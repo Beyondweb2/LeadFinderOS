@@ -18,6 +18,7 @@ import { answerProblems, buildOnboardingPatch, changedOnboardingPatch, cleanAnsw
 import { cellNamed } from "../../../src/lib/namedSignal.ts";
 import { loadClientSetup, loadClientSetups, recordFirstContact, recordLeadEvent, submitForDelivery, SETUP_LEAD_COLUMNS, type ClientSetup } from "../_shared/client-setup.ts";
 import { agreementRouteLock, maySetAgreementRoute, resolveAgreementRoute } from "../../../src/lib/agreementRoute.ts";
+import { signedAgreementRecord, type TermsLite } from "../../../src/lib/signedAgreement.ts";
 import { carriesMoney, clientClosed } from "../../../src/lib/paymentState.ts";
 import { sendOperatorAlert } from "../_shared/operator-alert.ts";
 import { handoffPrefill, handoffWithPrefill, type SalesHandoffRecord } from "../../../src/lib/salesHandoff.ts";
@@ -983,10 +984,10 @@ Deno.serve(async (req) => {
       };
       const loadAcceptances = async () => {
         const { data, error } = await service.from("client_agreement_acceptances")
-          .select("method,accepted_at,typed_name,typed_role,email,agreement_version,service_route,stripe_session_id")
+          .select("id,method,accepted_at,typed_name,typed_role,email,agreement_version,service_route,stripe_session_id")
           .eq("lead_id", L.id).order("accepted_at", { ascending: false });
         if (error) throw error;
-        return (data ?? []) as Array<{ method: string; accepted_at: string; typed_name: string | null; typed_role: string | null; email: string | null; agreement_version: string; service_route: string }>;
+        return (data ?? []) as Array<{ id: string; method: string; accepted_at: string; typed_name: string | null; typed_role: string | null; email: string | null; agreement_version: string; service_route: string }>;
       };
 
       if (action === "agreement_set_route") {
@@ -1054,6 +1055,12 @@ Deno.serve(async (req) => {
       const stampedRoute = serviceRouteForTotal(L.contract_total_payments);
       const acceptances = await loadAcceptances();
       const lock = agreementRouteLock({ contractTotalPayments: L.contract_total_payments, acceptances });
+      /* THE SIGNED AGREEMENT AS ONE RECORD (src/lib/signedAgreement.ts — the welcome pack folds the same way):
+         status, date, version, plan, and whether the authoritative payment rests on this signature. */
+      const { data: termsRow, error: termsErr } = await service.from("client_service_terms")
+        .select("agreement_acceptance_id,initial_paid_at,service_route").eq("lead_id", L.id).maybeSingle();
+      if (termsErr) throw termsErr;
+      const record = signedAgreementRecord(acceptances, termsRow as TermsLite | null);
       return json({
         ok: true,
         agreement: {
@@ -1067,6 +1074,7 @@ Deno.serve(async (req) => {
           last_sent_at: link?.last_sent_at ?? null,
           last_sent_to: link?.last_sent_to ?? null,
           acceptances,
+          record,
         },
       });
     }

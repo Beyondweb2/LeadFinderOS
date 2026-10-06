@@ -7,6 +7,7 @@ import { missingQuestionnaireFields, questionnaireComplete } from "../../../src/
 import { clientKnown, KNOWN_SOURCE_LINE } from "../../../src/lib/setupPrefill.ts";
 import { recordLeadEvent } from "../_shared/client-setup.ts";
 import { readWebsite, sameWebsite } from "../../../src/lib/websiteUrl.ts";
+import { salesSignupFor, type SignupRow } from "../../../src/lib/salesSignup.ts";
 
 // findable-onboarding — the PUBLIC backend for findable-site's /onboarding flow
 // (verify_jwt = false; the static site calls it with the anon apikey only). Actions:
@@ -289,6 +290,18 @@ Deno.serve(async (req) => {
          advisory: the flow renders it, but the charge is re-derived server-side at checkout, so a
          tampered response buys nothing. */
       const offer = offerPrice();
+      /* ⛔ A SALES-HELD SIGN-UP (src/lib/salesSignup.ts, 2026-10-07): when a salesperson's Quick Close holds
+         this lead's newest unpaid sign-up, the page shows THAT route and continues on THAT row — it never
+         asks the website question again. The row id is returned only when Quick Close says it may go to
+         the agreement now; it is the same id the agreement link already pays on. A failed read is
+         reported, never read as "no sales sign-up" (absence is never inferred from silence). */
+      const { data: signupRows, error: signupErr } = await service.from("onboarding_responses")
+        .select("id, status, created_at, plan_tier, website_addon, quick_close").eq("lead_id", lead.id);
+      if (signupErr) {
+        console.error("[findable-onboarding] prefill sign-up lookup failed:", signupErr.message);
+        return json({ ok: false, error: "lookup_failed" }, 503);
+      }
+      const held = salesSignupFor((signupRows ?? []) as SignupRow[]);
       /* ── WHAT THIS IS ALLOWED TO HAND BACK ───────────────────────────────────────────────────
          This line used to read "SAFE subset only — never expose phone/email/notes/owner to the
          public page", and phone was on the wrong side of it.
@@ -334,6 +347,9 @@ Deno.serve(async (req) => {
            "the column is missing", and "" renders as an empty box either way. */
         phone_guess: String(lead.phone ?? "").trim(),
         website_guess: String(lead.website ?? "").trim(),
+        sales_signup: held
+          ? { ready: held.ready, route: held.route, onboarding_id: held.ready ? held.onboardingId : null }
+          : null,
       });
     }
 
@@ -1060,6 +1076,19 @@ Deno.serve(async (req) => {
       if (!lead) return json({ ok: false, error: "unknown_lead" }, 404);
       if (PAID_OR_BEYOND.has(lead.status as string) || ((lead.amount_paid as number) ?? 0) > 0) {
         return json({ ok: false, error: "already_client" }, 403);
+      }
+
+      /* ⛔ A SALES-HELD SIGN-UP IS NEVER REPLACED FROM THE PUBLIC PAGE (src/lib/salesSignup.ts). A new row
+         would become the newest unpaid sign-up — the one the agreement page signs and checkout charges — so
+         it would silently change the route the salesperson agreed and who the sale belongs to. Fails
+         closed: an unreadable sign-up list refuses rather than guessing there is none. */
+      {
+        const { data: signupRows, error: signupErr } = await service.from("onboarding_responses")
+          .select("id, status, created_at, plan_tier, website_addon, quick_close").eq("lead_id", leadId);
+        if (signupErr) return json({ ok: false, error: "lookup_failed" }, 503);
+        if (salesSignupFor((signupRows ?? []) as SignupRow[])) {
+          return json({ ok: false, error: "signup_in_progress" }, 409);
+        }
       }
 
       // Lockdown #3a: one submission per lead per SUBMIT_COOLDOWN_MS.

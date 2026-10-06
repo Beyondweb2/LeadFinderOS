@@ -16,6 +16,7 @@ import { BASELINE_QUESTIONS, BASELINE_RUNS } from '@/lib/auditQuestionCounts';
 import { hubBaselineStatus, isFrozenBaselineStatus, isStartedBaselineStatus, paidBaselineStatusLabel } from '@/lib/paidBaselineState';
 import { approveAndStart, createSingleFlight, startApproved, type ApproveAndStartResult } from '@/lib/paidBaselineFlow';
 import { welcomePackReadiness, welcomePackUrl } from '@/lib/welcomePackData';
+import { ukDay, type SignedAgreementRecord } from '@/lib/signedAgreement';
 import { downloadHtmlDocAsPdf } from '@/lib/aiAuditReportDownload';
 import { BUILD_ROUTE_LABELS, parseWebsiteBuild, QA_ITEMS, REBUILD_STYLE_LABELS } from '@/lib/websiteBuildState';
 import { templateById } from '@/lib/websiteTemplates';
@@ -365,6 +366,8 @@ type AgreementView = {
   route_locked?: boolean; route_lock_reason?: string | null;
   last_sent_at: string | null; last_sent_to: string | null;
   acceptances: Array<{ method: string; accepted_at: string; typed_name: string | null; typed_role: string | null; email: string | null; agreement_version: string }>;
+  /* 2026-10-07 (src/lib/signedAgreement.ts): the signed agreement as one record — the welcome pack folds the same way. */
+  record?: SignedAgreementRecord;
 };
 const ukWhen = (iso: string) => new Date(iso).toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'Europe/London' });
 
@@ -389,30 +392,44 @@ function AgreementStage({ lead, ended = false }: { lead: AnyRecord; ended?: bool
   const signed = view?.acceptances.find((a) => a.method === 'agree_page') ?? null;
   const checkout = view?.acceptances.find((a) => a.method === 'checkout') ?? null;
   /* The signed PDF, rebuilt server-side from the stored record (the same builder the emailed copy used). */
-  const downloadPdf = async () => {
-    setBusy('agreement_pdf');
+  const downloadPdf = async (open = false) => {
+    /* View opens the tab NOW (a popup must start from the click), then fills it once the PDF arrives. */
+    const tab = open ? window.open('', '_blank') : null;
+    setBusy(open ? 'agreement_view' : 'agreement_pdf');
     try {
       const res = await call({ action: 'agreement_pdf', lead_id: lead.id });
       const bytes = Uint8Array.from(atob(String(res.pdf_base64 ?? '')), (c) => c.charCodeAt(0));
       if (!bytes.length) throw new Error('The server returned no PDF.');
       const href = URL.createObjectURL(new Blob([bytes], { type: 'application/pdf' }));
+      if (open) {
+        if (tab) tab.location.href = href; else window.open(href, '_blank');
+        setTimeout(() => URL.revokeObjectURL(href), 60_000);
+        return;
+      }
       const a = document.createElement('a'); a.href = href; a.download = String(res.filename ?? 'Findable Client Service Agreement.pdf');
       document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(href), 10_000);
     } catch (e) {
-      toast({ title: 'Could not download the agreement', description: edgeErrorMessage(e, 'Try again'), variant: 'destructive' });
+      tab?.close();
+      toast({ title: open ? 'Could not open the agreement' : 'Could not download the agreement', description: edgeErrorMessage(e, 'Try again'), variant: 'destructive' });
     } finally { setBusy(''); }
   };
   const summary = !view ? 'Loading' : signed ? 'Signed' : checkout ? 'Accepted at checkout' : ended ? 'Not needed (engagement ended)' : 'Not accepted yet';
   return <Stage k="agreement" title="Client Service Agreement" summary={summary} state={signed || checkout ? 'green' : ended ? undefined : view ? 'amber' : undefined}>
     {!view ? <p className="text-muted-foreground"><Loader2 className="mr-1 inline h-4 w-4 animate-spin"/>Loading…</p> : <>
+      {view.record && view.record.status !== 'none' && <AgreementRecordBlock record={view.record} />}
       {signed
         ? <p className="font-medium text-emerald-600">Signed on the agreement page on {ukWhen(signed.accepted_at)} by {signed.typed_name}{signed.typed_role ? `, ${signed.typed_role}` : ''}{signed.email ? ` (${signed.email})` : ''}. Version {signed.agreement_version}.</p>
         : <p className="font-medium text-muted-foreground">{ended ? 'Not needed: the engagement has ended.' : 'Not signed on the agreement page yet.'}</p>}
       {checkout && <p className="text-sm">Accepted at checkout on {ukWhen(checkout.accepted_at)}{checkout.typed_name ? ` by ${checkout.typed_name}` : ''}{checkout.email ? ` (${checkout.email})` : ''}. Binding on its own.</p>}
       {(signed || checkout) && <div className="pt-1">
-        <Button size="sm" variant="outline" disabled={!!busy} onClick={() => void downloadPdf()}>
-          {busy === 'agreement_pdf' ? <Loader2 className="mr-1 h-4 w-4 animate-spin"/> : <FileText className="mr-1 h-4 w-4"/>}Download signed PDF
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button size="sm" variant="outline" disabled={!!busy} onClick={() => void downloadPdf(true)}>
+            {busy === 'agreement_view' ? <Loader2 className="mr-1 h-4 w-4 animate-spin"/> : <ExternalLink className="mr-1 h-4 w-4"/>}View agreement
+          </Button>
+          <Button size="sm" variant="outline" disabled={!!busy} onClick={() => void downloadPdf()}>
+            {busy === 'agreement_pdf' ? <Loader2 className="mr-1 h-4 w-4 animate-spin"/> : <FileText className="mr-1 h-4 w-4"/>}Download PDF
+          </Button>
+        </div>
       </div>}
       {!ended && <><div className="flex flex-wrap items-center gap-2 pt-1">
         <span className="text-sm text-muted-foreground">Service:</span>
@@ -437,6 +454,21 @@ function AgreementStage({ lead, ended = false }: { lead: AnyRecord; ended?: bool
       {view.url && <p className="break-all text-xs text-muted-foreground">{view.url}</p>}</>}
     </>}
   </Stage>;
+}
+
+/** The signed agreement at a glance: AGREEMENT · Signed · date · version · plan · the payment it rests on. */
+function AgreementRecordBlock({ record }: { record: SignedAgreementRecord }) {
+  const head = [record.status === 'signed' ? 'Signed' : 'Accepted at checkout', ukDay(record.signedAtIso), record.version ? `version ${record.version}` : '', record.planName ?? '']
+    .filter(Boolean).join(' · ');
+  const by = record.signedBy ? `By ${record.signedBy}${record.role ? `, ${record.role}` : ''}. ` : '';
+  const paid = record.linkedToPayment
+    ? `Tied to their payment${record.initialPaidAtIso ? ` of ${ukDay(record.initialPaidAtIso)}` : ''}.`
+    : 'Not yet tied to a payment.';
+  return <div className="rounded-lg border p-3" data-testid="agreement-record">
+    <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Agreement</p>
+    <p className="mt-1 font-semibold">{head}</p>
+    <p className="text-sm text-muted-foreground">{by}{paid}</p>
+  </div>;
 }
 
 function WelcomePackStage({ lead, audit }: { lead: AnyRecord; audit: AnyRecord | null }) {

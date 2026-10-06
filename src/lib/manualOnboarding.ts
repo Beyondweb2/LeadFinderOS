@@ -31,7 +31,7 @@ import type { DomainAccessAnswer, YesNoNotSure } from './domainAuthority.ts';
 /* ── the questions, verbatim ──────────────────────────────────────────────────────────────────── */
 
 export const ONBOARDING_COPY = {
-  you: { headline: 'First, who are you?', sub: 'So we know where to send your report.' },
+  you: { headline: 'Your details', sub: 'Check what we already have and fill any gaps. This is where we send your results and your agreement.' },
   contactName: { label: 'Your name' },
   contactEmail: { label: 'Your email', helper: 'Where your report goes.', error: "That doesn't look like an email address." },
   phone: { label: 'Your mobile', helper: 'So we can reach you on WhatsApp about your results.', placeholder: '07700 900123', error: 'Start with 0 or +44 so we can dial it.' },
@@ -41,13 +41,17 @@ export const ONBOARDING_COPY = {
   tradeTown: { headline: 'What you do, and where', sub: "This is what we ask ChatGPT and Google's AI." },
   trade: { label: 'What you do', helper: 'One word is plenty.', placeholder: 'e.g. locksmith' },
   town: { label: 'Your town', placeholder: 'e.g. Huntingdon' },
-  websiteStep: { headline: 'Your website', sub: 'Where the work gets published, and who can let us in.' },
-  domain: { question: 'Are we using an existing domain?' },
-  agency: { question: 'Does an agency or web company look after your website?' },
-  access: { question: 'Will you be able to get us access to edit it?', helper: 'Your pages have to go on your own site, so we need editing access to it. Never send us a password here.' },
+  /* 🔴 2026-10-07 (client sign-up redesign): the website question is CHOICE-FIRST, as on the customer page. */
+  websiteStep: { headline: 'Your website', sub: 'We recommend a new website, built so customers, search engines and AI understand exactly what you do and where you work. You can also keep and improve the one you have.' },
+  buildManager: { question: 'Who looks after your current website?', helper: 'So we know who to talk to when your web address moves to the new site.', agencyNote: 'That’s fine. We only need their help to point your web address at the new site. Your arrangement with them stays yours to manage.' },
+  buildDomain: { question: 'Do you want to keep your current web address?', helper: 'Your web address (domain) is separate from your website. Keeping it means your new website goes live at the same address. The website itself is still built new: your current site is a reference, not the base.' },
+  noneDomain: { question: 'Do you already own a web address?', helper: 'For example yourbusiness.co.uk. If not, we’ll help you register one in your business’s name.' },
+  keepManager: { question: 'Who looks after your website?' },
+  access: { question: 'Can you get us access to edit it?', helper: 'To improve your current website we need editing access to it. Never send us a password here.' },
+  keepNoAccess: { note: 'We can only improve a website we can edit. A new website avoids that, and your web address can stay the same.', action: 'Build me a new website instead' },
   managerEmail: { label: 'Who should we ask?', optional: '(optional)', placeholder: 'name@theirwebcompany.co.uk', helper: 'Their email, so we can send them exactly what we need. Your agreement with them stays yours to manage.' },
   selfSite: { question: 'Can you give us access to edit it?' },
-  permission: { headline: 'Permission to do the work', sub: "One thing to agree, then we're moving.", discuss: "I'd rather talk it through first" },
+  permission: { headline: 'Permission to do the work', sub: 'One thing to agree, then we show you your plan.', discuss: "I'd rather talk it through first" },
   /* ⛔ NOT "one page per town" (2026-10-04, fix/04 — Session C C-07): that promised the cloned town pages
      the method rejects. Verbatim from findable-site's OnboardingFlow (same commit pair). */
   q2: { headline: 'What you do, and where', sub: "Each main service gets its own clear page. The towns you list tell us where to measure you and where real local pages make sense. That's the last thing we need." },
@@ -55,28 +59,36 @@ export const ONBOARDING_COPY = {
   areas: { label: 'Towns you want work from', optional: 'Optional', placeholder: 'e.g. March', helper: 'We judge the refund on the same questions before and after — asked about your home town and the towns you list here.' },
 } as const;
 
-export const DOMAIN_OPTIONS = [
-  { value: 'existing', label: 'Yes, I already have a domain/site' },
-  { value: 'new', label: 'No, this will be a new domain' },
+/* The website choices and follow-ups, verbatim from the customer page (findable-site WEBSITE_CHOICES and
+   SiteAccessBranch, 2026-10-07). The new website is first and recommended, as there. */
+export const WEBSITE_CHOICE_OPTIONS = [
+  { value: 'build', label: 'Build me a new website', note: 'A new website designed so customers, search engines and AI can understand exactly what you do and where you work. Hosting included, and your web address can stay the same.' },
+  { value: 'keep', label: 'Keep and improve my current website', note: 'We improve the site you already have. We will need access to edit it.' },
+  { value: 'none', label: "I haven't got a website yet", note: 'We build you one, set up properly for AI and search from day one.' },
 ] as const;
-export const AGENCY_OPTIONS = [
-  { value: 'yes', label: 'Yes, someone else manages it' },
-  { value: 'no', label: 'No, I look after it myself' },
+export const MANAGER_OPTIONS = [
+  { value: 'self', label: 'I do' },
+  { value: 'agency', label: 'An agency or web company' },
 ] as const;
-export const ACCESS_OPTIONS = [
-  { value: 'yes', label: 'Yes, I can get us access' },
-  { value: 'no', label: "No, or I'd rather not ask them" },
+export const KEEP_ACCESS_OPTIONS = [
+  { value: 'yes', label: 'Yes, I can get you access' },
+  { value: 'no', label: 'No, that isn’t possible' },
 ] as const;
-export const SELF_SITE_OPTIONS = [
-  { value: 'access', label: 'Yes, I can give you access' },
-  { value: 'rebuild', label: "I'd rather you built me a new one" },
-  { value: 'none', label: "I haven't got a website" },
+export const BUILD_DOMAIN_OPTIONS = [
+  { value: 'existing', label: 'Yes, keep my current web address' },
+  { value: 'new', label: 'No, I’d like a new web address' },
+] as const;
+export const NONE_DOMAIN_OPTIONS = [
+  { value: 'existing', label: 'Yes, I already own one' },
+  { value: 'new', label: 'No, I’ll need a new one' },
 ] as const;
 
-export type DomainStatus = (typeof DOMAIN_OPTIONS)[number]['value'];
-export type AgencyManages = (typeof AGENCY_OPTIONS)[number]['value'];
-export type CanGetAccess = (typeof ACCESS_OPTIONS)[number]['value'];
-export type SelfSiteChoice = (typeof SELF_SITE_OPTIONS)[number]['value'];
+export type DomainStatus = 'existing' | 'new';
+export type AgencyManages = 'yes' | 'no';
+export type CanGetAccess = 'yes' | 'no';
+export type SelfSiteChoice = 'access' | 'rebuild' | 'none';
+export type WebsiteChoice = (typeof WEBSITE_CHOICE_OPTIONS)[number]['value'];
+export type SiteManager = (typeof MANAGER_OPTIONS)[number]['value'];
 export type SiteAccessAnswer = 'yes_access' | 'no_access' | 'want_new' | 'no_website';
 
 /** findable-site siteAccess.ts siteAccessFromBranch — same folding, same nulls. */
@@ -84,6 +96,25 @@ export function siteAccessFromBranch(agency: AgencyManages | null, access: CanGe
   if (agency === 'yes') return access === 'yes' ? 'yes_access' : access === 'no' ? 'no_access' : null;
   if (agency === 'no') return self === 'access' ? 'yes_access' : self === 'rebuild' ? 'want_new' : self === 'none' ? 'no_website' : null;
   return null;
+}
+/** findable-site siteAccess.ts branchFromChoice — the choice-first question onto the same three answers.
+ *  ⛔ keep without editing access leaves the route UNANSWERED (never a silent build). */
+export function branchFromChoice(choice: WebsiteChoice | null, manager: SiteManager | null, keepAccess: 'yes' | 'no' | null): { agency_manages: AgencyManages | null; can_get_access: CanGetAccess | null; self_site: SelfSiteChoice | null } {
+  if (choice === 'none') return { agency_manages: 'no', can_get_access: null, self_site: 'none' };
+  if (choice === null || manager === null) return { agency_manages: null, can_get_access: null, self_site: null };
+  const agency_manages: AgencyManages = manager === 'agency' ? 'yes' : 'no';
+  if (choice === 'build') return manager === 'agency' ? { agency_manages, can_get_access: 'no', self_site: null } : { agency_manages, can_get_access: null, self_site: 'rebuild' };
+  if (keepAccess !== 'yes') return { agency_manages, can_get_access: null, self_site: null };
+  return manager === 'agency' ? { agency_manages, can_get_access: 'yes', self_site: null } : { agency_manages, can_get_access: null, self_site: 'access' };
+}
+/** findable-site siteAccess.ts choiceFromBranch — a stored answer read back as the choice. */
+export function choiceFromBranch(agency: AgencyManages | null, access: CanGetAccess | null, self: SelfSiteChoice | null): { choice: WebsiteChoice | null; manager: SiteManager | null; keepAccess: 'yes' | null } {
+  const manager: SiteManager | null = agency === 'yes' ? 'agency' : agency === 'no' && self !== 'none' ? 'self' : null;
+  const answer = siteAccessFromBranch(agency, access, self);
+  if (answer === 'no_website') return { choice: 'none', manager: null, keepAccess: null };
+  if (answer === 'yes_access') return { choice: 'keep', manager, keepAccess: 'yes' };
+  if (answer === 'want_new' || answer === 'no_access') return { choice: 'build', manager, keepAccess: null };
+  return { choice: null, manager, keepAccess: null };
 }
 /** findable-site siteAccess.ts websiteManagerFromBranch. */
 export function websiteManagerFromBranch(agency: AgencyManages | null): 'web_company' | 'direct_access' | null {
