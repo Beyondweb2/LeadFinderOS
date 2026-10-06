@@ -84,15 +84,17 @@ console.log("\n── History says the method ──");
 
 console.log("\n── the workspace logs every method ──");
 {
+  /* 2026-10-06: the channel is secondary in the call workspace — "Logged as: Call · Change", every method in the menu. */
   const crm = read("src/components/LeadCrmPanel.tsx");
-  const ui = crm.slice(crm.indexOf("function LogContact("), crm.indexOf("function InternalNote("));
-  ok(/CONTACT_METHODS\.filter\(\(m\) => m\.primary\)/.test(ui) && /CONTACT_METHODS\.filter\(\(m\) => !m\.primary && !m\.social\)/.test(ui) && /SOCIAL_CONTACT_METHODS\.map/.test(ui),
-    "pills = the set's primary methods + one Social pill (LinkedIn / Facebook / Instagram, 2026-09-30); the rest under More — every method reachable");
-  ok(CONTACT_METHODS.filter((m) => m.primary).length + 1 <= 5, "at most five pills, the Social pill included (compact)");
-  ok(/outcomesFor\(channel\)/.test(ui), "the outcome buttons are the method's");
-  ok(/recordedBy === 'send'/.test(ui) && /recorded automatically/.test(ui), "WhatsApp explains it is recorded by the send (no second record)");
-  ok((ui.match(/'lead_log_contact'/g) ?? []).length === 1, "one write per tap: lead_log_contact, once");
-  ok(!/\{ value: 'call'/.test(ui), "no local method list");
+  const flow = read("src/components/LeadCallFlow.tsx");
+  const lflow = read("src/lib/logOutcomeFlow.ts");
+  ok(/CONTACT_METHODS\.map\(\(m\) => <DropdownMenuItem/.test(flow) && /useState\(DEFAULT_LOG_CHANNEL\)/.test(flow) && /export const DEFAULT_LOG_CHANNEL = 'call';/.test(lflow),
+    "the channel defaults to Call; every method of the set is one Change away");
+  ok(/offeredOutcomes\(outcomesFor\(channel\)\)/.test(lflow), "the outcome buttons are the method's");
+  ok(/recordedBy === 'send'/.test(lflow) && /recorded automatically/.test(flow) && /!recordedBySend, recordedBySend \? null : note/.test(flow), "WhatsApp explains it is recorded by the send (no second record)");
+  const lo = crm.slice(crm.indexOf("const logOutcome = async"), crm.indexOf("const afterWrite"));
+  ok((lo.match(/'lead_log_contact'/g) ?? []).length === 1 && !/'lead_log_contact'/.test(flow), "one write per tap: lead_log_contact, once");
+  ok(!/\{ value: 'call'/.test(flow + lflow), "no local method list");
 }
 
 console.log("\n── the claim rule ──");

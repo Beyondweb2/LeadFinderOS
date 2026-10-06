@@ -192,12 +192,15 @@ console.log('── 5. THE CALL FLOW WORKS WITH NO AUDIT AND NO WHATSAPP ──'
 
 console.log('── 6. LOGGING THE CALL ROUTES NATURALLY ──');
 {
+  /* 2026-10-06: the Log window (src/components/LeadCallFlow.tsx) replaced the Log a contact card. */
   const crm = read('src/components/LeadCrmPanel.tsx');
-  const lc = crm.slice(crm.indexOf('function LogContact('), crm.indexOf('function InternalNote('));
-  ok(/CLOSE_READY_OUTCOMES: ReadonlySet<string> = new Set\(\['interested', 'spoke_to_owner', 'meeting_booked'\]\)/.test(crm) && /data-testid="logged-quick-close"/.test(lc) && /<QuickCloseButton leadId=\{leadId\} \/>/.test(lc), 'Interested / Spoke to owner / Meeting booked → Quick Close right in the result line');
-  ok(/result\.state\.state !== 'not_interested'/.test(lc), '…never on a lead that reads Not interested');
-  ok(/data-testid="outcome-groups"/.test(lc) && /Didn't speak to them/.test(lc) && /Spoke to them/.test(lc) && /current\?\.kind !== 'call'/.test(lc), 'call outcomes grouped by what happened (didn\'t speak / spoke); other channels keep one grid');
-  ok(!/lead_set_follow_up/.test(lc), 'logging an outcome itself still never saves a Next Action (the one rule does)');
+  const flow = read('src/components/LeadCallFlow.tsx');
+  const lc = flow.slice(flow.indexOf('export function LoggedLine('), flow.indexOf('type Step ='));
+  ok(/CLOSE_READY_OUTCOMES: ReadonlySet<string> = new Set\(\['interested', 'spoke_to_owner', 'meeting_booked'\]\)/.test(flow) && /data-testid="logged-quick-close"/.test(lc) && /<QuickCloseButton leadId=\{leadId\} \/>/.test(lc), 'Interested / Spoke to owner / Meeting booked → Quick Close right in the result line');
+  ok(/r\.state\.state !== 'not_interested'/.test(lc), '…never on a lead that reads Not interested');
+  ok(/data-testid="log-outcome-choices"/.test(flow) && /choicesFor\(channel, \{ paid \}\)/.test(flow) && /moreOutcomesFor\(channel\)/.test(flow), 'the Log window: a handful of what-happened buttons for the channel, the rest under More');
+  const lo = crm.slice(crm.indexOf('const logOutcome = async'), crm.indexOf('const afterWrite'));
+  ok(lo.length > 100 && !/lead_set_follow_up|saveNextAction/.test(lo), 'logging an outcome itself still never saves a Next Action (the one rule does)');
   const lead = { id: 'l', status: 'contacted', is_potential_work: false, next_action: null } as never;
   ok(outcomePlan('call_back', lead).setNextAction === 'call' && outcomePlan('meeting_booked', lead).setNextAction === 'meeting', 'Call back saves a Call; Meeting booked saves a Meeting');
   ok(outcomePlan('not_interested', lead).status === 'not_interested', 'Not interested sets the status (and clears the Next Action)');
@@ -208,8 +211,10 @@ console.log('── 6. LOGGING THE CALL ROUTES NATURALLY ──');
 console.log('── 7. DOUBLE SUBMIT IS ONE CALL ──');
 {
   const crm = read('src/components/LeadCrmPanel.tsx');
-  const tap = crm.slice(crm.indexOf('const tap = async'), crm.indexOf('const outcomeButton'));
-  ok(/if \(inFlight\.current\) return;\s*inFlight\.current = true;/.test(tap) && /finally \{ inFlight\.current = false; setBusy\(null\); \}/.test(tap), 'a second tap before the first answers is ignored (a ref, not a re-render)');
+  const tap = crm.slice(crm.indexOf('const logOutcome = async'), crm.indexOf('const afterWrite'));
+  ok(/if \(!lead \|\| inFlight\.current\) return null;\s*inFlight\.current = true;/.test(tap) && /finally \{ inFlight\.current = false; \}/.test(tap), 'a second tap before the first answers is ignored (a ref, not a re-render)');
+  const flowTap = read('src/components/LeadCallFlow.tsx');
+  ok(/if \(busy\) return;\s*setBusy\(key\);/.test(flowTap) && /disabled=\{busy !== null\}/.test(flowTap), '…and the Log window disables every outcome while one is saving');
   ok(/r\.duplicate === true \? 'Already logged a moment ago — not recorded twice'/.test(crm), 'a server-side duplicate is said plainly');
   const mig = read('supabase/migrations/20261007105000_call_workspace_guards.sql');
   for (const fn of ['lead_log_contact', 'lead_record_call']) {

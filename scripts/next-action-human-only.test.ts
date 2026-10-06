@@ -143,7 +143,7 @@ console.log("\n── 5. manual editing stays, for both roles ──");
   const plan = planSalesPatch({ next_action: "call", next_action_date: "2026-10-02" });
   ok(plan.steps.length === 1 && plan.steps[0].fn === "lead_set_follow_up", "a salesperson's manual pick → lead_set_follow_up");
   ok(planSalesPatch({ next_action: "none", next_action_date: null }).steps[0]?.fn === "lead_set_follow_up", "…and a clear");
-  ok(/const r = afterWrite\(await saveNextAction\(leadId, a, stateLead\(\)\)/.test(read("src/components/LeadCrmPanel.tsx")), "the CRM panel's Next action control saves what was picked (both roles, the one write)");
+  ok(/return afterWrite\(await saveNextAction\(leadId, a, stateLead\(\)\)/.test(read("src/components/LeadCrmPanel.tsx")) && /const r = await work\.saveNext\(a\)/.test(read("src/components/LeadCallFlow.tsx")), "the workspace's Next action control saves what was picked (both roles, the one write)");
   ok(/<NextActionEditor/.test(read("src/components/OutreachTable.tsx")), "the Outreach table keeps its Next Action column editor");
 }
 

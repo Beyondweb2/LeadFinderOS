@@ -112,7 +112,9 @@ console.log('\n── 3. THE CALL TAB ──');
   ok(HOW_WE_KNOW.some((l) => /fragmented/.test(l)) && /doesn't guarantee/.test(HOW_WE_KNOW_CAVEAT), '"how do you know?" explains fragmentation and promises nothing');
   ok(AI_FRIENDLY_SITE.length >= 10 && ['sitemap', 'schema', 'cloned town pages', 'keyword stuffing', 'crawlers', 'internal linking'].every((k) => AI_FRIENDLY_SITE.join(' ').toLowerCase().includes(k)), 'the AI-friendly site bullets are all there');
   const dlg = read('src/components/LeadDetailDialog.tsx');
-  ok(!/<NextActionBar|onEditNext=|NextActionForm/.test(dlg) && (read('src/components/LeadCrmPanel.tsx').match(/<NextActionForm /g) ?? []).length === 1, 'ONE Next Action control: none in the popup header; one display + one editor at the bottom of Call');
+  const flowNa = read('src/components/LeadCallFlow.tsx');
+  ok(!/<NextActionBar|onEditNext=|NextActionForm/.test(dlg) && !/<NextActionForm /.test(read('src/components/LeadCrmPanel.tsx')) && (flowNa.match(/<NextActionForm /g) ?? []).length === 1 && (dlg.match(/<HeaderNextAction /g) ?? []).length === 1,
+    'ONE Next Action control (2026-10-06): one compact display in the popup header, one editor (LeadCallFlow) — no card at the bottom of Call');
   ok(/lead_set_follow_up/.test(read('src/lib/nextActionWrite.ts')) && /_expected/.test(read('src/lib/nextActionWrite.ts')), 'stale-write protection kept (lead_set_follow_up _expected)');
   ok(spokenSeconds(FOLLOW_UP_VOICE_NOTE) >= 18 && spokenSeconds(FOLLOW_UP_VOICE_NOTE) <= 32 && FOLLOW_UP_VOICE_NOTE.includes(QUICK_CLOSE_PROMISE), `the "how does it work?" voice note is ~20–30 s (${spokenSeconds(FOLLOW_UP_VOICE_NOTE)} s) and says the guarantee as written`);
   ok(/data-testid="voice-coaching"/.test(ui) && /WHAT_WE_DO_SHORT/.test(ui.slice(ui.indexOf('function VoiceCoaching'))), 'coaching beside the voice note reads the same words');

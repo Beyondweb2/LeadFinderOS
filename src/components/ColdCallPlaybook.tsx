@@ -526,7 +526,7 @@ function PlaybookBody({ p, leadId, scriptsFirst, initialScript, onRunCheck }: { 
  *  `onLogCall` takes the person there with Log a contact open, so the script and the record are one click apart. */
 function LogCallBar({ onLogCall, leadId }: { onLogCall: () => void; leadId: string }) {
   return <div className="sticky bottom-0 mt-3 flex items-center gap-2 border-t border-border bg-background py-2">
-    <Button type="button" className="min-w-0 flex-1" onClick={onLogCall} data-testid="log-this-call"><PhoneCall className="mr-1.5 h-4 w-4 shrink-0" /><span className="truncate">Log this call<span className="hidden sm:inline">: outcome and Next Action</span></span></Button>
+    <Button type="button" className="min-w-0 flex-1" onClick={onLogCall} data-testid="log-this-call"><PhoneCall className="mr-1.5 h-4 w-4 shrink-0" /><span className="truncate">Log outcome<span className="hidden sm:inline"> — what happened</span></span></Button>
     <QuickCloseButton leadId={leadId} className="h-10 px-3 text-sm" />
   </div>;
 }
