@@ -1,11 +1,10 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ListFilter, Loader2, Megaphone, MessageCircle, Pause, Pencil, Phone, Plus, Send, Trash2 } from 'lucide-react';
-import { EmptyState, ErrorState, LoadState, PageHeader } from '@/components/operator/ui';
+import { EmptyState, ErrorState, LoadState, PageHeader, ToneChip } from '@/components/operator/ui';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
-import { cn } from '@/lib/utils';
 import { CampaignEditDialog } from '@/components/campaigns/CampaignEditDialog';
 import { useCampaignActions, useMyCampaigns } from '@/hooks/useMyCampaigns';
 import {
@@ -53,8 +52,10 @@ function CampaignCard({ c, admin, onEdit }: { c: CampaignSummary; admin: boolean
           <p className="break-words font-semibold" data-testid="campaign-name">{campaignDisplayName(c, admin)}</p>
           <p className="truncate text-xs text-muted-foreground">{[c.trade, c.area].filter(Boolean).join(' · ') || 'No niche set'}</p>
         </div>
-        <span className={cn('inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium text-white',
-          method === 'call' ? 'bg-sky-700' : 'bg-emerald-700')} data-testid="campaign-method"><Icon className="h-3 w-3" />{CAMPAIGN_METHOD_LABEL[method]}</span>
+        {/* The contact method is information, not success or money (2026-10-06, Paul): the dashboards' blue
+            status pill for every method — green stays reserved for positive / money states. The icon tells
+            Call from WhatsApp. */}
+        <ToneChip tone="blue" icon={Icon} testId="campaign-method" className="shrink-0">{CAMPAIGN_METHOD_LABEL[method]}</ToneChip>
       </div>
       <dl className="grid grid-cols-5 gap-1 text-center" data-testid="campaign-stats">
         {campaignStats({ ...c, method }).map((s) => <div key={s.label} className="min-w-0 rounded-md bg-muted/50 px-1 py-1.5">
