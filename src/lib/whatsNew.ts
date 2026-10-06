@@ -22,6 +22,17 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-06-campaign-chip-tips', date: '2026-10-06', title: 'Campaign cards: the Call / WhatsApp tag is blue', audience: 'all',
+    body: 'Green now only means something good happened (a sale, a reply, money). The tag that says how a campaign contacts people is blue.',
+    report: {
+      added: [],
+      changed: [
+        'The Call / WhatsApp tag on each campaign card is a blue tag with its icon (WhatsApp used to be green).',
+        'The Outreach tips no longer say the opener rotates between six messages. It does not: the template you choose is exactly what is sent.',
+      ],
+      removed: [],
+      effect: 'Green keeps one meaning across the app, and the tips match what the app actually does.',
+    } },
   { id: '2026-10-06-send-to-paul-sales', date: '2026-10-06', title: 'Finish a close with Send to Paul', audience: 'sales',
     body: 'When every handoff question is answered, the last button on the Close tab is Send to Paul. Press it and your part is done. Quick Close also has a calmer look.',
     report: {
