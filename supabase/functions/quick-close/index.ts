@@ -5,9 +5,12 @@ import { NOT_READY_BODY, salesReadiness } from "../_shared/sales-ready.ts";
 import {
   adoptLink, answersKey, buildConsentsFor, buildConsentsWording, cleanAnswers, linkExpiresAtMs, linkStep, linkUsable, linkUsableUntilMs, planQuickCloseSave,
   quickCloseEmail, quickCloseGate, quickCloseMessage, quickCloseState, QC_REVIEW_TEXT, QC_REVIEW_HEADING, paulFlagText, deliveryApproach, STRIPE_SESSION_LIFETIME_MS,
-  stripeSessionIdFromUrl, quickCloseClosedRefusal, type QcLinkShare, type QcRecord, type QuickCloseRecord,
+  stripeSessionIdFromUrl, quickCloseClosedRefusal, cleanCallNotes, splitCallList, offerFit, callNotesLines, type QcLinkShare, type QcRecord, type QuickCloseRecord,
 } from "../../../src/lib/quickClose.ts";
 import { serviceWindowState } from "../../../src/lib/serviceWindow.ts";
+import { decideLinkRoute, LINK_ROUTE_SAY, type ConversationFacts } from "../../../src/lib/paymentLinkRoute.ts";
+import { SIGNUP_LINK_TEMPLATE_NAME, templateSendState } from "../../../src/lib/whatsappLinkTemplates.ts";
+import { templateAvailability } from "../_shared/template-status.ts";
 import {
   cleanHandoff, handoffChangedKeys, handoffComplete, handoffMissing, handoffPrefill, handoffWithPrefill, HANDOFF_QUESTIONS, SALES_HANDOFF_SINCE,
   HANDOFF_SEND_REFUSAL_TEXT, handoffSendRefusal, handoffSentBody, handoffSentTitle,
@@ -25,7 +28,12 @@ import { cleanSellerClientInfo, MISSING_INFO_LABEL } from "../../../src/lib/clie
 // quick-close — QUICK CLOSE (Sales Experience, 2026-09-29; docs/sales-experience.md §9;
 // fixes 2026-10-04: docs/pre-sales-certification/fixes-02-quick-close.md).
 //
-// Modes: load · save · approve_review (admin) · generate_link · share_link · save_handoff · send_to_paul · save_client_info · submit_delivery · my_handoffs.
+// Modes: load · save · save_call · approve_review (admin) · generate_link · share_link · save_handoff · send_to_paul · save_client_info · submit_delivery · my_handoffs.
+// ⛔ 2026-10-07 (docs/pre-sales-certification/sales-close-handoff-australia.md): the CALL screen saves its
+//   answers here as they are given (enumerated ones through `save`, free text through `save_call`), so Quick
+//   Close and the handoff never ask them again. A WhatsApp share of the link follows Paul's rule
+//   (paymentLinkRoute.ts): we messaged them AND they replied AND the 24-hour window is open — otherwise an
+//   approved template (none approved yet → refused) — otherwise copy / email, never a pretend "sent".
 // ⛔ THE SALES HANDOFF (2026-10-02, src/lib/salesHandoff.ts) is what a salesperson may still write AFTER
 //   payment, and only on their OWN sale (sold_by_user_id) — it lands on outreach_leads.sales_handoff
 //   through cleanHandoff. Since 2026-10-05 (client missing-info actions) the seller may also ADD the client
@@ -87,9 +95,14 @@ const WHATSAPP_REFUSAL_TEXT: Record<string, string> = {
   wrong_number: "This number is marked Wrong number. Nothing was sent.",
   lead_archived: "This lead is archived. Nothing was sent.",
   qa_test_account: "Not sent: this is a test account or a lead held by one.",
+  not_messaged: LINK_ROUTE_SAY.not_messaged + " Email the link or copy it instead.",
+  no_reply: LINK_ROUTE_SAY.no_reply + " Email the link or copy it instead.",
+  template_not_approved: "WhatsApp signup template awaiting approval — copy the sign-up link or email it instead.",
+  pitch_already_sent: "The sign-up link was already sent to them on WhatsApp. Press Resend if you really mean to send it again.",
+  link_unavailable: "There is no usable sign-up link to send — make a fresh one first.",
 };
 
-const LEAD_COLS = "id, user_id, business_name, phone, email, website, address, search_location, derived_town, category, search_keyword, contact_name, campaign_id, lead_source, assigned_to_user_id, sold_by_user_id, amount_paid, status, rating, review_count, google_maps_url, place_id, website_control, sales_handoff, delivery_submitted_at, contract_total_payments, service_terminated_at, services_included, service_areas";
+const LEAD_COLS = "id, user_id, business_name, phone, country, email, website, address, search_location, derived_town, category, search_keyword, contact_name, campaign_id, lead_source, assigned_to_user_id, sold_by_user_id, amount_paid, status, rating, review_count, google_maps_url, place_id, website_control, sales_handoff, delivery_submitted_at, contract_total_payments, service_terminated_at, services_included, service_areas";
 const ROW_COLS = "id, status, source, created_at, contact_name, contact_email, confirmed_phone, business_website, quick_close, plan_tier, website_addon";
 
 async function loadAll(service: Service, leadId: string) {
@@ -157,7 +170,7 @@ Deno.serve(async (req) => {
     /* ⛔ READY TO SELL (2026-10-05, docs/salesperson-onboarding.md): a salesperson who has not finished
        onboarding cannot start or advance a sale — no Quick Close answers, no payment link, no sharing it.
        Reading, and finishing the handoff for a sale ALREADY made, stay open. The admin is never gated. */
-    if (actor.role === "sales" && (mode === "save" || mode === "generate_link" || mode === "share_link")) {
+    if (actor.role === "sales" && (mode === "save" || mode === "save_call" || mode === "generate_link" || mode === "share_link")) {
       const readiness = await salesReadiness(service, actor.id);
       if (!readiness.ready) {
         await recordDenial(service, actor.id, `quick-close:${mode}:not_ready`, typeof body.lead_id === "string" ? body.lead_id : null, { missing: readiness.missing });
@@ -264,14 +277,22 @@ Deno.serve(async (req) => {
       const { data } = await service.from("whatsapp_messages").select("created_at").eq("lead_id", leadId).eq("direction", "inbound").order("created_at", { ascending: false }).limit(1);
       return ((data ?? []) as Obj[])[0]?.created_at ?? null;
     };
+    /** Paul's link rule needs the whole shape of the conversation: our first real message and their latest. */
+    const conversation = async (): Promise<ConversationFacts> => {
+      const [lastIn, firstOut] = await Promise.all([
+        lastInboundAt(),
+        service.from("whatsapp_messages").select("created_at").eq("lead_id", leadId).eq("direction", "outbound").or("status.is.null,status.neq.failed").order("created_at", { ascending: true }).limit(1),
+      ]);
+      return { hasPhone: !!lead.phone, firstOutboundAt: (((firstOut as { data?: Obj[] }).data ?? [])[0]?.created_at as string | undefined) ?? null, lastInboundAt: lastIn };
+    };
     const shareEmailOf = (r: Obj | null): string | null => {
       const e = String(r?.contact_email || lead.email || "").trim().toLowerCase();
       return EMAIL_RE.test(e) ? e : null;
     };
 
     const view = async () => {
-      const [lastIn, camp, seller, events, infoRequest] = await Promise.all([
-        lastInboundAt(),
+      const [convo, camp, seller, events, infoRequest] = await Promise.all([
+        conversation(),
         /* ⛔ Campaigns are private to their owner (2026-10-03): a salesperson is told the name only of a campaign they own. */
         lead.campaign_id ? (actor.role === "sales" ? service.from("campaigns").select("name").eq("id", lead.campaign_id).eq("created_by", actor.id).maybeSingle() : service.from("campaigns").select("name").eq("id", lead.campaign_id).maybeSingle()) : Promise.resolve({ data: null }),
         (lead.assigned_to_user_id ?? lead.sold_by_user_id) ? service.from("team_members").select("display_name").eq("user_id", lead.assigned_to_user_id ?? lead.sold_by_user_id).maybeSingle() : Promise.resolve({ data: null }),
@@ -289,10 +310,16 @@ Deno.serve(async (req) => {
          client's setup checklist too — the same loader Paid Clients uses — so the seller sees what is
          still missing and may submit for delivery when everything required is in. */
       const saved = (lead.sales_handoff ?? null) as SalesHandoffRecord | null;
+      const callNotes = cleanCallNotes(cur?.call);
       const pre = handoffPrefill({
         quickClose: answers, route: serviceRouteFromRow(row as never), websiteControl: lead.website_control ?? null,
-        hasWebsite: lead.website ? true : null, contactName: row?.contact_name ?? lead.contact_name ?? null,
+        hasWebsite: lead.website ? true : null, contactName: row?.contact_name ?? lead.contact_name ?? null, call: callNotes,
       });
+      const hasWebsite = !!(String(row?.business_website ?? "").trim() || String(lead.website ?? "").trim());
+      /* Meta's LIVE status of findable_signup_link (cached; never hard-coded) and Paul's link rule. */
+      const signupTemplate = await templateAvailability(service, SIGNUP_LINK_TEMPLATE_NAME);
+      const signupTemplateState = templateSendState(signupTemplate, "signup");
+      const linkRoute = decideLinkRoute(convo, { template: signupTemplateState });
       let setup: Obj | null = null;
       if (paidLead) {
         try {
@@ -355,7 +382,14 @@ Deno.serve(async (req) => {
           expires_at: exp ? new Date(exp).toISOString() : null, usable_until: until ? new Date(until).toISOString() : null, shared: shared.slice(-MAX_SHARES),
         } : null,
         share: { email: shareEmailOf(row), hasPhone: !!lead.phone },
-        windowOpen: serviceWindowState(lastIn).open,
+        windowOpen: serviceWindowState(convo.lastInboundAt).open,
+        /* 2026-10-07: Paul's WhatsApp link rule, decided here once (paymentLinkRoute.ts). */
+        link_route: { ...linkRoute, template: { name: SIGNUP_LINK_TEMPLATE_NAME, status: signupTemplate.status, category: signupTemplate.category, checked_at: signupTemplate.checked_at, label: signupTemplateState.label, sendable: signupTemplateState.sendable, say: signupTemplateState.say } },
+        /* What the call screen heard, and the offer it points to (the agency-contract rule). */
+        call: callNotes,
+        call_lines: callNotesLines(answers, callNotes),
+        offer: offerFit(answers, hasWebsite),
+        has_website: hasWebsite,
         events: ((events as { data?: Obj[] }).data ?? []).map((e) => ({ kind: e.kind, at: e.created_at, by_me: e.actor_user_id === actor.id })),
       };
     };
@@ -489,6 +523,57 @@ Deno.serve(async (req) => {
        reads 'paid' (quickCloseClosedRefusal). */
     const closedRefusal = quickCloseClosedRefusal(lead as never, row as never);
     if (closedRefusal) return json({ ok: false, error: closedRefusal.error, detail: closedRefusal.detail }, 409);
+
+    /* ══ SAVE WHAT THE CALL HEARD (2026-10-07) ═══════════════════════════════════════════════════════════
+       The Call screen's free-text answers — the jobs they want more of, the areas that matter, roughly what they
+       pay their agency — kept on THIS close (quick_close.call, cleanCallNotes), rev-conditional like every write.
+       A key sent blank clears it; a key not sent is left alone. The jobs / areas also fill the lead's services /
+       service areas when those are blank (or still hold exactly what the call put there) — the same lead fields
+       the Details tab, the setup checklist and the paid-client intake read, so nobody asks again. */
+    if (mode === "save_call") {
+      const raw = (body.call && typeof body.call === "object" ? body.call : {}) as Obj;
+      const sentKeys = (["jobs", "areas", "agency_monthly_gbp"] as const).filter((k) => k in raw);
+      if (!sentKeys.length) return json({ ok: false, error: "bad_request" }, 400);
+      const incoming = cleanCallNotes(raw);
+      const rowId: string = row?.id ?? (await service.rpc("quick_close_row", { _lead_id: leadId, _business_name: lead.business_name ?? null })).data;
+      if (!rowId) return json({ ok: false, error: "not_saved" }, 500);
+      for (let attempt = 0; attempt < 4; attempt++) {
+        if (attempt > 0 || !row || row.id !== rowId) row = await loadRow(service, rowId);
+        if (!row) return json({ ok: false, error: "not_saved" }, 500);
+        if (row.status === "paid") return json({ ok: false, error: "already_paid", detail: "This client has already paid — Paul looks after them from here." }, 409);
+        const qcNow = (row.quick_close ?? null) as QcRecord | null;
+        const prevNotes = cleanCallNotes(qcNow?.call);
+        const nextNotes: Obj = { ...prevNotes };
+        for (const k of sentKeys) { if ((incoming as Obj)[k] !== undefined) nextNotes[k] = (incoming as Obj)[k]; else delete nextNotes[k]; }
+        const now = new Date().toISOString();
+        const stored = await writeQc(service, rowId, revOf(qcNow), { ...(qcNow ?? {}), call: { ...nextNotes, saved_at: now, saved_by: actor.id } }, { updated_at: now });
+        if (!stored) continue;
+        row = { ...row, quick_close: stored };
+        /* Fill the lead's lists only where they are blank, or still exactly what the call wrote before. */
+        const patch: Obj = {};
+        const sameList = (a: unknown, b: string[]) => Array.isArray(a) && a.length === b.length && a.every((x, i) => String(x) === b[i]);
+        for (const [key, col] of [["jobs", "services_included"], ["areas", "service_areas"]] as const) {
+          if (!sentKeys.includes(key)) continue;
+          const cur = lead[col] as unknown;
+          const blank = !Array.isArray(cur) || cur.length === 0;
+          const fromCall = sameList(cur, splitCallList(prevNotes[key]));
+          const next = splitCallList(nextNotes[key]);
+          if ((blank || fromCall) && next.length && !sameList(cur, next)) patch[col] = next;
+        }
+        if (Object.keys(patch).length) {
+          const { error } = await service.from("outreach_leads").update(patch).eq("id", leadId);
+          if (error) console.error("[quick-close] call lists not written to the lead (non-blocking):", error.message);
+          else {
+            Object.assign(lead, patch);
+            const { error: actErr } = await service.from("lead_activity").insert({ lead_id: leadId, actor_user_id: actor.id, kind: "details_set", data: { ...(patch.services_included ? { services: patch.services_included } : {}), ...(patch.service_areas ? { service_areas: patch.service_areas } : {}), source: "call" } });
+            if (actErr) console.error("[quick-close] details_set not recorded:", actErr.message);
+          }
+        }
+        await event(service, leadId, rowId, actor.id, "call_answers_saved", { keys: sentKeys });
+        return json(await view());
+      }
+      return json({ ok: false, error: "busy", detail: "Someone else is saving this at the same moment — try again." }, 409);
+    }
 
     /* ══ SAVE ONE OR MORE ANSWERS ═════════════════════════════════════════════════════════════════════
        🔴 M-001 (2026-10-04): the incoming answer is merged OVER the saved set and only then cleaned
@@ -702,7 +787,8 @@ Deno.serve(async (req) => {
        answered ok (and says when it was a test-mode simulation); an email only when Resend accepted it. */
     if (mode === "share_link") {
       const channel = body.channel;
-      if (channel !== "copy" && channel !== "email" && channel !== "whatsapp") return json({ ok: false, error: "bad_request" }, 400);
+      /* 'whatsapp_template' is accepted as the same thing as 'whatsapp': the SERVER picks the route (paymentLinkRoute). */
+      if (channel !== "copy" && channel !== "email" && channel !== "whatsapp" && channel !== "whatsapp_template") return json({ ok: false, error: "bad_request" }, 400);
       if (!row) return json({ ok: false, error: "not_started", detail: "Answer the questions first." }, 409);
       const qc = (row.quick_close ?? null) as (QuickCloseRecord & Obj) | null;
       if (!linkUsable(qc)) return json({ ok: false, error: "link_expired", detail: "Make the sign-up link first." }, 409);
@@ -711,7 +797,7 @@ Deno.serve(async (req) => {
       const url = qc!.link_url as string;
       const session = (qc!.link_session_id as string | null) ?? stripeSessionIdFromUrl(url);
       const greetName = row.contact_name ?? lead.contact_name ?? null;
-      const share: QcLinkShare = { channel, at: new Date().toISOString(), by: actor.id, session };
+      const share: QcLinkShare = { channel: channel === "whatsapp_template" ? "whatsapp" : channel, at: new Date().toISOString(), by: actor.id, session, link: url };
 
       if (channel === "copy") {
         // A second copy by the same person inside two minutes is the same act — not a second History row.
@@ -745,22 +831,35 @@ Deno.serve(async (req) => {
         }
         share.to = to; share.status = "sent";
       }
-      if (channel === "whatsapp") {
+      if (channel === "whatsapp" || channel === "whatsapp_template") {
         if (!lead.phone) return json({ ok: false, error: "no_phone", detail: "There is no phone number for them." }, 409);
-        if (!serviceWindowState(await lastInboundAt()).open) return json({ ok: false, error: "window_closed", detail: WHATSAPP_REFUSAL_TEXT.window_closed }, 409);
-        /* THE CANONICAL SENDER, AS THE CALLER: its window, QA, suppression and ownership rules decide. */
+        /* ⛔ ONE SEND OF THIS LINK unless the rep presses Resend (a double tap or a retry never messages them twice). */
+        const prior = ((qc!.link_shared ?? []) as QcLinkShare[]).filter((s) => s.channel === "whatsapp" && (s.link ? s.link === url : s.session === session) && s.status !== "failed");
+        if (prior.length && body.resend !== true) {
+          return json({ ok: false, error: "already_sent", detail: `Already sent on WhatsApp (${new Date(prior[prior.length - 1].at).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", timeZone: "Europe/London" })}). Press Resend if you really mean to send it again.` }, 409);
+        }
+        /* ⛔ THE ROUTE (paymentLinkRoute.ts): the APPROVED findable_signup_link template (Meta's live status), else a
+           normal message only when we messaged them, they replied and the 24-hour window is open, else nothing. */
+        const tplState = templateSendState(await templateAvailability(service, SIGNUP_LINK_TEMPLATE_NAME), "signup");
+        const lr = decideLinkRoute(await conversation(), { template: tplState });
+        if (lr.route === "none") return json({ ok: false, error: lr.reason, detail: lr.say }, 409);
+        /* THE CANONICAL SENDER, AS THE CALLER: its ownership, QA, suppression, phone (UK / AU / IN) and template rules
+           decide. The template's link and greeting are resolved THERE from the lead's records — never sent from here. */
         const anon = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
         const res = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/send-whatsapp-message`, {
           method: "POST", headers: { apikey: anon, Authorization: req.headers.get("authorization") ?? "", "Content-Type": "application/json" },
-          body: JSON.stringify({ phone: lead.phone, lead_id: leadId, body: quickCloseMessage(greetName, url, route) }),
+          body: JSON.stringify(lr.route === "whatsapp_template"
+            ? { phone: lead.phone, country: lead.country ?? null, lead_id: leadId, template_name: SIGNUP_LINK_TEMPLATE_NAME, ...(body.resend === true ? { allow_resend: true } : {}) }
+            : { phone: lead.phone, country: lead.country ?? null, lead_id: leadId, body: quickCloseMessage(greetName, url, route) }),
         });
         const out = await res.json().catch(() => ({})) as Obj;
         if (!res.ok || !out.ok) {
           const code = String(out.error ?? (res.ok ? "send_failed" : `http_${res.status}`));
-          await event(service, leadId, row.id, actor.id, "link_share_failed", { channel, error: code });
-          return json({ ok: false, error: code, detail: WHATSAPP_REFUSAL_TEXT[code] ?? String(out.reason ?? out.detail ?? "WhatsApp did not send it. Email the link or copy it instead.") }, 409);
+          await event(service, leadId, row.id, actor.id, "link_share_failed", { channel: "whatsapp", route: lr.route, error: code, fail_code: out.failCode ?? null });
+          return json({ ok: false, error: code, detail: String(out.reason ?? "") || WHATSAPP_REFUSAL_TEXT[code] || "WhatsApp did not send it. Copy the sign-up link or email it instead." }, 409);
         }
         share.status = out.simulated ? "simulated" : String(out.status ?? "sent");
+        share.template = lr.route === "whatsapp_template" ? SIGNUP_LINK_TEMPLATE_NAME : null;
       }
 
       for (let attempt = 0; attempt < 4; attempt++) {
@@ -774,10 +873,10 @@ Deno.serve(async (req) => {
       await event(service, leadId, row!.id, actor.id, "link_shared", { channel, to: share.to ?? null, status: share.status ?? null, session });
       const bodyText = channel === "copy" ? "Sign-up link copied (to send by hand — not confirmed as sent)"
         : channel === "email" ? `Sign-up link emailed to ${share.to}`
-        : share.status === "simulated" ? "Sign-up link sent on WhatsApp (test mode — not delivered)" : "Sign-up link sent on WhatsApp";
+        : share.status === "simulated" ? "Sign-up link sent on WhatsApp (test mode — not delivered)" : share.template ? "Sign-up link sent on WhatsApp (template findable_signup_link)" : "Sign-up link sent on WhatsApp";
       const { error: hErr } = await service.from("lead_activity").insert({
         lead_id: leadId, actor_user_id: actor.id, kind: "payment_link_shared", body: bodyText,
-        data: { source: actor.role === "admin" ? "admin" : "sales", channel, status: share.status ?? null, session, route },
+        data: { source: actor.role === "admin" ? "admin" : "sales", channel: share.channel, template: share.template ?? null, resend: body.resend === true, status: share.status ?? null, session, route },
       });
       if (hErr) console.error("[quick-close] history write failed (non-blocking):", hErr.message);
       return json(await view());

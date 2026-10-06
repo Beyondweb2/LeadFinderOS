@@ -16,7 +16,7 @@ import {
 /* ══ CSV IMPORT (2026-10-05, fix/csv-lead-import; docs/pre-sales-certification/csv-import-fix.md) ═══════════════
    Pick a file → match its columns → CHECK (a preview: the server runs every rule and writes nothing) → import.
    ⛔ The server (import_leads) decides validity, duplicates and the owner — always the person importing. This
-   screen never decides a row's fate and never sends an owner, status or any field outside the twelve.
+   screen never decides a row's fate and never sends an owner, status or any field outside the thirteen (country is optional).
    DUPLICATE (same Place ID / phone / Maps listing) never becomes a second lead. POSSIBLE MATCH (same name only →
    imported and flagged; same website, or same name + same postcode / address → held until the person ticks
    "import these too") is shown on its own list and never disappears from the import by itself.

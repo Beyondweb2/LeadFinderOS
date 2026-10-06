@@ -2,7 +2,7 @@
    THE CLOSE ON THE CALL SCREEN (fix workstream 5, 2026-10-04; Session A A-06, master plan M-009).
 
    What a salesperson says once the prospect is interested: the offer for the route that fits this lead,
-   the guarantee, the close ("I'll send you the link now") and what happens after they pay. Before this
+   the guarantee and what happens after they pay (no scripted close line since 2026-10-07). Before this
    the price and guarantee sat inside objection answers 13 and 14 and the close was never on screen.
 
    ⛔ PURE, AND EVERY FIGURE IS A findableOffer.ts CONSTANT. No £ amount, payment count or term is typed
@@ -17,10 +17,11 @@
    ⛔ AFTER PAYMENT reads QUICK_CLOSE_AFTER_PAYMENT (quickClose.ts) — the dialog's own list, not a copy.
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 import {
-  FINDABLE_CONTINUING_GBP, FINDABLE_MONTHLY_GBP, FINDABLE_SETUP_PRICE_GBP, MONTHLY_START_V3_WORDS, REMEASURE_WEEKS_STANDARD,
+  FINDABLE_MONTHLY_GBP, FINDABLE_SETUP_PRICE_GBP, MONTHLY_START_V3_WORDS, REMEASURE_WEEKS_STANDARD,
   SERVICE_ROUTE_NAME, termMonthsFor, totalPaymentsFor, type ServiceRoute,
 } from './findableOffer.ts';
 import { QUICK_CLOSE_AFTER_PAYMENT, QUICK_CLOSE_PROMISE } from './quickClose.ts';
+import { afterTermRepLine } from './planTerms.ts';
 import type { SiteSource } from './leadWebsiteKind.ts';
 
 /** findable.live's guarantee line, word for word (findable-site Guarantee.astro / Pricing.astro).
@@ -53,8 +54,8 @@ export interface CallClose {
   guarantee: { headline: string; spoken: string; caution: string };
   /** What the monthly pays for (Paul, 2026-10-02 — "check", never "audit"). */
   monthly: string;
-  /** The close itself, said once they are happy. */
-  closeLine: string;
+  /* ⛔ NO CLOSE LINE (Paul, 2026-10-07): "If that sounds good, I'll send you the link now…" was removed and
+     NOT replaced — the rep closes in their own words. scripts/call-workspace.test.ts pins it absent. */
   /** After they pay — Quick Close's own list. */
   afterPayment: readonly string[];
 }
@@ -70,7 +71,7 @@ export function routeOffer(route: ServiceRoute): CallRouteOffer {
       summary: `£${FINDABLE_SETUP_PRICE_GBP} now · £${FINDABLE_MONTHLY_GBP}/month · ${total} payments in total`,
       spoken: [
         `We build you a new website, host it and look after it. ${spokenPrice}`,
-        `${spokenTerm} Once the ${total} payments are done the site is yours, and it carries on at £${FINDABLE_CONTINUING_GBP} a month for hosting and monitoring until you cancel.`,
+        `${spokenTerm} ${afterTermRepLine(route)}`,
       ],
       site: 'A new website built, hosted and managed by Findable — theirs once the term is paid',
     }
@@ -79,7 +80,7 @@ export function routeOffer(route: ServiceRoute): CallRouteOffer {
       summary: `£${FINDABLE_SETUP_PRICE_GBP} now · £${FINDABLE_MONTHLY_GBP}/month · ${total} payments in total`,
       spoken: [
         `You keep your own website and it stays yours. We work on it with your access, and we never take it offline. ${spokenPrice}`,
-        `${spokenTerm} After that it carries on at £${FINDABLE_CONTINUING_GBP} a month for monitoring until you cancel.`,
+        `${spokenTerm} ${afterTermRepLine(route)}`,
       ],
       site: 'They keep their existing website and its ownership',
     };
@@ -107,7 +108,6 @@ export function buildCallClose(source: SiteSource | null | undefined): CallClose
       caution: 'Never promise a ranking, a recommendation or that AI will name them. The promise is the measured number, or the £' + FINDABLE_SETUP_PRICE_GBP + ' back.',
     },
     monthly: `The monthly is a new page every month, a monthly check of what AI says about you, adjustments as we go, and ${routes[0] === 'build' ? 'hosting and looking after the website' : 'keeping your site right'}.`,
-    closeLine: `If that sounds good, I'll send you the link now. It's £${FINDABLE_SETUP_PRICE_GBP} today, and Paul takes it from there.`,
     afterPayment: QUICK_CLOSE_AFTER_PAYMENT,
   };
 }

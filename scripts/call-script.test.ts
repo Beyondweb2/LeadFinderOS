@@ -164,10 +164,11 @@ console.log('── 9. Build / Optimise preselection, live v3 terms only ──'
   const o = buildCallScript(input());
   ok(o.plans.preselected === 'optimise' && o.plans.routes.map((r) => r.route).join() === 'optimise,build', 'existing usable website → Optimise selected, Build available to switch');
   const all = spokenScriptText(o);
-  ok(!/payments stop|one final month|nothing more to pay|then they stop/i.test(all), 'no unapproved v4 commercial wording (Optimise does not "stop")');
-  ok(o.plans.routes.every((r) => r.spoken.join(' ').includes('£' + FINDABLE_CONTINUING_GBP + ' a month')), 'both plans carry on at the v3 continuing price after the term');
+  ok(!/payments stop|one final month|nothing more to pay|then they stop/i.test(all), 'none of the unapproved v4 AGREEMENT phrases (the sales words say Optimise ends; the contract wording is a separate, unapproved change)');
+  /* 2026-10-07 (Paul): Optimise ENDS after its 6th payment; Build's £29.99 only if they want hosting to continue. */
+  ok(o.plans.routes.find((r) => r.route === 'build')!.spoken.join(' ').includes('£' + FINDABLE_CONTINUING_GBP + ' a month for hosting and maintenance') && !o.plans.routes.find((r) => r.route === 'optimise')!.spoken.join(' ').includes('£' + FINDABLE_CONTINUING_GBP), 'Build: £29.99 only for continued hosting; Optimise: no £29.99 at all');
   const sixMonths = o.objections.find((x) => x.objection === 'Why six months?')?.answer ?? '';
-  ok(sixMonths.includes('£' + FINDABLE_CONTINUING_GBP + ' a month for monitoring until you cancel'), '"Why six months?" says the v3 continuing service');
+  ok(/6th payment is the last one/.test(sixMonths) && /plan ends/.test(sixMonths) && !sixMonths.includes('£' + FINDABLE_CONTINUING_GBP), '"Why six months?": the 6th payment is the last, then the plan ends');
 }
 
 console.log('── 10. Guarantee once, objections short ──');
@@ -220,7 +221,7 @@ console.log('── 12. The Call screen UI: removed noise stays removed ──')
   ok(WHY_IT_MATTERS_STATS.length === 2 && WHY_IT_MATTERS_STATS.every((s) => /^\d+%$/.test(s.figure) && !/https?:/.test(s.label)), 'two stat cards: a figure and a line, no link in the words');
   ok(/data-testid="answer-self"[^>]*>I manage it</.test(ui) && /data-testid="answer-agency"[^>]*>Agency \/ someone else</.test(ui), 'the first-question buttons: I manage it / Agency / someone else');
   ok(/manager === 'agency' && after &&/.test(ui), 'the agency questions appear only after Agency is chosen');
-  ok(/useState<ServiceRoute>\(s\.plans\.preselected\)/.test(ui) && /data-testid=\{'call-route-' \+ plan\.route\}/.test(ui) && !/routes\.map\(\(r[^)]*\) => \(\s*<div key=\{r\.route\}[^]*?r\.spoken/.test(ui), 'one plan open at a time, starting from the preselected one');
+  ok(/const preferred = fit\?\.recommended \?\? s\.plans\.preselected/.test(ui) && /data-testid=\{'call-route-' \+ plan\.route\}/.test(ui) && !/routes\.map\(\(r[^)]*\) => \(\s*<div key=\{r\.route\}[^]*?r\.spoken/.test(ui), 'one plan open at a time, starting from the preselected one');
   ok(/useState<number \| null>\(null\)/.test(ui) && /open !== null && p\.script\.objections\[open\]/.test(ui), 'objections: closed by default, one answer open at a time');
   ok((code.match(/<QuickCloseButton/g) ?? []).length === 1, 'exactly ONE Quick Close on the call screen (the sticky bar)');
   ok(/data-testid="log-this-call"/.test(ui) && /Log this call/.test(ui), 'the sticky bar: Log this call');

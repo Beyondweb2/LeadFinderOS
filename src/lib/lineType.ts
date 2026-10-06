@@ -34,6 +34,12 @@ const COUNTRY_TO_ISO: Record<string, string> = {
   Brazil: 'BR', Mexico: 'MX', Japan: 'JP', Sweden: 'SE',
 };
 
+/* Australia's own international prefix is 0011, so libphonenumber reading an Australia lead's "0061 4…" (the
+   European 00 form, common in exported lists) treats it as a national number and fails. Only for AU: every other
+   country parses exactly as before. (2026-10-07) */
+function auInternational(raw: string, iso: string | undefined): string {
+  return iso === 'AU' ? raw.replace(/^\s*00(?!11)/, '+') : raw;
+}
 export function classifyLineType(
   phone: string | null | undefined,
   country?: Country | string | null,
@@ -46,7 +52,7 @@ export function classifyLineType(
   const iso = country ? (COUNTRY_TO_ISO[country] as CountryCode | undefined) : undefined;
   // Default to GB when no country is known (this is a UK-first product, and matches
   // toWhatsAppNumber's UK-default) so national 0… numbers still parse.
-  const parsed = parsePhoneNumberFromString(raw, iso ?? ('GB' as CountryCode));
+  const parsed = parsePhoneNumberFromString(auInternational(raw, iso), iso ?? ('GB' as CountryCode));
   if (!parsed || !parsed.isValid()) return { lineType: 'unknown', whatsappEligible: true };
 
   const type = parsed.getType();
@@ -89,7 +95,7 @@ export function internationalPhone(
   const raw = (phone ?? '').trim();
   const iso = country ? (COUNTRY_TO_ISO[country] as CountryCode | undefined) : undefined;
   if (!raw || !iso) return null;
-  const parsed = parsePhoneNumberFromString(raw, iso);
+  const parsed = parsePhoneNumberFromString(auInternational(raw, iso), iso);
   if (!parsed || !parsed.isValid() || parsed.country !== iso) return null;
   return parsed.formatInternational();
 }

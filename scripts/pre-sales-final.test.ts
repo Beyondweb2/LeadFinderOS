@@ -223,7 +223,7 @@ console.log('── 5. commercial terms: Build 12 / Optimise 6, £99 + £99/mont
   ok(totalPaymentsFor('optimise') === 6 && termMonthsFor('optimise') === 6, 'Optimise: 6 payments in total, 6-month minimum');
   const own = buildCallClose('own_site'), none = buildCallClose(null);
   const b = own.routes.find((r) => r.route === 'build')!, o = own.routes.find((r) => r.route === 'optimise')!;
-  ok(/build you a new website, host it and look after it/.test(b.spoken.join(' ')) && /Once the 12 payments are done the site is yours/.test(b.spoken.join(' ')), 'Build: Findable builds, hosts and manages; the site is theirs after the final payment');
+  ok(/build you a new website, host it and look after it/.test(b.spoken.join(' ')) && /Once the 12 payments are made the website is theirs/.test(b.spoken.join(' ')), 'Build: Findable builds, hosts and manages; the site is theirs after the final payment');
   ok(/You keep your own website and it stays yours/.test(o.spoken.join(' ')) && /never take it offline/.test(o.spoken.join(' ')), 'Optimise: they keep their own site; Findable never takes it offline');
   ok(none.routes.length === 1 && none.routes[0].route === 'build', 'no website → Build only (Optimise needs their own site)');
   const words = [...own.routes.flatMap((r) => r.spoken), own.guarantee.spoken, own.guarantee.headline].join(' ');

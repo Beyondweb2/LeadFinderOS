@@ -24,12 +24,28 @@
       that route IS work on their site. An exact-copy request without confirmed rights is a non-blocking
       flag and the delivery approach drops to a visual refresh / Findable template — never a promise to
       copy third-party code or design.
+   🔴 SALES CLOSE → HANDOFF (Paul, 2026-10-07, docs/pre-sales-certification/sales-close-handoff-australia.md):
+      QUICK CLOSE IS QUICK. Step 1 CONFIRM THE OFFER (Optimise | Build, with the recommendation the call's
+      answers give — offerFit); step 2 only the commercially necessary details still missing (authority; on
+      Optimise: can we get into the site, and who runs it; on Build with an agency: are they still in
+      contract); step 3 the sign-up link and its one compliant send; done. Everything the CALL screen asked
+      (who runs the site, the agency contract and spend, the jobs, the areas, the decision maker) is saved
+      on THIS record as they answer and is never asked again here or in the handoff.
+      ⛔ REMOVED FROM THE CLOSE (all still read on old rows): the website-approach sub-type, the rights /
+      design-owner / domain questions and the three Build consents. The client signs the Client Service
+      Agreement before paying (domain / DNS access 7.1(a), materials 8.1, previous agencies 7.2), and the
+      practical details go to the paid client's dynamic onboarding form (clientOnboardingForm.ts).
+      ⛔ THE AGENCY-CONTRACT RULE (offerFit): an agency / third party runs the site and they are still in
+      contract (or nobody is sure) → Optimise is the offer; Build is not offered to a salesperson, and a Build
+      on those answers is a "Paul review required" stop Paul can release (never a hard ban). Contract ended
+      → either plan. Never knock the agency.
    Pure, no imports beyond the offer constants: read by fn quick-close, the SPA and the tests.
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 import {
-  FINDABLE_CONTINUING_GBP, FINDABLE_GUARANTEE, FINDABLE_MONTHLY_GBP, FINDABLE_SETUP_PRICE_GBP, MONTHLY_START_V3_WORDS, SERVICE_ROUTE_NAME, planTierForRoute, termMonthsFor, totalPaymentsFor,
+  FINDABLE_GUARANTEE, FINDABLE_MONTHLY_GBP, FINDABLE_SETUP_PRICE_GBP, MONTHLY_START_V3_WORDS, SERVICE_ROUTE_NAME, planTierForRoute, termMonthsFor, totalPaymentsFor,
   type ServiceRoute,
 } from './findableOffer.ts';
+import { afterTermClientWords, afterTermRepLine } from './planTerms.ts';
 
 export type QcDecisionMaker = 'yes' | 'no';
 /** 'agency' (v2): an agency / provider controls it — a handoff, not a refusal. */
@@ -43,6 +59,8 @@ export type QcConsents = 'yes' | 'not_yet';
 export type QcApproach = 'improve' | 'new_template' | 'refresh' | 'recreation' | 'unsure';
 export type QcRights = 'yes' | 'no' | 'not_sure';
 export type QcDesignOwner = 'business' | 'agency' | 'not_sure';
+/** Asked on the CALL after "Agency / someone else" (2026-10-07): are they still tied into that contract? */
+export type QcAgencyContract = 'in_contract' | 'free' | 'not_sure';
 
 /** The approach → the commercial route. 'unsure' maps to nothing: the plan is then picked explicitly. */
 export const APPROACH_ROUTE: Record<Exclude<QcApproach, 'unsure'>, ServiceRoute> = {
@@ -71,6 +89,8 @@ export interface QuickCloseAnswers {
   /** 🔴 BUILD ONLY (Paul, 2026-09-29): the three essential consents, confirmed on the call before a link.
    *  'yes' = all three confirmed; 'not_yet' = not (yet) — the link waits. Never asked on Optimise. */
   build_consents?: QcConsents | null;
+  /** The agency contract (2026-10-07) — asked on the call, read by offerFit. */
+  agency_contract?: QcAgencyContract | null;
 }
 export type QcKey = keyof QuickCloseAnswers;
 
@@ -108,12 +128,14 @@ export function domainPending(a: QuickCloseAnswers): boolean {
 }
 
 export const QUICK_CLOSE_QUESTIONS: readonly { key: QcKey; text: string; detail?: readonly string[]; options: readonly { value: string; label: string }[] }[] = [
-  { key: 'decision_maker', text: 'Are you authorised to make this decision for the business?', options: [{ value: 'yes', label: 'Yes' }, { value: 'no', label: 'No' }] },
-  { key: 'approach', text: 'What do they want for their website?', options: (Object.keys(APPROACH_LABEL) as QcApproach[]).map((k) => ({ value: k, label: APPROACH_LABEL[k] })) },
-  /* Asked only when the approach is "Unsure": the plan they pay for still has to be one of the two. */
-  { key: 'route', text: 'Which plan are they starting on?', options: [{ value: 'build', label: 'Findable Build — a new website' }, { value: 'optimise', label: 'Findable Optimise — improve their current site' }] },
+  /* STEP 1 — the offer (2026-10-07: always first; the recommendation comes from offerFit). */
+  { key: 'route', text: 'Which plan are they going with?', options: [{ value: 'optimise', label: 'Findable Optimise — improve their current site' }, { value: 'build', label: 'Findable Build — a new website' }] },
+  { key: 'decision_maker', text: 'Are they authorised to make this decision for the business?', options: [{ value: 'yes', label: 'Yes' }, { value: 'no', label: 'No' }] },
   { key: 'access', text: 'Can Findable get access to their current website (its CMS / admin)?', options: [{ value: 'yes', label: 'Yes' }, { value: 'no', label: 'No' }, { value: 'not_sure', label: 'Not sure' }, { value: 'not_applicable', label: 'Not applicable' }] },
   { key: 'manager', text: 'Who manages the website day to day?', options: [{ value: 'owner', label: 'Business / owner' }, { value: 'employee', label: 'Employee' }, { value: 'agency', label: 'External agency' }, { value: 'third_party', label: 'Other third party' }, { value: 'no_website', label: 'No website' }, { value: 'not_sure', label: 'Not sure' }] },
+  { key: 'agency_contract', text: 'Are they still in a contract with the agency that runs their website?', options: [{ value: 'in_contract', label: 'Yes — still in contract' }, { value: 'free', label: 'No — it has ended / free to move' }, { value: 'not_sure', label: 'Not sure' }] },
+  /* Legacy / Details tab only since 2026-10-07: never asked by the close. */
+  { key: 'approach', text: 'What do they want for their website?', options: (Object.keys(APPROACH_LABEL) as QcApproach[]).map((k) => ({ value: k, label: APPROACH_LABEL[k] })) },
   { key: 'rights', text: 'Do they own, or have the right to reuse, the content, branding and photos on their current site?', options: [{ value: 'yes', label: 'Yes' }, { value: 'no', label: 'No' }, { value: 'not_sure', label: 'Not sure' }] },
   { key: 'design_owner', text: "Who owns the current site's design and code?", options: [{ value: 'business', label: 'The business' }, { value: 'agency', label: 'An agency, platform or template provider' }, { value: 'not_sure', label: 'Not sure' }] },
   { key: 'domain', text: 'Who controls their domain name?', options: [{ value: 'yes', label: 'The business controls it' }, { value: 'agency', label: 'An agency / provider controls it' }, { value: 'not_sure', label: 'Not sure' }, { value: 'no', label: 'They do not control it' }, { value: 'no_domain', label: 'No domain yet' }] },
@@ -134,7 +156,97 @@ export function routeTermsLines(route: ServiceRoute): string[] {
     `£${FINDABLE_SETUP_PRICE_GBP} today`,
     `Then £${FINDABLE_MONTHLY_GBP} a month, starting ${MONTHLY_START_V3_WORDS}`,
     `${totalPaymentsFor(route)} payments in total, today's included — a ${termMonthsFor(route)}-month minimum term`,
+    /* 2026-10-07: what happens after the payments, per plan (planTerms.ts — Optimise ends, Build may continue). */
+    afterTermRepLine(route),
   ];
+}
+
+/* ══ THE OFFER THAT FITS (2026-10-07) — the ONE rule for the agency contract ═════════════════════════════
+   Read by the Call screen's Offer, Quick Close step 1 and the gate's review backstop. */
+export const thirdPartyManaged = (a: QuickCloseAnswers): boolean => a.manager === 'agency' || a.manager === 'third_party';
+/** An agency / third party runs the site and they are NOT confirmed free of the contract — in contract, not
+ *  sure, or not asked yet. ⛔ Positive match on 'free': anything else counts as still tied in. */
+export const agencyContractBlocksBuild = (a: QuickCloseAnswers): boolean => thirdPartyManaged(a) && a.agency_contract !== 'free';
+export interface OfferFit {
+  /** The plan to put first (null = either fits equally). */
+  recommended: ServiceRoute | null;
+  /** May a SALESPERSON offer / pick this plan? (Paul — the admin — may still choose Build; it then stops for his release.) */
+  offered: Record<ServiceRoute, boolean>;
+  /** One line for the rep explaining the recommendation (never shown to the client). */
+  reason: string | null;
+}
+export function offerFit(a: QuickCloseAnswers, hasWebsite: boolean): OfferFit {
+  if (!hasWebsite || a.manager === 'no_website') {
+    return { recommended: 'build', offered: { build: true, optimise: false }, reason: 'No website of their own — Optimise needs one to work on, so the offer is Build.' };
+  }
+  if (agencyContractBlocksBuild(a)) {
+    return {
+      recommended: 'optimise', offered: { build: false, optimise: true },
+      reason: a.agency_contract === 'in_contract'
+        ? "They're still in contract with the agency that runs their site — offer Optimise, so they're not paying for two websites."
+        : "An agency runs their site and the contract isn't confirmed as ended — offer Optimise unless they're free to move.",
+    };
+  }
+  if (thirdPartyManaged(a)) return { recommended: null, offered: { build: true, optimise: true }, reason: 'Their agency contract has ended — either plan works.' };
+  return { recommended: 'optimise', offered: { build: true, optimise: true }, reason: 'They keep their own website — Optimise, or Build if they want a new one.' };
+}
+
+/** The answers a plan choice saves (step 1). The plan is stated explicitly; a legacy approach that would
+ *  contradict it is replaced (Optimise = improve; Build keeps a Build approach, else "Findable recommends"). */
+export function routeChoiceAnswers(a: QuickCloseAnswers, route: ServiceRoute): QuickCloseAnswers {
+  if (route === 'optimise') return { route, approach: 'improve' };
+  const keep = a.approach && a.approach !== 'unsure' && a.approach !== 'improve' ? a.approach : 'unsure';
+  return { route, approach: keep };
+}
+
+/* ══ WHAT THE CALL SCREEN HEARD (2026-10-07) — free text kept beside the answers, never re-asked ══════════ */
+export interface QcCallNotes {
+  /** "Which jobs would you most like more of?" */
+  jobs?: string | null;
+  /** "Which towns or areas matter most to you?" */
+  areas?: string | null;
+  /** What they pay their agency a month, roughly (£). */
+  agency_monthly_gbp?: number | null;
+}
+export const CALL_NOTE_MAX = 300;
+/** Only known keys survive; text is clipped; the spend is a sane positive number or nothing. */
+export function cleanCallNotes(raw: unknown): QcCallNotes {
+  const r = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
+  const out: QcCallNotes = {};
+  for (const k of ['jobs', 'areas'] as const) {
+    const v = r[k];
+    if (typeof v === 'string') { const t = v.replace(/\s+/g, ' ').trim().slice(0, CALL_NOTE_MAX); if (t) out[k] = t; }
+  }
+  const m = r.agency_monthly_gbp;
+  const n = typeof m === 'number' ? m : typeof m === 'string' && m.trim() !== '' ? Number(m.replace(/[£,\s]/g, '')) : NaN;
+  if (Number.isFinite(n) && n >= 0 && n <= 100_000) out.agency_monthly_gbp = Math.round(n * 100) / 100;
+  return out;
+}
+/** "Kitchen fitting and extensions, bathrooms" → ["Kitchen fitting", "extensions", "bathrooms"] — the list the
+ *  lead's services / areas fields hold. Deduplicated (case-insensitive), at most 12 items of 80 characters. */
+export function splitCallList(text: string | null | undefined): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const part of String(text ?? '').split(/[,;\n/]+|\s+(?:and|&)\s+/i)) {
+    const t = part.replace(/\s+/g, ' ').replace(/^[\s.-]+|[\s.]+$/g, '').trim().slice(0, 80);
+    if (!t || seen.has(t.toLowerCase())) continue;
+    seen.add(t.toLowerCase()); out.push(t);
+    if (out.length >= 12) break;
+  }
+  return out;
+}
+/** The call answers as label / answer lines (handoff, intake, Paul's email). Only what was answered. */
+export type CallLineKey = 'manager' | 'agency_contract' | 'agency_monthly_gbp' | 'jobs' | 'areas' | 'decision_maker';
+export function callNotesLines(a: QuickCloseAnswers, n: QcCallNotes | null | undefined): { key: CallLineKey; label: string; answer: string }[] {
+  const c = cleanCallNotes(n);
+  const out: { key: CallLineKey; label: string; answer: string }[] = [];
+  if (a.manager) out.push({ key: 'manager', label: 'Website run by', answer: answerLabel('manager', a.manager) });
+  if (a.agency_contract) out.push({ key: 'agency_contract', label: 'Agency contract', answer: answerLabel('agency_contract', a.agency_contract) });
+  if (c.agency_monthly_gbp !== undefined && c.agency_monthly_gbp !== null) out.push({ key: 'agency_monthly_gbp', label: 'Pays the agency', answer: `about £${c.agency_monthly_gbp} a month` });
+  if (c.jobs) out.push({ key: 'jobs', label: 'Jobs they want more of', answer: c.jobs });
+  if (c.areas) out.push({ key: 'areas', label: 'Areas that matter most', answer: c.areas });
+  if (a.decision_maker) out.push({ key: 'decision_maker', label: 'Decision maker on the call', answer: a.decision_maker === 'yes' ? 'Yes' : 'No — someone else decides' });
+  return out;
 }
 
 /** The short count line used on the route buttons. */
@@ -144,7 +256,7 @@ export const routePaymentsShort = (route: ServiceRoute) => `${totalPaymentsFor(r
  *  a site Findable builds transfers once the term is complete and paid; Optimise never takes a site over). */
 export function routeOwnershipLine(route: ServiceRoute): string {
   return route === 'build'
-    ? `Findable builds, hosts and manages a new website for them. It becomes theirs once all ${totalPaymentsFor(route)} payments are made.`
+    ? 'Findable builds, hosts and manages a new website for them.'
     : 'They keep their existing website — it stays theirs. Findable works on it with their access.';
 }
 
@@ -188,6 +300,9 @@ export function pickAnswers(raw: unknown): QuickCloseAnswers {
 export function mergeAnswers(saved: unknown, incoming: unknown): QuickCloseAnswers {
   const prev = cleanAnswers(saved);
   const inc = pickAnswers(incoming);
+  /* 2026-10-07: the plan is chosen directly (step 1). A plan sent on its own brings the approach that agrees
+     with it, so a stored legacy approach can never silently flip the plan back. */
+  if (inc.route && inc.approach === undefined) Object.assign(inc, routeChoiceAnswers(prev, inc.route));
   const merged: QuickCloseAnswers = { ...prev, ...inc };
   /* Consents read with one wording do not carry over to another (No domain / pending / standard). */
   if (prev.build_consents && inc.build_consents === undefined
@@ -210,48 +325,38 @@ export function cleanAnswers(raw: unknown): QuickCloseAnswers {
   return out;
 }
 
-const thirdPartyManaged = (a: QuickCloseAnswers) => a.manager === 'agency' || a.manager === 'third_party';
-
 /** THE one derivation of the plan from the approach (cleanAnswers stores it; every rule below reads it through
  *  this, so a raw answer set and a cleaned one can never be judged differently). */
 export function withRoute(a: QuickCloseAnswers): QuickCloseAnswers {
   return a.approach && a.approach !== 'unsure' ? { ...a, route: APPROACH_ROUTE[a.approach] } : a;
 }
 
-/** Which questions still need an answer — only the ones the chosen approach needs (v2 order: authority,
- *  approach, [plan when unsure], then the approach's own questions, then the Build consents). A row saved
- *  before v2 has no approach, so the approach is asked; its old answers stay stored and are not re-asked. */
+/** Which questions still need an answer (2026-10-07: the offer, then only what money / delivery needs). An
+ *  answer the CALL screen already saved is never asked again. ⛔ Legacy answers (approach sub-type, rights,
+ *  design owner, domain, Build consents) stay stored and readable, and are no longer required. */
 export function missingQuestions(raw: QuickCloseAnswers): QcKey[] {
   const a = withRoute(raw);
   const miss: QcKey[] = [];
+  if (!a.route) miss.push('route');
   if (!a.decision_maker) miss.push('decision_maker');
-  if (!a.approach) { miss.push('approach'); return miss; }
-  if (!a.route) { miss.push('route'); return miss; }
   for (const k of routeQuestions(a)) if (!a[k] || (a[k] as string) === 'not_applicable') miss.push(k);
-  if (a.route === 'build' && !a.build_consents) miss.push('build_consents');
   return miss;
 }
 
-/** The questions this approach / route asks, in order. ⛔ Build never asks for current-site access; plain
- *  Optimise never asks who controls the domain (the site is edited in place). */
+/** Step 2's questions for this plan, in order. ⛔ Build never asks for current-site access, and never the
+ *  domain (the agreement and the onboarding form cover it). Optimise: can we get in, and who runs it.
+ *  Build with an agency running the site: is the contract still on (the agency-contract rule needs it). */
 export function routeQuestions(raw: QuickCloseAnswers): QcKey[] {
   const a = withRoute(raw);
   if (a.route === 'optimise') return ['access', 'manager'];
-  if (a.route !== 'build') return [];
-  if (a.approach === 'recreation') return ['rights', 'design_owner', 'domain'];
-  if (a.approach === 'refresh') return ['rights', 'domain'];
-  return ['domain'];
+  if (a.route === 'build' && thirdPartyManaged(a)) return ['agency_contract'];
+  return [];
 }
 
-/** The questions on screen for these answers, in the order they are asked (the progress count reads this):
- *  authority, approach, the plan when unsure, the approach's own questions, the Build consents. */
+/** The questions of this close, in order (the progress count reads this): the offer, authority, the plan's own. */
 export function closeFlow(raw: QuickCloseAnswers): QcKey[] {
   const a = withRoute(raw);
-  const keys: QcKey[] = ['decision_maker', 'approach'];
-  if (a.approach === 'unsure') keys.push('route');
-  if (a.route && a.approach) keys.push(...routeQuestions(a));
-  if (a.route === 'build' && a.approach) keys.push('build_consents');
-  return keys;
+  return ['route', 'decision_maker', ...(a.route ? routeQuestions(a) : [])];
 }
 
 /** The route an answer WOULD give (for the "this changes the payments" confirmation before saving it). */
@@ -270,8 +375,9 @@ export function routeSwitchText(from: ServiceRoute, to: ServiceRoute, hasLink: b
 /** "Paul review required" — the PAYMENT STOP. Since v2 only Optimise work on a site we cannot get into
  *  (that route IS work on their site). The domain / rights reasons of the old gate are gone from here;
  *  the legacy authority answers still stop an Optimise on a site an agency runs. */
-export type QcReviewReason = 'third_party_no_authority' | 'third_party_authority_unsure' | 'no_site_access' | 'optimise_access_unsure';
+export type QcReviewReason = 'third_party_no_authority' | 'third_party_authority_unsure' | 'no_site_access' | 'optimise_access_unsure' | 'agency_contract_build';
 export const QC_REVIEW_TEXT: Record<QcReviewReason, string> = {
+  agency_contract_build: 'Build chosen, but an agency runs their website and they are still in contract with it (or not sure) — a new website now could mean paying two providers. Optimise is the normal route here',
   third_party_no_authority: 'An agency / third party runs the site and they do not have authority to let Findable change it',
   third_party_authority_unsure: 'An agency / third party runs the site and authority to let Findable change it is unclear',
   no_site_access: 'Optimise works on their current website, and they could not give Findable access to it',
@@ -336,12 +442,17 @@ export function quickCloseGate(raw: QuickCloseAnswers): QuickCloseGate {
     if (thirdPartyManaged(a) && a.access === 'yes') notes.push('An agency / third party runs the site; the client says Findable can get access');
   }
   if (a.route === 'build') {
+    /* ⛔ THE AGENCY-CONTRACT RULE's backstop (offerFit): Build on a site an agency runs while they are still
+       tied in stops for Paul — he can release it; a salesperson is never shown Build for these answers. */
+    if (agencyContractBlocksBuild(a) && a.agency_contract) review.push('agency_contract_build');
     if (domainPending(a)) flags.push('domain_handoff');
     if (a.approach === 'recreation' && (a.rights !== 'yes' || a.design_owner !== 'business')) flags.push('exact_copy_rights');
     if (a.approach === 'refresh' && a.rights && a.rights !== 'yes') notes.push('Reuse only content, branding and photos the business owns — replace anything else');
     if (a.domain === 'no_domain') notes.push('No domain yet — the business registers one in its own name');
   }
-  return { complete: missing.length === 0, missing, blocked: a.decision_maker === 'no', review, flags, notes, consentsNeeded: a.route === 'build' && a.build_consents !== 'yes' };
+  /* 2026-10-07: the three Build consents are no longer asked on the call (the signed agreement covers them;
+     the onboarding form collects the practical domain / materials answers) — so they never hold the link. */
+  return { complete: missing.length === 0, missing, blocked: a.decision_maker === 'no', review, flags, notes, consentsNeeded: false };
 }
 
 /** The canonical onboarding columns these answers set (the same ones the self-service form writes). */
@@ -374,7 +485,11 @@ export function onboardingColumnsFor(raw: QuickCloseAnswers): Record<string, unk
 export type QuickCloseState = 'not_started' | 'in_progress' | 'blocked' | 'consents_needed' | 'needs_review' | 'ready' | 'link_generated' | 'link_expired' | 'paid';
 /** One record of the link being handed to the prospect (M-015). `channel` says HOW; a copy is recorded as
  *  copied, never as sent — the app cannot know where it was pasted. */
-export interface QcLinkShare { channel: 'copy' | 'email' | 'whatsapp'; at: string; by: string | null; to?: string | null; status?: string | null; session?: string | null }
+export interface QcLinkShare { channel: 'copy' | 'email' | 'whatsapp'; at: string; by: string | null; to?: string | null; status?: string | null; session?: string | null;
+  /** The link this share carried (sign-up links have no Stripe session, so this is what a resend is judged on). */
+  link?: string | null;
+  /** The WhatsApp template it went as (findable_signup_link), or null for a normal message in an open conversation. */
+  template?: string | null }
 export interface QuickCloseRecord {
   answers?: QuickCloseAnswers | null; review_approved_at?: string | null; link_url?: string | null; link_generated_at?: string | null;
   /** The Stripe Checkout Session behind link_url (so a superseded one can be expired) and when Stripe closes it. */
@@ -383,6 +498,8 @@ export interface QuickCloseRecord {
    *  after they sign). Anything else — a link stored before v3 — is a naked Stripe URL and is NEVER usable. */
   link_kind?: 'signup' | null;
   link_shared?: QcLinkShare[] | null;
+  /** What the CALL screen heard (2026-10-07): jobs, areas, agency spend — cleanCallNotes. */
+  call?: QcCallNotes | null;
   /** Optimistic-concurrency counter: every write to quick_close is conditional on it (fn quick-close). */
   rev?: number | null;
 }
@@ -480,6 +597,7 @@ const SHORT_Q: Record<QcKey, string> = {
   decision_maker: 'Decision maker', approach: 'Website approach', domain: 'Domain controlled by', manager: 'Website managed by',
   access: 'Can give site access', authority: 'Authority to replace / move site', rights: 'Rights to reuse content / branding / photos',
   design_owner: 'Current design / code owned by', route: 'Website route', build_consents: 'Build consents (domain, DNS, content)',
+  agency_contract: 'Agency contract',
 };
 
 /** The answered Quick Close questions as label / answer pairs (the Paid Client intake shows them). Pure. */
@@ -512,7 +630,9 @@ export function quickCloseHandoffLines(i: {
   if (i.campaign || i.leadSource) out.push(`  Campaign / source: ${[i.campaign, i.leadSource].filter(Boolean).join(' · ')}`);
   if (i.latestNote) out.push(`  Sales note: ${i.latestNote.slice(0, 300)}`);
   if (i.latestMessages.length) out.push(`  Latest WhatsApp: ${i.latestMessages.map((m) => `${m.direction === 'inbound' ? 'Them' : 'Us'}: ${(m.body ?? '[media]').replace(/\s+/g, ' ').slice(0, 140)}`).join(' | ')}`);
-  out.push('  Still to collect after payment: services, service areas, Google Business Profile access, website / domain details.');
+  /* The call's free-text answers (the enumerated ones are already in the question lines above). */
+  for (const l of callNotesLines(a, (i.qc as QuickCloseRecord).call)) if (l.key === 'jobs' || l.key === 'areas' || l.key === 'agency_monthly_gbp') out.push(`  ${l.label}: ${l.answer}`);
+  out.push('  Still to collect after payment: anything the onboarding form shows as missing (Paid Clients → Send onboarding).');
   return out;
 }
 
@@ -641,15 +761,16 @@ export function adoptLink(
    guarantee (QUICK_CLOSE_GUARANTEE_LINES) and the agreement tick, BEFORE the link is sent. One phrase for
    the timing (MONTHLY_START_V3_WORDS, as offerSummaryFor), no nested brackets (A-29).
    🔴 v3 (2026-10-05): the link is the SIGN-UP link — the client reads and signs the Client Service Agreement
-   on it BEFORE paying (clause 1.2); the timing is the day after the refund window (5.6); the the Continuing Service price
-   Continuing Service follows the minimum term (9A). */
+   on it BEFORE paying (clause 1.2); the timing is the day after the refund window (5.6).
+   🔴 2026-10-07 (Paul): what follows the payments is PER PLAN (planTerms.ts) — Optimise ends after its sixth
+   payment; Build's £29.99 applies only if they want hosting / maintenance to continue. */
 const priceSentence = (route: ServiceRoute) =>
-  `£${FINDABLE_SETUP_PRICE_GBP} today, then £${FINDABLE_MONTHLY_GBP} a month starting ${MONTHLY_START_V3_WORDS} — ${totalPaymentsFor(route)} payments in total, so a ${termMonthsFor(route)}-month minimum term. After that it continues at £${FINDABLE_CONTINUING_GBP} a month until you cancel with 30 days' notice.`;
+  `£${FINDABLE_SETUP_PRICE_GBP} today, then £${FINDABLE_MONTHLY_GBP} a month starting ${MONTHLY_START_V3_WORDS} — ${totalPaymentsFor(route)} payments in total, so a ${termMonthsFor(route)}-month minimum term. ${afterTermClientWords(route)}`;
 /** What happens on the link, in the client's words. */
 export const SIGNUP_LINK_SENTENCE = "On the link you'll check your details, read and sign the Client Service Agreement, and then pay securely.";
 /** The ownership sentence in the CLIENT's words ("you"). Same facts as routeOwnershipLine. */
 const ownershipToClient = (route: ServiceRoute) => route === 'build'
-  ? `We build, host and manage a new website for you, and it becomes yours once all ${totalPaymentsFor(route)} payments are made.`
+  ? 'We build, host and manage a new website for you.'
   : 'You keep your own website — it stays yours, and we work on it.';
 const AFTER_PAYMENT_SENTENCE = "Once it's paid, Paul will be in touch within two working days to take over the setup — website, domain and access — and we take your baseline AI visibility measurement once we have the access we need.";
 

@@ -170,7 +170,7 @@ export const LAUNCH_SKIP_TEXT: Record<string, string> = {
   not_new: 'already in progress', already_contacted: 'already contacted', no_phone: 'no phone number',
   contacted_by_phone: 'already contacted by phone — initial opener not queued',
   contacted_logged: 'already in conversation (a logged contact) — initial opener not queued',
-  not_a_uk_mobile: 'not a mobile number', opted_out: 'asked not to be contacted', daily_limit: 'over your daily limit',
+  not_a_uk_mobile: 'not a UK or Indian mobile (WhatsApp outreach is not switched on for Australia or other countries yet)', opted_out: 'asked not to be contacted', daily_limit: 'over your daily limit',
   /* 2026-10-05 (migration 20261009150000): a launch messages only the CAMPAIGN OWNER's leads — membership never
      overrides ownership. */
   other_owner: 'owned by someone else (a campaign only messages its owner’s leads)',

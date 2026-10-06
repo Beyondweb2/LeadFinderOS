@@ -75,9 +75,12 @@ const base = { decision_maker: 'yes', approach: 'new_template', domain: 'yes' } 
 ok(QUICK_CLOSE_QUESTIONS.some((q) => q.key === 'build_consents' && q.detail?.length === 3) && BUILD_CONSENTS.length === 3, 'one Build-only question listing the three consents');
 ok(/own or control the domain, or have the authority/.test(BUILD_CONSENTS[0]) && /domain \/ DNS changes/.test(BUILD_CONSENTS[1]) && /right to provide and use the business content/.test(BUILD_CONSENTS[2]), 'domain authority · DNS permission · rights to content');
 const build = cleanAnswers({ ...base });
-ok(missingQuestions(build).includes('build_consents') && !mayGenerateLink('answers_saved', { answers: build }), 'Build with the consents unanswered → no link');
-ok(quickCloseState('answers_saved', { answers: { ...build, build_consents: 'not_yet' } }) === 'consents_needed' && !mayGenerateLink('answers_saved', { answers: { ...build, build_consents: 'not_yet' } }), '"Not yet" → Build consents needed, no link');
-ok(quickCloseState('answers_saved', { answers: { ...build, build_consents: 'not_yet' }, review_approved_at: '2026-09-29T10:00:00Z' }) === 'consents_needed', 'Paul\'s review release does not stand in for the consents');
+/* 2026-10-07 (Paul): the three consents are no longer asked on the call — the client signs the agreement (domain /
+   DNS access 7.1(a), materials 8.1) before paying, and the paid client's onboarding form collects the practical
+   answers (dns_permission, materials_confirmed). An old row's stored answer is still read, never required. */
+ok(!missingQuestions(build).includes('build_consents') && mayGenerateLink('answers_saved', { answers: build }), 'Build no longer waits on the consents before the link');
+ok(quickCloseState('answers_saved', { answers: { ...build, build_consents: 'not_yet' } }) === 'ready', 'an old "Not yet" answer no longer holds the link (the agreement is the consent)');
+ok(onboardingColumnsFor({ ...build, build_consents: 'yes' }).dns_permission === true, '…and an old "Yes" still writes the consent columns it always did');
 ok(mayGenerateLink('answers_saved', { answers: { ...build, build_consents: 'yes' } }), 'all three confirmed → the link may be generated');
 const cols = onboardingColumnsFor(cleanAnswers({ ...build, build_consents: 'yes' }));
 ok(cols.dns_permission === true && cols.materials_confirmed === true && cols.authority_confirmed === true, 'confirmed → the same consent columns the self-service pages write');

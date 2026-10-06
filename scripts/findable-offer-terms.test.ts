@@ -22,6 +22,7 @@ import { minimumTermCancelAt } from '../supabase/functions/_shared/delayed-subsc
 import { getTemplateSendability } from '../src/lib/whatsappTemplates.ts';
 import { templateAwaitingApproval } from '../supabase/functions/_shared/whatsapp-send.ts';
 import { buildColdCallPlaybook } from '../src/lib/coldCallPlaybook.ts';
+import { bothPlansSpoken } from '../src/lib/planTerms.ts';
 
 let f = 0;
 const ok = (c: unknown, l: string) => { if (!c) f++; console.log((c ? 'PASS ' : 'FAIL ') + l); };
@@ -118,14 +119,15 @@ const pb = buildColdCallPlaybook({
   lead: { id: 'l', business_name: 'Acme Plumbing', phone: '07700900123', website: null },
   reportAudit: null, report: null, runCrawls: [], leadCrawl: null, messages: [], nowMs: Date.now(),
 });
-ok(pb.offer.lines[0] === FINDABLE_OFFER_SUMMARY, 'Cold Call Playbook quotes the offer from the constant');
-ok(/12 months/.test(pb.offer.monthly) && /after the 12th payment/.test(pb.offer.monthly) && /after the 6th payment/.test(pb.offer.monthly) && /first payment either way/.test(pb.offer.monthly) && !/check current offer/i.test(JSON.stringify(pb)),
+/* 2026-10-07 (Paul): the sales offer is planTerms.ts — both plans, each with its own ending (Optimise ends after 6). */
+ok(pb.offer.lines[0] === bothPlansSpoken(), 'Cold Call Playbook quotes the offer from the one sales source (planTerms.ts)');
+ok(/12 months/.test(pb.offer.monthly) && /12 payments/.test(pb.offer.monthly) && /6 payments/.test(pb.offer.monthly) && /first payment either way/.test(pb.offer.monthly) && !/check current offer/i.test(JSON.stringify(pb)),
   'and names both routes\' counts, the sign-up counted — no "check current offer"');
 /* Nothing customer-facing may describe the count ON TOP of the sign-up. */
 for (const [label, text] of [['card notice (build)', cardSavedNoticeFor('build')], ['card notice (optimise)', cardSavedNoticeFor('optimise')], ['offer summary', FINDABLE_OFFER_SUMMARY], ['playbook offer', JSON.stringify(pb.offer)]] as const) {
   ok(!/(12|6) (more|further|monthly) payments|then (12|6) payments|plus (12|6)\b|13 payments|7 payments/i.test(text), label + ': no wording that implies an extra payment');
 }
-ok(pb.objections.find((o) => o.objection === 'How much is it?')?.answer.startsWith(FINDABLE_OFFER_SUMMARY), '"How much is it?" answers with the current offer');
+ok(pb.objections.find((o) => o.objection === 'How much is it?')?.answer === bothPlansSpoken(), '"How much is it?" answers with the current offer (planTerms.ts)');
 
 console.log('── 5. NO STALE CURRENT-OFFER WORDING ──');
 const ACTIVE = [

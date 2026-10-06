@@ -3,26 +3,29 @@
 //
 // ⛔ THE SERVER DECIDES. public.import_leads (migration 20261010170000) validates every row, finds duplicates with
 // the canonical _lead_identity_rows, stamps the owner (always the caller) and writes. This file only READS the file
-// (BOM, quoted commas, line breaks inside quotes, ; or tab separators), MAPS columns to the twelve fields the
+// (BOM, quoted commas, line breaks inside quotes, ; or tab separators), MAPS columns to the thirteen fields the
 // server accepts, sends them in calls of IMPORT_BATCH_MAX, and turns the server's answers into words. It holds no
 // validation or duplicate rule of its own — a second copy of either is the "one rule in N places" trap.
 //
-// ⛔ ONLY THE TWELVE FIELDS ARE EVER SENT (buildImportRows). An owner, status, seller, payment, agreement or client
+// ⛔ ONLY THE THIRTEEN FIELDS ARE EVER SENT (buildImportRows). An owner, status, seller, payment, agreement or client
 // column in a CSV is never mapped, and the server ignores anything else that arrives anyway.
 //
 // Leaf imports only (relative, explicit .ts): scripts/csv-lead-import.test.ts loads it directly. The one import is the
 // refusal wording for a salesperson whose onboarding is incomplete (readinessWords.ts, final sales release).
 import { onboardingWordsForPausedRefusal } from './readinessWords.ts';
 
-/** The fields a CSV row may set — the same allowlist import_leads reads. Order = the mapping screen's order. */
+/** The fields a CSV row may set — the same allowlist import_leads reads. Order = the mapping screen's order.
+ *  `country` (2026-10-07, migration 20261014100200) is optional: UK or Australia words; left unmapped, the server
+ *  derives it per row (a +61 phone, an address ending Australia or naming "NSW 2000" → Australia, else UK). */
 export const IMPORT_FIELDS = [
-  'business_name', 'contact_name', 'phone', 'email', 'website', 'address', 'postcode', 'town', 'trade', 'notes', 'google_maps_url', 'place_id',
+  'business_name', 'contact_name', 'phone', 'email', 'website', 'address', 'postcode', 'town', 'trade', 'notes', 'google_maps_url', 'place_id', 'country',
 ] as const;
 export type ImportField = typeof IMPORT_FIELDS[number];
 
 export const IMPORT_FIELD_LABEL: Record<ImportField, string> = {
   business_name: 'Business name', contact_name: 'Contact person', phone: 'Phone', email: 'Email', website: 'Website',
   address: 'Address', postcode: 'Postcode', town: 'Town', trade: 'Trade / category', notes: 'Notes', google_maps_url: 'Google Maps link', place_id: 'Google Place ID',
+  country: 'Country (UK or Australia)',
 };
 
 /** import_leads' own ceiling per call (it refuses more: too_many_rows). */
@@ -46,6 +49,7 @@ const ALIASES: Record<ImportField, string[]> = {
   notes: ['notes', 'note', 'comments', 'comment', 'remarks'],
   google_maps_url: ['googlemapsurl', 'googlemaps', 'googlemapslink', 'mapsurl', 'mapslink', 'maplink', 'gmaps'],
   place_id: ['placeid', 'googleplaceid', 'gplaceid'],
+  country: ['country', 'countryname', 'nation'],
 };
 
 export const normaliseHeader = (h: string) => h.replace(/^﻿/, '').trim().toLowerCase().replace(/[^a-z0-9]/g, '');
@@ -270,6 +274,7 @@ export function reasonText(reason: string, r: Pick<RowResult, 'first_row' | 'own
     case 'invalid_website': return 'Website is not valid';
     case 'invalid_maps_link': return 'Google Maps link is not valid';
     case 'invalid_place_id': return 'Google Place ID is not valid';
+    case 'invalid_country': return 'Country must be UK or Australia (or leave it blank)';
     case 'no_phone_or_email': return 'Needs a phone number or an email';
     case 'bad_row': return 'Row could not be read';
     case 'duplicate_in_file': return r.first_row ? `Repeats row ${r.first_row} of this file` : 'Repeats an earlier row of this file';

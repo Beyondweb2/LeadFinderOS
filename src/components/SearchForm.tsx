@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef } from 'react';
-import { Search, MapPin, Radius, Loader2 } from 'lucide-react';
+import { Search, MapPin, Radius, Loader2, Globe2 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { usePersistedState } from '@/hooks/usePersistedState';
 import logoIcon from '@/assets/leadfinder-logo-icon.png';
@@ -9,8 +9,9 @@ import { Label } from '@/components/ui/label';
 import { Slider } from '@/components/ui/slider';
 import { Switch } from '@/components/ui/switch';
 import { Card, CardContent } from '@/components/ui/card';
-import { QuickLocationsList, SEARCH_COUNTRIES, countryLabel } from '@/components/QuickLocationsList';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { SuggestedLocations } from '@/components/SuggestedLocations';
+import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectSeparator, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { SEARCH_COUNTRY_OPTIONS, countryName, locationAfterCountryChange, normaliseSearchCountry, quickLocationValue } from '@/lib/locationPicker';
 import { QuickBusinessTypes } from '@/components/QuickBusinessTypes';
 import type { Country } from '@/types/lead';
 import type { SearchFilters } from '@/types/lead';
@@ -72,7 +73,19 @@ export function SearchForm({
   const [keyword, setKeyword] = usePersistedState('find-leads-keyword', '', persist);
   const [location, setLocation] = usePersistedState('find-leads-location', '', persist);
   const [radius, setRadius] = usePersistedState('find-leads-radius', initialRadius ?? 50, persist);
-  const [selectedCountry, setSelectedCountry] = usePersistedState<Country>('find-leads-country', 'UK' as Country, persist);
+  const [storedCountry, setSelectedCountry] = usePersistedState<Country>('find-leads-country', 'UK' as Country, persist);
+  /* An old or hand-edited stored value is read as the default, never sent to the search as a bias. */
+  const selectedCountry = normaliseSearchCountry(storedCountry);
+  /* COUNTRY → LOCATION → RADIUS. A new country clears a Location that belonged to the old one (one of its
+     suggestions, or text naming it) and keeps one the person typed that names no country; the radius and
+     "This town only" are never touched (src/lib/locationPicker.ts). */
+  const changeCountry = (next: Country) => {
+    if (next === selectedCountry) return;
+    setLocation(locationAfterCountryChange(location, selectedCountry, next));
+    setSelectedCountry(next);
+  };
+  const primaryCountries = SEARCH_COUNTRY_OPTIONS.filter((o) => o.primary);
+  const otherCountries = SEARCH_COUNTRY_OPTIONS.filter((o) => !o.primary);
   // Persisted exactly like radius — same tier, same per-user scope — so the mode survives a
   // reload instead of quietly reverting to a radius search between sessions.
   /* ⛔ DEFAULT ON, 2026-08-09. locationBias is a HINT — Google returns results outside the circle
@@ -160,8 +173,8 @@ export function SearchForm({
           </p>
 
           {/* Main Search Fields */}
-          <div className="grid gap-3 sm:gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            <div className="space-y-1.5 sm:space-y-2" data-walkthrough-step="business-type-area">
+          <div className="grid gap-3 sm:gap-4 sm:grid-cols-2 lg:grid-cols-12">
+            <div className="min-w-0 space-y-1.5 sm:space-y-2 lg:col-span-4" data-walkthrough-step="business-type-area">
               <Label htmlFor="keyword" className="text-xs font-medium text-foreground/80">
                 Business Type
               </Label>
@@ -179,47 +192,73 @@ export function SearchForm({
               <QuickBusinessTypes onSelect={setKeyword} selected={keyword} />
             </div>
 
-            <div className="space-y-1.5 sm:space-y-2" data-walkthrough-step="location-area">
-              {/* ⛔ THE COUNTRY IS SHOWN, NOT REMEMBERED OUT OF SIGHT (2026-09-28). It used to change only on a
-                  Quick Locations click and was never displayed, so typing "Grimsby" after one click on a US
-                  city searched with a US bias and stored 349 UK businesses as USA. It still only BIASES the
-                  search — the leads carry the country Google resolved (leadCountry.ts). */}
-              <div className="flex items-center justify-between gap-2">
-                <Label htmlFor="location" className="text-xs font-medium text-foreground/80">
-                  Location
+            <div className="min-w-0 space-y-3 lg:col-span-5" data-walkthrough-step="location-area">
+              {/* ⛔ COUNTRY → LOCATION → RADIUS (2026-10-07, src/lib/locationPicker.ts). The country is a normal
+                  dropdown showing its NAME (no flag emoji — Windows draws those as "GB"), then the location, then
+                  this country's suggestions. It is SHOWN, never remembered out of sight (2026-09-28: a hidden
+                  choice stored 349 UK businesses as USA), and it only BIASES the search — the leads carry the
+                  country Google resolved (leadCountry.ts). */}
+              <div className="space-y-1.5">
+                <Label htmlFor="find-leads-country" className="text-xs font-medium text-foreground/80">
+                  Country
                 </Label>
-                <Select value={selectedCountry} onValueChange={(v) => setSelectedCountry(v as Country)}>
-                  <SelectTrigger className="h-7 w-auto gap-1 border-border/60 px-2 text-xs" aria-label="Country" data-testid="find-leads-country">
-                    <SelectValue />
+                <Select value={selectedCountry} onValueChange={(v) => changeCountry(normaliseSearchCountry(v))}>
+                  <SelectTrigger id="find-leads-country" className="h-9 sm:h-10 bg-input border-border text-sm" aria-label="Country" data-testid="find-leads-country">
+                    <span className="flex min-w-0 items-center gap-2">
+                      <Globe2 className="h-3.5 w-3.5 sm:h-4 sm:w-4 shrink-0 text-muted-foreground" />
+                      <SelectValue />
+                    </span>
                   </SelectTrigger>
-                  <SelectContent>
-                    {SEARCH_COUNTRIES.map((c) => (
-                      <SelectItem key={c.value} value={c.value} className="text-xs">{c.flag} {countryLabel(c.value)}</SelectItem>
-                    ))}
+                  <SelectContent className="max-h-80">
+                    <SelectGroup>
+                      <SelectLabel className="text-[11px] text-muted-foreground">Main markets</SelectLabel>
+                      {primaryCountries.map((c) => (
+                        <SelectItem key={c.value} value={c.value} className="text-sm">
+                          {c.name}<span className="ml-2 text-[10px] font-medium text-muted-foreground">{c.code}</span>
+                        </SelectItem>
+                      ))}
+                    </SelectGroup>
+                    <SelectSeparator />
+                    <SelectGroup>
+                      <SelectLabel className="text-[11px] text-muted-foreground">Other countries</SelectLabel>
+                      {otherCountries.map((c) => (
+                        <SelectItem key={c.value} value={c.value} className="text-sm">
+                          {c.name}<span className="ml-2 text-[10px] font-medium text-muted-foreground">{c.code}</span>
+                        </SelectItem>
+                      ))}
+                    </SelectGroup>
                   </SelectContent>
                 </Select>
               </div>
-              <div className="relative">
-                <MapPin className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 sm:h-4 sm:w-4 text-muted-foreground" />
-                <Input
-                  id="location"
-                  placeholder="City or postcode"
-                  value={location}
-                  onChange={(e) => setLocation(e.target.value)}
-                  className="pl-8 sm:pl-10 h-9 sm:h-10 bg-input border-border focus:ring-primary text-sm"
-                  data-walkthrough-step="location"
-                />
+              <div className="space-y-1.5">
+                <Label htmlFor="location" className="text-xs font-medium text-foreground/80">
+                  Location
+                </Label>
+                <div className="relative">
+                  <MapPin className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 sm:h-4 sm:w-4 text-muted-foreground" />
+                  <Input
+                    id="location"
+                    placeholder="Town, suburb or postcode"
+                    value={location}
+                    onChange={(e) => setLocation(e.target.value)}
+                    className="pl-8 sm:pl-10 h-9 sm:h-10 bg-input border-border focus:ring-primary text-sm"
+                    data-walkthrough-step="location"
+                    aria-describedby="find-leads-location-hint"
+                  />
+                </div>
+                <p id="find-leads-location-hint" className="sr-only">Searching in {countryName(selectedCountry)}</p>
               </div>
-              <QuickLocationsList onLocationSelect={(loc, country) => {
-                setLocation(loc);
-                setSelectedCountry(country);
-              }} />
+              <SuggestedLocations
+                country={selectedCountry}
+                location={location}
+                onPick={(city) => setLocation(quickLocationValue(city, selectedCountry))}
+              />
             </div>
 
             {/* HOW WIDE TO SEARCH — one control group. The radius and the town boundary answer the
                 same question, so they share a cell. As its own bordered block below the grid the
                 toggle read as an unrelated setting. */}
-            <div className="space-y-1.5 sm:space-y-2 sm:col-span-2 lg:col-span-1">
+            <div className="min-w-0 space-y-1.5 sm:space-y-2 sm:col-span-2 lg:col-span-3">
               <div className="flex items-center justify-between gap-3">
                 <Label className={`whitespace-nowrap text-xs font-medium transition-colors ${townOnly ? 'text-muted-foreground/50' : 'text-foreground/80'}`}>
                   Radius: {radius} km

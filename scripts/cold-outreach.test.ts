@@ -109,6 +109,15 @@ const EXPECTED_CONTINUATIONS = [
   "explain_offer",
   /* explain_offer_v2 — 2026-09-16, the same pitch with the proof paragraph. Same decision. */
   "explain_offer_v2",
+  /* findable_signup_link / findable_onboarding — added 2026-10-07 (Paul's brief). THE ANSWER IS YES, DELIBERATELY:
+     the sign-up link goes to someone a salesperson has just closed — usually on the phone, a LOGGED contact the
+     cold guard (opener_contact_block) would refuse — and the onboarding link to a PAYING client, who always has
+     history. Left cold, both would be refused for their entire audience. ⚠️ The accepted exposure is small and
+     fenced: neither is ever queued (the queue mirror lists them only for parity), both are sent only from Quick
+     Close / Paid Clients through send-whatsapp-message, both need a usable server-resolved link, and both are
+     one per lead unless deliberately resent. */
+  "findable_signup_link",
+  "findable_onboarding",
 ].sort();
 const actual = [...CONTINUATION_TEMPLATES].sort();
 const added = actual.filter((t) => !EXPECTED_CONTINUATIONS.includes(t));

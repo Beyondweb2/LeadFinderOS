@@ -31,6 +31,9 @@ import { OPT_OUT_REFUSAL_REASON, optOutBlocksTemplate } from "../../../src/lib/m
 import { STRONG_STATUSES, postgrestList } from "../../../src/lib/strongStatuses.ts";
 import { QA_REFUSAL_REASON } from "../../../src/lib/qaSafety.ts";
 import { qaSendHold } from "../_shared/qa-guard.ts";
+import { templateAvailability } from "../_shared/template-status.ts";
+import { resolveOnboardingFormVars, resolveSignupLinkVars } from "../_shared/link-template-vars.ts";
+import { LINK_TEMPLATE_NAMES, SIGNUP_LINK_TEMPLATE_NAME, TEMPLATE_UNAVAILABLE_CODES, templateSendFailureText, templateSendState } from "../../../src/lib/whatsappLinkTemplates.ts";
 
 // send-whatsapp-message — the Inbox reply sender (Phase A).
 //
@@ -67,7 +70,9 @@ const WINDOW_MS = 24 * 60 * 60 * 1000;
    asserts "dry_run" is listed IF AND ONLY IF this file actually contains the dry-run return, so the
    marker cannot claim a feature these bytes do not have — a constant that can lie is worse than no
    constant. BUMP `BUILD_ID` in the same commit as any change worth proving live. */
-const CAPABILITIES = ["dry_run", "build_phase_hold", "routing_leaf", "any_approved_opener"] as const;
+const CAPABILITIES = ["dry_run", "build_phase_hold", "routing_leaf", "any_approved_opener", "link_templates"] as const;
+/* 2026-10-07a: findable_signup_link / findable_onboarding — server-resolved links, Meta's LIVE template status
+   (_shared/template-status.ts), one send per lead unless resent on purpose. */
 /* 2026-09-25a: ai_site_findings_v2 APPROVED — six body params (no report link) + the clean-site {{6}}.
    2026-09-23b: the first build refusing an initial opener other than the SELECTED one
    (whatsapp_outreach_state.initial_opener_template; the 50/50 opener split is gone).
@@ -82,7 +87,7 @@ const CAPABILITIES = ["dry_run", "build_phase_hold", "routing_leaf", "any_approv
    gone; the capability reads any_approved_opener).
    2026-09-30b: an explicit opt-out refuses MARKETING templates here too (src/lib/marketingConsent.ts).
    2026-10-04a: QA safety — a QA fixture is simulated, a test-account lead is refused (src/lib/qaSafety.ts). */
-const BUILD_ID = "2026-10-05a-contact-guard";
+const BUILD_ID = "2026-10-07a-link-templates";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -385,6 +390,8 @@ Deno.serve(async (req) => {
     // For audit_reply the "claim url" IS the report link — the same column, the send's outbound URL.
     let auditBusinessName = businessName;
     let auditClaimUrl = "";
+    /* The language actually sent, when it is Meta's live registration rather than the registry's (link templates). */
+    let sentLang: string | null = null;
 
     if (templateName) {
       if (!WA_TEMPLATES[templateName]) return json({ ok: false, error: "unknown_template" }, 400);
@@ -458,7 +465,44 @@ Deno.serve(async (req) => {
       const needsAudit = buildsFromAudit(tvars);
       const needsOnboardingUrl = tvars.includes("onboarding_url");
       const needsContactName = tvars.includes("contact_first_name");
-      if (needsContactName) {
+      /* ══ THE TWO LINK TEMPLATES (2026-10-07, src/lib/whatsappLinkTemplates.ts) ════════════════════════════
+         findable_signup_link (a prospect's sign-up link after a close) / findable_onboarding (a paid client's form).
+         ⛔ META'S LIVE STATUS DECIDES, never a flag: APPROVED sends; in review / rejected / paused / not found
+            refuses with the reason (the screen offers Copy); unreadable → Meta decides on the send.
+         ⛔ The language is the one Meta registered (the status read), the registry's only a fallback.
+         ⛔ Both variables are resolved HERE from the lead's own records — the link is never the caller's — and
+            the link must be the findable.live sign-up / onboarding shape (templateBodyParams), never Stripe.
+         ⛔ ONE PER LEAD BY DEFAULT: a second send needs the operator's explicit resend (allow_resend), so a
+            double press or a retry never messages the client twice.
+         A salesperson can reach only the sign-up template on a lead they work (the role guard above); the
+         onboarding template is for a PAID client, which a salesperson's request is refused for (isClientLead). */
+      const linkKind = tvars.includes("signup_url") ? "signup" : tvars.includes("onboarding_form_url") ? "onboarding" : null;
+      if (linkKind) {
+        if (!resolvedLeadId) return json({ ok: false, error: "template_needs_lead" }, 400);
+        if (!allowResend && await pitchEverSent(service, resolvedLeadId, templateName)) {
+          return json({ ok: false, error: "pitch_already_sent", reason: "Already sent to them on WhatsApp — confirm to send it again." }, 200);
+        }
+        const avail = await templateAvailability(service, templateName);
+        const st = templateSendState(avail, linkKind);
+        if (!st.sendable && !st.tryable) return json({ ok: false, error: "template_not_approved", status: avail.status, reason: st.say }, 200);
+        if (avail.language) lang = avail.language;
+        const v = linkKind === "signup" ? await resolveSignupLinkVars(service, resolvedLeadId) : await resolveOnboardingFormVars(service, resolvedLeadId);
+        if (!v.ok) return json({ ok: false, error: "link_unavailable", reason: v.reason }, 200);
+        try {
+          payload = claimTemplatePayload(templateName, lang, v.business, "", linkKind === "signup" ? { greetingName: v.greeting, signupUrl: v.url } : { greetingName: v.greeting, onboardingFormUrl: v.url });
+        } catch (e) {
+          const msg = (e as Error).message ?? "";
+          if (msg.startsWith("unsafe_template_var:")) {
+            const [, reason, detail] = msg.split(":");
+            return json({ ok: false, error: "unsafe_template_var", reason, detail: detail ?? "" }, 200);
+          }
+          throw e;
+        }
+        storedBody = renderTemplateBody(templateName, v.greeting, v.url);
+        auditBusinessName = v.business;
+        auditClaimUrl = v.url;
+        sentLang = lang;
+      } else if (needsContactName) {
         /* questionnaire_followup: {{1}} = the OWNER'S first name (first word of the lead's
            contact_name), {{2}} = business name. The one template that greets a person, so a blank
            name refuses with a code the UI turns into "type their first name" — never "Hi there".
@@ -710,7 +754,7 @@ Deno.serve(async (req) => {
         payload,
         /* What the Inbox would store as the transcript — what the prospect reads. */
         body: storedBody,
-        ...(messageType === "template" && usedTemplate ? { template_snapshot: createTemplateSnapshot({ templateName: usedTemplate, language: WA_TEMPLATES[usedTemplate].lang, body: storedBody, payload }) } : {}),
+        ...(messageType === "template" && usedTemplate ? { template_snapshot: createTemplateSnapshot({ templateName: usedTemplate, language: sentLang ?? WA_TEMPLATES[usedTemplate].lang, body: storedBody, payload }) } : {}),
         ...(fellBackReason ? { fell_back: fellBackReason } : {}),
       });
     }
@@ -720,12 +764,18 @@ Deno.serve(async (req) => {
     let status = "simulated";
     let messageId: string | null = null;
     let sendError: string | null = null;
+    let failCode: number | null = null;
 
     if (env.live) {
       const r = await sendViaGraph(env.accessToken, env.phoneNumberId, to, payload);
       if (r.ok) { status = "sent"; messageId = r.messageId; }
-      else { status = "failed"; sendError = r.error; }
-    } else {
+      else { status = "failed"; sendError = r.error; failCode = r.failCode ?? null; }
+    }
+    /* A link template Meta refused as unavailable (not approved yet, paused, disabled): re-read its status now,
+       so the next screen load says so instead of offering the button again. */
+    const linkFailKind = status === "failed" && usedTemplate && (LINK_TEMPLATE_NAMES as readonly string[]).includes(usedTemplate)
+      ? (usedTemplate === SIGNUP_LINK_TEMPLATE_NAME ? "signup" : "onboarding") as "signup" | "onboarding" : null;
+    if (linkFailKind && failCode !== null && TEMPLATE_UNAVAILABLE_CODES.has(failCode)) await templateAvailability(service, usedTemplate!, { force: true }); else {
       console.log(`WOULD SEND (${messageType}) to ${to}${usedTemplate ? ` [${usedTemplate}]` : ""}: ${text || "(template)"}`);
     }
 
@@ -743,7 +793,7 @@ Deno.serve(async (req) => {
       status,
       test_mode: env.testMode,
       error: sendError,
-      ...(messageType === "template" && usedTemplate ? { template_snapshot: createTemplateSnapshot({ templateName: usedTemplate, language: WA_TEMPLATES[usedTemplate].lang, body: storedBody, payload }) } : {}),
+      ...(messageType === "template" && usedTemplate ? { template_snapshot: createTemplateSnapshot({ templateName: usedTemplate, language: sentLang ?? WA_TEMPLATES[usedTemplate].lang, body: storedBody, payload }) } : {}),
       ...(findingsShown?.length ? { findings_shown: findingsShown } : {}),
     }).select("*").maybeSingle();
     if (insErr) console.error("[send-whatsapp-message] log insert failed:", insErr.message);
@@ -845,6 +895,8 @@ Deno.serve(async (req) => {
     return json({
       ok: status !== "failed",
       status,
+      ...(failCode !== null ? { failCode } : {}),
+      ...(linkFailKind ? { reason: templateSendFailureText(failCode, linkFailKind) } : {}),
       simulated: !env.live,
       windowOpen,
       messageId,

@@ -67,29 +67,20 @@ export function getScoreLabel(score: number): { label: string; color: string } {
  * Format phone for WhatsApp link (digits only, with country code)
  */
 export function formatPhoneForWhatsApp(phone: string, country?: string | null): string {
-  /* ⛔ AN INDIA LEAD GOES THROUGH THE ONE RULE (2026-09-28): the UK default below turned "098765 43210"
-     into 449876543210 — a UK number. Every other lead keeps exactly the behaviour it had. */
-  if (country && /^(india|in)$/i.test(country)) return toWhatsAppDigits(phone, country) ?? '';
-  // Remove all non-digits except leading +
-  let cleaned = phone.replace(/[^\d+]/g, '');
-  
-  // Remove leading + if present (WhatsApp expects digits only)
-  cleaned = cleaned.replace(/^\+/, '');
-  
-  // If it starts with 0 (local format), try to add country code
-  // Default to UK (+44) if starts with 0
-  if (cleaned.startsWith('0')) {
-    cleaned = '44' + cleaned.slice(1);
-  }
-  
-  return cleaned;
+  /* ⛔ EVERY LEAD GOES THROUGH THE ONE RULE (src/lib/waNumber.ts). India moved first (2026-09-28: this
+     helper's own "leading 0 → 44" turned "098765 43210" into 449876543210); Australia followed (2026-10-07:
+     "0412 345 678" became 44412345678, a UK-shaped number nobody owns). The old body also mangled "0044 …"
+     into 440044… and gave a USA lead's 0… number a 44. On a valid UK number the result is unchanged
+     (07… → 447…, +44 … → 44…). A number the rule cannot place answers '' (no destination). */
+  return toWhatsAppDigits(phone, country) ?? '';
 }
 
 /**
- * Generate WhatsApp web URL with pre-filled message
+ * Generate WhatsApp web URL with pre-filled message. Pass the lead's country: without it the number is
+ * read as UK (an Australian "04…" number is then refused, never turned into a 44… one).
  */
-export function generateWhatsAppUrl(phone: string, message: string): string {
-  const formattedPhone = formatPhoneForWhatsApp(phone);
+export function generateWhatsAppUrl(phone: string, message: string, country?: string | null): string {
+  const formattedPhone = formatPhoneForWhatsApp(phone, country);
   const encodedMessage = encodeURIComponent(message);
   return `https://wa.me/${formattedPhone}?text=${encodedMessage}`;
 }
@@ -139,7 +130,7 @@ export function fillTemplate(
  * Open WhatsApp for multiple leads (opens first, queues rest)
  */
 export function openBulkWhatsApp(
-  leads: Array<{ phone: string; business_name: string }>,
+  leads: Array<{ phone: string; business_name: string; country?: string | null }>,
   messageTemplate: string
 ): void {
   if (leads.length === 0) return;
@@ -147,7 +138,7 @@ export function openBulkWhatsApp(
   // Open first lead immediately
   const firstLead = leads[0];
   const message = fillBusinessName(messageTemplate, firstLead.business_name);
-  const url = generateWhatsAppUrl(firstLead.phone, message);
+  const url = generateWhatsAppUrl(firstLead.phone, message, firstLead.country);
   window.open(url, '_blank');
   
   // If more than 1, notify user to click again for next

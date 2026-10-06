@@ -86,7 +86,7 @@ console.log("\n── 5. SALES CHASING STOPS ──");
 
 console.log("\n── HANDOFF ──");
 {
-  ok(HANDOFF_QUESTIONS.filter((q) => q.required).map((q) => q.key).join() === "work_type,site_situation,client_wants,promised,why_bought,decision_maker_name", "six required answers, role + note optional");
+  ok(HANDOFF_QUESTIONS.filter((q) => q.required).length === 0 && HANDOFF_QUESTIONS.filter((q) => q.asked).map((q) => q.key).join() === "decision_maker_name,decision_maker_role,promised,preferred_contact,notes_for_paul", "2026-10-07: nothing required; the rep is asked only contact, role, any promise, how to reach them, a note");
   ok(WORK_TYPE_OPTIONS.map((o) => o.label).join("|") === "Brand new website|Rebuild their existing website|Rebuild, keeping their current design fairly close|Optimise their existing website", "the four 'what are we doing' options, mapped to the two real routes");
   const c = cleanHandoff({ work_type: "rocket", site_situation: "agency", client_wants: "  More   calls ", junk: "x", promised: 5 });
   ok(!c.work_type && c.site_situation === "agency" && c.client_wants === "More calls" && !("junk" in c) && !c.promised, "cleanHandoff is an allowlist: unknown keys / tokens / types dropped, whitespace collapsed");
@@ -98,7 +98,7 @@ console.log("\n── HANDOFF ──");
   ok(handoffWithPrefill({ site_situation: "client" }, pre.fields).site_situation === "client", "saved answers win over the prefill");
   const full = { work_type: "optimise", site_situation: "client", client_wants: "a", promised: "b", why_bought: "c", decision_maker_name: "d" } as const;
   ok(!handoffComplete({ ...full }) && handoffComplete({ ...full, saved_at: "2026-10-02T10:00:00Z" }), "complete only once a person has SAVED it (a prefill alone never is)");
-  ok(handoffMissing({ ...full, promised: null }).join() === "promised", "9. the missing answers are named");
+  ok(handoffMissing({ ...full, promised: null }).length === 0, "9. an unknown answer is never 'missing' (lightweight handoff, 2026-10-07)");
   ok(handoffChangedKeys(full, { ...full, why_bought: "z" }).join() === "why_bought" && handoffChangedKeys(full, full).length === 0, "History records a material change, never a no-op save");
   ok(salesHandoffApplies({ sellerId: "rep", sellerIsBookOwner: false, paidOn: SALES_HANDOFF_SINCE }) === "required", "owed on a salesperson's sale");
   ok(salesHandoffApplies({ sellerId: "paul", sellerIsBookOwner: true, paidOn: "2026-10-05" }) === "not_needed_own_sale", "…not on Paul's own sale");

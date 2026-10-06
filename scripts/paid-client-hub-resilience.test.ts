@@ -112,6 +112,9 @@ const live: Record<string, string[]> = {
   client_intake: ['lead_id','status','summary','overrides'],
   client_handoff_sends: ['lead_id','sent_at','sent_by_name','handoff'],
   outreach_leads_archive_flag: ['is_archived'],
+  /* The onboarding-form send (2026-10-07): outreach_leads.country (the WhatsApp number's country — UK / AU),
+     read back from information_schema 2026-10-07. */
+  outreach_leads_country: ['country'],
 };
 const known = new Set(Object.values(live).flat());
 /* An aliased JSON path (family:evidence->d->>family) is checked on its base column. */

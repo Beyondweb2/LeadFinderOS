@@ -4,7 +4,7 @@ import { guardAction } from "../_shared/protection.ts";
 import { z } from 'https://esm.sh/zod@3.22.4';
 import { mapsDiscover } from '../_shared/enrichment/sources.ts';
 import { BOOKING_PLATFORM_DOMAINS, DIRECTORY_AND_RECORD_DOMAINS } from '../_shared/aggregators.ts';
-import { qualifierInfo, resolveGeoBias } from '../_shared/geobias.ts';
+import { qualifierInfo, resolveGeoBias, pickedCountryKeySuffix } from '../_shared/geobias.ts';
 import { generateCacheKey } from '../_shared/search-cache-key.ts';
 import { countryFromAddress } from '../../../src/lib/leadCountry.ts';
 import { foundRecord } from '../../../src/lib/websiteStatusClass.ts';
@@ -49,7 +49,9 @@ const SearchRequestSchema = z.object({
   skipTrialCount: z.boolean().default(false),
   demo: z.boolean().default(false),
   guest: z.boolean().default(false),
-  country: z.string().max(10).optional(),
+  /* The Find Leads `Country` value. max(10) refused "NewZealand"/"SouthAfrica"/"Netherlands" (11 chars) with a 400;
+     20 holds the longest value the picker sends with room to spare (2026-10-07). */
+  country: z.string().max(20).optional(),
   // List-builder "cast wide" mode: return the FULL discovered pool (with + without
   // websites), no no-website-first culling, no expansion. Default off = curated.
   broad: z.boolean().default(false),
@@ -107,6 +109,10 @@ const DIRECTORY_BLACKLIST = new Set([
   'sulekha.com', 'tradeindia.com',
   'gumtree.com', 'locanto.co.uk', 'fyple.co.uk',
   'citylocal.co.uk', 'thebestof.co.uk', 'locallife.co.uk',
+  // Australian directories / marketplaces / aggregators (2026-10-07): a listing whose only "website" is one of
+  // these has no site of its own, exactly like a Yell or Checkatrade page in the UK.
+  'hipages.com.au', 'oneflare.com.au', 'truelocal.com.au', 'yellowpages.com.au', 'localsearch.com.au',
+  'serviceseeking.com.au', 'startlocal.com.au', 'wordofmouth.com.au', 'airtasker.com', 'productreview.com.au',
 ]);
 
 // Booking platforms (Fresha/Booksy/Treatwell/…) are NOT a business's own website
@@ -296,14 +302,16 @@ async function geocodeLocation(
   // resolves to the UK; any qualifier ("Reading, PA", "Reading PA", a country word) →
   // no forced bias + (for a foreign state without a country word) the country appended
   // so Google resolves it unambiguously. Pure logic lives in _shared/geobias.ts.
-  const q = qualifierInfo(location);
+  const q = qualifierInfo(location, country);
   const bias = resolveGeoBias(location, country);          // ISO2 region hint, or null
   const expected = bias ?? q.country;                      // country we expect back, if any
   const primaryAddress = q.appendCountry ? `${location}, ${q.appendCountry}` : location;
   // Bias is part of the cache identity — a GB-biased "reading" must not satisfy a
   // later US-biased "reading" (cross-country cache poisoning). Qualified inputs carry
   // no bias suffix, so they never collide with a stale "@GB" row.
-  const locationKey = normalizeLocationKey(location) + (bias ? `@${bias}` : '');
+  /* + the picked-country suffix: "Perth WA" read as Western Australia (Australia picked) must never share a row
+     with "Perth WA" read as Washington. '' for every input the picked country does not change. */
+  const locationKey = normalizeLocationKey(location) + (bias ? `@${bias}` : '') + pickedCountryKeySuffix(location, country);
 
   // ─── GEOCODE CACHE CHECK ─────────────────────
   if (serviceClient) {
@@ -1398,7 +1406,8 @@ Deno.serve(async (req) => {
        another country's cached pool. A GB bias (every UK search, and a bare name with no country) adds
        NOTHING, so every existing UK key is byte-identical and still hits. */
     const keyBias = region ? null : resolveGeoBias(location, country);
-    const keyLocation = keyBias && keyBias !== 'GB' ? `${location}##${keyBias}` : location;
+    const pickSuffix = region ? '' : pickedCountryKeySuffix(location, country);
+    const keyLocation = keyBias && keyBias !== 'GB' ? `${location}##${keyBias}` : pickSuffix ? `${location}##${pickSuffix}` : location;
     const cacheKey = region
       ? await generateCacheKey(keyword, `##region:${density}##${location}`, radius)
       : await generateCacheKey(keyword, keyLocation, radius, townOnly);
@@ -1640,7 +1649,7 @@ Deno.serve(async (req) => {
         source: 'google',
         cached: false,
         notFound: true,
-        notice: `Couldn't find "${error.location}" — try adding a country or county, e.g. "Reading, UK".`,
+        notice: `Couldn't find "${error.location}" — try adding the region or country, e.g. "Reading, Berkshire" or "Ashgrove, Queensland".`,
         _debug: debug,
       });
     }

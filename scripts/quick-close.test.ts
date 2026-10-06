@@ -23,17 +23,18 @@ const SAFE = { decision_maker: "yes", approach: "improve", access: "yes", manage
 const NEW_SITE = { decision_maker: "yes", approach: "new_template", domain: "yes", build_consents: "yes" } as const;
 
 console.log("\n── the bare minimum, in the v2 order ──");
-ok(QUICK_CLOSE_QUESTIONS[0].key === "decision_maker" && QUICK_CLOSE_QUESTIONS[1].key === "approach" && QUICK_CLOSE_QUESTIONS[QUICK_CLOSE_QUESTIONS.length - 1].key === "build_consents", "authority first, then what they want, the Build consents last");
+/* 2026-10-07 (Paul: "Quick Close should be QUICK"): the OFFER first, then authority; legacy keys last (never asked). */
+ok(QUICK_CLOSE_QUESTIONS[0].key === "route" && QUICK_CLOSE_QUESTIONS[1].key === "decision_maker" && QUICK_CLOSE_QUESTIONS[QUICK_CLOSE_QUESTIONS.length - 1].key === "build_consents", "the offer first, then authority; the retired Build consents last (read on old rows only)");
 /* The Build consents' own wording (their `detail`) is a confirmation, not a collection, so it is not scanned. The rights
    question names photos on purpose (the right to REUSE them), so it is scanned without that word. */
 ok(!/service|opening hours|credential|description|google business/i.test(JSON.stringify(QUICK_CLOSE_QUESTIONS.map((q) => ({ key: q.key, text: q.text, options: q.options })))), "no services, hours, credentials, copy or GBP questions before payment");
 ok(JSON.stringify(cleanAnswers({ decision_maker: "yes", domain: "maybe", evil: "x" })) === JSON.stringify({ decision_maker: "yes" }), "only known answers survive");
-ok(missingQuestions({}).join() === "decision_maker,approach", "nothing answered: authority and the approach first — nothing about access or domains yet");
+ok(missingQuestions({}).join() === "route,decision_maker", "nothing answered: the offer and authority — nothing about access or domains yet");
 ok(missingQuestions({ decision_maker: "yes", approach: "improve" }).join() === "access,manager", "improve their site (Optimise): access and who manages it — NOT the domain");
-ok(missingQuestions({ decision_maker: "yes", approach: "new_template" }).join() === "domain,build_consents", "new Findable site (Build): the domain and the consents — NEVER current-site access");
-ok(missingQuestions({ decision_maker: "yes", approach: "refresh" }).join() === "rights,domain,build_consents", "visual refresh (Build): rights to reuse content, then the domain");
-ok(missingQuestions({ decision_maker: "yes", approach: "recreation" }).join() === "rights,design_owner,domain,build_consents", "close recreation (Build): rights, who owns the design, then the domain");
-ok(missingQuestions({ decision_maker: "yes", approach: "unsure" }).join() === "route", "unsure: the plan is picked explicitly before anything else");
+ok(missingQuestions({ decision_maker: "yes", approach: "new_template" }).length === 0 && missingQuestions({ decision_maker: "yes", route: "build" }).length === 0, "Build (self-managed or no site): nothing more — no domain, rights or consents on the call (the agreement and the onboarding form cover them)");
+ok(missingQuestions({ decision_maker: "yes", approach: "refresh" }).length === 0 && missingQuestions({ decision_maker: "yes", approach: "recreation" }).length === 0, "refresh / recreation chosen on Details: no rights / design-owner / domain questions on the call");
+ok(missingQuestions({ decision_maker: "yes", route: "build", manager: "agency" }).join() === "agency_contract", "Build on an agency-run site: only whether they are still in contract");
+ok(missingQuestions({ decision_maker: "yes", approach: "unsure" }).join() === "route", "unsure: the plan is picked explicitly");
 ok(missingQuestions(SAFE).length === 0 && missingQuestions(NEW_SITE).length === 0, "both complete answer sets are complete");
 ok(cleanAnswers({ approach: "improve", route: "build" }).route === "optimise" && cleanAnswers({ approach: "new_template", route: "optimise" }).route === "build", "a known approach DECIDES the route (prices unchanged)");
 ok(cleanAnswers({ approach: "unsure", route: "build" }).route === "build", "unsure keeps the plan that was picked");
@@ -45,8 +46,15 @@ console.log("\n── the gate ──");
   ok(quickCloseGate(SAFE).review.length === 0 && quickCloseState("answers_saved", { answers: SAFE }) === "ready" && mayGenerateLink("answers_saved", { answers: SAFE }), "Optimise with access → ready for payment");
   ok(quickCloseState("answers_saved", { answers: NEW_SITE }) === "ready", "a new Findable site with the domain theirs → ready");
   /* ⛔ THE SCREENSHOT FIX: a new site where they cannot give access to the old one is NOT a review. */
-  const newNoAccess = { ...NEW_SITE, access: "no", manager: "agency" } as const;
-  ok(quickCloseGate(newNoAccess).review.length === 0 && quickCloseState("answers_saved", { answers: newNoAccess }) === "ready", "Build + no access to the CURRENT site → no review, ready (we never need the old backend)");
+  const newNoAccess = { ...NEW_SITE, access: "no", manager: "agency", agency_contract: "free" } as const;
+  ok(quickCloseGate(newNoAccess).review.length === 0 && quickCloseState("answers_saved", { answers: newNoAccess }) === "ready", "Build + no access to the CURRENT site (agency contract ended) → no review, ready (we never need the old backend)");
+  /* ⛔ THE AGENCY-CONTRACT RULE (2026-10-07): Build while still tied into the agency stops for Paul's release. */
+  for (const c of ["in_contract", "not_sure"] as const) {
+    const a = { ...NEW_SITE, manager: "agency", agency_contract: c } as const;
+    ok(quickCloseGate(a).review.includes("agency_contract_build") && quickCloseState("answers_saved", { answers: a }) === "needs_review" && !mayGenerateLink("answers_saved", { answers: a }), `Build + agency + contract "${c}" → Paul review (no link)`);
+    ok(quickCloseState("answers_saved", { answers: a, review_approved_at: "2026-10-07T10:00:00Z" }) === "ready", `…which Paul can release (never a hard ban) — "${c}"`);
+  }
+  ok(quickCloseGate({ ...SAFE, manager: "agency", agency_contract: "in_contract", access: "yes" }).review.length === 0, "Optimise on an agency site still in contract (with access) → fine: Optimise IS the route for them");
   for (const d of ["not_sure", "agency", "no"] as const) {
     const a = { ...NEW_SITE, domain: d };
     const gd = quickCloseGate(a);
@@ -135,7 +143,7 @@ const dlg = read("src/components/QuickCloseDialog.tsx");
 ok(/<QuickClosePanel leadId=\{lead\.id\} active=\{tab === 'close'\} \/>/.test(read("src/components/LeadDetailDialog.tsx")) && /QuickCloseNav\.Provider value=\{\{ openClose: \(\) => goTab\('close'\) \}\}/.test(read("src/components/LeadDetailDialog.tsx")), "v2: in the lead workspace it IS the Close tab, and every Quick Close button there switches to it (one close UI)");
 ok(/min-h-\[56px\]/.test(dlg) && /h-\[100dvh\]/.test(dlg) && /answers\.decision_maker === 'no' \? null/.test(dlg), "phone: full screen, one question at a time, big targets; a 'No' ends the questions");
 ok(/mode: 'save', answers: \{ \[key\]: value \}/.test(dlg), "every tap is saved (a dropped call resumes)");
-ok(/disabled=\{!v\.windowOpen/.test(dlg) && /functions\/v1\/send-whatsapp-message/.test(fn) && /Authorization: req\.headers\.get\("authorization"\)/.test(fn), "WhatsApp send uses the canonical sender AS THE CALLER (server-side since 2026-10-04) and respects the 24-hour window");
+ok(/v\.link_route/.test(dlg) && /functions\/v1\/send-whatsapp-message/.test(fn) && /Authorization: req\.headers\.get\("authorization"\)/.test(fn) && /decideLinkRoute\(await conversation\(\), \{ template: tplState \}\)/.test(fn), "WhatsApp send uses the canonical sender AS THE CALLER; the server picks the route (approved template, else a replied open conversation, else nothing)");
 ok(/self-service sign-up link is on the lead's Close tab/.test(dlg) && /<OnboardingLinkCard lead=\{lead\} \/>/.test(read("src/components/LeadDetailDialog.tsx").slice(read("src/components/LeadDetailDialog.tsx").indexOf('value="close"'))), "the self-service onboarding link remains the fallback — on the Close tab, before payment");
 
 if (f) { console.log(`\n${f} FAILURES`); process.exit(1); }

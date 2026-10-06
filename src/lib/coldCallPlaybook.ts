@@ -29,11 +29,12 @@
 
    🔴 THE CALL FLOW (fix workstream 5, 2026-10-04): opening read (who is calling first, then why) → what we
       found → the questions worth asking → the close for the route that fits (callClose.ts: price, payments,
-      what they get, the guarantee, "I'll send you the link now") → what happens after they pay. Plus the
-      gatekeeper and voicemail lines. It works with no audit and with no WhatsApp ever sent.
+      what they get, the guarantee; no scripted close line since 2026-10-07) → what happens after they pay.
+      It works with no audit and with no WhatsApp ever sent.
 
-   🔴 THE OFFER IS READ FROM findableOffer.ts, NEVER TYPED HERE: FINDABLE_OFFER_SUMMARY (£99 to start,
-      then £99 a month; 12 payments on Build, 6 on Optimise — Paul, 2026-09-29) and FINDABLE_GUARANTEE. Until that date
+   🔴 THE OFFER IS READ FROM findableOffer.ts / planTerms.ts, NEVER TYPED HERE: £99 to start, then £99 a month;
+      12 payments on Build, 6 on Optimise (Paul, 2026-09-29); Optimise ends after its 6th, Build's £29.99 only if
+      they want hosting to continue (2026-10-07); FINDABLE_GUARANTEE. Until 2026-09-29
       the sources disagreed and the playbook said "check current offer"; they are one source now.
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 import { CRAWL_FRESH_MS, usableCrawlSignals, type CrawlSignals } from './crawlCheck.ts';
@@ -49,7 +50,8 @@ import { HOOK_ENGINE_LABELS, HOOK_SCORE_RESULTS } from './hookScore.ts';
 import { isRealSend } from './realSend.ts';
 import { REPORT_LINK_TEMPLATES } from './templateAttribution.ts';
 import { readableTemplateBody } from './templateBodies.ts';
-import { FINDABLE_CONTINUING_GBP, FINDABLE_GUARANTEE, FINDABLE_OFFER_SUMMARY, FINDABLE_SETUP_PRICE_GBP, reportPublicUrl, termMonthsFor, totalPaymentsFor } from './findableOffer.ts';
+import { FINDABLE_GUARANTEE, FINDABLE_SETUP_PRICE_GBP, reportPublicUrl, termMonthsFor, totalPaymentsFor } from './findableOffer.ts';
+import { afterTermRepLine, bothPlansSpoken } from './planTerms.ts';
 import { shortReportUrl } from './reportSlug.ts';
 import { classifyLeadWebsite, type SiteSource } from './leadWebsiteKind.ts';
 import { buildCallClose, type CallClose } from './callClose.ts';
@@ -714,15 +716,18 @@ export function buildColdCallPlaybook(input: PlaybookInput): ColdCallPlaybook {
   const optimise = totalPaymentsFor('optimise');
   const offer = {
     lines: [
-      FINDABLE_OFFER_SUMMARY,
+      bothPlansSpoken(),
       FINDABLE_GUARANTEE,
     ],
-    /* Paul's two routes (findableOffer.ts, 2026-09-29) — the build terms apply only to a site we build. */
-    monthly: 'If we build the site (Findable Build): we build, host and manage it for the ' + termMonthsFor('build') + " months, and once the term is complete and paid, it's theirs; after the " + build + 'th payment it carries on at £' + FINDABLE_CONTINUING_GBP + ' a month for hosting and monitoring until they cancel with 30 days\' notice. If they keep their own site (Findable Optimise): it stays theirs; after the ' + optimise + 'th payment it carries on at £' + FINDABLE_CONTINUING_GBP + ' a month for monitoring until they cancel. The sign-up £' + FINDABLE_SETUP_PRICE_GBP + ' is the first payment either way.',
+    /* Paul's two routes (findableOffer.ts, 2026-09-29) — the build terms apply only to a site we build. What follows
+       the payments is per plan (planTerms.ts, 2026-10-07): Optimise ends; Build's £29.99 only if they want it. */
+    monthly: 'If we build the site (Findable Build): we build, host and manage it for the ' + termMonthsFor('build') + ' months (' + build + ' payments). ' + afterTermRepLine('build')
+      + ' If they keep their own site (Findable Optimise): it stays theirs, ' + optimise + ' payments. ' + afterTermRepLine('optimise')
+      + ' The sign-up £' + FINDABLE_SETUP_PRICE_GBP + ' is the first payment either way.',
     nextSteps,
   };
 
-  /* ── THE CLOSE (callClose.ts): the route that fits this lead first, the guarantee, the close line. ── */
+  /* ── THE CLOSE (callClose.ts): the route that fits this lead first, the guarantee (no scripted close line). ── */
   const close = buildCallClose(siteKind.source);
 
   /* ── THE CALL SCRIPT (src/lib/callScript.ts, Paul's tested opener, 2026-10-06): OPENER → WHAT WE FOUND →

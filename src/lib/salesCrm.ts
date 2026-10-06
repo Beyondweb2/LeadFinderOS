@@ -240,7 +240,10 @@ export const QUEUE_SKIP_LABEL: Record<string, string> = {
   contacted_by_phone: 'already contacted by phone — initial opener not queued',
   contacted_logged: 'already in conversation (a logged contact) — initial opener not queued',
   no_phone: 'no phone',
-  not_a_uk_mobile: 'not a UK or Indian mobile',
+  /* ⛔ COLD WHATSAPP IS UK + INDIA ONLY (sales_queue_opener's not_a_uk_mobile). An Australian mobile lands here
+     too — the words say so rather than calling it "not a mobile". Switching Australia on is Paul's decision
+     (consent rules + a Sydney send window), not a label change (2026-10-07). */
+  not_a_uk_mobile: 'not a UK or Indian mobile (WhatsApp outreach is not switched on for Australia or other countries yet)',
   opted_out: 'opted out',
   daily_limit: 'over your daily limit',
 };
@@ -357,6 +360,10 @@ export const ACTIVITY_LABEL: Record<string, string> = {
   handoff_sent: 'Handoff sent to Paul',
   client_intake: 'Automatic client intake',
   client_fact_set: 'Client fact confirmed',
+  /* The paid client's onboarding link and WhatsApp facts (2026-10-07). "Shared" says how — never a pretend send. */
+  onboarding_link_sent: 'Onboarding link',
+  onboarding_form_submitted: 'Client sent their details',
+  whatsapp_facts_found: 'Details read from WhatsApp',
 };
 
 /** Where Find email found an address (lead_find_email / lead_set_email). */

@@ -25,6 +25,7 @@ import { hookFollowupBody, contactFollowupBody, questionnaireFollowupBody } from
 /* competitor_hook's body prints the SAME plural the parameter carries — see its note below. */
 import { articleTrade, pluraliseTrade } from './templateVars';
 import { transcriptBusinessName, IDENTIFY_NAME_TEMPLATES } from './displayName';
+import { onboardingTemplateBody, signupLinkTemplateBody } from './whatsappLinkTemplates';
 
 // ── Findable, link-bearing ────────────────────────────────────────────────
 const onboardingFollowupBody = (b: string, u: string) =>
@@ -430,6 +431,9 @@ export const READABLE_TEMPLATE_BODIES: Record<string, TemplateBodyFn> = {
   ai_site_findings_v2: aiSiteFindingsV2Body,
   explain_offer: explainOfferBody,
   explain_offer_v2: explainOfferV2Body,
+  /* 2026-10-07 — the registered wording (whatsappLinkTemplates.ts): b = {{1}} greeting name, u = {{2}} the link. */
+  findable_signup_link: (b, u) => signupLinkTemplateBody(b, u),
+  findable_onboarding: (b, u) => onboardingTemplateBody(b, u),
 };
 
 export interface ReadableBodyOpts {

@@ -29,9 +29,10 @@
    Pure. No React, no fetch, no clock.
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 import {
-  FINDABLE_CONTINUING_GBP, FINDABLE_MONTHLY_GBP, FINDABLE_OFFER_SUMMARY, FINDABLE_SETUP_PRICE_GBP,
+  FINDABLE_MONTHLY_GBP, FINDABLE_SETUP_PRICE_GBP,
   REMEASURE_WEEKS_STANDARD, totalPaymentsFor, type ServiceRoute,
 } from './findableOffer.ts';
+import { afterTermRepLine, bothPlansSpoken, ordinalOf } from './planTerms.ts';
 import { SALES_DOMAIN_LINE } from './domainAuthority.ts';
 import type { FindingKind } from './siteFindings.ts';
 import type { SiteSource } from './leadWebsiteKind.ts';
@@ -52,7 +53,12 @@ export const MAX_SPOKEN_FINDINGS = 3;
 export const NO_STRONG_ISSUE_LINE = "I couldn't see one huge technical problem with the site. The bigger issue is that the public evidence around the business isn't strong enough for AI to consistently choose you over the other companies.";
 export const BRIDGE_LINE = "More people are using AI to find local businesses now, and this is what we specialise in.";
 const weeksWord = (n: number) => (['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight'][n] ?? String(n));
-export const WHAT_WE_DO_LINE = `We measure where you're showing up now, improve the public evidence around the business and the website, then ask the same customer-style questions again after ${weeksWord(REMEASURE_WEEKS_STANDARD)} weeks.`;
+/** 🔴 Rewritten 2026-10-07 (Paul: no "improve the public evidence"). Plain words, short enough to say: the
+ *  baseline check, the real customer questions, the website work, pages where they help, the same check at
+ *  four weeks, then monthly. ⛔ Never a promise of being recommended, cited, ranked or included by AI. */
+export const WHAT_WE_DO_LINE = `First we run an AI visibility check to see where you stand today, and find the real customer questions you've got a genuine chance with. `
+  + `Then we optimise your website so Google and the AI tools properly understand what you do and where — adding or improving pages for your services where it helps. `
+  + `After ${weeksWord(REMEASURE_WEEKS_STANDARD)} weeks we run the same check again, then keep checking every month, so we can see what's improving and what still needs work.`;
 /** ⛔ 2–3 questions, each with a sales purpose. "Where does most of your work come from" is GONE (Paul,
  *  2026-10-06: no use for closing) — scripts/call-script.test.ts fails if it comes back. */
 export const DISCOVERY_QUESTIONS: readonly string[] = [
@@ -120,7 +126,6 @@ export interface CallScript {
   /** The plan the lead's website points to (the rep can switch, where the other applies). */
   plans: { preselected: ServiceRoute; routes: CallRouteOffer[]; note: string | null };
   guarantee: { spoken: string; caution: string };
-  closeLine: string;
   objections: Array<{ objection: string; answer: string }>;
 }
 
@@ -226,21 +231,22 @@ export function buildCallScript(i: CallScriptInput): CallScript {
     priceAngle: { overGbp: AGENCY_PRICE_ANGLE_OVER_GBP, line: PRICE_ANGLE_LINE },
   };
 
-  /* OBJECTIONS — spoken answers, short enough to say mid-call. Every figure is a constant (LIVE v3 terms:
-     both routes carry on at FINDABLE_CONTINUING_GBP after the minimum term until cancelled). */
+  /* OBJECTIONS — spoken answers, short enough to say mid-call. Every figure is a constant. What follows the
+     payments is per plan (planTerms.ts, Paul 2026-10-07): Optimise ends after its 6th payment; Build's £29.99
+     applies only if they want hosting / maintenance to carry on. */
   const build = totalPaymentsFor('build');
   const optimise = totalPaymentsFor('optimise');
   const objections = [
     { objection: `Why £${FINDABLE_SETUP_PRICE_GBP}?`, answer: `The £${FINDABLE_SETUP_PRICE_GBP} covers measuring where you are now, the first round of work and the re-check at four weeks. If the number hasn't gone up by then, you can claim it back.` },
-    { objection: 'How much is it?', answer: FINDABLE_OFFER_SUMMARY },
+    { objection: 'How much is it?', answer: bothPlansSpoken() },
     { objection: 'I already have an agency', answer: "Fair enough — what do they look after for you at the moment? This is one specific thing: what AI says when someone asks for a business like yours. I can send them what I found too." },
     { objection: 'My agency controls the website / domain', answer: SALES_DOMAIN_LINE + " Your agreement with them is yours to check — I can't advise on that, and we would never ask you to break it." },
     { objection: 'I need to think about it', answer: "Of course — is it mainly the price, the timing, or you're not sure what we'd actually be doing? When's good for a quick ring back?" },
     { objection: 'Is this a scam?', answer: 'Fair question. You read and sign a written agreement before you pay anything, all the terms are at findable.live, and ' + (i.hasReport ? 'I can send you the report showing exactly what AI said.' : "you'll see exactly what AI said before anything else happens.") },
-    { objection: 'Can I cancel?', answer: `It's a minimum term: ${build} payments if we build the site, ${optimise} if we work on yours, today's £${FINDABLE_SETUP_PRICE_GBP} included. After that it carries on at £${FINDABLE_CONTINUING_GBP} a month until you cancel with 30 days' notice. And if the number hasn't gone up at four weeks, a valid claim gets your £${FINDABLE_SETUP_PRICE_GBP} back and stops the monthly too.` },
+    { objection: 'Can I cancel?', answer: `It's a minimum term: ${build} payments if we build the site, ${optimise} if we work on yours, today's £${FINDABLE_SETUP_PRICE_GBP} included. If we work on your site, it simply ends after the ${ordinalOf(optimise)} payment. If we build one, the hosting carries on afterwards only if you want it, and you can cancel that with 30 days' notice. And if the number hasn't gone up at four weeks, a valid claim gets your £${FINDABLE_SETUP_PRICE_GBP} back and stops the monthly too.` },
     { objection: "Can you guarantee I'll show up?", answer: `No one can promise AI will name you, and I won't. What we do promise is the measurement: if the number hasn't gone up on the same questions, you can claim your £${FINDABLE_SETUP_PRICE_GBP} back.` },
-    { objection: 'Why twelve months?', answer: `That's Findable Build. We build the new website, host it and look after it — ${build} payments including today — and once they're done the site's yours. Then it's £${FINDABLE_CONTINUING_GBP} a month for hosting and monitoring until you cancel.` },
-    { objection: 'Why six months?', answer: `That's Findable Optimise, where you keep your own website. It's ${optimise} payments including today, then £${FINDABLE_CONTINUING_GBP} a month for monitoring until you cancel.` },
+    { objection: 'Why twelve months?', answer: `That's Findable Build. We build the new website, host it and look after it — ${build} payments including today. ${afterTermRepLine('build')}` },
+    { objection: 'Why six months?', answer: `That's Findable Optimise, where you keep your own website. It's ${optimise} payments including today. ${afterTermRepLine('optimise')}` },
     { objection: 'Just send me something', answer: i.hasReport ? "Sure, I'll send you the report — it shows the exact search, what AI said and who it named. Can I give you a ring once you've had a look?" : "Sure, I'll run the check and send it over. Can I give you a ring once you've had a look?" },
     { objection: "I'm busy right now", answer: "No problem. When's a better time for a quick ring back?" },
   ];
@@ -258,7 +264,6 @@ export function buildCallScript(i: CallScriptInput): CallScript {
     whatWeDo: WHAT_WE_DO_LINE,
     plans: { preselected: preselectedPlan(i.site.source), routes: i.close.routes, note: i.close.routeNote },
     guarantee: { spoken: i.close.guarantee.spoken, caution: i.close.guarantee.caution },
-    closeLine: i.close.closeLine,
     objections,
   };
 }
@@ -269,7 +274,7 @@ export function spokenScriptText(s: CallScript): string {
   return [
     ...s.opener, ...s.found.lines, ...s.bridge, s.firstQuestion.question,
     ...s.ifAgency.questions, s.ifAgency.priceAngle.line, ...s.discovery, s.whatWeDo,
-    ...s.plans.routes.flatMap((r) => r.spoken), s.guarantee.spoken, s.closeLine,
+    ...s.plans.routes.flatMap((r) => r.spoken), s.guarantee.spoken,
     ...s.objections.map((o) => o.answer),
   ].join('\n');
 }

@@ -45,3 +45,16 @@ export function indiaStateFromAddress(address: string | null | undefined): strin
   const seg = parts[parts.length - 2].replace(/\s*\d{6}\s*$/, '').trim();
   return seg && !/\d/.test(seg) ? seg : null;
 }
+
+/* ══ MAY THIS LEAD'S TOWN BE MEASURED AGAINST THE UK GAZETTEER? (2026-10-07) ══════════════════════════
+   create-ai-audit's wrong-town guard reads `uk_towns` (ONS built-up areas — the UK only). An Australian lead
+   asked about "Newcastle" or "Perth" would be measured to Newcastle upon Tyne / Perth, Scotland and BLOCKED
+   as ~16,000 km from its own town. So the gazetteer applies only to a UK lead: the audit's country is UK / GB
+   or blank (blank has always meant UK here), AND the business's Google address does not name another
+   country. Anything else → false → the distance is "not checked", which never blocks. */
+export function ukGazetteerApplies(country: string | null | undefined, address: string | null | undefined): boolean {
+  const c = String(country ?? '').trim().toUpperCase();
+  if (!(c === '' || c === 'UK' || c === 'GB' || c === 'UNITED KINGDOM')) return false;
+  const fromAddress = countryFromAddress(address);
+  return fromAddress === null || fromAddress === 'UK';
+}
