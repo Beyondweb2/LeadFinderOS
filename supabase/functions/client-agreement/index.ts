@@ -36,7 +36,7 @@ type Service = any;
 const TOKEN_RE = /^[0-9a-f]{64}$/;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 const MAX_FIELD = 300;
-const LEAD_COLUMNS = "id,business_name,email,phone,website,address,contract_total_payments,service_terminated_at,status,amount_paid";
+const LEAD_COLUMNS = "id,business_name,email,phone,website,address,contact_name,contract_total_payments,service_terminated_at,status,amount_paid";
 
 function html(body: string, status = 200): Response {
   return new Response(body, {
@@ -170,17 +170,19 @@ Deno.serve(async (req) => {
         }
         return html(agreementPageHtml({
           mode: "accepted", businessName: ctx.businessName, acceptedAtIso: signed.accepted_at, acceptedBy: signed.typed_name ?? "", pdfHref,
-          payFor: { signupId: signup.id, route: signup.route }, payError,
+          payFor: { signupId: signup.id, route: signup.route }, payError, version: signed.agreement_version,
         }));
       }
 
       if (!form) {
         const values: AgreementFormValues = {
           email: clip(signup.contactEmail || ctx.lead.email), phone: clip(ctx.lead.phone), address: clip(ctx.lead.address),
-          contactName: clip(signup.contactName),
+          /* The person who filled in the sign-up, else the contact on the lead (what the salesperson recorded). */
+          contactName: clip(signup.contactName || ctx.lead.contact_name),
           websiteDomain: clip(ctx.lead.website).replace(/^https?:\/\//, "").replace(/\/$/, ""),
         };
-        return html(agreementPageHtml({ mode: "sign", businessName: ctx.businessName, route: signup.route, values, errors: [], signupId: signup.id }));
+        /* nowIso: the signing date the page previews is TODAY (UK). The stored date is the database's accepted_at. */
+        return html(agreementPageHtml({ mode: "sign", businessName: ctx.businessName, route: signup.route, values, errors: [], signupId: signup.id, nowIso: new Date().toISOString() }));
       }
       if (form.get("action") === "pay") {
         return html(agreementPageHtml({ mode: "not_ready", businessName: ctx.businessName, message: "Please sign the agreement first — payment opens straight after." }), 409);
@@ -189,7 +191,7 @@ Deno.serve(async (req) => {
       const fill: AgreementFill = { businessName: ctx.businessName, route: signup.route, ...values };
       const errors = await signatureErrors(service, ctx.lead.id, fill, values);
       if (!values.authority) errors.push("Please confirm you have authority to sign for the business.");
-      if (errors.length) return html(agreementPageHtml({ mode: "sign", businessName: ctx.businessName, route: signup.route, values, errors, signupId: signup.id }), 422);
+      if (errors.length) return html(agreementPageHtml({ mode: "sign", businessName: ctx.businessName, route: signup.route, values, errors, signupId: signup.id, nowIso: new Date().toISOString() }), 422);
       const agreedText = renderAgreementText(fill, CLIENT_AGREEMENT_VERSION);
       const row = acceptanceRowFrom({
         leadId: ctx.lead.id, fill, method: "agree_page", agreedText, sha256: await sha256Hex(agreedText), version: CLIENT_AGREEMENT_VERSION,
@@ -203,7 +205,7 @@ Deno.serve(async (req) => {
         mode: "accepted", businessName: ctx.businessName,
         acceptedAtIso: winner?.accepted_at ?? stored.acceptedAt, acceptedBy: winner?.typed_name ?? values.contactName!, pdfHref,
         justSigned: !winner, emailedTo: stored.emailedTo ? values.email! : null,
-        payFor: { signupId: signup.id, route: signup.route },
+        payFor: { signupId: signup.id, route: signup.route }, version: CLIENT_AGREEMENT_VERSION,
       }));
     }
 

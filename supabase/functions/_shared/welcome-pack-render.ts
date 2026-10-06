@@ -32,6 +32,7 @@ import { isShortCode } from "../../../src/lib/reportSlug.ts";
 import { agreementUrl } from "../../../src/lib/clientAgreement.ts";
 import { resolveAgreementRoute } from "../../../src/lib/agreementRoute.ts";
 import { serviceRouteForTotal } from "../../../src/lib/findableOffer.ts";
+import { signedAgreementRecord, type AcceptanceLite, type TermsLite } from "../../../src/lib/signedAgreement.ts";
 
 /** ⛔ CLIENT-SAFE LEAD COLUMNS. Operator columns are absent by construction, not by discipline. */
 export const LEAD_CLIENT_COLUMNS =
@@ -176,12 +177,23 @@ export async function renderWelcomePack(service: any, slug: string): Promise<Wel
   const { data: agreeLink, error: agreeLinkErr } = await service.from("client_agreement_links")
     .select("token,service_route").eq("lead_id", leadId).maybeSingle();
   if (agreeLinkErr) throw agreeLinkErr;
-  let agreement: { url: string | null; route: "build" | "optimise" | null; termsKnown: boolean; acceptedAtIso: string | null; acceptedBy: string | null } | null = null;
+  let agreement: {
+    url: string | null; route: "build" | "optimise" | null; termsKnown: boolean; acceptedAtIso: string | null; acceptedBy: string | null;
+    version: string | null; planName: string | null; initialPaidAtIso: string | null;
+  } | null = null;
   if (agreeLink) {
-    const { data: signed, error: signedErr } = await service.from("client_agreement_acceptances")
-      .select("accepted_at,typed_name").eq("lead_id", leadId).eq("method", "agree_page")
-      .order("accepted_at", { ascending: false }).limit(1).maybeSingle();
+    /* 2026-10-07: the signature folded through the SAME record the Paid Client page shows
+       (src/lib/signedAgreement.ts) — the one the payment rests on, else the newest agreement-page one. */
+    const { data: accRows, error: signedErr } = await service.from("client_agreement_acceptances")
+      .select("id,method,accepted_at,typed_name,typed_role,email,agreement_version,service_route").eq("lead_id", leadId)
+      .order("accepted_at", { ascending: false });
     if (signedErr) throw signedErr;
+    const { data: termsRow, error: termsErr } = await service.from("client_service_terms")
+      .select("agreement_acceptance_id,initial_paid_at,service_route").eq("lead_id", leadId).maybeSingle();
+    if (termsErr) throw termsErr;
+    const record = signedAgreementRecord((accRows ?? []) as AcceptanceLite[], termsRow as TermsLite | null);
+    /* ⛔ Only an AGREEMENT-PAGE signature counts as "accepted" in the pack (unchanged rule). */
+    const signed = record.status === "signed" ? { accepted_at: record.signedAtIso, typed_name: record.signedBy } : null;
     /* ⛔ THE CURRENT AGREEMENT'S TERMS ARE SHOWN ONLY WHEN THE RECORD SAYS THEY APPLY (Paul, a general
        rule for older clients): a route on the link (today's checkout, or Paul's Build / Optimise) or a
        route stamped by today's checkout. The same test the agreement page itself uses to open. */
@@ -196,6 +208,9 @@ export async function renderWelcomePack(service: any, slug: string): Promise<Wel
       termsKnown,
       acceptedAtIso: (signed as { accepted_at?: string } | null)?.accepted_at ?? null,
       acceptedBy: (signed as { typed_name?: string | null } | null)?.typed_name ?? null,
+      version: signed ? record.version : null,
+      planName: signed ? record.planName : null,
+      initialPaidAtIso: signed ? record.initialPaidAtIso : null,
     };
   }
 
