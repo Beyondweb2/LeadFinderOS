@@ -22,6 +22,55 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-06-quicker-close', date: '2026-10-06', title: 'A quicker close: the call remembers, Quick Close asks less', audience: 'all',
+    body: 'What you learn on the call is saved as you tap it. Quick Close starts with the plan and only asks what is still missing. The handoff is mostly filled in for you.',
+    report: {
+      added: [
+        'On the Call screen: answer boxes for the jobs they want more of and the towns that matter, buttons for the agency contract and the decision maker. They save as you go.',
+        'Send signup link on WhatsApp: one click once the sign-up link is made (it uses the Meta template when approved, or their open conversation if they replied to us in the last 24 hours).',
+        'Resend, when you really mean to send the link again.',
+      ],
+      changed: [
+        'If an agency runs their website and they are still in contract (or not sure), the offer is Optimise — Build is not offered, so they never pay for two websites.',
+        'Quick Close: step 1 is the plan, then only authority, site access (Optimise) or the agency contract (Build) if the call did not already answer it.',
+        'Optimise wording: 6 payments in total and then it ends. Build: 12 payments, then £29.99 a month only if they want hosting to continue.',
+        '"What we do" is in plain words. The handoff asks only who decides, any special promise, how to reach them and a note — nothing is required.',
+      ],
+      removed: [
+        'The scripted close line ("If that sounds good, I\'ll send you the link now…"). Close in your own words.',
+        'The domain, rights and three Build consent questions on the call — the client signs the agreement and Paul collects the details after payment.',
+      ],
+      effect: 'A close on the phone is the plan, a sign-up link and one tap. Nothing you were told on the call is asked again.',
+    } },
+  { id: '2026-10-06-paid-client-onboarding', date: '2026-10-06', title: 'Paid clients: send an onboarding form that asks only what is missing', audience: 'admin',
+    body: 'Under "Still needed" on a paid client there is now Get missing info: one link to a short form that asks only the questions we cannot answer yet, for their plan. Their answers land on the client record.',
+    report: {
+      added: [
+        'Send onboarding (a secure findable.live/details link), Send on WhatsApp once the findable_onboarding template is approved, Copy link, Turn off link.',
+        'Read WhatsApp replies: details a paying client types on WhatsApp (services, areas, email…) appear as "Client on WhatsApp". New replies are read automatically.',
+      ],
+      changed: [
+        'Nothing you confirmed is ever overwritten — a different answer is shown to you as a conflict.',
+      ],
+      removed: [],
+      effect: 'One workflow from payment to a complete client record, without a giant questionnaire. The form has no payment step.',
+    } },
+  { id: '2026-10-06-australia-location', date: '2026-10-06', title: 'Find Leads: Country, then Location — and Australia works properly', audience: 'all',
+    body: 'Pick the country from a normal dropdown, then the town. Suggested towns are for that country only. Australian phone numbers are now handled correctly.',
+    report: {
+      added: [
+        'Suggested towns for the chosen country (Sydney, Melbourne, Brisbane, Perth… for Australia), with Show all.',
+        'Australia in Add lead and in the CSV import (a Country column, or detected from a +61 number or an Australian address).',
+      ],
+      changed: [
+        'Country is a dropdown above Location, not a cloud of country buttons.',
+        'An Australian mobile is recognised as a mobile and matched whichever way it is written (04… or +61 4…).',
+      ],
+      removed: [
+        'The old Quick Locations panel.',
+      ],
+      effect: 'Searching and adding Australian leads works like the UK. WhatsApp outreach is still UK and India only — Australia is not switched on yet.',
+    } },
   { id: '2026-10-06-whatsapp-queue-one-page', date: '2026-10-06', title: 'One WhatsApp queue for everyone', audience: 'all',
     body: 'The WhatsApp queue is now its own page, and it looks and works the same for the admin and for salespeople. Outreach shows a short summary with an Open queue button.',
     report: {
