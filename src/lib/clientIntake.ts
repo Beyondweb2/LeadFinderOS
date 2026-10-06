@@ -480,6 +480,9 @@ export const STEP_LABEL: Record<string, string> = {
   crawl: 'Website crawl', autofill: 'Filled from what we already had', socials: 'Social profiles',
 };
 
+/** Tiers that are evidence, not an answer: a value from these is shown, never counted as known for the work. */
+export const UNCONFIRMED_TIERS: ReadonlySet<SourceTier> = new Set<SourceTier>(['website', 'places', 'inferred']);
+
 export interface IntakeSummary {
   sources_checked: number;
   sources_with_data: number;
@@ -493,6 +496,12 @@ export function intakeSummary(profile: readonly ProfileField[], steps: readonly 
   const phone = profile.find((f) => f.key === 'phone'); const email = profile.find((f) => f.key === 'email');
   const contactOk = phone?.status !== 'missing' || email?.status !== 'missing';
   const still = needed.filter((f) => !(contactOk && (f.key === 'phone' || f.key === 'email'))).map((f) => f.label);
+  /* ⛔ A GUESS IS NOT AN ANSWER: services / areas found only on their website (or Google, or inferred) are what the
+     baseline would measure, so they still need confirming — the setup checklist counts them missing too, and the
+     two must never disagree (live certification, 2026-10-06). */
+  for (const f of profile) {
+    if ((f.key === 'services' || f.key === 'service_areas') && f.tier && UNCONFIRMED_TIERS.has(f.tier)) still.push(`${f.label} (confirm what we found)`);
+  }
   return {
     sources_checked: steps.filter((s) => s.key !== 'autofill').length,
     sources_with_data: steps.filter((s) => s.key !== 'autofill' && (s.status === 'done' || s.status === 'reused')).length,

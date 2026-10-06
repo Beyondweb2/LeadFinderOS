@@ -19,6 +19,8 @@
 import { readFileSync } from "node:fs";
 import { FINDABLE_SETUP_PRICE_GBP, serviceRouteFromRow, totalPaymentsFor } from "../src/lib/findableOffer.ts";
 import { isReservedTestNumber, qaPaymentEventShapeRefusal } from "../src/lib/qaSafety.ts";
+import { CLIENT_AGREEMENT_VERSION } from "../src/lib/clientAgreement.ts";
+import { COMMERCIAL_TERMS_V3 } from "../src/lib/clientTimeline.ts";
 
 const REF = "ruusxpkkmwtljxxulhbq";
 const args = process.argv.slice(2);
@@ -79,7 +81,16 @@ if (problems.length) { console.error("REFUSED (local pre-check):\n - " + problem
 
 if (checkOnly || !onb || !route) { await readBack(leadId); process.exit(0); }
 
-const tag = onb.id.replace(/-/g, "").slice(0, 16);
+/* v3 (2026-10-06): the agreement-first checkout stamps the session with the v3 terms, the agreement version and
+   the signature it was opened on (findable-checkout); the webhook HOLDS anything without them and re-verifies
+   the named signature itself. When this sign-up has a v3 signature the simulated session carries the same three
+   markers — and its own `_v3` ids, so a session simulated before (and held) stays a separate record. Without a
+   signature it is sent as before (and is correctly held). */
+const [acc] = await sql<{ id: string; agreement_version: string }>(
+  `select id, agreement_version from client_agreement_acceptances where lead_id = ${lit(leadId)} and onboarding_id = ${lit(onb.id)} order by accepted_at desc limit 1`);
+const v3 = acc && acc.agreement_version === CLIENT_AGREEMENT_VERSION ? acc : null;
+console.log(v3 ? `v3 signature ${v3.id} — the session carries the agreement-first markers` : "no v3 signature for this sign-up — the webhook will HOLD this payment");
+const tag = onb.id.replace(/-/g, "").slice(0, 16) + (v3 ? "_v3" : "");
 const event = {
   id: `evt_qa_${tag}`, object: "event", type: "checkout.session.completed", livemode: false, created: Math.floor(Date.now() / 1000),
   data: { object: {
@@ -87,7 +98,8 @@ const event = {
     amount_total: FINDABLE_SETUP_PRICE_GBP * 100, currency: "gbp", customer: null, payment_intent: `pi_qa_${tag}`,
     consent: { terms_of_service: "accepted" },
     customer_details: { email: "paul@move37.fun", name: "QA certification" },
-    metadata: { onboarding_id: onb.id, lead_id: leadId, service_route: route, total_payments: String(totalPaymentsFor(route)) },
+    metadata: { onboarding_id: onb.id, lead_id: leadId, service_route: route, total_payments: String(totalPaymentsFor(route)),
+      ...(v3 ? { commercial_terms: COMMERCIAL_TERMS_V3, agreement_version: CLIENT_AGREEMENT_VERSION, agreement_acceptance_id: v3.id } : {}) },
   } },
 };
 const shape = qaPaymentEventShapeRefusal(event);
