@@ -133,8 +133,8 @@ console.log('── the rules ──');
   ok(!normalizeLeadIds([]).ok && !normalizeLeadIds(null).ok, 'no leads → refused');
   ok(SALES_CHECK_BATCH_MAX === 20, 'the launch batch maximum is 20 (brief)');
   ok(SALES_CHECK_DEFAULT_PER_REP_PER_DAY === DEFAULT_PROTECTION_LIMITS.actions.sales_check.per_day && SALES_CHECK_DEFAULT_PER_REP_PER_DAY > 0, 'the per-rep allowance lives once (protectionLimits sales_check.per_day)');
-  ok(SALES_CHECK_DEFAULT_PER_REP_PER_DAY === 30, 'the launch allowance is 30 fresh checks per rep per day (Paul, 2026-10-05)');
-  ok(SALES_CHECK_BATCH_MAX === 20 && SALES_CHECK_DEFAULT_PER_REP_PER_DAY > SALES_CHECK_BATCH_MAX, '…one full batch plus a partial second; the per-batch maximum stays 20');
+  ok(SALES_CHECK_DEFAULT_PER_REP_PER_DAY === 50, 'the allowance is 50 fresh checks per rep per day (Paul, 2026-10-06; was 30)');
+  ok(SALES_CHECK_BATCH_MAX === 20 && SALES_CHECK_DEFAULT_PER_REP_PER_DAY > SALES_CHECK_BATCH_MAX, '…two full batches plus a half one; the per-batch maximum stays 20');
   ok(perRepDailyAllowance(null) === SALES_CHECK_DEFAULT_PER_REP_PER_DAY && perRepDailyAllowance({ actions: { sales_check: { per_day: 'x' } } }) === SALES_CHECK_DEFAULT_PER_REP_PER_DAY, 'absent / malformed allowance → the default, never unlimited');
   ok(perRepDailyAllowance({ actions: { sales_check: { per_day: 0 } } }) === 0, 'Paul can set the allowance to 0 (switch off fresh checks)');
   ok([...CLIENT_STATUSES].every((s) => leadEligibility(REP_A, { id: 'x', assigned_to_user_id: REP_A, status: s, business_name: 'n', search_keyword: 't', derived_town: 'x' }).ok === false), 'every client status is refused (held equal to roleRules CLIENT_STATUSES)');
@@ -156,7 +156,7 @@ console.log('── the rules ──');
   const c = itemCounts([{ status: 'failed' }, { status: 'done' }, { status: 'reused' }, { status: 'skipped' }]);
   ok(c.failed === 1 && c.done === 1 && c.reused === 1 && c.skipped === 1, 'counts keep failures apart from successes');
   ok(Object.values(REASON_TEXT).every((t) => !/\$|£|apify|openai|cost|spend/i.test(t)), 'no reason a rep reads names a cost or a provider');
-  ok(REASON_TEXT.allowance_used === "Today's checking allowance is used — try again tomorrow or ask Paul.", 'the allowance sentence is the brief\'s wording');
+  ok(REASON_TEXT.allowance_used === 'Daily check limit reached — try again tomorrow or ask Paul.', 'the allowance sentence is the 2026-10-06 brief\'s wording ("Daily check limit reached")');
   ok(checkedAgo(iso(T0 - 3 * DAY), T0) === 'checked 3 days ago', 'reused results say how old they are');
   const body = auditRequestBody(lead() as never, 'https://x.example', 3);
   ok(body.hook_audit === true && body.fresh_audit === true && body.question_count === 3 && !('purpose' in body) && !('queue_pitch_on_complete' in body) && !('questions' in body) && !('audit_id' in body) && !('run_id' in body),
@@ -343,22 +343,58 @@ console.log('── budget: per-rep allowance, prospecting pool, guarantee untou
 }
 
 /* ═══ 5. Caching / reuse ═══════════════════════════════════════════════════════════════════════ */
-console.log('── the launch allowance end to end: 30 fresh a day, reuse free ──');
+console.log('── the allowance end to end: 50 fresh a day (20 + 20 + 10), reuse free ──');
 {
+  /* Raised 30 → 50 (Paul, 2026-10-06, improve/one-click-checks-50). The batch maximum stays 20. */
+  const w1 = world();
+  const one = addLead(w1);
+  const v0 = await batchView(w1.deps, A);
+  ok(v0.allowance?.remaining === 50 && v0.allowance?.limit === 50, 'a fresh day: "Checks left today: 50/50"');
+  await run(w1, A, [one.id]);
+  const v1 = await batchView(w1.deps, A);
+  ok(v1.allowance?.used === 1 && v1.allowance?.remaining === 49, 'the first fresh check consumes exactly 1 (49/50)');
+
   const w = world(); // the default limits — no per-day override
-  const fresh = [...Array(31)].map(() => addLead(w));
+  const fresh = [...Array(51)].map(() => addLead(w));
   const cached = addLead(w); addAudit(w, cached.id, 3); addCrawl(w, cached.id, 3);
-  const b1 = await run(w, A, fresh.slice(0, SALES_CHECK_BATCH_MAX).map((l) => l.id));
+  const cached2 = addLead(w); addAudit(w, cached2.id, 5); addCrawl(w, cached2.id, 5);
+  const statusesBefore = JSON.stringify(w.db.table('outreach_leads').map((l) => [l.id, l.status]));
+  const b1 = await run(w, A, fresh.slice(0, 20).map((l) => l.id));
   ok(b1.status === 200 && items(w).filter((i) => i.status === 'running').length === SALES_CHECK_BATCH_MAX, 'batch 1: a full batch of 20 fresh checks starts');
-  const tooBig = await startBatch(w.deps, A, { lead_ids: fresh.slice(0, SALES_CHECK_BATCH_MAX + 1).map((l) => l.id), client_request_id: req() });
-  ok(tooBig.status === 400, 'the batch maximum is still 20 even though the day allows 30');
-  await run(w, A, [...fresh.slice(SALES_CHECK_BATCH_MAX).map((l) => l.id), cached.id]);
-  const second = fresh.slice(SALES_CHECK_BATCH_MAX).map((l) => itemFor(w, l.id));
-  ok(second.filter((i) => i.status === 'running').length === 10 && second.filter((i) => i.reason === 'allowance_used').length === 1, 'batch 2: ten more fresh checks start (30 in the day), the 31st is refused with the plain sentence');
-  ok(itemFor(w, cached.id).status === 'reused', 'a cached result still comes through after the allowance is used — reuse is free');
-  ok(w.calls.start.length === 30 && w.calls.guard.length === 30, 'exactly 30 paid checks and 30 guard rows; the reused one made neither');
+  const va = await batchView(w.deps, A);
+  ok(va.allowance?.used === 20 && va.allowance?.remaining === 30, '20 fresh checks consume 20 (30/50 left)');
+  const tooBig = await startBatch(w.deps, A, { lead_ids: fresh.slice(20, 20 + SALES_CHECK_BATCH_MAX + 1).map((l) => l.id), client_request_id: req() });
+  ok(tooBig.status === 400 && SALES_CHECK_BATCH_MAX === 20, 'the batch maximum is still 20 even though the day allows 50');
+  await run(w, A, fresh.slice(20, 40).map((l) => l.id));
+  ok((await batchView(w.deps, A)).allowance?.remaining === 10, 'batch 2: twenty more (40 used, 10/50 left)');
+  await run(w, A, [...fresh.slice(40, 51).map((l) => l.id), cached.id]);
+  const third = fresh.slice(40).map((l) => itemFor(w, l.id));
+  ok(third.slice(0, 10).every((i) => i.status === 'running'), 'batch 3: ten more fresh checks start — the 50th is allowed');
+  ok(third[10].status === 'skipped' && third[10].reason === 'allowance_used', 'the 51st fresh check is refused (allowance_used)');
+  ok(REASON_TEXT.allowance_used.startsWith('Daily check limit reached'), '…in a short sentence: "Daily check limit reached"');
+  ok(itemFor(w, cached.id).status === 'reused' && Number(itemFor(w, cached.id).est_cost_usd ?? 0) === 0, 'a cached result consumes 0 — still reused once the allowance is used');
+  ok(w.calls.start.length === 50 && w.calls.guard.length === 50, 'exactly 50 paid checks and 50 guard rows; the reused one made neither');
   const v = await batchView(w.deps, A);
-  ok(v.allowance?.used === 30 && v.allowance?.limit === 30 && v.allowance?.remaining === 0, 'the rep sees "Checks left today: 0 of 30"');
+  ok(v.allowance?.used === 50 && v.allowance?.limit === 50 && v.allowance?.remaining === 0, 'the rep sees "Checks left today: 0/50"');
+  // At 0: a cached lead on its own is still reused; nothing new is bought.
+  await run(w, A, [cached2.id]);
+  ok(itemFor(w, cached2.id).status === 'reused' && w.calls.start.length === 50 && w.calls.guard.length === 50, 'at 0/50 a cached result is still reused — no paid check, no guard row');
+  ok(JSON.stringify(w.db.table('outreach_leads').map((l) => [l.id, l.status])) === statusesBefore, 'no lead status changed across all four batches');
+  const touched = new Set(w.db.writes.map((x) => x.table));
+  ok(!touched.has('outreach_leads') && ![...touched].some((t) => /whatsapp|email/.test(t)), `nothing sent and no lead written (wrote: ${[...touched].sort().join(', ')})`);
+}
+
+console.log('── account restrictions: suspended / disabled refused; the onboarding checklist is not a gate ──');
+{
+  const ws = world();
+  const l = addLead(ws);
+  ws.cfg.guardRefuse = 'suspended';
+  await run(ws, A, [l.id]);
+  ok(itemFor(ws, l.id).status === 'skipped' && itemFor(ws, l.id).reason === 'not_allowed' && ws.calls.start.length === 0, 'a suspended salesperson: skipped "not_allowed", nothing started');
+  ok(guardRefusalReason('no_role') === 'not_allowed' && guardRefusalReason('suspended') === 'not_allowed', 'a disabled account (no sales role) and a suspended one are both refused');
+  const gate = read('supabase/migrations/20261012120000_selling_gate_account_only.sql').replace(/--.*$/gm, '');
+  ok(/'login'/.test(gate) && /'suspended'/.test(gate) && /'ended'/.test(gate) && !/right_to_work|bank_|vat_|guide_ack|over_18|team_guide/i.test(gate),
+    'the selling gate is account restrictions only (login / suspended / ended) — an incomplete practical checklist can still check');
 }
 
 console.log('── caching: reuse costs nothing ──');
@@ -540,9 +576,12 @@ console.log('── migration, config, limits ──');
   ok(/revoke insert, update, delete, truncate, references, trigger on public\.sales_check_batches from authenticated/.test(mig) && /revoke insert, update, delete, truncate, references, trigger on public\.sales_check_items from authenticated/.test(mig) && /revoke all on public\.sales_check_items from anon/.test(mig), 'no browser can write a batch or an item (service role only)');
   ok((mig.match(/create policy/g) ?? []).length === 2 && /for select to authenticated[\s\S]*actor_user_id = \(select auth\.uid\(\)\) or \(select public\.my_role\(\)\) = 'admin'/.test(mig), 'read: own rows, or the admin — no other policy');
   ok(/enable row level security/.test(mig), 'RLS on');
-  const m = mig.match(/'\{actions,sales_check\}', '(\{[^']*\})'::jsonb/);
-  ok(!!m && JSON.stringify(JSON.parse(m[1])) === JSON.stringify(DEFAULT_PROTECTION_LIMITS.actions.sales_check), "the live row's new action equals DEFAULT_PROTECTION_LIMITS.actions.sales_check");
-  ok(/where id = 1 and not \(limits -> 'actions' \? 'sales_check'\)/.test(mig), '…added only if absent (an edited value is never overwritten)');
+  ok(/where id = 1 and not \(limits -> 'actions' \? 'sales_check'\)/.test(mig), 'the first migration added the action only if absent (an edited value is never overwritten)');
+  /* 2026-10-06: the allowance moved 30 → 50 through its own migration; the newest one is what the live row holds. */
+  const mig50 = read('supabase/migrations/20261012130000_sales_check_allowance_50.sql');
+  const m = mig50.match(/'\{actions,sales_check\}', '(\{[^']*\})'::jsonb/);
+  ok(!!m && JSON.stringify(JSON.parse(m[1])) === JSON.stringify(DEFAULT_PROTECTION_LIMITS.actions.sales_check), "the 50 migration writes exactly DEFAULT_PROTECTION_LIMITS.actions.sales_check");
+  ok(/where id = 1\s+and \(limits -> 'actions' -> 'sales_check' ->> 'per_day'\) is distinct from '50'/.test(mig50) && !/\b(delete|drop|truncate)\b/i.test(mig50.replace(/--.*$/gm, '')), '…idempotent, one jsonb key, nothing dropped or deleted');
   ok(GUARD_ACTIONS.includes('sales_check') && validateLimits(DEFAULT_PROTECTION_LIMITS).ok, 'sales_check is a guard action and the defaults validate');
   const liveBefore = { ...DEFAULT_PROTECTION_LIMITS, actions: Object.fromEntries(Object.entries(DEFAULT_PROTECTION_LIMITS.actions).filter(([k]) => k !== 'sales_check')) } as typeof DEFAULT_PROTECTION_LIMITS;
   ok(!validateLimits(liveBefore).ok && validateLimits(withDefaultActions(liveBefore)).ok, 'a live row from before the SQL still saves from the Security panel (the missing action is filled from the defaults)');
@@ -558,7 +597,8 @@ console.log('── the screens ──');
   /* 2026-10-05 (improve/outreach-compact-audit-rows): the results panel is gone. The rows carry each
      lead's state and scores, the one-line check bar the counts / allowance / Stop / Open next ready —
      scripts/outreach-compact-audit-rows.test.ts holds that design; this section keeps the safety lines. */
-  const panel = read('src/components/SalesCheckDialog.tsx') + '\n' + read('src/components/OutreachAiCheck.tsx');
+  const panel = read('src/components/OutreachAiCheck.tsx');
+  ok(!existsSync(path.join(ROOT, 'src/components/SalesCheckDialog.tsx')), 'the confirm dialog is deleted — the press starts the batch (2026-10-06)');
   const hook = read('src/hooks/useSalesChecks.ts');
   const outreach = read('src/pages/Outreach.tsx');
   const table = read('src/components/OutreachTable.tsx');

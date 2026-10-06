@@ -208,10 +208,11 @@ console.log('── 4. budget pools: prospecting never draws on guarantee / clie
   ok(!budgetDecision({ pool: 'prospecting', poolSpentUsd: exhausted.poolSpentUsd, estCostUsd: 0.0331, apify: exhausted.apify }).allowed, 'prospecting exhausted → a prospect check is refused');
   ok(budgetDecision({ pool: 'guarantee', poolSpentUsd: 0, estCostUsd: 0.6, apify: exhausted.apify }).allowed, '…while a BASELINE / RE-MEASURE (guarantee pool, its own spend) is still allowed, Apify at 93%');
   ok(!budgetDecision({ pool: 'client', poolSpentUsd: 8, estCostUsd: 0.1, apify: null }).allowed && budgetDecision({ pool: 'guarantee', poolSpentUsd: 0, estCostUsd: 0.6, apify: null }).allowed, 'other client work at its cap does not consume guarantee capacity');
-  ok(SALES_CHECK_DEFAULT_PER_REP_PER_DAY === 30 && DEFAULT_PROTECTION_LIMITS.actions.sales_check.per_day === 30 && DEFAULT_PROTECTION_LIMITS.actions.sales_check.paid === true, 'salesperson allowance: 30 fresh checks per rep per day (paid action)');
+  ok(SALES_CHECK_DEFAULT_PER_REP_PER_DAY === 50 && DEFAULT_PROTECTION_LIMITS.actions.sales_check.per_day === 50 && DEFAULT_PROTECTION_LIMITS.actions.sales_check.paid === true, 'salesperson allowance: 50 fresh checks per rep per day (paid action; 30 until 2026-10-06)');
   ok(SALES_CHECK_BATCH_MAX === 20, 'batch maximum: 20 leads per press');
   const mig = read('supabase/migrations/20261006070000_sales_prospect_checks.sql');
-  ok(/"per_day"\s*:\s*30/.test(mig) && /where not \(limits->'actions' \? 'sales_check'\)|NOT \(limits -> 'actions' \? 'sales_check'\)|\? 'sales_check'/i.test(mig), 'the migration adds sales_check {per_day: 30} only if absent (never overwrites Paul\'s value)');
+  ok(/"per_day"\s*:\s*30/.test(mig) && /where not \(limits->'actions' \? 'sales_check'\)|NOT \(limits -> 'actions' \? 'sales_check'\)|\? 'sales_check'/i.test(mig), 'the first migration added sales_check {per_day: 30} only if absent (history, unchanged)');
+  ok(/"per_day"\s*:\s*50/.test(read('supabase/migrations/20261012130000_sales_check_allowance_50.sql')), 'the 2026-10-06 migration raises it to 50');
 }
 
 /* ═══ 5. Commercial terms ═════════════════════════════════════════════════════════════════════════ */

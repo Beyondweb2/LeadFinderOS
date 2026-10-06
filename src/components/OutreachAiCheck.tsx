@@ -7,9 +7,10 @@
    no answer text, no website findings; those are the call screen's.
    OutreachCheckBar — one line above the list: the rep's batch in counts, checks left today, Stop, and
    "Open next ready". It replaces the old "Check before calling" results panel.
-   ⛔ NOTHING HERE CONTACTS ANYONE OR WRITES A LEAD. Call screen opens the workspace; Retry opens the
-   same confirm dialog as the toolbar (sales) or the single AI check popup (admin); Stop asks the
-   server to skip what has not started. ⛔ NO COST IS SHOWN — the allowance is counted in checks.
+   ⛔ NOTHING HERE CONTACTS ANYONE OR WRITES A LEAD. Call screen opens the workspace; Retry starts the
+   check straight away like the toolbar press (sales — no confirm dialog since 2026-10-06) or opens the
+   single AI check popup (admin); Stop asks the server to skip what has not started.
+   ⛔ NO COST IS SHOWN — the allowance is counted in checks.
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 import { Clock, Loader2, PhoneCall, RotateCcw, SearchCheck, Square } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -109,6 +110,10 @@ export function OutreachCheckBar({ batch, allowance, onStop, ready, hasNext, onO
       )}
       {allowance && (
         <span data-testid="outreach-check-allowance">Checks left today: <b className="text-foreground">{allowance.remaining}</b>/{allowance.limit}</span>
+      )}
+      {/* At 0 a press still reuses recent results (free); only a NEW check is refused, item by item. */}
+      {allowance && allowance.remaining <= 0 && (
+        <span className="text-amber-700 dark:text-amber-300" data-testid="outreach-check-limit">Daily check limit reached</span>
       )}
       {error && <span className="text-destructive">{error}</span>}
       <span className="ml-auto inline-flex items-center gap-1.5">

@@ -50,8 +50,8 @@ export const SALES_CHECK_REFRESH_MIN_DAYS = 2;
  *  not name one (actions.sales_check.per_day). Absent never means unlimited. Reused results do not
  *  count. The number lives ONCE, in protectionLimits.ts (the value the migration adds to the live
  *  row); sized from the measured cost of one check (_shared/outreach-audit.ts OUTREACH_AUDIT_EST_USD):
- *  one full batch plus a partial second a day per rep at launch (Paul, 2026-10-05). Admin-configurable on
- *  the Security panel. */
+ *  two full batches plus a half one a day per rep (Paul, 2026-10-06). Admin-configurable on the
+ *  Security panel. */
 export const SALES_CHECK_DEFAULT_PER_REP_PER_DAY: number = Number(DEFAULT_PROTECTION_LIMITS.actions.sales_check.per_day);
 
 /** Items worked at once inside one advance (each is one create-ai-audit call or one crawl). */
@@ -103,7 +103,7 @@ export const REASON_TEXT: Record<ItemReason, string> = {
   town_unverified: 'Town not confirmed — confirm it on the lead, then check again.',
   pitch_waiting: 'An automatic WhatsApp is waiting on this lead\'s AI check, so no new check was started here. Ask Paul.',
   auto_message_on: 'New checks are off while a finished check sends an automatic WhatsApp. Ask Paul.',
-  allowance_used: 'Today\'s checking allowance is used — try again tomorrow or ask Paul.',
+  allowance_used: 'Daily check limit reached — try again tomorrow or ask Paul.',
   budget_used: 'Today\'s checking budget is used — your leads are still here, try tomorrow or ask Paul.',
   budget_unknown: 'Couldn\'t confirm today\'s allowance, so nothing was started. Try again in a minute.',
   paused: 'Checks are paused by Paul right now — nothing was started.',

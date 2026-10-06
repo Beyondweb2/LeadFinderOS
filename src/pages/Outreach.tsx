@@ -28,7 +28,6 @@ import { MyWhatsAppQueuePanel } from '@/components/MyWhatsAppQueuePanel';
 import { CampaignsButton } from '@/components/campaigns/CampaignsButton';
 import { useLeadPermissions } from '@/hooks/useLeadPermissions';
 import { AddLeadDialog } from '@/components/AddLeadDialog';
-import { SalesCheckDialog } from '@/components/SalesCheckDialog';
 import { useSalesChecks } from '@/hooks/useSalesChecks';
 import type { WorkspaceTabInput } from '@/components/LeadDetailDialog';
 import { UserPlus } from 'lucide-react';
@@ -97,9 +96,14 @@ const Outreach = () => {
   });
 
   /* "Check before calling" (sales, fix/07): the batch lives server-side; this reads it and moves it on
-     while the page is open. The press opens a dialog that says what will happen before anything starts. */
+     while the page is open. ⛔ ONE CLICK (Paul, 2026-10-06): the press STARTS the batch — no confirm
+     dialog. The server still judges every lead (ownership, archived, client, trade/town, allowance,
+     batch maximum, reuse) and the one-line check bar and each row say what happened. */
   const checks = useSalesChecks(perms.salesChecks);
-  const [checkIds, setCheckIds] = useState<string[] | null>(null);
+  const startSalesCheck = useCallback((ids: string[]) => {
+    const live = ids.filter((id) => !isDemoLead(id));
+    if (live.length > 0) void checks.start(live);
+  }, [checks.start]);
 
   // Campaign filter (null = all campaigns). Persisted per-user so it survives
   // navigation + reload + re-login (restored in an effect once campaigns load).
@@ -379,20 +383,7 @@ const Outreach = () => {
 
       {/* ⛔ NO RESULTS PANEL HERE (2026-10-05, improve/outreach-compact-audit-rows). The batch shows on the
           rows themselves (Waiting / Checking… / ChatGPT · Gemini) and in the table's one-line check bar
-          (counts, checks left today, Stop, Open next ready). Only the press's confirm dialog lives here. */}
-      {perms.salesChecks && (
-        <SalesCheckDialog
-          open={checkIds !== null}
-          onOpenChange={(o) => { if (!o) setCheckIds(null); }}
-          selected={checkIds?.length ?? 0}
-          checks={checks}
-          onConfirm={async (refresh) => {
-            if (!checkIds) return;
-            const r = await checks.start(checkIds, refresh);
-            if (r.ok) setCheckIds(null);
-          }}
-        />
-      )}
+          (counts, checks left today, Stop, Open next ready). No confirm dialog either (2026-10-06). */}
 
       {/* ⛔ NEVER A SILENT PARTIAL LIST: while the rest load (or after they failed) the page says so. */}
       {loadNotice && (
@@ -476,7 +467,7 @@ const Outreach = () => {
         onClearPreset={clearPreset}
         onBulkJob={perms.bulkAudits ? createJob : undefined}
         bulkJobActive={!!activeJob || creatingJob}
-        onSalesCheck={perms.salesChecks ? (ids) => setCheckIds(ids.filter((id) => !isDemoLead(id))) : undefined}
+        onSalesCheck={perms.salesChecks ? startSalesCheck : undefined}
         salesCheckBlocked={checks.view?.batch?.status === 'active' ? 'Your last checks are still starting — wait a moment, or stop them first.' : checks.starting ? 'Starting…' : null}
         salesCheckView={perms.salesChecks ? checks.view : null}
         onStopSalesCheck={perms.salesChecks ? (batchId) => { void checks.cancel(batchId); } : undefined}
