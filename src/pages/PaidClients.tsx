@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { AlertCircle, Plus, Loader2, RefreshCw, UsersRound, Layers, FileCode2, MessageSquareQuote, CalendarClock, BellRing, ChevronRight } from 'lucide-react';
+import { AlertCircle, Plus, Loader2, RefreshCw, UsersRound, Layers, FileCode2, MessageSquareQuote, CalendarClock, BellRing, ChevronRight, Search, Send } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogTrigger } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
@@ -20,11 +20,17 @@ import { PAID_CLIENT_TOOL_LABEL, toolOf, type PaidClientTool } from '@/lib/paidC
 import { PagePlanTool } from '@/components/clientTools/PagePlanTool';
 import { PageGeneratorTool } from '@/components/clientTools/PageGeneratorTool';
 import { ReviewReplyTool } from '@/components/clientTools/ReviewReplyTool';
+import { intakeStatusLine, type IntakeStatus, type IntakeSummary } from '@/lib/clientIntake';
+import { outreachLeadLink } from '@/lib/salesLinks';
 
 type Client = { id: string; business_name: string; address?: string | null; search_location?: string | null; derived_town?: string | null; website?: string | null; amount_paid?: number | null; payment_date?: string | null; next_action?: string | null; next_action_date?: string | null; next_action_time?: string | null; baseline_audit_id?: string | null; remeasure_audit_id?: string | null; remeasure_due_date?: string | null; delivery_checklist?: Record<string, boolean> | null; payment_source?: 'recorded' | 'marked_paid' | null;
   /* The handoff (paid-client-hub list, src/lib/handoffReadiness.ts) and who sold it. */
   handoff?: SetupView | null; sold_by_name?: string | null; seller_pending?: 'awaiting_attribution' | 'not_credited' | null;
-  contract?: ClientContract | null };
+  contract?: ClientContract | null;
+  /* Paid client auto-intake (2026-10-06): the run state and its counts. */
+  intake?: { status: IntakeStatus; summary: IntakeSummary | null } | null };
+/* A handoff a salesperson SENT for a client who has not paid yet (paid-client-hub list). */
+type AwaitingHandoff = { lead_id: string; business_name: string | null; sent_at: string; sent_by: string | null; lines: string[] };
 /* Every request goes through invokeEdge: a real session first, an explicit Authorization header,
    one refresh-and-retry on 401, and a genuine sign-out routed to /auth. Never the anon key. */
 const call = <T = Record<string, unknown>>(body: Record<string, unknown>) => invokeEdge<T>('paid-client-hub', body);
@@ -86,6 +92,7 @@ function ClientCard({ c }: { c: Client }) {
           {s && <ToneChip tone={tone} dot testId="paid-client-handoff" className="whitespace-normal text-left">{s.state_label}</ToneChip>}
           {s && <div className="text-xs text-muted-foreground">{s.state === 'ended' ? s.stage_label : `Setup ${s.done}/${s.total} · ${s.stage_label}`}</div>}
           <div className="flex items-center gap-1 text-xs text-muted-foreground"><CalendarClock className="h-3 w-3 shrink-0" />{paymentLine(c)}</div>
+          {c.intake && <div className="flex items-center gap-1 text-xs text-muted-foreground" data-testid="paid-client-intake"><Search className="h-3 w-3 shrink-0" />Intake: {intakeStatusLine(c.intake.status, c.intake.summary)}</div>}
         </div>
         <div className="min-w-0" data-testid="paid-client-next">
           <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Next step</div>
@@ -100,6 +107,28 @@ function ClientCard({ c }: { c: Client }) {
   );
 }
 
+/* ══ HANDOFFS SENT BEFORE PAYMENT (2026-10-06, Send to Paul) ═══════════════════════════════════════════
+   A salesperson may send the handoff before the client pays. Paul sees it here as "Awaiting payment"; the
+   moment payment lands the client moves into the list below and the automatic intake merges this handoff. */
+function AwaitingPayment({ items, highlight }: { items: AwaitingHandoff[]; highlight: string | null }) {
+  if (!items.length) return null;
+  return (
+    <section className="space-y-2" data-testid="handoffs-awaiting-payment">
+      <h2 className="flex items-center gap-2 px-1 text-sm font-bold"><Send className="h-4 w-4 text-blue-500" />New client handoffs · awaiting payment <span className="font-normal text-muted-foreground">({items.length})</span></h2>
+      {items.map((h) => (
+        <details key={h.lead_id} open={highlight === h.lead_id} className={cn(SURFACE, EDGE.blue, 'p-3 text-sm', highlight === h.lead_id && 'ring-2 ring-primary/50')}>
+          <summary className="flex cursor-pointer select-none flex-wrap items-center justify-between gap-2">
+            <span className="min-w-0"><span className="font-bold">{h.business_name ?? 'A client'}</span><span className="text-muted-foreground"> · from {h.sent_by ?? 'the salesperson'} · {new Date(h.sent_at).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: 'Europe/London' })}</span></span>
+            <ToneChip tone="amber" dot>Awaiting payment</ToneChip>
+          </summary>
+          <ul className="mt-2 space-y-0.5">{h.lines.map((l) => <li key={l}>{l}</li>)}</ul>
+          <Link to={outreachLeadLink(h.lead_id)} className="mt-2 inline-block text-xs font-medium text-primary hover:underline">Open the lead →</Link>
+        </details>
+      ))}
+    </section>
+  );
+}
+
 export default function PaidClients() {
   const { user, isLoading: authLoading } = useAuth();
   const [filter, setFilter] = usePersistedState<ClientFilter>('paidClients.filter', 'attention', { tier: 'local', validate: (v: unknown) => FILTERS.find((x) => x.value === v)?.value ?? null });
@@ -107,13 +136,19 @@ export default function PaidClients() {
   const tool = toolOf(searchParams.get('tool'));
   const openTool = (t: PaidClientTool | null) => setSearchParams((p) => { const n = new URLSearchParams(p); if (t) n.set('tool', t); else n.delete('tool'); return n; });
   const [clients, setClients] = useState<Client[] | null>(null);
+  const [awaiting, setAwaiting] = useState<AwaitingHandoff[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const navigate = useNavigate();
+  /* The bell's "NEW CLIENT HANDOFF" link for a client who has not paid yet opens this list on that handoff. */
+  const handoffParam = searchParams.get('handoff');
   const load = useCallback(async () => {
     if (!user?.id) return;
     setLoading(true); setError(null);
-    try { setClients((await call<{ clients: Client[] }>({ action: 'list' })).clients ?? []); }
+    try {
+      const r = await call<{ clients: Client[]; handoffs_awaiting_payment?: AwaitingHandoff[] }>({ action: 'list' });
+      setClients(r.clients ?? []); setAwaiting(r.handoffs_awaiting_payment ?? []);
+    }
     catch (e) {
       if (e instanceof EdgeAuthError && !e.transient) return; // the sign-in flow is taking over
       setClients(null);
@@ -146,6 +181,7 @@ export default function PaidClients() {
       {showSpinner && <div className="flex justify-center py-16"><Loader2 className="h-8 w-8 animate-spin text-primary"/></div>}
       {!showSpinner && error && <Callout tone="red" icon={AlertCircle} title="Could not load paid clients" action={<Button size="sm" variant="outline" onClick={() => void load()}><RefreshCw className="mr-1 h-4 w-4"/>Try again</Button>}>{error}</Callout>}
       {!showSpinner && !error && clients && <div className="space-y-3">
+        <AwaitingPayment items={awaiting} highlight={handoffParam} />
         <Segmented<ClientFilter> label="Filter clients" value={filter} onChange={setFilter} wrapOnPhone
           options={FILTERS.map((x) => ({ key: x.value, label: x.label, tone: x.tone, count: x.value === 'all' ? clients.length : clients.filter((c) => c.handoff && matchesFilter(c.handoff, x.value)).length }))} />
         <div className="grid gap-3">{shown.map((c) => <ClientCard key={c.id} c={c} />)}</div>

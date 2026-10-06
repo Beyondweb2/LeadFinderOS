@@ -31,7 +31,7 @@ import {
 } from "../../../src/lib/siteEvidence.ts";
 import {
   resolveCrawlMode, STANDARD_CRAWL, cleanRequestSource, toServedUrl, isPageUrl, internalPageLinks,
-  orderSitemapChildren, mayReplaceLeadCrawl,
+  orderSitemapChildren, mayReplaceLeadCrawl, isIntakeCrawlRequest,
 } from "../../../src/lib/fullCrawl.ts";
 import { activeJobFor, createCrawlJob, jobCounts, kickCrawlWorker } from "../_shared/crawl-job.ts";
 import { crawlPageCapFor, prospectCrawlReuse } from "../../../src/lib/prospectCrawl.ts";
@@ -301,7 +301,11 @@ Deno.serve(async (req) => {
     /* ⛔ THE PROFILE. FULL only when an OPERATOR asks for exactly `mode: "full"` (every manual Crawl
        site / Re-crawl site button does); every internal caller, and every absent or unknown value,
        is STANDARD — the budget this function always had. See src/lib/fullCrawl.ts. */
-    let mode = resolveCrawlMode(body?.mode, !internal);
+    /* ⛔ …EXCEPT THE PAID CLIENT AUTO-INTAKE (2026-10-06, isIntakeCrawlRequest): an internal call naming only a
+       lead, requested_from client_intake, gets the exhaustive job — and is refused below unless that lead is a
+       paid client. It is the one internal door to a full crawl; nothing else internal changes. */
+    const intakeCrawl = isIntakeCrawlRequest(internal, body);
+    let mode = intakeCrawl ? "full" as const : resolveCrawlMode(body?.mode, !internal);
     /* The INLINE crawl below is always the standard profile. A FULL request never runs inline: it
        becomes a background job (see the branch after the homepage probes). */
     const profile = STANDARD_CRAWL;
@@ -342,12 +346,16 @@ Deno.serve(async (req) => {
        admin, or by a rep once the saved crawl is a day old. A running job always wins (the press
        watches it). Nothing here spends AI or audit allowance. */
     let pageCap: number | null = null;
+    /* The intake's job is filed under the lead's owner (the book), as an operator's own crawl is. */
+    let intakeOwnerId: string | null = null;
     if (mode === "full") {
       let isClient = false;
       if (leadId && !salesLead) {
         const { data: lr } = await service.from("outreach_leads").select("id, user_id, assigned_to_user_id, amount_paid, status").eq("id", leadId).maybeSingle();
         isClient = !!lr && isClientLead(lr);
+        intakeOwnerId = (lr?.user_id as string | undefined) ?? null;
       }
+      if (intakeCrawl && !isClient) return json({ ok: false, error: "not_a_client", detail: "The intake crawl is for paid clients only." }, 403);
       pageCap = crawlPageCapFor({ isClient, requestedFrom });
       if (leadId && pageCap !== null) {
         const running = await activeJobFor(service, leadId, homeUrl);
@@ -408,7 +416,7 @@ Deno.serve(async (req) => {
        inline check below records that honestly (as a standard row). */
     if (mode === "full" && home && home.html) {
       const job = await createCrawlJob(service, {
-        leadId, userId: rowOwnerId, requestedFrom, pageCap,
+        leadId, userId: intakeCrawl ? intakeOwnerId : rowOwnerId, requestedFrom, pageCap,
         probe: {
           homeUrl, servedUrl: home.finalUrl || homeUrl, town: town || null, readableUa,
           readableAs: readableProbe?.c.label ?? null, searchBlocked, respondedAny,
@@ -419,9 +427,10 @@ Deno.serve(async (req) => {
       await kickCrawlWorker("start");
       /* Who started it goes on the lead's history (best-effort; never fails the crawl). A second press
          while a job runs returns the running job and logs nothing. */
-      if (leadId && userId && !job.reused) {
+      if (leadId && (userId || intakeCrawl) && !job.reused) {
         const { error: actErr } = await service.from("lead_activity").insert({
-          lead_id: leadId, actor_user_id: userId, kind: "crawl_run", data: { job_id: job.jobId, url: homeUrl },
+          lead_id: leadId, actor_user_id: userId, kind: "crawl_run",
+          data: { job_id: job.jobId, url: homeUrl, ...(intakeCrawl ? { source: "system", started_by: "client_intake" } : {}) },
         });
         if (actErr) console.warn(`[crawl-check] crawl_run activity not recorded: ${actErr.message}`);
       }

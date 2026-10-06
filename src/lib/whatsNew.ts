@@ -22,6 +22,44 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-06-send-to-paul-sales', date: '2026-10-06', title: 'Finish a close with Send to Paul', audience: 'sales',
+    body: 'When every handoff question is answered, the last button on the Close tab is Send to Paul. Press it and your part is done. Quick Close also has a calmer look.',
+    report: {
+      added: [
+        '"Handoff complete" and a big Send to Paul button once every required handoff answer is in.',
+        '"Sent to Paul" with the time, once you have sent it. You can still correct an answer after.',
+        'Send to Paul works before or after the client pays.',
+      ],
+      changed: [
+        'Quick Close uses the dashboard look: dark cards, blue buttons and choices, yellow for the guarantee, green only when something is done (paid, link ready, sent).',
+        'The handoff opens by itself once the sign-up link is out, after payment, or when it is ready to send.',
+      ],
+      removed: [
+        'The large teal panels and the teal progress bar in Quick Close.',
+        '"Save handoff" as the last step (it is still there while answers are missing).',
+      ],
+      effect: 'You know exactly when you are finished: answer the handoff, press Send to Paul, done. Nothing about the price, the agreement, the payment or your commission changed.',
+    } },
+  { id: '2026-10-06-paid-client-auto-intake', date: '2026-10-06', title: 'New paid clients arrive with everything we already know', audience: 'admin',
+    body: 'When a client pays, LeadFinderOS gathers the lead, the handoff, their sign-up answers, the signed agreement, Google data, the hook audit and a full crawl of their website into one Client intake at the top of the client page. Salespeople now press Send to Paul at the end of a close.',
+    report: {
+      added: [
+        'Client intake at the top of each paid client: who they are, what they bought, what Sales told us, what the client told us, what we found, and only what is still needed.',
+        'Every fact shows where it came from; open Sources to see each one. Different answers are marked "Needs review — conflicting evidence".',
+        'Confirm, Edit, "Wrong — reject" and "Back to automatic" on each fact. A fact you confirm is never replaced by later research.',
+        'A full crawl of their website starts by itself when they pay, unless a recent full crawl is already on file.',
+        'Build clients: their old site\'s content, logo and photos are marked REFERENCE ONLY — DO NOT REUSE unless the client confirmed they own them.',
+        'Notifications: NEW CLIENT HANDOFF when a salesperson sends one, and CLIENT READY (or needs attention) when the intake finishes.',
+        'Paid clients: "New client handoffs · awaiting payment" for handoffs sent before the client paid.',
+        'Refresh research and Refresh Google data buttons for a re-run.',
+      ],
+      changed: [
+        'Answers the client or the salesperson already gave fill the setup checklist automatically. You no longer need Find what we already have for those (it stays as a fallback).',
+        'Payment now starts the website crawl (it used to wait for you).',
+      ],
+      removed: [],
+      effect: 'Open a new client and the work is already gathered. Nothing is sent to the client, no paid lookups run, and the paid 20-question baseline still waits for you as before.',
+    } },
   { id: '2026-10-06-quick-report-concept4', date: '2026-10-06', title: 'The Quick AI Visibility Check report has a new design', audience: 'all',
     body: 'The six-answer quick report now opens with the score, then shows the search the business was missed on with what the AI actually said, the names it gave instead, every question, the website issues and a short "why this matters".',
     report: {

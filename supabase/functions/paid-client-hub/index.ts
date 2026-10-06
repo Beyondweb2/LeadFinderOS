@@ -35,6 +35,10 @@ import { whatsAppCapabilityOf } from "../../../src/lib/whatsAppCapability.ts";
 import { toWhatsAppDigits } from "../../../src/lib/waNumber.ts";
 import { serviceWindowState } from "../../../src/lib/serviceWindow.ts";
 import { newestRequestFor, requestClientInfo } from "../_shared/client-info-request.ts";
+import { intakeView, queueIntake, runClientIntake } from "../_shared/client-intake.ts";
+import { applyOverride, cleanOverrides, isIntakeFieldKey, INTAKE_FIELDS, type OverrideAction } from "../../../src/lib/clientIntake.ts";
+import { cleanSellerClientInfo } from "../../../src/lib/clientMissingInfo.ts";
+import { handoffSummaryLines } from "../../../src/lib/salesHandoff.ts";
 
 /* THE OFFICIAL BASELINE'S VISIBILITY, for the client summary (2026-09-30): answers naming the business
    over the FROZEN runs (usable runs, run_number order, the first baseline_target_runs — the same runs
@@ -240,7 +244,10 @@ function setupView(s: ClientSetup) {
 /* The delivery workflow's History on the client page: the handoff kinds above plus the delivery events. */
 const DELIVERY_ACTIVITY_KINDS = ["payment_received", "handoff_saved", "onboarding_submitted", "delivery_submitted", "discovery_run", "baseline_approved", "baseline_run", "build_started", "launched", "crawl_run", "audit_run",
   /* Client missing-info actions (2026-10-05). */
-  "client_info_requested", "client_info_answered", "client_contact_opened"];
+  "client_info_requested", "client_info_answered", "client_contact_opened",
+  /* Paid client auto-intake (2026-10-06): sent to Paul, the intake finished, Paul's fact decisions; details_set
+     is what the intake (or Find what we already have) filled in. */
+  "handoff_sent", "client_intake", "client_fact_set", "details_set"];
 
 /* ══ MISSING INFORMATION: who can answer it, the request to the seller, and how to reach the client ══
    (2026-10-05, src/lib/clientMissingInfo.ts — every decision is there). Read only. */
@@ -299,6 +306,33 @@ async function teamNames(service: any): Promise<Map<string, string>> {
   return new Map(((data ?? []) as Array<{ user_id: string; display_name: string | null }>).map((t) => [t.user_id, t.display_name ?? "A teammate"]));
 }
 
+/* ══ THE LIST'S OVERLAYS (2026-10-06, paid client auto-intake) ═══════════════════════════════════════
+   Status read BESIDE the client list, never a second client list: the intake state of each member, and the
+   handoffs a salesperson SENT for a lead that has not paid yet ("Awaiting payment"). Membership stays the one
+   outreach_leads read in `list`. A failed read shows no chip / no awaiting card, never an error page. */
+// deno-lint-ignore no-explicit-any
+async function listOverlays(service: any, userId: string, memberIdList: string[]) {
+  const memberIds = new Set(memberIdList);
+  const [intakes, sends] = await Promise.all([
+    service.from("client_intake").select("lead_id,status,summary").in("lead_id", memberIdList.length ? memberIdList : ["00000000-0000-0000-0000-000000000000"]),
+    service.from("client_handoff_sends").select("lead_id,sent_at,sent_by_name,handoff").order("sent_at", { ascending: false }).limit(50),
+  ]);
+  const intakeBy = new Map<string, Record<string, unknown>>(((intakes.error ? [] : intakes.data ?? []) as Array<Record<string, unknown>>).map((r) => [String(r.lead_id), r]));
+  let awaiting: Array<Record<string, unknown>> = [];
+  const pendingSends = ((sends.error ? [] : sends.data ?? []) as Array<Record<string, unknown>>).filter((s) => !memberIds.has(String(s.lead_id)));
+  if (pendingSends.length) {
+    const { data: pl } = await service.from("outreach_leads").select("id,business_name,status,amount_paid,is_archived,service_terminated_at")
+      .eq("user_id", userId).in("id", pendingSends.map((s) => String(s.lead_id)));
+    const byId = new Map(((pl ?? []) as Array<Record<string, unknown>>).map((l) => [String(l.id), l]));
+    awaiting = pendingSends.flatMap((s) => {
+      const l = byId.get(String(s.lead_id));
+      if (!l || l.is_archived === true || l.service_terminated_at || l.status === "refunded" || isPaidClient(l as never)) return [];
+      return [{ lead_id: s.lead_id, business_name: l.business_name ?? null, sent_at: s.sent_at, sent_by: s.sent_by_name ?? null, lines: handoffSummaryLines(s.handoff as never) }];
+    });
+  }
+  return { intakeBy, awaiting };
+}
+
 /* WHO SOLD IT, for display (saleCreditOf, the one rule). ⛔ A sale under attribution review, or not credited,
    names NOBODY — never the current owner (the old fallback). Only a client paid before the seller stamp existed
    (never decided) still shows the current owner, as before. */
@@ -341,7 +375,12 @@ Deno.serve(async (req) => {
       const members = (visible as unknown as Array<Parameters<typeof isPaidClient>[0]>).filter(isPaidClient) as unknown as Array<Record<string, unknown>>;
       /* THE SETUP CHECKLIST + STAGE + ONE NEXT STEP (src/lib/handoffReadiness.ts + deliveryStage.ts, loaded
          by _shared/client-setup.ts — the same loader the new-client email uses). */
-      const [setups, names, ledger] = await Promise.all([loadClientSetups(service, members), teamNames(service), ledgerFor(service, members.map((l) => String(l.id)))]);
+      const [setups, names, ledger, overlay] = await Promise.all([
+        loadClientSetups(service, members), teamNames(service), ledgerFor(service, members.map((l) => String(l.id))),
+        listOverlays(service, user.id, members.map((l) => String(l.id))),
+      ]);
+      const intakeBy = overlay.intakeBy;
+      const awaiting = overlay.awaiting;
       const clients = members.map((l) => {
         const id = String(l.id);
         const s = setups.get(id)!;
@@ -355,9 +394,10 @@ Deno.serve(async (req) => {
           sold_by_name: soldBy ? names.get(soldBy) ?? "A teammate" : null,
           seller_pending: seller.pending,
           contract: clientContract({ lead: l as Record<string, never>, onboarding: s.onboarding, ledger: ledger.get(id) ?? [] }),
+          intake: intakeBy.has(id) ? { status: intakeBy.get(id)!.status, summary: intakeBy.get(id)!.summary ?? null } : null,
         };
       });
-      return json({ ok: true, clients });
+      return json({ ok: true, clients, handoffs_awaiting_payment: awaiting });
     }
 
     if (action === "matches") {
@@ -491,7 +531,86 @@ Deno.serve(async (req) => {
         prospect_audit: ev.auditByLead.get(leadId) ?? null,
         activity: ((act.data ?? []) as Array<Record<string, unknown>>).map((a) => ({ ...a, actor: nameOf(a.actor_user_id) ?? "System" })),
       };
-      return json({ ok: true, client: { lead, onboarding: onboarding ?? null, onboarding_unpaid: onboardingUnpaid, audit, runs, pages, crawl, crawl_job: crawlJob, handoff, contract, baseline_visibility: visibility } });
+      /* THE AUTO-INTAKE (2026-10-06, _shared/client-intake.ts): the consolidated profile, DERIVED on this read
+         from every source, plus the run state. A failure here never fails the client page. */
+      let intake: Awaited<ReturnType<typeof intakeView>> = null;
+      try { intake = await intakeView(service, leadId); }
+      catch (e) { console.error("[paid-client-hub] intake view failed (non-blocking):", (e as { message?: string })?.message ?? e); }
+      return json({ ok: true, client: { lead, onboarding: onboarding ?? null, onboarding_unpaid: onboardingUnpaid, audit, runs, pages, crawl, crawl_job: crawlJob, handoff, contract, baseline_visibility: visibility, intake } });
+    }
+
+    /* ══ THE INTAKE ALONE (the card polls this while research runs — never the whole page) ═════════════ */
+    if (action === "intake_view") {
+      const leadId = text(body.lead_id);
+      const { data: own, error: ownErr } = await service.from("outreach_leads").select("id").eq("id", leadId).eq("user_id", user.id).maybeSingle();
+      if (ownErr) throw ownErr;
+      if (!own) return json({ ok: false, error: "client_not_found", detail: "This client is not in your paid-client list." }, 404);
+      return json({ ok: true, intake: await intakeView(service, leadId) });
+    }
+
+    /* ══ RE-RUN THE AUTOMATIC INTAKE (Paul's "Refresh research") ═════════════════════════════════════════
+       Re-queues the ONE intake row and runs it now. It may start ONE more crawl, only if no recent full crawl
+       of their site is on file (crawlPlan). Nothing paid, nothing sent. Refused for an ended client. */
+    if (action === "intake_run") {
+      const leadId = text(body.lead_id);
+      const { data: own, error: ownErr } = await service.from("outreach_leads").select("id,amount_paid,status,service_terminated_at").eq("id", leadId).eq("user_id", user.id).maybeSingle();
+      if (ownErr) throw ownErr;
+      if (!own || !isPaidClient(own as never)) return json({ ok: false, error: "client_not_found", detail: "This client is not in your paid-client list." }, 404);
+      if (clientClosed(own as never)) return json({ ok: false, error: "client_closed", detail: "This client's engagement has ended." }, 409);
+      await queueIntake(service, leadId, "rerun");
+      const out = await runClientIntake(service, leadId);
+      return json({ ok: true, outcome: out, intake: await intakeView(service, leadId) });
+    }
+
+    /* ══ PAUL'S DECISION ON ONE FACT (confirm / edit / reject / clear) ═══════════════════════════════════
+       Stored in client_intake.overrides (applyOverride): a confirmed value outranks every source and no later
+       research replaces it; a rejected value is never shown again. "confirm" without a value confirms what
+       the profile shows NOW (re-derived here — never a value the screen sent). Confirming services / areas,
+       or a website where none is on file, also writes the lead field the setup checklist reads. */
+    if (action === "intake_fact") {
+      const leadId = text(body.lead_id);
+      const key = body.field;
+      const act = text(body.fact_action) as OverrideAction;
+      if (!isIntakeFieldKey(key) || !["confirm", "edit", "reject", "clear"].includes(act)) return json({ ok: false, error: "bad_request" }, 400);
+      const { data: own, error: ownErr } = await service.from("outreach_leads").select("id,website,amount_paid,status,service_terminated_at").eq("id", leadId).eq("user_id", user.id).maybeSingle();
+      if (ownErr) throw ownErr;
+      if (!own || !isPaidClient(own as never)) return json({ ok: false, error: "client_not_found", detail: "This client is not in your paid-client list." }, 404);
+      if (clientClosed(own as never)) return json({ ok: false, error: "client_closed", detail: "This client's engagement has ended." }, 409);
+      const before = await intakeView(service, leadId);
+      const field = before?.profile.find((f) => f.key === key);
+      const def = INTAKE_FIELDS.find((f) => f.key === key)!;
+      let value: string | null = null; let values: string[] | null = null;
+      if (act === "edit") { value = typeof body.value === "string" ? body.value : null; values = Array.isArray(body.values) ? body.values as string[] : typeof body.value === "string" && def.kind === "list" ? body.value.split(/[,\n]/) : null; }
+      else if (act === "confirm" || act === "reject") {
+        /* Reject names a SOURCE's value by index (sources[i]); confirm takes the shown value. */
+        const src = act === "reject" && Number.isInteger(body.source_index) ? field?.sources[Number(body.source_index)] : null;
+        value = src ? src.value ?? null : field?.value ?? null; values = src ? src.values ?? null : field?.values ?? null;
+      }
+      if (!before) return json({ ok: false, error: "client_not_found" }, 404);
+      const { data: rec } = await service.from("client_intake").select("overrides").eq("lead_id", leadId).maybeSingle();
+      const r = applyOverride(cleanOverrides(rec?.overrides), key, act, { value, values, by: user.id, at: new Date().toISOString() });
+      if (r.refused) return json({ ok: false, error: "refused", detail: r.refused }, 409);
+      const { error: upErr } = await service.from("client_intake").upsert({ lead_id: leadId, overrides: r.next, updated_at: new Date().toISOString(),
+        ...(rec ? {} : { status: "ready", trigger_source: "rerun" }) }, { onConflict: "lead_id" });
+      if (upErr) return json({ ok: false, error: "not_saved", detail: "Not saved — try again." }, 500);
+      /* Paul's confirmation of the lists / a missing website becomes the lead's own field (the checklist's source). */
+      const confirmed = r.next[key]?.confirmed ?? null;
+      if ((act === "confirm" || act === "edit") && confirmed) {
+        const raw = key === "services" ? { services: confirmed.values } : key === "service_areas" ? { service_areas: confirmed.values } : key === "website" && !text(own.website) ? { website: confirmed.value } : null;
+        if (raw) {
+          const { patch } = cleanSellerClientInfo(raw, { website: (own.website as string | null) ?? null });
+          if (Object.keys(patch).length) {
+            const { error: lErr } = await service.from("outreach_leads").update(patch).eq("id", leadId);
+            if (lErr) console.error("[paid-client-hub] confirmed fact not written to the lead:", lErr.message);
+          }
+        }
+      }
+      await recordLeadEvent(service, leadId, "client_fact_set", {
+        actor: user.id, source: "admin",
+        body: `${def.label}: ${act === "reject" ? "rejected" : act === "clear" ? "back to automatic" : "confirmed by Paul"}`,
+        data: { field: key, action: act, value: confirmed?.value ?? value ?? null, values: confirmed?.values ?? values ?? null },
+      });
+      return json({ ok: true, intake: await intakeView(service, leadId) });
     }
 
     /* ══ ASK THE SALESPERSON FOR THE MISSING INFORMATION (2026-10-05, src/lib/clientMissingInfo.ts) ══════

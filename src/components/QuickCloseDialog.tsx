@@ -56,7 +56,9 @@ interface View {
   windowOpen: boolean;
   events: { kind: string; at: string; by_me: boolean }[];
   /** The sales handoff (src/lib/salesHandoff.ts) — editable by the seller even after payment. */
-  handoff?: { canEdit: boolean; fields: SalesHandoffFields; prefilled: HandoffFieldKey[]; saved_at: string | null; completed_at: string | null; complete: boolean; missing: HandoffFieldKey[] };
+  handoff?: { canEdit: boolean; fields: SalesHandoffFields; prefilled: HandoffFieldKey[]; saved_at: string | null; completed_at: string | null; complete: boolean; missing: HandoffFieldKey[];
+    /** SEND TO PAUL (2026-10-06): the one authoritative send, once made. */
+    sent?: { at: string; by: string | null; by_me: boolean; paid_when_sent: boolean; changed_since: boolean } | null };
   /** After payment: the client's setup checklist, so the seller sees what is missing. */
   setup?: { ready: boolean; label: string; done: number; total: number; missing: string[]; state_label: string; next: NextStep; submitted: boolean; first_contact?: { state: FirstContactState; due: string | null } } | null;
   /** CLIENT INFO NEEDED (2026-10-05): Paul's open request to this seller, and the client details they may add. */
@@ -64,18 +66,31 @@ interface View {
   client_info?: SellerClientInfo | null;
 }
 export const quickCloseKey = (leadId: string | null | undefined) => ['quick-close', leadId ?? null] as const;
-/** The state chip's colour (operator/ui tones: green = money/done, drawn teal). */
+/* ══ THE LOOK (2026-10-06, Paul: no big teal / cyan washes) ═════════════════════════════════════════════
+   The Sales Dashboard / Call screen language, scoped to Quick Close: dark card surfaces, BLUE for the
+   workflow and its actions, Findable YELLOW for emphasis (the guarantee), GREEN only for a genuine success
+   (paid, link ready, sent), amber for waiting, red for a stop — subtle accent edges, never a coloured wash. */
+/** The state chip's colour. Paid is the one success state (drawn green by SUCCESS_CHIP, not the teal tone). */
 const STATE_TONE: Record<QuickCloseState, Tone> = {
   not_started: 'grey', in_progress: 'blue',
   blocked: 'red', consents_needed: 'amber', needs_review: 'amber',
-  ready: 'green', link_generated: 'green',
+  ready: 'blue', link_generated: 'blue',
   link_expired: 'amber',
   paid: 'green',
 };
-/** The one money CTA (create / copy the sign-up link) — the teal of the money tone. */
-const MONEY_CTA = 'h-14 w-full gap-2 rounded-xl bg-teal-600 text-base font-bold text-white shadow-sm shadow-teal-900/30 hover:bg-teal-700';
+/** A genuine success, in green (overrides the teal of the shared 'green' tone, here only). */
+const SUCCESS_CHIP = 'bg-emerald-500/10 text-emerald-700 ring-emerald-500/25 dark:text-emerald-300';
+const OK_TEXT = 'text-emerald-600 dark:text-emerald-400';
+/** Findable yellow — emphasis only (the guarantee). */
+const EMPHASIS_TEXT = 'text-yellow-500 dark:text-yellow-400';
+/** The one primary CTA (create / copy the sign-up link): workflow blue. */
+const MONEY_CTA = 'h-14 w-full gap-2 rounded-xl bg-blue-600 text-base font-bold text-white shadow-sm shadow-blue-950/30 hover:bg-blue-700';
+/** A card on the dashboard surface with a thin accent edge (no wash). */
+const PANEL = 'rounded-2xl border border-border/70 bg-card p-3.5 shadow-sm';
 /** A fold-out group inside the panel: a list-row surface, never a box inside a box. */
 const FOLD = 'rounded-xl border border-border/60 bg-muted/20 p-3';
+/** A chosen answer: blue edge and text, a faint blue fill. */
+const PICKED = 'border-blue-500/70 bg-blue-500/10 text-blue-700 ring-1 ring-inset ring-blue-500/30 dark:text-blue-300';
 /** Server refusals that mean "what you are looking at is out of date" — the screen re-reads itself. */
 const REFRESH_ON: ReadonlySet<string> = new Set(['stale_route', 'answer_not_kept', 'already_paid', 'client_closed','answers_changed', 'link_expired', 'busy', 'route_locked']);
 
@@ -205,6 +220,12 @@ export function QuickClosePanel({ leadId, active = true, framed = false }: { lea
   };
 
   const saveHandoff = async (h: SalesHandoffFields) => !!(await run('handoff', { mode: 'save_handoff', handoff: h }));
+  /* SEND TO PAUL (2026-10-06): saves what the form holds and sends it, once. The server re-checks every answer. */
+  const sendToPaul = async (h: SalesHandoffFields) => {
+    const r = await run('handoff', { mode: 'send_to_paul', handoff: h });
+    if (r) toast({ title: 'Sent to Paul', description: r.state === 'paid' ? 'Your part is done — Paul takes it from here.' : 'Paul has it. It joins their client record automatically when they pay.' });
+    return !!r;
+  };
   const saveClientInfo = async (ci: Record<string, string>) => {
     const r = await run('client-info', { mode: 'save_client_info', client_info: ci }) as { refused?: string[] } | null;
     if (r) toast({ title: 'Client details saved for Paul', description: r.refused?.length ? r.refused.join(' ') : undefined });
@@ -226,17 +247,17 @@ export function QuickClosePanel({ leadId, active = true, framed = false }: { lea
     <div className={cn('flex min-h-0 flex-col', framed && 'h-full')} data-testid="quick-close-panel">
         <div className={cn('shrink-0 text-left', framed ? 'border-b border-border/60 px-4 py-3.5' : 'pb-3')}>
           <div className="flex min-w-0 items-start gap-3 pr-8">
-            <IconTile icon={BadgePoundSterling} tone="green" />
+            <IconTile icon={BadgePoundSterling} tone="blue" />
             <div className="min-w-0 flex-1">
               <p className="flex min-w-0 items-baseline gap-1.5 text-base font-bold tracking-tight"><span className="shrink-0 whitespace-nowrap">Close</span><span className="min-w-0 truncate font-normal text-muted-foreground">· {v?.lead.business_name ?? '…'}</span></p>
               <div className="mt-1.5 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
-                {v && <ToneChip tone={STATE_TONE[v.state]} dot>{QUICK_CLOSE_STATE_LABEL[v.state]}</ToneChip>}
-                {v && route && <ToneChip tone="green" icon={PoundSterling} testId="qc-route-chip">{SERVICE_ROUTE_NAME[route]} · {totalPaymentsFor(route)} payments</ToneChip>}
+                {v && <ToneChip tone={STATE_TONE[v.state]} dot className={v.state === 'paid' ? SUCCESS_CHIP : undefined}>{QUICK_CLOSE_STATE_LABEL[v.state]}</ToneChip>}
+                {v && route && <ToneChip tone="grey" icon={PoundSterling} testId="qc-route-chip">{SERVICE_ROUTE_NAME[route]} · {totalPaymentsFor(route)} payments</ToneChip>}
                 {v && v.state !== 'paid' && <span className="min-w-0">{answeredCount} of {shownQs.length} answered · saved as you go</span>}
               </div>
             </div>
           </div>
-          {v && v.state !== 'paid' && <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-muted"><div className={cn('h-full rounded-full transition-[width] duration-500 motion-reduce:transition-none', TONE.green.bar)} style={{ width: `${Math.round((answeredCount / Math.max(1, shownQs.length)) * 100)}%` }} /></div>}
+          {v && v.state !== 'paid' && <div className="mt-3 h-1 overflow-hidden rounded-full bg-muted" data-testid="qc-progress"><div className={cn('h-full rounded-full transition-[width] duration-500 motion-reduce:transition-none', TONE.blue.bar)} style={{ width: `${Math.round((answeredCount / Math.max(1, shownQs.length)) * 100)}%` }} /></div>}
         </div>
 
         <div className={cn('space-y-4', framed && 'min-h-0 flex-1 overflow-y-auto px-4 py-4')}>
@@ -250,13 +271,14 @@ export function QuickClosePanel({ leadId, active = true, framed = false }: { lea
           )}
 
           {v && v.state === 'paid' && v.closed !== 'client_closed' && (
-            <Callout tone="green" icon={CheckCircle2} title={<span className="text-lg font-bold">Paid — your part is done.</span>}>
-              Paul takes it from here and will be in touch with them within two working days{v.setup?.first_contact?.due && (v.setup.first_contact.state === 'owed' || v.setup.first_contact.state === 'overdue') ? ` (by ${firstContactDueLabel(v.setup.first_contact.due)})` : ''}. He has the handoff: your answers, the contact details, the latest messages and anything still to collect.
-            </Callout>
+            <div className={cn(PANEL, 'border-l-[3px] border-l-emerald-500 text-sm')} data-testid="qc-paid">
+              <p className="flex items-center gap-2 text-lg font-bold"><CheckCircle2 className={cn('h-5 w-5 shrink-0', OK_TEXT)} />Paid — {v.handoff?.sent || !v.handoff?.canEdit ? 'your part is done.' : 'one step left: send the handoff.'}</p>
+              <p className="mt-1 text-muted-foreground">Paul takes it from here and will be in touch with them within two working days{v.setup?.first_contact?.due && (v.setup.first_contact.state === 'owed' || v.setup.first_contact.state === 'overdue') ? ` (by ${firstContactDueLabel(v.setup.first_contact.due)})` : ''}. Everything we already know about them is gathered automatically — your handoff answers, the contact details, their website and the AI check.</p>
+            </div>
           )}
 
           {v && v.state === 'paid' && v.setup && (
-            <SubSection title={`Client setup · ${v.setup.done}/${v.setup.total} complete`} icon={ClipboardList} tone={v.setup.ready ? 'green' : 'amber'} testId="qc-client-setup" className="text-sm">
+            <SubSection title={`Client setup · ${v.setup.done}/${v.setup.total} complete`} icon={ClipboardList} tone={v.setup.ready ? 'blue' : 'amber'} testId="qc-client-setup" className="text-sm">
               <p className="text-xs text-muted-foreground">{v.setup.state_label}{v.setup.submitted ? ' · submitted for delivery' : ''}</p>
               {v.setup.missing.length > 0 && <p className="mt-1 text-xs text-amber-700 dark:text-amber-300">Still missing: {v.setup.missing.join(' · ')}</p>}
               {v.setup.ready && !v.setup.submitted && v.handoff?.canEdit && (
@@ -303,7 +325,7 @@ export function QuickClosePanel({ leadId, active = true, framed = false }: { lea
                     return (
                       <button key={o.value} type="button" disabled={!!busy || off} onClick={() => void answer(current!, o.value)}
                         className={cn('flex min-h-[56px] flex-col items-center justify-center rounded-xl border px-3 py-3 text-center text-base font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-50',
-                          answers[current!] === o.value ? cn('border-teal-500/70 ring-1 ring-inset', TONE.green.soft, TONE.green.text, TONE.green.ring) : 'border-border/70 bg-background hover:border-teal-500/40 hover:bg-muted/60')}>
+                          answers[current!] === o.value ? PICKED : 'border-border/70 bg-card hover:border-blue-500/40 hover:bg-muted/60')}>
                         {o.label}
                         {current === 'route' && <span className="mt-0.5 text-xs font-normal text-muted-foreground">{off ? 'Not possible — they have no website' : `${SERVICE_ROUTE_NAME[o.value as ServiceRoute]} · ${routePaymentsShort(o.value as ServiceRoute)}`}</span>}
                         {current === 'approach' && <span className="mt-0.5 text-xs font-normal text-muted-foreground">{off ? 'Not possible — no website on file' : planOf ? `${SERVICE_ROUTE_NAME[planOf]} · ${routePaymentsShort(planOf)}` : 'Pick the plan next'}</span>}
@@ -347,19 +369,19 @@ export function QuickClosePanel({ leadId, active = true, framed = false }: { lea
 
           {/* ── THE CLOSE: terms, then the link (first on screen once the route is chosen — M-013) ── */}
           {v && route && v.state !== 'paid' && v.state !== 'blocked' && (
-            <section aria-live="polite" className={cn('min-w-0 rounded-2xl p-3.5', TONE.green.tint)} data-testid="qc-route-terms">
-              <p className="flex items-center gap-2 text-sm font-bold tracking-tight"><IconTile icon={PoundSterling} tone="green" size="sm" />{SERVICE_ROUTE_NAME[route]}</p>
+            <section aria-live="polite" className={cn('min-w-0', PANEL, EDGE.blue)} data-testid="qc-route-terms">
+              <p className="flex items-center gap-2 text-sm font-bold tracking-tight"><IconTile icon={PoundSterling} tone="blue" size="sm" />{SERVICE_ROUTE_NAME[route]}</p>
               <ul className="mt-2 space-y-0.5 text-sm">{routeTermsLines(route).map((l, i) => <li key={l} className={cn(i === 2 && 'font-semibold')}>{l}</li>)}</ul>
               <p className="mt-1.5 text-sm">{routeOwnershipLine(route)}</p>
-              <div className="mt-2.5 rounded-xl bg-background/70 p-2.5 text-sm ring-1 ring-inset ring-teal-500/20" data-testid="qc-guarantee">
-                <p className="flex items-center gap-1.5 font-semibold"><ShieldCheck className={cn('h-4 w-4 shrink-0', TONE.green.text)} />{QUICK_CLOSE_GUARANTEE_LINES[0]}</p>
+              <div className="mt-2.5 rounded-xl bg-muted/30 p-2.5 text-sm ring-1 ring-inset ring-border/60" data-testid="qc-guarantee">
+                <p className="flex items-center gap-1.5 font-semibold"><ShieldCheck className={cn('h-4 w-4 shrink-0', EMPHASIS_TEXT)} />{QUICK_CLOSE_GUARANTEE_LINES[0]}</p>
                 <p className="mt-0.5 text-xs text-muted-foreground">{QUICK_CLOSE_GUARANTEE_LINES[1]}</p>
               </div>
               <p className="mt-2 text-xs text-muted-foreground">{QUICK_CLOSE_AGREEMENT_LINE} After payment: {QUICK_CLOSE_AFTER_PAYMENT[0]} {QUICK_CLOSE_AFTER_PAYMENT[1]}</p>
               <p className="mt-1 text-[11px] text-muted-foreground">Say the minimum term out loud before you send the link. Set by the offer — the price, the number of payments and the timing cannot be changed here.</p>
 
               {closing && (
-                <div className="mt-3 space-y-2 border-t border-teal-500/25 pt-3" data-testid="qc-link">
+                <div className="mt-3 space-y-2 border-t border-border/60 pt-3" data-testid="qc-link">
                   {!v.lead.trade && (
                     <label className={cn('block rounded-xl p-2.5 text-sm font-medium', TONE.amber.tint)}>What is their trade? <span className="font-normal text-muted-foreground">(decides what the baseline measures)</span>
                       <Input value={trade} onChange={(e) => setTrade(e.target.value)} placeholder="e.g. plumber" className="mt-1.5 h-11 text-base" />
@@ -380,7 +402,7 @@ export function QuickClosePanel({ leadId, active = true, framed = false }: { lea
                     </>
                   ) : (
                     <>
-                      <p className={cn('flex flex-wrap items-center gap-x-1 text-xs font-semibold uppercase tracking-wide', TONE.green.text)}><CheckCircle2 className="h-3.5 w-3.5 shrink-0" />Sign-up link ready · <span className="font-normal normal-case">{timeLeft(v.link?.usable_until ?? v.link?.expires_at)}</span></p>
+                      <p className={cn('flex flex-wrap items-center gap-x-1 text-xs font-semibold uppercase tracking-wide', OK_TEXT)}><CheckCircle2 className="h-3.5 w-3.5 shrink-0" />Sign-up link ready · <span className="font-normal normal-case">{timeLeft(v.link?.usable_until ?? v.link?.expires_at)}</span></p>
                       <Button className={MONEY_CTA} onClick={() => void doCopy('link', usableUrl)}>
                         {copied === 'link' ? <Check className="h-5 w-5" /> : <Copy className="h-5 w-5" />}{copied === 'link' ? 'Copied' : 'Copy sign-up link'}
                       </Button>
@@ -429,7 +451,7 @@ export function QuickClosePanel({ leadId, active = true, framed = false }: { lea
               {shownQs.filter((x) => answers[x.key]).map((x) => (
                 <li key={x.key}>
                   <button type="button" disabled={!v.canEdit} onClick={() => setStep(x.key)} className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm hover:bg-muted/60 disabled:hover:bg-transparent">
-                    <Check className={cn('h-4 w-4 shrink-0', TONE.green.text)} />
+                    <Check className={cn('h-4 w-4 shrink-0', OK_TEXT)} />
                     <span className="min-w-0 flex-1 truncate text-muted-foreground">{x.text}</span>
                     <span className="shrink-0 font-semibold">{x.options.find((o) => o.value === answers[x.key])?.label}</span>
                   </button>
@@ -438,14 +460,23 @@ export function QuickClosePanel({ leadId, active = true, framed = false }: { lea
             </ul>
           )}
 
-          {/* The handoff folds to one line while the close is happening (M-013); it can be finished after payment. */}
-          {v?.handoff && v.handoff.canEdit && v.state !== 'not_started' && v.state !== 'blocked' && (
-            <details className={cn(FOLD, v.handoff.complete ? EDGE.green : EDGE.amber)} open={v.state === 'paid' && !v.handoff.complete} data-testid="qc-handoff">
-              <summary className="flex min-h-[36px] cursor-pointer select-none flex-wrap items-center justify-between gap-x-2 gap-y-1 text-sm font-semibold">Handoff for Paul<ToneChip tone={v.handoff.complete ? 'green' : 'amber'} dot>{v.handoff.complete ? 'complete' : v.handoff.saved_at ? `${v.handoff.missing.length} still to answer` : 'not started — can wait until after the call'}</ToneChip></summary>
-              <p className="mt-1 text-xs text-muted-foreground">Quick answers so Paul does not have to ask again. Send the link first — this can be finished after they pay.</p>
-              <div className="mt-3"><SalesHandoffForm fields={v.handoff.fields} prefilled={v.handoff.prefilled} route={route} onSave={saveHandoff} busy={busy === 'handoff'} compact /></div>
-            </details>
-          )}
+          {/* The handoff folds to one line while the close is happening (M-013); it can be finished after payment.
+              It OPENS once the link is out (or they have paid) until it is sent, and it ENDS with Send to Paul. */}
+          {v?.handoff && v.handoff.canEdit && v.state !== 'not_started' && v.state !== 'blocked' && (() => {
+            const h = v.handoff;
+            const sent = h.sent ?? null;
+            const chip = sent ? { tone: 'green' as Tone, cls: SUCCESS_CHIP, text: 'sent to Paul' }
+              : h.complete ? { tone: 'blue' as Tone, cls: undefined, text: 'complete — ready to send' }
+              : { tone: 'amber' as Tone, cls: undefined, text: h.saved_at ? `${h.missing.length} still to answer` : 'not started — can wait until after the call' };
+            const openNow = !sent && (v.state === 'paid' || v.state === 'link_generated' || v.state === 'link_expired' || h.complete);
+            return (
+              <details className={cn(FOLD, sent ? 'border-l-[3px] border-l-emerald-500' : h.complete ? EDGE.blue : EDGE.amber)} open={openNow} data-testid="qc-handoff">
+                <summary className="flex min-h-[36px] cursor-pointer select-none flex-wrap items-center justify-between gap-x-2 gap-y-1 text-sm font-semibold">Handoff for Paul<ToneChip tone={chip.tone} dot className={chip.cls}>{chip.text}</ToneChip></summary>
+                <p className="mt-1 text-xs text-muted-foreground">{sent ? 'Paul has your handoff. You can still correct an answer.' : 'Quick answers so Paul does not have to ask again. Send the link first — finish this and press Send to Paul, before or after they pay.'}</p>
+                <div className="mt-3"><SalesHandoffForm fields={h.fields} prefilled={h.prefilled} route={route} onSave={saveHandoff} onSend={sendToPaul} sent={sent ? { at: sent.at, by: sent.by_me ? null : sent.by, changed_since: sent.changed_since } : null} busy={busy === 'handoff'} compact /></div>
+              </details>
+            );
+          })()}
 
           {v && (
             <details className={FOLD} open={v.state === 'not_started'}>
@@ -525,7 +556,7 @@ export function WebsiteApproachField({ leadId }: { leadId: string }) {
           return (
             <button key={k} type="button" disabled={off} onClick={() => void choose(k)} aria-pressed={a.approach === k}
               className={cn('rounded-md border px-2.5 py-2 text-left text-xs font-medium transition-colors disabled:opacity-50',
-                a.approach === k ? cn('border-teal-500/70', TONE.green.soft, TONE.green.text) : 'border-border/60 hover:bg-muted')}>
+                a.approach === k ? PICKED : 'border-border/60 hover:bg-muted')}>
               {APPROACH_LABEL[k]}
               <span className="block text-[10px] font-normal text-muted-foreground">{!hasSite && NEEDS_CURRENT_SITE.has(k) ? 'No website on file' : k === 'unsure' ? 'Paul recommends after payment' : SERVICE_ROUTE_NAME[APPROACH_ROUTE[k]]}</span>
             </button>
@@ -545,7 +576,7 @@ export function QuickCloseButton({ leadId, className, size = 'sm', variant = 'so
   const nav = useContext(QuickCloseNav);
   return (
     <>
-      <button type="button" onClick={() => (nav ? nav.openClose(leadId) : setOpen(true))} className={cn('inline-flex shrink-0 items-center justify-center gap-1.5 rounded-md font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary', variant === 'quiet' ? 'border border-teal-600/40 text-teal-700 hover:bg-teal-500/10 dark:text-teal-300' : 'bg-teal-600 text-white hover:bg-teal-700', size === 'lg' ? 'h-11 px-4 text-sm rounded-xl' : 'h-8 px-2.5 text-xs', className)} aria-label="Quick Close: take payment now">
+      <button type="button" onClick={() => (nav ? nav.openClose(leadId) : setOpen(true))} className={cn('inline-flex shrink-0 items-center justify-center gap-1.5 rounded-md font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary', variant === 'quiet' ? 'border border-blue-600/40 text-blue-700 hover:bg-blue-500/10 dark:text-blue-300' : 'bg-blue-600 text-white hover:bg-blue-700', size === 'lg' ? 'h-11 px-4 text-sm rounded-xl' : 'h-8 px-2.5 text-xs', className)} aria-label="Quick Close: take payment now">
         <Zap className="h-3.5 w-3.5" />Quick Close
       </button>
       {open && !nav && <QuickCloseDialog leadId={leadId} open={open} onOpenChange={setOpen} />}

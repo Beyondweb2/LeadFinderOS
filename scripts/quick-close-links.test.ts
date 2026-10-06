@@ -276,7 +276,9 @@ ok(QUICK_CLOSE_AGREEMENT_LINE.includes("read and sign the Client Service Agreeme
 const dlg = read("src/components/QuickCloseDialog.tsx");
 ok(/data-testid="qc-route-terms"/.test(dlg) && /QUICK_CLOSE_GUARANTEE_LINES\[0\]/.test(dlg) && /QUICK_CLOSE_AGREEMENT_LINE/.test(dlg) && /routeOwnershipLine\(route\)/.test(dlg), "the rep's card shows terms, ownership, guarantee and agreement tick");
 ok(dlg.indexOf('data-testid="qc-route-terms"') < dlg.indexOf('data-testid="qc-handoff"') && dlg.indexOf('data-testid="qc-link"') < dlg.indexOf('data-testid="qc-handoff"'), "M-013: the terms and the link come BEFORE the handoff");
-ok(/open=\{v\.state === 'paid' && !v\.handoff\.complete\}/.test(dlg), "M-013: the handoff is folded while closing (opens by itself only after payment)");
+/* 2026-10-06 (Send to Paul): folded while the rep ANSWERS — it opens once the link is out, after payment, or when
+   complete and not yet sent (the link card still comes first on screen, above). */
+ok(/const openNow = !sent && \(v\.state === 'paid' \|\| v\.state === 'link_generated' \|\| v\.state === 'link_expired' \|\| h\.complete\);/.test(dlg) && /open=\{openNow\}/.test(dlg), "M-013: the handoff is folded while answering (opens once the link is out, after payment, or ready to send)");
 
 /* ═══ SHARING ═════════════════════════════════════════════════════════════════════════════════════ */
 console.log("\n── SHARING: copy, email, WhatsApp — each recorded, none overclaimed ──");

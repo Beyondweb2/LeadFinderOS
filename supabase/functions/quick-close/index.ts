@@ -10,6 +10,7 @@ import {
 import { serviceWindowState } from "../../../src/lib/serviceWindow.ts";
 import {
   cleanHandoff, handoffChangedKeys, handoffComplete, handoffMissing, handoffPrefill, handoffWithPrefill, HANDOFF_QUESTIONS, SALES_HANDOFF_SINCE,
+  HANDOFF_SEND_REFUSAL_TEXT, handoffSendRefusal, handoffSentBody, handoffSentTitle,
   type SalesHandoffFields, type SalesHandoffRecord,
 } from "../../../src/lib/salesHandoff.ts";
 import { FINDABLE_CONTACT_EMAIL, SERVICE_ROUTE_NAME, serviceRouteFromRow } from "../../../src/lib/findableOffer.ts";
@@ -24,7 +25,7 @@ import { cleanSellerClientInfo, MISSING_INFO_LABEL } from "../../../src/lib/clie
 // quick-close — QUICK CLOSE (Sales Experience, 2026-09-29; docs/sales-experience.md §9;
 // fixes 2026-10-04: docs/pre-sales-certification/fixes-02-quick-close.md).
 //
-// Modes: load · save · approve_review (admin) · generate_link · share_link · save_handoff · save_client_info · submit_delivery · my_handoffs.
+// Modes: load · save · approve_review (admin) · generate_link · share_link · save_handoff · send_to_paul · save_client_info · submit_delivery · my_handoffs.
 // ⛔ THE SALES HANDOFF (2026-10-02, src/lib/salesHandoff.ts) is what a salesperson may still write AFTER
 //   payment, and only on their OWN sale (sold_by_user_id) — it lands on outreach_leads.sales_handoff
 //   through cleanHandoff. Since 2026-10-05 (client missing-info actions) the seller may also ADD the client
@@ -181,7 +182,18 @@ Deno.serve(async (req) => {
         if (r.error) console.error("[quick-close] my requests read failed (non-blocking):", r.error.message);
         for (const q of (r.data ?? []) as Obj[]) asked.set(String(q.lead_id), q);
       }
+      /* Send to Paul (2026-10-06): which of these sales the caller has already sent. */
+      const sentIds = new Set<string>();
+      {
+        const ids = ((data ?? []) as Obj[]).map((l) => String(l.id));
+        if (ids.length) {
+          const r = await service.from("client_handoff_sends").select("lead_id").in("lead_id", ids);
+          if (r.error) console.error("[quick-close] my sends read failed (non-blocking):", r.error.message);
+          for (const s of (r.data ?? []) as Obj[]) sentIds.add(String(s.lead_id));
+        }
+      }
       const sales = ((data ?? []) as Obj[]).filter((l) => isPaidLead(l)).map((l) => ({
+        sent_to_paul: sentIds.has(String(l.id)),
         id: l.id, business_name: l.business_name, paid_on: (l.payment_date ?? "").slice(0, 10),
         handoff_complete: handoffComplete(l.sales_handoff as SalesHandoffRecord | null),
         missing: handoffMissing(l.sales_handoff as SalesHandoffRecord | null).length,
@@ -208,6 +220,45 @@ Deno.serve(async (req) => {
        ⛔ Never another rep's client — sold_by_user_id is stamped once at payment and never moves. */
     const paidLead = isPaidLead(lead);
     const mayHandoff = actor.role === "admin" || (!paidLead && access.ok) || (paidLead && actor.role === "sales" && lead.sold_by_user_id === actor.id);
+    /* SEND TO PAUL (2026-10-06): the one send row for this client, if any (client_handoff_sends, unique per lead). */
+    const handoffSendFor = async (id: string): Promise<Obj | null> => {
+      const { data, error } = await service.from("client_handoff_sends").select("sent_at,sent_by_user_id,sent_by_name,sent_by_role,paid_when_sent,onboarding_id").eq("lead_id", id).maybeSingle();
+      if (error) { console.error("[quick-close] handoff send read failed (non-blocking):", error.message); return null; }
+      return (data ?? null) as Obj | null;
+    };
+    /* THE HANDOFF SAVE — one path for save_handoff and send_to_paul. A key sent blank CLEARS that answer; a
+       key not sent is left alone. Complete is stamped once, on the first save with every required answer.
+       History: "completed" once, then each material change. */
+    const saveHandoffFrom = async (raw: Obj): Promise<{ ok: true } | { ok: false; detail: string }> => {
+      const prev = (lead.sales_handoff ?? null) as SalesHandoffRecord | null;
+      const incoming = cleanHandoff(raw);
+      const merged: Obj = { ...cleanHandoff(prev) };
+      for (const q of HANDOFF_QUESTIONS) {
+        if (!(q.key in raw)) continue;
+        const v = (incoming as Obj)[q.key];
+        if (v) merged[q.key] = v; else delete merged[q.key];
+      }
+      const fields = cleanHandoff(merged) as SalesHandoffFields;
+      const changed = handoffChangedKeys(prev, fields);
+      if (prev?.saved_at && !changed.length) return { ok: true };
+      const now = new Date().toISOString();
+      const firstComplete = handoffMissing(fields).length === 0 && !prev?.completed_at;
+      const next: SalesHandoffRecord = {
+        ...fields, saved_at: now, saved_by: actor.id,
+        completed_at: prev?.completed_at ?? (firstComplete ? now : null), completed_by: prev?.completed_by ?? (firstComplete ? actor.id : null),
+      };
+      const { error } = await service.from("outreach_leads").update({ sales_handoff: next }).eq("id", leadId);
+      if (error) return { ok: false, detail: error.message };
+      if (firstComplete || (changed.length && prev?.completed_at)) {
+        await recordLeadEvent(service, leadId, "handoff_saved", {
+          actor: actor.id, source: actor.role === "admin" ? "admin" : "sales",
+          body: firstComplete ? "Sales handoff completed" : "Sales handoff updated",
+          data: { changed, after_submission: !!lead.delivery_submitted_at },
+        });
+      }
+      lead.sales_handoff = next;
+      return { ok: true };
+    };
 
     const lastInboundAt = async (): Promise<string | null> => {
       const { data } = await service.from("whatsapp_messages").select("created_at").eq("lead_id", leadId).eq("direction", "inbound").order("created_at", { ascending: false }).limit(1);
@@ -230,6 +281,7 @@ Deno.serve(async (req) => {
           ? openRequestFor(service, leadId).catch((e: unknown) => { console.error("[quick-close] request read failed (non-blocking):", e instanceof Error ? e.message : e); return null; })
           : Promise.resolve(null),
       ]);
+      const sent = await handoffSendFor(leadId);
       const cur = (row?.quick_close ?? null) as (QuickCloseRecord & Obj) | null;
       const answers = cleanAnswers(cur?.answers);
       const nowMs = Date.now();
@@ -265,6 +317,11 @@ Deno.serve(async (req) => {
           canEdit: mayHandoff, fields: handoffWithPrefill(saved, pre.fields), prefilled: saved?.saved_at ? [] : pre.prefilled,
           saved_at: saved?.saved_at ?? null, completed_at: saved?.completed_at ?? null,
           complete: handoffComplete(saved), missing: handoffMissing(saved),
+          /* SEND TO PAUL (2026-10-06): the one authoritative send, if made. Changed after = a later save. */
+          sent: sent ? {
+            at: sent.sent_at, by: sent.sent_by_name ?? null, by_me: sent.sent_by_user_id === actor.id, paid_when_sent: sent.paid_when_sent === true,
+            changed_since: !!saved?.saved_at && Date.parse(String(saved.saved_at)) > Date.parse(String(sent.sent_at)) + 1000,
+          } : null,
         },
         setup,
         /* CLIENT INFO NEEDED (2026-10-05): what Paul asked for, and the client details the seller may add. */
@@ -314,36 +371,72 @@ Deno.serve(async (req) => {
         return json({ ok: false, error: "not_your_sale", detail: paidLead ? "Only the salesperson who made this sale can change its handoff." : "That lead is not assigned to you." }, 403);
       }
       const raw = (body.handoff && typeof body.handoff === "object" ? body.handoff : {}) as Obj;
-      const prev = (lead.sales_handoff ?? null) as SalesHandoffRecord | null;
-      const incoming = cleanHandoff(raw);
-      const merged: Obj = { ...cleanHandoff(prev) };
-      for (const q of HANDOFF_QUESTIONS) {
-        if (!(q.key in raw)) continue;
-        const v = (incoming as Obj)[q.key];
-        if (v) merged[q.key] = v; else delete merged[q.key];
-      }
-      const fields = cleanHandoff(merged) as SalesHandoffFields;
-      const changed = handoffChangedKeys(prev, fields);
-      const now = new Date().toISOString();
-      const firstComplete = handoffMissing(fields).length === 0 && !prev?.completed_at;
-      const next: SalesHandoffRecord = {
-        ...fields, saved_at: now, saved_by: actor.id,
-        completed_at: prev?.completed_at ?? (firstComplete ? now : null), completed_by: prev?.completed_by ?? (firstComplete ? actor.id : null),
-      };
-      const { error } = await service.from("outreach_leads").update({ sales_handoff: next }).eq("id", leadId);
-      if (error) return json({ ok: false, error: "not_saved", detail: error.message }, 500);
-      if (firstComplete || (changed.length && prev?.completed_at)) {
-        await recordLeadEvent(service, leadId, "handoff_saved", {
-          actor: actor.id, source: actor.role === "admin" ? "admin" : "sales",
-          body: firstComplete ? "Sales handoff completed" : "Sales handoff updated",
-          data: { changed, after_submission: !!lead.delivery_submitted_at },
-        });
-      }
-      lead.sales_handoff = next;
+      const saved = await saveHandoffFrom(raw);
+      if (!saved.ok) return json({ ok: false, error: "not_saved", detail: saved.detail }, 500);
       /* The SELLER answered (any save counts as their response); the admin's own edit never closes it. */
       if (actor.role === "sales" && lead.sold_by_user_id === actor.id && paidLead) {
         const { data: me } = await service.from("team_members").select("display_name").eq("user_id", actor.id).maybeSingle();
         await answerClientInfoRequest(service, { leadId, actorId: actor.id, actorName: (me?.display_name as string | undefined) ?? null, businessName: lead.business_name ?? null, what: "Sales handoff updated" });
+      }
+      return json(await view());
+    }
+
+    /* ══ SEND TO PAUL (2026-10-06, src/lib/salesHandoff.ts handoffSendRefusal) ═══════════════════════════
+       The salesperson's last act, before or after payment: saves what the screen holds (the same save path),
+       re-checks every required answer ON THE SERVER, then writes the ONE send row (client_handoff_sends,
+       unique per lead) — who sent it (name kept), when, the sign-up it belongs to, the answers as sent.
+       Only the WINNING insert records History and tells Paul (the bell, "NEW CLIENT HANDOFF"); a double press,
+       a retry or a second tab reads the first send back. ⛔ It never messages the client and never touches
+       the route, the price, the agreement or the seller stamp. */
+    if (mode === "send_to_paul") {
+      if (!mayHandoff) {
+        await recordDenial(service, actor.id, "quick-close:send_to_paul", leadId);
+        return json({ ok: false, error: "not_your_sale", detail: paidLead ? "Only the salesperson who made this sale can send its handoff." : "That lead is not assigned to you." }, 403);
+      }
+      const closed = quickCloseClosedRefusal(lead as never, row as never)?.error === "client_closed";
+      if (body.handoff && typeof body.handoff === "object" && !closed) {
+        const saved = await saveHandoffFrom(body.handoff as Obj);
+        if (!saved.ok) return json({ ok: false, error: "not_saved", detail: saved.detail }, 500);
+      }
+      const fields = cleanHandoff(lead.sales_handoff);
+      const refusal = handoffSendRefusal({ fields, closed });
+      if (refusal) return json({ ok: false, error: refusal, detail: HANDOFF_SEND_REFUSAL_TEXT[refusal], missing: handoffMissing(fields) }, 409);
+      if (await handoffSendFor(leadId)) return json(await view());
+      const { data: me } = await service.from("team_members").select("display_name").eq("user_id", actor.id).maybeSingle();
+      const sellerName = (me?.display_name as string | undefined) ?? null;
+      const answers = cleanAnswers((row?.quick_close as { answers?: unknown } | null)?.answers);
+      const { error: insErr } = await service.from("client_handoff_sends").insert({
+        lead_id: leadId, onboarding_id: (row?.id as string | undefined) ?? null, sent_by_user_id: actor.id, sent_by_name: sellerName,
+        sent_by_role: actor.role === "admin" ? "admin" : "sales", paid_when_sent: paidLead, handoff: fields,
+        close_summary: { answers, route: serviceRouteFromRow(row as never) ?? null },
+      });
+      if (insErr) {
+        /* 23505 = another press won the same instant — that send stands, nothing more to do. */
+        if ((insErr as { code?: string }).code === "23505") return json(await view());
+        return json({ ok: false, error: "not_sent", detail: "Not sent — try again." }, 500);
+      }
+      await recordLeadEvent(service, leadId, "handoff_sent", {
+        actor: actor.id, source: actor.role === "admin" ? "admin" : "sales",
+        body: `Handoff sent to Paul by ${sellerName ?? "the salesperson"}${paidLead ? "" : " · awaiting payment"}`,
+        data: { onboarding_id: (row?.id as string | undefined) ?? null, paid_when_sent: paidLead, snapshot: fields },
+      });
+      /* Paul's own send needs no notice to himself. Everyone else's lands in his bell, once (the dedupe key). */
+      if (actor.role !== "admin") {
+        try {
+          const { data: owner } = await service.from("team_members").select("user_id").eq("is_book_owner", true).maybeSingle();
+          if (owner?.user_id) {
+            await service.rpc("notify_person", {
+              _user: owner.user_id, _kind: "client_handoff", _title: handoffSentTitle(lead.business_name),
+              _body: handoffSentBody({ sellerName, paid: paidLead }),
+              _link: paidLead ? `/paid-clients/${leadId}` : `/paid-clients?handoff=${leadId}`, _lead: leadId,
+              _dedupe: `handoff_sent:${leadId}`, _priority: 2,
+            });
+          }
+        } catch (e) { console.error("[quick-close] handoff notice failed (non-blocking):", e instanceof Error ? e.message : e); }
+      }
+      /* The seller sending after payment answers Paul's open request too (as a save does). */
+      if (actor.role === "sales" && lead.sold_by_user_id === actor.id && paidLead) {
+        await answerClientInfoRequest(service, { leadId, actorId: actor.id, actorName: sellerName, businessName: lead.business_name ?? null, what: "Sales handoff sent" });
       }
       return json(await view());
     }

@@ -84,8 +84,19 @@ export function resolveCrawlMode(requested: unknown, isOperator: boolean): Crawl
   return isOperator && requested === 'full' ? 'full' : 'standard';
 }
 
-/** Where the manual crawl was started — recorded, never used to decide anything. */
-export const CRAWL_REQUEST_SOURCES = ['outreach', 'inbox', 'lead_detail', 'paid_client', 'website_build'] as const;
+/** Where the manual crawl was started — recorded, never used to decide anything (except the intake door below).
+ *  'client_intake' = the paid client auto-intake (2026-10-06, src/lib/clientIntake.ts). */
+export const CRAWL_REQUEST_SOURCES = ['outreach', 'inbox', 'lead_detail', 'paid_client', 'website_build', 'client_intake'] as const;
+
+/** ⛔ THE ONE INTERNAL FULL CRAWL (2026-10-06): the paid client auto-intake may ask crawl-check for an
+ *  exhaustive crawl of a lead's OWN website — an internal caller, exactly `mode: "full"`,
+ *  `requested_from: "client_intake"` and a lead id (no URL, no audit, no run). crawl-check still refuses it
+ *  unless the lead is a paid client. Every other internal caller stays STANDARD (resolveCrawlMode). */
+export function isIntakeCrawlRequest(internal: boolean, body: unknown): boolean {
+  const b = (body && typeof body === 'object' ? body : {}) as Record<string, unknown>;
+  return internal && b.mode === 'full' && b.requested_from === 'client_intake'
+    && typeof b.lead_id === 'string' && b.lead_id.length > 0 && !b.url && !b.audit_id && !b.run_id;
+}
 export type CrawlRequestSource = (typeof CRAWL_REQUEST_SOURCES)[number];
 export function cleanRequestSource(v: unknown): CrawlRequestSource | null {
   return (CRAWL_REQUEST_SOURCES as readonly string[]).includes(String(v)) ? (v as CrawlRequestSource) : null;

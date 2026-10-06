@@ -353,6 +353,10 @@ export const ACTIVITY_LABEL: Record<string, string> = {
   client_info_requested: 'Missing info requested from salesperson',
   client_info_answered: 'Salesperson answered the info request',
   client_contact_opened: 'Client contact opened',
+  /* Paid client auto-intake (2026-10-06, _shared/client-intake.ts). */
+  handoff_sent: 'Handoff sent to Paul',
+  client_intake: 'Automatic client intake',
+  client_fact_set: 'Client fact confirmed',
 };
 
 /** Where Find email found an address (lead_find_email / lead_set_email). */

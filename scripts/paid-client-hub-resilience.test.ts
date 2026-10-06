@@ -105,6 +105,11 @@ const live: Record<string, string[]> = {
      feature/client-agreement-commercial-alignment, 2026-10-05) — must be applied and read back BEFORE
      paid-client-hub is deployed. Its client_service_events columns, from that file. */
   client_service_events: ['kind','actor_user_id','detail','created_at'],
+  /* Paid client auto-intake (migration 20261013120000_paid_client_auto_intake.sql, read back from
+     information_schema 2026-10-06): the intake state and the Send to Paul row; is_archived on the lead. */
+  client_intake: ['lead_id','status','summary','overrides'],
+  client_handoff_sends: ['lead_id','sent_at','sent_by_name','handoff'],
+  outreach_leads_archive_flag: ['is_archived'],
 };
 const known = new Set(Object.values(live).flat());
 /* An aliased JSON path (family:evidence->d->>family) is checked on its base column. */
