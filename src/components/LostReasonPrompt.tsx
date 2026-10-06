@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
-import { Loader2 } from 'lucide-react';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Loader2, ThumbsDown } from 'lucide-react';
+import { Dialog, DialogContent, DialogFooter } from '@/components/ui/dialog';
+import { DialogHero } from '@/components/operator/ui';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
@@ -51,17 +52,17 @@ export function LostReasonPrompt() {
   return (
     <Dialog open={!!ask} onOpenChange={(v) => { if (!v) close(); }}>
       <DialogContent className="max-h-[92dvh] overflow-y-auto sm:max-w-md" data-testid="lost-reason-prompt">
-        <DialogHeader>
-          <DialogTitle className="text-base">Why did they say no?</DialogTitle>
-          <DialogDescription className="text-xs">
-            {ask?.businessName ? `${ask.businessName} · ` : ''}{correcting ? 'Change the recorded reason. History keeps the old one.' : 'Marked Not interested. One tap helps us learn what loses prospects.'}
-          </DialogDescription>
-        </DialogHeader>
+        <DialogHero
+          icon={ThumbsDown}
+          tone="amber"
+          title="Why did they say no?"
+          subtitle={<>{ask?.businessName ? `${ask.businessName} · ` : ''}{correcting ? 'Change the recorded reason. History keeps the old one.' : 'Marked Not interested. One tap helps us learn what loses prospects.'}</>}
+        />
         <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2" role="radiogroup" aria-label="Reason">
           {LOST_REASONS.map((r) => (
             <button key={r.value} type="button" role="radio" aria-checked={reason === r.value} data-reason={r.value}
               onClick={() => { setReason(r.value); setError(null); }}
-              className={cn('min-h-9 rounded-md border px-2.5 py-1.5 text-left text-sm transition-colors',
+              className={cn('min-h-9 rounded-lg border px-2.5 py-1.5 text-left text-sm transition-colors',
                 reason === r.value ? 'border-primary bg-primary/10 font-medium text-foreground' : 'border-border/70 text-muted-foreground hover:bg-muted hover:text-foreground')}>
               {r.label}
             </button>
@@ -73,12 +74,12 @@ export function LostReasonPrompt() {
             className="mt-1 text-sm" placeholder={reason === 'other' ? 'In a few words, why they said no' : 'Anything useful, e.g. what they said about the price'} data-testid="lost-reason-note" />
         </label>
         {error && <p className="text-xs text-destructive" role="alert">{error}</p>}
-        <div className="flex items-center justify-end gap-2">
+        <DialogFooter>
           <Button variant="ghost" size="sm" onClick={close} disabled={saving} data-testid="lost-reason-skip">{correcting ? 'Cancel' : 'Skip'}</Button>
           <Button size="sm" onClick={() => void save()} disabled={saving || !!problem} data-testid="lost-reason-save">
             {saving && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}Save reason
           </Button>
-        </div>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );

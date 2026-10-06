@@ -39,6 +39,10 @@ const KIND: Record<string, { icon: typeof Bell; tone: Tone }> = {
   team_task: { icon: ListChecks, tone: 'amber' },
   /* CLIENT INFO NEEDED (2026-10-05): Paul asked the seller for a paid client's missing details (and the reply). */
   client_info_request: { icon: ListChecks, tone: 'amber' },
+  /* Paid client auto-intake (2026-10-06): NEW CLIENT HANDOFF (a salesperson pressed Send to Paul) and the
+     automatic intake finishing (CLIENT READY / needs attention). */
+  client_handoff: { icon: ListChecks, tone: 'blue' },
+  client_intake: { icon: Sparkles, tone: 'blue' },
 };
 const ALERTS_KEY = 'lf-desktop-alerts';
 const readAlerts = () => { try { return localStorage.getItem(ALERTS_KEY) === 'on'; } catch { return false; } };

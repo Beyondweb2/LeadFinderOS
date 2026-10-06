@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { Loader2, MapPin, Telescope } from 'lucide-react';
+import { Map as MapIcon, MapPin, Telescope } from 'lucide-react';
+import { EmptyState, ErrorState, LoadState, PageHeader, ToneChip, type Tone } from '@/components/operator/ui';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
-import { Badge } from '@/components/ui/badge';
 import { useAuth } from '@/hooks/useAuth';
 import { usePersistedState } from '@/hooks/usePersistedState';
 import NichePanel from '@/components/NichePanel';
@@ -32,10 +32,11 @@ import { CoverageFoundAdded } from '@/components/CoverageFoundAdded';
    ⛔ NOTHING ELSE MOVES. Nothing here persists an open dialog. The sort is fixed, so there is no
    sort to keep. (The Suppress button and its show-suppressed toggle went on 2026-09-28.) */
 
-const STATE_STYLE: Record<CoverageState, string> = {
-  worked: 'bg-emerald-500/15 text-emerald-600 border-emerald-500/30',
-  leads: 'bg-amber-500/15 text-amber-600 border-amber-500/30',
-  untouched: 'bg-muted text-muted-foreground border-transparent',
+/* The rung's colour, from the shared tones: contacted = done (green), added-not-contacted = waiting (amber). */
+const STATE_TONE: Record<CoverageState, Tone> = {
+  worked: 'green',
+  leads: 'amber',
+  untouched: 'grey',
 };
 
 export default function Coverage() {
@@ -140,19 +141,17 @@ export default function Coverage() {
 
   return (
     <div className="space-y-4 p-4 md:p-6">
-      <div>
-        <h1 className="text-xl font-semibold">Coverage</h1>
-        <p className="text-sm text-muted-foreground">
+      <PageHeader icon={MapIcon} tone="blue" title="Coverage"
+        subtitle={<>
           Every candidate town for a trade, and how far you have taken it. Nothing here is ticked by
           hand &mdash; the state is read from your audits, leads and messages.
-        </p>
-      </div>
+        </>} />
 
       <div className="flex flex-wrap items-end gap-2">
         <div className="space-y-1">
           <label className="text-xs font-medium text-muted-foreground">Trade</label>
           <Select value={trade} onValueChange={(v) => setParam('trade', v)}>
-            <SelectTrigger className="w-[220px] h-9"><SelectValue /></SelectTrigger>
+            <SelectTrigger className="w-[220px] max-w-full h-9"><SelectValue /></SelectTrigger>
             <SelectContent>
               {TRADES.map((t) => <SelectItem key={t.slug} value={t.label}>{t.label}</SelectItem>)}
             </SelectContent>
@@ -181,7 +180,7 @@ export default function Coverage() {
         <div className="space-y-1">
           <label className="text-xs font-medium text-muted-foreground">Region</label>
           <Select value={region ?? '__all'} onValueChange={(v) => { setParam('region', v === '__all' ? null : v); setSavedRegion(v === '__all' ? '' : v); }}>
-            <SelectTrigger className="w-[200px] h-9"><SelectValue /></SelectTrigger>
+            <SelectTrigger className="w-[200px] max-w-full h-9"><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="__all">All regions</SelectItem>
               {regions.map((r) => <SelectItem key={r} value={r}>{r}</SelectItem>)}
@@ -222,7 +221,7 @@ export default function Coverage() {
       {/* ⛔ THE HEADLINE IS THE POINT OF THE PAGE. "6 of 87 done" in one look, with the breakdown
           beside it. The counts sum to the total because a town shows at its furthest rung only. */}
       {!isLoading && !error && (
-        <div className="flex flex-wrap items-center gap-3 rounded-lg border border-border bg-muted/30 px-3 py-2">
+        <div className="flex min-w-0 flex-wrap items-center gap-3 rounded-2xl bg-muted/40 px-3.5 py-2.5 ring-1 ring-inset ring-border/40">
           <span className="text-sm">
             <span className="font-semibold">{trade}</span>
             {region ? <> in <span className="font-semibold">{region}</span></> : ' across all regions'}:{' '}
@@ -230,31 +229,26 @@ export default function Coverage() {
           </span>
           <span className="flex flex-wrap gap-1.5">
             {COVERAGE_STATES.map((s) => (
-              <Badge key={s} variant="outline" className={`text-xs ${STATE_STYLE[s]}`}>
+              <ToneChip key={s} tone={STATE_TONE[s]} dot className="text-xs">
                 {summary.counts[s]} {COVERAGE_LABEL[s].toLowerCase()}
-              </Badge>
+              </ToneChip>
             ))}
           </span>
         </div>
       )}
 
       {isLoading ? (
-        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-          <Loader2 className="h-4 w-4 animate-spin" /> Reading your audits, leads and messages&hellip;
-        </div>
+        <LoadState label={<>Reading your audits, leads and messages&hellip;</>} />
       ) : error ? (
-        <div className="space-y-2 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2">
-          <p className="text-sm text-destructive">{error}</p>
-          {/* ⛔ WRAPPED, NOT PASSED. onClick={refetch} hands React Query the click event as its
-              RefetchOptions — the same shape as the confirmAndRun bug, where the event arrived as a
-              boolean override and permanently disabled a guard. tsc caught this one. */}
-          <Button variant="outline" size="sm" onClick={() => { void refetch(); }}>Retry</Button>
-        </div>
+        /* ⛔ WRAPPED, NOT PASSED. onRetry={refetch} would hand React Query the click event as its
+            RefetchOptions — the same shape as the confirmAndRun bug, where the event arrived as a
+            boolean override and permanently disabled a guard. tsc caught this one. */
+        <ErrorState title="Couldn’t load coverage" detail={error} onRetry={() => { void refetch(); }} retryLabel="Retry" />
       ) : sorted.length === 0 ? (
-        <p className="text-sm text-muted-foreground">
-          No towns match those filters. The table holds 12,000&ndash;250,000; widen the population
+        <EmptyState icon={MapPin} title="No towns match those filters.">
+          The table holds 12,000&ndash;250,000; widen the population
           range to see the edges.
-        </p>
+        </EmptyState>
       ) : (
         <div className="overflow-x-auto rounded-lg border border-border">
           <table className="w-full text-sm">
@@ -285,7 +279,7 @@ export default function Coverage() {
                       <CoverageFoundAdded fa={t.foundAdded} trade={trade} town={t.name} />
                       {t.state === 'worked' && (
                         <span className="flex flex-wrap items-center gap-1.5 text-xs">
-                          <Badge variant="outline" className={`text-[11px] ${STATE_STYLE.worked}`}>{COVERAGE_LABEL.worked}</Badge>
+                          <ToneChip tone={STATE_TONE.worked} dot>{COVERAGE_LABEL.worked}</ToneChip>
                           {t.workers.length > 0 && <CoverageWorkers workers={t.workers} trade={trade} town={t.name} />}
                         </span>
                       )}

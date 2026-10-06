@@ -3,10 +3,10 @@ import { useTranslation } from 'react-i18next';
 import {
   Dialog,
   DialogContent,
-  DialogTitle,
 } from '@/components/ui/dialog';
-import { ArrowRight, Phone, ClipboardList } from 'lucide-react';
-import appLogo from '@/assets/logo.png';
+import { ArrowRight, CheckCircle2, Phone, ClipboardList } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { ActionBar, DialogHero, IconTile } from '@/components/operator/ui';
 import { useAuth } from '@/hooks/useAuth';
 
 export function PostContactModal() {
@@ -37,43 +37,33 @@ export function PostContactModal() {
 
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) setOpen(false); }}>
-      <DialogContent className="sm:max-w-[420px] p-0 overflow-hidden rounded-2xl border-border/40 bg-[hsl(220_50%_5%)]">
-        <div className="px-7 pt-7 pb-6 sm:px-8 sm:pt-8 sm:pb-7 flex flex-col items-center">
-          <div className="grid grid-cols-[40px_1fr_40px] items-center w-full mb-6">
-            <div className="flex justify-start">
-              <img src={appLogo} alt="LeadFinder Pro" className="h-9 w-9 shrink-0" />
-            </div>
-            <h2 className="text-lg font-bold tracking-tight text-center">
-              Lead<span className="text-primary">Finder</span> Pro
-            </h2>
-            <div />
+      <DialogContent className="sm:max-w-[420px]">
+        {/* 2026-10-06 design consistency: the operator dialog look (icon tile + title), not the old
+            dark LeadFinder-branded splash. Same words, same single dismiss. */}
+        <DialogHero
+          icon={CheckCircle2}
+          tone="green"
+          title={<>{t('postContact.greatStart')} {t('postContact.hereIsWhatNext')}</>}
+        />
+
+        <div className="space-y-3 text-[13px] leading-relaxed text-muted-foreground">
+          {/* ⛔ The "No WhatsApp? Try SMS" tip is gone (Paul, 2026-10-01): we do no SMS outreach. */}
+          <div className="flex items-start gap-3">
+            <IconTile icon={Phone} tone="blue" size="sm" />
+            <p><span className="font-medium text-foreground">{t('postContact.callingIsKing')}</span> {t('postContact.callingIsKingDesc')}</p>
           </div>
-
-          <DialogTitle className="text-center text-[22px] sm:text-2xl font-bold leading-[1.2] tracking-tight mb-5">
-            <span className="text-foreground">{t('postContact.greatStart')} </span>
-            <span className="text-primary">{t('postContact.hereIsWhatNext')}</span>
-          </DialogTitle>
-
-          <div className="text-left text-[13px] text-muted-foreground leading-relaxed mb-5 space-y-4 w-full">
-            {/* ⛔ The "No WhatsApp? Try SMS" tip is gone (Paul, 2026-10-01): we do no SMS outreach. */}
-            <div className="flex gap-3 items-start">
-              <Phone className="h-4 w-4 text-green-400 shrink-0 mt-0.5" />
-              <p><span className="text-foreground font-medium">{t('postContact.callingIsKing')}</span> {t('postContact.callingIsKingDesc')}</p>
-            </div>
-            <div className="flex gap-3 items-start">
-              <ClipboardList className="h-4 w-4 text-primary shrink-0 mt-0.5" />
-              <p><span className="text-foreground font-medium">{t('postContact.whenSomeoneReplies')}</span> {t('postContact.whenSomeoneRepliesDesc')}</p>
-            </div>
+          <div className="flex items-start gap-3">
+            <IconTile icon={ClipboardList} tone="blue" size="sm" />
+            <p><span className="font-medium text-foreground">{t('postContact.whenSomeoneReplies')}</span> {t('postContact.whenSomeoneRepliesDesc')}</p>
           </div>
+        </div>
 
-          <button
-            onClick={() => setOpen(false)}
-            className="btn-premium w-full h-12 rounded-xl text-[15px] font-semibold text-white flex items-center justify-center gap-2 transition-all"
-          >
+        <ActionBar>
+          <Button onClick={() => setOpen(false)} className="w-full gap-2 sm:w-auto">
             {t('postContact.gotItKeepGoing')}
             <ArrowRight className="h-4 w-4" />
-          </button>
-        </div>
+          </Button>
+        </ActionBar>
       </DialogContent>
     </Dialog>
   );

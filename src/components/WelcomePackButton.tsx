@@ -5,8 +5,9 @@ import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
-  Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle,
+  Dialog, DialogContent, DialogFooter,
 } from '@/components/ui/dialog';
+import { DialogHero } from '@/components/operator/ui';
 import { buildReportData, isMarketAudit, type QueueRow, type RunRow } from '@/lib/auditReport';
 import { isAggregatorUrl } from '@/lib/aggregators';
 import { downloadWelcomePack } from '@/lib/aiAuditReportDownload';
@@ -166,14 +167,16 @@ export function WelcomePackButton({
 
       <Dialog open={open} onOpenChange={(v) => { if (!busy) setOpen(v); }}>
         <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle className="text-base">Welcome pack for {businessName}</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-2 text-sm">
-            <p className="text-muted-foreground">
+          <DialogHero
+            icon={Gift}
+            tone="green"
+            title={<>Welcome pack for {businessName}</>}
+            subtitle={<>
               Cover, plan, how it works, get more reviews, then their audit report with the sales pitch
               removed. Saves as a PDF through your browser&rsquo;s print dialogue.
-            </p>
+            </>}
+          />
+          <div className="space-y-2 text-sm">
             <label className="block text-xs font-medium text-muted-foreground" htmlFor="wp-review-link">
               Their Google review link (optional)
             </label>

@@ -1,9 +1,10 @@
 import { useMemo } from 'react';
-import { Loader2 } from 'lucide-react';
-import { Dialog, DialogContent } from '@/components/ui/dialog';
+import { UserX } from 'lucide-react';
+import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { useAuth } from '@/hooks/useAuth';
 import { useOutreach } from '@/hooks/useOutreach';
 import { LeadDetailDialog } from '@/components/LeadDetailDialog';
+import { EmptyState, LoadState } from '@/components/operator/ui';
 import type { LeadStatus, OutreachLead } from '@/types/outreach';
 
 /* ============================================================
@@ -75,11 +76,11 @@ function LeadDetailFromInboxInner({ leadId, onOpenChange, onStatusPatched }: {
     return (
       <Dialog open onOpenChange={onOpenChange}>
         <DialogContent className="sm:max-w-md">
-          <div className="flex items-center gap-2 py-6 text-sm text-muted-foreground">
-            {isLoading
-              ? <><Loader2 className="h-4 w-4 animate-spin" /> Loading the full lead…</>
-              : 'This lead is no longer in your outreach list — it may have been archived or removed.'}
-          </div>
+          {/* Every dialog has an accessible name (2026-10-06): read by screen readers, not shown. */}
+          <DialogTitle className="sr-only">Lead details</DialogTitle>
+          {isLoading
+            ? <LoadState label="Loading the full lead…" />
+            : <EmptyState icon={UserX} title="This lead is no longer in your outreach list — it may have been archived or removed." className="mt-6" />}
         </DialogContent>
       </Dialog>
     );

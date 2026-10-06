@@ -3,14 +3,15 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table';
 import {
-  ArrowLeft, Loader2, DollarSign, AlertTriangle, Activity, Database, RefreshCw,
+  ArrowLeft, DollarSign, AlertTriangle, Activity, Database, RefreshCw, ShieldCheck, BarChart3, MapPin, Users,
 } from 'lucide-react';
+import { Callout, ErrorState, KpiCard, LoadState, PageHeader, SectionHeading } from '@/components/operator/ui';
+import { Panel } from '@/components/salesDash/ui';
 import { SecurityPanel } from '@/components/SecurityPanel';
 import { SalesChecksAdminCard } from '@/components/SalesChecksAdminCard';
 
@@ -62,19 +63,24 @@ export default function AdminApiUsage() {
 
   useEffect(() => { fetchData(); }, []);
 
+  /* The page keeps its header while loading and when the load fails (2026-10-06) — never a bare box. */
+  const bareHeader = <PageHeader icon={ShieldCheck} tone="blue" title="API Usage & Security" />;
+
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-background">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      <div className="mx-auto max-w-7xl min-w-0 space-y-6 p-4 md:p-8">
+        {bareHeader}
+        <LoadState label="Loading API usage…" className="min-h-[40vh]" />
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-screen bg-background gap-4">
-        <p className="text-destructive">{error}</p>
-        <Button onClick={() => navigate('/admin')}>Back to Admin</Button>
+      <div className="mx-auto max-w-7xl min-w-0 space-y-4 p-4 md:p-8">
+        {bareHeader}
+        <ErrorState title="Couldn’t load API usage" detail={error} onRetry={fetchData} />
+        <Button variant="outline" onClick={() => navigate('/admin')}>Back to Admin</Button>
       </div>
     );
   }
@@ -82,23 +88,21 @@ export default function AdminApiUsage() {
   if (!data) return null;
 
   return (
-    <div className="min-h-screen bg-background p-4 md:p-8 max-w-7xl mx-auto space-y-6">
+    <div className="min-h-screen bg-background p-4 md:p-8 max-w-7xl mx-auto space-y-6 min-w-0">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <Button variant="ghost" size="icon" onClick={() => navigate('/admin')}>
-            <ArrowLeft className="h-5 w-5" />
+      <PageHeader icon={ShieldCheck} tone="blue" title="API Usage & Security"
+        subtitle={<>
+          Everything the code recorded, as the spend guard sees it — including usage Move37 paid for before each provider moved to your own account.
+          {' '}Findable's own cost figures are on the Admin dashboard (API &amp; system costs).
+        </>}
+        actions={<>
+          <Button variant="ghost" size="sm" onClick={() => navigate('/admin')} aria-label="Back to Admin">
+            <ArrowLeft className="h-4 w-4" />
           </Button>
-          <h1 className="text-2xl font-bold text-foreground">API Usage &amp; Security</h1>
-        </div>
-        <Button variant="outline" size="sm" onClick={fetchData}>
-          <RefreshCw className="h-4 w-4 mr-2" /> Refresh
-        </Button>
-      </div>
-      <p className="text-xs text-muted-foreground">
-        Everything the code recorded, as the spend guard sees it — including usage Move37 paid for before each provider moved to your own account.
-        Findable's own cost figures are on the Admin dashboard (API &amp; system costs).
-      </p>
+          <Button variant="outline" size="sm" onClick={fetchData}>
+            <RefreshCw className="h-4 w-4 mr-2" /> Refresh
+          </Button>
+        </>} />
 
       {/* Security & usage (2026-09-29): who spent what, warnings, restrictions, the paid-action control. */}
       <SecurityPanel />
@@ -106,93 +110,50 @@ export default function AdminApiUsage() {
       {/* Salespeople's bulk pre-call checks (fix/07): batches, fresh vs reused, estimated and actual spend, problems. */}
       <SalesChecksAdminCard />
 
-      <h2 className="text-xl font-semibold text-foreground pt-2">Google API detail</h2>
+      <SectionHeading title="Google API detail" tone="blue" />
 
       {/* Alerts */}
       {data.alerts.length > 0 && (
         <div className="space-y-2">
           {data.alerts.map((alert, i) => (
-            <div
+            <Callout
               key={i}
-              className={`flex items-center gap-3 p-3 rounded-lg border ${
-                alert.severity === 'critical'
-                  ? 'bg-destructive/10 border-destructive/30 text-destructive'
-                  : 'bg-yellow-500/10 border-yellow-500/30 text-yellow-400'
-              }`}
-            >
-              <AlertTriangle className="h-5 w-5 shrink-0" />
-              <span className="text-sm font-medium">{alert.message}</span>
-              <Badge variant={alert.severity === 'critical' ? 'destructive' : 'secondary'} className="ml-auto">
-                {alert.severity}
-              </Badge>
-            </div>
+              tone={alert.severity === 'critical' ? 'red' : 'amber'}
+              icon={AlertTriangle}
+              title={alert.message}
+              action={<Badge variant={alert.severity === 'critical' ? 'destructive' : 'secondary'}>{alert.severity}</Badge>}
+            />
           ))}
         </div>
       )}
 
       {/* Spend Overview */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm text-muted-foreground flex items-center gap-2">
-              <DollarSign className="h-4 w-4" /> Spend Today
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-2xl font-bold text-foreground">${data.spendToday.toFixed(2)}</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm text-muted-foreground flex items-center gap-2">
-              <DollarSign className="h-4 w-4" /> Spend This Month
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-2xl font-bold text-foreground">${data.spendMonth.toFixed(2)}</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm text-muted-foreground flex items-center gap-2">
-              <Database className="h-4 w-4" /> Cache Entries
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-sm space-y-1">
-              <p className="text-foreground">Search: <span className="font-semibold">{data.cacheSizes.search_cache}</span></p>
-              <p className="text-foreground">Phone: <span className="font-semibold">{data.cacheSizes.phone_cache}</span></p>
-              <p className="text-foreground">Geocode: <span className="font-semibold">{data.cacheSizes.geocode_cache}</span></p>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm text-muted-foreground flex items-center gap-2">
-              <Activity className="h-4 w-4" /> Cache Hit Rates
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-sm space-y-1">
-              {Object.entries(data.cacheStats).map(([type, stats]) => (
-                <p key={type} className="text-foreground">
-                  {type}: <span className="font-semibold">
-                    {stats.total > 0 ? ((stats.hits / stats.total) * 100).toFixed(1) : '0'}%
-                  </span>
-                  <span className="text-muted-foreground ml-1">({stats.hits}/{stats.total})</span>
-                </p>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
+        <KpiCard label="Spend Today" value={'$' + data.spendToday.toFixed(2)} icon={DollarSign} tone="green" />
+        <KpiCard label="Spend This Month" value={'$' + data.spendMonth.toFixed(2)} icon={DollarSign} tone="green" />
+        <Panel title="Cache Entries" icon={Database} tone="grey">
+          <div className="text-sm space-y-1">
+            <p className="text-foreground">Search: <span className="font-semibold">{data.cacheSizes.search_cache}</span></p>
+            <p className="text-foreground">Phone: <span className="font-semibold">{data.cacheSizes.phone_cache}</span></p>
+            <p className="text-foreground">Geocode: <span className="font-semibold">{data.cacheSizes.geocode_cache}</span></p>
+          </div>
+        </Panel>
+        <Panel title="Cache Hit Rates" icon={Activity} tone="blue">
+          <div className="text-sm space-y-1">
+            {Object.entries(data.cacheStats).map(([type, stats]) => (
+              <p key={type} className="text-foreground break-words">
+                {type}: <span className="font-semibold">
+                  {stats.total > 0 ? ((stats.hits / stats.total) * 100).toFixed(1) : '0'}%
+                </span>
+                <span className="text-muted-foreground ml-1">({stats.hits}/{stats.total})</span>
+              </p>
+            ))}
+          </div>
+        </Panel>
       </div>
 
       {/* Cost by API Type */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg">Cost by API Type (This Month)</CardTitle>
-        </CardHeader>
-        <CardContent>
+      <Panel title="Cost by API Type (This Month)" icon={BarChart3} tone="green">
           <Table>
             <TableHeader>
               <TableRow>
@@ -213,15 +174,10 @@ export default function AdminApiUsage() {
                 ))}
             </TableBody>
           </Table>
-        </CardContent>
-      </Card>
+      </Panel>
 
       {/* Place Details by Trigger */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg">Place Details Calls by Trigger Source</CardTitle>
-        </CardHeader>
-        <CardContent>
+      <Panel title="Place Details Calls by Trigger Source" icon={MapPin} tone="blue">
           <Table>
             <TableHeader>
               <TableRow>
@@ -245,15 +201,10 @@ export default function AdminApiUsage() {
               )}
             </TableBody>
           </Table>
-        </CardContent>
-      </Card>
+      </Panel>
 
       {/* Cost by User */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg">Cost by User (This Month)</CardTitle>
-        </CardHeader>
-        <CardContent>
+      <Panel title="Cost by User (This Month)" icon={Users} tone="grey">
           <Table>
             <TableHeader>
               <TableRow>
@@ -276,8 +227,7 @@ export default function AdminApiUsage() {
               ))}
             </TableBody>
           </Table>
-        </CardContent>
-      </Card>
+      </Panel>
     </div>
   );
 }

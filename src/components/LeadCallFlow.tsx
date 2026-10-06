@@ -1,6 +1,7 @@
 import { useId, useState, type ComponentType, type KeyboardEvent, type ReactNode } from 'react';
-import { CalendarClock, Check, ChevronDown, Loader2, MessageSquarePlus, Pencil, PhoneMissed, PhoneOff, PhoneForwarded, Plus, Send, Star, ThumbsDown, Voicemail, X } from 'lucide-react';
-import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
+import { CalendarClock, Check, ChevronDown, ClipboardPen, Loader2, MessageSquarePlus, Pencil, PhoneMissed, PhoneOff, PhoneForwarded, Plus, Send, Star, ThumbsDown, Voicemail, X } from 'lucide-react';
+import { Dialog, DialogContent } from '@/components/ui/dialog';
+import { DialogHero, LoadState } from '@/components/operator/ui';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -321,16 +322,14 @@ export function LeadCallFlow({ leadId, businessName, logOpen, onLogOpenChange, n
     <>
       <Dialog open={logOpen} onOpenChange={setLogOpen}>
         <DialogContent className="max-h-[90dvh] w-[calc(100%-1.5rem)] max-w-md gap-3 overflow-y-auto rounded-2xl p-4 sm:p-5" onKeyDown={keepKeysHere} data-testid="log-outcome">
-          <DialogTitle className="text-base">{title}</DialogTitle>
-          <DialogDescription className="-mt-2 text-xs">{businessName}</DialogDescription>
+          <DialogHero icon={ClipboardPen} tone="blue" title={title} subtitle={businessName} />
           {body}
         </DialogContent>
       </Dialog>
       <Dialog open={nextOpen} onOpenChange={onNextOpenChange}>
         <DialogContent className="max-h-[90dvh] w-[calc(100%-1.5rem)] max-w-md gap-3 overflow-y-auto rounded-2xl p-4 sm:p-5" onKeyDown={keepKeysHere} data-testid="next-action-window">
-          <DialogTitle className="text-base">Next action</DialogTitle>
-          <DialogDescription className="-mt-2 text-xs">{businessName}</DialogDescription>
-          {lead ? nextForm(null, () => onNextOpenChange(false), () => onNextOpenChange(false)) : <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
+          <DialogHero icon={CalendarClock} tone="blue" title="Next action" subtitle={businessName} />
+          {lead ? nextForm(null, () => onNextOpenChange(false), () => onNextOpenChange(false)) : <LoadState compact />}
         </DialogContent>
       </Dialog>
     </>

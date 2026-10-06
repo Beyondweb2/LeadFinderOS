@@ -158,8 +158,9 @@ Facts and warnings, not prose. Correct a stale line when you find one; add a rul
   all through `_shared/client-setup.ts`). ⛔ **Paid client setup (2026-10-02, `docs/paid-client-automation.md`)**:
   the stage + ONE next step is `deliveryStage` (derived; never draw a second "what's next"); not-needed items
   never block (no GBP = `gbp_exists='no'` only; no site; Paul's own sale / pre-`SALES_HANDOFF_SINCE` clients owe
-  no handoff — never fabricated); the crawl is reused while fresh, payment never crawls and drafts NO questions
-  (crawl → Discovery manual → approve & freeze → Run baseline manual); ONE new-client email per lead (claim on
+  no handoff — never fabricated); the crawl is reused while fresh; payment drafts NO questions
+  (crawl → Discovery manual → approve & freeze → Run baseline manual) — ⛔ since 2026-10-06 payment DOES start ONE
+  full crawl through the auto-intake (below), never from the webhook itself; ONE new-client email per lead (claim on
   `new_client_email_at`); the sales handoff is `outreach_leads.sales_handoff`, written only by quick-close
   `save_handoff` (seller-only after payment); `delivery_submitted_at` is the one stored setup act; History kinds
   live in the migration CHECK, `LeadEventKind` and `ACTIVITY_LABEL` (`paid-client-automation.test.ts` pins all three).
@@ -167,6 +168,15 @@ Facts and warnings, not prose. Correct a stale line when you find one; add a rul
   `src/lib/clientMissingInfo.ts` — Ask salesperson only for another ACTIVE seller's sale (`sold_by_user_id`), ONE open
   `client_info_requests` row per client (unique index), answered only by that seller's save; Find what we already have shows
   each source separately and applies a candidate BY ID; Contact client opens the Inbox with an INTERNAL need note. Nothing sends.
+  ⛔ **Paid client auto-intake + Send to Paul** (2026-10-06, `docs/pre-sales-certification/paid-client-auto-intake-final-sales-check.md`):
+  entering Paid Clients (trigger `trg_client_intake_on_paid` — every paid path, never webhook code) queues ONE `client_intake`
+  row; fn `client-intake` runs it (claimed, capped, one source = one step). The profile is DERIVED on read (`clientIntake.ts`
+  `mergeClientProfile`, ranks `SOURCE_RANK`: Paul > client > sales > records > lead > website > Google > inferred); a
+  disagreement is "Needs review — conflicting evidence", never silently chosen; Paul's confirm / reject live in
+  `client_intake.overrides` and no research overwrites them. Auto-fill writes only BLANK lead fields and only from client /
+  sales answers (`AUTO_APPLY_SOURCES`) — never a website find. At most ONE crawl per intake via crawl-check's internal intake
+  door (`isIntakeCrawlRequest`, paid clients only). No paid API, no message, no baseline. Send to Paul = fn quick-close
+  `send_to_paul` → ONE `client_handoff_sends` row per lead (unique) + one History line + one `client_handoff` notice.
 - **Other Claude sessions may share this checkout.** Every substantial task starts from the latest
   `origin/main` (`git fetch origin` first) on its own named branch in its own `git worktree`
   (`C:/Users/paulj/LeadFinderOS-wt/<task>`, added from `LeadFinderOS-current` as above; junction `node_modules`
@@ -1174,7 +1184,8 @@ positive allowlist of `baseline`; `isColdOutreachTemplate` treats unknown as COL
   the two AI-Audit ones are the only audit-keyed ones — keep at least one.
 - **Cron jobs live only in the DB** (`cron.job`): `ai-audit-queue-run` (30 s), `bulk-jobs-sweep`,
   `whatsapp-queue-run`, `whatsapp-auto-replies-run`, `notify-onboarding-submit-run` (1 min each),
-  `daily-cron-run` (02:00), `crawl-worker-run` (1 min; only fires while a crawl job runs), `notify-follow-ups-due`, `security-sweep-run`. (`instantly-poll-run` is gone — 13 jobs, read 2026-10-02.)
+  `daily-cron-run` (02:00), `crawl-worker-run` (1 min; only fires while a crawl job runs), `client-intake-run` (1 min; only
+  posts while an intake is due — 2026-10-06), `notify-follow-ups-due`, `security-sweep-run`. (`instantly-poll-run` is gone — 13 jobs, read 2026-10-02.)
   Admin control centre (2026-09-30): `conversation-triage-run` (2 min), `weekly-visibility-run` (hourly :15),
   `performance-sync-run` (05:00), `business-summary-weekly` (Mon 06:30); each records last run / status in
   `admin_job_runs`. The

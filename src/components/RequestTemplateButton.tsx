@@ -3,7 +3,8 @@ import { ExternalLink, FilePlus2, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogFooter } from '@/components/ui/dialog';
+import { DialogHero } from '@/components/operator/ui';
 import { useToast } from '@/hooks/use-toast';
 import { edgeErrorMessage, invokeEdge } from '@/lib/edgeInvoke';
 import {
@@ -47,12 +48,12 @@ export function RequestTemplateButton({ source, className }: { source: TemplateR
       </Button>
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Request a WhatsApp template</DialogTitle>
-            <DialogDescription className="text-xs">
-              Paul gets an email with exactly what you write here and decides whether to register it with Meta. Nothing is sent to anyone else.
-            </DialogDescription>
-          </DialogHeader>
+          <DialogHero
+            icon={FilePlus2}
+            tone="blue"
+            title="Request a WhatsApp template"
+            subtitle="Paul gets an email with exactly what you write here and decides whether to register it with Meta. Nothing is sent to anyone else."
+          />
           <div className="space-y-3">
             <a href={META_TEMPLATE_GUIDELINES_URL} target="_blank" rel="noopener noreferrer"
               className="inline-flex items-center gap-1 text-xs font-medium text-primary underline underline-offset-2">
@@ -76,7 +77,7 @@ export function RequestTemplateButton({ source, className }: { source: TemplateR
               <Input className="mt-1 h-9 text-sm" value={f.name} onChange={(e) => setF((p) => ({ ...p, name: e.target.value }))} placeholder="e.g. prices after a call" />
             </label>
             {checkError && (f.message || f.useCase || f.whyNotExisting) && (
-              <p className="text-[11px] text-amber-600">{templateRequestRefusal(checkError)}</p>
+              <p className="text-[11px] text-amber-700 dark:text-amber-300">{templateRequestRefusal(checkError)}</p>
             )}
           </div>
           <DialogFooter>

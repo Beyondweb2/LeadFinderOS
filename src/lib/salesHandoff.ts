@@ -157,7 +157,34 @@ export function salesHandoffApplies(i: { sellerId: string | null | undefined; se
   return 'required';
 }
 
-export const workTypeLabel = (v: string | null | undefined) => WORK_TYPE_OPTIONS.find((o) => o.value === v)?.label ?? null;
+/* ══ SEND TO PAUL (2026-10-06, docs/pre-sales-certification/paid-client-auto-intake-final-sales-check.md) ══
+   The salesperson's last act: once every required answer is in, the handoff is SENT — an authoritative,
+   timestamped snapshot (client_handoff_sends, ONE per client) that puts "NEW CLIENT HANDOFF" in front of Paul.
+   It may happen before payment (Paul sees "Awaiting payment"); the auto-intake merges it when they pay.
+   ⛔ Sending is idempotent: a second press reads the first send back — never a second notice or History line.
+   ⛔ It is never a message to the client, and it changes nothing commercial (route, price, agreement). */
+export type HandoffSendRefusal = 'handoff_incomplete' | 'client_closed';
+export function handoffSendRefusal(i: { fields: SalesHandoffFields | null | undefined; closed: boolean }): HandoffSendRefusal | null {
+  if (i.closed) return 'client_closed';
+  if (handoffMissing(i.fields).length) return 'handoff_incomplete';
+  return null;
+}
+export const HANDOFF_SEND_REFUSAL_TEXT: Record<HandoffSendRefusal, string> = {
+  handoff_incomplete: 'Answer every required question first — then Send to Paul.',
+  client_closed: "This client's engagement has ended — there is nothing to send.",
+};
+/** The bell line Paul sees. Short — a notification body is capped. */
+export function handoffSentTitle(businessName: string | null | undefined): string {
+  return `NEW CLIENT HANDOFF · ${(businessName ?? '').trim() || 'A client'}`;
+}
+export function handoffSentBody(i: { sellerName: string | null | undefined; paid: boolean }): string {
+  const who = (i.sellerName ?? '').trim() || 'The salesperson';
+  return i.paid
+    ? `From ${who}. Paid — open them in Paid Clients.`
+    : `From ${who}. Awaiting payment — it joins their Paid Client record automatically when they pay.`;
+}
+
+export const workTypeLabel =(v: string | null | undefined) => WORK_TYPE_OPTIONS.find((o) => o.value === v)?.label ?? null;
 export const siteSituationLabel = (v: string | null | undefined) => SITE_SITUATION_OPTIONS.find((o) => o.value === v)?.label ?? null;
 
 /** Plain lines for an email or a snapshot (only what was answered). */

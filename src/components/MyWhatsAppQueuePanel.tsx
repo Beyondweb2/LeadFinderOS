@@ -10,6 +10,8 @@ import { notifyLeadChanged } from '@/lib/leadSync';
 import { QUEUE_PAUSED_LINE, queuedLeadLine } from '@/lib/queueStatus';
 import { refusalText } from '@/lib/salesCrm';
 import { templateLabel } from '@/types/outreach';
+import { ErrorState, IconTile, SURFACE, ToneChip } from '@/components/operator/ui';
+import { cn } from '@/lib/utils';
 
 /* ════════════════════════════════════════════════════════════════════════════════════════════════
    A SALESPERSON'S WHATSAPP QUEUE (2026-10-03) — the useful half of the admin's queue panel.
@@ -84,29 +86,29 @@ export function MyWhatsAppQueuePanel() {
     } finally { setRemoving(null); }
   };
 
-  return <div className="rounded-xl border border-border/60 bg-card/60 p-4 shadow-sm" data-testid="my-whatsapp-queue">
+  return <div className={cn(SURFACE, 'p-4')} data-testid="my-whatsapp-queue">
     <div className="flex flex-wrap items-center justify-between gap-3">
-      <div className="flex items-center gap-2">
-        <MessageSquare className="h-4 w-4 text-green-500" />
-        <span className="text-sm font-semibold">WhatsApp queue</span>
-        {state?.paused && <span className="rounded-full bg-orange-500/15 px-2 py-0.5 text-[11px] font-bold text-orange-500">PAUSED — no sends</span>}
+      <div className="flex min-w-0 flex-wrap items-center gap-2">
+        <IconTile icon={MessageSquare} tone="blue" size="sm" />
+        <span className="text-sm font-bold tracking-tight">WhatsApp queue</span>
+        {state?.paused && <ToneChip tone="amber" icon={PauseCircle}>PAUSED — no sends</ToneChip>}
       </div>
       <Button size="sm" variant="ghost" className="h-8 gap-1.5 text-xs" onClick={() => void q.refetch()} disabled={q.isFetching}>
         <RefreshCw className={`h-3.5 w-3.5 ${q.isFetching ? 'animate-spin' : ''}`} /> Refresh
       </Button>
     </div>
     {q.isError
-      ? <p className="mt-2 text-sm text-destructive">Could not load your queue. <button type="button" className="underline" onClick={() => void q.refetch()}>Try again</button></p>
+      ? <ErrorState className="mt-3" title="Could not load your queue." onRetry={() => void q.refetch()} retryLabel="Try again" />
       : <>
           {state?.paused
             ? <p role="status" data-testid="queue-paused-banner" className="mt-2 flex items-center gap-2 text-sm text-amber-600 dark:text-amber-400"><PauseCircle className="h-4 w-4 shrink-0" /><span><span className="font-medium">{QUEUE_PAUSED_LINE}</span> {rows.length === 1 ? '1 of your leads is' : `${rows.length} of your leads are`} waiting in the queue.</span></p>
             : <p className="mt-2 text-sm text-muted-foreground" data-testid="my-queue-line">{line.text.replace(/^In the queue — /, '')}</p>}
           <button type="button" onClick={() => setExpanded((v) => !v)} data-testid="my-queue-toggle"
-            className="mt-3 flex w-full items-center justify-between rounded-lg border border-border/40 bg-background/40 px-2.5 py-1.5 text-left text-xs transition-colors hover:border-border sm:w-64">
+            className="mt-3 flex w-full items-center justify-between rounded-xl bg-muted/40 px-2.5 py-1.5 text-left text-xs ring-1 ring-inset ring-border/40 transition-colors hover:ring-border sm:w-64">
             <span><span className="block text-[10px] uppercase tracking-wide text-muted-foreground/60">Your leads queued</span><span className="font-semibold text-foreground/90" data-testid="my-queue-count">{rows.length}</span></span>
             {expanded ? <ChevronDown className="h-3.5 w-3.5 text-muted-foreground/60" /> : <ChevronRight className="h-3.5 w-3.5 text-muted-foreground/60" />}
           </button>
-          {expanded && <div className="mt-2 rounded-lg border border-border/40 bg-background/40 p-2">
+          {expanded && <div className="mt-2 rounded-xl bg-muted/30 p-2 ring-1 ring-inset ring-border/40">
             <div className="px-1 pb-1 text-[10px] uppercase tracking-wide text-muted-foreground/50">In send order (next first) · sent a few at a time in the send window</div>
             <ul className="divide-y divide-border/30">
               {rows.map((l) => <li key={l.id} className="flex items-center justify-between gap-2 px-1 py-1.5 text-xs">

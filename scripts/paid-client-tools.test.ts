@@ -121,7 +121,8 @@ console.log('\n── 5. ONE LOOK — the primitives draw from one token source 
   /* A LEAF: a component rendered from plain data (a test under tsx) can use the look without the app's wiring. */
   for (const [n, f] of [['operator/ui', ui], ['salesDash/primitives', leaf]] as const) {
     const imports = f.split('\n').filter((l) => /^\s*(import|export) .* from /.test(l)).map((l) => l.match(/from '([^']+)'/)?.[1] ?? '');
-    ok(imports.length > 0 && imports.every((m) => ['react', '@/lib/utils', '@/components/ui/dialog', '@/components/salesDash/primitives'].includes(m)), `${n} imports only leaf modules (${imports.join(', ')}) — no auth, client or collapsible`);
+    /* lucide-react (icons) and ui/button (radix Slot + cva) joined 2026-10-06 for the shared Load/Error/Empty states — both leaves. */
+    ok(imports.length > 0 && imports.every((m) => ['react', 'lucide-react', '@/lib/utils', '@/components/ui/button', '@/components/ui/dialog', '@/components/salesDash/primitives'].includes(m)), `${n} imports only leaf modules (${imports.join(', ')}) — no auth, client or collapsible`);
   }
   const dialog = read('src/components/ui/dialog.tsx');
   ok(dialog.includes('bg-card') && dialog.includes('sm:rounded-[1.25rem]') && dialog.includes('max-h-[100dvh] overflow-y-auto'), 'every dialog: the card surface, rounder, never taller than the screen');

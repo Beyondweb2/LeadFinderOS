@@ -1,9 +1,10 @@
 import { useState } from 'react';
-import { Loader2, UserPlus } from 'lucide-react';
+import { AlertTriangle, Loader2, UserPlus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogFooter } from '@/components/ui/dialog';
+import { Callout, DialogHero } from '@/components/operator/ui';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { useCampaigns } from '@/hooks/useCampaigns';
@@ -104,10 +105,8 @@ export function AddLeadDialog({ open, onOpenChange, onAdded }: { open: boolean; 
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!busy) { onOpenChange(o); if (!o) { setRefusal(null); setSiteMatch(null); } } }}>
       <DialogContent className="max-h-[92dvh] overflow-y-auto sm:max-w-lg">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2"><UserPlus className="h-5 w-5" />Add a lead you found</DialogTitle>
-          <DialogDescription>It goes into your Outreach list. If the business is already in the book, it is not added twice.</DialogDescription>
-        </DialogHeader>
+        <DialogHero icon={UserPlus} tone="blue" title="Add a lead you found"
+          subtitle="It goes into your Outreach list. If the business is already in the book, it is not added twice." />
         <div className="grid gap-3 sm:grid-cols-2">
           <div>
             <label className={label}>Country</label>
@@ -148,12 +147,12 @@ export function AddLeadDialog({ open, onOpenChange, onAdded }: { open: boolean; 
           <div className="sm:col-span-2"><label className={label}>First note (internal, never sent)</label><Textarea rows={2} className="resize-none text-sm" value={f.note} onChange={set('note')} placeholder="How you know them, what they said…" /></div>
         </div>
         {siteMatch && (
-          <div className="space-y-2 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-800 dark:text-amber-200" data-testid="add-lead-site-match">
+          <Callout tone="amber" icon={AlertTriangle} testId="add-lead-site-match">
             <p>{siteMatch}</p>
-            <Button size="sm" variant="outline" className="h-8 text-xs" disabled={busy} onClick={() => void submit(true)}>It's a different branch — add it</Button>
-          </div>
+            <Button size="sm" variant="outline" className="mt-2 h-8 text-xs" disabled={busy} onClick={() => void submit(true)}>It's a different branch — add it</Button>
+          </Callout>
         )}
-        {refusal && <p className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-800 dark:text-amber-200" data-testid="add-lead-refusal">{refusal}</p>}
+        {refusal && <Callout tone="amber" icon={AlertTriangle} testId="add-lead-refusal">{refusal}</Callout>}
         <DialogFooter>
           <Button variant="ghost" onClick={() => onOpenChange(false)} disabled={busy}>Cancel</Button>
           <Button onClick={() => void submit(false)} disabled={!ready || busy}>{busy && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}Add lead</Button>

@@ -4,7 +4,8 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ChevronDown, Gift, Loader2, MessageSquarePlus, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogFooter } from '@/components/ui/dialog';
+import { DialogHero, IconTile, TONE } from '@/components/operator/ui';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
@@ -75,11 +76,11 @@ export function FeedbackAndNews() {
     <>
       <Dialog open={fbOpen} onOpenChange={setFbOpen}>
         <DialogContent className="max-h-[90vh] max-w-lg overflow-y-auto">
-          <DialogHeader><DialogTitle className="flex items-center gap-2"><MessageSquarePlus className="h-5 w-5 text-violet-500" />Send feedback</DialogTitle><DialogDescription>It goes straight to Paul. The page you are on is attached automatically.</DialogDescription></DialogHeader>
+          <DialogHero icon={MessageSquarePlus} tone="blue" title="Send feedback" subtitle="It goes straight to Paul. The page you are on is attached automatically." />
           <div className="grid grid-cols-2 gap-2" role="radiogroup" aria-label="Kind of feedback">
             {FEEDBACK_KINDS.map((k) => (
               <button key={k.value} type="button" role="radio" aria-checked={kind === k.value} onClick={() => setKind(k.value)}
-                className={cn('rounded-lg border px-3 py-2 text-left text-sm font-medium transition', kind === k.value ? 'border-violet-500/50 bg-violet-500/10 text-violet-700 dark:text-violet-300' : 'border-border/60 hover:bg-muted/50')}>{k.label}</button>
+                className={cn('rounded-xl px-3 py-2 text-left text-sm font-medium ring-1 ring-inset transition', kind === k.value ? cn(TONE.blue.soft, TONE.blue.text, TONE.blue.ring) : 'ring-border/60 hover:bg-muted/50')}>{k.label}</button>
             ))}
           </div>
           <Textarea value={message} onChange={(e) => setMessage(e.target.value.slice(0, FEEDBACK_MAX))} rows={5} placeholder={kind === 'bug' ? 'What happened, and what did you expect?' : kind === 'feature' ? 'What would help you sell?' : 'Tell us…'} aria-label="Your feedback" />
@@ -90,7 +91,7 @@ export function FeedbackAndNews() {
               <ul className="space-y-1.5">
                 {(mine.data ?? []).map((m) => (
                   <li key={m.id} className="rounded-lg bg-muted/40 px-3 py-2 text-xs">
-                    <div className="flex items-center justify-between gap-2"><span className="font-medium">{feedbackKindLabel(m.kind)}</span><span className={cn('rounded-full px-2 py-0.5 text-[10px] font-semibold', m.status === 'fixed' ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300' : m.status === 'planned' ? 'bg-violet-500/15 text-violet-700 dark:text-violet-300' : 'bg-muted text-muted-foreground')}>{feedbackStatusLabel(m.status)}</span></div>
+                    <div className="flex items-center justify-between gap-2"><span className="font-medium">{feedbackKindLabel(m.kind)}</span><span className={cn('rounded-full px-2 py-0.5 text-[10px] font-semibold', m.status === 'fixed' ? cn(TONE.green.soft, TONE.green.text) : m.status === 'planned' ? cn(TONE.blue.soft, TONE.blue.text) : 'bg-muted text-muted-foreground')}>{feedbackStatusLabel(m.status)}</span></div>
                     <p className="mt-0.5 line-clamp-2 text-muted-foreground">{m.message}</p>
                     {m.admin_note && <p className="mt-0.5 text-foreground">Paul: {m.admin_note}</p>}
                   </li>
@@ -102,7 +103,7 @@ export function FeedbackAndNews() {
       </Dialog>
       <Sheet open={newsOpen} onOpenChange={setNewsOpen}>
         <SheetContent side="right" className="w-full overflow-y-auto sm:max-w-md">
-          <SheetHeader><SheetTitle className="flex items-center gap-2"><Gift className="h-5 w-5 text-violet-500" />What's new</SheetTitle><SheetDescription>Recent changes to LeadFinderOS.</SheetDescription></SheetHeader>
+          <SheetHeader className="text-left"><div className="flex min-w-0 items-start gap-3 pr-8"><IconTile icon={Gift} tone="blue" /><div className="min-w-0"><SheetTitle>What's new</SheetTitle><SheetDescription className="mt-0.5">Recent changes to LeadFinderOS.</SheetDescription></div></div></SheetHeader>
           <ol className="mt-4 space-y-3">
             {news.map((e) => <NewsCard key={e.id} e={e} />)}
           </ol>
@@ -123,7 +124,7 @@ function NewsCard({ e }: { e: WhatsNewEntry }) {
   const r = e.report;
   const head = (
     <>
-      <p className="text-[11px] font-semibold uppercase tracking-wide text-violet-600 dark:text-violet-300">{new Date(`${e.date}T12:00:00Z`).toLocaleDateString('en-GB', { day: 'numeric', month: 'long' })}</p>
+      <p className={cn('text-[11px] font-semibold uppercase tracking-wide', TONE.blue.text)}>{new Date(`${e.date}T12:00:00Z`).toLocaleDateString('en-GB', { day: 'numeric', month: 'long' })}</p>
       <p className="mt-0.5 flex items-start justify-between gap-2 font-semibold">
         <span>{e.title}</span>
         {r && <ChevronDown className={cn('mt-0.5 h-4 w-4 shrink-0 text-muted-foreground transition-transform', open && 'rotate-180')} aria-hidden />}
@@ -132,7 +133,7 @@ function NewsCard({ e }: { e: WhatsNewEntry }) {
     </>
   );
   return (
-    <li className="rounded-xl border border-border/60">
+    <li className="rounded-2xl border border-border/70 bg-card">
       {r ? (
         <button type="button" onClick={() => setOpen(!open)} aria-expanded={open} className="w-full rounded-xl p-3.5 text-left transition hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary">
           {head}
@@ -147,8 +148,8 @@ function NewsCard({ e }: { e: WhatsNewEntry }) {
               <ul className="mt-1 list-disc space-y-1 pl-4">{r[s.key].map((x) => <li key={x}>{x}</li>)}</ul>
             </div>
           ))}
-          <div className="rounded-lg bg-violet-500/10 px-3 py-2">
-            <p className="text-xs font-semibold uppercase tracking-wide text-violet-700 dark:text-violet-300">What it means for you</p>
+          <div className={cn('rounded-xl px-3 py-2', TONE.blue.tint)}>
+            <p className={cn('text-xs font-semibold uppercase tracking-wide', TONE.blue.text)}>What it means for you</p>
             <p className="mt-0.5">{r.effect}</p>
           </div>
         </div>

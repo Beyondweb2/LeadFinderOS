@@ -39,6 +39,64 @@ export const WHATS_NEW: readonly WhatsNewEntry[] = [
       ],
       effect: 'A prospect sees at a glance what each AI said about their search and who it named. Scores, links, the Get started and Request a call buttons, and every other report are unchanged.',
     } },
+  { id: '2026-10-06-send-to-paul-sales', date: '2026-10-06', title: 'Finish a close with Send to Paul', audience: 'sales',
+    body: 'When every handoff question is answered, the last button on the Close tab is Send to Paul. Press it and your part is done. Quick Close also has a calmer look.',
+    report: {
+      added: [
+        '"Handoff complete" and a big Send to Paul button once every required handoff answer is in.',
+        '"Sent to Paul" with the time, once you have sent it. You can still correct an answer after.',
+        'Send to Paul works before or after the client pays.',
+      ],
+      changed: [
+        'Quick Close uses the dashboard look: dark cards, blue buttons and choices, yellow for the guarantee, green only when something is done (paid, link ready, sent).',
+        'The handoff opens by itself once the sign-up link is out, after payment, or when it is ready to send.',
+      ],
+      removed: [
+        'The large teal panels and the teal progress bar in Quick Close.',
+        '"Save handoff" as the last step (it is still there while answers are missing).',
+      ],
+      effect: 'You know exactly when you are finished: answer the handoff, press Send to Paul, done. Nothing about the price, the agreement, the payment or your commission changed.',
+    } },
+  { id: '2026-10-06-paid-client-auto-intake', date: '2026-10-06', title: 'New paid clients arrive with everything we already know', audience: 'admin',
+    body: 'When a client pays, LeadFinderOS gathers the lead, the handoff, their sign-up answers, the signed agreement, Google data, the hook audit and a full crawl of their website into one Client intake at the top of the client page. Salespeople now press Send to Paul at the end of a close.',
+    report: {
+      added: [
+        'Client intake at the top of each paid client: who they are, what they bought, what Sales told us, what the client told us, what we found, and only what is still needed.',
+        'Every fact shows where it came from; open Sources to see each one. Different answers are marked "Needs review — conflicting evidence".',
+        'Confirm, Edit, "Wrong — reject" and "Back to automatic" on each fact. A fact you confirm is never replaced by later research.',
+        'A full crawl of their website starts by itself when they pay, unless a recent full crawl is already on file.',
+        'Build clients: their old site\'s content, logo and photos are marked REFERENCE ONLY — DO NOT REUSE unless the client confirmed they own them.',
+        'Notifications: NEW CLIENT HANDOFF when a salesperson sends one, and CLIENT READY (or needs attention) when the intake finishes.',
+        'Paid clients: "New client handoffs · awaiting payment" for handoffs sent before the client paid.',
+        'Refresh research and Refresh Google data buttons for a re-run.',
+      ],
+      changed: [
+        'Answers the client or the salesperson already gave fill the setup checklist automatically. You no longer need Find what we already have for those (it stays as a fallback).',
+        'Payment now starts the website crawl (it used to wait for you).',
+      ],
+      removed: [],
+      effect: 'Open a new client and the work is already gathered. Nothing is sent to the client, no paid lookups run, and the paid 20-question baseline still waits for you as before.',
+    } },
+  { id: '2026-10-06-full-app-design', date: '2026-10-06', title: 'Every page and popup now looks like the Sales dashboard', audience: 'all',
+    body: 'The same headers, colours, popup style and loading / error messages across the whole app. Nothing you can do has changed, only how it looks.',
+    report: {
+      added: [
+        'Each page has the same header: its icon, its name and one line saying what it is for.',
+        'Every popup opens with the same title row: an icon, the title and a short line under it.',
+        'One look for "loading", "couldn’t load — Try again" and "nothing here yet", everywhere.',
+        'Team (Paul only): each salesperson shows their sales, commission earned and commission owed, and any sale held for review.',
+      ],
+      changed: [
+        'Find Leads, Outreach, WhatsApp, Coverage, Campaigns, AI Audit, API usage & Security, Templates, Website Build and the baseline pages use the shared header.',
+        'On a phone, page titles are left-aligned and buttons wrap instead of squeezing the text. The lead popup shows the full business name.',
+        'Delete / discard buttons in confirmations are always red.',
+        'The old dark Outreach tips and welcome popups match the rest of the app.',
+      ],
+      removed: [
+        'The full-screen spinner and full-screen error on API usage & Security.',
+      ],
+      effect: 'It is one app now: the same signals mean the same thing on every screen. No button, rule or number changed.',
+    } },
   { id: '2026-10-06-quick-report-no-schema', date: '2026-10-06', title: 'Quick report no longer lists "no structured data" as a website issue', audience: 'all',
     body: 'The six-answer quick report now leaves out the generic "Your site doesn\'t label the basics" line. Our own testing found it made no difference to whether AI names a business.',
     report: {

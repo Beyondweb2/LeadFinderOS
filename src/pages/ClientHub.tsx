@@ -4,7 +4,7 @@ import { AlertCircle, AlertTriangle, BookOpen, CalendarDays, CheckCircle2, Clipb
 import { invokePaidBaseline, type PaidBaseline } from '@/lib/paidBaseline';
 import { EdgeAuthError, edgeErrorMessage, invokeEdge } from '@/lib/edgeInvoke';
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogTrigger } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { cleanAuditQuestions } from '@/components/AuditQuestionEditor';
@@ -23,6 +23,7 @@ import { resolveClientFacts, clientConfirmationsNeeded } from '@/lib/clientFacts
 import { LeadCrawlPanel } from '@/components/LeadCrawlPanel';
 import { ClientHandoffCard, type ClientHandoff } from '@/components/ClientHandoffCard';
 import { ClientSetupCard, type SetupHandoff } from '@/components/ClientSetupCard';
+import { ClientIntakeCard, type IntakeViewData } from '@/components/ClientIntakeCard';
 import { DISCOVERY_PLAN_RUNS, DiscoverySection, HookAuditStep, nearDuplicateCount, RecommendationStep, useDiscoveryPoll } from '@/components/BaselineDiscovery';
 import { OfficialBaseline, qualityOverridesOf, unresolvedQuality } from '@/components/OfficialBaseline';
 import { MeasurementHealthPanel } from '@/components/MeasurementHealthPanel';
@@ -40,7 +41,7 @@ import { baselineReadiness } from '@/lib/baselineReadiness';
 import type { LeadCrawlSummary } from '@/lib/leadCrawlSummary';
 import { WORK_LABEL, type ClientContract } from '@/lib/clientContract';
 import { ClientTimelineCard } from '@/components/ClientTimelineCard';
-import { Callout, EDGE, Empty, Figure, IconTile, Segmented, SURFACE, ToneChip, type Tone } from '@/components/operator/ui';
+import { Callout, DialogHero, EDGE, Empty, Figure, IconTile, Segmented, SURFACE, ToneChip, type Tone } from '@/components/operator/ui';
 import { cn } from '@/lib/utils';
 import { CLIENT_TOOLS_SECTION, PAID_CLIENT_TOOLS, PAID_CLIENT_TOOL_LABEL, clientToolUrl, toolOf, type PaidClientTool } from '@/lib/paidClientTools';
 import { handoffSeed } from '@/lib/pagePlanHandoff';
@@ -52,7 +53,9 @@ type AnyRecord = Record<string, any>;
 type Baseline = PaidBaseline;
 type Hub = { lead: AnyRecord; onboarding: AnyRecord | null; onboarding_unpaid?: { id: string; status: string | null } | null; audit: AnyRecord | null; runs: AnyRecord[]; pages: AnyRecord[]; crawl: LeadCrawlSummary; handoff?: ClientHandoff; contract?: ClientContract;
   /** The official baseline's named count (paid-client-hub, the report's ruler): answers naming the business. */
-  baseline_visibility?: { named: number; answered: number; expected: number } | null };
+  baseline_visibility?: { named: number; answered: number; expected: number } | null;
+  /* Paid client auto-intake (2026-10-06): the consolidated profile + run state (ClientIntakeCard). */
+  intake?: IntakeViewData | null };
 
 /* THE ONE HUB POLLER. (The Prepare Baseline dialog has its own read-only Discovery poller while a
    Discovery job runs — useDiscoveryPoll in BaselineDiscovery.tsx.) The hub re-reads itself on this interval only while the baseline is `starting`
@@ -102,7 +105,7 @@ function ContractSummary({ c }: { c: ClientContract }) {
 function ClientDetailsDialog({ lead, onboarding }: { lead: AnyRecord; onboarding: AnyRecord | null }) {
   const f = (label: string, value: unknown) => <div><dt className="text-xs text-muted-foreground">{label}</dt><dd className="break-words">{String(value || '—')}</dd></div>;
   const notes = [lead.notes, lead.delivery_notes, lead.project_overview, onboarding?.standout, onboarding?.accreditations].filter(Boolean);
-  return <Dialog><DialogTrigger asChild><Button variant="outline" size="sm">Client details</Button></DialogTrigger><DialogContent className="max-h-[90vh] max-w-3xl overflow-y-auto"><DialogHeader><DialogTitle>Client details</DialogTitle></DialogHeader><div className="grid gap-4 text-sm sm:grid-cols-2">
+  return <Dialog><DialogTrigger asChild><Button variant="outline" size="sm">Client details</Button></DialogTrigger><DialogContent className="max-h-[90vh] max-w-3xl overflow-y-auto"><DialogHero icon={UsersRound} tone="green" title="Client details" subtitle={String(lead.business_name ?? "")} /><div className="grid gap-4 text-sm sm:grid-cols-2">
     {f('Business name', lead.business_name)}{f('Connected lead ID', lead.id)}
     {f('Contact name', lead.contact_name)}<div><dt className="text-xs text-muted-foreground">Email</dt><dd className="flex items-center gap-2 break-all">{lead.email || onboarding?.contact_email || '—'}{(lead.email || onboarding?.contact_email) && <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => void copy(lead.email || onboarding?.contact_email)}><Clipboard className="h-3.5 w-3.5"/></Button>}</dd></div>
     <div><dt className="text-xs text-muted-foreground">Phone / WhatsApp</dt><dd className="flex items-center gap-2">{lead.phone || '—'}{lead.phone && <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => void copy(lead.phone)}><Clipboard className="h-3.5 w-3.5"/></Button>}</dd></div>
@@ -268,7 +271,7 @@ function BaselineSetupDialog({ leadId, open, onOpenChange, onChanged }: { leadId
   const contextMissing = !!data && (!data.location || !data.business_type || !data.services_list.length);
   const step = !data ? 0 : started ? 5 : frozen ? 5 : count ? 4 : data.discovery?.pool.length ? 3 : 2;
 
-  return <Dialog open={open} onOpenChange={onOpenChange}><DialogContent className="max-h-[92vh] w-[calc(100vw-1rem)] max-w-4xl overflow-y-auto p-4 sm:p-6"><DialogHeader><DialogTitle>Prepare baseline</DialogTitle></DialogHeader>
+  return <Dialog open={open} onOpenChange={onOpenChange}><DialogContent className="max-h-[92vh] w-[calc(100vw-1rem)] max-w-4xl overflow-y-auto p-4 sm:p-6"><DialogHero icon={Gauge} tone="purple" title="Prepare baseline" />
     {!data && busy === 'load' && <div className="flex justify-center py-12"><Spinner/></div>}
     {!data && busy !== 'load' && error && <div className="space-y-3 py-6"><div role="alert" className="flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive"><AlertCircle className="mt-0.5 h-4 w-4 shrink-0"/>{error}</div><Button size="sm" variant="outline" onClick={() => setReloadKey((k) => k + 1)}>Retry</Button></div>}
     {data && <div className="space-y-3">
@@ -642,7 +645,7 @@ export default function ClientHub() {
   const poll = useCallback(async () => {
     try {
       const next = (await call({ action: 'get', lead_id: leadId, handoff: false })).client as Hub;
-      setHub((prev) => ({ ...next, handoff: prev?.handoff, baseline_visibility: next.baseline_visibility ?? prev?.baseline_visibility })); setPageError(null);
+      setHub((prev) => ({ ...next, handoff: prev?.handoff, intake: prev?.intake, baseline_visibility: next.baseline_visibility ?? prev?.baseline_visibility })); setPageError(null);
     } catch (e) { setPageError(describe(e, 'Could not refresh this client')); }
   }, [leadId]);
   const retry = () => { setPageError(null); setReloadKey((k) => k + 1); };
@@ -677,7 +680,10 @@ export default function ClientHub() {
   const setupLabel = bs === 'needs_questions' ? 'Prepare Baseline' : bs === 'approved' ? 'Start baseline' : 'Continue baseline setup';
   return <HubSection.Provider value={section}><div className="mx-auto max-w-7xl space-y-4 py-6"><Link to="/paid-clients" className="text-xs text-muted-foreground">← Paid clients</Link>
   {errorPanel}
-  <section id="hub-payment" className={cn(SURFACE, 'min-w-0 p-4 sm:p-5', section === 'payment' && 'ring-2 ring-primary/50')}><div className="flex flex-wrap items-start justify-between gap-4"><div className="flex min-w-0 items-start gap-3"><IconTile icon={UsersRound} tone="green" size="lg" /><div className="min-w-0"><h1 className="break-words text-2xl font-extrabold leading-tight tracking-tight sm:text-[1.75rem]">{lead.business_name}</h1><p className="break-words text-sm text-muted-foreground">{onboarding?.confirmed_location || lead.derived_town || lead.search_location} · {lead.website || 'No website recorded'}</p><p className="mt-1.5 break-words text-sm">{lead.contact_name || 'No contact name'} · {lead.email || onboarding?.contact_email || 'No email'} · {lead.phone || 'No phone'}</p></div></div><div className="min-w-0 space-y-1.5 text-sm sm:text-right"><div className="flex flex-wrap gap-1.5 sm:justify-end"><ToneChip tone={lead.payment_date ? 'green' : 'amber'} dot>Paid {lead.payment_date || 'date not recorded'}</ToneChip><ToneChip tone={onboarding?.website_route ? 'blue' : 'amber'}>{onboarding?.website_route?.replaceAll('_',' ') || 'Website route not set'}</ToneChip></div>{hub.contract && <ContractSummary c={hub.contract}/>}<div className="font-semibold">Remeasure: {remeasureLine}</div></div></div><div className="mt-4 flex flex-wrap gap-2">{lead.website && <Button asChild variant="outline" size="sm"><a href={lead.website} target="_blank" rel="noreferrer"><ExternalLink className="mr-1 h-4 w-4"/>Open website</a></Button>}<ClientDetailsDialog lead={lead} onboarding={onboarding}/>{audit && <Dialog><DialogTrigger asChild><Button size="sm"><FileText className="mr-1 h-4 w-4"/>View Baseline Report</Button></DialogTrigger><DialogContent className="max-w-3xl"><DialogHeader><DialogTitle>Baseline report</DialogTitle></DialogHeader><p className="text-sm text-muted-foreground">Client URL contains the client-safe report only. Internal report remains operator-only.</p><div className="flex flex-wrap gap-2"><Button asChild size="sm"><a href={reportUrl} target="_blank" rel="noreferrer">Client view</a></Button><Button asChild size="sm" variant="outline"><Link to={`/baseline/${audit.id}`}>Internal view / download</Link></Button><Button size="sm" variant="outline" onClick={() => void copy(reportUrl)}>Copy client URL</Button></div></DialogContent></Dialog>}</div></section>
+  <section id="hub-payment" className={cn(SURFACE, 'min-w-0 p-4 sm:p-5', section === 'payment' && 'ring-2 ring-primary/50')}><div className="flex flex-wrap items-start justify-between gap-4"><div className="flex min-w-0 items-start gap-3"><IconTile icon={UsersRound} tone="green" size="lg" /><div className="min-w-0"><h1 className="break-words text-2xl font-extrabold leading-tight tracking-tight sm:text-[1.75rem]">{lead.business_name}</h1><p className="break-words text-sm text-muted-foreground">{onboarding?.confirmed_location || lead.derived_town || lead.search_location} · {lead.website || 'No website recorded'}</p><p className="mt-1.5 break-words text-sm">{lead.contact_name || 'No contact name'} · {lead.email || onboarding?.contact_email || 'No email'} · {lead.phone || 'No phone'}</p></div></div><div className="min-w-0 space-y-1.5 text-sm sm:text-right"><div className="flex flex-wrap gap-1.5 sm:justify-end"><ToneChip tone={lead.payment_date ? 'green' : 'amber'} dot>Paid {lead.payment_date || 'date not recorded'}</ToneChip><ToneChip tone={onboarding?.website_route ? 'blue' : 'amber'}>{onboarding?.website_route?.replaceAll('_',' ') || 'Website route not set'}</ToneChip></div>{hub.contract && <ContractSummary c={hub.contract}/>}<div className="font-semibold">Remeasure: {remeasureLine}</div></div></div><div className="mt-4 flex flex-wrap gap-2">{lead.website && <Button asChild variant="outline" size="sm"><a href={lead.website} target="_blank" rel="noreferrer"><ExternalLink className="mr-1 h-4 w-4"/>Open website</a></Button>}<ClientDetailsDialog lead={lead} onboarding={onboarding}/>{audit && <Dialog><DialogTrigger asChild><Button size="sm"><FileText className="mr-1 h-4 w-4"/>View Baseline Report</Button></DialogTrigger><DialogContent className="max-w-3xl"><DialogHero icon={FileText} tone="purple" title="Baseline report" subtitle="Client URL contains the client-safe report only. Internal report remains operator-only." /><div className="flex flex-wrap gap-2"><Button asChild size="sm"><a href={reportUrl} target="_blank" rel="noreferrer">Client view</a></Button><Button asChild size="sm" variant="outline"><Link to={`/baseline/${audit.id}`}>Internal view / download</Link></Button><Button size="sm" variant="outline" onClick={() => void copy(reportUrl)}>Copy client URL</Button></div></DialogContent></Dialog>}</div></section>
+  {/* CLIENT INTAKE (2026-10-06): everything gathered automatically at payment — who, what they bought, what Sales
+      and the client told us, what we found, what is still needed. Above the setup checklist, which it feeds. */}
+  {!ended && <ClientIntakeCard leadId={lead.id} initial={hub.intake} placeId={lead.place_id ?? null}/>}
   {ended
     ? <EngagementEndedCard view={ended} at={lead.service_terminated_at} note={lead.service_termination_note}/>
     : hub.handoff?.setup && <ClientSetupCard leadId={lead.id} businessName={lead.business_name ?? null} h={hub.handoff as SetupHandoff} route={serviceRouteFromRow(onboarding)} onChanged={() => void refresh()} onOpenBaseline={() => setBaselineOpen(true)}/>}

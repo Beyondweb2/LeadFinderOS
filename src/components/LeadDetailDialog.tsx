@@ -440,8 +440,10 @@ function LeadDetailBody({
     <>
       {/* ── Header: name + glanceable pills (does not scroll) ── */}
       <div className="shrink-0 border-b border-border/60 bg-card/30 px-4 pt-4 pb-3.5 sm:px-5 sm:pt-5">
-        <div className="flex items-start justify-between gap-3 pr-9">
-          <div className="flex min-w-0 flex-1 items-center gap-2.5">
+        {/* flex-wrap + basis (2026-10-06): on a phone the Call / Log / WhatsApp pills wrap under the name
+            instead of squeezing it to two letters. */}
+        <div className="flex flex-wrap items-start justify-between gap-3 pr-9">
+          <div className="flex min-w-0 flex-1 basis-[13rem] items-center gap-2.5">
           <IconTile icon={Building2} tone="blue" />
           <DialogTitle className="flex items-center gap-2 min-w-0 text-lg font-bold tracking-tight">
             {editingName ? (
