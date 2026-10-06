@@ -35,6 +35,17 @@ export const WHATS_NEW: readonly WhatsNewEntry[] = [
       ],
       effect: 'The quick report ends on the outcome, not the price. Request a call and Ask me anything (your WhatsApp) are unchanged, and every other report keeps its old wording.',
     } },
+  { id: '2026-10-06-campaign-chip-tips', date: '2026-10-06', title: 'Campaign cards: the Call / WhatsApp tag is blue', audience: 'all',
+    body: 'Green now only means something good happened (a sale, a reply, money). The tag that says how a campaign contacts people is blue.',
+    report: {
+      added: [],
+      changed: [
+        'The Call / WhatsApp tag on each campaign card is a blue tag with its icon (WhatsApp used to be green).',
+        'The Outreach tips no longer say the opener rotates between six messages. It does not: the template you choose is exactly what is sent.',
+      ],
+      removed: [],
+      effect: 'Green keeps one meaning across the app, and the tips match what the app actually does.',
+    } },
   { id: '2026-10-06-quick-report-soft-redesign', date: '2026-10-06', title: 'The quick report has a softer design and shows both AI answers', audience: 'all',
     body: 'The six-answer quick report keeps its dark Findable header and footer, with softer rounded sections in between. The featured question now shows what ChatGPT said and what Google AI said, side by side.',
     report: {
