@@ -153,3 +153,40 @@ app replaces by error code. Owed at the next function deploy (wording only): tho
   `hook-named-instead`, the What's New id; absent — "Voicemail (under 20 seconds)", "If they'd rather see it first",
   "Where does most of your work come from", "The longer version is in".
 - Database gate: see the live proof above. Nothing was sent to any prospect; no card charged; no sign-up link made.
+
+## Follow-up, same day: one-click "Check before calling" + 50 checks a day (2026-10-06, `improve/one-click-checks-50`)
+
+The sales-team-today release was already merged and live, so this went on its own branch off `origin/main`.
+
+- **Confirmation popup removed.** `SalesCheckDialog.tsx` is deleted. Select leads → **Check before calling (N)** →
+  the batch starts on that click (`Outreach.tsx` `startSalesCheck` → `useSalesChecks.start`). No second button,
+  no modal; the one-line check bar and each row carry the progress. The "Check again even if checked recently" option
+  is gone (the hook always sends `refresh: false`); the server still accepts `refresh`, nothing on screen sends it.
+  Retry on a failed row starts straight away too.
+- **Daily fresh-check allowance 30 → 50.** Source of truth is the live `protection_settings` row
+  (`limits.actions.sales_check.per_day`): `public.guard_action` refuses past it and `sales-prospect-check` counts
+  "Checks left today" against it. Changed by migration `20261012130000_sales_check_allowance_50.sql` (one jsonb key,
+  idempotent) and the code fallback `DEFAULT_PROTECTION_LIMITS.actions.sales_check` (`src/lib/protectionLimits.ts`),
+  held equal by `abuse-cost-protection.test.ts` and `sales-prospect-check.test.ts`. `guard_action` itself has no
+  number in it — nothing else to change in the database.
+- **Unchanged:** batch maximum 20 (`SALES_CHECK_BATCH_MAX`, refused above it, never sliced); a reused result
+  (< 14 days) costs nothing and never counts; ownership / archived / client / trade / town / pitch / auto-message
+  refusals; nothing is sent and no lead row is written; the per-person spend caps (50 × `OUTREACH_AUDIT_EST_USD` is
+  far below `user_day_hard_usd`).
+- **At 0 left:** the bar reads "Checks left today: 0/50 · Daily check limit reached"; the button stays enabled because
+  a press can still reuse recent results; a new check on that lead is skipped "Daily check limit reached — try again
+  tomorrow or ask Paul." (`REASON_TEXT.allowance_used`).
+- **Onboarding:** the selling gate was already account-restrictions-only (migration `20261012120000`, above); an
+  active salesperson with an incomplete checklist can check; suspended / ended / disabled (no sales role) cannot.
+- ⚠️ **Apify still caps the team, not the allowance.** At deploy time Apify was US$29.05 of a US$40 monthly cap
+  (cycle ends 16 Oct); prospecting stops at 85%, so only about US$5 (≈150 fresh checks for the WHOLE team) remains this
+  cycle. Past that the check is skipped "budget used". Raising the Apify cap is Paul's, in the Apify dashboard.
+- **Tests:** `sales-prospect-check.test.ts` (50 end to end: 50/50 on a fresh day, first check → 49, 20 + 20 + 10, 21
+  in a batch refused, 51st refused, cached reused at 0 with no paid call and no guard row, no lead status changed,
+  nothing sent, suspended / disabled refused, gate = account restrictions); `outreach-compact-audit-rows.test.ts`
+  (no dialog, the press calls `checks.start` directly, no "check again", bar 50/50, 43/50, 0/50 + the limit line,
+  button not disabled at 0); `pre-sales-final`, `abuse-cost-protection` re-pinned. Gate: 338/338 suites.
+- **Visual QA:** the real Outreach page in a throwaway harness (Supabase / auth faked, no network, deleted before
+  commit), in-app browser, desktop 1280 px and 390 px: two leads ticked → press → the start request left 22 ms later,
+  no dialog in the page, bar "Checking 2: 2 checking · Checks left today: 41/50", both rows "Checking…"; 0/50 state;
+  no horizontal overflow at 390 px.

@@ -32,9 +32,10 @@ Find Leads; Coverage under More. They can open only `/sales-dashboard`, `/outrea
 
 ## 2. Check before calling (Outreach, sales only)
 
-- Tick leads → **"Check before calling (N)"**. A dialog says: research only, nothing is sent; recent results reused free;
-  checks left today; leads that can't be checked are skipped with a reason.
-- Limits: **30 fresh checks per rep per rolling 24 h, 20 per batch**, cached results (<14 days) free — see
+- Tick leads → **"Check before calling (N)"** — the batch STARTS on that click (no confirm dialog since 2026-10-06). Recent
+  results are reused free; leads that can't be checked are skipped with a reason on their row; the one-line bar shows
+  progress and "Checks left today: N/50" ("Daily check limit reached" at 0).
+- Limits: **50 fresh checks per rep per rolling 24 h (30 until 2026-10-06), 20 per batch**, cached results (<14 days) free — see
   `08-COSTS-BUDGETS-LIMITS.md`.
 - One check = 3 customer questions × ChatGPT + Google AI × 1 run (the hook audit) + a free website crawl.
 - A panel shows Waiting / Checking / Ready / Failed / Skipped with the call screen's own one-line result ("Google AI did not

@@ -22,6 +22,23 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-06-one-click-checks-50', date: '2026-10-06', title: 'Check before calling starts in one click, and you get 50 checks a day', audience: 'all',
+    body: 'Tick leads and press Check before calling: the checks start straight away, with no pop-up. Each person now gets 50 new checks a day instead of 30.',
+    report: {
+      added: [
+        '"Daily check limit reached" on the check bar when you have none left today.',
+      ],
+      changed: [
+        'Check before calling starts the checks the moment you press it. Progress shows on each row and on the one-line bar above the list.',
+        'Checks left today now counts down from 50 instead of 30. A batch is still at most 20 leads.',
+        'A lead checked in the last 14 days reuses that result automatically. It is free and does not use one of your 50.',
+      ],
+      removed: [
+        'The "Check N leads before calling" pop-up and its second Check button.',
+        'The "Check again even if checked recently" tick box.',
+      ],
+      effect: 'One press instead of two, and room for two full batches plus a half one each day. At 0 left you can still press it: recent results still come through, only new checks wait until tomorrow.',
+    } },
   { id: '2026-10-06-sales-team-today', date: '2026-10-06', title: 'A Call screen you can use on the phone, and onboarding no longer blocks selling', audience: 'all',
     body: 'The AI result is at the top of the Call tab, in colour. The script starts with the reason for the call, then the real website reasons, then one question: do they manage the website or does an agency. The onboarding checklist no longer stops anyone selling.',
     report: {

@@ -2039,8 +2039,8 @@ export function OutreachTable({
   const rowScores = useOutreachRowScores(scoreLeads, scoreLeads.map((l) => auditsByLead[l.id]?.runId ?? '').join(','));
   /** The call screen: the lead's workspace on its Call tab (the same door the old results panel used). */
   const openCallScreen = (l: OutreachLead) => { setDetailTab('call'); setDetailLogContact(false); setDetailLead(l); };
-  /** Retry a failed check: a rep goes through the same confirm dialog as the toolbar (allowance, reuse);
-   *  the admin gets the single AI check popup. */
+  /** Retry a failed check: a rep starts it straight away, exactly like the toolbar press (the server judges
+   *  allowance and reuse); the admin gets the single AI check popup. */
   const retryCheck = (l: OutreachLead) => {
     if (isDemoLead(l.id)) return;
     if (onSalesCheck && perms.salesChecks) onSalesCheck([l.id]); else setAuditLead(l);
@@ -2193,7 +2193,8 @@ export function OutreachTable({
                   </Button>
                 )}
                 {/* ── CHECK BEFORE CALLING (sales, fix/07) ── research only: never sends, never writes the lead.
-                    Every selected id goes to the server, which says per lead why one cannot be checked. */}
+                    Every selected id goes to the server, which says per lead why one cannot be checked.
+                    ONE CLICK (2026-10-06): the press starts the batch — no confirm dialog. */}
                 {!readOnly && onSalesCheck && perms.salesChecks && (
                   <Button
                     variant="outline"

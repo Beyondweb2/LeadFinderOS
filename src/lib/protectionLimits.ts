@@ -85,10 +85,11 @@ export const DEFAULT_PROTECTION_LIMITS: ProtectionLimits = {
     /* "Check before calling" (2026-10-04, fn sales-prospect-check): one guard row per FRESH paid check a
        salesperson's batch starts (reused results are free and never counted). per_day IS the rep's daily
        allowance — src/lib/salesCheck.ts reads it from the live row and falls back to this value.
-       Launch value (Paul, 2026-10-05): one full batch of SALES_CHECK_BATCH_MAX plus a second, partial
-       one. Planned with the Apify monthly cap confirmed / raised to about $150 (fixes-07 §6); change it on
-       the Security panel once real usage is seen. */
-    sales_check: { paid: true, per_day: 30 },
+       Raised 2026-10-06 (Paul, improve/one-click-checks-50): two full batches of SALES_CHECK_BATCH_MAX plus
+       a half one; migration 20261012130000 carries the same value to the live row. Still bounded by the
+       prospecting pool and the Apify monthly cap (src/lib/auditBudget.ts), which refuse with their own
+       reason. Change it on the Security panel once real usage is seen. */
+    sales_check: { paid: true, per_day: 50 },
     /* CSV import (2026-10-05, fn-less: public.import_leads, migration 20261010170000). One guard row per call — the
        check AND the import each count — with the call's row count as its units. Unpaid (no provider is called), so
        the prospecting pause never blocks it. max_rows equals import_leads' own per-call ceiling. */

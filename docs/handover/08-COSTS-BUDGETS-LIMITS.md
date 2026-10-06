@@ -74,9 +74,10 @@ book).
 | Google Text Search Enterprise / Place Details Enterprise | US$0.035 / US$0.020 | CLAUDE.md §4 |
 | gpt-4o-mini | US$0.15 / US$0.60 per 1M tokens in/out | CLAUDE.md §4 |
 
-**Rule of thumb for a rep:** 30 checks a day ≈ US$0.99/day ≈ US$22/month (22 working days). Five reps at full use ≈
-US$109/month — close to the prospecting line at a US$150 cap (85% ≈ US$127). The binding limit is the Apify **monthly**
-cap, not the daily pool.
+**Rule of thumb for a rep:** 50 checks a day (since 2026-10-06; was 30) ≈ US$1.66/day ≈ US$36/month (22 working days).
+Three reps at full use ≈ US$109/month; five ≈ US$182/month — past the prospecting line even at a US$150 cap (85% ≈
+US$127). The binding limit is the Apify **monthly** cap, not the per-rep allowance: when the prospecting line is reached
+the check is refused as "budget used", whatever the allowance says.
 
 **Client work:** a formal baseline is 20 × 3 × 2 = 120 answers; Discovery is ~40+ questions × 3 runs × 2 engines. Both
 are client/guarantee pools and protected from prospecting.
@@ -90,7 +91,7 @@ and team spend. Thresholds live ONLY in the `protection_settings` row (seeded fr
 - Default spend thresholds (USD): person hour warn 6 / hard 15, person day warn 15 / hard 35, team hour warn 12, team day
   warn 50 / cap 100, Apify warn 90%.
 - Per-action burst limits include `lead_search` 10/min 60/h, `place_details` 40/min 500/h, `hook_audit` 10 per 10 min and
-  80/day, `copy_numbers` 10/h (Sales), `export_csv` not allowed for Sales, `sales_check` 30/day.
+  80/day, `copy_numbers` 10/h (Sales), `export_csv` not allowed for Sales, `sales_check` 50/day (migration 20261012130000).
 - The ledger is `api_usage_log`; a row with `api_type = 'guard'` is an estimate, never a charge — exclude it from every
   spend total. Sales never sees a cost; refusals say `USAGE_PAUSED_DETAIL`.
 - Record: `docs/abuse-cost-protection.md`.

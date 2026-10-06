@@ -23,7 +23,7 @@
   Sales workspace v2 (`af8a930f` + migration `20261008100000`), opener contact guard (`9f8451c6` + migration
   `20261008110000`), simple Website Build (`592656f8`, no SQL).
 - Newest migration applied: `20261008110000_opener_contact_guard.sql` (read back live: `opener_contact_block`,
-  `campaigns.archived_at`, `campaign_new` all exist; `sales_check` limit = 30/day).
+  `campaigns.archived_at`, `campaign_new` all exist; `sales_check` limit = 30/day at the time; 50/day since migration `20261012130000`, 2026-10-06).
 - Edge functions: 68 in source (all listed in `supabase/config.toml`), 90 deployed (22 deployed with no source — 2 belong to
   the findable-directory repo; the rest are deep-clean leftovers). `whatsapp-status` held at v114.
 - Cron jobs (13, live only in the database `cron.job`, a rebuild from migrations loses them): `ai-audit-queue-run` (30 s),
