@@ -84,8 +84,9 @@ ok(scopeShowingLead({ assigned_to_user_id: A }, PAUL) === A && scopeShowingLead(
 const page = read("src/pages/Outreach.tsx");
 ok(/<OutreachTable[\s\S]*?leads=\{scopedLeads\}/.test(page), "Outreach page passes the SCOPED leads to the table");
 ok(!/<OutreachTable[^>]*?leads=\{allLeads\}/.test(page), "Outreach page never passes the unscoped list to the table");
-/* The admin's queue PANEL deliberately reads every lead: it shows the one WhatsApp queue, which sends for the whole team. */
-ok(/<WhatsAppQueuePanel leads=\{allLeads\}/.test(page), "the admin queue panel still shows the whole (team-wide) queue");
+/* The WhatsApp queue (2026-10-06) is its own page and reads its own rows from sales_leads, scoped by the SERVER —
+   the admin's is the whole team's, whatever the Outreach owner scope says. Outreach shows only its summary. */
+ok(/<WhatsAppQueueSummary \/>/.test(page) && !/<WhatsAppQueuePanel/.test(page) && !/<WhatsAppQueueSummary[^>]*leads=/.test(page), "the queue is not built from the scoped Outreach list (its own server-scoped read; admin = whole team)");
 ok(/useState<OwnerScope>\(DEFAULT_OWNER_SCOPE\)/.test(page) && !/usePersistedState[^\n]*[Oo]wner/.test(page), "the owner scope starts at My leads on every visit (not persisted)");
 ok(/onOwnerScopeChange=\{role === 'admin' \? /.test(page), "only the admin gets the owner control");
 const table = read("src/components/OutreachTable.tsx");

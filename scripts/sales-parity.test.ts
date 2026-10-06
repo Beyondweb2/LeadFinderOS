@@ -108,9 +108,11 @@ console.log("\n── the queued line never promises a send the queue will not m
   const controls = strip(read("src/components/WhatsAppLeadControls.tsx"));
   ok(!/7am–9:30pm UK window \(max 40\/day\)/.test(controls) && /queuedLeadLine\(useQueueState\(queued\)(, lead\.phone)?\)/.test(controls), "the workspace's queued line reads the live state");
   const out = strip(read("src/pages/Outreach.tsx"));
-  /* 2026-10-03: the paused line lives in the salesperson's own queue panel (MyWhatsAppQueuePanel). */
-  const myQueue = strip(read("src/components/MyWhatsAppQueuePanel.tsx"));
-  ok(/!perms\.queueControls && <MyWhatsAppQueuePanel \/>/.test(out) && /data-testid="queue-paused-banner"/.test(myQueue) && /state\?\.paused/.test(myQueue), "Sales sees a paused-queue line when their leads are waiting (in their queue panel)");
+  /* 2026-10-06: ONE queue for both roles (WhatsAppQueuePanel on /whatsapp-queue); Outreach shows its summary. Paused
+     reads queue_state (both roles) on the summary card and on the queue's status line. */
+  const queue = strip(read("src/components/WhatsAppQueuePanel.tsx"));
+  const summary = strip(read("src/components/WhatsAppQueueSummary.tsx"));
+  ok(/<WhatsAppQueueSummary \/>/.test(out) && /state\?\.paused && <ToneChip/.test(summary) && /queuedLeadLine\(state\)/.test(queue) && /data-testid="queue-line"/.test(queue), "Sales sees a paused-queue line (the Outreach summary and the one queue)");
 }
 
 console.log("\n── Outreach: the working list, the campaign filter, no claim tab ──");

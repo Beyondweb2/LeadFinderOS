@@ -64,6 +64,8 @@ settings.
   (`NewCampaignNameDialog` → `campaign_create`) and "Manage campaigns…" opens the page. The workspace picker,
   bulk Move to campaign, the Inbox filter and Find Leads' ask-each-time popup stay pick-only.
   `CampaignManagerDialog` is deleted (the page replaces it); the admin's old settings stay under Advanced settings.
+- ⚠️ SUPERSEDED 2026-10-06: `MyWhatsAppQueuePanel` is deleted — both roles now use the ONE queue (`WhatsAppQueuePanel`
+  on `/whatsapp-queue`), see `docs/pre-sales-certification/whatsapp-queue-role-parity.md`. The record below is history.
 - **The salesperson's WhatsApp queue** (`MyWhatsAppQueuePanel`, Outreach): before, the admin had the full queue
   panel and a salesperson had nothing but a paused banner. Now: their queued leads (read from `sales_leads`,
   server-scoped to leads assigned to them), whether the queue is sending (`queue_state`), and remove one through

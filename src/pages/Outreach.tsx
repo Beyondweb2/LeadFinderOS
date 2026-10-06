@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo } from 'react';
 import { useLocation, useSearchParams } from 'react-router-dom';
 import { OutreachTable } from '@/components/OutreachTable';
-import { WhatsAppQueuePanel } from '@/components/WhatsAppQueuePanel';
+import { WhatsAppQueueSummary } from '@/components/WhatsAppQueueSummary';
 
 import { OutreachTipsDialog } from '@/components/OutreachTipsDialog';
 import { OutreachIntroModal } from '@/components/OutreachIntroModal';
@@ -24,7 +24,6 @@ import { datasetComplete, leadLoadNotice } from '@/lib/outreachLoad';
 import { isOutreachPreset } from '@/lib/leadTrade';
 import { prefetchOutreachAuditMap } from '@/lib/outreachAuditMap';
 import { getQueueStatus } from '@/lib/queueStatus';
-import { MyWhatsAppQueuePanel } from '@/components/MyWhatsAppQueuePanel';
 import { CampaignsButton } from '@/components/campaigns/CampaignsButton';
 import { useLeadPermissions } from '@/hooks/useLeadPermissions';
 import { AddLeadDialog } from '@/components/AddLeadDialog';
@@ -86,7 +85,7 @@ const Outreach = () => {
   useEffect(() => {
     if (!user?.id) return;
     void prefetchOutreachAuditMap(queryClient, user.id);
-    /* The queue status is queue configuration — admin-only on the server; a salesperson has no panel. */
+    /* The queue's team status is admin-only on the server; warmed here for the queue page and the opener picker. */
     if (perms.queueControls) getQueueStatus(queryClient).catch(() => { /* the panel reads it itself and reports failures */ });
   }, [user?.id, queryClient, perms.queueControls]);
 
@@ -190,7 +189,6 @@ const Outreach = () => {
     const lead = allLeads.find((l) => l.id === launchIntent.leadId);
     if (lead) setOwnerScopeChoice(scopeShowingLead(lead, user?.id));
   }, [role, launchIntent, scopedLeads, allLeads, user?.id]);
-  /* Sales cannot see the queue panel; when the admin has paused the queue, their queued leads say so. */
 
   const isReadOnly = false;
 
@@ -327,11 +325,9 @@ const Outreach = () => {
         }
       />
 
-      {/* WhatsApp outreach queue (admin-only). */}
-      {perms.queueControls && <WhatsAppQueuePanel leads={allLeads} onUpdateLead={updateLead} listComplete={listComplete} />}
-      {/* Sales (2026-10-03): their own queued leads, the queue's sending state, and remove — the useful half of the
-          admin panel; the list is server-scoped (sales_leads), the controls stay the admin's. */}
-      {!perms.queueControls && <MyWhatsAppQueuePanel />}
+      {/* ⛔ THE WHATSAPP QUEUE IS ONE PAGE (2026-10-06, /whatsapp-queue, WhatsAppQueuePanel) for both roles. Outreach
+          shows only its summary and "Open queue" — never a second queue list. */}
+      <WhatsAppQueueSummary />
 
       {/* Server-side bulk job progress — lives in bulk_jobs, so it survives
           leaving the page/browser. Shows a live job, or a finished-while-away
