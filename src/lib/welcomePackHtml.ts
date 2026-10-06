@@ -77,6 +77,12 @@ export interface WelcomePackAgreement {
   termsKnown?: boolean;
   acceptedAtIso?: string | null;
   acceptedBy?: string | null;
+  /** 2026-10-07 (src/lib/signedAgreement.ts — the same record the Paid Client page shows): the version
+   *  signed, the plan named on the signature, and the payment the signature was taken on. Absent → the
+   *  line simply omits them; nothing is ever guessed. */
+  version?: string | null;
+  planName?: string | null;
+  initialPaidAtIso?: string | null;
 }
 
 /** Client-safe business facts. ⛔ NOTHING OPERATOR-ONLY BELONGS IN THIS SHAPE — no notes, no
@@ -490,6 +496,8 @@ export const AGREEMENT_KEY_POINTS: Record<'build' | 'optimise' | 'unknown', read
 };
 const AGREEMENT_ALWAYS_YOURS = 'Your domain, logo and photos are always yours.';
 
+/** Exported for its test (scripts/client-signup-agreement-flow.test.ts). */
+export function welcomePackAgreementPage(a: WelcomePackAgreement): string { return agreementPage(a); }
 function agreementPage(a: WelcomePackAgreement): string {
   if (!a.termsKnown && !a.acceptedAtIso) {
     return `
@@ -498,8 +506,17 @@ function agreementPage(a: WelcomePackAgreement): string {
       <p>${esc('Your agreed payment schedule continues under the terms you signed up to.')}</p>
       <p class="wp-note">${esc('Your agreement link will be sent separately.')}</p>`;
   }
+  /* The signed record, from the evidence row (never retyped): who, the day, the version, the plan, the
+     payment it was taken on, and their own signed copy (the agreement page serves the PDF at ?pdf=1). */
+  const facts = [
+    a.planName ? `Plan: ${a.planName}` : '',
+    a.version ? `Agreement version ${a.version}` : '',
+    a.initialPaidAtIso ? `First payment ${ukDate(a.initialPaidAtIso)}` : '',
+  ].filter(Boolean).join(' · ');
   const accepted = a.acceptedAtIso
-    ? `<div class="wp-box-navy"><p><b>Agreement accepted on ${esc(ukDate(a.acceptedAtIso))} by ${esc(a.acceptedBy || 'you')}.</b></p></div>`
+    ? `<div class="wp-box-navy"><p><b>Agreement accepted on ${esc(ukDate(a.acceptedAtIso))} by ${esc(a.acceptedBy || 'you')}.</b></p>${
+        facts ? `<p>${esc(facts)}</p>` : ''}${
+        a.url ? `<p><a href="${esc(a.url)}?pdf=1">Download your signed agreement (PDF)</a></p>` : ''}</div>`
     : '';
   const action = accepted || (a.url
     ? `<div class="wp-agree">

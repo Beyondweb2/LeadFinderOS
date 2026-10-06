@@ -12,8 +12,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { findableSiteDir } from './findable-site-dir.mjs';
 import {
-  ONBOARDING_COPY, DOMAIN_OPTIONS, AGENCY_OPTIONS, ACCESS_OPTIONS, SELF_SITE_OPTIONS,
-  siteAccessFromBranch, websiteManagerFromBranch, permissionAckText, accessConsequenceText, websiteRouteFor,
+  ONBOARDING_COPY, WEBSITE_CHOICE_OPTIONS, MANAGER_OPTIONS, KEEP_ACCESS_OPTIONS, BUILD_DOMAIN_OPTIONS, NONE_DOMAIN_OPTIONS,
+  branchFromChoice, choiceFromBranch, siteAccessFromBranch, websiteManagerFromBranch, permissionAckText, accessConsequenceText, websiteRouteFor,
   answersFromRecords, buildOnboardingPatch, cleanAnswers, answerProblems, leadPatchFromAnswers, onboardingStatus,
   type OnboardingAnswers,
 } from '../src/lib/manualOnboarding';
@@ -72,7 +72,8 @@ console.log('\n── SAME QUESTIONS: every string is the customer flow\'s own (
     const strings: string[] = [];
     const walk = (v: unknown) => { if (typeof v === 'string') strings.push(v); else if (v && typeof v === 'object') Object.values(v).forEach(walk); };
     walk(ONBOARDING_COPY);
-    for (const opts of [DOMAIN_OPTIONS, AGENCY_OPTIONS, ACCESS_OPTIONS, SELF_SITE_OPTIONS]) for (const o of opts) strings.push(o.label);
+    for (const opts of [WEBSITE_CHOICE_OPTIONS, MANAGER_OPTIONS, KEEP_ACCESS_OPTIONS, BUILD_DOMAIN_OPTIONS, NONE_DOMAIN_OPTIONS]) for (const o of opts) strings.push(o.label);
+    for (const o of WEBSITE_CHOICE_OPTIONS) strings.push(o.note);
     strings.push(permissionAckText(null), permissionAckText('yes_access'), permissionAckText('want_new'), accessConsequenceText('yes_access'), accessConsequenceText('no_website'));
     const missing = strings.filter((s) => !customer.includes(norm(s)));
     /* A MISSING string is first a question about WHICH findable-site was read: a sibling checkout
@@ -88,9 +89,22 @@ console.log('\n── SAME QUESTIONS: every string is the customer flow\'s own (
     && siteAccessFromBranch('no', null, 'none') === 'no_website' && siteAccessFromBranch('yes', null, null) === null && siteAccessFromBranch(null, 'yes', 'access') === null,
     'the website branch folds exactly as the customer flow\'s siteAccessFromBranch');
   ok(websiteManagerFromBranch('yes') === 'web_company' && websiteManagerFromBranch('no') === 'direct_access' && websiteManagerFromBranch(null) === null, 'website_manager folds the same way');
-  ok(/a\.agency_manages === 'yes' && <div>/.test(dialog) && /a\.agency_manages === 'no' && <div>/.test(dialog) && /a\.can_get_access === 'yes' && <div/.test(dialog) && /a\.domain_status === 'new' &&/.test(dialog),
+  /* 2026-10-07: the website question is CHOICE-FIRST on the customer page, so it is here too. */
+  ok(/choice === 'build' && <>/.test(dialog) && /choice === 'keep' && <>/.test(dialog) && /choice === 'none' && <div>/.test(dialog)
+    && /manager === 'agency' && keep === 'yes' && <div/.test(dialog) && /keep === 'no' && <div/.test(dialog) && /a\.domain_status === 'new' &&/.test(dialog),
     'the conditional questions keep the customer\'s show conditions');
-  ok(/can_get_access: null, self_site: null/.test(dialog), 'changing the agency answer clears the sub-answers, as the customer flow does');
+  const bf = (c: Parameters<typeof branchFromChoice>[0], m: Parameters<typeof branchFromChoice>[1], k: Parameters<typeof branchFromChoice>[2]) => {
+    const b = branchFromChoice(c, m, k); return siteAccessFromBranch(b.agency_manages, b.can_get_access, b.self_site);
+  };
+  ok(bf('build', 'self', null) === 'want_new' && bf('build', 'agency', null) === 'no_access' && bf('none', null, null) === 'no_website'
+    && bf('keep', 'self', 'yes') === 'yes_access' && bf('keep', 'agency', 'yes') === 'yes_access',
+    'the choice-first answers fold to the same four site-access values as the customer flow');
+  ok(bf('keep', 'agency', 'no') === null && bf('keep', 'self', 'no') === null && bf('build', null, null) === null && bf(null, 'self', 'yes') === null,
+    'keep WITHOUT access is unanswered (never a silent build), and a half-answered choice is no answer');
+  for (const c of ['build', 'keep', 'none'] as const) for (const m of ['self', 'agency', null] as const) for (const k of ['yes', null] as const) {
+    const b = branchFromChoice(c, m, k); const back = choiceFromBranch(b.agency_manages, b.can_get_access, b.self_site);
+    if (bf(c, m, k) !== null) ok(back.choice === c, `a stored ${c}/${m}/${k} answer reads back as the ${c} choice`);
+  }
 }
 
 console.log('\n── 8. CUSTOMER-SUBMITTED ONBOARDING STILL WORKS ──');

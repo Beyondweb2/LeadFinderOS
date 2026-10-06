@@ -53,6 +53,8 @@ const RENDERERS: Array<[string, string]> = [
   ["agreement page (paying client)", "src/lib/agreementPageHtml.ts"],
   ["agreement words (paying client)", "src/lib/clientAgreement.ts"],
   ["signed agreement PDF (paying client)", "src/lib/agreementPdf.ts"],
+  /* 2026-10-07: the plan summary above the signature (Today / Then / Term / After the term). */
+  ["agreement plan summary (paying client)", "src/lib/signupSummary.ts"],
   /* 2026-10-02: the lines above the paid form's pre-filled services / towns (findable.live renders them). */
   ["post-payment form prefill lines (paying client)", "src/lib/setupPrefill.ts"],
   ["audit report (prospect + client)", "src/lib/aiAuditReportHtml.ts"],

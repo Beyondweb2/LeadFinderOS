@@ -100,7 +100,9 @@ const live: Record<string, string[]> = {
   /* The Client Service Agreement (Paul ran the SQL 2026-10-02; read back from information_schema that
      day). client_agreement_links.service_route is the follow-up column (SQL_FOR_PAUL, same day). */
   client_agreement_links: ['lead_id','token','created_at','last_sent_at','last_sent_to','service_route'],
-  client_agreement_acceptances: ['method','accepted_at','typed_name','typed_role','email','agreement_version','service_route','stripe_session_id'],
+  client_agreement_acceptances: ['id','method','accepted_at','typed_name','typed_role','email','agreement_version','service_route','stripe_session_id'],
+  /* The v3 terms row the signed-agreement record reads (read back from information_schema 2026-10-07). */
+  client_service_terms: ['agreement_acceptance_id','initial_paid_at','service_route'],
   /* ⚠️ NOT LIVE YET: migration 20261010090000_client_agreement_v3_commercial.sql (branch
      feature/client-agreement-commercial-alignment, 2026-10-05) — must be applied and read back BEFORE
      paid-client-hub is deployed. Its client_service_events columns, from that file. */

@@ -11,9 +11,9 @@ import { tradeWord } from '@/lib/trade';
 import { chipsForTrade, serviceExamplesFor } from '@/lib/onboardingChips';
 import { AGENCY_CONTRACT_NOTE, DOMAIN_ACCESS_OPTIONS, DOMAIN_OWNED_OPTIONS, DOMAIN_QUESTIONS, DOMAIN_REASON_TEXT, DOMAIN_THIRD_PARTY_OPTIONS, NEW_DOMAIN_REGISTRATION_NOTE, SITE_RIGHTS_OPTIONS, domainAuthority } from '@/lib/domainAuthority';
 import {
-  ACCESS_OPTIONS, AGENCY_OPTIONS, DOMAIN_OPTIONS, ONBOARDING_COPY as C, SELF_SITE_OPTIONS,
-  accessConsequenceText, answerProblems, answersFromRecords, onboardingStatus, permissionAckText, siteAccessFromBranch,
-  type OnboardingAnswers,
+  BUILD_DOMAIN_OPTIONS, KEEP_ACCESS_OPTIONS, MANAGER_OPTIONS, NONE_DOMAIN_OPTIONS, ONBOARDING_COPY as C, WEBSITE_CHOICE_OPTIONS,
+  accessConsequenceText, answerProblems, answersFromRecords, branchFromChoice, choiceFromBranch, onboardingStatus, permissionAckText, siteAccessFromBranch,
+  type OnboardingAnswers, type SiteManager, type WebsiteChoice,
 } from '@/lib/manualOnboarding';
 
 /* ════════════════════════════════════════════════════════════════════════════════════════════════
@@ -66,6 +66,12 @@ export function ManualOnboardingDialog({ leadId, open, onOpenChange, onSaved }: 
   const [row, setRow] = useState<Record<string, unknown> | null>(null);
   const [detected, setDetected] = useState<{ services: string[]; towns: string[] }>({ services: [], towns: [] });
   const [serviceInput, setServiceInput] = useState('');
+  /* The website question is CHOICE-FIRST, as on the customer page (2026-10-07). The choice and the keep-access
+     answer are the form's own state; the stored three (agency_manages / can_get_access / self_site) are
+     written through branchFromChoice and read back with choiceFromBranch. */
+  const [choiceState, setChoiceState] = useState<WebsiteChoice | null>(null);
+  const [managerState, setManagerState] = useState<SiteManager | null>(null);
+  const [keepAccess, setKeepAccess] = useState<'yes' | 'no' | null>(null);
   const [areaInput, setAreaInput] = useState('');
 
   useEffect(() => {
@@ -77,6 +83,8 @@ export function ManualOnboardingDialog({ leadId, open, onOpenChange, onSaved }: 
         if (cancelled) return;
         const f = res.form as { lead: Record<string, unknown>; onboarding: Record<string, unknown> | null; detected: { services: string[]; towns: string[] } };
         setRow(f.onboarding); setA(answersFromRecords(f.onboarding, f.lead)); setDetected(f.detected ?? { services: [], towns: [] });
+        /* A fresh load reads the website choice back from the stored answers, never from the last client's form. */
+        setChoiceState(null); setManagerState(null); setKeepAccess(null);
       })
       .catch((e) => { if (!cancelled) setError(edgeErrorMessage(e, 'Could not load the onboarding answers')); })
       .finally(() => { if (!cancelled) setLoading(false); });
@@ -84,6 +92,17 @@ export function ManualOnboardingDialog({ leadId, open, onOpenChange, onSaved }: 
   }, [open, leadId]);
 
   const set = <K extends keyof OnboardingAnswers>(k: K, v: OnboardingAnswers[K]) => setA((prev) => (prev ? { ...prev, [k]: v } : prev));
+  const stored = a ? choiceFromBranch(a.agency_manages, a.can_get_access, a.self_site) : { choice: null, manager: null, keepAccess: null };
+  const choice = choiceState ?? stored.choice;
+  const manager = managerState ?? stored.manager;
+  const keep = keepAccess ?? stored.keepAccess;
+  const applyWebsite = (c: WebsiteChoice | null, m: SiteManager | null, k: 'yes' | 'no' | null) => {
+    const b = branchFromChoice(c, m, k);
+    setA((p) => (p ? { ...p, ...b, ...(c === 'keep' ? { domain_status: 'existing' as const } : {}) } : p));
+  };
+  const pickChoice = (c: WebsiteChoice) => { const m = c === 'none' ? null : manager; const k = c === 'keep' ? keep : null; setChoiceState(c); setManagerState(m); setKeepAccess(k); applyWebsite(c, m, k); };
+  const pickManager = (m: SiteManager) => { setManagerState(m); applyWebsite(choice, m, keep); };
+  const pickKeep = (k: 'yes' | 'no') => { setKeepAccess(k); applyWebsite(choice, manager, k); };
   const siteAccess = a ? siteAccessFromBranch(a.agency_manages, a.can_get_access, a.self_site) : null;
   const chips = useMemo(() => chipsForTrade(tradeWord(a?.trade ?? '')).services, [a?.trade]);
   const problems = a ? answerProblems(a) : [];
@@ -166,13 +185,21 @@ export function ManualOnboardingDialog({ leadId, open, onOpenChange, onSaved }: 
         </Panel>
 
         <Panel headline={C.websiteStep.headline} sub={C.websiteStep.sub}>
-          <div><p className="mb-1 font-medium">{C.domain.question}</p><Radio name="domain" value={a.domain_status} options={DOMAIN_OPTIONS} onChange={(v) => set('domain_status', v)} />
-</div>
-          <div><p className="mb-1 font-medium">{C.agency.question}</p><Radio name="agency" value={a.agency_manages} options={AGENCY_OPTIONS} onChange={(v) => setA((p) => p ? { ...p, agency_manages: v, can_get_access: null, self_site: null } : p)} /></div>
-          {a.agency_manages === 'yes' && <div><p className="mb-1 font-medium">{C.access.question}</p><p className="mb-1 text-xs text-muted-foreground">{C.access.helper}</p><Radio name="access" value={a.can_get_access} options={ACCESS_OPTIONS} onChange={(v) => set('can_get_access', v)} />
-            {a.can_get_access === 'yes' && <div className="mt-2"><Label>{C.managerEmail.label} <span className="font-normal text-muted-foreground">{C.managerEmail.optional}</span></Label><Input aria-label={C.managerEmail.label} value={a.website_manager_email} placeholder={C.managerEmail.placeholder} onChange={(e) => set('website_manager_email', e.target.value)} /><p className="mt-1 text-xs text-muted-foreground">{C.managerEmail.helper}</p>{problemFor('website_manager_email') && <p className="text-xs text-destructive">{problemFor('website_manager_email')}</p>}</div>}
-          </div>}
-          {a.agency_manages === 'no' && <div><p className="mb-1 font-medium">{C.selfSite.question}</p><Radio name="self" value={a.self_site} options={SELF_SITE_OPTIONS} onChange={(v) => set('self_site', v)} /></div>}
+          <div><Radio name="website-choice" value={choice} options={WEBSITE_CHOICE_OPTIONS} onChange={pickChoice} />
+            {choice && <p className="mt-1 text-xs text-muted-foreground">{WEBSITE_CHOICE_OPTIONS.find((o) => o.value === choice)?.note}</p>}</div>
+          {choice === 'build' && <>
+            <div><p className="mb-1 font-medium">{C.buildManager.question}</p><p className="mb-1 text-xs text-muted-foreground">{C.buildManager.helper}</p><Radio name="build-manager" value={manager} options={MANAGER_OPTIONS} onChange={pickManager} />
+              {manager === 'agency' && <p className="mt-1 text-xs text-muted-foreground">{C.buildManager.agencyNote}</p>}</div>
+            <div><p className="mb-1 font-medium">{C.buildDomain.question}</p><p className="mb-1 text-xs text-muted-foreground">{C.buildDomain.helper}</p><Radio name="domain" value={a.domain_status} options={BUILD_DOMAIN_OPTIONS} onChange={(v) => set('domain_status', v)} /></div>
+          </>}
+          {choice === 'none' && <div><p className="mb-1 font-medium">{C.noneDomain.question}</p><p className="mb-1 text-xs text-muted-foreground">{C.noneDomain.helper}</p><Radio name="domain" value={a.domain_status} options={NONE_DOMAIN_OPTIONS} onChange={(v) => set('domain_status', v)} /></div>}
+          {choice === 'keep' && <>
+            <div><p className="mb-1 font-medium">{C.keepManager.question}</p><Radio name="keep-manager" value={manager} options={MANAGER_OPTIONS} onChange={pickManager} /></div>
+            {manager && <div><p className="mb-1 font-medium">{manager === 'agency' ? C.access.question : C.selfSite.question}</p><p className="mb-1 text-xs text-muted-foreground">{C.access.helper}</p><Radio name="access" value={keep} options={KEEP_ACCESS_OPTIONS} onChange={pickKeep} />
+              {manager === 'agency' && keep === 'yes' && <div className="mt-2"><Label>{C.managerEmail.label} <span className="font-normal text-muted-foreground">{C.managerEmail.optional}</span></Label><Input aria-label={C.managerEmail.label} value={a.website_manager_email} placeholder={C.managerEmail.placeholder} onChange={(e) => set('website_manager_email', e.target.value)} /><p className="mt-1 text-xs text-muted-foreground">{C.managerEmail.helper}</p>{problemFor('website_manager_email') && <p className="text-xs text-destructive">{problemFor('website_manager_email')}</p>}</div>}
+              {keep === 'no' && <div className="mt-2 rounded-md border border-amber-500/40 p-2 text-xs"><p>{C.keepNoAccess.note}</p><button type="button" className="mt-1 font-semibold underline" onClick={() => pickChoice('build')}>{C.keepNoAccess.action}</button></div>}
+            </div>}
+          </>}
           {siteAccess && <p className="text-xs text-muted-foreground">{accessConsequenceText(siteAccess)}</p>}
           {/* ⛔ THE DOMAIN RULE (2026-09-28): the same questions the customer is asked on the new-site
               path. Record only what the CLIENT confirmed — never tick a confirmation on their behalf. */}
