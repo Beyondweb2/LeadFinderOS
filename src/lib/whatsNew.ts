@@ -22,6 +22,24 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-06-quick-report-concept4', date: '2026-10-06', title: 'The Quick AI Visibility Check report has a new design', audience: 'all',
+    body: 'The six-answer quick report now opens with the score, then shows the search the business was missed on with what the AI actually said, the names it gave instead, every question, the website issues and a short "why this matters".',
+    report: {
+      added: [
+        'The AI\'s own answer to the featured missed search, cleaned of map pins, star ratings and other listing clutter, with the competitors it named highlighted.',
+        'ChatGPT and Google AI marks beside their scores and answers.',
+        'A "Why this matters" strip: how many answers missed them and how many other businesses were named instead.',
+      ],
+      changed: [
+        'The score is the first thing on the page: the big %, "X of 6 answers named you", and ChatGPT and Google AI out of 3 in colour (red none, amber some, green half or more).',
+        'Website issues show as High or Medium. No website and a clean website keep their existing wording.',
+        'A business named in all 6 answers gets a green "Every answer named you" instead of a missed search.',
+      ],
+      removed: [
+        'The old percentage hero and the names-only featured box on this one report type.',
+      ],
+      effect: 'When you send or open a quick report, the prospect sees the proof straight away: what was asked, what the AI said, and who it named instead. Report links, the Get started and Request a call buttons, and every other report are unchanged.',
+    } },
   { id: '2026-10-06-one-click-checks-50', date: '2026-10-06', title: 'Check before calling starts in one click, and you get 50 checks a day', audience: 'all',
     body: 'Tick leads and press Check before calling: the checks start straight away, with no pop-up. Each person now gets 50 new checks a day instead of 30.',
     report: {

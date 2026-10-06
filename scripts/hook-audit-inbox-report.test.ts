@@ -219,21 +219,27 @@ function report(grid: Array<[G, G]>, extra: Record<string, unknown> = {}) {
 /* ── I / J / L. THE 3/6 REPORT: table, featured search ─────────────────────────────────────── */
 {
   const { d, html, t } = report([[true, false], [true, true], [false, false]]);
-  const rowsHtml = html.match(/<div class="qrow"><span class="qrow-q">/g) ?? [];
-  ok(/The questions we asked/.test(t) && rowsHtml.length === 3, 'I: the table has exactly 3 question rows');
+  /* Concept 4 (2026-10-06): the table is a real <table>, one row per question, a chip per engine. */
+  const tbl = html.slice(html.indexOf('<table class="q4-tbl">'), html.indexOf('</table>', html.indexOf('<table class="q4-tbl">')));
+  const rowsHtml = tbl.match(/<td class="q4-tq">/g) ?? [];
+  ok(/All questions we asked/i.test(t) && rowsHtml.length === 3, 'I: the table has exactly 3 question rows');
   ok(Q.every((q) => html.includes(q.replace(/'/g, '&#39;'))), 'I: all three questions are visible');
-  const head = html.match(/<div class="qrow qrow-head">([\s\S]*?)<\/div>/)?.[1] ?? '';
+  const head = tbl.match(/<thead>([\s\S]*?)<\/thead>/)?.[1] ?? '';
   ok(/ChatGPT/.test(head) && /Google AI/.test(head), 'I: columns are ChatGPT and Google AI');
-  const marks = html.slice(html.indexOf('The questions we asked')).match(/class="qm qm-(yes|no|na)"/g) ?? [];
-  ok(marks.length === 6 && !marks.some((m) => m.includes('qm-na')), 'I: each row has a ChatGPT and a Google AI status (6 marks)');
-  ok(/50\s*%/.test(t) && /of AI answers named/.test(t) && /3 of 6 answers/.test(t) && /3 questions × 2 AI engines/.test(t), 'L: 3/6 → 50%, raw count and method under it');
+  const marks = tbl.match(/class="q4-chip q4-chip--(y|n|na)"/g) ?? [];
+  ok(marks.length === 6 && !marks.some((m) => m.includes('--na')), 'I: each row has a ChatGPT and a Google AI status (6 chips)');
+  ok(/50\s*%/.test(t) && /Your score/i.test(t) && /3 of 6 answers named you/.test(t), 'L: 3/6 → 50% with "3 of 6 answers named you" under it');
   ok(/You're being named, but not consistently\./.test(t), 'L: verdict "being named, but not consistently"');
   const g = d!.hook!.gap!;
   ok(g.engine === 'gemini' && g.question === Q[2], 'J: the featured search is the strongest Google AI miss');
-  ok(/Asked Google AI/.test(t) && t.includes(`wasn’t named`), 'J: featured block names the engine and has the "wasn’t named" strip');
+  ok(/Featured missed search/i.test(t) && /What we asked/i.test(t) && /Google AI answer/i.test(t) && /Not named/i.test(t), 'J: featured block: what we asked, the Google AI answer, NOT NAMED');
   ok(RIVALS['2:gemini'].every((n) => html.includes(n.replace(/'/g, '&#39;'))), 'J: the businesses named are that exact result’s own list');
   ok(!html.includes('Commercial Power Ltd'), 'J: never another engine’s competitors for the same question');
-  ok(!/A long friendly paragraph/.test(t) && !/If you are looking for reliable commercial electricians/.test(t), 'J: no raw model prose on the quick report');
+  /* 🔴 REVERSED ON PURPOSE (Paul, 2026-10-06): the AI's own words are back on the quick report — the
+     featured answer's cleaned excerpt, and only that one (no other engine's prose). */
+  ok(/If you are looking for reliable commercial electricians/.test(t), 'J: the featured answer is quoted (cleaned excerpt)');
+  ok(!/A long friendly paragraph/.test(t), 'J: no OTHER answer’s prose is quoted');
+  ok(/<mark class="q4-hl">Addlestone Electricians<\/mark>/.test(html), 'J: a competitor named in the answer is highlighted inside it');
   ok(!/Gemini/.test(t.replace(/<style[\s\S]*?<\/style>/g, '')), 'the quick report never says Gemini');
   ok(!/Where you show up, and where you don/.test(t) && !/Why you&rsquo;re not in the answer/.test(html), 'the long "the fix" section is dropped from the quick report');
 }
@@ -248,8 +254,8 @@ function report(grid: Array<[G, G]>, extra: Record<string, unknown> = {}) {
   const n = report([[true, true], [true, true], [true, true]]);
   ok(/100\s*%/.test(n.t) && /6 of 6 answers/.test(n.t), 'N: 6/6 → 100%, 6 of 6 answers');
   ok(/You're being named consistently in this quick check\./.test(n.t), 'N: consistent verdict');
-  ok(!n.html.includes('class="chatcard evcard"') && !/wasn’t named/.test(n.t), 'N: no manufactured miss');
-  ok((n.html.slice(n.html.indexOf('The questions we asked')).match(/qm-yes/g) ?? []).length === 6, 'N: the table shows all six ticks');
+  ok(!/Featured missed search/i.test(n.t) && !/Not named/i.test(n.t) && /Every answer named you/i.test(n.t), 'N: no manufactured miss — a positive "every answer named you" state');
+  ok((n.html.slice(n.html.indexOf('<table class="q4-tbl">')).match(/q4-chip--y/g) ?? []).length === 6, 'N: the table shows all six named chips');
   // Percentages derive from the counts, never hard-coded.
   const pct = (grid: Array<[G, G]>) => report(grid).d!.hook!.score!.percent;
   ok(pct([[true, false], [false, false], [false, false]]) === 17 && pct([[true, true], [false, false], [false, false]]) === 33 && pct([[true, true], [true, true], [false, false]]) === 67, '1/6 → 17%, 2/6 → 33%, 4/6 → 67%');
@@ -258,7 +264,7 @@ function report(grid: Array<[G, G]>, extra: Record<string, unknown> = {}) {
   ok(!/Your website/i.test(report([[true, true], [true, true], [true, true]]).t), 'website: no completed crawl → nothing invented');
   const many = Array.from({ length: 8 }, (_, i) => ({ title: `Issue ${i + 1}`, detail: 'Detail.', minor: false }));
   const w = report([[true, false], [true, true], [false, false]], { crawlFaults: many });
-  ok(/Website issues we can fix/.test(w.t) && /Issue 5/.test(w.t) && !/Issue 6/.test(w.t), 'website: capped at 5 findings');
+  ok(/Website issues we found/i.test(w.t) && /Issue 5/.test(w.t) && !/Issue 6/.test(w.t), 'website: capped at 5 findings');
 }
 
 /* ── O. INCOMPLETE: 5 valid + 1 failure → no score, no public report, no hook ──────────────── */

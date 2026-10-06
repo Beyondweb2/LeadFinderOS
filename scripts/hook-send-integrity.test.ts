@@ -184,8 +184,8 @@ await (async () => {
     const text = html.replace(/<style[\s\S]*?<\/style>/g, '').replace(/<script[\s\S]*?<\/script>/g, '').replace(/<[^>]+>/g, ' ');
     const label = g.every(Boolean) ? '6/6 hook report' : 'gap hook report';
     ok(!/gemini/i.test(text) && /Google AI/.test(text), `E: the ${label} says Google AI and never Gemini`);
-    // Redesigned 2026-09-26: the quick report's verdict covers the whole score; the featured miss names its engine.
-    if (d?.hook?.gap) ok(/^You're (not being named|being named)/.test(hookReportCopy(d.hook, BIZ).headline) && /Asked Google AI/.test(text), 'E: the verdict covers the whole check and the featured miss says "Asked Google AI"');
+    // Concept 4 (2026-10-06): the verdict covers the whole score; the featured miss names its engine on the answer card.
+    if (d?.hook?.gap) ok(/^You're (not being named|being named)/.test(hookReportCopy(d.hook, BIZ).headline) && /Featured missed search[\s\S]*?Google AI/i.test(text), 'E: the verdict covers the whole check and the featured miss names Google AI (on the answer card, or on the summary when the answer is too short to quote)');
   }
   const root = resolve(import.meta.dirname, '..');
   const strip = (src: string) => src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
