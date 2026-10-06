@@ -322,6 +322,18 @@ export interface HookReportSummary {
    *  suppression rule) or the caller passed no rivalFilter: the report then omits the figure rather
    *  than print a count it could not show the names for. Never stored. */
   rivalsNamedInstead?: number | null;
+  /** VERSION 2 ONLY (2026-10-06, the soft redesign): ONE question with EVERY engine's answer to it, so
+   *  the quick report can show "what ChatGPT said" beside "what Google AI said". The question is the
+   *  hook pick's (the strongest miss) when there is one, else the first question (a 6/6 report then
+   *  shows two named answers — nothing manufactured). Each answer is that engine's own stored cell:
+   *  its whole text (cleaned at render), its named/not-named status from the score, and its own
+   *  competitor list through the SAME namedInstead gate the gap uses (suppressed run → []). An engine
+   *  with no valid answer to the question is simply absent. */
+  featured?: {
+    questionIndex: number;
+    question: string;
+    answers: Array<{ engine: string; label: string; named: boolean; answerText: string; names: string[] }>;
+  } | null;
   /** VERSION 2 ONLY: the complete score, straight from scoreHookRun (the same numbers the Inbox card,
    *  the 6/6 rule and the send guard read). The quick report's percentage is `percent`, and its raw
    *  count is `named` of `total`. Never set on an incomplete score, so it cannot print a partial one. */
@@ -505,9 +517,27 @@ function buildHookReportSummaryV2(
     }
     rivalsNamedInstead = withheld ? null : countDistinctBusinesses(keys);
   }
+  /* The featured question with every engine's answer (see `featured` above). Status comes from the
+     score, never re-derived, so the card and the table cannot disagree. */
+  let featured: HookReportSummary['featured'] = null;
+  const fqi = pick ? pick.questionIndex : 0;
+  const fQuestion = state.planned[fqi];
+  if (fQuestion) {
+    const frow = input.rows.find((r) => r.question.trim().toLowerCase() === fQuestion.trim().toLowerCase() && r.status === 'done');
+    const fcells = frow?.result && typeof frow.result === 'object' ? frow.result as Record<string, unknown> : null;
+    const answers = input.engineOrder.flatMap((e) => {
+      const st = statusOf(fqi, e);
+      const c = fcells ? fcells[e] : null;
+      if ((st !== 'named' && st !== 'not_named') || !hasAnswer(c)) return [];
+      const r = score.results.find((x) => x.questionIndex === fqi && x.engine === e);
+      return [{ engine: e, label: input.engineLabel(e), named: st === 'named', answerText: String((c as HookEngineCell).answer_text), names: input.namedInstead(r?.competitors ?? []) }];
+    });
+    if (answers.length) featured = { questionIndex: fqi, question: fQuestion, answers };
+  }
   return {
     shape: 'six',
     rivalsNamedInstead,
+    featured,
     questionsTested: state.planned.length,
     maxQuestions: HOOK_SCORE_QUESTIONS,
     stopReason: pick ? 'visibility_gap_found' : 'max_questions_reached',
