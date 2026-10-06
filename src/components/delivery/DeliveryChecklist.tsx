@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom';
+import { paidClientToolUrl } from '@/lib/paidClientTools';
 import { Check, Loader2 } from 'lucide-react';
 import {
   DELIVERY_CHECKLIST_ITEMS, isPageBuilt, isPageLine, pagesProgress, remeasureStatus,
@@ -82,7 +83,7 @@ export function DeliveryChecklistList({
               <span className={hintCls}>{item.hint}</span>
               {pages !== null && !pagesLoading && lines.length === 0 && (
                 <p className="mt-1 text-[11px] text-muted-foreground">
-                  No pages planned yet — <Link to="/page-plan" className="underline">build the page plan</Link>.
+                  No pages planned yet — <Link to={paidClientToolUrl('page-plan')} className="underline">build the page plan</Link>.
                 </p>
               )}
               {lines.length > 0 && (

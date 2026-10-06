@@ -29,7 +29,6 @@ import {
 import {
   Dialog,
   DialogContent,
-  DialogHeader,
   DialogTitle,
   DialogDescription,
   DialogFooter,
@@ -63,6 +62,8 @@ import { useLeadSalesState } from '@/hooks/useLeadSalesState';
 import { pillStatusOf } from '@/lib/leadState';
 import { leadSourceFor } from '@/lib/outreachLeadColumns';
 import { LeadHistoryPanel, LeadHookPanel, LeadWorkPanel, ProspectProfilePanel } from '@/components/LeadCrmPanel';
+import { DialogHero, IconTile, TONE, ToneChip } from '@/components/operator/ui';
+import { Building2 } from 'lucide-react';
 
 /** Small coloured section header for visual hierarchy + fast scanning. */
 /** The popup's Crawl site button, seeded with THIS lead's stored crawl (the one row every screen
@@ -436,9 +437,11 @@ function LeadDetailBody({
   return (
     <>
       {/* ── Header: name + glanceable pills (does not scroll) ── */}
-      <div className="shrink-0 border-b border-border/60 bg-card/30 px-5 pt-5 pb-3.5">
+      <div className="shrink-0 border-b border-border/60 bg-card/30 px-4 pt-4 pb-3.5 sm:px-5 sm:pt-5">
         <div className="flex items-start justify-between gap-3 pr-9">
-          <DialogTitle className="flex items-center gap-2 min-w-0 text-lg">
+          <div className="flex min-w-0 flex-1 items-center gap-2.5">
+          <IconTile icon={Building2} tone="blue" />
+          <DialogTitle className="flex items-center gap-2 min-w-0 text-lg font-bold tracking-tight">
             {editingName ? (
               <div className="flex items-center gap-1 flex-1 min-w-0">
                 <Input
@@ -469,6 +472,7 @@ function LeadDetailBody({
               </>
             )}
           </DialogTitle>
+          </div>
           {/* Lead → its WhatsApp conversation (the one Inbox deep link). Not shown inside the Inbox,
               where the conversation is already open beside this panel. */}
           {/* QUICK CLOSE (2026-09-29): take the £99 on the call — every context (Outreach, the WhatsApp Inbox). */}
@@ -476,12 +480,12 @@ function LeadDetailBody({
           {/* ⛔ A TAP IS NOT A CALL: tel: opens the phone's own dialler and writes nothing. What happened is logged at
               the bottom of the Call tab (lead_log_contact) — that is the only record of a call. */}
           {lead.phone && (
-            <a href={`tel:${lead.phone}`} className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-md border border-emerald-600/40 bg-emerald-500/10 px-2.5 text-xs font-semibold text-emerald-700 hover:bg-emerald-500/20 dark:text-emerald-300" title={`Call ${lead.phone}`} data-testid="workspace-call">
+            <a href={`tel:${lead.phone}`} className={cn('inline-flex h-9 min-w-9 shrink-0 items-center justify-center gap-1.5 rounded-full px-3 text-xs font-semibold ring-1 ring-inset transition hover:brightness-110', TONE.green.soft, TONE.green.text, TONE.green.ring)} title={`Call ${lead.phone}`} data-testid="workspace-call">
               <PhoneCall className="h-3.5 w-3.5" /><span className="hidden sm:inline">Call</span>
             </a>
           )}
           {context !== 'inbox' && lead.phone && (
-            <Link to={whatsAppLinkForLead(lead.id)} onClick={() => onClose?.()} className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-md border border-blue-500/40 bg-blue-500/10 px-2.5 text-xs font-semibold text-blue-700 hover:bg-blue-500/20 dark:text-blue-300" aria-label={`Open ${lead.business_name} on WhatsApp`}>
+            <Link to={whatsAppLinkForLead(lead.id)} onClick={() => onClose?.()} className={cn('inline-flex h-9 min-w-9 shrink-0 items-center justify-center gap-1.5 rounded-full px-3 text-xs font-semibold ring-1 ring-inset transition hover:brightness-110', TONE.blue.soft, TONE.blue.text, TONE.blue.ring)} aria-label={`Open ${lead.business_name} on WhatsApp`}>
               <MessageCircle className="h-3.5 w-3.5" /><span className="hidden sm:inline">WhatsApp</span>
             </Link>
           )}
@@ -505,7 +509,7 @@ function LeadDetailBody({
             ⛔ REMOVED 2026-09-29: the Playbook pill (the delivery checklist — unused, Paul). ── */}
         {(() => {
           const shown = pipelineStatusLabel(pillStatusOf(lead.status, salesState.view));
-          const statusPill = <span className="inline-flex h-7 items-center rounded-full border border-border/60 bg-muted/50 px-2.5 text-xs font-semibold" data-testid="workspace-status-pill" title="Change it at the bottom of the Call tab">{shown}</span>;
+          const statusPill = <ToneChip tone="blue" dot className="h-7 px-2.5 text-xs" testId="workspace-status-pill" title="Change it at the bottom of the Call tab">{shown}</ToneChip>;
           const extraState = salesState.view && headerStateShown(salesState.view, shown, salesState.row)
             ? <SalesStatePill view={salesState.view} /> : null;
           if (isDemoLead(lead.id)) return <div className="mt-3 flex flex-wrap items-center gap-2">{statusPill}<NextActionPill lead={lead} /></div>;
@@ -847,12 +851,7 @@ function LeadDetailBody({
       {/* Payment Received popup */}
       <Dialog open={showPaidPopup} onOpenChange={setShowPaidPopup}>
         <DialogContent className="sm:max-w-sm">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-emerald-500">
-              <Check className="h-5 w-5" />
-              Marked as Paid
-            </DialogTitle>
-          </DialogHeader>
+          <DialogHero icon={Check} tone="green" title="Marked as Paid" />
           {/* ⚠️ THIS USED TO SEND THE OPERATOR TO A PAGE THAT NO LONGER EXISTS. Paying customers
               stay in Outreach and the Inbox now; the amount is recorded in the Payment section of
               this dialog, and Outreach's "Paid (money in)" filter is how you find them again.

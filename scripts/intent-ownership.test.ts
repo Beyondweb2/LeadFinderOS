@@ -90,7 +90,7 @@ const CTX = { services: SERVICES, towns: TOWNS, homeTown: 'Bristol' };
   ok(/from '\.\/intentOwnership\.ts'/.test(gate) && !/function mentions\(/.test(gate), 'E: the Site Intent Map imports the same rule — no second copy of the matcher');
   const lib = readFileSync(new URL('../src/lib/intentOwnership.ts', import.meta.url), 'utf8');
   ok(!/from '@\//.test(lib) && !/from '\.\.?\/[^']+(?<!\.ts)'/.test(lib), 'E: edge-safe (no @/, explicit .ts)');
-  const ui = readFileSync(new URL('../src/pages/PageGenerator.tsx', import.meta.url), 'utf8');
+  const ui = readFileSync(new URL('../src/components/clientTools/PageGeneratorTool.tsx', import.meta.url), 'utf8');
   ok(/intent_owned/.test(ui), 'E: the page shows the "already owned" answer');
 }
 

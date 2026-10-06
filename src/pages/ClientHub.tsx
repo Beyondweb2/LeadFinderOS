@@ -1,10 +1,9 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
-import { AlertCircle, AlertTriangle, CheckCircle2, Clipboard, ClipboardEdit, ExternalLink, FileCode2, FileText, Loader2, Lock, Play, RefreshCw, Save } from 'lucide-react';
+import { AlertCircle, AlertTriangle, BookOpen, CalendarDays, CheckCircle2, Clipboard, ClipboardEdit, ExternalLink, FileCode2, FileSignature, FileText, Gauge, Gift, Globe, Layers, Lightbulb, Loader2, Lock, Play, RefreshCw, Save, Trophy, UsersRound } from 'lucide-react';
 import { invokePaidBaseline, type PaidBaseline } from '@/lib/paidBaseline';
 import { EdgeAuthError, edgeErrorMessage, invokeEdge } from '@/lib/edgeInvoke';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -41,6 +40,13 @@ import { baselineReadiness } from '@/lib/baselineReadiness';
 import type { LeadCrawlSummary } from '@/lib/leadCrawlSummary';
 import { WORK_LABEL, type ClientContract } from '@/lib/clientContract';
 import { ClientTimelineCard } from '@/components/ClientTimelineCard';
+import { Callout, EDGE, Empty, Figure, IconTile, Segmented, SURFACE, ToneChip, type Tone } from '@/components/operator/ui';
+import { cn } from '@/lib/utils';
+import { CLIENT_TOOLS_SECTION, PAID_CLIENT_TOOLS, PAID_CLIENT_TOOL_LABEL, clientToolUrl, toolOf, type PaidClientTool } from '@/lib/paidClientTools';
+import { handoffSeed } from '@/lib/pagePlanHandoff';
+import { PagePlanTool } from '@/components/clientTools/PagePlanTool';
+import { PageGeneratorTool } from '@/components/clientTools/PageGeneratorTool';
+import { ReviewReplyTool } from '@/components/clientTools/ReviewReplyTool';
 
 type AnyRecord = Record<string, any>;
 type Baseline = PaidBaseline;
@@ -62,11 +68,21 @@ const call = (body: Record<string, unknown>) => invokeEdge<Record<string, any>>(
 /* ?section=<k> (2026-09-30): a dashboard item opens the hub AT the stage where its work is done — the
    stage is opened (whatever was remembered) and scrolled into view. */
 const HubSection = createContext<string | null>(null);
-const Stage = ({ title, k, summary, children }: { title: string; k: string; summary?: ReactNode; children: ReactNode }) => {
+/* Each stage's icon and colour, by key (2026-10-06, operator/ui.tsx tones) — the dashboards' panel look
+   for the whole hub. Keyed, not passed, so a stage's markup (and the tests that read it) is unchanged. */
+const STAGE_LOOK: Record<string, { icon: typeof FileText; tone: Tone }> = {
+  onboarding: { icon: ClipboardEdit, tone: 'blue' }, evidence: { icon: Globe, tone: 'grey' }, baseline: { icon: Gauge, tone: 'purple' },
+  welcome: { icon: Gift, tone: 'green' }, agreement: { icon: FileSignature, tone: 'blue' }, directories: { icon: BookOpen, tone: 'grey' },
+  build: { icon: FileCode2, tone: 'purple' }, pages: { icon: Layers, tone: 'blue' }, remeasure: { icon: RefreshCw, tone: 'purple' },
+  results: { icon: Trophy, tone: 'green' }, opportunities: { icon: Lightbulb, tone: 'amber' }, monthly: { icon: CalendarDays, tone: 'blue' },
+};
+/** `state`: a coloured left edge when the stage's state matters (done, waiting, blocked). */
+const Stage = ({ title, k, summary, children, state }: { title: string; k: string; summary?: ReactNode; children: ReactNode; state?: Tone }) => {
   const focused = useContext(HubSection) === k;
-  return <Card className={focused ? 'ring-2 ring-primary/50' : undefined}><CardContent className="p-4">
-    <CollapsibleBlock id={`hub-${k}`} forceOpen={focused} persistKey={`hub.${k}`} title={title} titleClassName="text-base font-semibold" summary={summary}><div className="space-y-2 text-sm">{children}</div></CollapsibleBlock>
-  </CardContent></Card>;
+  const look = STAGE_LOOK[k] ?? { icon: FileText, tone: 'grey' as Tone };
+  return <section className={cn(SURFACE, 'min-w-0 p-4 sm:p-5', state && EDGE[state], focused && 'ring-2 ring-primary/50')} data-stage={k}>
+    <CollapsibleBlock id={`hub-${k}`} forceOpen={focused} persistKey={`hub.${k}`} title={title} titleClassName="text-base font-bold tracking-tight" summary={summary} leading={<IconTile icon={look.icon} tone={look.tone} size="sm" />}><div className="space-y-2 pt-1 text-sm">{children}</div></CollapsibleBlock>
+  </section>;
 };
 const values = (v: unknown) => Array.isArray(v) ? v.filter(Boolean).join(', ') : String(v || '—');
 const copy = async (value: string) => { if (value) await navigator.clipboard.writeText(value); };
@@ -75,7 +91,7 @@ const Spinner = ({ className = 'h-6 w-6' }: { className?: string }) => <Loader2 
 /** What they bought (src/lib/clientContract.ts): Findable Build / Optimise, payments made and left, next charge. */
 function ContractSummary({ c }: { c: ClientContract }) {
   const next = c.nextPaymentAt ? new Date(c.nextPaymentAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' }) : null;
-  return <div className="mt-1 rounded-md border px-2 py-1 text-left text-xs" data-testid="client-contract">
+  return <div className="mt-1 rounded-xl bg-muted/40 px-3 py-2 text-left text-xs ring-1 ring-inset ring-border/50" data-testid="client-contract">
     <div className="font-semibold">{c.name ? `${c.name} · ${c.totalPayments} payments` : 'Payment term not recorded'}</div>
     <div>{c.paymentsMade} paid{c.paymentsRemaining !== null ? ` · ${c.paymentsRemaining} remaining` : ''}{next ? ` · next ${next}` : ''}</div>
     <div className="text-muted-foreground">{WORK_LABEL[c.work]}</div>
@@ -384,7 +400,7 @@ function AgreementStage({ lead, ended = false }: { lead: AnyRecord; ended?: bool
     } finally { setBusy(''); }
   };
   const summary = !view ? 'Loading' : signed ? 'Signed' : checkout ? 'Accepted at checkout' : ended ? 'Not needed (engagement ended)' : 'Not accepted yet';
-  return <Stage k="agreement" title="Client Service Agreement" summary={summary}>
+  return <Stage k="agreement" title="Client Service Agreement" summary={summary} state={signed || checkout ? 'green' : ended ? undefined : view ? 'amber' : undefined}>
     {!view ? <p className="text-muted-foreground"><Loader2 className="mr-1 inline h-4 w-4 animate-spin"/>Loading…</p> : <>
       {signed
         ? <p className="font-medium text-emerald-600">Signed on the agreement page on {ukWhen(signed.accepted_at)} by {signed.typed_name}{signed.typed_role ? `, ${signed.typed_role}` : ''}{signed.email ? ` (${signed.email})` : ''}. Version {signed.agreement_version}.</p>
@@ -438,8 +454,8 @@ function WelcomePackStage({ lead, audit }: { lead: AnyRecord; audit: AnyRecord |
     } finally { setBusy(false); }
   };
 
-  const tone = ready.state === 'ready' ? 'text-emerald-600' : ready.state === 'error' ? 'text-destructive' : 'text-muted-foreground';
-  return <Stage k="welcome" title="2. Welcome Pack" summary={ready.state === 'ready' ? 'Ready' : ready.state === 'waiting' ? 'Waiting for baseline' : 'Error'}>
+  const tone = ready.state === 'ready' ? 'text-teal-600 dark:text-teal-300' : ready.state === 'error' ? 'text-destructive' : 'text-muted-foreground';
+  return <Stage k="welcome" title="2. Welcome Pack" summary={ready.state === 'ready' ? 'Ready' : ready.state === 'waiting' ? 'Waiting for baseline' : 'Error'} state={ready.state === 'ready' ? 'green' : ready.state === 'error' ? 'red' : undefined}>
     <p className={`font-medium ${tone}`}>
       {ready.state === 'ready' ? 'Ready' : ready.state === 'waiting' ? 'Waiting for baseline' : 'Error'}
     </p>
@@ -466,10 +482,11 @@ function WelcomePackStage({ lead, audit }: { lead: AnyRecord; audit: AnyRecord |
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 function OnboardingStage({ onboarding, unpaid, onOpen }: { onboarding: AnyRecord | null; unpaid: { id: string; status: string | null } | null | undefined; onOpen: () => void }) {
   const st = onboardingStatus(onboarding);
-  const tone = st.state === 'complete' || st.state === 'completed_manually' ? 'text-emerald-600' : 'text-amber-700 dark:text-amber-300';
+  const done = st.state === 'complete' || st.state === 'completed_manually';
+  const tone = done ? 'text-teal-600 dark:text-teal-300' : 'text-amber-700 dark:text-amber-300';
   const services = values(onboarding?.services_list) !== '—' ? values(onboarding?.services_list) : (onboarding?.services || '—');
   const areas = values(onboarding?.areas_list) !== '—' ? values(onboarding?.areas_list) : (onboarding?.areas_wanted || '—');
-  return <Stage k="onboarding" title="Onboarding" summary={st.label}>
+  return <Stage k="onboarding" title="Onboarding" summary={st.label} state={done ? 'green' : 'amber'}>
     <p className={`flex items-center gap-1.5 font-medium ${tone}`}>{st.state === 'complete' || st.state === 'completed_manually' ? <CheckCircle2 className="h-4 w-4"/> : <AlertTriangle className="h-4 w-4"/>}{st.label}</p>
     {unpaid && !onboarding && <p className="text-xs text-muted-foreground">The client started onboarding (status “{unpaid.status}”) but it was never marked paid. The manual form adopts that record — nothing is duplicated.</p>}
     {onboarding && <div className="grid gap-2 text-xs sm:grid-cols-2">
@@ -488,10 +505,10 @@ function OnboardingStage({ onboarding, unpaid, onOpen }: { onboarding: AnyRecord
 /* BASELINE READINESS — the server's own gate, shown before it refuses (src/lib/baselineReadiness.ts). */
 function ReadinessList({ lead, onboarding, onFix }: { lead: AnyRecord; onboarding: AnyRecord | null; onFix: () => void }) {
   const r = baselineReadiness(lead, onboarding);
-  return <div className="rounded-md border p-2 text-xs">
-    <p className="mb-1 font-medium">{r.ready ? 'Ready to prepare the baseline' : 'Needs attention before the baseline'}</p>
+  return <div className={cn('rounded-2xl px-3.5 py-3 text-xs', r.ready ? 'bg-teal-500/[0.07] ring-1 ring-inset ring-teal-500/20' : 'bg-amber-500/[0.07] ring-1 ring-inset ring-amber-500/20')}>
+    <p className={cn('mb-1 font-semibold', r.ready ? 'text-teal-700 dark:text-teal-300' : 'text-amber-700 dark:text-amber-300')}>{r.ready ? 'Ready to prepare the baseline' : 'Needs attention before the baseline'}</p>
     <ul className="space-y-0.5">{r.items.map((i) => <li key={i.key} className="flex items-start gap-1.5">
-      {i.ok ? <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-600"/> : <AlertTriangle className={`mt-0.5 h-3.5 w-3.5 shrink-0 ${i.required ? 'text-destructive' : 'text-amber-600'}`}/>}
+      {i.ok ? <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-teal-600 dark:text-teal-300"/> : <AlertTriangle className={`mt-0.5 h-3.5 w-3.5 shrink-0 ${i.required ? 'text-destructive' : 'text-amber-600'}`}/>}
       <span><b>{i.label}</b>{i.ok ? '' : i.required ? ' (required)' : ''} — <span className="text-muted-foreground">{i.detail}</span></span>
     </li>)}</ul>
     {r.attention.length > 0 && <Button size="sm" variant="outline" className="mt-2" onClick={onFix}><ClipboardEdit className="mr-1 h-4 w-4"/>Fix in onboarding</Button>}
@@ -537,14 +554,40 @@ function WebsiteBuildStage({ lead, onboarding, audit, pages }: {
     {confirmations.length > 0 && <p className="text-xs text-amber-700 dark:text-amber-300">{confirmations.length} client confirmation(s) needed — resolved in Client Build Facts.</p>}
     <Button asChild size="sm"><Link to={`/paid-clients/${lead.id}/website-build`}><FileCode2 className="mr-1 h-4 w-4"/>Open Website Build</Link></Button>
 
-    <div className="rounded-md border p-2">
-      <p className="text-xs font-medium text-muted-foreground">Planned pages</p>
+    <div className="rounded-2xl bg-muted/40 p-3 ring-1 ring-inset ring-border/50">
+      <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Planned pages</p>
       {pages.length
-        ? <div className="mt-1 space-y-1">{pages.map((p) => <div key={p.id} className="rounded border p-2 text-xs">{p.service || 'Page'} · {p.town || ''} — {p.status}</div>)}</div>
-        : <p className="text-xs text-muted-foreground">No planned pages yet.</p>}
-      <Button asChild variant="outline" size="sm" className="mt-2"><Link to="/page-generator"><FileCode2 className="mr-1 h-4 w-4"/>Open page generator</Link></Button>
+        ? <ul className="mt-1.5 divide-y divide-border/50">{pages.map((p) => <li key={p.id} className="flex items-center justify-between gap-2 py-1.5 text-xs"><span className="min-w-0 truncate">{p.service || 'Page'} · {p.town || ''}</span><ToneChip tone={p.status === 'live' || p.status === 'done' ? 'green' : 'grey'}>{p.status}</ToneChip></li>)}</ul>
+        : <p className="mt-1 text-xs text-muted-foreground">No planned pages yet.</p>}
+      {/* 2026-10-06: the generator lives in this page's "Pages & reviews" (src/lib/paidClientTools.ts). */}
+      <Button asChild variant="outline" size="sm" className="mt-2"><Link to={clientToolUrl(lead.id, 'page-generator')}><FileCode2 className="mr-1 h-4 w-4"/>Open page generator</Link></Button>
     </div>
   </Stage>;
+}
+
+/* ══ PAGES & REVIEWS (2026-10-06, src/lib/paidClientTools.ts) ═════════════════════════════════════════
+   The three tools, scoped to this client: the page plan (their baseline), the page generator (this lead
+   and its baseline) and review replies (their name filled in). WHICH tool is open is the URL (?tool=),
+   so a link — the website build's "Open page generator", an old /page-generator bookmark for this client —
+   lands on it. "Build this page" on the plan opens the generator HERE, seeded, never another page. */
+function ClientTools({ lead }: { lead: AnyRecord }) {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const tool = toolOf(searchParams.get('tool')) ?? 'page-plan';
+  const auditId: string | null = lead.baseline_audit_id ?? null;
+  const open = (t: PaidClientTool, seed: Record<string, string> = {}) => setSearchParams((p) => {
+    const n = new URLSearchParams(p); n.set('tool', t);
+    for (const [k, v] of Object.entries(seed)) n.set(k, v);
+    return n;
+  });
+  return <div className="space-y-4" data-testid="client-tools">
+    <Segmented<PaidClientTool> label="Client tool" value={tool} onChange={(t) => open(t)} wrapOnPhone
+      options={PAID_CLIENT_TOOLS.map((t) => ({ key: t, label: PAID_CLIENT_TOOL_LABEL[t], tone: t === 'page-generator' ? 'purple' : 'blue' }))} />
+    {tool === 'page-plan' && (auditId
+      ? <PagePlanTool key={auditId} scopeAuditId={auditId} onHandoff={(target) => { const seed = handoffSeed(target); if (seed) open('page-generator', seed); }}/>
+      : <Empty icon={Layers}>The page plan is built from the official baseline — it opens here once the baseline has run.</Empty>)}
+    {tool === 'page-generator' && <PageGeneratorTool key={lead.id} scope={{ leadId: lead.id, auditId, businessName: lead.business_name ?? null }}/>}
+    {tool === 'review-replies' && <ReviewReplyTool key={lead.id} businessName={lead.business_name ?? ''}/>}
+  </div>;
 }
 
 /* ════════════════════════════════════════════════════════════════════════════════════════════════
@@ -555,14 +598,13 @@ function WebsiteBuildStage({ lead, onboarding, audit, pages }: {
 function ClientSummary({ hub, bs, remeasure, opps }: { hub: Hub; bs: string; remeasure: string; opps: ReturnType<typeof backlogCounts> | null }) {
   const v = hub.baseline_visibility;
   const n = hub.onboarding?.baseline_questions?.length ?? 0;
-  const tile = (label: string, value: ReactNode, sub?: ReactNode) => <div className="rounded-md border px-3 py-2"><p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">{label}</p><p className="text-lg font-semibold leading-tight">{value}</p>{sub && <p className="text-xs text-muted-foreground">{sub}</p>}</div>;
   return <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6" data-testid="client-summary">
-    {tile('Official baseline', n ? `${n} questions` : '—', paidBaselineStatusLabel(bs))}
-    {tile('Baseline visibility', v ? `${v.named} / ${v.expected}` : '—', v ? `named${v.answered < v.expected ? ` · ${v.answered} answered` : ''}` : 'after the baseline completes')}
-    {tile('Remeasure', remeasure)}
-    {tile('Opportunities', opps ? opps.total : '…', 'in the backlog')}
-    {tile('Active improvements', opps ? opps.active : '…')}
-    {tile('Waiting for recheck', opps ? opps.waiting : '…')}
+    <Figure label="Official baseline" value={n ? `${n} questions` : '—'} sub={paidBaselineStatusLabel(bs)} tone="purple" strong={!!n} />
+    <Figure label="Baseline visibility" value={v ? `${v.named} / ${v.expected}` : '—'} sub={v ? `named${v.answered < v.expected ? ` · ${v.answered} answered` : ''}` : 'after the baseline completes'} tone="green" strong={!!v} />
+    <Figure label="Remeasure" value={<span className="text-base">{remeasure}</span>} tone="blue" />
+    <Figure label="Opportunities" value={opps ? opps.total : '…'} sub="in the backlog" tone="amber" strong={!!opps?.total} />
+    <Figure label="Active improvements" value={opps ? opps.active : '…'} tone="blue" strong={!!opps?.active} />
+    <Figure label="Waiting for recheck" value={opps ? opps.waiting : '…'} tone="purple" strong={!!opps?.waiting} />
   </div>;
 }
 
@@ -625,8 +667,8 @@ export default function ClientHub() {
   }, [hubReady, section]);
 
   if (loading) return <div className="flex justify-center py-16"><Spinner className="h-8 w-8"/></div>;
-  const errorPanel = pageError && <Card><CardContent className="space-y-3 p-6 text-sm"><div role="alert" className="flex items-start gap-2 text-destructive"><AlertCircle className="mt-0.5 h-4 w-4 shrink-0"/><span>{pageError}</span></div><Button size="sm" variant="outline" onClick={retry}><RefreshCw className="mr-1 h-4 w-4"/>Try again</Button></CardContent></Card>;
-  if (!hub) return <div className="mx-auto max-w-7xl space-y-4 py-6"><Link to="/paid-clients" className="text-xs text-muted-foreground">← Paid clients</Link>{errorPanel || <Card><CardContent className="p-6 text-sm text-muted-foreground">This client is not in your paid-client list.</CardContent></Card>}</div>;
+  const errorPanel = pageError && <Callout tone="red" icon={AlertCircle} title="Something went wrong" action={<Button size="sm" variant="outline" onClick={retry}><RefreshCw className="mr-1 h-4 w-4"/>Try again</Button>}><div role="alert">{pageError}</div></Callout>;
+  if (!hub) return <div className="mx-auto max-w-7xl space-y-4 py-6"><Link to="/paid-clients" className="text-xs text-muted-foreground">← Paid clients</Link>{errorPanel || <Empty icon={UsersRound}>This client is not in your paid-client list.</Empty>}</div>;
   const { lead, onboarding, audit, pages } = hub; const rm = remeasureStatus(lead.remeasure_due_date, Date.now());
   /* An ended engagement (serviceEnd.ts): one card says so; nothing below is offered as work to do. The stored
      re-measure date is kept as it was, but it is no longer a date anything runs on. */
@@ -635,7 +677,7 @@ export default function ClientHub() {
   const setupLabel = bs === 'needs_questions' ? 'Prepare Baseline' : bs === 'approved' ? 'Start baseline' : 'Continue baseline setup';
   return <HubSection.Provider value={section}><div className="mx-auto max-w-7xl space-y-4 py-6"><Link to="/paid-clients" className="text-xs text-muted-foreground">← Paid clients</Link>
   {errorPanel}
-  <Card id="hub-payment" className={section === 'payment' ? 'ring-2 ring-primary/50' : undefined}><CardContent className="p-5"><div className="flex flex-wrap items-start justify-between gap-4"><div><h1 className="text-2xl font-semibold">{lead.business_name}</h1><p className="text-sm text-muted-foreground">{onboarding?.confirmed_location || lead.derived_town || lead.search_location} · {lead.website || 'No website recorded'}</p><p className="mt-2 text-sm">{lead.contact_name || 'No contact name'} · {lead.email || onboarding?.contact_email || 'No email'} · {lead.phone || 'No phone'}</p></div><div className="text-right text-sm"><div>Paid {lead.payment_date || 'date not recorded'}</div><div>{onboarding?.website_route?.replaceAll('_',' ') || 'Website route not set'}</div>{hub.contract && <ContractSummary c={hub.contract}/>}<div className="font-medium">Remeasure: {remeasureLine}</div></div></div><div className="mt-4 flex flex-wrap gap-2">{lead.website && <Button asChild variant="outline" size="sm"><a href={lead.website} target="_blank" rel="noreferrer"><ExternalLink className="mr-1 h-4 w-4"/>Open website</a></Button>}<ClientDetailsDialog lead={lead} onboarding={onboarding}/>{audit && <Dialog><DialogTrigger asChild><Button size="sm"><FileText className="mr-1 h-4 w-4"/>View Baseline Report</Button></DialogTrigger><DialogContent className="max-w-3xl"><DialogHeader><DialogTitle>Baseline report</DialogTitle></DialogHeader><p className="text-sm text-muted-foreground">Client URL contains the client-safe report only. Internal report remains operator-only.</p><div className="flex flex-wrap gap-2"><Button asChild size="sm"><a href={reportUrl} target="_blank" rel="noreferrer">Client view</a></Button><Button asChild size="sm" variant="outline"><Link to={`/baseline/${audit.id}`}>Internal view / download</Link></Button><Button size="sm" variant="outline" onClick={() => void copy(reportUrl)}>Copy client URL</Button></div></DialogContent></Dialog>}</div></CardContent></Card>
+  <section id="hub-payment" className={cn(SURFACE, 'min-w-0 p-4 sm:p-5', section === 'payment' && 'ring-2 ring-primary/50')}><div className="flex flex-wrap items-start justify-between gap-4"><div className="flex min-w-0 items-start gap-3"><IconTile icon={UsersRound} tone="green" size="lg" /><div className="min-w-0"><h1 className="break-words text-2xl font-extrabold leading-tight tracking-tight sm:text-[1.75rem]">{lead.business_name}</h1><p className="break-words text-sm text-muted-foreground">{onboarding?.confirmed_location || lead.derived_town || lead.search_location} · {lead.website || 'No website recorded'}</p><p className="mt-1.5 break-words text-sm">{lead.contact_name || 'No contact name'} · {lead.email || onboarding?.contact_email || 'No email'} · {lead.phone || 'No phone'}</p></div></div><div className="min-w-0 space-y-1.5 text-sm sm:text-right"><div className="flex flex-wrap gap-1.5 sm:justify-end"><ToneChip tone={lead.payment_date ? 'green' : 'amber'} dot>Paid {lead.payment_date || 'date not recorded'}</ToneChip><ToneChip tone={onboarding?.website_route ? 'blue' : 'amber'}>{onboarding?.website_route?.replaceAll('_',' ') || 'Website route not set'}</ToneChip></div>{hub.contract && <ContractSummary c={hub.contract}/>}<div className="font-semibold">Remeasure: {remeasureLine}</div></div></div><div className="mt-4 flex flex-wrap gap-2">{lead.website && <Button asChild variant="outline" size="sm"><a href={lead.website} target="_blank" rel="noreferrer"><ExternalLink className="mr-1 h-4 w-4"/>Open website</a></Button>}<ClientDetailsDialog lead={lead} onboarding={onboarding}/>{audit && <Dialog><DialogTrigger asChild><Button size="sm"><FileText className="mr-1 h-4 w-4"/>View Baseline Report</Button></DialogTrigger><DialogContent className="max-w-3xl"><DialogHeader><DialogTitle>Baseline report</DialogTitle></DialogHeader><p className="text-sm text-muted-foreground">Client URL contains the client-safe report only. Internal report remains operator-only.</p><div className="flex flex-wrap gap-2"><Button asChild size="sm"><a href={reportUrl} target="_blank" rel="noreferrer">Client view</a></Button><Button asChild size="sm" variant="outline"><Link to={`/baseline/${audit.id}`}>Internal view / download</Link></Button><Button size="sm" variant="outline" onClick={() => void copy(reportUrl)}>Copy client URL</Button></div></DialogContent></Dialog>}</div></section>
   {ended
     ? <EngagementEndedCard view={ended} at={lead.service_terminated_at} note={lead.service_termination_note}/>
     : hub.handoff?.setup && <ClientSetupCard leadId={lead.id} businessName={lead.business_name ?? null} h={hub.handoff as SetupHandoff} route={serviceRouteFromRow(onboarding)} onChanged={() => void refresh()} onOpenBaseline={() => setBaselineOpen(true)}/>}
@@ -644,7 +686,8 @@ export default function ClientHub() {
   {hub.handoff && <ClientHandoffCard handoff={hub.handoff} leadId={lead.id} onChanged={refresh}/>}
   <BaselineSetupDialog leadId={lead.id} open={baselineOpen} onOpenChange={setBaselineOpen} onChanged={refresh}/>
   <ManualOnboardingDialog leadId={lead.id} open={onboardingOpen} onOpenChange={setOnboardingOpen} onSaved={refresh}/>
-  <div className="grid gap-4 lg:grid-cols-2">
+  {/* minmax(0,1fr): a column never grows to its widest child, so nothing pushes the page sideways on a phone. */}
+  <div className="grid grid-cols-[minmax(0,1fr)] gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
     {/* v3 Client Service Agreement (2026-10-05): Access Date, Results Date, refund window, Payment Start, Continuing Service. */}
     <div className="lg:col-span-2"><ClientTimelineCard leadId={lead.id} ended={!!ended}/></div>
     <OnboardingStage onboarding={onboarding} unpaid={hub.onboarding_unpaid} onOpen={() => setOnboardingOpen(true)}/>
@@ -664,10 +707,16 @@ export default function ClientHub() {
     {/* ⛔ REMOVED 2026-09-29 (Paul): "3. Action Plan" — a link into the deprecated Playbook, the last one. Stages renumbered. */}
     <Stage k="directories" title="3. Directories"><p>Directory opportunities are intentionally unverified until checked.</p>{/* REMOVED 2026-09-29 (UI cleanup): a permanently disabled "Directory catalogue integration" button — it could never be pressed. */}</Stage>
     <WebsiteBuildStage lead={lead} onboarding={onboarding} audit={audit} pages={pages}/>
+    {/* 2026-10-06: the page plan, page generator and review replies — once admin pages — live here,
+        scoped to this client (src/lib/paidClientTools.ts). A tool, not a numbered delivery stage:
+        review replies are not a Findable deliverable (Paul, 2026-09-28). */}
+    <div className="lg:col-span-2"><Stage k="pages" title="Pages & reviews" summary={`${pages.length} planned page${pages.length === 1 ? '' : 's'} · page plan, page generator, review replies`}>
+      <ClientTools lead={lead}/>
+    </Stage></div>
     {/* ⛔ REMOVED 2026-10-02 (closeout): "5. Review Replies". Review replies are NOT a Findable deliverable (Paul,
         2026-09-28) and the delivery stages are the deliverables. The admin drafting tool stays in the sidebar. */}
     {ended ? <Stage k="remeasure" title="5. Remeasure" summary="not scheduled"><p>Not scheduled: the engagement has ended, so there is no re-measure to run.</p></Stage> : <Stage k="remeasure" title="5. Remeasure" summary={lead.remeasure_due_date ? `due ${lead.remeasure_due_date}` : 'after baseline'}><p>Due: {lead.remeasure_due_date || 'scheduled after baseline'} · {rm.label}</p><p className="text-xs text-muted-foreground">The server replays the frozen baseline queue questions exactly; it never regenerates a remeasure set.</p>{lead.remeasure_audit_id ? <Button asChild variant="outline"><Link to={`/compare/${lead.remeasure_audit_id}`}>View Comparison</Link></Button> : <p className="text-muted-foreground">Runs automatically when due.</p>}</Stage>}
-    <Stage k="results" title="6. Results">{lead.remeasure_audit_id ? <Button asChild><Link to={`/compare/${lead.remeasure_audit_id}`}>View final comparison</Link></Button> : <p>Available after remeasure.</p>}</Stage>
+    <Stage k="results" title="6. Results" state={lead.remeasure_audit_id ? 'green' : undefined}>{lead.remeasure_audit_id ? <Button asChild><Link to={`/compare/${lead.remeasure_audit_id}`}>View final comparison</Link></Button> : <p>Available after remeasure.</p>}</Stage>
     <div className="lg:col-span-2"><Stage k="opportunities" title="7. Ongoing opportunities" summary={opps.data ? `${oppCounts.total} open · ${oppCounts.active} active · ${oppCounts.waiting} waiting for recheck` : undefined}>
       {hub.onboarding ? <OpportunityBacklog leadId={lead.id} state={opps}/> : <p className="text-muted-foreground">Available once onboarding exists.</p>}
     </Stage></div>

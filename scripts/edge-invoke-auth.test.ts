@@ -97,8 +97,9 @@ async function main() {
     let softErr: unknown = null;
     try { await soft.invoke('paid-client-hub', { action: 'get' }); } catch (e) { softErr = e; }
     check('6. a 200 with ok:false is still an error, with its code', softErr instanceof EdgeFunctionError && softErr.code === 'client_not_found');
-    check('4. Paid Clients renders an error state with retry on failure', paidClients.includes("Could not load paid clients: {error}") && paidClients.includes('Try again') && paidClients.includes('role="alert"'));
-    check('4. the empty card is shown only after a successful load', paidClients.includes('{!showSpinner && !error && clients && <div') && paidClients.includes("clients.length === 0 && <Card>") && !paidClients.includes('useState<Client[]>([])'));
+    /* 2026-10-06: the error is the shared red Callout (components/operator/ui.tsx), which carries role="alert". */
+    check('4. Paid Clients renders an error state with retry on failure', paidClients.includes('<Callout tone="red" icon={AlertCircle} title="Could not load paid clients"') && paidClients.includes('Try again') && read('src/components/operator/ui.tsx').includes("role={tone === 'red' ? 'alert' : undefined}"));
+    check('4. the empty card is shown only after a successful load', paidClients.includes('{!showSpinner && !error && clients && <div') && paidClients.includes("clients.length === 0 && <Empty") && !paidClients.includes('useState<Client[]>([])'));
     check('4. the load is caught, so nothing rejects unhandled', paidClients.includes('catch (e) {') && paidClients.includes("setError(edgeErrorMessage(e, 'Could not load paid clients'))"));
     check('4. a genuine sign-out is left to the sign-in flow, not painted as an error', paidClients.includes('if (e instanceof EdgeAuthError && !e.transient) return;'));
   }

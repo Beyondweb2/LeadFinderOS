@@ -18,6 +18,7 @@ import { LeadSearchProvider } from "./contexts/LeadSearchContext";
 import { FirstTimeRedirect } from "./components/FirstTimeRedirect";
 import { Loader2 } from "lucide-react";
 import { LegacySalesLeadRedirect } from "./components/LegacySalesLeadRedirect";
+import { LegacyToolRedirect } from "./components/LegacyToolRedirect";
 
 // Eagerly loaded routes (critical path)
 import Auth from "./pages/Auth";
@@ -48,9 +49,6 @@ const SetPassword = lazy(() => import("./pages/SetPassword"));
    own photos and the row is a DRAFT that must never be public (Step 1 proved anon reads only
    published rows). Nothing on this screen sends or publishes anything. */
 const Mockups = lazy(() => import("./pages/Mockups"));
-const ReviewReply = lazy(() => import("./pages/ReviewReply"));
-const PageGenerator = lazy(() => import("./pages/PageGenerator"));
-const PagePlanQueue = lazy(() => import("./pages/PagePlanQueue"));
 
 function FullPageLoader() {
   return (
@@ -250,15 +248,13 @@ const App = () => {
               {/* WhatsApp Inbox — operator-gated + in-app (each operator sees only their own) */}
               <Route path="/inbox" element={<Inbox />} />
               <Route path="/coverage" element={<Coverage />} />
-              {/* Stateless review-reply generator — paste a Google review in, copy a reply out (or a
-              don't-reply verdict). No Google API, no storage; see src/pages/ReviewReply.tsx. */}
-              <Route path="/review-replies" element={<ReviewReply />} />
-              {/* Delivery page generator — service+town pages from the questionnaire × baseline
-              overlap, paste-ready per page. See src/pages/PageGenerator.tsx + src/lib/pagePlan.ts. */}
-              <Route path="/page-generator" element={<PageGenerator />} />
-              {/* Page-plan queue — measured questions clustered into distinct-job pages, scored,
-              waved, stored + editable. See src/pages/PagePlanQueue.tsx + src/lib/pagePlanQueue.ts. */}
-              <Route path="/page-plan" element={<PagePlanQueue />} />
+              {/* 2026-10-06: Review replies, the page generator and the page plan live INSIDE Paid Clients (the
+                  Tools tab, and each client's "Pages & reviews" section — src/lib/paidClientTools.ts). The old
+                  pages redirect there with their query string, so a bookmark or a hand-off link still opens
+                  the same tool, client and page. Same edge functions, tables and logic. */}
+              <Route path="/review-replies" element={<LegacyToolRedirect />} />
+              <Route path="/page-generator" element={<LegacyToolRedirect />} />
+              <Route path="/page-plan" element={<LegacyToolRedirect />} />
               <Route path="/ai-audit" element={<AiAudit />} />
               <Route path="/admin/api-usage" element={<AdminApiUsage />} />
               {/* Multi-user. The retired My Leads pages redirect into the ONE workflow (2026-09-27):

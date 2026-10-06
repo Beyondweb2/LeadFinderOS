@@ -14,8 +14,8 @@ import { useSubscription } from '@/hooks/useSubscription';
 import { canOpenRoute, orderNavForRole, SALES_SECONDARY_NAV } from '@/lib/access';
 import { useWhatsAppUnread } from '@/hooks/useWhatsAppUnread';
 import {
-  LayoutDashboard, Search, ClipboardList, FileText, FileCode2, ListOrdered, UsersRound,
-  MessageSquareQuote, Inbox, Sparkles, Map, Users,
+  LayoutDashboard, Search, ClipboardList, FileText, UsersRound,
+  Inbox, Sparkles, Map, Users,
   BarChart3, MessageCircle, MessageSquarePlus,
 } from 'lucide-react';
 import { FeedbackNewsButtons } from '@/components/FeedbackAndNews';
@@ -44,11 +44,10 @@ export function AppSidebar() {
     /* Sales + Earnings are one page (2026-10-01); Focus Mode is retired (its parts are in the lead popup).
        2026-10-02: named "Sales dashboard" everywhere, beside the "Admin dashboard" — two dashboards, one product. */
     { title: 'Sales dashboard', url: '/sales-dashboard', icon: BarChart3, description: role === 'sales' ? 'Your month, commission and next steps' : "Each salesperson's month and commission" },
-    { title: 'Paid clients', url: '/paid-clients', icon: UsersRound, description: 'Client fulfilment hubs' },
+    { title: 'Paid clients', url: '/paid-clients', icon: UsersRound, description: 'Client hubs, pages and review replies' },
     { title: 'AI Audit', url: '/ai-audit', icon: Sparkles, description: 'AI visibility audit' },
-    { title: 'Review replies', url: '/review-replies', icon: MessageSquareQuote, description: 'Draft replies to client Google reviews' },
-    { title: 'Page generator', url: '/page-generator', icon: FileCode2, description: 'Client delivery pages, aimed at the measured queries' },
-    { title: 'Page plan', url: '/page-plan', icon: ListOrdered, description: 'The per-client page queue: distinct jobs, waves, editable' },
+    /* 2026-10-06 (Paul): Review replies, Page generator and Page plan are no longer menu items — they live
+       inside Paid clients (its Tools tab, and each client's Pages & reviews). Their old URLs redirect there. */
     { title: t('nav.templates'), url: '/templates', icon: FileText, description: t('nav.templatesDesc') },
     { title: 'Team', url: '/team', icon: Users, description: 'Salespeople, invites and lead ownership' },
     { title: 'Feedback inbox', url: '/feedback', icon: MessageSquarePlus, description: 'Team feedback and template requests' },

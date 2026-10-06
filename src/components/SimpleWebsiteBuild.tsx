@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
+import { clientToolUrl } from '@/lib/paidClientTools';
 import { AlertCircle, AlertTriangle, ArrowRight, Check, CheckCircle2, ChevronDown, ChevronRight, Circle, Clipboard, ExternalLink, Loader2, Rocket, Wand2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -231,7 +232,7 @@ export default function SimpleWebsiteBuild(p: SimpleWebsiteBuildProps) {
     <Block title="Improve their existing site (Findable Optimise)">
       <p>This client keeps their own website. Findable never replaces, deploys over or takes it down — we improve it with new pages. That happens in the page generator, not here.</p>
       <p className="text-xs text-muted-foreground">Route from {pack.routeSource || 'their records'}.</p>
-      <div className="flex flex-wrap gap-2"><Button asChild><Link to={'/page-generator?mode=service&client=' + encodeURIComponent(leadId)}>Open the page generator <ArrowRight className="ml-1 h-4 w-4" /></Link></Button>
+      <div className="flex flex-wrap gap-2"><Button asChild><Link to={clientToolUrl(leadId, 'page-generator', { mode: 'service', client: leadId })}>Open the page generator <ArrowRight className="ml-1 h-4 w-4" /></Link></Button>
         <Button asChild variant="outline"><Link to={'/paid-clients/' + leadId}>Client page</Link></Button></div>
     </Block>{advancedLink}</div>;
 

@@ -1,8 +1,6 @@
 import { useEffect, useRef, useState, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { SEOHead } from '@/components/SEOHead';
 import { supabase } from '@/integrations/supabase/client';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -10,8 +8,14 @@ import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { usePersistedState, updatePersistedValue } from '@/hooks/usePersistedState';
-import { Loader2, FileCode2, Copy, Sparkles, PiggyBank, AlertTriangle, Trash2, Clock } from 'lucide-react';
+import { Loader2, FileCode2, Copy, Sparkles, PiggyBank, AlertTriangle, Trash2, Clock, ListChecks, MapPin, Target, Ban, ShieldAlert, MessageSquareText, AlertCircle } from 'lucide-react';
 import { suggestCredentials } from '@/lib/tradeCredentials';
+import { Callout, EDGE, Empty, Segmented, SubSection, ToneChip } from '@/components/operator/ui';
+import { cn } from '@/lib/utils';
+
+/** The one-shot URL seed keys (the page-plan hand-off). Stripped once read — and ONLY these, so the
+ *  page the generator sits on keeps its own parameters (Paid Clients' tool / section). */
+export const PAGEGEN_SEED_KEYS = ['mode', 'client', 'page_key', 'question'] as const;
 
 /* ════════════════════════════════════════════════════════════════════════════════════════════
    PAGE GENERATOR — the delivery pages a client needs, aimed at the exact queries we measure.
@@ -26,6 +30,13 @@ import { suggestCredentials } from '@/lib/tradeCredentials';
    ⚠️ Generation uses OpenAI (out of credits at build time): the typed "no_credits" renders the
    friendly banner and the tool works the moment credits land, no redeploy. The PLAN half needs no
    OpenAI and works today.
+
+   📍 WHERE IT LIVES (2026-10-06): inside Paid Clients. The list's Tools tab renders it with both
+   pickers (every client with a paid baseline; every audit client for Q&A, lead-less national clients
+   included); a client's own page renders it SCOPED (`scope` = that lead and its baseline audit, no
+   picker, and the picks remembered for the Tools tab are left alone). The old /page-generator URL
+   redirects to the Tools tab carrying its seed (mode / client / page_key / question) — the same
+   one-shot seed below. Same edge function, same actions, same per-device cache.
    ════════════════════════════════════════════════════════════════════════════════════════════ */
 
 interface ClientRow { lead_id: string; business_name: string; baseline_at: string }
@@ -89,11 +100,18 @@ const htmlToPlainText = (html: string): string =>
     .replace(/\n{3,}/g, '\n\n')
     .trim();
 
-const PageGenerator = () => {
+export function PageGeneratorTool({ scope }: {
+  /** A client's own page: their lead (Service + Area) and baseline audit (Q&A). Omitted = the Tools
+   *  tab, with the pickers. A null auditId = no baseline yet (Q&A says so). */
+  scope?: { leadId: string; auditId: string | null; businessName?: string | null };
+} = {}) {
   const { toast } = useToast();
   const { user } = useAuth();
   const [clients, setClients] = useState<ClientRow[]>([]);
-  const [clientId, setClientId] = usePersistedState<string>('pagegen-client', '', { tier: 'both', scope: user?.id });
+  const [storedClientId, setStoredClientId] = usePersistedState<string>('pagegen-client', '', { tier: 'both', scope: user?.id });
+  /* Scoped: the client is fixed by the page and the Tools tab's remembered pick is not touched. */
+  const clientId = scope ? scope.leadId : storedClientId;
+  const setClientId = (id: string) => { if (!scope) setStoredClientId(id); };
   const [cache, setCache] = usePersistedState<CacheShape>('pagegen-cache', {}, {
     tier: 'both', scope: user?.id, version: 1,
     validate: (d) => (d && typeof d === 'object' ? (d as CacheShape) : null),
@@ -117,7 +135,9 @@ const PageGenerator = () => {
   };
   const [mode, setMode] = usePersistedState<'service' | 'qa'>('pagegen-mode', 'service', { tier: 'both', scope: user?.id });
   const [qaClients, setQaClients] = useState<QaClient[]>([]);
-  const [qaClientId, setQaClientId] = usePersistedState<string>('pagegen-qa-client', '', { tier: 'both', scope: user?.id });
+  const [storedQaClientId, setStoredQaClientId] = usePersistedState<string>('pagegen-qa-client', '', { tier: 'both', scope: user?.id });
+  const qaClientId = scope ? (scope.auditId ?? '') : storedQaClientId;
+  const setQaClientId = (id: string) => { if (!scope) setStoredQaClientId(id); };
   const [qaQuestions, setQaQuestions] = useState<string[]>([]);
   const [qaClientInfo, setQaClientInfo] = useState<{ business_name: string; business_type: string | null } | null>(null);
   const [qaQuestion, setQaQuestion] = useState('');
@@ -137,7 +157,10 @@ const PageGenerator = () => {
   if (seedRef.current === null) {
     const m = searchParams.get('mode');
     const client = (searchParams.get('client') ?? '').trim();
-    seedRef.current = (m === 'service' || m === 'qa') && client
+    /* Scoped, a seed for ANOTHER client is ignored (never load a different client's plan into this
+       client's page); its keys are still stripped below. */
+    const fits = !scope || client === (m === 'qa' ? scope.auditId : scope.leadId);
+    seedRef.current = (m === 'service' || m === 'qa') && client && fits
       ? { mode: m, client, pageKey: searchParams.get('page_key'), question: searchParams.get('question') }
       : 'none';
   }
@@ -270,9 +293,13 @@ const PageGenerator = () => {
 
   // ── APPLY THE SEED, once: strip the one-shot params, overwrite persisted mode/client, load. ──
   useEffect(() => {
+    /* One-shot: refresh/back never re-seeds. Only the seed's own keys go — the host page keeps its
+       parameters (Paid Clients' ?tool= / ?section=). */
+    if (PAGEGEN_SEED_KEYS.some((k) => searchParams.has(k))) {
+      setSearchParams((p) => { const n = new URLSearchParams(p); PAGEGEN_SEED_KEYS.forEach((k) => n.delete(k)); return n; }, { replace: true });
+    }
     const s = seedRef.current;
     if (!s || s === 'none') return;
-    setSearchParams({}, { replace: true });     // one-shot: refresh/back never re-seeds
     setMode(s.mode);
     if (s.mode === 'service') {
       setSeedKey(s.pageKey);                    // landed-check runs when the plan arrives
@@ -491,38 +518,28 @@ const PageGenerator = () => {
   );
 
   return (
-    <div className="space-y-5 max-w-4xl">
-      <SEOHead title="Page generator | LeadFinder Pro" description="Service and area pages matched to the measured baseline queries." canonical="/page-generator" noindex />
-      <div>
-        <h1 className="text-xl sm:text-2xl font-bold tracking-tight">Page generator</h1>
-        <p className="text-sm text-muted-foreground">
-          The service-plus-area pages a client needs, aimed at the exact queries their baseline
-          measured. Paste-ready per page — nothing publishes from here.
-        </p>
-      </div>
+    <div className="space-y-5" data-testid="page-generator-tool">
+      <p className="text-sm text-muted-foreground">
+        The service-plus-area pages a client needs, aimed at the exact queries their baseline
+        measured. Paste-ready per page — nothing publishes from here.
+      </p>
 
-      <div className="flex gap-1 rounded-md border border-border/60 p-1 w-fit">
-        <Button size="sm" variant={mode === 'service' ? 'default' : 'ghost'} className="h-7" onClick={() => setMode('service')}>Service + Area</Button>
-        <Button size="sm" variant={mode === 'qa' ? 'default' : 'ghost'} className="h-7" onClick={() => setMode('qa')}>Article / Q&amp;A</Button>
-      </div>
+      <Segmented label="Page type" value={mode} onChange={(k) => setMode(k)}
+        options={[{ key: 'service', label: 'Service + Area', tone: 'blue' }, { key: 'qa', label: 'Article / Q&A', tone: 'purple' }]} />
 
       {mode === 'service' && (
       <>
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-            <FileCode2 className="h-4 w-4 text-primary" /> Client
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="flex flex-wrap items-center gap-3">
-          <Select value={clientId} onValueChange={loadPlan}>
-            <SelectTrigger className="w-72"><SelectValue placeholder="Pick a client with a paid baseline…" /></SelectTrigger>
-            <SelectContent>
-              {clients.map((c) => (
-                <SelectItem key={c.lead_id} value={c.lead_id}>{c.business_name}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+      <div className="flex flex-wrap items-center gap-3">
+          {scope
+            ? <span className="text-sm font-semibold">{plan?.client.business_name || scope.businessName || 'This client'}</span>
+            : <Select value={clientId} onValueChange={loadPlan}>
+                <SelectTrigger className="w-full sm:w-72" aria-label="Client"><SelectValue placeholder="Pick a client with a paid baseline…" /></SelectTrigger>
+                <SelectContent>
+                  {clients.map((c) => (
+                    <SelectItem key={c.lead_id} value={c.lead_id}>{c.business_name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>}
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
             <span>Paste format:</span>
             <Select value={hosting} onValueChange={(v) => setHosting(v as Hosting)}>
@@ -535,24 +552,15 @@ const PageGenerator = () => {
             </Select>
           </div>
           {planBusy && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
-        </CardContent>
-      </Card>
+      </div>
 
-      {planError && (
-        <Card className="border-destructive/40 bg-destructive/10">
-          <CardContent className="p-4 text-sm text-destructive">Couldn't read this client's plan: {planError}</CardContent>
-        </Card>
-      )}
+      {planError && <Callout tone="red" icon={AlertCircle} title="Couldn't read this client's plan">{planError}</Callout>}
+      {!clientId && !planBusy && <Empty icon={FileCode2}>Pick a client with a paid baseline to see the pages they need.</Empty>}
 
       {plan && (
         <>
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">
-                What this plan is built from
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-1.5 text-sm">
+          <SubSection tone="grey" icon={ListChecks} title="What this plan is built from">
+            <div className="space-y-1.5 text-sm">
               <p><span className="text-muted-foreground">Services (questionnaire):</span> {plan.inputs.services.join(' · ')}</p>
               <p><span className="text-muted-foreground">Areas (questionnaire):</span> {plan.inputs.homeTown} (home) · {plan.inputs.areas.join(' · ')}</p>
               <p><span className="text-muted-foreground">Baseline:</span> {plan.inputs.questionCount} measured queries across {plan.inputs.baselineRuns} runs</p>
@@ -560,21 +568,18 @@ const PageGenerator = () => {
               {plan.inputs.mustNotSay && (
                 <p className="text-amber-600 dark:text-amber-500"><span className="font-medium">Must never say:</span> {plan.inputs.mustNotSay}</p>
               )}
-            </CardContent>
-          </Card>
+            </div>
+          </SubSection>
 
           {(plan.actionPlan?.length ?? 0) > 0 && (
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">Baseline action plan — build or optimise</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-2">
+            <SubSection tone="purple" icon={Target} title="Baseline action plan" hint="build or optimise">
+              <div className="space-y-2">
                 {plan.actionPlan!.map((item) => (
-                  <div key={item.id} className="rounded-md border border-border/60 p-3 text-sm">
+                  <div key={item.id} className={cn('rounded-xl border border-border/60 bg-muted/20 p-3 text-sm', item.existing_url ? EDGE.blue : EDGE.purple)}>
                     <div className="flex flex-wrap items-center gap-2">
                       <span className="font-medium">{item.title}</span>
-                      <Badge variant="outline" className="text-[10px]">{item.winnability ?? 'planned'}</Badge>
-                      <Badge variant="outline" className="text-[10px]">{item.existing_url ? 'Optimise existing' : 'Build new'}</Badge>
+                      <ToneChip tone="grey">{item.winnability ?? 'planned'}</ToneChip>
+                      <ToneChip tone={item.existing_url ? 'blue' : 'purple'}>{item.existing_url ? 'Optimise existing' : 'Build new'}</ToneChip>
                       <span className="text-xs text-muted-foreground">priority {item.priority}</span>
                       {(() => {
                         const match = plan.plan.pages.find((p) => p.queries.includes(item.question));
@@ -587,15 +592,12 @@ const PageGenerator = () => {
                   </div>
                 ))}
                 <p className="text-xs text-muted-foreground">These opportunities come from the locked baseline questions. Select the matching measured page below to generate; no new audit is run.</p>
-              </CardContent>
-            </Card>
+              </div>
+            </SubSection>
           )}
 
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">Contact &amp; local areas</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3 text-sm">
+          <SubSection tone="blue" icon={MapPin} title="Contact & local areas">
+            <div className="space-y-3 text-sm">
               <p className="text-xs text-muted-foreground">
                 Every page ends with the client's real phone and links — pulled automatically
                 ({plan.inputs.hasPhone ? 'phone found' : 'no phone on file — CTA will point to the contact page only'}
@@ -625,7 +627,7 @@ const PageGenerator = () => {
               </div>
               {/* ══ SCAN THEIR SITE — factual pre-fill, credentials as suggestions ══════════════
                   Raw fetch of their own site (no Apify, ~$0.005, cached 30 days). */}
-              <div className="grid gap-1 rounded-md border border-border bg-muted/30 p-2">
+              <div className="grid gap-1 rounded-xl bg-muted/40 p-2.5 ring-1 ring-inset ring-border/50">
                 <div className="flex flex-wrap items-center gap-2">
                   <Button size="sm" variant="outline" className="h-7 px-2 text-xs"
                     onClick={scanSite} disabled={scanning || !plan.inputs.website}
@@ -702,30 +704,24 @@ const PageGenerator = () => {
                   className="h-8 text-xs"
                 />
               </div>
-            </CardContent>
-          </Card>
+            </div>
+          </SubSection>
 
-          <Card>
-            <CardHeader className="pb-2">
-              <div className="flex flex-wrap items-center gap-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">
-                  The page set — {plan.plan.pages.length} page{plan.plan.pages.length === 1 ? '' : 's'}, each aimed at measured queries
-                </CardTitle>
-                {cachedCount > 0 && (
-                  <div className="ml-auto flex items-center gap-2 text-xs text-muted-foreground">
-                    <span>{cachedCount} generated & saved on this device</span>
-                    <Button variant="ghost" size="sm" className="h-7" onClick={clearCached}>
-                      <Trash2 className="mr-1.5 h-3 w-3" /> Clear
-                    </Button>
-                  </div>
-                )}
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-3">
+          <SubSection tone="green" icon={FileCode2} title="The page set"
+            hint={`${plan.plan.pages.length} page${plan.plan.pages.length === 1 ? '' : 's'}, each aimed at measured queries`}
+            action={cachedCount > 0 ? (
+              <span className="flex items-center gap-2 text-xs text-muted-foreground">
+                <span>{cachedCount} generated & saved on this device</span>
+                <Button variant="ghost" size="sm" className="h-7" onClick={clearCached}>
+                  <Trash2 className="mr-1.5 h-3 w-3" /> Clear
+                </Button>
+              </span>
+            ) : undefined}>
+            <div className="space-y-3">
               {plan.plan.pages.map((p) => {
                 const g = viewFor(p.key);
                 return (
-                  <div key={p.key} id={`pgpage-${p.key}`} className={`rounded-md border p-3 space-y-2 ${highlightKey === p.key ? 'border-primary ring-2 ring-primary/40' : 'border-border/60'}`}>
+                  <div key={p.key} id={`pgpage-${p.key}`} className={cn('space-y-2 rounded-xl border p-3', g?.kind === 'done' ? EDGE.green : EDGE.blue, highlightKey === p.key ? 'border-primary ring-2 ring-primary/40' : 'border-border/60 bg-muted/20')}>
                     <div className="flex flex-wrap items-center gap-2">
                       <span className="font-medium text-sm">{p.service} — {p.town}</span>
                       {p.queries.map((q) => (
@@ -742,10 +738,7 @@ const PageGenerator = () => {
                     </div>
 
                     {g?.kind === 'no_credits' && (
-                      <div className="flex items-start gap-2 rounded-md border border-amber-500/40 bg-amber-500/5 p-3 text-sm">
-                        <PiggyBank className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
-                        <span>AI credits need topping up — the plan above still works; generation resumes the moment credits land. Nothing to redeploy.</span>
-                      </div>
+                      <Callout tone="amber" icon={PiggyBank}>AI credits need topping up — the plan above still works; generation resumes the moment credits land. Nothing to redeploy.</Callout>
                     )}
                     {g?.kind === 'error' && (
                       <p className="text-sm text-destructive">Couldn't generate: {g.message}</p>
@@ -755,20 +748,17 @@ const PageGenerator = () => {
                 );
               })}
               {plan.plan.pages.length === 0 && (
-                <p className="text-sm text-muted-foreground">
+                <Empty icon={FileCode2}>
                   No overlap: nothing this client wants was measured in their baseline. That needs a
                   human look, not a generated guess.
-                </p>
+                </Empty>
               )}
-            </CardContent>
-          </Card>
+            </div>
+          </SubSection>
 
           {(plan.plan.excluded.length > 0 || plan.plan.unmeasuredAreas.length > 0) && (
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">Not getting a page — and why</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-1.5 text-xs text-muted-foreground">
+            <SubSection tone="amber" icon={Ban} title="Not getting a page — and why">
+              <div className="space-y-1.5 text-xs text-muted-foreground">
                 {plan.plan.excluded.map((e) => (
                   <p key={e.question}><span className="text-foreground/80">"{e.question}"</span> — {e.reason}</p>
                 ))}
@@ -780,8 +770,8 @@ const PageGenerator = () => {
                     instead.
                   </p>
                 )}
-              </CardContent>
-            </Card>
+              </div>
+            </SubSection>
           )}
         </>
       )}
@@ -790,22 +780,18 @@ const PageGenerator = () => {
 
       {mode === 'qa' && (
       <>
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-            <FileCode2 className="h-4 w-4 text-primary" /> Client (any with a baseline — national clients included)
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3">
+      <div className="space-y-3">
           <div className="flex flex-wrap items-center gap-3">
-            <Select value={qaClientId} onValueChange={selectQaClient}>
-              <SelectTrigger className="w-72"><SelectValue placeholder="Pick a client…" /></SelectTrigger>
-              <SelectContent>
-                {qaClients.map((c) => (
-                  <SelectItem key={c.audit_id} value={c.audit_id}>{c.business_name}{c.business_type ? ` — ${c.business_type}` : ''}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            {scope
+              ? <span className="text-sm font-semibold">{qaClientInfo?.business_name || scope.businessName || 'This client'}</span>
+              : <Select value={qaClientId} onValueChange={selectQaClient}>
+                  <SelectTrigger className="w-full sm:w-72" aria-label="Client (any with a baseline — national clients included)"><SelectValue placeholder="Pick a client — any with a baseline, national clients included…" /></SelectTrigger>
+                  <SelectContent>
+                    {qaClients.map((c) => (
+                      <SelectItem key={c.audit_id} value={c.audit_id}>{c.business_name}{c.business_type ? ` — ${c.business_type}` : ''}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>}
             {planBusy && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
           </div>
           {qaClientId && (
@@ -814,14 +800,14 @@ const PageGenerator = () => {
               <Input value={cs.contactUrl} placeholder="https://theirsite.co.uk/book/" onChange={(e) => setSetting({ contactUrl: e.target.value })} className="h-8 text-xs" />
             </div>
           )}
-        </CardContent>
-      </Card>
+          {scope && !scope.auditId && <Empty icon={MessageSquareText}>Q&amp;A pages are written from the baseline — this client has none yet.</Empty>}
+          {!scope && !qaClientId && <Empty icon={MessageSquareText}>Pick a client to write a Q&amp;A page.</Empty>}
+      </div>
 
       {qaClientId && (
         <>
-          <Card className="border-amber-500/40 bg-amber-500/5">
-            <CardContent className="p-3 text-xs text-amber-700 dark:text-amber-400">
-              <strong>Draft mode — safety.</strong> How much is drafted depends on the client&rsquo;s trade,
+          <Callout tone="amber" icon={ShieldAlert} title="Draft mode — safety">
+            <span className="text-xs">How much is drafted depends on the client&rsquo;s trade,
               decided in code, not by the model. For <strong>health, clinical, legal, mortgage, insurance and
               financial-advice</strong> clients — and for any client whose trade we can&rsquo;t read — nothing
               factual is generated at all: every fact, price, dose or eligibility rule is a{' '}
@@ -830,22 +816,17 @@ const PageGenerator = () => {
               trades) the general guidance is drafted for you, and only prices, figures, credentials and
               promises about the business are held back as <code>[CLIENT CONFIRM: …]</code> items carrying a
               suggested value to approve. Either way, a human signs off every number.
-            </CardContent>
-          </Card>
+            </span>
+          </Callout>
 
-          <Card>
-            <CardHeader className="pb-2">
-              <div className="flex flex-wrap items-center gap-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">Write a Q&amp;A page</CardTitle>
-                {cachedCount > 0 && (
-                  <div className="ml-auto flex items-center gap-2 text-xs text-muted-foreground">
-                    <span>{cachedCount} generated & saved on this device</span>
-                    <Button variant="ghost" size="sm" className="h-7" onClick={clearCached}><Trash2 className="mr-1.5 h-3 w-3" /> Clear</Button>
-                  </div>
-                )}
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-3">
+          <SubSection tone="purple" icon={MessageSquareText} title="Write a Q&A page"
+            action={cachedCount > 0 ? (
+              <span className="flex items-center gap-2 text-xs text-muted-foreground">
+                <span>{cachedCount} generated & saved on this device</span>
+                <Button variant="ghost" size="sm" className="h-7" onClick={clearCached}><Trash2 className="mr-1.5 h-3 w-3" /> Clear</Button>
+              </span>
+            ) : undefined}>
+            <div className="space-y-3">
               <div className="flex flex-wrap items-end gap-2">
                 <div className="grid gap-1 flex-1 min-w-[16rem]">
                   <label className="text-xs text-muted-foreground">A customer question (type your own, or pick a measured one below)</label>
@@ -862,7 +843,7 @@ const PageGenerator = () => {
                   {qaQuestions.map((q) => {
                     const g = viewFor(q);
                     return (
-                      <div key={q} className="rounded-md border border-border/60 p-3 space-y-2">
+                      <div key={q} className={cn('space-y-2 rounded-xl border border-border/60 bg-muted/20 p-3', g?.kind === 'done' ? EDGE.green : EDGE.purple)}>
                         <div className="flex flex-wrap items-center gap-2">
                           <span className="text-sm">{q}</span>
                           <Button size="sm" className="ml-auto" disabled={g?.kind === 'busy'} onClick={() => generateQA(q)}>
@@ -871,10 +852,7 @@ const PageGenerator = () => {
                           </Button>
                         </div>
                         {g?.kind === 'no_credits' && (
-                          <div className="flex items-start gap-2 rounded-md border border-amber-500/40 bg-amber-500/5 p-3 text-sm">
-                            <PiggyBank className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
-                            <span>AI credits need topping up — resumes the moment credits land.</span>
-                          </div>
+                          <Callout tone="amber" icon={PiggyBank}>AI credits need topping up — resumes the moment credits land.</Callout>
                         )}
                         {g?.kind === 'error' && <p className="text-sm text-destructive">Couldn't generate: {g.message}</p>}
                         {g?.kind === 'done' && renderDone(g)}
@@ -892,14 +870,12 @@ const PageGenerator = () => {
                   : g?.kind === 'no_credits' ? <p className="text-sm text-amber-600">AI credits need topping up.</p>
                   : null;
               })()}
-            </CardContent>
-          </Card>
+            </div>
+          </SubSection>
         </>
       )}
       </>
       )}
     </div>
   );
-};
-
-export default PageGenerator;
+}
