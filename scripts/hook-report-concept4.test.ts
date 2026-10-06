@@ -250,8 +250,15 @@ const hit = (rivals: string[]): Cell => ({ named: true, rivals });
   const v1 = { version: 1, planned: [Q[0]], executed: 1, next_index: 1, stop_reason: 'visibility_gap_found', named_in: [], gap: { question_index: 0, question: Q[0], engine: 'gemini', target_named: false, named_instead: ['B Co'], citations: [], named_on_engines: [], answer_excerpt: '' } };
   const old = report(grid, {}, v1);
   const frag = (h: string) => h.slice(h.indexOf('<section class="cta">'), h.indexOf('</footer>') + 9);
-  ok(frag(c4.html).length > 500 && frag(c4.html) === frag(old.html), 'K: the CTA + footer are byte-identical to the existing hook report’s');
-  ok(/Want to be one of the names\?/.test(c4.t) && c4.html.includes('Get started &mdash; &pound;99') && c4.t.includes(REMEASURE_CLAIM_SENTENCE.replace(/'/g, '’')), 'K: CTA heading, buttons and the locked guarantee sentence are present');
+  /* CTA wording on the SIX-ANSWER report only (Paul, 2026-10-06): heading "Want to improve your AI
+     visibility?", primary button "Improve AI visibility" (no price, same onboarding link). Everything
+     else in the CTA + footer is byte-identical to the existing hook report's. */
+  const swapped = frag(old.html).replace('<h3>Want to be one of the names?</h3>', '<h3>Want to improve your AI visibility?</h3>').replace('>Get started &mdash; &pound;99</a>', '>Improve AI visibility</a>');
+  ok(frag(c4.html).length > 500 && frag(c4.html) === swapped, 'K: the six-answer CTA + footer differ from the existing one ONLY in the heading and the primary button text');
+  ok(/Want to improve your AI visibility\?/.test(c4.t) && c4.html.includes('class="cta-btn start" href="#" target="_blank" rel="noopener noreferrer">Improve AI visibility</a>') && !/Get started/.test(c4.t), 'K: new heading, and the primary button says "Improve AI visibility" with no price');
+  ok(/>Request a call</.test(c4.html) && /class="cta-btn wa" href="https:\/\/wa\.me\/447943262742\?text=[^"]+"[^>]*>Ask me anything</.test(c4.html), 'K: Request a call kept; Ask me anything goes to Paul’s WhatsApp (wa.me)');
+  ok(c4.t.includes(REMEASURE_CLAIM_SENTENCE.replace(/'/g, '’')), 'K: the locked guarantee sentence is unchanged');
+  ok(/Want to be one of the names\?/.test(old.t) && old.html.includes('Get started &mdash; &pound;99'), 'K: other reports keep "Want to be one of the names?" and "Get started — £99"');
   ok(c4.html.indexOf('class="q4-why"') < c4.html.indexOf('<section class="cta">'), 'K: why-this-matters comes before the CTA');
 
   /* ── L. Older / other reports unchanged ── */

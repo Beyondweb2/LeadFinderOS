@@ -22,6 +22,19 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-06-quick-report-cta', date: '2026-10-06', title: 'Quick report button now says "Improve AI visibility"', audience: 'all',
+    body: 'On the six-answer quick report the closing section now asks "Want to improve your AI visibility?" and the yellow button says "Improve AI visibility" instead of showing the price.',
+    report: {
+      added: [],
+      changed: [
+        'Heading: "Want to improve your AI visibility?" instead of "Want to be one of the names?".',
+        'Yellow button: "Improve AI visibility" instead of "Get started — £99". It goes to the same sign-up page.',
+      ],
+      removed: [
+        'The price on the yellow button. It is still in the guarantee line underneath and on the sign-up page.',
+      ],
+      effect: 'The quick report ends on the outcome, not the price. Request a call and Ask me anything (your WhatsApp) are unchanged, and every other report keeps its old wording.',
+    } },
   { id: '2026-10-06-campaign-chip-tips', date: '2026-10-06', title: 'Campaign cards: the Call / WhatsApp tag is blue', audience: 'all',
     body: 'Green now only means something good happened (a sale, a reply, money). The tag that says how a campaign contacts people is blue.',
     report: {

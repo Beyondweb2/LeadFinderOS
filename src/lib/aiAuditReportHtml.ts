@@ -1941,8 +1941,13 @@ export function renderReportHtml(d: AiAuditReportData): string {
      ⚠️ It does NOT name a price. The pitch block was deliberately stripped from this document on
      2026-09-02; the price belongs on the onboarding page, which states it. */
   const startUrl = (d.offerUrl ?? "").trim();
+  /* SIX-ANSWER QUICK REPORT ONLY (Paul, 2026-10-06): the primary button names the outcome, not the
+     price — "Improve AI visibility" — and goes to the SAME onboarding link. Every other report keeps
+     "Get started — £99". The price is still stated where it is binding: the guarantee line below and
+     the onboarding flow itself. */
+  const startLabel = concept4 ? "Improve AI visibility" : "Get started &mdash; &pound;99";
   const startBtn = d.showOffer === true && startUrl
-    ? `<a class="cta-btn start" href="${esc(startUrl)}" target="_blank" rel="noopener noreferrer">Get started &mdash; &pound;99</a>`
+    ? `<a class="cta-btn start" href="${esc(startUrl)}" target="_blank" rel="noopener noreferrer">${startLabel}</a>`
     : "";
   if (d.showOffer === true && !startUrl) {
     console.warn("[report] get-started button omitted: no per-lead onboarding url (no lead_id, or the site origin is not configured)");
@@ -2851,7 +2856,7 @@ ${d.hidePitch || d.paidSummary || quickIncomplete ? "" : `
          an email route), and WhatsApp now points at the personal number, not the Business API line,
          prefilled with the business name, so the one route that was actually used is unchanged. -->
     <section class="cta">
-      <h3>Want to be one of the names?</h3>
+      <h3>${concept4 ? "Want to improve your AI visibility?" : "Want to be one of the names?"}</h3>
       <div class="cta-actions">
         ${startBtn}
         ${requestCallBtn}
