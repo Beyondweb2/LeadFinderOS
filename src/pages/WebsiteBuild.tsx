@@ -1,9 +1,10 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
-import { AlertCircle, AlertTriangle, Check, CheckCircle2, ChevronDown, ChevronRight, Circle, Clipboard, Loader2, Plus, RefreshCw, Trash2, X } from 'lucide-react';
+import { AlertCircle, AlertTriangle, Check, CheckCircle2, ChevronDown, ChevronRight, Circle, Clipboard, Globe, Loader2, Plus, Trash2, X } from 'lucide-react';
 import { edgeErrorMessage, invokeEdge } from '@/lib/edgeInvoke';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Callout, ErrorState, LoadState, PageHeader, SURFACE, TONE } from '@/components/operator/ui';
+import { cn } from '@/lib/utils';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
@@ -82,7 +83,7 @@ const sel = 'h-8 w-full rounded-md border border-input bg-background px-2 text-x
 
 function StatusDot({ done, applicable = true }: { done: boolean; applicable?: boolean }) {
   if (!applicable) return <Circle className="h-4 w-4 text-muted-foreground/40" />;
-  return done ? <CheckCircle2 className="h-4 w-4 text-emerald-600" /> : <Circle className="h-4 w-4 text-muted-foreground" />;
+  return done ? <CheckCircle2 className={cn('h-4 w-4', TONE.green.text)} /> : <Circle className="h-4 w-4 text-muted-foreground" />;
 }
 
 const FACT_TONE: Record<FactStatus, string> = {
@@ -93,8 +94,16 @@ const FACT_TONE: Record<FactStatus, string> = {
   not_applicable: 'bg-muted text-muted-foreground',
 };
 
+/* One panel of the command centre: the app's card surface (components/operator/ui SURFACE) with a
+   marked heading — the dashboards' look, not a plain grey card. */
 function Section({ title, children, right }: { title: string; children: ReactNode; right?: ReactNode }) {
-  return <Card><CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2 pb-2"><CardTitle className="text-base">{title}</CardTitle>{right}</CardHeader><CardContent className="space-y-3 text-sm">{children}</CardContent></Card>;
+  return <section className={cn(SURFACE, 'min-w-0 p-4 sm:p-5')}>
+    <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+      <h2 className="flex min-w-0 items-center gap-2 text-base font-bold tracking-tight"><span className="h-4 w-1 shrink-0 rounded-full bg-primary/70" aria-hidden /><span className="min-w-0 break-words">{title}</span></h2>
+      {right}
+    </div>
+    <div className="space-y-3 text-sm">{children}</div>
+  </section>;
 }
 
 function Choice<T extends string>({ value, options, labels, onChange, name }: { value: T | ''; options: readonly T[]; labels: Record<T, string>; onChange: (v: T) => void; name: string }) {
@@ -311,9 +320,9 @@ export default function WebsiteBuild() {
     }
   };
 
-  if (loadError) return <div className="mx-auto max-w-6xl space-y-4 py-6"><Link to={`/paid-clients/${leadId}`} className="text-xs text-muted-foreground">← Client hub</Link>
-    <Card><CardContent className="space-y-3 p-6 text-sm"><div role="alert" className="flex items-start gap-2 text-destructive"><AlertCircle className="mt-0.5 h-4 w-4 shrink-0" /><span>{loadError}</span></div><Button size="sm" variant="outline" onClick={() => setReloadKey((k) => k + 1)}><RefreshCw className="mr-1 h-4 w-4" />Try again</Button></CardContent></Card></div>;
-  if (!state || !payload || !evidence) return <div className="flex justify-center py-16"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
+  if (loadError) return <div className="mx-auto max-w-6xl space-y-4 px-4 py-6 sm:px-0"><Link to={`/paid-clients/${leadId}`} className="text-xs text-muted-foreground">← Client hub</Link>
+    <ErrorState title={loadError} onRetry={() => setReloadKey((k) => k + 1)} /></div>;
+  if (!state || !payload || !evidence) return <LoadState label="Loading the website build…" className="py-16" />;
 
   /* ── fact actions ───────────────────────────────────────────────────────────────────────────── */
   const putFact = (f: BuildFact) => update((s) => ({ ...s, facts: [...s.facts.filter((x) => x.key !== f.key), f] }));
@@ -337,7 +346,7 @@ export default function WebsiteBuild() {
   };
   const setView = (v: 'simple' | 'advanced') => { const next = new URLSearchParams(params); if (v === 'advanced') next.set('view', 'advanced'); else { next.delete('view'); next.delete('step'); } setParams(next, { replace: true }); window.scrollTo({ top: 0 }); };
   const saveNode = <span className={`inline-flex flex-wrap items-center gap-2 ${save === 'error' ? 'text-destructive' : ''}`}>
-    {save === 'saving' && <Loader2 className="h-3.5 w-3.5 animate-spin" />}{save === 'saved' && <Check className="h-3.5 w-3.5 text-emerald-600" />}{saveLabel}
+    {save === 'saving' && <Loader2 className="h-3.5 w-3.5 animate-spin" />}{save === 'saved' && <Check className={cn('h-3.5 w-3.5', TONE.green.text)} />}{saveLabel}
     {save === 'error' && <><span>— {saveError}</span><Button size="sm" variant="outline" onClick={() => void flush()}>Retry save</Button></>}</span>;
   if (params.get('view') !== 'advanced' && packInput) return <div className="mx-auto max-w-4xl space-y-4 px-4 py-6 sm:px-0">
     <Link to={`/paid-clients/${leadId}`} className="text-xs text-muted-foreground">← Client hub</Link>
@@ -347,38 +356,36 @@ export default function WebsiteBuild() {
       copy={(title, text) => copyText(title, text, [])} toast={toast} />
   </div>;
 
-  return <div className="mx-auto max-w-6xl space-y-4 px-4 py-6 sm:px-0">
+  return <div className="mx-auto min-w-0 max-w-6xl space-y-4 px-4 py-6 sm:px-0">
     <div className="flex flex-wrap items-center justify-between gap-2"><Link to={`/paid-clients/${leadId}`} className="text-xs text-muted-foreground">← Client hub</Link>
       <Button size="sm" variant="outline" onClick={() => setView('simple')}>← Back to the simple view</Button></div>
-    <Card><CardContent className="p-4 sm:p-5">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0"><h1 className="text-xl font-semibold sm:text-2xl">Website Build — {businessName || 'client'} <span className="text-sm font-normal text-muted-foreground">(Advanced)</span></h1>
-          <p className="text-sm text-muted-foreground">{state.route ? BUILD_ROUTE_LABELS[state.route] : 'Build route not chosen yet'}{template ? ` · ${template.name} v${template.version}` : ''}{faithful && state.rebuild_style ? ` · ${REBUILD_STYLE_LABELS[state.rebuild_style]}` : ''}</p></div>
-        <div className={`flex items-center gap-2 text-xs ${save === 'error' ? 'text-destructive' : 'text-muted-foreground'}`} aria-live="polite">
-          {save === 'saving' && <Loader2 className="h-3.5 w-3.5 animate-spin" />}{save === 'saved' && <Check className="h-3.5 w-3.5 text-emerald-600" />}{saveLabel}
+    <PageHeader icon={Globe} tone="blue" eyebrow="Paid client · Advanced" title={`Website Build — ${businessName || 'client'}`}
+      subtitle={<>{state.route ? BUILD_ROUTE_LABELS[state.route] : 'Build route not chosen yet'}{template ? ` · ${template.name} v${template.version}` : ''}{faithful && state.rebuild_style ? ` · ${REBUILD_STYLE_LABELS[state.rebuild_style]}` : ''}</>}
+      actions={<div className={`flex flex-wrap items-center gap-2 text-xs ${save === 'error' ? 'text-destructive' : 'text-muted-foreground'}`} aria-live="polite">
+          {save === 'saving' && <Loader2 className="h-3.5 w-3.5 animate-spin" />}{save === 'saved' && <Check className={cn('h-3.5 w-3.5', TONE.green.text)} />}{saveLabel}
           {save === 'error' && <><span>— {saveError}</span><Button size="sm" variant="outline" onClick={() => void flush()}>Retry save</Button></>}
-        </div>
-      </div>
-      {routeVerdict.route === 'optimise' && <div role="alert" className="mt-3 flex items-start gap-2 rounded-md border border-red-300 bg-red-50 p-3 text-sm text-red-900 dark:border-red-800 dark:bg-red-950/40 dark:text-red-100">
-        <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" /><span><b>Findable Optimise client — Website Build is switched off.</b> They keep their own website: nothing here builds, deploys, connects a domain or registers a form for them. Use the page generator for their pages. <span className="text-xs">(Route from {routeVerdict.source}.)</span></span></div>}
-      {routeVerdict.route === null && <div className="mt-3 flex items-start gap-2 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-100">
-        <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" /><span><b>Build or Optimise is not settled</b> — {routeVerdict.source}. Preview work can go on; production and the live enquiry form stay locked until the client's route is recorded as Build.</span></div>}
-      <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-7">
+        </div>} />
+    <section className={cn(SURFACE, 'min-w-0 p-4 sm:p-5')}>
+      {routeVerdict.route === 'optimise' && <Callout tone="red" icon={AlertCircle} className="mb-3">
+        <span><b>Findable Optimise client — Website Build is switched off.</b> They keep their own website: nothing here builds, deploys, connects a domain or registers a form for them. Use the page generator for their pages. <span className="text-xs">(Route from {routeVerdict.source}.)</span></span></Callout>}
+      {routeVerdict.route === null && <Callout tone="amber" icon={AlertTriangle} className="mb-3">
+        <span><b>Build or Optimise is not settled</b> — {routeVerdict.source}. Preview work can go on; production and the live enquiry form stay locked until the client's route is recorded as Build.</span></Callout>}
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-7">
         {stages.map((s) => <button key={s.stage} type="button" onClick={() => goStep(s.stage)}
-          className={`rounded-md border p-2 text-left text-xs transition ${step === s.stage ? 'border-primary bg-primary/5' : 'hover:bg-muted/50'} ${!s.applicable ? 'opacity-60' : ''}`}>
+          className={`min-w-0 rounded-xl border p-2 text-left text-xs transition ${step === s.stage ? 'border-primary bg-primary/10 ring-1 ring-primary/30' : 'border-border/70 hover:bg-muted/50'} ${!s.applicable ? 'opacity-60' : ''}`}>
           <div className="flex items-center gap-1.5 font-medium"><StatusDot done={s.done} applicable={s.applicable} />{STAGE_LABELS[s.stage]}</div>
           <div className="mt-1 line-clamp-2 break-all text-muted-foreground">{s.stage === 'intake' ? `${summary.verified} verified · ${summary.awaiting} to confirm` : s.stage === 'capture' && !state.route ? 'Choose the build route first' : s.stage === 'capture' && captureOn && state.capture.url_count != null ? `${state.capture.url_count} URLs · ${state.capture.asset_count ?? 0} assets` : s.detail}</div>
         </button>)}
       </div>
       {/* The eight Claude tasks, one click each. Each prompt carries only its stage's context. */}
-      <div className="mt-3 flex flex-wrap items-center gap-1.5 border-t pt-3">
+      <div className="mt-3 flex flex-wrap items-center gap-1.5 border-t border-border/60 pt-3">
         <span className="mr-1 text-xs text-muted-foreground">Claude tasks:</span>
         {prompts.map((p) => { const refusing = p.refused === true || (p.id === 'production_deploy' && p.blockedBy.length > 0);
           return <Button key={p.id} size="sm" variant={p.stage === step ? 'default' : 'outline'} className="h-7 px-2 text-xs" disabled={refusing}
             title={p.blockedBy.length ? `${p.label} — missing: ${p.blockedBy.join(', ')}` : p.label} aria-label={p.label} onClick={() => void copyPrompt(p)}>
             <Clipboard className="mr-1 h-3 w-3" />{p.short}{p.blockedBy.length > 0 && !refusing && <span className="ml-1 text-amber-500">•</span>}</Button>; })}
       </div>
-    </CardContent></Card>
+    </section>
 
     <ProjectDetails key={step === 'build_pack' ? 'open' : 'closed'} defaultOpen={step === 'build_pack'} state={state} set={set} businessName={businessName} productionLocked={launch.length > 0}
       template={template} existingSiteUrl={existingSiteUrl} factSiteUrl={factSiteUrl} researchNote={researchNote} tradeRow={tradeRow} crawlLabel={crawl.label} crawledAt={crawl.crawledAt} />
@@ -393,7 +400,7 @@ export default function WebsiteBuild() {
         {faithful && <div className="space-y-3">
           <div><Label>How close to the original?</Label><div className="mt-1"><Choice name="style" value={state.rebuild_style} options={REBUILD_STYLES} labels={REBUILD_STYLE_LABELS} onChange={(v) => set('rebuild_style', v)} /></div></div>
           <div><Label>Who owns / supplied the current website copy &amp; design?</Label><div className="mt-1"><Choice name="own" value={state.copy_ownership} options={COPY_OWNERSHIPS} labels={COPY_OWNERSHIP_LABELS} onChange={(v) => set('copy_ownership', v)} /></div>
-            {state.copy_ownership && <p className={`mt-2 rounded p-2 text-xs ${mayPreserveCopy(state.copy_ownership) ? 'bg-emerald-50 text-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-100' : 'bg-amber-50 text-amber-900 dark:bg-amber-950/40 dark:text-amber-100'}`}>
+            {state.copy_ownership && <p className={`mt-2 rounded-xl p-2 text-xs ${mayPreserveCopy(state.copy_ownership) ? cn(TONE.green.tint, TONE.green.text) : 'bg-amber-50 text-amber-900 dark:bg-amber-950/40 dark:text-amber-100'}`}>
               {mayPreserveCopy(state.copy_ownership) ? 'The existing wording may be kept where it is accurate.' : 'Facts and the visual requirements are kept; the marketing wording is rewritten freshly, never copied. Only genuine client-owned assets are reused.'}</p>}
           </div>
           {!existingSiteUrl && <p className="flex items-start gap-2 break-words text-xs text-amber-700"><AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" /><span className="min-w-0">No confirmed current website for this client. A faithful rebuild needs one — add it in Project details or approve it under Client Build Facts.{researchNote ? ` ${researchNote}` : ''}</span></p>}
@@ -430,7 +437,7 @@ export default function WebsiteBuild() {
         <p className="text-xs text-muted-foreground">Every client-specific claim in the template, and whether this client has a verified fact to replace it. Anything not verified is removed from the build, never adapted.</p>
         <div className="overflow-x-auto"><table className="w-full text-xs"><thead><tr className="border-b text-left text-muted-foreground"><th className="py-1 pr-2">Template claim</th><th className="py-1 pr-2">In the template</th><th className="py-1">For this client</th></tr></thead>
           <tbody>{mapTemplateClaims(template, rows).map((m) => <tr key={m.id} className="border-b align-top"><td className="py-1.5 pr-2 font-medium">{m.label}</td><td className="py-1.5 pr-2 text-muted-foreground">{m.sourceExample}</td>
-            <td className={`py-1.5 ${m.verdict === 'verified' ? 'text-emerald-700 dark:text-emerald-300' : m.verdict === 'needs_approval' ? 'text-amber-700 dark:text-amber-300' : 'text-muted-foreground'}`}>{CLAIM_VERDICT_LABELS[m.verdict]}{m.clientValue ? `: ${m.clientValue}` : ''}</td></tr>)}</tbody></table></div>
+            <td className={`py-1.5 ${m.verdict === 'verified' ? TONE.green.text : m.verdict === 'needs_approval' ? 'text-amber-700 dark:text-amber-300' : 'text-muted-foreground'}`}>{CLAIM_VERDICT_LABELS[m.verdict]}{m.clientValue ? `: ${m.clientValue}` : ''}</td></tr>)}</tbody></table></div>
       </Section>}
 
       <Section title="Operator notes"><Textarea rows={3} className="text-xs" value={state.notes} placeholder="Anything Claude should know that is not a client fact (e.g. the client wants a green colour scheme)." onChange={(e) => set('notes', e.target.value)} /></Section>
@@ -446,7 +453,7 @@ export default function WebsiteBuild() {
         {state.manifest.pages.length > 0 && <PageFamiliesPanel manifest={state.manifest} />}
         {state.manifest.assets.length > 0 && <AssetInventory state={state} update={update} />}
         <RouteGuide state={state} stage="capture" update={update} />
-        {captureOn && <details className="rounded-lg border bg-card p-4 text-sm">
+        {captureOn && <details className={cn(SURFACE, 'min-w-0 p-4 text-sm')}>
           <summary className="cursor-pointer font-semibold">Local capture — downloads, screenshots, design &amp; SEO notes <span className="text-xs font-normal text-muted-foreground">(after the recon)</span></summary>
           <div className="mt-3 space-y-3">
             <p className="text-xs text-muted-foreground">Run the <b>Project setup</b> commands first so the client folder exists. The capture prompt saves the site locally in a <code>capture</code> folder and updates <code>capture/recon.json</code> — import it again above.</p>
@@ -476,8 +483,8 @@ export default function WebsiteBuild() {
 
     {/* ══ BUILD PACK ═══════════════════════════════════════════════════════════════════════ */}
     {step === 'build_pack' && <>
-      {unconfirmedServices.length > 0 && <div role="status" className="flex items-start gap-2 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-100">
-        <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" /><span><b>Not confirmed by the client:</b> {unconfirmedServices.join(', ')}. The page plan has a page for it, but it is not in the client's own services (onboarding answer or a verified fact). It answers no baseline question, and must claim nothing beyond the verified facts. Confirm it with the client before launch, or remove the page.</span></div>}
+      {unconfirmedServices.length > 0 && <div role="status"><Callout tone="amber" icon={AlertTriangle}>
+        <span><b>Not confirmed by the client:</b> {unconfirmedServices.join(', ')}. The page plan has a page for it, but it is not in the client's own services (onboarding answer or a verified fact). It answers no baseline question, and must claim nothing beyond the verified facts. Confirm it with the client before launch, or remove the page.</span></Callout></div>}
       {state.route && <QualityPanel state={state} update={update} hasExistingSite={!!existingSiteUrl} />}
       {state.route && mapping && packInput && <BuildExecutionPanel state={state} update={update} mapping={mapping} input={packInput}
         execPrompt={promptById('build_execution')} onCopy={copyPrompt} toast={toast} />}
@@ -493,7 +500,7 @@ export default function WebsiteBuild() {
         <div className="rounded bg-muted p-3 text-xs"><p className="font-medium">Paste one block at a time and read what it prints. Paste back what each step asks for (repository URL, preview URL) — this page saves as you type.</p></div>
         {pack.filter((p) => p.applicable && p.kind === 'commands').map((p) => <PackCard key={p.id} item={p} onCopy={copyItem} />)}
       </Section>
-      <details className="rounded-md border p-3 text-sm"><summary className="cursor-pointer text-xs font-medium">Full brief (V1: every stage in one prompt, plus the separate V1 QA prompts)</summary>
+      <details className={cn(SURFACE, 'min-w-0 p-4 text-sm')}><summary className="cursor-pointer text-xs font-medium">Full brief (V1: every stage in one prompt, plus the separate V1 QA prompts)</summary>
         <div className="mt-3 space-y-2">{pack.filter((p) => p.applicable && p.kind === 'prompt' && p.id !== 'capture').map((p) => <PackCard key={p.id} item={p} onCopy={copyItem} />)}</div>
       </details>
       <div className="flex justify-between"><Button variant="outline" onClick={() => goStep('architecture')}>Back</Button><Button onClick={() => goStep('preview')}>Next: Preview</Button></div>
@@ -807,7 +814,7 @@ function ProjectDetails({ defaultOpen, state, set, businessName, template, exist
   const Sugg = ({ label, onClick }: { label: string; onClick: () => void }) => <button type="button" className="truncate text-[11px] text-primary underline" onClick={onClick}>{label}</button>;
   const G = ({ title, children }: { title: string; children: ReactNode }) => <div className="space-y-2"><p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{title}</p><div className="grid gap-3 sm:grid-cols-2">{children}</div></div>;
   const summaryLine = [state.repo_name || 'no repo', state.cloudflare_project || 'no Cloudflare project', state.canonical_domain || 'no domain'].join(' · ');
-  return <details open={defaultOpen} className="rounded-lg border bg-card p-4 text-sm">
+  return <details open={defaultOpen} className={cn(SURFACE, 'min-w-0 p-4 text-sm')}>
     <summary className="cursor-pointer"><span className="font-semibold">Project details</span> <span className="text-xs text-muted-foreground">— {summaryLine}{problems.length ? ` · setup needs ${problems.length} value(s)` : ''}</span></summary>
     <div className="mt-4 space-y-5">
       <G title="Source website">

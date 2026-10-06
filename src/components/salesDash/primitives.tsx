@@ -33,16 +33,27 @@ export const SURFACE = 'rounded-[1.25rem] border border-border/70 bg-card shadow
 
 /* ── Page header and section headings (both dashboards) ─────────────────────────────────────────── */
 
-/** The top of a dashboard: a small greeting, the page name, one line of purpose, and the actions. */
-export function PageHeader({ eyebrow, title, subtitle, actions }: { eyebrow?: ReactNode; title: string; subtitle?: ReactNode; actions?: ReactNode }) {
+/** The top of every page (2026-10-06: every page, not only the dashboards): a small greeting or area
+ *  name, the page name — with the page's solid icon tile when `icon` is given — one line of purpose,
+ *  and the actions. Left-aligned at every width; the actions wrap under the title on a phone. */
+export function PageHeader({ eyebrow, title, subtitle, actions, icon: I, tone = 'blue', testId }: {
+  eyebrow?: ReactNode; title: string; subtitle?: ReactNode; actions?: ReactNode; icon?: Icon; tone?: Tone; testId?: string;
+}) {
   return (
-    <header className="flex flex-wrap items-end justify-between gap-x-4 gap-y-3 pt-1">
-      <div className="min-w-0">
-        {eyebrow && <p className="text-sm font-medium text-muted-foreground">{eyebrow}</p>}
-        <h1 className="mt-0.5 text-[1.75rem] font-extrabold leading-tight tracking-tight sm:text-[2rem]">{title}</h1>
-        {subtitle && <p className="mt-1 text-sm text-muted-foreground">{subtitle}</p>}
+    <header data-testid={testId} className="flex flex-wrap items-end justify-between gap-x-4 gap-y-3 pt-1">
+      <div className="flex min-w-0 items-start gap-3">
+        {I && (
+          <span className={cn('mt-1 flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl sm:h-11 sm:w-11', TONE[tone].solid)} aria-hidden>
+            <I className="h-5 w-5" />
+          </span>
+        )}
+        <div className="min-w-0">
+          {eyebrow && <p className="text-sm font-medium text-muted-foreground">{eyebrow}</p>}
+          <h1 className={cn('font-extrabold leading-tight tracking-tight', I ? 'text-2xl sm:text-[1.75rem]' : 'mt-0.5 text-[1.75rem] sm:text-[2rem]')}>{title}</h1>
+          {subtitle && <p className="mt-1 max-w-2xl text-sm text-muted-foreground">{subtitle}</p>}
+        </div>
       </div>
-      {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
+      {actions && <div className="flex min-w-0 flex-wrap items-center gap-2">{actions}</div>}
     </header>
   );
 }

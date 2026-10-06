@@ -14,6 +14,7 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription,
   AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import { buttonVariants } from '@/components/ui/button';
 
 /** Pure: does leaving now need the person's say-so? Positive match on a marked draft. */
 export function leaveNeedsConfirm(dirtyKeys: ReadonlySet<string> | readonly string[]): boolean {
@@ -69,7 +70,7 @@ export function useDraftGuard() {
         <AlertDialogFooter>
           <AlertDialogCancel autoFocus data-testid="keep-editing">Keep editing</AlertDialogCancel>
           <AlertDialogAction data-testid="discard-draft"
-            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            className={buttonVariants({ variant: 'destructive' })}
             onClick={() => { const p = pending; setPending(null); if (p) ledger.discard(p.go); }}>
             Discard
           </AlertDialogAction>

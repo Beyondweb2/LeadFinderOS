@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Loader2 } from 'lucide-react';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
+import { ErrorState, LoadState } from '@/components/operator/ui';
 import { supabase } from '@/integrations/supabase/client';
 import { useHookVisibility } from '@/hooks/useHookVisibility';
 import { useLeadPermissions } from '@/hooks/useLeadPermissions';
@@ -114,9 +114,9 @@ function ProspectAuditBody({ leadId, businessName }: { leadId: string; businessN
     <>
       <ProspectAuditFrame name={name} website={website}>
         {q.isLoading || hook.isLoading ? (
-          <p className="flex items-center gap-2 py-8 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> Loading stored results…</p>
+          <LoadState label="Loading stored results…" />
         ) : q.isError ? (
-          <p className="py-8 text-sm text-destructive">Could not load this lead’s results: {(q.error as Error)?.message}. <button type="button" className="underline" onClick={() => void q.refetch()}>Try again</button></p>
+          <ErrorState className="my-6" title="Could not load this lead’s results" detail={(q.error as Error)?.message} onRetry={() => void q.refetch()} />
         ) : (
           <ProspectAuditView
             score={score} rivalsWithheld={rivalsWithheld} aiInFlight={!!hook.data?.inFlight}

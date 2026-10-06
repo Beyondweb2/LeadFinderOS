@@ -9,11 +9,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
   DialogFooter,
 } from '@/components/ui/dialog';
+import { DialogHero, EmptyState, LoadState, PageHeader } from '@/components/operator/ui';
 import {
   Select,
   SelectContent,
@@ -24,7 +22,7 @@ import {
 import { Label } from '@/components/ui/label';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { 
-  Loader2, 
+  FileText,
   Plus, 
   Copy, 
   Pencil, 
@@ -111,8 +109,8 @@ const Templates = () => {
       onClick={onClick}
     >
       <CardHeader className="pb-3">
-        <div className="flex items-start justify-between">
-          <div>
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0">
             <CardTitle className="text-base">{template.title}</CardTitle>
             <CardDescription className="text-xs mt-1">
               {TEMPLATE_CATEGORY_OPTIONS.find((c) => c.value === template.category)?.label || template.category}
@@ -156,21 +154,14 @@ const Templates = () => {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center h-full py-16">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-      </div>
+      <LoadState label="Loading templates…" className="h-full py-16" />
     );
   }
 
   return (
     <div className="space-y-6">
       <SEOHead title="Outreach Templates | LeadFinder Pro" description="Manage text and voice note templates for client outreach." noindex />
-      <div>
-        <h1 className="text-2xl font-bold">Templates</h1>
-        <p className="text-muted-foreground">
-          Manage your text messages and voice note scripts
-        </p>
-      </div>
+      <PageHeader icon={FileText} tone="blue" title="Templates" subtitle="Manage your text messages and voice note scripts" />
 
       <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as TemplateType)}>
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -194,19 +185,13 @@ const Templates = () => {
 
         <TabsContent value="text" className="mt-6">
           {textTemplates.length === 0 ? (
-            <Card className="bg-card/50 border-border/50">
-              <CardContent className="py-12 text-center">
-                <MessageSquare className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-                <h3 className="font-medium mb-2">No text templates yet</h3>
-                <p className="text-sm text-muted-foreground mb-4">
-                  Create templates for your initial texts and follow-ups.
-                </p>
-                <Button onClick={() => openCreateDialog('text')}>
-                  <Plus className="h-4 w-4 mr-2" />
-                  Create First Template
-                </Button>
-              </CardContent>
-            </Card>
+            <EmptyState icon={MessageSquare} tone="blue" title="No text templates yet"
+              action={<Button onClick={() => openCreateDialog('text')}>
+                <Plus className="h-4 w-4 mr-2" />
+                Create First Template
+              </Button>}>
+              Create templates for your initial texts and follow-ups.
+            </EmptyState>
           ) : (
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
               {textTemplates.map((template) => (
@@ -222,19 +207,13 @@ const Templates = () => {
 
         <TabsContent value="voice_script" className="mt-6">
           {voiceTemplates.length === 0 ? (
-            <Card className="bg-card/50 border-border/50">
-              <CardContent className="py-12 text-center">
-                <Mic className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-                <h3 className="font-medium mb-2">No voice scripts yet</h3>
-                <p className="text-sm text-muted-foreground mb-4">
-                  Create scripts for your voice note pitches.
-                </p>
-                <Button onClick={() => openCreateDialog('voice_script')}>
-                  <Plus className="h-4 w-4 mr-2" />
-                  Create First Script
-                </Button>
-              </CardContent>
-            </Card>
+            <EmptyState icon={Mic} tone="blue" title="No voice scripts yet"
+              action={<Button onClick={() => openCreateDialog('voice_script')}>
+                <Plus className="h-4 w-4 mr-2" />
+                Create First Script
+              </Button>}>
+              Create scripts for your voice note pitches.
+            </EmptyState>
           ) : (
             <div className="grid gap-4 md:grid-cols-2">
               {voiceTemplates.map((template) => (
@@ -252,16 +231,14 @@ const Templates = () => {
       {/* Create/Edit Dialog */}
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
         <DialogContent className="sm:max-w-[500px]">
-          <DialogHeader>
-            <DialogTitle>
-              {editingTemplate ? 'Edit Template' : 'Create Template'}
-            </DialogTitle>
-            <DialogDescription>
-              {activeTab === 'text' 
-                ? 'Create a text message template for quick copying.'
-                : 'Create a voice note script to guide your pitches.'}
-            </DialogDescription>
-          </DialogHeader>
+          <DialogHero
+            icon={activeTab === 'text' ? MessageSquare : Mic}
+            tone="blue"
+            title={editingTemplate ? 'Edit Template' : 'Create Template'}
+            subtitle={activeTab === 'text'
+              ? 'Create a text message template for quick copying.'
+              : 'Create a voice note script to guide your pitches.'}
+          />
           <div className="space-y-4 py-4">
             <div className="space-y-2">
               <Label htmlFor="title">Title</Label>
@@ -322,19 +299,12 @@ const Templates = () => {
       {/* View Template Dialog (Full Screen Popup) */}
       <Dialog open={!!viewingTemplate} onOpenChange={(open) => !open && setViewingTemplate(null)}>
         <DialogContent className="sm:max-w-[700px] max-h-[80vh]">
-          <DialogHeader>
-            <DialogTitle className="text-xl flex items-center gap-2">
-              {viewingTemplate?.template_type === 'voice_script' ? (
-                <Mic className="h-5 w-5" />
-              ) : (
-                <MessageSquare className="h-5 w-5" />
-              )}
-              {viewingTemplate?.title}
-            </DialogTitle>
-            <DialogDescription>
-              {TEMPLATE_CATEGORY_OPTIONS.find((c) => c.value === viewingTemplate?.category)?.label || viewingTemplate?.category}
-            </DialogDescription>
-          </DialogHeader>
+          <DialogHero
+            icon={viewingTemplate?.template_type === 'voice_script' ? Mic : MessageSquare}
+            tone="blue"
+            title={viewingTemplate?.title}
+            subtitle={TEMPLATE_CATEGORY_OPTIONS.find((c) => c.value === viewingTemplate?.category)?.label || viewingTemplate?.category}
+          />
           <ScrollArea className="max-h-[50vh]">
             <div className="py-4">
               <p className="text-lg leading-relaxed whitespace-pre-wrap">

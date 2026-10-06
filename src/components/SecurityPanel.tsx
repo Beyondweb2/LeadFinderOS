@@ -1,7 +1,9 @@
 import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { AlertTriangle, Loader2, OctagonX, PauseCircle, PlayCircle, RefreshCw, ShieldAlert, ShieldCheck } from 'lucide-react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { AlertTriangle, Ban, Download, Gauge, History, OctagonX, PauseCircle, PlayCircle, RefreshCw, ShieldAlert, ShieldCheck, Users, Wallet } from 'lucide-react';
+import { cn } from '@/lib/utils';
+import { Callout, EDGE, ErrorState, IconTile, LoadState, SURFACE, TONE, ToneChip } from '@/components/operator/ui';
+import { Panel } from '@/components/salesDash/ui';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
@@ -76,13 +78,10 @@ export function SecurityPanel() {
     await act({ action: 'set_mode', mode }, `Paid actions: ${MODE_WORDS[mode].label}`);
   };
 
-  if (q.isLoading) return <Card><CardContent className="p-6"><Loader2 className="h-5 w-5 animate-spin" /></CardContent></Card>;
+  if (q.isLoading) return <LoadState compact label="Loading the security overview…" className={SURFACE} />;
   if (q.error || !q.data) {
     return (
-      <Card><CardContent className="p-4 text-sm text-destructive flex items-center gap-3">
-        Could not load the security overview: {edgeErrorMessage(q.error, 'request failed')}
-        <Button size="sm" variant="outline" onClick={() => void refresh()}>Retry</Button>
-      </CardContent></Card>
+      <ErrorState title="Could not load the security overview" detail={edgeErrorMessage(q.error, 'request failed')} onRetry={() => void refresh()} retryLabel="Retry" />
     );
   }
   const d = q.data;
@@ -97,24 +96,22 @@ export function SecurityPanel() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h2 className="text-xl font-semibold flex items-center gap-2"><ShieldCheck className="h-5 w-5" /> Security &amp; usage</h2>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h2 className="flex min-w-0 items-center gap-2.5 text-lg font-bold tracking-tight"><IconTile icon={ShieldCheck} tone="blue" size="sm" /> Security &amp; usage</h2>
         <Button variant="outline" size="sm" onClick={() => void refresh()} disabled={q.isFetching}><RefreshCw className={`h-4 w-4 mr-2 ${q.isFetching ? 'animate-spin' : ''}`} />Refresh</Button>
       </div>
 
       {!d.webhook_signature_enforced && (
-        <div className="flex items-start gap-3 p-3 rounded-lg border bg-destructive/10 border-destructive/30 text-destructive">
-          <ShieldAlert className="h-5 w-5 shrink-0 mt-0.5" />
-          <div className="text-sm"><span className="font-semibold">WhatsApp webhook signatures are not verified.</span> WHATSAPP_APP_SECRET is not set. Until it is, the current webhook accepts unsigned posts (anyone who finds its address could post a fake reply), and the fail-closed webhook (built, held until the Findable Meta App is ready) would refuse every reply. Add the Meta App Secret (see the setup note) and this warning clears.</div>
-        </div>
+        <Callout tone="red" icon={ShieldAlert} title="WhatsApp webhook signatures are not verified.">
+          <span className="break-words">WHATSAPP_APP_SECRET is not set. Until it is, the current webhook accepts unsigned posts (anyone who finds its address could post a fake reply), and the fail-closed webhook (built, held until the Findable Meta App is ready) would refuse every reply. Add the Meta App Secret (see the setup note) and this warning clears.</span>
+        </Callout>
       )}
 
       {/* The ONE control for paid actions. */}
-      <Card className={d.mode === 'all_stop' ? 'border-destructive' : d.mode === 'prospecting_paused' ? 'border-yellow-500/60' : ''}>
-        <CardContent className="p-4 space-y-3">
+      <section className={cn('min-w-0 p-4 space-y-3', SURFACE, EDGE[d.mode === 'all_stop' ? 'red' : d.mode === 'prospecting_paused' ? 'amber' : 'green'])}>
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-sm text-muted-foreground mr-1">Paid actions:</span>
-            <Badge variant={d.mode === 'running' ? 'secondary' : 'destructive'} className="text-sm">{mode.label}</Badge>
+            <ToneChip tone={d.mode === 'all_stop' ? 'red' : d.mode === 'prospecting_paused' ? 'amber' : 'green'} dot className="text-xs">{mode.label}</ToneChip>
             <div className="ml-auto flex flex-wrap gap-2">
               <Button size="sm" variant={d.mode === 'running' ? 'default' : 'outline'} disabled={busy || d.mode === 'running'} onClick={() => void setMode('running')}><PlayCircle className="h-4 w-4 mr-1.5" />Resume</Button>
               <Button size="sm" variant="outline" disabled={busy || d.mode === 'prospecting_paused'} onClick={() => void setMode('prospecting_paused')}><PauseCircle className="h-4 w-4 mr-1.5" />Pause paid prospecting</Button>
@@ -122,8 +119,7 @@ export function SecurityPanel() {
             </div>
           </div>
           <p className="text-xs text-muted-foreground">{mode.explain}</p>
-        </CardContent>
-      </Card>
+      </section>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <Stat label="Spend today (actual)" value={usd(d.today_total_usd)} />
@@ -133,17 +129,12 @@ export function SecurityPanel() {
       </div>
 
       <div className="grid md:grid-cols-2 gap-4">
-        <Card>
-          <CardHeader className="pb-2"><CardTitle className="text-base">Spend today by provider</CardTitle></CardHeader>
-          <CardContent>
+        <Panel title="Spend today by provider" icon={Wallet} tone="green">
             <Table><TableHeader><TableRow><TableHead>Provider</TableHead><TableHead className="text-right">Rows</TableHead><TableHead className="text-right">Spend</TableHead></TableRow></TableHeader>
               <TableBody>{d.by_provider.map((p) => <TableRow key={p.provider}><TableCell>{p.provider}</TableCell><TableCell className="text-right">{p.rows}</TableCell><TableCell className="text-right font-medium">{usd(p.usd)}</TableCell></TableRow>)}
                 {!d.by_provider.length && <TableRow><TableCell colSpan={3} className="text-muted-foreground text-center">Nothing yet today</TableCell></TableRow>}</TableBody></Table>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2"><CardTitle className="text-base">Spend today by person</CardTitle></CardHeader>
-          <CardContent>
+        </Panel>
+        <Panel title="Spend today by person" icon={Users} tone="grey">
             <Table><TableHeader><TableRow><TableHead>Person</TableHead><TableHead className="text-right">Spend</TableHead><TableHead className="text-right">Refused</TableHead></TableRow></TableHeader>
               <TableBody>{d.by_user.map((u) => (
                 <TableRow key={u.user_id ?? 'system'}>
@@ -152,32 +143,29 @@ export function SecurityPanel() {
                   <TableCell className="text-right">{u.refused || ''}</TableCell>
                 </TableRow>))}</TableBody></Table>
             <p className="text-[11px] text-muted-foreground mt-1">* includes an estimate for work billed to the book owner (a salesperson&apos;s hook audits, AI drafts).</p>
-          </CardContent>
-        </Card>
+        </Panel>
       </div>
 
-      <Card>
-        <CardHeader className="pb-2"><CardTitle className="text-base flex items-center gap-2"><AlertTriangle className="h-4 w-4" />Warnings (7 days)</CardTitle></CardHeader>
-        <CardContent className="space-y-2">
+      <Panel title="Warnings (7 days)" icon={AlertTriangle} tone="amber">
+        <div className="space-y-2">
           {!warnings.length && <p className="text-sm text-muted-foreground">Nothing unusual.</p>}
           {warnings.slice(0, 25).map((e) => (
             <div key={e.id} className="flex flex-wrap items-start gap-2 text-sm border-b last:border-0 pb-2">
               <Badge variant={e.severity === 'warning' ? 'secondary' : 'destructive'}>{e.severity}</Badge>
               <span className="font-medium">{e.name ?? 'System'}</span>
-              <span className="text-muted-foreground flex-1 min-w-[240px]">{describeSecurityEvent(e)}</span>
+              <span className="text-muted-foreground flex-1 min-w-0 basis-[240px] break-words">{describeSecurityEvent(e)}</span>
               <span className="text-xs text-muted-foreground">{when(e.last_at)}{e.alerted_at ? ' · emailed' : ''}</span>
             </div>
           ))}
-        </CardContent>
-      </Card>
+        </div>
+      </Panel>
 
       <div className="grid md:grid-cols-2 gap-4">
-        <Card>
-          <CardHeader className="pb-2"><CardTitle className="text-base">Restricted and suspended</CardTitle></CardHeader>
-          <CardContent className="space-y-2 text-sm">
+        <Panel title="Restricted and suspended" icon={Ban} tone="red">
+          <div className="space-y-2 text-sm">
             {!d.restricted_now.length && !suspended.length && <p className="text-muted-foreground">Nobody is restricted or suspended.</p>}
             {d.restricted_now.map((r) => (
-              <div key={`${r.user_id}-${r.reason}`} className="flex items-center gap-2">
+              <div key={`${r.user_id}-${r.reason}`} className="flex flex-wrap items-center gap-2">
                 <Badge variant="destructive">restricted</Badge><span className="font-medium">{r.name ?? r.user_id}</span>
                 <span className="text-muted-foreground">{r.reason.replace(/_/g, ' ')}</span>
                 <Button size="sm" variant="outline" className="ml-auto h-7" disabled={busy} onClick={() => void act({ action: 'unlock_user', user_id: r.user_id, hours: 24 }, `Limits lifted for ${r.name ?? 'them'} for 24 hours`)}>Unlock 24 h</Button>
@@ -192,28 +180,25 @@ export function SecurityPanel() {
               </div>
             ))}
             {Object.entries(d.overrides ?? {}).filter(([, until]) => Date.parse(until) > Date.now()).map(([uid, until]) => (
-              <div key={uid} className="flex items-center gap-2 text-xs text-muted-foreground">
+              <div key={uid} className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                 Limits lifted for {d.members.find((m) => m.user_id === uid)?.name ?? uid} until {when(until)}
                 <Button size="sm" variant="ghost" className="h-6 ml-auto" disabled={busy} onClick={() => void act({ action: 'unlock_user', user_id: uid, hours: 0 }, 'Limits restored')}>Restore limits</Button>
               </div>
             ))}
             <p className="text-xs text-muted-foreground pt-1">Refused requests in the last 24 h: {d.denied_24h}. Ten from one person in ten minutes emails you.</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2"><CardTitle className="text-base">Exports and Copy Numbers (7 days)</CardTitle></CardHeader>
-          <CardContent className="space-y-1 text-sm">
+          </div>
+        </Panel>
+        <Panel title="Exports and Copy Numbers (7 days)" icon={Download} tone="blue">
+          <div className="space-y-1 text-sm">
             {!exports.length && <p className="text-muted-foreground">None.</p>}
             {exports.slice(0, 15).map((e) => (
-              <div key={e.id} className="flex gap-2"><span className="font-medium">{e.name ?? '—'}</span><span className="text-muted-foreground flex-1">{describeSecurityEvent(e)}</span><span className="text-xs text-muted-foreground">{when(e.created_at)}</span></div>
+              <div key={e.id} className="flex flex-wrap gap-x-2"><span className="font-medium">{e.name ?? '—'}</span><span className="text-muted-foreground flex-1 min-w-0 break-words">{describeSecurityEvent(e)}</span><span className="text-xs text-muted-foreground">{when(e.created_at)}</span></div>
             ))}
-          </CardContent>
-        </Card>
+          </div>
+        </Panel>
       </div>
 
-      <Card>
-        <CardHeader className="pb-2"><CardTitle className="text-base">Recent guarded activity</CardTitle></CardHeader>
-        <CardContent>
+      <Panel title="Recent guarded activity" icon={History} tone="grey">
           <Table><TableHeader><TableRow><TableHead>When</TableHead><TableHead>Person</TableHead><TableHead>Action</TableHead><TableHead>Outcome</TableHead><TableHead className="text-right">Count</TableHead></TableRow></TableHeader>
             <TableBody>{d.recent.slice(0, 20).map((r, i) => (
               <TableRow key={`${r.created_at}-${i}`}>
@@ -221,13 +206,10 @@ export function SecurityPanel() {
                 <TableCell>{r.outcome === 'allowed' ? 'ok' : <Badge variant={r.outcome === 'warned' ? 'secondary' : 'destructive'}>{r.outcome}{r.reason ? ` · ${r.reason.replace(/_/g, ' ')}` : ''}</Badge>}</TableCell>
                 <TableCell className="text-right">{r.units}</TableCell>
               </TableRow>))}</TableBody></Table>
-        </CardContent>
-      </Card>
+      </Panel>
 
-      <Card>
-        <CardHeader className="pb-2 flex flex-row items-center justify-between">
-          <CardTitle className="text-base">Thresholds</CardTitle>
-          {!editing ? <Button size="sm" variant="outline" onClick={() => setEditing(structuredClone(L))}>Edit</Button> : (
+      <Panel title="Thresholds" icon={Gauge} tone="blue" action={
+          !editing ? <Button size="sm" variant="outline" onClick={() => setEditing(structuredClone(L))}>Edit</Button> : (
             <div className="flex gap-2">
               <Button size="sm" variant="ghost" onClick={() => setEditing(null)}>Cancel</Button>
               <Button size="sm" disabled={busy} onClick={async () => {
@@ -236,9 +218,8 @@ export function SecurityPanel() {
                 if (await act({ action: 'set_limits', limits: v.limits }, 'Thresholds saved')) setEditing(null);
               }}>Save</Button>
             </div>
-          )}
-        </CardHeader>
-        <CardContent className="text-sm space-y-3">
+          )}>
+        <div className="text-sm space-y-3">
           <p className="text-xs text-muted-foreground">Per salesperson (the admin is never limited). Set from real usage on 29 Sep 2026 — a very productive day stays under every line.</p>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
             {(['user_hour_warn_usd', 'user_hour_hard_usd', 'user_day_warn_usd', 'user_day_hard_usd', 'team_hour_warn_usd', 'team_day_warn_usd', 'team_day_cap_usd', 'denied_alert_10min', 'apify_warn_pct'] as const).map((k) => (
@@ -265,19 +246,17 @@ export function SecurityPanel() {
                 </TableRow>
               );
             })}</TableBody></Table>
-        </CardContent>
-      </Card>
+        </div>
+      </Panel>
     </div>
   );
 }
 
 function Stat({ label, value, alert }: { label: string; value: string; alert?: boolean }) {
   return (
-    <Card className={alert ? 'border-destructive/60' : ''}>
-      <CardContent className="p-3">
-        <p className="text-xs text-muted-foreground">{label}</p>
-        <p className={`text-lg font-semibold ${alert ? 'text-destructive' : ''}`}>{value}</p>
-      </CardContent>
-    </Card>
+    <div className={cn('min-w-0 rounded-2xl px-3.5 py-3', alert ? TONE.red.tint : 'bg-muted/40 ring-1 ring-inset ring-border/40')}>
+      <p className="text-[11px] font-semibold text-muted-foreground">{label}</p>
+      <p className={cn('mt-0.5 break-words text-lg font-extrabold tabular-nums leading-tight tracking-tight', alert && TONE.red.text)}>{value}</p>
+    </div>
   );
 }

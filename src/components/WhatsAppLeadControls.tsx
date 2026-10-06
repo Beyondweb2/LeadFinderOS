@@ -154,9 +154,9 @@ export function WhatsAppLeadControls({
   }
   const summary = queued ? `Queued${lead.whatsapp_template ? ` · ${lead.whatsapp_template}` : ''}` : lead.status === 'whatsapp_failed' ? 'Last send failed' : 'Not queued';
   const alert = lead.status === 'whatsapp_failed' && !queued ? (
-    <p className="text-[11px] leading-relaxed text-orange-400">Previous WhatsApp send failed (temporary). You can re-queue to try again.</p>
+    <p className="text-[11px] leading-relaxed text-amber-700 dark:text-amber-300">Previous WhatsApp send failed (temporary). You can re-queue to try again.</p>
   ) : queued && queueLine.tone === 'paused' ? (
-    <p className="text-[11px] font-medium text-amber-500" data-testid="queued-paused">{queueLine.text}</p>
+    <p className="text-[11px] font-medium text-amber-700 dark:text-amber-300" data-testid="queued-paused">{queueLine.text}</p>
   ) : null;
 
   return (
@@ -192,15 +192,15 @@ export function WhatsAppLeadControls({
           {/* Says why the button is dead. A disabled control with no explanation reads as a bug,
               and the picker's own placeholder is easy to miss. */}
           {!queued && template && !approval.ok && (
-            <p className="mt-1.5 text-center text-[10px] text-orange-400">{approval.reason}</p>
+            <p className="mt-1.5 text-center text-[10px] text-amber-700 dark:text-amber-300">{approval.reason}</p>
           )}
           {!queued && !templateChosen && (
-            <p className="mt-1.5 text-center text-[10px] text-orange-400">
+            <p className="mt-1.5 text-center text-[10px] text-amber-700 dark:text-amber-300">
               Choose a template above before queueing — nothing is picked by default.
             </p>
           )}
           {queued && (
-            <p className={`mt-1.5 text-center text-[10px] ${queueLine.tone === 'paused' ? 'font-medium text-amber-500' : 'text-sky-400'}`} data-testid="queued-line">
+            <p className={`mt-1.5 text-center text-[10px] ${queueLine.tone === 'paused' ? 'font-medium text-amber-700 dark:text-amber-300' : 'text-sky-600 dark:text-sky-400'}`} data-testid="queued-line">
               {lead.whatsapp_template ? `${lead.whatsapp_template} · ` : ''}{queueLine.text}{salesPath ? ' Ask the admin to take it out of the queue.' : ''}
             </p>
           )}

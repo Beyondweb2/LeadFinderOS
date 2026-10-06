@@ -22,6 +22,7 @@
    ════════════════════════════════════════════════════════════════════════════════════════════ */
 import { useMemo, useState } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
+import { EmptyState } from '@/components/operator/ui';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -250,28 +251,21 @@ export function AuditBookList({
 
       {/* ── THE LIST ─────────────────────────────────────────────────────────────────────── */}
       {businesses.length > 0 && rows.length === 0 ? (
-        <div className="rounded-lg border border-dashed border-border/60 bg-card/40 px-4 py-6 text-center">
-          <Search className="mx-auto mb-2 h-5 w-5 text-muted-foreground" />
-          <div className="text-sm font-medium">
-            No audits match {deferredQuery ? <>&ldquo;{deferredQuery}&rdquo;</> : 'this filter'}
-          </div>
-          <div className="text-[11px] text-muted-foreground">
-            Searched {businesses.length} business{businesses.length === 1 ? '' : 'es'} by name, trade and town
-            {auditsCapped ? `, from the latest ${fetchLimit} audits loaded` : ''}.
-          </div>
-          <Button size="sm" variant="outline" className="mt-3" onClick={() => { onQueryChange(''); setTrade('all'); reset(); }}>
+        <EmptyState icon={Search} tone="grey"
+          title={<>No audits match {deferredQuery ? <>&ldquo;{deferredQuery}&rdquo;</> : 'this filter'}</>}
+          action={<Button size="sm" variant="outline" onClick={() => { onQueryChange(''); setTrade('all'); reset(); }}>
             <X className="mr-1.5 h-3.5 w-3.5" /> Clear filters
-          </Button>
-        </div>
+          </Button>}>
+          Searched {businesses.length} business{businesses.length === 1 ? '' : 'es'} by name, trade and town
+          {auditsCapped ? `, from the latest ${fetchLimit} audits loaded` : ''}.
+        </EmptyState>
       ) : businesses.length === 0 ? (
-        <div className="rounded-lg border border-dashed border-border/60 bg-card/40 px-4 py-6 text-center">
-          <Sparkles className="mx-auto mb-2 h-5 w-5 text-muted-foreground" />
-          <div className="text-sm font-medium">No audits yet</div>
-          <div className="text-[11px] text-muted-foreground">Run your first audit to see how AI answers for a business.</div>
-          <Button size="sm" className="mt-3" onClick={onNewAudit}>
+        <EmptyState icon={Sparkles} tone="purple" title="No audits yet"
+          action={<Button size="sm" onClick={onNewAudit}>
             <Plus className="mr-1.5 h-4 w-4" /> New audit
-          </Button>
-        </div>
+          </Button>}>
+          Run your first audit to see how AI answers for a business.
+        </EmptyState>
       ) : (
         <>
           <div className="divide-y divide-border/50 rounded-lg border border-border/60">

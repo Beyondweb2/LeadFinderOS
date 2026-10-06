@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
-import { AlertCircle, Loader2, Plus, Save, X } from 'lucide-react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { AlertCircle, ClipboardList, Info, Loader2, Plus, Save, X } from 'lucide-react';
+import { Dialog, DialogContent } from '@/components/ui/dialog';
+import { ActionBar, Callout, DialogHero, LoadState, SubSection } from '@/components/operator/ui';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -29,11 +30,15 @@ import {
 
 const call = (body: Record<string, unknown>) => invokeEdge<Record<string, any>>('paid-client-hub', body);
 
+/* 2026-10-06 design consistency: each question group is a SubSection (marker + heading, no box of its
+   own), not a stack of identical grey bordered boxes. */
 function Panel({ headline, sub, children }: { headline: string; sub: string; children: ReactNode }) {
-  return <section className="space-y-3 rounded-md border p-3">
-    <div><h3 className="font-medium">{headline}</h3><p className="text-xs text-muted-foreground">{sub}</p></div>
-    {children}
-  </section>;
+  return <SubSection title={headline} tone="blue" className="border-t border-border/60 pt-4">
+    <div className="space-y-3">
+      <p className="-mt-1 text-xs text-muted-foreground">{sub}</p>
+      {children}
+    </div>
+  </SubSection>;
 }
 
 function Radio<T extends string>({ name, value, options, onChange }: { name: string; value: T | null; options: ReadonlyArray<{ value: T; label: string }>; onChange: (v: T) => void }) {
@@ -133,12 +138,12 @@ export function ManualOnboardingDialog({ leadId, open, onOpenChange, onSaved }: 
 
   return <Dialog open={open} onOpenChange={onOpenChange}>
     <DialogContent className="max-h-[92vh] max-w-3xl overflow-y-auto">
-      <DialogHeader><DialogTitle>{row ? 'Edit onboarding answers' : 'Complete onboarding manually'}</DialogTitle></DialogHeader>
-      {loading && <div className="flex justify-center py-10"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div>}
-      {error && <div role="alert" className="flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive"><AlertCircle className="mt-0.5 h-4 w-4 shrink-0" /><span>{error}</span></div>}
+      <DialogHero icon={ClipboardList} tone="blue" title={row ? 'Edit onboarding answers' : 'Complete onboarding manually'} />
+      {loading && <LoadState />}
+      {error && <Callout tone="red" icon={AlertCircle}>{error}</Callout>}
       {a && !loading && <div className="space-y-4 text-sm">
-        <p className="rounded-md bg-muted p-2 text-xs">You are answering the client’s onboarding questions on their behalf. These are the same questions, saved to the same record; it is marked as entered by you, never as submitted by the client. Current state: <b>{status.label}</b>. Blank answers are prefilled from the client record where it has one — check each before saving. Nothing is sent to the client and no baseline starts.</p>
-        {row && String(row.status ?? '') !== 'paid' && <p className="text-xs text-amber-700 dark:text-amber-300">The client started onboarding themselves (status “{String(row.status)}”) but it was never marked paid. Saving adopts that record and marks it paid — no second record is created.</p>}
+        <Callout tone="blue" icon={Info} className="text-xs">You are answering the client’s onboarding questions on their behalf. These are the same questions, saved to the same record; it is marked as entered by you, never as submitted by the client. Current state: <b>{status.label}</b>. Blank answers are prefilled from the client record where it has one — check each before saving. Nothing is sent to the client and no baseline starts.</Callout>
+        {row && String(row.status ?? '') !== 'paid' && <Callout tone="amber" className="text-xs">The client started onboarding themselves (status “{String(row.status)}”) but it was never marked paid. Saving adopts that record and marks it paid — no second record is created.</Callout>}
 
         <Panel headline={C.you.headline} sub={C.you.sub}>
           <div className="grid gap-3 sm:grid-cols-2">
@@ -174,7 +179,7 @@ export function ManualOnboardingDialog({ leadId, open, onOpenChange, onSaved }: 
           {siteAccess && siteAccess !== 'yes_access' && (() => {
             const hasSite = siteAccess !== 'no_website';
             const v = domainAuthority({ newSite: true, hasCurrentSite: hasSite, domain_status: a.domain_status, domain_owned: a.domain_owned, domain_access: a.domain_access, domain_third_party: a.domain_third_party, authority_confirmed: a.authority_confirmed, dns_permission: a.dns_permission, materials_confirmed: a.materials_confirmed, site_rights: a.site_rights });
-            return <div className="space-y-3 rounded-md border p-3" data-testid="manual-domain-section">
+            return <div className="space-y-3 rounded-xl border border-border/70 p-3" data-testid="manual-domain-section">
               <p className="font-medium">Your domain</p>
               <p className="text-xs text-muted-foreground">{AGENCY_CONTRACT_NOTE}</p>
               {a.domain_status === 'new' && <p className="text-xs text-muted-foreground">{NEW_DOMAIN_REGISTRATION_NOTE}</p>}
@@ -187,7 +192,7 @@ export function ManualOnboardingDialog({ leadId, open, onOpenChange, onSaved }: 
               {hasSite && <label className="flex items-start gap-2"><input type="checkbox" className="mt-1" checked={a.authority_confirmed} onChange={(e) => set('authority_confirmed', e.target.checked)} /><span>{DOMAIN_QUESTIONS.authority}</span></label>}
               <label className="flex items-start gap-2"><input type="checkbox" className="mt-1" checked={a.dns_permission} onChange={(e) => set('dns_permission', e.target.checked)} /><span>{DOMAIN_QUESTIONS.dns}</span></label>
               <label className="flex items-start gap-2"><input type="checkbox" className="mt-1" checked={a.materials_confirmed} onChange={(e) => set('materials_confirmed', e.target.checked)} /><span>{DOMAIN_QUESTIONS.materials}</span></label>
-              <p className={`text-xs font-semibold ${v.ready ? 'text-emerald-600' : 'text-amber-600'}`}>{v.label}{v.reasons.length ? `: ${v.reasons.map((r) => DOMAIN_REASON_TEXT[r]).join(', ')}` : ''}</p>
+              <p className={`text-xs font-semibold ${v.ready ? 'text-teal-700 dark:text-teal-300' : 'text-amber-700 dark:text-amber-300'}`}>{v.label}{v.reasons.length ? `: ${v.reasons.map((r) => DOMAIN_REASON_TEXT[r]).join(', ')}` : ''}</p>
               <p className="text-xs text-muted-foreground">Tick only what the client has actually confirmed.</p>
             </div>;
           })()}
@@ -235,10 +240,10 @@ export function ManualOnboardingDialog({ leadId, open, onOpenChange, onSaved }: 
           </div>
         </Panel>
 
-        <div className="flex items-center justify-between gap-2">
-          <p className="text-xs text-muted-foreground">{a.confirmed_location.trim() && a.services.length ? 'Primary town and services are set — the baseline can be prepared.' : 'You can save a partial record and finish later. The baseline needs a primary town and at least one service.'}</p>
+        <ActionBar className="justify-between">
+          <p className="min-w-0 flex-1 basis-60 text-xs text-muted-foreground">{a.confirmed_location.trim() && a.services.length ? 'Primary town and services are set — the baseline can be prepared.' : 'You can save a partial record and finish later. The baseline needs a primary town and at least one service.'}</p>
           <Button disabled={saving || problems.length > 0} onClick={() => void save()}>{saving ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <Save className="mr-1 h-4 w-4" />}Save onboarding answers</Button>
-        </div>
+        </ActionBar>
       </div>}
     </DialogContent>
   </Dialog>;

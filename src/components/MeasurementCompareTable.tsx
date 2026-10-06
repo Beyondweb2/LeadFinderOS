@@ -19,10 +19,11 @@
    the default.
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 import { useMemo, useState } from 'react';
-import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
-import { Copy, Download, FileText } from 'lucide-react';
+import { Copy, Download, FileText, ListOrdered } from 'lucide-react';
+import { IconTile, SURFACE, TONE, type Tone } from '@/components/operator/ui';
+import { cn } from '@/lib/utils';
 import {
   MEASUREMENT_ORDERS,
   MEASUREMENT_ORDER_LABELS,
@@ -41,20 +42,21 @@ import {
 } from '@/lib/measurementExport';
 import { downloadHtmlDocAsPdf } from '@/lib/aiAuditReportDownload';
 
-const CHIP: Record<Movement, { label: string; cls: string }> = {
-  improved: { label: 'improved', cls: 'bg-emerald-100 text-emerald-900 border-emerald-300' },
-  dropped: { label: 'dropped', cls: 'bg-red-100 text-red-900 border-red-300' },
-  within_noise: { label: 'within noise', cls: 'bg-muted text-muted-foreground border-border' },
-  unchanged: { label: 'unchanged', cls: 'bg-muted text-muted-foreground border-border' },
-  only_before: { label: 'not re-asked', cls: 'bg-muted/50 text-muted-foreground border-border' },
-  only_after: { label: 'new question', cls: 'bg-sky-100 text-sky-900 border-sky-300' },
+/* The operator tones: green (drawn teal) improved · red dropped · blue new · grey the rest. */
+const CHIP: Record<Movement, { label: string; tone: Tone }> = {
+  improved: { label: 'improved', tone: 'green' },
+  dropped: { label: 'dropped', tone: 'red' },
+  within_noise: { label: 'within noise', tone: 'grey' },
+  unchanged: { label: 'unchanged', tone: 'grey' },
+  only_before: { label: 'not re-asked', tone: 'grey' },
+  only_after: { label: 'new question', tone: 'blue' },
 };
 
 function MoveChip({ movement, thin }: { movement: Movement; thin: boolean }) {
   const c = CHIP[movement];
   return (
     <span className="whitespace-nowrap">
-      <span className={`inline-block rounded-full border px-2 py-0.5 text-[11px] font-medium ${c.cls}`}>
+      <span className={cn('inline-block rounded-full px-2 py-0.5 text-[11px] font-medium ring-1 ring-inset', TONE[c.tone].soft, TONE[c.tone].text, TONE[c.tone].ring)}>
         {c.label}
       </span>
       {/* ⛔ THE PER-ROW "unproven" SUFFIX WAS REMOVED. On a real measurement nearly every row
@@ -148,14 +150,17 @@ export function MeasurementCompareTable({
   );
 
   return (
-    <Card className="p-4 sm:p-5">
+    <section className={cn(SURFACE, 'min-w-0 p-4 sm:p-5')}>
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h2 className="text-base font-semibold">Question by question</h2>
-          <p className="mt-1 text-xs text-muted-foreground">Same question, before and after.</p>
+        <div className="flex min-w-0 items-start gap-3">
+          <IconTile icon={ListOrdered} tone="purple" />
+          <div className="min-w-0">
+            <h2 className="text-base font-bold tracking-tight">Question by question</h2>
+            <p className="mt-0.5 text-xs text-muted-foreground">Same question, before and after.</p>
+          </div>
         </div>
         <div className="flex flex-wrap items-center gap-1.5">
-          <div className="flex items-center rounded-md border border-border/60 overflow-hidden">
+          <div className="flex items-center gap-0.5 rounded-full bg-muted/70 p-0.5 ring-1 ring-inset ring-border/50">
             {MEASUREMENT_ORDERS.map((o) => (
               <button
                 key={o}
@@ -164,8 +169,9 @@ export function MeasurementCompareTable({
                 title={o === 'asked'
                   ? 'The order the questions were asked — stable, so two exports of the same audit can be read against each other'
                   : 'Biggest movers first — the order a client reads their report in'}
-                className={`h-7 px-2 text-[11px] font-medium transition ${
-                  order === o ? 'bg-primary text-primary-foreground' : 'bg-transparent text-muted-foreground hover:text-foreground'
+                aria-pressed={order === o}
+                className={`h-6 rounded-full px-2.5 text-[11px] font-semibold transition ${
+                  order === o ? 'bg-card text-foreground shadow-sm ring-1 ring-border/60' : 'bg-transparent text-muted-foreground hover:text-foreground'
                 }`}
               >
                 {MEASUREMENT_ORDER_LABELS[o]}
@@ -248,7 +254,7 @@ export function MeasurementCompareTable({
         Movement under ±{NOISE_BAND_PP} points is not called improvement: repeat measurements with no work done swing
         by about that much. The exports carry the same flags.
       </p>
-    </Card>
+    </section>
   );
 }
 

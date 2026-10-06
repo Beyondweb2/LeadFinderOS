@@ -125,7 +125,8 @@ async function main() {
     check('7. the hub spinner component carries the primary accent', hub.includes('animate-spin text-primary'));
     check('7. no bare white spinner remains in the hub', !/<Loader2 className="animate-spin"\s*\/>/.test(hub));
     check('7. page and dialog loading states use the accented spinner', hub.includes('<div className="flex justify-center py-16"><Spinner') && hub.includes('<div className="flex justify-center py-12"><Spinner'));
-    check('7. the setup page spinner keeps the accent', setup.includes('animate-spin text-primary'));
+    /* 2026-10-06 design consistency: the setup page loads through the shared LoadState, whose spinner is the same accent. */
+    check('7. the setup page spinner keeps the accent', setup.includes('animate-spin text-primary') || setup.includes('<LoadState'));
   }
   // 8. Discovery remains separate research.
   {

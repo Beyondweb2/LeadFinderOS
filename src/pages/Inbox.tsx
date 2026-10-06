@@ -32,7 +32,8 @@ import { voiceSendErrorMessage } from '@/lib/voiceNote';
 import type { VoiceClip } from '@/lib/voiceRecorderState';
 import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogFooter } from '@/components/ui/dialog';
+import { DialogHero, EmptyState, ErrorState, IconTile, LoadState, SubSection } from '@/components/operator/ui';
 import { Card } from '@/components/ui/card';
 import { CampaignPicker } from '@/components/CampaignPicker';
 import { PipelineStatusSelect } from '@/components/PipelineStatusSelect';
@@ -1756,9 +1757,9 @@ const Inbox = () => {
           text-sm, and an active filter is drawn in the primary colour, the same way on all five. */}
       <div className={cn('space-y-3 md:shrink-0', active && 'hidden md:block')}>
         <div className="flex flex-wrap items-center gap-x-4 gap-y-3">
-          <div className="flex min-w-0 flex-1 items-baseline gap-3">
+          <div className="flex min-w-0 flex-1 items-center gap-3">
             {/* ⛔ It SAYS WhatsApp (Paul, 2026-09-28). One conversation system, one page, both roles. */}
-            <h1 className="flex shrink-0 items-center gap-2 text-xl font-bold tracking-tight sm:text-2xl"><MessageCircle className="h-6 w-6 shrink-0 text-blue-500" />WhatsApp Inbox</h1>
+            <h1 className="flex shrink-0 items-center gap-2.5 text-xl font-extrabold leading-tight tracking-tight sm:text-2xl"><IconTile icon={MessageCircle} tone="blue" />WhatsApp Inbox</h1>
             <p className="hidden truncate text-sm text-muted-foreground min-[1760px]:block">Every WhatsApp conversation with your leads.</p>
           </div>
           {/* The one auto-reply rule's switch (admin-only — hides itself otherwise). */}
@@ -2000,29 +2001,24 @@ const Inbox = () => {
             </div>
           )}
           {isLoading ? (
-            <div className="flex h-full items-center justify-center"><Loader2 className="h-5 w-5 animate-spin text-primary" /></div>
+            <LoadState className="h-full" label="Loading conversations…" />
           ) : isError ? (
-            <div className="flex h-full flex-col items-center justify-center gap-3 px-4 text-center text-muted-foreground">
-              <AlertTriangle className="h-6 w-6 text-destructive" />
-              <p className="text-sm">Couldn’t load conversations.</p>
-              <Button size="sm" variant="outline" onClick={() => void refetch()}>Retry</Button>
+            <div className="flex h-full items-center justify-center p-3">
+              <ErrorState className="w-full" title="Couldn’t load conversations." onRetry={() => void refetch()} retryLabel="Retry" />
             </div>
           ) : shownList.length === 0 ? (
             /* ⛔ shownList, not filteredList (2026-10-02): when nothing matches the filters, the OPEN conversation is
                still drawn (pinned, "outside your current filters"). Testing for filteredList hid it whenever the
                filters matched nothing, which happened to a salesperson with few conversations, never to the admin. */
-            <div className="flex h-full flex-col items-center justify-center px-4 text-center text-muted-foreground">
-              <MessageSquare className="mb-2 h-6 w-6 opacity-40" />
+            <div className="flex h-full items-center justify-center p-3">
               {searchTerm ? (
-                <>
-                  <p className="text-sm">No conversations match “{search.trim()}”.</p>
-                  <p className="mt-1 text-xs opacity-70">Clear the search to see the full list.</p>
-                </>
+                <EmptyState icon={MessageSquare} className="w-full" title={<>No conversations match “{search.trim()}”.</>}>
+                  Clear the search to see the full list.
+                </EmptyState>
               ) : (
-                <>
-                  <p className="text-sm">No conversations yet.</p>
-                  <p className="mt-1 text-xs opacity-70">Start one with “New”, or inbound replies will appear here as they arrive.</p>
-                </>
+                <EmptyState icon={MessageSquare} className="w-full" title="No conversations yet.">
+                  Start one with “New”, or inbound replies will appear here as they arrive.
+                </EmptyState>
               )}
             </div>
           ) : shownList.map((c) => (
@@ -2526,14 +2522,16 @@ const Inbox = () => {
           audit with the auto-pitch queued. The wizard link stays as a small secondary option. */}
       <Dialog open={auditPromptOpen} onOpenChange={setAuditPromptOpen}>
         <DialogContent className="sm:max-w-sm">
-          <DialogHeader>
-            <DialogTitle className="text-base">Run audit for {activeLead?.business_name}</DialogTitle>
-            <DialogDescription className="text-xs">
+          <DialogHero
+            icon={Sparkles}
+            tone="purple"
+            title={<>Run audit for {activeLead?.business_name}</>}
+            subtitle={<>
               This lead is missing its audit inputs. Fill them in — they're saved to the lead — and
               the audit runs right here (3 auto-generated questions; the report pitch auto-sends on
               completion).
-            </DialogDescription>
-          </DialogHeader>
+            </>}
+          />
           <div className="space-y-2">
             <div className="space-y-1">
               <label className="text-xs font-medium text-muted-foreground">Business type</label>
@@ -2560,12 +2558,12 @@ const Inbox = () => {
           here (the button hides once sent) and on the server (pitchEverSent). */}
       <Dialog open={hookOpen} onOpenChange={setHookOpen}>
         <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle className="text-base">Send hook follow-up to {activeLead?.business_name}</DialogTitle>
-            <DialogDescription className="text-xs">
-              For a lead who got the report and went quiet ({HOOK_FOLLOWUP_MIN_DAYS}+ days, no reply). One per lead — it can’t be sent twice.
-            </DialogDescription>
-          </DialogHeader>
+          <DialogHero
+            icon={Send}
+            tone="blue"
+            title={<>Send hook follow-up to {activeLead?.business_name}</>}
+            subtitle={<>For a lead who got the report and went quiet ({HOOK_FOLLOWUP_MIN_DAYS}+ days, no reply). One per lead — it can’t be sent twice.</>}
+          />
           <div className="space-y-2">
             {!hookExistingFirst && (
               <div className="space-y-1">
@@ -2573,7 +2571,7 @@ const Inbox = () => {
                 <Input value={hookName} onChange={(e) => setHookName(e.target.value)} placeholder="e.g. Ronnie" />
               </div>
             )}
-            <div className="whitespace-pre-wrap rounded-lg border border-border/60 bg-muted/30 px-2.5 py-2 text-[11px]">
+            <div className="whitespace-pre-wrap rounded-xl bg-muted/40 px-3 py-2 text-[11px] ring-1 ring-inset ring-border/50">
               {hookFollowupBody(hookEffectiveFirst, activeLead?.business_name ?? '')}
             </div>
           </div>
@@ -2590,13 +2588,13 @@ const Inbox = () => {
           One variable ({{1}} = business name), no first-name prompt. One per lead (server + button). */}
       <Dialog open={contactOpen} onOpenChange={setContactOpen}>
         <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle className="text-base">Send contact follow-up to {activeLead?.business_name}</DialogTitle>
-            <DialogDescription className="text-xs">
-              For a lead who got the opener and never replied ({CONTACT_FOLLOWUP_MIN_DAYS}+ days), with a report already generated and ready to send the moment they reply. One per lead — it can’t be sent twice.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="whitespace-pre-wrap rounded-lg border border-border/60 bg-muted/30 px-2.5 py-2 text-[11px]">
+          <DialogHero
+            icon={Send}
+            tone="blue"
+            title={<>Send contact follow-up to {activeLead?.business_name}</>}
+            subtitle={<>For a lead who got the opener and never replied ({CONTACT_FOLLOWUP_MIN_DAYS}+ days), with a report already generated and ready to send the moment they reply. One per lead — it can’t be sent twice.</>}
+          />
+          <div className="whitespace-pre-wrap rounded-xl bg-muted/40 px-3 py-2 text-[11px] ring-1 ring-inset ring-border/50">
             {contactFollowupBody(activeLead?.business_name ?? '')}
           </div>
           <DialogFooter className="gap-2 sm:justify-end">
@@ -2617,50 +2615,49 @@ const Inbox = () => {
           is how you send to the wrong twelve and never find out. */}
       <Dialog open={bulkConfirm} onOpenChange={(o) => { if (!bulkBusy) setBulkConfirm(o); }}>
         <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle className="text-base">
+          <DialogHero
+            icon={Send}
+            tone="amber"
+            title={<>
               Send “{WHATSAPP_TEMPLATES.find((t) => t.value === bulkTemplate)?.label ?? bulkTemplate}” to {bulkChecking ? bulkPlan.send.length : bulkChecked.ready.length} business{(bulkChecking ? bulkPlan.send.length : bulkChecked.ready.length) === 1 ? '' : 'es'}?
-            </DialogTitle>
-            <DialogDescription className="text-xs">
+            </>}
+            subtitle={<>
               They go out <strong>now</strong>, one after another — not through the daily queue.
               Everyone here has already replied to you, so this is a continuation, not cold outreach.
               A business that has already had this template will be refused by the server and listed
               afterwards, not sent it twice.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="max-h-56 space-y-2 overflow-y-auto text-xs">
+            </>}
+          />
+          <div className="max-h-56 space-y-3 overflow-y-auto text-xs">
             {/* Checked by the server in dry-run mode before anything is sent (runBulkChecks). */}
             {bulkChecked.pending.length > 0 && (
               <p className="flex items-center gap-1.5 text-muted-foreground" data-testid="bulk-checking">
                 <Loader2 className="h-3.5 w-3.5 animate-spin" /> Checking each one with the server first (nothing is sent)… {bulkPlan.send.length - bulkChecked.pending.length}/{bulkPlan.send.length}
               </p>
             )}
-            <div>
-              <p className="mb-1 font-medium">Checked, will be sent ({bulkChecked.ready.length})</p>
+            <SubSection tone="blue" title={<>Checked, will be sent ({bulkChecked.ready.length})</>}>
               <ul className="space-y-0.5 text-muted-foreground">
                 {bulkChecked.ready.slice(0, 12).map((t) => <li key={t.key} className="truncate">· {t.label}</li>)}
                 {bulkChecked.ready.length > 12 && <li>· and {bulkChecked.ready.length - 12} more</li>}
               </ul>
-            </div>
+            </SubSection>
             {bulkChecked.refused.length > 0 && (
-              <div data-testid="bulk-refused">
-                <p className="mb-1 font-medium text-destructive">Would be refused, not sent ({bulkChecked.refused.length})</p>
+              <SubSection testId="bulk-refused" tone="red" title={<span className="text-red-700 dark:text-red-300">Would be refused, not sent ({bulkChecked.refused.length})</span>}>
                 <ul className="space-y-0.5 text-muted-foreground">
                   {groupSkips(bulkChecked.refused).map((g) => (
                     <li key={g.reason}>· {g.count} — {g.reason} ({g.labels.slice(0, 3).join(', ')}{g.labels.length > 3 ? '…' : ''})</li>
                   ))}
                 </ul>
-              </div>
+              </SubSection>
             )}
             {bulkPlan.skipped.length > 0 && (
-              <div>
-                <p className="mb-1 font-medium text-amber-600 dark:text-amber-500">Skipped ({bulkPlan.skipped.length})</p>
+              <SubSection tone="amber" title={<span className="text-amber-700 dark:text-amber-300">Skipped ({bulkPlan.skipped.length})</span>}>
                 <ul className="space-y-0.5 text-muted-foreground">
                   {groupSkips(bulkPlan.skipped).map((g) => (
                     <li key={g.reason} className="truncate">· {g.count} — {g.reason} ({g.labels.slice(0, 3).join(', ')}{g.labels.length > 3 ? '…' : ''})</li>
                   ))}
                 </ul>
-              </div>
+              </SubSection>
             )}
           </div>
           <DialogFooter>
@@ -2676,16 +2673,18 @@ const Inbox = () => {
 
       <Dialog open={hookQueueConfirm} onOpenChange={(o) => { if (!hookQueuing) setHookQueueConfirm(o); }}>
         <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle className="text-base">Queue {hookSelected.size} lead{hookSelected.size === 1 ? '' : 's'} for hook follow-up?</DialogTitle>
-            <DialogDescription className="text-xs">
+          <DialogHero
+            icon={Clock}
+            tone="blue"
+            title={<>Queue {hookSelected.size} lead{hookSelected.size === 1 ? '' : 's'} for hook follow-up?</>}
+            subtitle={<>
               These are added to the WhatsApp send queue — <strong>nothing sends now</strong>. They pace out one at a
               time within the 120/day cap and the 07:00–21:30 UK window — about {estHookDays(hookSelected.size)} day
               {estHookDays(hookSelected.size) === 1 ? '' : 's'} to clear (shared with your other sends). Each lead is
               re-checked at send time: one per lead, paid customers skipped, only genuine no-reply report leads;
               a blank name sends “Hi there”.
-            </DialogDescription>
-          </DialogHeader>
+            </>}
+          />
           <DialogFooter className="gap-2 sm:justify-end">
             <Button variant="ghost" size="sm" onClick={() => setHookQueueConfirm(false)} disabled={hookQueuing}>Cancel</Button>
             <Button size="sm" onClick={() => void queueHookFollowups()} disabled={hookQueuing || hookSelected.size === 0}>
