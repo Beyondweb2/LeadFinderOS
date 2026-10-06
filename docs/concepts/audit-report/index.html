@@ -1,0 +1,602 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Report Concepts</title>
+<!--
+  CONCEPT ONLY — NOT THE LIVE REPORT.
+  Three visual directions for the Quick AI Visibility Check, rendered from ONE fixture so the
+  data is identical and only the presentation differs. Nothing here is imported by the app, the
+  edge functions or the build. The live report is src/lib/aiAuditReportHtml.ts and is untouched.
+  The answer text below is ILLUSTRATIVE FIXTURE DATA, not a recorded measurement.
+  URL params: ?c=1|2|3 picks the concept, ?named=1 features the named answer, ?bar=0 hides the
+  gallery bar (used for print).
+-->
+<style>
+  :root{
+    --band:#101114; --band-2:#2C2D34; --foot:#0A0B0D;
+    --gold:#FFD13F; --yellow:#F5B301; --on-gold:#3a2d05; --gold-tint:#fffaeb; --gold-line:#e6c968;
+    --ink:#131417; --ink-2:#334155; --muted:#5d6067; --faint:#9C9FA7; --line:#e8e9ec;
+    --page:#f4f5f7; --paper:#ffffff; --panel:#f0f1f3; --panel-2:#e9eaed;
+    --red:#c8202b; --red-tint:#fdf0f0; --red-line:#f3c9cc;
+    --amber:#b4740a; --amber-tint:#fff7e8; --amber-line:#f0d9a8;
+    --green:#15803d; --green-tint:#ecf7f0; --green-line:#c5e6d1;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    --serif:Georgia,"Times New Roman",serif;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{background:var(--page);color:var(--ink);font-family:var(--sans);-webkit-font-smoothing:antialiased;line-height:1.5}
+  svg{display:block}
+
+  /* ── Gallery chrome (not part of any concept) ─────────────────────────────── */
+  .gal{position:sticky;top:0;z-index:20;background:#2a1d00;color:#fff;border-bottom:3px solid var(--gold)}
+  .gal-in{max-width:1180px;margin:0 auto;padding:10px 16px;display:flex;flex-wrap:wrap;gap:10px 18px;align-items:center}
+  .gal-flag{font-size:12px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;background:var(--gold);color:#1a1300;padding:4px 9px;border-radius:4px}
+  .gal-note{font-size:12px;color:#e9dcb8;flex:1 1 260px}
+  .gal-tabs,.gal-toggle{display:flex;gap:6px;flex-wrap:wrap}
+  .gal button{font:inherit;font-size:13px;font-weight:600;border:1px solid #6b5a2a;background:transparent;color:#fff;padding:6px 12px;border-radius:999px;cursor:pointer}
+  .gal button[aria-pressed="true"]{background:#fff;color:#1a1300;border-color:#fff}
+  .concept{display:none}
+  .concept.on{display:block}
+
+  /* Shared bits */
+  .wm{font-weight:800;letter-spacing:-.03em;line-height:1}
+  .wm i{font-style:normal;color:var(--yellow);font-size:1.35em;line-height:0}
+  .mk{display:inline-flex;align-items:center;justify-content:center;flex:none;border-radius:50%}
+  .mk svg{width:62%;height:62%}
+  .mk-gpt{background:#0d0d0d}
+  .mk-gpt svg{fill:#fff}
+  .mk-gai{background:#fff;box-shadow:inset 0 0 0 1px #dadce0}
+  .mk-gai svg{width:70%;height:70%}
+  .tick,.cross{display:inline-flex;align-items:center;justify-content:center;border-radius:50%;flex:none;font-weight:800}
+  .fixture-note{font-size:11.5px;color:var(--faint);margin-top:6px}
+  .t-red{color:var(--red)} .t-amber{color:var(--amber)} .t-green{color:var(--green)}
+
+  /* ══════════════════════════════════════════════════════════════════════════
+     CONCEPT 1 — PREMIUM EDITORIAL
+     ══════════════════════════════════════════════════════════════════════════ */
+  .c1{padding:40px 16px 64px}
+  .c1-sheet{max-width:860px;margin:0 auto;background:var(--paper);border:1px solid var(--line);box-shadow:0 1px 2px rgba(16,17,20,.04),0 18px 48px -24px rgba(16,17,20,.18)}
+  .c1-head{display:flex;justify-content:space-between;align-items:flex-end;gap:16px;padding:32px 56px 22px;border-bottom:1px solid var(--ink)}
+  .c1-head .wm{font-size:26px}
+  .c1-meta{text-align:right;font-size:12px;color:var(--muted);line-height:1.6}
+  .c1-meta b{display:block;color:var(--ink);font-size:12px;letter-spacing:.12em;text-transform:uppercase}
+  .c1-body{padding:0 56px 48px}
+  .c1-sec{padding:40px 0 0;break-inside:avoid}
+  .c1-kicker{display:flex;gap:12px;align-items:baseline;font-size:11px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--muted);margin:0 0 18px}
+  .c1-kicker span{color:var(--ink);font-variant-numeric:tabular-nums}
+  .c1-kicker::after{content:"";flex:1;height:1px;background:var(--line);transform:translateY(-3px)}
+  .c1-for{font-size:15px;color:var(--muted);margin:30px 0 0}
+  .c1-for b{color:var(--ink)}
+  .c1-hero{display:grid;grid-template-columns:auto 1fr;gap:12px 40px;align-items:center}
+  .c1-big{font-family:var(--serif);font-size:128px;line-height:.85;letter-spacing:-.04em;font-weight:400}
+  .c1-big small{font-size:.36em;letter-spacing:0;vertical-align:1.25em;margin-left:10px}
+  .c1-verdict h1{font-family:var(--serif);font-weight:400;font-size:30px;line-height:1.18;letter-spacing:-.01em;margin:0 0 10px}
+  .c1-verdict p{margin:0;color:var(--ink-2);font-size:15px}
+  .c1-count{font-size:13px;font-weight:600;color:var(--muted);margin-top:16px;letter-spacing:.01em}
+  .c1-engines{display:flex;gap:12px;flex-wrap:wrap;margin-top:28px}
+  .c1-eng{display:flex;align-items:center;gap:10px;padding:8px 16px 8px 8px;border:1px solid var(--line);border-radius:999px;font-size:14px}
+  .c1-eng .mk{width:28px;height:28px}
+  .c1-eng b{font-variant-numeric:tabular-nums;font-size:15px}
+  .c1-eng .dots{display:flex;gap:4px;margin-left:4px}
+  .c1-eng .dots i{width:8px;height:8px;border-radius:50%;background:var(--panel-2)}
+  .c1-eng .dots i.y{background:var(--green)}
+  .c1-eng .dots i.n{background:var(--red);opacity:.85}
+  .c1-q{background:var(--band);color:#fff;padding:30px 36px 32px;position:relative;overflow:hidden}
+  .c1-q-label{font-size:11px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--gold)}
+  .c1-q-text{font-family:var(--serif);font-size:34px;line-height:1.2;margin:10px 0 0;letter-spacing:-.01em}
+  .c1-q-text::before{content:"\201C";color:var(--gold)} .c1-q-text::after{content:"\201D";color:var(--gold)}
+  .c1-q-sub{font-size:12.5px;color:#c9cbd1;margin-top:14px}
+  .c1-ans{border:1px solid var(--line);border-top:0}
+  .c1-ans-head{display:flex;align-items:center;gap:12px;padding:16px 36px;border-bottom:1px solid var(--line);background:#fafafb}
+  .c1-ans-head .mk{width:30px;height:30px}
+  .c1-ans-head b{font-size:14px;letter-spacing:.02em}
+  .c1-ans-head .c1-ans-sub{margin-left:auto;font-size:12px;color:var(--muted)}
+  .c1-ans-text{padding:28px 36px 8px;font-family:var(--serif);font-size:20px;line-height:1.7;color:#1d1f24;margin:0}
+  .c1-ans-text mark{background:linear-gradient(transparent 58%,rgba(245,179,1,.42) 58%);color:inherit;padding:0 1px;font-weight:600}
+  .c1-ans-text mark sup{font-family:var(--sans);font-size:10px;font-weight:800;color:#8a6d1a;margin-left:2px}
+  .c1-ans-text mark.me{background:linear-gradient(transparent 58%,rgba(21,128,61,.28) 58%)}
+  .c1-named{display:flex;flex-wrap:wrap;gap:8px 18px;padding:14px 36px 26px;font-size:13px;color:var(--ink-2);margin:0;list-style:none}
+  .c1-named li{display:flex;gap:6px;align-items:baseline}
+  .c1-named li b{font-size:10px;color:#8a6d1a}
+  .c1-verdict-strip{display:flex;align-items:center;gap:14px;padding:18px 36px;font-weight:800;font-size:15px;letter-spacing:.04em;text-transform:uppercase}
+  .c1-verdict-strip .tick,.c1-verdict-strip .cross{width:28px;height:28px;font-size:15px;color:#fff}
+  .c1-verdict-strip.no{background:var(--red-tint);color:var(--red);border-top:1px solid var(--red-line)}
+  .c1-verdict-strip.no .cross{background:var(--red)}
+  .c1-verdict-strip.yes{background:var(--green-tint);color:var(--green);border-top:1px solid var(--green-line)}
+  .c1-verdict-strip.yes .tick{background:var(--green)}
+  .c1-means{display:grid;grid-template-columns:4px 1fr;gap:0 22px;margin-top:28px}
+  .c1-means::before{content:"";background:var(--gold);border-radius:2px}
+  .c1-means h3{margin:0 0 6px;font-size:11px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--muted)}
+  .c1-means p{margin:0;font-family:var(--serif);font-size:21px;line-height:1.45}
+  .c1-tbl{width:100%;border-collapse:collapse}
+  .c1-tbl th{font-size:11px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);text-align:left;padding:0 0 12px;border-bottom:1px solid var(--ink)}
+  .c1-tbl th.e{text-align:center;width:150px}
+  .c1-tbl th.e span{display:inline-flex;align-items:center;gap:8px}
+  .c1-tbl th .mk{width:20px;height:20px}
+  .c1-tbl td{padding:18px 0;border-bottom:1px solid var(--line);vertical-align:middle}
+  .c1-tbl td.q{font-family:var(--serif);font-size:18px}
+  .c1-tbl td.q small{display:block;font-family:var(--sans);font-size:11px;color:var(--faint);letter-spacing:.1em;text-transform:uppercase;margin-bottom:2px}
+  .c1-tbl td.r{text-align:center}
+  .c1-res{display:inline-flex;align-items:center;gap:7px;font-size:13px;font-weight:700}
+  .c1-res .tick,.c1-res .cross{width:22px;height:22px;font-size:12px;color:#fff}
+  .c1-res.y{color:var(--green)} .c1-res.y .tick{background:var(--green)}
+  .c1-res.n{color:var(--red)} .c1-res.n .cross{background:var(--red)}
+  .c1-tbl tr.feat td.q::after{content:"Shown above";display:inline-block;margin-left:10px;font-family:var(--sans);font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;background:var(--gold-tint);color:#8a6d1a;border:1px solid var(--gold-line);padding:2px 7px;border-radius:999px;vertical-align:3px}
+  .c1-caveat{font-size:13px;color:var(--muted);margin:18px 0 0}
+  .c1-foot{background:var(--band);color:#c9cbd1;padding:26px 56px;display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;font-size:12.5px}
+  .c1-foot .wm{color:#fff;font-size:18px}
+
+  @media (max-width:640px){
+    .c1{padding:16px 0 40px}
+    .c1-sheet{border-left:0;border-right:0}
+    .c1-head{padding:22px 16px 16px}
+    .c1-head .wm{font-size:22px}
+    .c1-body{padding:0 16px 32px}
+    .c1-hero{grid-template-columns:1fr;gap:14px}
+    .c1-big{font-size:96px}
+    .c1-verdict h1{font-size:24px}
+    .c1-q{padding:22px 20px 24px}
+    .c1-q-text{font-size:26px}
+    .c1-ans-head{padding:14px 20px;flex-wrap:wrap}
+    .c1-ans-head .c1-ans-sub{margin-left:0;width:100%}
+    .c1-ans-text{padding:22px 20px 6px;font-size:18px}
+    .c1-named{padding:12px 20px 20px}
+    .c1-verdict-strip{padding:16px 20px;font-size:13px}
+    .c1-means p{font-size:18px}
+    .c1-tbl thead{display:none}
+    .c1-tbl,.c1-tbl tbody,.c1-tbl tr,.c1-tbl td{display:block;width:100%}
+    .c1-tbl tr{border-bottom:1px solid var(--line);padding:14px 0}
+    .c1-tbl td{border:0;padding:4px 0}
+    .c1-tbl td.r{text-align:left;display:flex;align-items:center;gap:10px}
+    .c1-tbl td.r::before{content:attr(data-eng);font-size:12px;color:var(--muted);width:78px}
+    .c1-foot{padding:22px 16px}
+  }
+
+  /* ══════════════════════════════════════════════════════════════════════════
+     CONCEPT 2 — AI CONVERSATION / SEARCH EXPERIENCE
+     ══════════════════════════════════════════════════════════════════════════ */
+  .c2{background:#fcfcfd;min-height:100vh}
+  .c2-top{background:var(--band);color:#fff;padding:0 16px}
+  .c2-top-in{max-width:760px;margin:0 auto;padding:22px 0 30px}
+  .c2-bar{display:flex;justify-content:space-between;align-items:center;gap:12px;font-size:12.5px;color:#c9cbd1}
+  .c2-bar .wm{font-size:22px;color:#fff}
+  .c2-title{margin:30px 0 4px;font-size:13px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--gold)}
+  .c2-biz{margin:0;font-size:30px;font-weight:800;letter-spacing:-.02em;line-height:1.15}
+  .c2-biz span{display:block;font-size:15px;font-weight:500;color:#c9cbd1;letter-spacing:0;margin-top:6px}
+  .c2-main{max-width:760px;margin:0 auto;padding:0 16px 56px}
+  .c2-thread{background:#fff;border:1px solid var(--line);border-radius:22px;margin-top:-14px;position:relative;box-shadow:0 20px 50px -30px rgba(16,17,20,.35);overflow:hidden;break-inside:avoid}
+  .c2-thread-head{display:flex;align-items:center;gap:12px;padding:16px 22px;border-bottom:1px solid var(--line)}
+  .c2-thread-head .mk{width:34px;height:34px}
+  .c2-thread-head b{font-size:16px}
+  .c2-thread-head small{display:block;font-size:12px;color:var(--muted);font-weight:400}
+  .c2-rec{margin-left:auto;font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);border:1px solid var(--line);border-radius:999px;padding:4px 10px;white-space:nowrap}
+  .c2-chat{padding:24px 22px 8px;background:linear-gradient(#fafafb,#fff)}
+  .c2-who{font-size:11.5px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin:0 0 8px}
+  .c2-ask{display:flex;flex-direction:column;align-items:flex-end;margin-bottom:22px}
+  .c2-ask .c2-who{text-align:right}
+  .c2-qbox{background:var(--band);color:#fff;border-radius:20px 20px 6px 20px;padding:16px 22px;font-size:21px;font-weight:600;letter-spacing:-.01em;max-width:90%;position:relative}
+  .c2-qbox::before{content:"QUESTION";display:block;font-size:10px;font-weight:800;letter-spacing:.16em;color:var(--gold);margin-bottom:4px}
+  .c2-reply{display:grid;grid-template-columns:40px 1fr;gap:12px;align-items:start}
+  .c2-reply .mk{width:40px;height:40px;margin-top:22px}
+  .c2-bubble{background:#fff;border:1px solid var(--line);border-radius:6px 20px 20px 20px;padding:18px 22px;font-size:17px;line-height:1.75;color:#24262b}
+  .c2-bubble .chip{display:inline;background:#f1f2f4;border:1px solid #d9dbe0;border-radius:7px;padding:2px 7px;font-weight:650;white-space:normal;box-decoration-break:clone;-webkit-box-decoration-break:clone}
+  .c2-bubble .chip.me{background:var(--green-tint);border-color:var(--green-line);color:var(--green)}
+  .c2-legend{display:flex;gap:6px;align-items:center;font-size:12px;color:var(--muted);margin:10px 0 0 52px}
+  .c2-legend i{display:inline-block;width:14px;height:10px;background:#f1f2f4;border:1px solid #d9dbe0;border-radius:3px}
+  .c2-find{margin:20px 22px 22px;border-radius:16px;padding:18px 20px;display:grid;grid-template-columns:52px 1fr;gap:4px 16px;align-items:center}
+  .c2-find.no{background:var(--red-tint);border:1.5px dashed var(--red)}
+  .c2-find.yes{background:var(--green-tint);border:1.5px solid var(--green)}
+  .c2-find-ic{width:52px;height:52px;border-radius:14px;display:flex;align-items:center;justify-content:center;grid-row:span 2}
+  .c2-find.no .c2-find-ic{background:var(--red);color:#fff}
+  .c2-find.yes .c2-find-ic{background:var(--green);color:#fff}
+  .c2-find-ic svg{width:28px;height:28px}
+  .c2-find-k{font-size:12px;font-weight:800;letter-spacing:.14em;text-transform:uppercase}
+  .c2-find.no .c2-find-k{color:var(--red)} .c2-find.yes .c2-find-k{color:var(--green)}
+  .c2-find-n{font-size:19px;font-weight:800;letter-spacing:-.01em;line-height:1.25}
+  .c2-find-n small{display:block;font-size:13.5px;font-weight:500;color:var(--ink-2);letter-spacing:0;margin-top:2px}
+  .c2-sec{margin-top:40px;break-inside:avoid}
+  .c2-h{font-size:22px;font-weight:800;letter-spacing:-.02em;margin:0 0 14px}
+  .c2-why{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+  .c2-why div{background:var(--panel);border-radius:14px;padding:16px 16px 18px;font-size:14.5px;line-height:1.5;color:var(--ink-2)}
+  .c2-why b{display:block;font-size:28px;color:var(--ink);letter-spacing:-.02em;line-height:1.1;margin-bottom:6px}
+  .c2-score{display:grid;grid-template-columns:1.1fr 1fr 1fr;gap:12px}
+  .c2-tile{border-radius:18px;padding:18px 20px;border:1px solid var(--line);background:#fff}
+  .c2-tile.all{background:var(--band);color:#fff;border-color:var(--band)}
+  .c2-tile-k{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:700;color:var(--muted)}
+  .c2-tile.all .c2-tile-k{color:#c9cbd1}
+  .c2-tile-k .mk{width:22px;height:22px}
+  .c2-tile-v{font-size:44px;font-weight:800;letter-spacing:-.04em;line-height:1.05;margin-top:8px}
+  .c2-tile-s{font-size:13px;color:var(--muted)}
+  .c2-tile.all .c2-tile-s{color:#c9cbd1}
+  .c2-tile.all .c2-tile-v.t-red{color:#ff6b74}
+  .c2-qs{display:flex;flex-direction:column;gap:10px}
+  .c2-qrow{border:1px solid var(--line);border-radius:16px;background:#fff;padding:14px 16px;display:grid;grid-template-columns:1fr auto;gap:10px 16px;align-items:center;break-inside:avoid}
+  .c2-qrow .q{font-size:16px;font-weight:650}
+  .c2-qrow .q::before{content:"You asked";display:block;font-size:10.5px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--faint)}
+  .c2-qrow .rs{display:flex;gap:8px}
+  .c2-pill{display:inline-flex;align-items:center;gap:7px;border-radius:999px;padding:5px 12px 5px 5px;font-size:13px;font-weight:700;border:1px solid}
+  .c2-pill .mk{width:22px;height:22px}
+  .c2-pill.y{background:var(--green-tint);border-color:var(--green-line);color:var(--green)}
+  .c2-pill.n{background:var(--red-tint);border-color:var(--red-line);color:var(--red)}
+  .c2-caveat{font-size:13px;color:var(--muted);margin:14px 0 0}
+  .c2-foot{border-top:1px solid var(--line);margin-top:44px;padding-top:18px;font-size:12.5px;color:var(--muted);display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}
+  @media (max-width:640px){
+    .c2-biz{font-size:24px}
+    .c2-thread{border-radius:18px}
+    .c2-thread-head{padding:14px 16px;flex-wrap:wrap}
+    .c2-rec{margin-left:0}
+    .c2-chat{padding:20px 14px 6px}
+    .c2-qbox{font-size:18px;max-width:100%}
+    .c2-reply{grid-template-columns:1fr}
+    .c2-reply .mk{display:none}
+    .c2-bubble{font-size:16px;padding:16px}
+    .c2-legend{margin-left:0}
+    .c2-find{margin:16px 14px 16px;grid-template-columns:44px 1fr;padding:16px}
+    .c2-find-ic{width:44px;height:44px}
+    .c2-find-n{font-size:17px}
+    .c2-why,.c2-score{grid-template-columns:1fr}
+    .c2-qrow{grid-template-columns:1fr}
+    .c2-qrow .rs{flex-wrap:wrap}
+  }
+
+  /* ══════════════════════════════════════════════════════════════════════════
+     CONCEPT 3 — EVIDENCE / SCORECARD
+     ══════════════════════════════════════════════════════════════════════════ */
+  .c3{padding:28px 16px 64px}
+  .c3-wrap{max-width:1080px;margin:0 auto}
+  .c3-head{display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap;padding-bottom:16px;border-bottom:3px solid var(--ink)}
+  .c3-head .wm{font-size:24px}
+  .c3-head-r{display:flex;gap:18px;flex-wrap:wrap;font-size:12px;color:var(--muted)}
+  .c3-head-r div b{display:block;font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--faint);font-weight:700}
+  .c3-head-r div span{color:var(--ink);font-weight:650;font-size:13px}
+  .c3-score{display:grid;grid-template-columns:1.3fr 1fr 1fr 1.6fr;gap:0;margin-top:22px;border:1px solid var(--ink);background:#fff;break-inside:avoid}
+  .c3-cell{padding:20px 22px;border-right:1px solid var(--line)}
+  .c3-cell:last-child{border-right:0}
+  .c3-cell-k{display:flex;align-items:center;gap:8px;font-size:10.5px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+  .c3-cell-k .mk{width:20px;height:20px}
+  .c3-big{font-size:72px;font-weight:800;letter-spacing:-.05em;line-height:1;margin-top:8px;font-variant-numeric:tabular-nums}
+  .c3-mid{font-size:44px;font-weight:800;letter-spacing:-.04em;line-height:1;margin-top:12px;font-variant-numeric:tabular-nums}
+  .c3-mid small{font-size:.5em;color:var(--faint);font-weight:700;letter-spacing:0}
+  .c3-sub{font-size:13px;color:var(--muted);margin-top:6px}
+  .c3-meter{display:flex;gap:4px;margin-top:12px}
+  .c3-meter i{flex:1;height:8px;border-radius:2px;background:var(--panel-2)}
+  .c3-meter i.y{background:var(--green)} .c3-meter i.n{background:var(--red)}
+  .c3-grid{display:grid;grid-template-columns:auto repeat(3,1fr);gap:6px;margin-top:12px;font-size:12px;align-items:center}
+  .c3-grid .gh{font-size:10px;font-weight:800;color:var(--faint);text-align:center;letter-spacing:.08em}
+  .c3-grid .gl{display:flex;align-items:center;gap:6px;font-weight:650;padding-right:6px;white-space:nowrap}
+  .c3-grid .gl .mk{width:18px;height:18px}
+  .c3-grid .gc{height:30px;border-radius:4px;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:14px;color:#fff}
+  .c3-grid .gc.y{background:var(--green)} .c3-grid .gc.n{background:var(--red)}
+  .c3-verdict{margin-top:14px;display:flex;gap:14px;align-items:flex-start;background:var(--red-tint);border-left:4px solid var(--red);padding:14px 18px;break-inside:avoid}
+  .c3-verdict b{font-size:16px}
+  .c3-verdict p{margin:2px 0 0;font-size:14px;color:var(--ink-2)}
+  .c3-sh{display:flex;align-items:baseline;gap:14px;margin:40px 0 14px}
+  .c3-sh h2{margin:0;font-size:20px;letter-spacing:-.01em}
+  .c3-sh span{font-size:13px;color:var(--muted)}
+  .c3-ev{background:#fff;border:1px solid var(--line);margin-bottom:18px;break-inside:avoid;page-break-inside:avoid}
+  .c3-ev-top{display:grid;grid-template-columns:auto 1fr auto;gap:16px;align-items:center;padding:16px 20px;border-bottom:1px solid var(--line);background:#fafafb}
+  .c3-ev-no{font-size:11px;font-weight:800;letter-spacing:.14em;color:var(--muted);text-transform:uppercase;line-height:1.2}
+  .c3-ev-no b{display:block;font-size:26px;color:var(--ink);letter-spacing:-.02em}
+  .c3-ev-q{border:2px solid var(--ink);border-radius:6px;padding:10px 14px;background:#fff}
+  .c3-ev-q small{display:block;font-size:10px;font-weight:800;letter-spacing:.16em;color:var(--muted);text-transform:uppercase}
+  .c3-ev-q span{font-size:18px;font-weight:700;letter-spacing:-.01em}
+  .c3-ev-tally{font-size:12px;color:var(--muted);text-align:right;line-height:1.4}
+  .c3-ev-tally b{display:block;font-size:20px;color:var(--ink)}
+  .c3-ev-cols{display:grid;grid-template-columns:1fr 1fr}
+  .c3-ev-col{padding:4px 20px 18px;border-right:1px solid var(--line)}
+  .c3-ev-col:last-child{border-right:0}
+  .c3-dl{display:grid;grid-template-columns:104px 1fr;margin:0}
+  .c3-dl dt{font-size:10px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;color:var(--faint);padding:13px 0 0}
+  .c3-dl dd{margin:0;padding:10px 0;border-bottom:1px dashed var(--line);font-size:14px}
+  .c3-dl dd:last-of-type{border-bottom:0}
+  .c3-eng{display:inline-flex;align-items:center;gap:8px;font-weight:750;font-size:15px}
+  .c3-eng .mk{width:24px;height:24px}
+  .c3-badge{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;padding:5px 10px;border-radius:4px;color:#fff}
+  .c3-badge.y{background:var(--green)} .c3-badge.n{background:var(--red)}
+  .c3-quote{font-size:14.5px;line-height:1.65;color:#2a2c31;border-left:3px solid var(--panel-2);padding-left:12px}
+  .c3-quote mark{background:#fff0bf;color:inherit;border-bottom:2px solid var(--yellow);padding:0 2px;font-weight:650}
+  .c3-quote mark.me{background:var(--green-tint);border-bottom-color:var(--green)}
+  .c3-chips{display:flex;flex-wrap:wrap;gap:6px}
+  .c3-chip{font-size:12.5px;font-weight:650;background:var(--gold-tint);border:1px solid var(--gold-line);color:#5f4b0f;border-radius:4px;padding:3px 8px}
+  .c3-client{font-weight:800}
+  .c3-client.n{color:var(--red)} .c3-client.y{color:var(--green)}
+  .c3-caveat{font-size:13px;color:var(--muted);margin:6px 0 0}
+  .c3-foot{margin-top:30px;padding-top:16px;border-top:3px solid var(--ink);display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;font-size:12.5px;color:var(--muted)}
+  @media (max-width:900px){
+    .c3-score{grid-template-columns:1fr 1fr}
+    .c3-cell:nth-child(2){border-right:0}
+    .c3-cell:nth-child(-n+2){border-bottom:1px solid var(--line)}
+    .c3-ev-cols{grid-template-columns:1fr}
+    .c3-ev-col{border-right:0;border-bottom:1px solid var(--line)}
+    .c3-ev-col:last-child{border-bottom:0}
+  }
+  @media (max-width:640px){
+    .c3{padding:18px 16px 40px}
+    .c3-score{grid-template-columns:1fr}
+    .c3-cell{border-right:0;border-bottom:1px solid var(--line)}
+    .c3-cell:last-child{border-bottom:0}
+    .c3-big{font-size:64px}
+    .c3-ev-top{grid-template-columns:1fr;gap:10px;padding:14px 16px}
+    .c3-ev-tally{text-align:left}
+    .c3-ev-col{padding:4px 16px 14px}
+    .c3-dl{grid-template-columns:1fr}
+    .c3-dl dt{padding:10px 0 0}
+    .c3-dl dd{padding:4px 0 10px}
+  }
+
+  /* ── Print / PDF ─────────────────────────────────────────────────────────── */
+  @media print{
+    @page{size:A4;margin:12mm}
+    body{background:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+    .gal{display:none}
+    .c1,.c3{padding:0}
+    .c1-sheet{border:0;box-shadow:none}
+    .c2{min-height:0}
+    .c2-thread{box-shadow:none}
+    .c1-sec,.c2-sec,.c3-ev,.c3-score,.c2-qrow,.c1-tbl tr{break-inside:avoid;page-break-inside:avoid}
+  }
+</style>
+</head>
+<body>
+
+<div class="gal" id="gal">
+  <div class="gal-in">
+    <span class="gal-flag">Concept only — not live report</span>
+    <div class="gal-tabs" role="group" aria-label="Concept">
+      <button data-c="1">Concept 1 · Editorial</button>
+      <button data-c="2">Concept 2 · Conversation</button>
+      <button data-c="3">Concept 3 · Evidence</button>
+    </div>
+    <div class="gal-toggle" role="group" aria-label="Featured answer">
+      <button data-named="0">Featured: not named</button>
+      <button data-named="1">Featured: named</button>
+    </div>
+    <span class="gal-note">Fixture data. The answer text is illustrative, written for this demo — not a recorded AI answer.</span>
+  </div>
+</div>
+
+<main>
+  <section class="concept c1" id="c1" aria-label="Concept 1"></section>
+  <section class="concept c2" id="c2" aria-label="Concept 2"></section>
+  <section class="concept c3" id="c3" aria-label="Concept 3"></section>
+</main>
+
+<script>
+/* ── FIXTURE — illustrative only. Same shape as the quick check: 3 questions × 2 engines. ── */
+const F = {
+  business: "The Doncaster Roofing Company",
+  trade: "roofer",
+  town: "Doncaster",
+  date: "6 October 2026",
+  reportType: "Quick AI Visibility Check",
+  engines: [
+    { key: "gpt", label: "ChatGPT" },
+    { key: "gai", label: "Google AI" },
+  ],
+  questions: [
+    {
+      q: "roof repair in Doncaster UK",
+      answers: {
+        gai: { named: false,
+          text: "For roof repair in Doncaster, some local companies you could consider include Apex Roofing Contractors Ltd, AMF Roofing Contractors Ltd, Wroe's Roofing Services and Complete Roofing Services. It's worth comparing availability, reviews and the type of repair you need before choosing.",
+          rivals: ["Apex Roofing Contractors Ltd", "AMF Roofing Contractors Ltd", "Wroe's Roofing Services", "Complete Roofing Services"] },
+        gpt: { named: false,
+          text: "If you need a roof repair in Doncaster, local options people often look at include AMF Roofing Contractors Ltd, Complete Roofing Services and Apex Roofing Contractors Ltd. For smaller jobs like slipped tiles or flashing, ask for a fixed quote and check the work comes with a guarantee.",
+          rivals: ["AMF Roofing Contractors Ltd", "Complete Roofing Services", "Apex Roofing Contractors Ltd"] },
+      },
+    },
+    {
+      q: "best roofer in Doncaster",
+      answers: {
+        gpt: { named: true,
+          text: "Well-reviewed roofers in Doncaster include The Doncaster Roofing Company, Wroe's Roofing Services and Apex Roofing Contractors Ltd. Most offer free quotes, so it's worth getting two or three before you decide.",
+          rivals: ["Wroe's Roofing Services", "Apex Roofing Contractors Ltd"] },
+        gai: { named: false,
+          text: "Highly rated roofers in the Doncaster area include Wroe's Roofing Services and Complete Roofing Services, both with strong customer reviews. Check that any roofer you choose is insured and offers a written guarantee.",
+          rivals: ["Wroe's Roofing Services", "Complete Roofing Services"] },
+      },
+    },
+    {
+      q: "emergency roofer near Doncaster",
+      answers: {
+        gpt: { named: false,
+          text: "For an emergency roof repair near Doncaster, Apex Roofing Contractors Ltd and AMF Roofing Contractors Ltd both advertise call-outs. If water is coming in, ask whether they can make the roof watertight the same day.",
+          rivals: ["Apex Roofing Contractors Ltd", "AMF Roofing Contractors Ltd"] },
+        gai: { named: false,
+          text: "Roofers offering emergency call-outs around Doncaster include AMF Roofing Contractors Ltd and Apex Roofing Contractors Ltd. Some charge a higher rate for out-of-hours visits, so confirm the price on the phone.",
+          rivals: ["AMF Roofing Contractors Ltd", "Apex Roofing Contractors Ltd"] },
+      },
+    },
+  ],
+  /* Featured answer: the live report's rule is "Google AI miss first, else ChatGPT". The named
+     variant exists only so Paul can see both client-result states. */
+  featured: { notNamed: [0, "gai"], named: [1, "gpt"] },
+};
+
+/* Colour bands — the naming result only. Matches verdictBand (≤40% poor, ≤70% middle, else good). */
+const tone = (n, t) => { const p = t ? n / t * 100 : 0; return p <= 40 ? "red" : p <= 70 ? "amber" : "green"; };
+
+/* Engine marks. OpenAI = the monochrome mark already in aiAuditReportHtml.ts.
+   Google AI = a clean four-colour spark (a simple representation, not Google's trademark G). */
+const OAI = '<svg viewBox="0 0 24 24"><path d="M22.2819 9.8211a5.9847 5.9847 0 0 0-.5157-4.9108 6.0462 6.0462 0 0 0-6.5098-2.9A6.0651 6.0651 0 0 0 4.9807 4.1818a5.9847 5.9847 0 0 0-3.9977 2.9 6.0462 6.0462 0 0 0 .7427 7.0966 5.98 5.98 0 0 0 .511 4.9107 6.051 6.051 0 0 0 6.5146 2.9001A5.9847 5.9847 0 0 0 13.2599 24a6.0557 6.0557 0 0 0 5.7718-4.2058 5.9894 5.9894 0 0 0 3.9977-2.9001 6.0557 6.0557 0 0 0-.7475-7.0729zm-9.022 12.6081a4.4755 4.4755 0 0 1-2.8764-1.0408l.1419-.0804 4.7783-2.7582a.7948.7948 0 0 0 .3927-.6813v-6.7369l2.02 1.1686a.071.071 0 0 1 .038.052v5.5826a4.504 4.504 0 0 1-4.4945 4.4944zm-9.6607-4.1254a4.4708 4.4708 0 0 1-.5346-3.0137l.1419.0852 4.783 2.7582a.7712.7712 0 0 0 .7806 0l5.8428-3.3685v2.3324a.0804.0804 0 0 1-.0332.0615L9.74 19.9502a4.4992 4.4992 0 0 1-6.1408-1.6464zM2.3408 7.8956a4.485 4.485 0 0 1 2.3655-1.9728V11.6a.7664.7664 0 0 0 .3879.6765l5.8144 3.3543-2.0201 1.1685a.0757.0757 0 0 1-.071 0l-4.8303-2.7865A4.504 4.504 0 0 1 2.3408 7.872zm16.5963 3.8558L13.1038 8.364 15.1192 7.2a.0757.0757 0 0 1 .071 0l4.8303 2.7913a4.4944 4.4944 0 0 1-.6765 8.1042v-5.6772a.79.79 0 0 0-.407-.6813zm2.0107-3.0231l-.142-.0852-4.7735-2.7818a.7759.7759 0 0 0-.7854 0L9.409 9.2297V6.8974a.0662.0662 0 0 1 .0284-.0615l4.8303-2.7866a4.4992 4.4992 0 0 1 6.6802 4.66zM8.3065 12.863l-2.02-1.1638a.0804.0804 0 0 1-.038-.0567V6.0742a4.4992 4.4992 0 0 1 7.3757-3.4537l-.142.0805L8.704 5.459a.7948.7948 0 0 0-.3927.6813zm1.0976-2.3654l2.602-1.4998 2.6069 1.4998v2.9994l-2.5974 1.4997-2.6067-1.4997Z"/></svg>';
+let gid = 0;
+const GAI = () => { const id = "gai" + (++gid);
+  return '<svg viewBox="0 0 24 24"><defs><linearGradient id="' + id + '" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#4285F4"/><stop offset=".38" stop-color="#4285F4"/><stop offset=".55" stop-color="#34A853"/><stop offset=".72" stop-color="#FBBC04"/><stop offset="1" stop-color="#EA4335"/></linearGradient></defs><path fill="url(#' + id + ')" d="M12 1.5c.5 5.7 3.8 9 9.5 9.5-5.7.5-9 3.8-9.5 9.5-.5-5.7-3.8-9-9.5-9.5 5.7-.5 9-3.8 9.5-9.5Z"/></svg>'; };
+const mark = (k) => k === "gpt" ? '<span class="mk mk-gpt" aria-hidden="true">' + OAI + '</span>' : '<span class="mk mk-gai" aria-hidden="true">' + GAI() + '</span>';
+const label = (k) => k === "gpt" ? "ChatGPT" : "Google AI";
+const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const reEsc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+/* Wrap each rival (and the client, if present) in the answer. fn(name, index, isClient) → html. */
+function highlight(a, fn) {
+  const names = a.rivals.map((n, i) => ({ n, i, me: false }));
+  if (a.named) names.push({ n: F.business, i: -1, me: true });
+  names.sort((x, y) => y.n.length - x.n.length);
+  const re = new RegExp(names.map((x) => reEsc(x.n)).join("|"), "g");
+  let out = "", last = 0, m;
+  while ((m = re.exec(a.text))) {
+    const hit = names.find((x) => x.n === m[0]);
+    out += esc(a.text.slice(last, m.index)) + fn(esc(m[0]), hit.i, hit.me);
+    last = m.index + m[0].length;
+  }
+  return out + esc(a.text.slice(last));
+}
+
+const S = (() => {
+  const per = F.engines.map((e) => ({ ...e, named: F.questions.filter((q) => q.answers[e.key].named).length, total: F.questions.length }));
+  const named = per.reduce((t, e) => t + e.named, 0), total = per.reduce((t, e) => t + e.total, 0);
+  return { per, named, total, pct: Math.round(named / total * 100) };
+})();
+const headline = S.named === 0 ? "You're not being named in these AI searches yet."
+  : S.named === S.total ? "You're being named consistently in this quick check."
+  : "You're being named, but not consistently.";
+const lede = S.per.map((e) => e.label + " named you in " + e.named + " of " + e.total).join(", and ") + " answers.";
+const caveat = "This is a quick check of " + F.questions.length + " questions, not your full AI visibility measurement.";
+const tick = (cls) => '<span class="tick ' + (cls || "") + '" aria-hidden="true">&#10003;</span>';
+const cross = (cls) => '<span class="cross ' + (cls || "") + '" aria-hidden="true">&#10005;</span>';
+const qWord = (n) => ["zero", "one", "two", "three", "four", "five"][n] || String(n);
+
+function feat(namedView) {
+  const [qi, ek] = namedView ? F.featured.named : F.featured.notNamed;
+  return { qi, ek, q: F.questions[qi].q, a: F.questions[qi].answers[ek] };
+}
+function meaning(f) {
+  const n = f.a.rivals.length;
+  return f.a.named
+    ? label(f.ek) + " named " + F.business + " for this search, alongside " + qWord(n) + " other " + (n === 1 ? "company" : "companies") + "."
+    : label(f.ek) + " named " + qWord(n) + " other roofing " + (n === 1 ? "company" : "companies") + " for this search, but did not name " + F.business + ".";
+}
+
+/* ═══ CONCEPT 1 — PREMIUM EDITORIAL ═══ */
+function renderC1(nv) {
+  const f = feat(nv), t = tone(S.named, S.total);
+  const engines = S.per.map((e) => '<div class="c1-eng">' + mark(e.key) + '<span>' + e.label + '</span><b class="t-' + tone(e.named, e.total) + '">' + e.named + '/' + e.total + '</b><span class="dots">' +
+    F.questions.map((q) => '<i class="' + (q.answers[e.key].named ? "y" : "n") + '"></i>').join("") + '</span></div>').join("");
+  const ans = highlight(f.a, (n, i, me) => me ? '<mark class="me">' + n + '</mark>' : '<mark>' + n + '<sup>' + (i + 1) + '</sup></mark>');
+  const rows = F.questions.map((q, qi) => '<tr class="' + (qi === f.qi ? "feat" : "") + '"><td class="q"><small>Question ' + (qi + 1) + '</small>&ldquo;' + esc(q.q) + '&rdquo;</td>' +
+    F.engines.map((e) => { const y = q.answers[e.key].named; return '<td class="r" data-eng="' + e.label + '"><span class="c1-res ' + (y ? "y" : "n") + '">' + (y ? tick() + "Named" : cross() + "Not named") + '</span></td>'; }).join("") + '</tr>').join("");
+  document.getElementById("c1").innerHTML =
+  '<article class="c1-sheet">' +
+    '<header class="c1-head"><div class="wm">Findable<i>.</i></div><div class="c1-meta"><b>' + F.reportType + '</b>' + F.date + '</div></header>' +
+    '<div class="c1-body">' +
+      '<p class="c1-for">Prepared for <b>' + esc(F.business) + '</b> &middot; ' + F.trade + ', ' + F.town + '</p>' +
+      '<section class="c1-sec"><p class="c1-kicker"><span>01</span>The result</p>' +
+        '<div class="c1-hero"><div><div class="c1-big t-' + t + '">' + S.pct + '<small>%</small></div><div class="c1-count">' + S.named + ' of ' + S.total + ' answers named you</div></div>' +
+        '<div class="c1-verdict"><h1>' + headline + '</h1><p>' + lede + '</p></div></div>' +
+        '<div class="c1-engines">' + engines + '</div></section>' +
+      '<section class="c1-sec"><p class="c1-kicker"><span>02</span>What we asked, and what came back</p>' +
+        '<div class="c1-q"><div class="c1-q-label">The question</div><p class="c1-q-text">' + esc(f.q) + '</p><div class="c1-q-sub">Asked exactly as a customer in ' + F.town + ' would type it.</div></div>' +
+        '<div class="c1-ans"><div class="c1-ans-head">' + mark(f.ek) + '<b>' + label(f.ek) + ' answer</b><span class="c1-ans-sub">Full answer, word for word</span></div>' +
+          '<p class="c1-ans-text">' + ans + '</p>' +
+          (f.a.rivals.length ? '<ol class="c1-named">' + f.a.rivals.map((r, i) => '<li><b>' + (i + 1) + '</b>' + esc(r) + '</li>').join("") + '</ol>' : "") +
+          (f.a.named ? '<div class="c1-verdict-strip yes">' + tick() + esc(F.business) + ' was named</div>'
+                     : '<div class="c1-verdict-strip no">' + cross() + esc(F.business) + ' was not named</div>') +
+        '</div>' +
+        '<div class="c1-means"><div><h3>What this means</h3><p>' + esc(meaning(f)) + '</p></div></div></section>' +
+      '<section class="c1-sec"><p class="c1-kicker"><span>03</span>All questions</p>' +
+        '<table class="c1-tbl"><thead><tr><th>Question</th>' + F.engines.map((e) => '<th class="e"><span>' + mark(e.key) + e.label + '</span></th>').join("") + '</tr></thead><tbody>' + rows + '</tbody></table>' +
+        '<p class="c1-caveat">' + caveat + '</p></section>' +
+    '</div>' +
+    '<footer class="c1-foot"><div class="wm">Findable<i>.</i></div><div>findable.live &middot; Measured on ChatGPT &amp; Google AI</div></footer>' +
+  '</article>';
+}
+
+/* ═══ CONCEPT 2 — AI CONVERSATION ═══ */
+function renderC2(nv) {
+  const f = feat(nv), t = tone(S.named, S.total);
+  const ans = highlight(f.a, (n, i, me) => '<span class="chip' + (me ? " me" : "") + '">' + n + '</span>');
+  const searchIc = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><circle cx="10.5" cy="10.5" r="6.5"/><line x1="15.5" y1="15.5" x2="21" y2="21"/>' + (f.a.named ? '<polyline points="7.5 10.8 9.8 13 13.6 8.6"/>' : '<line x1="8" y1="8" x2="13" y2="13"/><line x1="13" y1="8" x2="8" y2="13"/>') + '</svg>';
+  const missed = S.total - S.named;
+  const rivalSet = new Set(); F.questions.forEach((q) => F.engines.forEach((e) => q.answers[e.key].rivals.forEach((r) => rivalSet.add(r))));
+  document.getElementById("c2").innerHTML =
+  '<div class="c2-top"><div class="c2-top-in">' +
+    '<div class="c2-bar"><div class="wm">Findable<i>.</i></div><div>' + F.reportType + ' &middot; ' + F.date + '</div></div>' +
+    '<p class="c2-title">What AI told your customers</p>' +
+    '<h1 class="c2-biz">' + esc(F.business) + '<span>We asked ChatGPT and Google AI what a customer looking for a ' + F.trade + ' in ' + F.town + ' would ask.</span></h1>' +
+  '</div></div>' +
+  '<div class="c2-main">' +
+    '<div class="c2-thread">' +
+      '<div class="c2-thread-head">' + mark(f.ek) + '<div><b>' + label(f.ek) + '</b><small>Question ' + (f.qi + 1) + ' of ' + F.questions.length + '</small></div><span class="c2-rec">Recorded by Findable &middot; ' + F.date + '</span></div>' +
+      '<div class="c2-chat">' +
+        '<div class="c2-ask"><p class="c2-who">We asked</p><div class="c2-qbox">' + esc(f.q) + '</div></div>' +
+        '<p class="c2-who">' + label(f.ek) + ' answered</p>' +
+        '<div class="c2-reply">' + mark(f.ek) + '<div class="c2-bubble">' + ans + '</div></div>' +
+        '<div class="c2-legend"><i></i>Businesses ' + label(f.ek) + ' recommended</div>' +
+      '</div>' +
+      (f.a.named
+        ? '<div class="c2-find yes"><div class="c2-find-ic">' + searchIc + '</div><div class="c2-find-k">Found in this answer</div><div class="c2-find-n">' + esc(F.business) + '<small>' + label(f.ek) + ' recommended you, alongside ' + qWord(f.a.rivals.length) + ' others.</small></div></div>'
+        : '<div class="c2-find no"><div class="c2-find-ic">' + searchIc + '</div><div class="c2-find-k">Not found in this answer</div><div class="c2-find-n">' + esc(F.business) + '<small>' + label(f.ek) + ' recommended ' + qWord(f.a.rivals.length) + ' other roofers instead.</small></div></div>') +
+    '</div>' +
+    '<section class="c2-sec"><h2 class="c2-h">Why this matters</h2><div class="c2-why">' +
+      '<div><b>' + missed + ' of ' + S.total + '</b>answers sent a customer to someone else.</div>' +
+      '<div><b>' + rivalSet.size + '</b>other ' + F.town + ' roofers were recommended in your place.</div>' +
+      '<div><b>No list</b>An AI answer is not a page of results. If you are not in it, the customer never sees you.</div>' +
+    '</div></section>' +
+    '<section class="c2-sec"><h2 class="c2-h">Your score</h2><div class="c2-score">' +
+      '<div class="c2-tile all"><div class="c2-tile-k">Overall</div><div class="c2-tile-v t-' + t + '">' + S.pct + '%</div><div class="c2-tile-s">' + S.named + ' of ' + S.total + ' answers named you</div></div>' +
+      S.per.map((e) => '<div class="c2-tile"><div class="c2-tile-k">' + mark(e.key) + e.label + '</div><div class="c2-tile-v t-' + tone(e.named, e.total) + '">' + e.named + '/' + e.total + '</div><div class="c2-tile-s">answers named you</div></div>').join("") +
+    '</div><p class="c2-caveat"><b>' + headline + '</b> ' + caveat + '</p></section>' +
+    '<section class="c2-sec"><h2 class="c2-h">Every question we asked</h2><div class="c2-qs">' +
+      F.questions.map((q) => '<div class="c2-qrow"><div class="q">&ldquo;' + esc(q.q) + '&rdquo;</div><div class="rs">' +
+        F.engines.map((e) => { const y = q.answers[e.key].named; return '<span class="c2-pill ' + (y ? "y" : "n") + '">' + mark(e.key) + (y ? "&#10003; Named" : "&#10005; Not named") + '</span>'; }).join("") + '</div></div>').join("") +
+    '</div></section>' +
+    '<footer class="c2-foot"><span><b class="wm" style="color:var(--ink)">Findable<i>.</i></b> &nbsp;findable.live</span><span>Measured on ChatGPT &amp; Google AI</span></footer>' +
+  '</div>';
+}
+
+/* ═══ CONCEPT 3 — EVIDENCE / SCORECARD ═══ */
+function renderC3() {
+  const t = tone(S.named, S.total);
+  const grid = '<div class="c3-grid"><span></span>' + F.questions.map((_, i) => '<span class="gh">Q' + (i + 1) + '</span>').join("") +
+    F.engines.map((e) => '<span class="gl">' + mark(e.key) + e.label + '</span>' + F.questions.map((q) => { const y = q.answers[e.key].named; return '<span class="gc ' + (y ? "y" : "n") + '" title="' + (y ? "Named" : "Not named") + '">' + (y ? "&#10003;" : "&#10005;") + '</span>'; }).join("")).join("") + '</div>';
+  const col = (q, e) => { const a = q.answers[e.key];
+    return '<div class="c3-ev-col"><dl class="c3-dl">' +
+      '<dt>Engine</dt><dd><span class="c3-eng">' + mark(e.key) + e.label + '</span></dd>' +
+      '<dt>Result</dt><dd><span class="c3-badge ' + (a.named ? "y" : "n") + '">' + (a.named ? "&#10003; Named" : "&#10005; Not named") + '</span></dd>' +
+      '<dt>Full answer</dt><dd><div class="c3-quote">' + highlight(a, (n, i, me) => '<mark' + (me ? ' class="me"' : "") + '>' + n + '</mark>') + '</div></dd>' +
+      '<dt>Competitors found</dt><dd><div class="c3-chips">' + a.rivals.map((r) => '<span class="c3-chip">' + esc(r) + '</span>').join("") + '</div></dd>' +
+      '<dt>Your business</dt><dd><span class="c3-client ' + (a.named ? "y" : "n") + '">' + (a.named ? "Named" : "Not named") + '</span></dd>' +
+    '</dl></div>'; };
+  document.getElementById("c3").innerHTML =
+  '<div class="c3-wrap">' +
+    '<header class="c3-head"><div class="wm">Findable<i>.</i></div><div class="c3-head-r">' +
+      '<div><b>Report</b><span>' + F.reportType + '</span></div><div><b>Business</b><span>' + esc(F.business) + '</span></div><div><b>Search area</b><span>' + F.town + '</span></div><div><b>Date</b><span>' + F.date + '</span></div></div></header>' +
+    '<div class="c3-score">' +
+      '<div class="c3-cell"><div class="c3-cell-k">AI visibility</div><div class="c3-big t-' + t + '">' + S.pct + '%</div><div class="c3-sub">' + S.named + ' of ' + S.total + ' answers named you</div>' +
+        '<div class="c3-meter">' + Array.from({ length: S.total }, (_, i) => '<i class="' + (i < S.named ? "y" : "n") + '"></i>').join("") + '</div></div>' +
+      S.per.map((e) => '<div class="c3-cell"><div class="c3-cell-k">' + mark(e.key) + e.label + '</div><div class="c3-mid t-' + tone(e.named, e.total) + '">' + e.named + '<small>/' + e.total + '</small></div><div class="c3-sub">answers named you</div></div>').join("") +
+      '<div class="c3-cell"><div class="c3-cell-k">Every answer</div>' + grid + '</div>' +
+    '</div>' +
+    '<div class="c3-verdict">' + '<div><b>' + headline + '</b><p>' + lede + ' ' + caveat + '</p></div></div>' +
+    '<div class="c3-sh"><h2>The evidence</h2><span>Each question, each engine, the full answer.</span></div>' +
+    F.questions.map((q, qi) => { const n = F.engines.filter((e) => q.answers[e.key].named).length;
+      return '<article class="c3-ev"><div class="c3-ev-top"><div class="c3-ev-no">Evidence<b>' + String(qi + 1).padStart(2, "0") + '</b></div>' +
+        '<div class="c3-ev-q"><small>Question</small><span>&ldquo;' + esc(q.q) + '&rdquo;</span></div>' +
+        '<div class="c3-ev-tally"><b class="t-' + tone(n, 2) + '">' + n + '/2</b>engines named you</div></div>' +
+        '<div class="c3-ev-cols">' + F.engines.map((e) => col(q, e)).join("") + '</div></article>'; }).join("") +
+    '<footer class="c3-foot"><span><b class="wm" style="color:var(--ink)">Findable<i>.</i></b> &nbsp;findable.live</span><span>Measured on ChatGPT &amp; Google AI &middot; ' + F.date + '</span></footer>' +
+  '</div>';
+}
+
+/* ── Gallery ── */
+const params = new URLSearchParams(location.search);
+let cur = ["1", "2", "3"].includes(params.get("c")) ? params.get("c") : "1";
+let named = params.get("named") === "1";
+if (params.get("bar") === "0") document.getElementById("gal").style.display = "none";
+function render() {
+  gid = 0;
+  renderC1(named); renderC2(named); renderC3();
+  document.querySelectorAll(".concept").forEach((s) => s.classList.toggle("on", s.id === "c" + cur));
+  document.querySelectorAll("[data-c]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.c === cur)));
+  document.querySelectorAll("[data-named]").forEach((b) => b.setAttribute("aria-pressed", String((b.dataset.named === "1") === named)));
+  document.querySelector(".gal-toggle").style.visibility = cur === "3" ? "hidden" : "visible";
+}
+document.querySelectorAll("[data-c]").forEach((b) => b.addEventListener("click", () => { cur = b.dataset.c; render(); window.scrollTo(0, 0); }));
+document.querySelectorAll("[data-named]").forEach((b) => b.addEventListener("click", () => { named = b.dataset.named === "1"; render(); }));
+render();
+</script>
+</body>
+</html>
