@@ -199,6 +199,11 @@ const thin = mergeClientProfile(intakeCandidates({ lead: { business_name: "X", p
 const thinSum = intakeSummary(thin, steps, "optimise");
 ok(thinSum.still_needed.includes("Services") && thinSum.still_needed.includes("Home town") && !thinSum.still_needed.includes("Email") && thinSum.still_needed.includes("Website"), "only genuine gaps: a phone without an email is enough contact; Optimise needs their website, Build does not");
 ok(!intakeSummary(thin, steps, "build").still_needed.includes("Website"), "…a Build client without a website is not 'missing' one");
+const guessed = mergeClientProfile(intakeCandidates({ lead: { business_name: "X", phone: "07700 900111", derived_town: "Rugby", category: "plumber", contact_name: "Sam" }, onboarding: null, agreement: null, handoff: null, quickClose: null, placeCache: null, companiesHouse: null,
+  crawl: { url: "https://x.example", siteInfo: { services: ["Boilers"], towns: ["Rugby"] }, business: null }, hookAudit: null }));
+const guessedSum = intakeSummary(guessed, steps, "build");
+ok(guessedSum.still_needed.includes("Services (confirm what we found)") && guessedSum.still_needed.includes("Service areas (confirm what we found)"), "services / areas found only on their website still need confirming (a guess is not an answer — as the setup checklist says)");
+ok(guessed.find((x) => x.key === "services")!.values.join() === "Boilers", "…while the website's list is still shown, labelled, for Paul to confirm in one press");
 ok(intakeStatusLine("crawling", null).startsWith("Crawling website") && intakeStatusLine("queued", null).startsWith("Gathering") && intakeStatusLine(null, null) === "Not run yet", "live states: Gathering existing information / Crawling website / Merging findings");
 ok(/12 sources checked · 18 fields populated · 3 items still needed/.test(intakeStatusLine("needs_attention", { sources_checked: 12, sources_with_data: 9, fields_populated: 18, still_needed: ["a", "b", "c"], conflicts: [] })), "the summary line Paul reads: N sources checked · N fields populated · N items still needed (no percentages)");
 ok(intakeNoticeTitle("ABC", "ready") === "CLIENT READY · ABC" && /needs attention/.test(intakeNoticeTitle("ABC", "needs_attention")), "Paul's notice when it finishes");
