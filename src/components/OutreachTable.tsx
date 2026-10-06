@@ -145,7 +145,7 @@ import { logDataAccess } from '@/lib/dataAccessLog';
 import { maySetStatus } from '@/lib/access';
 import { leadRpc, salesQueueOpener } from '@/lib/leadRpc';
 import { notifyLeadChanged } from '@/lib/leadSync';
-import { announceQueueChanged } from '@/components/MyWhatsAppQueuePanel';
+import { announceQueueChanged, recordQueueBatch } from '@/lib/whatsappQueueView';
 import { QUEUE_SKIP_LABEL, REMOVE_FROM_MY_LEADS_EXPLAINER, REMOVE_FROM_MY_LEADS_LABEL, refusalText } from '@/lib/salesCrm';
 import { useTeamDirectory } from '@/hooks/useSalesCrm';
 import { OwnerFilterSelect } from '@/components/OwnerFilterSelect';
@@ -1405,14 +1405,16 @@ export function OutreachTable({
        message history, never on status, so "2nd attempt" doesn't affect eligibility. It persists
        after the send (the lane never touches status), which is why it reads for sent as well as
        queued leads. */
-    queueable.forEach((id) => {
+    const followupWrites = queueable.map((id) => {
       const l = leadOf(id);
-      onUpdateLead(id, {
+      return Promise.resolve(onUpdateLead(id, {
         contact_followup_queued_at: now,
         status: 'second_attempt',
         previous_status: (l?.status ?? 'initial_contact') as LeadStatus,
-      });
+      }));
     });
+    /* The one queue (both roles) re-reads once the writes have landed. */
+    void Promise.allSettled(followupWrites).then(() => announceQueueChanged());
     setSelectedIds(new Set());
     setQueueDialogOpen(false);
 
@@ -1440,7 +1442,10 @@ export function OutreachTable({
     const ids = Array.from(selectedIds).filter((id) => !isDemoLead(id));
     const r = await salesQueueOpener(ids, template);
     if (!r.ok) { toast({ title: 'Nothing queued', description: refusalText(r.error), variant: 'destructive' }); return; }
-    const skipped = Object.entries((r.skipped ?? {}) as Record<string, number>).map(([k, n]) => `${n} ${QUEUE_SKIP_LABEL[k] ?? k}`).join(' · ');
+    const skipList = Object.entries((r.skipped ?? {}) as Record<string, number>).map(([k, n]) => ({ n, label: QUEUE_SKIP_LABEL[k] ?? k }));
+    const skipped = skipList.map((s) => `${s.n} ${s.label}`).join(' · ');
+    /* The batch is kept for this tab and shown on the queue summary and page — so "Queued 0" says why. */
+    recordQueueBatch(Number(r.queued ?? 0), skipList);
     const tmplLabel = WHATSAPP_TEMPLATES.find((t) => t.value === template)?.label ?? template;
     toast({
       title: `Queued ${r.queued ?? 0} for WhatsApp`,
@@ -1556,6 +1561,7 @@ export function OutreachTable({
     // never enter the queue — they're flagged 'no_whatsapp_needs_sms' (the status name is
     // historical; it is the landline marker, and no send is ever attempted at one).
     let blockedNonMobile = 0;
+    const writes: Promise<unknown>[] = [];
     queueable.forEach((id) => {
       const lead = leads.find((l) => l.id === id);
       const { lineType, whatsappEligible } = classifyLineType(lead?.phone, lead?.country);
@@ -1580,9 +1586,18 @@ export function OutreachTable({
         line_type: lineType, // cache the offline result
         contact_method: 'whatsapp', // attribute to WhatsApp immediately (cleared on cancel / permanent fail)
       };
-      onUpdateLead(id, patch);
+      writes.push(Promise.resolve(onUpdateLead(id, patch)));
     });
     const queuedCount = queueable.length - blockedNonMobile;
+    const otherSkipped = skipped - blockedContacted - blockedConversation;
+    recordQueueBatch(queuedCount, [
+      { n: blockedConversation, label: QUEUE_SKIP_LABEL.contacted_by_phone },
+      { n: blockedContacted, label: 'number already in a conversation (probably a duplicate lead row)' },
+      { n: otherSkipped, label: 'already contacted, queued or suppressed' },
+      { n: blockedNonMobile, label: 'landline — flagged, not queued' },
+    ]);
+    /* The one queue (both roles) re-reads once the writes have landed. */
+    void Promise.allSettled(writes).then(() => announceQueueChanged());
     setSelectedIds(new Set());
     setQueueDialogOpen(false);
     const tmplLabel = WHATSAPP_TEMPLATES.find((t) => t.value === template)?.label ?? template;

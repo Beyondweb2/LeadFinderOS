@@ -39,6 +39,7 @@ const WebsiteBuild = lazy(() => import("./pages/WebsiteBuild"));
 const ComparePage = lazy(() => import("./pages/CompareMeasurements"));
 const AdminApiUsage = lazy(() => import("./pages/AdminApiUsage"));
 const Inbox = lazy(() => import("./pages/Inbox"));
+const WhatsAppQueue = lazy(() => import("./pages/WhatsAppQueue"));
 const SalesDashboard = lazy(() => import("./pages/SalesDashboard"));
 const AdminFeedback = lazy(() => import("./pages/AdminFeedback"));
 const AiAudit = lazy(() => import("./pages/AiAudit"));
@@ -247,6 +248,8 @@ const App = () => {
               <Route path="/templates" element={<Templates />} />
               {/* WhatsApp Inbox — operator-gated + in-app (each operator sees only their own) */}
               <Route path="/inbox" element={<Inbox />} />
+              {/* The ONE WhatsApp queue (2026-10-06): same page and component for both roles; the server scopes the rows. */}
+              <Route path="/whatsapp-queue" element={<WhatsAppQueue />} />
               <Route path="/coverage" element={<Coverage />} />
               {/* 2026-10-06: Review replies, the page generator and the page plan live INSIDE Paid Clients (the
                   Tools tab, and each client's "Pages & reviews" section — src/lib/paidClientTools.ts). The old

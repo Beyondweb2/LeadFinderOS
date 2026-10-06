@@ -22,6 +22,22 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-06-whatsapp-queue-one-page', date: '2026-10-06', title: 'One WhatsApp queue for everyone', audience: 'all',
+    body: 'The WhatsApp queue is now its own page, and it looks and works the same for the admin and for salespeople. Outreach shows a short summary with an Open queue button.',
+    report: {
+      added: [
+        'A WhatsApp queue page: every waiting message in send order, with a Waiting or No-reply follow-up tag, the template, and an X to take a waiting message back out.',
+        'A Last batch note after you queue: how many were queued and why any were skipped (for example "already contacted").',
+      ],
+      changed: [
+        'Outreach shows a one-line queue summary ("3 waiting") and an Open queue button instead of a list.',
+        'Salespeople see their own waiting leads only. The admin sees the whole team, plus Pause, Run tick, sent today and the next send.',
+      ],
+      removed: [
+        'The separate, simpler "Your leads queued" list salespeople had on Outreach.',
+      ],
+      effect: 'Everyone reads the queue the same way. Nothing about when or how messages are sent has changed.',
+    } },
   { id: '2026-10-06-quick-report-cta', date: '2026-10-06', title: 'Quick report button now says "Improve AI visibility"', audience: 'all',
     body: 'On the six-answer quick report the closing section now asks "Want to improve your AI visibility?" and the yellow button says "Improve AI visibility" instead of showing the price.',
     report: {

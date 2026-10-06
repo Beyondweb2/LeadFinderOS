@@ -19,7 +19,7 @@ import { useQueueState } from '@/hooks/useQueueState';
 import { fetchQueueState, queuedLeadLine } from '@/lib/queueStatus';
 import { WorkSection } from '@/components/WorkSection';
 import { notifyLeadChanged } from '@/lib/leadSync';
-import { announceQueueChanged } from '@/components/MyWhatsAppQueuePanel';
+import { announceQueueChanged } from '@/lib/whatsappQueueView';
 
 /**
  * Per-lead WhatsApp outreach controls (lead detail dialog): pick the approved
@@ -132,6 +132,8 @@ export function WhatsAppLeadControls({
       }
     } finally {
       setBusy(false);
+      /* The one queue (both roles) re-reads now, not at its next poll. */
+      announceQueueChanged();
     }
   };
 
