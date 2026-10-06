@@ -591,3 +591,10 @@ panels; the existing dark CTA + footer, byte-identical. The sheet widens to 920p
   engines' answers; 9/9 named cards show the business in green, 0 not-named cards do; no horizontal
   overflow at 1280/390px; 19 print on 2 A4 pages, the 2 no-website reports on 3 (the approved no-website
   wording is long). 8 other report types byte-identical to main.
+
+**CTA wording on the six-answer report (Paul, 2026-10-06).** Heading "Want to improve your AI visibility?" and
+primary button "Improve AI visibility" (no price, the same onboarding link), keyed on `concept4` in
+`renderReportHtml`. Request a call and Ask me anything (wa.me to `FINDABLE_CONTACT_WHATSAPP`) are unchanged; the
+locked guarantee sentence still names the £99. Every other report keeps "Want to be one of the names?" and
+"Get started — £99" (8 report types byte-identical). Buttons sit in one row on desktop and at 600px, and stack
+full width (44px each) at 390px.
