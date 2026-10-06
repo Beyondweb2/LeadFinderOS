@@ -348,3 +348,97 @@ findable-site: `functions/details/[token].ts` (the proxy, same shape as `/agree/
     `whatsapp-template-snapshot-paths` (the language actually sent); `paid-client-hub-resilience` (`country`);
   - `sales-ready-gate` (`save_call` gated); `client-copy-claims` (four new client-facing sources);
   - `india-readiness`, `csv-lead-import` (Australia).
+
+## 13. Deployed (2026-10-06 UK, evening)
+
+- **Reconciled** with `main` `fd89c671` (the sign-up / agreement redesign, merged meanwhile; deployed by its own session
+  at 18:07 UTC). No conflicts; that work's own record notes the same v3 Optimise conflict. Gate: 347/347 suites,
+  typecheck 9 = baseline. `client-signup-agreement-flow` and `manual-onboarding` read findable-site source and pass
+  with `FINDABLE_SITE_DIR` set to a current origin/master checkout.
+- **SQL**, in order, each read back:
+  1. `20261014100000`;
+  2. the two `REINDEX … CONCURRENTLY` (both indexes valid after);
+  3. `20261014100200`;
+  4. `20261014120000`.
+
+  Read back: three tables with RLS on, 0 policies, 0 API grants; the partial unique index; every kind list with old and
+  new values; `+61 412 345 678` = `0412 345 678`; `import_leads` with the country rule; the sales message-phones
+  function with the 61 forms.
+- **Functions** (from the main merge tree `add76de4`):
+  - send-whatsapp-message v160 (`x-swm-build 2026-10-07a-link-templates`, caps incl. `link_templates`);
+  - client-onboarding v1 (new; `x-build client-onboarding-2026-10-07a`);
+  - quick-close v19; paid-client-hub v67; client-intake; conversation-triage v27; findable-checkout v77;
+    process-whatsapp-queue; submissions; send-whatsapp-media; send-whatsapp-voice; mockup; create-ai-audit;
+    process-ai-audit-queue; search-leads; backfill-lead-towns; findable-onboarding; enrich-business; paid-baseline;
+    render-remeasure-results; weekly-visibility; admin-overview; business-summary; sales-performance; stripe-webhook v165.
+  - Then `main` `c3fa3777` (the template-status account lookup): send-whatsapp-message, quick-close, paid-client-hub
+    redeployed.
+  - **Not redeployed:** reached only through the continuation list or labels they never use — market-view, niche-sample,
+    page-generator, prospect-preview, render-audit-report, render-welcome-pack, run-seo-scan, voice-note-script,
+    warm-lead-reply.
+  - ⛔ **`whatsapp-status` untouched — still v114 (2026-09-30).**
+- **App:** `main` pushed. `app.leadfinderos.com` and `leadfinderos-next.pages.dev` serve "Send signup link on WhatsApp",
+  "Get missing info from the client", "Suggested in", "Already known — no need to type it" and "WhatsApp signup template"
+  (deploy check: live HTML → every chunk).
+- **findable-site:** `master` `adb22ca` (the `/details/[token]` proxy over their `698d605`), deployed to production
+  (branch master, account 4148056c). `findable.live/details/<unknown>` answers the client-onboarding function's own
+  "isn't available" page.
+
+## 14. Live certification (fixtures ZZ QA-S1 / ZZ QA-S2, drama-range phones, excluded, archived after)
+
+**ZZ QA-S1 — the Test salesperson:**
+
+- the call answers saved (manager, contract, £150, jobs, areas, decision maker) and filled the lead's services / areas;
+- Build while still in the agency contract → `needs_review`, and the link was refused (409);
+- switched to Optimise → only "access" was asked → ready;
+- the sign-up link is `findable.live/agree/<64 hex>`;
+- a WhatsApp send went as the template — **simulated**, because the fixture's number is in the drama range;
+- a second send needed Resend (`pitch_already_sent`);
+- copy was recorded as copied;
+- the handoff came pre-filled (Optimise / agency / "More Boiler installations … in Maidenhead, Windsor"), and Send to
+  Paul worked with nothing typed;
+- the salesperson was refused on Paid Clients (403 `admin_only`) and on the onboarding template (403).
+
+**ZZ QA-S2 — Paul:**
+
+- the form asked 11 Optimise questions (email known → not asked; town and contact pre-filled as confirmations);
+- the link was made once and reused;
+- WhatsApp went as the template (simulated); copy recorded; reading WhatsApp found 0 replies.
+
+**ZZ QA-S2 — the client, through `findable.live/details/<token>`:**
+
+- the form has no payment wording;
+- a bad email got 422 with the field marked;
+- a valid post showed the thanks page;
+- `amount_paid` / `plan_tier` / `status` posted alongside were ignored;
+- a second post got "already have your answers" and wrote nothing.
+
+**Results on the record:**
+
+- answers in the onboarding columns; History; "CLIENT DETAILS IN";
+- the intake re-ran to ready — **Still needed: none**, services and town from "Client onboarding";
+- the link was revoked.
+
+**Australia, read-only searches** (search-leads as Paul, no lead added): plumber Sydney 15, electrician Melbourne 33,
+painter Brisbane 47, locksmith Perth 13 (resolved "Perth WA, Australia"), builder Adelaide 50, plumber Ashgrove 39
+(resolved "Ashgrove QLD").
+
+- every address Australian, 0 UK, 0 duplicate place ids;
+- phones come from Place Details when a lead is added (international form), not in search results.
+
+**Mobile:** the onboarding form in a 390px frame (headless Edge) — no overflow, the options wrap, follow-ups hidden
+until relevant. The location picker at 390px: proved by its own harness (`improve/au-location-parity`). The Quick Close
+and Call changes: text / DOM proof only; nobody has seen them on screen.
+
+**⚠️ Meta template status cannot be read yet:**
+
+- the live read answers `no_waba`: the access token's debug_token has 20 scopes but no target accounts, and the token
+  belongs to no business, so the sending account cannot be discovered;
+- set the edge secret **`WHATSAPP_BUSINESS_ACCOUNT_ID`** (the account that owns the sending number, from WhatsApp
+  Manager) and the screens will show "awaiting approval" / "approved" from Meta;
+- until then the status is "unknown": a one-click send is tried and Meta decides (an unapproved template is refused by
+  Meta, reported in words, never shown as sent);
+- approval then works with no code change either way.
+
+**Noticed, not changed:** every `send-whatsapp-message` send also gets a mirrored `[template_name]` row from the
+existing `trg_mirror_whatsapp_send` trigger — 1,316 live rows in 30 days, pre-existing.
