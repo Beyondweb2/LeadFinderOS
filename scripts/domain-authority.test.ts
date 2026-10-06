@@ -115,8 +115,11 @@ const ob: HandoffOnboarding = { services_list: ["x"], areas_list: ["y"], busines
   ok(DOMAIN_CONTROL_OPTIONS.map((o) => o.value).join() === "client_owns,client_owns_agency_manages,third_party_owns,unknown", "Sales records the four situations (A/B/C/D)");
   ok(/do not promise/i.test(DOMAIN_CONTROL_OPTIONS[2].guidance) && /don't guess/i.test(DOMAIN_CONTROL_OPTIONS[3].guidance), "C → promise nothing and flag to Paul; D → don't guess");
   ok(/normally fine/.test(SALES_DOMAIN_LINE) && /owns or controls the domain/.test(SALES_DOMAIN_LINE), "the suggested sales line");
-  const play = read("src/lib/coldCallPlaybook.ts");
-  ok(!/talk about moving it to our hosting or a rebuild/.test(play) && /My agency controls the website \/ domain/.test(play) && /we would never ask you to break it/.test(play), "call script: no rebuild promise, an agency objection, never 'break your contract'");
+  /* 2026-10-06 (sales-team-today): the objections moved from coldCallPlaybook.ts into src/lib/callScript.ts
+     (buildCallScript); coldCallPlaybook.objections IS script.objections. Both files are held to the rule. */
+  const play = read("src/lib/coldCallPlaybook.ts") + "\n" + read("src/lib/callScript.ts");
+  const script = read("src/lib/callScript.ts");
+  ok(!/talk about moving it to our hosting or a rebuild/.test(play) && /\{ objection: 'My agency controls the website \/ domain', answer: SALES_DOMAIN_LINE \+ [^\n]*we would never ask you to break it/.test(script) && /objections = script\.objections/.test(read("src/lib/coldCallPlaybook.ts")), "call script: no rebuild promise, an agency objection (with the sales domain line), never 'break your contract'");
   ok(/promise a new website or a switch-over before they have said their business owns or controls the domain/.test(read("src/lib/warmReply.ts")), "the reply drafter may not promise a new site before the domain is confirmed");
   const mig = read("supabase/migrations/20260928180000_domain_authority.sql");
   ok(/function public\.lead_set_domain_control[\s\S]*?perform public\._require_work\(_lead_id\);/.test(mig) && /revoke all on function public\.lead_set_domain_control\(uuid, text\) from public, anon;/.test(mig), "lead_set_domain_control: own leads only, anon refused");

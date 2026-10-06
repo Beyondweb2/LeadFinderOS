@@ -15,6 +15,7 @@ import { Clock, Loader2, PhoneCall, RotateCcw, SearchCheck, Square } from 'lucid
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { engineScoreText, ROW_CHECK_WORD, type RowCheckState, type RowScore } from '@/lib/outreachRowCheck';
+import { scoreTone, SCORE_TONE_CLASS } from '@/lib/scoreTone';
 
 export function AiCheckSummary({ state, score, scoreLoading = false, onCallScreen, onRetry, className }: {
   state: RowCheckState;
@@ -31,9 +32,11 @@ export function AiCheckSummary({ state, score, scoreLoading = false, onCallScree
       data-testid="row-ai-check" data-state={state.kind} onClick={stop}>
       {state.kind === 'ready' && (score
         ? score.engines.map((e) => (
-            <span key={e.label} data-testid="row-ai-score" className={cn('whitespace-nowrap rounded border px-1 py-px font-medium tabular-nums',
-              e.answered === 0 ? 'border-border text-muted-foreground'
-                : e.named > 0 ? 'border-teal-500/50 text-teal-700 dark:text-teal-300' : 'border-border text-foreground')}>
+            /* Coloured by the ONE score rule (src/lib/scoreTone.ts): all named green … none named red; no answers neutral. */
+            <span key={e.label} data-testid="row-ai-score" data-tone={e.answered === 0 ? 'none' : scoreTone(e.named, e.answered)}
+              className={cn('whitespace-nowrap rounded-full px-1.5 py-px font-semibold tabular-nums ring-1 ring-inset',
+                SCORE_TONE_CLASS[e.answered === 0 ? 'none' : scoreTone(e.named, e.answered)].chip,
+                SCORE_TONE_CLASS[e.answered === 0 ? 'none' : scoreTone(e.named, e.answered)].text)}>
               {engineScoreText(e)}
             </span>
           ))

@@ -163,7 +163,14 @@ console.log("\n── pass 2: one folding pattern for the Work tab ──");
   for (const [what, src, id] of [["Campaign", crm, "lead-campaign"], ["Call booked", crm, "call-booked"], ["Sign-up link", card, "signup-link"], ["WhatsApp outreach", wa, "whatsapp-outreach"]] as const) {
     ok(src.includes(`<WorkSection `) && src.includes(`testId="${id}"`), `${what} uses the one WorkSection pattern`);
   }
-  ok(!/<details/.test(crm), "no second folding pattern (<details>) left on the Work tab");
+  /* 2026-10-06 (sales-team-today, Paul): ONE exception — LeadHookPanel's "Earlier checks" list (data-testid="hook-history")
+     folds as a <details> inside the AI result at the top of the Call tab (closed there; open in the Outreach audit popup).
+     It is part of the AI result card, not a Work section. Every OTHER <details> in LeadCrmPanel still fails this. */
+  {
+    const folds = crm.match(/<details\b[^>]*>/g) ?? [];
+    ok(folds.length === 1 && /data-testid="hook-history"/.test(folds[0]) && /open=\{variant === 'call' \? undefined : true\}/.test(folds[0]),
+      `no second folding pattern (<details>) left on the Work tab — only the AI result's Earlier checks fold (${folds.length} found)`);
+  }
   ok(/summary=\{name\}/.test(crm) && /summary=\{callBookedSummary\(lead\)\}/.test(crm) && /summary=\{summary\}/.test(card) && /summary=\{summary\}/.test(wa), "every folded section says its state in its summary");
   ok(/alert=\{blocking \? warningLine : null\}/.test(card), "Sign-up link: a blocking gap (no trade) stays visible while folded");
   ok(/flex flex-wrap gap-1\.5" data-testid="onboarding-buttons"/.test(card) && /h-9 /.test(card), "Sign-up link: the buttons wrap (no 390 px overflow) with phone-sized touch targets");

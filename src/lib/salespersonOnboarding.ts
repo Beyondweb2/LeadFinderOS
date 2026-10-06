@@ -5,8 +5,9 @@
    checklist with it.
 
    ⛔ THE GATE ITSELF IS IN THE DATABASE: public.salesperson_onboarding_missing() /
-      salesperson_ready_to_sell() (migration 20261010120000). This file mirrors that rule for the screen,
-      with the SAME keys (BLOCKING_KEYS, INACTIVE_KEYS); when the server's answer is supplied it is the one
+      salesperson_ready_to_sell() (migration 20261010120000; since 20261012120000 account restrictions ONLY —
+      SELLING_GATE_KEYS; the checklist, CHECKLIST_KEYS, is Paul's record and never gates). This file mirrors that rule
+      for the screen; when the server's answer is supplied it is the one
       shown (`serverMissing`). scripts/salesperson-onboarding.test.ts fences the keys on both sides.
    ⛔ READY TO SELL IS DERIVED, NEVER STORED, and it is ENFORCED: a salesperson who is not ready may sign in
       and see their onboarding, but every sales action is refused on the server.
@@ -342,21 +343,26 @@ export interface MemberState {
   has_signed_in?: boolean;
 }
 
-/** The eight items that block READY TO SELL — the SAME keys public.salesperson_onboarding_missing() returns
- *  (migration 20261010140000).
+/** 🔴 THE PRACTICAL ONBOARDING CHECKLIST NO LONGER BLOCKS SELLING (sales-team-today, Paul, 2026-10-06;
+ *  migration 20261012120000_selling_gate_account_only.sql). These eight items are Paul's admin record on the
+ *  Team page — 18+, right to work, bank details, VAT, individual/company, start date, login, team guide — and
+ *  an incomplete checklist stops NOTHING: Find Leads, claiming, checks, calls, messages, WhatsApp queueing,
+ *  sign-up links and Quick Close all work. ⛔ Do not reintroduce them into the gate
+ *  (scripts/selling-gate-account-only.test.ts fails if salesperson_onboarding_missing names one again).
+ *  The ONLY things that stop a salesperson selling are SELLING_GATE_KEYS — genuine account restrictions.
  *  ⛔ SALESPERSON PAPERWORK IS HANDLED OUTSIDE LEADFINDEROS (Paul, 2026-10-05): the contractor agreement and the
  *  salesperson privacy notice are sent and signed outside the app. They NEVER block Ready to Sell and nothing in
  *  the app asks a salesperson to open, tick or sign them. What Paul records about them stays as a reference line. */
-export const BLOCKING_KEYS = [
+export const CHECKLIST_KEYS = [
   'age_18', 'right_to_work', 'bank_details', 'vat',
   'contractor_status', 'start_date', 'login', 'team_guide',
 ] as const;
+/** The keys public.salesperson_onboarding_missing() returns since 2026-10-06 — and the ONLY reasons a
+ *  salesperson cannot sell: no sales role, login disabled / no team member, suspended, engagement ended. */
+export const SELLING_GATE_KEYS = ['not_sales', 'login', 'suspended', 'ended'] as const;
 /** Shown to Paul for reference only — never blocking (paperwork handled outside the app; Schedule 2 optional). */
 export const REFERENCE_KEYS = ['agreement', 'privacy_notice', 'schedule2'] as const;
-/** The other keys the server can return: the person is not an active salesperson right now.
- *  'not_started' (final sales release, 2026-10-05, migration 20261011120000): a start date still to come. */
-export const INACTIVE_KEYS = ['not_sales', 'suspended', 'ended', 'not_started'] as const;
-export type ChecklistKey = typeof BLOCKING_KEYS[number] | typeof REFERENCE_KEYS[number];
+export type ChecklistKey = typeof CHECKLIST_KEYS[number] | typeof REFERENCE_KEYS[number];
 
 export const CHECKLIST_LABELS: Record<ChecklistKey, string> = {
   agreement: 'Contractor agreement · handled outside LeadFinderOS',
@@ -376,8 +382,9 @@ export interface ChecklistItem {
   key: ChecklistKey;
   label: string;
   done: boolean;
-  /** Counts toward READY TO SELL. Schedule 2 is optional under the agreement, so it never blocks. */
-  blocking: boolean;
+  /** Counts toward the onboarding CHECKLIST (Paul's admin record). ⛔ Never toward selling (2026-10-06).
+   *  Schedule 2 and the paperwork references are optional. */
+  required: boolean;
   /** What is on file, or what is missing — one plain sentence. */
   detail: string;
 }
@@ -389,7 +396,8 @@ export interface OnboardingSummary {
   total: number;
   activeMember: boolean;
   inactiveReason: string | null;
-  /** The server's answer when supplied (it is the gate), else this file's. */
+  /** Can this person sell right now? ONLY the account restrictions decide (inactiveReason). The server's
+   *  answer when supplied (it is the gate), else this file's. The checklist never enters it. */
   readyToSell: boolean;
   /** The server's missing keys and this file's disagree — shown, never hidden. */
   serverDisagrees: boolean;
@@ -451,7 +459,7 @@ export function onboardingSummary(
   const r = record ?? emptyOnboardingRecord('');
   const notes: string[] = [];
   const items: ChecklistItem[] = [];
-  const add = (key: ChecklistKey, done: boolean, detail: string, blocking = true) => items.push({ key, label: CHECKLIST_LABELS[key], done, blocking, detail });
+  const add = (key: ChecklistKey, done: boolean, detail: string, required = true) => items.push({ key, label: CHECKLIST_LABELS[key], done, required, detail });
 
   /* 1–2. Contractor agreement and privacy notice — HANDLED OUTSIDE LEADFINDEROS (Paul, 2026-10-05). Reference
      only: whatever Paul chose to note here is shown, nothing is missing if he noted nothing, and it never blocks. */
@@ -501,9 +509,8 @@ export function onboardingSummary(
       : 'Not asked yet.');
   if (r.contractor_type === 'limited_company') notes.push('Limited company: the checklist says speak to an adviser before they start, because the contract must be with their company.');
 
-  /* 8. Start date — set AND arrived (final sales release, 2026-10-05): a future start date is not Ready to Sell. */
-  add('start_date', startDateReached(r.start_date, today),
-    !r.start_date ? 'Not set.' : startDateReached(r.start_date, today) ? fmt(r.start_date) : `${startsOnWords(r.start_date, today)} — not Ready to Sell before then.`);
+  /* 8. Start date — recorded for Paul. ⛔ Since 2026-10-06 it does not stop selling, set or not, past or future. */
+  add('start_date', !!r.start_date, !r.start_date ? 'Not set.' : startDateReached(r.start_date, today) ? fmt(r.start_date) : startsOnWords(r.start_date, today));
 
   /* 9. Their own LeadFinderOS login — from the live account, never stored. */
   const loginLive = member.role === 'sales' && member.status === 'active';
@@ -521,8 +528,8 @@ export function onboardingSummary(
       : s2Due ? (s2Due < today ? `Not received; the 7 days ended ${fmt(s2Due)}, so no existing contacts are listed.` : `Optional; due by ${fmt(s2Due)}.`)
       : 'Optional; due within 7 days of the start date.', false);
 
-  const blockingItems = items.filter((i) => i.blocking);
-  const missing = blockingItems.filter((i) => !i.done);
+  const requiredItems = items.filter((i) => i.required);
+  const missing = requiredItems.filter((i) => !i.done);
   const leaver = leaverStateOf(record, member, today);
   const ended = !!leaver.endDate && leaver.endDate <= today;
   const inactiveReason = member.role !== 'sales' && member.role !== null ? 'Not a salesperson'
@@ -535,14 +542,15 @@ export function onboardingSummary(
   if (leaver.accessStillOn) notes.push('Leaving: their end date has passed but their login is still on. Press Disable to remove access.');
   if (leaver.recorded && ended && !leaver.deletionConfirmed) notes.push(`Leaving: they have not confirmed deleting Findable data (due ${fmt(addDays(leaver.endDate!, 7))}, clause 12.3).`);
 
-  const localReady = missing.length === 0 && inactiveReason === null;
+  /* ⛔ THE CHECKLIST NEVER DECIDES SELLING (2026-10-06): only a genuine account restriction does. */
+  const localReady = inactiveReason === null;
   const serverReady = serverMissing ? serverMissing.length === 0 : null;
   const serverDisagrees = serverReady !== null && serverReady !== localReady;
   if (serverDisagrees) notes.push(`The server's check says ${serverReady ? 'ready' : `not ready (${serverMissing!.join(', ')})`}; the server's answer is the one that applies.`);
   return {
     items, missing,
-    done: blockingItems.length - missing.length,
-    total: blockingItems.length,
+    done: requiredItems.length - missing.length,
+    total: requiredItems.length,
     activeMember: inactiveReason === null,
     inactiveReason,
     readyToSell: serverReady ?? localReady,
@@ -582,7 +590,7 @@ export const ONBOARDING_SAVE_ERRORS: Record<string, string> = {
   deletion_needs_end: 'Record the end date first.',
   not_a_salesperson: 'Onboarding is for salespeople only.',
   not_a_member: 'That person is not on the team.',
-  not_ready_to_sell: 'That salesperson is not Ready to Sell, so leads cannot be moved to them.',
+  not_ready_to_sell: "That salesperson's sales access is not active (suspended, ended or login off), so leads cannot be moved to them.",
   bad_document: 'Fill in the document details.',
   bad_document_id: 'Version id: lower-case letters, digits and hyphens (e.g. contractor-agreement-v3).',
   bad_document_kind: 'Pick which document this is.',

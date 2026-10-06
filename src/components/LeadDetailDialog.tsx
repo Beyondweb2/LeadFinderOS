@@ -50,7 +50,6 @@ import { FindEmailButton } from '@/components/FindEmailButton';
 import { SocialLinks, SocialProfilesPanel } from '@/components/SocialLinks';
 import { cn } from '@/lib/utils';
 import { useLeadPermissions } from '@/hooks/useLeadPermissions';
-import { NotReadyToSellBanner } from '@/components/NotReadyToSellBanner';
 import { markLeadInterested } from '@/lib/leadQuickActions';
 import { notifyLeadChanged } from '@/lib/leadSync';
 import { useToast } from '@/hooks/use-toast';
@@ -63,7 +62,7 @@ import { pillStatusOf } from '@/lib/leadState';
 import { leadSourceFor } from '@/lib/outreachLeadColumns';
 import { LeadHistoryPanel, LeadHookPanel, LeadWorkPanel, ProspectProfilePanel } from '@/components/LeadCrmPanel';
 import { DialogHero, IconTile, TONE, ToneChip } from '@/components/operator/ui';
-import { Building2 } from 'lucide-react';
+import { Building2, Sparkles } from 'lucide-react';
 import { HeaderNextAction, LeadCallFlow, LoggedLine, LostReasonLine, type LoggedResult } from '@/components/LeadCallFlow';
 import { isAggregatorUrl } from '@/lib/aggregators';
 
@@ -308,7 +307,6 @@ function LeadDetailBody({
   /* A paying client opens on Client for the admin (delivery is the work then); everyone else on Call. */
   const [tab, setTab] = useState<WorkspaceTab>(() => workspaceTabOf(initialTab) ?? (permsForTab.clientDelivery && isPaidLead(lead) ? 'client' : 'call'));
   const bodyRef = useRef<HTMLDivElement>(null);
-  const aiToolsRef = useRef<HTMLDetailsElement>(null);
   const [moreTools, setMoreTools] = useState(false);
   /* ⛔ THE LOG WINDOW (2026-10-06): Log (the header, the script's sticky bar, Outreach's Call) opens ONE small
      window — what happened, then only the next step that outcome needs (src/components/LeadCallFlow.tsx).
@@ -318,7 +316,6 @@ function LeadDetailBody({
   const [logged, setLogged] = useState<LoggedResult | null>(null);
   const logThisCall = () => setLogOpen(true);
   /* "Run the AI check" on the evidence card: the AI check tools just below, opened. */
-  const openAiTools = () => { if (aiToolsRef.current) { aiToolsRef.current.open = true; aiToolsRef.current.scrollIntoView({ block: 'start', behavior: 'smooth' }); } };
   const goTab = (next: WorkspaceTab) => { setTab(next); if (bodyRef.current) bodyRef.current.scrollTop = 0; };
 
   const [notes, setNotes] = useState(lead.notes || '');
@@ -567,8 +564,8 @@ function LeadDetailBody({
           sign-up link, WhatsApp), SCRIPTS (call script / voice note), PROSPECT (who they are, the AI
           check, contact), HISTORY (everything recorded), CLIENT (admin only: delivery, payment, private
           note). Every write in here is the same server function Outreach uses. Full screen on a phone. ══ */}
-      {/* A salesperson who is not Ready to Sell (2026-10-05): calls, messages and links are refused on the server; this says why. */}
-      <div className="mx-3 mt-2.5 sm:mx-5 empty:hidden"><NotReadyToSellBanner compact /></div>
+      {/* ⛔ NO ONBOARDING BANNER IN THE LEAD POPUP (sales-team-today, 2026-10-06): the checklist no longer blocks
+          selling, and a genuinely restricted account is told on the Sales dashboard and Find Leads. */}
       <QuickCloseNav.Provider value={{ openClose: () => goTab('close') }}>
       <Tabs value={tab} onValueChange={(v) => goTab(v as WorkspaceTab)} className="flex min-h-0 flex-1 flex-col">
         <TabsList className={cn('mx-3 mt-2.5 grid h-9 shrink-0 sm:mx-5', perms.clientDelivery ? 'grid-cols-5' : 'grid-cols-4')}>
@@ -579,18 +576,21 @@ function LeadDetailBody({
           {perms.clientDelivery && <TabsTrigger value="client" className="text-xs">Client</TabsTrigger>}
         </TabsList>
         <div ref={bodyRef} className="min-h-0 flex-1 overflow-y-auto thin-scrollbar px-3 py-3 sm:px-5 sm:py-4">
-          {/* ── CALL (2026-10-06): the AI evidence → the call script (the playbook, read-only) → the primary actions
-                (its sticky bar: Log + Quick Close), then the AI check tools (folded) and the recent WhatsApp.
+          {/* ── CALL (sales-team-today, 2026-10-06): SCAN → SAY → ASK → LOG → CLOSE.
+                1 AI RESULT — the ONE AI summary on this screen (LeadHookPanel variant 'call': coloured scores, best
+                  missed search, who was named, full audit / report / copy link, run / re-run, earlier checks folded).
+                  ⛔ Never a second copy of the AI result lower down or inside the script.
+                2 CALL SCRIPT — the playbook (read-only), its sticky bar: Log this call + Quick Close.
                 ⛔ No CRM cards here: the status and the Next Action are in the header, the outcome is the Log window. ── */}
           <TabsContent value="call" className="mt-0 space-y-4" data-testid="workspace-call">
             {logged && <LoggedLine leadId={lead.id} logged={logged} onDismiss={() => setLogged(null)} />}
-            {!isDemoLead(lead.id) && <ColdCallPlaybookInline leadId={lead.id} initialScript="call" onLogCall={logThisCall} onRunCheck={openAiTools} />}
             {!isDemoLead(lead.id) && (
-              <details ref={aiToolsRef} className="rounded-xl border border-border/60 bg-card/60 px-3.5 py-2.5" data-testid="ai-check-tools">
-                <summary className="cursor-pointer select-none text-xs font-semibold uppercase tracking-wider text-muted-foreground">AI check — run, re-run, report, earlier checks</summary>
-                <div className="mt-2.5"><LeadHookPanel leadId={lead.id} /></div>
-              </details>
+              <section className="space-y-2 rounded-2xl border border-violet-500/30 bg-violet-500/[0.04] p-3 sm:p-3.5" data-testid="ai-check-tools">
+                <h3 className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-violet-700 dark:text-violet-300"><Sparkles className="h-4 w-4" />AI result</h3>
+                <LeadHookPanel leadId={lead.id} variant="call" />
+              </section>
             )}
+            {!isDemoLead(lead.id) && <ColdCallPlaybookInline leadId={lead.id} initialScript="call" onLogCall={logThisCall} />}
             {!isDemoLead(lead.id) && context !== 'inbox' && <RecentWhatsApp leadId={lead.id} />}
           </TabsContent>
 

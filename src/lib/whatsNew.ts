@@ -22,6 +22,26 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-06-sales-team-today', date: '2026-10-06', title: 'A Call screen you can use on the phone, and onboarding no longer blocks selling', audience: 'all',
+    body: 'The AI result is at the top of the Call tab, in colour. The script starts with the reason for the call, then the real website reasons, then one question: do they manage the website or does an agency. The onboarding checklist no longer stops anyone selling.',
+    report: {
+      added: [
+        'The AI result at the top of the Call tab: ChatGPT and Google AI scores in colour (green all named, amber some, red none), the overall % named, the best missed search and who was named instead.',
+        'The first question is always "Do you manage the website yourself, or does an agency do it?" with two buttons. Agency opens the contract and cost questions, and a cheaper-angle line only when what they pay is more than ours.',
+        'Optimise | Build switch on the offer: one plan open at a time, the right one picked from their website.',
+        'Objections as buttons: tap one, its answer opens.',
+      ],
+      changed: [
+        'The opener: "Hi mate, I was looking for a plumber in Rugby, so I asked Google AI and it mentioned …, but not you." Never "from Findable", never "I messaged you" or a day.',
+        'Outreach rows say Google AI instead of Gemini, and the scores are coloured.',
+        'The onboarding checklist (18+, right to work, bank details, VAT, company, start date, team guide) is now Paul\'s record on the Team page. It no longer blocks Find Leads, claiming, checks, calls, messages or Quick Close. A suspended, ended or disabled login is still stopped.',
+      ],
+      removed: [
+        'The LinkedIn and Email scripts, the gatekeeper and voicemail lines, "if they\'d rather see it first", the research links, the "where does most of your work come from" question, and the second copy of the AI result lower down the Call tab.',
+        'The "You are not Ready to Sell yet" banner.',
+      ],
+      effect: 'Scan the AI result, say the opener, ask the first question, log the call, Quick Close. Prices, the agreement and payments are unchanged.',
+    } },
   { id: '2026-10-06-call-workspace-log', date: '2026-10-06', title: 'The Call tab: status at the top, one Log button', audience: 'all',
     body: 'Open a lead and its status and next action are at the top. Press Log, pick what happened, and only the outcomes that need a next step ask for one.',
     report: {

@@ -12,7 +12,12 @@ const root = path.resolve(import.meta.dirname, "..");
 const read = (p: string) => fs.readFileSync(path.join(root, p), "utf8").replace(/\r\n/g, "\n");
 
 const play = read("src/components/ColdCallPlaybook.tsx");
-ok(/export function ColdCallPlaybookInline\(\{ leadId, initialScript, onLogCall, onRunCheck \}/.test(play) && /\{onLogCall && <LogCallBar onLogCall=\{onLogCall\} leadId=\{leadId\} \/>\}/.test(play), "the inline script offers Log this call when given a handler (with Quick Close beside it)");
+// onRunCheck removed 2026-10-06 (sales-team-today, Paul): the AI result sits above the script, not inside it.
+ok(/export function ColdCallPlaybookInline\(\{ leadId, initialScript, onLogCall \}/.test(play) && !/onRunCheck/.test(play) && /\{onLogCall && <LogCallBar onLogCall=\{onLogCall\} leadId=\{leadId\} \/>\}/.test(play), "the inline script offers Log this call when given a handler (with Quick Close beside it), and no onRunCheck");
+{
+  const barSrc = play.slice(play.indexOf("function LogCallBar"), play.indexOf("export function ColdCallPlaybookInline"));
+  ok(/data-testid="log-this-call"/.test(barSrc) && /<QuickCloseButton leadId=\{leadId\}/.test(barSrc) && /sticky bottom-0/.test(barSrc), "the bar is sticky: Log this call + Quick Close");
+}
 ok(/export function ColdCallPlaybookSheet\(\{ leadId, open, onOpenChange, onLogCall \}/.test(play) && /onLogCall && leadId && <Button[^>]*onClick=\{onLogCall\}/.test(play), "the sheet offers it too");
 const bar = play.slice(play.indexOf("function LogCallBar"), play.indexOf("export function ColdCallPlaybookInline"));
 ok(!/leadRpc|supabase|invoke|fetch\(/.test(bar), "Log this call writes nothing and calls nothing — it only navigates");
@@ -20,7 +25,12 @@ ok(!/leadRpc|supabase|invoke|fetch\(/.test(bar), "Log this call writes nothing a
 const dlg = read("src/components/LeadDetailDialog.tsx");
 ok(/const logThisCall = \(\) => setLogOpen\(true\);/.test(dlg), "2026-10-06: Log outcome opens the Log window (no scrolling to a card at the bottom)");
 ok(/<LeadCallFlow leadId=\{lead\.id\}[^>]*logOpen=\{logOpen\} onLogOpenChange=\{setLogOpen\}/.test(dlg) && /const \[logOpen, setLogOpen\] = useState\(openLogContact\);/.test(dlg), "…the one window, mounted once for the popup; Outreach's Call arrives with it open");
-ok(/<ColdCallPlaybookInline leadId=\{lead\.id\} initialScript="call" onLogCall=\{logThisCall\} onRunCheck=\{openAiTools\} \/>/.test(dlg), "the Call tab passes it (and the way to the AI check tools on the same tab)");
+// openAiTools / onRunCheck removed 2026-10-06 (sales-team-today, Paul): the AI check tools are at the TOP of the Call tab.
+ok(/<ColdCallPlaybookInline leadId=\{lead\.id\} initialScript="call" onLogCall=\{logThisCall\} \/>/.test(dlg) && !/openAiTools|onRunCheck/.test(dlg), "the Call tab passes it (no openAiTools — the AI check tools sit above the script)");
+{
+  const ai = dlg.indexOf('data-testid="ai-check-tools"'), inline = dlg.indexOf("<ColdCallPlaybookInline leadId={lead.id}");
+  ok(ai > 0 && inline > ai && /data-testid="ai-check-tools"[\s\S]{0,300}<LeadHookPanel leadId=\{lead\.id\} variant="call" \/>/.test(dlg), "the AI check tools (LeadHookPanel 'call') come BEFORE the script on the Call tab");
+}
 ok(/key=\{fullLead\.id\}/.test(dlg), "the body is keyed per lead, so the request never carries to the next lead");
 
 const flow = read("src/components/LeadCallFlow.tsx");

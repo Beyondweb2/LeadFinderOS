@@ -20,6 +20,7 @@
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 import { auditRowState, type LeadAuditState } from './auditRowState.ts';
 import { SCORED_ENGINES, ENGINE_LABELS } from './auditReport.ts';
+import { salesEngineLabel } from './scoreTone.ts';
 
 export interface EngineScore { label: string; named: number; answered: number }
 /** The two scored engines, in a fixed order (ChatGPT, Gemini). An engine with no answers is
@@ -37,11 +38,13 @@ export function rowScoreFromPerEngine(perEngine: ReadonlyArray<{ label: string; 
   return engines.some((e) => e.answered > 0) ? { engines } : null;
 }
 
-/** "ChatGPT 1/3" / "Gemini –" (no answer came back from that engine). */
+/** "ChatGPT 1/3" / "Google AI –" (no answer came back from that engine). ⛔ Sales screens say "Google AI"
+ *  (sales-team-today, 2026-10-06); the engine's own label ('Gemini') stays the key the fold is matched on. */
 export function engineScoreText(e: EngineScore): string {
-  return e.answered > 0 ? `${e.label} ${e.named}/${e.answered}` : `${e.label} –`;
+  const label = salesEngineLabel(e.label);
+  return e.answered > 0 ? `${label} ${e.named}/${e.answered}` : `${label} –`;
 }
-/** "ChatGPT 1/3 · Gemini 0/3" — the whole row summary. */
+/** "ChatGPT 1/3 · Google AI 0/3" — the whole row summary. */
 export function scoreLine(s: RowScore | null | undefined): string | null {
   return s ? s.engines.map(engineScoreText).join(' · ') : null;
 }

@@ -130,7 +130,7 @@ Facts and warnings, not prose. Correct a stale line when you find one; add a rul
   charge — every spend total must exclude it (`.or('api_type.is.null,api_type.neq.guard')`). Two pause
   levels, one control: "prospecting paused" keeps client measurement running; "all_stop" stops everything
   paid. Suspension = `team_members.suspended_at` (role kept, reads work). ⛔ Sales never sees a cost:
-  refusals say `USAGE_PAUSED_DETAIL` — EXCEPT an incomplete onboarding (`not_onboarded`), which is said as itself
+  refusals say `USAGE_PAUSED_DETAIL` — EXCEPT `not_onboarded` (since 2026-10-06 = a genuine ACCOUNT restriction, never the checklist), which is said as itself
   (`NOT_READY_DETAIL`; edge body `error: 'not_ready_to_sell'`, 403). Database actions still collapse to `usage_paused`, so
   the browser re-words those ONLY when the person's own server-read status is loaded, not ready and not suspended — one
   rule, `src/lib/readinessWords.ts` (wired into `refusalText`, `campaignErrorText`, CSV `callErrorText`, `edgeErrorMessage`,
@@ -1218,6 +1218,11 @@ positive allowlist of `baseline`; `isColdOutreachTemplate` treats unknown as COL
 - **TPS/CTPS screening is POSTPONED by Paul (2026-10-05)** — a future compliance enhancement, not a launch blocker.
   Dormant groundwork only (`phone_tps_checks`, `src/lib/tpsCheck.ts`); no provider, no call block, not in Ready to
   Sell (`docs/salesperson-onboarding.md` §5).
+- ⛔ **THE ONBOARDING CHECKLIST NO LONGER BLOCKS SELLING (Paul, 2026-10-06, migration `20261012120000`;
+  `docs/pre-sales-certification/sales-team-today-release.md`).** `salesperson_onboarding_missing` returns ONLY
+  `not_sales` / `login` / `suspended` / `ended`; every server gate follows. 18+, right to work, bank, VAT, company,
+  start date and team guide are Paul's Team-page record. Do not put them back (`scripts/selling-gate-account-only.test.ts`).
+  The text below describes the SUPERSEDED rule.
 - ⛔ **Salesperson paperwork (contractor agreement, privacy notice) is HANDLED EXTERNALLY BY PAUL — NOT ENFORCED IN
   LEADFINDEROS** (2026-10-05, migration `20261010140000`). Never part of Ready to Sell; never a salesperson-facing
   button, tick or upload; Team-page records are reference only. Ready to Sell = 18+, right to work, bank details, VAT,

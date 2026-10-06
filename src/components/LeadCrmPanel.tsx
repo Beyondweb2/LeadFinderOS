@@ -548,7 +548,10 @@ function hookInputs(lead: CrmRow, hook: ReturnType<typeof useHookVisibility>['da
 
 /** autoPropose: the Outreach row's audit popup — when the lead has no audit yet, propose the three
  *  questions straight away instead of showing the "Propose questions" button first. */
-export function LeadHookPanel({ leadId, autoPropose = false }: { leadId: string; autoPropose?: boolean }) {
+/** variant 'call' (2026-10-06): the TOP of the lead's Call tab — the one AI result on that screen (coloured
+ *  scores, best missed search, who was named, full audit / report / copy link), with run / re-run and the
+ *  earlier checks folded. Same data and the same propose → review → run path as everywhere else. */
+export function LeadHookPanel({ leadId, autoPropose = false, variant }: { leadId: string; autoPropose?: boolean; variant?: 'call' }) {
   const { toast } = useToast();
   const qc = useQueryClient();
   const crm = useLeadCrmRow(leadId);
@@ -638,8 +641,8 @@ export function LeadHookPanel({ leadId, autoPropose = false }: { leadId: string;
 
   return (
     <div className="space-y-3">
-      <HookVisibilityCard leadId={lead.id} onRunNew={() => void propose()} runNewBusy={hookBusy} onReportCopied={onReportCopied} />
-      {reportAuditId && hook?.report?.kind === 'ready' && hook.report.isCurrent && <ReportSharePanel leadId={lead.id} auditId={reportAuditId} />}
+      <HookVisibilityCard leadId={lead.id} onRunNew={() => void propose()} runNewBusy={hookBusy} onReportCopied={onReportCopied} variant={variant === 'call' ? 'call' : undefined} />
+      {variant !== 'call' && reportAuditId && hook?.report?.kind === 'ready' && hook.report.isCurrent && <ReportSharePanel leadId={lead.id} auditId={reportAuditId} />}
       {proposed && (
         <section className={cn(CARD, 'space-y-2')} data-testid="hook-proposed-questions">
           <div className={LABEL}>The {proposed.length} questions we will ask ChatGPT and Google AI — edit any of them</div>
@@ -693,8 +696,8 @@ export function LeadHookPanel({ leadId, autoPropose = false }: { leadId: string;
         </div>
       )}
       {(hook?.history?.length ?? 0) > 1 && (
-        <section className={cn(CARD, 'space-y-1')} data-testid="hook-history">
-          <div className={LABEL}>Previous checks</div>
+        <details className={cn(CARD, 'space-y-1')} data-testid="hook-history" open={variant === 'call' ? undefined : true}>
+          <summary className={cn(LABEL, 'cursor-pointer select-none')}>Earlier checks ({hook!.history.length})</summary>
           <ul className="space-y-0.5 text-xs">
             {hook!.history.map((h) => (
               <li key={h.auditId} className="flex flex-wrap items-center justify-between gap-2">
@@ -703,7 +706,7 @@ export function LeadHookPanel({ leadId, autoPropose = false }: { leadId: string;
               </li>
             ))}
           </ul>
-        </section>
+        </details>
       )}
       {!proposed && !details && !hookQ.isLoading && !hookQ.isError && !hook?.audit && (
         /* Compact until there is something to show (declutter pass, 2026-10-01): the name, "Not run yet", the one

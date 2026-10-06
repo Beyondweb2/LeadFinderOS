@@ -116,7 +116,8 @@ for (const t of TRADES) {
   const script = p.callScript.join('\n');
   const said = script + '\n' + p.objections.map((o) => o.answer).join('\n');
   ok(salesStyleProblems(said, t.rivals).length === 0, t.trade + ': call script + objections pass the house style ' + JSON.stringify(salesStyleProblems(said, t.rivals)));
-  ok(script.includes('for ' + t.spoken + ' in ' + t.town + ' and it named'), t.trade + ': the search is said plainly ("' + t.spoken + ' in ' + t.town + '"), not "reliable … who can come today"');
+  // 2026-10-06 (sales-team-today, Paul): the tested opener — "I was looking for <trade> in <town>, so I asked <engine> and it mentioned …".
+  ok(script.startsWith('Hi mate, I was looking for ' + t.spoken + ' in ' + t.town + ', so I asked ') && / and it mentioned /.test(script) && !/reliable|who can come today|\bUK\b/.test(script), t.trade + ': the search is said plainly ("' + t.spoken + ' in ' + t.town + '"), not "reliable … who can come today"');
   ok(t.rivals.slice(0, 3).every((r) => script.includes(r)) && !script.includes('Fourth Name'), t.trade + ': exactly the first three competitors from the evidence, no more');
   ok(!/undefined|null|\{\{|\[[a-z ]+\]|NaN/.test(said), t.trade + ': no placeholder or missing value leaks into the words');
   ok(/Google AI|ChatGPT/.test(script) && !/\bGemini\b/.test(script), t.trade + ': the engine is said as the product says it');

@@ -5,6 +5,7 @@ import type { HookCardScore, HookReportLink, HookReportState } from '@/lib/hookV
 import { useToast } from '@/hooks/use-toast';
 import { staffPreviewUrl } from '@/lib/reportShare';
 import { cn } from '@/lib/utils';
+import { percentTone, scoreTone, SCORE_TONE_CLASS } from '@/lib/scoreTone';
 
 /* ════════════════════════════════════════════════════════════════════════════════════════════════
    AI VISIBILITY (the presentational half; HookVisibilityCard.tsx loads the data): the Inbox's compact read of the lead's hook audit (2026-09-25, redesigned 2026-09-26).
@@ -241,7 +242,7 @@ function Details({ score, rivalsWithheld, legacy, issues }: { score: HookScore; 
 /* ── The card ────────────────────────────────────────────────────────────────────────────────── */
 
 /** The presentational half: no fetching, so it renders from plain data. */
-export function HookVisibilityView({ card, inFlight, state, report, onRunNew, runNewBusy, onRefresh, refreshing, defaultExpanded = false, issues, onReportCopied, onOpenFull }: {
+export function HookVisibilityView({ card, inFlight, state, report, onRunNew, runNewBusy, onRefresh, refreshing, defaultExpanded = false, issues, onReportCopied, onOpenFull, variant = 'inline' }: {
   card: HookCardScore | null;
   inFlight: boolean;
   state: unknown;
@@ -256,6 +257,9 @@ export function HookVisibilityView({ card, inFlight, state, report, onRunNew, ru
   /** Opens the large detailed audit window (ProspectAuditDialog). When given, View details opens it
    *  instead of the small overlay (2026-10-05: the overlay was a 40vh scroller inside a scrolling page). */
   onOpenFull?: () => void;
+  /** 'call': the top of the lead's Call tab (2026-10-06) — bigger coloured scores, the competitors named, no
+   *  thread-strip border. 'inline' (default): the Inbox strip. Same data, same rules. */
+  variant?: 'inline' | 'call';
 } & HookRunNewProps) {
   const [expanded, setExpanded] = useState(defaultExpanded);
 
@@ -289,15 +293,18 @@ export function HookVisibilityView({ card, inFlight, state, report, onRunNew, ru
     </button>
   ) : null;
 
+  const call = variant === 'call';
+  const overallTone = score.complete ? percentTone(score.percent) : 'none';
   const engineSplit = (
-    <div className="flex flex-wrap gap-x-4 gap-y-0.5 text-xs" data-testid="hook-engine-split">
+    <div className={cn('flex flex-wrap gap-1.5 text-xs', call && 'gap-2')} data-testid="hook-engine-split">
       {score.perEngine.map((t) => (
-        <span key={t.engine} className="whitespace-nowrap">
-          <span className="text-muted-foreground">{t.label}</span>{' '}
+        <span key={t.engine} data-testid="hook-engine-score" data-engine={t.engine} data-tone={t.valid === t.expected ? scoreTone(t.named, t.expected) : 'none'}
+          className={cn('whitespace-nowrap rounded-full px-2 py-0.5 ring-1 ring-inset', SCORE_TONE_CLASS[t.valid === t.expected && !(inFlight && !score.complete) ? scoreTone(t.named, t.expected) : 'none'].chip, call && 'px-2.5 py-1 text-sm')}>
+          <span className={cn('font-medium', call ? 'text-foreground' : 'text-muted-foreground')}>{t.label}</span>{' '}
           {inFlight && !score.complete ? (
             <span className="tabular-nums">{t.valid + t.failed}/{t.expected} checked</span>
           ) : t.valid === t.expected ? (
-            <span className="font-semibold tabular-nums">{t.named}/{t.expected}</span>
+            <span className={cn('font-bold tabular-nums', SCORE_TONE_CLASS[scoreTone(t.named, t.expected)].text)}>{t.named}/{t.expected}</span>
           ) : (
             <span className="tabular-nums">{t.named} named of {t.valid} valid</span>
           )}
@@ -310,8 +317,8 @@ export function HookVisibilityView({ card, inFlight, state, report, onRunNew, ru
 
   // The headline, right-aligned beside the eyebrow. A percentage only when complete.
   const headline = score.complete && score.percent !== null ? (
-    <span className="whitespace-nowrap text-sm" data-testid="hook-headline">
-      <span className="text-lg font-bold leading-none tabular-nums">{score.percent}%</span>{' '}
+    <span className={cn('whitespace-nowrap text-sm', call && 'rounded-xl px-2.5 py-1 ring-1 ring-inset', call && SCORE_TONE_CLASS[overallTone].chip)} data-testid="hook-headline" data-tone={overallTone}>
+      <span className={cn('font-bold leading-none tabular-nums', call ? 'text-2xl' : 'text-lg', SCORE_TONE_CLASS[overallTone].text)}>{score.percent}%</span>{' '}
       <span className="font-medium">named</span>{' '}
       <span className="text-muted-foreground tabular-nums">({score.named}/{score.expected})</span>
     </span>
@@ -324,11 +331,11 @@ export function HookVisibilityView({ card, inFlight, state, report, onRunNew, ru
   );
 
   return (
-    <div className="relative border-b border-border px-3 py-1.5 text-sm" data-testid="hook-visibility-card" data-expanded={expanded ? 'true' : 'false'}>
+    <div className={cn('relative text-sm', call ? 'space-y-1' : 'border-b border-border px-3 py-1.5')} data-testid="hook-visibility-card" data-variant={variant} data-expanded={expanded ? 'true' : 'false'}>
       {/* Row 1: label, engine split, headline. One line on desktop so the thread keeps its room. */}
       <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
         <span className="inline-flex flex-wrap items-center gap-x-3 gap-y-1">
-          <span className={EYEBROW}>AI visibility</span>
+          {!call && <span className={EYEBROW}>AI visibility</span>}
           {legacy && (
             <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-400" data-testid="hook-legacy-label">
               {legacyLabel}
@@ -371,6 +378,12 @@ export function HookVisibilityView({ card, inFlight, state, report, onRunNew, ru
             <span className="whitespace-nowrap"><span className="font-semibold">{score.hook.label}</span> <span className="font-bold text-red-700 dark:text-red-400">NOT NAMED</span></span>
           </p>
         ) : null
+      )}
+      {call && score.complete && !legacy && score.hook && (
+        <p className="mt-0.5 break-words text-xs" data-testid="hook-named-instead">
+          <span className="text-muted-foreground">Named instead: </span>
+          <NamedInstead names={score.hook.competitors} rivalsWithheld={rivalsWithheld} />
+        </p>
       )}
 
       <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">

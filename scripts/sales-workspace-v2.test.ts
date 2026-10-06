@@ -23,7 +23,7 @@ import { QUEUE_SKIP_LABEL } from '../src/lib/salesCrm.ts';
 import { CONVERSATION_OUTCOMES, reachedInConversation } from '../src/lib/leadState.ts';
 import {
   AI_FRIENDLY_SITE, BASELINE_ANSWERS, DISCOVERY_ABOUT, FOLLOW_UP_VOICE_NOTE, GOOGLE_STILL_MATTERS, HOW_WE_KNOW, HOW_WE_KNOW_CAVEAT,
-  REMEASURE_WEEKS, WEBSITE_MATTERS, WHAT_WE_DO, WHAT_WE_DO_SHORT, WHY_IT_MATTERS, YEXT_SOURCE, spokenSeconds,
+  REMEASURE_WEEKS, WEBSITE_MATTERS, WHAT_WE_DO, WHAT_WE_DO_SHORT, WHY_IT_MATTERS, WHY_IT_MATTERS_STATS, YEXT_SOURCE, spokenSeconds,
 } from '../src/lib/salesExplainer.ts';
 import { BASELINE_QUESTIONS, BASELINE_RUNS } from '../src/lib/auditQuestionCounts.ts';
 import { REMEASURE_OFFSET_DAYS } from '../src/lib/deliveryCockpit.ts';
@@ -93,14 +93,30 @@ console.log('\n── 2. CONTACT: a tap is not a call ──');
 console.log('\n── 3. THE CALL TAB ──');
 {
   const ui = read('src/components/ColdCallPlaybook.tsx');
-  const ev = ui.slice(ui.indexOf('function CallEvidence'), ui.indexOf('function SourceNote'));
-  ok(/<AiOpportunity p=\{p\} \/>/.test(ev) && /<AuditEvidence leadId=\{leadId\} \/>/.test(ev) && /<TalkAbout p=\{p\} \/>/.test(ev) && !/'[A-Z][a-z]+ (Plumbing|Locksmiths|Ltd)'/.test(ev), 'evidence = the stored audit (named, competitors, questions) and the stored crawl — nothing hard-coded');
-  ok(/score\.results\.filter\(\(r\) => r\.status === 'named'\)\.length/.test(ui) && /\{named\} \/ \{score\.expected\} answers named this business/.test(ui), 'the "X / N named" count comes from the scored stored results');
-  const body = ui.slice(ui.indexOf('if (scriptsFirst) {'), ui.indexOf('return (\n    <div className="space-y-4 pb-6"'));
-  const order = ['<CallEvidence', '<Scripts', '<WhyItMatters', '<WhatWeDo', '<HowWeBuild', 'Questions they may ask'].map((s) => body.indexOf(s));
-  ok(order.every((x, i) => x > 0 && (i === 0 || x > order[i - 1])), 'order: evidence → script → why it matters → what Findable does → how we build → questions');
+  /* 2026-10-06 (sales-team-today, Paul): the evidence block inside the playbook (CallEvidence / AiOpportunity /
+     AuditEvidence / TalkAbout) was removed — the ONE AI result is the top of the Call tab (LeadHookPanel 'call' →
+     HookVisibilityCard → useHookVisibility, the stored scored results). The script reads the stored evidence only. */
+  const dlgCall = read('src/components/LeadDetailDialog.tsx');
+  ok(!/function (CallEvidence|AiOpportunity|AuditEvidence|TalkAbout)\b|<(CallEvidence|AiOpportunity|AuditEvidence|TalkAbout)\b/.test(ui) && !/'[A-Z][a-z]+ (Plumbing|Locksmiths|Ltd)'/.test(ui)
+    && /data-testid="ai-check-tools"[\s\S]{0,400}<LeadHookPanel leadId=\{lead\.id\} variant="call" \/>/.test(dlgCall)
+    && /const q = useHookVisibility\(leadId\)/.test(read('src/components/HookVisibilityCard.tsx'))
+    && /const top = i\.competitors\.slice\(0, 3\)/.test(read('src/lib/callScript.ts')) && /competitors: evidence\.competitors/.test(read('src/lib/coldCallPlaybook.ts')),
+    'evidence = the stored audit (the AI result above the script, the stored answer\'s own competitors in the opener) and the stored crawl — nothing hard-coded');
+  {
+    const hv = read('src/components/HookVisibilityView.tsx');
+    ok(/\{t\.named\}\/\{t\.expected\}/.test(hv) && /scoreTone\(t\.named, t\.expected\)/.test(hv) && /variant\?: 'inline' \| 'call'/.test(hv), 'the "X / N named" count comes from the scored stored results, coloured by scoreTone (the AI result, call variant)');
+  }
+  const flow = ui.slice(ui.indexOf('function CallFlow('), ui.indexOf('type ScriptTab'));
+  const order = ['<Say ', '<Ask ', '<WhyAndWhat ', '<Offer ', '<Objections '].map((s) => flow.indexOf(s));
+  ok(order.every((x, i) => x > 0 && (i === 0 || x > order[i - 1])) && /title="What we do"/.test(ui), 'order: say (opener → reasons → bridge) → ask → what we do (why it matters) → offer → objections');
+  ok(!/HowWeBuild|Questions they may ask/.test(ui), 'removed 2026-10-06 (sales-team-today, Paul): "how we build" and "Questions they may ask" blocks');
   ok(/36\.7% of UK consumers had used AI for local search in the previous month/.test(WHY_IT_MATTERS[0].text) && /2026 Yext study/.test(WHY_IT_MATTERS[0].text) && /24% had tried a new local business because of an AI recommendation/.test(WHY_IT_MATTERS[1].text), 'the UK talking point, exactly as sourced');
-  ok(YEXT_SOURCE === 'Yext — 2026 UK Consumer Search Behaviours, n=600 UK consumers' && WHY_IT_MATTERS.every((p) => p.source === YEXT_SOURCE && /^https:\/\/www\.yext\.com\//.test(p.url)) && /data-testid="source-note"/.test(ui), '…with its source on screen');
+  /* removed 2026-10-06 (sales-team-today, Paul): the source link on the call screen. The source stays on the DATA
+     (every stat carries it), and the two stat cards on screen are the same sourced figures. */
+  ok(YEXT_SOURCE === 'Yext — 2026 UK Consumer Search Behaviours, n=600 UK consumers' && WHY_IT_MATTERS.every((p) => p.source === YEXT_SOURCE && /^https:\/\/www\.yext\.com\//.test(p.url))
+    && WHY_IT_MATTERS_STATS.length === 2 && WHY_IT_MATTERS_STATS.every((s) => s.source === YEXT_SOURCE && /^https:\/\/www\.yext\.com\//.test(s.url)), '…its source kept on the data, for every stat (incl. the two stat cards)');
+  ok(WHY_IT_MATTERS_STATS[0].figure === '37%' && /36\.7%/.test(WHY_IT_MATTERS[0].text) && WHY_IT_MATTERS_STATS[1].figure === '24%' && /24%/.test(WHY_IT_MATTERS[1].text), 'the stat cards are the sourced figures (36.7% shown rounded as 37%)');
+  ok(!/data-testid="source-note"|SourceNote|\.url\b|yext\.com/.test(ui) && /WHY_IT_MATTERS_STATS\.map/.test(ui), '…and no source link on the call screen (removed 2026-10-06)');
   const words = [WHY_IT_MATTERS.map((p) => p.text).join(' '), GOOGLE_STILL_MATTERS, WHAT_WE_DO.join(' '), WHAT_WE_DO_SHORT, HOW_WE_KNOW.join(' '), AI_FRIENDLY_SITE.join(' '), WEBSITE_MATTERS, FOLLOW_UP_VOICE_NOTE].join(' ');
   ok(!/replaced google|google is dead|instead of google|cannot recommend you without|can't recommend you without|without a website.{0,20}(can't|cannot)/i.test(words), 'no "AI replaced Google", no "AI cannot recommend you without a website"');
   ok(/Google still matters/.test(GOOGLE_STILL_MATTERS), '"Google still matters" framing');
@@ -117,7 +133,8 @@ console.log('\n── 3. THE CALL TAB ──');
     'ONE Next Action control (2026-10-06): one compact display in the popup header, one editor (LeadCallFlow) — no card at the bottom of Call');
   ok(/lead_set_follow_up/.test(read('src/lib/nextActionWrite.ts')) && /_expected/.test(read('src/lib/nextActionWrite.ts')), 'stale-write protection kept (lead_set_follow_up _expected)');
   ok(spokenSeconds(FOLLOW_UP_VOICE_NOTE) >= 18 && spokenSeconds(FOLLOW_UP_VOICE_NOTE) <= 32 && FOLLOW_UP_VOICE_NOTE.includes(QUICK_CLOSE_PROMISE), `the "how does it work?" voice note is ~20–30 s (${spokenSeconds(FOLLOW_UP_VOICE_NOTE)} s) and says the guarantee as written`);
-  ok(/data-testid="voice-coaching"/.test(ui) && /WHAT_WE_DO_SHORT/.test(ui.slice(ui.indexOf('function VoiceCoaching'))), 'coaching beside the voice note reads the same words');
+  // removed 2026-10-06 (sales-team-today, Paul): the coaching block beside the voice note (VoiceCoaching).
+  ok(!/data-testid="voice-coaching"|VoiceCoaching/.test(ui) && /\{tab === 'voice' && <VoiceNoteScriptBody leadId=\{leadId\} currentAuditId=\{p\.auditId\} \/>\}/.test(ui), 'the Voice note tab is the voice note alone — no coaching block beside it');
 }
 
 console.log('\n── 4. DETAILS ──');

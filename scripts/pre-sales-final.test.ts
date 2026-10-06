@@ -170,7 +170,10 @@ console.log('── 3. 6/6: bulk result → call screen (WS-5) → status untouc
   ok(pb.audit.headline === STRONG_VISIBILITY_HEADLINE, 'the call screen top line is the same helper (one copy)');
   const script = pb.callScript.join(' ');
   ok(!/did(?:n't| not) name (?:you|them)|not named|isn't naming|aren't naming|missing from|left out|never mentions/i.test(script), `the WS-5 call script makes no "AI missed you" claim on 6/6 ("${script.slice(0, 120)}…")`);
-  ok(/ZZ QA Final Elland Drains|Elland Drains/.test(pb.opening.join(' ') + script), 'identity-first: the opening names the business');
+  /* removed 2026-10-06 (sales-team-today, Paul): the identity check ("Hi, is that Elland Drains?") — Paul's tested opener
+     starts with the reason for ringing. On 6/6 it says, from the stored result, that AI DID mention them. */
+  ok(/^Hi mate, I was looking for a plumber in Halifax, so I asked ChatGPT and Google AI and they did mention you, which is good\.$/.test(pb.opening[0] ?? '') && !/is that|from Findable/i.test(script),
+    `the opening on 6/6: the search, both engines, "they did mention you" — no identity check, no "from Findable" ("${pb.opening[0] ?? ''}")`);
   ok(pb.close.guarantee.headline === 'We improve AI visibility or you get your money back.' && GUARANTEE_HEADLINE === QUICK_CLOSE_PROMISE, 'the close carries the one guarantee line (shared with Quick Close)');
   // The single check: the queue holds no status rule and no edge code writes not_interested.
   const queue = stripComments(read('supabase/functions/process-ai-audit-queue/index.ts'));
@@ -282,7 +285,14 @@ console.log('── 7. migrations (static) and the Meta hold ──');
     '20261011100000_attribution_review_admin.sql',
     /* the final sales release: a future start date is not Ready to Sell (2026-10-05) */
     '20261011120000_ready_to_sell_start_date.sql'];
-  const candidate = newer.filter((n) => !ON_MAIN.includes(n) && !LATER.includes(n));
+  /* The window is BOUNDED (2026-10-06): LATER above was kept up to the final sales release's last migration
+     (20261011120000). Anything dated after that belongs to a release this suite does not record (first:
+     20261012120000_selling_gate_account_only.sql, sales-team-today) and is outside the window — so the pin stays
+     "the certified ten, plus the named later ones, and nothing else up to the bound", without a list that has to
+     grow forever. */
+  const WINDOW_END = '20261011120000';
+  const candidate = newer.filter((n) => n.slice(0, 14) <= WINDOW_END && !ON_MAIN.includes(n) && !LATER.includes(n));
+  ok(LATER[LATER.length - 1].slice(0, 14) === WINDOW_END, 'the window ends at the last migration the LATER list records');
   ok(candidate.length === FINAL.length && candidate.every((n) => FINAL.includes(n)), `exactly the ten candidate migrations are new in this release (${candidate.length}: ${candidate.map((n) => n.slice(0, 14)).join(' ')})`);
   const sc = read('supabase/migrations/20261006070000_sales_prospect_checks.sql');
   ok(/create table if not exists public\.sales_check_batches/i.test(sc) && /create table if not exists public\.sales_check_items/i.test(sc), 'WS-7: both job tables, create-if-not-exists');

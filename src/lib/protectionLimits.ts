@@ -124,7 +124,8 @@ export const USAGE_PAUSED_DETAIL = 'Usage temporarily paused — contact Paul';
 
 /** What a salesperson sees when the guard refused them because their onboarding is incomplete (final sales
  *  release, 2026-10-05, E2E-02) — the real cause, never "usage paused". Not a cost, not a control. */
-export const NOT_READY_DETAIL = 'Complete your onboarding before using this. Paul can tell you what is still needed.';
+/** 'not_onboarded' from guard_action now means a genuine account restriction (2026-10-06) — never the checklist. */
+export const NOT_READY_DETAIL = 'Your sales access is not active. Speak to Paul.';
 
 /** The sentence for a refusal. The admin is told which control is holding them; a salesperson never is —
  *  except that an incomplete onboarding ('not_onboarded') is said as itself. */

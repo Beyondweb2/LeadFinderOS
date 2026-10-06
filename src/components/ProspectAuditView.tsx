@@ -1,4 +1,5 @@
 import { useState, type ReactNode } from 'react';
+import { scoreTone, SCORE_TONE_CLASS } from '@/lib/scoreTone';
 import { AlertTriangle, CheckCircle2, ChevronDown, ChevronRight, ExternalLink, FileSearch, Globe, Info, Lightbulb, ListChecks, Loader2, MessageSquareText, ScanSearch, Sparkles, XCircle } from 'lucide-react';
 import { Callout, EDGE, Empty, IconTile, SectionHeading, Segmented, SubSection, TONE, ToneChip, type Tone } from '@/components/operator/ui';
 import { Button } from '@/components/ui/button';
@@ -79,7 +80,7 @@ export function ProspectAuditView({ score, rivalsWithheld, aiInFlight, site, poi
               <>
                 <p className={cn('text-2xl font-extrabold tabular-nums tracking-tight', TONE.purple.text)}>{score!.named}<span className="text-base font-medium text-muted-foreground"> / {score!.expected}</span></p>
                 <p className="text-xs text-muted-foreground">answers named this business</p>
-                <ul className="mt-2 flex flex-wrap gap-1.5 text-sm">{score!.perEngine.map((t) => <li key={t.engine}><ToneChip tone="purple">{t.label}: <span className="tabular-nums">{t.named}/{t.expected}</span></ToneChip></li>)}</ul>
+                <ul className="mt-2 flex flex-wrap gap-1.5 text-sm">{score!.perEngine.map((t) => { const tone = t.valid === t.expected ? scoreTone(t.named, t.expected) : 'none'; return <li key={t.engine}><span data-testid="pa-engine-score" data-tone={tone} className={cn('inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold ring-1 ring-inset', SCORE_TONE_CLASS[tone].chip, SCORE_TONE_CLASS[tone].text)}>{t.label}: <span className="tabular-nums">{t.named}/{t.expected}</span></span></li>; })}</ul>
               </>
             ) : hasScore && aiInFlight ? <p className="flex items-center gap-1.5 text-sm"><Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin" />The AI check is still running ({score!.valid + score!.failed}/{score!.expected}).</p>
               : hasScore ? <p className="text-sm">Incomplete check — {score!.valid} of {score!.expected} answers valid. No final score.</p>

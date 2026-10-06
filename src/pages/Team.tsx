@@ -46,7 +46,7 @@ const ERR: Record<string, string> = {
   cannot_change_self: 'You cannot disable your own account.',
   cannot_change_book_owner: 'The book owner cannot be disabled.',
   cannot_change_admin: 'An admin cannot be disabled here.',
-  not_ready_to_sell: 'That salesperson is not Ready to Sell, so leads cannot be moved to them.',
+  not_ready_to_sell: 'That salesperson\'s sales access is not active (suspended, ended or login off), so leads cannot be moved to them.',
   not_an_active_member: 'Pick an active team member.',
 };
 
@@ -137,7 +137,7 @@ export default function Team() {
     <div className="p-4 md:p-6 space-y-6 max-w-5xl">
       <div className="space-y-3">
         <PageHeader eyebrow="Admin" title="Team" subtitle="Salespeople get their own login. They see only their own leads and never delivery, clients, money or settings." />
-        <p className="text-xs leading-snug text-muted-foreground">Click a salesperson's onboarding badge to see what is still missing. Until they are Ready to Sell they can sign in and see their onboarding, but every sales action is blocked. Only you can see these records.</p>
+        <p className="text-xs leading-snug text-muted-foreground">Click a salesperson's onboarding badge to see their checklist. The checklist is your record only — it does not block selling. Only a suspended, ended or disabled salesperson is stopped. Only you can see these records.</p>
         {onboarding.error && <Callout tone="red">Onboarding records could not be loaded: {String((onboarding.error as Error).message)}</Callout>}
       </div>
 
@@ -252,7 +252,7 @@ export default function Team() {
       })()}
 
       {onboarding.data && (
-        <Panel title="Salesperson documents" icon={FileText} tone="blue" hint="For your records only. Contractor agreements and privacy notices are handled outside LeadFinderOS and never affect Ready to Sell. Only the current team guide does (salespeople acknowledge it themselves).">
+        <Panel title="Salesperson documents" icon={FileText} tone="blue" hint="For your records only. Contractor agreements and privacy notices are handled outside LeadFinderOS. None of these documents affects whether someone can sell.">
           <SalespersonDocumentsCard docs={onboarding.data.documents} call={call} onChanged={(message, error) => {
             if (error) toast({ title: 'Not done', description: ONBOARDING_SAVE_ERRORS[error] ?? error, variant: 'destructive' });
             else toast({ title: message ?? 'Saved' });

@@ -60,7 +60,8 @@ ok(inboxSrc.includes('const allLogged = useAllLoggedContacts();') && inboxSrc.in
 console.log('\n── Audits from Outreach (the same engine) ──');
 const dlg = read('src/components/LeadDetailDialog.tsx');
 const work = dlg.slice(dlg.indexOf('TabsContent value="call"'), dlg.indexOf('TabsContent value="details"'));
-ok(/<LeadHookPanel leadId=\{lead\.id\} \/>/.test(work), 'the audit card is on the Call tab (v2: the AI check tools)');
+// 2026-10-06 (sales-team-today): the panel now renders its 'call' variant (coloured scores) at the top of the Call tab.
+ok(/<LeadHookPanel leadId=\{lead\.id\} variant="call" \/>/.test(work), 'the audit card is on the Call tab (v2: the AI check tools, call variant)');
 const crm = read('src/components/LeadCrmPanel.tsx');
 ok(/data-testid="hook-rerun"/.test(crm) && /data-testid="hook-history"/.test(crm) && /data-testid="hook-need-details"/.test(crm), 're-run, previous checks, and trade/town asked where it is needed');
 ok((crm.match(/invokeEdge<[^>]*>\('create-ai-audit'/g) ?? []).length === 2 && !/question_count: [0-9]/.test(crm), 'the one create-ai-audit hook path (preview + run), no new engine');

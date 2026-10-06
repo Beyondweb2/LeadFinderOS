@@ -94,7 +94,7 @@ export interface LeadPermissions {
   removeLeads: boolean;
   /** CSV import (2026-10-05, fix/csv-lead-import): both roles, the new leads owned by the person importing.
    *  import_leads decides the owner itself and a salesperson's rows go through the usage guard (lead_import);
-   *  a salesperson who is not Ready to Sell has no import, like every selling action. */
+   *  a salesperson whose sales access is restricted has no import, like every selling action. */
   importLeads: boolean;
   /** Enrichment admin: enrich, find emails, phone lookups, fix town, bulk set trade. */
   enrichLeads: boolean;
@@ -142,8 +142,9 @@ export interface LeadPermissions {
  *  star (lead_mark_interested). scripts/sales-shared-workflow.test.ts holds it to the migration. */
 export const SALES_SETTABLE_PIPELINE = ['interested', 'price_given', 'not_interested', 'won_pending_onboarding'] as const;
 
-/** `readyToSell` (2026-10-05, docs/salesperson-onboarding.md): a salesperson who has not finished onboarding
- *  keeps reading and giving leads back, but loses every selling action on screen. PRESENTATION — the
+/** `readyToSell` (2026-10-05; since 2026-10-06 = "sales access active" — no sales role / login off / suspended /
+ *  ended, NEVER the onboarding checklist): a restricted salesperson keeps reading and giving leads back, but loses
+ *  every selling action on screen. PRESENTATION — the
  *  server refuses the same actions (guard_action 'not_onboarded', the lead_activity gate, quick-close).
  *  The admin is never gated. */
 export function leadPermissions(role: AppRole | null, readyToSell = true): LeadPermissions {

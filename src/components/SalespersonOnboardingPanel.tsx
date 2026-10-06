@@ -29,11 +29,11 @@ interface FieldSpec {
   showIf?: (d: OnboardingRecord) => boolean;
 }
 
-/* Only the TEAM GUIDE version still decides Ready to Sell. Salesperson paperwork (contractor agreement, privacy
+/* No document decides selling (2026-10-06): the checklist is Paul's record. Salesperson paperwork (contractor agreement, privacy
    notice) is handled OUTSIDE LeadFinderOS (Paul, 2026-10-05): its versions are listed for reference, never "does not count". */
 const versions = (docs: readonly DocumentVersion[], kind: DocumentKind) => docs.filter((d) => d.kind === kind)
   .map((v) => ({ value: v.id, label: `${v.label} — ${DOCUMENT_STATUSES[v.status]}${kind === 'team_guide' && v.status !== 'approved' ? ' (does not count)' : ''}` }));
-const REFERENCE_HINT = 'Optional, for your own reference. This paperwork is handled outside LeadFinderOS and never affects Ready to Sell.';
+const REFERENCE_HINT = 'Optional, for your own reference. This paperwork is handled outside LeadFinderOS and never affects selling.';
 
 const editorsFor = (docs: readonly DocumentVersion[]): Partial<Record<ChecklistKey | 'leaving' | 'notes', FieldSpec[]>> => ({
   agreement: [
@@ -143,7 +143,7 @@ function Editor({ specs, record, docs, onSave, onCancel }: { specs: FieldSpec[];
 
 /** The badge on the Team row. */
 export function OnboardingBadge({ summary }: { summary: OnboardingSummary }) {
-  if (summary.readyToSell) return <ToneChip tone="green" icon={CheckCircle2} title="Every onboarding item is on file and the login is live">Ready to sell</ToneChip>;
+  if (summary.readyToSell) return <ToneChip tone="green" icon={CheckCircle2} title={`Can sell. Onboarding checklist ${summary.done}/${summary.total} (your record — it does not block selling)`}>Can sell · {summary.done}/{summary.total}</ToneChip>;
   return <ToneChip tone={summary.inactiveReason ? 'red' : 'amber'} icon={ClipboardCheck} title={summary.inactiveReason ?? `${summary.missing.length} onboarding items missing`}>{summary.inactiveReason ? `Not active · ${summary.done}/${summary.total}` : `Onboarding ${summary.done}/${summary.total}`}</ToneChip>;
 }
 
@@ -160,7 +160,7 @@ export function SalespersonOnboardingPanel({ userId, record, member, docs, serve
   const summary = onboardingSummary(record, member, docs, undefined, serverMissing);
   const EDITORS = editorsFor(docs);
   const [editing, setEditing] = useState<string | null>(null);
-  const ordered = [...summary.items.filter((i) => i.blocking && !i.done), ...summary.items.filter((i) => !(i.blocking && !i.done))];
+  const ordered = [...summary.items.filter((i) => i.required && !i.done), ...summary.items.filter((i) => !(i.required && !i.done))];
   return (
     <div className="w-full min-w-0 space-y-3 border-t border-border/50 pt-3" data-testid="salesperson-onboarding">
       <SubSection title="Onboarding" icon={ClipboardCheck} tone={summary.readyToSell ? 'green' : 'amber'}
@@ -169,7 +169,7 @@ export function SalespersonOnboardingPanel({ userId, record, member, docs, serve
           {/* The headline wraps (a ToneChip truncates, and this line must be read whole on a phone). */}
           <span className={cn('inline-flex max-w-full items-start gap-1 rounded-2xl px-2.5 py-1 text-xs font-semibold tracking-wide ring-1 ring-inset', TONE[summary.readyToSell ? 'green' : 'amber'].soft, TONE[summary.readyToSell ? 'green' : 'amber'].text, TONE[summary.readyToSell ? 'green' : 'amber'].ring)}>
             {summary.readyToSell ? <CheckCircle2 className="mt-px h-3.5 w-3.5 shrink-0" /> : <AlertTriangle className="mt-px h-3.5 w-3.5 shrink-0" />}
-            <span className="min-w-0 break-words">{summary.readyToSell ? 'READY TO SELL' : 'NOT READY TO SELL — sales actions are blocked'}</span>
+            <span className="min-w-0 break-words">{summary.readyToSell ? `CAN SELL — checklist ${summary.done}/${summary.total} (admin record, does not block selling)` : `SALES ACCESS OFF — ${summary.inactiveReason ?? 'restricted'}`}</span>
           </span>
           {summary.inactiveReason && <span className={cn('min-w-0 break-words text-xs', TONE.red.text)}>{summary.inactiveReason}</span>}
         </div>
@@ -180,7 +180,7 @@ export function SalespersonOnboardingPanel({ userId, record, member, docs, serve
       <ul className="space-y-1.5 text-sm">
         {ordered.map((i) => {
           /* done = green · a missing item that blocks selling = amber · an optional one not on file = grey */
-          const tone: Tone = i.done ? 'green' : i.blocking ? 'amber' : 'grey';
+          const tone: Tone = i.done ? 'green' : i.required ? 'amber' : 'grey';
           return (
             <li key={i.key} className={cn('min-w-0 rounded-xl border border-border/60 bg-muted/20 px-3 py-2', EDGE[tone])}>
               <div className="flex items-start gap-2">
@@ -188,8 +188,8 @@ export function SalespersonOnboardingPanel({ userId, record, member, docs, serve
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-1.5">
                     <span className={i.done ? 'text-muted-foreground' : 'font-semibold'}>{i.label}</span>
-                    {!i.blocking && <ToneChip tone="grey">optional</ToneChip>}
-                    {i.blocking && !i.done && <ToneChip tone="amber" dot>missing</ToneChip>}
+                    {!i.required && <ToneChip tone="grey">optional</ToneChip>}
+                    {i.required && !i.done && <ToneChip tone="amber" dot>missing</ToneChip>}
                   </div>
                   <span className="block break-words text-xs text-muted-foreground">{i.detail}</span>
                 </div>
@@ -214,7 +214,7 @@ export function SalespersonOnboardingPanel({ userId, record, member, docs, serve
       </div>
       {(editing === 'leaving' || editing === 'notes') && (
         <>
-          {editing === 'leaving' && <p className="text-xs text-muted-foreground">From the end date they are no longer Ready to Sell, so sales actions stop. Their login stays until you press Disable. Commission is not changed here.</p>}
+          {editing === 'leaving' && <p className="text-xs text-muted-foreground">From the end date their sales access stops. Their login stays until you press Disable. Commission is not changed here.</p>}
           <Editor specs={EDITORS[editing]!} record={r} docs={docs} onSave={onSave} onCancel={() => setEditing(null)} />
         </>
       )}
@@ -240,8 +240,8 @@ export function SalespersonDocumentsCard({ docs, call, onChanged }: {
       const r = await call(action, body);
       if (!r.ok) { onChanged(undefined, String(r.error ?? 'failed')); return false; }
       const affected = typeof r.affected === 'number' ? r.affected : 0;
-      /* Only a new TEAM GUIDE changes Ready to Sell; agreement / notice versions are reference only. */
-      onChanged(affected > 0 && kind === 'team_guide' ? `${ok} ${affected} salesperson(s) acknowledged the old guide and are not Ready to Sell until they acknowledge the new one.` : ok);
+      /* A new TEAM GUIDE shows as outstanding on checklists; nothing here affects selling (2026-10-06). */
+      onChanged(affected > 0 && kind === 'team_guide' ? `${ok} ${affected} salesperson(s) acknowledged the old guide; their checklist shows the new one as not acknowledged (it does not block selling).` : ok);
       return true;
     } finally { setBusy(false); }
   };
@@ -271,8 +271,8 @@ export function SalespersonDocumentsCard({ docs, call, onChanged }: {
                 ) : (
                   <Button size="sm" variant="outline" className="h-9 text-xs" disabled={busy} onClick={() => {
                     if (!window.confirm(d.kind === 'team_guide'
-                      ? `Approve "${d.label}" as the current team guide? The previous guide becomes superseded, and anyone who only acknowledged that one stops being Ready to Sell until they acknowledge this one.`
-                      : `Mark "${d.label}" as the current version for your records? This paperwork is handled outside LeadFinderOS and does not affect Ready to Sell.`)) return;
+                      ? `Approve "${d.label}" as the current team guide? The previous guide becomes superseded; anyone who only acknowledged that one shows it as outstanding on their checklist (it does not block selling).`
+                      : `Mark "${d.label}" as the current version for your records? This paperwork is handled outside LeadFinderOS and does not affect selling.`)) return;
                     void run('team_document_approve', { id: d.id }, 'Approved.', d.kind);
                   }}>Approve as current</Button>
                 )}

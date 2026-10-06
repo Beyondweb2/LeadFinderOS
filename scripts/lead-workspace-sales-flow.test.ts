@@ -41,7 +41,9 @@ for (const [what, needle] of [
 ] as const) ok(!(dlg + crm).includes(needle), `gone: ${what}`);
 ok(!/function LogContact\(/.test(crm) && !/part="call"/.test(dlg) && !/statusControl/.test(dlg + crm), "no LogContact component, no Call part of the Work panel, no status card slot");
 ok(!/<LeadWorkPanel/.test(callTab) && !/PipelineStatusSelect/.test(callTab), "the Call tab carries no CRM card and no second status control");
-ok(callTab.indexOf("<LoggedLine") < callTab.indexOf("<ColdCallPlaybookInline") && callTab.indexOf("<ColdCallPlaybookInline") < callTab.indexOf("ai-check-tools"), "Call order: the last result → evidence + script (+ Log / Quick Close bar) → the AI check tools, folded");
+// 2026-10-06 (sales-team-today, Paul): SCAN → SAY — the AI result moved to the TOP of the Call tab (no longer folded at the bottom).
+ok(callTab.indexOf("<LoggedLine") >= 0 && callTab.indexOf("<LoggedLine") < callTab.indexOf("ai-check-tools") && callTab.indexOf("ai-check-tools") < callTab.indexOf("<ColdCallPlaybookInline")
+  && /<LeadHookPanel leadId=\{lead\.id\} variant="call" \/>/.test(callTab) && !/<details/.test(callTab), "Call order: the last result → the AI result (LeadHookPanel 'call', not folded) → the script (+ Log / Quick Close bar)");
 
 console.log("── 3. the Log window ──");
 ok(/const \[logOpen, setLogOpen\] = useState\(openLogContact\);/.test(dlg) && /const logThisCall = \(\) => setLogOpen\(true\);/.test(dlg), "Log opens the window; Outreach's Call arrives with it open");
