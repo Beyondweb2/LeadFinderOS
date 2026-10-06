@@ -118,6 +118,21 @@ position number, which differs because the admin also sees Rep B's rows, and dro
 button). Sales issued no `status` call; no horizontal overflow at the narrowest width headless Edge allows (504 px)
 and none visible in the 390 px frame.
 
+## Release and live verification (2026-10-06)
+
+- Branch commits `cd287e22` (+ merge of main, + What's New `2026-10-06-whatsapp-queue-one-page`); production merge
+  **`57cfe42c`** on `main`. main had moved (quick-report CTA, campaign chip) — merged in, gate re-run: typecheck at
+  baseline, build OK, **342/342 suites**.
+- No migration. No edge function deployed. `whatsapp-status` **v114** before and after; `process-whatsapp-queue` v202
+  before and after.
+- Live by bundle marker, both hosts serving entry `index-B3iFw_Qn.js` ~60 s after the push:
+  `app.leadfinderos.com` and `leadfinderos-next.pages.dev` — the `WhatsAppQueue-*.js` lazy chunk exists and holds the
+  page subtitle; the Outreach chunk holds `open-queue`; `whatsapp-queue-rows` present; the old `my-queue-count` gone;
+  "Your leads queued" appears only inside the What's New note that says it was removed.
+- ⚠️ Not done: an authed walk-through on the live app as a real salesperson and as the admin (it needs a real sign-in
+  on someone's account). The server scoping was proven on the live database (above); the UI on the real component
+  with fixtures. Nobody has yet SEEN the live page signed in.
+
 ## Not changed
 
 Provider, Meta, templates, pacing, retries, eligibility, contact rules, sequencing, daily limits, campaigns, the
