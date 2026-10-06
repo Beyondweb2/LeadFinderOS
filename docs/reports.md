@@ -511,3 +511,53 @@ Branch `feat/welcome-pack-copy`. Paul's direction, two rounds; every claim rule 
   you signed up to." — none of the six live baseline clients qualified on the day (MCLocksmiths paid £99 on
   17 Sep, before routes). Re-measure timing is `remeasure_due_date` minus the baseline day in whole weeks
   (`recordedRemeasure`): RG and Ronnie read eight weeks with their dates; a missing date keeps four weeks.
+
+## Concept 4 · Hook Audit Hybrid — the six-answer quick report (2026-10-06)
+
+**What changed.** Paul chose Concept 4 from the gallery on `concept/audit-report-redesigns`
+(`docs/concepts/audit-report/`, never merged). A complete six-answer hook (3 questions × ChatGPT + Google AI)
+now renders: black header → YOUR SCORE (big %, "X of 6 answers named you", the existing verdict, two engine
+cards: 0/3 red, under half amber, half or more green; overall keeps `verdictBand`) → FEATURED MISSED SEARCH
+(what we asked, the engine's cleaned answer with competitor names highlighted, Result / Named instead / Your
+business) → ALL QUESTIONS WE ASKED (3-row table, red/green chips, the existing caveat) → WEBSITE ISSUES WE
+FOUND (stored findings only, serious → High, minor → Medium, cap 5; no-website and clean-site use the
+existing approved words) → WHY THIS MATTERS (misses, the rival count when it is a real number, one line) →
+the existing CTA + footer, byte-identical. 6/6 shows a green "Every answer named you" state, no miss.
+Version-1 hooks, incomplete checks, still-measuring and name-check pages, and every other report type are
+byte-identical (proved by rendering 8 report types with main and with the branch).
+
+**Paul reversed two rulings on purpose for this surface:** the AI's own words come back (taken off
+2026-09-26) and so do the engine identifiers (removed 2026-09-22). It stays a Findable card: our header and
+labels, "ChatGPT" / "Google AI", a small mark — never a copy of either product's UI.
+
+**The answer clean-up (`answerText.ts` `cleanAnswerBlocks` / `answerExcerpt`).** Measured on the 20
+six-answer hooks (120 stored answers): Google AI median ~2,700 characters, ChatGPT ~4,200; 36 of 60 Google AI
+answers carry gstatic map markup (the old `isMapCardAnswer` refused those whole), and 55 of 60 ChatGPT
+answers open with a "Map data is currently unavailable" strip. The clean-up drops whole chrome lines (map
+pins, star ratings, open/closed lines, listing buttons, "Map data…", bare source domains and "a | b | c"
+page-title chips that are not list items, private-use icon glyphs) and inline chrome ("Click to open side
+panel for more information", images, citation markers, markdown), keeps headings/paragraphs/bullets with
+their nesting in the AI's order, drops a listing title only when the next line opens with or contains the
+same name, then cuts to `QUICK_ANSWER_CHARS` (500) at a sentence end with "…". It never writes a word (a
+test checks every excerpt word exists in the stored answer). Readability over non-space characters, so a
+real list of firms with phone numbers survives. Result on the real data: 120/120 readable, average ~440
+characters. `isJunkAnswer`, `isMapCardAnswer` and `cleanAnswerText` are untouched (other cards use them).
+`HookReportSummary.gap.answerText` carries the whole stored answer so chrome is cleaned BEFORE the cut;
+`answerExcerpt` (600) is unchanged for every other reader.
+
+**The rival count (`rivalsNamedInstead`).** Derived at render — no stored field — from the competitor lists
+of every answer that did NOT name the client, through the same run-level gate as the names
+(`rivalsSuppressed` → null → the figure is omitted, never 0). Normalised by `normaliseRivalName` (case,
+&/and, punctuation, trailing Ltd/Limited/LLP/PLC/UK and the home town) and counted by
+`countDistinctBusinesses`, which treats a name and its longer branch form as one ("PureGym" / "PureGym
+Sheffield City Centre South") so the count errs low. On the real data this took one gym audit from 32 to 25.
+
+**Real-data QA (read-only replay of render-audit-report, 21 six-answer audits on 2026-10-06):** all 21 render
+Concept 4, every featured answer had a readable excerpt (366–485 chars), all 21 print on 2 A4 pages, no
+horizontal overflow at 1280px or 390px, and a scan of every page's visible text found no gstatic, star
+rating, side-panel text, "Map data", private-use glyph, raw URL, markdown or "Gemini". Cases covered: 0/6,
+1/6, 2/6, 3/6, 4/6, 5/6 (ChatGPT featured), 6/6, no website, clean website, website issues, unknown website.
+
+**Open for Paul:** the stored crawl finding "Your site doesn't label the basics — no structured data" still
+shows (as Medium) where the crawl found it. It was already on the live quick report; CLAUDE.md §5 records
+schema markup as tested negative, so whether it belongs on a client report is his call.

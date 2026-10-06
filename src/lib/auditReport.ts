@@ -1212,6 +1212,9 @@ export function buildReportData(
       // Hook surfaces say "Google AI", never "Gemini" (Paul, 2026-09-26); the rest of the report keeps ENGINE_LABELS.
       engineLabel: hookEngineLabel,
       namedInstead: (competitors) => rivalsSuppressed ? [] : competitors.filter((n) => !isProvableJunkName(n)).slice(0, 5),
+      /* Version 2 only: the "competitors named instead" count across all six answers goes through the
+         SAME run-level gate — a run whose rival names are withheld gets no count (null), never 0. */
+      rivalFilter: (competitors) => rivalsSuppressed ? null : competitors.filter((n) => n.trim() && !isProvableJunkName(n)),
       // Version 2 only (six-result hook): the same ruler the hero and per-question counts use.
       namedCtx,
       town: ctx.locationText || null,
