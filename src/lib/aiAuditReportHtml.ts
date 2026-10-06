@@ -19,9 +19,9 @@ import { articleTrade } from './templateVars.ts';
    dependency-free constant files, so nothing heavy joins those bundles. */
 import { FINDABLE_CONTACT_EMAIL, FINDABLE_CONTACT_WHATSAPP, FINDABLE_GUARANTEE, REMEASURE_CLAIM_SENTENCE, offerSummaryFor } from './findableOffer.ts';
 import { BASELINE_QUESTIONS } from './auditQuestionCounts.ts';
-import type { CrawlFault } from './crawlCheck.ts';
+import { isGenericSchemaGap, type CrawlFault } from './crawlCheck.ts';
 import type { EvidenceKind, SiteEvidenceFinding } from './siteEvidence.ts';
-import { cleanAnswerText, isJunkAnswer, isMapCardAnswer } from './answerText.ts';
+import { answerExcerpt, cleanAnswerText, isJunkAnswer, isMapCardAnswer, type AnswerBlock } from './answerText.ts';
 
 export interface ReportEngineRow {
   label: string;   // "ChatGPT", "Gemini", "AI Overview", "Google"
@@ -508,20 +508,30 @@ function siteCheckPendingSection(): string {
    fee and names the whole offer from offerSummaryFor, so the figures cannot drift.
    🔴 2026-09-29: a business with no website can only be Findable Build, so the panel names that route
    alone (12 payments) — never both routes to a reader for whom one is impossible. */
+/* The approved no-website words, ONE copy: the ordinary report's section below and the six-answer
+   quick report's panel (renderQuickCheckReport) both print exactly these. */
+const NO_WEBSITE_TITLE_HTML = "You don&rsquo;t have a website yet, so we&rsquo;ll build you one.";
+function noWebsiteBodyHtml(): string {
+  return `AI can&rsquo;t recommend a business it can&rsquo;t read, and right now there&rsquo;s nothing for it to read.
+        We&rsquo;ll build you a simple site that&rsquo;s set up properly for AI from the start: your services,
+        your area, your credentials, all written the way AI quotes them. Building and hosting it are
+        part of the service, with no separate build fee. ${esc(offerSummaryFor('build'))}`;
+}
 function noWebsiteSection(): string {
   return `
     <!-- NO WEBSITE &mdash; what we will build, where the SEO grade would be -->
     <section class="why" style="border-top:1px solid var(--line)">
       <div class="sec-eyebrow">Your website</div>
-      <div class="sec-title">You don&rsquo;t have a website yet, so we&rsquo;ll build you one.</div>
+      <div class="sec-title">${NO_WEBSITE_TITLE_HTML}</div>
       <p style="margin:0;max-width:70ch;font-size:14px;line-height:1.55;color:var(--muted)">
-        AI can&rsquo;t recommend a business it can&rsquo;t read, and right now there&rsquo;s nothing for it to read.
-        We&rsquo;ll build you a simple site that&rsquo;s set up properly for AI from the start: your services,
-        your area, your credentials, all written the way AI quotes them. Building and hosting it are
-        part of the service, with no separate build fee. ${esc(offerSummaryFor('build'))}
+        ${noWebsiteBodyHtml()}
       </p>
     </section>`;
 }
+
+/* The quick check's truthful "clean website" words, ONE copy (the old quick section and Concept 4). */
+const CLEAN_SITE_TITLE_HTML = "No technical faults found";
+const CLEAN_SITE_BODY_HTML = "We checked your website and didn&rsquo;t find a technical fault stopping AI from reading it. So the work here isn&rsquo;t fixing faults: it&rsquo;s making sure your site clearly sets out the services you offer, the areas you cover and who you are.";
 
 /* ══ THE FOUNDER OFFER ═════════════════════════════════════════════════════════════════════════
    The ask, not another pitch. The report has already made the argument; this is four sentences, what
@@ -1015,65 +1025,9 @@ export function renderHookSection(h: HookReportSummary, businessName: string, da
     </section>`;
 }
 
-/* ════════════════════════════════════════════════════════════════════════════════════════════════
-   THE QUICK AI VISIBILITY CHECK — the six-result hook's report (Paul, 2026-09-26).
-
-   Modelled on the older Findable AI Visibility Report, which Paul prefers: a large metric, a short
-   verdict, ONE featured AI search with the businesses it named and a "you weren't named" strip, and a
-   table of every question tested. Adapted to 3 questions × ChatGPT + Google AI = 6 answers:
-     1. the PERCENTAGE is the big number, the raw count and the method sit under it;
-     2. the verdict is hookReportCopy's (three bands on the complete score, per-engine counts under it);
-     3. the featured search is the hook pick (Google AI miss first, else ChatGPT), its competitors from
-        that exact cell, and NO model prose: the question, engine and names are the evidence;
-     4. "The questions we asked": all three questions, a ChatGPT and a Google AI mark on each row, so
-        the table itself shows 3 × 2 = 6. The featured question appears in it too, on purpose.
-   ⛔ ONLY FOR A COMPLETE SIX-RESULT HOOK (`h.shape === 'six'` with a score). Version-1 hooks keep
-   renderHookSection exactly as before, and an incomplete v2 never reaches here (hookIncomplete).
-   ⛔ NO "Gemini" ON THIS SURFACE. Labels arrive on the summary as ChatGPT / Google AI.
-   ⛔ 6/6 MANUFACTURES NOTHING. No featured block, the table shows every tick.
-   ════════════════════════════════════════════════════════════════════════════════════════════════ */
-export function renderQuickCheckTop(h: HookReportSummary, businessName: string, dateLabel?: string): string {
-  const s = h.score;
-  if (h.shape !== 'six' || !s) return renderHookSection(h, businessName, dateLabel);
-  const c = hookReportCopy(h, businessName);
-  const { band } = verdictBand(s.named, s.total);
-  const engineCount = s.perEngine.length;
-  const labels = s.perEngine.map((e) => e.label);
-  const mark = (v: boolean | null) => v === null
-    ? `<span class="qm qm-na" title="no answer">&ndash;</span>`
-    : v ? `<span class="qm qm-yes" title="named">&check;</span>`
-        : `<span class="qm qm-no" title="not named">&times;</span>`;
-  const rows = h.tested.map((q) => `
-        <div class="qrow"><span class="qrow-q">${esc(q.question)}</span>${s.perEngine.map((e) => {
-          const cell = q.perEngine.find((pe) => pe.engine === e.engine);
-          return `<span class="qrow-e">${mark(cell ? cell.named : null)}</span>`;
-        }).join("")}</div>`).join("");
-  return `
-    <!-- QUICK CHECK: percentage first -->
-    <div class="hero qc-hero">
-      <div class="hero-num">
-        <span class="num qc-num ${band}">${s.percent}<span class="qc-pct">%</span></span>
-        <div class="num-cap">
-          <div class="l1">of AI answers named ${esc(businessName)}</div>
-          <div class="l2">${s.named} of ${s.total} ${plural(s.total, "answer")}</div>
-          <div class="l3">${s.questions} ${plural(s.questions, "question")} &times; ${engineCount} AI ${plural(engineCount, "engine")}</div>
-        </div>
-      </div>
-      <div class="hero-rule"></div>
-      <div class="hero-verdict">
-        <div class="vk">The verdict</div>
-        <div class="punch">${esc(c.headline)}</div>
-        <div class="punch-sub">${esc(c.lede)}</div>
-      </div>
-    </div>
-${h.gap ? renderHookEvidenceBox(h.gap, businessName, dateLabel, { quote: false }) : ""}
-    <section class="qlist qc-table">
-      <div class="sec-eyebrow">The questions we asked</div>
-      <div class="qrow qrow-head"><span class="qrow-q"></span>${labels.map((l) => `<span class="qrow-e">${esc(l)}</span>`).join("")}</div>${rows}
-      <p class="qc-caveat">${esc(c.caveat)}</p>
-    </section>`;
-}
-
+/* THE QUICK AI VISIBILITY CHECK's 2026-09-26 layout (renderQuickCheckTop: percentage hero, a names-only
+   evidence box, the question rows) was REPLACED on 2026-10-06 by Concept 4 — renderQuickCheckReport
+   below. Deleted rather than left unused: one quick layout, not two. git holds it. */
 /** The notice a six-result hook shows when it ended without six valid answers. No figure at all. */
 function renderQuickCheckIncomplete(): string {
   return `
@@ -1083,6 +1037,348 @@ function renderQuickCheckIncomplete(): string {
       <p>An AI engine didn&rsquo;t return a usable answer to every question, so there is no score to show. A number built on missing answers would be wrong, so we don&rsquo;t show one.</p>
     </section>`;
 }
+
+/* ════════════════════════════════════════════════════════════════════════════════════════════════
+   CONCEPT 4 · HOOK AUDIT HYBRID — the six-answer quick report (Paul, approved 2026-10-06).
+   Concept gallery: docs/concepts/audit-report/ on branch concept/audit-report-redesigns.
+
+   ORDER: header → your score → featured missed search → all questions we asked → website issues →
+   why this matters → the EXISTING CTA + footer (rendered by renderReportHtml, untouched).
+
+   🔴 PAUL REVERSED TWO EARLIER RULINGS FOR THIS SURFACE ON PURPOSE (2026-10-06): the AI's own words
+   come back (2026-09-26 had taken them off) and so do the engine identifiers (2026-09-22). The card is
+   still FINDABLE'S: our header, our labels, the engine named as "ChatGPT" / "Google AI" beside a
+   small mark, never a copy of either product's interface.
+
+   ⛔ NOTHING ON THIS SURFACE IS INVENTED. The excerpt is the stored answer with listing chrome removed
+   (answerText.ts answerExcerpt — it drops lines, never writes them); nothing readable → no excerpt,
+   and the card shows the question, the result and the names. Names come from the run's own cleaned
+   competitor lists through the run-level suppression gate. A rival count is printed only when
+   rivalsNamedInstead is a real number. Website issues are the stored findings only: serious → High,
+   minor → Medium, and no "pages affected" figure because none is stored. 6/6 shows no missed search.
+
+   ONLY a complete six-answer hook reaches this (renderReportHtml's concept4 flag). Version-1 hooks,
+   incomplete checks, measuring/name-check states and every other report render exactly as before.
+   ════════════════════════════════════════════════════════════════════════════════════════════════ */
+
+/** Google AI's identifier on this report: a plain four-colour spark (not Google's trademark "G").
+ *  A gradient needs a unique id per instance on one page. */
+const googleAiSvg = (id: string) => `<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><defs><linearGradient id="${id}" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#4285F4"/><stop offset=".38" stop-color="#4285F4"/><stop offset=".55" stop-color="#34A853"/><stop offset=".72" stop-color="#FBBC04"/><stop offset="1" stop-color="#EA4335"/></linearGradient></defs><path fill="url(#${id})" d="M12 1.5c.5 5.7 3.8 9 9.5 9.5-5.7.5-9 3.8-9.5 9.5-.5-5.7-3.8-9-9.5-9.5 5.7-.5 9-3.8 9.5-9.5Z"/></svg>`;
+let q4MarkSeq = 0;
+/** The small engine identifier: ChatGPT = the OpenAI mark on black, Google AI = the spark. Keyed on the
+ *  engine KEY ('chatgpt' / 'gemini'), never on a label. */
+function q4Mark(engine: string): string {
+  return engine === 'chatgpt'
+    ? `<span class="q4-mk q4-mk--gpt">${OAI_SVG}</span>`
+    : `<span class="q4-mk q4-mk--gai">${googleAiSvg(`q4gai${++q4MarkSeq}`)}</span>`;
+}
+
+/** An engine's X/3: none named → red, under half → amber, half or more → green. Proportional, so a
+ *  different denominator still reads correctly. Absent denominator → no colour at all. */
+export function quickEngineTone(named: number, total: number): 'red' | 'amber' | 'green' | '' {
+  if (!(total > 0)) return '';
+  if (named <= 0) return 'red';
+  return named / total < 0.5 ? 'amber' : 'green';
+}
+/** The overall figure keeps the report's own verdict bands (verdictBand): ≤40% red, ≤70% amber. */
+function quickOverallTone(named: number, total: number): 'red' | 'amber' | 'green' {
+  const { band } = verdictBand(named, total);
+  return band === 'high' ? 'green' : band === 'mid' ? 'amber' : 'red';
+}
+
+const reEscape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+/** Escape `text`, wrapping each genuine occurrence of a named business. A name matches on its own
+ *  (letters on either side are a different word), case-insensitively, also without a trailing "Ltd" /
+ *  "Limited" — the way an answer usually writes it. Only names we were given are marked. */
+export function quickHighlight(text: string, names: string[], cls = 'q4-hl'): string {
+  const pats = new Set<string>();
+  for (const n of names) {
+    const t = String(n || '').trim();
+    if (t.length < 3) continue;
+    pats.add(t);
+    const short = t.replace(/\s+(?:ltd|limited)\.?$/i, '').trim();
+    if (short.length >= 3 && short !== t) pats.add(short);
+  }
+  if (!pats.size) return esc(text);
+  const re = new RegExp(`(?<![A-Za-z0-9])(?:${[...pats].sort((a, b) => b.length - a.length).map(reEscape).join('|')})(?![A-Za-z0-9])`, 'gi');
+  let out = '';
+  let last = 0;
+  for (const m of text.matchAll(re)) {
+    out += esc(text.slice(last, m.index)) + `<mark class="${cls}">${esc(m[0])}</mark>`;
+    last = (m.index ?? 0) + m[0].length;
+  }
+  return out + esc(text.slice(last));
+}
+
+/** The cleaned excerpt as HTML, in the AI's own block order; "…" closes it when the AI said more. */
+function quickExcerptHtml(blocks: AnswerBlock[], truncated: boolean, names: string[]): string {
+  const liDepths = blocks.filter((b) => b.kind === 'li').map((b) => b.depth ?? 0);
+  const base = liDepths.length ? Math.min(...liDepths) : 0;
+  let html = '';
+  let inList = false;
+  blocks.forEach((b, i) => {
+    const more = truncated && i === blocks.length - 1 ? '<span class="q4-more" title="The answer continues">&hellip;</span>' : '';
+    const body = quickHighlight(b.text, names) + more;
+    if (b.kind === 'li') {
+      if (!inList) { html += '<ul class="q4-ans-ul">'; inList = true; }
+      html += `<li class="q4-d${Math.min(2, Math.max(0, (b.depth ?? 0) - base))}">${body}</li>`;
+      return;
+    }
+    if (inList) { html += '</ul>'; inList = false; }
+    html += b.kind === 'h' ? `<p class="q4-ans-h">${body}</p>` : `<p>${body}</p>`;
+  });
+  if (inList) html += '</ul>';
+  return html;
+}
+
+/** The website section's input, decided by renderReportHtml from the stored crawl only. */
+export type QuickWebsite =
+  | { state: 'issues'; issues: Array<{ title: string; detail: string; minor: boolean }> }
+  | { state: 'none' }
+  | { state: 'clean' }
+  | { state: 'unknown' };
+
+/** Concept 4's header — replaces the wave band and explainer on this one report type. */
+export function renderQuickCheckHeader(businessName: string, dateLabel: string): string {
+  return `<header class="q4-head">
+      <div class="q4-wm">Findable<span>.</span></div>
+      <div class="q4-title">Quick AI Visibility Check<span>Prepared for ${esc(businessName)}</span></div>
+      <div class="q4-date">${esc(dateLabel)}</div>
+    </header>`;
+}
+
+/** Concept 4's body: score → featured → questions → website → why. The caller appends the CTA/footer. */
+export function renderQuickCheckReport(h: HookReportSummary, businessName: string, website: QuickWebsite): string {
+  const s = h.score;
+  if (h.shape !== 'six' || !s) return renderHookSection(h, businessName);
+  q4MarkSeq = 0;
+  const c = hookReportCopy(h, businessName);
+  const overall = quickOverallTone(s.named, s.total);
+  const misses = Math.max(0, s.total - s.named);
+
+  const engines = s.perEngine.map((e) => {
+    const tone = quickEngineTone(e.named, e.total);
+    return `
+          <div class="q4-eng${tone ? ` q4-eng--${tone}` : ''}">${q4Mark(e.engine)}<span class="q4-eng-l">${esc(e.label)}<small>${e.named} of ${e.total} ${plural(e.total, 'answer')}</small></span><span class="q4-eng-v">${e.named}/${e.total}</span></div>`;
+  }).join('');
+
+  const score = `
+    <section class="q4-score">
+      <div class="q4-big">
+        <span class="q4-k">Your score</span>
+        <b class="q4-t-${overall}">${s.percent}%</b>
+        <span class="q4-big-s">${s.named} of ${s.total} ${plural(s.total, 'answer')} named you</span>
+      </div>
+      <div class="q4-right">
+        <p class="q4-verdict">${esc(c.headline)}</p>
+        <div class="q4-engs">${engines}
+        </div>
+      </div>
+    </section>`;
+
+  /* FEATURED — the hook pick (Google AI miss first, else ChatGPT). No pick → a 6/6 positive line, or
+     nothing when misses exist without a pick (cannot happen today; absent is never dressed up). */
+  let featured = '';
+  const g = h.gap;
+  if (g) {
+    const seen = new Set<string>();
+    const names = g.namedInstead.filter((n) => {
+      const k = n.trim().toLowerCase();
+      if (!k || seen.has(k)) return false;
+      seen.add(k);
+      return true;
+    }).slice(0, 5);
+    const ex = answerExcerpt(g.answerText || g.answerExcerpt || '', QUICK_ANSWER_CHARS);
+    const answer = ex ? `
+          <div class="q4-ans">
+            <div class="q4-ans-head"><span class="q4-eng-name">${q4Mark(g.engine)}${esc(g.engineLabel)} answer</span><span class="q4-badge q4-badge--n">&#10005; Not named</span></div>
+            <div class="q4-ans-body">${quickExcerptHtml(ex.blocks, ex.truncated, names)}</div>
+          </div>` : '';
+    featured = `
+    <section class="q4-sec">
+      <h2 class="q4-h">Featured missed search</h2>
+      <div class="q4-q"><span class="q4-q-k">What we asked</span><span class="q4-q-t">${esc(g.question)}</span></div>
+      <div class="q4-proof${ex ? '' : ' q4-proof--noans'}">${answer}
+        <aside class="q4-sum">
+          <div><span class="q4-sum-k">${ex ? 'Result' : `${q4Mark(g.engine)}${esc(g.engineLabel)}`}</span><span class="q4-badge q4-badge--n">&#10005; Not named</span></div>${names.length ? `
+          <div><span class="q4-sum-k">Named instead</span><ol>${names.map((n) => `<li>${esc(n)}</li>`).join('')}</ol></div>` : ''}
+          <div class="q4-you"><span class="q4-sum-k">Your business</span>&#10005; Not named</div>
+        </aside>
+      </div>
+    </section>`;
+  } else if (misses === 0) {
+    featured = `
+    <section class="q4-sec">
+      <h2 class="q4-h">Every answer named you</h2>
+      <div class="q4-allnamed"><span class="q4-badge q4-badge--y">&#10003; Named</span>${esc(c.lede)}</div>
+    </section>`;
+  }
+
+  const cell = (v: boolean | null) => v === null
+    ? `<span class="q4-chip q4-chip--na">No answer</span>`
+    : v ? `<span class="q4-chip q4-chip--y">&#10003; Named</span>` : `<span class="q4-chip q4-chip--n">&#10005; Not named</span>`;
+  const rows = h.tested.map((q) => `
+          <tr${q.isGap ? ' class="q4-feat"' : ''}><td class="q4-tq">${esc(q.question)}</td>${s.perEngine.map((e) => {
+            const pe = q.perEngine.find((x) => x.engine === e.engine);
+            return `<td class="q4-tr" data-eng="${esc(e.label)}">${cell(pe ? pe.named : null)}</td>`;
+          }).join('')}</tr>`).join('');
+  const table = `
+    <section class="q4-sec">
+      <h2 class="q4-h">All questions we asked</h2>
+      <table class="q4-tbl">
+        <thead><tr><th>Question</th>${s.perEngine.map((e) => `<th class="q4-te">${q4Mark(e.engine)}${esc(e.label)}</th>`).join('')}</tr></thead>
+        <tbody>${rows}
+        </tbody>
+      </table>
+      <p class="q4-caveat">${esc(c.caveat)}</p>
+    </section>`;
+
+  const site = website.state === 'issues' ? `
+    <section class="q4-sec">
+      <h2 class="q4-h">Website issues we found</h2>
+      <div class="q4-iss">${website.issues.map((i) => `
+        <div class="q4-issue"><span class="q4-sev q4-sev--${i.minor ? 'med' : 'high'}">${i.minor ? 'Medium' : 'High'}</span><span class="q4-issue-t">${esc(i.title)}</span><p class="q4-issue-p">${esc(i.detail)}</p></div>`).join('')}
+      </div>
+    </section>`
+    : website.state === 'none' ? `
+    <section class="q4-sec">
+      <h2 class="q4-h">Your website</h2>
+      <div class="q4-note q4-note--none"><b>${NO_WEBSITE_TITLE_HTML}</b><p>${noWebsiteBodyHtml()}</p></div>
+    </section>`
+    : website.state === 'clean' ? `
+    <section class="q4-sec">
+      <h2 class="q4-h">Your website</h2>
+      <div class="q4-note"><b>${CLEAN_SITE_TITLE_HTML}</b><p>${CLEAN_SITE_BODY_HTML}</p></div>
+    </section>`
+    : '';
+
+  /* WHY THIS MATTERS — only figures this run supports. The rival count appears only when it is a real
+     number above zero (null = names withheld for this run → the figure is simply left out). */
+  const rivals = h.rivalsNamedInstead;
+  const why = `
+    <section class="q4-sec">
+      <h2 class="q4-h">Why this matters</h2>
+      <div class="q4-why">${misses > 0 ? `
+        <div><b>${misses} of ${s.total}</b>${plural(s.total, 'answer')} didn&rsquo;t name you</div>` : `
+        <div><b>${s.named} of ${s.total}</b>${plural(s.total, 'answer')} named you</div>`}${misses > 0 && typeof rivals === 'number' && rivals > 0 ? `
+        <div><b>${rivals}</b>${rivals === 1 ? 'competitor was' : 'competitors were'} named instead</div>` : ''}
+        <div class="q4-why-line">AI is another place customers choose who to contact.</div>
+      </div>
+    </section>`;
+
+  return `
+    <style>${QUICK_REPORT_CSS}</style>${score}
+    <div class="q4-body">${featured}${table}${site}${why}
+    </div>`;
+}
+
+/** How much of the featured answer the quick report quotes, after cleaning (Paul: about 500). */
+export const QUICK_ANSWER_CHARS = 500;
+
+/* Concept 4's own stylesheet — rendered INSIDE the six-answer quick report only, so no other report's
+   bytes change. Colours are the report's charcoal/gold/red/green; prints in colour like the rest. */
+const QUICK_REPORT_CSS = `
+  .q4-head,.q4-score,.q4-body{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .q4-head{background:#101114;color:#fff;padding:16px 28px;display:grid;grid-template-columns:auto 1fr auto;gap:6px 22px;align-items:center}
+  .q4-wm{font-size:24px;font-weight:800;letter-spacing:-.03em;color:#fff;line-height:1}
+  .q4-wm span{color:#FFD13F}
+  .q4-title{font-size:11px;font-weight:800;letter-spacing:.16em;text-transform:uppercase;color:#FFD13F;border-left:1px solid #3a3b42;padding-left:20px;line-height:1.3}
+  .q4-title span{display:block;color:#fff;font-size:15px;letter-spacing:-.01em;text-transform:none;font-weight:700;margin-top:2px}
+  .q4-date{font-size:12px;color:#c9cbd1;text-align:right}
+  .q4-score{background:#101114;color:#fff;padding:6px 28px 24px;display:grid;grid-template-columns:auto 1fr;gap:16px 28px;align-items:end;border-top:1px solid #26272d}
+  .q4-k{display:block;font-size:11px;font-weight:800;letter-spacing:.18em;text-transform:uppercase;color:#FFD13F;margin-bottom:6px}
+  .q4-big b{display:block;font-size:104px;font-weight:900;letter-spacing:-.065em;line-height:.86}
+  .q4-big-s{display:block;font-size:14px;font-weight:700;margin-top:10px}
+  .q4-t-red{color:#ff4f5c} .q4-t-amber{color:#ffb020} .q4-t-green{color:#3ddc84}
+  .q4-verdict{font-size:22px;font-weight:850;letter-spacing:-.02em;line-height:1.18;margin:0 0 14px;padding-bottom:12px;border-bottom:3px solid #FFD13F}
+  .q4-engs{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .q4-eng{background:#1c1d22;border:1px solid #34353c;border-left:5px solid var(--q4tone,#9C9FA7);border-radius:6px;padding:10px 12px;display:grid;grid-template-columns:auto 1fr auto;gap:4px 10px;align-items:center}
+  .q4-eng--red{--q4tone:#ff4f5c} .q4-eng--amber{--q4tone:#ffb020} .q4-eng--green{--q4tone:#3ddc84}
+  .q4-eng .q4-mk{width:28px;height:28px}
+  .q4-eng-l{font-size:13px;font-weight:700;color:#fff}
+  .q4-eng-l small{display:block;font-size:11px;font-weight:500;color:#9C9FA7}
+  .q4-eng-v{font-size:30px;font-weight:900;letter-spacing:-.04em;line-height:1;color:var(--q4tone,#fff)}
+  .q4-mk{display:inline-flex;align-items:center;justify-content:center;flex:none;border-radius:50%;width:22px;height:22px;vertical-align:middle}
+  .q4-mk svg{width:62%;height:62%;display:block}
+  .q4-mk--gpt{background:#0d0d0d} .q4-mk--gpt svg{fill:#fff}
+  .q4-mk--gai{background:#fff;box-shadow:inset 0 0 0 1px #dadce0} .q4-mk--gai svg{width:70%;height:70%}
+  .q4-body{padding:22px 28px 6px}
+  .q4-sec{margin-bottom:22px}
+  .q4-h{display:flex;align-items:center;gap:10px;margin:0 0 12px;font-size:12px;font-weight:800;letter-spacing:.16em;text-transform:uppercase;color:#101114;break-after:avoid;page-break-after:avoid}
+  .q4-h::before{content:"";width:18px;height:4px;background:#FFD13F}
+  .q4-q{background:#101114;color:#fff;border-radius:6px 6px 0 0;padding:12px 16px;display:flex;gap:14px;align-items:center;break-after:avoid;page-break-after:avoid}
+  .q4-q-k{flex:none;font-size:10.5px;font-weight:900;letter-spacing:.14em;text-transform:uppercase;color:#101114;background:#FFD13F;padding:4px 8px;border-radius:3px}
+  .q4-q-t{font-size:20px;font-weight:850;letter-spacing:-.015em;line-height:1.2}
+  .q4-proof{display:grid;grid-template-columns:1fr 220px;border:2px solid #101114;border-top:0;border-radius:0 0 6px 6px;overflow:hidden;break-inside:avoid;page-break-inside:avoid}
+  .q4-proof--noans{grid-template-columns:1fr}
+  .q4-ans{padding:12px 16px 14px;min-width:0}
+  .q4-ans-head{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:6px;flex-wrap:wrap}
+  .q4-eng-name{display:inline-flex;align-items:center;gap:8px;font-size:12px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:#101114}
+  .q4-ans-body{font-size:14.5px;line-height:1.6;color:#1b1c20;overflow-wrap:anywhere}
+  .q4-ans-body p{margin:0 0 6px}
+  .q4-ans-body .q4-ans-h{font-weight:800;margin-top:8px}
+  .q4-ans-ul{margin:0 0 6px;padding-left:18px}
+  .q4-ans-ul li{margin:2px 0}
+  .q4-ans-ul li.q4-d1{margin-left:16px} .q4-ans-ul li.q4-d2{margin-left:32px}
+  .q4-hl{background:#ffe680;color:#101114;font-weight:700;padding:0 3px;border-radius:3px;box-decoration-break:clone;-webkit-box-decoration-break:clone}
+  .q4-more{color:#5d6067;margin-left:4px}
+  .q4-sum{background:#f3f3f1;border-left:2px solid #101114;padding:12px 14px;font-size:12.5px;display:flex;flex-direction:column;gap:9px;color:#101114}
+  .q4-proof--noans .q4-sum{border-left:0;flex-direction:row;flex-wrap:wrap;gap:12px 28px}
+  .q4-sum-k{display:flex;align-items:center;gap:6px;font-size:10px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;color:#5d6067;margin-bottom:4px}
+  .q4-sum ol{margin:0;padding-left:18px;font-weight:650;line-height:1.4}
+  .q4-you{border-top:1px solid #d5d7dc;padding-top:8px;font-weight:800;color:#c8202b}
+  .q4-proof--noans .q4-you{border-top:0;padding-top:0}
+  .q4-badge{display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;padding:5px 10px;border-radius:4px;color:#fff;white-space:nowrap}
+  .q4-badge--n{background:#c8202b} .q4-badge--y{background:#127a3a}
+  .q4-allnamed{display:flex;gap:12px;align-items:center;border:2px solid #127a3a;border-left:8px solid #127a3a;border-radius:6px;padding:12px 16px;font-size:15px;font-weight:650;color:#101114;background:#e3f5ea}
+  .q4-tbl{width:100%;border-collapse:collapse;border:2px solid #101114;break-inside:avoid;page-break-inside:avoid}
+  .q4-tbl th{background:#101114;color:#fff;font-size:10.5px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;text-align:left;padding:8px 12px}
+  .q4-tbl th.q4-te{width:140px;white-space:nowrap}
+  .q4-tbl th .q4-mk{width:18px;height:18px;margin-right:6px}
+  .q4-tbl td{padding:9px 12px;border-top:1px solid #dcdde1;font-size:14.5px;font-weight:650;color:#101114}
+  .q4-tbl tr.q4-feat td{background:#fffbe8}
+  .q4-chip{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;padding:4px 10px;border-radius:999px;color:#fff;white-space:nowrap}
+  .q4-chip--y{background:#127a3a} .q4-chip--n{background:#c8202b} .q4-chip--na{background:#8f939d}
+  .q4-caveat{margin:8px 0 0;font-size:12.5px;color:#5d6067}
+  .q4-iss{border:2px solid #101114;border-radius:6px;overflow:hidden}
+  .q4-issue{display:grid;grid-template-columns:72px 1fr;gap:2px 14px;align-items:start;padding:10px 14px;border-top:1px solid #e6e7ea;break-inside:avoid;page-break-inside:avoid}
+  .q4-issue:first-child{border-top:0}
+  .q4-sev{grid-row:span 2;font-size:10px;font-weight:900;letter-spacing:.1em;text-transform:uppercase;text-align:center;padding:5px 0;border-radius:3px;color:#fff;margin-top:1px}
+  .q4-sev--high{background:#c8202b} .q4-sev--med{background:#b86e00}
+  .q4-issue-t{font-size:15px;font-weight:800;color:#101114}
+  .q4-issue-p{margin:0;font-size:13.5px;color:#3a3c42;line-height:1.45}
+  .q4-note{border:2px solid #101114;border-left:8px solid #101114;border-radius:6px;padding:12px 16px;break-inside:avoid;page-break-inside:avoid}
+  .q4-note--none{border-left-color:#c8202b}
+  .q4-note b{display:block;font-size:16px;color:#101114;margin-bottom:4px}
+  .q4-note p{margin:0;font-size:13.5px;line-height:1.5;color:#3a3c42}
+  .q4-why{display:grid;grid-template-columns:auto auto 1fr;background:#FFD13F;color:#101114;border-radius:6px;overflow:hidden;break-inside:avoid;page-break-inside:avoid}
+  .q4-why div{padding:12px 18px;border-right:2px solid rgba(16,17,20,.16);font-size:13px;font-weight:650;line-height:1.3}
+  .q4-why div:last-child{border-right:0}
+  .q4-why b{display:block;font-size:24px;font-weight:900;letter-spacing:-.03em}
+  .q4-why-line{display:flex;align-items:center;font-weight:750!important}
+  @media (max-width:640px){
+    .q4-head{grid-template-columns:1fr auto;padding:14px 16px}
+    .q4-title{grid-column:1/-1;grid-row:2;border-left:0;padding-left:0}
+    .q4-score{grid-template-columns:1fr;padding:4px 16px 18px}
+    .q4-big b{font-size:88px}
+    .q4-verdict{font-size:19px}
+    .q4-engs{grid-template-columns:1fr}
+    .q4-body{padding:18px 16px 2px}
+    .q4-q{align-items:flex-start;flex-direction:column;gap:8px}
+    .q4-q-t{font-size:18px}
+    .q4-proof{grid-template-columns:1fr}
+    .q4-sum{border-left:0;border-top:2px solid #101114}
+    .q4-proof--noans .q4-sum{border-top:0}
+    .q4-tbl thead{display:none}
+    .q4-tbl tr{display:grid;grid-template-columns:1fr 1fr}
+    .q4-tbl td.q4-tq{grid-column:1/-1;padding-bottom:2px}
+    .q4-tbl td.q4-tr{border-top:0;padding-top:4px}
+    .q4-tbl td.q4-tr::before{content:attr(data-eng);display:block;font-size:11px;color:#5d6067;font-weight:600;margin-bottom:3px}
+    .q4-issue{grid-template-columns:64px 1fr}
+    .q4-why{grid-template-columns:1fr}
+    .q4-why div{border-right:0;border-bottom:2px solid rgba(16,17,20,.16)}
+  }
+`;
 
 /* ════════════════════════════════════════════════════════════════════════════════════════════════
    ONE PLAIN-ENGLISH LINE UNDER THE ENGINE CARDS (paid summary only).
@@ -1138,6 +1434,10 @@ export function renderReportHtml(d: AiAuditReportData): string {
      version-1 hooks included, renders exactly as before. */
   const quick = d.hook?.shape === 'six' && !!d.hook.score;
   const quickIncomplete = !quick && d.hookIncomplete === true;
+  /* CONCEPT 4 owns the page only where the quick layout actually renders: a complete six-answer hook
+     that is neither still measuring nor waiting on the name check (those two branches come first and
+     keep the ordinary band + explainer). */
+  const concept4 = quick && !!d.hook && !d.measuring && !d.nameNotJudgeable;
   /* "an electrician", not "an Electricians": businessType is stored plural on most audits. The quick
      report uses the WhatsApp templates' own singulariser; every other report is unchanged. */
   const quickTradeCheck = quick || quickIncomplete ? articleTrade(d.businessType) : null;
@@ -1318,32 +1618,21 @@ export function renderReportHtml(d: AiAuditReportData): string {
       const copy = EVIDENCE_REPORT_COPY[e.kind];
       return copy ? [{ title: copy.title, detail: copy.why, minor: false }] : [];
     }),
-    ...(d.crawlFaults ?? []).map((f) => ({ title: f.title, detail: f.detail, minor: !!f.minor })),
+    /* ⛔ NOT THE GENERIC "NO STRUCTURED DATA" LINE (Paul, 2026-10-06): absence of schema alone is not a
+       defensible reason AI did not name someone (tested negative, CLAUDE.md §5), so it never takes a
+       slot on the prospect hook report. Excluded FIRST, before the cap; nothing is added to replace it.
+       Misleading schema still qualifies — it arrives as deep-crawl evidence (schema_wrong_domain) above.
+       Every other surface keeps the line: this filter is the quick report's alone. */
+    ...(d.crawlFaults ?? []).filter((f) => !isGenericSchemaGap(f)).map((f) => ({ title: f.title, detail: f.detail, minor: !!f.minor })),
   ].filter((x, i, all) => all.findIndex((y) => y.title.trim().toLowerCase() === x.title.trim().toLowerCase()) === i)
     .slice(0, QUICK_MAX_WEBSITE_ISSUES);
-  const quickWebsiteSection = quickIssues.length ? `
-    <section class="seo qc-web">
-      <div class="sec-eyebrow">Your website</div>
-      <div class="sec-title">Website issues we can fix</div>
-      <div class="seo-body">
-        <ul class="seo-findings">${quickIssues.map((f) => `
-          <li class="find">
-            <span class="find-dot" style="background:${f.minor ? "var(--amber)" : "var(--red)"}"></span>
-            <span class="find-body"><b class="find-title">${esc(f.title)}</b> <span class="find-detail">${esc(f.detail)}</span></span>
-          </li>`).join("")}
-        </ul>
-      </div>
-    </section>`
-    : d.hasWebsite === false ? noWebsiteSection()
-    : d.siteChecked === true ? `
-    <section class="seo qc-web">
-      <div class="sec-eyebrow">Your website</div>
-      <div class="sec-title">No technical faults found</div>
-      <div class="seo-body">
-        <p class="qc-web-p">We checked your website and didn&rsquo;t find a technical fault stopping AI from reading it. So the work here isn&rsquo;t fixing faults: it&rsquo;s making sure your site clearly sets out the services you offer, the areas you cover and who you are.</p>
-      </div>
-    </section>`
-    : "";
+  /* Concept 4 (2026-10-06) draws these as "Website issues we found" — serious → High, minor → Medium.
+     The four states and their order are unchanged from the section this replaced: findings, else no
+     website, else a COMPLETED crawl that found nothing, else nothing at all. */
+  const quickWebsite: QuickWebsite = quickIssues.length ? { state: 'issues', issues: quickIssues }
+    : d.hasWebsite === false ? { state: 'none' }
+    : d.siteChecked === true ? { state: 'clean' }
+    : { state: 'unknown' };
 
   /* ── ONE REAL AI ANSWER, RECREATED (2026-09-16, Paul) ─────────────────────────────────────────
      ONE engine — the one that did NOT name them (pickGutPunch, scored engines only) — with its
@@ -2276,9 +2565,9 @@ ${REPORT_CHROME_CSS_PRINT}
 </head>
 <body>
   <div class="sheet">
-    ${renderWaveBand(`${quick || quickIncomplete ? "Quick AI Visibility Check" : "AI Visibility Report"} &middot; ${esc(d.generatedAtLabel)}`)}
+    ${concept4 ? renderQuickCheckHeader(d.businessName, d.generatedAtLabel) : `${renderWaveBand(`${quick || quickIncomplete ? "Quick AI Visibility Check" : "AI Visibility Report"} &middot; ${esc(d.generatedAtLabel)}`)}
 
-    <div class="explainer">We asked ${quick || quickIncomplete ? "ChatGPT and Google AI" : "AI"} the kinds of questions customers ask when they&rsquo;re looking for ${quickTrade ? `<b>${esc(quickTrade)}</b>` : `${article(type)} <b>${esc(type)}</b>`}, and checked how often <b>${esc(d.businessName)}</b> came up.</div>
+    <div class="explainer">We asked ${quick || quickIncomplete ? "ChatGPT and Google AI" : "AI"} the kinds of questions customers ask when they&rsquo;re looking for ${quickTrade ? `<b>${esc(quickTrade)}</b>` : `${article(type)} <b>${esc(type)}</b>`}, and checked how often <b>${esc(d.businessName)}</b> came up.</div>`}
 ${d.measuring ? `
     <!-- STILL MEASURING: every figure below this point is withheld. See AiAuditReportData.measuring. -->
     <section class="measuring">
@@ -2288,8 +2577,7 @@ ${d.measuring ? `
       <p class="measuring-progress"><b>${d.measuring.runsDone} of ${d.measuring.runsTarget}</b> ${plural(d.measuring.runsTarget, "round")} of questions ${d.measuring.runsDone === 1 ? "is" : "are"} complete. Each round takes a few minutes. This page updates itself &mdash; check back shortly.</p>
     </section>` : d.nameNotJudgeable ? `${nameCheckSection}
 ${seoSlot}
-` : quick && d.hook ? `${renderQuickCheckTop(d.hook, d.businessName, d.generatedAtLabel)}
-${quickWebsiteSection}
+` : concept4 && d.hook ? `${renderQuickCheckReport(d.hook, d.businessName, quickWebsite)}
 ` : quickIncomplete ? `${renderQuickCheckIncomplete()}
 ` : d.hook ? `${renderHookSection(d.hook, d.businessName, d.generatedAtLabel)}
 ${hookCrawlSection}

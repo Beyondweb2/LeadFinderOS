@@ -349,7 +349,9 @@ ok(report.includes('const hookSummary = buildHookReportSummary({') && report.inc
 ok(report.includes('namedInstead: (competitors) => rivalsSuppressed ? [] :'), 'rival names on the hook card obey the same cleanliness gate as the rest of the report');
 ok(html.includes('export function renderHookSection(') && html.includes('d.hook ? `${renderHookSection(d.hook, d.businessName, d.generatedAtLabel)}'), 'the renderer branches narrowly on d.hook — the counted hero is replaced, nothing else is forked');
 ok(html.includes('hookReportCopy(h, businessName)'), 'the renderer uses the tested copy verbatim');
-const hookSection = html.slice(html.indexOf('export function renderHookSection('), html.indexOf('export function renderReportHtml('));
+/* Ends where the version-1 section ends: the six-answer Concept 4 report that follows it (2026-10-06)
+   DOES print a percentage — that is its job — and is pinned by hook-report-concept4.test.ts. */
+const hookSection = html.slice(html.indexOf('export function renderHookSection('), html.indexOf("/* THE QUICK AI VISIBILITY CHECK's 2026-09-26 layout"));
 ok(!/\d+%|out of \$\{|showed up in AI search/.test(hookSection), 'the hook section never prints a percentage or an "N out of M answers" score');
 
 /* ── N. THE MODEL/EVIDENCE BOX — restored (2026-09-21), then simplified the same day ─────────────

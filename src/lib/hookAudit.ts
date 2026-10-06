@@ -311,7 +311,17 @@ export interface HookReportSummary {
      *  adaptive because this field never reached HookReportSummary, even though HookGap always
      *  carried it. Empty string (never fabricated) when the stored gap predates this field. */
     answerExcerpt: string;
+    /** VERSION 2 ONLY (2026-10-06, Concept 4): the deciding cell's WHOLE stored answer, uncut, so the
+     *  quick report can strip listing chrome BEFORE it trims (answerText.ts answerExcerpt). The 600-
+     *  character answerExcerpt above is unchanged for every other reader. Absent on version 1. */
+    answerText?: string;
   } | null;
+  /** VERSION 2 ONLY (2026-10-06): how many DIFFERENT businesses the engines named across every answer
+   *  that did NOT name the client — read from the six stored cells' own competitor lists, normalised
+   *  and de-duplicated at render. null when the run's rival names are withheld (competitorCleaning's
+   *  suppression rule) or the caller passed no rivalFilter: the report then omits the figure rather
+   *  than print a count it could not show the names for. Never stored. */
+  rivalsNamedInstead?: number | null;
   /** VERSION 2 ONLY: the complete score, straight from scoreHookRun (the same numbers the Inbox card,
    *  the 6/6 rule and the send guard read). The quick report's percentage is `percent`, and its raw
    *  count is `named` of `total`. Never set on an incomplete score, so it cannot print a partial one. */
@@ -357,6 +367,9 @@ export function buildHookReportSummary(input: {
   engineOrder: readonly string[];
   engineLabel: (engine: string) => string;
   namedInstead: (competitors: string[]) => string[];
+  /** Version 2 only: the run-level rival gate for the "competitors named instead" count. Returns the
+   *  names that may be shown, or null when the run's rival names are withheld. Absent → no count. */
+  rivalFilter?: (competitors: string[]) => string[] | null;
   /** The report's own NamedContext and town/trade. Version 2 only: the score must use the same
    *  ruler as the report's counts. Version 1 is rendered exactly as it always was. */
   namedCtx?: NamedContext;
@@ -407,6 +420,36 @@ export function buildHookReportSummary(input: {
   };
 }
 
+/** One business, however an engine spelled it: case, "&"/"and", punctuation, a trailing legal or
+ *  country suffix and a trailing home-town name do not make a second firm
+ *  ("Apex Roofing Contractors Ltd" = "apex roofing contractors"; "Foundry Gym Sheffield" = "foundry gym"). */
+export function normaliseRivalName(name: string, town?: string | null): string {
+  const norm = (x: string) => String(x || '')
+    .toLowerCase()
+    .replace(/&/g, ' and ')
+    .replace(/[’'`]/g, '')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+  let s = norm(name);
+  const t = town ? norm(town.split(',')[0]) : '';
+  for (let i = 0; i < 3; i++) {
+    s = s.replace(/\s*\b(?:ltd|limited|llp|plc|uk)$/, '').trim();
+    if (t && s.endsWith(` ${t}`)) s = s.slice(0, -(t.length + 1)).trim();
+  }
+  return s;
+}
+
+/** How many DIFFERENT businesses a list of normalised names holds. A name that is the opening words
+ *  of another is the same business with more detail ("puregym" / "puregym city centre south", "the gym
+ *  group" / "the gym group heeley"), so it is counted once — the count errs low, never high. */
+export function countDistinctBusinesses(keys: string[]): number {
+  const kept: string[] = [];
+  for (const k of [...new Set(keys)].sort((a, b) => a.length - b.length)) {
+    if (!kept.some((p) => k === p || k.startsWith(`${p} `))) kept.push(k);
+  }
+  return kept.length;
+}
+
 /**
  * VERSION 2: the six-result hook. Null until the score is COMPLETE (every one of the six results a
  * valid answer). A partial audit falls back to the ordinary rendering, which labels failed and
@@ -445,10 +488,26 @@ function buildHookReportSummaryV2(
         .filter((r) => r.questionIndex === pick.questionIndex && r.engine !== pick.engine && r.status === 'named')
         .map((r) => input.engineLabel(r.engine)),
       answerExcerpt: pick.answerExcerpt,
+      answerText: hasAnswer(cell) ? String((cell as HookEngineCell).answer_text) : '',
     };
+  }
+  /* The rival count across every miss. Each name goes through the caller's gate (null = withheld →
+     no count at all), then is normalised ("Apex Roofing Ltd" = "apex roofing") and counted once. */
+  let rivalsNamedInstead: number | null = null;
+  if (input.rivalFilter) {
+    const keys: string[] = [];
+    let withheld = false;
+    for (const r of score.results) {
+      if (r.status !== 'not_named') continue;
+      const names = input.rivalFilter(r.competitors);
+      if (names === null) { withheld = true; break; }
+      for (const n of names) { const k = normaliseRivalName(n, input.town); if (k) keys.push(k); }
+    }
+    rivalsNamedInstead = withheld ? null : countDistinctBusinesses(keys);
   }
   return {
     shape: 'six',
+    rivalsNamedInstead,
     questionsTested: state.planned.length,
     maxQuestions: HOOK_SCORE_QUESTIONS,
     stopReason: pick ? 'visibility_gap_found' : 'max_questions_reached',

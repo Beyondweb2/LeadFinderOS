@@ -944,6 +944,12 @@ positive allowlist of `baseline`; `isColdOutreachTemplate` treats unknown as COL
   `findable.live/w/<code>` (the baseline audit's own `short_code`) and the operator's download.
   Client safety is an explicit COLUMN ALLOWLIST, not a remembered omission (`docs/welcome-pack-and-
   website-build.md`).
+- **The six-answer quick report is Concept 4** (`renderQuickCheckReport`, Paul 2026-10-06): score →
+  featured missed search → all questions → website issues → why this matters → the UNCHANGED CTA/footer.
+  It quotes the AI again (reverses 2026-09-26) through `answerExcerpt` (answerText.ts), which DROPS
+  listing chrome line by line and never writes a word; nothing readable → no quote, names only. The
+  "competitors named instead" count is `rivalsNamedInstead`, derived at render through the run's rival
+  gate — null (omitted) when names are withheld. Record: `docs/reports.md` (Concept 4).
 - **Every report renders live** from `render-audit-report` at `findable.live/report/<auditId>`.
   ⚠️ Measurement audits ARE served as client reports since 15634d49 (Paul, 2026-09-18) — the old
   "internal measurements answer 403" rule is gone. Refused: market audits and the **weekly check**
