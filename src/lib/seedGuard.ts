@@ -787,6 +787,26 @@ export function hasCountryMarker(question: string): boolean {
   return COUNTRY_MARKERS.some((c) => q.includes(` ${c} `));
 }
 
+/* ══ AN AUSTRALIAN PLACE IS ALREADY PINNED BY ITS STATE (2026-10-07) ═══════════════════════════════════════════
+   "plumber in Sydney NSW" became "plumber in Sydney Australia NSW" and "…Sydney AU" became "…Sydney Australia AU":
+   only the UK words counted as a country marker. For an AUSTRALIAN suffix, the country's own words and its
+   state / territory codes and names (whole words) count too. ⛔ ONLY for that suffix — "act", "wa" and "sa" are
+   ordinary words in a UK question ("who can act for me in Leeds"), so they never stop a UK question being
+   pinned "Leeds UK". */
+const AU_PLACE_MARKERS = ['australia', 'au', 'aus', 'nsw', 'vic', 'qld', 'wa', 'sa', 'tas', 'act', 'nt',
+  'new south wales', 'victoria', 'queensland', 'western australia', 'south australia', 'tasmania',
+  'northern territory', 'australian capital territory'];
+
+/** True when `text` already names the place's country for `suffix` — the suffix itself as a whole word
+ *  ("Pune India"), or, for Australia only, an Australian state / territory or AU word ("Sydney NSW").
+ *  create-ai-audit's place strings ask the same question through this. */
+export function placeNamesCountry(text: string, suffix: string): boolean {
+  if (mentionsWord(text, suffix)) return true;
+  if (normalise(suffix) !== 'australia') return false;
+  const q = ` ${normalise(text)} `;
+  return AU_PLACE_MARKERS.some((m) => q.includes(` ${m} `));
+}
+
 /**
  * Ensure every LOCAL question names the place with its country: "locksmith in Wisbech" becomes
  * "locksmith in Wisbech UK". Returns the questions and which ones were changed, so the caller can
@@ -811,7 +831,7 @@ export function qualifyPlace(
     const q = (raw ?? '').trim();
     if (!q) return q;
     if (hasCountryMarker(q)) return q;          // already pinned — never double-append
-    if (mentionsWord(q, suffix)) return q;      // already carries THIS suffix ("Pune India") — same rule
+    if (placeNamesCountry(q, suffix)) return q; // already carries THIS suffix ("Pune India", "Sydney NSW") — same rule
     if (!mentionsTown(q, town)) return q;       // dropMissingTown owns this case, not us
 
     /* Replace the LAST occurrence of the town, which is where the place sits in

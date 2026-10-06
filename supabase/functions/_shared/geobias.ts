@@ -35,6 +35,9 @@ const COUNTRY_PHRASES: [RegExp, string][] = [
   [/\bGREAT BRITAIN\b/, 'GB'],
   [/\bNEW ZEALAND\b/, 'NZ'],
   [/\bNORTHERN IRELAND\b/, 'GB'],
+  /* An Australian STATE, matched as a phrase before the single words below - otherwise its last word
+     "WALES" reads it as Great Britain ("Sydney, New South Wales" came back as a GB qualifier). */
+  [/\bNEW SOUTH WALES\b/, 'AU'],
 ];
 
 // Single-token country words (whole-word match). Derived from COUNTRY_ALIASES minus
@@ -73,7 +76,7 @@ const STATE_NAMES: Record<string, 'US' | 'CA' | 'AU' | 'IN'> = {
   OKLAHOMA: 'US', OREGON: 'US', PENNSYLVANIA: 'US', TENNESSEE: 'US', TEXAS: 'US', UTAH: 'US', VERMONT: 'US',
   VIRGINIA: 'US', WISCONSIN: 'US', WYOMING: 'US',
   ONTARIO: 'CA', QUEBEC: 'CA', MANITOBA: 'CA', SASKATCHEWAN: 'CA', ALBERTA: 'CA',
-  NSW: 'AU', VICTORIA: 'AU', QUEENSLAND: 'AU', TASMANIA: 'AU',
+  NSW: 'AU', VICTORIA: 'AU', QUEENSLAND: 'AU', TASMANIA: 'AU', 'NORTHERN TERRITORY': 'AU',
   /* Indian states / UTs ("Pune, Maharashtra", "Kochi, Kerala"). ⛔ PUNJAB IS DELIBERATELY ABSENT — Pakistan
      has one too ("Lahore, Punjab"); a Punjab search keeps no forced country. Multi-word names are
      matched as whole phrases by the same regex. */
@@ -84,6 +87,14 @@ const STATE_NAMES: Record<string, 'US' | 'CA' | 'AU' | 'IN'> = {
 };
 
 const COUNTRY_APPEND: Record<string, string> = { US: 'USA', CA: 'Canada', AU: 'Australia', IN: 'India' };
+
+/* == WHEN THE PICKED COUNTRY IS AUSTRALIA (2026-10-07) ==================================================
+   Three Australian state codes collide: WA is Washington, NT is Canada's Northwest Territories, and SA is
+   ambiguous. With any other country picked (or none) those stay exactly as they were (WA -> US, NT -> CA).
+   When the operator HAS picked Australia, a trailing Australian state code is read as Australian: "Perth WA"
+   and "Darwin NT" geocode as "..., Australia", never Washington State or the Yukon. The NAMES ("Western
+   Australia", "Northern Territory", "New South Wales") are Australian whatever is picked. */
+const AU_STATE_CODES = new Set(['NSW', 'VIC', 'QLD', 'WA', 'SA', 'TAS', 'ACT', 'NT']);
 
 /** Normalise an explicit `country` field to an ISO alpha-2 code, or null. */
 export function normCountry(country?: string): string | null {
@@ -107,9 +118,12 @@ function detectCountryWord(upper: string): string | null {
  * name (e.g. "Washington", "Georgia") stays a bare name so the GB default still
  * applies — a real US search always includes the city ("Reading, Pennsylvania").
  */
-function detectStateCountry(upper: string): 'US' | 'CA' | 'AU' | 'IN' | null {
+function detectStateCountry(upper: string, picked: string | null = null): 'US' | 'CA' | 'AU' | 'IN' | null {
   const tokens = upper.split(/[^A-Z]+/).filter(Boolean);
   if (tokens.length < 2) return null;
+  // Australia picked: a trailing Australian state code is Australian (checked before the US/CA table).
+  const lastToken = tokens[tokens.length - 1];
+  if (picked === 'AU' && lastToken && AU_STATE_CODES.has(lastToken)) return 'AU';
   // Full name anywhere (whole word).
   for (const [name, cc] of Object.entries(STATE_NAMES)) {
     if (new RegExp(`\\b${name}\\b`).test(upper)) return cc;
@@ -129,14 +143,15 @@ export interface QualifierInfo {
   appendCountry: string | null;
 }
 
-/** Analyse a raw location string for qualifiers. Pure. */
-export function qualifierInfo(location: string): QualifierInfo {
+/** Analyse a raw location string for qualifiers. Pure. `picked` is the picked country (optional): only
+ *  Australia changes anything - see AU_STATE_CODES. */
+export function qualifierInfo(location: string, picked?: string): QualifierInfo {
   const raw = (location ?? '').trim();
   if (!raw) return { hasQualifier: false, country: null, appendCountry: null };
   const upper = raw.toUpperCase();
   const hasComma = raw.includes(',');
   const wordCountry = detectCountryWord(upper);
-  const stateCountry = detectStateCountry(upper);
+  const stateCountry = detectStateCountry(upper, normCountry(picked));
   const country = wordCountry ?? stateCountry ?? null;
   const hasQualifier = hasComma || country !== null;
   // Append a country only when a STATE was detected but no explicit country word,
@@ -153,6 +168,17 @@ export function qualifierInfo(location: string): QualifierInfo {
  * Returns an ISO alpha-2 code, or null for "no bias".
  */
 export function resolveGeoBias(location: string, country?: string): string | null {
-  if (qualifierInfo(location).hasQualifier) return null;
+  if (qualifierInfo(location, country).hasQualifier) return null;
   return normCountry(country) ?? 'GB';
+}
+
+/**
+ * The extra cache-key text for a location whose READING depends on the picked country - "Perth WA" means
+ * Western Australia with Australia picked and Washington otherwise, so the two must never share a geocode
+ * or a results-cache row. '' whenever the picked country changes nothing, so every existing key (every UK
+ * search, every US "Reading, PA") is byte-identical and still hits.
+ */
+export function pickedCountryKeySuffix(location: string, country?: string): string {
+  const withPick = qualifierInfo(location, country).country;
+  return withPick && withPick !== qualifierInfo(location).country ? '@' + withPick : '';
 }

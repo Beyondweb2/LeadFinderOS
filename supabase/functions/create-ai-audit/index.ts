@@ -3,9 +3,10 @@ import { townGated, TOWN_GATE_REASON } from "../../../src/lib/townVerdict.ts";
 import { SOURCES } from "../_shared/enrichment/sources.ts";
 import { resolveDerivedTown, pickAuditTown } from "../_shared/place-town.ts";
 import { buildTownIndex, lookupTownCentroid, checkTownDistance, type TownDistanceCheck } from "../_shared/town-distance.ts";
+import { ukGazetteerApplies } from "../../../src/lib/leadCountry.ts";
 import { toWhatsAppNumber } from "../_shared/whatsapp-send.ts";
 import { DEFAULT_FIRST_REPLY_TEMPLATE, firstReplyTemplate, pitchEverSent } from "../_shared/auto-reply-rules.ts";
-import { dropResearchIntent, dropOffTrade, dropMissingTown, qualifyPlace, placeSuffixForCountry, dedupeQuestions, coverageDirective, stripRepeatedWords, capHeadTerms, headTermCap } from "../../../src/lib/seedGuard.ts";
+import { dropResearchIntent, dropOffTrade, dropMissingTown, qualifyPlace, placeSuffixForCountry, placeNamesCountry, dedupeQuestions, coverageDirective, stripRepeatedWords, capHeadTerms, headTermCap } from "../../../src/lib/seedGuard.ts";
 import { normalizeAuditList, serviceAreaQuestionDirective } from "../../../src/lib/auditQuestionContext.ts";
 import {
   nationalIntentDirective, hybridIntentDirective, nationalFallbackQuestions, marketVocabulary,
@@ -183,9 +184,11 @@ function otherCountrySuffix(country: string | null): string | null {
   const s = placeSuffixForCountry(country);
   return s === "UK" ? null : s;
 }
-/** Whole-word, case-insensitive: "Pune, India" already names India; "Indiana" does not. */
+/** Whole-word, case-insensitive: "Pune, India" already names India; "Indiana" does not. For Australia an
+ *  Australian state / territory also pins the place ("Sydney NSW", "Perth WA"), so the town is never written
+ *  "Sydney NSW Australia" twice-pinned or "Sydney AU Australia" (2026-10-07). One rule: seedGuard placeNamesCountry. */
 function mentionsCountryWord(text: string, word: string): boolean {
-  return (" " + text.toLowerCase().replace(/[^a-z0-9]+/g, " ") + " ").includes(" " + word.toLowerCase() + " ");
+  return placeNamesCountry(text, word);
 }
 
 /** The country/market word a NATIONAL question is qualified by ("uk"). Never a town: a national
@@ -917,22 +920,30 @@ Deno.serve(async (req) => {
            the requested town would pass a lead whose derived town then overrode it, and vice versa.
            ⚠️ WRAPPED IN ITS OWN try: a gazetteer read must never be able to stop an audit. The catch
            leaves `distance` null, which reads as "not checked" and blocks nothing. */
-        try {
-          const { data: townRows } = await service
-            .from("uk_towns").select("name, lat, lng").not("lat", "is", null);
-          const index = buildTownIndex((townRows ?? []) as Array<{ name: string; lat: number; lng: number }>);
-          distance = checkTownDistance({
-            businessLat: derived.lat,
-            businessLng: derived.lng,
-            townName: locationText,
-            townCentroid: lookupTownCentroid(index, locationText),
-          });
-          console.log(
-            `[create-ai-audit] lead ${leadId}: distance ${distance.verdict}`
-            + (distance.km === null ? ` (${distance.unknownReason})` : ` ${Math.round(distance.km)}km from "${locationText}"`),
-          );
-        } catch (e) {
-          console.warn(`[create-ai-audit] distance check unavailable, not blocking: ${(e as Error).message}`);
+        /* ⛔ ONLY A UK TOWN CAN BE MEASURED AGAINST uk_towns (2026-10-07). An Australian lead asked about
+           "Newcastle" or "Perth" would be measured to Newcastle upon Tyne / Perth, Scotland — ~16,000 km — and
+           BLOCKED. Outside the UK there is no gazetteer, so the distance stays unchecked (`distance` null =
+           "not checked", which blocks nothing), exactly as for a town missing from the gazetteer. */
+        if (!ukGazetteerApplies(country, derived.address)) {
+          console.log(`[create-ai-audit] lead ${leadId}: distance not checked (not a UK lead — no gazetteer)`);
+        } else {
+          try {
+            const { data: townRows } = await service
+              .from("uk_towns").select("name, lat, lng").not("lat", "is", null);
+            const index = buildTownIndex((townRows ?? []) as Array<{ name: string; lat: number; lng: number }>);
+            distance = checkTownDistance({
+              businessLat: derived.lat,
+              businessLng: derived.lng,
+              townName: locationText,
+              townCentroid: lookupTownCentroid(index, locationText),
+            });
+            console.log(
+              `[create-ai-audit] lead ${leadId}: distance ${distance.verdict}`
+              + (distance.km === null ? ` (${distance.unknownReason})` : ` ${Math.round(distance.km)}km from "${locationText}"`),
+            );
+          } catch (e) {
+            console.warn(`[create-ai-audit] distance check unavailable, not blocking: ${(e as Error).message}`);
+          }
         }
         console.log(
           `[create-ai-audit] lead ${leadId}: town "${locationText}" via ${locationSource}`
@@ -1996,7 +2007,7 @@ async function generateQuestions(
      src/lib/serviceScope.ts + customerQuestion.ts (baseline-discovery runs every question through
      them), so a question that ignores these rules is reshaped or dropped, never measured. */
   const customer = style?.customer === true;
-  const customerPlace = customer && locationText ? (isUK ? `${locationText}, UK` : abroadQ ? `${locationText}, ${abroadQ}` : locationText) : locQ;
+  const customerPlace = customer && locationText ? (isUK ? `${locationText}, UK` : abroadQ && !mentionsCountryWord(locationText, abroadQ) ? `${locationText}, ${abroadQ}` : locationText) : locQ;
   const placeQ = customer ? customerPlace : locQ;
   const notOfferedLine = customer && style?.notOffered?.length
     ? `\n- The business does NOT offer: ${style.notOffered.join("; ")}. NEVER ask about any of these, not even in other words.`

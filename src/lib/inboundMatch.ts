@@ -47,12 +47,15 @@ export function chooseInboundLead(candidates: readonly InboundLeadCandidate[] | 
 }
 
 /** The app-side mirror of public.phone_key(): digits only, a leading 00 dropped, a UK 44 prefix
- *  dropped when ten digits follow, then a leading 0 dropped; under seven digits is no key. Used by the
- *  tests to prove the formats a rep types all meet on one key — the MATCH itself is done in SQL. */
+ *  dropped when ten digits follow, an Australian 61 dropped when nine digits starting 2/3/4/7/8 follow
+ *  (migration 20261014100000), then a leading 0 dropped; under seven digits is no key. Used by the
+ *  tests to prove the formats a rep types all meet on one key — the MATCH itself is done in SQL.
+ *  scripts/au-phone-key-parity.test.ts runs the SQL's own regexes against this on a table of examples. */
 export function phoneKeyLikeDb(phone: string | null | undefined): string | null {
   let d = String(phone ?? '').replace(/\D/g, '');
   d = d.replace(/^00/, '');
   if (/^44\d{10}$/.test(d)) d = d.slice(2);
+  if (/^61[23478]\d{8}$/.test(d)) d = d.slice(2);
   d = d.replace(/^0/, '');
   return d.length < 7 ? null : d;
 }

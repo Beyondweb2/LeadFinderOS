@@ -404,10 +404,14 @@ export function productOf(lead: { product?: string | null } | null | undefined):
    ⚠️ Normalised to digits: the same number is stored as "+44 7920 684400" and "07920684400" on
    different rows, and a raw string compare would call those two different people. */
 export function normalisePhoneKey(phone: string | null | undefined): string {
-  const d = String(phone ?? '').replace(/\D/g, '');
+  // A leading 00 is the international prefix ("0044 …", "0061 …") — dropped first, as public.phone_key does (2026-10-07).
+  const d = String(phone ?? '').replace(/\D/g, '').replace(/^00/, '');
   if (!d) return '';
   // UK: 07… and 447… are the same subscriber. Compare on the national part.
   if (d.startsWith('44')) return d.slice(2).replace(/^0+/, '');
+  // Australia (2026-10-07): 04… and 614… are the same subscriber — the rule public.phone_key uses
+  // (61 + nine digits starting 2/3/4/7/8; migration 20261014100000).
+  if (/^61[23478]\d{8}$/.test(d)) return d.slice(2);
   return d.replace(/^0+/, '');
 }
 

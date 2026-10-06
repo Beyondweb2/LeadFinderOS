@@ -68,8 +68,9 @@ console.log("── reading the file ──");
 
 console.log("\n── matching the columns ──");
 {
-  const m = autoMapColumns(["Company Name", "Contact Person", "Mobile", "Email Address", "Website URL", "Street Address", "Post Code", "City", "Category", "Comments", "Google Maps Link", "Place ID"]).mapping;
-  ok(IMPORT_FIELDS.every((fld, i) => m[fld] === i), "common header names map to all twelve fields (Place ID included)");
+  // 2026-10-07: + the optional Country column (migration 20261014100200), so thirteen headers for thirteen fields.
+  const m = autoMapColumns(["Company Name", "Contact Person", "Mobile", "Email Address", "Website URL", "Street Address", "Post Code", "City", "Category", "Comments", "Google Maps Link", "Place ID", "Country"]).mapping;
+  ok(IMPORT_FIELDS.every((fld, i) => m[fld] === i), "common header names map to all thirteen fields (Place ID and Country included)");
   const n = autoMapColumns(["Name", "Phone"]).mapping;
   ok(n.business_name === 0, "a bare Name column is the business");
   const both = autoMapColumns(["Contact Name", "Business", "Phone"]).mapping;
