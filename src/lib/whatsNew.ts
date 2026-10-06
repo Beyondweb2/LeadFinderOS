@@ -22,6 +22,18 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-06-quick-report-no-schema', date: '2026-10-06', title: 'Quick report no longer lists "no structured data" as a website issue', audience: 'all',
+    body: 'The six-answer quick report now leaves out the generic "Your site doesn\'t label the basics" line. Our own testing found it made no difference to whether AI names a business.',
+    report: {
+      added: [],
+      changed: [
+        'Website issues on the quick report show only the stronger findings. A site whose only finding was missing structured data now shows "No technical faults found".',
+      ],
+      removed: [
+        'The "Your site doesn\'t label the basics (no structured data)" issue, from the six-answer quick report only.',
+      ],
+      effect: 'Every issue on the quick report is one you can defend on a call. The Crawl button and full reports still show the structured-data check, and a misleading one (business details pointing at a different website) still appears on the quick report.',
+    } },
   { id: '2026-10-06-quick-report-concept4', date: '2026-10-06', title: 'The Quick AI Visibility Check report has a new design', audience: 'all',
     body: 'The six-answer quick report now opens with the score, then shows the search the business was missed on with what the AI actually said, the names it gave instead, every question, the website issues and a short "why this matters".',
     report: {

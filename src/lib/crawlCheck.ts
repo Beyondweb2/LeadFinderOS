@@ -285,7 +285,24 @@ export interface CrawlVerdict {
 /** A fault line for the report's "What's stopping AI reading your site" section: a short title, a
  *  detail that CARRIES ITS SPECIFIC NUMBER, and `minor` (amber dot) for the structured-data gap —
  *  everything else is a real fault (red dot). Paul, 2026-09-16. */
-export interface CrawlFault { title: string; detail: string; minor: boolean }
+export interface CrawlFault {
+  title: string; detail: string; minor: boolean;
+  /** WHICH check produced the line — a stable key, so a surface can include or exclude a finding by
+   *  what it IS, never by its wording (2026-10-06). */
+  kind: CrawlFaultKind;
+}
+export type CrawlFaultKind = 'search_blocked' | 'client_rendered' | 'duplicates' | 'thin_pages' | 'missing_h1' | 'no_structured_data';
+
+/** The GENERIC structured-data gap: the site simply carries no schema. Kept for every surface that
+ *  shows the crawl (the Crawl button, full and older reports, rebuild context), but it does NOT
+ *  qualify for the six-answer prospect hook report (Paul, 2026-10-06): our own testing recorded that
+ *  schema did not change the measured AI outcome (CLAUDE.md §5), so its absence alone is not a
+ *  defensible reason AI did not name someone. A genuinely MISLEADING schema finding is a different
+ *  thing and is not this kind — the deep-crawl evidence's `schema_wrong_domain` ("Your business
+ *  details point at a different website") still qualifies. One rule, read by the quick report only. */
+export function isGenericSchemaGap(f: Pick<CrawlFault, 'kind'>): boolean {
+  return f.kind === 'no_structured_data';
+}
 
 /** Turn the signals into report fault lines, worst first, capped so the section stays short. Returns
  *  [] when the site couldn't be read — the caller then renders NO section (Paul's rule). Each detail
@@ -298,22 +315,22 @@ export function buildFaultLines(s: CrawlSignals): CrawlFault[] {
      GPTBot-only (training) block is never here — the edge doesn't even test it. */
   if (s.searchBlocked.length) out.push({
     title: "AI can’t reach your site",
-    detail: `${s.searchBlocked.join(", ")} ${s.searchBlocked.length === 1 ? "is" : "are"} blocked from fetching your pages — and ${s.searchBlocked.length === 1 ? "that is a crawler" : "those are the crawlers"} AI uses to read a site when someone asks about you.`, minor: false });
+    detail: `${s.searchBlocked.join(", ")} ${s.searchBlocked.length === 1 ? "is" : "are"} blocked from fetching your pages — and ${s.searchBlocked.length === 1 ? "that is a crawler" : "those are the crawlers"} AI uses to read a site when someone asks about you.`, minor: false, kind: 'search_blocked' });
   if (s.clientRendered?.flagged) out.push({
     title: "AI can’t read your homepage",
-    detail: `Only about ${s.clientRendered.visibleChars} characters reach a crawler — the rest loads with JavaScript, which AI doesn’t run.`, minor: false });
+    detail: `Only about ${s.clientRendered.visibleChars} characters reach a crawler — the rest loads with JavaScript, which AI doesn’t run.`, minor: false, kind: 'client_rendered' });
   if (s.duplicates) out.push({
     title: "Your pages are too similar",
-    detail: `${s.duplicates.clusterSize} near-identical pages, ${s.duplicates.similarityPct}% the same. AI reads them as one.`, minor: false });
+    detail: `${s.duplicates.clusterSize} near-identical pages, ${s.duplicates.similarityPct}% the same. AI reads them as one.`, minor: false, kind: 'duplicates' });
   if (s.thinPages > 0) out.push({
     title: "There isn’t enough on your pages",
-    detail: `${s.thinPages} page${s.thinPages === 1 ? "" : "s"} under ${THIN_WORDS} words. Not enough for AI to quote you from.`, minor: false });
+    detail: `${s.thinPages} page${s.thinPages === 1 ? "" : "s"} under ${THIN_WORDS} words. Not enough for AI to quote you from.`, minor: false, kind: 'thin_pages' });
   if (s.missingH1) out.push({
     title: "Your pages have no clear heading",
-    detail: `No H1 heading, so AI has no plain statement of what the page is about.`, minor: false });
+    detail: `No H1 heading, so AI has no plain statement of what the page is about.`, minor: false, kind: 'missing_h1' });
   if (s.noJsonLd) out.push({
     title: "Your site doesn’t label the basics",
-    detail: `No structured data — nothing tells AI what you do, where you are, or how to reach you.`, minor: true });
+    detail: `No structured data — nothing tells AI what you do, where you are, or how to reach you.`, minor: true, kind: 'no_structured_data' });
   return out.slice(0, 4);
 }
 

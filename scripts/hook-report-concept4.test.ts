@@ -15,6 +15,8 @@ import { renderReportHtml, quickEngineTone, quickHighlight, QUICK_ANSWER_CHARS }
 import { initialHookStateV2 } from '../src/lib/hookScore.ts';
 import { buildHookReportSummary, countDistinctBusinesses, normaliseRivalName } from '../src/lib/hookAudit.ts';
 import { REMEASURE_CLAIM_SENTENCE } from '../src/lib/findableOffer.ts';
+import { buildFaultLines, isGenericSchemaGap } from '../src/lib/crawlCheck.ts';
+import type { SiteEvidenceFinding } from '../src/lib/siteEvidence.ts';
 
 let failures = 0;
 function ok(cond: unknown, label: string) { if (!cond) failures++; console.log(`${cond ? 'PASS' : 'FAIL'} ${label}`); }
@@ -178,9 +180,33 @@ const hit = (rivals: string[]): Cell => ({ named: true, rivals });
 /* ── I. Website states ───────────────────────────────────────────────────────────────────────── */
 {
   const grid: Array<[Cell, Cell]> = [[miss(['A Co']), miss(['B Co'])], [miss(['A Co']), miss(['B Co'])], [hit(['A Co']), miss(['B Co'])]];
-  const issues = report(grid, { crawlFaults: [{ title: 'AI can’t reach your site', detail: 'GPTBot is blocked.', minor: false }, { title: 'Your site doesn’t label the basics', detail: 'No structured data.', minor: true }] });
+  const issues = report(grid, { crawlFaults: [{ title: 'AI can’t reach your site', detail: 'GPTBot is blocked.', minor: false, kind: 'search_blocked' }, { title: 'Pages load slowly for crawlers', detail: 'A minor fault.', minor: true, kind: 'thin_pages' }] });
   ok(/Website issues we found/i.test(issues.t) && /q4-sev--high">High/.test(issues.html) && /q4-sev--med">Medium/.test(issues.html), 'I: issues → High (serious) and Medium (minor)');
   ok(!/\bLow\b/.test(issues.t) && !/of \d+ pages/.test(issues.t), 'I: no invented "Low" and no invented pages-affected figure');
+
+  /* ── I2. STRUCTURED DATA (Paul, 2026-10-06): the GENERIC "no schema" line never qualifies for the
+     six-answer hook report; a misleading schema finding still does; every other surface keeps it. ── */
+  const signals = { homeUrl: 'https://example.co.uk', fetchFailed: false, searchBlocked: ['OAI-SearchBot'], clientRendered: null, duplicates: null, thinPages: 2, missingH1: true, noJsonLd: true } as never;
+  const faults = buildFaultLines(signals);
+  ok(faults.some((f) => f.kind === 'no_structured_data' && /label the basics/.test(f.title)), 'I2: the crawl check still detects and reports the schema gap (buildFaultLines unchanged for other surfaces)');
+  ok(faults.length === 4 && faults.map((f) => f.kind).join(',') === 'search_blocked,thin_pages,missing_h1,no_structured_data', 'I2: buildFaultLines order and cap are unchanged');
+  const hook = report(grid, { crawlFaults: faults, siteChecked: true });
+  ok(!/label the basics|structured data/i.test(hook.t), 'I2: "no structured data" alone does NOT appear on the six-answer hook report');
+  ok(/AI can’t reach your site/.test(hook.t) && /There isn’t enough on your pages/.test(hook.t) && /Your pages have no clear heading/.test(hook.t) && (hook.html.match(/class="q4-issue"/g) ?? []).length === 3, 'I2: the other genuine issues stay, in order, and nothing is added to fill the slot');
+  const onlySchema = report(grid, { crawlFaults: faults.filter(isGenericSchemaGap), siteChecked: true });
+  ok(!/structured data|label the basics/i.test(onlySchema.t) && /No technical faults found/.test(onlySchema.t), 'I2: a site whose only finding is "no schema" reads as no technical fault — nothing invented');
+  const badSchema: SiteEvidenceFinding = { kind: 'schema_wrong_domain', severity: 5, certainty: 'certain', tier: 'A', pageUrl: 'https://example.co.uk/', evidence: { observed: ['"url": "https://other-site.co.uk"'], source: 'https://example.co.uk/', subject: 'example.co.uk' } } as never;
+  const misleading = report(grid, { siteEvidence: [badSchema], crawlFaults: faults, siteChecked: true });
+  ok(/Your business details point at a different website/.test(misleading.t) && /q4-sev--high">High/.test(misleading.html), 'I2: a genuinely misleading schema finding (wrong website in the business details) still appears, as High');
+  ok(!/label the basics/.test(misleading.t), 'I2: …while the generic gap stays out beside it');
+  /* Every other surface: the full report and the version-1 hook report still print the schema line. */
+  const fullRun = { id: 'r1', run_number: 1, status: 'complete', mention_rate: 0, created_at: '2026-10-06T10:00:00Z', results: {} };
+  const fullRows = grid.map(([c, g], i) => ({ id: `q${i}`, question: Q[i], status: 'done', result: { chatgpt: cell(c), gemini: cell(g) } }));
+  const full = renderReportHtml({ ...(buildReportData(fullRows as never, fullRun as never, { businessName: BIZ, businessType: 'roofer', locationText: TOWN, specialisms: '', isAggregatorUrl: () => false, hasWebsite: true }) as object), generatedAtLabel: '6 October 2026', crawlFaults: faults, siteChecked: true } as never);
+  ok(/Your site doesn’t label the basics/.test(text(full)), 'I2: the full report still shows the structured-data line');
+  const v1 = { version: 1, planned: [Q[0]], executed: 1, next_index: 1, stop_reason: 'visibility_gap_found', named_in: [], gap: { question_index: 0, question: Q[0], engine: 'gemini', target_named: false, named_instead: ['B Co'], citations: [], named_on_engines: [], answer_excerpt: '' } };
+  const v1r = report(grid, { crawlFaults: faults }, v1);
+  ok(/Your site doesn’t label the basics/.test(v1r.t), 'I2: an older (version-1) hook report still shows it — only the six-answer report changed');
   const many = report(grid, { crawlFaults: Array.from({ length: 8 }, (_, i) => ({ title: `Issue ${i + 1}`, detail: 'Detail.', minor: false })) });
   ok(/Issue 5/.test(many.t) && !/Issue 6/.test(many.t), 'I: capped at 5 issues');
   const none = report(grid, { hasWebsite: false });
