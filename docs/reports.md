@@ -558,6 +558,13 @@ horizontal overflow at 1280px or 390px, and a scan of every page's visible text 
 rating, side-panel text, "Map data", private-use glyph, raw URL, markdown or "Gemini". Cases covered: 0/6,
 1/6, 2/6, 3/6, 4/6, 5/6 (ChatGPT featured), 6/6, no website, clean website, website issues, unknown website.
 
-**Open for Paul:** the stored crawl finding "Your site doesn't label the basics — no structured data" still
-shows (as Medium) where the crawl found it. It was already on the live quick report; CLAUDE.md §5 records
-schema markup as tested negative, so whether it belongs on a client report is his call.
+**Structured data — decided the same day (Paul, 2026-10-06).** The GENERIC crawl line "Your site doesn't
+label the basics — no structured data" no longer qualifies for the six-answer hook report: absence of schema
+alone is not a defensible reason AI did not name someone (tested negative, CLAUDE.md §5). Every crawl fault
+now carries a stable `kind` (`crawlCheck.ts` `CrawlFaultKind`); the quick report's issue selection drops
+`isGenericSchemaGap` (kind `no_structured_data`) BEFORE the cap and adds nothing in its place, so a report
+shows 2–4 strong issues rather than padding. A site whose only finding was the schema gap reads as "No
+technical faults found". The detection itself is untouched: `buildFaultLines` still emits the line (same
+order, same cap), and the Crawl button, the full report's fault section, the version-1 hook section and
+rebuild context still show it. A genuinely MISLEADING schema finding still qualifies — the deep-crawl
+evidence `schema_wrong_domain` ("Your business details point at a different website") shows as High.
