@@ -22,6 +22,23 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-06-call-workspace-log', date: '2026-10-06', title: 'The Call tab: status at the top, one Log button', audience: 'all',
+    body: 'Open a lead and its status and next action are at the top. Press Log, pick what happened, and only the outcomes that need a next step ask for one.',
+    report: {
+      added: [
+        'A Log button at the top of every lead (and Log outcome under the script). It opens a small window: Interested, Not interested, Didn’t answer, Call back, Send onboarding, Wrong number, Left voicemail.',
+        'After Call back it asks when to call. After Interested it asks what happens next: Send onboarding, Call back, Set follow-up or No next action. After Didn’t answer it offers a day to try again (Skip is fine).',
+        'Send onboarding records Interested and opens the Close tab (Quick Close) — the same sign-up, agreement and payment page as before.',
+      ],
+      changed: [
+        'The status pill and the next action sit at the top of the lead. Change the status from that pill; tap the next action to edit it.',
+        'Calls are logged as Call automatically. "Logged as: Call · Change" switches channel when you need to. Spoke to owner and Meeting booked are under More outcomes.',
+        'A note can still go with the outcome (Add note). The internal note stays on Details.',
+        'Admin: Mark paid is now a small button on the Close tab, not a big green bar under every tab. Same button, same result.',
+      ],
+      removed: ['The Status, Log a contact and Next action cards at the bottom of the Call tab.', 'The green Mark Paid bar at the bottom of the lead.'],
+      effect: 'While calling you see the script and one Log button, not a form. What you record and what it does to the lead are exactly the same as before.',
+      } },
   { id: '2026-10-06-paid-client-tools', date: '2026-10-06', title: 'Page plan, page generator and review replies are inside Paid clients', audience: 'admin',
     body: 'The three tools are no longer separate menu items. They are in Paid clients: the switch at the top of the list (every client), and "Pages & reviews" on each client\'s page (that client only). Old links still work.',
     report: {

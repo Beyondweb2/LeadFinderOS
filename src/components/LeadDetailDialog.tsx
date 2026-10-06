@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { isDemoLead } from '@/lib/demoLeads';
-import { StickyNote, Save, Check, X, Pencil, Calendar as CalendarIconLucide, PoundSterling, Mail, Copy, Share2, Globe, Phone, MapPin, Loader2, PhoneCall, ChevronDown, MessageCircle, Wrench } from 'lucide-react';
+import { StickyNote, Save, Check, X, Pencil, Calendar as CalendarIconLucide, PoundSterling, Mail, Copy, Share2, Globe, Phone, MapPin, Loader2, PhoneCall, ChevronDown, MessageCircle, Wrench, ClipboardCheck } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { whatsAppLinkForLead } from '@/lib/salesLinks';
 import { QuickCloseNav, QuickClosePanel } from '@/components/QuickCloseDialog';
@@ -64,6 +64,8 @@ import { leadSourceFor } from '@/lib/outreachLeadColumns';
 import { LeadHistoryPanel, LeadHookPanel, LeadWorkPanel, ProspectProfilePanel } from '@/components/LeadCrmPanel';
 import { DialogHero, IconTile, TONE, ToneChip } from '@/components/operator/ui';
 import { Building2 } from 'lucide-react';
+import { HeaderNextAction, LeadCallFlow, LoggedLine, LostReasonLine, type LoggedResult } from '@/components/LeadCallFlow';
+import { isAggregatorUrl } from '@/lib/aggregators';
 
 /** Small coloured section header for visual hierarchy + fast scanning. */
 /** The popup's Crawl site button, seeded with THIS lead's stored crawl (the one row every screen
@@ -149,7 +151,7 @@ interface LeadDetailDialogProps {
   context?: 'outreach' | 'inbox';
   /** Which workspace tab opens first. Default: Call (a paying client opens on Client for the admin). */
   initialTab?: WorkspaceTabInput;
-  /** The person came to log a contact (Outreach's Call button): the Call tab opens with Log a contact expanded. */
+  /** The person came to log a contact (Outreach's Call button, the script sheet): the Log window opens on arrival. */
   openLogContact?: boolean;
   /** Previous / Next through the list the popup was opened from (Focus Mode's stepping, moved here
    *  2026-10-01). Omitted = no stepping. ← / → step too, except while typing. */
@@ -175,8 +177,8 @@ function StepperBar({ s }: { s: LeadStepper }) {
   );
 }
 
-/* ⛔ SALES WORKSPACE V2 (Paul, 2026-10-05): FOUR TABS — CALL (everything needed while talking, the status and the ONE
-   Next Action at the bottom), DETAILS (what was learned: campaign, services, website & domain, note), CLOSE (the
+/* ⛔ SALES WORKSPACE V2 (Paul, 2026-10-05): FOUR TABS — CALL (everything needed while talking: the evidence, the
+   script, Log + Quick Close; the status and the ONE Next Action are in the header since 2026-10-06), DETAILS (what was learned: campaign, services, website & domain, note), CLOSE (the
    one close UI — QuickClosePanel), HISTORY. CLIENT stays the admin's delivery tab. */
 export type WorkspaceTab = 'call' | 'details' | 'close' | 'history' | 'client';
 /** Older callers and links named the tabs Work / Scripts / Prospect (before v2): they open the matching new tab. */
@@ -306,12 +308,15 @@ function LeadDetailBody({
   /* A paying client opens on Client for the admin (delivery is the work then); everyone else on Call. */
   const [tab, setTab] = useState<WorkspaceTab>(() => workspaceTabOf(initialTab) ?? (permsForTab.clientDelivery && isPaidLead(lead) ? 'client' : 'call'));
   const bodyRef = useRef<HTMLDivElement>(null);
-  const actionsRef = useRef<HTMLDivElement>(null);
   const aiToolsRef = useRef<HTMLDetailsElement>(null);
   const [moreTools, setMoreTools] = useState(false);
-  /* The script's "Log this call": the bottom of this same Call tab, with Log a contact open (remounted by key). */
-  const [logCallRequested, setLogCallRequested] = useState(0);
-  const logThisCall = () => { setLogCallRequested((n) => n + 1); requestAnimationFrame(() => actionsRef.current?.scrollIntoView({ block: 'start', behavior: 'smooth' })); };
+  /* ⛔ THE LOG WINDOW (2026-10-06): Log (the header, the script's sticky bar, Outreach's Call) opens ONE small
+     window — what happened, then only the next step that outcome needs (src/components/LeadCallFlow.tsx).
+     Outreach's Call / the script sheet arrive with it already open (openLogContact). */
+  const [logOpen, setLogOpen] = useState(openLogContact);
+  const [nextOpen, setNextOpen] = useState(false);
+  const [logged, setLogged] = useState<LoggedResult | null>(null);
+  const logThisCall = () => setLogOpen(true);
   /* "Run the AI check" on the evidence card: the AI check tools just below, opened. */
   const openAiTools = () => { if (aiToolsRef.current) { aiToolsRef.current.open = true; aiToolsRef.current.scrollIntoView({ block: 'start', behavior: 'smooth' }); } };
   const goTab = (next: WorkspaceTab) => { setTab(next); if (bodyRef.current) bodyRef.current.scrollTop = 0; };
@@ -464,7 +469,7 @@ function LeadDetailBody({
               </div>
             ) : (
               <>
-                <span className="truncate">{lead.business_name}</span>
+                <span className="line-clamp-2 break-words sm:truncate">{lead.business_name}</span>
                 {!isDemoLead(lead.id) && <StarToggle leadId={lead.id} on={!!lead.is_potential_work} canWriteRow={perms.editLeadRecord} />}
                 {perms.editLeadRecord && <button onClick={() => setEditingName(true)} className="h-5 w-5 flex items-center justify-center text-muted-foreground/40 hover:text-foreground rounded transition-colors shrink-0" title="Edit name">
                   <Pencil className="h-3.5 w-3.5" />
@@ -477,12 +482,17 @@ function LeadDetailBody({
               where the conversation is already open beside this panel. */}
           {/* QUICK CLOSE (2026-09-29): take the £99 on the call — every context (Outreach, the WhatsApp Inbox). */}
           <div className="flex shrink-0 items-center gap-1.5">
-          {/* ⛔ A TAP IS NOT A CALL: tel: opens the phone's own dialler and writes nothing. What happened is logged at
-              the bottom of the Call tab (lead_log_contact) — that is the only record of a call. */}
+          {/* ⛔ A TAP IS NOT A CALL: tel: opens the phone's own dialler and writes nothing. What happened is recorded
+              with Log (lead_log_contact) — that is the only record of a call. */}
           {lead.phone && (
             <a href={`tel:${lead.phone}`} className={cn('inline-flex h-9 min-w-9 shrink-0 items-center justify-center gap-1.5 rounded-full px-3 text-xs font-semibold ring-1 ring-inset transition hover:brightness-110', TONE.green.soft, TONE.green.text, TONE.green.ring)} title={`Call ${lead.phone}`} data-testid="workspace-call">
               <PhoneCall className="h-3.5 w-3.5" /><span className="hidden sm:inline">Call</span>
             </a>
+          )}
+          {!isDemoLead(lead.id) && (
+            <button type="button" onClick={logThisCall} className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full bg-primary px-3 text-xs font-semibold text-primary-foreground shadow-sm transition hover:brightness-110" title="Log what happened" data-testid="workspace-log">
+              <ClipboardCheck className="h-3.5 w-3.5" />Log
+            </button>
           )}
           {context !== 'inbox' && lead.phone && (
             <Link to={whatsAppLinkForLead(lead.id)} onClick={() => onClose?.()} className={cn('inline-flex h-9 min-w-9 shrink-0 items-center justify-center gap-1.5 rounded-full px-3 text-xs font-semibold ring-1 ring-inset transition hover:brightness-110', TONE.blue.soft, TONE.blue.text, TONE.blue.ring)} aria-label={`Open ${lead.business_name} on WhatsApp`}>
@@ -494,27 +504,48 @@ function LeadDetailBody({
 
         <DialogDescription className="sr-only">Lead detail, pipeline status and notes for {lead.business_name}</DialogDescription>
 
-        {/* ── WHERE THIS LEAD STANDS (declutter pass, 2026-10-01; first built in the UI cleanup pass) ────────
-            Three concepts, kept apart, each drawn ONCE (src/lib/workspaceHeader.ts):
-              STATUS      — the ONE solid status pill, the same control as the Outreach row and the Inbox
-                            (PipelineStatusSelect → pillStatusOf: a reached lead reads Contacted, an attempt
-                            does not). The sales-state pill joins it only when it adds a fact the pill, the
-                            star and the chips do not (a meeting that is NOT the Next Action, Won, Client,
-                            Not interested by a logged call) — never "Meeting booked" above the same meeting
-                            in the Next Action bar.
-              NEXT ACTION — the bar: the display of the one stored next action; Edit opens the Work tab's
-                            editor. The owner sits with the status; the last contact is a quiet line.
-              TOOLS       — how to reach them and the everyday tools; the less frequent ones (crawl, the
-                            welcome pack before they pay, the site check, the channel) under More tools.
+        {/* ── WHERE THIS LEAD STANDS (declutter pass, 2026-10-01; status + next action moved up 2026-10-06) ──
+            Each concept drawn ONCE (src/lib/workspaceHeader.ts): STATUS (the one coloured pill, and its menu),
+            NEXT ACTION (one compact line; tap = the one editor), then the owner, the chips and the last contact.
+            The less frequent tools live under Details → More tools.
             ⛔ REMOVED 2026-09-29: the Playbook pill (the delivery checklist — unused, Paul). ── */}
+        {/* Who they are, in one line: phone · website · trade · town (the full card is on Details). */}
+        {(() => {
+          const trade = (lead.search_keyword || lead.category || '').trim();
+          const town = (lead.derived_town || lead.search_location || '').trim();
+          const site = lead.website && !isAggregatorUrl(lead.website) ? lead.website : null;
+          if (!lead.phone && !site && !trade && !town) return null;
+          return (
+            <div className="mt-1 flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground" data-testid="workspace-facts">
+              {lead.phone && <a href={`tel:${lead.phone}`} className="inline-flex items-center gap-1 font-medium text-foreground/85 hover:text-primary"><Phone className="h-3 w-3" />{lead.phone}</a>}
+              {site && <a href={/^https?:\/\//i.test(site) ? site : `https://${site}`} target="_blank" rel="noopener noreferrer" className="inline-flex min-w-0 max-w-[14rem] items-center gap-1 hover:text-primary"><Globe className="h-3 w-3 shrink-0" /><span className="truncate">{site.replace(/^https?:\/\//i, '').replace(/\/$/, '')}</span></a>}
+              {(trade || town) && <span className="inline-flex min-w-0 items-center gap-1"><MapPin className="h-3 w-3 shrink-0" /><span className="truncate">{[trade, town].filter(Boolean).join(' · ')}</span></span>}
+            </div>
+          );
+        })()}
+
+        {/* ⛔ STATUS + NEXT ACTION AT THE TOP (2026-10-06, Paul: "do not require scrolling down to see the lead's
+            current state"). STATUS is the ONE coloured status pill — the same control as the Outreach row and the
+            Inbox (PipelineStatusSelect → pillStatusOf: a reached lead reads Contacted, an attempt does not), and it
+            is where the status is changed (the Call tab's Status card is gone). The sales-state pill joins it only
+            when it adds a fact (workspaceHeader.headerStateShown). NEXT is the one stored Next Action, compact;
+            tapping it opens the ONE editor in a small window. Owner, chips and last contact follow (LeadStateStrip). */}
         {(() => {
           const shown = pipelineStatusLabel(pillStatusOf(lead.status, salesState.view));
-          const statusPill = <ToneChip tone="blue" dot className="h-7 px-2.5 text-xs" testId="workspace-status-pill" title="Change it at the bottom of the Call tab">{shown}</ToneChip>;
+          const statusPill = (
+            <PipelineStatusSelect value={lead.status} stage={salesState.view} onValueChange={(v) => onStatusChange(lead.id, v as LeadStatus)}
+              askReasonFor={{ leadId: lead.id, businessName: lead.business_name }}
+              triggerProps={{ 'aria-label': 'Status', 'data-testid': 'workspace-status' }} />
+          );
           const extraState = salesState.view && headerStateShown(salesState.view, shown, salesState.row)
             ? <SalesStatePill view={salesState.view} /> : null;
-          if (isDemoLead(lead.id)) return <div className="mt-3 flex flex-wrap items-center gap-2">{statusPill}<NextActionPill lead={lead} /></div>;
-          /* ⛔ ONE NEXT ACTION (v2): not drawn here — its one display and editor are at the bottom of the Call tab. */
-          return <LeadStateStrip leadId={lead.id} status={<span className="inline-flex flex-wrap items-center gap-1.5">{statusPill}{extraState}</span>} />;
+          const label = (t: string) => <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">{t}</span>;
+          if (isDemoLead(lead.id)) return <div className="mt-3 flex flex-wrap items-center gap-2">{label('Status')}{statusPill}{label('Next')}<NextActionPill lead={lead} /></div>;
+          return (
+            <LeadStateStrip leadId={lead.id}
+              status={<span className="inline-flex flex-wrap items-center gap-1.5" data-testid="workspace-status-pill">{label('Status')}{statusPill}{extraState}<LostReasonLine leadId={lead.id} businessName={lead.business_name} /></span>}
+              next={<span className="inline-flex min-w-0 max-w-full items-center gap-1.5">{label('Next')}<HeaderNextAction leadId={lead.id} onEdit={() => setNextOpen(true)} /></span>} />
+          );
         })()}
 
         {lead.email && (
@@ -548,9 +579,11 @@ function LeadDetailBody({
           {perms.clientDelivery && <TabsTrigger value="client" className="text-xs">Client</TabsTrigger>}
         </TabsList>
         <div ref={bodyRef} className="min-h-0 flex-1 overflow-y-auto thin-scrollbar px-3 py-3 sm:px-5 sm:py-4">
-          {/* ── CALL: A evidence → B script → C why it matters → D what Findable does → E how we build → F questions
-                (the playbook, read-only), then the AI check tools, the recent WhatsApp, and G STATUS + THE NEXT ACTION. ── */}
+          {/* ── CALL (2026-10-06): the AI evidence → the call script (the playbook, read-only) → the primary actions
+                (its sticky bar: Log + Quick Close), then the AI check tools (folded) and the recent WhatsApp.
+                ⛔ No CRM cards here: the status and the Next Action are in the header, the outcome is the Log window. ── */}
           <TabsContent value="call" className="mt-0 space-y-4" data-testid="workspace-call">
+            {logged && <LoggedLine leadId={lead.id} logged={logged} onDismiss={() => setLogged(null)} />}
             {!isDemoLead(lead.id) && <ColdCallPlaybookInline leadId={lead.id} initialScript="call" onLogCall={logThisCall} onRunCheck={openAiTools} />}
             {!isDemoLead(lead.id) && (
               <details ref={aiToolsRef} className="rounded-xl border border-border/60 bg-card/60 px-3.5 py-2.5" data-testid="ai-check-tools">
@@ -559,21 +592,13 @@ function LeadDetailBody({
               </details>
             )}
             {!isDemoLead(lead.id) && context !== 'inbox' && <RecentWhatsApp leadId={lead.id} />}
-            <div ref={actionsRef} className="scroll-mt-2" data-testid="call-actions">
-              {!isDemoLead(lead.id) && <LeadWorkPanel key={`call-${logCallRequested}`} part="call" leadId={lead.id} onRemoved={onClose} logContactOpen={openLogContact || logCallRequested > 0}
-                statusControl={
-                  <PipelineStatusSelect value={lead.status} stage={salesState.view} onValueChange={(v) => onStatusChange(lead.id, v as LeadStatus)}
-                    askReasonFor={{ leadId: lead.id, businessName: lead.business_name }}
-                    triggerProps={{ 'aria-label': 'Status', 'data-testid': 'workspace-status' }} />
-                } />}
-            </div>
           </TabsContent>
 
           {/* ── DETAILS: what was learned on the call, recorded — never a script. ── */}
           <TabsContent value="details" className="mt-0 space-y-4" data-testid="workspace-details">
             <ProspectFacts lead={lead} />
             {!isDemoLead(lead.id) && <ProspectProfilePanel leadId={lead.id} />}
-            {!isDemoLead(lead.id) && <LeadWorkPanel part="details" leadId={lead.id} onRemoved={onClose} />}
+            {!isDemoLead(lead.id) && <LeadWorkPanel leadId={lead.id} onRemoved={onClose} />}
             {!isDemoLead(lead.id) && <WhatsAppLeadControls lead={lead} onUpdate={onUpdateLead} />}
             {!isDemoLead(lead.id) && <SocialProfilesPanel lead={lead} />}
             {!isDemoLead(lead.id) && (
@@ -692,6 +717,21 @@ function LeadDetailBody({
                 <p className="text-xs text-muted-foreground">The sign-up link takes them through the same questions, the client agreement and the same £99 payment page. The full setup questions come from Paul after they pay.</p>
                 <OnboardingLinkCard lead={lead} />
               </div>
+            )}
+            {/* ⛔ MARK PAID BY HAND (moved 2026-10-06 from the footer of EVERY tab, Paul: "should not dominate every
+                Call screen"). Admin only (clientDelivery — a salesperson never had it and still has not), unpaid
+                only, the SAME handler and writes as before: payment_received through onStatusChange (the page's own
+                write path and confirm), then the lead leaves Track. Seller attribution is the server's — the
+                client stamp and the attribution review are untouched by where this button sits. A small
+                secondary action; a little stronger at a payment stage (workspaceHeader.markPaidIsMain). */}
+            {perms.clientDelivery && !isPaidLead(lead) && (
+              <section className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-dashed border-border/70 px-3.5 py-2.5" data-testid="mark-paid-admin">
+                <span className="min-w-0 text-xs text-muted-foreground"><span className="font-semibold text-foreground/80">Admin · </span>Paid another way (bank transfer, cash)? Record it by hand.</span>
+                <Button size="sm" variant="outline" onClick={handleMarkPaid} title="Record that they have paid"
+                  className={cn('h-8 gap-1 text-xs', markPaidIsMain(lead.status, salesState.view) ? 'border-emerald-600/60 text-emerald-700 hover:bg-emerald-500/10 dark:text-emerald-300' : 'text-muted-foreground')}>
+                  <Check className="h-3.5 w-3.5" /> Mark paid
+                </Button>
+              </section>
             )}
           </TabsContent>
 
@@ -822,31 +862,15 @@ function LeadDetailBody({
           )}
         </div>
       </Tabs>
-      </QuickCloseNav.Provider>
-
-      {/* Footer: Mark Paid is my revenue/convert action and shows ONLY while UNPAID — once
-          amount_paid > 0 it hides (the Payment block is then the editor). Mark Lost removed from
-          the detail view (2026-08-18); a lost lead is set via the status control. When paid there
-          is nothing to show, so the footer bar is absent rather than empty.
-          ⛔ CONTEXTUAL (declutter pass, 2026-10-01): the big green button only at a payment stage — a price
-          given, the deal agreed, delivery running with no amount recorded (workspaceHeader.markPaidIsMain).
-          Before that the same action is a small one in a thin footer: still one tap, never the loudest thing
-          on a lead that is merely New, Contacted or has a meeting booked. Same handler, same writes. */}
-      {perms.clientDelivery && !isPaidLead(lead) && (
-        markPaidIsMain(lead.status, salesState.view) ? (
-          <div className="shrink-0 flex items-center justify-end gap-2 border-t border-border/60 bg-card/30 px-5 py-3" data-testid="mark-paid-main">
-            <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white" onClick={handleMarkPaid}>
-              <Check className="h-3.5 w-3.5 mr-1.5" /> Mark Paid
-            </Button>
-          </div>
-        ) : (
-          <div className="shrink-0 flex items-center justify-end border-t border-border/40 px-4 py-1" data-testid="mark-paid-quiet">
-            <Button size="sm" variant="ghost" className="h-7 gap-1 px-2 text-xs text-muted-foreground hover:text-emerald-700 dark:hover:text-emerald-300" onClick={handleMarkPaid} title="Record that they have paid">
-              <Check className="h-3 w-3" /> Mark paid
-            </Button>
-          </div>
-        )
+      {/* The Log window and the Next Action window: mounted once for the whole popup (not inside a tab), so the
+          header's Log / Next work from every tab and a typed note survives a tab switch. */}
+      {!isDemoLead(lead.id) && (
+        <LeadCallFlow leadId={lead.id} businessName={lead.business_name}
+          logOpen={logOpen} onLogOpenChange={setLogOpen} nextOpen={nextOpen} onNextOpenChange={setNextOpen}
+          onSendOnboarding={() => goTab('close')} onLogged={setLogged} />
       )}
+      </QuickCloseNav.Provider>
+      {/* ⛔ NO FOOTER (2026-10-06): Mark paid moved to the Close tab (admin only, the same handler). */}
 
       {/* Payment Received popup */}
       <Dialog open={showPaidPopup} onOpenChange={setShowPaidPopup}>

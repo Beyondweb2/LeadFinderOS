@@ -62,7 +62,8 @@ console.log('── 1. unsaved drafts: the one leave guard ──');
   ok((dlg.match(/\{\.\.\.\{ \[ESCAPE_CANCELS_EDIT\]: '' \}\}/g) ?? []).length === 2, 'both inline edits (name, contact field) carry the Escape-cancels-edit marker');
   const crm = read('src/components/LeadCrmPanel.tsx');
   ok(/function InternalNote[\s\S]{0,200}useUnsavedDraft\(`internal-note-\$\{useId\(\)\}`, note\.trim\(\) !== ''\)/.test(crm), 'Internal note marks itself while it holds text');
-  ok(/useUnsavedDraft\(`log-contact-note-\$\{useId\(\)\}`, note\.trim\(\) !== ''\)/.test(crm), 'the Log-a-contact note marks itself');
+  const flow = read('src/components/LeadCallFlow.tsx');
+  ok(/useUnsavedDraft\(`log-outcome-note-\$\{useId\(\)\}`, note\.trim\(\) !== ''\)/.test(flow), 'the Log window\'s note marks itself (and outlives the window: its state is outside the dialog)');
   ok(/useUnsavedDraft\(`profile-\$\{draftId\}`, editing && !!lead && \(/.test(crm), 'the Details editor marks itself only when a field differs from what was opened');
   const g = read('src/components/UnsavedDraftGuard.tsx');
   ok(/Discard unsaved changes\?/.test(g) && /<AlertDialogCancel autoFocus[^>]*>Keep editing<\/AlertDialogCancel>/.test(g) && />\s*Discard\s*</.test(g),

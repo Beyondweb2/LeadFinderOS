@@ -9,7 +9,6 @@ import { leadRpc } from '@/lib/leadRpc';
 import { notifyLeadChanged } from '@/lib/leadSync';
 import { refusalText } from '@/lib/salesCrm';
 import { LeadOwnerControl } from '@/components/LeadOwnerControl';
-import { NextActionBar } from '@/components/NextActionPill';
 import { useTeamDirectory } from '@/hooks/useSalesCrm';
 import { useLeadSalesState } from '@/hooks/useLeadSalesState';
 import { LastContactLine } from '@/components/SalesStatePill';
@@ -32,11 +31,11 @@ import { cn } from '@/lib/utils';
    three concepts, each drawn once:
      1. STATUS + OWNER — `status` (the dialog's one status pill, and the sales-state pill only when
         workspaceHeader.headerStateShown says it adds something), then the owner and the attribute chips;
-     2. NEXT ACTION   — NextActionBar, the display; its Edit opens the ONE editor on the Work tab;
+     2. NEXT ACTION   — beside the status (2026-10-06): one compact line, its tap opens the ONE editor;
      3. LAST CONTACT  — one quiet line. */
-/** onEditNext absent (sales workspace v2: the lead popup) = the Next Action is NOT drawn here — its one display
- *  and editor are at the bottom of the Call tab. */
-export function LeadStateStrip({ leadId, onEditNext, status }: { leadId: string; onEditNext?: () => void; status?: ReactNode }) {
+/** `next` (2026-10-06): the Next Action's ONE display, drawn by the caller beside the status (the lead popup
+ *  passes LeadCallFlow's HeaderNextAction, whose tap opens the one editor). Absent = not drawn here. */
+export function LeadStateStrip({ leadId, status, next }: { leadId: string; status?: ReactNode; next?: ReactNode }) {
   const crm = useLeadCrmRow(leadId);
   const team = useTeamDirectory();
   const row = crm.data;
@@ -63,8 +62,12 @@ export function LeadStateStrip({ leadId, onEditNext, status }: { leadId: string;
   const chip = 'inline-flex min-w-0 items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs font-medium';
   return (
     <div className="mt-3 space-y-2" data-testid="lead-state-strip">
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+      {/* Row 1: where the lead stands and what is next — the two things a caller needs without scrolling. */}
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5" data-testid="lead-state-top">
         {status}
+        {next}
+      </div>
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
         <LeadOwnerControl leadId={leadId} />
         {wrong.data?.wrong && (
           <span className={cn(chip, 'border-red-500/40 bg-red-500/10 text-red-700 dark:text-red-300')} data-testid="wrong-number-pill" title="Marked Wrong number: no templates, queue or automated WhatsApp go to this number. History is kept.">
@@ -78,7 +81,6 @@ export function LeadStateStrip({ leadId, onEditNext, status }: { leadId: string;
           </span>
         )}
       </div>
-      {onEditNext && <NextActionBar lead={row} onEdit={onEditNext} />}
       <p className="flex min-w-0 items-center text-muted-foreground/90"><LastContactLine v={last} actorName={last?.actorId ? team.byId.get(last.actorId)?.display_name ?? 'someone' : null} /></p>
     </div>
   );
