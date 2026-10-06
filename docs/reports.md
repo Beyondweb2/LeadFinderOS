@@ -568,3 +568,26 @@ technical faults found". The detection itself is untouched: `buildFaultLines` st
 order, same cap), and the Crawl button, the full report's fault section, the version-1 hook section and
 rebuild context still show it. A genuinely MISLEADING schema finding still qualifies — the deep-crawl
 evidence `schema_wrong_domain` ("Your business details point at a different website") shows as High.
+
+**Soft redesign (Paul, 2026-10-06, from his reference image).** Same data, softer and closer to the
+reference, keeping the dark Findable identity: a dark-navy header (Findable, "AI visibility quick audit",
+report for / date, and the method line "3 questions × 2 AI engines × 1 ask each · 6 answers total" built
+from the real score shape) flowing into a dark score band (overall % + one rounded card per engine; the
+card TINT identifies the engine, the NUMBER's colour grades the result); a soft warm page with rounded
+panels; the existing dark CTA + footer, byte-identical. The sheet widens to 920px for this report only.
+- **Featured question now shows BOTH engines' answers** to one question (`HookReportSummary.featured`): the
+  hook pick's question, else question 1 (so 6/6 shows two named answers, no manufactured miss). Each card
+  is that engine's own cell — status from the score, competitors through the same `namedInstead` gate, a
+  cleaned excerpt of `QUICK_ANSWER_CHARS` (now 380, two cards share the space) — with "Named instead" under
+  a not-named card. A NAMED card's excerpt starts at the passage that names the client (`answerExcerpt`
+  focus, leading "…") so the green badge never sits over text about someone else; the client's name is
+  highlighted green there via `ownNameVariants` (full name, no Ltd, &/and, a 3+ word lead — Google AI wrote
+  "5 Towns Roofing" for "5 Towns Roofing and Guttering"). Nothing readable → a sentence stated from the
+  data ("Google AI answered without naming X"), never junk.
+- **Mobile:** header stacks, overall score full width with the two engine cards side by side, answer cards
+  stack and are height-capped with a soft fade (compromise: desktop and print show the full excerpt), the
+  question table becomes one block per question, website + why stack.
+- **QA on 21 real six-answer reports (read-only replay):** all clean of listing clutter; 21/21 show both
+  engines' answers; 9/9 named cards show the business in green, 0 not-named cards do; no horizontal
+  overflow at 1280/390px; 19 print on 2 A4 pages, the 2 no-website reports on 3 (the approved no-website
+  wording is long). 8 other report types byte-identical to main.

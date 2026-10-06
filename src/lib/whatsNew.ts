@@ -22,6 +22,23 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-06-quick-report-soft-redesign', date: '2026-10-06', title: 'The quick report has a softer design and shows both AI answers', audience: 'all',
+    body: 'The six-answer quick report keeps its dark Findable header and footer, with softer rounded sections in between. The featured question now shows what ChatGPT said and what Google AI said, side by side.',
+    report: {
+      added: [
+        'Both AI answers to the featured question, each marked Named or Not named. The business is highlighted in green where an answer names it, and competitors in yellow.',
+        'A line under the header: 3 questions × 2 AI engines × 1 ask each, 6 answers total.',
+      ],
+      changed: [
+        'The score sits in the dark header band: the overall % and a card for ChatGPT and for Google AI.',
+        'Website issues and Why this matters sit side by side on a computer and stack on a phone.',
+        'On a phone each AI answer is shortened with a fade so the page is quicker to scroll.',
+      ],
+      removed: [
+        'The single-answer "Featured missed search" box and its side panel.',
+      ],
+      effect: 'A prospect sees at a glance what each AI said about their search and who it named. Scores, links, the Get started and Request a call buttons, and every other report are unchanged.',
+    } },
   { id: '2026-10-06-quick-report-no-schema', date: '2026-10-06', title: 'Quick report no longer lists "no structured data" as a website issue', audience: 'all',
     body: 'The six-answer quick report now leaves out the generic "Your site doesn\'t label the basics" line. Our own testing found it made no difference to whether AI names a business.',
     report: {

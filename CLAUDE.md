@@ -944,8 +944,11 @@ positive allowlist of `baseline`; `isColdOutreachTemplate` treats unknown as COL
   `findable.live/w/<code>` (the baseline audit's own `short_code`) and the operator's download.
   Client safety is an explicit COLUMN ALLOWLIST, not a remembered omission (`docs/welcome-pack-and-
   website-build.md`).
-- **The six-answer quick report is Concept 4** (`renderQuickCheckReport`, Paul 2026-10-06): score →
-  featured missed search → all questions → website issues → why this matters → the UNCHANGED CTA/footer.
+- **The six-answer quick report is Concept 4, soft redesign** (`renderQuickCheckReport`, Paul 2026-10-06):
+  dark header + score → FEATURED QUESTION with EVERY engine's answer (`HookReportSummary.featured`: the
+  strongest miss's question, else the first) → all questions → website issues + why this matters → the
+  UNCHANGED CTA/footer. The client's name is highlighted green only inside an answer already judged
+  NAMED (`ownNameVariants` finds it; it never decides naming).
   It quotes the AI again (reverses 2026-09-26) through `answerExcerpt` (answerText.ts), which DROPS
   listing chrome line by line and never writes a word; nothing readable → no quote, names only. The
   "competitors named instead" count is `rivalsNamedInstead`, derived at render through the run's rival
