@@ -169,8 +169,23 @@ function cutAtSentence(s: string, max: number): string {
 /** A cleaned excerpt of about `max` characters, cut at a block or sentence boundary, with
  *  `truncated` set when the AI said more. null when nothing readable survives the cleaning — the
  *  caller then shows the question, the result and the names only. Never a placeholder. */
-export function answerExcerpt(raw: string, max = 500): { blocks: AnswerBlock[]; truncated: boolean } | null {
-  const blocks = cleanAnswerBlocks(raw);
+export function answerExcerpt(raw: string, max = 500, focus: string[] = []): { blocks: AnswerBlock[]; truncated: boolean; lead: boolean } | null {
+  let blocks = cleanAnswerBlocks(raw);
+  /* FOCUS (2026-10-06): an answer that NAMED the client but mentions them only after the opening
+     window would show a "Named" badge over text about somebody else. When a focus name is given and
+     its first mention falls outside the default window, the excerpt starts AT that block — the AI's
+     own words, a later passage, marked with a leading "…" (`lead`). Nothing is reordered or written. */
+  let lead = false;
+  const needles = focus.flatMap((n) => {
+    const t = String(n || '').trim().toLowerCase();
+    const short = t.replace(/\s+(?:ltd|limited)\.?$/, '').trim();
+    return [t, short].filter((x) => x.length >= 3);
+  });
+  if (needles.length) {
+    const k = blocks.findIndex((b) => needles.some((x) => b.text.toLowerCase().includes(x)));
+    const before = k > 0 ? blocks.slice(0, k + 1).reduce((t, b) => t + b.text.length, 0) : 0;
+    if (k > 0 && before > max) { blocks = blocks.slice(k); lead = true; }
+  }
   const picked: AnswerBlock[] = [];
   let used = 0;
   let truncated = false;
@@ -197,7 +212,7 @@ export function answerExcerpt(raw: string, max = 500): { blocks: AnswerBlock[]; 
   const letters = (joined.match(/[a-z]/gi) || []).length;
   const visible = joined.replace(/\s+/g, '').length;
   if (words.length < 12 || letters / Math.max(1, visible) < 0.5 || /https?:\/\//i.test(joined)) return null;
-  return { blocks: picked, truncated };
+  return { blocks: picked, truncated, lead };
 }
 
 /** Strip UI chrome + markdown out of an engine answer so it reads as clean prose. */
