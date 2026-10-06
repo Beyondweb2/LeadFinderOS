@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useParams, Link, useNavigate, useLocation } from 'react-router-dom';
+import { paidClientToolUrl } from '@/lib/paidClientTools';
 import { BackLink } from '@/components/BackLink';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
@@ -390,7 +391,7 @@ export default function Baseline() {
                   </div>
                 ))}
               </div>
-              <Button asChild variant="outline" size="sm"><Link to="/page-plan">Build Action Plan</Link></Button>
+              <Button asChild variant="outline" size="sm"><Link to={paidClientToolUrl('page-plan')}>Build Action Plan</Link></Button>
             </CardContent>
           </Card>
         )}

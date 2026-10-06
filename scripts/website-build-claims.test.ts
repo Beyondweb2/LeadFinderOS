@@ -112,7 +112,7 @@ console.log('\n── F. the page generator ──');
   const ex = excludedFromText('No car keys / auto locksmith. No safe opening. No 24-hour call-outs.');
   ok(namesExcluded('car key replacement Cambridge', { excluded: ex, outOfHoursVerified: false }).refused && namesExcluded('24 hour locksmith in Cambridge', { excluded: [], outOfHoursVerified: false }).refused, 'F: Q&A refuses an excluded service and an unverified 24-hour ask (D-21)');
   ok(!namesExcluded('how long does a lock change take', { excluded: ex, outOfHoursVerified: false }).refused, 'F: …but a genuine general question is allowed');
-  const ui = readFileSync('src/pages/PageGenerator.tsx', 'utf8');
+  const ui = readFileSync('src/components/clientTools/PageGeneratorTool.tsx', 'utf8');
   ok(/unsupported_claim/.test(ui) && /unsupported_topic/.test(ui), 'F: the Page Generator screen says why, in words');
 }
 

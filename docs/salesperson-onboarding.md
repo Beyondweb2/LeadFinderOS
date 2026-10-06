@@ -51,6 +51,16 @@ from the clause being amended.
 
 ## 3. Ready to Sell — the rule and the gate
 
+> 🔴 **SUPERSEDED 2026-10-06 (Paul: "the sales team needs to use LeadFinderOS TODAY").** Migration
+> `20261012120000_selling_gate_account_only.sql`: the practical checklist below (items 1–8) is now Paul's admin
+> record on the Team page and **blocks nothing**. `salesperson_onboarding_missing` returns only genuine account
+> restrictions — `not_sales` (no sales role; a disabled account loses it), `login` (no active team member),
+> `suspended`, `ended` — and every gate listed in this section (guard_action, the two triggers, quick-close,
+> reassign, the attribution snapshot) follows it unchanged. The salesperson-facing "You are not Ready to Sell yet"
+> banner and "Complete your onboarding before using …" wording are gone; a restricted account reads "Your sales
+> access is not active … Speak to Paul." Guarded by `scripts/selling-gate-account-only.test.ts`. Record:
+> `docs/pre-sales-certification/sales-team-today-release.md`. The text below is the rule as it stood before.
+
 **The rule** (one place: `public.salesperson_onboarding_missing(uid)` / `salesperson_ready_to_sell(uid)`;
 `src/lib/salespersonOnboarding.ts` mirrors it for the screen with the same keys, and the Team page shows the
 SERVER's answer). Ready = an active, unsuspended sales login, not past an end date, and all eight:

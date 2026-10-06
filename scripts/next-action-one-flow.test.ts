@@ -30,7 +30,7 @@ const write = read('src/lib/nextActionWrite.ts');
 const mig = read('supabase/migrations/20261002160100_next_action_time.sql');
 ok(editor.includes("import { saveNextAction, snapshotOf, type NextActionInput } from '@/lib/nextActionWrite';") && editor.includes('const r = await saveNextAction(lead.id, a, lead);'), 'the Outreach cell saves through saveNextAction');
 ok(table.includes('<NextActionEditor lead={lead} />') && card.includes('<NextActionEditor lead={lead} />'), '…for the table row and the phone card alike');
-ok(/<NextActionForm compact/.test(editor) && /<NextActionForm key=/.test(crm), 'the cell and the lead workspace draw the SAME form (NextActionForm)');
+ok(/<NextActionForm compact/.test(editor) && /<NextActionForm key=/.test(read('src/components/LeadCallFlow.tsx')), 'the cell and the lead workspace draw the SAME form (NextActionForm)');
 ok(crm.includes('afterWrite(await saveNextAction(leadId, a, stateLead()),') && crm.includes('afterWrite(await bookMeeting(leadId, iso, note ?? lead.next_action_note, stateLead()),'), 'the workspace saves through the same write (Next Action and the meeting box)');
 ok(/const r = await saveNextAction\(leadId, \{/.test(hook) && !/next_action: nextAction/.test(hook), 'the bulk menu / Inbox popup (useOutreach.updateNextAction) use the same write; no direct row write');
 ok(write.includes("const args = { _lead_id: leadId, _next_action: a.nextAction, _date: date, _note: note, _time: time, _done: !!(none && a.done) };") && write.includes("leadRpc('lead_set_follow_up', a.expected ? { ...args, _expected: toSnapshotArg(a.expected) } : args)"), 'the write is lead_set_follow_up (role + ownership checked, History) for both roles, with the time and ✓ Done (and the stale-screen expectation when the screen has one)');
@@ -82,7 +82,7 @@ ok(londonInstant('2026-03-29', '00:30') === '2026-03-29T00:30:00.000Z' && london
 ok(londonInstant('2026-10-25', '00:30') === '2026-10-24T23:30:00.000Z' && londonInstant('2026-10-25', '03:30') === '2026-10-25T03:30:00.000Z', '…and the autumn change (25 Oct 2026: 00:30 BST, 03:30 GMT)');
 ok(londonLocalInput(londonInstant('2026-10-02', '09:05')!) === '2026-10-02T09:05', 'round trip: what is typed is what is shown');
 ok(londonInstant('2026-10-02', '') === null && londonInstant('', '14:30') === null, 'no day or no time → no instant (never a guessed one)');
-ok(crm.includes('londonInstant(localValue.slice(0, 10), localValue.slice(11, 16))') && crm.includes('(UK time)') && !crm.includes('your local time'), 'the workspace\'s meeting boxes read and show UK time too');
+ok(crm.includes('londonInstant(localValue.slice(0, 10), localValue.slice(11, 16))') && read('src/components/LeadCallFlow.tsx').includes('(UK time)') && !crm.includes('your local time'), 'the workspace\'s meeting boxes read and show UK time too');
 
 console.log('\n── it shows the same compact words everywhere ──');
 const NOW = at('2026-10-01T10:00:00Z');

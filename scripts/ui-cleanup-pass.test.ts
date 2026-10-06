@@ -42,7 +42,7 @@ console.log("── the Next Action in words ──");
 
 console.log("\n── one pill, every screen ──");
 {
-  ok(/<LeadStateStrip leadId=\{lead\.id\}/.test(read("src/components/LeadDetailDialog.tsx")) && /<NextActionBar lead=\{row\} onEdit=\{onEditNext\} \/>/.test(read("src/components/LeadStateStrip.tsx")), "popup: the next action above the tabs, from the Work tab's own row; Edit → the Work tab's editor (a bar since the declutter pass, 2026-10-01)");
+  ok(/<LeadStateStrip leadId=\{lead\.id\}/.test(read("src/components/LeadDetailDialog.tsx")) && /next=\{<span[^\n]*<HeaderNextAction leadId=\{lead\.id\} onEdit=\{\(\) => setNextOpen\(true\)\} \/>/.test(read("src/components/LeadDetailDialog.tsx")) && /\{status\}\s*\{next\}/.test(read("src/components/LeadStateStrip.tsx")), "popup: the next action above the tabs, beside the status; tap → the one editor (compact since 2026-10-06)");
   const inbox = read("src/pages/Inbox.tsx");
   ok(/<NextActionPill lead=\{leadByIdForState\.get\(c\.leadId\)\} size="xs"/.test(inbox), "Inbox list: a small pill on every row that has one");
   ok(/<NextActionEditor lead=\{activeLead\} variant="pill" \/>/.test(inbox), "Inbox header: the one Next Action, shown and set in place (2026-10-02, replacing Find email)");

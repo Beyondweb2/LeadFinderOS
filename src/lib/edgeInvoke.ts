@@ -6,9 +6,10 @@ import { myReadinessSnapshot, notReadyMessage, onboardingWordsForPausedRefusal }
 
 export { EdgeAuthError, EdgeFunctionError, createEdgeInvoker } from './edgeInvokeCore';
 
-/** edgeErrorMessage, plus the real cause for a salesperson whose onboarding is incomplete (final sales release,
- *  E2E-02): a function answering 'not_ready_to_sell' — or an older deploy's 'usage_paused' while the person's own
- *  server-read status says not ready and not suspended — reads "Complete your onboarding before using this …".
+/** edgeErrorMessage, plus the real cause for a salesperson whose sales access is restricted (since 2026-10-06 an
+ *  account restriction only, never the onboarding checklist): a function answering 'not_ready_to_sell' — or an older
+ *  deploy's 'usage_paused' while the person's own server-read status says not ready and not suspended — reads
+ *  "Your sales access is not active … Speak to Paul." (readinessWords.notReadyMessage).
  *  Every other refusal keeps its words (readinessWords.ts). */
 export function edgeErrorMessage(e: unknown, fallback?: string): string {
   if (e instanceof EdgeFunctionError) {

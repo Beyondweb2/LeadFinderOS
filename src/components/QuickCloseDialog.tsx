@@ -1,9 +1,10 @@
 import { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
-  AlertTriangle, ArrowLeft, Check, CheckCircle2, ClipboardCopy, Copy, Loader2, Mail, MessageCircle, Pencil, PoundSterling, RefreshCw, ShieldAlert, ShieldCheck, Zap,
+  AlertTriangle, ArrowLeft, BadgePoundSterling, Check, CheckCircle2, ClipboardCopy, ClipboardList, Copy, Flag, Loader2, Lock, Mail, MessageCircle, Pencil, PoundSterling, RefreshCw, ShieldAlert, ShieldCheck, Zap,
 } from 'lucide-react';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Callout, EDGE, IconTile, SubSection, TONE, ToneChip, type Tone } from '@/components/operator/ui';
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -63,13 +64,18 @@ interface View {
   client_info?: SellerClientInfo | null;
 }
 export const quickCloseKey = (leadId: string | null | undefined) => ['quick-close', leadId ?? null] as const;
-const STATE_TONE: Record<QuickCloseState, string> = {
-  not_started: 'bg-muted text-muted-foreground', in_progress: 'bg-blue-500/15 text-blue-700 dark:text-blue-300',
-  blocked: 'bg-red-500/15 text-red-700 dark:text-red-300', consents_needed: 'bg-amber-500/15 text-amber-700 dark:text-amber-300', needs_review: 'bg-amber-500/15 text-amber-700 dark:text-amber-300',
-  ready: 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300', link_generated: 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300',
-  link_expired: 'bg-amber-500/15 text-amber-700 dark:text-amber-300',
-  paid: 'bg-emerald-600 text-white',
+/** The state chip's colour (operator/ui tones: green = money/done, drawn teal). */
+const STATE_TONE: Record<QuickCloseState, Tone> = {
+  not_started: 'grey', in_progress: 'blue',
+  blocked: 'red', consents_needed: 'amber', needs_review: 'amber',
+  ready: 'green', link_generated: 'green',
+  link_expired: 'amber',
+  paid: 'green',
 };
+/** The one money CTA (create / copy the sign-up link) — the teal of the money tone. */
+const MONEY_CTA = 'h-14 w-full gap-2 rounded-xl bg-teal-600 text-base font-bold text-white shadow-sm shadow-teal-900/30 hover:bg-teal-700';
+/** A fold-out group inside the panel: a list-row surface, never a box inside a box. */
+const FOLD = 'rounded-xl border border-border/60 bg-muted/20 p-3';
 /** Server refusals that mean "what you are looking at is out of date" — the screen re-reads itself. */
 const REFRESH_ON: ReadonlySet<string> = new Set(['stale_route', 'answer_not_kept', 'already_paid', 'client_closed','answers_changed', 'link_expired', 'busy', 'route_locked']);
 
@@ -218,49 +224,50 @@ export function QuickClosePanel({ leadId, active = true, framed = false }: { lea
 
   return (
     <div className={cn('flex min-h-0 flex-col', framed && 'h-full')} data-testid="quick-close-panel">
-        <div className={cn('shrink-0 text-left', framed ? 'border-b border-border/60 px-4 py-3' : 'pb-3')}>
-          <p className="flex min-w-0 items-center gap-2 pr-8 text-base font-semibold"><Zap className="h-5 w-5 shrink-0 text-emerald-500" /><span className="shrink-0 whitespace-nowrap">Close</span><span className="min-w-0 truncate font-normal text-muted-foreground">· {v?.lead.business_name ?? '…'}</span></p>
-          <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-            {v && <span className={cn('rounded-full px-2 py-0.5 font-semibold', STATE_TONE[v.state])}>{QUICK_CLOSE_STATE_LABEL[v.state]}</span>}
-            {v && route && <span className="rounded-full border border-emerald-600/40 px-2 py-0.5 font-semibold text-emerald-800 dark:text-emerald-200" data-testid="qc-route-chip">{SERVICE_ROUTE_NAME[route]} · {totalPaymentsFor(route)} payments</span>}
-            {v && v.state !== 'paid' && <span>{answeredCount} of {shownQs.length} answered · saved as you go</span>}
+        <div className={cn('shrink-0 text-left', framed ? 'border-b border-border/60 px-4 py-3.5' : 'pb-3')}>
+          <div className="flex min-w-0 items-start gap-3 pr-8">
+            <IconTile icon={BadgePoundSterling} tone="green" />
+            <div className="min-w-0 flex-1">
+              <p className="flex min-w-0 items-baseline gap-1.5 text-base font-bold tracking-tight"><span className="shrink-0 whitespace-nowrap">Close</span><span className="min-w-0 truncate font-normal text-muted-foreground">· {v?.lead.business_name ?? '…'}</span></p>
+              <div className="mt-1.5 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+                {v && <ToneChip tone={STATE_TONE[v.state]} dot>{QUICK_CLOSE_STATE_LABEL[v.state]}</ToneChip>}
+                {v && route && <ToneChip tone="green" icon={PoundSterling} testId="qc-route-chip">{SERVICE_ROUTE_NAME[route]} · {totalPaymentsFor(route)} payments</ToneChip>}
+                {v && v.state !== 'paid' && <span className="min-w-0">{answeredCount} of {shownQs.length} answered · saved as you go</span>}
+              </div>
+            </div>
           </div>
-          {v && v.state !== 'paid' && <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-muted"><div className="h-full rounded-full bg-emerald-500 transition-[width] duration-500 motion-reduce:transition-none" style={{ width: `${Math.round((answeredCount / Math.max(1, shownQs.length)) * 100)}%` }} /></div>}
+          {v && v.state !== 'paid' && <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-muted"><div className={cn('h-full rounded-full transition-[width] duration-500 motion-reduce:transition-none', TONE.green.bar)} style={{ width: `${Math.round((answeredCount / Math.max(1, shownQs.length)) * 100)}%` }} /></div>}
         </div>
 
         <div className={cn('space-y-4', framed && 'min-h-0 flex-1 overflow-y-auto px-4 py-4')}>
           {q.isLoading && <p className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" />Loading what we already know…</p>}
-          {q.isError && <p className="text-sm text-destructive">{edgeErrorMessage(q.error)}</p>}
+          {q.isError && <Callout tone="red" icon={AlertTriangle}>{edgeErrorMessage(q.error)}</Callout>}
 
           {v && v.state === 'paid' && v.closed === 'client_closed' && (
-            <section className="rounded-2xl border border-border/60 p-5" data-testid="qc-client-closed">
-              <p className="text-lg font-bold">This client's engagement has ended.</p>
-              <p className="mt-1 text-sm text-muted-foreground">Nothing more happens here: no sign-up link can be made or sent. Ask Paul if anything looks wrong.</p>
-            </section>
+            <Callout tone="grey" icon={Lock} testId="qc-client-closed" title="This client's engagement has ended.">
+              <span className="text-muted-foreground">Nothing more happens here: no sign-up link can be made or sent. Ask Paul if anything looks wrong.</span>
+            </Callout>
           )}
 
           {v && v.state === 'paid' && v.closed !== 'client_closed' && (
-            <section className="rounded-2xl bg-gradient-to-br from-emerald-600 to-emerald-700 p-5 text-white">
-              <CheckCircle2 className="h-8 w-8" />
-              <p className="mt-2 text-xl font-bold">Paid — your part is done.</p>
-              <p className="mt-1 text-sm text-emerald-50/90">Paul takes it from here and will be in touch with them within two working days{v.setup?.first_contact?.due && (v.setup.first_contact.state === 'owed' || v.setup.first_contact.state === 'overdue') ? ` (by ${firstContactDueLabel(v.setup.first_contact.due)})` : ''}. He has the handoff: your answers, the contact details, the latest messages and anything still to collect.</p>
-            </section>
+            <Callout tone="green" icon={CheckCircle2} title={<span className="text-lg font-bold">Paid — your part is done.</span>}>
+              Paul takes it from here and will be in touch with them within two working days{v.setup?.first_contact?.due && (v.setup.first_contact.state === 'owed' || v.setup.first_contact.state === 'overdue') ? ` (by ${firstContactDueLabel(v.setup.first_contact.due)})` : ''}. He has the handoff: your answers, the contact details, the latest messages and anything still to collect.
+            </Callout>
           )}
 
           {v && v.state === 'paid' && v.setup && (
-            <section className="rounded-xl border border-border/60 p-3 text-sm" data-testid="qc-client-setup">
-              <p className="font-semibold">Client setup · {v.setup.done}/{v.setup.total} complete</p>
+            <SubSection title={`Client setup · ${v.setup.done}/${v.setup.total} complete`} icon={ClipboardList} tone={v.setup.ready ? 'green' : 'amber'} testId="qc-client-setup" className="text-sm">
               <p className="text-xs text-muted-foreground">{v.setup.state_label}{v.setup.submitted ? ' · submitted for delivery' : ''}</p>
               {v.setup.missing.length > 0 && <p className="mt-1 text-xs text-amber-700 dark:text-amber-300">Still missing: {v.setup.missing.join(' · ')}</p>}
               {v.setup.ready && !v.setup.submitted && v.handoff?.canEdit && (
                 <Button className="mt-2 h-11 w-full" onClick={() => void submitDelivery()} disabled={busy === 'submit'}>{busy === 'submit' && <Loader2 className="mr-1 h-4 w-4 animate-spin" />}Submit for delivery</Button>
               )}
-            </section>
+            </SubSection>
           )}
 
           {/* ── CLIENT INFO NEEDED: Paul asked this seller for missing details (client missing-info actions) ── */}
           {v && v.state === 'paid' && v.closed !== 'client_closed' && (v.info_request || v.client_info?.canEdit) && v.client_info && (
-            <details className={cn('rounded-xl border p-3', v.info_request ? 'border-amber-500/60 bg-amber-500/[0.06]' : 'border-border/60')} open={!!v.info_request} data-testid="qc-client-info">
+            <details className={cn(v.info_request ? cn('rounded-2xl p-3.5', TONE.amber.tint) : FOLD)} open={!!v.info_request} data-testid="qc-client-info">
               <summary className="flex cursor-pointer select-none items-center justify-between text-sm font-semibold">
                 {v.info_request ? 'CLIENT INFO NEEDED' : 'Client details for Paul'}
                 <span className="text-xs font-normal text-muted-foreground">{v.info_request ? `asked ${new Date(v.info_request.reminded_at ?? v.info_request.requested_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'Europe/London' })}` : 'optional'}</span>
@@ -296,7 +303,7 @@ export function QuickClosePanel({ leadId, active = true, framed = false }: { lea
                     return (
                       <button key={o.value} type="button" disabled={!!busy || off} onClick={() => void answer(current!, o.value)}
                         className={cn('flex min-h-[56px] flex-col items-center justify-center rounded-xl border px-3 py-3 text-center text-base font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-50',
-                          answers[current!] === o.value ? 'border-emerald-500 bg-emerald-500/15 text-emerald-800 dark:text-emerald-200' : 'border-border bg-background hover:bg-muted')}>
+                          answers[current!] === o.value ? cn('border-teal-500/70 ring-1 ring-inset', TONE.green.soft, TONE.green.text, TONE.green.ring) : 'border-border/70 bg-background hover:border-teal-500/40 hover:bg-muted/60')}>
                         {o.label}
                         {current === 'route' && <span className="mt-0.5 text-xs font-normal text-muted-foreground">{off ? 'Not possible — they have no website' : `${SERVICE_ROUTE_NAME[o.value as ServiceRoute]} · ${routePaymentsShort(o.value as ServiceRoute)}`}</span>}
                         {current === 'approach' && <span className="mt-0.5 text-xs font-normal text-muted-foreground">{off ? 'Not possible — no website on file' : planOf ? `${SERVICE_ROUTE_NAME[planOf]} · ${routePaymentsShort(planOf)}` : 'Pick the plan next'}</span>}
@@ -309,33 +316,29 @@ export function QuickClosePanel({ leadId, active = true, framed = false }: { lea
           )}
 
           {v && v.state === 'blocked' && (
-            <section className="rounded-xl border border-red-500/40 bg-red-500/10 p-3 text-sm">
-              <p className="flex items-center gap-2 font-semibold text-red-700 dark:text-red-300"><AlertTriangle className="h-4 w-4" />The decision maker needs to approve this</p>
-              <p className="mt-1 text-muted-foreground">No sign-up link can be created. Ask who makes the decision, and send them the sign-up link or arrange a call with them.</p>
-            </section>
+            <Callout tone="red" icon={AlertTriangle} title="The decision maker needs to approve this">
+              <span className="text-muted-foreground">No sign-up link can be created. Ask who makes the decision, and send them the sign-up link or arrange a call with them.</span>
+            </Callout>
           )}
           {v && v.state === 'consents_needed' && (
-            <section className="rounded-xl border border-amber-500/50 bg-amber-500/10 p-3 text-sm" data-testid="qc-consents-needed">
-              <p className="flex items-center gap-2 font-bold text-amber-800 dark:text-amber-200"><ShieldAlert className="h-4 w-4" />Build consents needed before the sign-up link</p>
-              <p className="mt-1 text-muted-foreground">A new website can only go ahead once they confirm all three. When they can, change the answer to Yes. If they would rather keep their current site, choose Optimise instead.</p>
-            </section>
+            <Callout tone="amber" icon={ShieldAlert} testId="qc-consents-needed" title="Build consents needed before the sign-up link">
+              <span className="text-muted-foreground">A new website can only go ahead once they confirm all three. When they can, change the answer to Yes. If they would rather keep their current site, choose Optimise instead.</span>
+            </Callout>
           )}
           {v && v.state === 'needs_review' && (
-            <section className="rounded-xl border border-amber-500/50 bg-amber-500/10 p-3 text-sm">
-              <p className="flex items-center gap-2 font-bold text-amber-800 dark:text-amber-200"><ShieldAlert className="h-4 w-4" />{QC_REVIEW_HEADING}</p>
-              <ul className="mt-1 list-disc pl-5 text-muted-foreground">{v.review.reasons.map((r) => <li key={r}>{r}</li>)}</ul>
+            <Callout tone="amber" icon={ShieldAlert} title={QC_REVIEW_HEADING}>
+              <ul className="list-disc pl-5 text-muted-foreground">{v.review.reasons.map((r) => <li key={r}>{r}</li>)}</ul>
               <p className="mt-2 text-muted-foreground">You do not need to sort this out or interpret any agreement. Paul has been told and will look at it; the lead stays yours.</p>
               {role === 'admin' && <Button size="sm" className="mt-2 h-10" onClick={() => void run('approve', { mode: 'approve_review' })} disabled={busy === 'approve'}>Release for payment</Button>}
-            </section>
+            </Callout>
           )}
 
           {/* v2: for Paul, never a stop — the sale and the preview build go ahead; it is settled after payment. */}
           {v && (v.review.flags?.length ?? 0) > 0 && v.state !== 'paid' && (
-            <section className="rounded-xl border border-sky-500/40 bg-sky-500/5 p-3 text-sm" data-testid="qc-paul-flags">
-              <p className="font-semibold text-sky-800 dark:text-sky-200">For Paul after payment — this does not stop the sale</p>
-              <ul className="mt-1 list-disc space-y-1 pl-5 text-muted-foreground">{v.review.flags!.map((r) => <li key={r}>{r}</li>)}</ul>
+            <Callout tone="blue" icon={Flag} testId="qc-paul-flags" title="For Paul after payment — this does not stop the sale">
+              <ul className="list-disc space-y-1 pl-5 text-muted-foreground">{v.review.flags!.map((r) => <li key={r}>{r}</li>)}</ul>
               <p className="mt-1.5 text-xs text-muted-foreground">Never promise to take over a domain or copy someone else's design. Paul sorts this out with them.</p>
-            </section>
+            </Callout>
           )}
           {v && answers.approach && v.state !== 'paid' && (
             <p className="text-xs text-muted-foreground" data-testid="qc-approach-summary">Website approach: <span className="font-medium text-foreground">{APPROACH_LABEL[answers.approach]}</span>
@@ -344,32 +347,32 @@ export function QuickClosePanel({ leadId, active = true, framed = false }: { lea
 
           {/* ── THE CLOSE: terms, then the link (first on screen once the route is chosen — M-013) ── */}
           {v && route && v.state !== 'paid' && v.state !== 'blocked' && (
-            <section aria-live="polite" className="rounded-xl border border-emerald-500/40 bg-emerald-500/5 p-3" data-testid="qc-route-terms">
-              <p className="text-sm font-bold">{SERVICE_ROUTE_NAME[route]}</p>
-              <ul className="mt-1 space-y-0.5 text-sm">{routeTermsLines(route).map((l, i) => <li key={l} className={cn(i === 2 && 'font-semibold')}>{l}</li>)}</ul>
+            <section aria-live="polite" className={cn('min-w-0 rounded-2xl p-3.5', TONE.green.tint)} data-testid="qc-route-terms">
+              <p className="flex items-center gap-2 text-sm font-bold tracking-tight"><IconTile icon={PoundSterling} tone="green" size="sm" />{SERVICE_ROUTE_NAME[route]}</p>
+              <ul className="mt-2 space-y-0.5 text-sm">{routeTermsLines(route).map((l, i) => <li key={l} className={cn(i === 2 && 'font-semibold')}>{l}</li>)}</ul>
               <p className="mt-1.5 text-sm">{routeOwnershipLine(route)}</p>
-              <div className="mt-2 rounded-lg bg-background/70 p-2 text-sm" data-testid="qc-guarantee">
-                <p className="flex items-center gap-1.5 font-semibold"><ShieldCheck className="h-4 w-4 text-emerald-600" />{QUICK_CLOSE_GUARANTEE_LINES[0]}</p>
+              <div className="mt-2.5 rounded-xl bg-background/70 p-2.5 text-sm ring-1 ring-inset ring-teal-500/20" data-testid="qc-guarantee">
+                <p className="flex items-center gap-1.5 font-semibold"><ShieldCheck className={cn('h-4 w-4 shrink-0', TONE.green.text)} />{QUICK_CLOSE_GUARANTEE_LINES[0]}</p>
                 <p className="mt-0.5 text-xs text-muted-foreground">{QUICK_CLOSE_GUARANTEE_LINES[1]}</p>
               </div>
               <p className="mt-2 text-xs text-muted-foreground">{QUICK_CLOSE_AGREEMENT_LINE} After payment: {QUICK_CLOSE_AFTER_PAYMENT[0]} {QUICK_CLOSE_AFTER_PAYMENT[1]}</p>
               <p className="mt-1 text-[11px] text-muted-foreground">Say the minimum term out loud before you send the link. Set by the offer — the price, the number of payments and the timing cannot be changed here.</p>
 
               {closing && (
-                <div className="mt-3 space-y-2 border-t border-emerald-500/30 pt-3" data-testid="qc-link">
+                <div className="mt-3 space-y-2 border-t border-teal-500/25 pt-3" data-testid="qc-link">
                   {!v.lead.trade && (
-                    <label className="block rounded-lg border border-amber-500/40 bg-amber-500/10 p-2 text-sm font-medium">What is their trade? <span className="font-normal text-muted-foreground">(decides what the baseline measures)</span>
+                    <label className={cn('block rounded-xl p-2.5 text-sm font-medium', TONE.amber.tint)}>What is their trade? <span className="font-normal text-muted-foreground">(decides what the baseline measures)</span>
                       <Input value={trade} onChange={(e) => setTrade(e.target.value)} placeholder="e.g. plumber" className="mt-1.5 h-11 text-base" />
                     </label>
                   )}
                   {!usableUrl ? (
                     <>
                       {v.state === 'link_expired' && (
-                        <p className="rounded-lg bg-amber-500/10 px-2.5 py-1.5 text-xs text-amber-800 dark:text-amber-200" data-testid="qc-link-expired">
+                        <p className={cn('flex items-start gap-1.5 rounded-xl px-2.5 py-2 text-xs', TONE.amber.tint, TONE.amber.text)} data-testid="qc-link-expired"><AlertTriangle className="mt-px h-3.5 w-3.5 shrink-0" />
                           The link made {hhmm(v.link?.generated_at)} is no longer usable and must not be sent. Make the sign-up link — any old payment page is closed.
                         </p>
                       )}
-                      <Button className="h-14 w-full gap-2 bg-emerald-600 text-base font-bold text-white hover:bg-emerald-700" onClick={() => void generate()} disabled={!!busy}>
+                      <Button className={MONEY_CTA} onClick={() => void generate()} disabled={!!busy}>
                         {busy === 'link' ? <Loader2 className="h-5 w-5 animate-spin" /> : v.state === 'link_expired' ? <RefreshCw className="h-5 w-5" /> : <PoundSterling className="h-5 w-5" />}
                         {v.state === 'link_expired' ? 'Make a fresh sign-up link' : 'Create sign-up link'}
                       </Button>
@@ -377,8 +380,8 @@ export function QuickClosePanel({ leadId, active = true, framed = false }: { lea
                     </>
                   ) : (
                     <>
-                      <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700 dark:text-emerald-300">Sign-up link ready · <span className="font-normal normal-case">{timeLeft(v.link?.usable_until ?? v.link?.expires_at)}</span></p>
-                      <Button className="h-14 w-full gap-2 bg-emerald-600 text-base font-bold text-white hover:bg-emerald-700" onClick={() => void doCopy('link', usableUrl)}>
+                      <p className={cn('flex flex-wrap items-center gap-x-1 text-xs font-semibold uppercase tracking-wide', TONE.green.text)}><CheckCircle2 className="h-3.5 w-3.5 shrink-0" />Sign-up link ready · <span className="font-normal normal-case">{timeLeft(v.link?.usable_until ?? v.link?.expires_at)}</span></p>
+                      <Button className={MONEY_CTA} onClick={() => void doCopy('link', usableUrl)}>
                         {copied === 'link' ? <Check className="h-5 w-5" /> : <Copy className="h-5 w-5" />}{copied === 'link' ? 'Copied' : 'Copy sign-up link'}
                       </Button>
                       <p className="line-clamp-2 break-all rounded-lg bg-muted/40 px-2.5 py-1.5 font-mono text-[11px] text-muted-foreground" title={usableUrl}>{usableUrl}</p>
@@ -410,8 +413,8 @@ export function QuickClosePanel({ leadId, active = true, framed = false }: { lea
           )}
 
           {v && route && v.state !== 'paid' && v.state !== 'blocked' && (
-            <details className="rounded-xl border border-border/60 p-3" open={v.state === 'ready'}>
-              <summary className="flex cursor-pointer select-none items-center justify-between text-sm font-semibold">What to tell them<button type="button" onClick={(e) => { e.preventDefault(); void doCopy('script', script); }} className="text-xs font-medium text-primary hover:underline">{copied === 'script' ? 'Copied' : 'Copy'}</button></summary>
+            <details className={FOLD} open={v.state === 'ready'}>
+              <summary className="flex min-h-[36px] cursor-pointer select-none items-center justify-between gap-2 text-sm font-semibold"><span className="flex items-center gap-2"><span className={cn('h-4 w-1 shrink-0 rounded-full', TONE.blue.bar)} aria-hidden />What to tell them</span><button type="button" onClick={(e) => { e.preventDefault(); void doCopy('script', script); }} className="inline-flex min-h-[36px] items-center rounded-lg px-2 text-xs font-medium text-primary hover:bg-muted hover:underline">{copied === 'script' ? 'Copied' : 'Copy'}</button></summary>
               <Textarea value={script} onChange={(e) => setScript(e.target.value)} rows={6} className="mt-2 text-sm" aria-label="What to tell them (edit freely)" />
               <p className="mt-1 text-[11px] text-muted-foreground">Your words — change them however you like, but keep the price, the minimum term and the guarantee as written. Never promise a ranking, a recommendation or that AI will name them.</p>
             </details>
@@ -426,7 +429,7 @@ export function QuickClosePanel({ leadId, active = true, framed = false }: { lea
               {shownQs.filter((x) => answers[x.key]).map((x) => (
                 <li key={x.key}>
                   <button type="button" disabled={!v.canEdit} onClick={() => setStep(x.key)} className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm hover:bg-muted/60 disabled:hover:bg-transparent">
-                    <Check className="h-4 w-4 shrink-0 text-emerald-500" />
+                    <Check className={cn('h-4 w-4 shrink-0', TONE.green.text)} />
                     <span className="min-w-0 flex-1 truncate text-muted-foreground">{x.text}</span>
                     <span className="shrink-0 font-semibold">{x.options.find((o) => o.value === answers[x.key])?.label}</span>
                   </button>
@@ -437,16 +440,16 @@ export function QuickClosePanel({ leadId, active = true, framed = false }: { lea
 
           {/* The handoff folds to one line while the close is happening (M-013); it can be finished after payment. */}
           {v?.handoff && v.handoff.canEdit && v.state !== 'not_started' && v.state !== 'blocked' && (
-            <details className="rounded-xl border border-emerald-500/40 p-3" open={v.state === 'paid' && !v.handoff.complete} data-testid="qc-handoff">
-              <summary className="flex cursor-pointer select-none items-center justify-between text-sm font-semibold">Handoff for Paul<span className={cn('text-xs font-normal', v.handoff.complete ? 'text-emerald-700 dark:text-emerald-300' : 'text-amber-700 dark:text-amber-300')}>{v.handoff.complete ? 'complete' : v.handoff.saved_at ? `${v.handoff.missing.length} still to answer` : 'not started — can wait until after the call'}</span></summary>
+            <details className={cn(FOLD, v.handoff.complete ? EDGE.green : EDGE.amber)} open={v.state === 'paid' && !v.handoff.complete} data-testid="qc-handoff">
+              <summary className="flex min-h-[36px] cursor-pointer select-none flex-wrap items-center justify-between gap-x-2 gap-y-1 text-sm font-semibold">Handoff for Paul<ToneChip tone={v.handoff.complete ? 'green' : 'amber'} dot>{v.handoff.complete ? 'complete' : v.handoff.saved_at ? `${v.handoff.missing.length} still to answer` : 'not started — can wait until after the call'}</ToneChip></summary>
               <p className="mt-1 text-xs text-muted-foreground">Quick answers so Paul does not have to ask again. Send the link first — this can be finished after they pay.</p>
               <div className="mt-3"><SalesHandoffForm fields={v.handoff.fields} prefilled={v.handoff.prefilled} route={route} onSave={saveHandoff} busy={busy === 'handoff'} compact /></div>
             </details>
           )}
 
           {v && (
-            <details className="rounded-xl border border-border/60 bg-muted/30 p-3" open={v.state === 'not_started'}>
-              <summary className="flex cursor-pointer select-none items-center justify-between text-sm font-semibold">What we already know<span className="text-xs font-normal text-muted-foreground">no need to ask</span></summary>
+            <details className={FOLD} open={v.state === 'not_started'}>
+              <summary className="flex min-h-[36px] cursor-pointer select-none items-center justify-between gap-2 text-sm font-semibold"><span className="flex items-center gap-2"><span className={cn('h-4 w-1 shrink-0 rounded-full', TONE.grey.bar)} aria-hidden />What we already know</span><span className="text-xs font-normal text-muted-foreground">no need to ask</span></summary>
               {!editing ? (
                 <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-sm">
                   {known.map(([k, val]) => <FragmentRow key={k} k={k} v={val} />)}
@@ -464,7 +467,7 @@ export function QuickClosePanel({ leadId, active = true, framed = false }: { lea
           )}
 
           {v && !v.lead.trade && v.canEdit && !closing && (
-            <label className="block rounded-xl border border-amber-500/40 bg-amber-500/10 p-3 text-sm font-medium">What is their trade? <span className="font-normal text-muted-foreground">(decides what the baseline measures)</span>
+            <label className={cn('block rounded-2xl p-3.5 text-sm font-medium', TONE.amber.tint)}>What is their trade? <span className="font-normal text-muted-foreground">(decides what the baseline measures)</span>
               <Input value={trade} onChange={(e) => setTrade(e.target.value)} placeholder="e.g. plumber" className="mt-1.5 h-11 text-base" />
             </label>
           )}
@@ -522,7 +525,7 @@ export function WebsiteApproachField({ leadId }: { leadId: string }) {
           return (
             <button key={k} type="button" disabled={off} onClick={() => void choose(k)} aria-pressed={a.approach === k}
               className={cn('rounded-md border px-2.5 py-2 text-left text-xs font-medium transition-colors disabled:opacity-50',
-                a.approach === k ? 'border-emerald-500 bg-emerald-500/10 text-emerald-800 dark:text-emerald-200' : 'border-border/60 hover:bg-muted')}>
+                a.approach === k ? cn('border-teal-500/70', TONE.green.soft, TONE.green.text) : 'border-border/60 hover:bg-muted')}>
               {APPROACH_LABEL[k]}
               <span className="block text-[10px] font-normal text-muted-foreground">{!hasSite && NEEDS_CURRENT_SITE.has(k) ? 'No website on file' : k === 'unsure' ? 'Paul recommends after payment' : SERVICE_ROUTE_NAME[APPROACH_ROUTE[k]]}</span>
             </button>
@@ -542,7 +545,7 @@ export function QuickCloseButton({ leadId, className, size = 'sm', variant = 'so
   const nav = useContext(QuickCloseNav);
   return (
     <>
-      <button type="button" onClick={() => (nav ? nav.openClose(leadId) : setOpen(true))} className={cn('inline-flex shrink-0 items-center justify-center gap-1.5 rounded-md font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary', variant === 'quiet' ? 'border border-emerald-600/40 text-emerald-700 hover:bg-emerald-500/10 dark:text-emerald-300' : 'bg-emerald-600 text-white hover:bg-emerald-700', size === 'lg' ? 'h-11 px-4 text-sm rounded-xl' : 'h-8 px-2.5 text-xs', className)} aria-label="Quick Close: take payment now">
+      <button type="button" onClick={() => (nav ? nav.openClose(leadId) : setOpen(true))} className={cn('inline-flex shrink-0 items-center justify-center gap-1.5 rounded-md font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary', variant === 'quiet' ? 'border border-teal-600/40 text-teal-700 hover:bg-teal-500/10 dark:text-teal-300' : 'bg-teal-600 text-white hover:bg-teal-700', size === 'lg' ? 'h-11 px-4 text-sm rounded-xl' : 'h-8 px-2.5 text-xs', className)} aria-label="Quick Close: take payment now">
         <Zap className="h-3.5 w-3.5" />Quick Close
       </button>
       {open && !nav && <QuickCloseDialog leadId={leadId} open={open} onOpenChange={setOpen} />}

@@ -108,8 +108,8 @@ export const REASON_TEXT: Record<ItemReason, string> = {
   budget_unknown: 'Couldn\'t confirm today\'s allowance, so nothing was started. Try again in a minute.',
   paused: 'Checks are paused by Paul right now — nothing was started.',
   not_allowed: 'Your account can\'t start checks right now — ask Paul.',
-  /* Final sales release (E2E-02): the guard refused an incomplete onboarding — said as itself, never "allowance used". */
-  not_ready: 'Complete your onboarding before starting checks — nothing was started.',
+  /* The guard refused a RESTRICTED account (since 2026-10-06 never the onboarding checklist) — said as itself, never "allowance used". */
+  not_ready: 'Your sales access is not active, so checks cannot start — nothing was started. Speak to Paul.',
   cancelled: 'Stopped before it started.',
   no_longer_yours: 'No longer one of your active leads.',
   audit_failed: 'The AI check failed — nothing usable came back. Check it again later.',

@@ -40,6 +40,7 @@ import {
 } from './websiteBuildState.ts';
 import { CONTENT_INTENTS, CORE_INTENTS, QUALITY_STANDARD_LINES, STRENGTH_RECON_LINES, UPGRADE_QA_LINES, type ContentIntent, type QualityState } from './websiteQuality.ts';
 import { BUILD_STANDARD_LINES } from './websiteBuildStandard.ts';
+import { clientToolUrl } from './paidClientTools.ts';
 import { DO_NOT_INVENT_LINES } from './claimRules.ts';
 import { WEBSITE_TEMPLATES, templateById, tradeFit, type WebsiteTemplate } from './websiteTemplates.ts';
 import type { FactRow } from './buildFacts.ts';
@@ -425,7 +426,7 @@ export function simpleIssues(x: SimpleInput): BuildIssue[] {
 
   /* Build or Optimise — the money decides, from the client's own records. */
   if (i.serviceRoute === 'optimise') {
-    out.push({ id: 'optimise-client', level: 'blocker', title: 'Findable Optimise client — no new site', detail: OPTIMISE_BUILD_REFUSAL, fixes: [{ kind: 'link', href: '/page-generator?mode=service&client=' + encodeURIComponent(x.leadId), label: 'Open the page generator' }] });
+    out.push({ id: 'optimise-client', level: 'blocker', title: 'Findable Optimise client — no new site', detail: OPTIMISE_BUILD_REFUSAL, fixes: [{ kind: 'link', href: clientToolUrl(x.leadId, 'page-generator', { mode: 'service', client: x.leadId }), label: 'Open the page generator' }] });
     return out;
   }
   if (i.serviceRoute === null || i.serviceRoute === undefined) {

@@ -13,7 +13,9 @@ const ok = (c: boolean, l: string) => { if (!c) f++; console.log(`${c ? "PASS" :
 const read = (p: string) => readFileSync(new URL(`../${p}`, import.meta.url), "utf8").replace(/\r\n/g, "\n");
 const code = (p: string) => read(p).replace(/\/\*[\s\S]*?\*\//g, "").replace(/\{\/\*[\s\S]*?\*\/\}/g, "");
 
-const ui = read("src/components/salesDash/ui.tsx");
+/* 2026-10-06: the props-only primitives and the tones moved to a leaf (salesDash/primitives.tsx, re-exported by ui.tsx)
+   so a component rendered from plain data can use them without the app's auth wiring. Still ONE design system. */
+const ui = read("src/components/salesDash/ui.tsx") + "\n" + read("src/components/salesDash/primitives.tsx");
 const sales = code("src/pages/SalesDashboard.tsx");
 const admin = code("src/pages/Dashboard.tsx");
 const cc = code("src/components/admin/controlCentre.tsx");

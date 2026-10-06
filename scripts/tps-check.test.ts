@@ -9,7 +9,7 @@
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import path from "node:path";
 import { TPS_PROVIDERS, TPS_RECHECK_DAYS, tpsRowFromAnswer, tpsVerdict, type TpsCheckRow, type TpsProviderInfo } from "../src/lib/tpsCheck.ts";
-import { BLOCKING_KEYS } from "../src/lib/salespersonOnboarding.ts";
+import { CHECKLIST_KEYS, SELLING_GATE_KEYS } from "../src/lib/salespersonOnboarding.ts";
 
 let f = 0;
 const ok = (c: boolean, l: string) => { if (!c) f++; console.log(`${c ? "PASS" : "FAIL"} ${l}`); };
@@ -38,7 +38,15 @@ ok(users.length === 0, `no screen or hook imports the TPS module (${users.join("
 ok(!/TPS|CTPS/.test(strip(read("src/components/ProspectFacts.tsx"))), "the lead card shows no TPS/CTPS line (nothing that looks broken)");
 
 console.log("\n── TPS/CTPS is NOT part of Ready to Sell, and does NOT block a call ──");
-ok(!BLOCKING_KEYS.some((k) => /tps/i.test(k)), "not a Ready to Sell item");
+ok(![...CHECKLIST_KEYS, ...SELLING_GATE_KEYS].some((k) => /tps/i.test(k)), "not a checklist item and not a selling-gate key");
+{
+  /* The LIVE gate is the newest migration redefining salesperson_onboarding_missing (2026-10-06: account restrictions only). */
+  const defs = readdirSync(path.join(ROOT, "supabase/migrations")).filter((n) => n.endsWith(".sql"))
+    .filter((n) => read(`supabase/migrations/${n}`).includes("create or replace function public.salesperson_onboarding_missing")).sort();
+  const latest = read(`supabase/migrations/${defs[defs.length - 1]}`);
+  const s = latest.indexOf("create or replace function public.salesperson_onboarding_missing");
+  ok(s >= 0 && !/tps|ctps/i.test(strip(latest.slice(s, latest.indexOf("$;", s)))), `the live selling gate (${defs[defs.length - 1]}) never reads TPS/CTPS`);
+}
 const gateFns = ["salesperson_onboarding_missing", "trg_lead_activity_ready_to_sell", "trg_outreach_leads_assign_ready", "trg_outreach_leads_attribution_review"];
 for (const fn of gateFns) {
   const start = MIG.indexOf(`create or replace function public.${fn}`);

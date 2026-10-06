@@ -39,13 +39,13 @@ import { NotReadyToSellBanner } from '@/components/NotReadyToSellBanner';
 import { useMyReadiness, type MyReadiness } from '@/hooks/useMyReadiness';
 import { missingItemWords } from '@/lib/readinessWords';
 
-/** Find Leads refused before searching (final sales release, E2E-02): the real cause, with what is still needed.
- *  Loading / unreadable status is said as such — never claimed to be onboarding. */
+/** Find Leads refused before searching: ONLY a genuine account restriction (2026-10-06 — the onboarding checklist
+ *  no longer blocks anything). Loading / unreadable status is said as such. */
 function findLeadsNotReadyToast(r: Pick<MyReadiness, 'loading' | 'failed' | 'missing' | 'startsOn'>) {
-  if (r.loading) return { title: 'Checking your onboarding', description: 'Try again in a moment.' };
-  if (r.failed) return { title: 'Could not check your onboarding', description: 'Try again in a moment, or contact Paul.', variant: 'destructive' as const };
+  if (r.loading) return { title: 'Checking your access', description: 'Try again in a moment.' };
+  if (r.failed) return { title: 'Could not check your access', description: 'Try again in a moment, or contact Paul.', variant: 'destructive' as const };
   const items = missingItemWords(r.missing, r.startsOn);
-  return { title: 'Complete your onboarding before using Find Leads.', description: items.length ? `Still needed: ${items.join(' · ')}.` : undefined, variant: 'destructive' as const };
+  return { title: 'Your sales access is not active.', description: (items.length ? `(${items.join(' · ')}) ` : '') + 'Speak to Paul.', variant: 'destructive' as const };
 }
 import type { OwnershipInfo } from '@/components/FindLeadsOwnership';
 
@@ -214,9 +214,9 @@ const Index = () => {
 
 
   const handleSearch = useCallback((filters: any) => {
-    /* READY TO SELL (Paul, 2026-10-05): a salesperson whose onboarding is incomplete cannot use Find Leads — the
-       Search button AND Coverage's "Find leads" both pass through here. The server refuses anyway
-       (search-leads → guard_action 'not_onboarded'); this says so plainly. The admin is never gated. */
+    /* THE SELLING GATE (2026-10-06): only a genuinely restricted salesperson (no sales role, login disabled,
+       suspended, engagement ended) is stopped here — an incomplete onboarding checklist is NOT. The Search button
+       AND Coverage's "Find leads" both pass through here; the server refuses the same people (guard_action). */
     if (readiness.gated && !readiness.ready) {
       toast(findLeadsNotReadyToast(readiness));
       return;

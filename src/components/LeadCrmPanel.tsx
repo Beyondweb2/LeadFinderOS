@@ -1,7 +1,7 @@
-import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { useUnsavedDraft } from '@/components/UnsavedDraftGuard';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { BriefcaseBusiness, CalendarClock, Megaphone, Check, ChevronDown, Clock, Globe, Link2, Lock, Loader2, PhoneCall, RefreshCw, Sparkles, UserMinus, X } from 'lucide-react';
+import { BriefcaseBusiness, Megaphone, Check, Clock, Globe, Link2, Lock, Loader2, RefreshCw, Sparkles, UserMinus } from 'lucide-react';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { leadPermissions } from '@/lib/access';
 import { supabase } from '@/integrations/supabase/client';
@@ -31,33 +31,29 @@ import { OUTREACH_HOOK_QUESTIONS } from '@/lib/auditQuestionCounts';
 import { reviewedHookQuestions } from '@/lib/hookQuestionEdit';
 import { OUTREACH_AUDIT_MAP_ROOT } from '@/lib/outreachAuditMap';
 import { LINK_CHANNEL_LABEL } from '@/lib/onboardingLinkStatus';
-import { ACTIVITY_LABEL, NEXT_ACTION_OPTIONS, REMOVE_FROM_MY_LEADS_EXPLAINER, REMOVE_FROM_MY_LEADS_LABEL, WEBSITE_CONTROL_OPTIONS, activityDetail, outcomesFor, refusalText, removeOutcomeText } from '@/lib/salesCrm';
-import { CONTACT_METHODS, SOCIAL_CONTACT_METHODS, contactMethodLabel } from '@/lib/contactMethods';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { ACTIVITY_LABEL, REMOVE_FROM_MY_LEADS_EXPLAINER, REMOVE_FROM_MY_LEADS_LABEL, WEBSITE_CONTROL_OPTIONS, activityDetail, refusalText, removeOutcomeText } from '@/lib/salesCrm';
+import { CONTACT_METHODS, contactMethodLabel } from '@/lib/contactMethods';
 import { cn } from '@/lib/utils';
 import { DOMAIN_CONTROL_OPTIONS, SALES_DOMAIN_LINE } from '@/lib/domainAuthority';
-import { reachedInConversation, meetingWhen, lastLoggedContactOf, offeredOutcomes, outcomeLabel, outcomeRule, salesStateOf, stateChangeText, stateChangedWords, suggestNextAction, LOGGED_CONTACT_KINDS, CONVERSATION_OUTCOMES, type SalesStateView } from '@/lib/leadState';
+import { reachedInConversation, meetingWhen, lastLoggedContactOf, outcomeLabel, salesStateOf, stateChangeText, stateChangedWords, suggestNextAction, LOGGED_CONTACT_KINDS, type OutcomePlan, type SalesStateView } from '@/lib/leadState';
 import { applyOutcome } from '@/lib/leadOutcome';
 import { askLostReason } from '@/lib/lostReasonAsk';
 import { DetectedAgency } from '@/components/DetectedAgency';
-import { LOST_REASON_UNRECORDED, lostReasonLabel } from '@/lib/lostReason';
-import { NextActionForm, londonDayPlus, type NextActionPreset } from '@/components/NextActionForm';
-import { bookMeeting, saveNextAction, type WriteResult } from '@/lib/nextActionWrite';
-import { londonInstant, londonLocalInput, meetingDayTime } from '@/lib/nextActionView';
-import { SalesStatePill } from '@/components/SalesStatePill';
-import { NextActionBar } from '@/components/NextActionPill';
-import { QuickCloseButton, WebsiteApproachField } from '@/components/QuickCloseDialog';
+import { londonDayPlus, type NextActionPreset } from '@/components/NextActionForm';
+import { bookMeeting, saveNextAction, type NextActionInput, type WriteResult } from '@/lib/nextActionWrite';
+import { londonInstant, meetingDayTime } from '@/lib/nextActionView';
+import { WebsiteApproachField } from '@/components/QuickCloseDialog';
 import { WorkSection } from '@/components/WorkSection';
 
 /* ════════════════════════════════════════════════════════════════════════════════════════════════
    THE LEAD'S CRM — THREE PANELS, BOTH ROLES, BOTH PAGES (2026-09-27; split into the prospect
    workspace's tabs 2026-09-28).
 
-   LeadWorkPanel    — log a contact (call / LinkedIn / email / in person / other, one tap per outcome),
-                      next action + date (quick chips, clear), internal note, call booked, website control.
+   useLeadWork      — every call-workspace write: log an outcome + its rule, the Next Action, the meeting.
+                      Drawn by src/components/LeadCallFlow.tsx (the Log window and the header's Next Action).
+   LeadWorkPanel    — the Details tab: campaign, internal note, website & domain, remove from my leads.
    LeadHookPanel    — the Hook Audit card, or the button that runs it.
    LeadHistoryPanel — the activity timeline, with sign-up link sends/opens merged in.
-   LeadCrmPanel     — all three stacked, for any caller that wants the old single panel.
 
    ⛔ EVERY WRITE IS A SERVER FUNCTION, FOR BOTH ROLES (lead_log_contact, lead_set_follow_up,
    lead_set_call_booked, lead_set_website_control, lead_add_note; assign_lead for the owner). Each
@@ -66,19 +62,8 @@ import { WorkSection } from '@/components/WorkSection';
    these panels all re-read the same row. No local copy is edited in place.
    ⛔ An outcome is written as ACTIVITY (lead_log_contact never writes a status or a next action).
    What else a tap does is THE ONE RULE, src/lib/leadState.ts (outcomePlan / suggestNextAction),
-   carried out by src/lib/leadOutcome.ts for both roles and shown in the result line under the buttons
-   — the state before → after, and the Next Action it suggests (lead state audit, 2026-09-30; Paul:
-   "no toast-only actions"). In short:
-     No answer / Left voicemail / Sent / Spoke to owner → the record itself (the lead reads Contacted if
-       it was New) + a suggested Next Action pre-filled below;
-     Interested → the star; Meeting booked → the star + SAVES the Next Action "Meeting" (no date yet) and
-       asks when — Save there puts the day and time on that same Next Action (call_booked_at mirrors it);
-     Call back → SAVES the Next Action "Call · No date set" and offers the day below;
-     Not interested → status Not interested, the queue stopped, the Next Action cleared;
-     Wrong number → the number suppressed (contact_suppressions).
-   ⛔ ONE NEXT ACTION (Paul, 2026-10-02): Call back and Meeting booked are tasks the rep definitely has, so they
-   are saved as real Next Actions (editable, filterable, completable). Every other suggestion is PRE-FILLED,
-   never saved.
+   carried out by src/lib/leadOutcome.ts for both roles (useLeadWork below has the full list) and shown
+   in the result line on the Call tab — the state before → after (Paul: "no toast-only actions").
    ⛔ "Agency controls site" is an ATTRIBUTE, not an outcome: the "Agency runs their site" chip sets
    website_control and logs no contact.
    ⛔ Reads come from the caller's OWN source (leadSourceFor): a salesperson reads the sales_leads
@@ -251,88 +236,80 @@ export function ProspectProfilePanel({ leadId }: { leadId: string }) {
 }
 
 /* ── WORK: what a salesperson does after picking up the phone ─────────────────────────────────── */
-/** What a logged outcome did, for the result line under the buttons. */
+/** What a logged outcome did, for the result line on the Call tab. */
 export interface OutcomeResultLine { contact: string | null; state: SalesStateView; change: string | null; said: string[]; failed: string[]; suggestion: string | null }
-type FollowOn = (outcome: string, channel: string, logged: boolean) => Promise<OutcomeResultLine>;
-/** A Next Action the panel pre-fills after an outcome (never saved by itself). `why` names the outcome that
- *  suggested it. (Call back and Meeting booked are not pre-fills: they save their Next Action.) */
-type FollowUpPreset = NextActionPreset;
+/** What one Log did: the result line, the plan the one rule carried out, and the Next Action the rule
+ *  suggests (pre-filled only — never saved by itself). ok false = the contact was not recorded. */
+export interface LoggedOutcome { ok: boolean; result: OutcomeResultLine | null; plan: OutcomePlan | null; preset: NextActionPreset | null }
 
-/** logContactOpen: the person came to log a contact (Outreach's Call) — Log a contact starts expanded.
- *  editNextRequested: the header's Next Action bar asked for the editor; taken, then cleared (onEditNextHandled). */
-/** part (sales workspace v2, 2026-10-05): 'call' = the bottom of the CALL tab (log the call, why they said no, the
- *  meeting, THE Next Action — its one display and its one editor); 'details' = the DETAILS tab (campaign, note,
- *  website & domain, remove). 'all' keeps the old single panel for any other mount. */
-export function LeadWorkPanel({ leadId, onRemoved, logContactOpen = false, editNextRequested = false, onEditNextHandled, part = 'all', statusControl }: { leadId: string; onRemoved?: () => void; logContactOpen?: boolean; editNextRequested?: boolean; onEditNextHandled?: () => void; part?: 'all' | 'call' | 'details'; statusControl?: ReactNode }) {
-  const showCall = part !== 'details';
-  const showDetails = part !== 'call';
+/* ══ THE LEAD'S WORK, ONE HOOK (call workspace, 2026-10-06) ══════════════════════════════════════════
+   Everything that WRITES from the call workspace — log an outcome and carry out its rule, save the Next
+   Action, book the meeting — in one place, so the Log window, its follow-up step and the header's Next
+   Action editor are the same code (they were all inside the Call tab's cards before).
+   ⛔ An outcome is written as ACTIVITY (lead_log_contact never writes a status or a next action). What else a
+   tap does is THE ONE RULE, src/lib/leadState.ts (outcomePlan / suggestNextAction), carried out by
+   src/lib/leadOutcome.ts for both roles — the state before → after, and the Next Action it suggests
+   (lead state audit, 2026-09-30; Paul: "no toast-only actions"). In short:
+     No answer / Left voicemail / Sent / Spoke to owner → the record itself (the lead reads Contacted if
+       it was New) + a suggested Next Action, offered;
+     Interested → the star; Meeting booked → the star + SAVES the Next Action "Meeting" (no date yet) and
+       asks when — Save there puts the day and time on that same Next Action (call_booked_at mirrors it);
+     Call back → SAVES the Next Action "Call · No date set" and asks the day;
+     Not interested → status Not interested, the queue stopped, the Next Action cleared;
+     Wrong number → the number suppressed (contact_suppressions).
+   ⛔ ONE NEXT ACTION (Paul, 2026-10-02): Call back and Meeting booked are tasks the rep definitely has, so they
+   are saved as real Next Actions (editable, filterable, completable). Every other suggestion is PRE-FILLED,
+   never saved.
+   ⛔ ONE TAP, ONE CALL (Session E E-12): a ref closes the same-frame double tap; the server refuses an identical
+   second row too (migration 20261007105000). */
+export function useLeadWork(leadId: string) {
   const crm = useLeadCrmRow(leadId);
   const activity = useLeadActivity(leadId);
   const wrong = useWrongNumber(leadId);
   const save = useSave(leadId);
-  const { role } = useSubscription();
-  const lead = crm.data;
   const qc = useQueryClient();
-  const [preset, setPreset] = useState<FollowUpPreset | null>(null);
-  const [askWhen, setAskWhen] = useState(false);
   const { toast } = useToast();
-  const nextRef = useRef<HTMLElement>(null);
-  /* ⛔ THE EDITOR OPENS ON DEMAND (declutter pass, 2026-10-01): the header bar is the display of the Next Action;
-     here the ONE editor (NextActionForm) opens when asked — Edit / Set one on the bar or here, or an outcome's
-     suggestion (preset) — and closes after a Save. Never a second, independently editable copy. */
-  const [editingNext, setEditingNext] = useState(false);
-  useEffect(() => {
-    if (!editNextRequested) return;
-    setEditingNext(true);
-    onEditNextHandled?.();
-    requestAnimationFrame(() => nextRef.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }));
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [editNextRequested]);
-  if (crm.isLoading) return <section className={CARD}><Loader2 className="h-4 w-4 animate-spin text-muted-foreground" /></section>;
-  if (crm.isError) return <section className={cn(CARD, 'text-xs text-destructive')}>Could not load this lead's CRM details. Close and open it again.</section>;
-  if (!lead) return null; // not readable by this caller → nothing to show (the server said so)
+  const lead = crm.data ?? null;
+  const inFlight = useRef(false);
 
   const stateLead = () => {
     const last = lastLoggedContactOf(activity.data);
-    return { ...lead, lastLogged: last ? { outcome: last.outcomeValue ?? '', at: last.at, reached: last.everReached } : null, wrongNumber: wrong.data?.wrong ?? null };
-  };
-  const scrollToNext = () => requestAnimationFrame(() => nextRef.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }));
-
-  /* The follow-on of one outcome (see the header): the ONE plan, carried out, then the suggestion
-     pre-filled. `logged` = lead_log_contact already recorded the contact (false for a WhatsApp
-     conversation's result — the messages are the record). */
-  const followOn: FollowOn = async (outcome, channel, logged) => {
-    const sl = stateLead();
-    const before = salesStateOf(sl);
-    const res = await applyOutcome(sl, outcome, before, logged);
-    if (res.plan.suppressNumber) void qc.invalidateQueries({ queryKey: wrongNumberKey(leadId) });
-    /* Why did they say no? The one prompt, once the lead really reads Not interested. */
-    if (outcome === 'not_interested' && res.after.state === 'not_interested' && !res.failed.length) {
-      askLostReason({ leadId, businessName: lead.business_name, reason: lead.lost_reason, note: lead.lost_reason_note });
-    }
-    const sug = suggestNextAction(channel, outcome);
-    let suggestion: string | null = null;
-    const saved = !!res.plan.setNextAction && !res.failed.some((x) => x.includes('Next Action set'));
-    /* The saved task shows at once (the re-read that follows confirms it). */
-    if (saved) qc.setQueryData<CrmRow | null>(leadCrmKey(leadId), (row) => (row ? { ...row, next_action: res.plan.setNextAction, next_action_date: null, next_action_time: null, call_booked_at: null } as CrmRow : row));
-    if (res.plan.askMeeting) { setAskWhen(true); suggestion = 'Add when it is below — it goes on the Next Action “Meeting”'; }
-    else if (res.plan.askCallBackDay) {
-      /* The Call is already the Next Action (or was): the form opens on it so the day can be added. */
-      setPreset(null); setEditingNext(true); scrollToNext();
-      suggestion = res.plan.setNextAction ? (saved ? 'Add the day below if you know it' : null) : 'The Next Action is already a Call — change its day below if needed';
-    }
-    else if (sug) {
-      setPreset({ nextAction: sug.nextAction, date: sug.days === null ? undefined : londonDayPlus(sug.days), note: sug.note, why: outcomeLabel(outcome) });
-      scrollToNext();
-      const word = NEXT_ACTION_OPTIONS.find((o) => o.value === sug.nextAction)?.label ?? sug.nextAction;
-      suggestion = sug.days === null
-        ? `Next Action “${word}” is filled in below — pick a day and Save`
-        : `Next Action “${word} · ${sug.days === 0 ? 'today' : sug.days === 1 ? 'tomorrow' : `in ${sug.days} days`}” is filled in below — Save to keep it`;
-    }
-    return { contact: null, state: res.after, change: stateChangeText(before, res.after), said: res.said, failed: res.failed, suggestion };
+    return { ...(lead as CrmRow), lastLogged: last ? { outcome: last.outcomeValue ?? '', at: last.at, reached: last.everReached } : null, wrongNumber: wrong.data?.wrong ?? null };
   };
 
-  /* ⛔ ONE NEXT-ACTION WRITE (src/lib/nextActionWrite.ts, 2026-10-02): this panel, the Outreach row and the phone
+  /** Record one outcome (`logged` false = a WhatsApp conversation's result — the messages are the record) and
+   *  carry out its rule. Returns null while another log is still in flight (the double tap). */
+  const logOutcome = async (outcome: string, channel: string, logged: boolean, note: string | null): Promise<LoggedOutcome | null> => {
+    if (!lead || inFlight.current) return null;
+    inFlight.current = true;
+    try {
+      const label = contactMethodLabel(channel);
+      if (logged) {
+        const r = await save('lead_log_contact', { _channel: channel, _outcome: outcome, _note: note?.trim() || null }, `${label} logged: ${outcomeLabel(outcome)}`);
+        if (!r.ok) return { ok: false, result: null, plan: null, preset: null };
+      }
+      const sl = stateLead();
+      const before = salesStateOf(sl);
+      const res = await applyOutcome(sl, outcome, before, logged);
+      if (res.plan.suppressNumber) void qc.invalidateQueries({ queryKey: wrongNumberKey(leadId) });
+      /* Why did they say no? The one prompt, once the lead really reads Not interested. */
+      if (outcome === 'not_interested' && res.after.state === 'not_interested' && !res.failed.length) {
+        askLostReason({ leadId, businessName: lead.business_name, reason: lead.lost_reason, note: lead.lost_reason_note });
+      }
+      const saved = !!res.plan.setNextAction && !res.failed.some((x) => x.includes('Next Action set'));
+      /* The saved task shows at once (the re-read that follows confirms it). */
+      if (saved) qc.setQueryData<CrmRow | null>(leadCrmKey(leadId), (row) => (row ? { ...row, next_action: res.plan.setNextAction, next_action_date: null, next_action_time: null, call_booked_at: null } as CrmRow : row));
+      const sug = res.plan.askMeeting || res.plan.askCallBackDay ? null : suggestNextAction(channel, outcome);
+      const preset: NextActionPreset | null = sug ? { nextAction: sug.nextAction, date: sug.days === null ? undefined : londonDayPlus(sug.days), note: sug.note, why: outcomeLabel(outcome) } : null;
+      let suggestion: string | null = null;
+      if (res.plan.askMeeting) suggestion = saved ? 'Next Action set: Meeting — add when it is' : null;
+      else if (res.plan.askCallBackDay) suggestion = res.plan.setNextAction ? (saved ? 'Next Action set: Call — add the day if you know it' : null) : 'The Next Action is already a Call';
+      const contact = `${logged ? CONTACT_METHODS.find((m) => m.value === channel)?.short ?? label : 'WhatsApp'} · ${outcomeLabel(outcome)}`;
+      return { ok: true, plan: res.plan, preset, result: { contact, state: res.after, change: stateChangeText(before, res.after), said: res.said, failed: res.failed, suggestion } };
+    } finally { inFlight.current = false; }
+  };
+
+  /* ⛔ ONE NEXT-ACTION WRITE (src/lib/nextActionWrite.ts, 2026-10-02): this hook, the Outreach row and the phone
      card save through the same functions. The meeting: ONE Save puts the day and time on the Next Action
      "Meeting"; the server sets call_booked_at as its mirror. There is no second meeting-time editor. */
   const afterWrite = (r: WriteResult, okText: string, before?: CrmRow | null) => {
@@ -340,66 +317,51 @@ export function LeadWorkPanel({ leadId, onRemoved, logContactOpen = false, editN
     else { if (before !== undefined) qc.setQueryData(leadCrmKey(leadId), before); toast({ title: 'Not saved', description: refusalText(r.error), variant: 'destructive' }); }
     return r;
   };
-  /* The open panel shows the chosen values the moment Save is pressed; a refusal puts the old ones back. */
+  /* The open window shows the chosen values the moment Save is pressed; a refusal puts the old ones back. */
   const showAtOnce = (patch: Record<string, unknown>) => {
     const before = qc.getQueryData<CrmRow | null>(leadCrmKey(leadId));
     qc.setQueryData<CrmRow | null>(leadCrmKey(leadId), (row) => (row ? { ...row, ...patch } as CrmRow : row));
     return before ?? null;
   };
-  const saveMeeting = async (localValue: string, note: string | null = null) => {
+  const saveMeeting = async (localValue: string, note: string | null = null): Promise<WriteResult | null> => {
+    if (!lead) return null;
     /* The typed value is UK time, as every screen shows it (londonInstant), whatever this computer's clock. */
     const iso = localValue ? londonInstant(localValue.slice(0, 10), localValue.slice(11, 16)) : null;
-    if (!iso) return;
-    /* Shown at once, like the form's Save (the write is several server calls); a refusal puts the old row back. */
+    if (!iso) return null;
     const { day, time } = meetingDayTime(iso);
     const before = showAtOnce({ next_action: 'meeting', next_action_date: day, next_action_time: time, call_booked_at: iso });
-    const r = afterWrite(await bookMeeting(leadId, iso, note ?? lead.next_action_note, stateLead()), 'Meeting booked · Next Action set', before);
-    if (r.ok) setAskWhen(false);
+    return afterWrite(await bookMeeting(leadId, iso, note ?? lead.next_action_note, stateLead()), 'Meeting booked · Next Action set', before);
   };
+  /** The ONE Next Action form's Save. Stale-tab protection is the form's own (lead_set_follow_up's _expected). */
+  const saveNext = async (a: NextActionInput): Promise<WriteResult> => {
+    /* A Meeting with a day and time also books it — shown at once too. */
+    const bookedAt = a.nextAction === 'meeting' && a.date && a.time ? londonInstant(a.date, a.time.slice(0, 5)) : null;
+    const before = showAtOnce({ next_action: a.nextAction, next_action_date: a.nextAction === 'none' ? null : a.date, next_action_time: a.nextAction === 'none' || !a.date ? null : (a.time ?? null), next_action_note: a.nextAction === 'none' ? null : a.note, call_booked_at: bookedAt });
+    return afterWrite(await saveNextAction(leadId, a, stateLead()), a.nextAction === 'none' ? 'Next action cleared' : a.nextAction === 'meeting' && a.time && a.date ? 'Meeting booked · Next Action set' : 'Next action saved', before);
+  };
+
+  return { crm, lead, save, logOutcome, saveMeeting, saveNext };
+}
+
+/** The DETAILS tab's work (sales workspace v2, 2026-10-05; the Call tab's cards moved out 2026-10-06 — the
+ *  status and the Next Action are in the popup header, the outcome is the Log window, src/components/
+ *  LeadCallFlow.tsx): what was learned — campaign, note, website & domain, remove. */
+export function LeadWorkPanel({ leadId, onRemoved }: { leadId: string; onRemoved?: () => void }) {
+  const crm = useLeadCrmRow(leadId);
+  const activity = useLeadActivity(leadId);
+  const save = useSave(leadId);
+  const { role } = useSubscription();
+  const lead = crm.data;
+  if (crm.isLoading) return <section className={CARD}><Loader2 className="h-4 w-4 animate-spin text-muted-foreground" /></section>;
+  if (crm.isError) return <section className={cn(CARD, 'text-xs text-destructive')}>Could not load this lead's CRM details. Close and open it again.</section>;
+  if (!lead) return null; // not readable by this caller → nothing to show (the server said so)
 
   const agency = lead.website_control === 'agency_controls';
   return (
     <div className="space-y-3">
-      {showCall && statusControl && (
-        <section className={cn(CARD, 'flex flex-wrap items-center justify-between gap-2 py-2.5')} data-testid="call-status">
-          <span className={LABEL}>Status</span>{statusControl}
-        </section>
-      )}
-      {showCall && <LogContact leadId={leadId} save={save} followOn={followOn} defaultOpen={logContactOpen} />}
-
-      {/* Why they said no: shown only while the lead is Not interested. Add one (skipped, or before this
-          existed: "Reason not recorded", never guessed) or correct it; History keeps every version. */}
-      {showCall && lead.status === 'not_interested' && (
-        <section className={cn(CARD, 'flex flex-wrap items-center justify-between gap-2 py-2.5')} data-testid="lost-reason">
-          <span className="min-w-0 text-xs">
-            <span className="text-muted-foreground">Why they said no · </span>
-            <span className={cn('font-medium', !lead.lost_reason && 'text-muted-foreground')}>{lead.lost_reason ? lostReasonLabel(lead.lost_reason) : LOST_REASON_UNRECORDED}</span>
-            {lead.lost_reason_note && <span className="block text-muted-foreground">{lead.lost_reason_note}</span>}
-          </span>
-          <Button size="sm" variant="outline" className="h-7 text-xs" data-testid="lost-reason-edit"
-            onClick={() => askLostReason({ leadId, businessName: lead.business_name, reason: lead.lost_reason, note: lead.lost_reason_note })}>
-            {lead.lost_reason ? 'Change' : 'Add reason'}
-          </Button>
-        </section>
-      )}
-
-      {showCall && askWhen && (
-        <section className={cn(CARD, 'flex flex-wrap items-end gap-2 border-blue-500/50')} data-testid="meeting-when">
-          <label className="min-w-0 flex-1 text-[11px] font-medium text-muted-foreground">When is the call / meeting? (UK time)
-            <Input type="datetime-local" className="mt-1 h-9 text-xs" id={`meeting-at-${lead.id}`} defaultValue={lead.call_booked_at ? londonLocalInput(lead.call_booked_at) : ''} />
-          </label>
-          <Button size="sm" variant="ghost" className="h-9 text-xs" onClick={() => setAskWhen(false)}>Later</Button>
-          <Button size="sm" className="h-9 text-xs" data-testid="meeting-save" onClick={() => {
-            const el = document.getElementById(`meeting-at-${lead.id}`) as HTMLInputElement | null;
-            void saveMeeting(el?.value ?? '');
-          }}>Save meeting</Button>
-          <p className="w-full text-[11px] text-muted-foreground">Shows as “Meeting booked” with the time, and sets the Next Action “Meeting” on that day.</p>
-        </section>
-      )}
-
       {/* ⛔ AN ATTRIBUTE, NOT AN OUTCOME: who runs their site changes how it is sold, whatever the call's
           outcome was. One tap here; the full choice is under "Website & domain". */}
-      {showDetails && <section className={cn(CARD, 'flex flex-wrap items-center justify-between gap-2 py-2.5')} data-testid="learned-agency">
+      <section className={cn(CARD, 'flex flex-wrap items-center justify-between gap-2 py-2.5')} data-testid="learned-agency">
         <span className="text-xs text-muted-foreground">Learned on the call</span>
         <button type="button" data-testid="agency-chip" aria-pressed={agency}
           className={cn('inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-medium', agency ? 'border-amber-500/50 bg-amber-500/10 text-amber-700 dark:text-amber-300' : 'border-border/60 text-muted-foreground hover:bg-muted')}
@@ -410,34 +372,11 @@ export function LeadWorkPanel({ leadId, onRemoved, logContactOpen = false, editN
         <DetectedAgency website={lead.website} websiteControl={lead.website_control}
           onConfirm={() => void save('lead_set_website_control', { _value: 'agency_controls', _note: lead.website_control_note }, 'Saved: an agency runs their site', { website_control: 'agency_controls' })}
           onReject={() => void save('lead_set_website_control', { _value: 'client_controls', _note: lead.website_control_note }, 'Saved: they control the website', { website_control: 'client_controls' })} />
-      </section>}
+      </section>
 
-      {showCall && <section className={cn(CARD, preset && 'border-amber-500/50', !(editingNext || preset) && 'py-2.5')} ref={nextRef} data-testid="next-action-section">
-        {editingNext || preset ? (<>
-          <div className="mb-2.5 flex items-center gap-1.5"><CalendarClock className="h-3.5 w-3.5 text-primary" /><span className={LABEL}>Next action</span>
-            {!preset && <button type="button" className="ml-auto text-xs text-muted-foreground hover:text-foreground" onClick={() => setEditingNext(false)} data-testid="next-action-close">Close</button>}
-          </div>
-          <NextActionForm key={`${lead.next_action}|${lead.next_action_date}|${lead.next_action_time}|${lead.next_action_note}|${preset ? JSON.stringify(preset) : ''}`} lead={lead} preset={preset} onDismiss={() => setPreset(null)}
-            onSave={async (a) => {
-              /* A Meeting with a day and time also books it — shown at once too, so the folded Call booked line
-                 never reads "Nothing recorded" while the bar already shows the meeting. */
-              const bookedAt = a.nextAction === 'meeting' && a.date && a.time ? londonInstant(a.date, a.time.slice(0, 5)) : null;
-              const before = showAtOnce({ next_action: a.nextAction, next_action_date: a.nextAction === 'none' ? null : a.date, next_action_time: a.nextAction === 'none' || !a.date ? null : (a.time ?? null), next_action_note: a.nextAction === 'none' ? null : a.note, call_booked_at: bookedAt });
-              const r = afterWrite(await saveNextAction(leadId, a, stateLead()), a.nextAction === 'none' ? 'Next action cleared' : a.nextAction === 'meeting' && a.time && a.date ? 'Meeting booked · Next Action set' : 'Next action saved', before);
-              if (r.ok) { setPreset(null); setEditingNext(false); } return r; }} />
-        </>) : (
-          /* ⛔ ONE NEXT ACTION (v2): this is its ONE display and its ONE editor — the popup header no longer
-             repeats it. Stale-tab protection is the editor's own (lead_set_follow_up's _expected). */
-          <div className="space-y-1.5">
-            <span className="inline-flex items-center gap-1.5"><CalendarClock className="h-3.5 w-3.5 text-primary" /><span className={LABEL}>Next action</span></span>
-            <NextActionBar lead={lead} onEdit={() => setEditingNext(true)} />
-          </div>
-        )}
-      </section>}
+      <LeadCampaign lead={lead} save={save} reached={reachedInConversation(activity.data)} />
 
-      {showDetails && <LeadCampaign lead={lead} save={save} reached={reachedInConversation(activity.data)} />}
-
-      {showDetails && <InternalNote save={save} />}
+      <InternalNote save={save} />
 
       {/* Folded to its summary (declutter pass 2): who controls the site and domain.
           ⛔ ONE NEXT ACTION (2026-10-02): the "Call booked for" time box that lived here was a SECOND editor of the
@@ -445,7 +384,7 @@ export function LeadWorkPanel({ leadId, onRemoved, logContactOpen = false, editN
           is booked, moved and completed as the Next Action "Meeting" only. */}
       {/* v2: renamed from "Call booked · website" — it records the website and the domain, nothing about a call.
           The website APPROACH comes first: it decides which Close questions make sense (the same stored answer). */}
-      {showDetails && <WorkSection icon={BriefcaseBusiness} title="Website & domain" testId="call-booked" summary={callBookedSummary(lead)}>
+      <WorkSection icon={BriefcaseBusiness} title="Website & domain" testId="call-booked" summary={callBookedSummary(lead)}>
         <WebsiteApproachField leadId={leadId} />
         <div className="mt-3 grid gap-3 sm:grid-cols-2">
           <div className="space-y-1.5">
@@ -476,9 +415,9 @@ export function LeadWorkPanel({ leadId, onRemoved, logContactOpen = false, editN
             <p className="text-[11px] text-muted-foreground">Who controls the domain is not the same as who can log in to the website. A new site never needs the old website's login.</p>
           </div>
         </div>
-      </WorkSection>}
+      </WorkSection>
 
-      {showDetails && leadPermissions(role).removeFromMyLeads && <RemoveFromMyLeads leadId={lead.id} onRemoved={onRemoved} />}
+      {leadPermissions(role).removeFromMyLeads && <RemoveFromMyLeads leadId={lead.id} onRemoved={onRemoved} />}
     </div>
   );
 }
@@ -562,148 +501,6 @@ function LeadCampaign({ lead, save, reached }: { lead: CrmRow; save: SaveFn; rea
 /** The Call booked section's folded line — the one rule in src/lib/workspaceHeader.ts (no time when the Next Action bar shows it). */
 const callBookedSummary = (lead: CrmRow) => callBookedSummaryOf(lead, Date.now(), { websiteControl: WEBSITE_CONTROL_OPTIONS, meetingWhen });
 
-/** A WhatsApp conversation is recorded by its messages; what CAME of it is still the rep's to say.
- *  These apply the same plan as the logged outcomes, without a second record of the messages. */
-const WHATSAPP_RESULT_OUTCOMES = ['interested', 'meeting_booked', 'call_back', 'not_interested'] as const;
-
-/** One tap per outcome. The channel defaults to Call; the note is optional and saved with it.
- *  ⛔ COLLAPSED BY DEFAULT (declutter pass, 2026-10-01): one line until the person opens it — or it opens itself
- *  when they came to log a call (defaultOpen). Every channel and every outcome is still inside. After a
- *  successful log it closes again; the result line (what was recorded, the state, the suggested Next Action)
- *  stays visible under the closed header. */
-/** Outcomes after which the prospect may be ready to pay: the result line offers Quick Close right there. */
-const CLOSE_READY_OUTCOMES: ReadonlySet<string> = new Set(['interested', 'spoke_to_owner', 'meeting_booked']);
-
-function LogContact({ leadId, save, followOn, defaultOpen = false }: { leadId: string; save: SaveFn; followOn: FollowOn; defaultOpen?: boolean }) {
-  const [open, setOpen] = useState(defaultOpen);
-  /* ⛔ ONE TAP, ONE CALL (Session E E-12): `busy` disables the buttons only after React re-renders, so two taps in
-     the same frame both got through. The ref closes that gap here; the server refuses an identical second row too. */
-  const inFlight = useRef(false);
-  const [lastOutcome, setLastOutcome] = useState<string | null>(null);
-  const [channel, setChannel] = useState<string>('call');
-  const [note, setNote] = useState('');
-  useUnsavedDraft(`log-contact-note-${useId()}`, note.trim() !== '');
-  const [busy, setBusy] = useState<string | null>(null);
-  const [result, setResult] = useState<OutcomeResultLine | null>(null);
-  /* Opened FOR a call (Outreach's Call, the script's "Log this call"): it sits below the audit card, so it is
-     brought into view — the person came here to record what happened. */
-  const rootRef = useRef<HTMLDivElement>(null);
-  useEffect(() => { if (defaultOpen) rootRef.current?.scrollIntoView({ block: 'start', behavior: 'smooth' }); }, [defaultOpen]);
-  const tap = async (outcome: string, logged: boolean) => {
-    if (inFlight.current) return;
-    inFlight.current = true;
-    setBusy(outcome);
-    try {
-      const label = contactMethodLabel(channel);
-      if (logged) {
-        const r = await save('lead_log_contact', { _channel: channel, _outcome: outcome, _note: note.trim() || null }, `${label} logged: ${outcomeLabel(outcome)}`);
-        if (!r.ok) return;
-        setNote('');
-      }
-      const res = await followOn(outcome, channel, logged);
-      setOpen(false);
-      setResult({ ...res, contact:`${logged ? CONTACT_METHODS.find((m) => m.value === channel)?.short ?? label : 'WhatsApp'} · ${outcomeLabel(outcome)}` });
-      setLastOutcome(outcome);
-    } finally { inFlight.current = false; setBusy(null); }
-  };
-  const outcomeButton = (o: { value: string; label: string }, logged: boolean) => (
-    <Button key={o.value} type="button" size="sm" variant="outline" disabled={busy !== null} title={outcomeRule(o.value).does} data-testid={`outcome-${o.value}`}
-      className={cn('h-9 justify-start px-2.5 text-xs', (o.value === 'interested' || o.value === 'meeting_booked') && 'border-emerald-500/40', (o.value === 'not_interested' || o.value === 'wrong_number') && 'border-rose-500/30')}
-      onClick={() => void tap(o.value, logged)}>
-      {busy === o.value ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : null}{o.label}
-    </Button>
-  );
-  const chip = (on: boolean) => cn('rounded-full border px-2.5 py-1 text-xs font-medium transition-colors', on ? 'border-primary bg-primary text-primary-foreground' : 'border-border/60 text-muted-foreground hover:bg-muted');
-  /* ⛔ EVERY METHOD OF THE ONE SET (src/lib/contactMethods.ts): the most used as pills, the rest under
-     More. WhatsApp is a pill but is recorded by the send itself — selecting it explains that instead of
-     offering a second record of the same message. */
-  const primary = CONTACT_METHODS.filter((m) => m.primary);
-  const more = CONTACT_METHODS.filter((m) => !m.primary && !m.social);
-  const current = CONTACT_METHODS.find((m) => m.value === channel);
-  const inMore = !!current && !current.primary && !current.social;
-  /* Social outreach → platform → outcome: ONE Social pill; picking it shows LinkedIn / Facebook /
-     Instagram (LinkedIn first). Keeps the row at five pills. */
-  const inSocial = !!current?.social;
-  const resultLine = result ? (
-    /* ⛔ THE VISIBLE RESULT (2026-09-30): what was recorded, the state it left the lead in (and the
-       change, when there was one), what else happened, and the Next Action waiting to be saved. Drawn
-       under the header whether the section is open or folded. */
-    <div className="space-y-1 rounded-md border border-border/60 bg-muted/30 px-2.5 py-2 text-[11px]" data-testid="logged-line">
-      <div className="flex flex-wrap items-center gap-1.5">
-        <Check className="h-3.5 w-3.5 text-emerald-600" />
-        <span className="font-semibold text-foreground">{result.contact}</span>
-        <span className="text-muted-foreground">→</span>
-        <SalesStatePill view={result.state} size="xs" />
-        {result.change && <span className="text-muted-foreground" data-testid="state-change">{result.change}</span>}
-      </div>
-      {result.said.length > 0 && <p className="text-muted-foreground">{result.said.join(' · ')}</p>}
-      {result.failed.length > 0 && <p className="text-destructive">{result.failed.join(' · ')}</p>}
-      {result.suggestion && <p className="font-medium text-amber-700 dark:text-amber-300" data-testid="suggestion">{result.suggestion}</p>}
-      {/* They are interested: the close is one tap away, not a hunt for the header button (call-first, 2026-10-04). */}
-      {lastOutcome && CLOSE_READY_OUTCOMES.has(lastOutcome) && result.state.state !== 'not_interested' && (
-        <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border/60 pt-1.5" data-testid="logged-quick-close">
-          <span className="text-muted-foreground">Ready to pay now? Take the £99 on the call.</span>
-          <QuickCloseButton leadId={leadId} />
-        </div>
-      )}
-    </div>
-  ) : null;
-  return (
-    <div ref={rootRef} data-testid="log-contact">
-    <WorkSection icon={PhoneCall} title="Log a contact" summary={open ? null : 'Call, WhatsApp, email, in person, social'} summaryClass="hidden sm:inline"
-      open={open} onOpenChange={setOpen} testId="log-contact" className={open ? 'border-primary/30' : undefined} after={resultLine}>
-      <div className="mb-2 flex flex-wrap gap-1.5" role="radiogroup" aria-label="How you contacted them">
-        {primary.map((c) => (
-          <button key={c.value} type="button" role="radio" aria-checked={channel === c.value} className={chip(channel === c.value)} onClick={() => setChannel(c.value)}>{c.short}</button>
-        ))}
-        <button type="button" role="radio" aria-checked={inSocial} className={chip(inSocial)} onClick={() => { if (!inSocial) setChannel(SOCIAL_CONTACT_METHODS[0].value); }} data-testid="log-social">Social</button>
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <button type="button" className={cn(chip(inMore), 'inline-flex items-center gap-0.5')} aria-label="More contact methods">
-              {inMore ? current!.short : 'More'}<ChevronDown className="h-3 w-3" />
-            </button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="start">
-            {more.map((c) => <DropdownMenuItem key={c.value} className="text-xs" onClick={() => setChannel(c.value)}>{c.label}</DropdownMenuItem>)}
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </div>
-      {inSocial && (
-        <div className="mb-2 flex flex-wrap items-center gap-1.5" role="radiogroup" aria-label="Which social network" data-testid="log-social-platform">
-          <span className="text-[11px] text-muted-foreground">On:</span>
-          {SOCIAL_CONTACT_METHODS.map((c) => (
-            <button key={c.value} type="button" role="radio" aria-checked={channel === c.value} className={chip(channel === c.value)} onClick={() => setChannel(c.value)}>{c.short}</button>
-          ))}
-        </div>
-      )}
-      {current?.recordedBy === 'send' ? (<>
-        <p className="mb-2 rounded-md bg-muted/50 px-2.5 py-2 text-xs text-muted-foreground" data-testid="whatsapp-recorded-by-send">
-          WhatsApp messages are recorded automatically — nothing to log. What came of the conversation?
-        </p>
-        <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-4" data-testid="whatsapp-result">
-          {WHATSAPP_RESULT_OUTCOMES.map((v) => outcomeButton({ value: v, label: outcomeLabel(v) }, false))}
-        </div>
-      </>) : (<>
-      <Input value={note} onChange={(e) => setNote(e.target.value)} className="mb-2 h-9 text-xs" placeholder="Note (optional), saved with the outcome" />
-      {(() => {
-        /* Two plain groups so the rep picks what happened, not a state: they did not reach anyone, or they spoke. */
-        const offered = offeredOutcomes(outcomesFor(channel));
-        const spoke = offered.filter((o) => CONVERSATION_OUTCOMES.has(o.value));
-        const notReached = offered.filter((o) => !CONVERSATION_OUTCOMES.has(o.value));
-        if (current?.kind !== 'call' || !spoke.length || !notReached.length) return <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3">{offered.map((o) => outcomeButton(o, true))}</div>;
-        return (<div className="space-y-2" data-testid="outcome-groups">
-          <div><p className="mb-1 text-[11px] font-medium text-muted-foreground">Didn't speak to them</p>
-            <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3">{notReached.map((o) => outcomeButton(o, true))}</div></div>
-          <div><p className="mb-1 text-[11px] font-medium text-muted-foreground">Spoke to them</p>
-            <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3">{spoke.map((o) => outcomeButton(o, true))}</div></div>
-        </div>);
-      })()}
-      </>)}
-    </WorkSection>
-    </div>
-  );
-}
-
 function InternalNote({ save }: { save: SaveFn }) {
   const [note, setNote] = useState('');
   useUnsavedDraft(`internal-note-${useId()}`, note.trim() !== '');
@@ -751,7 +548,10 @@ function hookInputs(lead: CrmRow, hook: ReturnType<typeof useHookVisibility>['da
 
 /** autoPropose: the Outreach row's audit popup — when the lead has no audit yet, propose the three
  *  questions straight away instead of showing the "Propose questions" button first. */
-export function LeadHookPanel({ leadId, autoPropose = false }: { leadId: string; autoPropose?: boolean }) {
+/** variant 'call' (2026-10-06): the TOP of the lead's Call tab — the one AI result on that screen (coloured
+ *  scores, best missed search, who was named, full audit / report / copy link), with run / re-run and the
+ *  earlier checks folded. Same data and the same propose → review → run path as everywhere else. */
+export function LeadHookPanel({ leadId, autoPropose = false, variant }: { leadId: string; autoPropose?: boolean; variant?: 'call' }) {
   const { toast } = useToast();
   const qc = useQueryClient();
   const crm = useLeadCrmRow(leadId);
@@ -841,8 +641,8 @@ export function LeadHookPanel({ leadId, autoPropose = false }: { leadId: string;
 
   return (
     <div className="space-y-3">
-      <HookVisibilityCard leadId={lead.id} onRunNew={() => void propose()} runNewBusy={hookBusy} onReportCopied={onReportCopied} />
-      {reportAuditId && hook?.report?.kind === 'ready' && hook.report.isCurrent && <ReportSharePanel leadId={lead.id} auditId={reportAuditId} />}
+      <HookVisibilityCard leadId={lead.id} onRunNew={() => void propose()} runNewBusy={hookBusy} onReportCopied={onReportCopied} variant={variant === 'call' ? 'call' : undefined} />
+      {variant !== 'call' && reportAuditId && hook?.report?.kind === 'ready' && hook.report.isCurrent && <ReportSharePanel leadId={lead.id} auditId={reportAuditId} />}
       {proposed && (
         <section className={cn(CARD, 'space-y-2')} data-testid="hook-proposed-questions">
           <div className={LABEL}>The {proposed.length} questions we will ask ChatGPT and Google AI — edit any of them</div>
@@ -896,8 +696,8 @@ export function LeadHookPanel({ leadId, autoPropose = false }: { leadId: string;
         </div>
       )}
       {(hook?.history?.length ?? 0) > 1 && (
-        <section className={cn(CARD, 'space-y-1')} data-testid="hook-history">
-          <div className={LABEL}>Previous checks</div>
+        <details className={cn(CARD, 'space-y-1')} data-testid="hook-history" open={variant === 'call' ? undefined : true}>
+          <summary className={cn(LABEL, 'cursor-pointer select-none')}>Earlier checks ({hook!.history.length})</summary>
           <ul className="space-y-0.5 text-xs">
             {hook!.history.map((h) => (
               <li key={h.auditId} className="flex flex-wrap items-center justify-between gap-2">
@@ -906,7 +706,7 @@ export function LeadHookPanel({ leadId, autoPropose = false }: { leadId: string;
               </li>
             ))}
           </ul>
-        </section>
+        </details>
       )}
       {!proposed && !details && !hookQ.isLoading && !hookQ.isError && !hook?.audit && (
         /* Compact until there is something to show (declutter pass, 2026-10-01): the name, "Not run yet", the one
@@ -1019,16 +819,5 @@ export function LeadHistoryPanel({ leadId, older }: { leadId: string; older?: Re
         {!activity.isLoading && items.length === 0 && <li className="text-muted-foreground/60">Nothing recorded yet.</li>}
       </ul>
     </section>
-  );
-}
-
-/** The three panels stacked — the old single-panel shape, kept for any caller that wants it. */
-export function LeadCrmPanel({ leadId }: { leadId: string }) {
-  return (
-    <div className="space-y-4">
-      <LeadHookPanel leadId={leadId} />
-      <LeadWorkPanel leadId={leadId} />
-      <LeadHistoryPanel leadId={leadId} />
-    </div>
   );
 }

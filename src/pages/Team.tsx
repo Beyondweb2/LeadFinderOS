@@ -1,13 +1,14 @@
 import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Copy, Loader2, UserPlus } from 'lucide-react';
+import { Copy, FileText, Link2, Loader2, Scale, ShieldCheck, UserPlus, Users } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
-import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
+import { cn } from '@/lib/utils';
+import { Callout, EDGE, PageHeader, ToneChip } from '@/components/operator/ui';
+import { Panel } from '@/components/salesDash/ui';
 import { OwnerAvatar } from '@/components/OwnerBadge';
 import { PERMISSION_MATRIX } from '@/lib/access';
 import { OnboardingBadge, SalespersonDocumentsCard, SalespersonOnboardingPanel } from '@/components/SalespersonOnboardingPanel';
@@ -45,21 +46,23 @@ const ERR: Record<string, string> = {
   cannot_change_self: 'You cannot disable your own account.',
   cannot_change_book_owner: 'The book owner cannot be disabled.',
   cannot_change_admin: 'An admin cannot be disabled here.',
-  not_ready_to_sell: 'That salesperson is not Ready to Sell, so leads cannot be moved to them.',
+  not_ready_to_sell: 'That salesperson\'s sales access is not active (suspended, ended or login off), so leads cannot be moved to them.',
   not_an_active_member: 'Pick an active team member.',
 };
 
 function LinkBox({ link, onClose }: { link: string; onClose: () => void }) {
   const { toast } = useToast();
   return (
-    <div className="rounded-md border border-primary/40 bg-primary/5 p-3 space-y-2">
-      <p className="text-sm">Send this link to them yourself (WhatsApp or email). It works once, and they choose their own password.</p>
-      <div className="flex gap-2">
-        <Input readOnly value={link} className="font-mono text-xs" onFocus={(e) => e.currentTarget.select()} />
-        <Button size="sm" variant="outline" onClick={async () => { await navigator.clipboard.writeText(link); toast({ title: 'Link copied' }); }}><Copy className="h-4 w-4" /></Button>
+    <Callout tone="blue" icon={Link2} title="Invite link ready">
+      <div className="space-y-2">
+        <p>Send this link to them yourself (WhatsApp or email). It works once, and they choose their own password.</p>
+        <div className="flex min-w-0 gap-2">
+          <Input readOnly value={link} className="h-9 min-w-0 flex-1 font-mono text-xs" onFocus={(e) => e.currentTarget.select()} />
+          <Button size="sm" variant="outline" className="h-9 w-9 shrink-0 p-0" aria-label="Copy link" onClick={async () => { await navigator.clipboard.writeText(link); toast({ title: 'Link copied' }); }}><Copy className="h-4 w-4" /></Button>
+        </div>
+        <Button size="sm" variant="ghost" onClick={onClose}>Done</Button>
       </div>
-      <Button size="sm" variant="ghost" onClick={onClose}>Done</Button>
-    </div>
+    </Callout>
   );
 }
 
@@ -132,46 +135,48 @@ export default function Team() {
 
   return (
     <div className="p-4 md:p-6 space-y-6 max-w-5xl">
-      <div>
-        <h1 className="text-xl font-semibold">Team</h1>
-        <p className="text-sm text-muted-foreground">Salespeople get their own login. They see only their own leads and never delivery, clients, money or settings.</p>
-        <p className="text-xs text-muted-foreground">Click a salesperson's onboarding badge to see what is still missing. Until they are Ready to Sell they can sign in and see their onboarding, but every sales action is blocked. Only you can see these records.</p>
-        {onboarding.error && <p className="text-xs text-destructive">Onboarding records could not be loaded: {String((onboarding.error as Error).message)}</p>}
+      <div className="space-y-3">
+        <PageHeader eyebrow="Admin" title="Team" subtitle="Salespeople get their own login. They see only their own leads and never delivery, clients, money or settings." />
+        <p className="text-xs leading-snug text-muted-foreground">Click a salesperson's onboarding badge to see their checklist. The checklist is your record only — it does not block selling. Only a suspended, ended or disabled salesperson is stopped. Only you can see these records.</p>
+        {onboarding.error && <Callout tone="red">Onboarding records could not be loaded: {String((onboarding.error as Error).message)}</Callout>}
       </div>
 
-      <Card className="p-4 space-y-3">
-        <h2 className="font-semibold flex items-center gap-2"><UserPlus className="h-4 w-4" />Invite a salesperson</h2>
-        <div className="flex flex-wrap gap-2">
-          <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Name" className="w-48" />
-          <Input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email" type="email" className="w-64" />
-          <Button disabled={busy || !name.trim() || !email.trim()} onClick={() => void invite()}>{busy ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Create invite link'}</Button>
+      <Panel title="Invite a salesperson" icon={UserPlus} tone="blue">
+        <div className="space-y-3">
+          <div className="flex flex-wrap gap-2">
+            <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Name" className="h-9 w-full sm:w-48" />
+            <Input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email" type="email" className="h-9 w-full sm:w-64" />
+            <Button className="w-full sm:w-auto" disabled={busy || !name.trim() || !email.trim()} onClick={() => void invite()}>{busy ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Create invite link'}</Button>
+          </div>
+          {link && <LinkBox link={link} onClose={() => setLink(null)} />}
         </div>
-        {link && <LinkBox link={link} onClose={() => setLink(null)} />}
-      </Card>
+      </Panel>
 
-      <Card className="p-0 overflow-hidden">
-        {team.isLoading ? <div className="p-6"><Loader2 className="h-5 w-5 animate-spin" /></div> : team.error ? (
-          <p className="p-4 text-sm text-destructive">{String((team.error as Error).message)}</p>
+      <Panel title="Team members" icon={Users} tone="blue">
+        {team.isLoading ? <div className="flex justify-center py-6"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div> : team.error ? (
+          <Callout tone="red">{String((team.error as Error).message)}</Callout>
         ) : (
-          <ul className="divide-y">
+          <ul className="space-y-2">
             {members.map((m) => (
-              <li key={m.user_id} className="p-3 flex flex-wrap items-center gap-3">
+              <li key={m.user_id} className={cn('flex min-w-0 flex-wrap items-center gap-x-3 gap-y-2 rounded-xl border border-border/60 bg-muted/20 p-3', m.status !== 'active' ? EDGE.grey : m.suspended_at ? EDGE.red : undefined)}>
                 <OwnerAvatar name={m.display_name} className="h-8 w-8 text-xs" />
-                <div className="min-w-0 mr-auto">
-                  <div className="font-medium">{m.display_name} {m.is_book_owner && <span className="text-xs text-muted-foreground">(book owner)</span>}</div>
-                  <div className="text-xs text-muted-foreground">
+                <div className="min-w-0 flex-1">
+                  <div className="break-words font-semibold">{m.display_name} {m.is_book_owner && <span className="text-xs font-normal text-muted-foreground">(book owner)</span>}</div>
+                  <div className="break-words text-xs text-muted-foreground">
                     {m.email ?? '—'} · {m.last_sign_in_at ? `last active ${new Date(m.last_sign_in_at).toLocaleString('en-GB', { timeZone: 'Europe/London' })}` : 'has not signed in yet'} · {m.assigned_leads} leads
                   </div>
                 </div>
-                <Badge variant={m.status === 'active' ? 'secondary' : 'outline'}>{m.status === 'active' ? (m.role ?? 'no role') : m.disabled_at ? `ended ${new Date(m.disabled_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'Europe/London' })}` : 'ended'}</Badge>
-                {m.status === 'active' && m.suspended_at && <Badge variant="destructive" title={`Suspended ${new Date(m.suspended_at).toLocaleString('en-GB', { timeZone: 'Europe/London' })}`}>suspended</Badge>}
+                <div className="flex flex-wrap items-center gap-1.5">
+                <ToneChip tone={m.status === 'active' ? 'blue' : 'grey'} dot>{m.status === 'active' ? (m.role ?? 'no role') : m.disabled_at ? `ended ${new Date(m.disabled_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'Europe/London' })}` : 'ended'}</ToneChip>
+                {m.status === 'active' && m.suspended_at && <ToneChip tone="red" dot title={`Suspended ${new Date(m.suspended_at).toLocaleString('en-GB', { timeZone: 'Europe/London' })}`}>suspended</ToneChip>}
                 {m.role !== 'admin' && !m.is_book_owner && onboarding.data && (
-                  <button type="button" onClick={() => setOpenOnboarding((o) => (o === m.user_id ? null : m.user_id))} aria-expanded={openOnboarding === m.user_id}>
+                  <button type="button" className="inline-flex min-h-[28px] items-center rounded-full" onClick={() => setOpenOnboarding((o) => (o === m.user_id ? null : m.user_id))} aria-expanded={openOnboarding === m.user_id}>
                     <OnboardingBadge summary={onboardingSummary(onboarding.data.rows.get(m.user_id) ?? null, m, onboarding.data.documents, undefined, onboarding.data.missing[m.user_id] ?? null)} />
                   </button>
                 )}
+                </div>
                 {m.role !== 'admin' && !m.is_book_owner && (
-                  <div className="flex flex-wrap items-center gap-2">
+                  <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
                     {m.status === 'active' && !m.has_signed_in && (
                       <Button size="sm" variant="outline" onClick={async () => { const r = await call('team_new_link', { user_id: m.user_id }); if (!r.ok) fail(r); else setLink(String(r.link ?? '')); }}>New link</Button>
                     )}
@@ -203,15 +208,15 @@ export default function Team() {
                   </div>
                 )}
                 {openOnboarding === m.user_id && onboarding.data && m.role !== 'admin' && !m.is_book_owner && (
-                  <div className="w-full pl-11">
+                  <div className="w-full sm:pl-11">
                     <SalespersonOnboardingPanel userId={m.user_id} record={onboarding.data.rows.get(m.user_id) ?? null} member={m} docs={onboarding.data.documents} serverMissing={onboarding.data.missing[m.user_id] ?? null} onSave={(patch) => saveOnboarding(m.user_id, patch)} />
                   </div>
                 )}
                 {m.assigned_leads > 0 && (
-                  <div className="w-full flex flex-wrap items-center gap-2 pl-11">
+                  <div className="flex w-full flex-wrap items-center gap-2 border-t border-border/50 pt-2 sm:pl-11">
                     <span className="text-xs text-muted-foreground">Move all {m.assigned_leads} leads to</span>
                     <Select value={moveTo[m.user_id] ?? ''} onValueChange={(v) => setMoveTo((p) => ({ ...p, [m.user_id]: v }))}>
-                      <SelectTrigger className="h-8 w-44"><SelectValue placeholder="Choose…" /></SelectTrigger>
+                      <SelectTrigger className="h-9 w-full sm:w-44"><SelectValue placeholder="Choose…" /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="__pool">Unassigned pool</SelectItem>
                         {active.filter((a) => a.user_id !== m.user_id).map((a) => <SelectItem key={a.user_id} value={a.user_id}>{a.display_name}</SelectItem>)}
@@ -229,48 +234,45 @@ export default function Team() {
             ))}
           </ul>
         )}
-      </Card>
+      </Panel>
 
-      {reviews.error && <p className="text-xs text-destructive">Attribution reviews could not be loaded: {String((reviews.error as Error).message)}</p>}
+      {reviews.error && <Callout tone="red">Attribution reviews could not be loaded: {String((reviews.error as Error).message)}</Callout>}
       {reviews.data && reviews.data.reviews.length > 0 && (() => {
         const openCount = reviews.data.reviews.filter((r) => r.status === 'open').length;
         return (
-          <Card className={openCount ? 'p-4 space-y-2 border-amber-500/50' : 'p-4 space-y-2'}>
-            <h2 className="font-semibold">{openCount ? `Sales needing an attribution review (${openCount})` : 'Attribution reviews'}</h2>
-            {openCount > 0 && <p className="text-xs text-muted-foreground">These clients paid, but who sold it is not clear, so no seller has been recorded. Their payments count as business revenue, never as anyone's sales or commission, until you decide. Check the evidence, then confirm the seller or record Not credited. Each decision is final and kept with the sale.</p>}
+          <Panel title={openCount ? `Sales needing an attribution review (${openCount})` : 'Attribution reviews'} icon={Scale} tone={openCount ? 'amber' : 'grey'}>
+            {openCount > 0 && <p className="mb-3 text-xs leading-snug text-muted-foreground">These clients paid, but who sold it is not clear, so no seller has been recorded. Their payments count as business revenue, never as anyone's sales or commission, until you decide. Check the evidence, then confirm the seller or record Not credited. Each decision is final and kept with the sale.</p>}
             <AttributionReviewsCard reviews={reviews.data.reviews} people={reviews.data.people} serverReady={reviews.data.serverReady} call={call} onChanged={(message, error) => {
               if (error) toast({ title: 'Not done', description: error, variant: 'destructive' });
               else toast({ title: message ?? 'Saved' });
               void qc.invalidateQueries({ queryKey: ['team', 'attribution-reviews'] });
             }} />
-          </Card>
+          </Panel>
         );
       })()}
 
       {onboarding.data && (
-        <Card className="p-4 space-y-2">
-          <h2 className="font-semibold">Salesperson documents</h2>
-          <p className="text-xs text-muted-foreground">For your records only. Contractor agreements and privacy notices are handled outside LeadFinderOS and never affect Ready to Sell. Only the current team guide does (salespeople acknowledge it themselves).</p>
+        <Panel title="Salesperson documents" icon={FileText} tone="blue" hint="For your records only. Contractor agreements and privacy notices are handled outside LeadFinderOS. None of these documents affects whether someone can sell.">
           <SalespersonDocumentsCard docs={onboarding.data.documents} call={call} onChanged={(message, error) => {
             if (error) toast({ title: 'Not done', description: ONBOARDING_SAVE_ERRORS[error] ?? error, variant: 'destructive' });
             else toast({ title: message ?? 'Saved' });
             void qc.invalidateQueries({ queryKey: ['team', 'onboarding'] });
           }} />
-        </Card>
+        </Panel>
       )}
 
-      <Card className="p-4 space-y-2">
-        <h2 className="font-semibold">What each role can do</h2>
-        <p className="text-xs text-muted-foreground">Enforced by the database and the server, not by hiding screens.</p>
-        <table className="w-full text-sm">
-          <thead><tr className="text-left text-muted-foreground"><th className="py-1 pr-2 font-normal">Feature</th><th className="py-1 pr-2 font-normal">Admin</th><th className="py-1 font-normal">Sales</th></tr></thead>
-          <tbody className="divide-y">
-            {PERMISSION_MATRIX.map((r) => (
-              <tr key={r.feature}><td className="py-1.5 pr-2">{r.feature}</td><td className="py-1.5 pr-2">{r.admin}</td><td className="py-1.5">{r.sales}</td></tr>
-            ))}
-          </tbody>
-        </table>
-      </Card>
+      <Panel title="What each role can do" icon={ShieldCheck} tone="grey" hint="Enforced by the database and the server, not by hiding screens.">
+        <div className="-mx-1 overflow-x-auto px-1">
+          <table className="w-full text-sm">
+            <thead><tr className="text-left text-[11px] uppercase tracking-wide text-muted-foreground"><th className="py-1.5 pr-3 font-semibold">Feature</th><th className="py-1.5 pr-3 font-semibold">Admin</th><th className="py-1.5 font-semibold">Sales</th></tr></thead>
+            <tbody className="divide-y divide-border/50">
+              {PERMISSION_MATRIX.map((r) => (
+                <tr key={r.feature}><td className="py-2 pr-3 font-medium">{r.feature}</td><td className="py-2 pr-3 text-muted-foreground">{r.admin}</td><td className="py-2 text-muted-foreground">{r.sales}</td></tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </Panel>
     </div>
   );
 }

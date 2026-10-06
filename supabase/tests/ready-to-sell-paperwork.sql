@@ -1,3 +1,9 @@
+-- ⛔ SUPERSEDED IN PART (2026-10-06, sales-team-today; migration 20261012120000_selling_gate_account_only.sql):
+-- the practical onboarding checklist NO LONGER blocks selling. Every assertion below that expects a checklist item
+-- (age_18, right_to_work, bank_details, vat, contractor_status, start_date / not_started, team_guide) to make a rep
+-- not ready / refused / creator_not_authorised is now WRONG BY DESIGN. Only not_sales / login / suspended / ended gate.
+-- Do NOT change the gate back to make this file pass; rewrite the stale assertions (listed in
+-- docs/pre-sales-certification/sales-team-today-release.md).
 -- READY TO SELL WITHOUT SALESPERSON PAPERWORK (migration 20261010140000, Paul 2026-10-05).
 -- RUN AGAINST THE LIVE DATABASE; ALWAYS ROLLED BACK (the last statement raises the results). Before the migration is
 -- applied, prepend it after `begin;`. Fake users on example.invalid.

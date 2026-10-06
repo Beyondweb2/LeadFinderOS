@@ -3,7 +3,8 @@ import * as React from "react";
 import { cn } from "@/lib/utils";
 
 const Card = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(({ className, ...props }, ref) => (
-  <div ref={ref} className={cn("rounded-lg border bg-card text-card-foreground shadow-sm [box-shadow:var(--shadow-card,none)]", className)} {...props} />
+  <div ref={ref} className={cn(/* 2026-10-06: the dashboards' rounder corner and softer border (salesDash/ui.tsx SURFACE). */
+  "rounded-2xl border border-border/70 bg-card text-card-foreground shadow-sm [box-shadow:var(--shadow-card,none)]", className)} {...props} />
 ));
 Card.displayName = "Card";
 

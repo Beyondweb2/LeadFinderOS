@@ -13,10 +13,9 @@
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 import { MISSING_KEY_WORDS, startsOnWords } from './salespersonOnboarding.ts';
 
-/* Short words for what is still needed (the banner's list; the Team page keeps the full checklist labels). */
+/* Short words for an account restriction (the banner and refusal wording; the Team page keeps the checklist). */
 const SHORT_WORDS: Record<string, string> = {
-  age_18: '18+ confirmed', right_to_work: 'Right to work', bank_details: 'Bank details', vat: 'VAT status',
-  contractor_status: 'Individual or company', start_date: 'Start date', login: 'Your login', team_guide: 'Team guide',
+  not_sales: 'no sales login', login: 'login not active', suspended: 'suspended', ended: 'engagement ended',
 };
 /** Salesperson paperwork is handled outside LeadFinderOS — never listed, even if an older answer names it. */
 const NEVER_LISTED: ReadonlySet<string> = new Set(['agreement', 'privacy_notice']);
@@ -29,11 +28,12 @@ export function missingItemWords(missing: readonly string[], startsOn: string | 
     k === 'not_started' && startsOn ? startsOnWords(startsOn, today) : SHORT_WORDS[k] ?? MISSING_KEY_WORDS[k] ?? k);
 }
 
-/** "Complete your onboarding before using Find Leads." (+ " Still needed: …" when known). */
+/** 🔴 SINCE 2026-10-06 a not-ready refusal means a GENUINE ACCOUNT RESTRICTION (no sales role, login disabled,
+ *  suspended, engagement ended) — never an incomplete onboarding checklist, which no longer blocks anything.
+ *  "Your sales access is not active, so Find Leads is not available (suspended). Speak to Paul." */
 export function notReadyMessage(feature: string | null, missing: readonly string[] = [], startsOn: string | null = null, today?: string): string {
-  const head = `Complete your onboarding before using ${feature ?? 'this'}.`;
   const items = missingItemWords(missing, startsOn, today);
-  return items.length ? `${head} Still needed: ${items.join(' · ')}.` : head;
+  return `Your sales access is not active${feature ? `, so ${feature} is not available` : ''}${items.length ? ` (${items.join(' · ')})` : ''}. Speak to Paul.`;
 }
 
 /** Pure: is a guard refusal for this person the onboarding one? Positive match on a loaded, not-ready,

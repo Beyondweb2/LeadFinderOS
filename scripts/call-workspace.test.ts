@@ -53,7 +53,8 @@ const base = (over: Partial<PlaybookInput> = {}): PlaybookInput => ({
   ...over,
 });
 const noSite = (over: Partial<PlaybookInput> = {}) => base({ lead: { ...base().lead, website: null }, ...over });
-const said = (p: ReturnType<typeof buildColdCallPlaybook>) => [...p.callScript, ...p.qualify, p.gatekeeper, p.voicemail, ...p.objections.map((o) => o.answer),
+// gatekeeper / voicemail removed 2026-10-06 (sales-team-today, Paul) — asserted absent in section 4.
+const said = (p: ReturnType<typeof buildColdCallPlaybook>) => [...p.callScript, ...p.qualify, ...p.objections.map((o) => o.answer),
   ...p.close.routes.flatMap((r) => r.spoken), p.close.guarantee.spoken, p.close.monthly, p.close.closeLine].join(' ');
 
 console.log('── 1. ARCHIVED LEADS ARE NEVER WORK ──');
@@ -113,7 +114,12 @@ console.log('── 2. THE OFFER, BOTH ROUTES, FROM THE CONSTANTS ──');
   ok(own.close.afterPayment === QUICK_CLOSE_AFTER_PAYMENT, 'what happens after they pay is Quick Close\'s own list, not a copy');
   ok(/send you the link now/.test(own.close.closeLine), 'the close: "I\'ll send you the link now"');
   const ui = read('src/components/ColdCallPlaybook.tsx');
-  ok(/data-testid="call-step-close"/.test(ui) && /<QuickCloseButton leadId=\{leadId\} \/>/.test(ui) && /data-testid=\{'call-route-' \+ r\.route\}/.test(ui), 'the call screen renders the close block, each route, and Quick Close beside the close line');
+  /* 2026-10-06 (sales-team-today, Paul): ONE plan open at a time (Optimise | Build switch), the guarantee once, and
+     Quick Close moved to the sticky bar beside Log this call — the only Quick Close on the call screen. */
+  ok(/testId="call-step-close"/.test(ui) && /data-testid="call-plan-switch"/.test(ui) && /data-testid=\{'call-plan-' \+ r\.route\}/.test(ui)
+    && /data-testid=\{'call-route-' \+ plan\.route\}/.test(ui) && /useState<ServiceRoute>\(s\.plans\.preselected\)/.test(ui) && (ui.match(/data-testid="call-guarantee"/g) ?? []).length === 1,
+    'the call screen renders the close block: a plan switch, ONE route open (preselected from the website), the guarantee once');
+  ok((ui.match(/<QuickCloseButton /g) ?? []).length === 1 && /data-testid="log-this-call"[\s\S]{0,200}<QuickCloseButton leadId=\{leadId\}/.test(ui), '…and Quick Close once, in the sticky bar beside Log this call');
 }
 
 console.log('── 3. NO FALSE GUARANTEE ──');
@@ -131,29 +137,40 @@ console.log('── 3. NO FALSE GUARANTEE ──');
   const g = buildCallClose('own_site').guarantee;
   ok(/before we start/.test(g.spoken) && /four weeks/.test(g.spoken) && /14 days of your results/.test(g.spoken) && g.spoken.includes('£' + FINDABLE_SETUP_PRICE_GBP + ' back'), 'the guarantee said plainly: measured before, re-checked at four weeks, 14 days to claim, the £99 back');
   ok(/Never promise a ranking, a recommendation or that AI will name them/.test(g.caution), 'and the rep is told what never to promise');
-  const appear = buildColdCallPlaybook(base()).objections.find((o) => o.objection === "Can you guarantee I'll appear?")?.answer ?? '';
-  ok(/^Nobody can promise AI will name you/.test(appear) && /get your £99 back\.$/.test(appear), '"Can you guarantee I\'ll appear?" — nobody can promise a placement; the number or the £99 back, with no hedge after it');
+  // 2026-10-06 (sales-team-today, Paul): the objection is now "Can you guarantee I'll show up?".
+  const appear = buildColdCallPlaybook(base()).objections.find((o) => o.objection === "Can you guarantee I'll show up?")?.answer ?? '';
+  ok(/^No one can promise AI will name you/.test(appear) && /claim your £99 back\.$/.test(appear), '"Can you guarantee I\'ll show up?" — nobody can promise a placement; the number or the £99 back, with no hedge after it');
 }
 
 console.log('── 4. WHO IS CALLING COMES FIRST ──');
 {
   const cold = buildColdCallPlaybook(base());
-  ok(/^Hi, is that .+\? It's Sam from Findable\.$/.test(cold.callScript[0]), 'cold call: "Hi, is that …? It\'s Sam from Findable." (the rep\'s own name)');
+  /* 2026-10-06 (sales-team-today, Paul): the tested opener — the reason for ringing IS the first line; the rep
+     knows who they are, so no "It's Sam from Findable". */
+  ok(/^Hi mate, I was looking for a plumber in Halifax, so I asked Google AI and it mentioned Brian Slattery Plumbers Limited and Sunnybank Plumbing Services, but not you\.$/.test(cold.callScript[0])
+    && !/from Findable|Sam/.test(cold.callScript.join(' ')), 'cold call: "Hi mate, I was looking for a plumber in Halifax, so I asked Google AI…" — never "It\'s Sam from Findable"');
   const sent: PlaybookMessage = { id: 'm1', created_at: iso(NOW - 3_600_000 * 3), direction: 'outbound', body: 'Hi is this Calder Plumbing?', message_type: 'text', template_name: null, status: 'read' };
   const who: PlaybookMessage = { id: 'm2', created_at: iso(NOW - 3_600_000), direction: 'inbound', body: "Yeah it is mate, who's this?", message_type: 'text', template_name: null, status: 'received' };
   const fu = buildColdCallPlaybook(base({ messages: [sent, who] }));
   const opening = fu.callScript.join(' ');
-  ok(/^Hi, is that .+\? It's Sam from Findable\. You asked who I was when I messaged earlier today/.test(fu.callScript[0]), 'after "who\'s this?": the name and Findable first, answering the question');
-  ok(!/Quick recap/.test(opening) && /I'm ringing because I asked Google AI for a plumber in Halifax/.test(opening), '…no "Quick recap" (no pitch went out) — the reason for ringing instead');
+  // removed 2026-10-06 (sales-team-today, Paul): "You asked who I was when I messaged …" — never "I messaged you", never the day.
+  ok(fu.callScript[0] === cold.callScript[0] && !/You asked who I was|messaged|WhatsApp|earlier today|from Findable/.test(opening), 'after an earlier WhatsApp (even "who\'s this?"): the SAME opener — never "I messaged you", never the day');
+  ok(/been in touch with them before/.test(fu.script.openerNote ?? ''), '…the rep is told in a note beside the script instead');
+  ok(!/Quick recap/.test(opening) && /I was looking for a plumber in Halifax, so I asked Google AI/.test(opening), '…no "Quick recap" — the reason for ringing instead');
   ok(!/2026/.test(opening), '…and no year read out for today');
   const report: PlaybookMessage = { id: 'm3', created_at: iso(NOW - 2 * DAY), direction: 'outbound', body: 'x', message_type: 'template', template_name: 'competitor_hook', status: 'read' };
-  ok(/Quick recap: /.test(buildColdCallPlaybook(base({ messages: [report] })).callScript.join(' ')), '"Quick recap" only when a report-carrying message actually went out');
+  // removed 2026-10-06 (sales-team-today, Paul): "Quick recap" after a report-carrying message — an earlier message is never read out.
+  ok(!/Quick recap|I sent you|messaged/.test(buildColdCallPlaybook(base({ messages: [report] })).callScript.join(' ')), 'a report sent earlier is not read out either — no "Quick recap"');
   for (const t of ["who's this?", 'Who is this', 'who are you', 'who dis', 'how did you get my number', 'is this a scam']) ok(WHO_ASKED_RE.test(t), 'recognised as "who is this": ' + t);
   for (const t of ['yeah go on then', 'not interested thanks', 'who would do that for £99']) ok(!WHO_ASKED_RE.test(t) || t.startsWith('who would'), 'not a "who is this": ' + t);
   ok(spokenDay(NOW - 3_600_000, NOW) === 'earlier today' && spokenDay(NOW - DAY, NOW) === 'yesterday' && spokenDay(NOW - 3 * DAY, NOW) === 'on Friday' && spokenDay(NOW - 20 * DAY, NOW) === 'on 15 Sep' && spokenDay(NOW - 400 * DAY, NOW) === 'on 31 Aug 2025',
     'days said aloud: earlier today / yesterday / on Friday / on 15 Sep / on 31 Aug 2025 (the year only when it is not this year)');
-  ok(/It's Sam from Findable/.test(cold.gatekeeper) && /^Hi, it's Sam from Findable/.test(cold.voicemail), 'gatekeeper and voicemail lines say who is calling');
-  ok(cold.voicemail.split(/\s+/).length <= 50, 'voicemail is under 20 seconds (' + cold.voicemail.split(/\s+/).length + ' words)');
+  // removed 2026-10-06 (sales-team-today, Paul): the gatekeeper and voicemail lines.
+  ok(!('gatekeeper' in cold) && !('voicemail' in cold) && !('fallback' in cold), 'no gatekeeper, voicemail or fallback line on the playbook');
+  {
+    const ui = read('src/components/ColdCallPlaybook.tsx');
+    ok(!/gatekeeper|voicemail|call-not-the-owner/i.test(ui.replace(/\/\*[\s\S]*?\*\//g, '')), '…and none on the call screen');
+  }
   const short = shortVoiceNote({ engineLabel: 'Google AI', competitors: ['Brian Slattery Plumbers', 'Sunnybank Plumbing'], trade: 'Plumbers', area: 'Halifax', site: { mode: 'no_website', source: 'none', sourceLabel: null }, caller: 'Sam Rep' })!;
   ok(/^hi mate, it's Sam from Findable\./.test(short) && !/quick one/.test(short) && /have you got a website i missed/.test(short), 'the 20-second voice note says who is speaking, drops "quick one", and confirms rather than interrogates about the website');
   ok(/^0\. WHO IS SPEAKING/m.test(VOICE_NOTE_SYSTEM_PROMPT), 'the generated voice note is told to open with who is speaking');
@@ -170,15 +187,31 @@ console.log('── 5. THE CALL FLOW WORKS WITH NO AUDIT AND NO WHATSAPP ──'
   const p = buildColdCallPlaybook(base({ report: null, reportAudit: null, messages: [] }));
   ok(p.mode === 'cold' && p.followUp === null, 'no WhatsApp ever sent → a first call');
   ok(p.audit.state === 'none' && p.audit.headline === 'No audit yet', 'the call card says "No audit yet"');
-  ok(p.callScript.length >= 3 && /^Hi, is that /.test(p.callScript[0]) && !/didn't come up|it named|named you|but not you/.test(p.callScript.join(' ')), 'the opening works and claims no AI result');
+  ok(p.callScript.length >= 2 && /^Hi mate, I look at how local businesses come up when people ask AI for things like a plumber in Halifax/.test(p.callScript[0]) && !/didn't come up|it mentioned|it named|named you|mention you|but not you/.test(p.callScript.join(' ')), 'the opening works and claims no AI result');
   ok(p.qualify.length >= 4 && p.close.routes.length >= 1 && p.close.guarantee.spoken.length > 0 && p.close.afterPayment.length > 0, '…and every later step (ask, close, after they pay) is still there');
   ok(p.warnings.some((w) => /Run the AI check first/.test(w) && /ring anyway/.test(w)), 'the warning points at the check, and says ringing first is fine');
   const ui = read('src/components/ColdCallPlaybook.tsx');
-  ok(/data-testid="call-card-run-check"/.test(ui) && /p\.audit\.state === 'none' && onRunCheck/.test(ui), 'the call card offers "Run the AI check" when there is none');
-  ok(/onRunCheck=\{openAiTools\}/.test(read('src/components/LeadDetailDialog.tsx')) && /data-testid="ai-check-tools"[\s\S]{0,400}<LeadHookPanel leadId=\{lead\.id\} \/>/.test(read('src/components/LeadDetailDialog.tsx')), '…which opens the AI check tools on the same Call tab, where the one-lead check is run');
+  /* removed 2026-10-06 (sales-team-today, Paul): the call card's own "Run the AI check" button (call-card-run-check /
+     onRunCheck / openAiTools). The AI check tools — where the one-lead check is run — are now the TOP of the Call tab. */
+  ok(!/call-card-run-check|onRunCheck/.test(ui), 'no second "Run the AI check" inside the script');
+  {
+    const dlg = read('src/components/LeadDetailDialog.tsx').replace(/\r\n/g, '\n');
+    ok(!/openAiTools|onRunCheck/.test(dlg) && /data-testid="ai-check-tools"[\s\S]{0,400}<LeadHookPanel leadId=\{lead\.id\} variant="call" \/>/.test(dlg)
+      && dlg.indexOf('data-testid="ai-check-tools"') < dlg.indexOf('<ColdCallPlaybookInline'), '…the AI check tools sit at the top of the Call tab, above the script, where the one-lead check is run');
+  }
   const ready = buildColdCallPlaybook(base());
   ok(ready.audit.state === 'ready' && /Google AI did not name them — it named Brian Slattery Plumbers Limited and Sunnybank Plumbing Services/.test(ready.audit.headline), 'with an audit: the key finding in one line, from the stored result');
-  ok(['call-step-open', 'call-step-ask', 'call-step-close', 'call-step-after', 'call-not-the-owner', 'call-card'].every((id) => ui.includes(`data-testid="${id}"`)), 'the screen: call card, then open → ask → close → after they pay, gatekeeper/voicemail folded');
+  /* 2026-10-06 (sales-team-today, Paul): Say → Ask first (→ agency) → Then ask → What we do → Offer → Objections.
+     removed: the call card (the AI result is above the script), the "after they pay" step and the folded gatekeeper/voicemail. */
+  {
+    const order = ['call-step-open', 'call-step-first', 'call-step-ask', 'call-step-explain', 'call-step-close', 'call-step-objections'];
+    const at = order.map((id) => ui.indexOf(`testId="${id}"`));
+    ok(at.every((i) => i > 0), 'the screen has every section: ' + order.join(' → '));
+    const flow = ui.slice(ui.indexOf('function CallFlow('), ui.indexOf('type ScriptTab'));
+    ok(/<Say p=\{p\} \/>\s*<Ask p=\{p\} \/>\s*<WhyAndWhat p=\{p\} \/>\s*<Offer p=\{p\} \/>\s*<Objections p=\{p\} \/>/.test(flow), '…rendered in that order');
+    ok(!['call-step-after', 'call-not-the-owner', 'call-card'].some((id) => ui.includes(`data-testid="${id}"`)), 'removed: call card, after-they-pay step, gatekeeper/voicemail fold');
+    ok(/data-testid="answer-self"/.test(ui) && /data-testid="answer-agency"/.test(ui) && /\{manager === 'agency' && after && \([\s\S]{0,120}data-testid="call-step-agency"/.test(ui), 'the first question has two answer buttons; the agency branch shows only after "Agency"');
+  }
   for (const c of [base(), noSite(), base({ report: null, reportAudit: null })]) {
     const p2 = buildColdCallPlaybook(c);
     const problems = salesStyleProblems(said(p2), ['Brian Slattery Plumbers Limited', 'Sunnybank Plumbing Services']);
@@ -186,30 +219,37 @@ console.log('── 5. THE CALL FLOW WORKS WITH NO AUDIT AND NO WHATSAPP ──'
     ok(p2.objections.every((o) => o.answer.split(/(?<=[.?!])\s+/).length <= 5), 'every objection answer is five sentences or fewer');
   }
   const objections = buildColdCallPlaybook(base()).objections.map((o) => o.objection);
-  for (const o of ['I need to think about it', 'Who are you? Is this a scam?', 'Can I cancel?', 'How long does it take?']) ok(objections.includes(o), 'objection covered: ' + o);
-  ok(objections.some((o) => /^That's a lot/.test(o)), 'objection covered: that\'s a lot / £99?');
+  // 2026-10-06 (sales-team-today, Paul): renamed "Is this a scam?" and "Why £99?"; "How long does it take?" removed from the call-time list.
+  for (const o of ['I need to think about it', 'Is this a scam?', 'Can I cancel?', 'Why £99?']) ok(objections.includes(o), 'objection covered: ' + o);
+  ok(!objections.includes('How long does it take?') && !objections.some((o) => /^That's a lot|^Who are you\?/.test(o)), 'the old titles are gone');
 }
 
 console.log('── 6. LOGGING THE CALL ROUTES NATURALLY ──');
 {
+  /* 2026-10-06: the Log window (src/components/LeadCallFlow.tsx) replaced the Log a contact card. */
   const crm = read('src/components/LeadCrmPanel.tsx');
-  const lc = crm.slice(crm.indexOf('function LogContact('), crm.indexOf('function InternalNote('));
-  ok(/CLOSE_READY_OUTCOMES: ReadonlySet<string> = new Set\(\['interested', 'spoke_to_owner', 'meeting_booked'\]\)/.test(crm) && /data-testid="logged-quick-close"/.test(lc) && /<QuickCloseButton leadId=\{leadId\} \/>/.test(lc), 'Interested / Spoke to owner / Meeting booked → Quick Close right in the result line');
-  ok(/result\.state\.state !== 'not_interested'/.test(lc), '…never on a lead that reads Not interested');
-  ok(/data-testid="outcome-groups"/.test(lc) && /Didn't speak to them/.test(lc) && /Spoke to them/.test(lc) && /current\?\.kind !== 'call'/.test(lc), 'call outcomes grouped by what happened (didn\'t speak / spoke); other channels keep one grid');
-  ok(!/lead_set_follow_up/.test(lc), 'logging an outcome itself still never saves a Next Action (the one rule does)');
+  const flow = read('src/components/LeadCallFlow.tsx');
+  const lc = flow.slice(flow.indexOf('export function LoggedLine('), flow.indexOf('type Step ='));
+  ok(/CLOSE_READY_OUTCOMES: ReadonlySet<string> = new Set\(\['interested', 'spoke_to_owner', 'meeting_booked'\]\)/.test(flow) && /data-testid="logged-quick-close"/.test(lc) && /<QuickCloseButton leadId=\{leadId\} \/>/.test(lc), 'Interested / Spoke to owner / Meeting booked → Quick Close right in the result line');
+  ok(/r\.state\.state !== 'not_interested'/.test(lc), '…never on a lead that reads Not interested');
+  ok(/data-testid="log-outcome-choices"/.test(flow) && /choicesFor\(channel, \{ paid \}\)/.test(flow) && /moreOutcomesFor\(channel\)/.test(flow), 'the Log window: a handful of what-happened buttons for the channel, the rest under More');
+  const lo = crm.slice(crm.indexOf('const logOutcome = async'), crm.indexOf('const afterWrite'));
+  ok(lo.length > 100 && !/lead_set_follow_up|saveNextAction/.test(lo), 'logging an outcome itself still never saves a Next Action (the one rule does)');
   const lead = { id: 'l', status: 'contacted', is_potential_work: false, next_action: null } as never;
   ok(outcomePlan('call_back', lead).setNextAction === 'call' && outcomePlan('meeting_booked', lead).setNextAction === 'meeting', 'Call back saves a Call; Meeting booked saves a Meeting');
   ok(outcomePlan('not_interested', lead).status === 'not_interested', 'Not interested sets the status (and clears the Next Action)');
   const dlg = read('src/components/ColdCallPlaybook.tsx');
-  ok(/<QuickCloseButton leadId=\{leadId\} className="h-10 px-3 text-sm" \/>/.test(dlg) && /data-testid="log-this-call"/.test(dlg), 'the call screen\'s sticky bar: Log this call + Quick Close, one tap each');
+  // 2026-10-06 (sales-team-today): the sticky bar (LogCallBar) restyled; asserted by structure, not class names.
+  ok(/function LogCallBar[\s\S]{0,400}sticky bottom-0[\s\S]{0,400}data-testid="log-this-call"[\s\S]{0,200}<QuickCloseButton leadId=\{leadId\}/.test(dlg), 'the call screen\'s sticky bar: Log this call + Quick Close, one tap each');
 }
 
 console.log('── 7. DOUBLE SUBMIT IS ONE CALL ──');
 {
   const crm = read('src/components/LeadCrmPanel.tsx');
-  const tap = crm.slice(crm.indexOf('const tap = async'), crm.indexOf('const outcomeButton'));
-  ok(/if \(inFlight\.current\) return;\s*inFlight\.current = true;/.test(tap) && /finally \{ inFlight\.current = false; setBusy\(null\); \}/.test(tap), 'a second tap before the first answers is ignored (a ref, not a re-render)');
+  const tap = crm.slice(crm.indexOf('const logOutcome = async'), crm.indexOf('const afterWrite'));
+  ok(/if \(!lead \|\| inFlight\.current\) return null;\s*inFlight\.current = true;/.test(tap) && /finally \{ inFlight\.current = false; \}/.test(tap), 'a second tap before the first answers is ignored (a ref, not a re-render)');
+  const flowTap = read('src/components/LeadCallFlow.tsx');
+  ok(/if \(busy\) return;\s*setBusy\(key\);/.test(flowTap) && /disabled=\{busy !== null\}/.test(flowTap), '…and the Log window disables every outcome while one is saving');
   ok(/r\.duplicate === true \? 'Already logged a moment ago — not recorded twice'/.test(crm), 'a server-side duplicate is said plainly');
   const mig = read('supabase/migrations/20261007105000_call_workspace_guards.sql');
   for (const fn of ['lead_log_contact', 'lead_record_call']) {

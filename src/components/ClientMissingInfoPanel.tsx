@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { BellRing, ClipboardCopy, Loader2, Mail, MessageCircle, Phone, UserRound } from 'lucide-react';
+import { AlertTriangle, BellRing, Circle, ClipboardCopy, Loader2, Mail, MessageCircle, Phone, UserRound } from 'lucide-react';
+import { IconTile, TONE, ToneChip } from '@/components/operator/ui';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { edgeErrorMessage, invokeEdge } from '@/lib/edgeInvoke';
@@ -114,14 +115,19 @@ export function ClientMissingInfoPanel({ leadId, businessName, mi, setupLink, on
 
   const canAsk = askState === 'ask' && !mi.request_read_failed;
   return (
-    <div className="space-y-3 rounded-lg border border-amber-500/50 bg-amber-500/[0.04] p-3" data-testid="missing-info">
-      <p className="text-sm font-semibold tracking-wide">MISSING INFORMATION</p>
-      <ul className="grid gap-x-6 gap-y-1 text-sm sm:grid-cols-2" data-testid="missing-info-items">
+    <div className={cn('min-w-0 space-y-3 rounded-2xl px-3.5 py-3', TONE.amber.tint)} data-testid="missing-info">
+      <div className="flex min-w-0 items-center gap-2.5">
+        <IconTile icon={AlertTriangle} tone="amber" size="sm" />
+        <p className={cn('text-sm font-bold tracking-wide', TONE.amber.text)}>MISSING INFORMATION</p>
+        <ToneChip tone="amber" className="ml-auto">{mi.items.length}</ToneChip>
+      </div>
+      <ul className="grid gap-x-6 gap-y-1.5 text-sm sm:grid-cols-2" data-testid="missing-info-items">
         {mi.items.map((i) => (
-          <li key={i.key} className="min-w-0" data-testid={`missing-${i.key}`}>
+          <li key={i.key} className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-1" data-testid={`missing-${i.key}`}>
+            <Circle className={cn('h-3.5 w-3.5 shrink-0', TONE.amber.text)} />
             <span className="font-medium">{i.label}</span>
-            <span className="ml-1 text-xs text-amber-700 dark:text-amber-300">· {WHO[i.who] ?? i.who}</span>
-            {canAsk && i.seller && i.who !== 'sales' && <span className="ml-1 text-xs text-muted-foreground">· {seller} may know</span>}
+            <ToneChip tone="amber">{WHO[i.who] ?? i.who}</ToneChip>
+            {canAsk && i.seller && i.who !== 'sales' && <span className="text-xs text-muted-foreground">· {seller} may know</span>}
           </li>
         ))}
       </ul>
@@ -149,7 +155,7 @@ export function ClientMissingInfoPanel({ leadId, businessName, mi, setupLink, on
           <span className="font-medium">Requested from {seller}</span>
           <span className="text-muted-foreground">· {when(pending.requestedAt)}{pending.remindedAt ? ` · reminded ${when(pending.remindedAt)}` : ''}</span>
           {canAsk && (
-            <Button size="sm" variant="ghost" className={cn('h-7 px-2 text-xs')} onClick={() => void ask(true)} disabled={!!busy || !pending.canRemind}
+            <Button size="sm" variant="ghost" className={cn('h-9 px-2 text-xs')} onClick={() => void ask(true)} disabled={!!busy || !pending.canRemind}
               title={pending.canRemind ? `Send ${seller} a reminder` : `You can remind again from ${when(pending.remindAt)}`} data-testid="remind-salesperson">
               {busy === 'remind' ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : <BellRing className="mr-1 h-3.5 w-3.5" />}Remind again
             </Button>

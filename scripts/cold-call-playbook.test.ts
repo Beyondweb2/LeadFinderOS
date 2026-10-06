@@ -24,6 +24,7 @@ import { CRAWL_CHECK_VERSION, type CrawlSignals } from '../src/lib/crawlCheck.ts
 import { SITE_EVIDENCE_VERSION, type SiteEvidence } from '../src/lib/siteEvidence.ts';
 import { FINDABLE_OFFER_SUMMARY, termMonthsFor } from '../src/lib/findableOffer.ts';
 import { salesStyleProblems } from '../src/lib/salesStyle.ts';
+import { BRIDGE_LINE, DISCOVERY_QUESTIONS, FIRST_QUESTION, MAX_SPOKEN_FINDINGS, NO_STRONG_ISSUE_LINE } from '../src/lib/callScript.ts';
 
 let f = 0;
 const ok = (cond: unknown, msg: string) => {
@@ -85,12 +86,14 @@ console.log('── 1. NOT NAMED + REAL COMPETITORS ──');
   const p = buildColdCallPlaybook(base());
   const opening = p.opening.join(' ');
   ok(p.mode === 'cold', 'no messages → NEW COLD CALL');
-  ok(/^Hi, is that /.test(p.opening[0]), 'opens by checking who picked up');
+  // 2026-10-06 (sales-team-today, Paul): no "Hi, is that …?" check — the reason for ringing IS the opener.
+  ok(/^Hi mate, I was looking for a locksmith in Tunbridge Wells, so I asked Google AI and it mentioned /.test(p.opening[0]) && !/is that|from Findable/i.test(opening),
+    "opens with Paul's tested line: the search, the engine, the names (never \"is that …?\", never \"from Findable\")");
   ok(opening.includes('LockRite Locksmiths Tunbridge Wells') && opening.includes('LockFit Tunbridge Wells') && opening.includes('TN Locksmith'),
     'the opening names the first three REAL competitors from the stored answer');
   ok(!opening.includes('S.J. Osborne'), 'and only three — the fourth stays in the evidence box');
   ok(p.evidence.competitors.length === 4, 'the evidence box lists them all (up to the cap)');
-  ok(/it named .*, but not you\./.test(opening), 'says the business did not come up — the AI result leads');
+  ok(/it mentioned .*, but not you\./.test(opening), 'says the business did not come up — the AI result leads');
   ok(!/build (you )?(a )?websites?/i.test(opening), 'the opening does NOT lead with "I build websites"');
   ok(p.evidence.question === 'locksmith for businesses in Tunbridge Wells UK' && p.evidence.engine === 'Gemini' && p.evidence.named === false,
     'the exact question, the engine and the result are shown');
@@ -182,8 +185,12 @@ console.log('── 6. WHATSAPP HISTORY = FOLLOW-UP ──');
   const opening = p.opening.join(' ');
   ok(p.mode === 'follow_up', 'existing history → FOLLOW-UP');
   // Days are said the way a person says them (Session A A-04, 2026-10-04): 19 Sep, four days before NOW, is "on Saturday" — never the year.
-  ok(/I messaged you on WhatsApp on Saturday\./.test(opening) && !/2026/.test(opening), 'the opening refers to the earlier message, by weekday, with no year');
-  ok(!/I was looking at/.test(opening), 'and does NOT introduce the pitch as though they have never spoken');
+  /* removed 2026-10-06 (sales-team-today, Paul): the script never says "I messaged you" or the day of the
+     earlier message — the rep is told in a NOTE beside the script instead. */
+  ok(!/messaged|WhatsApp|Saturday|on \w+day|2026/i.test(opening), 'the opening never mentions the earlier message or its day');
+  ok(/^Hi mate, I was looking for /.test(p.opening[0]), 'a follow-up opens with the same tested line');
+  ok(/been in touch with them before/.test(p.script.openerNote ?? ''), 'the rep is told, beside the script, that they have been in touch before');
+  ok(buildColdCallPlaybook(base()).script.openerNote === null, '…and a first contact carries no such note');
   ok(p.followUp?.lastInbound?.text === 'Sorry mate I lost my phone', 'their last reply is surfaced');
   ok(!!p.followUp?.lastOutbound?.text && !/^\[initial_contact\]$/.test(p.followUp.lastOutbound.text), 'what was said is rendered as words, not a template slug');
   ok(/replied last/.test(p.followUp?.continuation ?? ''), 'a sensible continuation point');
@@ -237,12 +244,20 @@ console.log('── 10. OFFER AND CLAIMS ──');
   ok(!/guarantee (you|that you)|will (rank|be named|show up)|you'll definitely/i.test(text), 'no guaranteed outcome anywhere');
   ok(!/is why you (don't|do not|aren't)|caused|because of your (site|website)/i.test(text), 'no website finding is stated as the cause');
   const objections = p.objections.map((o) => o.objection);
-  for (const o of ['I already have a website guy', 'My website is fine', 'I already rank on Google', 'Nobody uses AI for this', "I'm too busy", 'How much is it?', "Can you guarantee I'll appear?", 'Just send me the information',
-    // The house-style pass (Paul, 2026-09-30): the objections a salesperson actually hears.
-    'We already have an SEO company', "We're busy enough", 'How do you know this works?', 'What exactly do you do?', "I don't really understand AI visibility",
-    "I don't want a new website", 'My agency controls the website / domain', 'Why is it monthly?', 'Why six months?', 'Why twelve months?']) {
-    ok(objections.includes(o), 'objection covered: ' + o);
-  }
+  /* 2026-10-06 (sales-team-today, Paul): the short list a rep can use DURING a call, exactly, in this order.
+     The long 2026-09-30 list (website guy, rank on Google, SEO company, …) was removed deliberately. */
+  const EXPECTED = ['Why £99?', 'How much is it?', 'I already have an agency', 'My agency controls the website / domain', 'I need to think about it',
+    'Is this a scam?', 'Can I cancel?', "Can you guarantee I'll show up?", 'Why twelve months?', 'Why six months?', 'Just send me something', "I'm busy right now"];
+  for (const o of EXPECTED) ok(objections.includes(o), 'objection covered: ' + o);
+  ok(JSON.stringify(objections) === JSON.stringify(EXPECTED), 'the objection list is exactly the call-time list, in order');
+  ok(!/then they stop|one final month|nothing more to pay/i.test(text) && !objections.some((o) => /Why six payments\?|What happens after\?/.test(o)), 'no v4 wording (the live terms are v3: both routes continue at £29.99 a month)');
+  const ans = (t: string) => p.objections.find((o) => o.objection === t)?.answer ?? '';
+  ok(/until you cancel with 30 days' notice/.test(ans('Can I cancel?')) && /£29\.99 a month/.test(ans('Can I cancel?')) && /12 payments if we build the site, 6 if we work on yours/.test(ans('Can I cancel?')),
+    '"Can I cancel?": the v3 minimum terms (12 / 6), then £29.99 a month until cancelled with notice');
+  ok(/£29\.99 a month for monitoring until you cancel/.test(ans('Why six months?')) && /£29\.99 a month for hosting and monitoring until you cancel/.test(ans('Why twelve months?')),
+    'Optimise and Build both continue at the £29.99 Continuing Service (v3)');
+  ok(/^No one can promise AI will name you/.test(ans("Can you guarantee I'll show up?")) && /claim your £99 back/.test(ans("Can you guarantee I'll show up?")),
+    '"Can you guarantee …?": nobody can promise a placement; the measurement or the £99 back');
 }
 
 console.log('── 11. OPENING THE PLAYBOOK TRIGGERS NOTHING ──');
@@ -273,14 +288,28 @@ console.log('── 12. SIMPLIFIED PLAYBOOK (Paul, 2026-09-27) ──');
   // ONE call script, built from the pieces, nothing invented.
   const p = buildColdCallPlaybook(base({ leadCrawl: crawl(THIN, 1, SITEMAP_EVIDENCE) }));
   const script = p.callScript.join(' ');
-  ok(p.callScript.length >= 4 && /^Hi, is that /.test(p.callScript[0]), 'the call script is one read that opens by checking who picked up');
+  ok(p.callScript.length >= 4 && /^Hi mate, I was looking for /.test(p.callScript[0]), "the call script is one read that opens with Paul's tested line (2026-10-06)");
   ok(script.includes('LockRite Locksmiths Tunbridge Wells') && script.includes('LockFit Tunbridge Wells') && script.includes('TN Locksmith') && !script.includes('S.J. Osborne'),
     'it names the first three competitors from THAT result, no more');
-  ok(/I asked Google AI for a locksmith in Tunbridge Wells and it named/.test(script), 'it names the engine that was actually asked (Gemini is said as Google AI), and the search plainly');
-  ok(/I had a look at why you weren't coming up and found (something|a few things) that could be holding you back\. (It's that|The main one is that) your sitemap/.test(script) && /\bcan give them conflicting information\b/.test(script) && !/that's why/i.test(script), 'it carries the strongest finding, hedged ("could be holding you back", never "that\'s why")');
+  ok(/Hi mate, I was looking for a locksmith in Tunbridge Wells, so I asked Google AI and it mentioned/.test(script), 'it names the engine that was actually asked (Gemini is said as Google AI), and the search plainly');
+  ok(/I had a look into why they were being named and you weren't, and I found a few potential reasons\./.test(script)
+    && p.callScript.includes("The map of your site that Google reads points at a different web address, so it isn't clear which site is really yours.")
+    && !/that's why/i.test(script), 'it carries the real findings (strongest first) in plain words, as potential reasons (never "that\'s why")');
+  ok(p.script.found.lines.length <= MAX_SPOKEN_FINDINGS, 'never more than MAX_SPOKEN_FINDINGS website points said aloud');
   // Plain words, not "AI visibility" (Session A, 2026-10-04: jargon to a plumber).
-  ok(/We help local businesses get named when people ask AI for a locksmith in Tunbridge Wells\./.test(script) && !/AI visibility/.test(script), 'the Findable line is inside the script, in plain words');
-  ok(/Is now OK for a couple of minutes, or shall I ring you back\?/.test(script) && /I'll WhatsApp you the report/.test(p.fallback) && !/If they'd rather/.test(script), 'it ends on a natural next step; the report fallback is a hint beside the script, not a line to read');
+  ok(script.includes(BRIDGE_LINE) && !/AI visibility/.test(script), 'the Findable line (BRIDGE_LINE) is inside the script, in plain words');
+  /* removed 2026-10-06 (sales-team-today, Paul): the "Is now OK …?" line and the report fallback ("I'll WhatsApp
+     you the report") — the script ends on the offer to explain, and `fallback` is gone from the playbook. */
+  ok(/I'm happy to explain what I'd change to give you a better chance of showing up in those answers\.$/.test(script) && !('fallback' in p) && !/If they'd rather|Is now OK/.test(script),
+    'it ends on the offer to explain; there is no fallback line');
+  ok(!('gatekeeper' in p) && !('voicemail' in p), 'removed 2026-10-06 (sales-team-today, Paul): no gatekeeper and no voicemail lines');
+  ok(JSON.stringify(p.qualify) === JSON.stringify([FIRST_QUESTION, ...DISCOVERY_QUESTIONS]) && FIRST_QUESTION === 'Do you manage the website yourself, or does an agency do it?',
+    'the questions: FIRST_QUESTION always first, then the discovery questions');
+  {
+    const clean = buildColdCallPlaybook(base({ leadCrawl: crawl(CLEAN) }));
+    ok(clean.script.found.lines.length === 1 && clean.script.found.lines[0] === NO_STRONG_ISSUE_LINE && /do not invent one/.test(clean.script.found.note ?? ''),
+      'no strong site issue → the one honest line (NO_STRONG_ISSUE_LINE), no padding');
+  }
   ok((script.match(/but not you/g) ?? []).length === 1, 'the AI miss is said once, not repeated as a separate explanation');
 
   // Follow-up: picks up where it left off.
@@ -289,7 +318,9 @@ console.log('── 12. SIMPLIFIED PLAYBOOK (Paul, 2026-09-27) ──');
     { id: 'm2', created_at: new Date(NOW - 2 * DAY).toISOString(), direction: 'inbound', body: 'Yeah go on then', message_type: 'text', template_name: null, status: 'received' },
   ];
   const fu = buildColdCallPlaybook(base({ messages: msgs }));
-  ok(fu.mode === 'follow_up' && /I messaged you on WhatsApp/.test(fu.callScript[0]) && /Thanks for getting back to me/.test(fu.callScript[1]), 'follow-up: the script refers to the WhatsApp and their reply');
+  // removed 2026-10-06 (sales-team-today, Paul): the follow-up script no longer refers to the WhatsApp or their reply.
+  ok(fu.mode === 'follow_up' && /^Hi mate, I was looking for /.test(fu.callScript[0]) && !/WhatsApp|messaged|getting back to me/.test(fu.callScript.join(' ')) && /been in touch/.test(fu.script.openerNote ?? ''),
+    'follow-up: the same opener — no WhatsApp, no "getting back to me"; the rep gets a note instead');
 
   // A directory profile is not their website.
   const prof = buildColdCallPlaybook(base({
@@ -302,23 +333,39 @@ console.log('── 12. SIMPLIFIED PLAYBOOK (Paul, 2026-09-27) ──');
   ok(prof.findings.length === 0 && /only a TradeHQ profile/.test(prof.findingsNote ?? ''), 'its crawl is never offered as website findings');
   const ps = prof.callScript.join(' ');
   ok(/could only find your TradeHQ profile/.test(ps) && !/your site|your website is/i.test(ps.replace(/website of your own|one of your own/g, '')), 'the script says "just your TradeHQ profile", never "your site"');
-  ok(/belongs to TradeHQ/.test(prof.objections.find((o) => o.objection === 'My website is fine')?.answer ?? ''), '"My website is fine" answers truthfully for a profile');
+  // "My website is fine" objection removed 2026-10-06 (sales-team-today, Paul); the profile truth now lives in what we found.
+  ok(prof.script.found.lines.some((l) => /belongs to TradeHQ/.test(l)) && /Never call the profile their website/.test(prof.script.found.note ?? ''), 'what we found says truthfully that the profile page is TradeHQ\'s');
   ok(ps.includes('Able Group (Shrewsbury Service)') && /asked Google AI/.test(ps), 'the profile lead keeps its exact engine and competitors');
 
-  // "How much" carries the build terms, so the default screen needs no offer block.
+  // "How much" is the canonical offer sentence itself (2026-10-06); the ownership line moved to "Why twelve months?".
   const howMuch = p.objections.find((o) => o.objection === 'How much is it?')?.answer ?? '';
-  ok(howMuch.startsWith(FINDABLE_OFFER_SUMMARY) && /the site's yours once the minimum-term payments are made/.test(howMuch) && !/Nothing's charged after/.test(howMuch)
-    && howMuch.split(/(?<=[.?!])\s+/).length <= 3,
-    '"How much is it?" is the canonical offer sentence (which names the £29.99 Continuing Service) plus the ownership line — never "nothing after the last payment" (v3)');
+  ok(howMuch === FINDABLE_OFFER_SUMMARY && /£29\.99 a month until you cancel/.test(howMuch) && !/Nothing's charged after/.test(howMuch),
+    '"How much is it?" is exactly the canonical offer sentence (which names the £29.99 Continuing Service) — never "nothing after the last payment" (v3)');
+  ok(/once they're done the site's yours/.test(p.objections.find((o) => o.objection === 'Why twelve months?')?.answer ?? ''), 'the ownership line: on Build the site is theirs once the payments are made');
 
   // The panel: the new hierarchy, the old A–H headings gone.
   const ui = readFileSync(new URL('../src/components/ColdCallPlaybook.tsx', import.meta.url), 'utf8');
-  for (const t of ['AI opportunity', "What I'd talk about", 'Call script', 'Voice note', 'Questions they may ask', 'Audit evidence', 'Open report', 'Copy report link']) ok(ui.includes(t), 'panel shows: ' + t);
+  /* 2026-10-06 (sales-team-today, Paul): SCAN → SAY → ASK → LOG → CLOSE. The sections a rep glances at mid-call. */
+  for (const t of ['title="Say"', 'title="Ask first"', 'title="Then ask"', 'title="What we do"', 'title="Offer"', 'title="Objections"', "'Call script'", "'Voice note'"]) ok(ui.includes(t), 'panel shows: ' + t);
+  /* removed 2026-10-06 (sales-team-today, Paul): the second copy of the AI result (AI opportunity / Audit evidence /
+     report links), "What I'd talk about", "Questions they may ask", the source links and the coaching blocks. */
+  for (const t of ['AI opportunity', "What I'd talk about", 'Questions they may ask', 'Audit evidence', 'Open report', 'Copy report link',
+    'CallEvidence', 'AiOpportunity', 'TalkAbout', 'AuditEvidence', 'ReportLinks', 'WhyItMatters(', 'function WhatWeDo', 'HowWeBuild', 'SourceNote', 'VoiceCoaching']) ok(!ui.includes(t), 'removed block gone: ' + t);
   for (const t of ['How to explain it', 'Transition to Findable', 'Offer / next step', 'letter="A"']) ok(!ui.includes(t), 'old block gone: ' + t);
-  ok(/No strong owned-site technical issue found from the available evidence\./.test(ui), 'no strong site issue → one plain line, no padding');
-  ok(/\{tab === 'voice' && <div className="space-y-3"><VoiceNoteScriptBody leadId=\{leadId\} currentAuditId=\{p\.auditId\} \/><VoiceCoaching \/><\/div>\}/.test(ui) && /\['linkedin', 'LinkedIn'\], \['email', 'Email'\]/.test(ui) && /data-testid="voice-note-out-of-date"/.test(readFileSync(new URL('../src/components/VoiceNoteScriptButton.tsx', import.meta.url), 'utf8')), 'the voice-note script sits in the Voice note tab (loaded only when that tab is opened), with the coaching beside it (v2)');
-  ok(/useHookVisibility\(leadId\)/.test(ui) && /score\.shape !== 'six'/.test(ui) && /Older early-stop check/.test(ui), 'audit evidence reads the Inbox card\'s scored results and labels an old early-stop check');
-  ok(/<details key=\{o\.objection\}/.test(ui), 'each question is collapsed until opened');
+  ok(!/<a [^>]*href=\{?["'`]?https?:/.test(ui.replace(/href=\{'tel:'/g, '')) && !/\.sourceUrl|source\.url/.test(ui), 'removed 2026-10-06 (sales-team-today, Paul): no research source links on the call screen');
+  // removed 2026-10-06 (sales-team-today, Paul): the LinkedIn and Email tabs — only Call script and Voice note remain.
+  ok(/const tabs: Array<\[ScriptTab, string\]> = \[\['call', 'Call script'\], \['voice', 'Voice note'\]\];/.test(ui) && /type ScriptTab = 'call' \| 'voice';/.test(ui) && !/'linkedin'|'email'/.test(ui),
+    'the script tabs are exactly Call script and Voice note (no LinkedIn, no Email)');
+  ok(/\{tab === 'voice' && <VoiceNoteScriptBody leadId=\{leadId\} currentAuditId=\{p\.auditId\} \/>\}/.test(ui) && /data-testid="voice-note-out-of-date"/.test(readFileSync(new URL('../src/components/VoiceNoteScriptButton.tsx', import.meta.url), 'utf8')), 'the voice-note script sits in the Voice note tab (loaded only when that tab is opened)');
+  /* The AI result is no longer inside the playbook body: it is the ONE summary above it (LeadHookPanel 'call' →
+     HookVisibilityView), which still reads the Inbox card's scored results and labels an older check. */
+  ok(!/useHookVisibility\(leadId\)/.test(ui), 'the inline playbook carries no second copy of the AI result');
+  {
+    const hv = readFileSync(new URL('../src/components/HookVisibilityView.tsx', import.meta.url), 'utf8');
+    ok(/score\.shape !== 'six'/.test(hv) && /Older quick check/.test(hv) && /variant\?: 'inline' \| 'call'/.test(hv), 'the AI result above the script (HookVisibilityView, variant call) labels an older check format');
+  }
+  ok(/const \[open, setOpen\] = useState<number \| null>\(null\);/.test(ui) && /aria-expanded=\{open === i\}/.test(ui) && /data-testid="objection-answer"/.test(ui),
+    'objections are closed until opened, one answer open at a time');
   ok(!/onSend|doSend|send-whatsapp/.test(ui), 'the panel has no send action');
   const vn = readFileSync(new URL('../src/components/VoiceNoteScriptButton.tsx', import.meta.url), 'utf8');
   ok(/export function VoiceNoteScriptBody/.test(vn) && /<VoiceNoteScriptBody leadId=\{leadId\} \/>/.test(vn), 'the voice-note dialog and the playbook share one body');
@@ -342,7 +389,10 @@ console.log('── 13. HOUSE STYLE (Paul, 2026-09-30) ──');
     ok(problems.length === 0, 'case ' + (i + 1) + ': no filler, no fake rapport' + (problems.length ? ' — ' + problems.join(' ') : ''));
     ok(!/Have you got a minute|How are you|caught you at a bad time|I came across/i.test(said), 'case ' + (i + 1) + ': no permission-asking before the reason for ringing');
     ok(!/\bUK\b/.test(p.callScript.join(' ')) && !/for businesses in/.test(p.callScript.join(' ')), 'case ' + (i + 1) + ': the search is said as trade + town, never the audit query (no "UK", no qualifiers)');
-    ok(p.mode === 'follow_up' || /^I'm ringing because /.test(p.callScript[1] ?? ''), 'case ' + (i + 1) + ': the reason for ringing comes straight after the name');
+    // 2026-10-06 (sales-team-today, Paul): no name first — the reason for ringing IS the first line.
+    ok(/^Hi mate, I (was looking for|look at how)/.test(p.callScript[0] ?? ''), 'case ' + (i + 1) + ': the reason for ringing IS the first line (no name, no company, no earlier message)');
+    ok(!/from Findable|I messaged you|quicker to explain on the phone/i.test(said) && !/WhatsApp/.test(p.callScript.join(' ')) && !/\b(Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)\b/.test(p.callScript.join(' ')),
+      'case ' + (i + 1) + ': never "from Findable", "I messaged you", a weekday or "quicker to explain on the phone"');
     ok(p.objections.every((o) => o.answer.split(/(?<=[.?!])\s+/).length <= 5), 'case ' + (i + 1) + ': every objection answer is five sentences or fewer');
     ok(!/\bi asked\b/.test(p.callScript.join(' ')), 'case ' + (i + 1) + ': "I" is never lower-cased mid-sentence');
     ok(p.callScript.every((l) => l.length <= 320), 'case ' + (i + 1) + ': no line of the script runs past ~50 words');

@@ -22,6 +22,70 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-06-sales-team-today', date: '2026-10-06', title: 'A Call screen you can use on the phone, and onboarding no longer blocks selling', audience: 'all',
+    body: 'The AI result is at the top of the Call tab, in colour. The script starts with the reason for the call, then the real website reasons, then one question: do they manage the website or does an agency. The onboarding checklist no longer stops anyone selling.',
+    report: {
+      added: [
+        'The AI result at the top of the Call tab: ChatGPT and Google AI scores in colour (green all named, amber some, red none), the overall % named, the best missed search and who was named instead.',
+        'The first question is always "Do you manage the website yourself, or does an agency do it?" with two buttons. Agency opens the contract and cost questions, and a cheaper-angle line only when what they pay is more than ours.',
+        'Optimise | Build switch on the offer: one plan open at a time, the right one picked from their website.',
+        'Objections as buttons: tap one, its answer opens.',
+      ],
+      changed: [
+        'The opener: "Hi mate, I was looking for a plumber in Rugby, so I asked Google AI and it mentioned …, but not you." Never "from Findable", never "I messaged you" or a day.',
+        'Outreach rows say Google AI instead of Gemini, and the scores are coloured.',
+        'The onboarding checklist (18+, right to work, bank details, VAT, company, start date, team guide) is now Paul\'s record on the Team page. It no longer blocks Find Leads, claiming, checks, calls, messages or Quick Close. A suspended, ended or disabled login is still stopped.',
+      ],
+      removed: [
+        'The LinkedIn and Email scripts, the gatekeeper and voicemail lines, "if they\'d rather see it first", the research links, the "where does most of your work come from" question, and the second copy of the AI result lower down the Call tab.',
+        'The "You are not Ready to Sell yet" banner.',
+      ],
+      effect: 'Scan the AI result, say the opener, ask the first question, log the call, Quick Close. Prices, the agreement and payments are unchanged.',
+    } },
+  { id: '2026-10-06-call-workspace-log', date: '2026-10-06', title: 'The Call tab: status at the top, one Log button', audience: 'all',
+    body: 'Open a lead and its status and next action are at the top. Press Log, pick what happened, and only the outcomes that need a next step ask for one.',
+    report: {
+      added: [
+        'A Log button at the top of every lead (and Log outcome under the script). It opens a small window: Interested, Not interested, Didn’t answer, Call back, Send onboarding, Wrong number, Left voicemail.',
+        'After Call back it asks when to call. After Interested it asks what happens next: Send onboarding, Call back, Set follow-up or No next action. After Didn’t answer it offers a day to try again (Skip is fine).',
+        'Send onboarding records Interested and opens the Close tab (Quick Close) — the same sign-up, agreement and payment page as before.',
+      ],
+      changed: [
+        'The status pill and the next action sit at the top of the lead. Change the status from that pill; tap the next action to edit it.',
+        'Calls are logged as Call automatically. "Logged as: Call · Change" switches channel when you need to. Spoke to owner and Meeting booked are under More outcomes.',
+        'A note can still go with the outcome (Add note). The internal note stays on Details.',
+        'Admin: Mark paid is now a small button on the Close tab, not a big green bar under every tab. Same button, same result.',
+      ],
+      removed: ['The Status, Log a contact and Next action cards at the bottom of the Call tab.', 'The green Mark Paid bar at the bottom of the lead.'],
+      effect: 'While calling you see the script and one Log button, not a form. What you record and what it does to the lead are exactly the same as before.',
+      } },
+  { id: '2026-10-06-paid-client-tools', date: '2026-10-06', title: 'Page plan, page generator and review replies are inside Paid clients', audience: 'admin',
+    body: 'The three tools are no longer separate menu items. They are in Paid clients: the switch at the top of the list (every client), and "Pages & reviews" on each client\'s page (that client only). Old links still work.',
+    report: {
+      added: [
+        'Paid clients has a switch at the top: Clients · Page plan · Page generator · Review replies.',
+        'Each client\'s page has a "Pages & reviews" section with the same three tools, already set to that client.',
+        '"Build this page" on a client\'s page plan opens the generator right there, on that page.',
+      ],
+      changed: [
+        'Old links to Review replies, Page generator and Page plan open the same tool inside Paid clients, with the same client and page.',
+        'Paid clients is in the phone menu (More).',
+      ],
+      removed: ['Review replies, Page generator and Page plan from the side menu.'],
+      effect: 'Everything about a paying client is in one place. Nothing the tools could do has gone.',
+    } },
+  { id: '2026-10-06-one-look', date: '2026-10-06', title: 'One look across the app', audience: 'all',
+    body: 'Pop-ups, the Paid client pages, Team and the admin cards now use the same colours, icons and cards as the Sales dashboard.',
+    report: {
+      added: ['Coloured status chips, and a coloured edge on cards that need attention (amber), are done (teal) or are blocked (red).'],
+      changed: [
+        'Pop-ups have a clear header with an icon, rounder corners, and their buttons sit side by side on a phone instead of stacking.',
+        'Tabs look like the Sales dashboard\'s switches.',
+        'Fewer grey boxes inside grey boxes: sections inside a card are marked by a coloured line and a heading.',
+      ],
+      removed: [],
+      effect: 'The whole app reads as one product. Nothing works differently.',
+    } },
   { id: '2026-10-05-sales-small-fixes', date: '2026-10-05', title: 'Four small fixes: unsaved notes, start dates, clearer refusals, link expiry', audience: 'all',
     body: 'Escape no longer throws away a note you have not saved. A salesperson is Ready to Sell from their start date, not before. If your onboarding is not finished, the app now says so instead of "usage paused". The sign-up link says "about 30 days", not "715 hours".',
     report: {

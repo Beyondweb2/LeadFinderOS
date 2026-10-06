@@ -105,19 +105,23 @@ console.log("\n── the popup: one display, one editor, nothing removed ──
   ok(/headerStateShown\(salesState\.view, shown, salesState\.row\)/.test(dlg) && /const shown = pipelineStatusLabel\(pillStatusOf\(lead\.status, salesState\.view\)\);/.test(dlg) && /<SalesStatePill view=\{salesState\.view\} \/>/.test(dlg), "the extra state pill is drawn only through the one rule");
   ok(/<PipelineStatusSelect value=\{lead\.status\} stage=\{salesState\.view\}/.test(dlg) && !/<PipelineStatusBadge/.test(dlg), "the status is the SAME control as Outreach and the Inbox (pillStatusOf inside)");
   ok(!/<ContactMethodBadge/.test(dlg) && /Preferred channel/.test(dlg) && /onUpdateLead\(lead\.id, \{ contact_method: v \}/.test(dlg), "the channel is no longer a pill beside the status: a labelled Preferred channel, same write");
-  ok(/\{onEditNext && <NextActionBar lead=\{row\} onEdit=\{onEditNext\} \/>\}/.test(strip) && !/onEditNext=/.test(dlg) && /<NextActionBar lead=\{lead\} onEdit=\{\(\) => setEditingNext\(true\)\} \/>/.test(crm) && /data-testid="next-action-bar"/.test(pill), "v2: ONE Next Action — the popup header no longer draws it; its display and editor are at the bottom of the Call tab");
-  ok(!/onSave|lead_set_follow_up|saveNextAction/.test(pill.slice(pill.indexOf("export function NextActionBar"))), "…and never writes: its Edit only opens the editor");
-  ok(/<NextActionBar lead=\{lead\} onEdit=\{\(\) => setEditingNext\(true\)\} \/>/.test(crm) && /setEditingNext\(true\);\n\s*onEditNextHandled\?\.\(\);/.test(crm), "Edit on the bar opens the ONE editor in place (an outside request is taken once, then cleared)");
-  ok((crm.match(/<NextActionForm /g) ?? []).length === 1 && /editingNext \|\| preset \?/.test(crm) && /if \(r\.ok\) \{ setPreset\(null\); setEditingNext\(false\); \}/.test(crm), "the editor opens on demand or on an outcome's suggestion, and closes after Save");
-  ok(/const \[open, setOpen\] = useState\(defaultOpen\);/.test(crm) && /defaultOpen=\{logContactOpen\}/.test(crm) && /open=\{open\} onOpenChange=\{setOpen\} testId="log-contact"/.test(crm) && /aria-expanded=\{open\}/.test(read("src/components/WorkSection.tsx")),"Log a contact is collapsed by default and opens on tap");
-  const tap = crm.slice(crm.indexOf("const tap = async"), crm.indexOf("const outcomeButton"));
-  ok(/if \(!r\.ok\) return;/.test(tap) && tap.indexOf("setOpen(false)") > tap.indexOf("followOn(outcome"), "…it closes only after the log succeeded (a refusal leaves it open)");
-  const lc = crm.slice(crm.indexOf("function LogContact("), crm.indexOf("function InternalNote("));
-  ok(/after=\{resultLine\}/.test(lc) && /\{after && <div/.test(read("src/components/WorkSection.tsx")), "…and the result line stays visible under the closed header");
-  ok(/offeredOutcomes\(outcomesFor\(channel\)\)/.test(lc) && /WHATSAPP_RESULT_OUTCOMES\.map/.test(lc) && /SOCIAL_CONTACT_METHODS\.map/.test(lc) && /more\.map/.test(lc), "…with every channel and every outcome still inside");
+  /* 2026-10-06 (call workspace): the status and the Next Action are at the TOP; Log is a small window. */
+  const flow = read("src/components/LeadCallFlow.tsx");
+  ok(/\{status\}\s*\{next\}/.test(strip) && !/NextActionBar/.test(strip) && /<HeaderNextAction leadId=\{lead\.id\} onEdit=\{\(\) => setNextOpen\(true\)\} \/>/.test(dlg) && !/data-testid="next-action-section"/.test(crm + dlg), "ONE Next Action, at the top: a compact line beside the status; the old card at the bottom of Call is gone");
+  const hna = flow.slice(flow.indexOf("export function HeaderNextAction"), flow.indexOf("export function LostReasonLine"));
+  ok(!/onSave|lead_set_follow_up|saveNextAction|saveNext/.test(hna) && /No next action/.test(hna) && /· Set one/.test(hna), "…it never writes (a tap opens the editor), and with none it says No next action · Set one");
+  ok((flow.match(/<NextActionForm /g) ?? []).length === 1 && /data-testid="next-action-window"/.test(flow) && /nextForm\(null, \(\) => onNextOpenChange\(false\)/.test(flow), "the header's tap opens the ONE editor in a small window");
+  ok(/if \(r\.ok\) done\(\); return r;/.test(flow), "the editor closes after a successful Save only");
+  ok(/const \[logOpen, setLogOpen\] = useState\(openLogContact\);/.test(dlg) && /const logThisCall = \(\) => setLogOpen\(true\);/.test(dlg) && /data-testid="workspace-log"/.test(dlg), "Log is a button (header + the script's bar) that opens the Log window; Outreach's Call arrives with it open");
+  const tap = flow.slice(flow.indexOf("const tap = async"), flow.indexOf("const chooseInterestedNext"));
+  ok(/if \(!done \|\| !done\.ok \|\| !done\.result\) return;/.test(tap) && tap.indexOf("setLogOpen(false)") > tap.indexOf("work.logOutcome("), "…it moves on only after the log succeeded (a refusal leaves the window open)");
+  ok(/onLogged\(\{ key, outcome, result: done\.result \}\)/.test(tap) && /\{logged && <LoggedLine /.test(dlg), "…and the result line stays visible on the Call tab after the window closes");
+  ok(/CONTACT_METHODS\.map/.test(flow) && /moreOutcomesFor\(channel\)/.test(flow) && /recorded automatically/.test(flow), "…with every channel (Change) and every offered outcome (More) still reachable");
+  for (const gone of ['data-testid="call-status"', 'testId="log-contact"', 'data-testid="mark-paid-main"', 'data-testid="mark-paid-quiet"', 'data-testid="call-actions"']) ok(!(crm + dlg).includes(gone), `gone from the Call tab: ${gone}`);
   ok(/setDetailLogContact\(true\);\n\s*setDetailLead\(lead\);/.test(table) && /openLogContact=\{detailLogContact\}/.test(table) && /setDetailLogContact\(false\)/.test(table), "Outreach's Call opens the workspace with Log a contact expanded");
   ok(/data-testid="hook-not-run"/.test(crm) && /data-testid="hook-propose"/.test(crm) && /<HookVisibilityCard /.test(crm) && /data-testid="hook-history"/.test(crm), "the AI check: compact when not run; result, re-run and history unchanged");
-  ok(/markPaidIsMain\(lead\.status, salesState\.view\)/.test(dlg) && (dlg.match(/onClick=\{handleMarkPaid\}/g) ?? []).length === 2 && dlg.includes("{perms.clientDelivery && !isPaidLead(lead) && ("), "Mark Paid: the main button at a payment stage, a small one otherwise — admin only, unpaid only, same handler");
+  const closeTab = dlg.slice(dlg.indexOf('<TabsContent value="close"'), dlg.indexOf('<TabsContent value="history"'));
+  ok(/markPaidIsMain\(lead\.status, salesState\.view\)/.test(closeTab) && (dlg.match(/onClick=\{handleMarkPaid\}/g) ?? []).length === 1 && /onClick=\{handleMarkPaid\}/.test(closeTab) && closeTab.includes("{perms.clientDelivery && !isPaidLead(lead) && (") && /data-testid="mark-paid-admin"/.test(closeTab), "Mark Paid (2026-10-06): a small admin action on the Close tab — admin only, unpaid only, same handler; stronger at a payment stage");
   ok(!/<QuickCloseButton/.test(dlg) && /<TabsTrigger value="close"/.test(dlg) && /QuickCloseNav\.Provider/.test(dlg), "v2: Quick Close is the Close tab (no second close window from the header); every Quick Close button in the workspace switches to it");
   /* Nothing removed: every tool the header had is still mounted. */
   for (const [what, re] of [
@@ -126,7 +130,8 @@ console.log("\n── the popup: one display, one editor, nothing removed ──
     ["the star", /<StarToggle /], ["edit name", /setEditingName\(true\)/], ["WhatsApp link", /whatsAppLinkForLead\(lead\.id\)/], ["tabs", /<TabsTrigger value="client"/],
   ] as const) ok(re.test(dlg), `still there: ${what}`);
   ok(/data-testid="more-tools-toggle"/.test(dlg) && /\{moreTools && \(/.test(dlg) && !/DropdownMenu/.test(dlg), "the less frequent tools reveal IN PLACE on Details (not a menu), so their own dialogs stay mounted");
-  for (const id of ["learned-agency", "lead-campaign", "domain-control", "meeting-when"]) ok(crm.includes(`data-testid="${id}"`) || crm.includes(`testId="${id}"`), `Work tab keeps ${id}`);
+  for (const id of ["learned-agency", "lead-campaign", "domain-control"]) ok(crm.includes(`data-testid="${id}"`) || crm.includes(`testId="${id}"`), `Details keeps ${id}`);
+  ok(flow.includes('data-testid="meeting-when"'), "the meeting's when-form is the Log window's follow-up step");
   ok(/<LeadOwnerControl leadId=\{leadId\} \/>/.test(strip) && /<LastContactLine/.test(strip) && /wrong-number-pill/.test(strip), "owner, last contact and Wrong number stay in the header");
 }
 
@@ -155,10 +160,17 @@ console.log("\n── pass 2: one folding pattern for the Work tab ──");
   const card = read("src/components/OnboardingLinkCard.tsx");
   const wa = read("src/components/WhatsAppLeadControls.tsx");
   ok(/hidden=\{!open\}/.test(ws) && /\{alert && <div/.test(ws) && /const expandable = children !== undefined/.test(ws), "WorkSection: the body stays mounted while folded (state survives), warnings show folded, no body → no toggle");
-  for (const [what, src, id] of [["Log a contact", crm, "log-contact"], ["Campaign", crm, "lead-campaign"], ["Call booked", crm, "call-booked"], ["Sign-up link", card, "signup-link"], ["WhatsApp outreach", wa, "whatsapp-outreach"]] as const) {
+  for (const [what, src, id] of [["Campaign", crm, "lead-campaign"], ["Call booked", crm, "call-booked"], ["Sign-up link", card, "signup-link"], ["WhatsApp outreach", wa, "whatsapp-outreach"]] as const) {
     ok(src.includes(`<WorkSection `) && src.includes(`testId="${id}"`), `${what} uses the one WorkSection pattern`);
   }
-  ok(!/<details/.test(crm), "no second folding pattern (<details>) left on the Work tab");
+  /* 2026-10-06 (sales-team-today, Paul): ONE exception — LeadHookPanel's "Earlier checks" list (data-testid="hook-history")
+     folds as a <details> inside the AI result at the top of the Call tab (closed there; open in the Outreach audit popup).
+     It is part of the AI result card, not a Work section. Every OTHER <details> in LeadCrmPanel still fails this. */
+  {
+    const folds = crm.match(/<details\b[^>]*>/g) ?? [];
+    ok(folds.length === 1 && /data-testid="hook-history"/.test(folds[0]) && /open=\{variant === 'call' \? undefined : true\}/.test(folds[0]),
+      `no second folding pattern (<details>) left on the Work tab — only the AI result's Earlier checks fold (${folds.length} found)`);
+  }
   ok(/summary=\{name\}/.test(crm) && /summary=\{callBookedSummary\(lead\)\}/.test(crm) && /summary=\{summary\}/.test(card) && /summary=\{summary\}/.test(wa), "every folded section says its state in its summary");
   ok(/alert=\{blocking \? warningLine : null\}/.test(card), "Sign-up link: a blocking gap (no trade) stays visible while folded");
   ok(/flex flex-wrap gap-1\.5" data-testid="onboarding-buttons"/.test(card) && /h-9 /.test(card), "Sign-up link: the buttons wrap (no 390 px overflow) with phone-sized touch targets");

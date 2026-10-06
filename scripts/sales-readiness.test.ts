@@ -209,7 +209,7 @@ console.log("── Next Action stays human-set ──");
   const trg = mig.slice(mig.indexOf("function public.trg_onboarding_link_sent("), mig.indexOf("$$;", mig.indexOf("function public.trg_onboarding_link_sent(")));
   ok(!/next_action/.test(trg), "the onboarding trigger never touches the next action");
   const crm = read("src/components/LeadCrmPanel.tsx");
-  const logUi = crm.slice(crm.indexOf("function LogContact("), crm.indexOf("function InternalNote("));
+  const logUi = crm.slice(crm.indexOf("const logOutcome = async"), crm.indexOf("const afterWrite"));
   ok(/'lead_log_contact'/.test(logUi) && !/lead_set_follow_up/.test(logUi), "logging an outcome never schedules a follow-up");
   /* The outcome and channel allowlists were extended 2026-09-28 (20260928210000, the one contact-method
      set): these two read the NEWEST definition; the checks above still read the original migration. */

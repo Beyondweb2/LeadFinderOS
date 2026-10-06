@@ -115,8 +115,11 @@ console.log("\n── the screens (presentation; the server decides) ──");
   ok(ready.salesChecks && ready.moveToCampaign && (ready.settableStatuses ?? []).length > 0, "a ready rep's screen is unchanged");
   ok(admin.editLeadRecord && admin.bulkAudits && admin.settableStatuses === null, "the admin is unaffected (the readiness flag is ignored)");
   ok(JSON.stringify(leadPermissions("sales")) === JSON.stringify(ready), "the default is the old behaviour (every existing caller unchanged)");
-  ok(/^Complete your onboarding before using this\./.test(refusalText("not_ready_to_sell")), "the refusal reads in plain words (final sales release: the real cause, E2E-02)");
-  ok(/NotReadyToSellBanner/.test(read("src/pages/SalesDashboard.tsx")) && /NotReadyToSellBanner/.test(read("src/components/LeadDetailDialog.tsx")), "the banner is on the Sales dashboard and in the lead workspace");
+  /* sales-team-today (2026-10-06): a refusal now means a genuine account restriction, never the checklist. */
+  ok(refusalText("not_ready_to_sell") === "Your sales access is not active. Speak to Paul." && !/onboarding/i.test(refusalText("not_ready_to_sell")),
+    "the refusal reads in plain words: sales access not active, never 'complete your onboarding' (2026-10-06)");
+  ok(/NotReadyToSellBanner/.test(read("src/pages/SalesDashboard.tsx")) && /NotReadyToSellBanner/.test(read("src/pages/Index.tsx")) && !/NotReadyToSellBanner/.test(read("src/components/LeadDetailDialog.tsx")),
+    "the access banner is on the Sales dashboard and Find Leads, and NOT in the lead popup (2026-10-06)");
   ok(/useMyReadiness/.test(read("src/hooks/useLeadPermissions.ts")), "permissions fold in the rep's own readiness");
   const hook = read("src/hooks/useMyReadiness.ts");
   ok(/ready: q\.data\?\.ready === true/.test(hook), "the screen fails closed for a salesperson (unknown = not ready)");

@@ -5,11 +5,14 @@
    records admin-only. The gate's BEHAVIOUR is proven live by supabase/tests/salesperson-onboarding-rls.sql
    (run against the database, rolled back: 70/70 on 2026-10-05); scripts/sales-ready-gate.test.ts fences
    the gate's wiring.
+   🔴 SINCE 2026-10-06 (sales-team-today, Paul): the practical checklist NO LONGER BLOCKS SELLING. It is Paul's
+      admin record; only genuine account restrictions (SELLING_GATE_KEYS) stop a salesperson — migration
+      20261012120000_selling_gate_account_only.sql, fenced again by scripts/selling-gate-account-only.test.ts.
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import path from "node:path";
 import {
-  BLOCKING_KEYS, INACTIVE_KEYS, ONBOARDING_FIELDS, RTW_CATEGORIES, RTW_METHODS, SEED_DOCUMENT_VERSIONS,
+  CHECKLIST_KEYS, SELLING_GATE_KEYS, ONBOARDING_FIELDS, RTW_CATEGORIES, RTW_METHODS, SEED_DOCUMENT_VERSIONS,
   addMonths, emptyOnboardingRecord, normaliseCompanyNumber, normaliseVatNumber, onboardingSummary, sensitiveTextProblem,
   validateNewDocument, validateOnboardingPatch, type DocumentVersion, type MemberState, type OnboardingRecord,
 } from "../src/lib/salespersonOnboarding.ts";
@@ -49,30 +52,33 @@ console.log("── a complete record on a live sales login is READY TO SELL ─
 {
   const s = sum(full());
   ok(s.readyToSell && s.done === s.total && s.missing.length === 0, `ready, ${s.done}/${s.total}`);
-  ok(s.total === 8 && BLOCKING_KEYS.length === 8, "eight blocking items (paperwork and Schedule 2 never block)");
-  ok(!BLOCKING_KEYS.some((k) => /tps|ctps/i.test(k)) && !s.items.some((i) => /tps|ctps/i.test(i.label)), "TPS/CTPS is NOT an item (postponed by Paul)");
+  ok(s.total === 8 && CHECKLIST_KEYS.length === 8, "eight checklist items (paperwork and Schedule 2 are not on it)");
+  ok(!CHECKLIST_KEYS.some((k) => /tps|ctps/i.test(k)) && !s.items.some((i) => /tps|ctps/i.test(i.label)), "TPS/CTPS is NOT an item (postponed by Paul)");
   const empty = sum(null);
-  ok(!empty.readyToSell && empty.done === 1 && empty.missing.length === 7, `no record: only the login counts (${empty.done}/${empty.total})`);
+  /* 2026-10-06: an empty checklist on an active sales login CAN SELL; the checklist still shows 1/8. */
+  ok(empty.readyToSell && empty.done === 1 && empty.missing.length === 7, `no record: can still sell; the checklist shows only the login (${empty.done}/${empty.total})`);
+  ok(JSON.stringify([...SELLING_GATE_KEYS]) === JSON.stringify(["not_sales", "login", "suspended", "ended"]), "the only selling-gate keys are not_sales / login / suspended / ended");
 }
 
 console.log("\n── SALESPERSON PAPERWORK: handled OUTSIDE LeadFinderOS (Paul, 2026-10-05) — never blocks ──");
 {
-  ok(!(BLOCKING_KEYS as readonly string[]).includes("agreement"), "the contractor agreement is NOT a Ready to Sell blocker");
-  ok(!(BLOCKING_KEYS as readonly string[]).includes("privacy_notice"), "the salesperson privacy notice is NOT a Ready to Sell blocker");
+  ok(!(CHECKLIST_KEYS as readonly string[]).includes("agreement") && !(SELLING_GATE_KEYS as readonly string[]).includes("agreement"), "the contractor agreement is NOT a checklist item or a selling-gate key");
+  ok(!(CHECKLIST_KEYS as readonly string[]).includes("privacy_notice") && !(SELLING_GATE_KEYS as readonly string[]).includes("privacy_notice"), "the salesperson privacy notice is NOT a checklist item or a selling-gate key");
   const none = full({ agreement_version: null, agreement_signed_on: null, agreement_ref: null, privacy_notice_version: null, privacy_notice_given_on: null });
   ok(sum(none).readyToSell && sum(none, ACTIVE, [...SEED_DOCUMENT_VERSIONS]).readyToSell, "nothing recorded about the agreement or notice, and only DRAFT documents exist → still Ready to Sell");
   ok(sum(full({ agreement_version: "contractor-agreement-draft-v2", privacy_notice_version: "salesperson-privacy-notice-draft-2026-10-05" })).readyToSell, "a draft recorded for reference does not stop them either");
   const ag = item(none, "agreement"), pn = item(none, "privacy_notice");
-  ok(!ag.blocking && !pn.blocking && ag.done && pn.done && /outside LeadFinderOS/.test(ag.detail), "both are reference lines: never blocking, never shown as missing");
+  ok(!ag.required && !pn.required && ag.done && pn.done && /outside LeadFinderOS/.test(ag.detail), "both are reference lines: never required, never shown as missing");
   ok(!sum(none, ACTIVE, [...SEED_DOCUMENT_VERSIONS]).notes.some((n) => /contractor agreement|privacy notice/i.test(n)), "no note tells Paul he must approve paperwork before anyone can sell");
   ok(item(full(), "agreement").detail.includes("Secure folder / A"), "what Paul records is still shown for reference");
-  // The remaining practical requirements still gate.
+  // 2026-10-06: the practical items are still on the checklist (shown missing) but NONE of them stops selling.
   for (const [k, over] of [["age_18", { age_18_confirmed_on: null }], ["right_to_work", { rtw_result: null }], ["bank_details", { bank_details_received_on: null }], ["vat", { vat_registered: null }],
     ["contractor_status", { contractor_type: null }], ["start_date", { start_date: null }], ["team_guide", { team_guide_acknowledged_on: null }]] as const) {
     const s = sum(full(over as Partial<OnboardingRecord>));
-    ok(!s.readyToSell && s.missing.some((i) => i.key === k), `still required: ${k} missing → NOT Ready to Sell`);
+    ok(s.readyToSell && s.missing.some((i) => i.key === k), `${k} missing → shown missing on the checklist, STILL can sell`);
   }
-  ok(!sum(full(), { ...ACTIVE, status: "disabled" }).readyToSell, "still required: their own live login");
+  ok(sum(full({ start_date: "2026-12-01" })).readyToSell && item(full({ start_date: "2026-12-01" }), "start_date").done, "a FUTURE start date: recorded, and still can sell");
+  ok(!sum(full(), { ...ACTIVE, status: "disabled" }).readyToSell, "a disabled login still cannot sell (account restriction)");
   const seedAgreement = SEED_DOCUMENT_VERSIONS.find((d) => d.kind === "contractor_agreement")!;
   ok(seedAgreement.id === "contractor-agreement-draft-v2" && seedAgreement.status === "draft", "the reference record of the draft v2 agreement is kept as it was");
   ok(validateOnboardingPatch({ agreement_version: "contractor-agreement-draft-v2", agreement_signed_on: "2026-10-06" }, null, DOCS).ok, "Paul can still record what was signed, for reference");
@@ -84,7 +90,7 @@ console.log("\n── SALESPERSON PAPERWORK: handled OUTSIDE LeadFinderOS (Paul,
 
 console.log("\n── the server's answer is the one shown ──");
 {
-  const s = sum(full(), ACTIVE, DOCS, ["right_to_work"]);
+  const s = sum(full(), ACTIVE, DOCS, ["suspended"]);
   ok(!s.readyToSell && s.serverDisagrees, "when the gate says not ready, the panel says not ready (and flags the disagreement)");
   ok(sum(full(), ACTIVE, DOCS, []).readyToSell && !sum(full(), ACTIVE, DOCS, []).serverDisagrees, "agreement with the server: no flag");
   ok(!sum(full(), ACTIVE, DOCS, null).serverDisagrees, "server answer unreadable: the local rule is shown without a false flag");
@@ -92,18 +98,22 @@ console.log("\n── the server's answer is the one shown ──");
 
 console.log("\n── the keys match the database rule ──");
 {
-  /* The LIVE definition is the latest migration that replaces the function (20261011120000: paperwork removed in
-     20261010140000, plus a start date still to come = not_started, final sales release 2026-10-05). */
-  const LATEST = read("supabase/migrations/20261011120000_ready_to_sell_start_date.sql");
+  /* The LIVE definition is the NEWEST migration that replaces the function — found, not named, so a later
+     redefinition is always the one checked (since 2026-10-06: 20261012120000_selling_gate_account_only.sql,
+     account restrictions only). */
+  const DEFINERS = readdirSync(path.join(ROOT, "supabase/migrations")).filter((n) => n.endsWith(".sql"))
+    .filter((n) => read(`supabase/migrations/${n}`).includes("create or replace function public.salesperson_onboarding_missing")).sort();
+  const LATEST_NAME = DEFINERS[DEFINERS.length - 1];
+  const LATEST = read(`supabase/migrations/${LATEST_NAME}`);
+  ok(LATEST_NAME >= "20261012120000", `the newest definition is the account-only gate or later (${LATEST_NAME})`);
   const fn = LATEST.slice(LATEST.indexOf("create or replace function public.salesperson_onboarding_missing"), LATEST.indexOf("revoke all on function public.salesperson_onboarding_missing"));
   const emitted = new Set([...fn.matchAll(/'([a-z_0-9]+)'::text/g)].map((m) => m[1]).concat([...fn.matchAll(/array\['([a-z_]+)'\]/g)].map((m) => m[1])));
-  for (const k of [...BLOCKING_KEYS, ...INACTIVE_KEYS]) ok(emitted.has(k), `the database rule can return "${k}"`);
-  for (const k of emitted) ok((BLOCKING_KEYS as readonly string[]).includes(k) || (INACTIVE_KEYS as readonly string[]).includes(k), `"${k}" from the database is a key the screen knows`);
+  for (const k of SELLING_GATE_KEYS) ok(emitted.has(k), `the database rule can return "${k}"`);
+  for (const k of emitted) ok((SELLING_GATE_KEYS as readonly string[]).includes(k), `"${k}" from the database is a selling-gate key (account restriction)`);
+  for (const k of ["age_18", "right_to_work", "bank_details", "vat", "contractor_status", "start_date", "team_guide", "not_started"]) ok(!emitted.has(k), `the database rule no longer returns checklist key "${k}"`);
   ok(!emitted.has("agreement") && !emitted.has("privacy_notice") && !/contractor_agreement|privacy_notice/.test(fn.replace(/--[^\n]*/g, "")), "the database rule never checks the contractor agreement or privacy notice");
   ok(!/tps|ctps|phone_tps/i.test(fn), "the database rule never reads TPS/CTPS");
-  ok((fn.match(/d\.status = 'approved'/g) ?? []).length === 1 && /d\.kind = 'team_guide'/.test(fn), "the only document the rule reads is the current APPROVED team guide");
-  const migs = readdirSync(path.join(ROOT, "supabase/migrations")).filter((n) => n.slice(0, 14) > "20261011120000").filter((n) => /salesperson_onboarding_missing/.test(read(`supabase/migrations/${n}`)));
-  ok(migs.length === 0, `no later migration redefines the rule (${migs.join(", ") || "none"})`);
+  ok(!/salesperson_document_versions|team_guide/.test(fn.replace(/--[^\n]*/g, "")), "the rule reads no document at all (the team guide no longer gates)");
   ok(!/schedule2/.test(fn), "Schedule 2 never blocks in the database either");
 }
 
@@ -128,10 +138,10 @@ console.log("\n── right to work: factual, never a legal conclusion ──");
 {
   ok(item(full(), "right_to_work").done, "pass + method + date + checker + evidence location = recorded");
   ok(!item(full({ rtw_evidence_ref: null }), "right_to_work").done, "no evidence location: not done");
-  ok(!item(full({ rtw_result: "fail" }), "right_to_work").done && /FAILED/.test(item(full({ rtw_result: "fail" }), "right_to_work").detail), "a failed check blocks and says so");
+  ok(!item(full({ rtw_result: "fail" }), "right_to_work").done && /FAILED/.test(item(full({ rtw_result: "fail" }), "right_to_work").detail), "a failed check is not done and says so");
   ok(!item(full({ rtw_method: "certified_provider" }), "right_to_work").done, "a certified-provider check needs the provider's name");
   ok(item(full({ rtw_method: "certified_provider", rtw_provider: "Example IDSP" }), "right_to_work").done, "…and is done with it");
-  ok(!item(full({ rtw_recheck_due: "2026-10-19" }), "right_to_work").done, "a follow-up check that has fallen due blocks");
+  ok(!item(full({ rtw_recheck_due: "2026-10-19" }), "right_to_work").done, "a follow-up check that has fallen due is not done");
   ok(RTW_METHODS.manual_video_call.category === "manual_video" && RTW_METHODS.certified_provider.category === "certified_provider"
     && RTW_METHODS.manual_in_person.category === "other_approved" && RTW_METHODS.home_office_share_code.category === "other_approved",
     "three categories: manual/video, certified provider, other approved method");
@@ -158,7 +168,7 @@ console.log("\n── 18+, bank, VAT, contractor status, Schedule 2, team guide 
   ok(item(full({ contractor_type: "limited_company", company_name: "A Ltd", company_number: "01234567", company_contract_confirmed_on: "2026-10-06" }), "contractor_status").done, "limited company with name, number and contract confirmed: done");
   ok(validateOnboardingPatch({ company_name: "A Ltd" }, full(), DOCS).ok === false, "company details on an individual are refused");
   ok(normaliseCompanyNumber("1234567") === "01234567" && normaliseCompanyNumber("ABC") === null, "company numbers normalise");
-  ok(sum(full()).readyToSell && !item(full(), "schedule2").blocking, "Schedule 2 outstanding never blocks (it is optional)");
+  ok(sum(full()).readyToSell && !item(full(), "schedule2").required, "Schedule 2 outstanding is never required (it is optional)");
   ok(item(full({ schedule2_status: "none" }), "schedule2").done, "Schedule 2 none listed: done");
   ok(!item(full({ team_guide_acknowledged_on: null }), "team_guide").done, "team guide version without a date: not done");
   ok(!("login_created" in ONBOARDING_FIELDS), "there is no stored 'login created' tick");

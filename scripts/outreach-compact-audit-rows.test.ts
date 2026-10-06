@@ -46,12 +46,12 @@ const scoreOf = (g: Grid): RowScore | null => rowScoreFromPerEngine(buildReportD
 console.log('── the row score: ChatGPT x/3 · Gemini y/3, from the report\'s own fold ──');
 {
   const s = scoreOf([[true, false], [false, false], [false, false]]);
-  ok(scoreLine(s) === 'ChatGPT 1/3 · Gemini 0/3', `a checked row reads "ChatGPT 1/3 · Gemini 0/3" (got "${scoreLine(s)}")`);
-  ok(scoreLine(scoreOf([[true, true], [true, true], [true, true]])) === 'ChatGPT 3/3 · Gemini 3/3', 'all named → 3/3 · 3/3');
-  ok(scoreLine(scoreOf([[true, null], [false, false], [false, true]])) === 'ChatGPT 1/3 · Gemini 1/2', 'the denominator is the STORED answered count: a lost Gemini answer reads 1/2, not 1/3');
-  ok(scoreLine(scoreOf([[false, null], [false, null], [false, null]])) === 'ChatGPT 0/3 · Gemini –', 'an engine with no answers reads "Gemini –", never 0/3');
+  ok(scoreLine(s) === 'ChatGPT 1/3 · Google AI 0/3', `a checked row reads "ChatGPT 1/3 · Google AI 0/3" (Gemini is said as Google AI, 2026-10-06) (got "${scoreLine(s)}")`);
+  ok(scoreLine(scoreOf([[true, true], [true, true], [true, true]])) === 'ChatGPT 3/3 · Google AI 3/3', 'all named → 3/3 · 3/3');
+  ok(scoreLine(scoreOf([[true, null], [false, false], [false, true]])) === 'ChatGPT 1/3 · Google AI 1/2', 'the denominator is the STORED answered count: a lost Google AI answer reads 1/2, not 1/3');
+  ok(scoreLine(scoreOf([[false, null], [false, null], [false, null]])) === 'ChatGPT 0/3 · Google AI –', 'an engine with no answers reads "Google AI –", never 0/3');
   const six = rowScoreFromPerEngine([{ label: 'ChatGPT', named: 2, total: 9 }, { label: 'Gemini', named: 1, total: 9 }, { label: 'AI Overview', named: 5, total: 9 }]);
-  ok(scoreLine(six) === 'ChatGPT 2/9 · Gemini 1/9', 'a three-run method change reads x/9 with no code change; AI Overview is never on the row');
+  ok(scoreLine(six) === 'ChatGPT 2/9 · Google AI 1/9', 'a three-run method change reads x/9 with no code change; AI Overview is never on the row');
   ok(rowScoreFromPerEngine([]) === null && rowScoreFromPerEngine(null) === null, 'nothing answered → no score (never 0/0)');
   const json = JSON.stringify(s);
   ok(!json.includes('Pennine') && !json.includes(FINDING) && !json.includes('well reviewed') && !json.includes('Halifax'),
@@ -82,7 +82,7 @@ console.log('── the row markup: compact, scores only ──');
   const s = scoreOf([[true, false], [false, false], [false, false]]);
   const html = renderToStaticMarkup(createElement(AiCheckSummary, { state: ready, score: s, onCallScreen: () => {}, onRetry: () => {} }));
   const t = text(html);
-  ok(/ChatGPT 1\/3/.test(t) && /Gemini 0\/3/.test(t), 'the checked row shows ChatGPT and Gemini');
+  ok(/ChatGPT 1\/3/.test(t) && /Google AI 0\/3/.test(t) && !/Gemini/.test(t), 'the checked row shows ChatGPT and Google AI (never Gemini)');
   ok(/Call screen/.test(t) && /data-testid="row-call-screen"/.test(html), 'the checked row has a Call screen button');
   ok(!/Pennine|Rival|named them|did not name|website|Website|crawl|finding|missed/i.test(t), 'no rival name, no headline, no website finding, no missed query in the row');
   ok(t.length <= 60, `the whole ready row summary is one short line (${t.length} chars: "${t}")`);

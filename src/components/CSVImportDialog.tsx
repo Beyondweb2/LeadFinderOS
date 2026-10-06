@@ -1,17 +1,11 @@
 import { useRef, useState } from 'react';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-} from '@/components/ui/dialog';
+import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Upload, FileSpreadsheet, AlertCircle, CheckCircle } from 'lucide-react';
-import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Upload, FileSpreadsheet, AlertCircle, CheckCircle2, Info, Loader2, ListChecks, AlertTriangle } from 'lucide-react';
+import { ActionBar, Callout, DialogHero, Figure, SubSection, TONE, type Tone } from '@/components/operator/ui';
+import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
 import {
   IMPORT_FIELDS, IMPORT_FIELD_LABEL, IMPORT_FILE_MAX_BYTES, IMPORT_FILE_MAX_ROWS, IMPORT_BATCH_MAX,
@@ -143,47 +137,46 @@ export function CSVImportDialog({ open, onOpenChange, onImported, isAdmin }: CSV
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto" data-testid="csv-import-dialog">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <FileSpreadsheet className="h-5 w-5 text-primary" />
-            Import leads from a CSV
-          </DialogTitle>
-          <DialogDescription>
-            New leads are added to your leads, owned by {owner}. Nobody is messaged and nothing is queued.
-          </DialogDescription>
-        </DialogHeader>
+      <DialogContent className="sm:max-w-2xl max-h-[100dvh] sm:max-h-[90vh] overflow-y-auto" data-testid="csv-import-dialog">
+        <DialogHero
+          icon={FileSpreadsheet}
+          tone="blue"
+          title="Import leads from a CSV"
+          subtitle={<>New leads are added to your leads, owned by {owner}. Nobody is messaged and nothing is queued.</>}
+        />
 
-        <div className="space-y-4 py-2 min-w-0">
+        <div className="space-y-4 min-w-0">
           {step === 'pick' && (
             <>
               <div>
-                <Label htmlFor="csv-file">CSV file</Label>
+                <Label htmlFor="csv-file" className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">CSV file</Label>
                 <div className="mt-2">
                   <Input ref={fileInputRef} id="csv-file" type="file" accept=".csv,text/csv" onChange={handleFileChange} className="hidden" />
-                  <Button variant="outline" onClick={() => fileInputRef.current?.click()} className="w-full min-w-0" data-testid="csv-choose">
-                    <Upload className="h-4 w-4 mr-2 shrink-0" />
+                  <Button variant="outline" onClick={() => fileInputRef.current?.click()} className="h-12 w-full min-w-0 rounded-xl border-dashed border-blue-500/40 bg-blue-500/[0.04] hover:bg-blue-500/10" data-testid="csv-choose">
+                    <Upload className={cn('h-4 w-4 mr-2 shrink-0', TONE.blue.text)} />
                     <span className="truncate">{file ? file.name : 'Choose CSV file…'}</span>
                   </Button>
                 </div>
               </div>
-              <div className="text-xs text-muted-foreground space-y-1">
-                <p><strong>Needed:</strong> a business name, and a phone number or an email.</p>
-                <p><strong>Also read if present:</strong> contact person, website, address, postcode, town, trade / category, notes, Google Maps link, Google Place ID. You can match the columns on the next step.</p>
-                <p>Up to {IMPORT_FILE_MAX_ROWS.toLocaleString()} rows. From Excel or Google Sheets, save as "CSV UTF-8".</p>
-              </div>
+              <Callout tone="blue" icon={Info}>
+                <div className="space-y-1 text-xs text-muted-foreground">
+                  <p><strong className="text-foreground">Needed:</strong> a business name, and a phone number or an email.</p>
+                  <p><strong className="text-foreground">Also read if present:</strong> contact person, website, address, postcode, town, trade / category, notes, Google Maps link, Google Place ID. You can match the columns on the next step.</p>
+                  <p>Up to {IMPORT_FILE_MAX_ROWS.toLocaleString()} rows. From Excel or Google Sheets, save as "CSV UTF-8".</p>
+                </div>
+              </Callout>
             </>
           )}
 
           {step === 'map' && parsed && (
             <>
-              <p className="text-sm" data-testid="csv-detected"><strong>{parsed.records.length.toLocaleString()}</strong> row{parsed.records.length === 1 ? '' : 's'} found in <span className="break-all">{file?.name}</span>. Check the columns, then press Check rows.</p>
+              <p className="text-sm break-words" data-testid="csv-detected"><strong>{parsed.records.length.toLocaleString()}</strong> row{parsed.records.length === 1 ? '' : 's'} found in <span className="break-all">{file?.name}</span>. Check the columns, then press Check rows.</p>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-2" data-testid="csv-mapping">
                 {IMPORT_FIELDS.map((f) => (
                   <label key={f} className="flex items-center gap-2 text-sm min-w-0">
-                    <span className="w-32 shrink-0 text-muted-foreground">{IMPORT_FIELD_LABEL[f]}{f === 'business_name' ? ' *' : ''}</span>
+                    <span className="w-28 sm:w-32 shrink-0 break-words text-muted-foreground">{IMPORT_FIELD_LABEL[f]}{f === 'business_name' ? ' *' : ''}</span>
                     <select
-                      className="h-8 min-w-0 flex-1 rounded-md border bg-background px-2 text-sm"
+                      className="h-9 min-w-0 flex-1 rounded-lg border border-border/70 bg-background px-2 text-sm"
                       value={mapping[f] ?? ''}
                       onChange={(e) => setField(f, e.target.value)}
                       aria-label={IMPORT_FIELD_LABEL[f]}
@@ -215,11 +208,11 @@ export function CSVImportDialog({ open, onOpenChange, onImported, isAdmin }: CSV
                 ['New', preview.counts.new], ['Fill in blanks', preview.counts.update], ['Held', held],
               ]} />
               {preview.stopped && (
-                <Alert variant="destructive"><AlertCircle className="h-4 w-4" />
-                  <AlertDescription>Rows {preview.stopped.fromRow}–{preview.stopped.toRow} could not be checked: {preview.stopped.message}</AlertDescription>
-                </Alert>
+                <Callout tone="red" icon={AlertCircle}>
+                  Rows {preview.stopped.fromRow}–{preview.stopped.toRow} could not be checked: {preview.stopped.message}
+                </Callout>
               )}
-              <p className="text-sm">
+              <p className="text-sm break-words">
                 {willAdd > 0 ? <><strong>{willAdd}</strong> new lead{willAdd === 1 ? '' : 's'} will be added, owned by {owner}. </> : 'No new leads to add. '}
                 {willFill > 0 && <><strong>{willFill}</strong> of your existing leads will have blank details filled in (nothing is overwritten). </>}
                 Nobody is messaged, nothing is queued and no status changes.
@@ -229,8 +222,8 @@ export function CSVImportDialog({ open, onOpenChange, onImported, isAdmin }: CSV
                 {' '}<strong>Possible match</strong> = weaker evidence, such as the same business name — many businesses share a name across towns, so these are added and flagged.
               </p>
               {held > 0 && (
-                <label className="flex items-start gap-2 rounded-md border border-amber-500/50 p-2 text-sm" data-testid="csv-held">
-                  <input type="checkbox" className="mt-1" checked={importPossible} onChange={(e) => setImportPossible(e.target.checked)} />
+                <label className={cn('flex cursor-pointer items-start gap-2.5 rounded-2xl px-3.5 py-3 text-sm', TONE.amber.tint)} data-testid="csv-held">
+                  <input type="checkbox" className="mt-1 h-4 w-4 shrink-0 accent-amber-500" checked={importPossible} onChange={(e) => setImportPossible(e.target.checked)} />
                   <span>
                     Also import the <strong>{held}</strong> held possible match{held === 1 ? '' : 'es'} (same website, or same name and the same postcode or address).
                     Tick only if you have checked they are different businesses — for example another branch.
@@ -247,22 +240,19 @@ export function CSVImportDialog({ open, onOpenChange, onImported, isAdmin }: CSV
 
           {step === 'done' && result && (
             <>
-              <Alert data-testid="csv-import-result">
-                <CheckCircle className="h-4 w-4 text-green-500" />
-                <AlertDescription>
+              <Callout tone="green" icon={CheckCircle2} testId="csv-import-result">
+                <>
                   {result.counts.created} lead{result.counts.created === 1 ? '' : 's'} added{result.counts.updated ? `, ${result.counts.updated} filled in` : ''}.
                   {' '}{result.counts.invalid + result.counts.duplicate_in_file + result.counts.skipped + result.counts.failed + result.counts.held > 0
                     ? `${result.counts.invalid + result.counts.duplicate_in_file + result.counts.skipped + result.counts.failed + result.counts.held} row(s) not added — listed below.`
                     : 'Every row was added.'}
-                </AlertDescription>
-              </Alert>
+                </>
+              </Callout>
               {result.stopped && (
-                <Alert variant="destructive"><AlertCircle className="h-4 w-4" />
-                  <AlertDescription>
-                    The import stopped at row {result.stopped.fromRow}: {result.stopped.message} Rows {result.stopped.fromRow}–{result.stopped.toRow} were NOT imported.
-                    Everything before row {result.stopped.fromRow} was. Importing the same file again adds only what is missing.
-                  </AlertDescription>
-                </Alert>
+                <Callout tone="red" icon={AlertCircle}>
+                  The import stopped at row {result.stopped.fromRow}: {result.stopped.message} Rows {result.stopped.fromRow}–{result.stopped.toRow} were NOT imported.
+                  Everything before row {result.stopped.fromRow} was. Importing the same file again adds only what is missing.
+                </Callout>
               )}
               <CountGrid items={[
                 ['Added', result.counts.created], ['Filled in', result.counts.updated], ['Duplicates', result.counts.skipped + result.counts.duplicate_in_file],
@@ -274,14 +264,14 @@ export function CSVImportDialog({ open, onOpenChange, onImported, isAdmin }: CSV
           )}
 
           {progress && (
-            <p className="text-xs text-muted-foreground" data-testid="csv-progress">Working… {progress.done.toLocaleString()} of {progress.total.toLocaleString()} rows</p>
+            <p className="flex items-center gap-2 text-xs text-muted-foreground" data-testid="csv-progress"><Loader2 className={cn('h-3.5 w-3.5 shrink-0 animate-spin', TONE.blue.text)} />Working… {progress.done.toLocaleString()} of {progress.total.toLocaleString()} rows</p>
           )}
           {error && (
-            <Alert variant="destructive"><AlertCircle className="h-4 w-4" /><AlertDescription data-testid="csv-error">{error}</AlertDescription></Alert>
+            <Callout tone="red" icon={AlertCircle}><span data-testid="csv-error">{error}</span></Callout>
           )}
         </div>
 
-        <DialogFooter className="gap-2 sm:gap-0">
+        <ActionBar sticky>
           {step === 'done' ? (
             <Button onClick={() => handleClose(false)}>Close</Button>
           ) : (
@@ -301,20 +291,24 @@ export function CSVImportDialog({ open, onOpenChange, onImported, isAdmin }: CSV
               )}
             </>
           )}
-        </DialogFooter>
+        </ActionBar>
       </DialogContent>
     </Dialog>
   );
 }
 
+/* Colour carries meaning only (operator/ui tones): money/added = green (teal), held/possible = amber,
+   invalid/failed = red, everything else neutral. A tone lights up only when its count is above zero. */
+const COUNT_TONE: Record<string, Tone> = {
+  New: 'green', Added: 'green', 'Fill in blanks': 'blue', 'Filled in': 'blue',
+  'Possible matches': 'amber', Held: 'amber', Invalid: 'red', Failed: 'red',
+};
+
 function CountGrid({ items }: { items: Array<[string, number]> }) {
   return (
     <div className={`grid grid-cols-2 gap-2 ${items.length === 5 ? 'sm:grid-cols-5' : items.length === 6 ? 'sm:grid-cols-3' : 'sm:grid-cols-4'}`} data-testid="csv-counts">
       {items.map(([label, n]) => (
-        <div key={label} className="rounded-md border px-2 py-1.5">
-          <div className="text-lg font-semibold leading-tight">{n.toLocaleString()}</div>
-          <div className="text-[11px] text-muted-foreground">{label}</div>
-        </div>
+        <Figure key={label} label={label} value={n.toLocaleString()} tone={COUNT_TONE[label] ?? 'grey'} strong={n > 0 && !!COUNT_TONE[label]} />
       ))}
     </div>
   );
@@ -323,19 +317,18 @@ function CountGrid({ items }: { items: Array<[string, number]> }) {
 function RowList({ title, rows, isAdmin, testId, tone }: { title: string; rows: RowResult[]; isAdmin: boolean; testId: string; tone?: 'amber' }) {
   if (!rows.length) return null;
   return (
-    <div>
-      <p className="text-xs font-medium mb-1">{title} ({rows.length})</p>
-      <ul className={`max-h-56 overflow-y-auto rounded-md border divide-y text-xs ${tone === 'amber' ? 'border-amber-500/50' : ''}`} data-testid={testId}>
+    <SubSection title={`${title} (${rows.length})`} icon={tone === 'amber' ? AlertTriangle : ListChecks} tone={tone === 'amber' ? 'amber' : 'grey'}>
+      <ul className="max-h-56 overflow-y-auto rounded-xl border border-border/60 bg-muted/20 divide-y divide-border/50 text-xs" data-testid={testId}>
         {rows.map((r) => (
-          <li key={`${r.row}-${r.i}`} className="px-2 py-1.5 flex gap-2 min-w-0">
-            <span className="shrink-0 w-14 text-muted-foreground">Row {r.row}</span>
-            <span className="min-w-0 flex-1">
+          <li key={`${r.row}-${r.i}`} className="px-3 py-2 flex gap-2 min-w-0">
+            <span className="shrink-0 w-14 tabular-nums text-muted-foreground">Row {r.row}</span>
+            <span className="min-w-0 flex-1 break-words">
               {r.business_name ? <span className="font-medium break-words">{r.business_name}: </span> : null}
               <span className={r.outcome === 'invalid' || r.outcome === 'failed' ? 'text-destructive' : tone === 'amber' ? 'text-amber-600 dark:text-amber-400' : 'text-muted-foreground'}>{outcomeText(r, isAdmin)}</span>
             </span>
           </li>
         ))}
       </ul>
-    </div>
+    </SubSection>
   );
 }

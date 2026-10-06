@@ -40,6 +40,15 @@ export const WHY_IT_MATTERS: readonly SourcedPoint[] = [
   { text: 'AI is already becoming a real way people find local businesses. A 2026 Yext study found 36.7% of UK consumers had used AI for local search in the previous month.', source: YEXT_SOURCE, url: YEXT_URL },
   { text: 'The same study found 24% had tried a new local business because of an AI recommendation.', source: YEXT_SOURCE, url: YEXT_URL },
 ];
+/** The same two Yext figures as STAT CARDS for the Call screen (sales-team-today, 2026-10-06). ⛔ The source
+ *  stays HERE, in code (YEXT_SOURCE / YEXT_URL) — the Call screen shows the figure and its line, never a link,
+ *  a URL or a citation (Paul: no research bibliography in the sales call UI). 36.7% is shown rounded. */
+export const WHY_IT_MATTERS_STATS: readonly { figure: string; label: string; source: string; url: string }[] = [
+  { figure: '37%', label: 'of UK consumers surveyed used AI for local search in the previous month', source: YEXT_SOURCE, url: YEXT_URL },
+  { figure: '24%', label: 'had tried a new local business after an AI recommendation', source: YEXT_SOURCE, url: YEXT_URL },
+];
+/** The one line under the stat cards on the Call screen. */
+export const GOOGLE_STILL_MATTERS_SHORT = 'Google still matters. AI is becoming another way customers discover local businesses.';
 /** The framing line — said when Google comes up. */
 export const GOOGLE_STILL_MATTERS = 'Google still matters. AI is becoming another important way customers discover businesses.';
 

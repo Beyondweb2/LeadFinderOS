@@ -54,9 +54,14 @@ console.log('── COMPOSITE: N ROWS → ONE PAGE ──');
 console.log('── URL BUILDING ──');
 {
   const u = handoffUrl({ mode: 'service', clientId: 'L', pageKey: 'lock changes|st neots' })!;
-  ok(u === '/page-generator?mode=service&client=L&page_key=lock%20changes%7Cst%20neots', 'service URL encodes the key');
+  /* 2026-10-06: the generator lives in Paid Clients (src/lib/paidClientTools.ts) — the Tools tab, with the seed. */
+  const su = new URL(u, 'https://x');
+  ok(su.pathname === '/paid-clients' && su.searchParams.get('tool') === 'page-generator', 'service URL opens the Paid Clients page generator');
+  ok(su.searchParams.get('mode') === 'service' && su.searchParams.get('client') === 'L' && su.searchParams.get('page_key') === 'lock changes|st neots', 'service URL carries the seed, the key round-trips exactly');
   const q = handoffUrl({ mode: 'qa', clientId: 'A', question: 'How? & why' })!;
-  ok(q.includes('question=How%3F%20%26%20why'), 'qa URL encodes the question');
+  const qu = new URL(q, 'https://x');
+  ok(qu.searchParams.get('mode') === 'qa' && qu.searchParams.get('client') === 'A' && qu.searchParams.get('question') === 'How? & why', 'qa URL encodes the question (round-trips exactly)');
+  ok(!u.includes('/page-generator?') && !q.includes('/page-generator?'), 'no hand-off points at the retired /page-generator page');
   ok(handoffUrl({ mode: 'unresolved', reason: 'x' }) === null, 'unresolved builds NO url (the caller must not navigate)');
 }
 

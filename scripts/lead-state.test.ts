@@ -122,10 +122,11 @@ console.log("\n── 4. every outcome has a rule; the buttons are the offered o
   ok(!offeredOutcomes(outcomesFor("call")).some((o) => o.value === "agency_controls_site") && offeredOutcomes(outcomesFor("call")).some((o) => o.value === "left_voicemail"), "…the call buttons leave it out and keep the rest");
   ok(outcomeRule("anything_new").effect === "record" && !outcomeRule("anything_new").offered, "an unknown outcome is a plain record, never a status change");
   const crm = read("src/components/LeadCrmPanel.tsx");
-  ok(/offeredOutcomes\(outcomesFor\(channel\)\)/.test(crm), "Log Contact draws the offered outcomes");
+  const flowUi = read("src/components/LeadCallFlow.tsx");
+  ok(/offeredOutcomes\(outcomesFor\(channel\)\)/.test(read("src/lib/logOutcomeFlow.ts")) && /moreOutcomesFor\(channel\)/.test(flowUi), "the Log window draws the offered outcomes (main buttons + More)");
   ok(/data-testid="agency-chip"/.test(crm) && /'lead_set_website_control', \{ _value: agency \? 'unknown' : 'agency_controls'/.test(crm), "Agency runs their site is an attribute chip (website_control), logging no contact");
-  ok(/data-testid="logged-line"/.test(crm) && /<SalesStatePill view=\{result\.state\}/.test(crm) && /data-testid="state-change"/.test(crm) && /data-testid="suggestion"/.test(crm), "⛔ no toast-only button: the result line shows the contact, the state it left, the change and the suggestion");
-  ok(/WHATSAPP_RESULT_OUTCOMES = \['interested', 'meeting_booked', 'call_back', 'not_interested'\]/.test(crm) && /outcomeButton\(\{ value: v, label: outcomeLabel\(v\) \}, false\)/.test(crm), "WhatsApp: 'What came of the conversation?' applies the plan without a second record of the messages");
+  ok(/data-testid="logged-line"/.test(flowUi) && /<SalesStatePill view=\{r\.state\}/.test(flowUi) && /data-testid="state-change"/.test(flowUi) && /data-testid="suggestion"/.test(flowUi) && /data-testid="log-saved"/.test(flowUi), "⛔ no toast-only button: the result line shows the contact, the state it left, the change and the suggestion");
+  ok(/WHATSAPP_RESULT_OUTCOMES: readonly string\[\] = \['interested', 'meeting_booked', 'call_back', 'not_interested'\]/.test(read("src/lib/logOutcomeFlow.ts")) && /work\.logOutcome\(outcome, channel, !recordedBySend,/.test(flowUi), "WhatsApp: 'What came of the conversation?' applies the plan without a second record of the messages");
 }
 
 console.log("\n── 5. outcome → Next Action: suggested, pre-filled, human-saved ──");
@@ -152,10 +153,10 @@ console.log("\n── 5. outcome → Next Action: suggested, pre-filled, human-s
   /* ⛔ ONE NEXT ACTION (Paul, 2026-10-02): Call back is a real Next Action at once ("Call · No date set"), saved by the
      outcome through the one write — no longer a pre-fill that could not be saved without a day. */
   ok(/if \(plan\.setNextAction\) await step\('lead_set_follow_up'/.test(read("src/lib/leadOutcome.ts")) && !/requireDate/.test(crm + naForm) && /disabled=\{needsDay \|\| busy\}/.test(naForm), "Call back saves its Next Action (no day); the form only refuses a time with no day");
-  const logUi = crm.slice(crm.indexOf("function LogContact("), crm.indexOf("function InternalNote("));
-  ok(!/lead_set_follow_up/.test(logUi), "⛔ Log Contact itself never saves a Next Action");
+  const logUi = crm.slice(crm.indexOf("const logOutcome = async"), crm.indexOf("const afterWrite"));
+  ok(logUi.length > 100 && !/lead_set_follow_up|saveNextAction/.test(logUi), "⛔ logging an outcome itself never saves a Next Action");
   const naWrite = read("src/lib/nextActionWrite.ts");
-  ok(/return saveNextAction\(leadId, \{ nextAction: 'meeting', date: day, time, note: note \?\? null \}, stateLead\);/.test(naWrite) && /bookMeeting\(leadId, iso, note \?\? lead\.next_action_note, stateLead\(\)\)/.test(crm) && /Save meeting/.test(crm), "the meeting's ONE Save writes the Next Action Meeting at that UK day + time; the server books it from the same time (2026-10-02)");
+  ok(/return saveNextAction\(leadId, \{ nextAction: 'meeting', date: day, time, note: note \?\? null \}, stateLead\);/.test(naWrite) && /bookMeeting\(leadId, iso, note \?\? lead\.next_action_note, stateLead\(\)\)/.test(crm) && /Save meeting/.test(read("src/components/LeadCallFlow.tsx")), "the meeting's ONE Save writes the Next Action Meeting at that UK day + time; the server books it from the same time (2026-10-02)");
 }
 
 console.log("\n── 6. Last contact ──");
@@ -203,7 +204,8 @@ console.log("\n── 7. History says the state change, and only a real one ─�
   ok(/const MECHANISM = new Set\(\['marked_interested', 'stage_changed'\]\)/.test(crm), "…the star / pipeline rows of that change fold into its one line");
   ok(activityDetail({ kind: "follow_up_set", data: { next_action: "none" } }, () => "") === "Next action cleared", "a cleared Next Action reads 'Next action cleared', not 'none'");
   /* 2026-10-02: the box now READS UK time (londonInstant) — the label is true, so it says so. */
-  ok(/\(UK time\)/.test(crm) && /londonInstant\(localValue\.slice\(0, 10\), localValue\.slice\(11, 16\)\)/.test(crm) && !/your local time/.test(crm), "the meeting box reads UK time and says so (it used to read the browser's clock)");
+  const fl = read("src/components/LeadCallFlow.tsx");
+  ok(/\(UK time\)/.test(fl) && /londonInstant\(localValue\.slice\(0, 10\), localValue\.slice\(11, 16\)\)/.test(crm) && !/your local time/.test(crm + fl), "the meeting box reads UK time and says so (it used to read the browser's clock)");
   ok(activityDetail({ kind: "call_booked", data: { at: null } }, () => "") === "Cancelled" && /14:30$/.test(activityDetail({ kind: "call_booked", data: { at: "2026-10-02T13:30:00Z" } }, () => "") ?? ""), "a meeting row says its London time, or Cancelled");
 }
 

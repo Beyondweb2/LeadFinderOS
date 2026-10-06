@@ -5,7 +5,7 @@ import {
   LayoutDashboard, Search, ClipboardList, FileText,
   MoreHorizontal, Palette, LogOut,
   MessageSquare, Users, ShieldCheck,
-  BarChart3, Map as MapIcon, MessageSquarePlus, Gift,
+  BarChart3, Map as MapIcon, MessageSquarePlus, Gift, UsersRound,
 } from 'lucide-react';
 import { OPEN_FEEDBACK_EVENT, OPEN_WHATS_NEW_EVENT } from '@/components/FeedbackAndNews';
 import { cn } from '@/lib/utils';
@@ -84,6 +84,8 @@ export function MobileBottomNav() {
         { title: 'Coverage', url: '/coverage', icon: MapIcon },
         { title: 'Inbox', url: '/inbox', icon: MessageSquare },
         { title: 'Sales dashboard', url: '/sales-dashboard', icon: BarChart3 },
+        /* 2026-10-06: Paid clients holds the page plan, page generator and review replies now — admin only (this branch). */
+        { title: 'Paid clients', url: '/paid-clients', icon: UsersRound },
         { title: 'AI Audit', url: '/ai-audit', icon: Sparkles },
         { title: t('nav.templates'), url: '/templates', icon: FileText },
       ];

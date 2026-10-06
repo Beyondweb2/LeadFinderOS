@@ -53,6 +53,7 @@ import { FINDABLE_CONTINUING_GBP, FINDABLE_GUARANTEE, FINDABLE_OFFER_SUMMARY, FI
 import { shortReportUrl } from './reportSlug.ts';
 import { classifyLeadWebsite, type SiteSource } from './leadWebsiteKind.ts';
 import { buildCallClose, type CallClose } from './callClose.ts';
+import { buildCallScript, type CallScript } from './callScript.ts';
 import { callerFirstName, DEFAULT_CALLER_NAME } from './callerName.ts';
 
 /* ── Tunables, named ──────────────────────────────────────────────────────────────────────────── */
@@ -209,14 +210,13 @@ export interface ColdCallPlaybook {
   transition: string;
   offer: { lines: string[]; monthly: string; nextSteps: string[] };
   objections: Array<{ objection: string; answer: string }>;
-  /** THE CALL FLOW (fix workstream 5, 2026-10-04): after the opening read (callScript), the questions worth
-   *  asking, the close for the route that fits (callClose.ts) and the two calls that never reach the owner. */
+  /** THE CALL FLOW: the first question then discovery (callScript.ts), and the close for the route that fits
+   *  (callClose.ts). ⛔ No gatekeeper / voicemail / "if they'd rather see it first" lines (removed 2026-10-06). */
   qualify: string[];
   close: CallClose;
-  /** The fallback when they would rather see it first — a hint beside the script, not a line to read. */
-  fallback: string;
-  gatekeeper: string;
-  voicemail: string;
+  /** THE CALL SCRIPT IN SECTIONS (Paul's tested opener, 2026-10-06 — src/lib/callScript.ts): what the call
+   *  screen renders. callScript / opening / qualify / objections are views of it. */
+  script: CallScript;
   /** The AI check in one line for the top of the call screen: ready / running / none (never invented). */
   audit: { state: 'ready' | 'running' | 'none'; headline: string; finding: string | null };
   followUp: PlaybookFollowUp | null;
@@ -627,7 +627,6 @@ export function buildColdCallPlaybook(input: PlaybookInput): ColdCallPlaybook {
   const business = clean(reportAudit?.business_name) || clean(lead.business_name) || 'this business';
   const town = clean(reportAudit?.location_text) || clean(lead.derived_town) || clean(lead.search_location) || null;
   const trade = tradePlural(reportAudit, lead);
-  const callName = displayBusinessName(business, { town, style: 'identify' }) || business;
   const caller = callerFirstName(input.callerName);
   const place = spokenTown(town);
   const oneOf = tradeSpoken(reportAudit, lead);
@@ -680,37 +679,9 @@ export function buildColdCallPlaybook(input: PlaybookInput): ColdCallPlaybook {
           : 'I had a look at your website and one thing stood out: ' + lowerClause(lead0.explanation) + '.'), lead0.whyItMayMatter].filter(Boolean)
         : [];
 
-  /* ── B. the opening (the first beats, also what the tests read) ── */
-  const opening: string[] = [];
-  if (convo.mode === 'cold') {
-    opening.push('Hi, is that ' + callName + '? It\'s ' + caller + ' from Findable.');
-    if (evidence.kind === 'gap') opening.push('I\'m ringing because ' + joinOn(missLine));
-    else if (evidence.kind === 'named') opening.push('I\'m ringing because ' + joinOn(namedLine));
-    else opening.push('I\'m ringing because we check what AI tools like ChatGPT and Google AI say when someone asks for ' + searchFor + ', and I wanted to see how you come up.');
-  } else {
-    /* ⛔ WHO IS CALLING COMES FIRST (Session A A-04, M-009): the name and Findable before anything else, and
-       after a "who's this?" the reply is answered as such. "Quick recap" only when a pitch actually went out
-       (a report-carrying message); otherwise the reason for ringing, as on a first call. Days are said the
-       way a person says them — never the year for this week. */
-    const fu = convo.followUp!;
-    const repliedLast = !!fu.lastInbound && fu.lastInbound.at >= (fu.lastOutbound?.at ?? '');
-    const whoAsked = repliedLast && WHO_ASKED_RE.test(fu.lastInbound?.text ?? '');
-    const when = spokenDay(fu.lastOutbound?.at ?? fu.firstContactAt, nowMs);
-    if (whoAsked) {
-      opening.push('Hi, is that ' + callName + '? It\'s ' + caller + ' from Findable. You asked who I was when I messaged' + (when ? ' ' + when : '') + ', so I thought I\'d ring and explain.');
-      opening.push('We help local businesses get named when people ask AI tools like ChatGPT and Google AI for ' + searchFor + '.');
-    } else {
-      opening.push('Hi, is that ' + callName + '? It\'s ' + caller + ' from Findable, I messaged you on WhatsApp' + (when ? ' ' + when : '') + '.');
-      opening.push(repliedLast
-        ? 'Thanks for getting back to me. It\'s easier to explain on the phone.'
-        : fu.reportSentAt
-          ? 'I sent you the report on what AI says when someone asks for ' + searchFor + ', so I thought I\'d talk you through it.'
-          : 'I thought it\'d be quicker to explain on the phone.');
-    }
-    if (evidence.kind === 'gap') opening.push((fu.reportSentAt ? 'Quick recap: ' : 'I\'m ringing because ') + joinOn(missLine));
-    else if (evidence.kind === 'named' && !whoAsked) opening.push('I\'m ringing because ' + joinOn(namedLine));
-  }
-
+  /* ── B. the opening — Paul's tested opener (src/lib/callScript.ts, 2026-10-06). ⛔ No "from Findable",
+     no "I messaged you", no day or date of an earlier message: a previous WhatsApp is a NOTE for the rep
+     (script.openerNote), never words they say. Assembled once the close is known (below). */
   /* ── E. how to explain it (plain, short; the "what is AI visibility" answer reads from here) ── */
   const explain: string[] = [];
   if (evidence.kind === 'gap') {
@@ -754,158 +725,20 @@ export function buildColdCallPlaybook(input: PlaybookInput): ColdCallPlaybook {
   /* ── THE CLOSE (callClose.ts): the route that fits this lead first, the guarantee, the close line. ── */
   const close = buildCallClose(siteKind.source);
 
-  /* ── H. objections: short, spoken, true. Every figure is a findableOffer.ts constant. ── */
-  const findingShort = lead0 ? lowerClause(lead0.explanation) : null;
-  const objections = [
-    {
-      objection: 'What exactly do you do?',
-      answer: 'We make it more likely AI names you when someone asks for ' + searchFor + '. We check what it says now, fix what\'s on your site and the places AI reads, then ask the same searches again afterwards so you can see the difference.',
-    },
-    {
-      objection: 'I don\'t really understand AI visibility',
-      answer: 'It\'s simple really. When someone asks ChatGPT or Google AI for ' + searchFor + ', it names a few businesses. AI visibility is whether you\'re one of them.'
-        + (evidence.kind === 'gap' ? ' For the search I did, you weren\'t.' : evidence.kind === 'named' ? ' For the search I did, you were.' : ''),
-    },
-    {
-      objection: 'We already have an SEO company',
-      answer: 'That\'s fine, I\'m not trying to replace them. This is one specific thing: what AI says when someone asks for ' + searchFor + '. I can send over what I found so they can look at it too.',
-    },
-    {
-      objection: 'I already have a website guy',
-      answer: 'That\'s fine. This is one specific thing, what AI says when someone asks for ' + searchFor + '. I can send your web person exactly what I found.',
-    },
-    {
-      /* ⛔ Never legal advice, never "break your contract", never a promise to take over a domain. */
-      objection: 'My agency controls the website / domain',
-      answer: SALES_DOMAIN_LINE + ' Your agreement with them is yours to check. I can\'t advise on that, and we would never ask you to break it.',
-    },
-    {
-      objection: 'My website is fine',
-      answer: siteKind.source === 'directory_profile' || siteKind.source === 'social_profile'
-        ? 'The only page I could find for you is your ' + siteKind.label + ' profile, not a site of your own. That page belongs to ' + siteKind.label + ', so there\'s a lot less for AI to go on about what you do and where.'
-        : findingShort
-          ? 'It may look fine to customers. This is about how clearly it reads to AI. For example, ' + findingShort + '. I can show you where, and you can check it yourself.'
-          : 'It may well be. This is about what AI said when I asked, which is separate from how the site looks.',
-    },
-    {
-      objection: 'I don\'t want a new website',
-      answer: siteKind.source === 'own_site'
-        ? 'That\'s fine, you don\'t need one. If you can give us access, we can usually work on the site you\'ve already got. I\'d just check what it\'s built on first. That\'s Findable Optimise.'
-        : 'That\'s fine. It\'s your call. Without a site of your own, though, AI has a lot less to go on, so that\'s the part I\'d talk to you about.',
-    },
-    {
-      objection: 'I already rank on Google',
-      answer: 'That\'s good, and it\'s a different thing. When someone asks ChatGPT or Google AI instead of scrolling Google, they get a few names' + (evidence.kind === 'gap' ? ', and for the search I did, you weren\'t one of them.' : '.'),
-    },
-    {
-      objection: 'Nobody uses AI for this',
-      answer: 'More people are starting to, but I can\'t tell you how many of your customers do. That\'s why we measure it. You see the before and after on the same searches rather than taking my word for it.',
-    },
-    {
-      objection: 'We\'re busy enough',
-      answer: 'Fair enough, that\'s a good place to be. Can I send you the report on WhatsApp so you\'ve got it for when it suits?',
-    },
-    {
-      objection: 'I\'m too busy',
-      answer: 'No problem. Can I send you the report on WhatsApp and ring you back when it suits? What time\'s better?',
-    },
-    {
-      objection: 'How do you know this works?',
-      /* ⛔ The measurement and the refund, stated plainly — no hedge beside the guarantee (CLAUDE.md §1). */
-      answer: 'You don\'t have to take my word for it. We measure how often AI names you before we start, then ask the same searches again after four weeks. If that number hasn\'t gone up, you email us within 14 days of your results and get your £' + FINDABLE_SETUP_PRICE_GBP + ' back.',
-    },
-    {
-      objection: 'Can you guarantee I\'ll appear?',
-      /* ⛔ THE MASTER PLAN'S WORDING (M-009, 2026-10-04): "What I guarantee is the measurement" confused people
-         (the measurement is not what is guaranteed). Nobody can promise a placement; what IS promised is the
-         number going up or the £99 back — said plainly, with no hedge after it. */
-      answer: "Nobody can promise AI will name you, and I won't. What I can promise: we measure how often AI names you before we start and again after four weeks on the same questions. If that number hasn't gone up, you email us within 14 days of your results and get your £" + FINDABLE_SETUP_PRICE_GBP + ' back.',
-    },
-    {
-      objection: 'How much is it?',
-      /* ⛔ STARTS WITH THE CANONICAL SENTENCE (scripts/findable-offer-terms.test.ts), so the price said on
-         a call can never drift from the checkout. The tail is only what a caller asks next. */
-      /* 🔴 v3 (clause 9A): the old tail "Nothing's charged after the last payment" is no longer true —
-         the summary itself now names the Continuing Service (FINDABLE_CONTINUING_GBP). */
-      answer: FINDABLE_OFFER_SUMMARY + ' If we build it, the site\'s yours once the minimum-term payments are made.',
-    },
-    {
-      objection: 'Why is it monthly?',
-      /* ⛔ The agreed monthly wording (Paul, 2026-10-02): never "the monthly keeps you there" (an outcome). */
-      answer: 'The £' + FINDABLE_SETUP_PRICE_GBP + ' covers the first measurement and getting started. ' + close.monthly + ' The four-week check is the first one, not the end.',
-    },
-    {
-      objection: 'Why twelve months?',
-      answer: 'Twelve is when we build you a new site (Findable Build). We build it, host it and look after it. Once the ' + build + ' payments are done, the site\'s yours, then it\'s £' + FINDABLE_CONTINUING_GBP + ' a month for hosting and monitoring until you cancel.',
-    },
-    {
-      objection: 'Why six months?',
-      answer: 'Six is when you keep your own website (Findable Optimise). It stays yours and we work on it. That\'s ' + optimise + ' payments including the first, then £' + FINDABLE_CONTINUING_GBP + ' a month for monitoring until you cancel.',
-    },
-    {
-      objection: 'That\'s a lot / £' + FINDABLE_SETUP_PRICE_GBP + '?',
-      answer: 'I get that. If the number hasn\'t gone up at four weeks, you get the £' + FINDABLE_SETUP_PRICE_GBP + ' back. ' + close.monthly,
-    },
-    {
-      objection: 'I need to think about it',
-      answer: 'Of course. Can I send you the report on WhatsApp so you\'ve got it in front of you? When\'s good for a quick ring back, tomorrow?',
-    },
-    {
-      objection: 'Who are you? Is this a scam?',
-      answer: 'Fair question. I\'m ' + caller + ' from Findable. We help local businesses get named when people ask AI tools for ' + searchFor + '. You don\'t pay anything unless you decide to go ahead, and you can look us up at findable.live first.',
-    },
-    {
-      objection: 'Can I cancel?',
-      /* ⛔ The minimum term is said BEFORE payment (Session A objection audit), from the constants. */
-      answer: 'It\'s a minimum term, so it\'s ' + build + ' payments if we build the site and ' + optimise + ' if we work on yours, the £' + FINDABLE_SETUP_PRICE_GBP + ' today included. After the last payment it carries on at £' + FINDABLE_CONTINUING_GBP + ' a month until you cancel with 30 days\' notice. And if the number hasn\'t gone up at four weeks, a valid claim gets your £' + FINDABLE_SETUP_PRICE_GBP + ' back and stops the monthly too.',
-    },
-    {
-      objection: 'How long does it take?',
-      answer: 'We start once you\'ve paid. We measure where you are first, then do the work, and check the same questions again at four weeks. Paul keeps you posted along the way.',
-    },
-    {
-      objection: 'Just send me the information',
-      answer: reportUrl
-        ? 'Sure, I\'ll WhatsApp you the report. It shows the exact search, what AI said and who it named. Can I give you a quick ring once you\'ve had a look?'
-        : 'Sure, I\'ll run the check and send it over. Can I give you a quick ring once you\'ve had a look?',
-    },
-  ];
-
-  /* ── THE CALL SCRIPT: one read, built from the pieces above, nothing repeated ── */
-  const callScript: string[] = [...opening];
-  callScript.push(...siteLines);
-  /* Plain words, not "AI visibility" (Session A: jargon to a plumber). After a "who's this?" the line
-     saying what we do has already been said, so only the ask remains. */
-  const whatWeDo = 'We help local businesses get named when people ask AI for ' + searchFor + '.';
-  const alreadySaid = opening.some((l) => l.startsWith('We help local businesses'));
-  const withWhat = (s: string) => (alreadySaid ? '' : whatWeDo + ' ') + s;
-  callScript.push(evidence.kind === 'none'
-    ? withWhat('I can run a quick check on what AI says about you and send it over. Is now OK for a couple of minutes, or shall I ring you back?')
-    : evidence.kind === 'named'
-      ? withWhat('I wanted to run something by you about keeping it that way. Is now OK for a couple of minutes, or shall I ring you back?')
-      : withWhat('I can explain what I\'d do to make you more likely to be one of the names. Is now OK for a couple of minutes, or shall I ring you back?'));
-  const fallback = reportUrl
-    ? 'If they\'d rather see it first: "I\'ll WhatsApp you the report. It shows the exact search, what AI said and who it named." Then set a Call for when they\'ve looked.'
-    : 'If they\'d rather see it first: "I\'ll run the check properly and send it over on WhatsApp." Then set a Call for when they\'ve looked.';
-
-  /* ── THE QUESTIONS WORTH ASKING (short; each one changes what happens next) ── */
-  const qualify: string[] = [
-    siteKind.source === 'own_site'
-      ? 'Do you look after the website yourself, or does someone else?'
-      : siteKind.source === 'none'
-        ? 'Have you got a website I missed, or is it something you\'ve not got round to?'
-        : 'Is your ' + siteKind.label + ' page mainly what you use, or have you got a site of your own?',
-    'Where does most of your work come from at the moment? Word of mouth, Google, directories?',
-    'Which jobs would you most like more of?',
-    'Which towns do you cover?',
-    'Are you the one who decides on something like this?',
-  ];
-
-  /* ── THE CALLS THAT NEVER REACH THE OWNER (Session A: none existed) ── */
-  const gatekeeper = 'Is the owner about? It\'s ' + caller + ' from Findable. It\'s about how the business comes up when people ask AI for ' + searchFor + '. When\'s best to catch them?';
-  const voicemail = evidence.kind === 'gap'
-    ? 'Hi, it\'s ' + caller + ' from Findable. I asked ' + engine + ' for ' + searchFor + ' and wanted to tell you what it said about you. I\'ll send it over on WhatsApp, or ring me back on this number.'
-    : 'Hi, it\'s ' + caller + ' from Findable. I wanted a quick word about how you come up when people ask AI for ' + searchFor + '. I\'ll try you again, or drop me a WhatsApp on this number.';
+  /* ── THE CALL SCRIPT (src/lib/callScript.ts, Paul's tested opener, 2026-10-06): OPENER → WHAT WE FOUND →
+     BRIDGE → FIRST QUESTION (→ AGENCY) → DISCOVERY → WHAT WE DO → PLAN → GUARANTEE → OBJECTIONS. Built only
+     from the evidence above: the stored answer's own competitors, the stored crawl's own findings. ── */
+  const script = buildCallScript({
+    searchFor, engine, evidenceKind: evidence.kind, competitors: evidence.competitors, auditStale,
+    findings: f.findings, findingsStatus: f.status, site: { source: siteKind.source, label: siteKind.label },
+    close, contactedBefore: convo.mode === 'follow_up', hasReport: !!reportUrl,
+  });
+  const opening = script.opener;
+  const objections = script.objections;
+  /** One read, in order: the opener, what we found, the bridge. */
+  const callScript: string[] = [...script.opener, ...script.found.lines, ...script.bridge];
+  /* ── THE QUESTIONS: FIRST_QUESTION always first, then discovery ── */
+  const qualify: string[] = [script.firstQuestion.question, ...script.discovery];
 
   /* ── THE AI CHECK IN ONE LINE (top of the call screen) — what is stored, or that nothing is ── */
   const audit = callCardAudit(input);
@@ -979,9 +812,7 @@ export function buildColdCallPlaybook(input: PlaybookInput): ColdCallPlaybook {
     objections,
     qualify,
     close,
-    fallback,
-    gatekeeper,
-    voicemail,
+    script,
     audit,
     followUp: convo.followUp,
     reportUrl,
