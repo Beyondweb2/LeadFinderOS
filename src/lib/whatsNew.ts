@@ -41,6 +41,7 @@ export const WHATS_NEW: readonly WhatsNewEntry[] = [
         'The full-screen spinner and full-screen error on API usage & Security.',
       ],
       effect: 'It is one app now: the same signals mean the same thing on every screen. No button, rule or number changed.',
+    } },
   { id: '2026-10-06-quick-report-no-schema', date: '2026-10-06', title: 'Quick report no longer lists "no structured data" as a website issue', audience: 'all',
     body: 'The six-answer quick report now leaves out the generic "Your site doesn\'t label the basics" line. Our own testing found it made no difference to whether AI names a business.',
     report: {
