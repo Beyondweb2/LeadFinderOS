@@ -4,9 +4,8 @@ import { paidClientToolUrl } from '@/lib/paidClientTools';
 import { BackLink } from '@/components/BackLink';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Loader2, Target, ArrowLeftRight, FileText } from 'lucide-react';
+import { Loader2, Target, ArrowLeftRight, FileText, AlertTriangle, Sparkles } from 'lucide-react';
 import { fetchAllRows } from '@/lib/fetchAllRows';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
@@ -24,6 +23,8 @@ import {
 } from '@/lib/baselineView';
 import { assessTradeFit, TRADE_FIT_LABEL, TRADE_FIT_REASON } from '@/lib/questionTradeFit';
 import { SEOHead } from '@/components/SEOHead';
+import { Callout, EmptyState, ErrorState, Figure, LoadState, PageHeader, SubSection, SURFACE, TONE, ToneChip, type Tone } from '@/components/operator/ui';
+import { cn } from '@/lib/utils';
 import { isInternalMeasurement, isClientBaseline, auditRoleLabel } from '@/lib/auditKind';
 
 /**
@@ -42,13 +43,15 @@ import { isInternalMeasurement, isClientBaseline, auditRoleLabel } from '@/lib/a
  * list. Do not link this from anything a client can reach.
  */
 
-const BAND_STYLE: Record<Band, { row: string; chip: string }> = {
-  absent:     { row: 'border-l-2 border-l-red-500/70',    chip: 'bg-red-500/15 text-red-400' },
-  one_engine: { row: 'border-l-2 border-l-amber-500/70',  chip: 'bg-amber-500/15 text-amber-400' },
-  fragile:    { row: 'border-l-2 border-l-sky-500/70',    chip: 'bg-sky-500/15 text-sky-400' },
-  held:       { row: 'border-l-2 border-l-green-500/60',  chip: 'bg-green-500/15 text-green-500' },
+/* The operator tones (components/operator/ui): red absent · amber one engine · blue fragile ·
+   green (drawn teal) held · grey no race. */
+const BAND_STYLE: Record<Band, { row: string; tone: Tone }> = {
+  absent:     { row: 'border-l-2 border-l-red-500/70',    tone: 'red' },
+  one_engine: { row: 'border-l-2 border-l-amber-500/70',  tone: 'amber' },
+  fragile:    { row: 'border-l-2 border-l-blue-500/70',   tone: 'blue' },
+  held:       { row: 'border-l-2 border-l-teal-500/60',   tone: 'green' },
   // Visually demoted on purpose: there is nothing to win here, so it must not compete for attention.
-  no_race:    { row: 'border-l-2 border-l-border opacity-50', chip: 'bg-muted text-muted-foreground' },
+  no_race:    { row: 'border-l-2 border-l-border opacity-50', tone: 'grey' },
 };
 
 interface AuditRow {
@@ -217,16 +220,16 @@ export default function Baseline() {
   useEffect(() => { load(); }, [load]);
 
   if (isLoading) {
-    return <div className="flex items-center justify-center py-16"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
+    return <LoadState label="Loading the baseline…" className="py-16" />;
   }
 
   if (error || !audit || !view) {
     return (
-      <div className="mx-auto max-w-2xl py-12 text-center">
-        <p className="text-sm text-muted-foreground">{error ?? 'No baseline to show.'}</p>
+      <div className="mx-auto max-w-2xl space-y-3 px-4 py-12">
+        {error ? <ErrorState title={error} onRetry={() => void load()} /> : <EmptyState icon={Target} tone="purple" title="No baseline to show." />}
         {/* Same component as the success state below and as /playbook/:id — one pattern, three
             places, so they cannot drift apart. */}
-        <div className="mt-3"><BackLink /></div>
+        <div><BackLink /></div>
       </div>
     );
   }
@@ -237,13 +240,13 @@ export default function Baseline() {
     return (
       <>
         <SEOHead title={`Report — ${audit.business_name ?? 'client'}`} description="Client report preview." noindex />
-        <div className="mx-auto max-w-5xl space-y-4 py-4">
+        <div className="mx-auto min-w-0 max-w-5xl space-y-4 px-4 py-4 sm:px-0">
           {reportDirty && (
-            <div className="rounded-md border border-amber-500/40 bg-amber-500/5 px-3 py-2 text-xs text-amber-500">
+            <Callout tone="amber" icon={AlertTriangle} className="text-xs">
               Competitor names not cleaned &mdash; do not send to client. Rival names are withheld from
               this report because the cleaner never covered this measurement, so an empty rivals list
               here means &ldquo;we cannot vouch for the names&rdquo;, not &ldquo;AI named nobody&rdquo;.
-            </div>
+            </Callout>
           )}
           <AiAuditReport
             data={report}
@@ -289,31 +292,22 @@ export default function Baseline() {
         description={clientBaseline ? "Operator view of a paid client's baseline." : 'Operator view of an audit that is not a client baseline.'}
         noindex
       />
-      <div className="mx-auto max-w-5xl space-y-4 py-4">
+      <div className="mx-auto min-w-0 max-w-5xl space-y-4 px-4 py-4 sm:px-0">
         {/* Was missing entirely — this view was reachable only by URL and had no way out. */}
         <BackLink />
-        <div className="flex flex-wrap items-baseline justify-between gap-2">
-          <div className="min-w-0">
-            <h1 className="truncate text-xl font-semibold">{audit.business_name ?? 'Baseline'}</h1>
-            <p className="text-xs text-muted-foreground">
-              {/* What this audit IS, in the operator's words. The stored purpose stays 'measurement';
-                  the label is the only thing that changed (Paul, 2026-09-13). */}
-              <span className={clientBaseline ? 'font-semibold' : 'font-semibold text-amber-500'}>
-                {roleLabel}
-              </span>
-              {' · '}{view.questions.length} questions · {view.runsCounted} runs
-              {view.measuredAt && ` · measured ${new Date(view.measuredAt).toLocaleDateString('en-GB')}`}
-            </p>
-          </div>
-          <div className="text-right">
-            <div className="text-2xl font-bold tabular-nums">
-              {view.namedRatePct === null ? '—' : `${view.namedRatePct}%`}
-            </div>
-            <p className="text-[10px] uppercase tracking-wide text-muted-foreground/70">
-              named in {view.namedCells} of {view.answeredCells} answers
-            </p>
-          </div>
-        </div>
+        <PageHeader icon={Target} tone="purple" eyebrow="Paid client" title={audit.business_name ?? 'Baseline'}
+          subtitle={<>
+            {/* What this audit IS, in the operator's words. The stored purpose stays 'measurement';
+                the label is the only thing that changed (Paul, 2026-09-13). */}
+            <span className={clientBaseline ? 'font-semibold text-foreground' : 'font-semibold text-amber-600 dark:text-amber-400'}>
+              {roleLabel}
+            </span>
+            {' · '}{view.questions.length} questions · {view.runsCounted} runs
+            {view.measuredAt && ` · measured ${new Date(view.measuredAt).toLocaleDateString('en-GB')}`}
+          </>}
+          actions={<div className="min-w-[10rem]"><Figure tone="purple" strong
+            label={`named in ${view.namedCells} of ${view.answeredCells} answers`}
+            value={view.namedRatePct === null ? '—' : `${view.namedRatePct}%`} /></div>} />
 
         {/* BEFORE AND AFTER. Free — it re-reads runs that already exist and spends nothing, so it is
             a plain link rather than a priced action. Always offered: which runs are the "before" is
@@ -354,78 +348,64 @@ export default function Baseline() {
         {/* Band counts — the shape of the work at a glance, worst first. */}
         <div className="flex flex-wrap gap-1.5">
           {BANDS.filter((b) => view.bandCounts[b] > 0).map((b) => (
-            <span key={b} className={`rounded px-2 py-0.5 text-[10px] font-semibold tracking-wide ${BAND_STYLE[b].chip}`} title={BAND_MEANING[b]}>
+            <ToneChip key={b} tone={BAND_STYLE[b].tone} dot title={BAND_MEANING[b]}>
               {BAND_LABEL[b]} {view.bandCounts[b]}
-            </span>
+            </ToneChip>
           ))}
           {/* Counted separately from the bands ON PURPOSE: it is not a sixth band, it is a
               statement that some of the bands beside it cannot be trusted. */}
           {tradeFit.report.offTrade.length > 0 && (
-            <span
-              className="rounded bg-amber-500/15 px-2 py-0.5 text-[10px] font-semibold tracking-wide text-amber-500"
-              title={TRADE_FIT_REASON.off_trade ?? undefined}
-            >
+            <ToneChip tone="amber" icon={AlertTriangle} title={TRADE_FIT_REASON.off_trade ?? undefined}>
               {TRADE_FIT_LABEL.off_trade} {tradeFit.report.offTrade.length}
-            </span>
+            </ToneChip>
           )}
         </div>
 
         {opportunities.length > 0 && (
-          <Card>
-            <CardHeader className="p-3 pb-1.5 sm:p-4 sm:pb-2">
-              <CardTitle className="text-sm">Winnability from this baseline</CardTitle>
+          <section className={cn(SURFACE, 'min-w-0 p-4 sm:p-5')}>
+            <SubSection title="Winnability from this baseline" icon={Sparkles} tone="purple">
               <p className="text-xs font-normal text-muted-foreground">Same approved questions and completed results; named means success. No additional audit was run.</p>
-            </CardHeader>
-            <CardContent className="space-y-2 p-3 pt-0 sm:p-4 sm:pt-0">
-              <div className="flex flex-wrap gap-1.5 text-[11px]">
-                <span className="rounded bg-emerald-500/15 px-2 py-1 text-emerald-500">Named {opportunityCounts.named ?? 0}</span>
-                <span className="rounded bg-amber-500/15 px-2 py-1 text-amber-500">Winnable {opportunityCounts.winnable ?? 0}</span>
-                <span className="rounded bg-sky-500/15 px-2 py-1 text-sky-500">Possible {opportunityCounts.possible ?? 0}</span>
-                <span className="rounded bg-muted px-2 py-1 text-muted-foreground">Low priority {opportunityCounts.low ?? 0}</span>
+            </SubSection>
+            <div className="mt-3 space-y-2">
+              <div className="flex flex-wrap gap-1.5">
+                <ToneChip tone="green">Named {opportunityCounts.named ?? 0}</ToneChip>
+                <ToneChip tone="amber">Winnable {opportunityCounts.winnable ?? 0}</ToneChip>
+                <ToneChip tone="blue">Possible {opportunityCounts.possible ?? 0}</ToneChip>
+                <ToneChip tone="grey">Low priority {opportunityCounts.low ?? 0}</ToneChip>
               </div>
               <div className="space-y-1.5">
                 {opportunities.map((q) => (
-                  <div key={q.question} className="rounded border border-border/60 bg-muted/20 p-2 text-xs">
-                    <div className="flex flex-wrap items-center justify-between gap-2"><span className="font-medium">{q.question}</span><span className="rounded bg-background px-1.5 py-0.5 text-[10px] font-semibold uppercase">{q.classification}</span></div>
+                  <div key={q.question} className="min-w-0 rounded-xl bg-muted/40 p-2.5 text-xs ring-1 ring-inset ring-border/40">
+                    <div className="flex flex-wrap items-center justify-between gap-2"><span className="min-w-0 break-words font-medium">{q.question}</span><span className="rounded-full bg-background px-2 py-0.5 text-[10px] font-semibold uppercase">{q.classification}</span></div>
                     <p className="mt-1 text-muted-foreground">{q.reason} · {q.fragmentation}</p>
                   </div>
                 ))}
               </div>
               <Button asChild variant="outline" size="sm"><Link to={paidClientToolUrl('page-plan')}>Build Action Plan</Link></Button>
-            </CardContent>
-          </Card>
+            </div>
+          </section>
         )}
 
         {BANDS.filter((b) => view.bandCounts[b] > 0).map((band) => (
-          <Card key={band} className={band === 'no_race' ? 'opacity-60' : undefined}>
-            <CardHeader className="p-3 pb-1.5 sm:p-4 sm:pb-2">
-              <CardTitle className="flex flex-wrap items-center gap-2 text-sm">
-                <Target className="h-4 w-4 text-muted-foreground" />
-                <span className={`rounded px-1.5 py-0.5 text-[10px] font-semibold tracking-wide ${BAND_STYLE[band].chip}`}>
-                  {BAND_LABEL[band]}
-                </span>
-                <span className="text-xs font-normal text-muted-foreground">{BAND_MEANING[band]}</span>
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-1.5 p-3 pt-0 sm:p-4 sm:pt-0">
+          <section key={band} className={cn(SURFACE, 'min-w-0 p-4 sm:p-5', band === 'no_race' && 'opacity-60')}>
+            <SubSection icon={Target} tone={BAND_STYLE[band].tone} hint={BAND_MEANING[band]}
+              title={<ToneChip tone={BAND_STYLE[band].tone}>{BAND_LABEL[band]}</ToneChip>}>
+            <div className="space-y-1.5">
               {view.questions.filter((q) => q.band === band).map((q) => (
-                <div key={q.question} className={`rounded-r-md bg-muted/20 py-2 pl-3 pr-2 ${BAND_STYLE[band].row}`}>
+                <div key={q.question} className={`min-w-0 rounded-r-xl bg-muted/30 py-2 pl-3 pr-2 ${BAND_STYLE[band].row}`}>
                   <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-                    <span className="text-sm font-medium">{q.question}</span>
+                    <span className="min-w-0 break-words text-sm font-medium">{q.question}</span>
                     {/* ⛔ THE BAND IS NOT A FACT ABOUT THIS CLIENT WHEN THE ENGINES ANSWERED ABOUT
                         SOMEBODY ELSE'S TRADE. "fault diagnosis services in thetford UK" sat here
                         under ABSENT — "the race exists and you are invisible" — naming six car
                         garages. Rendered BEFORE the counts, because the counts are the thing it
                         disqualifies. Operator screen only: see questionTradeFit's header. */}
                     {tradeFit.byQuestion.get(q.question) === 'off_trade' && (
-                      <span
-                        className="rounded bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-semibold tracking-wide text-amber-500"
-                        title={TRADE_FIT_REASON.off_trade ?? undefined}
-                      >
+                      <ToneChip tone="amber" title={TRADE_FIT_REASON.off_trade ?? undefined}>
                         {TRADE_FIT_LABEL.off_trade}
-                      </span>
+                      </ToneChip>
                     )}
-                    <span className="flex shrink-0 gap-3 text-[11px] tabular-nums text-muted-foreground">
+                    <span className="flex shrink-0 flex-wrap gap-x-3 text-[11px] tabular-nums text-muted-foreground">
                       {engineNames.map((e) => {
                         const c = q.engines[e];
                         if (!c) return null;
@@ -435,7 +415,7 @@ export default function Baseline() {
                           <span key={e}>
                             {/* "named", always: a bare "0/3" read as measurements (Paul, 2026-09-30). */}
                             {e} named{' '}
-                            <span className={`font-bold ${all ? 'text-green-500' : none ? 'text-red-400' : 'text-amber-400'}`}>
+                            <span className={cn('font-bold', all ? TONE.green.text : none ? TONE.red.text : TONE.amber.text)}>
                               {c.named}/{c.runs}
                             </span>
                           </span>
@@ -459,8 +439,9 @@ export default function Baseline() {
                   )}
                 </div>
               ))}
-            </CardContent>
-          </Card>
+            </div>
+            </SubSection>
+          </section>
         ))}
 
         <p className="text-[11px] leading-relaxed text-muted-foreground/60">

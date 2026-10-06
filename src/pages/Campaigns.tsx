@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { AlertCircle, ListFilter, Loader2, Megaphone, MessageCircle, Pause, Pencil, Phone, Plus, RefreshCw, Send, Trash2 } from 'lucide-react';
+import { ListFilter, Loader2, Megaphone, MessageCircle, Pause, Pencil, Phone, Plus, Send, Trash2 } from 'lucide-react';
+import { EmptyState, ErrorState, LoadState, PageHeader } from '@/components/operator/ui';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
@@ -87,13 +88,9 @@ export default function Campaigns() {
   const shown = !admin || owner === ALL ? all : owner === MINE ? all.filter((c) => c.is_mine) : all.filter((c) => c.owner_id === owner);
 
   return <div className="mx-auto max-w-6xl space-y-5 px-4 py-6 sm:px-0">
-    <div className="flex flex-wrap items-start justify-between gap-3">
-      <div className="min-w-0">
-        <h1 className="flex items-center gap-2 text-2xl font-semibold"><Megaphone className="h-6 w-6" />Manage campaigns</h1>
-        <p className="text-sm text-muted-foreground">A campaign groups leads for one niche and one way of contacting them. Add leads from Find Leads; work them in Outreach.</p>
-      </div>
-      <Button onClick={() => setCreating(true)} data-testid="new-campaign"><Plus className="mr-1 h-4 w-4" />New campaign</Button>
-    </div>
+    <PageHeader icon={Megaphone} tone="blue" title="Manage campaigns"
+      subtitle="A campaign groups leads for one niche and one way of contacting them. Add leads from Find Leads; work them in Outreach."
+      actions={<Button onClick={() => setCreating(true)} data-testid="new-campaign"><Plus className="mr-1 h-4 w-4" />New campaign</Button>} />
 
     {admin && owners.length > 0 && <div className="flex flex-wrap items-center gap-2 text-sm">
       <label htmlFor="campaign-owner" className="text-xs font-medium">Owner</label>
@@ -104,12 +101,11 @@ export default function Campaigns() {
       </select>
     </div>}
 
-    {q.isLoading && <div className="flex justify-center py-16"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>}
-    {q.isError && <Card><CardContent className="flex flex-wrap items-center gap-2 p-6 text-sm text-destructive"><AlertCircle className="h-4 w-4" />Could not load campaigns.<Button size="sm" variant="outline" onClick={() => void q.refetch()}><RefreshCw className="mr-1 h-4 w-4" />Try again</Button></CardContent></Card>}
-    {q.data && shown.length === 0 && <Card><CardContent className="space-y-2 p-6 text-sm">
-      <p className="font-medium">{all.length === 0 ? 'No campaigns yet.' : 'No campaigns for this owner.'}</p>
-      {all.length === 0 && <p className="text-muted-foreground">Create one (niche, Call or WhatsApp, optional area), then pick it in Find Leads before you add businesses.</p>}
-    </CardContent></Card>}
+    {q.isLoading && <LoadState label="Loading campaigns…" />}
+    {q.isError && <ErrorState title="Could not load campaigns." onRetry={() => void q.refetch()} />}
+    {q.data && shown.length === 0 && <EmptyState icon={Megaphone} tone="blue" title={all.length === 0 ? 'No campaigns yet.' : 'No campaigns for this owner.'}>
+      {all.length === 0 ? 'Create one (niche, Call or WhatsApp, optional area), then pick it in Find Leads before you add businesses.' : undefined}
+    </EmptyState>}
     {shown.length > 0 && <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">{shown.map((c) => <CampaignCard key={c.id} c={c} admin={admin} onEdit={setEditing} />)}</div>}
 
     <CampaignEditDialog open={creating} onOpenChange={setCreating} />

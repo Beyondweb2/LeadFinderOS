@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Loader2, Wand2 } from 'lucide-react';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { AlertTriangle, CheckCircle2, Loader2, Wand2 } from 'lucide-react';
+import { Dialog, DialogContent, DialogFooter } from '@/components/ui/dialog';
+import { Callout, DialogHero, Figure, SubSection } from '@/components/operator/ui';
 import { Button } from '@/components/ui/button';
 import { supabase } from '@/integrations/supabase/client';
 import { fetchAllRows } from '@/lib/fetchAllRows';
@@ -80,12 +81,8 @@ export function TradeAutofixDialog({ open, onOpenChange, onDone }: { open: boole
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!busy) { onOpenChange(v); if (!v) setResults(null); } }}>
       <DialogContent className="max-h-[90vh] w-[calc(100vw-2rem)] max-w-lg overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2"><Wand2 className="h-5 w-5 text-violet-500" />Fill in missing trades</DialogTitle>
-          <DialogDescription>
-            Works out each lead&rsquo;s trade from what we already hold: its audit, the services its own website lists, its campaign&rsquo;s trade or name, and a clear trade word in the business name.
-          </DialogDescription>
-        </DialogHeader>
+        <DialogHero icon={Wand2} tone="blue" title="Fill in missing trades"
+          subtitle={<>Works out each lead&rsquo;s trade from what we already hold: its audit, the services its own website lists, its campaign&rsquo;s trade or name, and a clear trade word in the business name.</>} />
         {!results ? (
           <div className="space-y-2 text-sm">
             <ul className="list-disc space-y-1 pl-5 text-muted-foreground">
@@ -93,15 +90,20 @@ export function TradeAutofixDialog({ open, onOpenChange, onDone }: { open: boole
               <li>Saved automatically when the evidence is strong; a business name on its own is listed for you to check; anything unclear is left alone.</li>
               <li>Only the trade is written. No messages are sent; status, owner and Next Action do not change. Each change is recorded in the lead&rsquo;s History with its evidence.</li>
             </ul>
-            {failed && <p className="text-xs text-destructive">It stopped: {failed}. Nothing after that point was changed.</p>}
+            {failed && <Callout tone="red" icon={AlertTriangle} className="text-xs">It stopped: {failed}. Nothing after that point was changed.</Callout>}
           </div>
         ) : (
           <div className="space-y-3 text-sm" data-testid="trade-autofix-result">
-            <p className="font-semibold">{results.length} checked · {fixed.length} fixed · {review.length} need review · {unresolved.length} unresolved</p>
+            <p className="sr-only">{results.length} checked · {fixed.length} fixed · {review.length} need review · {unresolved.length} unresolved</p>
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4" aria-hidden>
+              <Figure label="Checked" value={results.length} />
+              <Figure label="Fixed" value={fixed.length} tone="green" strong={fixed.length > 0} />
+              <Figure label="Need review" value={review.length} tone="amber" strong={review.length > 0} />
+              <Figure label="Unresolved" value={unresolved.length} />
+            </div>
             {review.length > 0 && (
-              <div>
-                <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Check these</p>
-                <ul className="divide-y divide-border/60 rounded-lg border border-border/60">
+              <SubSection title="Check these" tone="amber">
+                <ul className="divide-y divide-border/60 rounded-xl border border-border/60">
                   {review.map((r) => (
                     <li key={r.leadId} className="flex items-center justify-between gap-2 px-3 py-2 text-xs">
                       <span className="min-w-0"><span className="font-medium">{r.name}</span> → <span className="font-semibold">{r.v.trade}</span><span className="block text-muted-foreground">{r.v.reason}</span></span>
@@ -109,19 +111,18 @@ export function TradeAutofixDialog({ open, onOpenChange, onDone }: { open: boole
                     </li>
                   ))}
                 </ul>
-              </div>
+              </SubSection>
             )}
             {unresolved.length > 0 && (
-              <div>
-                <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Left for you</p>
+              <SubSection title="Left for you" tone="grey">
                 <ul className="space-y-0.5 text-xs text-muted-foreground">
                   {unresolved.slice(0, 12).map((r) => <li key={r.leadId}><span className="text-foreground">{r.name}</span> — {r.v.reason}</li>)}
                   {unresolved.length > 12 && <li>…and {unresolved.length - 12} more</li>}
                 </ul>
                 <Link to="/outreach?show=no_trade" onClick={() => onOpenChange(false)} className="mt-1 inline-block text-xs text-primary hover:underline">Show the {unresolved.length + review.length} still without a trade in Outreach</Link>
-              </div>
+              </SubSection>
             )}
-            {fixed.length > 0 && <p className="text-xs text-muted-foreground">Saved from {[...new Set(fixed.flatMap((r) => r.v.evidence.filter((e) => e.trade === r.v.trade).map((e) => TRADE_SOURCE_LABEL[e.source])))].join(', ')}. Each is in the lead&rsquo;s History.</p>}
+            {fixed.length > 0 && <p className="flex items-start gap-1.5 text-xs text-muted-foreground"><CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-teal-600 dark:text-teal-300" /><span>Saved from {[...new Set(fixed.flatMap((r) => r.v.evidence.filter((e) => e.trade === r.v.trade).map((e) => TRADE_SOURCE_LABEL[e.source])))].join(', ')}. Each is in the lead&rsquo;s History.</span></p>}
           </div>
         )}
         <DialogFooter>

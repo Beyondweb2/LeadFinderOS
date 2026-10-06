@@ -1,5 +1,7 @@
 import { Link } from 'react-router-dom';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Sparkles } from 'lucide-react';
+import { Dialog, DialogContent } from '@/components/ui/dialog';
+import { DialogHero } from '@/components/operator/ui';
 import { LeadHookPanel } from '@/components/LeadCrmPanel';
 import { useLeadPermissions } from '@/hooks/useLeadPermissions';
 
@@ -20,12 +22,12 @@ export function HookAuditDialog({ lead, onOpenChange }: {
   return (
     <Dialog open={!!lead} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[90vh] w-[calc(100vw-2rem)] max-w-xl overflow-y-auto" data-testid="hook-audit-dialog">
-        <DialogHeader>
-          <DialogTitle className="pr-6 text-base">{lead?.business_name ?? 'AI visibility check'}</DialogTitle>
-          <DialogDescription className="text-xs">
-            AI visibility check — 3 customer questions, each asked once on ChatGPT and Google AI. It runs on the server: close this any time.
-          </DialogDescription>
-        </DialogHeader>
+        <DialogHero
+          icon={Sparkles}
+          tone="purple"
+          title={lead?.business_name ?? 'AI visibility check'}
+          subtitle="AI visibility check — 3 customer questions, each asked once on ChatGPT and Google AI. It runs on the server: close this any time."
+        />
         {lead && <LeadHookPanel key={lead.id} leadId={lead.id} autoPropose />}
         {lead && perms.auditAdmin && (
           <p className="pt-1 text-right text-[11px] text-muted-foreground">

@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { clientToolUrl } from '@/lib/paidClientTools';
-import { AlertCircle, AlertTriangle, ArrowRight, Check, CheckCircle2, ChevronDown, ChevronRight, Circle, Clipboard, ExternalLink, Loader2, Rocket, Wand2 } from 'lucide-react';
+import { AlertCircle, AlertTriangle, ArrowRight, Check, CheckCircle2, ChevronDown, ChevronRight, Circle, Clipboard, ExternalLink, Globe, Loader2, Rocket, Wand2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
+import { Fact, PageHeader, SURFACE, TONE } from '@/components/operator/ui';
+import { cn } from '@/lib/utils';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import type { useToast } from '@/hooks/use-toast';
@@ -61,26 +62,30 @@ export interface SimpleWebsiteBuildProps {
   toast: Toast;
 }
 
+/* The operator tones (components/operator/ui): a soft wash and coloured text, no hard border —
+   green (drawn teal) done · amber decide · red blocks. */
 const tone = {
-  ok: 'border-emerald-300 bg-emerald-50 text-emerald-900 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-100',
-  warn: 'border-amber-300 bg-amber-50 text-amber-900 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-100',
-  bad: 'border-red-300 bg-red-50 text-red-900 dark:border-red-800 dark:bg-red-950/40 dark:text-red-100',
+  ok: cn('border-transparent', TONE.green.tint, TONE.green.text),
+  warn: cn('border-transparent', TONE.amber.tint, TONE.amber.text),
+  bad: cn('border-transparent', TONE.red.tint, TONE.red.text),
 };
+/* A group inside a step: a light wash, not another bordered box. */
+const INSET = 'rounded-xl bg-muted/30 ring-1 ring-inset ring-border/50';
 
 function Block({ n, title, done, right, children }: { n?: number; title: string; done?: boolean; right?: ReactNode; children: ReactNode }) {
-  return <Card><CardContent className="space-y-3 p-4 text-sm sm:p-5">
+  return <section className={cn(SURFACE, 'min-w-0 space-y-3 p-4 text-sm sm:p-5')}>
     <div className="flex flex-wrap items-center justify-between gap-2">
-      <h2 className="flex min-w-0 items-center gap-2 text-base font-semibold">
-        {n != null && <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs ${done ? 'bg-emerald-600 text-white' : 'bg-primary/10 text-primary'}`}>{done ? <Check className="h-3.5 w-3.5" /> : n}</span>}
+      <h2 className="flex min-w-0 items-center gap-2.5 text-base font-bold tracking-tight">
+        {n != null && <span className={cn('flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-xs font-bold', done ? TONE.green.solid : TONE.blue.icon)}>{done ? <Check className="h-3.5 w-3.5" /> : n}</span>}
         <span className="min-w-0 break-words">{title}</span></h2>
       {right}
     </div>
     {children}
-  </CardContent></Card>;
+  </section>;
 }
 
 function CommandBox({ command, onCopy }: { command: string; onCopy: () => void }) {
-  return <div className="flex min-w-0 items-start gap-2 rounded-md bg-muted p-2">
+  return <div className="flex min-w-0 items-start gap-2 rounded-xl bg-muted p-2">
     <code className="min-w-0 flex-1 whitespace-pre-wrap break-all font-mono text-[11px] leading-relaxed">{command}</code>
     <Button size="sm" variant="outline" className="h-7 shrink-0 px-2 text-xs" onClick={onCopy}><Clipboard className="mr-1 h-3 w-3" />Copy</Button>
   </div>;
@@ -209,22 +214,22 @@ export default function SimpleWebsiteBuild(p: SimpleWebsiteBuildProps) {
   };
 
   /* ── Optimise client: not a new-site build at all ─────────────────────────────────────────────── */
-  const header = <Card><CardContent className="space-y-4 p-4 sm:p-5">
-    <div className="flex flex-wrap items-start justify-between gap-3">
-      <div className="min-w-0"><h1 className="break-words text-xl font-semibold sm:text-2xl">Website — {businessName}</h1></div>
-      <div className="text-xs text-muted-foreground" aria-live="polite">{p.saveLabel}</div>
-    </div>
-    <div className="grid gap-2 text-xs sm:grid-cols-3">
-      <div className="min-w-0 rounded-md border p-2"><div className="text-muted-foreground">CLIENT</div><div className="break-words font-medium">{businessName}</div></div>
-      <div className="min-w-0 rounded-md border p-2"><div className="text-muted-foreground">BUILD TYPE</div><div className="break-words font-medium">{optimiseClient ? 'Optimise (their own site)' : type ? BUILD_TYPE_INFO[type].label : 'Not chosen'}</div></div>
-      <div className="min-w-0 rounded-md border p-2"><div className="text-muted-foreground">STATUS</div><div className="break-words font-medium">{optimiseClient ? 'Not a new-site build' : progress.status}</div></div>
-    </div>
+  const header = <div className="space-y-4">
+    <PageHeader icon={Globe} tone="blue" eyebrow="Paid client" title={`Website — ${businessName}`}
+      actions={<div className="text-xs text-muted-foreground" aria-live="polite">{p.saveLabel}</div>} />
+    <section className={cn(SURFACE, 'min-w-0 space-y-4 p-4 sm:p-5')}>
+    <dl className="grid gap-3 sm:grid-cols-3">
+      <Fact label="CLIENT">{businessName}</Fact>
+      <Fact label="BUILD TYPE"><span className="font-medium">{optimiseClient ? 'Optimise (their own site)' : type ? BUILD_TYPE_INFO[type].label : 'Not chosen'}</span></Fact>
+      <Fact label="STATUS"><span className="font-medium">{optimiseClient ? 'Not a new-site build' : progress.status}</span></Fact>
+    </dl>
     {!optimiseClient && <ol className="grid grid-cols-5 gap-1" aria-label="Progress">
       {SIMPLE_STEPS.map((k, n) => { const cur = progress.current === k; const d = progress.done[k];
-        return <li key={k} className={`min-w-0 rounded-md border px-1 py-1.5 text-center text-[11px] sm:text-xs ${cur ? 'border-primary bg-primary/5 font-semibold' : ''} ${d ? 'text-emerald-700 dark:text-emerald-300' : 'text-muted-foreground'}`}>
+        return <li key={k} className={`min-w-0 rounded-xl px-1 py-1.5 text-center text-[11px] ring-1 ring-inset sm:text-xs ${cur ? 'bg-primary/10 font-semibold ring-primary/40' : d ? cn(TONE.green.soft, TONE.green.ring) : 'ring-border/60'} ${d ? TONE.green.text : 'text-muted-foreground'}`}>
           <span className="inline-flex items-center gap-1">{d ? <CheckCircle2 className="h-3.5 w-3.5 shrink-0" /> : <Circle className="h-3.5 w-3.5 shrink-0" />}<span className="truncate">{n + 1}. {SIMPLE_STEP_LABELS[k]}</span></span></li>; })}
     </ol>}
-  </CardContent></Card>;
+    </section>
+  </div>;
 
   const advancedLink = <div className="flex justify-center"><Button variant="ghost" size="sm" className="h-auto max-w-full whitespace-normal py-2 text-center text-xs text-muted-foreground" onClick={p.onAdvanced}>Advanced — view build details (page plan, facts, gates, every prompt) <ChevronRight className="ml-1 h-3.5 w-3.5" /></Button></div>;
 
@@ -240,13 +245,13 @@ export default function SimpleWebsiteBuild(p: SimpleWebsiteBuildProps) {
   const recommended = recommendedBuildType(hasOld);
   const typeCards = <div className="grid gap-2 sm:grid-cols-2">{BUILD_TYPES.map((t) => { const info = BUILD_TYPE_INFO[t]; const on = type === t;
     return <button key={t} type="button" onClick={() => chooseType(t)} aria-pressed={on}
-      className={`min-w-0 rounded-lg border p-3 text-left transition hover:bg-muted/50 ${on ? 'border-primary bg-primary/5 ring-1 ring-primary' : ''}`}>
-      <div className="flex flex-wrap items-center gap-2"><span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-semibold">{info.letter}</span>
+      className={`min-w-0 rounded-xl border p-3 text-left transition hover:bg-muted/50 ${on ? 'border-primary bg-primary/5 ring-1 ring-primary' : 'border-border/70'}`}>
+      <div className="flex flex-wrap items-center gap-2"><span className={cn('flex h-6 w-6 shrink-0 items-center justify-center rounded-lg text-xs font-bold', on ? TONE.blue.solid : 'bg-muted')}>{info.letter}</span>
         <span className="min-w-0 break-words font-semibold">{info.label}</span>
-        {t === recommended && !on && <span className="rounded bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-primary">Suggested</span>}
-        {on && <span className="rounded bg-primary px-1.5 py-0.5 text-[10px] font-semibold uppercase text-primary-foreground">Chosen</span>}</div>
+        {t === recommended && !on && <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold uppercase text-primary">Suggested</span>}
+        {on && <span className="rounded-full bg-primary px-2 py-0.5 text-[10px] font-semibold uppercase text-primary-foreground">Chosen</span>}</div>
       <p className="mt-1 text-xs text-muted-foreground">{info.description}</p>
-      {info.needsOldSite && !hasOld && <p className="mt-1 text-xs text-amber-700 dark:text-amber-300">No current website on record.</p>}
+      {info.needsOldSite && !hasOld && <p className={cn('mt-1 text-xs', TONE.amber.text)}>No current website on record.</p>}
     </button>; })}</div>;
 
   const trade = pack.facts.find((f) => f.key === 'trade')?.value ?? '';
@@ -254,10 +259,10 @@ export default function SimpleWebsiteBuild(p: SimpleWebsiteBuildProps) {
     <p className="text-xs font-medium">Template</p>
     <div className="grid gap-2 sm:grid-cols-2">{WEBSITE_TEMPLATES.map((t) => { const on = state.template_id === t.id; const fit = tradeFit(trade, t);
       return <button key={t.id} type="button" aria-pressed={on} onClick={() => update((s) => ({ ...s, template_id: t.id }))}
-        className={`min-w-0 rounded-lg border p-3 text-left hover:bg-muted/50 ${on ? 'border-primary bg-primary/5 ring-1 ring-primary' : ''}`}>
+        className={`min-w-0 rounded-xl border p-3 text-left hover:bg-muted/50 ${on ? 'border-primary bg-primary/5 ring-1 ring-primary' : 'border-border/70'}`}>
         <div className="flex flex-wrap items-center gap-2"><span className="font-semibold">{t.name}</span><span className="text-xs text-muted-foreground">v{t.version}</span>
-          {fit === 'compatible' && <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200">Fits {trade}</span>}
-          {fit === 'weak' && <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-amber-900 dark:bg-amber-900/40 dark:text-amber-100">Built for {t.primaryTrade}s</span>}</div>
+          {fit === 'compatible' && <span className={cn('rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase', TONE.green.soft, TONE.green.text)}>Fits {trade}</span>}
+          {fit === 'weak' && <span className={cn('rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase', TONE.amber.soft, TONE.amber.text)}>Built for {t.primaryTrade}s</span>}</div>
         <p className="mt-1 text-xs text-muted-foreground">{t.description}</p>
       </button>; })}</div>
   </div>;
@@ -285,7 +290,7 @@ export default function SimpleWebsiteBuild(p: SimpleWebsiteBuildProps) {
     <Block n={1} title="What are we building?" done={!!type && !changeType}
       right={type && !changeType ? <Button size="sm" variant="outline" onClick={() => setChangeType(true)}>Change</Button> : undefined}>
       {(!type || changeType || type === 'legacy_bespoke') ? typeCards : <p className="text-sm">{BUILD_TYPE_INFO[type].description}</p>}
-      {type === 'legacy_bespoke' && !changeType && <p className={`rounded-md border p-2 text-xs ${tone.warn}`}>{BUILD_TYPE_INFO.legacy_bespoke.description}</p>}
+      {type === 'legacy_bespoke' && !changeType && <p className={`rounded-xl border p-2 text-xs ${tone.warn}`}>{BUILD_TYPE_INFO.legacy_bespoke.description}</p>}
       {templatePicker}
     </Block>
 
@@ -300,26 +305,26 @@ export default function SimpleWebsiteBuild(p: SimpleWebsiteBuildProps) {
         {progress.done.gather && <div className="flex flex-wrap gap-1.5 text-[11px]">{gathered.filter(([, v]) => v).map(([k, v]) => <span key={k} className="max-w-full break-words rounded-full border px-2 py-0.5"><span className="text-muted-foreground">{k}:</span> {v}</span>)}</div>}
         {progress.done.gather && (shown.length
           ? <div className="space-y-2"><p className="text-xs font-semibold uppercase tracking-wide">Needs you</p>{shown.map((x) => <IssueCard key={x.id} issue={x} onFact={putFact} onType={chooseType} update={update} />)}</div>
-          : <p className={`flex items-center gap-2 rounded-md border p-2 text-xs ${tone.ok}`}><CheckCircle2 className="h-4 w-4" />Nothing needs you. Everything else is decided automatically.</p>)}
+          : <p className={`flex items-center gap-2 rounded-xl border p-2 text-xs ${tone.ok}`}><CheckCircle2 className="h-4 w-4" />Nothing needs you. Everything else is decided automatically.</p>)}
         {!progress.done.gather && stops.length > 0 && stops.some((s) => s.id === 'route') && <IssueCard issue={stops.find((s) => s.id === 'route')!} onFact={putFact} onType={chooseType} update={update} />}
       </Block>
 
       {/* 3 — BUILD */}
       <Block n={3} title="Build the site with Claude" done={progress.done.build}>
         {!progress.done.gather ? <p className="text-xs text-muted-foreground">Press Prepare website first.</p>
-          : master.blockedBy.length ? <p className={`rounded-md border p-2 text-xs ${tone.warn}`}><AlertTriangle className="mr-1 inline h-3.5 w-3.5" />Sort {master.blockedBy.length === 1 ? 'the one thing' : 'the ' + master.blockedBy.length + ' things'} under Prepare first: {master.blockedBy.join(' · ')}</p>
+          : master.blockedBy.length ? <p className={`rounded-xl border p-2 text-xs ${tone.warn}`}><AlertTriangle className="mr-1 inline h-3.5 w-3.5" />Sort {master.blockedBy.length === 1 ? 'the one thing' : 'the ' + master.blockedBy.length + ' things'} under Prepare first: {master.blockedBy.join(' · ')}</p>
           : <>
             <div className="flex flex-wrap items-center gap-2">
               <Button size="lg" onClick={() => void copyMaster()}><Clipboard className="mr-2 h-4 w-4" />COPY MASTER BUILD PROMPT</Button>
               <Button variant="outline" size="sm" onClick={() => setShowPrompt((o) => !o)}>{showPrompt ? <ChevronDown className="mr-1 h-4 w-4" /> : <ChevronRight className="mr-1 h-4 w-4" />}{showPrompt ? 'Hide' : 'Show'} prompt</Button>
               <span className="text-xs text-muted-foreground">{master.text.length.toLocaleString()} characters · everything Claude needs, in one paste</span>
             </div>
-            {showPrompt && <pre className="max-h-[420px] overflow-auto whitespace-pre-wrap break-words rounded bg-muted p-3 font-mono text-[11px] leading-relaxed">{master.text}</pre>}
+            {showPrompt && <pre className="max-h-[420px] overflow-auto whitespace-pre-wrap break-words rounded-xl bg-muted p-3 font-mono text-[11px] leading-relaxed">{master.text}</pre>}
           </>}
-        {progress.done.gather && <details open={!b.result_imported_at} className="space-y-2 rounded-md border p-3">
+        {progress.done.gather && <details open={!b.result_imported_at} className={cn('space-y-2 p-3', INSET)}>
           <summary className="cursor-pointer text-xs font-semibold uppercase tracking-wide">What to do{b.result_imported_at ? ' (the build has run — open to see the steps again)' : ''}</summary>
           <ol className="space-y-3">{steps.map((st, n) => <li key={st.title} className="flex gap-2">
-            <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-muted text-[11px] font-semibold">{n + 1}</span>
+            <span className={cn('flex h-5 w-5 shrink-0 items-center justify-center rounded-md text-[11px] font-bold', TONE.blue.icon)}>{n + 1}</span>
             <div className="min-w-0 flex-1 space-y-1"><p className="font-medium">{st.title}</p><p className="text-xs text-muted-foreground">{st.detail}</p>
               {st.command && <CommandBox command={st.command} onCopy={() => void p.copy('PowerShell command', st.command!)} />}
               {st.link && <a href={st.link.href} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs text-primary underline">{st.link.label}<ExternalLink className="h-3 w-3" /></a>}</div>
@@ -344,7 +349,7 @@ export default function SimpleWebsiteBuild(p: SimpleWebsiteBuildProps) {
           </div>
           {pack.existingSiteUrl && previewUrl && <p className="text-xs text-muted-foreground">Side by side: the button opens both. If only one opens, open the other too, then press Windows key + ← on one and Windows key + → on the other.</p>}
 
-          <div className={`rounded-md border p-3 ${tech.state === 'passed' ? tone.ok : tone.bad}`}>
+          <div className={`rounded-xl border p-3 ${tech.state === 'passed' ? tone.ok : tone.bad}`}>
             <p className="font-semibold">TECHNICAL CHECK {tech.state === 'passed' ? <span>✓ Passed</span> : <span>— {tech.failures.length} thing{tech.failures.length === 1 ? '' : 's'} need{tech.failures.length === 1 ? 's' : ''} fixing</span>}</p>
             {tech.state === 'failed' && <ul className="mt-1 list-disc space-y-0.5 break-words pl-5 text-xs">{tech.failures.slice(0, 12).map((f) => <li key={f}>{f}</li>)}</ul>}
             {tech.state === 'failed' && <p className="mt-1 text-xs">The correction prompt below already includes these.</p>}
@@ -357,7 +362,7 @@ export default function SimpleWebsiteBuild(p: SimpleWebsiteBuildProps) {
               </div></details>
           </div>
 
-          {(tech.assetChecks.length > 0 || tech.factChecks.length > 0) && <div className={`rounded-md border p-3 text-xs ${tone.warn}`}>
+          {(tech.assetChecks.length > 0 || tech.factChecks.length > 0) && <div className={`rounded-xl border p-3 text-xs ${tone.warn}`}>
             {tech.factChecks.length > 0 && <><p className="font-semibold">Claims Claude left out until you confirm</p><ul className="list-disc pl-5">{tech.factChecks.slice(0, 15).map((x) => <li key={x}>{x}</li>)}</ul></>}
             {tech.assetChecks.length > 0 && <><p className="mt-1 font-semibold">Images Claude did not use (ownership unclear)</p><ul className="list-disc break-all pl-5">{tech.assetChecks.slice(0, 15).map((x) => <li key={x}>{x}</li>)}</ul></>}
             <p className="mt-1">If one is genuinely theirs, say so in Make changes (e.g. “the van photo is theirs — use it”).</p>
@@ -366,12 +371,12 @@ export default function SimpleWebsiteBuild(p: SimpleWebsiteBuildProps) {
           <div className="space-y-1.5">
             <p className="text-xs font-semibold uppercase tracking-wide">Your review</p>
             {SIMPLE_REVIEW_ITEMS.map((it) => { const on = reviewItemDone(state, it, hasOld);
-              return <label key={it.key} className="flex cursor-pointer items-start gap-2 rounded-md border p-2">
+              return <label key={it.key} className={cn('flex cursor-pointer items-start gap-2 p-2', INSET)}>
                 <input type="checkbox" className="mt-1" aria-label={it.label} checked={on} onChange={(e) => update((s) => setReviewItem(s, it.key, e.target.checked, hasOld))} />
                 <span className="min-w-0"><span className="font-medium">{it.label}</span><span className="block text-xs text-muted-foreground">{it.help}</span></span></label>; })}
           </div>
 
-          <div className="space-y-2 rounded-md border p-3">
+          <div className={cn('space-y-2 p-3', INSET)}>
             <p className="font-semibold">Make changes</p>
             <p className="text-xs text-muted-foreground">One change per line, in plain words: “Change the hero wording to …”, “Remove the Canterbury page”, “Use the older logo”, “Make the header darker”, “Service X shouldn’t be listed”.</p>
             <Textarea aria-label="Changes" rows={4} className="text-xs" value={state.corrections} onChange={(e) => update((s) => ({ ...s, corrections: e.target.value }))} placeholder={'- Remove the Canterbury page\n- Use the older logo'} />
@@ -388,10 +393,10 @@ export default function SimpleWebsiteBuild(p: SimpleWebsiteBuildProps) {
       {/* 5 — LAUNCH */}
       <Block n={5} title="Launch" done={progress.done.launch}>
         {issues.filter((x) => x.level === 'launch').map((x) => <IssueCard key={x.id} issue={x} onFact={putFact} onType={chooseType} update={update} />)}
-        {progress.done.launch ? <p className={`flex items-center gap-2 rounded-md border p-2 ${tone.ok}`}><Rocket className="h-4 w-4" />Live at <a className="underline" href={state.production_url} target="_blank" rel="noreferrer">{state.production_url}</a> — the live check passed.</p>
+        {progress.done.launch ? <p className={`flex items-center gap-2 rounded-xl border p-2 ${tone.ok}`}><Rocket className="h-4 w-4" />Live at <a className="underline" href={state.production_url} target="_blank" rel="noreferrer">{state.production_url}</a> — the live check passed.</p>
           : p.launch.length ? <div className="text-xs"><p className="font-medium">Before launch:</p><ul className="mt-1 list-disc space-y-0.5 break-words pl-5">{launchLines(p.launch).slice(0, 10).map((l) => <li key={l}>{l}</li>)}</ul></div>
           : <div className="space-y-3">
-            <p className={`rounded-md border p-2 font-semibold ${tone.ok}`}><Rocket className="mr-1 inline h-4 w-4" />READY TO LAUNCH</p>
+            <p className={`rounded-xl border p-2 font-semibold ${tone.ok}`}><Rocket className="mr-1 inline h-4 w-4" />READY TO LAUNCH</p>
             <ol className="space-y-3 text-xs">
               <li><b>1.</b> Open PowerShell and start Claude in the client’s folder: <CommandBox command={openClaudeCommand(state)} onCopy={() => void p.copy('PowerShell command', openClaudeCommand(state))} /></li>
               <li><b>2.</b> <Button size="sm" disabled={!p.productionPrompt || p.productionPrompt.blockedBy.length > 0} onClick={() => p.productionPrompt && void p.copy('Launch prompt', p.productionPrompt.text)}><Clipboard className="mr-1 h-4 w-4" />COPY LAUNCH PROMPT</Button> — paste it into Claude. It asks you before it publishes; say yes.</li>
@@ -401,7 +406,7 @@ export default function SimpleWebsiteBuild(p: SimpleWebsiteBuildProps) {
         {!progress.done.launch && p.launch.length === 0 && <div className="space-y-2">
           <Textarea aria-label="Paste the live check" rows={3} className="font-mono text-xs" value={liveText} placeholder={'{ "siteGateVersion": 1, "domain": "…", "mode": "url", … }'} onChange={(e) => setLiveText(e.target.value)} />
           <Button size="sm" disabled={!liveText.trim()} onClick={importLive}>Import live check</Button>
-          {state.production_gate.imported_at && state.production_gate.passed !== true && <p className="text-xs text-red-700 dark:text-red-300">Last live check failed: {state.production_gate.fails.slice(0, 5).join('; ') || 'see Advanced'}</p>}
+          {state.production_gate.imported_at && state.production_gate.passed !== true && <p className={cn('text-xs', TONE.red.text)}>Last live check failed: {state.production_gate.fails.slice(0, 5).join('; ') || 'see Advanced'}</p>}
         </div>}
       </Block>
     </>}
@@ -414,7 +419,7 @@ export default function SimpleWebsiteBuild(p: SimpleWebsiteBuildProps) {
 
 function IssueCard({ issue, onFact, onType, update }: { issue: BuildIssue; onFact: (key: string, label: string, value: string) => void; onType: (t: BuildType) => void; update: UpdateFn }) {
   const cls = issue.level === 'blocker' ? tone.bad : tone.warn;
-  return <div className={`space-y-2 rounded-md border p-3 ${cls}`}>
+  return <div className={`space-y-2 rounded-xl border p-3 ${cls}`}>
     <p className="flex items-start gap-2 font-medium">{issue.level === 'blocker' ? <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" /> : <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />}<span className="min-w-0 break-words">{issue.title}{issue.level === 'decide' && <span className="ml-1 text-xs font-normal">(does not stop the preview)</span>}</span></p>
     {issue.detail && <p className="break-words text-xs">{issue.detail}</p>}
     {issue.fixes.length > 0 && <div className="flex flex-wrap items-center gap-2">{issue.fixes.map((f, n) => <Fix key={n} fix={f} onFact={onFact} onType={onType} update={update} />)}</div>}

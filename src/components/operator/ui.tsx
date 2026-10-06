@@ -1,5 +1,7 @@
 import type { ComponentType, ReactNode } from 'react';
+import { AlertTriangle, Loader2, Lock, RotateCcw } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { Button } from '@/components/ui/button';
 import { DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { TONE, type Tone } from '@/components/salesDash/primitives';
 
@@ -121,6 +123,52 @@ export function Fact({ label, children, className }: { label: ReactNode; childre
       <dd className="mt-0.5 break-words text-sm">{children}</dd>
     </div>
   );
+}
+
+/* ── The four states every screen and popup can be in besides "showing data" (2026-10-06, full-app
+   design consistency): loading, failed (with Retry), empty, not allowed. One look, one wording shape.
+   ⛔ Leaf only: props in, markup out. The caller owns the fetch and the retry. */
+
+/** Loading: a spinner and what is being loaded, centred in the space the content will take. */
+export function LoadState({ label = 'Loading…', className, compact = false }: { label?: ReactNode; className?: string; compact?: boolean }) {
+  return (
+    <div role="status" aria-live="polite" data-testid="load-state"
+      className={cn('flex items-center justify-center gap-2 text-sm text-muted-foreground', compact ? 'py-4' : 'py-12', className)}>
+      <Loader2 className="h-4 w-4 shrink-0 animate-spin text-primary" aria-hidden />
+      <span>{label}</span>
+    </div>
+  );
+}
+
+/** Failed: what could not be loaded, the reason in plain words when known, and Retry. Announced. */
+export function ErrorState({ title = 'Couldn’t load this', detail, onRetry, retryLabel = 'Try again', className }: {
+  title?: ReactNode; detail?: ReactNode; onRetry?: () => void; retryLabel?: string; className?: string;
+}) {
+  return (
+    <Callout tone="red" icon={AlertTriangle} title={title} testId="error-state" className={className}
+      action={onRetry ? <Button size="sm" variant="outline" className="h-8 gap-1.5 rounded-full" onClick={onRetry}><RotateCcw className="h-3.5 w-3.5" />{retryLabel}</Button> : undefined}>
+      {detail}
+    </Callout>
+  );
+}
+
+/** Empty: what this area is for, why it is empty, and the next useful action — compact, no fluff. */
+export function EmptyState({ icon: I, title, children, action, tone = 'grey', className, testId = 'empty-state' }: {
+  icon?: Icon; title: ReactNode; children?: ReactNode; action?: ReactNode; tone?: Tone; className?: string; testId?: string;
+}) {
+  return (
+    <div data-testid={testId} className={cn('flex flex-col items-center justify-center gap-2 rounded-2xl border border-dashed border-border/70 bg-muted/20 px-4 py-8 text-center', className)}>
+      {I && <IconTile icon={I} tone={tone} />}
+      <p className="text-sm font-semibold">{title}</p>
+      {children && <div className="max-w-md text-xs leading-snug text-muted-foreground">{children}</div>}
+      {action && <div className="mt-1 flex flex-wrap items-center justify-center gap-2">{action}</div>}
+    </div>
+  );
+}
+
+/** Not allowed: this screen or action belongs to another role. Says so plainly; never a blank page. */
+export function DeniedState({ title = 'Not available on your account', children, className }: { title?: ReactNode; children?: ReactNode; className?: string }) {
+  return <EmptyState icon={Lock} tone="grey" title={title} className={className} testId="denied-state">{children}</EmptyState>;
 }
 
 /** The left accent edge for a card whose state matters (a row that needs attention, a held sale). */

@@ -3,12 +3,11 @@ import { useTranslation } from 'react-i18next';
 import {
   Dialog,
   DialogContent,
-  DialogTitle,
 } from '@/components/ui/dialog';
-import { Checkbox } from '@/components/ui/checkbox';
+import { Button } from '@/components/ui/button';
 import { useAuth } from '@/hooks/useAuth';
-import appLogo from '@/assets/logo.png';
-import { MessageSquare, Phone, Send } from 'lucide-react';
+import { Lightbulb, Send } from 'lucide-react';
+import { ActionBar, DialogHero } from '@/components/operator/ui';
 
 type ContactMethod = 'whatsapp' | 'sms' | 'call' | null;
 
@@ -65,34 +64,26 @@ export function OutreachTipsDialog() {
 
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) handleClose(true); else setOpen(true); }}>
-      <DialogContent className="sm:max-w-[400px] p-0 overflow-hidden rounded-2xl border-border/40 bg-[hsl(220_50%_5%)]">
-        <div className="px-7 pt-7 pb-6 sm:px-8 sm:pt-8 sm:pb-7 flex flex-col items-center">
-          <div className="grid grid-cols-[40px_1fr_40px] items-center w-full mb-6">
-            <div className="flex justify-start">
-              <img src={appLogo} alt="LeadFinder Pro" className="h-9 w-9 shrink-0" />
-            </div>
-            <h2 className="text-lg font-bold tracking-tight text-center">
-              Lead<span className="text-primary">Finder</span> Pro
-            </h2>
-            <div />
-          </div>
+      <DialogContent className="sm:max-w-[400px]">
+        {/* 2026-10-06 design consistency: the operator dialog look (icon tile + title), not the old
+            dark LeadFinder-branded splash. Same words, same Skip and Send. */}
+        <DialogHero
+          icon={Lightbulb}
+          tone="blue"
+          title={<>{t('outreachTips.headline1')} {t('outreachTips.headline2')}</>}
+        />
 
-          <DialogTitle className="text-center text-[22px] sm:text-2xl font-bold leading-[1.2] tracking-tight mb-5">
-            <span className="text-foreground">{t('outreachTips.headline1')}</span>
-            <br />
-            <span className="text-primary">{t('outreachTips.headline2')}</span>
-          </DialogTitle>
+        <ol className="space-y-3 text-[13px] leading-relaxed text-muted-foreground">
+          {[1, 2, 3, 4].map((n) => (
+            <li key={n} className="flex gap-2.5">
+              <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-blue-500/10 text-[11px] font-bold text-blue-700 dark:text-blue-300">{n}</span>
+              <p><span className="font-medium text-foreground">{t(`outreachTips.tip${n}Title`)}</span> {t(`outreachTips.tip${n}Desc`)}</p>
+            </li>
+          ))}
+        </ol>
 
-          <div className="text-left text-[13px] text-muted-foreground leading-relaxed mb-4 space-y-3 w-full">
-            {[1, 2, 3, 4].map((n) => (
-              <div key={n} className="flex gap-2.5">
-                <span className="text-green-400 font-bold text-sm shrink-0">{n}.</span>
-                <p><span className="text-foreground font-medium">{t(`outreachTips.tip${n}Title`)}</span> {t(`outreachTips.tip${n}Desc`)}</p>
-              </div>
-            ))}
-          </div>
-
-          <p className="text-center text-[12px] text-muted-foreground mb-5">
+        <ActionBar className="justify-between">
+          <p className="text-[12px] text-muted-foreground">
             {t('outreachTips.notReady')}{' '}
             <button
               onClick={() => handleClose(true)}
@@ -101,15 +92,11 @@ export function OutreachTipsDialog() {
               {t('common.skip')}
             </button>
           </p>
-
-          <button
-            onClick={() => handleClose(false)}
-            className="btn-premium w-full h-12 rounded-xl text-[15px] font-semibold text-white flex items-center justify-center gap-2 transition-all"
-          >
+          <Button onClick={() => handleClose(false)} className="gap-2">
             <Send className="h-4 w-4" />
             {t('outreachTips.sendInitialText')}
-          </button>
-        </div>
+          </Button>
+        </ActionBar>
       </DialogContent>
     </Dialog>
   );

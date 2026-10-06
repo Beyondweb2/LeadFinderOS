@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { AlertCircle, Check, Clipboard, Loader2, Plus, RefreshCw, Save, Send } from 'lucide-react';
+import { BarChart3, Check, Clipboard, ClipboardList, Eye, Loader2, Plus, Save, Send } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
+import { ErrorState, SubSection, TONE } from '@/components/operator/ui';
+import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { leadRpc } from '@/lib/leadRpc';
 import {
@@ -138,26 +140,24 @@ export function MonthlyUpdatePanel({ leadId, contactName, paymentDate }: { leadI
       {loading && <Loader2 className="h-4 w-4 animate-spin text-primary"/>}
     </div>
 
-    {loadError && <div role="alert" className="flex flex-wrap items-center gap-2 rounded-md border border-destructive/40 p-3 text-destructive"><AlertCircle className="h-4 w-4"/><span>{loadError}</span><Button size="sm" variant="outline" onClick={() => void load(month)}><RefreshCw className="mr-1 h-4 w-4"/>Try again</Button></div>}
+    {loadError && <ErrorState title={loadError} onRetry={() => void load(month)} />}
 
     {facts && !loadError && (sent && facts.update ? <div className="space-y-2">
-      <p className="flex items-center gap-1 font-medium text-emerald-700 dark:text-emerald-300"><Check className="h-4 w-4"/>Sent {facts.update.sent_at ? new Date(facts.update.sent_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Europe/London' }) : ''} by {CHANNELS.find((c) => c.value === facts.update?.sent_channel)?.label.toLowerCase() ?? facts.update.sent_channel}</p>
-      <pre className="whitespace-pre-wrap rounded-md border bg-muted/40 p-3 font-sans text-sm">{facts.update.message}</pre>
+      <p className={cn('flex items-center gap-1 font-medium', TONE.green.text)}><Check className="h-4 w-4"/>Sent {facts.update.sent_at ? new Date(facts.update.sent_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Europe/London' }) : ''} by {CHANNELS.find((c) => c.value === facts.update?.sent_channel)?.label.toLowerCase() ?? facts.update.sent_channel}</p>
+      <pre className="whitespace-pre-wrap rounded-xl bg-muted/40 p-3 font-sans text-sm ring-1 ring-inset ring-border/50">{facts.update.message}</pre>
       <Button size="sm" variant="outline" onClick={() => void copyText(facts.update?.message ?? '')}><Clipboard className="mr-1 h-4 w-4"/>Copy what was sent</Button>
-    </div> : <div className="grid gap-4 lg:grid-cols-2">
-      <div className="space-y-3">
-        <section className="rounded-md border p-3">
-          <h4 className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">What we measured (written from the checks)</h4>
+    </div> : <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+      <div className="min-w-0 space-y-3">
+        <SubSection title="What we measured (written from the checks)" icon={BarChart3} tone="purple">
           <p>{measurementParagraph(facts.checks, month)}</p>
           {facts.checks.length > 0 && <ul className="mt-2 space-y-0.5 text-xs text-muted-foreground">
             {facts.checks.map((c) => <li key={c.week_start}>Week of {dayLabel(c.week_start)}: {usableCheck(c) ? `ChatGPT ${c.named?.chatgpt} of ${c.answered?.chatgpt}, Gemini ${c.named?.gemini} of ${c.answered?.gemini}` : c.status}{c.reason ? ` — ${c.reason}` : ''}</li>)}
           </ul>}
-        </section>
+        </SubSection>
         <label className="block space-y-1"><span className="text-xs font-medium">Anything to add about the measurements <span className="text-muted-foreground">(optional)</span></span>
           <Textarea rows={2} value={fields.measured_note ?? ''} onChange={(e) => set('measured_note')(e.target.value)} disabled={busy !== null}/></label>
 
-        <section className="rounded-md border p-3">
-          <h4 className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Recorded this month — add only what is true</h4>
+        <SubSection title="Recorded this month — add only what is true" icon={ClipboardList} tone="blue">
           {facts.pages.length === 0 && facts.implemented.length === 0 && <p className="text-xs text-muted-foreground">No page marked live and no opportunity marked implemented this month.</p>}
           <ul className="space-y-1 text-xs">
             {facts.pages.map((p) => <li key={p.id} className="flex items-start justify-between gap-2"><span>Page marked live: {p.label}{p.published_url ? ` (${p.published_url})` : ''} · last changed {dayLabel(p.updated_at)}</span>
@@ -170,7 +170,7 @@ export function MonthlyUpdatePanel({ leadId, contactName, paymentDate }: { leadI
             <ul className="space-y-1 text-xs">{facts.open_opportunities.map((o) => <li key={o.question} className="flex items-start justify-between gap-2"><span>{o.question}</span>
               <Button size="sm" variant="ghost" className="h-6 px-2" onClick={() => add('opportunities', `- ${o.question}`)}><Plus className="mr-1 h-3 w-3"/>Add</Button></li>)}</ul>
           </>}
-        </section>
+        </SubSection>
 
         <label className="block space-y-1"><span className="text-xs font-medium">What we did <span className="text-muted-foreground">(required)</span></span>
           <Textarea rows={4} value={fields.work_done ?? ''} onChange={(e) => set('work_done')(e.target.value)} disabled={busy !== null} placeholder="The work completed this month, in plain words."/></label>
@@ -180,14 +180,15 @@ export function MonthlyUpdatePanel({ leadId, contactName, paymentDate }: { leadI
           <Textarea rows={3} value={fields.next_steps ?? ''} onChange={(e) => set('next_steps')(e.target.value)} disabled={busy !== null}/></label>
       </div>
 
-      <div className="space-y-2">
-        <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">The update, as the client will read it</h4>
-        <pre className="max-h-[32rem] overflow-auto whitespace-pre-wrap rounded-md border bg-muted/40 p-3 font-sans text-sm">{text}</pre>
+      <div className="min-w-0 space-y-2">
+        <SubSection title="The update, as the client will read it" icon={Eye} tone="green">
+        <pre className="max-h-[32rem] overflow-auto whitespace-pre-wrap rounded-xl bg-muted/40 p-3 font-sans text-sm ring-1 ring-inset ring-border/50">{text}</pre>
+        </SubSection>
         <div className="flex flex-wrap items-center gap-2">
           <Button size="sm" variant="outline" onClick={() => void save().then((ok) => ok && toast({ title: 'Draft saved' }))} disabled={busy !== null || !dirty}>{busy === 'save' ? <Loader2 className="mr-1 h-4 w-4 animate-spin"/> : <Save className="mr-1 h-4 w-4"/>}Save draft</Button>
           <Button size="sm" variant="outline" onClick={() => void copyText(text)} disabled={busy !== null}><Clipboard className="mr-1 h-4 w-4"/>Copy text</Button>
         </div>
-        <div className="flex flex-wrap items-center gap-2 border-t pt-2">
+        <div className="flex flex-wrap items-center gap-2 border-t border-border/60 pt-2">
           <label className="text-xs font-medium" htmlFor="monthly-update-channel">Sent by</label>
           <select id="monthly-update-channel" className="h-8 rounded-md border bg-background px-2 text-sm" value={channel} onChange={(e) => setChannel(e.target.value)} disabled={busy !== null}>
             {CHANNELS.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
@@ -195,7 +196,7 @@ export function MonthlyUpdatePanel({ leadId, contactName, paymentDate }: { leadI
           <Button size="sm" onClick={() => void markSent()} disabled={busy !== null || missing.length > 0} title={missing.length ? `Fill in: ${missing.join(', ')}` : undefined}>{busy === 'send' ? <Loader2 className="mr-1 h-4 w-4 animate-spin"/> : <Send className="mr-1 h-4 w-4"/>}Mark as sent</Button>
         </div>
         {missing.length > 0 && <p className="text-xs text-muted-foreground">Before it can be marked sent, fill in: {missing.join(', ')}.</p>}
-        {dirty && <p className="text-xs text-amber-700 dark:text-amber-300">Unsaved changes.</p>}
+        {dirty && <p className={cn('text-xs', TONE.amber.text)}>Unsaved changes.</p>}
       </div>
     </div>)}
   </div>;

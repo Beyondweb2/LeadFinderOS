@@ -3,15 +3,12 @@ import { supabase } from '@/integrations/supabase/client';
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
   DialogFooter,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
-import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Callout, DialogHero } from '@/components/operator/ui';
 import { MessageSquare, Send, AlertTriangle, RotateCcw, Loader2 } from 'lucide-react';
 import { generateWhatsAppUrl, fillTemplate, hasLinkToken } from '@/lib/leadUtils';
 import { siteLinkGuard } from '@/lib/whatsappTemplates';
@@ -171,23 +168,17 @@ export function SingleWhatsAppDialog({ open, onOpenChange, lead, onSent, initial
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <MessageSquare className="h-5 w-5 text-green-500" />
-            WhatsApp Message
-          </DialogTitle>
-          <DialogDescription>
-            To <span className="font-semibold text-foreground">{lead.business_name}</span>
-          </DialogDescription>
-        </DialogHeader>
+        <DialogHero
+          icon={MessageSquare}
+          tone="green"
+          title="WhatsApp Message"
+          subtitle={<>To <span className="font-semibold text-foreground">{lead.business_name}</span></>}
+        />
 
         {!hasPhone ? (
-          <Alert className="border-amber-500/50 bg-amber-500/10">
-            <AlertTriangle className="h-4 w-4 text-amber-500" />
-            <AlertDescription>
-              This business doesn't have a phone number on file.
-            </AlertDescription>
-          </Alert>
+          <Callout tone="amber" icon={AlertTriangle}>
+            This business doesn't have a phone number on file.
+          </Callout>
         ) : (
           <div className="space-y-5">
             {/* Template Editor */}
@@ -251,7 +242,7 @@ export function SingleWhatsAppDialog({ open, onOpenChange, lead, onSent, initial
 
             {/* No-link guard: this template needs a site link but the lead has none. */}
             {linkBlocked && (
-              <p className="flex items-center gap-1.5 text-[11px] text-amber-600">
+              <p className="flex items-center gap-1.5 text-[11px] text-amber-700 dark:text-amber-300">
                 <AlertTriangle className="h-3 w-3 shrink-0" />
                 {linkResolving
                   ? 'Checking for this lead’s site link…'

@@ -2,7 +2,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { useState } from 'react';
-import { RefreshCw, ExternalLink, Loader2, Send } from 'lucide-react';
+import { RefreshCw, ExternalLink, Loader2, Send, SearchCheck } from 'lucide-react';
+import { EmptyState, ErrorState, IconTile, LoadState } from '@/components/operator/ui';
 import { useFreeCheckProgress, type FreeCheckRow } from '@/hooks/useFreeCheckProgress';
 import { emailStateFor, whatsappStateFor, type FreeCheckStage, type SendState } from '@/lib/freeCheckProgress';
 
@@ -201,7 +202,8 @@ export function FreeCheckProgressCard() {
     <Card>
       <CardHeader className="p-3 pb-1 sm:p-4 sm:pb-2">
         <div className="flex items-center justify-between gap-2">
-          <CardTitle className="text-sm font-semibold">
+          <CardTitle className="flex min-w-0 flex-wrap items-center text-sm font-semibold">
+            <IconTile icon={SearchCheck} tone="purple" size="sm" className="mr-2" />
             Free checks
             {live && <span className="ml-2 text-[10px] font-normal text-blue-600">live</span>}
             {needing > 0 && (
@@ -224,15 +226,11 @@ export function FreeCheckProgressCard() {
             that is the RLS-returns-empty-array trap, and on this card it would say the free check
             has never been used. */}
         {error ? (
-          <p className="py-2 text-[11px] text-red-600">
-            Could not read the submissions ({error}). This is not "none" — the data was not readable.
-          </p>
+          <ErrorState title="Could not read the submissions" detail={<>({error}). This is not "none" — the data was not readable.</>} onRetry={() => void refetch()} retryLabel="Refresh now" />
         ) : isLoading ? (
-          <p className="py-2 text-[11px] text-muted-foreground">Loading…</p>
+          <LoadState compact />
         ) : rows.length === 0 ? (
-          <p className="py-2 text-[11px] text-muted-foreground">
-            No free checks submitted yet.
-          </p>
+          <EmptyState title="No free checks submitted yet." className="py-5" />
         ) : (
           <div>{rows.map((r) => <Row key={r.onboarding_id} r={r} onResendRow={onResendRow} />)}</div>
         )}

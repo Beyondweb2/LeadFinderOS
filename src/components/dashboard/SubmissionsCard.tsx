@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
+import { Button, buttonVariants } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
@@ -9,6 +9,7 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction,
 } from '@/components/ui/alert-dialog';
 import { ClipboardList, Loader2, MailWarning, MessageCircle, Trash2 } from 'lucide-react';
+import { EmptyState, ErrorState, IconTile, LoadState, ToneChip } from '@/components/operator/ui';
 import { useNavigate } from 'react-router-dom';
 import { outreachLeadLink } from '@/lib/salesLinks';
 import { useToast } from '@/hooks/use-toast';
@@ -146,20 +147,19 @@ export function SubmissionsCard() {
     <Card>
       <CardHeader className="pb-3">
         <CardTitle className="flex flex-wrap items-center gap-2 text-base">
-          <ClipboardList className="h-4 w-4" />
+          <IconTile icon={ClipboardList} tone="blue" size="sm" />
           Questionnaire submissions
           {/* ⛔ FIRST, AND IN RED. A paid customer whose delivery cannot start is the only row here
               with a refund attached to it, and the whole point is not discovering it at week four. */}
           {summary.awaitingQ2 > 0 && (
-            <Badge variant="outline" className="ml-1 border-red-500/30 bg-red-500/15 text-xs text-red-600">
+            <ToneChip tone="red" className="ml-1 text-xs">
               {summary.awaitingQ2} awaiting details
-            </Badge>
+            </ToneChip>
           )}
           {summary.undelivered > 0 && (
-            <Badge variant="outline" className="ml-1 border-red-500/30 bg-red-500/15 text-xs text-red-600">
-              <MailWarning className="mr-1 h-3 w-3" />
+            <ToneChip tone="red" icon={MailWarning} className="ml-1 text-xs">
               {summary.undelivered} not emailed
-            </Badge>
+            </ToneChip>
           )}
           <span className="flex-1" />
           {selected.size > 0 && (
@@ -183,21 +183,16 @@ export function SubmissionsCard() {
       </CardHeader>
       <CardContent>
         {isLoading ? (
-          <p className="flex items-center gap-2 text-sm text-muted-foreground">
-            <Loader2 className="h-4 w-4 animate-spin" /> Reading submissions&hellip;
-          </p>
+          <LoadState compact label={<>Reading submissions&hellip;</>} />
         ) : error ? (
-          <div className="space-y-2">
-            <p className="text-sm text-destructive">{error}</p>
-            <Button variant="outline" size="sm" onClick={() => { void refetch(); }}>Retry</Button>
-          </div>
+          <ErrorState title="Couldn’t read the submissions" detail={error} onRetry={() => { void refetch(); }} retryLabel="Retry" />
         ) : rows.length === 0 ? (
           /* ⛔ SAYS "NONE YET", NOT "ALL CLEAR". This table is read through an endpoint precisely
              because an empty list used to be what a denied read looked like. */
-          <p className="text-sm text-muted-foreground">
-            Nobody has filled in the questionnaire yet. This list is read straight from the table,
+          <EmptyState icon={ClipboardList} title="Nobody has filled in the questionnaire yet.">
+            This list is read straight from the table,
             so it does not depend on an email arriving.
-          </p>
+          </EmptyState>
         ) : (
           <ul className="space-y-1.5">
             {rows.map((r) => {
@@ -326,7 +321,7 @@ export function SubmissionsCard() {
           <AlertDialogFooter>
             <AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
             <AlertDialogAction
-              className="bg-red-600 text-white hover:bg-red-700"
+              className={buttonVariants({ variant: 'destructive' })}
               onClick={(e) => { e.preventDefault(); void runDelete(); }}
               disabled={deleting}
             >

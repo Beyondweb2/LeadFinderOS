@@ -16,11 +16,9 @@ import {
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogFooter,
-  DialogHeader,
-  DialogTitle,
 } from '@/components/ui/dialog';
+import { DialogHero } from '@/components/operator/ui';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
@@ -105,7 +103,7 @@ export function UserMenu() {
                 <p className="text-xs text-primary font-medium">{t('userMenu.proRenews', { date: formatDate(subscriptionEnd) })}</p>
               )}
               {isStripeTrialing && subscriptionEnd && (
-                <p className="text-xs text-amber-500 font-medium">{t('userMenu.proTrialEnds', { date: formatDate(subscriptionEnd) })}</p>
+                <p className="text-xs text-amber-600 dark:text-amber-300 font-medium">{t('userMenu.proTrialEnds', { date: formatDate(subscriptionEnd) })}</p>
               )}
             </div>
           </DropdownMenuLabel>
@@ -128,11 +126,8 @@ export function UserMenu() {
 
       <Dialog open={showPasswordDialog} onOpenChange={setShowPasswordDialog}>
         <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>{t('userMenu.changePassword')}</DialogTitle>
-            <DialogDescription>{t('userMenu.enterNewPassword')}</DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 py-4">
+          <DialogHero icon={Key} tone="blue" title={t('userMenu.changePassword')} subtitle={t('userMenu.enterNewPassword')} />
+          <div className="space-y-4 py-2">
             <div className="space-y-2">
               <Label htmlFor="new-password">{t('userMenu.newPassword')}</Label>
               <Input id="new-password" type="password" placeholder="••••••••" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} disabled={isChangingPassword} />

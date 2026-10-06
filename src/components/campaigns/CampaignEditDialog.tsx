@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
-import { Loader2, MessageCircle, Phone } from 'lucide-react';
+import { Loader2, Megaphone, MessageCircle, Phone } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogFooter } from '@/components/ui/dialog';
+import { DialogHero } from '@/components/operator/ui';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 import { useCampaignActions } from '@/hooks/useMyCampaigns';
@@ -68,10 +69,8 @@ export function CampaignEditDialog({ open, onOpenChange, campaign, onSaved }: {
 
   return <Dialog open={open} onOpenChange={(v) => { if (!busy) onOpenChange(v); }}>
     <DialogContent className="sm:max-w-md" data-testid="campaign-form">
-      <DialogHeader>
-        <DialogTitle>{campaign ? 'Edit campaign' : 'New campaign'}</DialogTitle>
-        <DialogDescription>Add leads to it from Find Leads — pick the campaign first, then add businesses.</DialogDescription>
-      </DialogHeader>
+      <DialogHero icon={Megaphone} tone="blue" title={campaign ? 'Edit campaign' : 'New campaign'}
+        subtitle="Add leads to it from Find Leads — pick the campaign first, then add businesses." />
       <div className="space-y-3">
         <label className="block space-y-1 text-sm">
           <span className="font-medium">Niche / trade</span>

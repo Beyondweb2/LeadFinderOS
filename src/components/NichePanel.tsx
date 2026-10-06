@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Loader2, Telescope, CheckCircle2, MinusCircle, XCircle, HelpCircle, Search, Store } from 'lucide-react';
+import { ErrorState } from '@/components/operator/ui';
 import { rateLabel, sharePct, nicheVerdict, type NicheAnalysis } from '@/lib/nicheView';
 import { useNavigate } from 'react-router-dom';
 import { useLeadSearchContext } from '@/contexts/LeadSearchContext';
@@ -258,14 +259,7 @@ export default function NichePanel({ trade, autoLoad = false }: { trade: string;
        failure left the invitation card's own button on screen; opening straight into the fold means
        a transient failure would otherwise leave a dead card with no way forward but a page reload. */
     return (
-      <Card className="border-destructive/40 bg-destructive/10">
-        <CardContent className="flex flex-wrap items-center gap-3 p-4 text-sm">
-          <span className="min-w-0 flex-1 text-destructive">Niche analysis failed: {state.message}</span>
-          <Button size="sm" variant="outline" onClick={load}>
-            <Telescope className="mr-1.5 h-3.5 w-3.5" /> Try again · free
-          </Button>
-        </CardContent>
-      </Card>
+      <ErrorState title="Niche analysis failed" detail={state.message} onRetry={() => void load()} retryLabel="Try again · free" />
     );
   }
   if (state.kind === 'none') {

@@ -24,12 +24,13 @@ import {
   Loader2, Plus, X, ArrowLeft, Sparkles, RefreshCw, ExternalLink, Search, Check, FileText,
   Building2, Users, Globe, Map as MapIcon, Download, ChevronDown,
   Copy, CircleStop, ChevronRight, Eye, CopyPlus, AlertTriangle, ListChecks, ClipboardList, Undo2,
-  Archive, ShieldCheck, MoreHorizontal, Compass, Trash2 } from 'lucide-react';
+  Archive, ShieldCheck, MoreHorizontal, Compass, Trash2, MapPin } from 'lucide-react';
 // NOTE: lucide's `Map` is imported AS `MapIcon` — importing it as `Map` shadows the global
 // Map constructor, and this module uses `new Map()` (e.g. topCompetitors), which crashed
 // the page on load ("Map is not a constructor").
 import type { Country } from '@/types/outreach';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogFooter } from '@/components/ui/dialog';
+import { DialogHero, PageHeader } from '@/components/operator/ui';
 import { AiAuditReport } from '@/components/AiAuditReport';
 import { ReportBeforeAfter } from '@/components/ReportBeforeAfter';
 import { type AiAuditReportData, type AiAuditSeo } from '@/lib/aiAuditReportHtml';
@@ -2430,12 +2431,8 @@ const AiAudit = () => {
         if (!open) { setConnectBusinessQuery(''); setConnectBusinessResults([]); }
       }}>
         <DialogContent className="sm:max-w-lg">
-          <DialogHeader>
-            <DialogTitle>Connect to Business</DialogTitle>
-            <DialogDescription>
-              Attach {openAuditRow?.business_name ?? 'this audit'} to an existing outreach business. No business or lead will be created.
-            </DialogDescription>
-          </DialogHeader>
+          <DialogHero icon={Building2} tone="blue" title="Connect to Business"
+            subtitle={<>Attach {openAuditRow?.business_name ?? 'this audit'} to an existing outreach business. No business or lead will be created.</>} />
           <Input
             autoFocus
             value={connectBusinessQuery}
@@ -2476,14 +2473,8 @@ const AiAudit = () => {
   // ─────────────────────────────────────────────────────────────────────────────
   return (
     <div className="space-y-5 sm:space-y-7">
-      <div className="text-center sm:text-left">
-        <h1 className="text-xl sm:text-2xl font-bold tracking-tight flex items-center gap-2 justify-center sm:justify-start">
-          <Sparkles className="h-5 w-5 text-primary" /> AI Visibility Audit
-        </h1>
-        <p className="text-sm text-muted-foreground">
-          See whether AI assistants name a business when customers ask. Scored on ChatGPT and Gemini; Google's AI Overview is recorded where Google shows one.
-        </p>
-      </div>
+      <PageHeader icon={Sparkles} tone="purple" title="AI Visibility Audit"
+        subtitle="See whether AI assistants name a business when customers ask. Scored on ChatGPT and Gemini; Google's AI Overview is recorded where Google shows one." />
 
       {/* APIFY SPEND — outside the step blocks on purpose, so it shows on the list, the results view
           and the empty state alike. It is the thing that silently stops every audit working. */}
@@ -2581,16 +2572,10 @@ const AiAudit = () => {
           ═══════════════════════════════════════════════════════════════════════════════════════ */}
       <Dialog open={formOpen} onOpenChange={setFormOpen}>
         <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Sparkles className="h-4 w-4 text-primary" /> New audit
-            </DialogTitle>
-            {/* Required by Radix: DialogContent without a description logs an a11y warning, and it
-                is what a screen reader announces after the title. */}
-            <DialogDescription>
-              Pick a business, check the details, then review the questions before anything is spent.
-            </DialogDescription>
-          </DialogHeader>
+          {/* Required by Radix: DialogContent without a description logs an a11y warning, and it
+              is what a screen reader announces after the title (DialogHero draws both). */}
+          <DialogHero icon={Sparkles} tone="purple" title="New audit"
+            subtitle="Pick a business, check the details, then review the questions before anything is spent." />
 
           {/* START FRESH — your typed answers are saved and restored automatically (they survive
               leaving, reload, a new tab, even closing the tab). This clears the saved draft so the
@@ -2977,19 +2962,16 @@ const AiAudit = () => {
             const runCount = audit.runs?.length ?? 0;
             return (
               <>
-                <DialogHeader>
-                  <DialogTitle className="flex items-center gap-2">
-                    {verdict.isProtected
-                      ? (<><ShieldCheck className="h-4 w-4 text-primary" /> Kept — this one is protected</>)
-                      : (<><Archive className="h-4 w-4" /> Archive this audit?</>)}
-                  </DialogTitle>
-                  <DialogDescription className="pt-1">
+                <DialogHero
+                  icon={verdict.isProtected ? ShieldCheck : Archive}
+                  tone={verdict.isProtected ? 'blue' : 'amber'}
+                  title={verdict.isProtected ? 'Kept — this one is protected' : 'Archive this audit?'}
+                  subtitle={<>
                     <span className="font-medium text-foreground">{audit.business_name}</span>
                     {audit.location_text ? <> · {audit.location_text}</> : null}
                     {' · '}
                     {new Date(audit.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
-                  </DialogDescription>
-                </DialogHeader>
+                  </>} />
 
                 {verdict.isProtected ? (
                   <div className="space-y-3 text-sm">
@@ -3042,15 +3024,10 @@ const AiAudit = () => {
 
       <Dialog open={!!distanceBlock} onOpenChange={(o) => { if (!o) setDistanceBlock(null); }}>
         <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle className="text-base">
-              This business is {distanceBlock?.km} km from {distanceBlock?.town}
-            </DialogTitle>
-            <DialogDescription className="text-xs">
-              {/* The server's own sentence, verbatim. One wording, one place to change it. */}
-              {distanceBlock?.message}
-            </DialogDescription>
-          </DialogHeader>
+          {/* The description is the server's own sentence, verbatim. One wording, one place to change it. */}
+          <DialogHero icon={MapPin} tone="amber"
+            title={<>This business is {distanceBlock?.km} km from {distanceBlock?.town}</>}
+            subtitle={distanceBlock?.message} />
           <p className="rounded-md bg-muted/50 px-3 py-2 text-xs">
             Nothing has been spent. Cancel and fix the town on the lead, or audit anyway if you know
             they work there.

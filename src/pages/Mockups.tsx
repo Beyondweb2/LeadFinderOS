@@ -25,7 +25,8 @@ import { Link, useParams } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, RefreshCw, Trash2, ImageOff, ExternalLink, Plus, X } from 'lucide-react';
+import { Loader2, RefreshCw, Trash2, ImageOff, ExternalLink, Plus, X, LayoutTemplate } from 'lucide-react';
+import { Callout, EmptyState, LoadState, PageHeader, ToneChip } from '@/components/operator/ui';
 import { useMockup, useMockupActions, useMockupList, type PoolImage } from '@/hooks/useMockups';
 import { MOCKUP_MAX_SERVICES, MOCKUP_MAX_AREAS } from '@/lib/mockupNiche';
 import { stockAllowedInSlot, stockFor } from '@/lib/mockupStock';
@@ -53,50 +54,45 @@ const asPence = (usd: number | null | undefined) =>
 function WaitingList() {
   const { data: rows, isLoading, refetch, isFetching } = useMockupList();
   return (
-    <div className="mx-auto max-w-5xl p-6">
-      <div className="mb-4 flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Mockups waiting</h1>
-          <p className="text-sm text-muted-foreground">
-            Created automatically when a prospect replies to the opener. Nothing here has been sent.
-          </p>
-        </div>
-        <Button variant="outline" size="sm" onClick={() => refetch()} disabled={isFetching}>
-          {isFetching ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
-          Refresh
-        </Button>
-      </div>
+    <div className="mx-auto max-w-5xl space-y-4 p-4 sm:p-6">
+      <PageHeader icon={LayoutTemplate} tone="purple" title="Mockups waiting"
+        subtitle="Created automatically when a prospect replies to the opener. Nothing here has been sent."
+        actions={
+          <Button variant="outline" size="sm" onClick={() => refetch()} disabled={isFetching}>
+            {isFetching ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
+            Refresh
+          </Button>
+        } />
 
       {isLoading ? (
-        <div className="flex items-center gap-2 text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> Loading…</div>
+        <LoadState />
       ) : !rows?.length ? (
         /* ⛔ AN EMPTY LIST IS A REAL ANSWER AND SAYS WHAT IT MEANS. "No mockups" and "the read
            failed" must never look the same — the RLS-200-with-[] trap that has cost this codebase
            three features. */
-        <div className="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">
-          <p className="font-medium text-foreground">No mockups waiting.</p>
-          <p className="mt-1">One is prepared when a prospect replies to your opener and their trade has a template.</p>
-        </div>
+        <EmptyState icon={LayoutTemplate} tone="purple" title="No mockups waiting.">
+          One is prepared when a prospect replies to your opener and their trade has a template.
+        </EmptyState>
       ) : (
-        <div className="divide-y rounded-lg border">
+        <div className="divide-y overflow-hidden rounded-2xl border border-border/70 bg-card">
           {rows.map((r) => (
-            <Link key={r.id} to={`/mockups/${r.id}`} className="flex items-center gap-4 p-3 hover:bg-muted/50">
+            <Link key={r.id} to={`/mockups/${r.id}`} className="flex flex-wrap items-center gap-x-4 gap-y-2 p-3 hover:bg-muted/50">
               <div className="min-w-0 flex-1">
                 <div className="truncate font-medium">{r.business}</div>
                 <div className="text-xs text-muted-foreground">{r.niche} · {new Date(r.created_at).toLocaleDateString('en-GB')}</div>
               </div>
               {/* ⛔ "not scraped" and "0 services" are rendered DIFFERENTLY. Collapsing them would
                   mean re-running a scrape that already ran, or not running one that never did. */}
-              <div className="flex shrink-0 items-center gap-2 text-xs">
+              <div className="flex min-w-0 flex-wrap items-center gap-2 text-xs">
                 {!r.scraped
-                  ? <span className="rounded-full bg-amber-100 px-2 py-0.5 text-amber-900">site not read yet</span>
-                  : <span className="rounded-full bg-muted px-2 py-0.5">{r.services} services · {r.areas} areas</span>}
+                  ? <ToneChip tone="amber">site not read yet</ToneChip>
+                  : <ToneChip tone="grey">{r.services} services · {r.areas} areas</ToneChip>}
                 {r.pooled
-                  ? <span className="rounded-full bg-muted px-2 py-0.5">{r.pool_size} photos</span>
-                  : <span className="rounded-full bg-amber-100 px-2 py-0.5 text-amber-900">no photos yet</span>}
-                <span className={`rounded-full px-2 py-0.5 ${r.placed ? 'bg-green-100 text-green-900' : 'bg-muted'}`}>
+                  ? <ToneChip tone="grey">{r.pool_size} photos</ToneChip>
+                  : <ToneChip tone="amber">no photos yet</ToneChip>}
+                <ToneChip tone={r.placed ? 'green' : 'grey'}>
                   {r.placed} placed
-                </span>
+                </ToneChip>
               </div>
             </Link>
           ))}
@@ -177,27 +173,30 @@ function Picker({ id }: { id: string }) {
     });
   };
 
-  if (isLoading) return <div className="p-6 text-muted-foreground"><Loader2 className="inline h-4 w-4 animate-spin" /> Loading…</div>;
-  if (!m) return <div className="p-6">Mockup not found. <Link className="underline" to="/mockups">Back to the list</Link></div>;
+  if (isLoading) return <LoadState />;
+  if (!m) return (
+    <div className="mx-auto max-w-xl p-4 sm:p-6">
+      <EmptyState icon={LayoutTemplate} tone="purple" title="Mockup not found."
+        action={<Button asChild size="sm" variant="outline"><Link to="/mockups">Back to the list</Link></Button>} />
+    </div>
+  );
 
   const biz = c.business ?? {};
 
   return (
-    <div className="mx-auto max-w-6xl p-6">
+    <div className="mx-auto max-w-6xl p-4 sm:p-6">
       <Link to="/mockups" className="text-sm text-muted-foreground hover:underline">← Mockups waiting</Link>
-      <div className="mt-2 flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">{biz.name ?? '(unnamed)'}</h1>
-          <p className="text-sm text-muted-foreground">
+      <div className="mt-2">
+        <PageHeader icon={LayoutTemplate} tone="purple" title={String(biz.name ?? '(unnamed)')}
+          subtitle={<>
             {m.template} · {biz.town ?? 'no town'} · status <b>{m.status}</b>
             {c.current_site_url && (
               <> · <a href={c.current_site_url} target="_blank" rel="noopener noreferrer" className="underline">
                 their site <ExternalLink className="inline h-3 w-3" />
               </a></>
             )}
-          </p>
-        </div>
-        <div className="flex gap-2">
+          </>}
+          actions={<>
           <Button variant="outline" size="sm" onClick={() => refill.mutate()} disabled={refill.isPending}>
             {refill.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
             Re-read their site
@@ -220,14 +219,14 @@ function Picker({ id }: { id: string }) {
             {images.length ? 'Re-gather photos' : 'Gather photos'}
             {pool.data?.cost_usd ? ` · ~${asPence((pool.data.cost_usd.maps ?? 0) + (pool.data.cost_usd.vision ?? 0))}` : ''}
           </Button>
-        </div>
+          </>} />
       </div>
 
       {!templateHtml && (
-        <p className="mt-4 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
+        <Callout tone="amber" className="mt-4">
           No template file for niche <b>{m.template}</b>, so this screen cannot know which image slots exist.
-          Add <code>src/mockup/templates/{m.template}.html</code> and a registry row.
-        </p>
+          Add <code className="break-all">src/mockup/templates/{m.template}.html</code> and a registry row.
+        </Callout>
       )}
 
       {/* ── THE COMPARISON ────────────────────────────────────────────────────────────────
@@ -259,9 +258,9 @@ function Picker({ id }: { id: string }) {
         What we would build
       </h2>
       {preview.error ? (
-        <p className="mt-2 rounded-md border border-dashed border-destructive/50 p-3 text-sm text-destructive">
+        <Callout tone="red" className="mt-2">
           {preview.error}
-        </p>
+        </Callout>
       ) : preview.html ? (
         <div className="mt-2 overflow-hidden rounded-md border">
           {/* ⛔ SANDBOXED AND srcDoc: the page is built from SCRAPED text, so it is untrusted by

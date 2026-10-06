@@ -28,6 +28,7 @@ import { useFindEmails } from '@/hooks/useFindEmails';
 import { useCheckedBusinesses } from '@/hooks/useCheckedBusinesses';
 import { Flame, Zap, Search, MapPin, Info, Globe2, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { PageHeader } from '@/components/salesDash/primitives';
 import { useToast } from '@/hooks/use-toast';
 import { logDataAccess } from '@/lib/dataAccessLog';
 import type { Country, Lead, SearchMode } from '@/types/lead';
@@ -481,15 +482,14 @@ const Index = () => {
   return (
     <div className="space-y-4 md:space-y-8">
       {/* Page Header */}
-      <div className="flex flex-col gap-2 sm:gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="text-center sm:text-left">
-          <h1 className="text-lg sm:text-2xl font-bold tracking-tight">Find Leads</h1>
-          <p className="text-xs sm:text-base text-muted-foreground max-w-lg">
-            Find businesses without websites in any area. Search by business type and location, then add hot leads to your Outreach.
-          </p>
-        </div>
-        <div className="flex flex-col items-center sm:items-end gap-2">
-          <div className="flex items-center gap-2">
+      <PageHeader
+        icon={Search}
+        tone="blue"
+        title="Find Leads"
+        subtitle="Find businesses without websites in any area. Search by business type and location, then add hot leads to your Outreach."
+        actions={
+        <div className="flex flex-col items-start sm:items-end gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <span className="text-[10px] sm:text-xs text-muted-foreground">Adding to</span>
             {/* 2026-10-03: both roles create and manage their campaigns from here (New / Manage, and the Campaigns
                 button) — a salesperson sees and adds to only their own; the server decides. */}
@@ -500,7 +500,7 @@ const Index = () => {
             <Switch id="ask-campaign" checked={askCampaignEachTime} onCheckedChange={handleAskToggle} />
             <Label htmlFor="ask-campaign" className="text-[10px] sm:text-xs text-muted-foreground cursor-pointer">Ask campaign each time</Label>
           </div>
-          <div className="flex flex-wrap items-center justify-center sm:justify-end gap-2 sm:gap-4 text-[10px] sm:text-sm text-muted-foreground">
+          <div className="flex flex-wrap items-center sm:justify-end gap-2 sm:gap-4 text-[10px] sm:text-sm text-muted-foreground">
             <div className="flex items-center gap-1 sm:gap-2">
               <Flame className="h-3 w-3 sm:h-4 sm:w-4 text-status-hot" />
               <span>Hot = No website</span>
@@ -511,7 +511,8 @@ const Index = () => {
             </div>
           </div>
         </div>
-      </div>
+        }
+      />
 
       {/* READY TO SELL: why Find Leads is closed to a salesperson whose onboarding is incomplete (handleSearch). */}
       <NotReadyToSellBanner />

@@ -17,7 +17,7 @@ import {
   Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle,
 } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
-import { Label } from '@/components/ui/label';
+import { IconTile, SubSection } from '@/components/operator/ui';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -204,20 +204,22 @@ export function MobileBottomNav() {
 
       <Sheet open={themeSheetOpen} onOpenChange={setThemeSheetOpen}>
         <SheetContent side="bottom" className="h-[85vh] rounded-t-2xl bg-card border-border p-0">
-          <SheetHeader className="p-6 pb-4">
-            <SheetTitle className="flex items-center gap-2 text-foreground">
-              <Sparkles className="h-5 w-5 text-primary" />
-              {t('theme.themeAndAccent')}
-            </SheetTitle>
-            <SheetDescription className="text-muted-foreground text-sm">
-              {t('theme.personalizeInterface')}
-            </SheetDescription>
+          <SheetHeader className="p-6 pb-4 text-left">
+            <div className="flex min-w-0 items-start gap-3 pr-8">
+              <IconTile icon={Palette} tone="blue" />
+              <div className="min-w-0">
+                <SheetTitle className="text-foreground">{t('theme.themeAndAccent')}</SheetTitle>
+                <SheetDescription className="mt-0.5 text-muted-foreground text-sm">
+                  {t('theme.personalizeInterface')}
+                </SheetDescription>
+              </div>
+            </div>
           </SheetHeader>
 
           <ScrollArea className="h-[calc(85vh-140px)] px-6 pb-6">
             <div className="space-y-6">
-              <div className="rounded-xl p-4 border border-border bg-background/50">
-                <Label className="text-xs font-medium text-muted-foreground mb-3 block">{t('theme.livePreview')}</Label>
+              <div className="rounded-2xl p-4 bg-muted/40 ring-1 ring-inset ring-border/50">
+                <SubSection title={t('theme.livePreview')} tone="blue" />
                 <div className="flex items-center gap-3">
                   <Button size="sm" className="text-xs">{t('common.primary')}</Button>
                   <div className="h-8 w-8 rounded-lg border border-border" style={{ backgroundColor: `hsl(${accent})` }} />
@@ -225,8 +227,7 @@ export function MobileBottomNav() {
                 </div>
               </div>
 
-              <div className="space-y-3">
-                <Label className="text-xs font-medium text-muted-foreground">{t('theme.backgroundTheme')}</Label>
+              <SubSection title={t('theme.backgroundTheme')} tone="grey">
                 <Tabs defaultValue={currentTheme.mode} className="w-full">
                   <TabsList className="grid w-full grid-cols-2 mb-3">
                     <TabsTrigger value="dark" className="flex items-center gap-1.5 text-xs"><Moon className="h-3.5 w-3.5" />{t('theme.dark')}</TabsTrigger>
@@ -235,10 +236,9 @@ export function MobileBottomNav() {
                   <TabsContent value="dark" className="mt-0"><MobileThemeGrid themes={darkThemes} activeThemeId={themeId} onSelect={handleThemeSelect} /></TabsContent>
                   <TabsContent value="light" className="mt-0"><MobileThemeGrid themes={lightThemes} activeThemeId={themeId} onSelect={handleThemeSelect} /></TabsContent>
                 </Tabs>
-              </div>
+              </SubSection>
 
-              <div className="space-y-3">
-                <Label className="text-xs font-medium text-muted-foreground">{t('theme.accentColor')}</Label>
+              <SubSection title={t('theme.accentColor')} tone="grey">
                 <div className="grid grid-cols-3 gap-2">
                   {accentPresets.map((preset, index) => (
                     <button key={preset.name} onClick={() => handlePresetSelect(index)}
@@ -253,10 +253,9 @@ export function MobileBottomNav() {
                     </button>
                   ))}
                 </div>
-              </div>
+              </SubSection>
 
-              <div className="space-y-3">
-                <Label className="text-xs font-medium text-muted-foreground">{t('theme.customAccent')}</Label>
+              <SubSection title={t('theme.customAccent')} tone="grey">
                 <div className="flex items-center gap-3">
                   <Input type="color" value={currentHex} onChange={(e) => handleCustomColor(e.target.value)} className="w-14 h-12 p-1 cursor-pointer rounded-lg border-border" />
                   <div className="flex-1 space-y-1">
@@ -266,7 +265,7 @@ export function MobileBottomNav() {
                     <p className="text-[10px] text-muted-foreground">{t('theme.coolColorsOnly')}</p>
                   </div>
                 </div>
-              </div>
+              </SubSection>
 
               <Button variant="outline" onClick={handleReset} className="w-full border-border bg-background hover:bg-secondary">
                 <RotateCcw className="h-4 w-4 mr-2" />{t('common.reset')}
