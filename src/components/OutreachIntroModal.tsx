@@ -5,8 +5,9 @@ import {
   DialogContent,
 } from '@/components/ui/dialog';
 import { useAuth } from '@/hooks/useAuth';
-import appLogo from '@/assets/logo.png';
-import { ArrowRight, MessageSquare, Phone, Send } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { ArrowRight, ClipboardList, MessageSquare, Phone, Send } from 'lucide-react';
+import { ActionBar, DialogHero, IconTile } from '@/components/operator/ui';
 
 /**
  * One-time popup shown when the walkthrough reaches the Outreach page.
@@ -48,64 +49,43 @@ export function OutreachIntroModal() {
 
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) handleDismiss(); }}>
-      <DialogContent
-        hideClose
-        className="max-w-sm sm:max-w-[400px] mx-auto p-0 overflow-hidden border-border/40 bg-[hsl(220_50%_5%)] rounded-2xl outline-none focus:outline-none focus-visible:outline-none [&:focus]:outline-none [&:focus-visible]:ring-0"
-      >
-        <div className="px-7 pt-7 pb-6 sm:px-8 sm:pt-8 sm:pb-7 flex flex-col items-center">
-          <div className="grid grid-cols-[40px_1fr_40px] items-center w-full mb-5">
-            <div className="flex justify-start">
-              <img src={appLogo} alt="LeadFinder Pro" className="h-9 w-9 shrink-0" />
-            </div>
-            <h2 className="text-lg font-bold tracking-tight text-center">
-              Lead<span className="text-primary">Finder</span> Pro
-            </h2>
-            <div />
+      <DialogContent hideClose className="sm:max-w-[400px]">
+        {/* 2026-10-06 design consistency: the operator dialog look (icon tile + title — the dialog now has
+            an accessible title), not the old dark LeadFinder-branded splash. Same words, same Got it. */}
+        <DialogHero
+          icon={ClipboardList}
+          tone="blue"
+          title="Your Outreach CRM"
+          subtitle="These sample leads show how your pipeline works. Add real leads from Find Leads to get started."
+        />
+
+        <div className="space-y-3 text-[13px] leading-relaxed text-muted-foreground">
+          <div className="flex items-start gap-3">
+            <IconTile icon={MessageSquare} tone="blue" size="sm" />
+            <p>
+              <span className="font-medium text-foreground">Contact leads directly</span> — reach out via WhatsApp or a call. The contact method and status update automatically.
+            </p>
           </div>
-
-          <h3 className="text-center text-[20px] sm:text-[22px] font-bold leading-[1.25] tracking-tight mb-4 text-foreground">
-            Your <span className="text-primary">Outreach CRM</span> 📋
-          </h3>
-
-          <div className="text-left text-[13px] text-muted-foreground leading-relaxed mb-5 space-y-3 w-full">
-            <div className="flex gap-2.5">
-              <div className="flex items-center gap-1 text-primary shrink-0 mt-0.5">
-                <MessageSquare className="h-3.5 w-3.5" />
-              </div>
-              <p>
-                <span className="text-foreground font-medium">Contact leads directly</span> — reach out via WhatsApp or a call. The contact method and status update automatically.
-              </p>
-            </div>
-            <div className="flex gap-2.5">
-              <div className="flex items-center gap-1 text-primary shrink-0 mt-0.5">
-                <Send className="h-3.5 w-3.5" />
-              </div>
-              <p>
-                <span className="text-foreground font-medium">Set next actions</span> — schedule follow-ups, calls, or reminders so nothing falls through the cracks.
-              </p>
-            </div>
-            <div className="flex gap-2.5">
-              <div className="flex items-center gap-1 text-primary shrink-0 mt-0.5">
-                <Phone className="h-3.5 w-3.5" />
-              </div>
-              <p>
-                <span className="text-foreground font-medium">Track interested leads</span> — if a business seems interested, track them to close the deal.
-              </p>
-            </div>
+          <div className="flex items-start gap-3">
+            <IconTile icon={Send} tone="blue" size="sm" />
+            <p>
+              <span className="font-medium text-foreground">Set next actions</span> — schedule follow-ups, calls, or reminders so nothing falls through the cracks.
+            </p>
           </div>
+          <div className="flex items-start gap-3">
+            <IconTile icon={Phone} tone="blue" size="sm" />
+            <p>
+              <span className="font-medium text-foreground">Track interested leads</span> — if a business seems interested, track them to close the deal.
+            </p>
+          </div>
+        </div>
 
-          <p className="text-center text-[12px] text-muted-foreground/70 mb-5">
-            These sample leads show how your pipeline works. Add real leads from Find Leads to get started.
-          </p>
-
-          <button
-            onClick={handleDismiss}
-            className="btn-premium w-full h-12 rounded-xl text-[15px] font-semibold text-white flex items-center justify-center gap-2 transition-all outline-none focus:outline-none focus-visible:outline-none border-none ring-0 focus:ring-0 focus-visible:ring-0"
-          >
+        <ActionBar>
+          <Button onClick={handleDismiss} className="w-full gap-2 sm:w-auto">
             Got it
             <ArrowRight className="h-4 w-4" />
-          </button>
-        </div>
+          </Button>
+        </ActionBar>
       </DialogContent>
     </Dialog>
   );

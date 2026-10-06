@@ -9,6 +9,8 @@ import { Input } from '@/components/ui/input';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { format } from 'date-fns';
+import { TONE } from '@/components/operator/ui';
+import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { normalizeWaNumber } from '@/hooks/useInbox';
@@ -116,11 +118,12 @@ export function LeadDeliveryCockpit({ lead, onUpdateLead, context, onClose }: {
   const rm = useMemo(() => remeasureStatus(remeasureDue, Date.now()), [remeasureDue]);
   const [dueOpen, setDueOpen] = useState(false);
 
+  /* The operator tones (components/operator/ui): red overdue · amber due soon · green (teal) on track. */
   const rmTone =
-    rm.state === 'red' ? 'border-red-500/50 bg-red-500/10 text-red-500'
-    : rm.state === 'amber' ? 'border-amber-500/50 bg-amber-500/10 text-amber-600'
-    : rm.state === 'ok' ? 'border-emerald-500/40 bg-emerald-500/5 text-emerald-600'
-    : 'border-border/60 bg-muted/30 text-muted-foreground';
+    rm.state === 'red' ? cn(TONE.red.tint, TONE.red.text)
+    : rm.state === 'amber' ? cn(TONE.amber.tint, TONE.amber.text)
+    : rm.state === 'ok' ? cn(TONE.green.tint, TONE.green.text)
+    : cn(TONE.grey.tint, 'text-muted-foreground');
 
   /* 🔴 ONE RE-CLICK USED TO CANCEL THE CLIENT'S RE-MEASURE (Session C C-09, fixed 2026-10-04).
      react-day-picker passes `undefined` when the selected day is clicked again, and this wrote that as
@@ -172,7 +175,7 @@ export function LeadDeliveryCockpit({ lead, onUpdateLead, context, onClose }: {
   return (
     <div className="space-y-4">
       {/* ══ KEY DATES — the guarantee clock, most visual weight. ══ */}
-      <div className={`rounded-xl border p-3.5 ${rmTone}`}>
+      <div className={`rounded-2xl p-3.5 ${rmTone}`}>
         <div className="flex items-center gap-1.5 mb-2">
           <CalendarClock className="h-3.5 w-3.5" />
           <span className="text-[11px] font-semibold uppercase tracking-wide">Key dates</span>
@@ -210,7 +213,7 @@ export function LeadDeliveryCockpit({ lead, onUpdateLead, context, onClose }: {
       {/* ══ QUICK LAUNCH ══ */}
       <section className={CARD}>
         <div className="flex items-center gap-1.5 mb-2.5">
-          <ExternalLink className="h-3.5 w-3.5 text-primary" />
+          <ExternalLink className={cn('h-3.5 w-3.5', TONE.blue.text)} />
           <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Quick launch</span>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -220,7 +223,7 @@ export function LeadDeliveryCockpit({ lead, onUpdateLead, context, onClose }: {
                   the resolver landed on, so an unpaid prospect's outreach audit and (until the
                   filter above) a discovery scan were both announced as a baseline. */}
               <Link to={`/baseline/${audit.id}`} state={{ from: context === 'inbox' ? '/inbox' : '/outreach', fromLabel: context === 'inbox' ? 'Inbox' : 'Outreach' }} onClick={onClose}
-                className="inline-flex items-center gap-1.5 rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-xs font-semibold text-primary hover:bg-primary/20">
+                className={cn('inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold ring-1 ring-inset hover:bg-violet-500/20', TONE.purple.soft, TONE.purple.text, TONE.purple.ring)}>
                 <FileText className="h-3.5 w-3.5" /> {audit.isBaseline ? 'Baseline report' : 'Latest audit'}
               </Link>
               <button onClick={() => void loadQuestions()}
@@ -246,7 +249,7 @@ export function LeadDeliveryCockpit({ lead, onUpdateLead, context, onClose }: {
           )}
         </div>
         {questionsOpen && (
-          <div className="mt-3 rounded-lg border border-border/60 bg-muted/20 p-2.5 text-xs">
+          <div className="mt-3 rounded-xl bg-muted/40 p-2.5 text-xs ring-1 ring-inset ring-border/40">
             <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Saved audit questions</div>
             {questions === null ? (
               <div className="flex items-center gap-2 text-muted-foreground"><Loader2 className="h-3 w-3 animate-spin" /> loading…</div>
@@ -263,10 +266,10 @@ export function LeadDeliveryCockpit({ lead, onUpdateLead, context, onClose }: {
       <section className={CARD}>
         <div className="flex items-center justify-between gap-2 mb-2.5">
           <div className="flex items-center gap-1.5">
-            <ListChecks className="h-3.5 w-3.5 text-sky-400" />
+            <ListChecks className={cn('h-3.5 w-3.5', TONE.blue.text)} />
             <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Delivery</span>
           </div>
-          <span className="text-[11px] font-medium text-muted-foreground">{clDone}/{TICKABLE_ITEMS.length} done</span>
+          <span className={cn('rounded-full px-2 py-0.5 text-[11px] font-semibold tabular-nums', clDone === TICKABLE_ITEMS.length ? cn(TONE.green.soft, TONE.green.text) : cn(TONE.grey.soft, 'text-muted-foreground'))}>{clDone}/{TICKABLE_ITEMS.length} done</span>
         </div>
         <DeliveryChecklistList
           checklist={checklist}
@@ -286,10 +289,10 @@ export function LeadDeliveryCockpit({ lead, onUpdateLead, context, onClose }: {
       {/* ══ REFERENCE INFO — non-secret only ══ */}
       <section className={CARD}>
         <div className="flex items-center gap-1.5 mb-1">
-          <ClipboardList className="h-3.5 w-3.5 text-amber-400" />
+          <ClipboardList className={cn('h-3.5 w-3.5', TONE.amber.text)} />
           <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Delivery reference</span>
         </div>
-        <p className="mb-2.5 text-[10.5px] text-amber-600/90">Reference only — never paste passwords here. Keep real passwords in your password manager.</p>
+        <p className={cn('mb-2.5 text-[10.5px]', TONE.amber.text)}>Reference only — never paste passwords here. Keep real passwords in your password manager.</p>
         <div className="space-y-2">
           {DELIVERY_REF_FIELDS.map((f) => (
             <div key={f.key}>

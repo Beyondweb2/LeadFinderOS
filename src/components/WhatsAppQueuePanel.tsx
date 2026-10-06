@@ -11,6 +11,8 @@ import {
   type AuditRowForStatus, type QueueAuditStatus,
 } from '@/lib/queueAuditStatus';
 import { WA_TEMPLATE_REQS } from '@/lib/whatsappTemplates';
+import { Callout, IconTile, SURFACE, ToneChip } from '@/components/operator/ui';
+import { cn } from '@/lib/utils';
 
 interface QueueStatus {
   testMode: boolean;
@@ -213,21 +215,21 @@ export function WhatsAppQueuePanel({
   if (!status) return null; // admin-only; hidden otherwise
 
   return (
-    <div className="rounded-xl border border-border/60 bg-card/60 p-4 shadow-sm">
+    <div className={cn(SURFACE, 'p-4')}>
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-2">
-          <MessageSquare className="h-4 w-4 text-green-500" />
-          <span className="text-sm font-semibold">WhatsApp queue</span>
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
+          <IconTile icon={MessageSquare} tone="blue" size="sm" />
+          <span className="text-sm font-bold tracking-tight">WhatsApp queue</span>
           {status.testMode ? (
-            <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-[11px] font-bold text-amber-500">TEST MODE — no real sends</span>
+            <ToneChip tone="amber">TEST MODE — no real sends</ToneChip>
           ) : (
-            <span className="rounded-full bg-red-500/15 px-2 py-0.5 text-[11px] font-bold text-red-500">LIVE — real sends</span>
+            <ToneChip tone="red" dot>LIVE — real sends</ToneChip>
           )}
           {status.paused && (
-            <span className="rounded-full bg-orange-500/15 px-2 py-0.5 text-[11px] font-bold text-orange-500">PAUSED — no sends</span>
+            <ToneChip tone="amber" icon={Pause}>PAUSED — no sends</ToneChip>
           )}
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <Button size="sm" variant="ghost" className="h-8 gap-1.5 text-xs" onClick={() => void refresh(true)} disabled={loading}>
             <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} /> Refresh
           </Button>
@@ -266,7 +268,7 @@ export function WhatsAppQueuePanel({
         <button
           type="button"
           onClick={() => setExpanded((v) => !v)}
-          className="flex items-center justify-between rounded-lg border border-border/40 bg-background/40 px-2.5 py-1.5 text-left transition-colors hover:border-border"
+          className="flex items-center justify-between rounded-xl bg-muted/40 px-2.5 py-1.5 text-left ring-1 ring-inset ring-border/40 transition-colors hover:ring-border"
         >
           <span>
             <span className="block text-[10px] uppercase tracking-wide text-muted-foreground/60">Queued</span>
@@ -306,13 +308,13 @@ export function WhatsAppQueuePanel({
       {/* Archived leads still sitting at status='queued'. The processor skips them; saying so here
           stops "the queue looks stuck" being confused with "these were withdrawn". */}
       {(status.archivedQueuedCount ?? 0) > 0 && (
-        <p className="mt-2 rounded-md border border-amber-500/20 bg-amber-500/5 px-2.5 py-1.5 text-[11px] text-amber-600 dark:text-amber-400">
+        <Callout tone="amber" className="mt-2 px-3 py-2 text-[11px]">
           {status.archivedQueuedCount} archived {status.archivedQueuedCount === 1 ? 'lead is' : 'leads are'} still marked queued and will <strong>not</strong> be sent to. Archiving stops contact.
-        </p>
+        </Callout>
       )}
 
       {expanded && (
-        <div className="mt-2 rounded-lg border border-border/40 bg-background/40 p-2">
+        <div className="mt-2 rounded-xl bg-muted/30 p-2 ring-1 ring-inset ring-border/40">
           <div className="px-1 pb-1 text-[10px] uppercase tracking-wide text-muted-foreground/50">In send order (next first)</div>
           {!listComplete && (
             <p className="mb-2 text-[11px] text-muted-foreground">Queued leads so far — the rest of the leads are still loading.</p>
@@ -326,7 +328,7 @@ export function WhatsAppQueuePanel({
               {queued.length > 0 && (
                 <ol className="space-y-0.5">
                   {queued.map((l, i) => (
-                    <li key={l.id} className="flex items-center justify-between gap-2 rounded-md px-2 py-1.5 text-xs hover:bg-white/[0.03]">
+                    <li key={l.id} className="flex items-center justify-between gap-2 rounded-md px-2 py-1.5 text-xs hover:bg-muted/50">
                       <span className="flex min-w-0 items-center gap-2">
                         <span className="w-5 shrink-0 text-right text-[10px] tabular-nums text-muted-foreground/50">{i + 1}</span>
                         <span className="truncate text-foreground/90">{l.business_name}</span>
@@ -367,7 +369,7 @@ export function WhatsAppQueuePanel({
                   )}
                   <ol className="space-y-0.5">
                     {contactQueued.map((l, i) => (
-                      <li key={l.id} className="flex items-center justify-between gap-2 rounded-md px-2 py-1.5 text-xs hover:bg-white/[0.03]">
+                      <li key={l.id} className="flex items-center justify-between gap-2 rounded-md px-2 py-1.5 text-xs hover:bg-muted/50">
                         <span className="flex min-w-0 items-center gap-2">
                           <span className="w-5 shrink-0 text-right text-[10px] tabular-nums text-muted-foreground/50">{i + 1}</span>
                           <span className="truncate text-foreground/90">{l.business_name}</span>
@@ -396,7 +398,7 @@ export function WhatsAppQueuePanel({
 
 function Stat({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-lg border border-border/40 bg-background/40 px-2.5 py-1.5">
+    <div className="min-w-0 rounded-xl bg-muted/40 px-2.5 py-1.5 ring-1 ring-inset ring-border/40">
       <div className="text-[10px] uppercase tracking-wide text-muted-foreground/60">{label}</div>
       <div className="font-semibold text-foreground/90">{value}</div>
     </div>

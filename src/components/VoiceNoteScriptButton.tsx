@@ -11,7 +11,8 @@
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 import { useCallback, useEffect, useState } from 'react';
 import { AlertTriangle, Check, Copy, Loader2, Mic, RefreshCw } from 'lucide-react';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent } from '@/components/ui/dialog';
+import { Callout, DialogHero, LoadState } from '@/components/operator/ui';
 import { Button } from '@/components/ui/button';
 import { invokeEdge, edgeErrorMessage } from '@/lib/edgeInvoke';
 import { cn } from '@/lib/utils';
@@ -125,13 +126,11 @@ export function VoiceNoteScriptBody({ leadId, currentAuditId }: { leadId: string
   return (
     <div data-testid="voice-note-script-body">
         {loading ? (
-          <p className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> Loading…</p>
+          <LoadState compact label="Loading…" />
         ) : (
           <div className="space-y-3">
             {error && (
-              <p className="flex items-start gap-1.5 rounded-md border border-amber-500/40 bg-amber-500/10 p-2 text-xs text-amber-800 dark:text-amber-200">
-                <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" /> {error}
-              </p>
+              <Callout tone="amber" icon={AlertTriangle} className="text-xs">{error}</Callout>
             )}
 
             {row ? (
@@ -140,7 +139,7 @@ export function VoiceNoteScriptBody({ leadId, currentAuditId }: { leadId: string
                     the result this script quotes with the one a Regenerate would pick now. The playbook also
                     passes the audit its AI opportunity reads. Nothing regenerates on its own (a model call). */}
                 {outOfDate && (
-                  <div className="rounded-md border-2 border-red-500/60 bg-red-500/10 p-2.5 text-xs text-red-800 dark:text-red-200" data-testid="voice-note-out-of-date">
+                  <div className="rounded-xl border-2 border-red-500/60 bg-red-500/10 p-2.5 text-xs text-red-800 dark:text-red-200" data-testid="voice-note-out-of-date">
                     <p className="text-sm font-bold uppercase tracking-wide">Voice note out of date</p>
                     <p className="mt-0.5">
                       {current && 'detail' in current
@@ -163,7 +162,7 @@ export function VoiceNoteScriptBody({ leadId, currentAuditId }: { leadId: string
                   </div>
                 )}
                 {!outOfDate && oldStyle && (
-                  <p className="rounded-md border border-amber-500/40 bg-amber-500/10 p-2 text-xs text-amber-800 dark:text-amber-200" data-testid="voice-note-old-style">
+                  <p className="rounded-xl bg-amber-500/10 px-3 py-2 text-xs text-amber-800 ring-1 ring-inset ring-amber-500/25 dark:text-amber-200" data-testid="voice-note-old-style">
                     {(row.generator_version ?? 0) < 3
                       ? 'Written with the older script style (longer, and it ends by offering to explain changes). Regenerate for the short version that asks who controls the website.'
                       : (row.generator_version ?? 0) < 5
@@ -172,12 +171,11 @@ export function VoiceNoteScriptBody({ leadId, currentAuditId }: { leadId: string
                   </p>
                 )}
                 {row.problems.length > 0 && (
-                  <div className="rounded-md border border-amber-500/40 bg-amber-500/10 p-2 text-xs text-amber-800 dark:text-amber-200">
-                    <p className="font-semibold">Check this script before recording:</p>
+                  <Callout tone="amber" icon={AlertTriangle} title="Check this script before recording:" className="text-xs">
                     <ul className="ml-4 list-disc">{row.problems.map((p) => <li key={p}>{p}</li>)}</ul>
-                  </div>
+                  </Callout>
                 )}
-                <div className={cn('rounded-md border border-border bg-muted/40 p-3', outOfDate && 'opacity-60')}>
+                <div className={cn('rounded-xl bg-muted/40 p-3 ring-1 ring-inset ring-border/50', outOfDate && 'opacity-60')}>
                   {outOfDate && <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Old script, from the earlier result</p>}
                   <p className="whitespace-pre-wrap break-words text-sm leading-relaxed">{row.script}</p>
                 </div>
@@ -194,7 +192,7 @@ export function VoiceNoteScriptBody({ leadId, currentAuditId }: { leadId: string
                 </div>
                 {row.warnings.length > 0 && <p className="text-[11px] text-muted-foreground">{row.warnings.join(' ')}</p>}
                 {row.short_script && !outOfDate && (
-                  <div className="space-y-1.5 rounded-md border border-border p-3" data-testid="voice-note-short">
+                  <div className="space-y-1.5 rounded-xl p-3 ring-1 ring-inset ring-border/60" data-testid="voice-note-short">
                     <div className="flex items-center gap-2">
                       <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Short version · about 20s</p>
                       <Button size="sm" variant="outline" className="ml-auto h-7 gap-1 px-2 text-xs" onClick={copyShort}>
@@ -206,7 +204,7 @@ export function VoiceNoteScriptBody({ leadId, currentAuditId }: { leadId: string
                   </div>
                 )}
 
-                <div className="space-y-1.5 border-t border-border pt-2">
+                <div className="space-y-1.5 border-t border-border/60 pt-2">
                   <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Based on</p>
                   <Row label="Search">
                     <span className="font-medium">{ENGINE_LABEL[row.hook_engine] ?? row.hook_engine}</span>: “{row.hook_question}”
@@ -262,10 +260,7 @@ function VoiceNoteScriptPanel({ leadId, open, onOpenChange }: { leadId: string; 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[90vh] w-[calc(100vw-2rem)] max-w-xl overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2"><Mic className="h-4 w-4" /> {VOICE_NOTE_SCRIPT_LABEL}</DialogTitle>
-          <DialogDescription>For you to read out and record. Nothing is sent from here.</DialogDescription>
-        </DialogHeader>
+        <DialogHero icon={Mic} tone="purple" title={VOICE_NOTE_SCRIPT_LABEL} subtitle="For you to read out and record. Nothing is sent from here." />
         <VoiceNoteScriptBody leadId={leadId} />
       </DialogContent>
     </Dialog>

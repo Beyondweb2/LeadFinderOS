@@ -10,6 +10,12 @@ import { measurementsLine, namedLine, REC_LABELS, type RecInput, type RecVerdict
 import { BASELINE_QUESTIONS, BASELINE_RUNS } from '@/lib/auditQuestionCounts';
 import { DISCOVERY_JOB_LABELS, DISCOVERY_ENGINES, ENGINE_LABELS, discoveryPlan, discoveryView, type DiscoveryProgress } from '@/lib/discoveryProgress';
 import { buildServiceScope } from '@/lib/serviceScope';
+import { TONE } from '@/components/operator/ui';
+import { cn } from '@/lib/utils';
+
+/* The operator look (components/operator/ui): a step is a soft wash, not another bordered box; a row is a light card. */
+const STEP_BOX = 'rounded-2xl bg-muted/25 p-3 ring-1 ring-inset ring-border/50';
+const ROW = 'rounded-xl bg-card ring-1 ring-inset ring-border/50';
 
 /* ════════════════════════════════════════════════════════════════════════════════════════════════
    DISCOVERY → THE RECOMMENDED OFFICIAL BASELINE (Paid Clients; rebuilt 2026-09-30, Paul).
@@ -31,13 +37,13 @@ import { buildServiceScope } from '@/lib/serviceScope';
 
 const GROUP_ORDER: Array<OpportunityClass | 'unmeasured'> = ['winnable', 'possible', 'named', 'low', 'unmeasured'];
 const GROUP_TONE: Record<OpportunityClass | 'unmeasured', string> = {
-  winnable: 'text-emerald-700 dark:text-emerald-300', possible: 'text-sky-700 dark:text-sky-300',
-  named: 'text-violet-700 dark:text-violet-300', low: 'text-muted-foreground', unmeasured: 'text-muted-foreground',
+  winnable: TONE.green.text, possible: TONE.blue.text,
+  named: TONE.purple.text, low: 'text-muted-foreground', unmeasured: 'text-muted-foreground',
 };
 const VERDICT_TONE: Record<RecVerdict, string> = {
-  recommended: 'border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300',
-  future: 'border-sky-500/40 bg-sky-500/10 text-sky-700 dark:text-sky-300',
-  not_recommended: 'border-border bg-muted text-muted-foreground',
+  recommended: cn(TONE.green.soft, TONE.green.text, TONE.green.ring),
+  future: cn(TONE.blue.soft, TONE.blue.text, TONE.blue.ring),
+  not_recommended: cn(TONE.grey.soft, TONE.grey.text, TONE.grey.ring),
 };
 
 /** = _shared/baseline-discovery.ts DISCOVERY_RUNS (the server decides; this only prices the button). */
@@ -60,10 +66,10 @@ export function EngineLines({ engines, target, opportunity, compact = false }: {
 /** The job header: one progress bar, measurements first, then questions and engines. */
 export function DiscoveryProgressPanel({ progress }: { progress: Omit<DiscoveryProgress, 'by_question'> }) {
   const p = progress;
-  const tone = p.status === 'complete' ? 'text-emerald-700 dark:text-emerald-300'
-    : p.status === 'running' ? 'text-sky-700 dark:text-sky-300'
-    : 'text-amber-700 dark:text-amber-300';
-  return <div className="mt-3 space-y-2 rounded-md border bg-background p-3 text-sm" aria-live="polite">
+  const tone = p.status === 'complete' ? TONE.green.text
+    : p.status === 'running' ? TONE.blue.text
+    : TONE.amber.text;
+  return <div className={cn('mt-3 space-y-2 p-3 text-sm', ROW)} aria-live="polite">
     <div className="flex flex-wrap items-baseline justify-between gap-2">
       <p className={`text-xs font-semibold uppercase tracking-wide ${tone}`}>{p.status === 'needs_attention' && p.done === 0 ? 'Discovery failed — needs attention' : DISCOVERY_JOB_LABELS[p.status]}</p>
       <p className="text-xs text-muted-foreground">Started {hhmm(p.started_at)} · last update {hhmm(p.updated_at)}{p.completed_at ? ` · finished ${hhmm(p.completed_at)}` : ''}</p>
@@ -73,11 +79,11 @@ export function DiscoveryProgressPanel({ progress }: { progress: Omit<DiscoveryP
     <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs">
       <span>{fmt(p.questions_complete)} / {fmt(p.questions)} questions fully measured</span>
       {p.by_engine.map((e) => <span key={e.engine}>{ENGINE_LABELS[e.engine] ?? e.engine} {fmt(e.done)} / {fmt(e.total)} complete</span>)}
-      {p.failed > 0 && <span className="text-amber-700 dark:text-amber-300">Failed: {fmt(p.failed)}</span>}
+      {p.failed > 0 && <span className={TONE.amber.text}>Failed: {fmt(p.failed)}</span>}
     </div>
     {p.status === 'running' && <p className="text-xs text-muted-foreground">Runs on the server — you can close this and come back.</p>}
-    {p.stalled && <p className="flex items-start gap-1.5 text-xs text-amber-700 dark:text-amber-300"><AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0"/>No new answers for over 20 minutes — the audit queue may be stuck.</p>}
-    {p.status === 'needs_attention' && <p className="flex items-start gap-1.5 text-xs text-amber-700 dark:text-amber-300"><AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0"/>{p.error ? `The run chain stopped: ${p.error}. ` : 'Nothing has moved for a while and no more runs are due. '}The answers so far are kept. Regenerate the Discovery questions to start a fresh Discovery.</p>}
+    {p.stalled && <p className={cn('flex items-start gap-1.5 text-xs', TONE.amber.text)}><AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0"/>No new answers for over 20 minutes — the audit queue may be stuck.</p>}
+    {p.status === 'needs_attention' && <p className={cn('flex items-start gap-1.5 text-xs', TONE.amber.text)}><AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0"/>{p.error ? `The run chain stopped: ${p.error}. ` : 'Nothing has moved for a while and no more runs are due. '}The answers so far are kept. Regenerate the Discovery questions to start a fresh Discovery.</p>}
     {p.status === 'complete_with_failures' && <p className="text-xs text-muted-foreground">{fmt(p.failed)} measurement{p.failed === 1 ? '' : 's'} failed after the queue's own retries; every successful answer is kept and used below.</p>}
   </div>;
 }
@@ -133,13 +139,13 @@ export function tallyTarget(data: PaidBaseline, question: string): number {
 export function HookAuditStep({ data }: { data: PaidBaseline }) {
   const h = data.hook;
   const qs = h?.questions ?? [];
-  return <CollapsibleBlock as="section" className="rounded-md border p-3" title="1. Hook Audit"
+  return <CollapsibleBlock as="section" className={STEP_BOX} title="1. Hook Audit"
     summary={qs.length ? `${qs.length} original question${qs.length === 1 ? '' : 's'} · locked into the baseline` : 'No Hook Audit on record'}>
     {qs.length === 0
       ? <p className="text-sm text-muted-foreground">No Hook Audit is recorded for this client, so all {BASELINE_QUESTIONS} baseline questions come from Discovery.</p>
       : <ul className="space-y-1.5">{qs.map((q) => {
         const m = h?.measures.find((x) => x.question === q);
-        return <li key={q} className="rounded border px-2 py-1.5 text-sm">
+        return <li key={q} className={cn('px-2.5 py-1.5 text-sm', ROW)}>
           <div className="flex flex-wrap items-start justify-between gap-2"><span className="break-words">{q}</span><HookBadge/></div>
           <EngineLines engines={m?.engines} target={1} compact/>
         </li>;
@@ -147,7 +153,7 @@ export function HookAuditStep({ data }: { data: PaidBaseline }) {
     {qs.length > 0 && <p className="mt-2 text-xs text-muted-foreground">Kept word for word in the official baseline, for continuity from the first check to the re-measure. Replacing one needs a written reason.</p>}
   </CollapsibleBlock>;
 }
-export const HookBadge = () => <span className="inline-flex shrink-0 items-center rounded border border-violet-500/40 bg-violet-500/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-violet-700 dark:text-violet-300">Hook Audit · locked in</span>;
+export const HookBadge = () => <span className={cn('inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ring-1 ring-inset', TONE.purple.soft, TONE.purple.text, TONE.purple.ring)}>Hook Audit · locked in</span>;
 
 /** STEP 2 — Discovery: generate, run, and the one plain verdict per question. */
 export function DiscoverySection({ data, questions, busy, frozen, onGenerate, onRun, onAdd }: {
@@ -176,7 +182,7 @@ export function DiscoverySection({ data, questions, busy, frozen, onGenerate, on
   }, [d]);
   const status = !d?.pool.length ? 'Not generated yet' : view.status === 'complete' ? 'Complete' : view.status === 'running' ? 'Running' : view.status === 'starting' ? 'Starting' : d.audit ? DISCOVERY_JOB_LABELS[view.status as keyof typeof DISCOVERY_JOB_LABELS] ?? 'Finished' : 'Questions ready — not measured yet';
 
-  return <CollapsibleBlock as="section" className="rounded-md border p-3" title="2. Discovery"
+  return <CollapsibleBlock as="section" className={STEP_BOX} title="2. Discovery"
     summary={`${d?.pool.length ? `${d.pool.length} questions across ${towns.filter(Boolean).length} town${towns.filter(Boolean).length === 1 ? '' : 's'}` : 'wider research'} · ${status}`}
     actions={!frozen && <>
       <Button size="sm" variant="outline" disabled={busy || !view.canRegenerate} onClick={onGenerate} title={view.canRegenerate ? undefined : 'Discovery is measuring these questions — regenerate once it has finished.'}><Sparkles className="mr-1 h-4 w-4" />{d?.pool.length ? 'Regenerate questions' : 'Generate Discovery questions'}</Button>
@@ -187,24 +193,24 @@ export function DiscoverySection({ data, questions, busy, frozen, onGenerate, on
     </>}>
     <p className="text-xs text-muted-foreground">Explores genuine services, areas and customer intents beyond the baseline. Research only — never frozen, never part of the guarantee. Generating asks no AI engine; running costs what the button says.</p>
     {view.canRun && <p className="mt-1 text-xs">About to run: {plan.questions} questions × {plan.engines} engines × {plan.runs} runs = <b>{plan.measurements} measurements</b> · about ${(d?.estimate_usd ?? 0).toFixed(2)}.</p>}
-    {view.status === 'starting' && <p className="mt-1 text-xs text-sky-700 dark:text-sky-300">Discovery is starting on the server…</p>}
-    {d?.mismatch && <p className="mt-1 text-xs text-amber-700 dark:text-amber-300">An earlier Discovery (audit {d.mismatch.audit_id.slice(0, 8)}) measured a different question set. Its results stay on that audit and are not mixed in.</p>}
+    {view.status === 'starting' && <p className={cn('mt-1 text-xs', TONE.blue.text)}>Discovery is starting on the server…</p>}
+    {d?.mismatch && <p className={cn('mt-1 text-xs', TONE.amber.text)}>An earlier Discovery (audit {d.mismatch.audit_id.slice(0, 8)}) measured a different question set. Its results stay on that audit and are not mixed in.</p>}
     {d?.audit?.progress && <DiscoveryProgressPanel progress={d.audit.progress}/>}
-    {d?.towns_failed?.length ? <p className="mt-1 text-xs text-amber-700 dark:text-amber-300">No questions came back for: {d.towns_failed.join(', ')} — regenerate to retry.</p> : null}
+    {d?.towns_failed?.length ? <p className={cn('mt-1 text-xs', TONE.amber.text)}>No questions came back for: {d.towns_failed.join(', ')} — regenerate to retry.</p> : null}
     {/* 2026-10-04 (fix/04): questions the generator wrote about a service the client does not offer or
         never confirmed are kept OUT of the pool — listed here so nothing disappears silently. */}
     {d?.rejected?.length ? <CollapsibleBlock defaultOpen={false} titleClassName="text-xs text-muted-foreground" title={`${d.rejected.length} generated question${d.rejected.length === 1 ? '' : 's'} kept out — not a confirmed service`}>
       <ul className="ml-4 list-disc text-xs text-muted-foreground">{d.rejected.map((r) => <li key={r.question}>{r.question} — {r.reason}</li>)}</ul>
     </CollapsibleBlock> : null}
     {!!d?.pool.length && rec && <div className="mt-3 space-y-2">
-      {view.provisional && measured && <p className="rounded border border-amber-500/40 bg-amber-500/10 px-2 py-1 text-xs font-medium text-amber-700 dark:text-amber-300">{view.status === 'running' ? 'Provisional — Discovery still running. The verdicts below will change as answers arrive.' : 'Provisional — Discovery did not finish. The verdicts use the answers it collected.'}</p>}
+      {view.provisional && measured && <p className={cn('rounded-xl px-2.5 py-1.5 text-xs font-medium', TONE.amber.tint, TONE.amber.text)}>{view.status === 'running' ? 'Provisional — Discovery still running. The verdicts below will change as answers arrive.' : 'Provisional — Discovery did not finish. The verdicts use the answers it collected.'}</p>}
       <p className="text-sm font-medium">Which questions should go into the official baseline?</p>
       {(['recommended', 'future', 'not_recommended'] as RecVerdict[]).map((v) => byVerdict[v].length > 0 && (
-        <CollapsibleBlock key={v} defaultOpen={false} className="rounded border px-2 py-1.5" titleClassName="text-sm"
-          title={<span className={`rounded border px-1.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide ${VERDICT_TONE[v]}`}>{REC_LABELS[v]} · {byVerdict[v].length}</span>}>
+        <CollapsibleBlock key={v} defaultOpen={false} className={cn('px-2.5 py-1.5', ROW)} titleClassName="text-sm"
+          title={<span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide ring-1 ring-inset ${VERDICT_TONE[v]}`}>{REC_LABELS[v]} · {byVerdict[v].length}</span>}>
           <ul className="max-h-[420px] space-y-1 overflow-y-auto pr-1">{byVerdict[v].map((p) => {
             const added = inDraft(p.question);
-            return <li key={p.question} className="flex items-start justify-between gap-2 rounded border px-2 py-1.5 text-sm">
+            return <li key={p.question} className="flex items-start justify-between gap-2 rounded-xl bg-muted/30 px-2.5 py-1.5 text-sm">
               <div className="min-w-0 space-y-0.5">
                 <p className="break-words">{p.question}</p>
                 <p className="text-xs text-muted-foreground">{[p.service ?? 'general', p.town ?? 'no approved town'].join(' · ')}</p>
@@ -218,12 +224,12 @@ export function DiscoverySection({ data, questions, busy, frozen, onGenerate, on
           })}</ul>
         </CollapsibleBlock>
       ))}
-      {measured && <CollapsibleBlock defaultOpen={false} className="rounded border border-dashed px-2 py-1.5" titleClassName="text-xs text-muted-foreground" title="Advanced — the classifier's groups"
+      {measured && <CollapsibleBlock defaultOpen={false} className="rounded-xl border border-dashed border-border/70 px-2.5 py-1.5" titleClassName="text-xs text-muted-foreground" title="Advanced — the classifier's groups"
         summary={classes.map((g) => `${g.key === 'unmeasured' ? 'Not answered' : OPPORTUNITY_GROUP_LABELS[g.key as OpportunityClass]} ${g.items.length}`).join(' · ')}>
         <p className="mb-2 text-xs text-muted-foreground">Winnable / Possible / Already named / Weak explain a question; the verdicts above decide. Already named = named in at least one answer.</p>
         <div className="space-y-2">{classes.map((g) => <CollapsibleBlock key={g.key} defaultOpen={false} titleClassName={`text-xs font-semibold uppercase tracking-wide ${GROUP_TONE[g.key]}`}
           title={`${g.key === 'unmeasured' ? 'Not answered yet' : OPPORTUNITY_GROUP_LABELS[g.key as OpportunityClass]} (${g.items.length})`}>
-          <ul className="max-h-[360px] space-y-1 overflow-y-auto pr-1">{g.items.map((p) => <li key={p.question} className="rounded border px-2 py-1 text-sm">
+          <ul className="max-h-[360px] space-y-1 overflow-y-auto pr-1">{g.items.map((p) => <li key={p.question} className="rounded-xl bg-muted/30 px-2.5 py-1 text-sm">
             <p className="break-words">{p.question}</p>
             <EngineLines engines={p.opportunity?.engines} target={target} opportunity={p.opportunity ? `${OPPORTUNITY_GROUP_LABELS[p.opportunity.classification]} — ${p.opportunity.fragmentation}. ${p.opportunity.reason}` : null}/>
           </li>)}</ul>
@@ -241,10 +247,10 @@ export function RecommendationStep({ data, busy, frozen, draftIsRecommendation, 
   const measuredDone = data.discovery?.audit?.progress?.status === 'complete' || data.discovery?.audit?.progress?.status === 'complete_with_failures';
   const heading = !data.discovery?.pool.length ? 'Recommendation — generate Discovery first'
     : measuredDone ? 'Baseline recommendation ready' : data.discovery?.audit ? 'Recommendation (provisional — Discovery still measuring)' : 'Recommendation (balance only — Discovery not measured yet)';
-  return <section className="rounded-md border border-primary/30 bg-primary/5 p-3">
+  return <section className={cn('rounded-2xl p-3', TONE.blue.tint)}>
     <div className="flex flex-wrap items-center justify-between gap-2">
-      <div>
-        <p className="text-xs font-semibold uppercase tracking-wide text-primary">3. {heading}</p>
+      <div className="min-w-0">
+        <p className={cn('text-xs font-semibold uppercase tracking-wide', TONE.blue.text)}>3. {heading}</p>
         <p className="mt-0.5 text-sm"><b>{s.total} questions recommended</b>{s.fromHook ? ` · ${s.fromHook} from Hook Audit` : ''} · {s.fromDiscovery} from Discovery{rec.short ? ` · ${rec.short} short — add questions by hand` : ''}</p>
       </div>
       {!frozen && <Button size="sm" disabled={busy || !s.total} variant={draftIsRecommendation ? 'outline' : 'default'} onClick={onUse}>
@@ -261,9 +267,9 @@ export function CoveragePanel({ data, questions }: { data: PaidBaseline; questio
   const ctx = useMemo(() => mixContextOf(data), [data]);
   const r = useMemo(() => coverageReport(questions, ctx, BASELINE_QUESTIONS), [questions, ctx]);
   return <div className="mt-3 space-y-2 text-xs">
-    {r.warnings.length > 0 && <ul className="space-y-0.5">{r.warnings.map((w) => <li key={w} className="flex items-start gap-1.5 text-amber-700 dark:text-amber-300"><AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />{w}</li>)}</ul>}
+    {r.warnings.length > 0 && <ul className="space-y-0.5">{r.warnings.map((w) => <li key={w} className={cn('flex items-start gap-1.5', TONE.amber.text)}><AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />{w}</li>)}</ul>}
     {r.unusedAreas.length > 0 && <p className="text-muted-foreground">{r.unusedAreas.length} approved area{r.unusedAreas.length === 1 ? ' is' : 's are'} not individually represented ({r.unusedAreas.join(', ')}). That is fine — coverage is representative, and they stay in the Opportunity Backlog.</p>}
-    {r.duplicates.length > 0 && <div><p className="font-medium text-amber-700 dark:text-amber-300">Near-duplicates — the same question in different words:</p>
+    {r.duplicates.length > 0 && <div><p className={cn('font-medium', TONE.amber.text)}>Near-duplicates — the same question in different words:</p>
       <ul className="ml-4 list-disc">{r.duplicates.map(([a, b]) => <li key={`${a}-${b}`}>#{a + 1} “{questions.filter((q) => q.trim())[a]}” ≈ #{b + 1} “{questions.filter((q) => q.trim())[b]}”</li>)}</ul></div>}
     <p className="text-muted-foreground">{BASELINE_RUNS} runs · ChatGPT + Gemini · exactly {BASELINE_QUESTIONS} questions.</p>
   </div>;

@@ -10,6 +10,8 @@ import { Label } from '@/components/ui/label';
 import { Loader2, ArrowLeft } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import appLogo from '@/assets/logo.png';
+import { LoadState, SURFACE } from '@/components/operator/ui';
+import { cn } from '@/lib/utils';
 
 const Auth = () => {
   const { t } = useTranslation();
@@ -104,9 +106,7 @@ const Auth = () => {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-background gap-4">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-      </div>
+      <LoadState className="min-h-screen bg-background" />
     );
   }
 
@@ -158,14 +158,9 @@ const Auth = () => {
         </div>
 
         {/* Card */}
-        <div
-          className="rounded-2xl p-7 sm:p-8"
-          style={{
-            background: 'hsl(220 30% 8% / 0.8)',
-            border: '1px solid hsl(0 0% 100% / 0.06)',
-            boxShadow: '0 1px 2px hsl(0 0% 0% / 0.2), 0 8px 24px hsl(220 40% 4% / 0.4), 0 0 0 1px hsl(0 0% 100% / 0.02) inset',
-          }}
-        >
+        {/* The app's one card surface (components/operator/ui SURFACE) — it was a hard-coded dark
+            panel, which sat as a black box on the light themes. */}
+        <div className={cn(SURFACE, 'p-6 sm:p-8')}>
           <form onSubmit={handleSubmit} className="space-y-5">
             <div className="space-y-1.5">
               <Label htmlFor="email" className="text-xs font-medium text-muted-foreground/80 uppercase tracking-wider">{t('auth.email')}</Label>

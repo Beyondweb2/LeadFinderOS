@@ -1,6 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { ScanSearch, Loader2, Copy, Check, AlertTriangle, CircleCheck, RefreshCw } from 'lucide-react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent } from '@/components/ui/dialog';
+import { Callout, DialogHero, SubSection } from '@/components/operator/ui';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
@@ -239,26 +240,26 @@ function CrawlCheckDialog(
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2 text-base">
-            <ScanSearch className="h-4 w-4" /> Crawl check
-            <span className="text-xs font-normal text-muted-foreground">free · what AI sees</span>
-            {lead && !urlMode && (
-              <Button size="sm" variant="ghost" className="ml-auto h-7 text-xs" disabled={running}
+        <DialogHero
+          icon={ScanSearch}
+          tone="blue"
+          title="Crawl check"
+          subtitle="free · what AI sees"
+          chips={lead && !urlMode ? (
+            <>
+              <Button size="sm" variant="outline" className="h-7 text-xs" disabled={running}
                 onClick={() => void run({ lead_id: lead.id })}>
                 {running ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="mr-1 h-3.5 w-3.5" />}
                 Run again
               </Button>
-            )}
-            {lead && !urlMode && (
               <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setFullOpen(true)} data-testid="crawl-open-full-audit">
                 Full audit
               </Button>
-            )}
-          </DialogTitle>
-          {lead && !urlMode && <ProspectAuditDialog leadId={lead.id} open={fullOpen} onOpenChange={setFullOpen} />}
-          {savedAt && <p className="text-xs text-muted-foreground" data-testid="crawl-saved-note">Saved crawl from {new Date(savedAt).toLocaleString('en-GB')} reused — this site was crawled within the last {Math.round(PROSPECT_CRAWL_REUSE_MS / 86_400_000)} days, so it was not crawled again.</p>}
-        </DialogHeader>
+            </>
+          ) : undefined}
+        />
+        {lead && !urlMode && <ProspectAuditDialog leadId={lead.id} open={fullOpen} onOpenChange={setFullOpen} />}
+        {savedAt && <p className="-mt-2 text-xs text-muted-foreground" data-testid="crawl-saved-note">Saved crawl from {new Date(savedAt).toLocaleString('en-GB')} reused — this site was crawled within the last {Math.round(PROSPECT_CRAWL_REUSE_MS / 86_400_000)} days, so it was not crawled again.</p>}
 
         {urlMode && (
           <form onSubmit={(e) => { e.preventDefault(); if (url.trim()) void run({ url: url.trim() }); }} className="flex gap-2">
@@ -277,10 +278,10 @@ function CrawlCheckDialog(
 
         {result && !running && (
           <div className="space-y-5">
-            {result.error && <p className="text-sm text-destructive">{result.error}</p>}
+            {result.error && <Callout tone="red" icon={AlertTriangle}>{result.error}</Callout>}
 
             {result.signals && (
-              <div className="rounded-md border border-border/60 bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+              <div className="rounded-xl bg-muted/40 px-3 py-2 text-xs text-muted-foreground ring-1 ring-inset ring-border/40">
                 <span className="font-medium text-foreground">{fetchFailed ? 'Could not read website' : 'Crawl complete'}</span>
                 {result.full?.stats ? ` · full crawl · ${(result.full.stats.urlsDiscovered ?? 0).toLocaleString('en-GB')} discovered · ${(result.full.stats.pagesOk ?? 0).toLocaleString('en-GB')} fetched · ${result.full.stats.failed ?? 0} failed · ${result.full.stats.skipped ?? 0} skipped${result.full.completeness === 'complete_with_failures' ? ' (complete with failures)' : ''}` : result.signals.pagesChecked != null && ` · ${result.signals.pagesChecked} pages checked`}
                 {result.checked_at && ` · ${new Date(result.checked_at).toLocaleString()}`}
@@ -289,14 +290,11 @@ function CrawlCheckDialog(
 
             {/* ── SECTION 1: AI VISIBILITY (the faults — this feeds audit_followup_fault) ── */}
             {result.signals && (
-              <section className="space-y-2">
-                <h3 className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                  <AlertTriangle className="h-3.5 w-3.5" /> AI visibility
-                </h3>
+              <SubSection title="AI visibility" icon={AlertTriangle} tone="amber" className="space-y-2">
                 {fetchFailed ? (
                   <p className="text-sm text-muted-foreground">Couldn&rsquo;t read the site — it may be down or blocking automated requests.</p>
                 ) : faults.length === 0 ? (
-                  <p className="flex items-center gap-1.5 text-sm text-emerald-600 dark:text-emerald-400">
+                  <p className="flex items-center gap-1.5 text-sm text-teal-700 dark:text-teal-300">
                     <CircleCheck className="h-4 w-4" /> No AI-visibility faults found.
                   </p>
                 ) : (
@@ -320,12 +318,12 @@ function CrawlCheckDialog(
                   </ul>
                   </>
                 )}
-              </section>
+              </SubSection>
             )}
 
             {/* ── SECTION 2: SITE INFO (reading material — never gates a template) ── */}
             {isAdmin && result.signals && !fetchFailed && (
-              <p className={`text-xs ${faults.length ? 'text-emerald-700 dark:text-emerald-400' : 'text-muted-foreground'}`}>
+              <p className={`text-xs ${faults.length ? 'text-teal-700 dark:text-teal-300' : 'text-muted-foreground'}`}>
                 {faults.length
                   ? 'Usable for audit_followup_fault — the first finding is the client-facing fault.'
                   : 'Not usable for audit_followup_fault — this crawl found no meaningful fault.'}
@@ -333,24 +331,22 @@ function CrawlCheckDialog(
             )}
 
             {!urlMode && (
-              <section className="space-y-2">
-                <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Site info</h3>
+              <SubSection title="Site info" tone="blue" className="space-y-2">
                 <SiteInfoView info={result.siteInfo} />
-              </section>
+              </SubSection>
             )}
 
             {result.signals?.checkedPages && result.signals.checkedPages.length > 0 && (
-              <section className="space-y-2">
-                <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Pages checked</h3>
+              <SubSection title="Pages checked" tone="grey" className="space-y-2">
                 <ul className="space-y-1 text-xs">
                   {result.signals.checkedPages.map((page) => (
-                    <li key={page.url} className="flex items-start justify-between gap-3 rounded border border-border/50 px-2 py-1.5">
+                    <li key={page.url} className="flex items-start justify-between gap-3 rounded-lg border border-border/50 px-2 py-1.5">
                       <a href={page.url} target="_blank" rel="noreferrer" className="min-w-0 truncate text-primary hover:underline">{page.url}</a>
                       <span className="shrink-0 text-muted-foreground">{page.kind} · {page.readable ? page.words + ' words' : 'unreadable'}</span>
                     </li>
                   ))}
                 </ul>
-              </section>
+              </SubSection>
             )}
 
             <p className="text-[11px] text-muted-foreground">

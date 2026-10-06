@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Loader2, Search } from 'lucide-react';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { AlertTriangle, Eye, Loader2, Search, Send } from 'lucide-react';
+import { Dialog, DialogContent, DialogFooter } from '@/components/ui/dialog';
+import { Callout, DialogHero, SubSection, TONE } from '@/components/operator/ui';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -141,17 +142,14 @@ export function TeamComposer({ open, onOpenChange, seed }: { open: boolean; onOp
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!busy) onOpenChange(v); }}>
       <DialogContent className="max-h-[92vh] w-[calc(100vw-2rem)] max-w-xl overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>{draftId ? 'Edit draft' : seed?.followUpOf ? 'Send a clarification' : 'Send to sales team'}</DialogTitle>
-          <DialogDescription>{KIND_HINT[kind]}</DialogDescription>
-        </DialogHeader>
+        <DialogHero icon={Send} tone="blue" title={draftId ? 'Edit draft' : seed?.followUpOf ? 'Send a clarification' : 'Send to sales team'} subtitle={KIND_HINT[kind]} />
 
         <div className="space-y-3 text-sm">
           {!seed?.followUpOf && (
             <div className="flex flex-wrap gap-1" role="radiogroup" aria-label="Type">
               {COMPOSER_KINDS.filter((k) => !draftId || k !== 'lead_assignment').map((k) => (
                 <button key={k} type="button" role="radio" aria-checked={kind === k} onClick={() => { setKind(k); setConfirming(false); }}
-                  className={cn('rounded-lg border px-2.5 py-1 text-xs font-medium transition', kind === k ? 'border-primary bg-primary/10 text-primary' : 'border-border/70 text-muted-foreground hover:text-foreground')}>{KIND_LABEL[k]}</button>
+                  className={cn('rounded-full px-3 py-1 text-xs font-semibold ring-1 ring-inset transition', kind === k ? cn(TONE.blue.soft, TONE.blue.text, TONE.blue.ring) : 'ring-border/70 text-muted-foreground hover:text-foreground')}>{KIND_LABEL[k]}</button>
               ))}
             </div>
           )}
@@ -174,7 +172,7 @@ export function TeamComposer({ open, onOpenChange, seed }: { open: boolean; onOp
                     return (
                       <button key={p.user_id} type="button" aria-pressed={on}
                         onClick={() => setPicked(isAssign ? [p.user_id] : on ? picked.filter((x) => x !== p.user_id) : [...picked, p.user_id])}
-                        className={cn('rounded-full border px-2.5 py-1 text-xs', on ? 'border-primary bg-primary/10 font-medium text-primary' : 'border-border/70 hover:bg-muted')}>
+                        className={cn('rounded-full px-2.5 py-1 text-xs ring-1 ring-inset', on ? cn(TONE.blue.soft, TONE.blue.text, TONE.blue.ring, 'font-medium') : 'ring-border/70 hover:bg-muted')}>
                         {p.name}{p.test ? <span className="ml-1 text-[10px] text-muted-foreground">test</span> : null}
                       </button>
                     );
@@ -188,7 +186,7 @@ export function TeamComposer({ open, onOpenChange, seed }: { open: boolean; onOp
             <div className="space-y-1.5">
               <p className="text-xs font-semibold text-muted-foreground">{isAssign ? 'Lead' : 'Linked lead (optional)'}</p>
               {lead ? (
-                <div className="rounded-lg border border-border/60 bg-muted/40 px-3 py-2 text-xs">
+                <div className="min-w-0 rounded-xl bg-muted/40 px-3 py-2 text-xs ring-1 ring-inset ring-border/50">
                   <div className="flex items-center justify-between gap-2"><span className="font-semibold">{lead.name ?? 'Lead'}</span>
                     <button type="button" className="text-primary hover:underline" onClick={() => setLead(null)}>Change</button></div>
                   {seed?.reason && <p className="text-muted-foreground">Why: {seed.reason}</p>}
@@ -200,7 +198,7 @@ export function TeamComposer({ open, onOpenChange, seed }: { open: boolean; onOp
                     <Input className="h-9 pl-8 text-sm" placeholder="Search by business name" value={leadTerm} onChange={(e) => setLeadTerm(e.target.value)} /></div>
                   {search.isFetching && <p className="mt-1 text-xs text-muted-foreground">Searching…</p>}
                   {(search.data ?? []).length > 0 && (
-                    <ul className="mt-1 max-h-44 overflow-y-auto rounded-lg border border-border/60">
+                    <ul className="mt-1 max-h-44 overflow-y-auto rounded-xl border border-border/60">
                       {(search.data ?? []).map((l) => (
                         <li key={l.id}><button type="button" className="flex w-full justify-between gap-2 px-3 py-1.5 text-left text-xs hover:bg-muted"
                           onClick={() => setLead({ id: l.id, name: l.business_name, owner: l.assigned_to_user_id, action: l.next_action ?? null, actionDate: l.next_action_date ?? null, actionTime: l.next_action_time ?? null })}>
@@ -265,9 +263,9 @@ export function TeamComposer({ open, onOpenChange, seed }: { open: boolean; onOp
           {isAssign && <p className="text-[11px] text-muted-foreground">A date here becomes the lead's own Next Action date (the task shows that date — there is only one). Leave it blank to keep the lead's current Next Action.</p>}
 
           {/* The preview: exactly what will happen */}
-          <div className="rounded-lg border border-border/60 bg-muted/30 px-3 py-2 text-xs" aria-live="polite">
-            <p className="font-semibold">What happens</p>
-            <ul className="mt-1 space-y-0.5 text-muted-foreground">
+          <div className={cn('rounded-2xl px-3.5 py-3 text-xs', TONE.blue.tint)} aria-live="polite">
+            <SubSection title="What happens" icon={Eye} tone="blue" className="[&>header]:mb-1" />
+            <ul className="space-y-0.5 text-muted-foreground">
               <li>To: {recipients.length ? names.join(', ') : 'nobody yet'}</li>
               <li>They see: <span className="text-foreground">{KIND_LABEL[kind]} — {effectiveTitle || '…'}</span></li>
               <li>{isTaskKind(kind) ? 'Creates a to-do on their Team board (they mark it in progress / done)' : 'Information only — no task'}</li>
@@ -275,15 +273,15 @@ export function TeamComposer({ open, onOpenChange, seed }: { open: boolean; onOp
               <li>Each person gets an in-app notification.</li>
             </ul>
           </div>
-          {problems.length > 0 && <ul className="space-y-0.5 text-xs text-amber-700 dark:text-amber-300">{problems.map((p) => <li key={p}>{p}</li>)}</ul>}
+          {problems.length > 0 && <ul className={cn('space-y-0.5 text-xs', TONE.amber.text)}>{problems.map((p) => <li key={p}>{p}</li>)}</ul>}
           {confirming && problems.length === 0 && (
-            <p className="rounded-lg bg-amber-500/10 px-3 py-2 text-xs text-amber-800 dark:text-amber-200">
+            <Callout tone="amber" icon={AlertTriangle} className="text-xs">
               {isAssign ? `Move ${lead?.name ?? 'this lead'} to ${names[0]}?` : `Send this ${isTaskKind(kind) ? 'task' : 'update'} to ${recipients.length} ${recipients.length === 1 ? 'person' : 'people'}?`} Press the button again to confirm.
-            </p>
+            </Callout>
           )}
         </div>
 
-        <DialogFooter className="gap-2 sm:gap-0">
+        <DialogFooter>
           {!isAssign && !seed?.followUpOf && <Button variant="outline" disabled={busy || !effectiveTitle} onClick={() => void submit(false)}>Save draft</Button>}
           <Button disabled={busy || problems.length > 0} onClick={() => void submit(true)}>
             {busy ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : null}{confirming ? (isAssign ? 'Confirm assignment' : 'Confirm send') : isAssign ? 'Assign' : 'Send'}

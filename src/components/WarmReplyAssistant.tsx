@@ -185,7 +185,7 @@ export function WarmReplyAssistant({ leadId, phone, windowOpen, stage, getReadab
       <div className="flex flex-wrap items-center gap-1.5">
         <Button type="button" variant="outline" size="sm" className="h-7 gap-1 text-xs" disabled={busy || freshness === null}
           onClick={() => void run(hasDraft ? 'regenerate' : 'draft')} title={mainTitle}>
-          {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : hasDraft ? <RefreshCw className="h-3.5 w-3.5" /> : <Sparkles className="h-3.5 w-3.5" />}
+          {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : hasDraft ? <RefreshCw className="h-3.5 w-3.5" /> : <Sparkles className="h-3.5 w-3.5 text-violet-600 dark:text-violet-300" />}
           {mainLabel}
         </Button>
         {(freshness === 'fresh' || hasDraft) && (
@@ -197,7 +197,7 @@ export function WarmReplyAssistant({ leadId, phone, windowOpen, stage, getReadab
         <span className="text-[11px] text-muted-foreground" aria-live="polite">
           {phase === 'researching' && 'Researching site…'}
           {phase === 'analysing' && 'Analysing…'}
-          {phase === 'ready' && <span className="inline-flex items-center gap-1 text-green-600 dark:text-green-400"><Check className="h-3 w-3" /> Draft ready — review, edit, then send</span>}
+          {phase === 'ready' && <span className="inline-flex items-center gap-1 text-teal-700 dark:text-teal-300"><Check className="h-3 w-3" /> Draft ready — review, edit, then send</span>}
         </span>
         {why && (
           <button type="button" onClick={() => setWhyOpen((o) => !o)} aria-expanded={whyOpen}
@@ -208,7 +208,7 @@ export function WarmReplyAssistant({ leadId, phone, windowOpen, stage, getReadab
       </div>
       {error && <p className="text-[11px] text-destructive">{error}</p>}
       {why && why.problems.length > 0 && !whyOpen && (
-        <p className="flex items-start gap-1 text-[11px] text-amber-600 dark:text-amber-400">
+        <p className="flex items-start gap-1 text-[11px] text-amber-700 dark:text-amber-300">
           <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0" />
           <span><span className="font-semibold">CHECK THIS DRAFT</span> — {why.problems.includes(PRIMARY_MISSING_PROBLEM) ? PRIMARY_MISSING_PROBLEM : why.problems[0]}</span>
         </p>
@@ -221,7 +221,7 @@ export function WarmReplyAssistant({ leadId, phone, windowOpen, stage, getReadab
 function WhyPanel({ why }: { why: DraftWhy }) {
   const facts = SALES_FACT_KEYS.filter((k) => why.salesFacts?.[k]);
   return (
-    <div className="space-y-1.5 rounded-md border border-border/60 bg-muted/30 p-2 text-[11px] leading-snug">
+    <div className="space-y-1.5 rounded-xl bg-muted/40 px-3 py-2 text-[11px] leading-snug ring-1 ring-inset ring-border/50">
       <p className="text-muted-foreground">For you only — none of this is sent. Nothing has been sent.</p>
       <Row label="Question detected">
         {why.latestInbound?.text ? `“${why.latestInbound.text}” · ` : ''}{QUESTION_LABELS[why.questionType] ?? why.questionType}
@@ -284,7 +284,7 @@ function WhyPanel({ why }: { why: DraftWhy }) {
 
 function Row({ label, children, tone }: { label: string; children: ReactNode; tone?: 'bad' | 'warn' }) {
   return (
-    <p className={cn(tone === 'bad' && 'text-destructive', tone === 'warn' && 'text-amber-600 dark:text-amber-400')}>
+    <p className={cn(tone === 'bad' && 'text-destructive', tone === 'warn' && 'text-amber-700 dark:text-amber-300')}>
       <span className="font-medium text-foreground">{label}: </span>{children}
     </p>
   );

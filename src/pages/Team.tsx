@@ -7,7 +7,10 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
-import { Callout, EDGE, PageHeader, ToneChip } from '@/components/operator/ui';
+import { Callout, EDGE, ErrorState, LoadState, PageHeader, ToneChip } from '@/components/operator/ui';
+import { useEarnings } from '@/hooks/useEarnings';
+
+const GBP = new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP', maximumFractionDigits: 2 });
 import { Panel } from '@/components/salesDash/ui';
 import { OwnerAvatar } from '@/components/OwnerBadge';
 import { PERMISSION_MATRIX } from '@/lib/access';
@@ -132,11 +135,18 @@ export default function Team() {
 
   const members = team.data ?? [];
   const active = members.filter((m) => m.status === 'active' && m.role);
+  /* Each salesperson's money at a glance (2026-10-06, full-app design): read from the SAME commission
+     ledger the Sales dashboard uses (fn sales-earnings, admin 'all'), never computed here. Absent while it
+     loads or if it fails — the row then shows no figures rather than a guessed zero. */
+  const earn = useEarnings('all');
+  const salesOf = (id: string) => (earn.data?.clients ?? []).filter((c) => c.sellerId === id).length;
+  const moneyOf = (id: string) => (earn.data?.bySeller ?? []).find((s) => s.sellerId === id) ?? null;
+  const heldFor = (id: string) => (reviews.data?.reviews ?? []).filter((r) => r.status === 'open' && r.claimed_seller_user_id === id).length;
 
   return (
     <div className="p-4 md:p-6 space-y-6 max-w-5xl">
       <div className="space-y-3">
-        <PageHeader eyebrow="Admin" title="Team" subtitle="Salespeople get their own login. They see only their own leads and never delivery, clients, money or settings." />
+        <PageHeader icon={Users} tone="blue" eyebrow="Admin" title="Team" subtitle="Salespeople get their own login. They see only their own leads and never delivery, clients, money or settings." />
         <p className="text-xs leading-snug text-muted-foreground">Click a salesperson's onboarding badge to see their checklist. The checklist is your record only — it does not block selling. Only a suspended, ended or disabled salesperson is stopped. Only you can see these records.</p>
         {onboarding.error && <Callout tone="red">Onboarding records could not be loaded: {String((onboarding.error as Error).message)}</Callout>}
       </div>
@@ -153,18 +163,27 @@ export default function Team() {
       </Panel>
 
       <Panel title="Team members" icon={Users} tone="blue">
-        {team.isLoading ? <div className="flex justify-center py-6"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div> : team.error ? (
-          <Callout tone="red">{String((team.error as Error).message)}</Callout>
+        {team.isLoading ? <LoadState label="Loading the team…" compact /> : team.error ? (
+          <ErrorState title="Couldn’t load the team" detail={String((team.error as Error).message)} onRetry={() => void team.refetch()} />
         ) : (
           <ul className="space-y-2">
             {members.map((m) => (
               <li key={m.user_id} className={cn('flex min-w-0 flex-wrap items-center gap-x-3 gap-y-2 rounded-xl border border-border/60 bg-muted/20 p-3', m.status !== 'active' ? EDGE.grey : m.suspended_at ? EDGE.red : undefined)}>
                 <OwnerAvatar name={m.display_name} className="h-8 w-8 text-xs" />
-                <div className="min-w-0 flex-1">
+                {/* basis-56: on a phone the details take the line and the chips wrap under them (never a squeezed column). */}
+                <div className="min-w-0 flex-1 basis-56">
                   <div className="break-words font-semibold">{m.display_name} {m.is_book_owner && <span className="text-xs font-normal text-muted-foreground">(book owner)</span>}</div>
                   <div className="break-words text-xs text-muted-foreground">
                     {m.email ?? '—'} · {m.last_sign_in_at ? `last active ${new Date(m.last_sign_in_at).toLocaleString('en-GB', { timeZone: 'Europe/London' })}` : 'has not signed in yet'} · {m.assigned_leads} leads
                   </div>
+                  {m.role === 'sales' && earn.data && (
+                    <div className="mt-1.5 flex flex-wrap items-center gap-1.5" data-testid="team-member-money">
+                      <ToneChip tone="blue">{salesOf(m.user_id)} sale{salesOf(m.user_id) === 1 ? '' : 's'}</ToneChip>
+                      <ToneChip tone="green">Earned {GBP.format(moneyOf(m.user_id)?.earned ?? 0)}</ToneChip>
+                      <ToneChip tone={(moneyOf(m.user_id)?.due ?? 0) > 0 ? 'amber' : 'grey'}>Owed {GBP.format(moneyOf(m.user_id)?.due ?? 0)}</ToneChip>
+                      {heldFor(m.user_id) > 0 && <ToneChip tone="amber" icon={Scale}>{heldFor(m.user_id)} held for review</ToneChip>}
+                    </div>
+                  )}
                 </div>
                 <div className="flex flex-wrap items-center gap-1.5">
                 <ToneChip tone={m.status === 'active' ? 'blue' : 'grey'} dot>{m.status === 'active' ? (m.role ?? 'no role') : m.disabled_at ? `ended ${new Date(m.disabled_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'Europe/London' })}` : 'ended'}</ToneChip>

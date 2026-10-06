@@ -21,7 +21,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogFooter } from '@/components/ui/dialog';
+import { DialogHero } from '@/components/operator/ui';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -32,7 +33,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { Button } from '@/components/ui/button';
+import { Button, buttonVariants } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { 
@@ -2457,7 +2458,7 @@ export function OutreachTable({
                           <AlertDialogCancel>Cancel</AlertDialogCancel>
                           <AlertDialogAction
                             onClick={handleResetToFreshSelected}
-                            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                            className={buttonVariants({ variant: 'destructive' })}
                           >
                             Reset to fresh
                           </AlertDialogAction>
@@ -2589,6 +2590,8 @@ export function OutreachTable({
                   size="sm"
                   onClick={() => setShowImportDialog(true)}
                   className="bg-background text-xs h-8"
+                  aria-label="Import leads"
+                  title="Import leads from a CSV"
                 >
                   <Upload className="h-3.5 w-3.5 mr-1.5" />
                   <span className="hidden sm:inline">Import</span>
@@ -3270,15 +3273,17 @@ export function OutreachTable({
           eligible lead; the existing queue drains them (no direct Apify). */}
       <Dialog open={auditDialogOpen} onOpenChange={setAuditDialogOpen}>
         <DialogContent className="sm:max-w-sm">
-          <DialogHeader>
-            <DialogTitle className="text-base">Run AI audits</DialogTitle>
-            <DialogDescription className="text-xs">
+          <DialogHero
+            icon={ClipboardList}
+            tone="purple"
+            title="Run AI audits"
+            subtitle={<>
               One AI-visibility audit per selected lead — enqueued server-side and drained through the
               audit queue (no direct Apify). Uses each lead’s stored business type + location.
               {selectedIds.size - auditSelectedLeads.length > 0 && ` · ${selectedIds.size - auditSelectedLeads.length} skipped (already audited or missing type/location)`}.
               Capped at $3/audit + $15/day. Safe to leave this page.
-            </DialogDescription>
-          </DialogHeader>
+            </>}
+          />
           <div className="space-y-1.5">
             <label className="text-xs font-medium text-muted-foreground">Questions per business</label>
             <Select value={String(auditQuestionCount)} onValueChange={(v) => setAuditQuestionCount(Number(v))}>
@@ -3419,13 +3424,15 @@ export function OutreachTable({
       {/* Fix missing town — preview first, so the spend is on screen before it happens. */}
       <Dialog open={townFixOpen} onOpenChange={setTownFixOpen}>
         <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle className="text-base">Fix missing town</DialogTitle>
-            <DialogDescription className="text-xs">
+          <DialogHero
+            icon={MapPin}
+            tone="blue"
+            title="Fix missing town"
+            subtitle={<>
               Asks Google for the real town of each selected lead that has none, using its stored
               place id. Address-only call — the cheapest tier Google sells.
-            </DialogDescription>
-          </DialogHeader>
+            </>}
+          />
           {!townFixPreview ? (
             <div className="flex items-center gap-2 py-2 text-sm text-muted-foreground">
               <Loader2 className="h-4 w-4 animate-spin" /> Checking which leads need one…
@@ -3467,13 +3474,15 @@ export function OutreachTable({
       {/* Set trade on a selection — the hand half of the repair. */}
       <Dialog open={tradeDialogOpen} onOpenChange={setTradeDialogOpen}>
         <DialogContent className="sm:max-w-sm">
-          <DialogHeader>
-            <DialogTitle className="text-base">Set trade on {missingTradeIds.length} lead{missingTradeIds.length === 1 ? '' : 's'}</DialogTitle>
-            <DialogDescription className="text-xs">
+          <DialogHero
+            icon={Tag}
+            tone="blue"
+            title={<>Set trade on {missingTradeIds.length} lead{missingTradeIds.length === 1 ? '' : 's'}</>}
+            subtitle={<>
               These have no business type stored, so they cannot be audited. Only the leads that are
               missing one are changed — anything already set is left alone.
-            </DialogDescription>
-          </DialogHeader>
+            </>}
+          />
           <div className="space-y-1.5">
             <label className="text-xs font-medium text-muted-foreground">Trade</label>
             <Select value={tradeChoice} onValueChange={setTradeChoice}>
@@ -3504,14 +3513,14 @@ export function OutreachTable({
       {/* Bulk "Queue WhatsApp" template picker — choose the template at queue-time. */}
       <Dialog open={queueDialogOpen} onOpenChange={setQueueDialogOpen}>
         <DialogContent className="sm:max-w-sm">
-          <DialogHeader>
-            <DialogTitle className="text-base">Queue {selectedIds.size} for WhatsApp</DialogTitle>
-            <DialogDescription className="text-xs">
-              {perms.queueControls
+          <DialogHero
+            icon={MessageSquare}
+            tone="blue"
+            title={<>Queue {selectedIds.size} for WhatsApp</>}
+            subtitle={perms.queueControls
                 ? 'Choose the approved template to send. It’s applied to all selected leads, and that exact template is sent.'
                 : 'Choose which approved opener this batch gets. Only your never-contacted leads are queued, and that exact template is sent.'}
-            </DialogDescription>
-          </DialogHeader>
+          />
           <div className="space-y-1.5">
             <label className="text-xs font-medium text-muted-foreground">Template</label>
             <Select value={queueTemplate} onValueChange={setQueueTemplate}>

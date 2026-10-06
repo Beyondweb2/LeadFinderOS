@@ -3,8 +3,9 @@
    check, and the real Apify cost of those runs (ai_audit_runs.actor_cost_usd) once they have finished.
    Reused results cost nothing and are counted apart. No provider key or secret is ever read here. */
 import { useQuery } from '@tanstack/react-query';
-import { Loader2, SearchCheck } from 'lucide-react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { SearchCheck } from 'lucide-react';
+import { cn } from '@/lib/utils';
+import { EmptyState, ErrorState, IconTile, LoadState, SURFACE } from '@/components/operator/ui';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { edgeErrorMessage, invokeEdge } from '@/lib/edgeInvoke';
 
@@ -28,19 +29,20 @@ export function SalesChecksAdminCard() {
   });
   const o = q.data;
   return (
-    <Card data-testid="sales-checks-admin">
-      <CardHeader className="pb-2">
-        <CardTitle className="flex items-center gap-2 text-base"><SearchCheck className="h-4 w-4" />Check before calling — salespeople, last 7 days</CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-3 text-sm">
+    <section data-testid="sales-checks-admin" className={cn('min-w-0 p-4 sm:p-5', SURFACE)}>
+      <header className="mb-3 flex min-w-0 items-center gap-3">
+        <IconTile icon={SearchCheck} tone="purple" />
+        <h2 className="min-w-0 text-base font-bold leading-tight tracking-tight">Check before calling — salespeople, last 7 days</h2>
+      </header>
+      <div className="space-y-3 text-sm">
         <p className="text-xs text-muted-foreground">
           Every batch a salesperson ran. "Fresh" checks are paid (one per lead, estimate booked on the guard row);
           reused results are free. Actual cost appears once a run has finished. The daily allowance per salesperson is the
           "pre-call checks" line in the thresholds above.
         </p>
-        {q.isLoading && <p className="flex items-center gap-2 text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" />Loading…</p>}
-        {q.error && <p className="text-destructive">{edgeErrorMessage(q.error, 'Couldn\'t load the checks')}</p>}
-        {o && o.reps.length === 0 && <p className="text-muted-foreground">No salesperson has run a check in the last 7 days.</p>}
+        {q.isLoading && <LoadState compact />}
+        {q.error && <ErrorState title={edgeErrorMessage(q.error, 'Couldn\'t load the checks')} />}
+        {o && o.reps.length === 0 && <EmptyState icon={SearchCheck} title="No salesperson has run a check in the last 7 days." />}
         {o && o.reps.length > 0 && (
           <div className="overflow-x-auto">
             <Table>
@@ -95,7 +97,7 @@ export function SalesChecksAdminCard() {
             </ul>
           </details>
         )}
-      </CardContent>
-    </Card>
+      </div>
+    </section>
   );
 }

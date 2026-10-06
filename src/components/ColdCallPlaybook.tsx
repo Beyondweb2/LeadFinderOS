@@ -7,6 +7,7 @@ import { QuickCloseButton } from '@/components/QuickCloseDialog';
 import { HookVisibilityCard } from '@/components/HookVisibilityCard';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
+import { IconTile } from '@/components/operator/ui';
 import { cn } from '@/lib/utils';
 import { useColdCallPlaybook } from '@/hooks/useColdCallPlaybook';
 import { type ColdCallPlaybook } from '@/lib/coldCallPlaybook';
@@ -312,9 +313,14 @@ export function ColdCallPlaybookSheet({ leadId, open, onOpenChange, onLogCall }:
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent side="right" className="w-full overflow-y-auto sm:max-w-2xl">
-        <SheetHeader className="mb-3">
-          <SheetTitle className="flex items-center gap-2"><ScrollText className="h-5 w-5" />{COLD_CALL_PLAYBOOK_LABEL}</SheetTitle>
-          <SheetDescription>{q.data?.context.business ?? 'Built from the evidence already stored for this lead. Nothing is re-run.'}</SheetDescription>
+        <SheetHeader className="mb-3 space-y-0 pr-8 text-left">
+          <div className="flex min-w-0 items-start gap-3">
+            <IconTile icon={ScrollText} tone="blue" />
+            <div className="min-w-0 flex-1">
+              <SheetTitle className="break-words">{COLD_CALL_PLAYBOOK_LABEL}</SheetTitle>
+              <SheetDescription className="mt-0.5 text-xs leading-snug sm:text-sm">{q.data?.context.business ?? 'Built from the evidence already stored for this lead. Nothing is re-run.'}</SheetDescription>
+            </div>
+          </div>
         </SheetHeader>
         {q.isLoading && <p className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" />Loading stored evidence…</p>}
         {q.isError && <p className="text-sm text-destructive">Couldn't load the playbook: {(q.error as { message?: string })?.message ?? 'unknown error'}</p>}

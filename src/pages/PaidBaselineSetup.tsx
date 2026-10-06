@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { AlertCircle, Loader2, Lock, Play, RefreshCw, Save } from 'lucide-react';
+import { AlertCircle, ClipboardCheck, Loader2, Lock, Play, RefreshCw, Save } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Callout, EmptyState, Fact, LoadState, PageHeader, SubSection, SURFACE, ToneChip } from '@/components/operator/ui';
+import { cn } from '@/lib/utils';
 import { AuditQuestionEditor, cleanAuditQuestions } from '@/components/AuditQuestionEditor';
 import { useToast } from '@/hooks/use-toast';
 import { invokePaidBaseline, type PaidBaseline } from '@/lib/paidBaseline';
@@ -60,37 +61,34 @@ export default function PaidBaselineSetup() {
     } finally { setBusy(null); }
   });
 
-  if (loading) return <div className="flex justify-center py-16"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
-  if (!baseline) return <div className="mx-auto max-w-2xl py-12 text-center text-sm text-muted-foreground">No paid baseline found.</div>;
+  if (loading) return <LoadState label="Loading the baseline…" className="py-16" />;
+  if (!baseline) return <div className="mx-auto max-w-2xl px-4 py-12"><EmptyState icon={ClipboardCheck} tone="purple" title="No paid baseline found." /></div>;
 
   const locked = isFrozenBaselineStatus(baseline.status);
   const lines = cleanAuditQuestions(questions);
   return (
-    <div className="mx-auto max-w-4xl space-y-4 py-6">
+    <div className="mx-auto min-w-0 max-w-4xl space-y-4 px-4 py-6 sm:px-0">
       <Link to="/dashboard" className="text-xs text-muted-foreground hover:text-foreground">← Dashboard</Link>
-      <div>
-        <h1 className="text-2xl font-semibold">{baseline.business_name}</h1>
-        <p className="text-sm text-muted-foreground">Needs Baseline · {baseline.location || 'location not confirmed'}</p>
-      </div>
-      <Card>
-        <CardHeader><CardTitle className="text-base">Client context</CardTitle></CardHeader>
-        <CardContent className="grid gap-2 text-sm sm:grid-cols-2">
-          <div><span className="text-muted-foreground">Trade:</span> {baseline.business_type || '—'}</div>
-          <div><span className="text-muted-foreground">Website:</span> {baseline.website || 'none recorded'}</div>
-          <div><span className="text-muted-foreground">Services:</span> {baseline.services_list?.join(', ') || baseline.services || '—'}</div>
-          <div><span className="text-muted-foreground">Areas:</span> {baseline.areas_list?.join(', ') || baseline.location || '—'}</div>
-        </CardContent>
-      </Card>
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center justify-between text-base">
-            <span>Baseline questions <span className="text-xs font-normal text-muted-foreground">({lines.length})</span></span>
-            {locked && <span className="flex items-center gap-1 text-xs font-normal text-emerald-500"><Lock className="h-3.5 w-3.5" /> Frozen for the remeasure</span>}
-          </CardTitle>
+      <PageHeader icon={ClipboardCheck} tone="purple" eyebrow="Paid client" title={baseline.business_name}
+        subtitle={<>Needs Baseline · {baseline.location || 'location not confirmed'}</>} />
+      <section className={cn(SURFACE, 'min-w-0 p-4 sm:p-5')}>
+        <SubSection title="Client context" tone="blue">
+          <dl className="grid gap-3 sm:grid-cols-2">
+            <Fact label="Trade">{baseline.business_type || '—'}</Fact>
+            <Fact label="Website">{baseline.website || 'none recorded'}</Fact>
+            <Fact label="Services">{baseline.services_list?.join(', ') || baseline.services || '—'}</Fact>
+            <Fact label="Areas">{baseline.areas_list?.join(', ') || baseline.location || '—'}</Fact>
+          </dl>
+        </SubSection>
+      </section>
+      <section className={cn(SURFACE, 'min-w-0 p-4 sm:p-5')}>
+        <SubSection tone="purple"
+          title={<>Baseline questions <span className="text-xs font-normal text-muted-foreground">({lines.length})</span></>}
+          action={locked ? <ToneChip tone="green" icon={Lock}>Frozen for the remeasure</ToneChip> : undefined}>
           <p className="text-xs text-muted-foreground">These exact questions are measured now and replayed verbatim at the remeasure. Review them before approving.</p>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          {error && <div role="alert" className="flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive"><AlertCircle className="mt-0.5 h-4 w-4 shrink-0"/><span>{error}</span></div>}
+        </SubSection>
+        <div className="mt-3 space-y-3">
+          {error && <Callout tone="red" icon={AlertCircle}>{error}</Callout>}
           <AuditQuestionEditor questions={questions} onChange={setQuestions} disabled={locked} busy={!!busy}/>
           <div className="flex flex-wrap gap-2">
             {!locked && <Button variant="outline" onClick={() => void act('save', { questions: lines })} disabled={!!busy || lines.length === 0}><Save className="mr-2 h-4 w-4" /> Save edits</Button>}
@@ -101,8 +99,8 @@ export default function PaidBaselineSetup() {
           </div>
           {!locked && lines.length !== BASELINE_QUESTIONS && <p className="text-xs text-muted-foreground">Approval needs exactly {BASELINE_QUESTIONS} questions (currently {lines.length}).</p>}
           <p className="text-xs text-muted-foreground">Status: <span className="font-medium text-foreground">{paidBaselineStatusLabel(baseline.status)}</span>{baseline.approved_at ? ` · approved ${new Date(baseline.approved_at).toLocaleString('en-GB')}` : ''}</p>
-        </CardContent>
-      </Card>
+        </div>
+      </section>
     </div>
   );
 }

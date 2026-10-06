@@ -1,7 +1,7 @@
 import { useState } from 'react';
-import { Palette, RotateCcw, Check, Sparkles, Sun, Moon } from 'lucide-react';
+import { Palette, RotateCcw, Check, Sun, Moon, Info } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Label } from '@/components/ui/label';
+import { Callout, IconTile, SubSection } from '@/components/operator/ui';
 import { Input } from '@/components/ui/input';
 import {
   Sheet,
@@ -113,23 +113,23 @@ export function AccentColorPicker() {
         </Button>
       </SheetTrigger>
       <SheetContent className="w-[340px] sm:w-[380px] bg-card border-border p-0">
-        <SheetHeader className="p-6 pb-4">
-          <SheetTitle className="flex items-center gap-2 text-foreground">
-            <Sparkles className="h-5 w-5 text-primary" />
-            Theme & Accent
-          </SheetTitle>
-          <SheetDescription className="text-muted-foreground text-sm">
-            Personalize your interface with custom themes and accent colors.
-          </SheetDescription>
+        <SheetHeader className="p-6 pb-4 text-left">
+          <div className="flex min-w-0 items-start gap-3 pr-8">
+            <IconTile icon={Palette} tone="blue" />
+            <div className="min-w-0">
+              <SheetTitle className="text-foreground">Theme & Accent</SheetTitle>
+              <SheetDescription className="mt-0.5 text-muted-foreground text-sm">
+                Personalize your interface with custom themes and accent colors.
+              </SheetDescription>
+            </div>
+          </div>
         </SheetHeader>
 
         <ScrollArea className="h-[calc(100vh-140px)] px-6 pb-6">
           <div className="space-y-6">
             {/* Live Preview */}
-            <div className="rounded-xl p-4 border border-border bg-background/50">
-              <Label className="text-xs font-medium text-muted-foreground mb-3 block">
-                Live Preview
-              </Label>
+            <div className="rounded-2xl p-4 bg-muted/40 ring-1 ring-inset ring-border/50">
+              <SubSection title="Live Preview" tone="blue" />
               <div className="flex items-center gap-3">
                 <Button size="sm" className="text-xs">
                   Primary
@@ -148,10 +148,7 @@ export function AccentColorPicker() {
             </div>
 
             {/* Theme Selection */}
-            <div className="space-y-3">
-              <Label className="text-xs font-medium text-muted-foreground">
-                Background Theme
-              </Label>
+            <SubSection title="Background Theme" tone="grey">
               <Tabs defaultValue={currentTheme.mode} className="w-full">
                 <TabsList className="grid w-full grid-cols-2 mb-3">
                   <TabsTrigger value="dark" className="flex items-center gap-1.5 text-xs">
@@ -178,13 +175,10 @@ export function AccentColorPicker() {
                   />
                 </TabsContent>
               </Tabs>
-            </div>
+            </SubSection>
 
             {/* Curated Presets */}
-            <div className="space-y-3">
-              <Label className="text-xs font-medium text-muted-foreground">
-                Accent Color
-              </Label>
+            <SubSection title="Accent Color" tone="grey">
               <div className="grid grid-cols-3 gap-2">
                 {accentPresets.map((preset, index) => (
                   <button
@@ -217,13 +211,10 @@ export function AccentColorPicker() {
                   </button>
                 ))}
               </div>
-            </div>
+            </SubSection>
 
             {/* Custom Color Picker */}
-            <div className="space-y-3">
-              <Label className="text-xs font-medium text-muted-foreground">
-                Custom Accent
-              </Label>
+            <SubSection title="Custom Accent" tone="grey">
               <div className="flex items-center gap-3">
                 <div className="relative">
                   <Input
@@ -251,14 +242,14 @@ export function AccentColorPicker() {
                   </p>
                 </div>
               </div>
-            </div>
+            </SubSection>
 
             {/* Info Notice */}
-            <div className="rounded-lg p-3 bg-secondary/50 border border-border">
-              <p className="text-[10px] text-muted-foreground leading-relaxed">
+            <Callout tone="blue" icon={Info} className="text-xs">
+              <p className="text-[11px] leading-relaxed text-muted-foreground">
                 <strong className="text-foreground/80">Note:</strong> Warm colors (red, orange, yellow) are automatically adjusted to cool hues. The landing page always uses the brand blue theme.
               </p>
-            </div>
+            </Callout>
 
             {/* Reset Button */}
             <Button

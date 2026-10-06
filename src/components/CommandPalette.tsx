@@ -15,6 +15,7 @@ import { GO_SHORTCUTS, goTarget, isPaletteKey, isTypingTarget } from '@/lib/shor
 import { outreachLeadLink, whatsAppLinkForLead } from '@/lib/salesLinks';
 import { writeCampaignFilter } from '@/lib/outreachPrefs';
 import { cn } from '@/lib/utils';
+import { DialogHero } from '@/components/operator/ui';
 
 /* ══ THE COMMAND PALETTE — Ctrl/Cmd + K (Sales Experience release 4, 2026-09-28) ═════════════════════
    Search a lead, jump to a recent lead, open WhatsApp / Outreach / Find Leads / Sales / follow-ups, or
@@ -103,6 +104,7 @@ export function CommandPalette() {
     if (e.key === 'Enter') { e.preventDefault(); items[sel]?.run(); }
   };
   let lastGroup = '';
+  const KBD = 'shrink-0 rounded-md bg-muted/70 px-1.5 py-0.5 font-mono text-xs ring-1 ring-inset ring-border/60';
 
   return (
     <>
@@ -122,9 +124,9 @@ export function CommandPalette() {
               const head = it.group !== lastGroup ? (lastGroup = it.group, <li key={`h:${it.group}`} className="px-2.5 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">{it.group}</li>) : null;
               return [head, (
                 <li key={it.id} role="option" aria-selected={i === sel} onMouseEnter={() => setSel(i)}
-                  className={cn('flex items-center gap-2 rounded-lg px-2.5 py-2', i === sel ? 'bg-muted' : '')}>
+                  className={cn('flex items-center gap-2 rounded-xl px-2.5 py-2', i === sel ? 'bg-primary/10 ring-1 ring-inset ring-primary/20' : '')}>
                   <button type="button" onClick={it.run} className="flex min-w-0 flex-1 items-center gap-2.5 text-left">
-                    <it.icon className="h-4 w-4 shrink-0 text-muted-foreground" />
+                    <it.icon className={cn('h-4 w-4 shrink-0', i === sel ? 'text-primary' : 'text-muted-foreground')} />
                     <span className="min-w-0 flex-1 truncate text-sm">{it.label}</span>
                     {it.hint && <span className="shrink-0 text-[11px] text-muted-foreground">{it.hint}</span>}
                   </button>
@@ -141,12 +143,12 @@ export function CommandPalette() {
       </Dialog>
       <Dialog open={help} onOpenChange={setHelp}>
         <DialogContent className="max-w-sm">
-          <DialogHeader><DialogTitle>Keyboard shortcuts</DialogTitle><DialogDescription>They only open things — none of them sends or changes anything.</DialogDescription></DialogHeader>
+          <DialogHero icon={Keyboard} tone="blue" title="Keyboard shortcuts" subtitle="They only open things — none of them sends or changes anything." />
           <ul className="space-y-1.5 text-sm">
-            <li className="flex justify-between"><span>Search and jump</span><kbd className="rounded border px-1.5 text-xs">Ctrl / ⌘ K</kbd></li>
-            {GO_SHORTCUTS.filter((g) => canOpenRoute(role, g.to)).map((g) => <li key={g.to} className="flex justify-between"><span>{g.label}</span><kbd className="rounded border px-1.5 text-xs">{g.keys}</kbd></li>)}
-            <li className="flex justify-between"><span>Lead popup: next / previous lead</span><kbd className="rounded border px-1.5 text-xs">→ ←</kbd></li>
-            <li className="flex justify-between"><span>This list</span><kbd className="rounded border px-1.5 text-xs">?</kbd></li>
+            <li className="flex justify-between gap-3"><span>Search and jump</span><kbd className={KBD}>Ctrl / ⌘ K</kbd></li>
+            {GO_SHORTCUTS.filter((g) => canOpenRoute(role, g.to)).map((g) => <li key={g.to} className="flex justify-between gap-3"><span>{g.label}</span><kbd className={KBD}>{g.keys}</kbd></li>)}
+            <li className="flex justify-between gap-3"><span>Lead popup: next / previous lead</span><kbd className={KBD}>→ ←</kbd></li>
+            <li className="flex justify-between gap-3"><span>This list</span><kbd className={KBD}>?</kbd></li>
           </ul>
         </DialogContent>
       </Dialog>

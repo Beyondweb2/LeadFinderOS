@@ -20,9 +20,10 @@ import { useParams, Link, useLocation } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { fetchAllRows } from '@/lib/fetchAllRows';
 import { Button } from '@/components/ui/button';
-import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, ArrowLeft, ArrowUp, ArrowDown, Minus, CircleHelp } from 'lucide-react';
+import { ArrowLeft, ArrowUp, ArrowDown, Minus, CircleHelp, GitCompare, ListChecks } from 'lucide-react';
+import { EmptyState, ErrorState, Figure, LoadState, PageHeader, SubSection, SURFACE, TONE } from '@/components/operator/ui';
+import { cn } from '@/lib/utils';
 import type { QueueRowLite } from '@/lib/baselineView';
 import {
   compareMeasurements, NOISE_BAND_PP, type MeasurementComparison, type Movement,
@@ -173,13 +174,12 @@ export default function CompareMeasurements() {
   }, [rows, beforeIds, afterIds, businessName, website]);
 
   if (isLoading) {
-    return <div className="flex items-center justify-center py-16"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
+    return <LoadState label="Loading the measurements…" className="py-16" />;
   }
   if (error) {
     return (
-      <div className="mx-auto max-w-2xl py-12 text-center">
-        <p className="text-sm text-muted-foreground">{error}</p>
-        <Button variant="outline" className="mt-4" onClick={load}>Try again</Button>
+      <div className="mx-auto max-w-2xl px-4 py-12">
+        <ErrorState title={error} onRetry={() => void load()} />
       </div>
     );
   }
@@ -188,9 +188,9 @@ export default function CompareMeasurements() {
   const skipped = runs.length - usableRuns.length;
 
   return (
-    <div className="mx-auto max-w-6xl space-y-6 p-4 sm:p-6">
-      <div className="flex items-center gap-3">
-        <Button asChild variant="ghost" size="sm">
+    <div className="mx-auto min-w-0 max-w-6xl space-y-6 p-4 sm:p-6">
+      <div className="space-y-3">
+        <Button asChild variant="ghost" size="sm" className="-ml-2">
           {/* ⛔ HAND THE CHAIN BACK. Baseline's own back link reads router state; without this
               it arrives with none and falls through to its fallback, so the operator loses the
               trail that started on AI Audit. Passing it through is what turns
@@ -198,20 +198,14 @@ export default function CompareMeasurements() {
               cycle between these two pages. */}
           <Link to={`/baseline/${auditId}`} state={backState}><ArrowLeft className="mr-1.5 h-4 w-4" /> Baseline</Link>
         </Button>
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Before and after</h1>
-          <p className="text-sm text-muted-foreground">{businessName || 'This business'}</p>
-        </div>
+        <PageHeader icon={GitCompare} tone="purple" eyebrow="Paid client" title="Before and after"
+          subtitle={businessName || 'This business'} />
       </div>
 
       {/* ── RUN PICKER ─────────────────────────────────────────────────────────── */}
-      <Card className="p-4 sm:p-5">
-        <div className="flex flex-wrap items-baseline justify-between gap-2">
-          <h2 className="text-sm font-bold uppercase tracking-wide text-muted-foreground">Which runs to compare</h2>
-          <p className="text-xs text-muted-foreground">
-            Defaults to the oldest measured day against the newest. Change it if that is not the comparison you want.
-          </p>
-        </div>
+      <section className={cn(SURFACE, 'min-w-0 p-4 sm:p-5')}>
+        <SubSection title="Which runs to compare" icon={ListChecks} tone="purple"
+          hint="Defaults to the oldest measured day against the newest. Change it if that is not the comparison you want." />
         {skipped > 0 && (
           <p className="mt-2 text-xs text-muted-foreground">
             {skipped} run{skipped === 1 ? '' : 's'} not listed — cancelled or failed runs hold no answers, so including
@@ -257,26 +251,27 @@ export default function CompareMeasurements() {
             </tbody>
           </table>
         </div>
-      </Card>
+      </section>
 
       {!comparison && (
-        <Card className="p-6 text-center text-sm text-muted-foreground">
+        <EmptyState icon={GitCompare} tone="purple" title={<>
           Tick at least one run as <span className="font-medium text-foreground">Before</span> and one as{' '}
           <span className="font-medium text-foreground">After</span>.
-        </Card>
+        </>} />
       )}
 
       {comparison && (
         <>
           {/* ── HEADLINE ─────────────────────────────────────────────────────────── */}
-          <Card className="p-5 sm:p-6">
+          <section className={cn(SURFACE, 'min-w-0 p-5 sm:p-6')}>
             {/* ⛔ LEAD WITH THE ANSWER IN PLAIN WORDS. This page used to open with a
                 four-clause sentence carrying the counts, the rate, the noise band and the
                 verdict all at once, and the reader had to parse it to learn the one thing they
                 came for: did it move or not. The sentence is still here — it is the honest
                 detail and it is what the export carries — but it is now support underneath the
                 answer, not the answer itself. */}
-            <p className="text-2xl font-bold tracking-tight">
+            <p className={cn('text-2xl font-extrabold tracking-tight',
+              comparison.movement === 'improved' ? TONE.green.text : comparison.movement === 'dropped' ? TONE.red.text : comparison.movement === 'incomparable' ? TONE.grey.text : TONE.amber.text)}>
               {comparison.movement === 'incomparable' ? "Can't compare these two"
                 : comparison.movement === 'improved' ? 'Improved'
                 : comparison.movement === 'dropped' ? 'Dropped'
@@ -286,21 +281,17 @@ export default function CompareMeasurements() {
               {comparison.headline}
             </p>
 
-            <div className="mt-5 grid gap-4 sm:grid-cols-2">
+            <div className="mt-5 grid gap-3 sm:grid-cols-2">
               {([['Before', comparison.before], ['After', comparison.after]] as const).map(([label, side]) => (
-                <div key={label} className="rounded-lg border bg-muted/30 p-4">
-                  <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-muted-foreground">{label}</p>
-                  <p className="mt-1.5 text-2xl font-bold tabular-nums">
-                    {side.named} <span className="text-base font-medium text-muted-foreground">of {side.answered}</span>
-                  </p>
-                  <p className="text-sm text-muted-foreground">
-                    {side.ratePct === null ? 'nothing answered' : `${side.ratePct.toFixed(1)}% of answers`}
-                  </p>
-                  <p className="mt-2 text-xs text-muted-foreground">
-                    {side.questions} question{side.questions === 1 ? '' : 's'} · {side.runs} run{side.runs === 1 ? '' : 's'} ·
-                    {' '}own site cited in {side.cited}
-                  </p>
-                </div>
+                <Figure key={label} label={label} tone="purple" strong={label === 'After'}
+                  value={<>{side.named} <span className="text-base font-medium text-muted-foreground">of {side.answered}</span></>}
+                  sub={<>
+                    <span className="block text-sm">{side.ratePct === null ? 'nothing answered' : `${side.ratePct.toFixed(1)}% of answers`}</span>
+                    <span className="mt-1 block">
+                      {side.questions} question{side.questions === 1 ? '' : 's'} · {side.runs} run{side.runs === 1 ? '' : 's'} ·
+                      {' '}own site cited in {side.cited}
+                    </span>
+                  </>} />
               ))}
             </div>
 
@@ -320,7 +311,7 @@ export default function CompareMeasurements() {
                 {' '}Only questions asked both times can move.
               </p>
             )}
-          </Card>
+          </section>
 
           {/* ── SIDE BY SIDE, PER QUESTION ───────────────────────────────────────── */}
           {/* THE ALIGNED TABLE — shared with the AI Audit before/after view. It used to be

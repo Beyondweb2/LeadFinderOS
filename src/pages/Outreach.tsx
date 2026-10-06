@@ -30,7 +30,8 @@ import { useLeadPermissions } from '@/hooks/useLeadPermissions';
 import { AddLeadDialog } from '@/components/AddLeadDialog';
 import { useSalesChecks } from '@/hooks/useSalesChecks';
 import type { WorkspaceTabInput } from '@/components/LeadDetailDialog';
-import { UserPlus } from 'lucide-react';
+import { UserPlus, ClipboardList } from 'lucide-react';
+import { PageHeader } from '@/components/salesDash/primitives';
 import { useSubscription } from '@/hooks/useSubscription';
 import { useOwnerScopeMemberIds } from '@/components/OwnerFilterSelect';
 import { DEFAULT_OWNER_SCOPE, normaliseOwnerScope, scopeLeads, scopeShowingLead, type OwnerScope } from '@/lib/outreachOwnerScope';
@@ -299,16 +300,15 @@ const Outreach = () => {
   return (
     <div className="space-y-3 sm:space-y-6">
       {/* Page Header */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div className="text-center sm:text-left">
-          <h1 className="text-lg sm:text-2xl font-bold tracking-tight">Outreach CRM</h1>
-          <p className="text-xs sm:text-base text-muted-foreground max-w-lg">
-            {perms.queueControls
+      <PageHeader
+        icon={ClipboardList}
+        tone="blue"
+        title="Outreach CRM"
+        subtitle={perms.queueControls
               ? 'Contact businesses via WhatsApp or call. Update their status, star the promising ones to track them, and open any row for the full detail.'
               : 'Your leads. Contact them via WhatsApp or call, update their status, star the promising ones, and open any row for the full detail.'}
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center justify-center sm:justify-end gap-2 sm:shrink-0">
+        actions={
+        <>
           {/* A lead found outside the app (LinkedIn, referral…) — both roles, server-deduped. */}
           <Button size="sm" variant="outline" className="h-8 gap-1.5 text-xs" onClick={() => setAddLeadOpen(true)}><UserPlus className="h-3.5 w-3.5" />Add a lead</Button>
           {/* Added → its workspace opens at once (the launch waits until the new row is in the list),
@@ -323,8 +323,9 @@ const Outreach = () => {
           <span className="text-xs text-muted-foreground hidden sm:inline">Campaign</span>
           <CampaignPicker mode="filter" value={campaignFilter} onChange={changeCampaignFilter} />
           <CampaignsButton />
-        </div>
-      </div>
+        </>
+        }
+      />
 
       {/* WhatsApp outreach queue (admin-only). */}
       {perms.queueControls && <WhatsAppQueuePanel leads={allLeads} onUpdateLead={updateLead} listComplete={listComplete} />}

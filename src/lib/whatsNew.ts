@@ -22,6 +22,26 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-06-full-app-design', date: '2026-10-06', title: 'Every page and popup now looks like the Sales dashboard', audience: 'all',
+    body: 'The same headers, colours, popup style and loading / error messages across the whole app. Nothing you can do has changed, only how it looks.',
+    report: {
+      added: [
+        'Each page has the same header: its icon, its name and one line saying what it is for.',
+        'Every popup opens with the same title row: an icon, the title and a short line under it.',
+        'One look for "loading", "couldn’t load — Try again" and "nothing here yet", everywhere.',
+        'Team (Paul only): each salesperson shows their sales, commission earned and commission owed, and any sale held for review.',
+      ],
+      changed: [
+        'Find Leads, Outreach, WhatsApp, Coverage, Campaigns, AI Audit, API usage & Security, Templates, Website Build and the baseline pages use the shared header.',
+        'On a phone, page titles are left-aligned and buttons wrap instead of squeezing the text. The lead popup shows the full business name.',
+        'Delete / discard buttons in confirmations are always red.',
+        'The old dark Outreach tips and welcome popups match the rest of the app.',
+      ],
+      removed: [
+        'The full-screen spinner and full-screen error on API usage & Security.',
+      ],
+      effect: 'It is one app now: the same signals mean the same thing on every screen. No button, rule or number changed.',
+    } },
   { id: '2026-10-06-one-click-checks-50', date: '2026-10-06', title: 'Check before calling starts in one click, and you get 50 checks a day', audience: 'all',
     body: 'Tick leads and press Check before calling: the checks start straight away, with no pop-up. Each person now gets 50 new checks a day instead of 30.',
     report: {

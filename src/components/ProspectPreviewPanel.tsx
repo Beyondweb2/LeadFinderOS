@@ -5,6 +5,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { AlertTriangle, Check, Copy, Download, ExternalLink, Loader2, MonitorSmartphone, RefreshCw } from 'lucide-react';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+import { ActionBar, Callout, IconTile, SubSection, ToneChip } from '@/components/operator/ui';
 import { Button } from '@/components/ui/button';
 import { invokeEdge, edgeErrorMessage } from '@/lib/edgeInvoke';
 import { resolveStoredAssets } from '@/lib/prospectPreview/assets';
@@ -104,56 +105,64 @@ function ProspectPreviewSheet({ leadId, open, onOpenChange }: { leadId: string; 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent className="w-full overflow-y-auto sm:max-w-xl">
-        <SheetHeader>
-          <SheetTitle>{PROSPECT_PREVIEW_LABEL}</SheetTitle>
-          <SheetDescription>One replacement homepage + an evidence card, for outreach. Not a Website Build. Nothing is sent.</SheetDescription>
+        {/* The dialog header look (IconTile + title + purpose line), drawn with the Sheet's own title parts. */}
+        <SheetHeader className="space-y-0 pr-8 text-left">
+          <div className="flex min-w-0 items-start gap-3">
+            <IconTile icon={MonitorSmartphone} tone="blue" />
+            <div className="min-w-0 flex-1">
+              <SheetTitle className="break-words">{PROSPECT_PREVIEW_LABEL}</SheetTitle>
+              <SheetDescription className="mt-0.5 text-xs leading-snug sm:text-sm">One replacement homepage + an evidence card, for outreach. Not a Website Build. Nothing is sent.</SheetDescription>
+            </div>
+          </div>
         </SheetHeader>
 
         <div className="mt-4 space-y-5 text-sm">
-          <div className="flex items-center gap-2">
-            {working ? <Loader2 className="h-4 w-4 animate-spin" /> : status === 'ready' ? <Check className="h-4 w-4 text-emerald-600" /> : status === 'failed' ? <AlertTriangle className="h-4 w-4 text-destructive" /> : null}
-            <span className="font-semibold">{PREVIEW_STATUS_LABELS[status]}</span>
-            {p?.stale?.length ? <span className="rounded bg-amber-500/15 px-2 py-0.5 text-xs text-amber-700 dark:text-amber-300">Stale — {p.stale.join(', ')} changed</span> : null}
+          <div className="flex flex-wrap items-center gap-2">
+            <ToneChip
+              tone={working ? 'blue' : status === 'ready' ? 'green' : status === 'failed' ? 'red' : 'grey'}
+              icon={working ? undefined : status === 'ready' ? Check : status === 'failed' ? AlertTriangle : undefined}
+              dot={working || (status !== 'ready' && status !== 'failed')}
+              className="px-2.5 py-1 text-xs"
+            >{PREVIEW_STATUS_LABELS[status]}</ToneChip>
+            {p?.stale?.length ? <ToneChip tone="amber" className="px-2.5 py-1 text-xs">Stale — {p.stale.join(', ')} changed</ToneChip> : null}
           </div>
-          {status === 'failed' && p?.statusDetail && <p className="rounded border border-destructive/30 bg-destructive/5 p-2 text-xs">{p.statusDetail}</p>}
-          {error && <p className="rounded border border-destructive/30 bg-destructive/5 p-2 text-xs">{error}</p>}
-          {data && data.eligible === false && <p className="rounded border p-2 text-xs text-muted-foreground">{data.reason}</p>}
-          {data?.shotsConfigured === false && <p className="text-xs text-amber-700 dark:text-amber-300">Screenshots are not configured on the server (Cloudflare secrets).</p>}
+          {status === 'failed' && p?.statusDetail && <Callout tone="red" icon={AlertTriangle} className="text-xs">{p.statusDetail}</Callout>}
+          {error && <Callout tone="red" icon={AlertTriangle} className="text-xs">{error}</Callout>}
+          {data && data.eligible === false && <Callout tone="grey" className="text-xs">{data.reason}</Callout>}
+          {data?.shotsConfigured === false && <Callout tone="amber" className="text-xs">Screenshots are not configured on the server (Cloudflare secrets).</Callout>}
 
           {headline && (
-            <div className="space-y-1">
-              <div className="text-xs uppercase text-muted-foreground">AI search</div>
-              <div className="font-medium">“{headline.question}” <span className="text-muted-foreground">· {headline.engines.join(', ')}</span></div>
-              <div className="text-xs uppercase text-muted-foreground pt-2">Competitors named</div>
-              <ul className="list-disc pl-5">{headline.competitors.map((c) => <li key={c}>{c}</li>)}</ul>
-            </div>
+            <>
+              <SubSection title="AI search" tone="purple">
+                <div className="font-medium">“{headline.question}” <span className="text-muted-foreground">· {headline.engines.join(', ')}</span></div>
+              </SubSection>
+              <SubSection title="Competitors named" tone="purple">
+                <ul className="list-disc pl-5">{headline.competitors.map((c) => <li key={c}>{c}</li>)}</ul>
+              </SubSection>
+            </>
           )}
 
           {p?.status === 'ready' && (
             <>
               {p.recommendation && (
                 // Guidance, not a gate: the homepage stays viewable and downloadable either way.
-                <div className="rounded border p-2">
-                  <div className="text-xs uppercase text-muted-foreground">Recommended outreach</div>
-                  <div className="font-semibold">{OUTREACH_SEND_LABELS[p.recommendation.send]}</div>
+                <Callout tone="blue" title={<><span className="block text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Recommended outreach</span>{OUTREACH_SEND_LABELS[p.recommendation.send]}</>}>
                   <div className="text-xs text-muted-foreground">{p.recommendation.why}</div>
                   {p.recommendation.send === 'card_only' && <div className="pt-1 text-xs text-muted-foreground">The homepage is still below if you want to use it.</div>}
                   {p.recommendation.weaknesses.length > 1 && (
                     <ul className="mt-1 list-disc pl-4 text-xs text-muted-foreground">{p.recommendation.weaknesses.map((w) => <li key={w}>{w}</li>)}</ul>
                   )}
-                </div>
+                </Callout>
               )}
-              <div className="space-y-1">
-                <div className="text-xs uppercase text-muted-foreground">Primary site issue</div>
+              <SubSection title="Primary site issue" tone="amber">
                 <div>{p.primaryFinding ? p.primaryFinding.line : 'None strong enough — the card uses the truthful no-issue wording.'}</div>
                 {p.secondaryFindings.map((s) => <div key={s.id} className="text-muted-foreground">+ {s.line}</div>)}
-              </div>
+              </SubSection>
 
-              <div className="space-y-2">
-                <div className="text-xs uppercase text-muted-foreground">Assets</div>
+              <SubSection title="Assets" tone="blue" className="space-y-2">
                 <div className="grid grid-cols-2 gap-2">
                   {PREVIEW_ASSETS.filter((a) => p.assets[a]).map((a) => (
-                    <a key={a} href={p.assets[a]} target="_blank" rel="noreferrer" className="group rounded border p-1 hover:bg-muted">
+                    <a key={a} href={p.assets[a]} target="_blank" rel="noreferrer" className="group rounded-xl border border-border/70 p-1 hover:bg-muted">
                       <img src={p.assets[a]} alt={PREVIEW_ASSET_LABELS[a]} className="h-32 w-full rounded object-cover object-top" />
                       <div className="mt-1 flex items-center justify-between text-xs"><span>{PREVIEW_ASSET_LABELS[a]}</span><Download className="h-3 w-3 opacity-60" /></div>
                     </a>
@@ -162,20 +171,19 @@ function ProspectPreviewSheet({ leadId, open, onOpenChange }: { leadId: string; 
                 {p.assets.homepage_html && (
                   <Button variant="outline" size="sm" onClick={() => void openHtml(p.assets.homepage_html, p.storedImages ?? {})}><ExternalLink className="mr-2 h-4 w-4" /> View homepage</Button>
                 )}
-              </div>
+              </SubSection>
 
               {p.message && (
-                <div className="space-y-1">
-                  <div className="text-xs uppercase text-muted-foreground">Suggested message (not sent)</div>
-                  <pre className="whitespace-pre-wrap rounded border bg-muted/40 p-2 font-sans text-sm">{p.message}</pre>
+                <SubSection title="Suggested message (not sent)" tone="blue" className="space-y-1">
+                  <pre className="whitespace-pre-wrap break-words rounded-xl border border-border/70 bg-muted/40 p-2.5 font-sans text-sm">{p.message}</pre>
                   <Button variant="ghost" size="sm" onClick={() => { void navigator.clipboard.writeText(p.message ?? ''); setCopied(true); setTimeout(() => setCopied(false), 1500); }}>
                     {copied ? <Check className="mr-2 h-4 w-4" /> : <Copy className="mr-2 h-4 w-4" />} Copy message
                   </Button>
-                </div>
+                </SubSection>
               )}
 
               {p.notes.length > 0 && (
-                <details className="rounded border p-2 text-xs">
+                <details className="rounded-xl border border-border/70 p-2.5 text-xs">
                   <summary className="cursor-pointer font-medium">Operator notes ({p.notes.length})</summary>
                   <ul className="mt-2 list-disc space-y-1 pl-4">{p.notes.map((n) => <li key={n}>{n}</li>)}</ul>
                 </details>
@@ -184,7 +192,7 @@ function ProspectPreviewSheet({ leadId, open, onOpenChange }: { leadId: string; 
             </>
           )}
 
-          <div className="flex gap-2">
+          <ActionBar className="justify-start">
             {status !== 'ready' ? (
               <Button size="sm" disabled={working || data?.eligible === false} onClick={() => void generate(false)}>
                 {working ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <MonitorSmartphone className="mr-2 h-4 w-4" />} Generate homepage preview
@@ -194,7 +202,7 @@ function ProspectPreviewSheet({ leadId, open, onOpenChange }: { leadId: string; 
                 <RefreshCw className="mr-2 h-4 w-4" /> Regenerate
               </Button>
             )}
-          </div>
+          </ActionBar>
         </div>
       </SheetContent>
     </Sheet>
