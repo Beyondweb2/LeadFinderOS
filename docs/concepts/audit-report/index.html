@@ -522,6 +522,98 @@
     .c-why div{border-right:0;border-bottom:1px solid #33343b}
   }
 
+  /* ══════════════════════════════════════════════════════════════════════════
+     CONCEPT 4 — HOOK AUDIT HYBRID (2026-10-06)
+     header → score → featured missed search → all questions → website issues → why → LIVE footer
+     ══════════════════════════════════════════════════════════════════════════ */
+  .h-head{background:var(--k);color:#fff;padding:16px 26px;display:grid;grid-template-columns:auto 1fr auto;gap:6px 22px;align-items:center}
+  .h-head .wm{font-size:24px;color:#fff}
+  .h-title{font-size:11px;font-weight:800;letter-spacing:.16em;text-transform:uppercase;color:var(--gold);border-left:1px solid #3a3b42;padding-left:20px;line-height:1.3}
+  .h-title span{display:block;color:#fff;font-size:15px;letter-spacing:-.01em;text-transform:none;font-weight:700;margin-top:2px}
+  .h-date{font-size:12px;color:#c9cbd1;text-align:right}
+  .h-score{background:var(--k);color:#fff;padding:4px 26px 22px;display:grid;grid-template-columns:auto 1fr;gap:16px 28px;align-items:end;border-top:1px solid #26272d}
+  .h-big b{display:block;font-size:112px;font-weight:900;letter-spacing:-.065em;line-height:.86}
+  .h-big span{display:block;font-size:14px;font-weight:700;margin-top:8px}
+  .h-big em{font-style:normal;display:block;font-size:11px;font-weight:800;letter-spacing:.18em;text-transform:uppercase;color:var(--gold);margin-top:10px}
+  .h-verdict{font-size:23px;font-weight:850;letter-spacing:-.02em;line-height:1.15;margin:0 0 14px;padding-bottom:12px;border-bottom:3px solid var(--gold)}
+  .h-engs{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .h-eng{background:#1c1d22;border:1px solid #34353c;border-left:5px solid var(--tone);border-radius:6px;padding:10px 12px;display:grid;grid-template-columns:auto 1fr auto;gap:4px 10px;align-items:center}
+  .h-eng.red{--tone:var(--r-bright)} .h-eng.amber{--tone:var(--a-bright)} .h-eng.green{--tone:var(--g-bright)}
+  .h-eng .mk{width:28px;height:28px}
+  .h-eng-l{font-size:13px;font-weight:700}
+  .h-eng-l small{display:block;font-size:11px;font-weight:500;color:#9C9FA7}
+  .h-eng-v{font-size:32px;font-weight:900;letter-spacing:-.04em;line-height:1;color:var(--tone)}
+  .h-body{padding:20px 26px 4px}
+  .h-sec{margin-bottom:20px}
+  .h-q{background:var(--k);color:#fff;border-radius:6px 6px 0 0;padding:12px 16px;display:flex;gap:14px;align-items:center}
+  .h-q small{flex:none;font-size:10.5px;font-weight:900;letter-spacing:.14em;text-transform:uppercase;color:var(--k);background:var(--gold);padding:4px 8px;border-radius:3px}
+  .h-q span{font-size:21px;font-weight:850;letter-spacing:-.015em;line-height:1.2}
+  .h-proof{display:grid;grid-template-columns:1fr 236px;border:2px solid var(--k);border-top:0;border-radius:0 0 6px 6px;overflow:hidden}
+  .h-ans{padding:12px 16px 14px}
+  .h-ans-h{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:6px}
+  .h-ans-h .v-eng{font-size:12px}
+  .h-ans p{margin:0;font-size:15.5px;line-height:1.66;color:#1b1c20}
+  .h-sum{background:#f3f3f1;border-left:2px solid var(--k);padding:10px 14px;font-size:12.5px;display:flex;flex-direction:column;gap:7px}
+  .h-sum-k{display:block;font-size:10px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;color:#5d6067;margin-bottom:3px}
+  .h-sum ol{margin:0;padding-left:18px;font-weight:650;line-height:1.4}
+  .h-you{border-top:1px solid #d5d7dc;padding-top:8px;font-weight:800}
+  .h-you.n{color:var(--r)} .h-you.y{color:var(--g)}
+  .h-tbl{width:100%;border-collapse:collapse;border:2px solid var(--k)}
+  .h-tbl th{background:var(--k);color:#fff;font-size:10.5px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;text-align:left;padding:8px 12px}
+  .h-tbl th.e{width:140px}
+  .h-tbl th .mk{width:18px;height:18px;display:inline-flex;vertical-align:-4px;margin-right:6px}
+  .h-tbl td{padding:9px 12px;border-top:1px solid #dcdde1;font-size:14.5px;font-weight:650}
+  .h-tbl tr.feat td{background:#fffbe8}
+  .h-chip{display:inline-flex;align-items:center;gap:5px;font-size:11.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;padding:4px 10px;border-radius:999px;color:#fff;white-space:nowrap}
+  .h-chip.y{background:var(--g)} .h-chip.n{background:var(--r)}
+  .h-iss{border:2px solid var(--k);border-radius:6px;overflow:hidden}
+  .h-iss-top{display:flex;justify-content:space-between;gap:10px;align-items:baseline;background:#f3f3f1;padding:9px 14px;font-size:12.5px;color:#3a3c42;border-bottom:1px solid #dcdde1;flex-wrap:wrap}
+  .h-iss-top b{color:var(--k)}
+  .h-issue{display:grid;grid-template-columns:72px 1fr auto;gap:2px 14px;align-items:start;padding:10px 14px;border-top:1px solid #e6e7ea}
+  .h-issue:first-of-type{border-top:0}
+  .h-sev{grid-row:span 2;font-size:10px;font-weight:900;letter-spacing:.1em;text-transform:uppercase;text-align:center;padding:5px 0;border-radius:3px;color:#fff;margin-top:1px}
+  .h-sev.high{background:var(--r)} .h-sev.med{background:var(--a)} .h-sev.low{background:#5d6067}
+  .h-issue-t{font-size:15px;font-weight:800;color:var(--k)}
+  .h-issue-p{grid-column:2/4;margin:0;font-size:13.5px;color:#3a3c42;line-height:1.45}
+  .h-pages{font-size:11.5px;font-weight:800;color:var(--k);background:var(--hl);border-radius:3px;padding:3px 8px;white-space:nowrap}
+  .h-nosite{display:grid;grid-template-columns:auto 1fr;gap:4px 16px;align-items:center;border:2px solid var(--k);border-left:8px solid var(--r);border-radius:6px;padding:14px 16px}
+  .h-nosite .h-sev{grid-row:span 2;width:72px}
+  .h-nosite b{font-size:17px}
+  .h-nosite p{margin:0;font-size:14px;color:#3a3c42;line-height:1.5}
+  .h-why{display:grid;grid-template-columns:1fr 1fr 1.3fr;background:var(--gold);color:var(--k);border-radius:6px;overflow:hidden}
+  .h-why div{padding:12px 16px;border-right:2px solid rgba(16,17,20,.16);font-size:13px;font-weight:650;line-height:1.3}
+  .h-why div:last-child{border-right:0}
+  .h-why b{display:block;font-size:24px;font-weight:900;letter-spacing:-.03em}
+  .h-why div:last-child b{font-size:11px;letter-spacing:.14em;text-transform:uppercase;margin-bottom:4px}
+  @media (max-width:640px){
+    .h-head{grid-template-columns:1fr auto;padding:14px 16px}
+    .h-title{grid-column:1/-1;grid-row:2;border-left:0;padding-left:0}
+    .h-score{grid-template-columns:1fr;padding:4px 16px 18px}
+    .h-big b{font-size:92px}
+    .h-verdict{font-size:19px}
+    .h-engs{grid-template-columns:1fr}
+    .h-body{padding:18px 16px 2px}
+    .h-q{align-items:flex-start;flex-direction:column;gap:8px}
+    .h-q span{font-size:19px}
+    .h-proof{grid-template-columns:1fr}
+    .h-sum{border-left:0;border-top:2px solid var(--k)}
+    .h-ans-h{flex-wrap:wrap}
+    .h-ans p{font-size:15px}
+    .h-tbl th.e{width:auto}
+    .h-tbl th:first-child{display:none}
+    .h-tbl tr{display:grid;grid-template-columns:1fr 1fr}
+    .h-tbl thead tr{grid-template-columns:1fr 1fr}
+    .h-tbl td.q{grid-column:1/-1;padding-bottom:2px}
+    .h-tbl td.r{border-top:0;padding-top:4px}
+    .h-tbl td.r::before{content:attr(data-eng);display:block;font-size:11px;color:#5d6067;font-weight:600;margin-bottom:3px}
+    .h-tbl thead{display:none}
+    .h-issue{grid-template-columns:64px 1fr}
+    .h-pages{grid-column:2;justify-self:start}
+    .h-issue-p{grid-column:1/-1}
+    .h-why{grid-template-columns:1fr}
+    .h-why div{border-right:0;border-bottom:2px solid rgba(16,17,20,.16)}
+  }
+
   /* ── Print / PDF ─────────────────────────────────────────────────────────── */
   @media print{
     @page{size:A4;margin:12mm}
@@ -537,6 +629,9 @@
     .a-card,.a-compact,.a-why,.b-ans,.b-tbl tr,.b-why,.c-card,.c-why,.a-q{break-inside:avoid;page-break-inside:avoid}
     .a-q,.b-q{break-after:avoid;page-break-after:avoid}
     .v-livefoot{break-inside:avoid;page-break-inside:avoid}
+    .h-sec{break-inside:auto}
+    .h-proof,.h-issue,.h-why,.h-nosite,.h-tbl,.h-iss-top{break-inside:avoid;page-break-inside:avoid}
+    .h-q,.v-sec-h,.h-iss-top{break-after:avoid;page-break-after:avoid}
   }
 </style>
 </head>
@@ -552,10 +647,15 @@
       <button data-c="2a">Concept 2A</button>
       <button data-c="2b">Concept 2B</button>
       <button data-c="2c">Concept 2C</button>
+      <button data-c="4">Concept 4 · Hook Audit Hybrid</button>
     </div>
     <div class="gal-toggle" role="group" aria-label="Featured answer">
       <button data-named="0">Featured: not named</button>
       <button data-named="1">Featured: named</button>
+    </div>
+    <div class="gal-toggle gal-site" role="group" aria-label="Website">
+      <button data-site="1">Website: issues found</button>
+      <button data-site="0">Website: none</button>
     </div>
     <span class="gal-note">Fixture data. The answer text is illustrative, written for this demo — not a recorded AI answer.</span>
   </div>
@@ -568,6 +668,7 @@
   <section class="concept v" id="c2a" aria-label="Concept 2A"></section>
   <section class="concept v" id="c2b" aria-label="Concept 2B"></section>
   <section class="concept v" id="c2c" aria-label="Concept 2C"></section>
+  <section class="concept v" id="c4" aria-label="Concept 4"></section>
 </main>
 
 <!-- The live report's CTA + footer, generated from the real renderer by extract-live-footer.ts. -->
@@ -877,15 +978,66 @@ function renderC2C() {
     '</div>' + vFoot() + '</div>';
 }
 
+/* ═══ CONCEPT 4 — HOOK AUDIT HYBRID ═══ */
+/* Website issues — FIXTURE, in the shape the live crawl check produces (CrawlFault: title, detail,
+   minor) plus a severity and a pages-affected count. Titles reuse the live wording where one exists
+   (crawlCheck.ts buildFaultLines). Structured data is deliberately left out: it tested negative as a
+   lever (CLAUDE.md §5), so it never headlines a client report. */
+const SITE = {
+  pagesChecked: 3,
+  issues: [
+    { sev: "high", title: "Your pages have no clear heading", pages: 2, detail: "No main (H1) heading, so search engines and AI have no plain statement of what the page is about." },
+    { sev: "high", title: "There isn’t enough on your pages", pages: 2, detail: "Under 120 words on the page. Not enough for AI to quote you from." },
+    { sev: "med", title: "11 images without alt text", pages: 1, detail: "Missing descriptions weaken accessibility and how clearly the page’s content reads." },
+    { sev: "low", title: "Title tag too long", pages: 1, detail: "Shorter titles are easier for search engines and AI to interpret." },
+  ],
+};
+/* Engine cards: 0 of 3 red, 1 of 3 amber, 2 or 3 of 3 green. The overall figure keeps tone()
+   (the live verdictBand), so 17% reads as poor. */
+const engTone = (n, t) => n === 0 ? "red" : n / t < 0.5 ? "amber" : "green";
+const SEV = { high: "High", med: "Medium", low: "Low" };
+function renderC4(nv, hasSite) {
+  const f = feat(nv), t = tone(S.named, S.total);
+  const engs = S.per.map((e) => '<div class="h-eng ' + engTone(e.named, e.total) + '">' + mark(e.key) + '<span class="h-eng-l">' + e.label + '<small>' + e.named + ' of ' + e.total + ' answers</small></span><span class="h-eng-v">' + e.named + '/' + e.total + '</span></div>').join("");
+  const rows = F.questions.map((q, qi) => '<tr class="' + (qi === f.qi ? "feat" : "") + '"><td class="q">' + esc(q.q) + '</td>' + F.engines.map((e) => { const y = q.answers[e.key].named;
+    return '<td class="r" data-eng="' + e.label + '"><span class="h-chip ' + (y ? "y" : "n") + '">' + (y ? "&#10003; Named" : "&#10005; Not named") + '</span></td>'; }).join("") + '</tr>').join("");
+  const site = hasSite
+    ? '<div class="h-iss"><div class="h-iss-top"><span>We checked <b>' + SITE.pagesChecked + ' pages</b> of your website the way search engines and AI read it.</span><span>Strongest ' + SITE.issues.length + ' issues</span></div>' +
+        SITE.issues.map((i) => '<div class="h-issue"><span class="h-sev ' + i.sev + '">' + SEV[i.sev] + '</span><span class="h-issue-t">' + esc(i.title) + '</span><span class="h-pages">On ' + i.pages + ' of ' + SITE.pagesChecked + ' pages</span><p class="h-issue-p">' + esc(i.detail) + '</p></div>').join("") + '</div>'
+    : '<div class="h-nosite"><span class="h-sev high">High</span><b>No website found</b><p>AI can’t recommend a business it can’t read, and right now there’s nothing for it to read. Google AI in particular leans on businesses’ own websites.</p></div>';
+  document.getElementById("c4").innerHTML = '<div class="v-sheet">' +
+    '<header class="h-head"><div class="wm">Findable<i>.</i></div><div class="h-title">' + F.reportType + '<span>Prepared for ' + esc(F.business) + '</span></div><div class="h-date">' + F.date + '</div></header>' +
+    '<section class="h-score v-on-k"><div class="h-big"><em>Your score</em><b class="t-' + t + '">' + S.pct + '%</b><span>' + S.named + ' of ' + S.total + ' answers named you</span></div>' +
+      '<div><p class="h-verdict">' + headline + '</p><div class="h-engs">' + engs + '</div></div></section>' +
+    '<div class="h-body">' +
+      '<section class="h-sec"><h2 class="v-sec-h">' + (f.a.named ? "Featured search" : "Featured missed search") + '</h2>' +
+        '<div class="h-q"><small>What we asked</small><span>' + esc(f.q) + '</span></div>' +
+        '<div class="h-proof"><div class="h-ans"><div class="h-ans-h">' + vEng(f.ek, " answered") + vBadge(f.a.named) + '</div><p class="v-ans">' + vAns(f.a) + '</p></div>' +
+          '<aside class="h-sum"><div><span class="h-sum-k">Result</span>' + vBadge(f.a.named) + '</div>' +
+          '<div><span class="h-sum-k">' + (f.a.named ? "Also named" : "Named instead") + '</span><ol>' + f.a.rivals.map((r) => '<li>' + esc(r) + '</li>').join("") + '</ol></div>' +
+          '<div class="h-you ' + (f.a.named ? "y" : "n") + '"><span class="h-sum-k">Your business</span>' + (f.a.named ? "&#10003; Named" : "&#10005; Not named") + '</div></aside></div></section>' +
+      '<section class="h-sec"><h2 class="v-sec-h">All questions we asked</h2>' +
+        '<table class="h-tbl"><thead><tr><th>Question</th>' + F.engines.map((e) => '<th class="e">' + mark(e.key) + e.label + '</th>').join("") + '</tr></thead><tbody>' + rows + '</tbody></table></section>' +
+      '<section class="h-sec"><h2 class="v-sec-h">' + (hasSite ? "Website issues we found" : "Your website") + '</h2>' + site + '</section>' +
+      '<section class="h-sec"><h2 class="v-sec-h">Why this matters</h2><div class="h-why">' +
+        '<div><b>' + missed() + ' of ' + S.total + '</b>answers sent customers elsewhere</div>' +
+        '<div><b>' + allRivals() + '</b>competitors appeared instead</div>' +
+        '<div><b>The new shortlist</b>AI is another place customers now choose who to contact.</div></div></section>' +
+    '</div>' + vFoot() + '</div>';
+}
+
 /* ── Gallery ── */
 const params = new URLSearchParams(location.search);
-const IDS = ["1", "2", "3", "2a", "2b", "2c"];
+const IDS = ["1", "2", "3", "2a", "2b", "2c", "4"];
+let site = params.get("site") !== "0";
 let cur = IDS.includes(params.get("c")) ? params.get("c") : "1";
 let named = params.get("named") === "1";
 if (params.get("bar") === "0") document.getElementById("gal").style.display = "none";
 function render() {
   gid = 0;
-  renderC1(named); renderC2(named); renderC3(); renderC2A(named); renderC2B(named); renderC2C(); mountLiveFooters();
+  renderC1(named); renderC2(named); renderC3(); renderC2A(named); renderC2B(named); renderC2C(); renderC4(named, site); mountLiveFooters();
+  document.querySelectorAll("[data-site]").forEach((b) => b.setAttribute("aria-pressed", String((b.dataset.site === "1") === site)));
+  document.querySelector(".gal-site").style.display = cur === "4" ? "flex" : "none";
   document.querySelectorAll(".concept").forEach((s) => s.classList.toggle("on", s.id === "c" + cur));
   document.querySelectorAll("[data-c]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.c === cur)));
   document.querySelectorAll("[data-named]").forEach((b) => b.setAttribute("aria-pressed", String((b.dataset.named === "1") === named)));
@@ -893,6 +1045,7 @@ function render() {
 }
 document.querySelectorAll("[data-c]").forEach((b) => b.addEventListener("click", () => { cur = b.dataset.c; render(); window.scrollTo(0, 0); }));
 document.querySelectorAll("[data-named]").forEach((b) => b.addEventListener("click", () => { named = b.dataset.named === "1"; render(); }));
+document.querySelectorAll("[data-site]").forEach((b) => b.addEventListener("click", () => { site = b.dataset.site === "1"; render(); }));
 render();
 </script>
 </body>

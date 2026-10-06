@@ -56,6 +56,32 @@ No horizontal overflow at 1280px or 390px. Every card is set not to split, and n
 page, so none can split. Screenshots: `concept-2a/2b/2c-desktop.png`, `-mobile.png`,
 `concept-2a-desktop-named.png`, `concept-2b-mobile-named.png`.
 
+## Round 3 — Concept 4 · Hook Audit Hybrid (2026-10-06)
+For the 3-question × 2-engine hook audit (6 answers). Order: header → your score → featured missed
+search → all questions we asked → website issues we found → why this matters → LIVE CTA/footer.
+- **Score:** black band, huge 17% (overall keeps the live `verdictBand` colours), "1 of 6 answers named
+  you", the live verdict line ("You're being named, but not consistently.") over a yellow rule, and two
+  engine cards. Engine colours: 0/3 red, 1/3 amber, 2/3 and 3/3 green (`engTone`).
+- **Featured missed search:** black "What we asked" bar, the Google AI answer with competitors
+  highlighted (client green if named), NOT NAMED badge in the card header, and a side summary:
+  Result · Named instead 1–4 · Your business.
+- **All questions:** 3-row table, black header, red/green chips, featured row tinted.
+- **Website issues:** up to 4 issues, each with a High/Medium/Low marker, title, one line, and "On N of
+  3 pages". Titles reuse the live crawl-check wording (`crawlCheck.ts`) where one exists; structured
+  data is left out (tested negative as a lever, CLAUDE.md §5). Gallery switch "Website: none" swaps in
+  a "No website found" panel using the first sentence of the live `noWebsiteSection` (no prices).
+- **Why this matters:** one yellow strip — 5 of 6, 4 competitors, one sentence. No sources.
+
+| | Desktop | Mobile (390px) | Print (A4) | Body before footer |
+|---|---|---|---|---|
+| Concept 4, website issues | 2,002px | 3,249px | **2 pages** | ~1,320px ≈ 1.3 pages |
+| Concept 4, no website | 1,781px | — | **2 pages** | ~1,100px ≈ 1.1 pages |
+No horizontal overflow. Cards, the table, each issue row and the footer are set not to split, and no
+block is taller than a page. Earlier versions printed: Concept 1 = 3 pages, Concept 2 = 2,
+Concept 3 = 4 (all three WITHOUT the footer or a website section); 2A/2B/2C = 2 each with the footer.
+Screenshots: `concept-4-desktop.png`, `concept-4-mobile.png`, `concept-4-desktop-no-website.png`,
+`concept-4-mobile-named.png`. The website issues are fixture data, like the answers.
+
 ## QA (2026-10-06, headless Chrome)
 - No horizontal overflow at 1280px or 390px in any concept (scrollWidth = clientWidth).
 - Print to A4: Concept 1 = 3 pages, Concept 2 = 2, Concept 3 = 4. Cards are set not to split.
