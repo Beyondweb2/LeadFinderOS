@@ -142,3 +142,51 @@ the session; not seen live by Paul.
    `stripe-webhook`, `findable-checkout`, `findable-onboarding`, `paid-baseline`, `crawl-worker`, `directory-presence`.
    ⛔ `whatsapp-status` not deployed.
 3. SPA via `main`. Live verification: see the session report.
+
+## 10. Deployed (2026-10-06)
+
+- SQL `20261013120000` applied 11:2x UTC and read back: both tables + columns, `client_intake` 0 policies and no
+  `authenticated` select, `client_handoff_sends_read`, trigger, cron `* * * * *`, both kind lists widened.
+- `main` `5df464b6` (release) then `acd0e53a` (follow-up: website-only services / areas count as "confirm what we
+  found"; QA payment simulator speaks v3). Reconciled twice with parallel merges (quick-report fix, full-app design
+  consistency — no file overlap with Quick Close; What's New and the ClientHub header merged by hand). Gate 342/342.
+- Functions (markers read from the deployed bodies): `client-intake` (new, v1 → v2), `crawl-check`, `quick-close`,
+  `paid-client-hub` (×2), `admin-overview`, `business-summary`, `conversation-triage`, `sales-performance`.
+  Not redeployed (reached only by unused additions): `stripe-webhook` v164, `findable-checkout` v76,
+  `findable-onboarding`, `paid-baseline`, `crawl-worker`, `directory-presence`. ⛔ `whatsapp-status` v114 untouched.
+- SPA: `app.leadfinderos.com` and `leadfinderos-next.pages.dev` both serve "Send to Paul", "Client intake",
+  "Needs review — conflicting evidence", "awaiting payment".
+
+## 11. Live certification (production, fixture `ZZ QA-I1 Auto intake` `1f000000-0000-4000-8000-0000000000f1`)
+
+Signed in as the Test salesperson and as Paul by magic link (sessions revoked afterwards, scope=local). No message to
+anyone, no card, no Stripe object.
+
+| Step | Result |
+|---|---|
+| Rep: Quick Close answers (Build), Create sign-up link | `findable.live/agree/<token>` — a sign-up link, never Stripe |
+| Rep: Send to Paul with a partial handoff | 409 `handoff_incomplete`, the four missing answers named |
+| Rep: Send to Paul complete, then again | 200, the same send both times; 1 row, 1 History line, 1 "NEW CLIENT HANDOFF · …" ("Awaiting payment", `/paid-clients?handoff=…`) |
+| Rep reaches Paid Clients / intake / facts | 403 `admin_only` ×3; `client_intake` 42501; own send only; 0 raw lead rows; none of Paul's notices |
+| Fixture client signs v3 on the agreement page | v3, `agree_page`, the exact sign-up, authority confirmed; no pay button before signing |
+| Lead reassigned to Paul, then paid (simulated, delivered twice) | paid; **seller = Test** (creator of the sign-up); 1 ledger row (test_excluded 0%); 1 Payment received |
+| Automatic intake | queued by the trigger and run within ~1 s; ONE full crawl via the intake door; merged at the next tick; 10 sources, 12 fields; conflict Email (fixture vs website); ONE "CLIENT INTAKE DONE" notice + ONE History line |
+| Paul: client page / list | intake on the page (Build, content REFERENCE ONLY, sent by Test before payment); client listed with its intake state |
+| Paul: Refresh research | crawl reused (still 1 job), no new notice |
+| Paul: Confirm services / reject the website email / refresh | services written to the lead and confirmed; conflict cleared; a further refresh overwrote neither |
+| Rep after payment | sees Paid, the send, "Finish the handoff" lists it as sent; can no longer make a link (403) |
+| Fixture ended | archived, no contact, excluded |
+
+⚠️ The first simulated payment used the pre-v3 simulator and was correctly HELD (`client_payment_holds`, "PAYMENT HELD"
+bell item + operator email). Fixed by teaching the simulator the v3 markers; the hold row and its bell item are left
+OPEN for Paul (resolving it was not permitted to this session).
+
+Live SQL suites (rolled back): paid-client-auto-intake 24/24, outreach-ownership 32/32, call-workspace-guards 18/18,
+claim-rule 16/16, next-action-one-flow 29/29, sales-readiness 38/38, self-sourced-handoff 41/41,
+client-tables-admin-only 32/32, abuse-cost-protection 90/90, multi-user-rls 70/71 (the known E2E-06 item),
+v3-signup-attribution 20/24 (the four stale checks its header marks wrong-by-design since the selling gate became
+account-only — they prove an incomplete checklist no longer blocks). A brand-new rep with NO onboarding record: ready
+to sell, adds a lead that is theirs, sees nothing else.
+
+Not driven: creating a real salesperson login (Paul's own action on the Team page — this session never creates
+accounts); the operator screens were seen in the harness, not live.
