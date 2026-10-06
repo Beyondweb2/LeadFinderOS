@@ -21,6 +21,41 @@ All six answer texts are written for this demo. They are not recorded AI answers
 3. **Evidence** — scorecard + dossier: 17% / ChatGPT / Google AI / a 3×2 answer grid up top, then one
    evidence panel per question showing BOTH engines' full answers, competitor chips and the result.
 
+## Round 2 — 2A / 2B / 2C (Conversation direction, reworked, 2026-10-06)
+Paul preferred Concept 2 but found it pale, long and slow to the score. All three follow one order:
+header → your score → questions + AI answers → why this matters (one short strip) → the LIVE CTA/footer.
+They use the live report's 760px sheet width, black/white/yellow with solid red/green result states, and
+the result is a badge in the answer card's header (no separate "not found" panel).
+- **2A Bold score + stacked evidence** — black score band (17% + ChatGPT/Google AI), the featured
+  question expanded with its answer, the other engine as one line under it, Q2/Q3 as compact cards
+  (badge + names), yellow "why this matters" strip.
+- **2B Scoreboard + featured missed search** — three-cell scoreboard with coloured top bars, black verdict
+  line, yellow question box, answer card with a black "named instead / your business" side panel, a
+  solid red/green 3-row table, one-line why-this-matters. The shortest.
+- **2C Question cards** — compact black score band, then one card per question with both engines'
+  answers (badge + highlighted text), black stat strip.
+
+**The footer is the real one.** `extract-live-footer.ts` runs the unchanged live renderer
+(`buildReportData` → `renderReportHtml`) on the Doncaster fixture with the prospect-path flags
+(`showOffer`, `offerUrl`, `requestCallUrl`), cuts out `<section class="cta">…</footer>` and the live
+stylesheet, and writes `live-footer.js`. The gallery mounts it in a shadow root so its CSS applies
+unchanged. If the file is missing the page shows "EXISTING LIVE REPORT FOOTER CONTINUES UNCHANGED HERE".
+Regenerate with `npx tsx docs/concepts/audit-report/extract-live-footer.ts` (worktree needs node_modules).
+
+**Answer length.** Answers are labelled "Google AI answer" / "ChatGPT answer", never "full answer", and
+the renderer caps any text at 600 characters with an ellipsis (`ANSWER_CAP`), matching what is stored.
+The fixture answers are all under 600, so none is cut.
+
+| | Desktop height | Mobile height | Print (A4) | Report body before footer | Block taller than a page? |
+|---|---|---|---|---|---|
+| 2A | 1,863px | 2,708px | 2 pages | ~1,180px ≈ 1.15 pages | no |
+| 2B | 1,655px | 2,440px | 2 pages | ~970px — fits page 1; footer on page 2 | no |
+| 2C | 1,936px | 2,975px | 2 pages | ~1,340px ≈ 1.3 pages | no |
+Original Concept 2 for comparison: 1,810px desktop / 2,752px mobile, score near the bottom.
+No horizontal overflow at 1280px or 390px. Every card is set not to split, and none is taller than a
+page, so none can split. Screenshots: `concept-2a/2b/2c-desktop.png`, `-mobile.png`,
+`concept-2a-desktop-named.png`, `concept-2b-mobile-named.png`.
+
 ## QA (2026-10-06, headless Chrome)
 - No horizontal overflow at 1280px or 390px in any concept (scrollWidth = clientWidth).
 - Print to A4: Concept 1 = 3 pages, Concept 2 = 2, Concept 3 = 4. Cards are set not to split.

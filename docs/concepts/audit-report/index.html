@@ -327,6 +327,201 @@
     .c3-dl dd{padding:4px 0 10px}
   }
 
+  /* ══════════════════════════════════════════════════════════════════════════
+     CONCEPTS 2A / 2B / 2C — Conversation direction, reworked (Paul, 2026-10-06)
+     Order: header → your score → questions + answers → why this matters → LIVE footer.
+     760px sheet = the live report's own width (.sheet in aiAuditReportHtml.ts).
+     ══════════════════════════════════════════════════════════════════════════ */
+  .v{padding:24px 16px 48px;background:#d9dbe0}
+  .v-sheet{max-width:760px;margin:0 auto;background:#fff;box-shadow:0 18px 50px -28px rgba(0,0,0,.5);overflow:hidden}
+  :root{--k:#101114;--r:#d01f2e;--r-bright:#ff4f5c;--r-tint:#fdecee;--g:#127a3a;--g-bright:#3ddc84;--g-tint:#e3f5ea;--a:#b86e00;--a-bright:#ffb020;--hl:#ffe680}
+  .v .t-red{color:var(--r)} .v .t-amber{color:var(--a)} .v .t-green{color:var(--g)}
+  .v-on-k .t-red{color:var(--r-bright)} .v-on-k .t-amber{color:var(--a-bright)} .v-on-k .t-green{color:var(--g-bright)}
+  /* Header, shared */
+  .v-head{background:var(--k);color:#fff;padding:18px 28px;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+  .v-head .wm{font-size:22px;color:#fff}
+  .v-head-r{text-align:right;font-size:12px;color:#c9cbd1;line-height:1.45}
+  .v-head-r b{display:block;color:var(--gold);font-size:11px;letter-spacing:.14em;text-transform:uppercase}
+  .v-for{font-size:13px;color:#c9cbd1}
+  .v-for b{color:#fff}
+  /* Answer highlighting, shared */
+  .v-ans mark{background:var(--hl);color:var(--k);font-weight:700;padding:1px 4px;border-radius:3px;box-decoration-break:clone;-webkit-box-decoration-break:clone}
+  .v-ans mark.me{background:var(--g);color:#fff}
+  .v-badge{display:inline-flex;align-items:center;gap:6px;font-size:11.5px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;padding:5px 10px;border-radius:4px;color:#fff;white-space:nowrap}
+  .v-badge.y{background:var(--g)} .v-badge.n{background:var(--r)}
+  .v-eng{display:inline-flex;align-items:center;gap:8px;font-weight:800;font-size:13px;letter-spacing:.06em;text-transform:uppercase}
+  .v-eng .mk{width:24px;height:24px}
+  .v-sec-h{display:flex;align-items:center;gap:10px;margin:0 0 12px;font-size:12px;font-weight:800;letter-spacing:.16em;text-transform:uppercase;color:var(--k)}
+  .v-sec-h::before{content:"";width:18px;height:4px;background:var(--gold)}
+  .v-chip{display:inline-block;font-size:12px;font-weight:700;background:var(--hl);color:var(--k);border-radius:3px;padding:2px 7px;margin:2px 4px 2px 0}
+  /* Live footer mount */
+  .v-livefoot{display:block}
+  .v-livefoot-missing{background:#fff3c4;border:2px dashed #b08a00;color:#4a3a00;padding:16px 28px;font-weight:700;font-size:13px}
+
+  /* ── 2A: bold score band + stacked evidence ── */
+  .a-score{background:var(--k);color:#fff;padding:6px 28px 26px;display:grid;grid-template-columns:auto 1fr;gap:18px 30px;align-items:center;border-top:1px solid #26272d}
+  .a-big{font-size:104px;font-weight:900;letter-spacing:-.06em;line-height:.9}
+  .a-big-k{font-size:12px;font-weight:800;letter-spacing:.18em;text-transform:uppercase;color:var(--gold);margin-top:8px}
+  .a-big-s{font-size:14px;color:#fff;font-weight:600;margin-top:2px}
+  .a-verdict{font-size:21px;font-weight:800;letter-spacing:-.015em;line-height:1.2;margin:0 0 14px}
+  .a-engs{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .a-eng{border:1px solid #33343b;border-radius:8px;padding:10px 12px;display:grid;grid-template-columns:auto 1fr auto;gap:2px 10px;align-items:center}
+  .a-eng .mk{width:28px;height:28px;grid-row:span 2}
+  .a-eng-l{font-size:12.5px;font-weight:700;color:#c9cbd1}
+  .a-eng-v{font-size:30px;font-weight:900;letter-spacing:-.03em;line-height:1;grid-row:span 2}
+  .a-eng-d{display:flex;gap:4px}
+  .a-eng-d i{width:14px;height:6px;border-radius:2px;background:var(--r-bright)}
+  .a-eng-d i.y{background:var(--g-bright)}
+  .a-body{padding:26px 28px 8px}
+  .a-q{background:var(--k);color:#fff;border-left:6px solid var(--gold);padding:14px 18px;border-radius:6px 6px 0 0}
+  .a-q small{display:block;font-size:10.5px;font-weight:800;letter-spacing:.16em;text-transform:uppercase;color:var(--gold)}
+  .a-q span{font-size:22px;font-weight:800;letter-spacing:-.015em}
+  .a-card{border:2px solid var(--k);border-top:0;border-radius:0 0 6px 6px;margin-bottom:22px;break-inside:avoid}
+  .a-card-h{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 16px;border-bottom:1px solid #d5d7dc;background:#f6f6f7}
+  .a-card-t{padding:14px 16px 16px;font-size:16.5px;line-height:1.7;color:#1b1c20;margin:0}
+  .a-also{display:grid;grid-template-columns:auto auto 1fr;gap:8px 12px;align-items:center;padding:10px 16px;border-top:1px dashed #c9cbd1;font-size:13px}
+  .a-also .lbl{color:#5d6067;font-size:12px}
+  .a-compact{border:2px solid var(--k);border-radius:6px;margin-bottom:12px;break-inside:avoid;overflow:hidden}
+  .a-compact-q{display:flex;align-items:center;gap:12px;background:var(--k);color:#fff;padding:9px 14px}
+  .a-compact-q small{font-size:10.5px;font-weight:800;letter-spacing:.14em;color:var(--gold);white-space:nowrap}
+  .a-compact-q span{font-weight:750;font-size:16px}
+  .a-row{display:grid;grid-template-columns:150px auto 1fr;gap:6px 12px;align-items:center;padding:9px 14px;border-top:1px solid #e3e4e8;font-size:13px}
+  .a-row:first-of-type{border-top:0}
+  .a-row .lbl{color:#5d6067;font-size:12px;margin-right:2px}
+  .a-why{display:grid;grid-template-columns:auto auto 1fr;background:var(--gold);color:var(--k);margin-top:18px;break-inside:avoid}
+  .a-why div{padding:14px 20px;border-right:2px solid rgba(16,17,20,.18);font-size:13px;font-weight:600;line-height:1.3}
+  .a-why div:last-child{border-right:0}
+  .a-why b{display:block;font-size:24px;font-weight:900;letter-spacing:-.03em}
+  .a-why-h{font-size:10.5px!important;font-weight:800!important;letter-spacing:.16em;text-transform:uppercase;display:block;margin-bottom:2px;opacity:.75}
+  @media (max-width:640px){
+    .v{padding:0}
+    .v-head{padding:14px 16px}
+    .v-head-r{text-align:left}
+    .a-score{grid-template-columns:1fr;padding:4px 16px 20px}
+    .a-big{font-size:88px}
+    .a-verdict{font-size:18px}
+    .a-engs{grid-template-columns:1fr}
+    .a-body{padding:20px 16px 4px}
+    .a-q span{font-size:19px}
+    .a-card-h{flex-wrap:wrap}
+    .a-card-t{font-size:15.5px}
+    .a-also{grid-template-columns:auto 1fr}
+    .a-also .rv{grid-column:1/-1}
+    .a-row{grid-template-columns:auto 1fr}
+    .a-row .rv{grid-column:1/-1}
+    .a-row .v-badge,.a-also .v-badge{justify-self:end}
+    .a-why div:last-child b{display:none}
+    .a-why{grid-template-columns:1fr}
+    .a-why div{border-right:0;border-bottom:2px solid rgba(16,17,20,.18);padding:12px 16px}
+  }
+
+  /* ── 2B: scoreboard + featured missed search (shortest) ── */
+  .b-board{display:grid;grid-template-columns:1.35fr 1fr 1fr;border-bottom:3px solid var(--k)}
+  .b-cell{padding:16px 22px 16px;border-right:1px solid #d5d7dc;position:relative}
+  .b-cell:last-child{border-right:0}
+  .b-cell::before{content:"";position:absolute;left:0;right:0;top:0;height:6px;background:var(--tone)}
+  .b-cell.red{--tone:var(--r)} .b-cell.amber{--tone:var(--a)} .b-cell.green{--tone:var(--g)}
+  .b-k{display:flex;align-items:center;gap:8px;font-size:11px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;color:var(--k);margin-top:4px}
+  .b-k .mk{width:22px;height:22px}
+  .b-v{font-size:56px;font-weight:900;letter-spacing:-.05em;line-height:1;margin-top:6px}
+  .b-v small{font-size:.45em;color:#8f939d;letter-spacing:0}
+  .b-cell.all .b-v{font-size:64px}
+  .b-s{font-size:13px;font-weight:700;color:#3a3c42}
+  .b-verdict{background:var(--k);color:#fff;padding:11px 22px;font-size:15px;font-weight:700}
+  .b-verdict span{color:#c9cbd1;font-weight:500}
+  .b-body{padding:22px 22px 6px}
+  .b-q{background:var(--gold);color:var(--k);padding:14px 18px;border-radius:6px;border:2px solid var(--k)}
+  .b-q small{display:block;font-size:10.5px;font-weight:800;letter-spacing:.16em;text-transform:uppercase}
+  .b-q span{font-size:24px;font-weight:900;letter-spacing:-.02em;line-height:1.2}
+  .b-ans{display:grid;grid-template-columns:1fr 200px;border:2px solid var(--k);border-radius:6px;margin-top:10px;overflow:hidden;break-inside:avoid}
+  .b-ans-main{padding:12px 16px 14px}
+  .b-ans-h{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:8px}
+  .b-ans-t{margin:0;font-size:15.5px;line-height:1.68;color:#1b1c20}
+  .b-side{background:var(--k);color:#fff;padding:12px 14px;font-size:12.5px;display:flex;flex-direction:column;gap:8px}
+  .b-side-k{font-size:10px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;color:var(--gold)}
+  .b-side ol{margin:0;padding-left:18px;line-height:1.45}
+  .b-side li{margin:2px 0}
+  .b-you{margin-top:auto;border-top:1px solid #33343b;padding-top:8px}
+  .b-you b{display:block;font-size:13px}
+  .b-you.n b{color:var(--r-bright)} .b-you.y b{color:var(--g-bright)}
+  .b-tbl{width:100%;border-collapse:separate;border-spacing:0 4px;margin-top:2px}
+  .b-tbl th{font-size:10.5px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;color:var(--k);text-align:left;padding:0 10px 2px}
+  .b-tbl th.e{width:150px}
+  .b-tbl th .mk{width:18px;height:18px;display:inline-flex;vertical-align:-4px;margin-right:6px}
+  .b-tbl td{padding:9px 10px;font-size:14.5px;font-weight:650;background:#f2f3f5}
+  .b-tbl td.q{border-left:4px solid var(--k)}
+  .b-tbl td.r{color:#fff;font-size:12px;font-weight:800;letter-spacing:.08em;text-transform:uppercase}
+  .b-tbl td.r.y{background:var(--g)} .b-tbl td.r.n{background:var(--r)}
+  .b-why{display:flex;flex-wrap:wrap;gap:6px 22px;align-items:baseline;border-top:3px solid var(--k);margin-top:16px;padding:12px 0 16px;font-size:13.5px;color:#2a2c31;break-inside:avoid}
+  .b-why b{font-size:18px;font-weight:900;color:var(--k);margin-right:4px}
+  .b-why .h{font-size:11px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;color:var(--k)}
+  @media (max-width:640px){
+    .b-board{grid-template-columns:1fr 1fr}
+    .b-cell.all{grid-column:1/-1;border-right:0;border-bottom:1px solid #d5d7dc}
+    .b-cell{padding:14px 16px}
+    .b-v{font-size:44px} .b-cell.all .b-v{font-size:60px}
+    .b-verdict{padding:10px 16px;font-size:14px}
+    .b-body{padding:18px 16px 4px}
+    .b-q span{font-size:20px}
+    .b-ans{grid-template-columns:1fr}
+    .b-ans-h{flex-wrap:wrap}
+    .b-ans-t{font-size:15px}
+    .b-tbl thead{display:none}
+    .b-tbl,.b-tbl tbody,.b-tbl tr{display:block}
+    .b-tbl tr{display:grid;grid-template-columns:1fr 1fr;gap:3px;margin-bottom:8px}
+    .b-tbl td{display:block}
+    .b-tbl td.q{grid-column:1/-1}
+    .b-tbl td.r{font-size:11px;letter-spacing:.04em;padding:8px}
+    .b-tbl td.r::before{content:attr(data-eng);display:block;font-weight:600;letter-spacing:0;text-transform:none;opacity:.9;font-size:11.5px}
+  }
+
+  /* ── 2C: one card per question ── */
+  .c-score{background:var(--k);color:#fff;padding:4px 28px 20px;display:flex;align-items:center;gap:26px;flex-wrap:wrap;border-top:1px solid #26272d}
+  .c-big{display:flex;align-items:baseline;gap:14px}
+  .c-big b{font-size:76px;font-weight:900;letter-spacing:-.06em;line-height:.95}
+  .c-big span{font-size:13px;font-weight:700;line-height:1.35}
+  .c-big span em{display:block;font-style:normal;font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--gold)}
+  .c-engs{display:flex;gap:10px;margin-left:auto}
+  .c-eng{display:flex;align-items:center;gap:10px;background:#1d1e23;border:1px solid #33343b;border-radius:8px;padding:9px 14px 9px 10px}
+  .c-eng .mk{width:26px;height:26px}
+  .c-eng span{font-size:12px;color:#c9cbd1;font-weight:700;line-height:1.2}
+  .c-eng b{display:block;font-size:24px;font-weight:900;letter-spacing:-.03em;line-height:1}
+  .c-verdict{width:100%;font-size:15px;font-weight:700;border-top:1px solid #33343b;padding-top:12px}
+  .c-verdict span{font-weight:500;color:#c9cbd1}
+  .c-body{padding:22px 24px 6px}
+  .c-card{border:2px solid var(--k);border-radius:6px;margin-bottom:14px;overflow:hidden;break-inside:avoid}
+  .c-card-q{display:grid;grid-template-columns:auto 1fr auto;gap:12px;align-items:center;background:var(--k);color:#fff;padding:10px 14px}
+  .c-card-q .n{font-size:12px;font-weight:900;color:var(--k);background:var(--gold);border-radius:4px;padding:3px 7px}
+  .c-card-q .q{font-size:17px;font-weight:800;letter-spacing:-.01em}
+  .c-card-q .q small{display:block;font-size:10px;font-weight:800;letter-spacing:.16em;color:var(--gold)}
+  .c-card-q .t{font-size:12px;color:#c9cbd1;text-align:right;line-height:1.2}
+  .c-card-q .t b{display:block;font-size:18px}
+  .c-er{display:grid;grid-template-columns:132px 1fr;gap:6px 14px;padding:10px 14px;border-top:1px solid #e3e4e8;border-left:5px solid var(--r)}
+  .c-er:first-of-type{border-top:0}
+  .c-er.y{border-left-color:var(--g);background:#f6fbf8}
+  .c-er-l{display:flex;flex-direction:column;gap:6px;align-items:flex-start}
+  .c-er-l .v-eng{font-size:12px}
+  .c-er-l .v-eng .mk{width:22px;height:22px}
+  .c-er p{margin:0;font-size:14px;line-height:1.62;color:#1b1c20}
+  .c-why{display:grid;grid-template-columns:repeat(3,1fr);background:var(--k);color:#fff;margin:8px 0 18px;border-radius:6px;break-inside:avoid}
+  .c-why div{padding:12px 16px;font-size:12.5px;color:#c9cbd1;border-right:1px solid #33343b;line-height:1.35}
+  .c-why div:last-child{border-right:0}
+  .c-why b{display:block;font-size:22px;font-weight:900;color:var(--gold);letter-spacing:-.02em}
+  @media (max-width:640px){
+    .c-score{padding:4px 16px 18px;gap:14px}
+    .c-big b{font-size:68px}
+    .c-engs{margin-left:0;width:100%}
+    .c-eng{flex:1}
+    .c-body{padding:18px 16px 4px}
+    .c-card-q{grid-template-columns:auto 1fr}
+    .c-card-q .t{grid-column:1/-1;text-align:left;display:flex;gap:6px;align-items:baseline}
+    .c-card-q .t b{display:inline}
+    .c-er{grid-template-columns:1fr}
+    .c-er-l{flex-direction:row;align-items:center;justify-content:space-between}
+    .c-why{grid-template-columns:1fr}
+    .c-why div{border-right:0;border-bottom:1px solid #33343b}
+  }
+
   /* ── Print / PDF ─────────────────────────────────────────────────────────── */
   @media print{
     @page{size:A4;margin:12mm}
@@ -337,6 +532,11 @@
     .c2{min-height:0}
     .c2-thread{box-shadow:none}
     .c1-sec,.c2-sec,.c3-ev,.c3-score,.c2-qrow,.c1-tbl tr{break-inside:avoid;page-break-inside:avoid}
+    .v{padding:0;background:#fff}
+    .v-sheet{box-shadow:none;max-width:none}
+    .a-card,.a-compact,.a-why,.b-ans,.b-tbl tr,.b-why,.c-card,.c-why,.a-q{break-inside:avoid;page-break-inside:avoid}
+    .a-q,.b-q{break-after:avoid;page-break-after:avoid}
+    .v-livefoot{break-inside:avoid;page-break-inside:avoid}
   }
 </style>
 </head>
@@ -346,9 +546,12 @@
   <div class="gal-in">
     <span class="gal-flag">Concept only — not live report</span>
     <div class="gal-tabs" role="group" aria-label="Concept">
-      <button data-c="1">Concept 1 · Editorial</button>
-      <button data-c="2">Concept 2 · Conversation</button>
-      <button data-c="3">Concept 3 · Evidence</button>
+      <button data-c="1">Concept 1</button>
+      <button data-c="2">Concept 2 original</button>
+      <button data-c="3">Concept 3</button>
+      <button data-c="2a">Concept 2A</button>
+      <button data-c="2b">Concept 2B</button>
+      <button data-c="2c">Concept 2C</button>
     </div>
     <div class="gal-toggle" role="group" aria-label="Featured answer">
       <button data-named="0">Featured: not named</button>
@@ -362,8 +565,13 @@
   <section class="concept c1" id="c1" aria-label="Concept 1"></section>
   <section class="concept c2" id="c2" aria-label="Concept 2"></section>
   <section class="concept c3" id="c3" aria-label="Concept 3"></section>
+  <section class="concept v" id="c2a" aria-label="Concept 2A"></section>
+  <section class="concept v" id="c2b" aria-label="Concept 2B"></section>
+  <section class="concept v" id="c2c" aria-label="Concept 2C"></section>
 </main>
 
+<!-- The live report's CTA + footer, generated from the real renderer by extract-live-footer.ts. -->
+<script src="live-footer.js"></script>
 <script>
 /* ── FIXTURE — illustrative only. Same shape as the quick check: 3 questions × 2 engines. ── */
 const F = {
@@ -581,18 +789,107 @@ function renderC3() {
   '</div>';
 }
 
+/* ═══ 2A / 2B / 2C — shared pieces ═══ */
+/* The live system stores the featured answer cut at 600 characters (hookAudit.ts answer_excerpt).
+   The concept never shows more than that; a longer text would end in an ellipsis. */
+const ANSWER_CAP = 600;
+const capped = (a) => a.text.length > ANSWER_CAP ? { ...a, text: a.text.slice(0, ANSWER_CAP).replace(/\s+\S*$/, "") + "…" } : a;
+const vAns = (a) => highlight(capped(a), (n, i, me) => '<mark' + (me ? ' class="me"' : "") + '>' + n + '</mark>');
+const vBadge = (y) => '<span class="v-badge ' + (y ? "y" : "n") + '">' + (y ? "&#10003; Named" : "&#10005; Not named") + '</span>';
+const vEng = (k, suffix) => '<span class="v-eng">' + mark(k) + label(k) + (suffix || "") + '</span>';
+const vChips = (a) => a.rivals.map((r) => '<span class="v-chip">' + esc(r) + '</span>').join("");
+const vHead = () => '<header class="v-head"><div><div class="wm">Findable<i>.</i></div><div class="v-for">Prepared for <b>' + esc(F.business) + '</b></div></div>' +
+  '<div class="v-head-r"><b>' + F.reportType + '</b>' + F.date + '</div></header>';
+const allRivals = () => { const s = new Set(); F.questions.forEach((q) => F.engines.forEach((e) => q.answers[e.key].rivals.forEach((r) => s.add(r)))); return s.size; };
+const missed = () => S.total - S.named;
+const vFoot = () => '<div class="v-livefoot"></div>';
+/* Mount the LIVE CTA + footer in a shadow root so its stylesheet applies unchanged and cannot leak. */
+function mountLiveFooters() {
+  document.querySelectorAll(".v-livefoot").forEach((host) => {
+    if (!window.LIVE_FOOTER) { host.className = "v-livefoot-missing"; host.textContent = "EXISTING LIVE REPORT FOOTER CONTINUES UNCHANGED HERE (run extract-live-footer.ts to show it)"; return; }
+    const root = host.shadowRoot || host.attachShadow({ mode: "open" });
+    root.innerHTML = '<style>' + LIVE_FOOTER.css.replace(/:root/g, ":host") +
+      ':host{display:block;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;line-height:1.5}.sheet{margin:0!important;max-width:none!important;border-radius:0!important;box-shadow:none!important}</style>' +
+      '<div class="sheet">' + LIVE_FOOTER.html + '</div>';
+  });
+}
+
+/* ═══ CONCEPT 2A — bold score band + stacked evidence ═══ */
+function renderC2A(nv) {
+  const f = feat(nv), t = tone(S.named, S.total);
+  const other = f.ek === "gai" ? "gpt" : "gai", oa = F.questions[f.qi].answers[other];
+  const engs = S.per.map((e) => '<div class="a-eng">' + mark(e.key) + '<span class="a-eng-l">' + e.label + '</span><span class="a-eng-v t-' + tone(e.named, e.total) + '">' + e.named + '/' + e.total + '</span>' +
+    '<span class="a-eng-d">' + F.questions.map((q) => '<i class="' + (q.answers[e.key].named ? "y" : "") + '"></i>').join("") + '</span></div>').join("");
+  const compact = F.questions.map((q, qi) => qi === f.qi ? "" :
+    '<div class="a-compact"><div class="a-compact-q"><small>QUESTION ' + (qi + 1) + '</small><span>' + esc(q.q) + '</span></div>' +
+    F.engines.map((e) => { const a = q.answers[e.key];
+      return '<div class="a-row">' + vEng(e.key) + vBadge(a.named) + '<span class="rv"><span class="lbl">' + (a.named ? "Named alongside" : "Named instead") + '</span> ' + vChips(a) + '</span></div>'; }).join("") + '</div>').join("");
+  document.getElementById("c2a").innerHTML = '<div class="v-sheet">' + vHead() +
+    '<section class="a-score v-on-k"><div><div class="a-big t-' + t + '">' + S.pct + '%</div><div class="a-big-k">AI visibility</div><div class="a-big-s">' + S.named + ' of ' + S.total + ' answers named you</div></div>' +
+      '<div><p class="a-verdict">' + headline + '</p><div class="a-engs">' + engs + '</div></div></section>' +
+    '<div class="a-body"><h2 class="v-sec-h">What we asked &middot; what AI said</h2>' +
+      '<div class="a-q"><small>Question ' + (f.qi + 1) + '</small><span>' + esc(f.q) + '</span></div>' +
+      '<div class="a-card"><div class="a-card-h">' + vEng(f.ek, " answer") + vBadge(f.a.named) + '</div>' +
+        '<p class="a-card-t v-ans">' + vAns(f.a) + '</p>' +
+        '<div class="a-also">' + vEng(other) + vBadge(oa.named) + '<span class="rv"><span class="lbl">' + (oa.named ? "Named alongside" : "Named instead") + '</span> ' + vChips(oa) + '</span></div></div>' +
+      compact +
+      '<div class="a-why"><div><span class="a-why-h">Why this matters</span><b>' + missed() + ' of ' + S.total + '</b>answers did not name you</div>' +
+        '<div><b>' + allRivals() + '</b>competitors appeared instead</div>' +
+        '<div><b>&nbsp;</b>AI is another place customers are choosing who to contact.</div></div>' +
+    '</div>' + vFoot() + '</div>';
+}
+
+/* ═══ CONCEPT 2B — scoreboard + featured missed search (shortest) ═══ */
+function renderC2B(nv) {
+  const f = feat(nv), t = tone(S.named, S.total);
+  const rows = F.questions.map((q, qi) => '<tr><td class="q">' + esc(q.q) + '</td>' + F.engines.map((e) => { const y = q.answers[e.key].named;
+    return '<td class="r ' + (y ? "y" : "n") + '" data-eng="' + e.label + '">' + (y ? "&#10003; Named" : "&#10005; Not named") + '</td>'; }).join("") + '</tr>').join("");
+  document.getElementById("c2b").innerHTML = '<div class="v-sheet">' + vHead() +
+    '<section class="b-board">' +
+      '<div class="b-cell all ' + t + '"><div class="b-k">Your score</div><div class="b-v t-' + t + '">' + S.pct + '%</div><div class="b-s">' + S.named + ' of ' + S.total + ' answers named you</div></div>' +
+      S.per.map((e) => { const et = tone(e.named, e.total); return '<div class="b-cell ' + et + '"><div class="b-k">' + mark(e.key) + e.label + '</div><div class="b-v t-' + et + '">' + e.named + '<small>/' + e.total + '</small></div><div class="b-s">answers named you</div></div>'; }).join("") +
+    '</section>' +
+    '<div class="b-verdict">' + headline + ' <span>' + caveat + '</span></div>' +
+    '<div class="b-body"><h2 class="v-sec-h">' + (f.a.named ? "Featured search" : "Featured missed search") + '</h2>' +
+      '<div class="b-q"><small>Question ' + (f.qi + 1) + ' &middot; what we asked</small><span>' + esc(f.q) + '</span></div>' +
+      '<div class="b-ans"><div class="b-ans-main"><div class="b-ans-h">' + vEng(f.ek, " answer") + vBadge(f.a.named) + '</div><p class="b-ans-t v-ans">' + vAns(f.a) + '</p></div>' +
+        '<aside class="b-side"><span class="b-side-k">' + (f.a.named ? "Also named" : "Named instead") + '</span><ol>' + f.a.rivals.map((r) => '<li>' + esc(r) + '</li>').join("") + '</ol>' +
+        '<div class="b-you ' + (f.a.named ? "y" : "n") + '"><span class="b-side-k">Your business</span><b>' + (f.a.named ? "&#10003; Named" : "&#10005; Not named") + '</b></div></aside></div>' +
+      '<h2 class="v-sec-h" style="margin-top:22px">All questions</h2>' +
+      '<table class="b-tbl"><thead><tr><th>Question</th>' + F.engines.map((e) => '<th class="e">' + mark(e.key) + e.label + '</th>').join("") + '</tr></thead><tbody>' + rows + '</tbody></table>' +
+      '<div class="b-why"><span class="h">Why this matters</span><span><b>' + missed() + ' of ' + S.total + '</b>answers did not name you</span><span><b>' + allRivals() + '</b>competitors appeared instead</span><span>AI is another place customers are choosing who to contact.</span></div>' +
+    '</div>' + vFoot() + '</div>';
+}
+
+/* ═══ CONCEPT 2C — one card per question ═══ */
+function renderC2C() {
+  const t = tone(S.named, S.total);
+  const cards = F.questions.map((q, qi) => { const n = F.engines.filter((e) => q.answers[e.key].named).length;
+    return '<article class="c-card"><div class="c-card-q"><span class="n">Q' + (qi + 1) + '</span><span class="q"><small>QUESTION</small>' + esc(q.q) + '</span><span class="t"><b class="' + (n ? "" : "") + '">' + n + '/2</b>named you</span></div>' +
+      F.engines.map((e) => { const a = q.answers[e.key];
+        return '<div class="c-er' + (a.named ? " y" : "") + '"><div class="c-er-l">' + vEng(e.key) + vBadge(a.named) + '</div><p class="v-ans">' + vAns(a) + '</p></div>'; }).join("") + '</article>'; }).join("");
+  document.getElementById("c2c").innerHTML = '<div class="v-sheet">' + vHead() +
+    '<section class="c-score v-on-k"><div class="c-big"><b class="t-' + t + '">' + S.pct + '%</b><span><em>Your score</em>' + S.named + ' of ' + S.total + ' answers named you</span></div>' +
+      '<div class="c-engs">' + S.per.map((e) => '<div class="c-eng">' + mark(e.key) + '<span>' + e.label + '<b class="t-' + tone(e.named, e.total) + '">' + e.named + '/' + e.total + '</b></span></div>').join("") + '</div>' +
+      '<div class="c-verdict">' + headline + ' <span>' + caveat + '</span></div></section>' +
+    '<div class="c-body"><h2 class="v-sec-h">What we asked &middot; what AI said</h2>' + cards +
+      '<div class="c-why"><div><b>' + missed() + ' of ' + S.total + '</b>answers did not name you</div><div><b>' + allRivals() + '</b>competitors appeared instead</div><div><b>Why it matters</b>AI is another place customers are choosing who to contact.</div></div>' +
+    '</div>' + vFoot() + '</div>';
+}
+
 /* ── Gallery ── */
 const params = new URLSearchParams(location.search);
-let cur = ["1", "2", "3"].includes(params.get("c")) ? params.get("c") : "1";
+const IDS = ["1", "2", "3", "2a", "2b", "2c"];
+let cur = IDS.includes(params.get("c")) ? params.get("c") : "1";
 let named = params.get("named") === "1";
 if (params.get("bar") === "0") document.getElementById("gal").style.display = "none";
 function render() {
   gid = 0;
-  renderC1(named); renderC2(named); renderC3();
+  renderC1(named); renderC2(named); renderC3(); renderC2A(named); renderC2B(named); renderC2C(); mountLiveFooters();
   document.querySelectorAll(".concept").forEach((s) => s.classList.toggle("on", s.id === "c" + cur));
   document.querySelectorAll("[data-c]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.c === cur)));
   document.querySelectorAll("[data-named]").forEach((b) => b.setAttribute("aria-pressed", String((b.dataset.named === "1") === named)));
-  document.querySelector(".gal-toggle").style.visibility = cur === "3" ? "hidden" : "visible";
+  document.querySelector(".gal-toggle").style.visibility = (cur === "3" || cur === "2c") ? "hidden" : "visible";
 }
 document.querySelectorAll("[data-c]").forEach((b) => b.addEventListener("click", () => { cur = b.dataset.c; render(); window.scrollTo(0, 0); }));
 document.querySelectorAll("[data-named]").forEach((b) => b.addEventListener("click", () => { named = b.dataset.named === "1"; render(); }));
