@@ -15,6 +15,9 @@ for (const file of writers) {
 assert.match(fs.readFileSync('src/pages/Inbox.tsx', 'utf8'), /WhatsAppTemplateMessage/, 'Inbox uses structured template renderer');
 assert.match(fs.readFileSync('src/hooks/useInbox.ts', 'utf8'), /template_snapshot/, 'Inbox realtime type retains template snapshot');
 const immediate = fs.readFileSync('supabase/functions/send-whatsapp-message/index.ts', 'utf8');
-assert.equal((immediate.match(/language: WA_TEMPLATES\[usedTemplate\]\.lang/g) ?? []).length, 2,
-  'manual preview and send snapshots use the final template registry language, not a block-scoped variable');
+/* 2026-10-07: the link templates send in Meta's LIVE registered language — `sentLang` is hoisted (function scope),
+   set only on that branch, and falls back to the registry for every other template. */
+assert.equal((immediate.match(/language: sentLang \?\? WA_TEMPLATES\[usedTemplate\]\.lang/g) ?? []).length, 2,
+  'manual preview and send snapshots use the language actually sent (hoisted sentLang, else the registry), not a block-scoped variable');
+assert.match(immediate, /let sentLang: string \| null = null;/, 'sentLang is declared once, before the branches');
 console.log('whatsapp-template-snapshot-paths: all assertions passed');

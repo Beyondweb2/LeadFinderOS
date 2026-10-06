@@ -102,7 +102,9 @@ console.log('── 2. THE OFFER, BOTH ROUTES, FROM THE CONSTANTS ──');
   ok(/12 payments in total, the £99 today included, so a 12-month minimum/.test(b.spoken.join(' ')) && /6 payments in total, the £99 today included, so a 6-month minimum/.test(o.spoken.join(' ')), 'both say the total counts the £99 today and name the minimum term');
   /* 2026-10-05 (v3 clause 5.6): never "six weeks after today" — the day after the refund window. */
   ok(/starting the day after your 14-day refund window closes/.test(b.spoken.join(' ')) && !/six weeks after today/.test(b.spoken.join(' ')), 'the first monthly payment is the day after the refund window (v3), never "six weeks after today"');
-  ok(/£29\.99 a month for hosting and monitoring until you cancel/.test(b.spoken.join(' ')), 'Build names the £29.99 Continuing Service after the minimum term (9A)');
+  /* 2026-10-07 (Paul): per plan — Build's £29.99 only if they want hosting / maintenance to carry on; Optimise ENDS. */
+  ok(/If they want us to keep hosting and maintaining it after that, it's £29\.99 a month for hosting and maintenance/.test(b.spoken.join(' ')), 'Build: £29.99 a month only if they want hosting / maintenance to continue after the 12 payments');
+  ok(/6th payment is the last one/.test(o.spoken.join(' ')) && /plan ends/.test(o.spoken.join(' ')) && !/£29\.99/.test(o.spoken.join(' ')), 'Optimise: the 6th payment is the last, then the plan ends — no £29.99 continuation');
   ok(!/\b(12|6) (more|further) payments|then (12|6) payments|13 payments|7 payments/i.test(b.spoken.join(' ') + o.spoken.join(' ')), 'no wording that implies an extra payment on top of the 12 / 6');
   const src = read('src/lib/callClose.ts').replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
   ok(!/£\s?\d|\b(12|6) payments\b/.test(src), 'callClose.ts types no price and no payment count — every figure is a constant');
@@ -112,13 +114,16 @@ console.log('── 2. THE OFFER, BOTH ROUTES, FROM THE CONSTANTS ──');
   ok(own.close.routes.map((r) => r.route).join(',') === 'optimise,build' && own.close.routeNote === null, 'the call screen of a lead with a site offers both');
   ok(none.close.routes.map((r) => r.route).join(',') === 'build' && /Optimise needs their own website/.test(none.close.routeNote ?? ''), '…and of a lead without one, Build only, saying why');
   ok(own.close.afterPayment === QUICK_CLOSE_AFTER_PAYMENT, 'what happens after they pay is Quick Close\'s own list, not a copy');
-  ok(/send you the link now/.test(own.close.closeLine), 'the close: "I\'ll send you the link now"');
+  /* 2026-10-07 (Paul): the scripted close line is GONE and not replaced — the rep closes in their own words. */
+  ok(!('closeLine' in own.close) && !/send you the link now|Paul takes it from there/.test(JSON.stringify(own)), 'no scripted close line ("If that sounds good, I\'ll send you the link now…" removed, not replaced)');
+  ok(!/send you the link now|Paul takes it from there/.test(read('src/components/ColdCallPlaybook.tsx') + read('src/lib/callClose.ts').replace(/\/\*[\s\S]*?\*\//g, '') + read('src/lib/callScript.ts').replace(/\/\*[\s\S]*?\*\//g, '')), '…and nowhere on the call screen');
   const ui = read('src/components/ColdCallPlaybook.tsx');
   /* 2026-10-06 (sales-team-today, Paul): ONE plan open at a time (Optimise | Build switch), the guarantee once, and
      Quick Close moved to the sticky bar beside Log this call — the only Quick Close on the call screen. */
   ok(/testId="call-step-close"/.test(ui) && /data-testid="call-plan-switch"/.test(ui) && /data-testid=\{'call-plan-' \+ r\.route\}/.test(ui)
-    && /data-testid=\{'call-route-' \+ plan\.route\}/.test(ui) && /useState<ServiceRoute>\(s\.plans\.preselected\)/.test(ui) && (ui.match(/data-testid="call-guarantee"/g) ?? []).length === 1,
-    'the call screen renders the close block: a plan switch, ONE route open (preselected from the website), the guarantee once');
+    && /data-testid=\{'call-route-' \+ plan\.route\}/.test(ui) && /const preferred = fit\?\.recommended \?\? s\.plans\.preselected/.test(ui) && (ui.match(/data-testid="call-guarantee"/g) ?? []).length === 1,
+    'the call screen renders the close block: a plan switch, ONE route open (the call answers\' recommendation, else the website\'s), the guarantee once');
+  ok(/offerFit\(ans\.answers/.test(ui) && /fit\.offered\[r\.route\] \|\| role === 'admin'/.test(ui), '2026-10-07: the plans offered follow the agency-contract rule (a salesperson is not shown Build while tied in)');
   ok((ui.match(/<QuickCloseButton /g) ?? []).length === 1 && /data-testid="log-this-call"[\s\S]{0,200}<QuickCloseButton leadId=\{leadId\}/.test(ui), '…and Quick Close once, in the sticky bar beside Log this call');
 }
 
@@ -208,7 +213,7 @@ console.log('── 5. THE CALL FLOW WORKS WITH NO AUDIT AND NO WHATSAPP ──'
     const at = order.map((id) => ui.indexOf(`testId="${id}"`));
     ok(at.every((i) => i > 0), 'the screen has every section: ' + order.join(' → '));
     const flow = ui.slice(ui.indexOf('function CallFlow('), ui.indexOf('type ScriptTab'));
-    ok(/<Say p=\{p\} \/>\s*<Ask p=\{p\} \/>\s*<WhyAndWhat p=\{p\} \/>\s*<Offer p=\{p\} \/>\s*<Objections p=\{p\} \/>/.test(flow), '…rendered in that order');
+    ok(/<Say p=\{p\} \/>\s*<Ask p=\{p\} ans=\{ans\} \/>\s*<WhyAndWhat p=\{p\} \/>\s*<Offer p=\{p\} ans=\{ans\} \/>\s*<Objections p=\{p\} \/>/.test(flow), '…rendered in that order');
     ok(!['call-step-after', 'call-not-the-owner', 'call-card'].some((id) => ui.includes(`data-testid="${id}"`)), 'removed: call card, after-they-pay step, gatekeeper/voicemail fold');
     ok(/data-testid="answer-self"/.test(ui) && /data-testid="answer-agency"/.test(ui) && /\{manager === 'agency' && after && \([\s\S]{0,120}data-testid="call-step-agency"/.test(ui), 'the first question has two answer buttons; the agency branch shows only after "Agency"');
   }

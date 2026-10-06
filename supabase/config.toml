@@ -99,6 +99,10 @@ verify_jwt = false
 [functions.client-agreement]
 verify_jwt = false
 
+# Public paid-client onboarding form (findable.live/details/<token> proxies here with the anon key; the token is the key).
+[functions.client-onboarding]
+verify_jwt = false
+
 [functions.findable-onboarding]
 verify_jwt = false
 

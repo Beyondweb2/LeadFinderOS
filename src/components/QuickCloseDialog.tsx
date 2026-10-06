@@ -15,8 +15,9 @@ import { notifyLeadChanged } from '@/lib/leadSync';
 import {
   APPROACH_LABEL, APPROACH_ROUTE, QC_REVIEW_HEADING, QUICK_CLOSE_AFTER_PAYMENT, QUICK_CLOSE_AGREEMENT_LINE, QUICK_CLOSE_GUARANTEE_LINES, QUICK_CLOSE_QUESTIONS, QUICK_CLOSE_STATE_LABEL,
   closeFlow, linkTimeLeftWords, missingQuestions, quickCloseMessage, quickCloseScript, routeAfterAnswer, routeAvailable, routeSwitchText, routeOwnershipLine, routePaymentsShort, routeTermsLines,
-  type QcApproach, type QcKey, type QcLinkShare, type QuickCloseAnswers, type QuickCloseGate, type QuickCloseState,
+  type QcApproach, type QcCallNotes, type QcKey, type QcLinkShare, type OfferFit, type QuickCloseAnswers, type QuickCloseGate, type QuickCloseState,
 } from '@/lib/quickClose';
+import { LINK_READY_FALLBACK, type LinkRoute } from '@/lib/paymentLinkRoute';
 import { FINDABLE_SETUP_PRICE_GBP, SERVICE_ROUTE_NAME, totalPaymentsFor, type ServiceRoute } from '@/lib/findableOffer';
 import { cn } from '@/lib/utils';
 import { SalesHandoffForm } from '@/components/SalesHandoffForm';
@@ -54,6 +55,13 @@ interface View {
   link: { url: string | null; usable: boolean; generated_at: string | null; expires_at: string | null; usable_until?: string | null; shared: QcLinkShare[] } | null;
   share?: { email: string | null; hasPhone: boolean };
   windowOpen: boolean;
+  /** Paul's WhatsApp link rule, decided by the server (paymentLinkRoute.ts). */
+  link_route?: { route: LinkRoute; reason: string; say: string; template: { name: string; status: string; category: string | null; checked_at: string | null; label: string; sendable: boolean; say: string } };
+  /** What the call screen heard (quick_close.call) and the offer it points to (offerFit). */
+  call?: QcCallNotes;
+  call_lines?: { key: string; label: string; answer: string }[];
+  offer?: OfferFit;
+  has_website?: boolean;
   events: { kind: string; at: string; by_me: boolean }[];
   /** The sales handoff (src/lib/salesHandoff.ts) — editable by the seller even after payment. */
   handoff?: { canEdit: boolean; fields: SalesHandoffFields; prefilled: HandoffFieldKey[]; saved_at: string | null; completed_at: string | null; complete: boolean; missing: HandoffFieldKey[];
@@ -212,11 +220,15 @@ export function QuickClosePanel({ leadId, active = true, framed = false }: { lea
     const r = await run('email', { mode: 'share_link', channel: 'email' });
     if (r) toast({ title: 'Sign-up link emailed', description: v?.share?.email ? `To ${v.share.email}` : undefined });
   };
-  const sendWhatsApp = async () => {
-    const r = await run('wa', { mode: 'share_link', channel: 'whatsapp' });
+  /* ONE click (2026-10-07): the server picks the route — the approved findable_signup_link template, or a normal
+     message in a conversation they replied to inside 24 hours — and refuses a second send of the same link unless
+     this is a deliberate Resend. Sending… / Sent / failed come from the sender's own answer, never assumed. */
+  const sendWhatsApp = async (resend = false) => {
+    if (resend && !window.confirm('Send the sign-up link to them on WhatsApp again?')) return;
+    const r = await run('wa', { mode: 'share_link', channel: 'whatsapp', ...(resend ? { resend: true } : {}) });
     if (!r) return;
     const last = r.link?.shared.filter((s) => s.channel === 'whatsapp').slice(-1)[0];
-    toast({ title: last?.status === 'simulated' ? 'Sent (test mode — not delivered)' : 'Sent on WhatsApp' });
+    toast({ title: last?.status === 'simulated' ? 'Sent (test mode — not delivered)' : 'Sent on WhatsApp', description: last?.template ? 'As the findable_signup_link template.' : undefined });
   };
 
   const saveHandoff = async (h: SalesHandoffFields) => !!(await run('handoff', { mode: 'save_handoff', handoff: h }));
@@ -315,19 +327,28 @@ export function QuickClosePanel({ leadId, active = true, framed = false }: { lea
                   {(v.consents?.lines ?? currentQ.detail ?? []).map((d) => <li key={d}>{d}</li>)}
                 </ul>
               )}
-              <div className={cn('mt-3 grid gap-2', current === 'route' || current === 'build_consents' || current === 'approach' || current === 'domain' || current === 'design_owner' ? 'grid-cols-1' : 'grid-cols-2')}>
+              {/* STEP 1 — the offer, with what the call's answers recommend (offerFit: the agency-contract rule). */}
+              {current === 'route' && v.offer?.reason && (
+                <p className={cn('mt-2 rounded-xl px-3 py-2 text-xs leading-snug ring-1 ring-inset', v.offer.offered.build ? 'bg-muted/40 text-muted-foreground ring-border' : cn(TONE.amber.tint, 'ring-amber-500/30'))} data-testid="qc-offer-fit">{v.offer.reason}</p>
+              )}
+              <div className={cn('mt-3 grid gap-2', current === 'route' || current === 'build_consents' || current === 'approach' || current === 'domain' || current === 'design_owner' || current === 'agency_contract' ? 'grid-cols-1' : 'grid-cols-2')}>
                 {currentQ.options
                   .filter((o) => !(current === 'authority' && o.value === 'not_applicable' && (answers.manager === 'agency' || answers.manager === 'third_party')))
                   .map((o) => {
-                    const off = (current === 'route' && !routeAvailable(answers, o.value as ServiceRoute))
+                    const noSite = current === 'route' && (!routeAvailable(answers, o.value as ServiceRoute) || (o.value === 'optimise' && v.has_website === false));
+                    /* ⛔ The agency-contract rule: a salesperson is not offered Build while they are tied into their agency.
+                       Paul (admin) may still pick it — the gate then stops it for his own release. */
+                    const notOffered = current === 'route' && !noSite && v.offer ? !v.offer.offered[o.value as ServiceRoute] : false;
+                    const off = noSite || (notOffered && role !== 'admin')
                       || (current === 'approach' && !hasSite && NEEDS_CURRENT_SITE.has(o.value));
+                    const recommended = current === 'route' && v.offer?.recommended === o.value && !noSite;
                     const planOf = current === 'approach' && o.value !== 'unsure' ? APPROACH_ROUTE[o.value as Exclude<QcApproach, 'unsure'>] : null;
                     return (
-                      <button key={o.value} type="button" disabled={!!busy || off} onClick={() => void answer(current!, o.value)}
+                      <button key={o.value} type="button" disabled={!!busy || off} onClick={() => void answer(current!, o.value)} data-testid={current === 'route' ? 'qc-route-' + o.value : undefined}
                         className={cn('flex min-h-[56px] flex-col items-center justify-center rounded-xl border px-3 py-3 text-center text-base font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-50',
-                          answers[current!] === o.value ? PICKED : 'border-border/70 bg-card hover:border-blue-500/40 hover:bg-muted/60')}>
-                        {o.label}
-                        {current === 'route' && <span className="mt-0.5 text-xs font-normal text-muted-foreground">{off ? 'Not possible — they have no website' : `${SERVICE_ROUTE_NAME[o.value as ServiceRoute]} · ${routePaymentsShort(o.value as ServiceRoute)}`}</span>}
+                          answers[current!] === o.value ? PICKED : recommended ? 'border-blue-500/50 bg-card hover:bg-muted/60' : 'border-border/70 bg-card hover:border-blue-500/40 hover:bg-muted/60')}>
+                        <span className="flex flex-wrap items-center justify-center gap-1.5">{o.label}{recommended && <span className="rounded-full bg-yellow-400/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-yellow-600 ring-1 ring-inset ring-yellow-500/40 dark:text-yellow-300">Recommended</span>}</span>
+                        {current === 'route' && <span className="mt-0.5 text-xs font-normal text-muted-foreground">{noSite ? 'Not possible — they have no website' : notOffered ? (role === 'admin' ? 'Still in agency contract — needs your release' : 'Not offered — still in their agency contract') : `${SERVICE_ROUTE_NAME[o.value as ServiceRoute]} · ${routePaymentsShort(o.value as ServiceRoute)}`}</span>}
                         {current === 'approach' && <span className="mt-0.5 text-xs font-normal text-muted-foreground">{off ? 'Not possible — no website on file' : planOf ? `${SERVICE_ROUTE_NAME[planOf]} · ${routePaymentsShort(planOf)}` : 'Pick the plan next'}</span>}
                       </button>
                     );
@@ -362,7 +383,7 @@ export function QuickClosePanel({ leadId, active = true, framed = false }: { lea
               <p className="mt-1.5 text-xs text-muted-foreground">Never promise to take over a domain or copy someone else's design. Paul sorts this out with them.</p>
             </Callout>
           )}
-          {v && answers.approach && v.state !== 'paid' && (
+          {v && answers.approach && answers.approach !== 'unsure' && answers.approach !== 'improve' && v.state !== 'paid' && (
             <p className="text-xs text-muted-foreground" data-testid="qc-approach-summary">Website approach: <span className="font-medium text-foreground">{APPROACH_LABEL[answers.approach]}</span>
               {v.review.delivery_approach && v.review.delivery_approach !== answers.approach && <> · delivered as <span className="font-medium text-foreground">{APPROACH_LABEL[v.review.delivery_approach]}</span> unless Paul confirms the rights</>}</p>
           )}
@@ -407,19 +428,43 @@ export function QuickClosePanel({ leadId, active = true, framed = false }: { lea
                         {copied === 'link' ? <Check className="h-5 w-5" /> : <Copy className="h-5 w-5" />}{copied === 'link' ? 'Copied' : 'Copy sign-up link'}
                       </Button>
                       <p className="line-clamp-2 break-all rounded-lg bg-muted/40 px-2.5 py-1.5 font-mono text-[11px] text-muted-foreground" title={usableUrl}>{usableUrl}</p>
-                      <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-                        <Button variant="outline" className="h-12 gap-1.5" onClick={() => void sendEmail()} disabled={!v.share?.email || !!busy} title={v.share?.email ? `Emails the link and the terms to ${v.share.email}` : 'No email address for them — add one under "Correct a detail"'}>
-                          {busy === 'email' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Mail className="h-4 w-4" />}Email the link
-                        </Button>
-                        <Button variant="outline" className="h-12 gap-1.5" onClick={() => void sendWhatsApp()} disabled={!v.windowOpen || !v.share?.hasPhone || !!busy} title={v.windowOpen ? 'Sends the link and the terms in their open WhatsApp conversation' : 'The WhatsApp window is closed — email or copy the link instead'}>
-                          {busy === 'wa' ? <Loader2 className="h-4 w-4 animate-spin" /> : <MessageCircle className="h-4 w-4" />}Send on WhatsApp
-                        </Button>
-                        <Button variant="outline" className="h-12 gap-1.5" onClick={() => void doCopy('message', quickCloseMessage(greetName, usableUrl, route))}><ClipboardCopy className="h-4 w-4" />{copied === 'message' ? 'Copied' : 'Copy message'}</Button>
-                      </div>
-                      <p className="text-xs text-muted-foreground" data-testid="qc-share-availability">
-                        {v.share?.email ? `Email goes to ${v.share.email}.` : 'No email address on file — add one under "Correct a detail" to email it.'}{' '}
-                        {!v.share?.hasPhone ? 'No phone number for WhatsApp.' : v.windowOpen ? 'WhatsApp is open (they messaged in the last 24 hours).' : 'WhatsApp is closed (no message from them in the last 24 hours) — email the link instead.'}
-                      </p>
+                      {/* ONE compliant send (Paul's rule, paymentLinkRoute.ts): WhatsApp only in a conversation they replied
+                          to inside 24 hours, or an APPROVED template; otherwise say so and copy / email — never "sent". */}
+                      {(() => {
+                        const lr = v.link_route;
+                        const canWa = lr?.route === 'whatsapp_reply' || lr?.route === 'whatsapp_template';
+                        const sentWa = (v.link?.shared ?? []).filter((s) => s.channel === 'whatsapp' && s.status !== 'failed' && (!s.link || s.link === usableUrl)).slice(-1)[0] ?? null;
+                        return (
+                          <>
+                            {sentWa ? (
+                              <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/[0.06] px-3 py-2 text-sm" data-testid="qc-whatsapp-sent">
+                                <span className={cn('flex items-center gap-1.5 font-semibold', OK_TEXT)}><CheckCircle2 className="h-4 w-4" />{sentWa.status === 'simulated' ? 'Sent on WhatsApp (test mode — not delivered)' : 'Sent on WhatsApp'} · {hhmm(sentWa.at)}</span>
+                                {canWa && <Button size="sm" variant="outline" className="h-9" onClick={() => void sendWhatsApp(true)} disabled={!!busy} data-testid="qc-resend-whatsapp">{busy === 'wa' ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-1 h-4 w-4" />}Resend</Button>}
+                              </div>
+                            ) : canWa ? (
+                              <Button className="h-12 w-full gap-1.5 rounded-xl bg-blue-600 font-bold text-white hover:bg-blue-700" onClick={() => void sendWhatsApp(false)} disabled={!!busy} data-testid="qc-send-whatsapp">
+                                {busy === 'wa' ? <><Loader2 className="h-4 w-4 animate-spin" />Sending…</> : <><MessageCircle className="h-4 w-4" />Send signup link on WhatsApp</>}
+                              </Button>
+                            ) : (
+                              <div className={cn('rounded-xl px-3 py-2.5 text-sm', TONE.amber.tint)} data-testid="qc-link-fallback">
+                                <p className="font-semibold">{lr?.template && !lr.template.sendable && lr.template.status !== 'UNKNOWN' ? `WhatsApp signup template ${lr.template.label.toLowerCase()}` : LINK_READY_FALLBACK}</p>
+                                <p className="mt-0.5 text-xs text-muted-foreground">{lr?.say ?? 'WhatsApp is not available for this link.'} {LINK_READY_FALLBACK.replace('Link ready — ', 'Copy the sign-up link and ')}</p>
+                              </div>
+                            )}
+                            {lr?.route === 'whatsapp_template' && lr.reason === 'ok_unverified' && !sentWa && <p className="text-[11px] text-muted-foreground">{lr.template.say}</p>}
+                            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                              <Button variant="outline" className="h-12 gap-1.5" onClick={() => void sendEmail()} disabled={!v.share?.email || !!busy} title={v.share?.email ? `Emails the link and the terms to ${v.share.email}` : 'No email address for them — add one under "Correct a detail"'}>
+                                {busy === 'email' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Mail className="h-4 w-4" />}Email the link
+                              </Button>
+                              <Button variant="outline" className="h-12 gap-1.5" onClick={() => void doCopy('message', quickCloseMessage(greetName, usableUrl, route))}><ClipboardCopy className="h-4 w-4" />{copied === 'message' ? 'Copied' : 'Copy message'}</Button>
+                            </div>
+                            <p className="text-xs text-muted-foreground" data-testid="qc-share-availability">
+                              {v.share?.email ? `Email goes to ${v.share.email}.` : 'No email address on file — add one under "Correct a detail" to email it.'}{' '}
+                              {lr?.route === 'whatsapp_reply' ? 'WhatsApp: they replied to us in the last 24 hours.' : lr?.route === 'whatsapp_template' && lr.template.sendable ? 'WhatsApp: sends as the approved findable_signup_link template.' : ''}
+                            </p>
+                          </>
+                        );
+                      })()}
                       {(v.link?.shared.length ?? 0) > 0 && (
                         <ul className="space-y-0.5 text-xs text-muted-foreground" data-testid="qc-share-history">
                           {v.link!.shared.slice().reverse().map((s) => (
@@ -472,7 +517,7 @@ export function QuickClosePanel({ leadId, active = true, framed = false }: { lea
             return (
               <details className={cn(FOLD, sent ? 'border-l-[3px] border-l-emerald-500' : h.complete ? EDGE.blue : EDGE.amber)} open={openNow} data-testid="qc-handoff">
                 <summary className="flex min-h-[36px] cursor-pointer select-none flex-wrap items-center justify-between gap-x-2 gap-y-1 text-sm font-semibold">Handoff for Paul<ToneChip tone={chip.tone} dot className={chip.cls}>{chip.text}</ToneChip></summary>
-                <p className="mt-1 text-xs text-muted-foreground">{sent ? 'Paul has your handoff. You can still correct an answer.' : 'Quick answers so Paul does not have to ask again. Send the link first — finish this and press Send to Paul, before or after they pay.'}</p>
+                <p className="mt-1 text-xs text-muted-foreground">{sent ? 'Paul has your handoff. You can still correct an answer.' : 'Most of this is already filled in from the call. Add only what you learned that Paul should know — nothing here is required — then Send to Paul.'}</p>
                 <div className="mt-3"><SalesHandoffForm fields={h.fields} prefilled={h.prefilled} route={route} onSave={saveHandoff} onSend={sendToPaul} sent={sent ? { at: sent.at, by: sent.by_me ? null : sent.by, changed_since: sent.changed_since } : null} busy={busy === 'handoff'} compact /></div>
               </details>
             );
@@ -482,9 +527,19 @@ export function QuickClosePanel({ leadId, active = true, framed = false }: { lea
             <details className={FOLD} open={v.state === 'not_started'}>
               <summary className="flex min-h-[36px] cursor-pointer select-none items-center justify-between gap-2 text-sm font-semibold"><span className="flex items-center gap-2"><span className={cn('h-4 w-1 shrink-0 rounded-full', TONE.grey.bar)} aria-hidden />What we already know</span><span className="text-xs font-normal text-muted-foreground">no need to ask</span></summary>
               {!editing ? (
-                <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-sm">
-                  {known.map(([k, val]) => <FragmentRow key={k} k={k} v={val} />)}
-                </dl>
+                <>
+                  <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-sm">
+                    {known.map(([k, val]) => <FragmentRow key={k} k={k} v={val} />)}
+                  </dl>
+                  {(v.call_lines?.length ?? 0) > 0 && (
+                    <div className="mt-3 border-t border-border/60 pt-2" data-testid="qc-call-answers">
+                      <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">From the call</p>
+                      <dl className="mt-1 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-sm">
+                        {v.call_lines!.map((l) => <FragmentRow key={l.key} k={l.label} v={l.answer} />)}
+                      </dl>
+                    </div>
+                  )}
+                </>
               ) : (
                 <div className="mt-2 space-y-2">
                   {([['contact_name', 'Contact name'], ['contact_email', 'Email'], ['confirmed_phone', 'Phone'], ['business_website', 'Website']] as const).map(([k, label]) => (

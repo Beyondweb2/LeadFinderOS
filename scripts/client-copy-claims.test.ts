@@ -71,6 +71,12 @@ const RENDERERS: Array<[string, string]> = [
   ["Quick Close link message + email (prospect)", "src/lib/quickClose.ts"],
   /* 2026-10-05 (v3): the Access Date confirmation email (clause 5.1) sent to a paying client. */
   ["Access Date email (paying client)", "supabase/functions/_shared/client-terms.ts"],
+  /* 2026-10-07: the paid client's onboarding form (findable.live/details/<token>) and its words; the two link
+     templates' registered bodies (findable_signup_link / findable_onboarding); the per-plan "after the payments" words. */
+  ["onboarding form page (paying client)", "src/lib/clientOnboardingPageHtml.ts"],
+  ["onboarding form questions (paying client)", "src/lib/clientOnboardingForm.ts"],
+  ["link template bodies (prospect + paying client)", "src/lib/whatsappLinkTemplates.ts"],
+  ["after-the-payments words (prospect)", "src/lib/planTerms.ts"],
 ];
 
 /* Each pattern is a claim that has been false since a dated change. Keep the date in the label. */

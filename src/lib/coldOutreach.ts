@@ -112,6 +112,11 @@ export const CONTINUATION_TEMPLATES: ReadonlySet<string> = new Set([
      template written for people who have history. Same reasoning as its needsAudit note in
      whatsappTemplates.ts. */
   "re_engage_49",
+  /* The two link templates (2026-10-07, whatsappLinkTemplates.ts): the sign-up link goes to someone a salesperson
+     has just closed (usually on the phone — a logged contact, which the cold guard would refuse), the onboarding
+     link to a PAYING client. Neither is a first approach; both are one per lead unless deliberately resent. */
+  "findable_signup_link",
+  "findable_onboarding",
 ]);
 
 /** True when this template is a COLD approach — a first contact that must never land on a number

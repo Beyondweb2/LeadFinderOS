@@ -9,6 +9,7 @@ import { RIVAL_VARS, RIVALS_REQUIRED } from "../../../src/lib/rivalHook.ts";
 import { displayBusinessName, IDENTIFY_NAME_TEMPLATES } from "../../../src/lib/displayName.ts";
 import { AI_SITE_FINDINGS_V2, AI_SITE_FINDINGS_V2_APPROVED } from "../../../src/lib/siteFindings.ts";
 import { STALE_OFFER_TEMPLATES } from "../../../src/lib/findableOffer.ts";
+import { isOnboardingFormUrl, isSignupLinkUrl, onboardingTemplateBody, signupLinkTemplateBody } from "../../../src/lib/whatsappLinkTemplates.ts";
 
 import { toWhatsAppDigits } from "../../../src/lib/waNumber.ts";
 
@@ -44,7 +45,11 @@ export function resolveWhatsAppEnv() {
    ask for the wrong grammar, and the failure would be a prospect reading "for a accountants".
    `rival_1|2|3` are the three competitor names competitor_hook sends as SEPARATE parameters — see
    src/lib/rivalHook.ts for why they are never padded and never degrade. */
-export type TemplateVar = "name" | "url" | "trade" | "trade_plural" | "trade_article" | "competitors" | "rival_1" | "rival_2" | "rival_3" | "onboarding_url" | "contact_first_name" | "town" | "audit_url" | "site_fault";
+export type TemplateVar = "name" | "url" | "trade" | "trade_plural" | "trade_article" | "competitors" | "rival_1" | "rival_2" | "rival_3" | "onboarding_url" | "contact_first_name" | "town" | "audit_url" | "site_fault"
+  /* 2026-10-07 — the two link templates (src/lib/whatsappLinkTemplates.ts): {{1}} the greeting name, {{2}} the
+     prospect's SIGN-UP link or the paid client's ONBOARDING-FORM link, both resolved server-side by
+     _shared/link-template-vars.ts and shape-checked here (never a Stripe URL). */
+  | "greeting_name" | "signup_url" | "onboarding_form_url";
 
 /* ⛔ THE VIDEO HEADER'S URL, IN ONE PLACE (Paul, 2026-09-12).
    `video_template` is registered at Meta with a VIDEO header, which means the send MUST carry a
@@ -288,6 +293,15 @@ export const WA_TEMPLATES: Record<string, { lang: string; vars: TemplateVar[]; h
      ⚠️ NOT in TEMPLATES_NEEDING_REAL_NAME: the caller already refuses a nameless lead before it
      gets here, and this one is sent to someone who typed their own business name into a form. */
   free_check_result: { lang: "en", vars: ["name", "trade", "town", "audit_url", "onboarding_url"] },
+  /* ⛔ THE TWO LINK TEMPLATES (Paul, 2026-10-07), CREATED AT META AND IN REVIEW, registered before approval on
+     the free_check_result precedent. Approval is NOT a flag here: send-whatsapp-message reads Meta's LIVE status
+     (_shared/template-status.ts) and sends only when APPROVED, in the language Meta registered (`lang` below is
+     only the fallback when Meta could not be asked). CONTINUATIONS (a close on the phone / a paying client),
+     never cold. MIRRORS process-whatsapp-queue; change both together.
+     findable_signup_link: {{1}} greeting name, {{2}} the prospect's unique findable.live/agree/<token> link.
+     findable_onboarding:  {{1}} greeting name, {{2}} the paid client's findable.live/details/<token> link. */
+  findable_signup_link: { lang: "en", vars: ["greeting_name", "signup_url"] },
+  findable_onboarding: { lang: "en", vars: ["greeting_name", "onboarding_form_url"] },
 };
 export const WA_DEFAULT_TEMPLATE = "booking_page_intro";
 
@@ -764,6 +778,9 @@ export const WA_TEMPLATE_BODIES: Record<string, (businessName: string, claimUrl:
   ai_site_findings_v2: aiSiteFindingsV2Body,
   explain_offer: explainOfferBody,
   explain_offer_v2: explainOfferV2Body,
+  /* The registered wording (whatsappLinkTemplates.ts); b = {{1}} the greeting name, u = {{2}} the link. */
+  findable_signup_link: (b, u) => signupLinkTemplateBody(b, u),
+  findable_onboarding: (b, u) => onboardingTemplateBody(b, u),
 };
 
 /** Render the display copy of a template body with its variables filled. `trade`/`competitors`
@@ -809,7 +826,7 @@ export function templateBodyParams(
   vars: TemplateVar[],
   businessName: string,
   claimUrl: string,
-  extra?: { trade?: string; competitors?: string; rivals?: string[]; onboardingUrl?: string; templateName?: string; contactName?: string; town?: string; auditUrl?: string; siteFault?: string; siteFindings?: string },
+  extra?: { trade?: string; competitors?: string; rivals?: string[]; onboardingUrl?: string; templateName?: string; contactName?: string; town?: string; auditUrl?: string; siteFault?: string; siteFindings?: string; greetingName?: string; signupUrl?: string; onboardingFormUrl?: string },
 ) {
   /* Last line of defence for a template whose copy needs a real name. Callers check first and
      return a readable refusal; this throws so a new caller that forgets cannot quietly send
@@ -930,6 +947,25 @@ export function templateBodyParams(
       /* ai_site_findings_v2's {{6}}. Fails closed exactly as site_fault does and for the identical
          reason: Meta rejects an empty parameter, so an absent value is not a shorter message, it is
          a dead send. Refusing here is the last of three gates (picker → resolver → this). */
+      /* The two link templates (2026-10-07). The greeting is resolved by the caller with its fallbacks
+         (linkTemplateGreeting), so blank here is a caller bug: refuse. The links must be EXACTLY the findable.live
+         sign-up / onboarding shapes — a Stripe checkout URL, any other host, or an empty value throws, and the
+         unsafe_template_var: prefix turns that into a visible hold at the send site. */
+      case "greeting_name": {
+        const g = (extra?.greetingName ?? "").trim();
+        if (!g) throw new Error("unsafe_template_var:no_greeting_name:no name to greet");
+        return g;
+      }
+      case "signup_url": {
+        const u = (extra?.signupUrl ?? "").trim();
+        if (!isSignupLinkUrl(u)) throw new Error("unsafe_template_var:not_a_signup_link:the link is not the client's findable.live sign-up link");
+        return u;
+      }
+      case "onboarding_form_url": {
+        const u = (extra?.onboardingFormUrl ?? "").trim();
+        if (!isOnboardingFormUrl(u)) throw new Error("unsafe_template_var:not_an_onboarding_link:the link is not the client's findable.live onboarding form");
+        return u;
+      }
       case "site_findings": {
         const f = (extra?.siteFindings ?? "").trim();
         if (!f) throw new Error("unsafe_template_var:no_site_findings:the crawl check found nothing strong enough to name — use audit_followup_call");
@@ -1005,7 +1041,7 @@ export function claimTemplatePayload(
   lang: string,
   businessName: string,
   claimUrl: string,
-  extra?: { trade?: string; competitors?: string; rivals?: string[]; onboardingUrl?: string; contactName?: string; town?: string; auditUrl?: string; siteFault?: string; siteFindings?: string },
+  extra?: { trade?: string; competitors?: string; rivals?: string[]; onboardingUrl?: string; contactName?: string; town?: string; auditUrl?: string; siteFault?: string; siteFindings?: string; greetingName?: string; signupUrl?: string; onboardingFormUrl?: string },
 ) {
   /* THROWS on an unrecognised template rather than assuming ["name","url"].
      That assumption was a quieter version of the queue's template fallback: an unregistered name got

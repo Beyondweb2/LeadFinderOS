@@ -657,6 +657,9 @@ const SERVER_ONLY_TEMPLATE_LABELS: Record<string, string> = {
      than automatic, but it is still not a CAMPAIGN default: one send per lead, no override, and the
      server refuses it without a contact name. Labelled, deliberately not sendable from here. */
   questionnaire_followup: 'Questionnaire chase (one per lead)',
+  /* 2026-10-07: sent from Quick Close / Paid Clients only (one click, Meta's live approval), never from a picker. */
+  findable_signup_link: 'Sign-up link (after a close)',
+  findable_onboarding: 'Onboarding form link (paid client)',
 };
 
 /** Every template that can appear anywhere, for pickers that legitimately span both products. */

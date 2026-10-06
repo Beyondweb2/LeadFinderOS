@@ -112,17 +112,18 @@ console.log("── BUILD: one answer per call, exactly as the dialog sends them
     route = cleanAnswers(row.quick_close?.answers).route ?? null;
   }
   const a4 = cleanAnswers(row.quick_close!.answers);
-  ok(counter(a4) === "3/4" && state(row) === "in_progress" && missingQuestions(a4).join() === "build_consents", "after three answers: 3 of 4, the consents still to confirm (a new site is never asked for current-site access)");
+  /* 2026-10-07: Quick Close is QUICK — on Build (self-run / no site) the offer and authority are all it asks. */
+ok(counter(a4) === "2/2" && state(row) === "ready" && missingQuestions(a4).length === 0, "Build: the plan and the decision maker → READY (no domain / consent questions on the call; the agreement and the onboarding form cover them)");
   ok(buildConsentsFor(a4)[0] === BUILD_CONSENT_NO_DOMAIN && !/own or control the domain/.test(buildConsentsFor(a4)[0]), "M-012: with No domain the first consent says they WILL register one — not that they own one");
   const r5 = save(row, { build_consents: "yes" }, { expectRoute: "build" });
   ok(r5.ok, "the final answer \"Yes — they confirm all three\" is accepted");
   const a5 = cleanAnswers(row.quick_close!.answers);
-  ok(a5.build_consents === "yes" && counter(a5) === "4/4" && state(row) === "ready", "it PERSISTS: 4 of 4, Ready for payment");
+  ok(a5.build_consents === "yes" && counter(a5) === "2/2" && state(row) === "ready", "a legacy consent answer is still accepted and kept; still ready");
   ok((row.quick_close!.build_consents_confirmed as { wording: string; lines: string[] }).wording === "no_domain" && (row.quick_close!.build_consents_confirmed as { lines: string[] }).lines[0] === BUILD_CONSENT_NO_DOMAIN, "the stored consent records WHICH wording was read out");
   ok(row.cols.dns_permission === true && row.cols.materials_confirmed === true && row.cols.plan_tier === "new_site" && row.cols.website_addon === true, "the canonical columns the checkout reads: Build, DNS permission, materials");
   // Refresh = a new load of the stored row.
   const reloaded = clone(row.quick_close);
-  ok(quickCloseState(row.status, reloaded, clock) === "ready" && counter(cleanAnswers(reloaded!.answers)) === "4/4", "refresh: still 4 of 4, still ready");
+  ok(quickCloseState(row.status, reloaded, clock) === "ready" && counter(cleanAnswers(reloaded!.answers)) === "2/2", "refresh: still 2 of 2, still ready");
   // Double submit of the final answer.
   const rev = row.quick_close!.rev;
   const again = save(row, { build_consents: "yes" }, { expectRoute: "build" });
@@ -230,7 +231,7 @@ console.log("\n── ROUTE: Build and Optimise never mix; changes are deliberat
   ok(!row.quick_close!.link_url && sw.ok && buildSession === null && !sw.expired, "the Build sign-up link is cleared (it never had a Stripe session) — it can never be paid for an Optimise row");
   ok(row.quick_close!.build_consents_confirmed === null, "the stored consent evidence goes with them");
   const back = save(row, { route: "build" }, { expectRoute: "optimise", routeChange: true });
-  ok(back.ok && state(row) === "in_progress" && missingQuestions(cleanAnswers(row.quick_close!.answers)).includes("build_consents"), "back to Build → the consents must be confirmed again (never carried over from earlier)");
+  ok(back.ok && cleanAnswers(row.quick_close!.answers).build_consents === undefined && missingQuestions(cleanAnswers(row.quick_close!.answers)).length === 0, "back to Build → the old consents do NOT come back (never carried over); nothing more is asked on the call");
   const nosite = newRow();
   for (const [k, v] of [["decision_maker", "yes"], ["approach", "unsure"], ["manager", "no_website"]] as const) save(nosite, { [k]: v });
   const opt = save(nosite, { route: "optimise" }, { expectRoute: null });
@@ -246,9 +247,9 @@ console.log("\n── ROUTE: Build and Optimise never mix; changes are deliberat
   const apSilent = save(ap, { approach: "new_template" }, { expectRoute: "optimise" });
   ok(!apSilent.ok && apSilent.error === "route_change_unconfirmed" && cleanAnswers(ap.quick_close!.answers).route === "optimise", "improve → a new site WITHOUT confirming is refused; still Optimise");
   const apSw = save(ap, { approach: "new_template" }, { expectRoute: "optimise", routeChange: true });
-  ok(apSw.ok && cleanAnswers(ap.quick_close!.answers).route === "build" && missingQuestions(cleanAnswers(ap.quick_close!.answers)).join() === "domain,build_consents", "confirmed → Build, and now the domain and consents are asked (never site access)");
+  ok(apSw.ok && cleanAnswers(ap.quick_close!.answers).route === "build" && missingQuestions(cleanAnswers(ap.quick_close!.answers)).length === 0, "confirmed → Build; no domain / consent / site-access questions follow (2026-10-07)");
   const apRoute = save(ap, { route: "optimise" }, { expectRoute: "build", routeChange: true });
-  ok(!apRoute.ok && apRoute.error === "answer_not_kept" && /follows the website approach/.test(apRoute.detail), "a plan that contradicts the approach is refused out loud — change the approach instead");
+  ok(apRoute.ok && cleanAnswers(ap.quick_close!.answers).route === "optimise" && cleanAnswers(ap.quick_close!.answers).approach === "improve", "2026-10-07: the plan is chosen directly — it brings the approach that agrees with it (a stored Build approach can never flip it back)");
   const fn = read("supabase/functions/quick-close/index.ts");
   ok(/if \(plan\.routeChange\)/.test(fn) && /lead\.contract_total_payments != null\) return json\(\{ ok: false, error: "route_locked"/.test(fn) && /from\("client_agreement_acceptances"\)/.test(fn) && /error: "route_lock_unreadable"[^\n]*503/.test(fn), "locked route: a contract or ANY agreement acceptance refuses a route change; an unreadable record refuses too (fails closed)");
   ok(/if \(row\.status === "paid"\) return json\(\{ ok: false, error: "already_paid"/.test(fn), "after payment nothing in Quick Close can change");
@@ -261,7 +262,7 @@ for (const route of ["build", "optimise"] as const) {
   const terms = routeTermsLines(route).join(" | ");
   ok(terms.includes("£99 today") && terms.includes("£99 a month") && terms.includes(`${n} payments in total`) && terms.includes(`${n}-month minimum term`), `${route}: the card says £99 today, £99 a month, ${n} payments, a ${n}-month minimum term`);
   const own = routeOwnershipLine(route);
-  ok(route === "build" ? /builds, hosts and manages a new website/.test(own) && /once all 12 payments/.test(own) : /keep their existing website/.test(own) && /stays theirs/.test(own), `${route}: who owns the website is said`);
+  ok(route === "build" ? /builds, hosts and manages a new website/.test(own) && /website is theirs/.test(terms) : /keep their existing website/.test(own) && /stays theirs/.test(own) && /plan ends/.test(terms) && !/29\.99/.test(terms), `${route}: who owns the website is said; Build: theirs after the payments; Optimise: the plan ends, no £29.99`);
   const url = "https://findable.live/agree/" + "b".repeat(64);
   for (const [label, text] of [["script", quickCloseScript(route)], ["message", quickCloseMessage("Bob Smith", url, route)], ["email", quickCloseEmail({ greetName: "Bob", businessName: "ABC Ltd", url, route, senderName: "Sumi" }).text]] as const) {
     ok(text.includes(`${n} payments in total`) && text.includes(`${n}-month minimum term`) && text.includes(QUICK_CLOSE_PROMISE) && text.includes(FINDABLE_GUARANTEE) && /read and sign the Client Service Agreement/.test(text) && !/tick to accept/.test(text), `${route} ${label}: payments, minimum term, the guarantee (exact) and signing the agreement before paying (v3)`);
@@ -289,11 +290,11 @@ console.log("\n── SHARING: copy, email, WhatsApp — each recorded, none ove
   ok(/channel === "copy"/.test(share) && /Sign-up link copied \(to send by hand — not confirmed as sent\)/.test(share), "copy is recorded as COPIED, never as sent");
   ok(/checkSuppressed\(service, \{ email: to, leadId \}\)/.test(share) && /qaEmailHold\(service, leadId, to\)/.test(share) && /api\.resend\.com\/emails/.test(share) && /quick_close_link_email_failed/.test(share), "email: do-not-contact check, QA guard (fails closed), Resend, failure recorded");
   ok(/reply_to: FINDABLE_CONTACT_EMAIL/.test(share), "a reply to the email reaches Findable");
-  ok(/serviceWindowState\(await lastInboundAt\(\)\)\.open\) return json\(\{ ok: false, error: "window_closed"/.test(share) && /functions\/v1\/send-whatsapp-message/.test(share) && /Authorization: req\.headers\.get\("authorization"\)/.test(share), "WhatsApp: only with the window open, through the canonical sender AS THE CALLER");
+  ok(/decideLinkRoute\(await conversation\(\), \{ template: tplState \}\)/.test(share) && /if \(lr\.route === "none"\) return json\(\{ ok: false, error: lr\.reason/.test(share) && /functions\/v1\/send-whatsapp-message/.test(share) && /Authorization: req\.headers\.get\("authorization"\)/.test(share), "WhatsApp: only the approved template or a replied open conversation (paymentLinkRoute), through the canonical sender AS THE CALLER");
   ok(/if \(!res\.ok \|\| !out\.ok\) \{[\s\S]{0,200}"link_share_failed"/.test(share) && /share\.status = out\.simulated \? "simulated"/.test(share), "a failed WhatsApp is not recorded as sent; a test-mode one says so");
   ok(/kind: "payment_link_shared"/.test(share) && /"link_shared", \{ channel/.test(share), "every share writes History and the audit trail");
   ok(ACTIVITY_LABEL.payment_link_shared === "Sign-up link" && activityDetail({ kind: "payment_link_shared", body: "Sign-up link emailed to a@b.co" }, () => "x") === "Sign-up link emailed to a@b.co", "History shows how the link was shared");
-  ok(/disabled=\{!v\.share\?\.email/.test(dlg) && /disabled=\{!v\.windowOpen \|\| !v\.share\?\.hasPhone/.test(dlg) && /data-testid="qc-share-availability"/.test(dlg) && /data-testid="qc-share-history"/.test(dlg), "the screen says which ways are available and shows what was shared, when");
+  ok(/disabled=\{!v\.share\?\.email/.test(dlg) && /data-testid="qc-send-whatsapp"/.test(dlg) && /data-testid="qc-link-fallback"/.test(dlg) && /data-testid="qc-share-availability"/.test(dlg) && /data-testid="qc-share-history"/.test(dlg), "the screen says which ways are available (one-click WhatsApp, or the honest fallback) and shows what was shared, when");
   ok(/Make a fresh sign-up link/.test(dlg) && /Copy sign-up link/.test(dlg) && /url: usable \? cur\.link_url : null/.test(fn), "COPY SIGN-UP LINK is the primary action; an expired link offers a fresh one and its URL is never sent to the screen");
   const mig = read("supabase/migrations/20261006020000_quick_close_link_sharing.sql");
   ok(/'link_shared', 'link_share_failed', 'link_superseded'/.test(mig) && /'payment_link_shared'/.test(mig) && /if not \(v = any\(v_vals\)\)/.test(mig), "migration widens both checks from their LIVE definition (never clobbers another workstream's kinds)");

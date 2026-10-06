@@ -24,7 +24,8 @@ import {
 import { isPaidClient } from "../../../src/lib/paidClient.ts";
 import { clientClosed } from "../../../src/lib/paymentState.ts";
 import { serviceRouteForTotal, serviceRouteFromRow } from "../../../src/lib/findableOffer.ts";
-import { cleanAnswers as cleanQuickClose, quickCloseAnswerPairs } from "../../../src/lib/quickClose.ts";
+import { callNotesLines, cleanAnswers as cleanQuickClose, quickCloseAnswerPairs } from "../../../src/lib/quickClose.ts";
+import { whatsappReviewNotes } from "../../../src/lib/whatsappClientFacts.ts";
 import { handoffSummaryLines } from "../../../src/lib/salesHandoff.ts";
 import { HOOK_ENGINES, hookEngineLabel, scoreHookRun, type HookScoreRow } from "../../../src/lib/hookScore.ts";
 import { assessCompetitorCleanliness, collectCompetitorNames, countAnsweredCells, isProvableJunkName } from "../../../src/lib/competitorCleaning.ts";
@@ -40,7 +41,7 @@ const text = (v: unknown) => (typeof v === "string" ? v.trim() : "");
 export const INTAKE_LEAD_COLUMNS =
   "id,user_id,business_name,phone,email,website,address,derived_town,search_location,search_keyword,category,contact_name,place_id,google_maps_url," +
   "rating,review_count,services_included,service_areas,website_control,website_control_note,amount_paid,status,payment_date,service_terminated_at," +
-  "sales_handoff,sold_by_user_id,assigned_to_user_id,contract_total_payments,domain_control";
+  "sales_handoff,sold_by_user_id,assigned_to_user_id,contract_total_payments,domain_control,delivery_checklist";
 const ONBOARDING_COLUMNS =
   "id,lead_id,status,source,updated_at,created_at,business_name,business_website,confirmed_location,business_address,services,services_list,areas_list,areas_wanted," +
   "contact_name,contact_email,confirmed_phone,standout,accreditations,must_not_say,website_platform,website_manager,website_route,domain_status,gbp_status,gbp_exists," +
@@ -109,7 +110,7 @@ export async function loadIntakeSources(service: Service, leadId: string): Promi
   const steps: IntakeStep[] = [{ key: "lead", label: STEP_LABEL.lead, status: "done", detail: null, cost: "none" }];
   const placeId = text(L.place_id);
 
-  const [onboardingAll, agreement, handoffSend, placeCache, companiesHouse, crawlRow, crawlJob, socials, hook] = await Promise.all([
+  const [onboardingAll, agreement, handoffSend, placeCache, companiesHouse, crawlRow, crawlJob, socials, hook, whatsappReads] = await Promise.all([
     step<Row[]>(steps, "onboarding", async () => {
       const { data, error: e } = await service.from("onboarding_responses").select(ONBOARDING_COLUMNS).eq("lead_id", leadId).order("updated_at", { ascending: false }).limit(10);
       if (e) throw e;
@@ -163,6 +164,13 @@ export async function loadIntakeSources(service: Service, leadId: string): Promi
       const h = await loadHookSummary(service, leadId);
       return { value: h, status: h ? "reused" : "not_found", detail: h ? (h.complete ? `Named in ${h.named} of ${h.expected} answers` : "Hook audit not complete") : "No hook audit" };
     }, null),
+    /* Facts the client stated in their own WhatsApp replies (2026-10-07, whatsappClientFacts.ts) — stored reads only. */
+    step<{ read_at: string; facts: unknown }[]>(steps, "whatsapp", async () => {
+      const { data, error: e } = await service.from("client_whatsapp_reads").select("read_at,facts").eq("lead_id", leadId).eq("outcome", "facts").order("read_at", { ascending: false }).limit(50);
+      if (e) throw e;
+      const rows = (data ?? []) as { read_at: string; facts: unknown }[];
+      return { value: rows, status: rows.length ? "reused" : "not_found", detail: rows.length ? `${rows.length} repl${rows.length === 1 ? "y" : "ies"} with details` : "Nothing read from WhatsApp yet" };
+    }, []),
   ]);
 
   const counted = pickOnboarding(onboardingAll);
@@ -176,7 +184,7 @@ export async function loadIntakeSources(service: Service, leadId: string): Promi
     lead: L, onboarding: counted, agreement, handoff, quickClose: qc as Row, placeCache, companiesHouse,
     crawl: crawlSiteOk ? { url: text(crawlRow!.url), siteInfo: (crawlRow!.site ?? null) as Row | null, business: (crawlRow!.business ?? null) as Row | null } : null,
     hookAudit: hook ? { business_type: hook.trade, location_text: hook.town } : null,
-    socials,
+    socials, whatsappReads,
   };
   return { rows, lead: L, onboardingAll, crawlRow: crawlSiteOk ? crawlRow : null, crawlJob, hook, handoffSend, steps };
 }
@@ -465,9 +473,13 @@ export interface IntakeView {
   sales: {
     handoff_lines: string[]; sent: { at: string; by: string | null; paid_when_sent: boolean } | null;
     quick_close: { key: string; label: string; answer: string }[];
+    /** What the CALL screen heard (2026-10-07): jobs, areas, agency contract / spend — shown, never re-asked. */
+    call_lines: { key: string; label: string; answer: string }[];
     website_control: string | null; domain_control: string | null;
   };
-  client: { onboarding_status: string | null; source: string | null; answers: { label: string; value: string }[]; agreement: { version: string | null; signed_at: string | null; signer: string | null; role: string | null } | null };
+  client: { onboarding_status: string | null; source: string | null; answers: { label: string; value: string }[]; agreement: { version: string | null; signed_at: string | null; signer: string | null; role: string | null } | null;
+    /** The client's WhatsApp answer differs from a value Paul confirmed (never applied — his value stands). */
+    whatsapp_review: { field: string; label: string; confirmed: string; whatsapp: string }[] };
   found: { crawl: CrawlFacts | null; crawl_job: Loaded["crawlJob"]; hook: HookSummary | null; content_reuse: ContentReuse; website_manager: string | null; website_platform: string | null };
 }
 
@@ -496,6 +508,7 @@ export async function intakeView(service: Service, leadId: string): Promise<Inta
       handoff_lines: handoffSummaryLines(loaded.rows.handoff as never),
       sent: loaded.handoffSend ? { at: String(loaded.handoffSend.sent_at), by: (loaded.handoffSend.sent_by_name as string | null) ?? null, paid_when_sent: loaded.handoffSend.paid_when_sent === true } : null,
       quick_close: quickCloseAnswerPairs(qc as never),
+      call_lines: callNotesLines(qc as never, ((ob?.quick_close ?? null) as { call?: unknown } | null)?.call as never).filter((l) => l.key === "jobs" || l.key === "areas" || l.key === "agency_monthly_gbp"),
       website_control: (loaded.lead.website_control as string | null) ?? null,
       domain_control: (loaded.lead.domain_control as string | null) ?? null,
     },
@@ -508,6 +521,7 @@ export async function intakeView(service: Service, leadId: string): Promise<Inta
         ...answer("Domain", ob?.domain_status), ...answer("Google Business Profile", ob?.gbp_status ?? ob?.gbp_exists),
       ],
       agreement: ag ? { version: (ag.agreement_version as string | null) ?? null, signed_at: (ag.accepted_at as string | null) ?? null, signer: (ag.typed_name as string | null) ?? null, role: (ag.typed_role as string | null) ?? null } : null,
+      whatsapp_review: whatsappReviewNotes(profile),
     },
     found: {
       crawl: crawlFacts(loaded.crawlRow), crawl_job: loaded.crawlJob, hook: loaded.hook,

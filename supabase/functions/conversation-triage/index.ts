@@ -10,6 +10,8 @@ import {
 } from "../../../src/lib/replyTriage.ts";
 import { isPaidLead } from "../../../src/lib/leadPayment.ts";
 import { lastLoggedByLead, salesStateOf, type LastContactView } from "../../../src/lib/leadState.ts";
+import { worthReading } from "../../../src/lib/whatsappClientFacts.ts";
+import { readClientFacts } from "../_shared/client-whatsapp-facts.ts";
 
 // conversation-triage — files every inbound WhatsApp as urgent / admin / salesperson / nothing / review
 // (Admin control centre, release 2, 2026-09-30; docs/admin-control-centre.md §Reply triage).
@@ -23,6 +25,10 @@ import { lastLoggedByLead, salesStateOf, type LastContactView } from "../../../s
 // ⛔ SPEND: the model is asked only about a recent human message no rule recognised, the newest per
 // lead, at most AI_MAX_PER_RUN per run and AI_DAILY_CAP_USD per rolling day — past either, the row is
 // filed as REVIEW ("AI budget reached"), never guessed.
+// 🔴 CLIENT FACTS (2026-10-07, src/lib/whatsappClientFacts.ts): for a PAYING CLIENT's newest recent message with
+// real words, the model is also asked whether it states an onboarding fact (services, areas, contact, email, phone,
+// website, town, address) — stored in client_whatsapp_reads, read by the client intake as "Client on WhatsApp".
+// Inside the SAME caps and the all-stop. It never writes a client field and never sends anything.
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -30,7 +36,7 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 const json = (b: unknown, s = 200) => new Response(JSON.stringify(b), { status: s, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-const BUILD_ID = "conversation-triage-2026-09-30c";
+const BUILD_ID = "conversation-triage-2026-10-07-client-facts";
 /** Longest a run may hold the lease (a crashed run frees it after this). */
 const RUN_LEASE_SECONDS = 300;
 /** Messages filed per run (the first runs work through the history, oldest first). */
@@ -44,7 +50,7 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 // deno-lint-ignore no-explicit-any
 type Service = any;
 interface Pending { id: string; lead_id: string | null; phone: string | null; body: string | null; message_type: string | null; created_at: string }
-interface LeadRow { id: string; status: string | null; amount_paid: number | null; is_potential_work: boolean | null; call_booked_at: string | null; whatsapp_sent_at: string | null; whatsapp_ever_delivered?: boolean | null; phone: string | null }
+interface LeadRow { id: string; status: string | null; amount_paid: number | null; is_potential_work: boolean | null; call_booked_at: string | null; whatsapp_sent_at: string | null; whatsapp_ever_delivered?: boolean | null; phone: string | null; business_name?: string | null }
 
 const TRIAGE_TOOL = {
   type: "function",
@@ -78,7 +84,7 @@ async function run(service: Service): Promise<Record<string, unknown>> {
   const leadIds = [...new Set(pending.map((p) => p.lead_id).filter((x): x is string => !!x))];
   const leads = new Map<string, LeadRow>();
   for (let i = 0; i < leadIds.length; i += 150) {
-    const { data, error } = await service.from("outreach_leads").select("id, status, amount_paid, is_potential_work, call_booked_at, whatsapp_sent_at, whatsapp_ever_delivered, phone").in("id", leadIds.slice(i, i + 150));
+    const { data, error } = await service.from("outreach_leads").select("id, status, amount_paid, is_potential_work, call_booked_at, whatsapp_sent_at, whatsapp_ever_delivered, phone, business_name").in("id", leadIds.slice(i, i + 150));
     if (error) throw new Error(`leads: ${error.message}`);
     for (const l of (data ?? []) as LeadRow[]) leads.set(l.id, l);
   }
@@ -103,6 +109,7 @@ async function run(service: Service): Promise<Record<string, unknown>> {
   const paused = (await paidMode(service)) === "all_stop";
   if (paused) aiBudget = 0;
   const counts: Record<string, number> = {};
+  let factsFound = 0;
   const rows: Record<string, unknown>[] = [];
   const surfaceFloor = Date.now() - TRIAGE_SURFACE_DAYS * 86_400_000;
 
@@ -168,6 +175,17 @@ async function run(service: Service): Promise<Record<string, unknown>> {
       }
     }
 
+    /* CLIENT FACTS: a paying client's newest recent message with real words (never an opt-out), within the caps. */
+    if (isClient && p.lead_id && !d.suppress && newestOf.get(p.lead_id) === p.id && Date.parse(p.created_at) >= surfaceFloor
+      && worthReading(p.body) && aiCalls < AI_MAX_PER_RUN && aiBudget > 0) {
+      try {
+        const r = await readClientFacts(service, { id: p.id, lead_id: p.lead_id, body: p.body, created_at: p.created_at }, { business: lead?.business_name ?? null, functionName: FN, trigger: "internal" });
+        if (r.outcome !== "skipped") aiCalls += 1;
+        aiBudget -= r.usd;
+        if (r.outcome === "facts") factsFound += 1;
+      } catch (e) { console.error("[conversation-triage] client facts failed (non-blocking):", e instanceof Error ? e.message : e); }
+    }
+
     counts[`${d.category}/${d.bucket}`] = (counts[`${d.category}/${d.bucket}`] ?? 0) + 1;
     rows.push({
       message_id: p.id, lead_id: p.lead_id, phone: p.phone, message_at: p.created_at,
@@ -180,7 +198,7 @@ async function run(service: Service): Promise<Record<string, unknown>> {
     const { error } = await service.from("conversation_triage").upsert(rows.slice(i, i + 200), { onConflict: "message_id", ignoreDuplicates: true });
     if (error) throw new Error(`write: ${error.message}`);
   }
-  return { filed: rows.length, aiCalls, counts };
+  return { filed: rows.length, aiCalls, counts, clientFacts: factsFound };
 }
 
 Deno.serve(async (req) => {

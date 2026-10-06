@@ -39,12 +39,21 @@ import { intakeView, queueIntake, runClientIntake } from "../_shared/client-inta
 import { applyOverride, cleanOverrides, isIntakeFieldKey, INTAKE_FIELDS, type OverrideAction } from "../../../src/lib/clientIntake.ts";
 import { cleanSellerClientInfo } from "../../../src/lib/clientMissingInfo.ts";
 import { handoffSummaryLines } from "../../../src/lib/salesHandoff.ts";
+import { LINK_COLUMNS, loadOnboardingContext, makeOnboardingLink, ONBOARDING_REFUSAL_TEXT, openLinkFor, revokeOnboardingLink } from "../_shared/client-onboarding.ts";
+import { isGapQuestion, onboardingColumnLabel, onboardingFormUrl, onboardingMessage, onboardingPreview } from "../../../src/lib/clientOnboardingForm.ts";
+import { decideLinkRoute, type ConversationFacts } from "../../../src/lib/paymentLinkRoute.ts";
+import { ONBOARDING_TEMPLATE_NAME, templateSendState } from "../../../src/lib/whatsappLinkTemplates.ts";
+import { templateAvailability } from "../_shared/template-status.ts";
+import { readRecentClientReplies } from "../_shared/client-whatsapp-facts.ts";
+import { paidMode } from "../_shared/protection.ts";
 
 /* THE OFFICIAL BASELINE'S VISIBILITY, for the client summary (2026-09-30): answers naming the business
    over the FROZEN runs (usable runs, run_number order, the first baseline_target_runs — the same runs
    the freeze snapshot used), ChatGPT + Gemini, with the report's ruler (cellNamed + the business,
    trade and town). expected = questions × runs × 2. Display only — it decides nothing. */
 const SUMMARY_ENGINES = ["chatgpt", "gemini"];
+// deno-lint-ignore no-explicit-any
+type Row = Record<string, any>;
 // deno-lint-ignore no-explicit-any
 async function baselineVisibility(service: any, audit: Record<string, unknown>, runs: Array<Record<string, unknown>>) {
   if (!audit?.baseline_completed_at) return null;
@@ -247,7 +256,9 @@ const DELIVERY_ACTIVITY_KINDS = ["payment_received", "handoff_saved", "onboardin
   "client_info_requested", "client_info_answered", "client_contact_opened",
   /* Paid client auto-intake (2026-10-06): sent to Paul, the intake finished, Paul's fact decisions; details_set
      is what the intake (or Find what we already have) filled in. */
-  "handoff_sent", "client_intake", "client_fact_set", "details_set"];
+  "handoff_sent", "client_intake", "client_fact_set", "details_set",
+  /* The onboarding link and WhatsApp facts (2026-10-07). */
+  "onboarding_link_sent", "onboarding_form_submitted", "whatsapp_facts_found"];
 
 /* ══ MISSING INFORMATION: who can answer it, the request to the seller, and how to reach the client ══
    (2026-10-05, src/lib/clientMissingInfo.ts — every decision is there). Read only. */
@@ -560,6 +571,111 @@ Deno.serve(async (req) => {
       await queueIntake(service, leadId, "rerun");
       const out = await runClientIntake(service, leadId);
       return json({ ok: true, outcome: out, intake: await intakeView(service, leadId) });
+    }
+
+    /* ══ THE ONBOARDING FORM — ONLY WHAT'S MISSING (2026-10-07, _shared/client-onboarding.ts) ═════════════
+       onboarding_view: what the client would be asked now (for their plan), the open link, the last answers and
+       any conflicts, and how the link could reach them (paymentLinkRoute's rule). onboarding_link: make (or reuse;
+       `fresh` replaces) the ONE open link. onboarding_revoke. onboarding_share: copy (recorded as copied, never
+       sent) / WhatsApp in a conversation they replied to inside 24 h (send-whatsapp-message AS PAUL — its window,
+       suppression and QA rules apply) / an approved template (none approved yet → refused). Never a payment. */
+    if (action === "onboarding_view" || action === "onboarding_link" || action === "onboarding_revoke" || action === "onboarding_share" || action === "whatsapp_facts_read") {
+      const leadId = text(body.lead_id);
+      const { data: own, error: ownErr } = await service.from("outreach_leads").select("id,business_name,phone,country,contact_name,amount_paid,status,service_terminated_at").eq("id", leadId).eq("user_id", user.id).maybeSingle();
+      if (ownErr) throw ownErr;
+      if (!own || !isPaidClient(own as never)) return json({ ok: false, error: "client_not_found", detail: "This client is not in your paid-client list." }, 404);
+      const closedNow = !!clientClosed(own as never);
+      const conversationFacts = async (): Promise<ConversationFacts> => {
+        const [inb, outb] = await Promise.all([
+          service.from("whatsapp_messages").select("created_at").eq("lead_id", leadId).eq("direction", "inbound").order("created_at", { ascending: false }).limit(1),
+          service.from("whatsapp_messages").select("created_at").eq("lead_id", leadId).eq("direction", "outbound").or("status.is.null,status.neq.failed").order("created_at", { ascending: true }).limit(1),
+        ]);
+        return { hasPhone: !!text(own.phone), lastInboundAt: ((inb.data ?? []) as Row[])[0]?.created_at as string ?? null, firstOutboundAt: ((outb.data ?? []) as Row[])[0]?.created_at as string ?? null };
+      };
+      const view = async () => {
+        const ctx = await loadOnboardingContext(service, leadId);
+        const open = await openLinkFor(service, leadId);
+        const { data: last } = await service.from("client_onboarding_links").select(LINK_COLUMNS).eq("lead_id", leadId).not("submitted_at", "is", null).order("submitted_at", { ascending: false }).limit(1).maybeSingle();
+        /* Meta's LIVE status of findable_onboarding (cached; never hard-coded) and Paul's link rule. */
+        const tpl = await templateAvailability(service, ONBOARDING_TEMPLATE_NAME);
+        const tplState = templateSendState(tpl, "onboarding");
+        const route = decideLinkRoute(await conversationFacts(), { template: tplState });
+        return {
+          ok: true,
+          refusal: closedNow ? "closed" : ctx?.refusal ?? null,
+          refusal_text: closedNow ? ONBOARDING_REFUSAL_TEXT.closed : ctx?.refusal ? ONBOARDING_REFUSAL_TEXT[ctx.refusal] : null,
+          route: ctx?.route ?? null,
+          questions: ctx ? onboardingPreview(ctx.questions) : [],
+          nothing_missing: !!ctx && !ctx.refusal && !ctx.questions.some(isGapQuestion),
+          link: open ? {
+            url: onboardingFormUrl(String(open.token)), created_at: open.created_at, first_opened_at: open.first_opened_at ?? null, last_opened_at: open.last_opened_at ?? null,
+            open_count: open.open_count ?? 0, shared: open.shared ?? [], questions: ((open.questions ?? []) as Row[]).length,
+          } : null,
+          last_submitted: last ? {
+            at: last.submitted_at, answers: last.answers ?? {},
+            conflicts: ((last.conflicts ?? []) as Row[]).map((c) => ({ column: c.column, label: onboardingColumnLabel(String(c.column)), on_file: c.on_file, answered: c.answered })),
+          } : null,
+          send_route: { ...route, template: { name: ONBOARDING_TEMPLATE_NAME, status: tpl.status, category: tpl.category, checked_at: tpl.checked_at, label: tplState.label, sendable: tplState.sendable, say: tplState.say } },
+          message: open ? onboardingMessage(own.contact_name as string | null, onboardingFormUrl(String(open.token))) : null,
+        };
+      };
+      if (action === "onboarding_view") return json(await view());
+      if (action === "whatsapp_facts_read") {
+        /* Paul's button: read the client's newest unread WhatsApp replies for onboarding facts (a few pence at most;
+           the emergency stop halts it like every paid call). Nothing is written to the client record directly. */
+        if ((await paidMode(service)) === "all_stop") return json({ ok: false, error: "paused", detail: "Paid calls are paused (emergency stop)." }, 409);
+        const r = await readRecentClientReplies(service, leadId, (own.business_name as string | null) ?? null);
+        return json({ ok: true, ...r, intake: await intakeView(service, leadId) });
+      }
+      if (closedNow) return json({ ok: false, error: "client_closed", detail: ONBOARDING_REFUSAL_TEXT.closed }, 409);
+      if (action === "onboarding_link") {
+        const r = await makeOnboardingLink(service, leadId, user.id, { fresh: body.fresh === true });
+        if (!r.ok) return json({ ok: false, error: r.error, detail: r.detail }, 409);
+        return json(await view());
+      }
+      if (action === "onboarding_revoke") {
+        await revokeOnboardingLink(service, leadId, user.id);
+        return json(await view());
+      }
+      /* onboarding_share */
+      const channel = text(body.channel);
+      const open = await openLinkFor(service, leadId);
+      if (!open) return json({ ok: false, error: "no_link", detail: "Make the onboarding link first." }, 409);
+      const url = onboardingFormUrl(String(open.token));
+      const share: Row = { channel, at: new Date().toISOString(), by: user.id };
+      if (channel === "whatsapp" || channel === "whatsapp_template") {
+        share.channel = "whatsapp";
+        /* ⛔ ONE SEND OF THIS LINK unless Paul presses Resend. */
+        const prior = ((open.shared ?? []) as Row[]).filter((s) => s.channel === "whatsapp" && s.status !== "failed");
+        if (prior.length && body.resend !== true) return json({ ok: false, error: "already_sent", detail: "Already sent on WhatsApp. Press Resend if you really mean to send it again." }, 409);
+        /* The APPROVED findable_onboarding template (Meta's live status), else a normal message only in a conversation
+           they replied to inside 24 hours, else nothing (copy). */
+        const tplState = templateSendState(await templateAvailability(service, ONBOARDING_TEMPLATE_NAME), "onboarding");
+        const lr = decideLinkRoute(await conversationFacts(), { template: tplState });
+        if (lr.route === "none") return json({ ok: false, error: lr.reason, detail: lr.say }, 409);
+        /* THE CANONICAL SENDER, AS PAUL: its QA, suppression, phone (UK / AU / IN) and template rules decide; the
+           template's link and greeting are resolved THERE from this client's own open link. */
+        const anon = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
+        const res = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/send-whatsapp-message`, {
+          method: "POST", headers: { apikey: anon, Authorization: req.headers.get("authorization") ?? "", "Content-Type": "application/json" },
+          body: JSON.stringify(lr.route === "whatsapp_template"
+            ? { phone: own.phone, country: own.country ?? null, lead_id: leadId, template_name: ONBOARDING_TEMPLATE_NAME, ...(body.resend === true ? { allow_resend: true } : {}) }
+            : { phone: own.phone, country: own.country ?? null, lead_id: leadId, body: onboardingMessage(own.contact_name as string | null, url) }),
+        });
+        const out = await res.json().catch(() => ({})) as Row;
+        if (!res.ok || !out.ok) return json({ ok: false, error: String(out.error ?? "send_failed"), detail: String(out.reason ?? out.detail ?? "WhatsApp did not send it — copy the link instead.") }, 409);
+        share.status = out.simulated ? "simulated" : String(out.status ?? "sent");
+        share.template = lr.route === "whatsapp_template" ? ONBOARDING_TEMPLATE_NAME : null;
+        share.resend = body.resend === true;
+      } else if (channel !== "copy") return json({ ok: false, error: "bad_request" }, 400);
+      const { error: sErr } = await service.from("client_onboarding_links").update({ shared: [...((open.shared ?? []) as Row[]), share].slice(-20) }).eq("id", open.id);
+      if (sErr) console.error("[paid-client-hub] share not recorded:", sErr.message);
+      await recordLeadEvent(service, leadId, "onboarding_link_sent", {
+        actor: user.id, source: "admin",
+        body: channel === "copy" ? "Onboarding link copied (to send by hand — not confirmed as sent)" : share.status === "simulated" ? "Onboarding link sent on WhatsApp (test mode — not delivered)" : share.template ? `Onboarding link sent on WhatsApp (template ${ONBOARDING_TEMPLATE_NAME})` : "Onboarding link sent on WhatsApp",
+        data: { link_id: open.id, channel: share.channel, template: share.template ?? null, resend: body.resend === true, status: share.status ?? null },
+      });
+      return json(await view());
     }
 
     /* ══ PAUL'S DECISION ON ONE FACT (confirm / edit / reject / clear) ═══════════════════════════════════

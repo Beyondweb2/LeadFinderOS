@@ -10,6 +10,7 @@ import { CONTENT_REUSE_WORDS, TIER_WORDS, type ContentReuse, type IntakeStatus, 
 import { SERVICE_ROUTE_NAME } from '@/lib/findableOffer';
 import { EDGE, SURFACE, SubSection, ToneChip, type Tone } from '@/components/operator/ui';
 import { cn } from '@/lib/utils';
+import { ClientOnboardingPanel } from '@/components/ClientOnboardingPanel';
 
 /* ══ CLIENT INTAKE — the top of a Paid Client (2026-10-06, src/lib/clientIntake.ts has every rule) ════════
    What LeadFinderOS gathered AUTOMATICALLY when they paid, in the order Paul asks: who are they, what did they
@@ -24,8 +25,9 @@ export interface IntakeViewData {
   status: IntakeStatus | null; status_line: string; trigger_source: string | null;
   queued_at: string | null; finished_at: string | null; last_run_at: string | null; error: string | null;
   steps: IntakeStep[]; summary: IntakeSummary; profile: ProfileField[]; route: 'build' | 'optimise' | null;
-  sales: { handoff_lines: string[]; sent: { at: string; by: string | null; paid_when_sent: boolean } | null; quick_close: { key: string; label: string; answer: string }[]; website_control: string | null; domain_control: string | null };
-  client: { onboarding_status: string | null; source: string | null; answers: { label: string; value: string }[]; agreement: { version: string | null; signed_at: string | null; signer: string | null; role: string | null } | null };
+  sales: { handoff_lines: string[]; sent: { at: string; by: string | null; paid_when_sent: boolean } | null; quick_close: { key: string; label: string; answer: string }[]; call_lines?: { key: string; label: string; answer: string }[]; website_control: string | null; domain_control: string | null };
+  client: { onboarding_status: string | null; source: string | null; answers: { label: string; value: string }[]; agreement: { version: string | null; signed_at: string | null; signer: string | null; role: string | null } | null;
+    whatsapp_review?: { field: string; label: string; confirmed: string; whatsapp: string }[] };
   found: {
     crawl: null | { url: string | null; created_at: string | null; mode: string | null; completeness: string | null; fetch_failed: boolean; pages_ok: number | null; urls_discovered: number | null; capped: boolean;
       platform: string | null; built_by: string | null; families: { family: string; count: number }[]; findings: { id: string; severity: string; title: string; count: number }[];
@@ -130,6 +132,14 @@ export function ClientIntakeCard({ leadId, initial, placeId }: { leadId: string;
               <a href="#hub-setup" className="mt-1 inline-block text-xs font-medium text-primary hover:underline">Missing information — find again, ask the salesperson or contact the client ↓</a>
             </div>
           )}
+          {/* GET MISSING INFO (2026-10-07): the onboarding form that asks only the gaps above; answers flow back here. */}
+          <ClientOnboardingPanel leadId={leadId} onIntake={(i) => setView(i as IntakeViewData)} />
+          {(view.client.whatsapp_review?.length ?? 0) > 0 && (
+            <div className="mt-3 rounded-lg bg-amber-500/10 px-3 py-2 text-xs ring-1 ring-inset ring-amber-500/30" data-testid="intake-whatsapp-review">
+              <p className="font-semibold text-amber-800 dark:text-amber-200">On WhatsApp the client said something different from what you confirmed — your value still stands</p>
+              <ul className="mt-1 space-y-0.5">{view.client.whatsapp_review!.map((r) => <li key={r.field}><span className="font-medium">{r.label}:</span> you confirmed “{r.confirmed}” · WhatsApp “{r.whatsapp}”</li>)}</ul>
+            </div>
+          )}
 
           <div className="mt-4 grid grid-cols-[minmax(0,1fr)] gap-x-6 gap-y-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
             <SubSection title="Who are they" icon={ClipboardList} tone="blue">
@@ -146,6 +156,9 @@ export function ClientIntakeCard({ leadId, initial, placeId }: { leadId: string;
                 {view.sales.handoff_lines.length > 0
                   ? <ul className="mt-1 space-y-0.5 text-sm">{view.sales.handoff_lines.map((l) => <li key={l}>{l}</li>)}</ul>
                   : <p className="mt-1 text-sm text-muted-foreground">No handoff answers.</p>}
+                {(view.sales.call_lines?.length ?? 0) > 0 && (
+                  <dl className="mt-1.5 grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 text-sm" data-testid="intake-call-lines">{view.sales.call_lines!.map((p) => <FragmentPair key={p.key} k={p.label} v={p.answer} />)}</dl>
+                )}
                 {view.sales.quick_close.length > 0 && (
                   <details className="mt-1.5 text-xs"><summary className="cursor-pointer text-muted-foreground">On the sales call ({view.sales.quick_close.length} answers)</summary>
                     <dl className="mt-1 grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5">{view.sales.quick_close.map((p) => <FragmentPair key={p.key} k={p.label} v={p.answer} />)}</dl>

@@ -144,7 +144,10 @@ export type LeadEventKind =
   | "client_info_requested" | "client_info_answered" | "client_contact_opened"
   /* Paid client auto-intake (2026-10-06, _shared/client-intake.ts): the handoff was sent to Paul (once per
      client), the automatic intake finished (once), Paul confirmed / corrected / rejected a fact. */
-  | "handoff_sent" | "client_intake" | "client_fact_set";
+  | "handoff_sent" | "client_intake" | "client_fact_set"
+  /* The paid client's onboarding link (2026-10-07, _shared/client-onboarding.ts): made / shared, the client's
+     answers arrived; and facts read from the client's own WhatsApp replies (_shared/client-whatsapp-facts.ts). */
+  | "onboarding_link_sent" | "onboarding_form_submitted" | "whatsapp_facts_found";
 export async function recordLeadEvent(
   service: Service, leadId: string, kind: LeadEventKind,
   opts: { actor?: string | null; source: "system" | "client" | "sales" | "admin"; body?: string | null; data?: Row },

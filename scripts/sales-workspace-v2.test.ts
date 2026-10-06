@@ -147,10 +147,11 @@ console.log('\n── 4. DETAILS ──');
 console.log('\n── 5. CLOSE ──');
 {
   ok(APPROACH_ROUTE.improve === 'optimise' && APPROACH_ROUTE.new_template === 'build' && APPROACH_ROUTE.refresh === 'build' && APPROACH_ROUTE.recreation === 'build', 'the approach maps onto the two existing plans');
-  ok(closeFlow({ decision_maker: 'yes', approach: 'new_template' }).join() === 'decision_maker,approach,domain,build_consents', 'new site: authority → approach → domain → consents; never current-site access');
-  ok(closeFlow({ decision_maker: 'yes', approach: 'improve' }).join() === 'decision_maker,approach,access,manager', 'Optimise: access and who manages it; no domain question');
-  ok(closeFlow({ decision_maker: 'yes', approach: 'refresh' }).includes('rights') && closeFlow({ decision_maker: 'yes', approach: 'recreation' }).join() === 'decision_maker,approach,rights,design_owner,domain,build_consents', 'refresh asks rights; recreation asks rights AND who owns the design');
-  const newNoAccess = { decision_maker: 'yes', approach: 'new_template', domain: 'yes', access: 'no', manager: 'agency', build_consents: 'yes' } as const;
+  /* 2026-10-07 (Paul: "Quick Close should be QUICK"): the offer, authority, then only the plan's own questions. */
+  ok(closeFlow({ decision_maker: 'yes', approach: 'new_template' }).join() === 'route,decision_maker', 'new site: the offer and authority — no domain / consents / current-site access on the call');
+  ok(closeFlow({ decision_maker: 'yes', approach: 'improve' }).join() === 'route,decision_maker,access,manager', 'Optimise: access and who manages it; no domain question');
+  ok(closeFlow({ decision_maker: 'yes', approach: 'refresh' }).join() === 'route,decision_maker' && closeFlow({ decision_maker: 'yes', approach: 'recreation', manager: 'agency' }).join() === 'route,decision_maker,agency_contract', 'refresh / recreation ask nothing extra; Build on an agency site asks only whether they are still in contract');
+  const newNoAccess = { decision_maker: 'yes', approach: 'new_template', domain: 'yes', access: 'no', manager: 'agency', agency_contract: 'free', build_consents: 'yes' } as const;
   ok(quickCloseGate(newNoAccess).review.length === 0 && quickCloseState('answers_saved', { answers: newNoAccess }) === 'ready', 'the screenshot: Build + "could not give access to the current website" → NO blocker');
   for (const d of ['agency', 'not_sure', 'no'] as const) {
     const a = { decision_maker: 'yes', approach: 'new_template', domain: d, build_consents: 'yes' } as const;
@@ -166,7 +167,7 @@ console.log('\n── 5. CLOSE ──');
   ok(totalPaymentsFor('build') === 12 && totalPaymentsFor('optimise') === 6 && FINDABLE_MONTHLY_DELAY_DAYS === 42 && routeTermsLines('build')[1] === 'Then £99 a month, starting the day after your 14-day refund window closes (normally about six weeks after you give us access)', 'pricing unchanged: Build 12, Optimise 6; the card times the monthly by v3 Option B (E2E-11)');
   ok(QUICK_CLOSE_PROMISE === 'We improve AI visibility or you get your money back.' && FINDABLE_GUARANTEE.length > 100, 'the guarantee unchanged');
   ok(!linkUsable({ link_url: 'https://x', link_generated_at: '2026-09-29T10:00:00Z' }, Date.parse('2026-10-05T10:00:00Z')), 'stale-link protection unchanged');
-  ok(missingQuestions({ decision_maker: 'yes', approach: 'new_template', domain: 'yes' }).join() === 'build_consents', 'the Build consents are still required before a Build link');
+  ok(missingQuestions({ decision_maker: 'yes', approach: 'new_template', domain: 'yes' }).length === 0, '2026-10-07: the Build consents are no longer asked on the call (the signed agreement covers them; the onboarding form collects the details)');
   const fn = read('supabase/functions/quick-close/index.ts');
   ok(/flags: quickCloseGate\(answers\)\.flags\.map\(\(f\) => paulFlagText\(f, answers\)\)/.test(fn) && /title: QC_REVIEW_HEADING,/.test(fn), 'the server returns the flags and words the payment stop truthfully');
   const dlg = read('src/components/LeadDetailDialog.tsx');

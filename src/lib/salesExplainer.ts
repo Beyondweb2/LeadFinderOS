@@ -58,10 +58,10 @@ export const WHAT_WE_DO: readonly string[] = [
   `From that we choose the strongest ${BASELINE_QUESTIONS}: a balanced mix across your main services, your towns and the different ways customers ask — leaving out questions you already win every time and ones with no real local race.`,
   `Then we run the formal baseline: ${BASELINE_QUESTIONS} questions × ${BASELINE_RUNS} runs × ${SCORED_ENGINE_NAMES.join(' + ')} = ${BASELINE_ANSWERS} answers.`,
   `${REMEASURE_WEEKS_WORD} weeks later we ask the same ${BASELINE_QUESTIONS} questions again, the same way, so the before and after compare like for like.`,
-  'After that we keep improving the public evidence about the business each month — a new page, a monthly AI visibility check and adjustments as we learn — so AI has more accurate, useful ways to find and understand it.',
+  'After that we keep working on the website each month — a new page, a monthly AI visibility check and adjustments as we learn — so search engines and AI tools can understand the business more clearly.',
 ];
-/** One line to memorise. */
-export const WHAT_WE_DO_SHORT = `We measure how often AI names you on ${BASELINE_QUESTIONS} real customer questions, improve the public evidence about your business, and measure the same questions again after ${REMEASURE_WEEKS_WORD.toLowerCase()} weeks.`;
+/** One line to memorise. (2026-10-07: plain words, Paul.) */
+export const WHAT_WE_DO_SHORT = `We check how often AI names you on ${BASELINE_QUESTIONS} real customer questions, optimise your website so search engines and AI can properly understand what you do and where, and run the same check again after ${REMEASURE_WEEKS_WORD.toLowerCase()} weeks.`;
 
 /* ── HOW DO YOU KNOW WHAT IS WINNABLE? ───────────────────────────────────────────────────────── */
 export const HOW_WE_KNOW: readonly string[] = [
@@ -103,7 +103,7 @@ export const WEBSITE_MATTERS = 'AI still has to get its information from somewhe
 export const FOLLOW_UP_VOICE_NOTE = [
   'Hi, it\'s {rep} from Findable — you asked how it actually works, so here\'s the short version.',
   `We ask ChatGPT and Gemini ${BASELINE_QUESTIONS} questions your customers really ask, three times each, and count how often they name you.`,
-  'Then we improve the public evidence about your business — clear pages for what you do and where you work.',
+  'Then we optimise your website so AI understands what you do and where.',
   `After ${REMEASURE_WEEKS_WORD.toLowerCase()} weeks we ask the same questions again and compare. ${QUICK_CLOSE_PROMISE}`,
 ].join(' ');
 /** Spoken length at ~150 words a minute, in seconds (the coaching shows it). */

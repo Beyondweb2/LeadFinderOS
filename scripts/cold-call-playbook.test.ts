@@ -22,7 +22,8 @@ import {
 import { resolveSiteFindingsDetailed } from '../src/lib/siteFindings.ts';
 import { CRAWL_CHECK_VERSION, type CrawlSignals } from '../src/lib/crawlCheck.ts';
 import { SITE_EVIDENCE_VERSION, type SiteEvidence } from '../src/lib/siteEvidence.ts';
-import { FINDABLE_OFFER_SUMMARY, termMonthsFor } from '../src/lib/findableOffer.ts';
+import { termMonthsFor } from '../src/lib/findableOffer.ts';
+import { bothPlansSpoken } from '../src/lib/planTerms.ts';
 import { salesStyleProblems } from '../src/lib/salesStyle.ts';
 import { BRIDGE_LINE, DISCOVERY_QUESTIONS, FIRST_QUESTION, MAX_SPOKEN_FINDINGS, NO_STRONG_ISSUE_LINE } from '../src/lib/callScript.ts';
 
@@ -237,10 +238,11 @@ console.log('── 10. OFFER AND CLAIMS ──');
 {
   const p = buildColdCallPlaybook(base({ leadCrawl: crawl(THIN, 1, SITEMAP_EVIDENCE) }));
   const text = allText(p);
-  ok(p.offer.lines[0] === FINDABLE_OFFER_SUMMARY, 'the offer comes from findableOffer.ts: ' + FINDABLE_OFFER_SUMMARY);
-  ok(p.offer.monthly.includes(termMonthsFor('build') + ' months') && /12th payment/.test(p.offer.monthly) && /6th payment/.test(p.offer.monthly) && !/check current offer/i.test(text), 'both routes\' terms are stated (Build 12, Optimise 6); no "check current offer"');
-  /* 2026-10-05: £29.99 is the v3 Continuing Service — allowed ONLY as "£29.99 a month for … / until …". */
-  ok(!/£9\.99|£49\.99/.test(text) && !/£29\.99(?! a month (for|until))/.test(text), 'no stale or invented price anywhere (£29.99 only as the Continuing Service)');
+  ok(p.offer.lines[0] === bothPlansSpoken(), 'the offer comes from planTerms.ts (both plans, each with its own ending): ' + bothPlansSpoken());
+  ok(p.offer.monthly.includes(termMonthsFor('build') + ' months') && /12 payments/.test(p.offer.monthly) && /6 payments/.test(p.offer.monthly) && /6th payment is the last one/.test(p.offer.monthly) && !/check current offer/i.test(text), 'both routes\' terms are stated (Build 12, Optimise 6 — the 6th the last); no "check current offer"');
+  /* 2026-10-07: £29.99 appears ONLY as Build's optional hosting / maintenance after its 12 payments. */
+  ok(!/£9\.99|£49\.99/.test(text) && !/£29\.99(?! a month for hosting and maintenance)/.test(text), 'no stale or invented price anywhere (£29.99 only as Build\'s optional hosting and maintenance)');
+  ok(!/Optimise[^.]*£29\.99|carries on at £29\.99 a month for monitoring/.test(text), 'Optimise is never followed by £29.99');
   ok(!/guarantee (you|that you)|will (rank|be named|show up)|you'll definitely/i.test(text), 'no guaranteed outcome anywhere');
   ok(!/is why you (don't|do not|aren't)|caused|because of your (site|website)/i.test(text), 'no website finding is stated as the cause');
   const objections = p.objections.map((o) => o.objection);
@@ -250,12 +252,15 @@ console.log('── 10. OFFER AND CLAIMS ──');
     'Is this a scam?', 'Can I cancel?', "Can you guarantee I'll show up?", 'Why twelve months?', 'Why six months?', 'Just send me something', "I'm busy right now"];
   for (const o of EXPECTED) ok(objections.includes(o), 'objection covered: ' + o);
   ok(JSON.stringify(objections) === JSON.stringify(EXPECTED), 'the objection list is exactly the call-time list, in order');
-  ok(!/then they stop|one final month|nothing more to pay/i.test(text) && !objections.some((o) => /Why six payments\?|What happens after\?/.test(o)), 'no v4 wording (the live terms are v3: both routes continue at £29.99 a month)');
+  ok(!objections.some((o) => /Why six payments\?|What happens after\?/.test(o)), 'the objection list keeps its call-time shape');
   const ans = (t: string) => p.objections.find((o) => o.objection === t)?.answer ?? '';
-  ok(/until you cancel with 30 days' notice/.test(ans('Can I cancel?')) && /£29\.99 a month/.test(ans('Can I cancel?')) && /12 payments if we build the site, 6 if we work on yours/.test(ans('Can I cancel?')),
-    '"Can I cancel?": the v3 minimum terms (12 / 6), then £29.99 a month until cancelled with notice');
-  ok(/£29\.99 a month for monitoring until you cancel/.test(ans('Why six months?')) && /£29\.99 a month for hosting and monitoring until you cancel/.test(ans('Why twelve months?')),
-    'Optimise and Build both continue at the £29.99 Continuing Service (v3)');
+  /* 2026-10-07 (Paul): Optimise = 6 payments in total, then it ENDS; Build's £29.99 only if they want hosting to continue. */
+  ok(/12 payments if we build the site, 6 if we work on yours/.test(ans('Can I cancel?')) && /simply ends after the 6th payment/.test(ans('Can I cancel?')) && /only if you want it, and you can cancel that with 30 days' notice/.test(ans('Can I cancel?')),
+    '"Can I cancel?": 12 / 6 minimum; Optimise simply ends; Build\'s hosting only if they want it, cancellable with notice');
+  ok(/6th payment is the last one/.test(ans('Why six months?')) && /plan ends/.test(ans('Why six months?')) && !/£29\.99/.test(ans('Why six months?')),
+    '"Why six months?": the 6th payment is the last, then the plan ends — no £29.99');
+  ok(/keep hosting and maintaining it after that, it's £29\.99 a month for hosting and maintenance/.test(ans('Why twelve months?')),
+    '"Why twelve months?": £29.99 a month only if they want hosting / maintenance to continue');
   ok(/^No one can promise AI will name you/.test(ans("Can you guarantee I'll show up?")) && /claim your £99 back/.test(ans("Can you guarantee I'll show up?")),
     '"Can you guarantee …?": nobody can promise a placement; the measurement or the £99 back');
 }
@@ -270,6 +275,15 @@ console.log('── 11. OPENING THE PLAYBOOK TRIGGERS NOTHING ──');
     ok(!/\.(insert|update|upsert|delete)\s*\(/.test(src), file + ': no database write');
     ok(!/\bfetch\s*\(/.test(src), file + ': no raw fetch');
     ok(!/create-ai-audit|crawl-check|send-whatsapp|process-whatsapp|openai|apify/i.test(src), file + ': names no spending endpoint');
+  }
+  /* 2026-10-07: the call screen SAVES the answers the rep taps (who runs the site, the contract, jobs, areas, the
+     decision maker) — through fn quick-close's save / save_call only, on a tap or a blur, never on open. */
+  {
+    const ui = read('src/components/ColdCallPlaybook.tsx').replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
+    const calls = [...ui.matchAll(/invokeEdge\(\s*'([a-z-]+)'/g)].map((m) => m[1]);
+    ok(calls.length > 0 && calls.every((c) => c === 'quick-close'), 'the call screen talks only to fn quick-close');
+    ok(/mode: 'save', answers:/.test(ui) && /mode: 'save_call', call:/.test(ui) && !/mode: '(generate_link|share_link|send_to_paul)'/.test(ui), '…only to save answers (never a link, a share or a send)');
+    ok(!/useEffect\([^)]*\b(saveAnswer|saveCall)\b/.test(ui), '…and never on open (no save inside an effect)');
   }
   const hook = read('src/hooks/useColdCallPlaybook.ts');
   ok((hook.match(/\.select\(/g) ?? []).length >= 5, 'the loader is SELECTs');
@@ -339,9 +353,9 @@ console.log('── 12. SIMPLIFIED PLAYBOOK (Paul, 2026-09-27) ──');
 
   // "How much" is the canonical offer sentence itself (2026-10-06); the ownership line moved to "Why twelve months?".
   const howMuch = p.objections.find((o) => o.objection === 'How much is it?')?.answer ?? '';
-  ok(howMuch === FINDABLE_OFFER_SUMMARY && /£29\.99 a month until you cancel/.test(howMuch) && !/Nothing's charged after/.test(howMuch),
-    '"How much is it?" is exactly the canonical offer sentence (which names the £29.99 Continuing Service) — never "nothing after the last payment" (v3)');
-  ok(/once they're done the site's yours/.test(p.objections.find((o) => o.objection === 'Why twelve months?')?.answer ?? ''), 'the ownership line: on Build the site is theirs once the payments are made');
+  ok(howMuch === bothPlansSpoken() && /6 payments in total, today's included, and then it ends/.test(howMuch) && /£29\.99 a month for hosting and maintenance only if you want us to keep looking after it/.test(howMuch),
+    '"How much is it?" names both plans: Optimise 6 then it ends; Build 12, £29.99 after only if they want hosting (2026-10-07)');
+  ok(/the website is theirs/.test(p.objections.find((o) => o.objection === 'Why twelve months?')?.answer ?? ''), 'the ownership line: on Build the site is theirs once the payments are made');
 
   // The panel: the new hierarchy, the old A–H headings gone.
   const ui = readFileSync(new URL('../src/components/ColdCallPlaybook.tsx', import.meta.url), 'utf8');

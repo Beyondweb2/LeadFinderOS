@@ -357,6 +357,10 @@ export const ACTIVITY_LABEL: Record<string, string> = {
   handoff_sent: 'Handoff sent to Paul',
   client_intake: 'Automatic client intake',
   client_fact_set: 'Client fact confirmed',
+  /* The paid client's onboarding link and WhatsApp facts (2026-10-07). "Shared" says how — never a pretend send. */
+  onboarding_link_sent: 'Onboarding link',
+  onboarding_form_submitted: 'Client sent their details',
+  whatsapp_facts_found: 'Details read from WhatsApp',
 };
 
 /** Where Find email found an address (lead_find_email / lead_set_email). */

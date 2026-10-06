@@ -29,21 +29,25 @@
 import { CRAWL_FRESH_MS } from './crawlCheck.ts';
 import { sameSite } from './crawlUrl.ts';
 import type { KnownCandidate, KnownForItem } from './clientMissingInfo.ts';
+import { whatsappCandidates } from './whatsappClientFacts.ts';
 
 /* ══ SOURCES ══════════════════════════════════════════════════════════════════════════════════════ */
 
 export type IntakeSourceKey =
-  | 'manual' | 'onboarding' | 'agreement' | 'handoff' | 'quick_close' | 'sales'
+  | 'manual' | 'onboarding' | 'whatsapp' | 'agreement' | 'handoff' | 'quick_close' | 'sales'
   | 'companies_house' | 'lead' | 'website' | 'places' | 'audit';
 
-/** Lower = stronger. Two sources may share a rank (they are then equally strong; the first listed wins). */
+/** Lower = stronger. Two sources may share a rank (they are then equally strong; the first listed wins).
+ *  'whatsapp' (2026-10-07, whatsappClientFacts.ts): the client's own words in a WhatsApp reply — client grade,
+ *  just below their onboarding form, so a disagreement with the form is flagged, never decided silently. */
 export const SOURCE_RANK: Record<IntakeSourceKey, number> = {
-  manual: 0, onboarding: 1, agreement: 2, handoff: 3, quick_close: 3, sales: 4,
+  manual: 0, onboarding: 1, whatsapp: 1.5, agreement: 2, handoff: 3, quick_close: 3, sales: 4,
   companies_house: 5, lead: 6, website: 7, places: 8, audit: 9,
 };
 export const SOURCE_LABEL: Record<IntakeSourceKey, string> = {
   manual: 'Confirmed by Paul',
   onboarding: 'Client onboarding',
+  whatsapp: 'Client on WhatsApp',
   agreement: 'Signed client agreement',
   handoff: 'Sales handoff',
   quick_close: 'Sales call (Quick Close)',
@@ -57,7 +61,7 @@ export const SOURCE_LABEL: Record<IntakeSourceKey, string> = {
 /** What a value's source means for trust — the chip Paul sees beside it. */
 export type SourceTier = 'confirmed' | 'client' | 'sales' | 'record' | 'website' | 'places' | 'inferred';
 export const SOURCE_TIER: Record<IntakeSourceKey, SourceTier> = {
-  manual: 'confirmed', onboarding: 'client', agreement: 'client', handoff: 'sales', quick_close: 'sales', sales: 'sales',
+  manual: 'confirmed', onboarding: 'client', whatsapp: 'client', agreement: 'client', handoff: 'sales', quick_close: 'sales', sales: 'sales',
   companies_house: 'record', lead: 'record', website: 'website', places: 'places', audit: 'inferred',
 };
 export const TIER_WORDS: Record<SourceTier, string> = {
@@ -309,6 +313,8 @@ export interface IntakeRows {
   hookAudit: { business_type?: string | null; location_text?: string | null } | null;
   /** Canonical social profiles (lead_social_profiles, confirmed / likely). */
   socials?: readonly { platform: string; url: string }[];
+  /** Facts read from the client's own WhatsApp replies (client_whatsapp_reads, whatsappClientFacts.ts). */
+  whatsappReads?: readonly { read_at: string; facts: unknown }[];
 }
 
 const seenValues = (v: unknown): { values: string[]; urls: string[] } => {
@@ -388,6 +394,8 @@ export function intakeCandidates(r: IntakeRows): Partial<Record<IntakeFieldKey, 
   if (Number.isFinite(rating) && rating > 0) add('reviews', { source: 'places', value: `${rating.toFixed(1)}★${Number.isFinite(count) ? ` · ${count} Google review${count === 1 ? '' : 's'}` : ''}` });
   const socialUrls = [...(r.socials ?? []).map((s) => s.url), ...((Array.isArray(si?.socialLinks) ? si!.socialLinks as Array<{ url?: string }> : []).map((s) => str(s?.url)))];
   add('social_profiles', { source: 'website', values: cleanIntakeList(socialUrls) });
+  /* What the client told us on WhatsApp (2026-10-07): the newest fact per field. */
+  for (const [k, cs] of Object.entries(whatsappCandidates(r.whatsappReads ?? [])) as [IntakeFieldKey, IntakeCandidate[]][]) for (const c of cs) add(k, c);
   return out;
 }
 
@@ -478,6 +486,7 @@ export const STEP_LABEL: Record<string, string> = {
   lead: 'Lead record', handoff: 'Sales handoff', quick_close: 'Sales call answers', onboarding: 'Client onboarding',
   agreement: 'Signed agreement', places: 'Google business data', companies_house: 'Companies House', hook_audit: 'Hook audit',
   crawl: 'Website crawl', autofill: 'Filled from what we already had', socials: 'Social profiles',
+  whatsapp: 'Client WhatsApp replies',
 };
 
 /** Tiers that are evidence, not an answer: a value from these is shown, never counted as known for the work. */

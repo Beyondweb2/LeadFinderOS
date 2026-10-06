@@ -356,6 +356,11 @@ const TEMPLATES: Record<string, { lang: string; vars: TemplateVar[] }> = {
      keep this map byte-identical to WA_TEMPLATES in _shared/whatsapp-send.ts
      (scripts/re-engage-vars.test.ts asserts both directions). */
   contact_followup: { lang: "en", vars: [] },
+  /* The two link templates (2026-10-07) — sent ONLY by send-whatsapp-message (Quick Close / Paid Clients), never by
+     this queue. Present here only to keep this map byte-identical to WA_TEMPLATES in _shared/whatsapp-send.ts
+     (scripts/re-engage-vars.test.ts asserts both directions). */
+  findable_signup_link: { lang: "en", vars: ["greeting_name", "signup_url"] },
+  findable_onboarding: { lang: "en", vars: ["greeting_name", "onboarding_form_url"] },
 };
 /* NO DEFAULT_TEMPLATE.
    It used to be booking_page_intro, applied whenever a lead's whatsapp_template was unset or
