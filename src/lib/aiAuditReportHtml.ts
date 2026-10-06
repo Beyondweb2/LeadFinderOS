@@ -19,7 +19,7 @@ import { articleTrade } from './templateVars.ts';
    dependency-free constant files, so nothing heavy joins those bundles. */
 import { FINDABLE_CONTACT_EMAIL, FINDABLE_CONTACT_WHATSAPP, FINDABLE_GUARANTEE, REMEASURE_CLAIM_SENTENCE, offerSummaryFor } from './findableOffer.ts';
 import { BASELINE_QUESTIONS } from './auditQuestionCounts.ts';
-import type { CrawlFault } from './crawlCheck.ts';
+import { isGenericSchemaGap, type CrawlFault } from './crawlCheck.ts';
 import type { EvidenceKind, SiteEvidenceFinding } from './siteEvidence.ts';
 import { answerExcerpt, cleanAnswerText, isJunkAnswer, isMapCardAnswer, type AnswerBlock } from './answerText.ts';
 
@@ -1618,7 +1618,12 @@ export function renderReportHtml(d: AiAuditReportData): string {
       const copy = EVIDENCE_REPORT_COPY[e.kind];
       return copy ? [{ title: copy.title, detail: copy.why, minor: false }] : [];
     }),
-    ...(d.crawlFaults ?? []).map((f) => ({ title: f.title, detail: f.detail, minor: !!f.minor })),
+    /* ⛔ NOT THE GENERIC "NO STRUCTURED DATA" LINE (Paul, 2026-10-06): absence of schema alone is not a
+       defensible reason AI did not name someone (tested negative, CLAUDE.md §5), so it never takes a
+       slot on the prospect hook report. Excluded FIRST, before the cap; nothing is added to replace it.
+       Misleading schema still qualifies — it arrives as deep-crawl evidence (schema_wrong_domain) above.
+       Every other surface keeps the line: this filter is the quick report's alone. */
+    ...(d.crawlFaults ?? []).filter((f) => !isGenericSchemaGap(f)).map((f) => ({ title: f.title, detail: f.detail, minor: !!f.minor })),
   ].filter((x, i, all) => all.findIndex((y) => y.title.trim().toLowerCase() === x.title.trim().toLowerCase()) === i)
     .slice(0, QUICK_MAX_WEBSITE_ISSUES);
   /* Concept 4 (2026-10-06) draws these as "Website issues we found" — serious → High, minor → Medium.
