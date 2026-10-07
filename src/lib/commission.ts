@@ -303,7 +303,18 @@ export function engagedAt(events: readonly EngagementEvent[] | null | undefined,
 export function engagementEndedNow(events: readonly EngagementEvent[] | null | undefined): boolean {
   return !!events && events.length > 0 && events[events.length - 1].kind === 'ended';
 }
-/** Did this seller close this sale while engaged, before the payment? (A payment link they generated.) */
+/** WHAT COUNTS AS "THE SELLER CLOSED THIS SALE" (the evidence closedWhileEngaged reads) — server-written quick_close_events only:
+ *  · 'link_generated' / 'link_reused' — the Agreement & Payment link (phone close), and the sign-up row a client's own page
+ *    creates from a Full Setup send (setup-link-creator);
+ *  · 'link_shared' with data.variant 'setup' — the moment the salesperson SENT the Full Setup link. 🔴 FULL SETUP's other event is
+ *    timed by the CLIENT's submit, which can fall after the seller's engagement ended; the send is the seller's own act, timed
+ *    then. Any other 'link_shared' (a copy / email / WhatsApp of the agreement link) is not closing evidence on its own. */
+export function isSaleClosingEvent(e: { kind?: unknown; data?: { variant?: unknown } | null } | null | undefined): boolean {
+  if (!e) return false;
+  if (e.kind === 'link_generated' || e.kind === 'link_reused') return true;
+  return e.kind === 'link_shared' && e.data?.variant === 'setup';
+}
+/** Did this seller close this sale while engaged, before the payment? (A payment link they generated, or a Full Setup link they sent.) */
 export function closedWhileEngaged(closings: readonly SaleClosing[] | null | undefined, seller: string, events: readonly EngagementEvent[] | null | undefined, paymentAt: string): boolean {
   const pay = Date.parse(paymentAt);
   return (closings ?? []).some((c) => c.actorUserId === seller && Date.parse(c.at) < pay && engagedAt(events, c.at));

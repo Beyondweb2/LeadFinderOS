@@ -28,7 +28,7 @@ ok(front.length === 0, `no browser code touches quick_close_events (found: ${fro
 const qc = read('supabase/functions/quick-close/index.ts');
 ok(/service\.from\("quick_close_events"\)\.insert\(\{ lead_id: leadId, onboarding_id: onboardingId, actor_user_id: actor, kind, data \}\)/.test(qc), 'Quick Close still writes its events through the service role (no created_at sent)');
 ok(/service\.from\("quick_close_events"\)\.insert\(\{ lead_id: leadId, onboarding_id: onboardingId, actor_user_id: null, kind: "paid"/.test(read('supabase/functions/stripe-webhook/index.ts')), 'the Stripe webhook writes its "paid" event through the service role');
-ok(/service\.from\("quick_close_events"\)\.select\("lead_id, actor_user_id, created_at"\)/.test(read('supabase/functions/_shared/earnings.ts')), 'the commission proof lookup reads through the service role');
+ok(/service\.from\("quick_close_events"\)\.select\("lead_id, actor_user_id, created_at, kind, data"\)/.test(read('supabase/functions/_shared/earnings.ts')), 'the commission proof lookup reads through the service role');
 
 console.log(f === 0 ? '\nALL PASS' : `\n${f} FAILURE(S)`);
 process.exit(f === 0 ? 0 : 1);
