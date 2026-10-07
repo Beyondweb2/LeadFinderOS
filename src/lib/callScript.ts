@@ -150,9 +150,10 @@ export function afterFirstQuestion(answer: WebsiteManager, agencyMonthlyGbp: num
   return { ask: [AGENCY_CONTRACT_QUESTION, AGENCY_COST_QUESTION], priceAngle: priceAngleApplies(agencyMonthlyGbp) ? PRICE_ANGLE_LINE : null };
 }
 
-/** The plan to open first: no site of their own → Build; their own site → Optimise. */
-export function preselectedPlan(source: SiteSource | null | undefined): ServiceRoute {
-  return source === 'own_site' ? 'optimise' : 'build';
+/** The plan to open first: ALWAYS Build (Paul, 2026-10-07). Having their own site is not a reason for Optimise; only a
+ *  confirmed agency contract is, and that comes from the call's answers (quickClose.offerFit), not from the site source. */
+export function preselectedPlan(_source: SiteSource | null | undefined): ServiceRoute {
+  return 'build';
 }
 
 /* ── The script ────────────────────────────────────────────────────────────────────────────────── */

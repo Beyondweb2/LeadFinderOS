@@ -129,7 +129,7 @@ export function domainPending(a: QuickCloseAnswers): boolean {
 
 export const QUICK_CLOSE_QUESTIONS: readonly { key: QcKey; text: string; detail?: readonly string[]; options: readonly { value: string; label: string }[] }[] = [
   /* STEP 1 — the offer (2026-10-07: always first; the recommendation comes from offerFit). */
-  { key: 'route', text: 'Which plan are they going with?', options: [{ value: 'optimise', label: 'Findable Optimise — improve their current site' }, { value: 'build', label: 'Findable Build — a new website' }] },
+  { key: 'route', text: 'Which plan are they going with?', options: [{ value: 'build', label: 'Findable Build — a new website' }, { value: 'optimise', label: 'Findable Optimise — improve their current site' }] },
   { key: 'decision_maker', text: 'Are they authorised to make this decision for the business?', options: [{ value: 'yes', label: 'Yes' }, { value: 'no', label: 'No' }] },
   { key: 'access', text: 'Can Findable get access to their current website (its CMS / admin)?', options: [{ value: 'yes', label: 'Yes' }, { value: 'no', label: 'No' }, { value: 'not_sure', label: 'Not sure' }, { value: 'not_applicable', label: 'Not applicable' }] },
   { key: 'manager', text: 'Who manages the website day to day?', options: [{ value: 'owner', label: 'Business / owner' }, { value: 'employee', label: 'Employee' }, { value: 'agency', label: 'External agency' }, { value: 'third_party', label: 'Other third party' }, { value: 'no_website', label: 'No website' }, { value: 'not_sure', label: 'Not sure' }] },
@@ -179,16 +179,28 @@ export function offerFit(a: QuickCloseAnswers, hasWebsite: boolean): OfferFit {
   if (!hasWebsite || a.manager === 'no_website') {
     return { recommended: 'build', offered: { build: true, optimise: false }, reason: 'No website of their own — Optimise needs one to work on, so the offer is Build.' };
   }
-  if (agencyContractBlocksBuild(a)) {
+  /* The ONE positive blocker: an agency / third party runs the site AND the contract is confirmed still on. */
+  if (thirdPartyManaged(a) && a.agency_contract === 'in_contract') {
     return {
       recommended: 'optimise', offered: { build: false, optimise: true },
-      reason: a.agency_contract === 'in_contract'
-        ? "They're still in contract with the agency that runs their site — offer Optimise, so they're not paying for two websites."
-        : "An agency runs their site and the contract isn't confirmed as ended — offer Optimise unless they're free to move.",
+      reason: "They're still in contract with the agency that runs their site — offer Optimise, so they're not paying for two websites.",
     };
   }
-  if (thirdPartyManaged(a)) return { recommended: null, offered: { build: true, optimise: true }, reason: 'Their agency contract has ended — either plan works.' };
-  return { recommended: 'optimise', offered: { build: true, optimise: true }, reason: 'They keep their own website — Optimise, or Build if they want a new one.' };
+  /* 🔴 BUILD IS THE DEFAULT (Paul, 2026-10-07). Owning, keeping or having access to a website is NEVER a reason for
+     Optimise — the preferred outcome is a new Findable website. Optimise is recommended ONLY on the positive blocker
+     above (an agency / third party runs the site and the contract is confirmed still on). Unknown contract status
+     (not asked, or "not sure") keeps Build, with the rep told to confirm before closing; that Build then still has to
+     answer the contract question (routeQuestions) and, if the answer is "not sure" / "in contract", stops for Paul. */
+  return { recommended: 'build', offered: { build: true, optimise: true }, reason: buildDefaultReason(a) };
+}
+/** The one line for the rep when Build is the recommendation (never shown to the client). */
+export const BUILD_DEFAULT_REASON =
+  "Build is usually the best route. Use Optimise if they need to keep their current website because they're still tied into an existing agency contract.";
+export const AGENCY_CONTRACT_UNCONFIRMED_REASON =
+  "An agency runs their site. Build is usually the best route, but confirm whether they're still in contract before you close. If they are, offer Optimise.";
+function buildDefaultReason(a: QuickCloseAnswers): string {
+  if (thirdPartyManaged(a)) return a.agency_contract === 'free' ? 'Their agency contract has ended, so Build is the route: a new website they own.' : AGENCY_CONTRACT_UNCONFIRMED_REASON;
+  return BUILD_DEFAULT_REASON;
 }
 
 /** The answers a plan choice saves (step 1). The plan is stated explicitly; a legacy approach that would

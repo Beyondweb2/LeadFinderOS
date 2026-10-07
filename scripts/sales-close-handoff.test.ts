@@ -47,12 +47,17 @@ const ONB = `https://findable.live/details/${'b'.repeat(64)}`;
 console.log('── QUICK CLOSE: the agency-contract rule ──');
 {
   const self = offerFit({ manager: 'owner' }, true);
-  ok(self.offered.build && self.offered.optimise && self.recommended === 'optimise', 'self-managed site → both plans offered, Optimise first');
+  ok(self.offered.build && self.offered.optimise && self.recommended === 'build', 'self-managed site → both plans offered, BUILD recommended (a site of their own is not a reason for Optimise)');
   const free = offerFit({ manager: 'agency', agency_contract: 'free' }, true);
-  ok(free.offered.build && free.offered.optimise && free.recommended === null, 'agency, contract ended → either plan (Build available)');
-  for (const c of ['in_contract', 'not_sure', undefined] as const) {
+  ok(free.offered.build && free.offered.optimise && free.recommended === 'build', 'agency, contract ended → Build recommended, both available');
+  {
+    const fit = offerFit({ manager: 'agency', agency_contract: 'in_contract' }, true);
+    ok(!fit.offered.build && fit.offered.optimise && fit.recommended === 'optimise' && /Optimise/.test(fit.reason ?? ''), 'agency + still in contract → Optimise only for a salesperson (the one positive blocker)');
+    ok(!/(rubbish|bad|poor|rip|overcharg)/i.test(fit.reason ?? ''), '…and the reason never knocks the agency');
+  }
+  for (const c of ['not_sure', undefined] as const) {
     const fit = offerFit({ manager: 'agency', agency_contract: c }, true);
-    ok(!fit.offered.build && fit.offered.optimise && fit.recommended === 'optimise' && /Optimise/.test(fit.reason ?? ''), `agency + contract ${c ?? 'unanswered'} → Optimise only for a salesperson (absent is never "free")`);
+    ok(fit.recommended === 'build' && fit.offered.build && fit.offered.optimise && /confirm whether they're still in contract/.test(fit.reason ?? ''), `agency + contract ${c ?? 'unanswered'} → Build stays recommended and the rep is told to confirm the contract before closing`);
     ok(!/(rubbish|bad|poor|rip|overcharg)/i.test(fit.reason ?? ''), `…and the reason never knocks the agency (${c ?? 'unanswered'})`);
   }
   ok(!offerFit({ manager: 'third_party', agency_contract: 'in_contract' }, true).offered.build, 'another third party in contract → the same rule');
