@@ -500,6 +500,8 @@ export function OutreachTable({
   const [detailTab, setDetailTab] = useState<WorkspaceTabInput | undefined>(undefined);
   /* Opened by the Call button: the workspace shows Log a contact expanded (it is collapsed otherwise). */
   const [detailLogContact, setDetailLogContact] = useState(false);
+  /* Outreach CALL (2026-10-07): the lead popup arrives with the small number window over it (src/lib/callArrival.ts). */
+  const [detailNumberPopup, setDetailNumberPopup] = useState(false);
   /* ⛔ KEEP THE OPEN DETAIL DIALOG POINTED AT THE LIVE LEAD ROW, NOT A FROZEN SNAPSHOT (fixed
      2026-08-18). `detailLead` was set once on row click and never tracked `leads`, so an edit made
      inside the dialog — a delivery-checklist tick especially — neither showed nor ACCUMULATED:
@@ -840,10 +842,15 @@ export function OutreachTable({
     highlightLead(lead.id);
     /* ⛔ A TAP ON CALL IS NOT A CALL (Paul, 2026-10-01: "clicking the normal phone number does NOT falsely log a
        call"). It used to run executeContact → an attempt with no outcome AND status initial_contact, so a
-       number nobody spoke to read "Contacted". Now the dialler opens (the tel: link) and the lead's workspace
-       opens on Work, where the person logs what actually happened (lead_log_contact) and sets the Next Action. */
+       number nobody spoke to read "Contacted".
+       ⛔ CALL OPENS NOTHING EXTERNAL (Paul, 2026-10-07). Reps ring from their own phone. Call was a tel: link, and on
+       a laptop with WhatsApp Desktop installed tel: belongs to WhatsApp — the browser asked "Open WhatsApp?". Now
+       Call opens the lead popup on the Call tab (the script, the AI result, Quick Close) with the small NUMBER
+       window over it: copy or read the number, press CALL, dial on the phone. "What happened?" opens from Log call
+       only, never on arrival — the logged outcome (lead_log_contact) stays the only record of a call. */
     setDetailTab('call');
-    setDetailLogContact(true);
+    setDetailLogContact(false);
+    setDetailNumberPopup(true);
     setDetailLead(lead);
   }, [onContactGated]);
 
@@ -868,7 +875,7 @@ export function OutreachTable({
     setLaunchLink(launchIntent.shareLink ?? null);
     if (launchIntent.channel === 'whatsapp') setWhatsappDialogLead(lead);
     else if (launchIntent.channel === 'call') handleCallClick(lead);
-    else if (launchIntent.channel === 'open') { setDetailTab(launchIntent.tab); setDetailLogContact(false); setDetailLead(lead); }
+    else if (launchIntent.channel === 'open') { setDetailTab(launchIntent.tab); setDetailLogContact(false); setDetailNumberPopup(false); setDetailLead(lead); }
     onLaunchConsumed?.();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [launchIntent, leads, listComplete]);
@@ -2036,7 +2043,7 @@ export function OutreachTable({
   const stepPlace = useRef(0);
   const detailIdx = detailLead ? filteredAndSortedLeads.findIndex((l) => l.id === detailLead.id) : -1;
   if (detailIdx >= 0) stepPlace.current = detailIdx;
-  const openStep = (l: OutreachLead | undefined) => { if (!l) return; setDetailTab(undefined); setDetailLogContact(false); setDetailLead(l); };
+  const openStep = (l: OutreachLead | undefined) => { if (!l) return; setDetailTab(undefined); setDetailLogContact(false); setDetailNumberPopup(false); setDetailLead(l); };
   const detailStepper: LeadStepper | null = !detailLead || filteredAndSortedLeads.length === 0 ? null : detailIdx >= 0
     ? { index: detailIdx, total: filteredAndSortedLeads.length,
         onPrev: detailIdx > 0 ? () => openStep(filteredAndSortedLeads[detailIdx - 1]) : undefined,
@@ -2054,7 +2061,7 @@ export function OutreachTable({
     .map((l) => ({ id: l.id, business_name: l.business_name, website: l.website ?? null }));
   const rowScores = useOutreachRowScores(scoreLeads, scoreLeads.map((l) => auditsByLead[l.id]?.runId ?? '').join(','));
   /** The call screen: the lead's workspace on its Call tab (the same door the old results panel used). */
-  const openCallScreen = (l: OutreachLead) => { setDetailTab('call'); setDetailLogContact(false); setDetailLead(l); };
+  const openCallScreen = (l: OutreachLead) => { setDetailTab('call'); setDetailLogContact(false); setDetailNumberPopup(false); setDetailLead(l); };
   /** Retry a failed check: a rep starts it straight away, exactly like the toolbar press (the server judges
    *  allowance and reuse); the admin gets the single AI check popup. */
   const retryCheck = (l: OutreachLead) => {
@@ -3015,14 +3022,16 @@ export function OutreachTable({
                       <TableCell>
                         {lead.phone ? (
                           <div className="flex items-center gap-1.5">
-                            <a
-                              href={`tel:${lead.phone}`}
+                            {/* The number opens the same Call flow as the row's phone icon — never a tel: link. */}
+                            <button
+                              type="button"
                               className="text-primary hover:underline flex items-center gap-1.5 text-sm"
-                              onClick={(e) => e.stopPropagation()}
+                              onClick={(e) => { e.stopPropagation(); handleCallClick(lead); }}
+                              title={`Call ${lead.business_name}`}
                             >
                               <Phone className="h-3.5 w-3.5 flex-shrink-0" />
                               <span className="font-mono">{lead.phone}</span>
-                            </a>
+                            </button>
                             {isPhoneCopied(lead.id) && (
                               <span title="Copied">
                                 <CheckCheck className="h-3.5 w-3.5 text-primary" />
@@ -3143,10 +3152,10 @@ export function OutreachTable({
                             <>
                               {/* ONE tap to call (UI cleanup 2026-09-29). This was a two-item menu: Normal Call, and
                                   "WhatsApp thread" — an exact duplicate of the green WhatsApp button beside it. */}
-                              <a href={`tel:${lead.phone}`} onClick={() => handleCallClick(lead)} title={`Call ${lead.phone}`} aria-label={`Call ${lead.phone}`}
+                              <button type="button" onClick={() => handleCallClick(lead)} title={`Call ${lead.phone}`} aria-label={`Call ${lead.phone}`} data-testid="outreach-call"
                                 className="p-1.5 rounded-md hover:bg-amber-500/10 text-amber-500 hover:text-amber-400 transition-colors">
                                 <Phone className="h-4 w-4" />
-                              </a>
+                              </button>
                               <button
                                 onClick={() => { window.dispatchEvent(new CustomEvent('outreach-first-contact-click', { detail: { method: 'whatsapp' } })); handleWhatsAppClick(lead); }}
                                 className="p-1.5 rounded-md hover:bg-green-500/10 text-green-500 hover:text-green-400 transition-colors"
@@ -3622,10 +3631,11 @@ export function OutreachTable({
       {/* Lead detail modal (Track Leads fold-in) — opened on row click */}
       <LeadDetailDialog
         open={!!detailLead}
-        onOpenChange={(open) => { if (!open) { setDetailLead(null); setDetailTab(undefined); setDetailLogContact(false); onDetailClosed?.(); } }}
+        onOpenChange={(open) => { if (!open) { setDetailLead(null); setDetailTab(undefined); setDetailLogContact(false); setDetailNumberPopup(false); onDetailClosed?.(); } }}
         lead={detailLead}
         initialTab={detailTab}
         openLogContact={detailLogContact}
+        openNumberPopup={detailNumberPopup}
         onStatusChange={onStatusChange}
         onNextActionChange={onNextActionChange}
         onUpdateLead={onUpdateLead ?? (() => Promise.resolve(null))}
@@ -3647,7 +3657,7 @@ export function OutreachTable({
           const l = leads.find((x) => x.id === playbookLeadId);
           setPlaybookLeadId(null);
           if (!l) return;
-          setDetailTab('call'); setDetailLogContact(true); setDetailLead(l);
+          setDetailTab('call'); setDetailLogContact(true); setDetailNumberPopup(false); setDetailLead(l);
         }}
       />
     </Card>

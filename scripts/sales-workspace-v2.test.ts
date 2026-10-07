@@ -75,7 +75,7 @@ console.log('\n── 2. CONTACT: a tap is not a call ──');
   const table = read('src/components/OutreachTable.tsx');
   const call = table.slice(table.indexOf('const handleCallClick'), table.indexOf('}, [onContactGated]);')).replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
   ok(!/onContactMethodChange|executeContact|logAttempt|updateLead|last_outreach_attempt_at/.test(call), 'tapping Call writes nothing (no contact method, no attempt, no status)');
-  ok(/<a href=\{`tel:\$\{lead\.phone\}`\}[^>]*data-testid="workspace-call"/.test(read('src/components/LeadDetailDialog.tsx')), 'the popup Call is a plain tel: link — the phone\'s own dialler');
+  ok(/<button type="button" onClick=\{showNumber\}[^>]*data-testid="workspace-call"/.test(read('src/components/LeadDetailDialog.tsx')) && !/tel:/.test(read('src/components/LeadDetailDialog.tsx').replace(/\/\*[\s\S]*?\*\//g, '').replace(/\{\/\*[\s\S]*?\*\/\}/g, '')), '2026-10-07: the popup Call shows the number window (copy, WhatsApp or dial by hand) — never a tel: link, which a laptop hands to WhatsApp Desktop');
   ok(reachedInConversation([]) === null && reachedInConversation([{ kind: 'call_outcome', created_at: '2026-10-05T10:00:00Z', data: { outcome: 'no_answer' } } as never]) === null, 'no answer is an attempt — it never stops the opener');
   ok(reachedInConversation([{ kind: 'call_outcome', created_at: '2026-10-05T10:00:00Z', data: { outcome: 'spoke_to_owner' } } as never]) === 'phone', 'spoke to the owner (a call) → contacted by phone');
   ok(reachedInConversation([{ kind: 'contact_logged', created_at: '2026-10-05T10:00:00Z', data: { outcome: 'interested', channel: 'email' } } as never]) === 'other', 'a logged conversation on another channel → contacted (other)');

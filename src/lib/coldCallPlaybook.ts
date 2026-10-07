@@ -57,6 +57,7 @@ import { classifyLeadWebsite, type SiteSource } from './leadWebsiteKind.ts';
 import { buildCallClose, type CallClose } from './callClose.ts';
 import { buildCallScript, type CallScript } from './callScript.ts';
 import { callerFirstName, DEFAULT_CALLER_NAME } from './callerName.ts';
+import type { CallAuditProgress } from './callScriptGate.ts';
 
 /* ── Tunables, named ──────────────────────────────────────────────────────────────────────────── */
 
@@ -91,6 +92,8 @@ export interface PlaybookLead {
 
 export interface PlaybookAudit {
   id: string;
+  /** Whose audit it is — the call-script gate (callScriptGate.ts) shows the script only for this lead's own. */
+  lead_id?: string | null;
   short_code: string | null;
   created_at: string | null;
   business_name?: string | null;
@@ -131,6 +134,9 @@ export interface PlaybookInput {
   report: PlaybookReport | null;
   /** True when some audit for this lead is pending/running right now. */
   auditRunning?: boolean;
+  /** Where this lead's newest check has got to (callScriptGate.callAuditProgress). Absent = derived from the
+   *  two facts above: running, else complete when an audit was chosen, else none. */
+  auditProgress?: CallAuditProgress;
   /** Crawl sources in the order resolveFindingsSource wants them: audit-run crawls newest first. */
   runCrawls: FindingsSource[];
   leadCrawl: FindingsSource | null;
@@ -226,6 +232,10 @@ export interface ColdCallPlaybook {
   reportNote: string | null;
   /** The audit the AI opportunity and the report come from (resolveLeadReportAudit). */
   auditId: string | null;
+  /** That audit's lead — the call-script gate refuses an audit of any other lead. */
+  auditLeadId: string | null;
+  /** Where the newest check has got to: only the words of the locked call script (callScriptGate.ts). */
+  auditProgress: CallAuditProgress;
 }
 
 /* ── Small, pure helpers ──────────────────────────────────────────────────────────────────────── */
@@ -822,6 +832,8 @@ export function buildColdCallPlaybook(input: PlaybookInput): ColdCallPlaybook {
     followUp: convo.followUp,
     reportUrl,
     auditId: reportAudit?.id ?? null,
+    auditLeadId: reportAudit?.lead_id ?? null,
+    auditProgress: input.auditProgress ?? (input.auditRunning ? 'running' : reportAudit ? 'complete' : 'none'),
     reportNote: reportUrl ? null : (input.auditRunning ? 'The audit is still running — no report link yet.' : 'No usable public report for this lead.'),
   };
 }

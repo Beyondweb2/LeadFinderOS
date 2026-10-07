@@ -25,6 +25,7 @@ import { buildReportData, type QueueRow, type RunRow } from '@/lib/auditReport';
 import { isAggregatorUrl } from '@/lib/aggregators';
 import { buildColdCallPlaybook, callCardAudit, type ColdCallPlaybook, type PlaybookLead, type PlaybookMessage } from '@/lib/coldCallPlaybook';
 import type { FindingsSource } from '@/lib/siteFindings';
+import { callAuditProgress, callScriptRecheckMs } from '@/lib/callScriptGate';
 import type { CrawlStoredResult } from '@/lib/crawlResult';
 
 // Several of these tables are not in the generated types; RLS still enforces access.
@@ -110,6 +111,7 @@ async function loadPlaybook(leadId: string, callerName: string | null): Promise<
     reportAudit,
     report,
     auditRunning,
+    auditProgress: callAuditProgress(audits, leadId),
     /* Deliberately newestUsableAudit, not the report audit — the same choice useInbox makes: a
        measurement's crawl is still real site data even though its report link is never shown. */
     runCrawls: runCrawlSources(newestUsableAudit(audits, leadId)),
@@ -215,5 +217,8 @@ export function useColdCallPlaybook(leadId: string | null, enabled: boolean) {
     gcTime: 60_000,
     refetchOnWindowFocus: false,
     retry: 1,
+    /* The script is locked until the check is in (callScriptGate.ts): while it is queued or running, read again
+       so the script appears by itself. Reads only, as above. */
+    refetchInterval: (query) => (leadId ? callScriptRecheckMs(leadId, query.state.data) : false),
   });
 }
