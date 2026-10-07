@@ -17,3 +17,10 @@ Where they appear: Templates page (TEAM TEMPLATES then MY TEMPLATES), Inbox Quic
 
 **Nothing was promoted automatically.** Paul's nine existing rows are barber-era copy the team should not be handed; the Team library starts empty and
 Paul shares what he wants with one click (Share with the team).
+
+## Seeded 2026-10-07 (fix/seed-team-sales-templates)
+The eight current sales templates are Team rows (migration `20261016200000_seed_team_templates.sql`, GENERATED from `src/lib/teamTemplateSeed.ts`, which renders the registered bodies in
+`templateBodies.ts` and the picker labels in `outreach.ts` with markers — `{{business_name}}`, `{{link}}`, `{{trade}}` / `{{trade_plural}}` / `{{trade_with_article}}`, `{{town}}`, and the two the rep types:
+`{{competitors}}`, `{{site_fault}}`). Idempotent (unique `seed_key`, ON CONFLICT DO NOTHING). The Inbox fills link / trade / town from the open lead (`leadUtils.fillTemplate`, the same trade rules as
+the WhatsApp templates) and refuses to send a message that still carries a marker (`unresolvedTokens`). Live proof: `supabase/tests/team-seed.sql`; the live rows were compared to the source byte for byte.
+Old barber defaults stay personal; the Meta templates (including findable_signup_link / findable_onboarding) are untouched.
