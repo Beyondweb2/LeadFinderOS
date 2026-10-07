@@ -44,11 +44,12 @@ console.log('── SALES-HELD SIGN-UP (src/lib/salesSignup.ts) ──');
   ok(salesSignupFor([{ ...base, plan_tier: 'keep', website_addon: true }])?.route === null, 'a contradictory route is no route — never guessed');
   const ob = read('supabase/functions/findable-onboarding/index.ts');
   const submitAt = ob.indexOf('if (action === "submit")');
-  const refuseAt = ob.indexOf('error: "signup_in_progress"');
+  const refuseAt = ob.indexOf('error: "signup_pending"');
+  const resumeAt = ob.indexOf('decision.kind === "resume"');
   const insertAt = ob.indexOf('await saveAnswers({ lead_id: leadId, status: "submitted" })');
-  ok(refuseAt > submitAt && insertAt > refuseAt, 'the server refuses a competing self-service sign-up BEFORE any row is written');
+  ok(refuseAt > submitAt && resumeAt > submitAt && insertAt > refuseAt && insertAt > resumeAt, 'the server RESUMES a ready sales sign-up (and holds a not-ready one) BEFORE any row is written — it never creates a competing one (final pass: no more signup_in_progress)');
   ok(/if \(signupErr\) return json\(\{ ok: false, error: "lookup_failed" \}, 503\);/.test(ob), 'an unreadable sign-up list refuses (fails closed), never reads as "none"');
-  ok(/sales_signup: held\s*\n?\s*\? \{ ready: held\.ready, route: held\.route, onboarding_id: held\.ready \? held\.onboardingId : null \}/.test(ob), 'prefill returns the held route, and the row id ONLY when it may go to the agreement');
+  ok(/ready: held\.ready, route: held\.route, onboarding_id: held\.ready \? held\.onboardingId : null,/.test(ob), 'prefill returns the held route, and the row id ONLY when it may go to the agreement');
 }
 
 /* ── The plan summary and the signing date ─────────────────────────────────────────────────────── */

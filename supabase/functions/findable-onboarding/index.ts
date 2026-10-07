@@ -7,7 +7,9 @@ import { missingQuestionnaireFields, questionnaireComplete } from "../../../src/
 import { clientKnown, KNOWN_SOURCE_LINE } from "../../../src/lib/setupPrefill.ts";
 import { recordLeadEvent } from "../_shared/client-setup.ts";
 import { readWebsite, sameWebsite } from "../../../src/lib/websiteUrl.ts";
-import { salesSignupFor, type SignupRow } from "../../../src/lib/salesSignup.ts";
+import { planClientConfirmation, resumeDecision, salesSignupFor, type SignupRow } from "../../../src/lib/salesSignup.ts";
+import { confirmItemsFor } from "../../../src/lib/clientConfirm.ts";
+import type { QuickCloseRecord } from "../../../src/lib/quickClose.ts";
 
 // findable-onboarding — the PUBLIC backend for findable-site's /onboarding flow
 // (verify_jwt = false; the static site calls it with the anon apikey only). Actions:
@@ -16,6 +18,8 @@ import { salesSignupFor, type SignupRow } from "../../../src/lib/salesSignup.ts"
 //                                                (NEVER phone/email — anyone with a report link can call this)
 //   submit      { lead_id?, answers{...} }     → save answers; for a KNOWN lead also fire the audit
 //   revise      { onboarding_id, ... }         → pre-payment answer changes (refuses paid rows)
+//   sales_confirm { lead_id, onboarding_id, answers } → the client confirms / corrects the four situation facts
+//                                                on THEIR salesperson's sign-up (never the plan, price or seller)
 //   q2_prefill  { onboarding_id }              → the lead's phone for the post-payment form (PAID rows only)
 //   complete_q2 { onboarding_id, answers{...} }→ the post-payment save (paid rows only)
 //   payment_status { onboarding_id?, lead_id? } → { paid } — the paid screen waits on this, never on ?paid=1
@@ -347,8 +351,18 @@ Deno.serve(async (req) => {
            "the column is missing", and "" renders as an empty box either way. */
         phone_guess: String(lead.phone ?? "").trim(),
         website_guess: String(lead.website ?? "").trim(),
+        /* 🔴 FINAL PASS (2026-10-07): `confirm` = "here's what we have so far" — the four situation facts the
+           salesperson recorded, in the client's words (src/lib/clientConfirm.ts), only when the sign-up may go on. */
         sales_signup: held
-          ? { ready: held.ready, route: held.route, onboarding_id: held.ready ? held.onboardingId : null }
+          ? {
+            ready: held.ready, route: held.route, onboarding_id: held.ready ? held.onboardingId : null,
+            confirm: held.ready
+              ? (() => {
+                const qc = ((signupRows ?? []) as SignupRow[]).find((r) => r.id === held.onboardingId)?.quick_close as QuickCloseRecord | null | undefined;
+                return { items: confirmItemsFor(qc), confirmed_at: qc?.client_confirmed?.at ?? null };
+              })()
+              : null,
+          }
           : null,
       });
     }
@@ -401,6 +415,72 @@ Deno.serve(async (req) => {
         return json({ ok: false, error: "revise_failed" }, 500);
       }
       return json({ ok: true, onboarding_id: onboardingId, willing_to_migrate: migrate });
+    }
+
+    /* ── sales_confirm ──────────────────────────────────────────────────────────────────────────
+       🔴 FINAL PASS (2026-10-07). "Here's what we have so far" — the client presses Looks right, or corrects
+       one of the four situation facts their salesperson recorded (src/lib/clientConfirm.ts).
+       ⛔ IT CAN NEVER CHANGE THE PLAN, THE PRICE OR WHO SOLD IT. Only the four keys are read; they are stored
+       BESIDE the salesperson's answers (quick_close.client_confirmed) and judged by the same gate
+       (quickClose.effectiveAnswers) — a correction that makes the sale unsafe (Build while still tied into
+       an agency contract) holds the sign-up for Paul rather than paying on a plan nobody checked.
+       ⛔ ONLY THE HELD, READY SIGN-UP: the onboarding_id must be the row the lead's own sales sign-up
+       resolves to right now. Another lead's row, an old row or a made-up id changes nothing (409 not_held).
+       ⚠️ rev-conditional like every quick_close write (fn quick-close writeQc): a salesperson saving at the
+       same moment is never overwritten — re-read and decide again. */
+    if (action === "sales_confirm") {
+      const confirmLeadId = typeof body.lead_id === "string" ? body.lead_id : "";
+      const confirmOnboardingId = typeof body.onboarding_id === "string" ? body.onboarding_id : "";
+      if (!UUID_RE.test(confirmLeadId) || !UUID_RE.test(confirmOnboardingId)) return json({ ok: false, error: "bad_onboarding_id" }, 400);
+      const { data: cLead, error: cLeadErr } = await service
+        .from("outreach_leads").select("id, business_name, status, amount_paid").eq("id", confirmLeadId).maybeSingle();
+      if (cLeadErr) return json({ ok: false, error: "lookup_failed" }, 503);
+      if (!cLead) return json({ ok: false, error: "unknown_lead" }, 404);
+      if (PAID_OR_BEYOND.has(cLead.status as string) || ((cLead.amount_paid as number) ?? 0) > 0) return json({ ok: false, error: "already_client" }, 403);
+      for (let attempt = 0; attempt < 4; attempt++) {
+        const { data: cRows, error: cRowsErr } = await service.from("onboarding_responses")
+          .select("id, status, created_at, plan_tier, website_addon, quick_close").eq("lead_id", confirmLeadId);
+        if (cRowsErr) return json({ ok: false, error: "lookup_failed" }, 503);
+        const rows = (cRows ?? []) as SignupRow[];
+        const decision = resumeDecision(rows);
+        if (decision.kind !== "resume" || decision.onboardingId !== confirmOnboardingId) return json({ ok: false, error: "not_held" }, 409);
+        const heldRow = rows.find((r) => r.id === confirmOnboardingId)!;
+        const cur = (heldRow.quick_close ?? {}) as QuickCloseRecord & Record<string, unknown>;
+        const nowIso = new Date().toISOString();
+        const plan = planClientConfirmation(cur, body.answers, nowIso);
+        if (!plan.ok) return json({ ok: false, error: plan.error }, 400);
+        const rev = Number.isInteger(cur.rev) ? (cur.rev as number) : null;
+        const stored = { ...plan.next, rev: (rev ?? 0) + 1 };
+        let upd = service.from("onboarding_responses")
+          .update({ ...plan.columns, quick_close: stored, updated_at: nowIso }).eq("id", confirmOnboardingId);
+        upd = rev === null ? upd.is("quick_close->>rev", null) : upd.eq("quick_close->>rev", String(rev));
+        const { data: written, error: writeErr } = await upd.select("id");
+        if (writeErr) {
+          console.error("[findable-onboarding] sales_confirm write failed:", writeErr.message);
+          return json({ ok: false, error: "save_failed" }, 500);
+        }
+        if (!Array.isArray(written) || written.length !== 1) continue; // a salesperson wrote first: read again
+        try {
+          await service.from("quick_close_events").insert({
+            lead_id: confirmLeadId, onboarding_id: confirmOnboardingId, actor_user_id: null, kind: "answers_saved",
+            data: { by: "client", changed: plan.changed, holds: plan.holds },
+          });
+          if (plan.changed.length) {
+            const { data: owner } = await service.from("team_members").select("user_id").eq("is_book_owner", true).maybeSingle();
+            if (owner?.user_id) {
+              await service.from("notifications").upsert({
+                user_id: owner.user_id, kind: "quick_close_review", title: "The client corrected their set-up details",
+                body: `${cLead.business_name ?? "A client"} changed: ${plan.changed.join(", ")}.${plan.holds ? " The sign-up is on hold until you look." : ""}`,
+                link: `/inbox?lead=${confirmLeadId}`, lead_id: confirmLeadId, priority: 2,
+                dedupe_key: `qc_client_confirm:${confirmOnboardingId}:${JSON.stringify(plan.next.client_confirmed?.answers ?? {})}`,
+              }, { onConflict: "user_id,dedupe_key", ignoreDuplicates: true });
+            }
+          }
+        } catch (e) { console.error("[findable-onboarding] sales_confirm audit failed (non-fatal):", e instanceof Error ? e.message : String(e)); }
+        const after = resumeDecision(rows.map((r) => (r.id === confirmOnboardingId ? { ...r, quick_close: stored } : r)));
+        return json({ ok: true, onboarding_id: confirmOnboardingId, ready: after.kind === "resume", changed: plan.changed });
+      }
+      return json({ ok: false, error: "busy" }, 409);
     }
 
     /* ── q2_prefill ─────────────────────────────────────────────────────────────────────────────
@@ -1086,8 +1166,21 @@ Deno.serve(async (req) => {
         const { data: signupRows, error: signupErr } = await service.from("onboarding_responses")
           .select("id, status, created_at, plan_tier, website_addon, quick_close").eq("lead_id", leadId);
         if (signupErr) return json({ ok: false, error: "lookup_failed" }, 503);
-        if (salesSignupFor((signupRows ?? []) as SignupRow[])) {
-          return json({ ok: false, error: "signup_in_progress" }, 409);
+        const decision = resumeDecision((signupRows ?? []) as SignupRow[]);
+        /* 🔴 FINAL PASS (2026-10-07): A SALES-HELD SIGN-UP IS RESUMED, NOT REFUSED. This used to answer 409
+           `signup_in_progress` — "Your sign-up is already set up with the plan you agreed with us" — to a client
+           on a perfectly valid link whose saved draft had put the page back on the questions (or who pressed
+           "Let's start" before the page had loaded the sales sign-up). Their sign-up IS set up; the right answer
+           is to continue on it. Nothing is created and nothing about the plan, price or seller is read from here.
+           A sign-up Quick Close has not finished is a plain "being finished", never a dead end. */
+        if (decision.kind === "pending") return json({ ok: false, error: "signup_pending" }, 409);
+        if (decision.kind === "resume") {
+          /* Light-touch: anything they typed fills an EMPTY contact field on the held row, never replaces one. */
+          try {
+            const fills: [string, string | null][] = [["contact_name", clip(a.contact_name, 120)], ["contact_email", contactEmail], ["confirmed_phone", clip(a.confirmed_phone, 40)]];
+            for (const [col, val] of fills) if (val) await service.from("onboarding_responses").update({ [col]: val }).eq("id", decision.onboardingId).is(col, null);
+          } catch { /* non-fatal — the sales sign-up already carries what Sales recorded */ }
+          return json({ ok: true, onboarding_id: decision.onboardingId, resumed: true, route: decision.route });
         }
       }
 

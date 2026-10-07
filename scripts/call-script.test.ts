@@ -160,9 +160,9 @@ console.log('── 8. Discovery is short and useful ──');
 
 console.log('── 9. Build / Optimise preselection, live v3 terms only ──');
 {
-  ok(preselectedPlan('own_site') === 'optimise' && preselectedPlan('none') === 'build' && preselectedPlan('directory_profile') === 'build' && preselectedPlan(null) === 'build', 'own site → Optimise; anything else → Build');
+  ok(preselectedPlan('own_site') === 'build' && preselectedPlan('none') === 'build' && preselectedPlan('directory_profile') === 'build' && preselectedPlan(null) === 'build', 'BUILD is the plan opened first, whatever the site (final pass, 2026-10-07)');
   const o = buildCallScript(input());
-  ok(o.plans.preselected === 'optimise' && o.plans.routes.map((r) => r.route).join() === 'optimise,build', 'existing usable website → Optimise selected, Build available to switch');
+  ok(o.plans.preselected === 'build' && o.plans.routes.map((r) => r.route).join() === 'build,optimise', 'existing usable website → Build selected first, Optimise available to switch');
   const all = spokenScriptText(o);
   ok(!/payments stop|one final month|nothing more to pay|then they stop/i.test(all), 'none of the unapproved v4 AGREEMENT phrases (the sales words say Optimise ends; the contract wording is a separate, unapproved change)');
   /* 2026-10-07 (Paul): Optimise ENDS after its 6th payment; Build's £29.99 only if they want hosting to continue. */

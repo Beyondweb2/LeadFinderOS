@@ -39,6 +39,17 @@
       contract (or nobody is sure) → Optimise is the offer; Build is not offered to a salesperson, and a Build
       on those answers is a "Paul review required" stop Paul can release (never a hard ban). Contract ended
       → either plan. Never knock the agency.
+   🔴 FINAL PASS (Paul, 2026-10-07, docs/pre-sales-certification/sales-to-payment-final-pass.md) — SUPERSEDES the
+      "plan first" order and the agency-contract rule above:
+      · THE ORDER: authority → who looks after the site → (agency / freelancer only) the contract → who controls the
+        domain → (an existing site only) the right to reuse its design and content → THE PLAN, LAST (→ Optimise adds
+        only "can we get in?"). closeFlow is the one list; missingQuestions is "closeFlow minus what is answered".
+      · BUILD IS THE DEFAULT. Only an agency / developer the client is STILL TIED INTO moves the recommendation to
+        Optimise (agencyContractBlocksBuild). "Not sure" keeps Build and warns: "Confirm their agency contract before
+        finalising Build." A website, a domain held elsewhere, or no right to reuse the design never blocks Build.
+      · KEEPING THEIR DOMAIN IS NOT KEEPING THEIR WEBSITE. The domain answer is a note for Paul, never a plan.
+      · The client sees the same facts back on their own sign-up page and may correct them (clientConfirm.ts,
+        client_confirmed / effectiveAnswers) — never the plan, price or seller.
    Pure, no imports beyond the offer constants: read by fn quick-close, the SPA and the tests.
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 import {
@@ -50,7 +61,9 @@ import { afterTermClientWords, afterTermRepLine } from './planTerms.ts';
 export type QcDecisionMaker = 'yes' | 'no';
 /** 'agency' (v2): an agency / provider controls it — a handoff, not a refusal. */
 export type QcDomain = 'yes' | 'agency' | 'no' | 'not_sure' | 'no_domain';
-export type QcManager = 'owner' | 'employee' | 'agency' | 'third_party' | 'no_website' | 'not_sure';
+/** 'freelancer' (final pass, 2026-10-07): an individual developer, asked alongside an agency. 'employee' and
+ *  'third_party' are LEGACY stored answers — still valid, no longer offered (QcOption.legacy). */
+export type QcManager = 'owner' | 'employee' | 'agency' | 'freelancer' | 'third_party' | 'no_website' | 'not_sure';
 export type QcAccess = 'yes' | 'no' | 'not_sure' | 'not_applicable';
 /** Legacy (asked before v2 only): authority over a third-party-run site. Still read on old rows. */
 export type QcAuthority = 'yes' | 'no' | 'not_sure' | 'not_applicable';
@@ -127,18 +140,23 @@ export function domainPending(a: QuickCloseAnswers): boolean {
   return a.domain === 'agency' || a.domain === 'not_sure' || a.domain === 'no';
 }
 
-export const QUICK_CLOSE_QUESTIONS: readonly { key: QcKey; text: string; detail?: readonly string[]; options: readonly { value: string; label: string }[] }[] = [
-  /* STEP 1 — the offer (2026-10-07: always first; the recommendation comes from offerFit). */
-  { key: 'route', text: 'Which plan are they going with?', options: [{ value: 'optimise', label: 'Findable Optimise — improve their current site' }, { value: 'build', label: 'Findable Build — a new website' }] },
+/** `legacy` = a stored answer that is still valid and still labelled, but no longer offered as a choice. */
+export interface QcOption { value: string; label: string; legacy?: boolean }
+export const QUICK_CLOSE_QUESTIONS: readonly { key: QcKey; text: string; detail?: readonly string[]; options: readonly QcOption[] }[] = [
+  /* FINAL PASS (2026-10-07, docs/pre-sales-certification/sales-to-payment-final-pass.md): the close asks the
+     situation first (who looks after the site, the contract, the domain, the right to reuse the design) and
+     the PLAN LAST, Build first — Build is the normal recommendation (offerFit). Answers the Call screen
+     already saved are never asked again (missingQuestions). */
+  { key: 'route', text: 'Which plan are they going with?', options: [{ value: 'build', label: 'Findable Build — a new website built and optimised for AI visibility' }, { value: 'optimise', label: 'Findable Optimise — improve their current website' }] },
   { key: 'decision_maker', text: 'Are they authorised to make this decision for the business?', options: [{ value: 'yes', label: 'Yes' }, { value: 'no', label: 'No' }] },
   { key: 'access', text: 'Can Findable get access to their current website (its CMS / admin)?', options: [{ value: 'yes', label: 'Yes' }, { value: 'no', label: 'No' }, { value: 'not_sure', label: 'Not sure' }, { value: 'not_applicable', label: 'Not applicable' }] },
-  { key: 'manager', text: 'Who manages the website day to day?', options: [{ value: 'owner', label: 'Business / owner' }, { value: 'employee', label: 'Employee' }, { value: 'agency', label: 'External agency' }, { value: 'third_party', label: 'Other third party' }, { value: 'no_website', label: 'No website' }, { value: 'not_sure', label: 'Not sure' }] },
-  { key: 'agency_contract', text: 'Are they still in a contract with the agency that runs their website?', options: [{ value: 'in_contract', label: 'Yes — still in contract' }, { value: 'free', label: 'No — it has ended / free to move' }, { value: 'not_sure', label: 'Not sure' }] },
+  { key: 'manager', text: 'Who currently looks after their website?', options: [{ value: 'owner', label: 'They manage it themselves' }, { value: 'freelancer', label: 'Freelancer / individual developer' }, { value: 'agency', label: 'Agency' }, { value: 'no_website', label: 'No website' }, { value: 'not_sure', label: 'Not sure' }, { value: 'employee', label: 'Employee', legacy: true }, { value: 'third_party', label: 'Other third party', legacy: true }] },
+  { key: 'agency_contract', text: 'Are they still tied into a contract with them?', options: [{ value: 'in_contract', label: 'Yes — still in contract' }, { value: 'free', label: 'No — free to move' }, { value: 'not_sure', label: 'Not sure' }] },
   /* Legacy / Details tab only since 2026-10-07: never asked by the close. */
   { key: 'approach', text: 'What do they want for their website?', options: (Object.keys(APPROACH_LABEL) as QcApproach[]).map((k) => ({ value: k, label: APPROACH_LABEL[k] })) },
-  { key: 'rights', text: 'Do they own, or have the right to reuse, the content, branding and photos on their current site?', options: [{ value: 'yes', label: 'Yes' }, { value: 'no', label: 'No' }, { value: 'not_sure', label: 'Not sure' }] },
+  { key: 'rights', text: 'Do they own, or have permission to reuse, the design and content from their current website?', options: [{ value: 'yes', label: 'Yes' }, { value: 'no', label: 'No' }, { value: 'not_sure', label: 'Not sure' }] },
   { key: 'design_owner', text: "Who owns the current site's design and code?", options: [{ value: 'business', label: 'The business' }, { value: 'agency', label: 'An agency, platform or template provider' }, { value: 'not_sure', label: 'Not sure' }] },
-  { key: 'domain', text: 'Who controls their domain name?', options: [{ value: 'yes', label: 'The business controls it' }, { value: 'agency', label: 'An agency / provider controls it' }, { value: 'not_sure', label: 'Not sure' }, { value: 'no', label: 'They do not control it' }, { value: 'no_domain', label: 'No domain yet' }] },
+  { key: 'domain', text: 'Who has control of their web address (domain)?', detail: ['This is separate from the website itself: they can keep their web address and still get a new Build site.'], options: [{ value: 'yes', label: 'They do' }, { value: 'agency', label: 'Agency / developer' }, { value: 'not_sure', label: 'Not sure' }, { value: 'no_domain', label: 'No domain yet' }, { value: 'no', label: 'They do not control it', legacy: true }] },
   /* Legacy: never asked since v2, still a valid stored answer on rows saved before. */
   { key: 'authority', text: 'If an agency or third party manages the site, do you have the authority to replace, move or materially change the website?', options: [{ value: 'yes', label: 'Yes' }, { value: 'no', label: 'No' }, { value: 'not_sure', label: 'Not sure' }, { value: 'not_applicable', label: 'Not applicable' }] },
   /* Asked ONLY on Build. The three consents the new site cannot go ahead without, read out as written. */
@@ -163,10 +181,23 @@ export function routeTermsLines(route: ServiceRoute): string[] {
 
 /* ══ THE OFFER THAT FITS (2026-10-07) — the ONE rule for the agency contract ═════════════════════════════
    Read by the Call screen's Offer, Quick Close step 1 and the gate's review backstop. */
-export const thirdPartyManaged = (a: QuickCloseAnswers): boolean => a.manager === 'agency' || a.manager === 'third_party';
-/** An agency / third party runs the site and they are NOT confirmed free of the contract — in contract, not
- *  sure, or not asked yet. ⛔ Positive match on 'free': anything else counts as still tied in. */
-export const agencyContractBlocksBuild = (a: QuickCloseAnswers): boolean => thirdPartyManaged(a) && a.agency_contract !== 'free';
+/** The managers that mean someone OUTSIDE the business runs the site (the contract question applies). */
+export const THIRD_PARTY_MANAGERS: readonly string[] = ['agency', 'freelancer', 'third_party'];
+export const thirdPartyManaged = (a: QuickCloseAnswers): boolean => !!a.manager && THIRD_PARTY_MANAGERS.includes(a.manager);
+/** 🔴 FINAL PASS (Paul, 2026-10-07): BUILD IS THE DEFAULT. The ONLY thing that moves the recommendation to
+ *  Optimise is a genuine contractual blocker: an agency / developer runs the site AND they are still tied
+ *  into the contract. ⛔ Positive match on 'in_contract' — "not sure" or "not asked" is NOT a blocker (it is a
+ *  warning: confirm the contract before finalising Build). A website, a domain held elsewhere, or no right to
+ *  reuse the current design never blocks Build. */
+export const agencyContractBlocksBuild = (a: QuickCloseAnswers): boolean => thirdPartyManaged(a) && a.agency_contract === 'in_contract';
+/** A third party runs the site and nobody has confirmed the contract is over (not sure, or not asked yet). */
+export const agencyContractUnconfirmed = (a: QuickCloseAnswers): boolean => thirdPartyManaged(a) && a.agency_contract !== 'in_contract' && a.agency_contract !== 'free';
+export const CONFIRM_CONTRACT_WARNING = 'Confirm their agency contract before finalising Build.';
+/** The rep's lines (never shown to the client). ⛔ No promise of an identical clone when rights are unclear. */
+export const BUILD_REASON_LINE = 'Build is usually the best route because it gives us a clean technical base to work from.';
+export const DOMAIN_NOT_WEBSITE_LINE = 'Keeping their domain is not the same as keeping their website — they can keep their web address and still get a new Build site.';
+export const REUSE_YES_LINE = 'We can keep the new site very close to the look they already like if they want.';
+export const REUSE_NO_LINE = "We'll build an original site rather than copy their current one.";
 export interface OfferFit {
   /** The plan to put first (null = either fits equally). */
   recommended: ServiceRoute | null;
@@ -174,21 +205,32 @@ export interface OfferFit {
   offered: Record<ServiceRoute, boolean>;
   /** One line for the rep explaining the recommendation (never shown to the client). */
   reason: string | null;
+  /** A caution to show beside the recommendation (the contract is unconfirmed). Null when there is none. */
+  warning: string | null;
+  /** Short helper lines for the rep: the domain is not the website, what the reuse answer means. */
+  notes: string[];
 }
 export function offerFit(a: QuickCloseAnswers, hasWebsite: boolean): OfferFit {
   if (!hasWebsite || a.manager === 'no_website') {
-    return { recommended: 'build', offered: { build: true, optimise: false }, reason: 'No website of their own — Optimise needs one to work on, so the offer is Build.' };
+    return { recommended: 'build', offered: { build: true, optimise: false }, reason: 'No website of their own — Optimise needs one to work on, so the offer is Build.', warning: null, notes: [] };
   }
   if (agencyContractBlocksBuild(a)) {
     return {
       recommended: 'optimise', offered: { build: false, optimise: true },
-      reason: a.agency_contract === 'in_contract'
-        ? "They're still in contract with the agency that runs their site — offer Optimise, so they're not paying for two websites."
-        : "An agency runs their site and the contract isn't confirmed as ended — offer Optimise unless they're free to move.",
+      reason: "They're still tied into a contract with the people who run their site — offer Optimise, so they're not paying for two websites. Build can follow once the contract ends.",
+      warning: null, notes: [DOMAIN_NOT_WEBSITE_LINE],
     };
   }
-  if (thirdPartyManaged(a)) return { recommended: null, offered: { build: true, optimise: true }, reason: 'Their agency contract has ended — either plan works.' };
-  return { recommended: 'optimise', offered: { build: true, optimise: true }, reason: 'They keep their own website — Optimise, or Build if they want a new one.' };
+  const notes: string[] = [];
+  if (a.rights === 'yes') notes.push(REUSE_YES_LINE);
+  else if (a.rights === 'no' || a.rights === 'not_sure') notes.push(REUSE_NO_LINE);
+  notes.push(DOMAIN_NOT_WEBSITE_LINE);
+  return {
+    recommended: 'build', offered: { build: true, optimise: true },
+    reason: thirdPartyManaged(a) && a.agency_contract === 'free' ? `Their contract has ended, so nothing stands in the way. ${BUILD_REASON_LINE}` : BUILD_REASON_LINE,
+    warning: agencyContractUnconfirmed(a) ? CONFIRM_CONTRACT_WARNING : null,
+    notes,
+  };
 }
 
 /** The answers a plan choice saves (step 1). The plan is stated explicitly; a legacy approach that would
@@ -336,27 +378,29 @@ export function withRoute(a: QuickCloseAnswers): QuickCloseAnswers {
  *  design owner, domain, Build consents) stay stored and readable, and are no longer required. */
 export function missingQuestions(raw: QuickCloseAnswers): QcKey[] {
   const a = withRoute(raw);
-  const miss: QcKey[] = [];
-  if (!a.route) miss.push('route');
-  if (!a.decision_maker) miss.push('decision_maker');
-  for (const k of routeQuestions(a)) if (!a[k] || (a[k] as string) === 'not_applicable') miss.push(k);
-  return miss;
+  return closeFlow(a).filter((k) => !a[k] || (a[k] as string) === 'not_applicable');
 }
 
-/** Step 2's questions for this plan, in order. ⛔ Build never asks for current-site access, and never the
- *  domain (the agreement and the onboarding form cover it). Optimise: can we get in, and who runs it.
- *  Build with an agency running the site: is the contract still on (the agency-contract rule needs it). */
+/** What only the CHOSEN plan adds after the plan question. ⛔ Build never asks for current-site access.
+ *  Optimise works on their site, so it asks whether Findable can get in. */
 export function routeQuestions(raw: QuickCloseAnswers): QcKey[] {
-  const a = withRoute(raw);
-  if (a.route === 'optimise') return ['access', 'manager'];
-  if (a.route === 'build' && thirdPartyManaged(a)) return ['agency_contract'];
-  return [];
+  return withRoute(raw).route === 'optimise' ? ['access'] : [];
 }
 
-/** The questions of this close, in order (the progress count reads this): the offer, authority, the plan's own. */
+/** 🔴 THE CLOSE, IN ORDER (final pass, 2026-10-07): authority → who looks after the site → (only if an agency or
+ *  freelancer does) the contract → domain control → (only if they have a site) the right to reuse its design and
+ *  content → THE PLAN, LAST → (Optimise only) access. 4–5 questions, fewer when the Call screen already saved
+ *  the answers (missingQuestions). No registrar, DNS / CMS / hosting logins, logos, photos or contract dates:
+ *  those belong to the paid client's onboarding form. */
 export function closeFlow(raw: QuickCloseAnswers): QcKey[] {
   const a = withRoute(raw);
-  return ['route', 'decision_maker', ...(a.route ? routeQuestions(a) : [])];
+  const flow: QcKey[] = ['decision_maker', 'manager'];
+  if (thirdPartyManaged(a)) flow.push('agency_contract');
+  flow.push('domain');
+  if (a.manager !== 'no_website') flow.push('rights');
+  flow.push('route');
+  flow.push(...routeQuestions(a));
+  return flow;
 }
 
 /** The route an answer WOULD give (for the "this changes the payments" confirmation before saving it). */
@@ -377,7 +421,7 @@ export function routeSwitchText(from: ServiceRoute, to: ServiceRoute, hasLink: b
  *  the legacy authority answers still stop an Optimise on a site an agency runs. */
 export type QcReviewReason = 'third_party_no_authority' | 'third_party_authority_unsure' | 'no_site_access' | 'optimise_access_unsure' | 'agency_contract_build';
 export const QC_REVIEW_TEXT: Record<QcReviewReason, string> = {
-  agency_contract_build: 'Build chosen, but an agency runs their website and they are still in contract with it (or not sure) — a new website now could mean paying two providers. Optimise is the normal route here',
+  agency_contract_build: 'Build chosen, but an agency / developer runs their website and they are still tied into a contract with them — a new website now could mean paying two providers. Optimise is the normal route here',
   third_party_no_authority: 'An agency / third party runs the site and they do not have authority to let Findable change it',
   third_party_authority_unsure: 'An agency / third party runs the site and authority to let Findable change it is unclear',
   no_site_access: 'Optimise works on their current website, and they could not give Findable access to it',
@@ -444,7 +488,9 @@ export function quickCloseGate(raw: QuickCloseAnswers): QuickCloseGate {
   if (a.route === 'build') {
     /* ⛔ THE AGENCY-CONTRACT RULE's backstop (offerFit): Build on a site an agency runs while they are still
        tied in stops for Paul — he can release it; a salesperson is never shown Build for these answers. */
-    if (agencyContractBlocksBuild(a) && a.agency_contract) review.push('agency_contract_build');
+    if (agencyContractBlocksBuild(a)) review.push('agency_contract_build');
+    /* A contract nobody has confirmed is over is a NOTE for Paul, never a stop (offerFit's warning). */
+    if (agencyContractUnconfirmed(a)) notes.push(CONFIRM_CONTRACT_WARNING);
     if (domainPending(a)) flags.push('domain_handoff');
     if (a.approach === 'recreation' && (a.rights !== 'yes' || a.design_owner !== 'business')) flags.push('exact_copy_rights');
     if (a.approach === 'refresh' && a.rights && a.rights !== 'yes') notes.push('Reuse only content, branding and photos the business owns — replace anything else');
@@ -463,7 +509,7 @@ export function onboardingColumnsFor(raw: QuickCloseAnswers): Record<string, unk
   if (a.domain === 'agency') { out.domain_status = 'existing'; out.domain_owned = 'not_sure'; out.domain_third_party = 'yes'; }
   if (a.domain === 'no_domain') { out.domain_status = 'new'; out.domain_owned = null; }
   if (a.rights === 'yes' || a.rights === 'no' || a.rights === 'not_sure') out.site_rights = a.rights;
-  if (a.manager === 'agency' || a.manager === 'third_party') out.website_manager = 'web_company';
+  if (thirdPartyManaged(a)) out.website_manager = 'web_company';
   else if (a.manager === 'owner' || a.manager === 'employee') out.website_manager = a.access === 'yes' ? 'direct_access' : 'owner_only';
   if (a.manager === 'no_website') out.website_platform = 'no_website';
   if (a.authority === 'yes') out.authority_confirmed = true;
@@ -480,6 +526,24 @@ export function onboardingColumnsFor(raw: QuickCloseAnswers): Record<string, unk
     if (a.authority !== 'no' && a.authority !== 'not_sure' && !domainPending(a)) out.authority_confirmed = true;
   }
   return out;
+}
+
+/** The four situation facts the client may confirm or correct before paying. ⛔ Never the plan (route / approach),
+ *  the authority answer, the consents or anything that sets money — those stay the salesperson's record. */
+export const CLIENT_CONFIRMABLE_KEYS = ['manager', 'agency_contract', 'domain', 'rights'] as const;
+export type ClientConfirmKey = typeof CLIENT_CONFIRMABLE_KEYS[number];
+export interface ClientConfirmed { at: string; answers: QuickCloseAnswers; changed: QcKey[] }
+
+/** The answers the rules judge: the salesperson's, with the client's own confirmation laid over the four
+ *  situation facts. ⛔ The plan can never come from the client: only CLIENT_CONFIRMABLE_KEYS are read. */
+export function effectiveAnswers(qc: QuickCloseRecord | null | undefined): QuickCloseAnswers {
+  const base = cleanAnswers(qc?.answers);
+  const c = qc?.client_confirmed?.answers;
+  if (!c) return base;
+  const over = pickAnswers(c) as Record<string, string | undefined>;
+  const merged: Record<string, unknown> = { ...base };
+  for (const k of CLIENT_CONFIRMABLE_KEYS) if (over[k] !== undefined) merged[k] = over[k];
+  return cleanAnswers(merged);
 }
 
 export type QuickCloseState = 'not_started' | 'in_progress' | 'blocked' | 'consents_needed' | 'needs_review' | 'ready' | 'link_generated' | 'link_expired' | 'paid';
@@ -500,6 +564,10 @@ export interface QuickCloseRecord {
   link_shared?: QcLinkShare[] | null;
   /** What the CALL screen heard (2026-10-07): jobs, areas, agency spend — cleanCallNotes. */
   call?: QcCallNotes | null;
+  /** 🔴 FINAL PASS (2026-10-07): what the CLIENT confirmed or corrected on their own sign-up page before payment
+   *  (the four situation facts only — never the plan, the price or the seller). Written by fn findable-onboarding
+   *  (action sales_confirm) through salesSignup.planClientConfirmation; read through effectiveAnswers. */
+  client_confirmed?: ClientConfirmed | null;
   /** Optimistic-concurrency counter: every write to quick_close is conditional on it (fn quick-close). */
   rev?: number | null;
 }
@@ -574,8 +642,19 @@ export function linkUsable(qc: QuickCloseRecord | null | undefined, nowMs: numbe
 export function quickCloseState(rowStatus: string | null | undefined, qc: QuickCloseRecord | null | undefined, nowMs: number = Date.now()): QuickCloseState {
   if (rowStatus === 'paid') return 'paid';
   if (!qc || !qc.answers || Object.keys(cleanAnswers(qc.answers)).length === 0) return 'not_started';
+  const eff = effectiveAnswers(qc);
+  /* ⛔ A CLIENT'S OWN CORRECTION IS JUDGED EVEN WHILE THE LINK STANDS (final pass, 2026-10-07): if what they
+     confirmed makes the sale unsafe (Build while still tied into an agency contract, a decision-maker that is
+     not them, an answer now missing), the sign-up holds for Paul — the link they already hold does not
+     override it. Without a client confirmation the original order below is unchanged. */
+  if (qc.client_confirmed) {
+    const gc = quickCloseGate(eff);
+    if (gc.blocked) return 'blocked';
+    if (!gc.complete) return 'in_progress';
+    if (gc.review.length && !qc.review_approved_at) return 'needs_review';
+  }
   if (linkUsable(qc, nowMs)) return 'link_generated';
-  const g = quickCloseGate(cleanAnswers(qc.answers));
+  const g = quickCloseGate(eff);
   if (g.blocked) return 'blocked';
   if (!g.complete) return 'in_progress';
   /* ⛔ NOT RELEASABLE: Paul's review release does not stand in for the client's own Build consents. */

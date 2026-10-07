@@ -322,18 +322,25 @@ export function QuickClosePanel({ leadId, active = true, framed = false }: { lea
             <section aria-live="polite">
               <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Question {Math.min(answeredCount + 1, shownQs.length)} of {shownQs.length}</p>
               <p className="mt-1 text-lg font-semibold leading-snug">{currentQ.text}</p>
+              {currentQ.detail && current !== 'build_consents' && <p className="mt-1 text-sm text-muted-foreground" data-testid="qc-question-detail">{currentQ.detail.join(' ')}</p>}
               {current === 'build_consents' && (
                 <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-muted-foreground" data-testid="qc-build-consents">
                   {(v.consents?.lines ?? currentQ.detail ?? []).map((d) => <li key={d}>{d}</li>)}
                 </ul>
               )}
-              {/* STEP 1 — the offer, with what the call's answers recommend (offerFit: the agency-contract rule). */}
+              {/* THE PLAN, LAST — what the answers so far recommend (offerFit: Build unless a contract blocks it). */}
               {current === 'route' && v.offer?.reason && (
-                <p className={cn('mt-2 rounded-xl px-3 py-2 text-xs leading-snug ring-1 ring-inset', v.offer.offered.build ? 'bg-muted/40 text-muted-foreground ring-border' : cn(TONE.amber.tint, 'ring-amber-500/30'))} data-testid="qc-offer-fit">{v.offer.reason}</p>
+                <div className="mt-2 space-y-1.5" data-testid="qc-offer-fit-block">
+                  <p className={cn('rounded-xl px-3 py-2 text-xs leading-snug ring-1 ring-inset', v.offer.offered.build ? 'bg-muted/40 text-muted-foreground ring-border' : cn(TONE.amber.tint, 'ring-amber-500/30'))} data-testid="qc-offer-fit">{v.offer.reason}</p>
+                  {v.offer.warning && <p className={cn('flex items-start gap-1.5 rounded-xl px-3 py-2 text-xs font-semibold leading-snug ring-1 ring-inset', TONE.amber.tint, 'ring-amber-500/30')} data-testid="qc-offer-warning"><AlertTriangle className="mt-px h-3.5 w-3.5 shrink-0" />{v.offer.warning}</p>}
+                  {(v.offer.notes?.length ?? 0) > 0 && <ul className="space-y-0.5 px-1 text-xs text-muted-foreground" data-testid="qc-offer-notes">{v.offer.notes.map((n) => <li key={n}>• {n}</li>)}</ul>}
+                </div>
               )}
-              <div className={cn('mt-3 grid gap-2', current === 'route' || current === 'build_consents' || current === 'approach' || current === 'domain' || current === 'design_owner' || current === 'agency_contract' ? 'grid-cols-1' : 'grid-cols-2')}>
+              <div className={cn('mt-3 grid gap-2', current === 'route' || current === 'build_consents' || current === 'approach' || current === 'domain' || current === 'design_owner' || current === 'agency_contract' || current === 'manager' ? 'grid-cols-1' : 'grid-cols-2')}>
                 {currentQ.options
-                  .filter((o) => !(current === 'authority' && o.value === 'not_applicable' && (answers.manager === 'agency' || answers.manager === 'third_party')))
+                  /* A LEGACY answer stays readable but is never offered as a new choice (QcOption.legacy). */
+                  .filter((o) => !o.legacy || answers[current!] === o.value)
+                  .filter((o) => !(current === 'authority' && o.value === 'not_applicable' && (answers.manager === 'agency' || answers.manager === 'freelancer' || answers.manager === 'third_party')))
                   .map((o) => {
                     const noSite = current === 'route' && (!routeAvailable(answers, o.value as ServiceRoute) || (o.value === 'optimise' && v.has_website === false));
                     /* ⛔ The agency-contract rule: a salesperson is not offered Build while they are tied into their agency.
@@ -348,7 +355,7 @@ export function QuickClosePanel({ leadId, active = true, framed = false }: { lea
                         className={cn('flex min-h-[56px] flex-col items-center justify-center rounded-xl border px-3 py-3 text-center text-base font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-50',
                           answers[current!] === o.value ? PICKED : recommended ? 'border-blue-500/50 bg-card hover:bg-muted/60' : 'border-border/70 bg-card hover:border-blue-500/40 hover:bg-muted/60')}>
                         <span className="flex flex-wrap items-center justify-center gap-1.5">{o.label}{recommended && <span className="rounded-full bg-yellow-400/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-yellow-600 ring-1 ring-inset ring-yellow-500/40 dark:text-yellow-300">Recommended</span>}</span>
-                        {current === 'route' && <span className="mt-0.5 text-xs font-normal text-muted-foreground">{noSite ? 'Not possible — they have no website' : notOffered ? (role === 'admin' ? 'Still in agency contract — needs your release' : 'Not offered — still in their agency contract') : `${SERVICE_ROUTE_NAME[o.value as ServiceRoute]} · ${routePaymentsShort(o.value as ServiceRoute)}`}</span>}
+                        {current === 'route' && <span className="mt-0.5 text-xs font-normal text-muted-foreground">{noSite ? 'Not possible — they have no website' : notOffered ? (role === 'admin' ? 'Still tied into their contract — needs your release' : 'Not offered — still tied into their contract') : `${SERVICE_ROUTE_NAME[o.value as ServiceRoute]} · ${routePaymentsShort(o.value as ServiceRoute)}`}</span>}
                         {current === 'approach' && <span className="mt-0.5 text-xs font-normal text-muted-foreground">{off ? 'Not possible — no website on file' : planOf ? `${SERVICE_ROUTE_NAME[planOf]} · ${routePaymentsShort(planOf)}` : 'Pick the plan next'}</span>}
                       </button>
                     );

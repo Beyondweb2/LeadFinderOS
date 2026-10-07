@@ -223,6 +223,15 @@ Deno.serve(async (req) => {
        never carried a build flag, so this rule never reached it; recording Build on it must not turn
        that into a refusal of every Quick Close build. The self-service path is unchanged. */
     const quickCloseCleared = mayGenerateLink((ob as { status?: string }).status, ((ob as { quick_close?: unknown }).quick_close ?? null) as QuickCloseRecord | null);
+    /* 🔴 FINAL PASS (2026-10-07): A CLIENT'S OWN CORRECTION CAN HOLD THE SALE. When the client corrected one of
+       their set-up facts on their sign-up page (quick_close.client_confirmed) and the corrected answers no
+       longer pass Quick Close's gate (Build while still tied into an agency contract, a missing answer), no
+       payment link is released until Paul looks — the link they already hold does not override it. Rows with
+       no client correction are untouched. */
+    if (((ob as { quick_close?: { client_confirmed?: unknown } | null }).quick_close ?? null)?.client_confirmed && !quickCloseCleared) {
+      await recordRefusal("checkout_refused_client_correction_held", { lead_id: effectiveLeadId, onboarding_id: onboardingId });
+      return json({ ok: false, error: "held_for_review" }, 409);
+    }
     const domain = domainAuthority(domainInputFromRow(ob as DomainRow));
     if (domain.applies && !domain.ready && !quickCloseCleared) {
       await recordRefusal("checkout_refused_domain_authority", { lead_id: effectiveLeadId, reasons: domain.reasons });

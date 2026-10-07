@@ -71,6 +71,8 @@ const RENDERERS: Array<[string, string]> = [
   ["prospect preview card layout (prospect)", "src/lib/prospectPreview/evidenceCard.ts"],
   /* 2026-10-04: the Quick Close payment-link message and email (prospect) and the rep's spoken words. */
   ["Quick Close link message + email (prospect)", "src/lib/quickClose.ts"],
+  /* 2026-10-07 (final pass): "Here's what we have so far" — the four facts a client confirms on their own sign-up page. */
+  ["sign-up confirmation card (prospect)", "src/lib/clientConfirm.ts"],
   /* 2026-10-05 (v3): the Access Date confirmation email (clause 5.1) sent to a paying client. */
   ["Access Date email (paying client)", "supabase/functions/_shared/client-terms.ts"],
   /* 2026-10-07: the paid client's onboarding form (findable.live/details/<token>) and its words; the two link

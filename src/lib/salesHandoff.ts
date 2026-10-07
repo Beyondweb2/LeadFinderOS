@@ -149,7 +149,7 @@ export function handoffPrefill(i: HandoffPrefillInput): { fields: SalesHandoffFi
   else if (route === 'build' && noSite) f.work_type = 'new_site';
   // Build on an existing site: rebuild vs keep-close is the salesperson's call — never guessed.
   if (control === 'client_controls' || manager === 'owner' || manager === 'employee') f.site_situation = 'client';
-  else if (control === 'agency_controls' || manager === 'agency' || manager === 'third_party') f.site_situation = 'agency';
+  else if (control === 'agency_controls' || manager === 'agency' || manager === 'freelancer' || manager === 'third_party') f.site_situation = 'agency';
   else if (noSite) f.site_situation = 'no_website';
   else if (manager === 'not_sure') f.site_situation = 'unsure';
   const name = clip(i.contactName, 120);
