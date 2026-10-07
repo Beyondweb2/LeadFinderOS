@@ -11,7 +11,7 @@
 // A first payment after an end still earns when the seller closed the sale while engaged: a payment link
 // they generated (quick_close_events link_generated / link_reused). The admin never earns.
 import {
-  commissionForecast, commissionLines, commissionOn, earningsTotals, engagementEndedNow, COMMISSION_RECURRING_RATE, ENGAGEMENT_END_UNKNOWN,
+  commissionForecast, commissionLines, commissionOn, earningsTotals, engagementEndedNow, isSaleClosingEvent, COMMISSION_RECURRING_RATE, ENGAGEMENT_END_UNKNOWN,
   type CommissionForecast, type EngagementEvent, type SaleClosing, type CommissionLine, type ClientEarnings, type EarningsTotals, type LedgerRow, type PayoutRow, type ProjectionInput,
 } from "../../../src/lib/commission.ts";
 import { FINDABLE_MONTHLY_GBP, SERVICE_ROUTE_NAME, isServiceRoute, serviceRouteForTotal } from "../../../src/lib/findableOffer.ts";
@@ -122,10 +122,11 @@ export async function loadEarnings(service: Service, personId: string | null, to
   /* The proof a sale was closed: the payment links generated for each lead (server-written, server-timed). */
   const closings = new Map<string, SaleClosing[]>();
   for (let i = 0; i < leadIds.length; i += 150) {
-    const { data, error } = await service.from("quick_close_events").select("lead_id, actor_user_id, created_at")
-      .in("kind", ["link_generated", "link_reused"]).in("lead_id", leadIds.slice(i, i + 150)).limit(10000);
+    /* 'link_shared' joins them for a FULL SETUP send only (commission.isSaleClosingEvent) — the seller's own timed act. */
+    const { data, error } = await service.from("quick_close_events").select("lead_id, actor_user_id, created_at, kind, data")
+      .in("kind", ["link_generated", "link_reused", "link_shared"]).in("lead_id", leadIds.slice(i, i + 150)).limit(10000);
     if (error) throw new Error(error.message);
-    for (const e of (data ?? []) as { lead_id: string; actor_user_id: string | null; created_at: string }[]) {
+    for (const e of ((data ?? []) as { lead_id: string; actor_user_id: string | null; created_at: string; kind: string; data: { variant?: unknown } | null }[]).filter((x) => isSaleClosingEvent(x))) {
       const a = closings.get(e.lead_id) ?? []; a.push({ actorUserId: e.actor_user_id, at: e.created_at }); closings.set(e.lead_id, a);
     }
   }
