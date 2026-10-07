@@ -20,7 +20,7 @@ import { readFileSync } from "node:fs";
 import { FINDABLE_SETUP_PRICE_GBP, serviceRouteFromRow, totalPaymentsFor } from "../src/lib/findableOffer.ts";
 import { isReservedTestNumber, qaPaymentEventShapeRefusal } from "../src/lib/qaSafety.ts";
 import { CLIENT_AGREEMENT_VERSION } from "../src/lib/clientAgreement.ts";
-import { COMMERCIAL_TERMS_V3 } from "../src/lib/clientTimeline.ts";
+import { commercialTermsFor } from "../src/lib/clientTimeline.ts";
 
 const REF = "ruusxpkkmwtljxxulhbq";
 const args = process.argv.slice(2);
@@ -90,7 +90,7 @@ const [acc] = await sql<{ id: string; agreement_version: string }>(
   `select id, agreement_version from client_agreement_acceptances where lead_id = ${lit(leadId)} and onboarding_id = ${lit(onb.id)} order by accepted_at desc limit 1`);
 const v3 = acc && acc.agreement_version === CLIENT_AGREEMENT_VERSION ? acc : null;
 console.log(v3 ? `v3 signature ${v3.id} — the session carries the agreement-first markers` : "no v3 signature for this sign-up — the webhook will HOLD this payment");
-const tag = onb.id.replace(/-/g, "").slice(0, 16) + (v3 ? "_v3" : "");
+const tag = onb.id.replace(/-/g, "").slice(0, 16) + (v3 ? "_" + CLIENT_AGREEMENT_VERSION : "");
 const event = {
   id: `evt_qa_${tag}`, object: "event", type: "checkout.session.completed", livemode: false, created: Math.floor(Date.now() / 1000),
   data: { object: {
@@ -99,7 +99,7 @@ const event = {
     consent: { terms_of_service: "accepted" },
     customer_details: { email: "paul@move37.fun", name: "QA certification" },
     metadata: { onboarding_id: onb.id, lead_id: leadId, service_route: route, total_payments: String(totalPaymentsFor(route)),
-      ...(v3 ? { commercial_terms: COMMERCIAL_TERMS_V3, agreement_version: CLIENT_AGREEMENT_VERSION, agreement_acceptance_id: v3.id } : {}) },
+      ...(v3 ? { commercial_terms: commercialTermsFor(CLIENT_AGREEMENT_VERSION) ?? "", agreement_version: CLIENT_AGREEMENT_VERSION, agreement_acceptance_id: v3.id } : {}) },
   } },
 };
 const shape = qaPaymentEventShapeRefusal(event);
