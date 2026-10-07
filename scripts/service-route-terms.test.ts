@@ -96,8 +96,8 @@ ok(!/cancel_at_period_end|iterations|subscription_schedules/.test(sub), 'one mec
 console.log('── 3, 4. QUICK CLOSE: THE ROUTE IS REQUIRED AND WRITES THE SCHEDULE\'S INPUT ──');
 /* v2: 'Unsure — Findable to recommend' is the approach where the plan is picked explicitly — what these checks drive. */
 const base: QuickCloseAnswers = { decision_maker: 'yes', approach: 'unsure', domain: 'yes', manager: 'owner', access: 'yes' };
-ok(QUICK_CLOSE_QUESTIONS.some((q) => q.key === 'route' && q.options.map((o) => o.value).join() === 'optimise,build'), 'Quick Close asks the website route: optimise / build (2026-10-07: step 1)');
-ok(QUICK_CLOSE_QUESTIONS.find((q) => q.key === 'route')!.options.map((o) => o.label).join(' | ') === 'Findable Optimise — improve their current site | Findable Build — a new website', 'the two plans, named as the offer names them');
+ok(QUICK_CLOSE_QUESTIONS.some((q) => q.key === 'route' && q.options.map((o) => o.value).join() === 'build,optimise'), 'Quick Close asks the website route: build / optimise (Build first, 2026-10-07)');
+ok(QUICK_CLOSE_QUESTIONS.find((q) => q.key === 'route')!.options.map((o) => o.label).join(' | ') === 'Findable Build — a new website | Findable Optimise — improve their current site', 'the two plans, named as the offer names them (Build first)');
 ok(missingQuestions(base).includes('route') && !quickCloseGate(base).complete, 'no route → the close is not complete');
 ok(!mayGenerateLink('answers_saved', { answers: base }), 'no route → no payment link');
 for (const route of ['build', 'optimise'] as const) {

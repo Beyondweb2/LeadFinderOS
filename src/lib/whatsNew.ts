@@ -22,6 +22,20 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-07-build-recommended', date: '2026-10-07', title: 'Build is now the recommended plan; Optimise only when an agency contract blocks it', audience: 'all',
+    body: 'Owning or keeping a website no longer makes Optimise the recommendation. Findable Build is recommended unless they are still tied into an agency contract.',
+    report: {
+      added: [
+        'A line for you under the plan choice: "Build is usually the best route. Use Optimise if they need to keep their current website because they\'re still tied into an existing agency contract."',
+        'When an agency runs their site and the contract is not confirmed, Build stays recommended and you are told to confirm the contract before you close.',
+      ],
+      changed: [
+        'Quick Close and the Call screen put Findable Build first and mark it Recommended. Optimise is first and recommended only when an agency or other third party runs their site and the contract is confirmed still on.',
+        'Having a website, keeping the domain, or us being able to log in to it no longer points to Optimise.',
+      ],
+      removed: ['The old line "They keep their own website: Optimise, or Build if they want a new one."'],
+      effect: 'More closes start on Build, the plan we prefer. Nothing about the plans or prices changed, and Build is still held for Paul if the agency contract is still on.',
+    } },
   { id: '2026-10-07-call-number-window', date: '2026-10-07', title: 'Call shows you the number — call on WhatsApp or from your phone', audience: 'all',
     body: 'Call on Outreach opens the prospect with a small window showing their number. Call on WhatsApp, or copy it and ring from your phone. The script waits until the prospect check is done.',
     report: {

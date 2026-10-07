@@ -332,7 +332,9 @@ export function QuickClosePanel({ leadId, active = true, framed = false }: { lea
                 <p className={cn('mt-2 rounded-xl px-3 py-2 text-xs leading-snug ring-1 ring-inset', v.offer.offered.build ? 'bg-muted/40 text-muted-foreground ring-border' : cn(TONE.amber.tint, 'ring-amber-500/30'))} data-testid="qc-offer-fit">{v.offer.reason}</p>
               )}
               <div className={cn('mt-3 grid gap-2', current === 'route' || current === 'build_consents' || current === 'approach' || current === 'domain' || current === 'design_owner' || current === 'agency_contract' ? 'grid-cols-1' : 'grid-cols-2')}>
-                {currentQ.options
+                {/* The recommended plan goes first (Build normally; Optimise only on a confirmed agency contract). */}
+                {[...currentQ.options]
+                  .sort((x, y) => (current === 'route' && v.offer?.recommended ? Number(y.value === v.offer.recommended) - Number(x.value === v.offer.recommended) : 0))
                   .filter((o) => !(current === 'authority' && o.value === 'not_applicable' && (answers.manager === 'agency' || answers.manager === 'third_party')))
                   .map((o) => {
                     const noSite = current === 'route' && (!routeAvailable(answers, o.value as ServiceRoute) || (o.value === 'optimise' && v.has_website === false));

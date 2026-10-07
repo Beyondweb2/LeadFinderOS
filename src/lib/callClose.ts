@@ -88,7 +88,7 @@ export function routeOffer(route: ServiceRoute): CallRouteOffer {
 
 /** The routes for this lead's website, best fit first. */
 export function routesFor(source: SiteSource | null | undefined): { routes: ServiceRoute[]; note: string | null } {
-  if (source === 'own_site') return { routes: ['optimise', 'build'], note: null };
+  if (source === 'own_site') return { routes: ['build', 'optimise'], note: null };
   return {
     routes: ['build'],
     note: source === 'directory_profile' || source === 'social_profile'
