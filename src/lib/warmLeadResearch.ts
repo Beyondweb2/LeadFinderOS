@@ -32,6 +32,7 @@
 import { CRAWL_FRESH_MS, visibleText, detectClientRendered, usableCrawlSignals, type CrawlSignals } from './crawlCheck.ts';
 import { extractCanonical, metaRobotsDirectives, directiveHasNoindex, sameRegistrableDomain, usableSiteEvidence, selectableEvidence, type SiteEvidence } from './siteEvidence.ts';
 import { candidateFindings } from './siteFindings.ts';
+import { usableInsights, type InsightKind } from './salesInsights.ts';
 
 export const WARM_RESEARCH_VERSION = 1;
 /** Research younger than this, for the same website, is reused without touching the site. Same
@@ -602,7 +603,7 @@ export interface CrawlRowInput {
   /** 'full' = the operator's exhaustive crawl (full_evidence holds its summary). */
   mode?: string | null;
   full_evidence?: FullEvidenceInput | null;
-  result: { version?: number; status?: string; signals?: CrawlSignals; siteInfo?: { builtBy?: { credit?: string | null } | null; services?: string[]; towns?: string[]; openingHours?: string[] | null } | null; evidence?: SiteEvidence | null; evidenceVersion?: number } | null;
+  result: { version?: number; status?: string; signals?: CrawlSignals; siteInfo?: { builtBy?: { credit?: string | null } | null; services?: string[]; towns?: string[]; openingHours?: string[] | null } | null; evidence?: SiteEvidence | null; evidenceVersion?: number; insights?: unknown } | null;
 }
 
 /** Findings the crawl-check row already measured — reused, never re-measured. Stale rows (older
@@ -616,6 +617,19 @@ const CRAWL_KIND: Record<string, { kind: FindingKind; strength: ResearchFinding[
   unreadable_homepage: { kind: 'crawl_indexing', strength: 4, title: 'Homepage is nearly empty without JavaScript' },
   duplicate_pages: { kind: 'thin_or_duplicate', strength: 3, title: 'Many near-identical pages' },
   thin_pages: { kind: 'thin_or_duplicate', strength: 3, title: 'Pages with very little on them' },
+};
+
+/** The sales insights (salesInsights.ts) as research findings — same pages, same wording, so the voice note, the WhatsApp
+ *  reply and the call script say the same thing about a site. */
+const INSIGHT_AS_FINDING: Record<InsightKind, { kind: FindingKind; category: FindingCategory; strength: ResearchFinding['strength'] }> = {
+  no_service_pages: { kind: 'missing_core_service_pages', category: 'content', strength: 5 },
+  services_on_one_page: { kind: 'missing_core_service_pages', category: 'content', strength: 5 },
+  service_page_gaps: { kind: 'missing_core_service_pages', category: 'content', strength: 4 },
+  no_contact_details: { kind: 'weak_evidence', category: 'local_visibility', strength: 3 },
+  location_unclear: { kind: 'weak_evidence', category: 'local_visibility', strength: 3 },
+  name_unclear: { kind: 'weak_evidence', category: 'local_visibility', strength: 3 },
+  internal_linking: { kind: 'other', category: 'content', strength: 2 },
+  no_proof: { kind: 'weak_evidence', category: 'trust', strength: 2 },
 };
 
 export function crawlFindings(row: CrawlRowInput | null | undefined, nowMs: number): { findings: ResearchFinding[]; usedAt: string | null; credit: string | null } {
@@ -636,6 +650,14 @@ export function crawlFindings(row: CrawlRowInput | null | undefined, nowMs: numb
         ...(f.kind === 'crawler_blocked' && signals.searchBlocked.length ? { keyDetails: signals.searchBlocked } : {}),
         strength: meta.strength, source: 'crawl', verified: true });
     });
+  }
+  const ins = usableInsights(row.result.insights);
+  for (const f of ins?.findings ?? []) {
+    const meta = INSIGHT_AS_FINDING[f.kind];
+    if (!meta) continue;
+    out.push({ id: `insight:${f.id}`, kind: meta.kind, category: meta.category, title: f.title, detail: `${f.observed} ${f.why}`,
+      evidence: [...f.evidence.quotes, ...f.evidence.urls.map((u) => `page: ${u}`)], keyDetails: f.evidence.quotes.map((q) => q.replace(/^“|”.*$/g, '')).slice(0, 4),
+      pageUrl: f.evidence.urls[0] ?? null, strength: meta.strength, source: 'crawl', verified: true });
   }
   return { findings: out, usedAt: row.created_at, credit };
 }

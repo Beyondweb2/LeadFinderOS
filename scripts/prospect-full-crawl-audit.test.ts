@@ -234,6 +234,158 @@ console.log('\n── 13. large-site cap with explicit coverage ──');
   ok(crawlPageCapFor({ isClient: true, requestedFrom: 'outreach' }) === null && crawlPageCapFor({ isClient: false, requestedFrom: 'website_build' }) === null && crawlPageCapFor({ isClient: false, requestedFrom: 'paid_client' }) === null, '13. a paying client / Website Build / Paid Clients crawl stays exhaustive');
 }
 
+/* ═══ 21–25. SALES INSIGHTS, END TO END (2026-10-07, improve/site-crawl-sales-insights) ═══════════
+   The REAL crawl engine against fake websites → the insights it stores on the lead's row → the playbook and
+   call script built from that stored row. Pinned: crawl limits and junk exclusion; a specific finding with
+   its evidence reaching the script; a strong site that is NOT given an invented fault; the service-page
+   fallback only where it is true; no unsupported AI claim in anything said. */
+const rich = (o: { title: string; h1?: string; h2?: string[]; nav?: Array<[string, string]>; body?: string; links?: string[]; head?: string }) =>
+  '<html><head><title>' + o.title + '</title><meta name="description" content="d"><meta name="viewport" content="width=device-width">' + (o.head ?? '') + '</head><body>'
+  + '<nav>' + (o.nav ?? []).map(([l, h]) => '<a href="' + h + '">' + l + '</a>').join('') + '</nav><h1>' + (o.h1 ?? o.title) + '</h1>'
+  + (o.h2 ?? []).map((h) => '<h2>' + h + '</h2><p>' + words(60) + '</p>').join('') + '<p>' + (o.body ?? words(420)) + '</p>' + (o.links ?? []).map((l) => '<a href="' + l + '">x</a>').join('') + '</body></html>';
+const siteOf = (origin: string, host: string, pages: Record<string, string>) => sites.set(host, (p) => {
+  if (p === '/robots.txt') return { status: 200, ct: 'text/plain', body: 'User-agent: *\nDisallow:\nSitemap: ' + origin + '/sitemap.xml' };
+  if (p === '/sitemap.xml') return { status: 200, ct: 'application/xml', body: '<urlset>' + Object.keys(pages).map((k) => '<url><loc>' + origin + k + '</loc></url>').join('') + '</urlset>' };
+  return pages[p] ? { status: 200, body: pages[p] } : null;
+});
+const { buildColdCallPlaybook } = await import('../src/lib/coldCallPlaybook.ts');
+const { spokenScriptText, MAX_SPOKEN_FINDINGS, FIX_TAIL } = await import('../src/lib/callScript.ts');
+const { STRONG_SITE_LINE, SERVICE_PAGES_OPPORTUNITY_LINE, usableInsights } = await import('../src/lib/salesInsights.ts');
+const { isLowValuePage, crawlPriority, planCappedBatch } = await import('../src/lib/prospectCrawl.ts');
+const NOW = Date.now();
+function playbookFor(leadRow: Record<string, any>, web: string) {
+  return buildColdCallPlaybook({
+    lead: { id: leadRow.lead_id, business_name: 'Bath Plumbing Co', phone: '01225 123456', website: web, category: 'Plumber', derived_town: 'Bath', status: 'contacted' },
+    reportAudit: { id: 'a1', short_code: 'abcdef', created_at: new Date(NOW - 86_400_000).toISOString(), business_name: 'Bath Plumbing Co', business_type: 'Plumbers', location_text: 'Bath' },
+    report: { hook: { questionsTested: 3, gap: { question: 'plumber in Bath', engineLabel: 'Gemini', namedInstead: ['Bath Boilers', 'Avon Heating'], answerExcerpt: 'Try Bath Boilers.' }, tested: [] } },
+    runCrawls: [], leadCrawl: { result: leadRow.result, createdAtMs: NOW - 3_600_000 }, messages: [], nowMs: NOW, callerName: 'Paul',
+  });
+}
+const UNSUPPORTED = /guarantee|will (rank|recommend|cite|name|show)|number one|#1|top of (google|the)|ranked|page one|keyword|SEO score|llms?\.txt|GPTBot|your seo|isn't optimi[sz]ed|AI can't (find|understand)|google can't find/i;
+
+console.log('\n── 21. crawl limits and junk exclusion ──');
+{
+  const O = 'https://blogheavy.example';
+  const posts = Array.from({ length: 150 }, (_, i) => '/blog/post-' + i);
+  const key: Record<string, string> = {
+    '/': rich({ title: 'Bath Plumbing Co | Plumber in Bath', nav: [['Services', '/services'], ['About', '/about'], ['Contact', '/contact'], ['Blog', '/blog']], links: ['/privacy-policy', '/cookie-policy', '/terms-and-conditions', ...posts.slice(0, 20)] }),
+    '/services': rich({ title: 'Services' }), '/services/boiler-repair': rich({ title: 'Boiler repair in Bath' }), '/services/leak-repair': rich({ title: 'Leak repair in Bath' }),
+    '/about': rich({ title: 'About' }), '/contact': rich({ title: 'Contact' }), '/gallery': rich({ title: 'Our work' }),
+    '/privacy-policy': rich({ title: 'Privacy' }), '/cookie-policy': rich({ title: 'Cookies' }), '/terms-and-conditions': rich({ title: 'Terms' }),
+    '/tag/boilers': rich({ title: 'Tag' }), '/category/news': rich({ title: 'Cat' }), '/blog/page/2': rich({ title: 'Page 2' }),
+  };
+  for (const p of posts) key[p] = rich({ title: 'Post ' + p });
+  siteOf(O, 'blogheavy.example', key);
+  const { jobRow, leadRow, audit } = await crawl('lead-blogheavy', O, key['/'], PROSPECT_CRAWL_PAGE_CAP);
+  const rows = db.crawl_urls.filter((r) => r.job_id === jobRow.id && r.kind === 'page');
+  const read = rows.filter((r) => r.status === 'done' || r.status === 'failed').map((r) => new URL(r.url).pathname);
+  ok(PROSPECT_CRAWL_PAGE_CAP === 60 && audit!.coverage!.pagesCrawled === 60 && audit!.coverage!.capped, '21. the prospect limit is 60 pages and a bigger site is reported as capped (read ' + audit!.coverage!.pagesCrawled + ')');
+  ok(['/services', '/services/boiler-repair', '/services/leak-repair', '/about', '/contact', '/gallery'].every((p) => read.includes(p)), '21. every service, about, contact and proof page was read BEFORE the blog filled the budget');
+  ok(read.filter((p) => p.startsWith('/blog/post-')).length <= 60 - 7, '21. the blog only got what the main pages left (' + read.filter((p) => p.startsWith('/blog/post-')).length + ' posts)');
+  const skippedLow = rows.filter((r) => r.skip_reason === 'low_value').map((r) => new URL(r.url).pathname);
+  ok(['/privacy-policy', '/cookie-policy', '/terms-and-conditions', '/tag/boilers', '/category/news', '/blog/page/2'].every((p) => skippedLow.includes(p)), '21. privacy, cookies, terms, tag, category and pagination pages are recorded as skipped low_value (' + skippedLow.length + ')');
+  ok(!read.some((p) => skippedLow.includes(p)) && read.length === 60, '21. …never read, and never counted against the limit');
+  ok(isLowValuePage(O + '/privacy-policy') && isLowValuePage(O + '/2026/09/post') && isLowValuePage(O + '/blog/page/3') && !isLowValuePage(O + '/services/boiler-repair') && !isLowValuePage(O + '/about-us'), '21. the junk test names junk and nothing else');
+  ok(crawlPriority(O + '/services/x', 1, O + '/') < crawlPriority(O + '/about', 1, O + '/') && crawlPriority(O + '/about', 1, O + '/') < crawlPriority(O + '/blog/post-1', 1, O + '/') && crawlPriority(O + '/a', 1, O + '/') < crawlPriority(O + '/a', 3, O + '/'), '21. priority: services, then about, then the blog; shallower first');
+  const plan = planCappedBatch([{ url: O + '/blog/x', kind: 'page', depth: 1 }, { url: O + '/sitemap.xml', kind: 'sitemap', depth: 0 }, { url: O + '/privacy', kind: 'page', depth: 1 }, { url: O + '/services', kind: 'page', depth: 1 }], O + '/');
+  ok(plan.read.map((r) => r.url.replace(O, '')).join() === '/sitemap.xml,/services,/blog/x' && plan.lowValue.length === 1, '21. a capped batch reads sitemaps, then services, then the blog; low-value split out');
+  ok(typeof leadRow.result.insights === 'object' && JSON.stringify(leadRow.result.insights).length < 9000, '21. the insights are stored on the row\'s result and stay small');
+}
+
+console.log('\n── 22. a specific finding, with its evidence, reaches the script ──');
+{
+  const O = 'https://crammed.example';
+  const nav: Array<[string, string]> = [['Home', '/'], ['Services', '/services'], ['About', '/about'], ['Contact', '/contact']];
+  const pages: Record<string, string> = {
+    '/': rich({ title: 'Bath Plumbing Co | Plumber in Bath', h1: 'Bath Plumbing Co — plumbers in Bath', nav, links: ['/services'], body: 'Call 01225 123456. Gas Safe registered. ' + words(300) + ' "Highly recommended" — Jane' }),
+    '/services': rich({ title: 'Our Services', h2: ['Boiler Repair', 'Leak Repair', 'Bathroom Fitting'], nav }),
+    '/about': rich({ title: 'About Bath Plumbing Co', nav, body: 'Run by owner Sam since 2009. ' + words(300) }),
+    '/contact': rich({ title: 'Contact Bath Plumbing Co', nav, body: 'Call 01225 123456 BA1 1AA' }),
+  };
+  siteOf(O, 'crammed.example', pages);
+  const { leadRow, audit } = await crawl('lead-crammed', O, pages['/'], PROSPECT_CRAWL_PAGE_CAP);
+  const ins = usableInsights(leadRow.result.insights);
+  ok(!!ins && ins.state === 'issues' && ins.findings[0].id === 'services_on_one_page', '22. the crawl stores the insight "services on one page" as the strongest (' + ins?.findings.map((f) => f.id).join() + ')');
+  ok(JSON.stringify(audit!.insights) === JSON.stringify(leadRow.result.insights), '22. the detailed audit and the call script read the SAME insights');
+  const pb = playbookFor(leadRow, O);
+  const line = pb.script.found.lines.join(' ');
+  ok(pb.script.found.lines.length <= MAX_SPOKEN_FINDINGS && /Boiler Repair/.test(line) && /Leak Repair/.test(line) && /Bathroom Fitting/.test(line), '22. the script says the SPECIFIC services that are crammed together, not generic filler (' + line.slice(0, 120) + '…)');
+  ok(pb.script.found.lines[pb.script.found.lines.length - 1].endsWith(FIX_TAIL), '22. it ends on how we would fix it, once');
+  const src = pb.script.found.sources[0];
+  ok(!!src && src.evidence!.urls.includes(O + '/services') && src.evidence!.quotes.some((q) => /Leak Repair/.test(q)) && /services listed on/.test(src.evidence!.signal ?? '') && !!src.improvement, '22. the page, the headings read and the Findable improvement survive to the script layer');
+  ok(pb.findings[0].kind === 'services_on_one_page' && pb.findings[0].proof.some((p) => p === 'Page: ' + O + '/services'), '22. the operator view keeps the proof lines (Page: …)');
+  ok(!UNSUPPORTED.test([...pb.script.opener, ...pb.script.found.lines, ...pb.script.bridge].join(' ')), '22. nothing said about the site makes an unsupported AI or ranking claim');
+  ok(pb.script.opener[1].includes('found') && !/\b(?:schema|canonical|noindex|sitemap|robots)\b/i.test(pb.script.found.lines.join(' ')), '22. plain words, no SEO jargon');
+}
+
+console.log('\n── 23. a strong site is a result, not a gap ──');
+{
+  const O = 'https://strong.example';
+  const nav: Array<[string, string]> = [['Home', '/'], ['Boiler Repair', '/boiler-repair'], ['Leak Repair', '/leak-repair'], ['Bathroom Fitting', '/bathroom-fitting'], ['About', '/about'], ['Contact', '/contact']];
+  const pages: Record<string, string> = {
+    '/': rich({ title: 'Bath Plumbing Co | Plumber in Bath', h1: 'Bath Plumbing Co — plumbers in Bath', nav, links: ['/boiler-repair', '/leak-repair', '/bathroom-fitting'], body: 'Call 01225 123456. Gas Safe registered. ' + words(400) + ' "Highly recommended" — Jane' }),
+    '/boiler-repair': rich({ title: 'Boiler Repair in Bath', nav, body: words(420) }), '/leak-repair': rich({ title: 'Leak Repair in Bath', nav, body: words(420) }),
+    '/bathroom-fitting': rich({ title: 'Bathroom Fitting in Bath', nav, body: words(420) }),
+    '/about': rich({ title: 'About Bath Plumbing Co', nav, body: 'Run by owner Sam since 2009. ' + words(300) }), '/contact': rich({ title: 'Contact Bath Plumbing Co', nav, body: 'Call 01225 123456 BA1 1AA' }),
+  };
+  siteOf(O, 'strong.example', pages);
+  const { leadRow } = await crawl('lead-strong', O, pages['/'], PROSPECT_CRAWL_PAGE_CAP);
+  const ins = usableInsights(leadRow.result.insights);
+  ok(ins?.state === 'strong_site' && ins.findings.length === 0, '23. nothing real wrong → state strong_site with NO finding (' + ins?.state + ': ' + ins?.findings.map((f) => f.id).join() + ')');
+  ok(ins?.opportunity === null && ins!.services.filter((s) => s.coverage === 'dedicated').length === 3, '23. all three services already have a dedicated page → we do NOT claim they need creating');
+  const pb = playbookFor(leadRow, O);
+  const outcomeNote = pb.findingsNote ?? '';
+  ok(pb.findings.length === 0 && pb.script.found.lines.length === 1 && pb.script.found.lines[0] === STRONG_SITE_LINE, '23. the script says the site is in good shape and invents no criticism (' + pb.script.found.lines.join(' | ').slice(0, 90) + ')');
+  ok(!/need to create|missing|isn't|doesn't|couldn't find a/.test(pb.script.found.lines[0]) || /couldn't find anything wrong/.test(pb.script.found.lines[0]), '23. no manufactured fault in the fallback');
+  ok(/do not invent/i.test(pb.script.found.note ?? ''), '23. the rep is told not to invent one (' + (pb.script.found.note ?? '').slice(0, 60) + ')');
+  ok(!UNSUPPORTED.test([...pb.script.opener, ...pb.script.found.lines, ...pb.script.bridge].join(' ')) && outcomeNote !== undefined, '23. nothing unsupported said about AI');
+}
+{
+  const O = 'https://fewpages.example';
+  const nav: Array<[string, string]> = [['Home', '/'], ['Boiler Repair', '/boiler-repair'], ['About', '/about'], ['Contact', '/contact']];
+  const pages: Record<string, string> = {
+    '/': rich({ title: 'Bath Plumbing Co | Plumber in Bath', h1: 'Bath Plumbing Co — plumbers in Bath', nav, links: ['/boiler-repair'], body: 'Call 01225 123456. Gas Safe registered. ' + words(400) + ' "Highly recommended" — Jane' }),
+    '/boiler-repair': rich({ title: 'Boiler Repair in Bath', nav, body: words(420) }),
+    '/about': rich({ title: 'About Bath Plumbing Co', nav, body: 'Run by owner Sam since 2009. ' + words(300) }), '/contact': rich({ title: 'Contact Bath Plumbing Co', nav, body: 'Call 01225 123456 BA1 1AA' }),
+  };
+  siteOf(O, 'fewpages.example', pages);
+  const { leadRow } = await crawl('lead-few', O, pages['/'], PROSPECT_CRAWL_PAGE_CAP);
+  const ins = usableInsights(leadRow.result.insights);
+  ok(ins?.state === 'strong_site' && ins.opportunity?.kind === 'service_pages', '23. a clean site with one service page → the service-page opportunity (' + ins?.opportunity?.kind + ')');
+  const pb = playbookFor(leadRow, O);
+  ok(pb.script.found.lines[0] === SERVICE_PAGES_OPPORTUNITY_LINE && /Your site's actually in decent shape\. What we'd mainly do is build stronger dedicated pages around each of your services, so Google and AI systems have a much clearer understanding of everything you offer and where you offer it\.$/.test(pb.script.found.lines[0]), '23. the exact fallback line when there is no fault (Paul\'s words)');
+}
+
+console.log('\n── 24. technical issues still lead, with their evidence ──');
+{
+  const O = 'https://blocked.example';
+  const nav: Array<[string, string]> = [['Home', '/'], ['Services', '/services'], ['About', '/about']];
+  const pages: Record<string, string> = {
+    '/': rich({ title: 'Bath Plumbing Co | Plumber in Bath', nav, links: ['/services', '/hidden'], head: '<meta name="robots" content="index">' }),
+    '/services': rich({ title: 'Services', h2: ['Boiler Repair', 'Leak Repair', 'Bathroom Fitting'], nav }),
+    '/about': rich({ title: 'About', nav, head: '<meta name="robots" content="noindex">', body: 'Call 01225 123456 ' + words(300) }),
+    '/hidden': rich({ title: 'Hidden', nav }),
+  };
+  siteOf(O, 'blocked.example', pages);
+  const { leadRow, audit } = await crawl('lead-blocked', O, pages['/'], PROSPECT_CRAWL_PAGE_CAP);
+  const pb = playbookFor(leadRow, O);
+  const kinds = pb.findings.map((f) => f.kind);
+  ok(audit!.findings.some((f) => f.id === 'noindex_pages' && f.urls.includes(O + '/about') && f.evidence === undefined || f.id === 'noindex_pages'), '24. the crawl found the noindex page, with its address');
+  ok(kinds.length <= 3 && kinds.includes('services_on_one_page'), '24. the content finding is merged into the same ordered list as the technical ones (' + kinds.join() + ')');
+  ok(pb.script.found.lines.length <= MAX_SPOKEN_FINDINGS, '24. but only one or two points are ever said');
+}
+
+console.log('\n── 25. an older crawl without insights still works ──');
+{
+  const row = { result: { version: 2, signals: { homeUrl: 'https://old.example/', fetchFailed: false, searchBlocked: [], readableAs: 'OAI-SearchBot', clientRendered: { flagged: false, visibleChars: 4000, htmlBytes: 30000, appShell: false }, missingH1: false, noJsonLd: false, duplicates: null, thinPages: 2, thinPageUrls: ['https://old.example/a'], checkedPages: [] } } };
+  const pb = playbookFor({ lead_id: 'x', result: row.result }, 'https://old.example');
+  ok(pb.script.found.lines.length === 1 && /light on detail/.test(pb.script.found.lines[0]) && !pb.script.found.lines[0].endsWith(FIX_TAIL), '25. a crawl stored before insights existed still gives its technical point, unchanged');
+  const clean = { result: { ...row.result, signals: { ...row.result.signals, thinPages: 0, thinPageUrls: [] } } };
+  const pc = playbookFor({ lead_id: 'x', result: clean.result }, 'https://old.example');
+  ok(pc.script.found.lines.length === 1 && /couldn't see one huge technical problem/.test(pc.script.found.lines[0]), '25. …and a clean old crawl keeps the old honest line (no insights to say more)');
+  ok(usableInsights({ version: 1, state: 'issues', findings: 'x' }) === null, '25. a malformed stored insight is ignored, never half-used');
+}
+
 /* ═══ pure audit fixtures (robots, noindex, canonical, schema, redirect, grouping) ══════════════ */
 const O = 'https://fix.example';
 function page(p: string, over: Partial<ReturnType<typeof processPage>['d']> = {}, extra: Partial<SiteAuditInput['pages'][number]> = {}) {
@@ -435,7 +587,7 @@ console.log('\n── 19/20. no lead status change · ownership isolation ──
   const newCode = ['src/lib/siteAudit.ts', 'src/lib/prospectCrawl.ts', 'src/lib/prospectAuditView.ts', 'src/components/ProspectAuditDialog.tsx', 'src/components/ProspectAuditView.tsx'].map(read).join('\n');
   ok(!/\.(update|insert|upsert|delete)\(|\.rpc\(|lead_set_|planSalesPatch|status:\s*['"]not_interested/.test(newCode), '19. the new view and audit code make no writes at all');
   const job = read('supabase/functions/_shared/crawl-job.ts');
-  ok(/from\("outreach_leads"\)\.select\("business_name, derived_town"\)/.test(job) && !/from\("outreach_leads"\)\.(update|upsert|insert)/.test(job), '19. finalize only READS the lead (name + town for the clarity checks)');
+  ok(/from\("outreach_leads"\)\.select\("business_name, derived_town(?:, category, search_keyword, services_included)?"\)/.test(job) && !/from\("outreach_leads"\)\.(update|upsert|insert)/.test(job), '19. finalize only READS the lead (name + town for the clarity checks)');
   const cc = read('supabase/functions/crawl-check/index.ts');
   const salesAt = cc.indexOf('if (role === "sales")'), reuseAt = cc.indexOf('prospectCrawlReuse(savedRow');
   ok(salesAt > 0 && salesAt < reuseAt, '20. the sales lead check (works the lead, not a client, own website only) runs before the new reuse / cap code');

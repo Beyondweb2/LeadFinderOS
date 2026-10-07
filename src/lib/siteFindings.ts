@@ -462,6 +462,8 @@ export interface FindingsSource {
      *  yesterday, from its signals alone. */
     evidence?: SiteEvidence | null;
     evidenceVersion?: number;
+    /** The sales insights (src/lib/salesInsights.ts), added 2026-10-07. Read through usableInsights — never trusted raw. */
+    insights?: unknown;
   } | null | undefined;
   createdAtMs: number;
   /** An explicit crawl failure is never usable. */

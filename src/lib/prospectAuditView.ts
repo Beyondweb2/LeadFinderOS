@@ -16,6 +16,7 @@
 import type { HookScore } from './hookScore';
 import { auditFromStoredCrawl, HOME_FETCH_LABELS, type AuditFinding, type SiteAudit, type StoredCrawlForAudit } from './siteAudit';
 import { isAggregatorUrl } from './aggregators';
+import type { OpportunityKind } from './salesInsights';
 
 export const NO_WEBSITE_TEXT = 'No website was found for this business, so there is no site for search engines or AI systems to crawl and verify.';
 export const NO_WEBSITE_WHY = 'Without a site of its own, AI tools can only go on what directories, listings and reviews say about the business — and Gemini in particular leans on businesses’ own websites. A simple, accurate site gives them a source the business controls.';
@@ -66,6 +67,11 @@ export function coverageLine(audit: SiteAudit): string {
   return `Full crawl: every page found was read (${f(c.pagesCrawled)} page${c.pagesCrawled === 1 ? '' : 's'}).`;
 }
 
+const OPPORTUNITY_LABEL: Record<OpportunityKind, string> = {
+  service_pages: 'deeper service-page coverage',
+  deepen_services: 'making the service pages more detailed',
+};
+
 export interface CallPoint {
   ai: { headline: string; evidence: string[] } | null;
   site: { headline: string; evidence: string[]; findingId: string } | null;
@@ -97,7 +103,17 @@ export function callPoint(input: { score: HookScore | null; rivalsWithheld?: boo
   if (input.site.kind === 'no_website' && input.site.confirmed) site = { headline: NO_WEBSITE_TEXT, evidence: ['Google’s listing for the business has no website.'], findingId: 'no_website' };
   else if (input.site.kind === 'audited') {
     const f = strongestFinding(input.site.audit);
-    if (f) site = { headline: f.title, evidence: [f.saw, ...(f.evidence ?? []).slice(0, 2), ...f.urls.slice(0, 2)], findingId: f.id };
+    const ins = input.site.audit.insights && input.site.audit.insights.state !== 'unreadable' ? input.site.audit.insights : null;
+    const top = ins?.findings[0] ?? null;
+    /* A HIGH technical finding (crawlers refused, noindex, a wrong-domain sitemap) still leads; otherwise the
+       strongest point read off the site's own pages (services, name, town, linking) is the one to raise. */
+    if (f && (f.severity === 'high' || !top)) site = { headline: f.title, evidence: [f.saw, ...(f.evidence ?? []).slice(0, 2), ...f.urls.slice(0, 2)], findingId: f.id };
+    else if (top) site = { headline: top.title, evidence: [top.observed, ...top.evidence.quotes.slice(0, 2), ...top.evidence.urls.slice(0, 2)], findingId: top.id };
+    else if (ins?.state === 'strong_site') {
+      /* ⛔ A STRONG SITE IS A RESULT: said honestly, with the one genuine opportunity when there is one. */
+      const o = ins.opportunity;
+      site = { headline: o ? `Site is technically solid; main opportunity is ${OPPORTUNITY_LABEL[o.kind]}.` : 'Site is in good shape — no fault worth raising.', evidence: o ? [o.observed, ...o.evidence.urls.slice(0, 2)] : ins.strengths.slice(0, 2), findingId: 'strong_site' };
+    }
   }
   return { ai, site };
 }

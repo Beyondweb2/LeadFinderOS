@@ -109,6 +109,21 @@ function Say({ p }: { p: ColdCallPlaybook }) {
           ))}
         </ul>
       )}
+      {s.found.sources.some((x) => x.evidence || x.improvement) && (
+        <details className="rounded-lg border border-border/60 px-3 py-2 text-[12px] text-muted-foreground" data-testid="call-found-evidence">
+          <summary className="cursor-pointer text-[11px] font-semibold uppercase tracking-wider">How do we know?</summary>
+          <ul className="mt-2 space-y-2">
+            {s.found.sources.filter((x) => x.evidence || x.improvement).map((x) => (
+              <li key={x.line} className="space-y-0.5">
+                {x.evidence?.signal && <p className="font-medium text-foreground/80">{x.evidence.signal}</p>}
+                {x.evidence?.quotes.map((q) => <p key={q}>{q}</p>)}
+                {x.evidence?.urls.map((u) => <p key={u} className="break-all">{u}</p>)}
+                {x.improvement && <p className="text-foreground/70">We'd: {x.improvement}</p>}
+              </li>
+            ))}
+          </ul>
+        </details>
+      )}
       {s.found.note && <p className="text-[11px] text-muted-foreground" data-testid="call-found-note">{s.found.note}</p>}
       <div className="space-y-1.5 text-[15px] leading-relaxed" data-testid="call-step-bridge">{s.bridge.map((l) => <p key={l}>{l}</p>)}</div>
       {s.openerNote && <p className="text-[11px] text-muted-foreground" data-testid="call-opener-note">{s.openerNote}</p>}

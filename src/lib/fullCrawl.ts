@@ -168,6 +168,7 @@ function decode(s: string): string {
     .replace(/&amp;/gi, '&').replace(/&nbsp;/gi, ' ').replace(/&#0?39;|&apos;|&rsquo;|&lsquo;/gi, "'")
     .replace(/&quot;|&ldquo;|&rdquo;/gi, '"').replace(/&ndash;|&mdash;/gi, '-').replace(/&pound;/gi, '£')
     .replace(/&#(\d+);/g, (m, d) => { try { return String.fromCodePoint(Number(d)); } catch { return m; } })
+    .replace(/&#x([0-9a-f]+);/gi, (m, h) => { try { return String.fromCodePoint(parseInt(h, 16)); } catch { return m; } })
     .replace(/&lt;/gi, '<').replace(/&gt;/gi, '>');
 }
 const tagText = (s: string) => decode(s.replace(/<[^>]+>/g, ' ')).replace(/\s+/g, ' ').trim();

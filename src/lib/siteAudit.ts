@@ -26,6 +26,7 @@
 
 import type { CrawlCoverage, PageBusiness, PageDigest, FullCrawlEvidence } from './fullCrawl.ts';
 import { robotsAllows, robotsRulesFor, sameSite } from './crawlUrl.ts';
+import type { SalesInsights } from './salesInsights.ts';
 
 export const SITE_AUDIT_VERSION = 1;
 /** Affected addresses kept per finding. Above it the list is cut and `urlsComplete` is false. */
@@ -89,6 +90,8 @@ export interface SiteAudit {
   findings: AuditFinding[];
   /** Checks that could not be made on this evidence, said rather than skipped silently. */
   notChecked: string[];
+  /** The ranked, evidence-backed sales insights (src/lib/salesInsights.ts), added 2026-10-07. Absent on older rows. */
+  insights?: SalesInsights;
 }
 
 export interface SiteAuditPage {

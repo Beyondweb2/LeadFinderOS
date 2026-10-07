@@ -266,6 +266,25 @@ function WebsiteSection({ site, crawl }: { site: WebsiteState; crawl: CrawlContr
         {err}
       </div>
 
+      {audit.insights && audit.insights.state !== 'unreadable' && (
+        <div className={cn(TILE, 'space-y-2 text-sm')} data-testid="pa-insights" data-state={audit.insights.state}>
+          <p className="text-[11px] font-bold uppercase tracking-wider text-foreground/80">What to raise on the call</p>
+          {audit.insights.findings.length === 0 && (
+            <p data-testid="pa-insights-strong">{audit.insights.opportunity ? `Site is technically solid. Main opportunity: ${audit.insights.opportunity.observed.toLowerCase().replace(/\.$/, '')}.` : 'Site is in good shape — no fault worth raising.'}</p>
+          )}
+          <ul className="space-y-2">
+            {audit.insights.findings.map((f) => (
+              <li key={f.id} className="min-w-0 space-y-0.5" data-testid="pa-insight" data-insight={f.id}>
+                <p className="font-medium">{f.title} <span className="text-[11px] font-normal text-muted-foreground">({f.confidence} confidence)</span></p>
+                <p>{f.observed}</p>
+                <p className="text-xs text-muted-foreground">{f.why} We'd: {f.improvement}</p>
+                {f.evidence.urls.slice(0, 3).map((u) => <p key={u} className="break-all text-xs text-muted-foreground">{u}</p>)}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
       <Segmented<AuditSeverity | 'all'> label="Filter by severity" value={filter} onChange={setFilter} wrapOnPhone
         options={[
           { key: 'all', label: 'All', count: audit.findings.length, tone: 'grey' },

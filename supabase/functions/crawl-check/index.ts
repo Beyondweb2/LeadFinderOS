@@ -35,6 +35,8 @@ import {
 } from "../../../src/lib/fullCrawl.ts";
 import { activeJobFor, createCrawlJob, jobCounts, kickCrawlWorker } from "../_shared/crawl-job.ts";
 import { crawlPageCapFor, prospectCrawlReuse } from "../../../src/lib/prospectCrawl.ts";
+import { insightsFromFetchedPages } from "../../../src/lib/salesInsightsInline.ts";
+import type { SalesInsights } from "../../../src/lib/salesInsights.ts";
 import { classifyFetchError, type HomeFetchIssue } from "../../../src/lib/siteAudit.ts";
 import { progressLabel, type JobStatus } from "../../../src/lib/crawlJob.ts";
 import { CRAWL_FRESH_MS } from "../../../src/lib/crawlCheck.ts";
@@ -445,6 +447,9 @@ Deno.serve(async (req) => {
     let cr: CrawlSignals["clientRendered"] = null;
     let sampleCount = 0;
     let discoveryFetches = 0;
+    /* THE SALES INSIGHTS (2026-10-07): services, name, phone, town, linking and proof, read off the SAME pages
+       fetched below — no extra request (src/lib/salesInsightsInline.ts). Best-effort: it never fails the crawl. */
+    let insights: SalesInsights | null = null;
     const checkedPages: Array<{ url: string; kind: ReturnType<typeof crawlPageKind>; words: number; hasH1: boolean; readable: boolean }> = [];
     const thinPageUrls: string[] = [];
     /* Carried out of the block below so the SITE-INFO extraction (services from titles, towns from
@@ -544,7 +549,8 @@ Deno.serve(async (req) => {
       for (const r of sampleFetched) {
         const words = r.ok && r.html ? wordCount(r.html) : 0;
         checkedPages.push({ url: r.url, kind: crawlPageKind(r.url), words, hasH1: r.ok && r.html ? hasH1(r.html) : false, readable: r.ok && !!r.html });
-        if (r.ok && r.html && words < THIN_WORDS) thinPageUrls.push(r.url);
+        /* Only a service or area page can be "thin" — a short contact / about / legal page is normal (2026-10-07). */
+        if (r.ok && r.html && words < THIN_WORDS && ["service", "location"].includes(crawlPageKind(r.url))) thinPageUrls.push(r.url);
       }
       for (const r of sampleFetched) if (r.ok && r.html) samplePagesForInfo.push({ url: r.url, html: r.html });
       for (const r of sampleFetched) fullPages.push({ url: r.url, finalUrl: r.finalUrl, status: r.responded ? r.status : 0, xRobotsTag: r.xRobotsTag, html: r.ok ? r.html : "" });
@@ -573,8 +579,27 @@ Deno.serve(async (req) => {
           }
         }
       }
-      thinPages = readableSamples.filter((r) => wordCount(r.html) < THIN_WORDS).length;
+      thinPages = readableSamples.filter((r) => wordCount(r.html) < THIN_WORDS && ["service", "location"].includes(crawlPageKind(r.url))).length;
       if (!cr.flagged && homeWords < THIN_WORDS) { thinPages++; thinPageUrls.unshift(home.url); }
+      try {
+        const leadRow = leadId
+          ? (await service.from("outreach_leads").select("business_name, derived_town, category, search_keyword, services_included").eq("id", leadId).maybeSingle()).data as Record<string, unknown> | null
+          : null;
+        insights = insightsFromFetchedPages({
+          servedUrl,
+          home: { url: home.url, finalUrl: home.finalUrl, status: home.status, xRobotsTag: home.xRobotsTag, html: home.html },
+          samples: readableSamples.map((r) => ({ url: r.url, finalUrl: r.finalUrl, status: r.status, xRobotsTag: r.xRobotsTag, html: r.html })),
+          knownUrls: pool,
+          lead: {
+            name: (leadRow?.business_name as string | null) ?? null,
+            town: ((leadRow?.derived_town as string | null) || town || null),
+            trade: ((leadRow?.category as string | null) || (leadRow?.search_keyword as string | null)) ?? null,
+            services: Array.isArray(leadRow?.services_included) ? (leadRow!.services_included as unknown[]).filter((x): x is string => typeof x === "string") : [],
+          },
+        });
+      } catch (e) {
+        console.error(`[crawl-check] sales insights failed for ${homeUrl}:`, (e as Error).message);
+      }
     }
 
     const signals: CrawlSignals = {
@@ -658,6 +683,7 @@ Deno.serve(async (req) => {
     const storedResult = {
       version: CRAWL_CHECK_VERSION, siteInfoVersion: SITE_INFO_VERSION,
       checked_at: checkedAt, url: homeUrl, town: town || null, signals, verdict, siteInfo,
+      ...(insights ? { insights } : {}),
       ...(evidence ? { evidence, evidenceVersion: SITE_EVIDENCE_VERSION } : {}),
       ...(homeFetch ? { homeFetch } : {}),
     };
@@ -714,7 +740,7 @@ Deno.serve(async (req) => {
     }
 
     return json({
-      ok: true, url: homeUrl, served_url: servedUrl, town: town || null, verdict, signals, siteInfo, evidence, deep,
+      ok: true, url: homeUrl, served_url: servedUrl, town: town || null, verdict, signals, siteInfo, evidence, insights, deep,
       mode, checked_at: checkedAt, fetches, ms: Date.now() - started, stored, preserved_full_crawl: preserved,
       /* The full evidence's headline only — the row holds the rest, and every screen reads the row. */
       full: null,
