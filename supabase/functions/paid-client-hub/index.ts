@@ -654,7 +654,7 @@ Deno.serve(async (req) => {
         const tplState = templateSendState(await templateAvailability(service, ONBOARDING_TEMPLATE_NAME), "onboarding");
         const lr = decideLinkRoute(await conversationFacts(), { template: tplState });
         if (lr.route === "none") return json({ ok: false, error: lr.reason, detail: lr.say }, 409);
-        /* THE CANONICAL SENDER, AS PAUL: its QA, suppression, phone (UK / AU / IN) and template rules decide; the
+        /* THE CANONICAL SENDER, AS PAUL: its QA, suppression, phone (UK cold; AU and others only for replies) and template rules decide; the
            template's link and greeting are resolved THERE from this client's own open link. */
         const anon = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
         const res = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/send-whatsapp-message`, {
@@ -1027,7 +1027,7 @@ Deno.serve(async (req) => {
             text: [
               "Hello,",
               "",
-              `Here is your Findable Client Service Agreement for ${name}. Please read it, fill in your details and click "I agree and sign":`,
+              `Here is your Findable Client Service Agreement for ${name}. Please read it, check your details and accept it before you pay:`,
               "",
               url,
               "",
