@@ -85,15 +85,15 @@ console.log('\n── QUICK CLOSE: the shortest close, nothing asked twice ─�
 {
   ok(QUICK_CLOSE_QUESTIONS[0].key === 'route', 'the plan question is first in the table, but LAST in the flow (closeFlow)');
   ok(closeFlow({}).slice(-1)[0] === 'route' && closeFlow({ manager: 'agency' }).slice(-1)[0] === 'route', 'the plan is the LAST question (Optimise then adds only access)');
-  ok(missingQuestions({}).join() === 'decision_maker,manager,domain,rights,route', 'a fresh close asks authority, who runs the site, the domain, the reuse right, then the plan');
+  ok(missingQuestions({}).join() === 'decision_maker,manager,domain,route', 'a fresh close asks authority, who runs the site, the domain, then the plan');
   const fromCall = cleanAnswers({ decision_maker: 'yes', manager: 'owner' });
-  ok(missingQuestions(fromCall).join() === 'domain,rights,route', 'the call already answered authority and who runs the site → those are not asked again');
+  ok(missingQuestions(fromCall).join() === 'domain,route', 'the call already answered authority and who runs the site → those are not asked again');
   const sit = { ...fromCall, domain: 'yes', rights: 'yes' } as const;
   ok(missingQuestions(sit).join() === 'route', 'with the situation answered, only the plan is left');
   ok(missingQuestions({ ...sit, ...routeChoiceAnswers(sit, 'optimise') }).join() === 'access', 'Optimise after that: only "can we get in"');
   ok(missingQuestions({ ...sit, ...routeChoiceAnswers(sit, 'build') }).length === 0, 'Build after that (self-run): nothing more — ready');
   ok(quickCloseState('answers_saved', { answers: { ...sit, ...routeChoiceAnswers(sit, 'build') } }) === 'ready', '…READY for the sign-up link');
-  ok(missingQuestions(cleanAnswers({ decision_maker: 'yes', manager: 'agency', route: 'build', approach: 'unsure' })).join() === 'agency_contract,domain,rights', 'an agency-run site: the contract is asked (once), then the domain and the reuse right');
+  ok(missingQuestions(cleanAnswers({ decision_maker: 'yes', manager: 'agency', route: 'build', approach: 'unsure' })).join() === 'agency_contract,domain', 'an agency-run site: the contract is asked (once), then the domain');
   ok(!closeFlow({ route: 'build', approach: 'unsure' }).some((k) => ['design_owner', 'build_consents', 'approach', 'authority'].includes(k)), 'never the design owner, the consents, the approach sub-type or the legacy authority question');
   const merged = mergeAnswers({ approach: 'new_template' }, { route: 'optimise' });
   ok(merged.route === 'optimise' && merged.approach === 'improve', 'choosing the plan brings the agreeing approach (a stored Build approach never flips it back)');
@@ -155,7 +155,7 @@ console.log('\n── PAYMENT LINK: Paul\'s rule and the template ──');
   ok(/if \(!res\.ok \|\| !out\.ok\) \{[\s\S]{0,300}"link_share_failed"[\s\S]{0,300}return json\(\{ ok: false/.test(share), 'a failed send is recorded as failed and never as sent');
   ok(/share\.status = out\.simulated \? "simulated"/.test(share), 'a test-mode send says so');
   const dlg = read('src/components/QuickCloseDialog.tsx');
-  ok(/Send signup link on WhatsApp/.test(dlg) && /Sending…/.test(dlg) && /data-testid="qc-whatsapp-sent"/.test(dlg) && /Resend/.test(dlg) && /Copy sign-up link/.test(dlg), 'Quick Close: one click, Sending…, Sent · time + Resend, Copy sign-up link always there');
+  ok(/Send agreement &amp; payment link/.test(dlg) && /Sending…/.test(dlg) && /data-testid="qc-whatsapp-sent"/.test(dlg) && /Resend/.test(dlg) && /Copy link/.test(dlg), 'Quick Close: one click, Sending…, Sent · time + Resend, Copy link always there');
   ok(/WhatsApp signup template \$\{lr\.template\.label\.toLowerCase\(\)\}/.test(dlg), '…and "WhatsApp signup template awaiting approval" while in review');
 }
 
@@ -188,7 +188,7 @@ console.log('\n── THE TWO META TEMPLATES ──');
   ok(/const avail = await templateAvailability\(service, templateName\);/.test(swm) && /if \(!st\.sendable && !st\.tryable\) return json\(\{ ok: false, error: "template_not_approved"/.test(swm), 'the sender reads Meta\'s LIVE status and refuses a template Meta has not approved (no hard-coded "approved")');
   ok(/if \(avail\.language\) lang = avail\.language;/.test(swm), '…and sends in Meta\'s registered language');
   ok(/if \(!allowResend && await pitchEverSent\(service, resolvedLeadId, templateName\)\)/.test(swm.slice(swm.indexOf('if (linkKind) {'))), 'one per lead unless deliberately resent');
-  ok(/resolveSignupLinkVars\(service, resolvedLeadId\)/.test(swm) && /resolveOnboardingFormVars\(service, resolvedLeadId\)/.test(swm), 'both variables resolved server-side from the lead\'s own records');
+  ok(/resolveSignupLinkVars\(service, resolvedLeadId, signupLinkVariant\)/.test(swm) && /resolveOnboardingFormVars\(service, resolvedLeadId\)/.test(swm), 'both variables resolved server-side from the lead\'s own records');
   ok(/isClientLead\(sl\)/.test(swm), 'a salesperson\'s send to a PAID client is refused — sales cannot send the onboarding template');
   ok(/requireAdmin\(req/.test(read('supabase/functions/paid-client-hub/index.ts')), 'Paid Clients (and its onboarding send) is admin only');
   const vars = read('supabase/functions/_shared/link-template-vars.ts');

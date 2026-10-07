@@ -98,7 +98,7 @@ console.log("\n── the database gates ──");
 console.log("\n── the edge gates ──");
 {
   const qc = read("supabase/functions/quick-close/index.ts");
-  ok(/actor\.role === "sales" && \(mode === "save" \|\| mode === "save_call" \|\| mode === "generate_link" \|\| mode === "share_link"\)/.test(qc), "quick-close: save / the call answers / payment link / share are gated for sales");
+  ok(/actor\.role === "sales" && \(mode === "save" \|\| mode === "save_call" \|\| mode === "generate_link" \|\| mode === "share_link" \|\| mode === "share_setup"\)/.test(qc), "quick-close: save / the call answers / payment link / share are gated for sales");
   ok(qc.indexOf("salesReadiness(service, actor.id)") > qc.indexOf("const mode =") && qc.indexOf("salesReadiness(service, actor.id)") < qc.indexOf('if (mode === "save")'), "quick-close: checked before any mode runs");
   const sr = read("supabase/functions/_shared/sales-ready.ts");
   ok(/return \{ ready: false, missing: \["unknown"\] \}/.test(sr), "the shared check FAILS CLOSED");

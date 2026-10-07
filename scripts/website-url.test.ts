@@ -92,7 +92,7 @@ ok(fn.indexOf('const optional = ["business_website"') > 0, 'and leads it, so no 
 console.log('\n-- prefill returns Google\'s values, and only Google\'s --');
 ok(/phone_guess: String\(lead\.phone \?\? ""\)\.trim\(\)/.test(fn), 'phone_guess is returned');
 ok(/website_guess: String\(lead\.website \?\? ""\)\.trim\(\)/.test(fn), 'website_guess is returned');
-ok(/amount_paid, phone, website"\)/.test(fn), 'and both columns are actually SELECTED — an unselected column reads as undefined');
+ok(/amount_paid, phone, website(?:, services_included, service_areas)?"\)/.test(fn), 'and both columns are actually SELECTED — an unselected column reads as undefined');
 /* ⛔ THE LINE THAT MUST NOT MOVE. email/contact_name/notes come from enrichment and from the
    operator, not from a public Maps listing, and are present on 10.1% / 0.2% of leads — all of the
    risk, none of the value. */

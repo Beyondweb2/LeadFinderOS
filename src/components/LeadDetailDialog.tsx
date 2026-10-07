@@ -3,7 +3,8 @@ import { isDemoLead } from '@/lib/demoLeads';
 import { StickyNote, Save, Check, X, Pencil, Calendar as CalendarIconLucide, PoundSterling, Mail, Copy, Share2, Globe, Phone, MapPin, Loader2, PhoneCall, ChevronDown, MessageCircle, Wrench, ClipboardCheck } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { whatsAppLinkForLead } from '@/lib/salesLinks';
-import { QuickCloseNav, QuickClosePanel } from '@/components/QuickCloseDialog';
+import { QuickCloseNav } from '@/components/QuickCloseDialog';
+import { ClosePanel } from '@/components/ClosePanel';
 import { LeadQuestionnaireSection } from '@/components/LeadQuestionnaireSection';
 import { LeadSiteCheckButton } from '@/components/LeadSiteCheckButton';
 import { CrawlCheckButton } from '@/components/CrawlCheckButton';
@@ -45,7 +46,6 @@ import { pipelineStatusLabel } from '@/components/PipelineStatusBadge';
 import { PipelineStatusSelect } from '@/components/PipelineStatusSelect';
 import { headerStateShown, markPaidIsMain } from '@/lib/workspaceHeader';
 import { WhatsAppLeadControls } from '@/components/WhatsAppLeadControls';
-import { OnboardingLinkCard } from '@/components/OnboardingLinkCard';
 import { NextActionPill } from '@/components/NextActionPill';
 import { LeadStateStrip } from '@/components/LeadStateStrip';
 import { FindEmailButton } from '@/components/FindEmailButton';
@@ -730,14 +730,8 @@ function LeadDetailBody({
 
           {/* ── CLOSE: the one close UI (QuickClosePanel), then — before payment only — the self-service sign-up link. ── */}
           <TabsContent value="close" className="mt-0 space-y-4" data-testid="workspace-close">
-            {!isDemoLead(lead.id) && <QuickClosePanel leadId={lead.id} active={tab === 'close'} />}
-            {!isDemoLead(lead.id) && !isPaidLead(lead) && (
-              <div className="space-y-1.5" data-testid="close-self-service">
-                <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Or let them do it themselves</p>
-                <p className="text-xs text-muted-foreground">The sign-up link takes them through the same questions, the client agreement and the same £99 payment page. The full setup questions come from Paul after they pay.</p>
-                <OnboardingLinkCard lead={lead} />
-              </div>
-            )}
+            {/* TWO WAYS TO CLOSE (2026-10-07): Close on the phone, or Send full setup — one sign-up either way (ClosePanel). */}
+            {!isDemoLead(lead.id) && <ClosePanel leadId={lead.id} active={tab === 'close'} />}
             {/* ⛔ MARK PAID BY HAND (moved 2026-10-06 from the footer of EVERY tab, Paul: "should not dominate every
                 Call screen"). Admin only (clientDelivery — a salesperson never had it and still has not), unpaid
                 only, the SAME handler and writes as before: payment_received through onStatusChange (the page's own

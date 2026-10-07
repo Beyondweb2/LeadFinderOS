@@ -164,3 +164,4 @@
 - client-agreement-v4-release.md — v4 agreement + India cleanup (2026-10-07)
 - contact-method-auto-select.md — Contact Method follows the route (2026-10-07): Call sets the pill, WhatsApp queue already does, lead_set_contact_method for reps, Find Leads "fresh" side effect
 - `docs/pre-sales-certification/sales-to-payment-final-pass.md` — 2026-10-07: the sales sign-up is resumed (root cause of "Your sign-up is already set up…"), Quick Close asks the situation first and the plan last, Build-first recommendation, the client's "Here's what we have so far" confirmation.
+- `docs/pre-sales-certification/two-close-options.md` — 2026-10-07: the two ways to close (Close on the phone / Send full setup), the exact phone questions, the Full Setup link on the approved findable_signup_link template, one sign-up two routes, the self-serve agency-contract answer, deploy list

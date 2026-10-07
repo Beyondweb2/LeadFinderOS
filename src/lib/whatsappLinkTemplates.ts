@@ -46,6 +46,14 @@ const SIGNUP_LINK_RE = /^https:\/\/findable\.live\/agree\/[0-9a-f]{64}$/;
 const ONBOARDING_LINK_RE = /^https:\/\/findable\.live\/details\/[0-9a-f]{64}$/;
 /** The prospect's own sign-up link (their agreement page → sign → pay). Never a Stripe checkout URL. */
 export const isSignupLinkUrl = (u: string | null | undefined): boolean => SIGNUP_LINK_RE.test(String(u ?? ''));
+/* THE FULL-SETUP LINK (2026-10-07, fix/quick-close-two-options): the OTHER way to close. The client's own set-up page —
+   the short questions, then agreement, then payment — at findable.live/onboarding/?lead=<their lead id>. It is the
+   same findable_signup_link template carrying a different, equally secure findable.live link: still never a Stripe URL. */
+const SETUP_LINK_RE = /^https:\/\/findable\.live\/onboarding\/\?lead=[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+export const isSetupLinkUrl = (u: string | null | undefined): boolean => SETUP_LINK_RE.test(String(u ?? ''));
+export const setupLinkUrl = (leadId: string): string => 'https://findable.live/onboarding/?lead=' + leadId;
+/** Which link {{2}} of findable_signup_link may carry: the agreement & payment link, or the full-setup link. Positive shapes only. */
+export const isSignupTemplateLinkUrl = (u: string | null | undefined): boolean => isSignupLinkUrl(u) || isSetupLinkUrl(u);
 /** A paid client's onboarding-form link (no payment on it). */
 export const isOnboardingFormUrl = (u: string | null | undefined): boolean => ONBOARDING_LINK_RE.test(String(u ?? ''));
 

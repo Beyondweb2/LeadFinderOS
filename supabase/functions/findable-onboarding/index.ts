@@ -8,7 +8,7 @@ import { clientKnown, KNOWN_SOURCE_LINE } from "../../../src/lib/setupPrefill.ts
 import { recordLeadEvent } from "../_shared/client-setup.ts";
 import { readWebsite, sameWebsite } from "../../../src/lib/websiteUrl.ts";
 import { planClientConfirmation, resumeDecision, salesSignupFor, type SignupRow } from "../../../src/lib/salesSignup.ts";
-import { confirmItemsFor } from "../../../src/lib/clientConfirm.ts";
+import { confirmItemsFor, confirmSummaryFor } from "../../../src/lib/clientConfirm.ts";
 import type { QuickCloseRecord } from "../../../src/lib/quickClose.ts";
 
 // findable-onboarding — the PUBLIC backend for findable-site's /onboarding flow
@@ -233,7 +233,7 @@ Deno.serve(async (req) => {
            column is not bookkeeping here: an unselected column reads as `undefined`, so the
            response would have carried "" and the change would have looked applied while doing
            nothing — the same trap the derived_town note below records. */
-        .select("id, user_id, business_name, category, search_keyword, search_location, derived_town, address, status, amount_paid, phone, website")
+        .select("id, user_id, business_name, category, search_keyword, search_location, derived_town, address, status, amount_paid, phone, website, services_included, service_areas")
         .eq("id", leadId).maybeSingle();
       /* 🔴 A FAILED READ IS NOT A MISSING ROW, AND FOR MONTHS THEY WERE THE SAME ANSWER.
          This destructured the query's `error` away and tested only `data`, so a database that
@@ -358,8 +358,11 @@ Deno.serve(async (req) => {
             ready: held.ready, route: held.route, onboarding_id: held.ready ? held.onboardingId : null,
             confirm: held.ready
               ? (() => {
-                const qc = ((signupRows ?? []) as SignupRow[]).find((r) => r.id === held.onboardingId)?.quick_close as QuickCloseRecord | null | undefined;
-                return { items: confirmItemsFor(qc), confirmed_at: qc?.client_confirmed?.at ?? null };
+                const heldRow = ((signupRows ?? []) as SignupRow[]).find((r) => r.id === held.onboardingId);
+                const qc = heldRow?.quick_close as QuickCloseRecord | null | undefined;
+                /* TWO OPTIONS (2026-10-07): beside the facts they can correct, the read-only lines — what they offer,
+                   where they want to be found, and the plan the salesperson agreed (never editable here). */
+                return { items: confirmItemsFor(qc), summary: confirmSummaryFor(qc, heldRow, lead), confirmed_at: qc?.client_confirmed?.at ?? null };
               })()
               : null,
           }
@@ -935,6 +938,9 @@ Deno.serve(async (req) => {
         materials_confirmed: strictBool(a.materials_confirmed),
         /* The customer stopped at the domain question and asked Findable to look at their setup. */
         domain_escalated_at: a.domain_escalated === true ? new Date().toISOString() : null,
+        /* TWO OPTIONS (2026-10-07): asked only when an agency / web company looks after their site — are they still tied
+           into a contract with it? Same words as the salesperson's call (QcAgencyContract). Unknown value → null. */
+        agency_contract: a.agency_contract === "in_contract" || a.agency_contract === "free" || a.agency_contract === "not_sure" ? a.agency_contract : null,
         incomplete,
       };
 
@@ -948,7 +954,7 @@ Deno.serve(async (req) => {
          sent it, the row saved with HTTP 200, and the value was null, because this function builds
          its insert from an explicit key list and an unlisted key simply disappears. A Squarespace
          customer who had said no to moving reached Stripe as a result. */
-      const NEWER_COLS = ["services_list", "areas_list", "website_manager", "website_manager_email", "competitor_name", "website_platform", "website_platform_other", "willing_to_migrate", "gbp_exists", "gbp_status", "gbp_verified", "must_not_say", "photos_status", "contact_name", "confirmed_phone", "business_website", "source", "website_addon", "plan_tier", "domain_status", "domain_owned", "domain_access", "domain_third_party", "site_rights", "authority_confirmed", "dns_permission", "materials_confirmed", "domain_escalated_at", "services_not_offered", "top_requests"];
+      const NEWER_COLS = ["services_list", "areas_list", "website_manager", "website_manager_email", "competitor_name", "website_platform", "website_platform_other", "willing_to_migrate", "gbp_exists", "gbp_status", "gbp_verified", "must_not_say", "photos_status", "contact_name", "confirmed_phone", "business_website", "source", "website_addon", "plan_tier", "domain_status", "domain_owned", "domain_access", "domain_third_party", "site_rights", "authority_confirmed", "dns_permission", "materials_confirmed", "domain_escalated_at", "agency_contract", "services_not_offered", "top_requests"];
       for (const col of NEWER_COLS) {
         if ((answers as Record<string, unknown>)[col] == null) delete (answers as Record<string, unknown>)[col];
       }
@@ -964,7 +970,7 @@ Deno.serve(async (req) => {
         // website_platform_other before website_platform, for the same reason website_manager_email
         // comes before website_manager: the shorter name is a substring of the longer one, so
         // testing it first would shed both columns on a single miss.
-        const optional = ["business_website", "services_list", "areas_list", "website_manager_email", "website_manager", "website_platform_other", "website_platform", "willing_to_migrate", "gbp_verified", "gbp_exists", "gbp_status", "must_not_say", "photos_status", "competitor_name", "areas_wanted", "incomplete", "contact_email", "contact_name", "confirmed_phone", "business_address", "source", "website_addon", "plan_tier", "domain_status", "domain_owned", "domain_access", "domain_third_party", "site_rights", "authority_confirmed", "dns_permission", "materials_confirmed", "domain_escalated_at", "services_not_offered", "top_requests"];
+        const optional = ["business_website", "services_list", "areas_list", "website_manager_email", "website_manager", "website_platform_other", "website_platform", "willing_to_migrate", "gbp_verified", "gbp_exists", "gbp_status", "must_not_say", "photos_status", "competitor_name", "areas_wanted", "incomplete", "contact_email", "contact_name", "confirmed_phone", "business_address", "source", "website_addon", "plan_tier", "domain_status", "domain_owned", "domain_access", "domain_third_party", "site_rights", "authority_confirmed", "dns_permission", "materials_confirmed", "domain_escalated_at", "agency_contract", "services_not_offered", "top_requests"];
         const reduced = { ...answers } as Record<string, unknown>;
         let res = await attempt({ ...reduced, ...extra });
         let guard = 0;

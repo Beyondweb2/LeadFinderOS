@@ -12,7 +12,8 @@
    the same gate (quickClose.effectiveAnswers), never applied over them.
    ⚠️ Reached from an edge function: explicit .ts on every relative import.
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
-import { THIRD_PARTY_MANAGERS, effectiveAnswers, thirdPartyManaged, type ClientConfirmKey, type QuickCloseAnswers, type QuickCloseRecord } from './quickClose.ts';
+import { THIRD_PARTY_MANAGERS, cleanCallNotes, effectiveAnswers, splitCallList, thirdPartyManaged, type ClientConfirmKey, type QuickCloseAnswers, type QuickCloseRecord } from './quickClose.ts';
+import { SERVICE_ROUTE_NAME, serviceRouteFromRow, type ServiceRoute } from './findableOffer.ts';
 
 export interface ConfirmOption { value: string; label: string }
 /** When an item applies, judged on another item's CURRENT value — so the page can re-judge as the client changes
@@ -89,17 +90,37 @@ export function confirmKeysFor(a: QuickCloseAnswers): ClientConfirmKey[] {
   const keys: ClientConfirmKey[] = ['manager'];
   if (thirdPartyManaged(a)) keys.push('agency_contract');
   keys.push('domain');
-  if (a.manager !== 'no_website') keys.push('rights');
   return keys;
 }
 
-/** ALL FOUR items, each with its own `showIf`; the page draws the ones that apply to the current values. */
+/** The facts the client confirms (TWO OPTIONS, 2026-10-07: the reuse-of-design question is no longer asked on the call, so it is no longer shown back). */
+/** ALL items, each with its own `showIf`; the page draws the ones that apply to the current values. */
 export function confirmItemsFor(qc: QuickCloseRecord | null | undefined): ConfirmItem[] {
   const a = effectiveAnswers(qc);
-  return (['manager', 'agency_contract', 'domain', 'rights'] as ClientConfirmKey[]).map((key) => {
+  return (['manager', 'agency_contract', 'domain'] as ClientConfirmKey[]).map((key) => {
     const spec = SPEC[key];
     const value = (a[key] as string | null | undefined) ?? null;
     const answer = value === null ? 'Not answered yet' : spec.options.find((o) => o.value === value)?.label ?? LEGACY_ANSWER[value] ?? 'Not sure';
     return { key, label: spec.label, question: spec.question, value, answer, options: spec.options, ...(SHOW_IF[key] ? { showIf: SHOW_IF[key] } : {}) };
   });
+}
+
+/** READ-ONLY lines under the confirmation items: what they offer, where they want to be found, and the plan. The client
+ *  can correct none of them here (the plan, price and seller are never the client's to change on this card). */
+export interface ConfirmSummaryLine { key: 'services' | 'areas' | 'plan'; label: string; text: string }
+export function confirmSummaryFor(
+  qc: QuickCloseRecord | null | undefined,
+  row: { plan_tier?: unknown; website_addon?: unknown } | null | undefined,
+  lead: { services_included?: unknown; service_areas?: unknown } | null | undefined,
+): ConfirmSummaryLine[] {
+  const call = cleanCallNotes(qc?.call);
+  const list = (v: unknown): string[] => (Array.isArray(v) ? v.map((x) => String(x).trim()).filter(Boolean) : []);
+  const services = splitCallList(call.jobs).length ? splitCallList(call.jobs) : list(lead?.services_included);
+  const areas = splitCallList(call.areas).length ? splitCallList(call.areas) : list(lead?.service_areas);
+  const out: ConfirmSummaryLine[] = [];
+  if (services.length) out.push({ key: 'services', label: 'What you offer', text: services.join(', ') });
+  if (areas.length) out.push({ key: 'areas', label: 'Where you want to be found', text: areas.join(', ') });
+  const route: ServiceRoute | null = row ? serviceRouteFromRow(row as never) : null;
+  if (route) out.push({ key: 'plan', label: 'Your plan', text: SERVICE_ROUTE_NAME[route] });
+  return out;
 }

@@ -148,9 +148,9 @@ console.log('\n── 5. CLOSE ──');
 {
   ok(APPROACH_ROUTE.improve === 'optimise' && APPROACH_ROUTE.new_template === 'build' && APPROACH_ROUTE.refresh === 'build' && APPROACH_ROUTE.recreation === 'build', 'the approach maps onto the two existing plans');
   /* 2026-10-07 (Paul: "Quick Close should be QUICK"): the offer, authority, then only the plan's own questions. */
-  ok(closeFlow({ decision_maker: 'yes', approach: 'new_template' }).join() === 'decision_maker,manager,domain,rights,route', 'new site: authority, who looks after the site, the domain, the reuse right, then the plan — never current-site access');
-  ok(closeFlow({ decision_maker: 'yes', approach: 'improve' }).join() === 'decision_maker,manager,domain,rights,route,access', 'Optimise: the same situation questions, then the plan, then only whether we can get in');
-  ok(closeFlow({ decision_maker: 'yes', approach: 'refresh' }).join() === 'decision_maker,manager,domain,rights,route' && closeFlow({ decision_maker: 'yes', approach: 'recreation', manager: 'agency' }).join() === 'decision_maker,manager,agency_contract,domain,rights,route', 'refresh / recreation ask nothing extra; an agency-run site adds only whether they are still in contract');
+  ok(closeFlow({ decision_maker: 'yes', approach: 'new_template' }).join() === 'decision_maker,manager,domain,route', 'new site: authority, who looks after the site, the domain, then the plan — never current-site access');
+  ok(closeFlow({ decision_maker: 'yes', approach: 'improve' }).join() === 'decision_maker,manager,domain,route,access', 'Optimise: the same situation questions, then the plan, then only whether we can get in');
+  ok(closeFlow({ decision_maker: 'yes', approach: 'refresh' }).join() === 'decision_maker,manager,domain,route' && closeFlow({ decision_maker: 'yes', approach: 'recreation', manager: 'agency' }).join() === 'decision_maker,manager,agency_contract,domain,route', 'refresh / recreation ask nothing extra; an agency-run site adds only whether they are still in contract');
   const newNoAccess = { decision_maker: 'yes', approach: 'new_template', domain: 'yes', rights: 'yes', access: 'no', manager: 'agency', agency_contract: 'free', build_consents: 'yes' } as const;
   ok(quickCloseGate(newNoAccess).review.length === 0 && quickCloseState('answers_saved', { answers: newNoAccess }) === 'ready', 'the screenshot: Build + "could not give access to the current website" → NO blocker');
   for (const d of ['agency', 'not_sure', 'no'] as const) {
@@ -172,7 +172,7 @@ console.log('\n── 5. CLOSE ──');
   ok(/flags: quickCloseGate\(answers\)\.flags\.map\(\(f\) => paulFlagText\(f, answers\)\)/.test(fn) && /title: QC_REVIEW_HEADING,/.test(fn), 'the server returns the flags and words the payment stop truthfully');
   const dlg = read('src/components/LeadDetailDialog.tsx');
   const closeTab = dlg.slice(dlg.indexOf('TabsContent value="close"'), dlg.indexOf('TabsContent value="history"'));
-  ok(/<QuickClosePanel leadId=\{lead\.id\}/.test(closeTab) && /!isPaidLead\(lead\) && \(/.test(closeTab) && /<OnboardingLinkCard lead=\{lead\} \/>/.test(closeTab), 'Close tab: the close, then the self-service sign-up link only before payment');
+  ok(/<ClosePanel leadId=\{lead\.id\}/.test(closeTab), 'Close tab: ClosePanel — close on the phone, or send full setup (the self-service link, only before payment, lives inside it)');
   ok(/Paul takes it from here/.test(read('src/components/QuickCloseDialog.tsx')), 'after payment the setup is Paul\'s (no setup link handed to the seller)');
 }
 
