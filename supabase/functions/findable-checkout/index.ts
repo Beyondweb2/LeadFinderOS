@@ -6,6 +6,7 @@ import { offerPrice } from "../_shared/offer-price.ts";
 import { agreementUrl, CLIENT_AGREEMENT_VERSION, sha256Hex } from "../../../src/lib/clientAgreement.ts";
 import { checkoutAgreementGate, type GateAcceptance } from "../../../src/lib/signupGate.ts";
 import { SIGNUP_LINK_LIFETIME_MS } from "../../../src/lib/quickClose.ts";
+import { selfServeBuildHold } from "../../../src/lib/selfServeContract.ts";
 import { commercialTermsFor, OPTION_B_TIMING } from "../../../src/lib/clientTimeline.ts";
 import { openHoldFor } from "../_shared/payment-hold.ts";
 /* ⚠️ IMPORTED FROM onboarding-followup.ts ON PURPOSE, despite the module name. That file is where
@@ -136,7 +137,7 @@ Deno.serve(async (req) => {
       .from("onboarding_responses")
       // The three website answers come back too: they decide whether we can serve this customer at
       // all, and that has to be settled BEFORE a Stripe session exists. See the gate below.
-      .select("id, lead_id, status, website_platform, website_platform_other, website_manager, willing_to_migrate, quick_close, " + DOMAIN_ROW_COLUMNS)
+      .select("id, lead_id, status, website_platform, website_platform_other, website_manager, willing_to_migrate, agency_contract, quick_close, " + DOMAIN_ROW_COLUMNS)
       .eq("id", onboardingId).maybeSingle();
     if (!ob) return json({ ok: false, error: "unknown_onboarding" }, 404);
 
@@ -230,6 +231,13 @@ Deno.serve(async (req) => {
        no client correction are untouched. */
     if (((ob as { quick_close?: { client_confirmed?: unknown } | null }).quick_close ?? null)?.client_confirmed && !quickCloseCleared) {
       await recordRefusal("checkout_refused_client_correction_held", { lead_id: effectiveLeadId, onboarding_id: onboardingId });
+      return json({ ok: false, error: "held_for_review" }, 409);
+    }
+    /* 🔴 TWO CLOSE OPTIONS (2026-10-07): the agency-contract safeguard holds for the client's OWN sign-up too — Build on an
+       agency-run site they may still be tied into waits for Paul's release (src/lib/selfServeContract.ts; the release is the
+       same quick_close.review_approved_at). Optimise, or a contract that has ended, is untouched. */
+    if (selfServeBuildHold(ob as never)) {
+      await recordRefusal("checkout_refused_self_serve_contract_held", { lead_id: effectiveLeadId, onboarding_id: onboardingId });
       return json({ ok: false, error: "held_for_review" }, 409);
     }
     const domain = domainAuthority(domainInputFromRow(ob as DomainRow));

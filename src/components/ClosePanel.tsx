@@ -1,9 +1,11 @@
 import { useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { AlertTriangle, ArrowLeft, Check, CheckCircle2, Copy, FileText, Loader2, MessageCircle, Phone, RefreshCw } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, ShieldAlert, Check, CheckCircle2, Copy, FileText, Loader2, MessageCircle, Phone, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Callout } from '@/components/operator/ui';
 import { useToast } from '@/hooks/use-toast';
+import { useSubscription } from '@/hooks/useSubscription';
+import { QC_REVIEW_HEADING } from '@/lib/quickClose';
 import { invokeEdge, edgeErrorMessage } from '@/lib/edgeInvoke';
 import { notifyLeadChanged } from '@/lib/leadSync';
 import { LINK_READY_FALLBACK } from '@/lib/paymentLinkRoute';
@@ -39,6 +41,7 @@ export function ClosePanel({ leadId, active = true, framed = false }: { leadId: 
   );
   return (
     <div className={cn(framed && 'h-full overflow-y-auto px-4 py-4')} data-testid="close-panel">
+      {v.state === 'needs_review' && Object.keys(v.answers ?? {}).length === 0 && <SelfServeHold leadId={leadId} reasons={v.review.reasons} />}
       {way === null && (
         <section className="space-y-3" data-testid="close-chooser">
           <p className="text-lg font-bold tracking-tight">How do you want to close them?</p>
@@ -54,6 +57,31 @@ export function ClosePanel({ leadId, active = true, framed = false }: { leadId: 
       )}
       {way === 'phone' && <div>{back}<QuickClosePanel leadId={leadId} active={active} /></div>}
       {way === 'setup' && <div>{back}<FullSetupPanel leadId={leadId} /></div>}
+    </div>
+  );
+}
+
+/** The client's OWN sign-up chose Build on an agency-run site they may still be tied into: the SAME stop as a phone close, the same
+ *  release (quick-close approve_review, Paul only). The client is told "we need to check one thing"; nothing is charged meanwhile. */
+function SelfServeHold({ leadId, reasons }: { leadId: string; reasons: string[] }) {
+  const { role } = useSubscription();
+  const qc = useQueryClient();
+  const { toast } = useToast();
+  const [busy, setBusy] = useState(false);
+  const release = async () => {
+    setBusy(true);
+    try { const r = await invokeEdge<unknown>('quick-close', { lead_id: leadId, mode: 'approve_review' }); qc.setQueryData(quickCloseKey(leadId), r); notifyLeadChanged(leadId); toast({ title: 'Released for payment' }); }
+    catch (e) { toast({ title: 'Not done', description: edgeErrorMessage(e), variant: 'destructive' }); }
+    finally { setBusy(false); }
+  };
+  return (
+    <div className="mb-3" data-testid="self-serve-hold">
+      <Callout tone="amber" icon={ShieldAlert} title={QC_REVIEW_HEADING}>
+        <p className="text-muted-foreground">They chose Build on their own page.</p>
+        <ul className="mt-1 list-disc pl-5 text-muted-foreground">{reasons.map((r) => <li key={r}>{r}</li>)}</ul>
+        <p className="mt-2 text-muted-foreground">Payment stays closed to them until Paul looks. You do not need to sort this out.</p>
+        {role === 'admin' && <Button size="sm" className="mt-2 h-10" onClick={() => void release()} disabled={busy} data-testid="self-serve-release">{busy && <Loader2 className="mr-1 h-4 w-4 animate-spin" />}Release for payment</Button>}
+      </Callout>
     </div>
   );
 }

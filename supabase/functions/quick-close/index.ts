@@ -8,6 +8,7 @@ import {
   stripeSessionIdFromUrl, quickCloseClosedRefusal, cleanCallNotes, splitCallList, offerFit, callNotesLines, closeRouteOf, phoneCloseNotesComplete, quickCloseGreeting, type QcLinkShare, type QcRecord, type QuickCloseRecord,
 } from "../../../src/lib/quickClose.ts";
 import { serviceWindowState } from "../../../src/lib/serviceWindow.ts";
+import { selfServeBuildHold, SELF_SERVE_HOLD_TEXT } from "../../../src/lib/selfServeContract.ts";
 import { decideLinkRoute, LINK_ROUTE_SAY, type ConversationFacts } from "../../../src/lib/paymentLinkRoute.ts";
 import { SIGNUP_LINK_TEMPLATE_NAME, setupLinkUrl, templateSendState } from "../../../src/lib/whatsappLinkTemplates.ts";
 import { templateAvailability } from "../_shared/template-status.ts";
@@ -103,7 +104,7 @@ const WHATSAPP_REFUSAL_TEXT: Record<string, string> = {
 };
 
 const LEAD_COLS = "id, user_id, business_name, phone, country, email, website, address, search_location, derived_town, category, search_keyword, contact_name, campaign_id, lead_source, assigned_to_user_id, sold_by_user_id, amount_paid, status, rating, review_count, google_maps_url, place_id, website_control, sales_handoff, delivery_submitted_at, contract_total_payments, service_terminated_at, services_included, service_areas";
-const ROW_COLS = "id, status, source, created_at, contact_name, contact_email, confirmed_phone, business_website, quick_close, plan_tier, website_addon";
+const ROW_COLS = "id, status, source, created_at, contact_name, contact_email, confirmed_phone, business_website, quick_close, plan_tier, website_addon, website_manager, agency_contract";
 
 async function loadAll(service: Service, leadId: string) {
   const [{ data: lead }, { data: rows }] = await Promise.all([
@@ -317,6 +318,7 @@ Deno.serve(async (req) => {
       const cur = (row?.quick_close ?? null) as (QuickCloseRecord & Obj) | null;
       const answers = cleanAnswers(cur?.answers);
       const nowMs = Date.now();
+      const selfHold = row?.status !== "paid" && Object.keys(answers).length === 0 && selfServeBuildHold(row as never);
       /* THE HANDOFF, with what we already know pre-filled (saved answers win). After payment, the
          client's setup checklist too — the same loader Paid Clients uses — so the seller sees what is
          still missing and may submit for delivery when everything required is in. */
@@ -387,9 +389,11 @@ Deno.serve(async (req) => {
           salesperson: (seller as { data?: { display_name?: string } | null }).data?.display_name ?? null,
         },
         onboarding: row ? { id: row.id, status: row.status, contact_name: row.contact_name, contact_email: row.contact_email, confirmed_phone: row.confirmed_phone, business_website: row.business_website } : null,
-        answers, state: closedNow ? "paid" : quickCloseState(row?.status, cur, nowMs), gate: quickCloseGate(answers),
+        /* THE CLIENT'S OWN SIGN-UP (Full Setup) that chose Build on an agency-run site they may still be tied into is HELD for Paul by the
+           same rule as a phone close; the Close tab shows the same stop and the same Release button (approve_review). */
+        answers, state: closedNow ? "paid" : selfHold ? "needs_review" : quickCloseState(row?.status, cur, nowMs), gate: quickCloseGate(answers),
         consents: { lines: buildConsentsFor(answers), wording: buildConsentsWording(answers), confirmed: cur?.build_consents_confirmed ?? null },
-        review: { approved_at: cur?.review_approved_at ?? null, reasons: quickCloseGate(answers).review.map((r) => QC_REVIEW_TEXT[r]),
+        review: { approved_at: cur?.review_approved_at ?? null, reasons: selfHold ? [SELF_SERVE_HOLD_TEXT] : quickCloseGate(answers).review.map((r) => QC_REVIEW_TEXT[r]),
           /* v2: for Paul after payment, never a stop (domain handoff, an exact copy without confirmed rights). */
           flags: quickCloseGate(answers).flags.map((f) => paulFlagText(f, answers)), delivery_approach: deliveryApproach(answers) },
         link: cur?.link_url && cur.link_generated_at ? {

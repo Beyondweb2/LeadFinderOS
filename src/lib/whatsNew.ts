@@ -22,6 +22,18 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-07-full-setup-keeps-seller', date: '2026-10-07', title: 'Full setup keeps you as the seller; an agency contract holds a self-serve Build; previews no longer save', audience: 'all',
+    body: 'If you send a lead the Full Setup link and they fill it in and pay themselves, the sale is still yours. A client who says they are still tied into an agency contract and picks Build themselves is held for Paul, the same as on the phone. The Preview button no longer saves anything.',
+    report: {
+      added: [
+        'Full setup sales are credited to the salesperson who sent the link (the same record a phone close leaves), so the sale, your commission and your performance figures follow.',
+        'If a client on their own page picks Build while still tied into (or unsure about) an agency contract, Paul is told and payment stays closed until he releases it. The Close tab shows the stop and the Release for payment button.',
+        'A banner on the client page when it is opened as a preview: "Preview only. Nothing you enter here is saved."',
+      ],
+      changed: ['Opening the client page from Preview and filling it in used to save your details on their lead. It now saves nothing.', 'Under Build on the client page, a line says it is checked with them first when they may still be in contract.'],
+      removed: [],
+      effect: 'A client who completes the form themselves no longer costs you the sale, and the agency-contract check is the same whichever way the client is closed.',
+    } },
   { id: '2026-10-07-two-ways-to-close', date: '2026-10-07', title: 'Two clear ways to close: Close on the phone, or Send full setup', audience: 'all',
     body: 'The Close tab now asks one thing first: how do you want to close them? Ask the questions yourself and send the agreement and payment link, or send them a link to fill it in themselves.',
     report: {
