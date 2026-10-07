@@ -22,6 +22,7 @@ import { CLIENT_AGREEMENT_VERSION } from '../src/lib/clientAgreement.ts';
 import { checkoutAgreementGate } from '../src/lib/signupGate.ts';
 import { FINDABLE_SETUP_PRICE_GBP, planTierForRoute, serviceRouteFromRow, totalPaymentsFor } from '../src/lib/findableOffer.ts';
 import { afterTermRepLine } from '../src/lib/planTerms.ts';
+import { onboardingQuestionsFor } from '../src/lib/clientOnboardingForm.ts';
 
 let f = 0;
 const ok = (c: unknown, l: string) => { if (!c) f++; console.log(`${c ? 'PASS' : 'FAIL'} ${l}`); };
@@ -142,6 +143,19 @@ console.log('\n── F. REOPEN · RESUME · RESEND · NO DUPLICATE · SELLER AN
   ok(fillAt > 0 && /\.is\(col, null\)/.test(ob.slice(fillAt, fillAt + 600)), 'what they typed fills EMPTY contact fields only — never replaces what Sales recorded');
   /* Seller attribution: the sign-up row is Quick Close's, so sale_creations (the creator of that row) is untouched. */
   ok(!/sale_creations/.test(ob.slice(ob.indexOf('action === "sales_confirm"'), ob.indexOf('action === "q2_prefill"'))) && !/sold_by|assigned_to|user_id: (cLead|confirm)/.test(ob.slice(ob.indexOf('action === "sales_confirm"'), ob.indexOf('action === "q2_prefill"')).replace(/user_id: owner\.user_id/g, '')), 'the confirmation never touches who sold it (sale_creations / sold_by / assigned_to)');
+}
+
+console.log('\n── POST-PAYMENT ONBOARDING asks only what is still missing ──');
+{
+  /* The columns Quick Close writes for a Build sale on a site an agency runs, the domain theirs, the design reusable. */
+  const s = closeSession();
+  s.answer({ decision_maker: 'yes', manager: 'agency', agency_contract: 'free', domain: 'yes', rights: 'yes', route: 'build' });
+  const keys = onboardingQuestionsFor({ route: 'build', row: { ...s.cols, contact_name: 'Sam', contact_email: 's@x.co' }, profile: {}, hasWebsite: true }).map((q) => q.key);
+  ok(!keys.includes('domain_status') && !keys.includes('domain_owned') && !keys.includes('site_rights'), 'the domain, who controls it and the reuse right Quick Close already recorded are NOT asked again');
+  ok(keys.includes('dns_permission') && keys.includes('materials_confirmed') && keys.includes('photos_status') && keys.includes('domain_access'), 'what only the paid client can give is still asked: DNS permission, materials, photos, who handles the domain');
+  ok(!keys.includes('contact_name') && !keys.includes('contact_email'), 'details already on the row are not asked again');
+  const none = onboardingQuestionsFor({ route: 'build', row: { ...s.cols }, profile: {}, hasWebsite: false }).map((q) => q.key);
+  ok(!none.includes('authority_confirmed') && !none.includes('site_rights'), 'no website: the site-ownership questions are never asked after payment either');
 }
 
 console.log('\n── CLIENT CONFIRMATION: "here\'s what we have so far" ──');

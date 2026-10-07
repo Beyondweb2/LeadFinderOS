@@ -99,3 +99,31 @@ No migration. Edge functions that reach the changed modules (`check-import-graph
 `sales-performance`, `send-whatsapp-message`, `stripe-webhook`, `conversation-triage`, `paid-baseline`. **Never `whatsapp-status`.**
 Order: functions first (a new server with the old page is fine), then findable.live. findable-site: clean `origin/master` worktree,
 `npm run deploy` with `--branch=master`.
+
+## 9. Live ZZ QA — 2026-10-07 (production functions + findable.live)
+
+Driver: `scripts/_qa_final_pass.ts` (untracked, never staged). Fixtures `ZZ QA Final A…F, R, S` (ids `11110000-0000-4000-8000-0000000000xx`):
+no phone / email of a real person (paul@move37.fun only), in `metric_exclusions`, **all archived** (read back: `is_archived true, no_contact true, excluded true` ×10).
+The salesperson's close was written through the REAL `planQuickCloseSave` one tap at a time; everything the CLIENT does hit the live public endpoints
+(`findable-onboarding` prefill / submit / sales_confirm, `findable-checkout`, `findable.live/agree/<token>` GET + POST) and payment used `scripts/qa-simulate-payment.ts` twice (duplicate-safe).
+
+**Before the deploy (old server):** a valid ready sales sign-up answered the questionnaire submit with `409 signup_in_progress` — the bad state, reproduced.
+
+| | Scenario | Result (all live) |
+|---|---|---|
+| A | Build · self-managed | Build recommended; link; prefill ready; **submit resumes the same row** (twice); no duplicate; forged `route / plan_tier / website_addon / sold_by` ignored; wrong sign-up id → `not_held`; a correction "agency, still in contract" **holds it** (checkout `held_for_review`, page "being finished", client cannot flip it back); Paul's release → ready; agreement v4 signed on the exact link; paid ×2 → one ledger row, 12 payments, tied to the signature |
+| B | Build · agency, free to leave | resume + no duplicate; harmless correction (domain → not sure) saved, still ready; Looks right; v4; paid, 12 payments |
+| C | Optimise · contract blocker | Optimise recommended / Build not offered; resume; Looks right; **v4 Optimise** signed; paid, **6 payments** |
+| D | Unknown contract | Build default; the link is **refused until Paul releases** (existing stop, `domain_unresolved`); client told "being finished" (`signup_pending`); after release: link, sign, paid, 12 payments |
+| E | No website | Build only; no contract / reuse questions; full journey; 12 payments |
+| F | Resend | `findable-checkout signup_link` twice → **identical URL**; reopen → same sign-up, still one row; seller unchanged |
+
+Seller (A–F): exactly one `sale_creations` row per sign-up, by the Test salesperson, unchanged by every client action; `sold_by_user_id` = that salesperson after payment.
+Browser (findable.live, real fixture): the card renders; **390 px and 1280 px, no horizontal overflow**, buttons ≥ 52 px; Change shows the follow-ups conditionally
+(choosing "We manage it ourselves" removes the contract question); Save and continue → the plan screen. **The stale-draft case in a real tab:** the questionnaire started
+(draft saved in sessionStorage) → the salesperson then closed the lead → reload → the page showed the intro with the confirmation card, the draft was cleared, no questionnaire.
+Incidental proof: a simulated payment on a sign-up with no signature went on **payment hold**, not paid (the v3 backstop).
+
+**Not exercised live — said plainly:** Quick Close's own `save` / `generate_link` / WhatsApp `share_link` (a salesperson JWT could not be minted without the service key, and fetching it was
+blocked by the session's auto-mode — not pursued); the seller `link_generated` event was written by SQL as the Test salesperson. The operator Quick Close screen sits behind login and was not
+viewed in a browser (covered by the source tests; the dialog's classes are unchanged apart from two callouts and a one-column list for the new question).
