@@ -41,7 +41,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { format } from 'date-fns';
 import { parseAmountPaid, isPaidLead } from '@/lib/leadPayment';
 import type { OutreachLead, OutreachActivity, LeadStatus, NextActionType } from '@/types/outreach';
-import { CONTACT_METHOD_OPTIONS } from '@/types/outreach';
+import { CONTACT_METHOD_OPTIONS, REP_CONTACT_METHOD_OPTIONS } from '@/types/outreach';
 import { pipelineStatusLabel } from '@/components/PipelineStatusBadge';
 import { PipelineStatusSelect } from '@/components/PipelineStatusSelect';
 import { headerStateShown, markPaidIsMain } from '@/lib/workspaceHeader';
@@ -634,14 +634,15 @@ function LeadDetailBody({
                     {perms.crawlOwnLead && <LeadDetailCrawlButton lead={lead} />}
                     {perms.clientDelivery && <WelcomePackButton leadId={lead.id} businessName={lead.business_name} />}
                     {perms.clientDelivery && <LeadSiteCheckButton lead={lead} />}
-                    {perms.editLeadRecord && (
+                    {/* PREFERRED CHANNEL BY HAND (2026-10-07, Paul): admin picks any; a selling salesperson picks Call or WhatsApp (lead_set_contact_method). */}
+                    {perms.setContactMethod && (
                       <Select value={lead.contact_method || ''} onValueChange={(v) => onUpdateLead(lead.id, { contact_method: v } as Partial<OutreachLead>)}>
                         <SelectTrigger className="h-7 w-auto gap-1 border-border/60 px-2 text-xs" aria-label="Preferred channel">
                           <span className="text-muted-foreground">Preferred channel:</span>
                           <span className="font-medium">{CONTACT_METHOD_OPTIONS.find((o) => o.value === lead.contact_method)?.label ?? 'not set'}</span>
                         </SelectTrigger>
                         <SelectContent className="pointer-events-auto">
-                          {CONTACT_METHOD_OPTIONS.map((opt) => (<SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>))}
+                          {(perms.editLeadRecord ? CONTACT_METHOD_OPTIONS : REP_CONTACT_METHOD_OPTIONS).map((opt) => (<SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>))}
                         </SelectContent>
                       </Select>
                     )}

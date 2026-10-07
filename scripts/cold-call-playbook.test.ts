@@ -321,8 +321,8 @@ console.log('── 12. SIMPLIFIED PLAYBOOK (Paul, 2026-09-27) ──');
     'the questions: FIRST_QUESTION always first, then the discovery questions');
   {
     const clean = buildColdCallPlaybook(base({ leadCrawl: crawl(CLEAN) }));
-    ok(clean.script.found.lines.length === 1 && clean.script.found.lines[0] === NO_STRONG_ISSUE_LINE && /do not invent one/.test(clean.script.found.note ?? ''),
-      'no strong site issue → the one honest line (NO_STRONG_ISSUE_LINE), no padding');
+    ok(clean.script.found.lines.length === 2 && clean.script.found.lines[0] === NO_STRONG_ISSUE_LINE && /do not invent one/.test(clean.script.found.note ?? '') && (clean.script.found.checklist?.length ?? 0) >= 6,
+      'no strong site issue → "not set up for AI" + the short list of what we make sure it has (NO_STRONG_ISSUE_LINE), no invented fault');
   }
   ok((script.match(/but not you/g) ?? []).length === 1, 'the AI miss is said once, not repeated as a separate explanation');
 

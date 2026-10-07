@@ -17,3 +17,6 @@ they open the Call flow, WhatsApp when the lead is queued. Latest route wins; hi
   Leads' "Remove untouched lead" toggle no longer offers it. This is why the 2026-10-05 tap used to write
   nothing; Paul's 2026-10-07 brief overrides it. Claimability is unaffected (it counts logged contacts).
 - Tests: `scripts/contact-method-auto-select.test.ts`.
+
+## Set by hand (2026-10-07, Paul)
+The pill is a menu for admin (any method) AND a selling salesperson (Call / WhatsApp only, `REP_CONTACT_METHOD_OPTIONS` — the two `lead_set_contact_method` accepts). Flag `leadPermissions().setContactMethod`; offered on the Outreach row, the phone card and the lead window's Details tab (the existing Preferred channel menu). Tests: `scripts/contact-method-manual.test.ts`.

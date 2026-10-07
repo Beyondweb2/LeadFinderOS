@@ -382,7 +382,7 @@ console.log('\n── 25. an older crawl without insights still works ──');
   ok(pb.script.found.lines.length === 1 && /light on detail/.test(pb.script.found.lines[0]) && !pb.script.found.lines[0].endsWith(FIX_TAIL), '25. a crawl stored before insights existed still gives its technical point, unchanged');
   const clean = { result: { ...row.result, signals: { ...row.result.signals, thinPages: 0, thinPageUrls: [] } } };
   const pc = playbookFor({ lead_id: 'x', result: clean.result }, 'https://old.example');
-  ok(pc.script.found.lines.length === 1 && /couldn't see one huge technical problem/.test(pc.script.found.lines[0]), '25. …and a clean old crawl keeps the old honest line (no insights to say more)');
+  ok(pc.script.found.lines.length === 2 && /couldn't see anything badly wrong with the site, but it isn't really set up to be found by AI/.test(pc.script.found.lines[0]), '25. …and a clean old crawl says the site is not set up for AI (no insights to say more)');
   ok(usableInsights({ version: 1, state: 'issues', findings: 'x' }) === null, '25. a malformed stored insight is ignored, never half-used');
 }
 

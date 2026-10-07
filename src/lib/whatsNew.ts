@@ -22,6 +22,17 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-07-call-script-no-issue-and-contact-method', date: '2026-10-07', title: 'Call script: a clean site is "not set up for AI"; set Call or WhatsApp by hand', audience: 'all',
+    body: 'When the website check finds nothing wrong, the call script now says the site is not set up to be found by AI, and shows what we make sure a site has. You can also set a lead\'s contact method to Call or WhatsApp yourself.',
+    report: {
+      added: [
+        'A short list on the Call tab, "What we make sure a site has": no duplicate pages, a clear page for each service and area, enough detail on each page, a readable homepage, AI crawlers let in, nothing hidden from Google, and the sitemap and business details pointing at the right web address.',
+        'Call or WhatsApp can be picked by hand for any lead you work: the Contact Method on the Outreach row and phone card, and Preferred channel on the lead window\'s Details tab, for salespeople as well as Paul.',
+      ],
+      changed: ['When the site check finds no issue, the script now says: "I couldn\'t see anything badly wrong with the site, but it isn\'t really set up to be found by AI. A lot of sites aren\'t." and then one line on what we make sure a site has.'],
+      removed: ['The old line about "the public evidence around the business" on a site that was checked and found fine.'],
+      effect: 'You have a simple, true thing to say on every call even when the website looks fine, and you can mark how you are contacting someone without waiting for the system to guess.',
+    } },
   { id: '2026-10-07-team-templates-seeded', date: '2026-10-07', title: 'The Findable sales templates are now in Team templates', audience: 'all',
     body: 'The eight openers, audit hooks and follow-ups are now ready to use under TEAM TEMPLATES in Inbox Quick reply and Templates.',
     report: {
