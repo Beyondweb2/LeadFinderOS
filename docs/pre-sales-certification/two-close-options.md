@@ -63,3 +63,23 @@ Migration `20261016000000_onboarding_agency_contract.sql` first (additive). Func
 `findable-checkout`, `send-whatsapp-message`, `sales-performance`. Reach the changed modules but behaviour unchanged (not redeployed):
 `client-intake`, `client-onboarding`, `paid-client-hub`, `stripe-webhook`. **`whatsapp-status` untouched.** Then the SPA (push to
 main) and findable.live (`npm run deploy --branch=master` from a clean worktree).
+
+## Live ZZ QA — 2026-10-07 (production functions + findable.live, after the deploy)
+Driver `scripts/_qa_two_options.ts` (untracked, never staged). Fixtures `ZZ QA Two P1, P2, S1, S2` (ids `11120000-0000-4000-8000-0000000000a1/a2/b1/b2`), no real
+contact, in `metric_exclusions`, archived at the end (read back: `is_archived true, no_contact true, excluded true`). Payment simulated (no Stripe, no money), twice per
+sign-up (duplicate-safe).
+
+| | Scenario | Result |
+|---|---|---|
+| P1 | Phone close · Build (owner-run site, services + areas saved) | link is `findable.live/agree/<token>`, never Stripe; customer's page READY on the salesperson's row; 3 facts to confirm (no reuse question); summary *What you offer / Where you want to be found / Your plan = Findable Build*; full questionnaire submit **resumes the same row**, no duplicate; resend → identical URL; Looks right; agreement v4 before payment; paid, 12 payments; route recorded `phone`; seller = the salesperson |
+| P2 | Phone close · Optimise (agency, still in contract, access yes) | same, plan *Findable Optimise*, v4 Optimise, 6 payments |
+| S1 | Full setup · Build (agency, free to leave) | prefill holds no sales sign-up; submit stores `agency_contract=free`, services + areas **before payment**, `plan_tier new_site`; checkout → the agreement first; signed v4; paid, 12 payments; one row; no seller (self-serve) |
+| S2 | Full setup · Optimise (agency, in contract) | `agency_contract=in_contract`, `plan_tier keep`; agreement v4 Optimise; paid, 6 payments |
+
+Driver artefact, not a fault: the "one sign-up creation" check read 2 on P1/P2 because the driver itself wrote a second `link_generated` event for its resend step (the real server writes
+`link_reused`); both creations are by the same salesperson on the same sign-up.
+
+**Not exercised live — said plainly:** the operator screens (behind login — rendered in a throwaway harness against the real Quick Close rules at desktop and 390 px, no overflow, then deleted),
+Quick Close's own `save` / `generate_link`, and the WhatsApp sends (`share_link`, `share_setup`) — a salesperson JWT cannot be minted here. The Full Setup template path is pinned by
+`scripts/quick-close-two-options.test.ts` and by the sender's own shape check, not by a live Meta send. The customer's new panels (contract question, services / areas) were verified by
+typecheck, the site's source guards and the live chunk markers, **not** clicked through in a browser against live data.

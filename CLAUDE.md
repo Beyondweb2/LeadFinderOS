@@ -1315,6 +1315,7 @@ positive allowlist of `baseline`; `isColdOutreachTemplate` treats unknown as COL
 | The page generator, the page-plan queue, Q&A modes | `docs/page-generator.md` (§6i) |
 | Coverage, the town gate, state persistence, the DELETED market view | `docs/state-coverage-market.md` (§6c–§6f; §6e is archive) |
 | findable-site's home page and copy rules | `docs/findable-site.md` (§20, §28) |
+| Closing a sale: the two ways (Close on the phone / Send full setup), the phone questions, the Full Setup link | `docs/pre-sales-certification/two-close-options.md` |
 | Why a trap rule exists — the incident | `docs/traps.md` (§4) |
 | Why an architecture rule exists — the reasoning | `docs/architecture-rules.md` (§6) |
 | The full open-problems record, incl. the WhatsApp cap model and the auth matrix | `docs/open-problems.md` (§8) |
