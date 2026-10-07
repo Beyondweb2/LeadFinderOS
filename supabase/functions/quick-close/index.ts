@@ -7,6 +7,7 @@ import {
   quickCloseEmail, quickCloseGate, quickCloseMessage, quickCloseState, QC_REVIEW_TEXT, QC_REVIEW_HEADING, paulFlagText, deliveryApproach, STRIPE_SESSION_LIFETIME_MS,
   stripeSessionIdFromUrl, quickCloseClosedRefusal, cleanCallNotes, splitCallList, offerFit, callNotesLines, closeRouteOf, phoneCloseNotesComplete, quickCloseGreeting, type QcLinkShare, type QcRecord, type QuickCloseRecord,
 } from "../../../src/lib/quickClose.ts";
+import { cleanCloseEmail, closeRecipient, CLOSE_EMAIL_INVALID_TEXT, fullSetupEmail } from "../../../src/lib/closeEmail.ts";
 import { serviceWindowState } from "../../../src/lib/serviceWindow.ts";
 import { selfServeBuildHold, SELF_SERVE_HOLD_TEXT } from "../../../src/lib/selfServeContract.ts";
 import { decideLinkRoute, LINK_ROUTE_SAY, type ConversationFacts } from "../../../src/lib/paymentLinkRoute.ts";
@@ -65,7 +66,6 @@ const corsHeaders = {
 };
 const json = (b: unknown, s = 200) => new Response(JSON.stringify(b), { status: s, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 /** How many share records a row keeps (the newest win). */
 const MAX_SHARES = 20;
@@ -158,11 +158,11 @@ async function expireSession(sessionId: string | null | undefined): Promise<"exp
 }
 
 /** The Full Setup link's send history, oldest first: payment_link_shared rows marked variant 'setup'. */
-async function setupShareHistory(service: Service, leadId: string): Promise<{ channel: string; at: string; status: string | null; template: string | null }[]> {
+async function setupShareHistory(service: Service, leadId: string): Promise<{ channel: string; at: string; status: string | null; template: string | null; to: string | null }[]> {
   const { data, error } = await service.from("lead_activity").select("created_at, data").eq("lead_id", leadId).eq("kind", "payment_link_shared").order("created_at", { ascending: false }).limit(40);
   if (error) { console.error("[quick-close] setup share history read failed (non-blocking):", error.message); return []; }
   return ((data ?? []) as Obj[]).filter((r) => r.data?.variant === "setup")
-    .map((r) => ({ channel: String(r.data?.channel ?? ""), at: String(r.created_at), status: (r.data?.status as string | null) ?? null, template: (r.data?.template as string | null) ?? null }))
+    .map((r) => ({ channel: String(r.data?.channel ?? ""), at: String(r.created_at), status: (r.data?.status as string | null) ?? null, template: (r.data?.template as string | null) ?? null, to: (r.data?.to as string | null) ?? null }))
     .reverse().slice(-10);
 }
 
@@ -180,7 +180,7 @@ Deno.serve(async (req) => {
     /* ⛔ READY TO SELL (2026-10-05, docs/salesperson-onboarding.md): a salesperson who has not finished
        onboarding cannot start or advance a sale — no Quick Close answers, no payment link, no sharing it.
        Reading, and finishing the handoff for a sale ALREADY made, stay open. The admin is never gated. */
-    if (actor.role === "sales" && (mode === "save" || mode === "save_call" || mode === "generate_link" || mode === "share_link" || mode === "share_setup")) {
+    if (actor.role === "sales" && (mode === "save" || mode === "save_call" || mode === "generate_link" || mode === "share_link" || mode === "share_setup" || mode === "save_email")) {
       const readiness = await salesReadiness(service, actor.id);
       if (!readiness.ready) {
         await recordDenial(service, actor.id, `quick-close:${mode}:not_ready`, typeof body.lead_id === "string" ? body.lead_id : null, { missing: readiness.missing });
@@ -295,9 +295,38 @@ Deno.serve(async (req) => {
       ]);
       return { hasPhone: !!lead.phone, firstOutboundAt: (((firstOut as { data?: Obj[] }).data ?? [])[0]?.created_at as string | undefined) ?? null, lastInboundAt: lastIn };
     };
-    const shareEmailOf = (r: Obj | null): string | null => {
-      const e = String(r?.contact_email || lead.email || "").trim().toLowerCase();
-      return EMAIL_RE.test(e) ? e : null;
+    /* ⛔ THE CUSTOMER'S email only (src/lib/closeEmail.ts): the sign-up's contact email, else the lead's own. Never the
+       actor, never the admin — no email means the screen asks for one. */
+    const shareEmailOf = (r: Obj | null): string | null => closeRecipient(r?.contact_email, lead.email);
+
+    /* ONE email send for both close routes (Agreement & Payment, Full Setup). Recipient = shareEmailOf only; refused out
+       loud when there is none; suppression + the QA sink checked first; the Resend result is the only "sent". */
+    const emailCustomerLink = async (onboardingId: string | null, build: (senderName: string | null) => Promise<{ subject: string; text: string }>): Promise<{ ok: true; to: string } | { ok: false; response: Response }> => {
+      const to = shareEmailOf(row);
+      if (!to) return { ok: false, response: json({ ok: false, error: "no_email", detail: "There is no email address for them yet. Add their email on the screen, or copy the link." }, 409) };
+      const sup = await checkSuppressed(service, { email: to, leadId });
+      if (sup.suppressed) {
+        return { ok: false, response: json({ ok: false, error: sup.matchedOn === "lookup_failed" ? "suppression_unreadable" : "suppressed", detail: sup.matchedOn === "lookup_failed" ? "Could not check the do-not-contact list, so nothing was sent. Try again in a moment." : "They are on the do-not-contact list, so nothing was sent. Ask Paul." }, sup.matchedOn === "lookup_failed" ? 503 : 409) };
+      }
+      /* ⛔ QA (src/lib/qaSafety.ts): a test lead's email goes ONLY to the QA sink. Fails closed. */
+      let qaRefusal: string | null;
+      try { qaRefusal = await qaEmailHold(service, leadId, to); } catch { return { ok: false, response: json({ ok: false, error: "qa_guard_unavailable", detail: "Could not run the safety check, so nothing was sent. Try again in a moment." }, 503) }; }
+      if (qaRefusal) return { ok: false, response: json({ ok: false, error: "qa_email_sink_only", detail: qaRefusal }, 409) };
+      const key = Deno.env.get("RESEND_API_KEY");
+      if (!key) return { ok: false, response: json({ ok: false, error: "email_unconfigured", detail: "Email is not configured." }, 500) };
+      const { data: me } = await service.from("team_members").select("display_name").eq("user_id", actor.id).maybeSingle();
+      const mail = await build((me?.display_name as string | undefined) ?? null);
+      const res = await fetch("https://api.resend.com/emails", {
+        method: "POST", headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ from: "Findable <alerts@findable.live>", to: [to], reply_to: FINDABLE_CONTACT_EMAIL, subject: mail.subject, text: mail.text }),
+      });
+      if (!res.ok) {
+        const detail = (await res.text()).slice(0, 300);
+        await service.from("client_error_reports").insert({ error_id: "quick_close_link_email_failed", context: { lead_id: leadId, status: res.status, detail } });
+        await event(service, leadId, onboardingId, actor.id, "link_share_failed", { channel: "email", status: res.status });
+        return { ok: false, response: json({ ok: false, error: "email_failed", detail: "The email did not send. Try again in a moment, or copy the link." }, 502) };
+      }
+      return { ok: true, to };
     };
 
     const view = async () => {
@@ -607,7 +636,7 @@ Deno.serve(async (req) => {
       const c = (body.corrections && typeof body.corrections === "object" ? body.corrections : {}) as Obj;
       const cols: Obj = {};
       if (typeof c.contact_name === "string") cols.contact_name = c.contact_name.trim().slice(0, 120) || null;
-      if (typeof c.contact_email === "string") { const e = c.contact_email.trim(); if (e && !EMAIL_RE.test(e)) return json({ ok: false, error: "bad_email", detail: "That email address does not look right." }, 400); cols.contact_email = e || null; }
+      if (typeof c.contact_email === "string") { const e = c.contact_email.trim(); const ce = cleanCloseEmail(e); if (e && !ce.ok) return json({ ok: false, error: "bad_email", detail: CLOSE_EMAIL_INVALID_TEXT }, 400); cols.contact_email = ce.ok ? ce.email : null; }
       if (typeof c.confirmed_phone === "string") cols.confirmed_phone = c.confirmed_phone.trim().slice(0, 40) || null;
       if (typeof c.business_website === "string") cols.business_website = c.business_website.trim().slice(0, 200) || null;
       // The trade decides what the paid baseline measures (findable-checkout refuses a lead without one).
@@ -829,31 +858,10 @@ Deno.serve(async (req) => {
         if (last && last.channel === "copy" && last.by === actor.id && last.session === session && Date.now() - Date.parse(last.at) < 120_000) return json(await view());
       }
       if (channel === "email") {
-        const to = (typeof body.to === "string" && body.to.trim() ? body.to.trim() : (shareEmailOf(row) ?? "")).toLowerCase();
-        if (!EMAIL_RE.test(to)) return json({ ok: false, error: "no_email", detail: "There is no usable email address for them. Add one under \"Correct a detail\", or copy the link." }, 409);
-        const sup = await checkSuppressed(service, { email: to, leadId });
-        if (sup.suppressed) {
-          return json({ ok: false, error: sup.matchedOn === "lookup_failed" ? "suppression_unreadable" : "suppressed", detail: sup.matchedOn === "lookup_failed" ? "Could not check the do-not-contact list, so nothing was sent. Try again in a moment." : "They are on the do-not-contact list, so nothing was sent. Ask Paul." }, sup.matchedOn === "lookup_failed" ? 503 : 409);
-        }
-        /* ⛔ QA (src/lib/qaSafety.ts): a test lead's email goes ONLY to the QA sink. Fails closed. */
-        let qaRefusal: string | null;
-        try { qaRefusal = await qaEmailHold(service, leadId, to); } catch { return json({ ok: false, error: "qa_guard_unavailable", detail: "Could not run the safety check, so nothing was sent. Try again in a moment." }, 503); }
-        if (qaRefusal) return json({ ok: false, error: "qa_email_sink_only", detail: qaRefusal }, 409);
-        const key = Deno.env.get("RESEND_API_KEY");
-        if (!key) return json({ ok: false, error: "email_unconfigured", detail: "Email is not configured." }, 500);
-        const { data: me } = await service.from("team_members").select("display_name").eq("user_id", actor.id).maybeSingle();
-        const mail = quickCloseEmail({ greetName, businessName: lead.business_name, url, route, senderName: (me?.display_name as string | undefined) ?? null });
-        const res = await fetch("https://api.resend.com/emails", {
-          method: "POST", headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
-          body: JSON.stringify({ from: "Findable <alerts@findable.live>", to: [to], reply_to: FINDABLE_CONTACT_EMAIL, subject: mail.subject, text: mail.text }),
-        });
-        if (!res.ok) {
-          const detail = (await res.text()).slice(0, 300);
-          await service.from("client_error_reports").insert({ error_id: "quick_close_link_email_failed", context: { lead_id: leadId, status: res.status, detail } });
-          await event(service, leadId, row.id, actor.id, "link_share_failed", { channel, status: res.status });
-          return json({ ok: false, error: "email_failed", detail: "The email did not send. Try again in a moment, or copy the link." }, 502);
-        }
-        share.to = to; share.status = "sent";
+        /* ⛔ The recipient is ALWAYS the saved customer email — a `to` sent by the browser is ignored. */
+        const sent = await emailCustomerLink(row.id, async (senderName) => quickCloseEmail({ greetName, businessName: lead.business_name, url, route, senderName }));
+        if (!sent.ok) return sent.response;
+        share.to = sent.to; share.status = "sent";
       }
       if (channel === "whatsapp" || channel === "whatsapp_template") {
         if (!lead.phone) return json({ ok: false, error: "no_phone", detail: "There is no phone number for them." }, 409);
@@ -905,6 +913,31 @@ Deno.serve(async (req) => {
       if (hErr) console.error("[quick-close] history write failed (non-blocking):", hErr.message);
       return json(await view());
     }
+    /* ══ SAVE THE CUSTOMER'S EMAIL (2026-10-07, fix/customer-email-close-flow) ═══════════════════════════════════
+       The salesperson asks for it on the phone and types it on the Close screen. It is saved to the lead's ONE canonical
+       email field (outreach_leads.email) and — when a sign-up row exists — to its confirmed contact email, so the screen
+       and the send agree (the row wins in closeRecipient). No second "close email" field.
+       ⛔ Only someone who may work this lead (access.ok: its owner / assignee, or the admin) — never another rep's lead, never
+       a client who has paid. Server-side, not only a hidden input. A blank is refused here (use Correct a detail to clear). */
+    if (mode === "save_email") {
+      if (!access.ok) return json({ ok: false, error: "not_your_lead", detail: "That lead is not assigned to you." }, 403);
+      if (isPaidLead(lead) || row?.status === "paid") return json({ ok: false, error: "not_open", detail: "This lead is already a client." }, 409);
+      const closedNow0 = quickCloseClosedRefusal(lead as never, row as never);
+      if (closedNow0) return json({ ok: false, error: closedNow0.error, detail: closedNow0.detail }, 409);
+      const hadEmail = !!shareEmailOf(row);
+      const ce = cleanCloseEmail(body.email);
+      if (!ce.ok) return json({ ok: false, error: "bad_email", detail: CLOSE_EMAIL_INVALID_TEXT }, 400);
+      const { error: eErr } = await service.from("outreach_leads").update({ email: ce.email }).eq("id", leadId);
+      if (eErr) return json({ ok: false, error: "not_saved", detail: eErr.message }, 500);
+      if (row?.id) {
+        const { error: rErr } = await service.from("onboarding_responses").update({ contact_email: ce.email }).eq("id", row.id);
+        if (rErr) return json({ ok: false, error: "not_saved", detail: rErr.message }, 500);
+      }
+      lead.email = ce.email;
+      if (row) row = { ...row, contact_email: ce.email };
+      await event(service, leadId, row?.id ?? null, actor.id, "answers_saved", { field: "contact_email", replaced: hadEmail, source: "close_screen" });
+      return json(await view());
+    }
     /* ══ FULL SETUP (2026-10-07): SEND THE CLIENT THEIR OWN SET-UP LINK ═════════════════════════════════════════
        The OTHER way to close: the client answers the short questions themselves (findable.live/onboarding/?lead=<id>),
        then the agreement, then payment. Nothing is created here — the link is made from the lead id alone, and the page
@@ -915,12 +948,17 @@ Deno.serve(async (req) => {
        variable resolved there (link_variant "setup"). Copy is recorded as copied, never as sent. */
     if (mode === "share_setup") {
       const channel = body.channel;
-      if (channel !== "copy" && channel !== "whatsapp") return json({ ok: false, error: "bad_request" }, 400);
+      if (channel !== "copy" && channel !== "whatsapp" && channel !== "email") return json({ ok: false, error: "bad_request" }, 400);
       if (!access.ok || isPaidLead(lead) || row?.status === "paid") return json({ ok: false, error: "not_open", detail: "This lead can't be sent a set-up link (it is a client, or no longer yours)." }, 409);
       const closedNow = quickCloseClosedRefusal(lead as never, row as never);
       if (closedNow) return json({ ok: false, error: closedNow.error, detail: closedNow.detail }, 409);
       const url = setupLinkUrl(leadId);
-      let status: string | null = null; let template: string | null = null;
+      let status: string | null = null; let template: string | null = null; let emailedTo: string | null = null;
+      if (channel === "email") {
+        const sent = await emailCustomerLink(row?.id ?? null, async (senderName) => fullSetupEmail({ greeting: quickCloseGreeting(row?.contact_name ?? lead.contact_name ?? null), greetName: row?.contact_name ?? lead.contact_name ?? null, businessName: lead.business_name, url, senderName }));
+        if (!sent.ok) return sent.response;
+        emailedTo = sent.to; status = "sent";
+      }
       if (channel === "whatsapp") {
         if (!lead.phone) return json({ ok: false, error: "no_phone", detail: "There is no phone number for them." }, 409);
         const history = await setupShareHistory(service, leadId);
@@ -949,11 +987,11 @@ Deno.serve(async (req) => {
         status = out.simulated ? "simulated" : String(out.status ?? "sent");
         template = lr.route === "whatsapp_template" ? SIGNUP_LINK_TEMPLATE_NAME : null;
       }
-      await event(service, leadId, row?.id ?? null, actor.id, "link_shared", { channel, variant: "setup", status });
+      await event(service, leadId, row?.id ?? null, actor.id, "link_shared", { channel, variant: "setup", status, to: emailedTo });
       const { error: hErr } = await service.from("lead_activity").insert({
         lead_id: leadId, actor_user_id: actor.id, kind: "payment_link_shared",
-        body: channel === "copy" ? "Full setup link copied (to send by hand — not confirmed as sent)" : status === "simulated" ? "Full setup link sent on WhatsApp (test mode — not delivered)" : "Full setup link sent on WhatsApp",
-        data: { source: actor.role === "admin" ? "admin" : "sales", variant: "setup", close_route: "full_setup", channel, template, resend: body.resend === true, status },
+        body: channel === "copy" ? "Full setup link copied (to send by hand — not confirmed as sent)" : channel === "email" ? `Full setup link emailed to ${emailedTo}` : status === "simulated" ? "Full setup link sent on WhatsApp (test mode — not delivered)" : "Full setup link sent on WhatsApp",
+        data: { source: actor.role === "admin" ? "admin" : "sales", variant: "setup", close_route: "full_setup", channel, template, resend: body.resend === true, status, to: emailedTo },
       });
       if (hErr) console.error("[quick-close] history write failed (non-blocking):", hErr.message);
       return json(await view());

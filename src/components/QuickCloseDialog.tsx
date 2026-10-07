@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
-  AlertTriangle, ArrowLeft, BadgePoundSterling, Check, CheckCircle2, ClipboardCopy, ClipboardList, Copy, Flag, Loader2, Lock, Mail, MessageCircle, Pencil, PoundSterling, RefreshCw, ShieldAlert, ShieldCheck, Zap,
+  AlertTriangle, ArrowLeft, BadgePoundSterling, Check, CheckCircle2, ClipboardCopy, ClipboardList, Copy, Flag, Loader2, Lock, MessageCircle, Pencil, PoundSterling, RefreshCw, ShieldAlert, ShieldCheck, Zap,
 } from 'lucide-react';
 import { Callout, EDGE, IconTile, SubSection, TONE, ToneChip, type Tone } from '@/components/operator/ui';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
@@ -21,6 +21,7 @@ import { LINK_READY_FALLBACK, type LinkRoute } from '@/lib/paymentLinkRoute';
 import { FINDABLE_SETUP_PRICE_GBP, SERVICE_ROUTE_NAME, totalPaymentsFor, type ServiceRoute } from '@/lib/findableOffer';
 import { cn } from '@/lib/utils';
 import { ClosePanel } from '@/components/ClosePanel';
+import { CustomerEmailControl } from '@/components/CustomerEmailControl';
 import { SalesHandoffForm } from '@/components/SalesHandoffForm';
 import type { HandoffFieldKey, SalesHandoffFields } from '@/lib/salesHandoff';
 import type { NextStep } from '@/lib/deliveryStage';
@@ -66,7 +67,7 @@ interface View {
   events: { kind: string; at: string; by_me: boolean }[];
   /** THE TWO WAYS TO CLOSE: the route this sign-up is on, and the Full Setup link with how it has gone out. */
   close_route?: CloseRoute;
-  full_setup?: { url: string; shared: { channel: string; at: string; status: string | null; template: string | null }[] };
+  full_setup?: { url: string; shared: { channel: string; at: string; status: string | null; template: string | null; to?: string | null }[] };
   /** The sales handoff (src/lib/salesHandoff.ts) — editable by the seller even after payment. */
   handoff?: { canEdit: boolean; fields: SalesHandoffFields; prefilled: HandoffFieldKey[]; saved_at: string | null; completed_at: string | null; complete: boolean; missing: HandoffFieldKey[];
     /** SEND TO PAUL (2026-10-06): the one authoritative send, once made. */
@@ -223,6 +224,12 @@ export function QuickClosePanel({ leadId, active = true, framed = false }: { lea
   const sendEmail = async () => {
     const r = await run('email', { mode: 'share_link', channel: 'email' });
     if (r) toast({ title: 'Agreement & payment link emailed', description: v?.share?.email ? `To ${v.share.email}` : undefined });
+  };
+  /** Save the customer's email to the lead (quick-close save_email). True when stored; the view comes back with it. */
+  const saveEmail = async (email: string) => {
+    const r = await run('email-save', { mode: 'save_email', email });
+    if (r) toast({ title: 'Email saved', description: email });
+    return !!r;
   };
   /* ONE click (2026-10-07): the server picks the route — the approved findable_signup_link template, or a normal
      message in a conversation they replied to inside 24 hours — and refuses a second send of the same link unless
@@ -473,14 +480,9 @@ export function QuickClosePanel({ leadId, active = true, framed = false }: { lea
                               </div>
                             )}
                             {lr?.route === 'whatsapp_template' && lr.reason === 'ok_unverified' && !sentWa && <p className="text-[11px] text-muted-foreground">{lr.template.say}</p>}
-                            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                              <Button variant="outline" className="h-12 gap-1.5" onClick={() => void sendEmail()} disabled={!v.share?.email || !!busy} title={v.share?.email ? `Emails the link and the terms to ${v.share.email}` : 'No email address for them — add one under "Correct a detail"'}>
-                                {busy === 'email' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Mail className="h-4 w-4" />}Email the link
-                              </Button>
-                              <Button variant="outline" className="h-12 gap-1.5" onClick={() => void doCopy('message', quickCloseMessage(greetName, usableUrl, route))}><ClipboardCopy className="h-4 w-4" />{copied === 'message' ? 'Copied' : 'Copy message'}</Button>
-                            </div>
+                            <CustomerEmailControl testId="qc-customer-email" email={v.share?.email ?? null} busy={busy} onSave={saveEmail} onSend={() => void sendEmail()} />
+                            <Button variant="outline" className="h-12 w-full gap-1.5" onClick={() => void doCopy('message', quickCloseMessage(greetName, usableUrl, route))}><ClipboardCopy className="h-4 w-4" />{copied === 'message' ? 'Copied' : 'Copy message'}</Button>
                             <p className="text-xs text-muted-foreground" data-testid="qc-share-availability">
-                              {v.share?.email ? `Email goes to ${v.share.email}.` : 'No email address on file — add one under "Correct a detail" to email it.'}{' '}
                               {lr?.route === 'whatsapp_reply' ? 'WhatsApp: they replied to us in the last 24 hours.' : lr?.route === 'whatsapp_template' && lr.template.sendable ? 'WhatsApp: sends as the approved findable_signup_link template.' : ''}
                             </p>
                           </>

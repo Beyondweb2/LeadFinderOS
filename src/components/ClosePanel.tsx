@@ -11,6 +11,7 @@ import { notifyLeadChanged } from '@/lib/leadSync';
 import { LINK_READY_FALLBACK } from '@/lib/paymentLinkRoute';
 import { OnboardingLinkCard } from '@/components/OnboardingLinkCard';
 import { QuickClosePanel, quickCloseKey, useQuickClose } from '@/components/QuickCloseDialog';
+import { CustomerEmailControl } from '@/components/CustomerEmailControl';
 import { cn } from '@/lib/utils';
 
 /* ══ THE TWO WAYS TO CLOSE (2026-10-07, fix/quick-close-two-options) ═══════════════════════════════════════
@@ -101,7 +102,7 @@ export function FullSetupPanel({ leadId }: { leadId: string }) {
   const lr = v.link_route;
   const canWa = lr?.route === 'whatsapp_reply' || lr?.route === 'whatsapp_template';
   const sentWa = (setup?.shared ?? []).filter((s) => s.channel === 'whatsapp' && s.status !== 'failed').slice(-1)[0] ?? null;
-  const call = async (channel: 'whatsapp' | 'copy', resend = false) => {
+  const call = async (channel: 'whatsapp' | 'copy' | 'email', resend = false) => {
     setBusy(channel);
     try {
       const r = await invokeEdge<typeof v>('quick-close', { lead_id: leadId, mode: 'share_setup', channel, ...(resend ? { resend: true } : {}) });
@@ -116,6 +117,23 @@ export function FullSetupPanel({ leadId }: { leadId: string }) {
   const send = async (resend = false) => {
     if (resend && !window.confirm('Send the full setup link to them on WhatsApp again?')) return;
     if (await call('whatsapp', resend)) toast({ title: 'Full setup sent on WhatsApp' });
+  };
+  const sendEmail = async () => {
+    if (await call('email')) toast({ title: 'Full setup link emailed', description: v.share?.email ? `To ${v.share.email}` : undefined });
+  };
+  /** The customer's email is saved to the lead itself (quick-close save_email) — same field the other screens read. */
+  const saveEmail = async (email: string) => {
+    setBusy('email-save');
+    try {
+      const r = await invokeEdge<typeof v>('quick-close', { lead_id: leadId, mode: 'save_email', email });
+      qc.setQueryData(quickCloseKey(leadId), r);
+      notifyLeadChanged(leadId);
+      toast({ title: 'Email saved', description: email });
+      return true;
+    } catch (e) {
+      toast({ title: 'Not done', description: edgeErrorMessage(e), variant: 'destructive' });
+      return false;
+    } finally { setBusy(null); }
   };
   const copy = async () => {
     try { await navigator.clipboard.writeText(setup!.url); setCopied(true); window.setTimeout(() => setCopied(false), 1800); toast({ title: 'Link copied' }); void call('copy'); }
@@ -141,12 +159,13 @@ export function FullSetupPanel({ leadId }: { leadId: string }) {
           <span className="text-muted-foreground">{lr?.say ?? 'WhatsApp is not available for this link.'} Copy the link and send it another way.</span>
         </Callout>
       )}
+      <CustomerEmailControl testId="setup-customer-email" email={v.share?.email ?? null} busy={busy} onSave={saveEmail} onSend={() => void sendEmail()} />
       <Button variant="outline" className="h-12 w-full gap-1.5" onClick={() => void copy()} data-testid="setup-copy-link">
         {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}{copied ? 'Copied' : 'Copy link'}
       </Button>
       {(setup?.shared.length ?? 0) > 0 && (
         <ul className="space-y-0.5 text-xs text-muted-foreground" data-testid="setup-share-history">
-          {setup!.shared.slice().reverse().map((s) => <li key={s.channel + s.at}>✓ {s.channel === 'copy' ? 'Copied (to send by hand)' : s.status === 'simulated' ? 'Sent on WhatsApp (test mode — not delivered)' : 'Sent on WhatsApp'} · {hhmm(s.at)}</li>)}
+          {setup!.shared.slice().reverse().map((s) => <li key={s.channel + s.at}>✓ {s.channel === 'copy' ? 'Copied (to send by hand)' : s.channel === 'email' ? `Emailed${s.to ? ` to ${s.to}` : ''}` : s.status === 'simulated' ? 'Sent on WhatsApp (test mode — not delivered)' : 'Sent on WhatsApp'} · {hhmm(s.at)}</li>)}
         </ul>
       )}
       <OnboardingLinkCard lead={{ id: v.lead.id, business_name: v.lead.business_name, category: v.lead.trade, search_location: v.lead.town, amount_paid: 0 }} />
