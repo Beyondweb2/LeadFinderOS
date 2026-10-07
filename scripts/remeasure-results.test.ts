@@ -2,6 +2,7 @@
    Pins Paul's 2026-09-13 spec: pooled engines; inside the noise band is NOT gone up; a replay that
    gave up or a thin question holds; the copy is gated until approved; the claim sentence is the
    guarantee's own second sentence. */
+import { afterTermSummaryWords } from '../src/lib/findableOffer.ts';
 import { compareMeasurements, MIN_CELLS_FOR_QUESTION_CLAIM, NOISE_BAND_PP } from '../src/lib/measurementCompare.ts';
 import type { QueueRowLite } from '../src/lib/baselineView.ts';
 import {
@@ -173,10 +174,11 @@ console.log("-- The monthly: Stripe's date from sign-up, not the claim window (2
 
   /* ⛔ PAUL'S STANDING RULE: maintenance is the first thing anyone cuts. */
   const CARD_SAVED_NOTICE = cardSavedNoticeFor('build');
-  for (const text of [...withMonthly, ...rem.paragraphs, CARD_SAVED_NOTICE, cardSavedNoticeFor('optimise')]) {
+  /* v4: Build's signed agreement names an OPTIONAL Hosting and Maintenance service (clause 9A); the shared end-of-term sentence that says so is the one place the word is true and required. */
+  for (const text of [...withMonthly, ...rem.paragraphs, CARD_SAVED_NOTICE, cardSavedNoticeFor('optimise')].map((x) => x.split(afterTermSummaryWords('build')).join(''))) {
     ok(!/maintain|maintenance/i.test(text), `no "maintain": "${text.slice(0, 44)}"`);
   }
-  ok(/today/.test(CARD_SAVED_NOTICE) && /12-month minimum term/.test(CARD_SAVED_NOTICE) && /continues at £29\.99 a month until you cancel/.test(CARD_SAVED_NOTICE), 'the card notice says what is taken today, the term, and the Continuing Service after it (v3 clause 9A)');
+  ok(/today/.test(CARD_SAVED_NOTICE) && /12-month minimum term/.test(CARD_SAVED_NOTICE) && /ends after payment 12/.test(CARD_SAVED_NOTICE) && /£29\.99 a month Hosting and Maintenance is optional/.test(CARD_SAVED_NOTICE) && !/continues at £29\.99/.test(CARD_SAVED_NOTICE), 'the card notice says what is taken today, the term, and that Build ends after payment 12 with the £29.99 only as an option (v4 clause 9A)');
 }
 
 console.log("-- Billing notices: the right message, and never the wrong one --");

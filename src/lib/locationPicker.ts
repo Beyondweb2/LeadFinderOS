@@ -33,12 +33,12 @@ export interface SearchCountryOption {
 export const SEARCH_COUNTRY_OPTIONS: readonly SearchCountryOption[] = [
   { value: 'UK', name: 'United Kingdom', code: 'GB', primary: true },
   { value: 'Australia', name: 'Australia', code: 'AU', primary: true },
-  { value: 'India', name: 'India', code: 'IN', primary: true },
   { value: 'Belgium', name: 'Belgium', code: 'BE', primary: false },
   { value: 'Brazil', name: 'Brazil', code: 'BR', primary: false },
   { value: 'Canada', name: 'Canada', code: 'CA', primary: false },
   { value: 'France', name: 'France', code: 'FR', primary: false },
   { value: 'Germany', name: 'Germany', code: 'DE', primary: false },
+  { value: 'India', name: 'India', code: 'IN', primary: false },
   { value: 'Ireland', name: 'Ireland', code: 'IE', primary: false },
   { value: 'Italy', name: 'Italy', code: 'IT', primary: false },
   { value: 'Japan', name: 'Japan', code: 'JP', primary: false },

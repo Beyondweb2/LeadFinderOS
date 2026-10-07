@@ -240,10 +240,11 @@ export const QUEUE_SKIP_LABEL: Record<string, string> = {
   contacted_by_phone: 'already contacted by phone — initial opener not queued',
   contacted_logged: 'already in conversation (a logged contact) — initial opener not queued',
   no_phone: 'no phone',
-  /* ⛔ COLD WHATSAPP IS UK + INDIA ONLY (sales_queue_opener's not_a_uk_mobile). An Australian mobile lands here
-     too — the words say so rather than calling it "not a mobile". Switching Australia on is Paul's decision
-     (consent rules + a Sydney send window), not a label change (2026-10-07). */
-  not_a_uk_mobile: 'not a UK or Indian mobile (WhatsApp outreach is not switched on for Australia or other countries yet)',
+  /* ⛔ COLD WHATSAPP IS UK ONLY (sales_queue_opener's not_a_uk_mobile; India removed 2026-10-15). An Australian mobile
+     lands here too — the words say so rather than calling it "not a mobile". Switching Australia on is Paul's
+     decision (consent rules + a Sydney send window), not a label change. The reason CODE is a stored token: only
+     this wording changed. */
+  not_a_uk_mobile: 'not a UK mobile (cold WhatsApp outreach is UK only — not switched on for Australia or other countries)',
   opted_out: 'opted out',
   daily_limit: 'over your daily limit',
 };

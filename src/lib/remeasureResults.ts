@@ -25,7 +25,8 @@
    Flipping it is a deliberate commit and deploy, never a runtime switch.
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 import { MIN_CELLS_FOR_QUESTION_CLAIM, type MeasurementComparison } from './measurementCompare.ts';
-import { guaranteeNumberWentUp } from './clientTimeline.ts';
+import { guaranteeNumberWentUp, type ContinuingMode } from './clientTimeline.ts';
+import { afterTermSummaryWords } from './planTerms.ts';
 import { FINDABLE_CONTINUING_GBP, FINDABLE_MONTHLY_GBP, FINDABLE_SETUP_PRICE_GBP, GUARANTEE_PAYMENT_TWO_SENTENCE, REMEASURE_CLAIM_SENTENCE, REMEASURE_WEEKS_STANDARD, serviceRouteForTotal, termMonthsFor, totalPaymentsFor } from './findableOffer.ts';
 import { defaultRemeasureDue, remeasureOffsetDays } from './deliveryCockpit.ts';
 
@@ -241,6 +242,8 @@ export interface ResultsCopyInput {
   /** v3 terms (2026-10-05): the Continuing Service (FINDABLE_CONTINUING_GBP) follows the minimum term (clause 9A), and the
    *  first monthly payment is the Payment Start Date, the day after the Refund Window (5.6). */
   v3Terms?: boolean;
+  /** What follows the minimum term for THIS client (clientTimeline.continuingModeFor). Absent with v3Terms = v3's automatic continuation. */
+  continuingMode?: ContinuingMode;
 }
 
 /* ⛔ THE CLAIM PARAGRAPH — ONE SENTENCE OF OURS IN FRONT OF ONE SENTENCE THAT IS LOCKED.
@@ -301,7 +304,7 @@ export function resultsEmailParagraphs(i: ResultsCopyInput): string[] {
     /* v3: the date is the Payment Start Date (the day after the 14-day Refund Window); after the minimum
        term the Continuing Service follows (9A) — never "nothing is charged after". */
     const route = serviceRouteForTotal(i.totalPayments);
-    out.push(`Your first monthly payment of £${FINDABLE_MONTHLY_GBP} is on ${i.monthlyStartsOn}, the day after your 14-day refund window closes. The monthly covers ${monthlyCoversPhrase(route)}${route ? `, for the rest of your ${termMonthsFor(route)}-month minimum term (${totalPaymentsFor(route)} payments, counting the £${FINDABLE_SETUP_PRICE_GBP} you paid at sign-up)` : ''}. After that your service continues at £${FINDABLE_CONTINUING_GBP} a month until you cancel with 30 days' notice, and we will remind you at least 30 days before.`);
+    out.push(`Your first monthly payment of £${FINDABLE_MONTHLY_GBP} is on ${i.monthlyStartsOn}, the day after your 14-day refund window closes. The monthly covers ${monthlyCoversPhrase(route)}${route ? `, for the rest of your ${termMonthsFor(route)}-month minimum term (${totalPaymentsFor(route)} payments, counting the £${FINDABLE_SETUP_PRICE_GBP} you paid at sign-up)` : ''}. ${endOfTermSentence(i, route)}`);
   } else if (i.wentUp && i.monthlyStartsOn) {
     const route = serviceRouteForTotal(i.totalPayments);
     out.push(route
@@ -338,4 +341,12 @@ export function resultsDocumentMeaning(i: ResultsCopyInput): string[] {
     ];
   }
   return [`The number has not gone up.`, resultsClaimParagraph()];
+}
+
+/** What the results email says about the end of the plan, by what THIS client signed (clientTimeline.continuingModeFor).
+ *  v3 (and a missing mode, as before): the £29.99 continuation. v4: Optimise ends, Build's £29.99 is optional. */
+function endOfTermSentence(i: { continuingMode?: ContinuingMode }, route: ReturnType<typeof serviceRouteForTotal>): string {
+  const mode = i.continuingMode ?? 'automatic';
+  if (mode === 'automatic') return `After that your service continues at £${FINDABLE_CONTINUING_GBP} a month until you cancel with 30 days' notice, and we will remind you at least 30 days before.`;
+  return route ? afterTermSummaryWords(route) : 'Your plan ends after your last agreed payment and the final service period. There is no automatic continuing charge.';
 }

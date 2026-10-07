@@ -20,6 +20,10 @@
        Refused, not guessed.
    ⛔ PURE, NO IMPORTS: edge functions import this by relative path. */
 
+/* ⛔ INDIA IS NO LONGER AN OUTREACH MARKET (2026-10-15). This branch stays ONLY so a HISTORICAL India lead's stored
+   number still normalises to the digits its thread was sent to — replies, Inbox matching and the phone-history
+   guard read it. It decides nothing about sending: cold WhatsApp to a non-UK destination is refused by
+   src/lib/ukColdDestination.ts in the queue and in send-whatsapp-message. */
 const INDIA = new Set(['INDIA', 'IN']);
 const AUSTRALIA = new Set(['AUSTRALIA', 'AU']);
 

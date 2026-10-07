@@ -24,7 +24,7 @@ const fill: AgreementFill = {
 
 async function main() {
   console.log('── THE WORDS: Paul\'s v3 .docx, verbatim ──');
-  ok(CLIENT_AGREEMENT_VERSION === 'v3', 'v3 is the current version');
+  ok(agreementVersion('v3').version === 'v3' && CLIENT_AGREEMENT_VERSION === 'v4', 'v3 stays a pinned, readable version (v4 is the current one: scripts/client-agreement-v4.test.ts)');
   /* scripts/fixtures/client-agreement-v3-source.txt is the plain text of Findable_Client_Service_Agreement_v3_clean.docx
      (one paragraph per line, tabs as spaces). Every clause paragraph — "1. ABOUT…" to the end of 16.7 — must
      appear, in order, as a line of the agreed text. One changed word fails. */
@@ -75,7 +75,7 @@ async function main() {
   ok(/client_agreement_acceptances_one_v3_per_signup[\s\S]{0,120}\(onboarding_id, agreement_version\)/.test(mig), 'one v3 signature per sign-up (a double submit cannot make two)');
 
   console.log('\n── THE PAGE: details, offer, key points, the FULL agreement, nothing pre-ticked ──');
-  const page = agreementPageHtml({ mode: 'sign', businessName: 'Acme Plumbing', route: 'build', values: {}, errors: [], signupId: 'OB1' });
+  const page = agreementPageHtml({ mode: 'sign', businessName: 'Acme Plumbing', route: 'build', values: {}, errors: [], signupId: 'OB1', version: 'v3' });
   ok(page.includes('Your offer: Findable Build') && page.includes('KEY POINTS: please read before you accept') && page.includes('9A. CONTINUING SERVICE AFTER THE MINIMUM TERM') && page.includes('16.7'), 'offer, key points and the whole agreement are on the page');
   ok(!/name="agree"[^>]*checked/.test(page) && !/name="authority"[^>]*checked/.test(page) && !/name="marketingOptOut"[^>]*checked/.test(page), 'NOTHING is pre-ticked');
   ok(/name="agree" value="yes"[^>]*required/.test(page) && /name="authority" value="yes"[^>]*required/.test(page), 'agree AND authority are both required affirmative ticks');
@@ -110,7 +110,7 @@ async function main() {
   ok(/if \(!gateResult\.ok\) \{[\s\S]{0,400}return json\(\{ ok: true, kind: "agreement_required", url: signupUrl/.test(co), 'unsigned → no session; the visitor is sent to their agreement page (the site already navigates to `url`)');
   ok(/if \(purpose === "signup_link"\) \{[\s\S]{0,300}kind: "signup_link", url: signupUrl, session_id: null/.test(co) && co.indexOf('purpose === "signup_link"') < stripeAt, 'Quick Close gets the sign-up link — never a Stripe URL');
   ok(!/consent_collection/.test(co) && !/checkoutConsentText/.test(co), 'no checkout tick any more — v3 is accepted on the agreement page only');
-  ok(/metadata\[agreement_acceptance_id\]", gateResult\.acceptanceId/.test(co) && /metadata\[commercial_terms\]", COMMERCIAL_TERMS_V3/.test(co), 'the session carries the exact signature it rests on and the terms');
+  ok(/metadata\[agreement_acceptance_id\]", gateResult\.acceptanceId/.test(co) && /metadata\[commercial_terms\]", commercialTermsFor\(CLIENT_AGREEMENT_VERSION\)/.test(co), 'the session carries the exact signature it rests on and the terms');
   ok(/return json\(\{ ok: false, error: "agreement_unavailable" \}, 503\)/.test(co), 'no agreement link / unreadable acceptance → fails CLOSED (no session)');
   ok(/form\.set\("cancel_url", signupUrl\)/.test(co), 'backing out of Stripe returns to the agreement page');
   const ag = read('supabase/functions/client-agreement/index.ts');

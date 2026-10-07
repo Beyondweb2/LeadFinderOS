@@ -22,6 +22,7 @@ import { buildsFromAudit } from "../../../src/lib/templateRouting.ts";
 import { rivalHookDecision, templateNeedsRivals } from "../../../src/lib/rivalHook.ts";
 import { pitchEverSent } from "../_shared/auto-reply-rules.ts";
 import { isColdOutreachTemplate } from "../../../src/lib/coldOutreach.ts";
+import { isUkColdDestination, NOT_A_UK_MOBILE } from "../../../src/lib/ukColdDestination.ts";
 import { resolveOnboardingFollowupVars } from "../_shared/onboarding-followup.ts";
 import { createTemplateSnapshot } from "../../../src/lib/whatsappTemplateSnapshot.ts";
 import { canWorkLead, isClientLead, refusalBody, resolveActor } from "../_shared/access.ts";
@@ -70,7 +71,8 @@ const WINDOW_MS = 24 * 60 * 60 * 1000;
    asserts "dry_run" is listed IF AND ONLY IF this file actually contains the dry-run return, so the
    marker cannot claim a feature these bytes do not have — a constant that can lie is worse than no
    constant. BUMP `BUILD_ID` in the same commit as any change worth proving live. */
-const CAPABILITIES = ["dry_run", "build_phase_hold", "routing_leaf", "any_approved_opener", "link_templates"] as const;
+const CAPABILITIES = ["dry_run", "build_phase_hold", "routing_leaf", "any_approved_opener", "link_templates", "uk_only_cold"] as const;
+/* 2026-10-15a: cold WhatsApp is UK-only (src/lib/ukColdDestination.ts) - a cold template to a non-UK destination is refused. */
 /* 2026-10-07a: findable_signup_link / findable_onboarding — server-resolved links, Meta's LIVE template status
    (_shared/template-status.ts), one send per lead unless resent on purpose. */
 /* 2026-09-25a: ai_site_findings_v2 APPROVED — six body params (no report link) + the clean-site {{6}}.
@@ -87,7 +89,7 @@ const CAPABILITIES = ["dry_run", "build_phase_hold", "routing_leaf", "any_approv
    gone; the capability reads any_approved_opener).
    2026-09-30b: an explicit opt-out refuses MARKETING templates here too (src/lib/marketingConsent.ts).
    2026-10-04a: QA safety — a QA fixture is simulated, a test-account lead is refused (src/lib/qaSafety.ts). */
-const BUILD_ID = "2026-10-07a-link-templates";
+const BUILD_ID = "2026-10-15a-uk-only-cold";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -419,6 +421,13 @@ Deno.serve(async (req) => {
          looking at the thread and can have a good reason (they asked again, the first went to a dead
          handset). The UI sends allow_resend only after an explicit confirm, so an ACCIDENTAL repeat -
          the actual failure mode - is still refused. */
+      /* ⛔ COLD WHATSAPP IS UK-ONLY (2026-10-15, src/lib/ukColdDestination.ts). A cold template to a number that is not a
+         UK mobile is refused, NOT overridable by allow_resend — it is a market rule, not a repeat-send confirm.
+         Property of the digits we would send to; a continuation or a free-form reply never reaches this. */
+      if (isColdOutreachTemplate(templateName) && !isUkColdDestination(to)) {
+        return json({ ok: false, error: NOT_A_UK_MOBILE, template: templateName,
+          reason: "Cold WhatsApp outreach is UK only - this is not a UK mobile, so nothing was sent. Use a reply or a follow-up in an open conversation." }, 200);
+      }
       if (!allowResend && isColdOutreachTemplate(templateName)) {
         const { data: priorAny } = await service
           .from("whatsapp_messages")

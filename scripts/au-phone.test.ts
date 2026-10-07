@@ -11,7 +11,7 @@
      · line type: an Australian mobile is MOBILE, an Australian landline is a landline (not WhatsApp), 13 / 1300
        numbers are never WhatsApp-eligible; "0061 4…" parses on an Australia lead; the edge copy carries the same rule;
      · a typed Australian number is stored the way Google stores one ("+61 412 345 678");
-     · cold WhatsApp eligibility is NOT widened: sales_queue_opener's UK/India test is untouched, and the
+     · cold WhatsApp eligibility is NOT widened: sales_queue_opener's cold test is UK-only (India removed 2026-10-15), and the
        refusal says honestly that Australia is not switched on.
 
    Run: npx tsx scripts/au-phone.test.ts
@@ -106,8 +106,8 @@ ok(internationalPhone('(02) 9876 5432', 'Australia') === '+61 2 9876 5432', 'a S
 ok(internationalPhone('07700 900123', 'Australia') === null, 'a UK number typed on an Australia lead is refused, not relabelled');
 {
   const d = read('src/components/AddLeadDialog.tsx');
-  ok(/value: 'Australia', label: 'Australia'/.test(d) && /value: 'UK', label: 'United Kingdom'/.test(d) && /value: 'India'/.test(d) && /country: 'UK', businessName/.test(d),
-    'Add a lead offers Australia (UK still the default, India kept)');
+  ok(/value: 'Australia', label: 'Australia'/.test(d) && /value: 'UK', label: 'United Kingdom'/.test(d) && !/value: 'India'/.test(d) && /country: 'UK', businessName/.test(d),
+    'Add a lead offers Australia (UK still the default; India is no longer offered, 2026-10-15)');
   ok(/if \(f\.country !== 'UK' && f\.phone\.trim\(\)\) \{\n\s+const intl = internationalPhone\(f\.phone, f\.country\);/.test(d), '…and stores an Australian typed number in +61 form through internationalPhone');
 }
 
@@ -116,9 +116,9 @@ console.log('\n── cold WhatsApp is NOT widened to Australia; the words are h
   const latest = fs.readdirSync(path.join(ROOT, 'supabase/migrations')).filter((f) => f.endsWith('.sql')).sort()
     .filter((f) => /create or replace function public\.sales_queue_opener/i.test(read(`supabase/migrations/${f}`))).pop()!;
   const sqo = read(`supabase/migrations/${latest}`);
-  ok(/'not_a_uk_mobile'/.test(sqo) && !/\^61/.test(sqo.slice(sqo.indexOf('function public.sales_queue_opener'))), `the newest sales_queue_opener (${latest}) still refuses anything but a UK / Indian mobile (no 61 clause)`);
-  ok(!/20261014/.test(latest), 'this pass adds no sales_queue_opener definition');
-  ok(/Australia/.test(QUEUE_SKIP_LABEL.not_a_uk_mobile) && /not a UK or Indian mobile/.test(QUEUE_SKIP_LABEL.not_a_uk_mobile), 'the queue refusal says "not a UK or Indian mobile" and that Australia is not switched on');
+  ok(/'not_a_uk_mobile'/.test(sqo) && !/\^61/.test(sqo.slice(sqo.indexOf('function public.sales_queue_opener'))), `the newest sales_queue_opener (${latest}) still refuses anything but a UK mobile (no 61 clause, no 91 clause)`);
+  ok(!/\^91/.test(sqo.slice(sqo.indexOf('function public.sales_queue_opener'))), 'and the newest definition has no India (91) alternative');
+  ok(/Australia/.test(QUEUE_SKIP_LABEL.not_a_uk_mobile) && /not a UK mobile/.test(QUEUE_SKIP_LABEL.not_a_uk_mobile) && !/Indian/.test(QUEUE_SKIP_LABEL.not_a_uk_mobile), 'the queue refusal says "not a UK mobile" (no India) and that Australia is not switched on');
   ok(/Australia/.test(LAUNCH_SKIP_TEXT.not_a_uk_mobile) && !/^not a mobile number$/.test(LAUNCH_SKIP_TEXT.not_a_uk_mobile), 'the campaign launch no longer calls an Australian mobile "not a mobile number"');
 }
 

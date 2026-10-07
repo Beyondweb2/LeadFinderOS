@@ -11,10 +11,11 @@
 
    ⛔ THESE ARE THE SALES WORDS, NOT THE CONTRACT. Billing already matches (Stripe cancels an Optimise
       subscription after its sixth charge; nothing ever bills £29.99 automatically — delayed-subscription.ts,
-      CONTINUING_SERVICE_AUTOMATION). The signed v3 agreement (clause 9A), the checkout line and findable-site
-      still describe a £29.99 continuation for BOTH routes; the v4 agreement that removes it for Optimise is on
-      branch improve/sales-script-commercial-alignment awaiting Paul's approval of its legal wording. This file
-      never edits legal terms, Stripe or the guarantee.
+      CONTINUING_SERVICE_AUTOMATION). v4 (2026-10-07, Findable_Client_Service_Agreement_v4_clean.docx) is now the
+      agreement: Optimise ends after payment 6 and the final service period; Build ends after payment 12 and the
+      £29.99 Hosting and Maintenance is a separate OPT-IN (clause 9A). The signed v3 agreement still says a £29.99
+      continuation for BOTH routes — that is what those clients signed, and continuingModeFor (clientTimeline.ts)
+      keeps it for them. This file never edits legal terms, Stripe or the guarantee.
    ⛔ Every figure is a findableOffer.ts constant; nothing here is a typed price.
    Pure. Edge-reachable (quick-close via quickClose.ts): relative imports, explicit .ts.
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
@@ -45,6 +46,10 @@ export function afterTermClientWords(route: ServiceRoute): string {
     ? `Once all ${n} payments are made the website is yours. If you'd like us to keep hosting and maintaining it after that, it's £${FINDABLE_CONTINUING_GBP} a month for hosting and maintenance, and you can cancel with 30 days' notice.`
     : `The ${ordinalOf(n)} payment is the last one: it covers a final month of work, and then the plan ends — nothing more is charged.`;
 }
+
+export { afterTermSummaryWords, endOfTermKeyPoint } from './findableOffer.ts';
+/* ⛔ The end-of-term words (afterTermSummaryWords, endOfTermKeyPoint) live in findableOffer.ts, the constants module, and are
+   re-exported above: findableOffer.ts uses them in its own offer lines, so they cannot be defined here (an import cycle). */
 
 /** One spoken line per plan for "How much is it?" — both plans, each with its own ending. */
 export function bothPlansSpoken(): string {

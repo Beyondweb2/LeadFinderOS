@@ -87,10 +87,11 @@ export function webhookV3Verdict(args: {
   onboardingId: string;
   currentVersion: string;
   recomputedSha: string | null;
-  v3Terms: string;
+  /** The terms the CURRENT agreement version puts a sale on (clientTimeline.commercialTermsFor) — null = none, refuses. */
+  expectedTerms: string | null;
 }): WebhookVerdict {
   const m = args.metadata ?? {};
-  if (m.commercial_terms !== args.v3Terms) return { ok: false, reason: 'not_a_v3_checkout: the session was not created by the agreement-first checkout' };
+  if (!args.expectedTerms || m.commercial_terms !== args.expectedTerms) return { ok: false, reason: 'not_an_agreement_first_checkout: the session was not created by the agreement-first checkout' };
   if (m.agreement_version !== args.currentVersion) return { ok: false, reason: `old_version: the session names agreement version ${m.agreement_version ?? 'none'}` };
   if (!m.agreement_acceptance_id) return { ok: false, reason: 'no_acceptance_id: the session names no signature' };
   if (!args.leadId) return { ok: false, reason: 'no_lead: the session names no client' };

@@ -17,13 +17,13 @@ import { internationalPhone } from '@/lib/lineType';
 /* ⛔ THE COUNTRY IS ASKED, NOT ASSUMED (2026-09-28). It was hard-coded UK, so a hand-added Pune lead was
    stored as UK: its audit questions read "Pune UK", the engines were asked from Great Britain, and its
    typed "98765 43210" had no country code. UK stays the default and a UK lead is saved exactly as before.
-   Only countries a salesperson is actually working are offered. Australia added 2026-10-07: a typed
+   Only countries a salesperson is actually working are offered. India was removed 2026-10-15 (no longer an outreach
+   market; old India leads are untouched and keep their country). Australia added 2026-10-07: a typed
    "0412 345 678" is stored "+61 412 345 678" (never a UK 44… number); a landline / 1300 number is stored too
    (it can be called), it is just never a WhatsApp destination. */
 const ADD_COUNTRIES = [
   { value: 'UK', label: 'United Kingdom', phoneHint: '07… (or give a Maps link)', example: '07700 900123' },
   { value: 'Australia', label: 'Australia', phoneHint: '0412 345 678 or +61 … (or give a Maps link)', example: '0412 345 678' },
-  { value: 'India', label: 'India', phoneHint: '+91 98765 43210 (or give a Maps link)', example: '+91 98765 43210' },
 ] as const;
 
 /* ════════════════════════════════════════════════════════════════════════════════════════════════
@@ -59,13 +59,13 @@ export function AddLeadDialog({ open, onOpenChange, onAdded }: { open: boolean; 
 
   const submit = async (confirmSiteMatch = false) => {
     setRefusal(null); setSiteMatch(null);
-    /* A non-UK typed number is stored the way Google stores one ("+91 98765 43210"); one that is not a
+    /* A non-UK typed number is stored the way Google stores one ("+61 412 345 678"); one that is not a
        valid number there is refused here rather than saved in a form the WhatsApp paths cannot place. */
     let phone = f.phone;
     if (f.country !== 'UK' && f.phone.trim()) {
       const intl = internationalPhone(f.phone, f.country);
       if (!intl) {
-        const example = ADD_COUNTRIES.find((c) => c.value === f.country)?.example ?? '+91 98765 43210';
+        const example = ADD_COUNTRIES.find((c) => c.value === f.country)?.example ?? '+61 412 345 678';
         setRefusal(`That phone number is not a valid ${f.country} number. Check it, or type it with its country code (e.g. ${example}).`);
         return;
       }

@@ -10,6 +10,7 @@
       guessed for an unknown version would be a second, unchecked statement of the terms.
    ⚠️ EXPLICIT .ts ON EVERY RELATIVE IMPORT — reached from an edge function (client-agreement).
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
+import { afterTermSummaryWords } from './planTerms.ts';
 import {
   FINDABLE_CONTINUING_GBP, FINDABLE_MONTHLY_GBP, FINDABLE_SETUP_PRICE_GBP, MONTHLY_START_V3_WORDS,
   SERVICE_ROUTE_NAME, totalPaymentsFor, type ServiceRoute,
@@ -25,20 +26,24 @@ export const CONTINUING_SCOPE_V3: Record<ServiceRoute, string> = {
 
 /** What each plan is, in one plain line (the summary's first row). */
 export const PLAN_ONE_LINE: Record<ServiceRoute, string> = {
-  build: 'We build, host and manage a new website for you, and improve how AI and search read your business.',
+  build: 'A new website built and optimised for AI visibility, hosted and managed by us while your payments run.',
   optimise: 'We improve your existing website and how AI and search read your business. Your website stays yours.',
 };
 
 /** The rows, or null for an agreement version without a checked summary. */
 export function planSummaryRows(route: ServiceRoute, version: string): PlanSummaryRow[] | null {
-  if (version !== 'v3') return null;
+  if (version !== 'v3' && version !== 'v4') return null;
   const n = totalPaymentsFor(route);
+  /* v4 (clause 9A / 15.1): Optimise ends, Build's £29.99 is optional. v3 signers keep what they signed. */
+  const after = version === 'v4'
+    ? afterTermSummaryWords(route)
+    : `£${FINDABLE_CONTINUING_GBP} a month (${CONTINUING_SCOPE_V3[route]}) until you cancel with 30 days' notice`;
   return [
     { key: 'plan', label: 'Your plan', value: `${SERVICE_ROUTE_NAME[route]}. ${PLAN_ONE_LINE[route]}` },
     { key: 'today', label: 'Today', value: `£${FINDABLE_SETUP_PRICE_GBP} initial payment (payment 1 of ${n})` },
     { key: 'then', label: 'Then', value: `£${FINDABLE_MONTHLY_GBP} a month, starting ${MONTHLY_START_V3_WORDS}` },
     { key: 'term', label: 'Minimum term', value: `${n} payments in total, including today's` },
-    { key: 'after', label: 'After the term', value: `£${FINDABLE_CONTINUING_GBP} a month (${CONTINUING_SCOPE_V3[route]}) until you cancel with 30 days' notice` },
+    { key: 'after', label: 'After the term', value: after },
   ];
 }
 

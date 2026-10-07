@@ -64,7 +64,7 @@ for (const route of ['build', 'optimise'] as const) {
   const svc = agreementVersion('v3').services[route].description;
   ok(svc.includes(`${totalPaymentsFor(route)} payments in total`) && svc.includes(`£${FINDABLE_CONTINUING_GBP} a month`), `${route}: the v3 agreement's own service box carries the same count and continuing figure`);
 }
-ok(planSummaryRows('build', 'v1') === null && planSummaryRows('optimise', 'v4') === null, 'an agreement version without a checked summary gets NO summary (never guessed terms)');
+ok(planSummaryRows('build', 'v1') === null && planSummaryRows('optimise', 'v9') === null && planSummaryRows('optimise', 'v4') !== null, 'an agreement version without a checked summary gets NO summary (never guessed terms)');
 ok(signingDayWords('2026-10-07T23:30:00Z') === 'Thursday, 8 October 2026', 'the signing day is the UK calendar day (23:30 UTC in BST is the next day)');
 ok(signingDayWords('2026-12-01T23:30:00Z') === 'Tuesday, 1 December 2026', 'and in GMT it is the same day');
 
@@ -75,13 +75,13 @@ console.log('\n── THE AGREEMENT STEP (findable.live/agree/<token>) ──');
     values: { contactName: 'Sam Test', email: 'qa@example.com', phone: '07700900123', address: '1 Test Street', websiteDomain: 'zzqa.example' } });
   ok(page.includes('Before we take payment, please read and accept the Client Service Agreement.'), 'it says: before we take payment, read and accept the agreement');
   ok(page.includes('Your offer: Findable Build') && /<dt>Today<\/dt>/.test(page) && /<dt>Then<\/dt>/.test(page) && /<dt>Minimum term<\/dt>/.test(page) && /<dt>After the term<\/dt>/.test(page), 'the plan summary (plan, today, then, term, after) is shown above the signature');
-  ok(page.includes('Agreement date</dt><dd>Wednesday, 7 October 2026, the day you sign. Version v3'), 'the agreement date is the day they sign, with the version');
+  ok(page.includes('Agreement date</dt><dd>Wednesday, 7 October 2026, the day you sign. Version v4'), 'the agreement date is the day they sign, with the version');
   ok(/value="Sam Test"/.test(page) && /value="qa@example\.com"/.test(page) && /value="07700900123"/.test(page) && />1 Test Street<\/textarea>/.test(page), 'known details arrive pre-filled (and stay editable)');
   ok(/<td><!--email_off-->paul@findable\.live<!--\/email_off--><\/td>/.test(page) && /Paul James Sales/.test(page), "Findable's own details are already filled in the agreement");
   ok(/<span class="btn off" role="button" aria-disabled="true">Continue to payment<\/span>/.test(page) && !/name="action" value="pay"/.test(page), 'payment is visibly LOCKED on the sign step — no pay control exists before signing');
   ok(/name="agree" value="yes"[^>]*required/.test(page) && /name="authority" value="yes"[^>]*required/.test(page) && (page.match(/<input[^>]*type="checkbox"[^>]*>/g) ?? []).every((b) => !/\bchecked\b/.test(b)),'agree + authority are required, nothing pre-ticked');
-  ok(/<button type="submit">I agree and sign<\/button>/.test(page) && /b\.disabled=!ok/.test(page), '"I agree and sign" (the button clause 1.2 names) is greyed until both ticks are given');
-  ok(page.includes('9A. CONTINUING SERVICE AFTER THE MINIMUM TERM') && page.includes('16.7'), 'the FULL agreement is on the page');
+  ok(/<button type="submit">Accept the agreement<\/button>/.test(page) && /b\.disabled=!ok/.test(page), 'the accept button (clause 1.2: the tick plus authority) is greyed until both ticks are given');
+  ok(page.includes('9A. OPTIONAL BUILD HOSTING AND MAINTENANCE AFTER PAYMENT 12') && page.includes('16.7'), 'the FULL agreement is on the page');
   ok(/<meta name="viewport" content="width=device-width, initial-scale=1"\/>/.test(page) && /overflow-x:hidden/.test(page) && /@media \(max-width:560px\)/.test(page), 'mobile: viewport, no sideways scroll, single-column details');
   const accepted = agreementPageHtml({ mode: 'accepted', businessName: 'ZZ QA', acceptedAtIso: '2026-10-07T10:00:00Z', acceptedBy: 'Sam Test', pdfHref: '?pdf=1', justSigned: true, emailedTo: null, payFor: { signupId: 'OB1', route: 'optimise' }, version: 'v3' });
   ok(/Continue to secure payment/.test(accepted) && /name="action" value="pay"/.test(accepted) && /version v3/.test(accepted), 'after signing: "Continue to secure payment" opens, with the version signed');
@@ -144,7 +144,7 @@ console.log('\n── THE SET-UP PAGE (findable-site OnboardingFlow) ──');
   } else {
     const code = flow.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\{\/\*[\s\S]*?\*\/\}/g, '');
     ok(!/if you want one/i.test(code), 'the Build wording "A brand new website if you want one" is gone');
-    ok(/"A new website built so customers, search engines and AI understand exactly what you do and where you work"/.test(code), 'Build: "A new website built so customers, search engines and AI understand…"');
+    ok(/"A new website built and optimised for AI visibility, so customers, search engines and AI understand exactly what you do and where you work"/.test(code), 'Build: "A new website built and optimised for AI visibility…"');
     ok(/optimise: \[[\s\S]*?"Your current website improved/.test(code) && !/optimise: \[[^\]]*new website/.test(code), 'C: Optimise says the CURRENT website is improved and promises no new one');
     ok(/Let&rsquo;s get Findable set up for \{businessName\}/.test(code) && /We already know some of your details, so we just need to confirm a few things before we get started\./.test(code), 'the page opens personal: "Let\'s get Findable set up for [Business]"');
     const introAt = code.indexOf('phase === "intro" && (');

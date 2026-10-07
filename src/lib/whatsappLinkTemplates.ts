@@ -1,7 +1,8 @@
 /* ════════════════════════════════════════════════════════════════════════════════════════════════
    THE TWO LINK TEMPLATES (Paul, 2026-10-07, docs/pre-sales-certification/sales-close-handoff-australia.md).
 
-   Paul created both in Meta and submitted them for review on 2026-10-07 (shown there as MARKETING):
+   Paul created both in Meta on 2026-10-07 (shown there as MARKETING). BOTH ARE NOW APPROVED BY META (reported by Paul,
+   2026-10-07) — and the code still reads the LIVE status rather than trusting that sentence:
      findable_signup_link  — a salesperson's one-click send of the prospect's UNIQUE sign-up link after a close
                              (usually on the phone, so no open 24-hour window).
      findable_onboarding   — Paul's one-click send of a PAID client's secure onboarding-form link.

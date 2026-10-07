@@ -32,8 +32,43 @@ import { FINDABLE_CONTINUING_GBP, recurringPaymentsFor, totalPaymentsFor, type S
  *  ⛔ A client with no stamp is on the terms they bought under (Ronnie, MCL, RG, the QA clients) and is
  *  never re-ruled by this file — Paul migrates someone explicitly or not at all. */
 export const COMMERCIAL_TERMS_V3 = 'csa_v3_option_b';
-export type CommercialTerms = typeof COMMERCIAL_TERMS_V3;
-export function isV3Terms(v: unknown): v is CommercialTerms { return v === COMMERCIAL_TERMS_V3; }
+/** v4 (2026-10-07, Findable_Client_Service_Agreement_v4_clean.docx): the SAME Option B payment timing and the
+ *  same Access / Results / Refund Window / Payment Start rules as v3 — what changes is what follows the
+ *  minimum term (see continuingModeFor). */
+export const COMMERCIAL_TERMS_V4 = 'csa_v4_option_b';
+export type CommercialTerms = typeof COMMERCIAL_TERMS_V3 | typeof COMMERCIAL_TERMS_V4;
+/** STRICTLY v3. Almost nothing wants this — see isOptionBTerms. */
+export function isV3Terms(v: unknown): v is typeof COMMERCIAL_TERMS_V3 { return v === COMMERCIAL_TERMS_V3; }
+export function isV4Terms(v: unknown): v is typeof COMMERCIAL_TERMS_V4 { return v === COMMERCIAL_TERMS_V4; }
+/** ⛔ THE ONE QUESTION "is this client on the agreement-first (Option B) terms?" — v3 OR v4. Every timeline,
+ *  payment-start, baseline-gate, commission and cutover rule asks THIS, never === a version. A client with no
+ *  stamp (Ronnie, MCL, RG, the QA clients) is on neither and is never re-ruled. */
+export function isOptionBTerms(v: unknown): v is CommercialTerms { return v === COMMERCIAL_TERMS_V3 || v === COMMERCIAL_TERMS_V4; }
+/** The terms a signed agreement VERSION puts a sale on; null for a version that is not agreement-first (v1). */
+export function commercialTermsFor(agreementVersion: string | null | undefined): CommercialTerms | null {
+  return agreementVersion === 'v3' ? COMMERCIAL_TERMS_V3 : agreementVersion === 'v4' ? COMMERCIAL_TERMS_V4 : null;
+}
+/** The terms a Stripe subscription was created under (its metadata). A subscription with the Option B timing marker
+ *  and no `commercial_terms` was created under v3, before the v4 stamp existed. Anything else: null. */
+export function termsOfSubscriptionMeta(m: Record<string, unknown> | null | undefined): CommercialTerms | null {
+  const t = m?.commercial_terms;
+  if (isOptionBTerms(t)) return t;
+  return m?.payment_timing === 'option_b' ? COMMERCIAL_TERMS_V3 : null;
+}
+
+/** ⛔ WHAT FOLLOWS THE MINIMUM TERM — ONE RULE, written once (a second copy is how Optimise kept billing £29.99).
+ *    'automatic' — v3 (clause 9A): the £29.99 Continuing Service follows on BOTH routes until cancelled.
+ *    'optional'  — v4 Build (clause 9A): the service ENDS after payment 12; the £29.99 Hosting and Maintenance
+ *                  starts only if the client separately opts in. Never started by us.
+ *    'none'      — v4 Optimise (clause 15.1): the plan ends after payment 6 and the final service period; there
+ *                  is no continuing charge of any kind.
+ *  Absent / unknown terms or route → 'none' (on a spending path, absent means "do not"). */
+export type ContinuingMode = 'automatic' | 'optional' | 'none';
+export function continuingModeFor(terms: unknown, route: ServiceRoute | null | undefined): ContinuingMode {
+  if (isV3Terms(terms)) return route === 'build' || route === 'optimise' ? 'automatic' : 'none';
+  if (isV4Terms(terms)) return route === 'build' ? 'optional' : 'none';
+  return 'none';
+}
 /** The marker a v3 checkout and its Stripe subscription carry (metadata payment_timing): the monthly is
  *  created on a hold and its first charge is set later to the Payment Start Date. */
 export const OPTION_B_TIMING = 'option_b';
@@ -278,7 +313,7 @@ export interface TimelineAction { kind: TimelineActionKind; dueDay: string; urge
 /** Everything Paul must do on this client today or soon. Derived; never stored. Empty for a client not
  *  on v3 terms, and for an ended or refunded agreement. */
 export function timelineActions(f: TimelineFacts, todayIso: string): TimelineAction[] {
-  if (!isV3Terms(f.terms) || f.refundedAt || f.endedAt) return [];
+  if (!isOptionBTerms(f.terms) || f.refundedAt || f.endedAt) return [];
   const today = ukDay(todayIso)!;
   const out: TimelineAction[] = [];
   const initialDay = ukDay(f.initialPaidAt);
@@ -299,12 +334,22 @@ export function timelineActions(f: TimelineFacts, todayIso: string): TimelineAct
     out.push({ kind: 'payment_start_unscheduled', dueDay: ps.day, urgent: daysBetween(today, ps.day) <= 3, text: `Payment Start Date ${ps.day} is not yet confirmed in Stripe. Set it from this client's page — until then Stripe holds the monthly payment and charges nothing.` });
   }
   const mt = minimumTerm(f);
-  if (mt.continuingStartDay && mt.clientReminderDueDay && mt.paulActionDay && f.continuingDecision == null) {
+  const mode = continuingModeFor(f.terms, f.route);
+  /* 'none' (v4 Optimise): the plan simply ends — there is nothing to remind, decide or set up. */
+  if (mode !== 'none' && mt.continuingStartDay && mt.clientReminderDueDay && mt.paulActionDay && f.continuingDecision == null) {
+    const optional = mode === 'optional';
+    const what = optional ? 'optional Hosting and Maintenance' : 'Continuing Service';
     if (!f.continuingReminderSentAt) {
-      if (today > mt.clientReminderDueDay) out.push({ kind: 'continuing_reminder_overdue', dueDay: mt.clientReminderDueDay, urgent: true, text: `The 30-day Continuing Service reminder was due by ${mt.clientReminderDueDay} (clause 9A.3). Send it and record it; the £${CONTINUING_SERVICE_GBP} service starts ${mt.continuingStartDay}.` });
-      else if (today >= mt.paulActionDay) out.push({ kind: 'continuing_prepare', dueDay: mt.clientReminderDueDay, urgent: daysBetween(today, mt.clientReminderDueDay) <= 3, text: `Minimum term completes ${mt.finalPaymentDay}. Email the client their Continuing Service reminder by ${mt.clientReminderDueDay} (at least 30 days before £${CONTINUING_SERVICE_GBP}/month starts on ${mt.continuingStartDay}).` });
+      if (today > mt.clientReminderDueDay) out.push({ kind: 'continuing_reminder_overdue', dueDay: mt.clientReminderDueDay, urgent: true, text: optional
+        ? `The 30-day reminder about the optional Hosting and Maintenance was due by ${mt.clientReminderDueDay} (clause 9A). Tell the client the Build ends after payment 12 and the £${CONTINUING_SERVICE_GBP}/month service only starts if they opt in; send it and record it.`
+        : `The 30-day Continuing Service reminder was due by ${mt.clientReminderDueDay} (clause 9A.3). Send it and record it; the £${CONTINUING_SERVICE_GBP} service starts ${mt.continuingStartDay}.` });
+      else if (today >= mt.paulActionDay) out.push({ kind: 'continuing_prepare', dueDay: mt.clientReminderDueDay, urgent: daysBetween(today, mt.clientReminderDueDay) <= 3, text: optional
+        ? `Minimum term completes ${mt.finalPaymentDay}. Build does NOT continue automatically: email the client by ${mt.clientReminderDueDay} that the £${CONTINUING_SERVICE_GBP}/month Hosting and Maintenance is theirs to opt in to, and that the site stays live for 30 days after the term (clause 9A.5).`
+        : `Minimum term completes ${mt.finalPaymentDay}. Email the client their Continuing Service reminder by ${mt.clientReminderDueDay} (at least 30 days before £${CONTINUING_SERVICE_GBP}/month starts on ${mt.continuingStartDay}).` });
     } else if (daysBetween(today, mt.continuingStartDay) <= 7) {
-      out.push({ kind: 'continuing_decision', dueDay: mt.continuingStartDay, urgent: true, text: `Continuing Service starts ${mt.continuingStartDay}. Record whether the client continues or cancels — nothing switches in Stripe automatically.` });
+      out.push({ kind: 'continuing_decision', dueDay: mt.continuingStartDay, urgent: true, text: optional
+        ? `The Build minimum term is ending. Record whether the client OPTED IN to the ${what} — no answer means it does not start. Nothing switches in Stripe automatically.`
+        : `Continuing Service starts ${mt.continuingStartDay}. Record whether the client continues or cancels — nothing switches in Stripe automatically.` });
     }
   }
   return out.sort((a, b) => a.dueDay.localeCompare(b.dueDay));
@@ -337,7 +382,7 @@ export function accessReadiness(route: ServiceRoute | null, items: readonly Acce
 /** 5.2 — may the paid baseline start? A v3 client waits for the confirmed Access Date; a client with no
  *  terms row (sold before v3) is never held by this rule. */
 export function baselineMayStart(terms: { commercial_terms?: string | null; access_date?: string | null } | null | undefined): boolean {
-  if (!terms || !isV3Terms(terms.commercial_terms)) return true;
+  if (!terms || !isOptionBTerms(terms.commercial_terms)) return true;
   return !!terms.access_date;
 }
 
@@ -357,7 +402,10 @@ export function guaranteeNumberWentUp(beforeNamed: number, afterNamed: number): 
 
 /* ── everything the client page shows, in one derived object ────────────────────────────────────── */
 export interface TimelineView {
+  /** On the agreement-first terms (v3 or v4) — the name predates v4. */
   onV3: boolean;
+  /** What follows the minimum term for this client (continuingModeFor). */
+  continuingMode: ContinuingMode;
   initialPaidDay: string | null;
   accessDate: string | null;
   accessDeadlineDay: string | null;
@@ -377,7 +425,8 @@ export function timelineView(f: TimelineFacts, todayIso: string): TimelineView {
   const resultsDay = ukDay(f.resultsSentAt);
   const ps = paymentStart(f);
   return {
-    onV3: isV3Terms(f.terms),
+    onV3: isOptionBTerms(f.terms),
+    continuingMode: continuingModeFor(f.terms, f.route),
     initialPaidDay,
     accessDate: f.accessDate,
     accessDeadlineDay: initialPaidDay ? accessDeadlineDay(initialPaidDay) : null,

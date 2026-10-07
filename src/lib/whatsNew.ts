@@ -22,6 +22,26 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-07-agreement-v4', date: '2026-10-07', title: 'New clients sign Agreement v4: Optimise ends after 6 payments, Build\'s £29.99 is optional', audience: 'all',
+    body: 'Every new sign-up now accepts the v4 Client Service Agreement before paying. Optimise is 6 payments and then it ends. Build is 12 payments, then £29.99 a month hosting and maintenance only if the client chooses it. India is no longer an outreach market.',
+    report: {
+      added: [
+        'The v4 agreement, word for word from the approved document, is what new clients read and accept on their agreement page: one tick "I have read and agree to the Client Service Agreement" plus the authority tick, before the payment step opens.',
+        'The signed copy shows on the Paid Client page (version, date, plan, linked to the payment) and in the welcome pack, with a plan-specific line about what happens after the last payment.',
+        'findable.live and the Stripe payment page now say the same thing about the end of the plan.',
+      ],
+      changed: [
+        'Optimise: the plan ends after payment 6 and the final service period. No £29.99 continuation, no reminders, nothing to set up.',
+        'Build: the service ends after payment 12. The £29.99 Hosting and Maintenance only starts if the client separately opts in; the Paid Client page now says "opted in / declined".',
+        'The first £99 monthly payment is still taken the day after the 14-day refund window closes. Clients who already signed v3 keep v3 exactly as they signed it.',
+        'Cold WhatsApp is UK mobiles only. The signup link and onboarding link templates are approved by Meta and send in one click.',
+      ],
+      removed: [
+        'Any wording that said £29.99 a month continues automatically after Optimise (or after Build).',
+        'India as an outreach market: no Indian number is queued or sent a cold message, and the India send hours are gone. Old Indian leads and messages are untouched.',
+      ],
+      effect: 'What a new client reads, signs and pays now matches the agreement Paul approved. Nothing is charged after the last payment unless a Build client asks for hosting.',
+    } },
   { id: '2026-10-06-quicker-close', date: '2026-10-06', title: 'A quicker close: the call remembers, Quick Close asks less', audience: 'all',
     body: 'What you learn on the call is saved as you tap it. Quick Close starts with the plan and only asks what is still missing. The handoff is mostly filled in for you.',
     report: {
@@ -69,7 +89,7 @@ export const WHATS_NEW: readonly WhatsNewEntry[] = [
       removed: [
         'The old Quick Locations panel.',
       ],
-      effect: 'Searching and adding Australian leads works like the UK. WhatsApp outreach is still UK and India only — Australia is not switched on yet.',
+      effect: 'Searching and adding Australian leads works like the UK. WhatsApp outreach is UK only — Australia is not switched on.',
     } },
   { id: '2026-10-06-whatsapp-queue-one-page', date: '2026-10-06', title: 'One WhatsApp queue for everyone', audience: 'all',
     body: 'The WhatsApp queue is now its own page, and it looks and works the same for the admin and for salespeople. Outreach shows a short summary with an Open queue button.',
