@@ -45,8 +45,10 @@
         domain → (an existing site only) the right to reuse its design and content → THE PLAN, LAST (→ Optimise adds
         only "can we get in?"). closeFlow is the one list; missingQuestions is "closeFlow minus what is answered".
       · BUILD IS THE DEFAULT. Only an agency / developer the client is STILL TIED INTO moves the recommendation to
-        Optimise (agencyContractBlocksBuild). "Not sure" keeps Build and warns: "Confirm their agency contract before
-        finalising Build." A website, a domain held elsewhere, or no right to reuse the design never blocks Build.
+        Optimise (agencyContractTiedIn). "Not sure" keeps Build, warns "Confirm their agency contract before
+        finalising Build.", and the Build still stops for Paul's release (agencyContractBlocksBuild, unchanged: only a
+        contract confirmed FREE is ready). A website, a domain held elsewhere, or no right to reuse the design never
+        blocks Build.
       · KEEPING THEIR DOMAIN IS NOT KEEPING THEIR WEBSITE. The domain answer is a note for Paul, never a plan.
       · The client sees the same facts back on their own sign-up page and may correct them (clientConfirm.ts,
         client_confirmed / effectiveAnswers) — never the plan, price or seller.
@@ -184,17 +186,20 @@ export function routeTermsLines(route: ServiceRoute): string[] {
 /** The managers that mean someone OUTSIDE the business runs the site (the contract question applies). */
 export const THIRD_PARTY_MANAGERS: readonly string[] = ['agency', 'freelancer', 'third_party'];
 export const thirdPartyManaged = (a: QuickCloseAnswers): boolean => !!a.manager && THIRD_PARTY_MANAGERS.includes(a.manager);
-/** 🔴 FINAL PASS (Paul, 2026-10-07): BUILD IS THE DEFAULT. The ONLY thing that moves the recommendation to
- *  Optimise is a genuine contractual blocker: an agency / developer runs the site AND they are still tied
- *  into the contract. ⛔ Positive match on 'in_contract' — "not sure" or "not asked" is NOT a blocker (it is a
- *  warning: confirm the contract before finalising Build). A website, a domain held elsewhere, or no right to
- *  reuse the current design never blocks Build. */
-export const agencyContractBlocksBuild = (a: QuickCloseAnswers): boolean => thirdPartyManaged(a) && a.agency_contract === 'in_contract';
+/** 🔴 FINAL PASS (Paul, 2026-10-07): BUILD IS THE DEFAULT. The ONLY thing that moves the RECOMMENDATION to
+ *  Optimise is a genuine contractual blocker: an agency / developer runs the site AND they are still tied into
+ *  the contract (agencyContractTiedIn — a positive match on 'in_contract'). "Not sure" or "not asked" never
+ *  recommends Optimise: it keeps Build and warns. A website, a domain held elsewhere, or no right to reuse the
+ *  current design never blocks Build. */
+export const agencyContractTiedIn = (a: QuickCloseAnswers): boolean => thirdPartyManaged(a) && a.agency_contract === 'in_contract';
+/** THE PAYMENT STOP (unchanged since 2026-10-07 morning): a Build on an agency-run site stops for Paul's release unless
+ *  the contract is confirmed FREE — still in contract, or not sure. ⛔ Positive match on 'free'. */
+export const agencyContractBlocksBuild = (a: QuickCloseAnswers): boolean => thirdPartyManaged(a) && a.agency_contract !== 'free';
 /** A third party runs the site and nobody has confirmed the contract is over (not sure, or not asked yet). */
 export const agencyContractUnconfirmed = (a: QuickCloseAnswers): boolean => thirdPartyManaged(a) && a.agency_contract !== 'in_contract' && a.agency_contract !== 'free';
 export const CONFIRM_CONTRACT_WARNING = 'Confirm their agency contract before finalising Build.';
-/** The rep's lines (never shown to the client). ⛔ No promise of an identical clone when rights are unclear. */
-export const BUILD_REASON_LINE = 'Build is usually the best route because it gives us a clean technical base to work from.';
+/** The rep's helper lines (never shown to the client). ⛔ No promise of an identical clone when rights are unclear. */
+export const BUILD_TECH_BASE_LINE = 'Build gives us a clean technical base to work from.';
 export const DOMAIN_NOT_WEBSITE_LINE = 'Keeping their domain is not the same as keeping their website — they can keep their web address and still get a new Build site.';
 export const REUSE_YES_LINE = 'We can keep the new site very close to the look they already like if they want.';
 export const REUSE_NO_LINE = "We'll build an original site rather than copy their current one.";
@@ -214,23 +219,36 @@ export function offerFit(a: QuickCloseAnswers, hasWebsite: boolean): OfferFit {
   if (!hasWebsite || a.manager === 'no_website') {
     return { recommended: 'build', offered: { build: true, optimise: false }, reason: 'No website of their own — Optimise needs one to work on, so the offer is Build.', warning: null, notes: [] };
   }
-  if (agencyContractBlocksBuild(a)) {
+  /* The ONE positive blocker: an agency / third party runs the site AND the contract is confirmed still on. */
+  if (agencyContractTiedIn(a)) {
     return {
       recommended: 'optimise', offered: { build: false, optimise: true },
-      reason: "They're still tied into a contract with the people who run their site — offer Optimise, so they're not paying for two websites. Build can follow once the contract ends.",
+      reason: "They're still in contract with the agency that runs their site — offer Optimise, so they're not paying for two websites.",
       warning: null, notes: [DOMAIN_NOT_WEBSITE_LINE],
     };
   }
-  const notes: string[] = [];
+  /* 🔴 BUILD IS THE DEFAULT (Paul, 2026-10-07). Owning, keeping or having access to a website is NEVER a reason for
+     Optimise — the preferred outcome is a new Findable website. Optimise is recommended ONLY on the positive blocker
+     above (an agency / third party runs the site and the contract is confirmed still on). Unknown contract status
+     (not asked, or "not sure") keeps Build, with the rep told to confirm before closing; that Build then still has to
+     answer the contract question (closeFlow) and, if the answer is "not sure" / "in contract", stops for Paul. */
+  const notes: string[] = [BUILD_TECH_BASE_LINE];
   if (a.rights === 'yes') notes.push(REUSE_YES_LINE);
   else if (a.rights === 'no' || a.rights === 'not_sure') notes.push(REUSE_NO_LINE);
   notes.push(DOMAIN_NOT_WEBSITE_LINE);
   return {
-    recommended: 'build', offered: { build: true, optimise: true },
-    reason: thirdPartyManaged(a) && a.agency_contract === 'free' ? `Their contract has ended, so nothing stands in the way. ${BUILD_REASON_LINE}` : BUILD_REASON_LINE,
-    warning: agencyContractUnconfirmed(a) ? CONFIRM_CONTRACT_WARNING : null,
-    notes,
+    recommended: 'build', offered: { build: true, optimise: true }, reason: buildDefaultReason(a),
+    warning: agencyContractUnconfirmed(a) ? CONFIRM_CONTRACT_WARNING : null, notes,
   };
+}
+/** The one line for the rep when Build is the recommendation (never shown to the client). */
+export const BUILD_DEFAULT_REASON =
+  "Build is usually the best route. Use Optimise if they need to keep their current website because they're still tied into an existing agency contract.";
+export const AGENCY_CONTRACT_UNCONFIRMED_REASON =
+  "An agency runs their site. Build is usually the best route, but confirm whether they're still in contract before you close. If they are, offer Optimise.";
+function buildDefaultReason(a: QuickCloseAnswers): string {
+  if (thirdPartyManaged(a)) return a.agency_contract === 'free' ? 'Their agency contract has ended, so Build is the route: a new website they own.' : AGENCY_CONTRACT_UNCONFIRMED_REASON;
+  return BUILD_DEFAULT_REASON;
 }
 
 /** The answers a plan choice saves (step 1). The plan is stated explicitly; a legacy approach that would
@@ -421,7 +439,7 @@ export function routeSwitchText(from: ServiceRoute, to: ServiceRoute, hasLink: b
  *  the legacy authority answers still stop an Optimise on a site an agency runs. */
 export type QcReviewReason = 'third_party_no_authority' | 'third_party_authority_unsure' | 'no_site_access' | 'optimise_access_unsure' | 'agency_contract_build';
 export const QC_REVIEW_TEXT: Record<QcReviewReason, string> = {
-  agency_contract_build: 'Build chosen, but an agency / developer runs their website and they are still tied into a contract with them — a new website now could mean paying two providers. Optimise is the normal route here',
+  agency_contract_build: 'Build chosen, but an agency / developer runs their website and they are still tied into a contract with them (or not sure) — a new website now could mean paying two providers. Optimise is the normal route here',
   third_party_no_authority: 'An agency / third party runs the site and they do not have authority to let Findable change it',
   third_party_authority_unsure: 'An agency / third party runs the site and authority to let Findable change it is unclear',
   no_site_access: 'Optimise works on their current website, and they could not give Findable access to it',
@@ -488,9 +506,7 @@ export function quickCloseGate(raw: QuickCloseAnswers): QuickCloseGate {
   if (a.route === 'build') {
     /* ⛔ THE AGENCY-CONTRACT RULE's backstop (offerFit): Build on a site an agency runs while they are still
        tied in stops for Paul — he can release it; a salesperson is never shown Build for these answers. */
-    if (agencyContractBlocksBuild(a)) review.push('agency_contract_build');
-    /* A contract nobody has confirmed is over is a NOTE for Paul, never a stop (offerFit's warning). */
-    if (agencyContractUnconfirmed(a)) notes.push(CONFIRM_CONTRACT_WARNING);
+    if (agencyContractBlocksBuild(a) && a.agency_contract) review.push('agency_contract_build');
     if (domainPending(a)) flags.push('domain_handoff');
     if (a.approach === 'recreation' && (a.rights !== 'yes' || a.design_owner !== 'business')) flags.push('exact_copy_rights');
     if (a.approach === 'refresh' && a.rights && a.rights !== 'yes') notes.push('Reuse only content, branding and photos the business owns — replace anything else');

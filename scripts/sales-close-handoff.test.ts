@@ -9,7 +9,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { renderToStaticMarkup } from 'react-dom/server';
 import {
-  agencyContractBlocksBuild, CONFIRM_CONTRACT_WARNING, DOMAIN_NOT_WEBSITE_LINE, REUSE_NO_LINE, REUSE_YES_LINE, callNotesLines, cleanAnswers, cleanCallNotes, closeFlow, mergeAnswers, missingQuestions, offerFit, quickCloseGate,
+  agencyContractBlocksBuild, agencyContractTiedIn, BUILD_TECH_BASE_LINE, CONFIRM_CONTRACT_WARNING, DOMAIN_NOT_WEBSITE_LINE, REUSE_NO_LINE, REUSE_YES_LINE, callNotesLines, cleanAnswers, cleanCallNotes, closeFlow, mergeAnswers, missingQuestions, offerFit, quickCloseGate,
   quickCloseMessage, quickCloseState, routeChoiceAnswers, routeTermsLines, splitCallList, mayGenerateLink, QUICK_CLOSE_QUESTIONS,
 } from '../src/lib/quickClose.ts';
 import { afterTermClientWords, afterTermRepLine, bothPlansSpoken, continuingOptionAfter } from '../src/lib/planTerms.ts';
@@ -49,7 +49,7 @@ console.log('── QUICK CLOSE: BUILD is the default; only a contract they are 
   const SIT = { manager: 'owner', domain: 'yes', rights: 'yes' } as const;
   const self = offerFit({ manager: 'owner' }, true);
   ok(self.offered.build && self.offered.optimise && self.recommended === 'build' && self.warning === null, 'self-managed site → both plans offered, BUILD first');
-  ok(/clean technical base/.test(self.reason ?? ''), '…with the rep line: Build is usually the best route because it gives us a clean technical base to work from');
+  ok(/Build is usually the best route/.test(self.reason ?? '') && self.notes.includes(BUILD_TECH_BASE_LINE), '…with the rep line: Build is usually the best route, and it gives us a clean technical base to work from');
   const free = offerFit({ manager: 'agency', agency_contract: 'free' }, true);
   ok(free.offered.build && free.offered.optimise && free.recommended === 'build' && free.warning === null, 'agency, contract ended / free to leave → Build recommended, no warning');
   const tiedIn = offerFit({ manager: 'agency', agency_contract: 'in_contract' }, true);
@@ -63,7 +63,8 @@ console.log('── QUICK CLOSE: BUILD is the default; only a contract they are 
   ok(!offerFit({ manager: 'third_party', agency_contract: 'in_contract' }, true).offered.build, 'another third party in contract → the same rule');
   const noSite = offerFit({}, false);
   ok(noSite.offered.build && !noSite.offered.optimise && noSite.recommended === 'build' && noSite.notes.length === 0, 'no website → Build only, and no ownership notes (nothing irrelevant)');
-  ok(agencyContractBlocksBuild({ manager: 'agency', agency_contract: 'in_contract' }) && !agencyContractBlocksBuild({ manager: 'agency' }) && !agencyContractBlocksBuild({ manager: 'agency', agency_contract: 'not_sure' }) && !agencyContractBlocksBuild({ manager: 'agency', agency_contract: 'free' }) && !agencyContractBlocksBuild({ manager: 'owner' }), 'the one predicate: blocked ONLY by a positive "still in contract"');
+  ok(agencyContractTiedIn({ manager: 'agency', agency_contract: 'in_contract' }) && !agencyContractTiedIn({ manager: 'agency' }) && !agencyContractTiedIn({ manager: 'agency', agency_contract: 'not_sure' }) && !agencyContractTiedIn({ manager: 'agency', agency_contract: 'free' }) && !agencyContractTiedIn({ manager: 'owner' }), 'the recommendation blocker: ONLY a positive "still in contract" moves it to Optimise');
+  ok(agencyContractBlocksBuild({ manager: 'agency', agency_contract: 'in_contract' }) && agencyContractBlocksBuild({ manager: 'agency', agency_contract: 'not_sure' }) && !agencyContractBlocksBuild({ manager: 'agency', agency_contract: 'free' }) && !agencyContractBlocksBuild({ manager: 'owner' }), 'the payment stop is unchanged: only a contract confirmed FREE is ready (not sure / still in contract stop for Paul)');
   /* REUSE RIGHTS and the DOMAIN: guidance, never a blocker. */
   const rYes = offerFit({ ...SIT }, true);
   ok(rYes.notes.includes(REUSE_YES_LINE) && !rYes.notes.includes(REUSE_NO_LINE), 'reuse rights yes → "we can keep the new site very close to the look they already like if they want"');
@@ -77,7 +78,7 @@ console.log('── QUICK CLOSE: BUILD is the default; only a contract they are 
   ok(quickCloseState('answers_saved', { answers: tied }) === 'needs_review' && !mayGenerateLink('answers_saved', { answers: tied }), 'Build while tied in → Paul review, no link');
   ok(quickCloseState('answers_saved', { answers: tied, review_approved_at: iso(NOW) }) === 'ready', '…Paul can release it');
   const unsure = { ...tied, agency_contract: 'not_sure' } as const;
-  ok(quickCloseState('answers_saved', { answers: unsure }) === 'ready' && quickCloseGate(unsure).notes.includes(CONFIRM_CONTRACT_WARNING), 'Build with an unconfirmed contract → NOT a stop; the note travels to Paul');
+  ok(quickCloseState('answers_saved', { answers: unsure }) === 'needs_review' && quickCloseState('answers_saved', { answers: unsure, review_approved_at: iso(NOW) }) === 'ready', 'Build with an unconfirmed contract still stops for Paul (unchanged) — and he can release it');
 }
 
 console.log('\n── QUICK CLOSE: the shortest close, nothing asked twice ──');

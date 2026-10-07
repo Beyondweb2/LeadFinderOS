@@ -337,7 +337,9 @@ export function QuickClosePanel({ leadId, active = true, framed = false }: { lea
                 </div>
               )}
               <div className={cn('mt-3 grid gap-2', current === 'route' || current === 'build_consents' || current === 'approach' || current === 'domain' || current === 'design_owner' || current === 'agency_contract' || current === 'manager' ? 'grid-cols-1' : 'grid-cols-2')}>
-                {currentQ.options
+                {/* The recommended plan goes first (Build normally; Optimise only on a confirmed agency contract). */}
+                {[...currentQ.options]
+                  .sort((x, y) => (current === 'route' && v.offer?.recommended ? Number(y.value === v.offer.recommended) - Number(x.value === v.offer.recommended) : 0))
                   /* A LEGACY answer stays readable but is never offered as a new choice (QcOption.legacy). */
                   .filter((o) => !o.legacy || answers[current!] === o.value)
                   .filter((o) => !(current === 'authority' && o.value === 'not_applicable' && (answers.manager === 'agency' || answers.manager === 'freelancer' || answers.manager === 'third_party')))

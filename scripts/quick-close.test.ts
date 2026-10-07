@@ -7,7 +7,7 @@ import fs from "node:fs";
 import path from "node:path";
 import {
   cleanAnswers, mergeAnswers, buildConsentsFor, BUILD_CONSENT_DOMAIN_PENDING, missingQuestions, mayGenerateLink, onboardingColumnsFor, quickCloseGate, quickCloseHandoffLines, quickCloseMessage,
-  quickCloseState, CONFIRM_CONTRACT_WARNING, LINK_REUSE_MS, QUICK_CLOSE_QUESTIONS, quickCloseScript, QUICK_CLOSE_AFTER_PAYMENT, QUICK_CLOSE_PROMISE, closeFlow,
+  quickCloseState, LINK_REUSE_MS, QUICK_CLOSE_QUESTIONS, quickCloseScript, QUICK_CLOSE_AFTER_PAYMENT, QUICK_CLOSE_PROMISE, closeFlow,
 } from "../src/lib/quickClose.ts";
 import { FINDABLE_GUARANTEE, FINDABLE_MONTHLY_GBP, FINDABLE_SETUP_PRICE_GBP } from "../src/lib/findableOffer.ts";
 
@@ -57,8 +57,8 @@ console.log("\n── the gate ──");
   /* ⛔ THE SCREENSHOT FIX: a new site where they cannot give access to the old one is NOT a review. */
   const newNoAccess = { ...NEW_SITE, access: "no", manager: "agency", agency_contract: "free" } as const;
   ok(quickCloseGate(newNoAccess).review.length === 0 && quickCloseState("answers_saved", { answers: newNoAccess }) === "ready", "Build + no access to the CURRENT site (agency contract ended) → no review, ready (we never need the old backend)");
-  /* ⛔ THE AGENCY-CONTRACT RULE (final pass, 2026-10-07): ONLY a contract they are still tied into stops Build for
-     Paul's release. "Not sure" is a warning for Paul, never a stop — Build stays the default. */
+  /* ⛔ THE AGENCY-CONTRACT RULE: Build on an agency / freelancer-run site stops for Paul's release unless the contract
+     is confirmed FREE (still in contract, or not sure). The RECOMMENDATION is a different question (below). */
   for (const m of ["agency", "freelancer"] as const) {
     const a = { ...NEW_SITE, manager: m, agency_contract: "in_contract" } as const;
     ok(quickCloseGate(a).review.includes("agency_contract_build") && quickCloseState("answers_saved", { answers: a }) === "needs_review" && !mayGenerateLink("answers_saved", { answers: a }), `Build + ${m} + still in contract → Paul review (no link)`);
@@ -66,9 +66,9 @@ console.log("\n── the gate ──");
   }
   {
     const a = { ...NEW_SITE, manager: "agency", agency_contract: "not_sure" } as const;
-    ok(quickCloseGate(a).review.length === 0 && quickCloseGate(a).notes.includes(CONFIRM_CONTRACT_WARNING) && quickCloseState("answers_saved", { answers: a }) === "ready", "Build + agency + contract NOT SURE → no stop, ready — with the note 'Confirm their agency contract before finalising Build'");
+    ok(quickCloseGate(a).review.includes("agency_contract_build") && quickCloseState("answers_saved", { answers: a }) === "needs_review" && quickCloseState("answers_saved", { answers: a, review_approved_at: "2026-10-07T10:00:00Z" }) === "ready", "Build + agency + contract NOT SURE → still stops for Paul (unchanged), who can release it; the recommendation stays Build with the confirm-the-contract warning");
     const free = { ...NEW_SITE, manager: "agency", agency_contract: "free" } as const;
-    ok(quickCloseGate(free).review.length === 0 && !quickCloseGate(free).notes.includes(CONFIRM_CONTRACT_WARNING), "Build + agency + free to leave → no stop and no warning");
+    ok(quickCloseGate(free).review.length === 0 && quickCloseState("answers_saved", { answers: free }) === "ready", "Build + agency + free to leave → no stop");
   }
   ok(quickCloseGate({ ...SAFE, manager: "agency", agency_contract: "in_contract", access: "yes" }).review.length === 0, "Optimise on an agency site still in contract (with access) → fine: Optimise IS the route for them");
   for (const d of ["not_sure", "agency", "no"] as const) {

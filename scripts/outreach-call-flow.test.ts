@@ -38,9 +38,9 @@ const flow = read('src/components/LeadCallFlow.tsx');
 
 console.log('── 1. OUTREACH CALL opens the prospect popup with the number window over it ──');
 {
-  const call = code(slice(table, 'const handleCallClick', '}, [onContactGated]);'));
+  const call = code(slice(table, 'const handleCallClick', '}, [onContactGated, onContactMethodChange]);'));
   ok(/setDetailTab\('call'\);\s*setDetailLogContact\(false\);\s*setDetailNumberPopup\(true\);\s*setDetailLead\(lead\);/.test(call), 'Call opens the lead popup on the Call tab, number window on, Log window off');
-  ok(!/onContactMethodChange|executeContact|logAttempt|updateLead|leadRpc|supabase|invoke|navigate\(|window\.open|location/.test(call), '…and writes nothing, navigates nowhere, opens nothing external');
+  ok(!/executeContact|logAttempt|updateLead|leadRpc|supabase|invoke|navigate\(|window\.open|location/.test(call), '…and records no call (no attempt, no status, no history), navigates nowhere, opens nothing external — only the Contact Method pill is set (scripts/contact-method-auto-select.test.ts)');
   ok(/openNumberPopup=\{detailNumberPopup\}/.test(table) && /openLogContact=\{detailLogContact\}/.test(table), 'the popup is told which window to arrive on');
   ok(!/tel:/.test(code(table)) && !/tel:/.test(code(mobile)), 'no tel: link left in the Outreach table or the phone card');
   ok(/<button type="button" onClick=\{\(\) => handleCallClick\(lead\)\}[^>]*data-testid="outreach-call"/.test(table), 'the row\'s phone icon is a button that runs the Call flow');

@@ -150,9 +150,9 @@ export function afterFirstQuestion(answer: WebsiteManager, agencyMonthlyGbp: num
   return { ask: [AGENCY_CONTRACT_QUESTION, AGENCY_COST_QUESTION], priceAngle: priceAngleApplies(agencyMonthlyGbp) ? PRICE_ANGLE_LINE : null };
 }
 
-/** The plan to open first: BUILD, always (final pass, 2026-10-07). Only a genuine contract blocker moves it to
- *  Optimise, and that is decided from the saved answers by quickClose.offerFit, never from the site source. */
-export function preselectedPlan(_source?: SiteSource | null): ServiceRoute {
+/** The plan to open first: ALWAYS Build (Paul, 2026-10-07). Having their own site is not a reason for Optimise; only a
+ *  confirmed agency contract is, and that comes from the call's answers (quickClose.offerFit), not from the site source. */
+export function preselectedPlan(_source: SiteSource | null | undefined): ServiceRoute {
   return 'build';
 }
 

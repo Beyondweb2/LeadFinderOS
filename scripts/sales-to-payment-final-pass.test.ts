@@ -101,7 +101,8 @@ console.log('\n── D. UNKNOWN CONTRACT ──');
   const fit = offerFit(s.qc.answers as QuickCloseAnswers, true);
   ok(fit.recommended === 'build' && fit.offered.build && fit.warning === CONFIRM_CONTRACT_WARNING, 'contract "Not sure": Build stays the default, with the warning "Confirm their agency contract before finalising Build."');
   s.answer({ route: 'build' });
-  ok(s.state() === 'ready' && quickCloseGate(s.qc.answers as QuickCloseAnswers).notes.includes(CONFIRM_CONTRACT_WARNING), 'not a stop; the note travels to Paul with the sale');
+  ok(s.state() === 'needs_review' && !mayGenerateLink('answers_saved', s.qc, NOW), 'the Build still stops for Paul\'s release until the contract is confirmed free (the existing payment stop is unchanged)');
+  ok(quickCloseState('answers_saved', { ...s.qc, review_approved_at: iso(NOW) }, NOW) === 'ready', '…and he can release it');
   ok(fit.recommended !== 'optimise', 'never silently recommends Optimise');
 }
 
@@ -159,6 +160,8 @@ console.log('\n── CLIENT CONFIRMATION: "here\'s what we have so far" ──'
   const same = planClientConfirmation(s.qc as never, { manager: 'agency', agency_contract: 'free', domain: 'yes', rights: 'yes' }, iso(NOW));
   ok(same.ok && same.changed.length === 0 && Object.keys(same.columns).length === 0 && !same.holds, '"Looks right": recorded, nothing changed, nothing written to the sign-up columns, nothing held');
   ok(same.ok && same.next.link_url === s.qc.link_url && state(same.next) === 'link_generated', '…and the salesperson\'s link is untouched and still usable');
+  const unsureC = planClientConfirmation(s.qc as never, { manager: 'agency', agency_contract: 'not_sure', domain: 'yes', rights: 'yes' }, iso(NOW));
+  ok(unsureC.ok && unsureC.holds && state(unsureC.next) === 'needs_review', 'the client saying "not sure" about the contract on a Build holds it for Paul too (same rule as the salesperson\'s)');
 
   // A harmless correction.
   const fix = planClientConfirmation(s.qc as never, { manager: 'agency', agency_contract: 'free', domain: 'not_sure', rights: 'yes' }, iso(NOW));
