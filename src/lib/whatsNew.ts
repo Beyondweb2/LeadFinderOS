@@ -38,6 +38,7 @@ export const WHATS_NEW: readonly WhatsNewEntry[] = [
       ],
       removed: ['The fixed line "the bigger issue is the public evidence around the business" on a site that was checked and found fine. It is replaced by the honest strong-site line.'],
       effect: 'On a call you get one or two specific things you can point at on their own site, with the proof behind them. If the site is fine you are told so and have a truthful thing to offer, not a made-up fault.',
+    } },
   { id: '2026-10-07-full-setup-counts-as-closing', date: '2026-10-07', title: 'A Full Setup send now counts as you closing the sale', audience: 'all',
     body: 'When you send a client the Full Setup link, the moment you sent it is recorded as you closing the sale, the same as making an Agreement & Payment link.',
     report: {
