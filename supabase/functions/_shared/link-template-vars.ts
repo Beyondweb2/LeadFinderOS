@@ -14,7 +14,7 @@ import { clientClosed } from "../../../src/lib/paymentState.ts";
 import { linkUsable, quickCloseClosedRefusal, type QuickCloseRecord } from "../../../src/lib/quickClose.ts";
 import { displayBusinessName } from "../../../src/lib/displayName.ts";
 import { onboardingFormUrl } from "../../../src/lib/clientOnboardingForm.ts";
-import { isOnboardingFormUrl, isSignupLinkUrl, linkTemplateGreeting } from "../../../src/lib/whatsappLinkTemplates.ts";
+import { isOnboardingFormUrl, isSetupLinkUrl, isSignupLinkUrl, linkTemplateGreeting, setupLinkUrl } from "../../../src/lib/whatsappLinkTemplates.ts";
 
 // deno-lint-ignore no-explicit-any
 type Service = any;
@@ -36,11 +36,22 @@ async function leadAndRows(service: Service, leadId: string) {
 const greetingFor = (lead: Row, row: Row | null) =>
   linkTemplateGreeting(text(row?.contact_name) || text(lead.contact_name), displayBusinessName(text(lead.business_name), { town: text(lead.derived_town), style: "greet" }));
 
-export async function resolveSignupLinkVars(service: Service, leadId: string): Promise<LinkVars> {
+/** 'agreement' = the Agreement & Payment link (Quick Close, the default); 'setup' = the Full Setup link (the client's own
+ *  questions, then agreement, then payment). Both are findable.live links; neither is ever a Stripe URL. */
+export type SignupLinkVariant = "agreement" | "setup";
+
+export async function resolveSignupLinkVars(service: Service, leadId: string, variant: SignupLinkVariant = "agreement"): Promise<LinkVars> {
   const { lead, rows } = await leadAndRows(service, leadId);
   if (!lead) return { ok: false, reason: "Lead not found." };
   const closed = quickCloseClosedRefusal(lead as never, null);
   if (closed) return { ok: false, reason: closed.detail };
+  if (variant === "setup") {
+    /* The set-up page is the lead's own and is made from the lead id alone: nothing to store, nothing to expire. */
+    const url = setupLinkUrl(leadId);
+    if (!isSetupLinkUrl(url)) return { ok: false, reason: "That lead has no usable set-up link." };
+    const open = rows.find((r) => text(r.status) !== "paid") ?? null;
+    return { ok: true, greeting: greetingFor(lead, open), url, business: text(lead.business_name) };
+  }
   /* The sign-up being closed: the newest unpaid row that holds a usable sign-up link. */
   const row = rows.find((r) => text(r.status) !== "paid" && linkUsable((r.quick_close ?? null) as QuickCloseRecord | null)) ?? null;
   const url = text((row?.quick_close as QuickCloseRecord | null)?.link_url);

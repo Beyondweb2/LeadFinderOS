@@ -90,7 +90,7 @@ ok(/if \(next === 'none'\) \{ setLogOpen\(false\); return; \}/.test(flow), "an o
 console.log("── 6. Send onboarding is the approved sign-up, nothing else ──");
 const sendCode = code(flow + lib);
 ok(!/stripe|checkout|buy\.stripe|payment_link|paymentLink|create_onboarding_link|findable-checkout/i.test(sendCode), "the Log flow never makes or sends a payment / sign-up link itself");
-ok(/<TabsContent value="close"[\s\S]*?<QuickClosePanel leadId=\{lead\.id\}/.test(closeTab), "the Close tab is QuickClosePanel — the client agreement, Ready to Sell and seller attribution stay on its server path");
+ok(/<TabsContent value="close"[\s\S]*?<ClosePanel leadId=\{lead\.id\}/.test(closeTab), "the Close tab is ClosePanel (which holds QuickClosePanel) — the client agreement, Ready to Sell and seller attribution stay on its server path");
 
 console.log("── 7. the record and the rule, unchanged ──");
 const lo = crm.slice(crm.indexOf("const logOutcome = async"), crm.indexOf("const afterWrite"));

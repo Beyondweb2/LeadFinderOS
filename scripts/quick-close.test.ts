@@ -32,15 +32,15 @@ ok(QUICK_CLOSE_QUESTIONS[0].key === "route" && QUICK_CLOSE_QUESTIONS[1].key === 
    question names photos on purpose (the right to REUSE them), so it is scanned without that word. */
 ok(!/service|opening hours|credential|description|google business/i.test(JSON.stringify(QUICK_CLOSE_QUESTIONS.map((q) => ({ key: q.key, text: q.text, options: q.options })))), "no services, hours, credentials, copy or GBP questions before payment");
 ok(JSON.stringify(cleanAnswers({ decision_maker: "yes", domain: "maybe", evil: "x" })) === JSON.stringify({ decision_maker: "yes" }), "only known answers survive");
-ok(missingQuestions({}).join() === "decision_maker,manager,domain,rights,route", "nothing answered: authority, who looks after the site, the domain, the reuse right — and the PLAN LAST");
+ok(missingQuestions({}).join() === "decision_maker,manager,domain,route", "nothing answered: authority, who looks after the site, the domain — and the PLAN LAST");
 ok(missingQuestions({ decision_maker: "yes", ...SITUATION, approach: "improve" }).join() === "access", "improve their site (Optimise): only whether Findable can get in");
 ok(missingQuestions({ decision_maker: "yes", ...SITUATION, approach: "new_template" }).length === 0 && missingQuestions({ decision_maker: "yes", ...SITUATION, route: "build" }).length === 0, "Build, self-managed: nothing more — no consents, no registrar, no logins on the call");
 ok(missingQuestions({ decision_maker: "yes", manager: "no_website", domain: "no_domain", route: "build" }).length === 0, "NO WEBSITE: the reuse question is never asked (no irrelevant ownership questions)");
 ok(closeFlow({ manager: "no_website" }).join() === "decision_maker,manager,domain,route" && !closeFlow({ manager: "owner" }).includes("agency_contract"), "the flow: no website skips the reuse question; the contract only appears for an agency / freelancer");
-ok(missingQuestions({ decision_maker: "yes", route: "build", manager: "agency" }).join() === "agency_contract,domain,rights", "Build on an agency-run site: the contract, the domain, the reuse right");
-ok(missingQuestions({ decision_maker: "yes", route: "build", manager: "freelancer" }).join() === "agency_contract,domain,rights", "a FREELANCER is asked the contract question exactly like an agency");
+ok(missingQuestions({ decision_maker: "yes", route: "build", manager: "agency" }).join() === "agency_contract,domain", "Build on an agency-run site: the contract, the domain");
+ok(missingQuestions({ decision_maker: "yes", route: "build", manager: "freelancer" }).join() === "agency_contract,domain", "a FREELANCER is asked the contract question exactly like an agency");
 ok(missingQuestions({ decision_maker: "yes", ...SITUATION, approach: "unsure" }).join() === "route", "unsure: the plan is picked explicitly");
-ok(missingQuestions({ decision_maker: "yes", manager: "owner", domain: "yes", rights: "yes" }).join() === "route" && missingQuestions({ decision_maker: "yes", manager: "owner" }).join() === "domain,rights,route", "what the Call screen already saved (who looks after the site, the decision maker) is never asked again");
+ok(missingQuestions({ decision_maker: "yes", manager: "owner", domain: "yes", rights: "yes" }).join() === "route" && missingQuestions({ decision_maker: "yes", manager: "owner" }).join() === "domain,route", "what the Call screen already saved (who looks after the site, the decision maker) is never asked again");
 ok(closeFlow({}).length <= 5 && closeFlow({ manager: "agency" }).length <= 6, "4–5 questions, one more only when an agency / freelancer is involved");
 ok(QUICK_CLOSE_QUESTIONS.find((q) => q.key === "route")!.options[0].value === "build", "BUILD FIRST on the plan question");
 ok(["manager", "domain"].every((k) => QUICK_CLOSE_QUESTIONS.find((q) => q.key === k)!.options.filter((o) => !o.legacy).every((o) => !/employee|third party|do not control/i.test(o.label))) && QUICK_CLOSE_QUESTIONS.find((q) => q.key === "manager")!.options.filter((o) => !o.legacy).map((o) => o.value).join() === "owner,freelancer,agency,no_website,not_sure", "the offered site-manager choices are exactly: themselves, freelancer, agency, no website, not sure (legacy answers stay readable, not offered)");
@@ -156,11 +156,11 @@ ok(/\[functions\.quick-close\]\nverify_jwt = true/.test(read("supabase/config.to
 
 console.log("\n── where it lives, and the phone ──");
 const dlg = read("src/components/QuickCloseDialog.tsx");
-ok(/<QuickClosePanel leadId=\{lead\.id\} active=\{tab === 'close'\} \/>/.test(read("src/components/LeadDetailDialog.tsx")) && /QuickCloseNav\.Provider value=\{\{ openClose: \(\) => goTab\('close'\) \}\}/.test(read("src/components/LeadDetailDialog.tsx")), "v2: in the lead workspace it IS the Close tab, and every Quick Close button there switches to it (one close UI)");
+ok(/<ClosePanel leadId=\{lead\.id\} active=\{tab === 'close'\} \/>/.test(read("src/components/LeadDetailDialog.tsx")) && /QuickCloseNav\.Provider value=\{\{ openClose: \(\) => goTab\('close'\) \}\}/.test(read("src/components/LeadDetailDialog.tsx")), "v2: in the lead workspace it IS the Close tab, and every Quick Close button there switches to it (one close UI)");
 ok(/min-h-\[56px\]/.test(dlg) && /h-\[100dvh\]/.test(dlg) && /answers\.decision_maker === 'no' \? null/.test(dlg), "phone: full screen, one question at a time, big targets; a 'No' ends the questions");
 ok(/mode: 'save', answers: \{ \[key\]: value \}/.test(dlg), "every tap is saved (a dropped call resumes)");
 ok(/v\.link_route/.test(dlg) && /functions\/v1\/send-whatsapp-message/.test(fn) && /Authorization: req\.headers\.get\("authorization"\)/.test(fn) && /decideLinkRoute\(await conversation\(\), \{ template: tplState \}\)/.test(fn), "WhatsApp send uses the canonical sender AS THE CALLER; the server picks the route (approved template, else a replied open conversation, else nothing)");
-ok(/self-service sign-up link is on the lead's Close tab/.test(dlg) && /<OnboardingLinkCard lead=\{lead\} \/>/.test(read("src/components/LeadDetailDialog.tsx").slice(read("src/components/LeadDetailDialog.tsx").indexOf('value="close"'))), "the self-service onboarding link remains the fallback — on the Close tab, before payment");
+ok(/Send full setup/.test(read("src/components/ClosePanel.tsx")) && /<OnboardingLinkCard lead=\{/.test(read("src/components/ClosePanel.tsx")) && /<ClosePanel leadId/.test(read("src/components/LeadDetailDialog.tsx")), "the self-service link remains — as SEND FULL SETUP, the second way to close, on the Close tab");
 
 if (f) { console.log(`\n${f} FAILURES`); process.exit(1); }
 console.log("\nALL PASS");

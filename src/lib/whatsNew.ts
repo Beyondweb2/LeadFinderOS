@@ -22,6 +22,23 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-07-two-ways-to-close', date: '2026-10-07', title: 'Two clear ways to close: Close on the phone, or Send full setup', audience: 'all',
+    body: 'The Close tab now asks one thing first: how do you want to close them? Ask the questions yourself and send the agreement and payment link, or send them a link to fill it in themselves.',
+    report: {
+      added: [
+        'A first choice on the Close tab: "Close on the phone — ask the questions now, then send agreement & payment" or "Send full setup — let the customer fill it in themselves".',
+        'Close on the phone ends with one button, Send agreement & payment link (WhatsApp), plus Copy link. The customer checks a short summary, signs the agreement, then pays. It is a secure Findable link, never a raw payment page.',
+        'Send full setup sends their own link on WhatsApp (the approved signup template) or copies it. They answer a few short questions, see their plan, sign the agreement and pay.',
+        'Two short questions on the call: what they offer, and where they want to be found. The customer sees them back on their summary.',
+        'On the customer’s own page: if an agency runs their website, one extra question — are they still tied into a contract with them — and what they offer and where they want to be found.',
+      ],
+      changed: [
+        'The call no longer asks whether they can reuse their current website design. Build is still recommended; Optimise only when an agency they are still in contract with runs the site.',
+        'The button names now say what they do: Create agreement & payment link, Copy link, Send agreement & payment link.',
+      ],
+      removed: ['The reuse-the-design question on the call and on the customer’s confirmation card.'],
+      effect: 'Closing is two obvious choices instead of one long screen. Either way it is the same sign-up, so sending a link again never makes a second one, a customer who closes the page picks up where they left off, and the sale still counts as yours.',
+    } },
   { id: '2026-10-07-close-situation-first', date: '2026-10-07', title: 'Quick Close asks about their website first, picks the plan last — and the sign-up link now always opens', audience: 'all',
     body: 'Quick Close now asks who looks after their website, the agency contract (if there is one), who controls the domain and whether they can reuse their current design, then the plan. Their sign-up link opens the same sign-up every time.',
     report: {

@@ -150,6 +150,9 @@ Deno.serve(async (req) => {
     // Set by the Inbox ONLY after the operator confirmed a repeat send. Strict === true so a
     // stray truthy value ("false", 1) can't wave the duplicate guard through.
     const allowResend: boolean = body.allow_resend === true;
+    /* findable_signup_link only: 'setup' = the Full Setup link (the client's own questions → agreement → payment);
+       anything else = the Agreement & Payment link. Positive match — an unknown value is the default, never a third link. */
+    const signupLinkVariant: "agreement" | "setup" = body.link_variant === "setup" ? "setup" : "agreement";
     const country: string | null = typeof body.country === "string" ? body.country : null;
     /* ══ mode 'dry_run' — PROVE A SEND WILL WORK WITHOUT SENDING ═════════════════════════════════
        Built 2026-09-15, after two live prospects were burned on `audit_followup` 500s (CLAUDE.md
@@ -495,7 +498,7 @@ Deno.serve(async (req) => {
         const st = templateSendState(avail, linkKind);
         if (!st.sendable && !st.tryable) return json({ ok: false, error: "template_not_approved", status: avail.status, reason: st.say }, 200);
         if (avail.language) lang = avail.language;
-        const v = linkKind === "signup" ? await resolveSignupLinkVars(service, resolvedLeadId) : await resolveOnboardingFormVars(service, resolvedLeadId);
+        const v = linkKind === "signup" ? await resolveSignupLinkVars(service, resolvedLeadId, signupLinkVariant) : await resolveOnboardingFormVars(service, resolvedLeadId);
         if (!v.ok) return json({ ok: false, error: "link_unavailable", reason: v.reason }, 200);
         try {
           payload = claimTemplatePayload(templateName, lang, v.business, "", linkKind === "signup" ? { greetingName: v.greeting, signupUrl: v.url } : { greetingName: v.greeting, onboardingFormUrl: v.url });

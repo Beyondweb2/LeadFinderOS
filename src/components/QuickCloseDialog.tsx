@@ -14,12 +14,13 @@ import { invokeEdge, edgeErrorMessage, EdgeFunctionError } from '@/lib/edgeInvok
 import { notifyLeadChanged } from '@/lib/leadSync';
 import {
   APPROACH_LABEL, APPROACH_ROUTE, QC_REVIEW_HEADING, QUICK_CLOSE_AFTER_PAYMENT, QUICK_CLOSE_AGREEMENT_LINE, QUICK_CLOSE_GUARANTEE_LINES, QUICK_CLOSE_QUESTIONS, QUICK_CLOSE_STATE_LABEL,
-  closeFlow, linkTimeLeftWords, missingQuestions, quickCloseMessage, quickCloseScript, routeAfterAnswer, routeAvailable, routeSwitchText, routeOwnershipLine, routePaymentsShort, routeTermsLines,
-  type QcApproach, type QcCallNotes, type QcKey, type QcLinkShare, type OfferFit, type QuickCloseAnswers, type QuickCloseGate, type QuickCloseState,
+  closeFlow, linkTimeLeftWords, missingQuestions, phoneCloseNotesComplete, quickCloseMessage, quickCloseScript, routeAfterAnswer, routeAvailable, routeSwitchText, routeOwnershipLine, routePaymentsShort, routeTermsLines,
+  type QcApproach, type QcCallNotes, type CloseRoute, type QcKey, type QcLinkShare, type OfferFit, type QuickCloseAnswers, type QuickCloseGate, type QuickCloseState,
 } from '@/lib/quickClose';
 import { LINK_READY_FALLBACK, type LinkRoute } from '@/lib/paymentLinkRoute';
 import { FINDABLE_SETUP_PRICE_GBP, SERVICE_ROUTE_NAME, totalPaymentsFor, type ServiceRoute } from '@/lib/findableOffer';
 import { cn } from '@/lib/utils';
+import { ClosePanel } from '@/components/ClosePanel';
 import { SalesHandoffForm } from '@/components/SalesHandoffForm';
 import type { HandoffFieldKey, SalesHandoffFields } from '@/lib/salesHandoff';
 import type { NextStep } from '@/lib/deliveryStage';
@@ -63,6 +64,9 @@ interface View {
   offer?: OfferFit;
   has_website?: boolean;
   events: { kind: string; at: string; by_me: boolean }[];
+  /** THE TWO WAYS TO CLOSE: the route this sign-up is on, and the Full Setup link with how it has gone out. */
+  close_route?: CloseRoute;
+  full_setup?: { url: string; shared: { channel: string; at: string; status: string | null; template: string | null }[] };
   /** The sales handoff (src/lib/salesHandoff.ts) — editable by the seller even after payment. */
   handoff?: { canEdit: boolean; fields: SalesHandoffFields; prefilled: HandoffFieldKey[]; saved_at: string | null; completed_at: string | null; complete: boolean; missing: HandoffFieldKey[];
     /** SEND TO PAUL (2026-10-06): the one authoritative send, once made. */
@@ -137,7 +141,7 @@ export function QuickCloseDialog({ leadId, open, onOpenChange }: { leadId: strin
       <DialogContent className="flex h-[100dvh] max-h-[100dvh] w-full max-w-lg flex-col gap-0 overflow-hidden p-0 sm:h-auto sm:max-h-[92vh] sm:rounded-2xl">
         <DialogTitle className="sr-only">Quick Close</DialogTitle>
         <DialogDescription className="sr-only">Close this lead: the questions, the terms and the sign-up link</DialogDescription>
-        <QuickClosePanel leadId={leadId} active={open} framed />
+        <ClosePanel leadId={leadId} active={open} framed />
       </DialogContent>
     </Dialog>
   );
@@ -212,13 +216,13 @@ export function QuickClosePanel({ leadId, active = true, framed = false }: { lea
   const doCopy = async (what: 'link' | 'message' | 'script', text: string) => {
     if (await copy(text)) {
       setCopied(what); window.setTimeout(() => setCopied(null), 2000);
-      toast({ title: what === 'link' ? 'Sign-up link copied' : 'Copied' });
+      toast({ title: what === 'link' ? 'Link copied' : 'Copied' });
       if (what !== 'script') void run('share-copy', { mode: 'share_link', channel: 'copy' }, true);
     } else toast({ title: 'Copy blocked by the browser', description: 'Select the text and copy it by hand.', variant: 'destructive' });
   };
   const sendEmail = async () => {
     const r = await run('email', { mode: 'share_link', channel: 'email' });
-    if (r) toast({ title: 'Sign-up link emailed', description: v?.share?.email ? `To ${v.share.email}` : undefined });
+    if (r) toast({ title: 'Agreement & payment link emailed', description: v?.share?.email ? `To ${v.share.email}` : undefined });
   };
   /* ONE click (2026-10-07): the server picks the route — the approved findable_signup_link template, or a normal
      message in a conversation they replied to inside 24 hours — and refuses a second send of the same link unless
@@ -244,13 +248,18 @@ export function QuickClosePanel({ leadId, active = true, framed = false }: { lea
     return !!r;
   };
   const submitDelivery = async () => { const r = await run('submit', { mode: 'submit_delivery' }); if (r) toast({ title: 'Submitted for delivery', description: 'Paul has been told.' }); };
-  const answeredCount = shownQs.filter((x) => answers[x.key] && answers[x.key] !== 'not_applicable').length;
+  const notesDone = phoneCloseNotesComplete(v?.call);
+  /* TWO OPTIONS: "what they offer / where they want to be found" is one more step, just before the plan. */
+  const totalSteps = shownQs.length + 1;
+  const answeredCount = shownQs.filter((x) => answers[x.key] && answers[x.key] !== 'not_applicable').length + (notesDone ? 1 : 0);
   const known: [string, string | null | undefined][] = v ? [
     ['Business', v.lead.business_name], ['Trade', v.lead.trade], ['Town', v.lead.town], ['Phone', v.onboarding?.confirmed_phone || v.lead.phone],
     ['Email', v.onboarding?.contact_email || v.lead.email], ['Website', v.onboarding?.business_website || v.lead.website], ['Contact', v.onboarding?.contact_name || v.lead.contact_name],
     ['Google', v.lead.rating ? `${v.lead.rating}★ (${v.lead.review_count ?? 0} reviews)` : null], ['Campaign', v.lead.campaign], ['Source', v.lead.lead_source ?? 'App search'], ['Salesperson', v.lead.salesperson],
   ] : [];
-  const closing = !!v && v.canEdit && !!route && (v.state === 'ready' || v.state === 'link_generated' || v.state === 'link_expired');
+  /* A link that already stands is never hidden by the new step; a NEW link needs what they offer and where (server: call_notes_missing). */
+  const showNotes = !!v && v.canEdit && !notesDone && !step && answers.decision_maker !== 'no' && v.state !== 'link_generated' && v.state !== 'paid' && (current === 'route' || (current === null && !!route));
+  const closing = !!v && v.canEdit && !!route && (notesDone || v.state === 'link_generated') && (v.state === 'ready' || v.state === 'link_generated' || v.state === 'link_expired');
   const usableUrl = v?.link?.usable ? v.link.url : null;
   const greetName = v?.onboarding?.contact_name || v?.lead.contact_name || null;
   const currentQ = current ? QUICK_CLOSE_QUESTIONS.find((x) => x.key === current)! : null;
@@ -265,11 +274,11 @@ export function QuickClosePanel({ leadId, active = true, framed = false }: { lea
               <div className="mt-1.5 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
                 {v && <ToneChip tone={STATE_TONE[v.state]} dot className={v.state === 'paid' ? SUCCESS_CHIP : undefined}>{QUICK_CLOSE_STATE_LABEL[v.state]}</ToneChip>}
                 {v && route && <ToneChip tone="grey" icon={PoundSterling} testId="qc-route-chip">{SERVICE_ROUTE_NAME[route]} · {totalPaymentsFor(route)} payments</ToneChip>}
-                {v && v.state !== 'paid' && <span className="min-w-0">{answeredCount} of {shownQs.length} answered · saved as you go</span>}
+                {v && v.state !== 'paid' && <span className="min-w-0">{answeredCount} of {totalSteps} answered · saved as you go</span>}
               </div>
             </div>
           </div>
-          {v && v.state !== 'paid' && <div className="mt-3 h-1 overflow-hidden rounded-full bg-muted" data-testid="qc-progress"><div className={cn('h-full rounded-full transition-[width] duration-500 motion-reduce:transition-none', TONE.blue.bar)} style={{ width: `${Math.round((answeredCount / Math.max(1, shownQs.length)) * 100)}%` }} /></div>}
+          {v && v.state !== 'paid' && <div className="mt-3 h-1 overflow-hidden rounded-full bg-muted" data-testid="qc-progress"><div className={cn('h-full rounded-full transition-[width] duration-500 motion-reduce:transition-none', TONE.blue.bar)} style={{ width: `${Math.round((answeredCount / Math.max(1, totalSteps)) * 100)}%` }} /></div>}
         </div>
 
         <div className={cn('space-y-4', framed && 'min-h-0 flex-1 overflow-y-auto px-4 py-4')}>
@@ -318,9 +327,12 @@ export function QuickClosePanel({ leadId, active = true, framed = false }: { lea
           )}
 
           {/* ── THE CURRENT QUESTION (while answering) ── */}
-          {v && v.canEdit && currentQ && (
+          {v && showNotes && <ServicesAreasStep key={String(v.call?.jobs ?? '') + '|' + String(v.call?.areas ?? '')} call={v.call} busy={busy === 'notes'} total={totalSteps} number={Math.min(answeredCount + 1, totalSteps)}
+            onSave={async (jobs, areas) => !!(await run('notes', { mode: 'save_call', call: { jobs, areas } }))} />}
+
+          {v && v.canEdit && currentQ && !showNotes && (
             <section aria-live="polite">
-              <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Question {Math.min(answeredCount + 1, shownQs.length)} of {shownQs.length}</p>
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Question {Math.min(answeredCount + 1, totalSteps)} of {totalSteps}</p>
               <p className="mt-1 text-lg font-semibold leading-snug">{currentQ.text}</p>
               {currentQ.detail && current !== 'build_consents' && <p className="mt-1 text-sm text-muted-foreground" data-testid="qc-question-detail">{currentQ.detail.join(' ')}</p>}
               {current === 'build_consents' && (
@@ -421,20 +433,20 @@ export function QuickClosePanel({ leadId, active = true, framed = false }: { lea
                     <>
                       {v.state === 'link_expired' && (
                         <p className={cn('flex items-start gap-1.5 rounded-xl px-2.5 py-2 text-xs', TONE.amber.tint, TONE.amber.text)} data-testid="qc-link-expired"><AlertTriangle className="mt-px h-3.5 w-3.5 shrink-0" />
-                          The link made {hhmm(v.link?.generated_at)} is no longer usable and must not be sent. Make the sign-up link — any old payment page is closed.
+                          The link made {hhmm(v.link?.generated_at)} is no longer usable and must not be sent. Make a fresh agreement & payment link — any old payment page is closed.
                         </p>
                       )}
                       <Button className={MONEY_CTA} onClick={() => void generate()} disabled={!!busy}>
                         {busy === 'link' ? <Loader2 className="h-5 w-5 animate-spin" /> : v.state === 'link_expired' ? <RefreshCw className="h-5 w-5" /> : <PoundSterling className="h-5 w-5" />}
-                        {v.state === 'link_expired' ? 'Make a fresh sign-up link' : 'Create sign-up link'}
+                        {v.state === 'link_expired' ? 'Make a fresh agreement & payment link' : 'Create agreement & payment link'}
                       </Button>
-                      <p className="text-center text-xs text-muted-foreground">One link for the client: they check their details, read and sign the Client Service Agreement, then pay £{FINDABLE_SETUP_PRICE_GBP}. Payment cannot open before they sign.</p>
+                      <p className="text-center text-xs text-muted-foreground">One secure Findable link: they check a short summary, read and sign the Client Service Agreement, then pay £{FINDABLE_SETUP_PRICE_GBP}. Payment cannot open before they sign.</p>
                     </>
                   ) : (
                     <>
-                      <p className={cn('flex flex-wrap items-center gap-x-1 text-xs font-semibold uppercase tracking-wide', OK_TEXT)}><CheckCircle2 className="h-3.5 w-3.5 shrink-0" />Sign-up link ready · <span className="font-normal normal-case">{timeLeft(v.link?.usable_until ?? v.link?.expires_at)}</span></p>
+                      <p className={cn('flex flex-wrap items-center gap-x-1 text-xs font-semibold uppercase tracking-wide', OK_TEXT)}><CheckCircle2 className="h-3.5 w-3.5 shrink-0" />Agreement &amp; payment link ready · <span className="font-normal normal-case">{timeLeft(v.link?.usable_until ?? v.link?.expires_at)}</span></p>
                       <Button className={MONEY_CTA} onClick={() => void doCopy('link', usableUrl)}>
-                        {copied === 'link' ? <Check className="h-5 w-5" /> : <Copy className="h-5 w-5" />}{copied === 'link' ? 'Copied' : 'Copy sign-up link'}
+                        {copied === 'link' ? <Check className="h-5 w-5" /> : <Copy className="h-5 w-5" />}{copied === 'link' ? 'Copied' : 'Copy link'}
                       </Button>
                       <p className="line-clamp-2 break-all rounded-lg bg-muted/40 px-2.5 py-1.5 font-mono text-[11px] text-muted-foreground" title={usableUrl}>{usableUrl}</p>
                       {/* ONE compliant send (Paul's rule, paymentLinkRoute.ts): WhatsApp only in a conversation they replied
@@ -452,7 +464,7 @@ export function QuickClosePanel({ leadId, active = true, framed = false }: { lea
                               </div>
                             ) : canWa ? (
                               <Button className="h-12 w-full gap-1.5 rounded-xl bg-blue-600 font-bold text-white hover:bg-blue-700" onClick={() => void sendWhatsApp(false)} disabled={!!busy} data-testid="qc-send-whatsapp">
-                                {busy === 'wa' ? <><Loader2 className="h-4 w-4 animate-spin" />Sending…</> : <><MessageCircle className="h-4 w-4" />Send signup link on WhatsApp</>}
+                                {busy === 'wa' ? <><Loader2 className="h-4 w-4 animate-spin" />Sending…</> : <><MessageCircle className="h-4 w-4" />Send agreement &amp; payment link</>}
                               </Button>
                             ) : (
                               <div className={cn('rounded-xl px-3 py-2.5 text-sm', TONE.amber.tint)} data-testid="qc-link-fallback">
@@ -567,9 +579,31 @@ export function QuickClosePanel({ leadId, active = true, framed = false }: { lea
             </label>
           )}
 
-          {v && v.state !== 'paid' && framed && <p className="text-center text-[11px] text-muted-foreground">Prefer they fill it in themselves? The self-service sign-up link is on the lead's Close tab.</p>}
-        </div>
+                  </div>
     </div>
+  );
+}
+
+/** TWO OPTIONS: the short "what do they offer, and where do they want to be found?" step, just before the plan. It saves
+ *  the same two call notes the Call screen does (save_call), so a rep who already heard them there is never asked again. */
+function ServicesAreasStep({ call, busy, total, number, onSave }: { call: QcCallNotes | undefined; busy: boolean; total: number; number: number; onSave: (jobs: string, areas: string) => Promise<boolean> }) {
+  const [jobs, setJobs] = useState(call?.jobs ?? '');
+  const [areas, setAreas] = useState(call?.areas ?? '');
+  const ok = jobs.trim().length > 1 && areas.trim().length > 1;
+  return (
+    <section aria-live="polite" data-testid="qc-services-areas">
+      <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Question {number} of {total}</p>
+      <p className="mt-1 text-lg font-semibold leading-snug">What do they offer, and where do they want to be found?</p>
+      <label className="mt-3 block text-sm font-medium">What do they offer?
+        <Textarea value={jobs} onChange={(e) => setJobs(e.target.value)} rows={2} maxLength={300} placeholder="e.g. emergency lockouts, lock changes, car keys" className="mt-1 text-base" data-testid="qc-services" />
+      </label>
+      <label className="mt-3 block text-sm font-medium">Where do they want to be found?
+        <Textarea value={areas} onChange={(e) => setAreas(e.target.value)} rows={2} maxLength={300} placeholder="e.g. Canterbury, Whitstable, Herne Bay" className="mt-1 text-base" data-testid="qc-areas" />
+      </label>
+      <Button className="mt-3 h-12 w-full text-base font-bold" disabled={!ok || busy} onClick={() => void onSave(jobs.trim(), areas.trim())} data-testid="qc-services-continue">
+        {busy && <Loader2 className="mr-1 h-4 w-4 animate-spin" />}Continue
+      </Button>
+    </section>
   );
 }
 

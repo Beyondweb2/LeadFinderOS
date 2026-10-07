@@ -295,6 +295,25 @@ export function splitCallList(text: string | null | undefined): string[] {
   }
   return out;
 }
+/* ══ THE TWO WAYS TO CLOSE (2026-10-07, fix/quick-close-two-options) ═══════════════════════════════════════
+   CLOSE ON THE PHONE — the salesperson asks, then sends the Agreement & Payment link (the client confirms a short
+   summary, signs, pays). SEND FULL SETUP — the client answers the same short questions themselves on their own
+   link, then agreement, then payment. ONE underlying sign-up either way: the same onboarding row, the same agreement
+   link, the same checkout. The route is a DERIVED fact — a row Quick Close holds (answers saved) is assisted, a row
+   the client made alone is self-serve — and the phone route also stamps `close_route` when its link is made. */
+export type CloseRoute = 'phone' | 'full_setup';
+/** What a phone close must know about the business before the link: what they offer and where they want to be
+ *  found (the same two call notes the Call screen saves). ⛔ Positive: both present, or it is not complete. */
+export function phoneCloseNotesComplete(call: QcCallNotes | null | undefined): boolean {
+  const c = cleanCallNotes(call);
+  return splitCallList(c.jobs).length > 0 && splitCallList(c.areas).length > 0;
+}
+/** assisted (a salesperson's answers are on the row) → 'phone'; otherwise the client is doing it themselves. */
+export function closeRouteOf(qc: { answers?: unknown } | null | undefined): CloseRoute {
+  const a = qc?.answers;
+  return a && typeof a === 'object' && Object.keys(a as object).length > 0 ? 'phone' : 'full_setup';
+}
+
 /** The call answers as label / answer lines (handoff, intake, Paul's email). Only what was answered. */
 export type CallLineKey = 'manager' | 'agency_contract' | 'agency_monthly_gbp' | 'jobs' | 'areas' | 'decision_maker';
 export function callNotesLines(a: QuickCloseAnswers, n: QcCallNotes | null | undefined): { key: CallLineKey; label: string; answer: string }[] {
@@ -405,17 +424,17 @@ export function routeQuestions(raw: QuickCloseAnswers): QcKey[] {
   return withRoute(raw).route === 'optimise' ? ['access'] : [];
 }
 
-/** 🔴 THE CLOSE, IN ORDER (final pass, 2026-10-07): authority → who looks after the site → (only if an agency or
- *  freelancer does) the contract → domain control → (only if they have a site) the right to reuse its design and
- *  content → THE PLAN, LAST → (Optimise only) access. 4–5 questions, fewer when the Call screen already saved
- *  the answers (missingQuestions). No registrar, DNS / CMS / hosting logins, logos, photos or contract dates:
- *  those belong to the paid client's onboarding form. */
+/** 🔴 THE CLOSE, IN ORDER (final pass, 2026-10-07; TWO OPTIONS, 2026-10-07): authority → who looks after the site →
+ *  (only if an agency or freelancer does) the contract → domain control → [what they offer and where — saved as the
+ *  call notes, see phoneCloseNotesComplete] → THE PLAN, LAST → (Optimise only) access. The "may we reuse your
+ *  current design" question is no longer asked (Build is the default; it never changed the plan). Fewer when the Call
+ *  screen already saved the answers (missingQuestions). No registrar, DNS / CMS / hosting logins, logos, photos or
+ *  contract dates: those belong to the paid client's onboarding form. */
 export function closeFlow(raw: QuickCloseAnswers): QcKey[] {
   const a = withRoute(raw);
   const flow: QcKey[] = ['decision_maker', 'manager'];
   if (thirdPartyManaged(a)) flow.push('agency_contract');
   flow.push('domain');
-  if (a.manager !== 'no_website') flow.push('rights');
   flow.push('route');
   flow.push(...routeQuestions(a));
   return flow;
@@ -589,7 +608,7 @@ export interface QuickCloseRecord {
 }
 export const QUICK_CLOSE_STATE_LABEL: Record<QuickCloseState, string> = {
   not_started: 'Not started', in_progress: 'In progress', blocked: 'Decision maker needed', consents_needed: 'Build consents needed', needs_review: 'Paul review required',
-  ready: 'Ready for sign-up', link_generated: 'Sign-up link ready', link_expired: 'Sign-up link expired', paid: 'Paid',
+  ready: 'Ready for the link', link_generated: 'Agreement & payment link ready', link_expired: 'Link expired', paid: 'Paid',
 };
 
 /** 🔴 THE SIGN-UP LINK (v3 Client Service Agreement, 2026-10-05). What a salesperson sends is ONE link:

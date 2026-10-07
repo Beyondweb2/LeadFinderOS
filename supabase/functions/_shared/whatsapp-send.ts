@@ -9,7 +9,7 @@ import { RIVAL_VARS, RIVALS_REQUIRED } from "../../../src/lib/rivalHook.ts";
 import { displayBusinessName, IDENTIFY_NAME_TEMPLATES } from "../../../src/lib/displayName.ts";
 import { AI_SITE_FINDINGS_V2, AI_SITE_FINDINGS_V2_APPROVED } from "../../../src/lib/siteFindings.ts";
 import { STALE_OFFER_TEMPLATES } from "../../../src/lib/findableOffer.ts";
-import { isOnboardingFormUrl, isSignupLinkUrl, onboardingTemplateBody, signupLinkTemplateBody } from "../../../src/lib/whatsappLinkTemplates.ts";
+import { isOnboardingFormUrl, isSignupTemplateLinkUrl, onboardingTemplateBody, signupLinkTemplateBody } from "../../../src/lib/whatsappLinkTemplates.ts";
 
 import { toWhatsAppDigits } from "../../../src/lib/waNumber.ts";
 
@@ -958,7 +958,7 @@ export function templateBodyParams(
       }
       case "signup_url": {
         const u = (extra?.signupUrl ?? "").trim();
-        if (!isSignupLinkUrl(u)) throw new Error("unsafe_template_var:not_a_signup_link:the link is not the client's findable.live sign-up link");
+        if (!isSignupTemplateLinkUrl(u)) throw new Error("unsafe_template_var:not_a_signup_link:the link is not the client's findable.live sign-up link");
         return u;
       }
       case "onboarding_form_url": {

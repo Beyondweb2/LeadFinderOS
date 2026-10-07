@@ -164,10 +164,10 @@ console.log('\n── CLIENT CONFIRMATION: "here\'s what we have so far" ──'
   s.answer({ decision_maker: 'yes', manager: 'agency', agency_contract: 'free', domain: 'yes', rights: 'yes', route: 'build' }); s.linkMade();
   const items = confirmItemsFor(s.qc);
   const by = Object.fromEntries(items.map((i) => [i.key, i]));
-  ok(items.map((i) => i.key).join() === 'manager,agency_contract,domain,rights', 'four facts, in order');
-  ok(by.manager.answer === 'An agency' && by.agency_contract.answer === 'No' && by.domain.answer === 'We do' && by.rights.answer === 'Yes', 'prefilled from what Sales recorded, in the client\'s words');
+  ok(items.map((i) => i.key).join() === 'manager,agency_contract,domain', 'three facts, in order');
+  ok(by.manager.answer === 'An agency' && by.agency_contract.answer === 'No' && by.domain.answer === 'We do', 'prefilled from what Sales recorded, in the client\'s words');
   const vals = (o: Record<string, string>) => o as never;
-  ok(confirmItemApplies(by.agency_contract, vals({ manager: 'agency' })) && !confirmItemApplies(by.agency_contract, vals({ manager: 'owner' })) && !confirmItemApplies(by.rights, vals({ manager: 'no_website' })) && confirmItemApplies(by.rights, vals({ manager: 'owner' })), 'the contract applies only to an agency / freelancer; the reuse question never to "no website"');
+  ok(confirmItemApplies(by.agency_contract, vals({ manager: 'agency' })) && !confirmItemApplies(by.agency_contract, vals({ manager: 'owner' })), 'the contract applies only to an agency / freelancer');
   ok(/what we have so far|Here/.test('Here&rsquo;s what we have so far') && !JSON.stringify(items).includes('route') && !JSON.stringify(items).includes('£'), 'the card carries no plan, route or price');
 
   // Looks right: nothing changed.
@@ -248,7 +248,7 @@ console.log('\n── QUICK CLOSE SCREEN ──');
 {
   const dlg = read('src/components/QuickCloseDialog.tsx');
   ok(/qc-offer-warning/.test(dlg) && /qc-offer-notes/.test(dlg) && /\.filter\(\(o\) => !o\.legacy \|\| answers\[current!\] === o\.value\)/.test(dlg), 'the plan step shows the recommendation, the contract warning and the notes; legacy answers are not offered');
-  ok(/Question \$\{Math\.min\(answeredCount \+ 1, shownQs\.length\)\} of \$\{shownQs\.length\}|Question \{Math\.min\(answeredCount \+ 1, shownQs\.length\)\} of \{shownQs\.length\}/.test(dlg) && /data-testid="qc-progress"/.test(dlg), 'progress is shown (N of M, a bar)');
+  ok(/Question \{Math\.min\(answeredCount \+ 1, totalSteps\)\} of \{totalSteps\}/.test(dlg) && /data-testid="qc-progress"/.test(dlg), 'progress is shown (N of M, a bar)');
   const lib = read('src/lib/quickClose.ts');
   const banned = ['registrar', 'dns login', 'cms login', 'hosting password', 'google business login', 'expiry', 'logo', 'photos', 'plugin'];
   const asked = JSON.stringify(closeFlow({ manager: 'agency' }).map((k) => lib.match(new RegExp(`key: '${k}', text: '([^']*)'`))?.[1] ?? '')).toLowerCase();
