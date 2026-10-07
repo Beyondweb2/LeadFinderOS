@@ -10,6 +10,8 @@ import { readWebsite, sameWebsite } from "../../../src/lib/websiteUrl.ts";
 import { planClientConfirmation, resumeDecision, salesSignupFor, type SignupRow } from "../../../src/lib/salesSignup.ts";
 import { confirmItemsFor, confirmSummaryFor } from "../../../src/lib/clientConfirm.ts";
 import type { QuickCloseRecord } from "../../../src/lib/quickClose.ts";
+import { selfServeBuildHold, SELF_SERVE_HOLD_TEXT } from "../../../src/lib/selfServeContract.ts";
+import { recordSetupSignupCreator } from "../_shared/setup-link-creator.ts";
 
 // findable-onboarding — the PUBLIC backend for findable-site's /onboarding flow
 // (verify_jwt = false; the static site calls it with the anon apikey only). Actions:
@@ -1200,6 +1202,28 @@ Deno.serve(async (req) => {
 
       const { data: row, error: insErr } = await saveAnswers({ lead_id: leadId, status: "submitted" });
       if (insErr || !row) return json({ ok: false, error: "save_failed" }, 500);
+
+      /* 🔴 TWO CLOSE OPTIONS, FINAL SAFEGUARDS (2026-10-07). Both are non-fatal: the client's answers are already saved.
+         1. FULL SETUP KEEPS ITS SALESPERSON. When a salesperson sent this lead the Full Setup link, the sign-up the client's
+            page just created is THEIR creation (the same event + trigger a phone close uses), so the sale is theirs at payment.
+         2. THE AGENCY-CONTRACT SAFEGUARD. A Build on an agency-run site the client may still be tied into is held for Paul by
+            the SAME rule and the SAME release as the phone close (findable-checkout refuses it: held_for_review). Paul is told. */
+      try {
+        const made = await recordSetupSignupCreator(service, leadId, row.id as string);
+        if (!made.recorded && made.reason !== "no_setup_send" && made.reason !== "already_recorded") console.error("[findable-onboarding] setup creator not recorded:", made.reason);
+      } catch (e) { console.error("[findable-onboarding] setup creator failed (non-fatal):", e instanceof Error ? e.message : String(e)); }
+      try {
+        if (selfServeBuildHold({ plan_tier: (answers as Record<string, unknown>).plan_tier, website_addon: (answers as Record<string, unknown>).website_addon, website_manager: (answers as Record<string, unknown>).website_manager, agency_contract: (answers as Record<string, unknown>).agency_contract })) {
+          const { data: owner } = await service.from("team_members").select("user_id").eq("is_book_owner", true).maybeSingle();
+          if (owner?.user_id) {
+            await service.from("notifications").upsert({
+              user_id: owner.user_id, kind: "quick_close_review", title: "WEBSITE ACCESS ISSUE — Paul review required",
+              body: `A client chose Build on their own page: ${SELF_SERVE_HOLD_TEXT}.`,
+              link: `/inbox?lead=${leadId}`, lead_id: leadId, priority: 2, dedupe_key: `self_serve_review:${row.id}`,
+            }, { onConflict: "user_id,dedupe_key", ignoreDuplicates: true });
+          }
+        }
+      } catch (e) { console.error("[findable-onboarding] self-serve review notice failed (non-fatal):", e instanceof Error ? e.message : String(e)); }
 
       // Customer-confirmed location becomes the lead's location of record (the wizard's
       // write-back convention) — the audit and everything after use CONFIRMED inputs.

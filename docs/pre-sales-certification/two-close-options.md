@@ -83,3 +83,20 @@ Driver artefact, not a fault: the "one sign-up creation" check read 2 on P1/P2 b
 Quick Close's own `save` / `generate_link`, and the WhatsApp sends (`share_link`, `share_setup`) — a salesperson JWT cannot be minted here. The Full Setup template path is pinned by
 `scripts/quick-close-two-options.test.ts` and by the sender's own shape check, not by a live Meta send. The customer's new panels (contract question, services / areas) were verified by
 typecheck, the site's source guards and the live chunk markers, **not** clicked through in a browser against live data.
+
+## Final safeguards — 2026-10-07 (fix/two-close-final-safeguards, live)
+1. **Full Setup keeps its salesperson.** `share_setup` records the send (`quick_close_events` `link_shared`, `variant: "setup"`). When the client's own page creates the
+   sign-up row, `findable-onboarding` calls `_shared/setup-link-creator.ts`: ONE `link_generated` event on that row, actor = the sender — the phone close's own event, so the
+   existing trigger writes `sale_creations` and `sale_attribution_decision` stamps `sold_by_user_id` at payment. No send recorded → no event → the existing no-creator rule decides.
+   Before: a self-serve sale on a salesperson's lead had `sold_by_user_id` null (S1/S2 of the first QA). After: the sender, `source signup_creator`, ledger seller set, no review.
+   Not carried over: the send-time "engaged" evidence the commission engine reads from `link_generated` after an engagement END (a full setup send is `link_shared`, not `link_generated`).
+2. **Self-serve contract safeguard** (`src/lib/selfServeContract.ts`): Build + agency-run site + contract `in_contract` or `not_sure` is held — the phone close's own
+   predicate (`agencyContractBlocksBuild`), `findable-checkout` refuses `held_for_review`, Paul is notified once, the Close tab shows the stop and the SAME Release button
+   (`approve_review` → `quick_close.review_approved_at`). Optimise, `free`, no agency, or no answer are not held (silence is never "in contract").
+3. **A preview never writes.** The client page opened with `preview=1` answers every write locally (`preview_only`) and shows a banner. Cause of the wrong name / email on
+   a lead: the operator's Preview link was completed and submitted, which saved the operator's own details as the prospect's.
+
+Live QA `_qa_final_safeguards.ts`, fixtures `ZZ QA Safe …` (archived): P1 phone Build; S1 setup Build (contract ended) / S2 setup Optimise (in contract) paid with
+`sold_by_user_id` = the sender, one creation event, ledger seller set, no review; S3 Build in contract → held, Paul notified, released by SQL (the field `approve_review` writes) → v4 → paid, seller kept;
+S4 Build not sure → held. Resume in a real browser on findable.live: details and the website / contract answers restored on reopening the same link, no onboarding row created.
+Not exercised live: the WhatsApp send itself and the operator Close-tab buttons (no salesperson JWT here).
