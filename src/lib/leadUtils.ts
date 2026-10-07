@@ -1,5 +1,6 @@
 import type { OutreachLead } from '@/types/outreach';
 import { toWhatsAppDigits } from '@/lib/waNumber';
+import { articleTrade, normaliseTown, normaliseTrade, pluraliseTrade } from '@/lib/templateVars';
 
 /**
  * Calculate a lead score based on various factors (0-100)
@@ -118,12 +119,29 @@ export function hasLinkToken(template: string): boolean {
  */
 export function fillTemplate(
   template: string,
-  vars: { businessName?: string | null; link?: string | null },
+  vars: { businessName?: string | null; link?: string | null; trade?: string | null; town?: string | null },
 ): string {
   let out = template;
   if (vars.businessName != null) out = fillBusinessName(out, vars.businessName);
   if (vars.link) out = out.replace(new RegExp(LINK_TOKEN, 'gi'), vars.link);
+  /* THE TEAM LIBRARY'S TRADE / TOWN MARKERS (2026-10-07, src/lib/teamTemplateSeed.ts). Shaped by the SAME rules the registered
+     WhatsApp templates use (templateVars.ts): a trade the rule refuses (a vowel-initial one after "a", a multi-clause one) is NOT
+     guessed — its marker stays in the draft, unresolvedTokens() reports it, and the send is refused until the rep writes it. */
+  const swap = (name: string, v: { ok: boolean; value?: string }) => {
+    if (v.ok && v.value) out = out.replace(new RegExp('\\{\\{\\s*' + name + '\\s*\\}\\}', 'gi'), v.value);
+  };
+  if (vars.trade) {
+    swap('trade_with_article', articleTrade(vars.trade));
+    swap('trade_plural', pluraliseTrade(vars.trade));
+    swap('trade', normaliseTrade(vars.trade));
+  }
+  if (vars.town) swap('town', normaliseTown(vars.town));
   return out;
+}
+
+/** Markers still left in a message ({{competitors}}, a trade the rules refuse…). ⛔ A message carrying one is never sent as it stands. */
+export function unresolvedTokens(text: string): string[] {
+  return [...new Set([...String(text ?? '').matchAll(/\{\{\s*([a-z_ ]+?)\s*\}\}/gi)].map((m) => m[0].replace(/\s+/g, '')))];
 }
 
 /**

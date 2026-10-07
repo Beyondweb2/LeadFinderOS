@@ -22,6 +22,18 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-07-team-templates-seeded', date: '2026-10-07', title: 'The Findable sales templates are now in Team templates', audience: 'all',
+    body: 'The eight openers, audit hooks and follow-ups are now ready to use under TEAM TEMPLATES in Inbox Quick reply and Templates.',
+    report: {
+      added: [
+        'Eight Team templates: Initial contact (two openers), Audit reply, Audit result hook, Competitor hook, and the three Audit follow-ups. The wording is the same as the WhatsApp templates.',
+        'Inserting one fills in the business name, report link, trade and town for the lead you have open.',
+        'Two blanks are yours to fill in: the three rival names ({{competitors}}) and the site fault ({{site_fault}}). A message that still has a blank in it will not send.',
+      ],
+      changed: [],
+      removed: [],
+      effect: 'Everyone can start from the same messages today. The approved WhatsApp templates themselves are unchanged and still send as before.',
+    } },
   { id: '2026-10-07-team-templates', date: '2026-10-07', title: 'Team templates: the Findable message library, shared with the whole team', audience: 'all',
     body: 'Templates now has two lists: TEAM TEMPLATES from Findable, which you can use but not change, and MY TEMPLATES, which are yours alone.',
     report: {

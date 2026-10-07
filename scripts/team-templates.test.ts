@@ -63,7 +63,7 @@ console.log('\n── THE SCREENS ──');
 const hook = read('src/hooks/useTemplates.ts');
 ok(/scope === 'team' && isAdmin \? 'team' : 'personal'/.test(hook) && /duplicateToMine/.test(hook) && /scope: 'personal'/.test(hook), 'the hook only lets an admin author a Team template; a duplicate is always personal');
 const inbox = read('src/pages/Inbox.tsx');
-ok(/const insertTemplate = \(content: string\) => \{\s*setText\(fillTemplate\(content/.test(inbox) && !/insertTemplate[\s\S]{0,200}updateTemplate/.test(inbox), 'Quick reply only writes the draft (editing the message never edits the template)');
+ok(/const insertTemplate = \(content: string\) => \{(?:\s*\/\*[\s\S]*?\*\/)?\s*setText\(fillTemplate\(content/.test(inbox) && !/insertTemplate[\s\S]{0,200}updateTemplate/.test(inbox), 'Quick reply only writes the draft (editing the message never edits the template)');
 ok(/data-testid=\{g\.team \? 'quick-reply-team' : 'quick-reply-mine'\}/.test(inbox) && /TEAM_HEADING/.test(inbox), 'the Inbox quick reply shows TEAM TEMPLATES then MY TEMPLATES');
 const picker = read('src/components/TemplatePicker.tsx');
 ok(/TEAM_HEADING/.test(picker) && /MINE_HEADING/.test(picker) && /isArchived/.test(picker), 'the WhatsApp composer\'s picker shows the same two groups');

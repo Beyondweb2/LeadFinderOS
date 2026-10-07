@@ -7,6 +7,7 @@ import { getTemplateSendability, WA_TEMPLATE_REQS, canonicalTemplate } from '@/l
 import { useToast } from '@/hooks/use-toast';
 import { useTemplates } from '@/hooks/useTemplates';
 import { MINE_HEADING, TEAM_HEADING, TEAM_MARK } from '@/lib/teamTemplates';
+import { unresolvedTokens } from '@/lib/leadUtils';
 import { useSubscription } from '@/hooks/useSubscription';
 import { usePersistedState } from '@/hooks/usePersistedState';
 import { supabase } from '@/integrations/supabase/client';
@@ -922,7 +923,9 @@ const Inbox = () => {
      a remount cannot get out of step with the stored draft, and a handle can. */
   const [composerSeed, setComposerSeed] = useState(0);
   const insertTemplate = (content: string) => {
-    setText(fillTemplate(content, { businessName: activeBusinessName }));
+    /* Team templates carry markers beyond the business name (src/lib/teamTemplateSeed.ts): the lead's report link, trade and town resolve
+       from the open lead; the rival names and a site fault are typed by the rep, and doSend refuses a message that still carries one. */
+    setText(fillTemplate(content, { businessName: activeBusinessName, link: reportUrl, trade: activeLead?.category || activeLead?.search_keyword || null, town: (activeLead as { derived_town?: string | null; search_location?: string | null } | undefined)?.derived_town ?? activeLead?.search_location ?? null }));
     setComposerSeed((n) => n + 1);
   };
   /* WARM REPLY DRAFTS go in the same way a quick reply does: write the draft, remount the composer.
@@ -1703,6 +1706,11 @@ const Inbox = () => {
     }
     const body = (freeText ?? text).trim();
     if (!useTemplate && !body) return false;
+    /* A free-text message that still has a marker (a Team template's {{competitors}}, a trade the rules would not guess) is never sent. */
+    if (!useTemplate) {
+      const left = unresolvedTokens(body);
+      if (left.length) { toast({ title: 'Fill in the blanks first', description: `This message still contains ${left.join(', ')}. Replace it with the real wording, then send.`, variant: 'destructive' }); return false; }
+    }
     // Template sends are deliberate button actions; do not add a second confirmation step.
     // Repeats still pass the explicit server override automatically so removing the browser prompt
     // does not turn a valid repeat into a confusing duplicate refusal.
