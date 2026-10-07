@@ -156,9 +156,9 @@ export const OutreachMobileCard = memo(function OutreachMobileCard({
             <div className="text-[11px] text-muted-foreground leading-none truncate">{campaignName}</div>
           )}
           {hasPhone && (
-            <a href={`tel:${lead.phone}`} className="text-[11px] text-muted-foreground leading-none truncate">
+            <button type="button" onClick={() => onCallClick?.()} className="text-left text-[11px] text-muted-foreground leading-none truncate">
               {lead.phone}
-            </a>
+            </button>
           )}
           {/* The AI check, compact: a state word, or ChatGPT x · Gemini y and Call screen. Scores only. */}
           {aiCheck}
@@ -273,11 +273,11 @@ export const OutreachMobileCard = memo(function OutreachMobileCard({
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end" className="min-w-[160px]">
-                      <DropdownMenuItem asChild>
-                        <a href={`tel:${lead.phone}`} className="flex items-center gap-2 cursor-pointer" onClick={() => onCallClick?.()}>
-                          <PhoneCall className="h-4 w-4" />
-                          Normal Call
-                        </a>
+                      {/* Call opens the lead popup with the number to dial on your own phone — never a tel: link
+                          (2026-10-07: on a laptop tel: opens WhatsApp Desktop). */}
+                      <DropdownMenuItem className="flex items-center gap-2 cursor-pointer" onClick={() => onCallClick?.()} data-testid="outreach-call">
+                        <PhoneCall className="h-4 w-4" />
+                        Call
                       </DropdownMenuItem>
                       {/* ⛔ WAS A wa.me LINK LABELLED "WhatsApp Call" — the desktop row's twin, and
                           wrong the same way. wa.me opens a CHAT, so this was a second way to message

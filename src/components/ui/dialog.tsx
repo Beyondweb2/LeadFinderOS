@@ -30,14 +30,16 @@ DialogOverlay.displayName = DialogPrimitive.Overlay.displayName;
 interface DialogContentProps
   extends React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content> {
   hideClose?: boolean;
+  /** A lighter backdrop for a small window over another dialog that must stay visible (the Call number window). */
+  overlayClassName?: string;
 }
 
 const DialogContent = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Content>,
   DialogContentProps
->(({ className, children, hideClose = false, ...props }, ref) => (
+>(({ className, children, hideClose = false, overlayClassName, ...props }, ref) => (
   <DialogPortal>
-    <DialogOverlay />
+    <DialogOverlay className={overlayClassName} />
     {/* 2026-10-06 (operator design consistency): the dashboards' surface (bg-card, the soft deep shadow,
         rounder corners), never taller than the screen so a long dialog scrolls inside itself on a phone.
         A dialog that lays out its own scroll passes its own max-h / overflow and wins (tailwind-merge). */}

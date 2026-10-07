@@ -46,7 +46,7 @@ ok(callTab.indexOf("<LoggedLine") >= 0 && callTab.indexOf("<LoggedLine") < callT
   && /<LeadHookPanel leadId=\{lead\.id\} variant="call" \/>/.test(callTab) && !/<details/.test(callTab), "Call order: the last result → the AI result (LeadHookPanel 'call', not folded) → the script (+ Log / Quick Close bar)");
 
 console.log("── 3. the Log window ──");
-ok(/const \[logOpen, setLogOpen\] = useState\(openLogContact\);/.test(dlg) && /const logThisCall = \(\) => setLogOpen\(true\);/.test(dlg), "Log opens the window; Outreach's Call arrives with it open");
+ok(/const \[windows, setWindows\] = useState\(\(\) => arrivalWindows\(callArrivalOf\(openNumberPopup, openLogContact\)/.test(dlg) && /const logOpen = windows\.logOpen;/.test(dlg) && /const logThisCall = \(\) => setWindows\(afterLogCall\(\)\);/.test(dlg), "Log opens the window; Outreach's Call arrives on the number window, never on it (2026-10-07)");
 ok(/onClick=\{logThisCall\}[^>]*data-testid="workspace-log"/.test(header) && /onLogCall=\{logThisCall\}/.test(callTab), "…from the header's Log and from the script's sticky bar");
 const mount = dlg.slice(dlg.indexOf("<LeadCallFlow "), dlg.indexOf("/>", dlg.indexOf("<LeadCallFlow ")));
 ok(mount.length > 0 && dlg.indexOf("<LeadCallFlow ") > dlg.indexOf("</Tabs>"), "the window is mounted once for the popup, outside the tabs (works from every tab, keeps its note)");

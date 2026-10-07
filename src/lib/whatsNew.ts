@@ -22,6 +22,24 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-07-call-number-window', date: '2026-10-07', title: 'Call shows you the number — call on WhatsApp or from your phone', audience: 'all',
+    body: 'Call on Outreach opens the prospect with a small window showing their number. Call on WhatsApp, or copy it and ring from your phone. The script waits until the prospect check is done.',
+    report: {
+      added: [
+        'A small Call window over the prospect: the business, their number (+44 / +61, ready to dial), Copy number, Call on WhatsApp and Call manually.',
+        'Call on WhatsApp opens the WhatsApp app at their number (UK and Australian numbers). Call manually just closes the window so you can dial on your phone.',
+        'Until the prospect check has finished, the Call tab says "Run the prospect check before using the call script", with a button to the check.',
+      ],
+      changed: [
+        'Call no longer opens "What happened?" straight away. Make the call with the script in front of you, then press Log call.',
+        'The header button is now called Log call. It is the only thing that opens "What happened?". The outcomes are the same.',
+        'Pressing Call no longer makes the browser ask "Open WhatsApp?" by itself. WhatsApp opens only when you press Call on WhatsApp.',
+      ],
+      removed: [
+        'The call script for a prospect with no finished AI check. It appears by itself when the check is in.',
+      ],
+      effect: 'Press Call, dial, read the script while you talk, then log what happened. Nothing is recorded until you log it.',
+    } },
   { id: '2026-10-07-agreement-v4', date: '2026-10-07', title: 'New clients sign Agreement v4: Optimise ends after 6 payments, Build\'s £29.99 is optional', audience: 'all',
     body: 'Every new sign-up now accepts the v4 Client Service Agreement before paying. Optimise is 6 payments and then it ends. Build is 12 payments, then £29.99 a month hosting and maintenance only if the client chooses it. India is no longer an outreach market.',
     report: {

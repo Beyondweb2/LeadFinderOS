@@ -6,7 +6,7 @@ import { notifyLeadChanged } from '@/lib/leadSync';
 import { useToast } from '@/hooks/use-toast';
 import { useSubscription } from '@/hooks/useSubscription';
 import { offerFit, thirdPartyManaged, type QcAgencyContract, type QuickCloseAnswers } from '@/lib/quickClose';
-import { AlertTriangle, Building2, Check, ChevronDown, Copy, Globe, HelpCircle, Loader2, MessageSquareQuote, PhoneCall, ScrollText, ShieldCheck, Sparkles, Wrench } from 'lucide-react';
+import { AlertTriangle, ArrowUp, Building2, Lock, Check, ChevronDown, Copy, Globe, HelpCircle, Loader2, MessageSquareQuote, PhoneCall, ScrollText, ShieldCheck, Sparkles, Wrench } from 'lucide-react';
 import { GOOGLE_STILL_MATTERS_SHORT, WHY_IT_MATTERS_STATS } from '@/lib/salesExplainer';
 import { VoiceNoteScriptBody } from '@/components/VoiceNoteScriptButton';
 import { QuickCloseButton, quickCloseKey, useQuickClose } from '@/components/QuickCloseDialog';
@@ -18,6 +18,7 @@ import { cn } from '@/lib/utils';
 import { useColdCallPlaybook } from '@/hooks/useColdCallPlaybook';
 import { type ColdCallPlaybook } from '@/lib/coldCallPlaybook';
 import { afterFirstQuestion, type WebsiteManager } from '@/lib/callScript';
+import { callScriptGate, type CallScriptGate } from '@/lib/callScriptGate';
 import type { ServiceRoute } from '@/lib/findableOffer';
 
 /* ════════════════════════════════════════════════════════════════════════════════════════════════
@@ -364,7 +365,8 @@ function Prospect({ p }: { p: ColdCallPlaybook }) {
   const c = p.context;
   return (
     <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs" data-testid="playbook-prospect">
-      {c.phone ? <a href={'tel:' + c.phone} className="inline-flex items-center gap-1 font-semibold text-emerald-700 hover:underline dark:text-emerald-300"><PhoneCall className="h-3.5 w-3.5" />{c.phone}</a> : <span className="text-muted-foreground">No phone</span>}
+      {/* The number as text, never a tel: link (2026-10-07: on a laptop tel: opens WhatsApp Desktop). */}
+      {c.phone ? <span className="inline-flex select-all items-center gap-1 font-semibold text-emerald-700 dark:text-emerald-300"><PhoneCall className="h-3.5 w-3.5" />{c.phone}</span> : <span className="text-muted-foreground">No phone</span>}
       <span className="inline-flex min-w-0 items-center gap-1"><Globe className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />{c.website ? <span className="truncate">{c.website.replace(/^https?:\/\/(www\.)?/i, '').replace(/\/$/, '')}</span> : <span className="text-muted-foreground">No website</span>}</span>
       {(c.trade || c.town) && <span className="inline-flex items-center gap-1 text-muted-foreground"><Building2 className="h-3.5 w-3.5" />{[c.trade, c.town].filter(Boolean).join(', ')}</span>}
       {c.auditDate && <span className="text-muted-foreground">AI checked {c.auditDate}</span>}
@@ -385,17 +387,42 @@ function LogCallBar({ onLogCall, leadId }: { onLogCall: () => void; leadId: stri
   );
 }
 
+/** NO VALID COMPLETED AUDIT → NO SCRIPT (Paul, 2026-10-07; the rule is src/lib/callScriptGate.ts). What the Call tab
+ *  and the sheet show instead of the script: the one line, why, and the way to the check's own controls. */
+function ScriptLocked({ gate, onShowCheck }: { gate: CallScriptGate; onShowCheck?: () => void }) {
+  const waiting = gate.reason === 'queued' || gate.reason === 'running';
+  return (
+    <section className="space-y-2 rounded-2xl border border-dashed border-border bg-muted/30 p-3.5 sm:p-4" data-testid="call-script-locked" data-reason={gate.reason}>
+      <h3 className="flex items-start gap-2 text-sm font-bold leading-snug">
+        {waiting ? <Loader2 className="mt-0.5 h-4 w-4 shrink-0 animate-spin text-violet-500" /> : <Lock className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />}
+        <span>{gate.title}</span>
+      </h3>
+      <p className="text-xs leading-relaxed text-muted-foreground">{gate.detail}</p>
+      {onShowCheck && !waiting && (
+        <Button type="button" size="sm" variant="outline" className="h-8 gap-1 rounded-full text-xs" onClick={onShowCheck} data-testid="call-script-go-to-check">
+          <ArrowUp className="h-3.5 w-3.5" />Go to the AI check
+        </Button>
+      )}
+    </section>
+  );
+}
+
 /** The playbook inline — the lead popup's Call tab (Inbox and Outreach alike). The AI result sits ABOVE it
  *  (LeadDetailDialog → LeadHookPanel 'call'), so this body never repeats it. */
-export function ColdCallPlaybookInline({ leadId, initialScript, onLogCall }: { leadId: string; initialScript?: 'call' | 'voice'; onLogCall?: () => void }) {
+export function ColdCallPlaybookInline({ leadId, initialScript, onLogCall, onShowCheck }: { leadId: string; initialScript?: 'call' | 'voice'; onLogCall?: () => void; onShowCheck?: () => void }) {
   const q = useColdCallPlaybook(leadId, true);
   if (q.isLoading) return <p className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" />Loading the script…</p>;
   if (q.isError) return <p className="text-sm text-destructive">Couldn't load the script: {(q.error as { message?: string })?.message ?? 'unknown error'}</p>;
   if (!q.data) return <p className="text-sm text-muted-foreground">Lead not found.</p>;
+  const gate = callScriptGate(leadId, q.data);
+  /* The popup opens whatever the check's state; the SCRIPT waits for a valid completed check. Log call and Quick
+     Close stay — a call can be logged with or without a script. */
   return (
     <div className="space-y-3 pb-2" data-testid="cold-call-playbook">
-      <Warnings p={q.data} />
-      <Scripts p={q.data} leadId={leadId} initial={initialScript} />
+      {gate.show ? <>
+        <Warnings p={q.data} />
+        <Scripts p={q.data} leadId={leadId} initial={initialScript} />
+      </> : <ScriptLocked gate={gate} onShowCheck={onShowCheck} />}
       {onLogCall && <LogCallBar onLogCall={onLogCall} leadId={leadId} />}
     </div>
   );
@@ -427,8 +454,10 @@ export function ColdCallPlaybookSheet({ leadId, open, onOpenChange, onLogCall }:
               <HookVisibilityCard leadId={leadId} variant="call" />
               {q.data.audit.state !== 'ready' && <p className="text-xs text-muted-foreground">{q.data.audit.headline}</p>}
             </section>
-            <Warnings p={q.data} />
-            <Scripts p={q.data} leadId={leadId} />
+            {(() => {
+              const gate = callScriptGate(leadId, q.data);
+              return gate.show ? <><Warnings p={q.data} /><Scripts p={q.data} leadId={leadId} /></> : <ScriptLocked gate={gate} />;
+            })()}
           </div>
         )}
         <div className="sticky bottom-0 -mx-6 flex gap-2 border-t border-border bg-background px-6 py-2">

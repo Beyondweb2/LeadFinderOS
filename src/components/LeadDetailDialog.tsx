@@ -10,6 +10,8 @@ import { CrawlCheckButton } from '@/components/CrawlCheckButton';
 import { useLeadCrawl } from '@/hooks/useLeadCrawls';
 import { WelcomePackButton } from '@/components/WelcomePackButton';
 import { ColdCallPlaybookInline } from '@/components/ColdCallPlaybook';
+import { CallNumberPopup } from '@/components/CallNumberPopup';
+import { afterLogCall, afterStartCall, arrivalWindows, callArrivalOf } from '@/lib/callArrival';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ProspectFacts } from '@/components/ProspectFacts';
 import { LeadDeliveryCockpit } from '@/components/LeadDeliveryCockpit';
@@ -150,8 +152,11 @@ interface LeadDetailDialogProps {
   context?: 'outreach' | 'inbox';
   /** Which workspace tab opens first. Default: Call (a paying client opens on Client for the admin). */
   initialTab?: WorkspaceTabInput;
-  /** The person came to log a contact (Outreach's Call button, the script sheet): the Log window opens on arrival. */
+  /** The person came to log a contact (the script sheet's Log this call): the Log window opens on arrival. */
   openLogContact?: boolean;
+  /** The person pressed CALL (Outreach, a Call link): the small number window opens over the popup on arrival —
+   *  never "What happened?" (src/lib/callArrival.ts). Wins over openLogContact. */
+  openNumberPopup?: boolean;
   /** Previous / Next through the list the popup was opened from (Focus Mode's stepping, moved here
    *  2026-10-01). Omitted = no stepping. ← / → step too, except while typing. */
   stepper?: LeadStepper | null;
@@ -208,6 +213,7 @@ export function LeadDetailDialog({
   initialTab,
   stepper,
   openLogContact = false,
+  openNumberPopup = false,
 }: LeadDetailDialogProps) {
   const { row: fullLead, error: fullLeadError } = useFullLeadRow(lead, open);
   /* ⛔ ONE GUARD for every way of leaving this lead the person did not save through — Escape, a click
@@ -257,6 +263,7 @@ export function LeadDetailDialog({
         <LeadDetailBody
           initialTab={initialTab}
           openLogContact={openLogContact}
+          openNumberPopup={openNumberPopup}
           key={fullLead.id}
           lead={fullLead}
           onStatusChange={onStatusChange}
@@ -302,6 +309,7 @@ function LeadDetailBody({
   onClose,
   initialTab,
   openLogContact = false,
+  openNumberPopup = false,
 }: LeadDetailBodyProps) {
   const permsForTab = useLeadPermissions();
   /* A paying client opens on Client for the admin (delivery is the work then); everyone else on Call. */
@@ -310,11 +318,20 @@ function LeadDetailBody({
   const [moreTools, setMoreTools] = useState(false);
   /* ⛔ THE LOG WINDOW (2026-10-06): Log (the header, the script's sticky bar, Outreach's Call) opens ONE small
      window — what happened, then only the next step that outcome needs (src/components/LeadCallFlow.tsx).
-     Outreach's Call / the script sheet arrive with it already open (openLogContact). */
-  const [logOpen, setLogOpen] = useState(openLogContact);
+     The script sheet's Log this call arrives with it already open (openLogContact).
+     ⛔ CALL IS NOT LOG (Paul, 2026-10-07): Outreach's Call arrives with the small NUMBER window over the popup
+     (openNumberPopup), never with "What happened?". The number window's CALL only closes it; LOG CALL is the only
+     way the Log window opens (src/lib/callArrival.ts). */
+  const [windows, setWindows] = useState(() => arrivalWindows(callArrivalOf(openNumberPopup, openLogContact), !!(lead.phone ?? '').trim()));
+  const logOpen = windows.logOpen;
+  const setLogOpen = (o: boolean) => setWindows((w) => ({ ...w, logOpen: o }));
+  const showNumber = () => setWindows((w) => ({ ...w, numberOpen: true }));
+  const startCall = () => setWindows(afterStartCall);
   const [nextOpen, setNextOpen] = useState(false);
   const [logged, setLogged] = useState<LoggedResult | null>(null);
-  const logThisCall = () => setLogOpen(true);
+  const logThisCall = () => setWindows(afterLogCall());
+  const aiCheckRef = useRef<HTMLElement>(null);
+  const showCheck = () => aiCheckRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   /* "Run the AI check" on the evidence card: the AI check tools just below, opened. */
   const goTab = (next: WorkspaceTab) => { setTab(next); if (bodyRef.current) bodyRef.current.scrollTop = 0; };
 
@@ -481,16 +498,17 @@ function LeadDetailBody({
               where the conversation is already open beside this panel. */}
           {/* QUICK CLOSE (2026-09-29): take the £99 on the call — every context (Outreach, the WhatsApp Inbox). */}
           <div className="flex shrink-0 items-center gap-1.5">
-          {/* ⛔ A TAP IS NOT A CALL: tel: opens the phone's own dialler and writes nothing. What happened is recorded
-              with Log (lead_log_contact) — that is the only record of a call. */}
+          {/* ⛔ A TAP IS NOT A CALL: Call shows the number to dial on the rep's own phone and writes nothing. What
+              happened is recorded with Log call (lead_log_contact) — that is the only record of a call.
+              ⛔ NEVER A tel: LINK (Paul, 2026-10-07): on a laptop tel: belongs to WhatsApp Desktop ("Open WhatsApp?"). */}
           {lead.phone && (
-            <a href={`tel:${lead.phone}`} className={cn('inline-flex h-9 min-w-9 shrink-0 items-center justify-center gap-1.5 rounded-full px-3 text-xs font-semibold ring-1 ring-inset transition hover:brightness-110', TONE.green.soft, TONE.green.text, TONE.green.ring)} title={`Call ${lead.phone}`} data-testid="workspace-call">
+            <button type="button" onClick={showNumber} className={cn('inline-flex h-9 min-w-9 shrink-0 items-center justify-center gap-1.5 rounded-full px-3 text-xs font-semibold ring-1 ring-inset transition hover:brightness-110', TONE.green.soft, TONE.green.text, TONE.green.ring)} title={`Call ${lead.phone}`} data-testid="workspace-call">
               <PhoneCall className="h-3.5 w-3.5" /><span className="hidden sm:inline">Call</span>
-            </a>
+            </button>
           )}
           {!isDemoLead(lead.id) && (
-            <button type="button" onClick={logThisCall} className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full bg-primary px-3 text-xs font-semibold text-primary-foreground shadow-sm transition hover:brightness-110" title="Log what happened" data-testid="workspace-log">
-              <ClipboardCheck className="h-3.5 w-3.5" />Log
+            <button type="button" onClick={logThisCall} className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full bg-primary px-3 text-xs font-semibold text-primary-foreground shadow-sm transition hover:brightness-110" title="Log what happened on the call" data-testid="workspace-log">
+              <ClipboardCheck className="h-3.5 w-3.5" />Log call
             </button>
           )}
           {context !== 'inbox' && lead.phone && (
@@ -516,7 +534,7 @@ function LeadDetailBody({
           if (!lead.phone && !site && !trade && !town) return null;
           return (
             <div className="mt-1 flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground" data-testid="workspace-facts">
-              {lead.phone && <a href={`tel:${lead.phone}`} className="inline-flex items-center gap-1 font-medium text-foreground/85 hover:text-primary"><Phone className="h-3 w-3" />{lead.phone}</a>}
+              {lead.phone && <button type="button" onClick={showNumber} title="Show the number to dial" className="inline-flex items-center gap-1 font-medium text-foreground/85 hover:text-primary"><Phone className="h-3 w-3" />{lead.phone}</button>}
               {site && <a href={/^https?:\/\//i.test(site) ? site : `https://${site}`} target="_blank" rel="noopener noreferrer" className="inline-flex min-w-0 max-w-[14rem] items-center gap-1 hover:text-primary"><Globe className="h-3 w-3 shrink-0" /><span className="truncate">{site.replace(/^https?:\/\//i, '').replace(/\/$/, '')}</span></a>}
               {(trade || town) && <span className="inline-flex min-w-0 items-center gap-1"><MapPin className="h-3 w-3 shrink-0" /><span className="truncate">{[trade, town].filter(Boolean).join(' · ')}</span></span>}
             </div>
@@ -587,12 +605,12 @@ function LeadDetailBody({
           <TabsContent value="call" className="mt-0 space-y-4" data-testid="workspace-call">
             {logged && <LoggedLine leadId={lead.id} logged={logged} onDismiss={() => setLogged(null)} />}
             {!isDemoLead(lead.id) && (
-              <section className="space-y-2 rounded-2xl border border-violet-500/30 bg-violet-500/[0.04] p-3 sm:p-3.5" data-testid="ai-check-tools">
+              <section ref={aiCheckRef} className="scroll-mt-2 space-y-2 rounded-2xl border border-violet-500/30 bg-violet-500/[0.04] p-3 sm:p-3.5" data-testid="ai-check-tools">
                 <h3 className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-violet-700 dark:text-violet-300"><Sparkles className="h-4 w-4" />AI result</h3>
                 <LeadHookPanel leadId={lead.id} variant="call" />
               </section>
             )}
-            {!isDemoLead(lead.id) && <ColdCallPlaybookInline leadId={lead.id} initialScript="call" onLogCall={logThisCall} />}
+            {!isDemoLead(lead.id) && <ColdCallPlaybookInline leadId={lead.id} initialScript="call" onLogCall={logThisCall} onShowCheck={showCheck} />}
             {!isDemoLead(lead.id) && context !== 'inbox' && <RecentWhatsApp leadId={lead.id} />}
           </TabsContent>
 
@@ -635,11 +653,11 @@ function LeadDetailBody({
               /* Social profiles live in ONE place, SocialProfilesPanel above (2026-09-30) — never a second
                  list of the same links here. This card is the admin's editable contact fields only. */
               // Editable contact fields — rendered even when empty so a missing value
-              // can be added. `hrefFor` keeps the mailto/tel/open affordance in view mode.
+              // can be added. `hrefFor` keeps the mailto/open affordance in view mode (the phone is plain text: never a dialler link).
               const editableFields = [
                 { field: 'email' as const, Icon: Mail, label: 'Email', value: lead.email, color: 'text-violet-400', external: false, hrefFor: (v: string) => `mailto:${v}` },
                 { field: 'website' as const, Icon: Globe, label: 'Website', value: lead.website, color: 'text-emerald-500', external: true, hrefFor: (v: string) => v },
-                { field: 'phone' as const, Icon: Phone, label: 'Phone', value: lead.phone, color: 'text-sky-400', external: false, hrefFor: (v: string) => `tel:${v}` },
+                { field: 'phone' as const, Icon: Phone, label: 'Phone', value: lead.phone, color: 'text-sky-400', external: false, hrefFor: null /* plain text, never tel: (2026-10-07) — Call shows the number window */ },
                 { field: 'address' as const, Icon: MapPin, label: 'Address', value: lead.address, color: 'text-amber-500', external: false, hrefFor: null },
               ];
               /* A salesperson cannot edit these, and the facts card above already shows them. */
@@ -871,6 +889,9 @@ function LeadDetailBody({
           logOpen={logOpen} onLogOpenChange={setLogOpen} nextOpen={nextOpen} onNextOpenChange={setNextOpen}
           onSendOnboarding={() => goTab('close')} onLogged={setLogged} />
       )}
+      {/* The number window (2026-10-07): over the popup, which stays open underneath. CALL closes only it. */}
+      <CallNumberPopup open={windows.numberOpen} onOpenChange={(o) => setWindows((w) => ({ ...w, numberOpen: o }))}
+        businessName={lead.business_name} phone={lead.phone} country={lead.country} onStartCall={startCall} />
       </QuickCloseNav.Provider>
       {/* ⛔ NO FOOTER (2026-10-06): Mark paid moved to the Close tab (admin only, the same handler). */}
 
