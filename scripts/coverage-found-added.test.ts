@@ -71,7 +71,7 @@ ok(/Breakdown not recorded/.test(cell) && /Not searched/.test(cell) && /with web
 
 console.log('── 4. QUICK CLOSE: BUILD CONSENTS BEFORE THE LINK ──');
 /* v2: a NEW Findable site (approach new_template) is Build; it is asked the domain, never current-site access. */
-const base = { decision_maker: 'yes', approach: 'new_template', domain: 'yes' } as const;
+const base = { decision_maker: 'yes', approach: 'new_template', domain: 'yes', manager: 'owner', rights: 'yes' } as const;
 ok(QUICK_CLOSE_QUESTIONS.some((q) => q.key === 'build_consents' && q.detail?.length === 3) && BUILD_CONSENTS.length === 3, 'one Build-only question listing the three consents');
 ok(/own or control the domain, or have the authority/.test(BUILD_CONSENTS[0]) && /domain \/ DNS changes/.test(BUILD_CONSENTS[1]) && /right to provide and use the business content/.test(BUILD_CONSENTS[2]), 'domain authority · DNS permission · rights to content');
 const build = cleanAnswers({ ...base });

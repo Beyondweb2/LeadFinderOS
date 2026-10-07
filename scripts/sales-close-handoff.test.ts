@@ -9,7 +9,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { renderToStaticMarkup } from 'react-dom/server';
 import {
-  agencyContractBlocksBuild, callNotesLines, cleanAnswers, cleanCallNotes, closeFlow, mergeAnswers, missingQuestions, offerFit, quickCloseGate,
+  agencyContractBlocksBuild, agencyContractTiedIn, BUILD_TECH_BASE_LINE, CONFIRM_CONTRACT_WARNING, DOMAIN_NOT_WEBSITE_LINE, REUSE_NO_LINE, REUSE_YES_LINE, callNotesLines, cleanAnswers, cleanCallNotes, closeFlow, mergeAnswers, missingQuestions, offerFit, quickCloseGate,
   quickCloseMessage, quickCloseState, routeChoiceAnswers, routeTermsLines, splitCallList, mayGenerateLink, QUICK_CLOSE_QUESTIONS,
 } from '../src/lib/quickClose.ts';
 import { afterTermClientWords, afterTermRepLine, bothPlansSpoken, continuingOptionAfter } from '../src/lib/planTerms.ts';
@@ -44,43 +44,57 @@ const TOKEN = 'a'.repeat(64);
 const SIGNUP = `https://findable.live/agree/${TOKEN}`;
 const ONB = `https://findable.live/details/${'b'.repeat(64)}`;
 
-console.log('── QUICK CLOSE: the agency-contract rule ──');
+console.log('── QUICK CLOSE: BUILD is the default; only a contract they are tied into moves it to Optimise ──');
 {
+  const SIT = { manager: 'owner', domain: 'yes', rights: 'yes' } as const;
   const self = offerFit({ manager: 'owner' }, true);
-  ok(self.offered.build && self.offered.optimise && self.recommended === 'build', 'self-managed site → both plans offered, BUILD recommended (a site of their own is not a reason for Optimise)');
+  ok(self.offered.build && self.offered.optimise && self.recommended === 'build' && self.warning === null, 'self-managed site → both plans offered, BUILD first');
+  ok(/Build is usually the best route/.test(self.reason ?? '') && self.notes.includes(BUILD_TECH_BASE_LINE), '…with the rep line: Build is usually the best route, and it gives us a clean technical base to work from');
   const free = offerFit({ manager: 'agency', agency_contract: 'free' }, true);
-  ok(free.offered.build && free.offered.optimise && free.recommended === 'build', 'agency, contract ended → Build recommended, both available');
-  {
-    const fit = offerFit({ manager: 'agency', agency_contract: 'in_contract' }, true);
-    ok(!fit.offered.build && fit.offered.optimise && fit.recommended === 'optimise' && /Optimise/.test(fit.reason ?? ''), 'agency + still in contract → Optimise only for a salesperson (the one positive blocker)');
-    ok(!/(rubbish|bad|poor|rip|overcharg)/i.test(fit.reason ?? ''), '…and the reason never knocks the agency');
-  }
+  ok(free.offered.build && free.offered.optimise && free.recommended === 'build' && free.warning === null, 'agency, contract ended / free to leave → Build recommended, no warning');
+  const tiedIn = offerFit({ manager: 'agency', agency_contract: 'in_contract' }, true);
+  ok(!tiedIn.offered.build && tiedIn.offered.optimise && tiedIn.recommended === 'optimise' && /Optimise/.test(tiedIn.reason ?? ''), 'agency + still in contract → Optimise only for a salesperson (the ONE blocker)');
+  ok(!offerFit({ manager: 'freelancer', agency_contract: 'in_contract' }, true).offered.build, 'a freelancer still in contract → the same rule');
   for (const c of ['not_sure', undefined] as const) {
     const fit = offerFit({ manager: 'agency', agency_contract: c }, true);
-    ok(fit.recommended === 'build' && fit.offered.build && fit.offered.optimise && /confirm whether they're still in contract/.test(fit.reason ?? ''), `agency + contract ${c ?? 'unanswered'} → Build stays recommended and the rep is told to confirm the contract before closing`);
-    ok(!/(rubbish|bad|poor|rip|overcharg)/i.test(fit.reason ?? ''), `…and the reason never knocks the agency (${c ?? 'unanswered'})`);
+    ok(fit.offered.build && fit.recommended === 'build' && fit.warning === CONFIRM_CONTRACT_WARNING, `agency + contract ${c ?? 'unanswered'} → BUILD stays the default, with the warning "Confirm their agency contract before finalising Build."`);
+    ok(!/(rubbish|bad|poor|rip|overcharg)/i.test((fit.reason ?? '') + (fit.warning ?? '')), `…and nothing knocks the agency (${c ?? 'unanswered'})`);
   }
   ok(!offerFit({ manager: 'third_party', agency_contract: 'in_contract' }, true).offered.build, 'another third party in contract → the same rule');
   const noSite = offerFit({}, false);
-  ok(noSite.offered.build && !noSite.offered.optimise && noSite.recommended === 'build', 'no website → Build only');
-  ok(agencyContractBlocksBuild({ manager: 'agency' }) && !agencyContractBlocksBuild({ manager: 'agency', agency_contract: 'free' }) && !agencyContractBlocksBuild({ manager: 'owner' }), 'the one predicate: blocked unless confirmed free');
+  ok(noSite.offered.build && !noSite.offered.optimise && noSite.recommended === 'build' && noSite.notes.length === 0, 'no website → Build only, and no ownership notes (nothing irrelevant)');
+  ok(agencyContractTiedIn({ manager: 'agency', agency_contract: 'in_contract' }) && !agencyContractTiedIn({ manager: 'agency' }) && !agencyContractTiedIn({ manager: 'agency', agency_contract: 'not_sure' }) && !agencyContractTiedIn({ manager: 'agency', agency_contract: 'free' }) && !agencyContractTiedIn({ manager: 'owner' }), 'the recommendation blocker: ONLY a positive "still in contract" moves it to Optimise');
+  ok(agencyContractBlocksBuild({ manager: 'agency', agency_contract: 'in_contract' }) && agencyContractBlocksBuild({ manager: 'agency', agency_contract: 'not_sure' }) && !agencyContractBlocksBuild({ manager: 'agency', agency_contract: 'free' }) && !agencyContractBlocksBuild({ manager: 'owner' }), 'the payment stop is unchanged: only a contract confirmed FREE is ready (not sure / still in contract stop for Paul)');
+  /* REUSE RIGHTS and the DOMAIN: guidance, never a blocker. */
+  const rYes = offerFit({ ...SIT }, true);
+  ok(rYes.notes.includes(REUSE_YES_LINE) && !rYes.notes.includes(REUSE_NO_LINE), 'reuse rights yes → "we can keep the new site very close to the look they already like if they want"');
+  for (const r of ['no', 'not_sure'] as const) {
+    const fit = offerFit({ ...SIT, rights: r }, true);
+    ok(fit.notes.includes(REUSE_NO_LINE) && !fit.notes.includes(REUSE_YES_LINE) && fit.offered.build && fit.recommended === 'build' && !/identical|clone|exact copy/i.test(fit.notes.join(' ')), `reuse rights "${r}" → an original site, never a promised copy, and still Build`);
+  }
+  ok(offerFit({ ...SIT, domain: 'agency' }, true).recommended === 'build' && offerFit({ ...SIT, domain: 'agency' }, true).notes.includes(DOMAIN_NOT_WEBSITE_LINE), 'a domain held elsewhere never moves them to Optimise; the rep is told the domain is not the website');
   /* The backstop: a Build saved anyway (by Paul) stops for his release — never a hard ban. */
-  const tied = { route: 'build', approach: 'unsure', decision_maker: 'yes', manager: 'agency', agency_contract: 'in_contract' } as const;
+  const tied = { route: 'build', approach: 'unsure', decision_maker: 'yes', manager: 'agency', agency_contract: 'in_contract', domain: 'yes', rights: 'yes' } as const;
   ok(quickCloseState('answers_saved', { answers: tied }) === 'needs_review' && !mayGenerateLink('answers_saved', { answers: tied }), 'Build while tied in → Paul review, no link');
   ok(quickCloseState('answers_saved', { answers: tied, review_approved_at: iso(NOW) }) === 'ready', '…Paul can release it');
+  const unsure = { ...tied, agency_contract: 'not_sure' } as const;
+  ok(quickCloseState('answers_saved', { answers: unsure }) === 'needs_review' && quickCloseState('answers_saved', { answers: unsure, review_approved_at: iso(NOW) }) === 'ready', 'Build with an unconfirmed contract still stops for Paul (unchanged) — and he can release it');
 }
 
 console.log('\n── QUICK CLOSE: the shortest close, nothing asked twice ──');
 {
-  ok(QUICK_CLOSE_QUESTIONS[0].key === 'route', 'step 1 is the offer');
-  ok(missingQuestions({}).join() === 'route,decision_maker', 'a fresh close asks the offer and authority — nothing else yet');
+  ok(QUICK_CLOSE_QUESTIONS[0].key === 'route', 'the plan question is first in the table, but LAST in the flow (closeFlow)');
+  ok(closeFlow({}).slice(-1)[0] === 'route' && closeFlow({ manager: 'agency' }).slice(-1)[0] === 'route', 'the plan is the LAST question (Optimise then adds only access)');
+  ok(missingQuestions({}).join() === 'decision_maker,manager,domain,rights,route', 'a fresh close asks authority, who runs the site, the domain, the reuse right, then the plan');
   const fromCall = cleanAnswers({ decision_maker: 'yes', manager: 'owner' });
-  ok(missingQuestions(fromCall).join() === 'route', 'the call already answered authority and who runs the site → only the offer is left');
-  ok(missingQuestions({ ...fromCall, ...routeChoiceAnswers(fromCall, 'optimise') }).join() === 'access', 'Optimise after the call: only "can we get in" (who runs it was answered on the call)');
-  ok(missingQuestions({ ...fromCall, ...routeChoiceAnswers(fromCall, 'build') }).length === 0, 'Build after the call (self-run): nothing more — ready');
-  ok(quickCloseState('answers_saved', { answers: { ...fromCall, ...routeChoiceAnswers(fromCall, 'build') } }) === 'ready', '…READY for the sign-up link');
-  ok(missingQuestions(cleanAnswers({ decision_maker: 'yes', manager: 'agency', route: 'build', approach: 'unsure' })).join() === 'agency_contract', 'Build on an agency site with the contract not asked on the call → asked here, once');
-  ok(!closeFlow({ route: 'build', approach: 'unsure' }).some((k) => ['domain', 'rights', 'design_owner', 'build_consents', 'approach'].includes(k)), 'never the domain, rights, design owner, consents or approach sub-type');
+  ok(missingQuestions(fromCall).join() === 'domain,rights,route', 'the call already answered authority and who runs the site → those are not asked again');
+  const sit = { ...fromCall, domain: 'yes', rights: 'yes' } as const;
+  ok(missingQuestions(sit).join() === 'route', 'with the situation answered, only the plan is left');
+  ok(missingQuestions({ ...sit, ...routeChoiceAnswers(sit, 'optimise') }).join() === 'access', 'Optimise after that: only "can we get in"');
+  ok(missingQuestions({ ...sit, ...routeChoiceAnswers(sit, 'build') }).length === 0, 'Build after that (self-run): nothing more — ready');
+  ok(quickCloseState('answers_saved', { answers: { ...sit, ...routeChoiceAnswers(sit, 'build') } }) === 'ready', '…READY for the sign-up link');
+  ok(missingQuestions(cleanAnswers({ decision_maker: 'yes', manager: 'agency', route: 'build', approach: 'unsure' })).join() === 'agency_contract,domain,rights', 'an agency-run site: the contract is asked (once), then the domain and the reuse right');
+  ok(!closeFlow({ route: 'build', approach: 'unsure' }).some((k) => ['design_owner', 'build_consents', 'approach', 'authority'].includes(k)), 'never the design owner, the consents, the approach sub-type or the legacy authority question');
   const merged = mergeAnswers({ approach: 'new_template' }, { route: 'optimise' });
   ok(merged.route === 'optimise' && merged.approach === 'improve', 'choosing the plan brings the agreeing approach (a stored Build approach never flips it back)');
   ok(cleanCallNotes({ jobs: '  kitchen fitting,  extensions ', areas: '', agency_monthly_gbp: '£150', evil: 'x' }).jobs === 'kitchen fitting, extensions'

@@ -163,3 +163,4 @@
 - `docs/pre-sales-certification/paid-client-auto-intake-final-sales-check.md` — 2026-10-06 (main 5df464b6, acd0e53a): Send to Paul (one send per client), the paid client auto-intake (trigger, sources, precedence, conflicts, one crawl, auto-fill from client/sales only), the Client intake card, calmer Quick Close, migration 20261013120000, the live sale-to-paid-client certification.
 - client-agreement-v4-release.md — v4 agreement + India cleanup (2026-10-07)
 - contact-method-auto-select.md — Contact Method follows the route (2026-10-07): Call sets the pill, WhatsApp queue already does, lead_set_contact_method for reps, Find Leads "fresh" side effect
+- `docs/pre-sales-certification/sales-to-payment-final-pass.md` — 2026-10-07: the sales sign-up is resumed (root cause of "Your sign-up is already set up…"), Quick Close asks the situation first and the plan last, Build-first recommendation, the client's "Here's what we have so far" confirmation.

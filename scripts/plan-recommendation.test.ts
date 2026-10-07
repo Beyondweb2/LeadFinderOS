@@ -83,14 +83,14 @@ console.log('\n── THE BADGE FOLLOWS THE ANSWER IMMEDIATELY ──');
 console.log('\n── CARDS AND ORDER ──');
 {
   const q = QUICK_CLOSE_QUESTIONS.find((x) => x.key === 'route')!;
-  ok(q.options[0].value === 'build' && q.options[0].label === 'Findable Build — a new website' && q.options[1].label === 'Findable Optimise — improve their current site', 'default order and labels: Findable Build — a new website first, Findable Optimise — improve their current site second');
+  ok(q.options[0].value === 'build' && q.options[0].label === 'Findable Build — a new website built and optimised for AI visibility' && q.options[1].label === 'Findable Optimise — improve their current website', 'default order and labels: Findable Build first, Findable Optimise second (final pass wording)');
   ok(preselectedPlan('own_site') === 'build' && preselectedPlan('none') === 'build' && preselectedPlan(null) === 'build', 'the call script opens on Build for every site source');
   ok(routesFor('own_site').routes.join() === 'build,optimise', 'an own-site lead lists Build first and still offers Optimise');
 }
 
 console.log('\n── A SALESPERSON CAN STILL CHOOSE THE OTHER PLAN, UNDER THE EXISTING SAFEGUARDS ──');
 {
-  const base = { decision_maker: 'yes' as const };
+  const base = { decision_maker: 'yes' as const, domain: 'yes' as const, rights: 'yes' as const }; // final pass: the close asks the domain and the reuse right before the plan
   const optimiseOnOwnSite = { ...base, route: 'optimise' as const, manager: 'owner' as const, access: 'yes' as const };
   ok(quickCloseGate(optimiseOnOwnSite).complete && quickCloseState('answers_saved', { answers: optimiseOnOwnSite }) === 'ready', 'choosing Optimise although Build is recommended is allowed (self-managed site) and reaches ready');
   const buildTied = { ...base, route: 'build' as const, manager: 'agency' as const, agency_contract: 'in_contract' as const };

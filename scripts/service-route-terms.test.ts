@@ -95,9 +95,9 @@ ok(!/cancel_at_period_end|iterations|subscription_schedules/.test(sub), 'one mec
 
 console.log('── 3, 4. QUICK CLOSE: THE ROUTE IS REQUIRED AND WRITES THE SCHEDULE\'S INPUT ──');
 /* v2: 'Unsure — Findable to recommend' is the approach where the plan is picked explicitly — what these checks drive. */
-const base: QuickCloseAnswers = { decision_maker: 'yes', approach: 'unsure', domain: 'yes', manager: 'owner', access: 'yes' };
-ok(QUICK_CLOSE_QUESTIONS.some((q) => q.key === 'route' && q.options.map((o) => o.value).join() === 'build,optimise'), 'Quick Close asks the website route: build / optimise (Build first, 2026-10-07)');
-ok(QUICK_CLOSE_QUESTIONS.find((q) => q.key === 'route')!.options.map((o) => o.label).join(' | ') === 'Findable Build — a new website | Findable Optimise — improve their current site', 'the two plans, named as the offer names them (Build first)');
+const base: QuickCloseAnswers = { decision_maker: 'yes', approach: 'unsure', domain: 'yes', manager: 'owner', rights: 'yes', access: 'yes' };
+ok(QUICK_CLOSE_QUESTIONS.some((q) => q.key === 'route' && q.options.map((o) => o.value).join() === 'build,optimise'), 'Quick Close asks the website route: build / optimise (final pass: the plan LAST, Build first)');
+ok(QUICK_CLOSE_QUESTIONS.find((q) => q.key === 'route')!.options.map((o) => o.label).join(' | ') === 'Findable Build — a new website built and optimised for AI visibility | Findable Optimise — improve their current website', 'the two plans, named as the brief names them');
 ok(missingQuestions(base).includes('route') && !quickCloseGate(base).complete, 'no route → the close is not complete');
 ok(!mayGenerateLink('answers_saved', { answers: base }), 'no route → no payment link');
 for (const route of ['build', 'optimise'] as const) {
@@ -129,9 +129,9 @@ ok(!/price|amount|discount|total_payments|cadence/i.test(qcFn.slice(qcFn.indexOf
 ok(/"route_undecided"|route_undecided:/.test(read('supabase/functions/quick-close/index.ts')), 'a checkout refusal for an undecided route is explained to the rep');
 
 console.log('── Quick Close keeps the existing domain / agency safety ──');
-const agencyOpt = cleanAnswers({ decision_maker: 'yes', approach: 'improve', manager: 'agency', access: 'not_sure', authority: 'yes' });
+const agencyOpt = cleanAnswers({ decision_maker: 'yes', approach: 'improve', manager: 'agency', agency_contract: 'in_contract', domain: 'yes', rights: 'yes', access: 'not_sure', authority: 'yes' });
 ok(quickCloseGate(agencyOpt).review.includes('optimise_access_unsure') && quickCloseState('answers_saved', { answers: agencyOpt }) === 'needs_review', 'agency-run site + Optimise + access unsure → Paul review (never silently Optimise)');
-ok(quickCloseGate(cleanAnswers({ decision_maker: 'yes', approach: 'improve', manager: 'agency', access: 'yes', authority: 'yes' })).review.length === 0, 'agency-run site + Optimise + access confirmed + authority → no review');
+ok(quickCloseGate(cleanAnswers({ decision_maker: 'yes', approach: 'improve', manager: 'agency', agency_contract: 'in_contract', domain: 'yes', rights: 'yes', access: 'yes', authority: 'yes' })).review.length === 0, 'agency-run site + Optimise + access confirmed + authority → no review');
 /* ⛔ v2 (Paul, 2026-10-05): a domain doubt on a NEW site is a handoff for Paul, never a payment stop. */
 ok(quickCloseGate(cleanAnswers({ ...base, domain: 'not_sure', route: 'build' })).review.length === 0 && quickCloseGate(cleanAnswers({ ...base, domain: 'not_sure', route: 'build' })).flags.includes('domain_handoff'), 'Build with domain doubt → a domain-handoff flag for Paul, not a payment stop (v2)');
 ok(quickCloseGate(cleanAnswers({ decision_maker: 'yes', approach: 'new_template', domain: 'yes', manager: 'agency', access: 'no', authority: 'not_sure' })).review.length === 0, 'a NEW site is never stopped by who runs (or who can get into) the OLD one (v2)');

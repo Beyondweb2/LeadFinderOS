@@ -7,7 +7,7 @@ import fs from "node:fs";
 import path from "node:path";
 import {
   cleanAnswers, mergeAnswers, buildConsentsFor, BUILD_CONSENT_DOMAIN_PENDING, missingQuestions, mayGenerateLink, onboardingColumnsFor, quickCloseGate, quickCloseHandoffLines, quickCloseMessage,
-  quickCloseState, LINK_REUSE_MS, QUICK_CLOSE_QUESTIONS, quickCloseScript, QUICK_CLOSE_AFTER_PAYMENT, QUICK_CLOSE_PROMISE,
+  quickCloseState, LINK_REUSE_MS, QUICK_CLOSE_QUESTIONS, quickCloseScript, QUICK_CLOSE_AFTER_PAYMENT, QUICK_CLOSE_PROMISE, closeFlow,
 } from "../src/lib/quickClose.ts";
 import { FINDABLE_GUARANTEE, FINDABLE_MONTHLY_GBP, FINDABLE_SETUP_PRICE_GBP } from "../src/lib/findableOffer.ts";
 
@@ -19,8 +19,11 @@ const read = (p: string) => fs.readFileSync(path.join(root, p), "utf8").replace(
 /* 2026-09-29: the website route is a required answer (service-route-terms.test.ts pins it).
    Sales workspace v2 (2026-10-05): the WEBSITE APPROACH is asked second and decides the route; only the
    questions that approach needs are asked. SAFE = improve their current site (Optimise) with access. */
-const SAFE = { decision_maker: "yes", approach: "improve", access: "yes", manager: "owner" } as const;
-const NEW_SITE = { decision_maker: "yes", approach: "new_template", domain: "yes", build_consents: "yes" } as const;
+/* FINAL PASS (2026-10-07): the close now asks the SITUATION first — who looks after the site, (agency / freelancer
+   only) the contract, domain control, (existing site only) the right to reuse its design — and the plan LAST. */
+const SITUATION = { manager: "owner", domain: "yes", rights: "yes" } as const;
+const SAFE = { decision_maker: "yes", approach: "improve", access: "yes", ...SITUATION } as const;
+const NEW_SITE = { decision_maker: "yes", approach: "new_template", build_consents: "yes", ...SITUATION } as const;
 
 console.log("\n── the bare minimum, in the v2 order ──");
 /* 2026-10-07 (Paul: "Quick Close should be QUICK"): the OFFER first, then authority; legacy keys last (never asked). */
@@ -29,12 +32,18 @@ ok(QUICK_CLOSE_QUESTIONS[0].key === "route" && QUICK_CLOSE_QUESTIONS[1].key === 
    question names photos on purpose (the right to REUSE them), so it is scanned without that word. */
 ok(!/service|opening hours|credential|description|google business/i.test(JSON.stringify(QUICK_CLOSE_QUESTIONS.map((q) => ({ key: q.key, text: q.text, options: q.options })))), "no services, hours, credentials, copy or GBP questions before payment");
 ok(JSON.stringify(cleanAnswers({ decision_maker: "yes", domain: "maybe", evil: "x" })) === JSON.stringify({ decision_maker: "yes" }), "only known answers survive");
-ok(missingQuestions({}).join() === "route,decision_maker", "nothing answered: the offer and authority — nothing about access or domains yet");
-ok(missingQuestions({ decision_maker: "yes", approach: "improve" }).join() === "access,manager", "improve their site (Optimise): access and who manages it — NOT the domain");
-ok(missingQuestions({ decision_maker: "yes", approach: "new_template" }).length === 0 && missingQuestions({ decision_maker: "yes", route: "build" }).length === 0, "Build (self-managed or no site): nothing more — no domain, rights or consents on the call (the agreement and the onboarding form cover them)");
-ok(missingQuestions({ decision_maker: "yes", approach: "refresh" }).length === 0 && missingQuestions({ decision_maker: "yes", approach: "recreation" }).length === 0, "refresh / recreation chosen on Details: no rights / design-owner / domain questions on the call");
-ok(missingQuestions({ decision_maker: "yes", route: "build", manager: "agency" }).join() === "agency_contract", "Build on an agency-run site: only whether they are still in contract");
-ok(missingQuestions({ decision_maker: "yes", approach: "unsure" }).join() === "route", "unsure: the plan is picked explicitly");
+ok(missingQuestions({}).join() === "decision_maker,manager,domain,rights,route", "nothing answered: authority, who looks after the site, the domain, the reuse right — and the PLAN LAST");
+ok(missingQuestions({ decision_maker: "yes", ...SITUATION, approach: "improve" }).join() === "access", "improve their site (Optimise): only whether Findable can get in");
+ok(missingQuestions({ decision_maker: "yes", ...SITUATION, approach: "new_template" }).length === 0 && missingQuestions({ decision_maker: "yes", ...SITUATION, route: "build" }).length === 0, "Build, self-managed: nothing more — no consents, no registrar, no logins on the call");
+ok(missingQuestions({ decision_maker: "yes", manager: "no_website", domain: "no_domain", route: "build" }).length === 0, "NO WEBSITE: the reuse question is never asked (no irrelevant ownership questions)");
+ok(closeFlow({ manager: "no_website" }).join() === "decision_maker,manager,domain,route" && !closeFlow({ manager: "owner" }).includes("agency_contract"), "the flow: no website skips the reuse question; the contract only appears for an agency / freelancer");
+ok(missingQuestions({ decision_maker: "yes", route: "build", manager: "agency" }).join() === "agency_contract,domain,rights", "Build on an agency-run site: the contract, the domain, the reuse right");
+ok(missingQuestions({ decision_maker: "yes", route: "build", manager: "freelancer" }).join() === "agency_contract,domain,rights", "a FREELANCER is asked the contract question exactly like an agency");
+ok(missingQuestions({ decision_maker: "yes", ...SITUATION, approach: "unsure" }).join() === "route", "unsure: the plan is picked explicitly");
+ok(missingQuestions({ decision_maker: "yes", manager: "owner", domain: "yes", rights: "yes" }).join() === "route" && missingQuestions({ decision_maker: "yes", manager: "owner" }).join() === "domain,rights,route", "what the Call screen already saved (who looks after the site, the decision maker) is never asked again");
+ok(closeFlow({}).length <= 5 && closeFlow({ manager: "agency" }).length <= 6, "4–5 questions, one more only when an agency / freelancer is involved");
+ok(QUICK_CLOSE_QUESTIONS.find((q) => q.key === "route")!.options[0].value === "build", "BUILD FIRST on the plan question");
+ok(["manager", "domain"].every((k) => QUICK_CLOSE_QUESTIONS.find((q) => q.key === k)!.options.filter((o) => !o.legacy).every((o) => !/employee|third party|do not control/i.test(o.label))) && QUICK_CLOSE_QUESTIONS.find((q) => q.key === "manager")!.options.filter((o) => !o.legacy).map((o) => o.value).join() === "owner,freelancer,agency,no_website,not_sure", "the offered site-manager choices are exactly: themselves, freelancer, agency, no website, not sure (legacy answers stay readable, not offered)");
 ok(missingQuestions(SAFE).length === 0 && missingQuestions(NEW_SITE).length === 0, "both complete answer sets are complete");
 ok(cleanAnswers({ approach: "improve", route: "build" }).route === "optimise" && cleanAnswers({ approach: "new_template", route: "optimise" }).route === "build", "a known approach DECIDES the route (prices unchanged)");
 ok(cleanAnswers({ approach: "unsure", route: "build" }).route === "build", "unsure keeps the plan that was picked");
@@ -48,11 +57,18 @@ console.log("\n── the gate ──");
   /* ⛔ THE SCREENSHOT FIX: a new site where they cannot give access to the old one is NOT a review. */
   const newNoAccess = { ...NEW_SITE, access: "no", manager: "agency", agency_contract: "free" } as const;
   ok(quickCloseGate(newNoAccess).review.length === 0 && quickCloseState("answers_saved", { answers: newNoAccess }) === "ready", "Build + no access to the CURRENT site (agency contract ended) → no review, ready (we never need the old backend)");
-  /* ⛔ THE AGENCY-CONTRACT RULE (2026-10-07): Build while still tied into the agency stops for Paul's release. */
-  for (const c of ["in_contract", "not_sure"] as const) {
-    const a = { ...NEW_SITE, manager: "agency", agency_contract: c } as const;
-    ok(quickCloseGate(a).review.includes("agency_contract_build") && quickCloseState("answers_saved", { answers: a }) === "needs_review" && !mayGenerateLink("answers_saved", { answers: a }), `Build + agency + contract "${c}" → Paul review (no link)`);
-    ok(quickCloseState("answers_saved", { answers: a, review_approved_at: "2026-10-07T10:00:00Z" }) === "ready", `…which Paul can release (never a hard ban) — "${c}"`);
+  /* ⛔ THE AGENCY-CONTRACT RULE: Build on an agency / freelancer-run site stops for Paul's release unless the contract
+     is confirmed FREE (still in contract, or not sure). The RECOMMENDATION is a different question (below). */
+  for (const m of ["agency", "freelancer"] as const) {
+    const a = { ...NEW_SITE, manager: m, agency_contract: "in_contract" } as const;
+    ok(quickCloseGate(a).review.includes("agency_contract_build") && quickCloseState("answers_saved", { answers: a }) === "needs_review" && !mayGenerateLink("answers_saved", { answers: a }), `Build + ${m} + still in contract → Paul review (no link)`);
+    ok(quickCloseState("answers_saved", { answers: a, review_approved_at: "2026-10-07T10:00:00Z" }) === "ready", `…which Paul can release (never a hard ban) — ${m}`);
+  }
+  {
+    const a = { ...NEW_SITE, manager: "agency", agency_contract: "not_sure" } as const;
+    ok(quickCloseGate(a).review.includes("agency_contract_build") && quickCloseState("answers_saved", { answers: a }) === "needs_review" && quickCloseState("answers_saved", { answers: a, review_approved_at: "2026-10-07T10:00:00Z" }) === "ready", "Build + agency + contract NOT SURE → still stops for Paul (unchanged), who can release it; the recommendation stays Build with the confirm-the-contract warning");
+    const free = { ...NEW_SITE, manager: "agency", agency_contract: "free" } as const;
+    ok(quickCloseGate(free).review.length === 0 && quickCloseState("answers_saved", { answers: free }) === "ready", "Build + agency + free to leave → no stop");
   }
   ok(quickCloseGate({ ...SAFE, manager: "agency", agency_contract: "in_contract", access: "yes" }).review.length === 0, "Optimise on an agency site still in contract (with access) → fine: Optimise IS the route for them");
   for (const d of ["not_sure", "agency", "no"] as const) {
@@ -63,8 +79,8 @@ console.log("\n── the gate ──");
   }
   for (const [label, a, reason] of [
     ["Optimise + no site access", { ...SAFE, access: "no" }, "no_site_access"],
-    ["Optimise on an agency site, access not sure", { ...SAFE, manager: "agency", access: "not_sure" }, "optimise_access_unsure"],
-    ["Optimise, agency + no authority (legacy answer)", { ...SAFE, manager: "agency", authority: "no" }, "third_party_no_authority"],
+    ["Optimise on an agency site, access not sure", { ...SAFE, manager: "agency", agency_contract: "in_contract", access: "not_sure" }, "optimise_access_unsure"],
+    ["Optimise, agency + no authority (legacy answer)", { ...SAFE, manager: "agency", agency_contract: "in_contract", authority: "no" }, "third_party_no_authority"],
   ] as const) {
     const g2 = quickCloseGate(a);
     ok(g2.review.includes(reason as never) && quickCloseState("answers_saved", { answers: a }) === "needs_review" && !mayGenerateLink("answers_saved", { answers: a }), `${label} → WEBSITE ACCESS ISSUE, Paul review (never silently safe)`);
@@ -81,7 +97,7 @@ console.log("\n── the gate ──");
   ok(quickCloseState("answers_saved", { answers: SAFE, link_url: "https://x", link_generated_at: "2026-09-29T10:00:00Z" }) === "link_expired", "2026-10-04 (M-014): an old stored link is EXPIRED, never 'ready'");
   ok(LINK_REUSE_MS < 24 * 3_600_000, "a link is reused only while its Stripe session is still valid (under 24h)");
   /* Recreation: rights unclear never blocks Build, never promises an exact copy. */
-  const rec = { decision_maker: "yes", approach: "recreation", rights: "not_sure", design_owner: "agency", domain: "yes", build_consents: "yes" } as const;
+  const rec = { decision_maker: "yes", approach: "recreation", rights: "not_sure", design_owner: "agency", domain: "yes", manager: "owner", build_consents: "yes" } as const;
   ok(quickCloseGate(rec).review.length === 0 && quickCloseGate(rec).flags.includes("exact_copy_rights") && quickCloseState("answers_saved", { answers: rec }) === "ready", "recreation with unclear rights → still sellable as Build, flagged for Paul");
 }
 

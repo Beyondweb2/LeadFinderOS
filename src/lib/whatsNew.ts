@@ -22,6 +22,21 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-07-close-situation-first', date: '2026-10-07', title: 'Quick Close asks about their website first, picks the plan last — and the sign-up link now always opens', audience: 'all',
+    body: 'Quick Close now asks who looks after their website, the agency contract (if there is one), who controls the domain and whether they can reuse their current design, then the plan. Their sign-up link opens the same sign-up every time.',
+    report: {
+      added: [
+        'Four short questions before the plan: who looks after their website (themselves, a freelancer, an agency, no website), whether they are still tied into a contract with them, who controls their web address, and whether they own or can reuse the design and content of their current site.',
+        'A warning under the plan choice when the contract is not confirmed: "Confirm their agency contract before finalising Build."',
+        'On their sign-up page the client sees "Here\'s what we have so far" and presses Looks right, or changes one of those four answers.',
+      ],
+      changed: [
+        'The plan is the last question, Build first. Anything the Call screen already saved is not asked again.',
+        'Their sign-up link opens the sign-up you created every time: they can start, close the page, and come back, and you can send the same link again. It no longer says "Your sign-up is already set up".',
+      ],
+      removed: [],
+      effect: 'A shorter, clearer close, and a sign-up link that works. If a client corrects an answer in a way that makes the plan unsafe (still tied into an agency contract on Build), the sign-up waits for Paul. They can never change the plan, the price or who sold it.',
+    } },
   { id: '2026-10-07-build-recommended', date: '2026-10-07', title: 'Build is now the recommended plan; Optimise only when an agency contract blocks it', audience: 'all',
     body: 'Owning or keeping a website no longer makes Optimise the recommendation. Findable Build is recommended unless they are still tied into an agency contract.',
     report: {

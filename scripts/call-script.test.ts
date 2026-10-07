@@ -160,7 +160,7 @@ console.log('── 8. Discovery is short and useful ──');
 
 console.log('── 9. Build / Optimise preselection, live v3 terms only ──');
 {
-  ok(preselectedPlan('own_site') === 'build' && preselectedPlan('none') === 'build' && preselectedPlan('directory_profile') === 'build' && preselectedPlan(null) === 'build', 'Build is ALWAYS the opening plan: a site of their own is never a reason for Optimise (2026-10-07)');
+  ok(preselectedPlan('own_site') === 'build' && preselectedPlan('none') === 'build' && preselectedPlan('directory_profile') === 'build' && preselectedPlan(null) === 'build', 'BUILD is the plan opened first, whatever the site (final pass, 2026-10-07)');
   const o = buildCallScript(input());
   ok(o.plans.preselected === 'build' && o.plans.routes.map((r) => r.route).join() === 'build,optimise', 'existing usable website → Build selected first, Optimise available to switch');
   const all = spokenScriptText(o);

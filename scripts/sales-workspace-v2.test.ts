@@ -148,18 +148,18 @@ console.log('\n── 5. CLOSE ──');
 {
   ok(APPROACH_ROUTE.improve === 'optimise' && APPROACH_ROUTE.new_template === 'build' && APPROACH_ROUTE.refresh === 'build' && APPROACH_ROUTE.recreation === 'build', 'the approach maps onto the two existing plans');
   /* 2026-10-07 (Paul: "Quick Close should be QUICK"): the offer, authority, then only the plan's own questions. */
-  ok(closeFlow({ decision_maker: 'yes', approach: 'new_template' }).join() === 'route,decision_maker', 'new site: the offer and authority — no domain / consents / current-site access on the call');
-  ok(closeFlow({ decision_maker: 'yes', approach: 'improve' }).join() === 'route,decision_maker,access,manager', 'Optimise: access and who manages it; no domain question');
-  ok(closeFlow({ decision_maker: 'yes', approach: 'refresh' }).join() === 'route,decision_maker' && closeFlow({ decision_maker: 'yes', approach: 'recreation', manager: 'agency' }).join() === 'route,decision_maker,agency_contract', 'refresh / recreation ask nothing extra; Build on an agency site asks only whether they are still in contract');
-  const newNoAccess = { decision_maker: 'yes', approach: 'new_template', domain: 'yes', access: 'no', manager: 'agency', agency_contract: 'free', build_consents: 'yes' } as const;
+  ok(closeFlow({ decision_maker: 'yes', approach: 'new_template' }).join() === 'decision_maker,manager,domain,rights,route', 'new site: authority, who looks after the site, the domain, the reuse right, then the plan — never current-site access');
+  ok(closeFlow({ decision_maker: 'yes', approach: 'improve' }).join() === 'decision_maker,manager,domain,rights,route,access', 'Optimise: the same situation questions, then the plan, then only whether we can get in');
+  ok(closeFlow({ decision_maker: 'yes', approach: 'refresh' }).join() === 'decision_maker,manager,domain,rights,route' && closeFlow({ decision_maker: 'yes', approach: 'recreation', manager: 'agency' }).join() === 'decision_maker,manager,agency_contract,domain,rights,route', 'refresh / recreation ask nothing extra; an agency-run site adds only whether they are still in contract');
+  const newNoAccess = { decision_maker: 'yes', approach: 'new_template', domain: 'yes', rights: 'yes', access: 'no', manager: 'agency', agency_contract: 'free', build_consents: 'yes' } as const;
   ok(quickCloseGate(newNoAccess).review.length === 0 && quickCloseState('answers_saved', { answers: newNoAccess }) === 'ready', 'the screenshot: Build + "could not give access to the current website" → NO blocker');
   for (const d of ['agency', 'not_sure', 'no'] as const) {
-    const a = { decision_maker: 'yes', approach: 'new_template', domain: d, build_consents: 'yes' } as const;
+    const a = { decision_maker: 'yes', approach: 'new_template', domain: d, manager: 'owner', rights: 'yes', build_consents: 'yes' } as const;
     ok(mayGenerateLink('answers_saved', { answers: a }) && /^Domain handoff to resolve before launch/.test(paulFlagText('domain_handoff', a)) && !/access problem/i.test(paulFlagText('domain_handoff', a)), `domain "${d}" on a new site → "Domain handoff to resolve before launch", the sale goes ahead`);
   }
   ok(/authorised provider makes the DNS change, or a different domain is agreed/.test(paulFlagText('domain_handoff', { domain: 'no' })), 'never implies Findable can take a domain over: control, an authorised provider, or a different domain');
   ok(quickCloseGate({ decision_maker: 'yes', approach: 'improve', access: 'no', manager: 'owner' }).review.includes('no_site_access') && QC_REVIEW_HEADING === 'WEBSITE ACCESS ISSUE — Paul review required', 'Paul review stays for Optimise on a site we cannot get into — and says what it is');
-  const rec = { decision_maker: 'yes', approach: 'recreation', rights: 'not_sure', design_owner: 'agency', domain: 'yes', build_consents: 'yes' } as const;
+  const rec = { decision_maker: 'yes', approach: 'recreation', rights: 'not_sure', design_owner: 'agency', domain: 'yes', manager: 'owner', build_consents: 'yes' } as const;
   ok(mayGenerateLink('answers_saved', { answers: rec }) && deliveryApproach(rec) === 'new_template' && /Never promise an exact copy/.test(paulFlagText('exact_copy_rights', rec)), 'recreation with unclear rights: still sold as Build, delivered as template / refresh, never an exact-copy promise');
   ok(deliveryApproach({ ...rec, rights: 'yes', design_owner: 'agency' }) === 'refresh' && deliveryApproach({ ...rec, rights: 'yes', design_owner: 'business' }) === 'recreation', 'content theirs but design an agency\'s → a visual refresh; both theirs → a close recreation');
   ok(quickCloseGate({ decision_maker: 'no', approach: 'new_template' }).blocked, 'a decision-maker "No" still stops payment');
@@ -167,7 +167,7 @@ console.log('\n── 5. CLOSE ──');
   ok(totalPaymentsFor('build') === 12 && totalPaymentsFor('optimise') === 6 && FINDABLE_MONTHLY_DELAY_DAYS === 42 && routeTermsLines('build')[1] === 'Then £99 a month, starting the day after your 14-day refund window closes (normally about six weeks after you give us access)', 'pricing unchanged: Build 12, Optimise 6; the card times the monthly by v3 Option B (E2E-11)');
   ok(QUICK_CLOSE_PROMISE === 'We improve AI visibility or you get your money back.' && FINDABLE_GUARANTEE.length > 100, 'the guarantee unchanged');
   ok(!linkUsable({ link_url: 'https://x', link_generated_at: '2026-09-29T10:00:00Z' }, Date.parse('2026-10-05T10:00:00Z')), 'stale-link protection unchanged');
-  ok(missingQuestions({ decision_maker: 'yes', approach: 'new_template', domain: 'yes' }).length === 0, '2026-10-07: the Build consents are no longer asked on the call (the signed agreement covers them; the onboarding form collects the details)');
+  ok(missingQuestions({ decision_maker: 'yes', approach: 'new_template', domain: 'yes', manager: 'owner', rights: 'yes' }).length === 0, '2026-10-07: the Build consents are no longer asked on the call (the signed agreement covers them; the onboarding form collects the details)');
   const fn = read('supabase/functions/quick-close/index.ts');
   ok(/flags: quickCloseGate\(answers\)\.flags\.map\(\(f\) => paulFlagText\(f, answers\)\)/.test(fn) && /title: QC_REVIEW_HEADING,/.test(fn), 'the server returns the flags and words the payment stop truthfully');
   const dlg = read('src/components/LeadDetailDialog.tsx');

@@ -813,6 +813,11 @@ positive allowlist of `baseline`; `isColdOutreachTemplate` treats unknown as COL
   Hook questions pin the town with the LEAD'S country (`placeSuffixForCountry` — "Pune India", never
   "Pune UK"). Money is still GBP-only (checkout, webhook, report offer panel): India can PROSPECT, not
   CLOSE — `docs/india-readiness.md` §6.
+- ⛔ **A sales-held sign-up is RESUMED, never refused** (`salesSignup.resumeDecision`): the salesperson's
+  `/agree/<token>` link and the client's own page land on the SAME onboarding row; `findable-onboarding` never answers a
+  valid link with an error and never creates a competing row. The client may confirm / correct four situation facts
+  (`clientConfirm.ts`, `sales_confirm`) — never the plan, price or seller. **Build is the default recommendation**; Optimise
+  only for an agency / freelancer they are still tied into. `docs/pre-sales-certification/sales-to-payment-final-pass.md`.
 - **Owner-scoped rows are owned by the DATA account** `pauljsales455@outlook.com` (`9d5a7629…`),
   resolved from the data (newest lead's `user_id`), never from the operator login (`paul@move37.fun`,
   owns nothing) and never hardcoded. A row under the wrong owner is invisible, not wrong.

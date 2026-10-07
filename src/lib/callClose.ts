@@ -86,7 +86,9 @@ export function routeOffer(route: ServiceRoute): CallRouteOffer {
     };
 }
 
-/** The routes for this lead's website, best fit first. */
+/** The routes for this lead's website, best fit first. 🔴 FINAL PASS (Paul, 2026-10-07): BUILD FIRST — a site of
+ *  their own no longer makes Optimise the default (the agency-contract rule, quickClose.offerFit, is the only
+ *  thing that moves the recommendation). */
 export function routesFor(source: SiteSource | null | undefined): { routes: ServiceRoute[]; note: string | null } {
   if (source === 'own_site') return { routes: ['build', 'optimise'], note: null };
   return {

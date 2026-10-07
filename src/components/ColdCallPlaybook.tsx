@@ -267,6 +267,7 @@ function Offer({ p, ans }: { p: ColdCallPlaybook; ans: ReturnType<typeof useCall
   return (
     <Step title="Offer" tone="green" testId="call-step-close">
       {fit?.reason && <p className={cn('rounded-xl px-3 py-2 text-xs leading-snug ring-1 ring-inset', fit.offered.build ? 'bg-muted/40 text-muted-foreground ring-border' : 'bg-amber-500/[0.08] text-amber-800 ring-amber-500/30 dark:text-amber-200')} data-testid="call-offer-fit">{fit.reason}{!fit.offered.build && role === 'admin' && fit.offered.optimise ? ' (You can still choose Build — it will need your release.)' : ''}</p>}
+      {fit?.warning && <p className="rounded-xl bg-amber-500/[0.08] px-3 py-2 text-xs font-semibold leading-snug text-amber-800 ring-1 ring-inset ring-amber-500/30 dark:text-amber-200" data-testid="call-offer-warning">{fit.warning}</p>}
       {routes.length > 1 ? (
         <div className="inline-flex rounded-full bg-muted p-0.5" role="tablist" aria-label="Plan" data-testid="call-plan-switch">
           {routes.map((r) => (

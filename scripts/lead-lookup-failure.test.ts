@@ -45,8 +45,8 @@ ok(after.indexOf('leadErr') < after.indexOf('if (!lead)'),
    'and it is tested first — !lead before leadErr would swallow it straight back');
 
 console.log('\n-- unknown_lead still means exactly one thing --');
-ok((fn.match(/error: "unknown_lead" \}, 404\)/g) ?? []).length === 3,
-   'unknown_lead stays a 404 and stays reserved for a genuinely absent row');
+ok((fn.match(/error: "unknown_lead" \}, 404\)/g) ?? []).length === 4,
+   'unknown_lead stays a 404 and stays reserved for a genuinely absent row (submit, prefill, sales_confirm and the resolver)');
 
 console.log('\n-- q2_prefill is deliberately NOT changed --');
 /* A failed read there means the phone box arrives empty instead of filled: a missing convenience,

@@ -108,7 +108,7 @@ console.log('── 2. THE OFFER, BOTH ROUTES, FROM THE CONSTANTS ──');
   ok(!/\b(12|6) (more|further) payments|then (12|6) payments|13 payments|7 payments/i.test(b.spoken.join(' ') + o.spoken.join(' ')), 'no wording that implies an extra payment on top of the 12 / 6');
   const src = read('src/lib/callClose.ts').replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
   ok(!/£\s?\d|\b(12|6) payments\b/.test(src), 'callClose.ts types no price and no payment count — every figure is a constant');
-  ok(routesFor('own_site').routes.join(',') === 'build,optimise' && routesFor('none').routes.join(',') === 'build' && routesFor('directory_profile').routes.join(',') === 'build', 'the route that fits first: own site → Build then Optimise (Build is the default, 2026-10-07); no site or a profile page → Build only');
+  ok(routesFor('own_site').routes.join(',') === 'build,optimise' && routesFor('none').routes.join(',') === 'build' && routesFor('directory_profile').routes.join(',') === 'build', 'the route that fits first: Build, then Optimise for an own site; no site or a profile page → Build only');
   const own = buildColdCallPlaybook(base());
   const none = buildColdCallPlaybook(noSite());
   ok(own.close.routes.map((r) => r.route).join(',') === 'build,optimise' && own.close.routeNote === null, 'the call screen of a lead with a site offers both');

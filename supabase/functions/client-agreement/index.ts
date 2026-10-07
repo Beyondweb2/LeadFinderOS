@@ -108,6 +108,7 @@ const PAY_REFUSAL: Record<string, string> = {
   cannot_serve: "We cannot take payment for this website set-up yet. Paul will be in touch.",
   agreement_unavailable: "The payment page could not be opened just now. Please try again in a minute.",
   payment_held: "A payment from you is already with us and Paul is reviewing it, so we will not take another. He will be in touch.",
+  held_for_review: "Your Findable contact needs to check one thing before payment opens. We will be in touch shortly - there is nothing to do at your end.",
 };
 
 Deno.serve(async (req) => {
