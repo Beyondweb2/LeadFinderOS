@@ -55,7 +55,8 @@ import { afterTermRepLine, bothPlansSpoken } from './planTerms.ts';
 import { shortReportUrl } from './reportSlug.ts';
 import { classifyLeadWebsite, type SiteSource } from './leadWebsiteKind.ts';
 import { buildCallClose, type CallClose } from './callClose.ts';
-import { buildCallScript, type CallScript } from './callScript.ts';
+import { buildCallScript, type CallScript, type ScriptEvidence, type ScriptStrongSite } from './callScript.ts';
+import { mergePoints, usableInsights, STRONG_SITE_LINE, type InsightKind, type SalesFinding, type SalesInsights } from './salesInsights.ts';
 import { callerFirstName, DEFAULT_CALLER_NAME } from './callerName.ts';
 import type { CallAuditProgress } from './callScriptGate.ts';
 
@@ -152,7 +153,7 @@ export interface PlaybookInput {
 export type CallMode = 'cold' | 'follow_up';
 
 export interface PlaybookFinding {
-  kind: FindingKind;
+  kind: FindingKind | InsightKind;
   title: string;
   /** What we saw, in plain English (siteFindings.ts's clause, as a sentence). */
   explanation: string;
@@ -160,6 +161,13 @@ export interface PlaybookFinding {
   whyItMayMatter: string;
   /** The stored proof: verbatim URLs, counts, crawler names. Operator-facing. */
   proof: string[];
+  /** Set for a point read off the site's own pages (salesInsights.ts): already written for speaking. */
+  spoken?: string;
+  /** What Findable would do about it (operator-facing). */
+  improvement?: string;
+  /** The pages and words this point was read on — kept so the rep can say how they know. */
+  evidence?: ScriptEvidence;
+  confidence?: 'high' | 'medium';
 }
 
 export interface PlaybookEvidence {
@@ -435,6 +443,33 @@ export interface FindingsOutcome {
   note: string | null;
   crawlAtMs: number | null;
   crawlStale: boolean;
+  /** The pages were read and nothing worth raising was found: the honest positive to say instead (salesInsights.ts). */
+  strongSite?: ScriptStrongSite | null;
+}
+
+/** A stored insight, mapped onto the playbook's finding shape. The spoken text is two sentences — what was seen,
+ *  then why it matters — so the first becomes the "explanation" the email and the explain step read. */
+export function insightToFinding(f: SalesFinding): PlaybookFinding {
+  const [first, ...rest] = f.spoken.split(/(?<=[.!?])\s+/);
+  return {
+    kind: f.kind, title: f.title, explanation: first || f.spoken, whyItMayMatter: rest.join(' ') || f.why,
+    proof: [
+      ...f.evidence.urls.map((u) => 'Page: ' + u), ...f.evidence.quotes.map((q) => 'Read: ' + q),
+      ...(f.evidence.signal ? ['Detected: ' + f.evidence.signal] : []),
+    ],
+    spoken: f.spoken, improvement: f.improvement, evidence: { urls: f.evidence.urls, quotes: f.evidence.quotes, signal: f.evidence.signal }, confidence: f.confidence,
+  };
+}
+
+/** The newest fresh, readable stored insights across the crawl sources (audit-run crawls first, then the lead row). */
+export function freshInsights(input: Pick<PlaybookInput, 'runCrawls' | 'leadCrawl' | 'nowMs'>): SalesInsights | null {
+  for (const source of [...input.runCrawls, ...(input.leadCrawl ? [input.leadCrawl] : [])]) {
+    if (source.complete === false || source.result?.status === 'unavailable') continue;
+    if (!(input.nowMs - source.createdAtMs < CRAWL_FRESH_MS)) continue;
+    const ins = usableInsights(source.result?.insights);
+    if (ins && ins.state !== 'unreadable') return ins;
+  }
+  return null;
 }
 
 /** @param max how many findings to return — the playbook's MAX_SITE_FINDINGS by default; the Inbox
@@ -463,19 +498,20 @@ export function selectFindings(input: Pick<PlaybookInput, 'lead' | 'runCrawls' |
     };
   }
   const found = resolveFindingsSource(true, input.runCrawls, input.leadCrawl);
-  if (found) {
-    const findings = found.candidates.slice(0, max).map((f) => {
+  const insights = freshInsights(input);
+  {
+    const legacy = (found?.candidates ?? []).map((f): PlaybookFinding => {
       /* ⛔ THE THIN PAGE IS SOMETIMES THE HOMEPAGE. siteFindings.ts says "one of the service pages";
          read aloud on a call next to proof that is the homepage URL, that is a false statement to
          the owner (The Royal Locksmiths, 2026-09-23: the only thin page was the homepage). Said as
          the homepage when every thin URL is the homepage; the WhatsApp copy is left as it is. */
-      if (f.kind === 'thin_pages' && isOnlyHomepage(found.signals.thinPageUrls ?? [], found.signals.homeUrl)) {
+      if (f.kind === 'thin_pages' && isOnlyHomepage(found!.signals.thinPageUrls ?? [], found!.signals.homeUrl)) {
         return {
           kind: f.kind,
           title: 'Homepage light on detail',
           explanation: 'Your homepage is really light on detail.',
           whyItMayMatter: 'It says what you do, but there may not be much useful information there for AI to work with when somebody asks a more specific question.',
-          proof: proofFor(f, found.signals, found.evidence),
+          proof: proofFor(f, found!.signals, found!.evidence),
         };
       }
       return {
@@ -483,10 +519,16 @@ export function selectFindings(input: Pick<PlaybookInput, 'lead' | 'runCrawls' |
         title: FINDING_TITLES[f.kind],
         explanation: sentence(f.clause),
         whyItMayMatter: clean(f.rest),
-        proof: proofFor(f, found.signals, found.evidence),
+        proof: proofFor(f, found!.signals, found!.evidence),
       };
     });
-    return { status: 'findings', findings, note: null, crawlAtMs: found.source.createdAtMs, crawlStale: false };
+    /* ONE ordering across the crawl's technical findings and the site's own pages (salesInsights.mergePoints):
+       strongest first, one per theme. */
+    const fromInsights = (insights?.findings ?? []).filter((f) => f.confidence === 'high' || f.confidence === 'medium').map(insightToFinding);
+    const picks = mergePoints(legacy, insights && { ...insights, findings: insights.findings.filter((f) => f.confidence === 'high' || f.confidence === 'medium') }, max);
+    const findings = picks.map((p) => (p.from === 'legacy' ? legacy[p.index] : fromInsights[p.index]));
+    /* Nothing speakable (only weak notes, or nothing at all) falls through to "clean" / "strong site" below. */
+    if (findings.length) return { status: 'findings', findings, note: null, crawlAtMs: found?.source.createdAtMs ?? input.nowMs, crawlStale: false };
   }
   if (newestMs === null) {
     return { status: 'not_crawled', findings: [], crawlAtMs: null, crawlStale: false, note: 'Nobody has checked this website yet, so there are no website points to mention. Keep the call to the AI result.' };
@@ -497,6 +539,16 @@ export function selectFindings(input: Pick<PlaybookInput, 'lead' | 'runCrawls' |
   const usable = all.map((s) => usableCrawlSignals(s.result, s.createdAtMs)).find((s) => !!s);
   if (usable?.fetchFailed) {
     return { status: 'unreadable', findings: [], crawlAtMs: newestMs, crawlStale, note: 'The crawl could not read the site at all, so there is nothing reliable to say about it.' };
+  }
+  /* ⛔ A STRONG SITE IS A RESULT, NOT A GAP (2026-10-07). The pages were read (salesInsights.ts) and nothing real was
+     wrong: the script says so and offers the one genuine thing we would add. Without stored insights (an older
+     crawl) the old honest line stands — never a made-up fault either way. */
+  if (insights && insights.state === 'strong_site') {
+    return {
+      status: 'clean', findings: [], crawlAtMs: newestMs, crawlStale,
+      strongSite: { spoken: insights.opportunity?.spoken ?? STRONG_SITE_LINE, evidence: insights.opportunity?.evidence ?? null },
+      note: 'The website looks sound — nothing worth raising. Say the positive line and what we would add. Do not invent a problem.',
+    };
   }
   return { status: 'clean', findings: [], crawlAtMs: newestMs, crawlStale, note: 'The crawl found no strong website issues. Do not lead with the website on this call.' };
 }
@@ -745,7 +797,7 @@ export function buildColdCallPlaybook(input: PlaybookInput): ColdCallPlaybook {
      from the evidence above: the stored answer's own competitors, the stored crawl's own findings. ── */
   const script = buildCallScript({
     searchFor, engine, evidenceKind: evidence.kind, competitors: evidence.competitors, auditStale,
-    findings: f.findings, findingsStatus: f.status, site: { source: siteKind.source, label: siteKind.label },
+    findings: f.findings, findingsStatus: f.status, strongSite: f.strongSite ?? null, site: { source: siteKind.source, label: siteKind.label },
     close, contactedBefore: convo.mode === 'follow_up', hasReport: !!reportUrl,
   });
   const opening = script.opener;

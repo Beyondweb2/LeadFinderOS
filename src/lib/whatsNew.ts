@@ -22,6 +22,23 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-07-website-check-finds-more', date: '2026-10-07', title: 'The website check now finds what a careful person reading the site would find', audience: 'all',
+    body: 'The call script used to mention only technical faults. It now also reads the site itself: whether each service has its own page, whether a phone number and the town are stated, and whether the main pages are linked. When the site is in good shape it says so instead of inventing a problem.',
+    report: {
+      added: [
+        'New website points on the Call tab, each tied to the pages it was read on: services crammed on one page, services listed with no page of their own, no phone number found, the town not mentioned, service pages not linked from the homepage or menu.',
+        'A "How do we know?" fold under those points showing the page addresses, the headings it read and what we would do about it.',
+        'A strong-site result. If nothing real is wrong, the script says the site is in good shape and what we would add, for example stronger pages for each service.',
+        'The same points in "What to raise on the call" at the top of the website audit.',
+      ],
+      changed: [
+        'The call script now says one or two website points, not up to three.',
+        'A website check on a prospect now reads the 60 pages that matter most (services, about, contact first, the blog last) instead of the first 500 it finds. Privacy, terms and archive pages are skipped.',
+        'A short contact, about or legal page is no longer counted as a "light service page".',
+      ],
+      removed: ['The fixed line "the bigger issue is the public evidence around the business" on a site that was checked and found fine. It is replaced by the honest strong-site line.'],
+      effect: 'On a call you get one or two specific things you can point at on their own site, with the proof behind them. If the site is fine you are told so and have a truthful thing to offer, not a made-up fault.',
+    } },
   { id: '2026-10-07-full-setup-counts-as-closing', date: '2026-10-07', title: 'A Full Setup send now counts as you closing the sale', audience: 'all',
     body: 'When you send a client the Full Setup link, the moment you sent it is recorded as you closing the sale, the same as making an Agreement & Payment link.',
     report: {

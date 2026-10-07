@@ -73,8 +73,8 @@ console.log('── 1. Plumber, three competitors, website issues ──');
   ok(s.opener[0] === 'Hi mate, I was looking for a plumber in Rugby, so I asked Google AI and it mentioned Rugby Plumbing Co, Swift Heating and A1 Drains, but not you.', 'opener line 1 is Paul\'s structure, word for word');
   ok(s.opener[1] === "I had a look into why they were being named and you weren't, and I found a few potential reasons.", 'opener line 2: why they were named and you weren\'t — a few potential reasons');
   ok(!s.opener.join(' ').includes('Fourth Name'), 'only the first three competitors are said');
-  ok(s.found.lines.length === 3 && s.found.lines.every((l) => !/near-duplicates|robots\.txt|noindex/.test(l)), 'exactly three reasons, said in plain words (no jargon)');
-  ok(/near enough the same/.test(s.found.lines[0]) && /light on detail/.test(s.found.lines[1]) && /turning away some of the AI search crawlers/.test(s.found.lines[2]), '…each the same claim as its stored finding, in the order found');
+  ok(s.found.lines.length === 2 && s.found.lines.every((l) => !/near-duplicates|robots\.txt|noindex/.test(l)), 'exactly two reasons (MAX_SPOKEN_FINDINGS, 2026-10-07: one or two hooks, never a list), said in plain words (no jargon)');
+  ok(/near enough the same/.test(s.found.lines[0]) && /light on detail/.test(s.found.lines[1]), '…each the same claim as its stored finding, in the order found');
   ok(s.bridge[0].startsWith(BRIDGE_LINE) && /give you a better chance of showing up in those answers/.test(s.bridge[0]), 'the bridge: AI is how people find local businesses now + happy to explain what I\'d change');
   noBanned('plumber', spokenScriptText(s));
 }

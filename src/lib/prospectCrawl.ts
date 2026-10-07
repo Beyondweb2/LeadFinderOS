@@ -25,13 +25,51 @@
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 
 import { sameSite } from './crawlUrl.ts';
+import { fullPageFamily } from './fullCrawl.ts';
 
-/** Pages a prospect crawl reads before it stops and records the rest as not crawled. */
-export const PROSPECT_CRAWL_PAGE_CAP = 500;
+/** Pages a prospect crawl reads before it stops and records the rest as not crawled.
+ *  ⚠️ 500 → 60 on 2026-10-07 (improve/site-crawl-sales-insights): a salesperson needs the site's SHAPE — its
+ *  services, areas, about, contact and proof — not four hundred blog posts. The pages read are chosen by
+ *  crawlPriority below, so sixty is the sixty that matter; the sitemaps are still read in full, so the crawl
+ *  still KNOWS how big the site is and says "capped" honestly. Paying-client crawls stay exhaustive. */
+export const PROSPECT_CRAWL_PAGE_CAP = 60;
 /** A saved prospect crawl younger than this is reused rather than crawled again. */
 export const PROSPECT_CRAWL_REUSE_MS = 7 * 86_400_000;
 /** A salesperson may force a fresh crawl only once the saved one is at least this old. */
 export const PROSPECT_CRAWL_MIN_GAP_MS = 86_400_000;
+
+/* ── WHICH pages a capped crawl reads, and which it never spends a slot on ──────────────────────────
+   (2026-10-07.) Both rules apply ONLY to a capped (prospect) job: an exhaustive client crawl reads everything.
+
+   crawlPriority — a LOWER score is read first. The homepage's own links (depth 1) are what the site itself
+   calls its main pages, so depth counts; then what the page IS: services first, then about / contact, then
+   anything else, then the area-page clusters, and last the blog. Nothing here ranks a page's quality — it
+   only decides the ORDER a bounded budget is spent in.
+   isLowValuePage — pages a sales read never needs: privacy / cookie / terms, tag, category, author and date
+   archives, pagination, feeds. They are recorded as skipped (skip reason low_value), never read, never
+   counted against the limit. */
+const WEIGHT: Record<string, number> = { service: 0, about: 1, contact: 1, other: 2, gallery: 2, reviews: 2, faq: 2, pricing: 2, location: 3, blog: 6 };
+
+export function crawlPriority(url: string, depth: number, homeUrl: string): number {
+  const family = fullPageFamily(url, homeUrl);
+  return (WEIGHT[family] ?? 2) + Math.max(0, depth) * 1.5;
+}
+
+const LOW_VALUE_PATH = /(^|\/)(privacy[-a-z]*|cookies?[-a-z]*|terms[-a-z0-9]*|legal|gdpr|disclaimer|accessibility|modern-slavery|tags?|category|categories|author|authors|feed|attachment|sitemap[-a-z]*|thank-?you|returns?|refunds?)(\/|$)|\/page\/\d+|\/(?:19|20)\d{2}\/\d{1,2}(\/|$)/i;
+export function isLowValuePage(url: string): boolean {
+  try { return LOW_VALUE_PATH.test(new URL(url).pathname); } catch { return false; }
+}
+
+/** Queued rows → the order a capped crawl should read them in, low-value pages split out. Pure. */
+export function planCappedBatch<T extends { url: string; kind: string; depth: number }>(rows: T[], homeUrl: string): { read: T[]; lowValue: T[] } {
+  const sitemaps = rows.filter((r) => r.kind === 'sitemap');
+  const pages = rows.filter((r) => r.kind !== 'sitemap');
+  const lowValue = pages.filter((r) => isLowValuePage(r.url));
+  const rest = pages.filter((r) => !isLowValuePage(r.url))
+    .map((r, i) => ({ r, i, s: crawlPriority(r.url, r.depth, homeUrl) }))
+    .sort((a, b) => a.s - b.s || a.i - b.i).map((x) => x.r);
+  return { read: [...sitemaps, ...rest], lowValue };
+}
 
 /** Request sources that are paying-client work (exhaustive). */
 const CLIENT_SOURCES = new Set(['paid_client', 'website_build']);

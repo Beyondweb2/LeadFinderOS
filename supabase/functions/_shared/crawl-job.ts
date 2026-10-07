@@ -18,6 +18,8 @@ import {
   CRAWL_CHECK_VERSION, visibleText, type CrawlSignals,
 } from "../../../src/lib/crawlCheck.ts";
 import { buildSiteAudit, type SiteAuditPage } from "../../../src/lib/siteAudit.ts";
+import { buildSalesInsights, type SalesInsights } from "../../../src/lib/salesInsights.ts";
+import { planCappedBatch } from "../../../src/lib/prospectCrawl.ts";
 import { extractSiteInfo, SITE_INFO_VERSION } from "../../../src/lib/siteInfo.ts";
 import { buildSiteEvidence, SITE_EVIDENCE_VERSION, MAX_SITEMAP_LOCS, type EvidencePage } from "../../../src/lib/siteEvidence.ts";
 import {
@@ -280,10 +282,21 @@ export async function runCrawlTick(service: Client): Promise<{ jobId: string | n
     // Sitemaps before pages (they discover the most), then shallow before deep, then oldest first.
     const { data: batch, error: be } = await service.from("crawl_urls").select("id,url,kind,source,depth,attempts")
       .eq("job_id", jobId).eq("status", "queued")
-      .order("kind", { ascending: false }).order("depth", { ascending: true }).order("id", { ascending: true }).limit(FULL_CRAWL.batchSize);
+      .order("kind", { ascending: false }).order("depth", { ascending: true }).order("id", { ascending: true }).limit(pageCap ? PRIORITY_WINDOW : FULL_CRAWL.batchSize);
     if (be) throw new Error(`frontier read: ${be.message}`);
     let rows = (batch ?? []) as Array<{ id: number; url: string; kind: "page" | "sitemap"; source: string | null; depth: number; attempts: number }>;
     if (!rows.length) break;
+    if (pageCap) {
+      /* ⛔ A CAPPED JOB SPENDS ITS PAGES WELL (2026-10-07): the main pages first, never a privacy page or an
+         archive. Low-value rows are recorded as skipped (low_value) and cost nothing against the limit. */
+      const plan = planCappedBatch(rows, servedUrl);
+      if (plan.lowValue.length) {
+        await service.from("crawl_urls").update({ status: "skipped", skip_reason: "low_value", processed_at: new Date().toISOString() })
+          .in("id", plan.lowValue.map((r) => r.id)).eq("status", "queued");
+      }
+      rows = plan.read.slice(0, FULL_CRAWL.batchSize);
+      if (!rows.length) continue;
+    }
     if (pageCap) {
       const c = await jobCounts(service, jobId);
       let room = Math.max(0, pageCap - (c.done + c.failed));
@@ -379,6 +392,10 @@ export async function runCrawlTick(service: Client): Promise<{ jobId: string | n
 
 /* ── finalize ─────────────────────────────────────────────────────────────────────────────────── */
 
+/** How many queued rows a CAPPED job looks at to choose the next batch from (src/lib/prospectCrawl.ts crawlPriority).
+ *  An exhaustive job just takes the oldest batchSize, as it always did. */
+const PRIORITY_WINDOW = 400;
+
 /** Above this many read pages the finalize step does not load page links (memory); the audit then
  *  says the link-graph checks were not made. Prospect crawls (capped) are always well under it. */
 const LINK_GRAPH_MAX_PAGES = 5_000;
@@ -441,7 +458,10 @@ export async function finalizeCrawlJob(service: Client, jobId: string): Promise<
     const med = median(sims);
     if (list.length >= 2 && med >= 0.9) duplicates = { clusterSize: biggest.urls.length, sampleSize: list.length, similarityPct: Math.round(med * 100) };
   }
-  const thin = done.filter((r) => (r.evidence!.d.words ?? 0) < THIN_WORDS);
+  /* ⛔ ONLY A PAGE THAT IS MEANT TO EXPLAIN SOMETHING CAN BE "THIN" (2026-10-07). A short contact page, a legal page or
+     a gallery is normal, and "your service pages are light on detail" said about one is false. The signal counts
+     service, area and home pages only — the same families siteAudit's thin_key_pages judges. */
+  const thin = done.filter((r) => (r.evidence!.d.words ?? 0) < THIN_WORDS && ["service", "location", "homepage"].includes(r.evidence!.d.family));
   const cr = home.clientRendered ?? null;
   const signals: CrawlSignals = {
     homeUrl: job.start_url, fetchFailed: !home.respondedAny, searchBlocked: home.searchBlocked ?? [],
@@ -475,10 +495,13 @@ export async function finalizeCrawlJob(service: Client, jobId: string): Promise<
   /* THE GROUPED SITE AUDIT (2026-10-05, src/lib/siteAudit.ts) — stored with the crawl so the detailed
      view and the Call screen reopen it without re-reading thousands of rows. Best-effort: an analyser
      that trips must never cost the crawl its result. */
+  let insights: SalesInsights | null = null;
   try {
     let lead: { name: string | null; town: string | null } | null = null;
+    let leadForInsights: { name: string | null; trade: string | null; services: string[] } | null = null;
     if (job.lead_id) {
-      const { data: l } = await service.from("outreach_leads").select("business_name, derived_town").eq("id", job.lead_id).maybeSingle();
+      const { data: l } = await service.from("outreach_leads").select("business_name, derived_town, category, search_keyword, services_included").eq("id", job.lead_id).maybeSingle();
+      leadForInsights = { name: (l?.business_name as string | null) ?? null, trade: ((l?.category as string | null) || (l?.search_keyword as string | null)) ?? null, services: Array.isArray(l?.services_included) ? (l.services_included as unknown[]).filter((x): x is string => typeof x === "string") : [] };
       const fallbackTown = typeof home.town === "string" && home.town.trim().split(/\s+/).length <= 3 ? home.town : null;
       lead = { name: (l?.business_name as string | null) ?? null, town: (l?.derived_town as string | null) ?? fallbackTown };
     }
@@ -493,12 +516,23 @@ export async function finalizeCrawlJob(service: Client, jobId: string): Promise<
       coverage: full.coverage!, probe: { searchBlocked: home.searchBlocked ?? [], readableAs: home.readableAs ?? null, clientRendered: cr },
       duplicates, lead, homeText: home.lean ? visibleText(String(home.lean)).slice(0, 6000) : null,
     });
+    /* THE SALES INSIGHTS (2026-10-07, src/lib/salesInsights.ts): what the pages read say about services, name,
+       phone, town, linking and proof — one ranked, evidence-backed list for the call script. Deterministic. */
+    const homeNav = rows.find((r) => r.evidence?.nav)?.evidence?.nav ?? [];
+    insights = buildSalesInsights({
+      servedUrl, pages: auditPages, nav: homeNav,
+      knownUrls: rows.filter((r) => r.status !== "skipped" || r.skip_reason === "coverage_cap").map((r) => r.final_url || r.url),
+      lead: { name: lead?.name ?? null, town: lead?.town ?? null, trade: leadForInsights?.trade ?? null, services: leadForInsights?.services ?? [] },
+      capped: !!full.coverage?.capped,
+    });
+    full.audit.insights = insights;
   } catch (e) { console.error("[crawl-job] site audit failed:", (e as Error).message); }
 
   const checkedAt = new Date().toISOString();
   const result = {
     version: CRAWL_CHECK_VERSION, siteInfoVersion: SITE_INFO_VERSION, checked_at: checkedAt, url: job.start_url, town,
     signals, verdict, siteInfo, job_id: jobId,
+    ...(insights ? { insights } : {}),
     ...(evidence ? { evidence, evidenceVersion: SITE_EVIDENCE_VERSION } : {}),
   };
   const status = full.completeness === "complete" ? "complete" : full.completeness === "failed" ? "failed" : "complete_with_failures";

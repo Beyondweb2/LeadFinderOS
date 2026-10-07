@@ -1016,6 +1016,11 @@ positive allowlist of `baseline`; `isColdOutreachTemplate` treats unknown as COL
   shown as CAPPED, never "the full site"; client / Paid Clients / Website Build crawls stay exhaustive (positive match). A
   prospect's saved full crawl is REUSED for `PROSPECT_CRAWL_REUSE_MS` (decided before any fetch). The grouped site audit is
   `siteAudit.ts`, stored at `full_evidence.audit`; its words never claim how an AI decides, never score, never sell schema or llms.txt.
+  ⛔ **The prospect cap is 60 pages, chosen by priority** (2026-10-07, `docs/site-crawl-sales-insights.md`): services, then about/contact,
+  the blog last; privacy/terms/archives are `low_value`, never read. **What the call script says about a site comes from
+  `salesInsights.ts`** (`result.insights`, written by BOTH crawls) merged with the technical findings: services, name, phone, town,
+  linking, proof — each with the pages and words it was read on; nothing under `SPEAK_MIN_PRIORITY` is said; **a strong site is a
+  result** (`strong_site` → the positive line, never an invented fault; never "add more proof"). One or two points, never a list.
 - **`lead_crawl_checks` is ONE row per lead, read by every screen** — never a screen-specific copy.
   The crawl-wide summary lives in `full_evidence`, every URL in `crawl_urls` (never in `result`, which
   Outreach/Inbox read for the whole book). An automated crawl never replaces a fresh full one

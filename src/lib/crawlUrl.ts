@@ -19,7 +19,7 @@
 
 export type SkipReason =
   | 'off_site' | 'not_http' | 'asset' | 'private_path' | 'robots_disallow' | 'query_trap'
-  | 'path_trap' | 'too_long' | 'safety_ceiling' | 'not_html' | 'removed_since_last_crawl' | 'coverage_cap';
+  | 'path_trap' | 'too_long' | 'safety_ceiling' | 'not_html' | 'removed_since_last_crawl' | 'coverage_cap' | 'low_value';
 
 export const SKIP_REASON_LABELS: Record<SkipReason, string> = {
   off_site: 'another website',
@@ -34,6 +34,7 @@ export const SKIP_REASON_LABELS: Record<SkipReason, string> = {
   not_html: 'not an HTML page',
   removed_since_last_crawl: 'was on the last crawl, now gone',
   coverage_cap: 'found but not read — the prospect crawl reached its page limit',
+  low_value: 'a privacy, terms, archive or pagination page — not worth a slot in a sales read',
 };
 
 /** Parameters that never change the page: removed, never a reason to skip. */

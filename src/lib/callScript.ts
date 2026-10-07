@@ -35,6 +35,7 @@ import {
 import { afterTermRepLine, bothPlansSpoken, ordinalOf } from './planTerms.ts';
 import { SALES_DOMAIN_LINE } from './domainAuthority.ts';
 import type { FindingKind } from './siteFindings.ts';
+import type { InsightKind } from './salesInsights.ts';
 import type { SiteSource } from './leadWebsiteKind.ts';
 import type { CallClose, CallRouteOffer } from './callClose.ts';
 
@@ -47,8 +48,12 @@ export const AGENCY_COST_QUESTION = "If you don't mind me asking, roughly what a
 /** The agency spend (£ a month) above which the price angle may be offered. */
 export const AGENCY_PRICE_ANGLE_OVER_GBP = 100;
 export const PRICE_ANGLE_LINE = "Depending on what they're doing for you, we may be able to improve the AI side and still come in cheaper than what you're paying now.";
-/** Website points said on the call. Three is a sentence a person can follow; more is an audit. */
-export const MAX_SPOKEN_FINDINGS = 3;
+/** Website points said on the call. ⚠️ 3 → 2 on 2026-10-07 (Paul's brief): one or two strong conversational hooks,
+ *  never a list — the evidence behind every point is on the screen for the rep, not in their mouth. */
+export const MAX_SPOKEN_FINDINGS = 2;
+/** Said after a point that came from the site's own pages (a service, the town, a phone number): the Findable half
+ *  of REAL ISSUE → WHY IT MATTERS → HOW WE IMPROVE IT. Once, after the last point, never per point. */
+export const FIX_TAIL = "It's the sort of thing we'd fix as part of the work.";
 /** Said when the crawl found nothing strong — never a made-up fault (Paul's wording). */
 export const NO_STRONG_ISSUE_LINE = "I couldn't see one huge technical problem with the site. The bigger issue is that the public evidence around the business isn't strong enough for AI to consistently choose you over the other companies.";
 export const BRIDGE_LINE = "More people are using AI to find local businesses now, and this is what we specialise in.";
@@ -82,12 +87,28 @@ const SPOKEN_FINDING: Partial<Record<FindingKind, string>> = {
 };
 const HOMEPAGE_THIN_LINE = "Your homepage is really light on detail, so there isn't much there for AI to work with.";
 
-export interface ScriptFinding { kind: FindingKind; title: string; explanation: string }
+/** The proof behind a point, kept so the rep can answer "how do you know?" — pages and the words read. */
+export interface ScriptEvidence { urls: string[]; quotes: string[]; signal?: string }
+
+export interface ScriptFinding {
+  kind: FindingKind | InsightKind;
+  title: string;
+  explanation: string;
+  /** A point from the site's own pages (salesInsights.ts) arrives already written for speaking. */
+  spoken?: string;
+  /** What Findable would do about it — for the rep's screen, never read aloud. */
+  improvement?: string;
+  evidence?: ScriptEvidence;
+}
+
+/** The honest positive for a site with no fault worth raising (salesInsights.ts) — said instead of a made-up one. */
+export interface ScriptStrongSite { spoken: string; evidence: ScriptEvidence | null }
 
 /** One finding as a spoken sentence (the homepage-only thin page is said as the homepage). */
 export function spokenFinding(f: ScriptFinding): string {
+  if (f.spoken) return f.spoken;
   if (f.kind === 'thin_pages' && /^homepage/i.test(f.title)) return HOMEPAGE_THIN_LINE;
-  return SPOKEN_FINDING[f.kind] ?? f.explanation;
+  return SPOKEN_FINDING[f.kind as FindingKind] ?? f.explanation;
 }
 
 /* ── The input ─────────────────────────────────────────────────────────────────────────────────── */
@@ -105,6 +126,8 @@ export interface CallScriptInput {
   findings: readonly ScriptFinding[];
   /** Why the findings list is what it is (coldCallPlaybook.FindingsStatus). */
   findingsStatus: FindingsStatus;
+  /** Present only when the pages were read and nothing worth raising was found — see ScriptStrongSite. */
+  strongSite?: ScriptStrongSite | null;
   site: { source: SiteSource; label: string | null };
   close: CallClose;
   /** The rep has messaged this lead before — told to the REP as a note, never said in the script. */
@@ -117,7 +140,7 @@ export interface CallScript {
   /** For the rep's eyes only. */
   openerNote: string | null;
   /** The real website reasons, spoken, and a note for the rep (never said). */
-  found: { lines: string[]; note: string | null };
+  found: { lines: string[]; note: string | null; /** For the rep's eyes only: what each spoken point rests on. */ sources: Array<{ line: string; evidence: ScriptEvidence | null; improvement: string | null }> };
   bridge: string[];
   firstQuestion: { question: string; hint: string | null };
   ifAgency: { questions: [string, string]; coaching: string[]; priceAngle: { overGbp: number; line: string } };
@@ -180,14 +203,19 @@ export function buildCallScript(i: CallScriptInput): CallScript {
   const why = i.evidenceKind === 'gap'
     ? (rivals ? "I had a look into why they were being named and you weren't" : "I had a look into why you weren't coming up")
     : null;
-  const spoken = i.findings.slice(0, MAX_SPOKEN_FINDINGS).map(spokenFinding);
+  const picked = i.findings.slice(0, MAX_SPOKEN_FINDINGS);
+  const spoken = picked.map(spokenFinding);
+  /* A point read off the site's own pages gets the Findable half said once, after the last point. */
+  if (picked.length && picked.some((f) => !!f.spoken)) spoken[spoken.length - 1] = spoken[spoken.length - 1] + ' ' + FIX_TAIL;
   const found: string[] = [];
   let foundNote: string | null = null;
+  let sources: CallScript['found']['sources'] = [];
   if (i.findingsStatus === 'findings' && spoken.length) {
     if (why) opener.push(why + ', and I found ' + (spoken.length > 1 ? 'a few potential reasons.' : 'one thing that could be part of it.'));
     else if (i.evidenceKind === 'named') opener.push('I had a look at your site to see how solid that is, and found ' + (spoken.length > 1 ? 'a few things' : 'one thing') + ' that could make it more consistent.');
     else opener.push('I had a quick look at your website as well, and ' + (spoken.length > 1 ? 'a few things' : 'one thing') + ' stood out.');
     found.push(...spoken);
+    sources = picked.map((f, k) => ({ line: spoken[k], evidence: f.evidence ?? null, improvement: f.improvement ?? null }));
   } else if (i.findingsStatus === 'no_website') {
     opener.push((why ? why + ', and the first thing I noticed' : 'The first thing I noticed') + " is I couldn't find a website for you.");
     found.push("Without a site of your own there's a lot less for AI to go on about what you do and where you work.");
@@ -196,6 +224,12 @@ export function buildCallScript(i: CallScriptInput): CallScript {
     opener.push((why ? why + ', and I could only find' : 'I could only find') + ' your ' + (i.site.label ?? 'directory') + ' profile, not a site of your own.');
     found.push('That page belongs to ' + (i.site.label ?? 'the directory') + ", so there's a lot less for AI to go on about what you do and where.");
     foundNote = 'Never call the profile their website.';
+  } else if (i.findingsStatus === 'clean' && i.strongSite) {
+    /* The pages were read and nothing real was wrong: say so, and the one genuine thing we would add. */
+    opener.push(why ? why + '.' : 'I had a quick look at your website as well.');
+    found.push(i.strongSite.spoken);
+    sources = [{ line: i.strongSite.spoken, evidence: i.strongSite.evidence, improvement: null }];
+    foundNote = 'The site check found no fault worth raising — say the positive line and what we would add. Do not invent a problem.';
   } else if (i.findingsStatus === 'clean' && why) {
     opener.push(why + '.');
     found.push(NO_STRONG_ISSUE_LINE);
@@ -257,7 +291,7 @@ export function buildCallScript(i: CallScriptInput): CallScript {
     openerNote: i.contactedBefore
       ? "You've been in touch with them before. Don't open with it — if they bring it up, that was you."
       : null,
-    found: { lines: found, note: foundNote },
+    found: { lines: found, note: foundNote, sources },
     bridge,
     firstQuestion,
     ifAgency,
