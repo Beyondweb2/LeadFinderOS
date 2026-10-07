@@ -1,6 +1,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { toWhatsAppDigits } from "../../../src/lib/waNumber.ts";
-import { INDIA_SEND_WINDOW, windowOpen as sendWindowOpen, windowOpenForDigits } from "../../../src/lib/sendWindow.ts";
+import { windowOpenForDigits } from "../../../src/lib/sendWindow.ts";
+import { isUkColdDestination, NOT_A_UK_MOBILE } from "../../../src/lib/ukColdDestination.ts";
 import { leadAccess, resolveActor } from "../_shared/access.ts";
 import { paidMode } from "../_shared/protection.ts";
 import { classifyFailure, leadFailurePatch } from "../_shared/whatsapp-failure.ts";
@@ -517,7 +518,6 @@ Deno.serve(async (req) => {
         paused: st?.paused === true,
         windowOpen: m >= WINDOW_START * 60 && m < WINDOW_END_MIN,
         windowStartHour: WINDOW_START,
-        indiaWindowOpen: sendWindowOpen(INDIA_SEND_WINDOW),
       });
     }
     const forceReq = body.force === true;
@@ -633,13 +633,11 @@ Deno.serve(async (req) => {
     // Minute-granular so the 21:30 end is honoured (a whole-hour compare would run to 21:59).
     const nowMin = uk.hour * 60 + uk.minute;
     const windowOpen = nowMin >= WINDOW_START * 60 && nowMin < WINDOW_END_MIN;
-    /* ⛔ THE RECIPIENT'S OWN HOURS (2026-09-28, src/lib/sendWindow.ts). `windowOpen` above is still the
-       London window and still what the dashboard shows. An Indian number (+91) has its own window
-       (10:00–19:00 IST); the tick runs while EITHER is open, and each lane only picks a lead whose own
-       window is open. Chosen from the destination digits, never from outreach_leads.country (measured
-       wrong on ~370 rows). With no +91 lead queued, every tick behaves exactly as before. */
-    const indiaWindowOpen = sendWindowOpen(INDIA_SEND_WINDOW);
-    const anyWindowOpen = windowOpen || indiaWindowOpen;
+    /* THE SEND WINDOW (src/lib/sendWindow.ts). One window, London's. India's separate 10:00–19:00 IST window was
+       removed 2026-10-15 — India is not an outreach market any more, and a +91 number gets no special hours
+       (it is refused as a cold send further down). Chosen from the destination digits, never from
+       outreach_leads.country (measured wrong on ~370 rows). */
+    const anyWindowOpen = windowOpen;
     const leadWindowOpen = (r: { phone?: unknown; country?: unknown }) =>
       force || windowOpenForDigits(toWhatsAppNumber(String(r.phone ?? ""), (r.country as string | null) ?? null));
 
@@ -654,7 +652,7 @@ Deno.serve(async (req) => {
       hookQueuedCount: hookQueuedCount ?? 0,
       // Leads queued for the contact_followup (opener follow-up) lane, awaiting their paced turn.
       contactQueuedCount: contactQueuedCount ?? 0,
-      nextSendAt, windowOpen, indiaWindowOpen, paused,
+      nextSendAt, windowOpen, paused,
       /* The real next eligible send, Europe/London, computed live — what the dashboard shows.
          `nextSendAt` (the raw stored pacing stamp) stays in the payload for back-compat, but the
          panel reads THIS. Display only; changes no gate. */
@@ -1319,8 +1317,6 @@ Deno.serve(async (req) => {
        spend with no recipient.
        ⚠️ Never fatal: a failure here must not stop a tick sending something it already could. */
     let auditAhead: Awaited<ReturnType<typeof runOutreachAuditAhead>> | null = null;
-    /* Only in the London window, exactly as before: the India-only hours (05:30–07:00 London in BST)
-       must not start UK leads' paid audits early. */
     /* ⛔ PAID-ACTION PAUSE (2026-09-29, docs/abuse-cost-protection.md): the drip's pre-send hook audits are
        prospecting spend, so they stop under "prospecting paused" and the emergency stop. The SENDS
        below are not paid API and keep to the WhatsApp queue's own pause. */
@@ -1406,8 +1402,8 @@ Deno.serve(async (req) => {
        chosen, never how many or how fast. Still one send per tick. */
     const scannedAll = (leadRows ?? []) as Array<Record<string, unknown> & { id: string; campaign_id?: string | null; queued_at?: string | null }>;
     /* ⛔ HELD, NOT DROPPED: a lead outside its own window is simply not chosen this tick (nothing is
-       written) and is filtered out BEFORE the look-ahead slice, so sixty Indian leads at the head at
-       22:00 IST can never hide the UK leads behind them. */
+       written) and is filtered out BEFORE the look-ahead slice, so a run of held leads at the head can never
+       hide the sendable ones behind them. */
     const scanned = qaDrill ? scannedAll : scannedAll.filter(leadWindowOpen);
     const heldForLocalWindow = scannedAll.length - scanned.length;
     if (heldForLocalWindow > 0) console.log(`[queue] ${heldForLocalWindow} queued lead(s) held: outside their own local send window`);
@@ -1894,6 +1890,23 @@ Deno.serve(async (req) => {
         status: "not_contacted", whatsapp_delivery_status: "bad_number", contact_method: null,
       }).eq("id", lead.id);
       return json({ ok: true, skipped: "bad_number", lead_id: lead.id, business: lead.business_name, ...statusPayload });
+    }
+
+    /* ⛔ COLD WHATSAPP IS UK-ONLY (2026-10-15, src/lib/ukColdDestination.ts). A cold template to any destination that is
+       not a UK mobile is refused HERE, whatever the lead row says and however it reached the queue (the enqueue is a
+       client UPDATE, so the SQL guard cannot be the only one). India is no longer an outreach market and Australian
+       cold WhatsApp is off. The property is tested on the DIGITS WE WOULD SEND TO, never on the country column or an
+       identifier. Same drop-out shape as bad_number so the drip never stalls; the delivery status says why. A
+       continuation (a reply into an existing conversation) is a different path and never reaches this. */
+    if (isColdOutreachTemplate(templateName) && !isUkColdDestination(toNumber)) {
+      await service.from("outreach_leads").update({
+        status: "not_contacted", whatsapp_delivery_status: NOT_A_UK_MOBILE, contact_method: null,
+      }).eq("id", lead.id);
+      return json({
+        ok: true, skipped: NOT_A_UK_MOBILE,
+        reason: `${lead.business_name ?? "That lead"} is not a UK mobile - cold WhatsApp outreach is UK only, so nothing was sent.`,
+        lead_id: lead.id, business: lead.business_name, ...statusPayload,
+      });
     }
 
     // Cross-channel suppression: "one no = suppressed everywhere". If this number opted

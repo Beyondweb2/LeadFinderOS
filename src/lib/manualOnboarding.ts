@@ -62,7 +62,7 @@ export const ONBOARDING_COPY = {
 /* The website choices and follow-ups, verbatim from the customer page (findable-site WEBSITE_CHOICES and
    SiteAccessBranch, 2026-10-07). The new website is first and recommended, as there. */
 export const WEBSITE_CHOICE_OPTIONS = [
-  { value: 'build', label: 'Build me a new website', note: 'A new website designed so customers, search engines and AI can understand exactly what you do and where you work. Hosting included, and your web address can stay the same.' },
+  { value: 'build', label: 'Build me a new website', note: 'A new website built and optimised for AI visibility, so customers, search engines and AI can understand exactly what you do and where you work. Hosting included during your plan, and your web address can stay the same.' },
   { value: 'keep', label: 'Keep and improve my current website', note: 'We improve the site you already have. We will need access to edit it.' },
   { value: 'none', label: "I haven't got a website yet", note: 'We build you one, set up properly for AI and search from day one.' },
 ] as const;

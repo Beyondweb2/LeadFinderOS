@@ -202,11 +202,31 @@ export function remeasureWeeksFor(_row?: { plan_tier?: unknown; website_route?: 
    weeks; after the minimum term the service continues at FINDABLE_CONTINUING_GBP a month until cancelled (clause 9A).
    Salespeople quote ONLY these (contractor checklist Part 2, "Prices and terms"). */
 export const FINDABLE_OFFER_SUMMARY =
-  `£${FINDABLE_SETUP_PRICE_GBP} to start, then £${FINDABLE_MONTHLY_GBP} a month from ${MONTHLY_START_V3_WORDS} — ${FINDABLE_BUILD_TOTAL_PAYMENTS} payments in total if we build you a new website, ${FINDABLE_OPTIMISE_TOTAL_PAYMENTS} if we optimise the one you have. After that, £${FINDABLE_CONTINUING_GBP} a month until you cancel.`;
+  `£${FINDABLE_SETUP_PRICE_GBP} to start, then £${FINDABLE_MONTHLY_GBP} a month from ${MONTHLY_START_V3_WORDS} — ${FINDABLE_BUILD_TOTAL_PAYMENTS} payments in total if we build you a new website, ${FINDABLE_OPTIMISE_TOTAL_PAYMENTS} if we optimise the one you have. Optimise then ends with no continuing charge; after Build, £${FINDABLE_CONTINUING_GBP} a month hosting and maintenance is optional.`;
+
+/* ⛔ THE END-OF-TERM WORDS (agreement v4, clause 9A / 15.1) — written HERE, in the constants module, because the offer lines
+   below use them and planTerms.ts (which re-exports these) imports THIS file: the other direction would be a cycle. */
+export function afterTermSummaryWords(route: ServiceRoute): string {
+  const n = totalPaymentsFor(route);
+  return route === 'build'
+    ? `Your Build plan ends after payment ${n}. If you want us to keep hosting and maintaining the website afterwards, £${FINDABLE_CONTINUING_GBP} a month Hosting and Maintenance is optional: it only starts if you separately choose it.`
+    : `Your Optimise plan ends after payment ${n} and the final service period. There is no automatic continuing charge.`;
+}
+/** The welcome pack's key point (Paul, 2026-10-07). */
+export function endOfTermKeyPoint(route: ServiceRoute): string {
+  const n = totalPaymentsFor(route);
+  return route === 'build'
+    ? `Your Build plan ends after payment ${n}. If you want Findable to keep hosting and maintaining the site afterwards, you can separately choose the £${FINDABLE_CONTINUING_GBP}/month Hosting and Maintenance service.`
+    : `Your Optimise plan ends after payment ${n} and the final service period. There is no automatic monthly continuation.`;
+}
+/** The same fact inside a one-line offer ("then …"). */
+const afterTermInline = (route: ServiceRoute): string => route === 'build'
+  ? `then optional £${FINDABLE_CONTINUING_GBP} a month hosting and maintenance only if you choose it`
+  : 'then the plan ends with no continuing charge';
 
 /** The offer in one line for ONE route. */
 export function offerSummaryFor(route: ServiceRoute): string {
-  return `${SERVICE_ROUTE_NAME[route]}: £${FINDABLE_SETUP_PRICE_GBP} to start, then £${FINDABLE_MONTHLY_GBP} a month from ${MONTHLY_START_V3_WORDS} — ${totalPaymentsFor(route)} payments in total, a ${termMonthsFor(route)}-month minimum term, then £${FINDABLE_CONTINUING_GBP} a month until you cancel.`;
+  return `${SERVICE_ROUTE_NAME[route]}: £${FINDABLE_SETUP_PRICE_GBP} to start, then £${FINDABLE_MONTHLY_GBP} a month from ${MONTHLY_START_V3_WORDS} — ${totalPaymentsFor(route)} payments in total, a ${termMonthsFor(route)}-month minimum term, ${afterTermInline(route)}.`;
 }
 
 /** 🔴 WhatsApp templates whose META-REGISTERED body quotes an offer we no longer sell ("After that
@@ -428,7 +448,7 @@ export function subscriptionEndedEmail(i: { becauseOfPayment: boolean; siteKind:
 /* 🔴 ROUTE-AWARE (2026-09-29): the count comes from the subscription's own record (its metadata
    total_payments, written when it was created), so a 6-payment Optimise client is never told twelve.
    An unknown count names no number at all. */
-export function termCompleteEmail(i: { siteKind: FindableSiteKind; totalPayments: number | null }): { subject: string; paragraphs: string[] } {
+export function termCompleteEmail(i: { siteKind: FindableSiteKind; totalPayments: number | null; hostingOptional?: boolean }): { subject: string; paragraphs: string[] } {
   const route = serviceRouteForTotal(i.totalPayments);
   return {
     subject: "Your Findable payments are complete",
@@ -439,6 +459,9 @@ export function termCompleteEmail(i: { siteKind: FindableSiteKind; totalPayments
         : `All of your payments are complete, so your term has finished and nothing more will be charged.`,
       ...(i.siteKind === 'findable_built'
         ? [`As set out in our terms, the website build we made for you now transfers to you. Reply to this email and we'll arrange the handover.`]
+        : []),
+      ...(i.hostingOptional
+        ? [`If you would like us to keep hosting and maintaining the website, the £${FINDABLE_CONTINUING_GBP} a month Hosting and Maintenance service is optional. It only starts if you reply and ask for it.`]
         : []),
       `Thank you for being a Findable client. Any questions, just reply to this email.`,
       `Paul, findable`,
@@ -456,12 +479,18 @@ export function termCompleteEmail(i: { siteKind: FindableSiteKind; totalPayments
    minimum term now, so offering a free exit here would contradict what was sold. `cancelUrl` stays in
    the signature for the caller and is deliberately not printed.
    🔴 ROUTE-AWARE (2026-09-29): `route` is the subscription's own (its metadata); null names no count. */
-export function monthlyStartingSoonEmail(i: { businessName: string; startsOn: string; cancelUrl: string | null; route: ServiceRoute | null; continuingService?: boolean }): { subject: string; paragraphs: string[] } {
+export function monthlyStartingSoonEmail(i: { businessName: string; startsOn: string; cancelUrl: string | null; route: ServiceRoute | null; continuingService?: boolean; afterTerm?: 'automatic' | 'optional' | 'none' }): { subject: string; paragraphs: string[] } {
   /* 🔴 v3 (clause 9A): the minimum term is followed by the Continuing Service (FINDABLE_CONTINUING_GBP), so "then it stops"
      is only true for a legacy subscription. The caller says which (the subscription's own marker). */
-  const after = i.continuingService
+  /* 🔴 v4 (2026-10-07): what follows depends on what the client SIGNED — v3 continues, v4 Optimise ends, v4 Build's £29.99 is
+     optional. `afterTerm` is that (clientTimeline.continuingModeFor of the subscription's own terms); the old boolean means v3. */
+  const mode = i.afterTerm ?? (i.continuingService ? 'automatic' : 'legacy');
+  const after = mode === 'automatic'
     ? `After that your service continues at £${FINDABLE_CONTINUING_GBP} a month until you cancel with 30 days' notice, and we will remind you at least 30 days before it starts.`
-    : 'then it stops.';
+    : mode === 'legacy'
+      ? 'then it stops.'
+      : (i.route ? afterTermSummaryWords(i.route) : 'Your plan ends after your agreed payments and the final service period. There is no automatic continuing charge.');
+  const sep = mode === 'legacy' ? ', ' : '. ';
   return {
     subject: `Your Findable monthly starts on ${i.startsOn}`,
     paragraphs: [
@@ -469,8 +498,8 @@ export function monthlyStartingSoonEmail(i: { businessName: string; startsOn: st
       `Your monthly payment of £${FINDABLE_MONTHLY_GBP} starts on ${i.startsOn}.`,
       `It covers the work we keep doing every week to add another way for people to find you: pages improved on what the newer data shows, new pages where there is something worth going after, and an eye on who else is being named.`,
       i.route
-        ? `It runs for your ${termMonthsFor(i.route)}-month minimum term: ${totalPaymentsFor(i.route)} payments in total, counting the £${FINDABLE_SETUP_PRICE_GBP} you paid at sign-up${i.continuingService ? '. ' : ', '}${after}`
-        : `It runs until your agreed payments are complete, counting the £${FINDABLE_SETUP_PRICE_GBP} you paid at sign-up${i.continuingService ? '. ' : ', '}${after}`,
+        ? `It runs for your ${termMonthsFor(i.route)}-month minimum term: ${totalPaymentsFor(i.route)} payments in total, counting the £${FINDABLE_SETUP_PRICE_GBP} you paid at sign-up${sep}${after}`
+        : `It runs until your agreed payments are complete, counting the £${FINDABLE_SETUP_PRICE_GBP} you paid at sign-up${sep}${after}`,
       `Any questions, just reply to this email.`,
       `Paul, findable`,
     ],
@@ -498,16 +527,16 @@ export function monthlyStartingSoonEmail(i: { businessName: string; startsOn: st
    its own copy of this sentence and must be changed to match (separate repo, deployed by hand). */
 /* 🔴 PER ROUTE (2026-09-29): the checkout reads the route off the row and shows THAT route's count —
    the Stripe page a customer pays on names exactly the schedule the webhook then creates. */
-/* 🔴 v3 (2026-10-05): the agreement's own timing and the Continuing Service — "Nothing is charged after
-   the Nth" stopped being true when clause 9A was signed. Every v3 sale is checked out under these words. */
+/* 🔴 v4 (2026-10-07): the agreement's own timing and its end — Optimise ends after payment 6, Build ends after payment 12 and
+   the £29.99 service is a separate opt-in (clause 9A). Every sale is checked out under these words. */
 export function cardSavedNoticeFor(route: ServiceRoute): string {
   const n = totalPaymentsFor(route);
-  return `You pay £${FINDABLE_SETUP_PRICE_GBP} today. We save your card. £${FINDABLE_MONTHLY_GBP} a month starts ${MONTHLY_START_V3_WORDS}, for a ${termMonthsFor(route)}-month minimum term — ${n} payments in total, including today's. After that your service continues at £${FINDABLE_CONTINUING_GBP} a month until you cancel with 30 days' notice, as your signed agreement says.`;
+  return `You pay £${FINDABLE_SETUP_PRICE_GBP} today. We save your card. £${FINDABLE_MONTHLY_GBP} a month starts ${MONTHLY_START_V3_WORDS}, for a ${termMonthsFor(route)}-month minimum term — ${n} payments in total, including today's. ${afterTermSummaryWords(route)} That is what your signed agreement says.`;
 }
 /** The Stripe line-item name for a route — what the payer sees on the Stripe page and the receipt. */
 export function checkoutLineNameFor(route: ServiceRoute): string {
   const what = route === 'build' ? 'AI visibility + a new website we build and manage' : 'AI visibility on your existing website';
-  return `${SERVICE_ROUTE_NAME[route]} — ${what}: £${FINDABLE_SETUP_PRICE_GBP} today, then £${FINDABLE_MONTHLY_GBP}/month from the day after your refund window, ${totalPaymentsFor(route)} payments in total (${termMonthsFor(route)}-month minimum), then £${FINDABLE_CONTINUING_GBP}/month until cancelled`;
+  return `${SERVICE_ROUTE_NAME[route]} — ${what}: £${FINDABLE_SETUP_PRICE_GBP} today, then £${FINDABLE_MONTHLY_GBP}/month from the day after your refund window, ${totalPaymentsFor(route)} payments in total (${termMonthsFor(route)}-month minimum), ${route === 'build' ? `then optional £${FINDABLE_CONTINUING_GBP}/month hosting and maintenance` : 'then the plan ends'}`;
 }
 
 export const FINDABLE_CONTACT_EMAIL = "paul@findable.live";

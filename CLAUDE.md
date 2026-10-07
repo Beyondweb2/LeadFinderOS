@@ -1,5 +1,7 @@
 # CLAUDE.md — the rules. Short on purpose.
 
+⛔ **AGREEMENT v4 (2026-10-07) is what NEW clients sign** (`docs/pre-sales-certification/client-agreement-v4-release.md`): Optimise = 6 payments then it ENDS (no £29.99); Build = 12 payments then £29.99 hosting/maintenance only if the client separately opts in. v3/v1 stay readable and pinned; a v3 client stays v3. One rule: `continuingModeFor` (`clientTimeline.ts`); one end-of-term wording: `afterTermSummaryWords` (`findableOffer.ts`, mirrored by findable-site `continuingLineFor`). Never write "£29.99 continues" for a v4 client.
+
 **Read all of it — it is ~1,200 lines and it is the memory you don't have.** It holds RULES and
 POINTERS. The stories behind them — every dated session record, every incident narrative, every
 number that was measured on a particular day — live in **`docs/`** and are read ON DEMAND, by topic.
@@ -922,10 +924,11 @@ positive allowlist of `baseline`; `isColdOutreachTemplate` treats unknown as COL
   who knows more than we do spots one instantly. Write "can make it harder", "may mean", "gives AI
   less information to work with". `site-findings.test.ts` blocks both scanner phrasing and absolute
   claims; every finding is WHAT I SAW → WHAT IT MEANS → WHY IT MAY MAKE AI VISIBILITY HARDER.
-- ⛔ **The send window is the RECIPIENT'S, chosen from the digits we send to** (`src/lib/sendWindow.ts`,
-  2026-09-28): a +91 number sends 10:00–19:00 IST, every other number the London window unchanged; the
-  queue filters held leads BEFORE the look-ahead slice, in every lane. Never choose it from
-  `outreach_leads.country` — that column was measured wrong on 374 rows (`docs/india-readiness.md`).
+- ⛔ **COLD WHATSAPP IS UK MOBILES ONLY — India is no longer an outreach market (2026-10-07).** Decided from the digits we send
+  to (`src/lib/ukColdDestination.ts`), never `outreach_leads.country` (measured wrong on 374 rows). Enforced in the SQL
+  (`sales_queue_opener`, `campaign_candidates`) and in BOTH senders; the India send window is gone. Australia is supported for search,
+  normalisation and checks but is NOT enabled for cold WhatsApp. Old India leads/messages stay as history. The `waNumber.ts` India
+  digits branch exists only so old threads normalise. `docs/india-readiness.md` is history.
 - **The send window binds the QUEUE only** (07:00–21:30 London for UK numbers); the reply path answers Meta's 24-hour
   window and still counts against `DAILY_CAP`. Name the constants; never write the numbers.
 - **The Inbox bulk confirm dry-runs every lead first** and sends only those that passed (`inboxBulkSend.ts` `applyBulkChecks`). A single-engine body is refused for a hook from the other engine UNLESS waived by name: `audit_followup` ("I asked chatgpt") is waived for either engine by Paul (`TEMPLATE_ENGINE_CLAIM_WAIVED`). See `docs/whatsapp-templates.md` (2026-09-27).

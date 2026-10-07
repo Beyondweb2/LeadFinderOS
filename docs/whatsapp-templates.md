@@ -684,3 +684,19 @@ Paul: *"SELECT A TEMPLATE → SEND. That's it."* The global "Initial outreach te
   (`template_required`). Cold-outreach phone history, duplicate protection and eligibility are unchanged.
 - **Unchanged on purpose:** `audit_followup`'s engine-mismatch waiver (Google AI hooks allowed).
 - Tests: `scripts/initial-opener-select.test.ts` (rewritten to this rule).
+
+## 2026-10-15 — COLD WHATSAPP IS UK-ONLY (India removed from outreach)
+
+Paul's rule. **Current rule:** cold WhatsApp goes to **UK mobiles only**. India is no longer an outreach market
+(the 10:00-19:00 IST send window, the +91 queue line and the Indian-mobile test in SQL are gone). **Australia** stays
+supported for search, phone normalisation (`waNumber.ts` AU branch, `phone_key` AU), lead handling and AI checks, but
+**Australian cold WhatsApp stays OFF**. Historical India data (leads, messages, campaigns, logs) is untouched, and
+`waNumber.ts` still normalises a stored +91 number so old threads and replies keep working — normalising is not
+permission to send.
+- **The property** (`src/lib/ukColdDestination.ts`, `isUkColdDestination`): the WhatsApp DIGITS must be `447` + nine
+  digits. Absent/foreign/landline = refused. Enforced at both cold chokepoints — `process-whatsapp-queue` (skips,
+  `whatsapp_delivery_status = not_a_uk_mobile`) and `send-whatsapp-message` (`error: not_a_uk_mobile`, not overridable by
+  `allow_resend`; BUILD_ID `2026-10-15a-uk-only-cold`, capability `uk_only_cold`) — and in SQL (`sales_queue_opener`,
+  `campaign_candidates`, migration `20261015090000_outreach_uk_only.sql`). Continuations / replies are not affected.
+- The reason code `not_a_uk_mobile` is a stored token and did not change; only its words say "UK mobile".
+- Tests: `scripts/outreach-uk-only.test.ts`; `scripts/india-readiness.test.ts` keeps the historical-number pins.

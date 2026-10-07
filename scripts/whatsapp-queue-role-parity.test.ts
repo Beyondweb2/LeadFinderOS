@@ -155,7 +155,7 @@ console.log("\n── the last batch (skipped-only / failed-only) ──");
   clearQueueBatch();
   const t0 = new Date("2026-10-06T10:00:00Z");
   ok(readQueueBatch(t0) === null, "no batch yet");
-  const b = recordQueueBatch(0, [{ n: 1, label: "already contacted" }, { n: 1, label: "not a UK or Indian mobile" }, { n: 0, label: "opted out" }], t0);
+  const b = recordQueueBatch(0, [{ n: 1, label: "already contacted" }, { n: 1, label: "not a UK mobile" }, { n: 0, label: "opted out" }], t0);
   ok(batchHeadline(b) === "Queued 0 · 2 skipped" && b.skipped.length === 2, "skipped-only: \"Queued 0 · 2 skipped\" with the reasons, zero rows dropped");
   ok(readQueueBatch(new Date(t0.getTime() + 60_000))?.queued === 0, "kept for this tab");
   ok(readQueueBatch(new Date(t0.getTime() + BATCH_SHOWN_MS + 1)) === null, "and forgotten after an hour");

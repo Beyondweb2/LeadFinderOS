@@ -202,6 +202,9 @@ export async function createDelayedSubscription(
   route: ServiceRoute | null,
   claimKey: string,
   timing: SubscriptionTiming = "legacy",
+  /** The commercial terms the sale is on (clientTimeline CommercialTerms), stamped on the subscription so every later
+   *  email and alert says what the client SIGNED (v3 continues, v4 Optimise ends, v4 Build is optional). */
+  terms: string | null = null,
 ): Promise<DelayedSubscriptionOutcome> {
   if (lead.stripe_subscription_id) return { kind: "skipped", reason: `already subscribed (${lead.stripe_subscription_id})` };
   const refusal = subscriptionRefusal(lead);
@@ -259,6 +262,7 @@ export async function createDelayedSubscription(
     "metadata[service_route]": route,
     "metadata[total_payments]": String(totalPaymentsFor(route)),
     "metadata[checkout_session]": claimKey,
+    ...(terms ? { "metadata[commercial_terms]": terms } : {}),
     /* v3: the marker the Payment Start scheduler requires before it will move this subscription. */
     ...(timing === OPTION_B_TIMING ? { "metadata[payment_timing]": OPTION_B_TIMING, "metadata[payment_start]": "on_hold_until_set" } : {}),
   }), { "Idempotency-Key": subscriptionIdempotencyKey(claimKey) });

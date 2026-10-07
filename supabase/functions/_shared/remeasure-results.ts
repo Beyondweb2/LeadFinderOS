@@ -29,7 +29,7 @@ import {
 } from "../../../src/lib/remeasureResults.ts";
 import { REPORT_PUBLIC_ORIGIN, remeasureWeeksFor } from "../../../src/lib/findableOffer.ts";
 import { reportOnceAnHour } from "./audit-baseline.ts";
-import { isV3Terms, paymentStart } from "../../../src/lib/clientTimeline.ts";
+import { continuingModeFor, isOptionBTerms, paymentStart } from "../../../src/lib/clientTimeline.ts";
 import { loadTimelineFacts, schedulePaymentStart } from "./client-terms.ts";
 import { storedRemeasureWeeks } from "../../../src/lib/remeasureFill.ts";
 
@@ -220,7 +220,7 @@ export async function maybeSendRemeasureResults(service: Client, auditId: string
      after the Refund Window that starts now (5.6) — derived from the stamp about to be written, never from
      Stripe's hold date. Legacy clients keep reading Stripe's own date. */
   const v3 = await loadTimelineFacts(service, lead.id).catch(() => null);
-  const v3Terms = !!v3 && isV3Terms(v3.facts.terms);
+  const v3Terms = !!v3 && isOptionBTerms(v3.facts.terms);
   const v3StartDay = v3Terms ? paymentStart({ ...v3!.facts, resultsSentAt: nowIso }).day : null;
   const billingStartIso = v3Terms
     ? (v3StartDay ? `${v3StartDay}T12:00:00.000Z` : null)
@@ -238,6 +238,7 @@ export async function maybeSendRemeasureResults(service: Client, auditId: string
     monthlyStartsOn: prettyDate(billingStartIso),
     totalPayments: lead.contract_total_payments ?? null,
     v3Terms,
+    continuingMode: v3 ? continuingModeFor(v3.facts.terms, v3.facts.route) : undefined,
   };
   const paragraphs = resultsEmailParagraphs(copy);
   const subject = resultsEmailSubject(copy);

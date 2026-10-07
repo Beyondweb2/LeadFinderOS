@@ -149,7 +149,7 @@ async function main() {
   ok(/status \?\? 'open'\) !== 'open'\) continue; \/\/ complete \/ expired = history/.test(site), 'completed sessions are skipped by the plan (history is never listed)');
 
   console.log('\n── THE WEBHOOK BACKSTOP ──');
-  const v = (meta: Record<string, string | undefined>, acc: GateAcceptance | null, sha = 'h') => webhookV3Verdict({ metadata: meta, acceptance: acc, leadId: 'L', onboardingId: 'OB', currentVersion: 'v3', recomputedSha: sha, v3Terms: COMMERCIAL_TERMS_V3 });
+  const v = (meta: Record<string, string | undefined>, acc: GateAcceptance | null, sha = 'h') => webhookV3Verdict({ metadata: meta, acceptance: acc, leadId: 'L', onboardingId: 'OB', currentVersion: 'v3', recomputedSha: sha, expectedTerms: COMMERCIAL_TERMS_V3 });
   const META = { commercial_terms: COMMERCIAL_TERMS_V3, agreement_version: 'v3', agreement_acceptance_id: 'A1', service_route: 'build' };
   ok(v(META, good).ok, 'a valid v3 checkout is processed as a sale');
   ok(!v({ onboarding_id: 'OB', agreement_version: 'v1' }, null).ok, 'a pre-cutover (v1 / tick) session is HELD');

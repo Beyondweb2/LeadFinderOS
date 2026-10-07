@@ -7,6 +7,7 @@
    attribution, no projection past the contract, ownership words per route, historical clients
    untouched. Mobile Quick Close (390px) is checked in a browser, not here.
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
+import { afterTermSummaryWords } from '../src/lib/findableOffer.ts';
 import { readFileSync } from 'node:fs';
 import {
   FINDABLE_BUILD_TOTAL_PAYMENTS, FINDABLE_MONTHLY_DELAY_DAYS, FINDABLE_MONTHLY_GBP, FINDABLE_OPTIMISE_TOTAL_PAYMENTS, FINDABLE_OFFER_SUMMARY,
@@ -155,7 +156,7 @@ ok(!/body\.(plan_tier|route|service_route|total_payments)/.test(checkout), 'the 
 ok(/line_items\[0\]\[price_data\]\[unit_amount\]", String\(Math\.round\(offer\.gbp \* 100\)\)/.test(checkout), 'the £99 line is unchanged (inline price_data, the guarantee\'s carrier)');
 for (const r of ['build', 'optimise'] as const) {
   const n = totalPaymentsFor(r);
-  ok(cardSavedNoticeFor(r).includes(`${n} payments in total, including today's`) && /continues at £29\.99 a month until you cancel/.test(cardSavedNoticeFor(r)), `card notice (${r}): ${n} payments including today's, then the Continuing Service (v3 clause 9A)`);
+  ok(cardSavedNoticeFor(r).includes(`${n} payments in total, including today's`) && cardSavedNoticeFor(r).includes(afterTermSummaryWords(r)) && !/continues at £29\.99/.test(cardSavedNoticeFor(r)), `card notice (${r}): ${n} payments including today's, then the v4 end of term (clause 9A / 15.1)`);
   ok(checkoutLineNameFor(r).startsWith(r === 'build' ? 'Findable Build' : 'Findable Optimise') && checkoutLineNameFor(r).includes(`${n} payments in total`), `Stripe line name (${r}) names the route and ${n}`);
 }
 
@@ -190,7 +191,7 @@ ok(resolvePaidRoute({}, 'build').route === null && /created before routes existe
 const wh = code('supabase/functions/stripe-webhook/index.ts');
 ok(/const paid = resolvePaidRoute\(s\.metadata \?\? null, rowReadOk \? rowRoute : undefined\)/.test(wh), 'the webhook resolves the route from the session + row');
 /* 2026-10-05: + the timing (v3 hold vs legacy six weeks) after the claim key. */
-ok(/createDelayedSubscription\([\s\S]{0,500}paid\.route,\s*s\.id,\s*v3Checkout && s\.metadata\?\.payment_timing === OPTION_B_TIMING \? OPTION_B_TIMING : "legacy",\s*\)/.test(wh), 'and creates the subscription for THAT route (claimed by this checkout, pre-sales fix 03)');
+ok(/createDelayedSubscription\([\s\S]{0,500}paid\.route,\s*s\.id,\s*v3Checkout && s\.metadata\?\.payment_timing === OPTION_B_TIMING \? OPTION_B_TIMING : "legacy",\s*v3Checkout \? \(s\.metadata\?\.commercial_terms \?\? null\) : null,\s*\)/.test(wh), 'and creates the subscription for THAT route (claimed by this checkout, pre-sales fix 03)');
 ok(/\.update\(\{ contract_total_payments: totalPaymentsFor\(paid\.route\) \}\)[\s\S]{0,80}\.is\("contract_total_payments", null\)/.test(wh), 'the contract is stamped once, only when resolved, never over an existing one');
 ok(/NO MONTHLY SCHEDULE WAS CREATED/.test(wh), 'a payment with no schedule says so in Paul\'s PAID email');
 ok(/await recordLedger\(service, \{\s*lead_id: findableLeadId, kind: "initial"/.test(wh) && wh.indexOf('kind: "initial"') < wh.indexOf('contract_total_payments: totalPaymentsFor'), 'the initial payment is still written to the ledger first (attribution from sold_by at payment)');

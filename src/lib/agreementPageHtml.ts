@@ -27,6 +27,7 @@ import {
   agreementSectionTitles, agreementVersion, agreeConsentSentence, clientDetailRows, CLIENT_AGREEMENT_TITLE, CLIENT_AGREEMENT_VERSION, NOT_PROVIDED, ukDateTime,
   type AgreementFill, type AgreementRoute,
 } from './clientAgreement.ts';
+import { afterTermSummaryWords } from './planTerms.ts';
 import { FINDABLE_CONTINUING_GBP, FINDABLE_MONTHLY_GBP, FINDABLE_SETUP_PRICE_GBP, MONTHLY_START_V3_WORDS, SERVICE_ROUTE_NAME, totalPaymentsFor } from './findableOffer.ts';
 import { planSummaryRows, signingDayWords } from './signupSummary.ts';
 
@@ -200,7 +201,7 @@ function offerHtml(route: AgreementRoute, version: string = CLIENT_AGREEMENT_VER
   if (!rows) {
     return `<div class="offer"><p class="eyebrow gold">Your offer: ${esc(SERVICE_ROUTE_NAME[route])}</p>
       <p>£${FINDABLE_SETUP_PRICE_GBP} today, then £${FINDABLE_MONTHLY_GBP} a month starting ${esc(MONTHLY_START_V3_WORDS)}.
-      ${n} payments in total (the minimum term), then £${FINDABLE_CONTINUING_GBP} a month until you cancel with 30 days' notice.</p></div>`;
+      ${n} payments in total (the minimum term). ${esc(version === 'v3' ? `Then £${FINDABLE_CONTINUING_GBP} a month until you cancel with 30 days' notice.` : afterTermSummaryWords(route))}</p></div>`;
   }
   return `<div class="offer"><p class="eyebrow gold">Your offer: ${esc(SERVICE_ROUTE_NAME[route])}</p>
     <dl class="sum">${rows.map((r) => `<div><dt>${esc(r.label)}</dt><dd${r.key === 'today' ? ' class="big"' : ''}>${esc(r.value)}</dd></div>`).join('')}${dated}</dl></div>`;
@@ -302,10 +303,10 @@ export function agreementPageHtml(m: AgreementPageModel): string {
       ${v3 ? `<div class="consent"><input id="authority" type="checkbox" name="authority" value="yes" ${v.authority ? 'checked' : ''} required/>
         <label for="authority">${esc(authoritySentence(m.businessName))}</label></div>` : ''}
       <div class="consent"><input id="agree" type="checkbox" name="agree" value="yes" ${v.agree ? 'checked' : ''} required/>
-        <label for="agree">${esc(agreeConsentSentence(m.businessName))}</label></div>
+        <label for="agree">${esc(agreeConsentSentence(m.businessName, version))}</label></div>
       ${v3 ? `<div class="consent plain"><input id="marketingOptOut" type="checkbox" name="marketingOptOut" value="yes" ${v.marketingOptOut ? 'checked' : ''}/>
-        <label for="marketingOptOut" style="font-weight:400">${esc(MARKETING_OPT_OUT_SENTENCE)} <span class="opt">(optional, clause 12.4)</span></label></div>` : ''}
-      <button type="submit">I agree and sign</button>
+        <label for="marketingOptOut" style="font-weight:400">${esc(MARKETING_OPT_OUT_SENTENCE)} <span class="opt">(optional, clause ${version === 'v4' ? '12.5' : '12.4'})</span></label></div>` : ''}
+      <button type="submit">${version === 'v4' ? 'Accept the agreement' : 'I agree and sign'}</button>
       ${v3 ? `<div class="locked" aria-label="Step 3, secure payment, opens after you sign">
         <p class="eyebrow" style="margin:0 0 8px">Step 3 · Secure payment</p>
         <span class="btn off" role="button" aria-disabled="true">Continue to payment</span>

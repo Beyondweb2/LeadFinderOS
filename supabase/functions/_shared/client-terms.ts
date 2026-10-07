@@ -16,7 +16,7 @@
 // ⛔ THE CONTINUING SERVICE PRICE IS NEVER CHARGED FROM HERE. The minimum term's cancel_at is kept at its end; the Continuing
 //    Service is Paul's manual step until CONTINUING_SERVICE_AUTOMATION.stripeSwitch is turned on.
 import {
-  CONTINUING_SERVICE_AUTOMATION, OPTION_B_TIMING, chargeAllowedOn, isV3Terms, paymentStart, timelineActions, ukDay, ukDayAtHourIso, ukDayWords,
+  CONTINUING_SERVICE_AUTOMATION, OPTION_B_TIMING, chargeAllowedOn, isOptionBTerms, paymentStart, timelineActions, ukDay, ukDayAtHourIso, ukDayWords,
   type TimelineFacts,
 } from "../../../src/lib/clientTimeline.ts";
 import { recurringPaymentsFor, serviceRouteForTotal, isServiceRoute, type ServiceRoute } from "../../../src/lib/findableOffer.ts";
@@ -27,7 +27,7 @@ type Service = any;
 type FetchLike = (url: string, init?: RequestInit) => Promise<Response>;
 
 /** The marker a v3 subscription carries (clientTimeline.ts), written at creation (delayed-subscription.ts).
- *  The scheduler refuses a subscription without it: it was created under a different timing rule. */
+ *  The scheduler refuses a subscription without it: it was created under a different timing rule (v3 and v4 share it). */
 export { OPTION_B_TIMING };
 
 /** The kinds the history log accepts (mirrors client_service_events_kind_check). */
@@ -124,7 +124,7 @@ export interface StripeSubscriptionView {
  *    later than the contract allows is acceptable, EARLIER never is.
  */
 export function planPaymentStart(facts: TimelineFacts, leadId: string, sub: StripeSubscriptionView | null, nowIso: string): PaymentStartPlan {
-  if (!isV3Terms(facts.terms)) return { ok: false, reason: "This client is not on the v3 agreement — their payments keep the timing they signed up to." };
+  if (!isOptionBTerms(facts.terms)) return { ok: false, reason: "This client is not on the v3 or v4 agreement — their payments keep the timing they signed up to." };
   if (facts.refundedAt || facts.endedAt) return { ok: false, reason: "The agreement has ended (refunded or ended) — no monthly payment may be scheduled." };
   const ps = paymentStart(facts);
   if (!ps.day) return { ok: false, reason: ps.why };

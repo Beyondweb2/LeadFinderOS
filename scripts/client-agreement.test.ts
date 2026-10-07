@@ -5,7 +5,7 @@
    ============================================================ */
 import {
   acceptanceRowFrom, agreePageMissing, fillFromAcceptanceRow, renderAgreementText, sha256Hex, versionTemplateText,
-  AGREEMENT_COPY_TO_PAUL, CLIENT_AGREEMENT_VERSION, NOT_PROVIDED, type AgreementFill,
+  AGREEMENT_COPY_TO_PAUL, CLIENT_AGREEMENT_VERSION, agreementVersion, NOT_PROVIDED, type AgreementFill,
 } from '../src/lib/clientAgreement.ts';
 import { agreementPageHtml } from '../src/lib/agreementPageHtml.ts';
 
@@ -24,7 +24,7 @@ async function main() {
   const tsha = await sha256Hex(versionTemplateText('v1'));
   ok(tsha === V1_TEMPLATE_SHA, `v1 template fingerprint is unchanged (got ${tsha.slice(0, 12)}…)`);
   /* 2026-10-05: v3 is current (scripts/client-agreement-v3.test.ts pins it); v1 stays readable, unchanged. */
-  ok(CLIENT_AGREEMENT_VERSION === 'v3', 'the current version is v3');
+  ok(agreementVersion('v1').version === 'v1' && CLIENT_AGREEMENT_VERSION === 'v4', 'v1 stays a pinned, readable version (v4 is the current one)');
   ok(renderAgreementText(full, 'v1').includes('four weeks after the baseline'), 'v1 still renders its own words exactly');
   const t = renderAgreementText(full);
   ok(t.includes('[X] Findable Optimise') && t.includes('[ ] Findable Build'), 'the recorded route is the ticked one');
@@ -52,14 +52,14 @@ async function main() {
   ok(t.includes('Email for notices: paul@findable.live'), 'the agreement still DISPLAYS paul@findable.live');
 
   console.log('\n── THE AGREEMENT PAGE ──');
-  const sign = agreementPageHtml({ mode: 'sign', businessName: 'Test Co', route: 'build', values: {}, errors: [] });
+  const sign = agreementPageHtml({ mode: 'sign', businessName: 'Test Co', route: 'build', values: {}, errors: [], version: 'v1' });
   const consent = "By ticking this box and clicking &#39;I agree and sign&#39;, I confirm that I have read the Findable Client Service Agreement, that I agree to it on behalf of Test Co, that I am authorised to do so, and that I intend this to be my electronic signature.";
   ok(sign.includes(consent), 'the consent sentence is Paul’s, verbatim, with the business name');
   ok(/<button type="submit">I agree and sign<\/button>/.test(sign) && /name="agree" value="yes"[^>]*required/.test(sign), 'one "I agree and sign" button behind a required tick');
   for (const f of ['legalName', 'contactName', 'role', 'address', 'email', 'phone']) ok(new RegExp(`name="${f}"[^>]*required`).test(sign), `the form requires ${f}`);
   ok(!/name="companyNumber"[^>]*required/.test(sign) && !/name="websiteDomain"[^>]*required/.test(sign), 'company number and website domain are optional');
   ok(/<div class="svc on"><div class="box">&#10003;<\/div><div><b>Findable Build/.test(sign), 'the recorded route is shown ticked');
-  ok(sign.includes('about four weeks after the Access Date') && !/eight weeks|eight if/i.test(sign), 'the page shows the agreement’s four weeks, never eight');
+  ok(sign.includes('four weeks after the baseline') && !/eight weeks|eight if/i.test(sign), 'the page shows the agreement’s four weeks, never eight');
   ok(/noindex/.test(sign), 'the page is never indexed');
   const done = agreementPageHtml({ mode: 'accepted', businessName: 'Test Co', acceptedAtIso: '2026-10-02T13:42:07Z', acceptedBy: 'Sam', pdfHref: '?pdf=1' });
   ok(done.includes('Accepted on 2 October 2026, 14:42 (UK time) by Sam') && !done.includes('I agree and sign</button>'), 'already accepted → "Accepted on … by …" instead of the button');

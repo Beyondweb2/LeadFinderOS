@@ -126,20 +126,24 @@ export function ClientTimelineCard({ leadId, ended = false }: { leadId: string; 
 
       {!ended && v.paymentStart.day && !v.paymentStartConfirmed && <Button size="sm" disabled={!!busy} onClick={() => void act('schedule_payment_start', {}, 'Payment Start Date')}>{spin('schedule_payment_start')}Set Payment Start Date in Stripe</Button>}
 
-      <SubSection title={`Continuing Service · £${v.continuingGbp}/month after the minimum term`} icon={Repeat} tone="green" testId="continuing-service" className="border-t border-border/60 pt-4">
+      {/* v4 (2026-10-07): WHAT FOLLOWS the minimum term is what the client signed (clientTimeline.continuingModeFor). An older server that does not send it only had v3. */}
+      {(v.continuingMode ?? 'automatic') === 'none' && <SubSection title="After the minimum term · the plan ends" icon={Repeat} tone="green" testId="continuing-service" className="border-t border-border/60 pt-4">
+        <p className="text-xs text-muted-foreground">Findable Optimise ends after payment {mt.recurringNeeded + 1} and the final service period (v4 clause 15.1). Nothing continues and nothing more is charged.</p>
+      </SubSection>}
+      {(v.continuingMode ?? 'automatic') !== 'none' && <SubSection title={(v.continuingMode ?? 'automatic') === 'optional' ? `Optional Hosting and Maintenance · £${v.continuingGbp}/month, only if the client opts in` : `Continuing Service · £${v.continuingGbp}/month after the minimum term`} icon={Repeat} tone="green" testId="continuing-service" className="border-t border-border/60 pt-4">
         <div className="space-y-1.5">
           <p className="text-xs text-muted-foreground">
             {mt.continuingStartDay ? <>Starts {ukDayWords(mt.continuingStartDay)} · client reminder due by {ukDayWords(mt.clientReminderDueDay)}{mt.finalPaymentDay ? <> · minimum term {mt.finalPaymentActual ? 'completed' : 'completes'} {ukDayWords(mt.finalPaymentDay)}</> : null}</> : 'Dates appear once the Payment Start Date is known.'}
           </p>
-          <p className="text-xs text-muted-foreground">Manual for now: nothing switches to £{v.continuingGbp} in Stripe automatically{s.automation?.stripeSwitch ? '' : ' (automation off)'}. No salesperson commission on it.</p>
+          <p className="text-xs text-muted-foreground">{(v.continuingMode ?? 'automatic') === 'optional' ? 'Build does not continue automatically (v4 clause 9A). ' : ''}Manual for now: nothing switches to £{v.continuingGbp} in Stripe automatically{s.automation?.stripeSwitch ? '' : ' (automation off)'}. No salesperson commission on it.</p>
           {!ended && <div className="flex flex-wrap gap-2 pt-1">
             <Button size="sm" variant="outline" disabled={!!busy} onClick={() => void act('continuing_prepared', {}, 'Marked prepared')}>{spin('continuing_prepared')}{s.terms?.continuing_prepared_at ? 'Prepared ✓' : 'Prepare Continuing Service'}</Button>
             <Button size="sm" variant="outline" disabled={!!busy || !!s.terms?.continuing_reminder_sent_at} onClick={() => void act('continuing_reminder_sent', {}, 'Client reminder recorded')}>{spin('continuing_reminder_sent')}{s.terms?.continuing_reminder_sent_at ? 'Client reminder sent ✓' : 'Record client reminder sent'}</Button>
-            <Button size="sm" variant={s.terms?.continuing_decision === 'continue' ? 'default' : 'outline'} disabled={!!busy} onClick={() => void act('continuing_decision', { decision: 'continue' }, 'Client will continue')}>{spin('continuing_decision')}Client will continue</Button>
-            <Button size="sm" variant={s.terms?.continuing_decision === 'cancel' ? 'default' : 'outline'} disabled={!!busy} onClick={() => void act('continuing_decision', { decision: 'cancel' }, 'Client will cancel')}>Client will cancel</Button>
+            <Button size="sm" variant={s.terms?.continuing_decision === 'continue' ? 'default' : 'outline'} disabled={!!busy} onClick={() => void act('continuing_decision', { decision: 'continue' }, 'Client will continue')}>{spin('continuing_decision')}{(v.continuingMode ?? 'automatic') === 'optional' ? 'Client opted in' : 'Client will continue'}</Button>
+            <Button size="sm" variant={s.terms?.continuing_decision === 'cancel' ? 'default' : 'outline'} disabled={!!busy} onClick={() => void act('continuing_decision', { decision: 'cancel' }, 'Client will cancel')}>{(v.continuingMode ?? 'automatic') === 'optional' ? 'Client declined' : 'Client will cancel'}</Button>
           </div>}
         </div>
-      </SubSection>
+      </SubSection>}
 
       {(s.events?.length ?? 0) > 0 && <details className="border-t border-border/60 pt-3 text-xs text-muted-foreground"><summary className="flex cursor-pointer items-center gap-2 text-sm font-bold tracking-tight text-foreground"><History className="h-4 w-4 text-muted-foreground"/>History ({s.events!.length})</summary>
         <ul className="mt-1 divide-y divide-border/50">{s.events!.map((e, i) => <li key={i} className="py-1">{new Date(e.created_at).toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'Europe/London' })} · {EVENT_WORDS[e.kind] ?? e.kind}</li>)}</ul>

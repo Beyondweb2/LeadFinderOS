@@ -29,7 +29,7 @@ import { recordCheckoutAcceptance } from "../_shared/client-agreement.ts";
 import { appendTermsEvent } from "../_shared/client-terms.ts";
 import { holdPayment, paymentAlreadyRecorded, verifyV3Checkout } from "../_shared/payment-hold.ts";
 import { sendOperatorAlert } from "../_shared/operator-alert.ts";
-import { COMMERCIAL_TERMS_V3, OPTION_B_TIMING } from "../../../src/lib/clientTimeline.ts";
+import { continuingModeFor, isOptionBTerms, OPTION_B_TIMING, termsOfSubscriptionMeta } from "../../../src/lib/clientTimeline.ts";
 import { qaPaymentEventShapeRefusal, qaPaymentFactsRefusal } from "../../../src/lib/qaSafety.ts";
 import { loadQaPaymentFacts, qaSendHold } from "../_shared/qa-guard.ts";
 
@@ -1130,7 +1130,7 @@ Deno.serve(async (req) => {
             /* 🔴 v3 (2026-10-05): a v3 checkout has NO tick — the agreement was signed on the agreement page
                BEFORE this session could exist (findable-checkout, src/lib/signupGate.ts), and that row is the
                record. Only a legacy (pre-v3) session is recorded here, on ITS OWN version (its metadata). */
-            const v3Checkout = s.metadata?.commercial_terms === COMMERCIAL_TERMS_V3;
+            const v3Checkout = isOptionBTerms(s.metadata?.commercial_terms);
             if (findableLeadId && !closedBefore && !v3Checkout) {
               try {
                 const { data: agreeLead } = await service.from("outreach_leads").select("id, business_name").eq("id", findableLeadId).maybeSingle();
@@ -1330,7 +1330,7 @@ Deno.serve(async (req) => {
               if (ownsPayment && v3Checkout) {
                 const paidAtIso = new Date((event.created ?? Math.floor(Date.now() / 1000)) * 1000).toISOString();
                 const { error: tErr } = await service.from("client_service_terms").upsert({
-                  lead_id: findableLeadId, commercial_terms: COMMERCIAL_TERMS_V3,
+                  lead_id: findableLeadId, commercial_terms: s.metadata?.commercial_terms as string,
                   agreement_acceptance_id: s.metadata?.agreement_acceptance_id ?? null,
                   service_route: paid.route, initial_paid_at: paidAtIso,
                 }, { onConflict: "lead_id", ignoreDuplicates: true });
@@ -1391,6 +1391,7 @@ Deno.serve(async (req) => {
                   paid.route,
                   s.id,
                   v3Checkout && s.metadata?.payment_timing === OPTION_B_TIMING ? OPTION_B_TIMING : "legacy",
+                  v3Checkout ? (s.metadata?.commercial_terms ?? null) : null,
                 );
                 if (subscription.kind === "failed") {
                   billingProblem = paid.route ? subscription.reason : paid.problem;
@@ -1730,7 +1731,7 @@ Deno.serve(async (req) => {
           }
           const cancelUrl = await portalCancelUrl(idFrom((sub as { customer?: unknown }).customer));
           /* The count this client is told is the one this subscription was created for (its metadata). */
-          const mail = monthlyStartingSoonEmail({ businessName: (lead?.business_name ?? "").trim(), startsOn, cancelUrl, route: subscriptionRoute(sub as { metadata?: unknown }), continuingService: (sub as { metadata?: Record<string, string> }).metadata?.payment_timing === OPTION_B_TIMING });
+          const mail = monthlyStartingSoonEmail({ businessName: (lead?.business_name ?? "").trim(), startsOn, cancelUrl, route: subscriptionRoute(sub as { metadata?: unknown }), afterTerm: (() => { const tm = termsOfSubscriptionMeta((sub as { metadata?: Record<string, unknown> }).metadata); return tm ? continuingModeFor(tm, subscriptionRoute(sub as { metadata?: unknown })) : undefined; })() });
           const sent = await postResend({
             from: "Findable <reports@findable.live>", to: [to], reply_to: ADMIN_EMAIL,
             subject: mail.subject,
@@ -1829,7 +1830,11 @@ Deno.serve(async (req) => {
             /* 🔴 v3 (clause 9A): the minimum term ending is NOT the end — the Continuing Service (FINDABLE_CONTINUING_GBP) follows
                until the client cancels. It is manual for now (CONTINUING_SERVICE_AUTOMATION), so the client is
                NOT sent "it stops": Paul is told to set up or close the Continuing Service by hand. */
-            if (termComplete && (sub as { metadata?: Record<string, string> }).metadata?.payment_timing === OPTION_B_TIMING) {
+            /* 🔴 v4 (2026-10-07): WHAT THE CLIENT SIGNED decides what the end of the term means. v3: the Continuing Service
+               follows (manual, below). v4 Optimise: the plan ENDS. v4 Build: the service ends; the £29.99 hosting is an
+               opt-in Paul records. continuingModeFor is the one rule; absent terms → null → the legacy path. */
+            const endMode = termComplete ? (() => { const tm = termsOfSubscriptionMeta((sub as { metadata?: Record<string, unknown> }).metadata); return tm ? continuingModeFor(tm, subscriptionRoute(sub as { metadata?: unknown })) : null; })() : null;
+            if (termComplete && endMode === "automatic") {
               await recordPaymentFailure("v3_minimum_term_complete", { lead_id: leadId, subscription: sub.id });
               await sendOperatorAlert("Minimum term complete - Continuing Service is manual", [
                 `The minimum-term subscription ${sub.id} has ended after its last £${FINDABLE_MONTHLY_GBP} payment.`,
@@ -1839,12 +1844,22 @@ Deno.serve(async (req) => {
               ]);
               break;
             }
+            if (termComplete && (endMode === "optional" || endMode === "none")) {
+              await recordPaymentFailure("v4_minimum_term_complete", { lead_id: leadId, subscription: sub.id, mode: endMode });
+              await sendOperatorAlert(endMode === "none" ? "Optimise plan complete - nothing continues" : "Build minimum term complete - hosting is opt-in only", [
+                `The subscription ${sub.id} has ended after its last £${FINDABLE_MONTHLY_GBP} payment.`,
+                endMode === "none"
+                  ? "Under the v4 agreement the Optimise plan ends here. There is no continuing charge; nothing was set up."
+                  : `Under the v4 agreement the Build service ends here. The £${FINDABLE_CONTINUING_GBP} a month Hosting and Maintenance starts ONLY if the client opts in; nothing was charged or set up automatically.`,
+                `Lead: ${leadId}`,
+              ]);
+            }
             /* Whose website it is decides the ownership words (findableSiteKind: positive, else unknown). */
             const siteKind = await siteKindForLead(leadId);
             await emailClientForLead(
               leadId,
               termComplete ? "term_complete" : "monthly_ended",
-              termComplete ? termCompleteEmail({ siteKind, totalPayments: termTotal }) : subscriptionEndedEmail({ becauseOfPayment, siteKind }),
+              termComplete ? termCompleteEmail({ siteKind, totalPayments: termTotal, hostingOptional: endMode === "optional" }) : subscriptionEndedEmail({ becauseOfPayment, siteKind }),
               {
                 subscription: sub.id,
                 cancellation_reason: reason || "(none given)",

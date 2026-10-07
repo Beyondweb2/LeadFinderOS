@@ -139,7 +139,7 @@ const pb = buildColdCallPlaybook({ lead: { id: 'l', business_name: 'Acme Plumbin
 texts.push(['cold call playbook offer', JSON.stringify(pb.offer)]);
 for (const [label, t] of texts) {
   /* 2026-10-05 (v3 clause 9A): £29.99 only as the Continuing Service after the minimum term. */
-  ok(!/29\.99(?! a month (for|until))/.test(t), `${label}: no £29.99 except the Continuing Service`);
+  ok(!/29\.99(?! a month (for|until|hosting and maintenance is optional))/i.test(t), `${label}: no £29.99 except the v3 Continuing Service or v4's optional Build hosting and maintenance`);
   ok(!/(cancel|stop)( it)?( at)? any ?time|not binding|cancel before (it|week)/i.test(t), `${label}: no "cancel/stop any time", "not binding" or "cancel before it starts"`);
   ok(!/13 payments|7 payments|(12|6) (more|further) payments|plus (12|6)\b/i.test(t), `${label}: nothing that implies an extra payment`);
 }
@@ -179,7 +179,7 @@ console.log('── 12. THE END OF THE TERM IS RECOGNISED, AND ONLY THE END ─�
   ok(!subscriptionEndedByTerm({ ...done, cancel_at: cancelAt + 86400, ended_at: cancelAt + 86400 }, false), 'a hand-set cancel_at → not ours, not complete');
   ok(!subscriptionEndedByTerm({ trial_end: trialEnd, ended_at: cancelAt }, false) && !subscriptionEndedByTerm({ cancel_at: cancelAt, ended_at: cancelAt }, false) && !subscriptionEndedByTerm({ cancel_at: cancelAt, trial_end: trialEnd }, false), 'any date absent → not complete');
   const wh = code('supabase/functions/stripe-webhook/index.ts');
-  ok(/subscriptionEndedByTerm\(/.test(wh) && /termCompleteEmail\(\{ siteKind, totalPayments: termTotal \}\)/.test(wh) && /const termTotal = subscriptionTotalPayments\(sub/.test(wh) && /subscriptionEndedEmail\(\{ becauseOfPayment, siteKind \}\)/.test(wh), 'the webhook branches on it and passes the site kind to both endings');
+  ok(/subscriptionEndedByTerm\(/.test(wh) && /termCompleteEmail\(\{ siteKind, totalPayments: termTotal, hostingOptional: endMode === "optional" \}\)/.test(wh) && /const termTotal = subscriptionTotalPayments\(sub/.test(wh) && /subscriptionEndedEmail\(\{ becauseOfPayment, siteKind \}\)/.test(wh), 'the webhook branches on it and passes the site kind to both endings');
 }
 
 console.log('── FOUR WEEKS FOR EVERY NEW CLIENT (Paul, 2026-10-02; the 2026-09-23 new-domain eight weeks is gone) ──');

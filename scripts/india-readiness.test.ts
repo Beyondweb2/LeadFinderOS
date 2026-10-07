@@ -1,17 +1,21 @@
 /* ============================================================
    INDIA READINESS — the country-portability fixes of 2026-09-28, and that the UK path is unchanged.
 
+   ⛔ 2026-10-15: INDIA IS NO LONGER AN OUTREACH MARKET. The country-portability pins below (phone normalisation of
+   a historical +91 number, country from the address, geobias, "Pune India" audit questions) STAY — old India
+   leads and AI checks still use them. What changed: there is no India send window, no +91 queue line, the SQL
+   cold test is UK-only, and Add a lead no longer offers India. Cold WhatsApp rejection is pinned in
+   scripts/outreach-uk-only.test.ts.
+
    Pins:
      · +91 phones: every stored form reaches WhatsApp as 91…; the UK rule is byte-identical to the
        old hand-kept copy on every UK input; a typed Indian number is stored the way Google stores one;
      · the lead's country comes from Google's address, never from the form's hidden choice;
      · a bare Indian city is geocoded with an India bias, and UK inputs keep their GB bias;
      · audit questions name "Pune India", never "Pune UK" — and UK questions are unchanged;
-     · the queue sends an Indian number in India's hours (10:00–19:00 IST) and a UK one in London's
-       (07:00–21:30) — filtered before the look-ahead, in every lane;
-     · Sales can queue an Indian mobile; the UK rule in sales_queue_opener is unchanged;
+     · (retired 2026-10-15) the India send window and the Indian-mobile queue test — now pinned ABSENT below;
      · the admin's name dedupe does not collide across countries; place id stays country-blind;
-     · Add a lead asks for the country (no hard-coded UK).
+     · Add a lead asks for the country (no hard-coded UK; India no longer offered).
 
    Run: npx tsx scripts/india-readiness.test.ts
    ============================================================ */
@@ -22,7 +26,7 @@ import { internationalPhone, classifyLineType } from '../src/lib/lineType.ts';
 import { countryFromAddress, leadCountryFor, indiaStateFromAddress } from '../src/lib/leadCountry.ts';
 import { resolveGeoBias, qualifierInfo, normCountry } from '../supabase/functions/_shared/geobias.ts';
 import { qualifyPlace, placeSuffixForCountry } from '../src/lib/seedGuard.ts';
-import { sendWindowForDigits, windowOpenForDigits, anyWindowOpen, INDIA_SEND_WINDOW, LONDON_SEND_WINDOW } from '../src/lib/sendWindow.ts';
+import { sendWindowForDigits, windowOpenForDigits, anyWindowOpen, LONDON_SEND_WINDOW } from '../src/lib/sendWindow.ts';
 import { salesAddPayload } from '../src/lib/salesAddPayload.ts';
 import { queuedLeadLine } from '../src/lib/queueLine.ts';
 import { nameMatches } from '../src/lib/nameMatch.ts';
@@ -145,41 +149,47 @@ ok(placeSuffixForCountry('India') === 'India' && placeSuffixForCountry('UK') ===
   ok(/\$\{locationText\} UK`/.test(cai), '…and still "<town> UK" for a UK lead');
 }
 
-console.log('\n── Send window: India lead → India hours, UK lead → UK hours ──');
+console.log('\n── Send window: ONE window (London); a +91 number gets no special hours (India removed 2026-10-15) ──');
 const at = (iso: string) => new Date(iso);
-ok(sendWindowForDigits('919876543210') === INDIA_SEND_WINDOW && sendWindowForDigits('447700900123') === LONDON_SEND_WINDOW && sendWindowForDigits(null) === LONDON_SEND_WINDOW, 'window chosen from the destination digits; anything not +91 is London');
-// 2026-09-28 is BST (UTC+1); IST is UTC+5:30.
-ok(windowOpenForDigits('919876543210', at('2026-09-28T04:30:00Z')) === true, 'India lead at 10:00 IST (05:30 London) → open');
+ok(sendWindowForDigits('919876543210') === LONDON_SEND_WINDOW && sendWindowForDigits('447700900123') === LONDON_SEND_WINDOW && sendWindowForDigits(null) === LONDON_SEND_WINDOW, 'every destination, +91 included, gets the London window');
+// 2026-09-28 is BST (UTC+1).
+ok(windowOpenForDigits('919876543210', at('2026-09-28T04:30:00Z')) === false, 'a +91 number at 10:00 IST (05:30 London) → CLOSED (the old India window is gone)');
+ok(windowOpenForDigits('919876543210', at('2026-09-28T17:00:00Z')) === true, 'a +91 number is just London hours: 18:00 London → open (and it is refused as a cold send anyway)');
 ok(windowOpenForDigits('447700900123', at('2026-09-28T04:30:00Z')) === false, 'UK lead at 05:30 London → closed (unchanged)');
-ok(windowOpenForDigits('919876543210', at('2026-09-28T13:29:00Z')) === true && windowOpenForDigits('919876543210', at('2026-09-28T13:30:00Z')) === false, 'India closes at 19:00 IST exactly');
-ok(windowOpenForDigits('919876543210', at('2026-09-28T17:00:00Z')) === false, 'India lead at 22:30 IST (18:00 London) → held, although London is open');
 ok(windowOpenForDigits('447700900123', at('2026-09-28T17:00:00Z')) === true, 'UK lead at 18:00 London → open (unchanged)');
 ok(windowOpenForDigits('447700900123', at('2026-09-28T06:00:00Z')) === true && windowOpenForDigits('447700900123', at('2026-09-28T05:59:00Z')) === false, 'UK opens at 07:00 London (BST)');
 ok(windowOpenForDigits('447700900123', at('2026-09-28T20:29:00Z')) === true && windowOpenForDigits('447700900123', at('2026-09-28T20:30:00Z')) === false, 'UK closes at 21:30 London (BST)');
 ok(windowOpenForDigits('447700900123', at('2026-12-01T07:00:00Z')) === true && windowOpenForDigits('447700900123', at('2026-12-01T06:59:00Z')) === false, 'UK in GMT: 07:00 London is 07:00 UTC');
-ok(anyWindowOpen(at('2026-09-28T04:30:00Z')) && !anyWindowOpen(at('2026-09-28T22:00:00Z')), 'the tick runs while either window is open, and not at 23:00 London / 03:30 IST');
+ok(!anyWindowOpen(at('2026-09-28T04:30:00Z')) && anyWindowOpen(at('2026-09-28T17:00:00Z')), 'the tick runs only while London is open (05:30 London closed, 18:00 open)');
 {
   const q = read('supabase/functions/process-whatsapp-queue/index.ts');
   ok(/const WINDOW_START = 7;/.test(q) && /const WINDOW_END_MIN = 21 \* 60 \+ 30;/.test(q), 'the London constants are unchanged');
-  ok(/if \(!anyWindowOpen && !force && !qaDrill\) return json\(\{ ok: true, skipped: "outside_window"/.test(q), 'the outer gate opens for either window (only the QA drill, a single simulated fixture, skips it)');
+  ok(/if \(!anyWindowOpen && !force && !qaDrill\) return json\(\{ ok: true, skipped: "outside_window"/.test(q), 'the outer gate is the (London) window; only the QA drill skips it');
   ok(/const scanned = qaDrill \? scannedAll : scannedAll\.filter\(leadWindowOpen\);[\s\S]{0,400}const candidates = interleaveByCampaign\(scanned\)\.slice\(0, QUEUE_LOOKAHEAD\)/.test(q), 'opener lane: held leads are filtered BEFORE the fair order and look-ahead slice');
-  ok(/const hookLead = \(\(hookRows \?\? \[\]\)[^\n]*\.find\(leadWindowOpen\)/.test(q) && /const contactLead = \(\(contactRows \?\? \[\]\)[^\n]*\.find\(leadWindowOpen\)/.test(q), 'hook and contact lanes take the oldest lead whose own window is open');
-  // 2026-09-29: the same London-window condition, now also held by the paid-action pause (docs/abuse-cost-protection.md).
-  ok(/if \(\(windowOpen \|\| force\) && auditAheadMode === "running"\) try \{/.test(q), 'audit-ahead still runs only in the London window (UK spend unchanged)');
   ok(/windowOpenForDigits\(toWhatsAppNumber\(/.test(q) && !/leadWindowOpen[^\n]*\.country\b(?![^\n]*toWhatsAppNumber)/.test(q), 'the window is chosen from the send digits, not from the country column');
-  ok(/indiaWindowOpen: sendWindowOpen\(INDIA_SEND_WINDOW\)/.test(q), 'queue_state reports the India window');
+  ok(!/INDIA_SEND_WINDOW|indiaWindowOpen/.test(q), 'the queue carries no India window and queue_state reports none');
+  ok(/isColdOutreachTemplate\(templateName\) && !isUkColdDestination\(toNumber\)/.test(q), 'the queue refuses a cold send to anything that is not a UK mobile');
 }
-ok(/10am IST/.test(queuedLeadLine({ paused: false, windowOpen: true, windowStartHour: 7, indiaWindowOpen: false }, '+91 98765 43210').text), 'an Indian lead\'s queued line says India hours, not "sending now" while London is open');
-ok(queuedLeadLine({ paused: false, windowOpen: false, windowStartHour: 7, indiaWindowOpen: true }, '+44 7700 900123').text.includes('7am UK'), 'a UK lead\'s line is unchanged');
-ok(queuedLeadLine({ paused: true, windowOpen: true, windowStartHour: 7, indiaWindowOpen: true }, '+91 98765 43210').tone === 'paused', 'paused still outranks everything');
+ok(!/10am IST|India/.test(queuedLeadLine({ paused: false, windowOpen: true, windowStartHour: 7 }, '+91 98765 43210').text) && queuedLeadLine({ paused: false, windowOpen: true, windowStartHour: 7 }, '+91 98765 43210').tone === 'sending', 'a +91 lead\'s queued line has no India hours (it is the ordinary line)');
+ok(queuedLeadLine({ paused: false, windowOpen: false, windowStartHour: 7 }, '+44 7700 900123').text.includes('7am UK'), 'a UK lead\'s line is unchanged');
+ok(queuedLeadLine({ paused: true, windowOpen: true, windowStartHour: 7 }, '+91 98765 43210').tone === 'paused', 'paused still outranks everything');
 
-console.log('\n── Sales can queue an Indian mobile; UK rule unchanged ──');
+console.log('\n── Sales can NOT queue an Indian mobile any more; UK rule unchanged (2026-10-15) ──');
 {
-  const m = read('supabase/migrations/20260929010000_sales_queue_opener_india.sql');
-  ok(m.includes("elsif not ((coalesce(v_lead.country, 'UK') = 'UK' and v_pk ~ '^7[0-9]{9}$') or v_pk ~ '^91[6-9][0-9]{9}$') then v_reason := 'not_a_uk_mobile';"), 'the one changed line: UK mobile as before, OR an Indian mobile by number');
-  ok(!m.includes("<> 'UK' or v_pk !~"), 'the old UK-only line is gone from the new definition');
-  for (const g of ["'not_yours'", "'archived'", "'client'", "'not_new'", "'already_contacted'", "'opted_out'", "'daily_limit'", "'no_phone'"]) ok(m.includes(g), `…every other guard kept: ${g}`);
-  ok(/'not a UK or Indian mobile/.test(read('src/lib/salesCrm.ts')), 'the refusal reads "not a UK or Indian mobile" (2026-10-07: + that Australia is not switched on)');
+  const dir = path.join(ROOT, 'supabase/migrations');
+  const latest = fs.readdirSync(dir).filter((f) => f.endsWith('.sql')).sort()
+    .filter((f) => /create or replace function public\.sales_queue_opener/i.test(read('supabase/migrations/' + f))).pop()!;
+  const m = read('supabase/migrations/' + latest);
+  const fn = m.slice(m.toLowerCase().indexOf('create or replace function public.sales_queue_opener'));
+  ok(latest === '20261015090000_outreach_uk_only.sql', 'the newest sales_queue_opener is the UK-only migration (' + latest + ')');
+  ok(fn.includes("elsif not (coalesce(v_lead.country, 'UK') = 'UK' and v_pk ~ '^7[0-9]{9}$') then v_reason := 'not_a_uk_mobile';"), 'the one cold test: a UK mobile, nothing else');
+  ok(!/\^91/.test(fn), 'no India (91) alternative in it');
+  for (const g of ["'not_yours'", "'archived'", "'client'", "'not_new'", "'already_contacted'", "'opted_out'", "'daily_limit'", "'no_phone'", "opener_contact_block"]) ok(fn.includes(g), '…every other guard kept: ' + g);
+  const cc = m.slice(m.toLowerCase().indexOf('create or replace function public.campaign_candidates'));
+  ok(!/\^91/.test(cc) && /coalesce\(o\.country, 'UK'\) = 'UK' and public\.phone_key\(o\.phone\) ~ '\^7\[0-9\]\{9\}\$'/.test(cc), 'campaign_candidates "sendable" is UK-only too');
+  const sc = read('src/lib/salesCrm.ts');
+  ok(/not_a_uk_mobile: 'not a UK mobile/.test(sc) && !/not a UK or Indian mobile/.test(sc), 'the refusal reads "not a UK mobile" (code not_a_uk_mobile unchanged)');
+  ok(!/Indian/.test(read('src/lib/campaignRules.ts')), 'campaign launch wording has no India either');
 }
 
 console.log('\n── Dedupe: names never collide across countries; place id stays the identity ──');
@@ -196,7 +206,7 @@ console.log('\n── Add a lead (Sales + Admin share it) asks for the country �
 {
   const d = read('src/components/AddLeadDialog.tsx');
   ok(!/country: 'UK', address/.test(d) && /country: f\.country, address/.test(d), 'no hard-coded UK; the chosen country is sent');
-  ok(/data-testid="add-lead-country"/.test(d) && /value: 'India'/.test(d) && /country: 'UK', businessName/.test(d), 'a Country field, UK by default, India offered');
+  ok(/data-testid="add-lead-country"/.test(d) && !/value: 'India'/.test(d) && /country: 'UK', businessName/.test(d), 'a Country field, UK by default, India no longer offered (2026-10-15)');
   ok(/if \(f\.country !== 'UK' && f\.phone\.trim\(\)\)/.test(d) && /internationalPhone\(f\.phone, f\.country\)/.test(d), 'a non-UK number is stored in international form; a UK one exactly as typed');
 }
 

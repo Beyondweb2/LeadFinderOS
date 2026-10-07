@@ -37,7 +37,6 @@ export async function fetchQueueState(): Promise<QueueState> {
   if (d.ok !== true || typeof d.paused !== 'boolean' || typeof d.windowOpen !== 'boolean') throw new Error('queue state unreadable');
   return {
     paused: d.paused, windowOpen: d.windowOpen, windowStartHour: typeof d.windowStartHour === 'number' ? d.windowStartHour : 7,
-    ...(typeof d.indiaWindowOpen === 'boolean' ? { indiaWindowOpen: d.indiaWindowOpen } : {}),
   };
 }
 

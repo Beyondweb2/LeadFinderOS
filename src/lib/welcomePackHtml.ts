@@ -3,7 +3,7 @@
    extensionless specifier — CLAUDE.md §3. scripts/check-import-graph.mjs fences it. */
 import { renderReportHtml, esc, type AiAuditReportData } from './aiAuditReportHtml.ts';
 import { FINDABLE_CONTACT_EMAIL, FINDABLE_CONTACT_WHATSAPP, FINDABLE_GUARANTEE, FINDABLE_MONTHLY_GBP,
-  FINDABLE_SETUP_PRICE_GBP, MONTHLY_START_V3_WORDS, findableContactPhoneDisplay, serviceRouteForTotal, termMonthsFor, totalPaymentsFor,
+  FINDABLE_SETUP_PRICE_GBP, MONTHLY_START_V3_WORDS, endOfTermKeyPoint, findableContactPhoneDisplay, serviceRouteForTotal, termMonthsFor, totalPaymentsFor,
   GBP_ACCESS_ASK, GBP_ADD_STEPS, GBP_ACCESS_REASSURANCE, GBP_ACCESS_CONSEQUENCE } from './findableOffer.ts';
 import type { BaselineSummary } from './baselineSummary.ts';
 import { qrSvg } from './qrSvg.ts';
@@ -494,6 +494,13 @@ export const AGREEMENT_KEY_POINTS: Record<'build' | 'optimise' | 'unknown', read
     GUARANTEE_KEY_POINT,
   ],
 };
+/** The key points for ONE client's agreement: the route's list, plus (v4 only) what happens after the last minimum-term
+ *  payment — the shared wording (findableOffer.endOfTermKeyPoint). ⛔ A v3 signer's pack is unchanged: only a record that says
+ *  v4 gets it, and an unknown route names nothing. */
+export function agreementKeyPointsFor(a: { route?: 'build' | 'optimise' | null; version?: string | null }): readonly string[] {
+  const base = AGREEMENT_KEY_POINTS[a.route ?? 'unknown'];
+  return a.version === 'v4' && a.route ? [...base, endOfTermKeyPoint(a.route)] : base;
+}
 const AGREEMENT_ALWAYS_YOURS = 'Your domain, logo and photos are always yours.';
 
 /** Exported for its test (scripts/client-signup-agreement-flow.test.ts). */
@@ -533,7 +540,7 @@ function agreementPage(a: WelcomePackAgreement): string {
       <h1 class="wp-h1">Your agreement: the key points</h1>
       <p>Your Findable Client Service Agreement sets out exactly what we do and what you pay. In short:</p>
       <ul class="wp-keys">
-        ${AGREEMENT_KEY_POINTS[a.route ?? 'unknown'].map((l) => `<li>${esc(l)}</li>`).join('\n        ')}
+        ${agreementKeyPointsFor(a).map((l) => `<li>${esc(l)}</li>`).join('\n        ')}
       </ul>
       <p><b>${esc(AGREEMENT_ALWAYS_YOURS)}</b></p>
       ${action}`;

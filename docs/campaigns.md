@@ -50,7 +50,7 @@ settings.
   `unknown_campaign`). Candidates are only leads the caller can work (a rep: assigned to them, not a
   client); another owner's campaign shows as "another campaign", never named.
 - **Launch:** `campaign_launch` walks every new lead of the campaign through the EXISTING
-  `sales_queue_opener` (own lead, not a client, never contacted, UK / India mobile, opt-out suppression,
+  `sales_queue_opener` (own lead, not a client, never contacted, UK mobile (India removed 2026-10-15; docs/whatsapp-templates.md), opt-out suppression,
   daily limit, spend guard) with the current approved opener only. The queue, the send window and the
   round-robin across campaigns are unchanged. **Stop:** `campaign_stop` returns still-queued leads to the
   status they had; sent messages are untouched.

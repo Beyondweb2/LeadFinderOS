@@ -111,9 +111,14 @@ const OFFER_STALE: Array<[RegExp, string]> = [
 const ALLOWED_TRUE: readonly string[] = [
   /* v3 clause 12.2(e): where the data may be accessed from — a fact, not the retired founder offer. */
   "including from Thailand where our founder is based",
+  /* v4 (2026-10-07, Paul's approved .docx, verbatim): 12.3, 5.3, Schedule 1 and 9.2 — true, binding contract text. */
+  "including from Thailand where our founder may be based",
+  "If we build your website on a brand-new domain, we may use an eight-week re-measurement instead.",
+  "or 8 weeks where we build on a brand-new domain.",
+  "cannot promise uninterrupted availability",
 ];
 /** Every £29.99 in `text` sits beside words that make it the Continuing Service (v3 clause 9A). */
-const CONTINUING_WORDS = /Continuing Service|until you cancel|until cancelled|after the minimum term|clause 9A|FINDABLE_CONTINUING_GBP|continuingGbp|minimum term\)?, then|After that|Then £/i;
+const CONTINUING_WORDS = /optional|opts? in|separately choose|Hosting and Maintenance|Continuing Service|until you cancel|until cancelled|after the minimum term|clause 9A|FINDABLE_CONTINUING_GBP|continuingGbp|minimum term\)?, then|After that|Then £/i;
 function bare2999(text: string): string | null {
   for (const m of text.matchAll(/29\.99/g)) {
     const at = m.index ?? 0;
