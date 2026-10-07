@@ -22,6 +22,19 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-07-team-templates', date: '2026-10-07', title: 'Team templates: the Findable message library, shared with the whole team', audience: 'all',
+    body: 'Templates now has two lists: TEAM TEMPLATES from Findable, which you can use but not change, and MY TEMPLATES, which are yours alone.',
+    report: {
+      added: [
+        'TEAM TEMPLATES: a shared library Paul manages. Everyone sees the same ones, and when Paul edits one you see the change straight away.',
+        'Use a Team template in Inbox Quick reply, the WhatsApp composer or Templates. The business name and report link fill in for the lead, and you can edit the message before you send it without changing the template.',
+        'Save as my template makes your own editable copy of a Team template.',
+        'For Paul: a Team / Just me choice when creating a template, Share with the team on any of his own, and Archive / Restore.',
+      ],
+      changed: ['The WhatsApp composer\'s template button now says Templates, and groups Team above Mine.'],
+      removed: [],
+      effect: 'Everyone starts from the same proven messages instead of writing their own. Your own templates stay private to you. Nothing about the approved WhatsApp templates changed.',
+    } },
   { id: '2026-10-07-website-check-finds-more', date: '2026-10-07', title: 'The website check now finds what a careful person reading the site would find', audience: 'all',
     body: 'The call script used to mention only technical faults. It now also reads the site itself: whether each service has its own page, whether a phone number and the town are stated, and whether the main pages are linked. When the site is in good shape it says so instead of inventing a problem.',
     report: {

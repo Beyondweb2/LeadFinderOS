@@ -166,3 +166,5 @@
 - `docs/pre-sales-certification/sales-to-payment-final-pass.md` — 2026-10-07: the sales sign-up is resumed (root cause of "Your sign-up is already set up…"), Quick Close asks the situation first and the plan last, Build-first recommendation, the client's "Here's what we have so far" confirmation.
 - `docs/site-crawl-sales-insights.md` — 2026-10-07: the prospect crawl → sales insights layer: why the old crawl missed what a manual review finds, the checks, service detection, page choice and the 60-page prospect cap, the speakable threshold, the strong-site fallback lines, the script changes.
 - `docs/pre-sales-certification/two-close-options.md` — 2026-10-07: the two ways to close (Close on the phone / Send full setup), the exact phone questions, the Full Setup link on the approved findable_signup_link template, one sign-up two routes, the self-serve agency-contract answer, deploy list
+
+- `docs/pre-sales-certification/team-templates.md` — 2026-10-07: Team templates vs My templates (one shared row per Team template, RLS, admin-managed, Save as my template), what existed before, nothing auto-promoted, where they appear

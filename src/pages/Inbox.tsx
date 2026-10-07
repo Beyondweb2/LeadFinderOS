@@ -6,6 +6,7 @@ import { useInbox, windowFor, normalizeWaNumber, type WaConversation, type LeadL
 import { getTemplateSendability, WA_TEMPLATE_REQS, canonicalTemplate } from '@/lib/whatsappTemplates';
 import { useToast } from '@/hooks/use-toast';
 import { useTemplates } from '@/hooks/useTemplates';
+import { MINE_HEADING, TEAM_HEADING, TEAM_MARK } from '@/lib/teamTemplates';
 import { useSubscription } from '@/hooks/useSubscription';
 import { usePersistedState } from '@/hooks/usePersistedState';
 import { supabase } from '@/integrations/supabase/client';
@@ -420,7 +421,7 @@ const Inbox = () => {
   // Only for invalidating the AiAudit page's audit-book cache when startAudit fires one from
   // here — Inbox itself is not on React Query (see useInbox.ts).
   const queryClient = useQueryClient();
-  const { templates } = useTemplates(); // same source as the Templates page ("Texts" tab)
+  const { templates, grouped: templateGroups } = useTemplates(); // same source as the Templates page ("Texts" tab)
   const { isAdmin } = useSubscription(); // gates the admin-only "Send now" button
   /* ⛔ ONE INBOX, BOTH ROLES (2026-09-27). A salesperson's conversations are their own leads'
      (useInbox reads the safe sales_leads view; messages and media are scoped by RLS/storage policy),
@@ -907,6 +908,9 @@ const Inbox = () => {
   // Quick-reply scripts = the saved TEXT templates (not voice). Placeholders are filled
   // from the conversation's lead where possible, then inserted (editable, not auto-sent).
   const textTemplates = useMemo(() => templates.filter((t) => t.template_type === 'text'), [templates]);
+  /* TEAM TEMPLATES (2026-10-07): the shared Findable library first, then this person's own. Inserting either writes only the draft. */
+  const teamTextTemplates = useMemo(() => templateGroups.team.filter((t) => t.template_type === 'text'), [templateGroups]);
+  const myTextTemplates = useMemo(() => templateGroups.mine.filter((t) => t.template_type === 'text'), [templateGroups]);
   const activeLead = active?.leadId ? leads.find((l) => l.id === active.leadId) : undefined;
   // The canonical sales state for the open thread's lead (the same reading Focus Mode and the popup draw).
   const activeSales = useLeadSalesState(active?.leadId ?? '');
@@ -2420,13 +2424,18 @@ const Inbox = () => {
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="start" className="max-h-72 w-80 overflow-y-auto thin-scrollbar">
-                          {textTemplates.map((t, i) => (
-                            <DropdownMenuItem key={`${t.title}-${i}`} onClick={() => insertTemplate(t.content)} className="flex flex-col items-start gap-0.5">
-                              <span className="text-xs font-medium">{t.title}</span>
-                              <span className="line-clamp-2 whitespace-normal text-[11px] text-muted-foreground">
-                                {fillTemplate(t.content, { businessName: activeBusinessName })}
-                              </span>
-                            </DropdownMenuItem>
+                          {[{ label: TEAM_HEADING, rows: teamTextTemplates, team: true }, { label: MINE_HEADING, rows: myTextTemplates, team: false }].filter((g) => g.rows.length > 0).map((g) => (
+                            <div key={g.label} data-testid={g.team ? 'quick-reply-team' : 'quick-reply-mine'}>
+                              {(teamTextTemplates.length > 0 && myTextTemplates.length > 0) && <p className="px-2 pb-0.5 pt-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">{g.label}</p>}
+                              {g.rows.map((t, i) => (
+                                <DropdownMenuItem key={`${t.id}-${i}`} onClick={() => insertTemplate(t.content)} className="flex flex-col items-start gap-0.5">
+                                  <span className="flex items-center gap-1.5 text-xs font-medium">{t.title}{g.team && <span className="rounded-full bg-yellow-400/15 px-1.5 text-[9px] font-bold tracking-wide text-yellow-600 ring-1 ring-inset ring-yellow-500/40 dark:text-yellow-300">{TEAM_MARK}</span>}</span>
+                                  <span className="line-clamp-2 whitespace-normal text-[11px] text-muted-foreground">
+                                    {fillTemplate(t.content, { businessName: activeBusinessName })}
+                                  </span>
+                                </DropdownMenuItem>
+                              ))}
+                            </div>
                           ))}
                         </DropdownMenuContent>
                       </DropdownMenu>

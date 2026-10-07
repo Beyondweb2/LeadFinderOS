@@ -1805,33 +1805,42 @@ export type Database = {
       }
       templates: {
         Row: {
+          archived_at: string | null
           category: string
           content: string
           created_at: string
           id: string
           is_default: boolean | null
+          scope: string
+          sort_order: number
           template_type: string
           title: string
           updated_at: string
           user_id: string
         }
         Insert: {
+          archived_at?: string | null
           category: string
           content: string
           created_at?: string
           id?: string
           is_default?: boolean | null
+          scope?: string
+          sort_order?: number
           template_type: string
           title: string
           updated_at?: string
           user_id: string
         }
         Update: {
+          archived_at?: string | null
           category?: string
           content?: string
           created_at?: string
           id?: string
           is_default?: boolean | null
+          scope?: string
+          sort_order?: number
           template_type?: string
           title?: string
           updated_at?: string

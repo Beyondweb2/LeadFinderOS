@@ -2,6 +2,8 @@ import { useCallback, useMemo } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
+import { useSubscription } from '@/hooks/useSubscription';
+import { duplicateAsPersonal, isArchived, isTeamTemplate, splitTemplates } from '@/lib/teamTemplates';
 import { supabase } from '@/integrations/supabase/client';
 import type { Template, TemplateType, TemplateCategory } from '@/types/outreach';
 
@@ -93,6 +95,7 @@ const typeRow = (t: Record<string, unknown>): Template => ({
 export function useTemplates() {
   const { toast } = useToast();
   const { user } = useAuth();
+  const { isAdmin } = useSubscription();
   const queryClient = useQueryClient();
 
   /* ⛔ ON REACT QUERY SINCE 2026-09-10. Three refs and a hand-rolled effect used to do what the
@@ -111,8 +114,11 @@ export function useTemplates() {
       const { data, error } = await supabase
         .from('templates')
         .select('*')
+        .order('sort_order', { ascending: true })
         .order('created_at', { ascending: true });
       if (error) throw new Error(error.message);
+      /* TEAM TEMPLATES (2026-10-07): the database returns this person's OWN rows plus every active Team template (RLS,
+         migration 20261016100000) — one shared row each, never a copy per person. An admin also receives archived Team rows. */
 
       /* ⛔ SAVED TEXTS ARE PRIVATE, AND AN EMPTY LIST STAYS EMPTY (2026-10-04, pre-sales certification
          M-002; docs/pre-sales-certification/fixes-01-security-inbound.md). RLS now returns only the
@@ -125,7 +131,11 @@ export function useTemplates() {
     },
   });
 
-  const templates = query.data ?? EMPTY_TEMPLATES;
+  const all = query.data ?? EMPTY_TEMPLATES;
+  /* Everything the pickers offer: no archived Team template (an admin sees those only on the Templates page). */
+  const templates = useMemo(() => all.filter((t) => !isArchived(t)), [all]);
+  const archivedTeam = useMemo(() => all.filter((t) => isTeamTemplate(t) && isArchived(t)), [all]);
+  const grouped = useMemo(() => splitTemplates(templates, user?.id), [templates, user?.id]);
   const isLoading = query.isPending;
 
   const refetch = useCallback(
@@ -143,14 +153,17 @@ export function useTemplates() {
   }, [queryClient, queryKey]);
 
   const createTemplate = useCallback(async (
-    template: Pick<Template, 'template_type' | 'category' | 'title' | 'content'>
+    template: Pick<Template, 'template_type' | 'category' | 'title' | 'content'> & { scope?: 'personal' | 'team' }
   ) => {
     if (!user) return null;
+    /* A Team template is an admin's to make (the database refuses anyone else); everything else is personal. */
+    const scope = template.scope === 'team' && isAdmin ? 'team' : 'personal';
 
     const { data, error } = await supabase
       .from('templates')
       .insert({
         ...template,
+        scope,
         user_id: user.id,
         is_default: false,
       })
@@ -175,11 +188,17 @@ export function useTemplates() {
     await patchCache((prev) => [...prev, newTemplate]);
 
     return newTemplate;
-  }, [user, toast, patchCache]);
+  }, [user, isAdmin, toast, patchCache]);
+
+  /** "Save as my template": a NEW personal row from a Team (or any visible) template. The original is never touched. */
+  const duplicateToMine = useCallback(async (source: Pick<Template, 'title' | 'content' | 'category' | 'template_type'>) => {
+    const copy = duplicateAsPersonal(source);
+    return createTemplate({ template_type: copy.template_type as TemplateType, category: copy.category as TemplateCategory, title: copy.title, content: copy.content, scope: 'personal' });
+  }, [createTemplate]);
 
   const updateTemplate = useCallback(async (
     id: string,
-    updates: Partial<Pick<Template, 'title' | 'content' | 'category'>>
+    updates: Partial<Pick<Template, 'title' | 'content' | 'category' | 'scope' | 'archived_at' | 'sort_order'>>
   ) => {
     const { data, error } = await supabase
       .from('templates')
@@ -246,6 +265,11 @@ export function useTemplates() {
 
   return {
     templates,
+    /** { team: active Team templates in library order, mine: this person's own } */
+    grouped,
+    /** Archived Team templates (admin only — everyone else is never sent them). */
+    archivedTeam,
+    duplicateToMine,
     isLoading,
     createTemplate,
     updateTemplate,
