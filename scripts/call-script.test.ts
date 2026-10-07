@@ -21,7 +21,7 @@ import { readFileSync } from 'node:fs';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import {
-  AGENCY_CONTRACT_QUESTION, AGENCY_COST_QUESTION, BRIDGE_LINE, DISCOVERY_QUESTIONS, FIRST_QUESTION, NO_STRONG_ISSUE_LINE,
+  AGENCY_CONTRACT_QUESTION, AGENCY_COST_QUESTION, AI_SETUP_CHECKLIST, AI_SETUP_SPOKEN_LINE, BRIDGE_LINE, DISCOVERY_QUESTIONS, FIRST_QUESTION, NO_STRONG_ISSUE_LINE,
   PRICE_ANGLE_LINE, afterFirstQuestion, buildCallScript, preselectedPlan, priceAngleApplies, spokenScriptText,
   type CallScriptInput, type ScriptFinding,
 } from '../src/lib/callScript.ts';
@@ -105,13 +105,15 @@ console.log('── 4. No invented competitors, no invented findings ──');
   const named = s.opener[0].replace(/^.*it mentioned /, '').replace(/, but not you\.$/, '').split(/, | and /);
   ok(named.every((n) => real.includes(n)), 'every name said is one the stored answer returned (' + named.join(' | ') + ')');
   const clean = buildCallScript(input({ findings: [], findingsStatus: 'clean' }));
-  ok(clean.found.lines.length === 1 && clean.found.lines[0] === NO_STRONG_ISSUE_LINE, 'good website / no strong issue → the fixed honest line, nothing invented');
+  ok(clean.found.lines.length === 2 && clean.found.lines[0] === NO_STRONG_ISSUE_LINE && clean.found.lines[1] === AI_SETUP_SPOKEN_LINE && clean.found.checklist === AI_SETUP_CHECKLIST, 'good website / no strong issue → "not set up for AI, a lot of sites aren\'t" + what we make sure a site has; no fault invented');
+  ok(!/public evidence|bigger issue/i.test(clean.found.lines.join(' ')), 'the old "the bigger issue is the public evidence" line is gone');
+  ok(AI_SETUP_CHECKLIST.some((c) => /duplicate/i.test(c)) && AI_SETUP_CHECKLIST.length >= 6 && /no duplicate pages/.test(AI_SETUP_SPOKEN_LINE), 'the list names the duplicate-pages check and the rest of what we make sure a site has');
   ok(clean.opener[1] === "I had a look into why they were being named and you weren't.", '…and the opener does not claim "a few potential reasons"');
   for (const st of ['not_crawled', 'crawl_stale', 'unreadable'] as const) {
     const n = buildCallScript(input({ findings: [], findingsStatus: st }));
     ok(n.found.lines.length === 0 && n.opener.length === 1 && /say nothing about the site/.test(n.found.note ?? ''), st + ' → nothing said about the site at all');
   }
-  ok(NO_STRONG_ISSUE_LINE === "I couldn't see one huge technical problem with the site. The bigger issue is that the public evidence around the business isn't strong enough for AI to consistently choose you over the other companies.", 'the no-strong-issue line is Paul\'s wording');
+  ok(NO_STRONG_ISSUE_LINE === "I couldn't see anything badly wrong with the site, but it isn't really set up to be found by AI. A lot of sites aren't.", 'the no-strong-issue line is Paul\'s wording (2026-10-07)');
 }
 
 console.log('── 5. No website / a profile ──');

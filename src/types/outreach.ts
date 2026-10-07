@@ -706,6 +706,9 @@ export const CONTACT_METHOD_OPTIONS: { value: ContactMethod; label: string }[] =
   { value: 'email', label: 'Email' },
 ];
 
+/** What a SALESPERSON may pick by hand: the two the server accepts for them (lead_set_contact_method). Any other value would be a silent no-op. */
+export const REP_CONTACT_METHOD_OPTIONS = CONTACT_METHOD_OPTIONS.filter((o) => o.value === 'call' || o.value === 'whatsapp');
+
 // Pipeline status options (where the lead is in the pipeline). Simplified to a
 // single linear funnel: New → Initial Contact → Replied → Site Sent → Interested
 // → Not Interested → Paid. The old Attempted/Contacted/Delivered all collapse to

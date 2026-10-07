@@ -405,7 +405,7 @@ const Outreach = () => {
           if (status === 'interested') return handlePipelineStatusChange(leadId, status);
           return updateStatus(leadId, status);
         }}
-        onContactMethodChange={perms.editLeadRecord ? handleContactMethodChange : undefined}
+        onContactMethodChange={perms.setContactMethod ? handleContactMethodChange : undefined}
         onPipelineStatusChange={handlePipelineStatusChange}
         onNextActionChange={(leadId, action, date) => {
           if (isDemoLead(leadId)) return;

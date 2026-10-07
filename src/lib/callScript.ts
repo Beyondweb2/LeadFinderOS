@@ -54,8 +54,22 @@ export const MAX_SPOKEN_FINDINGS = 2;
 /** Said after a point that came from the site's own pages (a service, the town, a phone number): the Findable half
  *  of REAL ISSUE → WHY IT MATTERS → HOW WE IMPROVE IT. Once, after the last point, never per point. */
 export const FIX_TAIL = "It's the sort of thing we'd fix as part of the work.";
-/** Said when the crawl found nothing strong — never a made-up fault (Paul's wording). */
-export const NO_STRONG_ISSUE_LINE = "I couldn't see one huge technical problem with the site. The bigger issue is that the public evidence around the business isn't strong enough for AI to consistently choose you over the other companies.";
+/** Said when the crawl found nothing strong — never a made-up fault. 🔴 REWRITTEN 2026-10-07 (Paul): it used to say "the bigger issue is
+ *  the public evidence around the business", which is not what we sell on this call. When the site check finds no issue we say the true,
+ *  simple thing — it isn't set up to be found by AI, and a lot of sites aren't — and read the short list of what we make sure a site has. */
+export const NO_STRONG_ISSUE_LINE = "I couldn't see anything badly wrong with the site, but it isn't really set up to be found by AI. A lot of sites aren't.";
+/** The one spoken sentence of that list (the full list is on the rep's screen). ⛔ Only things the site check really tests (siteFindings.ts). */
+export const AI_SETUP_SPOKEN_LINE = "When we set a site up for AI we make sure things like there are no duplicate pages, each service and area has its own clear page, and nothing is stopping AI from reading it.";
+/** What we make sure a site has — for the rep's screen, so they can answer "like what?". Each item is something the site check reads. */
+export const AI_SETUP_CHECKLIST: readonly string[] = [
+  'No duplicate or near-identical pages',
+  'A clear page for each service, and for each area you cover',
+  'Enough real detail on every service page',
+  'A homepage with real text on it, readable by AI crawlers',
+  'AI crawlers allowed in (not blocked)',
+  'Nothing important hidden from Google',
+  'The sitemap, page signals and business details all pointing at your real web address',
+];
 export const BRIDGE_LINE = "More people are using AI to find local businesses now, and this is what we specialise in.";
 const weeksWord = (n: number) => (['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight'][n] ?? String(n));
 /** 🔴 Rewritten 2026-10-07 (Paul: no "improve the public evidence"). Plain words, short enough to say: the
@@ -140,7 +154,7 @@ export interface CallScript {
   /** For the rep's eyes only. */
   openerNote: string | null;
   /** The real website reasons, spoken, and a note for the rep (never said). */
-  found: { lines: string[]; note: string | null; /** For the rep's eyes only: what each spoken point rests on. */ sources: Array<{ line: string; evidence: ScriptEvidence | null; improvement: string | null }> };
+  found: { lines: string[]; note: string | null; /** For the rep's screen: what we make sure a site has — set only when the site check found no issue to raise. */ checklist: readonly string[] | null; /** For the rep's eyes only: what each spoken point rests on. */ sources: Array<{ line: string; evidence: ScriptEvidence | null; improvement: string | null }> };
   bridge: string[];
   firstQuestion: { question: string; hint: string | null };
   ifAgency: { questions: [string, string]; coaching: string[]; priceAngle: { overGbp: number; line: string } };
@@ -209,6 +223,7 @@ export function buildCallScript(i: CallScriptInput): CallScript {
   if (picked.length && picked.some((f) => !!f.spoken)) spoken[spoken.length - 1] = spoken[spoken.length - 1] + ' ' + FIX_TAIL;
   const found: string[] = [];
   let foundNote: string | null = null;
+  let checklist: readonly string[] | null = null;
   let sources: CallScript['found']['sources'] = [];
   if (i.findingsStatus === 'findings' && spoken.length) {
     if (why) opener.push(why + ', and I found ' + (spoken.length > 1 ? 'a few potential reasons.' : 'one thing that could be part of it.'));
@@ -232,8 +247,9 @@ export function buildCallScript(i: CallScriptInput): CallScript {
     foundNote = 'The site check found no fault worth raising — say the positive line and what we would add. Do not invent a problem.';
   } else if (i.findingsStatus === 'clean' && why) {
     opener.push(why + '.');
-    found.push(NO_STRONG_ISSUE_LINE);
-    foundNote = 'The website check found no strong issue — do not invent one.';
+    found.push(NO_STRONG_ISSUE_LINE, AI_SETUP_SPOKEN_LINE);
+    checklist = AI_SETUP_CHECKLIST;
+    foundNote = 'The website check found no strong issue — do not invent one. Say the site is not set up for AI and that a lot of sites are not; the list below is what we make sure it has.';
   } else {
     foundNote = i.findingsStatus === 'clean'
       ? 'The website check found no strong issue — do not invent one.'
@@ -291,7 +307,7 @@ export function buildCallScript(i: CallScriptInput): CallScript {
     openerNote: i.contactedBefore
       ? "You've been in touch with them before. Don't open with it — if they bring it up, that was you."
       : null,
-    found: { lines: found, note: foundNote, sources },
+    found: { lines: found, note: foundNote, checklist, sources },
     bridge,
     firstQuestion,
     ifAgency,

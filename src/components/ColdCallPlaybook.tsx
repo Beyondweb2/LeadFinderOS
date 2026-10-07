@@ -124,6 +124,12 @@ function Say({ p }: { p: ColdCallPlaybook }) {
           </ul>
         </details>
       )}
+      {s.found.checklist && (
+        <details className="rounded-lg border border-border/60 px-3 py-2 text-[12px]" data-testid="call-ai-checklist" open>
+          <summary className="cursor-pointer text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">What we make sure a site has</summary>
+          <ul className="mt-2 list-disc space-y-0.5 pl-5">{s.found.checklist.map((c) => <li key={c}>{c}</li>)}</ul>
+        </details>
+      )}
       {s.found.note && <p className="text-[11px] text-muted-foreground" data-testid="call-found-note">{s.found.note}</p>}
       <div className="space-y-1.5 text-[15px] leading-relaxed" data-testid="call-step-bridge">{s.bridge.map((l) => <p key={l}>{l}</p>)}</div>
       {s.openerNote && <p className="text-[11px] text-muted-foreground" data-testid="call-opener-note">{s.openerNote}</p>}

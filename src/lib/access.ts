@@ -108,6 +108,9 @@ export interface LeadPermissions {
   salesChecks: boolean;
   /** Create, rename, delete campaigns (restrictive RLS: admin only). */
   campaigns: boolean;
+  /** Set a lead's Contact Method by hand (the pill on the Outreach row / card and the lead workspace). Admin: any method. A salesperson:
+   *  Call or WhatsApp only (lead_set_contact_method — their own, non-client lead). Both write the ONE column the pill reads. */
+  setContactMethod: boolean;
   /** Put leads into an EXISTING campaign — one lead (the workspace card) or the Outreach selection.
    *  Both roles; lead_set_campaign / leads_set_campaign limit a salesperson to their own non-client leads. */
   moveToCampaign: boolean;
@@ -162,6 +165,7 @@ export function leadPermissions(role: AppRole | null, readyToSell = true): LeadP
     salesChecks: sellingSales,
     campaigns: admin,
     moveToCampaign: admin || sellingSales,
+    setContactMethod: admin || sellingSales,
     removeFromMyLeads: role === 'sales',
     product: admin,
     crawlSite: admin,

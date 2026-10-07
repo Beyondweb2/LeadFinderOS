@@ -29,7 +29,7 @@ import type { OutreachLead, LeadStatus, NextActionType, ContactMethod, PipelineS
 import { useLeadPermissions } from '@/hooks/useLeadPermissions';
 import { maySetStatus } from '@/lib/access';
 import type { AuditRowState } from '@/lib/outreachAuditMap';
-import { CONTACT_METHOD_OPTIONS, PIPELINE_STATUS_OPTIONS, OUTREACH_STATUS_OPTIONS, awaitingReplyTooltip } from '@/types/outreach';
+import { CONTACT_METHOD_OPTIONS, REP_CONTACT_METHOD_OPTIONS, PIPELINE_STATUS_OPTIONS, OUTREACH_STATUS_OPTIONS, awaitingReplyTooltip } from '@/types/outreach';
 
 interface OutreachMobileCardProps {
   lead: OutreachLead;
@@ -193,7 +193,7 @@ export const OutreachMobileCard = memo(function OutreachMobileCard({
                       <ContactMethodBadge method={lead.contact_method as ContactMethod} compact />
                     </SelectTrigger>
                     <SelectContent>
-                      {CONTACT_METHOD_OPTIONS.map((opt) => (
+                      {(perms.editLeadRecord ? CONTACT_METHOD_OPTIONS : REP_CONTACT_METHOD_OPTIONS).map((opt) => (
                         <SelectItem key={opt.value} value={opt.value}>
                           {opt.label}
                         </SelectItem>

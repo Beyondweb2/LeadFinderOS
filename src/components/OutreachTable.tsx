@@ -155,7 +155,7 @@ import { londonToday } from '@/lib/conversationState';
 import { BulkAssignSelect } from '@/components/BulkAssignSelect';
 import { OwnerAvatar } from './OwnerBadge';
 import { NEXT_ACTION_OPTIONS as CRM_NEXT_ACTION_OPTIONS } from '@/lib/salesCrm';
-import { OUTREACH_STATUS_OPTIONS, OUTREACH_STATUS_FILTER_OPTIONS, canonicalFilterValue, isPaidFilterValue, CONTACT_METHOD_OPTIONS, PIPELINE_STATUS_OPTIONS, WHATSAPP_TEMPLATES, PRODUCT_OPTIONS, PRODUCT_UNDECIDED, productOf, sharedPhoneLeadIds, type ProductValue, type StatusFilterValue } from '@/types/outreach';
+import { OUTREACH_STATUS_OPTIONS, OUTREACH_STATUS_FILTER_OPTIONS, canonicalFilterValue, isPaidFilterValue, CONTACT_METHOD_OPTIONS, REP_CONTACT_METHOD_OPTIONS, PIPELINE_STATUS_OPTIONS, WHATSAPP_TEMPLATES, PRODUCT_OPTIONS, PRODUCT_UNDECIDED, productOf, sharedPhoneLeadIds, type ProductValue, type StatusFilterValue } from '@/types/outreach';
 import { isPaidLead } from '@/lib/leadPayment';
 import { useApifyUsage, apifyWarningText } from '@/hooks/useApifyUsage';
 import {
@@ -3079,7 +3079,7 @@ export function OutreachTable({
                                   <ContactMethodBadge method={lead.contact_method as ContactMethod} />
                                 </SelectTrigger>
                                 <SelectContent>
-                                  {CONTACT_METHOD_OPTIONS.map((opt) => (
+                                  {(perms.editLeadRecord ? CONTACT_METHOD_OPTIONS : REP_CONTACT_METHOD_OPTIONS).map((opt) => (
                                     <SelectItem key={opt.value} value={opt.value}>
                                       {opt.label}
                                     </SelectItem>
