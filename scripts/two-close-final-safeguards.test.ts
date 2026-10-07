@@ -50,7 +50,7 @@ ok(/eq\("onboarding_id", onboardingId\)\.eq\("kind", "link_generated"\)/.test(sc
 ok(/SETUP_SEND_WINDOW_DAYS/.test(sc) && /gte\("created_at", since\)/.test(sc), 'a send from months ago is not this sale');
 ok(/no_setup_send/.test(sc), 'no recorded send → nothing recorded (the existing no-creator rule decides, never a guess)');
 ok(/recordSetupSignupCreator\(service, leadId, row\.id as string\)/.test(on) && on.indexOf('recordSetupSignupCreator(service') > on.indexOf('await saveAnswers({ lead_id: leadId, status: "submitted" })'), 'findable-onboarding records it right after the client\'s sign-up row is saved');
-ok(/await event\(service, leadId, row\?\.id \?\? null, actor\.id, "link_shared", \{ channel, variant: "setup", status \}\)/.test(qc), 'share_setup writes the send event the creator is read from (both WhatsApp and Copy)');
+ok(/await event\(service, leadId, row\?\.id \?\? null, actor\.id, "link_shared", \{ channel, variant: "setup", status, to: emailedTo \}\)/.test(qc), 'share_setup writes the send event the creator is read from (WhatsApp, Copy and Email alike)');
 
 console.log(f ? `\n${f} FAILURE(S)` : '\nALL PASS');
 process.exit(f ? 1 : 0);
