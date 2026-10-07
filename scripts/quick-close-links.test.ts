@@ -298,7 +298,7 @@ console.log("\n── SHARING: copy, email, WhatsApp — each recorded, none ove
   ok(/Make a fresh agreement &amp; payment link|Make a fresh agreement & payment link/.test(dlg) && /Copy link/.test(dlg) && /url: usable \? cur\.link_url : null/.test(fn), "COPY SIGN-UP LINK is the primary action; an expired link offers a fresh one and its URL is never sent to the screen");
   const mig = read("supabase/migrations/20261006020000_quick_close_link_sharing.sql");
   ok(/'link_shared', 'link_share_failed', 'link_superseded'/.test(mig) && /'payment_link_shared'/.test(mig) && /if not \(v = any\(v_vals\)\)/.test(mig), "migration widens both checks from their LIVE definition (never clobbers another workstream's kinds)");
-  ok(/\.in\("kind", \["link_generated", "link_reused"\]\)/.test(read("supabase/functions/_shared/earnings.ts")), "sharing is not commission evidence (earnings still read link_generated / link_reused only)");
+  ok(/\.in\("kind", \["link_generated", "link_reused", "link_shared"\]\)/.test(read("supabase/functions/_shared/earnings.ts")) && /e\.kind === 'link_shared' && e\.data\?\.variant === 'setup'/.test(read("src/lib/commission.ts")), "sharing the agreement link is not commission evidence (only a Full Setup send is, isSaleClosingEvent)");
 }
 
 /* ═══ REMINDERS / FALSE ALERTS ════════════════════════════════════════════════════════════════════ */

@@ -38,6 +38,13 @@ export const WHATS_NEW: readonly WhatsNewEntry[] = [
       ],
       removed: ['The fixed line "the bigger issue is the public evidence around the business" on a site that was checked and found fine. It is replaced by the honest strong-site line.'],
       effect: 'On a call you get one or two specific things you can point at on their own site, with the proof behind them. If the site is fine you are told so and have a truthful thing to offer, not a made-up fault.',
+  { id: '2026-10-07-full-setup-counts-as-closing', date: '2026-10-07', title: 'A Full Setup send now counts as you closing the sale', audience: 'all',
+    body: 'When you send a client the Full Setup link, the moment you sent it is recorded as you closing the sale, the same as making an Agreement & Payment link.',
+    report: {
+      added: ['Your Full Setup send is kept as proof you closed the sale, timed when you sent it.'],
+      changed: ['If a client you sent Full Setup to finishes after your engagement ended, the sale still counts as closed while you were engaged.'],
+      removed: [],
+      effect: 'Closing by Full Setup is treated exactly like closing on the phone for commission. Nothing changes for normal sales.',
     } },
   { id: '2026-10-07-full-setup-keeps-seller', date: '2026-10-07', title: 'Full setup keeps you as the seller; an agency contract holds a self-serve Build; previews no longer save', audience: 'all',
     body: 'If you send a lead the Full Setup link and they fill it in and pay themselves, the sale is still yours. A client who says they are still tied into an agency contract and picks Build themselves is held for Paul, the same as on the phone. The Preview button no longer saves anything.',

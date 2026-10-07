@@ -175,7 +175,7 @@ console.log('── 3. THE ENGAGEMENT: ENDS, RE-ENABLES, AND THE SALE CLOSED BEF
 {
   const loader = read('supabase/functions/_shared/earnings.ts');
   ok(/from\("team_engagement_events"\)\.select\("user_id, kind, at"\)/.test(loader) && /engagement: timelines, closings,/.test(loader), 'the loader reads the engagement log and the payment links, and passes both');
-  ok(/\.in\("kind", \["link_generated", "link_reused"\]\)/.test(loader), 'a closing is a payment link the server recorded (generated or re-sent) — never a note');
+  ok(/\.in\("kind", \["link_generated", "link_reused", "link_shared"\]\)/.test(loader) && /isSaleClosingEvent\(x\)/.test(loader), 'a closing is a link the server recorded (generated, re-sent, or a Full Setup send) — never a note');
   ok(/const sales = new Set\(\[\.\.\.roles\.filter\(\(r\) => r\.role === "sales"\)\.map\(\(r\) => r\.user_id\), \.\.\.disabledNow\]\)/.test(loader), 'an ended salesperson (role removed by Disable) still counts as commissionable — their earned commission is not zeroed');
   ok(/for \(const a of admins\) sales\.delete\(a\)/.test(loader), 'the admin never earns');
   const mig = read('supabase/migrations/20261005100000_team_engagement_events.sql');
