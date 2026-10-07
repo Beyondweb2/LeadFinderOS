@@ -50,6 +50,7 @@ export async function salesPatchLead(leadId: string, patch: Record<string, unkno
         r = await leadRpc(step.fn, { _lead_id: leadId, _contact_name: step.contact_name, _search_keyword: step.search_keyword, _search_location: step.search_location });
         break;
       case 'lead_set_archived': r = await leadRpc(step.fn, { _lead_id: leadId, _archived: step.archived }); break;
+      case 'lead_set_contact_method': r = await leadRpc(step.fn, { _lead_id: leadId, _method: step.method }); break;
       case 'lead_set_follow_up': {
         /* lead_set_follow_up writes all three follow-up columns at once. The table's editor holds only
            the action or the date — the list does not download the note — so the current values are

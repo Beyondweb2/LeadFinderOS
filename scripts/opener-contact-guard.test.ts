@@ -30,7 +30,7 @@ const controls = read('src/components/WhatsAppLeadControls.tsx');
 console.log('── 1. what is (and is not) a genuine conversation — the one rule ──');
 {
   ok(reachedInConversation([]) === null, 'tapping Call / opening tel: writes nothing → no contact → the opener is NOT suppressed');
-  ok(!/onContactMethodChange|executeContact|logAttempt|updateLead/.test(strip(table.slice(table.indexOf('const handleCallClick'), table.indexOf('}, [onContactGated]);')))), '…and the Call tap really writes nothing');
+  ok(!/executeContact|logAttempt|updateLead/.test(strip(table.slice(table.indexOf('const handleCallClick'), table.indexOf('}, [onContactGated, onContactMethodChange]);')))), '…and the Call tap records no contact (it sets only the Contact Method pill, which the opener guard never reads)');
   ok(reachedInConversation([row('call_outcome', { outcome: 'no_answer' })]) === null, 'no answer does NOT suppress the opener');
   ok(reachedInConversation([row('call_outcome', { outcome: 'left_voicemail' })]) === null, 'voicemail does NOT suppress the opener');
   ok(reachedInConversation([row('marked_interested', { on: true }), row('state_changed', { to: 'interested', from: 'new', outcome: 'interested' })]) === null, 'the Interested star alone does NOT suppress the opener (it is not a logged contact)');

@@ -847,12 +847,17 @@ export function OutreachTable({
        a laptop with WhatsApp Desktop installed tel: belongs to WhatsApp — the browser asked "Open WhatsApp?". Now
        Call opens the lead popup on the Call tab (the script, the AI result, Quick Close) with the small NUMBER
        window over it: copy or read the number, press CALL, dial on the phone. "What happened?" opens from Log call
-       only, never on arrival — the logged outcome (lead_log_contact) stays the only record of a call. */
+       only, never on arrival — the logged outcome (lead_log_contact) stays the only record of a call.
+       ⛔ CONTACT METHOD FOLLOWS THE ROUTE (Paul, 2026-10-07): opening Call sets the lead's Contact Method pill to
+       Call — the SAME contact_method column the pill shows and the WhatsApp queue writes (never a second field),
+       so the latest route chosen wins. It is the pill only: no attempt, no status, no history row — a call is
+       still recorded solely by the logged outcome. Skipped when it already says Call. */
+    if (lead.contact_method !== 'call') onContactMethodChange?.(lead.id, 'call' as ContactMethod);
     setDetailTab('call');
     setDetailLogContact(false);
     setDetailNumberPopup(true);
     setDetailLead(lead);
-  }, [onContactGated]);
+  }, [onContactGated, onContactMethodChange]);
 
   // Launch-pad: when the parent passes a launchIntent (e.g. from Manage), open the
   // matching lead's composer FRESH with the chosen template + that barber's link.
