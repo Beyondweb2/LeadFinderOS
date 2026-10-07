@@ -87,11 +87,17 @@ export type TemplateCategory =
   | 'no_website'
   | 'poor_website'
   | 'coming_soon'
+  | 'audit'
+  | 'close'
   | 'other';
 
 export interface Template {
   id: string;
   user_id: string;
+  /** 'team' = the shared Findable library (admin-managed); 'personal' (or absent) = one person's own. See src/lib/teamTemplates.ts. */
+  scope?: 'personal' | 'team';
+  archived_at?: string | null;
+  sort_order?: number;
   template_type: TemplateType;
   category: TemplateCategory;
   title: string;
@@ -107,6 +113,8 @@ export const TEMPLATE_CATEGORY_OPTIONS: { value: TemplateCategory; label: string
   { value: 'no_website', label: 'No Website' },
   { value: 'poor_website', label: 'Poor Website' },
   { value: 'coming_soon', label: 'Coming Soon' },
+  { value: 'audit', label: 'Audit' },
+  { value: 'close', label: 'Close' },
   { value: 'other', label: 'Other' },
 ];
 

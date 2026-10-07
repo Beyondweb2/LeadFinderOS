@@ -42,8 +42,13 @@ console.log('── the policy ──');
   ok(events.length > 0 && events[events.length - 1].kind === 'drop', `the LAST migration to mention sales_select_templates drops it (${events.length ? events[events.length - 1].file : 'none'})`);
 
   const dropAt = names.indexOf('20261006010000_templates_owner_only.sql');
-  const later = names.slice(dropAt + 1).filter((n) => /create policy [^;]*on public\.templates[^;]*for select/i.test(strip(read(`supabase/migrations/${n}`)).replace(/\n/g, ' ')));
+  /* The ONE sanctioned later SELECT policy (2026-10-07, team templates): own rows + ACTIVE rows an admin marked scope 'team' — never "every row of Paul's". */
+  const TEAM_MIG = '20261016100000_team_templates.sql';
+  const later = names.slice(dropAt + 1).filter((n) => n !== TEAM_MIG && /create policy [^;]*on public\.templates[^;]*for select/i.test(strip(read(`supabase/migrations/${n}`)).replace(/\n/g, ' ')));
   ok(later.length === 0, `no later migration adds another SELECT policy on templates (${later.join(', ') || 'none'})`);
+  const teamSql = strip(read(`supabase/migrations/${TEAM_MIG}`)).replace(/\s+/g, ' ');
+  ok(/create policy templates_select on public\.templates for select to authenticated using \( user_id = \(select auth\.uid\(\)\) or \(scope = 'team' and archived_at is null and \(select public\.my_role\(\)\) in \('admin', 'sales'\)\)/.test(teamSql) && !/sales_select_templates/.test(teamSql),
+    'the team migration shares ONLY scope = team rows, and only active ones (a personal row is never visible to anyone but its owner)');
 }
 
 console.log('\n── no server path sends a saved text by id ──');
@@ -59,8 +64,8 @@ console.log('\n── no server path sends a saved text by id ──');
   walk(fnRoot, '');
   ok(offenders.length === 0, `no edge function reads the templates table (${offenders.join(', ') || 'none'}) — sending is message text the rep could read`);
   const inbox = read('src/pages/Inbox.tsx');
-  ok(/const \{ templates \} = useTemplates\(\);/.test(inbox) && /templates\.filter\(\(t\) => t\.template_type === 'text'\)/.test(inbox),
-    'the Inbox Quick reply is built only from useTemplates (an RLS-scoped read of the caller\'s own rows)');
+  ok(/const \{ templates, grouped: templateGroups \} = useTemplates\(\);/.test(inbox) && /templates\.filter\(\(t\) => t\.template_type === 'text'\)/.test(inbox),
+    'the Inbox Quick reply is built only from useTemplates (an RLS-scoped read: the caller\'s own rows plus active Team templates)');
 }
 
 console.log('\n── the browser does not seed defaults into an account ──');

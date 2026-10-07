@@ -5,6 +5,7 @@ import { FileText, Copy, ChevronDown, ChevronUp } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
+import { MINE_HEADING, TEAM_HEADING, TEAM_MARK, isArchived, isTeamTemplate } from '@/lib/teamTemplates';
 
 interface TemplatePickerProps {
   onSelectTemplate: (content: string, templateId?: string) => void;
@@ -22,6 +23,10 @@ interface SimpleTemplate {
   content: string;
   category: string;
   template_type: string;
+  /** 'team' = the shared Findable library (src/lib/teamTemplates.ts). */
+  scope?: string | null;
+  archived_at?: string | null;
+  sort_order?: number | null;
 }
 
 // Default pre-made templates shown when user has none
@@ -59,8 +64,9 @@ export function TemplatePicker({ onSelectTemplate, templateType = 'text', isWalk
       setIsLoading(true);
       supabase
         .from('templates')
-        .select('id, title, content, category, template_type')
+        .select('id, title, content, category, template_type, scope, archived_at, sort_order')
         .eq('template_type', templateType)
+        .order('sort_order', { ascending: true })
         .order('updated_at', { ascending: false })
         .then(({ data, error }) => {
           setIsLoading(false);
@@ -70,8 +76,9 @@ export function TemplatePicker({ onSelectTemplate, templateType = 'text', isWalk
             setTemplates(DEFAULT_PREMADE_TEMPLATES.filter(t => t.template_type === templateType));
             return;
           }
-          if (data && data.length > 0) {
-            setTemplates(data);
+          const active = (data ?? []).filter((t) => !isArchived(t));
+          if (active.length > 0) {
+            setTemplates(active);
           } else {
             setTemplates(DEFAULT_PREMADE_TEMPLATES.filter(t => t.template_type === templateType));
           }
@@ -96,7 +103,7 @@ export function TemplatePicker({ onSelectTemplate, templateType = 'text', isWalk
   }, [isOpen, isWalkthrough, onWalkthroughTemplatesOpened]);
 
   // Highlight the "Initial Contact Cycle" template during walkthrough
-  const firstTextTemplate = isWalkthrough ? templates.find(t => 
+  const firstTextTemplate = isWalkthrough ? templates.find(t =>
     t.title.toLowerCase().includes('initial contact cycle') || t.id === 'default-0'
   ) || templates[0] : null;
 
@@ -108,13 +115,13 @@ export function TemplatePicker({ onSelectTemplate, templateType = 'text', isWalk
         size="sm"
         onClick={() => setIsOpen(!isOpen)}
         className={`h-8 text-xs gap-1.5 ${
-          isWalkthrough && !isOpen 
-            ? 'relative animate-bounce shadow-[0_0_16px_hsl(var(--primary)/0.5),0_0_4px_hsl(var(--primary)/0.3)] ring-2 ring-primary/60 font-semibold' 
+          isWalkthrough && !isOpen
+            ? 'relative animate-bounce shadow-[0_0_16px_hsl(var(--primary)/0.5),0_0_4px_hsl(var(--primary)/0.3)] ring-2 ring-primary/60 font-semibold'
             : 'text-muted-foreground hover:text-foreground'
         }`}
       >
         <FileText className="h-3.5 w-3.5" />
-        {isWalkthrough && !isOpen ? '👉 Select a Template' : 'My Templates'}
+        {isWalkthrough && !isOpen ? '👉 Select a Template' : 'Templates'}
         {isOpen ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
       </Button>
 
@@ -131,11 +138,14 @@ export function TemplatePicker({ onSelectTemplate, templateType = 'text', isWalk
           ) : (
             <ScrollArea className="max-h-[280px]">
               <div className="divide-y divide-border/30">
-                {templates.map((t) => {
+                {[...templates.filter((x) => isTeamTemplate(x)), ...templates.filter((x) => !isTeamTemplate(x))].map((t, idx, arr) => {
+                  const startsTeam = isTeamTemplate(t) && idx === 0;
+                  const startsMine = !isTeamTemplate(t) && arr.some((x) => isTeamTemplate(x)) && (idx === 0 || isTeamTemplate(arr[idx - 1]));
                   const isHighlighted = isWalkthrough && firstTextTemplate?.id === t.id;
                   return (
+                    <div key={t.id}>
+                    {(startsTeam || startsMine) && <p className="bg-muted/30 px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">{startsTeam ? TEAM_HEADING : MINE_HEADING}</p>}
                     <button
-                      key={t.id}
                       onClick={() => handleSelect(t)}
                       className={`w-full text-left px-3 py-2.5 hover:bg-accent/50 transition-colors group ${
                         isHighlighted ? 'bg-primary/10 ring-1 ring-primary/30' : ''
@@ -144,10 +154,12 @@ export function TemplatePicker({ onSelectTemplate, templateType = 'text', isWalk
                       <div className="flex items-center justify-between gap-2">
                         <span className={`text-xs font-medium ${isHighlighted ? 'text-primary' : ''}`}>
                           {isHighlighted && '👉 '}{t.title}
+                          {isTeamTemplate(t) && <span className="ml-1.5 rounded-full bg-yellow-400/15 px-1.5 text-[9px] font-bold tracking-wide text-yellow-600 ring-1 ring-inset ring-yellow-500/40 dark:text-yellow-300">{TEAM_MARK}</span>}
                         </span>
                         <Copy className="h-3 w-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
                       </div>
                     </button>
+                    </div>
                   );
                 })}
               </div>
