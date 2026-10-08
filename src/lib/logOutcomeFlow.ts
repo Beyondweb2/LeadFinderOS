@@ -55,7 +55,7 @@ export const LOG_CHOICES: readonly LogChoice[] = [
   { key: 'not_interested', outcome: 'not_interested', label: 'Not interested', tone: 'stop' },
   { key: 'no_answer', outcome: 'no_answer', label: "Didn't answer", tone: 'quiet' },
   { key: 'call_back', outcome: 'call_back', label: 'Call back', tone: 'info' },
-  { key: 'send_onboarding', outcome: 'interested', label: 'Send onboarding', tone: 'strong' },
+  { key: 'send_onboarding', outcome: 'interested', label: 'Close — take payment', tone: 'strong' },
   { key: 'wrong_number', outcome: 'wrong_number', label: 'Wrong number', tone: 'stop' },
   { key: 'left_voicemail', outcome: 'left_voicemail', label: 'Left voicemail', tone: 'quiet' },
 ];
@@ -105,7 +105,7 @@ export function followStepOf(key: string, outcome: string): FollowStep {
 /** "What happens next?" after Interested. Each one is an existing path: the Close tab, the one Next Action
  *  form (pre-filled, saved only by its own Save), or nothing. */
 export const INTERESTED_NEXT_CHOICES = [
-  { key: 'send_onboarding', label: 'Send onboarding' },
+  { key: 'send_onboarding', label: 'Close — take payment' },
   { key: 'call_back', label: 'Call back' },
   { key: 'follow_up', label: 'Set follow-up' },
   { key: 'none', label: 'No next action' },

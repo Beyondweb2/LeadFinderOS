@@ -74,7 +74,7 @@ console.log("── 5. outcome → the next step ──");
 const L = { id: "l", status: "initial_contact", is_potential_work: false, next_action: null } as never;
 ok(followStepOf("call_back", "call_back") === "call_back_when" && outcomePlan("call_back", L).setNextAction === "call" && /title = 'When should we call\?';/.test(flow), "Call back: the rule SAVES 'Call · No date set', then asks When should we call?");
 ok(followStepOf("interested", "interested") === "interested_next" && outcomePlan("interested", L).star === true, "Interested: the ⭐, then What happens next?");
-ok(JSON.stringify(INTERESTED_NEXT_CHOICES.map((c) => c.label)) === JSON.stringify(["Send onboarding", "Call back", "Set follow-up", "No next action"]), "…Send onboarding / Call back / Set follow-up / No next action");
+ok(JSON.stringify(INTERESTED_NEXT_CHOICES.map((c) => c.label)) === JSON.stringify(["Close — take payment", "Call back", "Set follow-up", "No next action"]), "…Send onboarding / Call back / Set follow-up / No next action");
 ok(interestedPreset("call_back")?.nextAction === "call" && interestedPreset("follow_up")?.nextAction === "follow_up" && interestedPreset("none") === null && interestedPreset("send_onboarding") === null, "…Call back and Set follow-up pre-fill the one form (saved only by its Save); No next action writes nothing");
 ok(/if \(k === 'send_onboarding'\) \{ setLogOpen\(false\); onSendOnboarding\(\); return; \}/.test(flow), "…Send onboarding there → the Close tab too");
 ok(followStepOf("not_interested", "not_interested") === "none" && outcomePlan("not_interested", L).status === "not_interested", "Not interested: no next step forced (the rule clears it and the lost-reason prompt asks why)");
