@@ -201,7 +201,7 @@ export default function Team() {
                 </div>
                 {m.role !== 'admin' && !m.is_book_owner && (
                   <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
-                    {m.status === 'active' && m.role === 'sales' && activationPending(m.password_set) && (
+                    {m.status === 'active' && m.role === 'sales' && (
                       <Button size="sm" variant="outline" data-testid="resend-activation" onClick={async () => {
                         const r = await call('team_new_link', { user_id: m.user_id });
                         if (!r.ok || !r.link) { fail(r.ok ? { error: 'link_failed' } : r); return; }

@@ -110,7 +110,7 @@ async function main() {
   ok(/password_set: pwSetErr/.test(au), 'team_list reports password_set for each member');
 
   const ui = strip(read('src/pages/Team.tsx'));
-  ok(/activationPending\(m\.password_set\)/.test(ui) && /Resend activation/.test(ui) && /data-testid="resend-activation"/.test(ui), '12. the Team row shows Resend activation only for a confirmed-pending salesperson');
+  ok(/activationPending\(m\.password_set\)/.test(ui) && /Resend activation/.test(ui) && /data-testid="resend-activation"/.test(ui), '12. the Team row shows Resend activation on every active salesperson (the server refuses an activated one)');
   ok(/activation pending/.test(ui) && /fail\(r\.ok \? \{ error: 'link_failed' \} : r\)/.test(ui) && /New activation link made for/.test(ui), '12b. success shows a toast + the link box; failure shows the mapped reason');
   ok(/\.\.\.RESEND_ERRORS/.test(ui), '12c. the page maps every server refusal to plain wording');
   ok(!/!m\.has_signed_in/.test(ui), '12d. the old "has not signed in" test (fooled by link scanners) no longer decides');
