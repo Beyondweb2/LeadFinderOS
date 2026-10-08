@@ -88,7 +88,7 @@ console.log("\n── every queue path refreshes the one queue ──");
 {
   const table = strip(read("src/components/OutreachTable.tsx"));
   ok(/handleSalesQueue[\s\S]*?recordQueueBatch\(Number\(r\.queued \?\? 0\), skipList\)[\s\S]*?announceQueueChanged\(\);/.test(table), "Sales bulk queue: records the batch and announces the change");
-  ok(/recordQueueBatch\(queuedCount, \[/.test(table) && /Promise\.allSettled\(writes\)\.then\(\(\) => announceQueueChanged\(\)\)/.test(table), "Admin bulk queue: records the batch and announces after the writes land");
+  ok(/recordQueueBatch\(queuedCount, skippedLines\)/.test(table) && /Promise\.allSettled\(writes\)\.then\(\(\) => announceQueueChanged\(\)\)/.test(table), "Admin bulk queue: records the batch and announces after the writes land");
   ok(/Promise\.allSettled\(followupWrites\)\.then\(\(\) => announceQueueChanged\(\)\)/.test(table), "Admin follow-up queue announces too");
   const controls = strip(read("src/components/WhatsAppLeadControls.tsx"));
   ok(/salesQueueOpener\(\[lead\.id\], template\)[\s\S]*?announceQueueChanged\(\)/.test(controls) && /finally \{\s*setBusy\(false\);\s*announceQueueChanged\(\);/.test(controls), "the lead popup (both roles) announces the change");

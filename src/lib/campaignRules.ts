@@ -167,7 +167,7 @@ export function campaignErrorText(code: string | undefined | null): string {
 /** Why a lead was not queued at launch (sales_queue_opener's own skip keys), in words. */
 export const LAUNCH_SKIP_TEXT: Record<string, string> = {
   not_found: 'not found', not_yours: 'not your lead', archived: 'archived', client: 'already a client',
-  not_new: 'already in progress', already_contacted: 'already contacted', no_phone: 'no phone number',
+  not_new: 'already in progress', already_contacted: 'already messaged on WhatsApp', number_already_contacted: 'that number is already in a conversation on another lead row (probably a duplicate)', sign_up_started: 'already has a sign-up in progress', whatsapp_app_opened: 'WhatsApp was already opened for this lead', no_phone: 'no phone number',
   contacted_by_phone: 'already contacted by phone — initial opener not queued',
   contacted_logged: 'already in conversation (a logged contact) — initial opener not queued',
   not_a_uk_mobile: 'not a UK mobile (cold WhatsApp outreach is UK only — not switched on for Australia or other countries)', opted_out: 'asked not to be contacted', daily_limit: 'over your daily limit',

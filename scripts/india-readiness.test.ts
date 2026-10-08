@@ -181,11 +181,12 @@ console.log('\n── Sales can NOT queue an Indian mobile any more; UK rule unc
     .filter((f) => /create or replace function public\.sales_queue_opener/i.test(read('supabase/migrations/' + f))).pop()!;
   const m = read('supabase/migrations/' + latest);
   const fn = m.slice(m.toLowerCase().indexOf('create or replace function public.sales_queue_opener'));
-  ok(latest === '20261015090000_outreach_uk_only.sql', 'the newest sales_queue_opener is the UK-only migration (' + latest + ')');
+  ok(latest === '20261017090000_queue_truthful_flags.sql', 'the newest sales_queue_opener is the truthful-flags migration, which keeps the UK-only rule (' + latest + ')');
   ok(fn.includes("elsif not (coalesce(v_lead.country, 'UK') = 'UK' and v_pk ~ '^7[0-9]{9}$') then v_reason := 'not_a_uk_mobile';"), 'the one cold test: a UK mobile, nothing else');
   ok(!/\^91/.test(fn), 'no India (91) alternative in it');
   for (const g of ["'not_yours'", "'archived'", "'client'", "'not_new'", "'already_contacted'", "'opted_out'", "'daily_limit'", "'no_phone'", "opener_contact_block"]) ok(fn.includes(g), '…every other guard kept: ' + g);
-  const cc = m.slice(m.toLowerCase().indexOf('create or replace function public.campaign_candidates'));
+  const ukm = read('supabase/migrations/20261015090000_outreach_uk_only.sql');
+  const cc = ukm.slice(ukm.toLowerCase().indexOf('create or replace function public.campaign_candidates'));
   ok(!/\^91/.test(cc) && /coalesce\(o\.country, 'UK'\) = 'UK' and public\.phone_key\(o\.phone\) ~ '\^7\[0-9\]\{9\}\$'/.test(cc), 'campaign_candidates "sendable" is UK-only too');
   const sc = read('src/lib/salesCrm.ts');
   ok(/not_a_uk_mobile: 'not a UK mobile/.test(sc) && !/not a UK or Indian mobile/.test(sc), 'the refusal reads "not a UK mobile" (code not_a_uk_mobile unchanged)');

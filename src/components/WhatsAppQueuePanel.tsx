@@ -35,6 +35,8 @@ interface TeamStatus {
    *  degrades cleanly against an older function deploy that has not shipped it yet. */
   nextEligibleSendAt?: string | null;
   paused: boolean;
+  /** Queued leads held by a test account — never sent, by design. Absent on an older deploy; null = unreadable. */
+  testHeldQueuedCount?: number | null;
 }
 
 /**
@@ -306,6 +308,21 @@ export function WhatsAppQueuePanel({ defaultExpanded = true }: { defaultExpanded
         </Callout>
       )}
 
+      {/* Held by a TEST ACCOUNT: the sender never chooses these (src/lib/qaSafety.ts), so "Waiting" would be a lie.
+          Server count, admin only (the same status read that gives Sent today). */}
+      {teamControls && (team?.testHeldQueuedCount ?? 0) > 0 && (
+        <Callout tone="amber" className="mt-2 px-3 py-2 text-[11px]" data-testid="queue-test-held">
+          {team?.testHeldQueuedCount} queued {team?.testHeldQueuedCount === 1 ? 'lead is' : 'leads are'} held by a test account and will <strong>not</strong> be sent to. Reassign {team?.testHeldQueuedCount === 1 ? 'it' : 'them'} to a real owner, or remove {team?.testHeldQueuedCount === 1 ? 'it' : 'them'} from the queue.
+        </Callout>
+      )}
+      {/* Queued with no number WhatsApp can reach (none, a landline, not a UK mobile): the sender flags these No
+          WhatsApp when it reaches them. Counted from the rows on screen. */}
+      {view.unsendable > 0 && (
+        <Callout tone="amber" className="mt-2 px-3 py-2 text-[11px]" data-testid="queue-unsendable">
+          {view.unsendable} queued {view.unsendable === 1 ? 'lead has' : 'leads have'} no number WhatsApp can reach (cold WhatsApp is UK mobiles only). {view.unsendable === 1 ? 'It' : 'They'} will be flagged No WhatsApp, not sent.
+        </Callout>
+      )}
+
       {/* The last batch THIS tab queued — a batch result, never queue rows (whatsappQueueView.ts). */}
       {batch && <BatchNote batch={batch} className="mt-2" />}
 
@@ -406,7 +423,9 @@ export function BatchNote({ batch, className }: { batch: QueueBatch; className?:
       <span className="text-muted-foreground">{batchHeadline(batch)}</span>
       {batch.skipped.length > 0 && (
         <ul className="mt-1 space-y-0.5 text-muted-foreground">
-          {batch.skipped.map((s) => <li key={s.label}>– {s.n} {s.label}</li>)}
+          {batch.skipped.map((s) => (
+            <li key={s.label}>– {s.n} {s.label}{s.names?.length ? <span className="text-muted-foreground/70"> ({s.names.join(', ')}{s.n > s.names.length ? ', …' : ''})</span> : null}</li>
+          ))}
         </ul>
       )}
     </div>

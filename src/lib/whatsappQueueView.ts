@@ -23,6 +23,8 @@
    Pure: no React, no Supabase. The hook (src/hooks/useWhatsAppQueue.ts) reads, the panel draws.
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 import type { Tone } from '@/components/salesDash/primitives';
+import { coldWhatsAppVerdict } from './coldWhatsAppEligibility';
+import { isColdOutreachTemplate } from './coldOutreach';
 
 /** The columns the queue reads from `sales_leads` — the same list for both roles. */
 export const QUEUE_ROW_COLUMNS =
@@ -63,6 +65,9 @@ export interface QueueView {
   hookCount: number;
   /** Queued but archived — the processor will NOT send these. */
   archivedWaiting: number;
+  /** Waiting COLD openers whose number WhatsApp cannot reach (none, landline, not a UK mobile). The sender flags
+   *  them No WhatsApp when it reaches them; this says so before then (positive allowlist: unknown = unsendable). */
+  unsendable: number;
 }
 
 const byStamp = (k: 'queued_at' | 'contact_followup_queued_at') => (a: QueueRow, b: QueueRow) =>
@@ -77,6 +82,9 @@ export function deriveQueue(rows: readonly QueueRow[]): QueueView {
     followUps: live.filter((r) => !!r.contact_followup_queued_at).sort(byStamp('contact_followup_queued_at')),
     hookCount: live.filter((r) => !!r.hook_followup_queued_at).length,
     archivedWaiting: rows.filter((r) => r.is_archived === true && r.status === 'queued').length,
+    unsendable: live.filter((r) => r.status === 'queued'
+      && isColdOutreachTemplate(r.whatsapp_template ?? '')
+      && !coldWhatsAppVerdict(r.phone, r.country ?? null).eligible).length,
   };
 }
 
@@ -101,13 +109,19 @@ export function queueSummaryParts(v: QueueView): string[] {
    empty, as if the press had failed. The batch's own result (from sales_queue_opener, or the admin's
    queue path) is kept for this tab and shown as a batch: never as queue rows, never sent to the server.
    Per-viewer convenience only, so sessionStorage, wrapped (it can throw or be empty). */
-export interface QueueBatch { at: string; queued: number; skipped: Array<{ n: number; label: string }> }
+/** `names`: up to a handful of the skipped businesses, so a salesperson can see WHICH ones and why. */
+export interface QueueSkip { n: number; label: string; names?: string[] }
+export interface QueueBatch { at: string; queued: number; skipped: QueueSkip[] }
 const BATCH_KEY = 'whatsapp-queue.last-batch.v1';
 export const QUEUE_BATCH_EVENT = 'whatsapp-queue-batch';
 let memoryBatch: QueueBatch | null = null;
 
-export function recordQueueBatch(queued: number, skipped: Array<{ n: number; label: string }>, now = new Date()): QueueBatch {
-  const b: QueueBatch = { at: now.toISOString(), queued, skipped: skipped.filter((s) => s.n > 0) };
+export const BATCH_SKIP_NAMES_MAX = 5;
+export function recordQueueBatch(queued: number, skipped: QueueSkip[], now = new Date()): QueueBatch {
+  const b: QueueBatch = {
+    at: now.toISOString(), queued,
+    skipped: skipped.filter((s) => s.n > 0).map((s) => (s.names?.length ? { ...s, names: s.names.slice(0, BATCH_SKIP_NAMES_MAX) } : { n: s.n, label: s.label })),
+  };
   memoryBatch = b;
   try { globalThis.sessionStorage?.setItem(BATCH_KEY, JSON.stringify(b)); } catch { /* memory copy still serves this tab */ }
   if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent(QUEUE_BATCH_EVENT));
