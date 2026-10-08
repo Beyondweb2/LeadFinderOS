@@ -142,6 +142,11 @@ async function main() {
   ok(/activationPending\(m\.password_set\)/.test(ui) && /Resend activation/.test(ui) && /Send password reset/.test(ui) && /pending \? 'resend-activation' : 'send-password-reset'/.test(ui) && /pending \? 'team_new_link' : 'team_password_reset'/.test(ui), '12. the Team row shows ONE button chosen by the real state: Resend activation (no password) or Send password reset (has one); unknown shows neither');
   ok(/activation pending/.test(ui) && /pending \? 'link_failed' : 'reset_failed'/.test(ui) && /New activation link made for/.test(ui) && /Password reset link made for/.test(ui), '12b. success shows a toast + the link box; failure shows the mapped reason');
   ok(/\.\.\.RESEND_ERRORS/.test(ui), '12c. the page maps every server refusal to plain wording');
+  ok(/setRowLink\(\{ userId: m\.user_id/.test(ui) && /rowLink\?\.userId === m\.user_id/.test(ui) && /data-testid="row-link"/.test(ui), '13. the fresh link is shown UNDER the row that was clicked, not only up by the invite form');
+  ok(/data-testid="copy-link"/.test(ui) && />\s*Copy link\s*</.test(ui.replace(/<Copy className="h-4 w-4" \/>/, '')) && /readOnly value=\{link\}/.test(ui), '13b. the link is shown in full in a read-only box with a labelled Copy link button');
+  ok(/Nothing was emailed/.test(ui) && /Not emailed/.test(ui), '13c. the wording says plainly that nothing was emailed - the admin sends the link');
+  const blk = au.slice(au.indexOf("action === 'team_new_link' || action === 'team_password_reset'"), au.indexOf("action === 'team_disable'"));
+  ok(!/console\.(log|error|warn)\([^)]*(link|action_link|token)/i.test(blk.replace(/event_error/g, '')) && /link: result\.link/.test(blk), '13d. the link goes back to the admin only; no log line in the block carries a link or token');
   ok(!/!m\.has_signed_in/.test(ui), '12d. the old "has not signed in" test (fooled by link scanners) no longer decides');
   const mig = read('supabase/migrations/20261017100000_team_password_is_set_real.sql');
   ok(/password_set_at/.test(mig) && !/encrypted_password\s*(is|<>)/.test(mig) && /security definer/.test(mig) && /revoke all on function public\.team_password_is_set\(uuid\) from public, anon, authenticated/.test(mig) && /grant execute[\s\S]*service_role/.test(mig), 'the migration exposes a boolean to the service role only, never the hash');
