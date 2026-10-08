@@ -57,15 +57,15 @@ const ERR: Record<string, string> = {
   not_an_active_member: 'Pick an active team member.',
 };
 
-function LinkBox({ link, onClose }: { link: string; onClose: () => void }) {
+function LinkBox({ link, onClose, title = 'Invite link ready', blurb = 'Send this link to them yourself (WhatsApp or email). It works once, and they choose their own password.' }: { link: string; onClose: () => void; title?: string; blurb?: string }) {
   const { toast } = useToast();
   return (
-    <Callout tone="blue" icon={Link2} title="Invite link ready">
+    <Callout tone="blue" icon={Link2} title={title}>
       <div className="space-y-2">
-        <p>Send this link to them yourself (WhatsApp or email). It works once, and they choose their own password.</p>
+        <p>{blurb}</p>
         <div className="flex min-w-0 gap-2">
           <Input readOnly value={link} className="h-9 min-w-0 flex-1 font-mono text-xs" onFocus={(e) => e.currentTarget.select()} />
-          <Button size="sm" variant="outline" className="h-9 w-9 shrink-0 p-0" aria-label="Copy link" onClick={async () => { await navigator.clipboard.writeText(link); toast({ title: 'Link copied' }); }}><Copy className="h-4 w-4" /></Button>
+          <Button size="sm" variant="outline" className="h-9 shrink-0 gap-1.5" data-testid="copy-link" aria-label="Copy link" onClick={async () => { try { await navigator.clipboard.writeText(link); toast({ title: 'Link copied' }); } catch { toast({ title: 'Could not copy automatically', description: 'Select the link in the box and copy it.' }); } }}><Copy className="h-4 w-4" />Copy link</Button>
         </div>
         <Button size="sm" variant="ghost" onClick={onClose}>Done</Button>
       </div>
@@ -88,6 +88,8 @@ export default function Team() {
   const [email, setEmail] = useState('');
   const [busy, setBusy] = useState(false);
   const [link, setLink] = useState<string | null>(null);
+  /* The recovery link for ONE row: shown under that row (not up by the invite form), so the admin sees it where they clicked. */
+  const [rowLink, setRowLink] = useState<{ userId: string; name: string; pending: boolean; link: string } | null>(null);
   const [moveTo, setMoveTo] = useState<Record<string, string>>({});
   const [openOnboarding, setOpenOnboarding] = useState<string | null>(null);
   /* Salesperson onboarding (2026-10-05): admin-users is the only way to the records (no RLS policy). */
@@ -209,8 +211,8 @@ export default function Team() {
                         <Button size="sm" variant="outline" data-testid={pending ? 'resend-activation' : 'send-password-reset'} onClick={async () => {
                           const r = await call(pending ? 'team_new_link' : 'team_password_reset', { user_id: m.user_id });
                           if (!r.ok || !r.link) { fail(r.ok ? { error: pending ? 'link_failed' : 'reset_failed' } : r); return; }
-                          setLink(String(r.link));
-                          toast({ title: pending ? `New activation link made for ${m.display_name}` : `Password reset link made for ${m.display_name}`, description: pending ? 'Same account. Send it to them — the old link no longer works.' : 'Same account. Send it to them — they choose a new password.' });
+                          setRowLink({ userId: m.user_id, name: m.display_name, pending, link: String(r.link) });
+                          toast({ title: pending ? `New activation link made for ${m.display_name}` : `Password reset link made for ${m.display_name}`, description: 'Nothing was emailed. Copy the link under their name and send it yourself.' });
                           void refresh();
                         }}>{pending ? 'Resend activation' : 'Send password reset'}</Button>
                       );
@@ -240,6 +242,13 @@ export default function Team() {
                     ) : (
                       <Button size="sm" variant="outline" onClick={async () => { const r = await call('team_reactivate', { user_id: m.user_id }); if (!r.ok) fail(r); else { toast({ title: `${m.display_name} re-enabled` }); void refresh(); } }}>Re-enable</Button>
                     )}
+                  </div>
+                )}
+                {rowLink?.userId === m.user_id && (
+                  <div className="w-full sm:pl-11" data-testid="row-link">
+                    <LinkBox link={rowLink.link} onClose={() => setRowLink(null)}
+                      title={rowLink.pending ? `Activation link for ${rowLink.name}` : `Password reset link for ${rowLink.name}`}
+                      blurb={rowLink.pending ? 'Not emailed. Copy it and send it to them yourself. Same account; the old link no longer works. It works once, and they choose their own password.' : 'Not emailed. Copy it and send it to them yourself. Same account; it works once, and they choose a new password.'} />
                   </div>
                 )}
                 {openOnboarding === m.user_id && onboarding.data && m.role !== 'admin' && !m.is_book_owner && (
