@@ -12,6 +12,8 @@ import { useToast } from '@/hooks/use-toast';
 import appLogo from '@/assets/logo.png';
 import { LoadState, SURFACE } from '@/components/operator/ui';
 import { cn } from '@/lib/utils';
+import { supabase } from '@/integrations/supabase/client';
+import { SET_PASSWORD_PATH } from '@/lib/teamActivation';
 
 const Auth = () => {
   const { t } = useTranslation();
@@ -30,6 +32,8 @@ const Auth = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errors, setErrors] = useState<{ email?: string; password?: string }>({});
   
+  const [forgot, setForgot] = useState(searchParamsInit.get('forgot') === '1');
+  const [resetSent, setResetSent] = useState(false);
   const { signIn, signUp, user, isLoading } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -69,6 +73,19 @@ const Auth = () => {
     }
     setErrors({});
     return true;
+  };
+
+  /* FORGOT PASSWORD: the provider's own recovery email, landing on the same set-password page an invite uses.
+     The answer is the same whether or not the address has an account — nothing here confirms one exists. */
+  const sendReset = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!z.string().email().safeParse(email.trim()).success) { setErrors({ email: 'Enter a valid email address.' }); return; }
+    setErrors({});
+    setIsSubmitting(true);
+    try {
+      await supabase.auth.resetPasswordForEmail(email.trim(), { redirectTo: `${window.location.origin}${SET_PASSWORD_PATH}` });
+      setResetSent(true);
+    } finally { setIsSubmitting(false); }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -161,6 +178,16 @@ const Auth = () => {
         {/* The app's one card surface (components/operator/ui SURFACE) — it was a hard-coded dark
             panel, which sat as a black box on the light themes. */}
         <div className={cn(SURFACE, 'p-6 sm:p-8')}>
+          {forgot ? (
+            <form onSubmit={sendReset} className="space-y-5" data-testid="forgot-form">
+              <p className="text-sm text-muted-foreground">Enter your email and we will send you a link to choose a new password.</p>
+              <Input id="forgot-email" type="email" placeholder={t('auth.emailPlaceholder')} value={email} onChange={(e) => setEmail(e.target.value)} disabled={isSubmitting} className="h-9 text-sm" />
+              {errors.email && <p className="text-xs text-destructive">{errors.email}</p>}
+              {resetSent && <p className="text-sm text-muted-foreground" role="status">If that email has an account, a reset link is on its way. Check your inbox and spam.</p>}
+              <Button type="submit" className="w-full h-10" disabled={isSubmitting}>{isSubmitting ? <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" /> : 'Send reset link'}</Button>
+              <Button type="button" variant="ghost" className="w-full" onClick={() => { setForgot(false); setResetSent(false); }}>Back to sign in</Button>
+            </form>
+          ) : (
           <form onSubmit={handleSubmit} className="space-y-5">
             <div className="space-y-1.5">
               <Label htmlFor="email" className="text-xs font-medium text-muted-foreground/80 uppercase tracking-wider">{t('auth.email')}</Label>
@@ -204,7 +231,9 @@ const Auth = () => {
                 isLogin ? t('auth.signIn') : t('auth.createAccount')
               )}
             </Button>
+            <button type="button" className="block w-full text-center text-xs text-muted-foreground hover:text-foreground hover:underline" onClick={() => setForgot(true)}>Forgot password?</button>
           </form>
+          )}
 
           {/* Invite-only: no public sign-up toggle. New admin users are created
               from the Supabase dashboard; barbers onboard via /claim. */}

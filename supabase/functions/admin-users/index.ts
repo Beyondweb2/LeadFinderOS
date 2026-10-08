@@ -2,7 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { checkRateLimit, rateLimitHeaders } from '../_shared/rate-limiter.ts';
 import { recordDenial } from '../_shared/protection.ts';
-import { reissueActivation } from '../_shared/team-activation.ts';
+import { issuePasswordReset, reissueActivation, type ActivationDeps } from '../_shared/team-activation.ts';
 import { OPERATOR_APP_URL } from '../../../src/config/operatorApp.ts';
 import { validateNewDocument, validateOnboardingPatch, type DocumentVersion, type OnboardingRecord } from '../../../src/lib/salespersonOnboarding.ts';
 
@@ -461,19 +461,21 @@ serve(async (req) => {
       return jsonResponse({ ok: true, user_id: uid, link: link.properties?.action_link ?? null }, 200, corsHeaders, rlHeaders);
     }
 
-    /* RESEND ACTIVATION (2026-10-08): a fresh link for an EXISTING salesperson who never finished
-       activating. Same user id throughout — no insert of any kind (src/lib/teamActivation.ts is the one
-       rule, _shared/team-activation.ts the one flow). Admin only: the role check above runs first. */
-    if (action === 'team_new_link') {
-      const result = await reissueActivation({
-        facts: async (uid) => {
+    /* RESEND ACTIVATION / SEND PASSWORD RESET (2026-10-08): a fresh link for an EXISTING salesperson —
+       activation if they never chose a password, a recovery link if they did. Same user id throughout, no
+       insert of any kind (src/lib/teamActivation.ts is the one rule, _shared/team-activation.ts the one
+       flow). Admin only: the role check above runs first. */
+    if (action === 'team_new_link' || action === 'team_password_reset') {
+      const reset = action === 'team_password_reset';
+      const deps: ActivationDeps = {
+        facts: async (uid, kind) => {
           const since = new Date(Date.now() - 3600_000).toISOString();
           const [{ data: m }, { data: roles }, { data: au }, { data: pw, error: pwErr }, { data: evs }] = await Promise.all([
             serviceClient.from('team_members').select('status, suspended_at, is_book_owner').eq('user_id', uid).maybeSingle(),
             serviceClient.from('user_roles').select('role').eq('user_id', uid),
             serviceClient.auth.admin.getUserById(uid),
             serviceClient.rpc('team_password_is_set', { _uid: uid }),
-            serviceClient.from('security_events').select('id').eq('kind', 'activation_resent').eq('detail->>target_user_id', uid).gte('created_at', since),
+            serviceClient.from('security_events').select('id').eq('kind', kind).eq('detail->>target_user_id', uid).gte('created_at', since),
           ]);
           const rs = new Set((roles ?? []).map((r: { role: string }) => r.role));
           const u = au?.user;
@@ -486,20 +488,21 @@ serve(async (req) => {
             resendsLastHour: (evs ?? []).length,
           };
         },
-        makeLink: async (email) => {
+        makeLink: async (email, kind) => {
           const { data: link, error: linkErr } = await serviceClient.auth.admin.generateLink({
-            type: 'magiclink', email, options: { redirectTo: SET_PASSWORD_URL },
+            type: kind === 'password_reset_sent' ? 'recovery' : 'magiclink', email, options: { redirectTo: SET_PASSWORD_URL },
           });
           return { link: link?.properties?.action_link ?? null, error: linkErr ? String(linkErr.message ?? 'link failed') : null };
         },
         audit: async (ev) => {
           const { error: eErr } = await serviceClient.from('security_events').insert({
-            actor_user_id: ev.actor, actor_role: 'admin', kind: 'activation_resent', severity: 'info',
+            actor_user_id: ev.actor, actor_role: 'admin', kind: ev.kind, severity: 'info',
             detail: { target_user_id: ev.target, at: ev.at },
           });
           if (eErr) console.error(JSON.stringify({ level: 'error', action, target: ev.target, event_error: eErr.message }));
         },
-      }, adminUserId, body.user_id);
+      };
+      const result = await (reset ? issuePasswordReset : reissueActivation)(deps, adminUserId, body.user_id);
       if (!result.ok) return jsonResponse({ ok: false, error: result.error, detail: result.detail }, result.status, corsHeaders, rlHeaders);
       console.log(JSON.stringify({ level: 'info', admin_user_id: adminUserId, action, target: result.user_id, timestamp: new Date().toISOString() }));
       return jsonResponse({ ok: true, link: result.link, user_id: result.user_id }, 200, corsHeaders, rlHeaders);

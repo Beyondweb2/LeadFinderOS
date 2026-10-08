@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Callout, IconTile, LoadState, SURFACE } from '@/components/operator/ui';
 import { cn } from '@/lib/utils';
+import { EXPIRED_LINK_COPY } from '@/lib/teamActivation';
 
 /* SET YOUR PASSWORD — where an invite (or a fresh link from the Team page) lands (multi-user,
  * 2026-09-27). Supabase signs the invitee in from the link itself; this page only lets them choose a
@@ -28,9 +29,12 @@ export default function SetPassword() {
       <div className="min-h-screen flex items-center justify-center p-4 sm:p-6 bg-background">
         <div className={cn(SURFACE, 'flex w-full max-w-sm flex-col items-center gap-3 p-6 text-center')}>
           <IconTile icon={Link2Off} tone="amber" size="lg" />
-          <h1 className="text-lg font-bold tracking-tight">This link has expired or was already used</h1>
-          <p className="text-sm text-muted-foreground">Ask the admin for a new link from the Team page.</p>
-          <Button variant="outline" onClick={() => navigate('/auth')}>Go to sign in</Button>
+          <h1 className="text-lg font-bold tracking-tight">{EXPIRED_LINK_COPY.title}</h1>
+          <p className="text-sm text-muted-foreground">{EXPIRED_LINK_COPY.body}</p>
+          <div className="flex flex-wrap justify-center gap-2">
+            <Button variant="outline" onClick={() => navigate('/auth')}>Go to sign in</Button>
+            <Button variant="outline" onClick={() => navigate('/auth?forgot=1')}>Forgot password</Button>
+          </div>
         </div>
       </div>
     );
@@ -42,7 +46,7 @@ export default function SetPassword() {
     if (pw !== pw2) { setErr('The two passwords do not match.'); return; }
     setBusy(true);
     try {
-      const { error } = await supabase.auth.updateUser({ password: pw });
+      const { error } = await supabase.auth.updateUser({ password: pw, data: { password_set_at: new Date().toISOString() } });
       if (error) { setErr(error.message); return; }
       navigate(homeFor(role), { replace: true });
     } finally { setBusy(false); }
