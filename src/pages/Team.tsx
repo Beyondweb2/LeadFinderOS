@@ -17,6 +17,7 @@ import { PERMISSION_MATRIX } from '@/lib/access';
 import { OnboardingBadge, SalespersonDocumentsCard, SalespersonOnboardingPanel } from '@/components/SalespersonOnboardingPanel';
 import { AttributionReviewsCard } from '@/components/AttributionReviews';
 import type { AttributionPerson, AttributionReview } from '@/lib/attributionReviewView';
+import { activationPending, RESEND_ERRORS } from '@/lib/teamActivation';
 import { ONBOARDING_SAVE_ERRORS, onboardingSummary, type DocumentVersion, type OnboardingRecord } from '@/lib/salespersonOnboarding';
 
 /* TEAM — admin only (multi-user, 2026-09-27). The route is admin-only in src/lib/access.ts, and every
@@ -25,7 +26,9 @@ import { ONBOARDING_SAVE_ERRORS, onboardingSummary, type DocumentVersion, type O
 
 interface Member {
   user_id: string; display_name: string; status: 'active' | 'disabled'; is_book_owner: boolean; role: 'admin' | 'sales' | null;
-  email: string | null; last_sign_in_at: string | null; has_signed_in: boolean; banned: boolean; assigned_leads: number;
+  email: string | null; last_sign_in_at: string | null; has_signed_in: boolean; banned: boolean;
+  /** Chose a password (true), never did (false), or could not be read (null/absent). Drives Resend activation. */
+  password_set?: boolean | null; assigned_leads: number;
   /** 2026-09-29: set = suspended (reads work, every protected action refuses). Null = not suspended. */
   suspended_at?: string | null;
   /** When Disable ended their engagement (the commission end date). Null while active. */
@@ -43,6 +46,7 @@ async function call(action: string, body: Record<string, unknown> = {}) {
 }
 
 const ERR: Record<string, string> = {
+  ...RESEND_ERRORS,
   already_exists: 'That email already has an account.',
   bad_email: 'That is not a valid email address.',
   bad_name: 'Give them a name (up to 60 characters).',
@@ -187,6 +191,7 @@ export default function Team() {
                 </div>
                 <div className="flex flex-wrap items-center gap-1.5">
                 <ToneChip tone={m.status === 'active' ? 'blue' : 'grey'} dot>{m.status === 'active' ? (m.role ?? 'no role') : m.disabled_at ? `ended ${new Date(m.disabled_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'Europe/London' })}` : 'ended'}</ToneChip>
+                {m.status === 'active' && m.role === 'sales' && activationPending(m.password_set) && <ToneChip tone="amber" dot>activation pending</ToneChip>}
                 {m.status === 'active' && m.suspended_at && <ToneChip tone="red" dot title={`Suspended ${new Date(m.suspended_at).toLocaleString('en-GB', { timeZone: 'Europe/London' })}`}>suspended</ToneChip>}
                 {m.role !== 'admin' && !m.is_book_owner && onboarding.data && (
                   <button type="button" className="inline-flex min-h-[28px] items-center rounded-full" onClick={() => setOpenOnboarding((o) => (o === m.user_id ? null : m.user_id))} aria-expanded={openOnboarding === m.user_id}>
@@ -196,8 +201,14 @@ export default function Team() {
                 </div>
                 {m.role !== 'admin' && !m.is_book_owner && (
                   <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
-                    {m.status === 'active' && !m.has_signed_in && (
-                      <Button size="sm" variant="outline" onClick={async () => { const r = await call('team_new_link', { user_id: m.user_id }); if (!r.ok) fail(r); else setLink(String(r.link ?? '')); }}>New link</Button>
+                    {m.status === 'active' && m.role === 'sales' && activationPending(m.password_set) && (
+                      <Button size="sm" variant="outline" data-testid="resend-activation" onClick={async () => {
+                        const r = await call('team_new_link', { user_id: m.user_id });
+                        if (!r.ok || !r.link) { fail(r.ok ? { error: 'link_failed' } : r); return; }
+                        setLink(String(r.link));
+                        toast({ title: `New activation link made for ${m.display_name}`, description: 'Same account. Send it to them — the old link no longer works.' });
+                        void refresh();
+                      }}>Resend activation</Button>
                     )}
                     {/* ⛔ SUSPEND SALES ACCESS (2026-09-29): the middle state. They keep their login and can READ
                         their leads; every paid action, search, lookup, claim, export, copy and send is refused on

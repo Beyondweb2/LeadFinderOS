@@ -2,6 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { checkRateLimit, rateLimitHeaders } from '../_shared/rate-limiter.ts';
 import { recordDenial } from '../_shared/protection.ts';
+import { reissueActivation } from '../_shared/team-activation.ts';
 import { OPERATOR_APP_URL } from '../../../src/config/operatorApp.ts';
 import { validateNewDocument, validateOnboardingPatch, type DocumentVersion, type OnboardingRecord } from '../../../src/lib/salespersonOnboarding.ts';
 
@@ -413,10 +414,11 @@ serve(async (req) => {
          ran together, but the members ran one after another, so the list grew one round trip per
          person. Same reads, same order (Promise.all keeps it). */
       const out = await Promise.all((members ?? []).map(async (m) => {
-        const [{ data: roles }, { data: authUser }, { count: assigned }] = await Promise.all([
+        const [{ data: roles }, { data: authUser }, { count: assigned }, { data: pwSet, error: pwSetErr }] = await Promise.all([
           serviceClient.from('user_roles').select('role').eq('user_id', m.user_id),
           serviceClient.auth.admin.getUserById(m.user_id),
           serviceClient.from('outreach_leads').select('id', { count: 'exact', head: true }).eq('assigned_to_user_id', m.user_id),
+          serviceClient.rpc('team_password_is_set', { _uid: m.user_id }),
         ]);
         const roleSet = new Set((roles ?? []).map((r: { role: string }) => r.role));
         const u = authUser?.user;
@@ -426,6 +428,8 @@ serve(async (req) => {
           email: u?.email ?? null,
           last_sign_in_at: u?.last_sign_in_at ?? null,
           has_signed_in: !!u?.last_sign_in_at,
+          /* true / false, or null when it could not be read (migration not applied) — null never shows the resend button. */
+          password_set: pwSetErr || typeof pwSet !== 'boolean' ? null : pwSet,
           banned: !!u?.banned_until && new Date(u.banned_until).getTime() > Date.now(),
           assigned_leads: assigned ?? 0,
         };
@@ -457,18 +461,48 @@ serve(async (req) => {
       return jsonResponse({ ok: true, user_id: uid, link: link.properties?.action_link ?? null }, 200, corsHeaders, rlHeaders);
     }
 
+    /* RESEND ACTIVATION (2026-10-08): a fresh link for an EXISTING salesperson who never finished
+       activating. Same user id throughout — no insert of any kind (src/lib/teamActivation.ts is the one
+       rule, _shared/team-activation.ts the one flow). Admin only: the role check above runs first. */
     if (action === 'team_new_link') {
-      if (!uuidOk(body.user_id)) return jsonResponse({ ok: false, error: 'bad_user' }, 400, corsHeaders, rlHeaders);
-      const { data: m } = await serviceClient.from('team_members').select('status').eq('user_id', body.user_id).maybeSingle();
-      if (!m || m.status !== 'active') return jsonResponse({ ok: false, error: 'not_active' }, 409, corsHeaders, rlHeaders);
-      const { data: au } = await serviceClient.auth.admin.getUserById(body.user_id);
-      const email = au?.user?.email;
-      if (!email) return jsonResponse({ ok: false, error: 'no_email' }, 409, corsHeaders, rlHeaders);
-      const { data: link, error: linkErr } = await serviceClient.auth.admin.generateLink({
-        type: 'magiclink', email, options: { redirectTo: SET_PASSWORD_URL },
-      });
-      if (linkErr) return jsonResponse({ ok: false, error: 'link_failed', detail: linkErr.message }, 500, corsHeaders, rlHeaders);
-      return jsonResponse({ ok: true, link: link?.properties?.action_link ?? null }, 200, corsHeaders, rlHeaders);
+      const result = await reissueActivation({
+        facts: async (uid) => {
+          const since = new Date(Date.now() - 3600_000).toISOString();
+          const [{ data: m }, { data: roles }, { data: au }, { data: pw, error: pwErr }, { data: evs }] = await Promise.all([
+            serviceClient.from('team_members').select('status, suspended_at, is_book_owner').eq('user_id', uid).maybeSingle(),
+            serviceClient.from('user_roles').select('role').eq('user_id', uid),
+            serviceClient.auth.admin.getUserById(uid),
+            serviceClient.rpc('team_password_is_set', { _uid: uid }),
+            serviceClient.from('security_events').select('id').eq('kind', 'activation_resent').eq('detail->>target_user_id', uid).gte('created_at', since),
+          ]);
+          const rs = new Set((roles ?? []).map((r: { role: string }) => r.role));
+          const u = au?.user;
+          return {
+            member: m ?? null,
+            role: rs.has('admin') ? 'admin' : rs.has('sales') ? 'sales' : null,
+            email: u?.email ?? null,
+            banned: !!u?.banned_until && new Date(u.banned_until).getTime() > Date.now(),
+            passwordSet: pwErr || typeof pw !== 'boolean' ? null : pw,
+            resendsLastHour: (evs ?? []).length,
+          };
+        },
+        makeLink: async (email) => {
+          const { data: link, error: linkErr } = await serviceClient.auth.admin.generateLink({
+            type: 'magiclink', email, options: { redirectTo: SET_PASSWORD_URL },
+          });
+          return { link: link?.properties?.action_link ?? null, error: linkErr ? String(linkErr.message ?? 'link failed') : null };
+        },
+        audit: async (ev) => {
+          const { error: eErr } = await serviceClient.from('security_events').insert({
+            actor_user_id: ev.actor, actor_role: 'admin', kind: 'activation_resent', severity: 'info',
+            detail: { target_user_id: ev.target, at: ev.at },
+          });
+          if (eErr) console.error(JSON.stringify({ level: 'error', action, target: ev.target, event_error: eErr.message }));
+        },
+      }, adminUserId, body.user_id);
+      if (!result.ok) return jsonResponse({ ok: false, error: result.error, detail: result.detail }, result.status, corsHeaders, rlHeaders);
+      console.log(JSON.stringify({ level: 'info', admin_user_id: adminUserId, action, target: result.user_id, timestamp: new Date().toISOString() }));
+      return jsonResponse({ ok: true, link: result.link, user_id: result.user_id }, 200, corsHeaders, rlHeaders);
     }
 
     if (action === 'team_disable' || action === 'team_reactivate') {
