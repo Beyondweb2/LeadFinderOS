@@ -891,6 +891,10 @@ positive allowlist of `baseline`; `isColdOutreachTemplate` treats unknown as COL
   `CONTINUATION_TEMPLATES` or it is refused for its whole audience. The queue is template-blind on
   "already sent" — it structurally cannot send a second message to a lead; second messages go from
   the Inbox. `contact_check` fails CLOSED.
+- **Queue eligibility is one leaf: `src/lib/coldWhatsAppEligibility.ts`** (UK mobile on the DIGITS only; no number / landline / India / Australia
+  → the EXISTING `no_whatsapp_needs_sms`, never a new status). A drop-out returns a lead to `statusBeforeQueue`, never a hard-coded `not_contacted`;
+  New → Contacted reconciles only on the lead's OWN evidence, never from another row sharing the phone. **Contact Method is the route, not the evidence**
+  — no eligibility rule may read `contact_method`. A lead held by a test account stays queued by design; the panel says so. `docs/whatsapp-queue-send-reliability.md`.
 - **A tap is not a call; only a logged CONVERSATION stops the cold opener** (sales workspace v2,
   `docs/pre-sales-certification/sales-workspace-v2.md`): tapping Call / `tel:` writes nothing (not even
   `contact_method`). `sales_queue_opener` refuses `contacted_by_phone` / `contacted_logged` only for an outcome in

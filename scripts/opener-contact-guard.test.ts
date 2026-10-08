@@ -61,7 +61,7 @@ console.log('\n── 2. every cold-opener door asks the SAME function ──');
   ok(/error: "contact_guard_unreadable"/.test(send), '…an unreadable answer refuses the cold send');
   /* The marker moves on with every later change (2026-10-07a: the link templates); the contact guard must still be in it. */
   ok(/BUILD_ID = "2026-10-(0[5-9]|1[0-9])[a-z]-[a-z-]+"/.test(sender) && /opener_contact_block/.test(sender), 'send-whatsapp-message BUILD_ID bumped (the deploy marker) and the contact guard still present');
-  ok(/body: \{ mode: 'contact_check', phones, \.\.\.\(wantsColdGuard \? \{ lead_ids: ids \} : \{\}\) \}/.test(table) && /if \(wantsColdGuard && conversation\[id\]\) \{ blockedConversation\+\+; return false; \}/.test(table), 'Outreach bulk queue (admin) asks it for a cold template and does not queue those leads');
+  ok(/body: \{ mode: 'contact_check', phones, \.\.\.\(wantsColdGuard \? \{ lead_ids: ids \} : \{\}\) \}/.test(table) && /if \(wantsColdGuard && conversation\[id\]\) \{ skipNames\.logged_conversation\.push\(nameOf\(l\)\); return false; \}/.test(table), 'Outreach bulk queue (admin) asks it for a cold template and does not queue those leads');
   ok(/if \(isColdOutreachTemplate\(template\)\) \{[\s\S]{0,400}mode: 'contact_check', phones: \[\], lead_ids: \[lead\.id\]/.test(controls) && /if \(chkErr \|\| !res\?\.ok\) \{ toast\(\{ title: 'Not queued'/.test(controls), 'the per-lead queue toggle (admin) asks it too, failing closed');
   ok(/salesQueueOpener\(\[lead\.id\], template\)/.test(controls) && /handleSalesQueue|salesQueueOpener/.test(table), 'a salesperson\'s per-lead and bulk queue still go through sales_queue_opener (the same function)');
   ok(/campaign_launch[\s\S]*v_r := public\.sales_queue_opener\(v_chunk, v_template\);/.test(V2), 'campaign launch still goes through sales_queue_opener → therefore the campaign and Outreach decisions are the same function');
@@ -69,12 +69,12 @@ console.log('\n── 2. every cold-opener door asks the SAME function ──');
 
 console.log('\n── 3. said plainly; nothing else about the lead changes ──');
 {
-  ok(QUEUE_SKIP_LABEL.contacted_by_phone === 'already contacted by phone — initial opener not queued' && /\$\{QUEUE_SKIP_LABEL\.contacted_by_phone\}/.test(table), 'Outreach says "already contacted by phone — initial opener not queued" (the shared wording)');
+  ok(QUEUE_SKIP_LABEL.contacted_by_phone === 'already contacted by phone — initial opener not queued' && /QUEUE_SKIP_LABEL\.contacted_by_phone/.test(table), 'Outreach says "already contacted by phone — initial opener not queued" (the shared wording)');
   ok(/Already contacted by phone" : "Already in conversation \(a logged contact\)"\} — initial opener not queued\./.test(queue), 'the drip records the same words');
   const upd = queue.slice(queue.indexOf('if (block === "contacted_by_phone" || block === "contacted_logged") {'), queue.indexOf('return json({', queue.indexOf('if (block === "contacted_by_phone" || block === "contacted_logged") {')));
   ok(/status: back, previous_status: null, queued_at: null, whatsapp_delivery_status: block, contact_method: null/.test(upd), 'a refused lead leaves the queue exactly as it was before it was queued (previous status)');
   ok(!/campaign_id|next_action|is_archived|assigned_to/.test(upd), '…its campaign, Next Action, archive and owner are not touched — no artificial Next Action');
-  const cb = table.slice(table.indexOf('const queueable = ids.filter'), table.indexOf('const skipped = ids.length - queueable.length;'));
+  const cb = table.slice(table.indexOf('const queueable = ids.filter'), table.indexOf('const notReachable: Record'));
   ok(!/onUpdateLead|update\(/.test(cb), 'Outreach writes nothing to a skipped lead (it stays in the CRM and its campaign, status unchanged)');
 }
 

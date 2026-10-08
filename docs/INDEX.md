@@ -168,3 +168,4 @@
 - `docs/pre-sales-certification/two-close-options.md` — 2026-10-07: the two ways to close (Close on the phone / Send full setup), the exact phone questions, the Full Setup link on the approved findable_signup_link template, one sign-up two routes, the self-serve agency-contract answer, deploy list
 
 - `docs/pre-sales-certification/team-templates.md` — 2026-10-07: Team templates vs My templates (one shared row per Team template, RLS, admin-managed, Save as my template), what existed before, nothing auto-promoted, where they appear
+- `docs/whatsapp-queue-send-reliability.md` — 2026-10-08: queue → send → Inbox reliability pass: the one eligibility leaf, "already contacted" split by reason (lead_contact_basis), test-account holds made visible, no-phone queued strand, drop-outs no longer downgrade, outbound-log retry; what was proved live and what is still open

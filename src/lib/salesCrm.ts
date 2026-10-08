@@ -234,7 +234,11 @@ export const QUEUE_SKIP_LABEL: Record<string, string> = {
   archived: 'archived',
   client: 'a client',
   not_new: 'already past “new”',
-  already_contacted: 'already contacted',
+  already_contacted: 'already messaged on WhatsApp',
+  /* sales_queue_opener splits the old catch-all by what actually blocked it (migration 20261017090000). */
+  number_already_contacted: 'that number is already in a conversation on another lead row (probably a duplicate)',
+  sign_up_started: 'already has a sign-up in progress',
+  whatsapp_app_opened: 'WhatsApp was already opened for this lead',
   /* Sales workspace v2 (sales_queue_opener): a real logged conversation stops the cold opener; the lead keeps
      its campaign. A dialler tap never gets here — it writes nothing. */
   contacted_by_phone: 'already contacted by phone — initial opener not queued',

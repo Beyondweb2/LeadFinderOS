@@ -2,6 +2,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { toWhatsAppDigits } from "../../../src/lib/waNumber.ts";
 import { windowOpenForDigits } from "../../../src/lib/sendWindow.ts";
 import { isUkColdDestination, NOT_A_UK_MOBILE } from "../../../src/lib/ukColdDestination.ts";
+import { statusBeforeQueue, statusWhenWhatsAppUnavailable, statusWithContactEvidence } from "../../../src/lib/coldWhatsAppEligibility.ts";
 import { leadAccess, resolveActor } from "../_shared/access.ts";
 import { paidMode } from "../_shared/protection.ts";
 import { classifyFailure, leadFailurePatch } from "../_shared/whatsapp-failure.ts";
@@ -641,8 +642,28 @@ Deno.serve(async (req) => {
     const leadWindowOpen = (r: { phone?: unknown; country?: unknown }) =>
       force || windowOpenForDigits(toWhatsAppNumber(String(r.phone ?? ""), (r.country as string | null) ?? null));
 
+    /* ⛔ QUEUED BUT HELD BY A TEST ACCOUNT (2026-10-08). The drip never chooses a real business held by a test
+       account (src/lib/qaSafety.ts REFUSE) — correct, but silent: 7 real plumbers queued from "test1" sat
+       "Waiting" for a send that was never going to happen. Counted here so the panel can say so. Display only;
+       null = could not be read (the panel then says nothing rather than a wrong number). */
+    let testHeldQueuedCount: number | null = null;
+    try {
+      const { data: exRows, error: exErr } = await service.from("metric_exclusions").select("value").eq("kind", "user");
+      if (!exErr) {
+        const ids = ((exRows ?? []) as Array<{ value: string }>).map((r) => r.value).filter(Boolean);
+        if (ids.length === 0) testHeldQueuedCount = 0;
+        else {
+          const { count: held, error: hErr } = await service.from("outreach_leads").select("id", { count: "exact", head: true })
+            .eq("status", "queued").eq("is_archived", false).in("assigned_to_user_id", ids);
+          if (!hErr) testHeldQueuedCount = held ?? 0;
+        }
+      }
+    } catch { testHeldQueuedCount = null; }
+
     const statusPayload = {
       testMode, live, sentToday: sentToday ?? 0, cap: DAILY_CAP,
+      // Queued leads held by a TEST ACCOUNT: never sent, by design (qaSafety). Surfaced so they are not mistaken for "waiting".
+      testHeldQueuedCount,
       queuedCount: queuedCount ?? 0, archivedQueuedCount: archivedQueuedCount ?? 0,
       // Queued leads held back because their town is settled-unverifiable (the town gate).
       unverifiedQueuedCount: unverifiedQueuedCount ?? 0,
@@ -1300,6 +1321,23 @@ Deno.serve(async (req) => {
     }
 
     // --- Tick: decide whether to send one ---
+    /* ⛔ A QUEUED LEAD WITH NO NUMBER CAN NEVER BE CHOSEN (2026-10-08). The selection below excludes a null phone,
+       so a lead queued without one sat 'queued' for 9 days, looking like it was waiting its turn (Roof Rhino,
+       Precision Roofers). We now KNOW it cannot be WhatsApped, so it leaves the queue and says so: back to its
+       pre-queue status, or No WhatsApp if it was still at the start — never left misleadingly "queued" or "New".
+       Writes status only, sends nothing, so it sits above the pause/window gates. Never fatal. */
+    try {
+      const { data: phoneless } = await service.from("outreach_leads")
+        .select("id, previous_status").eq("status", "queued").eq("is_archived", false).or("phone.is.null,phone.eq.").limit(50);
+      for (const p of (phoneless ?? []) as Array<{ id: string; previous_status: string | null }>) {
+        await service.from("outreach_leads").update({
+          status: statusWhenWhatsAppUnavailable(statusBeforeQueue(p.previous_status)),
+          whatsapp_delivery_status: "no_phone", contact_method: null, queued_at: null, previous_status: null, line_type: "unknown",
+        }).eq("id", p.id).eq("status", "queued");
+      }
+    } catch (e) {
+      console.error("[queue] phoneless sweep failed (non-fatal):", e instanceof Error ? e.message : String(e));
+    }
     // Pause guard FIRST — a paused queue sends nothing, even on a forced manual tick.
     if (paused) return json({ ok: true, skipped: "paused", ...statusPayload });
     if (!anyWindowOpen && !force && !qaDrill) return json({ ok: true, skipped: "outside_window", ...statusPayload });
@@ -1886,8 +1924,11 @@ Deno.serve(async (req) => {
     }
     const toNumber = toWhatsAppNumber(lead.phone as string, lead.country as string | null);
     if (!toNumber) {
+      /* A number that will not normalise is a number WhatsApp cannot reach: No WhatsApp (or its pre-queue status if it had
+         moved on), not "New" (2026-10-08, src/lib/coldWhatsAppEligibility.ts). */
       await service.from("outreach_leads").update({
-        status: "not_contacted", whatsapp_delivery_status: "bad_number", contact_method: null,
+        status: statusWhenWhatsAppUnavailable(statusBeforeQueue(lead.previous_status as string | null)),
+        whatsapp_delivery_status: "bad_number", contact_method: null, queued_at: null, previous_status: null,
       }).eq("id", lead.id);
       return json({ ok: true, skipped: "bad_number", lead_id: lead.id, business: lead.business_name, ...statusPayload });
     }
@@ -1899,8 +1940,10 @@ Deno.serve(async (req) => {
        identifier. Same drop-out shape as bad_number so the drip never stalls; the delivery status says why. A
        continuation (a reply into an existing conversation) is a different path and never reaches this. */
     if (isColdOutreachTemplate(templateName) && !isUkColdDestination(toNumber)) {
+      /* Learned for certain that cold WhatsApp cannot reach this destination: No WhatsApp, not "New" (2026-10-08). */
       await service.from("outreach_leads").update({
-        status: "not_contacted", whatsapp_delivery_status: NOT_A_UK_MOBILE, contact_method: null,
+        status: statusWhenWhatsAppUnavailable(statusBeforeQueue(lead.previous_status as string | null)),
+        whatsapp_delivery_status: NOT_A_UK_MOBILE, contact_method: null, queued_at: null, previous_status: null,
       }).eq("id", lead.id);
       return json({
         ok: true, skipped: NOT_A_UK_MOBILE,
@@ -1959,8 +2002,15 @@ Deno.serve(async (req) => {
         .or("status.is.null,status.not.in.(failed,failed_temporary,simulated)")
         .limit(1);
       if (Array.isArray(prior) && prior.length > 0) {
+        /* ⛔ NEVER DOWNGRADE, AND RECONCILE ONLY ON THIS LEAD'S OWN EVIDENCE (2026-10-08). This wrote "not_contacted"
+           over whatever the lead was, so a Contacted lead re-queued by hand was dragged back to New. It now returns
+           to its pre-queue status; and when the thread that blocked it is THIS lead's own (a real sent/received
+           message), a lead still at the start is reconciled to Contacted. A thread on ANOTHER lead row sharing the
+           phone (a duplicate listing) proves nothing about this row's status, so that one is left as it was. */
+        const ownThread = (prior[0] as { lead_id?: string | null }).lead_id === lead.id;
         await service.from("outreach_leads").update({
-          status: "not_contacted", whatsapp_delivery_status: "phone_already_contacted", contact_method: null,
+          status: statusWithContactEvidence(statusBeforeQueue(lead.previous_status as string | null), ownThread),
+          whatsapp_delivery_status: "phone_already_contacted", contact_method: null, queued_at: null, previous_status: null,
         }).eq("id", lead.id);
         return json({
           ok: true,
@@ -1986,7 +2036,9 @@ Deno.serve(async (req) => {
         return json({ ok: true, skipped: "contact_guard_unreadable", lead_id: lead.id, business: lead.business_name, ...statusPayload }, 200);
       }
       if (block === "contacted_by_phone" || block === "contacted_logged") {
-        const back = (lead.previous_status as string | null) && lead.previous_status !== "queued" ? (lead.previous_status as string) : "not_contacted";
+        /* A LOGGED CONVERSATION IS GENUINE CONTACT (2026-10-08): a lead still at the start is reconciled to Contacted
+           (the row pill already shows it; the stored status now agrees). Anything further along is never touched. */
+        const back = statusWithContactEvidence(statusBeforeQueue(lead.previous_status as string | null), true);
         await service.from("outreach_leads").update({
           status: back, previous_status: null, queued_at: null, whatsapp_delivery_status: block, contact_method: null,
         }).eq("id", lead.id);
@@ -2146,8 +2198,12 @@ Deno.serve(async (req) => {
       // send-whatsapp-message's shape. Campaign is NOT stored (no such column —
       // derived via lead_id). NON-BLOCKING: the WhatsApp message is already sent by
       // now; a failed log must never throw / retry / double-send — log and move on.
-      try {
-        const { error: msgErr } = await service.from("whatsapp_messages").insert({
+      /* ⛔ A META-ACCEPTED SEND MUST LEAVE AN OUTBOUND ROW (2026-10-08). This row is what puts the message in the Inbox
+         and lets a reply find its lead. It stays NON-BLOCKING (the message is already out: never throw, retry the
+         send, or double-send), but a failed insert used to be a console line nobody reads — a delivered message
+         invisible in the Inbox. It now retries once, and if that fails too it leaves a client_error_reports row
+         carrying the Meta message id, so the missing thread can be found and rebuilt. */
+      const outboundRow = {
           direction: "outbound",
           user_id: (lead.user_id as string | null) ?? null, // the lead's owner (inbox ownership + reply attribution)
           lead_id: lead.id,
@@ -2162,10 +2218,31 @@ Deno.serve(async (req) => {
           test_mode: rowTestMode,
           template_snapshot: campaignSnapshot,
           ...(campaignFindingsShown?.length ? { findings_shown: campaignFindingsShown } : {}),
-        });
-        if (msgErr) console.error(`[whatsapp] outbound message-log insert failed (non-blocking, ${lead.id}):`, (msgErr as { message?: string }).message);
-      } catch (e) {
-        console.error(`[whatsapp] outbound message-log insert threw (non-blocking, ${lead.id}):`, (e as Error).message);
+        };
+      let logErr = "";
+      for (let attempt = 0; attempt < 2; attempt++) {
+        try {
+          /* A retry must never become a DUPLICATE: if the first attempt actually landed (a timeout after the write),
+             the Meta message id is already on a row and we stop. */
+          if (attempt > 0 && messageId) {
+            const { data: landed } = await service.from("whatsapp_messages").select("id").eq("wa_message_id", messageId).limit(1);
+            if (Array.isArray(landed) && landed.length > 0) { logErr = ""; break; }
+          }
+          const { error: msgErr } = await service.from("whatsapp_messages").insert(outboundRow);
+          if (!msgErr) { logErr = ""; break; }
+          logErr = (msgErr as { message?: string }).message ?? "insert failed";
+        } catch (e) {
+          logErr = (e as Error).message;
+        }
+      }
+      if (logErr) {
+        console.error(`[whatsapp] outbound message-log insert failed twice (non-blocking, ${lead.id}):`, logErr);
+        try {
+          await service.from("client_error_reports").insert({
+            error_id: "queue_outbound_log_failed", message: logErr.slice(0, 500),
+            context: { lead_id: lead.id, wa_message_id: messageId, template: templateName, phone_tail: toNumber.slice(-4), at: nowIso },
+          });
+        } catch { /* nothing left to do — the console line above is the last resort */ }
       }
     } else {
       // Failure (permanent no_whatsapp OR temporary retry). Shared routing so the

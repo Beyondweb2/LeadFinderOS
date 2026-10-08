@@ -95,6 +95,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { formatPhoneForWhatsApp } from '@/lib/leadUtils';
 import { classifyLineType } from '@/lib/lineType';
+import { coldWhatsAppVerdict, statusWhenWhatsAppUnavailable, COLD_NOT_ELIGIBLE_LABEL, type ColdNotEligibleReason } from '@/lib/coldWhatsAppEligibility';
 import { useOutreachAttempt } from '@/hooks/useOutreachAttempt';
 import { useContactAction } from '@/hooks/useContactAction';
 import { useDebouncedCallback } from 'use-debounce';
@@ -1548,44 +1549,61 @@ export function OutreachTable({
     // A SUCCESSFUL prior WhatsApp = already contacted → never re-queue (Decision 1: only a real
     // success blocks; 'simulated'/failed don't).
     const SENT_OK = new Set(['sent', 'delivered', 'read']);
-    // Exclude: not-on-WhatsApp (permanent), already queued (in-flight), already successfully sent,
-    // suppressed, or - for a COLD template - a number with any prior conversation on ANY lead row.
-    let blockedContacted = 0;
-    let blockedConversation = 0;
+    /* ⛔ EVERY SKIP NAMES ITS OWN REASON (2026-10-08). Five different facts used to be counted as one line,
+       "already contacted, queued or suppressed" — which an operator reads as "these were all messaged". Measured on
+       a real batch: some were already in the queue, some marked No WhatsApp earlier, some opted out. Each reason
+       now has its own bucket, with up to a handful of business names so it can be traced. Contact Method is read
+       by NONE of them: pressing Call sets that pill and nothing else. */
+    type SkipKey = 'no_whatsapp' | 'in_queue' | 'already_sent' | 'opted_out' | 'number_in_conversation' | 'logged_conversation';
+    const skipNames: Record<SkipKey, string[]> = { no_whatsapp: [], in_queue: [], already_sent: [], opted_out: [], number_in_conversation: [], logged_conversation: [] };
+    const nameOf = (l: OutreachLead) => l.business_name || 'Unnamed lead';
     const queueable = ids.filter((id) => {
       const l = leadOf(id);
       if (!l) return false;
-      if (l.status === 'no_whatsapp') return false;
-      if (l.status === 'queued') return false;
-      if (SENT_OK.has((l.whatsapp_delivery_status ?? '') as string)) return false;
+      if (l.status === 'no_whatsapp') { skipNames.no_whatsapp.push(nameOf(l)); return false; }
+      if (l.status === 'queued') { skipNames.in_queue.push(nameOf(l)); return false; }
+      if (SENT_OK.has((l.whatsapp_delivery_status ?? '') as string)) { skipNames.already_sent.push(nameOf(l)); return false; }
       const digits = e164(l).replace(/\D/g, '');
-      if (digits && suppressed.has(digits)) return false;
+      if (digits && suppressed.has(digits)) { skipNames.opted_out.push(nameOf(l)); return false; }
       /* ⚠️ ONLY for cold templates. re_engage and the follow-ups EXIST to reach a number with
          history, so blocking them here would make them unqueueable for their only audience - the
          same reasoning as the drip's guard, reading the same leaf. */
-      if (wantsColdGuard && digits && contacted.has(digits)) { blockedContacted++; return false; }
+      if (wantsColdGuard && digits && contacted.has(digits)) { skipNames.number_in_conversation.push(nameOf(l)); return false; }
       /* A genuine logged conversation: no cold opener. The lead keeps its status, campaign and Next Action. */
-      if (wantsColdGuard && conversation[id]) { blockedConversation++; return false; }
+      if (wantsColdGuard && conversation[id]) { skipNames.logged_conversation.push(nameOf(l)); return false; }
       return true;
     });
-    const skipped = ids.length - queueable.length;
-    // Tier-1 offline line-type gate: only mobiles may be queued. Landline/VoIP/etc.
-    // never enter the queue — they're flagged 'no_whatsapp_needs_sms' (the status name is
-    // historical; it is the landline marker, and no send is ever attempted at one).
-    let blockedNonMobile = 0;
+    // A number WhatsApp cannot reach never enters the queue. Cold openers: ONLY a UK mobile (src/lib/
+    // coldWhatsAppEligibility.ts - the drip's rule, so the two cannot disagree; no number, a landline, India and
+    // Australia are all refused). Other templates keep the landline gate. The lead is flagged No WhatsApp
+    // (status no_whatsapp_needs_sms - the existing marker, the status name is historical) unless it has already
+    // moved past the start, so it does not stay "New" after the system has just learned it cannot be WhatsApped.
+    const notReachable: Record<string, string[]> = {};
     const writes: Promise<unknown>[] = [];
+    let queuedCount = 0;
     queueable.forEach((id) => {
       const lead = leads.find((l) => l.id === id);
-      const { lineType, whatsappEligible } = classifyLineType(lead?.phone, lead?.country);
-      if (!whatsappEligible) {
-        blockedNonMobile++;
+      let reason: ColdNotEligibleReason | null = null;
+      let lineType = classifyLineType(lead?.phone, lead?.country).lineType;
+      if (wantsColdGuard) {
+        const v = coldWhatsAppVerdict(lead?.phone, lead?.country);
+        if (v.eligible === false) reason = v.reason;
+      } else if (!String(lead?.phone ?? '').trim()) {
+        reason = 'no_phone';
+      } else if (!classifyLineType(lead?.phone, lead?.country).whatsappEligible) {
+        reason = 'landline';
+      }
+      if (reason) {
+        if (reason === 'landline') lineType = 'landline';
+        (notReachable[reason] ??= []).push(lead ? nameOf(lead) : 'Unnamed lead');
         onUpdateLead(id, {
-          status: 'no_whatsapp_needs_sms',
+          status: statusWhenWhatsAppUnavailable(lead?.status) as LeadStatus,
           line_type: lineType,
           line_type_checked_at: now,
         });
         return;
       }
+      queuedCount++;
       // Reset whatsapp_attempts so a re-queued (whatsapp_failed) lead gets fresh retries.
       // Capture the pre-queue status so cancelling restores it (not a wipe to not_contacted).
       /* ⛔ THE TEMPLATE IS STORED EXACTLY AS CHOSEN (2026-09-23 — the 50/50 opener split that used to
@@ -1600,32 +1618,31 @@ export function OutreachTable({
       };
       writes.push(Promise.resolve(onUpdateLead(id, patch)));
     });
-    const queuedCount = queueable.length - blockedNonMobile;
-    const otherSkipped = skipped - blockedContacted - blockedConversation;
-    recordQueueBatch(queuedCount, [
-      { n: blockedConversation, label: QUEUE_SKIP_LABEL.contacted_by_phone },
-      { n: blockedContacted, label: 'number already in a conversation (probably a duplicate lead row)' },
-      { n: otherSkipped, label: 'already contacted, queued or suppressed' },
-      { n: blockedNonMobile, label: 'landline — flagged, not queued' },
-    ]);
+    const skipLine = (key: SkipKey, label: string) => ({ n: skipNames[key].length, label, names: skipNames[key] });
+    const skippedLines = [
+      skipLine('logged_conversation', QUEUE_SKIP_LABEL.contacted_by_phone),
+      skipLine('number_in_conversation', 'number already in a conversation (probably a duplicate lead row)'),
+      skipLine('already_sent', 'already messaged on WhatsApp'),
+      skipLine('in_queue', 'already in the queue'),
+      skipLine('no_whatsapp', 'already marked No WhatsApp'),
+      skipLine('opted_out', 'asked not to be contacted'),
+      ...(Object.keys(notReachable) as ColdNotEligibleReason[]).map((r) => ({ n: notReachable[r].length, label: COLD_NOT_ELIGIBLE_LABEL[r], names: notReachable[r] })),
+    ];
+    recordQueueBatch(queuedCount, skippedLines);
     /* The one queue (both roles) re-reads once the writes have landed. */
     void Promise.allSettled(writes).then(() => announceQueueChanged());
     setSelectedIds(new Set());
     setQueueDialogOpen(false);
     const tmplLabel = WHATSAPP_TEMPLATES.find((t) => t.value === template)?.label ?? template;
-    /* ⚠️ THE NUMBER-LEVEL BLOCK GETS ITS OWN LINE. Folded into `skipped` it would read as
+    /* ⚠️ THE NUMBER-LEVEL BLOCK GETS ITS OWN LINE. Folded into one "skipped" it would read as
        "already contacted", which an operator takes to mean THIS lead - hiding the fact that the
        block came from a DIFFERENT lead row carrying the same phone. That distinction is the whole
        finding of 2026-09-02, and it is what tells you a duplicate row exists. */
-    const notes = [
-      blockedConversation ? `${blockedConversation} not queued — ${QUEUE_SKIP_LABEL.contacted_by_phone}.` : '',
-      blockedContacted ? `${blockedContacted} skipped — that number is already in a conversation (probably a duplicate lead row).` : '',
-      skipped - blockedContacted - blockedConversation > 0 ? `${skipped - blockedContacted - blockedConversation} skipped (already contacted, queued or suppressed).` : '',
-      blockedNonMobile ? `${blockedNonMobile} landline — flagged, not queued.` : '',
-    ].filter(Boolean).join(' ');
+    const notes = skippedLines.filter((s) => s.n > 0).map((s) => `${s.n} not queued — ${s.label}`).join('. ');
+    const skippedTotal = ids.length - queuedCount;
     toast({
       title: `Queued ${queuedCount} for WhatsApp`,
-      description: `Template: ${tmplLabel}. ${notes ? notes + ' ' : ''}Sends within the daily 7am–9:30pm UK window, at the queue's daily cap (shown live on the queue panel).`,
+      description: `Template: ${tmplLabel}. ${skippedTotal > 0 ? `${skippedTotal} skipped${notes ? ': ' + notes + '.' : '.'} ` : ''}Sends within the daily 7am–9:30pm UK window, at the queue's daily cap (shown live on the queue panel).`,
     });
   };
 
