@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { AlertTriangle, Check, CheckCheck, ChevronDown, Clock, FlaskConical, Globe, Loader2, MessageSquareText, Send, Repeat2 } from 'lucide-react';
+import { AlertTriangle, Check, CheckCheck, ChevronDown, Clock, FlaskConical, Loader2, MessageSquareText, Send } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
@@ -8,7 +8,9 @@ import { cn } from '@/lib/utils';
 import { markSmsRead, smsKeys, useContactDecision, useSmsThread, type SmsRow } from '@/hooks/useSms';
 import { newSendKey, sendSms, type SmsSendOk, type SmsSendRefused } from '@/lib/smsClient';
 import { smsSize, costWords, smsCostGbp } from '@/lib/channelCosts';
-import { SMS_STATE_LABEL, smsDeliveryState } from '@/lib/smsMessages';
+import { SMS_STATE_LABEL, smsDeliveryState, type SmsTemplateName } from '@/lib/smsMessages';
+import { SMS_COLD_CHOICES, SMS_CONVERSATION_CHOICES, smsPreview } from '@/lib/smsPreview';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { BestWayToContact } from '@/components/BestWayToContact';
 import { notifyLeadChanged } from '@/lib/leadSync';
 
@@ -48,7 +50,7 @@ export function LeadSmsPanel({ leadId, className, showBestWay = true, height = '
   const { toast } = useToast();
   const qc = useQueryClient();
   const thread = useSmsThread(leadId);
-  const { decision, freeTextOpen, introOpen } = useContactDecision(leadId, 'message');
+  const { decision, freeTextOpen, introOpen, lead } = useContactDecision(leadId, 'message');
   const rows = thread.data ?? [];
   const phone = rows[0]?.phone;
   const [text, setText] = useState('');
@@ -84,11 +86,34 @@ export function LeadSmsPanel({ leadId, className, showBestWay = true, height = '
     setBusy('text');
     try { if (done(await sendSms({ leadId, text: body, key: keyRef.current }), 'Text sent')) setText(''); } finally { setBusy(null); }
   };
-  const sendQuick = async (templateKey: 'website_link' | 'follow_up' | 'sms_opener', label: string) => {
-    if (busy) return;
-    setBusy(templateKey);
-    try { done(await sendSms({ leadId, templateKey, key: newSendKey() }), `${label} sent`); } finally { setBusy(null); }
+  /* THE TEMPLATE PICKER (2026-10-09): SMS carries the existing WhatsApp templates — the two cold openers while the lead is untouched,
+     the plain continuations once there is a conversation — and the preview is the exact text the server will send. */
+  const choices = [...(introOpen ? SMS_COLD_CHOICES : []), ...(freeTextOpen ? SMS_CONVERSATION_CHOICES : [])];
+  const [tpl, setTpl] = useState<SmsTemplateName | ''>('');
+  const chosen = (choices.some((c) => c.value === tpl) ? tpl : (choices[0]?.value ?? '')) as SmsTemplateName | '';
+  const preview = chosen ? smsPreview(chosen, { business_name: lead?.business_name, derived_town: lead?.derived_town }) : '';
+  const previewSize = useMemo(() => smsSize(preview), [preview]);
+  const sendTemplate = async () => {
+    if (busy || !chosen) return;
+    setBusy('template');
+    try { done(await sendSms({ leadId, template: chosen, key: newSendKey() }), 'Text sent'); } finally { setBusy(null); }
   };
+  const templatePicker = choices.length > 0 && (
+    <div className="space-y-1.5 rounded-xl border border-border/60 bg-card/60 p-2.5" data-testid="sms-template-picker">
+      <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Send a template (the same wording as WhatsApp)</p>
+      <Select value={chosen} onValueChange={(v) => setTpl(v as SmsTemplateName)}>
+        <SelectTrigger className="h-9" aria-label="Template"><SelectValue placeholder="Choose a template" /></SelectTrigger>
+        <SelectContent>{choices.map((c) => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}</SelectContent>
+      </Select>
+      <p className="whitespace-pre-wrap break-words rounded-lg bg-blue-600 px-3 py-2 text-sm text-white" data-testid="sms-template-preview">{preview}</p>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-[11px] text-muted-foreground" data-testid="sms-template-size">{previewSize.characters} characters · {previewSize.segments} text{previewSize.segments === 1 ? '' : 's'} · {costWords(smsCostGbp(preview))}</p>
+        <Button size="sm" className="h-9 gap-1.5 bg-blue-600 font-bold text-white hover:bg-blue-700" disabled={!!busy || !chosen} onClick={() => void sendTemplate()} data-testid="sms-send-template">
+          {busy === 'template' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}Send template
+        </Button>
+      </div>
+    </div>
+  );
 
   return (
     <div className={cn('space-y-2.5', className)} data-testid="lead-sms-panel">
@@ -113,40 +138,25 @@ export function LeadSmsPanel({ leadId, className, showBestWay = true, height = '
       )}
       {sms && !sms.available ? (
         <p className="rounded-lg bg-muted/50 px-2.5 py-2 text-xs text-muted-foreground" data-testid="sms-unavailable">{sms.reason}</p>
-      ) : !freeTextOpen ? (
-        /* Cold: the one approved intro text, shown in full by the button's own result (the server fills in the names). */
-        <div className="space-y-1.5" data-testid="sms-intro-only">
-          <Button className="h-11 w-full gap-1.5 rounded-xl bg-blue-600 font-bold text-white hover:bg-blue-700" disabled={!!busy || !introOpen} onClick={() => void sendQuick('sms_opener', 'Intro text')} data-testid="sms-quick-intro">
-            {busy === 'sms_opener' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}Send the intro text
-          </Button>
-          <p className="text-[11px] text-muted-foreground">{sms?.reason} They get one approved text; replies open the conversation.</p>
-        </div>
       ) : (
         <>
-          <Textarea value={text} onChange={(e) => setText(e.target.value)} rows={2} maxLength={600} placeholder="Write a text…" aria-label="Text message"
-            onKeyDown={(e) => { e.stopPropagation(); if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) void sendText(); }} className="resize-none text-sm" data-testid="sms-input" />
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <p className="text-[11px] text-muted-foreground" data-testid="sms-counter">
-              {size.characters} characters · {size.segments || 0} text{size.segments === 1 ? '' : 's'}{size.segments ? ` · ${costWords(smsCostGbp(text))}` : ''}{size.encoding === 'UCS-2' ? ' · special characters make it longer' : ''}
-            </p>
-            <div className="flex flex-wrap items-center gap-1.5">
-              {introOpen && (
-                <Button size="sm" variant="outline" className="h-9 gap-1" disabled={!!busy} onClick={() => void sendQuick('sms_opener', 'Intro text')} data-testid="sms-quick-intro-composer">
-                  {busy === 'sms_opener' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <MessageSquareText className="h-3.5 w-3.5" />}Intro text
+          {templatePicker}
+          {!freeTextOpen && <p className="text-[11px] text-muted-foreground" data-testid="sms-intro-only">{sms?.reason} They get one approved opener; replies open the conversation.</p>}
+          {freeTextOpen && (
+            <>
+              <Textarea value={text} onChange={(e) => setText(e.target.value)} rows={2} maxLength={600} placeholder="Or write a message…" aria-label="Text message"
+                onKeyDown={(e) => { e.stopPropagation(); if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) void sendText(); }} className="resize-none text-sm" data-testid="sms-input" />
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="text-[11px] text-muted-foreground" data-testid="sms-counter">
+                  {size.characters} characters · {size.segments || 0} text{size.segments === 1 ? '' : 's'}{size.segments ? ` · ${costWords(smsCostGbp(text))}` : ''}{size.encoding === 'UCS-2' ? ' · special characters make it longer' : ''}
+                </p>
+                <Button size="sm" className="h-9 gap-1.5 bg-blue-600 font-bold text-white hover:bg-blue-700" disabled={!!busy || !text.trim()} onClick={() => void sendText()} data-testid="sms-send">
+                  {busy === 'text' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}Send text
                 </Button>
-              )}
-              <Button size="sm" variant="outline" className="h-9 gap-1" disabled={!!busy} onClick={() => void sendQuick('website_link', 'Website link')} data-testid="sms-quick-website">
-                {busy === 'website_link' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Globe className="h-3.5 w-3.5" />}Findable website
-              </Button>
-              <Button size="sm" variant="outline" className="h-9 gap-1" disabled={!!busy} onClick={() => void sendQuick('follow_up', 'Follow-up')} data-testid="sms-quick-followup">
-                {busy === 'follow_up' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Repeat2 className="h-3.5 w-3.5" />}Follow-up
-              </Button>
-              <Button size="sm" className="h-9 gap-1.5 bg-blue-600 font-bold text-white hover:bg-blue-700" disabled={!!busy || !text.trim()} onClick={() => void sendText()} data-testid="sms-send">
-                {busy === 'text' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}Send text
-              </Button>
-            </div>
-          </div>
-          <p className="text-[10px] text-muted-foreground">{SMS_STATE_LABEL[state]}. Links to set up or pay are sent from the Close tab, not typed here.</p>
+              </div>
+              <p className="text-[10px] text-muted-foreground">{SMS_STATE_LABEL[state]}. Links to set up or pay are sent from the Close tab, not typed here.</p>
+            </>
+          )}
         </>
       )}
     </div>

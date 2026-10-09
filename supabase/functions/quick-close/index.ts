@@ -872,7 +872,7 @@ Deno.serve(async (req) => {
         const smsPrior = ((qc!.link_shared ?? []) as QcLinkShare[]).filter((s) => s.channel === "sms" && (s.link ? s.link === url : s.session === session) && s.status !== "failed");
         if (smsPrior.length && body.resend !== true) return json({ ok: false, error: "already_sent", detail: "That link was already texted to them. Press Resend only if they say it did not arrive." }, 409);
         const smsRes = await sendSmsToLead(service, {
-          actor, leadId, templateKey: "agreement_link", linkUrl: url,
+          actor, leadId, template: "findable_signup_link", linkVariant: "agreement",
           idempotencyKey: `qc-agreement:${row.id}:${smsPrior.length}`, allowResend: body.resend === true,
         });
         if (!smsRes.ok) {
@@ -984,7 +984,7 @@ Deno.serve(async (req) => {
         const smsHistory = (await setupShareHistory(service, leadId)).filter((s) => s.channel === "sms" && s.status !== "failed");
         if (smsHistory.length && body.resend !== true) return json({ ok: false, error: "already_sent", detail: "The full setup link was already texted to them. Press Resend if you really mean to send it again." }, 409);
         const smsRes = await sendSmsToLead(service, {
-          actor, leadId, templateKey: "setup_link", linkUrl: url,
+          actor, leadId, template: "findable_signup_link", linkVariant: "setup",
           idempotencyKey: `qc-setup:${leadId}:${smsHistory.length}`, allowResend: body.resend === true,
         });
         if (!smsRes.ok) {

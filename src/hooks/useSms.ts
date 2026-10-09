@@ -129,10 +129,10 @@ export async function markSmsRead(phone: string): Promise<void> {
 /* ── the facts "Best way to contact" is decided from ────────────────────────────────────────────── */
 interface LeadContactRow {
   id: string; phone: string | null; country: string | null; email: string | null; status: string | null; line_type: string | null;
-  whatsapp_delivery_status: string | null; whatsapp_ever_delivered: boolean | null;
+  whatsapp_delivery_status: string | null; whatsapp_ever_delivered: boolean | null; business_name: string | null; derived_town: string | null;
 }
-const FACT_COLUMNS = 'id, phone, country, email, status, line_type, whatsapp_delivery_status, whatsapp_ever_delivered';
-const FACT_COLUMNS_SALES = 'id, phone, country, email, status, line_type, whatsapp_delivery_status';
+const FACT_COLUMNS = 'id, phone, country, email, status, line_type, whatsapp_delivery_status, whatsapp_ever_delivered, business_name, derived_town';
+const FACT_COLUMNS_SALES = 'id, phone, country, email, status, line_type, whatsapp_delivery_status, business_name, derived_town';
 
 export function useContactDecision(leadId: string, purpose: RoutePurpose, extra?: { failed?: RouteChannel[]; alreadySent?: RouteChannel[] }) {
   const { role } = useSubscription();

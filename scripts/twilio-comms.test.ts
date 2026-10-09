@@ -10,7 +10,8 @@ import { createHmac } from 'node:crypto';
 import { twilioSignature, validTwilioSignature, voiceAccessToken, VOICE_TOKEN_MAX_TTL_S } from '../src/lib/twilioAuth.ts';
 import { decideContactRoute, smsGateOpen, type RoutingFacts } from '../src/lib/contactRouting.ts';
 import { smsSize, smsCostGbp, costWords, CHANNEL_COST_GBP } from '../src/lib/channelCosts.ts';
-import { buildSms, isApprovedSmsLink, advanceSmsStatus, mapTwilioStatus, smsDeliveryState, isStopMessage, SMS_TEMPLATES, SMS_STOP_LINE } from '../src/lib/smsMessages.ts';
+import { isApprovedSmsLink, advanceSmsStatus, mapTwilioStatus, smsDeliveryState, isStopMessage, SMS_TEMPLATE_NAMES, SMS_COLD_TEMPLATES, SMS_OPT_OUT_LINE, smsTextFromWhatsAppBody } from '../src/lib/smsMessages.ts';
+import { signupLinkTemplateBody } from '../src/lib/whatsappLinkTemplates.ts';
 
 let f = 0;
 const ok = (c: unknown, msg: string) => { if (c) console.log('  ✓ ' + msg); else { f++; console.log('  ✗ ' + msg); } };
@@ -104,19 +105,21 @@ console.log('4. cost model — segments, encoding, wording');
   ok(/ESTIMATE/.test(cost) && /billed row/.test(cost), 'the cost table says it is an estimate to be checked against a billed row');
 }
 
-console.log('5. SMS texts and links');
+console.log('5. SMS texts are the WhatsApp templates; links are the WhatsApp link shapes');
 {
-  const url = 'https://findable.live/agree/' + 'A1b2C3d4E5f6G7h8I9j0';
-  ok(buildSms('agreement_link', { rep: 'Sam', link: url })?.includes(url) === true, 'the agreement text carries the link');
-  ok(buildSms('agreement_link', { rep: 'Sam', link: null }) === null && buildSms('agreement_link', { rep: 'Sam', link: 'http://findable.live/agree/x' }) === null, 'a link template with no (or an insecure) link is refused, not sent with a hole');
-  for (const k of Object.keys(SMS_TEMPLATES) as Array<keyof typeof SMS_TEMPLATES>) ok(SMS_TEMPLATES[k].text.includes(SMS_STOP_LINE) || /STOP to opt out/.test(SMS_TEMPLATES[k].text), `${k} says how to opt out`);
-  ok(isApprovedSmsLink('agreement', url), 'agreement: findable.live/agree/<token>');
-  ok(!isApprovedSmsLink('agreement', 'https://checkout.stripe.com/c/pay/cs_live_abc123'), 'a raw Stripe link is NEVER approved — the agreement comes first');
-  ok(!isApprovedSmsLink('agreement', 'https://evil.example/agree/' + 'A1b2C3d4E5f6G7h8I9j0') && !isApprovedSmsLink('agreement', 'https://findable.live.evil.example/agree/' + 'A1b2C3d4E5f6G7h8I9j0'), 'another host is refused');
-  ok(!isApprovedSmsLink('agreement', 'https://findable.live/agree/short'), 'a malformed token is refused');
-  ok(isApprovedSmsLink('setup', 'https://findable.live/onboarding/?lead=9d5a7629-3171-4091-b3a4-43010a1d424d') && !isApprovedSmsLink('setup', 'https://findable.live/onboarding/?lead=x'), 'setup: the lead-id form only');
-  ok(isApprovedSmsLink('website', 'https://findable.live') && !isApprovedSmsLink('website', 'https://findable.live/agree/' + 'A1b2C3d4E5f6G7h8I9j0'), 'website: the home page only');
+  const agree = 'https://findable.live/agree/' + 'a1'.repeat(32);
+  const setup = 'https://findable.live/onboarding/?lead=9d5a7629-3171-4091-b3a4-43010a1d424d';
+  ok(isApprovedSmsLink(agree), 'agreement: findable.live/agree/<64 hex> (the WhatsApp link shape)');
+  ok(isApprovedSmsLink(setup), 'setup: findable.live/onboarding/?lead=<id>');
+  ok(!isApprovedSmsLink('https://checkout.stripe.com/c/pay/cs_live_abc123'), 'a raw Stripe link is NEVER approved — the agreement comes first');
+  ok(!isApprovedSmsLink('https://evil.example/agree/' + 'a1'.repeat(32)) && !isApprovedSmsLink('https://findable.live.evil.example/agree/' + 'a1'.repeat(32)), 'another host is refused');
+  ok(!isApprovedSmsLink('https://findable.live/agree/short') && !isApprovedSmsLink('https://findable.live/onboarding/?lead=x') && !isApprovedSmsLink('https://findable.live'), 'a malformed token, a bad lead id, or the home page is refused');
   ok(isStopMessage('STOP') && isStopMessage(' stop. ') && isStopMessage('Unsubscribe') && !isStopMessage('please stop by tomorrow'), 'STOP words, exactly');
+  // the link text IS the WhatsApp template body, unchanged
+  const body = smsTextFromWhatsAppBody('findable_signup_link', signupLinkTemplateBody('Sam', agree));
+  ok(body === signupLinkTemplateBody('Sam', agree).trim(), 'the sign-up link text equals the findable_signup_link body, with nothing added');
+  ok(!SMS_COLD_TEMPLATES.some((n) => n === 'findable_signup_link') && SMS_TEMPLATE_NAMES.includes('findable_signup_link'), 'the link template is not a cold template');
+  ok(SMS_OPT_OUT_LINE === 'Reply STOP to opt out.', 'the one added line');
 }
 
 console.log('6. delivery statuses — accepted is not delivered');
@@ -145,12 +148,12 @@ console.log('7. SMS sender guards (server)');
   ok(/sms_messages_idem_uq/.test(read('supabase/migrations/20261018090000_twilio_comms.sql')), '…backed by a unique index');
   ok(/already_sent_recently/.test(s) && /link_kind/.test(s), 'the same link kind within 10 minutes needs allow_resend');
   ok(/URL_IN_TEXT\.test\(body\)/.test(s) && /link_not_allowed/.test(s), 'free text can never carry a link');
-  ok(/isApprovedSmsLink\(linkKind, String\(a\.linkUrl/.test(s), 'a link template needs an approved findable.live URL');
+  ok(/resolveSignupLinkVars\(service, lead\.id as string, variant\)/.test(s) && /isApprovedSmsLink\(v\.url\)/.test(s), 'the link comes from the lead\'s own records (the WhatsApp resolver) and must be an approved findable.live shape');
   ok(!/body\.phone|\.phone\)\s*:\s*String\(body/.test(s) && /lead\.phone/.test(s), 'the number is the lead\'s stored number, never a parameter');
   ok(/simulated = env\.testMode \|\| qa\.kind === "simulate"/.test(s), 'test mode (default) and QA fixtures simulate: no Twilio call');
   ok(/status = "failed"/.test(s) && /sent_by_user_id: a\.actor\.id/.test(s), 'a failure is recorded as failed; the rep is recorded as the sender');
   const fnSend = code(read('supabase/functions/twilio-sms-send/index.ts'));
-  ok(/t\.linkKind === "setup" \|\| t\.linkKind === "agreement"/.test(fnSend) && /use_quick_close/.test(fnSend), 'setup / agreement links cannot be sent from the Inbox endpoint — Quick Close only');
+  ok(/template === SMS_LINK_TEMPLATE/.test(fnSend) && /use_quick_close/.test(fnSend), 'the sign-up link template cannot be sent from the Inbox endpoint — Quick Close only');
   ok(/resolveActor\(req, service\)/.test(fnSend) && !/body\.phone|body\.to\b/.test(fnSend), 'role required; no phone parameter exists');
   ok(/isUkColdDestination/.test(read('supabase/functions/_shared/twilio-sms.ts')), 'UK only (India and Australia cold contact stay off)');
 }
@@ -227,13 +230,13 @@ console.log('11. Quick Close: the SMS link is the authoritative link, agreement 
   const i = q.indexOf('if (channel === "sms") {');
   ok(i > 0, 'quick-close has an sms channel for the agreement link');
   const block = q.slice(i, i + 1400);
-  ok(/templateKey: "agreement_link", linkUrl: url/.test(block), 'the agreement text carries the link quick-close generated (qc.link_url), not one built here');
+  ok(/template: "findable_signup_link", linkVariant: "agreement"/.test(block) && !/linkUrl/.test(block), 'the agreement text is the findable_signup_link template; the link is resolved from the lead\'s records, never passed in');
   ok(/linkUsable\(qc\)/.test(q.slice(q.indexOf('if (mode === "share_link")'), i)), '…only while that link is still usable');
   ok(/smsPrior\.length && body\.resend !== true/.test(block), 'one text per link unless Resend');
-  ok(/templateKey: "setup_link", linkUrl: url/.test(q), 'Full Setup texts the setupLinkUrl(lead) form');
+  ok(/template: "findable_signup_link", linkVariant: "setup"/.test(q), 'Full Setup texts the same template with the setup variant');
   ok(/stripe/i.test(code(read('supabase/functions/_shared/twilio-sms.ts'))) === false, 'the SMS sender knows nothing of Stripe — no path to a raw payment link');
   const sentry = read('src/lib/smsMessages.ts');
-  ok(/agree\\\/\[A-Za-z0-9_-\]\{16,\}/.test(sentry), 'only the agreement page URL shape is textable');
+  ok(/isSignupTemplateLinkUrl\(url\)/.test(sentry), 'only the shapes findable_signup_link carries are textable (WhatsApp\'s own validator)');
   const ui = read('src/components/SmsLinkSend.tsx');
   ok(!/https?:\/\//.test(code(ui)), 'the SMS button builds no URL');
   ok(/'sms'/.test(read('src/lib/quickClose.ts')), 'the share record type includes sms');

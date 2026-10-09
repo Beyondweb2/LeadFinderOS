@@ -3,7 +3,7 @@ import { isInternalCall, pickRole, type Actor } from "../_shared/access.ts";
 import { sendSmsToLead } from "../_shared/twilio-sms.ts";
 import { loadQaExclusions } from "../_shared/qa-guard.ts";
 import { qaSendVerdict } from "../../../src/lib/qaSafety.ts";
-import { SMS_QUEUE_DAILY_CAP, SMS_QUEUE_GAP_SECONDS, SMS_QUEUE_MAX_ATTEMPTS, londonDayStartUtc, smsWindowOpen } from "../../../src/lib/smsMessages.ts";
+import { isColdSmsTemplate, SMS_QUEUE_DAILY_CAP, SMS_QUEUE_GAP_SECONDS, SMS_QUEUE_MAX_ATTEMPTS, londonDayStartUtc, smsWindowOpen } from "../../../src/lib/smsMessages.ts";
 
 // process-sms-queue — the SMS drip (2026-10-09). The twin of process-whatsapp-queue, deliberately smaller.
 //
@@ -42,7 +42,7 @@ Deno.serve(async (req) => {
 
     // Oldest waiting lead that may be sent. Held (test-account) and suspended-rep leads are skipped, never dropped.
     const { data: rows } = await service.from("outreach_leads")
-      .select("id, business_name, phone, assigned_to_user_id, sms_queued_at, sms_queued_by_user_id, sms_attempts")
+      .select("id, business_name, phone, assigned_to_user_id, sms_queued_at, sms_queued_by_user_id, sms_attempts, sms_queued_template")
       .not("sms_queued_at", "is", null).eq("is_archived", false).not("sms_queued_by_user_id", "is", null)
       .order("sms_queued_at", { ascending: true }).limit(25);
     const { data: susp, error: suspErr } = await service.from("team_members").select("user_id").not("suspended_at", "is", null);
@@ -68,9 +68,15 @@ Deno.serve(async (req) => {
       await pace();
       return json({ ok: true, skipped: "queuer_no_access", lead_id: lead.id });
     }
+    // ⛔ ONLY A COLD OPENER (the two approved WhatsApp openers) is ever sent from the queue; anything else on a row is dropped, not sent.
+    if (!isColdSmsTemplate(lead.sms_queued_template)) {
+      await finish({ sms_queued_at: null, sms_queued_by_user_id: null, sms_delivery_status: "bad_template", contact_method: null });
+      await pace();
+      return json({ ok: true, skipped: "bad_template", lead_id: lead.id });
+    }
     const actor: Actor = { id: String(lead.sms_queued_by_user_id), email: null, role } as Actor;
     const r = await sendSmsToLead(service, {
-      actor, leadId: String(lead.id), templateKey: "sms_opener",
+      actor, leadId: String(lead.id), template: lead.sms_queued_template as never,
       idempotencyKey: `smsq:${lead.id}:${String(lead.sms_queued_at)}`, source: "queue",
     });
     await pace();

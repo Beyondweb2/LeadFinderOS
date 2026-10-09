@@ -3,15 +3,15 @@ import { refusalBody, resolveActor } from "../_shared/access.ts";
 import { sendSmsToLead } from "../_shared/twilio-sms.ts";
 import { resolveTwilioEnv } from "../_shared/twilio.ts";
 import { diagnoseTwilio } from "../_shared/twilio-diagnose.ts";
-import { SMS_TEMPLATES } from "../../../src/lib/smsMessages.ts";
+import { isSmsTemplate, SMS_LINK_TEMPLATE } from "../../../src/lib/smsMessages.ts";
 
 // twilio-sms-send — a rep texts ONE of their own leads from the Inbox / prospect workspace (2026-10-09).
 //
 // Modes: send · status (is SMS/voice set up?)
 // ⛔ The lead decides the number; the browser sends a lead id, never a phone number.
-// ⛔ Link texts for the SETUP and AGREEMENT links are refused here: those links are generated and sent by
-//    quick-close (the authoritative flow, which also attributes the sale to the rep). Here: the Findable website
-//    link, the follow-up, and plain replies — never a typed link.
+// ⛔ THE TEXTS ARE THE WHATSAPP TEMPLATES (src/lib/smsMessages.ts): the two cold openers and the plain continuations, rendered by the
+//    same function the WhatsApp sender uses. The sign-up link template (findable_signup_link) is refused here: it is made and sent by
+//    quick-close (the authoritative flow, which also attributes the sale to the rep). Plain replies carry no typed link.
 // ⛔ Every guard lives in _shared/twilio-sms.ts. Signed-in callers only (verify_jwt = true) AND a team role.
 
 const corsHeaders = {
@@ -46,19 +46,17 @@ Deno.serve(async (req) => {
 
     const leadId = String(body.lead_id ?? "");
     if (!UUID_RE.test(leadId)) return json({ ok: false, error: "bad_request", detail: "Missing lead." }, 400);
-    const templateKey = body.template_key ? String(body.template_key) : null;
+    const template = body.template_name ? String(body.template_name) : null;
     const text = body.text != null ? String(body.text) : null;
-    if (templateKey) {
-      const t = SMS_TEMPLATES[templateKey as keyof typeof SMS_TEMPLATES];
-      if (!t) return json({ ok: false, error: "bad_request", detail: "Unknown text." }, 400);
-      if (t.linkKind === "setup" || t.linkKind === "agreement") {
+    if (template) {
+      if (template === SMS_LINK_TEMPLATE) {
         return json({ ok: false, error: "use_quick_close", detail: "The setup and agreement links are sent from Quick Close, which creates the right link for this customer." }, 400);
       }
+      if (!isSmsTemplate(template)) return json({ ok: false, error: "bad_request", detail: "That template is not available by text." }, 400);
     }
-    const website = templateKey === "website_link" ? "https://findable.live" : null;
     const r = await sendSmsToLead(service, {
       actor: who.actor, leadId,
-      templateKey: (templateKey as never) ?? undefined, linkUrl: website, text: templateKey ? null : text,
+      template: (template as never) ?? undefined, text: template ? null : text,
       idempotencyKey: String(body.idempotency_key ?? ""), allowResend: body.allow_resend === true,
     });
     return json(r, r.ok ? 200 : (r.status ?? 200));

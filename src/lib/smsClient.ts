@@ -3,7 +3,7 @@
    in plain words. A refusal is a normal answer ({ ok:false, detail }), not an exception. */
 import { invokeEdge, edgeErrorMessage } from '@/lib/edgeInvoke';
 import { EdgeFunctionError } from '@/lib/edgeInvokeCore';
-import type { SmsTemplateKey } from '@/lib/smsMessages';
+import type { SmsTemplateName } from '@/lib/smsMessages';
 
 export interface SmsSendOk { ok: true; duplicate: boolean; simulated: boolean; message: { id: string; status: string; body: string; segments: number | null } }
 export interface SmsSendRefused { ok: false; error: string; detail: string }
@@ -23,10 +23,10 @@ async function call<T>(body: Record<string, unknown>): Promise<T | SmsSendRefuse
   }
 }
 
-export function sendSms(a: { leadId: string; templateKey?: SmsTemplateKey; text?: string; key: string; resend?: boolean }): Promise<SmsSendResult> {
+export function sendSms(a: { leadId: string; template?: SmsTemplateName; text?: string; key: string; resend?: boolean }): Promise<SmsSendResult> {
   return call<SmsSendResult>({
     mode: 'send', lead_id: a.leadId, idempotency_key: a.key,
-    ...(a.templateKey ? { template_key: a.templateKey } : { text: a.text ?? '' }),
+    ...(a.template ? { template_name: a.template } : { text: a.text ?? '' }),
     ...(a.resend ? { allow_resend: true } : {}),
   }) as Promise<SmsSendResult>;
 }
