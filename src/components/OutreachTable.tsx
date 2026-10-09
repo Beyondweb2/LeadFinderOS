@@ -3649,7 +3649,7 @@ export function OutreachTable({
 
       {/* Text (SMS): one lead's conversation, and the bulk queue. */}
       <SingleSmsDialog open={!!smsDialogLead} onOpenChange={(o) => { if (!o) setSmsDialogLead(null); }} lead={smsDialogLead} />
-      <QueueSmsDialog open={queueSmsOpen} onOpenChange={setQueueSmsOpen} leadIds={Array.from(selectedIds)} onDone={() => setSelectedIds(new Set())} />
+      <QueueSmsDialog open={queueSmsOpen} onOpenChange={setQueueSmsOpen} leadIds={Array.from(selectedIds)} sample={leads.find((l) => selectedIds.has(l.id)) ?? null} onDone={() => setSelectedIds(new Set())} />
 
       {/* WhatsApp Template Dialog */}
       <SingleWhatsAppDialog

@@ -5,25 +5,46 @@
    salesperson's nav says Inbox. Provider calls are never made; server code and SQL are asserted on their text.
    ═══════════════════════════════════════════════════════════ */
 import { readFileSync } from 'node:fs';
-import { buildSms, smsBusinessName, SMS_TEMPLATES, SMS_STOP_LINE, SMS_QUEUE_SKIP_WORDS, SMS_QUEUE_DAILY_CAP, SMS_QUEUE_WINDOW, smsWindowOpen, londonDayStartUtc } from '../src/lib/smsMessages.ts';
+import { SMS_COLD_TEMPLATES, SMS_CONVERSATION_TEMPLATES, SMS_TEMPLATE_NAMES, SMS_OPT_OUT_LINE, SMS_TEMPLATES_NEEDING_REAL_NAME, isColdSmsTemplate, smsTextFromWhatsAppBody, SMS_QUEUE_SKIP_WORDS, SMS_QUEUE_DAILY_CAP, SMS_QUEUE_WINDOW, smsWindowOpen, londonDayStartUtc } from '../src/lib/smsMessages.ts';
 import { decideContactRoute } from '../src/lib/contactRouting.ts';
+import { smsPreview, smsTemplateLabel } from '../src/lib/smsPreview.ts';
+import { renderTemplateBody } from '../supabase/functions/_shared/whatsapp-send.ts';
+import { smsSize } from '../src/lib/channelCosts.ts';
+import { WHATSAPP_TEMPLATES } from '../src/types/outreach.ts';
+import { INITIAL_OPENERS } from '../src/lib/openerVariant.ts';
 
 let f = 0;
 const ok = (c: unknown, msg: string) => { if (c) console.log('  ✓ ' + msg); else { f++; console.log('  ✗ ' + msg); } };
 const read = (p: string) => readFileSync(new URL('../' + p, import.meta.url), 'utf8').replace(/\r\n/g, '\n');
 const code = (src: string) => src.replace(/\{\/\*[\s\S]*?\*\/\}/g, '').replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '').replace(/^\s*--.*$/gm, '');
 
-console.log('1. the cold text');
+console.log('1. SMS reuses the WhatsApp templates — no copy of its own');
 {
-  const t = SMS_TEMPLATES.sms_opener;
-  ok(t.cold === true && Object.values(SMS_TEMPLATES).filter((x) => x.cold).length === 1, 'exactly ONE cold text exists');
-  const body = buildSms('sms_opener', { rep: 'Sam', business: 'Smith & Sons Plumbing' })!;
-  ok(body.includes("it's Sam at Findable") && body.includes('Smith & Sons Plumbing') && body.includes('STOP'), 'says who we are, names the business, offers STOP');
-  ok(!/https?:\/\/|www\./i.test(body) && t.linkKind === null, 'carries no link');
-  ok(body.includes(SMS_STOP_LINE.replace('Reply STOP', 'STOP').toLowerCase().slice(0, 4)) || /STOP to opt out/.test(body), 'the opt-out line is present');
-  ok(smsBusinessName('  A\n\tB   Ltd ') === 'A B Ltd' && smsBusinessName('') === 'your business' && smsBusinessName(null) === 'your business', 'a business name is made safe (one line, never a hole)');
-  ok(smsBusinessName('x'.repeat(80)).length <= 40, '…and short');
-  ok(buildSms('follow_up', { rep: 'Sam' })!.includes('Findable') && !buildSms('follow_up', { rep: 'Sam' })!.includes('{'), 'other texts have no leftover placeholder');
+  ok(JSON.stringify([...SMS_COLD_TEMPLATES]) === JSON.stringify([...INITIAL_OPENERS]), 'the cold templates ARE the two WhatsApp openers (initial_contact, initial_opener_v2), from the one opener list');
+  const labelled = new Set(WHATSAPP_TEMPLATES.map((t) => t.value));
+  ok(SMS_TEMPLATE_NAMES.filter((n) => n !== 'findable_signup_link').every((n) => labelled.has(n)), 'every SMS template is a template in the WhatsApp picker list (findable_signup_link is the Quick Close link template)');
+  ok(SMS_CONVERSATION_TEMPLATES.every((n) => !isColdSmsTemplate(n)) && !isColdSmsTemplate('video_template') && !isColdSmsTemplate('findable_signup_link'), 'only the two openers are cold');
+  ok(!SMS_TEMPLATE_NAMES.some((n) => /audit|video|competitor|explain|ai_site/.test(n)), 'audit-driven and long WhatsApp templates are not offered by SMS');
+  ok(SMS_TEMPLATES_NEEDING_REAL_NAME.has('book_call') && SMS_TEMPLATES_NEEDING_REAL_NAME.has('re_engage_49'), 'the greeting-name rule carries over');
+  // EXACT parity: the text the server sends == the preview the screen shows, and both are the WhatsApp body (+ opt-out on cold only)
+  for (const n of SMS_TEMPLATE_NAMES.filter((x) => x !== 'findable_signup_link')) {
+    for (const biz of ['Smith & Sons Plumbing', 'Beeson Plumbing & Heating Ltd', 'MCLocksmiths']) {
+      const wa = renderTemplateBody(n, biz, '', undefined, undefined, undefined, 'Leeds');
+      const server = smsTextFromWhatsAppBody(n, wa);
+      ok(smsPreview(n as never, { business_name: biz, derived_town: 'Leeds' }) === server, `${n} / ${biz}: the preview equals what the server sends`);
+      ok(isColdSmsTemplate(n) ? server === `${wa.trim()}\n\n${SMS_OPT_OUT_LINE}` : server === wa.trim(), `${n} / ${biz}: the WhatsApp wording is unchanged${isColdSmsTemplate(n) ? ' (opt-out line appended)' : ''}`);
+    }
+  }
+  const a = smsTextFromWhatsAppBody('initial_contact', renderTemplateBody('initial_contact', 'Smith & Sons Plumbing', ''));
+  ok(a === 'Hi, is this Smith & Sons Plumbing?\n\nCheers\n\nReply STOP to opt out.', 'initial_contact reads exactly as on WhatsApp, plus the opt-out line');
+  ok(smsTextFromWhatsAppBody('initial_opener_v2', renderTemplateBody('initial_opener_v2', 'X', '')) === 'Hey, are you taking on more jobs atm? Cheers\n\nReply STOP to opt out.', 'initial_opener_v2 reads exactly as on WhatsApp, plus the opt-out line');
+  // segments: every offered template (with a realistic link for the link template)
+  const agree = 'https://findable.live/agree/' + 'a1'.repeat(32);
+  const link = smsTextFromWhatsAppBody('findable_signup_link', renderTemplateBody('findable_signup_link', 'Sam', agree));
+  const sizes = Object.fromEntries(SMS_TEMPLATE_NAMES.map((n) => [n, smsSize(n === 'findable_signup_link' ? link : smsPreview(n as never, { business_name: 'Beeson Plumbing & Heating Ltd', derived_town: 'Leeds' })).segments]));
+  ok(SMS_COLD_TEMPLATES.every((n) => sizes[n] === 1), 'both openers fit ONE text segment');
+  console.log('    segments per template:', JSON.stringify(sizes));
+  ok(smsTemplateLabel('initial_contact') === WHATSAPP_TEMPLATES.find((t) => t.value === 'initial_contact')!.label, 'labels come from the WhatsApp list');
 }
 
 console.log('2. schedule rules');
@@ -37,20 +58,22 @@ console.log('2. schedule rules');
 
 console.log('3. the queue is a lane, not a status; every skip has its reason');
 {
-  const m = code(read('supabase/migrations/20261019090000_sms_queue_and_method.sql'));
+  const m1 = code(read('supabase/migrations/20261019090000_sms_queue_and_method.sql'));
+  const m = code(read('supabase/migrations/20261019100000_sms_queue_template.sql'));
   const q = m.slice(m.indexOf('function public.queue_sms_openers'), m.indexOf('function public.unqueue_sms'));
-  ok(/set sms_queued_at = now\(\), sms_queued_by_user_id = v_uid, sms_attempts = 0, contact_method = 'sms'/.test(q) && !/set status/.test(q), 'queueing sets the sms marker and the Text method — it never changes the lead\'s status');
+  ok(/set sms_queued_at = now\(\), sms_queued_by_user_id = v_uid, sms_queued_template = v_template, sms_attempts = 0, contact_method = 'sms'/.test(q) && !/set status/.test(q), 'queueing sets the sms marker and the Text method — it never changes the lead\'s status');
   ok(/can_work_lead\(v_id\)/.test(q) && /lead_is_client/.test(q), 'a salesperson queues only their own, non-client leads');
   const reasons = [...q.matchAll(/v_reason := '([a-z_]+)'/g)].map((x) => x[1]).concat(['contacted_by_phone', 'contacted_logged']);
   for (const k of new Set(reasons)) ok(k in SMS_QUEUE_SKIP_WORDS, `skip reason ${k} has words`);
   ok(/'\^7\[0-9\]\{9\}\$'|\^7\[0-9\]\{9\}\$/.test(q) && !/\^91/.test(q), 'UK mobiles only (India / Australia off)');
   ok(/contact_suppressions/.test(q) && /sms_messages m where m\.direction = 'outbound'/.test(q) && /whatsapp_messages w/.test(q) && /opener_contact_block\(v_id\)/.test(q), 'opt-out, already texted, WhatsApp conversation and logged conversation all refuse');
   ok(/guard_action\(v_uid, 'sms_send'/.test(q) && /array_length\(_lead_ids, 1\) > 200/.test(q), 'rate limited and capped at 200 a time');
-  ok(/revoke all on function public\.queue_sms_openers\(uuid\[\]\) from public, anon/.test(m) && /grant execute on function public\.queue_sms_openers\(uuid\[\]\) to authenticated/.test(m), 'signed-in callers only');
-  ok(/lead_set_contact_method[\s\S]*_method not in \('call', 'whatsapp', 'sms'\)/.test(m), 'a rep may set Text as the Contact Method');
-  ok(/enable row level security/.test(m) && !/create policy[^;]*sms_queue_state/.test(m), 'the queue state table has no browser policy');
+  ok(/v_template not in \('initial_contact', 'initial_opener_v2'\)/.test(q) && /drop function if exists public\.queue_sms_openers\(uuid\[\]\)/.test(m), 'the queue takes the template and accepts ONLY the two WhatsApp openers');
+  ok(/revoke all on function public\.queue_sms_openers\(uuid\[\], text\) from public, anon/.test(m) && /grant execute on function public\.queue_sms_openers\(uuid\[\], text\) to authenticated/.test(m), 'signed-in callers only');
+  ok(/lead_set_contact_method[\s\S]*_method not in \('call', 'whatsapp', 'sms'\)/.test(m1), 'a rep may set Text as the Contact Method');
+  ok(/enable row level security/.test(m1) && !/create policy[^;]*sms_queue_state/.test(m1), 'the queue state table has no browser policy');
   ok(/my_role\(\) = 'sales' and l\.assigned_to_user_id = auth\.uid\(\)/.test(m), 'a salesperson sees only their own queue');
-  ok(/sms_queue_set_paused[\s\S]{0,260}admin_only/.test(m), 'only the admin pauses it');
+  ok(/sms_queue_set_paused[\s\S]{0,260}admin_only/.test(m1), 'only the admin pauses it');
 }
 
 console.log('4. the drip: one text per tick, as the person who queued, through the one guarded sender');
@@ -60,7 +83,7 @@ console.log('4. the drip: one text per tick, as the person who queued, through t
   const order = ['paused === true', 'smsWindowOpen()', 'st.next_send_at &&', '>= SMS_QUEUE_DAILY_CAP', 'sendSmsToLead('].map((x) => d.indexOf(x));
   ok(order.every((n, i) => n > 0 && (i === 0 || n > order[i - 1])), 'order: paused -> window -> pacing -> daily cap -> send');
   ok((d.match(/sendSmsToLead\(/g) ?? []).length === 1, 'one send site, so at most one text per tick');
-  ok(/templateKey: "sms_opener"/.test(d) && /source: "queue"/.test(d), 'only the approved opener, marked as queue');
+  ok(/template: lead\.sms_queued_template as never/.test(d) && /isColdSmsTemplate\(lead\.sms_queued_template\)/.test(d) && /source: "queue"/.test(d), 'sends the template stored on the lead, only if it is a cold opener, marked as queue');
   ok(/lead\.sms_queued_by_user_id/.test(d) && /user_roles/.test(d), 'sent AS the person who queued, with their role read fresh');
   ok(/qaSendVerdict\(qa/.test(d) && /\.kind !== "refuse"/.test(d) && /suspended\.has/.test(d), 'test-account-held and suspended-rep leads are skipped, never dropped');
   ok(/idempotencyKey: `smsq:\$\{lead\.id\}:\$\{String\(lead\.sms_queued_at\)\}`/.test(d), 'a retried tick cannot text twice (per lead, per queueing)');
@@ -74,13 +97,13 @@ console.log('4. the drip: one text per tick, as the person who queued, through t
 console.log('5. the guarded sender: cold rules, method, no double text');
 {
   const s = code(read('supabase/functions/_shared/twilio-sms.ts'));
-  ok(/isCold = !!a\.templateKey && SMS_TEMPLATES\[a\.templateKey\]\?\.cold === true/.test(s), 'cold is a property of the template');
+  ok(/isCold = isColdSmsTemplate\(a\.template\)/.test(s), 'cold is a property of the template (the two WhatsApp openers)');
   ok(/already_texted/.test(s) && /in_whatsapp_conversation/.test(s) && /contacted_logged/.test(s), 'cold rules: never texted, not in WhatsApp, not spoken to');
   ok(/const gate = isCold \|\| smsGateOpen\(/.test(s), 'only the cold text skips the conversation gate');
   ok(/if \(!simulated && status !== "failed"\)[\s\S]{0,400}contact_method: "sms"/.test(s), 'a real text moves the Contact Method to Text; a simulated or failed one does not');
   ok(/source\?: 'manual' \| 'queue'/.test(read('supabase/functions/_shared/twilio-sms.ts')), 'the sender knows whether it is the drip');
   const fn = code(read('supabase/functions/twilio-sms-send/index.ts'));
-  ok(!/sms_opener/.test(fn) || /t\.linkKind === "setup"/.test(fn), 'the Inbox endpoint still refuses setup / agreement links');
+  ok(/template === SMS_LINK_TEMPLATE/.test(fn), 'the Inbox endpoint still refuses the sign-up link template');
 }
 
 console.log('6. routing: the intro text opens SMS for a message, never for a link');
@@ -100,7 +123,7 @@ console.log('7. the buttons, the panel, the nav');
   ok(/onSmsClick=\{\(\) => setSmsDialogLead\(lead\)\}/.test(t) && /data-testid="outreach-sms-mobile"/.test(read('src/components/OutreachMobileCard.tsx')), '…and on the phone-width card');
   ok(/data-testid="queue-sms-button"/.test(t) && /<QueueSmsDialog /.test(t), 'a "Queue text" bulk button');
   const dlg = read('src/components/QueueSmsDialog.tsx');
-  ok(/queue_sms_openers/.test(dlg) && /queue-sms-example/.test(dlg) && /SMS_QUEUE_SKIP_WORDS/.test(dlg), 'the dialog shows the exact text, calls the queue, and names every skip');
+  ok(/queue_sms_openers/.test(dlg) && /_template: template/.test(dlg) && /queue-sms-example/.test(dlg) && /smsPreview\(template, sample/.test(dlg) && /SMS_QUEUE_SKIP_WORDS/.test(dlg) && /queue-sms-size/.test(dlg), 'the dialog picks the opener, shows the exact text with its segments and cost, calls the queue, and names every skip');
   ok(/<SmsQueuePanel \/>/.test(read('src/pages/WhatsAppQueue.tsx')), 'the text queue is on the queue page for both roles');
   const p = read('src/components/SmsQueuePanel.tsx');
   ok(/my_sms_queue/.test(p) && /unqueue_sms/.test(p) && /sms_queue_set_paused/.test(p), 'rows, Remove, and the admin pause');

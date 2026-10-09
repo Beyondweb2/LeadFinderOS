@@ -27,12 +27,12 @@ export const WHATS_NEW: readonly WhatsNewEntry[] = [
     report: {
       added: [
         'A text (SMS) button next to the WhatsApp button on every lead row.',
-        'Queue text on a selection: shows the exact text first, then sends them one at a time inside 9am-8pm UK, with a daily limit. A Text queue panel on the queue page lists what is waiting, with Remove.',
+        'Queue text on a selection: you pick one of the two WhatsApp openers, it shows the exact text first (with how many text segments it is), then sends them one at a time inside 9am-8pm UK, with a daily limit. A Text queue panel on the queue page lists what is waiting, with Remove.',
         'Text as a Contact Method. A real text sets it, and the Inbox opens that lead on the SMS tab.',
       ],
       changed: [
         'The salesperson sidebar item and the phone bar say Inbox instead of WhatsApp, and one badge counts WhatsApp and text conversations together.',
-        'A first text to someone you have not spoken to is the one approved intro text only; free text opens once they reply or you have spoken.',
+        'Texts use the existing WhatsApp templates word for word (the only addition is a Reply STOP line on a first text). A first text to someone you have not spoken to is one of the two WhatsApp openers; free text and the other templates open once they reply or you have spoken.',
       ],
       removed: [],
       effect: 'You can start a conversation by text from the row, line up a batch the same way as WhatsApp, and always find a lead in the channel you used. Leads already texted, in a WhatsApp conversation, spoken to or opted out are skipped, with the reason.',

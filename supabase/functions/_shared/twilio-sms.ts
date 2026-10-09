@@ -16,7 +16,12 @@
 //   8. idempotency: the row is inserted FIRST under a unique key; a second press with the same key is a no-op that
 //      returns the first result. A link of the same kind sent in the last 10 minutes needs allow_resend.
 //   9. only then Twilio (or the simulation). "queued" from Twilio is NOT delivered; the status webhook says that.
-import { buildSms, isApprovedSmsLink, SMS_TEMPLATES, type SmsLinkKind, type SmsTemplateKey } from "../../../src/lib/smsMessages.ts";
+import {
+  isApprovedSmsLink, isColdSmsTemplate, isSmsTemplate, smsTextFromWhatsAppBody, SMS_LINK_TEMPLATE, SMS_TEMPLATES_NEEDING_REAL_NAME,
+  type SmsLinkVariant, type SmsTemplateName,
+} from "../../../src/lib/smsMessages.ts";
+import { renderTemplateBody } from "./whatsapp-send.ts";
+import { resolveSignupLinkVars } from "./link-template-vars.ts";
 import { smsGateOpen } from "../../../src/lib/contactRouting.ts";
 import { smsSize, CHANNEL_COST_GBP } from "../../../src/lib/channelCosts.ts";
 import { isUkColdDestination } from "../../../src/lib/ukColdDestination.ts";
@@ -34,9 +39,11 @@ type Service = any;
 export interface SendSmsArgs {
   actor: Actor;
   leadId: string;
-  /** An approved template (link kinds need `linkUrl`). Exactly one of templateKey / text. */
-  templateKey?: SmsTemplateKey;
-  linkUrl?: string | null;
+  /** A WHATSAPP template name SMS may carry (src/lib/smsMessages.ts). Exactly one of template / text. The wording is the
+   *  WhatsApp body, rendered by the same function the WhatsApp sender uses. */
+  template?: SmsTemplateName;
+  /** For findable_signup_link only: which link (the agreement, or the full setup). Resolved from the lead's own records. */
+  linkVariant?: SmsLinkVariant;
   /** Free text — never contains a link; only to a conversation whose gate is open. */
   text?: string | null;
   idempotencyKey: string;
@@ -56,13 +63,13 @@ export async function sendSmsToLead(service: Service, a: SendSmsArgs): Promise<S
   const env = resolveTwilioEnv();
   if (!env.testMode && !env.smsConfigured) return fail("not_configured", "SMS is not set up yet — the Twilio settings are missing.", 200);
   if (!a.idempotencyKey || a.idempotencyKey.length < 8 || a.idempotencyKey.length > 120) return fail("bad_request", "Missing send key.", 400);
-  if (!!a.templateKey === !!a.text) return fail("bad_request", "Send a template or a message, not both.", 400);
+  if (!!a.template === !!a.text) return fail("bad_request", "Send a template or a message, not both.", 400);
 
   // 1. the lead, through the one access rule
   const access = await leadAccess(service, a.actor, a.leadId);
   if (!access.ok) return fail(access.error === "lookup_failed" ? "lookup_failed" : "lead_not_found", "That lead is not available to you.", access.error === "lookup_failed" ? 503 : 404);
   const { data: lead, error: lErr } = await service.from("outreach_leads")
-    .select("id, business_name, phone, country, email, user_id, assigned_to_user_id, status, is_archived").eq("id", a.leadId).maybeSingle();
+    .select("id, business_name, phone, country, email, user_id, assigned_to_user_id, status, is_archived, derived_town").eq("id", a.leadId).maybeSingle();
   if (lErr || !lead) return fail("lookup_failed", "Could not read the lead.", 503);
   if (lead.is_archived === true) return fail("archived", "That lead is archived.", 409);
 
@@ -72,17 +79,30 @@ export async function sendSmsToLead(service: Service, a: SendSmsArgs): Promise<S
   const e164 = `+${digits}`;
 
   // 3. the text
-  const { data: rep } = await service.from("team_members").select("display_name").eq("user_id", a.actor.id).maybeSingle();
-  const repName = String((rep as { display_name?: string } | null)?.display_name ?? "").trim().split(/\s+/)[0] || "";
   let body: string | null;
-  let linkKind: SmsLinkKind | null = null;
-  if (a.templateKey) {
-    const t = SMS_TEMPLATES[a.templateKey];
-    if (!t) return fail("bad_request", "Unknown text.", 400);
-    linkKind = t.linkKind;
-    if (linkKind && !isApprovedSmsLink(linkKind, String(a.linkUrl ?? ""))) return fail("link_not_approved", "That link is not one we send by text.", 400);
-    body = buildSms(a.templateKey, { rep: repName, link: a.linkUrl ?? null, business: lead.business_name as string | null });
-    if (!body) return fail("bad_request", "The text could not be built.", 400);
+  let linkKind: SmsLinkVariant | null = null;
+  if (a.template) {
+    if (!isSmsTemplate(a.template)) return fail("bad_request", "That template is not available by text.", 400);
+    /* ⛔ THE WORDS ARE WHATSAPP'S: the same renderTemplateBody the WhatsApp sender calls, with the same arguments it passes
+       (send-whatsapp-message: the sign-up link template is filled from link-template-vars; the openers and continuations from the
+       lead's name and town). The only SMS addition is the opt-out line on a COLD text (smsTextFromWhatsAppBody). */
+    const business = String(lead.business_name ?? "").trim();
+    if (SMS_TEMPLATES_NEEDING_REAL_NAME.has(a.template) && !business) return fail("needs_real_name", "This template needs the business name, and the lead has none.");
+    try {
+      if (a.template === SMS_LINK_TEMPLATE) {
+        const variant: SmsLinkVariant = a.linkVariant === "setup" ? "setup" : "agreement";
+        const v = await resolveSignupLinkVars(service, lead.id as string, variant);
+        if (!v.ok) return fail("link_unavailable", v.reason, 409);
+        if (!isApprovedSmsLink(v.url)) return fail("link_not_approved", "That link is not one we send by text.", 400);
+        linkKind = variant;
+        body = smsTextFromWhatsAppBody(a.template, renderTemplateBody(a.template, v.greeting, v.url));
+      } else {
+        body = smsTextFromWhatsAppBody(a.template, renderTemplateBody(a.template, business, "", undefined, undefined, undefined, (lead.derived_town as string | null) ?? undefined));
+      }
+    } catch (e) {
+      return fail("template_unsafe", String((e as Error).message ?? "The text could not be built.").slice(0, 200), 400);
+    }
+    if (!body || /^\[[a-z0-9_]+\]$/.test(body)) return fail("bad_request", "The text could not be built.", 400);
   } else {
     body = String(a.text ?? "").trim();
     if (!body || body.length > 600) return fail("bad_request", "Messages must be 1–600 characters.", 400);
@@ -97,7 +117,7 @@ export async function sendSmsToLead(service: Service, a: SendSmsArgs): Promise<S
   }
 
   // 5. the conversation gate
-  const isCold = !!a.templateKey && SMS_TEMPLATES[a.templateKey]?.cold === true;
+  const isCold = isColdSmsTemplate(a.template);
   const [{ data: block }, { data: inSms }, { data: inWa }, { data: priorOut }, { data: waAny }] = await Promise.all([
     service.rpc("opener_contact_block", { _lead_id: lead.id }),
     service.from("sms_messages").select("id").eq("phone", digits).eq("direction", "inbound").limit(1),
@@ -105,7 +125,7 @@ export async function sendSmsToLead(service: Service, a: SendSmsArgs): Promise<S
     service.from("sms_messages").select("id").eq("phone", digits).eq("direction", "outbound").not("status", "in", "(failed,undelivered,simulated)").limit(1),
     service.from("whatsapp_messages").select("id").eq("phone", digits).or("status.is.null,status.not.in.(failed,failed_temporary,simulated)").limit(1),
   ]);
-  /* ⛔ THE COLD TEXT (sms_opener) is the one text that needs no conversation — and so it has the WhatsApp cold rule instead:
+  /* ⛔ A COLD TEXT (the two WhatsApp openers) is the one text that needs no conversation — and so it has the WhatsApp cold rule instead:
      never to a number we have already texted, never into a WhatsApp conversation, never after a logged conversation. It is
      the same check for the Outreach row button and for the queue. */
   if (isCold) {
@@ -141,7 +161,7 @@ export async function sendSmsToLead(service: Service, a: SendSmsArgs): Promise<S
   const size = smsSize(body);
   const { data: row, error: insErr } = await service.from("sms_messages").insert({
     direction: "outbound", user_id: lead.user_id, lead_id: lead.id, phone: digits, body, status: "queued",
-    segments: size.segments, template_key: a.templateKey ?? null, link_kind: linkKind, sent_by_user_id: a.actor.id,
+    segments: size.segments, template_key: a.template ?? null, link_kind: linkKind, sent_by_user_id: a.actor.id,
     idempotency_key: a.idempotencyKey, test_mode: simulated, est_cost_gbp: simulated ? 0 : size.segments * CHANNEL_COST_GBP.sms,
   }).select("id, status, body, segments").single();
   if (insErr) {
@@ -170,7 +190,7 @@ export async function sendSmsToLead(service: Service, a: SendSmsArgs): Promise<S
   }
   await service.from("lead_activity").insert({
     lead_id: lead.id, actor_user_id: a.actor.id, kind: "sms_sent",
-    data: { template: a.templateKey ?? "free_text", link_kind: linkKind, status, sms_id: row.id, simulated },
+    data: { template: a.template ?? "free_text", link_kind: linkKind, status, sms_id: row.id, simulated },
   }).then(() => undefined, () => undefined);
 
   if (status === "failed") return fail("send_failed", `The text could not be sent${errCode ? ` (code ${errCode})` : ""}. Try another way.`, 200);
