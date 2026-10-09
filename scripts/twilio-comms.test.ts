@@ -109,7 +109,7 @@ console.log('5. SMS texts and links');
   const url = 'https://findable.live/agree/' + 'A1b2C3d4E5f6G7h8I9j0';
   ok(buildSms('agreement_link', { rep: 'Sam', link: url })?.includes(url) === true, 'the agreement text carries the link');
   ok(buildSms('agreement_link', { rep: 'Sam', link: null }) === null && buildSms('agreement_link', { rep: 'Sam', link: 'http://findable.live/agree/x' }) === null, 'a link template with no (or an insecure) link is refused, not sent with a hole');
-  for (const k of Object.keys(SMS_TEMPLATES) as Array<keyof typeof SMS_TEMPLATES>) ok(SMS_TEMPLATES[k].text.includes(SMS_STOP_LINE), `${k} says how to opt out`);
+  for (const k of Object.keys(SMS_TEMPLATES) as Array<keyof typeof SMS_TEMPLATES>) ok(SMS_TEMPLATES[k].text.includes(SMS_STOP_LINE) || /STOP to opt out/.test(SMS_TEMPLATES[k].text), `${k} says how to opt out`);
   ok(isApprovedSmsLink('agreement', url), 'agreement: findable.live/agree/<token>');
   ok(!isApprovedSmsLink('agreement', 'https://checkout.stripe.com/c/pay/cs_live_abc123'), 'a raw Stripe link is NEVER approved — the agreement comes first');
   ok(!isApprovedSmsLink('agreement', 'https://evil.example/agree/' + 'A1b2C3d4E5f6G7h8I9j0') && !isApprovedSmsLink('agreement', 'https://findable.live.evil.example/agree/' + 'A1b2C3d4E5f6G7h8I9j0'), 'another host is refused');

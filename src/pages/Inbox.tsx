@@ -1773,7 +1773,7 @@ const WhatsAppInbox = () => {
         <div className="flex flex-wrap items-center gap-x-4 gap-y-3">
           <div className="flex min-w-0 flex-1 items-center gap-3">
             {/* ⛔ It SAYS WhatsApp (Paul, 2026-09-28). One conversation system, one page, both roles. */}
-            <h1 className="flex shrink-0 items-center gap-2.5 text-xl font-extrabold leading-tight tracking-tight sm:text-2xl"><IconTile icon={MessageCircle} tone="blue" />WhatsApp Inbox</h1>
+            <h1 className="flex shrink-0 items-center gap-2.5 text-xl font-extrabold leading-tight tracking-tight sm:text-2xl"><IconTile icon={MessageCircle} tone="blue" />Inbox</h1>
             <InboxChannelSwitch current="whatsapp" />
             <p className="hidden truncate text-sm text-muted-foreground min-[1760px]:block">Every WhatsApp conversation with your leads.</p>
           </div>

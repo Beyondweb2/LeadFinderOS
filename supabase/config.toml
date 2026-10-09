@@ -356,3 +356,8 @@ verify_jwt = true
 # X-Twilio-Signature and fails closed if the auth token is unset. Must stay false.
 [functions.twilio-webhook]
 verify_jwt = false
+
+# process-sms-queue (2026-10-09): the SMS drip. Called every minute by pg_cron (invoke_sms_queue) with x-cron-secret;
+# the handler refuses anything else. verify_jwt must stay false.
+[functions.process-sms-queue]
+verify_jwt = false

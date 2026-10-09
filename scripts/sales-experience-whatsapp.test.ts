@@ -147,10 +147,10 @@ ok(parseTargets({ contacts: "12", replies: -3, wins: "x", period: "month" })?.co
 console.log("\n── source: navigation, privacy, security ──");
 {
   const side = read("src/components/AppSidebar.tsx"), mob = read("src/components/MobileBottomNav.tsx"), inbox = read("src/pages/Inbox.tsx");
-  ok(/\{ title: role === 'sales' \? 'WhatsApp' : 'Inbox', url: '\/inbox'/.test(side) && (side.match(/url: '\/inbox'/g) ?? []).length === 1, "sales sidebar item says WhatsApp and is the one /inbox route");
-  ok(/title: 'WhatsApp', url: '\/inbox'/.test(mob), "sales phone bar says WhatsApp");
-  ok(/WhatsApp Inbox<\/h1>/.test(inbox), "the page is titled WhatsApp Inbox");
-  ok(side.includes("useWhatsAppUnread") && mob.includes("useWhatsAppUnread"), "both navs show the unread badge from the one server count");
+  ok(/\{ title: 'Inbox', url: '\/inbox'/.test(side) && (side.match(/url: '\/inbox'/g) ?? []).length === 1, "sidebar item says Inbox (2026-10-09: it handles WhatsApp AND texts) and is the one /inbox route");
+  ok(/title: 'Inbox', url: '\/inbox'/.test(mob), "sales phone bar says Inbox");
+  ok(/>Inbox<\/h1>/.test(inbox) && /label: 'WhatsApp', tone: 'green'/.test(read("src/components/InboxChannelSwitch.tsx")), "the page is titled Inbox, with WhatsApp and SMS as its two channels");
+  ok(side.includes("useAllInboxUnread") && mob.includes("useAllInboxUnread") && /useWhatsAppUnread\(\)/.test(read("src/hooks/useSms.ts")), "both navs show ONE unread badge: the server's WhatsApp count plus the SMS count");
   ok(/searchParams\.get\('lead'\)/.test(inbox) && /next\.delete\('lead'\)/.test(inbox), "the Inbox opens ?lead= and drops it once a thread is chosen");
   ok(/markRead\(active\.phone\)/.test(inbox) && /visibilityState === 'visible'/.test(inbox), "a thread is marked read only when open AND on screen");
   ok(/active \? 'hidden md:block'/.test(inbox) && /Back to all conversations/.test(inbox), "phones switch list ↔ thread with a Back button");

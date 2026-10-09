@@ -19,7 +19,7 @@ console.log('\n── WHO MAY SET IT ──');
 ok(leadPermissions('admin').setContactMethod === true, 'admin: yes');
 ok(leadPermissions('sales', true).setContactMethod === true, 'a selling salesperson: yes');
 ok(leadPermissions('sales', false).setContactMethod === false && leadPermissions(null).setContactMethod === false, 'a restricted salesperson, or nobody signed in: no (the server refuses the same)');
-ok(REP_CONTACT_METHOD_OPTIONS.map((o) => o.value).join() === 'call,whatsapp' && CONTACT_METHOD_OPTIONS.length > 2, 'a salesperson is offered exactly Call and WhatsApp; the admin keeps the full list');
+ok(REP_CONTACT_METHOD_OPTIONS.map((o) => o.value).join() === 'call,sms,whatsapp' && CONTACT_METHOD_OPTIONS.length > 3, 'a salesperson is offered exactly Call, Text and WhatsApp (2026-10-09: Text added); the admin keeps the full list');
 let planned = '';
 try { planned = JSON.stringify(planSalesPatch({ contact_method: 'call' })); } catch { planned = 'threw'; }
 ok(/lead_set_contact_method/.test(planned) && !/threw/.test(planned), 'a salesperson\'s Call write goes through lead_set_contact_method (the one server function), never a direct row write');

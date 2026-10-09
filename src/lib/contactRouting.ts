@@ -41,6 +41,9 @@ export interface RoutingFacts extends WhatsAppCapabilityInput {
   whatsappWindowOpen?: boolean;
   /** SMS gate: the rep has a logged conversation with them, or they have texted/WhatsApped us. */
   smsAllowed?: boolean;
+  /** The ONE cold text (the intro) may be sent: never texted, no WhatsApp thread, never spoken to. Opens SMS for a 'message' only —
+   *  never for a link (a link text always follows a conversation). */
+  coldTextOpen?: boolean;
   /** Twilio is configured on the server (the SMS/voice functions say so). */
   smsConfigured?: boolean;
   voiceConfigured?: boolean;
@@ -110,12 +113,14 @@ export function decideContactRoute(f: RoutingFacts, purpose: RoutePurpose = 'lin
     f.whatsappWindowOpen ? CHANNEL_COST_GBP.whatsapp_service : CHANNEL_COST_GBP.whatsapp_utility, f);
 
   const smsGateOpen = f.smsAllowed === true;
-  const smsOk = !phoneBlocked && p.ukMobile && f.smsConfigured !== false && smsGateOpen;
+  const coldOnly = !smsGateOpen && purpose === 'message' && f.coldTextOpen === true;
+  const smsOk = !phoneBlocked && p.ukMobile && f.smsConfigured !== false && (smsGateOpen || coldOnly);
   const smsOption = option('sms', smsOk,
     phoneBlocked ? 'They asked not to be contacted, or the number is marked wrong.'
       : !p.digits ? 'No usable phone number.'
       : !p.ukMobile ? 'SMS goes to UK mobiles only.'
       : f.smsConfigured === false ? 'SMS is not set up yet.'
+      : coldOnly ? 'A UK mobile you have not texted yet: you can send the intro text. Free messages open once they reply.'
       : !smsGateOpen ? 'SMS opens once you have spoken to them (log the call) or they have messaged us.'
       : 'A UK mobile — a text usually arrives within seconds, but delivery is only confirmed when the carrier says so.',
     CHANNEL_COST_GBP.sms, f);

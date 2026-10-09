@@ -12,7 +12,7 @@ import { useAvatar } from '@/hooks/useAvatar';
 import { useAuth } from '@/hooks/useAuth';
 import { useSubscription } from '@/hooks/useSubscription';
 import { canOpenRoute, orderNavForRole, SALES_SECONDARY_NAV } from '@/lib/access';
-import { useWhatsAppUnread } from '@/hooks/useWhatsAppUnread';
+import { useAllInboxUnread } from '@/hooks/useSms';
 import {
   LayoutDashboard, Search, ClipboardList, FileText, UsersRound,
   Inbox, Sparkles, Map, Users,
@@ -31,7 +31,7 @@ export function AppSidebar() {
   const { role } = useSubscription();
   /* The unread badge (per person, fn my_whatsapp_unread): the one number the dashboard's Today strip
      and the Inbox's Unread filter also read. */
-  const unread = useWhatsAppUnread();
+  const unread = useAllInboxUnread();
 
   const allNavItems = [
     { title: 'Admin dashboard', url: '/', icon: LayoutDashboard, description: 'The business at a glance' },
@@ -40,7 +40,7 @@ export function AppSidebar() {
     { title: 'Coverage', url: '/coverage', icon: Map, description: 'Which towns are done, per trade' },
     /* ⛔ Sales: the item SAYS WhatsApp (Paul, 2026-09-28: "I should not have to know that Inbox means
        WhatsApp"). Same route, same page, same conversations — one conversation system. */
-    { title: role === 'sales' ? 'WhatsApp' : 'Inbox', url: '/inbox', icon: role === 'sales' ? MessageCircle : Inbox, description: role === 'sales' ? 'Your WhatsApp conversations' : 'WhatsApp conversations' },
+    { title: 'Inbox', url: '/inbox', icon: role === 'sales' ? MessageCircle : Inbox, description: role === 'sales' ? 'Your WhatsApp and text conversations' : 'WhatsApp and text conversations' },
     /* Sales + Earnings are one page (2026-10-01); Focus Mode is retired (its parts are in the lead popup).
        2026-10-02: named "Sales dashboard" everywhere, beside the "Admin dashboard" — two dashboards, one product. */
     { title: 'Sales dashboard', url: '/sales-dashboard', icon: BarChart3, description: role === 'sales' ? 'Your month, commission and next steps' : "Each salesperson's month and commission" },
@@ -125,7 +125,7 @@ export function AppSidebar() {
                           <span className="text-xs text-sidebar-foreground/50 truncate">{item.description}</span>
                         </div>
                         {item.url === '/inbox' && unread.count > 0 && (
-                          <span className="ml-auto shrink-0 rounded-full bg-blue-500 px-1.5 py-0.5 text-[10px] font-bold leading-none text-white tabular-nums" aria-label={`${unread.count} unread WhatsApp conversations`}>
+                          <span className="ml-auto shrink-0 rounded-full bg-blue-500 px-1.5 py-0.5 text-[10px] font-bold leading-none text-white tabular-nums" aria-label={`${unread.count} unread conversations`}>
                             {unread.count > 99 ? '99+' : unread.count}
                           </span>
                         )}

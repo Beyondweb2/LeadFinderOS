@@ -34,7 +34,7 @@ const COLUMN_LISTS = "src/lib/outreachLeadColumns.ts";
    reads its own row by id (useLeadCrmRow), exactly as the detail dialog does — the walk stops there. */
 /* Quick Close (2026-10-04, on the call screen and the Log-a-contact result line): the dialog loads its own state by
    lead id through quick-close — it takes only the lead id from whoever opens it, never a list row. */
-const STOP_AT = ["src/components/LeadDetailDialog.tsx", "src/components/HookAuditDialog.tsx", "src/components/QuickCloseDialog.tsx", COLUMN_LISTS];
+const STOP_AT = ["src/components/LeadDetailDialog.tsx", "src/components/HookAuditDialog.tsx", "src/components/QuickCloseDialog.tsx", /* 2026-10-09: the text dialog takes only id + business_name; its panel reads by lead id */ "src/components/SingleSmsDialog.tsx", "src/components/QueueSmsDialog.tsx", COLUMN_LISTS];
 
 /* ── Hand-checked 2026-09-27: these files NAME the column, but never read it off a list row. ──────
    Pinned per FILE: the same column read in any other file still fails. */

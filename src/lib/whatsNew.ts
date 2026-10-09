@@ -22,6 +22,21 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-09-text-queue-and-inbox', date: '2026-10-09', title: 'Text button, text queue, and one Inbox', audience: 'all',
+    body: 'Every lead row has a text button, you can queue texts like WhatsApp, the sidebar now says Inbox, and a lead opens in the Inbox on the channel you used for it.',
+    report: {
+      added: [
+        'A text (SMS) button next to the WhatsApp button on every lead row.',
+        'Queue text on a selection: shows the exact text first, then sends them one at a time inside 9am-8pm UK, with a daily limit. A Text queue panel on the queue page lists what is waiting, with Remove.',
+        'Text as a Contact Method. A real text sets it, and the Inbox opens that lead on the SMS tab.',
+      ],
+      changed: [
+        'The salesperson sidebar item and the phone bar say Inbox instead of WhatsApp, and one badge counts WhatsApp and text conversations together.',
+        'A first text to someone you have not spoken to is the one approved intro text only; free text opens once they reply or you have spoken.',
+      ],
+      removed: [],
+      effect: 'You can start a conversation by text from the row, line up a batch the same way as WhatsApp, and always find a lead in the channel you used. Leads already texted, in a WhatsApp conversation, spoken to or opted out are skipped, with the reason.',
+    } },
   { id: '2026-10-09-texts-and-browser-calls', date: '2026-10-09', title: 'Text messages and calling from your browser', audience: 'all',
     body: 'You can now text prospects and call UK numbers from LeadFinderOS itself, and the Inbox has a WhatsApp / SMS switch. A "Best way to contact" box tells you the cheapest route that is likely to arrive.',
     report: {

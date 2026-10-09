@@ -12,7 +12,7 @@ export const NOT_STORED_FOR_SALES: ReadonlySet<string> = new Set(['outreach_atte
 /** The two ROUTES the app itself chooses between (the Call button, the WhatsApp queue). contact_method for a
  *  salesperson is stored only as one of these (lead_set_contact_method, migration 20261015110000); any other
  *  pill value stays the accepted no-op it always was for them. The function's allowlist is the same two. */
-export const SALES_CONTACT_ROUTES: readonly string[] = ['call', 'whatsapp'];
+export const SALES_CONTACT_ROUTES: readonly string[] = ['call', 'whatsapp', 'sms'];
 export const DETAIL_KEYS = ['contact_name', 'search_keyword', 'search_location'] as const;
 export const FOLLOW_UP_KEYS: ReadonlySet<string> = new Set(['next_action', 'next_action_date']);
 

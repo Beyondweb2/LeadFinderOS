@@ -24,7 +24,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { useAccentColor, hexToHSL, hslToHex, ThemePreset } from '@/hooks/useAccentColor';
 import { useAuth } from '@/hooks/useAuth';
 import { useSubscription } from '@/hooks/useSubscription';
-import { useWhatsAppUnread } from '@/hooks/useWhatsAppUnread';
+import { useAllInboxUnread } from '@/hooks/useSms';
 import { Check, Sparkles, Sun, Moon, RotateCcw } from 'lucide-react';
 
 function MobileThemeGrid({ themes, activeThemeId, onSelect }: { themes: ThemePreset[]; activeThemeId: string; onSelect: (id: string) => void; }) {
@@ -54,7 +54,7 @@ export function MobileBottomNav() {
   const location = useLocation();
   const { signOut } = useAuth();
   const { isAdmin, role } = useSubscription();
-  const unread = useWhatsAppUnread();
+  const unread = useAllInboxUnread();
   const [themeSheetOpen, setThemeSheetOpen] = useState(false);
   const [crmGlow, setCrmGlow] = useState(false);
   const [searchGlow, setSearchGlow] = useState(false);
@@ -69,7 +69,7 @@ export function MobileBottomNav() {
     ? [
         { title: 'Dashboard', url: '/sales-dashboard', icon: BarChart3 },
         { title: t('nav.outreach'), url: '/outreach', icon: ClipboardList },
-        { title: 'WhatsApp', url: '/inbox', icon: MessageSquare },
+        { title: 'Inbox', url: '/inbox', icon: MessageSquare },
         { title: t('nav.search'), url: '/find-leads', icon: Search },
       ]
     : [
@@ -164,7 +164,7 @@ export function MobileBottomNav() {
                 'flex flex-col items-center justify-center gap-1 px-3 py-2 rounded-lg transition-colors min-w-[60px]',
                 isMoreActive ? 'text-primary' : 'text-muted-foreground hover:text-foreground'
               )}>
-                <span className="relative"><MoreHorizontal className="h-5 w-5" />{role !== 'sales' && unread.count > 0 && <span className="absolute -right-1 -top-1 h-2 w-2 rounded-full bg-blue-500" aria-label="Unread WhatsApp in More" />}</span>
+                <span className="relative"><MoreHorizontal className="h-5 w-5" />{role !== 'sales' && unread.count > 0 && <span className="absolute -right-1 -top-1 h-2 w-2 rounded-full bg-blue-500" aria-label="Unread messages in More" />}</span>
                 <span className="text-[10px] font-medium">{t('common.more')}</span>
               </button>
             </DropdownMenuTrigger>
