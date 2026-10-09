@@ -226,6 +226,9 @@ export interface OutreachLead {
   whatsapp_attempts?: number | null;
   outreach_attempts?: number;
   last_outreach_attempt_at?: string | null;
+  /** The SMS queue lane marker and the SMS state (src/lib/smsStatus.ts). */
+  sms_queued_at?: string | null;
+  sms_delivery_status?: string | null;
   // New fields
   potential_revenue?: number | null;
   contact_name?: string | null;
@@ -733,7 +736,10 @@ export type PipelineStatus =
   | 'in_delivery'
   | 'completed'
   | 'refunded'     // money returned — the one status that removes a lead from revenue (isPaidLead)
-  | 'opted_out';   // render-only (system-written); not in the pickable options below
+  | 'opted_out'    // render-only (system-written); not in the pickable options below
+  | 'sms_queued'   // render-only: the SMS queue's Queued pill (smsStatus.smsPillOf) — never stored, never pickable
+  | 'sms_failed'   // render-only: SMS Failed
+  | 'no_sms';      // render-only: No SMS (a number that cannot receive texts)
 
 export const PIPELINE_STATUS_OPTIONS: { value: PipelineStatus; label: string }[] = [
   { value: 'not_contacted', label: 'New' },

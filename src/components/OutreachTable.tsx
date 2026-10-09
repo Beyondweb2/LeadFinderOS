@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect, useRef, useCallback, memo } from 'react';
+import { isPlausibleUkMobile, smsPillOf } from '@/lib/smsStatus';
 import { fetchAllRowsParallel } from '@/lib/fetchAllRows';
 import type { PhoneFetchStatus } from '@/hooks/useOutreach';
 import { isAggregatorUrl } from '@/lib/aggregators';
@@ -3198,9 +3199,12 @@ export function OutreachTable({
                               >
                                 <MessageSquare className="h-4 w-4" />
                               </button>
-                              <button type="button" onClick={() => setSmsDialogLead(lead)} className="p-1.5 rounded-md hover:bg-blue-500/10 text-blue-500 hover:text-blue-400 transition-colors" title="Send a text message (SMS)" aria-label="Send a text message" data-testid="outreach-sms">
-                                <MessageSquareText className="h-4 w-4" />
-                              </button>
+                              {/* No SMS option for a number that can never be a UK mobile (a landline, a foreign number) or one already marked No SMS. */}
+                              {isPlausibleUkMobile(lead.phone) && smsPillOf(lead) !== 'no_sms' && (
+                                <button type="button" onClick={() => setSmsDialogLead(lead)} className="p-1.5 rounded-md hover:bg-blue-500/10 text-blue-500 hover:text-blue-400 transition-colors" title="Send a text message (SMS)" aria-label="Send a text message" data-testid="outreach-sms">
+                                  <MessageSquareText className="h-4 w-4" />
+                                </button>
+                              )}
                               {/* Cold Call Playbook — beside the contact icons (Paul, 2026-09-23). Opens
                                   the ONE shared panel, rendered once at the foot of the table. */}
                               {!isDemoLead(lead.id) && (

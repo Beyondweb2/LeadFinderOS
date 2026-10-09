@@ -58,7 +58,7 @@ console.log('── 0. THE ROOT CAUSE: SEARCH RESULTS NOW CARRY THE ADDRESS ─�
   ok(!isCompaniesHouseTarget({ id: 'x', websiteStatus: 'NO_WEBSITE', address: undefined }) && isCompaniesHouseTarget({ id: 'x', websiteStatus: 'NO_WEBSITE', address: '1 High St, Sheffield S1 2AB, UK' }),
     'why it mattered: with no address nothing was a target; with the Google address a UK no-website result is');
   ok(!isCompaniesHouseTarget({ id: 'x', websiteStatus: 'HAS_OWN_WEBSITE', address: '1 High St, Sheffield S1 2AB, UK' }), 'a result with a website is still never checked (shown as —)');
-  ok(/address: l\.address \?\? null, isTarget: isCompaniesHouseTarget\(l\)/.test(read('src/components/LeadsTable.tsx')), 'Find Leads hands the checker each result with its address');
+  ok(!/useCompaniesHouseChecks/.test(read('src/components/LeadsTable.tsx')), 'Find Leads no longer hands results to the checker (Business age removed 2026-10-09 — no Companies House calls from the search)');
 }
 
 console.log('── 1. SEARCH A, THEN SEARCH B WITH DIFFERENT LEADS ──');

@@ -144,7 +144,7 @@ ok(/<TableHead[^>]*>Site management<\/TableHead>/.test(table) && /<SiteManagemen
 ok(/SITE_FILTERS\.map/.test(table) && /passesSiteFilter\(siteFilter, siteStateOf\(hasOwnSite\(lead\), agency\.rowFor\(lead\.websiteUrl\)\)\)/.test(table), 'and a site-management filter');
 // 2026-10-02: the order also waits for the Companies House check (ch.pending) and lifts new strong matches
 // within the non-agency rows; agency sites are still last and still never hidden.
-ok(/if \(agency\.pending > 0 \|\| ch\.pending > 0\) return shown;\s*const last = shown\.filter\(\(l\) => highAgency\(l\)\);\s*const rest = shown\.filter\(\(l\) => !highAgency\(l\)\);\s*return \[[^\]]*\.\.\.last\];/.test(table),'high-confidence agency sites sort last once the checks finish (rows never jump mid-check), never hidden');
+ok(/if \(agency\.pending > 0\) return shown;\s*const last = shown\.filter\(\(l\) => highAgency\(l\)\);\s*const rest = shown\.filter\(\(l\) => !highAgency\(l\)\);\s*return \[[^\]]*\.\.\.last\];/.test(table),'high-confidence agency sites sort last once the checks finish (rows never jump mid-check), never hidden');
 ok(/const selectAllPool = useMemo\(\(\) => selectableLeads\.filter\(\(l\) => !highAgency\(l\)\)/.test(table), '"Select all" leaves them out (they can still be ticked one by one)');
 ok(table.includes('onClick={() => runBulkAdd(selectAllPool)}') && table.includes('Add all shown ({selectAllPool.length})'), '"Add all shown" leaves them out too, and says so');
 ok(agencyCellText({ classification: 'agency_likely', confidence: 92 }, true) === 'Agency · 92%' && agencyCellText({ classification: 'no_evidence', confidence: 78 }, true) === 'No agency · 78%', 'on a phone the pill is short, so the confidence is never the part cut off');

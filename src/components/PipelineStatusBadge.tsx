@@ -18,6 +18,22 @@ const statusConfig: Record<string, { label: string; shortLabel: string; classNam
     shortLabel: 'Queued',
     className: 'bg-[hsl(var(--badge-sky))] text-[hsl(var(--badge-sky-fg))] border-transparent font-semibold',
   },
+  /* The SMS display pills (2026-10-09, src/lib/smsStatus.ts): same colours as their WhatsApp twins so the two channels read alike. */
+  sms_queued: {
+    label: 'Queued',
+    shortLabel: 'Queued',
+    className: 'bg-[hsl(var(--badge-sky))] text-[hsl(var(--badge-sky-fg))] border-transparent font-semibold',
+  },
+  sms_failed: {
+    label: 'SMS Failed',
+    shortLabel: 'SMS Failed',
+    className: 'bg-[hsl(var(--badge-orange))] text-[hsl(var(--badge-orange-fg))] border-transparent font-semibold',
+  },
+  no_sms: {
+    label: 'No SMS',
+    shortLabel: 'No SMS',
+    className: 'bg-[hsl(var(--badge-gray))] text-[hsl(var(--badge-gray-fg))] border-transparent font-semibold',
+  },
   email_sent: {
     label: 'Email Sent',
     shortLabel: 'Email',

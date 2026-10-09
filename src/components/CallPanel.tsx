@@ -2,12 +2,10 @@ import { CircleAlert, Loader2, Mic, MicOff, PhoneCall, PhoneOff, FlaskConical, C
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { TONE } from '@/components/salesDash/primitives';
-import { BestWayToContact } from '@/components/BestWayToContact';
 import { fmtDuration, type TwilioCall } from '@/hooks/useTwilioCall';
 import { callNumberView } from '@/lib/callNumber';
-import type { RouteChannel } from '@/lib/contactRouting';
 
-/* THE CALL PANEL (2026-10-09) — top of the Call tab: the recommended way to reach this prospect and, when you choose to
+/* THE CALL PANEL (2026-10-09) — top of the Call tab: the Call in browser button (and a small Call on WhatsApp) and, when you choose to
    call from the browser, the live call (Calling… / Ringing / Connected 02:13 / Ended / Failed), Mute and Hang up.
    Sits ABOVE the script, the AI result and Quick Close — all still on the same tab, so the rep keeps reading while talking.
    ⛔ Opening the workspace or pressing a button here records nothing about the lead. When a call ends, the panel offers
@@ -24,10 +22,6 @@ export function CallPanel({ leadId, phone, country, call, onLogCall }: {
   const here = call.leadId === leadId;
   const otherLead = call.active && !here;
   const view = callNumberView(phone, country);
-  const pick = (c: RouteChannel) => {
-    if (c === 'call') void call.start(leadId);
-    if (c === 'whatsapp_app_call' && view?.whatsappUrl) window.open(view.whatsappUrl, '_blank', 'noopener,noreferrer');
-  };
   return (
     <section className="space-y-2 rounded-2xl border border-amber-500/30 bg-amber-500/[0.04] p-3 sm:p-3.5" data-testid="call-panel" data-call-state={here ? call.state : 'idle'}>
       {otherLead ? (
@@ -65,11 +59,15 @@ export function CallPanel({ leadId, phone, country, call, onLogCall }: {
         </div>
       ) : (
         <>
-          <BestWayToContact leadId={leadId} purpose="call" onPick={pick} />
           <div className="flex flex-wrap items-center gap-2">
             <Button className="h-11 gap-2 rounded-xl bg-amber-500 font-bold text-white hover:bg-amber-600" onClick={() => void call.start(leadId)} disabled={!view} data-testid="call-start-browser">
               <PhoneCall className="h-4 w-4" />Call in browser
             </Button>
+            {view?.whatsappUrl && (
+              <Button type="button" variant="outline" size="sm" className="h-9 gap-1.5" onClick={() => window.open(view.whatsappUrl, '_blank', 'noopener,noreferrer')} data-testid="call-start-whatsapp">
+                <PhoneCall className="h-3.5 w-3.5" />Call on WhatsApp
+              </Button>
+            )}
             <p className="text-[11px] text-muted-foreground">Not recorded. Allow your microphone when asked.</p>
           </div>
         </>

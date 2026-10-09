@@ -46,7 +46,7 @@ console.log("\n── one pill, every screen ──");
   const inbox = read("src/pages/Inbox.tsx");
   ok(/<NextActionPill lead=\{leadByIdForState\.get\(c\.leadId\)\} size="xs"/.test(inbox), "Inbox list: a small pill on every row that has one");
   ok(/<NextActionEditor lead=\{activeLead\} variant="pill" \/>/.test(inbox), "Inbox header: the one Next Action, shown and set in place (2026-10-02, replacing Find email)");
-  ok(/next_action, next_action_date, next_action_time, next_action_note'/.test(read("src/hooks/useInbox.ts")), "…and the Inbox reads the note (and the time), so the header pill carries it");
+  ok(/next_action, next_action_date, next_action_time, next_action_note/.test(read("src/hooks/useInbox.ts")), "…and the Inbox reads the note (and the time), so the header pill carries it");
   ok(/onlyFollowUp/.test(read("src/components/ConvStateChip.tsx")), "the Inbox chip no longer repeats \"Follow-up due\" beside the pill");
   const editor = read("src/components/NextActionEditor.tsx");
   ok(/const v = nextActionView\(lead\);/.test(editor) && /<NextActionForm compact/.test(editor) && /NEXT_ACTION_OPTIONS \} from '@\/lib\/salesCrm'/.test(read("src/components/NextActionForm.tsx")), "Outreach cell: the same words and the same form (every choice) as the popup (2026-10-02)");

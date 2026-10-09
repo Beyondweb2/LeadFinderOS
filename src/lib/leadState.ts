@@ -21,6 +21,7 @@
    Pure and edge-safe (relative imports with .ts): fn sales-performance runs this too.
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 import { CALL_OUTCOMES, salesStageOf } from './salesCrm.ts';
+import { isEarlyStatus, smsPillOf, type SmsPill } from './smsStatus.ts';
 import { CONTACT_METHODS, contactMethodLabel } from './contactMethods.ts';
 
 /* ── 1. THE SALES STATE ──────────────────────────────────────────────────────────────────────── */
@@ -79,6 +80,9 @@ export interface LeadStateInput {
   wrongNumber?: boolean | null;
   /** Meta has confirmed a delivery to this number at least once (outreach_leads.whatsapp_ever_delivered). */
   whatsapp_ever_delivered?: boolean | null;
+  /** The SMS lane marker and the SMS state (src/lib/smsStatus.ts) — drawn as Queued / SMS Failed / No SMS over an early status. */
+  sms_queued_at?: string | null;
+  sms_delivery_status?: string | null;
 }
 
 /* ⛔ A SEND STAMP IS NOT A CONTACT WHEN THE SEND FAILED (Paul, 2026-10-01: "An attempted contact that failed
@@ -109,9 +113,12 @@ export const REACHED_OUTCOMES: ReadonlySet<string> = new Set([...CONVERSATION_OU
    set the star — fell back to the pipeline's "New" pill and sat under the New filter. Starred and never reached
    stays "New ⭐". */
 const PIPELINE_NOT_CONTACTED: ReadonlySet<string> = new Set(['', 'not_contacted', 'no_whatsapp', 'no_whatsapp_needs_sms', 'whatsapp_failed']);
-export function pillStatusOf(status: string | null | undefined, stage: (Pick<SalesStateView, 'state'> & { reached?: boolean }) | null | undefined): string | null {
+export function pillStatusOf(status: string | null | undefined, stage: (Pick<SalesStateView, 'state'> & { reached?: boolean; smsPill?: SmsPill | null }) | null | undefined): string | null {
   const s = (status ?? '').trim();
   if ((stage?.state === 'contacted' || stage?.reached === true) && PIPELINE_NOT_CONTACTED.has(s)) return 'initial_contact';
+  /* ⛔ THE SMS PILL (2026-10-09): Queued / SMS Failed / No SMS are drawn ONLY over an early status (isEarlyStatus), after the Contacted
+     rule above — so a text can never hide a reply, a client, an interested lead or a lead already reached. Display only; nothing stored. */
+  if (stage?.smsPill && isEarlyStatus(s)) return stage.smsPill;
   /* ⛔ "Interested" IS NEVER A PILL (Paul, 2026-10-01). The stored status 'interested' is the pre-star marker;
      one path still writes it (a no turned yes, leadOutcome — the trigger that lifts the Not interested block
      keys on it), always together with the star. The pill shows the contact truth instead; the star says
@@ -144,6 +151,8 @@ export interface SalesStateView {
   /** They were REACHED — a real send, a logged conversation, or the pipeline already past New — whatever state
    *  outranks it. The pill reads this (pillStatusOf), so the ⭐ never turns a reached lead back into "New". */
   reached: boolean;
+  /** The SMS display pill for this lead (smsPillOf), or null. pillStatusOf draws it over an EARLY status only. */
+  smsPill?: SmsPill | null;
 }
 
 const paidOf = (v: unknown) => { const n = Number(v ?? 0); return Number.isFinite(n) && n > 0; };
@@ -171,7 +180,7 @@ export function salesStateOf(l: LeadStateInput, nowMs: number = Date.now()): Sal
   // attempt), OR an opener really went out (a failed send's leftover stamp is not contact).
   const loggedReached = !!l.lastLogged && (l.lastLogged.reached ?? REACHED_OUTCOMES.has(l.lastLogged.outcome));
   const reached = stage === 'contacted' || loggedReached || openerReallySent(l);
-  const v = (state: SalesState, detail: string | null = null): SalesStateView => ({ state, label: SALES_STATE_LABEL[state], tone: SALES_STATE_TONE[state], detail, reached });
+  const v = (state: SalesState, detail: string | null = null): SalesStateView => ({ state, label: SALES_STATE_LABEL[state], tone: SALES_STATE_TONE[state], detail, reached, smsPill: smsPillOf(l) });
   if (paidOf(l.amount_paid) || stage === 'client') return v('client', status === 'refunded' ? 'Refunded' : null);
   if (stage === 'won') return v('won');
   const saidNo = NOT_INTERESTED_STATUSES.has(status) || (l.lastLogged?.outcome === 'not_interested' && !l.is_potential_work);

@@ -78,7 +78,7 @@ const sb = supabase as any;
 /* status / is_potential_work / amount_paid / whatsapp_sent_at (2026-09-30): the facts the sales state
    is read from (src/lib/leadState.ts), so the Work panel knows the state before and after a tap. Both
    sources have them (the sales view's amount_paid is always null — a client is not in it at all). */
-const CRM_COLUMNS = 'id, business_name, search_keyword, category, derived_town, search_location, country, website, next_action, next_action_date, next_action_time, next_action_note, call_booked_at, website_control, website_control_note, assigned_to_user_id, services_included, service_areas, address, domain_control, campaign_id, status, is_potential_work, amount_paid, whatsapp_sent_at, lost_reason, lost_reason_note';
+const CRM_COLUMNS = 'id, business_name, search_keyword, category, derived_town, search_location, country, website, next_action, next_action_date, next_action_time, next_action_note, call_booked_at, website_control, website_control_note, assigned_to_user_id, services_included, service_areas, address, domain_control, campaign_id, status, is_potential_work, amount_paid, whatsapp_sent_at, lost_reason, lost_reason_note, sms_queued_at, sms_delivery_status';
 
 interface CrmRow {
   id: string; business_name: string | null; search_keyword: string | null; category: string | null;
@@ -92,6 +92,8 @@ interface CrmRow {
   status: string | null; is_potential_work: boolean | null; amount_paid: number | null; whatsapp_sent_at: string | null;
   /** Why they said no (lead_set_lost_reason); null = not recorded. */
   lost_reason: string | null; lost_reason_note: string | null;
+  /** The SMS lane marker + state (smsStatus.ts): the header pill's Queued / SMS Failed / No SMS. */
+  sms_queued_at?: string | null; sms_delivery_status?: string | null;
 }
 
 export const leadCrmKey = (leadId: string) => ['lead-crm', leadId] as const;
