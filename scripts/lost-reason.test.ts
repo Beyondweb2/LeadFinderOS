@@ -124,7 +124,7 @@ const panel = read('src/components/LeadCrmPanel.tsx');
 ok(/if \(outcome === 'not_interested' && res\.after\.state === 'not_interested' && !res\.failed\.length\) \{\s*askLostReason\(/.test(panel), 'the Work panel\'s Not interested outcome asks (popup and Focus Mode share it)');
 const flowFile = read('src/components/LeadCallFlow.tsx');
 ok(/if \(!lead \|\| lead\.status !== 'not_interested'\) return null;/.test(flowFile) && /data-testid="lost-reason"/.test(flowFile) && /LOST_REASON_UNRECORDED/.test(flowFile) && /\{lead\.lost_reason \? 'Change' : 'Add'\}/.test(flowFile), 'a Not interested lead shows its reason (or Reason not recorded) beside the status, with Change / Add');
-ok(/whatsapp_sent_at, lost_reason, lost_reason_note';/.test(panel), 'the Work panel reads the reason');
+ok(/whatsapp_sent_at, lost_reason, lost_reason_note/.test(panel), 'the Work panel reads the reason');
 const askers = srcFiles.filter((p) => /askLostReason\(/.test(readFileSync(p, 'utf8')) && !/lostReasonAsk\.ts$/.test(p)).map((p) => p.replace(/\\/g, '/').replace(/^.*\/src\//, 'src/')).sort();
 ok(JSON.stringify(askers) === JSON.stringify(['src/components/LeadCallFlow.tsx', 'src/components/LeadCrmPanel.tsx', 'src/components/PipelineStatusSelect.tsx']), `only the pill, the logged outcome and the reason line's Change ask (bulk changes do not): ${askers.join(', ')}`);
 const writers = srcFiles.filter((p) => /['"]lead_set_lost_reason['"]/.test(readFileSync(p, 'utf8'))).map((p) => p.replace(/\\/g, '/').replace(/^.*\/src\//, 'src/'));

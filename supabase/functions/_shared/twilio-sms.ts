@@ -32,6 +32,7 @@ import { guardAction } from "./protection.ts";
 import { loadQaExclusions } from "./qa-guard.ts";
 import { qaSendVerdict } from "../../../src/lib/qaSafety.ts";
 import { resolveTwilioEnv, twilioSendSms } from "./twilio.ts";
+import { markLeadNoSms, markLeadSmsRefused } from "./sms-lead-sync.ts";
 
 // deno-lint-ignore no-explicit-any
 type Service = any;
@@ -75,7 +76,12 @@ export async function sendSmsToLead(service: Service, a: SendSmsArgs): Promise<S
 
   // 2. UK mobile only, from the lead's own stored number
   const digits = toWhatsAppDigits(lead.phone as string, (lead.country as string | null) ?? null);
-  if (!isUkColdDestination(digits)) return fail("not_uk_mobile", "SMS goes to UK mobile numbers only, and this lead's number is not one.");
+  if (!isUkColdDestination(digits)) {
+    /* ⛔ A NUMBER THAT CAN NEVER BE A UK MOBILE is No SMS the moment we find out — before anything is queued or sent (the SMS twin of
+       WhatsApp's "not on WhatsApp"). A landline (+44 151 …), a foreign number, junk: nothing leaves, and the lead says so. */
+    await markLeadNoSms(service, lead.id as string);
+    return fail("not_uk_mobile", "SMS goes to UK mobile numbers only, and this lead's number is not one — it is marked No SMS.");
+  }
   const e164 = `+${digits}`;
 
   // 3. the text
@@ -180,6 +186,9 @@ export async function sendSmsToLead(service: Service, a: SendSmsArgs): Promise<S
   if (!simulated) {
     const r = await twilioSendSms(env, e164, body);
     if (r.ok) { status = "queued"; sid = r.sid; } else { status = "failed"; sid = r.sid; errCode = r.errorCode; errText = r.error; }
+    /* A Twilio REFUSAL at send time (never accepted): the code decides — 21211 / 21614 mean the number cannot receive SMS (No SMS); 21610 means
+       they unsubscribed (an opt-out, recorded); anything else is a failed attempt (SMS Failed). Smsstatus.ts has the full map. */
+    if (!r.ok) await markLeadSmsRefused(service, lead.id as string, r.errorCode, e164);
   }
   await service.from("sms_messages").update({ status, twilio_sid: sid, error_code: errCode, error: errText }).eq("id", row.id);
   if (!simulated && status !== "failed") {

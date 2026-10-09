@@ -1,5 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { isInternalCall, pickRole, type Actor } from "../_shared/access.ts";
+import { isInternalCall, pickRole, resolveActor, type Actor } from "../_shared/access.ts";
 import { sendSmsToLead } from "../_shared/twilio-sms.ts";
 import { loadQaExclusions } from "../_shared/qa-guard.ts";
 import { qaSendVerdict } from "../../../src/lib/qaSafety.ts";
@@ -27,14 +27,23 @@ const json = (b: unknown, s = 200) => new Response(JSON.stringify(b), { status: 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
   if (req.method !== "POST") return json({ ok: false, error: "method_not_allowed" }, 405);
-  if (!isInternalCall(req)) return json({ ok: false, error: "forbidden" }, 403);
   const service = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "", { auth: { persistSession: false } });
+  /* Two callers only: the cron (x-cron-secret), or an ADMIN's own session asking for { send_now: true } — the Inbox's "Send now", the twin of
+     WhatsApp's. Send now skips ONLY the pacing wait; pause, the window, the daily cap and every send guard still apply. Anyone else: refused. */
+  let sendNow = false;
+  if (!isInternalCall(req)) {
+    const body = await req.json().catch(() => ({})) as { send_now?: unknown };
+    if (body?.send_now !== true) return json({ ok: false, error: "forbidden" }, 403);
+    const who = await resolveActor(req, service);
+    if (!who.ok || who.actor.role !== "admin") return json({ ok: false, error: "forbidden" }, 403);
+    sendNow = true;
+  }
   try {
     const { data: st, error: stErr } = await service.from("sms_queue_state").select("paused, next_send_at").eq("id", 1).maybeSingle();
     if (stErr || !st) return json({ ok: true, skipped: "state_unreadable" });
     if (st.paused === true) return json({ ok: true, skipped: "paused" });
     if (!smsWindowOpen()) return json({ ok: true, skipped: "outside_window" });
-    if (st.next_send_at && new Date(st.next_send_at) > new Date()) return json({ ok: true, skipped: "not_due" });
+    if (!sendNow && st.next_send_at && new Date(st.next_send_at) > new Date()) return json({ ok: true, skipped: "not_due" });
 
     const { count: sentToday } = await service.from("sms_messages").select("id", { count: "exact", head: true })
       .eq("direction", "outbound").eq("test_mode", false).not("status", "in", "(failed,undelivered)").gte("created_at", londonDayStartUtc().toISOString());
@@ -91,7 +100,10 @@ Deno.serve(async (req) => {
       await finish({ sms_attempts: attempts, sms_delivery_status: r.error });
       return json({ ok: true, sent: false, retry: true, error: r.error, lead_id: lead.id });
     }
-    await finish({ sms_queued_at: null, sms_queued_by_user_id: null, sms_attempts: attempts, sms_delivery_status: r.error, contact_method: null });
+    // The lead's SMS state: a number that can never be a UK mobile is No SMS; a Twilio send failure was already classified by the sender
+    // (markLeadSmsRefused: No SMS / opt-out / SMS failed by code) so it is not overwritten; any other rule refusal is stored as its reason.
+    const stateFields: Record<string, unknown> = r.error === "not_uk_mobile" ? { sms_delivery_status: "no_sms" } : r.error === "send_failed" ? {} : { sms_delivery_status: r.error };
+    await finish({ sms_queued_at: null, sms_queued_by_user_id: null, sms_attempts: attempts, ...stateFields, contact_method: null });
     return json({ ok: true, sent: false, dropped: true, error: r.error, lead_id: lead.id });
   } catch (e) {
     console.error("[process-sms-queue] error:", (e as Error).message);

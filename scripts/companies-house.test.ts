@@ -49,7 +49,7 @@ console.log('── 1. ONLY NO-WEBSITE UK RESULTS ARE CHECKED ──');
   ok(ageStateOf(false, null, false, NOW) === 'skipped', 'a non-target reads "skipped" (the "—" cell)');
   // The hook only ever sends targets: the table builds its items with isCompaniesHouseTarget.
   const table = code('src/components/LeadsTable.tsx');
-  ok(/isTarget: isCompaniesHouseTarget\(l\)/.test(table), 'Find Leads marks targets with isCompaniesHouseTarget');
+  ok(!/isCompaniesHouseTarget|useCompaniesHouseChecks|BusinessAgeCell|AGE_FILTERS/.test(table), 'Find Leads no longer uses Companies House at all (Business age removed 2026-10-09)');
   ok(/chTargetsOf\(items\.filter\(\(i\) => i\.isTarget\)\)/.test(code('src/hooks/useCompaniesHouseChecks.ts')) && /if \(i\.id && !m\.has\(i\.id\)\)/.test(code('src/lib/companiesHouseRunner.ts')),
     'the hook drops every non-target (and the runner every id-less row) before any lookup');
 }
@@ -240,10 +240,10 @@ console.log('── 11. FIND LEADS WIRING — and the agency check is untouched 
   const t = code('src/components/LeadsTable.tsx');
   ok(/const agency = useAgencyChecks\(agencyItems\)/.test(t) && /hasOwnWebsite: hasOwnSite\(l\)/.test(t), 'the agency check still runs for every own-website result');
   ok(/passesSiteFilter\(siteFilter/.test(t) && /SITE_FILTERS\.map/.test(t), 'the site-management filter is still there');
-  ok(/if \(agency\.pending > 0 \|\| ch\.pending > 0\) return shown;/.test(t), 'rows never jump while either check is still running');
+  ok(/if \(agency\.pending > 0\) return shown;/.test(t), 'rows never jump while the agency checks are still running');
   ok(/\.\.\.last\]/.test(t), 'high-confidence agency sites still sort last');
-  ok(/>Business age</.test(t) && /AGE_FILTERS\.map/.test(t), 'Business age column + filter present');
-  ok(/colSpan=\{bulkAllowed \? 7 : 6\}/.test(t), 'the empty row spans the new column');
+  ok(!/Business age/.test(t) && !/age-filter/.test(t) && !/passesAgeFilter|ageFilter/.test(t), 'no Business age column, filter or sort remains in Find Leads');
+  ok(/colSpan=\{bulkAllowed \? 6 : 5\}/.test(t), 'the empty row spans the remaining columns');
 }
 
 console.log(f ? `\n${f} FAILED` : '\nALL PASS');

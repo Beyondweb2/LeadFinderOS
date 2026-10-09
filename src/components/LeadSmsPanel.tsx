@@ -11,7 +11,6 @@ import { smsSize, costWords, smsCostGbp } from '@/lib/channelCosts';
 import { SMS_STATE_LABEL, smsDeliveryState, type SmsTemplateName } from '@/lib/smsMessages';
 import { SMS_COLD_CHOICES, SMS_CONVERSATION_CHOICES, smsPreview } from '@/lib/smsPreview';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { BestWayToContact } from '@/components/BestWayToContact';
 import { notifyLeadChanged } from '@/lib/leadSync';
 
 /* ONE LEAD'S TEXT CONVERSATION (2026-10-09): the thread, delivery marks, the composer and the two approved quick
@@ -46,7 +45,7 @@ export function LeadSmsSection({ leadId }: { leadId: string }) {
   );
 }
 
-export function LeadSmsPanel({ leadId, className, showBestWay = true, height = 'max-h-[320px]' }: { leadId: string; className?: string; showBestWay?: boolean; height?: string }) {
+export function LeadSmsPanel({ leadId, className, height = 'max-h-[320px]' }: { leadId: string; className?: string; height?: string }) {
   const { toast } = useToast();
   const qc = useQueryClient();
   const thread = useSmsThread(leadId);
@@ -117,7 +116,6 @@ export function LeadSmsPanel({ leadId, className, showBestWay = true, height = '
 
   return (
     <div className={cn('space-y-2.5', className)} data-testid="lead-sms-panel">
-      {showBestWay && <BestWayToContact leadId={leadId} purpose="message" />}
       <div className={cn('overflow-y-auto rounded-xl border border-border/60 bg-muted/20 p-2.5', height)} data-testid="sms-thread" aria-live="polite">
         {thread.isLoading ? <p className="flex items-center gap-2 p-2 text-xs text-muted-foreground"><Loader2 className="h-3.5 w-3.5 animate-spin" />Loading texts…</p>
           : rows.length === 0 ? <p className="p-2 text-xs text-muted-foreground">No texts yet.</p>
@@ -134,7 +132,7 @@ export function LeadSmsPanel({ leadId, className, showBestWay = true, height = '
         <div ref={endRef} />
       </div>
       {state === 'failed' && (
-        <p className="flex items-start gap-1.5 rounded-lg bg-red-500/10 px-2.5 py-2 text-xs text-red-700 dark:text-red-300" data-testid="sms-failed-help"><AlertTriangle className="mt-px h-3.5 w-3.5 shrink-0" />The last text did not arrive. Check the number with them, or use another way above.</p>
+        <p className="flex items-start gap-1.5 rounded-lg bg-red-500/10 px-2.5 py-2 text-xs text-red-700 dark:text-red-300" data-testid="sms-failed-help"><AlertTriangle className="mt-px h-3.5 w-3.5 shrink-0" />The last text did not arrive. Check the number with them, or try another way to reach them.</p>
       )}
       {sms && !sms.available ? (
         <p className="rounded-lg bg-muted/50 px-2.5 py-2 text-xs text-muted-foreground" data-testid="sms-unavailable">{sms.reason}</p>

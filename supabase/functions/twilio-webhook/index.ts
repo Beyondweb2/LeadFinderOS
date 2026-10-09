@@ -4,6 +4,7 @@ import { advanceSmsStatus, isStopMessage, mapTwilioStatus } from "../../../src/l
 import { recordOptOut } from "../_shared/suppression.ts";
 import { bookOwnerId } from "../_shared/access.ts";
 import { resolveTwilioEnv, twiml, webhookUrlFor, xmlEscape } from "../_shared/twilio.ts";
+import { syncLeadFromSms } from "../_shared/sms-lead-sync.ts";
 
 // twilio-webhook — everything Twilio calls us about (2026-10-09). PUBLIC (verify_jwt = false): the handler
 // authenticates every request by Twilio's signature instead.
@@ -97,11 +98,14 @@ async function smsIn(service: Service, env: ReturnType<typeof resolveTwilioEnv>,
 
 async function smsStatus(service: Service, p: Record<string, string>): Promise<Response> {
   if (!p.MessageSid) return empty();
-  const { data: row } = await service.from("sms_messages").select("id, status").eq("twilio_sid", p.MessageSid).maybeSingle();
+  const { data: row } = await service.from("sms_messages").select("id, status, lead_id, phone").eq("twilio_sid", p.MessageSid).maybeSingle();
   if (!row) return empty();
   const next = advanceSmsStatus(row.status, mapTwilioStatus(p.MessageStatus));
   if (next === row.status && !p.ErrorCode) return empty();
   await service.from("sms_messages").update({ status: next, ...(p.ErrorCode ? { error_code: String(p.ErrorCode) } : {}) }).eq("id", row.id);
+  /* ⛔ THE LEAD FOLLOWS THE PROVIDER (2026-10-09): delivered → Contacted, failed → SMS Failed / No SMS by the error code. Only the lead's
+     newest text moves it, and only a real receipt (never "accepted") — see _shared/sms-lead-sync.ts. */
+  if (row.lead_id) await syncLeadFromSms(service, { leadId: row.lead_id, messageId: row.id, providerStatus: next, errorCode: p.ErrorCode ? String(p.ErrorCode) : null, phoneE164: `+${row.phone}` });
   return empty();
 }
 

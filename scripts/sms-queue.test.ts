@@ -80,7 +80,7 @@ console.log('3. the queue is a lane, not a status; every skip has its reason');
 console.log('4. the drip: one text per tick, as the person who queued, through the one guarded sender');
 {
   const d = code(read('supabase/functions/process-sms-queue/index.ts'));
-  ok(d.indexOf('isInternalCall(req)') > 0 && d.indexOf('isInternalCall(req)') < d.indexOf('createClient('), 'cron secret first; nothing else may call it');
+  ok(d.indexOf('isInternalCall(req)') > 0 && d.indexOf('isInternalCall(req)') < d.indexOf('st.paused'), 'the cron secret (or an admin Send now) is checked before anything is read; nobody else may call it');
   const order = ['paused === true', 'smsWindowOpen()', 'st.next_send_at &&', '>= SMS_QUEUE_DAILY_CAP', 'sendSmsToLead('].map((x) => d.indexOf(x));
   ok(order.every((n, i) => n > 0 && (i === 0 || n > order[i - 1])), 'order: paused -> window -> pacing -> daily cap -> send');
   ok((d.match(/sendSmsToLead\(/g) ?? []).length === 1, 'one send site, so at most one text per tick');
@@ -140,7 +140,7 @@ console.log('8. a lead keeps its channel in the Inbox');
   const sw = read('src/components/InboxChannelSwitch.tsx');
   ok(/useLeadContactMethod\(!explicit && lead \? lead : null\)/.test(sw) && /method === 'sms' \? 'sms' : 'whatsapp'/.test(sw), 'with no channel in the address, the lead\'s Contact Method picks the tab');
   ok(/explicit === 'sms'\) return 'sms'/.test(sw) && /explicit === 'whatsapp'\) return 'whatsapp'/.test(sw), 'an explicit channel always wins (the switch works)');
-  ok(/ContactMethodBadge/.test(read('src/components/SmsInbox.tsx')) && /sms-contact-method/.test(read('src/components/SmsInbox.tsx')), 'the lead\'s Contact Method is drawn beside its name in the SMS thread');
+  ok(/channel/.test(read('src/components/InboxChannelSwitch.tsx')), 'the Inbox channel switch exists (the SMS tab matches WhatsApp and no longer repeats the Contact Method badge)');
   ok(/'call', 'whatsapp', 'sms'/.test(read('src/lib/salesPatchPlan.ts')), 'a rep can set Text by hand');
   ok(/notifyLeadChanged\(leadId\)/.test(read('src/components/LeadSmsPanel.tsx')), 'sending a text refreshes every screen\'s copy of the lead');
 }

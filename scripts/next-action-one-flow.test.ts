@@ -139,7 +139,7 @@ console.log('\n── stored next actions still read ──');
 ok(nextActionViewOf('remove_if_no_reply', null)!.label === 'Close if no reply' && nextActionViewOf('send_voice_note', '2026-10-05', null, TODAY)!.label === 'Voice note', 'older stored values still read in their own words');
 ok(nextActionText(nextActionViewOf('follow_up', '2026-10-01', null, TODAY, null, NOW)!) === 'Follow up · Today', 'an existing date-only action reads exactly as before');
 const cols = read('src/lib/outreachLeadColumns.ts');
-ok(cols.includes("'next_action', 'next_action_date', 'next_action_time', 'next_action_note',") && /'next_action_time',\n\] as const;\nconst SALES_VIEW/.test(cols), 'the admin list and the salesperson view both load the time');
+ok(cols.includes("'next_action', 'next_action_date', 'next_action_time', 'next_action_note',") && /'next_action_time',\n[^\]]*\] as const;\nconst SALES_VIEW/.test(cols), 'the admin list and the salesperson view both load the time');
 
 console.log(`\n${fails ? `${fails} FAILED` : 'all passed'}`);
 if (fails) process.exit(1);

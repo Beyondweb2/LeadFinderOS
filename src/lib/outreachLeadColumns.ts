@@ -41,6 +41,9 @@ export const OUTREACH_LIST_COLUMNS = [
   // (leadState.openerReallySent) and the number is WhatsApp verified (whatsAppCapability). Not in the
   // sales view — a salesperson's rows fall back to the status / delivery status, never a guess.
   'whatsapp_ever_delivered',
+  // 2026-10-09: the SMS lane marker + SMS state — the Queued / SMS Failed / No SMS pills (src/lib/smsStatus.ts). Also in the sales view
+  // (migration 20261019110000), so both roles draw the same pill.
+  'sms_queued_at', 'sms_delivery_status',
 ] as const;
 
 export type OutreachListColumn = (typeof OUTREACH_LIST_COLUMNS)[number];
@@ -74,6 +77,8 @@ export const SALES_VIEW_COLUMNS = [
   'linkedin_url', 'facebook_status', 'instagram_status', 'linkedin_status',
   // 2026-10-02 (migration 20261002160100): the Next Action's optional UK time; appended at the view's end.
   'next_action_time',
+  // 2026-10-09 (migration 20261019110000): the SMS lane marker + state, appended at the view's end.
+  'sms_queued_at', 'sms_delivery_status',
 ] as const;
 const SALES_VIEW = new Set<string>(SALES_VIEW_COLUMNS);
 /** The list columns a salesperson's list can have: the admin's list, cut to what the view carries.
