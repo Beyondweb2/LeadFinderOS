@@ -96,7 +96,7 @@ console.log('── 3b. the fixes found in visual QA ──');
   ok(/aria-label="Import leads"/.test(read('src/components/OutreachTable.tsx')), 'Outreach: the icon-only Import button on a phone has an accessible name');
   ok(/flex flex-wrap items-start justify-between gap-3 pr-9/.test(read('src/components/LeadDetailDialog.tsx')), 'Lead popup: on a phone the Call / Log / WhatsApp pills wrap under the name');
   ok(/<DialogTitle className="sr-only">Lead details<\/DialogTitle>/.test(read('src/components/LeadDetailFromInbox.tsx')), 'Inbox lead placeholder: has an accessible name');
-  ok(/<IconTile\b/.test(read('src/pages/Inbox.tsx')) && /<IconTile icon=\{MessageCircle\} tone="blue" \/>Inbox<\/h1>/.test(read('src/pages/Inbox.tsx')), 'The Inbox (WhatsApp tab; heading says just Inbox since 2026-10-09) keeps a compact header WITH the shared icon tile (the recorded exception above)');
+  ok(/<IconTile\b/.test(read('src/pages/Inbox.tsx')) && /<IconTile icon=\{sms \? MessageSquareText : MessageCircle\} tone="blue" \/>Inbox<\/h1>/.test(read('src/pages/Inbox.tsx')), 'The Inbox (WhatsApp tab; heading says just Inbox since 2026-10-09) keeps a compact header WITH the shared icon tile (the recorded exception above)');
 }
 
 console.log('── 3c. follow-up (Paul, 2026-10-06): colour means something; the tips say what really happens ──');

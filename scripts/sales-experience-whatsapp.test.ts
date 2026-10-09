@@ -152,7 +152,7 @@ console.log("\n── source: navigation, privacy, security ──");
   ok(/>Inbox<\/h1>/.test(inbox) && /label: 'WhatsApp', tone: 'green'/.test(read("src/components/InboxChannelSwitch.tsx")), "the page is titled Inbox, with WhatsApp and SMS as its two channels");
   ok(side.includes("useAllInboxUnread") && mob.includes("useAllInboxUnread") && /useWhatsAppUnread\(\)/.test(read("src/hooks/useSms.ts")), "both navs show ONE unread badge: the server's WhatsApp count plus the SMS count");
   ok(/searchParams\.get\('lead'\)/.test(inbox) && /next\.delete\('lead'\)/.test(inbox), "the Inbox opens ?lead= and drops it once a thread is chosen");
-  ok(/markRead\(active\.phone\)/.test(inbox) && /visibilityState === 'visible'/.test(inbox), "a thread is marked read only when open AND on screen");
+  ok(/markRead\(active\.phone\)/.test(inbox) && /visibilityState !== 'visible'/.test(inbox), "a thread is marked read only when open AND on screen");
   ok(/active \? 'hidden md:block'/.test(inbox) && /Back to all conversations/.test(inbox), "phones switch list ↔ thread with a Back button");
   ok(/queueState\?\.paused/.test(inbox) && /QUEUE_PAUSED_LINE/.test(inbox), "both roles see a paused queue in the Inbox");
   const fn = read("supabase/functions/sales-performance/index.ts");

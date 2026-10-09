@@ -146,8 +146,8 @@ console.log("\n── one Outreach, one Inbox, no second CRM ──");
   const owner = read("src/components/LeadOwnerControl.tsx");
   ok(/if \(!canAssign\)/.test(owner) && /leadPermissions\(role\)\.assignOwner/.test(owner), "a salesperson sees the owner; only the admin reassigns");
   const inboxPage = read("src/pages/Inbox.tsx");
-  ok(/\{perms\.queueControls && <AutoReplyToggle \/>\}/.test(inboxPage), "the Inbox's automation settings are admin-only");
-  ok(/perms\.queueControls && <SelectItem value=\{HOOK_DUE_FILTER\}>/.test(inboxPage) && /perms\.queueControls && <SelectItem value=\{CONTACT_DUE_FILTER\}>/.test(inboxPage), "…and the follow-up lanes (they stamp lead rows)");
+  ok(/\{perms\.queueControls && <AutoReplyToggle channel=\{channel\} \/>\}/.test(inboxPage), "the Inbox's automation settings are admin-only");
+  ok(/perms\.queueControls && !sms && <SelectItem value=\{HOOK_DUE_FILTER\}>/.test(inboxPage) && /perms\.queueControls && <SelectItem value=\{CONTACT_DUE_FILTER\}>/.test(inboxPage), "…and the follow-up lanes (they stamp lead rows)");
   ok(/active\.leadId && maySetStatus\(perms, 'closed'\) && \(/.test(inboxPage), "Remove-from-inbox (mark Closed) is not offered to a salesperson");
   ok(!/<WelcomePackButton/.test(inboxPage) && /perms\.clientDelivery && <WelcomePackButton/.test(read("src/components/LeadDetailDialog.tsx")), "the welcome pack is client delivery — admin only, in the prospect workspace (no longer repeated on the Inbox header)");
 }

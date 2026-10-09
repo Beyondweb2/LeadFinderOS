@@ -4,6 +4,9 @@ import { sendSmsToLead } from "../_shared/twilio-sms.ts";
 import { resolveTwilioEnv } from "../_shared/twilio.ts";
 import { diagnoseTwilio } from "../_shared/twilio-diagnose.ts";
 import { isSmsTemplate, SMS_LINK_TEMPLATE } from "../../../src/lib/smsMessages.ts";
+import { smsTemplateAvailability } from "../../../src/lib/inboxChannel.ts";
+import { toWhatsAppDigits } from "../../../src/lib/waNumber.ts";
+import { smsSize } from "../../../src/lib/channelCosts.ts";
 
 // twilio-sms-send — a rep texts ONE of their own leads from the Inbox / prospect workspace (2026-10-09).
 //
@@ -42,7 +45,7 @@ Deno.serve(async (req) => {
       if (who.actor.role !== "admin") return json({ ok: false, error: "admin_only" }, 403);
       return json({ ok: true, ...(await diagnoseTwilio(env)) });
     }
-    if (mode !== "send") return json({ ok: false, error: "unknown_mode" }, 400);
+    if (mode !== "send" && mode !== "preview") return json({ ok: false, error: "unknown_mode" }, 400);
 
     const leadId = String(body.lead_id ?? "");
     if (!UUID_RE.test(leadId)) return json({ ok: false, error: "bad_request", detail: "Missing lead." }, 400);
@@ -52,11 +55,36 @@ Deno.serve(async (req) => {
       if (template === SMS_LINK_TEMPLATE) {
         return json({ ok: false, error: "use_quick_close", detail: "The setup and agreement links are sent from Quick Close, which creates the right link for this customer." }, 400);
       }
-      if (!isSmsTemplate(template)) return json({ ok: false, error: "bad_request", detail: "That template is not available by text." }, 400);
+    }
+    /* ⛔ ANY OTHER WHATSAPP TEMPLATE (2026-10-09, one Inbox): its text is built by the WhatsApp sender itself — the same endpoint the WhatsApp
+       Inbox previews with (send-whatsapp-message mode:"dry_run": every guard, nothing sent, nothing written) — called with the REP'S OWN
+       session, so ownership and the lead's records are exactly what a WhatsApp send would meet. Wording and placeholder filling are therefore
+       WhatsApp's by construction, not a second copy. Templates a text cannot carry are refused with the reason (smsTemplateAvailability). */
+    let extended: { template: string; body: string } | null = null;
+    if (template && !isSmsTemplate(template)) {
+      const avail = smsTemplateAvailability(template);
+      if (!avail.ok) return json({ ok: false, error: "template_unavailable", detail: avail.reason }, 400);
+      const { data: lead } = await service.from("outreach_leads").select("phone, country").eq("id", leadId).maybeSingle();
+      const digits = toWhatsAppDigits(String(lead?.phone ?? ""), (lead?.country as string | null) ?? null);
+      if (!digits) return json({ ok: false, error: "bad_request", detail: "That lead has no usable number." }, 400);
+      const wa = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/send-whatsapp-message`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Authorization": req.headers.get("authorization") ?? "", "apikey": req.headers.get("apikey") ?? Deno.env.get("SUPABASE_ANON_KEY") ?? "" },
+        body: JSON.stringify({ mode: "dry_run", phone: digits, lead_id: leadId, country: (lead?.country as string | null) ?? null, template_name: template, allow_resend: true }),
+      }).then((x) => x.json()).catch(() => null) as { ok?: boolean; mode?: string; body?: string; error?: string; reason?: string } | null;
+      if (!wa?.ok || wa.mode !== "dry_run" || !wa.body) {
+        return json({ ok: false, error: wa?.error ?? "template_unavailable", detail: wa?.reason ?? "That template can't be built for this lead right now." }, 200);
+      }
+      extended = { template, body: wa.body };
+    }
+    if (mode === "preview") {
+      if (!template) return json({ ok: false, error: "bad_request", detail: "Choose a template to preview." }, 400);
+      if (!extended) return json({ ok: false, error: "use_send", detail: "Preview applies to the extended templates." }, 400);
+      return json({ ok: true, mode: "preview", body: extended.body, segments: smsSize(extended.body).segments });
     }
     const r = await sendSmsToLead(service, {
       actor: who.actor, leadId,
-      template: (template as never) ?? undefined, text: template ? null : text,
+      template: extended ? undefined : ((template as never) ?? undefined), extended, text: template ? null : text,
       idempotencyKey: String(body.idempotency_key ?? ""), allowResend: body.allow_resend === true,
     });
     return json(r, r.ok ? 200 : (r.status ?? 200));

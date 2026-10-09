@@ -1,6 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { InboxChannelSwitch, useInboxChannel } from '@/components/InboxChannelSwitch';
-import { SmsInbox } from '@/components/SmsInbox';
+import { smsTemplateAvailability, type InboxChannel } from '@/lib/inboxChannel';
+import { markSmsRead, smsKeys, useSmsUnread } from '@/hooks/useSms';
+import { isPlausibleUkMobile, smsPillOf } from '@/lib/smsStatus';
+import { isColdSmsTemplate, SMS_QUEUE_SKIP_WORDS } from '@/lib/smsMessages';
+import { CHANNEL_COST_GBP, costWords } from '@/lib/channelCosts';
 import { AutoReplyToggle } from '@/components/AutoReplyToggle';
 import { hookAuditRequestBody } from '@/lib/hookAuditRequest';
 import { getDraft, setDraft, type DraftMap } from '@/lib/inboxDrafts';
@@ -71,14 +75,14 @@ import { HookVisibilityCard } from '@/components/HookVisibilityCard';
 import { hookVisibilityQueryKey, useHookVisibility } from '@/hooks/useHookVisibility';
 import { OUTREACH_HOOK_QUESTIONS } from '@/lib/auditQuestionCounts';
 import { auditListQueryKey } from '@/types/auditBook';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { getQueueStatus, QUEUE_STATUS_KEY, QUEUE_PAUSED_LINE } from '@/lib/queueStatus';
 import { useQueueState } from '@/hooks/useQueueState';
 import { useMarkWhatsAppRead, useWhatsAppReads } from '@/hooks/useWhatsAppUnread';
 import { conversationState, INBOX_QUICK_FILTERS, londonToday, passesQuickFilter, formatWaiting, type ConversationState, type InboxQuickFilter } from '@/lib/conversationState';
 import { ConvStateChip } from '@/components/ConvStateChip';
 import { NEXT_ACTION_KIND_OPTIONS, NEXT_ACTION_WHEN_OPTIONS, nextActionSortKey, passesNextActionFilter, type NextActionKind, type NextActionWhen } from '@/lib/nextActionView';
-import { Eye, Loader2, Send, MessageSquare, MessageSquarePlus, Clock, AlertTriangle, Plus, ShieldAlert, MapPin, Globe, Mail, MessageCircle, Trash2, ListChecks, Sparkles, FileText, Copy, Check, Link2, Star, MoreHorizontal, ArrowLeft, PauseCircle, XCircle, Timer } from 'lucide-react';
+import { Eye, Loader2, Send, MessageSquareText, MessageSquare, MessageSquarePlus, Clock, AlertTriangle, Plus, ShieldAlert, MapPin, Globe, Mail, MessageCircle, Trash2, ListChecks, Sparkles, FileText, Copy, Check, Link2, Star, MoreHorizontal, ArrowLeft, PauseCircle, XCircle, Timer } from 'lucide-react';
 import { isPaidLead } from '@/lib/leadPayment';
 import { REPORT_LINK_TEMPLATES } from '@/lib/templateAttribution';
 import { notifyLeadChanged } from '@/lib/leadSync';
@@ -275,8 +279,16 @@ const LIST_SORT_OPTIONS = [
   { value: 'next_action', label: 'Next action: most overdue first', short: 'Most overdue' },
 ] as const;
 
-const WhatsAppInbox = () => {
-  const { user, conversations, messages, messagesForKey, leads, auditByLeadId, auditRunningLeadIds, hasSiteFaultLeadIds, hasSiteFindingsLeadIds, crawlByLeadId, isLoading, isError, send, sendVoice, sendMedia, preview, refetch, loadLead, patchLeadStatus, patchLeadPotentialWork } = useInbox();
+/* ══ THE ONE INBOX (2026-10-09, Paul: the SMS inbox must be the SAME inbox as WhatsApp) ═══════════════════════════════════════
+   ConversationInbox renders BOTH channels. `channel` picks the message source and the send path (useInbox(channel)) and nothing else;
+   every control, filter, chip, panel and handler below is shared, so whatever is added to the WhatsApp Inbox appears on the SMS tab by
+   construction. The only places the two differ are the `sms` conditionals, and every one of them is listed — with its reason — in
+   SMS_ONLY_DIFFERENCES (src/lib/inboxChannel.ts); scripts/inbox-channel-parity.test.ts fails on an unlisted one. */
+const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
+  const sms = channel === 'sms';
+  /* Remembered per channel (storage-keys difference): a text filter, search or half-typed draft must never appear on a WhatsApp thread. */
+  const pk = (k: string) => (sms ? `sms-${k}` : k);
+  const { user, conversations, messages, messagesForKey, leads, auditByLeadId, auditRunningLeadIds, hasSiteFaultLeadIds, hasSiteFindingsLeadIds, crawlByLeadId, isLoading, isError, send, sendVoice, sendMedia, preview, refetch, loadLead, patchLeadStatus, patchLeadPotentialWork } = useInbox(channel);
   const { toast } = useToast();
   // Only for invalidating the AiAudit page's audit-book cache when startAudit fires one from
   // here — Inbox itself is not on React Query (see useInbox.ts).
@@ -303,16 +315,19 @@ const WhatsAppInbox = () => {
   const handleSendNow = async () => {
     setSendingNow(true);
     try {
-      const { data, error } = await supabase.functions.invoke('process-whatsapp-queue', { body: { mode: 'tick', send_now: true } });
+      const { data, error } = sms
+        ? await supabase.functions.invoke('process-sms-queue', { body: { send_now: true } })
+        : await supabase.functions.invoke('process-whatsapp-queue', { body: { mode: 'tick', send_now: true } });
       if (error) throw error;
       if (data?.sent) {
-        toast({ title: 'Sent next message', description: `${data.business ?? ''}${data.simulated ? ' — TEST_MODE, nothing real sent' : ''}`.trim() || undefined });
+        toast({ title: sms ? 'Sent next text' : 'Sent next message', description: `${data.business ?? ''}${data.simulated ? ' — TEST_MODE, nothing real sent' : ''}`.trim() || undefined });
       } else {
         const reason: Record<string, string> = {
           paused: 'Queue is paused',
           cap_reached: 'Daily cap reached',
           outside_window: 'Outside sending hours',
           empty_queue: 'Nothing queued to send',
+          all_held: 'Everything queued is on hold',
         };
         toast({ title: reason[data?.skipped as string] ?? `No send (${data?.skipped ?? 'unknown'})` });
       }
@@ -320,8 +335,14 @@ const WhatsAppInbox = () => {
       toast({ title: "Couldn't send now", description: (e as Error)?.message ?? 'Failed', variant: 'destructive' });
     } finally {
       setSendingNow(false);
+      if (sms) void queryClient.invalidateQueries({ queryKey: ['sms-queue'] });
     }
   };
+  /* The text queue's own state: how many are waiting, and whether it is paused (the WhatsApp queue has useQueueState below). */
+  const smsQueueRows = useQuery({ queryKey: ['sms-queue', 'rows'], enabled: sms, refetchInterval: 30_000,
+    queryFn: async () => { const { data, error } = await (supabase as unknown as { rpc: (n: string) => Promise<{ data: unknown; error: unknown }> }).rpc('my_sms_queue'); if (error) throw error; return (data ?? []) as Array<{ id: string }>; } });
+  const smsQueueInfo = useQuery({ queryKey: ['sms-queue', 'info'], enabled: sms, refetchInterval: 30_000,
+    queryFn: async () => { const { data, error } = await (supabase as unknown as { rpc: (n: string) => Promise<{ data: unknown; error: unknown }> }).rpc('sms_queue_info'); if (error) throw error; return (data ?? null) as { paused: boolean } | null; } });
 
   /* ══ THE CONVERSATION LIVES IN THE URL ═════════════════════════════════════════════════
      ⛔ IT WAS useState, AND THAT IS WHY THE INBOX LOST YOUR PLACE. React Router unmounts a route
@@ -351,10 +372,10 @@ const WhatsAppInbox = () => {
   // when a specific campaign is selected — that's where mis-routed / unknown-sender
   // replies land and must never be hidden.
   // Persisted per-user (sessionStorage) so the filter survives navigating away and back.
-  const [campaignFilter, setCampaignFilter] = usePersistedState<string | null>('inbox-campaign-filter', null, { tier: 'session', scope: user?.id });
+  const [campaignFilter, setCampaignFilter] = usePersistedState<string | null>(pk('inbox-campaign-filter'), null, { tier: 'session', scope: user?.id });
   // Status filter (null = all statuses). Composes with the campaign filter (AND).
   // Unassigned stays visible regardless (never hidden by a filter).
-  const [statusFilter, setStatusFilter] = usePersistedState<string | null>('inbox-status-filter', null, { tier: 'session', scope: user?.id });
+  const [statusFilter, setStatusFilter] = usePersistedState<string | null>(pk('inbox-status-filter'), null, { tier: 'session', scope: user?.id });
   // Not-interested conversations are hidden by default (dead prospects); a toggle
   // reveals them. A new inbound reply flips the lead back to 'replied' server-side
   // (whatsapp-inbound), so re-engaging conversations reappear on their own.
@@ -363,13 +384,13 @@ const WhatsAppInbox = () => {
   // already loaded — useInbox uses fetchAllRows, nothing paginated/virtualised). Narrows WITHIN
   // the campaign/status/hidden filters, never replaces them. Persisted per-user like those
   // filters sit right beside it, and the box shows the term, so it is not a hidden filter.
-  const [search, setSearch] = usePersistedState<string>('inbox-search', '', { tier: 'session', scope: user?.id });
+  const [search, setSearch] = usePersistedState<string>(pk('inbox-search'), '', { tier: 'session', scope: user?.id });
   /* All / Unread / Waiting on us (both roles, 2026-09-28). A view control over the loaded list. */
-  const [quickFilter, setQuickFilter] = usePersistedState<InboxQuickFilter>('inbox-quick-filter', 'all', { tier: 'session', scope: user?.id });
+  const [quickFilter, setQuickFilter] = usePersistedState<InboxQuickFilter>(pk('inbox-quick-filter'), 'all', { tier: 'session', scope: user?.id });
   /* Next Action filters + sort (2026-09-30, both roles; the one rule is src/lib/nextActionView.ts). */
-  const [naWhen, setNaWhen] = usePersistedState<NextActionWhen>('inbox-na-when', 'all', { tier: 'session', scope: user?.id });
-  const [naKind, setNaKind] = usePersistedState<NextActionKind>('inbox-na-kind', 'all', { tier: 'session', scope: user?.id });
-  const [listSort, setListSort] = usePersistedState<'recent' | 'next_action' | 'recent_reply'>('inbox-sort', 'recent', { tier: 'session', scope: user?.id });
+  const [naWhen, setNaWhen] = usePersistedState<NextActionWhen>(pk('inbox-na-when'), 'all', { tier: 'session', scope: user?.id });
+  const [naKind, setNaKind] = usePersistedState<NextActionKind>(pk('inbox-na-kind'), 'all', { tier: 'session', scope: user?.id });
+  const [listSort, setListSort] = usePersistedState<'recent' | 'next_action' | 'recent_reply'>(pk('inbox-sort'), 'recent', { tier: 'session', scope: user?.id });
   /* ?filter=<quick filter> (2026-09-30): a dashboard count ("N replies waiting in the Inbox") opens the
      Inbox on that view. Applied once, then dropped from the URL — the choice is then the person's own. */
   const filterParam = searchParams.get('filter');
@@ -381,6 +402,8 @@ const WhatsAppInbox = () => {
   }, [filterParam]);
   const { reads, loaded: readsLoaded } = useWhatsAppReads();
   const markRead = useMarkWhatsAppRead();
+  const smsUnread = useSmsUnread();
+  const smsUnreadByPhone = useMemo(() => new Map((smsUnread.data ?? []).map((u) => [u.phone, u.unread_messages])), [smsUnread.data]);
   /* The waiting timers tick once a minute; nothing is re-read. */
   const [clockTick, setClockTick] = useState(0);
   useEffect(() => { const id = window.setInterval(() => setClockTick((n) => n + 1), 60_000); return () => window.clearInterval(id); }, []);
@@ -400,7 +423,7 @@ const WhatsAppInbox = () => {
      (the send path already calls setText('')), and it is what stops the map growing a key per
      thread ever opened. The cap below is a backstop for a map that somehow still grows. */
   const [drafts, setDrafts] = usePersistedState<DraftMap>(
-    'inbox-drafts', {}, { tier: 'local', scope: user?.id },
+    pk('inbox-drafts'), {}, { tier: 'local', scope: user?.id },
   );
   /* The rules live in src/lib/inboxDrafts.ts so they can be tested — scripts/inbox-drafts.test.ts
      drives the cross-thread leak, the post-send clear, whitespace, the cap and a corrupt store.
@@ -591,14 +614,15 @@ const WhatsAppInbox = () => {
     for (const c of list) {
       const lead = c.leadId ? leadByIdForState.get(c.leadId) : undefined;
       const st = conversationState({
-        messages: messagesForKey(c.key), lastReadAt: reads?.get(c.phone), leadStatus: c.leadStatus,
+        messages: messagesForKey(c.key), lastReadAt: sms ? null : reads?.get(c.phone), leadStatus: c.leadStatus,
         isPotentialWork: c.isPotentialWork, nextAction: lead?.next_action, nextActionDate: lead?.next_action_date, nowMs,
       });
-      out.set(c.key, readsLoaded ? st : { ...st, unread: false });
+      // SMS: unread is the person's own SMS read marks (my_sms_unread_counts), not the WhatsApp read times.
+      out.set(c.key, sms ? { ...st, unread: (smsUnreadByPhone.get(c.phone) ?? 0) > 0 } : readsLoaded ? st : { ...st, unread: false });
     }
     return out;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [list, messagesForKey, reads, readsLoaded, leadByIdForState, clockTick]);
+  }, [list, messagesForKey, reads, readsLoaded, leadByIdForState, clockTick, sms, smsUnreadByPhone]);
   const quickCounts = useMemo(() => {
     let unread = 0; let waiting = 0;
     for (const st of stateByKey.values()) { if (st.unread) unread++; if (st.waitingSinceMs !== null) waiting++; }
@@ -752,13 +776,18 @@ const WhatsAppInbox = () => {
     () => (active ? messagesForKey(active.key) : []),
     [active, messagesForKey],
   );
-  const win = active ? windowFor(active.lastInboundAt) : { open: false, hoursLeft: 0 };
+  /* A text has no 24-hour window: it is always "open" for free text (the SMS sender's own conversation gate still decides who may be texted). */
+  const win = sms ? { open: true, hoursLeft: 0 } : active ? windowFor(active.lastInboundAt) : { open: false, hoursLeft: 0 };
   const activeState = active ? stateByKey.get(active.key) : undefined;
   /* ⛔ OPENING A THREAD READS IT — and a reply that lands while it is open and on screen is read too.
      A just-started (synthetic) thread has nothing to read. A hidden tab marks nothing. */
   useEffect(() => {
     if (!active || active === synthetic || !active.lastInboundAt) return;
-    const mark = () => { if (document.visibilityState === 'visible') void markRead(active.phone); };
+    const mark = () => {
+      if (document.visibilityState !== 'visible') return;
+      if (sms) void markSmsRead(active.phone).then(() => queryClient.invalidateQueries({ queryKey: smsKeys.unread }));
+      else void markRead(active.phone);
+    };
     mark();
     document.addEventListener('visibilitychange', mark);
     return () => document.removeEventListener('visibilitychange', mark);
@@ -892,6 +921,13 @@ const WhatsAppInbox = () => {
   const [hookQueuing, setHookQueuing] = useState(false);
   const hookExistingFirst = firstNameFrom(activeLead?.contact_name);
   const hookEffectiveFirst = hookExistingFirst || firstNameFrom(hookName);
+  /* The two manual follow-ups send a NAMED template through the open channel's own sender (WhatsApp: Meta; SMS: the text sender). */
+  const sendNamed = async (templateName: string): Promise<{ data: { ok?: boolean; error?: string } | null; error: { message: string } | null }> => {
+    if (!active?.leadId) return { data: { ok: false, error: 'no lead' }, error: null };
+    if (!sms) return supabase.functions.invoke('send-whatsapp-message', { body: { lead_id: active.leadId, phone: active.phone, country: activeLead?.country ?? undefined, template_name: templateName } });
+    const res = await send({ phone: active.phone, leadId: active.leadId, templateName });
+    return { data: { ok: res.ok, error: res.reason ?? res.error }, error: null };
+  };
   const sendHookFollowup = async () => {
     /* First name is OPTIONAL for hook_followup — a blank sends "Hi there, …" (the server allows it
        via TEMPLATES_ALLOWING_NO_FIRST_NAME). Do NOT block the send on an empty name. */
@@ -906,9 +942,7 @@ const WhatsAppInbox = () => {
           await leadRpc('lead_set_details', { _lead_id: active.leadId, _contact_name: hookName.trim(), _search_keyword: null, _search_location: null });
         }
       }
-      const { data, error } = await supabase.functions.invoke('send-whatsapp-message', {
-        body: { lead_id: active.leadId, phone: active.phone, country: activeLead.country ?? undefined, template_name: 'hook_followup' },
-      });
+      const { data, error } = await sendNamed('hook_followup');
       if (error || !data?.ok) {
         const code = error?.message ?? data?.error ?? 'send failed';
         toast({
@@ -936,9 +970,7 @@ const WhatsAppInbox = () => {
     if (!active?.leadId || !activeLead || contactSending) return;
     setContactSending(true);
     try {
-      const { data, error } = await supabase.functions.invoke('send-whatsapp-message', {
-        body: { lead_id: active.leadId, phone: active.phone, country: activeLead.country ?? undefined, template_name: 'contact_followup' },
-      });
+      const { data, error } = await sendNamed('contact_followup');
       if (error || !data?.ok) {
         const code = error?.message ?? data?.error ?? 'send failed';
         toast({
@@ -1045,6 +1077,28 @@ const WhatsAppInbox = () => {
     setBulkBusy(true);
     setBulkReport(null);
     setBulkProgress({ done: 0, total: targets.length });
+    if (sms && isColdSmsTemplate(bulkTemplate)) {
+      /* bulk-queue difference: a cold text opener is QUEUED (queue_sms_openers → the paced text drip), never sent in a burst. The RPC applies
+         the same mobile / opt-out / already-texted / WhatsApp-conversation guards and says why each skipped lead was skipped. */
+      try {
+        const { data, error } = await (supabase as unknown as { rpc: (n: string, a: unknown) => Promise<{ data: { ok?: boolean; queued?: number; error?: string; skipped?: Record<string, number> } | null; error: { message: string } | null }> })
+          .rpc('queue_sms_openers', { _lead_ids: targets.map((t) => t.leadId).filter(Boolean), _template: bulkTemplate });
+        if (error || !data?.ok) {
+          setBulkReport({ sent: 0, failed: [{ key: 'queue', label: 'Text queue', reason: error?.message ?? data?.error ?? 'could not queue' }] });
+        } else {
+          const skipped = Object.entries(data.skipped ?? {}).map(([k, n]) => ({ key: k, label: `${n} lead${n === 1 ? '' : 's'}`, reason: SMS_QUEUE_SKIP_WORDS[k] ?? k }));
+          setBulkReport({ sent: data.queued ?? 0, failed: skipped });
+          toast({ title: `Queued ${data.queued ?? 0} text${data.queued === 1 ? '' : 's'}`, description: 'They go out one at a time inside the text sending hours. Nothing was sent now.' });
+          void queryClient.invalidateQueries({ queryKey: ['sms-queue'] });
+        }
+      } finally {
+        setBulkBusy(false);
+        setBulkConfirm(false);
+        setBulkSelected(new Set());
+      }
+      await refetch();
+      return;
+    }
     const failed: { key: string; label: string; reason: string }[] = [];
     let sent = 0;
     for (const target of targets) {
@@ -1116,7 +1170,11 @@ const WhatsAppInbox = () => {
 
   /* hasSiteFault gates audit_followup_fault: it names a specific site fault in {{6}} and Meta rejects
      an empty parameter, so it is only offered when this lead's crawl check found one. */
-  const templateSendability = (name: string) => getTemplateSendability(name, { shareToken: null }, { reportSlug: activeReport?.auditId ?? null, hasSiteFault: active?.leadId ? hasSiteFaultLeadIds.has(active.leadId) : false, hasSiteFindings: active?.leadId ? hasSiteFindingsLeadIds.has(active.leadId) : false });
+  const templateSendability = (name: string): { ok: boolean; reason?: string } => {
+    const base = getTemplateSendability(name, { shareToken: null }, { reportSlug: activeReport?.auditId ?? null, hasSiteFault: active?.leadId ? hasSiteFaultLeadIds.has(active.leadId) : false, hasSiteFindings: active?.leadId ? hasSiteFindingsLeadIds.has(active.leadId) : false });
+    if (!base.ok || !sms) return base;
+    return smsTemplateAvailability(name); // template-availability difference: video / retired barber / Quick Close link templates are greyed with a reason
+  };
   /* getTemplateSendability('') returns ok:true, because an unknown name is not its business to
      block — so "nothing selected" has to be refused here or the button would be live with no
      template chosen. */
@@ -1266,7 +1324,9 @@ const WhatsAppInbox = () => {
            Same isAggregatorUrl rule create-ai-audit's own first-reply path already applies. */
         website: (activeLead.website && !isAggregatorUrl(activeLead.website)) ? activeLead.website : undefined,
         has_website: !!(activeLead.website && !isAggregatorUrl(activeLead.website)),
-        queue_pitch_on_complete: true,
+        /* audit-reply-send difference: on the WhatsApp channel the header audit also parks the report pitch to auto-send on completion; on texts
+           it NEVER does (a text channel sends no automatic message) — the audit only measures. */
+        queue_pitch_on_complete: !sms,
         // Stated, not inherited. This used to send nothing and rely on create-ai-audit's shared
         // default happening to be 3; one edit to that default would have silently multiplied the
         // cost of the highest-volume path in the system.
@@ -1291,7 +1351,9 @@ const WhatsAppInbox = () => {
     void queryClient.invalidateQueries({ queryKey: ['hook-visibility', active.leadId] });
     toast({
       title: hasCompletedAudit ? 'Audit re-running' : 'Audit started',
-      description: data.pitch_queued
+      description: sms
+        ? 'Audit is running (~10–15 min). Nothing is sent to the lead.'
+        : data.pitch_queued
         ? 'The report pitch will auto-send when it completes (~10–15 min; declines cancel it).'
         : data.pitch_note === 'lead_archived'
           // Its own line: the generic note ends with "send manually when it completes", which is
@@ -1365,7 +1427,7 @@ const WhatsAppInbox = () => {
     }
     const confirmText = hasCompletedAudit
       ? `Re-run audit for ${activeLead.business_name}?`
-      : `Run audit for ${activeLead.business_name}? The report pitch auto-sends when it completes.`;
+      : sms ? `Run audit for ${activeLead.business_name}? Nothing is sent to the lead.` : `Run audit for ${activeLead.business_name}? The report pitch auto-sends when it completes.`;
     if (!window.confirm(confirmText)) return;
     await startAudit(auditInputs!.type, auditInputs!.loc);
   };
@@ -1399,6 +1461,9 @@ const WhatsAppInbox = () => {
   const websiteUrl = activeLead?.website
     ? (/^https?:\/\//i.test(activeLead.website) ? activeLead.website : `https://${activeLead.website}`)
     : null;
+
+  /* sms: a number that can never receive a text (a landline, a foreign number, or one already marked No SMS) is not offered. */
+  const newPickerLeads = useMemo(() => (sms ? leads.filter((l) => isPlausibleUkMobile(l.phone) && smsPillOf(l) !== 'no_sms') : leads), [leads, sms]);
 
   const startFromLead = (lead: LeadLite) => {
     const norm = normalizeWaNumber(lead.phone, lead.country);
@@ -1619,13 +1684,14 @@ const WhatsAppInbox = () => {
         <div className="flex flex-wrap items-center gap-x-4 gap-y-3">
           <div className="flex min-w-0 flex-1 items-center gap-3">
             {/* ⛔ It SAYS WhatsApp (Paul, 2026-09-28). One conversation system, one page, both roles. */}
-            <h1 className="flex shrink-0 items-center gap-2.5 text-xl font-extrabold leading-tight tracking-tight sm:text-2xl"><IconTile icon={MessageCircle} tone="blue" />Inbox</h1>
-            <InboxChannelSwitch current="whatsapp" />
-            <p className="hidden truncate text-sm text-muted-foreground min-[1760px]:block">Every WhatsApp conversation with your leads.</p>
+            <h1 className="flex shrink-0 items-center gap-2.5 text-xl font-extrabold leading-tight tracking-tight sm:text-2xl"><IconTile icon={sms ? MessageSquareText : MessageCircle} tone="blue" />Inbox</h1>
+            <InboxChannelSwitch current={channel} />
+            <p className="hidden truncate text-sm text-muted-foreground min-[1760px]:block">{sms ? 'Every text conversation with your leads.' : 'Every WhatsApp conversation with your leads.'}</p>
           </div>
           {/* The one auto-reply rule's switch (admin-only — hides itself otherwise). */}
-          {perms.queueControls && <AutoReplyToggle />}
+          {perms.queueControls && <AutoReplyToggle channel={channel} />}
           <div className="flex shrink-0 items-center gap-2">
+            {sms && (smsQueueRows.data?.length ?? 0) > 0 && <span className="rounded-full bg-sky-500/15 px-2.5 py-1 text-xs font-semibold text-sky-700 dark:text-sky-300" data-testid="sms-queued-count">{smsQueueRows.data?.length} queued</span>}
             {isAdmin && (
               <Button
                 size="sm"
@@ -1633,7 +1699,7 @@ const WhatsAppInbox = () => {
                 onClick={handleSendNow}
                 disabled={sendingNow}
                 aria-label="Send now"
-                title="Send the next queued WhatsApp message now — skips only the pacing wait; still respects pause, the daily cap and the 7am–9:30pm window"
+                title={sms ? 'Send the next queued text now — skips only the pacing wait; still respects pause, the daily cap and the sending hours' : 'Send the next queued WhatsApp message now — skips only the pacing wait; still respects pause, the daily cap and the 7am–9:30pm window'}
               >
                 {sendingNow ? <Loader2 className="h-4 w-4 animate-spin sm:mr-1.5" /> : <Send className="h-4 w-4 sm:mr-1.5" />}<span className="hidden sm:inline">Send now</span>
               </Button>
@@ -1655,7 +1721,7 @@ const WhatsAppInbox = () => {
               {perms.queueControls && <SelectItem value={CONTACT_DUE_FILTER}>Contact follow-up due</SelectItem>}
               {/* Report sent (audit_reply), no reply since, 3+ days — the hook_followup work queue
                   (it stamps the lead rows directly: queue configuration, admin only). */}
-              {perms.queueControls && <SelectItem value={HOOK_DUE_FILTER}>Hook follow-up due</SelectItem>}
+              {perms.queueControls && !sms && <SelectItem value={HOOK_DUE_FILTER}>Hook follow-up due</SelectItem>}
             </SelectContent>
           </Select>
           {/* Next Action: when, what, and the order (both roles) — beside the other filters. */}
@@ -1676,20 +1742,20 @@ const WhatsAppInbox = () => {
       </div>
 
       {/* ⛔ BOTH ROLES SEE A PAUSED QUEUE (2026-09-28). Replies typed here still send; only the drip waits. */}
-      {queueState?.paused && (
+      {(sms ? smsQueueInfo.data?.paused : queueState?.paused) && (
         <div className={cn('flex items-center gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs font-medium text-amber-700 dark:text-amber-300 md:shrink-0', active && 'hidden md:flex')} role="status">
-          <PauseCircle className="h-4 w-4 shrink-0" />{QUEUE_PAUSED_LINE} Replies you send by hand still go out.
+          <PauseCircle className="h-4 w-4 shrink-0" />{sms ? 'The text queue is paused.' : QUEUE_PAUSED_LINE} Replies you send by hand still go out.
         </div>
       )}
 
       {/* New-conversation lead picker */}
       {newOpen && (
         <Card className="p-3 md:shrink-0">
-          <p className="mb-2 text-xs font-medium text-muted-foreground">Start a conversation with one of your leads (must have a phone):</p>
+          <p className="mb-2 text-xs font-medium text-muted-foreground">{sms ? 'Start a text conversation with one of your leads (UK mobile numbers only):' : 'Start a conversation with one of your leads (must have a phone):'}</p>
           <div className="max-h-56 space-y-1 overflow-y-auto">
-            {leads.length === 0 ? (
-              <p className="text-xs text-muted-foreground/60">No leads with a phone number.</p>
-            ) : leads.map((l) => (
+            {newPickerLeads.length === 0 ? (
+              <p className="text-xs text-muted-foreground/60">{sms ? 'No leads with a UK mobile number.' : 'No leads with a phone number.'}</p>
+            ) : newPickerLeads.map((l) => (
               <button key={l.id} onClick={() => startFromLead(l)}
                 className="flex w-full items-center justify-between rounded-md px-2 py-1.5 text-left text-sm hover:bg-muted/50">
                 <span className="truncate">{l.business_name || '(no name)'}</span>
@@ -1995,7 +2061,8 @@ const WhatsAppInbox = () => {
                       <Star className={cn('h-4 w-4', active.isPotentialWork ? 'fill-amber-400 text-amber-500' : 'text-muted-foreground/60')} />
                     </button>
                   )}
-                  {win.open ? (
+                  {/* window difference: a text has no 24-hour window, so no chip at all. */}
+                  {!sms && (win.open ? (
                     <span className="ml-auto flex shrink-0 items-center gap-1 rounded-full bg-green-500/15 px-2 py-0.5 text-[11px] font-semibold text-green-600 dark:text-green-400">
                       <Clock className="h-3 w-3" /> Window open · ~{win.hoursLeft}h left
                     </span>
@@ -2003,7 +2070,7 @@ const WhatsAppInbox = () => {
                     <span className="ml-auto flex shrink-0 items-center gap-1 rounded-full bg-amber-500/15 px-2 py-0.5 text-[11px] font-semibold text-amber-600 dark:text-amber-400">
                       <AlertTriangle className="h-3 w-3" /> Window closed · template only
                     </span>
-                  )}
+                  ))}
                 </div>
                 <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                   {/* ⛔ SAME PILL, SAME STATE, SAME HANDLER as the list pill below — deliberately NOT a
@@ -2156,9 +2223,11 @@ const WhatsAppInbox = () => {
                       <DropdownMenuItem onClick={() => { void navigator.clipboard?.writeText(`+${active.phone}`); toast({ title: 'Number copied', description: `+${active.phone}` }); }} aria-label="Copy the number">
                         <Copy className="mr-2 h-4 w-4" /><span className="tabular-nums">+{active.phone}</span><span className="ml-auto text-[10px] text-muted-foreground">Copy</span>
                       </DropdownMenuItem>
-                      <DropdownMenuItem asChild>
-                        <a href={`https://wa.me/${active.phone}`} target="_blank" rel="noreferrer" aria-label="Open in WhatsApp app"><MessageCircle className="mr-2 h-4 w-4" />Open in the WhatsApp app</a>
-                      </DropdownMenuItem>
+                      {!sms && (
+                        <DropdownMenuItem asChild>
+                          <a href={`https://wa.me/${active.phone}`} target="_blank" rel="noreferrer" aria-label="Open in WhatsApp app"><MessageCircle className="mr-2 h-4 w-4" />Open in the WhatsApp app</a>
+                        </DropdownMenuItem>
+                      )}
                       {active.leadId && maySetStatus(perms, 'closed') && (
                         <>
                           <DropdownMenuSeparator />
@@ -2308,7 +2377,7 @@ const WhatsAppInbox = () => {
                         half-typed reply is exactly where it was when the voice note is sent or deleted. */}
                     {/* Voice-note script — prominent in the OPEN window, beside the recorder: text for Paul to
                         read out when he records. Never sends. Closed-window threads do not get one. */}
-                    {active.leadId && <VoiceNoteScriptButton key={active.key} leadId={active.leadId} prominent />}
+                    {!sms && active.leadId && <VoiceNoteScriptButton key={active.key} leadId={active.leadId} prominent />}
                     <span className="flex-1" />
                     {/* Approved WhatsApp templates — SEPARATE from the free-text "Quick reply". In the
                         window they are optional, so they open on demand; outside it they always show. */}
@@ -2333,12 +2402,12 @@ const WhatsAppInbox = () => {
                           onSend={(bodyText) => doSend(false, bodyText)}
                         />
                       </div>
-                      {active.leadId && (
+                      {!sms && active.leadId && (
                         <div className={cn('contents', voiceActive && '[&>*]:hidden')}>
                           <AttachmentPicker key={active.key} disabled={sending} onActiveChange={setAttachActive} onSend={sendAttachment} />
                         </div>
                       )}
-                      {active.leadId && (
+                      {!sms && active.leadId && (
                         <div className={cn('contents', attachActive && '[&>*]:hidden')}>
                           <VoiceNoteRecorder
                             key={active.key}
@@ -2349,9 +2418,10 @@ const WhatsAppInbox = () => {
                         </div>
                       )}
                     </div>
+                    {sms && <p className="text-[11px] text-muted-foreground" data-testid="sms-cost-note">About {costWords(CHANNEL_COST_GBP.sms)} a text segment. No 24-hour window. Links go only through templates.</p>}
                     {templatesOpen && (
                       <div className="border-t border-border/60 pt-2">
-                        <p className="mb-1 text-[11px] text-muted-foreground">Or send an approved WhatsApp template:</p>
+                        <p className="mb-1 text-[11px] text-muted-foreground">{sms ? 'Or send a template (the same wording as WhatsApp):' : 'Or send an approved WhatsApp template:'}</p>
                         {templatePicker}
                       </div>
                     )}
@@ -2394,8 +2464,7 @@ const WhatsAppInbox = () => {
             title={<>Run audit for {activeLead?.business_name}</>}
             subtitle={<>
               This lead is missing its audit inputs. Fill them in — they're saved to the lead — and
-              the audit runs right here (3 auto-generated questions; the report pitch auto-sends on
-              completion).
+              the audit runs right here (3 auto-generated questions{sms ? '; nothing is sent to the lead' : '; the report pitch auto-sends on completion'}).
             </>}
           />
           <div className="space-y-2">
@@ -2488,8 +2557,10 @@ const WhatsAppInbox = () => {
               Send “{WHATSAPP_TEMPLATES.find((t) => t.value === bulkTemplate)?.label ?? bulkTemplate}” to {bulkChecking ? bulkPlan.send.length : bulkChecked.ready.length} business{(bulkChecking ? bulkPlan.send.length : bulkChecked.ready.length) === 1 ? '' : 'es'}?
             </>}
             subtitle={<>
-              They go out <strong>now</strong>, one after another — not through the daily queue.
-              Everyone here has already replied to you, so this is a continuation, not cold outreach.
+              {sms && isColdSmsTemplate(bulkTemplate)
+                ? <>They are added to the <strong>text queue</strong> and go out one at a time, paced — nothing is sent now.</>
+                : <>They go out <strong>now</strong>, one after another — not through the daily queue.
+              Everyone here has already replied to you, so this is a continuation, not cold outreach.</>}
               A business that has already had this template will be refused by the server and listed
               afterwards, not sent it twice.
             </>}
@@ -2531,7 +2602,7 @@ const WhatsAppInbox = () => {
             <Button size="sm" disabled={bulkBusy || bulkChecking || bulkChecked.pending.length > 0 || bulkChecked.ready.length === 0} onClick={() => void runBulkSend()}>
               {bulkBusy
                 ? <><Loader2 className="mr-1.5 h-4 w-4 animate-spin" />Sending {bulkProgress.done}/{bulkProgress.total}</>
-                : bulkChecked.pending.length > 0 ? 'Checking…' : `Send ${bulkChecked.ready.length} now`}
+                : bulkChecked.pending.length > 0 ? 'Checking…' : sms && isColdSmsTemplate(bulkTemplate) ? `Queue ${bulkChecked.ready.length}` : `Send ${bulkChecked.ready.length} now`}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -2573,7 +2644,7 @@ const WhatsAppInbox = () => {
   );
 };
 
-/* ONE INBOX, TWO CHANNELS (2026-10-09): /inbox is WhatsApp exactly as before; /inbox?channel=sms is the SMS tab. */
-const Inbox = () => (useInboxChannel() === 'sms' ? <SmsInbox /> : <WhatsAppInbox />);
+/* ONE INBOX, TWO CHANNELS (2026-10-09): /inbox is WhatsApp; /inbox?channel=sms is the same component on the SMS channel. */
+const Inbox = () => { const channel = useInboxChannel(); return <ConversationInbox key={channel} channel={channel} />; };
 
 export default Inbox;

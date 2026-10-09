@@ -245,8 +245,8 @@ console.log('11. Quick Close: the SMS link is the authoritative link, agreement 
 console.log('12. UI: one inbox, WhatsApp preserved, honest call states');
 {
   const inbox = read('src/pages/Inbox.tsx');
-  ok(/const WhatsAppInbox = \(\) => \{/.test(inbox) && /useInboxChannel\(\) === 'sms' \? <SmsInbox \/> : <WhatsAppInbox \/>/.test(inbox), '/inbox is still the WhatsApp inbox by default; ?channel=sms is the SMS tab');
-  ok(/<InboxChannelSwitch current="whatsapp" \/>/.test(inbox), 'a WhatsApp / SMS switch on the same page');
+  ok(/const ConversationInbox = \(\{ channel \}/.test(inbox) && /<ConversationInbox key=\{channel\} channel=\{channel\} \/>/.test(inbox) && /return 'whatsapp'/.test(read('src/components/InboxChannelSwitch.tsx')), '/inbox is the WhatsApp channel by default; ?channel=sms is the SAME component on the SMS channel');
+  ok(/<InboxChannelSwitch current=\{channel\} \/>/.test(inbox), 'a WhatsApp / SMS switch on the same page');
   const call = code(read('src/hooks/useTwilioCall.ts'));
   ok(/call\.on\('accept', \(\) => \{ set\('connected'\)/.test(call) && /call\.on\('ringing'/.test(call), '"connected" is the SDK\'s accept event, "ringing" its ringing event');
   ok(/mic_denied/.test(call) && /unsupported/.test(call) && /getUserMedia/.test(call), 'microphone permission and unsupported browsers are handled');

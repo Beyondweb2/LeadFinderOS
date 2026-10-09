@@ -185,11 +185,11 @@ console.log('7. STOP still opts out and starts nothing');
 
 console.log('8. the SMS inbox header');
 {
-  const s = read('src/components/SmsInbox.tsx');
-  ok(/<AutoReplyToggle channel="sms" \/>/.test(s) && /perms\.queueControls && <AutoReplyToggle/.test(s), 'the "When a prospect replies" control is in the SMS header (admin-only, like WhatsApp)');
+  const s = read('src/pages/Inbox.tsx');
+  ok(/<AutoReplyToggle channel=\{channel\} \/>/.test(s) && /perms\.queueControls && <AutoReplyToggle/.test(s), 'the "When a prospect replies" control is in the shared header (admin-only), told which channel it is on');
   const t = read('src/components/AutoReplyToggle.tsx');
   ok(/disabled=\{saving \|\| \(sms && m === 'send'\)\}/.test(t) && /Audit and reply is WhatsApp only/.test(t), '"Audit and reply" is disabled on texts, with a plain note');
-  ok(/data-testid="sms-run-audit"/.test(s) && /hookAuditRequestBody/.test(s) && !/queue_pitch_on_complete/.test(s), 'the Run AI audit button uses the shared no-pitch request');
+  ok(/queue_pitch_on_complete: !sms/.test(s) && /aria-label="Run AI audit"/.test(s), 'the one Run AI audit header button queues NO pitch on the text channel');
   ok(/hookAuditRequestBody\(activeLead, bizType, loc, old\?\.business_name\)/.test(read('src/pages/Inbox.tsx')), 'WhatsApp\'s "Run new" uses the same request body (one copy)');
   const body = read('src/lib/hookAuditRequest.ts');
   ok(!/queue_pitch_on_complete/.test(body.replace(/\/\*[\s\S]*?\*\//g, '')) && /hook_audit: true/.test(body), 'that body never queues a pitch');

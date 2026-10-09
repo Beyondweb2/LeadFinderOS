@@ -6,7 +6,7 @@
    · a non-mobile number is No SMS before anything is queued or sent, and is not offered the SMS option
    · the SMS inbox is the WhatsApp inbox's twin (same shared components), the Best-way panels are gone
    ═══════════════════════════════════════════════════════════ */
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { classifySmsFailure, isEarlyStatus, isPlausibleUkMobile, leadSmsStatusFor, smsPillOf, statusAfterSmsDelivered } from '../src/lib/smsStatus.ts';
 import { pillStatusOf, salesStateOf } from '../src/lib/leadState.ts';
 
@@ -96,18 +96,20 @@ console.log('8. UI cleanup — the Best-way panels are gone from the Call tab, t
   ok(!/BestWayToContact/.test(call), 'Call tab: no "Best way to contact" panel');
   ok(/data-testid="call-start-browser"/.test(call) && /data-testid="call-start-whatsapp"/.test(call), 'Call tab: one primary Call in browser + a small Call on WhatsApp');
   ok(!/BestWayToContact/.test(read('src/components/LeadSmsPanel.tsx')), 'SMS modal / panel: no "Best way to contact" section');
-  ok(!/BestWayToContact/.test(read('src/components/SmsInbox.tsx')), 'SMS inbox conversation: no chooser');
+  ok(!/BestWayToContact/.test(read('src/pages/Inbox.tsx')), 'Inbox conversation (both channels): no chooser');
 }
 
 console.log('9. the SMS inbox is the WhatsApp inbox twin');
 {
-  const s = read('src/components/SmsInbox.tsx');
+  // 2026-10-09: the separate SMS page is GONE — one component renders both channels (scripts/inbox-channel-parity.test.ts proves the parity).
+  const s = read('src/pages/Inbox.tsx');
+  ok(!existsSync(new URL('../src/components/SmsInbox.tsx', import.meta.url)), 'there is no separate SMS inbox page any more');
   for (const c of ['PipelineStatusSelect', 'NextActionEditor', 'NextActionPill', 'ConvStateChip', 'HookVisibilityCard', 'LeadOwnerControl', 'LeadDetailFromInbox', 'CampaignPicker', 'conversationState', 'INBOX_QUICK_FILTERS', 'markLeadInterested', 'setLeadPipelineStatus', 'shownStatusMatches']) {
     ok(new RegExp('\\b' + c + '\\b').test(s), `uses the same ${c} as the WhatsApp inbox`);
   }
   ok(/aria-label="Next action type"/.test(s) && /aria-label="Sort conversations"/.test(s) && /aria-label="Lead status"/.test(s), 'same filter bar (status, next action when/type, sort)');
-  ok(/data-testid="sms-send-now"/.test(s) && /data-testid="sms-new"/.test(s) && /sms-queued-count/.test(s), 'same top-bar actions: queued count, Send now, New');
-  ok(!/Window open|Window closed/.test(s.replace(/\/\*[\s\S]*?\*\//g, '')), 'no 24-hour window chip on SMS');
+  ok(/aria-label="Send now"/.test(s) && /sms-queued-count/.test(s), 'same top-bar actions: queued count, Send now, New');
+  ok(/\{!sms && \(win\.open \?/.test(s), 'no 24-hour window chip on SMS (the chip is WhatsApp-only)');
   const q = read('supabase/functions/process-sms-queue/index.ts');
   ok(/send_now !== true\) return json\(\{ ok: false, error: "forbidden" \}, 403\)/.test(q) && /who\.actor\.role !== "admin"/.test(q), 'Send now is admin-only on the server, and skips only the pacing wait');
 }

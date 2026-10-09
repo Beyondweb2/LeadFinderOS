@@ -3,7 +3,6 @@
    in plain words. A refusal is a normal answer ({ ok:false, detail }), not an exception. */
 import { invokeEdge, edgeErrorMessage } from '@/lib/edgeInvoke';
 import { EdgeFunctionError } from '@/lib/edgeInvokeCore';
-import type { SmsTemplateName } from '@/lib/smsMessages';
 
 export interface SmsSendOk { ok: true; duplicate: boolean; simulated: boolean; message: { id: string; status: string; body: string; segments: number | null } }
 export interface SmsSendRefused { ok: false; error: string; detail: string }
@@ -23,12 +22,20 @@ async function call<T>(body: Record<string, unknown>): Promise<T | SmsSendRefuse
   }
 }
 
-export function sendSms(a: { leadId: string; template?: SmsTemplateName; text?: string; key: string; resend?: boolean }): Promise<SmsSendResult> {
+/** `template` is any WhatsApp template name: the six the sender renders itself, or any other the server builds with the WhatsApp sender's own code. */
+export function sendSms(a: { leadId: string; template?: string; text?: string; key: string; resend?: boolean }): Promise<SmsSendResult> {
   return call<SmsSendResult>({
     mode: 'send', lead_id: a.leadId, idempotency_key: a.key,
     ...(a.template ? { template_name: a.template } : { text: a.text ?? '' }),
     ...(a.resend ? { allow_resend: true } : {}),
   }) as Promise<SmsSendResult>;
+}
+
+export type SmsPreviewResult = { ok: true; body: string; segments: number } | { ok: false; error: string; detail: string };
+/** What an EXTENDED template would say for this lead, built by the WhatsApp sender's own dry run. Nothing is sent. */
+export async function previewSms(a: { leadId: string; template: string }): Promise<SmsPreviewResult> {
+  const r = await call<{ ok: true; body: string; segments: number }>({ mode: 'preview', lead_id: a.leadId, template_name: a.template });
+  return (r as { ok?: boolean }).ok === true ? (r as { ok: true; body: string; segments: number }) : (r as SmsSendRefused as SmsPreviewResult);
 }
 
 export async function fetchCommsStatus(): Promise<CommsStatus | null> {

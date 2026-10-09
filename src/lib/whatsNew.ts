@@ -22,6 +22,22 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-09-one-inbox-both-channels', date: '2026-10-09', title: 'The SMS Inbox is now the same Inbox as WhatsApp', audience: 'all',
+    body: 'WhatsApp and SMS now use one Inbox page. Everything in the WhatsApp Inbox — the AI visibility strip, Run AI audit, the full template list — is on the SMS tab too, and anything added later appears in both.',
+    report: {
+      added: [
+        'The SMS tab now has everything the WhatsApp Inbox has: the AI visibility strip and its actions, Run AI audit, the website check, the Site and Waiting chips, All / Unread / Waiting, Show hidden, Select several, the "When a prospect replies" control and the ready-to-send count.',
+        'Every WhatsApp template can be sent by text with the same wording. Templates a text cannot carry (the two with a video, the Quick Close sign-up link, and the retired barber ones) are greyed out with the reason.',
+        'Select several on the SMS tab queues cold openers into the paced text queue instead of sending them all at once.',
+      ],
+      changed: [
+        'There is now one Inbox page for both channels. The old separate SMS page is gone, so the two cannot drift apart.',
+        'On texts there is no 24-hour window chip, voice notes and file attachments are not offered, and Run AI audit never queues a report message to the prospect.',
+        '"Audit and reply" is switched off on the SMS tab with a short note. A text reply only ever runs the audit.',
+      ],
+      removed: ['The separate SMS Inbox page.'],
+      effect: 'Texts and WhatsApp are worked from the same screen the same way, and a new Inbox feature shows up in both at once.',
+    } },
   { id: '2026-10-09-text-replies-like-whatsapp', date: '2026-10-09', title: 'Text replies now behave like WhatsApp replies', audience: 'all',
     body: 'When a prospect texts back, the lead moves to Replied exactly as it does for WhatsApp, and the "When a prospect replies" setting can now run the AI check for texts too.',
     report: {

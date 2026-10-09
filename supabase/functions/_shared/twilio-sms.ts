@@ -17,7 +17,7 @@
 //      returns the first result. A link of the same kind sent in the last 10 minutes needs allow_resend.
 //   9. only then Twilio (or the simulation). "queued" from Twilio is NOT delivered; the status webhook says that.
 import {
-  isApprovedSmsLink, isColdSmsTemplate, isSmsTemplate, smsTextFromWhatsAppBody, SMS_LINK_TEMPLATE, SMS_TEMPLATES_NEEDING_REAL_NAME,
+  hasUnapprovedLink, isApprovedSmsLink, isColdSmsTemplate, isSmsTemplate, smsTextFromWhatsAppBody, SMS_LINK_TEMPLATE, SMS_TEMPLATES_NEEDING_REAL_NAME,
   type SmsLinkVariant, type SmsTemplateName,
 } from "../../../src/lib/smsMessages.ts";
 import { renderTemplateBody } from "./whatsapp-send.ts";
@@ -45,6 +45,10 @@ export interface SendSmsArgs {
   template?: SmsTemplateName;
   /** For findable_signup_link only: which link (the agreement, or the full setup). Resolved from the lead's own records. */
   linkVariant?: SmsLinkVariant;
+  /** ANY OTHER WHATSAPP TEMPLATE (2026-10-09): the text is the WhatsApp sender's own dry-run body for that template, word for word — the
+   *  caller (twilio-sms-send) fetched it from send-whatsapp-message with the rep's own session. Treated as a conversation text (never cold),
+   *  and every link in it must be an approved one. */
+  extended?: { template: string; body: string } | null;
   /** Free text — never contains a link; only to a conversation whose gate is open. */
   text?: string | null;
   idempotencyKey: string;
@@ -64,7 +68,7 @@ export async function sendSmsToLead(service: Service, a: SendSmsArgs): Promise<S
   const env = resolveTwilioEnv();
   if (!env.testMode && !env.smsConfigured) return fail("not_configured", "SMS is not set up yet — the Twilio settings are missing.", 200);
   if (!a.idempotencyKey || a.idempotencyKey.length < 8 || a.idempotencyKey.length > 120) return fail("bad_request", "Missing send key.", 400);
-  if (!!a.template === !!a.text) return fail("bad_request", "Send a template or a message, not both.", 400);
+  if ([a.template, a.text, a.extended].filter(Boolean).length !== 1) return fail("bad_request", "Send a template or a message, not both.", 400);
 
   // 1. the lead, through the one access rule
   const access = await leadAccess(service, a.actor, a.leadId);
@@ -109,6 +113,10 @@ export async function sendSmsToLead(service: Service, a: SendSmsArgs): Promise<S
       return fail("template_unsafe", String((e as Error).message ?? "The text could not be built.").slice(0, 200), 400);
     }
     if (!body || /^\[[a-z0-9_]+\]$/.test(body)) return fail("bad_request", "The text could not be built.", 400);
+  } else if (a.extended) {
+    body = String(a.extended.body ?? "").trim();
+    if (!body || /^\[[a-z0-9_]+\]$/.test(body) || body.length > 1000) return fail("bad_request", "The text could not be built.", 400);
+    if (hasUnapprovedLink(body)) return fail("link_not_approved", "That template carries a link that is not sent by text.", 400);
   } else {
     body = String(a.text ?? "").trim();
     if (!body || body.length > 600) return fail("bad_request", "Messages must be 1–600 characters.", 400);
@@ -167,7 +175,7 @@ export async function sendSmsToLead(service: Service, a: SendSmsArgs): Promise<S
   const size = smsSize(body);
   const { data: row, error: insErr } = await service.from("sms_messages").insert({
     direction: "outbound", user_id: lead.user_id, lead_id: lead.id, phone: digits, body, status: "queued",
-    segments: size.segments, template_key: a.template ?? null, link_kind: linkKind, sent_by_user_id: a.actor.id,
+    segments: size.segments, template_key: a.template ?? a.extended?.template ?? null, link_kind: linkKind, sent_by_user_id: a.actor.id,
     idempotency_key: a.idempotencyKey, test_mode: simulated, est_cost_gbp: simulated ? 0 : size.segments * CHANNEL_COST_GBP.sms,
   }).select("id, status, body, segments").single();
   if (insErr) {
@@ -199,7 +207,7 @@ export async function sendSmsToLead(service: Service, a: SendSmsArgs): Promise<S
   }
   await service.from("lead_activity").insert({
     lead_id: lead.id, actor_user_id: a.actor.id, kind: "sms_sent",
-    data: { template: a.template ?? "free_text", link_kind: linkKind, status, sms_id: row.id, simulated },
+    data: { template: a.template ?? a.extended?.template ?? "free_text", link_kind: linkKind, status, sms_id: row.id, simulated },
   }).then(() => undefined, () => undefined);
 
   if (status === "failed") return fail("send_failed", `The text could not be sent${errCode ? ` (code ${errCode})` : ""}. Try another way.`, 200);

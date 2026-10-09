@@ -363,7 +363,7 @@ console.log('\n── WIRING: ONE WINDOW RULE, ONE RECIPIENT, THE INBOX ──')
   ok(inbox.indexOf('<VoiceNoteRecorder', closed) === -1, 'B. …and nowhere in the closed-window branch');
   /* 2026-09-27: the recorder shares the row with the attachment paperclip; each hides the other (and
      the text box) while it holds the row — still keyed by conversation, still lead-only. */
-  ok(/\{active\.leadId && \(\s*<div className=\{cn\('contents', attachActive && '\[&>\*\]:hidden'\)\}>\s*<VoiceNoteRecorder\s+key=\{active\.key\}/.test(inbox), 'H. keyed by conversation (a thread switch discards a recording) and only on a lead-linked thread');
+  ok(/\{(?:!sms && )?active\.leadId && \(\s*<div className=\{cn\('contents', attachActive && '\[&>\*\]:hidden'\)\}>\s*<VoiceNoteRecorder\s+key=\{active\.key\}/.test(inbox), 'H. keyed by conversation (a thread switch discards a recording) and only on a lead-linked thread');
   ok(/className=\{cn\('min-w-0 flex-1', \(voiceActive \|\| attachActive\) && active\.leadId && 'hidden'\)\}>\s*<InboxComposer/.test(inbox), 'I. the text composer is HIDDEN, not unmounted, while recording — its draft survives');
   ok(/\{showsAttachment\(m\) && <MessageMedia message=\{m\} \/>\}/.test(inbox) && /return m\.message_type === 'audio' \|\| /.test(read('src/components/WhatsAppMedia.tsx')), 'J. audio renders for outbound as well as inbound, through the same signed-URL component');
   /* The viewer moved to src/components/WhatsAppMedia.tsx (2026-09-27) so the salesperson's lead page shares it. */

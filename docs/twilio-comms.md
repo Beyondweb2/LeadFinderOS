@@ -16,7 +16,7 @@ tab, and links still come from Quick Close. WhatsApp (Meta direct) is untouched;
 | Functions | `twilio-sms-send` (JWT), `twilio-voice-token` (JWT), `twilio-webhook` (public, signature-checked) |
 | Quick Close | `quick-close` `share_link` / `share_setup` accept channel `sms` |
 | Tables | `sms_messages`, `sms_conversation_reads`, `call_logs` (migration `20261018090000_twilio_comms.sql`) |
-| UI | Inbox `?channel=sms` (`SmsInbox`), `LeadSmsPanel`, `BestWayToContact`, `CallPanel`, `SmsLinkSend`, `useTwilioCall` |
+| UI | Inbox `?channel=sms` (the one shared `ConversationInbox` in `src/pages/Inbox.tsx`, on the SMS channel), `LeadSmsPanel`, `BestWayToContact`, `CallPanel`, `SmsLinkSend`, `useTwilioCall` |
 
 ## Rules this encodes (each is pinned by `scripts/twilio-comms.test.ts`)
 

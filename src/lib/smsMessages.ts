@@ -54,9 +54,26 @@ export function smsTextFromWhatsAppBody(_template: string, whatsappBody: string)
   return String(whatsappBody ?? '').trim();
 }
 
-/** Is this URL one an SMS may carry? Exactly the shapes findable_signup_link carries (and never anything else). */
+/** The prospect-facing report link: the short form findable.live/r/<code> or the always-resolving findable.live/report/<auditId>. */
+const REPORT_LINK_RE = /^https:\/\/findable\.live\/(r\/[A-Za-z0-9]{4,12}|report\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\/?$/i;
+export const isReportLinkUrl = (u: string | null | undefined): boolean => REPORT_LINK_RE.test(String(u ?? ''));
+
+/** Is this URL one an SMS may carry? The shapes findable_signup_link carries, and the prospect's own report link (the WhatsApp
+ *  report templates carry exactly that link, so the same templates can go by text). Nothing else. */
 export function isApprovedSmsLink(url: string): boolean {
-  return isSignupTemplateLinkUrl(url);
+  return isSignupTemplateLinkUrl(url) || isReportLinkUrl(url);
+}
+
+/** Does this text carry any link that is NOT an approved one? (A typed or template-filled URL outside the allow-list.) */
+export function hasUnapprovedLink(text: string): boolean {
+  const urls = String(text ?? '').match(/https?:\/\/[^\s)]+/gi) ?? [];
+  let rest = String(text ?? '');
+  for (const raw of urls) {
+    const u = raw.replace(/[.,!?;:]+$/, '');
+    if (!isApprovedSmsLink(u)) return true;
+    rest = rest.split(raw).join(' ');
+  }
+  return /(https?:\/\/|www\.|\b[a-z0-9-]+\.(com|co\.uk|uk|net|org|io|live|me|ly)\b)/i.test(rest);
 }
 
 /* ── status ────────────────────────────────────────────────────────────────────────────────────────── */

@@ -18,6 +18,11 @@ import type { WhatsAppTemplateSnapshot } from '@/lib/whatsappTemplateSnapshot';
 import { serviceWindowState } from '@/lib/serviceWindow';
 import { sendMediaAttachmentRequest } from '@/lib/sendMediaAttachment';
 import { isRealSend } from '@/lib/realSend';
+import { smsRowToInboxMessage, smsTemplateAvailability, type InboxChannel, type SmsMessageRow } from '@/lib/inboxChannel';
+import { newSendKey, previewSms, sendSms } from '@/lib/smsClient';
+import { SMS_TEMPLATE_NAMES } from '@/lib/smsMessages';
+import { smsPreview } from '@/lib/smsPreview';
+import type { SmsTemplateName } from '@/lib/smsMessages';
 
 // whatsapp_messages isn't in the generated types yet — RLS still enforces access
 // (operators read their own; admin reads all incl. Unassigned).
@@ -197,13 +202,17 @@ const NO_PAGE_HITS: InboxData['pageHits'] = [];
 const NO_GEMINI: InboxData['geminiSignals'] = [];
 const NO_CRAWL: InboxData['crawlChecks'] = [];
 
-async function fetchInboxData(leadTable: InboxLeadTable, previous?: InboxData, essentialOnly = false): Promise<InboxData> {
+/** The message table a channel reads, and the mapping of its rows onto the Inbox's own message shape (the rest of the Inbox cannot tell). */
+const messageTableFor = (channel: InboxChannel) => (channel === 'sms' ? 'sms_messages' : 'whatsapp_messages');
+const toInboxMessage = (channel: InboxChannel, row: unknown): WaMessage => (channel === 'sms' ? smsRowToInboxMessage(row as SmsMessageRow) as WaMessage : row as WaMessage);
+
+async function fetchInboxData(leadTable: InboxLeadTable, previous?: InboxData, essentialOnly = false, channel: InboxChannel = 'whatsapp'): Promise<InboxData> {
   const [msgRes, leadRes, reportRes, hitRes, gemRes, crawlRes] = await Promise.all([
     /* Paginated, and with the id tiebreaker it never had: 3 groups of rows share a created_at, and
        on a non-unique sort a tied row can be fetched twice and another missed at a page boundary.
        This is the fastest-growing table in the system — every send and every reply. */
     fetchAllRowsParallel<WaMessage>('Inbox (messages)', (from, to) =>
-      sb.from('whatsapp_messages').select('*')
+      sb.from(messageTableFor(channel)).select('*')
         .order('created_at', { ascending: true }).order('id', { ascending: true }).range(from, to), (m) => m.id),
     // is_archived = false: an archived lead is one the operator has stopped working, so its thread
     // leaves the Inbox and it also leaves the start-a-conversation picker below. Un-archiving
@@ -259,7 +268,7 @@ async function fetchInboxData(leadTable: InboxLeadTable, previous?: InboxData, e
         .order('id', { ascending: true }).range(from, to))),
   ]);
   return {
-    messages: msgRes.rows,
+    messages: channel === 'sms' ? msgRes.rows.map((m) => toInboxMessage(channel, m)) : msgRes.rows,
     leads: leadRes.rows.filter((l) => (l.phone ?? '').trim()),
     audits: reportRes?.rows ?? previous?.audits ?? NO_AUDITS,
     pageHits: hitRes?.rows ?? previous?.pageHits ?? NO_PAGE_HITS,
@@ -268,12 +277,15 @@ async function fetchInboxData(leadTable: InboxLeadTable, previous?: InboxData, e
   };
 }
 
-export function useInbox() {
+export function useInbox(channel: InboxChannel = 'whatsapp') {
+  const sms = channel === 'sms';
+  const msgTable = messageTableFor(channel);
   const { user } = useAuth();
   const { role } = useSubscription();
   const leadTable = inboxLeadTableFor(role);
   const queryClient = useQueryClient();
-  const queryKey = useMemo(() => inboxQueryKey(user?.id), [user?.id]);
+  /* One cache per channel: WhatsApp keeps its key exactly; texts get ['inbox', user, 'sms'] (so a prefix invalidation of ['inbox'] reaches both). */
+  const queryKey = useMemo(() => (sms ? [...inboxQueryKey(user?.id), 'sms'] : inboxQueryKey(user?.id)) as unknown as ReturnType<typeof inboxQueryKey>, [user?.id, sms]);
 
   /* ⛔ REACT QUERY, THE SAME WAY useOutreach/useCoverage USE IT (App.tsx defaults:
      refetchOnWindowFocus:false, staleTime 5min). The old shape — useEffect→fetchAll with
@@ -290,7 +302,7 @@ export function useInbox() {
     queryKey,
     queryFn: () => {
       loadStartedAtRef.current = Date.now();
-      return fetchInboxData(leadTable, queryClient.getQueryData<InboxData>(queryKey));
+      return fetchInboxData(leadTable, queryClient.getQueryData<InboxData>(queryKey), false, channel);
     },
     enabled: !!user?.id && !!role,
   });
@@ -306,7 +318,7 @@ export function useInbox() {
   const pendingLeadPatchesRef = useRef(new Map<string, Partial<LeadLite>>());
 
   const reconcile = useCallback(async () => {
-    const fresh = await fetchInboxData(leadTable, queryClient.getQueryData<InboxData>(queryKey), true);
+    const fresh = await fetchInboxData(leadTable, queryClient.getQueryData<InboxData>(queryKey), true, channel);
     queryClient.setQueryData<InboxData>(queryKey, (current) => current
       ? {
           ...current,
@@ -315,7 +327,7 @@ export function useInbox() {
           audits: fresh.audits,
         }
       : fresh);
-  }, [queryClient, queryKey, leadTable]);
+  }, [queryClient, queryKey, leadTable, channel]);
 
   /* One audit id → a small single-row fetch → an idempotent patch of just that row. The targeted
      reaction to every event that can make a report newly usable, instead of invalidating (and
@@ -363,14 +375,15 @@ export function useInbox() {
       return null;
     }
     const msgs = await fetchAllRows<WaMessage>('Inbox (one lead)', (from, to) =>
-      sb.from('whatsapp_messages').select('*').eq('lead_id', leadId)
+      sb.from(msgTable).select('*').eq('lead_id', leadId)
         .order('created_at', { ascending: true }).order('id', { ascending: true }).range(from, to)).catch(() => null);
+    if (msgs && sms) msgs.rows = msgs.rows.map((m) => toInboxMessage(channel, m));
     pendingLeadPatchesRef.current.delete(leadId);
     queryClient.setQueryData<InboxData>(queryKey, (current) => current
       ? { ...current, leads: patchInboxLead(current.leads, fresh), messages: msgs ? mergeInboxMessages(current.messages, msgs.rows) : current.messages }
       : current);
     return fresh;
-  }, [queryClient, queryKey, leadTable]);
+  }, [queryClient, queryKey, leadTable, msgTable, sms, channel]);
 
   /* ⚡ THE FIRST CONNECT DOES NOT RELOAD EVERYTHING AGAIN (2026-09-27). The subscription usually
      comes up while the initial load is still running, and reconcile() then re-read every message,
@@ -383,12 +396,12 @@ export function useInbox() {
      full reconcile(), exactly as before. */
   const catchUpAfterFirstLoad = useCallback(async () => {
     try {
-      await queryClient.ensureQueryData({ queryKey, queryFn: () => fetchInboxData(leadTable, queryClient.getQueryData<InboxData>(queryKey)) });
+      await queryClient.ensureQueryData({ queryKey, queryFn: () => fetchInboxData(leadTable, queryClient.getQueryData<InboxData>(queryKey), false, channel) });
     } catch { return; }
     const since = new Date((loadStartedAtRef.current || Date.now()) - 60_000).toISOString();
     const [msgs, leadRows, audits] = await Promise.all([
       fetchAllRows<WaMessage>('Inbox (catch-up messages)', (from, to) =>
-        sb.from('whatsapp_messages').select('*').gte('created_at', since)
+        sb.from(msgTable).select('*').gte('created_at', since)
           .order('created_at', { ascending: true }).order('id', { ascending: true }).range(from, to)).catch(() => null),
       fetchAllRows<LeadLite & { is_archived?: boolean }>('Inbox (catch-up leads)', (from, to) =>
         sb.from(leadTable).select(`${LEAD_COLUMNS}, is_archived`).gte('updated_at', since)
@@ -404,20 +417,21 @@ export function useInbox() {
       }
       return {
         ...current,
-        messages: msgs ? mergeInboxMessages(current.messages, msgs.rows) : current.messages,
+        messages: msgs ? mergeInboxMessages(current.messages, msgs.rows.map((m) => toInboxMessage(channel, m))) : current.messages,
         leads,
         audits: audits?.rows ?? current.audits,
       };
     });
-  }, [queryClient, queryKey, leadTable]);
+  }, [queryClient, queryKey, leadTable, msgTable, channel]);
 
   /* Subscription only patches cache. It never calls the six-read loader on connect. */
   useEffect(() => {
     if (!user?.id) return;
-    const channel = (supabase as any).channel(`inbox:${user.id}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'whatsapp_messages' }, (payload: any) => {
-        const row = (payload.new ?? payload.old) as WaMessage | undefined;
-        if (!row?.id) return;
+    const rt = (supabase as any).channel(`inbox:${user.id}:${channel}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: msgTable }, (payload: any) => {
+        const raw = payload.new ?? payload.old;
+        if (!raw?.id) return;
+        const row = toInboxMessage(channel, raw);
         queryClient.setQueryData<InboxData>(queryKey, (current) => {
           if (!current) return current;
           return { ...current, messages: mergeInboxMessages(current.messages, [row]) };
@@ -481,9 +495,9 @@ export function useInbox() {
     return () => {
       window.removeEventListener('focus', onFocus);
       document.removeEventListener('visibilitychange', onFocus);
-      void (supabase as any).removeChannel(channel);
+      void (supabase as any).removeChannel(rt);
     };
-  }, [user?.id, queryClient, queryKey, reconcile, catchUpAfterFirstLoad, patchOneAudit, patchOneLead]);
+  }, [user?.id, queryClient, queryKey, reconcile, catchUpAfterFirstLoad, patchOneAudit, patchOneLead, msgTable, channel]);
 
   /* ⛔ THE SAME ROW OUTREACH EDITS (2026-09-28). A status, next action, star or note saved anywhere —
      Outreach, the prospect panel, another tab — announces itself (src/lib/leadSync.ts) and the Inbox
@@ -773,6 +787,19 @@ export function useInbox() {
      *  refuses a duplicate pitch by default; this is the deliberate override, never a default. */
     allowResend?: boolean;
   }): Promise<{ ok: boolean; simulated?: boolean; error?: string; reason?: string }> => {
+    if (sms) {
+      /* A TEXT: through the SMS sender (every guard lives there — mobile check, opt-outs, the conversation gate, QA safety, the abuse guard).
+         The row it wrote is read back and merged so the thread shows it at once, exactly as a WhatsApp send does. */
+      if (!args.leadId) return { ok: false, error: 'template_needs_lead', reason: 'A text needs a linked lead.' };
+      const r = await sendSms({ leadId: args.leadId, key: newSendKey(), ...(args.templateName ? { template: args.templateName } : { text: args.body ?? '' }), resend: args.allowResend });
+      if (r.ok !== true) return { ok: false, error: (r as { error: string }).error, reason: (r as { detail: string }).detail };
+      const { data: row } = await sb.from('sms_messages').select('*').eq('id', (r as { message: { id: string } }).message.id).maybeSingle();
+      if (row?.id) {
+        queryClient.setQueryData<InboxData>(queryKey, (current) => current
+          ? { ...current, messages: mergeInboxMessages(current.messages, [toInboxMessage(channel, row)]) } : current);
+      }
+      return { ok: true, simulated: (r as { simulated: boolean }).simulated };
+    }
     const { data, error } = await sb.functions.invoke('send-whatsapp-message', {
       body: {
         phone: args.phone,
@@ -790,7 +817,7 @@ export function useInbox() {
         ? { ...current, messages: mergeInboxMessages(current.messages, [data.message as WaMessage]) } : current);
     }
     return { ok: true, simulated: data.simulated };
-  }, [queryClient, queryKey]);
+  }, [queryClient, queryKey, sms, channel]);
 
   /* ⛔ ONE RECORDED VOICE NOTE → send-whatsapp-voice. The server resolves the recipient from the
      LEAD (the phone here is only a confirmation it must match), re-checks the 24-hour window, converts
@@ -800,6 +827,7 @@ export function useInbox() {
   const sendVoice = useCallback(async (args: {
     phone: string; leadId: string; audio: Blob; mime: string; sendId: string;
   }): Promise<{ ok: boolean; simulated?: boolean; error?: string; reason?: string; retryable?: boolean }> => {
+    if (sms) return { ok: false, error: 'not_supported', reason: 'Voice notes are WhatsApp only.', retryable: false };
     const form = new FormData();
     form.append('lead_id', args.leadId);
     form.append('phone', args.phone);
@@ -827,13 +855,14 @@ export function useInbox() {
      voice note's twin (src/lib/sendMediaAttachment.ts holds the call, shared with the sales page).
      The sent row is merged the same way, so it appears in the thread at once. */
   const sendMedia = useCallback(async (args: { phone: string; leadId: string; file: File; caption: string; sendId: string }) => {
+    if (sms) return { ok: false as const, error: 'not_supported', retryable: false } as unknown as Awaited<ReturnType<typeof sendMediaAttachmentRequest>>;
     const res = await sendMediaAttachmentRequest(sb, args);
     if (res.ok && res.message?.id) {
       queryClient.setQueryData<InboxData>(queryKey, (current) => current
         ? { ...current, messages: mergeInboxMessages(current.messages, [res.message as unknown as WaMessage]) } : current);
     }
     return res;
-  }, [queryClient, queryKey]);
+  }, [queryClient, queryKey, sms]);
 
   /* ⛔ PREVIEW WHAT WOULD BE SENT — the SAME endpoint, the same guards, nothing sent.
      `mode: "dry_run"` returns the built Meta payload and the transcript body immediately before the
@@ -845,6 +874,19 @@ export function useInbox() {
   const preview = useCallback(async (args: {
     phone: string; leadId: string | null; country?: string | null; templateName: string; allowResend?: boolean;
   }): Promise<{ ok: boolean; body?: string; snapshot?: WhatsAppTemplateSnapshot; template?: string; fellBack?: string; error?: string; reason?: string }> => {
+    if (sms) {
+      /* The text this template would send: the six native templates are built here from the same function the sender uses; every other
+         template is built by the WhatsApp sender's own dry run (twilio-sms-send mode:'preview'). Nothing is sent either way. */
+      const avail = smsTemplateAvailability(args.templateName);
+      if (avail.ok === false) return { ok: false, error: 'template_unavailable', reason: avail.reason };
+      if (!args.leadId) return { ok: false, error: 'template_needs_lead', reason: 'A text needs a linked lead.' };
+      if ((SMS_TEMPLATE_NAMES as readonly string[]).includes(args.templateName)) {
+        const lead = queryClient.getQueryData<InboxData>(queryKey)?.leads.find((l) => l.id === args.leadId);
+        return { ok: true, body: smsPreview(args.templateName as SmsTemplateName, { business_name: lead?.business_name ?? '', derived_town: (lead as { derived_town?: string | null } | undefined)?.derived_town ?? null }), template: args.templateName };
+      }
+      const r = await previewSms({ leadId: args.leadId, template: args.templateName });
+      return r.ok === true ? { ok: true, body: r.body, template: args.templateName } : { ok: false, error: (r as { error: string }).error, reason: (r as { detail: string }).detail };
+    }
     const { data, error } = await sb.functions.invoke('send-whatsapp-message', {
       body: {
         mode: 'dry_run',
@@ -865,7 +907,7 @@ export function useInbox() {
       return { ok: false, error: 'preview_unsupported', reason: 'The live function does not have the preview yet — deploy send-whatsapp-message.' };
     }
     return { ok: true, body: data.body ?? '', snapshot: data.template_snapshot ?? undefined, template: data.template ?? args.templateName, fellBack: data.fell_back };
-  }, []);
+  }, [sms, queryClient, queryKey]);
 
   // Optimistic single-lead status patch — updates local `leads` state so the derived
   // `conversations`/`list` recompute (leadStatus + hide filters) WITHOUT a full
