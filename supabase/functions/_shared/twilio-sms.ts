@@ -85,7 +85,7 @@ export async function sendSmsToLead(service: Service, a: SendSmsArgs): Promise<S
     if (!isSmsTemplate(a.template)) return fail("bad_request", "That template is not available by text.", 400);
     /* ⛔ THE WORDS ARE WHATSAPP'S: the same renderTemplateBody the WhatsApp sender calls, with the same arguments it passes
        (send-whatsapp-message: the sign-up link template is filled from link-template-vars; the openers and continuations from the
-       lead's name and town). The only SMS addition is the opt-out line on a COLD text (smsTextFromWhatsAppBody). */
+       lead's name and town). Nothing is added: the SMS is the WhatsApp body word for word (smsTextFromWhatsAppBody). */
     const business = String(lead.business_name ?? "").trim();
     if (SMS_TEMPLATES_NEEDING_REAL_NAME.has(a.template) && !business) return fail("needs_real_name", "This template needs the business name, and the lead has none.");
     try {

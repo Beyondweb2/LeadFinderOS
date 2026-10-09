@@ -1,6 +1,6 @@
 /* WHAT A TEXT WILL SAY — THE WHATSAPP WORDING, NOTHING ELSE (2026-10-09) — client side.
    The preview is the WhatsApp template body rendered by the SAME mirror the Inbox uses (readableTemplateBody, parity-tested against the
-   function the server renders with), plus — on a COLD text only — the opt-out line (smsTextFromWhatsAppBody). So the queue dialog and the
+   function the server renders with) and NOTHING ELSE (smsTextFromWhatsAppBody adds no suffix). So the queue dialog and the
    composer show exactly what the server will send; there is no second copy of any wording. The business name is shortened the way the
    real send shortens it (sentAt = now makes the mirror apply today's greeting rules). */
 import { readableTemplateBody } from './templateBodies';

@@ -5,7 +5,7 @@
    salesperson's nav says Inbox. Provider calls are never made; server code and SQL are asserted on their text.
    ═══════════════════════════════════════════════════════════ */
 import { readFileSync } from 'node:fs';
-import { SMS_COLD_TEMPLATES, SMS_CONVERSATION_TEMPLATES, SMS_TEMPLATE_NAMES, SMS_OPT_OUT_LINE, SMS_TEMPLATES_NEEDING_REAL_NAME, isColdSmsTemplate, smsTextFromWhatsAppBody, SMS_QUEUE_SKIP_WORDS, SMS_QUEUE_DAILY_CAP, SMS_QUEUE_WINDOW, smsWindowOpen, londonDayStartUtc } from '../src/lib/smsMessages.ts';
+import { SMS_COLD_TEMPLATES, SMS_CONVERSATION_TEMPLATES, SMS_TEMPLATE_NAMES, SMS_TEMPLATES_NEEDING_REAL_NAME, isColdSmsTemplate, smsTextFromWhatsAppBody, SMS_QUEUE_SKIP_WORDS, SMS_QUEUE_DAILY_CAP, SMS_QUEUE_WINDOW, smsWindowOpen, londonDayStartUtc } from '../src/lib/smsMessages.ts';
 import { decideContactRoute } from '../src/lib/contactRouting.ts';
 import { smsPreview, smsTemplateLabel } from '../src/lib/smsPreview.ts';
 import { renderTemplateBody } from '../supabase/functions/_shared/whatsapp-send.ts';
@@ -26,18 +26,19 @@ console.log('1. SMS reuses the WhatsApp templates — no copy of its own');
   ok(SMS_CONVERSATION_TEMPLATES.every((n) => !isColdSmsTemplate(n)) && !isColdSmsTemplate('video_template') && !isColdSmsTemplate('findable_signup_link'), 'only the two openers are cold');
   ok(!SMS_TEMPLATE_NAMES.some((n) => /audit|video|competitor|explain|ai_site/.test(n)), 'audit-driven and long WhatsApp templates are not offered by SMS');
   ok(SMS_TEMPLATES_NEEDING_REAL_NAME.has('book_call') && SMS_TEMPLATES_NEEDING_REAL_NAME.has('re_engage_49'), 'the greeting-name rule carries over');
-  // EXACT parity: the text the server sends == the preview the screen shows, and both are the WhatsApp body (+ opt-out on cold only)
+  // EXACT parity: the text the server sends == the preview the screen shows, and both are the WhatsApp body, word for word
   for (const n of SMS_TEMPLATE_NAMES.filter((x) => x !== 'findable_signup_link')) {
     for (const biz of ['Smith & Sons Plumbing', 'Beeson Plumbing & Heating Ltd', 'MCLocksmiths']) {
       const wa = renderTemplateBody(n, biz, '', undefined, undefined, undefined, 'Leeds');
       const server = smsTextFromWhatsAppBody(n, wa);
       ok(smsPreview(n as never, { business_name: biz, derived_town: 'Leeds' }) === server, `${n} / ${biz}: the preview equals what the server sends`);
-      ok(isColdSmsTemplate(n) ? server === `${wa.trim()}\n\n${SMS_OPT_OUT_LINE}` : server === wa.trim(), `${n} / ${biz}: the WhatsApp wording is unchanged${isColdSmsTemplate(n) ? ' (opt-out line appended)' : ''}`);
+      ok(server === wa.trim(), `${n} / ${biz}: the SMS is the WhatsApp body word for word — nothing added`);
+      ok(!/opt out|STOP|Findable/i.test(server.replace(wa.trim(), '')), `${n} / ${biz}: no suffix, no identification, no extra wording`);
     }
   }
   const a = smsTextFromWhatsAppBody('initial_contact', renderTemplateBody('initial_contact', 'Smith & Sons Plumbing', ''));
-  ok(a === 'Hi, is this Smith & Sons Plumbing?\n\nCheers\n\nReply STOP to opt out.', 'initial_contact reads exactly as on WhatsApp, plus the opt-out line');
-  ok(smsTextFromWhatsAppBody('initial_opener_v2', renderTemplateBody('initial_opener_v2', 'X', '')) === 'Hey, are you taking on more jobs atm? Cheers\n\nReply STOP to opt out.', 'initial_opener_v2 reads exactly as on WhatsApp, plus the opt-out line');
+  ok(a === 'Hi, is this Smith & Sons Plumbing?\n\nCheers', 'initial_contact reads exactly as on WhatsApp');
+  ok(smsTextFromWhatsAppBody('initial_opener_v2', renderTemplateBody('initial_opener_v2', 'X', '')) === 'Hey, are you taking on more jobs atm? Cheers', 'initial_opener_v2 reads exactly as on WhatsApp');
   // segments: every offered template (with a realistic link for the link template)
   const agree = 'https://findable.live/agree/' + 'a1'.repeat(32);
   const link = smsTextFromWhatsAppBody('findable_signup_link', renderTemplateBody('findable_signup_link', 'Sam', agree));

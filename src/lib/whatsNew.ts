@@ -32,7 +32,7 @@ export const WHATS_NEW: readonly WhatsNewEntry[] = [
       ],
       changed: [
         'The salesperson sidebar item and the phone bar say Inbox instead of WhatsApp, and one badge counts WhatsApp and text conversations together.',
-        'Texts use the existing WhatsApp templates word for word (the only addition is a Reply STOP line on a first text). A first text to someone you have not spoken to is one of the two WhatsApp openers; free text and the other templates open once they reply or you have spoken.',
+        'Texts use the existing WhatsApp templates word for word, with nothing added. A first text to someone you have not spoken to is one of the two WhatsApp openers; free text and the other templates open once they reply or you have spoken.',
       ],
       removed: [],
       effect: 'You can start a conversation by text from the row, line up a batch the same way as WhatsApp, and always find a lead in the channel you used. Leads already texted, in a WhatsApp conversation, spoken to or opted out are skipped, with the reason.',

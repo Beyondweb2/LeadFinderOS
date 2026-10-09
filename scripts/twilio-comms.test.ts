@@ -10,7 +10,7 @@ import { createHmac } from 'node:crypto';
 import { twilioSignature, validTwilioSignature, voiceAccessToken, VOICE_TOKEN_MAX_TTL_S } from '../src/lib/twilioAuth.ts';
 import { decideContactRoute, smsGateOpen, type RoutingFacts } from '../src/lib/contactRouting.ts';
 import { smsSize, smsCostGbp, costWords, CHANNEL_COST_GBP } from '../src/lib/channelCosts.ts';
-import { isApprovedSmsLink, advanceSmsStatus, mapTwilioStatus, smsDeliveryState, isStopMessage, SMS_TEMPLATE_NAMES, SMS_COLD_TEMPLATES, SMS_OPT_OUT_LINE, smsTextFromWhatsAppBody } from '../src/lib/smsMessages.ts';
+import { isApprovedSmsLink, advanceSmsStatus, mapTwilioStatus, smsDeliveryState, isStopMessage, SMS_TEMPLATE_NAMES, SMS_COLD_TEMPLATES, smsTextFromWhatsAppBody } from '../src/lib/smsMessages.ts';
 import { signupLinkTemplateBody } from '../src/lib/whatsappLinkTemplates.ts';
 
 let f = 0;
@@ -119,7 +119,7 @@ console.log('5. SMS texts are the WhatsApp templates; links are the WhatsApp lin
   const body = smsTextFromWhatsAppBody('findable_signup_link', signupLinkTemplateBody('Sam', agree));
   ok(body === signupLinkTemplateBody('Sam', agree).trim(), 'the sign-up link text equals the findable_signup_link body, with nothing added');
   ok(!SMS_COLD_TEMPLATES.some((n) => n === 'findable_signup_link') && SMS_TEMPLATE_NAMES.includes('findable_signup_link'), 'the link template is not a cold template');
-  ok(SMS_OPT_OUT_LINE === 'Reply STOP to opt out.', 'the one added line');
+  ok(smsTextFromWhatsAppBody('initial_contact', '  Hi\n\nCheers \n') === 'Hi\n\nCheers', 'only surrounding whitespace is trimmed — nothing is added');
 }
 
 console.log('6. delivery statuses — accepted is not delivered');
