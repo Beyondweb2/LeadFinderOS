@@ -22,6 +22,24 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-09-sms-status-and-inbox', date: '2026-10-09', title: 'Text status that follows the network, and the SMS Inbox now matches WhatsApp', audience: 'all',
+    body: 'A queued text now shows Queued, a delivered one shows Contacted, a failed one shows SMS Failed, and a number that can never get texts shows No SMS. The SMS Inbox looks and works like the WhatsApp one.',
+    report: {
+      added: [
+        'Queued, SMS Failed and No SMS status pills on leads, driven by the network delivery receipts rather than assumed when a text is sent.',
+        'The SMS Inbox now has the same filters, conversation rows, header (star, status, next action, owner, Prospect), AI visibility strip, queued count, Send now (admin) and New as the WhatsApp Inbox.',
+        'A Call on WhatsApp button next to Call in browser on the Call tab.',
+      ],
+      changed: [
+        'A text only moves a lead to Contacted once the network confirms it was delivered. A text that did not arrive (phone off or out of signal) shows SMS Failed, not No SMS.',
+        'A landline or foreign number is marked No SMS the moment you try to queue or text it, and the text button is not offered for it.',
+      ],
+      removed: [
+        'The Business age column, filter and lookup on Find Leads.',
+        'The Best way to contact box from the Call tab, the text window and the SMS Inbox.',
+      ],
+      effect: 'You can see at a glance which texts are waiting, which arrived and which did not, and never waste a text on a number that cannot receive one.',
+    } },
   { id: '2026-10-09-text-queue-and-inbox', date: '2026-10-09', title: 'Text button, text queue, and one Inbox', audience: 'all',
     body: 'Every lead row has a text button, you can queue texts like WhatsApp, the sidebar now says Inbox, and a lead opens in the Inbox on the channel you used for it.',
     report: {
