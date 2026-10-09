@@ -195,6 +195,16 @@ console.log('9. secrets stay server-side; whatsapp-status untouched');
   ok(!/whatsapp-status/.test(logs.map(read).join('\n').replace(/\/\/[^\n]*/g, '')), 'no Twilio file touches whatsapp-status');
 }
 
+console.log('9b. the configuration check never returns a secret');
+{
+  const d = code(read('supabase/functions/_shared/twilio-diagnose.ts'));
+  const fn = code(read('supabase/functions/twilio-sms-send/index.ts'));
+  ok(/mode === "diagnose"[\s\S]{0,160}role !== "admin"[\s\S]{0,80}403/.test(fn), 'diagnose is admin-only');
+  ok(!/Messages\.json|Calls\.json|method: "POST"|method: "DELETE"/.test(d), 'it only READS from Twilio: no message, no call, no change');
+  const answerLines = d.split('\n').filter((l) => /\badd\(|\bsid\(|\burl\(|say/.test(l) && !/twGet\(/.test(l));
+  ok(answerLines.length > 10 && !answerLines.some((l) => /\$\{env\.(authToken|apiKeySecret|accountSid|apiKeySid|twimlAppSid|smsFrom)\}/.test(l)) && !/console\./.test(d), 'no secret value is placed in the answer or logged (only lengths and yes/no)');
+}
+
 console.log('10. database: scope and isolation');
 {
   const m = code(read('supabase/migrations/20261018090000_twilio_comms.sql'));

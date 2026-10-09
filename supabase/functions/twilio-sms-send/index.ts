@@ -2,6 +2,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { refusalBody, resolveActor } from "../_shared/access.ts";
 import { sendSmsToLead } from "../_shared/twilio-sms.ts";
 import { resolveTwilioEnv } from "../_shared/twilio.ts";
+import { diagnoseTwilio } from "../_shared/twilio-diagnose.ts";
 import { SMS_TEMPLATES } from "../../../src/lib/smsMessages.ts";
 
 // twilio-sms-send — a rep texts ONE of their own leads from the Inbox / prospect workspace (2026-10-09).
@@ -35,6 +36,11 @@ Deno.serve(async (req) => {
     if (mode === "status") {
       // Tells the screen whether to offer SMS / calling. Booleans only — never a value, never a secret.
       return json({ ok: true, smsConfigured: env.smsConfigured, voiceConfigured: env.voiceConfigured, testMode: env.testMode });
+    }
+    if (mode === "diagnose") {
+      // Admin-only, read-only configuration check: booleans and plain words, never a secret value (twilio-diagnose.ts).
+      if (who.actor.role !== "admin") return json({ ok: false, error: "admin_only" }, 403);
+      return json({ ok: true, ...(await diagnoseTwilio(env)) });
     }
     if (mode !== "send") return json({ ok: false, error: "unknown_mode" }, 400);
 
