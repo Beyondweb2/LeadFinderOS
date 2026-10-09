@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { InboxChannelSwitch, useInboxChannel } from '@/components/InboxChannelSwitch';
+import { SmsInbox } from '@/components/SmsInbox';
 import { getDraft, setDraft, type DraftMap } from '@/lib/inboxDrafts';
 import { planBulkSend, groupSkips, applyBulkChecks, type BulkCandidate, type BulkCheck } from '@/lib/inboxBulkSend';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
@@ -416,7 +418,7 @@ const LIST_SORT_OPTIONS = [
   { value: 'next_action', label: 'Next action: most overdue first', short: 'Most overdue' },
 ] as const;
 
-const Inbox = () => {
+const WhatsAppInbox = () => {
   const { user, conversations, messages, messagesForKey, leads, auditByLeadId, auditRunningLeadIds, hasSiteFaultLeadIds, hasSiteFindingsLeadIds, crawlByLeadId, isLoading, isError, send, sendVoice, sendMedia, preview, refetch, loadLead, patchLeadStatus, patchLeadPotentialWork } = useInbox();
   const { toast } = useToast();
   // Only for invalidating the AiAudit page's audit-book cache when startAudit fires one from
@@ -1772,6 +1774,7 @@ const Inbox = () => {
           <div className="flex min-w-0 flex-1 items-center gap-3">
             {/* ⛔ It SAYS WhatsApp (Paul, 2026-09-28). One conversation system, one page, both roles. */}
             <h1 className="flex shrink-0 items-center gap-2.5 text-xl font-extrabold leading-tight tracking-tight sm:text-2xl"><IconTile icon={MessageCircle} tone="blue" />WhatsApp Inbox</h1>
+            <InboxChannelSwitch current="whatsapp" />
             <p className="hidden truncate text-sm text-muted-foreground min-[1760px]:block">Every WhatsApp conversation with your leads.</p>
           </div>
           {/* The one auto-reply rule's switch (admin-only — hides itself otherwise). */}
@@ -2723,5 +2726,8 @@ const Inbox = () => {
     </div>
   );
 };
+
+/* ONE INBOX, TWO CHANNELS (2026-10-09): /inbox is WhatsApp exactly as before; /inbox?channel=sms is the SMS tab. */
+const Inbox = () => (useInboxChannel() === 'sms' ? <SmsInbox /> : <WhatsAppInbox />);
 
 export default Inbox;

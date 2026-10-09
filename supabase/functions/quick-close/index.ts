@@ -23,6 +23,7 @@ import { isPaidLead } from "../../../src/lib/leadPayment.ts";
 import { loadClientSetup, recordLeadEvent, submitForDelivery } from "../_shared/client-setup.ts";
 import { sendOperatorAlert } from "../_shared/operator-alert.ts";
 import { checkSuppressed } from "../_shared/suppression.ts";
+import { sendSmsToLead } from "../_shared/twilio-sms.ts";
 import { qaEmailHold } from "../_shared/qa-guard.ts";
 import { answerClientInfoRequest, openRequestFor, CLIENT_INFO_REQUEST_COLUMNS } from "../_shared/client-info-request.ts";
 import { cleanSellerClientInfo, MISSING_INFO_LABEL } from "../../../src/lib/clientMissingInfo.ts";
@@ -841,7 +842,7 @@ Deno.serve(async (req) => {
     if (mode === "share_link") {
       const channel = body.channel;
       /* 'whatsapp_template' is accepted as the same thing as 'whatsapp': the SERVER picks the route (paymentLinkRoute). */
-      if (channel !== "copy" && channel !== "email" && channel !== "whatsapp" && channel !== "whatsapp_template") return json({ ok: false, error: "bad_request" }, 400);
+      if (channel !== "copy" && channel !== "email" && channel !== "whatsapp" && channel !== "whatsapp_template" && channel !== "sms") return json({ ok: false, error: "bad_request" }, 400);
       if (!row) return json({ ok: false, error: "not_started", detail: "Answer the questions first." }, 409);
       const qc = (row.quick_close ?? null) as (QuickCloseRecord & Obj) | null;
       if (!linkUsable(qc)) return json({ ok: false, error: "link_expired", detail: "Make the sign-up link first." }, 409);
@@ -862,6 +863,23 @@ Deno.serve(async (req) => {
         const sent = await emailCustomerLink(row.id, async (senderName) => quickCloseEmail({ greetName, businessName: lead.business_name, url, route, senderName }));
         if (!sent.ok) return sent.response;
         share.to = sent.to; share.status = "sent";
+      }
+      if (channel === "sms") {
+        /* ⛔ SMS (2026-10-09): the SAME agreement link this screen generated — findable.live/agree/<token>, the agreement first and
+           payment only after it is signed — texted through the one guarded sender (_shared/twilio-sms.ts: UK mobile, opt-outs, the
+           conversation gate, QA, rate limit, idempotency). ONE text per link unless the rep presses Resend; "delivered" is only
+           ever a carrier receipt, so a fresh text is recorded as queued, never as delivered. */
+        const smsPrior = ((qc!.link_shared ?? []) as QcLinkShare[]).filter((s) => s.channel === "sms" && (s.link ? s.link === url : s.session === session) && s.status !== "failed");
+        if (smsPrior.length && body.resend !== true) return json({ ok: false, error: "already_sent", detail: "That link was already texted to them. Press Resend only if they say it did not arrive." }, 409);
+        const smsRes = await sendSmsToLead(service, {
+          actor, leadId, templateKey: "agreement_link", linkUrl: url,
+          idempotencyKey: `qc-agreement:${row.id}:${smsPrior.length}`, allowResend: body.resend === true,
+        });
+        if (!smsRes.ok) {
+          await event(service, leadId, row.id, actor.id, "link_share_failed", { channel: "sms", error: smsRes.error });
+          return json({ ok: false, error: smsRes.error, detail: smsRes.detail }, 409);
+        }
+        share.channel = "sms"; share.status = smsRes.simulated ? "simulated" : smsRes.message.status;
       }
       if (channel === "whatsapp" || channel === "whatsapp_template") {
         if (!lead.phone) return json({ ok: false, error: "no_phone", detail: "There is no phone number for them." }, 409);
@@ -905,6 +923,7 @@ Deno.serve(async (req) => {
       await event(service, leadId, row!.id, actor.id, "link_shared", { channel, to: share.to ?? null, status: share.status ?? null, session });
       const bodyText = channel === "copy" ? "Sign-up link copied (to send by hand — not confirmed as sent)"
         : channel === "email" ? `Sign-up link emailed to ${share.to}`
+        : channel === "sms" ? (share.status === "simulated" ? "Sign-up link texted (test mode — not sent)" : "Sign-up link texted (queued — delivery not yet confirmed)")
         : share.status === "simulated" ? "Sign-up link sent on WhatsApp (test mode — not delivered)" : share.template ? "Sign-up link sent on WhatsApp (template findable_signup_link)" : "Sign-up link sent on WhatsApp";
       const { error: hErr } = await service.from("lead_activity").insert({
         lead_id: leadId, actor_user_id: actor.id, kind: "payment_link_shared", body: bodyText,
@@ -948,7 +967,7 @@ Deno.serve(async (req) => {
        variable resolved there (link_variant "setup"). Copy is recorded as copied, never as sent. */
     if (mode === "share_setup") {
       const channel = body.channel;
-      if (channel !== "copy" && channel !== "whatsapp" && channel !== "email") return json({ ok: false, error: "bad_request" }, 400);
+      if (channel !== "copy" && channel !== "whatsapp" && channel !== "email" && channel !== "sms") return json({ ok: false, error: "bad_request" }, 400);
       if (!access.ok || isPaidLead(lead) || row?.status === "paid") return json({ ok: false, error: "not_open", detail: "This lead can't be sent a set-up link (it is a client, or no longer yours)." }, 409);
       const closedNow = quickCloseClosedRefusal(lead as never, row as never);
       if (closedNow) return json({ ok: false, error: closedNow.error, detail: closedNow.detail }, 409);
@@ -958,6 +977,21 @@ Deno.serve(async (req) => {
         const sent = await emailCustomerLink(row?.id ?? null, async (senderName) => fullSetupEmail({ greeting: quickCloseGreeting(row?.contact_name ?? lead.contact_name ?? null), greetName: row?.contact_name ?? lead.contact_name ?? null, businessName: lead.business_name, url, senderName }));
         if (!sent.ok) return sent.response;
         emailedTo = sent.to; status = "sent";
+      }
+      if (channel === "sms") {
+        /* The Full Setup link by text: the same setup URL as the other channels (findable.live/onboarding/?lead=<id>), through the
+           one guarded SMS sender. Once per link unless Resend; recorded as queued, never as delivered. */
+        const smsHistory = (await setupShareHistory(service, leadId)).filter((s) => s.channel === "sms" && s.status !== "failed");
+        if (smsHistory.length && body.resend !== true) return json({ ok: false, error: "already_sent", detail: "The full setup link was already texted to them. Press Resend if you really mean to send it again." }, 409);
+        const smsRes = await sendSmsToLead(service, {
+          actor, leadId, templateKey: "setup_link", linkUrl: url,
+          idempotencyKey: `qc-setup:${leadId}:${smsHistory.length}`, allowResend: body.resend === true,
+        });
+        if (!smsRes.ok) {
+          await event(service, leadId, row?.id ?? null, actor.id, "link_share_failed", { channel: "sms", variant: "setup", error: smsRes.error });
+          return json({ ok: false, error: smsRes.error, detail: smsRes.detail }, 409);
+        }
+        status = smsRes.simulated ? "simulated" : smsRes.message.status;
       }
       if (channel === "whatsapp") {
         if (!lead.phone) return json({ ok: false, error: "no_phone", detail: "There is no phone number for them." }, 409);
@@ -990,7 +1024,7 @@ Deno.serve(async (req) => {
       await event(service, leadId, row?.id ?? null, actor.id, "link_shared", { channel, variant: "setup", status, to: emailedTo });
       const { error: hErr } = await service.from("lead_activity").insert({
         lead_id: leadId, actor_user_id: actor.id, kind: "payment_link_shared",
-        body: channel === "copy" ? "Full setup link copied (to send by hand — not confirmed as sent)" : channel === "email" ? `Full setup link emailed to ${emailedTo}` : status === "simulated" ? "Full setup link sent on WhatsApp (test mode — not delivered)" : "Full setup link sent on WhatsApp",
+        body: channel === "copy" ? "Full setup link copied (to send by hand — not confirmed as sent)" : channel === "email" ? `Full setup link emailed to ${emailedTo}` : channel === "sms" ? (status === "simulated" ? "Full setup link texted (test mode — not sent)" : "Full setup link texted (queued — delivery not yet confirmed)") : status === "simulated" ? "Full setup link sent on WhatsApp (test mode — not delivered)" : "Full setup link sent on WhatsApp",
         data: { source: actor.role === "admin" ? "admin" : "sales", variant: "setup", close_route: "full_setup", channel, template, resend: body.resend === true, status, to: emailedTo },
       });
       if (hErr) console.error("[quick-close] history write failed (non-blocking):", hErr.message);

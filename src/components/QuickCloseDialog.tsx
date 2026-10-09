@@ -22,6 +22,7 @@ import { FINDABLE_SETUP_PRICE_GBP, SERVICE_ROUTE_NAME, totalPaymentsFor, type Se
 import { cn } from '@/lib/utils';
 import { ClosePanel } from '@/components/ClosePanel';
 import { CustomerEmailControl } from '@/components/CustomerEmailControl';
+import { SmsLinkSend } from '@/components/SmsLinkSend';
 import { SalesHandoffForm } from '@/components/SalesHandoffForm';
 import type { HandoffFieldKey, SalesHandoffFields } from '@/lib/salesHandoff';
 import type { NextStep } from '@/lib/deliveryStage';
@@ -128,7 +129,7 @@ function timeLeft(iso: string | null | undefined): string {
   if (!iso) return '';
   return linkTimeLeftWords(Date.parse(iso) - Date.now());
 }
-const SHARE_WORDS: Record<QcLinkShare['channel'], string> = { copy: 'Copied', email: 'Emailed', whatsapp: 'Sent on WhatsApp' };
+const SHARE_WORDS: Record<QcLinkShare['channel'], string> = { copy: 'Copied', email: 'Emailed', whatsapp: 'Sent on WhatsApp', sms: 'Texted' };
 
 /** Inside the lead workspace, a Quick Close button goes to the CLOSE tab instead of opening a second window. */
 export const QuickCloseNav = createContext<{ openClose: (leadId: string) => void } | null>(null);
@@ -240,6 +241,16 @@ export function QuickClosePanel({ leadId, active = true, framed = false }: { lea
     if (!r) return;
     const last = r.link?.shared.filter((s) => s.channel === 'whatsapp').slice(-1)[0];
     toast({ title: last?.status === 'simulated' ? 'Sent (test mode — not delivered)' : 'Sent on WhatsApp', description: last?.template ? 'As the findable_signup_link template.' : undefined });
+  };
+
+  /* TEXT THE LINK (2026-10-09): the same agreement link, through the one guarded SMS sender (server: quick-close share_link / sms).
+     A text is recorded as queued, never as delivered — the carrier's receipt updates the status shown beside the button. */
+  const sendSmsLink = async (resend = false): Promise<boolean> => {
+    const r = await run('sms', { mode: 'share_link', channel: 'sms', ...(resend ? { resend: true } : {}) });
+    if (!r) return false;
+    const last = r.link?.shared.filter((s) => s.channel === 'sms').slice(-1)[0];
+    toast({ title: last?.status === 'simulated' ? 'Texted (test mode — not sent)' : 'Link texted', description: 'Delivery is confirmed once the network reports it.' });
+    return true;
   };
 
   const saveHandoff = async (h: SalesHandoffFields) => !!(await run('handoff', { mode: 'save_handoff', handoff: h }));
@@ -480,6 +491,7 @@ export function QuickClosePanel({ leadId, active = true, framed = false }: { lea
                               </div>
                             )}
                             {lr?.route === 'whatsapp_template' && lr.reason === 'ok_unverified' && !sentWa && <p className="text-[11px] text-muted-foreground">{lr.template.say}</p>}
+                            <SmsLinkSend leadId={leadId} kind="agreement" otherSent={sentWa ? ['whatsapp'] : []} onSend={sendSmsLink} />
                             <CustomerEmailControl testId="qc-customer-email" email={v.share?.email ?? null} busy={busy} onSave={saveEmail} onSend={() => void sendEmail()} />
                             <Button variant="outline" className="h-12 w-full gap-1.5" onClick={() => void doCopy('message', quickCloseMessage(greetName, usableUrl, route))}><ClipboardCopy className="h-4 w-4" />{copied === 'message' ? 'Copied' : 'Copy message'}</Button>
                             <p className="text-xs text-muted-foreground" data-testid="qc-share-availability">

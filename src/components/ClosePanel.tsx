@@ -12,6 +12,7 @@ import { LINK_READY_FALLBACK } from '@/lib/paymentLinkRoute';
 import { OnboardingLinkCard } from '@/components/OnboardingLinkCard';
 import { QuickClosePanel, quickCloseKey, useQuickClose } from '@/components/QuickCloseDialog';
 import { CustomerEmailControl } from '@/components/CustomerEmailControl';
+import { SmsLinkSend } from '@/components/SmsLinkSend';
 import { cn } from '@/lib/utils';
 
 /* ══ THE TWO WAYS TO CLOSE (2026-10-07, fix/quick-close-two-options) ═══════════════════════════════════════
@@ -102,7 +103,7 @@ export function FullSetupPanel({ leadId }: { leadId: string }) {
   const lr = v.link_route;
   const canWa = lr?.route === 'whatsapp_reply' || lr?.route === 'whatsapp_template';
   const sentWa = (setup?.shared ?? []).filter((s) => s.channel === 'whatsapp' && s.status !== 'failed').slice(-1)[0] ?? null;
-  const call = async (channel: 'whatsapp' | 'copy' | 'email', resend = false) => {
+  const call = async (channel: 'whatsapp' | 'copy' | 'email' | 'sms', resend = false) => {
     setBusy(channel);
     try {
       const r = await invokeEdge<typeof v>('quick-close', { lead_id: leadId, mode: 'share_setup', channel, ...(resend ? { resend: true } : {}) });
@@ -117,6 +118,11 @@ export function FullSetupPanel({ leadId }: { leadId: string }) {
   const send = async (resend = false) => {
     if (resend && !window.confirm('Send the full setup link to them on WhatsApp again?')) return;
     if (await call('whatsapp', resend)) toast({ title: 'Full setup sent on WhatsApp' });
+  };
+  const sendSmsSetup = async (resend = false): Promise<boolean> => {
+    const ok = await call('sms', resend);
+    if (ok) toast({ title: 'Full setup link texted', description: 'Delivery is confirmed once the network reports it.' });
+    return ok;
   };
   const sendEmail = async () => {
     if (await call('email')) toast({ title: 'Full setup link emailed', description: v.share?.email ? `To ${v.share.email}` : undefined });
@@ -159,13 +165,14 @@ export function FullSetupPanel({ leadId }: { leadId: string }) {
           <span className="text-muted-foreground">{lr?.say ?? 'WhatsApp is not available for this link.'} Copy the link and send it another way.</span>
         </Callout>
       )}
+      <SmsLinkSend leadId={leadId} kind="setup" otherSent={sentWa ? ['whatsapp'] : []} onSend={sendSmsSetup} />
       <CustomerEmailControl testId="setup-customer-email" email={v.share?.email ?? null} busy={busy} onSave={saveEmail} onSend={() => void sendEmail()} />
       <Button variant="outline" className="h-12 w-full gap-1.5" onClick={() => void copy()} data-testid="setup-copy-link">
         {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}{copied ? 'Copied' : 'Copy link'}
       </Button>
       {(setup?.shared.length ?? 0) > 0 && (
         <ul className="space-y-0.5 text-xs text-muted-foreground" data-testid="setup-share-history">
-          {setup!.shared.slice().reverse().map((s) => <li key={s.channel + s.at}>✓ {s.channel === 'copy' ? 'Copied (to send by hand)' : s.channel === 'email' ? `Emailed${s.to ? ` to ${s.to}` : ''}` : s.status === 'simulated' ? 'Sent on WhatsApp (test mode — not delivered)' : 'Sent on WhatsApp'} · {hhmm(s.at)}</li>)}
+          {setup!.shared.slice().reverse().map((s) => <li key={s.channel + s.at}>✓ {s.channel === 'copy' ? 'Copied (to send by hand)' : s.channel === 'email' ? `Emailed${s.to ? ` to ${s.to}` : ''}` : (s.channel as string) === 'sms' ? (s.status === 'simulated' ? 'Texted (test mode — not sent)' : 'Texted') : s.status === 'simulated' ? 'Sent on WhatsApp (test mode — not delivered)' : 'Sent on WhatsApp'} · {hhmm(s.at)}</li>)}
         </ul>
       )}
       <OnboardingLinkCard lead={{ id: v.lead.id, business_name: v.lead.business_name, category: v.lead.trade, search_location: v.lead.town, amount_paid: 0 }} />

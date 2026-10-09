@@ -12,6 +12,9 @@ import { useLeadCrawl } from '@/hooks/useLeadCrawls';
 import { WelcomePackButton } from '@/components/WelcomePackButton';
 import { ColdCallPlaybookInline } from '@/components/ColdCallPlaybook';
 import { CallNumberPopup } from '@/components/CallNumberPopup';
+import { CallPanel } from '@/components/CallPanel';
+import { LeadSmsSection } from '@/components/LeadSmsPanel';
+import { useTwilioCall } from '@/hooks/useTwilioCall';
 import { afterLogCall, afterStartCall, arrivalWindows, callArrivalOf } from '@/lib/callArrival';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ProspectFacts } from '@/components/ProspectFacts';
@@ -330,6 +333,8 @@ function LeadDetailBody({
   const [nextOpen, setNextOpen] = useState(false);
   const [logged, setLogged] = useState<LoggedResult | null>(null);
   const logThisCall = () => setWindows(afterLogCall());
+  /* The browser call lives HERE, above the tabs, so it survives switching tabs (script, Details, Close) mid-call. */
+  const twilioCall = useTwilioCall();
   const aiCheckRef = useRef<HTMLElement>(null);
   const showCheck = () => aiCheckRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   /* "Run the AI check" on the evidence card: the AI check tools just below, opened. */
@@ -603,6 +608,7 @@ function LeadDetailBody({
                 2 CALL SCRIPT — the playbook (read-only), its sticky bar: Log this call + Quick Close.
                 ⛔ No CRM cards here: the status and the Next Action are in the header, the outcome is the Log window. ── */}
           <TabsContent value="call" className="mt-0 space-y-4" data-testid="workspace-call">
+            {!isDemoLead(lead.id) && <CallPanel leadId={lead.id} phone={lead.phone} country={lead.country} call={twilioCall} onLogCall={logThisCall} />}
             {logged && <LoggedLine leadId={lead.id} logged={logged} onDismiss={() => setLogged(null)} />}
             {!isDemoLead(lead.id) && (
               <section ref={aiCheckRef} className="scroll-mt-2 space-y-2 rounded-2xl border border-violet-500/30 bg-violet-500/[0.04] p-3 sm:p-3.5" data-testid="ai-check-tools">
@@ -612,6 +618,7 @@ function LeadDetailBody({
             )}
             {!isDemoLead(lead.id) && <ColdCallPlaybookInline leadId={lead.id} initialScript="call" onLogCall={logThisCall} onShowCheck={showCheck} />}
             {!isDemoLead(lead.id) && context !== 'inbox' && <RecentWhatsApp leadId={lead.id} />}
+            {!isDemoLead(lead.id) && lead.phone && <LeadSmsSection leadId={lead.id} />}
           </TabsContent>
 
           {/* ── DETAILS: what was learned on the call, recorded — never a script. ── */}
@@ -886,7 +893,8 @@ function LeadDetailBody({
       )}
       {/* The number window (2026-10-07): over the popup, which stays open underneath. CALL closes only it. */}
       <CallNumberPopup open={windows.numberOpen} onOpenChange={(o) => setWindows((w) => ({ ...w, numberOpen: o }))}
-        businessName={lead.business_name} phone={lead.phone} country={lead.country} onStartCall={startCall} />
+        businessName={lead.business_name} phone={lead.phone} country={lead.country} onStartCall={startCall}
+        onBrowserCall={() => { startCall(); setTab('call'); void twilioCall.start(lead.id); }} />
       </QuickCloseNav.Provider>
       {/* ⛔ NO FOOTER (2026-10-06): Mark paid moved to the Close tab (admin only, the same handler). */}
 

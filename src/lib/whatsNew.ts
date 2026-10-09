@@ -22,6 +22,22 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-09-texts-and-browser-calls', date: '2026-10-09', title: 'Text messages and calling from your browser', audience: 'all',
+    body: 'You can now text prospects and call UK numbers from LeadFinderOS itself, and the Inbox has a WhatsApp / SMS switch. A "Best way to contact" box tells you the cheapest route that is likely to arrive.',
+    report: {
+      added: [
+        'An SMS tab in the Inbox (same page as WhatsApp): conversations, unread marks, replies, delivery marks.',
+        'Call in browser on the Call tab: calling / ringing / connected, mute, hang up and a timer. Not recorded.',
+        'Text the link buttons on both ways to close: the agreement & payment link and the full setup link can go by text as well as WhatsApp or email.',
+        'A Best way to contact box that explains why a channel is recommended or unavailable, with a rough cost.',
+      ],
+      changed: [
+        'Texts open once you have spoken to them (logged a call) or they have messaged you - there are no cold texts.',
+        'A text only says Delivered when the network confirms it; Queued and Sent are shown as exactly that.',
+      ],
+      removed: [],
+      effect: 'Salespeople can reach a prospect, take the call and send the sign-up link without leaving the app, and a failed text points to another way to send the same link. Calls and texts stay in test mode until the Twilio settings are switched on.',
+    } },
   { id: '2026-10-07-customer-email-close-flow', date: '2026-10-07', title: 'Email the link goes to the customer only; add their email right on the Close screen', audience: 'all',
     body: 'The Email the link button on both ways to close now only ever emails the customer. If there is no email for them yet, a small box asks for it right there.',
     report: {

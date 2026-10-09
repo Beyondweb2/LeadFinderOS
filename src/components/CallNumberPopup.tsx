@@ -23,13 +23,15 @@ import { callNumberView, type CallNumberView } from '@/lib/callNumber';
 const keepKeysHere = (e: KeyboardEvent) => { if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') e.stopPropagation(); };
 
 /** The window's content — plain markup, no portal, so it can be rendered and checked on its own. */
-export function CallNumberCard({ businessName, view, copied, onCopy, onStartCall, onCancel }: {
+export function CallNumberCard({ businessName, view, copied, onCopy, onStartCall, onCancel, onBrowserCall }: {
   businessName: string;
   view: CallNumberView | null;
   copied: boolean;
   onCopy: () => void;
   onStartCall: () => void;
   onCancel: () => void;
+  /** Call from the browser (Twilio): shown only where the screen offers it. Not the free options below. */
+  onBrowserCall?: () => void;
 }) {
   return (
     <div className="min-w-0 space-y-4" data-testid="call-number-card">
@@ -49,6 +51,11 @@ export function CallNumberCard({ businessName, view, copied, onCopy, onStartCall
         {copied ? <Check className="mr-1.5 h-4 w-4 text-emerald-500" /> : <Copy className="mr-1.5 h-4 w-4" />}
         {copied ? 'Copied' : 'Copy number'}
       </Button>
+      {onBrowserCall && view && (
+        <Button type="button" className="h-11 w-full min-w-0 rounded-full bg-amber-500 font-bold text-white hover:bg-amber-600" onClick={onBrowserCall} data-testid="call-number-browser">
+          <PhoneCall className="mr-1.5 h-4 w-4 shrink-0" />Call in browser
+        </Button>
+      )}
       <div className="grid gap-2 sm:grid-cols-2">
         {view?.whatsappUrl && (
           <Button asChild className="h-11 min-w-0 rounded-full bg-emerald-600 font-bold text-white hover:bg-emerald-700">
@@ -67,7 +74,7 @@ export function CallNumberCard({ businessName, view, copied, onCopy, onStartCall
   );
 }
 
-export function CallNumberPopup({ open, onOpenChange, businessName, phone, country, onStartCall }: {
+export function CallNumberPopup({ open, onOpenChange, businessName, phone, country, onStartCall, onBrowserCall }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   businessName: string;
@@ -75,6 +82,7 @@ export function CallNumberPopup({ open, onOpenChange, businessName, phone, count
   country?: string | null;
   /** CALL: the caller closes this window and nothing else. */
   onStartCall: () => void;
+  onBrowserCall?: () => void;
 }) {
   const view = callNumberView(phone, country);
   const [copied, setCopied] = useState(false);
@@ -90,7 +98,7 @@ export function CallNumberPopup({ open, onOpenChange, businessName, phone, count
         <DialogTitle className="sr-only">Call {businessName}</DialogTitle>
         <DialogDescription className="sr-only">The number to dial on your own phone</DialogDescription>
         <CallNumberCard businessName={businessName} view={view} copied={copied} onCopy={copy}
-          onStartCall={onStartCall} onCancel={() => onOpenChange(false)} />
+          onStartCall={onStartCall} onCancel={() => onOpenChange(false)} onBrowserCall={onBrowserCall} />
       </DialogContent>
     </Dialog>
   );

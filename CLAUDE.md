@@ -67,8 +67,9 @@ Facts and warnings, not prose. Correct a stale line when you find one; add a rul
   barber branches in live functions, the 20 orphan function deletes, the
   SQL and purges that go to Paul one statement at a time — **and Paul's standing decisions, which
   are not to be re-asked.** `INVENTORY_DEEP_CLEAN.md` (untracked) is the Phase 1 evidence. Dead and
-  not to be built on: the barber/salon product, Instantly, Twilio/SMS, contact discovery, the
-  Feedback page. 22 functions are deployed with no source (2 belong to the
+  not to be built on: the barber/salon product, Instantly, the OLD Twilio SMS drip (`sms_sends`,
+  `process-sms-queue`), contact discovery, the Feedback page. ⛔ **Twilio is BACK, as two-way texting + browser calling,
+  not a drip (Paul, 2026-10-09): `docs/twilio-comms.md`.** 22 functions are deployed with no source (2 belong to the
   findable-directory repo and stay). ⛔ **Step 7 (delete the multi-user surface) is OVERTURNED** —
   Paul, 2026-09-27: see the next bullet. ⛔ **Step 4 is OVERTURNED for SOCIAL discovery** (Paul,
   2026-09-30, `docs/social-profiles.md`): Find socials / `social-profiles` / `enrich-business` /
