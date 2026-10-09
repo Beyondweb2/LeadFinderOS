@@ -50,7 +50,11 @@ export async function diagnoseTwilio(env: TwilioEnv): Promise<Diagnosis> {
         : a.status === 401 ? "REJECTED by Twilio (wrong Account SID or Auth Token)" : `could not check (HTTP ${a.status})`);
   }
   if (SID("AC").test(env.accountSid) && SID("SK").test(env.apiKeySid) && env.apiKeySecret) {
-    const k = await twGet(`Accounts/${env.accountSid}.json`, env.apiKeySid, env.apiKeySecret);
+    // ⛔ A STANDARD key may not read the Account resource itself (Twilio: Standard keys cover everything except Accounts and Keys),
+    //    so proving the key on that URL rejects a perfectly good key. Prove it on the TwiML App (which the browser calls need anyway),
+    //    else on the phone-number list.
+    const keyPath = SID("AP").test(env.twimlAppSid) ? `Accounts/${env.accountSid}/Applications/${env.twimlAppSid}.json` : `Accounts/${env.accountSid}/IncomingPhoneNumbers.json?PageSize=1`;
+    const k = await twGet(keyPath, env.apiKeySid, env.apiKeySecret);
     add("API key + secret work", k.status === 200,
       k.status === 200 ? "accepted by Twilio (the key belongs to this account)"
         : k.status === 401 ? "REJECTED by Twilio (wrong API Key SID or secret, or the key is from a different account)" : `could not check (HTTP ${k.status})`);
