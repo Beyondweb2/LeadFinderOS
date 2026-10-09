@@ -5,9 +5,9 @@
    sender uses (renderTemplateBody; its Inbox mirror readableTemplateBody is parity-tested against it), with the same
    greeting-name rules. Nothing here paraphrases, shortens or adds a variant. Which templates an SMS may carry is below;
    what each one says is decided at Meta and in src/lib/templateBodies.ts, never here.
-   The ONLY addition is the opt-out line on a COLD first text (SMS_OPT_OUT_LINE): UK marketing rules require it, and Twilio
-   enforces the STOP reply at the carrier. It is appended AFTER the WhatsApp wording, on its own line, and nothing else is
-   changed. A text sent inside a conversation (they replied, or you have spoken) carries no extra line.
+   NOTHING IS ADDED (Paul, 2026-10-09): no opt-out line, no Findable identification, no rewriting, no shortening. The text is the
+   WhatsApp body, trimmed of surrounding whitespace and nothing more. (Twilio still enforces a STOP reply at the carrier, and
+   a STOP reply is recorded as an opt-out — that is behaviour, not wording.) Compliance wording is Paul's decision, not code's.
 
    WHICH WHATSAPP TEMPLATES, AND WHY ONLY THESE:
      cold openers       initial_contact · initial_opener_v2   — the two approved cold openers, chosen per send or per batch
@@ -48,13 +48,10 @@ export const isConversationSmsTemplate = (n: unknown): n is SmsConversationTempl
 /** Templates whose greeting is a salutation: an empty business name refuses rather than reading "Hi your business" (WhatsApp's own rule). */
 export const SMS_TEMPLATES_NEEDING_REAL_NAME: ReadonlySet<string> = new Set(['book_call', 're_engage_49']);
 
-/** The one line added to a COLD text. Appended on its own line after the unchanged WhatsApp wording. */
-export const SMS_OPT_OUT_LINE = 'Reply STOP to opt out.';
-
-/** WhatsApp's wording + (cold only) the opt-out line. `whatsappBody` is the rendered WhatsApp body, untouched. */
-export function smsTextFromWhatsAppBody(template: string, whatsappBody: string): string {
-  const body = String(whatsappBody ?? '').trim();
-  return isColdSmsTemplate(template) ? `${body}\n\n${SMS_OPT_OUT_LINE}` : body;
+/** The SMS text IS the rendered WhatsApp body — word for word, for every template. `template` is accepted so every caller names what it
+ *  is sending, but it changes nothing: there is no per-template difference. */
+export function smsTextFromWhatsAppBody(_template: string, whatsappBody: string): string {
+  return String(whatsappBody ?? '').trim();
 }
 
 /** Is this URL one an SMS may carry? Exactly the shapes findable_signup_link carries (and never anything else). */

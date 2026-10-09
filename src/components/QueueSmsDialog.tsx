@@ -19,7 +19,7 @@ const sb = supabase as any;
 /* QUEUE SMS (2026-10-09) — the text twin of "Queue WhatsApp": pick leads, pick the OPENER, press, they wait in the text queue and go out
    one at a time inside the sending window.
    ⛔ THE TEXT IS THE WHATSAPP OPENER, UNCHANGED: the same two approved openers WhatsApp offers (initial_contact, initial_opener_v2), chosen for
-   the batch exactly as on WhatsApp, with the only SMS addition being the opt-out line. What is shown below is the EXACT text the server will send
+   the batch exactly as on WhatsApp, with NOTHING added. What is shown below is the EXACT text the server will send
    to the first selected lead (the business name is filled in per lead, the way the real send fills it), with its segment count and cost.
    The server (queue_sms_openers, then the drip again at send time) refuses anything that is not a clean first text — not a UK mobile, opted out,
    already texted, already in a WhatsApp conversation, already spoken to, a client — and says which. The drip sends AS THE PERSON WHO QUEUED. */
@@ -77,7 +77,7 @@ export function QueueSmsDialog({ open, onOpenChange, leadIds, sample, onDone }: 
         <div className="space-y-2">
           <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">The text that goes out{sample?.business_name ? ` (to ${sample.business_name})` : ''}</p>
           <p className="whitespace-pre-wrap break-words rounded-xl bg-blue-600 px-3 py-2 text-sm text-white" data-testid="queue-sms-example">{text}</p>
-          <p className="text-[11px] text-muted-foreground" data-testid="queue-sms-size">{size.characters} characters · {size.segments} text{size.segments === 1 ? '' : 's'} each · {costWords(smsCostGbp(text))}. The WhatsApp wording is unchanged; the last line is the opt-out.</p>
+          <p className="text-[11px] text-muted-foreground" data-testid="queue-sms-size">{size.characters} characters · {size.segments} text{size.segments === 1 ? '' : 's'} each · {costWords(smsCostGbp(text))}. Word for word the WhatsApp template.</p>
         </div>
         <Callout tone="amber" className="text-xs">
           Sent only to UK mobiles you have not texted or spoken to, who are not already in a WhatsApp conversation and have not opted out. Anyone else is skipped, and you are told why. Up to {SMS_QUEUE_DAILY_CAP} a day.
