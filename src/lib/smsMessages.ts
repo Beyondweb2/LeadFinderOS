@@ -12,7 +12,7 @@
    Only a status callback of `delivered` earns that word; `sent` is "handed to the network"; `undelivered`/`failed`
    is a failure with the carrier's code. A simulated (test) send is labelled as such and is never counted. */
 
-export type SmsTemplateKey = 'setup_link' | 'agreement_link' | 'website_link' | 'follow_up';
+export type SmsTemplateKey = 'setup_link' | 'agreement_link' | 'website_link' | 'follow_up' | 'sms_opener';
 export type SmsLinkKind = 'setup' | 'agreement' | 'website';
 
 export const FINDABLE_WEBSITE_URL = 'https://findable.live';
@@ -23,8 +23,10 @@ export interface SmsTemplate {
   label: string;
   /** The link kind this text carries, if any. setup/agreement links come ONLY from the quick-close server flow. */
   linkKind: SmsLinkKind | null;
-  /** {rep} {link} {name} are the only placeholders. */
+  /** {rep} {link} {business} are the only placeholders. */
   text: string;
+  /** A FIRST text to someone we have not spoken to. Only ever one, only to a clean UK mobile (the cold rules, below). */
+  cold?: boolean;
 }
 
 export const SMS_TEMPLATES: Readonly<Record<SmsTemplateKey, SmsTemplate>> = {
@@ -40,6 +42,12 @@ export const SMS_TEMPLATES: Readonly<Record<SmsTemplateKey, SmsTemplate>> = {
     key: 'website_link', label: 'Findable website', linkKind: 'website',
     text: `Hi, it's {rep} at Findable. You can see what we do here: {link} ${SMS_STOP_LINE}`,
   },
+  /* ⛔ THE ONE COLD TEXT (2026-10-09, Paul: queue SMS like the WhatsApp queue). Plain, says who we are, makes no claim about
+     their business that we have not checked, carries no link, and offers the way out. The wording is Paul's to change here. */
+  sms_opener: {
+    key: 'sms_opener', label: 'Intro text', linkKind: null, cold: true,
+    text: `Hi, it's {rep} at Findable. We help local firms get found when people ask ChatGPT or Google AI. Free check for {business}? Reply YES, or ${SMS_STOP_LINE.toLowerCase().replace('reply stop', 'STOP')}`,
+  },
   follow_up: {
     key: 'follow_up', label: 'Follow-up', linkKind: null,
     text: `Hi, it's {rep} at Findable — just checking you got my message. Any questions, reply here. ${SMS_STOP_LINE}`,
@@ -47,7 +55,14 @@ export const SMS_TEMPLATES: Readonly<Record<SmsTemplateKey, SmsTemplate>> = {
 };
 
 /** Fill a template. A link template with no link is a refusal (null), never a text with a hole in it. */
-export function buildSms(key: SmsTemplateKey, vars: { rep: string; link?: string | null }): string | null {
+/** A business name made safe for a text: one line, printable, short. Empty becomes a neutral phrase, never a hole. */
+export function smsBusinessName(raw: string | null | undefined): string {
+  const c = String(raw ?? '').replace(/[\u0000-\u001f\u007f]+/g, ' ').replace(/\s+/g, ' ').trim();
+  const short = c.length > 40 ? `${c.slice(0, 39).trimEnd()}…` : c;
+  return short || 'your business';
+}
+
+export function buildSms(key: SmsTemplateKey, vars: { rep: string; link?: string | null; business?: string | null }): string | null {
   const t = SMS_TEMPLATES[key];
   if (!t) return null;
   const rep = String(vars.rep ?? '').trim() || 'the Findable team';
@@ -56,7 +71,7 @@ export function buildSms(key: SmsTemplateKey, vars: { rep: string; link?: string
     if (!/^https:\/\/[^\s]+$/.test(link)) return null;
     return t.text.replace('{rep}', rep).replace('{link}', link);
   }
-  return t.text.replace('{rep}', rep).replace('{name}', '');
+  return t.text.replace('{rep}', rep).replace('{business}', smsBusinessName(vars.business));
 }
 
 /** Is this URL one we are willing to put in a text for this link kind? (host allowlist: our own domain only) */
@@ -116,3 +131,34 @@ const STOP_WORDS = new Set(['stop', 'stopall', 'unsubscribe', 'cancel', 'end', '
 export function isStopMessage(body: string | null | undefined): boolean {
   return STOP_WORDS.has(String(body ?? '').trim().toLowerCase().replace(/[.!]+$/, ''));
 }
+
+/* ── THE SMS QUEUE'S SCHEDULE (2026-10-09) — pure, shared by the drip and the panel ───────────────────────────
+   Named constants only (never write these numbers in prose). Texts go out in a NARROWER window than WhatsApp: a text
+   buzzes a phone, so quiet hours are longer. One text per tick at most; the gap is jittered so they never burst. */
+export const SMS_QUEUE_WINDOW = { startHour: 9, endHour: 20 } as const; // Europe/London, [start, end)
+export const SMS_QUEUE_DAILY_CAP = 100;
+export const SMS_QUEUE_GAP_SECONDS = { min: 45, max: 100 } as const;
+export const SMS_QUEUE_MAX_ATTEMPTS = 3;
+
+/** Is it inside the sending window in London at this instant? */
+export function smsWindowOpen(now: Date = new Date()): boolean {
+  const h = Number(new Intl.DateTimeFormat('en-GB', { hour: '2-digit', hour12: false, timeZone: 'Europe/London' }).format(now)) % 24;
+  return h >= SMS_QUEUE_WINDOW.startHour && h < SMS_QUEUE_WINDOW.endHour;
+}
+
+/** 00:00 today in London, as a UTC instant (the daily cap counts from here). One hour out on the two clock-change days. */
+export function londonDayStartUtc(now: Date = new Date()): Date {
+  const parts = new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/London', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }).formatToParts(now);
+  const g = (k: string) => Number(parts.find((p) => p.type === k)?.value ?? 0);
+  const elapsed = (((g('hour') % 24) * 60 + g('minute')) * 60 + g('second')) * 1000 + now.getMilliseconds();
+  return new Date(now.getTime() - elapsed);
+}
+
+/** Why a lead was not queued, in words (the queue RPC's own reason keys). */
+export const SMS_QUEUE_SKIP_WORDS: Readonly<Record<string, string>> = {
+  not_found: 'no longer exists', not_yours: 'not assigned to you', archived: 'archived', client: 'already a client',
+  already_queued: 'already in the text queue', not_new: 'already past the start (not a first text)', no_phone: 'no phone number',
+  not_a_uk_mobile: 'not a UK mobile (texts go to UK mobiles only)', opted_out: 'asked not to be contacted',
+  already_texted: 'already texted before', in_whatsapp_conversation: 'already in a WhatsApp conversation',
+  contacted_by_phone: 'already spoken to by phone', contacted_logged: 'already in a logged conversation',
+};

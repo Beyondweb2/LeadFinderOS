@@ -10,7 +10,8 @@ import { cn } from '@/lib/utils';
 import { IconTile, EmptyState, LoadState, ErrorState } from '@/components/operator/ui';
 import { InboxChannelSwitch } from '@/components/InboxChannelSwitch';
 import { LeadSmsPanel } from '@/components/LeadSmsPanel';
-import { useSmsMessages, useSmsUnread, type SmsRow } from '@/hooks/useSms';
+import { ContactMethodBadge } from '@/components/ContactMethodBadge';
+import { useLeadContactMethod, useSmsMessages, useSmsUnread, type SmsRow } from '@/hooks/useSms';
 import { leadSourceFor } from '@/lib/outreachLeadColumns';
 import { outreachLeadLink } from '@/lib/salesLinks';
 import { smsDeliveryState, SMS_STATE_LABEL } from '@/lib/smsMessages';
@@ -29,6 +30,12 @@ const when = (iso: string) => {
 };
 
 interface Conv { leadId: string; name: string; last: SmsRow; unread: number; rows: SmsRow[] }
+
+/** The lead's Contact Method, drawn beside its name so it is always clear which route a lead is on. */
+function ActiveMethod({ leadId }: { leadId: string }) {
+  const method = useLeadContactMethod(leadId);
+  return method ? <span data-testid="sms-contact-method" title="Contact method for this lead"><ContactMethodBadge method={method as never} /></span> : null;
+}
 
 export function SmsInbox() {
   const navigate = useNavigate();
@@ -75,7 +82,7 @@ export function SmsInbox() {
   return (
     <div className="space-y-4 md:flex md:h-[calc(100dvh-6.5rem)] md:min-h-[560px] md:flex-col md:space-y-2 lg:h-[calc(100dvh-7.5rem)]" data-testid="sms-inbox">
       <div className={cn('flex flex-wrap items-center gap-x-4 gap-y-2 md:shrink-0', active && 'hidden md:flex')}>
-        <h1 className="flex shrink-0 items-center gap-2.5 text-xl font-extrabold leading-tight tracking-tight sm:text-2xl"><IconTile icon={MessageSquareText} tone="blue" />SMS Inbox</h1>
+        <h1 className="flex shrink-0 items-center gap-2.5 text-xl font-extrabold leading-tight tracking-tight sm:text-2xl"><IconTile icon={MessageSquareText} tone="blue" />Inbox</h1>
         <InboxChannelSwitch current="sms" />
       </div>
 
@@ -118,6 +125,7 @@ export function SmsInbox() {
               <div className="flex items-center gap-2">
                 <Button size="icon" variant="ghost" className="h-9 w-9 md:hidden" onClick={() => open(null)} aria-label="Back to conversations"><ArrowLeft className="h-4 w-4" /></Button>
                 <h2 className="min-w-0 flex-1 truncate text-base font-bold">{active.name}</h2>
+                <ActiveMethod leadId={active.leadId} />
                 <Button size="sm" variant="outline" className="h-9 gap-1.5" onClick={() => navigate(outreachLeadLink(active.leadId))} data-testid="sms-open-lead"><ExternalLink className="h-3.5 w-3.5" />Open lead</Button>
               </div>
               <LeadSmsPanel leadId={active.leadId} height="max-h-[48dvh] md:max-h-[44dvh]" />

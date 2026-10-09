@@ -81,3 +81,12 @@ UK PECR: unsolicited marketing texts to individual subscribers (including sole t
 not, but identification and an opt-out are required. The product only texts after a conversation, every template says who we are
 and how to stop, and STOP is honoured. Cold calling to numbers on the TPS/CTPS register is a separate compliance question
 (already open in `docs/open-problems.md`).
+
+## SMS queue, text button, one Inbox (2026-10-09, feat/sms-queue-and-method)
+
+- **Row text button / Queue text.** `SingleSmsDialog`, `QueueSmsDialog`, `SmsQueuePanel` (on the queue page). The queue is a LANE (`outreach_leads.sms_queued_at`, by `sms_queued_by_user_id`), never a status. `queue_sms_openers` refuses with a named reason: not a UK mobile, opted out, already texted, already in a WhatsApp conversation, spoken to, not at the start, client, not yours.
+- **The cold text** is `sms_opener` (src/lib/smsMessages.ts) - the ONE text that needs no conversation. Wording is Paul's to change in that file. Cold rules in `_shared/twilio-sms.ts`: never texted, no WhatsApp thread, never spoken to.
+- **The drip** `process-sms-queue` (cron `sms-queue-run`, every minute): paused -> window 09:00-20:00 London -> pacing -> daily cap (`SMS_QUEUE_DAILY_CAP`) -> ONE send through `sendSmsToLead`, as the person who queued it. Test-account-held and suspended-rep leads are skipped, never dropped.
+- **Contact Method.** A real (non-simulated) text sets `contact_method = sms`. `/inbox?lead=<id>` with no channel opens the SMS tab when the lead is on Text (`useInboxChannel`); an explicit `?channel=` wins. Reps may set Text by hand (`lead_set_contact_method`).
+- **Nav.** The sidebar / phone nav say Inbox for both roles; one badge = WhatsApp + SMS unread (`useAllInboxUnread`).
+- Compliance: a cold text is marketing. Limited companies need identification + opt-out (present); sole traders need consent (PECR) - Paul's call; the queue has a daily cap and the STOP list.

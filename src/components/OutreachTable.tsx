@@ -62,6 +62,7 @@ import {
   Loader2,
   SearchCheck,
   MessageSquare,
+  MessageSquareText,
   Upload,
   Eye,
   PhoneOff,
@@ -173,6 +174,8 @@ const AUDIT_JOB_CAP = 100;
    not changeable from here; this is the figure the warning is measured against. */
 const AUDIT_DAILY_CAP_USD = 12.0;
 import { SingleWhatsAppDialog } from '@/components/SingleWhatsAppDialog';
+import { SingleSmsDialog } from '@/components/SingleSmsDialog';
+import { QueueSmsDialog } from '@/components/QueueSmsDialog';
 import { TemplatePreviewButton, TemplateSnippet } from '@/components/TemplateWordingPreview';
 import { RequestTemplateButton } from '@/components/RequestTemplateButton';
 import { CampaignPicker } from '@/components/CampaignPicker';
@@ -582,6 +585,9 @@ export function OutreachTable({
   const [lastContactedLeadId, setLastContactedLeadId] = useState<string | null>(null);
   // Dialog state for the WhatsApp template page
   const [whatsappDialogLead, setWhatsappDialogLead] = useState<OutreachLead | null>(null);
+  /* Text (SMS) — the twin of the WhatsApp button and of Queue WhatsApp (2026-10-09). Opening either writes nothing. */
+  const [smsDialogLead, setSmsDialogLead] = useState<OutreachLead | null>(null);
+  const [queueSmsOpen, setQueueSmsOpen] = useState(false);
   // Launch-pad: template + /s/ link injected into the composer for THIS launch only
   // (cleared on dialog close so a later manual open behaves normally).
   const [launchTemplate, setLaunchTemplate] = useState<string | null>(null);
@@ -2210,6 +2216,12 @@ export function OutreachTable({
                     Queue WhatsApp ({selectedIds.size})
                   </Button>
                 )}
+                {!readOnly && (
+                  <Button variant="outline" size="sm" className="bg-background text-xs h-8" onClick={() => setQueueSmsOpen(true)} data-testid="queue-sms-button">
+                    <MessageSquareText className="h-3.5 w-3.5 mr-1.5 text-blue-500" />
+                    Queue text ({selectedIds.size})
+                  </Button>
+                )}
                 {!readOnly && onBulkJob && perms.enrichLeads && (
                   <Button
                     variant="outline"
@@ -2918,6 +2930,7 @@ export function OutreachTable({
                     onPipelineStatusChange(lead.id, status);
                   } : undefined}
                   onWhatsAppClick={() => handleWhatsAppClick(lead)}
+                  onSmsClick={() => setSmsDialogLead(lead)}
                   onCallClick={() => handleCallClick(lead)}
                   onTrack={onMarkAsInterested ? () => onMarkAsInterested([lead.id]) : undefined}
                   readOnly={readOnly}
@@ -3184,6 +3197,9 @@ export function OutreachTable({
                                 title="Send WhatsApp message"
                               >
                                 <MessageSquare className="h-4 w-4" />
+                              </button>
+                              <button type="button" onClick={() => setSmsDialogLead(lead)} className="p-1.5 rounded-md hover:bg-blue-500/10 text-blue-500 hover:text-blue-400 transition-colors" title="Send a text message (SMS)" aria-label="Send a text message" data-testid="outreach-sms">
+                                <MessageSquareText className="h-4 w-4" />
                               </button>
                               {/* Cold Call Playbook — beside the contact icons (Paul, 2026-09-23). Opens
                                   the ONE shared panel, rendered once at the foot of the table. */}
@@ -3630,6 +3646,10 @@ export function OutreachTable({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Text (SMS): one lead's conversation, and the bulk queue. */}
+      <SingleSmsDialog open={!!smsDialogLead} onOpenChange={(o) => { if (!o) setSmsDialogLead(null); }} lead={smsDialogLead} />
+      <QueueSmsDialog open={queueSmsOpen} onOpenChange={setQueueSmsOpen} leadIds={Array.from(selectedIds)} onDone={() => setSelectedIds(new Set())} />
 
       {/* WhatsApp Template Dialog */}
       <SingleWhatsAppDialog

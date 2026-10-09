@@ -20,7 +20,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { ExternalLink, MessageSquare, Star, StickyNote, Phone, PhoneCall, Loader2, RefreshCw, CalendarClock, Wand2, Settings2, Scissors, Flower2, Wrench, ClipboardList, ClipboardCheck } from 'lucide-react';
+import { ExternalLink, MessageSquare, Star, StickyNote, Phone, PhoneCall, Loader2, RefreshCw, CalendarClock, Wand2, Settings2, Scissors, Flower2, Wrench, ClipboardList, ClipboardCheck, MessageSquareText } from 'lucide-react';
 import { ContactMethodBadge } from './ContactMethodBadge';
 import { NextActionEditor } from './NextActionEditor';
 import { LeadEnrichButtons } from './LeadEnrichButtons';
@@ -47,6 +47,8 @@ interface OutreachMobileCardProps {
   onContactMethodChange?: (method: ContactMethod) => void;
   onPipelineStatusChange?: (status: PipelineStatus) => void;
   onWhatsAppClick: () => void;
+  /** Text this lead (SMS). Optional so older callers keep working. */
+  onSmsClick?: () => void;
   onCallClick?: () => void;
   onTrack?: () => void;
   readOnly?: boolean;
@@ -81,6 +83,7 @@ export const OutreachMobileCard = memo(function OutreachMobileCard({
   onContactMethodChange,
   onPipelineStatusChange,
   onWhatsAppClick,
+  onSmsClick,
   onCallClick,
   onTrack,
   readOnly = false,
@@ -315,6 +318,11 @@ export const OutreachMobileCard = memo(function OutreachMobileCard({
                     >
                       <MessageSquare className="h-3.5 w-3.5" />
                     </Button>
+                    {onSmsClick && (
+                      <Button variant="ghost" size="icon" className="h-7 w-7 text-blue-500 hover:bg-blue-500/10 hover:text-blue-400" onClick={onSmsClick} title="Send a text message" aria-label="Send a text message" data-testid="outreach-sms-mobile">
+                        <MessageSquareText className="h-3.5 w-3.5" />
+                      </Button>
+                    )}
                   </div>
                 ) : null}
                 {!readOnly && showTrackButton && onTrack && (

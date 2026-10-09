@@ -10,6 +10,7 @@ import { newSendKey, sendSms, type SmsSendOk, type SmsSendRefused } from '@/lib/
 import { smsSize, costWords, smsCostGbp } from '@/lib/channelCosts';
 import { SMS_STATE_LABEL, smsDeliveryState } from '@/lib/smsMessages';
 import { BestWayToContact } from '@/components/BestWayToContact';
+import { notifyLeadChanged } from '@/lib/leadSync';
 
 /* ONE LEAD'S TEXT CONVERSATION (2026-10-09): the thread, delivery marks, the composer and the two approved quick
    texts. Used in the prospect workspace and as the right-hand pane of the SMS inbox — one component, so the two can
@@ -47,7 +48,7 @@ export function LeadSmsPanel({ leadId, className, showBestWay = true, height = '
   const { toast } = useToast();
   const qc = useQueryClient();
   const thread = useSmsThread(leadId);
-  const { decision } = useContactDecision(leadId, 'message');
+  const { decision, freeTextOpen, introOpen } = useContactDecision(leadId, 'message');
   const rows = thread.data ?? [];
   const phone = rows[0]?.phone;
   const [text, setText] = useState('');
@@ -71,6 +72,7 @@ export function LeadSmsPanel({ leadId, className, showBestWay = true, height = '
       toast({ title: (r as SmsSendOk).simulated ? `${okTitle} (test mode — not sent)` : okTitle, description: (r as SmsSendOk).duplicate ? 'That text had already gone.' : 'Delivery is confirmed once the network reports it.' });
       keyRef.current = newSendKey();
       void qc.invalidateQueries({ queryKey: smsKeys.all });
+      notifyLeadChanged(leadId); // a real text moves the lead's Contact Method to Text; every screen re-reads it
     } else {
       toast({ title: 'Text not sent', description: (r as SmsSendRefused).detail, variant: 'destructive' });
     }
@@ -82,7 +84,7 @@ export function LeadSmsPanel({ leadId, className, showBestWay = true, height = '
     setBusy('text');
     try { if (done(await sendSms({ leadId, text: body, key: keyRef.current }), 'Text sent')) setText(''); } finally { setBusy(null); }
   };
-  const sendQuick = async (templateKey: 'website_link' | 'follow_up', label: string) => {
+  const sendQuick = async (templateKey: 'website_link' | 'follow_up' | 'sms_opener', label: string) => {
     if (busy) return;
     setBusy(templateKey);
     try { done(await sendSms({ leadId, templateKey, key: newSendKey() }), `${label} sent`); } finally { setBusy(null); }
@@ -93,7 +95,7 @@ export function LeadSmsPanel({ leadId, className, showBestWay = true, height = '
       {showBestWay && <BestWayToContact leadId={leadId} purpose="message" />}
       <div className={cn('overflow-y-auto rounded-xl border border-border/60 bg-muted/20 p-2.5', height)} data-testid="sms-thread" aria-live="polite">
         {thread.isLoading ? <p className="flex items-center gap-2 p-2 text-xs text-muted-foreground"><Loader2 className="h-3.5 w-3.5 animate-spin" />Loading texts…</p>
-          : rows.length === 0 ? <p className="p-2 text-xs text-muted-foreground">No texts yet. Once you have spoken to them you can text them here.</p>
+          : rows.length === 0 ? <p className="p-2 text-xs text-muted-foreground">No texts yet.</p>
           : (
             <ul className="space-y-1.5">
               {rows.map((m) => (
@@ -111,6 +113,14 @@ export function LeadSmsPanel({ leadId, className, showBestWay = true, height = '
       )}
       {sms && !sms.available ? (
         <p className="rounded-lg bg-muted/50 px-2.5 py-2 text-xs text-muted-foreground" data-testid="sms-unavailable">{sms.reason}</p>
+      ) : !freeTextOpen ? (
+        /* Cold: the one approved intro text, shown in full by the button's own result (the server fills in the names). */
+        <div className="space-y-1.5" data-testid="sms-intro-only">
+          <Button className="h-11 w-full gap-1.5 rounded-xl bg-blue-600 font-bold text-white hover:bg-blue-700" disabled={!!busy || !introOpen} onClick={() => void sendQuick('sms_opener', 'Intro text')} data-testid="sms-quick-intro">
+            {busy === 'sms_opener' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}Send the intro text
+          </Button>
+          <p className="text-[11px] text-muted-foreground">{sms?.reason} They get one approved text; replies open the conversation.</p>
+        </div>
       ) : (
         <>
           <Textarea value={text} onChange={(e) => setText(e.target.value)} rows={2} maxLength={600} placeholder="Write a text…" aria-label="Text message"
@@ -120,6 +130,11 @@ export function LeadSmsPanel({ leadId, className, showBestWay = true, height = '
               {size.characters} characters · {size.segments || 0} text{size.segments === 1 ? '' : 's'}{size.segments ? ` · ${costWords(smsCostGbp(text))}` : ''}{size.encoding === 'UCS-2' ? ' · special characters make it longer' : ''}
             </p>
             <div className="flex flex-wrap items-center gap-1.5">
+              {introOpen && (
+                <Button size="sm" variant="outline" className="h-9 gap-1" disabled={!!busy} onClick={() => void sendQuick('sms_opener', 'Intro text')} data-testid="sms-quick-intro-composer">
+                  {busy === 'sms_opener' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <MessageSquareText className="h-3.5 w-3.5" />}Intro text
+                </Button>
+              )}
               <Button size="sm" variant="outline" className="h-9 gap-1" disabled={!!busy} onClick={() => void sendQuick('website_link', 'Website link')} data-testid="sms-quick-website">
                 {busy === 'website_link' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Globe className="h-3.5 w-3.5" />}Findable website
               </Button>

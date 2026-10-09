@@ -41,6 +41,8 @@ export interface SendSmsArgs {
   text?: string | null;
   idempotencyKey: string;
   allowResend?: boolean;
+  /** 'queue' = the SMS drip (process-sms-queue) sending as the person who queued it. Changes nothing about the guards. */
+  source?: 'manual' | 'queue';
 }
 
 export type SendSmsResult =
@@ -79,7 +81,7 @@ export async function sendSmsToLead(service: Service, a: SendSmsArgs): Promise<S
     if (!t) return fail("bad_request", "Unknown text.", 400);
     linkKind = t.linkKind;
     if (linkKind && !isApprovedSmsLink(linkKind, String(a.linkUrl ?? ""))) return fail("link_not_approved", "That link is not one we send by text.", 400);
-    body = buildSms(a.templateKey, { rep: repName, link: a.linkUrl ?? null });
+    body = buildSms(a.templateKey, { rep: repName, link: a.linkUrl ?? null, business: lead.business_name as string | null });
     if (!body) return fail("bad_request", "The text could not be built.", 400);
   } else {
     body = String(a.text ?? "").trim();
@@ -95,12 +97,23 @@ export async function sendSmsToLead(service: Service, a: SendSmsArgs): Promise<S
   }
 
   // 5. the conversation gate
-  const [{ data: block }, { data: inSms }, { data: inWa }] = await Promise.all([
+  const isCold = !!a.templateKey && SMS_TEMPLATES[a.templateKey]?.cold === true;
+  const [{ data: block }, { data: inSms }, { data: inWa }, { data: priorOut }, { data: waAny }] = await Promise.all([
     service.rpc("opener_contact_block", { _lead_id: lead.id }),
     service.from("sms_messages").select("id").eq("phone", digits).eq("direction", "inbound").limit(1),
     service.from("whatsapp_messages").select("id").eq("lead_id", lead.id).eq("direction", "inbound").limit(1),
+    service.from("sms_messages").select("id").eq("phone", digits).eq("direction", "outbound").not("status", "in", "(failed,undelivered,simulated)").limit(1),
+    service.from("whatsapp_messages").select("id").eq("phone", digits).or("status.is.null,status.not.in.(failed,failed_temporary,simulated)").limit(1),
   ]);
-  const gate = smsGateOpen({
+  /* ⛔ THE COLD TEXT (sms_opener) is the one text that needs no conversation — and so it has the WhatsApp cold rule instead:
+     never to a number we have already texted, never into a WhatsApp conversation, never after a logged conversation. It is
+     the same check for the Outreach row button and for the queue. */
+  if (isCold) {
+    if (Array.isArray(priorOut) && priorOut.length > 0) return fail("already_texted", "That number has already been texted.");
+    if (Array.isArray(waAny) && waAny.length > 0) return fail("in_whatsapp_conversation", "They are already in a WhatsApp conversation, so a cold text is not sent.");
+    if (typeof block === "string" && block.length > 0) return fail("contacted_logged", "You have already spoken to them, so a cold text is not sent.");
+  }
+  const gate = isCold || smsGateOpen({
     loggedConversation: typeof block === "string" && block.length > 0,
     inboundSms: Array.isArray(inSms) && inSms.length > 0,
     inboundWhatsapp: Array.isArray(inWa) && inWa.length > 0,
@@ -149,6 +162,12 @@ export async function sendSmsToLead(service: Service, a: SendSmsArgs): Promise<S
     if (r.ok) { status = "queued"; sid = r.sid; } else { status = "failed"; sid = r.sid; errCode = r.errorCode; errText = r.error; }
   }
   await service.from("sms_messages").update({ status, twilio_sid: sid, error_code: errCode, error: errText }).eq("id", row.id);
+  if (!simulated && status !== "failed") {
+    /* A real text is a real contact and the latest route wins: the lead's Contact Method becomes Text (the Inbox opens it on the SMS
+       tab), and the legacy send stamp records it for the claim rule. A simulated or failed text changes neither. */
+    await service.from("outreach_leads").update({ contact_method: "sms", sms_sent_at: new Date().toISOString(), sms_delivery_status: status, sms_message_sid: sid }).eq("id", lead.id)
+      .then(() => undefined, () => undefined);
+  }
   await service.from("lead_activity").insert({
     lead_id: lead.id, actor_user_id: a.actor.id, kind: "sms_sent",
     data: { template: a.templateKey ?? "free_text", link_kind: linkKind, status, sms_id: row.id, simulated },

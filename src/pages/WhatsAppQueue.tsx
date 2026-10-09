@@ -3,6 +3,7 @@ import { ArrowLeft, MessageSquare } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { PageHeader } from '@/components/salesDash/primitives';
 import { WhatsAppQueuePanel } from '@/components/WhatsAppQueuePanel';
+import { SmsQueuePanel } from '@/components/SmsQueuePanel';
 import { useLeadPermissions } from '@/hooks/useLeadPermissions';
 
 /** THE WHATSAPP QUEUE PAGE (2026-10-06) — the one queue, both roles. The admin sees the whole team's queue
@@ -25,6 +26,8 @@ const WhatsAppQueue = () => {
         }
       />
       <WhatsAppQueuePanel />
+      {/* The text queue (2026-10-09): same page, same idea — what is waiting, in send order, Remove. */}
+      <SmsQueuePanel />
     </div>
   );
 };
