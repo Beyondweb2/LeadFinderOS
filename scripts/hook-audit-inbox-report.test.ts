@@ -298,7 +298,8 @@ function report(grid: Array<[G, G]>, extra: Record<string, unknown> = {}) {
   const src = readFileSync(resolve(import.meta.dirname, '..', 'src/pages/Inbox.tsx'), 'utf8');
   const i = src.indexOf('const startHookRerun');
   const body = src.slice(i, src.indexOf('};', src.indexOf("invoke('create-ai-audit'", i)));
-  ok(i > 0 && body.includes('hook_audit: true') && body.includes('fresh_audit: true'), 'rerun: creates a fresh hook audit');
+  const reqBody = readFileSync(resolve(import.meta.dirname, '..', 'src/lib/hookAuditRequest.ts'), 'utf8');
+  ok(i > 0 && body.includes('hookAuditRequestBody(') && reqBody.includes('hook_audit: true') && reqBody.includes('fresh_audit: true'), 'rerun: creates a fresh hook audit (one shared request body, src/lib/hookAuditRequest.ts)');
   ok(!body.includes('queue_pitch_on_complete'), 'rerun: never passes queue_pitch_on_complete (nothing is sent)');
   ok(!src.includes('No public report yet — run an audit for this lead.'), 'Inbox: the misleading "No public report yet — run an audit" line is gone');
 }

@@ -43,7 +43,7 @@ for (const label of ['Lead status', 'Next action due', 'Next action type', 'Sort
 }
 ok(!/text-xs|text-\[1[01]px\]/.test(filterGroup), 'no filter shrinks its own text: every control on the bar is text-sm');
 ok((filterGroup.match(/'h-9/g) ?? []).length === 5, 'all five filters are h-9');
-const toggle = inbox.slice(inbox.indexOf('function AutoReplyToggle()'), inbox.indexOf('function PreviewLinkedText'));
+const toggle = readFileSync(new URL('../src/components/AutoReplyToggle.tsx', import.meta.url), 'utf8');
 ok(/order-last flex w-full flex-wrap/.test(toggle) && !/text-\[11px\]/.test(toggle), 'the reply rule takes its own row on a narrower screen, at the bar\'s text size');
 ok(/role="tablist" aria-label="Show conversations"/.test(inbox) && /mb-1\.5 grid grid-cols-2 gap-1 px-0\.5" role="tablist"/.test(inbox), 'the four list views are a 2 × 2 grid (no single tab orphaned on a second line)');
 

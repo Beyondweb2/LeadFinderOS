@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, Check, Copy, Globe, ListChecks, Link2, Loader2, Mail, MapPin, MessageSquareText, MoreHorizontal, Plus, Send, Star, Trash2 } from 'lucide-react';
+import { ArrowLeft, Check, Copy, Globe, ListChecks, Link2, Loader2, Mail, MapPin, MessageSquareText, MoreHorizontal, Plus, Send, Sparkles, Star, Trash2 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -27,6 +27,11 @@ import { ConvStateChip } from '@/components/ConvStateChip';
 import { SocialLinks } from '@/components/SocialLinks';
 import { LeadOwnerControl } from '@/components/LeadOwnerControl';
 import { HookVisibilityCard } from '@/components/HookVisibilityCard';
+import { AutoReplyToggle } from '@/components/AutoReplyToggle';
+import { hookVisibilityQueryKey, useHookVisibility } from '@/hooks/useHookVisibility';
+import { hookAuditRequestBody } from '@/lib/hookAuditRequest';
+import { OUTREACH_HOOK_QUESTIONS } from '@/lib/auditQuestionCounts';
+import { auditListQueryKey } from '@/types/auditBook';
 import { LeadDetailFromInbox } from '@/components/LeadDetailFromInbox';
 import { assessOnboardingLink } from '@/components/OnboardingLinkCard';
 import { useSmsMessages, useSmsUnread, type SmsRow } from '@/hooks/useSms';
@@ -262,6 +267,27 @@ export function SmsInbox() {
     } finally { setSendingNow(false); }
   };
 
+  /* RUN AI AUDIT (header) — the WhatsApp card's "Run new" request, one body (hookAuditRequestBody): a NEW 3 × 2 hook audit that NEVER queues a
+     pitch and sends nothing to the lead. The WhatsApp header button also queues a WhatsApp pitch; that is deliberately not offered on texts. */
+  const hookData = useHookVisibility(active?.leadId ?? null).data;
+  const [auditBusy, setAuditBusy] = useState(false);
+  const runAudit = async () => {
+    if (!active || !activeLead || auditBusy) return;
+    const old = hookData?.audit ?? null;
+    const bizType = (old?.business_type || activeLead.category || activeLead.search_keyword || '').trim();
+    const loc = (old?.location_text || activeLead.search_location || activeLead.address || '').trim();
+    if (!bizType || !loc) { toast({ title: 'Need a trade and a town', description: 'Add them in the Prospect workspace first.', variant: 'destructive' }); return; }
+    if (!window.confirm(`Run a new ${OUTREACH_HOOK_QUESTIONS} questions × ChatGPT + Google AI audit for ${activeLead.business_name}?\n\nThe old result is kept. Nothing is sent to the lead.`)) return;
+    setAuditBusy(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('create-ai-audit', { body: hookAuditRequestBody(activeLead, bizType, loc, old?.business_name) });
+      if (error || !data?.ok) { toast({ title: "Couldn't start the audit", description: error?.message ?? data?.detail ?? data?.error ?? 'Try again', variant: 'destructive' }); return; }
+      void qc.invalidateQueries({ queryKey: auditListQueryKey(user?.id) });
+      await qc.invalidateQueries({ queryKey: hookVisibilityQueryKey(active.leadId) });
+      toast({ title: 'New audit started', description: `${OUTREACH_HOOK_QUESTIONS} questions × ChatGPT + Google AI. The old result is kept, and nothing will be sent.` });
+    } finally { setAuditBusy(false); }
+  };
+
   const signupLink = activeLead ? assessOnboardingLink(activeLead) : null;
   const copySignupLink = async () => {
     if (!activeLead) return;
@@ -288,6 +314,8 @@ export function SmsInbox() {
             <InboxChannelSwitch current="sms" />
             <p className="hidden truncate text-sm text-muted-foreground min-[1760px]:block">Every text conversation with your leads.</p>
           </div>
+          {/* The ONE reply rule's control (admin-only — hides itself otherwise). Same setting as WhatsApp; "Audit and reply" is disabled for texts. */}
+          {perms.queueControls && <AutoReplyToggle channel="sms" />}
           <div className="flex shrink-0 items-center gap-2">
             {queuedCount > 0 && <span className="rounded-full bg-sky-500/15 px-2.5 py-1 text-xs font-semibold text-sky-700 dark:text-sky-300" data-testid="sms-queued-count">{queuedCount} queued</span>}
             {isAdmin && (
@@ -451,6 +479,9 @@ export function SmsInbox() {
                       className="inline-flex h-7 items-center gap-1 rounded-md border border-primary/40 bg-primary/10 px-2 text-xs font-semibold text-primary hover:bg-primary/20">
                       <ListChecks className="h-3.5 w-3.5" />Prospect
                     </button>
+                    <button type="button" onClick={() => void runAudit()} disabled={auditBusy} title="Run a new AI visibility check (sends nothing to the lead)" aria-label="Run AI audit" data-testid="sms-run-audit" className={HEADER_ICON_BTN}>
+                      {auditBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+                    </button>
                     <LeadOwnerControl leadId={active.leadId} />
                     {activeLead && signupLink && !signupLink.paid && (
                       <button type="button" onClick={() => void copySignupLink()} aria-label={signupLink.blocking ? `Copy sign-up link. Warning: ${signupLink.warnings.join('; ')}` : 'Copy sign-up link'}
@@ -489,7 +520,7 @@ export function SmsInbox() {
               </div>
 
               {/* AI visibility strip — View full audit / Open report / Copy link, the same card as the WhatsApp tab. */}
-              <HookVisibilityCard leadId={active.leadId} />
+              <HookVisibilityCard leadId={active.leadId} onRunNew={() => void runAudit()} runNewBusy={auditBusy} />
 
               {/* The conversation + composer. No 24-hour window on SMS: nothing here closes after a day. */}
               <div className="min-h-0 flex-1 overflow-y-auto p-3">

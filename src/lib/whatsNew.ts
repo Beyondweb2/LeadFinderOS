@@ -22,6 +22,22 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-09-text-replies-like-whatsapp', date: '2026-10-09', title: 'Text replies now behave like WhatsApp replies', audience: 'all',
+    body: 'When a prospect texts back, the lead moves to Replied exactly as it does for WhatsApp, and the "When a prospect replies" setting can now run the AI check for texts too.',
+    report: {
+      added: [
+        'The "When a prospect replies" control now shows in the SMS Inbox header (admin). It is the same setting as WhatsApp.',
+        'A Run AI audit button in the SMS Inbox header. It starts a new check and never sends anything to the prospect.',
+      ],
+      changed: [
+        'A text reply moves a lead to Replied from every status WhatsApp does, including Not interested, and never moves a lead who is already interested, quoted or paying.',
+        'Audit only on a text reply runs one check per lead, ever. A check from the last two weeks is reused instead of paying for a new one.',
+        'Audit and reply is turned off on the SMS tab. A text reply never sends an automatic message: if the setting is Audit and reply, a text still just runs the check.',
+        'A number that matches several leads goes to Unassigned and the book owner is told, as on WhatsApp.',
+      ],
+      removed: [],
+      effect: 'Replies by text are handled the same way as WhatsApp ones, without any risk of an automatic text going out. STOP still opts the person out and starts nothing.',
+    } },
   { id: '2026-10-09-sms-status-and-inbox', date: '2026-10-09', title: 'Text status that follows the network, and the SMS Inbox now matches WhatsApp', audience: 'all',
     body: 'A queued text now shows Queued, a delivered one shows Contacted, a failed one shows SMS Failed, and a number that can never get texts shows No SMS. The SMS Inbox looks and works like the WhatsApp one.',
     report: {

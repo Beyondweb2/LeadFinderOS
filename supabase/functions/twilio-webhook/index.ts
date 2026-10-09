@@ -5,6 +5,7 @@ import { recordOptOut } from "../_shared/suppression.ts";
 import { bookOwnerId } from "../_shared/access.ts";
 import { resolveTwilioEnv, twiml, webhookUrlFor, xmlEscape } from "../_shared/twilio.ts";
 import { syncLeadFromSms } from "../_shared/sms-lead-sync.ts";
+import { handleInboundSmsReply, resolveSmsOwner } from "../_shared/sms-inbound.ts";
 
 // twilio-webhook — everything Twilio calls us about (2026-10-09). PUBLIC (verify_jwt = false): the handler
 // authenticates every request by Twilio's signature instead.
@@ -28,8 +29,6 @@ import { syncLeadFromSms } from "../_shared/sms-lead-sync.ts";
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const empty = () => new Response("<?xml version=\"1.0\" encoding=\"UTF-8\"?><Response/>", { status: 200, headers: { "Content-Type": "text/xml" } });
 const FINAL_CALL = new Set(["completed", "busy", "no-answer", "failed", "canceled"]);
-/** A reply from these statuses is a first reply: the lead moves to Replied (forward-only; nothing further along is touched). */
-const REPLIABLE = ["not_contacted", "queued", "initial_contact", "second_attempt", "report_sent", "site_sent", "no_whatsapp", "no_whatsapp_needs_sms", "whatsapp_failed"];
 
 Deno.serve(async (req) => {
   if (req.method !== "POST") return new Response("method not allowed", { status: 405 });
@@ -62,27 +61,16 @@ Deno.serve(async (req) => {
 type Service = any;
 const digitsOf = (e164: string) => String(e164 ?? "").replace(/\D/g, "");
 
-/** Which lead is this number? The lead we last texted from it, else the only live candidate, else none (never a guess). */
-async function matchLead(service: Service, digits: string): Promise<{ leadId: string | null; userId: string | null }> {
-  const { data: last } = await service.from("sms_messages").select("lead_id, user_id").eq("phone", digits).eq("direction", "outbound")
-    .not("lead_id", "is", null).order("created_at", { ascending: false }).limit(1);
-  if (Array.isArray(last) && last[0]?.lead_id) return { leadId: last[0].lead_id, userId: last[0].user_id ?? null };
-  const { data: cands } = await service.rpc("inbound_lead_candidates", { _phone: digits });
-  const live = ((cands ?? []) as Array<{ id: string; user_id: string; is_archived: boolean }>).filter((c) => !c.is_archived);
-  if (live.length === 1) return { leadId: live[0].id, userId: live[0].user_id };
-  return { leadId: null, userId: null };
-}
-
 async function smsIn(service: Service, env: ReturnType<typeof resolveTwilioEnv>, p: Record<string, string>): Promise<Response> {
   const from = digitsOf(p.From);
   if (!from || !p.MessageSid) return empty();
   if (env.smsFrom && digitsOf(p.To) !== digitsOf(env.smsFrom)) return empty(); // not our number
-  const m = await matchLead(service, from);
+  const m = await resolveSmsOwner(service, from); // the shared WhatsApp rule: last texted lead, else the canonical-phone chooser (never a guess)
   const userId = m.userId ?? (await bookOwnerId(service));
   const body = String(p.Body ?? "").slice(0, 1600);
-  const { error } = await service.from("sms_messages").insert({
+  const { data: stored, error } = await service.from("sms_messages").insert({
     direction: "inbound", user_id: userId, lead_id: m.leadId, phone: from, body, twilio_sid: p.MessageSid, status: "received",
-  });
+  }).select("id").single();
   if (error) {
     if ((error as { code?: string }).code === "23505") return empty(); // a retried webhook
     throw new Error(`insert: ${error.message}`);
@@ -90,8 +78,10 @@ async function smsIn(service: Service, env: ReturnType<typeof resolveTwilioEnv>,
   if (isStopMessage(body)) {
     await recordOptOut(service, { phone: `+${from}`, leadId: m.leadId }, "twilio_inbound");
     if (m.leadId) await service.from("lead_activity").insert({ lead_id: m.leadId, kind: "opted_out", data: { channel: "sms" } }).then(() => undefined, () => undefined);
-  } else if (m.leadId) {
-    await service.from("outreach_leads").update({ status: "replied" }).eq("id", m.leadId).in("status", REPLIABLE);
+  } else {
+    /* A real reply: Replied exactly as a WhatsApp reply (same no-downgrade list), the ambiguous-number notice, and the shared "When a prospect
+       replies" rule (audit only on text; sms-inbound.ts). The message is already stored; nothing below can lose it. */
+    await handleInboundSmsReply(service, { leadId: m.leadId, digits: from, body, messageId: String(stored?.id ?? ""), sid: p.MessageSid, ambiguous: m.ambiguous });
   }
   return empty();
 }
@@ -163,7 +153,7 @@ async function voiceStatus(service: Service, p: Record<string, string>): Promise
 async function voiceIn(service: Service, env: ReturnType<typeof resolveTwilioEnv>, p: Record<string, string>): Promise<Response> {
   const from = digitsOf(p.From);
   if (from && p.CallSid) {
-    const m = await matchLead(service, from);
+    const m = await resolveSmsOwner(service, from);
     const userId = m.userId ?? (await bookOwnerId(service));
     const { data: log } = !userId ? { data: null } : await service.from("call_logs").insert({
       lead_id: m.leadId, user_id: userId, phone: from, direction: "inbound", call_sid: p.CallSid,

@@ -10,6 +10,7 @@ import {
 import { checkSuppressed, suppress } from "./suppression.ts";
 import { OUTREACH_HOOK_QUESTIONS } from "../../../src/lib/auditQuestionCounts.ts";
 import { isAggregatorUrl } from "./aggregators.ts";
+import { replyAuditSource, smsReplyMode, type ReplyAuditRow, type ReplyRunRow } from "../../../src/lib/smsReplyAudit.ts";
 import { armStatusFor, effectiveReplyMode, firstReplyTemplate, autoReplyEnvOn, type FirstReplyMode } from "./auto-reply-rules.ts";
 
 type Service = any; // Supabase edge functions intentionally use a service-role client here.
@@ -43,6 +44,8 @@ export async function armFirstReplyAuditIntent(input: {
   archived: boolean;
   /** The stored inbound body (bodyFor) — the guard reads it for a decline / auto-responder. */
   body: string;
+  /** Which channel the reply came in on. 'sms' NEVER sends (audit only) and reuses a recent check (src/lib/smsReplyAudit.ts). Default whatsapp. */
+  channel?: "whatsapp" | "sms";
 }): Promise<{ armed: boolean; reason: string }> {
   /* The control's reading: "Do nothing" is 'off' (effectiveFirstReplyMode), not the remembered mode. */
   const mode = await effectiveReplyMode(input.service);
@@ -57,7 +60,7 @@ export async function armFirstReplyAuditIntent(input: {
 }
 
 async function armIntent(
-  input: { service: Service; leadId: string; phone: string; wamid: string | null; firstInbound: boolean; firstInboundReliable: boolean; archived: boolean; body: string },
+  input: { service: Service; leadId: string; phone: string; wamid: string | null; firstInbound: boolean; firstInboundReliable: boolean; archived: boolean; body: string; channel?: "whatsapp" | "sms" },
   modeIn: FirstReplyMode,
 ): Promise<{ armed: boolean; reason: string }> {
   let mode = modeIn;
@@ -83,7 +86,8 @@ async function armIntent(
     .select("amount_paid, status").eq("id", input.leadId).maybeSingle();
   if (guardLeadErr) throw new Error(`first_reply_guard_lead_read_failed:${guardLeadErr.message}`);
   const supp = await checkSuppressed(input.service, { phone: input.phone, leadId: input.leadId });
-  const { data: lastOut } = await input.service.from("whatsapp_messages")
+  const sms = input.channel === "sms";
+  const { data: lastOut } = sms ? { data: null } : await input.service.from("whatsapp_messages")
     .select("template_name").eq("lead_id", input.leadId).eq("direction", "outbound").neq("status", "failed")
     .order("created_at", { ascending: false }).limit(1).maybeSingle();
   const guard = firstReplyGuard({
@@ -110,6 +114,8 @@ async function armIntent(
   }
   /* Send mode sends only on a reply to an approved opener; otherwise this reply runs the audit alone. */
   mode = modeForReply(mode, guard.sendAllowed);
+  /* ⛔ A TEXT REPLY NEVER SENDS (Paul, 2026-10-09): under "Audit and reply" it runs the audit only. */
+  if (sms) mode = smsReplyMode(mode);
 
   /* The unique lead_id row is the durable exactly-once claim.  This is intentionally before any
      audit creation: a webhook timeout, function cold start, or create-ai-audit failure cannot erase
@@ -117,6 +123,24 @@ async function armIntent(
   const templateName = await firstReplyTemplate(input.service);
   const replyStatus = armStatusFor(mode, false);
   if (!replyStatus) return { armed: false, reason: "mode_does_not_arm" };
+  /* ⛔ THE CACHE (SMS replies): a lead with a usable check younger than the reuse window, or one already running, is not audited again. The
+     once-ever claim is still recorded — against THAT audit, as complete / queued — so no later reply can start one either, and nothing is spent. */
+  let reuse: { auditId: string; status: "complete" | "queued" } | null = null;
+  if (sms) {
+    const { data: aud, error: audErr } = await input.service.from("ai_audits")
+      .select("id, lead_id, created_at, audit_purpose, baseline_target_runs, is_measurement, baseline_contract").eq("lead_id", input.leadId);
+    if (audErr) throw new Error(`sms_reply_cache_audit_read_failed:${audErr.message}`);
+    const audits = (aud ?? []) as ReplyAuditRow[];
+    let runs: ReplyRunRow[] = [];
+    if (audits.length) {
+      const { data: rn, error: rnErr } = await input.service.from("ai_audit_runs").select("id, audit_id, status, created_at").in("audit_id", audits.map((a) => a.id));
+      if (rnErr) throw new Error(`sms_reply_cache_run_read_failed:${rnErr.message}`);
+      runs = (rn ?? []) as ReplyRunRow[];
+    }
+    const src = replyAuditSource(audits, runs, Date.now());
+    if (src.kind === "cached") reuse = { auditId: src.auditId, status: "complete" };
+    else if (src.kind === "in_flight") reuse = { auditId: src.auditId, status: "queued" };
+  }
   const { error } = await input.service.from("whatsapp_auto_replies").insert({
     lead_id: input.leadId,
     phone: input.phone,
@@ -128,9 +152,10 @@ async function armIntent(
     fire_after: new Date().toISOString(),
     audit_required: true,
     audit_mode: mode,
-    audit_status: "pending" satisfies FirstReplyAuditStatus,
+    audit_status: (reuse ? reuse.status : "pending") satisfies FirstReplyAuditStatus,
+    ...(reuse ? { audit_id: reuse.auditId } : {}),
   });
-  if (!error) return { armed: true, reason: "audit_pending" };
+  if (!error) return reuse ? { armed: false, reason: reuse.status === "complete" ? "audit_cached" : "audit_in_flight" } : { armed: true, reason: "audit_pending" };
   if ((error as { code?: string }).code === "23505") {
     /* A duplicate webhook/rapid second reply normally reaches this branch. A pre-existing row can
        also belong to another reply trigger; add the independent audit intent to that same
