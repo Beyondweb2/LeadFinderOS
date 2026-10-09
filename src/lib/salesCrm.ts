@@ -350,6 +350,9 @@ export const ACTIVITY_LABEL: Record<string, string> = {
   handoff_saved: 'Sales handoff',
   /* fn quick-close share_link (2026-10-04): how the payment link reached them — copied / emailed / WhatsApp. */
   payment_link_shared: 'Sign-up link',
+  /* Twilio (2026-10-09): a text we sent (the carrier receipt lives on the SMS thread) and a browser call that ended. */
+  sms_sent: 'Text sent',
+  call_made: 'Browser call',
   onboarding_submitted: 'Client submitted onboarding',
   delivery_submitted: 'Ready for delivery',
   discovery_run: 'Discovery run',
@@ -448,6 +451,12 @@ export function activityDetail(
     case 'opted_out': return a.body ?? 'Future automated outreach is suppressed';
     /* Written by fn quick-close: "copied (to send by hand)", "emailed to x", "sent on WhatsApp (test mode)". */
     case 'payment_link_shared': return a.body ?? null;
+    case 'sms_sent': return d.simulated ? 'Test mode - not sent' : d.link_kind ? 'With a link (sent through Quick Close)' : 'A text message';
+    case 'call_made': {
+      const secs = Number(d.duration_s);
+      const how = d.answered ? 'Answered' : ({ 'no-answer': 'No answer', busy: 'Busy', failed: 'Failed', canceled: 'Cancelled' } as Record<string, string>)[String(d.status)] ?? 'Ended';
+      return Number.isFinite(secs) && secs > 0 && d.answered ? `${how} · ${Math.floor(secs / 60)}m ${String(secs % 60).padStart(2, '0')}s - log what happened` : `${how} - log what happened`;
+    }
     default: return null;
   }
 }

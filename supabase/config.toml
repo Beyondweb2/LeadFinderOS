@@ -343,3 +343,16 @@ verify_jwt = true
 
 [functions.submissions]
 verify_jwt = true
+
+# Twilio SMS + browser calling (2026-10-09, docs/twilio-comms.md).
+# twilio-sms-send / twilio-voice-token: SPA-only, signed-in callers; role + lead access checked in the handler.
+[functions.twilio-sms-send]
+verify_jwt = true
+
+[functions.twilio-voice-token]
+verify_jwt = true
+
+# twilio-webhook: PUBLIC by necessity (Twilio calls it). The handler authenticates every request by
+# X-Twilio-Signature and fails closed if the auth token is unset. Must stay false.
+[functions.twilio-webhook]
+verify_jwt = false

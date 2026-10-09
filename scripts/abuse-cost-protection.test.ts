@@ -31,7 +31,7 @@ console.log("── the thresholds live once ──");
   /* 2026-10-04 (fix/07): an action added after the seed reaches the live row through its OWN migration
      (jsonb_set, only when absent). The defaults must equal the seed PLUS exactly those additions — each read
      from the NEWEST migration that writes it (sales_check: 30 → 50 on 2026-10-06). */
-  const LATER_ACTIONS: Record<string, string> = { sales_check: "supabase/migrations/20261012130000_sales_check_allowance_50.sql", lead_import: "supabase/migrations/20261010170000_csv_lead_import.sql" };
+  const LATER_ACTIONS: Record<string, string> = { sales_check: "supabase/migrations/20261012130000_sales_check_allowance_50.sql", lead_import: "supabase/migrations/20261010170000_csv_lead_import.sql", sms_send: "supabase/migrations/20261018090000_twilio_comms.sql", voice_call: "supabase/migrations/20261018090000_twilio_comms.sql" };
   const seeded = m ? JSON.parse(m[1]) : null;
   if (seeded) for (const [action, file] of Object.entries(LATER_ACTIONS)) {
     const am = read(file).match(new RegExp(`'\{actions,${action}\}', '(\{[^']*\})'::jsonb`));

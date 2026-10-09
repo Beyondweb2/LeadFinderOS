@@ -49,7 +49,7 @@ export interface ProtectionLimits {
 export const GUARD_ACTIONS = [
   'lead_search', 'place_details', 'enrich', 'site_scrape', 'hook_audit', 'hook_preview', 'ai_draft',
   'prospect_preview', 'niche_check', 'audit_manual', 'admin_ai', 'claim', 'lead_add', 'lead_lookup',
-  'copy_numbers', 'export_csv', 'whatsapp_send', 'whatsapp_queue', 'sales_check', 'lead_import',
+  'copy_numbers', 'export_csv', 'whatsapp_send', 'whatsapp_queue', 'sales_check', 'lead_import', 'sms_send', 'voice_call',
 ] as const;
 export type GuardAction = typeof GUARD_ACTIONS[number];
 
@@ -94,6 +94,9 @@ export const DEFAULT_PROTECTION_LIMITS: ProtectionLimits = {
        check AND the import each count — with the call's row count as its units. Unpaid (no provider is called), so
        the prospecting pause never blocks it. max_rows equals import_leads' own per-call ceiling. */
     lead_import: { paid: false, per_hour: 30, max_rows: 500, rows_per_day: 3000 },
+    /* Twilio texts and browser calls (2026-10-09, migration 20261018090000): people pressing buttons, unpaid, burst-limited. */
+    sms_send: { paid: false, per_min: 6, per_hour: 60, per_day: 200 },
+    voice_call: { paid: false, per_min: 6, per_hour: 120, per_day: 400 },
   },
 };
 

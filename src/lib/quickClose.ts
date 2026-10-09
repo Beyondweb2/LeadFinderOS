@@ -584,7 +584,7 @@ export function effectiveAnswers(qc: QuickCloseRecord | null | undefined): Quick
 export type QuickCloseState = 'not_started' | 'in_progress' | 'blocked' | 'consents_needed' | 'needs_review' | 'ready' | 'link_generated' | 'link_expired' | 'paid';
 /** One record of the link being handed to the prospect (M-015). `channel` says HOW; a copy is recorded as
  *  copied, never as sent — the app cannot know where it was pasted. */
-export interface QcLinkShare { channel: 'copy' | 'email' | 'whatsapp'; at: string; by: string | null; to?: string | null; status?: string | null; session?: string | null;
+export interface QcLinkShare { channel: 'copy' | 'email' | 'whatsapp' | 'sms'; at: string; by: string | null; to?: string | null; status?: string | null; session?: string | null;
   /** The link this share carried (sign-up links have no Stripe session, so this is what a resend is judged on). */
   link?: string | null;
   /** The WhatsApp template it went as (findable_signup_link), or null for a normal message in an open conversation. */
