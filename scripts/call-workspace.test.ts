@@ -88,7 +88,7 @@ console.log('── 1. ARCHIVED LEADS ARE NEVER WORK ──');
   ok(ws.today.followUpsDue === 1, "…and the archived lead's overdue Call is not counted as due today");
   ok(ws.activity.some((a) => a.leadId === 'Archived Co'), 'its HISTORY stays: the activity feed still shows what was done on it');
   ok(isActiveWork({ is_archived: false }) && isActiveWork({}) && isActiveWork(null) && !isActiveWork({ is_archived: true }), 'isActiveWork: only an explicit archive removes a lead from work (absent = active)');
-  ok(/is_archived"/.test(read('supabase/functions/sales-performance/index.ts')), 'sales-performance reads is_archived for the fold');
+  ok(/is_archived(, work_closed_at)?"/.test(read('supabase/functions/sales-performance/index.ts')), 'sales-performance reads is_archived for the fold');
 }
 
 console.log('── 2. THE OFFER, BOTH ROUTES, FROM THE CONSTANTS ──');

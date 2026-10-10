@@ -22,6 +22,19 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-10-close-dashboard-items', date: '2026-10-10', title: 'Close items on the Sales dashboard', audience: 'all',
+    body: 'Every item in What to do next and Follow-ups (including Replied, unanswered) now has a Close button, and you can tick several or Select all and close them in one go.',
+    report: {
+      added: [
+        'A Close button on each item in What to do next and in every Follow-ups list.',
+        'A tick on each item, Select all, and "Close N items" with a confirmation that shows the count.',
+        'Two choices: "Done, no action needed" (clears the item and its Next Action only) or "Dead lead" (records Not interested or Wrong number exactly as the Call tab does).',
+        'History shows who closed it and when.',
+      ],
+      changed: ['A closed item stays off the dashboard until the business replies again (WhatsApp or text) — then it comes back as new.'],
+      removed: [],
+      effect: 'You can clear dead or finished leads yourself, so the lists only show work that is really waiting. Done never changes the status, the star or the campaign, and nothing is ever sent.',
+    } },
   { id: '2026-10-09-audit-obeys-reply-setting', date: '2026-10-09', title: 'Run AI audit now follows the "When a prospect replies" setting', audience: 'all',
     body: 'A manual audit only sends a pitch when the setting is Audit and reply. On Do nothing and Audit only it runs the audit and sends nothing, and the button tooltip says which.',
     report: {

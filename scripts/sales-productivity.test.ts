@@ -29,7 +29,7 @@ ok(/filteredAndSortedLeads\.findIndex\(\(l\) => l\.id === detailLead\.id\)/.test
 ok(/stepPlace\.current/.test(table), "a lead that drops out of the list keeps its place: Next opens the one that took it");
 const groups = read("src/components/salesDash/sections.tsx");
 for (const k of ["meetings", "warm", "signupSent", "goingCold"]) ok(new RegExp(`key: '${k}'`).test(groups), `Sales → What to do next has the "${k}" list`);
-ok(/followUps\.warm\.push\(pl\)/.test(read("src/lib/salesWorkspace.ts")), "the warm list is filled by the same warmth reading");
+ok(/fu\('warm', pl\)/.test(read("src/lib/salesWorkspace.ts")), "the warm list is filled by the same warmth reading");
 const recent = read("src/components/RecentWhatsApp.tsx");
 ok(/context !== 'inbox' && <RecentWhatsApp leadId=\{lead\.id\} \/>/.test(dialog) && /\.limit\(RECENT_WHATSAPP_COUNT\)/.test(recent) && !/\.insert\(|\.update\(|functions\.invoke|\.rpc\(/.test(recent), "the latest WhatsApp messages are in the popup (read-only; the Inbox shows the thread itself)");
 ok(linkedInSearchUrl("Acme Locks", "Leeds") === "https://www.linkedin.com/search/results/all/?keywords=Acme%20Locks%20Leeds" && linkedInSearchUrl(null, null) === null, "LinkedIn is a search link, never a scrape");

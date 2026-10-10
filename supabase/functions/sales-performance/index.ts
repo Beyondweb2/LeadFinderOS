@@ -101,7 +101,7 @@ Deno.serve(async (req) => {
 
     const fetchedLeads = await allRows<PerfLead & { id: string }>((a, b, c) => {
       let q = service.from("outreach_leads")
-        .select("id, business_name, campaign_id, status, amount_paid, is_potential_work, lead_source, sold_by_user_id, sold_at, assigned_to_user_id, next_action, next_action_date, next_action_time, next_action_note, call_booked_at, is_archived", (c ? { count: "exact" } : undefined));
+        .select("id, business_name, campaign_id, status, amount_paid, is_potential_work, lead_source, sold_by_user_id, sold_at, assigned_to_user_id, next_action, next_action_date, next_action_time, next_action_note, call_booked_at, is_archived, work_closed_at", (c ? { count: "exact" } : undefined));
       /* The person's leads, plus any client they SOLD that has since been reassigned (the win stays theirs). */
       if (personId) q = q.or(`assigned_to_user_id.eq.${personId},sold_by_user_id.eq.${personId}`);
       return q.order("id").range(a, b);
@@ -176,6 +176,21 @@ Deno.serve(async (req) => {
         if (!prev || s === "paid") quickClose.set(r.lead_id, { state: s, linkAt: r.quick_close?.link_generated_at ?? null });
       }
     } catch (err) { console.error("[sales-performance] quick close", err instanceof Error ? err.message : err); }
+    /* A closed lead's items come back on a NEW inbound reply (salesWorkspace.ts isClosedItem) — WhatsApp replies are in
+       the facts; texts are read here, newest inbound per lead, only for leads someone has closed. A failed read leaves
+       closed items closed (a display), never an error. */
+    const lastSmsReplyMs = new Map<string, number>();
+    const closedIds = (leads as unknown as { id: string; work_closed_at?: string | null }[]).filter((l) => !!l.work_closed_at).map((l) => l.id);
+    if (closedIds.length) {
+      try {
+        const sms = await rowsForLeads<{ id: string; lead_id: string; direction: string; created_at: string }>(service, "sms_messages", "id, lead_id, direction, created_at", closedIds);
+        for (const m of sms) {
+          if (m.direction !== "inbound") continue;
+          const t = Date.parse(m.created_at);
+          if (Number.isFinite(t) && t > (lastSmsReplyMs.get(m.lead_id) ?? -Infinity)) lastSmsReplyMs.set(m.lead_id, t);
+        }
+      } catch (err) { console.error("[sales-performance] sms replies", err instanceof Error ? err.message : err); }
+    }
     const workspace = foldSalesWorkspace({
       personId, facts, activity, nowMs: Date.now(),
       leads: new Map((leads as unknown as WorkspaceLead[]).map((l) => [l.id, l])),
@@ -183,6 +198,7 @@ Deno.serve(async (req) => {
       targets: personId === actor.id ? parseTargets(body.targets) : null,
       commission,
       quickClose,
+      lastSmsReplyMs,
     });
 
     // A salesperson learns only that a lead of theirs was won — never a figure. The fold already

@@ -1354,6 +1354,7 @@ positive allowlist of `baseline`; `isColdOutreachTemplate` treats unknown as COL
 
 | Touching… | Read first |
 |---|---|
+| Closing items on the Sales dashboard (What to do next / Follow-ups): lead_close_work, the closed-until-they-reply rule (isClosedItem), Done vs Dead lead | `docs/close-dashboard-items.md` |
 | The Inbox (WhatsApp **and** SMS — one component), the SMS status model and failure codes, inbound text handling, Run AI audit vs the reply setting | `docs/twilio-comms.md` (the "One Inbox, two channels…" section) |
 | Anything, as a NEW Claude account / fresh start — orientation, reading order, open actions, Paul's preferences | `docs/handover/00-START-HERE.md` (then the folder in its order) |
 | The monthly client update (paid client page step 8), `client_monthly_updates` and its three functions | `docs/monthly-client-update.md` |
