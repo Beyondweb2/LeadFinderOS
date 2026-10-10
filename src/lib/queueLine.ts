@@ -5,6 +5,8 @@
    never that it will send. */
 export type QueueState = {
   paused: boolean; windowOpen: boolean; windowStartHour: number;
+  /** The EFFECTIVE "When a prospect replies" rule (off / audit_only / send). Absent = an older deploy; the Inbox then says it cannot tell. */
+  replyRule?: 'off' | 'audit_only' | 'send';
 };
 
 export const QUEUE_PAUSED_LINE = 'Queue paused by admin — not currently sending.';

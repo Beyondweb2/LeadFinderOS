@@ -5,7 +5,8 @@ import { resolveDerivedTown, pickAuditTown } from "../_shared/place-town.ts";
 import { buildTownIndex, lookupTownCentroid, checkTownDistance, type TownDistanceCheck } from "../_shared/town-distance.ts";
 import { ukGazetteerApplies } from "../../../src/lib/leadCountry.ts";
 import { toWhatsAppNumber } from "../_shared/whatsapp-send.ts";
-import { DEFAULT_FIRST_REPLY_TEMPLATE, firstReplyTemplate, pitchEverSent } from "../_shared/auto-reply-rules.ts";
+import { DEFAULT_FIRST_REPLY_TEMPLATE, effectiveReplyMode, firstReplyTemplate, pitchEverSent } from "../_shared/auto-reply-rules.ts";
+import { pitchMayFollowAudit, pitchRefusalNote } from "../../../src/lib/auditPitchRule.ts";
 import { dropResearchIntent, dropOffTrade, dropMissingTown, qualifyPlace, placeSuffixForCountry, placeNamesCountry, dedupeQuestions, coverageDirective, stripRepeatedWords, capHeadTerms, headTermCap } from "../../../src/lib/seedGuard.ts";
 import { normalizeAuditList, serviceAreaQuestionDirective } from "../../../src/lib/auditQuestionContext.ts";
 import {
@@ -1643,7 +1644,14 @@ Deno.serve(async (req) => {
     // already owned (e.g. the reply trigger got there first) — first-trigger-wins, fine.
     let pitchQueued = false;
     let pitchNote: string | undefined;
-    if (queuePitchOnComplete && leadId) {
+    /* ⛔ THE SETTING DECIDES (2026-10-09, Paul): a pitch may follow a manual audit ONLY when "When a prospect replies" is "Audit and reply".
+       Do nothing and Audit only run the audit, store the result and send nothing — and park nothing, so the lead's once-ever slot is not
+       spent either. Read here, on the server, whatever the caller asked for: the browser's tooltip is advice, this is the rule. An unreadable
+       setting reads as "off" (effectiveReplyMode), the safe direction. */
+    const replyRule = queuePitchOnComplete && leadId ? await effectiveReplyMode(service) : null;
+    if (queuePitchOnComplete && leadId && !pitchMayFollowAudit(replyRule)) {
+      pitchNote = pitchRefusalNote(replyRule);
+    } else if (queuePitchOnComplete && leadId) {
       try {
         const { data: leadRow } = await service
           .from("outreach_leads").select("phone, country, is_archived").eq("id", leadId).maybeSingle();

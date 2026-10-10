@@ -104,7 +104,7 @@ console.log("\n── the queued line never promises a send the queue will not m
   const q = read("supabase/functions/process-whatsapp-queue/index.ts");
   ok(/mode === "contact_check" \|\| mode === "suppress_lead" \|\| mode === "queue_state"/.test(q), "Sales may read queue_state (and still nothing else configurable)");
   const qs = q.slice(q.indexOf('if (mode === "queue_state") {'), q.indexOf('if (mode === "queue_state") {') + 900);
-  ok(/select\("paused"\)/.test(qs) && !/\.update\(|\.insert\(/.test(qs), "queue_state reads the pause flag and writes nothing");
+  ok(/select\("paused, auto_reply_enabled, first_reply_mode"\)/.test(qs) && !/\.update\(|\.insert\(/.test(qs), "queue_state reads the pause flag and writes nothing");
   const controls = strip(read("src/components/WhatsAppLeadControls.tsx"));
   ok(!/7am–9:30pm UK window \(max 40\/day\)/.test(controls) && /queuedLeadLine\(useQueueState\(queued\)(, lead\.phone)?\)/.test(controls), "the workspace's queued line reads the live state");
   const out = strip(read("src/pages/Outreach.tsx"));

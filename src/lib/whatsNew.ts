@@ -22,6 +22,18 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-09-audit-obeys-reply-setting', date: '2026-10-09', title: 'Run AI audit now follows the "When a prospect replies" setting', audience: 'all',
+    body: 'A manual audit only sends a pitch when the setting is Audit and reply. On Do nothing and Audit only it runs the audit and sends nothing, and the button tooltip says which.',
+    report: {
+      added: ['The Run AI audit tooltip, confirmation and message now say what will really happen under the current setting ("no message will be sent" or "the report pitch sends when it completes").'],
+      changed: [
+        'Do nothing and Audit only: Run AI audit runs the audit, stores the result and updates the AI visibility strip, and parks and sends nothing.',
+        'Audit and reply: unchanged on WhatsApp. On texts an audit never sends a pitch.',
+        'The same setting now also governs the completed-audit pitch, so no audit finishing can send a message under Do nothing or Audit only.',
+      ],
+      removed: ['The fixed "pitch auto-sends on completion" tooltip, which was wrong whenever the setting was not Audit and reply.'],
+      effect: 'You can run an audit to look at a business without any risk that a message goes to them; only Audit and reply on WhatsApp ever sends.',
+    } },
   { id: '2026-10-09-one-inbox-both-channels', date: '2026-10-09', title: 'The SMS Inbox is now the same Inbox as WhatsApp', audience: 'all',
     body: 'WhatsApp and SMS now use one Inbox page. Everything in the WhatsApp Inbox — the AI visibility strip, Run AI audit, the full template list — is on the SMS tab too, and anything added later appears in both.',
     report: {

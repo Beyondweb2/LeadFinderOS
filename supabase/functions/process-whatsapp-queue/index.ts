@@ -24,6 +24,7 @@ import { interleaveByCampaign, campaignsRepresented } from "../_shared/campaign-
 import { resolveAuditReplyVars } from "../_shared/audit-reply.ts";
 import { buildsFromAudit } from "../../../src/lib/templateRouting.ts";
 import { AUDIT_ONLY_STATUS, DEFAULT_FIRST_REPLY_TEMPLATE, FIRST_REPLY_MODES, autoReplyEnvOn, autoReplyToggleOn, firstReplyMode, firstReplyTemplate, isDecline, isStaleAutoReply, modeSends, parseFirstReplyMode, phoneSuppressed, pitchEverSent } from "../_shared/auto-reply-rules.ts";
+import { effectiveFirstReplyMode } from "../../../src/lib/firstReplyAutomation.ts";
 import { SETTLED_TOWN_NOTES } from "../_shared/place-details.ts";
 import { createTemplateSnapshot } from "../../../src/lib/whatsappTemplateSnapshot.ts";
 import { STRONG_STATUSES, postgrestList } from "../../../src/lib/strongStatuses.ts";
@@ -510,7 +511,7 @@ Deno.serve(async (req) => {
        settings, nothing written; returns before any send path. The admin's full status is still 'status'. */
     if (mode === "queue_state") {
       const { data: st, error: stErr } = await service
-        .from("whatsapp_outreach_state").select("paused").eq("id", 1).maybeSingle();
+        .from("whatsapp_outreach_state").select("paused, auto_reply_enabled, first_reply_mode").eq("id", 1).maybeSingle();
       if (stErr) return json({ ok: false, error: "state_read_failed" }, 503);
       const n = londonNow();
       const m = n.hour * 60 + n.minute;
@@ -519,6 +520,8 @@ Deno.serve(async (req) => {
         paused: st?.paused === true,
         windowOpen: m >= WINDOW_START * 60 && m < WINDOW_END_MIN,
         windowStartHour: WINDOW_START,
+        /* The EFFECTIVE "When a prospect replies" rule (off / audit_only / send): the Inbox's Run AI audit tooltip tells the truth from it. One word, readable by Sales. */
+        replyRule: effectiveFirstReplyMode(st?.auto_reply_enabled, st?.first_reply_mode),
       });
     }
     const forceReq = body.force === true;
@@ -1041,6 +1044,8 @@ Deno.serve(async (req) => {
            switching to send mode resumes it. */
         if (trigger === "first_reply" && !replyModeSends) continue;
         if (trigger === "audit_complete" && !completeTemplateOn) continue;
+        /* ⛔ the audit_complete pitch follows the SAME setting as every other pitch after an audit: only under "Audit and reply" (toggle on AND mode send). */
+        if (trigger === "audit_complete" && (!replyToggleOn || !replyModeSends)) continue;
         /* ⛔ AND A ROW THAT WENT STALE WHILE THE RULE WAS OFF IS RETIRED, NOT SENT. Measured
            2026-09-08: 18 first_reply rows were parked past their fire_after — four for leads
            already at status `report_sent` — waiting on a toggle. Turning the rule on would have

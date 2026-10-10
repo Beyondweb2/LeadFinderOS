@@ -100,8 +100,6 @@ console.log('3. every channel conditional is a DECLARED difference');
     [/if \(!sms\) return supabase\.functions\.invoke\('send-whatsapp-message'/, 'send-path'],
     [/if \(sms && isColdSmsTemplate\(bulkTemplate\)\)|sms && isColdSmsTemplate/, 'bulk-queue'],
     [/if \(!base\.ok \|\| !sms\) return base|return smsTemplateAvailability\(name\)/, 'template-availability'],
-    [/queue_pitch_on_complete: !sms|description: sms$|: sms \? `Run audit for/, 'audit-reply-send'],
-    [/questions\{sms \?/, 'audit-reply-send'],
     [/const newPickerLeads = |isPlausibleUkMobile/, 'statuses'],
     [/IconTile icon=\{sms \?|sms \? 'Every text conversation|sms && \(smsQueueRows|title=\{sms \?|\(sms \? smsQueueInfo|sms \? 'The text queue|sms \? 'Start a text|sms \? 'No leads with a UK mobile/, 'send-path'],
     [/!sms && <SelectItem value=\{HOOK_DUE_FILTER\}>|perms\.queueControls && !sms/, 'no-hook-queue'],

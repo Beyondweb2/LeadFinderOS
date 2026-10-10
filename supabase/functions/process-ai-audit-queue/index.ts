@@ -15,7 +15,8 @@ import { maybeSendFreeCheckResult } from "../_shared/free-check-result.ts";
 import { maybeSendRemeasureResults, resultsSweepDue, sweepUnsentRemeasureResults } from "../_shared/remeasure-results.ts";
 import { toWhatsAppNumber } from "../_shared/whatsapp-send.ts";
 import { reconcileFirstReplyAuditIntents } from "../_shared/first-reply-audit.ts";
-import { AUDIT_ONLY_STATUS, autoReplyEnvOn, phoneSuppressed } from "../_shared/auto-reply-rules.ts";
+import { AUDIT_ONLY_STATUS, autoReplyEnvOn, effectiveReplyMode, phoneSuppressed } from "../_shared/auto-reply-rules.ts";
+import { pitchMayFollowAudit } from "../../../src/lib/auditPitchRule.ts";
 import { seoScanAllowed } from "../../../src/lib/auditKind.ts";
 import { cellNamed } from "../../../src/lib/namedSignal.ts";
 import { CRAWL_CHECK_VERSION } from "../../../src/lib/crawlCheck.ts";
@@ -1548,7 +1549,14 @@ async function finaliseSettledRuns(service: any, runIds: string[], estCost: numb
     }
   }
 
-  if (completionSendJobs.length && autoReplyEnvOn()) {
+  /* ⛔ ONE SETTING FOR EVERY PITCH AFTER AN AUDIT (2026-10-09): a completed audit arms a parked pitch, or queues the audit_complete pitch, ONLY
+     when "When a prospect replies" is "Audit and reply". Do nothing / Audit only: the audit result is stored and the Inbox strip updates (that
+     is finalisation, above) and NOTHING is armed. Read at completion time, so a setting changed while the audit ran is honoured. */
+  const pitchesMayFollow = completionSendJobs.length > 0 && pitchMayFollowAudit(await effectiveReplyMode(service));
+  if (completionSendJobs.length && autoReplyEnvOn() && !pitchesMayFollow) {
+    console.log(`[auto-send] ${completionSendJobs.length} audit(s) complete — "When a prospect replies" is not Audit and reply, so no pitch is armed.`);
+  }
+  if (completionSendJobs.length && autoReplyEnvOn() && pitchesMayFollow) {
     let completeTemplate: string | null = null;
     try {
       const { data: st, error: stErr } = await service

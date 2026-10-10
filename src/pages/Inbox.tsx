@@ -7,6 +7,7 @@ import { isColdSmsTemplate, SMS_QUEUE_SKIP_WORDS } from '@/lib/smsMessages';
 import { CHANNEL_COST_GBP, costWords } from '@/lib/channelCosts';
 import { AutoReplyToggle } from '@/components/AutoReplyToggle';
 import { hookAuditRequestBody } from '@/lib/hookAuditRequest';
+import { auditButtonCopy, auditStartedDescription, pitchMayFollowAudit } from '@/lib/auditPitchRule';
 import { getDraft, setDraft, type DraftMap } from '@/lib/inboxDrafts';
 import { planBulkSend, groupSkips, applyBulkChecks, type BulkCandidate, type BulkCheck } from '@/lib/inboxBulkSend';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
@@ -1302,6 +1303,8 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
   const [promptType, setPromptType] = useState('');
   const [promptLoc, setPromptLoc] = useState('');
   const hasCompletedAudit = !!activeReport; // auditByLeadId — completed/capped run exists
+  /* The button's words come from the CURRENT "When a prospect replies" rule (src/lib/auditPitchRule.ts) — tooltip, confirm and toast all say what will really happen. */
+  const auditCopy = auditButtonCopy({ channel, rule: queueState?.replyRule, inFlight: auditInFlight, inputsMissing: auditInputsMissing, hasCompleted: hasCompletedAudit, business: activeLead?.business_name });
 
   // Shared runner: fire create-ai-audit (server defaults: 3 auto-generated questions, no approval
   // step) with queue_pitch_on_complete, keep the spinner state, and toast the outcome. 23505 on
@@ -1324,9 +1327,9 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
            Same isAggregatorUrl rule create-ai-audit's own first-reply path already applies. */
         website: (activeLead.website && !isAggregatorUrl(activeLead.website)) ? activeLead.website : undefined,
         has_website: !!(activeLead.website && !isAggregatorUrl(activeLead.website)),
-        /* audit-reply-send difference: on the WhatsApp channel the header audit also parks the report pitch to auto-send on completion; on texts
-           it NEVER does (a text channel sends no automatic message) — the audit only measures. */
-        queue_pitch_on_complete: !sms,
+        /* ⛔ A PITCH FOLLOWS THE AUDIT ONLY UNDER "AUDIT AND REPLY" ON WHATSAPP (2026-10-09). We only ASK for one then; the server (create-ai-audit)
+           re-reads the setting and is the rule — Do nothing / Audit only never park a pitch, and a text channel never sends one. */
+        queue_pitch_on_complete: pitchMayFollowAudit(queueState?.replyRule, channel),
         // Stated, not inherited. This used to send nothing and rely on create-ai-audit's shared
         // default happening to be 3; one edit to that default would have silently multiplied the
         // cost of the highest-volume path in the system.
@@ -1351,17 +1354,7 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
     void queryClient.invalidateQueries({ queryKey: ['hook-visibility', active.leadId] });
     toast({
       title: hasCompletedAudit ? 'Audit re-running' : 'Audit started',
-      description: sms
-        ? 'Audit is running (~10–15 min). Nothing is sent to the lead.'
-        : data.pitch_queued
-        ? 'The report pitch will auto-send when it completes (~10–15 min; declines cancel it).'
-        : data.pitch_note === 'lead_archived'
-          // Its own line: the generic note ends with "send manually when it completes", which is
-          // exactly the wrong advice for a lead the operator has withdrawn.
-          ? 'Audit is running. No pitch was queued because this lead is archived — un-archive them if you want the pitch to send.'
-          : data.pitch_note === 'slot_already_owned'
-            ? 'Audit re-running — pitch already sent, so no new pitch will be queued.'
-            : `Audit is running, but the auto-pitch wasn’t queued (${data.pitch_note ?? 'unknown'}) — send manually when it completes.`,
+      description: auditStartedDescription(data, channel), // from what the server actually did, never from what we hoped
     });
     refetch(); // pick up the pending run → spinner state survives reloads
   };
@@ -1425,10 +1418,7 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
       setAuditPromptOpen(true);
       return;
     }
-    const confirmText = hasCompletedAudit
-      ? `Re-run audit for ${activeLead.business_name}?`
-      : sms ? `Run audit for ${activeLead.business_name}? Nothing is sent to the lead.` : `Run audit for ${activeLead.business_name}? The report pitch auto-sends when it completes.`;
-    if (!window.confirm(confirmText)) return;
+    if (!window.confirm(auditCopy.confirm)) return;
     await startAudit(auditInputs!.type, auditInputs!.loc);
   };
 
@@ -2120,13 +2110,7 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
                       type="button"
                       onClick={fireAuditFromInbox}
                       disabled={auditInFlight}
-                      title={auditInFlight
-                        ? 'Audit running — the pitch auto-sends on completion'
-                        : auditInputsMissing
-                          ? 'Needs business type/location — click to fill them in here (stays in the Inbox)'
-                          : hasCompletedAudit
-                            ? 'Re-run AI audit for this lead'
-                            : 'Run AI audit for this lead (pitch auto-sends on completion)'}
+                      title={auditCopy.title}
                       aria-label="Run AI audit"
                       className={cn(HEADER_ICON_BTN, auditInputsMissing && !auditInFlight && 'opacity-50')}
                     >
@@ -2464,7 +2448,7 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
             title={<>Run audit for {activeLead?.business_name}</>}
             subtitle={<>
               This lead is missing its audit inputs. Fill them in — they're saved to the lead — and
-              the audit runs right here (3 auto-generated questions{sms ? '; nothing is sent to the lead' : '; the report pitch auto-sends on completion'}).
+              the audit runs right here (3 auto-generated questions{pitchMayFollowAudit(queueState?.replyRule, channel) ? '; the report pitch auto-sends on completion' : '; nothing is sent to the lead'}).
             </>}
           />
           <div className="space-y-2">
