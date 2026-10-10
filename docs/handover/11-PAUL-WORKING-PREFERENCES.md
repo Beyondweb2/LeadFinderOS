@@ -97,3 +97,6 @@ explicitly authorised in the brief:
 - Say which functions were redeployed, by name.
 - Don't re-ask decisions he has already made — they are recorded in `docs/` (e.g. `docs/deep-clean-phase3-plan.md`
   "standing decisions") and in CLAUDE.md.
+- **Verification is tiered** (Paul, 2026-10-10): quick checks and targeted tests while working (`npm run check:quick`, `npm run test:changed`), ONE full gate
+  (`npm run check`, ~3½ min) before commit / push / deploy, never re-run on an unchanged tree. Always run the full gate for messaging, auth / tenancy,
+  database / migrations, payments or secrets. Always verify the deployed site. See CLAUDE.md §3a.

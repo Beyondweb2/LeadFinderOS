@@ -81,3 +81,6 @@ Paul may have done some of the manual ones since.*
 - **`leadfinderos-next.pages.dev` redirect** to the custom domain — only when Paul says.
 - Do **not** merge: `full-measure-dials`, `edge-check-gate`, `findable-product-rename`, `short-signup-url`,
   `claude-md-session-safety` (already ported).
+- **Two old waiting pitch rows** (`awaiting_audit`, 2026-09-01: Auto Mobile Key Masters, First4locks Ltd - Locksmiths Speke) would arm and send if the reply
+  setting were ever switched to Audit and reply and an audit for them completed. Cancel them first if that is not wanted (`docs/twilio-comms.md`).
+- **SMS reply automation beyond audit-only** ("Audit and reply" for texts) is deliberately NOT built; the control is disabled on the SMS tab with a note.

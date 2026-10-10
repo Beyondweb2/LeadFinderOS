@@ -26,10 +26,10 @@ function makeDb(seed: Record<string, Row[]>) {
   let seq = 1000;
   const from = (name: string) => {
     tables[name] ??= [];
-    let rows = tables[name];
+    const rows = tables[name];
     const filters: Array<(r: Row) => boolean> = [];
     let op: 'select' | 'update' | 'insert' = 'select';
-    let patch: Row = {}; let ins: Row | null = null; let lim = Infinity; let single: 'maybe' | 'one' | null = null; let ord: Array<[string, boolean]> = [];
+    let patch: Row = {}; let ins: Row | null = null; let lim = Infinity; let single: 'maybe' | 'one' | null = null; const ord: Array<[string, boolean]> = [];
     const b: Record<string, unknown> = {};
     const run = () => {
       if (op === 'insert') {
@@ -193,6 +193,17 @@ console.log('8. the SMS inbox header');
   ok(/hookAuditRequestBody\(activeLead, bizType, loc, old\?\.business_name\)/.test(read('src/pages/Inbox.tsx')), 'WhatsApp\'s "Run new" uses the same request body (one copy)');
   const body = read('src/lib/hookAuditRequest.ts');
   ok(!/queue_pitch_on_complete/.test(body.replace(/\/\*[\s\S]*?\*\//g, '')) && /hook_audit: true/.test(body), 'that body never queues a pitch');
+}
+
+console.log('9. an inbound text notifies the way a WhatsApp message does (one coalesced notification per lead, not one per text)');
+{
+  const wa = read('supabase/migrations/20260929140000_notifications.sql');
+  const sm = read('supabase/migrations/20261020090000_sms_reply_notification_coalesce.sql');
+  const waFn = wa.slice(wa.indexOf('create or replace function public.trg_notify_whatsapp'), wa.indexOf('drop trigger if exists trg_notify_whatsapp'));
+  ok(/set count = count \+ 1/.test(waFn.replace(/\s+/g, ' ')) || /count = count \+ 1/.test(waFn), 'WhatsApp folds a second unread reply into the same notification');
+  ok(/update public\.notifications set count = count \+ 1/.test(sm) && /kind = 'sms_reply' and lead_id = new\.lead_id and read_at is null and cleared_at is null/.test(sm), 'a text does the same: unread sms_reply rows for the lead are updated in place');
+  ok(/lead_recipient\(new\.lead_id\)/.test(sm) && /get diagnostics v_n = row_count/.test(sm) && /if v_n = 0 then/.test(sm), 'same recipient rule (assignee, else the book owner) and only one new row when none is open');
+  ok(/'sms_failed'/.test(sm) && /status in \('failed', 'undelivered'\)/.test(sm), 'the failed-text notification is unchanged');
 }
 
 if (f) { console.log(`\n${f} FAILED`); process.exit(1); }

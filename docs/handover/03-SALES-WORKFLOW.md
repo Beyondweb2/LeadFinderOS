@@ -151,5 +151,11 @@ admin bulk audit. See `07-SECURITY-AND-PERMISSIONS.md`.
 
 ## Calling
 
-Calls use the **phone's native dialler** (`tel:` links) — a business SIM or eSIM. Integrated in-app calling is optional
-future work, not built.
+Calls: **Call in browser** (Twilio, on the Call tab) or a small **Call on WhatsApp**; the number window offers Copy / WhatsApp / manual. In-app calling
+and texting are built (`docs/twilio-comms.md`); there is no `tel:` link.
+
+## The Inbox: WhatsApp and SMS are one component (2026-10-10)
+
+Both channels use the same Inbox (`ConversationInbox`, a channel adapter, a parity test — `docs/twilio-comms.md`). A text lead shows **Queued / Contacted / SMS
+Failed / No SMS**; a delivered cold opener is not a genuine conversation (the shared contact guard is unchanged). **Run AI audit** only sends a pitch under
+"Audit and reply" on WhatsApp — never on texts, never under Do nothing / Audit only. Its tooltip says what will happen.

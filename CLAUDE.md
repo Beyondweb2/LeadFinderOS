@@ -1168,6 +1168,22 @@ positive allowlist of `baseline`; `isColdOutreachTemplate` treats unknown as COL
 
 ---
 
+### 6k. One Inbox for two channels; SMS status; the reply setting (2026-10-10 — record: `docs/twilio-comms.md`)
+
+- ⛔ **WhatsApp and SMS are ONE component** (`ConversationInbox({ channel })` in `src/pages/Inbox.tsx`) with a thin channel adapter (`useInbox(channel)`,
+  `src/lib/inboxChannel.ts`). There is no second inbox page — never add one. Add a feature once and it appears in both. Every place the channels differ is
+  declared in `SMS_ONLY_DIFFERENCES`; `scripts/inbox-channel-parity.test.ts` fails on a lost element or an undeclared `sms` conditional. Do not tell Paul it
+  is "the same" without that test green.
+- ⛔ **SMS status is DERIVED from the provider's delivery receipts** (`src/lib/smsStatus.ts`): Queued → Contacted (delivered, early statuses only) → SMS Failed →
+  No SMS. 30005/30006/21211/21614 = No SMS; **30003 = SMS Failed, never No SMS**; 21610 = opt-out. Never set the lead's `status` to `queued` for SMS (the
+  WhatsApp drip would send it). A non-mobile number is No SMS before anything is queued or sent.
+- ⛔ **A text reply behaves like a WhatsApp reply**: Replied on the shared no-downgrade list, a coalesced notification, the shared "When a prospect replies" rule
+  as AUDIT ONLY (a text never sends), cache reused, prospecting pool only, never a sales status. STOP opts out first and starts nothing.
+- ⛔ **A pitch follows an audit ONLY under "Audit and reply" on WhatsApp** (`src/lib/auditPitchRule.ts`): Do nothing / Audit only send and park nothing; texts
+  never. Enforced server-side (create-ai-audit, the completion step, the drain). The Inbox's Run AI audit tooltip reads the effective rule.
+- **Verification tiers** are §3a: `check:quick` / `test:changed` while working, ONE full gate before shipping, always for messaging / auth / database /
+  payments / secrets; always verify the deployed site.
+
 ## 7. Where the code lives (`docs/code-map.md` for the long form)
 
 | Thing | Path |
@@ -1324,6 +1340,7 @@ positive allowlist of `baseline`; `isColdOutreachTemplate` treats unknown as COL
 
 | Touching… | Read first |
 |---|---|
+| The Inbox (WhatsApp **and** SMS — one component), the SMS status model and failure codes, inbound text handling, Run AI audit vs the reply setting | `docs/twilio-comms.md` (the "One Inbox, two channels…" section) |
 | Anything, as a NEW Claude account / fresh start — orientation, reading order, open actions, Paul's preferences | `docs/handover/00-START-HERE.md` (then the folder in its order) |
 | The monthly client update (paid client page step 8), `client_monthly_updates` and its three functions | `docs/monthly-client-update.md` |
 | What the 2026-10-02 closeout audit found complete / fixed / still open | `docs/closeout-2026-10-02.md` |

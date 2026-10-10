@@ -95,5 +95,58 @@ and how to stop, and STOP is honoured. Cold calling to numbers on the TPS/CTPS r
 
 - **No SMS copy exists.** `src/lib/smsMessages.ts` lists which WhatsApp templates SMS may carry: cold openers `initial_contact`, `initial_opener_v2` (chosen per send / per batch, as on WhatsApp - `openerVariant.ts`); conversation templates `book_call`, `re_engage_49`, `contact_followup` (conversation gate); `findable_signup_link` (Quick Close only, agreement or setup variant, link resolved by `link-template-vars.ts`).
 - The server renders with the WhatsApp sender's own `renderTemplateBody`; the screens preview with `readableTemplateBody` (`src/lib/smsPreview.ts`). `scripts/sms-queue.test.ts` pins that the two are identical for every template and that the SMS text equals the WhatsApp body exactly - nothing is added (the earlier `Reply STOP to opt out.` suffix was removed 2026-10-09 at Paul's instruction; compliance wording is his decision).
-- Not offered by SMS: the audit-driven templates (`video_template`, `competitor_hook`, `audit_*`, `ai_site_findings_v2`) and `explain_offer(_v2)` - they need the lead's audit/rivals/report link resolved by the WhatsApp sender and run to 2-8 segments. The bespoke `sms_opener`, `follow_up`, `website_link`, `setup_link`, `agreement_link` texts are gone.
+- ~~Not offered by SMS:~~ **SUPERSEDED 2026-10-10 — see "One Inbox, two channels" below: every WhatsApp template can go by text except the two with a video, the Quick Close sign-up link and the retired barber ones.** (Old text:) the audit-driven templates (`video_template`, `competitor_hook`, `audit_*`, `ai_site_findings_v2`) and `explain_offer(_v2)` - they need the lead's audit/rivals/report link resolved by the WhatsApp sender and run to 2-8 segments. The bespoke `sms_opener`, `follow_up`, `website_link`, `setup_link`, `agreement_link` texts are gone.
 - The SMS queue stores the chosen opener on the lead (`outreach_leads.sms_queued_template`); `queue_sms_openers(uuid[], text)` accepts only the two openers.
+
+## One Inbox, two channels; SMS status; reply handling; audit vs the reply setting (2026-10-09/10 — THE CURRENT RECORD)
+
+**One component.** `src/pages/Inbox.tsx` exports ONE `ConversationInbox({ channel })`; `/inbox` renders it for WhatsApp and `/inbox?channel=sms` for texts
+(`useInboxChannel()`, keyed so a channel switch remounts). The separate SMS inbox page is DELETED — there is no second page to drift.
+The channel adapter is the data layer: `useInbox(channel)` (`src/hooks/useInbox.ts`) chooses the message table (`sms_messages` mapped by
+`smsRowToInboxMessage`), its own cache key (`['inbox', user, 'sms']`), the sender (`twilio-sms-send` vs `send-whatsapp-message`) and the preview.
+Everything else — filters, rows, chips, header, AI visibility strip, Run AI audit, crawl, composer, template picker, bulk send, the
+"When a prospect replies" control (`src/components/AutoReplyToggle.tsx`, `channel` prop) — is shared, so a feature added to the WhatsApp inbox appears
+on texts by construction.
+- **The declared differences** live in ONE list, `SMS_ONLY_DIFFERENCES` (`src/lib/inboxChannel.ts`): no 24-hour window; send path (queue/Twilio); unread
+  from the SMS read marks; cost wording; the SMS statuses; no voice notes / attachments; no "open in WhatsApp"; no hook-follow-up queue; "Audit and reply"
+  disabled; greyed templates; bulk cold openers are QUEUED not burst; per-channel storage keys.
+- **The parity test** `scripts/inbox-channel-parity.test.ts` fails if the SMS channel loses any WhatsApp element (38 listed), if an `sms`-conditional appears in
+  Inbox.tsx that is not declared, if a WhatsApp template is missing from the picker or greyed without a reason, or if SMS message rows stop matching WhatsApp
+  ones to the shared code. ⛔ It proves "same code, every difference declared" — it does not render pixels.
+- **Templates by text.** The six native ones (`SMS_TEMPLATE_NAMES`) are rendered by `renderTemplateBody`; ANY other WhatsApp template is built by the WhatsApp
+  sender's own dry run (`twilio-sms-send` calls `send-whatsapp-message` `mode:"dry_run"` with the rep's own session) so wording and placeholder filling are
+  WhatsApp's by construction. Greyed with a reason (`smsTemplateAvailability`): `video_template`, `competitor_hook` (video), `findable_signup_link`
+  (Quick Close), the retired barber templates. Links in a text are limited to the sign-up links and the prospect's own report link (`isApprovedSmsLink`).
+
+**SMS status model** (`src/lib/smsStatus.ts`, `_shared/sms-lead-sync.ts`; the status comes from Twilio's delivery receipts, never assumed on send):
+| State | Shown | Stored |
+|---|---|---|
+| on the queue / accepted / sent, no receipt | **Queued** | `sms_queued_at` / `sms_delivery_status` queued\|sent |
+| receipt "delivered" | **Contacted** | lead `status` → `initial_contact` (only from an early status) |
+| receipt failed / undelivered | **SMS Failed** | `sms_delivery_status = sms_failed` |
+| the number can never receive a text | **No SMS** | `sms_delivery_status = no_sms` |
+- ⛔ The lead's STATUS is never set to `queued` for SMS (that is the WhatsApp drip's marker — it would send the lead a WhatsApp). The pills are DERIVED
+  (`smsPillOf`) and drawn only over early statuses, so they never hide a reply, a client or an interested lead. Only the lead's NEWEST text moves it.
+- **Failure codes.** No SMS: 30005 (unknown handset), 30006 (landline / unreachable carrier), 21211 (invalid number), 21614 (not a mobile). SMS Failed:
+  30003 (handset off / out of coverage — the number may be fine), 30004, 30007, 30008, 30001, 30002 and anything unrecognised. 21610 = opt-out (recorded).
+- **Not a mobile.** A non-UK-mobile number (landline, foreign, junk) is marked No SMS the moment it is tried — before queueing or sending — and the text
+  icon / New picker do not offer it (`isPlausibleUkMobile`; `queue_sms_openers` marks it too).
+
+**Inbound text** (`twilio-webhook` → `_shared/sms-inbound.ts`): STOP opts out first and starts nothing. Any other reply: Replied on the SAME no-downgrade list as
+WhatsApp (`INBOUND_NO_DOWNGRADE`), the shared lead chooser (several leads on one number → Unassigned + the book owner is told), a notification that
+**coalesces like WhatsApp** (migration `20261020090000`: one unread `sms_reply` card per lead, count + 1), and the shared "When a prospect replies" rule:
+one claim per lead ever (`whatsapp_auto_replies`), AUDIT ONLY on texts (a text reply never sends — "Audit and reply" collapses to audit only), a usable check
+under 14 days old is REUSED (nothing spent), the prospecting pool only, never a rep's daily allowance, never a sales status. `scripts/sms-reply-parity.test.ts`.
+
+**Run AI audit obeys the setting** (`src/lib/auditPitchRule.ts`, `scripts/audit-pitch-setting.test.ts`): a pitch follows an audit ONLY under
+**Audit and reply on WhatsApp**. Do nothing / Audit only: the audit runs, the result is stored, the strip updates, nothing is parked or sent. On texts: never.
+Enforced on the SERVER — `create-ai-audit` (parks nothing), `process-ai-audit-queue` (arms nothing at completion, incl. the audit_complete pitch),
+`process-whatsapp-queue` (re-checks at send time). `queue_state` returns the effective rule so the button's tooltip / confirm / toast tell the truth.
+The Inbox header button is the ONLY caller that asks for a pitch. History (checked 2026-10-10): the last pitch from a manual audit was sent 2026-09-19,
+before the mode gate; none since.
+- **Waiting rows to know about:** two `awaiting_audit` rows from 2026-09-01 (Auto Mobile Key Masters, First4locks Ltd - Locksmiths Speke; template
+  `audit_reply_warm`) WOULD ARM AND SEND if the setting were switched to Audit and reply and an audit for those leads then completed. Cancel them first if
+  that is not wanted. Sunnybank Plumbing Services and Momentum Drive were cancelled 2026-10-10 (status `cancelled`, with a reason).
+
+**Verification** is tiered — see CLAUDE.md §3a: `npm run check:quick` and `npm run test:changed` while working; `npm run check` ONCE before shipping and always for
+messaging / auth / database / payments / secrets.
