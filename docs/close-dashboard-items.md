@@ -6,8 +6,8 @@ could not clear them.
 ## What was there before
 - Both lists are DERIVED on every load by `foldSalesWorkspace` (`src/lib/salesWorkspace.ts`), run inside fn
   `sales-performance`. Nothing was stored per item, so there was nothing to clear.
-- "Replied, unanswered" = `conversationState(...).waitingSinceMs` over the lead's **WhatsApp** thread only. Inbound
-  texts (SMS) do NOT feed that list today (found in this pass; not changed).
+- "Replied, unanswered" = `conversationState(...).waitingSinceMs` over the lead's WhatsApp thread — and, since the later
+  pass below, its SMS thread too.
 - The lead popup's Close tab is Quick Close (the sale). The "stop" outcomes are the Call tab's `not_interested` and
   `wrong_number` (`CALL_OUTCOMES`, carried out by `leadOutcome.ts applyOutcome`).
 
@@ -27,6 +27,14 @@ could not clear them.
   `lastSmsReplyMs`). Anything that happens after the close (an audit, an opened sign-up page, a meeting) shows. A due
   Next Action is never gated — closing cleared it, so one present now was set afterwards by a person.
 - UI: `sections.tsx` (tick, Close per row, Select all / Close N), one `CloseWorkDialog` (count + the two choices).
+
+## 2026-10-10 (later): text replies included
+Paul: yes, include SMS. `smsWaitingSinceMs` (salesWorkspace.ts) runs the SAME `conversationState` rule over each lead's
+`sms_messages` thread (read by `sales-performance` for every lead; undelivered = failed). An opt-out text
+(`isStopMessage`) is never a reply needing an answer, and when it is their newest text nothing is owed on that thread.
+WhatsApp keeps its item when both wait; a text-only wait is "New text reply", link `sms` → `/inbox?channel=sms&lead=`
+(`smsLinkForLead`). A STOP never re-opens a closed lead (`lastSmsReplyOf`). The facts (responded, warmth, pipeline) are
+still WhatsApp-only — unchanged. Test: `scripts/sms-replies-unanswered.test.ts`.
 
 ## Tests
 - `scripts/close-next-actions.test.ts` — the rule through the real fold, the migration text, History words.

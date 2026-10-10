@@ -23,9 +23,15 @@
       isClosedItem is the one rule. A new inbound reply (WhatsApp or SMS) after the close brings them back, and so does
       anything that HAPPENS after it (a finished audit, an opened sign-up page, a meeting). A due Next Action is never
       hidden: closing cleared it, so one that is there now was set afterwards, by a person.
+   ⛔ A TEXT REPLY WAITS LIKE A WHATSAPP REPLY (2026-10-10, Paul). "Replied, unanswered" and "New reply" read the lead's
+      SMS thread with the SAME rule (conversationState: a human reply with no real send after it; a clear no is owed
+      nothing). smsWaitingSinceMs is the one SMS reading: an opt-out text (isStopMessage — STOP, UNSUBSCRIBE…) is never
+      a reply that needs an answer, and when it is their newest text nothing on that thread is owed. WhatsApp keeps its
+      place when both wait; a text-only wait opens the SMS Inbox (link 'sms').
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 import type { LeadFacts, PerfActivity } from './salesPerformance.ts';
-import { conversationState, londonToday } from './conversationState.ts';
+import { conversationState, formatWaiting, londonToday, type ConvMessage } from './conversationState.ts';
+import { isStopMessage } from './smsMessages.ts';
 import { NEXT_ACTION_OPTIONS, followUpBucket } from './salesCrm.ts';
 import type { QuickCloseState } from './quickClose.ts';
 import { meetingWhen } from './leadState.ts';
@@ -92,7 +98,24 @@ export interface PipeLead { id: string; name: string; at: string | null; warmth:
   /** Where THIS row is worked, when it differs by lead (a due follow-up: its action type decides). */
   link?: ActionLink }
 export type Tone = 'green' | 'blue' | 'amber' | 'purple' | 'red' | 'grey';
-export type ActionLink = 'whatsapp' | 'lead';
+export type ActionLink = 'whatsapp' | 'sms' | 'lead';
+
+/** ⛔ THE ONE SMS "WAITING ON US" READING (see the header). `thread` is the lead's texts, oldest first, with SMS statuses
+ *  (sent / delivered are real sends; failed / undelivered / queued / simulated are not — isRealSend). */
+export function smsWaitingSinceMs(thread: readonly ConvMessage[] | undefined, nowMs: number): number | null {
+  if (!thread || thread.length === 0) return null;
+  let newestIn: ConvMessage | null = null;
+  for (const m of thread) if (m.direction === 'inbound' && (!newestIn || Date.parse(m.created_at) >= Date.parse(newestIn.created_at))) newestIn = m;
+  if (!newestIn || isStopMessage(newestIn.body)) return null;
+  const replies = thread.filter((m) => !(m.direction === 'inbound' && isStopMessage(m.body)));
+  return conversationState({ messages: replies, lastReadAt: null, nowMs }).waitingSinceMs;
+}
+/** Their newest real text (an opt-out is not a reply) — what re-opens a closed lead. */
+export function lastSmsReplyOf(thread: readonly ConvMessage[] | undefined): number | null {
+  let best = -Infinity;
+  for (const m of thread ?? []) if (m.direction === 'inbound' && !isStopMessage(m.body)) { const t = Date.parse(m.created_at); if (t > best) best = t; }
+  return Number.isFinite(best) ? best : null;
+}
 export interface NextAction { kind: string; leadId: string; name: string; title: string; detail: string; at: string | null; tone: Tone; link: ActionLink }
 export interface FeedItem { kind: string; leadId: string; name: string; text: string; at: string; tone: Tone; link: ActionLink }
 export interface HealthWarning { key: string; tone: Tone; text: string; group?: FollowUpGroup }
@@ -133,6 +156,8 @@ export interface WorkspaceInput {
   quickClose?: Map<string, { state: QuickCloseState; linkAt: string | null }>;
   /** Each lead's newest inbound SMS (ms) — with the WhatsApp replies in the facts, what re-opens a closed lead. */
   lastSmsReplyMs?: Map<string, number>;
+  /** Each lead's SMS thread, oldest first (sms_messages) — "Replied, unanswered" for texts and the re-open on a new text. */
+  smsThreads?: Map<string, ConvMessage[]>;
 }
 
 export const STAGES: { key: StageKey; label: string }[] = [
@@ -249,7 +274,8 @@ export function foldSalesWorkspace(input: WorkspaceInput): SalesWorkspace {
     /* ⛔ Archived: history above, and nothing below — no action, no follow-up, no waiting reply, no meeting. */
     if (!active) continue;
     /* Closed items (isClosedItem): the lists and actions below push through these two. A due Next Action does not. */
-    const lastReply = Math.max(last(f.humanReplyTimesMs) ?? -Infinity, input.lastSmsReplyMs?.get(f.lead.id) ?? -Infinity);
+    const smsThread = input.smsThreads?.get(f.lead.id);
+    const lastReply = Math.max(last(f.humanReplyTimesMs) ?? -Infinity, input.lastSmsReplyMs?.get(f.lead.id) ?? -Infinity, lastSmsReplyOf(smsThread) ?? -Infinity);
     const closed = (at: string | null | undefined) => isClosedItem(lead?.work_closed_at, Number.isFinite(lastReply) ? lastReply : null, at);
     const act = (a: NextAction & { rank: number }) => { if (!closed(a.at)) actions.push(a); };
     const fu = (g: FollowUpGroup, row: PipeLead) => { if (!closed(row.at)) followUps[g].push(row); };
@@ -293,10 +319,16 @@ export function foldSalesWorkspace(input: WorkspaceInput): SalesWorkspace {
     const dueAtDawn = before && before.data?.next_action && before.data.next_action !== 'none' && typeof before.data.date === 'string' && before.data.date <= today;
     if (dueAtDawn && (f.contactTimesMs.some(onToday) || acts.some((a) => a.kind === 'follow_up_set' && onToday(Date.parse(a.created_at))))) followUpsCompleted += 1;
 
-    if (!out && st.waitingSinceMs !== null) fu('repliedUnanswered', { ...pl, at: iso(st.waitingSinceMs) });
-    if (!out && st.waitingSinceMs !== null && now - st.waitingSinceMs <= REPLY_ACTION_DAYS * DAY && !closed(iso(st.waitingSinceMs))) {
-      waiting.push({ leadId: f.lead.id, name, since: iso(st.waitingSinceMs)!, ms: st.waitingSinceMs });
-      act({ kind: 'reply_waiting', leadId: f.lead.id, name, title: 'New WhatsApp reply', detail: st.label ?? 'Waiting on you', at: iso(st.waitingSinceMs), tone: 'blue', link: 'whatsapp', rank: 0 });
+    /* A reply waiting on us: WhatsApp first (unchanged), else a text (the same rule, smsWaitingSinceMs). */
+    const smsWait = st.waitingSinceMs === null ? smsWaitingSinceMs(smsThread, now) : null;
+    const waitMs = st.waitingSinceMs ?? smsWait;
+    const viaSms = st.waitingSinceMs === null && smsWait !== null;
+    if (!out && waitMs !== null) fu('repliedUnanswered', { ...pl, at: iso(waitMs), ...(viaSms ? { link: 'sms' as const, detail: 'Text reply' } : {}) });
+    if (!out && waitMs !== null && now - waitMs <= REPLY_ACTION_DAYS * DAY && !closed(iso(waitMs))) {
+      waiting.push({ leadId: f.lead.id, name, since: iso(waitMs)!, ms: waitMs });
+      act(viaSms
+        ? { kind: 'reply_waiting', leadId: f.lead.id, name, title: 'New text reply', detail: `Waiting ${formatWaiting(now - waitMs)}`, at: iso(waitMs), tone: 'blue', link: 'sms', rank: 0 }
+        : { kind: 'reply_waiting', leadId: f.lead.id, name, title: 'New WhatsApp reply', detail: st.label ?? 'Waiting on you', at: iso(st.waitingSinceMs), tone: 'blue', link: 'whatsapp', rank: 0 });
     }
     if (!f.won && f.onboardingOpened && !f.notInterested) {
       act({ kind: 'signup_opened', leadId: f.lead.id, name, title: 'Opened the sign-up page', detail: 'Not paid yet — a good moment to check in', at: f.linkFirstOpenedAt, tone: 'green', link: 'whatsapp', rank: 3 });
