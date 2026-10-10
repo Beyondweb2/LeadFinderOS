@@ -18,6 +18,11 @@
    ⛔ CALL-FIRST (2026-10-04): a due Call is "Call due", an audit ready to use is "Ready to call" and opens the lead
       (the call screen), not WhatsApp; an interested lead says "Ring them, or Quick Close". A WhatsApp reply still
       ranks high (the 24-hour window), but nothing here is a mass-WhatsApp task.
+   ⛔ A CLOSED ITEM STAYS CLOSED UNTIL THEY SPEAK AGAIN (2026-10-10, Paul; fn lead_close_work). A person may close a lead's
+      items ("Done, no action needed" or "Dead lead"): every item that was there when they closed it is hidden —
+      isClosedItem is the one rule. A new inbound reply (WhatsApp or SMS) after the close brings them back, and so does
+      anything that HAPPENS after it (a finished audit, an opened sign-up page, a meeting). A due Next Action is never
+      hidden: closing cleared it, so one that is there now was set afterwards, by a person.
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 import type { LeadFacts, PerfActivity } from './salesPerformance.ts';
 import { conversationState, londonToday } from './conversationState.ts';
@@ -60,6 +65,19 @@ export interface WorkspaceLead {
   call_booked_at?: string | null;
   /** Archived = stopped working it. Absent (an older caller) reads as not archived. */
   is_archived?: boolean | null;
+  /** When a person last closed this lead's dashboard items (lead_close_work). Absent / null = never closed. */
+  work_closed_at?: string | null;
+}
+
+/** ⛔ THE ONE "WAS THIS ITEM CLOSED?" RULE. Hidden when the lead was closed, nothing newer than the close has come
+ *  in from them (lastReplyMs: their newest inbound WhatsApp or SMS), and the item itself is not newer than the close
+ *  (itemAt: when the thing it is about happened; null = no moment of its own, so it was there when they closed it). */
+export function isClosedItem(closedAt: string | null | undefined, lastReplyMs: number | null | undefined, itemAt: string | null | undefined): boolean {
+  const closedMs = closedAt ? Date.parse(closedAt) : NaN;
+  if (!Number.isFinite(closedMs)) return false;
+  if (lastReplyMs !== null && lastReplyMs !== undefined && Number.isFinite(lastReplyMs) && lastReplyMs > closedMs) return false;
+  const atMs = itemAt ? Date.parse(itemAt) : NaN;
+  return !(Number.isFinite(atMs) && atMs > closedMs);
 }
 
 /** ⛔ THE ONE "IS THIS STILL WORK?" PREDICATE: an archived lead never is. Its history still counts. */
@@ -113,6 +131,8 @@ export interface WorkspaceInput {
   commission?: { at: string; amount: number; leadId: string; label: string; business: string }[] | null;
   /** Quick Close per lead (derived state + when the payment link was made), for the next best actions. */
   quickClose?: Map<string, { state: QuickCloseState; linkAt: string | null }>;
+  /** Each lead's newest inbound SMS (ms) — with the WhatsApp replies in the facts, what re-opens a closed lead. */
+  lastSmsReplyMs?: Map<string, number>;
 }
 
 export const STAGES: { key: StageKey; label: string }[] = [
@@ -228,12 +248,17 @@ export function foldSalesWorkspace(input: WorkspaceInput): SalesWorkspace {
     pushFeed(f, name, soldMs, auditMs, acts);
     /* ⛔ Archived: history above, and nothing below — no action, no follow-up, no waiting reply, no meeting. */
     if (!active) continue;
+    /* Closed items (isClosedItem): the lists and actions below push through these two. A due Next Action does not. */
+    const lastReply = Math.max(last(f.humanReplyTimesMs) ?? -Infinity, input.lastSmsReplyMs?.get(f.lead.id) ?? -Infinity);
+    const closed = (at: string | null | undefined) => isClosedItem(lead?.work_closed_at, Number.isFinite(lastReply) ? lastReply : null, at);
+    const act = (a: NextAction & { rank: number }) => { if (!closed(a.at)) actions.push(a); };
+    const fu = (g: FollowUpGroup, row: PipeLead) => { if (!closed(row.at)) followUps[g].push(row); };
 
     // ── The conversation, by the one rule ──
     const st = conversationState({ messages: f.thread, lastReadAt: null, leadStatus: f.lead.status, nextAction: lead?.next_action, nextActionDate: lead?.next_action_date, nowMs: now });
     const out = f.won || f.notInterested;
     /* Warm (Focus Mode's list, moved to Sales → What to do next, 2026-10-01): the same warmth reading. */
-    if (!out && w === 'warm') followUps.warm.push(pl);
+    if (!out && w === 'warm') fu('warm', pl);
 
     /* ── A booked meeting (lead state audit, 2026-09-30): it outranks everything — prepare for it, then
        log how it went. Every upcoming one is on the Meetings list; the action is for the next 36 hours
@@ -241,10 +266,10 @@ export function foldSalesWorkspace(input: WorkspaceInput): SalesWorkspace {
     const meetMs = lead?.call_booked_at ? Date.parse(lead.call_booked_at) : NaN;
     if (!out && Number.isFinite(meetMs) && meetMs >= now - MEETING_ACTION_AFTER_MS) {
       const when = meetingWhen(lead!.call_booked_at!);
-      followUps.meetings.push({ ...pl, at: iso(meetMs), detail: when });
+      fu('meetings', { ...pl, at: iso(meetMs), detail: when });
       if (meetMs <= now + MEETING_ACTION_BEFORE_MS) {
         const started = meetMs <= now;
-        actions.push({ kind: 'meeting', leadId: f.lead.id, name, title: started ? 'Meeting — log how it went' : onToday(meetMs) ? 'Meeting today' : 'Meeting booked',
+        act({ kind: 'meeting', leadId: f.lead.id, name, title: started ? 'Meeting — log how it went' : onToday(meetMs) ? 'Meeting today' : 'Meeting booked',
           detail: when, at: iso(meetMs), tone: 'blue', link: 'lead', rank: -1 });
       }
     }
@@ -268,46 +293,46 @@ export function foldSalesWorkspace(input: WorkspaceInput): SalesWorkspace {
     const dueAtDawn = before && before.data?.next_action && before.data.next_action !== 'none' && typeof before.data.date === 'string' && before.data.date <= today;
     if (dueAtDawn && (f.contactTimesMs.some(onToday) || acts.some((a) => a.kind === 'follow_up_set' && onToday(Date.parse(a.created_at))))) followUpsCompleted += 1;
 
-    if (!out && st.waitingSinceMs !== null) followUps.repliedUnanswered.push({ ...pl, at: iso(st.waitingSinceMs) });
-    if (!out && st.waitingSinceMs !== null && now - st.waitingSinceMs <= REPLY_ACTION_DAYS * DAY) {
+    if (!out && st.waitingSinceMs !== null) fu('repliedUnanswered', { ...pl, at: iso(st.waitingSinceMs) });
+    if (!out && st.waitingSinceMs !== null && now - st.waitingSinceMs <= REPLY_ACTION_DAYS * DAY && !closed(iso(st.waitingSinceMs))) {
       waiting.push({ leadId: f.lead.id, name, since: iso(st.waitingSinceMs)!, ms: st.waitingSinceMs });
-      actions.push({ kind: 'reply_waiting', leadId: f.lead.id, name, title: 'New WhatsApp reply', detail: st.label ?? 'Waiting on you', at: iso(st.waitingSinceMs), tone: 'blue', link: 'whatsapp', rank: 0 });
+      act({ kind: 'reply_waiting', leadId: f.lead.id, name, title: 'New WhatsApp reply', detail: st.label ?? 'Waiting on you', at: iso(st.waitingSinceMs), tone: 'blue', link: 'whatsapp', rank: 0 });
     }
     if (!f.won && f.onboardingOpened && !f.notInterested) {
-      actions.push({ kind: 'signup_opened', leadId: f.lead.id, name, title: 'Opened the sign-up page', detail: 'Not paid yet — a good moment to check in', at: f.linkFirstOpenedAt, tone: 'green', link: 'whatsapp', rank: 3 });
+      act({ kind: 'signup_opened', leadId: f.lead.id, name, title: 'Opened the sign-up page', detail: 'Not paid yet — a good moment to check in', at: f.linkFirstOpenedAt, tone: 'green', link: 'whatsapp', rank: 3 });
     }
     const lastOurs = last(f.contactTimesMs);
     if (f.interested && !out && !f.onboardingSent) {
       const since = f.interestedAtMs ?? null;
       const untouched = since === null ? (lastOurs === null || now - lastOurs > INTERESTED_UNTOUCHED_DAYS * DAY) : !(lastOurs !== null && lastOurs > since) && now - since > INTERESTED_UNTOUCHED_DAYS * DAY;
       if (untouched) {
-        followUps.interestedUntouched.push(pl);
-        actions.push({ kind: 'interested_untouched', leadId: f.lead.id, name, title: 'Interested — not followed up', detail: 'Ring them, or take the £99 with Quick Close', at: iso(since), tone: 'green', link: 'lead', rank: 4 });
+        fu('interestedUntouched', pl);
+        act({ kind: 'interested_untouched', leadId: f.lead.id, name, title: 'Interested — not followed up', detail: 'Ring them, or take the £99 with Quick Close', at: iso(since), tone: 'green', link: 'lead', rank: 4 });
       }
     }
     if (!f.won && !f.notInterested && f.onboardingSent) {
-      followUps.signupSent.push({ ...pl, at: f.linkFirstSentAt, detail: f.onboardingOpened ? 'Opened, not paid' : 'Not opened yet' });
+      fu('signupSent', { ...pl, at: f.linkFirstSentAt, detail: f.onboardingOpened ? 'Opened, not paid' : 'Not opened yet' });
       const sentMs = f.linkFirstSentAt ? Date.parse(f.linkFirstSentAt) : null;
       if (!f.onboardingOpened && sentMs !== null && now - sentMs > SIGNUP_UNOPENED_DAYS * DAY) {
-        actions.push({ kind: 'signup_unopened', leadId: f.lead.id, name, title: 'Sign-up link not opened', detail: `Sent ${Math.floor((now - sentMs) / DAY)} days ago`, at: f.linkFirstSentAt, tone: 'amber', link: 'whatsapp', rank: 5 });
+        act({ kind: 'signup_unopened', leadId: f.lead.id, name, title: 'Sign-up link not opened', detail: `Sent ${Math.floor((now - sentMs) / DAY)} days ago`, at: f.linkFirstSentAt, tone: 'amber', link: 'whatsapp', rank: 5 });
       }
     }
     if (auditMs !== undefined && !out && now - auditMs <= AUDIT_READY_DAYS * DAY && !(lastOurs !== null && lastOurs > auditMs)) {
-      actions.push({ kind: 'audit_ready', leadId: f.lead.id, name, title: 'Ready to call', detail: 'The AI check is in — open the call script and ring them', at: iso(auditMs), tone: 'purple', link: 'lead', rank: 3 });
+      act({ kind: 'audit_ready', leadId: f.lead.id, name, title: 'Ready to call', detail: 'The AI check is in — open the call script and ring them', at: iso(auditMs), tone: 'purple', link: 'lead', rank: 3 });
     }
     if (w === 'going_cold') {
-      followUps.goingCold.push(pl);
-      actions.push({ kind: 'going_cold', leadId: f.lead.id, name, title: 'Warm lead going cold', detail: `No contact for ${GOING_COLD_DAYS}+ days`, at: pl.at, tone: 'amber', link: 'whatsapp', rank: 7 });
+      fu('goingCold', pl);
+      act({ kind: 'going_cold', leadId: f.lead.id, name, title: 'Warm lead going cold', detail: `No contact for ${GOING_COLD_DAYS}+ days`, at: pl.at, tone: 'amber', link: 'whatsapp', rank: 7 });
     }
 
     // ── Quick Close: finish it, or chase the link ──
     const qcs = input.quickClose?.get(f.lead.id);
     if (qcs && !f.won) {
-      if (qcs.state === 'in_progress' || qcs.state === 'ready' || qcs.state === 'consents_needed') actions.push({ kind: 'quick_close_finish', leadId: f.lead.id, name, title: qcs.state === 'ready' ? 'Quick Close ready — send the sign-up link' : qcs.state === 'consents_needed' ? 'Quick Close — Build consents needed' : 'Finish Quick Close', detail: qcs.state === 'consents_needed' ? 'They need to confirm the three new-website consents before the link' : 'Answers are saved — pick up where you left off', at: null, tone: 'amber', link: 'lead', rank: 2 });
-      else if (qcs.state === 'link_generated') actions.push({ kind: 'quick_close_link', leadId: f.lead.id, name, title: 'Sign-up link sent — not paid yet', detail: qcs.linkAt ? `Link made ${new Date(qcs.linkAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}` : 'Check they received it', at: qcs.linkAt, tone: 'green', link: 'whatsapp', rank: 3 });
+      if (qcs.state === 'in_progress' || qcs.state === 'ready' || qcs.state === 'consents_needed') act({ kind: 'quick_close_finish', leadId: f.lead.id, name, title: qcs.state === 'ready' ? 'Quick Close ready — send the sign-up link' : qcs.state === 'consents_needed' ? 'Quick Close — Build consents needed' : 'Finish Quick Close', detail: qcs.state === 'consents_needed' ? 'They need to confirm the three new-website consents before the link' : 'Answers are saved — pick up where you left off', at: null, tone: 'amber', link: 'lead', rank: 2 });
+      else if (qcs.state === 'link_generated') act({ kind: 'quick_close_link', leadId: f.lead.id, name, title: 'Sign-up link sent — not paid yet', detail: qcs.linkAt ? `Link made ${new Date(qcs.linkAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}` : 'Check they received it', at: qcs.linkAt, tone: 'green', link: 'whatsapp', rank: 3 });
       /* M-014 (2026-10-04): an expired link is never "sent, not paid" — the rep needs a fresh one. */
-      else if (qcs.state === 'link_expired') actions.push({ kind: 'quick_close_finish', leadId: f.lead.id, name, title: 'Sign-up link needed — make a fresh one', detail: qcs.linkAt ? `Old link made ${new Date(qcs.linkAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}` : 'Open Quick Close to make a fresh link', at: qcs.linkAt, tone: 'amber', link: 'lead', rank: 2 });
-      else if (qcs.state === 'needs_review') actions.push({ kind: 'quick_close_review', leadId: f.lead.id, name, title: 'Quick Close waiting for Paul', detail: 'Domain / agency issue under review', at: null, tone: 'amber', link: 'lead', rank: 8 });
+      else if (qcs.state === 'link_expired') act({ kind: 'quick_close_finish', leadId: f.lead.id, name, title: 'Sign-up link needed — make a fresh one', detail: qcs.linkAt ? `Old link made ${new Date(qcs.linkAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}` : 'Open Quick Close to make a fresh link', at: qcs.linkAt, tone: 'amber', link: 'lead', rank: 2 });
+      else if (qcs.state === 'needs_review') act({ kind: 'quick_close_review', leadId: f.lead.id, name, title: 'Quick Close waiting for Paul', detail: 'Domain / agency issue under review', at: null, tone: 'amber', link: 'lead', rank: 8 });
     }
 
   }

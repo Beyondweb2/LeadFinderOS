@@ -27,7 +27,8 @@ import { campaignKey, templateKey, visibleRows } from '@/lib/dashboardVisibility
 import { KpiCard, PageHeader, Panel } from '@/components/salesDash/ui';
 import { TeamBoard } from '@/components/team/TeamBoard';
 import { MyHandoffs } from '@/components/salesDash/MyHandoffs';
-import { FollowUpQueue, NextActions, FOLLOW_UP_GROUPS } from '@/components/salesDash/sections';
+import { FollowUpQueue, NextActions, FOLLOW_UP_GROUPS, type CloseItems } from '@/components/salesDash/sections';
+import { CloseWorkDialog, type CloseTarget } from '@/components/salesDash/CloseWorkDialog';
 
 /* ════════════════════════════════════════════════════════════════════════════════════════════════
    THE SALES DASHBOARD — ONE PAGE (2026-10-01, Sales + Earnings merged; redesigned 2026-10-02).
@@ -95,10 +96,14 @@ export default function SalesDashboard() {
   /* ⛔ WHAT TO DO NEXT COMES FIRST FOR A SALESPERSON (fix workstream 5, 2026-10-04; Session A A-18): on a phone it
      sat ~1,600 px down, under the commission ladder. The admin's overview keeps its order. */
   const todoFirst = role === 'sales';
+  /* Close items (2026-10-10, src/lib/closeWork.ts): one row's Close or the ticked ones → ONE confirmation. The server
+     decides what may be closed (a salesperson: their own leads; the admin: any). */
+  const [closing, setClosing] = useState<CloseTarget | null>(null);
+  const onClose: CloseItems = (ids, names, done) => { if (ids.length) setClosing({ ids, names, done }); };
   const todo = w ? (
     <div className="grid grid-cols-1 gap-4 lg:grid-cols-5" data-testid="what-to-do-next">
-      <div className="min-w-0 lg:col-span-3"><NextActions items={w.nextActions} go={go} title="What to do next" hint="Calls and follow-ups due first. Tap a lead to open it." /></div>
-      <div className="min-w-0 lg:col-span-2"><FollowUpQueue fu={w.followUps} go={go} group={fuGroup ?? fuDefault} setGroup={setFuGroup} /></div>
+      <div className="min-w-0 lg:col-span-3"><NextActions items={w.nextActions} go={go} onClose={onClose} title="What to do next" hint="Calls and follow-ups due first. Tap a lead to open it, or Close what needs nothing more." /></div>
+      <div className="min-w-0 lg:col-span-2"><FollowUpQueue fu={w.followUps} go={go} group={fuGroup ?? fuDefault} setGroup={setFuGroup} onClose={onClose} /></div>
     </div>
   ) : null;
 
@@ -204,6 +209,7 @@ export default function SalesDashboard() {
         </Panel>
       )}
 
+      <CloseWorkDialog target={closing} onOpenChange={(o) => { if (!o) setClosing(null); }} />
       {isAdmin && <PayoutDialog open={payoutOpen} onOpenChange={setPayoutOpen} sellers={(team.data ?? []).filter((m) => m.user_id !== user?.id).map((m) => ({ id: m.user_id, name: m.display_name }))} />}
     </div>
   );

@@ -353,6 +353,8 @@ export const ACTIVITY_LABEL: Record<string, string> = {
   /* Twilio (2026-10-09): a text we sent (the carrier receipt lives on the SMS thread) and a browser call that ended. */
   sms_sent: 'Text sent',
   call_made: 'Browser call',
+  /* lead_close_work (2026-10-10): a person closed this lead's items on the Sales dashboard. Who = the row's actor. */
+  work_closed: 'Closed on the dashboard',
   onboarding_submitted: 'Client submitted onboarding',
   delivery_submitted: 'Ready for delivery',
   discovery_run: 'Discovery run',
@@ -451,6 +453,11 @@ export function activityDetail(
     case 'opted_out': return a.body ?? 'Future automated outreach is suppressed';
     /* Written by fn quick-close: "copied (to send by hand)", "emailed to x", "sent on WhatsApp (test mode)". */
     case 'payment_link_shared': return a.body ?? null;
+    case 'work_closed': {
+      const cleared = d.cleared_next_action ? ` · Next Action cleared (${nextActionWords(d.cleared_next_action)})` : '';
+      const why = d.reason === 'dead' ? `Dead lead — ${d.outcome === 'wrong_number' ? 'Wrong number' : 'Not interested'}` : 'Done, no action needed';
+      return `${why}${cleared}`;
+    }
     case 'sms_sent': return d.simulated ? 'Test mode - not sent' : d.link_kind ? 'With a link (sent through Quick Close)' : 'A text message';
     case 'call_made': {
       const secs = Number(d.duration_s);
