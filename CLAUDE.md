@@ -492,6 +492,31 @@ Full history and reasoning: `docs/business-and-offer.md`, `docs/measurement.md`.
 
 ---
 
+### 3a. Verification tiers — how much to check, and when (2026-10-10, Paul: stop wasting time on slow verification)
+
+**Measured once, 2026-10-10:** the full gate (`npm run check`) is **~3½ minutes** — typecheck vs baseline 25 s, edge syntax 2 s, edge undefined
+6 s, import graph 1 s, build 14 s, **tests 157 s** (the bulk; 8 suites at a time), and `eslint .` 35 s which is NOT in the gate (it has
+existing findings and exits non-zero). There is **no browser / e2e suite** in this repo — the live site is verified by hand (below).
+⛔ **None of this weakens the gate. `npm run check` covers exactly what it did; these tiers only decide WHEN to run it.**
+
+| Tier | Command | Cost | When |
+|---|---|---|---|
+| Quick | `npm run check:quick` | ~30 s | While working: typecheck vs baseline + eslint on changed files (advisory) + the edge static checks when edge/shared-lib code changed |
+| Targeted | `npm run test:changed` (`-- --list` shows the mapping) | seconds–1 min | While working: only suites whose text names a changed file (or that changed themselves) |
+| Full | `npm run check` | ~3½ min | **ONCE, after all changes are finished, before commit / push / deploy** |
+
+- **While working:** quick check + targeted tests. **Do not run the full gate after every edit.**
+- **Before the final commit / push / deploy:** run the full gate **once**, after the last edit.
+- **Do not re-run the full gate if nothing changed since it last passed.** (Check `git status` / the diff; a re-run on an identical tree proves nothing.)
+- **Copy-only, styling-only, docs-only changes:** quick checks only, then verify the deployed site. (A `whatsNew.ts` entry, wording, CSS, a doc.)
+- ⛔ **Always run the full gate, whatever the size**, for changes touching: **auth, tenancy / permissions / RLS, the database or migrations,
+  messaging (WhatsApp / SMS / email) sending, payments / Stripe / pricing, or secrets handling.** The two scripts print a yellow
+  "FULL GATE REQUIRED" warning when the changed paths look like these — a green quick check is not permission to ship them.
+- **Browser / e2e:** there is none to run. If one is ever added, run only the specs for the UI flows you changed while working, and the
+  whole suite as part of the pre-deploy gate.
+- ⛔ **Always still verify the real deployed site after a deploy** (§4 "The deploy check": fetch the live bundle, assert a marker only your
+  change produces; for an edge function grep `/functions/<slug>/body`). Passing tests are not a deploy.
+
 ## 4. Traps — the rules. The incidents behind each are in `docs/traps.md` (§4) unless pointed elsewhere.
 
 **Verifying**
