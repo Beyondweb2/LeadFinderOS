@@ -302,7 +302,7 @@ console.log('\n── SAFETY — the page reads one action and writes one ──
 {
   const page = readFileSync(new URL('../src/pages/WebsiteBuild.tsx', import.meta.url), 'utf8');
   const actions = [...page.matchAll(/call\(\{ action: '([a-z_]+)'/g)].map((m) => m[1]);
-  ok(actions.length > 0 && actions.every((a) => a === 'rebuild_context' || a === 'save_website_build'), `only rebuild_context and save_website_build are called (${[...new Set(actions)].join(', ')})`);
+  ok(actions.length > 0 && actions.every((a) => a === 'rebuild_context' || a === 'save_website_build' || a === 'old_site_pages'), `only rebuild_context, save_website_build and old_site_pages (stored crawl rows, read-only) are called (${[...new Set(actions)].join(', ')})`);
   ok(!/create-ai-audit|crawl-check|run-seo-scan|send-whatsapp|whatsapp|notify-|functions\.invoke|sendEmail|resend/i.test(page.replace(/\/\*[\s\S]*?\*\//g, '')), 'no audit, crawl, WhatsApp or email is reachable from the page');
   ok(/invokeEdge<Record<string, any>>\('paid-client-hub'/.test(page), 'and it talks only to paid-client-hub');
   ok(/return \(\) => \{[^}]*if \(queue\.current!\.pending\(\)\) void flush\(\)/.test(page), 'a pending edit is sent when the page is left, not dropped with the debounce timer');

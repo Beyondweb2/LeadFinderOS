@@ -23,6 +23,15 @@
    identity and every approved intent with the page that OWNS it. Without it the identity and intent
    checks are skipped and SAY so — skipped is never passed.
 
+   OLD PAGES (ranking protection, 2026-10-10): the expect file's "oldUrls" lists every important address of
+   the client's OLD site and the new page it must land on. --url requests each one itself (redirects are
+   followed one by one and counted, never off the site) and fails a 404 / 410, a soft 404 (a "not found"
+   title or H1, or the same page a made-up address gets), the wrong target, a home-page dump, a temporary
+   redirect (302 / 303 / 307) where a 301 is needed, more than one hop, or a noindex target (on a preview
+   only a noindex in the page counts — every preview page carries the preview's noindex header). The raw
+   facts go in the report as "oldUrls"; LeadFinderOS judges them again itself (src/lib/oldPages.ts — the
+   SAME rule as judgeOldUrl below). --dist checks the same list statically against public/_redirects.
+
    Exit code: 0 = no FAIL, 1 = at least one FAIL, 2 = the gate could not run. The JSON report
    (siteGateVersion 1) goes in the build result as quality.siteGate.
    ⛔ Never weaken a check to make a build pass. Fix the site, or report the check as failed.
@@ -211,6 +220,9 @@ export function auditSite(site, opts) {
   const pageFor = (p) => { const n = norm(p); for (const k of parsed.keys()) if (norm(k) === n) return k; return null; };
   const metaNoindex = (p) => parsed.get(p).robots.some((r) => /noindex|none/.test(r));
   const indexable = [...parsed.keys()].filter((p) => !is404(p) && !metaNoindex(p));
+
+  /* ── O1 old pages (ranking protection) ── */
+  oldPagesCheck(site, expect, pageFor, add);
 
   /* ── T1 robots.txt and crawler access ── */
   {
@@ -700,7 +712,8 @@ export function auditSite(site, opts) {
     const count = (l) => checks.filter((c) => c.level === l).length;
     return { siteGateVersion: SITE_GATE_VERSION, domain, mode: site?.mode ?? '', preview: !!opts.preview, pages: site?.pages?.size ?? 0,
       passed: count('fail') === 0 && checks.length > 0, counts: { pass: count('pass'), warn: count('warn'), fail: count('fail'), skip: count('skip') },
-      checks, humanReview: human };
+      checks, humanReview: human,
+      ...(site?.mode === 'url' && Array.isArray(expect?.oldUrls) ? { oldUrls: site?.live?.oldUrls ?? { base: '', results: [] } } : {}) };
   }
 }
 const escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, (c) => '\\' + c);
@@ -751,9 +764,125 @@ export function scanClaims(text, claims) {
   return out;
 }
 
+/* ── old pages: the verdict, the static check, the live fetch ────────────────────────────────── */
+
+const OLD_PERMANENT = [301, 308];
+const oldKey = (p) => { let k = String(p || '').replace(/[?#].*$/, ''); try { k = decodeURI(k); } catch { /* keep */ } k = k.toLowerCase().replace(/\/index\.html?$/, '/').replace(/\/{2,}/g, '/').replace(/\/+$/, ''); return k === '' ? '/' : k; };
+
+/** The verdict on one fetched old address. ⛔ THE SAME RULE as judgeOldUrlResult in LeadFinderOS
+ *  src/lib/oldPages.ts — scripts/website-build-redirects.test.ts runs both over one table. */
+export function judgeOldUrl(r, target) {
+  const p = r.path;
+  if (!target) return { passed: false, detail: p + ' has no new page chosen.' };
+  if (r.target && oldKey(r.target) !== oldKey(target)) return { passed: false, detail: p + ' was checked against ' + r.target + ', but it now goes to ' + target + ' — run the check again.' };
+  if (r.problem) return { passed: false, detail: p + ' ' + r.problem + '.' };
+  if (r.final_status === 404 || r.final_status === 410) return { passed: false, detail: p + ' answers ' + r.final_status + ': the page is gone and nothing redirects it.' };
+  if (r.final_status !== 200 || !r.final_path) return { passed: false, detail: p + ' ends with HTTP ' + (r.final_status || 'no answer') + '.' };
+  if (r.soft_404 !== false) return { passed: false, detail: p + ' shows a "page not found" page with HTTP 200 (a soft 404).' };
+  if (oldKey(r.final_path) !== oldKey(target)) return { passed: false, detail: oldKey(r.final_path) === '/' ? p + ' sends visitors to the home page instead of ' + target + '.' : p + ' lands on ' + r.final_path + ', not on ' + target + '.' };
+  const temp = (r.hops ?? []).find((h) => !OLD_PERMANENT.includes(h));
+  if (temp != null) return { passed: false, detail: p + ' uses a temporary redirect (' + temp + ') where a permanent 301 is needed.' };
+  if ((r.hops ?? []).length > 1) return { passed: false, detail: p + ' goes through ' + r.hops.length + ' redirects (a chain): redirect it straight to ' + target + '.' };
+  if (r.noindex !== false) return { passed: false, detail: p + ' lands on ' + target + ', which carries noindex.' };
+  return { passed: true, detail: r.hops.length ? p + ' redirects once (' + r.hops[0] + ') to ' + target + '.' : p + ' still answers.' };
+}
+
+/** _redirects lines with their REAL status: Cloudflare Pages treats a line without one as a 302. */
+const redirectLines = (txt) => String(txt ?? '').split(/\r?\n/).map((l) => l.replace(/#.*$/, '').trim()).filter(Boolean)
+  .map((l) => l.split(/\s+/)).filter((p) => p.length >= 2).map(([from, to, status]) => ({ from, to, status: status ? Number(status) : 302 }));
+
+function oldPagesCheck(site, expect, pageFor, add) {
+  const label = 'Every important old address still answers, or redirects once (301) to its new page';
+  if (!expect || !Array.isArray(expect.oldUrls)) { add('old_urls', 'technical', label, 'skip', ['No oldUrls in --expect: the old site\'s addresses were not checked.']); return; }
+  const list = expect.oldUrls.filter((u) => u && u.path);
+  if (!list.length) { add('old_urls', 'technical', label, 'pass', ['No old pages to protect (LeadFinderOS records the client has no old site, or none are important).']); return; }
+  if (site.mode === 'url') {
+    const got = site.live?.oldUrls;
+    if (!got) { add('old_urls', 'technical', label, 'fail', ['The old addresses were not fetched.']); return; }
+    const fails = [];
+    for (const u of list) {
+      const r = got.results.find((x) => oldKey(x.path) === oldKey(u.path));
+      const v = r ? judgeOldUrl(r, u.target) : { passed: false, detail: u.path + ' was not fetched.' };
+      if (!v.passed) fails.push(v.detail);
+    }
+    add('old_urls', 'technical', label, fails.length ? 'fail' : 'pass', fails.length ? fails : ['Old pages protected: ' + list.length + ' of ' + list.length + '.']);
+    return;
+  }
+  /* --dist: the same list, statically: a kept address must be built; a moved one needs ONE 301 / 308 line
+     straight to a built page that is not itself redirected. The live fetch on the preview is what counts. */
+  const lines = redirectLines(site.redirects);
+  const ruleFor = (p) => lines.find((r) => !/[*:]/.test(r.from) && oldKey(r.from) === oldKey(p)) ?? lines.find((r) => /[*:]/.test(r.from) && oldKey(p).startsWith(oldKey(r.from.split(/[*:]/)[0])));
+  const fails = [];
+  for (const u of list) {
+    if (oldKey(u.path) === oldKey(u.target)) { if (!pageFor(u.target)) fails.push(u.path + ' must stay at the same address, but no page is built there.'); continue; }
+    const r = ruleFor(u.path);
+    if (!r) { fails.push(u.path + ' has no redirect in _redirects (it should go to ' + u.target + ').'); continue; }
+    if (!OLD_PERMANENT.includes(r.status)) fails.push(u.path + ' redirects with ' + r.status + (r.status === 302 ? ' (no status written = 302)' : '') + ' — write 301.');
+    if (oldKey(r.to) !== oldKey(u.target)) fails.push(u.path + ' redirects to ' + r.to + ', not ' + u.target + '.');
+    else if (!pageFor(u.target)) fails.push(u.path + ' redirects to ' + u.target + ', which is not built.');
+    else if (ruleFor(u.target) && oldKey(ruleFor(u.target).to) !== oldKey(u.target)) fails.push(u.path + ' redirects to ' + u.target + ', which redirects again (a chain).');
+    else if (r.to !== u.target && /\/$/.test(u.target) && !/\/$/.test(r.to)) fails.push(u.path + ' redirects to ' + r.to + ' without the trailing slash — a second hop to ' + u.target + '.');
+  }
+  add('old_urls', 'technical', label, fails.length ? 'fail' : 'pass', fails.length ? fails : ['Old pages in _redirects / built: ' + list.length + ' of ' + list.length + ' (the --url run on the preview is what counts).']);
+}
+
+const NOT_FOUND_TEXT = /(?:\b404\b\W{0,3}(?:error|not found|page)|\bnot found\b|\bpage (?:can(?:no|')t be found|does(?: not|n't) exist|no longer exists)\b|\bnothing (?:was )?found\b)/i;
+const visibleText = (html) => String(html).replace(/<(script|style|head)\b[\s\S]*?<\/\1>/gi, ' ').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().toLowerCase();
+
+/**
+ * Requests every old address against base (the preview or the live domain), following redirects ONE BY
+ * ONE (never off the site, at most five). Raw facts per address; judgeOldUrl decides. fetchImpl is for tests.
+ */
+export async function checkOldUrls({ base, list, preview = false, fetchImpl = fetch, ua = 'Mozilla/5.0 (compatible; FindableSiteGate/1; +https://findable.live)' }) {
+  const origin = new URL(base).origin;
+  const get = async (u) => {
+    try {
+      const r = await fetchImpl(u, { headers: { 'user-agent': ua }, redirect: 'manual' });
+      const status = r.status;
+      return { status, location: r.headers.get('location') ?? '', robots: r.headers.get('x-robots-tag') ?? '', text: status === 200 ? await r.text() : '' };
+    } catch (e) { return { status: 0, location: '', robots: '', text: '', error: String(e?.message || e) }; }
+  };
+  const follow = async (start) => {
+    const hops = []; const seen = new Set([start]); let url = start;
+    for (let i = 0; i <= 5; i++) {
+      const page = await get(url);
+      if (page.status >= 300 && page.status < 400 && page.location) {
+        hops.push(page.status);
+        let next;
+        try { next = new URL(page.location, url); } catch { return { hops, page, url, problem: 'redirects to an address that cannot be read (' + page.location + ')' }; }
+        if (next.origin !== origin) return { hops, page, url, problem: 'redirects off the site, to ' + next.host };
+        if (seen.has(next.toString())) return { hops, page, url, problem: 'redirects in a loop' };
+        seen.add(next.toString()); url = next.toString(); continue;
+      }
+      if (page.status === 0) return { hops, page, url, problem: 'does not answer (' + (page.error || 'no response') + ')' };
+      return { hops, page, url, problem: '' };
+    }
+    return { hops, page: null, url, problem: 'redirects more than five times' };
+  };
+  const probe = await follow(origin + '/lfos-missing-page-' + Math.random().toString(36).slice(2, 10) + '/');
+  const probeText = probe.page && !probe.problem && probe.page.status === 200 ? visibleText(probe.page.text) : null;
+  const results = [];
+  for (const u of list) {
+    const f = await follow(new URL(u.path, origin).toString());
+    const ok200 = !!f.page && !f.problem && f.page.status === 200;
+    const html = ok200 ? f.page.text : '';
+    const title = (/<title\b[^>]*>([\s\S]*?)<\/title>/i.exec(html) ?? [])[1] ?? '';
+    const h1 = (/<h1\b[^>]*>([\s\S]*?)<\/h1>/i.exec(html) ?? [])[1] ?? '';
+    const metaNo = [...html.matchAll(/<meta\b[^>]*>/gi)].some((m) => /name\s*=\s*["']?(?:robots|googlebot)\b/i.test(m[0]) && /noindex/i.test(m[0]));
+    results.push({
+      path: u.path, target: u.target, hops: f.hops, final_status: f.page && !f.problem ? f.page.status : 0,
+      final_path: f.problem ? null : new URL(f.url).pathname,
+      soft_404: ok200 ? (NOT_FOUND_TEXT.test(squash(title)) || NOT_FOUND_TEXT.test(squash(h1)) || (probeText !== null && visibleText(html) === probeText)) : false,
+      noindex: ok200 ? (metaNo || (!preview && /noindex/i.test(f.page.robots))) : false,
+      problem: f.problem,
+    });
+  }
+  return { base: origin, results };
+}
+
 /* ── live crawl (--url) ──────────────────────────────────────────────────────────────────────── */
 
-export async function crawlSite(startUrl, { max = 300, preview = false, domain = '', form = null } = {}) {
+export async function crawlSite(startUrl, { max = 300, preview = false, domain = '', form = null, oldUrls = null } = {}) {
   const start = new URL(startUrl);
   const base = start.origin;
   const pages = new Map(), files = new Set(), sitemaps = new Map();
@@ -808,7 +937,9 @@ export async function crawlSite(startUrl, { max = 300, preview = false, domain =
       formPreflight = { ok: r.status === 204 && (r.headers.get('access-control-allow-origin') ?? '') === base, detail: 'HTTP ' + r.status + (r.headers.get('access-control-allow-origin') ? '' : ', no CORS for ' + base) };
     } catch (e) { formPreflight = { ok: false, detail: String(e.message || e) }; }
   }
-  return { mode: 'url', pages, files, sizes: null, sitemaps, robots: robotsTxt, headers: null, redirects: null, llms: (await get(base + '/llms.txt')).status === 200, pagesComplete: queue.length === 0, live: { homeRobotsHeader, botFetch, transport, formPreflight } };
+  /* The old site's important addresses, requested on THIS copy (preview or live). */
+  const oldChecked = Array.isArray(oldUrls) ? await checkOldUrls({ base, list: oldUrls.filter((u) => u && u.path), preview, ua: UA }) : null;
+  return { mode: 'url', pages, files, sizes: null, sitemaps, robots: robotsTxt, headers: null, redirects: null, llms: (await get(base + '/llms.txt')).status === 200, pagesComplete: queue.length === 0, live: { homeRobotsHeader, botFetch, transport, formPreflight, oldUrls: oldChecked } };
 }
 
 /* ── CLI ─────────────────────────────────────────────────────────────────────────────────────── */
@@ -834,7 +965,7 @@ async function main(argv) {
   const expect = expectPath ? JSON.parse(readFileSync(expectPath, 'utf8')) : null;
   const opts = { domain: domain || expect?.domain, expect, preview: flag('preview'), forbidHosts: (arg('forbid-host') ?? '').split(',').concat(expect?.forbidHosts ?? []).filter(Boolean) };
   let site;
-  if (arg('url')) site = await crawlSite(arg('url'), { preview: opts.preview, domain: String(opts.domain || ''), form: expect?.form ?? null });
+  if (arg('url')) site = await crawlSite(arg('url'), { preview: opts.preview, domain: String(opts.domain || ''), form: expect?.form ?? null, oldUrls: Array.isArray(expect?.oldUrls) ? expect.oldUrls : null });
   else site = loadDist(arg('dist') ?? 'dist');
   const report = auditSite(site, opts);
   if (arg('json')) writeFileSync(arg('json'), JSON.stringify(report, null, 2));

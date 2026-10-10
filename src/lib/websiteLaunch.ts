@@ -16,6 +16,9 @@
      · every required preview QA tick (requiredPreviewQa), "No unverified claim published" among them —
        the technical ones answered by the automatic gate once the preview is ready (outstandingPreviewQa)
      · a live enquiry form switched on when the build has a site-enquiry form
+     · RANKING PROTECTION (2026-10-10, oldPages.ts): the old site's pages recorded (or "no old site" recorded
+       explicitly), every important old address mapped, and the PREVIEW gate run's fetch of each one judged a
+       pass by LeadFinderOS for its current mapping. "Production checked" repeats it on the live domain.
 
      productionReadiness()       the problems, in Paul's words. Empty = production may be offered.
      productionGateProblems()    why an imported LIVE gate report cannot verify the launch
@@ -35,6 +38,7 @@ import {
   type ProductionGateRecord, type WebsiteBuildState,
 } from './websiteBuildState.ts';
 import { siteFormProblems } from './siteForm.ts';
+import { oldPagesProblems, oldPagesSaveRefusal, type OldPagesState } from './oldPages.ts';
 
 export interface DomainReadiness { applies: boolean; ready: boolean; reasons: string[] }
 
@@ -80,18 +84,21 @@ export function productionReadiness(i: LaunchInput): string[] {
   const missing = outstandingPreviewQa(s, i.hasExistingSite);
   if (missing.length) out.push(missing.length + ' preview QA tick(s) not done: ' + missing.slice(0, 4).map((q) => q.label).join('; ') + (missing.length > 4 ? ' …' : ''));
   if ((b.standard.form === 'site_enquiry') && !s.form.enabled) out.push('The site has an enquiry form but it is not switched on in LeadFinderOS — the live form would not deliver');
+  for (const p of oldPagesProblems(s.old_pages, b.old_urls, { stage: 'preview', base: b.preview_url || s.preview_url })) out.push(p);
   return out;
 }
 
 /** Why an imported LIVE gate report (scripts/findable-site-gate.mjs --url https://<domain>) cannot
- *  verify the launch. Empty = it can. */
-export function productionGateProblems(g: ProductionGateRecord, canonicalDomain: string): string[] {
+ *  verify the launch. Empty = it can. The old pages are fetched again on the real domain (oldPages.ts):
+ *  `oldPages` is required — a caller cannot skip them by leaving it out. */
+export function productionGateProblems(g: ProductionGateRecord, canonicalDomain: string, oldPages: OldPagesState): string[] {
   if (!g.imported_at) return ['Live site gate not imported (run it on the real domain and paste qa/site-gate-production.json)'];
   const out: string[] = [];
   const dom = (canonicalDomain || '').toLowerCase().replace(/^https?:\/\//, '').replace(/\/.*$/, '');
   if (g.mode !== 'url' || g.preview) out.push('The imported gate was not a --url run on the live site (it was ' + (g.mode || 'unknown') + (g.preview ? ', preview' : '') + ')');
   if (dom && g.domain !== dom) out.push('The gate ran for ' + (g.domain || 'no domain') + ', not ' + dom);
   if (g.passed !== true || g.fails.length) out.push('The live site gate FAILED' + (g.fails.length ? ': ' + g.fails.slice(0, 5).join('; ') : ''));
+  for (const p of oldPagesProblems(oldPages, g.old_urls, { stage: 'production', base: dom })) out.push(p);
   return out;
 }
 
@@ -117,12 +124,14 @@ export function websiteBuildSaveRefusal(prevRaw: unknown, nextRaw: unknown, ctx:
   const verifies = (next.qa.production_checked === true && prev.qa.production_checked !== true) || (next.production_status === 'verified' && prev.production_status !== 'verified');
   const formOn = next.form.enabled && (!prev.form.enabled || prev.form.site_key !== next.form.site_key || prev.form.recipient !== next.form.recipient);
   if (ctx.route === 'optimise' && (newly.length || verifies || formOn)) return OPTIMISE_BUILD_REFUSAL;
+  const lost = oldPagesSaveRefusal(prev.old_pages, next.old_pages);
+  if (lost) return lost;
   if (newly.length) {
     const problems = productionReadiness({ state: next, route: ctx.route, routeSource: ctx.routeSource, hasExistingSite: stateHasExistingSite(next), domain: ctx.domain ?? null });
     if (problems.length) return 'Not saved: this would record ' + newly.join(', ') + ', but the site is not cleared for production — ' + problems.slice(0, 4).join('; ') + (problems.length > 4 ? ' …' : '') + '.';
   }
   if (verifies) {
-    const g = productionGateProblems(readProductionGate(next.production_gate), next.canonical_domain);
+    const g = productionGateProblems(readProductionGate(next.production_gate), next.canonical_domain, next.old_pages);
     if (!next.production_url) g.unshift('No production URL recorded');
     if (g.length) return 'Not saved: "Production checked" needs the live site gate to pass first — ' + g.join('; ') + '.';
   }

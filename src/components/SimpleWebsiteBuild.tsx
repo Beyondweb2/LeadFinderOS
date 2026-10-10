@@ -23,9 +23,13 @@ import { edgeErrorMessage } from '@/lib/edgeInvoke';
 import {
   BUILD_TYPE_INFO, BUILD_TYPES, SIMPLE_STEP_LABELS, SIMPLE_STEPS, applyBuildType, blockers, clientServices, cloudflareOneTimeSteps,
   correctionsWithFailures, launchLines, masterBuildPrompt, openClaudeCommand, prepareWebsite, recommendedBuildType, resolveBuildType,
-  setReviewItem, simpleIssues, simpleProgress, technicalCheck, terminalSteps, trustedPack, type BuildIssue, type BuildType, type IssueFix, type SimpleInput,
+  newSitePages, oldPagesView, setReviewItem, simpleIssues, simpleProgress, technicalCheck, terminalSteps, trustedPack, type BuildIssue, type BuildType, type IssueFix, type PrepareContext, type SimpleInput,
 } from '@/lib/simpleBuild';
 import { isPublishable } from '@/lib/buildFacts';
+import {
+  MIN_HOME_REASON, REASON_LABEL, addOldUrl, isMandatory, mapOldUrl, noOldSiteRefusal, pathKey, recordNoOldSite, removeOldUrl, setOldUrlImportant,
+  type CrawlPageRow, type OldUrl,
+} from '@/lib/oldPages';
 
 /* ════════════════════════════════════════════════════════════════════════════════════════════════
    WEBSITE BUILD — THE SIMPLE SCREEN (2026-10-05). /paid-clients/:leadId/website-build
@@ -60,6 +64,8 @@ export interface SimpleWebsiteBuildProps {
   onAdvanced: () => void;
   copy: (title: string, text: string) => Promise<boolean>;
   toast: Toast;
+  /** The stored full crawl of the current site, page by page (paid-client-hub old_site_pages). */
+  loadOldSite: () => Promise<CrawlPageRow[]>;
 }
 
 /* The operator tones (components/operator/ui): a soft wash and coloured text, no hard border —
@@ -128,21 +134,28 @@ export default function SimpleWebsiteBuild(p: SimpleWebsiteBuildProps) {
     const msg = pendingPrepare.current;
     if (msg === null) return;
     pendingPrepare.current = null;
-    runPrepare(false);
+    void runPrepare(false);
     if (msg) toast({ title: msg });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pack]);
 
-  const runPrepare = (announce = true) => {
+  /* The old site's pages: the stored full crawl, else the quick crawl's pages, else none (the home page only). */
+  const readOldSite = async (): Promise<PrepareContext['oldSite']> => {
+    if (!pack.existingSiteUrl) return null;
+    const quick = (): PrepareContext['oldSite'] => (p.oldUrls.length ? { rows: p.oldUrls.map((u) => ({ url: u.url, source: 'link', inbound: null, http_status: null, status: 'done' })), readFrom: 'quick_crawl' } : null);
+    try { const rows = await p.loadOldSite(); return rows.length ? { rows, readFrom: 'full_crawl' } : quick(); } catch { return quick(); }
+  };
+  const runPrepare = async (announce = true) => {
+    const oldSite = await readOldSite();
     let changes: string[] = [];
-    update((s) => { const r = prepareWebsite({ pack: { ...pack, state: s }, onboarding: p.onboarding, active: !p.ended }); changes = r.changes; return r.state; });
+    update((s) => { const r = prepareWebsite({ pack: { ...pack, state: s }, onboarding: p.onboarding, active: !p.ended, oldSite }); changes = r.changes; return r.state; });
     if (announce) toast({ title: 'Website prepared', description: changes.length ? changes.slice(0, 4).join(' · ') + (changes.length > 4 ? ' …' : '') : 'Everything was already in place.' });
   };
 
   const prepare = async () => {
     setPreparing(true);
     try {
-      runPrepare();
+      await runPrepare();
       const site = pack.existingSiteUrl;
       if (site && p.crawl.status === 'none' && !crawlJob) {
         const res = await startFullLeadCrawl(leadId, 'website_build');
@@ -197,13 +210,14 @@ export default function SimpleWebsiteBuild(p: SimpleWebsiteBuildProps) {
     if (!r.reported) { toast({ title: 'Not a live check', description: 'That JSON has no site gate checks in it.', variant: 'destructive' }); return; }
     const gate = { imported_at: new Date().toISOString(), version: r.version, domain: r.domain, mode: r.mode, preview: r.preview, passed: r.passed,
       fails: r.checks.filter((c) => c.level === 'fail').map((c) => c.label + (c.details[0] ? ' (' + c.details[0] + ')' : '')).slice(0, 40),
-      warns: r.checks.filter((c) => c.level === 'warn').map((c) => c.label).slice(0, 40) };
-    const passes = productionGateProblems(gate, state.canonical_domain).length === 0;
+      warns: r.checks.filter((c) => c.level === 'warn').map((c) => c.label).slice(0, 40), old_urls: r.oldUrls };
+    const liveProblems = productionGateProblems(gate, state.canonical_domain, state.old_pages);
+    const passes = liveProblems.length === 0;
     update((s) => passes
       ? { ...s, production_gate: gate, production_url: s.production_url || 'https://' + s.canonical_domain, production_status: 'verified', custom_domain_status: 'active', qa: { ...s.qa, production_deployed: true, production_checked: true } }
       : { ...s, production_gate: gate });
     setLiveText('');
-    toast({ title: passes ? 'Live — the live check passed' : 'The live check did not pass', description: passes ? 'https://' + state.canonical_domain : gate.fails.slice(0, 3).join('; '), variant: passes ? undefined : 'destructive' });
+    toast({ title: passes ? 'Live — the live check passed' : 'The live check did not pass', description: passes ? 'https://' + state.canonical_domain : liveProblems.slice(0, 3).join('; '), variant: passes ? undefined : 'destructive' });
   };
 
   const sideBySide = () => {
@@ -304,9 +318,10 @@ export default function SimpleWebsiteBuild(p: SimpleWebsiteBuildProps) {
         </div>
         {progress.done.gather && <div className="flex flex-wrap gap-1.5 text-[11px]">{gathered.filter(([, v]) => v).map(([k, v]) => <span key={k} className="max-w-full break-words rounded-full border px-2 py-0.5"><span className="text-muted-foreground">{k}:</span> {v}</span>)}</div>}
         {progress.done.gather && (shown.length
-          ? <div className="space-y-2"><p className="text-xs font-semibold uppercase tracking-wide">Needs you</p>{shown.map((x) => <IssueCard key={x.id} issue={x} onFact={putFact} onType={chooseType} update={update} />)}</div>
+          ? <div className="space-y-2"><p className="text-xs font-semibold uppercase tracking-wide">Needs you</p>{shown.map((x) => <IssueCard key={x.id} issue={x} onFact={putFact} onType={chooseType} update={update} hasOld={hasOld} />)}</div>
           : <p className={`flex items-center gap-2 rounded-xl border p-2 text-xs ${tone.ok}`}><CheckCircle2 className="h-4 w-4" />Nothing needs you. Everything else is decided automatically.</p>)}
-        {!progress.done.gather && stops.length > 0 && stops.some((s) => s.id === 'route') && <IssueCard issue={stops.find((s) => s.id === 'route')!} onFact={putFact} onType={chooseType} update={update} />}
+        {!progress.done.gather && stops.length > 0 && stops.some((s) => s.id === 'route') && <IssueCard issue={stops.find((s) => s.id === 'route')!} onFact={putFact} onType={chooseType} update={update} hasOld={hasOld} />}
+        {progress.done.gather && (state.old_pages.urls.length > 0 || state.old_pages.none_at) && <OldPagesPanel state={state} update={update} pack={pack} />}
       </Block>
 
       {/* 3 — BUILD */}
@@ -349,6 +364,8 @@ export default function SimpleWebsiteBuild(p: SimpleWebsiteBuildProps) {
           </div>
           {pack.existingSiteUrl && previewUrl && <p className="text-xs text-muted-foreground">Side by side: the button opens both. If only one opens, open the other too, then press Windows key + ← on one and Windows key + → on the other.</p>}
 
+          {(state.old_pages.urls.length > 0) && (() => { const v = oldPagesView(state);
+            return <p className={`rounded-xl border p-2 text-xs font-semibold ${v.missing.length ? tone.warn : tone.ok}`}>{v.line}{v.missing.length ? ' — ' + v.missing.length + ' not protected yet (listed under Prepare)' : ' ✓'}</p>; })()}
           <div className={`rounded-xl border p-3 ${tech.state === 'passed' ? tone.ok : tone.bad}`}>
             <p className="font-semibold">TECHNICAL CHECK {tech.state === 'passed' ? <span>✓ Passed</span> : <span>— {tech.failures.length} thing{tech.failures.length === 1 ? '' : 's'} need{tech.failures.length === 1 ? 's' : ''} fixing</span>}</p>
             {tech.state === 'failed' && <ul className="mt-1 list-disc space-y-0.5 break-words pl-5 text-xs">{tech.failures.slice(0, 12).map((f) => <li key={f}>{f}</li>)}</ul>}
@@ -392,7 +409,7 @@ export default function SimpleWebsiteBuild(p: SimpleWebsiteBuildProps) {
 
       {/* 5 — LAUNCH */}
       <Block n={5} title="Launch" done={progress.done.launch}>
-        {issues.filter((x) => x.level === 'launch').map((x) => <IssueCard key={x.id} issue={x} onFact={putFact} onType={chooseType} update={update} />)}
+        {issues.filter((x) => x.level === 'launch').map((x) => <IssueCard key={x.id} issue={x} onFact={putFact} onType={chooseType} update={update} hasOld={hasOld} />)}
         {progress.done.launch ? <p className={`flex items-center gap-2 rounded-xl border p-2 ${tone.ok}`}><Rocket className="h-4 w-4" />Live at <a className="underline" href={state.production_url} target="_blank" rel="noreferrer">{state.production_url}</a> — the live check passed.</p>
           : p.launch.length ? <div className="text-xs"><p className="font-medium">Before launch:</p><ul className="mt-1 list-disc space-y-0.5 break-words pl-5">{launchLines(p.launch).slice(0, 10).map((l) => <li key={l}>{l}</li>)}</ul></div>
           : <div className="space-y-3">
@@ -417,17 +434,19 @@ export default function SimpleWebsiteBuild(p: SimpleWebsiteBuildProps) {
 
 /* ── one problem, with its own fix ──────────────────────────────────────────────────────────────── */
 
-function IssueCard({ issue, onFact, onType, update }: { issue: BuildIssue; onFact: (key: string, label: string, value: string) => void; onType: (t: BuildType) => void; update: UpdateFn }) {
+function IssueCard({ issue, onFact, onType, update, hasOld }: { issue: BuildIssue; onFact: (key: string, label: string, value: string) => void; onType: (t: BuildType) => void; update: UpdateFn; hasOld: boolean }) {
   const cls = issue.level === 'blocker' ? tone.bad : tone.warn;
   return <div className={`space-y-2 rounded-xl border p-3 ${cls}`}>
     <p className="flex items-start gap-2 font-medium">{issue.level === 'blocker' ? <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" /> : <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />}<span className="min-w-0 break-words">{issue.title}{issue.level === 'decide' && <span className="ml-1 text-xs font-normal">(does not stop the preview)</span>}</span></p>
     {issue.detail && <p className="break-words text-xs">{issue.detail}</p>}
-    {issue.fixes.length > 0 && <div className="flex flex-wrap items-center gap-2">{issue.fixes.map((f, n) => <Fix key={n} fix={f} onFact={onFact} onType={onType} update={update} />)}</div>}
+    {issue.fixes.length > 0 && <div className="flex flex-wrap items-center gap-2">{issue.fixes.map((f, n) => <Fix key={n} fix={f} onFact={onFact} onType={onType} update={update} hasOld={hasOld} />)}</div>}
   </div>;
 }
 
-function Fix({ fix, onFact, onType, update }: { fix: IssueFix; onFact: (key: string, label: string, value: string) => void; onType: (t: BuildType) => void; update: UpdateFn }) {
+function Fix({ fix, onFact, onType, update, hasOld }: { fix: IssueFix; onFact: (key: string, label: string, value: string) => void; onType: (t: BuildType) => void; update: UpdateFn; hasOld: boolean }) {
   const [v, setV] = useState('');
+  if (fix.kind === 'old_pages') return <Button size="sm" variant="outline" className="border-current bg-transparent text-inherit hover:bg-black/5" onClick={() => document.getElementById('old-pages')?.scrollIntoView({ behavior: 'smooth', block: 'center' })}>Choose where they go</Button>;
+  if (fix.kind === 'no_old_site') return <NoOldSiteFix update={update} hasOld={hasOld} />;
   if (fix.kind === 'link') return <Button asChild size="sm" variant="outline" className="border-current bg-transparent text-inherit hover:bg-black/5"><Link to={fix.href}>{fix.label}</Link></Button>;
   if (fix.kind === 'switch_type') return <Button size="sm" variant="outline" className="border-current bg-transparent text-inherit hover:bg-black/5" onClick={() => onType(fix.to)}>{fix.label}</Button>;
   if (fix.kind === 'confirm_rights') return <Button size="sm" variant="outline" className="h-auto min-h-8 whitespace-normal border-current bg-transparent text-inherit hover:bg-black/5 text-left" onClick={() => update((s) => ({ ...s, copy_ownership: 'client_permission' }))}>The client has confirmed they own / may reuse it</Button>;
@@ -439,5 +458,62 @@ function Fix({ fix, onFact, onType, update }: { fix: IssueFix; onFact: (key: str
     {fix.options.map((o) => <Button key={o} size="sm" variant="outline" className="h-auto min-h-8 max-w-full whitespace-normal break-words border-current bg-transparent text-inherit hover:bg-black/5 text-left" onClick={() => onFact(fix.key, fix.label, o)}>{fix.input ? 'Use ' : 'Confirm '}“{o.length > 80 ? o.slice(0, 80) + '…' : o}”</Button>)}
     {fix.input && <><Input aria-label={fix.label} className="h-8 min-w-0 flex-1 border-current bg-transparent text-inherit hover:bg-black/5 text-xs" value={v} placeholder={'Type the correct ' + fix.label.toLowerCase()} onChange={(e) => setV(e.target.value)} />
       <Button size="sm" disabled={!v.trim()} onClick={() => onFact(fix.key, fix.label, v)}>Save</Button></>}
+  </div>;
+}
+
+/* ── RANKING PROTECTION: the old site's pages (src/lib/oldPages.ts) ─────────────────────────────── */
+
+/** "The client has no old website" — recorded with how Paul knows. Refused while a current site or old pages are on record. */
+function NoOldSiteFix({ update, hasOld }: { update: UpdateFn; hasOld: boolean }) {
+  const [why, setWhy] = useState('');
+  return <div className="flex w-full min-w-0 flex-wrap items-center gap-2">
+    <Input aria-label="How you know there is no old site" className="h-8 min-w-0 flex-1 border-current bg-transparent text-inherit text-xs" value={why} placeholder="How you know, e.g. the client said they have never had a website" onChange={(e) => setWhy(e.target.value)} />
+    <Button size="sm" disabled={!!noOldSiteRefusal({ site_url: '', recorded_at: '', read_from: '', none_at: '', none_reason: '', urls: [] }, hasOld, why)}
+      onClick={() => update((s) => (noOldSiteRefusal(s.old_pages, hasOld, why) ? s : { ...s, old_pages: recordNoOldSite(s.old_pages, why, new Date().toISOString()) }))}>They have no old website</Button>
+  </div>;
+}
+
+const HOME = '/';
+function OldPagesPanel({ state, update, pack }: { state: WebsiteBuildState; update: UpdateFn; pack: BuildPackInput }) {
+  const op = state.old_pages;
+  const view = oldPagesView(state);
+  const [add, setAdd] = useState('');
+  const [err, setErr] = useState('');
+  const pages = useMemo(() => {
+    const seen = new Set<string>();
+    return newSitePages({ ...pack, state }).filter((x) => { const k = pathKey(x.path); if (seen.has(k)) return false; seen.add(k); return true; });
+  }, [pack, state]);
+  if (op.none_at && !op.urls.length) return <p className={`rounded-xl border p-2 text-xs ${tone.ok}`}>No old website (recorded {op.none_at.slice(0, 10)}: {op.none_reason}) — nothing to protect.</p>;
+  const open = op.urls.filter((u) => u.important && (!u.target || (pathKey(u.target) === HOME && pathKey(u.path) !== HOME && u.home_reason.trim().length < MIN_HOME_REASON)));
+  const row = (u: OldUrl) => {
+    const homeDump = !!u.target && pathKey(u.target) === HOME && pathKey(u.path) !== HOME;
+    const choices = [...pages.map((x) => x.path), ...(u.target && !pages.some((x) => pathKey(x.path) === pathKey(u.target)) ? [u.target] : [])];
+    return <li key={u.path} className="flex min-w-0 flex-wrap items-center gap-2 border-t border-border/40 py-1.5 first:border-t-0">
+      <code className="min-w-0 max-w-full break-all font-mono text-[11px]">{u.path}</code>
+      <span className="text-[11px] text-muted-foreground">{u.reasons.map((r) => REASON_LABEL[r]).join(', ')}</span>
+      <span className="text-[11px]">→</span>
+      <select aria-label={'New page for ' + u.path} className="h-7 max-w-full rounded-md border bg-background px-1 text-xs" value={u.target}
+        onChange={(e) => update((s) => ({ ...s, old_pages: mapOldUrl(s.old_pages, u.path, e.target.value, u.home_reason) }))}>
+        <option value="">Choose the new page…</option>
+        {choices.map((c) => <option key={c} value={c}>{pathKey(c) === pathKey(u.path) ? c + ' (same address — kept)' : pathKey(c) === HOME ? '/ (home page — needs a reason)' : c}</option>)}
+      </select>
+      {homeDump && <Input aria-label={'Why ' + u.path + ' goes to the home page'} className="h-7 min-w-0 flex-1 text-xs" value={u.home_reason} placeholder="Why the home page is the right place (required)"
+        onChange={(e) => { const r = e.target.value; update((s) => ({ ...s, old_pages: { ...s.old_pages, urls: s.old_pages.urls.map((x) => (x.path === u.path ? { ...x, home_reason: r.slice(0, 300) } : x)) } })); }} />}
+      <label className="flex items-center gap-1 text-[11px]"><input type="checkbox" checked={u.important} disabled={isMandatory(u.reasons)} onChange={(e) => update((s) => ({ ...s, old_pages: setOldUrlImportant(s.old_pages, u.path, e.target.checked) }))} />important{isMandatory(u.reasons) ? ' (always)' : ''}</label>
+      {u.source === 'person' && <button type="button" className="text-[11px] text-primary underline" onClick={() => update((s) => ({ ...s, old_pages: removeOldUrl(s.old_pages, u.path) }))}>remove</button>}
+    </li>;
+  };
+  return <div id="old-pages" className={cn('space-y-2 p-3 text-sm', INSET)}>
+    <p className="font-semibold">{view.line}</p>
+    <p className="text-xs text-muted-foreground">Every important page of their current site keeps working on the new one — at the same address, or with one permanent redirect to the right new page — so its rankings are kept. LeadFinder checks each one on the preview, and again on the live site; the launch waits for them.{op.read_from === 'homepage_only' ? ' Their site could not be read, so only the home page is listed — add any address you know matters.' : ''}</p>
+    {view.missing.length > 0 && <ul className={cn('list-disc space-y-0.5 break-words pl-5 text-xs', TONE.amber.text)}>{view.missing.slice(0, 8).map((m) => <li key={m}>{m}</li>)}{view.missing.length > 8 && <li>… and {view.missing.length - 8} more</li>}</ul>}
+    {open.length > 0 && <ul className="space-y-0">{open.map(row)}</ul>}
+    <details className="text-xs"><summary className="cursor-pointer">All old pages ({op.urls.length}) — where each one goes</summary>
+      <ul className="mt-1">{op.urls.map(row)}</ul></details>
+    <div className="flex min-w-0 flex-wrap items-center gap-2">
+      <Input aria-label="Add an old address" className="h-7 min-w-0 flex-1 text-xs" value={add} placeholder="Add an old address you know matters, e.g. /boiler-repair-leeds/" onChange={(e) => { setAdd(e.target.value); setErr(''); }} />
+      <Button size="sm" variant="outline" className="h-7 text-xs" disabled={!add.trim()} onClick={() => { const r = addOldUrl(op, add); if (r.error) { setErr(r.error); return; } update((s) => ({ ...s, old_pages: addOldUrl(s.old_pages, add).state })); setAdd(''); }}>Add</Button>
+      {err && <span className={cn('text-xs', TONE.red.text)}>{err}</span>}
+    </div>
   </div>;
 }

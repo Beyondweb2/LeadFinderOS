@@ -29,6 +29,7 @@ import { ALL_ROUTE_CHECK_IDS } from './buildRoutes.ts';
 import { EMPTY_QUALITY, EMPTY_UPGRADE, qualityGateProblems, readQuality, readUpgradeReview, type QualityState, type UpgradeReview } from './websiteQuality.ts';
 import { EMPTY_STANDARD, readStandardReport, standardProblems, type StandardEvidence, type StandardReport } from './websiteBuildStandard.ts';
 import { EMPTY_SITE_FORM, readSiteForm, type SiteFormState } from './siteForm.ts';
+import { EMPTY_OLD_PAGES, EMPTY_OLD_URL_CHECK, oldPagesSummary, readOldPages, readOldUrlCheck, type OldPagesState, type OldUrlCheck } from './oldPages.ts';
 
 export const WEBSITE_BUILD_VERSION = 2;
 
@@ -239,7 +240,7 @@ export const GATE_ANSWERED_QA: Partial<Record<QaKey, string>> = {
   schema_valid: 'schema',
   sitemap_robots: 'sitemap + robots',
   canonicals_domain: 'canonical + domain',
-  old_urls_handled: 'the build’s old-URL coverage (nothing unresolved)',
+  old_urls_handled: 'every important old page fetched on the preview: kept, or one permanent redirect to its new page',
 };
 /**
  * The technical preview ticks the gate has answered for THIS state: only when the imported build result
@@ -251,8 +252,14 @@ export function gateAnsweredQa(s: WebsiteBuildState, hasExistingSite: boolean = 
   const b = s.build_execution;
   if (!b.result_imported_at || b.result_status !== 'preview_ready') return [];
   if (previewReadyProblems(s, hasExistingSite).length) return [];
-  const redirectsClean = b.redirects.unresolved.length === 0 && b.redirects.issues.length === 0;
+  const redirectsClean = b.redirects.unresolved.length === 0 && b.redirects.issues.length === 0 && oldPagesPreviewClean(s);
   return (Object.keys(GATE_ANSWERED_QA) as QaKey[]).filter((k) => k !== 'old_urls_handled' || redirectsClean);
+}
+/** Ranking protection on the PREVIEW (oldPages.ts): no old site recorded explicitly, or every important old
+ *  address passed LeadFinderOS's own judgement of the preview check, for its current mapping. */
+export function oldPagesPreviewClean(s: WebsiteBuildState): boolean {
+  const sum = oldPagesSummary(s.old_pages, s.build_execution.old_urls, s.build_execution.preview_url || s.preview_url);
+  return sum.mode === 'exempt' || (sum.mode === 'recorded' && sum.missing.length === 0);
 }
 /** THE preview ticks still owed before production: required, not ticked, not answered by the gate. */
 export function outstandingPreviewQa(s: WebsiteBuildState, hasExistingSite: boolean = stateHasExistingSite(s)): Array<(typeof QA_ITEMS)[number]> {
@@ -370,12 +377,15 @@ export interface BuildExecution {
   standard: StandardReport;
   /** The last result before this one — a failed build never erases what was working. */
   previous: BuildSnapshot | null;
+  /** RANKING PROTECTION (oldPages.ts): the old addresses as the PREVIEW gate run fetched them
+   *  (quality.siteGatePreview.oldUrls). Not reported = never checked. */
+  old_urls: OldUrlCheck;
 }
 export const EMPTY_BUILD_EXECUTION: BuildExecution = {
   started_at: '', completed_at: '', template_id: '', config_version: '', repository_url: '', repository_name: '', branch: '', local_path: '',
   cloudflare_project: '', preview_url: '', deployment_id: '', deployment_status: '', noindex_confirmed: null, output_dir: '', commit_hash: '',
   result_imported_at: '', result_status: '', warnings: [], errors: [], qa: {}, pages: [], services: [], locations: [], assets: [],
-  redirects: { kept: null, redirected: null, retired: null, unresolved: [], issues: [] }, seed_hits: [], upgrade: EMPTY_UPGRADE, standard: EMPTY_STANDARD, previous: null,
+  redirects: { kept: null, redirected: null, retired: null, unresolved: [], issues: [] }, seed_hits: [], upgrade: EMPTY_UPGRADE, standard: EMPTY_STANDARD, previous: null, old_urls: EMPTY_OLD_URL_CHECK,
 };
 const strList = (v: unknown, n: number, cap: number) => arr(v).map((x) => str(x, cap)).filter(Boolean).slice(0, n);
 export function readBuildExecution(v: unknown): BuildExecution {
@@ -397,6 +407,7 @@ export function readBuildExecution(v: unknown): BuildExecution {
     upgrade: readUpgradeReview(o.upgrade),
     standard: readStandardReport(o.standard),
     previous: Object.keys(p).length ? { commit_hash: str(p.commit_hash, 64), repository_url: str(p.repository_url, 500), preview_url: str(p.preview_url, 500), result_status: oneOf(BUILD_RESULT_STATUSES, p.result_status, ''), imported_at: str(p.imported_at, 40) } : null,
+    old_urls: readOldUrlCheck(o.old_urls),
   };
 }
 
@@ -539,6 +550,9 @@ export interface WebsiteBuildState {
   /** The site's main call to action, in Paul's words ("Call Gareth", "Send an enquiry"). Blank = the
    *  builder chooses from the verified contact routes. */
   primary_cta: string;
+  /** RANKING PROTECTION (2026-10-10, oldPages.ts): the old site's addresses, the new page each lands
+   *  on, or the explicit "no old site" record. */
+  old_pages: OldPagesState;
 }
 
 /** The production gate report, kept small: the verdict and the failing / warning check labels. */
@@ -551,8 +565,10 @@ export interface ProductionGateRecord {
   passed: boolean | null;
   fails: string[];
   warns: string[];
+  /** The old addresses as the LIVE gate run fetched them (oldPages.ts). */
+  old_urls: OldUrlCheck;
 }
-export const EMPTY_PRODUCTION_GATE: ProductionGateRecord = { imported_at: '', version: null, domain: '', mode: '', preview: false, passed: null, fails: [], warns: [] };
+export const EMPTY_PRODUCTION_GATE: ProductionGateRecord = { imported_at: '', version: null, domain: '', mode: '', preview: false, passed: null, fails: [], warns: [], old_urls: EMPTY_OLD_URL_CHECK };
 export function readProductionGate(v: unknown): ProductionGateRecord {
   const o = obj(v);
   const list = (x: unknown) => arr(x).map((y) => str(y, 300)).filter(Boolean).slice(0, 40);
@@ -560,6 +576,7 @@ export function readProductionGate(v: unknown): ProductionGateRecord {
     imported_at: str(o.imported_at, 40), version: typeof o.version === 'number' ? o.version : null,
     domain: str(o.domain, 253).toLowerCase(), mode: str(o.mode, 10), preview: o.preview === true,
     passed: o.passed === true ? true : o.passed === false ? false : null, fails: list(o.fails), warns: list(o.warns),
+    old_urls: readOldUrlCheck(o.old_urls),
   };
 }
 
@@ -607,7 +624,7 @@ export const EMPTY_WEBSITE_BUILD: WebsiteBuildState = {
   mapping: { services: {}, candidate_map: {}, locations: {}, assets: {}, fields: {} },
   build_execution: EMPTY_BUILD_EXECUTION,
   facts: [], pages: [], redirects: [], qa: {}, checks: {}, quality: EMPTY_QUALITY,
-  form: EMPTY_SITE_FORM, production_gate: EMPTY_PRODUCTION_GATE, corrections: '', primary_cta: '',
+  form: EMPTY_SITE_FORM, production_gate: EMPTY_PRODUCTION_GATE, corrections: '', primary_cta: '', old_pages: EMPTY_OLD_PAGES,
 };
 
 const obj = (v: unknown): Record<string, unknown> =>
@@ -783,6 +800,7 @@ export function parseWebsiteBuild(raw: unknown): WebsiteBuildState {
   out.quality = readQuality(o.quality);
   out.form = readSiteForm(o.form);
   out.production_gate = readProductionGate(o.production_gate);
+  out.old_pages = readOldPages(o.old_pages);
   return out;
 }
 
@@ -966,7 +984,7 @@ export function previewGateProblems(b: BuildExecution): string[] {
 /** Does this build replace an existing website? Derived from the state when the caller does not know
  *  better: a recorded source URL, an imported recon of a site, or its crawled pages. */
 export function stateHasExistingSite(s: WebsiteBuildState): boolean {
-  return !!(s.source_site_url || s.recon.source_url || s.manifest.pages.length);
+  return !!(s.source_site_url || s.recon.source_url || s.manifest.pages.length || s.old_pages?.urls.length);
 }
 
 /** The pages that exist for the completeness check: what the build reported, else the page plan. */

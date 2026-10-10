@@ -20,7 +20,7 @@ Choose build type
   → compare old site + preview side by side
   → review (8 checks)
   → corrections (one prompt, same preview) — repeat if needed
-  → automated technical gate passes
+  → automated technical gate passes (incl. "Old pages protected: X of Y")
   → launch (production prompt → paste the live gate report)
 ```
 
@@ -97,7 +97,11 @@ superlatives, prices, tracking IDs.
   production domain, no stray `noindex` (preview builds on `*.pages.dev` ARE noindexed via `_headers`).
 - **OAI-SearchBot / crawlability:** the master prompt makes Claude confirm the pages can be fetched by OpenAI's search
   crawler (and other legitimate crawlers); content must be in the HTML, not only behind JavaScript.
-- **Old URLs:** every old URL gets a 301 to its new home.
+- **Old URLs (ranking protection, 2026-10-10, `docs/website-build-redirects.md`):** Prepare records the old site's pages from
+  the crawl; every IMPORTANT one (home, services, contact, linked sitemap pages — and anything unsure) must be kept or get ONE 301
+  to its new page (never the home page without a written reason). The gate fetches each on the preview and the live site;
+  LeadFinderOS judges the raw results itself. Launch and "Production checked" wait for them. A client with no old site is exempt
+  only by an explicit "no old site" record. Simple screen: one line, "Old pages protected: X of Y".
 - **Forms:** a real enquiry form through fn `site-enquiry` (recipient never from the request); a `mailto:` form always fails.
 
 ## The Master Build Prompt (`masterBuildPrompt`, `MASTER_PROMPT_VERSION = master-build-1`)

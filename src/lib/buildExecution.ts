@@ -41,7 +41,8 @@ import { clean, extractJson, safeUrl } from './recon.ts';
 import { oneLine } from './manifestSummary.ts';
 import { pathKey, redirectMatcher, toPath } from './buildArchitecture.ts';
 import { templateCacheName } from './websiteTemplates.ts';
-import { EMPTY_SITE_GATE, GATE_QA_OVERRIDES, readSiteGateReport, siteGateLines, siteGateProblems, siteIntentMap, siteIntentMapLines, type SiteGateReport } from './siteGate.ts';
+import { EMPTY_SITE_GATE, GATE_QA_OVERRIDES, oldUrlsExpectRefreshLines, readSiteGateReport, siteGateLines, siteGateProblems, siteIntentMap, siteIntentMapLines, type SiteGateReport } from './siteGate.ts';
+import { oldUrlPromptLines } from './oldPages.ts';
 
 /* ── assets to download (shared with the standalone Asset Download prompt) ──────────────────── */
 
@@ -536,6 +537,9 @@ export function applyBuildResult(s: WebsiteBuildState, r: BuildResult, opts: { n
     warnings: [...r.warnings, ...kept, ...gate.warnings].slice(0, 100), errors: [...gate.errors, ...r.errors].slice(0, 100), qa: gate.qa,
     pages: r.build.pages, services: r.build.services, locations: r.build.locations, assets: r.build.assets,
     redirects: r.redirects, seed_hits: r.seedHits, upgrade: r.upgrade ?? EMPTY_UPGRADE, standard: r.standard ?? EMPTY_STANDARD, previous,
+    /* RANKING PROTECTION: the preview run's fetch of every important old address (raw facts; judged by
+       oldPages.ts against the CURRENT mapping). A failed build keeps the last check it had. */
+    old_urls: failed ? prev.old_urls : r.siteGatePreview.oldUrls,
   };
   next.build_execution = be;
   /* The build's strength inventory (Website Build Simple): it fills the record ONLY where nothing has
@@ -658,12 +662,14 @@ export function correctionPrompt(i: BuildPackInput): { text: string; blockedBy: 
     ...(removeNow.length ? ['', 'PAGES TO REMOVE (Paul marked them remove — the build still has them). Delete each page, take it out of the sitemap, the navigation and every internal link, and add a 301 to its closest genuine page in public/_redirects:', ...removeNow.map((p) => '- ' + p.path + (p.target ? '  → redirect to ' + p.target : '') + (p.notes ? '  — ' + p.notes : ''))] : []),
     ...(notInPlan.length ? ['', 'BUILT BUT NOT IN THE APPROVED PLAN — remove each (and redirect it) unless Paul says to keep it:', ...notInPlan.slice(0, 40).map((p) => '- ' + p)] : []),
     ...(metas.length || s.primary_cta ? ['', 'THE APPROVED PLAN — titles, meta descriptions and the call to action as Paul set them:', ...pageLines(s)] : []),
+    ...(oldUrlPromptLines(s.old_pages).length ? ['', ...oldUrlPromptLines(s.old_pages)] : []),
     '',
     ...DO_NOT_INVENT_LINES,
     '',
     'VERIFIED FACTS (the only business facts the site may state):', ...verifiedFactLines(i.facts),
     '',
     'THEN: the production build, the site quality gate on the build output and the preview (fix the SITE until it passes — never the gate):',
+    ...oldUrlsExpectRefreshLines(s),
     ...siteGateLines(b.output_dir || codeConfig(s, i.template).outputDir, s.canonical_domain, stablePreviewUrl(s)),
     'Commit ("Corrections from Paul"), push, redeploy the PREVIEW only — ' + modeLabel(s) + ':',
     ...previewDeploySteps({ ...deployInputFor(s, i.template), project: b.cloudflare_project || s.cloudflare_project || MARK.project }),

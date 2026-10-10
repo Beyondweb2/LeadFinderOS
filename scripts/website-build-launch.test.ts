@@ -308,11 +308,13 @@ console.log('\n── H. post-launch verification ──');
   const fq = finalQaPrompt(input(D2_RAW, 'd2')).text;
   ok(fq.includes(PRODUCTION_GATE_REPORT_FILE) && /OAI-SearchBot/.test(fq) && /sitemap/.test(fq) && /canonicals/.test(fq) && /schema/.test(fq) && /no noindex/.test(fq) && /enquiry backend/.test(fq) && /HTTPS/.test(fq), 'H: the Final production QA prompt runs the live gate (HTTPS, pages, robots/OAI-SearchBot, sitemap, canonicals, schema, noindex, form backend) and hands back its report');
   ok(/No llms\.txt/.test(fq), 'H: …and adds no llms.txt / AI-ranking gimmick');
+  /* Ranking protection (oldPages.ts): this client has no old site, recorded explicitly — the live rule then needs no old pages. */
+  const NO_OLD_SITE = parseWebsiteBuild({ old_pages: { none_at: '2026-10-04T08:00:00Z', none_reason: 'Fixture: the client has never had a website' } }).old_pages;
   const G = (o: Record<string, unknown>) => parseWebsiteBuild({ production_gate: { imported_at: '2026-10-04T12:00:00Z', version: 1, domain: 'brookfootplumbing.example', mode: 'url', preview: false, passed: true, fails: [], warns: [], ...o } }).production_gate;
-  ok(productionGateProblems(G({}), 'brookfootplumbing.example').length === 0, 'H: a passing --url run on the live domain verifies the launch');
-  ok(productionGateProblems(G({ preview: true }), 'brookfootplumbing.example').length > 0 && productionGateProblems(G({ mode: 'dist' }), 'brookfootplumbing.example').length > 0, 'H: a preview or a dist run does not');
-  ok(productionGateProblems(G({ domain: 'preview.brookfoot-plumbing.pages.dev' }), 'brookfootplumbing.example').some((p) => /not brookfootplumbing\.example/.test(p)), 'H: a run on another domain does not');
-  ok(productionGateProblems(G({ passed: false, fails: ['robots.txt blocks OAI-SearchBot'] }), 'brookfootplumbing.example').some((p) => /FAILED: robots\.txt blocks OAI-SearchBot/.test(p)), 'H: a failed live gate (OAI-SearchBot blocked) does not');
+  ok(productionGateProblems(G({}), 'brookfootplumbing.example', NO_OLD_SITE).length === 0, 'H: a passing --url run on the live domain verifies the launch');
+  ok(productionGateProblems(G({ preview: true }), 'brookfootplumbing.example', NO_OLD_SITE).length > 0 && productionGateProblems(G({ mode: 'dist' }), 'brookfootplumbing.example', NO_OLD_SITE).length > 0, 'H: a preview or a dist run does not');
+  ok(productionGateProblems(G({ domain: 'preview.brookfoot-plumbing.pages.dev' }), 'brookfootplumbing.example', NO_OLD_SITE).some((p) => /not brookfootplumbing\.example/.test(p)), 'H: a run on another domain does not');
+  ok(productionGateProblems(G({ passed: false, fails: ['robots.txt blocks OAI-SearchBot'] }), 'brookfootplumbing.example', NO_OLD_SITE).some((p) => /FAILED: robots\.txt blocks OAI-SearchBot/.test(p)), 'H: a failed live gate (OAI-SearchBot blocked) does not');
   const live = { ...clearedForProduction({ ...D2_RAW, preview_url: 'https://preview.brookfoot-plumbing.pages.dev' }, { existingSite: false }), production_url: 'https://brookfootplumbing.example', production_status: 'deployed' };
   ok(/Production checked" needs the live site gate/.test(websiteBuildSaveRefusal(live, { ...live, qa: { ...(live.qa as object), production_checked: true } }, { route: 'build', ended: false })), 'H: SERVER — "Production checked" is refused with no live gate report');
   const passed = { ...live, production_gate: { imported_at: '2026-10-04T12:00:00Z', version: 1, domain: 'brookfootplumbing.example', mode: 'url', preview: false, passed: true, fails: [], warns: [] } };

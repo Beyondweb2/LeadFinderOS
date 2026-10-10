@@ -33,7 +33,7 @@ import { CLAIM_VERDICT_LABELS, isPublishable, mapTemplateClaims } from './buildF
 import type { RebuildPromptInput } from './websiteBuildPrompt.ts';
 import { AI_VISIBILITY, baselineProtection, confirmationsSection, crawlSection, doNotBreak } from './websiteBuildPrompt.ts';
 import { RECON_RULES_LINES, RECON_SCHEMA_LINES } from './reconSchema.ts';
-import { SITE_GATE_EXPECT_FILE, SITE_GATE_FETCH } from './siteGate.ts';
+import { oldUrlsExpectRefreshLines, SITE_GATE_EXPECT_FILE, SITE_GATE_FETCH } from './siteGate.ts';
 /** The live-domain gate report Paul imports on the Live step (websiteLaunch.ts productionGateProblems). */
 export const PRODUCTION_GATE_REPORT_FILE = 'qa/site-gate-production.json';
 import { manifestBuildLines } from './manifestSummary.ts';
@@ -1027,6 +1027,7 @@ export function finalQaPrompt(i: BuildPackInput): PackItem {
     '- All assets load from the new domain; nothing is hotlinked from the old site.',
     '- No placeholder text, no template leftovers, no unverified claim anywhere (compare with VERIFIED FACTS).',
     '- Mobile check on the live site at 375x812.',
+    ...oldUrlsExpectRefreshLines(s),
     '- THE GATE ON PRODUCTION: node scripts/findable-site-gate.mjs --url ' + prod + ' --domain ' + (s.canonical_domain || MARK.domain) + ' --expect ' + SITE_GATE_EXPECT_FILE + ' --json ' + PRODUCTION_GATE_REPORT_FILE + ' (fetch it first if missing: ' + SITE_GATE_FETCH + '). It checks the domain answers over HTTPS, http / www / apex in one hop, the home page and every page in the sitemap, robots.txt (OAI-SearchBot and the other search crawlers allowed) and the sitemap, canonicals, the schema, no noindex header, the search crawlers\' user agents getting the real page (Cloudflare WAF / Bot Fight Mode), the enquiry backend accepting this origin (an OPTIONS check — nothing is submitted), the trust claims, and Cloudflare email obfuscation. Every FAIL is reported to Paul — a DNS or Cloudflare setting is his to change, never yours.',
     '- Paste the WHOLE of ' + PRODUCTION_GATE_REPORT_FILE + ' at the end of your report: Paul imports it into LeadFinderOS (Live step). "Production checked" cannot be ticked until it has passed.',
     '- ⛔ No llms.txt, no "AI ranking" file or claim: the gate warns on an llms.txt, and nothing on the site promises a recommendation.',
