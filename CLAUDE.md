@@ -517,6 +517,20 @@ existing findings and exits non-zero). There is **no browser / e2e suite** in th
 - ⛔ **Always still verify the real deployed site after a deploy** (§4 "The deploy check": fetch the live bundle, assert a marker only your
   change produces; for an edge function grep `/functions/<slug>/body`). Passing tests are not a deploy.
 
+### 3b. Running alongside other sessions (2026-10-10, Paul)
+
+Paul runs several Claude Code sessions at once across LeadFinderOS V1, V2 and ABLM. **Assume another session is active.**
+
+- **Before touching shared state** (staging data, test accounts / leads, dev or debug ports, shared config files, branches, worktrees),
+  check that no other session is using it (`git worktree list`, process list, recent branch activity).
+- **Unique ports and unique throwaway temp profiles / directories per run.** Never reuse a fixed debugging port; use port 0.
+- ⛔ **Never kill processes by name** (`chrome.exe`, `node.exe`, `msedge.exe`). Kill only a process THIS session started, by PID.
+- **Never delete or reset shared staging / test data another session created.** Namespace test data per run; clean up only your own.
+- **No `pnpm` / `npm` install, purge or git operation in a worktree or checkout another session is using.**
+- **Migrations go to staging only unless told otherwise, and one session applies migrations at a time.**
+- **Before any push or merge: `git fetch` and confirm the branch has not moved.**
+- **Keep reports short, and say when a task must only run in one session.**
+
 ## 4. Traps — the rules. The incidents behind each are in `docs/traps.md` (§4) unless pointed elsewhere.
 
 **Verifying**
