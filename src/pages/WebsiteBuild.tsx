@@ -42,6 +42,7 @@ import { cloudflareBranches, cloudflareModeProblem, stablePreviewUrl } from '@/l
 import { AREA_STATUS_LABELS, serviceAreaView, withAreas, withServes, type AreaStatus } from '@/lib/serviceAreaCandidates';
 import { CLOUDFLARE_MODE_LABELS, CLOUDFLARE_MODES } from '@/lib/websiteBuildState';
 import { crawlOldUrls, summariseLeadCrawl } from '@/lib/leadCrawlSummary';
+import type { CrawlPageRow } from '@/lib/oldPages';
 import { websiteServiceRoute } from '@/lib/websiteRoute';
 import { domainAuthority, domainInputFromRow, DOMAIN_REASON_TEXT } from '@/lib/domainAuthority';
 import { productionGateProblems } from '@/lib/websiteLaunch';
@@ -353,6 +354,7 @@ export default function WebsiteBuild() {
     <SimpleWebsiteBuild leadId={leadId} state={state} update={update} pack={packInput} onboarding={(payload.onboarding ?? null) as Record<string, unknown> | null}
       oldUrls={crawlOldUrls(payload.crawl)} domain={domainVerdict} ended={ended} launch={launch} productionPrompt={prompts.find((x) => x.id === 'production_deploy')}
       crawl={crawl} saveLabel={saveNode} onReload={reload} onAdvanced={() => setView('advanced')}
+      loadOldSite={async () => ((await call({ action: 'old_site_pages', lead_id: leadId })).old_site?.rows ?? []) as CrawlPageRow[]}
       copy={(title, text) => copyText(title, text, [])} toast={toast} />
   </div>;
 
@@ -571,7 +573,7 @@ export default function WebsiteBuild() {
       <Checklist state={state} group="live" set={set} title="Live checks" hasExistingSite={!!existingSiteUrl}
         lockedKeys={{
           ...(launch.length > 0 ? { production_deployed: 'Cleared for production first', redirects_tested: 'Cleared for production first' } : {}),
-          ...(productionGateProblems(state.production_gate, state.canonical_domain).length || !state.production_url ? { production_checked: 'Import a passing live site gate first' } : {}),
+          ...(productionGateProblems(state.production_gate, state.canonical_domain, state.old_pages).length || !state.production_url ? { production_checked: 'Import a passing live site gate first' } : {}),
         }} />
       {state.route === 'bespoke' && <PromotionPanel state={state} update={update} />}
       <div className="flex justify-start"><Button variant="outline" onClick={() => goStep('qa')}>Back</Button></div>
@@ -641,7 +643,7 @@ function LaunchPanel({ problems }: { problems: string[] }) {
 function ProductionGatePanel({ state, update, toast }: { state: WebsiteBuildState; update: UpdateFn; toast: ReturnType<typeof useToast>['toast'] }) {
   const [text, setText] = useState('');
   const g = state.production_gate;
-  const problems = productionGateProblems(g, state.canonical_domain);
+  const problems = productionGateProblems(g, state.canonical_domain, state.old_pages);
   const importIt = () => {
     let v: unknown;
     try { v = JSON.parse(text.slice(text.indexOf('{'), text.lastIndexOf('}') + 1)); } catch { toast({ title: 'Not a gate report', description: 'Paste the whole of ' + PRODUCTION_GATE_REPORT_FILE + ' (one JSON object).', variant: 'destructive' }); return; }
@@ -650,7 +652,7 @@ function ProductionGatePanel({ state, update, toast }: { state: WebsiteBuildStat
     update((s) => ({ ...s, production_gate: {
       imported_at: new Date().toISOString(), version: r.version, domain: r.domain, mode: r.mode, preview: r.preview, passed: r.passed,
       fails: r.checks.filter((c) => c.level === 'fail').map((c) => c.label + (c.details[0] ? ' (' + c.details[0] + ')' : '')).slice(0, 40),
-      warns: r.checks.filter((c) => c.level === 'warn').map((c) => c.label).slice(0, 40),
+      warns: r.checks.filter((c) => c.level === 'warn').map((c) => c.label).slice(0, 40), old_urls: r.oldUrls,
     } }));
     setText('');
     toast({ title: r.passed ? 'Live gate imported — passed' : 'Live gate imported — FAILED', description: r.domain + ' · ' + r.checks.length + ' checks' });

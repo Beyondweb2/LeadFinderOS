@@ -81,6 +81,7 @@
 - `docs/campaigns.md` — Campaigns for salespeople: the audit of the old flow, the four-step flow, ownership / privacy / global name uniqueness, the functions, the live proof (2026-10-03)
 - `docs/closeout-2026-10-02.md` — The 2026-10-02 closeout audit: what was already complete, what was fixed (five merges), the production smoke test, and every item still open with its exact blocker
 - `docs/welcome-pack-and-website-build.md` — The Welcome Pack (baseline-keyed, public /w/ link) and Section 5 Website Build with the generated Claude rebuild prompt (2026-09-22)
+- `docs/website-build-redirects.md` — Website Build ranking protection: old pages found from the crawl, mapped, fetched on preview and live by the gate, judged by LeadFinderOS; launch + live rule; what V1 can and cannot enforce (2026-10-10)
 - `docs/website-build-v1.md` — Website Build V1: the command centre (build mode, MCL template profile, client build facts, architecture + redirects, the nine-item Build Pack), verified on production (2026-09-23)
 - `docs/website-build-v2.md` — Website Build V2 foundation: versioned website_build (V1 rows read through), three build routes, route-aware stage checklists, eight stage prompts, source manifest, visual comparison, forbidden seed values, promote-to-template intent (2026-09-25)
 - `docs/website-build-recon.md` — Website Build Phase 2: source-site recon (route-aware prompt, recon JSON schema v1, safe import with summary, fact merge rules, Needs Review, page families, asset inventory, manifest summaries in later prompts) (2026-09-25)

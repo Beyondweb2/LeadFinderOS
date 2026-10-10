@@ -83,13 +83,15 @@ function result(s: WebsiteBuildState, over: Record<string, unknown> = {}) {
     quality: {
       oldVsNew: { verdict: 'upgrade', widths: [1440, 390], stillStronger: [], notes: '' },
       strengths: [{ category: 'photography', label: '12 genuine job photos', evidence: 'home + gallery', disposition: 'preserve', where: '/' }],
-      siteGate: gate('dist', s.canonical_domain), siteGatePreview: gate('url', s.canonical_domain),
+      siteGate: gate('dist', s.canonical_domain), siteGatePreview: { ...gate('url', s.canonical_domain), oldUrls: oldUrlsPassing(s) },
       standard: { heroImage: 'genuine', mobileHero: 'integrated', areasVisual: 'map', reviews: 'none_available', rating: 'none_available', form: 'site_enquiry', formTest: 'passed', credentialsProminent: true, photosUsed: 6, photographyPreserved: true, repeatedImages: [] },
     },
     seedHits: [], warnings: ['ASSET CHECK: ' + SITE + '/img/worcester-boiler.jpg — manufacturer product image', 'FACT CHECK: "Gas Safe registered" — /about/'], errors: [],
     ...over,
   });
 }
+/** The preview gate's fetch of every important old page, all passing (ranking protection, oldPages.ts). */
+const oldUrlsPassing = (s: WebsiteBuildState) => ({ base: 'https://preview.' + s.cloudflare_project + '.pages.dev', results: s.old_pages.urls.filter((u) => u.important && u.target).map((u) => ({ path: u.path, target: u.target, hops: u.path === u.target ? [] : [301], final_status: 200, final_path: u.target, soft_404: false, noindex: false })) });
 const importInto = (s: WebsiteBuildState, json: string) => { const r = parseBuildResult(json); if (!r.ok) throw new Error('parse: ' + (r as { error: string }).error); return applyBuildResult(s, r.result, { now: '2026-10-05T12:00:00Z' }).state; };
 const tickAll = (s: WebsiteBuildState, hasOld: boolean) => SIMPLE_REVIEW_ITEMS.reduce((acc, it) => setReviewItem(acc, it.key, true, hasOld), s);
 

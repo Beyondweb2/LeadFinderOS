@@ -22,6 +22,22 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-10-website-build-old-pages', date: '2026-10-10', title: 'Website Build protects the old site’s pages', audience: 'admin',
+    body: 'When a client with a website gets a new one, every important page of the old site must keep working on the new site — at the same address or with one permanent redirect — before it can launch.',
+    report: {
+      added: [
+        'Prepare website records the old site’s pages from the crawl (home, services, contact and linked sitemap pages are always important) and maps each to a new page where it can.',
+        'One line under Prepare and in Review: "Old pages protected: X of Y", with the missing ones in plain words. You choose the new page for any it could not map; the home page needs a written reason.',
+        'The Master Build Prompt lists every address to keep and every 301; the site gate fetches each one on the preview and again on the live site.',
+        '"They have no old website" — recorded with how you know, for a client with no site.',
+      ],
+      changed: [
+        'Launch waits until every important old page passes on the preview; "Production checked" waits until they pass on the live domain too.',
+        'A 404, a "page not found" page, the wrong page, a dump on the home page, a 302, a chain of redirects or a noindex page all fail.',
+      ],
+      removed: [],
+      effect: 'A rebuild can no longer quietly lose the pages that bring the client their Google traffic. Clients with no old site are not slowed down once you record that.',
+    } },
   { id: '2026-10-10-text-replies-unanswered', date: '2026-10-10', title: 'Text replies now show in "Replied, unanswered"', audience: 'all',
     body: 'A prospect who texts back and has not had an answer now shows in "Replied, unanswered" and "What to do next", exactly like a WhatsApp reply. Tapping it opens the SMS Inbox.',
     report: {

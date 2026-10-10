@@ -30,6 +30,7 @@ import { classifyQuestion, excludedFromText, type SiteScope } from './siteScope.
 import { serviceConfirmed, siteServiceTruth, type SiteTruth } from './siteServiceTruth.ts';
 import { claimExpect, claimSupport, type ClaimExpect } from './claimRules.ts';
 import { SITE_ENQUIRY_ENDPOINT } from './websiteBuildStandard.ts';
+import { EMPTY_OLD_URL_CHECK, oldUrlsForExpect, readOldUrlCheck, type OldUrlCheck } from './oldPages.ts';
 export { parseIntentPage } from './websiteQuality.ts';
 
 export const SITE_GATE_VERSION = 1;
@@ -86,6 +87,9 @@ export interface SiteIntentMap {
   unconfirmedServices: string[];
   /** The client's explicit "we do NOT offer" list — never written about on the site. */
   notOffered: string[];
+  /** RANKING PROTECTION (oldPages.ts): every important old address and the new page it must land on. The
+   *  gate fetches each on a --url run (preview and live) and reports the raw facts as `oldUrls`. */
+  oldUrls: Array<{ path: string; target: string }>;
 }
 
 const fact = (i: BuildPackInput, key: string) => { const r = i.facts.find((f) => f.key === key); return r && isPublishable(r) ? r.value.trim() : ''; };
@@ -219,6 +223,7 @@ export function siteIntentMap(i: BuildPackInput, m: Mapping): SiteIntentMap {
     claims: claimExpect(i.facts.filter(isPublishable).map((f) => ({ key: f.key, value: f.value }))),
     form: s.form.enabled && s.form.site_key ? { siteKey: s.form.site_key, endpoint: SITE_ENQUIRY_ENDPOINT } : null,
     unconfirmedServices, notOffered: truth.truth.notOffered,
+    oldUrls: oldUrlsForExpect(s.old_pages),
   };
 }
 /** "Electrician in Bath" / "Bath" → "Bath": a location page's title names the trade too. */
@@ -268,6 +273,18 @@ export function siteGateLines(outputDir: string, domain: string, previewUrl: str
   ];
 }
 
+/**
+ * RANKING PROTECTION: the old-address list as it stands NOW, for a correction or the launch run. The expect
+ * file was written by the first build; a page re-mapped since then must be checked against its new target.
+ */
+export function oldUrlsExpectRefreshLines(s: { old_pages: Parameters<typeof oldUrlsForExpect>[0] }): string[] {
+  const list = oldUrlsForExpect(s.old_pages);
+  return [
+    '- Old addresses: before running the gate, set "oldUrls" in ' + SITE_GATE_EXPECT_FILE + ' to EXACTLY this list (LeadFinderOS\'s current one; replace what is there, change nothing else):',
+    '  ' + JSON.stringify(list),
+  ];
+}
+
 /* ── the report as it comes back ──────────────────────────────────────────────────────────────── */
 
 export type GateLevel = 'pass' | 'warn' | 'fail' | 'skip';
@@ -278,8 +295,10 @@ export interface SiteGateReport {
   domain: string; mode: string; preview: boolean; pages: number;
   passed: boolean | null;
   checks: SiteGateCheck[];
+  /** The old addresses the --url run fetched (raw facts; LeadFinderOS judges them, oldPages.ts). */
+  oldUrls: OldUrlCheck;
 }
-export const EMPTY_SITE_GATE: SiteGateReport = { reported: false, version: null, domain: '', mode: '', preview: false, pages: 0, passed: null, checks: [] };
+export const EMPTY_SITE_GATE: SiteGateReport = { reported: false, version: null, domain: '', mode: '', preview: false, pages: 0, passed: null, checks: [], oldUrls: EMPTY_OLD_URL_CHECK };
 
 const isObj = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v);
 const str = (v: unknown, n: number) => (typeof v === 'string' ? v : v == null ? '' : String(v)).replace(/\s+/g, ' ').trim().slice(0, n);
@@ -301,6 +320,7 @@ export function readSiteGateReport(v: unknown): SiteGateReport {
     /* The report's own "passed" is believed only when its checks agree. */
     passed: v.passed === true && !failed && checks.length > 0 ? true : v.passed === false || failed ? false : null,
     checks,
+    oldUrls: readOldUrlCheck(v.oldUrls),
   };
 }
 

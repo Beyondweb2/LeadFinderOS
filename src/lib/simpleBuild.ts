@@ -18,6 +18,7 @@
      masterBuildPrompt()  ONE self-contained Claude Code prompt
      terminalSteps()      the exact numbered steps and commands beside it
      technicalCheck()     the automatic gate's verdict: passed, or only the failures
+     oldPagesView()       RANKING PROTECTION (oldPages.ts): "Old pages protected: X of Y" + what is missing
      simpleProgress()     Gather · Prepare · Build · Review · Launch, derived
 
    ⛔ TRUTH ORDER: client-confirmed facts > verified onboarding / sales information > the client's own
@@ -61,6 +62,10 @@ import { slugify, toPath } from './buildArchitecture.ts';
 import { crawlSection, doNotBreak, baselineProtection } from './websiteBuildPrompt.ts';
 import { templateCacheName } from './websiteTemplates.ts';
 import { OPTIMISE_BUILD_REFUSAL } from './websiteRoute.ts';
+import {
+  EMPTY_OLD_PAGES, autoMapOldUrls, inventoryFromCrawl, mergeOldUrls, oldPagesSummary, oldUrlPromptLines, unmappedOldUrls,
+  type CrawlPageRow, type NewPage, type OldPagesSummary, type OldSiteReadFrom,
+} from './oldPages.ts';
 
 /* ── 1. BUILD TYPES ───────────────────────────────────────────────────────────────────────────── */
 
@@ -314,6 +319,28 @@ export interface PrepareContext {
   onboarding: Record<string, unknown> | null;
   /** False for an engagement that has ended (the form is never switched on then). */
   active: boolean;
+  /** The stored crawl of the client's CURRENT site, page by page (paid-client-hub old_site_pages), or the
+   *  quick crawl's checked pages. null / absent = not read: only the home page is recorded. */
+  oldSite?: { rows: readonly CrawlPageRow[]; readFrom: OldSiteReadFrom } | null;
+  now?: string;
+}
+
+const hostKey = (u: string) => { try { return new URL(/^https?:\/\//i.test(u) ? u : 'https://' + u).hostname.toLowerCase().replace(/^www\./, ''); } catch { return ''; } };
+
+/** The pages the NEW site will have, for mapping old addresses: the page plan, or a template's own pages. */
+export function newSitePages(i: BuildPackInput): NewPage[] {
+  const s = i.state;
+  if (s.route === 'template_rebuild' && i.template) {
+    const m = computeMapping(s, i.template, i.facts, i.businessName);
+    const map = siteIntentMap(i, m);
+    const core = i.template.defaultPageFamilies.filter((f) => ['homepage', 'services_index', 'about', 'contact'].includes(f.family) || (f.family === 'legal' && /privacy/.test(f.path)));
+    return [
+      ...core.map((f) => ({ path: f.path, family: f.family, title: f.title })),
+      ...map.services.filter((x) => x.page).map((x) => ({ path: x.page, family: 'service', title: x.name })),
+      ...map.locations.filter((x) => x.page).map((x) => ({ path: x.page, family: 'location', title: x.name })),
+    ];
+  }
+  return s.pages.filter((p) => (p.action === 'keep' || p.action === 'create') && p.path).map((p) => ({ path: p.path, family: p.family, title: p.title }));
 }
 
 /** Everything Prepare would change, applied — pure. `changes` says what it did, in Paul's words. */
@@ -367,6 +394,22 @@ export function prepareWebsite(ctx: PrepareContext): { state: WebsiteBuildState;
   const intents = autoIntents(s.quality, pagesForIntents, servicePages);
   if (CONTENT_INTENTS.some((k) => !s.quality.intents[k]?.need)) { s = { ...s, quality: { ...s.quality, intents } }; changes.push('Content plan assessed'); }
 
+  /* RANKING PROTECTION: the current site's addresses (the crawl / its sitemap, at least the home page),
+     merged into what is recorded — nothing found is dropped, no decision is overwritten — then mapped
+     where a sensible new page exists. Never the home page for anything else (oldPages.ts). */
+  if (i.existingSiteUrl && type !== '' && type !== 'optimise') {
+    const rows = ctx.oldSite?.rows ?? [];
+    const found = inventoryFromCrawl({ siteUrl: i.existingSiteUrl, rows, services: truth.services });
+    const merged = mergeOldUrls(s.old_pages ?? EMPTY_OLD_PAGES, found, { siteUrl: i.existingSiteUrl, readFrom: rows.length ? (ctx.oldSite?.readFrom ?? 'quick_crawl') : 'homepage_only', now: ctx.now ?? new Date().toISOString() });
+    const mapped = autoMapOldUrls(merged, newSitePages({ ...i, state: { ...s, old_pages: merged } }));
+    const before = s.old_pages?.urls.length ?? 0;
+    /* Prepare twice changes nothing: the same list, read the same way, keeps its record (and its date). */
+    const same = JSON.stringify([mapped.site_url, mapped.read_from, mapped.urls]) === JSON.stringify([s.old_pages?.site_url, s.old_pages?.read_from, s.old_pages?.urls]);
+    if (!same) s = { ...s, old_pages: mapped };
+    const important = mapped.urls.filter((u) => u.important);
+    if (!same) changes.push('Old pages: ' + mapped.urls.length + ' recorded' + (mapped.urls.length > before ? ' (' + (mapped.urls.length - before) + ' new)' : '') + ', ' + important.filter((u) => u.target).length + ' of ' + important.length + ' important ones mapped to a new page');
+  }
+
   /* The enquiry form: the verified email, switched on only when the save would be accepted (the server
      runs the same siteFormProblems and refuses the whole save otherwise). */
   if (!s.form.enabled) {
@@ -398,7 +441,9 @@ export type IssueFix =
   | { kind: 'confirm_rights' }
   | { kind: 'domain' }
   | { kind: 'premises' }
-  | { kind: 'link'; href: string; label: string };
+  | { kind: 'link'; href: string; label: string }
+  | { kind: 'old_pages' }
+  | { kind: 'no_old_site' };
 export interface BuildIssue { id: string; level: IssueLevel; title: string; detail: string; fixes: IssueFix[] }
 
 export interface SimpleInput {
@@ -500,6 +545,15 @@ export function simpleIssues(x: SimpleInput): BuildIssue[] {
     out.push({ id: 'claim-' + k, level: 'decide', title: 'Not confirmed: ' + r.label.replace(/ \(.*\)$/, ''), detail: '"' + r.value.slice(0, 160) + '" \u2014 the site leaves it out unless you confirm it is true and current.', fixes: [{ kind: 'fact', key: k, label: r.label, options: [r.value], input: false }] });
   }
 
+  /* RANKING PROTECTION (oldPages.ts). An important old address with no new page stops the prompt (the
+     builder must know where it goes); a site read from another address must be read again. */
+  const op = s.old_pages ?? EMPTY_OLD_PAGES;
+  if (oldSite && op.site_url && hostKey(op.site_url) !== hostKey(oldSite)) out.push({ id: 'old-pages-stale', level: 'blocker', title: 'The old pages were read from a different website', detail: op.site_url + ' was read; the current website is ' + oldSite + '. Press Prepare again to read the right one.', fixes: [] });
+  const unmapped = unmappedOldUrls(op);
+  if (unmapped.length) out.push({ id: 'old-pages-unmapped', level: 'blocker', title: unmapped.length + ' important old page' + (unmapped.length === 1 ? ' has' : 's have') + ' no new page', detail: 'Choose where each one goes on the new site, so its rankings are kept: ' + unmapped.slice(0, 5).map((u) => u.path).join(', ') + (unmapped.length > 5 ? ' …' : '') + '. Never the home page without a reason.', fixes: [{ kind: 'old_pages' }] });
+  if (oldSite && op.urls.length && op.read_from === 'homepage_only') out.push({ id: 'old-pages-unread', level: 'decide', title: 'Their old site’s pages could not be read', detail: 'Only the home page is protected. Add any address you know matters (a page that ranks or is linked to) under Old pages, or press Prepare again once their site answers.', fixes: [{ kind: 'old_pages' }] });
+  if (!oldSite && !op.urls.length && !op.none_at) out.push({ id: 'no-old-site-record', level: 'launch', title: 'Does the client have an old website?', detail: 'No current website is on record. Record that they have none (and how you know) — or confirm their website under the facts so its old pages are protected.', fixes: [{ kind: 'no_old_site' }] });
+
   /* Only before go-live. */
   if (x.domain && x.domain.applies && !x.domain.ready) out.push({ id: 'domain-handoff', level: 'launch', title: 'Preview can be built now. Domain handoff required before launch.', detail: x.domain.reasons.join('; ') + '. Resolved by: the client giving access, their authorised agency / provider changing the DNS, or using a new / different domain. We never take over a domain without the owner\u2019s authority.', fixes: [{ kind: 'link', href: hub, label: 'Domain answers on the client page' }] });
   if (!pub('email')) out.push({ id: 'form-email', level: 'launch', title: 'The enquiry form has nowhere to send', detail: 'Confirm the business email and the form switches itself on.', fixes: [{ kind: 'fact', key: 'email', label: 'Email', options: options(row('email')), input: true }] });
@@ -546,7 +600,8 @@ function oldSiteLines(i: BuildPackInput, oldUrls: ReadonlyArray<{ url: string }>
     'Facts it states: use the ones section 1 also confirms. A fact ONLY the old site states (and section 1 does not contradict) may be used if it is a plain description (what they do, where, how to contact them); a TRUST CLAIM (credentials, memberships, insurance, years, 24/7, response times, reviews, awards, guarantees, prices) is NOT published unless section 1 verifies it \u2014 list each one in warnings as "FACT CHECK: <claim> \u2014 <page>" so Paul can confirm it.',
     ...STRENGTH_RECON_LINES,
     '  Report the inventory in quality.strengths with your no-downgrade decision for each (preserve / modernise / improve, and WHERE on the new site; remove only with a reason).',
-    ...(paths.length ? ['', 'Old web addresses LeadFinderOS has on record (' + paths.length + '). Each one that will not exist at the same path gets ONE 301 in public/_redirects to the page that now owns its intent; report counts in "redirects" and anything with no sensible home in redirects.unresolved:', '    ' + paths.join('  ')] : ['', 'LeadFinderOS has no list of the old site\u2019s addresses: build one from its sitemap / navigation and redirect each that moves (one hop, to the page that owns its intent).']),
+    ...(i.state.old_pages?.urls.length ? ['', 'Old web addresses: section 4b lists every important one and where it goes. Any OTHER old address you find that will not exist at the same path also gets ONE 301 in public/_redirects to the page that now owns its intent (never the home page by default); report counts in "redirects" and anything with no sensible home in redirects.unresolved.']
+      : paths.length ? ['', 'Old web addresses LeadFinderOS has on record (' + paths.length + '). Each one that will not exist at the same path gets ONE 301 in public/_redirects to the page that now owns its intent; report counts in "redirects" and anything with no sensible home in redirects.unresolved:', '    ' + paths.join('  ')] : ['', 'LeadFinderOS has no list of the old site\u2019s addresses: build one from its sitemap / navigation and redirect each that moves (one hop, to the page that owns its intent).']),
     ...(i.evidence.crawlFindings.length ? ['', ...crawlSection(i.evidence)] : []),
     '', ...doNotBreak(i.evidence),
   ];
@@ -629,6 +684,7 @@ export function masterBuildPrompt(x: SimpleInput): MasterPrompt {
     ...(hasOld || (type === 'template' && i.existingSiteUrl) ? [...H('4. THE CURRENT WEBSITE'), ...(type === 'template'
       ? ['Current website: ' + i.existingSiteUrl + ' \u2014 read it for facts, the logo and the business\u2019s own photos only (section 5). The new site does not imitate it.']
       : oldSiteLines(i, x.oldUrls))] : []),
+    ...(oldUrlPromptLines(s.old_pages).length ? [...H('4b. OLD ADDRESSES \u2014 keep their rankings'), ...oldUrlPromptLines(s.old_pages)] : []),
     ...H('5. ASSETS'),
     ...assetLines(i, m),
     ...H('6. SITE PLAN \u2014 one primary page per important intent'),
@@ -742,9 +798,15 @@ export function technicalCheck(s: WebsiteBuildState, hasExistingSite: boolean = 
     ...b.errors,
     ...(b.result_status === 'preview_ready' ? previewReadyProblems(s, hasExistingSite).filter((p) => !/^\d+ error\(s\) reported$/.test(p)) : []),
     ...(b.redirects.unresolved.length ? [b.redirects.unresolved.length + ' old web address(es) have no new home: ' + b.redirects.unresolved.slice(0, 5).join(', ')] : []),
+    ...(b.result_status === 'preview_ready' || b.result_status === 'needs_attention' ? oldPagesView(s).missing.map((m) => 'Old page: ' + m) : []),
     ...b.redirects.issues.map((x) => 'Redirect: ' + x),
   ])];
   return { state: failures.length ? 'failed' : 'passed', failures, warnings, assetChecks, factChecks };
+}
+
+/** RANKING PROTECTION, as the simple screen shows it: the latest PREVIEW check against the current mapping. */
+export function oldPagesView(s: WebsiteBuildState): OldPagesSummary {
+  return oldPagesSummary(s.old_pages, s.build_execution.result_imported_at ? s.build_execution.old_urls : null, s.build_execution.preview_url || s.preview_url);
 }
 
 /** The correction prompt's input: Paul's words, plus the technical failures to fix, in one list. */

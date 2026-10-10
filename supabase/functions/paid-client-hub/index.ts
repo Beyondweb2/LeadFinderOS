@@ -1395,6 +1395,36 @@ Deno.serve(async (req) => {
       return json({ ok: true, inventory: { job_id: jobId, total: count ?? 0, offset, limit, rows: data ?? [] } });
     }
 
+    /* RANKING PROTECTION (2026-10-10, src/lib/oldPages.ts): the client's CURRENT site as the stored full
+       crawl read it — every page row with how it was found and how many of the site's own pages link to it
+       (from the crawl's link graph, when it kept one). Stored rows only: nothing is fetched or spent. The
+       browser turns these into the old-pages list (inventoryFromCrawl). */
+    if (action === "old_site_pages") {
+      const leadId = text(body.lead_id);
+      const { data: owned } = await service.from("outreach_leads").select("id").eq("id", leadId).eq("user_id", user.id).maybeSingle();
+      if (!owned) return json({ ok: false, error: "client_not_found", detail: "This client is not in your paid-client list." }, 404);
+      const jobId = await inventoryJobId(service, leadId);
+      if (!jobId) return json({ ok: true, old_site: { job_id: null, rows: [] } });
+      const raw: Array<Record<string, any>> = [];
+      for (let from = 0; from < 3000; from += 1000) {
+        const { data, error } = await service.from("crawl_urls").select("id,url,status,http_status,source,l:evidence->l")
+          .eq("job_id", jobId).eq("kind", "page").order("id").range(from, from + 999);
+        if (error) throw error;
+        raw.push(...(data ?? []));
+        if ((data ?? []).length < 1000) break;
+      }
+      const keyOf = (p: string) => { let k = String(p || "").replace(/[?#].*$/, ""); if (/^https?:\/\//i.test(k)) { try { k = new URL(k).pathname; } catch { /* keep */ } } k = k.toLowerCase().replace(/\/+$/, ""); return k || "/"; };
+      const graph = raw.some((r) => Array.isArray(r.l));
+      const inbound = new Map<string, number>();
+      for (const r of raw) {
+        if (!Array.isArray(r.l)) continue;
+        const self = keyOf(String(r.url));
+        for (const p of new Set((r.l as unknown[]).map((x) => keyOf(String(x))))) if (p !== self) inbound.set(p, (inbound.get(p) ?? 0) + 1);
+      }
+      const rows = raw.map((r) => ({ url: String(r.url), source: r.source ?? null, status: r.status ?? null, http_status: typeof r.http_status === "number" ? r.http_status : null, inbound: graph ? (inbound.get(keyOf(String(r.url))) ?? 0) : null }));
+      return json({ ok: true, old_site: { job_id: jobId, rows } });
+    }
+
     if (action === "create_manual") {
       const businessName = text(body.business_name);
       const location = text(body.location);
