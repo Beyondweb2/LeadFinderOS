@@ -23,6 +23,23 @@ export function pitchRefusalNote(rule: ReplyRule | null | undefined): 'reply_rul
   return 'reply_rule_unreadable';
 }
 
+/* ⛔ A WAITING PITCH EXPIRES (2026-10-10, Paul): a parked pitch row ('awaiting_audit' — waiting for an audit — or 'pending' — armed, waiting to send) that is more
+   than WAITING_PITCH_MAX_AGE_DAYS old is retired instead of ever sending. Without this, a row parked on 2026-09-01 would have armed and sent the day an
+   unrelated audit for that lead happened to complete under "Audit and reply". Measured from the row's creation. Pure; one rule, three enforcers:
+   the completion step (never arms an old row), the drain (retires an old one before any send) and a sweep (retires them even while the rule is off). */
+export const WAITING_PITCH_MAX_AGE_DAYS = 7;
+export const WAITING_PITCH_MAX_AGE_MS = WAITING_PITCH_MAX_AGE_DAYS * 24 * 60 * 60 * 1000;
+/** The statuses a parked pitch waits in. (audit_only is a marker for a hand send, never an automatic one, and is not swept.) */
+export const WAITING_PITCH_STATUSES = ['awaiting_audit', 'pending'] as const;
+/** ISO cutoff: rows created before this are expired. */
+export const waitingPitchCutoffIso = (nowMs: number = Date.now()): string => new Date(nowMs - WAITING_PITCH_MAX_AGE_MS).toISOString();
+/** An unreadable or missing creation time reads as EXPIRED — an undated waiting pitch is exactly the one that must not send. */
+export function isWaitingPitchExpired(createdAt: string | null | undefined, nowMs: number = Date.now()): boolean {
+  const t = Date.parse(String(createdAt ?? ''));
+  return !Number.isFinite(t) || nowMs - t > WAITING_PITCH_MAX_AGE_MS;
+}
+export const WAITING_PITCH_EXPIRED_REASON = `expired: waiting more than ${WAITING_PITCH_MAX_AGE_DAYS} days, so it is retired instead of sending`;
+
 export interface AuditButtonState {
   channel: 'whatsapp' | 'sms';
   /** The effective setting: undefined while it is still being read, null when it could not be read. */

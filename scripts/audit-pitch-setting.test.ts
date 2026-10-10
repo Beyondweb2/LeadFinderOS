@@ -6,7 +6,7 @@
    · no other caller can queue a pitch, and nothing here changes a sales status
    ═══════════════════════════════════════════════════════════ */
 import { readFileSync, readdirSync } from 'node:fs';
-import { auditButtonCopy, auditStartedDescription, pitchMayFollowAudit, pitchRefusalNote } from '../src/lib/auditPitchRule.ts';
+import { WAITING_PITCH_MAX_AGE_DAYS, WAITING_PITCH_STATUSES, auditButtonCopy, auditStartedDescription, isWaitingPitchExpired, pitchMayFollowAudit, pitchRefusalNote, waitingPitchCutoffIso } from '../src/lib/auditPitchRule.ts';
 
 let f = 0;
 const ok = (c: unknown, msg: string) => { if (c) console.log('  ✓ ' + msg); else { f++; console.log('  ✗ ' + msg); } };
@@ -78,6 +78,31 @@ console.log('4. the wiring: server rule first, every route consistent');
   ok(callers.length === 1 && callers[0] === 'src/pages/Inbox.tsx', `the Inbox header button is the ONLY caller that asks for a pitch (found: ${callers.join(', ')})`);
   ok(!/status:\s*['"]not_interested['"]|set_lead_status|setLeadPipelineStatus/.test(ca) , 'create-ai-audit never sets a sales status');
   ok(/budgetPoolForPurpose\(auditPurpose\) === "prospecting"/.test(ca), 'budget rules untouched: prospecting pool only');
+}
+
+console.log('5. a waiting pitch older than 7 days expires instead of sending');
+{
+  const NOW = Date.parse('2026-10-10T12:00:00Z');
+  const ago = (d: number) => new Date(NOW - d * 86_400_000).toISOString();
+  ok(WAITING_PITCH_MAX_AGE_DAYS === 7, 'the limit is 7 days');
+  ok(!isWaitingPitchExpired(ago(0), NOW) && !isWaitingPitchExpired(ago(6.9), NOW), 'a fresh row is not expired');
+  ok(isWaitingPitchExpired(ago(7.1), NOW) && isWaitingPitchExpired(ago(39), NOW), 'a row over 7 days old (the 2026-09-01 ones were 39 days) is expired');
+  ok(isWaitingPitchExpired(null, NOW) && isWaitingPitchExpired('not a date', NOW) && isWaitingPitchExpired(undefined, NOW), 'an undated waiting row reads as expired — never as fresh');
+  ok(Date.parse(waitingPitchCutoffIso(NOW)) === NOW - 7 * 86_400_000, 'the sweep cutoff is exactly 7 days back');
+  ok(JSON.stringify([...WAITING_PITCH_STATUSES]) === JSON.stringify(['awaiting_audit', 'pending']), 'only the two waiting statuses are swept (audit_only, sent, flagged_* are left alone)');
+  const q = read('supabase/functions/process-ai-audit-queue/index.ts');
+  const expire = q.indexOf('.lt("created_at", waitingPitchCutoffIso())');
+  const arm = q.indexOf('.eq("status", "awaiting_audit").gte("created_at", waitingPitchCutoffIso())');
+  ok(expire > 0 && arm > expire, 'the completion step retires old waiting rows FIRST and arms only a row inside the window');
+  const d = read('supabase/functions/process-whatsapp-queue/index.ts');
+  const sweep = d.indexOf('THE EXPIRY SWEEP RUNS FIRST');
+  const env = d.indexOf('if (!autoReplyEnvOn()) return json({ ok: true, mode, skipped: "env_off"', sweep);
+  ok(sweep > 0 && env > sweep, 'the drain sweeps expired rows BEFORE the kill-switch / toggle checks (so they expire even while the rule is off)');
+  const rowCheck = d.indexOf('isWaitingPitchExpired(row.created_at)');
+  const toggle = d.indexOf('if (trigger === "first_reply" && !replyToggleOn) continue;', rowCheck);
+  ok(rowCheck > 0 && toggle > rowCheck, 'and each row is checked for expiry before any send decision');
+  ok(/results\[row\.lead_id\] = "expired";\s*continue;/.test(d), 'an expired row is retired and skipped — never sent');
+  ok(/skipped_stale/.test(d.slice(sweep, sweep + 900)), 'it uses the existing retired status (skipped_stale), with a reason');
 }
 
 if (f) { console.log(`\n${f} FAILED`); process.exit(1); }

@@ -16,7 +16,7 @@ import { maybeSendRemeasureResults, resultsSweepDue, sweepUnsentRemeasureResults
 import { toWhatsAppNumber } from "../_shared/whatsapp-send.ts";
 import { reconcileFirstReplyAuditIntents } from "../_shared/first-reply-audit.ts";
 import { AUDIT_ONLY_STATUS, autoReplyEnvOn, effectiveReplyMode, phoneSuppressed } from "../_shared/auto-reply-rules.ts";
-import { pitchMayFollowAudit } from "../../../src/lib/auditPitchRule.ts";
+import { WAITING_PITCH_EXPIRED_REASON, WAITING_PITCH_STATUSES, pitchMayFollowAudit, waitingPitchCutoffIso } from "../../../src/lib/auditPitchRule.ts";
 import { seoScanAllowed } from "../../../src/lib/auditKind.ts";
 import { cellNamed } from "../../../src/lib/namedSignal.ts";
 import { CRAWL_CHECK_VERSION } from "../../../src/lib/crawlCheck.ts";
@@ -1583,9 +1583,14 @@ async function finaliseSettledRuns(service: any, runIds: string[], estCost: numb
            to depend on the reply kill-switch. reconcileFirstReplyAuditIntents settles `queued`
            intents from their own audit's run status on every tick, independent of any reply gate;
            this block owns the REPLY side only (the awaiting_audit → pending upgrade below). */
+        /* ⛔ A WAITING PITCH OLDER THAN 7 DAYS EXPIRES, IT IS NEVER ARMED (auditPitchRule.ts). Retire the lead's old waiting row first, then arm
+             only a fresh one. */
+        await service.from("whatsapp_auto_replies")
+          .update({ status: "skipped_stale", reason: WAITING_PITCH_EXPIRED_REASON, updated_at: new Date().toISOString() })
+          .eq("lead_id", leadId).in("status", [...WAITING_PITCH_STATUSES]).lt("created_at", waitingPitchCutoffIso());
         const { data: upgraded } = await service.from("whatsapp_auto_replies")
             .update({ status: "pending", fire_after: new Date(Date.now() + 3 * 60_000).toISOString(), updated_at: new Date().toISOString() })
-            .eq("lead_id", leadId).eq("status", "awaiting_audit")
+            .eq("lead_id", leadId).eq("status", "awaiting_audit").gte("created_at", waitingPitchCutoffIso())
             .select("id");
           if (Array.isArray(upgraded) && upgraded.length > 0) {
             console.log(`[auto-send] audit ${job.auditId} complete → armed the awaiting_audit pitch for lead ${leadId}.`);

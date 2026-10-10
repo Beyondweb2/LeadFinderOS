@@ -25,6 +25,7 @@ import { resolveAuditReplyVars } from "../_shared/audit-reply.ts";
 import { buildsFromAudit } from "../../../src/lib/templateRouting.ts";
 import { AUDIT_ONLY_STATUS, DEFAULT_FIRST_REPLY_TEMPLATE, FIRST_REPLY_MODES, autoReplyEnvOn, autoReplyToggleOn, firstReplyMode, firstReplyTemplate, isDecline, isStaleAutoReply, modeSends, parseFirstReplyMode, phoneSuppressed, pitchEverSent } from "../_shared/auto-reply-rules.ts";
 import { effectiveFirstReplyMode } from "../../../src/lib/firstReplyAutomation.ts";
+import { WAITING_PITCH_EXPIRED_REASON, WAITING_PITCH_STATUSES, isWaitingPitchExpired, waitingPitchCutoffIso } from "../../../src/lib/auditPitchRule.ts";
 import { SETTLED_TOWN_NOTES } from "../_shared/place-details.ts";
 import { createTemplateSnapshot } from "../../../src/lib/whatsappTemplateSnapshot.ts";
 import { STRONG_STATUSES, postgrestList } from "../../../src/lib/strongStatuses.ts";
@@ -1000,6 +1001,14 @@ Deno.serve(async (req) => {
     // leads who messaged US (template send, deliverable any time), not cold outreach. Controls are
     // the env kill-switch + the Inbox UI toggle, both re-checked here (send time), not queue time.
     if (mode === "auto_replies") {
+      /* ⛔ THE EXPIRY SWEEP RUNS FIRST, BEFORE ANY SWITCH (2026-10-10): a waiting pitch (awaiting_audit / pending) more than 7 days old is retired, never
+         sent — even while the rule is off or the kill-switch is closed, so an old row cannot sit there waiting to be armed by a later audit. It only
+         ever changes status; it sends nothing. */
+      try {
+        await service.from("whatsapp_auto_replies")
+          .update({ status: "skipped_stale", reason: WAITING_PITCH_EXPIRED_REASON, updated_at: new Date().toISOString() })
+          .in("status", [...WAITING_PITCH_STATUSES]).lt("created_at", waitingPitchCutoffIso());
+      } catch (e) { console.error("[auto-replies] expiry sweep failed:", (e as Error).message); }
       // Master kill-switch gates EVERYTHING (both triggers). Per-trigger switches are checked
       // per row below: first_reply rows need the Inbox toggle; audit_complete rows need the
       // audit_complete_template setting to still be non-null. A row whose own switch is off is
@@ -1038,6 +1047,14 @@ Deno.serve(async (req) => {
       for (const row of (due ?? []) as Array<{ id: string; lead_id: string; phone: string; created_at: string; trigger?: string | null; template_name?: string | null; fire_after?: string | null; trigger_wa_message_id?: string | null }>) {
         // Per-trigger switch (see above). Default trigger (pre-SQL rows / null) = first_reply.
         const trigger = row.trigger || "first_reply";
+        /* …and the same rule at the send point, as the second line: an old row is retired here, before any send path, whatever the switches say. */
+        if (isWaitingPitchExpired(row.created_at)) {
+          await service.from("whatsapp_auto_replies")
+            .update({ status: "skipped_stale", reason: WAITING_PITCH_EXPIRED_REASON, updated_at: new Date().toISOString() })
+            .eq("id", row.id).eq("status", "pending");
+          results[row.lead_id] = "expired";
+          continue;
+        }
         if (trigger === "first_reply" && !replyToggleOn) continue;
         /* Mode says audit-only → the first_reply rule sends NOTHING. Left pending rather than
            finished, exactly like the toggle-off case above: the rule is paused, not cancelled, and
