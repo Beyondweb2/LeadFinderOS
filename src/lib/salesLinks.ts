@@ -12,7 +12,10 @@ import { whatsAppLinkForLead } from './conversationState.ts';
 import { WHATSAPP_NEXT_ACTIONS } from './nextActionView.ts';
 export { whatsAppLinkForLead };
 
-export type LeadLink = 'whatsapp' | 'lead';
+export type LeadLink = 'whatsapp' | 'sms' | 'lead';
+
+/** The lead's TEXT thread: the same Inbox on its SMS channel (2026-10-10 — a text reply waiting on us opens here). */
+export const smsLinkForLead = (leadId: string): string => `/inbox?channel=sms&lead=${encodeURIComponent(leadId)}`;
 
 /** The lead's workspace on Outreach. */
 export const outreachLeadLink = (leadId: string): string => `/outreach?lead=${encodeURIComponent(leadId)}`;
@@ -22,7 +25,7 @@ export const leadLaunchState = (leadId: string) => ({ launch: { leadId, channel:
 
 /** A router target for a link kind: [path, state]. */
 export function leadTarget(link: LeadLink, leadId: string): [string, unknown] {
-  return link === 'whatsapp' ? [whatsAppLinkForLead(leadId), undefined] : [outreachLeadLink(leadId), undefined];
+  return link === 'whatsapp' ? [whatsAppLinkForLead(leadId), undefined] : link === 'sms' ? [smsLinkForLead(leadId), undefined] : [outreachLeadLink(leadId), undefined];
 }
 
 /** A paid client's hub, optionally opened at one stage (ClientHub ?section=). */

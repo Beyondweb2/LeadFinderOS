@@ -84,7 +84,7 @@ export function NextActions({ items, go, onClose, title = "Your next best action
                     <span className="block truncate text-xs text-muted-foreground"><span className={cn('font-medium', TONE[a.tone].text)}>{a.title}</span> · {a.detail}</span>
                   </span>
                   <span className="hidden shrink-0 items-center gap-1 rounded-full bg-card px-2.5 py-1 text-xs font-semibold text-muted-foreground ring-1 ring-border/60 transition group-hover:text-foreground sm:flex">
-                    {a.link === 'whatsapp' ? <><MessageCircle className="h-3.5 w-3.5" />WhatsApp</> : <>Open<ArrowRight className="h-3.5 w-3.5" /></>}
+                    {a.link === 'whatsapp' ? <><MessageCircle className="h-3.5 w-3.5" />WhatsApp</> : a.link === 'sms' ? <><MessageCircle className="h-3.5 w-3.5" />Text</> : <>Open<ArrowRight className="h-3.5 w-3.5" /></>}
                   </span>
                 </button>
                 {onClose && <RowClose name={a.name} onClick={() => onClose([a.leadId], [a.name], () => s.clear())} />}

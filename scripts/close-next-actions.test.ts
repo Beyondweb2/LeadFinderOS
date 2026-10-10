@@ -100,7 +100,7 @@ console.log('4. History and the browser');
   ok(!/functions\.invoke|send-whatsapp|send-sms|sales_queue_opener/.test(cw), 'closeWork never sends anything itself');
   ok(cw.indexOf("closeCall([id], 'dead'") < cw.indexOf('applyOutcome('), 'the server checks permission (close) before the outcome is recorded');
   const ed = read('supabase/functions/sales-performance/index.ts');
-  ok(/is_archived, work_closed_at"/.test(ed) && /lastSmsReplyMs,/.test(ed), 'sales-performance reads the stamp and the newest inbound text');
+  ok(/is_archived, work_closed_at"/.test(ed) && /smsThreads,/.test(ed), 'sales-performance reads the stamp and the newest inbound text');
   const sec = read('src/components/salesDash/sections.tsx');
   ok((sec.match(/<RowClose /g) ?? []).length === 2 && (sec.match(/<SelectBar /g) ?? []).length === 2, 'a Close per row and a Select-all bar on both lists');
 }

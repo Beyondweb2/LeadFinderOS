@@ -22,6 +22,20 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-10-text-replies-unanswered', date: '2026-10-10', title: 'Text replies now show in "Replied, unanswered"', audience: 'all',
+    body: 'A prospect who texts back and has not had an answer now shows in "Replied, unanswered" and "What to do next", exactly like a WhatsApp reply. Tapping it opens the SMS Inbox.',
+    report: {
+      added: [
+        'Unanswered text replies in "Replied, unanswered", in "What to do next" ("New text reply") and in the waiting timers.',
+        'Tapping a text item opens that lead in the SMS Inbox.',
+      ],
+      changed: [
+        'The same rule as WhatsApp: it shows while their latest text has no reply from us, and leaves once you text back (a failed text does not count) or close it.',
+        'STOP, UNSUBSCRIBE and other opt-out texts never show as needing an answer. They are still handled as opt-outs, exactly as before.',
+      ],
+      removed: [],
+      effect: 'Nobody who texted you back gets missed. Status, star and campaign are not changed, and nothing is sent.',
+    } },
   { id: '2026-10-10-close-dashboard-items', date: '2026-10-10', title: 'Close items on the Sales dashboard', audience: 'all',
     body: 'Every item in What to do next and Follow-ups (including Replied, unanswered) now has a Close button, and you can tick several or Select all and close them in one go.',
     report: {
