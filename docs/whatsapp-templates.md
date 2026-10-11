@@ -700,3 +700,16 @@ permission to send.
   `campaign_candidates`, migration `20261015090000_outreach_uk_only.sql`). Continuations / replies are not affected.
 - The reason code `not_a_uk_mobile` is a stored token and did not change; only its words say "UK mobile".
 - Tests: `scripts/outreach-uk-only.test.ts`; `scripts/india-readiness.test.ts` keeps the historical-number pins.
+
+
+## The Outreach WhatsApp dialog (2026-10-11)
+
+The green WhatsApp button on an Outreach row opens `LeadWhatsAppDialog` / `LeadWhatsAppPanel` (the twin of the Text dialog)
+instead of jumping to the Inbox: the latest messages for the lead (by `lead_id`), the `WHATSAPP_TEMPLATES` picker gated by
+`getTemplateSendability` (default `initial_contact`; site-fault / site-findings templates stay disabled here, send them from the
+Inbox), a preview from `readableTemplateBody`, Send template, and free text inside the 24-hour window.
+
+- ⛔ One send request: `src/lib/whatsAppSendRequest.ts` is the Inbox's `send-whatsapp-message` call, lifted verbatim; the Inbox
+  and the dialog both use it. The dialog writes nothing itself. Pinned by `scripts/whatsapp-lead-dialog.test.ts`.
+- The click keeps the No-WhatsApp toast, the contact gate and the Contact Method pill. The old wa.me `SingleWhatsAppDialog`
+  still serves only the launch-pad (`launchIntent.channel === 'whatsapp'`).
