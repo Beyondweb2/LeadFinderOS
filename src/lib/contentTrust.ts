@@ -250,13 +250,15 @@ const GENERIC_TRADE = new Set(['electrical', 'electrician', 'electricians', 'ele
   'trades', 'trade', 'engineers', 'engineer', 'engineering', 'maintenance', 'general', 'quality', 'reliable', 'trusted', 'best', 'leading']);
 /** Service words across the trades we sell to. A homepage heading naming one of these is about something. */
 const SERVICE_WORDS = /\b(?:electric\w*|rewir\w*|wiring|lighting|lights?|ev|charg\w*|solar|pv|battery|batteries|fuse ?boards?|consumer units?|eicr|testing|inspections?|alarms?|cctv|security|data|plumb\w*|boilers?|heating|gas|bathrooms?|kitchens?|drain\w*|blocked|leaks?|pipes?|water|roof\w*|gutter\w*|chimneys?|fascias?|flat roofs?|tiling|tiler|locks?|locksmith\w*|doors?|windows?|glaz\w*|upvc|build\w*|extensions?|lofts?|conversions?|renovations?|plaster\w*|decorat\w*|painters?|carpent\w*|joiner\w*|fencing|landscap\w*|gardens?|paving|driveways?|cleaning|cleaners?|pest|removals?|accountan\w*|tax|bookkeep\w*|dentist\w*|dental|solicitors?|legal|garage|mot|servicing|repairs?|installations?|install\w*|air con\w*|hvac|refrigerat\w*|commercial|industrial|domestic|residential)\b/i;
+/** Stock phrases must be DENSE to call a page generic: at least one per this many words (a long page with three is not). */
+const GENERIC_PER_WORDS = 300;
 const GENERIC_PHRASES = [
   'clear communication', 'accountable delivery', 'technical capability', 'high quality', 'highest standards', 'high standards',
   'attention to detail', 'peace of mind', 'second to none', 'one-stop shop', 'one stop shop', 'no job too small', 'competitive prices',
   'competitive rates', 'customer satisfaction', 'reliable and professional', 'professional and reliable', 'we pride ourselves', 'pride ourselves',
   'committed to', 'tailored solutions', 'tailored to your', 'bespoke solutions', 'seamless', 'cutting-edge', 'cutting edge', 'industry-leading',
   'industry leading', 'state-of-the-art', 'state of the art', 'end-to-end', 'end to end', 'from start to finish', 'from conversation to completion',
-  'trusted partner', 'value for money', 'friendly and professional', 'look no further', 'your needs', 'every step of the way', 'hassle-free',
+  'trusted partner', 'value for money', 'friendly and professional', 'look no further', 'every step of the way', 'hassle-free',
   'hassle free', 'excellence', 'diligent planning', 'hands-on knowledge', 'trusted working relationships', 'proven track record',
 ];
 const COMMERCIAL_RE = /\b(?:commercial|industrial|c&i|b2b|businesses|factories|warehouses?|offices|facilities management|contractors?)\b/i;
@@ -649,6 +651,8 @@ export function buildContentTrust(input: ContentTrustInput): ContentTrust {
   for (const p of pages) {
     if (!p.h1.length || !['homepage', 'service', 'location', 'other'].includes(p.family)) continue;
     if (p.family === 'other' && !/service|install|repair|contractor|electric|plumb|roof|drain|heating|lock/i.test(pathOf(p.url))) continue;
+    /* A hub page ("/services" → "Our Services") is an index: its heading is meant to be general. */
+    if (/^\/(?:our-)?(?:services?|what-we-do|areas?|areas-we-cover|locations?)$/i.test(pathOf(p.url))) continue;
     const h = p.h1[0];
     const w = words(h).filter((x) => !bizWords.has(x) && !['welcome', 'to', 'hello', 'hi'].includes(x));
     const hasPlace = w.some((x) => placeWords.has(x));
@@ -766,7 +770,7 @@ export function buildContentTrust(input: ContentTrustInput): ContentTrust {
   }
 
   /* ── Generic copy on the pages that should be specific ────────────────────────────────────────── */
-  const genericPages = pages.filter((p) => ['homepage', 'service', 'location', 'other'].includes(p.family) && p.family !== 'other' && p.words >= 300 && p.generic.length >= 3 && p.specifics <= 2);
+  const genericPages = pages.filter((p) => ['homepage', 'service', 'location', 'other'].includes(p.family) && p.family !== 'other' && p.words >= 300 && p.generic.length >= 3 && p.generic.length * GENERIC_PER_WORDS >= p.words && p.specifics <= 2);
   if (genericPages.length) add({ kind: 'generic_copy', severity: 'low',
     title: 'Pages read as general copy, with few specifics',
     why: 'Stock phrases could describe any business. Specific, checkable detail — real jobs, places, timescales, the equipment you use — gives people and AI tools something to quote about you in particular.',
