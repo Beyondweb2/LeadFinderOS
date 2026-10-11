@@ -151,7 +151,7 @@ await (async () => {
   ok(applyBulkChecks([c('g')], { g: { ok: true } }).ready.length === 1, '8: a Google AI lead whose dry run passes is "Checked, will be sent" for audit_followup');
   ok(r.ready.map((x) => x.key).join() === 'a', 'only a lead whose dry run PASSED is ready to send');
   ok(r.pending.map((x) => x.key).join() === 'e', 'a lead with no check yet is pending — never sent (fail closed)');
-  ok(r.refused.length === 2 && /missed search is on Google AI/.test(r.refused.find((x) => x.key === 'b')!.reason) && /Audit follow-up \+ call/.test(r.refused.find((x) => x.key === 'b')!.reason), 'hook_engine_mismatch is listed before sending, with the template to use instead');
+  ok(r.refused.length === 2 && /missed search is on Gemini/.test(r.refused.find((x) => x.key === 'b')!.reason) && /Audit follow-up \+ call/.test(r.refused.find((x) => x.key === 'b')!.reason), 'hook_engine_mismatch is listed before sending, with the template to use instead');
   ok(r.refused.find((x) => x.key === 'd')!.reason === 'already had this template', 'an already-sent pitch is listed, not sent twice');
   ok(applyBulkChecks(send, { a: { ok: undefined as unknown as boolean } }).ready.length === 0, 'an unclear answer is not a pass');
   ok(explainBulkRefusal('x', 'some new server reason') === 'some new server reason', 'an unknown refusal keeps the server\'s own words');

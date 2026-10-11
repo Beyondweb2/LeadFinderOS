@@ -113,7 +113,7 @@ const V2 = initialHookStateV2(Q);
   ok(s.shape === 'six' && s.expected === 6 && s.complete && s.named === 3 && s.percent === 50, 'B: current audit scores X/6 (3/6 = 50%)');
   ok(s.perEngine.find((t) => t.engine === 'chatgpt')?.named === 2 && s.perEngine.find((t) => t.engine === 'gemini')?.named === 1, 'B: ChatGPT 2/3, Google AI 1/3');
   const t = text(view());
-  ok(/50% named \(3\/6\)/.test(t) && /ChatGPT 2\/3/.test(t) && /Google AI 1\/3/.test(t), 'B: card headline and engine split');
+  ok(/50% named \(3\/6\)/.test(t) && /ChatGPT 2\/3/.test(t) && /Gemini 1\/3/.test(t), 'B: card headline and engine split');
   ok(!/Older/.test(t) && !/Run new/.test(t), 'B: a current audit is not labelled old and does not offer a rerun');
   ok(report.kind === 'ready' && report.isCurrent, 'B: report ready for this audit');
 }
@@ -192,7 +192,7 @@ const V2 = initialHookStateV2(Q);
      NAMED in green and NOT NAMED in red, under the best missed search as one inseparable tuple. */
   const best = expanded.slice(expanded.indexOf('data-testid="hook-best-missed"'), expanded.indexOf('data-testid="hook-results-grid"'));
   const tb = text(best);
-  ok(/Best missed search/.test(tb) && tb.includes(card.score.hook!.question) && /Google AI NOT NAMED/.test(tb), 'H: the best missed search shows its question, its engine and NOT NAMED');
+  ok(/Best missed search/.test(tb) && tb.includes(card.score.hook!.question) && /Gemini NOT NAMED/.test(tb), 'H: the best missed search shows its question, its engine and NOT NAMED');
   ok(/Named instead/.test(tb) && ['Precision Electrical Services Limited', 'Addlestone Electricians', 'S G Electrical Surrey'].every((n) => tb.includes(n)), 'H: …and up to three competitors from THAT answer');
   ok(!tb.includes("Pennington's Electrical Contractors") && !['Volt Electrical', 'Sparks Ltd', 'Commercial Power Ltd', 'EICR Masters'].some((n) => tb.includes(n)), 'H: never a fourth name, and never a name from another question or engine');
   const grid = expanded.slice(expanded.indexOf('data-testid="hook-results-grid"'));
@@ -200,11 +200,11 @@ const V2 = initialHookStateV2(Q);
   ok(pills.length === 6, `H: all six results are shown (${pills.length})`);
   ok(pills.filter((m) => m[2] === 'named').length === 3 && pills.filter((m) => m[2] === 'not_named').length === 3, 'H: 3 NAMED and 3 NOT NAMED, matching the audit');
   ok(pills.every((m) => (m[2] === 'named' ? /green/.test(m[1]) && !/red/.test(m[1]) : /red/.test(m[1]) && !/green/.test(m[1]))), 'H: NAMED is green, NOT NAMED is red');
-  ok(/Q1 .*ChatGPT NAMED Google AI NOT NAMED/.test(te) && /Q2 .*ChatGPT NAMED Google AI NAMED/.test(te) && /Q3 .*ChatGPT NOT NAMED Google AI NOT NAMED/.test(te), 'H: each question row reads as explicit words per engine');
+  ok(/Q1 .*ChatGPT NAMED Gemini NOT NAMED/.test(te) && /Q2 .*ChatGPT NAMED Gemini NAMED/.test(te) && /Q3 .*ChatGPT NOT NAMED Gemini NOT NAMED/.test(te), 'H: each question row reads as explicit words per engine');
   ok(!/Selected outreach search|Other Google AI misses|Other ChatGPT misses|Named searches/.test(te), 'H: the old grouped headings are gone');
-  ok(/Google AI<\/span> <span class="font-bold text-red-700/.test(collapsed), 'H: the collapsed best-miss line says NOT NAMED in red too');
+  ok(/Gemini<\/span> <span class="font-bold text-red-700/.test(collapsed), 'H: the collapsed best-miss line says NOT NAMED in red too');
   const card2 = [collapsed, expanded].join('');
-  ok(!/Gemini/.test(text(card2)), 'H: the card never says Gemini');
+  ok(!/Google AI(?! Overview)/.test(text(card2)), 'H: the card never says "Google AI" for Gemini');
 }
 
 /* ── Report fixtures ───────────────────────────────────────────────────────────────────────── */
@@ -225,14 +225,14 @@ function report(grid: Array<[G, G]>, extra: Record<string, unknown> = {}) {
   ok(/All questions we asked/i.test(t) && rowsHtml.length === 3, 'I: the table has exactly 3 question rows');
   ok(Q.every((q) => html.includes(q.replace(/'/g, '&#39;'))), 'I: all three questions are visible');
   const head = tbl.match(/<thead>([\s\S]*?)<\/thead>/)?.[1] ?? '';
-  ok(/ChatGPT/.test(head) && /Google AI/.test(head), 'I: columns are ChatGPT and Google AI');
+  ok(/ChatGPT/.test(head) && /Gemini/.test(head), 'I: columns are ChatGPT and Gemini');
   const marks = tbl.match(/class="q4-chip q4-chip--(y|n|na)"/g) ?? [];
   ok(marks.length === 6 && !marks.some((m) => m.includes('--na')), 'I: each row has a ChatGPT and a Google AI status (6 chips)');
   ok(/50\s*%/.test(t) && /Overall AI visibility/i.test(t) && /3 of 6 answers named your business/.test(t), 'L: 3/6 → 50% with "3 of 6 answers named your business" under it');
   ok(/You're being named, but not consistently\./.test(t), 'L: verdict "being named, but not consistently"');
   const g = d!.hook!.gap!;
   ok(g.engine === 'gemini' && g.question === Q[2], 'J: the featured search is the strongest Google AI miss');
-  ok(/Featured question/i.test(t) && /Google AI/i.test(t) && /Not named/i.test(t), 'J: featured block: the question, the Google AI answer, NOT NAMED');
+  ok(/Featured question/i.test(t) && /Gemini/i.test(t) && /Not named/i.test(t), 'J: featured block: the question, the Gemini answer, NOT NAMED');
   /* Soft redesign (2026-10-06): the featured question shows EVERY engine's answer, each card with its
      OWN competitors — names never cross from one engine's card to the other's. */
   const card = (eng: string) => { const i = html.indexOf(`class="q4-ans q4-ans--${eng}"`); return i < 0 ? '' : html.slice(i, html.indexOf('</article>', i)); };
@@ -243,7 +243,7 @@ function report(grid: Array<[G, G]>, extra: Record<string, unknown> = {}) {
   ok(/If you are looking for reliable commercial electricians/.test(t), 'J: the featured answer is quoted (cleaned excerpt)');
   ok(!/A long friendly paragraph/.test(t), 'J: no OTHER answer’s prose is quoted');
   ok(/<mark class="q4-hl">Addlestone Electricians<\/mark>/.test(html), 'J: a competitor named in the answer is highlighted inside it');
-  ok(!/Gemini/.test(t.replace(/<style[\s\S]*?<\/style>/g, '')), 'the quick report never says Gemini');
+  ok(!/Google AI(?! Overview)/.test(t.replace(/<style[\s\S]*?<\/style>/g, '')), 'the quick report never says "Google AI" for Gemini');
   ok(!/Where you show up, and where you don/.test(t) && !/Why you&rsquo;re not in the answer/.test(html), 'the long "the fix" section is dropped from the quick report');
 }
 
@@ -278,7 +278,7 @@ function report(grid: Array<[G, G]>, extra: Record<string, unknown> = {}) {
   ok(/This check didn’t finish/.test(o.t) && !/%/.test(o.t.replace(/100%/g, '')), 'O: the public page shows the incomplete notice and no percentage');
   ok(!/of AI answers named/.test(o.t) && !/out of \d+ answers?/.test(o.t), 'O: never the ordinary count hero');
   ok(!/If that number has not gone up/.test(o.t), 'O: no refund line about a number that is not shown');
-  ok(!/Gemini/.test(o.t), 'O: the incomplete page says Google AI, not Gemini');
+  ok(!/Google AI(?! Overview)/.test(o.t) && /Gemini/.test(o.t), 'O: the incomplete page says Gemini, not Google AI');
   const cur = audit('a-inc-00011', '2026-09-26T10:00:00Z', 'complete', V2);
   const { card, report: st, view } = inbox([cur], grid);
   ok(!card.score.complete && card.score.percent === null && card.score.hook === null, 'O: the card has no percentage and no hook');

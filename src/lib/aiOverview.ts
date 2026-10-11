@@ -87,12 +87,13 @@ export type AiOverviewState =
    text run together with NO separators — "…industrial facilities.Top Commercial Electricians in Leeds"
    (a sentence glued to the next HEADING), and Google Maps cards glued in after the summary
    ("…in Wallasey.Wirral 24 Hour Plumber4.8(105)PlumberOpen5 Moorcroft RdPhone: …"), sometimes with the
-   card details repeated. Without the actor's paid full-overview add-on (kept OFF: cost + latency) a
-   long overview is cut where Google collapses it, so the text can end on a bare heading.
-   This turns that into what a reader can take in. It NEVER writes a word: it adds the missing space,
-   keeps the overview's own complete sentences, drops a dangling heading / card fragment, and says
-   `truncated` so the caller closes with "…". The stored answer is untouched; `named` and the competitor
-   names are decided on the stored cell, never on this text.
+   card details repeated. Audits before the full-overview add-on (switched on 2026-10-11) carry only the
+   snippet Google shows before "Show more", so their text can end on a bare heading.
+   This turns that into what a reader can take in. It NEVER writes a word: it adds the missing space
+   (overviewReadableText, above — the extractor's copy too), keeps the overview's own complete
+   sentences, drops a dangling heading / card fragment, and says `truncated` so the caller closes with
+   "…". The stored answer is untouched; `named` and the competitor names are decided on the stored
+   cell, never on this text.
    ══════════════════════════════════════════════════════════════════════════════════════════════════ */
 
 /** A Google Maps card's rating + review count as the overview text carries it: "4.8(105)", "5.0 (1,204)". */
@@ -100,24 +101,9 @@ const MAPS_CARD_RE = /\d\.\d\s?\(\d[\d,.]*[kK]?\)/;
 /** The longest summary the reader is given; the report clamps it further to two lines. */
 export const OVERVIEW_SUMMARY_CHARS = 420;
 
-/** Google's own controls that trail the overview (share / copy / feedback). Everything from the
- *  earliest one is page furniture, never the answer (ai-search.ts strips some of these at scan time;
- *  older rows and the copy/share row still carry them). Multi-word phrases only. */
-const OVERVIEW_FURNITURE = [
-  'learn morecopied', 'copied to clipboard', 'failed to copy', 'share public link', 'this public link is valid',
-  'ai responses may include mistakes', 'ai can make mistakes', 'your feedback helps google improve', 'report a problem',
-];
-
-/** Put back the space the scrape dropped between a sentence (or label) and the next one. */
+/** The readable text on one line (the display never keeps the scrape's line breaks). */
 function unglue(raw: string): string {
-  let text = String(raw || '');
-  const hay = text.toLowerCase();
-  const cut = Math.min(...OVERVIEW_FURNITURE.map((m) => { const i = hay.indexOf(m); return i < 0 ? Infinity : i; }));
-  if (Number.isFinite(cut)) text = text.slice(0, cut);
-  return text
-    .replace(/\s+/g, ' ')
-    .replace(/([a-z0-9)\]’”'"%])([.!?:;])(?=[A-Z])/g, '$1$2 ')
-    .trim();
+  return overviewReadableText(raw).replace(/\s+/g, ' ').trim();
 }
 
 function sentencesOf(text: string): string[] {

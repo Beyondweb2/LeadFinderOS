@@ -245,7 +245,7 @@ console.log('── 13. AI score colours ──');
   ok(scoreTone(null, 3) === 'none' && scoreTone(1, 0) === 'none' && scoreTone(4, 3) === 'none' && scoreTone(undefined, undefined) === 'none', 'no data / impossible counts → neutral');
   ok(percentTone(0) === 'poor' && percentTone(100) === 'strong' && percentTone(50) === 'good' && percentTone(33) === 'weak' && percentTone(null) === 'none', 'overall: 0% red, 100% green, mid amber/green-ish, none neutral');
   ok(/emerald/.test(SCORE_TONE_CLASS.strong.chip) && /red/.test(SCORE_TONE_CLASS.poor.chip) && /amber/.test(SCORE_TONE_CLASS.weak.chip) && /muted/.test(SCORE_TONE_CLASS.none.chip), 'the classes are green / amber / red / neutral');
-  ok(salesEngineLabel('gemini') === 'Google AI' && salesEngineLabel('Gemini') === 'Google AI' && salesEngineLabel('chatgpt') === 'ChatGPT', 'Gemini is "Google AI" on sales screens');
+  ok(salesEngineLabel('gemini') === 'Gemini' && salesEngineLabel('Google AI') === 'Gemini' && salesEngineLabel('chatgpt') === 'ChatGPT', 'screens say "Gemini" (2026-10-11; an old "Google AI" label reads as Gemini)');
 
   /* The real component, rendered, from real scored rows. */
   const Q = ['best plumber in Rugby?', 'emergency plumber Rugby?', 'boiler repair Rugby?'];
@@ -265,7 +265,7 @@ console.log('── 13. AI score colours ──');
   const zero = render([[false, false], [false, false], [false, false]]);
   ok(/data-engine="chatgpt" data-tone="poor"/.test(zero) && /data-engine="gemini" data-tone="poor"/.test(zero), 'gym-style 0/3 + 0/3: both engine chips red');
   ok(/data-testid="hook-headline" data-tone="poor"/.test(zero) && /0%/.test(zero), '0% named overall → red headline');
-  ok(/Google AI/.test(zero) && /ChatGPT/.test(zero) && !/>Gemini</.test(zero), 'the engines are drawn separately as ChatGPT and Google AI');
+  ok(/Gemini/.test(zero) && /ChatGPT/.test(zero) && !/Google AI(?! Overview)/.test(zero), 'the engines are drawn separately as ChatGPT and Gemini');
   ok(/data-testid="hook-named-instead"/.test(zero) && /Rugby Plumbing Co/.test(zero), 'the call summary shows who was named instead');
   ok(/View full audit/.test(zero), '"View full audit" is the route to the detail');
   const full = render([[true, true], [true, true], [true, true]]);

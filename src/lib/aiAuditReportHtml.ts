@@ -1,4 +1,4 @@
-import { hookReportCopy, normaliseRivalName, type HookReportSummary } from './hookAudit.ts';
+import { hookReportCopy, normaliseRivalName, sameBusiness, type HookReportSummary } from './hookAudit.ts';
 import { articleTrade } from './templateVars.ts';
 import { AI_OVERVIEW_CONTEXT_LABEL, AI_OVERVIEW_LABEL, AI_OVERVIEW_NOT_SCORED, AI_OVERVIEW_REPORT_LABEL as AI_OVERVIEW_ROW_LABEL, NO_OVERVIEW_DETAIL, NO_OVERVIEW_TEXT, OVERVIEW_NO_NAMES_TEXT } from './aiOverview.ts';
 // Client-facing AI Visibility Audit report — shared data shape + a standalone,
@@ -1176,7 +1176,7 @@ const Q4_ICONS = {
 /** How much of each answer the report quotes: about two lines, cut at a sentence or word boundary by
  *  answerExcerpt and clamped to two lines by CSS (2026-10-11 restyle, Paul: "no long answer text"). The
  *  names are the point of the card; the words under them only show the AI said it. */
-export const QUICK_ANSWER_CHARS = 220;
+export const QUICK_ANSWER_CHARS = 320;
 
 /** The solid colours a business named instead wears in the question table (Paul, 2026-10-11: green,
  *  amber, violet, orange, grey, rose — never blue). One business keeps one colour across the table. */
@@ -1188,7 +1188,7 @@ function quickSnippetHtml(text: string, names: string[], me: string[]): string {
   const ex = answerExcerpt(text, QUICK_ANSWER_CHARS, me.length ? me : names);
   if (!ex) return '';
   const plain = ex.blocks.map((b) => b.text.trim()).filter(Boolean).join(' ').replace(/\s+/g, ' ');
-  return `<p class="q4-snip">${ex.lead ? '&hellip; ' : ''}${quickHighlight(plain, names, 'q4-hl', me)}${ex.truncated ? '&hellip;' : ''}</p>`;
+  return `<p class="q4-snip">${ex.lead ? '&hellip; ' : ''}${quickHighlight(plain, names, 'q4-hl', me)}${ex.truncated ? ' &hellip;' : ''}</p>`;
 }
 
 /** The yellow pills for the businesses an answer named instead of the client. */
@@ -1277,7 +1277,7 @@ export function renderQuickCheckReport(h: HookReportSummary, businessName: strin
         : names.length || withheld ? `<span class="q4-chip q4-chip--n">&#10005; Not named</span>`
         : `<span class="q4-chip q4-chip--na">${esc(OVERVIEW_NO_NAMES_TEXT)}</span>`;
       const body = fo.state !== 'shown' ? '' : `${names.length ? quickNamePills(names, 5, true) : ''}${fo.answerText ? `
-        <p class="q4-snip q4-snip--aio">${quickHighlight(fo.answerText, names, 'q4-hl', me)}${fo.truncated ? '&hellip;' : ''}</p>` : ''}`;
+        <p class="q4-snip q4-snip--aio">${quickHighlight(fo.answerText, names, 'q4-hl', me)}${fo.truncated ? ' &hellip;' : ''}</p>` : ''}`;
       aio = `
       <div class="q4-aio" data-overview="${fo.state}">
         <div class="q4-aio-head"><span class="q4-eng-name q4-eng-name--sm">${q4Mark('ai_overview')}${esc(AI_OVERVIEW_LABEL)}</span><span class="q4-aio-ctx">${esc(AI_OVERVIEW_CONTEXT_LABEL)}</span>${chip}</div>${body}
@@ -1295,11 +1295,14 @@ export function renderQuickCheckReport(h: HookReportSummary, businessName: strin
 
   /* ── ALL QUESTIONS WE ASKED ── each cell: the result, and for a miss the top business named instead
      as a solid pill with "+n more". A business keeps one colour across the whole table. */
-  const toneOf = new Map<string, string>();
+  /* Keyed by BUSINESS (hookAudit sameBusiness — the rule the count uses), so "Leeds And District Roofing
+     Services Ltd" and "Leeds and District Roofing Ltd" from two engines wear one colour. */
+  const toneOf: Array<{ key: string; tone: string }> = [];
   const tone = (name: string) => {
     const k = normaliseRivalName(name, null) || name.toLowerCase();
-    if (!toneOf.has(k)) toneOf.set(k, Q4_NAME_TONES[toneOf.size % Q4_NAME_TONES.length]);
-    return toneOf.get(k)!;
+    let hit = toneOf.find((t) => sameBusiness(k, t.key));
+    if (!hit) { hit = { key: k, tone: Q4_NAME_TONES[toneOf.length % Q4_NAME_TONES.length] }; toneOf.push(hit); }
+    return hit.tone;
   };
   const missCell = (names: string[], label = '&#10005; Not named') => `<span class="q4-chip q4-chip--n">${label}</span>${names.length
     ? `<span class="q4-top"><span class="q4-np q4-np--${tone(names[0])}">${esc(names[0])}</span>${names.length > 1 ? `<span class="q4-np-more">+${names.length - 1} more</span>` : ''}</span>` : ''}`;
@@ -1491,6 +1494,7 @@ const QUICK_REPORT_CSS = `
   .q4-tbl tr.q4-feat-row td.q4-tq{font-weight:700}
   .q4-tq{overflow-wrap:anywhere}
   .q4-cell{display:flex;flex-direction:column;align-items:flex-start;gap:6px;min-width:0}
+  .q4-cell .q4-chip{white-space:normal;line-height:1.3;max-width:100%}
   .q4-top{display:flex;flex-wrap:wrap;align-items:center;gap:4px 6px;max-width:100%}
   .q4-np{display:inline-block;max-width:100%;font-size:11.5px;font-weight:700;line-height:1.3;padding:3px 9px;border-radius:999px;color:#fff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .q4-np--green{background:#1f8a4c} .q4-np--amber{background:#b7791f} .q4-np--violet{background:#7c4dcc}

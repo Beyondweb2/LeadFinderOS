@@ -462,7 +462,7 @@ export function normaliseRivalName(name: string, town?: string | null): string {
  *  more ("martin day electrician" / "martin day commercial electricians", "coleman electrical services" /
  *  "coleman electrical and security" — four "different" firms on S P Electrical's report, 2026-10-11).
  *  A leading "the" is ignored for the two-word test. Errs low, never high. */
-function sameBusiness(a: string, b: string): boolean {
+export function sameBusiness(a: string, b: string): boolean {
   if (a === b || a.startsWith(`${b} `) || b.startsWith(`${a} `)) return true;
   const wa = a.replace(/^the /, '').split(' ');
   const wb = b.replace(/^the /, '').split(' ');
