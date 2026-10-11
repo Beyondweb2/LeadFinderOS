@@ -6,16 +6,18 @@
       path, no template picker and no call to send-whatsapp-message (scripts/warm-lead-reply.test.ts
       fails the build if one appears).
 
-   Button states:
-     · no saved research, or stale    → "Research & draft reply" (reads the site if needed, then drafts)
-     · fresh saved research           → "Draft reply" + "Refresh research"
-     · after a draft                  → "Regenerate" (same research, no site fetch) + "Refresh research"
+   Button states (Paul, 2026-10-11: BOTH BUTTONS ALWAYS SHOW, in every stage of the conversation):
+     · "Draft reply"      — always. Stale research is refreshed first (as before); NO research is not fetched:
+                            the draft is written from what we hold (the conversation, the audit if any) and
+                            says "No audit yet, so no site issues included." when there was nothing to go on.
+     · "Refresh research" — always. With no research saved it STARTS it (reads the site), then drafts.
+     · after a draft      → "Regenerate" joins them (same research, no site fetch).
    Progress reads "Researching site…" → "Analysing…" → "Draft ready".
 
-   ⛔ SALES STAGE (Paul, 2026-09-25): the button exists only in a WARM conversation — the audit /
-      competitor hook has gone out and they replied after it (src/lib/warmStage.ts). Before that the
-      Inbox's own audit/hook actions are the next step; this shows one muted stage line and nothing
-      else, and makes no call.
+   ⛔ THE OLD WARM-ONLY GATE IS GONE (it hid the buttons on "HOOK NOT SENT" — Safety First Electrical,
+      2026-10-11). The stage (src/lib/warmStage.ts) is still shown as a quiet label and the server still tells
+      the model whether the hook has gone, so a draft before the hook may name the search, and one after it
+      never repeats it.
 
    Mounted per conversation (keyed by it in the Inbox), so a draft or its "why" can never follow Paul
    into someone else's thread.
@@ -72,6 +74,8 @@ interface DraftWhy {
   operatorNote: string | null;
   usedFallback: boolean;
   timings: { generationMs: number; totalMs: number; researchMs: number | null };
+  /** "No audit yet, so no site issues included." — set when the draft had nothing about their site to go on. */
+  siteNote?: string | null;
 }
 interface DraftResponse { ok: true; reply: string; why: DraftWhy }
 
@@ -113,28 +117,19 @@ export function WarmReplyAssistant({ leadId, phone, windowOpen, stage, getReadab
 
   /* The saved-research state decides the label. A read of our own table — no fetch, no model. */
   useEffect(() => {
-    if (!windowOpen || stage !== 'warm') return;
+    if (!windowOpen) return;
     let live = true;
     invokeEdge<StatusResponse>('warm-lead-reply', { action: 'status', lead_id: leadId, phone })
       .then((s) => { if (live) setFreshness(s.freshness); })
       .catch(() => { if (live) setFreshness('none'); });
     return () => { live = false; };
-  }, [leadId, phone, windowOpen, stage]);
+  }, [leadId, phone, windowOpen]);
 
   if (!windowOpen) {
     return (
       <p className="flex items-center gap-1 text-[11px] text-muted-foreground">
         <AlertTriangle className="h-3 w-3 shrink-0 text-amber-500" />
         Research &amp; draft reply needs the 24h window — only an approved Meta template can be sent now.
-      </p>
-    );
-  }
-
-  /* Not warm yet: the funnel's own opener → audit → hook steps come first. One quiet line, no button. */
-  if (stage !== 'warm') {
-    return (
-      <p className="text-[10px] uppercase tracking-wide text-muted-foreground/70" title="Research & draft reply opens once they reply to the audit / competitor hook">
-        Warm reply · {WARM_STAGE_LABELS[stage]}
       </p>
     );
   }
@@ -150,7 +145,9 @@ export function WarmReplyAssistant({ leadId, phone, windowOpen, stage, getReadab
     try {
       /* Regenerate NEVER asks for research — it reuses the saved record. Refresh always does. A first
          draft asks only when nothing fresh is saved, and the server still reuses what it can. */
-      if (mode === 'refresh' || (mode === 'draft' && freshness !== 'fresh')) {
+      /* No research saved (none / failed) → Draft reply does NOT fetch the site: it drafts from what we hold.
+         Refresh research is the button that starts it. Stale or changed research is refreshed first, as before. */
+      if (mode === 'refresh' || (mode === 'draft' && (freshness === 'stale' || freshness === 'website_changed'))) {
         setPhase('researching');
         await invokeEdge<ResearchResponse>('warm-lead-reply', { action: 'research', lead_id: leadId, phone, refresh: mode === 'refresh' });
         setFreshness('fresh');
@@ -173,27 +170,32 @@ export function WarmReplyAssistant({ leadId, phone, windowOpen, stage, getReadab
   };
 
   const hasDraft = lastReply !== null;
-  const mainLabel = hasDraft ? 'Regenerate' : freshness === 'fresh' ? 'Draft reply' : 'Research & draft reply';
-  const mainTitle = hasDraft
-    ? 'Write another version from the same saved research (does not re-read the site)'
-    : freshness === 'fresh'
-      ? 'Draft a reply from the saved research — nothing is sent'
-      : 'Read their site (or reuse what we have), then draft a reply — nothing is sent';
+  const mainTitle = freshness === 'fresh'
+    ? 'Draft a reply from the saved research — nothing is sent'
+    : freshness === 'stale' || freshness === 'website_changed'
+      ? 'Re-read their site, then draft a reply — nothing is sent'
+      : 'Draft a reply from the conversation (no site research saved yet) — nothing is sent';
 
   return (
     <div className="space-y-1.5">
       <div className="flex flex-wrap items-center gap-1.5">
-        <Button type="button" variant="outline" size="sm" className="h-7 gap-1 text-xs" disabled={busy || freshness === null}
-          onClick={() => void run(hasDraft ? 'regenerate' : 'draft')} title={mainTitle}>
-          {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : hasDraft ? <RefreshCw className="h-3.5 w-3.5" /> : <Sparkles className="h-3.5 w-3.5 text-violet-600 dark:text-violet-300" />}
-          {mainLabel}
+        <Button type="button" variant="outline" size="sm" className="h-7 gap-1 text-xs" disabled={busy}
+          onClick={() => void run('draft')} title={mainTitle} data-testid="warm-draft-reply">
+          {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5 text-violet-600 dark:text-violet-300" />}
+          Draft reply
         </Button>
-        {(freshness === 'fresh' || hasDraft) && (
-          <Button type="button" variant="ghost" size="sm" className="h-7 px-2 text-xs text-muted-foreground" disabled={busy}
-            onClick={() => void run('refresh')} title="Re-read their website, then draft again">
-            Refresh research
+        {hasDraft && (
+          <Button type="button" variant="outline" size="sm" className="h-7 gap-1 text-xs" disabled={busy}
+            onClick={() => void run('regenerate')} title="Write another version from the same saved research (does not re-read the site)">
+            <RefreshCw className="h-3.5 w-3.5" /> Regenerate
           </Button>
         )}
+        <Button type="button" variant="ghost" size="sm" className="h-7 px-2 text-xs text-muted-foreground" disabled={busy}
+          onClick={() => void run('refresh')} title={freshness === 'fresh' || freshness === 'stale' ? 'Re-read their website, then draft again' : 'Read their website for the first time, then draft'}
+          data-testid="warm-refresh-research">
+          Refresh research
+        </Button>
+        <span className="text-[10px] uppercase tracking-wide text-muted-foreground/70" title="Where the conversation is">{WARM_STAGE_LABELS[stage]}</span>
         <span className="text-[11px] text-muted-foreground" aria-live="polite">
           {phase === 'researching' && 'Researching site…'}
           {phase === 'analysing' && 'Analysing…'}
@@ -207,6 +209,7 @@ export function WarmReplyAssistant({ leadId, phone, windowOpen, stage, getReadab
         )}
       </div>
       {error && <p className="text-[11px] text-destructive">{error}</p>}
+      {why?.siteNote && <p className="text-[11px] text-muted-foreground" data-testid="warm-site-note">{why.siteNote}</p>}
       {why && why.problems.length > 0 && !whyOpen && (
         <p className="flex items-start gap-1 text-[11px] text-amber-700 dark:text-amber-300">
           <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0" />

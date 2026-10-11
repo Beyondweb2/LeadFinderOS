@@ -22,6 +22,21 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-11-ai-handles-replies', date: '2026-10-11', title: 'AI handles replies (you approve every one), and Draft reply always shows', audience: 'all',
+    body: 'When it is switched on, each new WhatsApp reply gets a ready-written answer in the reply box. Nothing is ever sent until someone presses Approve & send.',
+    report: {
+      added: [
+        '"AI handles replies" switch (admin, Inbox top bar, beside "When a prospect replies"). Off by default. When on, a new WhatsApp reply to our outreach gets a draft: what was searched and who AI named instead, the real website issues found (up to 3), then "are you with an agency or do you look after the site yourself?".',
+        'The draft is pre-filled in the reply box. Edit it, then Approve & send, Regenerate or Discard. Approve & send uses the normal send and can only go once.',
+        'New badges: "Needs approving" (a draft is waiting), "Needs you" (they said stop or not interested, asked for a call or a price, sound angry, mention legal action, sent a photo, or are on the Do Not Contact list — no draft is written), "Needs a template" (outside the 24-hour window). New "Needs approving" filter.',
+      ],
+      changed: [
+        '"Draft reply" and "Refresh research" now always show in a WhatsApp conversation, also before the report-link hook has gone out. With no audit or research yet it drafts from the conversation alone and says "No audit yet, so no site issues included." Refresh research reads the site when nothing is saved.',
+        'A website check that fails (timeout, site down) no longer wipes the last good check. The good one stays and the failed attempt is noted beside it.',
+      ],
+      removed: [],
+      effect: 'Replies can be answered in two clicks without anything going out on its own. Each draft costs well under a penny and is capped. Texts (SMS) are unchanged.',
+    } },
   { id: '2026-10-11-crawl-content-trust', date: '2026-10-11', title: 'The website check now finds content and trust problems too', audience: 'all',
     body: 'Crawling a website used to find only technical faults, so a site with vague headings, empty placeholder blocks or unnamed accreditations could read as clean. The check now reads the pages the way a person would.',
     report: {

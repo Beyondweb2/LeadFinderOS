@@ -48,7 +48,7 @@ console.log('2. every element of the WhatsApp inbox is in the shared component')
     ['filters: next action due', /aria-label="Next action due"/],
     ['filters: next action type', /aria-label="Next action type"/],
     ['filters: sort', /aria-label="Sort conversations"/],
-    ['list: All / Unread / Waiting tabs', /INBOX_QUICK_FILTERS\.map/],
+    ['list: All / Unread / Waiting tabs', /INBOX_QUICK_FILTERS(\.filter\(\(f\) => f\.value !== 'needs_approving' \|\| aiOn\))?\.map/],
     ['list: Show hidden', /Show hidden \(/],
     ['list: search', /aria-label="Search conversations by business name"/],
     ['list: Select several', /Select several…/],
@@ -93,6 +93,7 @@ console.log('3. every channel conditional is a DECLARED difference');
   const MAP: Array<[RegExp, string]> = [
     [/const sms = channel === 'sms'/, 'send-path'],
     [/const pk = /, 'storage-keys'],
+    [/const aiOn = !sms;|AI handles replies (2026-10-11) is WhatsApp only/, 'ai-replies'],
     [/sms-queue|smsQueue|process-sms-queue|Sent next text|const \{ data, error \} = sms$|^\? await supabase\.functions\.invoke\('process-sms-queue'/, 'send-path'],
     [/enabled: sms|\? await supabase\.functions/, 'send-path'],
     [/smsUnread|smsUnreadByPhone|lastReadAt: sms|out\.set\(c\.key, sms|markSmsRead|clockTick, sms/, 'reads'],

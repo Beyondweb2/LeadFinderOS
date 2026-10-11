@@ -62,12 +62,41 @@ ok(WARM_STAGE_LABELS.hook_not_sent === 'HOOK NOT SENT' && WARM_STAGE_LABELS.wait
 const body = (name: string) => FN.match(new RegExp(`async function ${name}[\\s\\S]*?\\n}\\n`))?.[0] ?? '';
 const research = body('handleResearch');
 const draft = body('handleDraft');
-ok(research.includes('if (conv.stage.stage !== "warm") return notWarm(conv.stage);') && research.indexOf('notWarm(') < research.indexOf('runSiteResearch('), 'research refuses a not-warm conversation BEFORE any site fetch (the fetch lives in the shared runSiteResearch)');
-ok(draft.includes('if (conv.stage.stage !== "warm") return notWarm(conv.stage);') && draft.indexOf('notWarm(') < draft.indexOf('callModel('), 'draft refuses a not-warm conversation BEFORE any model call');
-ok(/error: "not_warm_yet"/.test(FN) && /Send the hook first/.test(FN), 'the refusal says to send the hook first');
+/* ⛔ 2026-10-11 (Paul): the warm-only gate is GONE. Safety First Electrical (opener sent, report-link hook NOT sent,
+   "WARM REPLY · HOOK NOT SENT") showed no Draft reply because the Inbox returned only the stage line when the stage
+   was not "warm", and the function refused research/draft with not_warm_yet. Both buttons now show in every stage. */
+ok(!/notWarm\(|not_warm_yet/.test(FN), 'the function no longer refuses a conversation for its stage (no not_warm_yet)');
+ok(!research.includes('stage.stage !== "warm"') && !draft.includes('stage.stage !== "warm"') && research.includes('runSiteResearch('), 'research and draft run before the hook too');
+ok(/hookTemplate: conv\.stage\.hookTemplate/.test(FN), '…and the model is still told whether the hook has gone (null before it)');
+ok(/No audit yet, so no site issues included\./.test(FN) && /siteNote: !audit && !research \? NO_AUDIT_NOTE/.test(FN), 'no audit and no research → the one-line note "No audit yet, so no site issues included."');
 ok(/warmStage\(rows\)/.test(FN) && /status"\)\s*\.eq\("user_id", operatorId\)|status"\)\.eq\("user_id"/.test(FN.replace(/\n\s*/g, '')), 'the server reads the stage from the stored rows, with their send status');
-ok(/if \(stage !== 'warm'\) \{/.test(UI) && /Warm reply · \{WARM_STAGE_LABELS\[stage\]\}/.test(UI), 'the Inbox shows only a quiet stage line, no button, until warm');
-ok(/if \(!windowOpen \|\| stage !== 'warm'\) return;/.test(UI), '…and makes no call at all until warm');
+ok(!/stage !== 'warm'/.test(UI), 'the Inbox never hides the buttons for the stage');
+ok(/data-testid="warm-draft-reply"/.test(UI) && /data-testid="warm-refresh-research"/.test(UI), 'Draft reply and Refresh research are both rendered');
+ok(!/\{\(freshness === 'fresh' \|\| hasDraft\) && \(/.test(UI) && !/freshness === null\}/.test(UI), '…unconditionally (no freshness / draft condition around them)');
+ok(/mode === 'draft' && \(freshness === 'stale' \|\| freshness === 'website_changed'\)/.test(UI), 'Draft reply with NO research does not fetch the site; Refresh research is what starts it');
+ok(/data-testid="warm-site-note"/.test(UI), 'the site note is shown under the buttons');
+
+/* The no-hook case on the pure rules: opener → "Yes it is, who is this?" → Draft reply, no audit, no research. */
+{
+  const thread: ThreadMessage[] = [
+    { id: 'o1', direction: 'outbound', text: 'Hi, is this Safety First Electrical?', at: at(120) },
+    { id: 'i1', direction: 'inbound', text: 'Yes it is, who is this?', at: at(60) },
+  ];
+  const stage = warmStage([
+    { direction: 'outbound', created_at: at(120), message_type: 'template', template_name: 'initial_contact', status: 'read' },
+    { direction: 'inbound', created_at: at(60) },
+  ]);
+  ok(stage.stage === 'hook_not_sent', 'no-hook case: the stage is HOOK NOT SENT');
+  const ctx = buildReplyContext({
+    businessName: 'Safety First Electrical', contactFirstName: null, trade: 'electrician', town: null, website: null,
+    latest: latestInbound(thread)!, thread, research: null, audit: null, salesFacts: {}, reportUrl: null,
+    hookTemplate: stage.hookTemplate, hookAt: stage.hookAt, variant: 0, numberSource: null, avoidText: null,
+  });
+  const prompt = buildReplyPrompt(ctx);
+  ok(ctx.hookTemplate === null && !/already sent them the AI check/.test(prompt), 'no-hook case: the prompt does not claim the hook was sent');
+  ok(ctx.selection.primary === null && ctx.primaryRequired === false, 'no-hook case: no research → no site finding chosen, none required (nothing invented)');
+  ok(/Yes it is, who is this\?/.test(prompt), 'no-hook case: the draft is built from the conversation (their latest message is in the prompt)');
+}
 ok((INBOX.match(/stage=\{warmStage\(thread\)\.stage\}/g) ?? []).length === 2, 'the Inbox passes the same rule\'s stage in both window states');
 
 /* ─────────── 4. the funnel's "How much" reply ─────────── */

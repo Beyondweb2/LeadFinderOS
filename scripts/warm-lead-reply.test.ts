@@ -70,9 +70,10 @@ ok(/Research &amp; draft reply needs the 24h window — only an approved Meta te
 
 /* ─────────── 3. regenerate never crawls; refresh does ─────────── */
 ok(!/fetchSitePage|pickResearchPages|handleResearch|runSiteResearch/.test(draftBody), 'the draft action has no site-fetch path at all');
-ok(/mode === 'refresh' \|\| \(mode === 'draft' && freshness !== 'fresh'\)/.test(UI), 'the UI asks for research only on Refresh, or a first draft with nothing fresh');
+/* 2026-10-11 (Paul): Draft reply with NO research drafts from the conversation; only stale / changed research is refreshed first. */
+ok(/mode === 'refresh' \|\| \(mode === 'draft' && \(freshness === 'stale' \|\| freshness === 'website_changed'\)\)/.test(UI), 'the UI asks for research only on Refresh, or a draft over stale / changed research');
 ok(/refresh: mode === 'refresh'/.test(UI), 'Refresh research sends refresh: true (the only re-read of fresh research)');
-ok(/run\(hasDraft \? 'regenerate' : 'draft'\)/.test(UI), 'after a draft the main button is Regenerate');
+ok(/\{hasDraft && \(/.test(UI) && /void run\('regenerate'\)/.test(UI), 'after a draft a Regenerate button joins Draft reply (2026-10-11: Draft reply always shows)');
 ok(/avoid: mode === 'regenerate' \? lastReply : null/.test(UI), 'Regenerate passes the previous draft so the next one differs');
 
 /* ─────────── 4. what they asked ─────────── */

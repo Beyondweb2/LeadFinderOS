@@ -26,6 +26,7 @@ import {
   FULL_CRAWL, RUNAWAY_URL_CEILING, leanHtml, orderSitemapChildren, processPage, summariseCrawlRows,
   syntheticHtml, rawLinks, type PageEvidence, type StoredCrawlRow,
 } from "../../../src/lib/fullCrawl.ts";
+import { leadCrawlWriteDecision, storedCrawlFailed, STORED_CRAWL_STATE_COLUMNS } from "../../../src/lib/crawlWriteRule.ts";
 import { classifyCrawlUrl, classifySitemapUrl, parseRobots, type RobotsRules } from "../../../src/lib/crawlUrl.ts";
 import { cleanCounts, decideFetchOutcome, frontierExhausted, type JobCounts } from "../../../src/lib/crawlJob.ts";
 import { buildContentTrust, pageObservations, type ContentTrust, type PageObs } from "../../../src/lib/contentTrust.ts";
@@ -579,13 +580,27 @@ export async function finalizeCrawlJob(service: Client, jobId: string): Promise<
   };
   const status = full.completeness === "complete" ? "complete" : full.completeness === "failed" ? "failed" : "complete_with_failures";
   await service.from("crawl_jobs").update({ status, result, summary: { ...summaryState, full }, completed_at: checkedAt, lease_until: null, updated_at: checkedAt }).eq("id", jobId);
-  if (job.lead_id) {
+  /* ⛔ A FAILED CRAWL NEVER OVERWRITES THE LAST GOOD ONE (2026-10-11, leadCrawlWriteDecision): a full crawl that could
+     not read the site keeps the stored row and notes the attempt beside it. */
+  let keepLastGood = false;
+  if (job.lead_id && full.completeness === "failed") {
+    const { data: ex } = await service.from("lead_crawl_checks")
+      .select(STORED_CRAWL_STATE_COLUMNS).eq("lead_id", job.lead_id).maybeSingle();
+    keepLastGood = leadCrawlWriteDecision(ex ? { ...ex, failed: storedCrawlFailed(ex) } : null, { mode: "full", failed: true }, Date.now(), 0) === "keep_last_good";
+    if (keepLastGood) {
+      const { error: noteErr } = await service.from("lead_crawl_checks").update({
+        last_failed_attempt: { at: checkedAt, mode: "full", url: job.start_url, requested_from: job.requested_from, job_id: jobId, kind: "full_crawl_failed" },
+      }).eq("lead_id", job.lead_id);
+      if (noteErr) console.error(`[crawl-job] failed-attempt note failed: ${noteErr.message}`);
+    }
+  }
+  if (job.lead_id && !keepLastGood) {
     /* THE LEAD'S ONE CANONICAL ROW now describes this crawl. The previous job's rows stay as
        history; the lead row points only at the newest completed job, so a page that has gone is not
        part of the latest snapshot. */
     const { error } = await service.from("lead_crawl_checks").upsert({
       lead_id: job.lead_id, url: job.start_url, user_id: job.user_id, result, created_at: checkedAt,
-      mode: "full", full_evidence: full, requested_from: job.requested_from, job_id: jobId,
+      mode: "full", full_evidence: full, requested_from: job.requested_from, job_id: jobId, last_failed_attempt: null,
     }, { onConflict: "lead_id" });
     if (error) {
       console.error(`[crawl-job] lead row write failed: ${error.message}`);
