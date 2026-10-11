@@ -3260,7 +3260,7 @@ export function OutreachTable({
                             }
                             return (
                               <button className="p-1.5 rounded-md text-sky-400 hover:bg-sky-500/10 hover:text-sky-300 transition-colors"
-                                title="Run the AI visibility check (3 questions, ChatGPT + Google AI)" aria-label="Run audit" onClick={open}>
+                                title="Run the AI visibility check (3 questions, ChatGPT + Gemini)" aria-label="Run audit" onClick={open}>
                                 <ClipboardList className="h-4 w-4" />
                               </button>
                             );

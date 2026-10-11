@@ -187,7 +187,7 @@ export function explainBulkRefusal(error: string | null | undefined, reason: str
   const r = String(reason ?? '');
   const e = String(error ?? '');
   if (r.startsWith('hook_engine_mismatch')) {
-    return 'this template says "I asked chatgpt", but this lead\'s missed search is on Google AI. Use "Audit follow-up + call" or "Audit follow-up + fault" (they say "i asked AI").';
+    return 'this template says "I asked chatgpt", but this lead\'s missed search is on Gemini. Use "Audit follow-up + call" or "Audit follow-up + fault" (they say "i asked AI").';
   }
   if (e === 'pitch_already_sent' || e === 'already_sent') return 'already had this template';
   if (e === 'phone_already_contacted') return 'this number has already been contacted';

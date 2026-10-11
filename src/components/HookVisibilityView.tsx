@@ -2,7 +2,7 @@ import { useState, type ReactNode } from 'react';
 import { Check, ChevronDown, ChevronRight, Copy, ExternalLink, Loader2, RefreshCw } from 'lucide-react';
 import { HOOK_ALL_NAMED_REASON, HOOK_SCORE_QUESTIONS, HOOK_ENGINES, isHookStateV2, type HookResult, type HookScore } from '@/lib/hookScore';
 import type { HookCardScore, HookReportLink, HookReportState } from '@/lib/hookVisibility';
-import { AI_OVERVIEW_LABEL, NO_OVERVIEW_DETAIL, overviewStatusWord, overviewSummary } from '@/lib/aiOverview';
+import { AI_OVERVIEW_LABEL, NO_OVERVIEW_DETAIL, OVERVIEW_NO_NAMES_TEXT, overviewStatusWord, overviewSummary } from '@/lib/aiOverview';
 import { useToast } from '@/hooks/use-toast';
 import { staffPreviewUrl } from '@/lib/reportShare';
 import { cn } from '@/lib/utils';
@@ -26,7 +26,7 @@ import { percentTone, scoreTone, SCORE_TONE_CLASS } from '@/lib/scoreTone';
    ⛔ THE REPORT ACTION IS THE REPORT OF THE AUDIT SHOWN. It reads HookReportState (hookVisibility.ts),
    computed from the same poll as the score, so "Report ready" cannot contradict a visible result
    and a running audit never borrows an older audit's link as its own.
-   ⛔ ENGINE-SPECIFIC WORDS, AND "Google AI", NEVER the internal engine key, on this surface.
+   ⛔ ENGINE-SPECIFIC WORDS, AND "Gemini" (Paul, 2026-10-11), NEVER the internal engine key, on this surface.
    ⛔ NO LABELS LIKE poor/good/excellent. The numbers are the judgement (Paul).
    ⛔ IT READS AND IT STARTS AN AUDIT. It never sends. The "Run new 3 × 2 audit" callback it is given
    must not queue a pitch (Inbox.tsx startHookRerun).
@@ -243,7 +243,10 @@ function Details({ score, rivalsWithheld, legacy, issues }: { score: HookScore; 
                       <div data-testid="hook-overview-detail">
                         <p className="font-semibold">{AI_OVERVIEW_LABEL} <span className="font-bold text-muted-foreground">{overviewStatusWord(overviewOf(qi)!).toUpperCase()}</span> <span className="font-normal text-muted-foreground">(not scored)</span></p>
                         {overviewOf(qi)!.state === 'not_shown' && <p className="text-muted-foreground">{NO_OVERVIEW_DETAIL}</p>}
-                        {overviewOf(qi)!.state === 'shown' && <p className="line-clamp-4 break-words text-muted-foreground">{overviewOf(qi)!.answerText.slice(0, 600)}</p>}
+                        {overviewOf(qi)!.state === 'shown' && !overviewOf(qi)!.named && (rivalsWithheld || overviewOf(qi)!.competitors.length
+                          ? <p className="break-words"><span className="text-muted-foreground">Named instead: </span><NamedInstead names={overviewOf(qi)!.competitors} rivalsWithheld={rivalsWithheld} /></p>
+                          : <p className="text-muted-foreground" data-testid="hook-overview-no-names">{OVERVIEW_NO_NAMES_TEXT}</p>)}
+                        {overviewOf(qi)!.state === 'shown' && overviewOf(qi)!.answerText && <p className="line-clamp-4 break-words text-muted-foreground">{overviewOf(qi)!.answerText}{overviewOf(qi)!.truncated ? ' …' : ''}</p>}
                       </div>
                     )}
                   </div>

@@ -347,12 +347,14 @@ export interface HookReportSummary {
   /** VERSION 2 ONLY (2026-10-11): Google AI Overview per tested question, DISPLAY ONLY — never in
    *  `score`, the percentage or the gap. Absent / empty on an audit from before overviews were
    *  recorded, so an old report renders exactly as before. `names` went through namedInstead. */
-  overviews?: Array<{ questionIndex: number; question: string; state: 'shown' | 'not_shown' | 'pending' | 'failed'; named: boolean | null; answerText: string; names: string[] }>;
+  overviews?: Array<{ questionIndex: number; question: string; state: 'shown' | 'not_shown' | 'pending' | 'failed'; named: boolean | null; answerText: string; truncated?: boolean; names: string[] }>;
   /** Every tested question, in order, with what each answering engine did. `named: null` = no answer. */
   tested: Array<{
     question: string;
     isGap: boolean;
-    perEngine: Array<{ engine: string; label: string; named: boolean | null }>;
+    /** `names` (version 2, 2026-10-11): who that answer named instead, one per business, through the
+     *  run-level gate (withheld → []). Display only — the table's pill and "+n more". */
+    perEngine: Array<{ engine: string; label: string; named: boolean | null; names?: string[] }>;
   }>;
 }
 
@@ -455,15 +457,40 @@ export function normaliseRivalName(name: string, town?: string | null): string {
   return s;
 }
 
-/** How many DIFFERENT businesses a list of normalised names holds. A name that is the opening words
- *  of another is the same business with more detail ("puregym" / "puregym city centre south", "the gym
- *  group" / "the gym group heeley"), so it is counted once — the count errs low, never high. */
+/** Two normalised names that are one business: the same; one is the opening words of the other
+ *  ("puregym" / "puregym city centre south"); or both open with the same TWO words and at least one has
+ *  more ("martin day electrician" / "martin day commercial electricians", "coleman electrical services" /
+ *  "coleman electrical and security" — four "different" firms on S P Electrical's report, 2026-10-11).
+ *  A leading "the" is ignored for the two-word test. Errs low, never high. */
+function sameBusiness(a: string, b: string): boolean {
+  if (a === b || a.startsWith(`${b} `) || b.startsWith(`${a} `)) return true;
+  const wa = a.replace(/^the /, '').split(' ');
+  const wb = b.replace(/^the /, '').split(' ');
+  if (wa.length < 2 || wb.length < 2 || (wa.length < 3 && wb.length < 3)) return false;
+  return wa[0] === wb[0] && wa[1] === wb[1];
+}
+
+/** How many DIFFERENT businesses a list of normalised names holds (sameBusiness): the count errs
+ *  low, never high. */
 export function countDistinctBusinesses(keys: string[]): number {
   const kept: string[] = [];
   for (const k of [...new Set(keys)].sort((a, b) => a.length - b.length)) {
-    if (!kept.some((p) => k === p || k.startsWith(`${p} `))) kept.push(k);
+    if (!kept.some((p) => sameBusiness(k, p))) kept.push(k);
   }
   return kept.length;
+}
+
+/** One entry per business (sameBusiness), the first spelling and the order kept. */
+export function distinctNames(names: readonly string[], town?: string | null): string[] {
+  const out: string[] = [];
+  const keys: string[] = [];
+  for (const n of names) {
+    const k = normaliseRivalName(n, town);
+    if (!k || keys.some((p) => sameBusiness(k, p))) continue;
+    keys.push(k);
+    out.push(n.trim());
+  }
+  return out;
 }
 
 /**
@@ -486,7 +513,9 @@ function buildHookReportSummaryV2(
     isGap: pick?.questionIndex === i,
     perEngine: input.engineOrder.filter((e) => score.results.some((r) => r.questionIndex === i && r.engine === e)).map((e) => {
       const st = statusOf(i, e);
-      return { engine: e, label: input.engineLabel(e), named: st === 'named' ? true : st === 'not_named' ? false : null };
+      const r = score.results.find((x) => x.questionIndex === i && x.engine === e);
+      const pool = st === 'not_named' && r ? (input.rivalFilter ? (input.rivalFilter(r.competitors) ?? []) : input.namedInstead(r.competitors)) : [];
+      return { engine: e, label: input.engineLabel(e), named: st === 'named' ? true : st === 'not_named' ? false : null, names: distinctNames(pool, input.town) };
     }),
   }));
   let gap: HookReportSummary['gap'] = null;
@@ -543,8 +572,11 @@ function buildHookReportSummaryV2(
     .map((o) => ({
       questionIndex: o.questionIndex, question: o.question,
       state: o.state as 'shown' | 'not_shown' | 'pending' | 'failed',
-      named: o.named, answerText: o.answerText,
-      names: o.state === 'shown' && !o.named ? input.namedInstead(o.competitors) : [],
+      named: o.named, answerText: o.answerText, truncated: o.truncated,
+      /* One per business, through the run's gate (withheld → []), the whole list so "+n more" is true. */
+      names: o.state === 'shown' && !o.named
+        ? distinctNames(input.rivalFilter ? (input.rivalFilter(o.competitors) ?? []) : input.namedInstead(o.competitors), input.town)
+        : [],
     }));
   return {
     shape: 'six',

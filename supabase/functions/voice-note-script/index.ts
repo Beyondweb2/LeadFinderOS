@@ -27,7 +27,7 @@ import { guardAction } from "../_shared/protection.ts";
 const VOICE_SCRIPT_EST_USD = 0.01;
 import { logOpenAiUsage, openAiUsd } from "../_shared/openai-usage.ts";
 import { runSiteResearch, callModel, leadTrade, leadTown, RESEARCH_LEAD_COLUMNS, type ResearchLead } from "../_shared/site-research.ts";
-import { hookEngineLabel, scoreHookRun, type HookScoreRow } from "../../../src/lib/hookScore.ts";
+import { hookSpokenEngineLabel as hookEngineLabel, scoreHookRun, type HookScoreRow } from "../../../src/lib/hookScore.ts";
 import { assessCompetitorCleanliness, collectCompetitorNames, countAnsweredCells, isProvableJunkName } from "../../../src/lib/competitorCleaning.ts";
 import {
   selectVoiceNoteEvidence, selectVoiceNoteFindings, buildVoiceNotePrompt, parseVoiceNoteScript, checkVoiceNoteScript,

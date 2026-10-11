@@ -31,6 +31,11 @@ export const AI_OVERVIEW_REPORT_LABEL = 'AI Overview';
 export const NO_OVERVIEW_TEXT = 'No overview shown';
 /** The one-line explanation beside it, for the screens with room. */
 export const NO_OVERVIEW_DETAIL = 'Google did not show an AI Overview for this search.';
+/** The words when Google showed an overview that named no business (state 2 of 3: none shown /
+ *  shown, no names / shown, names listed). Only said when the run's names are not withheld. */
+export const OVERVIEW_NO_NAMES_TEXT = 'Overview shown, no businesses named';
+/** The short label on the public report's overview row. */
+export const AI_OVERVIEW_CONTEXT_LABEL = 'Shown for context, not scored';
 /** Said wherever the overview sits beside a score. */
 export const AI_OVERVIEW_NOT_SCORED = 'Shown for context, not counted in the score.';
 
@@ -46,12 +51,100 @@ export type AiOverviewState =
   /** An audit from before the stamp — draw nothing new. */
   | 'not_recorded';
 
+/* ══ THE OVERVIEW'S TEXT, MADE READABLE (2026-10-11, report restyle) ═════════════════════════════════
+   What the actor returns for an AI Overview (measured on 81 stored overviews, 2026-10-11): the page's
+   text run together with NO separators — "…industrial facilities.Top Commercial Electricians in Leeds"
+   (a sentence glued to the next HEADING), and Google Maps cards glued in after the summary
+   ("…in Wallasey.Wirral 24 Hour Plumber4.8(105)PlumberOpen5 Moorcroft RdPhone: …"), sometimes with the
+   card details repeated. Without the actor's paid full-overview add-on (kept OFF: cost + latency) a
+   long overview is cut where Google collapses it, so the text can end on a bare heading.
+   This turns that into what a reader can take in. It NEVER writes a word: it adds the missing space,
+   keeps the overview's own complete sentences, drops a dangling heading / card fragment, and says
+   `truncated` so the caller closes with "…". The stored answer is untouched; `named` and the competitor
+   names are decided on the stored cell, never on this text.
+   ══════════════════════════════════════════════════════════════════════════════════════════════════ */
+
+/** A Google Maps card's rating + review count as the overview text carries it: "4.8(105)", "5.0 (1,204)". */
+const MAPS_CARD_RE = /\d\.\d\s?\(\d[\d,.]*[kK]?\)/;
+/** The longest summary the reader is given; the report clamps it further to two lines. */
+export const OVERVIEW_SUMMARY_CHARS = 420;
+
+/** Google's own controls that trail the overview (share / copy / feedback). Everything from the
+ *  earliest one is page furniture, never the answer (ai-search.ts strips some of these at scan time;
+ *  older rows and the copy/share row still carry them). Multi-word phrases only. */
+const OVERVIEW_FURNITURE = [
+  'learn morecopied', 'copied to clipboard', 'failed to copy', 'share public link', 'this public link is valid',
+  'ai responses may include mistakes', 'ai can make mistakes', 'your feedback helps google improve', 'report a problem',
+];
+
+/** Put back the space the scrape dropped between a sentence (or label) and the next one. */
+function unglue(raw: string): string {
+  let text = String(raw || '');
+  const hay = text.toLowerCase();
+  const cut = Math.min(...OVERVIEW_FURNITURE.map((m) => { const i = hay.indexOf(m); return i < 0 ? Infinity : i; }));
+  if (Number.isFinite(cut)) text = text.slice(0, cut);
+  return text
+    .replace(/\s+/g, ' ')
+    .replace(/([a-z0-9)\]’”'"%])([.!?:;])(?=[A-Z])/g, '$1$2 ')
+    .trim();
+}
+
+function sentencesOf(text: string): string[] {
+  return text.split(/(?<=[.!?:])\s+(?=[A-Z0-9“"(£])/).map((s) => s.trim()).filter(Boolean);
+}
+
+/**
+ * The overview's opening, readable: its own complete sentences up to OVERVIEW_SUMMARY_CHARS, stopping
+ * before a Maps card or a dangling heading. `truncated` = the overview said more than this.
+ * Empty when not even one sentence can be read (the caller then shows the names alone).
+ */
+export function overviewSummaryText(raw: string): { text: string; truncated: boolean } {
+  const t = unglue(raw);
+  if (!t) return { text: '', truncated: false };
+  const card = t.search(MAPS_CARD_RE);
+  const head = card >= 0 ? t.slice(0, card) : t;
+  let truncated = card >= 0;
+  const keep: string[] = [];
+  const seen = new Set<string>();
+  let len = 0;
+  for (const s of sentencesOf(head)) {
+    const complete = /[.!?]$/.test(s);
+    const intro = /:$/.test(s);
+    if (!complete && !intro) {
+      /* A bare heading or a business name glued before its card: not a sentence the overview finished
+         on this page. A long unpunctuated opening is still the overview's own words — kept, marked. */
+      if (!keep.length && s.split(/\s+/).length >= 10) keep.push(s);
+      truncated = true;
+      break;
+    }
+    const k = s.toLowerCase();
+    if (seen.has(k)) continue;
+    if (keep.length && len + s.length + 1 > OVERVIEW_SUMMARY_CHARS) { truncated = true; break; }
+    seen.add(k); keep.push(s); len += s.length + 1;
+    if (intro) { truncated = true; break; }
+  }
+  return { text: keep.join(' '), truncated };
+}
+
+/** The whole overview for "Read the overview": spaces restored, a repeated sentence shown once, each
+ *  Maps card's rating set off so it does not run into the name. Still only the overview's own words. */
+export function overviewFullText(raw: string): string {
+  const t = unglue(raw).replace(new RegExp(`\\s?(${MAPS_CARD_RE.source})\\s?`, 'g'), ' $1 ');
+  const seen = new Set<string>();
+  return sentencesOf(t).filter((s) => { const k = s.toLowerCase(); if (s.length > 25 && seen.has(k)) return false; seen.add(k); return true; }).join(' ').replace(/\s+/g, ' ').trim();
+}
+
 export interface AiOverviewView {
   state: AiOverviewState;
   /** Shown only: did the overview name the business (the same ruler as every other answer). */
   named: boolean | null;
-  /** Shown only: the overview's own text (trimmed for display by the caller). */
+  /** Shown only: the overview's opening, cleaned for reading (overviewSummaryText). Never the stored
+   *  bytes: those are the cell's, read by the named ruler and extract-competitors. */
   answerText: string;
+  /** Shown only: the overview said more than `answerText` — close it with "…". */
+  truncated: boolean;
+  /** Shown only: the whole overview, cleaned for reading (overviewFullText), for "Read the overview". */
+  fullText: string;
   citations: Array<{ title: string; url: string }>;
   /** Shown only: the overview's own competitor list, as stored (callers apply their own gates). */
   competitors: string[];
@@ -80,17 +173,20 @@ export function overviewFor(
   row: { status?: string | null; cells: unknown } | null | undefined,
   opts: { stamped: boolean; named?: NamedContext },
 ): AiOverviewView {
-  const empty = (state: AiOverviewState): AiOverviewView => ({ state, named: null, answerText: '', citations: [], competitors: [] });
+  const empty = (state: AiOverviewState): AiOverviewView => ({ state, named: null, answerText: '', truncated: false, fullText: '', citations: [], competitors: [] });
   const cells = row?.status === 'done' && row.cells && typeof row.cells === 'object' ? row.cells as Record<string, unknown> : null;
   if (cells && hasOverviewStamp(cells)) {
     const cell = cells[AI_OVERVIEW_ENGINE];
     const text = answerOf(cell);
     if (cells[AI_OVERVIEW_STAMP_KEY] === 'shown' && text) {
       const c = cell as { citations?: unknown; competitors?: unknown };
+      const summary = overviewSummaryText(text);
       return {
         state: 'shown',
         named: cellNamed(cell as NamedCell, opts.named),
-        answerText: text,
+        answerText: summary.text,
+        truncated: summary.truncated,
+        fullText: overviewFullText(text),
         citations: Array.isArray(c.citations)
           ? c.citations.filter((x): x is { title: string; url: string } => !!x && typeof (x as { url?: unknown }).url === 'string')
             .map((x) => ({ title: String(x.title ?? ''), url: x.url }))

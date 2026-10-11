@@ -1,7 +1,7 @@
 /* ════════════════════════════════════════════════════════════════════════════════════════════════
    AI SCORE COLOURS (sales-team-today release, 2026-10-06) — the ONE rule for colouring a naming result.
 
-   A count "named / asked" (one engine: ChatGPT 2/3, Google AI 0/3) or the overall percentage named is
+   A count "named / asked" (one engine: ChatGPT 2/3, Gemini 0/3) or the overall percentage named is
    coloured by its PROPORTION, so a different denominator in future needs no new table:
      all named           → strong  (green)
      half or more named  → good    (green-ish)
@@ -40,8 +40,8 @@ export const SCORE_TONE_CLASS: Record<ScoreTone, { chip: string; text: string; e
   none: { chip: 'bg-muted ring-border', text: 'text-muted-foreground', edge: 'border-l-border', solid: 'bg-muted text-muted-foreground' },
 };
 
-/** The engine's name on sales-facing screens: Gemini is "Google AI" (the engine key stays 'gemini'). */
+/** The engine's name on sales-facing screens: "Gemini" (Paul, 2026-10-11; was "Google AI"). An old "Google AI" label reads as Gemini too. */
 export function salesEngineLabel(engineOrLabel: string | null | undefined): string {
   const s = (engineOrLabel ?? '').trim();
-  return /^gemini$/i.test(s) || /^google ai$/i.test(s) ? 'Google AI' : /^chatgpt$/i.test(s) ? 'ChatGPT' : s || 'AI';
+  return /^gemini$/i.test(s) || /^google ai$/i.test(s) ? 'Gemini' : /^chatgpt$/i.test(s) ? 'ChatGPT' : s || 'AI';
 }
