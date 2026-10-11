@@ -5,7 +5,8 @@ import { Callout, EDGE, Empty, IconTile, SectionHeading, Segmented, SubSection, 
 import { Button } from '@/components/ui/button';
 import { DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import { mayForceRecrawl } from '@/lib/prospectCrawl';
-import type { HookResult, HookScore } from '@/lib/hookScore';
+import type { HookOverview, HookResult, HookScore } from '@/lib/hookScore';
+import { AI_OVERVIEW_LABEL, AI_OVERVIEW_NOT_SCORED, NO_OVERVIEW_DETAIL, NO_OVERVIEW_TEXT, overviewSummary } from '@/lib/aiOverview';
 import { AUDIT_SEVERITY_LABELS, groupFindings, severityCounts, type AuditFinding, type AuditSeverity, type SiteAudit } from '@/lib/siteAudit';
 import {
   NO_WEBSITE_ON_FILE_TEXT, NO_WEBSITE_TEXT, NO_WEBSITE_WHY, callPoint, coverageLine, engineSections, hostOf, type WebsiteState,
@@ -81,6 +82,7 @@ export function ProspectAuditView({ score, rivalsWithheld, aiInFlight, site, poi
                 <p className={cn('text-2xl font-extrabold tabular-nums tracking-tight', TONE.purple.text)}>{score!.named}<span className="text-base font-medium text-muted-foreground"> / {score!.expected}</span></p>
                 <p className="text-xs text-muted-foreground">answers named this business</p>
                 <ul className="mt-2 flex flex-wrap gap-1.5 text-sm">{score!.perEngine.map((t) => { const tone = t.valid === t.expected ? scoreTone(t.named, t.expected) : 'none'; return <li key={t.engine}><span data-testid="pa-engine-score" data-tone={tone} className={cn('inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold ring-1 ring-inset', SCORE_TONE_CLASS[tone].chip, SCORE_TONE_CLASS[tone].text)}>{t.label}: <span className="tabular-nums">{t.named}/{t.expected}</span></span></li>; })}</ul>
+                <OverviewGlance score={score!} />
               </>
             ) : hasScore && aiInFlight ? <p className="flex items-center gap-1.5 text-sm"><Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin" />The AI check is still running ({score!.valid + score!.failed}/{score!.expected}).</p>
               : hasScore ? <p className="text-sm">Incomplete check — {score!.valid} of {score!.expected} answers valid. No final score.</p>
@@ -117,6 +119,15 @@ export function ProspectAuditView({ score, rivalsWithheld, aiInFlight, site, poi
                   <ol className="mt-3 space-y-3">{e.results.map((r) => <AiResult key={`${r.questionIndex}-${r.engine}`} r={r} rivalsWithheld={rivalsWithheld} />)}</ol>
                 </div>
               ))}
+              {score!.overviews.length > 0 && (
+                <div className={TILE} data-testid="pa-engine-ai_overview">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <h3 className="flex min-w-0 items-center gap-2 text-sm font-bold tracking-tight"><IconTile icon={MessageSquareText} tone="grey" size="sm" />{AI_OVERVIEW_LABEL}</h3>
+                    <span className="text-xs text-muted-foreground">{AI_OVERVIEW_NOT_SCORED}</span>
+                  </div>
+                  <ol className="mt-3 space-y-3">{score!.overviews.map((o) => <OverviewResult key={o.questionIndex} o={o} rivalsWithheld={rivalsWithheld} />)}</ol>
+                </div>
+              )}
             </div>
             <p className="text-xs text-muted-foreground">Being cited (a source the answer used) is not the same as being named in the answer.</p>
           </>
@@ -203,6 +214,48 @@ function AiResult({ r, rivalsWithheld }: { r: HookResult; rivalsWithheld: boolea
             {open ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />} {open ? 'Hide the answer' : 'Read the answer'}
           </button>
           {open && <p className="mt-1.5 whitespace-pre-wrap break-words rounded-xl bg-muted/40 p-2.5 text-xs leading-relaxed">{r.answerExcerpt}</p>}
+        </>
+      )}
+    </li>
+  );
+}
+
+/** One line in the score card: the overview, said as context. Nothing for an audit from before overviews were recorded. */
+function OverviewGlance({ score }: { score: HookScore }) {
+  const sum = overviewSummary(score.overviews);
+  if (!sum) return null;
+  return <p className="mt-2 text-[11px] text-muted-foreground" data-testid="pa-overview-glance"><span className="font-medium text-foreground/80">{AI_OVERVIEW_LABEL}:</span> {sum.line} (not scored)</p>;
+}
+
+function OverviewResult({ o, rivalsWithheld }: { o: HookOverview; rivalsWithheld: boolean }) {
+  const [open, setOpen] = useState(false);
+  const tone: Tone = o.state === 'shown' ? (o.named ? 'green' : 'red') : 'grey';
+  const word = o.state === 'shown' ? (o.named ? 'Named' : 'Not named') : o.state === 'not_shown' ? NO_OVERVIEW_TEXT : o.state === 'pending' ? 'Pending' : 'Not available';
+  return (
+    <li className="min-w-0 border-t border-border/50 pt-3 first:border-t-0 first:pt-0" data-testid="pa-overview-result" data-state={o.state}>
+      <p className="text-sm"><span className="mr-1.5 rounded-md bg-muted px-1.5 py-0.5 text-[10px] font-bold tabular-nums text-muted-foreground">Q{o.questionIndex + 1}</span><span className="break-words">“{o.question}”</span></p>
+      <p className="mt-1.5 flex flex-wrap items-center gap-1.5 text-xs">
+        <ToneChip tone={tone} dot>{word}</ToneChip>
+        {o.state === 'not_shown' && <span className="text-muted-foreground">{NO_OVERVIEW_DETAIL}</span>}
+        {o.state === 'shown' && !o.named && (rivalsWithheld ? <span className="italic text-muted-foreground">names withheld (competitor list failed cleaning)</span>
+          : o.competitors.length ? <span className="break-words">Named instead: <b>{o.competitors.slice(0, 5).join(', ')}</b></span> : null)}
+      </p>
+      {o.state === 'shown' && o.citations.length > 0 && (
+        <p className="mt-1 flex flex-wrap gap-1 text-[11px]">
+          <span className="text-muted-foreground">Sources cited:</span>
+          {o.citations.slice(0, 8).map((c) => (
+            <a key={c.url} href={c.url} target="_blank" rel="noreferrer" title={c.title || c.url} className="inline-flex max-w-full items-center gap-0.5 rounded-full bg-muted/60 px-2 py-0.5 ring-1 ring-inset ring-border/50 hover:bg-muted">
+              <span className="truncate">{hostOf(c.url)}</span><ExternalLink className="h-2.5 w-2.5 shrink-0" />
+            </a>
+          ))}
+        </p>
+      )}
+      {o.state === 'shown' && (
+        <>
+          <button type="button" onClick={() => setOpen((v) => !v)} className="mt-1 inline-flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground" aria-expanded={open}>
+            {open ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />} {open ? 'Hide the overview' : 'Read the overview'}
+          </button>
+          {open && <p className="mt-1.5 whitespace-pre-wrap break-words rounded-xl bg-muted/40 p-2.5 text-xs leading-relaxed">{o.answerText.slice(0, 1500)}</p>}
         </>
       )}
     </li>

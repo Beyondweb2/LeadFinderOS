@@ -2,6 +2,7 @@ import { useState, type ReactNode } from 'react';
 import { Check, ChevronDown, ChevronRight, Copy, ExternalLink, Loader2, RefreshCw } from 'lucide-react';
 import { HOOK_ALL_NAMED_REASON, HOOK_SCORE_QUESTIONS, HOOK_ENGINES, isHookStateV2, type HookResult, type HookScore } from '@/lib/hookScore';
 import type { HookCardScore, HookReportLink, HookReportState } from '@/lib/hookVisibility';
+import { AI_OVERVIEW_LABEL, NO_OVERVIEW_DETAIL, overviewStatusWord, overviewSummary } from '@/lib/aiOverview';
 import { useToast } from '@/hooks/use-toast';
 import { staffPreviewUrl } from '@/lib/reportShare';
 import { cn } from '@/lib/utils';
@@ -163,6 +164,16 @@ function StatusPill({ r, best }: { r: HookResult; best: boolean }) {
   );
 }
 
+/** The overview's pill: grey, because it is context, not a scored result. */
+function OverviewPill({ o }: { o: HookScore['overviews'][number] }) {
+  return (
+    <span className="inline-flex items-center gap-1 whitespace-nowrap rounded border border-dashed border-border bg-muted px-1.5 py-0.5 text-[11px] leading-none text-muted-foreground" data-testid="hook-overview-pill" data-state={o.state} title="Google AI Overview: shown for context, not counted in the score">
+      <span className="font-medium">AI Overview</span>
+      <span className="font-semibold">{overviewStatusWord(o)}</span>
+    </span>
+  );
+}
+
 function NamedInstead({ names, rivalsWithheld }: { names: string[]; rivalsWithheld: boolean }) {
   if (rivalsWithheld) return <span className="italic text-muted-foreground">names withheld (this run’s competitor list failed cleaning)</span>;
   if (!names.length) return <span className="italic text-muted-foreground">no competitor names extracted for this answer</span>;
@@ -177,6 +188,8 @@ function Details({ score, rivalsWithheld, legacy, issues }: { score: HookScore; 
   // One row per question, in the order asked; each row carries that question's own cells only.
   const questions = [...new Set(score.results.map((r) => r.questionIndex))].sort((a, b) => a - b)
     .map((qi) => ({ qi, cells: score.results.filter((r) => r.questionIndex === qi) }));
+  // Google AI Overview per question: display only, and absent on audits from before it was recorded.
+  const overviewOf = (qi: number) => score.overviews.find((o) => o.questionIndex === qi && o.state !== 'not_recorded') ?? null;
   return (
     <div className="absolute inset-x-2 top-full z-30 mt-1 max-h-[40vh] space-y-2.5 overflow-y-auto overscroll-contain rounded-md border border-border bg-popover p-2 text-xs text-popover-foreground shadow-lg" data-testid="hook-visibility-details">
       {hook && (
@@ -213,7 +226,7 @@ function Details({ score, rivalsWithheld, legacy, issues }: { score: HookScore; 
                     <span className="mr-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Q{qi + 1}</span>
                     <span className={cn('break-words', !open && 'line-clamp-1')} title={cells[0]?.question}>{cells[0]?.question}</span>
                   </span>
-                  <span className="flex shrink-0 flex-wrap gap-1">{cells.map((r) => <StatusPill key={r.engine} r={r} best={isBest(r)} />)}</span>
+                  <span className="flex shrink-0 flex-wrap gap-1">{cells.map((r) => <StatusPill key={r.engine} r={r} best={isBest(r)} />)}{overviewOf(qi) && <OverviewPill o={overviewOf(qi)!} />}</span>
                 </button>
                 {open && (
                   <div className="mt-1 space-y-1.5 border-t border-border pt-1.5">
@@ -226,6 +239,13 @@ function Details({ score, rivalsWithheld, legacy, issues }: { score: HookScore; 
                         {r.answerExcerpt && <p className="line-clamp-4 break-words text-muted-foreground">{r.answerExcerpt}</p>}
                       </div>
                     ))}
+                    {overviewOf(qi) && (
+                      <div data-testid="hook-overview-detail">
+                        <p className="font-semibold">{AI_OVERVIEW_LABEL} <span className="font-bold text-muted-foreground">{overviewStatusWord(overviewOf(qi)!).toUpperCase()}</span> <span className="font-normal text-muted-foreground">(not scored)</span></p>
+                        {overviewOf(qi)!.state === 'not_shown' && <p className="text-muted-foreground">{NO_OVERVIEW_DETAIL}</p>}
+                        {overviewOf(qi)!.state === 'shown' && <p className="line-clamp-4 break-words text-muted-foreground">{overviewOf(qi)!.answerText.slice(0, 600)}</p>}
+                      </div>
+                    )}
                   </div>
                 )}
               </li>
@@ -345,6 +365,12 @@ export function HookVisibilityView({ card, inFlight, state, report, onRunNew, ru
         </span>
         {headline}
       </div>
+
+      {overviewSummary(score.overviews) && (
+        <p className="mt-0.5 text-[11px] text-muted-foreground" data-testid="hook-overview-line">
+          <span className="font-medium">{AI_OVERVIEW_LABEL}:</span> {overviewSummary(score.overviews)!.line} (not scored)
+        </p>
+      )}
 
       {legacy && (
         <p className="mt-0.5 text-[11px] text-muted-foreground">

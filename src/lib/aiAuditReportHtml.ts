@@ -1,5 +1,6 @@
 import { hookReportCopy, type HookReportSummary } from './hookAudit.ts';
 import { articleTrade } from './templateVars.ts';
+import { AI_OVERVIEW_LABEL, AI_OVERVIEW_NOT_SCORED, AI_OVERVIEW_REPORT_LABEL as AI_OVERVIEW_ROW_LABEL, NO_OVERVIEW_DETAIL, NO_OVERVIEW_TEXT } from './aiOverview.ts';
 // Client-facing AI Visibility Audit report — shared data shape + a standalone,
 // self-contained, PRINT-READY one-page HTML document for download (Findable-branded,
 // inline styles, no dependencies). Deliberately client-friendly: no engine keys, no
@@ -108,7 +109,7 @@ export interface AiAuditReportData {
        ranCount = how many runs the engine answered in; named = how many of those it named you in
        (a count now; older payloads carried a boolean, handled in the renderer). ran=false → the
        engine never returned an answer. */
-    perEngine?: { label: string; ran: boolean; ranCount?: number; runs?: number; named: number | boolean; recommended?: number; cited?: number; rivals: string[]; rivalsRaw?: number; citations: { domain: string; url: string }[] }[];
+    perEngine?: { label: string; ran: boolean; ranCount?: number; runs?: number; notShown?: number; overviewRecorded?: boolean; counted?: boolean; named: number | boolean; recommended?: number; cited?: number; rivals: string[]; rivalsRaw?: number; citations: { domain: string; url: string }[] }[];
     /* INTERNAL winnability signal (rendered only when `internal` is true — never on the client doc).
        Structural match for QuestionWinnability in auditReport.ts (kept inline to avoid a circular
        type import between this file and auditReport.ts). */
@@ -1171,7 +1172,7 @@ export function renderQuickCheckHeader(businessName: string, dateLabel: string, 
   const s = h?.score;
   const engines = s ? s.perEngine.length : 0;
   const method = s && s.questions > 0 && engines > 0
-    ? `${s.questions} ${plural(s.questions, 'question')} &times; ${engines} AI ${plural(engines, 'engine')} &times; 1 ask each &middot; ${s.total} ${plural(s.total, 'answer')} total`
+    ? `${s.questions} ${plural(s.questions, 'question')} &times; ${engines} AI ${plural(engines, 'engine')} &times; 1 ask each &middot; ${s.total} ${plural(s.total, 'answer')} total${h?.overviews?.length ? ' &middot; plus Google&rsquo;s AI Overview, shown for context' : ''}`
     : '';
   return `<header class="q4-head">
       <div class="q4-brand"><div class="q4-wm">Findable<span>.</span></div><div class="q4-sub">AI visibility quick audit</div></div>
@@ -1259,13 +1260,37 @@ export function renderQuickCheckReport(h: HookReportSummary, businessName: strin
             <div class="q4-ans-head"><span class="q4-eng-name">${q4Mark(a.engine)}${esc(a.label)}</span>${chip}</div>${body}${instead}
           </article>`;
     }).join('');
+    /* Google AI Overview for the same question — DISPLAY ONLY, never in the score above. "No overview
+       shown" is a result, said plainly (Google does not show one for every search). */
+    const fo = (h.overviews ?? []).find((o) => o.questionIndex === f.questionIndex && (o.state === 'shown' || o.state === 'not_shown'));
+    let aio = '';
+    if (fo) {
+      const me = fo.named ? ownNameVariants(businessName) : [];
+      const ex = fo.state === 'shown' ? answerExcerpt(fo.answerText, QUICK_ANSWER_CHARS, me) : null;
+      const seen = new Set<string>();
+      const names = fo.names.filter((n) => { const k = n.trim().toLowerCase(); if (!k || seen.has(k)) return false; seen.add(k); return true; }).slice(0, 5);
+      const chip = fo.state === 'not_shown'
+        ? `<span class="q4-chip q4-chip--na">${NO_OVERVIEW_TEXT}</span>`
+        : fo.named ? `<span class="q4-chip q4-chip--y">&#10003; Named</span>` : `<span class="q4-chip q4-chip--n">&#10005; Not named</span>`;
+      const body = fo.state === 'not_shown'
+        ? `<p class="q4-ans-none">${esc(NO_OVERVIEW_DETAIL)}</p>`
+        : ex ? `<div class="q4-ans-body">${quickExcerptHtml(ex.blocks, ex.truncated, names, me, ex.lead)}</div>`
+        : `<p class="q4-ans-none">${fo.named ? `Google&rsquo;s AI Overview named ${esc(businessName)}.` : `Google&rsquo;s AI Overview answered without naming ${esc(businessName)}.`}</p>`;
+      const instead = fo.state === 'shown' && !fo.named && names.length
+        ? `<p class="q4-instead"><span>Named instead</span>${names.map((n) => esc(n)).join(' &middot; ')}</p>` : '';
+      aio = `
+      <article class="q4-ans q4-ans--aio" data-overview="${fo.state}">
+        <div class="q4-ans-head"><span class="q4-eng-name">${q4Mark('ai_overview')}${esc(AI_OVERVIEW_LABEL)}</span>${chip}</div>${body}${instead}
+        <p class="q4-aio-note">${esc(AI_OVERVIEW_NOT_SCORED)}</p>
+      </article>`;
+    }
     featured = `
     <section class="q4-feat">
       <span class="q4-pill">Featured question</span>
       <h2 class="q4-feat-q">${esc(f.question)}</h2>
       <p class="q4-feat-sub">${f.answers.length > 1 ? 'We asked both AI engines the same question. Here is what each one said.' : 'Here is what the AI said.'}</p>
       <div class="q4-ans-grid${f.answers.length > 1 ? '' : ' q4-ans-grid--one'}">${cards}
-      </div>
+      </div>${aio}
     </section>`;
   }
 
@@ -1273,16 +1298,25 @@ export function renderQuickCheckReport(h: HookReportSummary, businessName: strin
   const cell = (v: boolean | null) => v === null
     ? `<span class="q4-chip q4-chip--na">No answer</span>`
     : v ? `<span class="q4-chip q4-chip--y">&#10003; Named</span>` : `<span class="q4-chip q4-chip--n">&#10005; Not named</span>`;
+  /* The AI Overview column appears only on an audit that recorded overviews (display only). */
+  const ovs = h.overviews ?? [];
+  const aioCell = (qi: number) => {
+    const o = ovs.find((x) => x.questionIndex === qi);
+    const v = !o ? `<span class="q4-chip q4-chip--na">No answer</span>`
+      : o.state === 'not_shown' ? `<span class="q4-chip q4-chip--na">${NO_OVERVIEW_TEXT}</span>`
+      : o.state === 'shown' ? cell(o.named) : `<span class="q4-chip q4-chip--na">No answer</span>`;
+    return `<td class="q4-tr q4-tr--aio" data-eng="${esc(AI_OVERVIEW_LABEL)}">${v}</td>`;
+  };
   const rows = h.tested.map((q, qi) => `
           <tr${f && f.questionIndex === qi ? ' class="q4-feat-row"' : ''}><td class="q4-tq">${esc(q.question)}</td>${s.perEngine.map((e) => {
             const pe = q.perEngine.find((x) => x.engine === e.engine);
             return `<td class="q4-tr" data-eng="${esc(e.label)}">${cell(pe ? pe.named : null)}</td>`;
-          }).join('')}</tr>`).join('');
+          }).join('')}${ovs.length ? aioCell(qi) : ''}</tr>`).join('');
   const table = `
     <section class="q4-panel">
       <h2 class="q4-h">All questions we asked</h2>
       <table class="q4-tbl">
-        <thead><tr><th>Question</th>${s.perEngine.map((e) => `<th class="q4-te">${q4Mark(e.engine)}${esc(e.label)}</th>`).join('')}</tr></thead>
+        <thead><tr><th>Question</th>${s.perEngine.map((e) => `<th class="q4-te">${q4Mark(e.engine)}${esc(e.label)}</th>`).join('')}${ovs.length ? `<th class="q4-te q4-te--aio">${q4Mark('ai_overview')}${esc(AI_OVERVIEW_LABEL)}<small>not scored</small></th>` : ''}</tr></thead>
         <tbody>${rows}
         </tbody>
       </table>
@@ -1379,6 +1413,9 @@ const QUICK_REPORT_CSS = `
   .q4-feat-sub{margin:0 0 16px;font-size:14.5px;color:#4b5263}
   .q4-ans-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
   .q4-ans-grid--one{grid-template-columns:1fr}
+  .q4-ans--aio{margin-top:14px;background:#f6f7f9;border-color:#e3e6ea;border-style:dashed}
+  .q4-aio-note{margin:8px 0 0;font-size:12px;color:#6b7280;font-style:italic}
+  .q4-te--aio small{display:block;font-size:10px;font-weight:500;color:#8a8f98;text-transform:none;letter-spacing:0}
   .q4-ans{border-radius:16px;padding:16px 18px;min-width:0;border:1px solid}
   .q4-ans--gpt{background:#f2f8f4;border-color:#d8eadf}
   .q4-ans--gai{background:#f5f3fc;border-color:#e2ddf4}
@@ -1862,11 +1899,23 @@ export function renderReportHtml(d: AiAuditReportData): string {
   /* ⚠️ THE HEADING CHANGES WITH THE SHAPE ABOVE IT, and only the heading. On a paid report there is
      no chat card, so no question has been shown yet and "the OTHER questions" would be answering a
      question the reader was never asked. The rows, the markers and the data are identical. */
+  /* Google AI Overview column (2026-10-11): only on an audit that RECORDED overviews (some question
+     shows one or says none was shown), so every older report keeps its two columns. Display only:
+     the note under the table says it is not counted. */
+  const aioOf = (q: NonNullable<typeof d.questionBreakdown>[number]) => q.perEngine?.find((pe) => pe.label === AI_OVERVIEW_ROW_LABEL);
+  const aioRecorded = qOther.some((q) => aioOf(q)?.overviewRecorded === true);
+  const aioMark = (q: NonNullable<typeof d.questionBreakdown>[number]): string => {
+    const a = aioOf(q);
+    if (a && a.ran) return qMark(engNamed(q, AI_OVERVIEW_ROW_LABEL));
+    if (a && (a.notShown ?? 0) > 0) return `<span class="qm qm-none" title="${NO_OVERVIEW_TEXT}">none</span>`;
+    return qMark(null);
+  };
   const questionsList = qOther.length ? `
     <section class="qlist">
       <div class="sec-eyebrow">${d.paidSummary ? "Question by question" : "The other questions we asked"}</div>
-      <div class="qrow qrow-head"><span class="qrow-q"></span>${SCORED_LABELS.map((l) => `<span class="qrow-e">${l}</span>`).join("")}</div>
-      ${qOther.map((q) => `<div class="qrow"><span class="qrow-q">${esc(q.question)}</span>${SCORED_LABELS.map((l) => `<span class="qrow-e">${qMark(engNamed(q, l))}</span>`).join("")}</div>`).join("")}
+      <div class="qrow qrow-head"><span class="qrow-q"></span>${SCORED_LABELS.map((l) => `<span class="qrow-e">${l}</span>`).join("")}${aioRecorded ? `<span class="qrow-e qrow-aio">AI Overview</span>` : ""}</div>
+      ${qOther.map((q) => `<div class="qrow"><span class="qrow-q">${esc(q.question)}</span>${SCORED_LABELS.map((l) => `<span class="qrow-e">${qMark(engNamed(q, l))}</span>`).join("")}${aioRecorded ? `<span class="qrow-e qrow-aio">${aioMark(q)}</span>` : ""}</div>`).join("")}
+      ${aioRecorded ? `<p class="qlist-note">Google&rsquo;s AI Overview is shown for context and is not counted in the score. &ldquo;none&rdquo; = ${NO_OVERVIEW_TEXT.toLowerCase()} for that search.</p>` : ""}
     </section>` : "";
 
   /* 🔴 THE NAME REFUSAL — IT REPLACES THE HERO. Paul's words, 2026-09-15, and the phrasing is his
@@ -1989,7 +2038,10 @@ export function renderReportHtml(d: AiAuditReportData): string {
   // One engine's row inside a question card: name → named X of R (across runs) → who → sources.
   const engineRow = (e: NonNullable<(typeof qb)[number]['perEngine']>[number]): string => {
     if (!e.ran) {
-      return `<div class="qb-eng"><div class="qb-eng-head"><span class="qb-eng-name">${esc(e.label)}</span><span class="qb-eng-empty">Didn&rsquo;t appear</span></div></div>`;
+      /* Google AI Overview on a new audit: the queue recorded that Google showed none — a result,
+         said as one. Anything else (and every old audit) keeps "Didn't appear". */
+      const none = (e.notShown ?? 0) > 0 ? NO_OVERVIEW_TEXT : 'Didn&rsquo;t appear';
+      return `<div class="qb-eng"><div class="qb-eng-head"><span class="qb-eng-name">${esc(e.label)}</span><span class="qb-eng-empty">${none}</span></div></div>`;
     }
     // named is a COUNT now (across runs); older payloads carried a boolean.
     const namedN = typeof e.named === 'number' ? e.named : (e.named ? 1 : 0);
@@ -2326,6 +2378,8 @@ ${REPORT_CHROME_CSS_CORE}
   .qb-line{ margin-top:8px; font-size:13px; color:var(--muted); line-height:1.9; }
   .qb-split{ display:flex; gap:14px; flex-wrap:wrap; font-size:11px; color:var(--ink); margin:2px 0 1px; }
   .qb-split-i b{ font-weight:800; }
+  .qm-none{ font-size:10px; color:#8a8f98; font-weight:600; }
+  .qlist-note{ font-size:11px; color:#6b7280; margin:8px 0 0; font-style:italic; }
   .qb-uncounted{ font-size:10px; color:var(--muted); font-style:italic; margin-left:6px; }
   .qb-rlabel{ font-weight:700; color:var(--ink); font-size:12px; margin-right:2px; }
   .qb-chip{ display:inline-block; background:var(--paper); border:1px solid var(--line); border-radius:999px;

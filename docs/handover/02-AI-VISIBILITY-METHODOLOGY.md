@@ -12,8 +12,8 @@ measure it before the work (the **baseline**), do the work, then ask the **same 
 (the **replay**) and compare like for like. The guarantee is judged on that comparison.
 
 **Engines:** ChatGPT and Gemini only (`AUDIT_ENGINES`, `SCORED_ENGINES = ['chatgpt','gemini']`). Answers are collected via
-Apify actors. ⚠️ **Google AI Overview is no longer collected at all** (removed from the scraper input to cut latency —
-`_shared/enrichment/ai-search.ts:92-95`); older stored data still displays. Never claim it is measured.
+Apify actors. ⚠️ **Google AI Overview is collected and shown, DISPLAY ONLY** (2026-10-11, `docs/ai-overview.md`): it comes
+back free with the results page; each new question is stamped shown / not shown. It is never scored. Never claim it is measured.
 
 ## The kinds of measurement (`audit_purpose` is the marker, never the count)
 
