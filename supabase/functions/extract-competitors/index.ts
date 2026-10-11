@@ -6,6 +6,7 @@ import { logOpenAiUsage } from "../_shared/openai-usage.ts";
 import { isProvableJunkName } from "../../../src/lib/competitorCleaning.ts";
 import { classifyKnownEntity } from "../../../src/lib/knownEntities.ts";
 import { nameIsTextJudgeable, nameMatches } from "../../../src/lib/nameMatch.ts";
+import { AI_OVERVIEW_ENGINE, overviewReadableText } from "../../../src/lib/aiOverview.ts";
 
 // extract-competitors — AI-judged competitor extraction from a run's ALREADY-STORED answer
 // text (no new Apify scrape). For each engine answer on the run, an OpenAI call reads the
@@ -363,7 +364,11 @@ Deno.serve(async (req) => {
       if (r.status !== "done" || !r.result || typeof r.result !== "object") continue;
       for (const [engine, label] of Object.entries(ANSWER_ENGINES)) {
         const er = (r.result as Row)[engine];
-        const answer = str(er?.answer_text);
+        /* Google AI Overview (2026-10-11): read with the scrape's missing spaces put back, or a full
+           overview's run-together listing ("…01134360017 | SmartOhm Commercial ServicesServices:") hid every
+           business in it. ChatGPT / Gemini answers are untouched. */
+        const raw = str(er?.answer_text);
+        const answer = engine === AI_OVERVIEW_ENGINE ? overviewReadableText(raw) : raw;
         if (!answer) continue;
         /* ⛔ DE-NOISE BEFORE TRUNCATING, NEVER AFTER. Slicing first would keep the cut exactly
            where it is and simply tidy what survived it — the listing cards would stay invisible. */

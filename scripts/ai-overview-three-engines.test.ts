@@ -92,5 +92,18 @@ ok(!!aioRow && !aioRow.ran && aioRow.notShown === 1 && aioRow.overviewRecorded =
 const oldRow = old.d.questionBreakdown!.find((q) => q.question === Q[2])!.perEngine.find((e) => e.label === 'AI Overview') as { notShown?: number; overviewRecorded?: boolean };
 ok(oldRow.notShown === undefined && oldRow.overviewRecorded === undefined, 'E: an old audit’s full report row carries no new field');
 
+/* ── F. The overview, readable for the extractor (2026-10-11, full-overview add-on) ──────────── */
+{
+  const { overviewReadableText } = await import('../src/lib/aiOverview.ts');
+  const raw = '…and certified testing:Services: fit-outs.Contact: 0113 436 0017 | SmartOhm Commercial ServicesServices: Small fit-outs.Learn moreCopied to clipboardFailed to copy';
+  const r = overviewReadableText(raw);
+  ok(r.includes('testing: Services:') && r.includes('fit-outs. Contact:'), 'F: a sentence glued to the next label gets its space back');
+  ok(r.includes('SmartOhm Commercial Services Services:'), 'F: a name glued to the next card label is separated');
+  ok(!/clipboard|copy/i.test(r), "F: Google's share / copy controls are cut");
+  ok(['SmartOhm', 'Commercial', 'fit-outs', '0113 436 0017'].every((w) => r.includes(w)), "F: no word is written and none of the overview's own words is lost");
+  const ec = (await import('node:fs')).readFileSync('supabase/functions/extract-competitors/index.ts', 'utf8');
+  ok(/engine === AI_OVERVIEW_ENGINE \? overviewReadableText\(raw\) : raw/.test(ec), 'F: extract-competitors reads the overview (only) through overviewReadableText');
+}
+
 console.log(f ? `\n${f} FAILED` : '\nall passed');
 process.exit(f ? 1 : 0);
