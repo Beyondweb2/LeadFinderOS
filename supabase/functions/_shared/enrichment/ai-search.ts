@@ -12,7 +12,7 @@
  * ── Actor contract ──────────────────────────────────────────────────────────
  *  INPUT:  countryCode = lowercase ISO-3166 alpha-2 ("gb" for UK). AI engines are
  *          NESTED objects: chatGptSearch.enableChatGpt, perplexitySearch.enablePerplexity,
- *          geminiSearch.enableGemini, aiOverview.scrapeFullAiOverview.
+ *          geminiSearch.enableGemini, aiOverview.scrapeFullAiOverview (sent explicitly, true).
  *  OUTPUT (confirmed from a real dataset item — note OUTPUT keys differ from INPUT keys):
  *          organicResults[]        { title, url, position, ... }
  *          chatGptSearchResult     { text, sources[] }            (sources often empty)
@@ -88,11 +88,16 @@ export function buildAiSearchInput(query: string, countryCode: string): Record<s
     // input toggle to disable it (organic IS the search; the AI engines ride on top). So
     // google_organic is DROPPED at the normalization layer (see normalizeAiSearch), not here: it's
     // not in SCORED_ENGINES and is no longer emitted, so it's ABSENT downstream (not zero-scored).
-    // AI Overview: NO toggle needed. The overview Google shows on the results page comes back in the
-    // base output (measured live 2026-10-11: on 60–80% of questions, full answers, median ~1,900
-    // chars), so it is captured at no extra cost and stamped shown / not shown (aiOverviewStamp).
-    // The FULL-scrape option (aiOverview: { scrapeFullAiOverview: true }) stays OFF: it was dropped
-    // for per-call latency and 115s aborts, and it would add cost. Display only, never scored.
+    // AI Overview: the FULL overview, set EXPLICITLY here (Paul approved the add-on, 2026-10-11).
+    // Without it the base output carries only the snippet Google shows before "Show more" — S P
+    // Electrical's overview stopped at its first line and a heading, so no business was ever in it.
+    // ⛔ Never rely on the actor's default: an API run takes the actor's schema default for any key it
+    // does not send, and a toggle on the Apify console page changes neither. Apify's public price for
+    // the add-on is $2.00 per 1,000 overviews (Starter), billed only when one is captured — the
+    // measured per-question cost is in sources.ts. Async start/poll means the extra latency cannot
+    // abort an edge call (the old 115s aborts were the sync path). Display only, never scored; the
+    // stamp (aiOverviewStamp) still records shown / not shown.
+    aiOverview: { scrapeFullAiOverview: true },
     chatGptSearch: { enableChatGpt: true },
     geminiSearch: { enableGemini: true },
     // Perplexity dropped (kept dormant — flip enablePerplexity:true to re-add):

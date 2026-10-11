@@ -24,5 +24,17 @@ the percentage, the hook pick, the 6/6, the guarantee or the call script. Hook s
 - Test: `scripts/ai-overview-three-engines.test.ts`.
 
 ## Cost
-No change: the Apify input is byte-identical and AI Overview was already in every billed run. One small knock-on that
-already existed: extract-competitors reads AI Overview answers too (OpenAI, gpt-4o-mini).
+First version (morning of 2026-10-11): no change — the Apify input was byte-identical and the overview snippet was
+already in every billed run. One small knock-on that already existed: extract-competitors reads AI Overview answers too.
+
+## The full overview add-on (2026-10-11, later the same day — Paul approved)
+- Without it the actor returns only the snippet Google shows before "Show more" (S P Electrical, `fga54n`: the first
+  line and a heading, so no business was ever in it). `buildAiSearchInput` now sends
+  `aiOverview: { scrapeFullAiOverview: true }` EXPLICITLY. Never rely on the actor default: an API run takes the
+  actor's schema default for any key it does not send, and the toggle on the Apify console page changes neither (it is
+  the console's own input form, not the API).
+- Only `process-ai-audit-queue` starts this actor, so it is the one redeploy; it serves hook, Discovery, baseline and
+  the weekly check. `directory-presence` runs the same actor with plain organic input (no AI keys) and is unaffected.
+  Nothing in findable-site or findable-directory calls it.
+- Price (Apify public): $2.00 per 1,000 captured overviews on Starter ($1.50 on Scale) — about +$0.002 a question when
+  one is shown. The measured cost of a live run is recorded below.

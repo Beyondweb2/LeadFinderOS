@@ -5,7 +5,7 @@
    results page the scrape already loads (no actor input change, no extra cost), stamped shown / not
    shown per question, and SHOWN — never counted. This suite pins:
      A. the stamp: shown / not shown / unknown, from the actor's own item;
-     B. the actor input is unchanged (cost);
+     B. the actor input sends the full-overview add-on explicitly (approved 2026-10-11), nothing else changed;
      C. the score, the hook pick and the 6/6 are untouched by an overview;
      D. "No overview shown" is a result, an old audit draws nothing new;
      E. the quick public report and the full report show it, labelled not scored.
@@ -31,10 +31,10 @@ ok(aiOverviewStamp(noAio, normalizeAiSearch(noAio, 'Acme Roofing Services')) ===
 ok(aiOverviewStamp(noPage, normalizeAiSearch(noPage, 'Acme Roofing Services')) === null, 'A: no results page at all → nothing stamped (never a guess)');
 ok(aiOverviewStamp([], {}) === null, 'A: an empty dataset → nothing stamped');
 
-/* ── B. Cost: the actor input is unchanged ────────────────────────────────────────────────── */
+/* ── B. Cost: the actor input (full overview explicit) ────────────────────────────────────────────────── */
 const input = buildAiSearchInput('roofer in Leeds', 'gb');
-ok(!('aiOverview' in input), 'B: the full-overview scrape toggle stays OFF (no latency, no extra cost)');
-ok(JSON.stringify(Object.keys(input).sort()) === JSON.stringify(['chatGptSearch', 'countryCode', 'geminiSearch', 'languageCode', 'maxPagesPerQuery', 'queries']), 'B: the actor input keys are exactly what they were');
+ok(JSON.stringify(input.aiOverview) === JSON.stringify({ scrapeFullAiOverview: true }), 'B: the FULL overview add-on is sent EXPLICITLY (Paul approved it 2026-10-11) — never left to the actor default');
+ok(JSON.stringify(Object.keys(input).sort()) === JSON.stringify(['aiOverview', 'chatGptSearch', 'countryCode', 'geminiSearch', 'languageCode', 'maxPagesPerQuery', 'queries']), 'B: the actor input keys are exactly these (the overview add-on is the only addition)');
 
 /* ── C. The score is untouched ────────────────────────────────────────────────────────────── */
 const BIZ = 'Acme Roofing Services';
