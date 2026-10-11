@@ -17,6 +17,7 @@ import type { CrawlStoredResult } from '@/lib/crawlResult';
 import type { WhatsAppTemplateSnapshot } from '@/lib/whatsappTemplateSnapshot';
 import { serviceWindowState } from '@/lib/serviceWindow';
 import { sendMediaAttachmentRequest } from '@/lib/sendMediaAttachment';
+import { sendWhatsAppRequest } from '@/lib/whatsAppSendRequest';
 import { isRealSend } from '@/lib/realSend';
 import { smsRowToInboxMessage, smsTemplateAvailability, type InboxChannel, type SmsMessageRow } from '@/lib/inboxChannel';
 import { newSendKey, previewSms, sendSms } from '@/lib/smsClient';
@@ -800,23 +801,14 @@ export function useInbox(channel: InboxChannel = 'whatsapp') {
       }
       return { ok: true, simulated: (r as { simulated: boolean }).simulated };
     }
-    const { data, error } = await sb.functions.invoke('send-whatsapp-message', {
-      body: {
-        phone: args.phone,
-        lead_id: args.leadId,
-        country: args.country ?? null,
-        body: args.body,
-        template_name: args.templateName,
-        allow_resend: args.allowResend === true,
-      },
-    });
-    if (error) return { ok: false, error: error.message };
-    if (!data?.ok) return { ok: false, error: data?.error ?? 'send_failed', reason: data?.reason };
-    if (data.message?.id) {
+    // The one WhatsApp send request (src/lib/whatsAppSendRequest.ts) — the Outreach WhatsApp dialog sends through it too.
+    const r = await sendWhatsAppRequest(sb, args);
+    if (!r.ok) return { ok: false, error: r.error, reason: r.reason };
+    if (r.message?.id) {
       queryClient.setQueryData<InboxData>(queryKey, (current) => current
-        ? { ...current, messages: mergeInboxMessages(current.messages, [data.message as WaMessage]) } : current);
+        ? { ...current, messages: mergeInboxMessages(current.messages, [r.message as unknown as WaMessage]) } : current);
     }
-    return { ok: true, simulated: data.simulated };
+    return { ok: true, simulated: r.simulated };
   }, [queryClient, queryKey, sms, channel]);
 
   /* ⛔ ONE RECORDED VOICE NOTE → send-whatsapp-voice. The server resolves the recipient from the

@@ -107,7 +107,6 @@ import { useIsMobile } from '@/hooks/use-mobile';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { useNavigate } from 'react-router-dom';
 import { OutreachStatusBadge } from './OutreachStatusBadge';
 import { WhatsAppStatusBadge } from './WhatsAppStatusBadge';
 import { ContactMethodBadge } from './ContactMethodBadge';
@@ -176,6 +175,7 @@ const AUDIT_JOB_CAP = 100;
 const AUDIT_DAILY_CAP_USD = 12.0;
 import { SingleWhatsAppDialog } from '@/components/SingleWhatsAppDialog';
 import { SingleSmsDialog } from '@/components/SingleSmsDialog';
+import { LeadWhatsAppDialog } from '@/components/LeadWhatsAppDialog';
 import { QueueSmsDialog } from '@/components/QueueSmsDialog';
 import { TemplatePreviewButton, TemplateSnippet } from '@/components/TemplateWordingPreview';
 import { RequestTemplateButton } from '@/components/RequestTemplateButton';
@@ -425,7 +425,6 @@ export function OutreachTable({
   });
   /* The row's audit popup (HookAuditDialog) — the same Hook Audit panel as the workspace, both roles. */
   const [auditLead, setAuditLead] = useState<OutreachLead | null>(null);
-  const navigate = useNavigate();
   /* ── THE ROW'S AI CHECK (2026-10-05, src/lib/outreachRowCheck.ts) ── one state per row: the rep's own
      batch item first (Waiting / Checking… / failed), then the audit map (ready / checking). */
   const checkItemByLead = useMemo(() => {
@@ -588,6 +587,8 @@ export function OutreachTable({
   const [whatsappDialogLead, setWhatsappDialogLead] = useState<OutreachLead | null>(null);
   /* Text (SMS) — the twin of the WhatsApp button and of Queue WhatsApp (2026-10-09). Opening either writes nothing. */
   const [smsDialogLead, setSmsDialogLead] = useState<OutreachLead | null>(null);
+  /* WhatsApp — the same kind of dialog as Text (2026-10-11): the thread, the template picker with a preview, free text. */
+  const [waDialogLead, setWaDialogLead] = useState<OutreachLead | null>(null);
   const [queueSmsOpen, setQueueSmsOpen] = useState(false);
   // Launch-pad: template + /s/ link injected into the composer for THIS launch only
   // (cleared on dialog close so a later manual open behaves normally).
@@ -825,10 +826,11 @@ export function OutreachTable({
       next.add(lead.id);
       return next;
     });
-    // Primary WhatsApp path now = the in-app Inbox (real API send + conversation).
-    // The wa.me "Open in WhatsApp app" fallback lives in the Inbox thread header.
-    navigate('/inbox', { state: { launch: { leadId: lead.id } } });
-  }, [toast, onContactGated, onContactMethodChange, navigate]);
+    /* ⛔ THE WHATSAPP DIALOG (2026-10-11): it used to jump to the Inbox; it now opens this lead's WhatsApp in a dialog (the
+       twin of the Text button). Everything above is unchanged, and the dialog sends through the Inbox's own request
+       (sendWhatsAppRequest → send-whatsapp-message). The full conversation is one tap away inside it. */
+    setWaDialogLead(lead);
+  }, [toast, onContactGated, onContactMethodChange]);
 
   // Single-row "Generate site": enqueue a DURABLE, server-side site-gen job — the same
 
@@ -3653,6 +3655,7 @@ export function OutreachTable({
 
       {/* Text (SMS): one lead's conversation, and the bulk queue. */}
       <SingleSmsDialog open={!!smsDialogLead} onOpenChange={(o) => { if (!o) setSmsDialogLead(null); }} lead={smsDialogLead} />
+      <LeadWhatsAppDialog open={!!waDialogLead} onOpenChange={(o) => { if (!o) { setWaDialogLead(null); window.dispatchEvent(new CustomEvent('demo-checklist-contact-panel-closed')); } }} lead={waDialogLead} />
       <QueueSmsDialog open={queueSmsOpen} onOpenChange={setQueueSmsOpen} leadIds={Array.from(selectedIds)} sample={leads.find((l) => selectedIds.has(l.id)) ?? null} onDone={() => setSelectedIds(new Set())} />
 
       {/* WhatsApp Template Dialog */}
