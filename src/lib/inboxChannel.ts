@@ -28,6 +28,7 @@ export const SMS_ONLY_DIFFERENCES: ReadonlyArray<{ id: string; why: string }> = 
   { id: 'audit-reply-send', why: '"Audit and reply" sends an automatic WhatsApp message; a text reply only ever runs the audit (disabled with a note on the SMS tab).' },
   { id: 'template-availability', why: 'A template that carries a video, a retired barber link or the Quick Close sign-up link is greyed out for texts with the reason.' },
   { id: 'bulk-queue', why: 'Select several: cold openers are queued (paced) for texts, never sent in a burst.' },
+  { id: 'ai-replies', why: 'AI handles replies is WhatsApp only (Paul, 2026-10-11): no drafts, no Needs approving filter and no switch on the SMS tab.' },
   { id: 'storage-keys', why: 'Filters, search and drafts are remembered per channel so a text draft never lands in a WhatsApp thread.' },
 ];
 

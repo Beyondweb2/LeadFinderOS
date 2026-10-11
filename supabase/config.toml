@@ -16,6 +16,10 @@ verify_jwt = false
 [functions.legacy-checkout-cutover]
 verify_jwt = false
 
+# AI handles replies (2026-10-11): cron (CRON_SECRET + x-internal-job) and signed-in people; auth is handler-side.
+[functions.ai-reply-drafts]
+verify_jwt = false
+
 [functions.admin-users]
 verify_jwt = false
 

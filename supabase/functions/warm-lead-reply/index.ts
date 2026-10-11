@@ -17,9 +17,11 @@
 //                site-fetch path, which is what makes "Regenerate never re-crawls" structural rather
 //                than remembered.
 //
-// ⛔ SALES STAGE (Paul, 2026-09-25): research and draft run only in a WARM conversation — an audit /
-//    competitor hook has gone out AND they have replied after it (src/lib/warmStage.ts). Before that
-//    the funnel's own opener → audit → hook steps are the next move, and this refuses without spending.
+// ⛔ EVERY STAGE (Paul, 2026-10-11 — replaces the 2026-09-25 warm-only gate): research and draft run in ANY
+//    conversation they have replied to. The stage (src/lib/warmStage.ts) is still read and passed to the model:
+//    before the hook the draft may say the search and the names; after it, it must not repeat them. No audit /
+//    research → the draft is built from the conversation alone and the Inbox says "No audit yet, so no site
+//    issues included." Nothing is invented: absent facts are left out.
 //
 // Auth: the operator's own JWT (resolveOperator), and the lead must be theirs — the same ownership
 // send-whatsapp-message applies, so this can never draft for a conversation the sender would refuse.
@@ -40,7 +42,7 @@ import {
   type ResearchLead,
 } from "../_shared/site-research.ts";
 import { serviceWindowState } from "../../../src/lib/serviceWindow.ts";
-import { warmStage, WARM_STAGE_LABELS, type WarmStageResult } from "../../../src/lib/warmStage.ts";
+import { warmStage, type WarmStageResult } from "../../../src/lib/warmStage.ts";
 import { researchFreshness, type StoredResearchRow, type WarmLeadResearch } from "../../../src/lib/warmLeadResearch.ts";
 import {
   buildReplyContext, buildReplyPrompt, checkReply, fallbackReply, parseModelReply, ruleSalesFacts, mergeSalesFacts,
@@ -61,6 +63,9 @@ const json = (b: unknown, s = 200) =>
 const text = (v: unknown) => (typeof v === "string" ? v.trim() : "");
 
 const TABLE = WARM_RESEARCH_TABLE;
+const NO_AUDIT_NOTE = "No audit yet, so no site issues included.";
+const NO_AUDIT_RESULT_NOTE = "No audit yet, so no AI search result included.";
+const NO_RESEARCH_NOTE = "No site research yet, so no site issues included. Press Refresh research to read the site.";
 const ROW_COLUMNS = "lead_id, website, research, research_status, generated_at, revalidated_at, sales_facts, last_draft";
 // deno-lint-ignore no-explicit-any
 type Service = any;
@@ -117,15 +122,6 @@ async function loadConversation(service: Service, operatorId: string, lead: Lead
   return { rows, ours, stage: warmStage(rows) };
 }
 
-/** The refusal for a conversation that is not warm yet — no fetch, no model, no spend. */
-function notWarm(stage: WarmStageResult) {
-  const detail = stage.stage === "hook_not_sent"
-    ? "They have replied, but the AI audit / competitor hook has not been sent yet. Send the hook first — the warm-reply drafter is for their reply to it."
-    : stage.stage === "waiting_for_hook_reply"
-      ? "The competitor hook has gone out and they have not replied to it yet. The drafter opens when they do."
-      : "They have not replied yet.";
-  return json({ ok: false, error: "not_warm_yet", stage: stage.stage, stage_label: WARM_STAGE_LABELS[stage.stage], detail });
-}
 
 /* ───────────────────────── actions ───────────────────────── */
 
@@ -147,8 +143,7 @@ async function handleResearch(service: Service, lead: LeadRow, operatorId: strin
   if (!phone) return json({ ok: false, error: "phone_required", detail: "Open the conversation first." }, 400);
   const conv = await loadConversation(service, operatorId, lead, phone);
   if (!conv.ours) return json({ ok: false, error: "forbidden", detail: "That conversation is not this lead's." }, 403);
-  if (conv.stage.stage !== "warm") return notWarm(conv.stage);
-  // The research itself (reuse → revalidate → full crawl → targeted fetch) is the shared path.
+  // Any stage (2026-10-11). The research itself (reuse → revalidate → full crawl → targeted fetch) is the shared path.
   const out = await runSiteResearch(service, lead, operatorId, refresh, { functionName: "warm-lead-reply" });
   return json({ ok: true, plan: out.plan, ...(out.usedFullCrawl === null ? {} : { used_full_crawl: out.usedFullCrawl }), research: researchSummary(out.research), ms: out.ms });
 }
@@ -184,8 +179,7 @@ async function handleDraft(service: Service, lead: LeadRow, operatorId: string, 
       ? "Their last message was more than 24 hours ago, so WhatsApp only allows an approved template now. No draft was written."
       : "They have not replied, so there is no reply window. Only an approved template can be sent." });
   }
-  // Warm only: a hook has gone out and they have answered it. Checked before any spend.
-  if (conv.stage.stage !== "warm") return notWarm(conv.stage);
+  // Any stage (2026-10-11): before the hook, hookTemplate is null and the prompt may say the search and the names.
 
   const readable = (body.readable && typeof body.readable === "object" ? body.readable : {}) as Record<string, string>;
   const thread: ThreadMessage[] = rows.map((m) => ({ id: m.id, direction: m.direction === "inbound" ? "inbound" : "outbound", text: threadText(m, readable), at: m.created_at }));
@@ -274,6 +268,8 @@ async function handleDraft(service: Service, lead: LeadRow, operatorId: string, 
     noFindingNote: !sel.primary && research && research.status !== "failed" && research.status !== "no_website"
       ? "No website finding was strong enough to use; the draft leans on the AI search result. Nothing was invented."
       : null,
+    /* The one line the Inbox shows when the draft had nothing about their site to go on (Paul, 2026-10-11). */
+    siteNote: !audit && !research ? NO_AUDIT_NOTE : !research ? NO_RESEARCH_NOTE : !audit ? NO_AUDIT_RESULT_NOTE : null,
     researchSources: research ? [...new Set(research.sources.map((x) => x.kind === "page" ? "Live website" : x.kind === "full_crawl" ? "Existing full crawl" : x.kind === "crawl_check" ? "Existing crawl check" : "AI audit"))] : [],
     research: research ? { generatedAt: research.generatedAt, status: research.status, sourceCrawlAt: research.sourceCrawlAt, technicallyClean: research.technicallyClean, warnings: research.warnings } : null,
     audit: audit ? { auditId: audit.auditId, createdAt: audit.createdAt, named: audit.namedDatapoints, total: audit.totalDatapoints, namedEverywhere: audit.namedEverywhere } : null,

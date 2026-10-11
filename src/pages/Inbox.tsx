@@ -82,6 +82,11 @@ import { useQueueState } from '@/hooks/useQueueState';
 import { useMarkWhatsAppRead, useWhatsAppReads } from '@/hooks/useWhatsAppUnread';
 import { conversationState, INBOX_QUICK_FILTERS, londonToday, passesQuickFilter, formatWaiting, type ConversationState, type InboxQuickFilter } from '@/lib/conversationState';
 import { ConvStateChip } from '@/components/ConvStateChip';
+import { AiRepliesToggle } from '@/components/AiRepliesToggle';
+import { AiDraftChip, AiDraftPanel } from '@/components/AiDraftPanel';
+import { useAiReplyDrafts } from '@/hooks/useAiReplyDrafts';
+import { aiChipFor, needsApproving } from '@/lib/aiReplyDraft';
+import { invokeEdge, edgeErrorMessage } from '@/lib/edgeInvoke';
 import { NEXT_ACTION_KIND_OPTIONS, NEXT_ACTION_WHEN_OPTIONS, nextActionSortKey, passesNextActionFilter, type NextActionKind, type NextActionWhen } from '@/lib/nextActionView';
 import { Eye, Loader2, Send, MessageSquareText, MessageSquare, MessageSquarePlus, Clock, AlertTriangle, Plus, ShieldAlert, MapPin, Globe, Mail, MessageCircle, Trash2, ListChecks, Sparkles, FileText, Copy, Check, Link2, Star, MoreHorizontal, ArrowLeft, PauseCircle, XCircle, Timer } from 'lucide-react';
 import { isPaidLead } from '@/lib/leadPayment';
@@ -287,6 +292,9 @@ const LIST_SORT_OPTIONS = [
    SMS_ONLY_DIFFERENCES (src/lib/inboxChannel.ts); scripts/inbox-channel-parity.test.ts fails on an unlisted one. */
 const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
   const sms = channel === 'sms';
+  /* AI handles replies (2026-10-11) is WhatsApp only: the SMS tab reads no drafts and shows no switch (ai-replies difference). */
+  const aiOn = !sms;
+  const ai = useAiReplyDrafts(aiOn);
   /* Remembered per channel (storage-keys difference): a text filter, search or half-typed draft must never appear on a WhatsApp thread. */
   const pk = (k: string) => (sms ? `sms-${k}` : k);
   const { user, conversations, messages, messagesForKey, leads, auditByLeadId, auditRunningLeadIds, hasSiteFaultLeadIds, hasSiteFindingsLeadIds, crawlByLeadId, isLoading, isError, send, sendVoice, sendMedia, preview, refetch, loadLead, patchLeadStatus, patchLeadPotentialWork } = useInbox(channel);
@@ -625,10 +633,12 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [list, messagesForKey, reads, readsLoaded, leadByIdForState, clockTick, sms, smsUnreadByPhone]);
   const quickCounts = useMemo(() => {
-    let unread = 0; let waiting = 0;
+    let unread = 0; let waiting = 0; let approving = 0;
     for (const st of stateByKey.values()) { if (st.unread) unread++; if (st.waitingSinceMs !== null) waiting++; }
-    return { unread, waiting };
-  }, [stateByKey]);
+    for (const c of list) if (needsApproving(ai.forPhone(c.phone))) approving++;
+    return { unread, waiting, approving };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stateByKey, list, ai.rows]);
 
   const searchTerm = search.trim().toLowerCase();
   const filteredList = useMemo(() => {
@@ -637,7 +647,7 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
     const today = londonToday();
     const byNa = naWhen === 'all' && naKind === 'all' ? searched
       : searched.filter((c) => passesNextActionFilter(c.leadId ? leadByIdForState.get(c.leadId) : null, naWhen, naKind, today));
-    const kept = quickFilter === 'all' ? [...byNa] : byNa.filter((c) => { const st = stateByKey.get(c.key); return !!st && passesQuickFilter(quickFilter, st); });
+    const kept = quickFilter === 'all' ? [...byNa] : byNa.filter((c) => { const st = stateByKey.get(c.key); return !!st && passesQuickFilter(quickFilter, { ...st, needsApproving: needsApproving(ai.forPhone(c.phone)) }); });
     if (listSort === 'next_action') {
       kept.sort((a, b) => nextActionSortKey(a.leadId ? leadByIdForState.get(a.leadId) : null).localeCompare(nextActionSortKey(b.leadId ? leadByIdForState.get(b.leadId) : null)));
     } else if (listSort === 'recent_reply') {
@@ -647,7 +657,8 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
       kept.sort((a, b) => (stateByKey.get(a.key)?.waitingSinceMs ?? 0) - (stateByKey.get(b.key)?.waitingSinceMs ?? 0));
     }
     return kept;
-  }, [list, searchTerm, quickFilter, stateByKey, naWhen, naKind, listSort, leadByIdForState]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [list, searchTerm, quickFilter, stateByKey, naWhen, naKind, listSort, leadByIdForState, ai.rows]);
   const naFiltered = naWhen !== 'all' || naKind !== 'all' || listSort !== 'recent';
 
   /* ⚡ THE LIST DRAWS 150 ROWS AT A TIME (2026-09-28, measured). Every row carries a status dropdown, so
@@ -840,6 +851,101 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
     pendingWarmDraft.current = null;
     setDrafts((prev) => setDraft(prev, p.key, p.draft));
   }, [composerSeed, setDrafts]);
+
+  /* ══ AI HANDLES REPLIES (2026-10-11) ══════════════════════════════════════════════════════════════
+     The open AI row for this thread (src/lib/aiReplyDraft.ts). A pending draft is PRE-FILLED in the reply box once
+     per version — never over text a person typed — and is editable there. "Approve & send" = claim (one winner,
+     server-side) → the Inbox's own send (useInbox.send → send-whatsapp-message, unchanged) → complete (records who,
+     when and the text actually sent). Discard and Dismiss send nothing. */
+  const activeAi = active ? ai.forPhone(active.phone) : null;
+  const [aiBusy, setAiBusy] = useState<'approve' | 'regenerate' | 'discard' | null>(null);
+  const aiInsertedRef = useRef<Map<string, string>>(new Map());
+  const activeAiDraft = activeAi && activeAi.kind === 'draft' && activeAi.status === 'pending' && win.open ? (activeAi.draft_text ?? '') : '';
+  useEffect(() => {
+    if (!active || !activeAiDraft || !activeAi) return;
+    const version = activeAi.id + ':' + (activeAi.regenerations ?? 0);
+    const seen = aiInsertedRef.current.get(active.key);
+    if (seen === version) return;
+    const box = getDraft(draftsRef.current, active.key).trim();
+    /* Never over a person's own typing: fill only an empty box, or one still holding an earlier AI version. */
+    const earlier = seen ? (aiInsertedRef.current.get(active.key + '#text') ?? '') : '';
+    if (box && box !== earlier.trim()) return;
+    aiInsertedRef.current.set(active.key, version);
+    aiInsertedRef.current.set(active.key + '#text', activeAiDraft);
+    insertWarmDraft(active.key, activeAiDraft);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [active?.key, activeAi?.id, activeAi?.regenerations, activeAiDraft]);
+  const aiBoxDiffers = !!activeAiDraft && !!active && getDraft(drafts, active.key).trim() !== activeAiDraft.trim();
+
+  const approveAiDraft = async () => {
+    if (!active || !activeAi || aiBusy) return;
+    const sendKey = active.key;
+    if (sendingKeysRef.current.has(sendKey)) return;
+    const body = getDraft(draftsRef.current, sendKey).trim();
+    if (!body) { toast({ title: 'Nothing to send', description: 'The reply box is empty.', variant: 'destructive' }); return; }
+    const left = unresolvedTokens(body);
+    if (left.length) { toast({ title: 'Fill in the blanks first', description: 'This message still contains ' + left.join(', ') + '.', variant: 'destructive' }); return; }
+    setAiBusy('approve');
+    try {
+      /* 1. The once-only claim. A second click, tab or person is refused here and nothing is sent. */
+      try {
+        await invokeEdge('ai-reply-drafts', { action: 'claim', draft_id: activeAi.id, final_text: body });
+      } catch (e) {
+        toast({ title: 'Not sent', description: edgeErrorMessage(e, 'This draft could not be approved.'), variant: 'destructive' });
+        return;
+      }
+      /* 2. The existing send path, unchanged. */
+      sendingKeysRef.current.add(sendKey);
+      setSendingKeys((prev) => new Set(prev).add(sendKey));
+      const res = await send({ phone: active.phone, leadId: active.leadId, body });
+      sendingKeysRef.current.delete(sendKey);
+      setSendingKeys((prev) => { const next = new Set(prev); next.delete(sendKey); return next; });
+      /* 3. Record the outcome (the server checks the message row itself). A refusal hands the draft back. */
+      await invokeEdge('ai-reply-drafts', { action: 'complete', draft_id: activeAi.id, message_id: res.ok ? (res.messageId ?? null) : null, error: res.ok ? null : (res.reason ?? res.error ?? 'send_failed') }).catch(() => undefined);
+      if (!res.ok) {
+        toast({ title: 'Not sent', description: res.reason ?? (res.error === 'window_closed' ? 'The 24h reply window is closed — send an approved template instead.' : res.error) ?? 'Send failed.', variant: 'destructive' });
+        return;
+      }
+      setDrafts((prev) => setDraft(prev, sendKey, ''));
+      aiInsertedRef.current.delete(sendKey);
+      setComposerSeed((n) => n + 1);
+      toast({ title: res.simulated ? 'Sent (simulated — test mode)' : 'Approved and sent ✓' });
+      setTimeout(() => threadRef.current?.scrollTo({ top: threadRef.current.scrollHeight }), 50);
+    } finally {
+      setAiBusy(null);
+      void ai.refetch();
+    }
+  };
+  const regenerateAiDraft = async () => {
+    if (!active || !activeAi || aiBusy) return;
+    setAiBusy('regenerate');
+    try {
+      await invokeEdge('ai-reply-drafts', { action: 'regenerate', draft_id: activeAi.id });
+    } catch (e) {
+      toast({ title: "Couldn't write another version", description: edgeErrorMessage(e), variant: 'destructive' });
+    } finally {
+      setAiBusy(null);
+      void ai.refetch();
+    }
+  };
+  const discardAiDraft = async () => {
+    if (!active || !activeAi || aiBusy) return;
+    setAiBusy('discard');
+    try {
+      await invokeEdge('ai-reply-drafts', { action: 'discard', draft_id: activeAi.id });
+      /* Take the AI's words out of the box only if they are still exactly the AI's (never a person's edit). */
+      if (activeAi.draft_text && getDraft(draftsRef.current, active.key).trim() === activeAi.draft_text.trim()) {
+        setDrafts((prev) => setDraft(prev, active.key, ''));
+        setComposerSeed((n) => n + 1);
+      }
+      aiInsertedRef.current.delete(active.key);
+    } catch (e) {
+      toast({ title: "Couldn't discard", description: edgeErrorMessage(e), variant: 'destructive' });
+    } finally {
+      setAiBusy(null);
+      void ai.refetch();
+    }
+  };
 
   // Thread-header quick-action data — each button/link renders only when present.
   // Public audit report for THIS lead — the lead's own COMPLETED audit, served live at /a/<auditId>
@@ -1680,6 +1786,7 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
           </div>
           {/* The one auto-reply rule's switch (admin-only — hides itself otherwise). */}
           {perms.queueControls && <AutoReplyToggle channel={channel} />}
+          {perms.queueControls && aiOn && <AiRepliesToggle />}
           <div className="flex shrink-0 items-center gap-2">
             {sms && (smsQueueRows.data?.length ?? 0) > 0 && <span className="rounded-full bg-sky-500/15 px-2.5 py-1 text-xs font-semibold text-sky-700 dark:text-sky-300" data-testid="sms-queued-count">{smsQueueRows.data?.length} queued</span>}
             {isAdmin && (
@@ -1762,12 +1869,12 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
           {/* Four views in a 2 × 2 grid: the 300px column cannot hold all four on one line, and a free wrap
               left "Waiting on them" alone on a second row (2026-10-01). */}
           <div className="mb-1.5 grid grid-cols-2 gap-1 px-0.5" role="tablist" aria-label="Show conversations">
-            {INBOX_QUICK_FILTERS.map((f) => {
-              const n = f.value === 'unread' ? quickCounts.unread : f.value === 'waiting' ? quickCounts.waiting : null;
+            {INBOX_QUICK_FILTERS.filter((f) => f.value !== 'needs_approving' || aiOn).map((f) => {
+              const n = f.value === 'unread' ? quickCounts.unread : f.value === 'waiting' ? quickCounts.waiting : f.value === 'needs_approving' ? quickCounts.approving : null;
               const on = quickFilter === f.value;
               return (
                 <button key={f.value} type="button" role="tab" aria-selected={on} onClick={() => setQuickFilter(f.value)}
-                  className={cn('flex h-8 items-center justify-center gap-1 whitespace-nowrap rounded-md px-1.5 text-xs font-medium transition-colors',
+                  className={cn('flex h-8 items-center justify-center gap-1 whitespace-nowrap rounded-md px-1.5 text-xs font-medium transition-colors', f.value === 'needs_approving' && 'col-span-2',
                     on ? 'bg-blue-500/15 text-blue-700 ring-1 ring-blue-500/30 dark:text-blue-300' : 'text-muted-foreground hover:bg-muted/60')}>
                   {f.label}{n !== null && n > 0 && <span className={cn('rounded-full px-1.5 text-[10px] font-bold tabular-nums', on ? 'bg-blue-500 text-white' : 'bg-muted text-foreground')}>{n}</span>}
                 </button>
@@ -1976,7 +2083,8 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
                   {!c.unassigned && c.isPotentialWork && <Star className="h-3.5 w-3.5 shrink-0 fill-amber-400 text-amber-500"><title>Interested</title></Star>}
                 </span>
                 <span className="flex shrink-0 items-center gap-1">
-                  <ConvStateChip state={stateByKey.get(c.key)} compact />
+                  <AiDraftChip row={ai.forPhone(c.phone)} compact />
+                  {(!aiChipFor(ai.forPhone(c.phone)) || stateByKey.get(c.key)?.failed) && <ConvStateChip state={stateByKey.get(c.key)} compact />}
                   {c.lastMessage && <span className={cn('text-[10px]', stateByKey.get(c.key)?.unread ? 'font-semibold text-blue-600 dark:text-blue-400' : 'text-muted-foreground')}>{relTime(c.lastMessageAt)}</span>}
                 </span>
               </div>
@@ -2084,6 +2192,7 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
                     {activeLead && <NextActionEditor lead={activeLead} variant="pill" />}
                     <EngagementPills reportOpenedAt={active.reportOpenedAt} siteVisitedAt={active.siteVisitedAt} geminiNamed={active.geminiNamed} geminiAnswers={active.geminiAnswers} />
                     <ConvStateChip state={activeState} hideQueued />
+                    <AiDraftChip row={activeAi} />
                     {/* The status pill already says Queued; this adds only what it cannot — the queue is paused. */}
                     {active.leadStatus === 'queued' && queueState?.paused && (
                       <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/15 px-2 py-0.5 text-[11px] font-medium text-amber-700 dark:text-amber-300">
@@ -2303,6 +2412,14 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
 
               {/* Reply box */}
               <div className="border-t border-border p-2.5">
+                {/* AI HANDLES REPLIES: the open draft / hand-over for this conversation. Never sends by itself. */}
+                {activeAi && (
+                  <div className="mb-2">
+                    <AiDraftPanel row={activeAi} busy={aiBusy} boxDiffers={aiBoxDiffers} onApprove={() => void approveAiDraft()}
+                      onRegenerate={() => void regenerateAiDraft()} onDiscard={() => void discardAiDraft()}
+                      onUseDraft={() => { if (active && activeAi.draft_text) insertWarmDraft(active.key, activeAi.draft_text); }} />
+                  </div>
+                )}
                 {win.open ? (
                   <div className="space-y-2">
                     {/* ⛔ ONE TOOLS ROW (2026-09-27): the reply helpers used to stack three rows high

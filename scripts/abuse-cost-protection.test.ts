@@ -106,7 +106,7 @@ for (const fn of fnDirs) {
   ok(asks, `${fn}: spends on a provider for a signed-in caller → asks the guard`);
   if (asks) guarded.push(fn);
 }
-for (const fn of ["search-leads", "google-place-details", "enrich-business", "check-website", "extract-email", "extract-facebook", "scan-site-details", "create-ai-audit", "warm-lead-reply", "voice-note-script", "social-profiles", "prospect-preview", "niche-sample", "send-whatsapp-message", "send-whatsapp-voice", "send-whatsapp-media", "bulk-jobs"]) {
+for (const fn of ["search-leads", "google-place-details", "enrich-business", "check-website", "extract-email", "extract-facebook", "scan-site-details", "create-ai-audit", "warm-lead-reply", "ai-reply-drafts", "voice-note-script", "social-profiles", "prospect-preview", "niche-sample", "send-whatsapp-message", "send-whatsapp-voice", "send-whatsapp-media", "bulk-jobs"]) {
   ok(/guardAction\(service|guardAction\(supabase|guardAction\(serviceClient|guardAction\(guardService/.test(read(`supabase/functions/${fn}/index.ts`)), `${fn} calls guardAction`);
 }
 for (const fn of ["review-reply", "run-seo-scan", "apply-seo-paste", "directory-presence"]) {

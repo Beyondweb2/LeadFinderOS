@@ -787,7 +787,7 @@ export function useInbox(channel: InboxChannel = 'whatsapp') {
     /** Only true when the operator confirmed a repeat of a pitch this lead already had. The edge
      *  refuses a duplicate pitch by default; this is the deliberate override, never a default. */
     allowResend?: boolean;
-  }): Promise<{ ok: boolean; simulated?: boolean; error?: string; reason?: string }> => {
+  }): Promise<{ ok: boolean; simulated?: boolean; error?: string; reason?: string; messageId?: string }> => {
     if (sms) {
       /* A TEXT: through the SMS sender (every guard lives there — mobile check, opt-outs, the conversation gate, QA safety, the abuse guard).
          The row it wrote is read back and merged so the thread shows it at once, exactly as a WhatsApp send does. */
@@ -808,7 +808,8 @@ export function useInbox(channel: InboxChannel = 'whatsapp') {
       queryClient.setQueryData<InboxData>(queryKey, (current) => current
         ? { ...current, messages: mergeInboxMessages(current.messages, [r.message as unknown as WaMessage]) } : current);
     }
-    return { ok: true, simulated: r.simulated };
+    /* messageId: the row the server wrote — AI handles replies records it as the approved send. */
+    return { ok: true, simulated: r.simulated, messageId: r.message?.id };
   }, [queryClient, queryKey, sms, channel]);
 
   /* ⛔ ONE RECORDED VOICE NOTE → send-whatsapp-voice. The server resolves the recipient from the

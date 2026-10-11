@@ -16,7 +16,7 @@
    already the SPA's one answer to that question (it drives the per-template send guards), so a new
    audit-class template shows a pill automatically.
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
-import { WA_TEMPLATE_REQS } from './whatsappTemplates';
+import { WA_TEMPLATE_REQS } from './whatsappTemplates.ts';
 
 /** A run that means the audit produced something usable. `capped` counts: resolveAuditReplyVars
  *  accepts it, so a capped run can genuinely send.

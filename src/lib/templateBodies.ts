@@ -21,11 +21,11 @@
    modules only (questionnaireFollowup.ts is the only one).
    ============================================================ */
 
-import { hookFollowupBody, contactFollowupBody, questionnaireFollowupBody } from './questionnaireFollowup';
+import { hookFollowupBody, contactFollowupBody, questionnaireFollowupBody } from './questionnaireFollowup.ts';
 /* competitor_hook's body prints the SAME plural the parameter carries — see its note below. */
-import { articleTrade, pluraliseTrade } from './templateVars';
-import { transcriptBusinessName, IDENTIFY_NAME_TEMPLATES } from './displayName';
-import { onboardingTemplateBody, signupLinkTemplateBody } from './whatsappLinkTemplates';
+import { articleTrade, pluraliseTrade } from './templateVars.ts';
+import { transcriptBusinessName, IDENTIFY_NAME_TEMPLATES } from './displayName.ts';
+import { onboardingTemplateBody, signupLinkTemplateBody } from './whatsappLinkTemplates.ts';
 
 // ── Findable, link-bearing ────────────────────────────────────────────────
 const onboardingFollowupBody = (b: string, u: string) =>

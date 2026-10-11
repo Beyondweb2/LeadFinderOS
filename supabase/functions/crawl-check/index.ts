@@ -31,8 +31,9 @@ import {
 } from "../../../src/lib/siteEvidence.ts";
 import {
   resolveCrawlMode, STANDARD_CRAWL, cleanRequestSource, toServedUrl, isPageUrl, internalPageLinks,
-  orderSitemapChildren, mayReplaceLeadCrawl, isIntakeCrawlRequest,
+  orderSitemapChildren, isIntakeCrawlRequest,
 } from "../../../src/lib/fullCrawl.ts";
+import { leadCrawlWriteDecision, storedCrawlFailed, STORED_CRAWL_STATE_COLUMNS } from "../../../src/lib/crawlWriteRule.ts";
 import { activeJobFor, createCrawlJob, jobCounts, kickCrawlWorker } from "../_shared/crawl-job.ts";
 import { crawlPageCapFor, prospectCrawlReuse } from "../../../src/lib/prospectCrawl.ts";
 import { insightsFromFetchedPages } from "../../../src/lib/salesInsightsInline.ts";
@@ -722,11 +723,22 @@ Deno.serve(async (req) => {
        attaches its own result to its run below. */
     let stored: boolean | null = null;
     let preserved = false;
+    let keptLastGood = false;
     if (leadId) {
       try {
         const { data: existing } = await service.from("lead_crawl_checks")
-          .select("mode, created_at").eq("lead_id", leadId).maybeSingle();
-        if (!mayReplaceLeadCrawl(existing as { mode?: string | null; created_at?: string | null } | null, mode, Date.now(), CRAWL_FRESH_MS)) {
+          .select(STORED_CRAWL_STATE_COLUMNS).eq("lead_id", leadId).maybeSingle();
+        const ex = existing as { mode?: string | null; created_at?: string | null; fetch_failed?: unknown; completeness?: unknown } | null;
+        const decision = leadCrawlWriteDecision(ex ? { ...ex, failed: storedCrawlFailed(ex) } : null, { mode, failed: signals.fetchFailed === true }, Date.now(), CRAWL_FRESH_MS);
+        if (decision === "keep_last_good") {
+          /* ⛔ A FAILED CRAWL NEVER OVERWRITES THE LAST GOOD ONE (2026-10-11): keep the row, note the attempt beside it. */
+          keptLastGood = true;
+          stored = false;
+          const { error: noteErr } = await service.from("lead_crawl_checks").update({
+            last_failed_attempt: { at: checkedAt, mode, url: homeUrl, requested_from: requestedFrom, kind: homeFetch?.kind ?? "fetch_failed", status: homeFetch?.status ?? null, detail: homeFetch?.detail ?? null },
+          }).eq("lead_id", leadId);
+          if (noteErr) console.error(`[crawl-check] failed-attempt note failed for lead ${leadId}:`, noteErr.message);
+        } else if (decision === "preserve_full") {
           preserved = true;
           stored = false;
         } else {
@@ -740,6 +752,7 @@ Deno.serve(async (req) => {
                a newer, shallower result it no longer describes. */
             full_evidence: full,
             requested_from: requestedFrom,
+            last_failed_attempt: null,
           }, { onConflict: "lead_id" });
           if (upErr) throw new Error(upErr.message);
           stored = true;
@@ -766,7 +779,7 @@ Deno.serve(async (req) => {
 
     return json({
       ok: true, url: homeUrl, served_url: servedUrl, town: town || null, verdict, signals, siteInfo, evidence, insights, deep,
-      mode, checked_at: checkedAt, fetches, ms: Date.now() - started, stored, preserved_full_crawl: preserved,
+      mode, checked_at: checkedAt, fetches, ms: Date.now() - started, stored, preserved_full_crawl: preserved, kept_last_good: keptLastGood,
       /* The full evidence's headline only — the row holds the rest, and every screen reads the row. */
       full: null,
       warnings: fullWarnings,

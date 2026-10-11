@@ -1192,6 +1192,13 @@ positive allowlist of `baseline`; `isColdOutreachTemplate` treats unknown as COL
 
 ---
 
+### 6l. AI handles replies (2026-10-11 — record: `docs/ai-handles-replies.md`)
+
+- ⛔ **Approve-to-send only.** fn `ai-reply-drafts` never sends; Approve & send = `claim` (one conditional write) → the Inbox's own send → `complete`. Never add an auto-send without Paul.
+- ⛔ **One row per inbound** (`ai_reply_drafts`, unique `inbound_message_id`), one open row per conversation. Rules: `src/lib/aiReplyDraft.ts`; hand-over phrases come from `replyTriage`. Absent facts are left out, never invented.
+- ⛔ **The warm drafter has no stage gate any more** (Paul, 2026-10-11): Draft reply and Refresh research show in every stage.
+- ⛔ **A failed crawl never overwrites the last good one** (`src/lib/crawlWriteRule.ts`, `lead_crawl_checks.last_failed_attempt`).
+
 ### 6k. One Inbox for two channels; SMS status; the reply setting (2026-10-10 — record: `docs/twilio-comms.md`)
 
 - ⛔ **WhatsApp and SMS are ONE component** (`ConversationInbox({ channel })` in `src/pages/Inbox.tsx`) with a thin channel adapter (`useInbox(channel)`,
