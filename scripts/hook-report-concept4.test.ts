@@ -232,6 +232,28 @@ const hit = (rivals: string[]): Cell => ({ named: true, rivals });
   ok(/No technical faults found/.test(clean.t) && /didn’t find a technical fault stopping AI from reading it/.test(clean.t), 'I: clean crawl → the existing truthful line');
   const unknown = report(grid);
   ok(!/Your website|Website issues/i.test(unknown.t), 'I: no completed crawl → no website section, nothing invented');
+
+  /* ── I3. CONTENT & TRUST ISSUES (2026-10-11): ranked WITH the technical faults by severity, the top five
+     shown, High / Medium / Low with one line of evidence; the faults keep their place at the top. ── */
+  const ci = (kind: string, severity: 'high' | 'medium' | 'low', title: string, evidence: string) => ({ kind, severity, title, why: `Why ${title}.`, evidence });
+  const contentIssues = [
+    ci('placeholder_content', 'high', 'Unfinished placeholder blocks are live on the site', '“Project 1” links to “#” on the homepage'),
+    ci('conflicting_facts', 'medium', 'Your site gives different figures for how long you’ve been trading', '“More than 20 years’ experience” (the homepage)'),
+    ci('no_proof', 'medium', 'We couldn’t find reviews, testimonials or case studies', 'None found in the 13 pages we read'),
+    ci('vague_headings', 'medium', 'Main headings don’t say what you do or where', 'Homepage: “The power behind your project”'),
+    ci('identical_dates', 'low', 'All 4 posts carry the same date', '4 posts dated 9 September 2026'),
+    ci('robots_blocks_ai', 'high', 'robots.txt asks AI and search crawlers to stay away', 'User-agent: OAI-SearchBot → Disallow: /'),
+  ];
+  const blocked = { title: 'AI can’t reach your site', detail: 'OAI-SearchBot is blocked.', minor: false, kind: 'search_blocked' };
+  const mixed = report(grid, { crawlFaults: [blocked], contentIssues, siteChecked: true });
+  const rows = [...mixed.html.matchAll(/<div class="q4-issue-t">([^<]+)/g)].map((m) => m[1].trim());
+  ok(rows.length === 5 && rows[0] === 'AI can’t reach your site' && rows[1] === 'Unfinished placeholder blocks are live on the site', 'I3: the real fetch block still leads; content issues follow by severity; top five only');
+  ok(!/robots\.txt asks AI/.test(mixed.t), 'I3: robots.txt’s own block is not said twice beside a refused fetch');
+  ok(/We found:<\/b> “Project 1” links to “#” on the homepage/.test(mixed.html), 'I3: each content issue prints its one line of evidence');
+  const lowOnly = report(grid, { contentIssues: [contentIssues[4]], siteChecked: true });
+  ok(/q4-sev--low">Low/.test(lowOnly.html) && /q4-ic--low/.test(lowOnly.html), 'I3: a Low issue draws as Low (it never borrows Medium)');
+  const oldRow = report(grid, { crawlFaults: [blocked], siteChecked: true });
+  ok(!/We found:/.test(oldRow.html) && /q4-sev--high">High/.test(oldRow.html), 'I3: an old crawl (no content issues) renders exactly as before');
 }
 
 /* ── J. 6/6: no manufactured miss ────────────────────────────────────────────────────────────── */

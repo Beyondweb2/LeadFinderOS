@@ -22,6 +22,22 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-11-crawl-content-trust', date: '2026-10-11', title: 'The website check now finds content and trust problems too', audience: 'all',
+    body: 'Crawling a website used to find only technical faults, so a site with vague headings, empty placeholder blocks or unnamed accreditations could read as clean. The check now reads the pages the way a person would.',
+    report: {
+      added: [
+        'New checks: vague main headings, accreditations claimed but not named, no reviews or case studies, empty placeholder blocks (like “Project 1” going nowhere), little said about the areas covered, conflicting facts (two different “years in business”), business details in the page code that don’t match the page, AI-generated image file names, wrong or empty image descriptions, links that go to the wrong place or nowhere, posts all with the same date, and generic copy.',
+        'Each issue says why it may matter, how serious it is (High / Medium / Low), how well-established the advice is (A / B / C), the exact evidence, and what the business would need to supply.',
+        'The report you send shows the top 5 in “Website issues we found”. The audit window (Inbox, crawl icon) shows them all. The call script can use the top 2 or 3 as talking points.',
+      ],
+      changed: [
+        'When Google showed an AI Overview but we could not pick out any business names, it now says “names could not be read” and shows Google’s text, instead of “no businesses named”.',
+        'A missing thing is always said as “We couldn’t find…”, because a crawl can miss things. Nothing ever suggests inventing reviews, accreditations, offices or dates.',
+        'Older crawls and reports look exactly as they did. Re-crawl a site to see the new checks.',
+      ],
+      removed: [],
+      effect: 'The website half of the report and the call now has real, checkable things to say about most sites, not just technical faults. The AI score (3 questions × 2 engines = 6) and the cost of a check are unchanged.',
+    } },
   { id: '2026-10-11-report-restyle-gemini', date: '2026-10-11', title: 'New look for the AI visibility report, and "Gemini" is back', audience: 'all',
     body: 'The report you send has a new look: the businesses named instead of the client are big yellow pills, with two lines of what the AI said under them. Screens say "Gemini" again instead of "Google AI", and Google AI Overview now comes back in full.',
     report: {

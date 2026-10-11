@@ -27,6 +27,7 @@
 import type { CrawlCoverage, PageBusiness, PageDigest, FullCrawlEvidence } from './fullCrawl.ts';
 import { robotsAllows, robotsRulesFor, sameSite } from './crawlUrl.ts';
 import type { SalesInsights } from './salesInsights.ts';
+import { compareIssues, usableContentTrust, CONTENT_TRUST_KINDS, type ContentIssue, type ContentTrust, type EvidenceClass } from './contentTrust.ts';
 
 export const SITE_AUDIT_VERSION = 1;
 /** Affected addresses kept per finding. Above it the list is cut and `urlsComplete` is false. */
@@ -78,6 +79,10 @@ export interface AuditFinding {
   evidence?: string[];
   /** A "not found" finding: on a capped crawl it is only true of the pages read. */
   absence?: boolean;
+  /** The Master Standard evidence class (content & trust checks, 2026-10-11). Absent on the older checks. */
+  evidenceClass?: EvidenceClass;
+  /** What the business would need to supply. Absent on the older checks. */
+  needs?: string;
 }
 
 export type AuditBasis = 'full' | 'capped' | 'full_legacy' | 'quick';
@@ -522,6 +527,8 @@ export interface StoredCrawlForAudit {
     } | null;
     siteInfo?: { phone?: string | null; email?: string | null; address?: string | null; services?: string[] } | null;
     homeFetch?: HomeFetchIssue | null;
+    /** The content & trust checks (src/lib/contentTrust.ts), when the crawl ran them. */
+    contentTrust?: unknown;
   } | null;
   full_evidence?: (Partial<FullCrawlEvidence> & { audit?: SiteAudit }) | null;
 }
@@ -563,6 +570,35 @@ export function classifyFetchError(input: { message?: string | null; status?: nu
  *  row honestly supports. Null when there is nothing to show (no row, or the site was not reachable —
  *  the caller shows the failure instead). Pure. */
 export function auditFromStoredCrawl(row: StoredCrawlForAudit | null | undefined): SiteAudit | null {
+  return withContentTrust(auditFromStoredCrawlBase(row), row);
+}
+
+/** A content & trust issue as an audit finding, with its evidence class and what the business would supply. */
+export function contentIssueFinding(i: ContentIssue): AuditFinding {
+  return finding({
+    id: `ct_${i.kind}`, category: CONTENT_TRUST_KINDS[i.kind].category, severity: i.severity, title: i.title,
+    saw: i.evidence[0] ?? '', meaning: i.why, urls: i.urls, count: i.urls.length,
+    evidence: i.evidence.slice(1), absence: i.absence, evidenceClass: i.evidenceClass, needs: i.needs,
+  });
+}
+
+/** The audit plus the row's content & trust issues (one copy each), worst first. Old rows: unchanged. */
+function withContentTrust(audit: SiteAudit | null, row: StoredCrawlForAudit | null | undefined): SiteAudit | null {
+  return audit ? mergeContentTrust(audit, usableContentTrust(row?.result?.contentTrust)) : audit;
+}
+
+/** An audit with the content & trust issues added (one copy each), worst first. The full crawl stores the merged
+ *  audit at finalize; a read of a row that already carries them returns the audit untouched. */
+export function mergeContentTrust(audit: SiteAudit, ct: ContentTrust | null): SiteAudit {
+  if (!ct || !ct.issues.length) return audit;
+  const have = new Set(audit.findings.map((f) => f.id));
+  const extra = [...ct.issues].sort(compareIssues).map(contentIssueFinding).filter((f) => !have.has(f.id));
+  if (!extra.length) return audit;   // a full crawl stores them in its audit already: returned exactly as stored
+  const findings = [...audit.findings, ...extra].sort((a, b) => SEVERITY_RANK[a.severity] - SEVERITY_RANK[b.severity]);
+  return { ...audit, findings, notChecked: [...new Set([...audit.notChecked, ...ct.notChecked])] };
+}
+
+function auditFromStoredCrawlBase(row: StoredCrawlForAudit | null | undefined): SiteAudit | null {
   if (!row) return null;
   const full = row.mode === 'full' ? row.full_evidence ?? null : null;
   if (full?.audit && Number(full.audit.version) >= 1) return full.audit;

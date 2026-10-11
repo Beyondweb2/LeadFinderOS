@@ -37,6 +37,7 @@ import { activeJobFor, createCrawlJob, jobCounts, kickCrawlWorker } from "../_sh
 import { crawlPageCapFor, prospectCrawlReuse } from "../../../src/lib/prospectCrawl.ts";
 import { insightsFromFetchedPages } from "../../../src/lib/salesInsightsInline.ts";
 import type { SalesInsights } from "../../../src/lib/salesInsights.ts";
+import { buildContentTrust, pageObservations, type ContentTrust } from "../../../src/lib/contentTrust.ts";
 import { classifyFetchError, type HomeFetchIssue } from "../../../src/lib/siteAudit.ts";
 import { progressLabel, type JobStatus } from "../../../src/lib/crawlJob.ts";
 import { CRAWL_FRESH_MS } from "../../../src/lib/crawlCheck.ts";
@@ -450,6 +451,7 @@ Deno.serve(async (req) => {
     /* THE SALES INSIGHTS (2026-10-07): services, name, phone, town, linking and proof, read off the SAME pages
        fetched below — no extra request (src/lib/salesInsightsInline.ts). Best-effort: it never fails the crawl. */
     let insights: SalesInsights | null = null;
+    let contentTrust: ContentTrust | null = null;
     const checkedPages: Array<{ url: string; kind: ReturnType<typeof crawlPageKind>; words: number; hasH1: boolean; readable: boolean }> = [];
     const thinPageUrls: string[] = [];
     /* Carried out of the block below so the SITE-INFO extraction (services from titles, towns from
@@ -581,8 +583,9 @@ Deno.serve(async (req) => {
       }
       thinPages = readableSamples.filter((r) => wordCount(r.html) < THIN_WORDS && ["service", "location"].includes(crawlPageKind(r.url))).length;
       if (!cr.flagged && homeWords < THIN_WORDS) { thinPages++; thinPageUrls.unshift(home.url); }
+      let leadRow: Record<string, unknown> | null = null;
       try {
-        const leadRow = leadId
+        leadRow = leadId
           ? (await service.from("outreach_leads").select("business_name, derived_town, category, search_keyword, services_included").eq("id", leadId).maybeSingle()).data as Record<string, unknown> | null
           : null;
         insights = insightsFromFetchedPages({
@@ -599,6 +602,27 @@ Deno.serve(async (req) => {
         });
       } catch (e) {
         console.error(`[crawl-check] sales insights failed for ${homeUrl}:`, (e as Error).message);
+      }
+      /* THE CONTENT & TRUST CHECKS (2026-10-11, src/lib/contentTrust.ts): headings, accreditations, proof,
+         placeholders, areas, conflicting facts, markup vs page, images, links, dates — read off the SAME pages,
+         no extra request. Its own key and version; never touches `signals`. Best-effort: never fails the crawl. */
+      try {
+        const obs = [home, ...readableSamples].map((r) => pageObservations(r.html, r.finalUrl || r.url, servedUrl, r.status || 200));
+        contentTrust = buildContentTrust({
+          pages: obs, servedUrl,
+          knownUrls: [...new Set([...pool, ...rawSitemapLocs.map((u) => toServedUrl(u, servedUrl)).filter((u): u is string => !!u)])],
+          robotsTxt: robotsBody, sitemapsRead: sitemapDocsRead.length,
+          brokenPages: sampleFetched.filter((r) => r.responded && r.status >= 400).map((r) => ({ url: r.url, status: r.status })),
+          sitemapOnly: null,
+          lead: {
+            name: (leadRow?.business_name as string | null) ?? null,
+            town: ((leadRow?.derived_town as string | null) || town || null),
+            trade: ((leadRow?.category as string | null) || (leadRow?.search_keyword as string | null)) ?? null,
+          },
+          partial: true,
+        });
+      } catch (e) {
+        console.error(`[crawl-check] content checks failed for ${homeUrl}:`, (e as Error).message);
       }
     }
 
@@ -684,6 +708,7 @@ Deno.serve(async (req) => {
       version: CRAWL_CHECK_VERSION, siteInfoVersion: SITE_INFO_VERSION,
       checked_at: checkedAt, url: homeUrl, town: town || null, signals, verdict, siteInfo,
       ...(insights ? { insights } : {}),
+      ...(contentTrust ? { contentTrust } : {}),
       ...(evidence ? { evidence, evidenceVersion: SITE_EVIDENCE_VERSION } : {}),
       ...(homeFetch ? { homeFetch } : {}),
     };

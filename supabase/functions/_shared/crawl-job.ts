@@ -17,7 +17,7 @@ import {
   extractSitemapLocs, clusterUrls, pageSimilarity, buildVerdict, crawlPageKind, THIN_WORDS,
   CRAWL_CHECK_VERSION, visibleText, type CrawlSignals,
 } from "../../../src/lib/crawlCheck.ts";
-import { buildSiteAudit, type SiteAuditPage } from "../../../src/lib/siteAudit.ts";
+import { buildSiteAudit, mergeContentTrust, type SiteAuditPage } from "../../../src/lib/siteAudit.ts";
 import { buildSalesInsights, type SalesInsights } from "../../../src/lib/salesInsights.ts";
 import { planCappedBatch } from "../../../src/lib/prospectCrawl.ts";
 import { extractSiteInfo, SITE_INFO_VERSION } from "../../../src/lib/siteInfo.ts";
@@ -28,6 +28,15 @@ import {
 } from "../../../src/lib/fullCrawl.ts";
 import { classifyCrawlUrl, classifySitemapUrl, parseRobots, type RobotsRules } from "../../../src/lib/crawlUrl.ts";
 import { cleanCounts, decideFetchOutcome, frontierExhausted, type JobCounts } from "../../../src/lib/crawlJob.ts";
+import { buildContentTrust, pageObservations, type ContentTrust, type PageObs } from "../../../src/lib/contentTrust.ts";
+
+/** One page's content observations, or undefined if the analyser trips — never a failed page. */
+function contentObs(html: string, url: string, servedUrl: string, status: number): PageObs | undefined {
+  try { return pageObservations(html, url, servedUrl, status); } catch (e) {
+    console.error(`[crawl-job] content observations failed for ${url}:`, (e as Error).message);
+    return undefined;
+  }
+}
 
 // deno-lint-ignore no-explicit-any
 type Client = any;
@@ -177,7 +186,8 @@ export async function createCrawlJob(service: Client, input: {
   const counts = { total: 0 };
 
   // The homepage is already read: it is the first page row, done.
-  const homeEv = processPage({ url: p.homeUrl, finalUrl: p.servedUrl, status: p.homeStatus, xRobotsTag: p.homeXRobots, html: p.homeHtml, isHome: true }, p.servedUrl);
+  const homeEv: PageEvidence & { ct?: PageObs } = processPage({ url: p.homeUrl, finalUrl: p.servedUrl, status: p.homeStatus, xRobotsTag: p.homeXRobots, html: p.homeHtml, isHome: true }, p.servedUrl);
+  homeEv.ct = contentObs(p.homeHtml, p.servedUrl, p.servedUrl, p.homeStatus);
   const homeKey = classifyCrawlUrl(p.servedUrl, p.servedUrl, p.servedUrl, null);
   const homeUrlKey = homeKey.ok ? homeKey.url : p.servedUrl;
   await enqueue(service, jobId, [{ url: homeUrlKey, kind: "page", source: "seed", depth: 0, status: "done", http_status: p.homeStatus, final_url: p.servedUrl, evidence: homeEv, processed_at: new Date().toISOString() }], counts);
@@ -353,7 +363,8 @@ export async function runCrawlTick(service: Client): Promise<{ jobId: string | n
         } else {
           const html = leanHtml(f.body);
           const ev = processPage({ url: r.url, finalUrl: f.finalUrl, status: f.status, xRobotsTag: f.xRobotsTag, html }, servedUrl);
-          base.evidence = ev;
+          /* The content & trust observations ride on the row (evidence.ct): the raw page is gone by finalize. */
+          base.evidence = { ...ev, ct: contentObs(html, f.finalUrl || r.url, servedUrl, f.status) };
           discovered.push(...linkRows(ev, rawLinks(html), f.finalUrl, servedUrl, robots, r.depth + 1));
         }
       }
@@ -413,14 +424,14 @@ export async function finalizeCrawlJob(service: Client, jobId: string): Promise<
   // links (the audit's link graph) only while the site is small enough to hold them in memory.
   const preCounts = await jobCounts(service, jobId);
   const withLinks = preCounts.done <= LINK_GRAPH_MAX_PAGES;
-  const rows: Array<StoredCrawlRow & { id: number; depth: number; links?: string[] | null }> = [];
+  const rows: Array<StoredCrawlRow & { id: number; depth: number; links?: string[] | null; ct?: PageObs | null }> = [];
   for (let from = 0; ; from += 1000) {
     const { data, error } = await service.from("crawl_urls")
-      .select("id,url,status,skip_reason,http_status,final_url,source,depth,d:evidence->d,b:evidence->b,nav:evidence->nav,footer:evidence->footer" + (withLinks ? ",l:evidence->l" : ""))
+      .select("id,url,status,skip_reason,http_status,final_url,source,depth,d:evidence->d,b:evidence->b,nav:evidence->nav,footer:evidence->footer,ct:evidence->ct" + (withLinks ? ",l:evidence->l" : ""))
       .eq("job_id", jobId).eq("kind", "page").order("id").range(from, from + 999);
     if (error) throw new Error(`finalize read: ${error.message}`);
     const list = (data ?? []) as Array<Record<string, any>>;
-    for (const r of list) rows.push({ id: r.id, depth: r.depth, url: r.url, status: r.status, skip_reason: r.skip_reason, http_status: r.http_status, final_url: r.final_url, source: r.source, evidence: r.d ? { d: r.d, b: r.b, nav: r.nav ?? undefined, footer: r.footer ?? undefined } : null, links: Array.isArray(r.l) ? r.l : null });
+    for (const r of list) rows.push({ id: r.id, depth: r.depth, url: r.url, status: r.status, skip_reason: r.skip_reason, http_status: r.http_status, final_url: r.final_url, source: r.source, evidence: r.d ? { d: r.d, b: r.b, nav: r.nav ?? undefined, footer: r.footer ?? undefined } : null, links: Array.isArray(r.l) ? r.l : null, ct: r.ct ?? null });
     if (list.length < 1000) break;
   }
   const { count: sitemapsRead } = await service.from("crawl_urls").select("id", { count: "exact", head: true }).eq("job_id", jobId).eq("kind", "sitemap").eq("status", "done");
@@ -528,11 +539,42 @@ export async function finalizeCrawlJob(service: Client, jobId: string): Promise<
     full.audit.insights = insights;
   } catch (e) { console.error("[crawl-job] site audit failed:", (e as Error).message); }
 
+  /* THE CONTENT & TRUST CHECKS (2026-10-11, src/lib/contentTrust.ts) — the same builder the quick check runs,
+     fed from each page's stored observations (evidence.ct; pages crawled before today have none and are
+     simply not judged). Pages nothing links to come from the audit's own link graph, only when it was usable. */
+  let contentTrust: ContentTrust | null = null;
+  try {
+    const obsPages = [...rows].sort((a, b) => a.depth - b.depth || a.id - b.id).filter((r) => r.status === "done" && r.ct).map((r) => r.ct as PageObs);
+    if (obsPages.length) {
+      const graph = full.audit?.findings.find((f) => f.id === "sitemap_only_pages");
+      const graphJudged = !!full.audit && !full.audit.notChecked.some((n) => /^Click depth/.test(n));
+      let leadName: string | null = null, leadTown: string | null = (home.town as string | null) ?? null, leadTrade: string | null = null;
+      if (job.lead_id) {
+        const { data: l } = await service.from("outreach_leads").select("business_name, derived_town, category, search_keyword").eq("id", job.lead_id).maybeSingle();
+        leadName = (l?.business_name as string | null) ?? null;
+        leadTown = (l?.derived_town as string | null) ?? leadTown;
+        leadTrade = ((l?.category as string | null) || (l?.search_keyword as string | null)) ?? null;
+      }
+      contentTrust = buildContentTrust({
+        pages: obsPages, servedUrl,
+        knownUrls: [...rows.filter((r) => r.status !== "skipped" || r.skip_reason === "coverage_cap").map((r) => r.final_url || r.url), ...(summaryState.sitemap_locs_sample ?? [])],
+        robotsTxt: job.robots_txt ?? null, sitemapsRead: sitemapsRead ?? 0,
+        brokenPages: rows.filter((r) => r.status === "failed" && (r.http_status ?? 0) >= 400).map((r) => ({ url: r.url, status: r.http_status as number })),
+        sitemapOnly: graphJudged ? (graph?.urls ?? []) : null,
+        lead: { name: leadName, town: leadTown, trade: leadTrade },
+        partial: !!full.coverage?.capped,
+      });
+      /* The detailed view reopens the stored audit as stored: it carries these issues too. */
+      if (full.audit) full.audit = mergeContentTrust(full.audit, contentTrust);
+    }
+  } catch (e) { console.error("[crawl-job] content checks failed:", (e as Error).message); }
+
   const checkedAt = new Date().toISOString();
   const result = {
     version: CRAWL_CHECK_VERSION, siteInfoVersion: SITE_INFO_VERSION, checked_at: checkedAt, url: job.start_url, town,
     signals, verdict, siteInfo, job_id: jobId,
     ...(insights ? { insights } : {}),
+    ...(contentTrust ? { contentTrust } : {}),
     ...(evidence ? { evidence, evidenceVersion: SITE_EVIDENCE_VERSION } : {}),
   };
   const status = full.completeness === "complete" ? "complete" : full.completeness === "failed" ? "failed" : "complete_with_failures";

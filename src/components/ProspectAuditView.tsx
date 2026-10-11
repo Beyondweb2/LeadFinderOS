@@ -8,6 +8,7 @@ import { mayForceRecrawl } from '@/lib/prospectCrawl';
 import type { HookOverview, HookResult, HookScore } from '@/lib/hookScore';
 import { AI_OVERVIEW_LABEL, AI_OVERVIEW_NOT_SCORED, NO_OVERVIEW_DETAIL, NO_OVERVIEW_TEXT, OVERVIEW_NO_NAMES_TEXT, overviewSummary } from '@/lib/aiOverview';
 import { AUDIT_SEVERITY_LABELS, groupFindings, severityCounts, type AuditFinding, type AuditSeverity, type SiteAudit } from '@/lib/siteAudit';
+import { EVIDENCE_CLASS_LABELS } from '@/lib/contentTrust';
 import {
   NO_WEBSITE_ON_FILE_TEXT, NO_WEBSITE_TEXT, NO_WEBSITE_WHY, callPoint, coverageLine, engineSections, hostOf, type WebsiteState,
 } from '@/lib/prospectAuditView';
@@ -228,7 +229,9 @@ function OverviewGlance({ score }: { score: HookScore }) {
 }
 
 function OverviewResult({ o, rivalsWithheld }: { o: HookOverview; rivalsWithheld: boolean }) {
-  const [open, setOpen] = useState(false);
+  /* Shown, but no names could be read from it: Google’s own text is open from the start, so the reader sees what it said (2026-10-11). */
+  const namesUnread = o.state === 'shown' && !o.named && !rivalsWithheld && !o.competitors.length;
+  const [open, setOpen] = useState(namesUnread);
   const tone: Tone = o.state === 'shown' ? (o.named ? 'green' : 'red') : 'grey';
   const word = o.state === 'shown' ? (o.named ? 'Named' : 'Not named') : o.state === 'not_shown' ? NO_OVERVIEW_TEXT : o.state === 'pending' ? 'Pending' : 'Not available';
   return (
@@ -373,9 +376,11 @@ function FindingRow({ f, audit }: { f: AuditFinding; audit: SiteAudit }) {
         <SeverityBadge s={f.severity} />
         <span className="min-w-0 break-words text-sm font-semibold">{f.title}</span>
         {f.count > 0 && <ToneChip tone="grey" className="tabular-nums" testId="pa-count">{f.count.toLocaleString('en-GB')} {f.count === 1 ? 'page' : 'pages'} affected</ToneChip>}
+        {f.evidenceClass && <ToneChip tone="grey" testId="pa-evidence-class">Evidence {EVIDENCE_CLASS_LABELS[f.evidenceClass]}</ToneChip>}
       </div>
       <p className="mt-1 break-words text-sm [overflow-wrap:anywhere]">{f.saw}</p>
       {f.meaning && <p className="mt-0.5 text-xs text-muted-foreground">{f.meaning}</p>}
+      {f.needs && <p className="mt-0.5 text-xs" data-testid="pa-needs"><span className="font-semibold">What the business would need to supply: </span>{f.needs}</p>}
       {f.absence && audit.basis === 'capped' && <p className="mt-0.5 text-xs italic text-muted-foreground">Only true of the pages read — the crawl was capped.</p>}
       {f.evidence && f.evidence.length > 0 && <pre className="mt-1.5 whitespace-pre-wrap break-words rounded-lg bg-muted/50 p-2 font-mono text-[11px] [overflow-wrap:anywhere]">{f.evidence.join('\n')}</pre>}
       {examples.length > 0 && (

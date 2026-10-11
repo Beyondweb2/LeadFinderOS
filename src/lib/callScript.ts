@@ -36,6 +36,7 @@ import { afterTermRepLine, bothPlansSpoken, ordinalOf } from './planTerms.ts';
 import { SALES_DOMAIN_LINE } from './domainAuthority.ts';
 import type { FindingKind } from './siteFindings.ts';
 import type { InsightKind } from './salesInsights.ts';
+import type { ContentTrustKind } from './contentTrust.ts';
 import type { SiteSource } from './leadWebsiteKind.ts';
 import type { CallClose, CallRouteOffer } from './callClose.ts';
 
@@ -105,7 +106,7 @@ const HOMEPAGE_THIN_LINE = "Your homepage is really light on detail, so there is
 export interface ScriptEvidence { urls: string[]; quotes: string[]; signal?: string }
 
 export interface ScriptFinding {
-  kind: FindingKind | InsightKind;
+  kind: FindingKind | InsightKind | ContentTrustKind;
   title: string;
   explanation: string;
   /** A point from the site's own pages (salesInsights.ts) arrives already written for speaking. */

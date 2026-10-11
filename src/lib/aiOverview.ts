@@ -31,9 +31,13 @@ export const AI_OVERVIEW_REPORT_LABEL = 'AI Overview';
 export const NO_OVERVIEW_TEXT = 'No overview shown';
 /** The one-line explanation beside it, for the screens with room. */
 export const NO_OVERVIEW_DETAIL = 'Google did not show an AI Overview for this search.';
-/** The words when Google showed an overview that named no business (state 2 of 3: none shown /
- *  shown, no names / shown, names listed). Only said when the run's names are not withheld. */
-export const OVERVIEW_NO_NAMES_TEXT = 'Overview shown, no businesses named';
+/** The words when Google showed an overview and no business name could be READ from it (state 2 of 3:
+ *  none shown / shown, names not read / shown, names listed). Only said when the run's names are not
+ *  withheld.
+ *  ⛔ NEVER "no businesses named" (Paul, 2026-10-11): an empty extraction is not proof the overview named
+ *  nobody — the scrape runs text together and the extractor can miss names. Say what we know: an overview
+ *  was shown and its names could not be read. Every surface shows Google's own text beside it. */
+export const OVERVIEW_NO_NAMES_TEXT = 'Overview shown, names could not be read';
 /** The short label on the public report's overview row. */
 export const AI_OVERVIEW_CONTEXT_LABEL = 'Shown for context, not scored';
 /** Said wherever the overview sits beside a score. */
