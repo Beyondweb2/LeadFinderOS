@@ -296,8 +296,9 @@ Full history and reasoning: `docs/business-and-offer.md`, `docs/measurement.md`.
 - **Guarantee is outcome-conditional:** measure before, re-measure at four weeks on the same
   questions and engines, **judged on all 20 frozen questions — the home town AND the approved service
   areas** (Paul, 2026-09-23; was home-town-only from 2026-09-12; older frozen sets stay as they
-  were). **Scored engines: ChatGPT + Gemini only** (`SCORED_ENGINES`); Google AI Overview is no longer
-  collected at all (removed from the scraper input, `_shared/enrichment/ai-search.ts`) — never claim it is measured. "The number" = named answers ÷ answered answers pooled over every frozen question,
+  were). **Scored engines: ChatGPT + Gemini only** (`SCORED_ENGINES`). ⛔ Google AI Overview IS
+  collected and SHOWN on every new audit (2026-10-11, `docs/ai-overview.md`, `src/lib/aiOverview.ts`) but is DISPLAY ONLY —
+  never scored, never in the guarantee, never claim it is measured. "The number" = named answers ÷ answered answers pooled over every frozen question,
   replay vs baseline (`compareMeasurements` → `numberWentUp`). Same rule on Build and Optimise; only
   the clock is four weeks for every new client (`remeasureWeeksFor` always returns 4 since 2026-10-02). If the number has not
   gone up, they email within 14 days of their results and get the £99 back, **plus the first monthly

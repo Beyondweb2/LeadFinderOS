@@ -344,6 +344,10 @@ export interface HookReportSummary {
     questions: number;
     perEngine: Array<{ engine: string; label: string; named: number; total: number }>;
   };
+  /** VERSION 2 ONLY (2026-10-11): Google AI Overview per tested question, DISPLAY ONLY — never in
+   *  `score`, the percentage or the gap. Absent / empty on an audit from before overviews were
+   *  recorded, so an old report renders exactly as before. `names` went through namedInstead. */
+  overviews?: Array<{ questionIndex: number; question: string; state: 'shown' | 'not_shown' | 'pending' | 'failed'; named: boolean | null; answerText: string; names: string[] }>;
   /** Every tested question, in order, with what each answering engine did. `named: null` = no answer. */
   tested: Array<{
     question: string;
@@ -534,10 +538,19 @@ function buildHookReportSummaryV2(
     });
     if (answers.length) featured = { questionIndex: fqi, question: fQuestion, answers };
   }
+  const overviews = score.overviews
+    .filter((o) => o.state !== 'not_recorded')
+    .map((o) => ({
+      questionIndex: o.questionIndex, question: o.question,
+      state: o.state as 'shown' | 'not_shown' | 'pending' | 'failed',
+      named: o.named, answerText: o.answerText,
+      names: o.state === 'shown' && !o.named ? input.namedInstead(o.competitors) : [],
+    }));
   return {
     shape: 'six',
     rivalsNamedInstead,
     featured,
+    overviews,
     questionsTested: state.planned.length,
     maxQuestions: HOOK_SCORE_QUESTIONS,
     stopReason: pick ? 'visibility_gap_found' : 'max_questions_reached',

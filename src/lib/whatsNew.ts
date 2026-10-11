@@ -22,6 +22,20 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-11-ai-overview', date: '2026-10-11', title: 'AI checks now show Google AI Overview too', audience: 'all',
+    body: 'New AI checks (quick check, Discovery, baseline) show three answers per search: ChatGPT, Google AI and Google’s AI Overview. The AI Overview is shown for context and is not counted in the score.',
+    report: {
+      added: [
+        'Google AI Overview on the AI visibility card, in the full audit window (its own column of answers) and on the report you send.',
+        '"No overview shown" when Google did not show one for that search. That is a normal result, not an error.',
+      ],
+      changed: [
+        'Nothing in the score changes: it is still 3 questions × ChatGPT and Google AI = 6 answers, and the best missed search and call script work exactly as before.',
+        'Older checks look exactly as they did. Only checks run from today show the AI Overview.',
+      ],
+      removed: [],
+      effect: 'You can see what Google’s own AI Overview says about the business as well, at no extra cost per check.',
+    } },
   { id: '2026-10-11-whatsapp-dialog', date: '2026-10-11', title: 'The WhatsApp button opens a message window', audience: 'all',
     body: 'In Outreach, the green WhatsApp button now opens a window like the Text one: the messages so far, a template picker with a preview, and a box to write your own.',
     report: {

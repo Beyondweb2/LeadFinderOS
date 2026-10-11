@@ -18,7 +18,7 @@
  *          chatGptSearchResult     { text, sources[] }            (sources often empty)
  *          perplexitySearchResult  { text, sources[{title,url,snippet}], citationUrls[] }
  *          geminiSearchResult      { text, sources[{title,url,description}] }
- *          AI Overview key not yet confirmed from a live run → still probed (see below).
+ *          AI Overview: one of the probed keys below; present only when Google showed one.
  *
  * Competitor detection is BEST-EFFORT from unstructured text (this actor has no
  * structured brand field): candidate names come from organicResults titles + the
@@ -29,10 +29,9 @@ import { runApifyActor, startApifyRun, getApifyRun, getApifyRunItems } from "./a
 /** apify/google-search-scraper — actor id uses `~` in the API path. */
 export const AI_SEARCH_ACTOR = "apify~google-search-scraper";
 
-/** Engines we normalise. Active set = ChatGPT + Gemini + Google organic (organic comes free
- *  in the same run; the queue scores [chatgpt,gemini]). ai_overview stays in the loop but is
- *  no longer scraped (see buildAiSearchInput) — normalizeAiSearch finds no block and simply
- *  omits it, so re-enabling the toggle is all it takes to bring it back.
+/** Engines we normalise. Scored = ChatGPT + Gemini (the queue scores [chatgpt,gemini]).
+ *  ai_overview is captured whenever Google shows one on the results page (display only, never
+ *  scored; see aiOverviewStamp). Google organic is stored as _google_serp, never as an engine.
  *  'perplexity' stays in the type (dormant — not enabled, not looped) so it's a one-line
  *  re-add: put it back in AI_ENGINES and re-enable perplexitySearch in the input. */
 export type AiEngineKey = "chatgpt" | "perplexity" | "gemini" | "ai_overview" | "google_organic";
@@ -89,8 +88,11 @@ export function buildAiSearchInput(query: string, countryCode: string): Record<s
     // input toggle to disable it (organic IS the search; the AI engines ride on top). So
     // google_organic is DROPPED at the normalization layer (see normalizeAiSearch), not here: it's
     // not in SCORED_ENGINES and is no longer emitted, so it's ABSENT downstream (not zero-scored).
-    // AI Overview DROPPED to cut per-call latency and 115s aborts — it's DISPLAY-ONLY (not in
-    // SCORED_ENGINES). Re-enable if needed by restoring:  aiOverview: { scrapeFullAiOverview: false },
+    // AI Overview: NO toggle needed. The overview Google shows on the results page comes back in the
+    // base output (measured live 2026-10-11: on 60–80% of questions, full answers, median ~1,900
+    // chars), so it is captured at no extra cost and stamped shown / not shown (aiOverviewStamp).
+    // The FULL-scrape option (aiOverview: { scrapeFullAiOverview: true }) stays OFF: it was dropped
+    // for per-call latency and 115s aborts, and it would add cost. Display only, never scored.
     chatGptSearch: { enableChatGpt: true },
     geminiSearch: { enableGemini: true },
     // Perplexity dropped (kept dormant — flip enablePerplexity:true to re-add):
@@ -354,6 +356,31 @@ function normalizeEngineBlock(
      answer_text at run finalisation; until it does, "no names yet" is the truthful state. */
   const competitors: string[] = [];
   return { named, position, competitors, citations, answer_text };
+}
+
+/* ══ GOOGLE AI OVERVIEW — ASKED ON EVERY QUESTION, RECORDED EITHER WAY (2026-10-11, Paul) ═════════
+ * The overview is part of the Google results page the actor already loads for every question, so it
+ * costs nothing extra and the actor input is unchanged. What was missing was the NEGATIVE: when Google
+ * shows no overview the cell is simply absent, which reads the same as "this audit never looked".
+ * So every new question is stamped with `_ai_overview` (a leading-underscore meta key, like
+ * `_google_serp`, so nothing that walks the engine keys trips on it):
+ *   'shown'     — Google showed an overview; its answer is the `ai_overview` cell.
+ *   'not_shown' — the results page came back and carried no overview (or an empty one).
+ *   null        — no results page at all, so we cannot say; nothing is stamped.
+ * ⛔ DISPLAY ONLY. It is never in SCORED_ENGINES / HOOK_ENGINES and never changes a count. Old audits
+ * carry no stamp and are shown exactly as before (src/lib/aiOverview.ts reads it). */
+export const AI_OVERVIEW_META_KEY = "_ai_overview";
+export type AiOverviewStamp = "shown" | "not_shown";
+
+export function aiOverviewStamp(items: unknown[], normalised: AiSearchResult): AiOverviewStamp | null {
+  const item = asRecord(Array.isArray(items) ? items[0] : items);
+  if (!item) return null;
+  const cell = normalised.ai_overview;
+  if (cell && cell.answer_text.trim()) return "shown";
+  /* A page we can vouch for: the organic block came back (the actor's base output). Without it the
+     scrape itself is in doubt and "no overview" would be a guess. */
+  const organic = item["organicResults"] ?? item["results"];
+  return Array.isArray(organic) ? "not_shown" : null;
 }
 
 /**

@@ -34,6 +34,7 @@
 import { cellNamed, type NamedCell, type NamedContext } from './namedSignal.ts';
 import { articleTrade } from './templateVars.ts';
 import { RIVALS_REQUIRED } from './rivalHook.ts';
+import { auditRecordsOverviews, overviewFor, type AiOverviewView } from './aiOverview.ts';
 
 /** The engines a hook asks, in DISPLAY order. Each queue row lists these, so every question
  *  runs on both. */
@@ -233,6 +234,15 @@ export interface HookScore {
   allNamed: boolean;
   /** A NEW hook that could not be given three valid questions. It is never complete. */
   questionShortfall: boolean;
+  /** Google AI Overview per question (2026-10-11). DISPLAY ONLY: never in a count, the percentage,
+   *  the hook pick or the 6/6. Empty for an audit from before overviews were recorded (aiOverview.ts),
+   *  so an old audit draws exactly what it drew before. */
+  overviews: HookOverview[];
+}
+
+export interface HookOverview extends AiOverviewView {
+  questionIndex: number;
+  question: string;
 }
 
 export interface HookScoreRow {
@@ -300,6 +310,8 @@ export function scoreHookRun(state: unknown, rows: readonly HookScoreRow[], ctx:
     : [...byQuestion.values()].map((r) => r.question);
 
   const results: HookResult[] = [];
+  const stamped = auditRecordsOverviews(rows.map((r) => ({ cells: r.result })));
+  const overviews: HookOverview[] = [];
   questions.forEach((question, questionIndex) => {
     const row = byQuestion.get(question.trim().toLowerCase());
     const engines = v2 ? (v2.engines.length ? v2.engines : [...HOOK_ENGINES]) : rowEngines(row, HOOK_ENGINES);
@@ -319,6 +331,14 @@ export function scoreHookRun(state: unknown, rows: readonly HookScoreRow[], ctx:
         competitors: ctx.cleanCompetitors ? ctx.cleanCompetitors(raw) : raw,
         answerExcerpt: valid ? String((cell as { answer_text: string }).answer_text).trim().slice(0, 600) : '',
         citations: valid ? citationList((cell as { citations?: unknown }).citations) : [],
+      });
+    }
+    if (stamped) {
+      const ov = overviewFor(row ? { status: row.status, cells: row.result } : null, { stamped, named: ctx.named });
+      overviews.push({
+        ...ov, questionIndex, question,
+        citations: citationList(ov.citations),
+        competitors: ctx.cleanCompetitors ? ctx.cleanCompetitors(ov.competitors) : ov.competitors,
       });
     }
   });
@@ -365,6 +385,7 @@ export function scoreHookRun(state: unknown, rows: readonly HookScoreRow[], ctx:
     hook: complete ? pick : null,
     allNamed: complete && named === expected,
     questionShortfall,
+    overviews,
   };
 }
 

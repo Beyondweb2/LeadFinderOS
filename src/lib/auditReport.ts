@@ -39,13 +39,14 @@ import { sourceMix } from './sourceType.ts';
 import type { AiAuditReportData, AiAuditSeo, SeoFinding } from './aiAuditReportHtml.ts';
 import { nameMatches } from './nameMatch.ts';
 import { cleanAnswerText, isJunkAnswer } from './answerText.ts';
+import { AI_OVERVIEW_ENGINE, AI_OVERVIEW_REPORT_LABEL, AI_OVERVIEW_STAMP_KEY } from './aiOverview.ts';
 
 // Engines shown in results (queue targets chatgpt+gemini; the actor also returns
 // AI Overview + Google organic, shown for context). mention_rate is over chatgpt+gemini.
 export const DISPLAY_ENGINES = ['chatgpt', 'gemini', 'ai_overview', 'google_organic'] as const;
 export const SCORED_ENGINES = ['chatgpt', 'gemini'] as const;
 export const ENGINE_LABELS: Record<string, string> = {
-  chatgpt: 'ChatGPT', gemini: 'Gemini', ai_overview: 'AI Overview', google_organic: 'Google',
+  chatgpt: 'ChatGPT', gemini: 'Gemini', ai_overview: AI_OVERVIEW_REPORT_LABEL, google_organic: 'Google',
 };
 export interface EngineResult {
   /** ⚠️ THE LEGACY STRING MATCH — nameMatches(answer_text, businessName) at scan time. Kept, and
@@ -1106,9 +1107,17 @@ export function buildReportData(
     // Per display-engine, across runs: how many of the runs it named you in, plus its rivals/sources.
     const perEngine = (['chatgpt', 'gemini', 'ai_overview'] as const).map((engine) => {
       let ranCount = 0; let named = 0; let recommended = 0; let cited = 0; let rawRivals = 0;
+      /* Google AI Overview only (2026-10-11): runs where the queue RECORDED that Google showed no
+         overview. Old audits carry no stamp, so this stays 0 and they render exactly as before. */
+      let notShown = 0; let recorded = 0;
       const seenR = new Set<string>(); const engRivals: string[] = [];
       const cm = new Map<string, string>();
       for (const r of rows) {
+        if (engine === AI_OVERVIEW_ENGINE) {
+          const stamp = (r.result as Record<string, unknown>)[AI_OVERVIEW_STAMP_KEY];
+          if (stamp === 'shown' || stamp === 'not_shown') recorded++;
+          if (stamp === 'not_shown') notShown++;
+        }
         const er = r.result![engine]; if (!er) continue;
         ranCount++; if (cellNamed(er, namedCtx)) named++;
         /* ⛔ RECOMMENDED vs CITED — DERIVED HERE, NOT STORED, AND `named` IS UNTOUCHED.
@@ -1159,6 +1168,7 @@ export function buildReportData(
            reconcile: an engine outside SCORED_ENGINES says so on its own row. */
         counted: (SCORED_ENGINES as readonly string[]).includes(engine),
         ran: ranCount > 0, ranCount, runs: rows.length, named, recommended, cited,
+        ...(recorded > 0 ? { overviewRecorded: true, notShown } : {}),
         rivals: engRivals,
         /* How many names AI returned for this engine BEFORE filtering - see the loop above. */
         rivalsRaw: rawRivals,

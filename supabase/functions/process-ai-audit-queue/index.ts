@@ -2,7 +2,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { paidMode } from "../_shared/protection.ts";
 import { SOURCES } from "../_shared/enrichment/sources.ts";
 import { runEnrichSource, recordCostCorrection } from "../_shared/enrichment/runner.ts";
-import { startAiSearch, pollAiSearchRun, fetchAiSearchItems, normalizeAiSearch, captureGoogleSerp, toCountryCode } from "../_shared/enrichment/ai-search.ts";
+import { startAiSearch, pollAiSearchRun, fetchAiSearchItems, normalizeAiSearch, captureGoogleSerp, toCountryCode, aiOverviewStamp, AI_OVERVIEW_META_KEY, type AiSearchResult } from "../_shared/enrichment/ai-search.ts";
 import { abortApifyRun } from "../_shared/enrichment/apify.ts";
 import {
   mayFinishWithoutStragglers,
@@ -364,6 +364,10 @@ Deno.serve(async (req) => {
              "Google returned nothing" stay distinguishable in the stored row. */
           const serp = captureGoogleSerp(items);
           if (serp) result._google_serp = serp;
+          /* Google AI Overview, shown or not shown (display only — see aiOverviewStamp). Only new
+             questions carry the stamp, so an old audit is never re-read as "no overview shown". */
+          const aio = aiOverviewStamp(items, result as AiSearchResult);
+          if (aio) result[AI_OVERVIEW_META_KEY] = aio;
           // What Apify says this question actually cost. Stored under a leading-underscore meta
           // key (same convention as _apify) so nothing that walks the engine keys trips on it.
           if (usageTotalUsd != null || computeUnits != null) {
