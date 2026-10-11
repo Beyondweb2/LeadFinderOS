@@ -99,12 +99,38 @@ export function resetRowCountHints() {
  * finishes. Deduped by key, page order kept. Throws on any page error — the caller shows what it has
  * and says the rest failed; it never treats a partial list as complete.
  */
+/* ⛔ ONE SLOW PAGE MUST NOT FAIL THE WHOLE LIST (2026-10-11). The database answers one Outreach page in
+   ~35 ms when idle, but this small shared instance stalls now and then (pg_stat_statements: the same
+   page query has a 7.5 s worst case against the API's 8 s statement timeout, and the same stall shows
+   on unrelated statements). A page that hit a stall used to throw and drop the remaining thousands of
+   leads ("failed to load"). Each page is now tried up to PAGE_ATTEMPTS times with a short back-off; a
+   page that keeps failing still throws, so a partial list is never treated as complete. */
+const PAGE_ATTEMPTS = 3;
+const PAGE_RETRY_BASE_MS = 600;
+async function buildWithRetry(
+  build: (from: number, to: number) => PromiseLike<{ data: unknown; error: unknown }>,
+  from: number,
+  to: number,
+): Promise<{ data: unknown; error: unknown }> {
+  let last: { data: unknown; error: unknown } = { data: null, error: null };
+  for (let attempt = 1; attempt <= PAGE_ATTEMPTS; attempt++) {
+    try {
+      last = await build(from, to);
+      if (!last.error) return last;
+    } catch (e) {
+      last = { data: null, error: e };
+    }
+    if (attempt < PAGE_ATTEMPTS) await new Promise((r) => setTimeout(r, PAGE_RETRY_BASE_MS * attempt));
+  }
+  return last;
+}
+
 export async function fetchPagesAfterFirst<T>(
   build: (from: number, to: number) => PromiseLike<{ data: unknown; error: unknown }>,
   keyOf: (row: T) => string,
   firstRows: readonly T[],
   total: number | null,
-  concurrency = 6,
+  concurrency = 3,
 ): Promise<T[]> {
   const size = firstRows.length;
   const pages: T[][] = [[...firstRows]];
@@ -118,7 +144,7 @@ export async function fetchPagesAfterFirst<T>(
       if (next >= MAX_PAGES) { console.warn(`fetchPagesAfterFirst: stopped at ${MAX_PAGES} pages.`); break; }
       const wave = Array.from({ length: Math.min(waveLen, MAX_PAGES - next) }, (_, i) => next + i);
       waveLen = concurrency;
-      const results = await Promise.all(wave.map((p) => build(p * size, p * size + size - 1)));
+      const results = await Promise.all(wave.map((p) => buildWithRetry(build, p * size, p * size + size - 1)));
       for (const r of results) {
         if (r.error) throw r.error;
         const batch = (r.data ?? []) as T[];
