@@ -23,6 +23,7 @@ import { paidReportKind } from "../../../src/lib/reportKind.ts";
 import { WEEKLY_CHECK_AUDIT_PURPOSE } from "../../../src/lib/auditKind.ts";
 import { buildFaultLines, CRAWL_CHECK_VERSION, CRAWL_FRESH_MS, type CrawlSignals } from "../../../src/lib/crawlCheck.ts";
 import { usableSiteEvidence, type SiteEvidence } from "../../../src/lib/siteEvidence.ts";
+import { reportContentIssues } from "../../../src/lib/contentTrust.ts";
 
 /** The stored crawl shape this function reads, from either the run's results or the lead-level row.
  *  `evidence` / `evidenceVersion` are optional because every row written before 2026-09-22 has
@@ -34,6 +35,8 @@ type StoredCrawl = {
   signals?: CrawlSignals;
   evidence?: SiteEvidence | null;
   evidenceVersion?: number;
+  /** The content & trust checks (2026-10-11). Absent on every row written before — those render as before. */
+  contentTrust?: unknown;
 };
 
 /* ⛔ THE "VIEW ONLINE" FOOTER LINK WAS DEAD IN EVERY REPORT EVER SENT.
@@ -375,6 +378,14 @@ Deno.serve(async (req) => {
       ? evidenceOf(runCrawl, runCrawl.checked_at ? new Date(runCrawl.checked_at).getTime() : Date.now())
       : [];
     if (runEvidence.length) data.siteEvidence = runEvidence;
+    /* THE CONTENT & TRUST ISSUES (2026-10-11, src/lib/contentTrust.ts): the run's own crawl first, under the
+       same freshness window; the report shows the top five beside the technical faults. A row without the
+       block (every crawl before today) yields nothing and the report renders as it did. */
+    if (runCrawl?.status === "complete" && (runCrawl.version ?? 0) >= CRAWL_CHECK_VERSION
+      && (Date.now() - (runCrawl.checked_at ? new Date(runCrawl.checked_at).getTime() : Date.now())) < CRAWL_FRESH_MS) {
+      const runIssues = reportContentIssues(runCrawl.contentTrust);
+      if (runIssues.length) data.contentIssues = runIssues;
+    }
     if (leadId) {
       const { data: cc } = await service
         .from("lead_crawl_checks").select("result, created_at")
@@ -395,6 +406,11 @@ Deno.serve(async (req) => {
       if (!data.siteEvidence?.length && cc) {
         const leadEvidence = evidenceOf(stored, new Date((cc as { created_at: string }).created_at).getTime());
         if (leadEvidence.length) data.siteEvidence = leadEvidence;
+      }
+      // …and the content & trust issues, the same way (run first, then the fresh lead row).
+      if (!data.contentIssues?.length && fresh && currentVer) {
+        const leadIssues = reportContentIssues(stored?.contentTrust);
+        if (leadIssues.length) data.contentIssues = leadIssues;
       }
       /* Background-populate when there's no fresh CURRENT-version check and they have a real site, so
          the section is there on the next open. Fire-and-forget via waitUntil — never blocks this

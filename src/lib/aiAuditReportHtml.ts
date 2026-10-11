@@ -22,6 +22,7 @@ import { FINDABLE_CONTACT_EMAIL, FINDABLE_CONTACT_WHATSAPP, FINDABLE_GUARANTEE, 
 import { BASELINE_QUESTIONS } from './auditQuestionCounts.ts';
 import { isGenericSchemaGap, type CrawlFault } from './crawlCheck.ts';
 import type { EvidenceKind, SiteEvidenceFinding } from './siteEvidence.ts';
+import type { ReportContentIssue } from './contentTrust.ts';
 import { answerExcerpt, cleanAnswerText, isJunkAnswer, isMapCardAnswer, type AnswerBlock } from './answerText.ts';
 
 export interface ReportEngineRow {
@@ -225,6 +226,10 @@ export interface AiAuditReportData {
    *  by render-audit-report to the ones worth showing. Absent on every report whose crawl predates
    *  Phase 1 or ran shallow — and absent renders NOTHING, exactly as an absent crawlFaults does. */
   siteEvidence?: SiteEvidenceFinding[];
+  /** The content & trust issues (src/lib/contentTrust.ts, 2026-10-11), worst first, already through the
+   *  crawl's freshness gate. The quick report ranks them with the faults above and shows the top five.
+   *  Absent on every crawl before that date → the report renders exactly as before. */
+  contentIssues?: ReportContentIssue[];
   /** The audit id, so the "Request a call" form can POST it (recipient + phone are derived
    *  server-side from it — the prospect sends nothing but this id). Absent → no call button. */
   auditId?: string;
@@ -1139,8 +1144,16 @@ export function ownNameVariants(businessName: string): string[] {
 }
 
 /** The website section's input, decided by renderReportHtml from the stored crawl only. */
+/** One row of "Website issues we found". `severity` is set by the content & trust checks; the older faults
+ *  leave it out and read minor → Medium, else High, as they always did. `evidence` is one verbatim line. */
+export interface QuickIssue { title: string; detail: string; minor: boolean; severity?: 'high' | 'medium' | 'low'; evidence?: string | null }
+const QUICK_SEVERITY_RANK: Record<'high' | 'medium' | 'low', number> = { high: 0, medium: 1, low: 2 };
+const QUICK_SEVERITY_WORD: Record<'high' | 'medium' | 'low', string> = { high: 'High', medium: 'Medium', low: 'Low' };
+const QUICK_SEVERITY_CLASS: Record<'high' | 'medium' | 'low', string> = { high: 'high', medium: 'med', low: 'low' };
+const quickSeverity = (i: QuickIssue) => i.severity ?? (i.minor ? 'medium' : 'high');
+
 export type QuickWebsite =
-  | { state: 'issues'; issues: Array<{ title: string; detail: string; minor: boolean }> }
+  | { state: 'issues'; issues: QuickIssue[] }
   | { state: 'none' }
   | { state: 'clean' }
   | { state: 'unknown' };
@@ -1336,12 +1349,13 @@ export function renderQuickCheckReport(h: HookReportSummary, businessName: strin
       <p class="q4-caveat">${esc(c.caveat)}</p>
     </section>`;
 
-  /* ── WEBSITE ── stored findings only; serious → High, minor → Medium. */
+  /* ── WEBSITE ── stored findings only, worst first: High / Medium / Low, with the one line of evidence
+     a content & trust issue carries ("We found: …"). */
   const site = website.state === 'issues' ? `
       <section class="q4-panel q4-panel--site">
         <h2 class="q4-h">Website issues we found</h2>
-        <div class="q4-rows">${website.issues.map((i) => `
-          <div class="q4-issue"><span class="q4-ic q4-ic--${i.minor ? 'med' : 'high'}">${Q4_ICONS.page}</span><div><div class="q4-issue-t">${esc(i.title)} <span class="q4-sev q4-sev--${i.minor ? 'med' : 'high'}">${i.minor ? 'Medium' : 'High'}</span></div><p class="q4-issue-p">${esc(i.detail)}</p></div></div>`).join('')}
+        <div class="q4-rows">${website.issues.map((i) => { const sv = QUICK_SEVERITY_CLASS[quickSeverity(i)]; return `
+          <div class="q4-issue"><span class="q4-ic q4-ic--${sv}">${Q4_ICONS.page}</span><div><div class="q4-issue-t">${esc(i.title)} <span class="q4-sev q4-sev--${sv}">${QUICK_SEVERITY_WORD[quickSeverity(i)]}</span></div><p class="q4-issue-p">${esc(i.detail)}</p>${i.evidence ? `<p class="q4-issue-ev"><b>We found:</b> ${esc(i.evidence)}</p>` : ''}</div></div>`; }).join('')}
         </div>
       </section>`
     : website.state === 'none' ? `
@@ -1509,11 +1523,12 @@ const QUICK_REPORT_CSS = `
   .q4-issue{display:grid;grid-template-columns:40px 1fr;gap:12px;align-items:start;padding:10px 0;break-inside:avoid;page-break-inside:avoid}
   .q4-ic{width:40px;height:40px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex:none}
   .q4-ic svg{width:20px;height:20px}
-  .q4-ic--high{background:#fde4e6;color:#c21d2b} .q4-ic--med{background:#fdf0d8;color:#b86e00} .q4-ic--ok{background:#e1f4e7;color:#13703a}
+  .q4-ic--high{background:#fde4e6;color:#c21d2b} .q4-ic--med{background:#fdf0d8;color:#b86e00} .q4-ic--low{background:#e8eef8;color:#3a5a8c} .q4-ic--ok{background:#e1f4e7;color:#13703a}
   .q4-issue-t{font-size:14.5px;font-weight:800;color:#101114;line-height:1.35}
   .q4-sev{display:inline-block;margin-left:6px;font-size:9.5px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;padding:2px 7px;border-radius:999px;vertical-align:2px}
-  .q4-sev--high{background:#fde4e6;color:#c21d2b} .q4-sev--med{background:#fdf0d8;color:#8a5200}
+  .q4-sev--high{background:#fde4e6;color:#c21d2b} .q4-sev--med{background:#fdf0d8;color:#8a5200} .q4-sev--low{background:#e8eef8;color:#3a5a8c}
   .q4-issue-p{margin:3px 0 0;font-size:13px;color:#4f5056;line-height:1.45}
+  .q4-issue-ev{margin:4px 0 0;font-size:12px;color:#6b6c72;line-height:1.4;overflow-wrap:anywhere} .q4-issue-ev b{color:#101114;font-weight:700}
   .q4-tiles{display:grid;gap:10px}
   .q4-tile{display:grid;grid-template-columns:76px 1fr;align-items:center;gap:12px;background:#fcc933;border-radius:16px;padding:12px 16px;color:#101114}
   .q4-tile b{font-size:30px;font-weight:900;letter-spacing:-.04em;line-height:1;text-align:center}
@@ -1840,7 +1855,7 @@ export function renderReportHtml(d: AiAuditReportData): string {
      ⛔ NOTHING INVENTED. No findings and a crawl that COMPLETED (siteChecked) → a truthful line that
      nothing technical was found. No completed crawl → nothing. No website → the build-one slot. */
   const QUICK_MAX_WEBSITE_ISSUES = 5;
-  const quickIssues = [
+  const quickIssues = ([
     ...(d.siteEvidence ?? []).flatMap((e) => {
       const copy = EVIDENCE_REPORT_COPY[e.kind];
       return copy ? [{ title: copy.title, detail: copy.why, minor: false }] : [];
@@ -1851,7 +1866,15 @@ export function renderReportHtml(d: AiAuditReportData): string {
        Misleading schema still qualifies — it arrives as deep-crawl evidence (schema_wrong_domain) above.
        Every other surface keeps the line: this filter is the quick report's alone. */
     ...(d.crawlFaults ?? []).filter((f) => !isGenericSchemaGap(f)).map((f) => ({ title: f.title, detail: f.detail, minor: !!f.minor })),
-  ].filter((x, i, all) => all.findIndex((y) => y.title.trim().toLowerCase() === x.title.trim().toLowerCase()) === i)
+    /* THE CONTENT & TRUST ISSUES (2026-10-11): ranked with the technical ones by severity — the faults and
+       evidence above keep their place at the top of each tier, so "AI can't reach your site" still leads.
+       robots.txt's own block is not said twice beside a real fetch that was refused. */
+    ...(d.contentIssues ?? [])
+      .filter((c) => !(c.kind === 'robots_blocks_ai' && (d.crawlFaults ?? []).some((f) => f.kind === 'search_blocked')))
+      .map((c) => ({ title: c.title, detail: c.why, minor: c.severity !== 'high', severity: c.severity, evidence: c.evidence })),
+  ] as QuickIssue[]).filter((x, i, all) => all.findIndex((y) => y.title.trim().toLowerCase() === x.title.trim().toLowerCase()) === i)
+    .map((x, i) => ({ x, i, rank: QUICK_SEVERITY_RANK[quickSeverity(x)] }))
+    .sort((a, b) => a.rank - b.rank || a.i - b.i).map((r) => r.x)
     .slice(0, QUICK_MAX_WEBSITE_ISSUES);
   /* Concept 4 (2026-10-06) draws these as "Website issues we found" — serious → High, minor → Medium.
      The four states and their order are unchanged from the section this replaced: findings, else no

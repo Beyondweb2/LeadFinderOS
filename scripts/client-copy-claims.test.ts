@@ -58,6 +58,8 @@ const RENDERERS: Array<[string, string]> = [
   /* 2026-10-02: the lines above the paid form's pre-filled services / towns (findable.live renders them). */
   ["post-payment form prefill lines (paying client)", "src/lib/setupPrefill.ts"],
   ["audit report (prospect + client)", "src/lib/aiAuditReportHtml.ts"],
+  /* 2026-10-11: the content & trust issues' words print on the report's "Website issues we found" card. */
+  ["website content & trust issues (prospect)", "src/lib/contentTrust.ts"],
   ["four-week results document (client)", "src/lib/remeasureResultsHtml.ts"],
   /* 2026-10-02: the monthly update Paul copies to a paying client (prepared by hand, sent by him). */
   ["monthly client update words (client)", "src/lib/monthlyUpdate.ts"],

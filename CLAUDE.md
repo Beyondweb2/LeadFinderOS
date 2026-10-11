@@ -1069,6 +1069,11 @@ positive allowlist of `baseline`; `isColdOutreachTemplate` treats unknown as COL
   `salesInsights.ts`** (`result.insights`, written by BOTH crawls) merged with the technical findings: services, name, phone, town,
   linking, proof — each with the pages and words it was read on; nothing under `SPEAK_MIN_PRIORITY` is said; **a strong site is a
   result** (`strong_site` → the positive line, never an invented fault; never "add more proof"). One or two points, never a list.
+- ⛔ **Content & trust checks are ONE builder, `src/lib/contentTrust.ts`** (2026-10-11, `docs/crawl-content-trust.md`): `pageObservations` per page
+  (quick crawl in memory; full crawl stores `evidence.ct`) → `buildContentTrust` → `result.contentTrust` (own key + version; never `signals`).
+  Absence = "We couldn't find…"; never suggest invented facts/reviews/accreditations/offices/dates; area advice "only where genuinely true
+  and useful", never town-swap; no llms.txt, no promise. Report = top 5 ranked with the faults; Inbox audit window = all; call script =
+  observed ones may override `strong_site`, a "couldn't find" never does. `scripts/content-trust.test.ts` pins it.
 - **`lead_crawl_checks` is ONE row per lead, read by every screen** — never a screen-specific copy.
   The crawl-wide summary lives in `full_evidence`, every URL in `crawl_urls` (never in `result`, which
   Outreach/Inbox read for the whole book). An automated crawl never replaces a fresh full one
@@ -1396,6 +1401,7 @@ positive allowlist of `baseline`; `isColdOutreachTemplate` treats unknown as COL
 | How things stood on 2026-09-09, the harness repair | `docs/state-of-play-2026-09-09.md` (§0) |
 | The original §2 / §3 / §7 / §10 text | `docs/how-paul-works.md`, `docs/discipline-checklist.md`, `docs/parked-branches.md`, `docs/other-docs.md` |
 | Website Build: fact edits / saves, service-area candidates, asset plan, Cloudflare modes, template fit, readiness | `docs/website-build-pilot-hardening.md` (+ the website-build-*.md phase records) |
+| The crawl's content & trust checks (headings, accreditations, proof, placeholders, areas, conflicting facts, markup vs page, images, links, dates), evidence classes, the Master Standard wording rules | `docs/crawl-content-trust.md` |
 | Website Build: the QUALITY standard — strengths, no-downgrade, completeness, old-vs-new upgrade, the source-site fact rule, the BUILD standard (image roles, Areas → map, mobile hero, reviews, forms) | `docs/website-build-quality-standard.md` |
 | India (or any non-UK country): search bias, lead country, +91 phones, local send hours, audit wording, the measured Places quality, INR/Coverage designs | `docs/india-readiness.md` |
 | Abuse / cost protection: the guard, thresholds, suspension, pause / emergency stop, exports, alerts | `docs/abuse-cost-protection.md` |

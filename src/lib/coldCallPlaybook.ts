@@ -38,6 +38,7 @@
       the sources disagreed and the playbook said "check current offer"; they are one source now.
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 import { CRAWL_FRESH_MS, usableCrawlSignals, type CrawlSignals } from './crawlCheck.ts';
+import { compareIssues, usableContentTrust, type ContentIssue, type ContentTrustKind } from './contentTrust.ts';
 import { resolveFindingsSource, MAX_SITE_FINDINGS, type FindingKind, type FindingsSource, type SiteFinding } from './siteFindings.ts';
 import type { SiteEvidenceFinding } from './siteEvidence.ts';
 import { SALES_DOMAIN_LINE } from './domainAuthority.ts';
@@ -153,7 +154,7 @@ export interface PlaybookInput {
 export type CallMode = 'cold' | 'follow_up';
 
 export interface PlaybookFinding {
-  kind: FindingKind | InsightKind;
+  kind: FindingKind | InsightKind | ContentTrustKind;
   title: string;
   /** What we saw, in plain English (siteFindings.ts's clause, as a sentence). */
   explanation: string;
@@ -472,6 +473,34 @@ export function freshInsights(input: Pick<PlaybookInput, 'runCrawls' | 'leadCraw
   return null;
 }
 
+/** Findings about the same thing say it once (the call script's themes; unlisted kinds are their own theme). */
+const CONTENT_THEME_OF: Record<string, string> = {
+  no_proof: 'proof', placeholder_content: 'proof', area_coverage: 'location', location_unclear: 'location',
+  robots_blocks_ai: 'crawler', crawler_blocked: 'crawler', internal_linking: 'linking', link_mismatch: 'linking', dead_links: 'linking',
+  schema_mismatch: 'schema', schema_incomplete: 'schema', schema_unverified: 'schema', schema_wrong_domain: 'schema',
+};
+
+/** The newest fresh, current content & trust issues across the crawl sources (audit-run crawls first, then the lead row). */
+export function freshContentIssues(input: Pick<PlaybookInput, 'runCrawls' | 'leadCrawl' | 'nowMs'>): ContentIssue[] {
+  for (const source of [...input.runCrawls, ...(input.leadCrawl ? [input.leadCrawl] : [])]) {
+    if (source.complete === false || source.result?.status === 'unavailable') continue;
+    if (!(input.nowMs - source.createdAtMs < CRAWL_FRESH_MS)) continue;
+    const ct = usableContentTrust((source.result as { contentTrust?: unknown } | null | undefined)?.contentTrust);
+    if (ct) return [...ct.issues].sort(compareIssues);
+  }
+  return [];
+}
+
+/** A content & trust issue as a playbook finding: its own spoken line, its evidence as proof. */
+export function contentIssueToFinding(c: ContentIssue): PlaybookFinding {
+  return {
+    kind: c.kind, title: c.title, explanation: c.spoken, whyItMayMatter: c.why,
+    proof: [...c.evidence.map((e) => 'Read: ' + e), ...c.urls.slice(0, 3).map((u) => 'Page: ' + u)],
+    spoken: c.spoken, improvement: 'What we would need from them: ' + c.needs,
+    evidence: { urls: c.urls.slice(0, 5), quotes: c.evidence.slice(0, 5) }, confidence: c.severity === 'high' ? 'high' : 'medium',
+  };
+}
+
 /** @param max how many findings to return — the playbook's MAX_SITE_FINDINGS by default; the Inbox
  *        details ask for all of them and show the first few (2026-09-27). */
 export function selectFindings(input: Pick<PlaybookInput, 'lead' | 'runCrawls' | 'leadCrawl' | 'nowMs'>, max: number = MAX_SITE_FINDINGS): FindingsOutcome {
@@ -527,6 +556,21 @@ export function selectFindings(input: Pick<PlaybookInput, 'lead' | 'runCrawls' |
     const fromInsights = (insights?.findings ?? []).filter((f) => f.confidence === 'high' || f.confidence === 'medium').map(insightToFinding);
     const picks = mergePoints(legacy, insights && { ...insights, findings: insights.findings.filter((f) => f.confidence === 'high' || f.confidence === 'medium') }, max);
     const findings = picks.map((p) => (p.from === 'legacy' ? legacy[p.index] : fromInsights[p.index]));
+    /* THE CONTENT & TRUST ISSUES (2026-10-11, contentTrust.ts) fill any room left, worst first: high and medium
+       only, one per theme, never a second line about something already said. Each carries its own spoken line. */
+    if (findings.length < max) {
+      const taken = new Set(findings.map((f) => CONTENT_THEME_OF[f.kind] ?? f.kind));
+      for (const c of freshContentIssues(input)) {
+        if (findings.length >= max) break;
+        const theme = CONTENT_THEME_OF[c.kind] ?? c.kind;
+        if (c.severity === 'low' || taken.has(theme)) continue;
+        /* A site the pages call strong keeps that verdict against a "we couldn't find…" — only something we SAW
+           (a placeholder, a contradiction, an unnamed claim, a wrong link) may override it (2026-10-11). */
+        if (insights?.state === 'strong_site' && c.absence) continue;
+        taken.add(theme);
+        findings.push(contentIssueToFinding(c));
+      }
+    }
     /* Nothing speakable (only weak notes, or nothing at all) falls through to "clean" / "strong site" below. */
     if (findings.length) return { status: 'findings', findings, note: null, crawlAtMs: found?.source.createdAtMs ?? input.nowMs, crawlStale: false };
   }
