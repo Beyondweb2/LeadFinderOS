@@ -106,6 +106,10 @@ const elect = build([ELECT_HOME, ELECT_CI, ELECT_EV, ELECT_PV, ELECT_HOMEPAGE]);
   ok(!kinds(work).includes('link_mismatch'), 'B: a label sharing any word with its destination is fine ("Commercial Workplaces" → /commercial-ev-charging)');
   const areaSite = build([obs('/', '<h1>Drain unblocking in Wirral</h1><p>We cover Wallasey and Birkenhead.</p>')], { knownUrls: [HOME + 'blocked-drains-wirral/birkenhead'] });
   ok(!kinds(areaSite).includes('area_coverage'), 'B: a site WITH area pages gets no area advice (never "add more town pages")');
+  const hub = build([obs('/', '<h1>Drain unblocking in Wirral</h1>'), obs('/services', '<h1>Our Services</h1>')]);
+  ok(!kinds(hub).includes('vague_headings'), 'B: a hub page ("/services" → "Our Services") is an index, not a vague heading (RPD NW, live 2026-10-11)');
+  const longPage = build([obs('/drain-jetting', `<h1>Drain jetting in Wirral</h1><p>Peace of mind, state of the art kit and value for money. ${'We jet drains clear of fat, scale and roots for homes and businesses. '.repeat(110)}</p>`)]);
+  ok(!kinds(longPage).includes('generic_copy'), 'B: three stock phrases in a 1,400-word page is not "generic copy" (they must be dense)');
 }
 
 /* ── C. MASTER STANDARD WORDING RULES ────────────────────────────────────────────────────────────── */
