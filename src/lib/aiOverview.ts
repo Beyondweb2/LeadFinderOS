@@ -39,6 +39,37 @@ export const AI_OVERVIEW_CONTEXT_LABEL = 'Shown for context, not scored';
 /** Said wherever the overview sits beside a score. */
 export const AI_OVERVIEW_NOT_SCORED = 'Shown for context, not counted in the score.';
 
+/* ══ THE OVERVIEW'S TEXT, READABLE (2026-10-11) ══════════════════════════════════════════════════════
+   The actor returns an overview as the page's text run together with NO separators: a sentence glued to
+   the next heading or label ("…facilities.Top Commercial Electricians", "…01134360017 | SmartOhm
+   Commercial ServicesServices:"), Google Maps cards and Google's own share / copy controls after it
+   (measured on 81 stored overviews + a live full-overview run, 2026-10-11). Read that way, the
+   competitor extractor found none of the businesses a full overview listed.
+   This puts back the space the scrape dropped and cuts Google's controls. It NEVER writes a word and
+   never removes one of the overview's own; the stored answer is untouched. One copy, read by the
+   extractor (extract-competitors) and the display. */
+
+/** Google's own controls that trail the overview (share / copy / feedback). Everything from the
+ *  earliest one is page furniture, never the answer. Multi-word phrases only. */
+const OVERVIEW_FURNITURE = [
+  'learn morecopied', 'copied to clipboard', 'failed to copy', 'share public link', 'this public link is valid',
+  'ai responses may include mistakes', 'ai can make mistakes', 'your feedback helps google improve', 'report a problem',
+];
+
+/** The overview with the scrape's missing spaces put back and Google's trailing controls cut. */
+export function overviewReadableText(raw: string): string {
+  let text = String(raw || '');
+  const hay = text.toLowerCase();
+  const cut = Math.min(...OVERVIEW_FURNITURE.map((m) => { const i = hay.indexOf(m); return i < 0 ? Infinity : i; }));
+  if (Number.isFinite(cut)) text = text.slice(0, cut);
+  return text
+    .replace(/[ \t]+/g, ' ')
+    .replace(/([a-z0-9)\]’”'"%])([.!?:;])(?=[A-Z])/g, '$1$2 ')
+    /* A name glued to the next card label: "Commercial ServicesServices:", "Moorcroft RdPhone:". */
+    .replace(/([a-z])([A-Z][a-z]{2,}:)/g, '$1 $2')
+    .trim();
+}
+
 export type AiOverviewState =
   /** Google showed an overview; `named` / the answer are filled in. */
   | 'shown'

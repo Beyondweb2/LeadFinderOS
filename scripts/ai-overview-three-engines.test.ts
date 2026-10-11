@@ -5,7 +5,7 @@
    results page the scrape already loads (no actor input change, no extra cost), stamped shown / not
    shown per question, and SHOWN — never counted. This suite pins:
      A. the stamp: shown / not shown / unknown, from the actor's own item;
-     B. the actor input is unchanged (cost);
+     B. the actor input sends the full-overview add-on explicitly (approved 2026-10-11), nothing else changed;
      C. the score, the hook pick and the 6/6 are untouched by an overview;
      D. "No overview shown" is a result, an old audit draws nothing new;
      E. the quick public report and the full report show it, labelled not scored.
@@ -31,10 +31,10 @@ ok(aiOverviewStamp(noAio, normalizeAiSearch(noAio, 'Acme Roofing Services')) ===
 ok(aiOverviewStamp(noPage, normalizeAiSearch(noPage, 'Acme Roofing Services')) === null, 'A: no results page at all → nothing stamped (never a guess)');
 ok(aiOverviewStamp([], {}) === null, 'A: an empty dataset → nothing stamped');
 
-/* ── B. Cost: the actor input is unchanged ────────────────────────────────────────────────── */
+/* ── B. Cost: the actor input (full overview explicit) ────────────────────────────────────────────────── */
 const input = buildAiSearchInput('roofer in Leeds', 'gb');
-ok(!('aiOverview' in input), 'B: the full-overview scrape toggle stays OFF (no latency, no extra cost)');
-ok(JSON.stringify(Object.keys(input).sort()) === JSON.stringify(['chatGptSearch', 'countryCode', 'geminiSearch', 'languageCode', 'maxPagesPerQuery', 'queries']), 'B: the actor input keys are exactly what they were');
+ok(JSON.stringify(input.aiOverview) === JSON.stringify({ scrapeFullAiOverview: true }), 'B: the FULL overview add-on is sent EXPLICITLY (Paul approved it 2026-10-11) — never left to the actor default');
+ok(JSON.stringify(Object.keys(input).sort()) === JSON.stringify(['aiOverview', 'chatGptSearch', 'countryCode', 'geminiSearch', 'languageCode', 'maxPagesPerQuery', 'queries']), 'B: the actor input keys are exactly these (the overview add-on is the only addition)');
 
 /* ── C. The score is untouched ────────────────────────────────────────────────────────────── */
 const BIZ = 'Acme Roofing Services';
@@ -91,6 +91,19 @@ const aioRow = qb.perEngine.find((e) => e.label === 'AI Overview') as { ran: boo
 ok(!!aioRow && !aioRow.ran && aioRow.notShown === 1 && aioRow.overviewRecorded === true && aioRow.counted === false, 'E: the full report records "not shown" for that question, and never counts it');
 const oldRow = old.d.questionBreakdown!.find((q) => q.question === Q[2])!.perEngine.find((e) => e.label === 'AI Overview') as { notShown?: number; overviewRecorded?: boolean };
 ok(oldRow.notShown === undefined && oldRow.overviewRecorded === undefined, 'E: an old audit’s full report row carries no new field');
+
+/* ── F. The overview, readable for the extractor (2026-10-11, full-overview add-on) ──────────── */
+{
+  const { overviewReadableText } = await import('../src/lib/aiOverview.ts');
+  const raw = '…and certified testing:Services: fit-outs.Contact: 0113 436 0017 | SmartOhm Commercial ServicesServices: Small fit-outs.Learn moreCopied to clipboardFailed to copy';
+  const r = overviewReadableText(raw);
+  ok(r.includes('testing: Services:') && r.includes('fit-outs. Contact:'), 'F: a sentence glued to the next label gets its space back');
+  ok(r.includes('SmartOhm Commercial Services Services:'), 'F: a name glued to the next card label is separated');
+  ok(!/clipboard|copy/i.test(r), "F: Google's share / copy controls are cut");
+  ok(['SmartOhm', 'Commercial', 'fit-outs', '0113 436 0017'].every((w) => r.includes(w)), "F: no word is written and none of the overview's own words is lost");
+  const ec = (await import('node:fs')).readFileSync('supabase/functions/extract-competitors/index.ts', 'utf8');
+  ok(/engine === AI_OVERVIEW_ENGINE \? overviewReadableText\(raw\) : raw/.test(ec), 'F: extract-competitors reads the overview (only) through overviewReadableText');
+}
 
 console.log(f ? `\n${f} FAILED` : '\nall passed');
 process.exit(f ? 1 : 0);
