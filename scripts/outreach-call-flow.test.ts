@@ -179,7 +179,7 @@ console.log('── 5. PERMISSIONS ──');
 
 console.log('── 6. REGRESSION ──');
 {
-  ok(/navigate\('\/inbox', \{ state: \{ launch: \{ leadId: lead\.id \} \} \}\);/.test(table) && /handleWhatsAppClick\(lead\)/.test(table), 'the green WhatsApp button still opens the in-app conversation (messaging is separate from calling)');
+  ok(/setWaDialogLead\(lead\);/.test(table) && /handleWhatsAppClick\(lead\)/.test(table), 'the green WhatsApp button opens the WhatsApp dialog (messaging is separate from calling)');
   ok(/whatsAppLinkForLead\(lead\.id\)/.test(dlg), 'the popup\'s WhatsApp link to the Inbox conversation is unchanged');
   ok(/<QuickCloseButton leadId=\{leadId\}/.test(play) && /QuickCloseNav\.Provider/.test(dlg), 'Quick Close unchanged');
   ok(!/INDIA|India/.test(read('src/lib/callNumber.ts').replace(/\/\*[\s\S]*?\*\//g, '')), 'no India rule added for calling');

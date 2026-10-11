@@ -22,6 +22,20 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-11-whatsapp-dialog', date: '2026-10-11', title: 'The WhatsApp button opens a message window', audience: 'all',
+    body: 'In Outreach, the green WhatsApp button now opens a window like the Text one: the messages so far, a template picker with a preview, and a box to write your own.',
+    report: {
+      added: [
+        'The window shows the business name, the latest WhatsApp messages (or "No messages yet"), a template picker that starts on "Initial contact — original opener" with the business name filled into the preview, Send template, and a free-text box with Send.',
+        'Free text works inside the 24-hour reply window; outside it, only a template can be sent, as before.',
+        'A link inside opens the full conversation in the Inbox.',
+      ],
+      changed: [
+        'The WhatsApp button no longer jumps straight to the Inbox. Sending works exactly as it does in the Inbox — the same checks, the same status changes, nothing extra.',
+      ],
+      removed: [],
+      effect: 'You can send the opener without leaving Outreach. Opening the window sends nothing; leads marked "not on WhatsApp" still just show the "Try a call" note.',
+    } },
   { id: '2026-10-10-website-build-old-pages', date: '2026-10-10', title: 'Website Build protects the old site’s pages', audience: 'admin',
     body: 'When a client with a website gets a new one, every important page of the old site must keep working on the new site — at the same address or with one permanent redirect — before it can launch.',
     report: {

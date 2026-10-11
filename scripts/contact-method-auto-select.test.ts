@@ -94,7 +94,7 @@ console.log('── 5. A salesperson\'s edit reaches it through the plan, not a 
 
 console.log('── 6. REGRESSION ──');
 {
-  ok(/navigate\('\/inbox', \{ state: \{ launch: \{ leadId: lead\.id \} \} \}\);/.test(table), 'the WhatsApp button still opens the in-app conversation');
+  ok(/setWaDialogLead\(lead\);/.test(table) && /<LeadWhatsAppDialog open=\{!!waDialogLead\}/.test(table), 'the WhatsApp button opens the lead\'s WhatsApp dialog (2026-10-11; it used to jump to the Inbox)');
   ok(/openNumberPopup=\{detailNumberPopup\}/.test(table) && /openLogContact=\{detailLogContact\}/.test(table), 'the call popup is still told which window to arrive on');
   ok(!/tel:/.test(code(table)), 'no tel: link on the call path');
   ok(/useCallback\(\(lead: OutreachLead\) => \{\s*if \(onContactGated && !onContactGated\('call', lead\.id\)\) return;/.test(table), 'the contact gate still runs first, so a blocked rep sets nothing');
