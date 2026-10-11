@@ -191,8 +191,8 @@ function EngagementPills(
         <span className={pill + ' bg-emerald-500/20 text-emerald-400'} title={'Visited findable.live · ' + when(siteVisitedAt)}>Site</span>
       )}
       {showGemini && (
-        <span className={pill + gemTone} title={`Already named on Google AI in ${geminiNamed} of ${geminiAnswers} answers — the engine pages move`}>
-          Google AI {geminiNamed}/{geminiAnswers}
+        <span className={pill + gemTone} title={`Already named on Gemini in ${geminiNamed} of ${geminiAnswers} answers — the engine pages move`}>
+          Gemini {geminiNamed}/{geminiAnswers}
         </span>
       )}
     </>
@@ -1380,7 +1380,7 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
       toast({ title: 'Need a trade and a town', description: 'Add them with the Audit button first.', variant: 'destructive' });
       return;
     }
-    if (!window.confirm(`Run a new ${OUTREACH_HOOK_QUESTIONS} questions × ChatGPT + Google AI audit for ${activeLead.business_name}?\n\nThe old result is kept. Nothing is sent to the lead.`)) return;
+    if (!window.confirm(`Run a new ${OUTREACH_HOOK_QUESTIONS} questions × ChatGPT + Gemini audit for ${activeLead.business_name}?\n\nThe old result is kept. Nothing is sent to the lead.`)) return;
     setHookRerunBusy(true);
     try {
       const { data, error } = await supabase.functions.invoke('create-ai-audit', {
@@ -1392,7 +1392,7 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
       }
       void queryClient.invalidateQueries({ queryKey: auditListQueryKey(user?.id) });
       await queryClient.invalidateQueries({ queryKey: hookVisibilityQueryKey(leadId) });
-      toast({ title: 'New audit started', description: `${OUTREACH_HOOK_QUESTIONS} questions × ChatGPT + Google AI. The old result is kept, and nothing will be sent.` });
+      toast({ title: 'New audit started', description: `${OUTREACH_HOOK_QUESTIONS} questions × ChatGPT + Gemini. The old result is kept, and nothing will be sent.` });
     } finally {
       setHookRerunBusy(false);
     }

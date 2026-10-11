@@ -572,7 +572,7 @@ console.log('\n── 18. AI scores unchanged · mixed ChatGPT / Google AI ─�
   ok(HOOK_ENGINES.length === 2, '18. two engines, as before');
   const site = { kind: 'audited', url: O, audit: buildSiteAudit(baseInput([page('/')], { robotsTxt: 'User-agent: OAI-SearchBot\nDisallow: /' })), checkedAt: null, source: 'saved' } as any;
   const pt = callPoint({ score: s, site });
-  ok(!!pt.ai && /Google AI did not name them/.test(pt.ai.headline) && pt.ai.evidence.some((e) => /Rival/.test(e)), '18. the call point names the strongest missed search and who was named instead');
+  ok(!!pt.ai && /Gemini did not name them/.test(pt.ai.headline) && pt.ai.evidence.some((e) => /Rival/.test(e)), '18. the call point names the strongest missed search and who was named instead');
   ok(pt.site?.findingId === 'robots_blocks_oai-searchbot', '18. … and the strongest website issue (HIGH first)');
   const htmlMixed = renderToStaticMarkup(createElement(ProspectAuditView, { ...viewProps(site), score: s, point: pt }));
   ok(/data-testid="pa-engine-chatgpt"/.test(htmlMixed) && /data-testid="pa-engine-gemini"/.test(htmlMixed) && /checkatrade\.com/.test(htmlMixed) && (htmlMixed.match(/data-testid="pa-ai-result"/g) ?? []).length === 6, '18. the view shows both engines, all six results and the cited sources');

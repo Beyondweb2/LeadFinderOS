@@ -26,7 +26,7 @@ export function HookAuditDialog({ lead, onOpenChange }: {
           icon={Sparkles}
           tone="purple"
           title={lead?.business_name ?? 'AI visibility check'}
-          subtitle="AI visibility check — 3 customer questions, each asked once on ChatGPT and Google AI. It runs on the server: close this any time."
+          subtitle="AI visibility check — 3 customer questions, each asked once on ChatGPT and Gemini. It runs on the server: close this any time."
         />
         {lead && <LeadHookPanel key={lead.id} leadId={lead.id} autoPropose />}
         {lead && perms.auditAdmin && (

@@ -46,7 +46,7 @@
    back to Paul's older order, and the operator is told which search the script used instead.
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 
-import { HOOK_PICK_ENGINE_ORDER, hookEngineLabel, hookMissScore, type HookPick, type HookResult } from './hookScore.ts';
+import { HOOK_PICK_ENGINE_ORDER, hookSpokenEngineLabel as hookEngineLabel, hookMissScore, type HookPick, type HookResult } from './hookScore.ts';
 import { usableRivals, excludeSelfRivals } from './rivalHook.ts';
 import { nameMatches } from './nameMatch.ts';
 import { articleTrade } from './templateVars.ts';

@@ -44,14 +44,24 @@ export const HOOK_ENGINES = ['chatgpt', 'gemini'] as const;
  *  (Paul, 2026-09-25). Named once so the pick and its test cannot disagree. */
 export const HOOK_PICK_ENGINE_ORDER = ['gemini', 'chatgpt'] as const;
 
-/** The user-facing engine names for EVERY hook-audit surface: the Inbox card, the hook report, the
- *  cold-call playbook's hook evidence (Paul, 2026-09-26: "Google AI", never "Gemini" on one surface
- *  and "Google AI" on another). `gemini` stays the internal key. */
-export const HOOK_ENGINE_LABELS: Record<string, string> = { chatgpt: 'ChatGPT', gemini: 'Google AI' };
+/** The engine names SHOWN on every hook-audit screen: the Inbox card, the audit window, the public
+ *  report (Paul, 2026-10-11: "Gemini" again, everywhere a person reads it — was "Google AI" since
+ *  2026-09-26). `gemini` stays the internal key; "Google AI Overview" is a different thing and keeps
+ *  its own name (aiOverview.ts). */
+export const HOOK_ENGINE_LABELS: Record<string, string> = { chatgpt: 'ChatGPT', gemini: 'Gemini' };
 
-/** The label for an engine key, for any hook surface. */
+/** The label for an engine key, for any hook screen. */
 export function hookEngineLabel(engine: string): string {
   return HOOK_ENGINE_LABELS[engine] ?? engine;
+}
+
+/** The engine as it is SAID — call scripts, the cold-call playbook, voice-note scripts. Unchanged by
+ *  the 2026-10-11 rename on purpose (Paul: preserve call scripts): a rep still says "I asked Google AI". */
+export const HOOK_SPOKEN_ENGINE_LABELS: Record<string, string> = { chatgpt: 'ChatGPT', gemini: 'Google AI' };
+
+/** The spoken name for an engine key. */
+export function hookSpokenEngineLabel(engine: string): string {
+  return HOOK_SPOKEN_ENGINE_LABELS[engine] ?? engine;
 }
 
 /** Questions per new hook audit. */

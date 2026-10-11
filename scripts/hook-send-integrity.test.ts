@@ -2,7 +2,7 @@
      A/B. the WhatsApp rivals are the SELECTED hook result's own competitors (same question, same
           engine), driven through the real resolveAuditReplyVars and the real payload builder;
      C/D. a new hook has exactly three questions, topped up safely, or it is incomplete;
-     E.   every user-facing hook surface says "Google AI", never "Gemini". */
+     E.   every hook SCREEN says "Gemini" (2026-10-11); a spoken script still says "Google AI". */
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { HOOK_ENGINE_LABELS, HOOK_SCORE_QUESTIONS, initialHookStateV2, scoreHookRun, topUpHookQuestions, type HookScoreRow } from '../src/lib/hookScore.ts';
@@ -172,9 +172,9 @@ await (async () => {
   /* (The 6/6 "Not interested" writer this used to call is RETIRED 2026-10-04 (Paul, fix/07): an audit result never changes a lead's status.) */
 })();
 
-/* E. Every user-facing hook surface says Google AI. */
+/* E. Every hook screen says Gemini; spoken scripts say Google AI (HOOK_SPOKEN_ENGINE_LABELS). */
 {
-  ok(HOOK_ENGINE_LABELS.gemini === 'Google AI' && HOOK_ENGINE_LABELS.chatgpt === 'ChatGPT', 'E: one label map: ChatGPT / Google AI');
+  ok(HOOK_ENGINE_LABELS.gemini === 'Gemini' && HOOK_ENGINE_LABELS.chatgpt === 'ChatGPT', 'E: one label map: ChatGPT / Gemini');
   const c = (n: boolean) => ({ named: n, self_named: n, answer_text: n ? `Try ${BIZ} or Sparks Ltd.` : 'Try Sparks Ltd, Volt Electrical or Power Co.', competitors: ['Sparks Ltd', 'Volt Electrical', 'Power Co'], citations: [] });
   for (const g of [[true, false, true], [true, true, true]]) {
     const qr = Q.map((q, i) => ({ id: String(i), question: q, status: 'done', result: { chatgpt: c(true), gemini: c(g[i]) } }));
@@ -183,16 +183,16 @@ await (async () => {
     const html = renderReportHtml({ ...(d as object), generatedAtLabel: '26 September 2026' } as never);
     const text = html.replace(/<style[\s\S]*?<\/style>/g, '').replace(/<script[\s\S]*?<\/script>/g, '').replace(/<[^>]+>/g, ' ');
     const label = g.every(Boolean) ? '6/6 hook report' : 'gap hook report';
-    ok(!/gemini/i.test(text) && /Google AI/.test(text), `E: the ${label} says Google AI and never Gemini`);
+    ok(!/Google AI(?! Overview)/.test(text) && /Gemini/.test(text), `E: the ${label} says Gemini and never "Google AI"`);
     // Soft redesign (2026-10-06): the verdict covers the whole score; the featured question's answer cards name their engine.
-    if (d?.hook?.gap) ok(/^You're (not being named|being named)/.test(hookReportCopy(d.hook, BIZ).headline) && /Featured question[\s\S]*?Google AI/i.test(text), 'E: the verdict covers the whole check and the featured question names Google AI on its answer card');
+    if (d?.hook?.gap) ok(/^You're (not being named|being named)/.test(hookReportCopy(d.hook, BIZ).headline) && /Featured question[\s\S]*?Gemini/i.test(text), 'E: the verdict covers the whole check and the featured question names Gemini on its answer card');
   }
   const root = resolve(import.meta.dirname, '..');
   const strip = (src: string) => src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
   const card = strip(readFileSync(resolve(root, 'src/components/HookVisibilityCard.tsx'), 'utf8') + readFileSync(resolve(root, 'src/components/HookVisibilityView.tsx'), 'utf8'));
-  ok(!/Gemini/.test(card), 'E: the Inbox AI visibility card never says Gemini');
+  ok(!/Google AI(?! Overview)/.test(card), 'E: the Inbox AI visibility card never says "Google AI" for Gemini');
   const inbox = readFileSync(resolve(root, 'src/pages/Inbox.tsx'), 'utf8');
-  ok(inbox.includes('Google AI {geminiNamed}/{geminiAnswers}') && !/>\s*Gemini \{geminiNamed\}/.test(inbox), 'E: the Inbox list pill reads "Google AI n/m"');
+  ok(inbox.includes('Gemini {geminiNamed}/{geminiAnswers}') && !inbox.includes('Google AI {geminiNamed}'), 'E: the Inbox list pill reads "Gemini n/m"');
   const playbook = strip(readFileSync(resolve(root, 'src/lib/coldCallPlaybook.ts'), 'utf8'));
   ok(!/Gemini/.test(playbook), 'E: the cold-call playbook script says Google AI');
 }

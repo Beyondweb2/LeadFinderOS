@@ -298,7 +298,10 @@ Full history and reasoning: `docs/business-and-offer.md`, `docs/measurement.md`.
   areas** (Paul, 2026-09-23; was home-town-only from 2026-09-12; older frozen sets stay as they
   were). **Scored engines: ChatGPT + Gemini only** (`SCORED_ENGINES`). ⛔ Google AI Overview IS
   collected and SHOWN on every new audit (2026-10-11, `docs/ai-overview.md`, `src/lib/aiOverview.ts`) but is DISPLAY ONLY —
-  never scored, never in the guarantee, never claim it is measured. "The number" = named answers ÷ answered answers pooled over every frozen question,
+  never scored, never in the guarantee, never claim it is measured. The actor input asks for the FULL overview
+  EXPLICITLY (`scrapeFullAiOverview: true`, Paul 2026-10-11, ~+$0.002 a question shown) — never rely on the actor
+  default. ⛔ **Screens say "Gemini"; spoken scripts say "Google AI"** (Paul, 2026-10-11): `HOOK_ENGINE_LABELS` vs
+  `HOOK_SPOKEN_ENGINE_LABELS` (`hookScore.ts`) — call script, playbook and voice note use the spoken one. "The number" = named answers ÷ answered answers pooled over every frozen question,
   replay vs baseline (`compareMeasurements` → `numberWentUp`). Same rule on Build and Optimise; only
   the clock is four weeks for every new client (`remeasureWeeksFor` always returns 4 since 2026-10-02). If the number has not
   gone up, they email within 14 days of their results and get the £99 back, **plus the first monthly

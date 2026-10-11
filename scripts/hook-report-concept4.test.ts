@@ -106,7 +106,7 @@ function report(grid: Array<[Cell, Cell]>, extra: Record<string, unknown> = {}, 
   const run = { id: 'r1', run_number: 1, status: 'complete', mention_rate: 0, created_at: '2026-10-06T10:00:00Z', results: { hook, competitor_cleaning: { complete: true, at: 'x', attempts: 1, errors: [] } } };
   const qr = grid.map(([c, g], i) => ({ id: `q${i}`, question: Q[i], status: 'done', result: { chatgpt: cell(c), gemini: cell(g) } }));
   const d = buildReportData(qr as never, run as never, { businessName: BIZ, businessType: 'roofer', locationText: TOWN, specialisms: '', isAggregatorUrl: () => false, hasWebsite: true });
-  const html = renderReportHtml({ ...(d as object), generatedAtLabel: '6 October 2026', showOffer: true, offerUrl: '#', auditId: 'a1', requestCallUrl: '#', ...extra } as never);
+  const html = renderReportHtml({ ...(d as object), generatedAtLabel: '6 October 2026', showOffer: true, offerUrl: '#', auditId: 'a1', requestCallUrl: 'https://x.invalid/functions/v1/request-call', ...extra } as never);
   return { d: d!, html, t: text(html) };
 }
 const miss = (rivals: string[], text?: string): Cell => ({ named: false, rivals, text });
@@ -124,9 +124,9 @@ const hit = (rivals: string[]): Cell => ({ named: true, rivals });
   ok(/3 questions × 2 AI engines × 1 ask each · 6 answers total/.test(r.t.replace(/&times;/g, '×').replace(/&middot;/g, '·')), 'C: the header reminds the reader of the method, from the real score shape');
   ok(r.html.indexOf('class="q4-score"') < r.html.indexOf('Featured question'), 'C: the score comes before the featured question');
   ok(quickEngineTone(0, 3) === 'red' && quickEngineTone(1, 3) === 'amber' && quickEngineTone(2, 3) === 'green' && quickEngineTone(3, 3) === 'green' && quickEngineTone(0, 0) === '', 'C: engine colours 0 red, 1 amber, 2-3 green, no denominator none');
-  ok(/q4-eng--gpt[\s\S]*?ChatGPT[\s\S]*?q4-eng-v q4-t-amber">33%/.test(r.html) && /q4-eng--gai[\s\S]*?Google AI[\s\S]*?q4-eng-v q4-t-red">0%/.test(r.html), 'C: ChatGPT 1/3 (33%) amber, Google AI 0/3 (0%) red — tint identifies the engine, colour grades the result');
+  ok(/q4-eng--gpt[\s\S]*?ChatGPT[\s\S]*?q4-eng-v q4-t-amber">33%/.test(r.html) && /q4-eng--gai[\s\S]*?Gemini[\s\S]*?q4-eng-v q4-t-red">0%/.test(r.html), 'C: ChatGPT 1/3 (33%) amber, Gemini 0/3 (0%) red — tint identifies the engine, colour grades the result');
   ok(/class="q4-t-red">17%/.test(r.html), 'C: 17% overall reads red (poor)');
-  ok(!/Gemini/.test(r.t), 'C: the page says Google AI, never Gemini');
+  ok(!/Google AI(?! Overview)/.test(r.t) && /Gemini/.test(r.t), 'C: the page says Gemini, never "Google AI" (2026-10-11)');
 
   /* ── D. Featured question: BOTH engines' answers to the strongest missed question ── */
   const f = r.d.hook!.featured!;
@@ -143,7 +143,7 @@ const hit = (rivals: string[]): Cell => ({ named: true, rivals });
 
   /* ── E. Rival count across all six answers ── */
   ok(r.d.hook!.rivalsNamedInstead === 5, `E: rivals across the misses, de-duplicated (got ${r.d.hook!.rivalsNamedInstead}: Ridge Roofing = Ridge Roofing Ltd; the named answer’s list is not counted)`);
-  ok(/5 of 6 answers didn’t name you/.test(r.t) && /5 competitors were named instead/.test(r.t), 'E: why-this-matters shows the supported figures');
+  ok(/5\/6 answers didn’t name you/.test(r.t) && /5 different businesses named instead/.test(r.t), 'E: why-this-matters shows the supported figures (yellow tiles, 2026-10-11)');
 }
 
 /* ── F. Normalising and counting ─────────────────────────────────────────────────────────────── */
@@ -167,7 +167,7 @@ const hit = (rivals: string[]): Cell => ({ named: true, rivals });
   ok(counted!.rivalsNamedInstead === 4, 'G: with the gate open, all six answers are counted (Top Tiles once + Rival 0-2)');
   const r = report([[miss(['Top Tiles Ltd']), miss(['Slate Masters'])], [miss(['Top Tiles Ltd']), miss(['Slate Masters'])], [miss(['Top Tiles Ltd']), miss(['Slate Masters'])]]);
   const html = r.html.replace(/data-x/g, '');
-  ok(/competitors were named instead|competitor was named instead/.test(r.t), 'G: (control) an open run prints the count');
+  ok(/different (?:businesses|business) named instead/.test(r.t), 'G: (control) an open run prints the count');
   const d = { ...(r.d as object), hook: { ...r.d.hook!, rivalsNamedInstead: null } };
   const t2 = text(renderReportHtml({ ...d, generatedAtLabel: '6 October 2026' } as never));
   ok(!/named instead\s*$/.test(t2) && !/competitors? (were|was) named instead/.test(t2), 'G: a withheld count is omitted from why-this-matters');
@@ -179,8 +179,8 @@ const hit = (rivals: string[]): Cell => ({ named: true, rivals });
   const r = report([[miss(['Top Tiles Ltd']), miss(['Ridge Roofing Ltd', 'Slate Masters', 'Tile Doctors'], MAP_ONLY)], [miss(['Top Tiles Ltd']), miss(['Slate Masters'])], [miss(['Top Tiles Ltd']), miss(['Slate Masters'])]]);
   ok(r.d.hook!.gap!.question === Q[0] && r.d.hook!.gap!.engine === 'gemini', 'H: (setup) the map-only answer is the featured one');
   const gai = r.html.slice(r.html.indexOf('class="q4-ans q4-ans--gai"'), r.html.indexOf('</article>', r.html.indexOf('class="q4-ans q4-ans--gai"')));
-  ok(!gai.includes('q4-ans-body') && gai.includes('q4-ans-none'), 'H: no excerpt when nothing readable survives');
-  ok(/Google AI answered without naming/.test(r.t) && /Named instead[\s\S]*Ridge Roofing Ltd/.test(text(gai)) && /q4-chip--n/.test(gai), 'H: the result and the names still show, stated from the data');
+  ok(!/class="q4-snip"/.test(gai) && gai.includes('q4-snip--none'), 'H: no excerpt when nothing readable survives');
+  ok(/Gemini answered without naming/.test(r.t) && /Named instead of you[\s\S]*Ridge Roofing Ltd/i.test(text(gai)) && /q4-chip--n/.test(gai), 'H: the result and the names still show, stated from the data');
   ok(!/stars rating|gstatic|📍/.test(r.t), 'H: no garbage printed');
 
   /* A NAMED answer that mentions the client only late: the excerpt starts at that passage, marked "…". */
@@ -249,17 +249,19 @@ const hit = (rivals: string[]): Cell => ({ named: true, rivals });
   const c4 = report(grid);
   const v1 = { version: 1, planned: [Q[0]], executed: 1, next_index: 1, stop_reason: 'visibility_gap_found', named_in: [], gap: { question_index: 0, question: Q[0], engine: 'gemini', target_named: false, named_instead: ['B Co'], citations: [], named_on_engines: [], answer_excerpt: '' } };
   const old = report(grid, {}, v1);
-  const frag = (h: string) => h.slice(h.indexOf('<section class="cta">'), h.indexOf('</footer>') + 9);
-  /* CTA wording on the SIX-ANSWER report only (Paul, 2026-10-06): heading "Want to improve your AI
-     visibility?", primary button "Improve AI visibility" (no price, same onboarding link). Everything
-     else in the CTA + footer is byte-identical to the existing hook report's. */
-  const swapped = frag(old.html).replace('<h3>Want to be one of the names?</h3>', '<h3>Want to improve your AI visibility?</h3>').replace('>Get started &mdash; &pound;99</a>', '>Improve AI visibility</a>');
-  ok(frag(c4.html).length > 500 && frag(c4.html) === swapped, 'K: the six-answer CTA + footer differ from the existing one ONLY in the heading and the primary button text');
-  ok(/Want to improve your AI visibility\?/.test(c4.t) && c4.html.includes('class="cta-btn start" href="#" target="_blank" rel="noopener noreferrer">Improve AI visibility</a>') && !/Get started/.test(c4.t), 'K: new heading, and the primary button says "Improve AI visibility" with no price');
-  ok(/>Request a call</.test(c4.html) && /class="cta-btn wa" href="https:\/\/wa\.me\/447943262742\?text=[^"]+"[^>]*>Ask me anything</.test(c4.html), 'K: Request a call kept; Ask me anything goes to Paul’s WhatsApp (wa.me)');
+  /* THE SIX-ANSWER REPORT'S CLOSING BAND (restyle, Paul 2026-10-11): the dark card band — "Want to be the
+     one AI names?", the SAME three buttons (onboarding link, the call form POST, WhatsApp), the site link,
+     the locked guarantee sentence in a card, and Prepared for / Report date / Measured on as three cards.
+     Every other report keeps the .cta section + .site-foot exactly as before. */
+  const foot = c4.html.slice(c4.html.indexOf('<footer class="q4-foot">'), c4.html.indexOf('</footer>') + 9);
+  ok(foot.length > 500 && !c4.html.includes('<section class="cta">') && !c4.html.includes('<footer class="site-foot">'), 'K: the six-answer report closes with the q4 band, not the old CTA + footer');
+  ok(/Want to be the one AI names\?/.test(c4.t) && foot.includes('class="cta-btn start" href="#" target="_blank" rel="noopener noreferrer">Improve AI visibility</a>') && !/Get started/.test(c4.t), 'K: new heading, and the primary button says "Improve AI visibility" with no price');
+  ok(/<form method="POST" action="[^"]+request-call"[^>]*><input type="hidden" name="audit" value="[^"]+"><button type="submit" class="cta-btn call">Request a call<\/button><\/form>/.test(foot) && /class="cta-btn wa" href="https:\/\/wa\.me\/447943262742\?text=[^"]+"[^>]*>Ask me anything</.test(foot), 'K: Request a call is the same POST form; Ask me anything goes to Paul’s WhatsApp (wa.me)');
+  ok(foot.includes('See how it works at findable.live') && /Prepared for[\s\S]*Report date[\s\S]*Measured on/.test(foot) && /q4-foot-card/.test(foot), 'K: the site link and the three cards are there');
   ok(c4.t.includes(REMEASURE_CLAIM_SENTENCE.replace(/'/g, '’')), 'K: the locked guarantee sentence is unchanged');
-  ok(/Want to be one of the names\?/.test(old.t) && old.html.includes('Get started &mdash; &pound;99'), 'K: other reports keep "Want to be one of the names?" and "Get started — £99"');
-  ok(c4.html.indexOf('class="q4-why"') < c4.html.indexOf('<section class="cta">'), 'K: why-this-matters comes before the CTA');
+  ok(/Want to be one of the names\?/.test(old.t) && old.html.includes('Get started &mdash; &pound;99') && old.html.includes('<footer class="site-foot">'), 'K: other reports keep "Want to be one of the names?", "Get started — £99" and their footer');
+  ok(c4.html.indexOf('q4-panel--why') < c4.html.indexOf('<footer class="q4-foot">'), 'K: why-this-matters comes before the closing band');
+  ok(!/#(?:4285F4|1a73e8|0c1322|121726|eef1f8)\b/i.test(c4.html), 'K: no blue anywhere on the six-answer report (the old navy / Google-blue values are gone)');
 
   /* ── L. Older / other reports unchanged ── */
   ok(!old.html.includes('q4-head') && old.html.includes('<header class="band">'), 'L: a version-1 hook report keeps the wave band, no Concept 4');

@@ -647,7 +647,7 @@ export function LeadHookPanel({ leadId, autoPropose = false, variant }: { leadId
       {variant !== 'call' && reportAuditId && hook?.report?.kind === 'ready' && hook.report.isCurrent && <ReportSharePanel leadId={lead.id} auditId={reportAuditId} />}
       {proposed && (
         <section className={cn(CARD, 'space-y-2')} data-testid="hook-proposed-questions">
-          <div className={LABEL}>The {proposed.length} questions we will ask ChatGPT and Google AI — edit any of them</div>
+          <div className={LABEL}>The {proposed.length} questions we will ask ChatGPT and Gemini — edit any of them</div>
           <div className="space-y-1.5">
             {proposed.map((q, i) => (
               <div key={i} className="flex items-center gap-2">
@@ -714,7 +714,7 @@ export function LeadHookPanel({ leadId, autoPropose = false, variant }: { leadId
         /* Compact until there is something to show (declutter pass, 2026-10-01): the name, "Not run yet", the one
            button; what it does is on hover. The proposed questions, the run, the result and history are unchanged. */
         <section className={cn(CARD, 'flex flex-wrap items-center justify-between gap-2 py-2.5')} data-testid="hook-not-run"
-          title="Asks ChatGPT and Google AI the questions a customer would, and shows who they name instead. Nothing is sent to the lead.">
+          title="Asks ChatGPT and Gemini the questions a customer would, and shows who they name instead. Nothing is sent to the lead.">
           <div className="flex items-center gap-1.5 text-xs">
             <Sparkles className="h-3.5 w-3.5 text-primary" /><span className="font-medium text-foreground">AI visibility check</span>
             <span className="text-muted-foreground">· Not run yet</span>

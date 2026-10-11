@@ -22,6 +22,24 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-11-report-restyle-gemini', date: '2026-10-11', title: 'New look for the AI visibility report, and "Gemini" is back', audience: 'all',
+    body: 'The report you send has a new look: the businesses named instead of the client are big yellow pills, with two lines of what the AI said under them. Screens say "Gemini" again instead of "Google AI", and Google AI Overview now comes back in full.',
+    report: {
+      added: [
+        'Each answer card on the report shows "Named instead of you" with the businesses as yellow pills.',
+        'In "All questions we asked", every missed answer shows the top business named instead, plus "+n more".',
+        'Google AI Overview has three clear states: "No overview shown", "Overview shown, no businesses named", or the names it gave.',
+        'Google AI Overview is now fetched in full (it used to stop at Google’s "Show more"), so its business names can be picked out. This adds about $0.002 per search that shows one.',
+      ],
+      changed: [
+        'The report’s top and bottom are near-black, the page is warm cream, and "Why this matters" is three yellow tiles. Every button and link works as before, and opening a report from the app still does not count as the prospect opening it.',
+        'The report, the Inbox card and the audit window say "Gemini" instead of "Google AI". Call scripts and voice-note scripts still say "Google AI" out loud.',
+        'The "competitors named instead" figure counts each business once even when the two AIs spell it differently, so it can read slightly lower than before.',
+        'Old reports show the new look, from their saved results.',
+      ],
+      removed: [],
+      effect: 'The report is quicker to read: who the AI named instead of the client is the first thing they see. The score is still 3 questions × ChatGPT and Gemini = 6 answers.',
+    } },
   { id: '2026-10-11-ai-overview', date: '2026-10-11', title: 'AI checks now show Google AI Overview too', audience: 'all',
     body: 'New AI checks (quick check, Discovery, baseline) show three answers per search: ChatGPT, Google AI and Google’s AI Overview. The AI Overview is shown for context and is not counted in the score.',
     report: {

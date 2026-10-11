@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import { mayForceRecrawl } from '@/lib/prospectCrawl';
 import type { HookOverview, HookResult, HookScore } from '@/lib/hookScore';
-import { AI_OVERVIEW_LABEL, AI_OVERVIEW_NOT_SCORED, NO_OVERVIEW_DETAIL, NO_OVERVIEW_TEXT, overviewSummary } from '@/lib/aiOverview';
+import { AI_OVERVIEW_LABEL, AI_OVERVIEW_NOT_SCORED, NO_OVERVIEW_DETAIL, NO_OVERVIEW_TEXT, OVERVIEW_NO_NAMES_TEXT, overviewSummary } from '@/lib/aiOverview';
 import { AUDIT_SEVERITY_LABELS, groupFindings, severityCounts, type AuditFinding, type AuditSeverity, type SiteAudit } from '@/lib/siteAudit';
 import {
   NO_WEBSITE_ON_FILE_TEXT, NO_WEBSITE_TEXT, NO_WEBSITE_WHY, callPoint, coverageLine, engineSections, hostOf, type WebsiteState,
@@ -238,7 +238,8 @@ function OverviewResult({ o, rivalsWithheld }: { o: HookOverview; rivalsWithheld
         <ToneChip tone={tone} dot>{word}</ToneChip>
         {o.state === 'not_shown' && <span className="text-muted-foreground">{NO_OVERVIEW_DETAIL}</span>}
         {o.state === 'shown' && !o.named && (rivalsWithheld ? <span className="italic text-muted-foreground">names withheld (competitor list failed cleaning)</span>
-          : o.competitors.length ? <span className="break-words">Named instead: <b>{o.competitors.slice(0, 5).join(', ')}</b></span> : null)}
+          : o.competitors.length ? <span className="break-words">Named instead: <b>{o.competitors.slice(0, 5).join(', ')}</b></span>
+          : <span className="text-muted-foreground" data-testid="pa-overview-no-names">{OVERVIEW_NO_NAMES_TEXT}</span>)}
       </p>
       {o.state === 'shown' && o.citations.length > 0 && (
         <p className="mt-1 flex flex-wrap gap-1 text-[11px]">
@@ -255,7 +256,7 @@ function OverviewResult({ o, rivalsWithheld }: { o: HookOverview; rivalsWithheld
           <button type="button" onClick={() => setOpen((v) => !v)} className="mt-1 inline-flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground" aria-expanded={open}>
             {open ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />} {open ? 'Hide the overview' : 'Read the overview'}
           </button>
-          {open && <p className="mt-1.5 whitespace-pre-wrap break-words rounded-xl bg-muted/40 p-2.5 text-xs leading-relaxed">{o.answerText.slice(0, 1500)}</p>}
+          {open && <p className="mt-1.5 whitespace-pre-wrap break-words rounded-xl bg-muted/40 p-2.5 text-xs leading-relaxed">{(o.fullText || o.answerText).slice(0, 1500)}</p>}
         </>
       )}
     </li>

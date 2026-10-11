@@ -46,7 +46,7 @@ import { excludeSelfRivals } from './rivalHook.ts';
 import { nameMatches } from './nameMatch.ts';
 import { displayBusinessName } from './displayName.ts';
 import { articleTrade, pluraliseTrade } from './templateVars.ts';
-import { HOOK_ENGINE_LABELS, HOOK_SCORE_RESULTS } from './hookScore.ts';
+import { HOOK_SPOKEN_ENGINE_LABELS, HOOK_SCORE_RESULTS } from './hookScore.ts';
 import { isRealSend } from './realSend.ts';
 import { REPORT_LINK_TEMPLATES } from './templateAttribution.ts';
 import { readableTemplateBody } from './templateBodies.ts';
@@ -628,12 +628,12 @@ function tradeSpoken(audit: PlaybookAudit | null, lead: PlaybookLead): string | 
   return null;
 }
 
-/** The engine as it is said out loud. The report labels Gemini "Gemini"; the product says Google AI
- *  (HOOK_ENGINE_LABELS), and so does every script. */
+/** The engine as it is said out loud. The report labels Gemini "Gemini"; a rep says Google AI
+ *  (HOOK_SPOKEN_ENGINE_LABELS, hookScore.ts), and so does every script. */
 export function spokenEngine(label: string | null | undefined): string {
   let l = clean(label);
   if (!l) return 'AI';
-  for (const [key, said] of Object.entries(HOOK_ENGINE_LABELS)) l = l.replace(new RegExp('\\b' + key + '\\b', 'gi'), said);
+  for (const [key, said] of Object.entries(HOOK_SPOKEN_ENGINE_LABELS)) l = l.replace(new RegExp('\\b' + key + '\\b', 'gi'), said);
   return l;
 }
 

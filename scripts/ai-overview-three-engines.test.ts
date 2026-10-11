@@ -82,7 +82,7 @@ const fresh = render(['missed', 'named', 'none']);
 const old = render(['old', 'old', 'old']);
 ok(fresh.d.hook?.score?.total === old.d.hook?.score?.total && fresh.d.hook?.score?.named === old.d.hook?.score?.named, 'E: the quick report’s score is identical with or without overviews');
 ok(/Google AI Overview/.test(fresh.t), 'E: the quick public report shows Google AI Overview');
-ok(/not counted in the score/.test(fresh.t) && /not scored/.test(fresh.t), 'E: and says it is not counted');
+ok(/Shown for context, not scored/.test(fresh.t) && /not scored/.test(fresh.t), 'E: and says it is not scored');
 ok(fresh.t.includes(NO_OVERVIEW_TEXT), 'E: the "No overview shown" state appears for the question with none');
 ok(/plus Google’s AI Overview, shown for context/.test(fresh.t), 'E: the header method line mentions it');
 ok(!/AI Overview/.test(old.t), 'E: an OLD hook report is unchanged — no overview anywhere');
@@ -103,6 +103,48 @@ ok(oldRow.notShown === undefined && oldRow.overviewRecorded === undefined, 'E: a
   ok(['SmartOhm', 'Commercial', 'fit-outs', '0113 436 0017'].every((w) => r.includes(w)), "F: no word is written and none of the overview's own words is lost");
   const ec = (await import('node:fs')).readFileSync('supabase/functions/extract-competitors/index.ts', 'utf8');
   ok(/engine === AI_OVERVIEW_ENGINE \? overviewReadableText\(raw\) : raw/.test(ec), 'F: extract-competitors reads the overview (only) through overviewReadableText');
+}
+
+/* ── G. Report restyle + overview states + names (2026-10-11) ───────────────────────────────── */
+{
+  const { overviewSummaryText, overviewFullText, OVERVIEW_NO_NAMES_TEXT } = await import('../src/lib/aiOverview.ts');
+  const { countDistinctBusinesses, distinctNames, normaliseRivalName } = await import('../src/lib/hookAudit.ts');
+  /* S P Electrical's stored snippet (fga54n): a sentence glued to the next heading. */
+  const sp = overviewSummaryText('Top commercial electrical contractors in Leeds, UK provide specialized installations, testing, fit-outs, and maintenance for businesses, offices, retail spaces, and industrial facilities.Top Commercial Electricians in Leeds');
+  ok(sp.text.endsWith('industrial facilities.') && !/Top Commercial Electricians/.test(sp.text) && sp.truncated, 'G: a glued trailing heading is dropped and the text marked as continuing');
+  const maps = overviewSummaryText('You can call Wirral 24 Hour Plumber at 0151 691 0258 for help in Wallasey.Wirral 24 Hour Plumber4.8(105)PlumberOpen5 Moorcroft RdPhone: 0151 691');
+  ok(maps.text === 'You can call Wirral 24 Hour Plumber at 0151 691 0258 for help in Wallasey.' && maps.truncated, 'G: the summary stops before a Google Maps card');
+  ok(!/clipboard/i.test(overviewFullText('One. Two sentences here.Learn moreCopied to clipboard')), 'G: the full text drops Google\'s copy controls');
+  ok(overviewSummaryText('').text === '', 'G: empty in, empty out (never a placeholder)');
+  /* The duplicate rule (S P Electrical read four firms as four). */
+  const k = (n: string) => normaliseRivalName(n, 'Leeds');
+  ok(countDistinctBusinesses([k('Martin Day Electrician'), k('Martin Day Commercial Electricians'), k('Coleman Electrical Services'), k('Coleman Electrical & Security')]) === 2, 'G: two spellings of one firm count once');
+  ok(countDistinctBusinesses([k('AB Roofing'), k('ABC Roofing'), k('HG Electrical'), k('HPS Electrical')]) === 4, 'G: different firms stay different');
+  ok(JSON.stringify(distinctNames(['Brightlec Ltd', 'Brightlec', 'Volta Compliance'], 'Leeds')) === JSON.stringify(['Brightlec Ltd', 'Volta Compliance']), 'G: one name per business, first spelling kept');
+
+  /* The quick report: three overview states, table pills, "+n more", one colour per business. */
+  const many = ['Ridge Roofing Ltd', 'Slate Masters', 'Top Roofs'];
+  const cellOf = (named: boolean, names: string[]) => ({ named, self_named: named, answer_text: named ? `Try ${BIZ} for roofing, they are well reviewed across Leeds and nearby towns for repairs.` : `Good options include ${names.join(', ')} for roofing work across Leeds and nearby towns, all well reviewed.`, competitors: named ? [] : names, citations: [] });
+  const rows3 = Q.map((question, i) => {
+    const result: Record<string, unknown> = { chatgpt: cellOf(false, many), gemini: cellOf(false, i === 0 ? ['Ridge Roofing Services Ltd'] : many) };
+    if (i === 0) { result.ai_overview = cellOf(false, ['Slate Masters', 'Top Roofs']); result[AI_OVERVIEW_STAMP_KEY] = 'shown'; }
+    if (i === 1) { result.ai_overview = { ...cellOf(false, []), answer_text: 'Roofers in Leeds handle repairs, flat roofs and storm damage for homeowners across the city.' }; result[AI_OVERVIEW_STAMP_KEY] = 'shown'; }
+    if (i === 2) result[AI_OVERVIEW_STAMP_KEY] = 'not_shown';
+    return { id: `g${i}`, question, status: 'done', result };
+  });
+  const run = { id: 'r1', run_number: 1, status: 'complete', mention_rate: 0, created_at: '2026-10-11T10:00:00Z', results: { hook: state, competitor_cleaning: { complete: true, at: 'x', attempts: 1, errors: [] } } };
+  const d = buildReportData(rows3 as never, run as never, { businessName: BIZ, businessType: 'roofer', locationText: 'Leeds', specialisms: '', isAggregatorUrl: () => false, hasWebsite: true });
+  const html = renderReportHtml({ ...(d as object), generatedAtLabel: '11 October 2026', showOffer: true, offerUrl: '#', auditId: 'a1', requestCallUrl: '#' } as never);
+  const tt = text(html);
+  ok(/Named instead of you/.test(tt) && /class="q4-name">Ridge Roofing Ltd</.test(html), 'G: the answer card shows the names named instead as pills');
+  ok(/data-overview="shown"[\s\S]*?Shown for context, not scored/.test(html), 'G: the overview row is labelled shown for context, not scored');
+  ok(tt.includes(OVERVIEW_NO_NAMES_TEXT) && tt.includes(NO_OVERVIEW_TEXT), 'G: the table distinguishes "no businesses named" from "no overview shown"');
+  ok(/q4-np q4-np--\w+">Ridge Roofing Ltd<\/span><span class="q4-np-more">\+2 more</.test(html), 'G: a table cell shows the top business and "+n more"');
+  const tones = [...html.matchAll(/q4-np q4-np--(\w+)">(Ridge Roofing[^<]*)</g)].map((m) => m[1]);
+  ok(tones.length >= 2 && new Set(tones).size === 1, 'G: one business wears one colour across the table, whatever the spelling');
+  ok(!/q4-np--blue|#4285F4/i.test(html), 'G: no blue pill or mark');
+  ok(/Measured on[\s\S]*ChatGPT, Gemini and Google AI Overview/.test(tt), 'G: "Measured on" names all three');
+  ok(d!.hook!.score!.total === 6, 'G: the score is still 3 × 2 = 6');
 }
 
 console.log(f ? `\n${f} FAILED` : '\nall passed');
