@@ -109,6 +109,14 @@ for (const [k, cap] of [[1000, 1000], [1001, 1000], [5222, 1000], [12000, 1000],
   try { await fetchPagesAfterFirst<Row>(server(rows(5222), 1000, 3000), (r) => r.id, rows(1000), 5222); } catch { threw = true; }
   ok(threw, "a failed background page throws (the hook turns it into phase 'failed')");
 }
+{ // one page stalls ONCE (a database stall) → retried, the list still completes (2026-10-11)
+  const all = rows(3500);
+  const base = server(all);
+  let calls = 0;
+  const flaky = (from: number, to: number) => { calls++; return calls === 2 ? Promise.resolve({ data: null, error: { message: "canceling statement due to statement timeout" } }) : base(from, to); };
+  const got = await fetchPagesAfterFirst<Row>(flaky, (r) => r.id, all.slice(0, 1000), 3500);
+  ok(got.length === 3500, `a page that fails once is retried and the list completes (${got.length} of 3,500)`);
+}
 ok((await fetchPagesAfterFirst<Row>(server(rows(400)), (r) => r.id, rows(400), 400)).length === 400, "under 1,000 with a matching count: no further request needed");
 
 console.log("── a failed background load ──");
