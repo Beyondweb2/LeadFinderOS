@@ -157,7 +157,7 @@ ok(c.technicallyClean && sc.primary?.kind === 'missing_core_service_pages', `C: 
 const d = research(CLEAN, W, { audit: auditGap });
 const cd = ctxFor(d);
 ok(cd.selection.primary === null && cd.primaryRequired === false, 'D: a clean site has no primary finding — none is invented');
-ok(/No website finding is strong enough to use\. Do NOT invent one\. The site itself is not badly built: say so honestly, then use the strongest true point you have: AI still isn't linking them strongly enough/.test(buildReplyPrompt(cd)), 'D: say the site is not badly built, then explain the visibility gap');
+ok(/No website finding is strong enough to use\. Do NOT invent one or claim any fault\. The site itself is not badly built: you may say so honestly\. GENERAL LINE/.test(buildReplyPrompt(cd)), 'D: say the site is not badly built, then the general line (2026-10-12)');
 ok(checkReply(`${price}\n\nyour site itself isn't badly built, but ai still isn't linking you strongly enough with plumber searches in scunthorpe.\n\n${tail}`, cd).problems.length === 0, 'D: an honest no-finding reply passes, nothing invented');
 ok(checkReply(`${price}\n\nyour site itself isn't badly built.\n\n${tail}`, cd).warnings.some((w) => /No website finding was strong enough/.test(w)), 'D: Paul is told no website finding was used');
 

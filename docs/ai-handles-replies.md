@@ -56,3 +56,26 @@ The model is still told whether the hook has gone (`hookTemplate` null before it
 crawl). Used by `crawl-check` and `_shared/crawl-job.ts` (→ redeploy crawl-check, crawl-worker).
 
 Tests: `scripts/ai-reply-drafts.test.ts`, `scripts/warm-stage.test.ts` (no-hook case). Migration `20261022090000_ai_handles_replies.sql`.
+
+## Names and real site issues in drafts (2026-10-12)
+
+**Cause of the Safety First Electrical draft** ("it named a few other businesses … found some things we could fix"): it came
+from the Inbox's **Draft reply** (fn `warm-lead-reply`), not the switch worker (`ai_reply_drafts` held 0 rows; the switch is off).
+Its audit (`59e6d496`, 3 questions) HAD recorded names on every engine, e.g. Gemini: GF Electrical Contractors Ltd, NIC
+Electrical Solutions Ltd, Glasby Electrical Ltd. The warm prompt never passed names to the model: its AI VISIBILITY line said
+"the competitors were in Paul's hook; do not list them again" for every lead, but here the hook had NOT been sent (only
+`initial_contact`). There was no saved research, so the model was told "do not mention anything specific", wrote a vague
+"found some things" instead, and nothing checked for that. The stored crawl had called the site strong.
+
+**Fix** — one leaf, `src/lib/draftEvidence.ts`, read by both drafters:
+- names: `draftNames` (≤3, `hookAudit.distinctNames`), loaded once in `_shared/site-research.ts` `loadAuditContext` from
+  `resolveAuditReplyVars` (the hook search's own cell) with the engine it came from (`AuditContext.engine`).
+- engine words: `draftEngineWords` — `HOOK_SPOKEN_ENGINE_LABELS` lower-cased: Gemini → "google ai", ChatGPT → "chatgpt", else "ai".
+- site: the stored crawl through `coldCallPlaybook.selectFindings` (≤2). Only status `findings` hands issues over; clean,
+  strong, failed, stale → `GENERIC_SITE_LINE` (no fault). No website → `NO_SITE_LINE`.
+- checks: `vagueSiteClaim`, names missing before the hook, `wrongEngineWords`, `offersRoutes` (both routes) in BOTH checkers.
+- warm path: names are given only before the hook (after it, still not repeated); the crawl's issues stand in when there is no
+  research or it failed. `checkReply` no longer reads a rival's name ("…Solutions Ltd") as sales-speak.
+- `ai-reply-drafts` `action: 'dry_run'` (admin): the draft the worker would write for one lead; writes no draft row, sends nothing.
+
+Tests: `scripts/ai-draft-names-issues.test.ts` (names present / unreadable, issues found / none, crawl failed, strong site, for both).

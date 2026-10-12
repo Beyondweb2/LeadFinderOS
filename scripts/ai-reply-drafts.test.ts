@@ -7,6 +7,7 @@ import {
   aiReplyDecision, aiChipFor, needsApproving, checkAiReply, fallbackAiReply, buildAiReplyPrompt, worstCaseCallUsd, mayCallWithin,
   AI_REPLY_DRAFT_MAX_USD, AI_REPLY_MAX_PROMPT_CHARS, AI_REPLY_SYSTEM_PROMPT, OWNERSHIP_QUESTION, type AiReplyContext, type AiReplyRow,
 } from '../src/lib/aiReplyDraft.ts';
+import { GENERIC_SITE_LINE, OFFER_LINE_BOTH } from '../src/lib/draftEvidence.ts';
 import { leadCrawlWriteDecision, storedCrawlFailed } from '../src/lib/crawlWriteRule.ts';
 import { passesQuickFilter, INBOX_QUICK_FILTERS } from '../src/lib/conversationState.ts';
 
@@ -139,6 +140,7 @@ const ctx: AiReplyContext = {
   thread: [{ from: 'us', text: 'Hi, is this Safety First Electrical?' }, { from: 'them', text: 'Yes it is, who is this?' }],
   search: { trade: 'an electrician', town: 'Leeds' }, competitors: ['Spark Bros', 'Leeds Electric'], namedEverywhere: false, hookAlreadySent: false,
   findings: [{ title: 'Placeholder blocks', said: 'Your projects page still shows placeholder blocks like Project 1 and Project 2.' }], ownershipKnown: false,
+  engineWords: 'ai', hasWebsite: true,
 };
 {
   const fb = fallbackAiReply(ctx);
@@ -146,9 +148,9 @@ const ctx: AiReplyContext = {
   ok(checkAiReply(fb, ctx).length === 0, `the rule-built draft passes the checks${checkAiReply(fb, ctx).length ? ' — ' + checkAiReply(fb, ctx).join(' | ') : ''}`);
   const bare = { ...ctx, search: null, competitors: [], findings: [] };
   const fb2 = fallbackAiReply(bare);
-  ok(!/AI|placeholder|issue/i.test(fb2.replace(OWNERSHIP_QUESTION, '')) && fb2.endsWith(OWNERSHIP_QUESTION), 'no audit, no crawl → no AI claim and no site issue is invented');
+  ok(!/AI|placeholder|issue/i.test(fb2.replace(OWNERSHIP_QUESTION, '').replace(GENERIC_SITE_LINE, '').replace(OFFER_LINE_BOTH, '')) && fb2.includes(GENERIC_SITE_LINE) && fb2.endsWith(OWNERSHIP_QUESTION), 'no audit, no crawl → no AI claim and no site issue is invented (the general line instead)');
   const p = buildAiReplyPrompt(bare);
-  ok(/SEARCH: none on record\. Leave the AI part out\./.test(p) && /WEBSITE ISSUES: none found\. Do not mention website problems\./.test(p), 'the prompt says to leave the absent parts out');
+  ok(/SEARCH: none on record\. Leave the AI part out\./.test(p) && /WEBSITE ISSUES: none to mention\. Do not claim any fault\./.test(p), 'the prompt says to leave the absent parts out');
 }
 ok(checkAiReply('Hi mate, it is £99 a month, see https://findable.live — are you with an agency?', ctx).some((x) => /price or a link/.test(x)), 'a draft with a price or a link is flagged');
 ok(checkAiReply('Hi mate, i asked AI and it named Spark Bros. Your projects page shows placeholder blocks. Want a call?', ctx).some((x) => /agency/.test(x)), 'a draft that does not ask the agency question is flagged');

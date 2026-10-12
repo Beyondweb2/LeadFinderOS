@@ -799,6 +799,9 @@ export interface AuditContext {
   trade: string | null;
   town: string | null;
   competitors: string[];
+  /** The engine the names were read from (the hook gap: 'gemini' / 'chatgpt'), null when they come from
+   *  the whole audit. Said through draftEvidence.draftEngineWords. Optional: older callers omit it. */
+  engine?: string | null;
   /** The quick check named the business on every engine it tried — no absence to talk about. */
   namedEverywhere: boolean;
   namedDatapoints: number | null;

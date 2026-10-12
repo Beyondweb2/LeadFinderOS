@@ -133,7 +133,7 @@ const ryliThread = [msg('out1', 'outbound', 'Hi, I checked whether AI recommends
 const ryliLatest = latestInbound(ryliThread)!;
 const ctxFor = (over: Partial<Parameters<typeof buildReplyContext>[0]> = {}) => buildReplyContext({
   businessName: 'Ryli Heat', contactFirstName: null, trade: 'Plumbers', town: 'Scunthorpe', website: 'https://www.ryliheat.co.uk/',
-  latest: ryliLatest, thread: ryliThread, research: ryliResearch, audit: ryliAudit, salesFacts: {}, reportUrl: REPORT, hookTemplate: null, variant: 0, avoidText: null, ...over,
+  latest: ryliLatest, thread: ryliThread, research: ryliResearch, audit: ryliAudit, salesFacts: {}, reportUrl: REPORT, hookTemplate: 'audit_followup', variant: 0, avoidText: null, ...over,
 });
 const ryli = ctxFor();
 ok(ryliLatest.text === 'How much', 'the latest inbound is theirs, newest first');
@@ -206,10 +206,10 @@ const failedCtx = ctxFor({ research: { ...ryliResearch, status: 'failed', strong
 ok(/Their website could NOT be read today and nothing measured earlier applies\. Do NOT mention any website problem/.test(buildReplyPrompt(failedCtx)), 'failed crawl: the model is told not to mention the site');
 ok(checkReply(`i asked ai and it showed others. Your website has a problem with its pages. are you with an agency or do you manage it yourself?`, failedCtx).problems.some((p) => /not researched/.test(p)), 'failed crawl: a site problem in the draft is caught');
 const noResearch = ctxFor({ research: null });
-ok(/No website research is available\. Do NOT mention anything specific about their website/.test(buildReplyPrompt(noResearch)), 'no evidence: nothing personalised invented');
+ok(/No website finding is available\. Do NOT claim any website fault/.test(buildReplyPrompt(noResearch)) && /GENERAL LINE/.test(buildReplyPrompt(noResearch)), 'no evidence: nothing personalised invented, the general line instead');
 const cleanCtx = ctxFor({ research: { ...ryliResearch, technicallyClean: true, strongestFindings: [], technicalFindings: [], contentFindings: [], localVisibilityFindings: [], ownershipClues: [] } });
 const cleanPrompt = buildReplyPrompt(cleanCtx);
-ok(/No website finding is strong enough to use\. Do NOT invent one\. The site itself is not badly built: say so honestly/.test(cleanPrompt), 'clean site: say it is not badly built, invent nothing, use the visibility gap');
+ok(/No website finding is strong enough to use\. Do NOT invent one or claim any fault\. The site itself is not badly built: you may say so honestly/.test(cleanPrompt) && /GENERAL LINE/.test(cleanPrompt), 'clean site: say it is not badly built, invent nothing, the general line');
 const regen = ctxFor({ variant: 1, avoidText: GOOD });
 ok(/regenerate #1\. Write a genuinely different version/.test(buildReplyPrompt(regen)) && buildReplyPrompt(regen).includes('are you currently with an agency'), 'regenerate: a different version of the same facts is asked for');
 const showCtx = ctxFor({ latest: msg('q', 'inbound', "Can you show me what you'd change?", 1), thread: [msg('q', 'inbound', "Can you show me what you'd change?", 1)] });

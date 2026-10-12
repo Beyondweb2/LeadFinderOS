@@ -22,6 +22,21 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-12-ai-draft-names-issues', date: '2026-10-12', title: 'Reply drafts now name the businesses AI picked and the real website issue', audience: 'all',
+    body: 'Drafted WhatsApp replies (Draft reply, and AI handles replies) now say who AI recommended and what is actually wrong with the site, instead of "a few other businesses" and "found some things".',
+    report: {
+      added: [
+        'The draft names up to 3 businesses the audit recorded as recommended instead of them ("it recommended A, B and C"). Two spellings of one firm count once. If no names could be read, it says "a few other businesses" and never makes one up.',
+        'When the stored website check found issues, the draft says the strongest 1 or 2 in plain words.',
+      ],
+      changed: [
+        'If the website check found nothing, failed, timed out or the site is strong, the draft claims no fault. It says AI tools tend to favour sites that make it clear who you are, where you work and why to trust you, and that is what we help with.',
+        'The AI tool is named the way the audit ran it: "google ai" when the names came from Gemini, "chatgpt" from ChatGPT, otherwise "ai".',
+        'A draft that says "found some things" without saying what, leaves out the names, or names the wrong AI tool is now flagged and rewritten.',
+      ],
+      removed: [],
+      effect: 'Drafts are specific and true. Nothing sends on its own; you still approve every message.',
+    } },
   { id: '2026-10-11-ai-handles-replies', date: '2026-10-11', title: 'AI handles replies (you approve every one), and Draft reply always shows', audience: 'all',
     body: 'When it is switched on, each new WhatsApp reply gets a ready-written answer in the reply box. Nothing is ever sent until someone presses Approve & send.',
     report: {

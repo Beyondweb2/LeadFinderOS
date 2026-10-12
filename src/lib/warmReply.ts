@@ -26,6 +26,10 @@ import {
   normaliseForMatch, MIN_QUOTE_CHARS, MIN_SALES_STRENGTH, rankFindings, findingScore,
   type AuditContext, type ResearchFinding, type WarmLeadResearch,
 } from './warmLeadResearch.ts';
+import {
+  GENERIC_SITE_LINE, NO_SITE_LINE, ROUTE_EXISTING_RE as ROUTE_EXISTING, ROUTE_NEW_RE as ROUTE_NEW,
+  draftEngineWords, draftNames, issueMentioned, namesAny, namesLine, vagueSiteClaim, wrongEngineWords,
+} from './draftEvidence.ts';
 
 export const REPLY_MODEL = 'gpt-4o-mini';
 /** Messages of history the model sees (oldest dropped first). */
@@ -417,6 +421,9 @@ export interface ReplyContext {
   searchContext: string | null;
   /** Where their number came from, stated only when the lead row proves it (a Google listing). */
   numberSource?: string | null;
+  /** The 1–2 strongest issues the STORED CRAWL saw (coldCallPlaybook.selectFindings), used when the
+   *  research has no primary finding (or there is no research). Empty / absent = the general line. */
+  crawlFindings?: Array<{ title: string; said: string }>;
   avoidText: string | null;
 }
 
@@ -440,15 +447,15 @@ export function buildReplyContext(i: Omit<ReplyContext, 'question' | 'askOwnersh
 
 export const REPLY_SYSTEM_PROMPT = `You draft WhatsApp replies for Paul, who helps UK local businesses show up when people ask AI tools (google ai, chatgpt, gemini, perplexity) for their trade in their area. Paul reads and edits every draft before sending; you never send anything. Return ONLY structured data via the return_reply tool.
 
-WHERE THIS CONVERSATION IS: Paul messaged them cold, they replied, Paul sent a message saying he asked AI for their trade in their area and it named other businesses, and now they have replied to that. This reply has exactly three jobs:
-1. PROVE THERE IS A REAL ISSUE: AI was asked for their service in their area, it recommended their competitors, not them, and (where the research found one) here is a specific reason on their website.
+WHERE THIS CONVERSATION IS: Paul messaged them cold and they replied. FOR THIS REPLY says whether Paul has ALREADY sent them the AI check (the search and the businesses it named). This reply has exactly three jobs:
+1. PROVE THERE IS A REAL ISSUE: AI was asked for their service in their area, it recommended their competitors, not them, and (only where a finding is given) here is a specific thing on their website.
 2. SAY WHAT WE CAN DO ABOUT IT: we can fix it on the site they already have, OR build them a new site properly set up for ai visibility and seo. Offer both routes; never imply everyone needs a new site.
 3. FIND OUT WHO CONTROLS THE WEBSITE: end by asking whether they are with an agency or own/manage the site themselves (unless FOR THIS REPLY says they already told us).
 
 THE SHAPE (normally 3 or 4 short paragraphs):
 - respond naturally to what they just said (if they misread the hook, e.g. "do you need an electrician?", put them right in a friendly way: "nah mate, i was checking what google ai recommends when someone's looking for an electrician in addlestone")
-- the AI search: what was asked and that it brought up their competitors instead of them. Do not list the competitors again; they have just seen them.
-- the specific issue from the PRIMARY FINDING, with its real details, and what it means in plain english ("so a lot of the ai tools can't properly access and understand the site")
+- the AI search: what was asked, using the AI TOOL words given, and who it recommended instead of them. If the AI check has NOT been sent yet, name the businesses listed under AI VISIBILITY (at most three, spelt as given), casually: "it recommended A, B and C". If it says no names could be read, say "it named a few other businesses" and never make a name up. If the AI check HAS already been sent, do not list them again; they have just seen them.
+- the specific issue from the PRIMARY FINDING (or the CRAWL FINDINGS), with its real details, and what it means in plain english ("so a lot of the ai tools can't properly access and understand the site"). With no finding given, use the GENERAL LINE given instead and claim no fault.
 - what we'd do: "that's the sort of thing we fix, either on the site you've already got or we can build you a new one that's properly set up for ai visibility and seo"
 - the website question last: "are you currently with an agency or do you own/manage the website yourself?"
 
@@ -466,6 +473,8 @@ ${SALES_STYLE_RULES}
 
 NEVER:
 - invent a website problem. Use ONLY the findings you are given, and state them no more strongly than their detail does;
+- say you "found some things", "spotted a few issues" or "some things we could fix" without saying exactly what they are;
+- invent a competitor name, or name a different AI tool from the one given;
 - water a specific finding down to "a few technical issues" or "your website could be better optimised";
 - promise or imply rankings, recommendations, citations, customers or leads;
 - claim to know how an AI model decides ("ai ignores", "ai reads it as"). Say what is on the site and that it "can make it harder" / means ai "can't properly access" when access is actually blocked;
@@ -521,13 +530,20 @@ export function buildReplyPrompt(ctx: ReplyContext): string {
   const facts = SALES_FACT_KEYS.filter((k) => ctx.salesFacts[k])
     .map((k) => `- ${k} = ${ctx.salesFacts[k]!.value} (they said: "${clip(ctx.salesFacts[k]!.quote, 160)}")`).join('\n') || '- (none yet)';
 
+  /* The stored crawl's own findings (coldCallPlaybook.selectFindings) stand in when there is no research, or the
+     research could not read the site. With none, the GENERAL LINE: no fault is claimed (draftEvidence.ts). */
+  const crawl = ctx.crawlFindings ?? [];
+  const crawlBlock = crawl.length
+    ? `CRAWL FINDINGS (actually seen by our crawl of their site, strongest first; say 1 or 2 in plain everyday words, only these, no jargon):\n${crawl.map((f, i) => `${i + 1}. ${f.title}: ${f.said}`).join('\n')}`
+    : null;
+  const generalLine = `GENERAL LINE (say it in your own casual words; it claims no fault): ${ctx.website ? GENERIC_SITE_LINE : NO_SITE_LINE}`;
   let research: string;
   if (!r) {
-    research = 'No website research is available. Do NOT mention anything specific about their website. Lead with the AI search result instead.';
+    research = crawlBlock ?? `No website finding is available. Do NOT claim any website fault and do not say you found anything. ${generalLine}`;
   } else if (r.status === 'no_website') {
     research = 'They have NO website on record. Do not critique a website. The route is: we can build them one that is properly set up for ai visibility and seo.';
   } else if (r.status === 'failed' && !ctx.selection.primary) {
-    research = 'Their website could NOT be read today and nothing measured earlier applies. Do NOT mention any website problem. Lead with the AI search result instead.';
+    research = crawlBlock ?? `Their website could NOT be read today and nothing measured earlier applies. Do NOT mention any website problem. ${generalLine}`;
   } else {
     const { primary, secondary } = ctx.selection;
     const concrete = (f: ResearchFinding) => sayableDetails(f).map((d) => `"${d}"`).join(' / ');
@@ -541,16 +557,24 @@ export function buildReplyPrompt(ctx: ReplyContext): string {
           secondary.length ? `SUPPORTING FINDINGS (use at most ONE, and only if it genuinely strengthens the point):\n${secondary.map((f) => `- [${f.id}] ${f.title}: ${f.detail}\n  Concrete details: ${concrete(f)}`).join('\n')}` : '',
           'Specificity beats quantity: one clear issue with its real details, not a mini audit.',
         ].filter(Boolean).join('\n')
-        : `No website finding is strong enough to use. Do NOT invent one. ${r.technicallyClean ? 'The site itself is not badly built: say so honestly, then ' : ''}use the strongest true point you have: AI still isn't linking them strongly enough with ${ctx.searchContext ?? 'their trade in their area'}, while it is with those other businesses, and we would make their services, areas and business evidence much clearer so google and the ai tools understand exactly what they do and where.`,
+        : `No website finding is strong enough to use. Do NOT invent one or claim any fault. ${r.technicallyClean ? 'The site itself is not badly built: you may say so honestly. ' : ''}${generalLine}`,
       ctx.selection.alreadyMentioned.length ? `Paul has ALREADY told them about: ${ctx.selection.alreadyMentioned.map((f) => f.title).join('; ')}. Do not repeat it.` : '',
     ].filter(Boolean).join('\n');
   }
 
   let visibility = 'No AI check result is available beyond the hook Paul sent.';
   const a = ctx.audit;
+  const names = draftNames(a?.competitors ?? [], a?.town ?? ctx.town);
   if (a?.namedEverywhere) visibility = 'Our check named them on every AI engine it tried. Do NOT say AI is recommending competitors instead of them.';
-  else if (a && a.totalDatapoints) {
-    visibility = `When we asked AI for ${ctx.searchContext ?? 'their trade'}, they were named in ${a.namedDatapoints ?? 0} of ${a.totalDatapoints} answers. (The competitors were in Paul's hook; do not list them again.)`;
+  else if (a) {
+    const counts = a.totalDatapoints ? `When we asked AI for ${ctx.searchContext ?? 'their trade'}, they were named in ${a.namedDatapoints ?? 0} of ${a.totalDatapoints} answers. ` : '';
+    /* ⛔ THE NAMES GO IN WHEN THE HOOK HAS NOT (Safety First Electrical, 2026-10-11): this line used to say "the
+       competitors were in Paul's hook" for every lead, so a reply drafted before the hook never had a name to say. */
+    visibility = ctx.hookTemplate
+      ? `${counts}(The competitors were in Paul's hook; do not list them again.)`
+      : `${counts}Paul has NOT told them this yet. ${names.length
+        ? `AI NAMED INSTEAD (name these, at most three, spelt exactly like this): ${names.join(', ')}`
+        : 'AI NAMED INSTEAD: no names could be read. Say "it named a few other businesses". Never make a name up.'}`;
   }
 
   const lean = ctx.route === 'new_only'
@@ -559,6 +583,8 @@ export function buildReplyPrompt(ctx: ReplyContext): string {
   const known = ctx.salesFacts.owns_website ?? (ctx.salesFacts.has_existing_provider?.value === 'yes' ? ctx.salesFacts.has_existing_provider : null);
   const instructions = [
     ctx.searchContext ? `AI SEARCH CONTEXT: AI was asked for "${ctx.searchContext}".` : '',
+    a && !a.namedEverywhere ? `AI TOOL: say it as "${draftEngineWords(a.engine)}" (the tool the result came from). Do not name a different AI tool.` : '',
+    !ctx.hookTemplate && a && !a.namedEverywhere ? 'STAGE: Paul has NOT sent them the AI check yet. Say the search and who it recommended (see AI VISIBILITY).' : '',
     ctx.hookTemplate ? 'STAGE: Paul has already sent them the AI check naming the businesses AI mentioned, and they have replied to it. Do NOT repeat that message or list those businesses again.' : '',
     ctx.primaryRequired ? 'ISSUE: the PRIMARY FINDING is the specific issue in this reply, with its real details.' : '',
     lean,
@@ -620,8 +646,7 @@ const AI_ABSOLUTE = /\b(?:AI|ChatGPT|Gemini|Google)\s+(?:can(?:['’]|no)?t|cann
 const PRICE_TALK = /£\s?\d|\b\d+\s?(?:quid|pounds?)\b|\bper month\b|\ba month\b|\/\s?month|\bmonthly\b|\b\d+\s+payments?\b|\bpayments? in total\b|\brefund\w*\b|\bmoney back\b|\bguarantee\w*\b|\bminimum term\b/i;
 /** The website question, in its natural forms. */
 const WEBSITE_Q = /\b(agency|agencies|developer|web (?:guy|designer|company|person)|own|owns|manage|manages|control|look(?:s|ing)? after|built|runs?|in charge of|have a (?:web)?site|got a (?:web)?site)\b[^?]{0,140}\?/i;
-const ROUTE_EXISTING = /\b(site|website) you(?:['’]ve| have)? (?:already )?got\b|\b(?:current|existing) (?:web)?site\b|\bsite you already have\b|\byour (?:current )?(?:web)?site as it is\b|\bon (?:the|your) (?:current )?(?:web)?site\b/i;
-const ROUTE_NEW = /\bnew (?:one|site|website)\b|\bbuild (?:you )?(?:a|one|a new)\b|\brebuild\b/i;
+/* ROUTE_EXISTING / ROUTE_NEW: imported from draftEvidence.ts (one copy for both drafters). */
 /* ⛔ The AI search must be SAID ("i asked google ai…", "ai brought up…"). A passing "harder for AI tools
    to connect you with local searches" passed the first version (Adcock Heat, live 2026-09-25). */
 const AI_SEARCH_STRICT = /\b(?:asked|asking|checked|checking|searched|searching|looked|looking|tried|typed|put)\b[^.?!\n]{0,60}\b(?:ai|chatgpt|gemini|perplexity|claude|google)\b|\b(?:ai|chatgpt|gemini|perplexity|claude|google ai)\b[^.?!\n]{0,40}\b(?:recommend\w*|brought up|brings up|came up with|comes up with|mention\w*|suggest\w*|named|listed|picked)\b/i;
@@ -668,8 +693,18 @@ export function checkReply(reply: string, ctx: ReplyContext): ReplyCheck {
   if (!accessFinding && /\b(?:can['\u2019]?t|cannot|unable to|struggl\w* to|not able to)\s+(?:properly\s+|fully\s+|really\s+)?(?:access|read|reach|get into|crawl|see)\b|\bblock(?:ed|ing|s)?\b/i.test(text)) {
     problems.push('It says the AI tools cannot access the site, but no finding shows that.');
   }
-  if (!ctx.selection.primary && (!ctx.research || ctx.research.status === 'failed' || ctx.research.status === 'no_website') && /\b(your|the) (web)?site\b[^.?!]{0,60}\b(problem|issue|wrong|broken|missing|doesn'?t|isn'?t)\b/i.test(text)) {
+  if (!ctx.selection.primary && !crawlFindingsInPlay(ctx).length && (!ctx.research || ctx.research.status === 'failed' || ctx.research.status === 'no_website') && /\b(your|the) (web)?site\b[^.?!]{0,60}\b(problem|issue|wrong|broken|missing|doesn'?t|isn'?t)\b/i.test(text)) {
     problems.push('It describes a website problem, but the site was not researched.');
+  }
+  /* ⛔ NEVER "found some things" WITH NOTHING NAMED (Safety First Electrical, 2026-10-11: the crawl had called the site strong). */
+  const crawlUsed = crawlFindingsInPlay(ctx);
+  if (!ctx.selection.primary && !crawlUsed.length && vagueSiteClaim(text)) problems.push(VAGUE_CLAIM_PROBLEM);
+  if (crawlUsed.length && !refusal && !crawlUsed.some((f) => issueMentioned(text, f))) problems.push('It does not mention the website issue our crawl actually found.');
+  const aud = ctx.audit;
+  if (aud && !aud.namedEverywhere && !refusal) {
+    const names = draftNames(aud.competitors, aud.town ?? ctx.town);
+    if (!ctx.hookTemplate && names.length && !namesAny(text, names)) problems.push(`It does not name who AI recommended instead (${names.join(', ')}).`);
+    if (wrongEngineWords(text, draftEngineWords(aud.engine))) problems.push(`It names a different AI tool from the one the audit used ("${draftEngineWords(aud.engine)}").`);
   }
 
   if (!refusal) {
@@ -685,7 +720,10 @@ export function checkReply(reply: string, ctx: ReplyContext): ReplyCheck {
     problems.push('It asks who owns/manages the website again, which they already told us.');
   }
   if (usesDash(text)) problems.push('It uses a dash (— or –). Paul writes with commas and full stops.');
-  if (SALESY.test(text)) problems.push(`It uses sales-script wording ("${text.match(SALESY)![0]}").`);
+  /* A rival's own name is not our wording ("NIC Electrical Solutions Ltd" is not sales-speak). */
+  const ownWords = [...(ctx.audit?.competitors ?? []), ctx.businessName ?? ''].filter((n) => n.trim().length >= 3)
+    .reduce((t, n) => t.split(n).join(' '), text);
+  if (SALESY.test(ownWords)) problems.push(`It uses sales-script wording ("${ownWords.match(SALESY)![0]}").`);
   /* The shared house style (salesStyle.ts). SALESY above already names the phrase when it caught one,
      so a second line for the same fault is not added. Their own business name and the competitors are
      not our words. */
@@ -702,6 +740,15 @@ export function checkReply(reply: string, ctx: ReplyContext): ReplyCheck {
   return { problems, warnings };
 }
 
+/** The stored crawl's findings are in play only when the research has no primary finding AND there is no
+ *  research, or it could not read the site — the prompt's own rule (buildReplyPrompt). At most two. */
+function crawlFindingsInPlay(ctx: ReplyContext): Array<{ title: string; said: string }> {
+  if (ctx.selection.primary) return [];
+  if (ctx.research && ctx.research.status !== 'failed') return [];
+  return (ctx.crawlFindings ?? []).slice(0, 2);
+}
+export const VAGUE_CLAIM_PROBLEM = 'It says it found things on the website without saying what. Name the issue, or use the general line.';
+
 /* ─────────────────────────────── when the model is unavailable ─────────────────────────────── */
 
 const lowerFirst = (s: string) => s.charAt(0).toLowerCase() + s.slice(1);
@@ -712,16 +759,26 @@ export function fallbackReply(ctx: ReplyContext): string | null {
   if (ctx.question.primary === 'not_interested') return null;
   const search = ctx.searchContext ?? 'your trade in your area';
   const paras: string[] = [];
-  paras.push(ctx.searchContext
-    ? `i asked ai for ${/^[aeiou]/i.test(search) ? 'an' : 'a'} ${search} and it brought up other businesses, not you.`
-    : 'i asked ai for your trade in your area and it brought up other businesses, not you.');
+  const a = ctx.audit;
+  const tool = a ? draftEngineWords(a.engine) : 'ai';
+  if (a && !a.namedEverywhere && !ctx.hookTemplate) {
+    paras.push(`${namesLine(tool, ctx.searchContext, draftNames(a.competitors, a.town ?? ctx.town))}.`);
+  } else {
+    paras.push(ctx.searchContext
+      ? `i asked ${tool} for ${/^[aeiou]/i.test(search) ? 'an' : 'a'} ${search} and it brought up other businesses, not you.`
+      : `i asked ${tool} for your trade in your area and it brought up other businesses, not you.`);
+  }
   const f = ctx.selection.primary;
+  const crawl = crawlFindingsInPlay(ctx);
   if (f) {
     const details = sayableDetails(f).join(', ');
     const first = f.detail.split(/(?<=\.)\s/)[0].replace(/\.$/, '');
     paras.push(`i had a look at your site as well and one thing that stood out is ${lowerFirst(first)}${details && !first.includes(details) ? ` (${details})` : ''}.`);
-  } else if (ctx.research && ctx.research.status !== 'failed' && ctx.research.status !== 'no_website') {
-    paras.push(`your site itself isn't badly built, but ai still isn't linking you strongly enough with ${search} searches, while it is with those other businesses.`);
+  } else if (crawl.length) {
+    paras.push(`i had a look at your site as well and ${crawl.map((c) => lowerFirst(c.said.replace(/\.$/, ''))).join(', and ')}.`);
+  } else if (!ctx.research || ctx.research.status !== 'no_website') {
+    /* Nothing found, failed, timed out or a strong site: the general line, never a fault. */
+    paras.push(`${ctx.website ? GENERIC_SITE_LINE : NO_SITE_LINE}.`);
   }
   paras.push(ctx.route === 'new_only'
     ? `that's the sort of thing we sort out, we can build you a site that's properly set up for ai visibility and seo.`

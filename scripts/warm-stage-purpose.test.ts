@@ -146,7 +146,8 @@ const cleanResearch = assembleResearch({ nowIso: new Date(NOW).toISOString(), we
   pages: [extractPageFacts(HOME, W, W, 200, true)], crawl: null, audit: null, model: null, modelError: null, fetchMs: 1, analyseMs: null, researchMs: 1, nowYear: 2026 });
 const c = buildReplyContext({ ...mk(), research: cleanResearch });
 ok(c.selection.primary === null && c.primaryRequired === false, 'a healthy site with nothing strong → no primary, none invented');
-ok(/The site itself is not badly built: say so honestly, then use the strongest true point you have: AI still isn't linking them strongly enough with electrician in Addlestone/.test(buildReplyPrompt(c)), 'the no-finding reply leans on the AI search result');
+/* 2026-10-12 (Paul): no finding → the general line, never a fault (draftEvidence.GENERIC_SITE_LINE). */
+ok(/The site itself is not badly built: you may say so honestly\. GENERAL LINE/.test(buildReplyPrompt(c)), 'the no-finding reply claims no fault and uses the general line');
 const NOFIND = `nah mate, i was checking what google ai recommends for an electrician in addlestone and it brought up your competitors instead.\n\nyour site itself isn't badly built, but ai still isn't linking you strongly enough with electrician searches in addlestone, while it is with those other businesses.\n\nthat's the sort of thing we'd work on, either on the site you've already got or we can build you a new one that's properly set up for ai visibility and seo.\n\nare you currently with an agency or do you own/manage the website yourself?`;
 const nf = checkReply(NOFIND, c);
 ok(nf.problems.length === 0, `the honest no-finding reply passes (${nf.problems.join(' | ') || 'ok'})`);
