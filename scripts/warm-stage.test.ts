@@ -68,7 +68,7 @@ const draft = body('handleDraft');
 ok(!/notWarm\(|not_warm_yet/.test(FN), 'the function no longer refuses a conversation for its stage (no not_warm_yet)');
 ok(!research.includes('stage.stage !== "warm"') && !draft.includes('stage.stage !== "warm"') && research.includes('runSiteResearch('), 'research and draft run before the hook too');
 ok(/hookTemplate: conv\.stage\.hookTemplate/.test(FN), '…and the model is still told whether the hook has gone (null before it)');
-ok(/No audit yet, so no site issues included\./.test(FN) && /siteNote: !audit && !research \? NO_AUDIT_NOTE/.test(FN), 'no audit and no research → the one-line note "No audit yet, so no site issues included."');
+ok(/No audit yet, so no site issues included\./.test(FN) && /: !audit && !research \? NO_AUDIT_NOTE/.test(FN), 'no audit and no research → the one-line note "No audit yet, so no site issues included."');
 ok(/warmStage\(rows\)/.test(FN) && /status"\)\s*\.eq\("user_id", operatorId\)|status"\)\.eq\("user_id"/.test(FN.replace(/\n\s*/g, '')), 'the server reads the stage from the stored rows, with their send status');
 ok(!/stage !== 'warm'/.test(UI), 'the Inbox never hides the buttons for the stage');
 ok(/data-testid="warm-draft-reply"/.test(UI) && /data-testid="warm-refresh-research"/.test(UI), 'Draft reply and Refresh research are both rendered');

@@ -16,6 +16,7 @@
 import { logOpenAiUsage } from "./openai-usage.ts";
 import { resolveAuditReplyVars, HOOK_NO_GAP_REASON } from "./audit-reply.ts";
 import { shortReportUrl } from "../../../src/lib/reportSlug.ts";
+import { draftNames } from "../../../src/lib/draftEvidence.ts";
 import {
   planResearch, extractPageFacts, pickResearchPages, assembleResearch, noWebsiteResearch,
   contentHash, buildResearchPrompt, usableFullCrawl, RESEARCH_SYSTEM_PROMPT, RESEARCH_TOOL, RESEARCH_MODEL,
@@ -169,7 +170,9 @@ export async function loadAuditContext(service: Service, lead: ResearchLead): Pr
     createdAt: audit.created_at ?? null,
     trade: (audit.business_type ?? "").trim() || leadTrade(lead),
     town: (audit.location_text ?? "").trim() || leadTown(lead),
-    competitors: sameAudit && vars.ok ? vars.rivals.slice(0, 3) : [],
+    /* One per business (the report's rule), at most three, only names the audit recorded (draftEvidence.ts). */
+    competitors: sameAudit && vars.ok ? draftNames(vars.rivals, (audit.location_text ?? "").trim() || leadTown(lead)) : [],
+    engine: sameAudit && vars.ok ? vars.hookEngine : null,
     namedEverywhere: !vars.ok && vars.reason.startsWith(HOOK_NO_GAP_REASON),
     namedDatapoints: typeof summary?.named_datapoints === "number" ? summary.named_datapoints : null,
     totalDatapoints: typeof summary?.total_datapoints === "number" ? summary.total_datapoints : null,

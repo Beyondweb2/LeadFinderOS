@@ -25,6 +25,9 @@ import { usesDash } from './warmReply.ts';
 import { salesStyleProblems, SALES_STYLE_RULES } from './salesStyle.ts';
 import { serviceWindowState } from './serviceWindow.ts';
 import { isClientLead } from './roleRules.ts';
+import {
+  GENERIC_SITE_LINE, NO_SITE_LINE, OFFER_LINE_BOTH, OFFER_LINE_NEW, draftSearch, issueMentioned, namesLine, offersRoutes, vagueSiteClaim, withArticle, wrongEngineWords,
+} from './draftEvidence.ts';
 
 /* ── cost ─────────────────────────────────────────────────────────────────────────────────────── */
 
@@ -189,12 +192,17 @@ export interface AiReplyContext {
   thread: Array<{ from: 'us' | 'them'; text: string }>;
   /** From the completed audit only: the search as a person says it, and who AI named. */
   search: { trade: string; town: string } | null;
+  /** At most three, one per business (draftEvidence.draftNames). Empty = no names could be read. */
   competitors: string[];
+  /** The AI tool the names were read from, as a text says it ("google ai", "chatgpt", else "ai"). */
+  engineWords: string;
+  /** They have a website of their own on file (decides the offer: both routes, or build one). */
+  hasWebsite: boolean;
   /** The audit named them on every answer: say nothing about anyone named "instead". */
   namedEverywhere: boolean;
   /** The audit / competitor hook has already gone out: refer back, never re-list the names. */
   hookAlreadySent: boolean;
-  /** 1–3 real crawl issues, worst first (coldCallPlaybook.selectFindings). */
+  /** The 1–2 strongest real crawl issues (coldCallPlaybook.selectFindings). Empty = the generic line. */
   findings: AiReplyFinding[];
   /** They already told us who runs the site — the question is not asked again. */
   ownershipKnown: boolean;
@@ -203,9 +211,13 @@ export interface AiReplyContext {
 export interface AiReplyWhy {
   search: string | null;
   competitors: string[];
+  /** Which AI tool the draft was told to name, and why (the engine the names came from). */
+  engineWords?: string | null;
   hookAlreadySent: boolean;
   findings: string[];
   findingsNote: string | null;
+  /** 'issues' = the crawl's own findings were offered; 'generic' = nothing to claim, the general line. */
+  siteLine?: 'issues' | 'generic';
   askedOwnership: boolean;
   styleSource: string;
   problems: string[];
@@ -229,9 +241,10 @@ export const AI_REPLY_SYSTEM_PROMPT = `You draft the NEXT WhatsApp message from 
 
 THE SHAPE (in this order, each part only if its facts are given):
 1. Answer their latest message in one short line if it asked or said something that needs answering.
-2. What was searched and who AI named instead ("i asked AI for a plumber in Rugby and it named A, B and C"). If the hook has ALREADY been sent, do not list the names again; refer back to it in a few words. If no search is given, leave this part out.
-3. The real issues found on their website: 1 to 3, in plain words, only the ones listed under WEBSITE ISSUES. If none are listed, do not mention website problems at all.
-4. End with ONE question: ${OWNERSHIP_QUESTION} If they have already said who runs the site, end instead with one simple question about a quick call.
+2. What was searched and who it recommended, using the AI TOOL words given ("i asked google ai for an electrician in rotherham and it recommended A, B and C"). Name ONLY the businesses listed under AI NAMED INSTEAD, at most three. If it says no names could be read, say "it named a few other businesses" and never make a name up. If the hook has ALREADY been sent, do not list the names again; refer back to it in a few words. If no search is given, leave this part out.
+3. The website: if WEBSITE ISSUES are listed, say the strongest 1 or 2 in plain everyday words (no jargon), only those. If none are listed, use the GENERAL LINE given instead and claim no fault. Never say you "found some things" or "a few issues" without saying exactly what they are.
+4. The offer, in one short line, as given under OFFER.
+5. End with ONE question: ${OWNERSHIP_QUESTION} If they have already said who runs the site, end instead with one simple question about a quick call.
 The goal is a call. One question only, at the very end.
 
 RULES:
@@ -260,16 +273,19 @@ export function buildAiReplyPrompt(c: AiReplyContext): string {
   lines.push(`THEIR LATEST MESSAGE (answer this first if it needs an answer):\n"""${c.latestInbound.slice(0, 600)}"""`);
   lines.push(`BUSINESS: ${c.businessName}${c.firstName ? ` (first name: ${c.firstName})` : ''}`);
   if (c.search) {
-    lines.push(`SEARCH: i asked AI for ${c.search.trade} in ${c.search.town}`);
+    lines.push(`SEARCH: i asked ${c.engineWords} for ${withArticle(draftSearch(c.search.trade, c.search.town) ?? c.search.trade)}`);
+    lines.push(`AI TOOL: say it as "${c.engineWords}" (the tool these results came from). Do not name a different AI tool.`);
     if (c.namedEverywhere) lines.push('AI NAMED: them, on every answer. Do not say anyone was named instead.');
-    else if (c.competitors.length) lines.push(`AI NAMED INSTEAD: ${c.competitors.join(', ')}`);
+    else if (c.competitors.length) lines.push(`AI NAMED INSTEAD (name these, at most three, spelt exactly like this): ${c.competitors.join(', ')}`);
+    else lines.push('AI NAMED INSTEAD: no names could be read. Say "it named a few other businesses". Never make a name up.');
     lines.push(c.hookAlreadySent ? 'HOOK: already sent (they have seen the search and the names). Refer back briefly, do not list the names again.' : 'HOOK: not sent yet. Say the search and the names.');
   } else {
     lines.push('SEARCH: none on record. Leave the AI part out.');
   }
   lines.push(c.findings.length
-    ? `WEBSITE ISSUES (actually found by our crawl, worst first; use 1 to 3):\n${c.findings.map((f, i) => `${i + 1}. ${f.title}: ${f.said}`).join('\n')}`
-    : 'WEBSITE ISSUES: none found. Do not mention website problems.');
+    ? `WEBSITE ISSUES (actually found by our crawl, strongest first; say 1 or 2 in plain words):\n${c.findings.map((f, i) => `${i + 1}. ${f.title}: ${f.said}`).join('\n')}`
+    : `WEBSITE ISSUES: none to mention. Do not claim any fault. GENERAL LINE (say this in your own casual words): ${c.hasWebsite ? GENERIC_SITE_LINE : NO_SITE_LINE}`);
+  lines.push(`OFFER: ${c.hasWebsite ? OFFER_LINE_BOTH : OFFER_LINE_NEW}`);
   lines.push(c.ownershipKnown ? 'WEBSITE OWNERSHIP: they already told us. Do not ask again; end with a quick question about a call.' : `END WITH: ${OWNERSHIP_QUESTION}`);
   const thread = c.thread.slice(-12).map((m) => `${m.from === 'us' ? 'PAUL' : 'THEM'}: ${m.text.replace(/\s+/g, ' ').slice(0, 500)}`).join('\n');
   lines.push(`CONVERSATION SO FAR (oldest first):\n${thread}`);
@@ -278,7 +294,6 @@ export function buildAiReplyPrompt(c: AiReplyContext): string {
 }
 
 const PRICE_OR_LINK = /£|\$|\bper month\b|\bmonthly\b|\bprice\b|\bcosts?\b|https?:\/\/|www\.|\.(?:co\.uk|com|live|uk)\b/i;
-const sig = (s: string) => s.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').split(/\s+/).filter((w) => w.length >= 5);
 
 /** The checks a draft is held to. Each problem is shown to the person as "Check this draft". */
 export function checkAiReply(reply: string, c: AiReplyContext): string[] {
@@ -292,30 +307,35 @@ export function checkAiReply(reply: string, c: AiReplyContext): string[] {
   if (qs === 0) out.push('Does not end with a question.');
   if (qs > 1) out.push('Asks more than one question.');
   if (!c.ownershipKnown && !/\bagency\b/i.test(r)) out.push('Does not ask whether they use an agency or run the site themselves.');
-  if (c.findings.length && !c.findings.some((f) => { const w = sig(`${f.title} ${f.said}`); const hit = w.filter((x) => r.toLowerCase().includes(x)); return hit.length >= 2; })) {
+  if (c.findings.length && !c.findings.some((f) => issueMentioned(r, f))) {
     out.push('Does not mention any of the website issues found.');
   }
   if (c.search && !c.hookAlreadySent && !c.namedEverywhere && c.competitors.length && !c.competitors.some((n) => r.toLowerCase().includes(n.toLowerCase()))) {
     out.push('Does not name who AI recommended instead.');
   }
   if (!c.findings.length && /\b(your (?:web)?site|website)\b.{0,60}\b(issue|problem|wrong|missing|broken)/i.test(r)) out.push('Mentions website problems when none were found.');
+  if (vagueSiteClaim(r) && !c.findings.length) out.push('Says it found things on the website without saying what (none were found).');
+  if (c.search && wrongEngineWords(r, c.engineWords)) out.push(`Names a different AI tool from the one the audit used ("${c.engineWords}").`);
+  if (!offersRoutes(r, c.hasWebsite)) out.push(c.hasWebsite ? 'Does not offer both routes (improve the current site, or build a new one).' : 'Does not offer to build them a site.');
   out.push(...salesStyleProblems(r, [...c.competitors, c.businessName]));
   return out;
 }
 
-const joinNames = (n: string[]) => (n.length <= 1 ? n.join('') : `${n.slice(0, -1).join(', ')} and ${n[n.length - 1]}`);
+const lowerFirst = (s: string) => s.replace(/\.$/, '').replace(/^./, (x) => x.toLowerCase());
 
 /** The rule-built draft when the model is unavailable or over budget. Built only from the facts. */
 export function fallbackAiReply(c: AiReplyContext): string {
   const parts: string[] = [];
   parts.push(c.firstName ? `Hi ${c.firstName}` : 'Hi mate');
-  if (c.search) {
-    if (c.hookAlreadySent && !c.namedEverywhere) parts.push(`like i said, when i asked AI for ${c.search.trade} in ${c.search.town} you weren't the one it put forward`);
-    else if (!c.hookAlreadySent && !c.namedEverywhere && c.competitors.length) parts.push(`i asked AI for ${c.search.trade} in ${c.search.town} and it named ${joinNames(c.competitors.slice(0, 3))}`);
+  if (c.search && !c.namedEverywhere) {
+    const search = draftSearch(c.search.trade, c.search.town) ?? c.search.trade;
+    if (c.hookAlreadySent) parts.push(`like i said, when i asked ${c.engineWords} for ${withArticle(search)} you weren't the one it put forward`);
+    else parts.push(namesLine(c.engineWords, search, c.competitors));
   }
-  if (c.findings.length) {
-    parts.push(`i had a look at your website too and found a few things that could be holding you back: ${c.findings.slice(0, 2).map((f) => f.said.replace(/\.$/, '').replace(/^./, (x) => x.toLowerCase())).join(', and ')}`);
-  }
+  parts.push(c.findings.length
+    ? `i had a look at your website too and ${c.findings.slice(0, 2).map((f) => lowerFirst(f.said)).join(', and ')}`
+    : (c.hasWebsite ? GENERIC_SITE_LINE : NO_SITE_LINE));
+  parts.push(c.hasWebsite ? OFFER_LINE_BOTH : OFFER_LINE_NEW);
   parts.push(c.ownershipKnown ? 'would a quick call this week work?' : OWNERSHIP_QUESTION);
   return parts.join('\n\n');
 }

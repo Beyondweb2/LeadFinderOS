@@ -14,6 +14,7 @@
 //   · tick (cron: CRON_SECRET + x-internal-job) — drafts for new inbound replies while the switch is on
 //   · settings / set_enabled (admin) — the switch (whatsapp_outreach_state.ai_handles_replies, default OFF)
 //   · regenerate / discard / claim / complete (the person working the lead — admin, or the assigned rep)
+//   · dry_run (admin) — the draft the worker WOULD write for one lead; writes no draft row, sends nothing
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { isUpstreamOutage } from "../_shared/operator-auth.ts";
 import { leadAccess, refusalBody, resolveActor, type Actor } from "../_shared/access.ts";
@@ -28,6 +29,7 @@ import {
   type AiReplyContext, type AiReplyWhy,
 } from "../../../src/lib/aiReplyDraft.ts";
 import { selectFindings } from "../../../src/lib/coldCallPlaybook.ts";
+import { draftEngineWords, draftNames } from "../../../src/lib/draftEvidence.ts";
 import { warmStage } from "../../../src/lib/warmStage.ts";
 import { ruleSalesFacts, websiteControlKnown, mergeSalesFacts, type ThreadMessage } from "../../../src/lib/warmReply.ts";
 import { serviceWindowState } from "../../../src/lib/serviceWindow.ts";
@@ -38,7 +40,7 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-internal-job, x-cron-secret",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
   /* The deploy marker: only this build answers with it. */
-  "x-ai-reply-drafts": "2026-10-11a",
+  "x-ai-reply-drafts": "2026-10-11b",
 };
 const json = (b: unknown, s = 200) => new Response(JSON.stringify(b), { status: s, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 const str = (v: unknown) => (typeof v === "string" ? v.trim() : "");
@@ -129,10 +131,14 @@ async function buildContext(service: Service, lead: ResearchLead, thread: MsgRow
     thread: thread.filter((m) => m.direction === "inbound" || isRealSend(m.status) || m.status === "simulated")
       .map((m) => ({ from: m.direction === "inbound" ? "them" as const : "us" as const, text: m.body ?? (m.template_name ? `[${m.template_name}]` : "") })),
     search: audit && trade && town ? { trade, town } : null,
-    competitors: audit?.competitors ?? [],
+    /* Already one per business and at most three (loadAuditContext → draftNames). Empty = none readable. */
+    competitors: draftNames(audit?.competitors ?? [], town),
+    engineWords: draftEngineWords(audit?.engine ?? null),
+    hasWebsite: found.status !== "no_website" && found.status !== "profile",
     namedEverywhere: audit?.namedEverywhere === true,
     hookAlreadySent: stage.stage === "warm" || stage.stage === "waiting_for_hook_reply",
-    findings: found.status === "findings" ? found.findings.slice(0, 3).map((f) => ({ title: f.title, said: (f.spoken ?? f.explanation ?? "").trim() || f.title })) : [],
+    /* The strongest 1 or 2 the crawl actually saw; anything else (clean, strong, failed, stale) → the general line. */
+    findings: found.status === "findings" ? found.findings.slice(0, 2).map((f) => ({ title: f.title, said: (f.spoken ?? f.explanation ?? "").trim() || f.title })) : [],
     ownershipKnown: websiteControlKnown(facts),
   };
   return { ctx, findingsNote: found.status === "findings" ? null : found.note };
@@ -163,9 +169,11 @@ function whyOf(ctx: AiReplyContext, findingsNote: string | null, w: Awaited<Retu
   return {
     search: ctx.search ? `${ctx.search.trade} in ${ctx.search.town}` : null,
     competitors: ctx.namedEverywhere ? [] : ctx.competitors,
+    engineWords: ctx.search ? ctx.engineWords : null,
     hookAlreadySent: ctx.hookAlreadySent,
     findings: ctx.findings.map((f) => f.title),
     findingsNote,
+    siteLine: ctx.findings.length ? "issues" : "generic",
     askedOwnership: !ctx.ownershipKnown,
     styleSource: BEST_TEMPLATE_STYLE_NOTE,
     problems: w.problems,
@@ -367,6 +375,37 @@ async function handleRegenerate(service: Service, actor: Actor, body: Record<str
   return json({ ok: true, draft: saved });
 }
 
+/** ADMIN ONLY. Writes the draft the worker WOULD write for this lead's newest inbound, and returns it.
+ *  ⛔ It writes no ai_reply_drafts row, sends nothing and touches no message. The only write is the model
+ *  call's own api_usage_log row (cost honesty). A lead with no inbound uses `sample_inbound` (said in the
+ *  answer as a stand-in). The switch, the window and the hand-over rule are reported, not applied. */
+async function handleDryRun(service: Service, actor: Actor, body: Record<string, unknown>) {
+  if (actor.role !== "admin") return json({ ok: false, error: "admin_only" }, 403);
+  const leadId = str(body.lead_id);
+  if (!leadId) return json({ ok: false, error: "lead_id_required" }, 400);
+  const lead = await loadLead(service, leadId);
+  if (!lead) return json({ ok: false, error: "lead_not_found" }, 404);
+  const guard = await guardAction(service, actor.id, "ai_draft", { fn: "ai-reply-drafts", leadId, role: actor.role, estCostUsd: 0 });
+  if (!guard.ok) return json(guard.body, guard.status);
+  const { data, error } = await service.from("whatsapp_messages")
+    .select("id, created_at, direction, body, message_type, template_name, status, lead_id")
+    .eq("lead_id", leadId).order("created_at", { ascending: false }).limit(60);
+  if (error) throw error;
+  const thread = ((data ?? []) as MsgRow[]).slice().reverse();
+  const real = [...thread].reverse().find((m) => m.direction === "inbound") ?? null;
+  const sample = str(body.sample_inbound) || "Hi. Yes it is. How can I help?";
+  const inbound: MsgRow = real ?? { id: "dry-run", created_at: new Date().toISOString(), direction: "inbound", body: sample, message_type: "text", template_name: null, status: "received", lead_id: leadId };
+  const withInbound = real ? thread : [...thread, inbound];
+  const hadOutreach = withInbound.some((m) => m.direction === "outbound" && (isRealSend(m.status) || m.status === "simulated") && m.created_at < inbound.created_at);
+  const decision = aiReplyDecision({ enabled: true, body: inbound.body, messageType: inbound.message_type, inboundAt: inbound.created_at, lead, suppressed: false, hadOutreach });
+  const { ctx, findingsNote } = await buildContext(service, lead, withInbound, inbound);
+  const w = await writeDraft(service, ctx, { spentUsd: 0, temperature: 0.5, userId: actor.id, triggerSource: "user" });
+  return json({
+    ok: true, dry_run: true, lead: lead.business_name, inbound: { text: inbound.body, at: inbound.created_at, stand_in: !real },
+    decision_if_live: decision, draft: w.reply, why: whyOf(ctx, findingsNote, w, w.spentUsd, w.calls), model_error: w.modelError,
+  });
+}
+
 async function handleSettings(service: Service, actor: Actor, body: Record<string, unknown>, set: boolean) {
   if (actor.role !== "admin") return json({ ok: false, error: "admin_only" }, 403);
   if (set) {
@@ -399,6 +438,7 @@ Deno.serve(async (req) => {
     if (action === "complete") return await handleComplete(service, who.actor, body);
     if (action === "discard") return await handleDiscard(service, who.actor, body);
     if (action === "regenerate") return await handleRegenerate(service, who.actor, body);
+    if (action === "dry_run") return await handleDryRun(service, who.actor, body);
     return json({ ok: false, error: "unknown_action" }, 400);
   } catch (e) {
     const message = String((e as { message?: unknown })?.message ?? e);

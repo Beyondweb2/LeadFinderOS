@@ -52,6 +52,8 @@ import {
   type SalesFacts, type ThreadMessage,
 } from "../../../src/lib/warmReply.ts";
 import { findingScore, type ResearchFinding } from "../../../src/lib/warmLeadResearch.ts";
+import { selectFindings } from "../../../src/lib/coldCallPlaybook.ts";
+import { draftEngineWords } from "../../../src/lib/draftEvidence.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -191,6 +193,18 @@ async function handleDraft(service: Service, lead: LeadRow, operatorId: string, 
      research is still what we know; the Inbox asks for a refresh before drafting when it is stale. */
   const research = row?.research && researchFreshness(row, lead.website, Date.now()) !== "website_changed" ? row.research : null;
   const audit = await loadAuditContext(service, lead);
+  /* The stored crawl's own findings (the call script's rule, at most 2), used when there is no research or it could
+     not read the site. Nothing found / failed / strong → none, and the draft says the general line (draftEvidence.ts). */
+  const { data: crawlRow } = await service.from("lead_crawl_checks").select("result, created_at").eq("lead_id", lead.id).maybeSingle();
+  const found = selectFindings({
+    lead: { website: lead.website } as Parameters<typeof selectFindings>[0]["lead"],
+    runCrawls: [],
+    leadCrawl: crawlRow?.result ? { result: crawlRow.result, createdAtMs: new Date(crawlRow.created_at).getTime() } : null,
+    nowMs: Date.now(),
+  }, 2);
+  const crawlFindings = found.status === "findings"
+    ? found.findings.slice(0, 2).map((f) => ({ title: f.title, said: (f.spoken ?? f.explanation ?? "").trim() || f.title }))
+    : [];
   const inbound = thread.filter((m) => m.direction === "inbound");
   const ruled = mergeSalesFacts(row?.sales_facts ?? {}, ruleSalesFacts(inbound), inbound);
 
@@ -200,6 +214,7 @@ async function handleDraft(service: Service, lead: LeadRow, operatorId: string, 
     trade: leadTrade(lead), town: leadTown(lead), website: lead.website, latest, thread, research, audit,
     salesFacts: ruled.facts, reportUrl: audit?.reportUrl ?? null, hookTemplate: conv.stage.hookTemplate, hookAt: conv.stage.hookAt, variant,
     numberSource: lead.place_id || lead.google_maps_url ? "their number is on their public google business listing, which is where Paul found them" : null, avoidText: variant > 0 ? text(body.avoid) || null : null,
+    crawlFindings,
   });
 
   const findingIds = pooledFindings(research).map((f) => f.id);
@@ -260,6 +275,12 @@ async function handleDraft(service: Service, lead: LeadRow, operatorId: string, 
     /* Paul's stage summary (2026-09-25): what AI was asked, the issue, the proposed route, what we
        know about who controls the site, and how the reply ends. For Paul only. */
     aiSearchContext: ctx.searchContext,
+    /* What the draft was given to say (2026-10-11): the AI tool, up to three names (one per business), and the
+       crawl's own issues, or none and the general line. */
+    aiTool: audit && !audit.namedEverywhere ? draftEngineWords(audit.engine) : null,
+    namesGiven: audit && !audit.namedEverywhere && !ctx.hookTemplate ? audit.competitors : [],
+    crawlFindings: crawlFindings.map((f) => f.title),
+    crawlNote: found.status === "findings" ? null : found.note,
     proposedSolution: ROUTE_LABELS[ctx.route],
     websiteOwnership: websiteControlKnown(ctx.salesFacts)
       ? (ctx.salesFacts.owns_website ? `they own it: ${ctx.salesFacts.owns_website.value} ("${ctx.salesFacts.owns_website.quote}")` : `managed by someone else ("${ctx.salesFacts.has_existing_provider?.quote ?? ""}")`)
@@ -269,7 +290,7 @@ async function handleDraft(service: Service, lead: LeadRow, operatorId: string, 
       ? "No website finding was strong enough to use; the draft leans on the AI search result. Nothing was invented."
       : null,
     /* The one line the Inbox shows when the draft had nothing about their site to go on (Paul, 2026-10-11). */
-    siteNote: !audit && !research ? NO_AUDIT_NOTE : !research ? NO_RESEARCH_NOTE : !audit ? NO_AUDIT_RESULT_NOTE : null,
+    siteNote: crawlFindings.length && !sel.primary && (!research || research.status === "failed") ? "Site issues come from the stored crawl check." : !audit && !research ? NO_AUDIT_NOTE : !research ? NO_RESEARCH_NOTE : !audit ? NO_AUDIT_RESULT_NOTE : null,
     researchSources: research ? [...new Set(research.sources.map((x) => x.kind === "page" ? "Live website" : x.kind === "full_crawl" ? "Existing full crawl" : x.kind === "crawl_check" ? "Existing crawl check" : "AI audit"))] : [],
     research: research ? { generatedAt: research.generatedAt, status: research.status, sourceCrawlAt: research.sourceCrawlAt, technicallyClean: research.technicallyClean, warnings: research.warnings } : null,
     audit: audit ? { auditId: audit.auditId, createdAt: audit.createdAt, named: audit.namedDatapoints, total: audit.totalDatapoints, namedEverywhere: audit.namedEverywhere } : null,
