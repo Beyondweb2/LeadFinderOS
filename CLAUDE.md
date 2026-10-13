@@ -1011,15 +1011,14 @@ positive allowlist of `baseline`; `isColdOutreachTemplate` treats unknown as COL
   `findable.live/w/<code>` (the baseline audit's own `short_code`) and the operator's download.
   Client safety is an explicit COLUMN ALLOWLIST, not a remembered omission (`docs/welcome-pack-and-
   website-build.md`).
-- **The six-answer quick report is Concept 4, soft redesign** (`renderQuickCheckReport`, Paul 2026-10-06):
-  dark header + score → FEATURED QUESTION with EVERY engine's answer (`HookReportSummary.featured`: the
-  strongest miss's question, else the first) → all questions → website issues + why this matters → the
-  UNCHANGED CTA/footer. The client's name is highlighted green only inside an answer already judged
-  NAMED (`ownNameVariants` finds it; it never decides naming).
-  It quotes the AI again (reverses 2026-09-26) through `answerExcerpt` (answerText.ts), which DROPS
-  listing chrome line by line and never writes a word; nothing readable → no quote, names only. The
-  "competitors named instead" count is `rivalsNamedInstead`, derived at render through the run's rival
-  gate — null (omitted) when names are withheld. Record: `docs/reports.md` (Concept 4).
+- **The six-answer quick report is the CHAT VIEW** (`renderQuickCheckReport`, Paul 2026-10-13; replaced Concept 4's
+  featured box, table and yellow tiles): dark header + score + verdict (unchanged) → ONE line of real figures
+  (`rivalsNamedInstead`, omitted when withheld) → one chat window per question (grey question bubble, a reply per
+  engine listing who it named in the order the answer names them, `quickReplyOrder`) → the quick-check caveat →
+  website section → the UNCHANGED CTA/footer. ⛔ Colours: GREEN + tick = the business, RED + cross = a competitor
+  (all one red), a miss = neutral grey "You weren't mentioned"; yellow only on the header and buttons. Max
+  `QUICK_MAX_RIVALS` per reply then "+N more". The AI Overview is a further reply marked display only. Names
+  exactly as stored; the snippet is `answerExcerpt` (never writes a word). Record: `docs/reports.md` (Chat view).
 - **Every report renders live** from `render-audit-report` at `findable.live/report/<auditId>`.
   ⚠️ Measurement audits ARE served as client reports since 15634d49 (Paul, 2026-09-18) — the old
   "internal measurements answer 403" rule is gone. Refused: market audits and the **weekly check**

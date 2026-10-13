@@ -185,7 +185,7 @@ await (async () => {
     const label = g.every(Boolean) ? '6/6 hook report' : 'gap hook report';
     ok(!/Google AI(?! Overview)/.test(text) && /Gemini/.test(text), `E: the ${label} says Gemini and never "Google AI"`);
     // Soft redesign (2026-10-06): the verdict covers the whole score; the featured question's answer cards name their engine.
-    if (d?.hook?.gap) ok(/^You're (not being named|being named)/.test(hookReportCopy(d.hook, BIZ).headline) && /Featured question[\s\S]*?Gemini/i.test(text), 'E: the verdict covers the whole check and the featured question names Gemini on its answer card');
+    if (d?.hook?.gap) ok(/^You're (not being named|being named)/.test(hookReportCopy(d.hook, BIZ).headline) && /Gemini/i.test(text.slice(text.indexOf('didn'))), 'E: the verdict covers the whole check and each chat window names Gemini on its reply');
   }
   const root = resolve(import.meta.dirname, '..');
   const strip = (src: string) => src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');

@@ -598,3 +598,23 @@ primary button "Improve AI visibility" (no price, the same onboarding link), key
 locked guarantee sentence still names the £99. Every other report keeps "Want to be one of the names?" and
 "Get started — £99" (8 report types byte-identical). Buttons sit in one row on desktop and at 600px, and stack
 full width (44px each) at 390px.
+
+## Chat view — the six-answer quick report, simplified (2026-10-13)
+
+**What changed (Paul).** Everything under the dark score section was too busy and too colourful. Kept: the dark
+header + score + verdict, the three buttons and their behaviour, the quick-check caveat, preview mode, tracking and
+every link. Removed: the "Featured question" box, the "All questions we asked" table, the three yellow "Why this
+matters" tiles (and the six-colour name pills and in-answer highlighting with them).
+
+**Now.** One short line ("5 of 6 answers didn't name you. 22 other businesses were named instead.") then one chat
+window per question: the question as a grey bubble, a reply from each scored engine with its logo listing the
+businesses it named. GREEN + tick = the business, RED + cross = a competitor (one red for all), a miss reads "You
+weren't mentioned" in neutral grey. Up to `QUICK_MAX_RIVALS` (5) competitors, then "+N more". A short real snippet
+(`answerExcerpt`, `QUICK_ANSWER_CHARS`). A recorded Google AI Overview is a further reply tagged "Display only · not
+scored". The website section stays, in neutral grey. Dark mode follows the reader's setting.
+
+**Data.** `HookReportSummary.tested[].perEngine` now carries `answerText` and `names` for a NAMED answer too (the
+competitors named beside the business), both through the same run-level gate; the client is filtered out of their own
+list (`sameBusiness`). Overview `names` likewise. Order = first mention in the answer text (`quickReplyOrder`), stored
+order for names the text never writes; the business first when the verdict named them but the text never spells them.
+Scores are untouched. Only `render-audit-report` needs a redeploy for the public page.
