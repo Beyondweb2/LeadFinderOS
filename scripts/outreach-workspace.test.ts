@@ -39,7 +39,7 @@ console.log('\n── WhatsApp: one truth model ──');
 ok(whatsAppCapabilityOf({ status: 'no_whatsapp', line_type: 'mobile' }) === 'not_on_whatsapp', 'mobile + Meta rejection → No WhatsApp (never "WhatsApp-capable")');
 ok(whatsAppCapabilityOf({ status: 'initial_contact', line_type: 'mobile' }) === 'mobile_unchecked' && WHATSAPP_CAPABILITY_LABEL.mobile_unchecked === 'Mobile number', 'a mobile alone → "Mobile number"');
 ok(whatsAppCapabilityOf({ status: 'replied', line_type: 'mobile', whatsapp_delivery_status: 'read' }) === 'verified', 'delivered / read → WhatsApp verified');
-ok(whatsAppCapabilityOf({ status: 'no_whatsapp_needs_sms', line_type: 'landline' }) === 'not_mobile', 'landline → Not a mobile');
+ok(whatsAppCapabilityOf({ status: 'no_whatsapp_needs_sms', line_type: 'landline' }) === 'not_mobile', 'landline → No mobile');
 ok(whatsAppCapabilityOf({ status: 'not_contacted', line_type: null }) === 'unchecked', 'nothing known → WhatsApp not checked');
 ok(!isWhatsAppWorthTrying('not_on_whatsapp') && isWhatsAppWorthTrying('mobile_unchecked'), 'the WhatsApp-capable filter drops rejected numbers');
 const leb = read('src/components/LeadEnrichButtons.tsx');

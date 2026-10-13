@@ -86,18 +86,19 @@ for (const s of ["not_interested", "opted_out", "closed", "bounced"] as const) {
    rule dies: not by being argued with, but by being switched off to accommodate its first exception.
 
    ⚠️ AND THE ALLOWLIST ITSELF IS ASSERTED. Widening it has to be a visible edit to a test that
-   says out loud why the exception exists, not a quiet extra member. */
+   says out loud why the exception exists, not a quiet extra member.
+
+   ⛔ 2026-10-13 (Paul): THE PAIR IS SPLIT AGAIN. Texting is back; a mobile with no WhatsApp can be texted, a
+   landline cannot, so no_whatsapp reads "No WhatsApp" and no_whatsapp_needs_sms reads "No mobile". The
+   allowlist is now EMPTY — every status has its own words. */
 console.log("\n── ⛔ STATUSES ARE DISTINGUISHABLE BY THEIR WORDS, BAR ONE DELIBERATE PAIR ──");
 {
   /* The one sanctioned collision. Order-independent; compared as a set. */
-  const ALLOWED_SHARED: string[][] = [["no_whatsapp", "no_whatsapp_needs_sms"]];
+  const ALLOWED_SHARED: string[][] = [];
   const key = (vs: string[]) => [...vs].sort().join("|");
   const allowed = new Set(ALLOWED_SHARED.map(key));
 
-  ok(ALLOWED_SHARED.length === 1 && ALLOWED_SHARED[0].length === 2,
-    "exactly ONE pair is allowed to share a label — adding a second is an edit to this line");
-  ok(allowed.has(key(["no_whatsapp", "no_whatsapp_needs_sms"])),
-    "  and it is the two no-WhatsApp statuses, named");
+  ok(ALLOWED_SHARED.length === 0, "NO pair is allowed to share a label (since 2026-10-13) — adding one is an edit to this line");
 
   const byLabel = new Map<string, string[]>();
   for (const o of OUTREACH_STATUS_OPTIONS) {
@@ -130,12 +131,12 @@ console.log("\n── ⛔ STATUSES ARE DISTINGUISHABLE BY THEIR WORDS, BAR ONE D
 
   const labelOf = (v: string) => OUTREACH_STATUS_OPTIONS.find((o) => o.value === v)?.label ?? "";
   ok(labelOf("no_whatsapp") === "No WhatsApp", `no_whatsapp reads ${JSON.stringify(labelOf("no_whatsapp"))}`);
-  ok(labelOf("no_whatsapp_needs_sms") === "No WhatsApp", `no_whatsapp_needs_sms reads the same, as intended`);
+  ok(labelOf("no_whatsapp_needs_sms") === "No mobile", `no_whatsapp_needs_sms reads "No mobile" (a landline / no number — not texted either)`);
   /* ⚠️ The label merged; the VALUES must not. One is a mobile without WhatsApp, the other a
      landline, so a "tidy-up" that collapsed them into a single status would lose which phones are
      mobiles. Both remain in the crawl defaults for the same reason. */
-  ok(labelOf("no_whatsapp") !== "" && OUTREACH_STATUS_OPTIONS.filter((o) => o.label === "No WhatsApp").length === 2,
-    "  and they are still TWO separate statuses wearing one label, not one merged status");
+  ok(OUTREACH_STATUS_OPTIONS.filter((o) => o.label === "No WhatsApp").length === 1,
+    "  and they are still TWO separate statuses, now with their own words");
 }
 
 /* ── ⛔ THE FILTER IS ONE OPTION PER LABEL, AND EVERY STATUS IS STILL REACHABLE ────────────────
@@ -173,27 +174,28 @@ console.log("\n── ⛔ THE COMBINED FILTER COVERS EVERY STATUS, EXACTLY ONCE 
      only after reading those pass. */
   /* 21 → 22 on 2026-09-27: 'won_pending_onboarding' (multi-user). Its label is unique and it has its
      own filter group — both checked by the two assertions above before this number was changed. */
-  ok(OUTREACH_STATUS_FILTER_OPTIONS.length === 22 && OUTREACH_STATUS_OPTIONS.length === 22,
-    `21 status groups + the Paid sentinel = 22 filter options for 22 statuses (got ${OUTREACH_STATUS_FILTER_OPTIONS.length} for ${OUTREACH_STATUS_OPTIONS.length})`);
+  /* 22 → 23 on 2026-10-13: No WhatsApp and No mobile are two filter options again (Paul). */
+  ok(OUTREACH_STATUS_FILTER_OPTIONS.length === 23 && OUTREACH_STATUS_OPTIONS.length === 22,
+    `22 status groups + the Paid sentinel = 23 filter options for 22 statuses (got ${OUTREACH_STATUS_FILTER_OPTIONS.length} for ${OUTREACH_STATUS_OPTIONS.length})`);
 
   const noWa = OUTREACH_STATUS_FILTER_OPTIONS.filter((o) => o.label === "No WhatsApp");
   ok(noWa.length === 1, `"No WhatsApp" appears ONCE in the filter (got ${noWa.length})`);
-  ok(noWa[0].statuses.length === 2
-    && noWa[0].statuses.includes("no_whatsapp")
-    && noWa[0].statuses.includes("no_whatsapp_needs_sms"),
-    "  and it matches BOTH statuses — 53 + 509, not one or the other");
-  /* Every other option stays single, or the merge has leaked past the pair it was for. */
-  ok(OUTREACH_STATUS_FILTER_OPTIONS.filter((o) => o.statuses.length > 1).length === 1,
-    "exactly one option covers more than one status");
+  ok(noWa[0].statuses.length === 1 && noWa[0].statuses.includes("no_whatsapp"),
+    "  and it matches only the mobile with no WhatsApp (texts can still go)");
+  const noMobile = OUTREACH_STATUS_FILTER_OPTIONS.filter((o) => o.label === "No mobile");
+  ok(noMobile.length === 1 && noMobile[0].statuses.length === 1 && noMobile[0].statuses.includes("no_whatsapp_needs_sms"),
+    '"No mobile" is its own option, matching the landline / no-number status');
+  ok(OUTREACH_STATUS_FILTER_OPTIONS.filter((o) => o.statuses.length > 1).length === 0,
+    "no option covers more than one status");
 
   console.log("\n── A SAVED FILTER FROM BEFORE THE MERGE STILL WORKS ──");
   /* Table state persisted earlier can hold a value that is no longer any option's own. It must keep
      filtering, and the Select must show the option that owns it — a control disagreeing with the
      table it drives is its own bug. */
-  ok(statusesForFilter("no_whatsapp_needs_sms").length === 2,
-    "a saved 'no_whatsapp_needs_sms' still matches the whole group rather than nothing");
-  ok(canonicalFilterValue("no_whatsapp_needs_sms") === "no_whatsapp",
-    "  and normalises onto the option that owns it, so the dropdown is not blank");
+  ok(statusesForFilter("no_whatsapp_needs_sms").length === 1,
+    "a saved 'no_whatsapp_needs_sms' matches its own option (No mobile) rather than nothing");
+  ok(canonicalFilterValue("no_whatsapp_needs_sms") === "no_whatsapp_needs_sms",
+    "  and is its own option's value, so the dropdown is not blank");
   ok(canonicalFilterValue("replied") === "replied", "an unmerged status normalises to itself");
 
   console.log("\n── ⛔ AN UNKNOWN FILTER NARROWS, IT NEVER WIDENS ──");

@@ -41,10 +41,10 @@ export function coldWhatsAppVerdict(phone: string | null | undefined, country?: 
 
 /** Human wording for the batch note; the reason codes themselves are stored tokens. */
 export const COLD_NOT_ELIGIBLE_LABEL: Record<ColdNotEligibleReason, string> = {
-  no_phone: 'no phone number (flagged No WhatsApp)',
-  bad_number: 'phone number not usable (flagged No WhatsApp)',
-  landline: 'landline (flagged No WhatsApp)',
-  [NOT_A_UK_MOBILE]: 'not a UK mobile - cold WhatsApp is UK only (flagged No WhatsApp)',
+  no_phone: 'no phone number (flagged No mobile)',
+  bad_number: 'phone number not usable (flagged No mobile)',
+  landline: 'landline (flagged No mobile)',
+  [NOT_A_UK_MOBILE]: 'not a UK mobile - cold WhatsApp is UK only (flagged No mobile)',
 };
 
 /* A status BEFORE any real contact. A positive allowlist: anything not listed here (replied, interested,

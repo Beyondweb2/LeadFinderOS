@@ -58,7 +58,7 @@ ok(m('not_contacted', noAnswer) && !m('initial_contact', noAnswer), 'no answer o
 ok(m('replied', { status: 'replied', whatsapp_sent_at: S }) && !m('awaiting_reply', { status: 'replied', whatsapp_sent_at: S }), 'Replied → only under Replied');
 ok(m('awaiting_reply', { status: 'awaiting_reply', whatsapp_sent_at: S }) && !m('replied', { status: 'awaiting_reply', whatsapp_sent_at: S }), 'You replied → only under You replied');
 ok(m('initial_contact', { status: 'no_whatsapp', lastLogged: { outcome: 'spoke_to_owner', at: S } }), 'No WhatsApp, reached by phone → under Contacted');
-ok(m('no_whatsapp', { status: 'no_whatsapp_needs_sms' }), 'No WhatsApp covers the landline too (the pill reads No WhatsApp for both)');
+ok(!m('no_whatsapp', { status: 'no_whatsapp_needs_sms' }) && m('no_whatsapp_needs_sms', { status: 'no_whatsapp_needs_sms' }), 'a landline is under No mobile, not No WhatsApp (2026-10-13: a mobile with no WhatsApp can still be texted)');
 ok(m('interested', { status: 'not_contacted', is_potential_work: true }) && m('interested', { status: 'replied', is_potential_work: true }), 'Interested = the star, whatever the status');
 ok(!m('interested', { status: 'price_given', is_potential_work: false }) && !m('interested', { status: 'interested', is_potential_work: false }), '…no star → not Interested (Price given, the old stored status)');
 ok(shownStatusMatches('replied', { status: 'replied' }, null), 'a row with no lead to read (unassigned) falls back to its stored status');

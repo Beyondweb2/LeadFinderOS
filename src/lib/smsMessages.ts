@@ -127,6 +127,11 @@ export function isStopMessage(body: string | null | undefined): boolean {
    buzzes a phone, so quiet hours are longer. One text per tick at most; the gap is jittered so they never burst. */
 export const SMS_QUEUE_WINDOW = { startHour: 9, endHour: 20 } as const; // Europe/London, [start, end)
 export const SMS_QUEUE_DAILY_CAP = 100;
+/** ONE limit per Queue for text press (2026-10-13): at most one day of sending. queue_sms_openers refuses a real call above it
+ *  (20261023090000, pinned by scripts/sms-queue-rules.test.ts); the popup queues the first this-many that pass and names the rest. */
+export const SMS_QUEUE_MAX_PER_ACTION = SMS_QUEUE_DAILY_CAP;
+/** How many leads one check-only (dry run) call looks at; the server allows up to 1000. */
+export const SMS_QUEUE_CHECK_CHUNK = 500;
 export const SMS_QUEUE_GAP_SECONDS = { min: 45, max: 100 } as const;
 export const SMS_QUEUE_MAX_ATTEMPTS = 3;
 
@@ -147,8 +152,13 @@ export function londonDayStartUtc(now: Date = new Date()): Date {
 /** Why a lead was not queued, in words (the queue RPC's own reason keys). */
 export const SMS_QUEUE_SKIP_WORDS: Readonly<Record<string, string>> = {
   not_found: 'no longer exists', not_yours: 'not assigned to you', archived: 'archived', client: 'already a client',
-  already_queued: 'already in the text queue', not_new: 'already past the start (not a first text)', no_phone: 'no phone number',
-  not_a_uk_mobile: 'not a UK mobile (texts go to UK mobiles only)', opted_out: 'asked not to be contacted',
-  already_texted: 'already texted before', in_whatsapp_conversation: 'already in a WhatsApp conversation',
+  already_queued: 'already in the text queue',
+  in_whatsapp_queue: 'already in the WhatsApp queue', whatsapp_messaged: 'already messaged on WhatsApp',
+  in_whatsapp_conversation: 'already in a WhatsApp conversation',
+  whatsapp_failed: 'already tried on WhatsApp (the send failed)',
+  not_new: 'already past the start (not a first text)',
+  no_phone: 'no mobile (no phone number)', not_a_uk_mobile: 'no mobile (landline, or not a UK mobile)',
+  opted_out: 'asked not to be contacted', already_texted: 'already texted before',
   contacted_by_phone: 'already spoken to by phone', contacted_logged: 'already in a logged conversation',
+  over_cap: 'over the limit for one go (queue them next time)',
 };

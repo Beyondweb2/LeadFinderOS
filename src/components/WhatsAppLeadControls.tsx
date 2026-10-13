@@ -144,11 +144,11 @@ export function WhatsAppLeadControls({
   const sentDay = lead.whatsapp_sent_at ? new Date(lead.whatsapp_sent_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'Europe/London' }) : '';
   if (lead.status === 'no_whatsapp') {
     return <WorkSection icon={MessageSquare} iconClass="text-green-500" title="WhatsApp outreach" testId="whatsapp-outreach" summaryClass="text-amber-600 dark:text-amber-400"
-      summary="No WhatsApp — this number can't receive it. Call or email instead." />;
+      summary="No WhatsApp — this mobile can't receive it. A text or a call still works." />;
   }
   if (lead.status === 'no_whatsapp_needs_sms') {
     return <WorkSection icon={MessageSquare} iconClass="text-green-500" title="WhatsApp outreach" testId="whatsapp-outreach" summaryClass="text-cyan-600 dark:text-cyan-400"
-      summary={`Landline${lead.line_type && lead.line_type !== 'landline' ? ` (${lead.line_type})` : ''} — flagged, not queued. It can't receive WhatsApp.`} />;
+      summary={`No mobile — landline${lead.line_type && lead.line_type !== 'landline' ? ` (${lead.line_type})` : ''}, flagged, not queued. It can't receive WhatsApp or texts.`} />;
   }
   if (openerReallySent(lead)) {
     return <WorkSection icon={Check} iconClass="text-green-500" title="WhatsApp outreach" testId="whatsapp-outreach"
