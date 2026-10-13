@@ -1217,6 +1217,10 @@ positive allowlist of `baseline`; `isColdOutreachTemplate` treats unknown as COL
   as AUDIT ONLY (a text never sends), cache reused, prospecting pool only, never a sales status. STOP opts out first and starts nothing.
 - ⛔ **A pitch follows an audit ONLY under "Audit and reply" on WhatsApp** (`src/lib/auditPitchRule.ts`): Do nothing / Audit only send and park nothing; texts
   never. Enforced server-side (create-ai-audit, the completion step, the drain). The Inbox's Run AI audit tooltip reads the effective rule.
+- ⛔ **Queue for text never texts a lead tried on WhatsApp** (2026-10-13, `docs/twilio-comms.md` last section): `queue_sms_openers` skips the WhatsApp queue
+  (any lane, any row with the phone), a real WhatsApp send, a WhatsApp conversation and a failed WhatsApp send; `no_whatsapp` mobiles may be texted. Every
+  queue path asks it `_dry_run` first through `src/lib/smsQueueBatch.ts` and shows THAT count; ONE limit `SMS_QUEUE_MAX_PER_ACTION` (= daily cap), over it
+  = the first that pass + `over_cap`. `no_whatsapp_needs_sms` reads **"No mobile"**, `no_whatsapp` **"No WhatsApp"** (Paul; reverses 2026-08-08).
 - **Verification tiers** are §3a: `check:quick` / `test:changed` while working, ONE full gate before shipping, always for messaging / auth / database /
   payments / secrets; always verify the deployed site.
 

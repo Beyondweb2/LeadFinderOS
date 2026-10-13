@@ -86,14 +86,9 @@ const statusConfig: Record<LeadStatus, { label: string; shortLabel: string; clas
     shortLabel: 'Not Int.',
     className: 'bg-[hsl(var(--badge-not-interested))] text-[hsl(var(--badge-not-interested-fg))] border-transparent font-semibold',
   },
-  /* ⚠️ BOTH READ "No WhatsApp", AND THAT IS DELIBERATE — Paul's call, 2026-08-08. He does no SMS
-     outreach, so the difference between a mobile with no WhatsApp account and a landline changes
-     nothing about what he does next: both mean email instead. A label that draws a distinction the
-     operator never acts on is noise.
-     ⛔ WHAT MUST NOT BE "TIDIED" ON THE BACK OF THIS: the two statuses stay SEPARATE IN THE DATA and
-     keep different colours. They describe two different phones, and merging the values would lose
-     that fact for ever. (SMS left the product 2026-09-16; the second status is the landline marker,
-     Paul's decision to keep it.) The colour is what keeps them tellable apart on screen.
+  /* ⛔ "No WhatsApp" vs "No mobile" (Paul, 2026-10-13 — reverses the 2026-08-08 shared label). Texting is back, and a
+     mobile with no WhatsApp CAN be texted while a landline cannot, so the two must read differently.
+     The two statuses stay SEPARATE IN THE DATA and keep different colours.
        no_whatsapp            a real mobile with no WhatsApp account
        no_whatsapp_needs_sms  not a mobile at all — a landline/VoIP number (1,861 leads, 2026-09-15) */
   no_whatsapp: {
@@ -102,9 +97,9 @@ const statusConfig: Record<LeadStatus, { label: string; shortLabel: string; clas
     className: 'bg-[hsl(var(--badge-gray))] text-[hsl(var(--badge-gray-fg))] border-transparent font-semibold',
   },
   no_whatsapp_needs_sms: {
-    /* Same words as no_whatsapp above, different colour. See the block there for why. */
-    label: 'No WhatsApp',
-    shortLabel: 'No WA',
+    /* Not a mobile at all (landline / no number): no WhatsApp AND no text. See the block above. */
+    label: 'No mobile',
+    shortLabel: 'No mobile',
     className: 'bg-[hsl(var(--badge-cyan))] text-[hsl(var(--badge-cyan-fg))] border-transparent font-semibold',
   },
   completed: {

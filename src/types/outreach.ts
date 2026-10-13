@@ -47,7 +47,7 @@ export type LeadStatus =
   | 'refunded'
   | 'completed'
   | 'no_whatsapp'        // number isn't on WhatsApp (permanent — reach via SMS/call/email)
-  | 'no_whatsapp_needs_sms' // offline line-type gate: not a mobile → never queued; pick up for SMS
+  | 'no_whatsapp_needs_sms' // offline line-type gate: not a mobile → never queued, never texted ("No mobile")
   | 'whatsapp_failed'    // WhatsApp send failed after retries (temporary — re-queueable)
   | 'email_sent'         // pushed to an Instantly.ai email campaign
   | 'bounced'            // Instantly reported the email bounced
@@ -303,15 +303,11 @@ export const OUTREACH_STATUS_OPTIONS: { value: LeadStatus; label: string }[] = [
   { value: 'interested', label: 'Interested ⭐ (star only)' },
   { value: 'not_interested', label: 'Not Interested' },
   /* ⚠️ THE FILTER LIST IS A THIRD LABEL SOURCE, and it is the one the operator reads BEFORE
-     choosing. It must match the pill, so these carry the same simplification — see
-     PipelineStatusBadge for why both read "No WhatsApp".
-     ⚠️ KNOWN COST OF THAT CHOICE, FLAGGED AND ACCEPTED: this dropdown now offers TWO entries with
-     identical text and no colour to separate them, so picking the wrong one shows 53 rows instead of
-     509. On the pills the colour still distinguishes them; in a <select> there is nothing to. If
-     that becomes annoying the fix is one combined option that filters on both values, NOT a
-     re-split of the labels. */
+     choosing. It must match the pill (PipelineStatusBadge). Since 2026-10-13 the two read differently
+     ("No WhatsApp" = a mobile with no WhatsApp, which can still be texted; "No mobile" = a landline / no
+     number), so the filter offers them as two options. */
   { value: 'no_whatsapp', label: 'No WhatsApp' },
-  { value: 'no_whatsapp_needs_sms', label: 'No WhatsApp' },
+  { value: 'no_whatsapp_needs_sms', label: 'No mobile' }, // 2026-10-13: a landline / no number — not texted either (Paul)
   /* ⚠️ Two entries, one label. That is right for this list, which is the canonical status -> label
      map and is also what the per-row status SETTER renders — a setter must offer every status
      individually, because setting one is choosing exactly one. The FILTER does not use this list;

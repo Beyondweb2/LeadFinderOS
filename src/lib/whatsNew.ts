@@ -22,6 +22,22 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-13-sms-queue-whatsapp-rules', date: '2026-10-13', title: 'Queue for text never texts a business you tried on WhatsApp, and says the real number first', audience: 'all',
+    body: 'Before anything is queued, the Queue for text popup now asks the server what would really happen and shows that number, with the reason for every lead it skips. Businesses waiting in the WhatsApp queue, already messaged on WhatsApp, or in a WhatsApp conversation are never texted.',
+    report: {
+      added: [
+        'The popup checks your selection first: "Queue 37 of 120 for text", the button says the same number, and the skipped leads are listed with their reasons (for example "already messaged on WhatsApp", "no mobile", "asked not to be contacted", "over the limit for one go").',
+        'New skip reasons: already in the WhatsApp queue (even if not sent yet), already messaged on WhatsApp, already tried on WhatsApp (the send failed).',
+        'A new "No mobile" label for landlines and leads with no number.',
+      ],
+      changed: [
+        'One limit: up to 100 can be queued in one go, the same as the most texts that go out in a day. A bigger selection queues the first 100 that pass instead of showing "Nothing queued".',
+        '"No WhatsApp" now means only a mobile with no WhatsApp (it can still get a text). Landlines read "No mobile", and the status filter has both.',
+        'The Inbox bulk text uses the same checks and the same limit.',
+      ],
+      removed: ['The "Queue up to 200 at a time" message.'],
+      effect: 'You can select a whole list and press Queue for text without worrying about doubling up on WhatsApp, and you know exactly how many will go before you press.',
+    } },
   { id: '2026-10-13-find-leads-add-reliable', date: '2026-10-13', title: 'Add to CRM on Find Leads no longer throws "Error loading leads"', audience: 'all',
     body: 'Find Leads loads your lead list in the background. A slow database answer used to fail that load and show "Error loading leads [object Object]". It now retries, and Add to CRM is safe to press while it loads.',
     report: {

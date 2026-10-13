@@ -39,7 +39,7 @@ export function whatsAppCapabilityOf(l: WhatsAppCapabilityInput): WhatsAppCapabi
 export const WHATSAPP_CAPABILITY_LABEL: Record<WhatsAppCapability, string> = {
   not_on_whatsapp: 'No WhatsApp',
   verified: 'WhatsApp verified',
-  not_mobile: 'Not a mobile',
+  not_mobile: 'No mobile',
   mobile_unchecked: 'Mobile number',
   unchecked: 'WhatsApp not checked',
 };
@@ -48,7 +48,7 @@ export const WHATSAPP_CAPABILITY_LABEL: Record<WhatsAppCapability, string> = {
 export const WHATSAPP_CAPABILITY_DETAIL: Record<WhatsAppCapability, string> = {
   not_on_whatsapp: 'No WhatsApp — Meta rejected a message to this number. Call or email instead.',
   verified: 'WhatsApp verified — a message to this number was delivered.',
-  not_mobile: 'Not a mobile (landline or VoIP, from the number format) — call or email.',
+  not_mobile: 'No mobile (landline or VoIP, from the number format) — no WhatsApp and no text. Call or email.',
   mobile_unchecked: 'Mobile number — WhatsApp not checked yet (only a message can confirm it).',
   unchecked: 'WhatsApp not checked.',
 };

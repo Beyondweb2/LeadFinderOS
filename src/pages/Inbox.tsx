@@ -3,7 +3,8 @@ import { InboxChannelSwitch, useInboxChannel } from '@/components/InboxChannelSw
 import { smsTemplateAvailability, type InboxChannel } from '@/lib/inboxChannel';
 import { markSmsRead, smsKeys, useSmsUnread } from '@/hooks/useSms';
 import { isPlausibleUkMobile, smsPillOf } from '@/lib/smsStatus';
-import { isColdSmsTemplate, SMS_QUEUE_SKIP_WORDS } from '@/lib/smsMessages';
+import { isColdSmsTemplate } from '@/lib/smsMessages';
+import { checkSmsQueue, runSmsQueue, type SmsQueueRpc } from '@/lib/smsQueueBatch';
 import { CHANNEL_COST_GBP, costWords } from '@/lib/channelCosts';
 import { AutoReplyToggle } from '@/components/AutoReplyToggle';
 import { hookAuditRequestBody } from '@/lib/hookAuditRequest';
@@ -1185,19 +1186,18 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
     setBulkReport(null);
     setBulkProgress({ done: 0, total: targets.length });
     if (sms && isColdSmsTemplate(bulkTemplate)) {
-      /* bulk-queue difference: a cold text opener is QUEUED (queue_sms_openers → the paced text drip), never sent in a burst. The RPC applies
-         the same mobile / opt-out / already-texted / WhatsApp-conversation guards and says why each skipped lead was skipped. */
+      /* bulk-queue difference: a cold text opener is QUEUED (queue_sms_openers → the paced text drip), never sent in a burst. The SAME helper
+         as Outreach's Queue for text (smsQueueBatch): the server checks every lead (WhatsApp queue / messages / conversation, already texted,
+         spoken to, opted out, UK mobile), at most SMS_QUEUE_MAX_PER_ACTION are queued, and every lead not queued is named with its reason. */
       try {
-        const { data, error } = await (supabase as unknown as { rpc: (n: string, a: unknown) => Promise<{ data: { ok?: boolean; queued?: number; error?: string; skipped?: Record<string, number> } | null; error: { message: string } | null }> })
-          .rpc('queue_sms_openers', { _lead_ids: targets.map((t) => t.leadId).filter(Boolean), _template: bulkTemplate });
-        if (error || !data?.ok) {
-          setBulkReport({ sent: 0, failed: [{ key: 'queue', label: 'Text queue', reason: error?.message ?? data?.error ?? 'could not queue' }] });
-        } else {
-          const skipped = Object.entries(data.skipped ?? {}).map(([k, n]) => ({ key: k, label: `${n} lead${n === 1 ? '' : 's'}`, reason: SMS_QUEUE_SKIP_WORDS[k] ?? k }));
-          setBulkReport({ sent: data.queued ?? 0, failed: skipped });
-          toast({ title: `Queued ${data.queued ?? 0} text${data.queued === 1 ? '' : 's'}`, description: 'They go out one at a time inside the text sending hours. Nothing was sent now.' });
-          void queryClient.invalidateQueries({ queryKey: ['sms-queue'] });
-        }
+        const rpc: SmsQueueRpc = (args) => (supabase as unknown as { rpc: (n: string, a: Parameters<SmsQueueRpc>[0]) => ReturnType<SmsQueueRpc> }).rpc('queue_sms_openers', args);
+        const plan = await checkSmsQueue(rpc, targets.map((t) => t.leadId).filter(Boolean) as string[], bulkTemplate);
+        const r = await runSmsQueue(rpc, plan, bulkTemplate);
+        setBulkReport({ sent: r.queued, failed: r.skipped.map((l) => ({ key: l.key, label: `${l.n} lead${l.n === 1 ? '' : 's'}`, reason: l.label })) });
+        toast({ title: `Queued ${r.queued} text${r.queued === 1 ? '' : 's'}`, description: 'They go out one at a time inside the text sending hours. Nothing was sent now.' });
+        void queryClient.invalidateQueries({ queryKey: ['sms-queue'] });
+      } catch (e) {
+        setBulkReport({ sent: 0, failed: [{ key: 'queue', label: 'Text queue', reason: e instanceof Error ? e.message : 'could not queue' }] });
       } finally {
         setBulkBusy(false);
         setBulkConfirm(false);

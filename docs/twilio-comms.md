@@ -150,3 +150,26 @@ before the mode gate; none since.
 
 **Verification** is tiered — see CLAUDE.md §3a: `npm run check:quick` and `npm run test:changed` while working; `npm run check` ONCE before shipping and always for
 messaging / auth / database / payments / secrets.
+
+## Queue for text: WhatsApp-tried leads skipped, honest counts, one limit (2026-10-13, feat/sms-queue-rules)
+
+- **Server rule** (`queue_sms_openers`, migration `20261023090000`): skips, in this order and each with its own reason key —
+  not found / not yours / archived / client / already in the text queue → `in_whatsapp_queue` (status `queued`, or either
+  follow-up lane, or another live row with the same phone waiting in the WhatsApp queue — sent or not) → `whatsapp_messaged`
+  (a real send stamp, or a non-failed OUTBOUND WhatsApp message on the phone) → `in_whatsapp_conversation` (any other non-failed
+  WhatsApp message on the phone) → `whatsapp_failed` (we tried WhatsApp and it failed for a reason other than "not on WhatsApp";
+  the safe default — 9 leads on the day) → not new → no phone / not a UK mobile (both read "no mobile") → opted out → already
+  texted → spoken to (`opener_contact_block`). A mobile WhatsApp rejected as "not on WhatsApp" (`no_whatsapp`) may be texted.
+- **`_dry_run`** runs every check and writes nothing (no queue mark, no No SMS mark, no activity row, no guard row) and returns the
+  ids that would be queued. The popup's title, button and reason list are THAT answer (`src/lib/smsQueueBatch.ts`, used by
+  Outreach's Queue for text — single lead, ticked leads and Select all — and the Inbox bulk text). Salespeople cannot read
+  `contact_suppressions`, so no browser-side guess could be honest.
+- **One limit**: `SMS_QUEUE_MAX_PER_ACTION` = `SMS_QUEUE_DAILY_CAP`. A real call above it is refused (`too_many`); a dry run may
+  look at up to 1000 (the browser checks in `SMS_QUEUE_CHECK_CHUNK`s). A bigger selection queues the first that-many that pass,
+  in selection order; the rest are reported `over_cap`. The old 200-per-call refusal ("Queue up to 200 at a time") is gone.
+- **Labels** (reverses the 2026-08-08 shared label): `no_whatsapp` = "No WhatsApp" (a mobile; can be texted),
+  `no_whatsapp_needs_sms` = "No mobile" (landline / no number / not a UK mobile; no WhatsApp, no text). Two filter options.
+- Verified before applying: the new function was loaded as a session-only `pg_temp` copy and dry-run on live samples (40 each):
+  WhatsApp-queued → 40 `in_whatsapp_queue`; WhatsApp-contacted → 40 `whatsapp_messaged`; `whatsapp_failed` → 9 skipped;
+  `no_whatsapp` mobiles → 38 would queue (2 are UK mobiles stored with country USA, still refused by the existing country check);
+  landlines → 0. Tests: `scripts/sms-queue-rules.test.ts`.

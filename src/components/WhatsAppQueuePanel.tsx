@@ -319,7 +319,7 @@ export function WhatsAppQueuePanel({ defaultExpanded = true }: { defaultExpanded
           WhatsApp when it reaches them. Counted from the rows on screen. */}
       {view.unsendable > 0 && (
         <Callout tone="amber" className="mt-2 px-3 py-2 text-[11px]" data-testid="queue-unsendable">
-          {view.unsendable} queued {view.unsendable === 1 ? 'lead has' : 'leads have'} no number WhatsApp can reach (cold WhatsApp is UK mobiles only). {view.unsendable === 1 ? 'It' : 'They'} will be flagged No WhatsApp, not sent.
+          {view.unsendable} queued {view.unsendable === 1 ? 'lead has' : 'leads have'} no number WhatsApp can reach (cold WhatsApp is UK mobiles only). {view.unsendable === 1 ? 'It' : 'They'} will be flagged No mobile, not sent.
         </Callout>
       )}
 
