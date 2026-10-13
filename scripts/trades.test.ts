@@ -27,6 +27,8 @@ const REAL: Array<[string, string]> = [
   ["electrician", "electrician"], ["electricians", "electrician"],
   ["mobile mechanics", "mobile-mechanic"], ["Mobile mechanics", "mobile-mechanic"],
   ["mobile valeting and detailing", "mobile-valeting"],
+  /* outreach_leads.search_keyword and ai_audits.business_type, read 2026-10-13. */
+  ["roofer", "roofer"], ["roofers", "roofer"], ["Roofer", "roofer"],
 ];
 for (const [stored, slug] of REAL) {
   const t = canonicalTrade(stored);

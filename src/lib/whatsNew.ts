@@ -22,6 +22,18 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-13-coverage-roofers', date: '2026-10-13', title: 'Roofers now appear on Coverage', audience: 'all',
+    body: 'Roofers is now in the Coverage trade list, with the same towns as every other trade. Roofer leads and messages already in the system count straight away.',
+    report: {
+      added: [
+        'Roofers in the Coverage trade picker, and in the "Set trade" picker on Outreach.',
+      ],
+      changed: [
+        'Roofer leads (searched as "roofer" or "roofers") now show as Leads or Worked on Coverage in their towns, for example Stockport and Doncaster.',
+      ],
+      removed: [],
+      effect: 'You can see which towns you have already covered for roofers and which are untouched. The other trades are unchanged.',
+    } },
   { id: '2026-10-13-gemini-one-engine', date: '2026-10-13', title: 'Drafts and call scripts say "Gemini", and stick to one AI tool per conversation', audience: 'all',
     body: 'Reply drafts, call scripts and voice-note scripts now say "Gemini" instead of "Google AI", and a follow-up always names the same AI tool your earlier message did.',
     report: {
