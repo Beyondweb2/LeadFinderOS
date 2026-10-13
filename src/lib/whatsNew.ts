@@ -22,6 +22,20 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-13-find-leads-add-reliable', date: '2026-10-13', title: 'Add to CRM on Find Leads no longer throws "Error loading leads"', audience: 'all',
+    body: 'Find Leads loads your lead list in the background. A slow database answer used to fail that load and show "Error loading leads [object Object]". It now retries, and Add to CRM is safe to press while it loads.',
+    report: {
+      added: [
+        'Add to CRM shows "Adding…" and cannot be pressed twice while a lead is being added.',
+      ],
+      changed: [
+        'A slow page of the lead list is tried again (up to three times) instead of failing the whole list.',
+        'If the list still cannot load, the message says what happened and what to do (for example "The database was busy… reload the page in a moment"), never "[object Object]".',
+        'A lead you add while the list is loading stays marked as added when the load finishes. Before, it could flip back to "Add to CRM".',
+      ],
+      removed: [],
+      effect: 'You can add leads straight from a search without waiting for the list, and you will not get a duplicate or a confusing red error.',
+    } },
   { id: '2026-10-13-coverage-roofers', date: '2026-10-13', title: 'Roofers now appear on Coverage', audience: 'all',
     body: 'Roofers is now in the Coverage trade list, with the same towns as every other trade. Roofer leads and messages already in the system count straight away.',
     report: {

@@ -122,10 +122,19 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
   const { user } = useAuth();
   // Allow saving up to maxFreeSaves leads even for gated users
   const canSave = !gated || savedLeadCount < maxFreeSaves;
+  /* Rows whose Add to CRM is running: the button shows a spinner and cannot be pressed again until the add
+     answers (useOutreach.addLead also joins a repeat press to the same add — this is the visible half). */
+  const [addingIds, setAddingIds] = useState<ReadonlySet<string>>(() => new Set());
   const handleAddToOutreach = useCallback((lead: Lead) => {
     if (gated && !canSave) { onGatedAction?.(); return; }
-    return onAddToOutreach?.(lead);
-  }, [onAddToOutreach, gated, canSave, onGatedAction]);
+    if (addingIds.has(lead.id)) return;
+    const run = onAddToOutreach?.(lead);
+    if (!run || typeof (run as Promise<unknown>).finally !== 'function') return run;
+    setAddingIds((prev) => new Set(prev).add(lead.id));
+    return (run as Promise<unknown>).finally(() => {
+      setAddingIds((prev) => { const next = new Set(prev); next.delete(lead.id); return next; });
+    });
+  }, [onAddToOutreach, gated, canSave, onGatedAction, addingIds]);
 
   const checkIsInOutreach = useCallback((name: string, url?: string) => {
     return isInOutreach?.(name, url) ?? false;
@@ -754,10 +763,12 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
                             size="icon"
                             className={`h-8 w-8 bg-primary hover:bg-primary/90`}
                             onClick={() => handleAddToOutreach(lead)}
+                            disabled={addingIds.has(lead.id)}
+                            aria-busy={addingIds.has(lead.id)}
                             data-walkthrough-step="add-to-crm"
                             data-walkthrough="add-crm"
                           >
-                            <ClipboardList className="h-3.5 w-3.5" />
+                            {addingIds.has(lead.id) ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ClipboardList className="h-3.5 w-3.5" />}
                           </Button>
                         </TooltipTrigger>
                          <TooltipContent>Save this lead</TooltipContent>
@@ -976,11 +987,14 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
                                 size="sm"
                                 className={`h-8 px-3 text-xs gap-1.5 text-green-600 dark:text-green-500 border-green-600/30 hover:bg-green-500/10 hover:text-green-500`}
                                 onClick={() => handleAddToOutreach(lead)}
+                                disabled={addingIds.has(lead.id)}
+                                aria-busy={addingIds.has(lead.id)}
+                                data-testid="find-leads-add-to-crm"
                                 data-walkthrough-step="add-to-crm"
                                 data-walkthrough="add-crm"
                               >
-                                <ClipboardList className="h-3.5 w-3.5" />
-                                Add to CRM
+                                {addingIds.has(lead.id) ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ClipboardList className="h-3.5 w-3.5" />}
+                                {addingIds.has(lead.id) ? 'Adding…' : 'Add to CRM'}
                               </Button>
                             </TooltipTrigger>
                             <TooltipContent>{addCampaignTooltip}</TooltipContent>

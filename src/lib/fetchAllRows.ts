@@ -171,7 +171,10 @@ export async function fetchAllRowsParallel<T>(
   keyOf: (row: T) => string,
   concurrency = 6,
 ): Promise<{ rows: T[]; truncated: boolean }> {
-  const first = await build(0, PAGE - 1);
+  /* Every page, page 0 included, gets the same retry as fetchPagesAfterFirst (2026-10-13): Find Leads loads the
+     whole book through here, and one page past the 8 s statement timeout used to fail the lot ("Error loading
+     leads"). A page that keeps failing still throws. */
+  const first = await buildWithRetry(build, 0, PAGE - 1);
   if (first.error) throw first.error;
   const firstRows = (first.data ?? []) as T[];
   const size = firstRows.length;
@@ -191,7 +194,7 @@ export async function fetchAllRowsParallel<T>(
       if (next >= MAX_PAGES) { truncated = true; break; }
       const wave = Array.from({ length: Math.min(waveLen, MAX_PAGES - next) }, (_, i) => next + i);
       waveLen = concurrency;
-      const results = await Promise.all(wave.map((p) => build(p * size, p * size + size - 1)));
+      const results = await Promise.all(wave.map((p) => buildWithRetry(build, p * size, p * size + size - 1)));
       for (const r of results) {
         if (r.error) throw r.error;
         const batch = (r.data ?? []) as T[];
