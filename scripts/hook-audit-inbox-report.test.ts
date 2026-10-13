@@ -219,30 +219,24 @@ function report(grid: Array<[G, G]>, extra: Record<string, unknown> = {}) {
 /* ── I / J / L. THE 3/6 REPORT: table, featured search ─────────────────────────────────────── */
 {
   const { d, html, t } = report([[true, false], [true, true], [false, false]]);
-  /* Concept 4 (2026-10-06): the table is a real <table>, one row per question, a chip per engine. */
-  const tbl = html.slice(html.indexOf('<table class="q4-tbl">'), html.indexOf('</table>', html.indexOf('<table class="q4-tbl">')));
-  const rowsHtml = tbl.match(/<td class="q4-tq">/g) ?? [];
-  ok(/All questions we asked/i.test(t) && rowsHtml.length === 3, 'I: the table has exactly 3 question rows');
+  /* Chat view (2026-10-13): one window per question, one reply per engine. */
+  const chats = [...html.matchAll(/<article class="q4-chat">([\s\S]*?)<\/article>/g)].map((m) => m[1]);
+  ok(chats.length === 3, 'I: one chat window per question (3)');
   ok(Q.every((q) => html.includes(q.replace(/'/g, '&#39;'))), 'I: all three questions are visible');
-  const head = tbl.match(/<thead>([\s\S]*?)<\/thead>/)?.[1] ?? '';
-  ok(/ChatGPT/.test(head) && /Gemini/.test(head), 'I: columns are ChatGPT and Gemini');
-  const marks = tbl.match(/class="q4-chip q4-chip--(y|n|na)"/g) ?? [];
-  ok(marks.length === 6 && !marks.some((m) => m.includes('--na')), 'I: each row has a ChatGPT and a Google AI status (6 chips)');
+  ok(chats.every((c) => /q4-reply--gpt[\s\S]*ChatGPT[\s\S]*q4-reply--gai[\s\S]*Gemini/.test(c)), 'I: each window has a ChatGPT reply then a Gemini reply');
+  const me = chats.map((c) => [c.slice(c.indexOf('q4-reply--gpt'), c.indexOf('q4-reply--gai')), c.slice(c.indexOf('q4-reply--gai'))].map((x) => /q4-who--me/.test(x) ? 'y' : /You weren/.test(x) ? 'n' : '?').join(''));
+  ok(me.join(',') === 'yn,yy,nn', `I: each reply says named / not mentioned, matching the audit (${me.join(',')})`);
   ok(/50\s*%/.test(t) && /Overall AI visibility/i.test(t) && /3 of 6 answers named your business/.test(t), 'L: 3/6 → 50% with "3 of 6 answers named your business" under it');
   ok(/You're being named, but not consistently\./.test(t), 'L: verdict "being named, but not consistently"');
   const g = d!.hook!.gap!;
   ok(g.engine === 'gemini' && g.question === Q[2], 'J: the featured search is the strongest Google AI miss');
-  ok(/Featured question/i.test(t) && /Gemini/i.test(t) && /Not named/i.test(t), 'J: featured block: the question, the Gemini answer, NOT NAMED');
-  /* Soft redesign (2026-10-06): the featured question shows EVERY engine's answer, each card with its
-     OWN competitors — names never cross from one engine's card to the other's. */
-  const card = (eng: string) => { const i = html.indexOf(`class="q4-ans q4-ans--${eng}"`); return i < 0 ? '' : html.slice(i, html.indexOf('</article>', i)); };
-  ok(RIVALS['2:gemini'].every((n) => card('gai').includes(n.replace(/'/g, '&#39;'))), 'J: the Google AI card’s names are that exact result’s own list');
-  ok(card('gpt').includes('Commercial Power Ltd') && !card('gai').includes('Commercial Power Ltd'), 'J: never another engine’s competitors inside a card');
-  /* 🔴 REVERSED ON PURPOSE (Paul, 2026-10-06): the AI's own words are back on the quick report — the
-     featured answer's cleaned excerpt, and only that one (no other engine's prose). */
-  ok(/If you are looking for reliable commercial electricians/.test(t), 'J: the featured answer is quoted (cleaned excerpt)');
-  ok(!/A long friendly paragraph/.test(t), 'J: no OTHER answer’s prose is quoted');
-  ok(/<mark class="q4-hl">Addlestone Electricians<\/mark>/.test(html), 'J: a competitor named in the answer is highlighted inside it');
+  const win = chats[2] ?? '';
+  const gpt = win.slice(win.indexOf('q4-reply--gpt'), win.indexOf('q4-reply--gai'));
+  const gai = win.slice(win.indexOf('q4-reply--gai'));
+  ok(RIVALS['2:gemini'].every((n) => gai.includes(n.replace(/'/g, '&#39;'))), 'J: the Gemini reply’s names are that exact result’s own list');
+  ok(gpt.includes('Commercial Power Ltd') && !gai.includes('Commercial Power Ltd'), 'J: never another engine’s competitors inside a reply');
+  ok(/If you are looking for reliable commercial electricians/.test(t), 'J: a short real snippet of the answer is quoted');
+  ok(!/<mark/.test(html), 'J: no highlighter marks');
   ok(!/Google AI(?! Overview)/.test(t.replace(/<style[\s\S]*?<\/style>/g, '')), 'the quick report never says "Google AI" for Gemini');
   ok(!/Where you show up, and where you don/.test(t) && !/Why you&rsquo;re not in the answer/.test(html), 'the long "the fix" section is dropped from the quick report');
 }
@@ -257,8 +251,8 @@ function report(grid: Array<[G, G]>, extra: Record<string, unknown> = {}) {
   const n = report([[true, true], [true, true], [true, true]]);
   ok(/100\s*%/.test(n.t) && /6 of 6 answers/.test(n.t), 'N: 6/6 → 100%, 6 of 6 answers');
   ok(/You're being named consistently in this quick check\./.test(n.t), 'N: consistent verdict');
-  ok(!/Not named/i.test(n.t) && n.d!.hook!.featured!.answers.every((a) => a.named), 'N: no manufactured miss — the featured question shows named answers only');
-  ok((n.html.slice(n.html.indexOf('<table class="q4-tbl">')).match(/q4-chip--y/g) ?? []).length === 6, 'N: the table shows all six named chips');
+  ok(!/Not named|weren’t mentioned/i.test(n.t), 'N: no manufactured miss');
+  ok((n.html.match(/q4-who q4-who--me/g) ?? []).length === 6, 'N: six green ticks, one per answer');
   // Percentages derive from the counts, never hard-coded.
   const pct = (grid: Array<[G, G]>) => report(grid).d!.hook!.score!.percent;
   ok(pct([[true, false], [false, false], [false, false]]) === 17 && pct([[true, true], [false, false], [false, false]]) === 33 && pct([[true, true], [true, true], [false, false]]) === 67, '1/6 → 17%, 2/6 → 33%, 4/6 → 67%');

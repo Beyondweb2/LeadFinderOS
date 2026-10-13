@@ -1,6 +1,6 @@
-import { hookReportCopy, normaliseRivalName, sameBusiness, type HookReportSummary } from './hookAudit.ts';
+import { hookReportCopy, type HookReportSummary } from './hookAudit.ts';
 import { articleTrade } from './templateVars.ts';
-import { AI_OVERVIEW_CONTEXT_LABEL, AI_OVERVIEW_LABEL, AI_OVERVIEW_NOT_SCORED, AI_OVERVIEW_REPORT_LABEL as AI_OVERVIEW_ROW_LABEL, NO_OVERVIEW_DETAIL, NO_OVERVIEW_TEXT, OVERVIEW_NO_NAMES_TEXT } from './aiOverview.ts';
+import { AI_OVERVIEW_LABEL, AI_OVERVIEW_NOT_SCORED, AI_OVERVIEW_REPORT_LABEL as AI_OVERVIEW_ROW_LABEL, NO_OVERVIEW_DETAIL, NO_OVERVIEW_TEXT, OVERVIEW_NO_NAMES_TEXT } from './aiOverview.ts';
 // Client-facing AI Visibility Audit report — shared data shape + a standalone,
 // self-contained, PRINT-READY one-page HTML document for download (Findable-branded,
 // inline styles, no dependencies). Deliberately client-friendly: no engine keys, no
@@ -1093,38 +1093,6 @@ function quickOverallTone(named: number, total: number): 'red' | 'amber' | 'gree
   return band === 'high' ? 'green' : band === 'mid' ? 'amber' : 'red';
 }
 
-const reEscape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-/** Escape `text`, wrapping each genuine occurrence of a named business. A name matches on its own
- *  (letters on either side are a different word), case-insensitively, also without a trailing "Ltd" /
- *  "Limited" — the way an answer usually writes it. Only names we were given are marked. */
-export function quickHighlight(text: string, names: string[], cls = 'q4-hl', me: string[] = []): string {
-  const variants = (list: string[]) => {
-    const out = new Set<string>();
-    for (const n of list) {
-      const t = String(n || '').trim();
-      if (t.length < 3) continue;
-      out.add(t);
-      const short = t.replace(/\s+(?:ltd|limited)\.?$/i, '').trim();
-      if (short.length >= 3 && short !== t) out.add(short);
-    }
-    return out;
-  };
-  /* The client's own name (only passed for an answer that NAMED them) is marked green; rivals yellow. */
-  const mine = variants(me);
-  const pats = new Set([...variants(names), ...mine]);
-  if (!pats.size) return esc(text);
-  const mineLower = new Set([...mine].map((x) => x.toLowerCase()));
-  const re = new RegExp(`(?<![A-Za-z0-9])(?:${[...pats].sort((a, b) => b.length - a.length).map(reEscape).join('|')})(?![A-Za-z0-9])`, 'gi');
-  let out = '';
-  let last = 0;
-  for (const m of text.matchAll(re)) {
-    const own = mineLower.has(m[0].toLowerCase());
-    out += esc(text.slice(last, m.index)) + `<mark class="${own ? `${cls} ${cls}--me` : cls}">${esc(m[0])}</mark>`;
-    last = (m.index ?? 0) + m[0].length;
-  }
-  return out + esc(text.slice(last));
-}
-
 /** How an answer may write the client's own name: the full name, without "Ltd"/"Limited", "&" as
  *  "and" (and back), and its leading three-plus words not ending on a joining word ("5 Towns Roofing"
  *  for "5 Towns Roofing and Guttering" — measured on a real Google AI answer). USED ONLY INSIDE AN
@@ -1186,33 +1154,86 @@ const Q4_ICONS = {
   spark: '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2.5c.5 5 3.6 8.1 8.6 8.6-5 .5-8.1 3.6-8.6 8.6-.5-5-3.6-8.1-8.6-8.6 5-.5 8.1-3.6 8.6-8.6Z"/></svg>',
 };
 
-/** How much of each answer the report quotes: about two lines, cut at a sentence or word boundary by
- *  answerExcerpt and clamped to two lines by CSS (2026-10-11 restyle, Paul: "no long answer text"). The
- *  names are the point of the card; the words under them only show the AI said it. */
-export const QUICK_ANSWER_CHARS = 320;
+/** How much of each answer the chat view quotes: a short real snippet, cut at a sentence or word
+ *  boundary by answerExcerpt and clamped to two lines by CSS. The names are the point of the reply;
+ *  the words under them only show the AI said it. */
+export const QUICK_ANSWER_CHARS = 220;
+/** At most this many competitors per reply, then "+N more" (Paul, 2026-10-13). */
+export const QUICK_MAX_RIVALS = 5;
 
-/** The solid colours a business named instead wears in the question table (Paul, 2026-10-11: green,
- *  amber, violet, orange, grey, rose — never blue). One business keeps one colour across the table. */
-const Q4_NAME_TONES = ['green', 'amber', 'violet', 'orange', 'grey', 'rose'] as const;
+const reEscape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+/** Where a name first appears in the answer (its own word, case-insensitive, also without a trailing
+ *  "Ltd" / "Limited"), or Infinity when the text never writes it. Used only to ORDER the names. */
+function firstMention(text: string, variants: string[]): number {
+  let best = Infinity;
+  for (const v of variants) {
+    const t = String(v || '').trim();
+    for (const form of [t, t.replace(/\s+(?:ltd|limited)\.?$/i, '').trim()]) {
+      if (form.length < 3) continue;
+      const m = new RegExp(`(?<![A-Za-z0-9])${reEscape(form)}(?![A-Za-z0-9])`, 'i').exec(text);
+      if (m && m.index < best) best = m.index;
+    }
+  }
+  return best;
+}
 
-/** One answer's words as a two-line snippet, rivals marked yellow and the client (only inside an
- *  answer judged NAMED) green. "…" closes it when the AI said more. Empty when nothing readable survives. */
-function quickSnippetHtml(text: string, names: string[], me: string[]): string {
-  const ex = answerExcerpt(text, QUICK_ANSWER_CHARS, me.length ? me : names);
+/** One reply's names in the order the AI named them: each name's first appearance in the answer text;
+ *  ties and names the text never writes keep the stored order (the order extraction read them in). The
+ *  client — passed only when the answer NAMED them — sits at their own first mention, or first when the
+ *  text never spells them out (the verdict said named). Names are printed exactly as stored. */
+export function quickReplyOrder(answerText: string, rivals: string[], businessName: string | null): Array<{ name: string; me: boolean }> {
+  const text = String(answerText || '');
+  const rows = rivals.map((name, i) => ({ name, me: false, at: firstMention(text, [name]), i }));
+  if (businessName) {
+    const at = firstMention(text, ownNameVariants(businessName));
+    rows.push({ name: businessName, me: true, at: Number.isFinite(at) ? at : -1, i: -1 });
+  }
+  return rows.sort((a, b) => (a.at === b.at ? 0 : a.at < b.at ? -1 : 1) || (a.i - b.i)).map(({ name, me }) => ({ name, me }));
+}
+
+/** A short real snippet of one answer, or '' when nothing readable survives. Never rewritten. */
+function quickSnippet(text: string, focus: string[]): string {
+  const ex = answerExcerpt(text, QUICK_ANSWER_CHARS, focus);
   if (!ex) return '';
   const plain = ex.blocks.map((b) => b.text.trim()).filter(Boolean).join(' ').replace(/\s+/g, ' ');
-  return `<p class="q4-snip">${ex.lead ? '&hellip; ' : ''}${quickHighlight(plain, names, 'q4-hl', me)}${ex.truncated ? ' &hellip;' : ''}</p>`;
+  return plain ? `<p class="q4-snip">&ldquo;${ex.lead ? '&hellip; ' : ''}${esc(plain)}${ex.truncated ? ' &hellip;' : ''}&rdquo;</p>` : '';
 }
 
-/** The yellow pills for the businesses an answer named instead of the client. */
-function quickNamePills(names: string[], max: number, small = false): string {
-  const shown = names.slice(0, max);
-  const more = names.length - shown.length;
-  return `<div class="q4-names${small ? ' q4-names--sm' : ''}">${shown.map((n) => `<span class="q4-name">${esc(n)}</span>`).join('')}${more > 0 ? `<span class="q4-name-more">+${more} more</span>` : ''}</div>`;
+/** The list of who one reply named. GREEN + tick = the client; RED + cross = a competitor (every
+ *  competitor the same red); up to QUICK_MAX_RIVALS competitors, then "+N more". */
+function quickNameList(entries: Array<{ name: string; me: boolean }>): string {
+  const shown: Array<{ name: string; me: boolean }> = [];
+  let rivals = 0;
+  let hidden = 0;
+  for (const e of entries) {
+    if (e.me) { shown.push(e); continue; }
+    if (rivals < QUICK_MAX_RIVALS) { shown.push(e); rivals++; } else hidden++;
+  }
+  if (!shown.length) return '';
+  return `<ul class="q4-list">${shown.map((e) => e.me
+    ? `<li class="q4-who q4-who--me"><span class="q4-ico" aria-hidden="true">&#10003;</span><span class="q4-sr">Named you: </span><span class="q4-nm">${esc(e.name)}</span></li>`
+    : `<li class="q4-who q4-who--rival"><span class="q4-ico" aria-hidden="true">&#10005;</span><span class="q4-sr">Competitor: </span><span class="q4-nm">${esc(e.name)}</span></li>`).join('')}${hidden > 0 ? `<li class="q4-more">+${hidden} more</li>` : ''}</ul>`;
 }
 
-/** The six-answer report's body: score → featured question → all questions → website issues + why
- *  this matters. The caller appends the CTA and footer (renderQuickCheckFooter). */
+/** One reply bubble: the engine's mark and name, who it named, a short real snippet. A miss says
+ *  "You weren't mentioned" in NEUTRAL grey — never red (red means a competitor). */
+function quickReply(o: { engine: string; label: string; tag?: string; named: boolean | null; names: string[]; answerText: string; businessName: string; emptyNote?: string }): string {
+  const kind = o.engine === 'chatgpt' ? 'gpt' : o.engine === 'ai_overview' ? 'aio' : 'gai';
+  const head = `<div class="q4-reply-h">${q4Mark(o.engine)}<span class="q4-reply-n">${esc(o.label)}</span>${o.tag ? `<span class="q4-tag">${esc(o.tag)}</span>` : ''}</div>`;
+  if (o.named === null) return `
+          <div class="q4-reply q4-reply--${kind}">${head}<p class="q4-none">${esc(o.emptyNote ?? 'No answer')}</p></div>`;
+  const list = quickNameList(quickReplyOrder(o.answerText, o.names, o.named ? o.businessName : null));
+  const miss = o.named ? '' : `<p class="q4-none">You weren&rsquo;t mentioned</p>`;
+  const note = o.emptyNote && !o.names.length ? `<p class="q4-none">${esc(o.emptyNote)}</p>` : '';
+  const snip = quickSnippet(o.answerText, o.named ? ownNameVariants(o.businessName) : o.names);
+  return `
+          <div class="q4-reply q4-reply--${kind}">${head}${miss}${list}${note}${snip}</div>`;
+}
+
+/** The six-answer report's body (chat view, Paul 2026-10-13): the dark score section, ONE plain line of
+ *  figures, then one chat window per question — the question as a grey bubble, each engine's reply under
+ *  it listing who it named — then the honest "quick check" note and the website section. The caller
+ *  appends the CTA and footer (renderQuickCheckFooter). */
 export function renderQuickCheckReport(h: HookReportSummary, businessName: string, website: QuickWebsite): string {
   const s = h.score;
   if (h.shape !== 'six' || !s) return renderHookSection(h, businessName);
@@ -1220,12 +1241,8 @@ export function renderQuickCheckReport(h: HookReportSummary, businessName: strin
   const c = hookReportCopy(h, businessName);
   const overall = quickOverallTone(s.named, s.total);
   const misses = Math.max(0, s.total - s.named);
-  /* The run's rival names withheld (competitorCleaning's gate) → no names anywhere, and never the words
-     "no businesses named": we do not know that. */
-  const withheld = h.rivalsNamedInstead === null;
 
-  /* ── YOUR SCORE ── the overall figure first, then one card per engine. Tone = the RESULT (red /
-     amber / green); the card's tint only identifies the engine, it never grades. */
+  /* ── YOUR SCORE ── the dark section, unchanged: the overall figure, one card per engine, the verdict. */
   const engines = s.perEngine.map((e) => {
     const tone = quickEngineTone(e.named, e.total);
     const pct = e.total > 0 ? Math.round((e.named / e.total) * 100) : 0;
@@ -1250,107 +1267,39 @@ export function renderQuickCheckReport(h: HookReportSummary, businessName: strin
       <p class="q4-verdict">${esc(c.headline)}</p>
     </section>`;
 
-  /* Who each answer named instead, one per business, through the run's gate — the SAME list the table
-     reads, so the card's pills and the table's "+n more" can never disagree. */
-  const namesFor = (qi: number, engine: string): string[] =>
-    h.tested[qi]?.perEngine.find((p) => p.engine === engine)?.names ?? [];
+  /* ── ONE LINE ── replaces the three "why this matters" tiles. Only figures this run supports: the rival
+     figure is DIFFERENT businesses named in the answers that missed (hookAudit sameBusiness); null
+     (names withheld) or 0 → that sentence is left out, never a guess. */
+  const rivals = h.rivalsNamedInstead;
+  const summary = misses > 0
+    ? `${misses} of ${s.total} ${plural(s.total, 'answer')} didn&rsquo;t name you.${typeof rivals === 'number' && rivals > 0 ? ` ${rivals} other ${rivals === 1 ? 'business was' : 'businesses were'} named instead.` : ''}`
+    : `All ${s.total} ${plural(s.total, 'answer')} named you.`;
 
-  /* ── FEATURED QUESTION ── every engine's own answer to ONE question (the strongest miss, else the
-     first question): the result, the businesses named instead as yellow pills, two lines of the AI's
-     own words with those names marked. */
-  let featured = '';
-  const f = h.featured;
-  if (f && f.answers.length) {
-    const cards = f.answers.map((a) => {
-      const me = a.named ? ownNameVariants(businessName) : [];
-      const names = a.named ? [] : (namesFor(f.questionIndex, a.engine).length ? namesFor(f.questionIndex, a.engine) : a.names);
-      const chip = a.named
-        ? `<span class="q4-chip q4-chip--y">&#10003; Named</span>`
-        : `<span class="q4-chip q4-chip--n">&#10005; Not named</span>`;
-      const instead = !a.named && names.length ? `
-            <div class="q4-inst-k">Named instead of you</div>${quickNamePills(names, 5)}` : '';
-      const words = quickSnippetHtml(a.answerText, names, me)
-        || `<p class="q4-snip q4-snip--none">${a.named ? `${esc(a.label)} named ${esc(businessName)} in this answer.` : `${esc(a.label)} answered without naming ${esc(businessName)}.`}</p>`;
-      return `
-          <article class="q4-ans q4-ans--${a.engine === 'chatgpt' ? 'gpt' : 'gai'}">
-            <div class="q4-ans-head"><span class="q4-eng-name">${q4Mark(a.engine)}${esc(a.label)}</span>${chip}</div>${instead}
-            ${words}
-          </article>`;
-    }).join('');
-    /* Google AI Overview for the same question — DISPLAY ONLY, never in the score above. Three states,
-       said plainly: Google showed none / showed one that named no business / showed one with names. */
-    const fo = (h.overviews ?? []).find((o) => o.questionIndex === f.questionIndex && (o.state === 'shown' || o.state === 'not_shown'));
-    let aio = '';
-    if (fo) {
-      const me = fo.named ? ownNameVariants(businessName) : [];
-      const names = fo.state === 'shown' && !fo.named ? fo.names : [];
-      const chip = fo.state === 'not_shown'
-        ? `<span class="q4-chip q4-chip--na">${NO_OVERVIEW_TEXT}</span>`
-        : fo.named ? `<span class="q4-chip q4-chip--y">&#10003; Named</span>`
-        : names.length || withheld ? `<span class="q4-chip q4-chip--n">&#10005; Not named</span>`
-        : `<span class="q4-chip q4-chip--na">${esc(OVERVIEW_NO_NAMES_TEXT)}</span>`;
-      const body = fo.state !== 'shown' ? '' : `${names.length ? quickNamePills(names, 5, true) : ''}${fo.answerText ? `
-        <p class="q4-snip q4-snip--aio">${quickHighlight(fo.answerText, names, 'q4-hl', me)}${fo.truncated ? ' &hellip;' : ''}</p>` : ''}`;
-      aio = `
-      <div class="q4-aio" data-overview="${fo.state}">
-        <div class="q4-aio-head"><span class="q4-eng-name q4-eng-name--sm">${q4Mark('ai_overview')}${esc(AI_OVERVIEW_LABEL)}</span><span class="q4-aio-ctx">${esc(AI_OVERVIEW_CONTEXT_LABEL)}</span>${chip}</div>${body}
-      </div>`;
-    }
-    featured = `
-    <section class="q4-feat">
-      <span class="q4-pill">Featured question</span>
-      <h2 class="q4-feat-q">${esc(f.question)}</h2>
-      <p class="q4-feat-sub">${f.answers.length > 1 ? 'We asked both AI engines the same question. Here is what each one said.' : 'Here is what the AI said.'}</p>
-      <div class="q4-ans-grid${f.answers.length > 1 ? '' : ' q4-ans-grid--one'}">${cards}
-      </div>${aio}
-    </section>`;
-  }
-
-  /* ── ALL QUESTIONS WE ASKED ── each cell: the result, and for a miss the top business named instead
-     as a solid pill with "+n more". A business keeps one colour across the whole table. */
-  /* Keyed by BUSINESS (hookAudit sameBusiness — the rule the count uses), so "Leeds And District Roofing
-     Services Ltd" and "Leeds and District Roofing Ltd" from two engines wear one colour. */
-  const toneOf: Array<{ key: string; tone: string }> = [];
-  const tone = (name: string) => {
-    const k = normaliseRivalName(name, null) || name.toLowerCase();
-    let hit = toneOf.find((t) => sameBusiness(k, t.key));
-    if (!hit) { hit = { key: k, tone: Q4_NAME_TONES[toneOf.length % Q4_NAME_TONES.length] }; toneOf.push(hit); }
-    return hit.tone;
-  };
-  const missCell = (names: string[], label = '&#10005; Not named') => `<span class="q4-chip q4-chip--n">${label}</span>${names.length
-    ? `<span class="q4-top"><span class="q4-np q4-np--${tone(names[0])}">${esc(names[0])}</span>${names.length > 1 ? `<span class="q4-np-more">+${names.length - 1} more</span>` : ''}</span>` : ''}`;
-  const cell = (v: boolean | null, names: string[] = []) => v === null
-    ? `<span class="q4-chip q4-chip--na">No answer</span>`
-    : v ? `<span class="q4-chip q4-chip--y">&#10003; Named</span>` : missCell(names);
-  /* The AI Overview column appears only on an audit that recorded overviews (display only). */
+  /* ── ONE CHAT WINDOW PER QUESTION ── the scored engines in score order; the Google AI Overview (when
+     this audit recorded one) as a further reply marked display only — never in the score. */
   const ovs = h.overviews ?? [];
-  const aioCell = (qi: number) => {
-    const o = ovs.find((x) => x.questionIndex === qi);
-    const v = !o || (o.state !== 'shown' && o.state !== 'not_shown') ? `<span class="q4-chip q4-chip--na">No answer</span>`
-      : o.state === 'not_shown' ? `<span class="q4-chip q4-chip--na">${NO_OVERVIEW_TEXT}</span>`
-      : o.named ? cell(true)
-      : o.names.length || withheld ? missCell(o.names)
-      : `<span class="q4-chip q4-chip--na">${esc(OVERVIEW_NO_NAMES_TEXT)}</span>`;
-    return `<td class="q4-tr q4-tr--aio" data-eng="${esc(AI_OVERVIEW_LABEL)}"><div class="q4-cell">${v}</div></td>`;
-  };
-  const rows = h.tested.map((q, qi) => `
-          <tr${f && f.questionIndex === qi ? ' class="q4-feat-row"' : ''}><td class="q4-tq">${esc(q.question)}</td>${s.perEngine.map((e) => {
-            const pe = q.perEngine.find((x) => x.engine === e.engine);
-            return `<td class="q4-tr" data-eng="${esc(e.label)}"><div class="q4-cell">${cell(pe ? pe.named : null, pe?.names ?? [])}</div></td>`;
-          }).join('')}${ovs.length ? aioCell(qi) : ''}</tr>`).join('');
-  const table = `
-    <section class="q4-panel">
-      <h2 class="q4-h">All questions we asked</h2>
-      <table class="q4-tbl">
-        <thead><tr><th>Question</th>${s.perEngine.map((e) => `<th class="q4-te">${q4Mark(e.engine)}${esc(e.label)}</th>`).join('')}${ovs.length ? `<th class="q4-te q4-te--aio">${q4Mark('ai_overview')}${esc(AI_OVERVIEW_LABEL)}<small>not scored</small></th>` : ''}</tr></thead>
-        <tbody>${rows}
-        </tbody>
-      </table>
-      <p class="q4-caveat">${esc(c.caveat)}</p>
-    </section>`;
+  const withheld = h.rivalsNamedInstead === null;
+  const chats = h.tested.map((q, qi) => {
+    const replies = s.perEngine.map((e) => {
+      const pe = q.perEngine.find((x) => x.engine === e.engine);
+      return quickReply({ engine: e.engine, label: e.label, named: pe ? pe.named : null, names: pe?.names ?? [], answerText: pe?.answerText ?? '', businessName });
+    }).join('');
+    const o = ovs.find((x) => x.questionIndex === qi && (x.state === 'shown' || x.state === 'not_shown'));
+    const aio = !o ? '' : quickReply({
+      engine: 'ai_overview', label: AI_OVERVIEW_LABEL, tag: 'Display only · not scored',
+      named: o.state === 'not_shown' ? null : !!o.named, names: o.names, answerText: o.answerText, businessName,
+      emptyNote: o.state === 'not_shown' ? NO_OVERVIEW_TEXT : (!o.named && !withheld ? OVERVIEW_NO_NAMES_TEXT : undefined),
+    });
+    return `
+      <article class="q4-chat">
+        <div class="q4-chat-q"><span class="q4-sr">Question ${qi + 1}: </span>${esc(q.question)}</div>
+        <div class="q4-replies">${replies}${aio}
+        </div>
+      </article>`;
+  }).join('');
 
   /* ── WEBSITE ── stored findings only, worst first: High / Medium / Low, with the one line of evidence
-     a content & trust issue carries ("We found: …"). */
+     a content & trust issue carries ("We found: …"). Neutral colours since 2026-10-13. */
   const site = website.state === 'issues' ? `
       <section class="q4-panel q4-panel--site">
         <h2 class="q4-h">Website issues we found</h2>
@@ -1370,29 +1319,13 @@ export function renderQuickCheckReport(h: HookReportSummary, businessName: strin
       </section>`
     : '';
 
-  /* ── WHY THIS MATTERS ── yellow tiles, only figures this run supports. The rival figure is DIFFERENT
-     businesses (one per business, hookAudit sameBusiness), so it can be lower than the names a reader
-     adds up from the table; null (names withheld) or 0 → the tile is left out. */
-  const rivals = h.rivalsNamedInstead;
-  const tiles = [
-    misses > 0
-      ? `<div class="q4-tile"><b>${misses}/${s.total}</b><span>${plural(s.total, 'answer')} didn&rsquo;t name you</span></div>`
-      : `<div class="q4-tile"><b>${s.named}/${s.total}</b><span>${plural(s.total, 'answer')} named you</span></div>`,
-    misses > 0 && typeof rivals === 'number' && rivals > 0
-      ? `<div class="q4-tile"><b>${rivals}</b><span>different ${rivals === 1 ? 'business' : 'businesses'} named instead</span></div>` : '',
-    `<div class="q4-tile"><b class="q4-tile-star" aria-hidden="true">&#9733;</b><span>AI is another place customers choose who to contact.</span></div>`,
-  ].filter(Boolean).join('');
-  const why = `
-      <section class="q4-panel q4-panel--why">
-        <h2 class="q4-h">Why this matters</h2>
-        <div class="q4-tiles">${tiles}</div>
-      </section>`;
-
   return `
     <style>${QUICK_REPORT_CSS}</style>${score}
-    <div class="q4-body">${featured}${table}
-      <div class="q4-pair${site ? '' : ' q4-pair--one'}">${site}${why}
-      </div>
+    <div class="q4-body">
+      <p class="q4-sum">${summary}</p>
+      <section class="q4-chats" aria-label="What each AI said">${chats}
+      </section>
+      <p class="q4-caveat">${esc(c.caveat)}</p>${site}
     </div>`;
 }
 
@@ -1464,76 +1397,40 @@ const QUICK_REPORT_CSS = `
   .q4-mk svg{width:62%;height:62%;display:block}
   .q4-mk--gpt{background:#0d0d0d;box-shadow:inset 0 0 0 1px rgba(255,255,255,.18)} .q4-mk--gpt svg{fill:#fff}
   .q4-mk--gai{background:#fff;box-shadow:inset 0 0 0 1px #e2e0da} .q4-mk--gai svg{width:70%;height:70%}
-  .q4-body{background:#f7f5f1;padding:22px 24px 8px}
-  .q4-feat{background:#fff;border:1px solid #e9e5dc;border-radius:20px;padding:22px 24px 22px;margin-bottom:18px;break-inside:avoid;page-break-inside:avoid}
-  .q4-pill{display:inline-block;background:#fcc933;color:#101114;font-size:11px;font-weight:800;letter-spacing:.16em;text-transform:uppercase;padding:6px 12px;border-radius:8px}
-  .q4-feat-q{margin:14px 0 6px;font-size:26px;font-weight:850;letter-spacing:-.02em;line-height:1.2;color:#101114;text-transform:none}
-  .q4-feat-sub{margin:0 0 16px;font-size:14.5px;color:#55565c}
-  .q4-ans-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
-  .q4-ans-grid--one{grid-template-columns:1fr}
-  .q4-ans{background:#fff;border:1px solid #e4e0d6;border-radius:16px;padding:16px 18px;min-width:0}
-  .q4-ans-head{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:12px;flex-wrap:wrap}
-  .q4-eng-name{display:inline-flex;align-items:center;gap:9px;font-size:14.5px;font-weight:800;color:#101114}
-  .q4-eng-name .q4-mk{width:26px;height:26px}
-  .q4-eng-name--sm{font-size:13.5px} .q4-eng-name--sm .q4-mk{width:22px;height:22px}
-  .q4-inst-k{font-size:10.5px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;color:#6b6c72;margin:0 0 8px}
-  .q4-names{display:flex;flex-wrap:wrap;gap:7px;margin:0 0 12px}
-  .q4-name{display:inline-block;background:#fcc933;color:#101114;font-weight:800;font-size:14px;line-height:1.25;padding:7px 12px;border-radius:999px;max-width:100%;overflow-wrap:anywhere}
-  .q4-name-more{display:inline-flex;align-items:center;font-size:12.5px;font-weight:700;color:#6b6c72;padding:0 4px}
-  .q4-names--sm{margin:8px 0 6px;gap:6px} .q4-names--sm .q4-name{font-size:12.5px;padding:5px 10px}
-  .q4-snip{margin:0;font-size:13.5px;line-height:1.55;color:#3a3b40;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;line-clamp:2;overflow:hidden;overflow-wrap:anywhere}
-  .q4-snip--none{display:block;color:#55565c}
-  .q4-hl{background:#fff0b3;color:#101114;font-weight:700;padding:0 3px;border-radius:4px;box-decoration-break:clone;-webkit-box-decoration-break:clone}
-  .q4-hl--me{background:#d7f2df;color:#0f5b2c}
-  .q4-aio{margin-top:12px;background:#fbfaf7;border:1px dashed #dcd7cc;border-radius:14px;padding:11px 16px}
-  .q4-aio-head{display:flex;align-items:center;gap:8px 12px;flex-wrap:wrap}
-  .q4-aio-ctx{font-size:12px;color:#7a7b80;font-style:italic;flex:1 1 auto}
-  .q4-snip--aio{margin-top:6px;font-size:13px;color:#4a4b50}
-  .q4-chip{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;padding:5px 11px;border-radius:999px;white-space:nowrap;border:1px solid}
-  .q4-chip--y{background:#e6f5eb;color:#13703a;border-color:#c5e6d1}
-  .q4-chip--n{background:#fdebec;color:#c21d2b;border-color:#f6c9cd}
-  .q4-chip--na{background:#efeeea;color:#5d5e63;border-color:#dedbd3}
-  .q4-ans-head .q4-chip--y{background:#13703a;color:#fff;border-color:#13703a}
-  .q4-panel{background:#fff;border:1px solid #e9e5dc;border-radius:20px;padding:18px 20px 16px;margin-bottom:18px;break-inside:avoid;page-break-inside:avoid}
-  .q4-h{display:flex;align-items:center;gap:10px;margin:0 0 12px;font-size:12px;font-weight:800;letter-spacing:.16em;text-transform:uppercase;color:#101114;break-after:avoid;page-break-after:avoid}
-  .q4-h::before{content:"";width:18px;height:4px;border-radius:2px;background:#fcc933}
-  .q4-tbl{width:100%;border-collapse:collapse;table-layout:fixed}
-  .q4-tbl th{font-size:10.5px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;color:#6b6c72;text-align:left;padding:4px 10px 10px;border-bottom:1px solid #ebe8e0}
-  .q4-tbl th:first-child{width:auto}
-  .q4-tbl th.q4-te{width:190px;white-space:nowrap;color:#101114}
-  .q4-tbl th .q4-mk{width:20px;height:20px;margin-right:7px}
-  .q4-te--aio small{display:block;font-size:10px;font-weight:500;color:#8a8b90;text-transform:none;letter-spacing:0}
-  .q4-tbl td{padding:11px 10px;border-bottom:1px solid #f1eee7;font-size:14.5px;color:#101114;vertical-align:top}
-  .q4-tbl tr:last-child td{border-bottom:0}
-  .q4-tbl tr.q4-feat-row td.q4-tq{font-weight:700}
-  .q4-tq{overflow-wrap:anywhere}
-  .q4-cell{display:flex;flex-direction:column;align-items:flex-start;gap:6px;min-width:0}
-  .q4-cell .q4-chip{white-space:normal;line-height:1.3;max-width:100%}
-  .q4-top{display:flex;flex-wrap:wrap;align-items:center;gap:4px 6px;max-width:100%}
-  .q4-np{display:inline-block;max-width:100%;font-size:11.5px;font-weight:700;line-height:1.3;padding:3px 9px;border-radius:999px;color:#fff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-  .q4-np--green{background:#1f8a4c} .q4-np--amber{background:#b7791f} .q4-np--violet{background:#7c4dcc}
-  .q4-np--orange{background:#d9622b} .q4-np--grey{background:#5f6066} .q4-np--rose{background:#c8436b}
-  .q4-np-more{font-size:11.5px;font-weight:700;color:#6b6c72;white-space:nowrap}
-  .q4-caveat{margin:10px 0 0;font-size:12.5px;color:#6b6c72}
-  .q4-pair{display:grid;grid-template-columns:1.1fr 1fr;gap:18px}
-  .q4-pair--one{grid-template-columns:1fr}
-  .q4-pair .q4-panel{margin-bottom:18px}
-  .q4-panel--site{background:#fffafa;border-color:#f3e3e3}
+  .q4-body{background:#f7f5f1;padding:20px 24px 8px}
+  .q4-sr{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+  .q4-sum{margin:0 0 16px;font-size:16px;font-weight:700;line-height:1.4;color:#101114}
+  .q4-chats{display:grid;gap:16px}
+  .q4-chat{background:#fff;border:1px solid #e6e2d9;border-radius:18px;padding:16px;min-width:0;break-inside:avoid;page-break-inside:avoid}
+  .q4-chat-q{margin:0 0 12px auto;max-width:88%;width:fit-content;background:#ebe9e4;color:#101114;font-size:15px;font-weight:650;line-height:1.4;padding:10px 14px;border-radius:16px 16px 4px 16px;overflow-wrap:anywhere}
+  .q4-replies{display:grid;gap:10px}
+  .q4-reply{max-width:94%;background:#fff;border:1px solid #ebe8e1;border-radius:4px 16px 16px 16px;padding:11px 14px;min-width:0}
+  .q4-reply-h{display:flex;align-items:center;flex-wrap:wrap;gap:6px 8px;margin:0 0 8px}
+  .q4-reply-n{font-size:13.5px;font-weight:800;color:#101114}
+  .q4-reply-h .q4-mk{width:22px;height:22px}
+  .q4-tag{font-size:11px;font-weight:600;color:#6b6c72;background:#efeeea;border-radius:999px;padding:2px 8px}
+  .q4-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:3px}
+  .q4-who{display:flex;align-items:flex-start;gap:8px;font-size:14.5px;font-weight:700;line-height:1.35;padding:6px 10px;border-radius:10px;border:1px solid;min-width:0}
+  .q4-nm{min-width:0;overflow-wrap:anywhere}
+  .q4-ico{flex:none;width:18px;height:18px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:11px;font-weight:900;line-height:1;margin-top:1px;color:#fff}
+  .q4-who--me{background:#e7f6ec;border-color:#b9e2c7;color:#0d5c2c}
+  .q4-who--me .q4-ico{background:#15803d}
+  .q4-who--rival{background:#fff;border-color:transparent;color:#b3121e;padding:2px 10px}
+  .q4-who--rival .q4-ico{background:#c81e2b}
+  .q4-more{font-size:13px;font-weight:600;color:#6b6c72;padding:2px 2px 0}
+  .q4-none{margin:0 0 6px;font-size:14px;font-weight:600;color:#5d5e63}
+  .q4-snip{margin:8px 0 0;font-size:13px;line-height:1.5;color:#55565c;font-style:italic;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;line-clamp:2;overflow:hidden;overflow-wrap:anywhere}
+  .q4-caveat{margin:14px 2px 18px;font-size:13px;line-height:1.45;color:#5d5e63}
+  .q4-panel{background:#fff;border:1px solid #e6e2d9;border-radius:18px;padding:16px 18px 12px;margin-bottom:18px;break-inside:avoid;page-break-inside:avoid}
+  .q4-h{margin:0 0 8px;font-size:12px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;color:#101114;break-after:avoid;page-break-after:avoid}
   .q4-rows > div + div{border-top:1px solid rgba(16,17,20,.07)}
-  .q4-issue{display:grid;grid-template-columns:40px 1fr;gap:12px;align-items:start;padding:10px 0;break-inside:avoid;page-break-inside:avoid}
-  .q4-ic{width:40px;height:40px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex:none}
-  .q4-ic svg{width:20px;height:20px}
-  .q4-ic--high{background:#fde4e6;color:#c21d2b} .q4-ic--med{background:#fdf0d8;color:#b86e00} .q4-ic--low{background:#e8eef8;color:#3a5a8c} .q4-ic--ok{background:#e1f4e7;color:#13703a}
+  .q4-issue{display:grid;grid-template-columns:36px 1fr;gap:12px;align-items:start;padding:10px 0;break-inside:avoid;page-break-inside:avoid}
+  .q4-ic{width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex:none;background:#efeeea;color:#55565c}
+  .q4-ic svg{width:18px;height:18px}
   .q4-issue-t{font-size:14.5px;font-weight:800;color:#101114;line-height:1.35}
-  .q4-sev{display:inline-block;margin-left:6px;font-size:9.5px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;padding:2px 7px;border-radius:999px;vertical-align:2px}
-  .q4-sev--high{background:#fde4e6;color:#c21d2b} .q4-sev--med{background:#fdf0d8;color:#8a5200} .q4-sev--low{background:#e8eef8;color:#3a5a8c}
+  .q4-sev{display:inline-block;margin-left:6px;font-size:9.5px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;padding:2px 7px;border-radius:999px;vertical-align:2px;background:#efeeea;color:#55565c}
   .q4-issue-p{margin:3px 0 0;font-size:13px;color:#4f5056;line-height:1.45}
   .q4-issue-ev{margin:4px 0 0;font-size:12px;color:#6b6c72;line-height:1.4;overflow-wrap:anywhere} .q4-issue-ev b{color:#101114;font-weight:700}
-  .q4-tiles{display:grid;gap:10px}
-  .q4-tile{display:grid;grid-template-columns:76px 1fr;align-items:center;gap:12px;background:#fcc933;border-radius:16px;padding:12px 16px;color:#101114}
-  .q4-tile b{font-size:30px;font-weight:900;letter-spacing:-.04em;line-height:1;text-align:center}
-  .q4-tile b.q4-tile-star{font-size:28px}
-  .q4-tile span{font-size:14.5px;font-weight:750;line-height:1.35}
   .q4-foot{background:#101114;color:#d4d5d9;padding:26px 28px 22px}
   .q4-foot-cta h3{margin:0 0 16px;font-size:26px;font-weight:800;letter-spacing:-.02em;color:#fff}
   .q4-foot .cta-actions{display:flex;flex-wrap:wrap;gap:10px;margin:0 0 14px}
@@ -1571,33 +1468,19 @@ const QUICK_REPORT_CSS = `
     .q4-eng-h .q4-mk{width:24px;height:24px}
     .q4-eng-v{font-size:34px;margin-top:8px}
     .q4-verdict{font-size:16px}
-    .q4-body{padding:16px 12px 4px}
-    .q4-feat{padding:18px 14px;border-radius:18px}
-    .q4-feat-q{font-size:21px}
-    .q4-feat-sub{font-size:13.5px;margin-bottom:12px}
-    .q4-ans-grid{grid-template-columns:1fr}
-    .q4-ans{padding:14px}
-    .q4-name{font-size:13px;padding:6px 11px}
-    .q4-aio{padding:10px 12px}
-    .q4-panel{padding:16px 14px 12px;border-radius:18px}
-    .q4-tbl,.q4-tbl tbody{display:block}
-    .q4-tbl thead{display:none}
-    .q4-tbl tr{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px 10px;border-bottom:1px solid #f1eee7;padding:12px 0}
-    .q4-tbl tr:last-child{border-bottom:0}
-    .q4-tbl td{border:0;padding:0;min-width:0}
-    .q4-tbl td.q4-tq{grid-column:1/-1;font-weight:650}
-    .q4-tbl td.q4-tr::before{content:attr(data-eng);display:block;font-size:11px;color:#6b6c72;font-weight:600;margin-bottom:4px}
-    .q4-pair{grid-template-columns:1fr;gap:0}
-    .q4-ic{width:34px;height:34px} .q4-ic svg{width:17px;height:17px}
-    .q4-issue{grid-template-columns:34px 1fr;gap:10px}
-    .q4-tile{grid-template-columns:62px 1fr;padding:11px 14px}
-    .q4-tile b{font-size:26px}
     .q4-foot{padding:22px 16px 18px}
     .q4-foot-cta h3{font-size:22px}
     .q4-foot .cta-actions{flex-direction:column}
     .q4-foot .cta-btn{width:100%;min-height:44px}
     .q4-foot .cta-actions form{display:block !important;width:100%}
     .q4-foot-grid{grid-template-columns:1fr}
+    .q4-body{padding:16px 12px 4px}
+    .q4-sum{font-size:15px}
+    .q4-chat{padding:12px;border-radius:16px}
+    .q4-chat-q{max-width:94%;font-size:14.5px}
+    .q4-reply{max-width:100%;padding:10px 12px}
+    .q4-who{font-size:14px}
+    .q4-panel{padding:14px 14px 10px;border-radius:16px}
   }
   @media print{
     .sheet{max-width:none}
@@ -1609,15 +1492,26 @@ const QUICK_REPORT_CSS = `
     .q4-eng-v{font-size:36px;margin-top:8px}
     .q4-verdict{margin-top:10px;font-size:16px}
     .q4-body{padding:14px 18px 2px}
-    .q4-feat{padding:14px 16px 16px;margin-bottom:12px}
-    .q4-feat-q{font-size:20px;margin:10px 0 4px}
-    .q4-feat-sub{margin-bottom:10px;font-size:13px}
-    .q4-ans{padding:12px 14px}
-    .q4-panel{padding:12px 16px 10px;margin-bottom:12px}
-    .q4-pair .q4-panel{margin-bottom:12px}
-    .q4-tbl td{padding:7px 10px;font-size:13px}
-    .q4-issue{padding:6px 0}
-    .q4-issue-p{font-size:12px}
+    .q4-chats{gap:10px}
+    .q4-chat{padding:10px 12px}
+    .q4-snip{-webkit-line-clamp:3;line-clamp:3}
+  }
+  @media (prefers-color-scheme: dark){
+    body,.sheet,.q4-body{background:#16171a}
+    .sheet{box-shadow:none}
+    .q4-sum{color:#f2f2f3}
+    .q4-chat,.q4-panel{background:#1e1f23;border-color:#2e3036}
+    .q4-chat-q{background:#33353b;color:#f2f2f3}
+    .q4-reply{background:#25272c;border-color:#34363c}
+    .q4-reply-n,.q4-h,.q4-issue-t,.q4-issue-ev b{color:#f2f2f3}
+    .q4-mk--gai{background:#f2f2f3}
+    .q4-tag,.q4-sev,.q4-ic{background:#33353b;color:#c9cacf}
+    .q4-who--me{background:rgba(34,197,94,.14);border-color:rgba(74,222,128,.38);color:#86efac}
+    .q4-who--me .q4-ico{background:#16a34a}
+    .q4-who--rival{background:transparent;border-color:transparent;color:#fca5a5}
+    .q4-who--rival .q4-ico{background:#dc2626}
+    .q4-none,.q4-more,.q4-caveat,.q4-snip,.q4-issue-p,.q4-issue-ev{color:#b4b5ba}
+    .q4-rows > div + div{border-top-color:rgba(255,255,255,.08)}
   }
 `;
 

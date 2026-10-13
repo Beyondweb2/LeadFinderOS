@@ -352,9 +352,11 @@ export interface HookReportSummary {
   tested: Array<{
     question: string;
     isGap: boolean;
-    /** `names` (version 2, 2026-10-11): who that answer named instead, one per business, through the
-     *  run-level gate (withheld → []). Display only — the table's pill and "+n more". */
-    perEngine: Array<{ engine: string; label: string; named: boolean | null; names?: string[] }>;
+    /** `names` (version 2): the OTHER businesses that answer named, one per business, through the
+     *  run-level gate (withheld → []) — for a named answer too since 2026-10-13 (the chat view lists
+     *  everyone the AI named). Never the client. Display only. `answerText` is that cell's own stored
+     *  answer, uncut (cleaned at render, never rewritten); '' when there is none. */
+    perEngine: Array<{ engine: string; label: string; named: boolean | null; names?: string[]; answerText?: string }>;
   }>;
 }
 
@@ -508,14 +510,24 @@ function buildHookReportSummaryV2(
   if (!score.complete) return null;
   const pick = score.hook;
   const statusOf = (qi: number, e: string) => score.results.find((r) => r.questionIndex === qi && r.engine === e)?.status;
+  const cellOf = (qi: number, e: string): unknown => {
+    const q = state.planned[qi];
+    const row = q ? input.rows.find((r) => r.question.trim().toLowerCase() === q.trim().toLowerCase() && r.status === 'done') : null;
+    return row?.result && typeof row.result === 'object' ? (row.result as Record<string, unknown>)[e] : null;
+  };
+  /* The client is never listed as their own rival (a named answer's competitor list should not carry
+     them, but one business spelled two ways must not read as a competitor). */
+  const clientKey = normaliseRivalName(input.namedCtx?.businessName ?? '', input.town);
+  const notTheClient = (names: string[]) => clientKey ? names.filter((n) => !sameBusiness(normaliseRivalName(n, input.town), clientKey)) : names;
   const tested = state.planned.map((question, i) => ({
     question,
     isGap: pick?.questionIndex === i,
     perEngine: input.engineOrder.filter((e) => score.results.some((r) => r.questionIndex === i && r.engine === e)).map((e) => {
       const st = statusOf(i, e);
       const r = score.results.find((x) => x.questionIndex === i && x.engine === e);
-      const pool = st === 'not_named' && r ? (input.rivalFilter ? (input.rivalFilter(r.competitors) ?? []) : input.namedInstead(r.competitors)) : [];
-      return { engine: e, label: input.engineLabel(e), named: st === 'named' ? true : st === 'not_named' ? false : null, names: distinctNames(pool, input.town) };
+      const pool = (st === 'not_named' || st === 'named') && r ? (input.rivalFilter ? (input.rivalFilter(r.competitors) ?? []) : input.namedInstead(r.competitors)) : [];
+      const c = cellOf(i, e);
+      return { engine: e, label: input.engineLabel(e), named: st === 'named' ? true : st === 'not_named' ? false : null, names: notTheClient(distinctNames(pool, input.town)), answerText: hasAnswer(c) ? String((c as HookEngineCell).answer_text ?? '') : '' };
     }),
   }));
   let gap: HookReportSummary['gap'] = null;
@@ -574,8 +586,8 @@ function buildHookReportSummaryV2(
       state: o.state as 'shown' | 'not_shown' | 'pending' | 'failed',
       named: o.named, answerText: o.answerText, truncated: o.truncated,
       /* One per business, through the run's gate (withheld → []), the whole list so "+n more" is true. */
-      names: o.state === 'shown' && !o.named
-        ? distinctNames(input.rivalFilter ? (input.rivalFilter(o.competitors) ?? []) : input.namedInstead(o.competitors), input.town)
+      names: o.state === 'shown'
+        ? notTheClient(distinctNames(input.rivalFilter ? (input.rivalFilter(o.competitors) ?? []) : input.namedInstead(o.competitors), input.town))
         : [],
     }));
   return {

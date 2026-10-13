@@ -11,7 +11,7 @@
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 import { answerExcerpt, cleanAnswerBlocks } from '../src/lib/answerText.ts';
 import { buildReportData } from '../src/lib/auditReport.ts';
-import { renderReportHtml, quickEngineTone, quickHighlight, ownNameVariants, QUICK_ANSWER_CHARS } from '../src/lib/aiAuditReportHtml.ts';
+import { renderReportHtml, quickEngineTone, quickReplyOrder, ownNameVariants, QUICK_ANSWER_CHARS, QUICK_MAX_RIVALS } from '../src/lib/aiAuditReportHtml.ts';
 import { initialHookStateV2 } from '../src/lib/hookScore.ts';
 import { buildHookReportSummary, countDistinctBusinesses, normaliseRivalName } from '../src/lib/hookAudit.ts';
 import { REMEASURE_CLAIM_SENTENCE } from '../src/lib/findableOffer.ts';
@@ -122,28 +122,58 @@ const hit = (rivals: string[]): Cell => ({ named: true, rivals });
   ok(s.perEngine.length === 2 && s.perEngine.every((e) => e.total === 3), 'C: ChatGPT /3 and Google AI /3');
   ok(/17%/.test(r.t) && /1 of 6 answers named your business/.test(r.t), 'C: "17%" and "1 of 6 answers named your business" are printed');
   ok(/3 questions × 2 AI engines × 1 ask each · 6 answers total/.test(r.t.replace(/&times;/g, '×').replace(/&middot;/g, '·')), 'C: the header reminds the reader of the method, from the real score shape');
-  ok(r.html.indexOf('class="q4-score"') < r.html.indexOf('Featured question'), 'C: the score comes before the featured question');
+  ok(r.html.indexOf('class="q4-score"') < r.html.indexOf('class="q4-chats"'), 'C: the dark score section comes before the chat windows');
   ok(quickEngineTone(0, 3) === 'red' && quickEngineTone(1, 3) === 'amber' && quickEngineTone(2, 3) === 'green' && quickEngineTone(3, 3) === 'green' && quickEngineTone(0, 0) === '', 'C: engine colours 0 red, 1 amber, 2-3 green, no denominator none');
   ok(/q4-eng--gpt[\s\S]*?ChatGPT[\s\S]*?q4-eng-v q4-t-amber">33%/.test(r.html) && /q4-eng--gai[\s\S]*?Gemini[\s\S]*?q4-eng-v q4-t-red">0%/.test(r.html), 'C: ChatGPT 1/3 (33%) amber, Gemini 0/3 (0%) red — tint identifies the engine, colour grades the result');
   ok(/class="q4-t-red">17%/.test(r.html), 'C: 17% overall reads red (poor)');
   ok(!/Google AI(?! Overview)/.test(r.t) && /Gemini/.test(r.t), 'C: the page says Gemini, never "Google AI" (2026-10-11)');
 
-  /* ── D. Featured question: BOTH engines' answers to the strongest missed question ── */
-  const f = r.d.hook!.featured!;
-  ok(f.question === Q[0] && f.answers.map((a) => `${a.engine}:${a.named}`).join(',') === 'chatgpt:true,gemini:false', 'D: the featured question is the strongest miss, with each engine’s own answer and status');
-  ok(/Featured question/i.test(r.t) && r.t.includes('roof repair in Leeds') && /We asked both AI engines the same question/.test(r.t), 'D: the question is shown with both answers');
-  ok((r.html.match(/class="q4-ans q4-ans--/g) ?? []).length === 2 && /q4-ans--gpt[\s\S]*?q4-chip--y[\s\S]*?q4-ans--gai[\s\S]*?q4-chip--n/.test(r.html), 'D: ChatGPT card NAMED, Google AI card NOT NAMED');
-  ok(/is a professional roofing contractor in Leeds/.test(r.t) && !/click to open side panel|stars rating|gstatic/i.test(r.t), 'D: the cleaned excerpt is shown, map clutter gone');
-  ok(/<mark class="q4-hl">Ridge Roofing Ltd<\/mark>/.test(r.html), 'D: a competitor in the excerpt is highlighted (Slate Masters falls after the 380-character cut and is listed under Named instead)');
-  ok(new RegExp(`<mark class="q4-hl q4-hl--me">${BIZ}</mark>`).test(r.html), 'D: the business is highlighted GREEN inside the answer that named it');
-  const gaiCard = r.html.slice(r.html.indexOf('class="q4-ans q4-ans--gai"'));
-  ok(!/q4-hl--me/.test(gaiCard.slice(0, gaiCard.indexOf('</article>'))), 'D: …and never inside an answer that did not name it');
-  ok(/Named instead[\s\S]*?Ridge Roofing Ltd[\s\S]*?Slate Masters/.test(r.t), 'D: the not-named card lists who was named instead');
-  ok(r.html.includes('class="q4-mk q4-mk--gai"') && r.html.includes('class="q4-mk q4-mk--gpt"'), 'D: both engine identifiers are present');
+  /* ── D. CHAT VIEW (Paul, 2026-10-13): one chat window per question — the question as a grey bubble, a reply
+     per engine listing who it named. GREEN + tick = the client, RED + cross = a competitor, a miss is
+     neutral grey "You weren't mentioned". The featured box, the table and the yellow tiles are gone. ── */
+  const chats = [...r.html.matchAll(/<article class="q4-chat">([\s\S]*?)<\/article>/g)].map((m) => m[1]);
+  ok(chats.length === 3 && chats.every((c, i) => c.includes('class="q4-chat-q"') && c.includes(Q[i])), 'D: one chat window per question, the question in the grey bubble');
+  ok(chats.every((c) => (c.match(/class="q4-reply q4-reply--gpt"/g) ?? []).length === 1 && (c.match(/class="q4-reply q4-reply--gai"/g) ?? []).length === 1), 'D: each window has one ChatGPT reply and one Gemini reply');
+  ok(chats.every((c) => c.includes('class="q4-mk q4-mk--gpt"') && c.includes('class="q4-mk q4-mk--gai"')), 'D: each reply carries its engine logo');
+  ok(!/Featured question|All questions we asked|Why this matters/i.test(r.t) && !/q4-feat|q4-tbl|q4-tile|q4-ans\b|q4-np/.test(r.html.replace(/<style[\s\S]*?<\/style>/g, '')), 'D: the featured box, the question table and the yellow tiles are gone');
+  const gptNamed = chats[0].slice(chats[0].indexOf('q4-reply--gpt'), chats[0].indexOf('q4-reply--gai'));
+  ok(new RegExp(`q4-who q4-who--me"><span class="q4-ico" aria-hidden="true">&#10003;</span><span class="q4-sr">Named you: </span><span class="q4-nm">${BIZ}</span>`).test(gptNamed), 'D: a named answer shows the business GREEN with a tick');
+  ok(/q4-who q4-who--rival"><span class="q4-ico" aria-hidden="true">&#10005;<\/span><span class="q4-sr">Competitor: <\/span><span class="q4-nm">Top Tiles Ltd</.test(gptNamed), 'D: …and the competitor it named beside them RED with a cross');
+  ok(gptNamed.indexOf('q4-who--me') < gptNamed.indexOf('Top Tiles Ltd') && !/You weren/.test(gptNamed), 'D: in the order the answer named them (the business first here), no "not mentioned"');
+  const gaiMiss = chats[0].slice(chats[0].indexOf('q4-reply--gai'));
+  ok(/class="q4-none">You weren&rsquo;t mentioned</.test(gaiMiss) && !/q4-who--me/.test(gaiMiss), 'D: a miss says "You weren\'t mentioned" in the neutral style, never a green row');
+  const order = [...gaiMiss.matchAll(/<span class="q4-nm">([^<]+)</g)].map((m) => m[1]);
+  ok(order.join('|') === 'Ridge Roofing Ltd|Slate Masters|Tile Doctors', `D: competitors in the order the answer named them, names exactly as stored (got ${order.join('|')})`);
+  ok(/class="q4-snip">&ldquo;/.test(gaiMiss) && /is a professional roofing contractor in Leeds/.test(r.t) && !/click to open side panel|stars rating|gstatic/i.test(r.t), 'D: a short real snippet of the answer, map clutter removed');
+  ok(!/<mark/.test(r.html), 'D: no highlighter marks inside the answer words');
+}
 
+/* ── D2. Colour rules: two meaningful colours plus neutral; yellow only on the header and buttons ── */
+{
+  const r = report([[hit(['Top Tiles Ltd']), miss(['Ridge Roofing Ltd', 'Slate Masters', 'Tile Doctors'])], [miss(['Top Tiles Ltd']), miss(['Slate Masters'])], [miss(['Leeds Roof Co']), miss(['Ridge Roofing'])]]);
+  const body = r.html.replace(/<style[\s\S]*?<\/style>/g, '');
+  const kinds = new Set([...body.matchAll(/q4-who q4-who--(\w+)/g)].map((m) => m[1]));
+  ok(kinds.size === 2 && kinds.has('me') && kinds.has('rival'), 'D2: a name is either the business (green) or a competitor (red) — no other chip colours');
+  const css = r.html.match(/<style>([^<]*\.q4-chat[\s\S]*?)<\/style>/)?.[1] ?? '';
+  const rule = (sel: string) => (css.match(new RegExp(`(?:^|[\\s}])${sel.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\{([^}]*)\\}`)) ?? [])[1] ?? '';
+  ok(/#e7f6ec/.test(rule('.q4-who--me')) && /#b3121e/.test(rule('.q4-who--rival')), 'D2: the business row is green, a competitor row is red');
+  ok(!/#c81e2b|#b3121e|red/i.test(rule('.q4-none')), 'D2: "You weren\'t mentioned" is neutral, never red');
+  const yellowRules = [...css.matchAll(/([^{}]+)\{[^}]*#fcc933[^}]*\}/gi)].map((m) => m[1].trim());
+  ok(yellowRules.length > 0 && yellowRules.every((sel) => /^\.q4-(wm|method|k|verdict|foot)\b/.test(sel)), `D2: yellow only on the header, the score band and the buttons (${yellowRules.join(', ')})`);
+  ok(!/violet|orange|#7c4dcc|#d9622b|#c8436b|#b7791f/i.test(css.slice(css.indexOf('.q4-body'))), 'D2: no purple, orange, gold or rose chips below the score');
+  ok(/@media \(prefers-color-scheme: dark\)\{[\s\S]*q4-who--me[\s\S]*q4-who--rival/.test(css), 'D2: a dark-mode palette exists for the chat windows');
+  /* +N more after five competitors. */
+  const eight = ['Alpha Roofs', 'Bravo Roofing', 'Charlie Slate', 'Delta Tiles', 'Echo Gutters', 'Foxtrot Roofs', 'Golf Leadwork', 'Hotel Chimneys'];
+  const big = report([[miss(eight), miss(['A Co'])], [miss(['A Co']), miss(['B Co'])], [miss(['A Co']), miss(['B Co'])]]);
+  const first = big.html.slice(big.html.indexOf('q4-reply--gpt'), big.html.indexOf('q4-reply--gai'));
+  ok((first.match(/q4-who--rival/g) ?? []).length === QUICK_MAX_RIVALS && /<li class="q4-more">\+3 more<\/li>/.test(first), 'D2: up to 5 competitors per reply, then "+3 more"');
+}
+
+{
+  const r = report([[hit(['Top Tiles Ltd']), miss(['Ridge Roofing Ltd', 'Slate Masters', 'Tile Doctors'], GEMINI_MAP)], [miss(['Top Tiles Ltd']), miss(['Slate Masters'])], [miss(['Leeds Roof Co']), miss(['Ridge Roofing'])]]);
   /* ── E. Rival count across all six answers ── */
   ok(r.d.hook!.rivalsNamedInstead === 5, `E: rivals across the misses, de-duplicated (got ${r.d.hook!.rivalsNamedInstead}: Ridge Roofing = Ridge Roofing Ltd; the named answer’s list is not counted)`);
-  ok(/5\/6 answers didn’t name you/.test(r.t) && /5 different businesses named instead/.test(r.t), 'E: why-this-matters shows the supported figures (yellow tiles, 2026-10-11)');
+  ok(/5 of 6 answers didn’t name you\. 5 other businesses were named instead\./.test(r.t) && /class="q4-sum"/.test(r.html), 'E: ONE short line with the real figures replaces the three yellow tiles');
 }
 
 /* ── F. Normalising and counting ─────────────────────────────────────────────────────────────── */
@@ -167,10 +197,10 @@ const hit = (rivals: string[]): Cell => ({ named: true, rivals });
   ok(counted!.rivalsNamedInstead === 4, 'G: with the gate open, all six answers are counted (Top Tiles once + Rival 0-2)');
   const r = report([[miss(['Top Tiles Ltd']), miss(['Slate Masters'])], [miss(['Top Tiles Ltd']), miss(['Slate Masters'])], [miss(['Top Tiles Ltd']), miss(['Slate Masters'])]]);
   const html = r.html.replace(/data-x/g, '');
-  ok(/different (?:businesses|business) named instead/.test(r.t), 'G: (control) an open run prints the count');
+  ok(/other business(?:es)? (?:was|were) named instead/.test(r.t), 'G: (control) an open run prints the count');
   const d = { ...(r.d as object), hook: { ...r.d.hook!, rivalsNamedInstead: null } };
   const t2 = text(renderReportHtml({ ...d, generatedAtLabel: '6 October 2026' } as never));
-  ok(!/named instead\s*$/.test(t2) && !/competitors? (were|was) named instead/.test(t2), 'G: a withheld count is omitted from why-this-matters');
+  ok(!/(?:was|were) named instead/.test(t2) && /didn’t name you\./.test(t2), 'G: a withheld count is omitted from the summary line, the miss figure stays');
   ok(html.length > 0, 'G: render ok');
 }
 
@@ -178,9 +208,10 @@ const hit = (rivals: string[]): Cell => ({ named: true, rivals });
 {
   const r = report([[miss(['Top Tiles Ltd']), miss(['Ridge Roofing Ltd', 'Slate Masters', 'Tile Doctors'], MAP_ONLY)], [miss(['Top Tiles Ltd']), miss(['Slate Masters'])], [miss(['Top Tiles Ltd']), miss(['Slate Masters'])]]);
   ok(r.d.hook!.gap!.question === Q[0] && r.d.hook!.gap!.engine === 'gemini', 'H: (setup) the map-only answer is the featured one');
-  const gai = r.html.slice(r.html.indexOf('class="q4-ans q4-ans--gai"'), r.html.indexOf('</article>', r.html.indexOf('class="q4-ans q4-ans--gai"')));
-  ok(!/class="q4-snip"/.test(gai) && gai.includes('q4-snip--none'), 'H: no excerpt when nothing readable survives');
-  ok(/Gemini answered without naming/.test(r.t) && /Named instead of you[\s\S]*Ridge Roofing Ltd/i.test(text(gai)) && /q4-chip--n/.test(gai), 'H: the result and the names still show, stated from the data');
+  const c0 = r.html.slice(r.html.indexOf('<article class="q4-chat">'), r.html.indexOf('</article>'));
+  const gai = c0.slice(c0.indexOf('q4-reply--gai'));
+  ok(!/class="q4-snip"/.test(gai), 'H: no snippet when nothing readable survives');
+  ok(/You weren&rsquo;t mentioned/.test(gai) && /<span class="q4-nm">Ridge Roofing Ltd</.test(gai), 'H: the result and the names still show, stated from the data');
   ok(!/stars rating|gstatic|📍/.test(r.t), 'H: no garbage printed');
 
   /* A NAMED answer that mentions the client only late: the excerpt starts at that passage, marked "…". */
@@ -190,8 +221,8 @@ const hit = (rivals: string[]): Cell => ({ named: true, rivals });
   ok(answerExcerpt(late, 380)!.lead === false, 'H2: without a focus the excerpt starts at the top as before');
   const v = ownNameVariants('5 Towns Roofing and Guttering Ltd');
   ok(v.includes('5 Towns Roofing') && v.includes('5 Towns Roofing & Guttering') && !v.includes('5 Towns Roofing and') && !v.includes('5 Towns'), 'H2: own-name variants: a 3+ word lead ("5 Towns Roofing"), &/and, never a dangling "and" or a 2-word stub');
-  const shortForm = `Here are some local roofers. **5 Towns Roofing:** a family-run local business covering Castleford with general repairs and guttering.`;
-  ok(quickHighlight(shortForm, [], 'q4-hl', v).includes('<mark class="q4-hl q4-hl--me">5 Towns Roofing</mark>'), 'H2: a named answer that shortens the name still highlights it green');
+  const shortForm = `Here are some local roofers like Castle Roofs. **5 Towns Roofing:** a family-run local business covering Castleford.`;
+  ok(quickReplyOrder(shortForm, ['Castle Roofs'], '5 Towns Roofing and Guttering Ltd').map((e) => e.me).join(',') === 'false,true', 'H2: a named answer that shortens the name is placed where the short form appears');
 }
 
 /* ── I. Website states ───────────────────────────────────────────────────────────────────────── */
@@ -261,7 +292,8 @@ const hit = (rivals: string[]): Cell => ({ named: true, rivals });
   const r = report([[hit(['A Co']), hit(['B Co'])], [hit(['A Co']), hit(['B Co'])], [hit(['A Co']), hit(['B Co'])]]);
   ok(/100%/.test(r.t) && /6 of 6 answers named your business/.test(r.t), 'J: 6/6 → 100%');
   ok(r.d.hook!.featured!.question === Q[0] && r.d.hook!.featured!.answers.every((a) => a.named), 'J: 6/6 features the first question, both answers NAMED');
-  ok(!/Not named/i.test(r.t) && (r.html.match(/q4-ans-head[^]*?q4-chip--y/g) ?? []).length >= 1, 'J: no "not named" anywhere — no manufactured miss');
+  ok(!/Not named|weren’t mentioned/i.test(r.t) && (r.html.match(/q4-who q4-who--me/g) ?? []).length === 6, 'J: six green ticks, no "not mentioned" anywhere — no manufactured miss');
+  ok(/All 6 answers named you\./.test(r.t) && (r.html.match(/q4-who q4-who--rival/g) ?? []).length === 6, 'J: the summary line says so, and the businesses named beside them still show in red');
   ok(!/didn’t name you|named instead/.test(r.t), 'J: why-this-matters claims no misses and no rivals');
 }
 
@@ -282,7 +314,7 @@ const hit = (rivals: string[]): Cell => ({ named: true, rivals });
   ok(foot.includes('See how it works at findable.live') && /Prepared for[\s\S]*Report date[\s\S]*Measured on/.test(foot) && /q4-foot-card/.test(foot), 'K: the site link and the three cards are there');
   ok(c4.t.includes(REMEASURE_CLAIM_SENTENCE.replace(/'/g, '’')), 'K: the locked guarantee sentence is unchanged');
   ok(/Want to be one of the names\?/.test(old.t) && old.html.includes('Get started &mdash; &pound;99') && old.html.includes('<footer class="site-foot">'), 'K: other reports keep "Want to be one of the names?", "Get started — £99" and their footer');
-  ok(c4.html.indexOf('q4-panel--why') < c4.html.indexOf('<footer class="q4-foot">'), 'K: why-this-matters comes before the closing band');
+  ok(c4.html.indexOf('class="q4-chats"') < c4.html.indexOf('<footer class="q4-foot">') && c4.html.indexOf('class="q4-caveat"') > c4.html.indexOf('class="q4-chats"') && /This is a quick check of 3 questions, not your full AI visibility measurement\./.test(c4.t), 'K: the chat windows and the honest quick-check note come before the closing band');
   ok(!/#(?:4285F4|1a73e8|0c1322|121726|eef1f8)\b/i.test(c4.html), 'K: no blue anywhere on the six-answer report (the old navy / Google-blue values are gone)');
 
   /* ── L. Older / other reports unchanged ── */
@@ -296,11 +328,14 @@ const hit = (rivals: string[]): Cell => ({ named: true, rivals });
   ok(!plain.includes('q4-') && plain.includes('<header class="band">'), 'L: a full (non-hook) report never reaches Concept 4');
 }
 
-/* ── M. Highlighting is exact and safe ───────────────────────────────────────────────────────── */
+/* ── M. Order: the order the answer named them, names never rewritten ───────────────────────── */
 {
-  ok(quickHighlight('Try Apex Roofing Contractors today.', ['Apex Roofing Contractors Ltd']) === 'Try <mark class="q4-hl">Apex Roofing Contractors</mark> today.', 'M: a name is matched without its "Ltd"');
-  ok(quickHighlight('Apexian roofs are great.', ['Apex']) === 'Apexian roofs are great.', 'M: no match inside a longer word');
-  ok(quickHighlight('<b>Bold & Co</b>', ['Bold & Co']).includes('&lt;b&gt;<mark class="q4-hl">Bold &amp; Co</mark>&lt;/b&gt;'), 'M: text is escaped around a highlight');
+  const t = 'For roofing in Leeds try Slate Masters first, then Apex Roofing Contractors, or Acme Roofing Services.';
+  const o = quickReplyOrder(t, ['Apex Roofing Contractors Ltd', 'Slate Masters', 'Never Written Co'], BIZ);
+  ok(o.map((e) => e.name).join('|') === 'Slate Masters|Apex Roofing Contractors Ltd|Acme Roofing Services|Never Written Co', 'M: by first mention ("Ltd" optional); a name the text never writes keeps its stored place at the end; spelling as stored');
+  ok(o.filter((e) => e.me).length === 1 && quickReplyOrder(t, ['Slate Masters'], null).every((e) => !e.me), 'M: the business is listed only for an answer that named it');
+  ok(quickReplyOrder('No names here at all.', ['B Co', 'A Co'], BIZ).map((e) => e.name).join('|') === `${BIZ}|B Co|A Co`, 'M: named by the verdict but not written → the business first, rivals in stored order');
+  ok(quickReplyOrder('Apexian roofs. Apex Roofs too.', ['Apex Roofs'], null).length === 1, 'M: no match inside a longer word');
 }
 
 if (failures) throw new Error(`${failures} Concept 4 report checks failed`);

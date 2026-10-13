@@ -22,6 +22,18 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-13-report-chat-view', date: '2026-10-13', title: 'The quick AI visibility report is now simple chat windows', audience: 'all',
+    body: 'Under the dark score section, each question is now a chat window: the question at the top, then what ChatGPT and Gemini replied, listing the businesses each one named in the order it named them.',
+    report: {
+      added: [
+        'One chat window per question. The business shows in green with a tick when it was named; every competitor shows in red with a cross. A miss says "You weren’t mentioned" in plain grey.',
+        'One short line under the score, for example "5 of 6 answers didn’t name you. 22 other businesses were named instead."',
+        'Up to 5 competitors per reply, then "+N more", and a short real line of what the AI said.',
+      ],
+      changed: ['Competitors named alongside the business on an answer that DID name it now show too.', 'The website section is plain grey, and yellow is only on the header and the buttons. The page follows the reader’s dark mode.'],
+      removed: ['The "Featured question" box.', 'The "All questions we asked" table.', 'The three yellow "Why this matters" bars.'],
+      effect: 'A prospect sees at a glance who AI recommended instead of them. The score, the buttons, the guarantee and the report links are unchanged.',
+    } },
   { id: '2026-10-13-sms-queue-whatsapp-rules', date: '2026-10-13', title: 'Queue for text never texts a business you tried on WhatsApp, and says the real number first', audience: 'all',
     body: 'Before anything is queued, the Queue for text popup now asks the server what would really happen and shows that number, with the reason for every lead it skips. Businesses waiting in the WhatsApp queue, already messaged on WhatsApp, or in a WhatsApp conversation are never texted.',
     report: {
