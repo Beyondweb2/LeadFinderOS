@@ -29,7 +29,7 @@ import {
   type AiReplyContext, type AiReplyWhy,
 } from "../../../src/lib/aiReplyDraft.ts";
 import { selectFindings } from "../../../src/lib/coldCallPlaybook.ts";
-import { draftEngineWords, draftNames } from "../../../src/lib/draftEvidence.ts";
+import { conversationEngine, draftNames } from "../../../src/lib/draftEvidence.ts";
 import { warmStage } from "../../../src/lib/warmStage.ts";
 import { ruleSalesFacts, websiteControlKnown, mergeSalesFacts, type ThreadMessage } from "../../../src/lib/warmReply.ts";
 import { serviceWindowState } from "../../../src/lib/serviceWindow.ts";
@@ -40,7 +40,7 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-internal-job, x-cron-secret",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
   /* The deploy marker: only this build answers with it. */
-  "x-ai-reply-drafts": "2026-10-11b",
+  "x-ai-reply-drafts": "2026-10-13a",
 };
 const json = (b: unknown, s = 200) => new Response(JSON.stringify(b), { status: s, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 const str = (v: unknown) => (typeof v === "string" ? v.trim() : "");
@@ -93,11 +93,14 @@ async function callReplyModel(system: string, user: string, temperature: number)
 
 /* ───────────────────────── what we already hold (DB only) ───────────────────────── */
 
-interface MsgRow { id: string; created_at: string; direction: string; body: string | null; message_type: string | null; template_name: string | null; status: string | null; lead_id: string | null }
+interface MsgRow { id: string; created_at: string; direction: string; body: string | null; message_type: string | null; template_name: string | null; status: string | null; lead_id: string | null; template_snapshot?: { body?: unknown } | null }
+
+/** What a sent row SAID: a template's stored rendered body (template_snapshot), else its body. */
+const sentText = (m: MsgRow): string => (m.template_snapshot && typeof m.template_snapshot.body === "string" && m.template_snapshot.body.trim()) ? m.template_snapshot.body.trim() : (m.body ?? "");
 
 async function loadThread(service: Service, bookUserId: string, phone: string): Promise<MsgRow[]> {
   const { data, error } = await service.from("whatsapp_messages")
-    .select("id, created_at, direction, body, message_type, template_name, status, lead_id")
+    .select("id, created_at, direction, body, message_type, template_name, status, lead_id, template_snapshot")
     .eq("user_id", bookUserId).eq("phone", phone).order("created_at", { ascending: false }).limit(60);
   if (error) throw error;
   return ((data ?? []) as MsgRow[]).slice().reverse();
@@ -120,6 +123,7 @@ async function buildContext(service: Service, lead: ResearchLead, thread: MsgRow
     nowMs: Date.now(),
   }, 3);
   const stage = warmStage(thread);
+  const sentRows = thread.filter((m) => m.direction !== "inbound" && (isRealSend(m.status) || m.status === "simulated"));
   const inboundOnly: ThreadMessage[] = thread.filter((m) => m.direction === "inbound").map((m) => ({ id: m.id, direction: "inbound", text: m.body ?? "", at: m.created_at }));
   const facts = mergeSalesFacts({}, ruleSalesFacts(inboundOnly), inboundOnly).facts;
   const trade = audit?.trade ?? leadTrade(lead);
@@ -129,11 +133,12 @@ async function buildContext(service: Service, lead: ResearchLead, thread: MsgRow
     businessName: lead.business_name ?? "",
     latestInbound: inbound.body ?? "",
     thread: thread.filter((m) => m.direction === "inbound" || isRealSend(m.status) || m.status === "simulated")
-      .map((m) => ({ from: m.direction === "inbound" ? "them" as const : "us" as const, text: m.body ?? (m.template_name ? `[${m.template_name}]` : "") })),
+      .map((m) => ({ from: m.direction === "inbound" ? "them" as const : "us" as const, text: (m.direction === "inbound" ? m.body ?? "" : sentText(m)) || (m.template_name ? `[${m.template_name}]` : "") })),
     search: audit && trade && town ? { trade, town } : null,
     /* Already one per business and at most three (loadAuditContext → draftNames). Empty = none readable. */
     competitors: draftNames(audit?.competitors ?? [], town),
-    engineWords: draftEngineWords(audit?.engine ?? null),
+    /* One engine per conversation (draftEvidence.conversationEngine): what our sent messages already named, else the audit's. */
+    engineWords: conversationEngine(sentRows.map((m) => ({ text: sentText(m), templateName: m.template_name })), audit?.engine ?? null).words,
     hasWebsite: found.status !== "no_website" && found.status !== "profile",
     namedEverywhere: audit?.namedEverywhere === true,
     hookAlreadySent: stage.stage === "warm" || stage.stage === "waiting_for_hook_reply",

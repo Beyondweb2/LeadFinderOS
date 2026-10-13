@@ -12,7 +12,10 @@
       "two spellings of one firm count once" rule), only names the audit recorded. None readable →
       "a few other businesses", never an invented name.
    ⛔ ENGINE WORDS: said the way the call script says them (hookScore.HOOK_SPOKEN_ENGINE_LABELS,
-      lower-cased for a text): the engine the names were read from. Unknown → "ai".
+      lower-cased for a text): "gemini" / "chatgpt", never "google ai" (Paul, 2026-10-13).
+   ⛔ ONE ENGINE PER CONVERSATION (conversationEngine, Paul 2026-10-13): once we have sent a message
+      that names an AI tool, every later draft names THAT tool; sent messages naming none → the engine
+      the rival names came from; sent messages naming different tools, or no engine known → "ai".
    ⛔ SITE: a specific issue only when the stored crawl SAW it. Nothing found / failed / timed out /
       strong site → GENERIC_SITE_LINE, which claims no fault. "found some things" with nothing named
       is refused (vagueSiteClaim).
@@ -21,6 +24,7 @@
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 import { distinctNames } from './hookAudit.ts';
 import { HOOK_SPOKEN_ENGINE_LABELS } from './hookScore.ts';
+import { TEMPLATE_SINGLE_ENGINE_CLAIM } from './rivalHook.ts';
 
 export const DRAFT_MAX_NAMES = 3;
 
@@ -29,14 +33,62 @@ export function draftNames(names: readonly string[] | null | undefined, town?: s
   return distinctNames((names ?? []).map((n) => String(n ?? '').trim()).filter(Boolean), town ?? null).slice(0, DRAFT_MAX_NAMES);
 }
 
-/** The AI tool as a text says it: the engine the names came from ("google ai" for Gemini, "chatgpt"),
- *  else "ai". Accepts an engine key ("gemini") or a label ("Gemini", "Google AI"). */
+/** The AI tool as a text says it: the engine the names came from ("gemini", "chatgpt"), else "ai".
+ *  Accepts an engine key ("gemini") or a label ("Gemini", "Google AI"). */
 export function draftEngineWords(engine: string | null | undefined): string {
   const e = String(engine ?? '').trim().toLowerCase();
   if (!e) return 'ai';
   if (e === 'google ai' || e === 'gemini') return HOOK_SPOKEN_ENGINE_LABELS.gemini.toLowerCase();
   if (e === 'chatgpt') return HOOK_SPOKEN_ENGINE_LABELS.chatgpt.toLowerCase();
   return 'ai';
+}
+
+/** "Google AI Overview(s)" is Google Search's own summary, not Gemini: blanked before reading engine words. */
+const stripOverview = (t: string) => String(t ?? '').replace(/\b(?:google(?:['’]?s)?\s+)?ai\s+overviews?\b/gi, ' ');
+const SAYS_CHATGPT = /\bchat\s?gpt\b/i;
+const SAYS_GEMINI = /\bgemini\b|\bgoogle(?:['’]?s)?\s+ai\b/i;
+
+/** The one AI tool a message we SENT named: 'chatgpt' / 'gemini', else null (named none, or both — a
+ *  "tools like chatgpt and gemini" line claims neither). A template whose text is not on hand falls back
+ *  to the tool its approved body claims (rivalHook.TEMPLATE_SINGLE_ENGINE_CLAIM: audit_followup → chatgpt). */
+export function engineNamedIn(text: string | null | undefined, templateName?: string | null): 'chatgpt' | 'gemini' | null {
+  const t = stripOverview(String(text ?? ''));
+  const c = SAYS_CHATGPT.test(t);
+  const g = SAYS_GEMINI.test(t);
+  if (c !== g) return c ? 'chatgpt' : 'gemini';
+  if (c && g) return null;
+  const claim = templateName ? TEMPLATE_SINGLE_ENGINE_CLAIM[templateName] : undefined;
+  return claim === 'chatgpt' || claim === 'gemini' ? claim : null;
+}
+
+export interface ConversationEngine {
+  /** As a text says it: "gemini" / "chatgpt" / "ai". */
+  words: string;
+  /** Why: a message we already sent named it; the audit's names came from it; or not sure → "ai". */
+  source: 'sent_message' | 'audit' | 'unsure';
+}
+
+/** ONE ENGINE PER CONVERSATION (Paul, 2026-10-13). The AI tool a draft names: the one our sent messages
+ *  already named (they must agree); none named → the engine the rival names came from; sent messages
+ *  naming different tools, or no engine known → "ai". Never mixes two tools in one conversation. */
+export function conversationEngine(
+  sent: ReadonlyArray<{ text: string | null | undefined; templateName?: string | null }>,
+  auditEngine: string | null | undefined,
+): ConversationEngine {
+  const named = new Set(sent.map((m) => engineNamedIn(m.text, m.templateName)).filter((e): e is 'chatgpt' | 'gemini' => e !== null));
+  if (named.size === 1) return { words: draftEngineWords([...named][0]), source: 'sent_message' };
+  if (named.size > 1) return { words: 'ai', source: 'unsure' };
+  const w = draftEngineWords(auditEngine);
+  return { words: w, source: w === 'ai' ? 'unsure' : 'audit' };
+}
+
+/** "aI tools" never: lower-case a line's first letter to carry on a sentence, but leave an acronym
+ *  ("AI", "SEO", "HTTPS") and the pronoun "I" alone. Drops one trailing full stop. */
+export function carryOn(s: string): string {
+  const t = String(s ?? '').trim().replace(/\.$/, '');
+  const first = (t.match(/^[^\s,.;:!?]+/)?.[0] ?? '').replace(/['’]s$/, '');
+  if (/^I(?:['’][a-z]+)?$/.test(first) || /^[A-Z0-9]{2,}$/.test(first.replace(/[^A-Za-z0-9]/g, ''))) return t;
+  return t.charAt(0).toLowerCase() + t.slice(1);
 }
 
 export const joinDraftNames = (n: readonly string[]): string =>
@@ -76,9 +128,16 @@ export const GENERIC_SITE_LINE =
 export const NO_SITE_LINE =
   "without a site of your own there's a lot less for ai tools to go on about what you do and where you work, and that's what we help with";
 
-/** The offer: both routes, never "everyone needs a new site". */
-export const OFFER_LINE_BOTH = "we can do that on the site you've already got, or build you a new one that's properly set up for ai visibility and seo";
+/** The offer: both routes, never "everyone needs a new site". It follows the GENERAL LINE ("…that's what
+ *  we help with"), so "help with that" has something to point at. */
+export const OFFER_LINE_BOTH = "we can help with that on the site you've already got, or build you a new one that's properly set up for ai visibility and seo";
+/** The offer when the line before it named real website issues: it joins on to them, never "do that". */
+export const OFFER_LINE_AFTER_ISSUES = "that's the sort of thing we fix, either on the site you've already got or by building you a new one that's properly set up for ai visibility and seo";
 export const OFFER_LINE_NEW = "we can build you a site that's properly set up for ai visibility and seo";
+/** The offer for what came before it: no site → build one; real issues named → OFFER_LINE_AFTER_ISSUES; else OFFER_LINE_BOTH. */
+export function offerLine(hasWebsite: boolean, issuesNamed: boolean): string {
+  return !hasWebsite ? OFFER_LINE_NEW : issuesNamed ? OFFER_LINE_AFTER_ISSUES : OFFER_LINE_BOTH;
+}
 
 /** The two routes as a draft says them (also warmReply's checks — one copy). */
 export const ROUTE_EXISTING_RE = /\b(site|website) you(?:['’]ve| have)? (?:already )?got\b|\b(?:current|existing) (?:web)?site\b|\bsite you already have\b|\byour (?:current )?(?:web)?site as it is\b|\bon (?:the|your) (?:current )?(?:web)?site\b/i;
@@ -102,12 +161,18 @@ export function issueMentioned(text: string, f: { title: string; said: string })
   return sig(`${f.title} ${f.said}`).filter((w) => t.includes(w)).length >= 2;
 }
 
-/** The draft names a different AI tool from the one the names were read from. */
+/** The draft names a different AI tool from the one this conversation uses (conversationEngine). With
+ *  "ai" (not sure), saying it asked one particular tool is the wrong claim. */
 export function wrongEngineWords(text: string, engineWords: string): boolean {
-  const t = String(text ?? '').toLowerCase();
-  if (engineWords === 'google ai') return /\bchat ?gpt\b/.test(t);
-  if (engineWords === 'chatgpt') return /\b(?:google ai|gemini)\b/.test(t);
-  return false;
+  const t = stripOverview(String(text ?? '').toLowerCase());
+  if (engineWords === 'gemini' || engineWords === 'google ai') return SAYS_CHATGPT.test(t);
+  if (engineWords === 'chatgpt') return SAYS_GEMINI.test(t);
+  return /\b(?:asked|checked|tried|searched)\s+(?:on\s+)?(?:chat\s?gpt|gemini|google(?:['’]?s)?\s+ai)\b/.test(t);
+}
+
+/** "google ai" for Gemini (not the AI Overview): the old wording — say "gemini" (Paul, 2026-10-13). */
+export function saysGoogleAiForGemini(text: string): boolean {
+  return /\bgoogle(?:['’]?s)?\s+ai\b/i.test(stripOverview(String(text ?? '')));
 }
 
 /** Does the draft name at least one of the businesses it was given? */

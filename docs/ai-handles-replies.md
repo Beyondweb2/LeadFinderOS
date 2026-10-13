@@ -79,3 +79,22 @@ Electrical Solutions Ltd, Glasby Electrical Ltd. The warm prompt never passed na
 - `ai-reply-drafts` `action: 'dry_run'` (admin): the draft the worker would write for one lead; writes no draft row, sends nothing.
 
 Tests: `scripts/ai-draft-names-issues.test.ts` (names present / unreadable, issues found / none, crawl failed, strong site, for both).
+
+## 2026-10-13 — "Gemini", one engine per conversation, the tidy (Paul)
+
+- **Wording.** `HOOK_SPOKEN_ENGINE_LABELS.gemini` is now "Gemini" (was "Google AI"), so call scripts, the cold-call
+  playbook, voice-note scripts and both reply drafters say "Gemini" / "gemini". `spokenEngine` also turns an old stored
+  "Google AI" label into "Gemini". "Google AI Overview" keeps its name. Approved Meta template bodies, already-sent
+  messages and stored keys (`gemini`) are untouched. Both drafters flag a draft that says "google ai"
+  (`saysGoogleAiForGemini`).
+- **One engine per conversation** (`draftEvidence.conversationEngine`, read by both drafters): the tool our SENT messages
+  already named wins (a template with no stored text falls back to `TEMPLATE_SINGLE_ENGINE_CLAIM`, so `audit_followup` =
+  chatgpt); sent messages naming none → the engine the rival names came from; sent messages naming different tools, or no
+  engine known → "ai". With "ai", a draft saying it asked one particular tool is flagged too. `ai-reply-drafts` now reads
+  `template_snapshot` so a template's rendered words count; `warm-lead-reply` passes `templateName` on each thread row.
+- **Tidy.** `carryOn` lower-cases a line to carry on a sentence but never an acronym or "I" ("AI tools", not "aI tools") —
+  used by both fallbacks and the call script. The offer after real issues is `OFFER_LINE_AFTER_ISSUES` ("that's the sort
+  of thing we fix, either on the site you've already got or by building you a new one…"); after the general line it is
+  `OFFER_LINE_BOTH` ("we can help with that…", pointing at "that's what we help with"); `offerLine` chooses.
+
+Tests: `scripts/ai-draft-names-issues.test.ts` section 3.

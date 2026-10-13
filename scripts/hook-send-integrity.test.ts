@@ -172,7 +172,7 @@ await (async () => {
   /* (The 6/6 "Not interested" writer this used to call is RETIRED 2026-10-04 (Paul, fix/07): an audit result never changes a lead's status.) */
 })();
 
-/* E. Every hook screen says Gemini; spoken scripts say Google AI (HOOK_SPOKEN_ENGINE_LABELS). */
+/* E. Every hook screen says Gemini; spoken scripts say Gemini too since 2026-10-13 (HOOK_SPOKEN_ENGINE_LABELS). */
 {
   ok(HOOK_ENGINE_LABELS.gemini === 'Gemini' && HOOK_ENGINE_LABELS.chatgpt === 'ChatGPT', 'E: one label map: ChatGPT / Gemini');
   const c = (n: boolean) => ({ named: n, self_named: n, answer_text: n ? `Try ${BIZ} or Sparks Ltd.` : 'Try Sparks Ltd, Volt Electrical or Power Co.', competitors: ['Sparks Ltd', 'Volt Electrical', 'Power Co'], citations: [] });
@@ -194,7 +194,7 @@ await (async () => {
   const inbox = readFileSync(resolve(root, 'src/pages/Inbox.tsx'), 'utf8');
   ok(inbox.includes('Gemini {geminiNamed}/{geminiAnswers}') && !inbox.includes('Google AI {geminiNamed}'), 'E: the Inbox list pill reads "Gemini n/m"');
   const playbook = strip(readFileSync(resolve(root, 'src/lib/coldCallPlaybook.ts'), 'utf8'));
-  ok(!/Gemini/.test(playbook), 'E: the cold-call playbook script says Google AI');
+  ok(!/Google AI(?! Overview)/.test(playbook), 'E: the cold-call playbook script says Gemini, never "Google AI" (2026-10-13)');
 }
 
 if (failures) throw new Error(`${failures} hook send-integrity checks failed`);

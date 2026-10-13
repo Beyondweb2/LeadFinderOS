@@ -89,7 +89,7 @@ const CAPABILITIES = ["dry_run", "build_phase_hold", "routing_leaf", "any_approv
    gone; the capability reads any_approved_opener).
    2026-09-30b: an explicit opt-out refuses MARKETING templates here too (src/lib/marketingConsent.ts).
    2026-10-04a: QA safety — a QA fixture is simulated, a test-account lead is refused (src/lib/qaSafety.ts). */
-const BUILD_ID = "2026-10-15a-uk-only-cold";
+const BUILD_ID = "2026-10-16a-gemini-wording";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",

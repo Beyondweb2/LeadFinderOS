@@ -55,9 +55,10 @@ export function hookEngineLabel(engine: string): string {
   return HOOK_ENGINE_LABELS[engine] ?? engine;
 }
 
-/** The engine as it is SAID — call scripts, the cold-call playbook, voice-note scripts. Unchanged by
- *  the 2026-10-11 rename on purpose (Paul: preserve call scripts): a rep still says "I asked Google AI". */
-export const HOOK_SPOKEN_ENGINE_LABELS: Record<string, string> = { chatgpt: 'ChatGPT', gemini: 'Google AI' };
+/** The engine as it is SAID — call scripts, the cold-call playbook, voice-note scripts and reply drafts.
+ *  Gemini is said "Gemini" (Paul, 2026-10-13; was "Google AI" until then). "Google AI Overview" is a
+ *  different thing and keeps its own name (aiOverview.ts). Approved Meta template bodies are untouched. */
+export const HOOK_SPOKEN_ENGINE_LABELS: Record<string, string> = { chatgpt: 'ChatGPT', gemini: 'Gemini' };
 
 /** The spoken name for an engine key. */
 export function hookSpokenEngineLabel(engine: string): string {

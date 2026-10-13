@@ -172,7 +172,7 @@ console.log('── 3. 6/6: bulk result → call screen (WS-5) → status untouc
   ok(!/did(?:n't| not) name (?:you|them)|not named|isn't naming|aren't naming|missing from|left out|never mentions/i.test(script), `the WS-5 call script makes no "AI missed you" claim on 6/6 ("${script.slice(0, 120)}…")`);
   /* removed 2026-10-06 (sales-team-today, Paul): the identity check ("Hi, is that Elland Drains?") — Paul's tested opener
      starts with the reason for ringing. On 6/6 it says, from the stored result, that AI DID mention them. */
-  ok(/^Hi mate, I was looking for a plumber in Halifax, so I asked ChatGPT and Google AI and they did mention you, which is good\.$/.test(pb.opening[0] ?? '') && !/is that|from Findable/i.test(script),
+  ok(/^Hi mate, I was looking for a plumber in Halifax, so I asked ChatGPT and Gemini and they did mention you, which is good\.$/.test(pb.opening[0] ?? '') && !/is that|from Findable/i.test(script),
     `the opening on 6/6: the search, both engines, "they did mention you" — no identity check, no "from Findable" ("${pb.opening[0] ?? ''}")`);
   ok(pb.close.guarantee.headline === 'We improve AI visibility or you get your money back.' && GUARANTEE_HEADLINE === QUICK_CLOSE_PROMISE, 'the close carries the one guarantee line (shared with Quick Close)');
   // The single check: the queue holds no status rule and no edge code writes not_interested.

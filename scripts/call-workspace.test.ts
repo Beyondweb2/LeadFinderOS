@@ -152,8 +152,8 @@ console.log('── 4. WHO IS CALLING COMES FIRST ──');
   const cold = buildColdCallPlaybook(base());
   /* 2026-10-06 (sales-team-today, Paul): the tested opener — the reason for ringing IS the first line; the rep
      knows who they are, so no "It's Sam from Findable". */
-  ok(/^Hi mate, I was looking for a plumber in Halifax, so I asked Google AI and it mentioned Brian Slattery Plumbers Limited and Sunnybank Plumbing Services, but not you\.$/.test(cold.callScript[0])
-    && !/from Findable|Sam/.test(cold.callScript.join(' ')), 'cold call: "Hi mate, I was looking for a plumber in Halifax, so I asked Google AI…" — never "It\'s Sam from Findable"');
+  ok(/^Hi mate, I was looking for a plumber in Halifax, so I asked Gemini and it mentioned Brian Slattery Plumbers Limited and Sunnybank Plumbing Services, but not you\.$/.test(cold.callScript[0])
+    && !/from Findable|Sam/.test(cold.callScript.join(' ')), 'cold call: "Hi mate, I was looking for a plumber in Halifax, so I asked Gemini…" — never "It\'s Sam from Findable"');
   const sent: PlaybookMessage = { id: 'm1', created_at: iso(NOW - 3_600_000 * 3), direction: 'outbound', body: 'Hi is this Calder Plumbing?', message_type: 'text', template_name: null, status: 'read' };
   const who: PlaybookMessage = { id: 'm2', created_at: iso(NOW - 3_600_000), direction: 'inbound', body: "Yeah it is mate, who's this?", message_type: 'text', template_name: null, status: 'received' };
   const fu = buildColdCallPlaybook(base({ messages: [sent, who] }));
@@ -161,7 +161,7 @@ console.log('── 4. WHO IS CALLING COMES FIRST ──');
   // removed 2026-10-06 (sales-team-today, Paul): "You asked who I was when I messaged …" — never "I messaged you", never the day.
   ok(fu.callScript[0] === cold.callScript[0] && !/You asked who I was|messaged|WhatsApp|earlier today|from Findable/.test(opening), 'after an earlier WhatsApp (even "who\'s this?"): the SAME opener — never "I messaged you", never the day');
   ok(/been in touch with them before/.test(fu.script.openerNote ?? ''), '…the rep is told in a note beside the script instead');
-  ok(!/Quick recap/.test(opening) && /I was looking for a plumber in Halifax, so I asked Google AI/.test(opening), '…no "Quick recap" — the reason for ringing instead');
+  ok(!/Quick recap/.test(opening) && /I was looking for a plumber in Halifax, so I asked Gemini/.test(opening), '…no "Quick recap" — the reason for ringing instead');
   ok(!/2026/.test(opening), '…and no year read out for today');
   const report: PlaybookMessage = { id: 'm3', created_at: iso(NOW - 2 * DAY), direction: 'outbound', body: 'x', message_type: 'template', template_name: 'competitor_hook', status: 'read' };
   // removed 2026-10-06 (sales-team-today, Paul): "Quick recap" after a report-carrying message — an earlier message is never read out.
@@ -205,7 +205,7 @@ console.log('── 5. THE CALL FLOW WORKS WITH NO AUDIT AND NO WHATSAPP ──'
       && dlg.indexOf('data-testid="ai-check-tools"') < dlg.indexOf('<ColdCallPlaybookInline'), '…the AI check tools sit at the top of the Call tab, above the script, where the one-lead check is run');
   }
   const ready = buildColdCallPlaybook(base());
-  ok(ready.audit.state === 'ready' && /Google AI did not name them — it named Brian Slattery Plumbers Limited and Sunnybank Plumbing Services/.test(ready.audit.headline), 'with an audit: the key finding in one line, from the stored result');
+  ok(ready.audit.state === 'ready' && /Gemini did not name them — it named Brian Slattery Plumbers Limited and Sunnybank Plumbing Services/.test(ready.audit.headline), 'with an audit: the key finding in one line, from the stored result');
   /* 2026-10-06 (sales-team-today, Paul): Say → Ask first (→ agency) → Then ask → What we do → Offer → Objections.
      removed: the call card (the AI result is above the script), the "after they pay" step and the folded gatekeeper/voicemail. */
   {

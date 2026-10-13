@@ -22,6 +22,19 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-13-gemini-one-engine', date: '2026-10-13', title: 'Drafts and call scripts say "Gemini", and stick to one AI tool per conversation', audience: 'all',
+    body: 'Reply drafts, call scripts and voice-note scripts now say "Gemini" instead of "Google AI", and a follow-up always names the same AI tool your earlier message did.',
+    report: {
+      added: [
+        'One AI tool per conversation: once a message has gone out naming ChatGPT or Gemini, every later draft names that same tool. If the message named neither, the draft uses the tool the competitor names came from. If it is not clear, the draft just says "ai".',
+      ],
+      changed: [
+        'Call scripts, voice-note scripts and reply drafts say "Gemini" where they used to say "Google AI". "Google AI Overview" keeps its name. Messages already sent and the approved WhatsApp templates are unchanged.',
+        'Drafts no longer write "aI tools" with a stray capital, and the line after the website issues now follows on properly ("that\'s the sort of thing we fix…") instead of "we can do that".',
+      ],
+      removed: [],
+      effect: 'Prospects never see one message say ChatGPT and the next say Gemini. You still approve every message.',
+    } },
   { id: '2026-10-12-ai-draft-names-issues', date: '2026-10-12', title: 'Reply drafts now name the businesses AI picked and the real website issue', audience: 'all',
     body: 'Drafted WhatsApp replies (Draft reply, and AI handles replies) now say who AI recommended and what is actually wrong with the site, instead of "a few other businesses" and "found some things".',
     report: {

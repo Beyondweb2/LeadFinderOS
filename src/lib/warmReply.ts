@@ -28,7 +28,7 @@ import {
 } from './warmLeadResearch.ts';
 import {
   GENERIC_SITE_LINE, NO_SITE_LINE, ROUTE_EXISTING_RE as ROUTE_EXISTING, ROUTE_NEW_RE as ROUTE_NEW,
-  draftEngineWords, draftNames, issueMentioned, namesAny, namesLine, vagueSiteClaim, wrongEngineWords,
+  carryOn, conversationEngine, draftNames, issueMentioned, namesAny, namesLine, offerLine, saysGoogleAiForGemini, vagueSiteClaim, wrongEngineWords,
 } from './draftEvidence.ts';
 
 export const REPLY_MODEL = 'gpt-4o-mini';
@@ -48,6 +48,8 @@ export interface ThreadMessage {
   direction: 'inbound' | 'outbound';
   text: string;
   at: string;
+  /** A sent template's name, when its text may not be on hand (draftEvidence.engineNamedIn's fallback). */
+  templateName?: string | null;
 }
 
 /** Their newest message that carries words. A photo with no caption still counts as "they replied",
@@ -419,6 +421,9 @@ export interface ReplyContext {
   route: RouteLean;
   /** "electrician in Addlestone" (derived). */
   searchContext: string | null;
+  /** The AI tool this conversation names (derived, draftEvidence.conversationEngine): what our sent
+   *  messages already said, else the engine the audit's names came from, else "ai". */
+  engineWords: string;
   /** Where their number came from, stated only when the lead row proves it (a Google listing). */
   numberSource?: string | null;
   /** The 1–2 strongest issues the STORED CRAWL saw (coldCallPlaybook.selectFindings), used when the
@@ -427,7 +432,7 @@ export interface ReplyContext {
   avoidText: string | null;
 }
 
-export function buildReplyContext(i: Omit<ReplyContext, 'question' | 'askOwnership' | 'allowReportUrl' | 'alreadyAnswered' | 'selection' | 'primaryRequired' | 'route' | 'searchContext'>): ReplyContext {
+export function buildReplyContext(i: Omit<ReplyContext, 'question' | 'askOwnership' | 'allowReportUrl' | 'alreadyAnswered' | 'selection' | 'primaryRequired' | 'route' | 'searchContext' | 'engineWords'>): ReplyContext {
   const question = classifyInbound(i.latest.text);
   const selection = selectReplyFindings(i.research, i.thread, i.town, i.hookAt ?? null);
   return {
@@ -440,12 +445,13 @@ export function buildReplyContext(i: Omit<ReplyContext, 'question' | 'askOwnersh
     allowReportUrl: !!i.reportUrl && reportUrlAllowed(i.latest.text, question.all),
     route: routeLean(i.research),
     searchContext: aiSearchContext(i),
+    engineWords: conversationEngine(i.thread.filter((m) => m.direction === 'outbound').map((m) => ({ text: m.text, templateName: m.templateName ?? null })), i.audit?.engine ?? null).words,
   };
 }
 
 /* ─────────────────────────────── the prompt ─────────────────────────────── */
 
-export const REPLY_SYSTEM_PROMPT = `You draft WhatsApp replies for Paul, who helps UK local businesses show up when people ask AI tools (google ai, chatgpt, gemini, perplexity) for their trade in their area. Paul reads and edits every draft before sending; you never send anything. Return ONLY structured data via the return_reply tool.
+export const REPLY_SYSTEM_PROMPT = `You draft WhatsApp replies for Paul, who helps UK local businesses show up when people ask AI tools (chatgpt, gemini, perplexity) for their trade in their area. Paul reads and edits every draft before sending; you never send anything. Return ONLY structured data via the return_reply tool.
 
 WHERE THIS CONVERSATION IS: Paul messaged them cold and they replied. FOR THIS REPLY says whether Paul has ALREADY sent them the AI check (the search and the businesses it named). This reply has exactly three jobs:
 1. PROVE THERE IS A REAL ISSUE: AI was asked for their service in their area, it recommended their competitors, not them, and (only where a finding is given) here is a specific thing on their website.
@@ -453,7 +459,7 @@ WHERE THIS CONVERSATION IS: Paul messaged them cold and they replied. FOR THIS R
 3. FIND OUT WHO CONTROLS THE WEBSITE: end by asking whether they are with an agency or own/manage the site themselves (unless FOR THIS REPLY says they already told us).
 
 THE SHAPE (normally 3 or 4 short paragraphs):
-- respond naturally to what they just said (if they misread the hook, e.g. "do you need an electrician?", put them right in a friendly way: "nah mate, i was checking what google ai recommends when someone's looking for an electrician in addlestone")
+- respond naturally to what they just said (if they misread the hook, e.g. "do you need an electrician?", put them right in a friendly way: "nah mate, i was checking what gemini recommends when someone's looking for an electrician in addlestone")
 - the AI search: what was asked, using the AI TOOL words given, and who it recommended instead of them. If the AI check has NOT been sent yet, name the businesses listed under AI VISIBILITY (at most three, spelt as given), casually: "it recommended A, B and C". If it says no names could be read, say "it named a few other businesses" and never make a name up. If the AI check HAS already been sent, do not list them again; they have just seen them.
 - the specific issue from the PRIMARY FINDING (or the CRAWL FINDINGS), with its real details, and what it means in plain english ("so a lot of the ai tools can't properly access and understand the site"). With no finding given, use the GENERAL LINE given instead and claim no fault.
 - what we'd do: "that's the sort of thing we fix, either on the site you've already got or we can build you a new one that's properly set up for ai visibility and seo"
@@ -463,11 +469,11 @@ NO PRICE AT THIS STAGE. Do not mention any price, figure, monthly fee, number of
 
 HOW PAUL WRITES ON WHATSAPP:
 - conversational, short, simple sentences. lowercase is fine and natural. "mate" where it fits.
-- product names in normal lowercase is fine: google ai, chatgpt, claude, perplexity.
+- product names in normal lowercase is fine: gemini, chatgpt, claude, perplexity.
 - no headings, no bullet points, no bold, no emojis, no dashes of any kind (no "—" or "–"): use a comma or a new sentence.
 - never: "i'd love to", "great question", "thanks for getting back to me", "ai-powered", "solutions", "leverage", "boost", "online presence", "seamless", "unlock", "don't hesitate", fake urgency, exaggerated claims.
 - it should read like Paul checked THEIR business himself and found something worth fixing, not like a sales script.
-- say the search plainly ("i asked google ai for an electrician in addlestone"), never with an adjective on it and never read back word for word.
+- say the search plainly ("i asked gemini for an electrician in addlestone"), never with an adjective on it and never read back word for word.
 
 ${SALES_STYLE_RULES}
 
@@ -583,7 +589,9 @@ export function buildReplyPrompt(ctx: ReplyContext): string {
   const known = ctx.salesFacts.owns_website ?? (ctx.salesFacts.has_existing_provider?.value === 'yes' ? ctx.salesFacts.has_existing_provider : null);
   const instructions = [
     ctx.searchContext ? `AI SEARCH CONTEXT: AI was asked for "${ctx.searchContext}".` : '',
-    a && !a.namedEverywhere ? `AI TOOL: say it as "${draftEngineWords(a.engine)}" (the tool the result came from). Do not name a different AI tool.` : '',
+    a && !a.namedEverywhere ? (ctx.engineWords === 'ai'
+      ? 'AI TOOL: say it as "ai". Do not name ChatGPT or Gemini as the tool you asked.'
+      : `AI TOOL: say it as "${ctx.engineWords}" (the tool this conversation has used). Do not name a different AI tool.`) : '',
     !ctx.hookTemplate && a && !a.namedEverywhere ? 'STAGE: Paul has NOT sent them the AI check yet. Say the search and who it recommended (see AI VISIBILITY).' : '',
     ctx.hookTemplate ? 'STAGE: Paul has already sent them the AI check naming the businesses AI mentioned, and they have replied to it. Do NOT repeat that message or list those businesses again.' : '',
     ctx.primaryRequired ? 'ISSUE: the PRIMARY FINDING is the specific issue in this reply, with its real details.' : '',
@@ -704,8 +712,9 @@ export function checkReply(reply: string, ctx: ReplyContext): ReplyCheck {
   if (aud && !aud.namedEverywhere && !refusal) {
     const names = draftNames(aud.competitors, aud.town ?? ctx.town);
     if (!ctx.hookTemplate && names.length && !namesAny(text, names)) problems.push(`It does not name who AI recommended instead (${names.join(', ')}).`);
-    if (wrongEngineWords(text, draftEngineWords(aud.engine))) problems.push(`It names a different AI tool from the one the audit used ("${draftEngineWords(aud.engine)}").`);
+    if (wrongEngineWords(text, ctx.engineWords)) problems.push(`It names a different AI tool from the one this conversation uses ("${ctx.engineWords}").`);
   }
+  if (!refusal && saysGoogleAiForGemini(text)) problems.push('It says "google ai"; say "gemini".');
 
   if (!refusal) {
     if (!AI_SEARCH_STRICT.test(text)) problems.push('It does not mention the AI search that started this conversation.');
@@ -751,8 +760,6 @@ export const VAGUE_CLAIM_PROBLEM = 'It says it found things on the website witho
 
 /* ─────────────────────────────── when the model is unavailable ─────────────────────────────── */
 
-const lowerFirst = (s: string) => s.charAt(0).toLowerCase() + s.slice(1);
-
 /** A plain, rule-built reply in the same shape, for when the model is unavailable. Not for a
  *  refusal (Paul answers that himself). */
 export function fallbackReply(ctx: ReplyContext): string | null {
@@ -760,7 +767,7 @@ export function fallbackReply(ctx: ReplyContext): string | null {
   const search = ctx.searchContext ?? 'your trade in your area';
   const paras: string[] = [];
   const a = ctx.audit;
-  const tool = a ? draftEngineWords(a.engine) : 'ai';
+  const tool = ctx.engineWords;
   if (a && !a.namedEverywhere && !ctx.hookTemplate) {
     paras.push(`${namesLine(tool, ctx.searchContext, draftNames(a.competitors, a.town ?? ctx.town))}.`);
   } else {
@@ -773,16 +780,19 @@ export function fallbackReply(ctx: ReplyContext): string | null {
   if (f) {
     const details = sayableDetails(f).join(', ');
     const first = f.detail.split(/(?<=\.)\s/)[0].replace(/\.$/, '');
-    paras.push(`i had a look at your site as well and one thing that stood out is ${lowerFirst(first)}${details && !first.includes(details) ? ` (${details})` : ''}.`);
+    paras.push(`i had a look at your site as well and one thing that stood out is ${carryOn(first)}${details && !first.includes(details) ? ` (${details})` : ''}.`);
   } else if (crawl.length) {
-    paras.push(`i had a look at your site as well and ${crawl.map((c) => lowerFirst(c.said.replace(/\.$/, ''))).join(', and ')}.`);
+    paras.push(`i had a look at your site as well and ${crawl.map((c) => carryOn(c.said)).join(', and ')}.`);
   } else if (!ctx.research || ctx.research.status !== 'no_website') {
     /* Nothing found, failed, timed out or a strong site: the general line, never a fault. */
     paras.push(`${ctx.website ? GENERIC_SITE_LINE : NO_SITE_LINE}.`);
   }
-  paras.push(ctx.route === 'new_only'
+  /* The offer joins on to what came before it: real issues → "that's the sort of thing we fix"; the general
+     line (no issue named) → offerLine's "we can help with that…", never a fix for a fault nobody named. */
+  const issuesSaid = !!f || crawl.length > 0;
+  paras.push(issuesSaid && ctx.route === 'new_only'
     ? `that's the sort of thing we sort out, we can build you a site that's properly set up for ai visibility and seo.`
-    : `that's the sort of thing we fix, either on the site you've already got or we can build you a new one that's properly set up for ai visibility and seo.`);
+    : `${offerLine(!!ctx.website && ctx.route !== 'new_only', issuesSaid)}.`);
   if (ctx.askOwnership) {
     paras.push(ctx.route === 'new_only' ? 'have you got a website at the moment or have you been going without one?' : 'are you currently with an agency or do you own/manage the website yourself?');
   } else {

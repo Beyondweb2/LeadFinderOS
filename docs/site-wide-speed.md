@@ -262,3 +262,17 @@ corrections $5.80 over 1,668 questions = $0.0139): `AUDIT_EST_USD_PER_QUESTION`,
   and in-list checks read whatever the lists held when the user object last changed (usually empty) —
   the database dedupe is what actually works. Deliberately NOT changed (it would revive a check).
 - `lead_crawl_checks` returns 0 rows to the admin session (RLS) — not investigated.
+
+## 9. Outreach list order index — tried and REMOVED (2026-10-13)
+
+The Outreach active list reads `where is_archived = false order by created_at desc, id asc limit 1000 offset N` (RLS adds
+`user_id = auth.uid()` + the admin RESTRICTIVE policy). Measured live as the admin (`explain analyze`, read-only): 13–22 ms
+per page; every page seq-scans and sorts all ~5,500 active rows, from offset 3000 the sort spills to disk (2.6 MB).
+
+An index `(user_id, is_archived, created_at desc, id)` was built CONCURRENTLY: forced, the plan reads 3 ms (offset 0) and
+8 ms (offset 4000) — but the planner never picks it, because the RESTRICTIVE policy's `(select my_role()) = 'admin'` is
+estimated at the default 0.5% selectivity (27 rows instead of 5,473), so seq scan + sort always looks cheaper. Timings
+with the index present were unchanged (12–36 ms). It was dropped the same session (idx_scan 4 = the forced tests only).
+The Outreach SORT is done in the browser (`OutreachTable` sortField state), so no index can affect it either.
+⛔ Do not re-add this index without changing how the planner estimates the policy (that is a policy change — not done).
+If Outreach stalls, look in the browser (5.5k rows sorted / rendered), not the database.

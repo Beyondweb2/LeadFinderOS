@@ -49,7 +49,7 @@ const FINDINGS: ScriptFinding[] = [
 ];
 const own = { source: 'own_site' as const, label: null };
 const input = (over: Partial<CallScriptInput> = {}): CallScriptInput => ({
-  searchFor: 'a plumber in Rugby', engine: 'Google AI', evidenceKind: 'gap',
+  searchFor: 'a plumber in Rugby', engine: 'Gemini', evidenceKind: 'gap',
   competitors: ['Rugby Plumbing Co', 'Swift Heating', 'A1 Drains', 'Fourth Name Ltd'], auditStale: false,
   findings: FINDINGS, findingsStatus: 'findings', site: own, close: buildCallClose('own_site'),
   contactedBefore: false, hasReport: true, ...over,
@@ -61,7 +61,7 @@ const BANNED: Array<[RegExp, string]> = [
   [/If they'd rather see it first/i, '"If they\'d rather see it first"'], [/The longer version is in/i, '"The longer version is in"'],
   [/Someone else answers/i, '"Someone else answers"'], [/Voicemail \(under 20 seconds\)/i, '"Voicemail (under 20 seconds)"'],
   [/Where does most of your work come from/i, '"Where does most of your work come from"'],
-  [/https?:\/\//i, 'a URL'], [/\bGemini\b/, 'the internal engine name "Gemini"'],
+  [/https?:\/\//i, 'a URL'], [/Google AI(?! Overview)/, '"Google AI" for Gemini (said "Gemini" since 2026-10-13)'],
 ];
 const noBanned = (label: string, text: string) => {
   for (const [re, what] of BANNED) ok(!re.test(text), label + ': never ' + what);
@@ -70,7 +70,7 @@ const noBanned = (label: string, text: string) => {
 console.log('── 1. Plumber, three competitors, website issues ──');
 {
   const s = buildCallScript(input());
-  ok(s.opener[0] === 'Hi mate, I was looking for a plumber in Rugby, so I asked Google AI and it mentioned Rugby Plumbing Co, Swift Heating and A1 Drains, but not you.', 'opener line 1 is Paul\'s structure, word for word');
+  ok(s.opener[0] === 'Hi mate, I was looking for a plumber in Rugby, so I asked Gemini and it mentioned Rugby Plumbing Co, Swift Heating and A1 Drains, but not you.', 'opener line 1 is Paul\'s structure, word for word');
   ok(s.opener[1] === "I had a look into why they were being named and you weren't, and I found a few potential reasons.", 'opener line 2: why they were named and you weren\'t — a few potential reasons');
   ok(!s.opener.join(' ').includes('Fourth Name'), 'only the first three competitors are said');
   ok(s.found.lines.length === 2 && s.found.lines.every((l) => !/near-duplicates|robots\.txt|noindex/.test(l)), 'exactly two reasons (MAX_SPOKEN_FINDINGS, 2026-10-07: one or two hooks, never a list), said in plain words (no jargon)');
@@ -90,9 +90,9 @@ console.log('── 2. Follow-up lead: the SAME opener, the earlier contact is a
 console.log('── 3. One competitor / none ──');
 {
   const one = buildCallScript(input({ competitors: ['Solo Plumbing'] }));
-  ok(one.opener[0] === 'Hi mate, I was looking for a plumber in Rugby, so I asked Google AI and it mentioned Solo Plumbing, but not you.', 'one competitor, said naturally ("it mentioned Solo Plumbing, but not you")');
+  ok(one.opener[0] === 'Hi mate, I was looking for a plumber in Rugby, so I asked Gemini and it mentioned Solo Plumbing, but not you.', 'one competitor, said naturally ("it mentioned Solo Plumbing, but not you")');
   const none = buildCallScript(input({ competitors: [] }));
-  ok(none.opener[0] === "Hi mate, I was looking for a plumber in Rugby, so I asked Google AI and you didn't come up in the answer it gave.", 'no competitors → "you didn\'t come up", no names');
+  ok(none.opener[0] === "Hi mate, I was looking for a plumber in Rugby, so I asked Gemini and you didn't come up in the answer it gave.", 'no competitors → "you didn\'t come up", no names');
   ok(!/mentioned/.test(none.opener.join(' ')) && /I had a look into why you weren't coming up/.test(none.opener[1] ?? ''), '…and never "it mentioned", the reason line has no "they"');
 }
 
@@ -128,13 +128,13 @@ console.log('── 5. No website / a profile ──');
 console.log('── 6. Named (3/3-type lead) and no audit ──');
 {
   const named = buildCallScript(input({ evidenceKind: 'named', competitors: [], findings: [], findingsStatus: 'clean' }));
-  ok(named.opener[0] === 'Hi mate, I was looking for a plumber in Rugby, so I asked Google AI and it did mention you, which is good.', 'named → says so honestly');
+  ok(named.opener[0] === 'Hi mate, I was looking for a plumber in Rugby, so I asked Gemini and it did mention you, which is good.', 'named → says so honestly');
   ok(!/but not you|weren't/.test(spokenScriptText(named)), '…and never claims a miss');
   const none = buildCallScript(input({ evidenceKind: 'none', competitors: [] }));
   ok(/^Hi mate, I look at how local businesses come up/.test(none.opener[0]) && !/mentioned|but not you/.test(none.opener.join(' ')), 'no audit → claims no AI result');
 }
 
-{ const two = buildCallScript(input({ evidenceKind: 'named', engine: 'ChatGPT and Google AI', competitors: [], findings: [], findingsStatus: 'clean' })); ok(/asked ChatGPT and Google AI and they did mention you/.test(two.opener[0]), 'two engines → "they", not "it"'); }
+{ const two = buildCallScript(input({ evidenceKind: 'named', engine: 'ChatGPT and Gemini', competitors: [], findings: [], findingsStatus: 'clean' })); ok(/asked ChatGPT and Gemini and they did mention you/.test(two.opener[0]), 'two engines → "they", not "it"'); }
 console.log('── 7. The first question, the agency branch, the price angle ──');
 {
   const s = buildCallScript(input());
@@ -206,7 +206,7 @@ console.log('── 11. The playbook end to end (real crawl evidence) ──');
   });
   const p = pb();
   const said = [...p.callScript, ...p.qualify, ...p.objections.map((o) => o.answer)].join('\n');
-  ok(/^Hi mate, I was looking for a plumber in Rugby, so I asked Google AI and it mentioned Rugby Plumbing Co, Swift Heating and A1 Drains, but not you\.$/.test(p.callScript[0]), 'the real playbook opener (Gemini said as Google AI)');
+  ok(/^Hi mate, I was looking for a plumber in Rugby, so I asked Gemini and it mentioned Rugby Plumbing Co, Swift Heating and A1 Drains, but not you\.$/.test(p.callScript[0]), 'the real playbook opener (Gemini said as Gemini)');
   ok(p.script.found.lines.length >= 1 && p.script.found.lines.length <= 3 && /different web address/.test(p.script.found.lines.join(' ')), 'reasons come from the stored crawl evidence (the sitemap finding)');
   ok(p.qualify[0] === FIRST_QUESTION, 'qualify starts with the website-management question');
   noBanned('playbook (messaged 3 days ago, caller Paul)', said);

@@ -53,7 +53,6 @@ import {
 } from "../../../src/lib/warmReply.ts";
 import { findingScore, type ResearchFinding } from "../../../src/lib/warmLeadResearch.ts";
 import { selectFindings } from "../../../src/lib/coldCallPlaybook.ts";
-import { draftEngineWords } from "../../../src/lib/draftEvidence.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -184,7 +183,7 @@ async function handleDraft(service: Service, lead: LeadRow, operatorId: string, 
   // Any stage (2026-10-11): before the hook, hookTemplate is null and the prompt may say the search and the names.
 
   const readable = (body.readable && typeof body.readable === "object" ? body.readable : {}) as Record<string, string>;
-  const thread: ThreadMessage[] = rows.map((m) => ({ id: m.id, direction: m.direction === "inbound" ? "inbound" : "outbound", text: threadText(m, readable), at: m.created_at }));
+  const thread: ThreadMessage[] = rows.map((m) => ({ id: m.id, direction: m.direction === "inbound" ? "inbound" : "outbound", text: threadText(m, readable), at: m.created_at, templateName: m.template_name ?? null }));
   const latest = latestInbound(thread);
   if (!latest) return json({ ok: false, error: "no_inbound", detail: "They have not replied yet." });
 
@@ -277,7 +276,7 @@ async function handleDraft(service: Service, lead: LeadRow, operatorId: string, 
     aiSearchContext: ctx.searchContext,
     /* What the draft was given to say (2026-10-11): the AI tool, up to three names (one per business), and the
        crawl's own issues, or none and the general line. */
-    aiTool: audit && !audit.namedEverywhere ? draftEngineWords(audit.engine) : null,
+    aiTool: audit && !audit.namedEverywhere ? ctx.engineWords : null, // one engine per conversation (draftEvidence.conversationEngine)
     namesGiven: audit && !audit.namedEverywhere && !ctx.hookTemplate ? audit.competitors : [],
     crawlFindings: crawlFindings.map((f) => f.title),
     crawlNote: found.status === "findings" ? null : found.note,

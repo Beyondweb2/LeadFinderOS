@@ -24,14 +24,14 @@
 /** The line Paul says is working best (2026-09-30). A QUALITY STANDARD — never pasted in as the
  *  message. The placeholders are filled only with real data. */
 export const HOUSE_STYLE_EXAMPLE =
-  "Hi mate, I asked Google AI for a plumber in [town] and it named [competitor 1], [competitor 2] and [competitor 3]. " +
+  "Hi mate, I asked Gemini for a plumber in [town] and it named [competitor 1], [competitor 2] and [competitor 3]. " +
   "I had a look at why this was happening and found a few issues with your website. " +
   "We specialise in AI visibility and I'm happy to explain what I'd do to make your business more likely to be the one AI recommends.";
 
 /** The shared prompt block. Short on purpose: each generator's own prompt still owns its SHAPE. */
 export const SALES_STYLE_RULES = `HOW IT MUST SOUND (Findable's house style; it applies to every word you write):
 - A real person who genuinely asked AI, genuinely saw who it named and genuinely looked at their website. Plain English. Short sentences. Direct and specific.
-- Say the search the way a person says it: "i asked Google AI for a plumber in Rugby". No adjectives on the search ("reliable", "trusted", "reputable", "professional", "highly rated", "top rated") unless that word is the whole point of it (an "emergency" locksmith). Nobody needs a reason for searching.
+- Say the search the way a person says it: "i asked Gemini for a plumber in Rugby". No adjectives on the search ("reliable", "trusted", "reputable", "professional", "highly rated", "top rated") unless that word is the whole point of it (an "emergency" locksmith). Nobody needs a reason for searching.
 - Say what was actually found on their site and why it matters, in normal words a tradesperson uses. No jargon ("entity", "signals", "schema", "structured data", "indexing", "optimised", "crawl budget"); if a technical word is unavoidable, explain it in the same breath.
 - Use ONLY the facts you are given. If a detail is missing, write naturally around it. Never invent a name, a number, a service, a result, a reason or a compliment.
 - Never: "i came across your business", "hope this message finds you well", "trusted local business", "reputable", "leading", "premier", "high-quality", "unlock", "leverage", "revolutionise", "enhance your digital presence", "boost your online presence", "stand out in today's competitive landscape", "AI-powered", "game-changer", "cutting-edge", "seamless", "elevate", "don't hesitate", "great question".

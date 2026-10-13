@@ -88,7 +88,7 @@ console.log('── 1. NOT NAMED + REAL COMPETITORS ──');
   const opening = p.opening.join(' ');
   ok(p.mode === 'cold', 'no messages → NEW COLD CALL');
   // 2026-10-06 (sales-team-today, Paul): no "Hi, is that …?" check — the reason for ringing IS the opener.
-  ok(/^Hi mate, I was looking for a locksmith in Tunbridge Wells, so I asked Google AI and it mentioned /.test(p.opening[0]) && !/is that|from Findable/i.test(opening),
+  ok(/^Hi mate, I was looking for a locksmith in Tunbridge Wells, so I asked Gemini and it mentioned /.test(p.opening[0]) && !/is that|from Findable/i.test(opening),
     "opens with Paul's tested line: the search, the engine, the names (never \"is that …?\", never \"from Findable\")");
   ok(opening.includes('LockRite Locksmiths Tunbridge Wells') && opening.includes('LockFit Tunbridge Wells') && opening.includes('TN Locksmith'),
     'the opening names the first three REAL competitors from the stored answer');
@@ -305,7 +305,7 @@ console.log('── 12. SIMPLIFIED PLAYBOOK (Paul, 2026-09-27) ──');
   ok(p.callScript.length >= 4 && /^Hi mate, I was looking for /.test(p.callScript[0]), "the call script is one read that opens with Paul's tested line (2026-10-06)");
   ok(script.includes('LockRite Locksmiths Tunbridge Wells') && script.includes('LockFit Tunbridge Wells') && script.includes('TN Locksmith') && !script.includes('S.J. Osborne'),
     'it names the first three competitors from THAT result, no more');
-  ok(/Hi mate, I was looking for a locksmith in Tunbridge Wells, so I asked Google AI and it mentioned/.test(script), 'it names the engine that was actually asked (Gemini is said as Google AI), and the search plainly');
+  ok(/Hi mate, I was looking for a locksmith in Tunbridge Wells, so I asked Gemini and it mentioned/.test(script), 'it names the engine that was actually asked (Gemini is said as Gemini), and the search plainly');
   ok(/I had a look into why they were being named and you weren't, and I found a few potential reasons\./.test(script)
     && p.callScript.includes("The map of your site that Google reads points at a different web address, so it isn't clear which site is really yours.")
     && !/that's why/i.test(script), 'it carries the real findings (strongest first) in plain words, as potential reasons (never "that\'s why")');
@@ -349,7 +349,7 @@ console.log('── 12. SIMPLIFIED PLAYBOOK (Paul, 2026-09-27) ──');
   ok(/could only find your TradeHQ profile/.test(ps) && !/your site|your website is/i.test(ps.replace(/website of your own|one of your own/g, '')), 'the script says "just your TradeHQ profile", never "your site"');
   // "My website is fine" objection removed 2026-10-06 (sales-team-today, Paul); the profile truth now lives in what we found.
   ok(prof.script.found.lines.some((l) => /belongs to TradeHQ/.test(l)) && /Never call the profile their website/.test(prof.script.found.note ?? ''), 'what we found says truthfully that the profile page is TradeHQ\'s');
-  ok(ps.includes('Able Group (Shrewsbury Service)') && /asked Google AI/.test(ps), 'the profile lead keeps its exact engine and competitors');
+  ok(ps.includes('Able Group (Shrewsbury Service)') && /asked Gemini/.test(ps), 'the profile lead keeps its exact engine and competitors');
 
   // "How much" is the canonical offer sentence itself (2026-10-06); the ownership line moved to "Why twelve months?".
   const howMuch = p.objections.find((o) => o.objection === 'How much is it?')?.answer ?? '';

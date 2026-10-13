@@ -49,7 +49,7 @@ type CurrentBasis =
 interface LatestResponse { ok: true; script: ScriptRow | null; versions: number; current?: CurrentBasis; stale?: boolean; generatorVersion?: number }
 interface GenerateResponse { ok: true; script: ScriptRow }
 
-const ENGINE_LABEL: Record<string, string> = { gemini: 'Google AI', chatgpt: 'ChatGPT' };
+const ENGINE_LABEL: Record<string, string> = { gemini: 'Gemini', chatgpt: 'ChatGPT' };
 const SITE_MODE_TEXT: Record<Exclude<ScriptRow['site_mode'], 'findings'>, string> = {
   clean: 'Nothing strong found on the site, so the script uses the "nothing obviously broken" line.',
   unread: 'The site could not be read, so the script says nothing specific about it.',

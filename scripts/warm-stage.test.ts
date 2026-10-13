@@ -118,7 +118,7 @@ ok(/STAGE: Paul has already sent them the AI check[\s\S]*Do NOT repeat that mess
 ok(/THEY ASKED THE PRICE: do not give one at this stage/.test(prompt) && !/£\s?\d/.test(prompt), 'this stage gives no price, even to "How much" (Paul, 2026-09-25)');
 const GOOD = `depends which route suits you mate, so i'll go through that once i know how the site's set up.
 
-i asked google ai who it recommends for a plumber in scunthorpe and it brought up other businesses instead of you. i checked your site to see why and it says "nationwide across england" in one place and scunthorpe-based in another, so ai gets mixed signals about where you actually work.
+i asked ai who it recommends for a plumber in scunthorpe and it brought up other businesses instead of you. i checked your site to see why and it says "nationwide across england" in one place and scunthorpe-based in another, so ai gets mixed signals about where you actually work.
 
 that's the sort of thing we fix, either on the site you've already got or we can build you a new one that's properly set up for ai visibility and seo.
 
