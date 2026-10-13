@@ -12,7 +12,7 @@ import { usePersistedState } from '@/hooks/usePersistedState';
 import NichePanel from '@/components/NichePanel';
 import { NicheCheckCard } from '@/components/NicheCheckCard';
 import { useCoverage } from '@/hooks/useCoverage';
-import { TRADES, TOWN_BAND_DEFAULT_MIN, TOWN_BAND_DEFAULT_MAX } from '@/lib/trades';
+import { TRADES, TOWN_BAND_DEFAULT_MIN, TOWN_BAND_DEFAULT_MAX, tradeSearchWord } from '@/lib/trades';
 import {
   COVERAGE_STATES, COVERAGE_LABEL, findLeadsHref, type CoverageState,
 } from '@/lib/coverageState';
@@ -210,11 +210,11 @@ export default function Coverage() {
           behind its own button and never shown as the verdict. */}
       {nicheOpen && (
         <div className="space-y-2">
-          <NicheCheckCard key={trade} trade={trade} />
+          <NicheCheckCard key={trade} trade={tradeSearchWord(trade)} />
           <Button variant="ghost" size="sm" className="h-7 text-xs text-muted-foreground" onClick={() => setStoredOpen((v) => !v)} aria-expanded={storedOpen}>
             {storedOpen ? 'Hide the older stored-audit reading' : 'Show the older stored-audit reading (a different method — background only)'}
           </Button>
-          {storedOpen && <NichePanel key={`stored-${trade}`} trade={trade} autoLoad />}
+          {storedOpen && <NichePanel key={`stored-${trade}`} trade={tradeSearchWord(trade)} autoLoad />}
         </div>
       )}
 
@@ -305,7 +305,7 @@ export default function Coverage() {
                         suppressed when it went, the server action and uk_towns.suppressed_at stay, and a
                         suppressed town would still be left off this list. */}
                     <Button variant="ghost" size="sm" className="h-7 text-xs" asChild>
-                      <Link to={findLeadsHref(trade, t.name)} title={`Search Google for ${trade} in ${t.name} and list them.`}>
+                      <Link to={findLeadsHref(tradeSearchWord(trade), t.name)} title={`Search Google for ${tradeSearchWord(trade)} in ${t.name} and list them.`}>
                         Find leads
                       </Link>
                     </Button>
