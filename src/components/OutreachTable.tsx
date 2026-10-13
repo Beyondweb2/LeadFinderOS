@@ -180,7 +180,7 @@ import { QueueSmsDialog } from '@/components/QueueSmsDialog';
 import { TemplatePreviewButton, TemplateSnippet } from '@/components/TemplateWordingPreview';
 import { RequestTemplateButton } from '@/components/RequestTemplateButton';
 import { CampaignPicker } from '@/components/CampaignPicker';
-import { TRADES } from '@/lib/trades';
+import { TRADES, tradeSearchWord } from '@/lib/trades';
 import { ColdCallPlaybookSheet, COLD_CALL_PLAYBOOK_LABEL } from '@/components/ColdCallPlaybook';
 import { useSubscription } from '@/hooks/useSubscription';
 import { useOutreachFindEmails, CRAWLABLE_STATUSES_DEFAULT, CRAWL_STATUS_OPTIONS } from '@/hooks/useOutreachFindEmails';
@@ -1314,11 +1314,13 @@ export function OutreachTable({
     setTradeBusy(true);
     try {
       const ids = missingTradeIds.length ? missingTradeIds : Array.from(selectedIds);
-      const results = await Promise.allSettled(ids.map((id) => onUpdateLead(id, { search_keyword: tradeChoice })));
+      /* A label that is not a business type ("Web designers / digital agencies") stores its search words instead. */
+      const stored = tradeSearchWord(tradeChoice);
+      const results = await Promise.allSettled(ids.map((id) => onUpdateLead(id, { search_keyword: stored })));
       const okCount = results.filter((r, i) => bulkWriteLanded(r, isDemoLead(ids[i]))).length;
       toast({
         title: `Set trade on ${okCount} of ${ids.length} lead${ids.length === 1 ? '' : 's'}`,
-        description: okCount < ids.length ? `${ids.length - okCount} failed — try again` : `They can be audited as “${tradeChoice}” now.`,
+        description: okCount < ids.length ? `${ids.length - okCount} failed — try again` : `They can be audited as “${stored}” now.`,
         variant: okCount === 0 ? 'destructive' : undefined,
       });
       setTradeDialogOpen(false);

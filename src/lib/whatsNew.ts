@@ -22,6 +22,19 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-13-find-leads-fast', date: '2026-10-13', title: 'Find Leads opens fast, and Web designers / digital agencies is a trade', audience: 'all',
+    body: 'Find Leads no longer loads your whole lead list in the background. It checks only the businesses in your search results to see which are already added.',
+    report: {
+      added: [
+        'Web designers / digital agencies in the Coverage trade picker and in Outreach’s "Set trade". Coverage searches it as "web designers".',
+      ],
+      changed: [
+        'Find Leads asks the database about the results on screen only (a few small requests) instead of downloading every lead, archived lead and past add (about 13 requests and 10 MB) on every visit.',
+        'The In CRM / Remove markers, "Previously added", Add to CRM and the owner shown on each result work exactly as before.',
+      ],
+      removed: ['The slow background lead load on Find Leads, which could time out and show "Error loading leads".'],
+      effect: 'Find Leads is quicker and the "Error loading leads" message should not come back. Nothing changes in how you search or add.',
+    } },
   { id: '2026-10-13-report-chat-view', date: '2026-10-13', title: 'The quick AI visibility report is now simple chat windows', audience: 'all',
     body: 'Under the dark score section, each question is now a chat window: the question at the top, then what ChatGPT and Gemini replied, listing the businesses each one named in the order it named them.',
     report: {

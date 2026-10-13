@@ -670,6 +670,9 @@ Paul runs several Claude Code sessions at once across LeadFinderOS V1, V2 and AB
   `DASHBOARD_LEAD_COLUMNS`). A new field read in list code goes in that list —
   `scripts/outreach-list-columns.test.ts` walks every caller with a parser and fails otherwise; a dev
   Proxy logs any undownloaded read. `LeadDetailDialog` reads its own complete row (`useFullLeadRow`).
+- ⛔ **Find Leads never downloads the lead list** (2026-10-13): `useOutreach({ preload: false })`; its "already
+  added" markers are a lookup for the results on screen only (`src/lib/findLeadsCrmMatch.ts`, batched). Never
+  mark search results by loading the book again (`docs/site-wide-speed.md` §10).
 - ⛔ **The app's Sign out is GLOBAL** (`useAuth` calls `supabase.auth.signOut()`, scope defaults to
   global): pressing it ends every session on that account, on every device. To end ONLY a test or QA
   session, revoke it with `/auth/v1/logout?scope=local` using that session's own token.

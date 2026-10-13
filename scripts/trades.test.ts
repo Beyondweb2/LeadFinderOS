@@ -10,7 +10,7 @@
    alias list fitted to imagined inputs is how a real stored value ends up unmapped.
    ============================================================ */
 import {
-  TRADES, canonicalTrade, tradeKey,
+  TRADES, canonicalTrade, tradeKey, tradeSearchWord,
   TOWN_BAND_DEFAULT_MIN, TOWN_BAND_DEFAULT_MAX, TOWN_SEED_MIN, TOWN_SEED_MAX,
 } from "../src/lib/trades.ts";
 
@@ -80,6 +80,18 @@ for (const t of TRADES) {
     ok(canonicalTrade(a)?.slug === t.slug, `  alias ${JSON.stringify(a)} -> ${t.slug}`);
   }
 }
+
+console.log("\n── WEB DESIGNERS / DIGITAL AGENCIES (2026-10-13) ──");
+/* No stored lead or audit used these words yet (read 2026-10-13); these are the words a search would type. */
+for (const s of ["web designer", "Web Designers", "website designer", "web design agency", "digital agency", "Digital Marketing Agencies", "web developers"]) {
+  ok(canonicalTrade(s)?.slug === "web-designer", `${JSON.stringify(s)} -> web-designer`);
+}
+ok(canonicalTrade("agency") === null && canonicalTrade("estate agency") === null && canonicalTrade("recruitment agency") === null,
+  "bare 'agency' (and estate / recruitment agencies) are NOT this trade");
+ok(tradeSearchWord("Web designers / digital agencies") === "web designers", "Coverage searches, and Set trade stores, 'web designers' — never the slashed label");
+ok(TRADES.filter((t) => t.slug !== "web-designer").every((t) => tradeSearchWord(t.label) === t.label), "every other trade searches and stores its label exactly as before");
+ok(TRADES.every((t) => !t.searchAs || canonicalTrade(t.searchAs)?.slug === t.slug), "a searchAs maps back to its own trade (so what is stored is counted)");
+ok(tradeSearchWord("kava cafe, pool bar") === "kava cafe, pool bar", "an unknown string passes through untouched");
 
 console.log("\n── THE SIZE BAND ──");
 /* Norwich is 200,770 and has been worked. A 200k ceiling would have hidden it. */

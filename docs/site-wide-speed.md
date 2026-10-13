@@ -276,3 +276,31 @@ with the index present were unchanged (12–36 ms). It was dropped the same sess
 The Outreach SORT is done in the browser (`OutreachTable` sortField state), so no index can affect it either.
 ⛔ Do not re-add this index without changing how the planner estimates the policy (that is a policy change — not done).
 If Outreach stalls, look in the browser (5.5k rows sorted / rendered), not the database.
+
+## 10. Find Leads stops loading the whole book (2026-10-13)
+
+**Before:** Find Leads mounted `useOutreach()` with the default full load, only to mark which search results were
+already added. Every visit downloaded every active lead (5,591 → 6 pages of 1,000, fired at once), the archived
+leads (1 page) and every `outreach_history` row (5,619 → 6 pages): **13 requests, 11,456 rows, ~10 MB**, measured
+2.4 s with the service role from here — the real page paid RLS on top, and single pages peaked at ~7.6 s against
+the 8 s statement timeout, which is what produced "Error loading leads [object Object]".
+
+**After:** `useOutreach({ preload: false })` downloads nothing (fetchLeads is a no-op there) and the markers come
+from `useFindLeadsCrm` → `src/lib/findLeadsCrmMatch.ts`: the results on screen only, `CRM_MATCH_BATCH` (25) per
+request, one `outreach_leads` (or `sales_leads`) + one `outreach_history` request per batch, `or=(place_id.in…,
+google_maps_url.in…,business_name.in…)` with every value double-quoted. Live read-only check with 60 real leads
+(names with `&`, commas, brackets, dots): **6 requests, ~100 rows, 48 KB, ~0.9 s**, every real one matched, a fake
+one not. place_id and google_maps_url are indexed; business_name is not, but a scan is ~4 ms (EXPLAIN ANALYZE under
+admin RLS) — **no database change**.
+
+- Same match rules as before: In CRM / Remove = newest ACTIVE lead by Maps link, name or place id
+  (`crmMatchFor`); "ever added" = history, active or archived by name or Maps link (`inOutreachFor`).
+- Add / remove on the page show at once (`noteAdded`, `noteRemoved`); a lookup that started before them cannot
+  undo them. Any `crm-lead-added` / `crm-lead-purged` / `sales-lead-changed` / `lead-row-changed` re-asks (400 ms
+  coalesced). A failed lookup is retried twice per request, then says so in a toast; Add to CRM still dedupes.
+- addLead's in-memory outreach_history pre-check cannot run without the list, so under `preload: false` the same
+  question is asked of the database for that one business ("Previously added").
+- Coverage freshness: without the list the derived coverage watch never fires, so under `preload: false` the hook
+  marks Coverage stale on `crm-lead-added` / `crm-lead-purged`.
+- Not changed: Coverage's `NichePanel` still mounts the default `useOutreach()` (full load) — a separate pass.
+- Tests: `scripts/find-leads-crm-match.test.ts`.

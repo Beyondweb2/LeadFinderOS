@@ -15,7 +15,7 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { isFreshLead } from '@/lib/leadStatus';
+import { useFindLeadsCrm } from '@/hooks/useFindLeadsCrm';
 import { leadRpc } from '@/lib/leadRpc';
 
 import { supabase } from '@/integrations/supabase/client';
@@ -55,7 +55,9 @@ const ASK_CAMPAIGN_KEY = 'lf_ask_campaign_each_time';
 
 const Index = () => {
   const { leads, isLoading, search, retryLastSearch, exportToCsv, searchError, searchNotice, expanded, setWebsiteOverride, regionMeta, regionDowngraded, townFilterFallback, resolvedLocation, locationCandidates, lastSearch } = useLeadSearchContext();
-  const { addLead: addToOutreach, isInOutreach, leads: crmLeads, removeFreshLead, refetch: refetchCrm } = useOutreach();
+  /* ⚡ preload: false (2026-10-13): this page never downloads the lead list. Which results are already in
+     the CRM is asked for the results on screen only (useFindLeadsCrm, src/lib/findLeadsCrmMatch.ts). */
+  const { addLead: addLeadToCrm, removeFreshLead } = useOutreach({ preload: false });
   const { searchEnrichment, patchEnrichment, getEnrichment } = useSearchEnrichment();
   const { markAsChecked, isChecked } = useCheckedBusinesses();
   const { toast } = useToast();
@@ -67,6 +69,14 @@ const Index = () => {
      own buttons (getCrmState below) are untouched; this adds the owner marker for the admin and, for
      a salesperson, replaces Add with Claim / "Already added · <name>" wherever the business exists. */
   const { role: viewerRole } = useSubscription();
+  const crmMatch = useFindLeadsCrm(leads, viewerRole);
+  const { getCrmState, isInOutreach, noteAdded, noteRemoved, refresh: refetchCrm } = crmMatch;
+  /* Every add on this page goes through here, so the row shows as added the moment the add answers. */
+  const addToOutreach = useCallback(async (...args: Parameters<typeof addLeadToCrm>) => {
+    const row = await addLeadToCrm(...args);
+    if (row) noteAdded(args[0], row, args[3] ?? null);
+    return row;
+  }, [addLeadToCrm, noteAdded]);
   const teamDir = useTeamDirectory();
   const salesActions = useSalesActions();
   const identityQc = useQueryClient();
@@ -318,19 +328,9 @@ const Index = () => {
   }, [pendingAdd]);
 
   // ── Remove-from-CRM (FRESH leads only) ──────────────────────────────────────
-  // Match a search result to its ACTIVE CRM lead row (mirrors addLead's dedup:
-  // google_maps_url OR business_name OR place_id). Returns whether it's in the CRM,
-  // whether it's still fresh (removable), and the row id — LeadsTable renders from this.
-  const getCrmState = useCallback((lead: Lead): { inCrm: boolean; isFresh: boolean; crmLeadId: string | null; campaignId: string | null } => {
-    const match = crmLeads.find(
-      (l) =>
-        (lead.googleMapsUrl && l.google_maps_url === lead.googleMapsUrl) ||
-        l.business_name === lead.name ||
-        (lead.id && (l as { place_id?: string | null }).place_id === lead.id),
-    );
-    if (!match) return { inCrm: false, isFresh: false, crmLeadId: null, campaignId: null };
-    return { inCrm: true, isFresh: isFreshLead(match), crmLeadId: match.id, campaignId: match.campaign_id ?? null };
-  }, [crmLeads]);
+  // getCrmState (useFindLeadsCrm) matches a search result to its ACTIVE CRM lead row by
+  // google_maps_url OR business_name OR place_id: whether it's in the CRM, whether it's still
+  // fresh (removable), and the row id — LeadsTable renders from this.
 
   // Remove confirm dialog (fresh leads). Holds the pending lead id + name.
   const [pendingRemove, setPendingRemove] = useState<{ id: string; name: string } | null>(null);
@@ -342,6 +342,7 @@ const Index = () => {
     setPendingRemove(null);
     if (!p) return;
     const res = await removeFreshLead(p.id);
+    if (res.ok) noteRemoved(p.id);
     // Click-time guard tripped: the lead was actioned since page load. Tell the user
     // and refresh so the button flips to the disabled "In CRM" state.
     if (!res.ok && res.reason === 'not_fresh') {
@@ -351,7 +352,7 @@ const Index = () => {
       });
       await refetchCrm();
     }
-  }, [pendingRemove, removeFreshLead, refetchCrm, toast]);
+  }, [pendingRemove, removeFreshLead, refetchCrm, noteRemoved, toast]);
 
   // Bulk "Add all with emails": the Targeted results that have a found email AND
   // aren't already in Outreach. Recomputes as emails are found / leads are added, so

@@ -32,6 +32,11 @@ export interface Trade {
   label: string;
   /** Lowercased spellings that map here. The canonical label is matched implicitly. */
   aliases: string[];
+  /** The words SEARCHED and STORED for this trade when the label is not a business type a person would
+   *  type ("Web designers / digital agencies"): Coverage's Find leads and niche check search it, and
+   *  Outreach's Set trade stores it, so an audit asks about "web designers", never the slash. Absent =
+   *  the label, exactly as before. Must be one of the aliases. */
+  searchAs?: string;
 }
 
 /* ⛔ ADD A TRADE HERE WHEN A NEW NICHE STARTS. One entry, one line — that is the "obvious way to
@@ -54,6 +59,15 @@ export const TRADES: Trade[] = [
   /* Added 2026-10-13: ~150 leads (search "roofer" / "roofers"), 15 audits and real outreach existed
      but the picker had no entry, so Coverage could not show any of it. */
   { slug: "roofer", label: "Roofers", aliases: ["roofer", "roofers", "roofing"] },
+  /* Added 2026-10-13 (Paul). No lead, audit or Coverage search used these words yet (read 2026-10-13: 0 leads by
+     search_keyword or category, 0 audits). One past search typed only "agency" (Sunderland, 2026-09-02, nothing
+     added): bare "agency" is NOT an alias — estate, recruitment and travel agencies are not this trade. */
+  { slug: "web-designer", label: "Web designers / digital agencies", searchAs: "web designers", aliases: [
+    "web designer", "web designers", "website designer", "website designers", "web design", "website design",
+    "web design agency", "web design agencies", "web design company", "web design companies",
+    "web developer", "web developers", "website developer", "website developers",
+    "digital agency", "digital agencies", "digital marketing agency", "digital marketing agencies",
+  ] },
 ];
 
 /** Normalise the way market-view's own `norm()` does, so the two agree about what a trade string is.
@@ -93,6 +107,12 @@ export function canonicalTrade(businessType: string | null | undefined): Trade |
   const n = norm(businessType ?? "");
   if (!n) return null;
   return BY_ALIAS.get(n) ?? null;
+}
+
+/** The words to search / store for a trade label or stored string: its searchAs, else the string itself
+ *  (every trade without a searchAs — all the others — is unchanged). */
+export function tradeSearchWord(labelOrStored: string): string {
+  return canonicalTrade(labelOrStored)?.searchAs ?? labelOrStored;
 }
 
 /** Convenience for grouping: the slug, or the raw normalised string when unrecognised. */

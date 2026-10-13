@@ -190,7 +190,12 @@ async function applyPlaceDetailsToLead(
    shows the newest OUTREACH_FIRST_BATCH leads as soon as they arrive and loads the rest behind them;
    `leadLoad` says how complete the list is, and everything that needs the whole dataset gates on
    datasetComplete(leadLoad). Every other caller loads the whole list first, exactly as before. */
-export function useOutreach({ history = true, progressive = false }: { history?: boolean; progressive?: boolean } = {}) {
+/* ⚡ `preload: false` — Find Leads only (2026-10-13, src/lib/findLeadsCrmMatch.ts). Find Leads needs addLead and
+   removeFreshLead, never the list: it marks its results with a lookup for the results on screen. Nothing is
+   downloaded on mount and fetchLeads does nothing, so the whole book (~5,600 leads + archive + history, ~17
+   requests) is never read there. addLead's database dedupe is unchanged, and the outreach_history pre-check it
+   can no longer do in memory is asked of the database for that one business. */
+export function useOutreach({ history = true, progressive = false, preload = true }: { history?: boolean; progressive?: boolean; preload?: boolean } = {}) {
   const [leads, setLeads] = useState<OutreachLead[]>([]);
   const [archivedLeads, setArchivedLeads] = useState<OutreachLead[]>([]);
   const [leadLoad, setLeadLoad] = useState<LeadLoadState>(LEAD_LOAD_INITIAL);
@@ -543,6 +548,7 @@ export function useOutreach({ history = true, progressive = false }: { history?:
   const fetchLeads = useCallback(async () => {
     const uid = userIdRef.current;
     if (!uid) return;
+    if (!preload) return; // Find Leads: never the whole book (see preload above)
     /* Progressive only while the list is not yet complete; a refresh of a COMPLETE list (after a bulk
        job, an import, a claim) reloads it whole in the background and swaps it in, so the page never
        drops back to "loading" and never re-locks the bulk actions. */
@@ -620,7 +626,7 @@ export function useOutreach({ history = true, progressive = false }: { history?:
     setArchivedLeads(merged.archived);
     setLeadLoad(LEAD_LOAD_COMPLETE(merged.active.length));
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [progressive, progressiveLoad]);
+  }, [progressive, progressiveLoad, preload]);
 
   const fetchOutreachHistory = useCallback(async (): Promise<OutreachHistoryEntry[] | null> => {
     const uid = userIdRef.current;
@@ -664,10 +670,22 @@ export function useOutreach({ history = true, progressive = false }: { history?:
     if (currentUserId === userIdRef.current) return;
     userIdRef.current = currentUserId;
     if (currentUserId) {
+      if (!preload) { setIsLoading(false); return; }
       fetchLeads();
       if (history) fetchOutreachHistory();
     }
-  }, [user?.id, fetchLeads, fetchOutreachHistory, history]);
+  }, [user?.id, fetchLeads, fetchOutreachHistory, history, preload]);
+
+  /* Without the list, the coverage watch above never sees a change, so an add or a removal made here
+     marks Coverage stale through the events the page already fires (addLead and removeFreshLead fire
+     crm-lead-added; a lead dropped for having no phone or email fires crm-lead-purged). */
+  useEffect(() => {
+    if (preload) return;
+    const stale = () => { void queryClient.invalidateQueries({ queryKey: coverageQueryKey(user?.id) }); };
+    window.addEventListener('crm-lead-added', stale);
+    window.addEventListener('crm-lead-purged', stale);
+    return () => { window.removeEventListener('crm-lead-added', stale); window.removeEventListener('crm-lead-purged', stale); };
+  }, [preload, queryClient, user?.id]);
 
   // Resolve loading immediately for unauthenticated (ad-entry) users
   useEffect(() => {
@@ -891,6 +909,28 @@ export function useOutreach({ history = true, progressive = false }: { history?:
           variant: 'destructive',
         });
         return null;
+      }
+      /* Without the preloaded history (Find Leads) the in-memory pre-check above saw nothing: ask the database
+         the same question for this one business — same name in the same country, or the same Maps link. */
+      if (!preload) {
+        const { data: byName, error: hErr } = await supabase.from('outreach_history')
+          .select('id, country').eq('business_name', lead.name).limit(20);
+        if (hErr) throw hErr;
+        let inHist = (byName ?? []).some((h) => sameCountry((h as { country?: string | null }).country));
+        if (!inHist && lead.googleMapsUrl) {
+          const { data: byUrl, error: uErr } = await supabase.from('outreach_history')
+            .select('id').eq('google_maps_url', lead.googleMapsUrl).limit(1);
+          if (uErr) throw uErr;
+          inHist = (byUrl ?? []).length > 0;
+        }
+        if (inHist) {
+          if (!silent) toast({
+            title: 'Previously added',
+            description: `${lead.name} was already added to your outreach list before.`,
+            variant: 'destructive',
+          });
+          return null;
+        }
       }
     } catch {
       if (!silent) toast({
