@@ -48,6 +48,7 @@ import { nameMatches } from './nameMatch.ts';
 import { displayBusinessName } from './displayName.ts';
 import { articleTrade, pluraliseTrade } from './templateVars.ts';
 import { HOOK_SPOKEN_ENGINE_LABELS, HOOK_SCORE_RESULTS } from './hookScore.ts';
+import { carryOn } from './draftEvidence.ts';
 import { isRealSend } from './realSend.ts';
 import { REPORT_LINK_TEMPLATES } from './templateAttribution.ts';
 import { readableTemplateBody } from './templateBodies.ts';
@@ -672,13 +673,14 @@ function tradeSpoken(audit: PlaybookAudit | null, lead: PlaybookLead): string | 
   return null;
 }
 
-/** The engine as it is said out loud. The report labels Gemini "Gemini"; a rep says Google AI
- *  (HOOK_SPOKEN_ENGINE_LABELS, hookScore.ts), and so does every script. */
+/** The engine as it is said out loud: "Gemini" / "ChatGPT" (HOOK_SPOKEN_ENGINE_LABELS, hookScore.ts),
+ *  the same in every script. */
 export function spokenEngine(label: string | null | undefined): string {
   let l = clean(label);
   if (!l) return 'AI';
   for (const [key, said] of Object.entries(HOOK_SPOKEN_ENGINE_LABELS)) l = l.replace(new RegExp('\\b' + key + '\\b', 'gi'), said);
-  return l;
+  /* An older stored label ("Google AI", 2026-09-26 → 10-11) is Gemini too; the AI Overview keeps its name. */
+  return l.replace(/\bgoogle(?:['’]?s)? ai\b(?!\s+overview)/gi, HOOK_SPOKEN_ENGINE_LABELS.gemini);
 }
 
 /** A town said aloud: the audit's "Rugby UK" disambiguation is for the engines, not for a person. */
@@ -689,7 +691,7 @@ const spokenTown = (town: string | null): string | null => {
 
 /* 🔴 THE HOUSE STYLE (Paul, 2026-09-30; src/lib/salesStyle.ts). The call sounds like someone who asked
    AI for the trade in the town, saw who it named, looked at the site and is just saying so:
-     "I'm ringing because I asked Google AI for a plumber in Rugby and it named A, B and C, but not you.
+     "I'm ringing because I asked Gemini for a plumber in Rugby and it named A, B and C, but not you.
       I had a look at your website and one thing stood out: …. We specialise in AI visibility …"
    ⛔ No "Have you got a minute?" before the reason for ringing, no "How are you today?" — the reason
       IS the opener, and the rep asks for the time once they have said why.
@@ -757,7 +759,7 @@ export function buildColdCallPlaybook(input: PlaybookInput): ColdCallPlaybook {
   if (f.crawlStale && !f.findings.length) warnings.push('The website crawl is more than 30 days old.');
 
   const top = evidence.competitors.slice(0, OPENING_COMPETITORS);
-  /* "I asked Google AI for a plumber in Rugby" — or, for an old result, "When I checked, …". */
+  /* "I asked Gemini for a plumber in Rugby" — or, for an old result, "When I checked, …". */
   const asked = auditStale ? 'When I checked, I asked ' + engine + ' for ' + searchFor : 'I asked ' + engine + ' for ' + searchFor;
   const missLine = top.length
     ? asked + ' and it named ' + joinNames(top) + ', but not you.'
@@ -769,7 +771,8 @@ export function buildColdCallPlaybook(input: PlaybookInput): ColdCallPlaybook {
   /* The website, in one or two plain sentences: the strongest finding's own words (siteFindings.ts,
      already hedged), a profile page, or no site at all. Nothing when there is nothing strong. */
   const lead0 = f.findings[0] ?? null;
-  const lowerClause = (s: string) => s.charAt(0).toLowerCase() + s.slice(1).replace(/\.$/, '');
+  /* draftEvidence.carryOn: lower-cases the first letter but never an acronym ("AI tools", not "aI tools"). */
+  const lowerClause = carryOn;
   /* Two lines for a finding — what I saw, then why it matters — so it is said with a breath between.
      🔴 "I had a look at why you weren't coming up" (Paul, 2026-09-30) is used only after a MISS, and what
      was found only "could be holding you back": never "that's why", never a proven cause. "Something"
@@ -793,9 +796,9 @@ export function buildColdCallPlaybook(input: PlaybookInput): ColdCallPlaybook {
   /* ── E. how to explain it (plain, short; the "what is AI visibility" answer reads from here) ── */
   const explain: string[] = [];
   if (evidence.kind === 'gap') {
-    explain.push('When someone asks ChatGPT or Google AI for ' + searchFor + ', they get a few names, not ten links. For the search I did, you weren\'t one of them' + (top.length ? '. ' + joinNames(top) + ' were.' : '.'));
+    explain.push('When someone asks ChatGPT or Gemini for ' + searchFor + ', they get a few names, not ten links. For the search I did, you weren\'t one of them' + (top.length ? '. ' + joinNames(top) + ' were.' : '.'));
   } else if (evidence.kind === 'named') {
-    explain.push('When someone asks ChatGPT or Google AI for ' + searchFor + ', they get a few names, not ten links. You were one of them for the search I did. The aim is to keep it that way across more of the searches people make.');
+    explain.push('When someone asks ChatGPT or Gemini for ' + searchFor + ', they get a few names, not ten links. You were one of them for the search I did. The aim is to keep it that way across more of the searches people make.');
   }
   if (lead0) {
     explain.push('The main thing I noticed on your site is ' + lowerClause(lead0.explanation) + '. ' + lead0.whyItMayMatter + ' It could be contributing, it\'s not the only thing AI looks at.');
@@ -872,7 +875,7 @@ export function buildColdCallPlaybook(input: PlaybookInput): ColdCallPlaybook {
     ? [hi, missLine, lookedShort, 'We specialise in AI visibility. Happy to explain what I\'d do if it\'s useful?'].filter(Boolean).join(' ')
     : evidence.kind === 'named'
       ? [hi, namedLine, 'We specialise in AI visibility. Happy to explain how to keep it that way if it\'s useful?'].join(' ')
-      : [hi, 'we check what ChatGPT and Google AI say when someone asks for ' + searchFor + '. Happy to run it for you and send over what it says?'].join(' ');
+      : [hi, 'we check what ChatGPT and Gemini say when someone asks for ' + searchFor + '. Happy to run it for you and send over what it says?'].join(' ');
   const emailParas: string[] = [hi];
   if (evidence.kind === 'gap') {
     emailParas.push(missLine);
@@ -884,7 +887,7 @@ export function buildColdCallPlaybook(input: PlaybookInput): ColdCallPlaybook {
     if (siteLines.length) emailParas.push(siteLines.join(' '));
     emailParas.push('We specialise in AI visibility for local businesses, and I\'d be happy to explain how to keep it that way. Is it worth a quick call?');
   } else {
-    emailParas.push('We check what AI tools like ChatGPT and Google AI say when someone asks for ' + searchFor + ', and which businesses they name.');
+    emailParas.push('We check what AI tools like ChatGPT and Gemini say when someone asks for ' + searchFor + ', and which businesses they name.');
     if (siteLines.length) emailParas.push(siteLines.join(' '));
     emailParas.push('Happy to run the check for you and send over what it says. Would that be useful?');
   }

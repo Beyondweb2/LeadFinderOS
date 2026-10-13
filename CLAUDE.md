@@ -1036,6 +1036,11 @@ positive allowlist of `baseline`; `isColdOutreachTemplate` treats unknown as COL
   sales copy is checked with `salesStyleProblems` (pass the inserted names as `ignore`) and added to
   `scripts/sales-style.test.ts`. Say the search as trade + town ("a plumber in Rugby"), never the audit
   query or an adjective on it. Record: `docs/sales-language.md`.
+- ⛔ **Gemini is said "Gemini" in every script and draft** (`HOOK_SPOKEN_ENGINE_LABELS`, Paul 2026-10-13; never "Google AI" —
+  "Google AI Overview" keeps its name; sent messages and Meta bodies untouched). ⛔ **One AI tool per conversation:** a draft
+  names what our sent messages already named, else the rivals' engine, else "ai" (`draftEvidence.conversationEngine`, both
+  drafters). Record: `docs/ai-handles-replies.md` (2026-10-13). ⛔ No Outreach list-order index: the planner cannot use it
+  under the admin RLS policy and the sort is in the browser (`docs/site-wide-speed.md` §9).
 - **Page generator**: anti-stuffing is CODE (phrase/town/noun-spam caps, measured); "based here" only on
   the real home-town page; Q&A `structured` (all blanks) for regulated trades and for ANY blank trade,
   `advice` otherwise with every figure/credential/first-person commitment held for confirmation;

@@ -11,9 +11,9 @@
    never the other engine's, never padded. The script must name the engine that was actually asked.
 
    THE PICK (selectVoiceNoteEvidence), Paul's order:
-     1. a Google AI miss with 2–3 usable competitor names (3 preferred, then the hook rank);
+     1. a Gemini miss with 2–3 usable competitor names (3 preferred, then the hook rank);
      2. else a ChatGPT miss with 2–3 names;
-     3. else, as a last resort, a miss with ONE name (Google AI first), flagged to the operator;
+     3. else, as a last resort, a miss with ONE name (Gemini first), flagged to the operator;
      4. else refuse and say why — named everywhere, or no usable names in any miss.
 
    THE WEBSITE HALF reuses the warm-lead research record (saved research → full crawl → crawl check →
@@ -28,7 +28,7 @@
 
    🔴 THE SHAPE (Paul, 2026-09-27, generator v3). Five beats, 30–45 seconds, nothing padded:
      1. SEARCH CONTEXT, short: trade + town + engine ("i was looking for an electrician in Shrewsbury,
-        so i asked Google AI who it recommended"). Never the audit query's qualifiers ("who can come
+        so i asked Gemini who it recommended"). Never the audit query's qualifiers ("who can come
         today") — they are the tell of a machine-worded search.
      2. "it came up with X, Y and Z, but you didn't come up."
      3. "i had a look at why you weren't coming up and found something that could be holding you back" +
@@ -167,7 +167,7 @@ function selectVoiceNoteEvidenceByOrder(
   const note = thin
     ? `Only one usable competitor name was found in any missed search (${hookEngineLabel(pick.m.engine)}). The note names just that one.`
     : pick.m.engine !== 'gemini' && geminiMissed
-      ? 'Google AI missed them too, but without two usable competitor names, so the ChatGPT result is used.'
+      ? 'Gemini missed them too, but without two usable competitor names, so the ChatGPT result is used.'
       : null;
   return {
     ok: true,
@@ -265,11 +265,11 @@ export function findingRecord(f: ResearchFinding): VoiceNoteFindingRecord {
 
 /* ─────────────────────────────── 3. the prompt ─────────────────────────────── */
 
-export const VOICE_NOTE_SYSTEM_PROMPT = `You write WhatsApp voice-note scripts for Paul, a British guy who helps local trades businesses get named by AI search (ChatGPT and Google AI). Paul reads the script out loud and records it himself. You return ONLY the script, via the return_script tool.
+export const VOICE_NOTE_SYSTEM_PROMPT = `You write WhatsApp voice-note scripts for Paul, a British guy who helps local trades businesses get named by AI search (ChatGPT and Gemini). Paul reads the script out loud and records it himself. You return ONLY the script, via the return_script tool.
 
 THE SHAPE, five short beats, in this order. Every sentence has to earn its place:
 0. WHO IS SPEAKING, first, in a few words: "hi mate, it's Paul from Findable." Use the name given under WHO IS SPEAKING (Paul when none is given). Never skip it: the owner has to know who is talking before anything else.
-1. SEARCH CONTEXT, one short sentence: the trade, the town and the engine, nothing else. "hi mate, i asked Google AI for an electrician in Shrewsbury" or "hi mate, i was looking for an electrician in Shrewsbury, so i asked Google AI". No adjective on the trade ("a reliable electrician", "a trusted electrician") and no reason for the search. Do NOT read the search back and do NOT narrate its qualifiers ("who can come out today", "near me", "for a same-day job", "UK"). At most ONE word of the search may colour the trade, and only if it is the heart of it (an "emergency locksmith"); usually leave it out.
+1. SEARCH CONTEXT, one short sentence: the trade, the town and the engine, nothing else. "hi mate, i asked Gemini for an electrician in Shrewsbury" or "hi mate, i was looking for an electrician in Shrewsbury, so i asked Gemini". No adjective on the trade ("a reliable electrician", "a trusted electrician") and no reason for the search. Do NOT read the search back and do NOT narrate its qualifiers ("who can come out today", "near me", "for a same-day job", "UK"). At most ONE word of the search may colour the trade, and only if it is the heart of it (an "emergency locksmith"); usually leave it out.
 2. THE MISS, one sentence: "it came up with [the competitors], but you didn't come up." Name every competitor given, exactly, and no others.
 3. THE FINDING: "i had a look at why you weren't coming up and found something that could be holding you back:" (or "a few things that could be holding you back" ONLY when you are given two website points) + the website point, in very plain English, keeping its concrete details. Use a second point only if it is the same kind of problem and fits in the same sentence. The conclusion stays hedged: "could be holding you back", never "this is why".
 4. POSITIONING, one short sentence: "i actually specialise in AI visibility for local businesses." Do not explain the service.
@@ -287,7 +287,7 @@ NEVER: "I hope this message finds you well", "unlock your potential", "leverage"
 
 EVIDENCE RULES, which override everything:
 - The competitors are exactly the ones listed, from that one search on that one engine. Never add, swap or drop one. If only one or two are listed, name just those.
-- Say the engine exactly as given ("Google AI" or "ChatGPT"). Never name the other engine as the one you asked.
+- Say the engine exactly as given ("Gemini" or "ChatGPT"). Never name the other engine as the one you asked.
 - Website points: ONLY the ones in WEBSITE POINTS. Never invent or add a problem. Never claim a technical issue that is not listed.
 - OBSERVATION, NOT JUDGEMENT: say what the site says or shows, and what it doesn't show. "your service pages don't give much detail about the work you actually do" is right; "you have weak evidence of qualifications", "there's no evidence" or "your site is poor" are judgements, never say them.
 - If there are no website points, follow the NO WEBSITE POINTS instruction in spirit, with a natural variation.
@@ -654,11 +654,11 @@ export function checkVoiceNoteScript(raw: string, ctx: { evidence: VoiceNoteEvid
   const saysGoogleAi = /\b(google ai|googles ai|google s ai|gemini)\b/.test(tEngine);
   const saysChatGpt = /\bchat ?gpt\b/.test(tEngine);
   if (ctx.evidence.engine === 'gemini') {
-    if (!saysGoogleAi) problems.push('Does not say it was Google AI that was asked.');
-    if (saysChatGpt) problems.push('Mentions ChatGPT, but these competitors came from Google AI.');
+    if (!saysGoogleAi) problems.push('Does not say it was Gemini that was asked.');
+    if (saysChatGpt) problems.push('Mentions ChatGPT, but these competitors came from Gemini.');
   } else if (ctx.evidence.engine === 'chatgpt') {
     if (!saysChatGpt) problems.push('Does not say it was ChatGPT that was asked.');
-    if (saysGoogleAi) problems.push('Mentions Google AI, but these competitors came from ChatGPT.');
+    if (saysGoogleAi) problems.push('Mentions Gemini, but these competitors came from ChatGPT.');
   }
   // Causation, price, link, banned phrases.
   if (CAUSATION.some((re) => re.test(tb))) problems.push('States a website issue as the reason the AI left them out. Use "might be contributing" instead.');

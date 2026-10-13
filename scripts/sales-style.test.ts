@@ -120,14 +120,14 @@ for (const t of TRADES) {
   ok(script.startsWith('Hi mate, I was looking for ' + t.spoken + ' in ' + t.town + ', so I asked ') && / and it mentioned /.test(script) && !/reliable|who can come today|\bUK\b/.test(script), t.trade + ': the search is said plainly ("' + t.spoken + ' in ' + t.town + '"), not "reliable … who can come today"');
   ok(t.rivals.slice(0, 3).every((r) => script.includes(r)) && !script.includes('Fourth Name'), t.trade + ': exactly the first three competitors from the evidence, no more');
   ok(!/undefined|null|\{\{|\[[a-z ]+\]|NaN/.test(said), t.trade + ': no placeholder or missing value leaks into the words');
-  ok(/Google AI|ChatGPT/.test(script) && !/\bGemini\b/.test(script), t.trade + ': the engine is said as the product says it');
+  ok(/Gemini|ChatGPT/.test(script) && !/Google AI(?! Overview)/.test(script), t.trade + ': the engine is said as the product says it (Gemini since 2026-10-13, an old "Google AI" label too)');
 
   // LinkedIn and email: the SAME facts, written for the channel.
   const { linkedin, email } = p.messages;
   const words = (x: string) => x.split(/\s+/).filter(Boolean).length;
   ok(salesStyleProblems(linkedin + '\n' + email.subject + '\n' + email.body, t.rivals).length === 0, t.trade + ': LinkedIn + email pass the house style ' + JSON.stringify(salesStyleProblems(linkedin + ' ' + email.body, t.rivals)));
   ok(t.rivals.slice(0, 3).every((r) => linkedin.includes(r) && email.body.includes(r)) && !linkedin.includes('Fourth Name') && !email.body.includes('Fourth Name'), t.trade + ': LinkedIn + email name exactly the call\'s three competitors');
-  ok(linkedin.includes('for ' + t.spoken + ' in ' + t.town) && email.subject === 'Asked ' + (t.engine === 'Gemini' ? 'Google AI' : t.engine) + ' for ' + t.spoken + ' in ' + t.town, t.trade + ': the same engine and plain search in LinkedIn and the email subject');
+  ok(linkedin.includes('for ' + t.spoken + ' in ' + t.town) && email.subject === 'Asked ' + (t.engine === 'Google AI' ? 'Gemini' : t.engine) + ' for ' + t.spoken + ' in ' + t.town, t.trade + ': the same engine and plain search in LinkedIn and the email subject');
   ok(words(linkedin) <= 70 && !/https?:\/\//.test(linkedin) && /\?$/.test(linkedin), t.trade + ': LinkedIn is short (' + words(linkedin) + ' words), no link, ends on a question');
   ok(words(email.body) <= 170 && email.body.includes('https://findable.live/r/abc123') && /\nFindable$/.test(email.body), t.trade + ': the email is plain and a little longer (' + words(email.body) + ' words), with the real report link and a plain sign-off');
   ok(!linkedin.includes(t.name) && !email.body.includes(t.name), t.trade + ': neither says the business\'s own name back to them');
@@ -137,7 +137,7 @@ for (const t of TRADES) {
   // The short voice note: the same facts, the right ownership question.
   const site: Pick<VoiceNoteSite, 'mode' | 'source' | 'sourceLabel'> = t.website === null ? { mode: 'no_website', source: 'none', sourceLabel: null }
     : /facebook/.test(t.website) ? { mode: 'profile', source: 'social_profile', sourceLabel: 'Facebook' } : { mode: 'findings', source: 'own_site', sourceLabel: null };
-  const engineLabel = t.engine === 'Gemini' ? 'Google AI' : t.engine;
+  const engineLabel = t.engine === 'Google AI' ? 'Gemini' : t.engine;
   const short = shortVoiceNote({ engineLabel, competitors: t.rivals.slice(0, 3), trade: t.trade, area: t.town + ' UK', site })!;
   ok(!!short && salesStyleProblems(short, t.rivals).length === 0, t.trade + ': short voice note passes the house style');
   const ev: VoiceNoteEvidence = { questionIndex: 0, question: 'x', engine: t.engine === 'ChatGPT' ? 'chatgpt' : 'gemini', engineLabel, competitors: t.rivals.slice(0, 3), answerExcerpt: '', thin: false };

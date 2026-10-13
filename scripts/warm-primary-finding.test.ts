@@ -87,7 +87,7 @@ function sayableDetailsIn(p: string, x: ResearchFinding) { return (x.keyDetails 
 
 // The regression the brief names: generic words FAIL when stronger evidence exists.
 // This stage carries no price (Paul, 2026-09-25): the opening is the AI search, the tail the two routes + the website question.
-const price = `depends which route suits you mate. i asked google ai who it recommends for a plumber in scunthorpe and it brought up other businesses instead of you.`;
+const price = `depends which route suits you mate. i asked ai who it recommends for a plumber in scunthorpe and it brought up other businesses instead of you.`;
 const tail = `that's the sort of thing we fix, either on the site you've already got or we can build you a new one that's properly set up for ai visibility and seo.\n\nare you currently with an agency or do you own/manage the website yourself?`;
 const GENERIC = `${price}\n\nI had a look through your site as well and there are a few inconsistencies on your site.\n\n${tail}`;
 ok(checkReply(GENERIC, ctx).problems.includes(PRIMARY_MISSING_PROBLEM), '"there are a few inconsistencies on your site" FAILS');

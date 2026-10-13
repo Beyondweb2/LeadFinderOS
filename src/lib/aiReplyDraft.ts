@@ -26,7 +26,7 @@ import { salesStyleProblems, SALES_STYLE_RULES } from './salesStyle.ts';
 import { serviceWindowState } from './serviceWindow.ts';
 import { isClientLead } from './roleRules.ts';
 import {
-  GENERIC_SITE_LINE, NO_SITE_LINE, OFFER_LINE_BOTH, OFFER_LINE_NEW, draftSearch, issueMentioned, namesLine, offersRoutes, vagueSiteClaim, withArticle, wrongEngineWords,
+  GENERIC_SITE_LINE, NO_SITE_LINE, carryOn, draftSearch, issueMentioned, namesLine, offerLine, offersRoutes, saysGoogleAiForGemini, vagueSiteClaim, withArticle, wrongEngineWords,
 } from './draftEvidence.ts';
 
 /* ── cost ─────────────────────────────────────────────────────────────────────────────────────── */
@@ -194,7 +194,8 @@ export interface AiReplyContext {
   search: { trade: string; town: string } | null;
   /** At most three, one per business (draftEvidence.draftNames). Empty = no names could be read. */
   competitors: string[];
-  /** The AI tool the names were read from, as a text says it ("google ai", "chatgpt", else "ai"). */
+  /** The AI tool this conversation names, as a text says it ("gemini", "chatgpt", else "ai"):
+   *  draftEvidence.conversationEngine — what our sent messages already said, else the audit's engine. */
   engineWords: string;
   /** They have a website of their own on file (decides the offer: both routes, or build one). */
   hasWebsite: boolean;
@@ -241,7 +242,7 @@ export const AI_REPLY_SYSTEM_PROMPT = `You draft the NEXT WhatsApp message from 
 
 THE SHAPE (in this order, each part only if its facts are given):
 1. Answer their latest message in one short line if it asked or said something that needs answering.
-2. What was searched and who it recommended, using the AI TOOL words given ("i asked google ai for an electrician in rotherham and it recommended A, B and C"). Name ONLY the businesses listed under AI NAMED INSTEAD, at most three. If it says no names could be read, say "it named a few other businesses" and never make a name up. If the hook has ALREADY been sent, do not list the names again; refer back to it in a few words. If no search is given, leave this part out.
+2. What was searched and who it recommended, using the AI TOOL words given ("i asked gemini for an electrician in rotherham and it recommended A, B and C"). Name ONLY the businesses listed under AI NAMED INSTEAD, at most three. If it says no names could be read, say "it named a few other businesses" and never make a name up. If the hook has ALREADY been sent, do not list the names again; refer back to it in a few words. If no search is given, leave this part out.
 3. The website: if WEBSITE ISSUES are listed, say the strongest 1 or 2 in plain everyday words (no jargon), only those. If none are listed, use the GENERAL LINE given instead and claim no fault. Never say you "found some things" or "a few issues" without saying exactly what they are.
 4. The offer, in one short line, as given under OFFER.
 5. End with ONE question: ${OWNERSHIP_QUESTION} If they have already said who runs the site, end instead with one simple question about a quick call.
@@ -274,7 +275,9 @@ export function buildAiReplyPrompt(c: AiReplyContext): string {
   lines.push(`BUSINESS: ${c.businessName}${c.firstName ? ` (first name: ${c.firstName})` : ''}`);
   if (c.search) {
     lines.push(`SEARCH: i asked ${c.engineWords} for ${withArticle(draftSearch(c.search.trade, c.search.town) ?? c.search.trade)}`);
-    lines.push(`AI TOOL: say it as "${c.engineWords}" (the tool these results came from). Do not name a different AI tool.`);
+    lines.push(c.engineWords === 'ai'
+      ? 'AI TOOL: say it as "ai". Do not name ChatGPT or Gemini as the tool you asked.'
+      : `AI TOOL: say it as "${c.engineWords}" (the tool this conversation has used). Do not name a different AI tool.`);
     if (c.namedEverywhere) lines.push('AI NAMED: them, on every answer. Do not say anyone was named instead.');
     else if (c.competitors.length) lines.push(`AI NAMED INSTEAD (name these, at most three, spelt exactly like this): ${c.competitors.join(', ')}`);
     else lines.push('AI NAMED INSTEAD: no names could be read. Say "it named a few other businesses". Never make a name up.');
@@ -285,7 +288,7 @@ export function buildAiReplyPrompt(c: AiReplyContext): string {
   lines.push(c.findings.length
     ? `WEBSITE ISSUES (actually found by our crawl, strongest first; say 1 or 2 in plain words):\n${c.findings.map((f, i) => `${i + 1}. ${f.title}: ${f.said}`).join('\n')}`
     : `WEBSITE ISSUES: none to mention. Do not claim any fault. GENERAL LINE (say this in your own casual words): ${c.hasWebsite ? GENERIC_SITE_LINE : NO_SITE_LINE}`);
-  lines.push(`OFFER: ${c.hasWebsite ? OFFER_LINE_BOTH : OFFER_LINE_NEW}`);
+  lines.push(`OFFER: ${offerLine(c.hasWebsite, c.findings.length > 0)} (it follows the website part, so join it on to that; never a bare "do that")`);
   lines.push(c.ownershipKnown ? 'WEBSITE OWNERSHIP: they already told us. Do not ask again; end with a quick question about a call.' : `END WITH: ${OWNERSHIP_QUESTION}`);
   const thread = c.thread.slice(-12).map((m) => `${m.from === 'us' ? 'PAUL' : 'THEM'}: ${m.text.replace(/\s+/g, ' ').slice(0, 500)}`).join('\n');
   lines.push(`CONVERSATION SO FAR (oldest first):\n${thread}`);
@@ -315,13 +318,12 @@ export function checkAiReply(reply: string, c: AiReplyContext): string[] {
   }
   if (!c.findings.length && /\b(your (?:web)?site|website)\b.{0,60}\b(issue|problem|wrong|missing|broken)/i.test(r)) out.push('Mentions website problems when none were found.');
   if (vagueSiteClaim(r) && !c.findings.length) out.push('Says it found things on the website without saying what (none were found).');
-  if (c.search && wrongEngineWords(r, c.engineWords)) out.push(`Names a different AI tool from the one the audit used ("${c.engineWords}").`);
+  if (c.search && wrongEngineWords(r, c.engineWords)) out.push(`Names a different AI tool from the one this conversation uses ("${c.engineWords}").`);
+  if (saysGoogleAiForGemini(r)) out.push('Says "google ai"; say "gemini".');
   if (!offersRoutes(r, c.hasWebsite)) out.push(c.hasWebsite ? 'Does not offer both routes (improve the current site, or build a new one).' : 'Does not offer to build them a site.');
   out.push(...salesStyleProblems(r, [...c.competitors, c.businessName]));
   return out;
 }
-
-const lowerFirst = (s: string) => s.replace(/\.$/, '').replace(/^./, (x) => x.toLowerCase());
 
 /** The rule-built draft when the model is unavailable or over budget. Built only from the facts. */
 export function fallbackAiReply(c: AiReplyContext): string {
@@ -333,9 +335,9 @@ export function fallbackAiReply(c: AiReplyContext): string {
     else parts.push(namesLine(c.engineWords, search, c.competitors));
   }
   parts.push(c.findings.length
-    ? `i had a look at your website too and ${c.findings.slice(0, 2).map((f) => lowerFirst(f.said)).join(', and ')}`
+    ? `i had a look at your website too and ${c.findings.slice(0, 2).map((f) => carryOn(f.said)).join(', and ')}`
     : (c.hasWebsite ? GENERIC_SITE_LINE : NO_SITE_LINE));
-  parts.push(c.hasWebsite ? OFFER_LINE_BOTH : OFFER_LINE_NEW);
+  parts.push(offerLine(c.hasWebsite, c.findings.length > 0));
   parts.push(c.ownershipKnown ? 'would a quick call this week work?' : OWNERSHIP_QUESTION);
   return parts.join('\n\n');
 }

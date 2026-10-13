@@ -161,7 +161,7 @@ ok(/promise or imply rankings, recommendations, citations, customers or leads/.t
 // A Paul-style draft for Ryli at this stage passes the checks.
 const GOOD = `no worries mate, it depends which route makes sense for you so i'll go through that once i know how the site's set up.
 
-i asked google ai who it recommends for a plumber in scunthorpe and it brought up other businesses instead of you. i checked your site to see why and one of the main things is it says "nationwide across england" in one place and scunthorpe-based in another, so ai is getting mixed signals about where you actually work.
+i asked ai who it recommends for a plumber in scunthorpe and it brought up other businesses instead of you. i checked your site to see why and one of the main things is it says "nationwide across england" in one place and scunthorpe-based in another, so ai is getting mixed signals about where you actually work.
 
 that's the sort of thing we fix, either on the site you've already got or we can build you a new one that's properly set up for ai visibility and seo.
 
@@ -185,7 +185,7 @@ const fb = fallbackReply(ryli)!;
 ok(!!fb && /i asked ai for a plumber in Scunthorpe and it brought up other businesses, not you/.test(fb), 'fallback: leads from the AI search, said plainly');
 ok(salesStyleProblems(fb).length === 0 && checkReply(fb, ryli).problems.length === 0, 'fallback: passes the house style and every draft check');
 ok(!/£\s?\d|refund|guarantee|findable\.live/i.test(fb), 'fallback: no price, no guarantee, no pricing link');
-ok(/either on the site you've already got or we can build you a new one/.test(fb), 'fallback: both routes');
+ok(/either on the site you've already got or by building you a new one/.test(fb), 'fallback: both routes');
 ok(fb.trim().endsWith('are you currently with an agency or do you own/manage the website yourself?'), 'fallback: ends with the website question');
 ok(checkReply(fb, ryli).problems.length === 0, `fallback passes its own checks (${checkReply(fb, ryli).problems.join(' | ') || 'none'})`);
 ok(fallbackReply(ctxFor({ latest: msg('x', 'inbound', 'Not interested thanks', 1), thread: [msg('x', 'inbound', 'Not interested thanks', 1)] })) === null,

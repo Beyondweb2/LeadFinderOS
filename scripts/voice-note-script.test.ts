@@ -31,7 +31,7 @@ const res = (questionIndex: number, engine: string, status: HookResult['status']
     res(1, 'gemini', 'named', ['X']),
   ], CTX);
   ok(r.ok && r.evidence.engine === 'gemini' && r.evidence.competitors.join() === 'G1,G2,G3', 'A: a Google AI miss is preferred over a ChatGPT miss');
-  ok(r.ok && r.evidence.engineLabel === 'Google AI', '…and labelled "Google AI"');
+  ok(r.ok && r.evidence.engineLabel === 'Gemini', '…and labelled "Gemini" (2026-10-13)');
 }
 {
   const r = selectVoiceNoteEvidence([
@@ -54,7 +54,7 @@ const res = (questionIndex: number, engine: string, status: HookResult['status']
 {
   const r = selectVoiceNoteEvidence([res(0, 'gemini', 'not_named', ['G1']), res(0, 'chatgpt', 'not_named', ['C1', 'C2'])], CTX);
   ok(r.ok && r.evidence.engine === 'chatgpt' && r.evidence.competitors.length === 2, 'a Google AI miss with ONE name gives way to another genuine miss with two');
-  ok(r.ok && /Google AI missed them too/.test(r.note ?? ''), '…and the operator is told why');
+  ok(r.ok && /Gemini missed them too/.test(r.note ?? ''), '…and the operator is told why');
 }
 {
   const r = selectVoiceNoteEvidence([res(0, 'gemini', 'not_named', ['G1']), res(0, 'chatgpt', 'named', [])], CTX);
@@ -119,7 +119,7 @@ ok(g.wordCount >= VOICE_NOTE_TARGET_WORDS.min && g.wordCount <= VOICE_NOTE_TARGE
 const missing = checkVoiceNoteScript(GOOD.replace(' and PipeFix', ''), { evidence: EV, site: SITE_F });
 ok(missing.problems.some((p) => /PipeFix/.test(p)), 'a dropped competitor is a problem');
 const wrongEngine = checkVoiceNoteScript(GOOD.replace('asked Google AI', 'asked ChatGPT'), { evidence: EV, site: SITE_F });
-ok(wrongEngine.problems.some((p) => /came from Google AI/.test(p)) && wrongEngine.problems.some((p) => /Does not say it was Google AI/.test(p)), 'saying ChatGPT for a Google AI result is a problem');
+ok(wrongEngine.problems.some((p) => /came from Gemini/.test(p)) && wrongEngine.problems.some((p) => /Does not say it was Gemini/.test(p)), 'saying ChatGPT for a Gemini result is a problem');
 const gptEv = { ...EV, engine: 'chatgpt', engineLabel: 'ChatGPT' };
 ok(checkVoiceNoteScript(GOOD.replace('asked Google AI', 'asked ChatGPT'), { evidence: gptEv, site: SITE_F }).problems.length === 0, '…and correct for a ChatGPT result');
 ok(checkVoiceNoteScript(GOOD, { evidence: gptEv, site: SITE_F }).problems.some((p) => /came from ChatGPT/.test(p)), 'saying Google AI for a ChatGPT result is a problem');
@@ -211,7 +211,7 @@ ok(classifyLeadWebsite('').source === 'none' && classifyLeadWebsite(null).source
   const rp = "hi mate, i was looking for an electrician in Woking on Google AI, specifically for commercial work, and it suggested Smith & Sons Plumbing, Leicester Heating Co, and PipeFix. if AI's recommending others, that could be potential customers going elsewhere. i had a quick look at your site and noticed some of the AI search crawlers are blocked, like OAI-SearchBot and ChatGPT-User. that might be making it harder for AI to properly understand your site. i specialise in AI visibility for local businesses, so if you'd like, i can explain what i'd change to give you a better chance of being named in those searches. just let me know.";
   const c = checkVoiceNoteScript(rp, { evidence: EV, site: SITE_F });
   ok(!c.problems.some((x) => /ChatGPT|Google AI/.test(x)), `naming the ChatGPT-User crawler is not claiming ChatGPT was asked (${c.problems.join(' | ')})`);
-  ok(checkVoiceNoteScript(rp.replace('on Google AI', 'on ChatGPT'), { evidence: EV, site: SITE_F }).problems.some((x) => /came from Google AI/.test(x)), '…while actually saying ChatGPT for a Google AI result is still caught');
+  ok(checkVoiceNoteScript(rp.replace('on Google AI', 'on ChatGPT'), { evidence: EV, site: SITE_F }).problems.some((x) => /came from Gemini/.test(x)), '…while actually saying ChatGPT for a Gemini result is still caught');
 }
 
 /* ─────────── 4c. tone and evidence pass (Paul, 2026-09-27) — the three real v1 scripts are the fixtures ─────────── */

@@ -8,7 +8,7 @@
      PLAN (one open at a time) → GUARANTEE → OBJECTIONS (accordion)
 
    The opener Paul has tested, said as natural spoken British English:
-     "Hi mate, I was looking for a plumber in Rugby, so I asked Google AI and it mentioned A, B and C, but
+     "Hi mate, I was looking for a plumber in Rugby, so I asked Gemini and it mentioned A, B and C, but
       not you. I had a look into why they were being named and you weren't, and I found a few potential
       reasons." → up to MAX_SPOKEN_FINDINGS real findings in plain words → BRIDGE_LINE.
 
@@ -20,7 +20,7 @@
       coldCallPlaybook.ts) — up to three, and none when there are none. Website points are the stored
       crawl's findings (siteFindings.ts), each said in plain words making the SAME claim as the finding.
       No strong finding → NO_STRONG_ISSUE_LINE, never a made-up fault. No crawl → nothing about the site.
-   ⛔ THE ENGINE IS SAID THE WAY THE PRODUCT SAYS IT: Gemini is "Google AI" (coldCallPlaybook.spokenEngine);
+   ⛔ THE ENGINE IS SAID THE WAY THE PRODUCT SAYS IT: Gemini is "Gemini" (coldCallPlaybook.spokenEngine);
       a ChatGPT miss is said as ChatGPT — never a claim about an engine that was not asked.
    ⛔ THE FIRST QUESTION IS ALWAYS FIRST_QUESTION. The agency branch asks the contract, then — lightly — the
       cost. The PRICE ANGLE appears only above AGENCY_PRICE_ANGLE_OVER_GBP a month AND above our own monthly,
@@ -132,7 +132,7 @@ export type FindingsStatus = 'findings' | 'no_website' | 'profile' | 'not_crawle
 export interface CallScriptInput {
   /** "a plumber in Rugby" — the search said plainly (coldCallPlaybook builds it). */
   searchFor: string;
-  /** The engine as said aloud ("Google AI", "ChatGPT"). */
+  /** The engine as said aloud ("Gemini", "ChatGPT"). */
   engine: string;
   evidenceKind: 'gap' | 'named' | 'none';
   /** The stored answer's real competitor names, cleaned, self-excluded; only the first three are said. */
@@ -199,7 +199,7 @@ export function buildCallScript(i: CallScriptInput): CallScript {
   const top = i.competitors.slice(0, 3);
   const rivals = top.length > 0;
   const asked = 'Hi mate, I was looking for ' + i.searchFor + ', so I asked ' + i.engine;
-  /** "it" for one engine, "they" when the evidence names two ("I asked ChatGPT and Google AI and they …"). */
+  /** "it" for one engine, "they" when the evidence names two ("I asked ChatGPT and Gemini and they …"). */
   const it = /\band\b/.test(i.engine) ? 'they' : 'it';
 
   /* OPENER, line 1 — the AI result, from the stored answer only. */
