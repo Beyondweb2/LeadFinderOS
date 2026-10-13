@@ -4,6 +4,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { fetchAllRows, fetchAllRowsParallel, fetchPagesAfterFirst } from '@/lib/fetchAllRows';
 import { OUTREACH_FIRST_BATCH, LEAD_LOAD_INITIAL, LEAD_LOAD_COMPLETE, datasetComplete, mergeAfterBackgroundLoad, type LeadLoadState } from '@/lib/outreachLoad';
 import { guardListRows, leadSourceFor } from '@/lib/outreachLeadColumns';
+import { errorMessageOf, leadLoadErrorText, addInFlightKey } from '@/lib/leadLoadError';
 import { leadsSetCampaign, salesPatchLead, salesRemoveLeads } from '@/lib/leadRpc';
 import { markLeadInterested } from '@/lib/leadQuickActions';
 import { saveNextAction, clearNextActionOnNo } from '@/lib/nextActionWrite';
@@ -466,8 +467,8 @@ export function useOutreach({ history = true, progressive = false }: { history?:
       setLeadLoad(LEAD_LOAD_COMPLETE(merged.active.length));
     } catch (e) {
       if (gen !== loadGenRef.current) return;
-      const message = e instanceof Error ? e.message : String((e as { message?: string })?.message ?? e);
-      console.error('Outreach: the remaining leads failed to load:', message);
+      const message = errorMessageOf(e);
+      console.error('Outreach: the remaining leads failed to load:', e);
       /* ⛔ NEVER COMPLETE ON A FAILURE. The first batch stays on screen and everything that needs the
          whole list stays off; Retry runs this half again. */
       setLeadLoad((s) => ({ phase: 'failed', loaded: latestRef.current.active.length, total: s.total, error: message }));
@@ -505,10 +506,10 @@ export function useOutreach({ history = true, progressive = false }: { history?:
       if (gen !== loadGenRef.current) return;
       hasLoadedOnceRef.current = true;
       setIsLoading(false);
-      const message = e instanceof Error ? e.message : String((e as { message?: string })?.message ?? e);
-      console.error('Error fetching leads:', message);
+      const message = errorMessageOf(e);
+      console.error('Error fetching leads:', e);
       setLeadLoad({ phase: 'failed', loaded: 0, total: null, error: message });
-      toast({ title: 'Error loading leads', description: message, variant: 'destructive' });
+      toast({ ...leadLoadErrorText(e), variant: 'destructive' });
       return;
     }
     if (gen !== loadGenRef.current) return;
@@ -547,6 +548,10 @@ export function useOutreach({ history = true, progressive = false }: { history?:
        drops back to "loading" and never re-locks the bulk actions. */
     if (progressive && !datasetComplete(leadLoadRef.current)) { await progressiveLoad(); return; }
     const gen = ++loadGenRef.current;
+    /* What was on screen when this load started. A lead added (or removed) while the load runs must survive
+       it: Find Leads loads the whole book here, and pressing Add to CRM during that load used to have its new
+       row wiped by the stale result, so the button came back and a second press said "Previously added". */
+    const shownAtStart = latestRef.current;
     
     // Only show loading spinner on initial load
     if (!hasLoadedOnceRef.current) {
@@ -562,8 +567,8 @@ export function useOutreach({ history = true, progressive = false }: { history?:
        existing handling and are only ever set by the catch. .order('id') is the unique tiebreaker. */
     let activeData: OutreachLead[] = [];
     let archivedData: OutreachLead[] = [];
-    let activeError: { message?: string } | null = null;
-    let archivedError: { message?: string } | null = null;
+    let activeError: unknown = null;
+    let archivedError: unknown = null;
     try {
       /* ⚡ Pages fetched six at a time, and active + archived together (2026-09-27): the six
          sequential round trips were ~9 s of the Outreach page's load. Same rows, same order. */
@@ -581,21 +586,20 @@ export function useOutreach({ history = true, progressive = false }: { history?:
           .order('updated_at', { ascending: false }).order('id', { ascending: true }).range(from, to), (l) => l.id),
       ]);
       if (act.status === 'fulfilled') activeData = guardListRows(act.value.rows, 'useOutreach');
-      else activeError = { message: act.reason instanceof Error ? act.reason.message : String(act.reason) };
+      else activeError = act.reason ?? new Error('Unknown error');
       if (arc.status === 'fulfilled') archivedData = guardListRows(arc.value.rows, 'useOutreach');
-      else archivedError = { message: arc.reason instanceof Error ? arc.reason.message : String(arc.reason) };
-    } catch (e) { activeError = { message: e instanceof Error ? e.message : String(e) }; }
+      else archivedError = arc.reason ?? new Error('Unknown error');
+    } catch (e) { activeError = e ?? new Error('Unknown error'); }
 
     hasLoadedOnceRef.current = true;
     setIsLoading(false);
 
     if (activeError) {
       console.error('Error fetching active leads:', activeError);
-      toast({
-        title: 'Error loading leads',
-        description: activeError.message,
-        variant: 'destructive',
-      });
+      if (gen !== loadGenRef.current) return;
+      /* A refresh of a COMPLETE list that fails keeps the list it has (still complete); a first load says failed. */
+      if (!datasetComplete(leadLoadRef.current)) setLeadLoad((s) => ({ ...s, phase: 'failed', error: errorMessageOf(activeError) }));
+      toast({ ...leadLoadErrorText(activeError), variant: 'destructive' });
       return;
     }
 
@@ -604,9 +608,17 @@ export function useOutreach({ history = true, progressive = false }: { history?:
     }
 
     if (gen !== loadGenRef.current) return;
-    setLeads((activeData || []) as OutreachLead[]);
-    setArchivedLeads((archivedData || []) as OutreachLead[]);
-    setLeadLoad(LEAD_LOAD_COMPLETE((activeData || []).length));
+    /* Lay the result over anything done while it loaded (the same rule as the Outreach background load):
+       a lead added meanwhile stays, an edit stays, a removal stays removed. A failed archived read keeps the
+       archived list as it was rather than emptying it. */
+    const merged = mergeAfterBackgroundLoad({
+      shownActive: shownAtStart.active, shownArchived: shownAtStart.archived,
+      localActive: latestRef.current.active, localArchived: latestRef.current.archived,
+      fetchedActive: activeData, fetchedArchived: archivedError ? latestRef.current.archived : archivedData,
+    });
+    setLeads(merged.active);
+    setArchivedLeads(merged.archived);
+    setLeadLoad(LEAD_LOAD_COMPLETE(merged.active.length));
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [progressive, progressiveLoad]);
 
@@ -950,6 +962,8 @@ export function useOutreach({ history = true, progressive = false }: { history?:
 
     const newLead = data as OutreachLead;
     setLeads((prev) => [newLead, ...prev]);
+    /* Seen at once by a list load that lands before the next render (fetchLeads merges against latestRef). */
+    latestRef.current = { ...latestRef.current, active: [newLead, ...latestRef.current.active] };
     recordSearchAddition(lead);
 
     // Notify bottom nav immediately
@@ -1014,6 +1028,20 @@ export function useOutreach({ history = true, progressive = false }: { history?:
 
     return newLead;
   }, [user]);
+
+  /* ⛔ ONE ADD PER BUSINESS AT A TIME (2026-10-13). A second press of Add to CRM for a business whose add is
+     still running (a double click, or a press while the slow lead list loads) joins the SAME add and gets its
+     answer; it never starts a second insert and is never dropped. The database dedupe stays the authority
+     for anything already saved. */
+  const addsInFlightRef = useRef(new Map<string, Promise<OutreachLead | null>>());
+  const addLeadSingleFlight = useCallback((lead: Lead, ...rest: Parameters<typeof addLead> extends [Lead, ...infer R] ? R : never) => {
+    const key = addInFlightKey(lead);
+    const running = addsInFlightRef.current.get(key);
+    if (running) return running;
+    const p = addLead(lead, ...rest).finally(() => { addsInFlightRef.current.delete(key); });
+    addsInFlightRef.current.set(key, p);
+    return p;
+  }, [addLead]);
 
   const updateLead = useCallback(async (
     leadId: string,
@@ -1894,7 +1922,7 @@ export function useOutreach({ history = true, progressive = false }: { history?:
     archivedLeads,
     activities,
     isLoading,
-    addLead,
+    addLead: addLeadSingleFlight,
     updateLead,
     assignCampaign,
     removeFromMyLeads,
