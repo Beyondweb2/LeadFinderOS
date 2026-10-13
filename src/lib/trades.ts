@@ -51,6 +51,9 @@ export const TRADES: Trade[] = [
      "car-detailing" entry and move its aliases across — the audits keep their stored wording either
      way, so nothing is lost by waiting. */
   { slug: "mobile-valeting", label: "Mobile valeting & detailing", aliases: ["mobile valeting and detailing", "mobile valeting", "car valeting", "valeting"] },
+  /* Added 2026-10-13: ~150 leads (search "roofer" / "roofers"), 15 audits and real outreach existed
+     but the picker had no entry, so Coverage could not show any of it. */
+  { slug: "roofer", label: "Roofers", aliases: ["roofer", "roofers", "roofing"] },
 ];
 
 /** Normalise the way market-view's own `norm()` does, so the two agree about what a trade string is.
