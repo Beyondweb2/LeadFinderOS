@@ -31,6 +31,8 @@ interface SearchFormProps {
      locksmiths results is the quiet kind of wrong this codebase keeps getting caught by. */
   initialKeyword?: string;
   initialLocation?: string;
+  /** The country to search in, from Coverage's Find leads (2026-10-14) — seeded like the keyword and town. */
+  initialCountry?: Country;
   /**
    * Run the search ONCE on arrival — set by Coverage's "Find leads" button, which exists to run a
    * search rather than to prefill a box and wait.
@@ -61,6 +63,7 @@ export function SearchForm({
   initialRadius,
   initialKeyword,
   initialLocation,
+  initialCountry,
   autoSubmit = null,
   onUpgrade,
   isUpgradeLoading = false,
@@ -112,7 +115,8 @@ export function SearchForm({
     seeded.current = true;
     if (initialKeyword) setKeyword(initialKeyword);
     if (initialLocation) setLocation(initialLocation);
-  }, [initialKeyword, initialLocation, setKeyword, setLocation]);
+    if (initialCountry) setSelectedCountry(initialCountry);
+  }, [initialKeyword, initialLocation, initialCountry, setKeyword, setLocation, setSelectedCountry]);
 
   /* ⛔ ONE PLACE BUILDS THE FILTERS, so the auto-run and the button cannot send different searches.
      Every value comes from the form's own state — the radius, country and town-only the operator can
@@ -152,10 +156,11 @@ export function SearchForm({
     if (!autoSubmit || autoSubmitted.current || !seeded.current) return;
     if (initialKeyword && keyword.trim() !== initialKeyword.trim()) return;   // the trade we were asked for
     if (initialLocation && location.trim() !== initialLocation.trim()) return; // the town we were asked for
+    if (initialCountry && selectedCountry !== initialCountry) return;          // the country we were asked for
     if (!keyword.trim() || !location.trim()) return;                       // nothing to search for
     autoSubmitted.current = true;
     runSearch();
-  }, [autoSubmit, keyword, location, initialKeyword, initialLocation, runSearch]);
+  }, [autoSubmit, keyword, location, initialKeyword, initialLocation, initialCountry, selectedCountry, runSearch]);
 
   return (
     <Card className="border-border/50 bg-card shadow-sm">

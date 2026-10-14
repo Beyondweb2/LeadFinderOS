@@ -9,6 +9,7 @@ import {
   type SuppressionPatch, type CoverageWorker, type WorkedByEntry, type FoundAdded, type SearchRunRecord,
 } from '@/lib/coverageState';
 import { coverageQueryKey, coverageTownsQueryKey } from '@/lib/coverageFreshness';
+import { ABROAD_TOWNS, pairsForCountry, type CoverageCountry } from '@/lib/coverageCountries';
 
 /* ⚠️ The grading lives in src/lib/coverageState.ts and is unit-tested there. This hook fetches the
    facts and applies it — it deliberately decides nothing about what "worked" means, so the page and
@@ -16,6 +17,10 @@ import { coverageQueryKey, coverageTownsQueryKey } from '@/lib/coverageFreshness
 
 export interface CoverageTownRow extends CoverageTown {
   county: string | null;
+  /** Malaysia / Singapore only: another name for the town ("Penang"), and true when the row is not on the list
+   *  but a lead or search named it. */
+  aka?: string;
+  fromLeads?: boolean;
   suppressed_at: string | null;
   suppressed_reason: string | null;
 }
@@ -30,7 +35,7 @@ export interface CoverageTownRow extends CoverageTown {
 /* `foundAdded` = Found vs Added, with / without a website, from the search runs (2026-09-29); null = never searched. */
 export type GradedTown = CoverageTownRow & { state: CoverageRow['state']; leadCount: number; hasPool: boolean; workers: CoverageWorker[]; foundAdded: FoundAdded | null };
 
-interface Pair { trade: string; town: string }
+interface Pair { trade: string; town: string; country?: string | null }
 
 /* ⛔ SPLIT INTO TWO READS (2026-08-19). The 733-town list is static ONS data; the measured/leads/
    worked pairs are what change. Fetching them together meant a lead-add — which invalidates the
@@ -48,7 +53,9 @@ interface PairsData { pairs: { measured: Pair[]; leads: Pair[]; worked: Pair[]; 
    that page), so no listener here could ever hear it. invalidateQueries works with no subscriber,
    which is exactly why the fix lives at the write. */
 
-export function useCoverage() {
+/** `country` (2026-10-14): UK = uk_towns and every non-Malaysia/Singapore lead, exactly as before; Malaysia /
+ *  Singapore = their town list (coverageCountries.ts) and that country's leads only. */
+export function useCoverage(country: CoverageCountry = 'UK') {
   const { user } = useAuth();
   const queryClient = useQueryClient();
 
@@ -89,8 +96,20 @@ export function useCoverage() {
     enabled: !!user?.id,
   });
 
-  const towns = useMemo(() => townsQuery.data?.towns ?? [], [townsQuery.data]);
-  const pairs = pairsQuery.data?.pairs ?? null;
+  const ukTowns = useMemo(() => townsQuery.data?.towns ?? [], [townsQuery.data]);
+  const rawPairs = pairsQuery.data?.pairs ?? null;
+  /* The pairs cut to the chosen country (UK: every pair except a Malaysia / Singapore lead's — the same towns
+     match as before). `pooled` / `measured` are UK-only facts and pass through untouched. */
+  const countryPairs = useMemo(() => (rawPairs ? pairsForCountry(country, rawPairs) : null), [rawPairs, country]);
+  const pairs = useMemo(() => (rawPairs && countryPairs ? { ...rawPairs, ...countryPairs } : null), [rawPairs, countryPairs]);
+  const towns: CoverageTownRow[] = useMemo(() => {
+    if (country === 'UK') return ukTowns;
+    const row = (t: { name: string; region: string | null; aka?: string }, fromLeads: boolean): CoverageTownRow => ({
+      id: `${country}:${t.name}`, name: t.name, region: t.region, population: null, county: null,
+      suppressed_at: null, suppressed_reason: null, aka: t.aka, fromLeads,
+    });
+    return [...ABROAD_TOWNS[country].map((t) => row(t, false)), ...(countryPairs?.extraTowns ?? []).map((t) => row(t, true))];
+  }, [country, ukTowns, countryPairs]);
   const isLoading = townsQuery.isLoading || pairsQuery.isLoading;
   const queryError = townsQuery.error || pairsQuery.error;
   const error = queryError ? (queryError as Error).message : null;

@@ -68,6 +68,13 @@ export const TRADES: Trade[] = [
     "web developer", "web developers", "website developer", "website developers",
     "digital agency", "digital agencies", "digital marketing agency", "digital marketing agencies",
   ] },
+  /* Added 2026-10-14 (Paul): Malaysia / Singapore outreach. Ethan's imported file stores "Language schools"
+     (RESEARCH_FILE_DEFAULT_TRADE, csvLeadImport.ts); one Singapore search typed "language school". */
+  { slug: "language-school", label: "Language schools", aliases: [
+    "language school", "language schools", "language centre", "language centres", "language center", "language centers",
+    "english language school", "english language schools", "english school", "english schools",
+    "english language centre", "english language centres",
+  ] },
 ];
 
 /** Normalise the way market-view's own `norm()` does, so the two agree about what a trade string is.

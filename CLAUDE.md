@@ -438,6 +438,9 @@ Full history and reasoning: `docs/business-and-offer.md`, `docs/measurement.md`.
 - [ ] ⛔ **Never edit a source file with a PowerShell `Get-Content`/`Set-Content` round-trip or
       `-replace`** — it mojibakes every non-ASCII character and can silently not apply. Twice recorded.
       Use the Edit tool, or a Node script that reads/writes UTF-8 explicitly.
+- [ ] ⛔ **Backslashes do not survive the Bash tool here** (a heredoc or `node -e` string): `'\s+'` arrives as `'s+'`. That
+      is how `import_leads_v2` deleted every "s" from batch names (fixed `20261027090000`). Write SQL / regex / any text with
+      a backslash through the Write or Edit tool, then diff it against what you meant.
 - [ ] Commit with `-F <file>`. **End with `Co-Authored-By: Claude <the model this session is actually
       running, as the harness names it> <noreply@anthropic.com>`** — e.g. today `Claude Fable 5.1`.
       Never copy the trailer from an older commit.
