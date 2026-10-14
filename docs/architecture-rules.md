@@ -177,3 +177,11 @@
 
 ---
 
+
+## No-website leads in the bulk AI audit (2026-10-14, Paul)
+
+The Outreach "Run AI audits" box audits leads with no website BY DEFAULT — they are the best targets (AI not naming
+them is the pitch). The old hold-back tick box is gone; an info line counts them. bulk-jobs sends `has_website: false`
+with no URL, so the queue skips the SEO scan (`process-ai-audit-queue`), the price has no scan in it
+(`estimateBatchCost`), and the report shows its no-website section. The report-offer guard has no website input.
+`scripts/audit-no-website.test.ts` pins it. Caps unchanged.

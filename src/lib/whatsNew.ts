@@ -22,6 +22,21 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-14-audit-no-website', date: '2026-10-14', title: 'Bulk AI audits include leads with no website', audience: 'admin',
+    body: 'Run AI audits on Outreach no longer holds back leads with no website. They are audited like everyone else, without a website scan.',
+    report: {
+      added: [
+        'An info line in the Run AI audits box saying how many of the selected leads have no website.',
+      ],
+      changed: [
+        'Leads with no website are now counted as eligible and audited by default. The AI questions use their business type and town.',
+        'The cost estimate charges no website scan for them, and the confirm line says how many have no website.',
+      ],
+      removed: [
+        'The "held back" warning and its "audit them anyway" tick box.',
+      ],
+      effect: 'Your best targets — businesses with no website — get audited in the same press as the rest. Their report shows the "we’ll build you one" section instead of a website grade. The daily and monthly caps are unchanged.',
+    } },
   { id: '2026-10-14-import-campaign-select-page', date: '2026-10-14', title: 'CSV import into a campaign, and Select this page', audience: 'all',
     body: 'Importing a CSV now asks which campaign the new leads go into. Outreach and Find Leads have a "Select this page" button next to Select all.',
     report: {

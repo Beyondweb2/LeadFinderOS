@@ -420,7 +420,6 @@ export function OutreachTable({
      auditing one buys an answer we already know — Gemini cannot name a business it has nothing of to
      read (measured: MK Plumbing, 0/10 on Gemini). Overridable, because the ChatGPT-via-directories
      number is occasionally worth having. NEVER silent: the count and the saving are both stated. */
-  const [auditIncludeNoWebsite, setAuditIncludeNoWebsite] = useState(false);
   // Per-lead LATEST audit state (mirrors sitesByLead) — drives the upcoming "Run audit" /
   // "Manage" row control. Keyed by lead_id, newest audit first; each entry carries that
   // audit's latest run + its status (pending|running|complete|capped|failed).
@@ -1097,12 +1096,11 @@ export function OutreachTable({
     }),
     [auditSelectedLeads],
   );
-  const auditEligibleLeads = useMemo(
-    () => (auditIncludeNoWebsite
-      ? auditSelectedLeads
-      : auditSelectedLeads.filter((l) => !auditNoWebsiteLeads.includes(l))),
-    [auditSelectedLeads, auditNoWebsiteLeads, auditIncludeNoWebsite],
-  );
+  /* ⛔ NO-WEBSITE LEADS ARE AUDITED BY DEFAULT (Paul, 2026-10-14): they are the best targets — AI not naming them is
+     the whole pitch. They are counted as eligible; bulk-jobs sends has_website: false with no URL, so the queue
+     runs the AI questions on the stored business type + location and skips the website scan (it has nothing to
+     scan). The old hold-back checkbox is gone; the dialog says how many have no site, as information only. */
+  const auditEligibleLeads = auditSelectedLeads;
   const auditEligibleIds = useMemo(() => auditEligibleLeads.map((l) => l.id), [auditEligibleLeads]);
   /* MEASURED CONSTANTS, not invented ones. This read $0.05 a question and $0.02 an SEO scan; the
      measured figures are $0.0125 (ai_audit_runs.actor_cost_usd over 81 runs) and $0.12 (the Apify
@@ -1162,11 +1160,6 @@ export function OutreachTable({
     [auditBatchCost.totalUsd, apifyUsage],
   );
 
-  /** What holding the no-website leads back is saving, at the same measured rates. */
-  const auditNoWebsiteSavingUsd = useMemo(
-    () => auditNoWebsiteLeads.length * Math.max(3, Math.min(5, auditQuestionCount)) * AUDIT_EST_USD_PER_QUESTION,
-    [auditNoWebsiteLeads, auditQuestionCount],
-  );
 
   /* ══ THE TWO REPAIRS FOR LEADS ADDED WITHOUT A TRADE OR A TOWN ══════════════════════════════
      168 rows were written with neither, by the sessionStorage fault fixed in LeadSearchContext.
@@ -3415,28 +3408,17 @@ export function OutreachTable({
             </Select>
           </div>
 
-          {/* ── THE NO-WEBSITE HOLD-BACK, STATED ─────────────────────────────────────────────────
-              A silent exclusion reads as "everything selected was audited" when it wasn't, which is
-              the failure mode CLAUDE.md keeps warning about. So the count and the saving are both on
-              screen, and the checkbox is right next to them. */}
+          {/* ── NO WEBSITE: INCLUDED, SAID AS INFORMATION (2026-10-14) ───────────────────────────
+              Counted in "Eligible to audit" below. Their price has no site scan in it (estimateBatchCost
+              counts a scan only for a lead's own website). */}
           {auditNoWebsiteLeads.length > 0 && (
-            <label className="flex cursor-pointer items-start gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2">
-              <Checkbox
-                checked={auditIncludeNoWebsite}
-                onCheckedChange={(v) => setAuditIncludeNoWebsite(v === true)}
-                className="mt-0.5"
-              />
-              <span className="text-xs leading-snug">
-                <span className="font-semibold">
-                  {auditNoWebsiteLeads.length} of these {auditNoWebsiteLeads.length === 1 ? 'has' : 'have'} no website
-                </span>
-                {auditIncludeNoWebsite
-                  ? <> — included, adding ~${auditNoWebsiteSavingUsd.toFixed(2)}.</>
-                  : <> — held back, saving ~${auditNoWebsiteSavingUsd.toFixed(2)}.</>}
-                {' '}AI has nothing of theirs to read, so Gemini can't name them at all. Tick to audit
-                them anyway.
+            <p className="rounded-md border border-border/60 bg-muted/30 px-3 py-2 text-xs leading-snug" data-testid="audit-no-website-info">
+              <span className="font-semibold">
+                {auditNoWebsiteLeads.length} of these {auditNoWebsiteLeads.length === 1 ? 'has' : 'have'} no website
               </span>
-            </label>
+              {' '}— included. The AI questions run on their business type and town; there is no site scan
+              for them, so no scan cost. Their report shows the &ldquo;we&rsquo;ll build you one&rdquo; section instead.
+            </p>
           )}
           {/* ══ THE PREVIEW — what is selected, what is already done, and what this press spends,
               before it is pressed. Every number is derived from data already on screen. */}
@@ -3528,7 +3510,8 @@ export function OutreachTable({
             Audit <span className="font-semibold">{auditBatchCost.leads}</span> business{auditBatchCost.leads === 1 ? '' : 'es'}
             {' '}× <span className="font-semibold">{auditQuestionCount}</span> question{auditQuestionCount === 1 ? '' : 's'}
             {' '}(~<span className="font-semibold">${auditBatchCost.totalUsd.toFixed(2)}</span>
-            {auditBatchCost.withWebsite > 0 && <>, incl. {auditBatchCost.withWebsite} site scan{auditBatchCost.withWebsite === 1 ? '' : 's'}</>}). Proceed?
+            {auditBatchCost.withWebsite > 0 && <>, incl. {auditBatchCost.withWebsite} site scan{auditBatchCost.withWebsite === 1 ? '' : 's'}</>}
+            {auditBatchCost.leads - auditBatchCost.withWebsite > 0 && <>; {auditBatchCost.leads - auditBatchCost.withWebsite} with no website, no scan</>}). Proceed?
           </p>
           <DialogFooter>
             <Button variant="ghost" size="sm" onClick={() => setAuditDialogOpen(false)}>Cancel</Button>
