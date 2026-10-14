@@ -22,6 +22,22 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-14-team-access-tidy', date: '2026-10-14', title: 'Team: add someone with a temporary password, links that survive scanners, and a Trial switch', audience: 'admin',
+    body: 'Team → Add a team member can now set a temporary password, so the person signs in straight away. Links you send now open a Continue page, so a WhatsApp preview or an email scanner can no longer use them up.',
+    report: {
+      added: [
+        'Set a temporary password (or press Generate). It is shown to you once only; copy it and send it yourself. Role is Salesperson unless you pick Admin and tick to confirm.',
+        '"Choose their own password at first sign-in" is on by default. You can switch it off.',
+        'A Trial team member switch on each salesperson. When on, their onboarding checklist is hidden and they show as "Trial · can sell". Nothing in the checklist is changed or deleted.',
+      ],
+      changed: [
+        'Invite, Resend activation and Send password reset links now open a page with a Continue button. The link is only used when they press it.',
+        'A used or expired link now says so plainly, explains that email and chat apps can use links up, and tells them to ask for a new one.',
+        'Passwords need at least 12 characters with a letter and a number.',
+      ],
+      removed: [],
+      effect: 'You can get a new salesperson working in a minute, and the links you send stop "not working" because something opened them first.',
+    } },
   { id: '2026-10-14-whatsapp-limits', date: '2026-10-14', title: 'WhatsApp queue: limits you can change, sent today per person, and an automatic pause', audience: 'admin',
     body: 'The WhatsApp queue panel now has a Limits line. Open it to change the team’s daily cap, the minutes between sends, and how many leads each salesperson can queue a day. No code change needed.',
     report: {

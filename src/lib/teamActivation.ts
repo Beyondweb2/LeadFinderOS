@@ -83,5 +83,7 @@ export const RESEND_ERRORS: Record<string, string> = {
 /** The public expired-link page cannot know who the visitor is, so it must not hint at an account. */
 export const EXPIRED_LINK_COPY = {
   title: 'This link has expired or was already used',
-  body: 'If you have not set up your account yet, ask your admin for a new activation link. If you already have an account, use Forgot password.',
+  body: 'If you have not set up your account yet, ask your admin for a new activation link. If you already have an account, use Forgot password to get a new link.',
+  /* 2026-10-14: email scanners and chat link previews open links to check them, which can use a one-time link up. */
+  scanner: 'Each link works once and only for a limited time. Some email and chat apps open links to check them, which can use a link up before you do. If that happens, ask for a new link and open it straight away.',
 };
