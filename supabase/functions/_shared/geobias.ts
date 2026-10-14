@@ -25,7 +25,7 @@ const COUNTRY_ALIASES: Record<string, string> = {
      never for a name that also exists elsewhere, e.g. Kochi, Japan). */
   INDIA: 'IN', SINGAPORE: 'SG', UAE: 'AE', UNITEDARABEMIRATES: 'AE', GERMANY: 'DE', FRANCE: 'FR',
   SPAIN: 'ES', ITALY: 'IT', NETHERLANDS: 'NL', BELGIUM: 'BE', SOUTHAFRICA: 'ZA', BRAZIL: 'BR',
-  MEXICO: 'MX', JAPAN: 'JP', SWEDEN: 'SE', THAILAND: 'TH',
+  MEXICO: 'MX', JAPAN: 'JP', SWEDEN: 'SE', THAILAND: 'TH', MALAYSIA: 'MY',
 };
 
 // Multi-word country phrases to detect inside a location string (checked first).
@@ -48,6 +48,9 @@ const COUNTRY_WORDS: Record<string, string> = {
   AU: 'AU', AUS: 'AU', AUSTRALIA: 'AU',
   CANADA: 'CA', IRELAND: 'IE', NZ: 'NZ',
   INDIA: 'IN',
+  /* 2026-10-14: the new markets, so "Johor Bahru, Malaysia" / "Tampines, Singapore" geocode in their own country.
+     ⛔ Never the bare code "MY" — it is an English word ("my plumber"). */
+  MALAYSIA: 'MY', SINGAPORE: 'SG',
 };
 
 // State/province CODE → country. US takes precedence on any 2-letter collision (it's

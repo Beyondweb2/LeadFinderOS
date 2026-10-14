@@ -92,7 +92,8 @@ ok(sqlPhoneKey('+61 412 345 678') === sqlPhoneKey('0412 345 678'), 'THE POINT: "
 
 console.log('\n── phone_e164_key: what the senders dial ──');
 const e164 = newestDefinition('phone_e164_key');
-ok(e164.file === '20261014100000_au_phone_key.sql', `newest phone_e164_key is this pass's migration (${e164.file})`);
+// 2026-10-14: 20261025090000_my_sg_markets.sql re-creates it with ONE added branch (a 10-digit 60 / 65 key keeps its code).
+ok(e164.file === '20261025090000_my_sg_markets.sql', `newest phone_e164_key is the Malaysia / Singapore migration (${e164.file})`);
 ok(/when length\(public\.phone_key\(_phone\)\) = 10 and public\.phone_key\(_phone\) ~ '\^\[1-9\]' then '\+44' \|\| public\.phone_key\(_phone\)/.test(e164.body), 'the UK branch is unchanged');
 ok(/regexp_replace\(coalesce\(_phone, ''\), '\\D', '', 'g'\) ~ '\^\(00\)\?61\[23478\]\[0-9\]\{8\}\$' then '\+61' \|\| public\.phone_key\(_phone\)/.test(e164.body), 'an Australian international number → +61…');
 ok(/regexp_replace\(coalesce\(_phone, ''\), '\\D', '', 'g'\) ~ '\^04\[0-9\]\{8\}\$' then '\+61' \|\| public\.phone_key\(_phone\)/.test(e164.body), 'an Australian national mobile (04…) → +61…');
@@ -102,6 +103,7 @@ function sqlE164(phone: string): string | null {
   const k = sqlPhoneKey(phone);
   const d = phone.replace(/\D/g, '');
   if (k === null) return null;
+  if (k.length === 10 && /^6[05]/.test(k)) return '+' + k;
   if (k.length === 10 && /^[1-9]/.test(k)) return '+44' + k;
   if (k.length === 9 && /^(00)?61[23478][0-9]{8}$/.test(d)) return '+61' + k;
   if (k.length === 9 && /^04[0-9]{8}$/.test(d)) return '+61' + k;
@@ -117,7 +119,7 @@ ok(!/^\+4\d{8}$/.test(sqlE164('0412 345 678') ?? ''), 'an Australian mobile is n
 console.log('\n── my_sales_message_phones: a rep can read an Australian lead\'s messages ──');
 {
   const f = newestDefinition('my_sales_message_phones');
-  ok(f.file === '20261014100000_au_phone_key.sql', `newest my_sales_message_phones is this pass's migration (${f.file})`);
+  ok(f.file === '20261025090000_my_sg_markets.sql', `newest my_sales_message_phones is the Malaysia / Singapore migration (${f.file})`);
   ok(/values \('44' \|\| s\.k\), \(s\.k\), \('0' \|\| s\.k\), \('\+44' \|\| s\.k\)\)/.test(f.body), 'the UK forms are offered as before');
   ok(/values \('61' \|\| s\.k\), \('\+61' \|\| s\.k\)\) as au\(v\) where s\.k ~ '\^\[23478\]\[0-9\]\{8\}\$'/.test(f.body), 'an Australian-shaped key adds 61… and +61… (whatsapp_messages.phone is 61412345678)');
   ok(/if public\.my_role\(\) is distinct from 'sales' then return; end if;/.test(f.body) && /security definer set search_path = public/.test(f.body) && /where l\.id in \(select public\.my_sales_lead_ids\(\)\)/.test(f.body),

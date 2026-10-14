@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useRef, useCallback, memo } from 'react';
-import { isPlausibleUkMobile, smsPillOf } from '@/lib/smsStatus';
+import { isTextableMobile, smsPillOf } from '@/lib/smsStatus';
 import { fetchAllRowsParallel } from '@/lib/fetchAllRows';
 import type { PhoneFetchStatus } from '@/hooks/useOutreach';
 import { isAggregatorUrl } from '@/lib/aggregators';
@@ -97,7 +97,9 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { formatPhoneForWhatsApp } from '@/lib/leadUtils';
 import { classifyLineType } from '@/lib/lineType';
-import { coldWhatsAppVerdict, statusWhenWhatsAppUnavailable, COLD_NOT_ELIGIBLE_LABEL, type ColdNotEligibleReason } from '@/lib/coldWhatsAppEligibility';
+import { coldWhatsAppVerdict, statusWhenWhatsAppUnavailable, COLD_NOT_ELIGIBLE_LABEL, marksNoMobile, type ColdNotEligibleReason } from '@/lib/coldWhatsAppEligibility';
+import { useCountrySettings } from '@/hooks/useCountrySettings';
+import { marketsOn } from '@/lib/outreachMarkets';
 import { useOutreachAttempt } from '@/hooks/useOutreachAttempt';
 import { useContactAction } from '@/hooks/useContactAction';
 import { useDebouncedCallback } from 'use-debounce';
@@ -372,6 +374,9 @@ export function OutreachTable({
   onOwnerScopeChange,
 }: OutreachTableProps) {
   const { toast } = useToast();
+  const { settings: countrySettings } = useCountrySettings();
+  const waMarkets = marketsOn(countrySettings, 'whatsapp');
+  const smsMarkets = marketsOn(countrySettings, 'sms');
   /* ⛔ THE ONE GATE (src/lib/outreachLoad.ts). Select all, every bulk action, CSV, the Paid filter and
      the shared-phone count need the WHOLE list; until it has finished loading they are off — the
      toolbar sits in a disabled fieldset and each handler refuses on its own as well. */
@@ -1597,7 +1602,7 @@ export function OutreachTable({
       let reason: ColdNotEligibleReason | null = null;
       let lineType = classifyLineType(lead?.phone, lead?.country).lineType;
       if (wantsColdGuard) {
-        const v = coldWhatsAppVerdict(lead?.phone, lead?.country);
+        const v = coldWhatsAppVerdict(lead?.phone, lead?.country, waMarkets);
         if (v.eligible === false) reason = v.reason;
       } else if (!String(lead?.phone ?? '').trim()) {
         reason = 'no_phone';
@@ -1607,6 +1612,8 @@ export function OutreachTable({
       if (reason) {
         if (reason === 'landline') lineType = 'landline';
         (notReachable[reason] ??= []).push(lead ? nameOf(lead) : 'Unnamed lead');
+        // A Malaysia / Singapore mobile while that country is switched off: skipped, never flagged No mobile.
+        if (!marksNoMobile(reason)) return;
         onUpdateLead(id, {
           status: statusWhenWhatsAppUnavailable(lead?.status) as LeadStatus,
           line_type: lineType,
@@ -3206,7 +3213,7 @@ export function OutreachTable({
                                 <MessageSquare className="h-4 w-4" />
                               </button>
                               {/* No SMS option for a number that can never be a UK mobile (a landline, a foreign number) or one already marked No SMS. */}
-                              {isPlausibleUkMobile(lead.phone) && smsPillOf(lead) !== 'no_sms' && (
+                              {isTextableMobile(lead.phone, lead.country, smsMarkets) && smsPillOf(lead) !== 'no_sms' && (
                                 <button type="button" onClick={() => setSmsDialogLead(lead)} className="p-1.5 rounded-md hover:bg-blue-500/10 text-blue-500 hover:text-blue-400 transition-colors" title="Send a text message (SMS)" aria-label="Send a text message" data-testid="outreach-sms">
                                   <MessageSquareText className="h-4 w-4" />
                                 </button>

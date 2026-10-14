@@ -147,7 +147,8 @@ console.log("\n── the pause modes reach the background work ──");
   ok(aq.indexOf("PHASE A: POLL") < aq.indexOf('if (tickMode === "all_stop") candidateIds.length = 0;'), "…while runs already started are still polled (nothing stranded)");
   ok(/if \(tickMode === "all_stop"\) \{\n\s+console\.log\("\[process-ai-audit-queue\] emergency stop is on - no SEO scan this tick"\);/.test(aq), "audit queue: no SEO scan under the emergency stop");
   const wq = read("supabase/functions/process-whatsapp-queue/index.ts");
-  ok(/if \(\(windowOpen \|\| force\) && auditAheadMode === "running"\) try \{/.test(wq), "WhatsApp queue: the pre-send hook audits stop under either pause; the sends do not");
+  // 2026-10-14: the window is anyWindowOpen (London, or a switched-on Malaysia / Singapore window) — the pause rule is the same.
+  ok(/if \(\(anyWindowOpen \|\| force\) && auditAheadMode === "running"\) try \{/.test(wq), "WhatsApp queue: the pre-send hook audits stop under either pause; the sends do not");
   ok(/suspendedIds\.has\(l\.assigned_to_user_id\)/.test(wq) && /skipped: "team_read_failed"/.test(wq), "WhatsApp queue: a suspended rep's queued leads are held (fail closed), never deleted");
   ok(/if \(sweepMode !== "running"\) return json\(\{ ok: true, skipped: sweepMode \}\);/.test(read("supabase/functions/bulk-jobs/index.ts")), "bulk jobs wait under either pause");
 }

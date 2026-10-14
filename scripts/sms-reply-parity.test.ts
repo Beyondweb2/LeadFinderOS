@@ -177,7 +177,9 @@ console.log('7. STOP still opts out and starts nothing');
 {
   ok(['STOP', 'stop', 'Stop.', 'UNSUBSCRIBE', 'END'].every((w) => isStopMessage(w)), 'STOP-family words are recognised');
   const hook = read('supabase/functions/twilio-webhook/index.ts');
-  const at = hook.indexOf('if (isStopMessage(body))');
+  // 2026-10-14: the STOP branch is `isStopMessage(body) || isOptOut(body)` (Malay / Chinese words and the shared phrases).
+  const at = hook.indexOf('if (isStopMessage(body) || isOptOut(body))');
+  ok(at > 0, 'the STOP branch is found');
   const stopBranch = hook.slice(at, hook.indexOf('} else {', at));
   ok(/recordOptOut\(service/.test(stopBranch) && !/handleInboundSmsReply/.test(stopBranch), 'a STOP records the opt-out and never reaches the reply handler / audit');
   ok(hook.lastIndexOf('handleInboundSmsReply') > hook.indexOf('recordOptOut('), 'the opt-out branch comes first; the reply rule is the else');

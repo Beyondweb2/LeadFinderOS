@@ -23,6 +23,7 @@ import {
 import { QUICK_CLOSE_AFTER_PAYMENT, QUICK_CLOSE_PROMISE } from './quickClose.ts';
 import { afterTermRepLine } from './planTerms.ts';
 import type { SiteSource } from './leadWebsiteKind.ts';
+import { PRICE_MODEL_GUARANTEE, UPFRONT_SETUP_GBP, upfrontSpoken, type PriceModel } from './priceModel.ts';
 
 /** findable.live's guarantee line, word for word (findable-site Guarantee.astro / Pricing.astro).
  *  ⛔ ONE COPY (wave 1 integration): it IS Quick Close's promise, so the call screen and the payment
@@ -60,6 +61,12 @@ export interface CallClose {
   afterPayment: readonly string[];
 }
 
+/** What each route IS, in one spoken sentence — shared by every price model. */
+const ROUTE_WHAT: Record<ServiceRoute, string> = {
+  build: 'We build you a new website, host it and look after it.',
+  optimise: 'You keep your own website and it stays yours. We work on it with your access, and we never take it offline.',
+};
+
 export function routeOffer(route: ServiceRoute): CallRouteOffer {
   const total = totalPaymentsFor(route);
   const term = termMonthsFor(route);
@@ -70,7 +77,7 @@ export function routeOffer(route: ServiceRoute): CallRouteOffer {
       route, name: SERVICE_ROUTE_NAME.build,
       summary: `£${FINDABLE_SETUP_PRICE_GBP} now · £${FINDABLE_MONTHLY_GBP}/month · ${total} payments in total`,
       spoken: [
-        `We build you a new website, host it and look after it. ${spokenPrice}`,
+        `${ROUTE_WHAT.build} ${spokenPrice}`,
         `${spokenTerm} ${afterTermRepLine(route)}`,
       ],
       site: 'A new website built, hosted and managed by Findable — theirs once the term is paid',
@@ -79,7 +86,7 @@ export function routeOffer(route: ServiceRoute): CallRouteOffer {
       route, name: SERVICE_ROUTE_NAME.optimise,
       summary: `£${FINDABLE_SETUP_PRICE_GBP} now · £${FINDABLE_MONTHLY_GBP}/month · ${total} payments in total`,
       spoken: [
-        `You keep your own website and it stays yours. We work on it with your access, and we never take it offline. ${spokenPrice}`,
+        `${ROUTE_WHAT.optimise} ${spokenPrice}`,
         `${spokenTerm} ${afterTermRepLine(route)}`,
       ],
       site: 'They keep their existing website and its ownership',
@@ -96,6 +103,26 @@ export function routesFor(source: SiteSource | null | undefined): { routes: Serv
     note: source === 'directory_profile' || source === 'social_profile'
       ? 'Only a profile page on file, not a site of their own — Optimise needs their own website, so offer Build.'
       : 'No website on file — Optimise needs their own website, so offer Build.',
+  };
+}
+
+/* ══ THE PRICE MODEL (2026-10-14, src/lib/priceModel.ts) ═══════════════════════════════════════════════════════
+   'standard' returns the offer above unchanged. The £499 model keeps what the route IS and says its own price; its
+   guarantee is the headline only — no refund amount or condition is invented (that is Paul's, in its agreement). */
+export function routeOfferForModel(route: ServiceRoute, model: PriceModel): CallRouteOffer {
+  const base = routeOffer(route);
+  if (model !== 'upfront_499') return base;
+  const u = upfrontSpoken();
+  return { ...base, summary: u.summary, spoken: [`${ROUTE_WHAT[route]} ${u.spoken[0]}`] };
+}
+
+export function guaranteeForModel<G extends { spoken: string; caution: string }>(base: G, model: PriceModel): G {
+  if (model !== 'upfront_499') return base;
+  return {
+    ...base,
+    ...('headline' in base ? { headline: PRICE_MODEL_GUARANTEE } : {}),
+    spoken: PRICE_MODEL_GUARANTEE,
+    caution: `Say only this line. Do not quote a refund amount or conditions for the £${UPFRONT_SETUP_GBP} model — Paul confirms them in its agreement. Never promise a ranking or that AI will name them.`,
   };
 }
 

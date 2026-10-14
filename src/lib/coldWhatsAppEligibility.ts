@@ -19,24 +19,41 @@
    ⛔ PURE, relative imports only: the queue edge function imports this by path. */
 import { toWhatsAppDigits } from './waNumber.ts';
 import { isUkColdDestination, NOT_A_UK_MOBILE } from './ukColdDestination.ts';
+import { COUNTRY_OFF, mobileMarketOf, type Market } from './outreachMarkets.ts';
 
 /** The one existing "cannot WhatsApp this number" status. Never rename: stored, consumed everywhere. */
 export const NO_WHATSAPP_STATUS = 'no_whatsapp_needs_sms';
 
-export type ColdNotEligibleReason = 'no_phone' | 'bad_number' | 'landline' | typeof NOT_A_UK_MOBILE;
+export type ColdNotEligibleReason = 'no_phone' | 'bad_number' | 'landline' | typeof NOT_A_UK_MOBILE | typeof COUNTRY_OFF;
 export type ColdVerdict =
   | { eligible: true; digits: string }
   | { eligible: false; reason: ColdNotEligibleReason; digits: string | null };
 
-export function coldWhatsAppVerdict(phone: string | null | undefined, country?: string | null): ColdVerdict {
+/* 2026-10-14 (Malaysia / Singapore, src/lib/outreachMarkets.ts): `markets` = the markets whose WhatsApp switch is on.
+   Left out it is the UK alone — exactly the old rule. A real Malaysian / Singapore mobile in a market that is switched
+   off answers COUNTRY_OFF: a mobile we are not messaging yet, NEVER a reason to flag the lead No mobile. */
+export function coldWhatsAppVerdict(phone: string | null | undefined, country?: string | null,
+                                    markets: ReadonlySet<Market> = UK_ONLY): ColdVerdict {
   const raw = String(phone ?? '').trim();
   if (!raw) return { eligible: false, reason: 'no_phone', digits: null };
   const digits = toWhatsAppDigits(raw, country);
   if (!digits) return { eligible: false, reason: 'bad_number', digits: null };
-  if (isUkColdDestination(digits)) return { eligible: true, digits };
+  const market = mobileMarketOf(digits);
+  if (market === 'UK' && isUkColdDestination(digits)) {
+    return markets.has('UK') ? { eligible: true, digits } : { eligible: false, reason: COUNTRY_OFF, digits };
+  }
+  if (market) return markets.has(market) ? { eligible: true, digits } : { eligible: false, reason: COUNTRY_OFF, digits };
   // A UK number that is not a mobile (01/02/03…) is a landline; everything else is simply not UK.
   if (/^44[1-3]\d{8,9}$/.test(digits)) return { eligible: false, reason: 'landline', digits };
   return { eligible: false, reason: NOT_A_UK_MOBILE, digits };
+}
+
+const UK_ONLY: ReadonlySet<Market> = new Set<Market>(['UK']);
+
+/** Does this reason mean "WhatsApp cannot reach this number" (flag the lead No mobile)? COUNTRY_OFF never does: the
+ *  number is a real mobile in a market that is switched off. */
+export function marksNoMobile(reason: ColdNotEligibleReason): boolean {
+  return reason !== COUNTRY_OFF;
 }
 
 /** Human wording for the batch note; the reason codes themselves are stored tokens. */
@@ -44,7 +61,8 @@ export const COLD_NOT_ELIGIBLE_LABEL: Record<ColdNotEligibleReason, string> = {
   no_phone: 'no phone number (flagged No mobile)',
   bad_number: 'phone number not usable (flagged No mobile)',
   landline: 'landline (flagged No mobile)',
-  [NOT_A_UK_MOBILE]: 'not a UK mobile - cold WhatsApp is UK only (flagged No mobile)',
+  [NOT_A_UK_MOBILE]: 'not a mobile we message (UK, Malaysia or Singapore) - flagged No mobile',
+  [COUNTRY_OFF]: 'a Malaysia / Singapore mobile - that country is switched off for WhatsApp (not flagged; turn it on in WhatsApp queue settings)',
 };
 
 /* A status BEFORE any real contact. A positive allowlist: anything not listed here (replied, interested,

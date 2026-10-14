@@ -29,10 +29,13 @@ export interface SearchCountryOption {
   primary: boolean;
 }
 
-/** Every country Find Leads can search. The first three are the markets worked today; the rest A–Z. */
+/** Every country Find Leads can search. The primary ones are the markets worked today (Malaysia and Singapore
+ *  joined 2026-10-14); the rest A–Z. */
 export const SEARCH_COUNTRY_OPTIONS: readonly SearchCountryOption[] = [
   { value: 'UK', name: 'United Kingdom', code: 'GB', primary: true },
   { value: 'Australia', name: 'Australia', code: 'AU', primary: true },
+  { value: 'Malaysia', name: 'Malaysia', code: 'MY', primary: true },
+  { value: 'Singapore', name: 'Singapore', code: 'SG', primary: true },
   { value: 'Belgium', name: 'Belgium', code: 'BE', primary: false },
   { value: 'Brazil', name: 'Brazil', code: 'BR', primary: false },
   { value: 'Canada', name: 'Canada', code: 'CA', primary: false },
@@ -45,7 +48,6 @@ export const SEARCH_COUNTRY_OPTIONS: readonly SearchCountryOption[] = [
   { value: 'Mexico', name: 'Mexico', code: 'MX', primary: false },
   { value: 'Netherlands', name: 'Netherlands', code: 'NL', primary: false },
   { value: 'NewZealand', name: 'New Zealand', code: 'NZ', primary: false },
-  { value: 'Singapore', name: 'Singapore', code: 'SG', primary: false },
   { value: 'SouthAfrica', name: 'South Africa', code: 'ZA', primary: false },
   { value: 'Spain', name: 'Spain', code: 'ES', primary: false },
   { value: 'Sweden', name: 'Sweden', code: 'SE', primary: false },
@@ -185,6 +187,12 @@ export const SUGGESTED_LOCATIONS: Record<Country, readonly string[]> = {
     'Bloemfontein', 'East London', 'Nelspruit', 'Kimberley', 'Polokwane',
     'Pietermaritzburg', 'Rustenburg', 'George', 'Stellenbosch',
   ],
+  /* 2026-10-14: the biggest Malaysian cities and towns first (Kuala Lumpur, the Klang Valley, Johor Bahru, Penang). */
+  Malaysia: [
+    'Kuala Lumpur', 'Petaling Jaya', 'Shah Alam', 'Subang Jaya', 'Klang', 'Johor Bahru',
+    'George Town', 'Ipoh', 'Seremban', 'Melaka', 'Kuching', 'Kota Kinabalu',
+    'Kuantan', 'Alor Setar', 'Kuala Terengganu', 'Kota Bharu', 'Cyberjaya', 'Putrajaya',
+  ],
   Singapore: [
     'Orchard', 'Marina Bay', 'Jurong East', 'Tampines', 'Woodlands',
     'Ang Mo Kio', 'Bedok', 'Clementi', 'Bukit Timah', 'Changi',
@@ -245,6 +253,8 @@ const COUNTRY_TAILS: Partial<Record<Country, readonly string[]>> = {
   NewZealand: ['new zealand', 'nz'],
   SouthAfrica: ['south africa'],
   UAE: ['uae', 'united arab emirates'],
+  Malaysia: ['malaysia', 'my'],
+  Singapore: ['singapore', 'sg'],
 };
 function tailsFor(c: Country): string[] {
   return [...new Set([...(COUNTRY_TAILS[c] ?? []), norm(c), norm(countryName(c)), norm(suffixWord(c))])];

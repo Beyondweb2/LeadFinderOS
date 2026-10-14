@@ -11,7 +11,8 @@ import { useAuth } from '@/hooks/useAuth';
 import { useTeamDirectory } from '@/hooks/useSalesCrm';
 import {
   IMPORT_FIELDS, IMPORT_FIELD_LABEL, IMPORT_FILE_MAX_BYTES, IMPORT_FILE_MAX_ROWS, IMPORT_BATCH_MAX,
-  IMPORT_BATCH_NAME_MAX, withDefaultTrade,
+  IMPORT_BATCH_NAME_MAX, withDefaultTrade, withImportCountry, countsByCountry, IMPORT_COUNTRIES, type ImportCountry,
+  isResearchFile, buildResearchRows, batchFromFileName, RESEARCH_FILE_DEFAULT_TRADE,
   parseCsv, autoMapColumns, columnLabel, buildImportRows, runImport, outcomeText, problemRows, possibleMatchRows,
   type ParsedCsv, type ColumnMapping, type ImportReport, type ImportRpc, type ImportField, type RowResult,
 } from '@/lib/csvLeadImport';
@@ -64,6 +65,8 @@ export function CSVImportDialog({ open, onOpenChange, onImported, isAdmin }: CSV
   const [importPossible, setImportPossible] = useState(false);
   const [batchName, setBatchName] = useState('');
   const [defaultTrade, setDefaultTrade] = useState('');
+  const [importCountry, setImportCountry] = useState<ImportCountry | ''>(''); // '' = worked out from each row
+  const [research, setResearch] = useState(false); // a researched lead file (Ethan's format) — rows built by buildResearchRows
   const [assignTo, setAssignTo] = useState(''); // '' = the person importing
   const { user } = useAuth();
   const team = useTeamDirectory();
@@ -73,7 +76,7 @@ export function CSVImportDialog({ open, onOpenChange, onImported, isAdmin }: CSV
   const reset = () => {
     setStep('pick'); setFile(null); setParsed(null); setMapping(emptyMapping()); setMapNotes([]);
     setError(null); setBusy(false); setProgress(null); setPreview(null); setResult(null); setImportPossible(false);
-    setBatchName(''); setDefaultTrade(''); setAssignTo('');
+    setBatchName(''); setDefaultTrade(''); setAssignTo(''); setImportCountry(''); setResearch(false);
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
@@ -103,13 +106,22 @@ export function CSVImportDialog({ open, onOpenChange, onImported, isAdmin }: CSV
       }
       const m = autoMapColumns(p.headers);
       setParsed(p); setMapping(m.mapping); setMapNotes(m.notes); setStep('map');
+      /* 2026-10-14: a researched lead file is read by its own rule (csvLeadImport.ts buildResearchRows). Its batch name
+         defaults to the file name and its trade to Language schools — both still editable. Other files: as before. */
+      if (isResearchFile(p.headers)) {
+        setResearch(true);
+        setBatchName(batchFromFileName(f.name));
+        setDefaultTrade(RESEARCH_FILE_DEFAULT_TRADE);
+        setMapNotes(['Recognised a researched lead file. Name, country, city, website, WhatsApp number and owner are read automatically. Hypothesis, website evidence and offer become the "Why this lead" note; the other research columns are kept on the lead. "Not established" counts as empty.']);
+      }
     } catch (err) {
       console.error('CSV read error:', err);
       setError('That file could not be read as a CSV. Save it from your spreadsheet as "CSV UTF-8" and try again.');
     }
   };
 
-  const rows = parsed ? withDefaultTrade(buildImportRows(parsed, mapping), defaultTrade) : [];
+  /* 2026-10-14: the file's country fills a blank Country (a row's own always wins); phones are read in that country. */
+  const rows = parsed ? withImportCountry(withDefaultTrade(research ? buildResearchRows(parsed) : buildImportRows(parsed, mapping), defaultTrade), importCountry || null) : [];
 
   const runCheck = async (commit: boolean) => {
     if (!parsed || !rows.length) return;
@@ -185,7 +197,7 @@ export function CSVImportDialog({ open, onOpenChange, onImported, isAdmin }: CSV
           {step === 'map' && parsed && (
             <>
               <p className="text-sm break-words" data-testid="csv-detected"><strong>{parsed.records.length.toLocaleString()}</strong> row{parsed.records.length === 1 ? '' : 's'} found in <span className="break-all">{file?.name}</span>. Check the columns, then press Check rows.</p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-2" data-testid="csv-mapping">
+              {!research && <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-2" data-testid="csv-mapping">
                 {IMPORT_FIELDS.map((f) => (
                   <label key={f} className="flex items-center gap-2 text-sm min-w-0">
                     <span className="w-28 sm:w-32 shrink-0 break-words text-muted-foreground">{IMPORT_FIELD_LABEL[f]}{f === 'business_name' ? ' *' : ''}</span>
@@ -201,7 +213,7 @@ export function CSVImportDialog({ open, onOpenChange, onImported, isAdmin }: CSV
                     </select>
                   </label>
                 ))}
-              </div>
+              </div>}
               <SubSection title="Tag this import" icon={ListChecks} tone="grey">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-2" data-testid="csv-tags">
                   <label className="flex flex-col gap-1 text-sm min-w-0">
@@ -211,6 +223,14 @@ export function CSVImportDialog({ open, onOpenChange, onImported, isAdmin }: CSV
                   <label className="flex flex-col gap-1 text-sm min-w-0">
                     <span className="text-muted-foreground">Trade for rows with none</span>
                     <Input value={defaultTrade} maxLength={100} onChange={(e) => setDefaultTrade(e.target.value)} placeholder="e.g. Plumbers" data-testid="csv-trade" />
+                  </label>
+                  <label className="flex flex-col gap-1 text-sm min-w-0">
+                    <span className="text-muted-foreground">Country of these leads</span>
+                    <select className="h-9 min-w-0 rounded-lg border border-border/70 bg-background px-2 text-sm" value={importCountry}
+                      onChange={(e) => setImportCountry(e.target.value as ImportCountry | '')} aria-label="Country of these leads" data-testid="csv-country">
+                      <option value="">Work it out from each row</option>
+                      {IMPORT_COUNTRIES.map((c) => <option key={c} value={c}>{c}</option>)}
+                    </select>
                   </label>
                   {isAdmin && (
                     <label className="flex flex-col gap-1 text-sm min-w-0">
@@ -222,7 +242,7 @@ export function CSVImportDialog({ open, onOpenChange, onImported, isAdmin }: CSV
                     </label>
                   )}
                 </div>
-                <p className="mt-1 text-xs text-muted-foreground">Search the batch name in Outreach to see just this import. A row's own trade always wins.</p>
+                <p className="mt-1 text-xs text-muted-foreground">Search the batch name in Outreach to see just this import. A row's own trade and country always win. Phone numbers are read in the row's country (Malaysia 012-345 6789 → +60, Singapore 9123 4567 → +65).</p>
               </SubSection>
               {mapNotes.length > 0 && (
                 <ul className="text-xs text-muted-foreground list-disc pl-4 space-y-0.5">{mapNotes.map((n) => <li key={n}>{n}</li>)}</ul>
@@ -243,6 +263,7 @@ export function CSVImportDialog({ open, onOpenChange, onImported, isAdmin }: CSV
                 ['Duplicates', preview.counts.duplicate_in_file + preview.counts.existing], ['Possible matches', preview.counts.possible_match],
                 ['New', preview.counts.new], ['Fill in blanks', preview.counts.update], ['Held', held],
               ]} />
+              <CountryCounts rows={preview.rows} />
               {preview.stopped && (
                 <Callout tone="red" icon={AlertCircle}>
                   Rows {preview.stopped.fromRow}–{preview.stopped.toRow} could not be checked: {preview.stopped.message}
@@ -345,6 +366,23 @@ function CountGrid({ items }: { items: Array<[string, number]> }) {
     <div className={`grid grid-cols-2 gap-2 ${items.length === 5 ? 'sm:grid-cols-5' : items.length === 6 ? 'sm:grid-cols-3' : 'sm:grid-cols-4'}`} data-testid="csv-counts">
       {items.map(([label, n]) => (
         <Figure key={label} label={label} value={n.toLocaleString()} tone={COUNT_TONE[label] ?? 'grey'} strong={n > 0 && !!COUNT_TONE[label]} />
+      ))}
+    </div>
+  );
+}
+
+/** The preview by country (2026-10-14): rows, how many will be added, and the numbers that could not be read there. */
+function CountryCounts({ rows }: { rows: RowResult[] }) {
+  const by = countsByCountry(rows);
+  if (!by.length) return null;
+  return (
+    <div className="rounded-lg bg-muted/30 px-3 py-2 text-xs ring-1 ring-inset ring-border/40" data-testid="csv-by-country">
+      <span className="font-medium">By country: </span>
+      {by.map((c, i) => (
+        <span key={c.country}>
+          {i > 0 && ' · '}
+          {c.country} {c.rows} row{c.rows === 1 ? '' : 's'} ({c.adding} to add{c.unreadablePhones ? <>, <span className="text-destructive font-medium">{c.unreadablePhones} number{c.unreadablePhones === 1 ? '' : 's'} could not be read</span></> : null})
+        </span>
       ))}
     </div>
   );

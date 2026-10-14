@@ -38,6 +38,61 @@ export const WHATS_NEW: readonly WhatsNewEntry[] = [
       removed: [],
       effect: 'You can get a new salesperson working in a minute, and the links you send stop "not working" because something opened them first.',
     } },
+  { id: '2026-10-14-csv-import-country', date: '2026-10-14', title: 'CSV import: choose the country (UK, Malaysia or Singapore)', audience: 'all',
+    body: 'Outreach → Import has a new "Country of these leads" box. Phone numbers are read in that country, and the check shows how many rows are in each country.',
+    report: {
+      added: [
+        '"Country of these leads": UK, Malaysia or Singapore, or "Work it out from each row". A Country column in the file still wins for its row.',
+        'The check step shows rows by country, and how many numbers in each country could not be read.',
+        'Researched lead files (like Ethan’s language-school list) import as they are: name, country, city, website, WhatsApp number and owner are read automatically, and the research becomes a short “Why this lead” note. The batch name starts as the file name and the trade as Language schools.',
+      ],
+      changed: ['A Malaysian or Singapore number without +60 / +65 is read in the right country, and the same number written two ways is caught as a duplicate.'],
+      removed: [],
+      effect: 'Import your Malaysia and Singapore lists with the right country set, and fix any number the check says it could not read.',
+    } },
+  { id: '2026-10-14-malaysia-singapore-sending', date: '2026-10-14', title: 'You can now WhatsApp, text and call Malaysia and Singapore leads', audience: 'all',
+    body: 'Malaysian and Singapore mobiles can be queued for WhatsApp and texts, and called from the browser. They go out in their own local hours (9am–7pm), with their own daily limits.',
+    report: {
+      added: [
+        'A switch per country for WhatsApp, SMS and browser calls (admin: WhatsApp queue → Countries). Malaysia and Singapore are on.',
+        'Each country has its own daily limit and local send hours. The UK is unchanged.',
+        'Opt-outs in Malay and Chinese (for example "berhenti", "jangan hantar", "停止") stop all messages, on WhatsApp and by text.',
+      ],
+      changed: [
+        'Follow-ups to Malaysia and Singapore go in their local hours, not UK hours.',
+        'Texts to Malaysia and Singapore come from our UK number, so some may not arrive. The SMS option says so.',
+      ],
+      removed: [],
+      effect: 'Queue your Malaysia and Singapore leads the same way as UK ones. Use only the openers — explain_offer messages quote £ prices and UK wording.',
+    } },
+  { id: '2026-10-14-malaysia-singapore-leads', date: '2026-10-14', title: 'Malaysia and Singapore leads: the right country and the right phone numbers', audience: 'all',
+    body: 'Find Leads, Add a lead and the CSV import now know Malaysia and Singapore. Their phone numbers are stored with +60 / +65, and their mobiles are never marked "No mobile".',
+    report: {
+      added: [
+        'Malaysia in Find Leads (with its main towns), Add a lead and the AI checks. Malaysia and Singapore are listed first with the UK and Australia.',
+        'Malaysian and Singapore numbers are saved as +60… / +65…, typed with or without the country code. "012-345 6789" and "+60 12-345 6789" are the same lead.',
+        'AI check questions read "plumber in Johor Bahru, Malaysia".',
+      ],
+      changed: [
+        'A Malaysian or Singapore lead is saved under its own country, not the UK.',
+        '"Wrong number" now works for Singapore and Malaysian numbers.',
+        'A Malaysian or Singapore mobile is no longer marked "No mobile". Sending to those countries stays off until Paul switches it on.',
+      ],
+      removed: [],
+      effect: 'You can add and import Malaysia and Singapore leads today and they are stored correctly. Nothing is sent to them yet.',
+    } },
+  { id: '2026-10-14-price-model', date: '2026-10-14', title: 'Price model switch: £99 start or £499 upfront (the £499 link is not on yet)', audience: 'all',
+    body: 'The Sales dashboard, the call script’s Offer step and the Close tab now show a Price model switch. Pick “£99 start” (today’s offer) or “£499 upfront”. The script and the Close terms follow your choice.',
+    report: {
+      added: [
+        'A one-click Price model switch for each person. The admin also sets the team default.',
+        '£499 upfront: £499, then £99 a month for 12 months, starting when Build’s monthly payments start. The guarantee line is “We improve AI visibility or you get your money back.”',
+        'The model a sign-up link was made under is recorded on the lead, so we can compare results by model.',
+      ],
+      changed: ['Under “£499 upfront” the sign-up link button is switched off and says why: its client agreement still needs Paul’s approval. Switch to “£99 start” to send a link.'],
+      removed: [],
+      effect: 'You can try the £499 pitch on calls today. To close a sale, switch back to £99 start until the £499 agreement is approved.',
+    } },
   { id: '2026-10-14-whatsapp-limits', date: '2026-10-14', title: 'WhatsApp queue: limits you can change, sent today per person, and an automatic pause', audience: 'admin',
     body: 'The WhatsApp queue panel now has a Limits line. Open it to change the team’s daily cap, the minutes between sends, and how many leads each salesperson can queue a day. No code change needed.',
     report: {

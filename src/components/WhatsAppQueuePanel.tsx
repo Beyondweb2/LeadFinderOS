@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCountrySettings } from '@/hooks/useCountrySettings';
+import { marketsOn } from '@/lib/outreachMarkets';
 import { useQueryClient } from '@tanstack/react-query';
 import { getQueueStatus, rememberQueueStatus, QUEUE_STATE_KEY, queuedLeadLine } from '@/lib/queueStatus';
 import { MessageSquare, Loader2, Play, Pause, RefreshCw, ChevronDown, ChevronRight, X, Inbox as InboxIcon } from 'lucide-react';
@@ -24,6 +26,7 @@ import {
 import { Callout, EmptyState, ErrorState, IconTile, LoadState, SURFACE, ToneChip } from '@/components/operator/ui';
 import { cn } from '@/lib/utils';
 import { WhatsAppPaceSettings, type PaceStatus } from '@/components/WhatsAppPaceSettings';
+import { CountrySendingSettings } from '@/components/CountrySendingSettings';
 
 /** The admin's team-wide status (process-whatsapp-queue mode 'status' — admin-only on the server). */
 interface TeamStatus {
@@ -62,7 +65,8 @@ export function WhatsAppQueuePanel({ defaultExpanded = true }: { defaultExpanded
   const perms = useLeadPermissions();
   const teamControls = perms.queueControls;
   const q = useWhatsAppQueue();
-  const view = useMemo(() => deriveQueue(q.data ?? []), [q.data]);
+  const { settings: countrySettings } = useCountrySettings();
+  const view = useMemo(() => deriveQueue(q.data ?? [], marketsOn(countrySettings, 'whatsapp')), [q.data, countrySettings]);
   const state = useQueueState();
   const [team, setTeam] = useState<TeamStatus | null>(null);
   const [teamLoading, setTeamLoading] = useState(false);
@@ -324,6 +328,8 @@ export function WhatsAppQueuePanel({ defaultExpanded = true }: { defaultExpanded
       )}
       {/* The cap, pace, per-person limits and sent today per person; the auto-pause note (2026-10-14). Admin only. */}
       {teamControls && <WhatsAppPaceSettings team={team} onSaved={() => refreshTeam(true)} />}
+      {/* 2026-10-14: sending by country — UK / Malaysia / Singapore switches, caps and local hours (admin only). */}
+      {teamControls && <CountrySendingSettings />}
       {/* Queued with no number WhatsApp can reach (none, a landline, not a UK mobile): the sender flags these No
           WhatsApp when it reaches them. Counted from the rows on screen. */}
       {view.unsendable > 0 && (

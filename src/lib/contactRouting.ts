@@ -24,6 +24,7 @@ import { CHANNEL_COST_GBP, costWords } from './channelCosts.ts';
 import { isUkColdDestination } from './ukColdDestination.ts';
 import { toWhatsAppDigits } from './waNumber.ts';
 import { whatsAppCapabilityOf, type WhatsAppCapabilityInput } from './whatsAppCapability.ts';
+import { callMarketOf, MARKET_NAME, mobileMarketOf, type Market } from './outreachMarkets.ts';
 
 export type RouteChannel = 'whatsapp' | 'sms' | 'email' | 'call' | 'whatsapp_app_call';
 export type RoutePurpose = 'link' | 'message' | 'call';
@@ -51,7 +52,14 @@ export interface RoutingFacts extends WhatsAppCapabilityInput {
   failed?: ReadonlyArray<RouteChannel>;
   /** Channels that already carried it (so a second one is an explicit resend, not a default). */
   alreadySent?: ReadonlyArray<RouteChannel>;
+  /** The countries whose switch is on, per channel (src/lib/outreachMarkets.ts, 2026-10-14). Left out: the UK alone, as before. */
+  markets?: { whatsapp: ReadonlySet<Market>; sms: ReadonlySet<Market>; call: ReadonlySet<Market> };
 }
+
+const UK_ONLY: ReadonlySet<Market> = new Set<Market>(['UK']);
+
+/** The cold intro text's reason starts with this for every country — useSms reads it to tell the intro from free text. */
+export const COLD_TEXT_REASON_MARK = 'you have not texted yet';
 
 export interface RouteOption {
   channel: RouteChannel;
@@ -81,10 +89,13 @@ export const ROUTE_LABEL: Record<RouteChannel, string> = {
   whatsapp: 'WhatsApp', sms: 'SMS', email: 'Email', call: 'Call in browser', whatsapp_app_call: 'Call on WhatsApp (your phone)',
 };
 
-type Phone = { digits: string | null; ukMobile: boolean; uk: boolean };
+type Phone = { digits: string | null; ukMobile: boolean; uk: boolean; market: Market | null; abroad: Market | null; callAbroad: Market | null };
 function phoneOf(f: RoutingFacts): Phone {
   const digits = f.phone ? toWhatsAppDigits(f.phone, f.country ?? null) : null;
-  return { digits, ukMobile: isUkColdDestination(digits), uk: !!digits && /^44[1-9]\d{8,9}$/.test(digits) };
+  const market = mobileMarketOf(digits);
+  const callMarket = callMarketOf(digits);
+  return { digits, ukMobile: isUkColdDestination(digits), uk: !!digits && /^44[1-9]\d{8,9}$/.test(digits), market,
+    abroad: market && market !== 'UK' ? market : null, callAbroad: callMarket && callMarket !== 'UK' ? callMarket : null };
 }
 
 function option(channel: RouteChannel, available: boolean, reason: string, cost: number, f: RoutingFacts): RouteOption {
@@ -96,17 +107,23 @@ function option(channel: RouteChannel, available: boolean, reason: string, cost:
 export function decideContactRoute(f: RoutingFacts, purpose: RoutePurpose = 'link'): RouteDecision {
   const p = phoneOf(f);
   const phoneBlocked = !!f.optedOut || !!f.wrongNumber;
+  const mk = f.markets ?? { whatsapp: UK_ONLY, sms: UK_ONLY, call: UK_ONLY };
+  /* A mobile we may message on a channel: a UK mobile while the UK is on, or a Malaysia / Singapore mobile while that
+     country is on (2026-10-14). */
+  const mobileOn = (ch: 'whatsapp' | 'sms') => (p.ukMobile && mk[ch].has('UK')) || (!!p.abroad && mk[ch].has(p.abroad));
+  const offWords = (m: Market, what: string) => `${what} to ${MARKET_NAME[m]} is switched off.`;
   const wa = whatsAppCapabilityOf(f);
   const emailOk = !!(f.email && f.email.includes('@')) && !f.emailBounced && !f.optedOut;
 
   /* ── per channel: available? and why ───────────────────────────────────────────────────────────── */
-  const whatsappOk = !phoneBlocked && p.ukMobile && wa !== 'not_on_whatsapp' && wa !== 'not_mobile';
+  const whatsappOk = !phoneBlocked && mobileOn('whatsapp') && wa !== 'not_on_whatsapp' && wa !== 'not_mobile';
   const whatsappProven = whatsappOk && (wa === 'verified' || f.whatsappWindowOpen === true);
   const waOption = option('whatsapp', whatsappOk,
     phoneBlocked ? 'They asked not to be contacted, or the number is marked wrong.'
       : !p.digits ? 'No usable phone number.'
       : wa === 'not_on_whatsapp' ? 'Meta rejected a message to this number — it is not on WhatsApp.'
-      : !p.ukMobile ? 'Not a UK mobile (cold WhatsApp is UK mobiles only).'
+      : p.abroad && !mk.whatsapp.has(p.abroad) ? offWords(p.abroad, 'WhatsApp')
+      : !p.ukMobile && !p.abroad ? 'Not a UK mobile (cold WhatsApp is UK mobiles only).'
       : f.whatsappWindowOpen ? 'They replied on WhatsApp — a free reply is open.'
       : wa === 'verified' ? 'WhatsApp is confirmed for this number (a message was delivered).'
       : 'A mobile — WhatsApp is not confirmed. You can try it, but it may not arrive.',
@@ -114,14 +131,16 @@ export function decideContactRoute(f: RoutingFacts, purpose: RoutePurpose = 'lin
 
   const smsGateOpen = f.smsAllowed === true;
   const coldOnly = !smsGateOpen && purpose === 'message' && f.coldTextOpen === true;
-  const smsOk = !phoneBlocked && p.ukMobile && f.smsConfigured !== false && (smsGateOpen || coldOnly);
+  const smsOk = !phoneBlocked && mobileOn('sms') && f.smsConfigured !== false && (smsGateOpen || coldOnly);
   const smsOption = option('sms', smsOk,
     phoneBlocked ? 'They asked not to be contacted, or the number is marked wrong.'
       : !p.digits ? 'No usable phone number.'
-      : !p.ukMobile ? 'SMS goes to UK mobiles only.'
+      : p.abroad && !mk.sms.has(p.abroad) ? offWords(p.abroad, 'SMS')
+      : !p.ukMobile && !p.abroad ? 'SMS goes to UK mobiles only.'
       : f.smsConfigured === false ? 'SMS is not set up yet.'
-      : coldOnly ? 'A UK mobile you have not texted yet: you can send the intro text. Free messages open once they reply.'
+      : coldOnly ? `A ${p.abroad ? MARKET_NAME[p.abroad] : 'UK'} mobile ${COLD_TEXT_REASON_MARK}: you can send the intro text. Free messages open once they reply.`
       : !smsGateOpen ? 'SMS opens once you have spoken to them (log the call) or they have messaged us.'
+      : p.abroad ? `A ${MARKET_NAME[p.abroad]} mobile — delivery depends on the local networks accepting our sender, and is only confirmed when the carrier says so.`
       : 'A UK mobile — a text usually arrives within seconds, but delivery is only confirmed when the carrier says so.',
     CHANNEL_COST_GBP.sms, f);
 
@@ -132,17 +151,18 @@ export function decideContactRoute(f: RoutingFacts, purpose: RoutePurpose = 'lin
       : 'An email address is on file.',
     CHANNEL_COST_GBP.email, f);
 
-  const callOk = !phoneBlocked && p.uk && f.voiceConfigured !== false;
+  const callOk = !phoneBlocked && ((p.uk && mk.call.has('UK')) || (!!p.callAbroad && mk.call.has(p.callAbroad))) && f.voiceConfigured !== false;
   const callOption = option('call', callOk,
     phoneBlocked ? 'They asked not to be contacted, or the number is marked wrong.'
-      : !p.uk ? 'No usable UK phone number to call.'
+      : p.callAbroad && !mk.call.has(p.callAbroad) ? offWords(p.callAbroad, 'Browser calling')
+      : !p.uk && !p.callAbroad ? 'No usable UK phone number to call.'
       : f.voiceConfigured === false ? 'Calling is not set up yet.'
       : 'Calls from your browser — nothing to install, not recorded.',
-    p.ukMobile ? CHANNEL_COST_GBP.call_mobile : CHANNEL_COST_GBP.call_landline, f);
+    p.ukMobile || p.abroad ? CHANNEL_COST_GBP.call_mobile : CHANNEL_COST_GBP.call_landline, f);
 
-  const appCallOk = !phoneBlocked && p.ukMobile && wa !== 'not_on_whatsapp';
+  const appCallOk = !phoneBlocked && (p.ukMobile || !!p.abroad) && wa !== 'not_on_whatsapp';
   const appCall = option('whatsapp_app_call', appCallOk,
-    appCallOk ? 'Free, from your own phone — only works if they have WhatsApp. Never used automatically.' : 'Needs a UK mobile that has WhatsApp.', 0, f);
+    appCallOk ? 'Free, from your own phone — only works if they have WhatsApp. Never used automatically.' : 'Needs a mobile that has WhatsApp.', 0, f);
 
   /* ── the recommendation, in priority order, per purpose ───────────────────────────────────────── */
   let order: RouteChannel[];

@@ -27,6 +27,35 @@
 const INDIA = new Set(['INDIA', 'IN']);
 const AUSTRALIA = new Set(['AUSTRALIA', 'AU']);
 
+/* ══ MALAYSIA AND SINGAPORE (2026-10-14, feat/my-sg-support) ═════════════════════════════════════════
+   Before this a Malaysian "012-345 6789" became 44 12345 6789 (a UK-shaped number nobody owns) and a
+   Singapore "9123 4567" became bare 91234567, which Meta reads as +91 (India). Now, for a lead in that country:
+     · Malaysia (+60): trunk 0 + 8-10 digits (mobiles 01x, landlines 03 / 04 / 05 / 06 / 07 / 08 / 09) → 60…;
+       a mobile typed without its 0 ("12 345 6789", a spreadsheet dropped it) → 60…; "60…" typed without "+"
+       stays; anything else → null.
+     · Singapore (+65): 8 digits starting 3 / 6 / 8 / 9 → 65…; "65…" typed without "+" stays; anything else → null.
+   A "+60" / "+65" / "0060" / "0065" number keeps its code on every lead, as every "+" number always has.
+   ⛔ Null, never bare digits: a bare national number is always another country's number to Meta. */
+const MALAYSIA = new Set(['MALAYSIA', 'MY']);
+const SINGAPORE = new Set(['SINGAPORE', 'SG']);
+
+/** Malaysia's national form (digits only) → 60… digits, or null. */
+export function malaysiaDigits(d: string): string | null {
+  if (/^600?1([02-9]\d{7}|1\d{8})$/.test(d)) return '60' + d.replace(/^600?/, '');    // 60 1x… (and "+60 (0)1x…")
+  if (/^600?[3-9]\d{7,8}$/.test(d)) return '60' + d.replace(/^600?/, ''); // 60 3… landlines
+  if (/^01([02-9]\d{7}|1\d{8})$/.test(d)) return '60' + d.slice(1);                    // 01x mobile
+  if (/^0[3-9]\d{7,8}$/.test(d)) return '60' + d.slice(1);                // 03… / 04… landline
+  if (/^1([02-9]\d{7}|1\d{8})$/.test(d)) return '60' + d;                              // a mobile with its 0 dropped
+  return null;
+}
+
+/** Singapore's national form (digits only) → 65… digits, or null. */
+export function singaporeDigits(d: string): string | null {
+  if (/^65[3689]\d{7}$/.test(d)) return d;
+  if (/^[3689]\d{7}$/.test(d)) return '65' + d;
+  return null;
+}
+
 export function toWhatsAppDigits(raw: string | null | undefined, country?: string | null): string | null {
   let s = (raw || '').replace(/[^\d+]/g, '');
   if (!s) return null;
@@ -35,6 +64,8 @@ export function toWhatsAppDigits(raw: string | null | undefined, country?: strin
   // generic 00 rule below, exactly as before.
   if (AUSTRALIA.has(cc) && s.startsWith('0011')) s = '+' + s.slice(4);
   if (s.startsWith('00')) s = '+' + s.slice(2);
+  if (MALAYSIA.has(cc) && s.startsWith('+60')) return malaysiaDigits(s.replace(/\D/g, ''));
+  if (SINGAPORE.has(cc) && s.startsWith('+65')) return singaporeDigits(s.replace(/\D/g, ''));
   if (s.startsWith('+')) return s.slice(1).replace(/\D/g, '') || null;
   if (INDIA.has(cc)) {
     const d = s.replace(/\D/g, '');
@@ -43,6 +74,8 @@ export function toWhatsAppDigits(raw: string | null | undefined, country?: strin
     if (/^0\d{10}$/.test(d)) return '91' + d.slice(1); // trunk 0 + 10 digits (mobile or STD landline)
     return d || null;                                  // anything else: best effort, as before
   }
+  if (MALAYSIA.has(cc)) return malaysiaDigits(s.replace(/\D/g, ''));
+  if (SINGAPORE.has(cc)) return singaporeDigits(s.replace(/\D/g, ''));
   if (AUSTRALIA.has(cc)) {
     const d = s.replace(/\D/g, '');
     if (/^61[23478]\d{8}$/.test(d)) return d;               // already 61 + a national number, typed without "+"

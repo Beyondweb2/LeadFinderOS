@@ -23,6 +23,8 @@ import { rivalHookDecision, templateNeedsRivals } from "../../../src/lib/rivalHo
 import { pitchEverSent } from "../_shared/auto-reply-rules.ts";
 import { isColdOutreachTemplate } from "../../../src/lib/coldOutreach.ts";
 import { isUkColdDestination, NOT_A_UK_MOBILE } from "../../../src/lib/ukColdDestination.ts";
+import { COUNTRY_OFF, channelOn, mobileMarketOf } from "../../../src/lib/outreachMarkets.ts";
+import { loadCountrySettings } from "../_shared/country-settings.ts";
 import { resolveOnboardingFollowupVars } from "../_shared/onboarding-followup.ts";
 import { createTemplateSnapshot } from "../../../src/lib/whatsappTemplateSnapshot.ts";
 import { canWorkLead, isClientLead, refusalBody, resolveActor } from "../_shared/access.ts";
@@ -427,7 +429,14 @@ Deno.serve(async (req) => {
       /* ⛔ COLD WHATSAPP IS UK-ONLY (2026-10-15, src/lib/ukColdDestination.ts). A cold template to a number that is not a
          UK mobile is refused, NOT overridable by allow_resend — it is a market rule, not a repeat-send confirm.
          Property of the digits we would send to; a continuation or a free-form reply never reaches this. */
-      if (isColdOutreachTemplate(templateName) && !isUkColdDestination(to)) {
+      /* 2026-10-14 (src/lib/outreachMarkets.ts): a Malaysia / Singapore mobile may take a cold template while its
+         country's WhatsApp switch is on; while it is off the answer is country_off. The UK rule is unchanged. */
+      const coldMarket = isColdOutreachTemplate(templateName) ? mobileMarketOf(to) : null;
+      if (coldMarket && coldMarket !== "UK" && !channelOn(await loadCountrySettings(service), coldMarket, "whatsapp")) {
+        return json({ ok: false, error: COUNTRY_OFF, template: templateName,
+          reason: "WhatsApp to this country is switched off, so nothing was sent. Paul can turn it on in the WhatsApp queue settings." }, 200);
+      }
+      if (isColdOutreachTemplate(templateName) && !isUkColdDestination(to) && !(coldMarket && coldMarket !== "UK")) {
         return json({ ok: false, error: NOT_A_UK_MOBILE, template: templateName,
           reason: "Cold WhatsApp outreach is UK only - this is not a UK mobile, so nothing was sent. Use a reply or a follow-up in an open conversation." }, 200);
       }

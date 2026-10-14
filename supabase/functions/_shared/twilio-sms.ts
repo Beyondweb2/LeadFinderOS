@@ -25,6 +25,8 @@ import { resolveSignupLinkVars } from "./link-template-vars.ts";
 import { smsGateOpen } from "../../../src/lib/contactRouting.ts";
 import { smsSize, CHANNEL_COST_GBP } from "../../../src/lib/channelCosts.ts";
 import { isUkColdDestination } from "../../../src/lib/ukColdDestination.ts";
+import { COUNTRY_OFF, channelOn, mobileMarketOf } from "../../../src/lib/outreachMarkets.ts";
+import { loadCountrySettings } from "./country-settings.ts";
 import { toWhatsAppDigits } from "../../../src/lib/waNumber.ts";
 import { leadAccess, type Actor } from "./access.ts";
 import { checkSuppressed } from "./suppression.ts";
@@ -78,9 +80,16 @@ export async function sendSmsToLead(service: Service, a: SendSmsArgs): Promise<S
   if (lErr || !lead) return fail("lookup_failed", "Could not read the lead.", 503);
   if (lead.is_archived === true) return fail("archived", "That lead is archived.", 409);
 
-  // 2. UK mobile only, from the lead's own stored number
+  // 2. a mobile in a country whose SMS switch is on (2026-10-14: UK as before; Malaysia / Singapore by
+  //    outreach_country_settings), from the lead's own stored number
   const digits = toWhatsAppDigits(lead.phone as string, (lead.country as string | null) ?? null);
-  if (!isUkColdDestination(digits)) {
+  const market = mobileMarketOf(digits);
+  if (market && market !== "UK" && !channelOn(await loadCountrySettings(service), market, "sms")) {
+    /* A real Malaysia / Singapore mobile while texts to that country are switched off: nothing is sent and NOTHING is
+       written on the lead — it is a mobile, never No SMS. */
+    return fail(COUNTRY_OFF, "Texts to this country are switched off. Paul can turn them on in the WhatsApp queue settings.");
+  }
+  if (!isUkColdDestination(digits) && !(market && market !== "UK")) {
     /* ⛔ A NUMBER THAT CAN NEVER BE A UK MOBILE is No SMS the moment we find out — before anything is queued or sent (the SMS twin of
        WhatsApp's "not on WhatsApp"). A landline (+44 151 …), a foreign number, junk: nothing leaves, and the lead says so. */
     await markLeadNoSms(service, lead.id as string);

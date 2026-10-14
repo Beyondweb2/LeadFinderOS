@@ -117,9 +117,14 @@ export const SMS_STATE_LABEL: Record<SmsDeliveryState, string> = {
 };
 
 /** STOP words that opt a number out (Twilio also enforces these at the carrier for long codes). */
-const STOP_WORDS = new Set(['stop', 'stopall', 'unsubscribe', 'cancel', 'end', 'quit', 'optout', 'opt-out', 'opt out']);
+const STOP_WORDS = new Set(['stop', 'stopall', 'unsubscribe', 'cancel', 'end', 'quit', 'optout', 'opt-out', 'opt out',
+  /* 2026-10-14 (Malaysia / Singapore): the common Malay and Chinese ways of saying stop, as the WHOLE message. A STOP
+     inside a sentence is the WhatsApp triage's job (src/lib/replyTriage.ts OPT_OUT), which has the same words. */
+  'berhenti', 'henti', 'hentikan', 'jangan hantar', 'jangan hantar lagi', 'tolong berhenti', 'stop hantar',
+  '停止', '停', '退订', '退訂', '取消订阅', '取消訂閱', '不要再发', '不要再發', '不要发', '不要發', '别再发', '別再發']);
 export function isStopMessage(body: string | null | undefined): boolean {
-  return STOP_WORDS.has(String(body ?? '').trim().toLowerCase().replace(/[.!]+$/, ''));
+  // ASCII and full-width end punctuation (。！) are dropped; spaces collapse ("jangan  hantar").
+  return STOP_WORDS.has(String(body ?? '').trim().toLowerCase().replace(/\s+/g, ' ').replace(/[.!。！]+$/u, ''));
 }
 
 /* ── THE SMS QUEUE'S SCHEDULE (2026-10-09) — pure, shared by the drip and the panel ───────────────────────────
@@ -157,7 +162,8 @@ export const SMS_QUEUE_SKIP_WORDS: Readonly<Record<string, string>> = {
   in_whatsapp_conversation: 'already in a WhatsApp conversation',
   whatsapp_failed: 'already tried on WhatsApp (the send failed)',
   not_new: 'already past the start (not a first text)',
-  no_phone: 'no mobile (no phone number)', not_a_uk_mobile: 'no mobile (landline, or not a UK mobile)',
+  no_phone: 'no mobile (no phone number)', not_a_uk_mobile: 'no mobile (landline, or not a UK / Malaysia / Singapore mobile)',
+  country_off: 'a Malaysia / Singapore mobile, but texts to that country are switched off for now',
   opted_out: 'asked not to be contacted', already_texted: 'already texted before',
   contacted_by_phone: 'already spoken to by phone', contacted_logged: 'already in a logged conversation',
   over_cap: 'over the limit for one go (queue them next time)',

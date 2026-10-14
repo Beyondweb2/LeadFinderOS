@@ -20,6 +20,9 @@ import {
 import { LINK_READY_FALLBACK, type LinkRoute } from '@/lib/paymentLinkRoute';
 import { FINDABLE_SETUP_PRICE_GBP, SERVICE_ROUTE_NAME, totalPaymentsFor, type ServiceRoute } from '@/lib/findableOffer';
 import { cn } from '@/lib/utils';
+import { usePriceModel } from '@/hooks/usePriceModel';
+import { PriceModelSwitch } from '@/components/PriceModelSwitch';
+import { PRICE_MODEL_GUARANTEE, priceModelLinkRefusal, upfrontSpoken } from '@/lib/priceModel';
 import { ClosePanel } from '@/components/ClosePanel';
 import { CustomerEmailControl } from '@/components/CustomerEmailControl';
 import { SmsLinkSend } from '@/components/SmsLinkSend';
@@ -278,6 +281,11 @@ export function QuickClosePanel({ leadId, active = true, framed = false }: { lea
   /* A link that already stands is never hidden by the new step; a NEW link needs what they offer and where (server: call_notes_missing). */
   const showNotes = !!v && v.canEdit && !notesDone && !step && answers.decision_maker !== 'no' && v.state !== 'link_generated' && v.state !== 'paid' && (current === 'route' || (current === null && !!route));
   const closing = !!v && v.canEdit && !!route && (notesDone || v.state === 'link_generated') && (v.state === 'ready' || v.state === 'link_generated' || v.state === 'link_expired');
+  /* THE PRICE MODEL (2026-10-14, src/lib/priceModel.ts): the terms said here follow the person's model. A model whose payment
+     is not live gets no new link — the button is off and says why (the server refuses it too: quick-close price_model_not_live). */
+  const { model: priceModel } = usePriceModel();
+  const modelRefusal = priceModelLinkRefusal(priceModel);
+  const upfront = priceModel === 'upfront_499' ? upfrontSpoken() : null;
   const usableUrl = v?.link?.usable ? v.link.url : null;
   const greetName = v?.onboarding?.contact_name || v?.lead.contact_name || null;
   const currentQ = current ? QUICK_CLOSE_QUESTIONS.find((x) => x.key === current)! : null;
@@ -431,11 +439,12 @@ export function QuickClosePanel({ leadId, active = true, framed = false }: { lea
           {v && route && v.state !== 'paid' && v.state !== 'blocked' && (
             <section aria-live="polite" className={cn('min-w-0', PANEL, EDGE.blue)} data-testid="qc-route-terms">
               <p className="flex items-center gap-2 text-sm font-bold tracking-tight"><IconTile icon={PoundSterling} tone="blue" size="sm" />{SERVICE_ROUTE_NAME[route]}</p>
-              <ul className="mt-2 space-y-0.5 text-sm">{routeTermsLines(route).map((l, i) => <li key={l} className={cn(i === 2 && 'font-semibold')}>{l}</li>)}</ul>
+              <div className="mt-2"><PriceModelSwitch compact /></div>
+              <ul className="mt-2 space-y-0.5 text-sm" data-testid="qc-terms" data-model={priceModel}>{(upfront ? upfront.terms : routeTermsLines(route)).map((l, i) => <li key={l} className={cn(i === 2 && 'font-semibold')}>{l}</li>)}</ul>
               <p className="mt-1.5 text-sm">{routeOwnershipLine(route)}</p>
               <div className="mt-2.5 rounded-xl bg-muted/30 p-2.5 text-sm ring-1 ring-inset ring-border/60" data-testid="qc-guarantee">
-                <p className="flex items-center gap-1.5 font-semibold"><ShieldCheck className={cn('h-4 w-4 shrink-0', EMPHASIS_TEXT)} />{QUICK_CLOSE_GUARANTEE_LINES[0]}</p>
-                <p className="mt-0.5 text-xs text-muted-foreground">{QUICK_CLOSE_GUARANTEE_LINES[1]}</p>
+                <p className="flex items-center gap-1.5 font-semibold"><ShieldCheck className={cn('h-4 w-4 shrink-0', EMPHASIS_TEXT)} />{upfront ? PRICE_MODEL_GUARANTEE : QUICK_CLOSE_GUARANTEE_LINES[0]}</p>
+                {!upfront && <p className="mt-0.5 text-xs text-muted-foreground">{QUICK_CLOSE_GUARANTEE_LINES[1]}</p>}
               </div>
               <p className="mt-2 text-xs text-muted-foreground">{QUICK_CLOSE_AGREEMENT_LINE} After payment: {QUICK_CLOSE_AFTER_PAYMENT[0]} {QUICK_CLOSE_AFTER_PAYMENT[1]}</p>
               <p className="mt-1 text-[11px] text-muted-foreground">Say the minimum term out loud before you send the link. Set by the offer — the price, the number of payments and the timing cannot be changed here.</p>
@@ -454,7 +463,8 @@ export function QuickClosePanel({ leadId, active = true, framed = false }: { lea
                           The link made {hhmm(v.link?.generated_at)} is no longer usable and must not be sent. Make a fresh agreement & payment link — any old payment page is closed.
                         </p>
                       )}
-                      <Button className={MONEY_CTA} onClick={() => void generate()} disabled={!!busy}>
+                      {modelRefusal && <p className={cn('flex items-start gap-1.5 rounded-xl px-2.5 py-2 text-xs', TONE.amber.tint, TONE.amber.text)} data-testid="qc-model-not-live"><AlertTriangle className="mt-px h-3.5 w-3.5 shrink-0" />{modelRefusal}</p>}
+                      <Button className={MONEY_CTA} onClick={() => void generate()} disabled={!!busy || !!modelRefusal}>
                         {busy === 'link' ? <Loader2 className="h-5 w-5 animate-spin" /> : v.state === 'link_expired' ? <RefreshCw className="h-5 w-5" /> : <PoundSterling className="h-5 w-5" />}
                         {v.state === 'link_expired' ? 'Make a fresh agreement & payment link' : 'Create agreement & payment link'}
                       </Button>

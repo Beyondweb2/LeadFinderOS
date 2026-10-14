@@ -7,6 +7,9 @@ import { WHATSAPP_TEMPLATES, type OutreachLead } from '@/types/outreach';
 import { TemplatePreviewButton, TemplateSnippet } from '@/components/TemplateWordingPreview';
 import { RequestTemplateButton } from '@/components/RequestTemplateButton';
 import { classifyLineType } from '@/lib/lineType';
+import { coldWhatsAppVerdict } from '@/lib/coldWhatsAppEligibility';
+import { COUNTRY_OFF, marketsOn } from '@/lib/outreachMarkets';
+import { useCountrySettings } from '@/hooks/useCountrySettings';
 import { isInitialOpener } from '@/lib/openerVariant';
 import { getTemplateSendability } from '@/lib/whatsappTemplates';
 import { useLeadPermissions } from '@/hooks/useLeadPermissions';
@@ -36,6 +39,7 @@ export function WhatsAppLeadControls({
 }) {
   const [busy, setBusy] = useState(false);
   const { toast } = useToast();
+  const { settings: countrySettings } = useCountrySettings();
   /* ⛔ SAME CONTROL, BOTH ROLES (2026-09-27). The admin stores the template on the lead and queues it
      directly, as before. A salesperson cannot write the lead row: they choose the opener here and
      sales_queue_opener stores THAT template and queues it, with the same never-contacted, UK-mobile,
@@ -103,6 +107,15 @@ export function WhatsAppLeadControls({
           if (chkErr || !res?.ok) { toast({ title: 'Not queued', description: 'Could not check the contact history, so nothing was queued.', variant: 'destructive' }); return; }
           const block = res.conversation?.[lead.id];
           if (block) { toast({ title: 'Not queued', description: (QUEUE_SKIP_LABEL[block] ?? QUEUE_SKIP_LABEL.contacted_by_phone).replace(/^./, (c) => c.toUpperCase()) + '.', variant: 'destructive' }); return; }
+        }
+        /* 2026-10-14: a Malaysia / Singapore mobile while WhatsApp to that country is switched off is not queued — and is
+           never flagged No mobile (it is a mobile). src/lib/outreachMarkets.ts. */
+        if (isColdOutreachTemplate(template)) {
+          const v = coldWhatsAppVerdict(lead.phone, lead.country, marketsOn(countrySettings, 'whatsapp'));
+          if (v.eligible === false && v.reason === COUNTRY_OFF) {
+            toast({ title: 'Not queued', description: 'WhatsApp to this country is switched off. Paul can turn it on in the WhatsApp queue settings.', variant: 'destructive' });
+            return;
+          }
         }
         const { lineType, whatsappEligible } = classifyLineType(lead.phone, lead.country);
         if (!whatsappEligible) {
