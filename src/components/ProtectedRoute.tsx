@@ -2,6 +2,7 @@ import { ReactNode, useEffect, useMemo } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { Loader2 } from 'lucide-react';
+import { mustChangePassword } from '@/lib/teamAccounts';
 
 interface ProtectedRouteProps {
   children: ReactNode;
@@ -45,6 +46,12 @@ export function ProtectedRoute({ children, redirectTo = "/auth" }: ProtectedRout
 
   if (!user) {
     return <Navigate to={redirectTo} replace />;
+  }
+
+  /* FIRST LOGIN WITH A TEMPORARY PASSWORD (2026-10-14): an admin-made account with the change switched on sees
+     nothing until they choose their own password. /set-password is outside this guard, so this cannot loop. */
+  if (mustChangePassword(user)) {
+    return <Navigate to="/set-password" replace />;
   }
 
   return <>{children}</>;

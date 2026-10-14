@@ -35,6 +35,9 @@ import { STRONG_STATUSES, postgrestList } from "../../../src/lib/strongStatuses.
 import { QA_REFUSAL_REASON } from "../../../src/lib/qaSafety.ts";
 import { qaSendHold } from "../_shared/qa-guard.ts";
 import { templateAvailability } from "../_shared/template-status.ts";
+import { formatVisibilityScore, REPORT_OFFER_REFUSAL_WORDS, REPORT_OFFER_TEMPLATE, reportOfferRefusal, ukWordedTemplateRefusal } from "../../../src/lib/reportOfferTemplate.ts";
+import { mobileMarketOf } from "../../../src/lib/outreachMarkets.ts";
+import { senderMessageName } from "../_shared/sender-name.ts";
 import { resolveOnboardingFormVars, resolveSignupLinkVars } from "../_shared/link-template-vars.ts";
 import { LINK_TEMPLATE_NAMES, SIGNUP_LINK_TEMPLATE_NAME, TEMPLATE_UNAVAILABLE_CODES, templateSendFailureText, templateSendState } from "../../../src/lib/whatsappLinkTemplates.ts";
 
@@ -91,7 +94,7 @@ const CAPABILITIES = ["dry_run", "build_phase_hold", "routing_leaf", "any_approv
    gone; the capability reads any_approved_opener).
    2026-09-30b: an explicit opt-out refuses MARKETING templates here too (src/lib/marketingConsent.ts).
    2026-10-04a: QA safety — a QA fixture is simulated, a test-account lead is refused (src/lib/qaSafety.ts). */
-const BUILD_ID = "2026-10-14t-texted-guard";
+const BUILD_ID = "2026-10-14u-report-offer";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -364,6 +367,9 @@ Deno.serve(async (req) => {
        request — every branch below (window, payload, simulated record, response) then behaves exactly
        as it does with WHATSAPP_TEST_MODE on, and nothing reaches Meta. A real lead held by a test
        account, or a send pressed by one, is refused. A failed read throws (500) — fail closed. */
+    /* ⛔ THE FOUR UK-WORDED TEMPLATES NEVER GO OUTSIDE THE UK (2026-10-14, src/lib/reportOfferTemplate.ts). */
+    const ukWorded = templateName ? ukWordedTemplateRefusal(templateName, mobileMarketOf(to)) : null;
+    if (ukWorded) return json({ ok: false, error: "uk_template_wrong_country", reason: ukWorded }, 200);
     const qa = await qaSendHold(service, { leadId: resolvedLeadId, to, actorUserId: actor.id });
     if (qa.kind === "refuse") return json({ ok: false, error: "qa_test_account", reason: QA_REFUSAL_REASON }, 200);
     const liveEnv = resolveWhatsAppEnv();
@@ -701,6 +707,19 @@ Deno.serve(async (req) => {
            about what this message said to messages that never said it — and the whole point of the
            column is to be able to trust it later. Same condition as the variable itself. */
         if (tvars.includes("site_findings")) findingsShown = a.siteFindingsKinds ?? null;
+        /* ai_visibility_report_offer (2026-10-14): {{4}} the check's score, {{6}} the PERSON PRESSING SEND's own message
+           name (never anyone else's). Every missing piece refuses with the template's own words, before Meta. */
+        if (tvars.includes("visibility_score")) auditExtra.visibilityScore = formatVisibilityScore(a.visibilityPct);
+        if (tvars.includes("sender_name")) auditExtra.senderName = await senderMessageName(service, operatorId);
+        if (templateName === REPORT_OFFER_TEMPLATE) {
+          const refusal = reportOfferRefusal({ hasAudit: true, competitors: a.competitors, score: String(auditExtra.visibilityScore ?? ""), link: a.link, namedInAnswers: false })
+            ?? (auditExtra.senderName ? null : "no_sender");
+          if (refusal) return json({ ok: false, error: "report_offer_" + refusal, reason: REPORT_OFFER_REFUSAL_WORDS[refusal] }, 200);
+          const avail = await templateAvailability(service, templateName);
+          if (["PENDING", "IN_APPEAL", "REJECTED", "PAUSED", "DISABLED", "LIMIT_EXCEEDED", "NOT_FOUND"].includes(avail.status)) {
+            return json({ ok: false, error: "template_" + avail.status.toLowerCase(), reason: "Meta says this template is " + avail.status.toLowerCase().replace("_", " ") + " — nothing was sent." }, 200);
+          }
+        }
         /* ⛔ THE SAME TRADE/TOWN HOLD AS THE QUEUE (2026-09-12), and it matters MORE here because
            this is the manual path: the operator pressed send and is owed an answer. A plural trade
            or a town like "Bourne uk" would render "for a Locksmiths in Bourne uk" to a prospect, so
@@ -720,7 +739,7 @@ Deno.serve(async (req) => {
         }
         auditBusinessName = a.business;
         auditClaimUrl = a.link;
-        storedBody = renderTemplateBody(templateName, a.business, a.link, a.trade, a.competitors, undefined, a.town, a.siteFault ?? undefined, a.siteFindings ?? undefined);
+        storedBody = renderTemplateBody(templateName, a.business, a.link, a.trade, a.competitors, undefined, a.town, a.siteFault ?? undefined, a.siteFindings ?? undefined, (auditExtra.visibilityScore as string | undefined), (auditExtra.senderName as string | undefined));
       } else {
         /* ⛔ contact_followup — a MANUAL follow-up, so ONE PER LEAD, NO OVERRIDE. It is a ["name"]
            template and would otherwise fall through this opener branch with no history guard at all

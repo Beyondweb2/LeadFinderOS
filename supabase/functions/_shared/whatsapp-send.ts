@@ -12,6 +12,7 @@ import { STALE_OFFER_TEMPLATES } from "../../../src/lib/findableOffer.ts";
 import { isOnboardingFormUrl, isSignupTemplateLinkUrl, onboardingTemplateBody, signupLinkTemplateBody } from "../../../src/lib/whatsappLinkTemplates.ts";
 
 import { toWhatsAppDigits } from "../../../src/lib/waNumber.ts";
+import { REPORT_OFFER_NO_NAME, REPORT_OFFER_TEMPLATE, reportOfferBody } from "../../../src/lib/reportOfferTemplate.ts";
 
 export const GRAPH_VERSION = "v21.0";
 
@@ -49,7 +50,10 @@ export type TemplateVar = "name" | "url" | "trade" | "trade_plural" | "trade_art
   /* 2026-10-07 — the two link templates (src/lib/whatsappLinkTemplates.ts): {{1}} the greeting name, {{2}} the
      prospect's SIGN-UP link or the paid client's ONBOARDING-FORM link, both resolved server-side by
      _shared/link-template-vars.ts and shape-checked here (never a Stripe URL). */
-  | "greeting_name" | "signup_url" | "onboarding_form_url";
+  | "greeting_name" | "signup_url" | "onboarding_form_url"
+  /* 2026-10-14 — ai_visibility_report_offer (src/lib/reportOfferTemplate.ts): {{1}} the business name or "there",
+     {{4}} the check's visibility score ("66%"), {{6}} the SENDING person's own message name (_shared/sender-name.ts). */
+  | "name_or_there" | "visibility_score" | "sender_name";
 
 /* ⛔ THE VIDEO HEADER'S URL, IN ONE PLACE (Paul, 2026-09-12).
    `video_template` is registered at Meta with a VIDEO header, which means the send MUST carry a
@@ -302,6 +306,11 @@ export const WA_TEMPLATES: Record<string, { lang: string; vars: TemplateVar[]; h
      findable_onboarding:  {{1}} greeting name, {{2}} the paid client's findable.live/details/<token> link. */
   findable_signup_link: { lang: "en", vars: ["greeting_name", "signup_url"] },
   findable_onboarding: { lang: "en", vars: ["greeting_name", "onboarding_form_url"] },
+  /* ⛔ ai_visibility_report_offer — SUBMITTED TO META 2026-10-14 (Marketing, English), wired in as approved (Paul). The
+     rules, the six variables and what refuses it live in src/lib/reportOfferTemplate.ts. COLD (not in
+     CONTINUATION_TEMPLATES): the phone-history seatbelt applies. Queue-sent; the drip reads Meta's live status first.
+     MIRRORS process-whatsapp-queue; change both together. */
+  ai_visibility_report_offer: { lang: "en", vars: ["name_or_there", "town", "competitors", "visibility_score", "audit_url", "sender_name"] },
 };
 export const WA_DEFAULT_TEMPLATE = "booking_page_intro";
 
@@ -742,7 +751,7 @@ const auditReplyWarmBody = (_b: string, u: string, trade?: string, _c?: string, 
 Here's your result: ${u}
 More on how we can fix it, and how to get started: https://findable.live`;
 
-export const WA_TEMPLATE_BODIES: Record<string, (businessName: string, claimUrl: string, trade?: string, competitors?: string, contactFirstName?: string, town?: string, siteFault?: string, siteFindings?: string) => string> = {
+export const WA_TEMPLATE_BODIES: Record<string, (businessName: string, claimUrl: string, trade?: string, competitors?: string, contactFirstName?: string, town?: string, siteFault?: string, siteFindings?: string, visibilityScore?: string, senderName?: string) => string> = {
   book_call: bookCallBody,
   re_engage: reEngageBody,
   re_engage_49: reEngage49Body,
@@ -781,11 +790,14 @@ export const WA_TEMPLATE_BODIES: Record<string, (businessName: string, claimUrl:
   /* The registered wording (whatsappLinkTemplates.ts); b = {{1}} the greeting name, u = {{2}} the link. */
   findable_signup_link: (b, u) => signupLinkTemplateBody(b, u),
   findable_onboarding: (b, u) => onboardingTemplateBody(b, u),
+  /* b = the business name (greeting form), u = {{5}} the report link; the score and the sender ride the last two slots. */
+  ai_visibility_report_offer: (b, u, _t, competitors, _first, town, _sf, _sfi, score, sender) =>
+    reportOfferBody({ name: b, town: town ?? "", competitors: competitors ?? "", score: score ?? "", link: u, sender: sender ?? "" }),
 };
 
 /** Render the display copy of a template body with its variables filled. `trade`/`competitors`
  *  are used only by audit_reply; the other (2-var) bodies ignore them. */
-export function renderTemplateBody(templateName: string, businessName: string, claimUrl: string, trade?: string, competitors?: string, contactFirstName?: string, town?: string, siteFault?: string, siteFindings?: string): string {
+export function renderTemplateBody(templateName: string, businessName: string, claimUrl: string, trade?: string, competitors?: string, contactFirstName?: string, town?: string, siteFault?: string, siteFindings?: string, visibilityScore?: string, senderName?: string): string {
   const fn = WA_TEMPLATE_BODIES[templateName];
   if (templateName === "audit_followup_fault" && !siteFault?.trim()) {
     throw new Error("unsafe_template_var:no_site_fault:the crawl check found no fault to name — use the call version");
@@ -814,7 +826,7 @@ export function renderTemplateBody(templateName: string, businessName: string, c
      single slot fed ai_site_findings_v2's findings to audit_followup_fault's body, because "whichever
      value is defined" is not the same question as "which variable does THIS template declare". Each
      body now reads its own argument and ignores the other, which is the property that cannot drift. */
-  return fn ? fn(businessName, claimUrl, trade, competitors, contactFirstName, town, siteFault?.trim(), siteFindings?.trim()) : `[${templateName}]`;
+  return fn ? fn(businessName, claimUrl, trade, competitors, contactFirstName, town, siteFault?.trim(), siteFindings?.trim(), visibilityScore?.trim(), senderName?.trim()) : `[${templateName}]`;
 }
 
 /** Body params for a template, filled STRICTLY in the template's declared `vars`
@@ -826,7 +838,7 @@ export function templateBodyParams(
   vars: TemplateVar[],
   businessName: string,
   claimUrl: string,
-  extra?: { trade?: string; competitors?: string; rivals?: string[]; onboardingUrl?: string; templateName?: string; contactName?: string; town?: string; auditUrl?: string; siteFault?: string; siteFindings?: string; greetingName?: string; signupUrl?: string; onboardingFormUrl?: string },
+  extra?: { trade?: string; competitors?: string; rivals?: string[]; onboardingUrl?: string; templateName?: string; contactName?: string; town?: string; auditUrl?: string; siteFault?: string; siteFindings?: string; greetingName?: string; signupUrl?: string; onboardingFormUrl?: string; visibilityScore?: string; senderName?: string },
 ) {
   /* Last line of defence for a template whose copy needs a real name. Callers check first and
      return a readable refusal; this throws so a new caller that forgets cannot quietly send
@@ -849,7 +861,27 @@ export function templateBodyParams(
         if (!t.ok) throw new Error(`unsafe_template_var:${t.reason}:${t.detail}`);
         return t.value;
       }
-      case "competitors": return extra?.competitors ?? "";
+      /* ⛔ ai_visibility_report_offer says "it mentioned {{3}} but not you" — an empty list is a false message, so it
+         throws (every other template that sends the joined list is refused upstream on an empty one already). */
+      case "competitors": {
+        const c = (extra?.competitors ?? "").trim();
+        if (!c && extra?.templateName === REPORT_OFFER_TEMPLATE) throw new Error("unsafe_template_var:no_competitors:the AI check named no competitors");
+        return extra?.competitors ?? "";
+      }
+      /* ai_visibility_report_offer {{1}}: the greeting form of the business name, or "there". */
+      case "name_or_there": return displayBusinessName(businessName, { town: extra?.town, style: "greet" }) || REPORT_OFFER_NO_NAME;
+      /* {{4}}: "66%" — resolved from the check (reportOfferTemplate.formatVisibilityScore). Blank is a false message: throw. */
+      case "visibility_score": {
+        const s = (extra?.visibilityScore ?? "").trim();
+        if (!/^\d{1,3}%$/.test(s)) throw new Error("unsafe_template_var:no_score:the AI check has no visibility score");
+        return s;
+      }
+      /* {{6}}: the SENDING person's own message name (_shared/sender-name.ts). Never a default, never another person. */
+      case "sender_name": {
+        const n = (extra?.senderName ?? "").trim();
+        if (!n) throw new Error("unsafe_template_var:no_sender:no sender name for this message");
+        return n;
+      }
       /* ⛔ THE PLURAL SLOT. competitor_hook's body is "find {{2}} in your area" — no article — so it
          wants "plumbers", not "plumber". pluraliseTrade blocks the same unusable values
          normaliseTrade blocks (digits, multi-clause lists, uncountable activity nouns) and does NOT
@@ -1041,7 +1073,7 @@ export function claimTemplatePayload(
   lang: string,
   businessName: string,
   claimUrl: string,
-  extra?: { trade?: string; competitors?: string; rivals?: string[]; onboardingUrl?: string; contactName?: string; town?: string; auditUrl?: string; siteFault?: string; siteFindings?: string; greetingName?: string; signupUrl?: string; onboardingFormUrl?: string },
+  extra?: { trade?: string; competitors?: string; rivals?: string[]; onboardingUrl?: string; contactName?: string; town?: string; auditUrl?: string; siteFault?: string; siteFindings?: string; greetingName?: string; signupUrl?: string; onboardingFormUrl?: string; visibilityScore?: string; senderName?: string },
 ) {
   /* THROWS on an unrecognised template rather than assuming ["name","url"].
      That assumption was a quieter version of the queue's template fallback: an unregistered name got

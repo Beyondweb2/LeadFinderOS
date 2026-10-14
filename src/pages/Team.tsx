@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Copy, FileText, Link2, Loader2, Scale, ShieldCheck, UserPlus, Users } from 'lucide-react';
+import { Copy, FileText, Link2, Scale, ShieldCheck, UserPlus, Users } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -18,11 +18,15 @@ import { OnboardingBadge, SalespersonDocumentsCard, SalespersonOnboardingPanel }
 import { AttributionReviewsCard } from '@/components/AttributionReviews';
 import type { AttributionPerson, AttributionReview } from '@/lib/attributionReviewView';
 import { activationPending, RESEND_ERRORS } from '@/lib/teamActivation';
+import { trialOnboardingView } from '@/lib/teamAccounts';
+import { Switch } from '@/components/ui/switch';
+import { AddTeamMember } from '@/components/team/AddTeamMember';
 import { ONBOARDING_SAVE_ERRORS, onboardingSummary, type DocumentVersion, type OnboardingRecord } from '@/lib/salespersonOnboarding';
 
 /* TEAM — admin only (multi-user, 2026-09-27). The route is admin-only in src/lib/access.ts, and every
- * action below goes to admin-users, which refuses anyone without the admin role. No password is ever
- * seen here: an invite produces a one-time link the admin sends; the salesperson sets their own. */
+ * action below goes to admin-users, which refuses anyone without the admin role. Two ways to add someone
+ * (2026-10-14, AddTeamMember): a temporary password shown to the admin ONCE (never stored or logged), or a
+ * one-time invite link the admin sends; either way the salesperson ends up choosing their own. */
 
 interface Member {
   user_id: string; display_name: string; status: 'active' | 'disabled'; is_book_owner: boolean; role: 'admin' | 'sales' | null;
@@ -33,6 +37,8 @@ interface Member {
   suspended_at?: string | null;
   /** When Disable ended their engagement (the commission end date). Null while active. */
   disabled_at?: string | null;
+  /** 2026-10-14 (app_metadata): Trial team member (hides the onboarding checklist), the first-login change still owed, made with a temporary password. */
+  trial?: boolean; must_change_password?: boolean; temp_password?: boolean;
 }
 
 async function call(action: string, body: Record<string, unknown> = {}) {
@@ -55,9 +61,10 @@ const ERR: Record<string, string> = {
   cannot_change_admin: 'An admin cannot be disabled here.',
   not_ready_to_sell: 'That salesperson\'s sales access is not active (suspended, ended or login off), so leads cannot be moved to them.',
   not_an_active_member: 'Pick an active team member.',
+  not_a_salesperson: 'Only a salesperson can be a trial team member.',
 };
 
-function LinkBox({ link, onClose, title = 'Invite link ready', blurb = 'Send this link to them yourself (WhatsApp or email). It works once, and they choose their own password.' }: { link: string; onClose: () => void; title?: string; blurb?: string }) {
+function LinkBox({ link, onClose, title = 'Invite link ready', blurb = 'Send this link to them yourself (WhatsApp or email). They open it, press Continue and choose their own password. It works once.' }: { link: string; onClose: () => void; title?: string; blurb?: string }) {
   const { toast } = useToast();
   return (
     <Callout tone="blue" icon={Link2} title={title}>
@@ -84,10 +91,6 @@ export default function Team() {
       return (r.team ?? []) as Member[];
     },
   });
-  const [name, setName] = useState('');
-  const [email, setEmail] = useState('');
-  const [busy, setBusy] = useState(false);
-  const [link, setLink] = useState<string | null>(null);
   /* The recovery link for ONE row: shown under that row (not up by the invite form), so the admin sees it where they clicked. */
   const [rowLink, setRowLink] = useState<{ userId: string; name: string; pending: boolean; link: string } | null>(null);
   const [moveTo, setMoveTo] = useState<Record<string, string>>({});
@@ -128,16 +131,6 @@ export default function Team() {
   const refresh = () => qc.invalidateQueries({ queryKey: ['team'] });
   const fail = (r: Record<string, unknown>) => toast({ title: 'Not done', description: ERR[String(r.error)] ?? String(r.error ?? 'Try again'), variant: 'destructive' });
 
-  const invite = async () => {
-    setBusy(true);
-    try {
-      const r = await call('team_invite', { name: name.trim(), email: email.trim() });
-      if (!r.ok) { fail(r); return; }
-      setLink(String(r.link ?? ''));
-      setName(''); setEmail('');
-      void refresh();
-    } finally { setBusy(false); }
-  };
 
   const members = team.data ?? [];
   const active = members.filter((m) => m.status === 'active' && m.role);
@@ -157,15 +150,8 @@ export default function Team() {
         {onboarding.error && <Callout tone="red">Onboarding records could not be loaded: {String((onboarding.error as Error).message)}</Callout>}
       </div>
 
-      <Panel title="Invite a salesperson" icon={UserPlus} tone="blue">
-        <div className="space-y-3">
-          <div className="flex flex-wrap gap-2">
-            <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Name" className="h-9 w-full sm:w-48" />
-            <Input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email" type="email" className="h-9 w-full sm:w-64" />
-            <Button className="w-full sm:w-auto" disabled={busy || !name.trim() || !email.trim()} onClick={() => void invite()}>{busy ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Create invite link'}</Button>
-          </div>
-          {link && <LinkBox link={link} onClose={() => setLink(null)} />}
-        </div>
+      <Panel title="Add a team member" icon={UserPlus} tone="blue">
+        <AddTeamMember call={call} onDone={() => void refresh()} inviteLinkBox={(l, close) => <LinkBox link={l} onClose={close} />} />
       </Panel>
 
       <Panel title="Team members" icon={Users} tone="blue">
@@ -193,16 +179,36 @@ export default function Team() {
                 </div>
                 <div className="flex flex-wrap items-center gap-1.5">
                 <ToneChip tone={m.status === 'active' ? 'blue' : 'grey'} dot>{m.status === 'active' ? (m.role ?? 'no role') : m.disabled_at ? `ended ${new Date(m.disabled_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'Europe/London' })}` : 'ended'}</ToneChip>
-                {m.status === 'active' && m.role === 'sales' && activationPending(m.password_set) && <ToneChip tone="amber" dot>activation pending</ToneChip>}
+                {m.status === 'active' && m.role === 'sales' && activationPending(m.password_set) && <ToneChip tone="amber" dot>{m.temp_password ? 'temporary password · not signed in yet' : 'activation pending'}</ToneChip>}
+                {m.status === 'active' && m.must_change_password && !activationPending(m.password_set) && <ToneChip tone="amber" dot>must choose a new password</ToneChip>}
                 {m.status === 'active' && m.suspended_at && <ToneChip tone="red" dot title={`Suspended ${new Date(m.suspended_at).toLocaleString('en-GB', { timeZone: 'Europe/London' })}`}>suspended</ToneChip>}
-                {m.role !== 'admin' && !m.is_book_owner && onboarding.data && (
-                  <button type="button" className="inline-flex min-h-[28px] items-center rounded-full" onClick={() => setOpenOnboarding((o) => (o === m.user_id ? null : m.user_id))} aria-expanded={openOnboarding === m.user_id}>
-                    <OnboardingBadge summary={onboardingSummary(onboarding.data.rows.get(m.user_id) ?? null, m, onboarding.data.documents, undefined, onboarding.data.missing[m.user_id] ?? null)} />
-                  </button>
-                )}
+                {m.role !== 'admin' && !m.is_book_owner && onboarding.data && (() => {
+                  const summary = onboardingSummary(onboarding.data.rows.get(m.user_id) ?? null, m, onboarding.data.documents, undefined, onboarding.data.missing[m.user_id] ?? null);
+                  /* ⛔ TRIAL TEAM MEMBER (2026-10-14): the checklist is hidden, never deleted; "can sell" is the same
+                     server answer as everyone's (the checklist never blocked selling). */
+                  const tv = trialOnboardingView(m.trial === true, summary.readyToSell, summary.inactiveReason);
+                  if (!tv.showChecklist) return <ToneChip tone={tv.tone} dot testId="trial-chip">{tv.label}</ToneChip>;
+                  return (
+                    <button type="button" className="inline-flex min-h-[28px] items-center rounded-full" onClick={() => setOpenOnboarding((o) => (o === m.user_id ? null : m.user_id))} aria-expanded={openOnboarding === m.user_id}>
+                      <OnboardingBadge summary={summary} />
+                    </button>
+                  );
+                })()}
                 </div>
                 {m.role !== 'admin' && !m.is_book_owner && (
                   <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
+                    {m.role === 'sales' && (
+                      <label className="inline-flex min-h-[32px] items-center gap-2 rounded-lg border border-border/60 px-2 text-xs font-medium">
+                        <Switch checked={m.trial === true} aria-label="Trial team member" data-testid="trial-switch" onCheckedChange={async (v) => {
+                          const r = await call('team_set_trial', { user_id: m.user_id, trial: v });
+                          if (!r.ok) { fail(r); return; }
+                          toast({ title: v ? `${m.display_name} is a trial team member` : `${m.display_name} is no longer a trial team member`, description: v ? 'Their onboarding checklist is hidden. Nothing in it was changed.' : 'Their onboarding checklist is shown again, exactly as it was.' });
+                          if (v && openOnboarding === m.user_id) setOpenOnboarding(null);
+                          void refresh();
+                        }} />
+                        Trial team member
+                      </label>
+                    )}
                     {m.status === 'active' && m.role === 'sales' && (activationPending(m.password_set) || m.password_set === true) && (() => {
                       /* ONE recovery button, chosen by the real state: never chose a password → Resend activation;
                          did → Send password reset. Unknown (null) shows neither. */
@@ -248,10 +254,10 @@ export default function Team() {
                   <div className="w-full sm:pl-11" data-testid="row-link">
                     <LinkBox link={rowLink.link} onClose={() => setRowLink(null)}
                       title={rowLink.pending ? `Activation link for ${rowLink.name}` : `Password reset link for ${rowLink.name}`}
-                      blurb={rowLink.pending ? 'Not emailed. Copy it and send it to them yourself. Same account; the old link no longer works. It works once, and they choose their own password.' : 'Not emailed. Copy it and send it to them yourself. Same account; it works once, and they choose a new password.'} />
+                      blurb={rowLink.pending ? 'Not emailed. Copy it and send it to them yourself. Same account; the old link no longer works. They open it, press Continue and choose their own password. It works once.' : 'Not emailed. Copy it and send it to them yourself. Same account; they open it, press Continue and choose a new password. It works once.'} />
                   </div>
                 )}
-                {openOnboarding === m.user_id && onboarding.data && m.role !== 'admin' && !m.is_book_owner && (
+                {openOnboarding === m.user_id && onboarding.data && m.role !== 'admin' && !m.is_book_owner && m.trial !== true && (
                   <div className="w-full sm:pl-11">
                     <SalespersonOnboardingPanel userId={m.user_id} record={onboarding.data.rows.get(m.user_id) ?? null} member={m} docs={onboarding.data.documents} serverMissing={onboarding.data.missing[m.user_id] ?? null} onSave={(patch) => saveOnboarding(m.user_id, patch)} />
                   </div>

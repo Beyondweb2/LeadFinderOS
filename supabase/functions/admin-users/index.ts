@@ -3,6 +3,8 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { checkRateLimit, rateLimitHeaders } from '../_shared/rate-limiter.ts';
 import { recordDenial } from '../_shared/protection.ts';
 import { issuePasswordReset, reissueActivation, type ActivationDeps } from '../_shared/team-activation.ts';
+import { createTeamUser, type CreateUserDeps } from '../_shared/team-create-user.ts';
+import { isTrialMember, mustChangePassword, scannerSafeLink, type LinkType } from '../../../src/lib/teamAccounts.ts';
 import { OPERATOR_APP_URL } from '../../../src/config/operatorApp.ts';
 import { validateNewDocument, validateOnboardingPatch, type DocumentVersion, type OnboardingRecord } from '../../../src/lib/salespersonOnboarding.ts';
 
@@ -396,12 +398,19 @@ serve(async (req) => {
        the 'sales' row — every RLS policy and every edge function refuses on the next request, whatever
        token the browser still holds — AND bans the auth user so the session cannot be refreshed.
        Nothing is deleted: team_members keeps the person, lead_activity keeps their authorship, and
-       their leads stay assigned until the admin moves them. Passwords are never seen: the invitee sets
-       their own through a one-time link the admin sends them. */
+       their leads stay assigned until the admin moves them. Passwords: either the invitee sets their own
+       through a one-time link the admin sends them, or (2026-10-14, team_create_user) the admin sets a
+       temporary one that passes straight to the provider and is never logged or returned. */
     /* The secret overrides; the fallback is the ONE constant (src/config/operatorApp.ts), never a
        hostname typed here. A blank secret counts as unset. */
     const TEAM_APP_URL = (Deno.env.get('TEAM_APP_URL')?.trim() || OPERATOR_APP_URL).replace(/\/+$/, '');
     const SET_PASSWORD_URL = `${TEAM_APP_URL}/set-password`;
+    /* ⛔ SCANNER-SAFE LINKS (2026-10-14): the link we hand the admin points at OUR set-password page with the
+       token hash, and the page uses it only when the person presses Continue. The provider's own action_link
+       is used up by anything that merely opens it (an email scanner, a WhatsApp link preview). The provider's
+       link is the fallback only when it returns no hash. Expiry is the project's email-link setting, not code. */
+    const safeLink = (props: { hashed_token?: string; action_link?: string } | null | undefined, type: LinkType): string | null =>
+      props?.hashed_token ? scannerSafeLink(SET_PASSWORD_URL, props.hashed_token, type) : (props?.action_link ?? null);
     const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     const uuidOk = (v: unknown): v is string => typeof v === 'string' && /^[0-9a-f-]{36}$/i.test(v);
 
@@ -432,6 +441,10 @@ serve(async (req) => {
           password_set: pwSetErr || typeof pwSet !== 'boolean' ? null : pwSet,
           banned: !!u?.banned_until && new Date(u.banned_until).getTime() > Date.now(),
           assigned_leads: assigned ?? 0,
+          /* 2026-10-14: the Trial switch and the first-login change, both from app_metadata (service role only). */
+          trial: isTrialMember(u?.app_metadata),
+          must_change_password: mustChangePassword(u),
+          temp_password: typeof u?.app_metadata?.temp_password_set_at === 'string',
         };
       }));
       return jsonResponse({ ok: true, team: out }, 200, corsHeaders, rlHeaders);
@@ -458,7 +471,68 @@ serve(async (req) => {
         return jsonResponse({ ok: false, error: 'role_write_failed', detail: String(rErr?.message ?? tErr?.message) }, 500, corsHeaders, rlHeaders);
       }
       console.log(JSON.stringify({ level: 'info', admin_user_id: adminUserId, action, invited: uid, timestamp: new Date().toISOString() }));
-      return jsonResponse({ ok: true, user_id: uid, link: link.properties?.action_link ?? null }, 200, corsHeaders, rlHeaders);
+      return jsonResponse({ ok: true, user_id: uid, link: safeLink(link.properties, 'invite') }, 200, corsHeaders, rlHeaders);
+    }
+
+    /* ⛔ CREATE A TEAM MEMBER WITH A TEMPORARY PASSWORD (2026-10-14). Admin only: the role check above ran
+       first. The password is handed to the provider and never logged, stored by us, echoed or put in an
+       error (_shared/team-create-user.ts). Default role sales; admin only when named AND confirmed. */
+    if (action === 'team_create_user') {
+      const deps: CreateUserDeps = {
+        createAuthUser: async ({ email, password, displayName, appMetadata }) => {
+          const { data, error } = await serviceClient.auth.admin.createUser({
+            email, password, email_confirm: true, user_metadata: { display_name: displayName }, app_metadata: appMetadata,
+          });
+          return { id: data?.user?.id ?? null, error: error ? String(error.message ?? 'create failed') : null };
+        },
+        /* Compensation only: the account this request made seconds ago, which owns nothing yet. */
+        deleteAuthUser: async (id) => {
+          await serviceClient.from('team_members').delete().eq('user_id', id);
+          await serviceClient.from('user_roles').delete().eq('user_id', id);
+          await serviceClient.auth.admin.deleteUser(id);
+        },
+        writeRole: async (id, role) => {
+          const { error } = await serviceClient.from('user_roles').insert({ user_id: id, role });
+          return error ? String(error.message) : null;
+        },
+        writeMember: async (id, displayName, invitedBy) => {
+          const { error } = await serviceClient.from('team_members').insert({ user_id: id, display_name: displayName, invited_by: invitedBy });
+          return error ? String(error.message) : null;
+        },
+        audit: async (ev) => {
+          const { error: eErr } = await serviceClient.from('security_events').insert({
+            actor_user_id: ev.actor, actor_role: 'admin', kind: 'user_created_by_admin', severity: 'info',
+            detail: { target_user_id: ev.target, role: ev.role, must_change_password: ev.must_change_password, at: ev.at },
+          });
+          if (eErr) console.error(JSON.stringify({ level: 'error', action, target: ev.target, event_error: eErr.message }));
+        },
+      };
+      const result = await createTeamUser(deps, adminUserId, body);
+      if (!result.ok) return jsonResponse({ ok: false, error: result.error, detail: result.detail }, result.status, corsHeaders, rlHeaders);
+      console.log(JSON.stringify({ level: 'info', admin_user_id: adminUserId, action, created: result.user_id, role: result.role, must_change_password: result.must_change_password, timestamp: new Date().toISOString() }));
+      return jsonResponse({ ok: true, user_id: result.user_id, role: result.role, must_change_password: result.must_change_password }, 200, corsHeaders, rlHeaders);
+    }
+
+    /* TRIAL TEAM MEMBER (2026-10-14): display only — hides the onboarding checklist on the Team page. Stored in
+       app_metadata.trial_team_member (only the service role can write it; no table change). It never changes
+       whether someone can sell: that stays the account restrictions alone, for everyone. */
+    if (action === 'team_set_trial') {
+      const uid = body.user_id;
+      if (!uuidOk(uid)) return jsonResponse({ ok: false, error: 'bad_user' }, 400, corsHeaders, rlHeaders);
+      if (typeof body.trial !== 'boolean') return jsonResponse({ ok: false, error: 'bad_trial' }, 400, corsHeaders, rlHeaders);
+      const { data: m } = await serviceClient.from('team_members').select('user_id, is_book_owner').eq('user_id', uid).maybeSingle();
+      if (!m) return jsonResponse({ ok: false, error: 'not_a_member' }, 404, corsHeaders, rlHeaders);
+      const { data: isAdminRow } = await serviceClient.from('user_roles').select('role').eq('user_id', uid).eq('role', 'admin').maybeSingle();
+      if (m.is_book_owner || isAdminRow) return jsonResponse({ ok: false, error: 'not_a_salesperson' }, 400, corsHeaders, rlHeaders);
+      /* app_metadata is MERGED by the provider: only this key changes. */
+      const { error: uErr } = await serviceClient.auth.admin.updateUserById(uid, { app_metadata: { trial_team_member: body.trial } });
+      if (uErr) return jsonResponse({ ok: false, error: 'write_failed', detail: uErr.message }, 500, corsHeaders, rlHeaders);
+      const { error: eErr } = await serviceClient.from('security_events').insert({
+        actor_user_id: adminUserId, actor_role: 'admin', kind: body.trial ? 'trial_member_on' : 'trial_member_off', severity: 'info',
+        detail: { target_user_id: uid },
+      });
+      if (eErr) console.error(JSON.stringify({ level: 'error', action, target: uid, event_error: eErr.message }));
+      return jsonResponse({ ok: true, trial: body.trial }, 200, corsHeaders, rlHeaders);
     }
 
     /* RESEND ACTIVATION / SEND PASSWORD RESET (2026-10-08): a fresh link for an EXISTING salesperson —
@@ -492,7 +566,7 @@ serve(async (req) => {
           const { data: link, error: linkErr } = await serviceClient.auth.admin.generateLink({
             type: kind === 'password_reset_sent' ? 'recovery' : 'magiclink', email, options: { redirectTo: SET_PASSWORD_URL },
           });
-          return { link: link?.properties?.action_link ?? null, error: linkErr ? String(linkErr.message ?? 'link failed') : null };
+          return { link: safeLink(link?.properties, kind === 'password_reset_sent' ? 'recovery' : 'magiclink'), error: linkErr ? String(linkErr.message ?? 'link failed') : null };
         },
         audit: async (ev) => {
           const { error: eErr } = await serviceClient.from('security_events').insert({

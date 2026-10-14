@@ -30,6 +30,8 @@
 /** Variables only a lead's completed audit can answer. */
 export const AUDIT_DERIVED_VARS: ReadonlySet<string> = new Set([
   "trade", "trade_plural", "trade_article", "competitors", "rival_1", "rival_2", "rival_3", "audit_url",
+  /* ai_visibility_report_offer's {{4}} (2026-10-14): the quick check's visibility score — only the audit can answer it. */
+  "visibility_score",
 ]);
 
 /** The four ways a send resolves its variables. Named for the branch each sender already has. */
@@ -80,6 +82,9 @@ export const BRANCH_SUPPLIES: Record<TemplateBranch, ReadonlySet<string>> = {
        audit_url), but supplied by this branch. It differs from site_fault only in what it says —
        two or three findings in plain English instead of one report sentence. */
     "site_findings",
+    /* ai_visibility_report_offer (2026-10-14): {{1}} the name or "there", {{4}} the score, {{6}} the sending person's own
+       message name (_shared/sender-name.ts) — all resolved in the audit branch of both senders. */
+    "name_or_there", "visibility_score", "sender_name",
   ]),
   plain: new Set(["name", "url", "town"]),
 };
