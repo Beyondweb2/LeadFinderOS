@@ -288,6 +288,8 @@ export const ZERO_COUNTS: ImportCounts = { rows: 0, valid: 0, invalid: 0, duplic
 export interface ImportCallResult {
   ok: boolean; error?: string; reason?: string | null; max?: number;
   committed?: boolean; import_id?: string | null; role?: string; counts?: ImportCounts; rows?: RowResult[];
+  /** import_leads_v3: how many created leads joined the chosen campaign in this call. */
+  joined_campaign?: number;
 }
 
 export interface ImportReport {
@@ -298,11 +300,15 @@ export interface ImportReport {
   stopped: { fromRow: number; toRow: number; message: string } | null;
   createdIds: string[];
   updatedIds: string[];
+  /** New leads that joined the chosen campaign (import_leads_v3), summed across calls. */
+  joinedCampaign: number;
 }
 
 /** What the import is tagged with (2026-10-14, import_leads_v2): the owner of the NEW leads (null = the person importing;
  *  only the admin may name a teammate — the server refuses anything else) and a batch name ("Ethan batch 14 Oct"). */
-export interface ImportTags { assignTo?: string | null; batch?: string | null }
+export interface ImportTags { assignTo?: string | null; batch?: string | null;
+  /** 2026-10-14 (import_leads_v3): the campaign every NEW lead joins. Required by the server; null is refused (campaign_required). */
+  campaignId?: string | null }
 
 /** The longest batch name the server keeps (import_leads_v2 cuts nothing silently in the rows, but trims the batch to this). */
 export const IMPORT_BATCH_NAME_MAX = 80;
@@ -343,7 +349,7 @@ export function withDefaultTrade(rows: ImportRow[], trade: string | null | undef
   return rows.map((r) => (r.trade ? r : { ...r, trade: t }));
 }
 
-export type ImportRpc = (args: { _rows: ImportRow[]; _commit: boolean; _file_name: string | null; _import_possible: boolean; _assign_to: string | null; _batch: string | null }) =>
+export type ImportRpc = (args: { _rows: ImportRow[]; _commit: boolean; _file_name: string | null; _import_possible: boolean; _assign_to: string | null; _batch: string | null; _campaign_id: string | null }) =>
   Promise<{ data: unknown; error: { message?: string } | null }>;
 
 /** Send the rows in calls of IMPORT_BATCH_MAX, one after another. Each call is one transaction on the server, so a
@@ -356,14 +362,14 @@ export async function runImport(
   importPossible = false,
   tags: ImportTags = {},
 ): Promise<ImportReport> {
-  const report: ImportReport = { committed: commit, counts: { ...ZERO_COUNTS }, rows: [], stopped: null, createdIds: [], updatedIds: [] };
+  const report: ImportReport = { committed: commit, counts: { ...ZERO_COUNTS }, rows: [], stopped: null, createdIds: [], updatedIds: [], joinedCampaign: 0 };
   for (let at = 0; at < rows.length; at += IMPORT_BATCH_MAX) {
     const chunk = rows.slice(at, at + IMPORT_BATCH_MAX);
     let res: ImportCallResult | null = null;
     let message: string | null = null;
     try {
       const { data, error } = await rpc({ _rows: chunk, _commit: commit, _file_name: fileName, _import_possible: importPossible,
-        _assign_to: tags.assignTo ?? null, _batch: (tags.batch ?? '').trim().slice(0, IMPORT_BATCH_NAME_MAX) || null });
+        _assign_to: tags.assignTo ?? null, _batch: (tags.batch ?? '').trim().slice(0, IMPORT_BATCH_NAME_MAX) || null, _campaign_id: tags.campaignId ?? null });
       if (error) message = error.message ?? 'The import could not be reached.';
       else res = (data ?? null) as ImportCallResult | null;
     } catch (e) {
@@ -376,6 +382,7 @@ export async function runImport(
     }
     const c = res!.counts ?? ZERO_COUNTS;
     for (const k of Object.keys(report.counts) as (keyof ImportCounts)[]) report.counts[k] += Number(c[k] ?? 0);
+    report.joinedCampaign += Number(res!.joined_campaign ?? 0);
     for (const r of res!.rows ?? []) {
       report.rows.push(r);
       if (r.lead_id && r.outcome === 'created') report.createdIds.push(r.lead_id);
@@ -397,6 +404,8 @@ export function callErrorText(res: ImportCallResult | null): string {
     case 'bad_rows': return 'The rows could not be read.';
     case 'no_book_owner': return 'The lead book has no owner set — contact Paul.';
     case 'owner_not_yours': return 'Only the admin can import leads for someone else.';
+    case 'campaign_required': return 'Choose the campaign these leads go into.';
+    case 'unknown_campaign': return 'That campaign is not available — it may have been deleted. Choose another one.';
     case 'not_an_active_member': return 'That person is not an active member of the team, so nothing was imported for them.';
     default: return res?.error ? `The import was refused (${res.error}).` : 'The import gave no answer. Nothing from this part was saved.';
   }

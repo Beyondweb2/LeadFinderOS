@@ -196,6 +196,7 @@ import { isColdOutreachTemplate } from '@/lib/coldOutreach';
 import { useAllLoggedContacts } from '@/hooks/useLastLoggedContacts';
 import { shownStatusMatches } from '@/lib/statusFilter';
 import { contactAgo, isStarred, salesStateOf, type SalesStateView } from '@/lib/leadState';
+import { SelectionModeBar } from './SelectionModeBar';
 
 interface OutreachTableProps {
   leads: OutreachLead[];
@@ -2131,6 +2132,9 @@ export function OutreachTable({
     (currentPage - 1) * ITEMS_PER_PAGE,
     currentPage * ITEMS_PER_PAGE
   );
+  /* "Select this page" vs "Select all" (2026-10-14): the ids each button ticks. Bulk actions still read selectedIds. */
+  const pageLeadIds = paginatedLeads.map((l) => l.id);
+  const allLeadIds = useMemo(() => filteredAndSortedLeads.map((l) => l.id), [filteredAndSortedLeads]);
   /* The row scores — read for THIS PAGE's ready rows only (useOutreachRowScores), never the whole book. */
   const scoreLeads = paginatedLeads.filter((l) => !isDemoLead(l.id) && rowCheck(l).kind === 'ready')
     .map((l) => ({ id: l.id, business_name: l.business_name, website: l.website ?? null }));
@@ -2947,6 +2951,8 @@ export function OutreachTable({
         </div>
       </CardHeader>
       <CardContent className="p-0">
+        <SelectionModeBar className="px-3 py-2 border-b border-border/40" pageIds={pageLeadIds} allIds={allLeadIds} selected={selectedIds}
+          onChange={setSelectedIds} allDisabled={!listComplete} allDisabledTitle="Unlocks when every lead has loaded" />
         {/* Mobile Card View */}
         {isMobile ? (
           <div>
@@ -3008,7 +3014,8 @@ export function OutreachTable({
                       checked={selectedIds.size === filteredAndSortedLeads.length && filteredAndSortedLeads.length > 0}
                       onCheckedChange={handleSelectAll}
                       disabled={!listComplete}
-                      aria-label="Select all"
+                      aria-label="Select all on every page"
+                      title="Select all on every page"
                     />
                   </TableHead>
                   <TableHead className="min-w-[150px] sm:w-[250px]">Business</TableHead>

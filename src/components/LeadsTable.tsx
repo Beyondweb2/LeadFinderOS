@@ -33,6 +33,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { readSearchResultsView, writeSearchResultsView } from '@/lib/searchResultsPrefs';
 import { resultSetSignature } from '@/lib/searchResultsCache';
 import { visibleResults } from '@/lib/searchResultsView';
+import { SelectionModeBar } from './SelectionModeBar';
 
 function initials(name: string | null): string {
   if (!name) return '?';
@@ -264,6 +265,12 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
   const handleSelectAll = useCallback(() => {
     setSelectedIds(allSelected ? new Set() : new Set(selectAllPool.map((l) => l.id)));
   }, [allSelected, selectableLeads]);
+  /* "Select this page" (2026-10-14): the same pool as Select all, limited to the rows showing now. */
+  const selectAllIds = useMemo(() => selectAllPool.map((l) => l.id), [selectAllPool]);
+  const pagePoolIds = useMemo(() => {
+    const pool = new Set(selectAllIds);
+    return paginatedLeads.filter((l) => pool.has(l.id)).map((l) => l.id);
+  }, [paginatedLeads, selectAllIds]);
   const handleSelectOne = useCallback((id: string, checked: boolean) => {
     setSelectedIds((prev) => {
       const next = new Set(prev);
@@ -644,6 +651,9 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
         {blurred && (
           <div className="absolute inset-0 z-10 backdrop-blur-md bg-background/30 rounded-b-lg" />
         )}
+        {bulkAllowed && (
+          <SelectionModeBar className="mb-2" pageIds={pagePoolIds} allIds={selectAllIds} selected={new Set(selectedLeads.map((l) => l.id))} onChange={setSelectedIds} />
+        )}
         {/* Mobile View */}
         <div className="md:hidden space-y-1.5">
           {paginatedLeads.length === 0 ? (
@@ -791,7 +801,8 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
                     <Checkbox
                       checked={allSelected}
                       onCheckedChange={handleSelectAll}
-                      aria-label="Select all"
+                      aria-label="Select all on every page"
+                      title="Select all on every page"
                       disabled={selectableLeads.length === 0}
                     />
                   </TableHead>
