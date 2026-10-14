@@ -61,6 +61,15 @@ const OPT_OUT: readonly RegExp[] = [
   /\btake\s+(me|us|my\s+number|this\s+number)\s+off\b/i,
   /\bopt(ing)?[\s-]?out\b/i,
   /\bleave\s+(me|us)\s+alone\b/i,
+  /* 2026-10-14 (Malaysia / Singapore): Malay and Chinese. Kept as narrow as the English: the stop word as the whole
+     message, or "don't send / stop sending / remove my number" — never a stop word inside an ordinary sentence. */
+  /^\W*(berhenti|henti(kan)?|tolong\s+berhenti|stop\s+hantar)\W*$/i,
+  /\bjangan\s+(hantar|mesej|whatsapp|ganggu|kacau|hubungi|call|telefon|contact)\b/i,
+  /\b(berhenti|henti(kan)?)\s+(hantar|menghantar|mesej|whatsapp|ganggu|kacau|hubungi)\b/i,
+  /\b(buang|padam|keluarkan)\s+(nombor|no\.?\s*(telefon|tel)|saya|kami)\b/i,
+  /^[\s\p{P}]*(停止|停|退订|退訂|取消订阅|取消訂閱)[\s\p{P}]*$/u,
+  /(不要|别|別|请勿|請勿)(再)?(发|發|联系|聯繫|聯絡|打扰|打擾|传|傳)/u,
+  /(停止|取消)(发送|發送|发|發|联系|聯繫)/u,
 ];
 const ESCALATION: readonly RegExp[] = [
   /\bharass(ment|ing|ed)?\b/i,

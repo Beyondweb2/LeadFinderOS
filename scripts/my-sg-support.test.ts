@@ -24,6 +24,10 @@ import { qualifyPlace, placeSuffixForCountry } from '../src/lib/seedGuard.ts';
 import { normalisePhoneKey } from '../src/types/outreach.ts';
 import { phoneKeyLikeDb } from '../src/lib/inboundMatch.ts';
 import { internationalPhone } from '../src/lib/lineType.ts';
+import { isStopMessage } from '../src/lib/smsMessages.ts';
+import { isOptOut, triageByRules } from '../src/lib/replyTriage.ts';
+import { isDecline } from '../src/lib/inboundClassify.ts';
+import { SMS_SENDER_WORDS } from '../src/lib/outreachMarkets.ts';
 
 const ROOT = path.resolve(import.meta.dirname, '..');
 const read = (p: string) => fs.readFileSync(path.join(ROOT, p), 'utf8').replace(/\r\n/g, '\n');
@@ -193,6 +197,25 @@ ok(qualifyPlace(['plumber in Johor Bahru'], 'Johor Bahru', 'Malaysia').questions
 ok(qualifyPlace(['plumber in Singapore'], 'Singapore', 'Singapore').questions[0] === 'plumber in Singapore', 'Singapore is never pinned twice');
 ok(qualifyPlace(['plumber in Leeds'], 'Leeds', 'UK').questions[0] === 'plumber in Leeds UK' && qualifyPlace(['ca in Pune'], 'Pune', 'India').questions[0] === 'ca in Pune India', 'UK / India wording unchanged');
 ok(/Malaysia: "my"/.test(read('supabase/functions/_shared/enrichment/ai-search.ts')), 'the AI search is asked from Malaysia');
+
+console.log('\n── 11. opt-outs in Malay and Chinese (WhatsApp and SMS) ──');
+for (const w of ['berhenti', 'Berhenti.', 'henti', 'jangan hantar', 'Jangan hantar lagi!', '停止', '退订', '取消订阅', '不要再发', '停止。', 'STOP'])
+  ok(isStopMessage(w), `SMS: "${w}" as the whole text opts out`);
+for (const w of ['Tolong jangan hantar mesej lagi', 'jangan ganggu saya', 'berhenti hantar mesej', 'buang nombor saya', '请不要再发信息给我', '停止发送', '停止', 'berhenti', 'please stop messaging me'])
+  ok(isOptOut(w) && triageByRules(w, { isClient: false }).suppress === true, `WhatsApp / SMS phrase: "${w}" opts out`);
+for (const w of ['Boleh berhenti kat kedai esok?', 'saya nak tahu harga', '停车场在哪里', 'one-stop shop', 'Can you stop by on Monday?'])
+  ok(!isOptOut(w), `not an opt-out: "${w}"`);
+ok(isDecline('tak berminat') && isDecline('没兴趣') && isDecline('jangan hantar') && !isDecline('berminat, boleh terangkan?'), 'Malay / Chinese declines stop the automation (never a pitch)');
+ok(/if \(isStopMessage\(body\) \|\| isOptOut\(body\)\) \{/.test(read('supabase/functions/twilio-webhook/index.ts')), 'an inbound text opts out on the STOP words OR the shared phrases');
+
+console.log('\n── 12. the admin panel and the SMS sender warning ──');
+{
+  const panel = read('src/components/CountrySendingSettings.tsx');
+  ok(/\{teamControls && <CountrySendingSettings \/>\}/.test(read('src/components/WhatsAppQueuePanel.tsx')), 'the country panel sits in the WhatsApp queue panel, admin (team controls) only');
+  ok(/\['whatsapp_on', 'WhatsApp'\], \['sms_on', 'SMS'\], \['call_on', 'Browser calls'\]/.test(panel) && /checkCountryValue\('whatsapp_daily_cap'/.test(panel), 'a switch per channel and the country caps, validated by the one rule');
+  ok(/\+44 7400 420187/.test(SMS_SENDER_WORDS) && /delivery depends on sender registration/.test(SMS_SENDER_WORDS), 'the SMS warning names the sender and says delivery depends on registration');
+  ok(/explain_offer \/ explain_offer_v2/.test(panel), 'the panel names the templates not to use in Malaysia / Singapore');
+}
 
 console.log(failures ? `\n${failures} FAILED` : '\nall passed');
 process.exit(failures ? 1 : 0);

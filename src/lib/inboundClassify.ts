@@ -27,6 +27,9 @@ const DECLINE_PATTERNS: RegExp[] = [
   /\bremove\s*(me|us)?\b/i,
   /\bunsubscribe\b/i,
   /\bwrong\s+number\b/i,
+  // 2026-10-14 (Malaysia / Singapore): Malay and Chinese declines — a match never auto-sends anything.
+  /\b(berhenti|henti(kan)?|tak\s+(minat|berminat)|tidak\s+berminat|jangan\s+hantar|salah\s+nombor)\b/i,
+  /(停止|退订|退訂|不要|没兴趣|沒興趣|不感兴趣|不感興趣|打错|打錯)/u,
 ];
 
 /** Obvious automated responses (booking bots / out-of-office / auto-acks) — not a human
