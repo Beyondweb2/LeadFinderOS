@@ -2070,6 +2070,26 @@ Deno.serve(async (req) => {
           lead_id: lead.id, business: lead.business_name, ...statusPayload,
         }, 200);
       }
+      /* ⛔ A NUMBER ALREADY TEXTED NEVER GETS A COLD WHATSAPP OPENER (2026-10-14) — the mirror of the text queue's
+         'already_texted' rule, across every lead row and owner. The same SQL rule send-whatsapp-message asks
+         (public.phone_already_texted). Fails closed: unreadable → the lead stays queued and nothing goes this tick.
+         On a hit the lead leaves the queue as it was before it was queued; only the delivery status says why. */
+      const { data: texted, error: textedErr } = await service.rpc("phone_already_texted", { _phone: toNumber });
+      if (textedErr) {
+        console.error(`[process-whatsapp-queue] phone_already_texted failed for ${lead.id}: ${textedErr.message}`);
+        return json({ ok: true, skipped: "contact_guard_unreadable", lead_id: lead.id, business: lead.business_name, ...statusPayload }, 200);
+      }
+      if (texted === true) {
+        await service.from("outreach_leads").update({
+          status: statusBeforeQueue(lead.previous_status as string | null), previous_status: null, queued_at: null,
+          whatsapp_delivery_status: "phone_already_texted", contact_method: null,
+        }).eq("id", lead.id);
+        return json({
+          ok: true, skipped: "phone_already_texted",
+          reason: `${lead.business_name ?? "That lead"}'s number has already been sent a text — a cold WhatsApp opener never follows a text.`,
+          lead_id: lead.id, business: lead.business_name, ...statusPayload,
+        }, 200);
+      }
     }
     // Already-contacted guard: NEVER re-send to a lead that already got a SUCCESSFUL WhatsApp. A UI
     // re-queue (status forced back to 'queued') must not double-send — this is the AUTHORITATIVE server

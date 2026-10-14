@@ -1391,7 +1391,11 @@ Deno.serve(async (req) => {
       return jsonResponse({ error: 'Invalid search parameters. Please check your input.', _debug: debug }, 400);
     }
 
-    const { keyword, location, radius, broad, region, density, country, townOnly, skipHistory } = validationResult.data;
+    const { keyword, location, radius, broad, region: regionAsked, density, country, townOnly, skipHistory } = validationResult.data;
+    /* ⛔ REGION MODE IS ADMIN-ONLY (test-day roles check, 2026-10-14). The screen never sends it, but a direct call
+       from a salesperson could start the wider (dearer) tiled search and read back the day's Google spend in
+       downgraded.spentUsd. Sales never sees a cost (CLAUDE.md §0) - their request runs as a normal search. */
+    const region = regionAsked && role === 'admin';
 
     if (!GOOGLE_MAPS_API_KEY) {
       console.error('GOOGLE_MAPS_API_KEY not configured');
