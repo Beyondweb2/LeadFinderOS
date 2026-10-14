@@ -87,7 +87,8 @@ console.log('6. the wiring: callbacks → lead, send-time No SMS, queue RPC');
 console.log('7. a landline is not offered the SMS option');
 {
   const ot = read('src/components/OutreachTable.tsx');
-  ok(/isPlausibleUkMobile\(lead\.phone\) && smsPillOf\(lead\) !== 'no_sms'/.test(ot), 'the Outreach row hides the SMS icon for a non-mobile or No-SMS lead');
+  // 2026-10-14: isTextableMobile = a plausible UK mobile (unchanged) or a Malaysia / Singapore mobile while its country is on.
+  ok(/isTextableMobile\(lead\.phone, lead\.country, smsMarkets\) && smsPillOf\(lead\) !== 'no_sms'/.test(ot), 'the Outreach row hides the SMS icon for a non-mobile or No-SMS lead');
 }
 
 console.log('8. UI cleanup — the Best-way panels are gone from the Call tab, the SMS modal and the SMS inbox');

@@ -7,6 +7,8 @@ import { qaSendVerdict } from "../../../src/lib/qaSafety.ts";
 import { toWhatsAppDigits } from "../../../src/lib/waNumber.ts";
 import { voiceAccessToken } from "../../../src/lib/twilioAuth.ts";
 import { resolveTwilioEnv } from "../_shared/twilio.ts";
+import { COUNTRY_OFF, callMarketOf, channelOn } from "../../../src/lib/outreachMarkets.ts";
+import { loadCountrySettings } from "../_shared/country-settings.ts";
 
 // twilio-voice-token — "I want to call THIS lead from my browser" (2026-10-09).
 //
@@ -52,7 +54,13 @@ Deno.serve(async (req) => {
     if (lead.is_archived === true) return json({ ok: false, error: "archived", detail: "That lead is archived." }, 409);
 
     const digits = toWhatsAppDigits(lead.phone as string, (lead.country as string | null) ?? null);
-    if (!digits || !UK_CALLABLE.test(digits)) return json({ ok: false, error: "not_callable", detail: "Browser calling covers UK numbers only, and this number is not one." });
+    /* 2026-10-14 (src/lib/outreachMarkets.ts): Malaysia / Singapore numbers (mobile or landline) are callable while that
+       country's calling switch is on. The UK test is unchanged (UK_CALLABLE). */
+    const callMarket = callMarketOf(digits);
+    if (callMarket && callMarket !== "UK" && !channelOn(await loadCountrySettings(service), callMarket, "call")) {
+      return json({ ok: false, error: COUNTRY_OFF, detail: "Browser calling to this country is switched off. Paul can turn it on in the WhatsApp queue settings." });
+    }
+    if (!digits || !(UK_CALLABLE.test(digits) || (callMarket && callMarket !== "UK"))) return json({ ok: false, error: "not_callable", detail: "Browser calling covers UK, Malaysia and Singapore numbers only, and this number is not one." });
 
     const sup = await checkSuppressed(service, { phone: `+${digits}`, email: lead.email as string | null, leadId });
     if (sup.suppressed) {

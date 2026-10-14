@@ -28,6 +28,8 @@
      SMS FAILED (this attempt failed; the NUMBER may still be fine — a retry or another route is the rep's call):
        30003  Unreachable destination handset  — switched off / out of coverage: NOT proof there is no mobile (Paul's rule)
        30004  Message blocked · 30007 carrier filtering · 30008 unknown error · 30001 queue overflow · 30002 account suspended · anything else. */
+import { toWhatsAppDigits } from './waNumber.ts';
+import { mobileMarketOf, type Market } from './outreachMarkets.ts';
 
 export type SmsPill = 'sms_queued' | 'sms_failed' | 'no_sms';
 
@@ -96,4 +98,13 @@ export function isPlausibleUkMobile(raw: string | null | undefined): boolean {
   const digits = d.startsWith('+') ? d.slice(1) : d.startsWith('00') ? d.slice(2) : d;
   if (/^447\d{9}$/.test(digits)) return true;
   return /^07\d{9}$/.test(digits) && !d.startsWith('+');
+}
+
+/** May the SMS button / picker offer this lead? A plausible UK mobile (exactly as before), or a Malaysia / Singapore
+ *  mobile while texts to that country are switched on (2026-10-14, src/lib/outreachMarkets.ts). */
+export function isTextableMobile(raw: string | null | undefined, country: string | null | undefined,
+                                 smsMarkets: ReadonlySet<Market>): boolean {
+  if (isPlausibleUkMobile(raw)) return smsMarkets.has('UK');
+  const m = mobileMarketOf(toWhatsAppDigits(raw, country ?? null));
+  return !!m && m !== 'UK' && smsMarkets.has(m);
 }

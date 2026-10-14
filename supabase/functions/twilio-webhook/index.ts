@@ -5,6 +5,8 @@ import { recordOptOut } from "../_shared/suppression.ts";
 import { bookOwnerId } from "../_shared/access.ts";
 import { resolveTwilioEnv, twiml, webhookUrlFor, xmlEscape } from "../_shared/twilio.ts";
 import { syncLeadFromSms } from "../_shared/sms-lead-sync.ts";
+import { callMarketOf, channelOn } from "../../../src/lib/outreachMarkets.ts";
+import { loadCountrySettings } from "../_shared/country-settings.ts";
 import { handleInboundSmsReply, resolveSmsOwner } from "../_shared/sms-inbound.ts";
 
 // twilio-webhook — everything Twilio calls us about (2026-10-09). PUBLIC (verify_jwt = false): the handler
@@ -108,7 +110,11 @@ async function voiceTwiml(service: Service, env: ReturnType<typeof resolveTwilio
   const since = new Date(Date.now() - 10 * 60_000).toISOString();
   const { data: claimed } = await service.from("call_logs").update({ call_sid: p.CallSid, status: "dialing" })
     .eq("id", callId).eq("user_id", identity).eq("status", "initiated").gte("created_at", since).select("phone").maybeSingle();
-  if (!claimed?.phone || !/^44[1237]\d{8,9}$/.test(claimed.phone)) return hangup("This call could not be set up.");
+  // UK numbers as before; Malaysia / Singapore only while that country's calling switch is on (2026-10-14).
+  const market = callMarketOf(claimed?.phone);
+  const callable = !!claimed?.phone && (/^44[1237]\d{8,9}$/.test(claimed.phone)
+    || (!!market && market !== "UK" && channelOn(await loadCountrySettings(service), market, "call")));
+  if (!callable) return hangup("This call could not be set up.");
   const cb = `${env.webhookBase}?type=voice-status`;
   return twiml(
     `<Dial callerId="${xmlEscape(env.smsFrom)}" answerOnBridge="true" timeout="40">` +

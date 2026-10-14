@@ -24,6 +24,7 @@
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 import type { Tone } from '@/components/salesDash/primitives';
 import { coldWhatsAppVerdict } from './coldWhatsAppEligibility';
+import type { Market } from './outreachMarkets';
 import { isColdOutreachTemplate } from './coldOutreach';
 
 /** The columns the queue reads from `sales_leads` — the same list for both roles. */
@@ -75,7 +76,8 @@ const byStamp = (k: 'queued_at' | 'contact_followup_queued_at') => (a: QueueRow,
 
 /** Split the authorised rows into the lanes. Every count on screen comes from here — never a global
  *  number beside a scoped list. */
-export function deriveQueue(rows: readonly QueueRow[]): QueueView {
+/** `markets` = the countries whose WhatsApp switch is on (src/lib/outreachMarkets.ts); left out = the UK alone, as before. */
+export function deriveQueue(rows: readonly QueueRow[], markets?: ReadonlySet<Market>): QueueView {
   const live = rows.filter((r) => r.is_archived !== true);
   return {
     waiting: live.filter((r) => r.status === 'queued').sort(byStamp('queued_at')),
@@ -84,7 +86,7 @@ export function deriveQueue(rows: readonly QueueRow[]): QueueView {
     archivedWaiting: rows.filter((r) => r.is_archived === true && r.status === 'queued').length,
     unsendable: live.filter((r) => r.status === 'queued'
       && isColdOutreachTemplate(r.whatsapp_template ?? '')
-      && !coldWhatsAppVerdict(r.phone, r.country ?? null).eligible).length,
+      && !coldWhatsAppVerdict(r.phone, r.country ?? null, markets).eligible).length,
   };
 }
 

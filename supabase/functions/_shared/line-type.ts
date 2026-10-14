@@ -29,7 +29,7 @@ const COUNTRY_TO_ISO: Record<string, string> = {
   UK: "GB", Australia: "AU", USA: "US", Canada: "CA", Germany: "DE", France: "FR",
   Spain: "ES", Italy: "IT", Netherlands: "NL", Belgium: "BE", Ireland: "IE",
   NewZealand: "NZ", SouthAfrica: "ZA", India: "IN", Singapore: "SG", UAE: "AE",
-  Brazil: "BR", Mexico: "MX", Japan: "JP", Sweden: "SE",
+  Brazil: "BR", Mexico: "MX", Japan: "JP", Sweden: "SE", Malaysia: "MY",
 };
 
 /* Australia's own international prefix is 0011, so libphonenumber reading an Australia lead's "0061 4…" (the

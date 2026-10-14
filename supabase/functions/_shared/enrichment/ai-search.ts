@@ -65,7 +65,7 @@ const COUNTRY_TO_ISO2: Record<string, string> = {
   UK: "gb", Australia: "au", USA: "us", Canada: "ca", Germany: "de", France: "fr",
   Spain: "es", Italy: "it", Netherlands: "nl", Belgium: "be", Ireland: "ie",
   NewZealand: "nz", SouthAfrica: "za", India: "in", Singapore: "sg", UAE: "ae",
-  Brazil: "br", Mexico: "mx", Japan: "jp", Sweden: "se", Thailand: "th",
+  Brazil: "br", Mexico: "mx", Japan: "jp", Sweden: "se", Thailand: "th", Malaysia: "my",
 };
 
 /** Map a lead country (enum or raw) to the actor's lowercase countryCode. Defaults

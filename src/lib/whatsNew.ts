@@ -22,6 +22,22 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-14-malaysia-singapore-leads', date: '2026-10-14', title: 'Malaysia and Singapore leads: the right country and the right phone numbers', audience: 'all',
+    body: 'Find Leads, Add a lead and the CSV import now know Malaysia and Singapore. Their phone numbers are stored with +60 / +65, and their mobiles are never marked "No mobile".',
+    report: {
+      added: [
+        'Malaysia in Find Leads (with its main towns), Add a lead and the AI checks. Malaysia and Singapore are listed first with the UK and Australia.',
+        'Malaysian and Singapore numbers are saved as +60… / +65…, typed with or without the country code. "012-345 6789" and "+60 12-345 6789" are the same lead.',
+        'AI check questions read "plumber in Johor Bahru, Malaysia".',
+      ],
+      changed: [
+        'A Malaysian or Singapore lead is saved under its own country, not the UK.',
+        '"Wrong number" now works for Singapore and Malaysian numbers.',
+        'A Malaysian or Singapore mobile is no longer marked "No mobile". Sending to those countries stays off until Paul switches it on.',
+      ],
+      removed: [],
+      effect: 'You can add and import Malaysia and Singapore leads today and they are stored correctly. Nothing is sent to them yet.',
+    } },
   { id: '2026-10-14-price-model', date: '2026-10-14', title: 'Price model switch: £99 start or £499 upfront (the £499 link is not on yet)', audience: 'all',
     body: 'The Sales dashboard, the call script’s Offer step and the Close tab now show a Price model switch. Pick “£99 start” (today’s offer) or “£499 upfront”. The script and the Close terms follow your choice.',
     report: {

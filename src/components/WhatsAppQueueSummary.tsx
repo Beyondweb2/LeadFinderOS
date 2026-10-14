@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useCountrySettings } from '@/hooks/useCountrySettings';
+import { marketsOn } from '@/lib/outreachMarkets';
 import { Link } from 'react-router-dom';
 import { ArrowRight, MessageSquare, Pause } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -21,7 +23,8 @@ export const WHATSAPP_QUEUE_PATH = '/whatsapp-queue';
  */
 export function WhatsAppQueueSummary() {
   const q = useWhatsAppQueue();
-  const view = useMemo(() => deriveQueue(q.data ?? []), [q.data]);
+  const { settings: countrySettings } = useCountrySettings();
+  const view = useMemo(() => deriveQueue(q.data ?? [], marketsOn(countrySettings, 'whatsapp')), [q.data, countrySettings]);
   const state = useQueueState();
   const [batch, setBatch] = useState<QueueBatch | null>(() => readQueueBatch());
   useEffect(() => {

@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCountrySettings } from '@/hooks/useCountrySettings';
+import { marketsOn } from '@/lib/outreachMarkets';
 import { useQueryClient } from '@tanstack/react-query';
 import { getQueueStatus, rememberQueueStatus, QUEUE_STATE_KEY, queuedLeadLine } from '@/lib/queueStatus';
 import { MessageSquare, Loader2, Play, Pause, RefreshCw, ChevronDown, ChevronRight, X, Inbox as InboxIcon } from 'lucide-react';
@@ -62,7 +64,8 @@ export function WhatsAppQueuePanel({ defaultExpanded = true }: { defaultExpanded
   const perms = useLeadPermissions();
   const teamControls = perms.queueControls;
   const q = useWhatsAppQueue();
-  const view = useMemo(() => deriveQueue(q.data ?? []), [q.data]);
+  const { settings: countrySettings } = useCountrySettings();
+  const view = useMemo(() => deriveQueue(q.data ?? [], marketsOn(countrySettings, 'whatsapp')), [q.data, countrySettings]);
   const state = useQueueState();
   const [team, setTeam] = useState<TeamStatus | null>(null);
   const [teamLoading, setTeamLoading] = useState(false);

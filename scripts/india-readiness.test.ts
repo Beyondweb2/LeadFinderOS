@@ -165,7 +165,7 @@ ok(!anyWindowOpen(at('2026-09-28T04:30:00Z')) && anyWindowOpen(at('2026-09-28T17
   const q = read('supabase/functions/process-whatsapp-queue/index.ts');
   ok(/const WINDOW_START = 7;/.test(q) && /const WINDOW_END_MIN = 21 \* 60 \+ 30;/.test(q), 'the London constants are unchanged');
   ok(/if \(!anyWindowOpen && !force && !qaDrill\) return json\(\{ ok: true, skipped: "outside_window"/.test(q), 'the outer gate is the (London) window; only the QA drill skips it');
-  ok(/const scanned = qaDrill \? scannedAll : scannedAll\.filter\(leadWindowOpen\);[\s\S]{0,400}const candidates = interleaveByCampaign\(scanned\)\.slice\(0, QUEUE_LOOKAHEAD\)/.test(q), 'opener lane: held leads are filtered BEFORE the fair order and look-ahead slice');
+  ok(/const scanned = qaDrill \? scannedAll : scannedAll\.filter\(leadSendable\);[\s\S]{0,400}const candidates = interleaveByCampaign\(scanned\)\.slice\(0, QUEUE_LOOKAHEAD\)/.test(q), 'opener lane: held leads are filtered BEFORE the fair order and look-ahead slice');
   ok(/windowOpenForDigits\(toWhatsAppNumber\(/.test(q) && !/leadWindowOpen[^\n]*\.country\b(?![^\n]*toWhatsAppNumber)/.test(q), 'the window is chosen from the send digits, not from the country column');
   ok(!/INDIA_SEND_WINDOW|indiaWindowOpen/.test(q), 'the queue carries no India window and queue_state reports none');
   ok(/isColdOutreachTemplate\(templateName\) && !isUkColdDestination\(toNumber\)/.test(q), 'the queue refuses a cold send to anything that is not a UK mobile');
@@ -182,8 +182,13 @@ console.log('\n── Sales can NOT queue an Indian mobile any more; UK rule unc
   const m = read('supabase/migrations/' + latest);
   const fn = m.slice(m.toLowerCase().indexOf('create or replace function public.sales_queue_opener'));
   /* 2026-10-14: 20261024110000 re-creates it (the live body, plus the team-default daily limit) — the checks below run on it. */
-  ok(latest === '20261024110000_whatsapp_pace_settings.sql', 'the newest sales_queue_opener is the pace-settings migration, which keeps the UK-only rule (' + latest + ')');
-  ok(fn.includes("elsif not (coalesce(v_lead.country, 'UK') = 'UK' and v_pk ~ '^7[0-9]{9}$') then v_reason := 'not_a_uk_mobile';"), 'the one cold test: a UK mobile, nothing else');
+  /* 2026-10-14: 20261025090000 re-creates it — the UK-only line becomes THE market rule (public.mobile_market) + the per-country
+     switch. The UK half of mobile_market is the old test, character for character; India is still never a market. */
+  ok(latest === '20261025090000_my_sg_markets.sql', 'the newest sales_queue_opener is the Malaysia / Singapore migration (' + latest + ')');
+  ok(fn.includes("elsif public.mobile_market(v_lead.country, v_pk) is null then v_reason := 'not_a_uk_mobile';")
+    && fn.includes("elsif not public.outreach_channel_on(public.mobile_market(v_lead.country, v_pk), 'whatsapp') then v_reason := 'country_off';"),
+    'the one cold test: a mobile in a market whose WhatsApp switch is on');
+  ok(m.includes("when coalesce(_country, 'UK') = 'UK' and _pk ~ '^7[0-9]{9}$' then 'UK'"), '…whose UK half is the old UK test, unchanged');
   ok(!/\^91/.test(fn), 'no India (91) alternative in it');
   for (const g of ["'not_yours'", "'archived'", "'client'", "'not_new'", "'already_contacted'", "'opted_out'", "'daily_limit'", "'no_phone'", "opener_contact_block"]) ok(fn.includes(g), '…every other guard kept: ' + g);
   const ukm = read('supabase/migrations/20261015090000_outreach_uk_only.sql');

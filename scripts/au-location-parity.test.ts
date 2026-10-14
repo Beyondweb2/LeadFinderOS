@@ -42,7 +42,8 @@ console.log('\n── the country dropdown ──');
 ok(DEFAULT_SEARCH_COUNTRY === 'UK' && SEARCH_COUNTRY_OPTIONS[0].value === 'UK' && SEARCH_COUNTRY_OPTIONS[1].value === 'Australia', 'UK is the default and first; Australia second');
 ok(countryName('UK') === 'United Kingdom' && countryName('Australia') === 'Australia' && countryName('NewZealand') === 'New Zealand', 'countries are shown by name ("United Kingdom", "New Zealand")');
 ok(SEARCH_COUNTRY_OPTIONS.every((o) => /^[A-Z]{2}$/.test(o.code) && !/[\u{1F1E6}-\u{1F1FF}]/u.test(o.name)), 'a compact ISO code beside each name — no flag emoji anywhere');
-ok(new Set(SEARCH_COUNTRY_OPTIONS.map((o) => o.value)).size === SEARCH_COUNTRY_OPTIONS.length && SEARCH_COUNTRY_OPTIONS.length === 20, 'all 20 Country values, once each');
+ok(new Set(SEARCH_COUNTRY_OPTIONS.map((o) => o.value)).size === SEARCH_COUNTRY_OPTIONS.length && SEARCH_COUNTRY_OPTIONS.length === 21, 'all 21 Country values (Malaysia joined 2026-10-14), once each');
+ok(SEARCH_COUNTRY_OPTIONS.filter((o) => o.primary).map((o) => o.value).join(',') === 'UK,Australia,Malaysia,Singapore', 'the markets worked today are first: UK, Australia, Malaysia, Singapore');
 ok(normaliseSearchCountry('Australia') === 'Australia' && normaliseSearchCountry('Narnia') === 'UK' && normaliseSearchCountry(undefined) === 'UK' && normaliseSearchCountry(null) === 'UK',
   'a stored value outside the list reads as the default (never sent as a bias)');
 ok(Math.max(...SEARCH_COUNTRY_OPTIONS.map((o) => o.value.length)) <= 20, 'every value fits search-leads\' country schema (max 20)');

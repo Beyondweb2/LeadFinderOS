@@ -166,7 +166,8 @@ console.log('7. "No WhatsApp" and "No mobile" read differently');
     ok(/no_whatsapp_needs_sms: \{[\s\S]*?label: 'No mobile'/.test(s) && /no_whatsapp: \{\s+label: 'No WhatsApp'/.test(s), `${p.split('/').pop()}: the pills say the same`);
   }
   ok(WHATSAPP_CAPABILITY_LABEL.not_mobile === 'No mobile' && WHATSAPP_CAPABILITY_LABEL.not_on_whatsapp === 'No WhatsApp', 'the WhatsApp capability chip agrees');
-  ok(Object.values(COLD_NOT_ELIGIBLE_LABEL).every((w) => /No mobile/.test(w) && !/No WhatsApp/.test(w)), 'the WhatsApp queue\'s "not a mobile" reasons say "flagged No mobile"');
+  // 2026-10-14: country_off is a real Malaysia / Singapore mobile whose country is switched off — it is NOT flagged.
+  ok(Object.entries(COLD_NOT_ELIGIBLE_LABEL).every(([k, w]) => k === 'country_off' ? /not flagged/.test(w) : /No mobile/.test(w) && !/No WhatsApp/.test(w)), 'the WhatsApp queue\'s "not a mobile" reasons say "flagged No mobile" (a switched-off country says "not flagged")');
   ok(/flagged No mobile/.test(read('src/components/WhatsAppQueuePanel.tsx')), 'the WhatsApp queue panel too');
 }
 

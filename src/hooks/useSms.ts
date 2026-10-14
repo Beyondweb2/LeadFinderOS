@@ -16,7 +16,9 @@ import { fetchCommsStatus } from '@/lib/smsClient';
 import { leadSourceFor } from '@/lib/outreachLeadColumns';
 import { reachedInConversation } from '@/lib/leadState';
 import { serviceWindowState } from '@/lib/serviceWindow';
-import { decideContactRoute, type RouteChannel, type RouteDecision, type RoutePurpose } from '@/lib/contactRouting';
+import { COLD_TEXT_REASON_MARK, decideContactRoute, type RouteChannel, type RouteDecision, type RoutePurpose } from '@/lib/contactRouting';
+import { useCountrySettings } from '@/hooks/useCountrySettings';
+import { marketsOn } from '@/lib/outreachMarkets';
 import { smsDeliveryState } from '@/lib/smsMessages';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -142,6 +144,7 @@ export function useContactDecision(leadId: string, purpose: RoutePurpose, extra?
   const wrong = useWrongNumber(leadId);
   const comms = useCommsStatus();
   const sms = useSmsThread(leadId);
+  const { settings: countrySettings } = useCountrySettings();
   const row = useQuery({
     queryKey: smsKeys.facts(leadId),
     enabled: !!leadId,
@@ -182,11 +185,12 @@ export function useContactDecision(leadId: string, purpose: RoutePurpose, extra?
       smsConfigured: comms.data ? comms.data.smsConfigured || comms.data.testMode : undefined,
       voiceConfigured: comms.data ? comms.data.voiceConfigured || comms.data.testMode : undefined,
       failed, alreadySent: extra?.alreadySent,
+      markets: { whatsapp: marketsOn(countrySettings, 'whatsapp'), sms: marketsOn(countrySettings, 'sms'), call: marketsOn(countrySettings, 'call') },
     }, purpose);
-  }, [row.data, wa.data, sms.data, activity.data, wrong.data, comms.data, role, purpose, extra?.failed, extra?.alreadySent]);
+  }, [row.data, wa.data, sms.data, activity.data, wrong.data, comms.data, role, purpose, extra?.failed, extra?.alreadySent, countrySettings]);
   const rowsNow = sms.data ?? [];
   /* What the composer may do: free text needs the conversation gate; the intro text needs the cold rules. */
-  const freeTextOpen = (decision?.options.find((o) => o.channel === 'sms')?.available ?? false) && !(decision?.options.find((o) => o.channel === 'sms')?.reason ?? '').startsWith('A UK mobile you have not texted');
+  const freeTextOpen = (decision?.options.find((o) => o.channel === 'sms')?.available ?? false) && !(decision?.options.find((o) => o.channel === 'sms')?.reason ?? '').includes(COLD_TEXT_REASON_MARK);
   const introOpen = (decision?.options.find((o) => o.channel === 'sms')?.available ?? false) && rowsNow.every((m) => m.direction !== 'outbound' || ['failed', 'undelivered', 'simulated'].includes(m.status));
   return { decision, crm: crm.data, isLoading: row.isLoading, lead: row.data, comms: comms.data, freeTextOpen, introOpen };
 }

@@ -21,13 +21,17 @@ const ADDRESS_COUNTRY: Record<string, string> = {
   'ireland': 'Ireland', 'new zealand': 'NewZealand', 'south africa': 'SouthAfrica',
   'singapore': 'Singapore', 'united arab emirates': 'UAE', 'uae': 'UAE', 'brazil': 'Brazil',
   'mexico': 'Mexico', 'japan': 'Japan', 'sweden': 'Sweden', 'thailand': 'Thailand',
+  'malaysia': 'Malaysia',
 };
 
-/** The lead-enum country an address is in, from its LAST comma segment; null when it names none. */
+/** The lead-enum country an address is in, from its LAST comma segment; null when it names none.
+ *  Singapore (2026-10-14): Google writes the country WITH the postcode — "…, Singapore 048616" — so a last
+ *  segment of "Singapore" + a 6-digit postcode is Singapore too. */
 export function countryFromAddress(address: string | null | undefined): string | null {
   const parts = String(address ?? '').split(',').map((p) => p.trim()).filter(Boolean);
   if (parts.length < 2) return null;              // a bare word is not an address
   const last = parts[parts.length - 1].toLowerCase().replace(/\s+/g, ' ');
+  if (/^singapore \d{6}$/.test(last)) return 'Singapore';
   return ADDRESS_COUNTRY[last] ?? null;
 }
 
