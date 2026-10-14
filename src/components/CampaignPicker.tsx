@@ -35,13 +35,17 @@ interface CampaignPickerProps {
    *  (e.g. bulk "Move to campaign (3)") where each pick fires onChange but the
    *  control isn't meant to display a persistent selection. Omit for normal use. */
   triggerLabel?: string;
+  /** A REQUIRED choice (CSV import, 2026-10-14): no "No campaign" / "All" option; nothing chosen shows this text. */
+  requiredPlaceholder?: string;
+  /** Marks the trigger for tests / QA. */
+  testId?: string;
 }
 
 /**
  * Thin campaign dropdown shared by Outreach (filter) and Find Leads (assign).
  * Includes an inline "New campaign…" action that opens the shared create dialog.
  */
-export function CampaignPicker({ value, onChange, mode, className, hideCreate = false, triggerLabel }: CampaignPickerProps) {
+export function CampaignPicker({ value, onChange, mode, className, hideCreate = false, triggerLabel, requiredPlaceholder, testId }: CampaignPickerProps) {
   const { campaigns, refetch } = useCampaigns();
   const { user } = useAuth();
   const { role } = useSubscription();
@@ -63,7 +67,7 @@ export function CampaignPicker({ value, onChange, mode, className, hideCreate = 
   const navigate = useNavigate();
 
   const sentinel = mode === 'filter' ? ALL_CAMPAIGNS : NO_CAMPAIGN;
-  const selectValue = value ?? sentinel;
+  const selectValue = value ?? (requiredPlaceholder ? '' : sentinel);
 
   const handleSelect = (v: string) => {
     if (v === NEW_CAMPAIGN) {
@@ -106,13 +110,15 @@ export function CampaignPicker({ value, onChange, mode, className, hideCreate = 
         // immediately, without a page reload.
         onOpenChange={(open) => { if (open) refetch(); }}
       >
-        <SelectTrigger className={className ?? 'h-9 w-[200px]'}>
-          {triggerLabel ? <span className="truncate">{triggerLabel}</span> : <SelectValue />}
+        <SelectTrigger className={className ?? 'h-9 w-[200px]'} data-testid={testId}>
+          {triggerLabel ? <span className="truncate">{triggerLabel}</span> : <SelectValue placeholder={requiredPlaceholder} />}
         </SelectTrigger>
         <SelectContent>
-          <SelectItem value={sentinel}>
-            {mode === 'filter' ? 'All campaigns' : 'No campaign'}
-          </SelectItem>
+          {!requiredPlaceholder && (
+            <SelectItem value={sentinel}>
+              {mode === 'filter' ? 'All campaigns' : 'No campaign'}
+            </SelectItem>
+          )}
           {campaigns.map((c) => (
             <SelectItem key={c.id} value={c.id}>
               {label(c)}
@@ -126,7 +132,8 @@ export function CampaignPicker({ value, onChange, mode, className, hideCreate = 
               </span>
             </SelectItem>
           )}
-          {!hideCreate && campaigns.length > 0 && (
+          {/* Never inside a form that would be lost by leaving the page (the required picker). */}
+          {!hideCreate && !requiredPlaceholder && campaigns.length > 0 && (
             <SelectItem value={MANAGE_CAMPAIGNS}>
               <span className="flex items-center gap-1.5 text-muted-foreground">
                 <Settings2 className="h-3.5 w-3.5" />

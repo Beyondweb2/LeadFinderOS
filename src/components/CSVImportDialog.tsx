@@ -1,4 +1,5 @@
 import { useRef, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -9,6 +10,8 @@ import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useTeamDirectory } from '@/hooks/useSalesCrm';
+import { useCampaigns } from '@/hooks/useCampaigns';
+import { CampaignPicker } from '@/components/CampaignPicker';
 import {
   IMPORT_FIELDS, IMPORT_FIELD_LABEL, IMPORT_FILE_MAX_BYTES, IMPORT_FILE_MAX_ROWS, IMPORT_BATCH_MAX,
   IMPORT_BATCH_NAME_MAX, withDefaultTrade, withImportCountry, countsByCountry, IMPORT_COUNTRIES, type ImportCountry,
@@ -24,11 +27,14 @@ import {
    DUPLICATE (same Place ID / phone / Maps listing) never becomes a second lead. POSSIBLE MATCH (same name only →
    imported and flagged; same website, or same name + same postcode / address → held until the person ticks
    "import these too") is shown on its own list and never disappears from the import by itself.
-   ⛔ Nobody is contacted: an import creates or fills in lead records only — no WhatsApp, no queue, no campaign,
-   no status change. The screen says so before the button is pressed.
+   ⛔ Nobody is contacted: an import creates or fills in lead records only — no WhatsApp, no queue, no launch,
+   no status change (joining the chosen campaign sends nothing). The screen says so before the button is pressed.
    2026-10-14 (test day, import_leads_v2): a BATCH NAME on every new lead (Outreach search finds it), a TRADE typed once
    for the rows with none, and — admin only — the OWNER of the new leads (an active teammate; one notice to them, never
-   one per lead). The server still decides; a salesperson's import is always their own. */
+   one per lead). The server still decides; a salesperson's import is always their own.
+   2026-10-14 (import_leads_v3): a REQUIRED campaign — an existing one or a new one made here (the shared campaign form).
+   Every NEW lead joins it on the server (lead_set_campaign); filled-in existing leads keep theirs. Joining a campaign
+   queues and sends nothing. */
 
 export interface CsvImportResult {
   createdIds: string[];
@@ -47,7 +53,7 @@ interface CSVImportDialogProps {
 type Step = 'pick' | 'map' | 'preview' | 'done';
 
 const importRpc: ImportRpc = (args) =>
-  (supabase.rpc as unknown as (n: string, a: unknown) => Promise<{ data: unknown; error: { message?: string } | null }>)('import_leads_v2', args);
+  (supabase.rpc as unknown as (n: string, a: unknown) => Promise<{ data: unknown; error: { message?: string } | null }>)('import_leads_v3', args);
 
 const emptyMapping = () => Object.fromEntries(IMPORT_FIELDS.map((f) => [f, null])) as ColumnMapping;
 
@@ -68,6 +74,9 @@ export function CSVImportDialog({ open, onOpenChange, onImported, isAdmin }: CSV
   const [importCountry, setImportCountry] = useState<ImportCountry | ''>(''); // '' = worked out from each row
   const [research, setResearch] = useState(false); // a researched lead file (Ethan's format) — rows built by buildResearchRows
   const [assignTo, setAssignTo] = useState(''); // '' = the person importing
+  const [campaignId, setCampaignId] = useState<string | null>(null); // required — the campaign every new lead joins
+  const { campaigns } = useCampaigns();
+  const qc = useQueryClient();
   const { user } = useAuth();
   const team = useTeamDirectory();
   const teammates = isAdmin ? (team.data ?? []).filter((m) => m.status === 'active' && m.role && m.user_id !== user?.id) : [];
@@ -76,7 +85,7 @@ export function CSVImportDialog({ open, onOpenChange, onImported, isAdmin }: CSV
   const reset = () => {
     setStep('pick'); setFile(null); setParsed(null); setMapping(emptyMapping()); setMapNotes([]);
     setError(null); setBusy(false); setProgress(null); setPreview(null); setResult(null); setImportPossible(false);
-    setBatchName(''); setDefaultTrade(''); setAssignTo(''); setImportCountry(''); setResearch(false);
+    setBatchName(''); setDefaultTrade(''); setAssignTo(''); setImportCountry(''); setResearch(false); setCampaignId(null);
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
@@ -128,9 +137,15 @@ export function CSVImportDialog({ open, onOpenChange, onImported, isAdmin }: CSV
     setBusy(true); setError(null); setProgress({ done: 0, total: rows.length });
     try {
       const rep = await runImport(importRpc, rows, commit, file?.name ?? null, (done, total) => setProgress({ done, total }), commit && importPossible,
-        { assignTo: isAdmin && assignTo ? assignTo : null, batch: batchName });
+        { assignTo: isAdmin && assignTo ? assignTo : null, batch: batchName, campaignId });
       if (commit) {
         setResult(rep); setStep('done');
+        if (rep.joinedCampaign) {
+          /* The campaign's counts and lead list re-read (Manage campaigns, the campaign page). */
+          void qc.invalidateQueries({ queryKey: ['my-campaigns'] });
+          void qc.invalidateQueries({ queryKey: ['campaign-detail'] });
+          void qc.invalidateQueries({ queryKey: ['campaign-leads'] });
+        }
         if (rep.createdIds.length || rep.updatedIds.length) {
           await onImported({ createdIds: rep.createdIds, updatedIds: rep.updatedIds });
         }
@@ -157,6 +172,10 @@ export function CSVImportDialog({ open, onOpenChange, onImported, isAdmin }: CSV
   });
 
   const owner = isAdmin && assignTo ? (team.byId.get(assignTo)?.display_name ?? 'that teammate') : isAdmin ? 'you (Paul)' : 'you';
+  const campaign = campaignId ? campaigns.find((c) => c.id === campaignId) ?? null : null;
+  /* A campaign launch messages only its OWNER's leads (docs/campaigns.md): say so when the new leads belong to someone else. */
+  const leadOwnerId = isAdmin && assignTo ? assignTo : user?.id;
+  const ownerMismatch = !!campaign && !!leadOwnerId && campaign.created_by !== leadOwnerId;
   const held = preview ? preview.counts.held : 0;
   const willAdd = preview ? preview.counts.new + (importPossible ? held : 0) : 0;
   const willFill = preview ? preview.counts.update : 0;
@@ -216,6 +235,13 @@ export function CSVImportDialog({ open, onOpenChange, onImported, isAdmin }: CSV
               </div>}
               <SubSection title="Tag this import" icon={ListChecks} tone="grey">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-2" data-testid="csv-tags">
+                  <div className="flex flex-col gap-1 text-sm min-w-0 sm:col-span-2">
+                    <span className="text-muted-foreground">Add to campaign *</span>
+                    <CampaignPicker mode="assign" value={campaignId} onChange={setCampaignId} requiredPlaceholder="Choose a campaign, or New campaign…" className="h-9 w-full min-w-0" testId="csv-campaign" />
+                    {ownerMismatch && (
+                      <span className="text-xs text-amber-600 dark:text-amber-400" data-testid="csv-campaign-owner-note">This campaign belongs to someone else. The leads still join it, but launching it only messages its owner's leads.</span>
+                    )}
+                  </div>
                   <label className="flex flex-col gap-1 text-sm min-w-0">
                     <span className="text-muted-foreground">Batch name</span>
                     <Input value={batchName} maxLength={IMPORT_BATCH_NAME_MAX} onChange={(e) => setBatchName(e.target.value)} placeholder="e.g. Ethan batch 14 Oct" data-testid="csv-batch" />
@@ -247,6 +273,9 @@ export function CSVImportDialog({ open, onOpenChange, onImported, isAdmin }: CSV
               {mapNotes.length > 0 && (
                 <ul className="text-xs text-muted-foreground list-disc pl-4 space-y-0.5">{mapNotes.map((n) => <li key={n}>{n}</li>)}</ul>
               )}
+              {campaignId == null && (
+                <p className="text-xs text-destructive">Choose the campaign these leads go into.</p>
+              )}
               {mapping.business_name == null && (
                 <p className="text-xs text-destructive">Choose the column that holds the business name.</p>
               )}
@@ -270,8 +299,8 @@ export function CSVImportDialog({ open, onOpenChange, onImported, isAdmin }: CSV
                 </Callout>
               )}
               <p className="text-sm break-words">
-                {willAdd > 0 ? <><strong>{willAdd}</strong> new lead{willAdd === 1 ? '' : 's'} will be added, owned by {owner}. </> : 'No new leads to add. '}
-                {willFill > 0 && <><strong>{willFill}</strong> of your existing leads will have blank details filled in (nothing is overwritten). </>}
+                {willAdd > 0 ? <><strong>{willAdd}</strong> new lead{willAdd === 1 ? '' : 's'} will be added, owned by {owner}, into the campaign <strong>{campaign?.name ?? 'you chose'}</strong>. </> : 'No new leads to add. '}
+                {willFill > 0 && <><strong>{willFill}</strong> of your existing leads will have blank details filled in (nothing is overwritten; they keep their campaign). </>}
                 Nobody is messaged, nothing is queued and no status changes.
               </p>
               <p className="text-xs text-muted-foreground" data-testid="csv-dup-explainer">
@@ -299,7 +328,7 @@ export function CSVImportDialog({ open, onOpenChange, onImported, isAdmin }: CSV
             <>
               <Callout tone="green" icon={CheckCircle2} testId="csv-import-result">
                 <>
-                  {result.counts.created} lead{result.counts.created === 1 ? '' : 's'} added{result.counts.updated ? `, ${result.counts.updated} filled in` : ''}.
+                  {result.counts.created} lead{result.counts.created === 1 ? '' : 's'} added{result.joinedCampaign ? ` to the campaign ${campaign?.name ?? ''}`.trimEnd() : ''}{result.counts.updated ? `, ${result.counts.updated} filled in` : ''}.
                   {' '}{result.counts.invalid + result.counts.duplicate_in_file + result.counts.skipped + result.counts.failed + result.counts.held > 0
                     ? `${result.counts.invalid + result.counts.duplicate_in_file + result.counts.skipped + result.counts.failed + result.counts.held} row(s) not added — listed below.`
                     : 'Every row was added.'}
@@ -337,12 +366,12 @@ export function CSVImportDialog({ open, onOpenChange, onImported, isAdmin }: CSV
                 {step === 'preview' ? 'Back' : 'Cancel'}
               </Button>
               {step === 'map' && (
-                <Button onClick={() => runCheck(false)} disabled={busy || mapping.business_name == null || (mapping.phone == null && mapping.email == null)} data-testid="csv-check">
+                <Button onClick={() => runCheck(false)} disabled={busy || campaignId == null || mapping.business_name == null || (mapping.phone == null && mapping.email == null)} data-testid="csv-check">
                   {busy ? 'Checking…' : `Check ${rows.length.toLocaleString()} row${rows.length === 1 ? '' : 's'}`}
                 </Button>
               )}
               {step === 'preview' && (
-                <Button onClick={() => runCheck(true)} disabled={busy || willAdd + willFill === 0} data-testid="csv-import">
+                <Button onClick={() => runCheck(true)} disabled={busy || campaignId == null || willAdd + willFill === 0} data-testid="csv-import">
                   {busy ? 'Importing…' : willAdd + willFill === 0 ? 'Nothing to import' : `Import ${willAdd} new${willFill ? ` + fill ${willFill}` : ''}`}
                 </Button>
               )}

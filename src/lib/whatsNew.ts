@@ -22,6 +22,21 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-14-import-campaign-select-page', date: '2026-10-14', title: 'CSV import into a campaign, and Select this page', audience: 'all',
+    body: 'Importing a CSV now asks which campaign the new leads go into. Outreach and Find Leads have a "Select this page" button next to Select all.',
+    report: {
+      added: [
+        'An "Add to campaign" choice on CSV import. Pick one of your campaigns, or make a new one there and then. You must choose one before you can check or import the rows.',
+        '"Select this page" on Outreach and on Find Leads results: it ticks only the rows showing now.',
+        'A line above the table saying how many leads are ticked and which mode is on: this page only, all matching (every page), or ticked by hand. "Clear" unticks them all.',
+      ],
+      changed: [
+        'Every NEW lead from an import joins the campaign you chose and shows there straight away. Existing leads that only had blanks filled in keep their campaign.',
+        'The box at the top of the tick column now says what it does: select all on every page (same as before).',
+      ],
+      removed: [],
+      effect: 'Imported leads land in the right campaign without moving them afterwards. Importing still sends nothing and queues nothing. Bulk actions act only on the ticked leads, with all the usual queue checks.',
+    } },
   { id: '2026-10-14-coverage-malaysia-singapore', date: '2026-10-14', title: 'Coverage: Malaysia and Singapore, and Language schools', audience: 'all',
     body: 'Coverage has a Country box (United Kingdom, Malaysia, Singapore). Language schools is now a trade. Imported language-school leads show under their own country and city.',
     report: {

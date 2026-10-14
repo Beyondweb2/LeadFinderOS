@@ -89,3 +89,15 @@ creates B. A and B each list only their own; every open / rename / stop / launch
 `unknown_campaign`; direct table read / update of another's campaign → 0 rows; " zz qa roofers  -  MANCHESTER "
 and "ZZ QA  ELECTRICIANS - leeds" → `name_taken`; availability says only taken; the admin lists P (plain), A
 (Test), B (test1). `scripts/campaign-ownership.test.ts` fences the code.
+
+## CSV import into a campaign (2026-10-14)
+
+- The CSV import screen has a REQUIRED "Add to campaign" choice (an existing campaign the person may use, or a new one
+  made from the picker's New campaign…). The screen calls `import_leads_v3` (migration `20261028090000`) = `import_leads_v2`
+  unchanged, plus `_campaign_id`: refused with `campaign_required` / `unknown_campaign` (`campaign_usable`) before anything
+  else; after a committed call every CREATED lead joins through `lead_set_campaign` (one activity row each), all or nothing
+  per call. Filled-in existing leads keep their campaign. Joining queues and sends nothing.
+- If the admin gives the new leads to a teammate but picks a campaign someone else owns, the screen warns that a launch
+  messages only the campaign owner's leads (the existing launch rule).
+- "Select this page" / "Select all (every page)" on Outreach and Find Leads results: `src/lib/selectionMode.ts` +
+  `SelectionModeBar` — mode derived from the ticked ids, never stored; bulk actions read the same selection as before.
