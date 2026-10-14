@@ -80,7 +80,9 @@ async function allInWaves(q: (from: number, to: number) => any): Promise<Record<
   return out;
 }
 
-interface Pair { trade: string; town: string }
+/* `country` (2026-10-14) is the lead's own stored country, sent so the page can show Malaysia / Singapore
+   coverage; measured / pooled pairs carry none. An older page ignores it. */
+interface Pair { trade: string; town: string; country?: string | null }
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
@@ -187,7 +189,7 @@ Deno.serve(async (req) => {
       });
       const leadsP = allInWaves((from, to) => service
         .from("outreach_leads")
-        .select("id, search_keyword, category, search_location, derived_town, status, whatsapp_sent_at, instantly_pushed_at, last_outreach_attempt_at, assigned_to_user_id")
+        .select("id, search_keyword, category, search_location, derived_town, country, status, whatsapp_sent_at, instantly_pushed_at, last_outreach_attempt_at, assigned_to_user_id")
         .eq("user_id", userId).eq("is_archived", false).order("id", { ascending: true }).range(from, to));
       const historyP = all((from, to) => service
         .from("search_history").select("keyword, location, radius")
@@ -223,12 +225,13 @@ Deno.serve(async (req) => {
          Aggregated per raw pair here (coverageKey folds case/plural on the client, as for every pair).
          ⚠️ The per-person COUNT goes to the admin only: a salesperson sees which teammates worked a
          town (names they already see as "Already added · <name>"), never how much. */
-      const workedBy = new Map<string, { trade: string; town: string; users: Map<string, number> }>();
+      const workedBy = new Map<string, { trade: string; town: string; country: string | null; users: Map<string, number> }>();
       for (const l of leads) {
         const trade = String(l.search_keyword || l.category || "").trim();
         const town = String(l.derived_town || l.search_location || "").trim();
         if (!trade || !town) continue;
-        const pair = { trade, town };
+        const country = typeof l.country === "string" && l.country ? l.country : null;
+        const pair = { trade, town, country };
         leadPairs.push(pair);
         /* ⛔ CONTACTED IS A POSITIVE TEST ON EVIDENCE OF A SEND, not "status is not new". Statuses are
            operator-editable and a list of the ones that mean untouched would go stale the moment one
@@ -240,8 +243,8 @@ Deno.serve(async (req) => {
           workedPairs.push(pair);
           const owner = typeof l.assigned_to_user_id === "string" ? l.assigned_to_user_id : "";
           if (owner) {
-            const k = `${trade}\u0000${town}`;
-            const e = workedBy.get(k) ?? { trade, town, users: new Map<string, number>() };
+            const k = `${trade}\u0000${town}\u0000${country ?? ""}`;
+            const e = workedBy.get(k) ?? { trade, town, country, users: new Map<string, number>() };
             e.users.set(owner, (e.users.get(owner) ?? 0) + 1);
             workedBy.set(k, e);
           }
@@ -251,6 +254,7 @@ Deno.serve(async (req) => {
       const workedByOut = [...workedBy.values()].map((e) => ({
         trade: e.trade,
         town: e.town,
+        country: e.country,
         users: [...e.users.entries()].map(([id, n]) => (isAdmin ? { id, n } : { id })),
       }));
 

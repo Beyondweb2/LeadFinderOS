@@ -18,6 +18,10 @@ import {
 } from '@/lib/coverageState';
 import { CoverageWorkers } from '@/components/CoverageWorkers';
 import { CoverageFoundAdded } from '@/components/CoverageFoundAdded';
+import {
+  COVERAGE_COUNTRIES, COVERAGE_COUNTRY_LABEL, DEFAULT_COVERAGE_COUNTRY, normaliseCoverageCountry, type CoverageCountry,
+} from '@/lib/coverageCountries';
+import { quickLocationValue } from '@/lib/locationPicker';
 
 /* ══ WHERE HAVE I BEEN? ═══════════════════════════════════════════════════════════════════════
    ⛔ WHAT THIS REPLACES: asking someone for town names. Every candidate town for a trade, with the
@@ -41,9 +45,18 @@ const STATE_TONE: Record<CoverageState, Tone> = {
 
 export default function Coverage() {
   const { user } = useAuth();
-  const { isLoading, error, gradeFor, regions, applyFilters, summarise, refetch } = useCoverage();
-
   const [params, setParams] = useSearchParams();
+  /* ⛔ THE COUNTRY (2026-10-14: UK, Malaysia, Singapore). In the URL like the trade — it is WHAT you are looking at —
+     but only when it is not the UK, so every UK link reads exactly as before. A bare URL restores the last country
+     chosen (local memory, like the trade). */
+  const [savedCountry, setSavedCountry] = usePersistedState<CoverageCountry>(
+    'coverage-country', DEFAULT_COVERAGE_COUNTRY,
+    { tier: 'local', scope: user?.id, validate: (d) => (COVERAGE_COUNTRIES.includes(d as CoverageCountry) ? (d as CoverageCountry) : null) },
+  );
+  const country: CoverageCountry = normaliseCoverageCountry(params.get('country') || savedCountry);
+  const isUk = country === 'UK';
+  const { isLoading, error, gradeFor, regions, applyFilters, summarise, refetch } = useCoverage(country);
+
   /* ⛔ THE URL STILL WINS; THE MEMORY ONLY FILLS A BARE ONE — fixed 2026-08-17 after Paul's report.
      The sidebar links to plain /coverage, so "URL is for what I am looking at" (§6c) was resetting
      the trade to the default on every return — and with it hid the row spinner of a mid-measure
@@ -82,16 +95,18 @@ export default function Coverage() {
   const regionRestored = useRef(false);
   useEffect(() => {
     if (trade !== savedTrade) setSavedTrade(trade);
+    if (country !== savedCountry) setSavedCountry(country);
     const next = new URLSearchParams(params);
     let dirty = false;
     if (!params.get('trade')) { next.set('trade', trade); dirty = true; }
+    if (!params.get('country') && !isUk) { next.set('country', country); dirty = true; }
     if (!regionRestored.current && !params.get('region') && savedRegion) {
       next.set('region', savedRegion); dirty = true;
     }
     regionRestored.current = true;
     if (dirty) setParams(next, { replace: true });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [trade, params]);
+  }, [trade, country, params]);
 
   /* ⛔ THE BAND IS ONE SETTING, SO IT PERSISTS AS ONE VALUE. Two keys could restore a half-band
      (a new min against a stale max) and silently show the wrong rows. `validate` rejects any stored
@@ -128,9 +143,13 @@ export default function Coverage() {
   const [storedOpen, setStoredOpen] = useState(false);
 
   /* Suppressed towns (none today) stay off the list; the page no longer offers a way to show them. */
+  /* ⛔ Malaysia / Singapore have no population figures (none is invented), so only the region filters them; the UK
+     keeps its population band exactly as before. */
   const rows = useMemo(
-    () => applyFilters(gradeFor(trade, false), { region, minPopulation: minPop, maxPopulation: maxPop }),
-    [gradeFor, trade, region, minPop, maxPop, applyFilters],
+    () => (isUk
+      ? applyFilters(gradeFor(trade, false), { region, minPopulation: minPop, maxPopulation: maxPop })
+      : gradeFor(trade, false).filter((r) => !region || r.region === region)),
+    [gradeFor, trade, region, minPop, maxPop, applyFilters, isUk],
   );
   const summary = useMemo(() => summarise(rows), [rows, summarise]);
 
@@ -149,6 +168,23 @@ export default function Coverage() {
 
       <div className="flex flex-wrap items-end gap-2">
         <div className="space-y-1">
+          <label className="text-xs font-medium text-muted-foreground">Country</label>
+          <Select value={country} onValueChange={(v) => {
+            /* A new country has different regions, so the region goes back to All. */
+            const next = new URLSearchParams(params);
+            if (v === 'UK') next.delete('country'); else next.set('country', v);
+            next.delete('region');
+            setParams(next, { replace: true });
+            setSavedCountry(normaliseCoverageCountry(v));
+            setSavedRegion('');
+          }}>
+            <SelectTrigger className="w-[170px] max-w-full h-9"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {COVERAGE_COUNTRIES.map((c) => <SelectItem key={c} value={c}>{COVERAGE_COUNTRY_LABEL[c]}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-1">
           <label className="text-xs font-medium text-muted-foreground">Trade</label>
           <Select value={trade} onValueChange={(v) => setParam('trade', v)}>
             <SelectTrigger className="w-[220px] max-w-full h-9"><SelectValue /></SelectTrigger>
@@ -164,7 +200,8 @@ export default function Coverage() {
             were about that town. The fold itself was always trade-wide (market-view's `niche`
             action takes a trade and no town); only the door was in the wrong place.
             ⚠️ FREE, and the label says so: `niche` re-reads stored audits and touches no paid API. */}
-        <div className="space-y-1">
+        {/* The niche check samples UK towns, so it is offered on the UK view only. */}
+        {isUk && <div className="space-y-1">
           <label className="text-xs font-medium text-muted-foreground">Whole trade</label>
           <Button
             variant={nicheOpen ? 'default' : 'outline'}
@@ -176,7 +213,7 @@ export default function Coverage() {
             <Telescope className="mr-1.5 h-3.5 w-3.5" />
             {nicheOpen ? 'Hide niche verdict' : 'Niche verdict'}
           </Button>
-        </div>
+        </div>}
         <div className="space-y-1">
           <label className="text-xs font-medium text-muted-foreground">Region</label>
           <Select value={region ?? '__all'} onValueChange={(v) => { setParam('region', v === '__all' ? null : v); setSavedRegion(v === '__all' ? '' : v); }}>
@@ -187,14 +224,14 @@ export default function Coverage() {
             </SelectContent>
           </Select>
         </div>
-        <div className="space-y-1">
+        {isUk && <div className="space-y-1">
           <label className="text-xs font-medium text-muted-foreground">Population</label>
           <div className="flex items-center gap-1.5">
             <Input type="number" value={minPop} onChange={(e) => setBand((b) => ({ ...b, min: Number(e.target.value) || 0 }))} className="h-9 w-[100px]" />
             <span className="text-xs text-muted-foreground">to</span>
             <Input type="number" value={maxPop} onChange={(e) => setBand((b) => ({ ...b, max: Number(e.target.value) || 0 }))} className="h-9 w-[100px]" />
           </div>
-        </div>
+        </div>}
       </div>
 
       {/* ⛔ ABOVE THE TOWN TABLE, BECAUSE IT IS THE QUESTION THAT COMES FIRST. "Is this trade worth
@@ -208,7 +245,7 @@ export default function Coverage() {
           (src/lib/nicheSample.ts). The older fold over whatever audits happen to be stored is a
           different method — mixed purposes, single runs, no chosen towns — so it is background only,
           behind its own button and never shown as the verdict. */}
-      {nicheOpen && (
+      {isUk && nicheOpen && (
         <div className="space-y-2">
           <NicheCheckCard key={trade} trade={tradeSearchWord(trade)} />
           <Button variant="ghost" size="sm" className="h-7 text-xs text-muted-foreground" onClick={() => setStoredOpen((v) => !v)} aria-expanded={storedOpen}>
@@ -224,7 +261,8 @@ export default function Coverage() {
         <div className="flex min-w-0 flex-wrap items-center gap-3 rounded-2xl bg-muted/40 px-3.5 py-2.5 ring-1 ring-inset ring-border/40">
           <span className="text-sm">
             <span className="font-semibold">{trade}</span>
-            {region ? <> in <span className="font-semibold">{region}</span></> : ' across all regions'}:{' '}
+            {region ? <> in <span className="font-semibold">{region}</span></> : ' across all regions'}
+            {!isUk && <> of <span className="font-semibold">{COVERAGE_COUNTRY_LABEL[country]}</span></>}:{' '}
             <span className="font-semibold text-foreground">{summary.started} of {summary.total}</span> started
           </span>
           <span className="flex flex-wrap gap-1.5">
@@ -246,8 +284,8 @@ export default function Coverage() {
         <ErrorState title="Couldn’t load coverage" detail={error} onRetry={() => { void refetch(); }} retryLabel="Retry" />
       ) : sorted.length === 0 ? (
         <EmptyState icon={MapPin} title="No towns match those filters.">
-          The table holds 12,000&ndash;250,000; widen the population
-          range to see the edges.
+          {isUk ? <>The table holds 12,000&ndash;250,000; widen the population
+          range to see the edges.</> : <>Choose All regions to see every town.</>}
         </EmptyState>
       ) : (
         <div className="overflow-x-auto rounded-lg border border-border">
@@ -255,7 +293,7 @@ export default function Coverage() {
             <thead className="bg-muted/50 text-xs text-muted-foreground">
               <tr>
                 <th className="px-3 py-2 text-left font-medium">Town</th>
-                <th className="px-3 py-2 text-left font-medium">Region</th>
+                <th className="px-3 py-2 text-left font-medium">{country === 'Malaysia' ? 'State' : 'Region'}</th>
                 <th className="px-3 py-2 text-right font-medium">Population</th>
                 <th className="px-3 py-2 text-left font-medium">{trade}</th>
                 <th className="px-3 py-2 text-right font-medium"></th>
@@ -266,6 +304,8 @@ export default function Coverage() {
                 <tr key={t.id} className="border-t border-border">
                   <td className="px-3 py-1.5">
                     <span className="font-medium">{t.name}</span>
+                    {t.aka && <span className="ml-1.5 text-xs text-muted-foreground">{t.aka}</span>}
+                    {t.fromLeads && <span className="ml-1.5 text-xs text-muted-foreground" title="Not on the town list: a lead or a search named this place.">from your leads</span>}
                   </td>
                   <td className="px-3 py-1.5 text-muted-foreground">{t.region ?? '—'}</td>
                   <td className="px-3 py-1.5 text-right tabular-nums text-muted-foreground">
@@ -305,7 +345,7 @@ export default function Coverage() {
                         suppressed when it went, the server action and uk_towns.suppressed_at stay, and a
                         suppressed town would still be left off this list. */}
                     <Button variant="ghost" size="sm" className="h-7 text-xs" asChild>
-                      <Link to={findLeadsHref(tradeSearchWord(trade), t.name)} title={`Search Google for ${tradeSearchWord(trade)} in ${t.name} and list them.`}>
+                      <Link to={findLeadsHref(tradeSearchWord(trade), isUk || t.name === 'Singapore' ? t.name : quickLocationValue(t.name, country), country)} title={`Search Google for ${tradeSearchWord(trade)} in ${t.name} and list them.`}>
                         Find leads
                       </Link>
                     </Button>
@@ -318,11 +358,15 @@ export default function Coverage() {
       )}
 
       {/* Required by the Open Government Licence wherever the list is shown. */}
-      <p className="text-xs text-muted-foreground">
+      {isUk ? <p className="text-xs text-muted-foreground">
         <MapPin className="mr-1 inline h-3 w-3" />
         Towns are ONS Built-Up Areas 2022. Contains OS data &copy; Crown copyright and database right
         2024. Source: Office for National Statistics licensed under the Open Government Licence v3.0.
-      </p>
+      </p> : <p className="text-xs text-muted-foreground">
+        <MapPin className="mr-1 inline h-3 w-3" />
+        Towns are the places Find Leads suggests for {COVERAGE_COUNTRY_LABEL[country]}, plus any place your leads or
+        searches name. No population figures are shown: we have no source for them. A lead counts here by its own country.
+      </p>}
     </div>
   );
 }

@@ -22,6 +22,25 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-14-coverage-malaysia-singapore', date: '2026-10-14', title: 'Coverage: Malaysia and Singapore, and Language schools', audience: 'all',
+    body: 'Coverage has a Country box (United Kingdom, Malaysia, Singapore). Language schools is now a trade. Imported language-school leads show under their own country and city.',
+    report: {
+      added: [
+        'A Country box on Coverage. The UK is still the default and works exactly as before.',
+        'Malaysian towns (Kuala Lumpur, George Town / Penang, Johor Bahru, Kuching, Ipoh, Kota Kinabalu, Melaka / Malacca, Shah Alam, Petaling Jaya and more) with their state, and Singapore with its main areas.',
+        'Language schools as a trade, next to Roofers and Web designers / digital agencies.',
+        'A town your leads name that is not on the list gets its own row, marked "from your leads", so no lead goes missing.',
+      ],
+      changed: [
+        'A lead counts under the country stored on it. City text like "Kuala Lumpur (Cheras)", "Ipoh, Perak" or "Penang" is read as the right town.',
+        'Find leads on a Coverage row now searches in that row’s country.',
+        'CSV import keeps the batch name exactly as typed. Before, every letter "s" in a batch name was dropped ("Language schools" became "Language  chool").',
+      ],
+      removed: [
+        'On Malaysia and Singapore there is no population filter and no Niche verdict: we have no population figures there, and the niche check samples UK towns.',
+      ],
+      effect: 'Pick Malaysia or Singapore on Coverage to see which cities have language-school leads, which are contacted, and which are untouched.',
+    } },
   { id: '2026-10-14-report-offer-and-name', date: '2026-10-14', title: 'Your name on messages, and the AI visibility report offer for language schools', audience: 'all',
     body: 'The first time you log in you are asked one thing: the name to put at the end of your WhatsApp messages. A new WhatsApp message, the AI visibility report offer, can now be queued for language-school leads.',
     report: {

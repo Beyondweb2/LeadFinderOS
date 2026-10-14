@@ -61,6 +61,28 @@ allow MY and SG for SMS and voice or Twilio refuses the send.
   the file name, trade to Language schools — only for that shape; every other file imports exactly as before.
 - Checked 2026-10-14 against the real file (100 rows, kept out of the repo), check-only as admin, rolled back:
   100 valid, all new — Malaysia 79, Singapore 21, 0 invalid, 0 duplicates.
+- ⚠️ **The batch name lost every "s" until 2026-10-14** (`regexp_replace(_batch, 's+', …)` — the backslash of `\s+` was lost
+  when `20261024100000` was written, and copied twice). Fixed by `20261027090000_import_batch_name_spaces.sql` (the live
+  definition with that one line changed, read back). No lead had a batch when it was found.
+
+## Coverage (2026-10-14, `feat/coverage-my-sg`)
+
+- Coverage has a Country (UK / Malaysia / Singapore; URL `?country=` only when not the UK; remembered like the trade).
+  The rules: `src/lib/coverageCountries.ts`. The UK view reads `uk_towns` and counts every lead EXCEPT a Malaysia /
+  Singapore one — the same rows as before (no UK town can match those).
+- Malaysia / Singapore towns = Find Leads' `SUGGESTED_LOCATIONS` for the country (reused) + a few towns Ethan's file named,
+  with the state / URA region. **No population** (no source in the app; none invented) — the population band and the
+  Niche verdict (it samples UK towns) are UK-only.
+- A lead counts by its OWN `country`. City text is read by `resolveCoverageTown`: the first piece (outside brackets, split on
+  `, ; /`, then bracket contents) that is a listed town or alias wins — "Kuala Lumpur (Cheras)" → Kuala Lumpur, "Penang" →
+  George Town, "Skudai (Johor Bahru)" → Johor Bahru. Unlisted Malaysian place → its own row ("from your leads"); unlisted
+  Singapore → Singapore. Search runs (no stored country) count by their location's tail ("…, Malaysia") or a listed town.
+- Find leads on a row passes `country=` and Find Leads waits for that country before the arrival search runs.
+- Language schools is a trade (`trades.ts`; searched and stored as "Language schools", what the research import stores).
+- Checked 2026-10-14 with Ethan's real file (rolled back, 0 kept): imported as admin with batch "Language schools" →
+  100 created (79 MY / 21 SG), batch intact, trade Language schools, town = the city as written, no `derived_town`. Folded
+  through the Coverage code: all 79 Malaysian leads land on a row (KL 22, George Town 7, Johor Bahru 6, Kuching 6 …, 7 on
+  "from your leads" rows), all 21 Singapore leads under Singapore; none in the UK view.
 
 ## Deploys
 

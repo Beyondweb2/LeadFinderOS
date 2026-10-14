@@ -32,6 +32,7 @@ import { PageHeader } from '@/components/salesDash/primitives';
 import { useToast } from '@/hooks/use-toast';
 import { logDataAccess } from '@/lib/dataAccessLog';
 import type { Country, Lead, SearchMode } from '@/types/lead';
+import { normaliseSearchCountry } from '@/lib/locationPicker';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useSubscription } from '@/hooks/useSubscription';
 import { lookupIdentities, useSalesActions, useTeamDirectory } from '@/hooks/useSalesCrm';
@@ -131,6 +132,9 @@ const Index = () => {
   const runLeadSearchOnArrival = useRef(searchParams.get('run') === 'search').current;
   const urlKeyword = (searchParams.get('keyword') ?? '').trim();
   const urlLocation = (searchParams.get('location') ?? '').trim();
+  /* Coverage's Find leads names the country (2026-10-14); an unknown value is ignored, never used as a bias. */
+  const urlCountryRaw = (searchParams.get('country') ?? '').trim();
+  const urlCountry: Country | undefined = urlCountryRaw && normaliseSearchCountry(urlCountryRaw) === urlCountryRaw ? (urlCountryRaw as Country) : undefined;
   const { user } = useAuth();
   /* ⛔ THESE WERE useState AND THAT WAS THE BUG. They were set only by pressing Search, while the
      RESULTS came back from sessionStorage on mount — so returning to this page rather than
@@ -530,6 +534,7 @@ const Index = () => {
              persisted value; a plain visit to /find-leads still restores whatever was last used. */
           initialKeyword={urlKeyword || undefined}
           initialLocation={urlLocation || undefined}
+          initialCountry={urlCountry}
           /* Runs the search once, on arrival, when Coverage asked for it. */
           autoSubmit={runLeadSearchOnArrival}
         />
