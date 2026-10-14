@@ -11,6 +11,9 @@ import { coldWhatsAppVerdict } from '@/lib/coldWhatsAppEligibility';
 import { COUNTRY_OFF, marketsOn } from '@/lib/outreachMarkets';
 import { useCountrySettings } from '@/hooks/useCountrySettings';
 import { isInitialOpener } from '@/lib/openerVariant';
+import { queueDropWords, REPORT_OFFER_TEMPLATE } from '@/lib/reportOfferTemplate';
+import { checkReportOffer } from '@/lib/reportOfferCheck';
+import { useAuth } from '@/hooks/useAuth';
 import { getTemplateSendability } from '@/lib/whatsappTemplates';
 import { useLeadPermissions } from '@/hooks/useLeadPermissions';
 import { salesQueueOpener } from '@/lib/leadRpc';
@@ -39,6 +42,17 @@ export function WhatsAppLeadControls({
 }) {
   const [busy, setBusy] = useState(false);
   const { toast } = useToast();
+  const { user } = useAuth();
+  /* The report offer is checked before it is queued (2026-10-14): a reason, never a failed send later. Fails closed. */
+  const reportOfferBlocked = async (): Promise<boolean> => {
+    if (template !== REPORT_OFFER_TEMPLATE) return false;
+    const c = await checkReportOffer([lead.id]);
+    const r = c.ok ? c.results[lead.id] : null;
+    if (!r) { toast({ title: 'Not queued', description: 'Could not check this lead for the report offer, so nothing was queued.', variant: 'destructive' }); return true; }
+    if (!r.ok) { toast({ title: 'Not queued', description: `Report offer: ${r.reason ?? 'not sendable'}.`, variant: 'destructive' }); return true; }
+    if (r.warnings.length) toast({ title: 'Check before it sends', description: `This lead is ${r.warnings.join(' and ')}.` });
+    return false;
+  };
   const { settings: countrySettings } = useCountrySettings();
   /* ⛔ SAME CONTROL, BOTH ROLES (2026-09-27). The admin stores the template on the lead and queues it
      directly, as before. A salesperson cannot write the lead row: they choose the opener here and
@@ -53,7 +67,7 @@ export function WhatsAppLeadControls({
      outranks the sending window, and an unreadable state never claims it will send. */
   const queueLine = queuedLeadLine(useQueueState(queued), lead.phone);
   /* A salesperson's single-lead queue is the bulk opener path, so it offers the approved openers. */
-  const options = salesPath ? WHATSAPP_TEMPLATES.filter((t) => isInitialOpener(t.value)) : WHATSAPP_TEMPLATES;
+  const options = salesPath ? WHATSAPP_TEMPLATES.filter((t) => isInitialOpener(t.value) || t.value === REPORT_OFFER_TEMPLATE) : WHATSAPP_TEMPLATES;
   /* A template must be CHOSEN before this lead can be queued. Only a name that is currently in the
      allowlist counts: a lead can be carrying a value from a removed or renamed template, and
      inheriting that silently is the same problem as substituting one. Removing from the queue is
@@ -66,6 +80,7 @@ export function WhatsAppLeadControls({
     if (!templateChosen) return;
     setBusy(true);
     try {
+      if (await reportOfferBlocked()) return;
       const r = await salesQueueOpener([lead.id], template);
       if (!r.ok) { toast({ title: 'Not queued', description: refusalText(r.error), variant: 'destructive' }); return; }
       const skipped = Object.keys((r.skipped ?? {}) as Record<string, number>);
@@ -117,6 +132,7 @@ export function WhatsAppLeadControls({
             return;
           }
         }
+        if (await reportOfferBlocked()) return;
         const { lineType, whatsappEligible } = classifyLineType(lead.phone, lead.country);
         if (!whatsappEligible) {
           await onUpdate(lead.id, {
@@ -138,6 +154,7 @@ export function WhatsAppLeadControls({
           // of nowhere and looked chosen. The button is now disabled until one is picked, and this
           // write is unreachable without it.
           whatsapp_template: template,
+          queued_by_user_id: user?.id ?? null, // the report offer is signed with THIS person's own name
           whatsapp_attempts: 0, // fresh retries (e.g. re-queuing a whatsapp_failed lead)
           line_type: lineType, // cache the offline result
           contact_method: 'whatsapp', // attribute to WhatsApp immediately
@@ -168,7 +185,10 @@ export function WhatsAppLeadControls({
       summary={`Sent ${sentDay}${lead.whatsapp_template ? ` · ${lead.whatsapp_template}` : ''}${lead.whatsapp_delivery_status ? ` (${lead.whatsapp_delivery_status})` : ''}`} />;
   }
   const summary = queued ? `Queued${lead.whatsapp_template ? ` · ${lead.whatsapp_template}` : ''}` : lead.status === 'whatsapp_failed' ? 'Last send failed' : 'Not queued';
-  const alert = lead.status === 'whatsapp_failed' && !queued ? (
+  const dropped = !queued ? queueDropWords(lead.whatsapp_delivery_status) : null;
+  const alert = dropped ? (
+    <p className="text-[11px] leading-relaxed text-amber-700 dark:text-amber-300" data-testid="queue-drop-reason">{dropped}</p>
+  ) : lead.status === 'whatsapp_failed' && !queued ? (
     <p className="text-[11px] leading-relaxed text-amber-700 dark:text-amber-300">Previous WhatsApp send failed (temporary). You can re-queue to try again.</p>
   ) : queued && queueLine.tone === 'paused' ? (
     <p className="text-[11px] font-medium text-amber-700 dark:text-amber-300" data-testid="queued-paused">{queueLine.text}</p>

@@ -34,6 +34,11 @@ import { AUTO_PAUSE_WINDOW_MIN, FAILED_SEND_STATUSES, MAX_DAILY_CAP, autoPauseVe
 import { STRONG_STATUSES, postgrestList } from "../../../src/lib/strongStatuses.ts";
 import { qaSendVerdict } from "../../../src/lib/qaSafety.ts";
 import { loadQaExclusions, qaSendHold } from "../_shared/qa-guard.ts";
+import { formatVisibilityScore, REPORT_OFFER_REFUSAL_WORDS, REPORT_OFFER_TEMPLATE, REPORT_OFFER_WARNING_WORDS, reportOfferRefusal, reportOfferWarnings, ukWordedTemplateRefusal, type ReportOfferRefusal } from "../../../src/lib/reportOfferTemplate.ts";
+import { senderMessageName } from "../_shared/sender-name.ts";
+import { templateAvailability } from "../_shared/template-status.ts";
+import { TEMPLATE_UNAVAILABLE_CODES } from "../../../src/lib/whatsappLinkTemplates.ts";
+import { HOOK_INCOMPLETE_REASON, HOOK_NO_GAP_REASON } from "../_shared/audit-reply.ts";
 
 // process-whatsapp-queue — the WhatsApp outreach processor.
 //
@@ -373,7 +378,21 @@ const TEMPLATES: Record<string, { lang: string; vars: TemplateVar[] }> = {
      (scripts/re-engage-vars.test.ts asserts both directions). */
   findable_signup_link: { lang: "en", vars: ["greeting_name", "signup_url"] },
   findable_onboarding: { lang: "en", vars: ["greeting_name", "onboarding_form_url"] },
+  /* ai_visibility_report_offer (2026-10-14, src/lib/reportOfferTemplate.ts) — queue-sent, cold. Mirrors WA_TEMPLATES. */
+  ai_visibility_report_offer: { lang: "en", vars: ["name_or_there", "town", "competitors", "visibility_score", "audit_url", "sender_name"] },
 };
+
+/* ── ai_visibility_report_offer: a resolver refusal, in the template's own reasons ── */
+function reportOfferReasonFromResolver(reason: string): ReportOfferRefusal {
+  if (reason.startsWith(HOOK_NO_GAP_REASON)) return "named_in_answers";
+  if (reason.startsWith(HOOK_INCOMPLETE_REASON)) return "no_score";
+  if (/competitor/i.test(reason)) return "no_competitors";
+  return "no_audit";
+}
+/** Meta statuses that mean "do not send this template now" (UNKNOWN still tries: Meta decides, never a loop). */
+const META_NOT_SENDABLE = new Set(["PENDING", "IN_APPEAL", "REJECTED", "PAUSED", "DISABLED", "LIMIT_EXCEEDED", "NOT_FOUND"]);
+/** Templates whose live Meta status the drip reads before each send (registered while in review). */
+const META_STATUS_GATED: ReadonlySet<string> = new Set([REPORT_OFFER_TEMPLATE]);
 /* NO DEFAULT_TEMPLATE.
    It used to be booking_page_intro, applied whenever a lead's whatsapp_template was unset or
    unrecognised. That turned a registration slip into a wrong message: a plumber could receive a
@@ -505,13 +524,15 @@ Deno.serve(async (req) => {
        Every other mode — the tick, send_now, pause, the reply rules — is queue configuration and
        stays admin-only. */
     let isAdmin = false;
+    let callerId: string | null = null;
     let salesActor: { id: string; email?: string; role: "sales" } | null = null;
     if (!isCron) {
       void anonKey;
       const who = await resolveActor(req, service);
       if (!who.ok) return json({ ok: false, error: who.error === "no_role" ? "forbidden" : who.error, detail: who.detail }, who.status);
+      callerId = who.actor.id;
       if (who.actor.role === "admin") isAdmin = true;
-      else if (who.actor.role === "sales" && (mode === "contact_check" || mode === "suppress_lead" || mode === "queue_state")) salesActor = { ...who.actor, role: "sales" };
+      else if (who.actor.role === "sales" && (mode === "contact_check" || mode === "suppress_lead" || mode === "queue_state" || mode === "report_offer_check")) salesActor = { ...who.actor, role: "sales" };
       else return json({ ok: false, error: "forbidden" }, 403);
     }
     /* ⛔ queue_state — READ-ONLY, BOTH ROLES (2026-09-28). Is the queue sending right now? A salesperson
@@ -937,6 +958,38 @@ Deno.serve(async (req) => {
        ⚠️ IT REPORTS, IT DOES NOT DECIDE. The authoritative refusals stay at send time in the drip
        and in send-whatsapp-message; this makes the queue dialog honest before an operator commits.
        A caller that cannot reach this endpoint must fail towards NOT queueing - see the SPA side. */
+    /* ══ mode 'report_offer_check' — CAN THESE LEADS GET ai_visibility_report_offer? (2026-10-14) ══════════════════
+       Read-only, both roles (a salesperson only for leads assigned to them). The SAME resolver the send uses
+       (resolveAuditReplyVars) answers competitors / score / report link / "named in the answers", so the queue panel
+       says why BEFORE queueing; the drip asks again at send time. Warnings (country, trade) never block.
+       ⛔ The sender name is the CALLER's own — the person who will queue it. */
+    if (mode === "report_offer_check") {
+      const askedIds: string[] = (Array.isArray(body.lead_ids) ? body.lead_ids : [])
+        .map((x: unknown) => String(x ?? "")).filter((x: string) => /^[0-9a-f-]{36}$/i.test(x)).slice(0, 200);
+      const results: Record<string, { ok: boolean; refusal: ReportOfferRefusal | null; reason: string | null; warnings: string[] }> = {};
+      const sender = await senderMessageName(service, callerId);
+      if (askedIds.length) {
+        let q = service.from("outreach_leads").select("id, phone, country, category, search_keyword").in("id", askedIds);
+        if (salesActor) q = q.eq("assigned_to_user_id", salesActor.id);
+        const { data: rows, error: rowsErr } = await q;
+        if (rowsErr) return json({ ok: false, error: "report_offer_check_failed", detail: "could not read the leads" }, 200);
+        const list = (rows ?? []) as Array<{ id: string; phone: string | null; country: string | null; category: string | null; search_keyword: string | null }>;
+        for (let i = 0; i < list.length; i += 5) {
+          await Promise.all(list.slice(i, i + 5).map(async (l) => {
+            const digits = toWhatsAppDigits(l.phone ?? "", l.country);
+            const warnings = reportOfferWarnings({ market: mobileMarketOf(digits), trade: l.category || l.search_keyword || "" }).map((w) => REPORT_OFFER_WARNING_WORDS[w]);
+            let refusal: ReportOfferRefusal | null;
+            const ar = await resolveAuditReplyVars(service, l.id, { templateName: REPORT_OFFER_TEMPLATE });
+            if (!ar.ok) refusal = reportOfferReasonFromResolver(ar.reason);
+            else refusal = reportOfferRefusal({ hasAudit: true, competitors: ar.competitors, score: formatVisibilityScore(ar.visibilityPct), link: ar.link, namedInAnswers: false });
+            if (!refusal && !sender) refusal = "no_sender";
+            results[l.id] = { ok: !refusal, refusal, reason: refusal ? REPORT_OFFER_REFUSAL_WORDS[refusal] : null, warnings };
+          }));
+        }
+      }
+      for (const id of askedIds) if (!results[id]) results[id] = { ok: false, refusal: null, reason: "not one of your leads", warnings: [] };
+      return json({ ok: true, mode, sender, results });
+    }
     if (mode === "contact_check") {
       /* ══ + THE REAL-CONTACT GUARD, PER LEAD (2026-10-05, opener consistency fix) ══════════════════
          Sent `lead_ids`, it also answers "has this prospect had a genuine conversation with us?" from the ONE
@@ -1553,7 +1606,7 @@ Deno.serve(async (req) => {
        badge, and re-enters the drip the moment its town verifies. */
     const queuedQuery = service
       .from("outreach_leads")
-      .select("id, business_name, phone, email, country, whatsapp_template, whatsapp_attempts, whatsapp_delivery_status, whatsapp_ever_delivered, previous_status, user_id, campaign_id, queued_at, assigned_to_user_id");
+      .select("id, business_name, phone, email, country, whatsapp_template, whatsapp_attempts, whatsapp_delivery_status, whatsapp_ever_delivered, previous_status, user_id, campaign_id, queued_at, assigned_to_user_id, queued_by_user_id");
     const { data: queuedRows } = await (qaDrill ? queuedQuery.eq("id", qaDrillLeadId as string) : queuedQuery)
       .eq("status", "queued")
       .eq("is_archived", false)
@@ -1977,7 +2030,7 @@ Deno.serve(async (req) => {
        EVERY builder of its payload and count them before believing you have them all.
        ⚠️ The guard did its job: it refused rather than sending a message with a missing link, and
        failed_temporary means the lead retries rather than being burned. */
-    const templateExtra: { trade?: string; competitors?: string; rivals?: string[]; onboardingUrl?: string; town?: string; auditUrl?: string; siteFault?: string; siteFindings?: string } = {};
+    const templateExtra: { trade?: string; competitors?: string; rivals?: string[]; onboardingUrl?: string; town?: string; auditUrl?: string; siteFault?: string; siteFindings?: string; visibilityScore?: string; senderName?: string } = {};
     /* The ordered deep-crawl finding kinds this campaign send's {{6}} carried, for
        whatsapp_messages.findings_shown. Null for every template that does not carry site findings. */
     let campaignFindingsShown: string[] | null = null;
@@ -1999,8 +2052,35 @@ Deno.serve(async (req) => {
       }
       templateExtra.onboardingUrl = ob.url;
     }
+    /* ⛔ ai_visibility_report_offer (2026-10-14): a resolver refusal is FINAL for this template — "named in the answers",
+       "no competitors", "no score" cannot improve without a new check — so the lead leaves the queue with the reason on
+       it (report_offer_<reason>), never left to wait and never sent as something else. An audit still RUNNING waits as usual. */
+    const reportLead = lead as Record<string, unknown>;
+    const dequeueReportOffer = async (refusal: ReportOfferRefusal, detail?: string) => {
+      await service.from("outreach_leads").update({
+        status: statusBeforeQueue(reportLead.previous_status as string | null),
+        whatsapp_delivery_status: "report_offer_" + refusal, contact_method: null, queued_at: null, previous_status: null,
+      }).eq("id", reportLead.id);
+      return json({
+        ok: true, skipped: "report_offer_" + refusal,
+        reason: (reportLead.business_name ?? "That lead") + " was not sent the report offer: " + REPORT_OFFER_REFUSAL_WORDS[refusal] + "." + (detail ? " " + detail : ""),
+        lead_id: reportLead.id, business: reportLead.business_name, ...statusPayload,
+      });
+    };
+    if (tvars.includes("sender_name")) {
+      /* {{6}} is the QUEUING person's own name — never the owner's, the assignee's or a default. */
+      templateExtra.senderName = await senderMessageName(service, lead.queued_by_user_id as string | null);
+      if (!templateExtra.senderName) return await dequeueReportOffer("no_sender", "Nobody is recorded as queuing it — re-queue it yourself.");
+    }
     if (buildsFromAudit(tvars)) {
       const ar = await resolveAuditReplyVars(service, lead.id as string, { templateName });
+      if (!ar.ok && templateName === REPORT_OFFER_TEMPLATE) {
+        const st0 = (await readAuditStates(service, [lead.id as string])).get(lead.id as string);
+        // deno-lint-ignore no-explicit-any
+        const d0 = st0 ? decideOutreachAudit(lead as any, st0) : null;
+        const why = reportOfferReasonFromResolver(ar.reason);
+        if (!(why === "no_audit" && d0 && (d0.start || d0.wait))) return await dequeueReportOffer(why);
+      }
       if (!ar.ok) {
         /* 🔴 NO COMPLETED AUDIT. THIS USED TO DEQUEUE UNCONDITIONALLY, AND THAT WAS THE BUG.
            `status: "not_contacted"` is right for a lead that can NEVER be audited - a gated lead
@@ -2084,6 +2164,11 @@ Deno.serve(async (req) => {
       if (tvars.includes("site_fault")) templateExtra.siteFault = ar.siteFault ?? "";
       if (tvars.includes("site_findings")) templateExtra.siteFindings = ar.siteFindings ?? "";
       if (tvars.includes("site_findings")) campaignFindingsShown = ar.siteFindingsKinds ?? null;
+      if (tvars.includes("visibility_score")) templateExtra.visibilityScore = formatVisibilityScore(ar.visibilityPct);
+      if (templateName === REPORT_OFFER_TEMPLATE) {
+        const refusal = reportOfferRefusal({ hasAudit: true, competitors: ar.competitors, score: templateExtra.visibilityScore ?? "", link: ar.link, namedInAnswers: false });
+        if (refusal) return await dequeueReportOffer(refusal);
+      }
       // Its "url" var is the AUDIT REPORT link, so it replaces the claim link for this send.
       // Sending the site claim link under audit_reply's copy ("we ran a full report … <link>")
       // would point the prospect at the wrong page entirely.
@@ -2132,6 +2217,30 @@ Deno.serve(async (req) => {
         reason: `${lead.business_name ?? "That lead"} is not a UK mobile - cold WhatsApp outreach is UK only, so nothing was sent.`,
         lead_id: lead.id, business: lead.business_name, ...statusPayload,
       });
+    }
+    /* ⛔ THE FOUR UK-WORDED TEMPLATES NEVER GO OUTSIDE THE UK (2026-10-14, reportOfferTemplate.ts): £ prices and UK figures
+       in a message to Malaysia or Singapore. Dequeued with the reason on the lead. */
+    const ukWorded = ukWordedTemplateRefusal(templateName, coldMarket);
+    if (ukWorded) {
+      await service.from("outreach_leads").update({
+        status: statusBeforeQueue(lead.previous_status as string | null),
+        whatsapp_delivery_status: "uk_template_wrong_country", contact_method: null, queued_at: null, previous_status: null,
+      }).eq("id", lead.id);
+      return json({ ok: true, skipped: "uk_template_wrong_country", reason: ukWorded, lead_id: lead.id, business: lead.business_name, ...statusPayload });
+    }
+    /* ⛔ META'S LIVE STATUS FOR A TEMPLATE REGISTERED WHILE IN REVIEW (2026-10-14). Not approved / rejected / paused →
+       nothing is sent, the lead leaves the queue with Meta's word on it (template_<status>), and nothing retries it. An
+       unreadable status still tries (Meta decides; a refusal below is also final, never a loop). */
+    if (META_STATUS_GATED.has(templateName)) {
+      const avail = await templateAvailability(service, templateName);
+      if (META_NOT_SENDABLE.has(avail.status)) {
+        const token = "template_" + avail.status.toLowerCase();
+        await service.from("outreach_leads").update({
+          status: statusBeforeQueue(lead.previous_status as string | null),
+          whatsapp_delivery_status: token, contact_method: null, queued_at: null, previous_status: null,
+        }).eq("id", lead.id);
+        return json({ ok: true, skipped: token, reason: "Meta says " + templateName + " is " + avail.status.toLowerCase().replace("_", " ") + " — nothing was sent and it will not retry.", lead_id: lead.id, business: lead.business_name, ...statusPayload });
+      }
     }
 
     // Cross-channel suppression: "one no = suppressed everywhere". If this number opted
@@ -2313,7 +2422,7 @@ Deno.serve(async (req) => {
     let failCode: number | undefined;
     let sendError: string | null = null;
     const campaignPayload = claimTemplatePayload(templateName, lang, lead.business_name as string, resolvedUrl, templateExtra);
-    const campaignBody = renderTemplateBody(templateName, lead.business_name as string, resolvedUrl, templateExtra.trade, templateExtra.competitors, undefined, templateExtra.town, templateExtra.siteFault, templateExtra.siteFindings);
+    const campaignBody = renderTemplateBody(templateName, lead.business_name as string, resolvedUrl, templateExtra.trade, templateExtra.competitors, undefined, templateExtra.town, templateExtra.siteFault, templateExtra.siteFindings, templateExtra.visibilityScore, templateExtra.senderName);
     const campaignSnapshot = createTemplateSnapshot({ templateName, language: lang, body: campaignBody, payload: campaignPayload });
 
     /* ⛔ QA SAFETY: a fixture takes the test-mode branch for THIS send (simulated, test_mode true);
@@ -2458,9 +2567,20 @@ Deno.serve(async (req) => {
         lead.whatsapp_ever_delivered === true ||
         !!site?.first_opened_at ||
         ["delivered", "read"].includes((lead.whatsapp_delivery_status as string) ?? "");
-      await service.from("outreach_leads")
-        .update(leadFailurePatch(failCode, (lead.whatsapp_attempts as number) ?? 0, nowIso, hasPriorSuccess))
-        .eq("id", lead.id);
+      /* ⛔ META SAYS THE TEMPLATE ITSELF CANNOT BE USED (not approved / paused / disabled / wrong variables, 2026-10-14):
+         retrying the same message changes nothing, so the lead leaves the queue with the reason and is never retried. */
+      if (failCode !== undefined && (TEMPLATE_UNAVAILABLE_CODES.has(failCode) || failCode === 132000)) {
+        await service.from("outreach_leads").update({
+          status: statusBeforeQueue(lead.previous_status as string | null),
+          whatsapp_delivery_status: failCode === 132000 ? "template_vars_mismatch" : "template_unavailable",
+          whatsapp_attempts: attempts, contact_method: null, queued_at: null, previous_status: null,
+        }).eq("id", lead.id);
+        if (META_STATUS_GATED.has(templateName)) await templateAvailability(service, templateName, { force: true });
+      } else {
+        await service.from("outreach_leads")
+          .update(leadFailurePatch(failCode, (lead.whatsapp_attempts as number) ?? 0, nowIso, hasPriorSuccess))
+          .eq("id", lead.id);
+      }
     }
 
     // Pace the next send after ANY real/simulated attempt (spread quota + jitter — see nextPacingStamp).

@@ -143,6 +143,11 @@ import { cn } from '@/lib/utils';
 import type { OutreachLead, LeadStatus, NextActionType, Country, ContactMethod, PipelineStatus } from '@/types/outreach';
 import { leadStatusLabel, awaitingReplyTooltip } from '@/types/outreach';
 import { isInitialOpener } from '@/lib/openerVariant';
+import { REPORT_OFFER_TEMPLATE } from '@/lib/reportOfferTemplate';
+import { checkReportOffer, summariseReportOffer, type ReportOfferSummary } from '@/lib/reportOfferCheck';
+import { ReportOfferPreviewBox } from '@/components/ReportOfferPreviewBox';
+/** What a salesperson can bulk-queue: the approved openers, and the report offer (2026-10-14). */
+const salesBulkTemplate = (t: string) => isInitialOpener(t) || t === REPORT_OFFER_TEMPLATE;
 import { getTemplateSendability } from '@/lib/whatsappTemplates';
 import { useLeadPermissions } from '@/hooks/useLeadPermissions';
 import { logDataAccess } from '@/lib/dataAccessLog';
@@ -585,6 +590,8 @@ export function OutreachTable({
      batch of accountants without touching the dropdown stamped a barber template on all of them.
      Same class of bug as the Inbox picker; '' means not set and the Queue button stays disabled. */
   const [queueTemplate, setQueueTemplate] = useState<string>('');
+  /* The report offer's pre-check for the open dialog's selection (null = not asked / not that template). */
+  const [reportOfferPreview, setReportOfferPreview] = useState<ReportOfferSummary | 'checking' | 'failed' | null>(null);
   /* The admin's "Queue across team" confirmation — opened only when the ticked leads span more than one owner. */
   const [crossOwnerConfirmOpen, setCrossOwnerConfirmOpen] = useState(false);
   const [lastContactedLeadId, setLastContactedLeadId] = useState<string | null>(null);
@@ -1464,21 +1471,33 @@ export function OutreachTable({
 
   const handleSalesQueue = async (template: string) => {
     if (needsFullList()) return;
-    if (!isInitialOpener(template)) {
-      toast({ title: 'Not queued', description: 'Bulk initial outreach sends an approved opener. Other templates go from the Inbox conversation.', variant: 'destructive' });
+    if (!salesBulkTemplate(template)) {
+      toast({ title: 'Not queued', description: 'Bulk initial outreach sends an approved opener or the report offer. Other templates go from the Inbox conversation.', variant: 'destructive' });
       return;
     }
-    const ids = Array.from(selectedIds).filter((id) => !isDemoLead(id));
-    const r = await salesQueueOpener(ids, template);
+    let ids = Array.from(selectedIds).filter((id) => !isDemoLead(id));
+    /* ⛔ THE REPORT OFFER IS CHECKED BEFORE IT IS QUEUED (competitors, score, report link, not named) — the refused
+       leads are listed with their reason; nothing is left to fail at send time. Fails closed. */
+    let offerSkips: Array<{ n: number; label: string; names: string[] }> = [];
+    let offerWarn = '';
+    if (template === REPORT_OFFER_TEMPLATE) {
+      const chk = await checkReportOffer(ids);
+      if (!chk.ok) { toast({ title: 'Nothing queued', description: 'Could not check the leads for the report offer, so nothing was queued. Try again.', variant: 'destructive' }); return; }
+      const s = summariseReportOffer(chk, ids, (id) => leads.find((l) => l.id === id)?.business_name || 'Unnamed lead');
+      ids = s.okIds;
+      offerSkips = s.refused.map((x) => ({ n: x.names.length, label: x.label, names: x.names }));
+      offerWarn = s.warnings.map((w) => `${w.names.length} ${w.label}`).join('; ');
+    }
+    const r = ids.length ? await salesQueueOpener(ids, template) : { ok: true as const, queued: 0, skipped: {} };
     if (!r.ok) { toast({ title: 'Nothing queued', description: refusalText(r.error), variant: 'destructive' }); return; }
-    const skipList = Object.entries((r.skipped ?? {}) as Record<string, number>).map(([k, n]) => ({ n, label: QUEUE_SKIP_LABEL[k] ?? k }));
+    const skipList = [...offerSkips, ...Object.entries((r.skipped ?? {}) as Record<string, number>).map(([k, n]) => ({ n, label: QUEUE_SKIP_LABEL[k] ?? k }))];
     const skipped = skipList.map((s) => `${s.n} ${s.label}`).join(' · ');
     /* The batch is kept for this tab and shown on the queue summary and page — so "Queued 0" says why. */
     recordQueueBatch(Number(r.queued ?? 0), skipList);
     const tmplLabel = WHATSAPP_TEMPLATES.find((t) => t.value === template)?.label ?? template;
     toast({
       title: `Queued ${r.queued ?? 0} for WhatsApp`,
-      description: `${tmplLabel}. ${skipped ? `Skipped: ${skipped}. ` : ''}${queuedLeadLine(await fetchQueueState().catch(() => null)).text} The queue re-checks each one before it sends.`,
+      description: `${tmplLabel}. ${skipped ? `Skipped: ${skipped}. ` : ''}${offerWarn ? `Check: ${offerWarn}. ` : ''}${queuedLeadLine(await fetchQueueState().catch(() => null)).text} The queue re-checks each one before it sends.`,
       variant: r.queued ? undefined : 'destructive',
     });
     setSelectedIds(new Set());
@@ -1514,6 +1533,18 @@ export function OutreachTable({
     const now = new Date().toISOString();
     const ids = Array.from(selectedIds);
     const leadOf = (id: string) => leads.find((l) => l.id === id);
+    /* ⛔ THE REPORT OFFER IS CHECKED BEFORE IT IS QUEUED (2026-10-14) — same rule as the sales path above. */
+    let idsToQueue = ids;
+    let offerSkips: Array<{ n: number; label: string; names: string[] }> = [];
+    let offerWarn = '';
+    if (template === REPORT_OFFER_TEMPLATE) {
+      const chk = await checkReportOffer(ids);
+      if (!chk.ok) { toast({ title: 'Nothing queued', description: 'Could not check the leads for the report offer, so nothing was queued. Try again.', variant: 'destructive' }); return; }
+      const s = summariseReportOffer(chk, ids, (id) => leadOf(id)?.business_name || 'Unnamed lead');
+      idsToQueue = s.okIds;
+      offerSkips = s.refused.map((x) => ({ n: x.names.length, label: x.label, names: x.names }));
+      offerWarn = s.warnings.map((w) => `${w.names.length} ${w.label}`).join('; ');
+    }
     // Canonical E.164 ("+…") for a lead, matching the drainer's suppression key (and the SMS lane's, before it went).
     const e164 = (l?: OutreachLead) => { const d = l?.phone ? formatPhoneForWhatsApp(l.phone, l.country) : ''; return d ? `+${d}` : ''; };
 
@@ -1573,7 +1604,7 @@ export function OutreachTable({
     type SkipKey = 'no_whatsapp' | 'in_queue' | 'already_sent' | 'opted_out' | 'number_in_conversation' | 'logged_conversation';
     const skipNames: Record<SkipKey, string[]> = { no_whatsapp: [], in_queue: [], already_sent: [], opted_out: [], number_in_conversation: [], logged_conversation: [] };
     const nameOf = (l: OutreachLead) => l.business_name || 'Unnamed lead';
-    const queueable = ids.filter((id) => {
+    const queueable = idsToQueue.filter((id) => {
       const l = leadOf(id);
       if (!l) return false;
       if (l.status === 'no_whatsapp') { skipNames.no_whatsapp.push(nameOf(l)); return false; }
@@ -1630,6 +1661,7 @@ export function OutreachTable({
       const patch: Partial<OutreachLead> = {
         status: 'queued', queued_at: now, whatsapp_attempts: 0,
         whatsapp_template: template,
+        queued_by_user_id: user?.id ?? null,
         previous_status: lead?.status ?? null,
         line_type: lineType, // cache the offline result
         contact_method: 'whatsapp', // attribute to WhatsApp immediately (cleared on cancel / permanent fail)
@@ -1638,6 +1670,7 @@ export function OutreachTable({
     });
     const skipLine = (key: SkipKey, label: string) => ({ n: skipNames[key].length, label, names: skipNames[key] });
     const skippedLines = [
+      ...offerSkips,
       skipLine('logged_conversation', QUEUE_SKIP_LABEL.contacted_by_phone),
       skipLine('number_in_conversation', 'number already in a conversation (probably a duplicate lead row)'),
       skipLine('already_sent', 'already messaged on WhatsApp'),
@@ -1660,7 +1693,7 @@ export function OutreachTable({
     const skippedTotal = ids.length - queuedCount;
     toast({
       title: `Queued ${queuedCount} for WhatsApp`,
-      description: `Template: ${tmplLabel}. ${skippedTotal > 0 ? `${skippedTotal} skipped${notes ? ': ' + notes + '.' : '.'} ` : ''}Sends within the daily 7am–9:30pm UK window, at the queue's daily cap (shown live on the queue panel).`,
+      description: `Template: ${tmplLabel}. ${skippedTotal > 0 ? `${skippedTotal} skipped${notes ? ': ' + notes + '.' : '.'} ` : ''}${offerWarn ? `Check: ${offerWarn}. ` : ''}Sends within the daily 7am–9:30pm UK window, at the queue's daily cap (shown live on the queue panel).`,
     });
   };
 
@@ -3605,7 +3638,7 @@ export function OutreachTable({
             <Select value={queueTemplate} onValueChange={setQueueTemplate}>
               <SelectTrigger><SelectValue placeholder="Not set — choose a template" /></SelectTrigger>
               <SelectContent>
-                {(perms.queueControls ? WHATSAPP_TEMPLATES : WHATSAPP_TEMPLATES.filter((t) => isInitialOpener(t.value))).map((t) => {
+                {(perms.queueControls ? WHATSAPP_TEMPLATES : WHATSAPP_TEMPLATES.filter((t) => salesBulkTemplate(t.value))).map((t) => {
                   const blocked = openerBlocked(t.value);
                   return (
                     <SelectItem key={t.value} value={t.value} disabled={blocked}>
@@ -3621,6 +3654,10 @@ export function OutreachTable({
             <TemplatePreviewButton selected={queueTemplate} />
             <RequestTemplateButton source="queue" />
           </div>
+          {/* The report offer: who can get it, who cannot (and why), and the warnings — BEFORE the press. */}
+          {queueTemplate === REPORT_OFFER_TEMPLATE && (
+            <ReportOfferPreviewBox ids={[...selectedIds]} value={reportOfferPreview} setValue={setReportOfferPreview} nameOf={(id) => leads.find((l) => l.id === id)?.business_name || 'Unnamed lead'} />
+          )}
           {/* ⛔ CROSS-OWNER: said BEFORE the press, and the press then asks again (src/lib/outreachOwnerScope.ts). */}
           {selectionOwners.needsConfirm && (
             <div role="alert" data-testid="queue-cross-owner" className="rounded-md border border-amber-500/60 bg-amber-500/10 px-3 py-2 text-xs text-amber-800 dark:text-amber-300">

@@ -235,6 +235,7 @@ const TEMPLATE_DISPLAY: Record<string, string> = {
   /* ai_site_findings_v2 — rivals + what AI is seeing on their site in {{6}}; NO report link, so it is
      NOT in REPORT_TEMPLATES (like audit_followup_call). UNCONDITIONAL, like every entry here. */
   ai_site_findings_v2: 'AI site findings (rivals + what AI sees, no link)',
+  ai_visibility_report_offer: 'AI visibility report offer (competitors, score + report)',
   explain_offer: 'Explain the offer (full pitch + sign-up link)',
   explain_offer_v2: 'Explain the offer v2 (adds the 941-audit proof)',
   /* ⚠️ UNCONDITIONAL, unlike its entry in the picker. This map names a message that has ALREADY been

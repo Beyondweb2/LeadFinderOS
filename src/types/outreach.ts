@@ -213,6 +213,8 @@ export interface OutreachLead {
   // WhatsApp outreach (queue + processor). whatsapp_template is the chosen approved
   // template; the rest are written server-side by process-whatsapp-queue on send.
   whatsapp_template?: string | null;
+  /** Who queued it (2026-10-14): ai_visibility_report_offer is signed with THIS person's message name. */
+  queued_by_user_id?: string | null;
   queued_at?: string | null;
   /** The lead's status immediately BEFORE it was queued for WhatsApp, so cancelling
    *  the queue can restore it (instead of wiping to not_contacted). Null when not queued. */
@@ -611,6 +613,10 @@ export const WHATSAPP_TEMPLATES: { value: string; label: string }[] = [
      sent with a template must always have a label. getTemplateSendability is still what decides
      whether THIS lead can be sent it ({{6}} needs a value). */
   { value: AI_SITE_FINDINGS_V2, label: 'AI site findings — rivals + what AI is seeing on their site, no link (outreach)' },
+  /* ai_visibility_report_offer — SUBMITTED TO META 2026-10-14, wired in as approved (src/lib/reportOfferTemplate.ts). Language
+     schools ("the best English language school in …"), cold, queue-sent. Needs competitors, a score and a report link, and
+     the lead must not have been named — checked before queueing; signed with the sender's own message name. */
+  { value: 'ai_visibility_report_offer', label: 'AI visibility report offer — language schools: competitors, score + free report (outreach)' },
   /* explain_offer — SUBMITTED TO META 2026-09-15. The full pitch: what we do, both figures, the
      guarantee and the sign-up link, over the same video header.
      ⚠️ THE LABEL SEPARATES IT FROM THE OTHER TWO VIDEO TEMPLATES by what it ASKS FOR. video_template

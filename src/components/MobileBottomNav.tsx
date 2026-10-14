@@ -5,9 +5,10 @@ import {
   LayoutDashboard, Search, ClipboardList, FileText,
   MoreHorizontal, Palette, LogOut,
   MessageSquare, Users, ShieldCheck,
-  BarChart3, Map as MapIcon, MessageSquarePlus, Gift, UsersRound,
+  BarChart3, Map as MapIcon, MessageSquarePlus, Gift, UsersRound, PenLine,
 } from 'lucide-react';
 import { OPEN_FEEDBACK_EVENT, OPEN_WHATS_NEW_EVENT } from '@/components/FeedbackAndNews';
+import { OPEN_MESSAGE_NAME_EVENT } from '@/components/MessageNameDialog';
 import { cn } from '@/lib/utils';
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem,
@@ -187,6 +188,9 @@ export function MobileBottomNav() {
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => window.dispatchEvent(new Event(OPEN_WHATS_NEW_EVENT))} className="flex items-center gap-3 cursor-pointer">
                 <Gift className="h-4 w-4" /><span>What's new</span>
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => window.dispatchEvent(new Event(OPEN_MESSAGE_NAME_EVENT))} className="flex items-center gap-3 cursor-pointer" data-testid="edit-message-name">
+                <PenLine className="h-4 w-4" /><span>Name on my messages</span>
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => setThemeSheetOpen(true)} className="flex items-center gap-3 cursor-pointer">
                 <Palette className="h-4 w-4" />

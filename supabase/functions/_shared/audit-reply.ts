@@ -116,7 +116,7 @@ export type AuditReplyVars =
   /* `hookQuestion` / `hookEngine`: the hook search the rivals were read from (the report's hook gap,
      which for a six-result hook is the pick). Null for an audit with no hook gap, whose rivals come
      from the audit-wide leaders as before. */
-  | { ok: true; trade: string; competitors: string; rivals: string[]; business: string; link: string; town: string; auditId: string; siteFault: string | null; siteFindings: string | null; siteFindingsKinds: string[] | null; hookQuestion: string | null; hookEngine: string | null }
+  | { ok: true; trade: string; competitors: string; rivals: string[]; business: string; link: string; town: string; auditId: string; siteFault: string | null; siteFindings: string | null; siteFindingsKinds: string[] | null; hookQuestion: string | null; hookEngine: string | null; visibilityPct: number | null }
   | { ok: false; reason: string };
 
 /**
@@ -191,6 +191,13 @@ export async function resolveAuditReplyVars(service: any, leadId: string, opts: 
         `No audit-based template can be sent from this check; the report shows the result honestly.`,
     };
   }
+  /* {{4}} of ai_visibility_report_offer (2026-10-14): the quick check's overall AI visibility — the SAME scoreHookRun
+     percentage the report's "Overall AI visibility" shows. NULL for anything but a complete six-result hook, so a
+     message can never quote a score the report does not show. */
+  const hookScore = isHookStateV2(hookState) ? scoreHookRun(hookState, (qrows ?? []) as HookScoreRow[], {
+    named: { businessName: audit.business_name ?? "", trade: audit.business_type || null, town: audit.location_text || null },
+  }) : null;
+  const visibilityPct = hookScore && hookScore.complete ? hookScore.percent : null;
   const answered = countAnsweredCells((qrows ?? []) as Parameters<typeof countAnsweredCells>[0]);
   if (run.status === "capped" && answered === 0) {
     return { ok: false, reason: "The audit didn't answer any questions — re-run it." };
@@ -387,5 +394,5 @@ export async function resolveAuditReplyVars(service: any, leadId: string, opts: 
   );
   const siteFindings = siteFindingsDetail?.text ?? null;
   const siteFindingsKinds = siteFindingsDetail?.kinds ?? null;
-  return { ok: true, trade, competitors, rivals: usableRivals(rivalPool), business, link, town: (audit.location_text ?? "").trim(), auditId: audit.id, siteFault, siteFindings, siteFindingsKinds, hookQuestion: hookGap?.question ?? null, hookEngine: hookGap?.engine ?? null };
+  return { ok: true, trade, competitors, rivals: usableRivals(rivalPool), business, link, town: (audit.location_text ?? "").trim(), auditId: audit.id, siteFault, siteFindings, siteFindingsKinds, hookQuestion: hookGap?.question ?? null, hookEngine: hookGap?.engine ?? null, visibilityPct };
 }

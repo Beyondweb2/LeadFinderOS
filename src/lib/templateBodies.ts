@@ -26,6 +26,7 @@ import { hookFollowupBody, contactFollowupBody, questionnaireFollowupBody } from
 import { articleTrade, pluraliseTrade } from './templateVars.ts';
 import { transcriptBusinessName, IDENTIFY_NAME_TEMPLATES } from './displayName.ts';
 import { onboardingTemplateBody, signupLinkTemplateBody } from './whatsappLinkTemplates.ts';
+import { reportOfferBody } from './reportOfferTemplate.ts';
 
 // ── Findable, link-bearing ────────────────────────────────────────────────
 const onboardingFollowupBody = (b: string, u: string) =>
@@ -399,7 +400,7 @@ const barberFreshaBooksyBody = (b: string, u: string) =>
 /** One template's display renderer. Named so the superseded-bodies map can reuse it rather than
  *  restate the signature — two copies of it would drift the day a seventh argument appears. */
 export type TemplateBodyFn =
-  (businessName: string, claimUrl: string, trade?: string, competitors?: string, contactFirstName?: string, town?: string, siteFault?: string, siteFindings?: string) => string;
+  (businessName: string, claimUrl: string, trade?: string, competitors?: string, contactFirstName?: string, town?: string, siteFault?: string, siteFindings?: string, visibilityScore?: string, senderName?: string) => string;
 
 /** DISPLAY-ONLY body renderers keyed by template name. Same signature as whatsapp-send.ts's
  *  WA_TEMPLATE_BODIES so the parity test can compare them one-to-one. */
@@ -434,6 +435,9 @@ export const READABLE_TEMPLATE_BODIES: Record<string, TemplateBodyFn> = {
   /* 2026-10-07 — the registered wording (whatsappLinkTemplates.ts): b = {{1}} greeting name, u = {{2}} the link. */
   findable_signup_link: (b, u) => signupLinkTemplateBody(b, u),
   findable_onboarding: (b, u) => onboardingTemplateBody(b, u),
+  /* 2026-10-14 — the registered wording (reportOfferTemplate.ts); the score and the sender ride the last two slots. */
+  ai_visibility_report_offer: (b, u, _t, competitors, _first, town, _sf, _sfi, score, sender) =>
+    reportOfferBody({ name: b, town: town ?? '', competitors: competitors ?? '', score: score ?? '', link: u, sender: sender ?? '' }),
 };
 
 export interface ReadableBodyOpts {

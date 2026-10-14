@@ -126,6 +126,9 @@ export const WA_TEMPLATE_REQS: Record<string, TemplateReq> = {
      refuses a lead with no website (both {{6}} forms describe their site), which audit_followup_fault
      accepts; a clean site qualifies only with a fresh crawl AND a measured visibility gap. */
   ai_site_findings_v2:    { needsUrl: false, needsAudit: true,  needsSiteFindings: true, group: 'audit' },
+  /* ai_visibility_report_offer (2026-10-14): competitors, the score and the report link all come from the completed check.
+     What makes a lead unsendable (no score, named in the answers…) is decided server-side (report_offer_check) and said. */
+  ai_visibility_report_offer: { needsUrl: false, needsAudit: true, group: 'audit' },
   /* explain_offer - the full pitch. ⛔ needsAudit is FALSE and that is the point: its {{3}} is the
      SIGN-UP link, built from the lead id alone, so nothing here waits on a completed audit. It is
      the only outreach template that can go to a lead we have never audited.

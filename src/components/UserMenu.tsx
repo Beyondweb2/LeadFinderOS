@@ -1,6 +1,8 @@
 import { useState, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { LogOut, User, Crown, Key, Loader2, Camera } from 'lucide-react';
+import { LogOut, User, Crown, Key, Loader2, Camera, PenLine } from 'lucide-react';
+import { OPEN_MESSAGE_NAME_EVENT } from '@/components/MessageNameDialog';
+import { PASSWORD_PROBLEM_WORDS, passwordProblem } from '@/lib/teamAccounts';
 import { useAuth } from '@/hooks/useAuth';
 import { useAvatar } from '@/hooks/useAvatar';
 import { useSubscription } from '@/hooks/useSubscription';
@@ -55,8 +57,10 @@ export function UserMenu() {
   const handleSignOut = async () => { await signOut(); };
 
   const handleChangePassword = async () => {
-    if (newPassword.length < 6) {
-      toast({ title: t('userMenu.passwordTooShort'), description: t('userMenu.passwordMinChars'), variant: 'destructive' });
+    /* The ONE password rule (teamAccounts.ts): 12+ characters, a letter and a number — the same as /set-password. */
+    const problem = passwordProblem(newPassword, { email: user?.email });
+    if (problem) {
+      toast({ title: t('userMenu.passwordTooShort'), description: PASSWORD_PROBLEM_WORDS[problem], variant: 'destructive' });
       return;
     }
     if (newPassword !== confirmPassword) {
@@ -111,6 +115,10 @@ export function UserMenu() {
           <DropdownMenuItem onClick={() => fileInputRef.current?.click()} className="cursor-pointer" disabled={isUploading}>
             <Camera className="mr-2 h-4 w-4" />
             {isUploading ? t('userMenu.uploading') : t('userMenu.changeProfilePicture')}
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => window.dispatchEvent(new Event(OPEN_MESSAGE_NAME_EVENT))} className="cursor-pointer" data-testid="edit-message-name">
+            <PenLine className="mr-2 h-4 w-4" />
+            Name on my messages
           </DropdownMenuItem>
           <DropdownMenuItem onClick={() => setShowPasswordDialog(true)} className="cursor-pointer">
             <Key className="mr-2 h-4 w-4" />

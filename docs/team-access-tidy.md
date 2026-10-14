@@ -28,8 +28,7 @@ Branch `feat/team-access-tidy`. Rules live in `src/lib/teamAccounts.ts`; the cre
 
 - **Expiry is a project auth setting, not code.** Supabase `mailer_otp_exp` — Dashboard → Authentication →
   Sign In / Providers → Email → "Email OTP Expiration" (Management API `PATCH /v1/projects/<ref>/config/auth`
-  `{"mailer_otp_exp": 86400}`). Read live 2026-10-14: **3600 (1 hour)**. Paul's target: **86400 (24 hours,
-  the maximum)**. It covers invite, magic link (Resend activation), recovery (Send password reset) and the
+  `{"mailer_otp_exp": 86400}`). Was **3600 (1 hour)**; **set to 86400 (24 hours, the maximum) on 2026-10-14** through the Management API and read back. It covers invite, magic link (Resend activation), recovery (Send password reset) and the
   Forgot password email alike.
 - **Scanner-safe links** (`scannerSafeLink`): the Team page's invite / Resend activation / Send password reset
   links now go to `/set-password?token_hash=…&type=invite|magiclink|recovery`; the page calls `verifyOtp` only
@@ -54,3 +53,46 @@ Branch `feat/team-access-tidy`. Rules live in `src/lib/teamAccounts.ts`; the cre
   restriction>** if suspended / ended — the switch never hides that). Off: the checklist shows exactly as it was.
 - Display only. Selling is still decided by `salesperson_onboarding_missing` (account restrictions), unchanged.
   No onboarding data is read, changed or deleted.
+
+## 4. The name on your messages (2026-10-14)
+
+- One rule: `src/lib/messageName.ts`. Stored on `profiles.message_name` (+ `message_name_set_at`; CHECK 1–40 characters, one
+  line — migration `20261026090000`). RLS already lets a person update only their own profile row.
+- **First login:** `MessageNameDialog` (mounted once in `AppLayout`) asks *"What name should we use on your messages?"* — one
+  field, not onboarding — after any temporary-password change (`ProtectedRoute` sends a must-change user to /set-password first).
+  Skip → the first part of the person's OWN email is used and the box asks again at the next login (a sessionStorage mark).
+- **Edit later:** account menu → *Name on my messages* (desktop `UserMenu`, phone More menu).
+- ⛔ **Never another person's name.** The sender is the person who queued (`outreach_leads.queued_by_user_id`, stamped by the admin
+  queue writes and by `sales_queue_opener`) or pressed send (the caller). No sender → the send refuses. `_shared/sender-name.ts`
+  never reads the owner, the assignee or the book owner.
+- "Onboarding must not show for team members": a salesperson sees only `NotReadyToSellBanner` for a genuine account restriction
+  (no role, login, suspended, ended) — never the checklist (Paul's Team-page record; a Trial member's is hidden there too).
+
+## 5. ai_visibility_report_offer (2026-10-14)
+
+Marketing, English, submitted to Meta 2026-10-14 and wired in as approved. Rules: `src/lib/reportOfferTemplate.ts`.
+
+| {{n}} | var | value |
+|---|---|---|
+| 1 | `name_or_there` | the business name (greeting form), "there" when blank |
+| 2 | `town` | the town the lead's AI check SEARCHED (`ai_audits.location_text` — what was actually asked) |
+| 3 | `competitors` | the check's missed-search rivals, "A, B and C" / "A and B" / "A" (`formatCompetitors`) |
+| 4 | `visibility_score` | the quick check's overall AI visibility (`scoreHookRun` percent — the report's figure), "66%" |
+| 5 | `audit_url` | `findable.live/r/<code>` (no preview flag) |
+| 6 | `sender_name` | the sending person's own message name |
+
+- **Not queueable** without a finished check, competitors, a score (a complete six-result quick check only) and the report link,
+  or when the lead was named (6/6 → `hook_no_visibility_gap`; the rivals always come from a MISSED search). Checked BEFORE
+  queueing by `process-whatsapp-queue` mode `report_offer_check` (both roles; a salesperson only for their own leads) — the
+  queue dialog shows who can get it and why not (`ReportOfferPreviewBox`), the batch result lists the refused leads with names,
+  and the single-lead control refuses with the reason. The drip checks again and dequeues with `report_offer_<reason>`.
+- **Warnings, never a block:** outside MY / SG / UK, or a trade that is not a language school.
+- **Country rules** are the existing ones: cold template → `outreach_country_settings` switch, caps and local send hours;
+  suppression and the opener contact guard apply. Sales bulk-queue it through `sales_queue_opener` (now accepts it).
+- **Meta status:** the drip reads Meta's live status (`template-status.ts`) before sending it; PENDING / REJECTED / PAUSED /
+  DISABLED / NOT_FOUND → the lead leaves the queue as `template_<status>`, nothing retries. A send Meta refuses as template
+  unavailable (132001/132015/132016/132007) or wrong variables (132000) also leaves the queue (`template_unavailable` /
+  `template_vars_mismatch`) — for every template, not only this one. The lead's WhatsApp box says it in words (`queueDropWords`).
+- **UK-worded templates** (`explain_offer`, `explain_offer_v2`, `re_engage`, `booking_switch_barbers`) are refused for any
+  number that is not a UK mobile, in both senders (`uk_template_wrong_country`).
+- Nothing was sent to test it. Tests: `scripts/report-offer-template.test.ts`.

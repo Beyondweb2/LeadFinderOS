@@ -22,6 +22,23 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-14-report-offer-and-name', date: '2026-10-14', title: 'Your name on messages, and the AI visibility report offer for language schools', audience: 'all',
+    body: 'The first time you log in you are asked one thing: the name to put at the end of your WhatsApp messages. A new WhatsApp message, the AI visibility report offer, can now be queued for language-school leads.',
+    report: {
+      added: [
+        'A small box: "What name should we use on your messages?". Change it any time from your account menu ("Name on my messages"). Skip it and we use the first part of your email, and ask again next login.',
+        'The "AI visibility report offer" template in the WhatsApp queue: it names the competitors the AI check found, the lead’s visibility score and their free report link, signed with your name.',
+        'Before queueing it, the queue box shows how many leads can get it and why the others cannot (no AI check, no competitors, no score, no report link, or the AI already mentioned them).',
+        'A warning (not a block) when a lead is outside Malaysia, Singapore or the UK, or is not a language school.',
+      ],
+      changed: [
+        'If Meta has not approved a template or has rejected it, the lead leaves the queue with that reason shown on it, and nothing retries it.',
+        'The four UK-only messages (with £ prices) can never be sent to Malaysia or Singapore.',
+        'Changing your password from the account menu now needs 12+ characters with a letter and a number.',
+      ],
+      removed: [],
+      effect: 'Queue the report offer to your language-school leads that have a finished AI check; the box tells you which ones cannot get it and why. Your messages are always signed with your own name.',
+    } },
   { id: '2026-10-14-team-access-tidy', date: '2026-10-14', title: 'Team: add someone with a temporary password, links that survive scanners, and a Trial switch', audience: 'admin',
     body: 'Team → Add a team member can now set a temporary password, so the person signs in straight away. Links you send now open a Continue page, so a WhatsApp preview or an email scanner can no longer use them up.',
     report: {
@@ -34,6 +51,7 @@ export const WHATS_NEW: readonly WhatsNewEntry[] = [
         'Invite, Resend activation and Send password reset links now open a page with a Continue button. The link is only used when they press it.',
         'A used or expired link now says so plainly, explains that email and chat apps can use links up, and tells them to ask for a new one.',
         'Passwords need at least 12 characters with a letter and a number.',
+        'Invite, activation and reset links now last 24 hours (they lasted 1 hour).',
       ],
       removed: [],
       effect: 'You can get a new salesperson working in a minute, and the links you send stop "not working" because something opened them first.',

@@ -125,6 +125,7 @@
     "linkedin_url",
     "linkedin_status",
     "next_action_time",
-    "import_batch"
+    "import_batch",
+    "queued_by_user_id"
   ]
 }
