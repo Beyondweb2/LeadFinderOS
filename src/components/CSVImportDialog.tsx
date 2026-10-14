@@ -7,8 +7,11 @@ import { Upload, FileSpreadsheet, AlertCircle, CheckCircle2, Info, Loader2, List
 import { ActionBar, Callout, DialogHero, Figure, SubSection, TONE, type Tone } from '@/components/operator/ui';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/hooks/useAuth';
+import { useTeamDirectory } from '@/hooks/useSalesCrm';
 import {
   IMPORT_FIELDS, IMPORT_FIELD_LABEL, IMPORT_FILE_MAX_BYTES, IMPORT_FILE_MAX_ROWS, IMPORT_BATCH_MAX,
+  IMPORT_BATCH_NAME_MAX, withDefaultTrade,
   parseCsv, autoMapColumns, columnLabel, buildImportRows, runImport, outcomeText, problemRows, possibleMatchRows,
   type ParsedCsv, type ColumnMapping, type ImportReport, type ImportRpc, type ImportField, type RowResult,
 } from '@/lib/csvLeadImport';
@@ -21,7 +24,10 @@ import {
    imported and flagged; same website, or same name + same postcode / address → held until the person ticks
    "import these too") is shown on its own list and never disappears from the import by itself.
    ⛔ Nobody is contacted: an import creates or fills in lead records only — no WhatsApp, no queue, no campaign,
-   no status change. The screen says so before the button is pressed. */
+   no status change. The screen says so before the button is pressed.
+   2026-10-14 (test day, import_leads_v2): a BATCH NAME on every new lead (Outreach search finds it), a TRADE typed once
+   for the rows with none, and — admin only — the OWNER of the new leads (an active teammate; one notice to them, never
+   one per lead). The server still decides; a salesperson's import is always their own. */
 
 export interface CsvImportResult {
   createdIds: string[];
@@ -40,7 +46,7 @@ interface CSVImportDialogProps {
 type Step = 'pick' | 'map' | 'preview' | 'done';
 
 const importRpc: ImportRpc = (args) =>
-  (supabase.rpc as unknown as (n: string, a: unknown) => Promise<{ data: unknown; error: { message?: string } | null }>)('import_leads', args);
+  (supabase.rpc as unknown as (n: string, a: unknown) => Promise<{ data: unknown; error: { message?: string } | null }>)('import_leads_v2', args);
 
 const emptyMapping = () => Object.fromEntries(IMPORT_FIELDS.map((f) => [f, null])) as ColumnMapping;
 
@@ -56,11 +62,18 @@ export function CSVImportDialog({ open, onOpenChange, onImported, isAdmin }: CSV
   const [preview, setPreview] = useState<ImportReport | null>(null);
   const [result, setResult] = useState<ImportReport | null>(null);
   const [importPossible, setImportPossible] = useState(false);
+  const [batchName, setBatchName] = useState('');
+  const [defaultTrade, setDefaultTrade] = useState('');
+  const [assignTo, setAssignTo] = useState(''); // '' = the person importing
+  const { user } = useAuth();
+  const team = useTeamDirectory();
+  const teammates = isAdmin ? (team.data ?? []).filter((m) => m.status === 'active' && m.role && m.user_id !== user?.id) : [];
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const reset = () => {
     setStep('pick'); setFile(null); setParsed(null); setMapping(emptyMapping()); setMapNotes([]);
     setError(null); setBusy(false); setProgress(null); setPreview(null); setResult(null); setImportPossible(false);
+    setBatchName(''); setDefaultTrade(''); setAssignTo('');
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
@@ -96,13 +109,14 @@ export function CSVImportDialog({ open, onOpenChange, onImported, isAdmin }: CSV
     }
   };
 
-  const rows = parsed ? buildImportRows(parsed, mapping) : [];
+  const rows = parsed ? withDefaultTrade(buildImportRows(parsed, mapping), defaultTrade) : [];
 
   const runCheck = async (commit: boolean) => {
     if (!parsed || !rows.length) return;
     setBusy(true); setError(null); setProgress({ done: 0, total: rows.length });
     try {
-      const rep = await runImport(importRpc, rows, commit, file?.name ?? null, (done, total) => setProgress({ done, total }), commit && importPossible);
+      const rep = await runImport(importRpc, rows, commit, file?.name ?? null, (done, total) => setProgress({ done, total }), commit && importPossible,
+        { assignTo: isAdmin && assignTo ? assignTo : null, batch: batchName });
       if (commit) {
         setResult(rep); setStep('done');
         if (rep.createdIds.length || rep.updatedIds.length) {
@@ -130,7 +144,7 @@ export function CSVImportDialog({ open, onOpenChange, onImported, isAdmin }: CSV
     return next;
   });
 
-  const owner = isAdmin ? 'you (Paul)' : 'you';
+  const owner = isAdmin && assignTo ? (team.byId.get(assignTo)?.display_name ?? 'that teammate') : isAdmin ? 'you (Paul)' : 'you';
   const held = preview ? preview.counts.held : 0;
   const willAdd = preview ? preview.counts.new + (importPossible ? held : 0) : 0;
   const willFill = preview ? preview.counts.update : 0;
@@ -188,6 +202,28 @@ export function CSVImportDialog({ open, onOpenChange, onImported, isAdmin }: CSV
                   </label>
                 ))}
               </div>
+              <SubSection title="Tag this import" icon={ListChecks} tone="grey">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-2" data-testid="csv-tags">
+                  <label className="flex flex-col gap-1 text-sm min-w-0">
+                    <span className="text-muted-foreground">Batch name</span>
+                    <Input value={batchName} maxLength={IMPORT_BATCH_NAME_MAX} onChange={(e) => setBatchName(e.target.value)} placeholder="e.g. Ethan batch 14 Oct" data-testid="csv-batch" />
+                  </label>
+                  <label className="flex flex-col gap-1 text-sm min-w-0">
+                    <span className="text-muted-foreground">Trade for rows with none</span>
+                    <Input value={defaultTrade} maxLength={100} onChange={(e) => setDefaultTrade(e.target.value)} placeholder="e.g. Plumbers" data-testid="csv-trade" />
+                  </label>
+                  {isAdmin && (
+                    <label className="flex flex-col gap-1 text-sm min-w-0">
+                      <span className="text-muted-foreground">New leads belong to</span>
+                      <select className="h-9 min-w-0 rounded-lg border border-border/70 bg-background px-2 text-sm" value={assignTo} onChange={(e) => setAssignTo(e.target.value)} aria-label="New leads belong to" data-testid="csv-owner">
+                        <option value="">Me (Paul)</option>
+                        {teammates.map((m) => <option key={m.user_id} value={m.user_id}>{m.display_name}</option>)}
+                      </select>
+                    </label>
+                  )}
+                </div>
+                <p className="mt-1 text-xs text-muted-foreground">Search the batch name in Outreach to see just this import. A row's own trade always wins.</p>
+              </SubSection>
               {mapNotes.length > 0 && (
                 <ul className="text-xs text-muted-foreground list-disc pl-4 space-y-0.5">{mapNotes.map((n) => <li key={n}>{n}</li>)}</ul>
               )}

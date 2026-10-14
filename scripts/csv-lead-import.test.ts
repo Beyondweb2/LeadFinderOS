@@ -104,7 +104,8 @@ console.log("\n── sending: calls of IMPORT_BATCH_MAX, one transaction each, 
   };
   const rep = await runImport(rpc, mk(1201), true, "big.csv");
   ok(calls.length === 3 && calls.map((c) => c.n).join(",") === `${IMPORT_BATCH_MAX},${IMPORT_BATCH_MAX},201`, `1,201 rows → 3 calls of at most ${IMPORT_BATCH_MAX}`);
-  ok(calls.every((c) => c.commit && c.keys === "_commit,_file_name,_import_possible,_rows" && c.possible === false), "every call carries only rows, commit, the file name and the held-matches choice (off unless ticked) — never an owner");
+  /* 2026-10-14 (import_leads_v2): two more keys, both NULL unless the screen set them — the owner (admin only, server-checked) and the batch name. */
+  ok(calls.every((c) => c.commit && c.keys === "_assign_to,_batch,_commit,_file_name,_import_possible,_rows" && c.possible === false), "every call carries only rows, commit, the file name, the held-matches choice (off unless ticked), and the owner / batch tags (null unless set)");
   calls.length = 0;
   await runImport(rpc, mk(3), true, "x.csv", undefined, true);
   ok(calls.length === 1 && calls[0].possible === true, "ticking \"import these too\" sends _import_possible = true");
@@ -228,8 +229,9 @@ console.log("\n── the browser no longer writes leads itself ──");
   ok(/await fetchLeads\(\);\n\s+return \{ verified: 0, unverifiable: 0 \};/.test(salesBranch) && !/backfill-lead-towns/.test(salesBranch),
     "a SALESPERSON's import never triggers the paid town check (Paul, 2026-10-05: same as their manual Add a lead)");
   const dlg = read("src/components/CSVImportDialog.tsx");
-  ok(/\('import_leads', args\)/.test(dlg) && !/\.from\(/.test(dlg), "the dialog imports through import_leads only");
-  ok(!/assigned_to|user_id|owner_id|status:/.test(dlg), "the dialog never sends an owner or a status");
+  ok(/\('import_leads_v2', args\)/.test(dlg) && !/\.from\(/.test(dlg), "the dialog imports through import_leads_v2 only (2026-10-14)");
+  /* The owner is sent ONLY as the _assign_to tag, only from the admin's screen (the server refuses it from anyone else). */
+  ok(!/assigned_to|owner_id|status:/.test(dlg) && /assignTo: isAdmin && assignTo \? assignTo : null/.test(dlg), "the dialog never sends a status, and an owner only as the admin's _assign_to tag");
   ok(/Nobody is messaged/.test(dlg) && /nothing is queued/.test(dlg), "the dialog says nobody is messaged and nothing is queued");
   const page = read("src/pages/Outreach.tsx");
   ok(/onImportLeads=\{perms\.importLeads \? async \(\{ createdIds \}\) => \{\n\s+await afterCsvImport\(createdIds\);/.test(page), "Outreach gates the import on perms.importLeads and hands the created ids on");

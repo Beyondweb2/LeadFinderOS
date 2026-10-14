@@ -229,6 +229,8 @@ export interface OutreachLead {
   /** The SMS queue lane marker and the SMS state (src/lib/smsStatus.ts). */
   sms_queued_at?: string | null;
   sms_delivery_status?: string | null;
+  /** The CSV import's batch name ("Ethan batch 14 Oct"), set once on a lead the import created (migration 20261024100000). */
+  import_batch?: string | null;
   // New fields
   potential_revenue?: number | null;
   contact_name?: string | null;

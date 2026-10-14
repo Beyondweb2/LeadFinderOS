@@ -22,6 +22,19 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-14-csv-import-batch', date: '2026-10-14', title: 'CSV import: name the batch, set the trade, and (admin) choose who owns the leads', audience: 'all',
+    body: 'Outreach → Import now has a "Tag this import" box: a batch name such as "Ethan batch 14 Oct", a trade for rows that have none, and for the admin, who the new leads belong to.',
+    report: {
+      added: [
+        'Batch name on every new lead from the import. Type the batch name into the Outreach search to see just that batch.',
+        'A trade typed once fills every row whose own trade is blank.',
+        'A "Why this lead" column is read as the lead’s note.',
+        'Admin only: "New leads belong to" puts the whole import straight into a teammate’s Outreach. They get one notice, not one per lead.',
+      ],
+      changed: [],
+      removed: [],
+      effect: 'Each person can load their own list for the day and find it again by name. Importing still never messages or queues anyone.',
+    } },
   { id: '2026-10-14-double-contact-guards', date: '2026-10-14', title: 'A number that was already texted never gets a WhatsApp opener', audience: 'all',
     body: 'Before a cold WhatsApp opener goes, the app now checks whether anyone on the team has already sent that number a text, on any lead. If so, the opener is not sent.',
     report: {

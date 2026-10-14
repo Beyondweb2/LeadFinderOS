@@ -46,7 +46,8 @@ const ALIASES: Record<ImportField, string[]> = {
   postcode: ['postcode', 'postalcode', 'zip', 'zipcode'],
   town: ['town', 'city', 'locality', 'area', 'towncity'],
   trade: ['trade', 'category', 'type', 'industry', 'sector', 'businesstype', 'service', 'niche'],
-  notes: ['notes', 'note', 'comments', 'comment', 'remarks'],
+  /* "Why this lead" (2026-10-14, test day): the reason a person picked the business — kept as the lead's note. */
+  notes: ['notes', 'note', 'comments', 'comment', 'remarks', 'whythislead', 'whylead', 'why', 'reason', 'reasonforlead'],
   google_maps_url: ['googlemapsurl', 'googlemaps', 'googlemapslink', 'mapsurl', 'mapslink', 'maplink', 'gmaps'],
   place_id: ['placeid', 'googleplaceid', 'gplaceid'],
   country: ['country', 'countryname', 'nation'],
@@ -206,7 +207,21 @@ export interface ImportReport {
   updatedIds: string[];
 }
 
-export type ImportRpc = (args: { _rows: ImportRow[]; _commit: boolean; _file_name: string | null; _import_possible: boolean }) =>
+/** What the import is tagged with (2026-10-14, import_leads_v2): the owner of the NEW leads (null = the person importing;
+ *  only the admin may name a teammate — the server refuses anything else) and a batch name ("Ethan batch 14 Oct"). */
+export interface ImportTags { assignTo?: string | null; batch?: string | null }
+
+/** The longest batch name the server keeps (import_leads_v2 cuts nothing silently in the rows, but trims the batch to this). */
+export const IMPORT_BATCH_NAME_MAX = 80;
+
+/** A trade typed once for the whole file fills ONLY the rows whose own trade cell is blank — a row's own trade always wins. */
+export function withDefaultTrade(rows: ImportRow[], trade: string | null | undefined): ImportRow[] {
+  const t = (trade ?? '').replace(/\s+/g, ' ').trim();
+  if (!t) return rows;
+  return rows.map((r) => (r.trade ? r : { ...r, trade: t }));
+}
+
+export type ImportRpc = (args: { _rows: ImportRow[]; _commit: boolean; _file_name: string | null; _import_possible: boolean; _assign_to: string | null; _batch: string | null }) =>
   Promise<{ data: unknown; error: { message?: string } | null }>;
 
 /** Send the rows in calls of IMPORT_BATCH_MAX, one after another. Each call is one transaction on the server, so a
@@ -217,6 +232,7 @@ export async function runImport(
   onProgress?: (done: number, total: number) => void,
   /** Also import the HELD possible matches (the person ticked "import these too"). */
   importPossible = false,
+  tags: ImportTags = {},
 ): Promise<ImportReport> {
   const report: ImportReport = { committed: commit, counts: { ...ZERO_COUNTS }, rows: [], stopped: null, createdIds: [], updatedIds: [] };
   for (let at = 0; at < rows.length; at += IMPORT_BATCH_MAX) {
@@ -224,7 +240,8 @@ export async function runImport(
     let res: ImportCallResult | null = null;
     let message: string | null = null;
     try {
-      const { data, error } = await rpc({ _rows: chunk, _commit: commit, _file_name: fileName, _import_possible: importPossible });
+      const { data, error } = await rpc({ _rows: chunk, _commit: commit, _file_name: fileName, _import_possible: importPossible,
+        _assign_to: tags.assignTo ?? null, _batch: (tags.batch ?? '').trim().slice(0, IMPORT_BATCH_NAME_MAX) || null });
       if (error) message = error.message ?? 'The import could not be reached.';
       else res = (data ?? null) as ImportCallResult | null;
     } catch (e) {
@@ -257,6 +274,8 @@ export function callErrorText(res: ImportCallResult | null): string {
     case 'no_rows': return 'There were no rows to import.';
     case 'bad_rows': return 'The rows could not be read.';
     case 'no_book_owner': return 'The lead book has no owner set — contact Paul.';
+    case 'owner_not_yours': return 'Only the admin can import leads for someone else.';
+    case 'not_an_active_member': return 'That person is not an active member of the team, so nothing was imported for them.';
     default: return res?.error ? `The import was refused (${res.error}).` : 'The import gave no answer. Nothing from this part was saved.';
   }
 }
