@@ -2,7 +2,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { InboxChannelSwitch, useInboxChannel } from '@/components/InboxChannelSwitch';
 import { smsTemplateAvailability, type InboxChannel } from '@/lib/inboxChannel';
 import { markSmsRead, smsKeys, useSmsUnread } from '@/hooks/useSms';
-import { isPlausibleUkMobile, smsPillOf } from '@/lib/smsStatus';
+import { isTextableMobile, smsPillOf } from '@/lib/smsStatus';
+import { useCountrySettings } from '@/hooks/useCountrySettings';
+import { marketsOn } from '@/lib/outreachMarkets';
 import { isColdSmsTemplate } from '@/lib/smsMessages';
 import { checkSmsQueue, runSmsQueue, type SmsQueueRpc } from '@/lib/smsQueueBatch';
 import { CHANNEL_COST_GBP, costWords } from '@/lib/channelCosts';
@@ -1559,7 +1561,8 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
     : null;
 
   /* sms: a number that can never receive a text (a landline, a foreign number, or one already marked No SMS) is not offered. */
-  const newPickerLeads = useMemo(() => (sms ? leads.filter((l) => isPlausibleUkMobile(l.phone) && smsPillOf(l) !== 'no_sms') : leads), [leads, sms]);
+  const { settings: countrySettings } = useCountrySettings();
+  const newPickerLeads = useMemo(() => (sms ? leads.filter((l) => isTextableMobile(l.phone, l.country, marketsOn(countrySettings, 'sms')) && smsPillOf(l) !== 'no_sms') : leads), [leads, sms, countrySettings]);
 
   const startFromLead = (lead: LeadLite) => {
     const norm = normalizeWaNumber(lead.phone, lead.country);

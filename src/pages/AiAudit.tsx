@@ -144,6 +144,8 @@ const COUNTRIES: { value: string; label: string }[] = [
   { value: 'USA', label: 'USA' },
   { value: 'Canada', label: 'Canada' },
   { value: 'Australia', label: 'Australia' },
+  { value: 'Malaysia', label: 'Malaysia' },
+  { value: 'Singapore', label: 'Singapore' },
   { value: 'NewZealand', label: 'New Zealand' },
   { value: 'Thailand', label: 'Thailand' },
 ];

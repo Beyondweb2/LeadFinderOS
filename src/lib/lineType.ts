@@ -31,7 +31,7 @@ const COUNTRY_TO_ISO: Record<string, string> = {
   UK: 'GB', Australia: 'AU', USA: 'US', Canada: 'CA', Germany: 'DE', France: 'FR',
   Spain: 'ES', Italy: 'IT', Netherlands: 'NL', Belgium: 'BE', Ireland: 'IE',
   NewZealand: 'NZ', SouthAfrica: 'ZA', India: 'IN', Singapore: 'SG', UAE: 'AE',
-  Brazil: 'BR', Mexico: 'MX', Japan: 'JP', Sweden: 'SE',
+  Brazil: 'BR', Mexico: 'MX', Japan: 'JP', Sweden: 'SE', Malaysia: 'MY',
 };
 
 /* Australia's own international prefix is 0011, so libphonenumber reading an Australia lead's "0061 4…" (the
@@ -88,6 +88,7 @@ export function isWhatsAppEligible(
  * Google would have stored it, and every downstream path then sees an explicit country code.
  * ⚠️ UK callers do not use this: a UK number stays exactly as typed (07…), as it always has.
  */
+const E164_STORED = new Set(['MY', 'SG']);
 export function internationalPhone(
   phone: string | null | undefined,
   country: Country | string | null | undefined,
@@ -97,5 +98,7 @@ export function internationalPhone(
   if (!raw || !iso) return null;
   const parsed = parsePhoneNumberFromString(auInternational(raw, iso), iso);
   if (!parsed || !parsed.isValid() || parsed.country !== iso) return null;
-  return parsed.formatInternational();
+  // Malaysia and Singapore (2026-10-14) are stored as plain E.164 ("+60123456789") — Paul's rule for the new markets.
+  // Every other country keeps the spaced form Google stores, exactly as before.
+  return E164_STORED.has(iso) ? parsed.number : parsed.formatInternational();
 }

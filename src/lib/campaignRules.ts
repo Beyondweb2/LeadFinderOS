@@ -170,7 +170,7 @@ export const LAUNCH_SKIP_TEXT: Record<string, string> = {
   not_new: 'already in progress', already_contacted: 'already messaged on WhatsApp', number_already_contacted: 'that number is already in a conversation on another lead row (probably a duplicate)', sign_up_started: 'already has a sign-up in progress', whatsapp_app_opened: 'WhatsApp was already opened for this lead', no_phone: 'no phone number',
   contacted_by_phone: 'already contacted by phone — initial opener not queued',
   contacted_logged: 'already in conversation (a logged contact) — initial opener not queued',
-  not_a_uk_mobile: 'not a UK mobile (cold WhatsApp outreach is UK only — not switched on for Australia or other countries)', opted_out: 'asked not to be contacted', daily_limit: 'over your daily limit',
+  not_a_uk_mobile: 'not a UK mobile (cold WhatsApp goes to UK mobiles, and to Malaysia / Singapore mobiles when switched on — not landlines, and not switched on for Australia or other countries)', country_off: 'a Malaysia / Singapore mobile, but that country is switched off for now (not flagged — Paul can switch it on)', opted_out: 'asked not to be contacted', daily_limit: 'over your daily limit',
   /* 2026-10-05 (migration 20261009150000): a launch messages only the CAMPAIGN OWNER's leads — membership never
      overrides ownership. */
   other_owner: 'owned by someone else (a campaign only messages its owner’s leads)',

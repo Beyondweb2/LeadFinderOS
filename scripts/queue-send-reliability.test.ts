@@ -44,7 +44,7 @@ console.log('1. one eligibility rule — UK mobile only');
   ok(!coldWhatsAppVerdict('0412 345 678', 'UK').eligible, '…and an Australian mobile stored on a UK lead (04…) is refused, not guessed');
   ok(isUkColdDestination('447911123456') && !isUkColdDestination('919876543210') && !isUkColdDestination('61412345678') && !isUkColdDestination(null), 'the leaf behind it: UK mobile yes, India/AU/null no');
   const reasons = Object.keys(COLD_NOT_ELIGIBLE_LABEL).sort();
-  ok(JSON.stringify(reasons) === JSON.stringify(['bad_number', 'landline', 'no_phone', 'not_a_uk_mobile']), 'every not-eligible reason has words');
+  ok(JSON.stringify(reasons) === JSON.stringify(['bad_number', 'country_off', 'landline', 'no_phone', 'not_a_uk_mobile']), 'every not-eligible reason has words');
 }
 
 console.log('2. the unreachable lead is flagged, never left New; nothing further along is touched');
@@ -114,7 +114,8 @@ console.log('6. skip counts match their reasons — no catch-all');
   ok(!/already contacted, queued or suppressed/.test(code(table)), 'the "already contacted, queued or suppressed" catch-all is gone (12)');
   const enqueue = slice(table, 'const handleQueueForWhatsApp = async', '// Archive selected leads');
   for (const k of ['no_whatsapp', 'in_queue', 'already_sent', 'opted_out', 'number_in_conversation', 'logged_conversation']) ok(new RegExp(`skipNames\\.${k}\\.push`).test(enqueue), `bucket ${k} is counted where it is decided`);
-  ok(/coldWhatsAppVerdict\(lead\?\.phone, lead\?\.country\)/.test(enqueue) && /statusWhenWhatsAppUnavailable\(lead\?\.status\)/.test(enqueue), 'an unreachable lead is flagged through the shared leaf');
+  ok(/coldWhatsAppVerdict\(lead\?\.phone, lead\?\.country, waMarkets\)/.test(enqueue) && /statusWhenWhatsAppUnavailable\(lead\?\.status\)/.test(enqueue), 'an unreachable lead is flagged through the shared leaf');
+  ok(/if \(!marksNoMobile\(reason\)\) return;/.test(enqueue), '…except a Malaysia / Singapore mobile whose country is switched off: skipped, never flagged (2026-10-14)');
   ok(!/classifyLineType\(lead\?\.phone, lead\?\.country\);\s*\n\s*if \(!whatsappEligible\)/.test(enqueue), 'the old empty-number-is-eligible gate is gone');
   ok(/names: skipNames\[key\]/.test(enqueue), 'the batch note carries business names');
   clearQueueBatch();

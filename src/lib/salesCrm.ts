@@ -248,7 +248,8 @@ export const QUEUE_SKIP_LABEL: Record<string, string> = {
      lands here too — the words say so rather than calling it "not a mobile". Switching Australia on is Paul's
      decision (consent rules + a Sydney send window), not a label change. The reason CODE is a stored token: only
      this wording changed. */
-  not_a_uk_mobile: 'not a UK mobile (cold WhatsApp outreach is UK only — not switched on for Australia or other countries)',
+  not_a_uk_mobile: 'not a UK mobile (cold WhatsApp goes to UK mobiles, and to Malaysia / Singapore mobiles when switched on — not landlines, and not switched on for Australia or other countries)',
+  country_off: 'a Malaysia / Singapore mobile, but that country is switched off for now (not flagged — Paul can switch it on)',
   opted_out: 'opted out',
   daily_limit: 'over your daily limit',
 };

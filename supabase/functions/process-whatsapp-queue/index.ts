@@ -1,6 +1,8 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { toWhatsAppDigits } from "../../../src/lib/waNumber.ts";
-import { windowOpenForDigits } from "../../../src/lib/sendWindow.ts";
+import { marketWindowOpen, windowOpenForDigits } from "../../../src/lib/sendWindow.ts";
+import { COUNTRY_OFF, channelOn, mobileMarketOf, type Market } from "../../../src/lib/outreachMarkets.ts";
+import { loadCountrySettings, marketAtDailyCap } from "../_shared/country-settings.ts";
 import { isUkColdDestination, NOT_A_UK_MOBILE } from "../../../src/lib/ukColdDestination.ts";
 import { statusBeforeQueue, statusWhenWhatsAppUnavailable, statusWithContactEvidence } from "../../../src/lib/coldWhatsAppEligibility.ts";
 import { leadAccess, resolveActor } from "../_shared/access.ts";
@@ -649,6 +651,9 @@ Deno.serve(async (req) => {
     } catch { paceRow = null; }
     const pace = effectivePace(paceRow as never);
     const DAILY_CAP = pace.dailyCap;
+    /* ⛔ PER-COUNTRY SWITCHES, HOURS AND CAPS (2026-10-14, src/lib/outreachMarkets.ts). An unreadable table answers the
+       defaults: the UK exactly as before, Malaysia and Singapore OFF. */
+    const countrySettings = await loadCountrySettings(service);
     const paused: boolean = stateRow?.paused === true;
     const uk = londonNow();
     // Minute-granular so the 21:30 end is honoured (a whole-hour compare would run to 21:59).
@@ -658,9 +663,22 @@ Deno.serve(async (req) => {
        removed 2026-10-15 — India is not an outreach market any more, and a +91 number gets no special hours
        (it is refused as a cold send further down). Chosen from the destination digits, never from
        outreach_leads.country (measured wrong on ~370 rows). */
-    const anyWindowOpen = windowOpen;
+    /* 2026-10-14: Malaysia / Singapore mobiles send in THEIR OWN local hours (09:00-19:00 by default, UTC+8), only while
+       that country's WhatsApp switch is on. The London window and every UK number are unchanged. */
+    const anyWindowOpen = windowOpen || marketWindowOpen(["MY", "SG"], "whatsapp", new Date(), countrySettings);
     const leadWindowOpen = (r: { phone?: unknown; country?: unknown }) =>
-      force || windowOpenForDigits(toWhatsAppNumber(String(r.phone ?? ""), (r.country as string | null) ?? null));
+      force || windowOpenForDigits(toWhatsAppNumber(String(r.phone ?? ""), (r.country as string | null) ?? null), new Date(), countrySettings);
+    /* A country at its OWN daily cap (Malaysia / Singapore; counted in its own local day) holds its leads, like the window
+       does: not chosen, nothing written. Read once per tick, only for a market that is switched on. */
+    const marketsAtCap = new Set<Market>();
+    for (const m of ["MY", "SG"] as const) {
+      if (channelOn(countrySettings, m, "whatsapp") && await marketAtDailyCap(service, countrySettings, m, "whatsapp")) marketsAtCap.add(m);
+    }
+    const leadSendable = (r: { phone?: unknown; country?: unknown }) => {
+      if (!leadWindowOpen(r)) return false;
+      const m = mobileMarketOf(toWhatsAppNumber(String(r.phone ?? ""), (r.country as string | null) ?? null));
+      return !(m && marketsAtCap.has(m));
+    };
 
     /* ⛔ QUEUED BUT HELD BY A TEST ACCOUNT (2026-10-08). The drip never chooses a real business held by a test
        account (src/lib/qaSafety.ts REFUSE) — correct, but silent: 7 real plumbers queued from "test1" sat
@@ -1508,7 +1526,7 @@ Deno.serve(async (req) => {
        prospecting spend, so they stop under "prospecting paused" and the emergency stop. The SENDS
        below are not paid API and keep to the WhatsApp queue's own pause. */
     const auditAheadMode = await paidMode(service);
-    if ((windowOpen || force) && auditAheadMode === "running") try {
+    if ((anyWindowOpen || force) && auditAheadMode === "running") try {
       auditAhead = await runOutreachAuditAhead(service, (name) => TEMPLATES[name ?? ""]?.vars);
       if (auditAhead.started || auditAhead.waiting) {
         console.log(`[outreach-audit] started=${auditAhead.started} waiting=${auditAhead.waiting} inFlight=${auditAhead.inFlight} skipped=${auditAhead.skipped} considered=${auditAhead.considered}`);
@@ -1591,7 +1609,7 @@ Deno.serve(async (req) => {
     /* ⛔ HELD, NOT DROPPED: a lead outside its own window is simply not chosen this tick (nothing is
        written) and is filtered out BEFORE the look-ahead slice, so a run of held leads at the head can never
        hide the sendable ones behind them. */
-    const scanned = qaDrill ? scannedAll : scannedAll.filter(leadWindowOpen);
+    const scanned = qaDrill ? scannedAll : scannedAll.filter(leadSendable);
     const heldForLocalWindow = scannedAll.length - scanned.length;
     if (heldForLocalWindow > 0) console.log(`[queue] ${heldForLocalWindow} queued lead(s) held: outside their own local send window`);
     const candidates = interleaveByCampaign(scanned).slice(0, QUEUE_LOOKAHEAD) as Array<Record<string, unknown>>;
@@ -1647,7 +1665,7 @@ Deno.serve(async (req) => {
         .order("hook_followup_queued_at", { ascending: true })
         .limit(QUEUE_LOOKAHEAD);
       // The oldest whose own window is open (with only UK numbers queued: exactly the old limit(1) row).
-      const hookLead = ((hookRows ?? []) as Array<Record<string, any>>).find(leadWindowOpen) ?? null;
+      const hookLead = ((hookRows ?? []) as Array<Record<string, any>>).find(leadSendable) ?? null;
 
       if (hookLead) {
         const clearMarker = () => service.from("outreach_leads")
@@ -1755,7 +1773,7 @@ Deno.serve(async (req) => {
         .or(`derived_town.not.is.null,town_fetch_note.is.null,town_fetch_note.not.in.(${[...SETTLED_TOWN_NOTES].join(",")})`)
         .order("contact_followup_queued_at", { ascending: true })
         .limit(QUEUE_LOOKAHEAD);
-      const contactLead = ((contactRows ?? []) as Array<Record<string, any>>).find(leadWindowOpen) ?? null;
+      const contactLead = ((contactRows ?? []) as Array<Record<string, any>>).find(leadSendable) ?? null;
 
       if (contactLead) {
         const clearMarker = () => service.from("outreach_leads")
@@ -2088,7 +2106,22 @@ Deno.serve(async (req) => {
        cold WhatsApp is off. The property is tested on the DIGITS WE WOULD SEND TO, never on the country column or an
        identifier. Same drop-out shape as bad_number so the drip never stalls; the delivery status says why. A
        continuation (a reply into an existing conversation) is a different path and never reaches this. */
-    if (isColdOutreachTemplate(templateName) && !isUkColdDestination(toNumber)) {
+    /* 2026-10-14: a real Malaysia / Singapore mobile (or a UK one) whose country's WhatsApp switch is OFF is not "No
+       WhatsApp" — it is a mobile we are not messaging yet. It leaves the queue back to its pre-queue status, nothing else
+       is written about the number. A MY / SG mobile whose country is ON passes; everything else keeps the old drop-out. */
+    const coldMarket = mobileMarketOf(toNumber);
+    if (isColdOutreachTemplate(templateName) && coldMarket && !channelOn(countrySettings, coldMarket, "whatsapp")) {
+      await service.from("outreach_leads").update({
+        status: statusBeforeQueue(lead.previous_status as string | null),
+        whatsapp_delivery_status: COUNTRY_OFF, contact_method: null, queued_at: null, previous_status: null,
+      }).eq("id", lead.id);
+      return json({
+        ok: true, skipped: COUNTRY_OFF,
+        reason: `${lead.business_name ?? "That lead"} is in a country whose WhatsApp is switched off, so nothing was sent.`,
+        lead_id: lead.id, business: lead.business_name, ...statusPayload,
+      });
+    }
+    if (isColdOutreachTemplate(templateName) && !isUkColdDestination(toNumber) && !(coldMarket && coldMarket !== "UK")) {
       /* Learned for certain that cold WhatsApp cannot reach this destination: No WhatsApp, not "New" (2026-10-08). */
       await service.from("outreach_leads").update({
         status: statusWhenWhatsAppUnavailable(statusBeforeQueue(lead.previous_status as string | null)),

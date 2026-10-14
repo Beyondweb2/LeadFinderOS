@@ -7,7 +7,7 @@ import { ukGazetteerApplies } from "../../../src/lib/leadCountry.ts";
 import { toWhatsAppNumber } from "../_shared/whatsapp-send.ts";
 import { DEFAULT_FIRST_REPLY_TEMPLATE, effectiveReplyMode, firstReplyTemplate, pitchEverSent } from "../_shared/auto-reply-rules.ts";
 import { pitchMayFollowAudit, pitchRefusalNote } from "../../../src/lib/auditPitchRule.ts";
-import { dropResearchIntent, dropOffTrade, dropMissingTown, qualifyPlace, placeSuffixForCountry, placeNamesCountry, dedupeQuestions, coverageDirective, stripRepeatedWords, capHeadTerms, headTermCap } from "../../../src/lib/seedGuard.ts";
+import { dropResearchIntent, dropOffTrade, dropMissingTown, qualifyPlace, placeSuffixForCountry, placeNamesCountry, placeJoin, dedupeQuestions, coverageDirective, stripRepeatedWords, capHeadTerms, headTermCap } from "../../../src/lib/seedGuard.ts";
 import { normalizeAuditList, serviceAreaQuestionDirective } from "../../../src/lib/auditQuestionContext.ts";
 import {
   nationalIntentDirective, hybridIntentDirective, nationalFallbackQuestions, marketVocabulary,
@@ -276,7 +276,7 @@ function fallbackQuestions(type: string, loc: string, hasWebsite: boolean, speci
      wording is unchanged; a blank/unknown country is still left bare here, as before. */
   const abroad = isUK ? null : otherCountrySuffix(country);
   const ukTown = (l: string) => (isUK && l && !/\b(uk|united kingdom|england|scotland|wales)\b/i.test(l) ? `${l} UK`
-    : abroad && l && !mentionsCountryWord(l, abroad) ? `${l} ${abroad}` : l);
+    : abroad && l && !mentionsCountryWord(l, abroad) ? `${l}${placeJoin(abroad)}${abroad}` : l);
   const niches = specialisms
     ? specialisms.split(/[,;/]|\band\b/i).map((x) => x.trim().toLowerCase()).filter((x) => x.length > 1)
     : [];
@@ -1989,7 +1989,7 @@ async function generateQuestions(
   const isUK = ["UK", "GB"].includes((country ?? "").trim().toUpperCase());
   const abroadQ = isUK ? null : otherCountrySuffix(country);
   const locQ = isUK && locationText && !/\b(uk|united kingdom|england|scotland|wales)\b/i.test(locationText) ? `${locationText} UK`
-    : abroadQ && locationText && !mentionsCountryWord(locationText, abroadQ) ? `${locationText} ${abroadQ}` : loc;
+    : abroadQ && locationText && !mentionsCountryWord(locationText, abroadQ) ? `${locationText}${placeJoin(abroadQ)}${abroadQ}` : loc;
   /* ⛔ THE MONEY-QUESTION BLOCK — EMPTY STRING WHEN OFF, so a caller that did not opt in gets a
      prompt byte-identical to the one it got before this existed. The text lives in
      src/lib/moneyQuestions.ts rather than inline here: it is the part Paul tunes, it has to be

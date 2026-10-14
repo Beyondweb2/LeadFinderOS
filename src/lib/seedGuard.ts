@@ -769,8 +769,16 @@ const PLACE_SUFFIX_BY_COUNTRY: Record<string, string> = {
   india: 'India', usa: 'USA', australia: 'Australia', canada: 'Canada', germany: 'Germany',
   france: 'France', spain: 'Spain', italy: 'Italy', netherlands: 'Netherlands', belgium: 'Belgium',
   ireland: 'Ireland', newzealand: 'New Zealand', southafrica: 'South Africa', singapore: 'Singapore',
-  uae: 'UAE', brazil: 'Brazil', mexico: 'Mexico', japan: 'Japan', sweden: 'Sweden', thailand: 'Thailand',
+  uae: 'UAE', brazil: 'Brazil', mexico: 'Mexico', japan: 'Japan', sweden: 'Sweden', thailand: 'Thailand', malaysia: 'Malaysia',
 };
+/* Malaysia and Singapore (2026-10-14) are written with a comma — "plumber in Johor Bahru, Malaysia" — as Paul asked.
+   They are new markets with no measured audits, so no day-28 replay compares against a different wording. Every
+   other country keeps its space ("Pune India", "Leeds UK"), byte for byte. Singapore's town IS the country, so a
+   Singapore question already names it and is never pinned twice (placeNamesCountry). */
+const COMMA_PLACE_SUFFIX = new Set(['malaysia', 'singapore']);
+export function placeJoin(suffix: string): string {
+  return COMMA_PLACE_SUFFIX.has(suffix.trim().toLowerCase()) ? ', ' : ' ';
+}
 export function placeSuffixForCountry(country: string | null | undefined): string {
   const k = String(country ?? '').toLowerCase().replace(/[^a-z]/g, '');
   return PLACE_SUFFIX_BY_COUNTRY[k] ?? 'UK';
@@ -841,7 +849,7 @@ export function qualifyPlace(
     const re = new RegExp(`(.*)(${escapeForRegex(town.trim())})`, 'i');
     const m = q.match(re);
     if (!m) return q;
-    const after = `${m[1]}${m[2]} ${suffix.trim()}${q.slice(m[0].length)}`.replace(/\s+/g, ' ').trim();
+    const after = `${m[1]}${m[2]}${placeJoin(suffix)}${suffix.trim()}${q.slice(m[0].length)}`.replace(/\s+/g, ' ').trim();
     if (after !== q) repaired.push({ before: q, after });
     return after;
   });

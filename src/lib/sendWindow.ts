@@ -4,7 +4,11 @@
    for +91 numbers. It is gone: a +91 number gets NO special hours, and cold WhatsApp to anything that is not a
    UK mobile is refused outright (src/lib/ukColdDestination.ts). The window is still chosen from the digits we
    send to, never from outreach_leads.country (measured wrong on ~370 live rows).
-   ⛔ PURE, NO IMPORTS: the queue imports this by relative path. */
+   ⛔ MALAYSIA AND SINGAPORE (2026-10-14): a Malaysian / Singapore MOBILE gets its own country's hours (09:00-19:00
+   local by default, set per country in outreach_country_settings — src/lib/outreachMarkets.ts). Every other number keeps
+   the London window, byte for byte. Pass the settings; left out, MY / SG use their defaults.
+   ⛔ PURE (one relative import of another pure leaf): the queue imports this by relative path. */
+import { channelOn, mobileMarketOf, windowForMarket, type CountrySettings, type Market } from './outreachMarkets.ts';
 
 export interface SendWindow {
   /** IANA zone the window is read in. */
@@ -20,7 +24,9 @@ export const SEND_WINDOWS: readonly SendWindow[] = [LONDON_SEND_WINDOW];
 
 /** The window for a destination in WhatsApp digits. One window for everyone now (the digits stay in the signature so
  *  a future market is a one-line change here, not a new call site). */
-export function sendWindowForDigits(_digits: string | null | undefined): SendWindow {
+export function sendWindowForDigits(digits: string | null | undefined, settings?: CountrySettings | null): SendWindow {
+  const m = mobileMarketOf(digits);
+  if (m === 'MY' || m === 'SG') return { ...windowForMarket(m, settings, LONDON_SEND_WINDOW), label: m };
   return LONDON_SEND_WINDOW;
 }
 
@@ -38,11 +44,19 @@ export function windowOpen(w: SendWindow, now: Date = new Date()): boolean {
 }
 
 /** Is the window for THIS destination open now? */
-export function windowOpenForDigits(digits: string | null | undefined, now: Date = new Date()): boolean {
-  return windowOpen(sendWindowForDigits(digits), now);
+export function windowOpenForDigits(digits: string | null | undefined, now: Date = new Date(), settings?: CountrySettings | null): boolean {
+  return windowOpen(sendWindowForDigits(digits, settings), now);
 }
 
 /** Is ANY window open (the queue's outer gate)? */
-export function anyWindowOpen(now: Date = new Date()): boolean {
-  return SEND_WINDOWS.some((w) => windowOpen(w, now));
+export function anyWindowOpen(now: Date = new Date(), settings?: CountrySettings | null): boolean {
+  if (SEND_WINDOWS.some((w) => windowOpen(w, now))) return true;
+  return marketWindowOpen(['MY', 'SG'], 'whatsapp', now, settings);
+}
+
+/** Is a switched-on market's own window open now (Malaysia / Singapore)? */
+export function marketWindowOpen(markets: readonly Market[], channel: 'whatsapp' | 'sms', now: Date = new Date(),
+                                 settings?: CountrySettings | null): boolean {
+  return markets.some((m) => m !== 'UK' && channelOn(settings ?? null, m, channel)
+    && windowOpen({ ...windowForMarket(m, settings, LONDON_SEND_WINDOW), label: m }, now));
 }

@@ -1226,6 +1226,16 @@ positive allowlist of `baseline`; `isColdOutreachTemplate` treats unknown as COL
 - **Verification tiers** are §3a: `check:quick` / `test:changed` while working, ONE full gate before shipping, always for messaging / auth / database /
   payments / secrets; always verify the deployed site.
 
+### 6l. Malaysia and Singapore (2026-10-14 — record: `docs/my-sg-support.md`)
+
+- ⛔ **Which market a number is = `src/lib/outreachMarkets.ts` (`mobileMarketOf` / `callMarketOf`), SQL twin `public.mobile_market`** — from the
+  digits we send to, never `outreach_leads.country`. The UK half is the old UK-mobile test, unchanged.
+- ⛔ **A market is not permission**: each channel (WhatsApp / SMS / browser calling) has its switch in `outreach_country_settings` (admin-only via
+  `set_outreach_country`). Absent / unreadable = UK on, MY / SG OFF. A real MY / SG mobile in a switched-off market is `country_off` — NEVER
+  "No mobile" / "No SMS". New sending code asks `channelOn`, never a hand-written country list.
+- **MY / SG send in their own local hours** (`windowForMarket`, default 09:00–19:00 UTC+8) with their own daily caps; the UK windows and the team cap are
+  unchanged. **MY / SG phones are stored E.164** (`my_sg_e164` + trigger); `phone_key` is unchanged on purpose (no index rebuild).
+
 ## 7. Where the code lives (`docs/code-map.md` for the long form)
 
 | Thing | Path |

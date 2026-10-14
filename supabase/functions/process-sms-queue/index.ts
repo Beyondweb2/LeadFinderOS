@@ -4,6 +4,9 @@ import { sendSmsToLead } from "../_shared/twilio-sms.ts";
 import { loadQaExclusions } from "../_shared/qa-guard.ts";
 import { qaSendVerdict } from "../../../src/lib/qaSafety.ts";
 import { isColdSmsTemplate, SMS_QUEUE_DAILY_CAP, SMS_QUEUE_GAP_SECONDS, SMS_QUEUE_MAX_ATTEMPTS, londonDayStartUtc, smsWindowOpen } from "../../../src/lib/smsMessages.ts";
+import { channelOn, mobileMarketOf, windowForMarket, windowOpen, type Market } from "../../../src/lib/outreachMarkets.ts";
+import { toWhatsAppDigits } from "../../../src/lib/waNumber.ts";
+import { loadCountrySettings, marketAtDailyCap } from "../_shared/country-settings.ts";
 
 // process-sms-queue — the SMS drip (2026-10-09). The twin of process-whatsapp-queue, deliberately smaller.
 //
@@ -42,7 +45,15 @@ Deno.serve(async (req) => {
     const { data: st, error: stErr } = await service.from("sms_queue_state").select("paused, next_send_at").eq("id", 1).maybeSingle();
     if (stErr || !st) return json({ ok: true, skipped: "state_unreadable" });
     if (st.paused === true) return json({ ok: true, skipped: "paused" });
-    if (!smsWindowOpen()) return json({ ok: true, skipped: "outside_window" });
+    /* 2026-10-14 (src/lib/outreachMarkets.ts): a Malaysia / Singapore mobile is texted in ITS OWN local hours while that
+       country's SMS switch is on, and stops at its own daily cap. The UK window and every UK lead are unchanged. */
+    const countrySettings = await loadCountrySettings(service);
+    const ukOpen = smsWindowOpen();
+    const LONDON = { tz: "Europe/London", startMin: 0, endMin: 0 };
+    const marketOpen = (m: Market) => m !== "UK" && channelOn(countrySettings, m, "sms") && windowOpen(windowForMarket(m, countrySettings, LONDON));
+    if (!ukOpen && !marketOpen("MY") && !marketOpen("SG")) return json({ ok: true, skipped: "outside_window" });
+    const atCap = new Set<Market>();
+    for (const m of ["MY", "SG"] as const) if (marketOpen(m) && await marketAtDailyCap(service, countrySettings, m, "sms")) atCap.add(m);
     if (!sendNow && st.next_send_at && new Date(st.next_send_at) > new Date()) return json({ ok: true, skipped: "not_due" });
 
     const { count: sentToday } = await service.from("sms_messages").select("id", { count: "exact", head: true })
@@ -51,7 +62,7 @@ Deno.serve(async (req) => {
 
     // Oldest waiting lead that may be sent. Held (test-account) and suspended-rep leads are skipped, never dropped.
     const { data: rows } = await service.from("outreach_leads")
-      .select("id, business_name, phone, assigned_to_user_id, sms_queued_at, sms_queued_by_user_id, sms_attempts, sms_queued_template")
+      .select("id, business_name, phone, country, assigned_to_user_id, sms_queued_at, sms_queued_by_user_id, sms_attempts, sms_queued_template")
       .not("sms_queued_at", "is", null).eq("is_archived", false).not("sms_queued_by_user_id", "is", null)
       .order("sms_queued_at", { ascending: true }).limit(25);
     const { data: susp, error: suspErr } = await service.from("team_members").select("user_id").not("suspended_at", "is", null);
@@ -59,8 +70,13 @@ Deno.serve(async (req) => {
     const suspended = new Set(((susp ?? []) as Array<{ user_id: string }>).map((r) => r.user_id));
     let qa;
     try { qa = await loadQaExclusions(service); } catch { return json({ ok: true, skipped: "qa_guard_read_failed" }); }
+    // A lead outside its own country's hours (or its country at its cap) is HELD: not chosen, nothing written.
+    const inItsHours = (l: Record<string, unknown>) => {
+      const m = mobileMarketOf(toWhatsAppDigits(l.phone as string | null, (l.country as string | null) ?? null));
+      return m === "MY" || m === "SG" ? marketOpen(m) && !atCap.has(m) : ukOpen;
+    };
     const lead = ((rows ?? []) as Array<Record<string, unknown>>).find((l) =>
-      !suspended.has(String(l.sms_queued_by_user_id))
+      inItsHours(l) && !suspended.has(String(l.sms_queued_by_user_id))
       && qaSendVerdict(qa, { leadId: String(l.id), phones: [l.phone as string | null], holderUserId: (l.assigned_to_user_id as string | null) ?? null }).kind !== "refuse");
     if (!lead) return json({ ok: true, skipped: (rows ?? []).length ? "all_held" : "empty_queue" });
 
