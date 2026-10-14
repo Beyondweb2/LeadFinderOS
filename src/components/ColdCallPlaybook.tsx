@@ -1,4 +1,8 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { usePriceModel } from '@/hooks/usePriceModel';
+import { PriceModelSwitch } from '@/components/PriceModelSwitch';
+import { guaranteeForModel, routeOfferForModel } from '@/lib/callClose';
+import type { PriceModel } from '@/lib/priceModel';
 import { useQueryClient } from '@tanstack/react-query';
 import { logFeatureUse } from '@/lib/featureUsage';
 import { invokeEdge, edgeErrorMessage } from '@/lib/edgeInvoke';
@@ -78,9 +82,11 @@ function Step({ title, tone = 'grey', hint, children, testId, action }: { title:
 }
 
 /** The script as plain text for the Copy button — the same sections, in the same order, as the screen. */
-export function callFlowText(p: ColdCallPlaybook): string {
+export function callFlowText(p: ColdCallPlaybook, model: PriceModel = 'standard'): string {
   const s = p.script;
-  const plan = s.plans.routes.find((r) => r.route === s.plans.preselected) ?? s.plans.routes[0];
+  const base = s.plans.routes.find((r) => r.route === s.plans.preselected) ?? s.plans.routes[0];
+  /* The copied script says the price of the person's model (2026-10-14), exactly as the Offer step does. */
+  const plan = base ? routeOfferForModel(base.route, model) : base;
   return [
     'SAY\n' + s.opener.join('\n'),
     ...(s.found.lines.length ? ['REASONS\n' + s.found.lines.map((l) => '- ' + l).join('\n')] : []),
@@ -90,15 +96,16 @@ export function callFlowText(p: ColdCallPlaybook): string {
     'THEN ASK\n' + s.discovery.map((q) => '- ' + q).join('\n'),
     'WHAT WE DO\n' + s.whatWeDo,
     ...(plan ? ['PLAN: ' + plan.name + ' (' + plan.summary + ')\n' + plan.spoken.join(' ')] : []),
-    'GUARANTEE\n' + s.guarantee.spoken,
+    'GUARANTEE\n' + guaranteeForModel(s.guarantee, model).spoken,
   ].join('\n\n');
 }
 
 /* ── SAY ──────────────────────────────────────────────────────────────────────────────────────── */
 function Say({ p }: { p: ColdCallPlaybook }) {
   const s = p.script;
+  const { model } = usePriceModel();
   return (
-    <Step title="Say" tone="blue" testId="call-step-open" action={<CopyButton text={callFlowText(p)} label="Copy" />}>
+    <Step title="Say" tone="blue" testId="call-step-open" action={<CopyButton text={callFlowText(p, model)} label="Copy" />}>
       <div className="space-y-2 text-[15px] leading-relaxed" data-testid="playbook-call-script">{s.opener.map((line) => <p key={line}>{line}</p>)}</div>
       {s.found.lines.length > 0 && (
         <ul className="space-y-1.5" data-testid="call-step-found">
@@ -279,7 +286,9 @@ function Offer({ p, ans }: { p: ColdCallPlaybook; ans: ReturnType<typeof useCall
   /* THE AGENCY-CONTRACT RULE (offerFit): the call's answers decide which plans a salesperson offers. Paul (admin)
      still sees both — a Build on those answers stops for his release in Quick Close. */
   const fit = ans.v ? offerFit(ans.answers, ans.v.has_website ?? (p.context.website ? true : false)) : null;
-  const routes = s.plans.routes.filter((r) => !fit || fit.offered[r.route] || role === 'admin');
+  const { model } = usePriceModel();
+  const routes = s.plans.routes.filter((r) => !fit || fit.offered[r.route] || role === 'admin').map((r) => routeOfferForModel(r.route, model));
+  const guarantee = guaranteeForModel(s.guarantee, model);
   const preferred = fit?.recommended ?? s.plans.preselected;
   const [picked, setPicked] = useState<ServiceRoute | null>(null);
   const route = picked && routes.some((r) => r.route === picked) ? picked : routes.some((r) => r.route === preferred) ? preferred : routes[0]?.route;
@@ -287,6 +296,7 @@ function Offer({ p, ans }: { p: ColdCallPlaybook; ans: ReturnType<typeof useCall
   if (!plan) return null;
   return (
     <Step title="Offer" tone="green" testId="call-step-close">
+      <PriceModelSwitch compact />
       {fit?.reason && <p className={cn('rounded-xl px-3 py-2 text-xs leading-snug ring-1 ring-inset', fit.offered.build ? 'bg-muted/40 text-muted-foreground ring-border' : 'bg-amber-500/[0.08] text-amber-800 ring-amber-500/30 dark:text-amber-200')} data-testid="call-offer-fit">{fit.reason}{!fit.offered.build && role === 'admin' && fit.offered.optimise ? ' (You can still choose Build — it will need your release.)' : ''}</p>}
       {fit?.warning && <p className="rounded-xl bg-amber-500/[0.08] px-3 py-2 text-xs font-semibold leading-snug text-amber-800 ring-1 ring-inset ring-amber-500/30 dark:text-amber-200" data-testid="call-offer-warning">{fit.warning}</p>}
       {routes.length > 1 ? (
@@ -308,8 +318,8 @@ function Offer({ p, ans }: { p: ColdCallPlaybook; ans: ReturnType<typeof useCall
         <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-yellow-500" />
         <div className="min-w-0">
           <p className="text-[11px] font-bold uppercase tracking-wider text-yellow-600 dark:text-yellow-400">Money-back guarantee</p>
-          <p className="leading-snug">{s.guarantee.spoken}</p>
-          <p className="mt-0.5 text-[11px] text-amber-700 dark:text-amber-300">{s.guarantee.caution}</p>
+          <p className="leading-snug">{guarantee.spoken}</p>
+          <p className="mt-0.5 text-[11px] text-amber-700 dark:text-amber-300">{guarantee.caution}</p>
         </div>
       </div>
     </Step>

@@ -22,6 +22,18 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-14-price-model', date: '2026-10-14', title: 'Price model switch: £99 start or £499 upfront (the £499 link is not on yet)', audience: 'all',
+    body: 'The Sales dashboard, the call script’s Offer step and the Close tab now show a Price model switch. Pick “£99 start” (today’s offer) or “£499 upfront”. The script and the Close terms follow your choice.',
+    report: {
+      added: [
+        'A one-click Price model switch for each person. The admin also sets the team default.',
+        '£499 upfront: £499, then £99 a month for 12 months, starting when Build’s monthly payments start. The guarantee line is “We improve AI visibility or you get your money back.”',
+        'The model a sign-up link was made under is recorded on the lead, so we can compare results by model.',
+      ],
+      changed: ['Under “£499 upfront” the sign-up link button is switched off and says why: its client agreement still needs Paul’s approval. Switch to “£99 start” to send a link.'],
+      removed: [],
+      effect: 'You can try the £499 pitch on calls today. To close a sale, switch back to £99 start until the £499 agreement is approved.',
+    } },
   { id: '2026-10-14-whatsapp-limits', date: '2026-10-14', title: 'WhatsApp queue: limits you can change, sent today per person, and an automatic pause', audience: 'admin',
     body: 'The WhatsApp queue panel now has a Limits line. Open it to change the team’s daily cap, the minutes between sends, and how many leads each salesperson can queue a day. No code change needed.',
     report: {

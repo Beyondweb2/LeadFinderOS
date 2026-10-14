@@ -29,6 +29,7 @@ import { TeamBoard } from '@/components/team/TeamBoard';
 import { MyHandoffs } from '@/components/salesDash/MyHandoffs';
 import { FollowUpQueue, NextActions, FOLLOW_UP_GROUPS, type CloseItems } from '@/components/salesDash/sections';
 import { CloseWorkDialog, type CloseTarget } from '@/components/salesDash/CloseWorkDialog';
+import { PriceModelSwitch } from '@/components/PriceModelSwitch';
 
 /* ════════════════════════════════════════════════════════════════════════════════════════════════
    THE SALES DASHBOARD — ONE PAGE (2026-10-01, Sales + Earnings merged; redesigned 2026-10-02).
@@ -133,6 +134,9 @@ export default function SalesDashboard() {
           </Button>
         </>}
       />
+
+      {/* The person's price model, one click (2026-10-14, src/lib/priceModel.ts) — the call script and the Close tab follow it. */}
+      <PriceModelSwitch />
 
       {(q.isError || earn.isError) && (
         <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-destructive/40 bg-destructive/10 p-3 text-sm">
