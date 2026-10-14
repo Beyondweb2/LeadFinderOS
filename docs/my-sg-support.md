@@ -30,6 +30,25 @@ Malaysia at all and was UK-only for phones, sending, hours and opt-outs.
 - The held `whatsapp-status` function imports `waNumber.ts` but was NOT redeployed (held for the Meta App Secret). Its output
   for an incoming `60…` / `65…` number is identical under the old code, so nothing is lost.
 
+## Opt-outs (Part B)
+
+- SMS: `isStopMessage` (whole text) has the Malay and Chinese stop words; an inbound text ALSO opts out on `isOptOut`
+  (`replyTriage.ts` OPT_OUT) — the same phrases WhatsApp replies are triaged with. Malay / Chinese phrases are as narrow as the
+  English ones: "Boleh berhenti kat kedai esok?" is not an opt-out.
+- Declines (`inboundClassify.ts`) include "tak berminat", "没兴趣" etc. — a decline never gets an automatic pitch.
+
+## SMS sender
+
+Texts go from TWILIO_SMS_FROM = the UK long code +44 7400 420187 (confirmed by secret digest, value never printed). No
+Malaysian / Singapore sender registration exists, so delivery there is not guaranteed; Twilio's Geo Permissions must
+allow MY and SG for SMS and voice or Twilio refuses the send.
+
+## Templates with UK / £ wording (do not use for MY / SG)
+
+`explain_offer`, `explain_offer_v2` ("941 UK businesses", £99 / £29.99 — already blocked as stale offers),
+`re_engage` (£49.99, legacy), `booking_switch_barbers` (£29.99, dead barber product). The openers (`initial_contact`,
+`initial_opener_v2`) have no UK or £ wording. The sign-up link and report pages are in £ (money is out of scope).
+
 ## Deploys
 
 - Part A (country plumbing, sending OFF): migrations `20261025090000_my_sg_markets.sql`, `20261025090100_my_sg_import.sql`.

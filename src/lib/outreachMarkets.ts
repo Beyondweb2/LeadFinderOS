@@ -165,3 +165,6 @@ export function checkCountryValue(field: 'whatsapp_daily_cap' | 'sms_daily_cap' 
   const w = wholeIn(n, lo, hi);
   return w === null ? { ok: false, error: `${field}_out_of_range` } : { ok: true, value: w };
 }
+
+/** The SMS sender the texts go from (TWILIO_SMS_FROM, _shared/twilio.ts — checked by digest 2026-10-14). */
+export const SMS_SENDER_WORDS = 'Texts go from the team’s UK Twilio number (+44 7400 420187), not a local sender. Malaysian and Singapore networks may filter or block texts from an unregistered foreign sender — delivery depends on sender registration, so check the delivery status of the first few.';

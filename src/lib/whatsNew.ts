@@ -22,6 +22,21 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-14-malaysia-singapore-sending', date: '2026-10-14', title: 'You can now WhatsApp, text and call Malaysia and Singapore leads', audience: 'all',
+    body: 'Malaysian and Singapore mobiles can be queued for WhatsApp and texts, and called from the browser. They go out in their own local hours (9am–7pm), with their own daily limits.',
+    report: {
+      added: [
+        'A switch per country for WhatsApp, SMS and browser calls (admin: WhatsApp queue → Countries). Malaysia and Singapore are on.',
+        'Each country has its own daily limit and local send hours. The UK is unchanged.',
+        'Opt-outs in Malay and Chinese (for example "berhenti", "jangan hantar", "停止") stop all messages, on WhatsApp and by text.',
+      ],
+      changed: [
+        'Follow-ups to Malaysia and Singapore go in their local hours, not UK hours.',
+        'Texts to Malaysia and Singapore come from our UK number, so some may not arrive. The SMS option says so.',
+      ],
+      removed: [],
+      effect: 'Queue your Malaysia and Singapore leads the same way as UK ones. Use only the openers — explain_offer messages quote £ prices and UK wording.',
+    } },
   { id: '2026-10-14-malaysia-singapore-leads', date: '2026-10-14', title: 'Malaysia and Singapore leads: the right country and the right phone numbers', audience: 'all',
     body: 'Find Leads, Add a lead and the CSV import now know Malaysia and Singapore. Their phone numbers are stored with +60 / +65, and their mobiles are never marked "No mobile".',
     report: {

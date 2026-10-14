@@ -6,6 +6,7 @@ import { bookOwnerId } from "../_shared/access.ts";
 import { resolveTwilioEnv, twiml, webhookUrlFor, xmlEscape } from "../_shared/twilio.ts";
 import { syncLeadFromSms } from "../_shared/sms-lead-sync.ts";
 import { callMarketOf, channelOn } from "../../../src/lib/outreachMarkets.ts";
+import { isOptOut } from "../../../src/lib/replyTriage.ts";
 import { loadCountrySettings } from "../_shared/country-settings.ts";
 import { handleInboundSmsReply, resolveSmsOwner } from "../_shared/sms-inbound.ts";
 
@@ -77,7 +78,9 @@ async function smsIn(service: Service, env: ReturnType<typeof resolveTwilioEnv>,
     if ((error as { code?: string }).code === "23505") return empty(); // a retried webhook
     throw new Error(`insert: ${error.message}`);
   }
-  if (isStopMessage(body)) {
+  /* 2026-10-14: a text opts out on the STOP words (English, Malay, Chinese) as the whole message, OR on the same opt-out
+     phrases WhatsApp replies are triaged with ("jangan hantar mesej lagi", "please stop messaging me") — one rule, replyTriage. */
+  if (isStopMessage(body) || isOptOut(body)) {
     await recordOptOut(service, { phone: `+${from}`, leadId: m.leadId }, "twilio_inbound");
     if (m.leadId) await service.from("lead_activity").insert({ lead_id: m.leadId, kind: "opted_out", data: { channel: "sms" } }).then(() => undefined, () => undefined);
   } else {
