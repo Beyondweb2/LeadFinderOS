@@ -96,5 +96,50 @@ console.log("── Job 2: CSV import — messy real-world files ──");
   ok(/revoke all on function public\.import_leads_v2\(jsonb, boolean, text, boolean, uuid, text\) from public, anon;/.test(mig), "anon cannot call it");
 }
 
+console.log("── Job 3: WhatsApp cap, pace and auto-pause ──");
+{
+  const P = await import("../src/lib/whatsappPace.ts");
+  ok(P.DEFAULT_DAILY_CAP === 800 && P.MAX_DAILY_CAP === 1000 && P.DEFAULT_GAP_FLOOR_MIN === 1, "defaults: 800 a day (was 400), never above 1,000, 1 minute floor (unchanged)");
+  const e0 = P.effectivePace(null);
+  ok(e0.dailyCap === 800 && e0.gapFloorMin === 1 && e0.personDefault === null, "nothing stored → the defaults, no per-person limit");
+  ok(P.effectivePace({ daily_cap: 5000 }).dailyCap === 800, "a stored cap above Meta's ceiling is never used (falls back to the default)");
+  ok(P.effectivePace({ daily_cap: 0 }).dailyCap === 0, "a cap of 0 is a real setting (send nothing)");
+  ok(P.effectivePace({ daily_cap: 300, min_gap_minutes: 3, person_daily_limit_default: 40 }).gapFloorMin === 3, "stored values are used when in range");
+  ok(P.effectivePace({ min_gap_minutes: 0 }).gapFloorMin === 1 && P.effectivePace({ daily_cap: 2.5 }).dailyCap === 800, "out-of-range or fractional values fall back");
+  ok(P.checkPaceValue("daily_cap", "1001").ok === false && P.checkPaceValue("daily_cap", "-1").ok === false, "the admin's cap is refused above 1,000 or below 0 (never clamped)");
+  const okCap = P.checkPaceValue("daily_cap", " 650 ");
+  ok(okCap.ok === true && okCap.value === 650, "a typed cap is read as a whole number");
+  const blank = P.checkPaceValue("person_limit", "");
+  ok(blank.ok === true && blank.value === null, "blank = back to the default");
+  ok(P.checkPaceValue("min_gap_minutes", "abc").ok === false, "not a number → refused");
+
+  ok(P.autoPauseVerdict(7, 7).pause === false, "auto-pause: fewer than 8 attempts never pauses (one bad number is not a pattern)");
+  ok(P.autoPauseVerdict(20, 19).pause === true, "auto-pause: 19 of 20 failed (8 Oct 2026) → paused");
+  ok(P.autoPauseVerdict(20, 9).pause === false && P.autoPauseVerdict(20, 10).pause === true, "auto-pause: the line is half of them failing");
+  ok(P.autoPauseVerdict(40, 2).pause === false, "auto-pause: a normal day's ~5% failures never pauses");
+  ok(/press Resume/.test(P.autoPauseVerdict(10, 9).reason ?? ""), "auto-pause says why and what to do");
+
+  const q = read("supabase/functions/process-whatsapp-queue/index.ts");
+  ok(!/^const DAILY_CAP = /m.test(q) && /const DAILY_CAP = pace\.dailyCap;/.test(q), "the drip's cap comes from the one rule, not a constant");
+  ok(/Math\.max\(pace\.gapFloorMin, Math\.round\(baseGap \* jitter\)\)/.test(q), "the pacing floor is the admin-set floor (the formula is unchanged)");
+  ok(/select\("daily_cap, min_gap_minutes, person_daily_limit_default, auto_paused_at, auto_pause_reason"\)/.test(q)
+    && /\.select\("next_send_at, paused"\)/.test(q), "the pace is read separately — the pause flag's own read is untouched");
+  const tick = q.slice(q.indexOf('skipped: "outside_window"'), q.indexOf('skipped: "cap_reached"'));
+  ok(/autoPauseVerdict\(rows\.length, failed\)/.test(tick) && /\.is\("user_id", null\)\.eq\("test_mode", false\)/.test(tick), "auto-pause runs in the tick, on the queue's own non-test sends, before any send");
+  ok(/update\(\{ auto_paused_at: null, auto_pause_reason: null \}\)/.test(q), "Resume clears the auto-pause note");
+  const setPace = q.slice(q.indexOf('if (mode === "set_pace")'), q.indexOf('if (mode === "set_auto_reply")'));
+  ok(/checkPaceValue\(k, body\[k\]\)/.test(setPace) && /not_a_salesperson/.test(setPace) && /\.eq\("status", "active"\)/.test(setPace), "set_pace checks every value and writes person limits only for active salespeople");
+  const gate = q.slice(q.indexOf("let isAdmin = false;"), q.indexOf('if (mode === "queue_state")'));
+  ok(/mode === "contact_check" \|\| mode === "suppress_lead" \|\| mode === "queue_state"/.test(gate) && !/set_pace/.test(gate), "set_pace and the status read stay admin-only (Sales gets three read/safety modes only)");
+
+  const mig = read("supabase/migrations/20261024110000_whatsapp_pace_settings.sql");
+  ok(/add column if not exists daily_cap integer/.test(mig) && !/drop |delete from|truncate/i.test(mig.replace(/--.*$/gm, "")), "the migration only adds columns and replaces one function");
+  ok(/v_limit := coalesce\(\(select daily_send_limit from public\.team_members where user_id = v_uid\),\s*case when public\.my_role\(\) = 'sales' then \(select person_daily_limit_default/.test(mig),
+    "sales_queue_opener: own limit first, then the default — for a salesperson only");
+
+  const panel = read("src/components/WhatsAppQueuePanel.tsx");
+  ok(/\{teamControls && <WhatsAppPaceSettings/.test(panel), "the limits, per-person counts and auto-pause note show only with team controls (admin)");
+}
+
 console.log(f ? `\n${f} FAILURE(S)` : "\nALL PASS");
 process.exit(f ? 1 : 0);

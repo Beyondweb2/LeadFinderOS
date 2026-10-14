@@ -181,7 +181,8 @@ console.log('\n── Sales can NOT queue an Indian mobile any more; UK rule unc
     .filter((f) => /create or replace function public\.sales_queue_opener/i.test(read('supabase/migrations/' + f))).pop()!;
   const m = read('supabase/migrations/' + latest);
   const fn = m.slice(m.toLowerCase().indexOf('create or replace function public.sales_queue_opener'));
-  ok(latest === '20261017090000_queue_truthful_flags.sql', 'the newest sales_queue_opener is the truthful-flags migration, which keeps the UK-only rule (' + latest + ')');
+  /* 2026-10-14: 20261024110000 re-creates it (the live body, plus the team-default daily limit) — the checks below run on it. */
+  ok(latest === '20261024110000_whatsapp_pace_settings.sql', 'the newest sales_queue_opener is the pace-settings migration, which keeps the UK-only rule (' + latest + ')');
   ok(fn.includes("elsif not (coalesce(v_lead.country, 'UK') = 'UK' and v_pk ~ '^7[0-9]{9}$') then v_reason := 'not_a_uk_mobile';"), 'the one cold test: a UK mobile, nothing else');
   ok(!/\^91/.test(fn), 'no India (91) alternative in it');
   for (const g of ["'not_yours'", "'archived'", "'client'", "'not_new'", "'already_contacted'", "'opted_out'", "'daily_limit'", "'no_phone'", "opener_contact_block"]) ok(fn.includes(g), '…every other guard kept: ' + g);

@@ -28,6 +28,7 @@ import { effectiveFirstReplyMode } from "../../../src/lib/firstReplyAutomation.t
 import { WAITING_PITCH_EXPIRED_REASON, WAITING_PITCH_STATUSES, isWaitingPitchExpired, waitingPitchCutoffIso } from "../../../src/lib/auditPitchRule.ts";
 import { SETTLED_TOWN_NOTES } from "../_shared/place-details.ts";
 import { createTemplateSnapshot } from "../../../src/lib/whatsappTemplateSnapshot.ts";
+import { AUTO_PAUSE_WINDOW_MIN, FAILED_SEND_STATUSES, MAX_DAILY_CAP, autoPauseVerdict, checkPaceValue, effectivePace, type EffectivePace } from "../../../src/lib/whatsappPace.ts";
 import { STRONG_STATUSES, postgrestList } from "../../../src/lib/strongStatuses.ts";
 import { qaSendVerdict } from "../../../src/lib/qaSafety.ts";
 import { loadQaExclusions, qaSendHold } from "../_shared/qa-guard.ts";
@@ -163,7 +164,12 @@ const GRAPH_VERSION = "v21.0";
    nine days before the cycle resets. Budget-neutral for the whole cycle is ~215/day. Paul's call —
    recorded so the number is not rediscovered when audits start failing 402 (the 2026-07-30
    incident). */
-const DAILY_CAP = 400;
+/* ✅ 400 → ADMIN-SET, DEFAULT 800, ON 2026-10-14 (test day). The cap and the gap floor are no longer constants here:
+   they are whatsapp_outreach_state.daily_cap / min_gap_minutes, set on the WhatsApp queue panel, read through ONE rule
+   (src/lib/whatsappPace.ts effectivePace — NULL = DEFAULT_DAILY_CAP 800 / DEFAULT_GAP_FLOOR_MIN 1; never above
+   MAX_DAILY_CAP, Meta's first established tier). Inside the handler DAILY_CAP is that effective cap. Everything above
+   about the grid still holds: one send per one-minute tick, 870 ticks in the window, so 800 is close to the most the
+   drip can reach — the pacing formula is unchanged. */
 /* ══ THE SEND GAP ═══════════════════════════════════════════════════════════════════════
    ⚠️ THESE WERE BARE LITERALS INSIDE THE PACING EXPRESSION. The floor in particular — the single
    number that decided real throughput for months — had no name, so nothing could reference it, no
@@ -228,7 +234,7 @@ const QUEUE_SCAN = 400;
    1 gets 399/day where 2 gets ~334. ⚠️ 1 is the floor of the floor: pg_cron cannot go below a
    minute, so there is no faster grid to sit under. If more throughput is ever wanted, this is not
    the lever — the WINDOW is (870 minutes today). */
-const SEND_GAP_FLOOR_MIN = 1;
+/* The floor is now pace.gapFloorMin (admin-set, default 1 — the value this constant held). */
 const SEND_GAP_CEILING_MIN = 180;
 const SEND_GAP_JITTER_LOW = 0.55;
 const SEND_GAP_JITTER_HIGH = 1.65;
@@ -419,12 +425,12 @@ function minutesUntilWindowEnd(): number {
  *  baseGap = time-left-in-window / remaining-cap, jittered, floored and ceilinged. Both the opener
  *  lane and the hook_followup lane write this, so the two share one pacing clock and one global rate
  *  (with one send per tick, they interleave at the cap — never a burst). */
-function nextPacingStamp(sentTodayCount: number): string {
-  const remaining = Math.max(1, DAILY_CAP - (sentTodayCount + 1));
+function nextPacingStamp(sentTodayCount: number, pace: EffectivePace): string {
+  const remaining = Math.max(1, pace.dailyCap - (sentTodayCount + 1));
   const minsLeft = minutesUntilWindowEnd();
   const baseGap = minsLeft / remaining;
   const jitter = SEND_GAP_JITTER_LOW + Math.random() * (SEND_GAP_JITTER_HIGH - SEND_GAP_JITTER_LOW);
-  const gapMin = Math.min(SEND_GAP_CEILING_MIN, Math.max(SEND_GAP_FLOOR_MIN, Math.round(baseGap * jitter)));
+  const gapMin = Math.min(SEND_GAP_CEILING_MIN, Math.max(pace.gapFloorMin, Math.round(baseGap * jitter)));
   return new Date(Date.now() + gapMin * 60000).toISOString();
 }
 
@@ -441,11 +447,11 @@ function nextPacingStamp(sentTodayCount: number): string {
  *   - outside the window, OR cap reached → the next 07:00 Europe/London. Cap-hit today rolls to
  *     tomorrow; before 07:00 today rolls to 07:00 today; after 21:30 today rolls to tomorrow.
  *  DST-correct because londonInstant round-trips through the London offset. */
-function nextEligibleSendAt(sentToday: number, storedNextSendAt: string | null): string {
+function nextEligibleSendAt(sentToday: number, storedNextSendAt: string | null, dailyCap: number): string {
   const n = londonNow();
   const nowMin = n.hour * 60 + n.minute;
   const inWindow = nowMin >= WINDOW_START * 60 && nowMin < WINDOW_END_MIN;
-  const underCap = sentToday < DAILY_CAP;
+  const underCap = sentToday < dailyCap;
 
   if (inWindow && underCap) {
     // The pacing wait already in flight, if it is still ahead of now; otherwise it is due now.
@@ -633,6 +639,16 @@ Deno.serve(async (req) => {
       })(),
     ]);
     const nextSendAt: string | null = stateRow?.next_send_at ?? null;
+    /* ⛔ THE CAP, PACE AND AUTO-PAUSE (2026-10-14) — read on their own, so an unreadable answer can only fall back to the
+       defaults; the pause flag above is never read through this. */
+    let paceRow: Record<string, unknown> | null = null;
+    try {
+      const { data: pr, error: prErr } = await service.from("whatsapp_outreach_state")
+        .select("daily_cap, min_gap_minutes, person_daily_limit_default, auto_paused_at, auto_pause_reason").eq("id", 1).maybeSingle();
+      if (!prErr) paceRow = (pr ?? null) as Record<string, unknown> | null;
+    } catch { paceRow = null; }
+    const pace = effectivePace(paceRow as never);
+    const DAILY_CAP = pace.dailyCap;
     const paused: boolean = stateRow?.paused === true;
     const uk = londonNow();
     // Minute-granular so the 21:30 end is honoured (a whole-hour compare would run to 21:59).
@@ -666,6 +682,11 @@ Deno.serve(async (req) => {
 
     const statusPayload = {
       testMode, live, sentToday: sentToday ?? 0, cap: DAILY_CAP,
+      /* 2026-10-14: the admin-set numbers (stored null = the default) and the auto-pause note, for the queue panel. */
+      pace: { dailyCap: pace.dailyCap, gapFloorMin: pace.gapFloorMin, personDefault: pace.personDefault, maxDailyCap: MAX_DAILY_CAP,
+              stored: { daily_cap: paceRow?.daily_cap ?? null, min_gap_minutes: paceRow?.min_gap_minutes ?? null } },
+      autoPausedAt: (paceRow?.auto_paused_at as string | null) ?? null,
+      autoPauseReason: (paceRow?.auto_pause_reason as string | null) ?? null,
       // Queued leads held by a TEST ACCOUNT: never sent, by design (qaSafety). Surfaced so they are not mistaken for "waiting".
       testHeldQueuedCount,
       queuedCount: queuedCount ?? 0, archivedQueuedCount: archivedQueuedCount ?? 0,
@@ -681,7 +702,7 @@ Deno.serve(async (req) => {
       /* The real next eligible send, Europe/London, computed live — what the dashboard shows.
          `nextSendAt` (the raw stored pacing stamp) stays in the payload for back-compat, but the
          panel reads THIS. Display only; changes no gate. */
-      nextEligibleSendAt: nextEligibleSendAt(sentToday ?? 0, nextSendAt),
+      nextEligibleSendAt: nextEligibleSendAt(sentToday ?? 0, nextSendAt, DAILY_CAP),
       ukTime: `${String(uk.hour).padStart(2, "0")}:${String(uk.minute).padStart(2, "0")}`,
       // Auto audit_reply rule state: BOTH must be on for the rule to run. Toggle read is
       // defensive (missing column → false), so status works before the SQL has been run.
@@ -706,7 +727,50 @@ Deno.serve(async (req) => {
 
     // Status-only probe (the dashboard panel).
     if (mode === "status") {
-      return new Response(JSON.stringify({ ok: true, ...statusPayload }), {
+      /* ⛔ SENT TODAY, PER PERSON (2026-10-14) — the admin panel only (status is admin-only). The same credit rule as the
+         admin dashboard (src/lib/adminMetrics.ts): a send names its person; a queue send (user_id NULL) is credited to
+         whoever holds the lead. Test sends are left out. Best-effort: null = could not be read (the panel says nothing). */
+      let perPersonToday: Array<{ user_id: string | null; name: string; sent: number }> | null = null;
+      try {
+        const { data: sends, error: sErr } = await service.from("whatsapp_sends")
+          .select("user_id, lead_id, test_mode").gte("created_at", dayStart).limit(5000);
+        if (!sErr) {
+          const rows = ((sends ?? []) as Array<{ user_id: string | null; lead_id: string | null; test_mode: boolean | null }>).filter((r) => r.test_mode !== true);
+          const needHolder = [...new Set(rows.filter((r) => !r.user_id && r.lead_id).map((r) => r.lead_id as string))];
+          const holder = new Map<string, string | null>();
+          for (let i = 0; i < needHolder.length; i += 200) {
+            const { data: ls } = await service.from("outreach_leads").select("id, assigned_to_user_id").in("id", needHolder.slice(i, i + 200));
+            for (const l of (ls ?? []) as Array<{ id: string; assigned_to_user_id: string | null }>) holder.set(l.id, l.assigned_to_user_id);
+          }
+          const counts = new Map<string | null, number>();
+          for (const r of rows) {
+            const who = r.user_id ?? (r.lead_id ? holder.get(r.lead_id) ?? null : null);
+            counts.set(who, (counts.get(who) ?? 0) + 1);
+          }
+          const ids = [...counts.keys()].filter((k): k is string => !!k);
+          const names = new Map<string, string>();
+          if (ids.length) {
+            const { data: tm } = await service.from("team_members").select("user_id, display_name").in("user_id", ids);
+            for (const t of (tm ?? []) as Array<{ user_id: string; display_name: string | null }>) names.set(t.user_id, t.display_name ?? "Someone");
+          }
+          perPersonToday = [...counts.entries()]
+            .map(([user_id, sent]) => ({ user_id, name: user_id ? (names.get(user_id) ?? "Someone") : "Unassigned", sent }))
+            .sort((a, b) => b.sent - a.sent);
+        }
+      } catch { perPersonToday = null; }
+      /* Each salesperson's own daily queue limit (team_members.daily_send_limit; null = the default). */
+      let personLimits: Array<{ user_id: string; name: string; limit: number | null }> | null = null;
+      try {
+        const { data: tm, error: tErr } = await service.from("team_members").select("user_id, display_name, daily_send_limit").eq("status", "active");
+        const { data: rr, error: rErr } = await service.from("user_roles").select("user_id, role").eq("role", "sales");
+        if (!tErr && !rErr) {
+          const sales = new Set(((rr ?? []) as Array<{ user_id: string }>).map((r) => r.user_id));
+          personLimits = ((tm ?? []) as Array<{ user_id: string; display_name: string | null; daily_send_limit: number | null }>)
+            .filter((t) => sales.has(t.user_id))
+            .map((t) => ({ user_id: t.user_id, name: t.display_name ?? "Someone", limit: t.daily_send_limit ?? null }));
+        }
+      } catch { personLimits = null; }
+      return new Response(JSON.stringify({ ok: true, ...statusPayload, perPersonToday, personLimits }), {
         status: 200,
         headers: {
           ...corsHeaders, "Content-Type": "application/json",
@@ -724,7 +788,45 @@ Deno.serve(async (req) => {
       await service.from("whatsapp_outreach_state")
         .update({ paused: nextPaused, updated_at: new Date().toISOString() })
         .eq("id", 1);
-      return json({ ok: true, ...statusPayload, paused: nextPaused });
+      /* A person resuming (or pausing by hand) clears the auto-pause note. Separate write: a missing column never blocks the pause. */
+      await service.from("whatsapp_outreach_state").update({ auto_paused_at: null, auto_pause_reason: null }).eq("id", 1);
+      return json({ ok: true, ...statusPayload, paused: nextPaused, autoPausedAt: null, autoPauseReason: null });
+    }
+
+    /* ⛔ SET THE CAP AND PACE (2026-10-14, admin-gated like pause). Each value is checked by the ONE rule
+       (src/lib/whatsappPace.ts checkPaceValue) and REFUSED out of range, never clamped; null clears it back to the
+       default. person_limits writes team_members.daily_send_limit for an ACTIVE salesperson only. */
+    if (mode === "set_pace") {
+      const patch: Record<string, unknown> = {};
+      for (const k of ["daily_cap", "min_gap_minutes", "person_daily_limit_default"] as const) {
+        if (!(k in body)) continue;
+        const c = checkPaceValue(k, body[k]);
+        if (!c.ok) return json({ ok: false, error: c.error }, 400);
+        patch[k] = c.value;
+      }
+      const people = Array.isArray(body.person_limits) ? body.person_limits as Array<{ user_id?: unknown; limit?: unknown }> : [];
+      const personWrites: Array<{ user_id: string; limit: number | null }> = [];
+      for (const p of people) {
+        if (typeof p?.user_id !== "string" || !/^[0-9a-f-]{36}$/i.test(p.user_id)) return json({ ok: false, error: "bad_user_id" }, 400);
+        const c = checkPaceValue("person_limit", p.limit);
+        if (!c.ok) return json({ ok: false, error: c.error }, 400);
+        personWrites.push({ user_id: p.user_id, limit: c.value });
+      }
+      if (personWrites.length) {
+        const { data: sales, error: sErr } = await service.from("user_roles").select("user_id").eq("role", "sales").in("user_id", personWrites.map((p) => p.user_id));
+        if (sErr) return json({ ok: false, error: "person_limit_failed" }, 503);
+        const salesIds = new Set(((sales ?? []) as Array<{ user_id: string }>).map((r) => r.user_id));
+        if (personWrites.some((p) => !salesIds.has(p.user_id))) return json({ ok: false, error: "not_a_salesperson" }, 400);
+      }
+      if (Object.keys(patch).length) {
+        const { error: pErr } = await service.from("whatsapp_outreach_state").update({ ...patch, updated_at: new Date().toISOString() }).eq("id", 1);
+        if (pErr) return json({ ok: false, error: "pace_failed", detail: pErr.message }, 500);
+      }
+      for (const p of personWrites) {
+        const { error: lErr } = await service.from("team_members").update({ daily_send_limit: p.limit }).eq("user_id", p.user_id).eq("status", "active");
+        if (lErr) return json({ ok: false, error: "person_limit_failed", detail: lErr.message }, 500);
+      }
+      return json({ ok: true, saved: { ...patch, person_limits: personWrites.length } });
     }
 
     // Flip the auto audit_reply UI toggle (admin-gated like pause). The env kill-switch
@@ -1363,6 +1465,31 @@ Deno.serve(async (req) => {
     // Pause guard FIRST — a paused queue sends nothing, even on a forced manual tick.
     if (paused) return json({ ok: true, skipped: "paused", ...statusPayload });
     if (!anyWindowOpen && !force && !qaDrill) return json({ ok: true, skipped: "outside_window", ...statusPayload });
+    /* ⛔ AUTO-PAUSE ON A BURST OF FAILURES (2026-10-14; src/lib/whatsappPace.ts). The queue's OWN sends (user_id NULL)
+       in the last AUTO_PAUSE_WINDOW_MIN minutes, test sends left out: when at least AUTO_PAUSE_MIN_ATTEMPTS went and at
+       least AUTO_PAUSE_FAIL_SHARE of them failed, the queue pauses itself and records why. A person resumes it.
+       A failed read never pauses and never blocks a send (best-effort, like the other non-fatal passes). */
+    if (!qaDrill) {
+      try {
+        const since = new Date(Date.now() - AUTO_PAUSE_WINDOW_MIN * 60_000).toISOString();
+        const { data: recent, error: rErr } = await service.from("whatsapp_sends")
+          .select("delivery_status").is("user_id", null).eq("test_mode", false).gte("created_at", since).limit(1000);
+        if (!rErr) {
+          const rows = ((recent ?? []) as Array<{ delivery_status: string | null }>).filter((r) => r.delivery_status !== "simulated");
+          const failed = rows.filter((r) => (FAILED_SEND_STATUSES as readonly string[]).includes(String(r.delivery_status))).length;
+          const v = autoPauseVerdict(rows.length, failed);
+          if (v.pause) {
+            const nowIso = new Date().toISOString();
+            await service.from("whatsapp_outreach_state").update({ paused: true, updated_at: nowIso }).eq("id", 1);
+            await service.from("whatsapp_outreach_state").update({ auto_paused_at: nowIso, auto_pause_reason: v.reason }).eq("id", 1);
+            console.warn("[process-whatsapp-queue] AUTO-PAUSED: " + v.reason);
+            return json({ ok: true, skipped: "auto_paused", reason: v.reason, ...statusPayload, paused: true, autoPausedAt: nowIso, autoPauseReason: v.reason });
+          }
+        }
+      } catch (e) {
+        console.error("[process-whatsapp-queue] auto-pause check failed (non-fatal):", e instanceof Error ? e.message : String(e));
+      }
+    }
     /* == AUDIT AHEAD OF THE SEND =============================================================
        video_template's {{4}} is the lead's report link, so the audit must exist before the
        message can be built. This starts the audits the drip is about to need, capped at
@@ -1602,7 +1729,7 @@ Deno.serve(async (req) => {
 
         // Share the pacing clock, exactly like the opener lane.
         await service.from("whatsapp_outreach_state")
-          .update({ next_send_at: nextPacingStamp(sentToday ?? 0), updated_at: hNowIso }).eq("id", 1);
+          .update({ next_send_at: nextPacingStamp(sentToday ?? 0, pace), updated_at: hNowIso }).eq("id", 1);
 
         return json({
           ok: true, sent: hOutcome === "sent", simulated: !hLive, outcome: hOutcome, lane: "hook_followup",
@@ -1708,7 +1835,7 @@ Deno.serve(async (req) => {
 
         // Share the pacing clock, exactly like the opener and hook lanes.
         await service.from("whatsapp_outreach_state")
-          .update({ next_send_at: nextPacingStamp(sentToday ?? 0), updated_at: cNowIso }).eq("id", 1);
+          .update({ next_send_at: nextPacingStamp(sentToday ?? 0, pace), updated_at: cNowIso }).eq("id", 1);
 
         return json({
           ok: true, sent: cOutcome === "sent", simulated: !cLive, outcome: cOutcome, lane: "contact_followup",
@@ -2307,7 +2434,7 @@ Deno.serve(async (req) => {
     // A QA drill never moves the real queue's clock.
     if (!qaDrill) {
       await service.from("whatsapp_outreach_state")
-        .update({ next_send_at: nextPacingStamp(sentToday ?? 0), updated_at: nowIso }).eq("id", 1);
+        .update({ next_send_at: nextPacingStamp(sentToday ?? 0, pace), updated_at: nowIso }).eq("id", 1);
     }
 
     return json({

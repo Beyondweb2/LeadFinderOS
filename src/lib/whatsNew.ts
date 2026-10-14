@@ -22,6 +22,18 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-14-whatsapp-limits', date: '2026-10-14', title: 'WhatsApp queue: limits you can change, sent today per person, and an automatic pause', audience: 'admin',
+    body: 'The WhatsApp queue panel now has a Limits line. Open it to change the team’s daily cap, the minutes between sends, and how many leads each salesperson can queue a day. No code change needed.',
+    report: {
+      added: [
+        'Limits: team daily cap (default 800, was 400; never above 1,000), minutes between sends (default 1), a default per-salesperson daily queue limit, and an override for each salesperson.',
+        'Sent today, per person, under the queue numbers.',
+        'Automatic pause: if at least 8 queue messages went in the last hour and half or more failed, the queue pauses itself and says why. Press Resume when it is safe.',
+      ],
+      changed: ['The queue still sends one message a minute at most, 7:00–21:30. Opt-outs, the 24-hour window and the template rules are unchanged.'],
+      removed: [],
+      effect: 'You can speed up or slow down WhatsApp for the team in seconds, see who has sent what today, and a run of failures stops itself before it harms the number.',
+    } },
   { id: '2026-10-14-csv-import-batch', date: '2026-10-14', title: 'CSV import: name the batch, set the trade, and (admin) choose who owns the leads', audience: 'all',
     body: 'Outreach → Import now has a "Tag this import" box: a batch name such as "Ethan batch 14 Oct", a trade for rows that have none, and for the admin, who the new leads belong to.',
     report: {

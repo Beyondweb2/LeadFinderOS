@@ -23,6 +23,7 @@ import {
 } from '@/lib/whatsappQueueView';
 import { Callout, EmptyState, ErrorState, IconTile, LoadState, SURFACE, ToneChip } from '@/components/operator/ui';
 import { cn } from '@/lib/utils';
+import { WhatsAppPaceSettings, type PaceStatus } from '@/components/WhatsAppPaceSettings';
 
 /** The admin's team-wide status (process-whatsapp-queue mode 'status' — admin-only on the server). */
 interface TeamStatus {
@@ -37,6 +38,12 @@ interface TeamStatus {
   paused: boolean;
   /** Queued leads held by a test account — never sent, by design. Absent on an older deploy; null = unreadable. */
   testHeldQueuedCount?: number | null;
+  /* 2026-10-14: the admin-set cap / pace, the auto-pause note, sent today per person (WhatsAppPaceSettings). */
+  pace?: PaceStatus['pace'];
+  autoPausedAt?: PaceStatus['autoPausedAt'];
+  autoPauseReason?: PaceStatus['autoPauseReason'];
+  perPersonToday?: PaceStatus['perPersonToday'];
+  personLimits?: PaceStatus['personLimits'];
 }
 
 /**
@@ -315,6 +322,8 @@ export function WhatsAppQueuePanel({ defaultExpanded = true }: { defaultExpanded
           {team?.testHeldQueuedCount} queued {team?.testHeldQueuedCount === 1 ? 'lead is' : 'leads are'} held by a test account and will <strong>not</strong> be sent to. Reassign {team?.testHeldQueuedCount === 1 ? 'it' : 'them'} to a real owner, or remove {team?.testHeldQueuedCount === 1 ? 'it' : 'them'} from the queue.
         </Callout>
       )}
+      {/* The cap, pace, per-person limits and sent today per person; the auto-pause note (2026-10-14). Admin only. */}
+      {teamControls && <WhatsAppPaceSettings team={team} onSaved={() => refreshTeam(true)} />}
       {/* Queued with no number WhatsApp can reach (none, a landline, not a UK mobile): the sender flags these No
           WhatsApp when it reaches them. Counted from the rows on screen. */}
       {view.unsendable > 0 && (
