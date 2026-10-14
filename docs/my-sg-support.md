@@ -49,6 +49,19 @@ allow MY and SG for SMS and voice or Twilio refuses the send.
 `re_engage` (£49.99, legacy), `booking_switch_barbers` (£29.99, dead barber product). The openers (`initial_contact`,
 `initial_opener_v2`) have no UK or £ wording. The sign-up link and report pages are in £ (money is out of scope).
 
+## CSV import (Part C)
+
+- A Country for the whole file (UK / Malaysia / Singapore, or worked out per row as before); a row's own Country wins.
+  The preview counts rows by country and the numbers that could not be read there (`countsByCountry`); the server names the
+  country on every result row (migration `20261025090200`).
+- **A researched lead file** (Ethan's language-school list, 53 columns) is recognised by its columns (`isResearchFile`) and read
+  by `buildResearchRows`: name / country / city / website / whatsapp_number / owner_name + owner_role; "Not established" (the
+  whole value) is empty; the note = hypothesis_1 + english_evidence (or website_absence_evidence) + proposed_offer, first
+  sentences; every other column goes to `outreach_leads.import_extra` (jsonb, new leads only, never shown). Batch defaults to
+  the file name, trade to Language schools — only for that shape; every other file imports exactly as before.
+- Checked 2026-10-14 against the real file (100 rows, kept out of the repo), check-only as admin, rolled back:
+  100 valid, all new — Malaysia 79, Singapore 21, 0 invalid, 0 duplicates.
+
 ## Deploys
 
 - Part A (country plumbing, sending OFF): migrations `20261025090000_my_sg_markets.sql`, `20261025090100_my_sg_import.sql`.

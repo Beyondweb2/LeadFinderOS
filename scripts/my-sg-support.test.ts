@@ -27,6 +27,10 @@ import { internationalPhone } from '../src/lib/lineType.ts';
 import { isStopMessage } from '../src/lib/smsMessages.ts';
 import { isOptOut, triageByRules } from '../src/lib/replyTriage.ts';
 import { isDecline } from '../src/lib/inboundClassify.ts';
+import {
+  autoMapColumns, batchFromFileName, buildImportRows, buildResearchRows, countsByCountry, IMPORT_FIELD_LABEL, isResearchFile, parseCsv, reasonText,
+  RESEARCH_FILE_DEFAULT_TRADE, RESEARCH_NOTE_MAX, withDefaultTrade, withImportCountry,
+} from '../src/lib/csvLeadImport.ts';
 import { SMS_SENDER_WORDS } from '../src/lib/outreachMarkets.ts';
 
 const ROOT = path.resolve(import.meta.dirname, '..');
@@ -215,6 +219,76 @@ console.log('\n── 12. the admin panel and the SMS sender warning ──');
   ok(/\['whatsapp_on', 'WhatsApp'\], \['sms_on', 'SMS'\], \['call_on', 'Browser calls'\]/.test(panel) && /checkCountryValue\('whatsapp_daily_cap'/.test(panel), 'a switch per channel and the country caps, validated by the one rule');
   ok(/\+44 7400 420187/.test(SMS_SENDER_WORDS) && /delivery depends on sender registration/.test(SMS_SENDER_WORDS), 'the SMS warning names the sender and says delivery depends on registration');
   ok(/explain_offer \/ explain_offer_v2/.test(panel), 'the panel names the templates not to use in Malaysia / Singapore');
+}
+
+console.log('\n── 13. the CSV import screen: a country per file and per row, counts by country ──');
+{
+  const rows = [{ row: 2, phone: '012-345 6789' }, { row: 3, phone: '9123 4567', country: 'Singapore' }];
+  const out = withImportCountry(rows, 'Malaysia');
+  ok(out[0].country === 'Malaysia' && out[1].country === 'Singapore', 'the file\'s country fills a blank Country; a row\'s own always wins');
+  ok(withImportCountry(rows, null) === rows, '"Work it out from each row" changes nothing (as before)');
+  const by = countsByCountry([
+    { i: 0, row: 2, outcome: 'new', country: 'Malaysia' }, { i: 1, row: 3, outcome: 'invalid', reasons: ['invalid_phone'], country: 'Malaysia' },
+    { i: 2, row: 4, outcome: 'new', country: 'Singapore' }, { i: 3, row: 5, outcome: 'new', country: 'UK' },
+  ]);
+  ok(JSON.stringify(by.map((c) => [c.country, c.rows, c.adding, c.unreadablePhones])) === JSON.stringify([['UK', 1, 1, 0], ['Malaysia', 2, 1, 1], ['Singapore', 1, 1, 0]]),
+    'preview counts by country, with the numbers that could not be read');
+  ok(reasonText('invalid_phone', { country: 'Malaysia' }, false) === 'Phone number could not be read as a Malaysia number' && reasonText('invalid_phone', {}, false) === 'Phone number not recognised',
+    'an unreadable number says which country it was read in (UK wording unchanged)');
+  const c = read('supabase/migrations/20261025090200_csv_import_country_rows.sql');
+  ok(c.includes("'outcome', 'invalid', 'reasons', to_jsonb(c_errs), 'country', c_country)") && c.includes("'outcome', v_outcome, 'country', o ->> 'country',"),
+    'the server names the country on every result row');
+  const d = read('src/components/CSVImportDialog.tsx');
+  ok(/withImportCountry\(withDefaultTrade\(research \? buildResearchRows\(parsed\) : buildImportRows\(parsed, mapping\), defaultTrade\), importCountry \|\| null\)/.test(d) && /data-testid="csv-country"/.test(d) && /<CountryCounts rows=\{preview\.rows\} \/>/.test(d),
+    'the import screen has the country picker and the by-country preview');
+  ok(/data-testid="csv-batch"/.test(d) && /data-testid="csv-trade"/.test(d) && /data-testid="csv-owner"/.test(d), 'batch name, default trade and owner are kept');
+  ok(IMPORT_FIELD_LABEL.notes && /whythislead/.test(read('src/lib/csvLeadImport.ts')), '"Why this lead" is still read as the note');
+}
+
+console.log('\n── 14. a researched lead file (Ethan\'s language-school shape — made-up rows) ──');
+{
+  const head = ['id', 'name', 'country', 'city', 'segment', 'website', 'english_evidence', 'whatsapp_number', 'whatsapp_url', 'website_absence_evidence',
+    'hypothesis_1', 'hypothesis_2', 'proposed_offer', 'owner_name', 'owner_role', 'owner_evidence', 'social_date_precision'];
+  const q = (v: string) => '"' + v.replace(/"/g, '""') + '"';
+  const line = (o: Record<string, string>) => head.map((h) => q(o[h] ?? '')).join(',');
+  const csv = '﻿' + head.join(',') + '\n' + [
+    line({ id: 'T001', name: 'Test Bahasa Centre', country: 'Malaysia', city: 'Kuala Lumpur', segment: 'English website', website: 'https://example-test.my/',
+      english_evidence: 'English site lists adult and kids classes. It also says more.', whatsapp_number: '+60123456789', whatsapp_url: 'https://wa.me/60123456789',
+      hypothesis_1: 'Hypothesis: parents may search for kids English classes nearby.', hypothesis_2: 'Hypothesis: second idea.',
+      proposed_offer: 'Test prompts across AI assistants. Then rerun.', owner_name: 'Ann Tan', owner_role: 'Founder (per About page)',
+      owner_evidence: 'Not established in inspected public sources; about page names no owner.', social_date_precision: 'Not established' }),
+    line({ id: 'T002', name: 'Test SG Tutors', country: 'Singapore', city: 'Singapore', website: 'Not established', english_evidence: 'Social posts mention IELTS.',
+      whatsapp_number: '+6591234567', website_absence_evidence: 'Exact-name searches found no owned domain. More text.',
+      hypothesis_1: 'Hypothesis: referrals from schools.', proposed_offer: 'A clear course page could help.', owner_name: 'Not established', owner_role: 'Teacher' }),
+  ].join('\n');
+  const parsed = parseCsv(csv);
+  ok(isResearchFile(parsed.headers) && !isResearchFile(['business_name', 'phone', 'country']), 'the research shape is recognised by its columns (an ordinary file is not)');
+  const rows = buildResearchRows(parsed);
+  const [a, b] = rows;
+  ok(a.business_name === 'Test Bahasa Centre' && a.country === 'Malaysia' && a.town === 'Kuala Lumpur' && a.website === 'https://example-test.my/' && a.phone === '+60123456789',
+    'name / country / city / website / whatsapp_number are read');
+  ok(a.contact_name === 'Ann Tan (Founder)' && b.contact_name === undefined, 'owner + role is the contact; "Not established" owner → no contact (a role alone is not a name)');
+  ok(b.website === undefined && b.phone === '+6591234567' && b.country === 'Singapore', '"Not established" website is empty');
+  ok(a.notes === 'Why this lead: Parents may search for kids English classes nearby.\nWebsite: English site lists adult and kids classes.\nOffer: Test prompts across AI assistants.',
+    'the note: hypothesis_1 (no "Hypothesis:"), the website evidence, the offer — first sentences only');
+  ok(/^Why this lead: Referrals from schools\.\nNo website: Exact-name searches found no owned domain\.\nOffer: /.test(b.notes ?? ''), 'no website → website_absence_evidence');
+  ok(a.extra?.segment === 'English website' && a.extra?.hypothesis_2 === 'Hypothesis: second idea.' && a.extra?.whatsapp_url === 'https://wa.me/60123456789'
+    && a.extra?.id === 'T001' && !('social_date_precision' in (a.extra ?? {})) && !('name' in (a.extra ?? {})),
+    'every other non-empty column is kept as extra data (a bare "Not established" is dropped; used columns are not repeated)');
+  ok(rows.every((r) => !Object.values({ ...r, ...(r.extra ?? {}) }).some((v) => typeof v === 'string' && /^not established\.?$/i.test(v))), 'no value is a bare "Not established"');
+  ok(rows.every((r) => (r.notes ?? '').length <= RESEARCH_NOTE_MAX), 'the note is short');
+  ok(batchFromFileName('ethan-language-schools.csv') === 'Ethan - language schools' && RESEARCH_FILE_DEFAULT_TRADE === 'Language schools', 'batch defaults to the file name; trade to Language schools');
+  ok(withDefaultTrade(rows, RESEARCH_FILE_DEFAULT_TRADE).every((r) => r.trade === 'Language schools'), '…filled on every row');
+  const plain = parseCsv('business_name,phone,notes\nPlain Co,07700 900123,Not established\n');
+  ok(JSON.stringify(buildImportRows(plain, autoMapColumns(plain.headers).mapping)) === JSON.stringify([{ row: 2, business_name: 'Plain Co', phone: '07700 900123', notes: 'Not established' }]),
+    'an ordinary import is read exactly as before (no extra, nothing blanked)');
+  const mig = read('supabase/migrations/20261025090200_csv_import_country_rows.sql');
+  ok(/alter table public\.outreach_leads add column if not exists import_extra jsonb;/.test(mig) && mig.includes("o ->> 'country', 'manual', v_batch, o -> 'extra')")
+    && mig.includes("if length(c_extra::text) > 20000 then c_errs := c_errs || 'too_long:extra'::text; end if;"), 'the server stores extra on a NEW lead only, size-capped');
+  ok(!/import_extra/.test(read('src/lib/outreachLeadColumns.ts')) && !/import_extra/.test(read('src/components/LeadDetailDialog.tsx')), 'import_extra is not drawn or listed anywhere');
+  const d = read('src/components/CSVImportDialog.tsx');
+  ok(/research \? buildResearchRows\(parsed\) : buildImportRows\(parsed, mapping\)/.test(d) && /setBatchName\(batchFromFileName\(f\.name\)\)/.test(d), 'the import screen uses the research reader and the defaults');
+  ok(!/queue|sales_queue_opener|send-whatsapp/i.test(read('src/lib/csvLeadImport.ts').replace(/\/\*[\s\S]*?\*\/|\/\/.*$/gm, '')), 'import only — nothing is queued or sent');
 }
 
 console.log(failures ? `\n${failures} FAILED` : '\nall passed');

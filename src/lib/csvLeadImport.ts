@@ -25,7 +25,7 @@ export type ImportField = typeof IMPORT_FIELDS[number];
 export const IMPORT_FIELD_LABEL: Record<ImportField, string> = {
   business_name: 'Business name', contact_name: 'Contact person', phone: 'Phone', email: 'Email', website: 'Website',
   address: 'Address', postcode: 'Postcode', town: 'Town', trade: 'Trade / category', notes: 'Notes', google_maps_url: 'Google Maps link', place_id: 'Google Place ID',
-  country: 'Country (UK or Australia)',
+  country: 'Country (UK, Malaysia, Singapore or Australia)',
 };
 
 /** import_leads' own ceiling per call (it refuses more: too_many_rows). */
@@ -158,7 +158,10 @@ export function columnLabel(headers: string[], i: number): string {
 
 /** One row as sent to import_leads: the spreadsheet row number plus ONLY the mapped allowlisted fields, each
  *  trimmed, blank = absent. Nothing else can ride along. */
-export type ImportRow = { row: number } & Partial<Record<ImportField, string>>;
+export type ImportRow = { row: number } & Partial<Record<ImportField, string>> & {
+  /** A research file's other columns, kept on the lead (outreach_leads.import_extra) and never shown (2026-10-14). */
+  extra?: Record<string, string>;
+};
 
 export function buildImportRows(parsed: ParsedCsv, mapping: ColumnMapping): ImportRow[] {
   return parsed.records.map(({ row, cells }) => {
@@ -173,6 +176,94 @@ export function buildImportRows(parsed: ParsedCsv, mapping: ColumnMapping): Impo
   });
 }
 
+/* ══ A RESEARCH FILE (2026-10-14, Ethan's language-school list) ══════════════════════════════════════════════════
+   One shape of file is recognised by its columns: a researched lead list with name, country, city, website,
+   whatsapp_number, owner_name / owner_role and the research columns (hypothesis_1, proposed_offer, the website
+   evidence …). For that file the rows are built HERE instead of from the column mapping:
+     · name → business, country → country, city → town, website → website, whatsapp_number → phone;
+     · owner_name (+ owner_role, its bracketed note dropped) → contact person — only a real name;
+     · "Not established" is empty everywhere;
+     · the note ("Why this lead") is built from hypothesis_1, the website evidence (english_evidence) — or
+       website_absence_evidence when there is no website — and proposed_offer, each cut to its first sentence;
+     · every OTHER non-empty column is kept as the row's extra data (outreach_leads.import_extra, never shown).
+   Every other file is read exactly as before. */
+export const RESEARCH_FILE_DEFAULT_TRADE = 'Language schools';
+const RESEARCH_MARK = ['name', 'country', 'whatsapp_number', 'hypothesis_1', 'proposed_offer'];
+const RESEARCH_USED = new Set(['name', 'country', 'city', 'website', 'whatsapp_number', 'owner_name', 'owner_role']);
+const NOT_ESTABLISHED = /^not established\.?$/i;
+/** The longest note a research row produces (the server refuses notes over 2000). */
+export const RESEARCH_NOTE_MAX = 900;
+const EXTRA_VALUE_MAX = 1500;
+
+export function isResearchFile(headers: readonly string[]): boolean {
+  const h = new Set(headers.map((x) => x.replace(/^﻿/, '').trim().toLowerCase()));
+  return RESEARCH_MARK.every((k) => h.has(k));
+}
+
+const clean = (v: string | undefined | null): string => {
+  const s = String(v ?? '').replace(/\s+/g, ' ').trim();
+  return NOT_ESTABLISHED.test(s) ? '' : s;
+};
+/** The first sentence, at most max characters, never cut mid-word without an ellipsis. */
+export function firstSentence(v: string, max = 220): string {
+  const s = clean(v);
+  if (!s) return '';
+  const m = /^(.+?[.!?])(\s|$)/.exec(s);
+  let out = (m ? m[1] : s).trim();
+  if (out.length > max) out = out.slice(0, max).replace(/\s+\S*$/, '') + '…';
+  return out;
+}
+
+export function researchNote(r: Record<string, string>): string {
+  const hyp = firstSentence(r.hypothesis_1).replace(/^hypothesis:\s*/i, '');
+  const site = clean(r.website);
+  const evidence = site ? firstSentence(r.english_evidence) : firstSentence(r.website_absence_evidence);
+  const offer = firstSentence(r.proposed_offer);
+  const lines = [
+    hyp && 'Why this lead: ' + hyp.charAt(0).toUpperCase() + hyp.slice(1),
+    evidence && (site ? 'Website: ' : 'No website: ') + evidence,
+    offer && 'Offer: ' + offer,
+  ].filter(Boolean) as string[];
+  return lines.join('\n').slice(0, RESEARCH_NOTE_MAX);
+}
+
+export function buildResearchRows(parsed: ParsedCsv): ImportRow[] {
+  const keys = parsed.headers.map((x) => x.replace(/^﻿/, '').trim().toLowerCase());
+  return parsed.records.map(({ row, cells }) => {
+    const r: Record<string, string> = {};
+    keys.forEach((k, i) => { if (k && !(k in r)) r[k] = (cells[i] ?? '').trim(); });
+    const out: ImportRow = { row };
+    const set = (f: ImportField, v: string) => { const c = clean(v); if (c) out[f] = c; };
+    set('business_name', r.name);
+    set('country', r.country);
+    set('town', r.city);
+    set('website', r.website);
+    set('phone', r.whatsapp_number);
+    const owner = clean(r.owner_name);
+    const role = clean(r.owner_role).replace(/\s*\(.*$/, '').trim();
+    if (owner) out.contact_name = (role ? owner + ' (' + role + ')' : owner).slice(0, 120);
+    const note = researchNote(r);
+    if (note) out.notes = note;
+    const extra: Record<string, string> = {};
+    keys.forEach((k) => {
+      if (!k || RESEARCH_USED.has(k)) return;
+      const v = clean(r[k]);
+      if (v) extra[k] = v.slice(0, EXTRA_VALUE_MAX);
+    });
+    if (Object.keys(extra).length) out.extra = extra;
+    return out;
+  });
+}
+
+/** A file name as a batch name: "ethan-language-schools.csv" → "Ethan - language schools". */
+export function batchFromFileName(name: string): string {
+  const words = name.replace(/\.[a-z0-9]+$/i, '').split(/[-_\s]+/).filter(Boolean);
+  if (!words.length) return '';
+  const first = words[0].charAt(0).toUpperCase() + words[0].slice(1);
+  const rest = words.slice(1).join(' ').toLowerCase();
+  return (rest ? first + ' - ' + rest : first).slice(0, IMPORT_BATCH_NAME_MAX);
+}
+
 // ── The server's answer ─────────────────────────────────────────────────────────────────────────────────────
 
 /** held = a POSSIBLE MATCH strong enough to wait for the person's say-so (same website, or same name + same
@@ -184,6 +275,8 @@ export interface MatchInfo { in_file?: boolean; yours?: number; others?: number;
 export interface RowResult {
   i: number; row: number; business_name?: string; outcome: RowOutcome; reasons?: string[];
   first_row?: number; owner_name?: string; fields?: string[]; lead_id?: string; match?: MatchInfo;
+  /** The country the server decided for the row (20261025090200; absent from an older server). */
+  country?: string | null;
 }
 export interface ImportCounts {
   rows: number; valid: number; invalid: number; duplicate_in_file: number; existing: number;
@@ -215,6 +308,35 @@ export interface ImportTags { assignTo?: string | null; batch?: string | null }
 export const IMPORT_BATCH_NAME_MAX = 80;
 
 /** A trade typed once for the whole file fills ONLY the rows whose own trade cell is blank — a row's own trade always wins. */
+/* ══ THE IMPORT'S COUNTRY (2026-10-14, Malaysia / Singapore) ════════════════════════════════════════════════════
+   The person picks the country for the whole file (UK, Malaysia or Singapore) — or leaves it to be worked out per row,
+   exactly as before. A row's OWN Country column always wins; the file's country only fills a blank one. The server then
+   reads the phone in that country (a Malaysian "012-345 6789" → +60123456789) and refuses one it cannot read. */
+export const IMPORT_COUNTRIES = ['UK', 'Malaysia', 'Singapore'] as const;
+export type ImportCountry = typeof IMPORT_COUNTRIES[number];
+export function withImportCountry(rows: ImportRow[], country: ImportCountry | null | undefined): ImportRow[] {
+  if (!country) return rows;
+  return rows.map((r) => (r.country && String(r.country).trim() ? r : { ...r, country }));
+}
+
+/** The preview's counts by country: every row the server placed, how many will be added / filled in, and how many
+ *  numbers could not be read there. Rows the server gave no country (an older server, an unreadable Country) are
+ *  counted under "Unknown". */
+export interface CountryCount { country: string; rows: number; adding: number; unreadablePhones: number }
+export function countsByCountry(rows: readonly RowResult[]): CountryCount[] {
+  const by = new Map<string, CountryCount>();
+  for (const r of rows) {
+    const c = r.country || 'Unknown';
+    const e = by.get(c) ?? { country: c, rows: 0, adding: 0, unreadablePhones: 0 };
+    e.rows++;
+    if (['new', 'update', 'created', 'updated', 'possible_match'].includes(r.outcome)) e.adding++;
+    if ((r.reasons ?? []).includes('invalid_phone')) e.unreadablePhones++;
+    by.set(c, e);
+  }
+  const order = ['UK', 'Malaysia', 'Singapore', 'Australia'];
+  return [...by.values()].sort((a, b) => (order.indexOf(a.country) + 1 || 99) - (order.indexOf(b.country) + 1 || 99));
+}
+
 export function withDefaultTrade(rows: ImportRow[], trade: string | null | undefined): ImportRow[] {
   const t = (trade ?? '').replace(/\s+/g, ' ').trim();
   if (!t) return rows;
@@ -283,17 +405,17 @@ export function callErrorText(res: ImportCallResult | null): string {
 const TOO_LONG = /^too_long:(.+)$/;
 
 /** One reason in words. A salesperson is never told whose lead it is (the server sends no name to them). */
-export function reasonText(reason: string, r: Pick<RowResult, 'first_row' | 'owner_name'>, isAdmin: boolean): string {
+export function reasonText(reason: string, r: Pick<RowResult, 'first_row' | 'owner_name'> & { country?: string | null }, isAdmin: boolean): string {
   const tl = TOO_LONG.exec(reason);
   if (tl) return `${IMPORT_FIELD_LABEL[tl[1] as ImportField] ?? tl[1]} is too long`;
   switch (reason) {
     case 'missing_business_name': return 'No business name';
-    case 'invalid_phone': return 'Phone number not recognised';
+    case 'invalid_phone': return r.country && r.country !== 'UK' ? `Phone number could not be read as a ${r.country} number` : 'Phone number not recognised';
     case 'invalid_email': return 'Email address is not valid';
     case 'invalid_website': return 'Website is not valid';
     case 'invalid_maps_link': return 'Google Maps link is not valid';
     case 'invalid_place_id': return 'Google Place ID is not valid';
-    case 'invalid_country': return 'Country must be UK or Australia (or leave it blank)';
+    case 'invalid_country': return 'Country must be UK, Malaysia, Singapore or Australia (or leave it blank)';
     case 'no_phone_or_email': return 'Needs a phone number or an email';
     case 'bad_row': return 'Row could not be read';
     case 'duplicate_in_file': return r.first_row ? `Repeats row ${r.first_row} of this file` : 'Repeats an earlier row of this file';

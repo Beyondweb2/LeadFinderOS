@@ -22,6 +22,18 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-14-csv-import-country', date: '2026-10-14', title: 'CSV import: choose the country (UK, Malaysia or Singapore)', audience: 'all',
+    body: 'Outreach → Import has a new "Country of these leads" box. Phone numbers are read in that country, and the check shows how many rows are in each country.',
+    report: {
+      added: [
+        '"Country of these leads": UK, Malaysia or Singapore, or "Work it out from each row". A Country column in the file still wins for its row.',
+        'The check step shows rows by country, and how many numbers in each country could not be read.',
+        'Researched lead files (like Ethan’s language-school list) import as they are: name, country, city, website, WhatsApp number and owner are read automatically, and the research becomes a short “Why this lead” note. The batch name starts as the file name and the trade as Language schools.',
+      ],
+      changed: ['A Malaysian or Singapore number without +60 / +65 is read in the right country, and the same number written two ways is caught as a duplicate.'],
+      removed: [],
+      effect: 'Import your Malaysia and Singapore lists with the right country set, and fix any number the check says it could not read.',
+    } },
   { id: '2026-10-14-malaysia-singapore-sending', date: '2026-10-14', title: 'You can now WhatsApp, text and call Malaysia and Singapore leads', audience: 'all',
     body: 'Malaysian and Singapore mobiles can be queued for WhatsApp and texts, and called from the browser. They go out in their own local hours (9am–7pm), with their own daily limits.',
     report: {

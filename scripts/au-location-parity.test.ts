@@ -182,7 +182,8 @@ console.log('\n── CSV import: the row\'s country ──');
   ok(mapping.country === 3, 'a "Country" header maps automatically');
   const rows = buildImportRows(parsed, mapping);
   ok(rows[0].country === 'Australia' && rows[1].country === undefined, 'the country is sent when given; a blank cell is not sent (the server derives it)');
-  ok(/UK or Australia/.test(reasonText('invalid_country', {}, true)), 'an unrecognised country is explained');
+  // 2026-10-14: Malaysia and Singapore joined the accepted countries.
+  ok(/UK, Malaysia, Singapore or Australia/.test(reasonText('invalid_country', {}, true)), 'an unrecognised country is explained');
 
   const OLD = read('supabase/migrations/20261010170000_csv_lead_import.sql');
   const NEW = read('supabase/migrations/20261014100200_csv_import_country.sql');
