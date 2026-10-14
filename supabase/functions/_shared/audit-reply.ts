@@ -42,11 +42,13 @@ export function hookForbidsAbsenceCopy(state: unknown): boolean {
 /** VERSION 2 (2026-09-25): the six-result hook forbids absence copy when it is COMPLETE and named the
  *  business in all six results. Scored by scoreHookRun with the report's ruler, the same call the
  *  Inbox card makes (the 6/6 Not Interested rule that also did was removed 2026-10-04). Any miss (5/6 down) or an incomplete audit
- *  returns false and leaves every other check below to decide, as before. */
+ *  returns false and leaves every other check below to decide, as before.
+ *  A bulk audit's marker (2026-10-14, docs/bulk-audit-score.md) can hold 4 or 5 questions: named in every one of its
+ *  answers is the same "no absence to claim", so the count is the score's own, never a fixed six. */
 export function sixResultHookForbidsAbsenceCopy(state: unknown, rows: readonly HookScoreRow[], ctx: HookScoreContext): boolean {
   if (!isHookStateV2(state)) return false;
   const score = scoreHookRun(state, rows, ctx);
-  return score.complete && score.allNamed && score.expected === HOOK_SCORE_RESULTS;
+  return score.complete && score.allNamed;
 }
 
 // Public report origin (matches the /a/<slug|auditId> route fronted by functions/a/[slug].ts).
@@ -181,22 +183,23 @@ export async function resolveAuditReplyVars(service: any, leadId: string, opts: 
      reason and is never described as a competitor problem. */
   /* ⛔ THE SIX-RESULT HOOK, SAME REFUSAL (2026-09-25). A version-2 hook needs its rows to be scored, so
      this check sits after they are read. Named in 6/6 means there is no absence to claim. */
+  /* {{4}} of ai_visibility_report_offer (2026-10-14): the quick check's overall AI visibility — the SAME scoreHookRun
+     percentage the report's "Overall AI visibility" shows. NULL for anything but a complete version-2 run (a quick check,
+     or a bulk audit carrying its score marker — docs/bulk-audit-score.md), so a message can never quote a score the
+     report does not show. */
+  const hookScore = isHookStateV2(hookState) ? scoreHookRun(hookState, (qrows ?? []) as HookScoreRow[], {
+    named: { businessName: audit.business_name ?? "", trade: audit.business_type || null, town: audit.location_text || null },
+  }) : null;
   if (sixResultHookForbidsAbsenceCopy(hookState, (qrows ?? []) as HookScoreRow[], {
     named: { businessName: audit.business_name ?? "", trade: audit.business_type || null, town: audit.location_text || null },
   })) {
     return {
       ok: false,
-      reason: `${HOOK_NO_GAP_REASON}: the quick check named ${String(audit.business_name ?? "").trim() || "this business"} ` +
-        `in all ${HOOK_SCORE_RESULTS} ChatGPT and Google AI results, so there is no absence to message about. ` +
+      reason: `${HOOK_NO_GAP_REASON}: the AI check named ${String(audit.business_name ?? "").trim() || "this business"} ` +
+        `in all ${hookScore?.expected ?? HOOK_SCORE_RESULTS} ChatGPT and Google AI results, so there is no absence to message about. ` +
         `No audit-based template can be sent from this check; the report shows the result honestly.`,
     };
   }
-  /* {{4}} of ai_visibility_report_offer (2026-10-14): the quick check's overall AI visibility — the SAME scoreHookRun
-     percentage the report's "Overall AI visibility" shows. NULL for anything but a complete six-result hook, so a
-     message can never quote a score the report does not show. */
-  const hookScore = isHookStateV2(hookState) ? scoreHookRun(hookState, (qrows ?? []) as HookScoreRow[], {
-    named: { businessName: audit.business_name ?? "", trade: audit.business_type || null, town: audit.location_text || null },
-  }) : null;
   const visibilityPct = hookScore && hookScore.complete ? hookScore.percent : null;
   const answered = countAnsweredCells((qrows ?? []) as Parameters<typeof countAnsweredCells>[0]);
   if (run.status === "capped" && answered === 0) {

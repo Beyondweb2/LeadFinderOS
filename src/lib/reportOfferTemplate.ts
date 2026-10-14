@@ -57,7 +57,9 @@ export type ReportOfferRefusal = 'no_audit' | 'no_competitors' | 'no_score' | 'n
 export const REPORT_OFFER_REFUSAL_WORDS: Record<ReportOfferRefusal, string> = {
   no_audit: 'no finished AI check yet',
   no_competitors: 'its AI check named no competitors',
-  no_score: 'its AI check has no visibility score (run a quick AI check)',
+  /* A score needs every answer of a scored check (a quick check, or a bulk audit with its score marker —
+     docs/bulk-audit-score.md). One failed or missing answer, or an older audit from before scores, has none. */
+  no_score: 'its AI check has no visibility score — an answer failed or is missing, or it is an older audit (run a quick AI check)',
   no_report_link: 'it has no report link',
   named_in_answers: 'the AI answers already mentioned this business',
   no_sender: 'no sender name',

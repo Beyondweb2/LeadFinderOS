@@ -22,6 +22,22 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-14-bulk-audit-score', date: '2026-10-14', title: 'Bulk AI audits now give a visibility score', audience: 'admin',
+    body: 'A finished bulk AI audit now gives the lead an AI visibility score (for example 67%), worked out the same way as the quick AI check. That lets bulk-audited leads get the report-offer WhatsApp message.',
+    report: {
+      added: [
+        'An AI visibility score on every finished bulk audit: the share of its answers that named the business, as a whole-number % (for example 67%). It shows on the report, the lead’s AI check card and in the report-offer message.',
+        'A line in the Run AI audits box saying each audit now comes with a score, at no extra cost.',
+        'Older bulk-audited leads whose answers were all in got their score filled in from those answers (28 leads). No audit was re-run.',
+      ],
+      changed: [
+        'Bulk-audited leads are no longer refused by the report-offer message for "no visibility score".',
+        'When a lead still has no score, the queue says why: an answer failed or is missing, or it is an older audit.',
+        'Competitor names in the message still come only from an answer that did not name the lead.',
+      ],
+      removed: [],
+      effect: 'Bulk-audit your language schools (with or without a website) and queue the report offer straight after. Cost per audit, the $3 per audit and $15 per day caps, and the Apify warning are all unchanged.',
+    } },
   { id: '2026-10-14-audit-no-website', date: '2026-10-14', title: 'Bulk AI audits include leads with no website', audience: 'admin',
     body: 'Run AI audits on Outreach no longer holds back leads with no website. They are audited like everyone else, without a website scan.',
     report: {
