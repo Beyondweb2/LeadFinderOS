@@ -89,7 +89,7 @@ const CAPABILITIES = ["dry_run", "build_phase_hold", "routing_leaf", "any_approv
    gone; the capability reads any_approved_opener).
    2026-09-30b: an explicit opt-out refuses MARKETING templates here too (src/lib/marketingConsent.ts).
    2026-10-04a: QA safety — a QA fixture is simulated, a test-account lead is refused (src/lib/qaSafety.ts). */
-const BUILD_ID = "2026-10-16a-gemini-wording";
+const BUILD_ID = "2026-10-14t-texted-guard";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -431,16 +431,32 @@ Deno.serve(async (req) => {
         return json({ ok: false, error: NOT_A_UK_MOBILE, template: templateName,
           reason: "Cold WhatsApp outreach is UK only - this is not a UK mobile, so nothing was sent. Use a reply or a follow-up in an open conversation." }, 200);
       }
-      if (!allowResend && isColdOutreachTemplate(templateName)) {
+      /* ⛔ allow_resend confirms repeating a pitch on THIS lead's own thread. For a salesperson it never reaches
+         across lead rows (test-day roles check, 2026-10-14): a number already messaged on ANOTHER row — a duplicate
+         that may belong to someone else — refuses the cold opener whatever the flag says. The admin keeps the
+         override, as before. */
+      if (isColdOutreachTemplate(templateName) && (!allowResend || actor.role !== "admin")) {
         const { data: priorAny } = await service
           .from("whatsapp_messages")
           .select("id, lead_id")
           .eq("phone", to)
           // A send that never left is not prior contact; a NULL status still blocks (sending path).
           .or("status.is.null,status.not.in.(failed,failed_temporary,simulated)")
-          .limit(1);
-        if (Array.isArray(priorAny) && priorAny.length > 0) {
+          .limit(50);
+        const blocking = (priorAny ?? []).filter((m: { lead_id?: string | null }) => !allowResend || !resolvedLeadId || m.lead_id !== resolvedLeadId);
+        if (blocking.length > 0) {
           return json({ ok: false, error: "phone_already_contacted", template: templateName }, 200);
+        }
+      }
+      /* ⛔ A NUMBER ALREADY TEXTED NEVER GETS A COLD WHATSAPP OPENER (2026-10-14) — the mirror of the text queue's
+         rule (queue_sms_openers 'already_texted'), across every lead row and owner, both roles. One SQL rule,
+         public.phone_already_texted (the drip asks the same function); not overridable; fails closed. */
+      if (isColdOutreachTemplate(templateName)) {
+        const { data: texted, error: textedErr } = await service.rpc("phone_already_texted", { _phone: to });
+        if (textedErr) return json({ ok: false, error: "contact_guard_unreadable", template: templateName, reason: "Could not check whether this number was already texted - nothing was sent." }, 200);
+        if (texted === true) {
+          return json({ ok: false, error: "phone_already_texted", template: templateName,
+            reason: "This number has already been sent a text - a cold WhatsApp opener never goes to a number we have already texted. Reply in the text thread instead." }, 200);
         }
       }
       /* ⛔ THE REAL-CONTACT GUARD (2026-10-05, opener consistency fix): a COLD template never goes to a lead

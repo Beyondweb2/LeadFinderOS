@@ -22,6 +22,17 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-14-double-contact-guards', date: '2026-10-14', title: 'A number that was already texted never gets a WhatsApp opener', audience: 'all',
+    body: 'Before a cold WhatsApp opener goes, the app now checks whether anyone on the team has already sent that number a text, on any lead. If so, the opener is not sent.',
+    report: {
+      added: ['A cold WhatsApp opener is refused for a number that already received a text, from the Inbox, the lead popup and the WhatsApp queue. The queue drops the lead and says why.'],
+      changed: [
+        'A salesperson resending an opener can only repeat it on that lead’s own thread, never to a number already messaged on another lead.',
+        'The wider "region" search on Find Leads is admin-only.',
+      ],
+      removed: [],
+      effect: 'Two people on the team cannot cold-message the same business on different channels or duplicate leads. Replies and follow-ups are unchanged.',
+    } },
   { id: '2026-10-13-find-leads-fast', date: '2026-10-13', title: 'Find Leads opens fast, and Web designers / digital agencies is a trade', audience: 'all',
     body: 'Find Leads no longer loads your whole lead list in the background. It checks only the businesses in your search results to see which are already added.',
     report: {
