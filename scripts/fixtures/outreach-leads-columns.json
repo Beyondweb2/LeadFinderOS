@@ -1,5 +1,5 @@
 {
-  "note": "Live public.outreach_leads columns, read from information_schema on 2026-10-02. Refresh when a column is added.",
+  "note": "Live public.outreach_leads columns, read from information_schema on 2026-10-02. Refresh when a column is added. import_batch added 2026-10-14.",
   "columns": [
     "id",
     "user_id",
@@ -124,6 +124,7 @@
     "contract_total_payments",
     "linkedin_url",
     "linkedin_status",
-    "next_action_time"
+    "next_action_time",
+    "import_batch"
   ]
 }

@@ -1849,7 +1849,9 @@ export function OutreachTable({
         // Check business name and address normally
         if (lead.business_name.toLowerCase().includes(query)) return true;
         if (lead.address?.toLowerCase().includes(query)) return true;
-        
+        // The CSV import's batch name ("Ethan batch 14 Oct") — searching it lists the batch (2026-10-14).
+        if (lead.import_batch?.toLowerCase().includes(query)) return true;
+
         // For phone, normalize by removing spaces for comparison
         if (lead.phone) {
           const normalizedPhone = lead.phone.replace(/\s+/g, '').toLowerCase();

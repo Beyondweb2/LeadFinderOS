@@ -44,6 +44,8 @@ export const OUTREACH_LIST_COLUMNS = [
   // 2026-10-09: the SMS lane marker + SMS state — the Queued / SMS Failed / No SMS pills (src/lib/smsStatus.ts). Also in the sales view
   // (migration 20261019110000), so both roles draw the same pill.
   'sms_queued_at', 'sms_delivery_status',
+  // 2026-10-14 (migration 20261024100000): the CSV import batch name — Outreach search finds a batch by it.
+  'import_batch',
 ] as const;
 
 export type OutreachListColumn = (typeof OUTREACH_LIST_COLUMNS)[number];
@@ -79,6 +81,8 @@ export const SALES_VIEW_COLUMNS = [
   'next_action_time',
   // 2026-10-09 (migration 20261019110000): the SMS lane marker + state, appended at the view's end.
   'sms_queued_at', 'sms_delivery_status',
+  // 2026-10-14 (migration 20261024100000): the CSV import batch name, appended at the view's end.
+  'import_batch',
 ] as const;
 const SALES_VIEW = new Set<string>(SALES_VIEW_COLUMNS);
 /** The list columns a salesperson's list can have: the admin's list, cut to what the view carries.

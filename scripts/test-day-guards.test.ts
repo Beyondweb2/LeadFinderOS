@@ -37,5 +37,64 @@ console.log("── Job 1: roles and double contact ──");
   ok(/const region = regionAsked && role === 'admin';/.test(search), "C: region mode runs only for the admin");
 }
 
+console.log("── Job 2: CSV import — messy real-world files ──");
+{
+  const { parseCsv, autoMapColumns, buildImportRows, withDefaultTrade, runImport, callErrorText, IMPORT_BATCH_MAX } =
+    await import("../src/lib/csvLeadImport.ts");
+  const mapAll = (text: string) => { const p = parseCsv(text); const m = autoMapColumns(p.headers); return { p, m, rows: buildImportRows(p, m.mapping) }; };
+
+  // Quotes, commas inside quotes, an escaped quote, a line break inside a quoted note, blank rows, CRLF, a BOM.
+  const messy = "﻿Business Name,Website,Phone,Email,Town,Why this lead\r\n"
+    + "\"Smith & Sons, Plumbing\",smithandsons.co.uk,+44 (0)7700 900001,,Leeds,\"Has no site reviews, \"\"old\"\" logo\"\r\n"
+    + "\r\n"
+    + ",,,,,\r\n"
+    + "Beta Locks,https://www.betalocks.com/,7700900002,info@betalocks.com,York,\"Line one\nline two\"\r\n"
+    + "Gamma Roofing,,07700-900-003,,Hull,\r\n";
+  const { p, m, rows } = mapAll(messy);
+  ok(p.records.length === 3, `blank and all-empty rows are dropped (3 records, got ${p.records.length})`);
+  ok(m.mapping.notes != null && m.mapping.town != null && m.mapping.website != null, "\"Why this lead\" maps to Notes; Town and Website auto-map");
+  ok(rows[0].business_name === "Smith & Sons, Plumbing", "a comma inside quotes stays in the name");
+  ok(rows[0].notes === "Has no site reviews, \"old\" logo", "an escaped quote inside a quoted field is kept");
+  ok(rows[1].notes === "Line one\nline two", "a line break inside a quoted field stays in that one field");
+  ok(rows[1].row === 5 && rows[2].row === 6, "spreadsheet row numbers count the dropped blank rows");
+  ok(rows[0].phone === "+44 (0)7700 900001" && rows[2].phone === "07700-900-003", "odd phone formats go to the server untouched (it repairs and judges them)");
+  ok(!("email" in rows[0]), "an empty cell is absent");
+
+  const tagged = withDefaultTrade([{ row: 2 }, { row: 3, trade: "Roofers" }], "  Plumbers ");
+  ok(tagged[0].trade === "Plumbers" && tagged[1].trade === "Roofers", "the file-wide trade fills only rows with none; a row's own trade wins");
+  ok(withDefaultTrade(rows, "  ") === rows, "a blank trade changes nothing");
+
+  // Semicolon-separated (a European Excel export) and a header-only file.
+  ok(mapAll("Name;Phone\nAcme;07700 900009\n").rows[0]?.phone === "07700 900009", "a semicolon-separated file reads");
+  ok(parseCsv("Business Name,Phone\n").records.length === 0, "a header with no rows reads as no records (the screen says so)");
+
+  // The tags reach every call; large files are sent in parts.
+  const calls: Array<Record<string, unknown>> = [];
+  const rpc = async (a: Record<string, unknown>) => { calls.push(a); return { data: { ok: true, counts: {}, rows: [] }, error: null }; };
+  const many = Array.from({ length: IMPORT_BATCH_MAX * 2 + 7 }, (_, i) => ({ row: i + 2, business_name: `B${i}`, phone: "07700900001" }));
+  await runImport(rpc as never, many, false, "f.csv", undefined, false, { assignTo: "u-ethan", batch: "  Ethan batch 14 Oct  " });
+  ok(calls.length === 3, `a ${many.length}-row file goes in 3 calls of at most ${IMPORT_BATCH_MAX}`);
+  ok(calls.every((c) => c._assign_to === "u-ethan" && c._batch === "Ethan batch 14 Oct"), "owner and trimmed batch name ride on every call");
+  calls.length = 0;
+  await runImport(rpc as never, many.slice(0, 2), false, null);
+  ok(calls[0]._assign_to === null && calls[0]._batch === null, "no tags = the importer owns the leads, no batch");
+  ok(/admin/.test(callErrorText({ ok: false, error: "owner_not_yours" })) && /not an active member/.test(callErrorText({ ok: false, error: "not_an_active_member" })), "the two new refusals have words");
+
+  const dialog = read("src/components/CSVImportDialog.tsx");
+  ok(/\('import_leads_v2', args\)/.test(dialog), "the screen calls import_leads_v2");
+  ok(/assignTo: isAdmin && assignTo \? assignTo : null/.test(dialog), "only the admin's screen ever sends an owner");
+
+  const mig = read("supabase/migrations/20261024100000_csv_import_batch_owner.sql");
+  ok(/add column if not exists import_batch text;/.test(mig), "import_batch is a plain nullable column (no default, no rewrite)");
+  ok(/if v_role is distinct from 'admin' then return jsonb_build_object\('ok', false, 'error', 'owner_not_yours'\)/.test(mig), "server: a salesperson can only import for themselves");
+  ok(/t\.status = 'active' and t\.suspended_at is null and r\.role in \('admin', 'sales'\)/.test(mig), "server: the admin may only name an active, unsuspended teammate");
+  ok(/v_book, v_uid, v_owner, now\(\)/.test(mig) && /'manual', v_batch\)/.test(mig), "server: new leads get the chosen owner and the batch");
+  ok(/where l\.id = v_id and l\.assigned_to_user_id = v_uid/.test(mig), "server: fill-in-blanks still touches only the importer's own leads");
+  ok((mig.match(/perform public\.notify_person/g) ?? []).length === 1 && /'import:' \|\| v_import/.test(mig), "server: ONE notice per import call, never one per lead");
+  ok(!/\binsert into public\.(whatsapp|sms)/i.test(mig) && !/status = 'queued'/.test(mig), "server: an import never queues or sends");
+  ok(/,\n    import_batch\n   FROM outreach_leads l/.test(mig) && /with \(security_barrier = true\)/.test(mig), "sales_leads appends import_batch and keeps security_barrier");
+  ok(/revoke all on function public\.import_leads_v2\(jsonb, boolean, text, boolean, uuid, text\) from public, anon;/.test(mig), "anon cannot call it");
+}
+
 console.log(f ? `\n${f} FAILURE(S)` : "\nALL PASS");
 process.exit(f ? 1 : 0);

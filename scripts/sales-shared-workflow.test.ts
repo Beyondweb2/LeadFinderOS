@@ -35,7 +35,8 @@ console.log("── the safe view is the salesperson's only lead source ──")
   const view = mig.slice(mig.indexOf("create or replace view public.sales_leads"), mig.indexOf("from public.outreach_leads l", mig.indexOf("create or replace view public.sales_leads")));
   const cols = [...view.matchAll(/(null::numeric as amount_paid)|l\.([a-z_]+)/g)].map((m) => (m[1] ? "amount_paid" : m[2]));
   /* 20261019110000 (2026-10-09) appended sms_queued_at + sms_delivery_status (pg_get_viewdef writes them unqualified, so they are asserted by name). */
-  const SMS_TAIL = ["sms_queued_at", "sms_delivery_status"];
+  /* 20261024100000 (2026-10-14) appended import_batch after them, the same way. */
+  const SMS_TAIL = ["sms_queued_at", "sms_delivery_status", "import_batch"];
   ok(cols.length === SALES_VIEW_COLUMNS.length - SMS_TAIL.length && cols.every((c, i) => c === SALES_VIEW_COLUMNS[i]) && SMS_TAIL.every((c, i) => c === SALES_VIEW_COLUMNS[SALES_VIEW_COLUMNS.length - SMS_TAIL.length + i]), `SALES_VIEW_COLUMNS equals the view's ${cols.length} columns, in order, plus the two SMS columns the newest migration appends`);
   ok(/null::numeric as amount_paid/.test(view), "the view's amount_paid is a literal NULL");
   for (const secret of ["notes", "paid_for", "payment_date", "subscription_status", "delivery_checklist", "delivery_notes", "project_value", "user_id", "stripe_customer_id", "baseline_audit_id"]) {
