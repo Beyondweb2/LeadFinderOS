@@ -442,6 +442,12 @@ Deno.serve(async (req) => {
        what makes an audit ADAPTIVE (see isHookAudit below); it is never inferred from the question
        count, the purpose, or who is calling. A separate concept from fresh_audit. */
     const hookAuditRequested: boolean = body.hook_audit === true;
+    /* bulk_score — THE BULK AUDIT'S SCORE MARKER (2026-10-14, docs/bulk-audit-score.md). Set only by bulk-jobs (internal).
+       It changes NOTHING about what is asked: same questions, same count, same engines, same reuse, same cost. It only
+       stamps results.hook (version 2) with the questions AS QUEUED, so the run is scored by scoreHookRun — the quick
+       check's own ruler — and the report, the Inbox card and ai_visibility_report_offer read one score. Not a hook:
+       no plan, no top-up, no one-in-flight rule, no person guard. Internal-only so a public caller cannot set it. */
+    const bulkScoreRequested: boolean = body.bulk_score === true && isInternal;
     // fresh_audit is honoured for internal callers, and for an authenticated caller that has declared
     // a hook (the Inbox re-run): a hook re-run is a new hook by product rule, and it can only ever
     // reduce reuse, never raise a ceiling.
@@ -1549,6 +1555,11 @@ Deno.serve(async (req) => {
       questions = finalHookPlan(questions, { town: locationText, country, trade: businessType, businessName });
       hookState = initialHookStateV2(questions, AUDIT_ENGINES);
       console.log(`[create-ai-audit] hook: ${questions.length} question(s) × ${AUDIT_ENGINES.length} engines, all queued`);
+    } else if (bulkScoreRequested && leadId && auditPurpose === ORDINARY_AUDIT_PURPOSE && !preview) {
+      /* The bulk marker: the questions exactly as queued (reuse included), every row on AUDIT_ENGINES. Fewer than
+         HOOK_SCORE_QUESTIONS → scoreHookRun calls it incomplete → no score, never a guess. */
+      hookState = initialHookStateV2(questions, AUDIT_ENGINES);
+      console.log(`[create-ai-audit] bulk score marker: ${questions.length} question(s) × ${AUDIT_ENGINES.length} engines`);
     }
     /* ⛔ THE MONEY FLAG, INTERSECTED WITH WHAT IS ACTUALLY QUEUED. dedupeQuestions above can drop a
        money question that collided with a standard one, and the guards can reject one earlier — so a

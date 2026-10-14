@@ -300,6 +300,9 @@ async function runItem(service: any, job: JobRow, item: JobItem): Promise<{ stat
         website: website || undefined,
         question_count: questionCount,
         ...(skipSeo ? { skip_seo: true } : {}),
+        /* The bulk audit's score marker (2026-10-14, docs/bulk-audit-score.md): the run is scored from its own
+           answers by the quick check's ruler, so the report offer's {{4}} has a score. Changes nothing asked or spent. */
+        bulk_score: true,
       }),
     });
     const data = await res.json().catch(() => ({}));

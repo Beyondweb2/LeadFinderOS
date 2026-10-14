@@ -3513,6 +3513,12 @@ export function OutreachTable({
             {auditBatchCost.withWebsite > 0 && <>, incl. {auditBatchCost.withWebsite} site scan{auditBatchCost.withWebsite === 1 ? '' : 's'}</>}
             {auditBatchCost.leads - auditBatchCost.withWebsite > 0 && <>; {auditBatchCost.leads - auditBatchCost.withWebsite} with no website, no scan</>}). Proceed?
           </p>
+          {/* The score comes from the answers the audit already collects (docs/bulk-audit-score.md) — no extra AI call,
+              so the price above is unchanged. Said so nobody wonders whether it costs more. */}
+          <p className="text-[11px] text-muted-foreground" data-testid="audit-score-info">
+            Each finished audit also gives the lead an AI visibility score (for example 67%), worked out from its own
+            answers, the same way as the quick AI check. No extra cost. If any answer fails, that lead gets no score.
+          </p>
           <DialogFooter>
             <Button variant="ghost" size="sm" onClick={() => setAuditDialogOpen(false)}>Cancel</Button>
             <Button size="sm" onClick={confirmBulkAudit} disabled={bulkJobActive || !auditBatchCost.leads}>
