@@ -142,6 +142,17 @@ ok(OUTREACH_LIST_SELECT === OUTREACH_LIST_COLUMNS.join(", ") && !OUTREACH_LIST_S
   const row = src.slice(src.indexOf("function TownRow("), src.indexOf("export default function NichePanel("));
   ok(row.length > 100 && !/useOutreach\(/.test(row), "TownRow has no useOutreach of its own");
   ok((src.match(/useOutreach\(/g) ?? []).length === 1, "NichePanel mounts exactly one useOutreach");
+  ok(/useOutreach\(\{ preload: false \}\)/.test(src), "…and it downloads no list (preload: false, 2026-10-15)");
+}
+
+// The Inbox's lead dialog loads ONE lead, never the book (2026-10-15).
+{
+  const dlg = read("src/components/LeadDetailFromInbox.tsx");
+  const hook = read("src/hooks/useOutreach.ts");
+  ok(/useOutreach\(\{ history: false, onlyLeadId: leadId \}\)/.test(dlg), "LeadDetailFromInbox asks useOutreach for its one lead");
+  ok(/<LeadDetailFromInboxInner key=\{leadId\}/.test(dlg), "…and remounts when the lead changes, so the one-lead load follows it");
+  ok(/if \(onlyLeadId\) \{[\s\S]{0,400}\.from\(src\.table\)\.select\(src\.listSelect\)\.eq\('id', onlyLeadId\)\.eq\('is_archived', false\)\.maybeSingle\(\)/.test(hook),
+    "onlyLeadId reads that one active row from the caller's own source with the list columns");
 }
 
 // 4. The detail dialog renders only from the complete row.
@@ -159,10 +170,10 @@ ok(OUTREACH_LIST_SELECT === OUTREACH_LIST_COLUMNS.join(", ") && !OUTREACH_LIST_S
 {
   const src = read("src/hooks/useOutreach.ts");
   const fetchLeads = src.slice(src.indexOf("const fetchLeads = useCallback"), src.indexOf("const fetchOutreachHistory"));
-  ok((fetchLeads.match(/\.from\(src\.table\)\.select\(src\.listSelect\)/g) ?? []).length === 2 && /const src = leadSourceFor\(roleRef\.current\);/.test(fetchLeads) && !/select\('\*'\)/.test(fetchLeads), "active and archived leads both select the role's LIST columns");
+  ok((fetchLeads.match(/\.from\(src\.table\)\.select\(src\.listSelect\)/g) ?? []).length === 3 && /const src = leadSourceFor\(roleRef\.current\);/.test(fetchLeads) && !/select\('\*'\)/.test(fetchLeads), "active and archived leads (and the one-lead read) all select the role's LIST columns");
   ok(leadSourceFor("admin").listSelect === OUTREACH_LIST_SELECT && leadSourceFor(null).listSelect === OUTREACH_LIST_SELECT, "…the admin's list is OUTREACH_LIST_SELECT, unchanged");
   ok(leadSourceFor("sales").listSelect === SALES_LIST_SELECT && !SALES_LIST_SELECT.includes("*") && SALES_LIST_SELECT.split(", ").every((c) => LIST.has(c)), "…a salesperson's is the same list, cut to the safe view (never '*')");
-  ok((fetchLeads.match(/guardListRows\(/g) ?? []).length === 2, "both lists pass through the dev guard");
+  ok((fetchLeads.match(/guardListRows\(/g) ?? []).length === 3, "all three reads pass through the dev guard");
 
   const errors: string[] = [];
   const orig = console.error;

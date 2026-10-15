@@ -22,6 +22,18 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-15-speed-inbox-coverage', date: '2026-10-15', title: 'Faster Inbox and Coverage', audience: 'all',
+    body: 'Opening a lead from the WhatsApp Inbox now loads just that lead, the Inbox does far less work each time a lead or audit changes, and adding leads from a Coverage niche no longer downloads your whole lead list first.',
+    report: {
+      added: [],
+      changed: [
+        'Opening a lead from the Inbox loads only that lead, not every lead in the CRM.',
+        'The Inbox works out which leads can get the site-fault templates in one pass instead of once per lead, so it stays quick as the list grows.',
+        'The Coverage niche panel adds leads without loading your whole lead list first. Duplicate checks are unchanged.',
+      ],
+      removed: [],
+      effect: 'The same screens and buttons, just quicker, especially opening a lead from the Inbox.',
+    } },
   { id: '2026-10-15-lead-ready-check', date: '2026-10-15', title: 'See what a lead is missing before it fails', audience: 'all',
     body: 'When you add or import leads, you now see up front which are ready for an AI audit and a message, and what the rest need (a town, a mobile number, a trade, a name). A "Needs info" tag shows on leads in Outreach and the Inbox, and the bulk audit says who will be skipped before anything is spent.',
     report: {

@@ -84,6 +84,24 @@ export function newestUsableAudit<T extends ResolvableAudit>(audits: readonly T[
   return auditsForLead(audits, leadId).find(hasUsableRun) ?? null;
 }
 
+/** newestUsableAudit for every lead at once — the SAME rule (newest → oldest, first with a usable run,
+ *  no purpose filter), one pass over the audit list. ⚡ (2026-10-15) useInbox called newestUsableAudit
+ *  once per lead, twice per render pass: ~5,800 leads × a filter + sort of ~1,700 audits each. A lead
+ *  absent from the map has no usable audit (newestUsableAudit's null). */
+export function newestUsableAuditByLead<T extends ResolvableAudit>(audits: readonly T[]): Map<string, T> {
+  const byLead = new Map<string, T[]>();
+  for (const a of audits) {
+    if (!a.lead_id) continue;
+    (byLead.get(a.lead_id) ?? byLead.set(a.lead_id, []).get(a.lead_id)!).push(a);
+  }
+  const out = new Map<string, T>();
+  for (const [leadId, group] of byLead) {
+    const usable = group.sort(byNewestFirst).find(hasUsableRun);
+    if (usable) out.set(leadId, usable);
+  }
+  return out;
+}
+
 /** The audit whose report Inbox should show for this lead — newest eligible usable audit, falling
  *  through to an older one when the newest hasn't settled (or never will). Null when none has. */
 export function resolveLeadReportAudit<T extends ResolvableAudit>(audits: readonly T[], leadId: string): T | null {

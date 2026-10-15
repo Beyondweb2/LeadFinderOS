@@ -1,4 +1,4 @@
-import { newestUsableAudit, resolveLeadReport, resolveLeadReportAudit, resolveReportsByLead, type ResolvableAudit } from '../src/lib/auditReportResolver.ts';
+import { newestUsableAudit, newestUsableAuditByLead, resolveLeadReport, resolveLeadReportAudit, resolveReportsByLead, type ResolvableAudit } from '../src/lib/auditReportResolver.ts';
 
 let failures = 0;
 const ok = (condition: boolean, label: string) => { if (!condition) failures++; console.log(`${condition ? 'PASS' : 'FAIL'} ${label}`); };
@@ -127,6 +127,34 @@ const audit = (over: Partial<ResolvableAudit> & { id: string }): ResolvableAudit
   const audits = [audit({ id: 'm', audit_purpose: 'measurement', created_at: '2026-09-10T00:00:00.000Z' })];
   ok(newestUsableAudit(audits, 'lead-1')?.id === 'm', 'newestUsableAudit does not exclude measurement purpose');
   ok(resolveLeadReportAudit(audits, 'lead-1') === null, 'resolveLeadReportAudit (the report gate) still excludes it');
+}
+
+/* newestUsableAuditByLead (2026-10-15, Inbox speed) is newestUsableAudit for every lead in one pass — it must
+   pick the SAME audit for every lead, on shuffled input with timestamp ties, measurements and unsettled runs. */
+{
+  const statuses = ['complete', 'capped', 'running', 'pending', 'failed'];
+  const purposes = [null, 'measurement', 'baseline', 'discovery'];
+  let seed = 7;
+  const rnd = (n: number) => { seed = (seed * 1103515245 + 12345) % 2147483648; return seed % n; };
+  const audits: ResolvableAudit[] = [];
+  for (let i = 0; i < 600; i++) {
+    audits.push(audit({
+      id: `a${rnd(100000)}-${i}`,
+      lead_id: rnd(10) === 0 ? null : `lead-${rnd(120)}`,
+      created_at: rnd(8) === 0 ? null : `2026-09-0${1 + rnd(5)}T00:00:00.000Z`,
+      audit_purpose: purposes[rnd(purposes.length)],
+      ai_audit_runs: rnd(9) === 0 ? null : Array.from({ length: rnd(3) }, () => ({ status: statuses[rnd(statuses.length)] })),
+    }));
+  }
+  const before = audits.map((a) => a.id).join();
+  const map = newestUsableAuditByLead(audits);
+  let same = true;
+  for (let l = 0; l < 125; l++) {
+    const id = `lead-${l}`;
+    if ((newestUsableAudit(audits, id)?.id ?? null) !== (map.get(id)?.id ?? null)) same = false;
+  }
+  ok(same, 'newestUsableAuditByLead picks the same audit as newestUsableAudit for every lead');
+  ok(audits.map((a) => a.id).join() === before, 'newestUsableAuditByLead leaves the caller list in its order');
 }
 
 if (failures) process.exit(1);

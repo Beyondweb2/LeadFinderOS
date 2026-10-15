@@ -41,7 +41,8 @@ export function LeadDetailFromInbox({ leadId, open, onOpenChange, onStatusPatche
 }) {
   // Not open → nothing mounts, so useOutreach (and its fetch) never runs on a closed Inbox.
   if (!open || !leadId) return null;
-  return <LeadDetailFromInboxInner leadId={leadId} onOpenChange={onOpenChange} onStatusPatched={onStatusPatched} />;
+  /* key: a different lead remounts the inner dialog, so its one-lead load (onlyLeadId) follows it. */
+  return <LeadDetailFromInboxInner key={leadId} leadId={leadId} onOpenChange={onOpenChange} onStatusPatched={onStatusPatched} />;
 }
 
 function LeadDetailFromInboxInner({ leadId, onOpenChange, onStatusPatched }: {
@@ -53,7 +54,7 @@ function LeadDetailFromInboxInner({ leadId, onOpenChange, onStatusPatched }: {
   const {
     leads, isLoading,
     updateStatus, updateNextAction, updateLead, updateNotes, updateBusinessName, fetchActivities,
-  } = useOutreach({ history: false });
+  } = useOutreach({ history: false, onlyLeadId: leadId }); // ⚡ one lead, never the whole book (useOutreach onlyLeadId)
   const lead = useMemo(() => leads.find((l) => l.id === leadId) ?? null, [leads, leadId]);
 
   /* The two handlers that can move status are wrapped so Inbox's pill follows live. Everything
