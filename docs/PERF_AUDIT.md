@@ -33,9 +33,12 @@ Speed only; nothing about what the pages do was changed. Earlier passes are in `
 3. ✅ **Coverage niche panel: no whole-book download.** `useOutreach({ preload: false })`, the mode Find Leads already uses; `addLead`'s
    database dedupe unchanged, its history check asked of the database. Before: ~13 requests / ~10 MB (measured on Find Leads
    2026-10-13, same load). After: none on open.
-4. ⏸ **Outreach revisit: show the last list at once, refresh behind it.** The biggest remaining Outreach win (every return to the page
-   waits for the first 1,000 again, ~1–2 s, and bulk actions lock for ~3–5 s). Not done: it means showing a list that can be a few
-   seconds old and adding a "refreshing" state to the bulk-action gate — a behaviour change. **Needs you** (see below).
+4. ✅ **Outreach revisit: the last list at once, refreshed behind it** (Paul approved, 2026-10-15). `src/lib/outreachListMemory.ts`
+   remembers the COMPLETE list per person + role, in memory for this tab only (never browser storage; sign-out forgets it). A return
+   shows it as `LEAD_LOAD_FROM_LAST_VISIT` — phase `partial`, so `datasetComplete` is false and every whole-list action stays locked —
+   then the full fresh load replaces it through `mergeAfterBackgroundLoad` (edits made meanwhile kept). A failed refresh says so with
+   Retry. **Measured headless (fake offline backend, 5,800 leads, 700 ms per request): first visit 1,700 ms to the first 1,000 rows;
+   return 37 ms to all 5,800, fresh copy complete ~1.4 s later.** Tests: `scripts/outreach-progressive.test.ts`.
 5. ⏸ **Outreach rows: memoised row component.** Rows are inline JSX in a 3,857-line table; memoising means extracting them with many
    closures. Behaviour-risky; measured cost is already 70–100 ms per action on a normal machine. Not done.
 6. Not worth doing now: Inbox crawl checks / page hits read with the sequential pager (1 page each today); narrowing the Inbox
@@ -48,8 +51,7 @@ never uses it under the admin RESTRICTIVE policy; see `docs/site-wide-speed.md` 
 
 ## Needs you
 
-- **Outreach "show last list instantly" (item 4):** OK to show the previous copy for the few seconds a refresh takes, with bulk
-  actions staying locked until the fresh copy lands? It touches no auth, tenancy or sending.
+- Nothing outstanding — item 4 was approved and built the same day.
 
 ## Verification
 
