@@ -5,7 +5,9 @@ import { readFileSync } from "node:fs";
 import {
   OUTREACH_FIRST_BATCH, LEAD_LOAD_INITIAL, LEAD_LOAD_COMPLETE, datasetComplete, leadLoadNotice,
   leadCountLabel, partialResultsSuffix, mergeAfterBackgroundLoad, visibleWhileLoading, type LeadLoadState,
+  LEAD_LOAD_FROM_LAST_VISIT,
 } from "../src/lib/outreachLoad.ts";
+import { forgetOutreachList, recallOutreachList, rememberOutreachList } from "../src/lib/outreachListMemory.ts";
 import { fetchAllRows, fetchPagesAfterFirst } from "../src/lib/fetchAllRows.ts";
 import { OUTREACH_LIST_COLUMNS, SALES_LIST_COLUMNS, SALES_VIEW_COLUMNS, leadSourceFor } from "../src/lib/outreachLeadColumns.ts";
 
@@ -170,6 +172,33 @@ ok(merged.archived.map((r) => `${r.id}:${r.v}`).join(",") === "a2:archived,r1:or
 const untouched = mergeAfterBackgroundLoad<L>({ shownActive, shownArchived, localActive: shownActive, localArchived: shownArchived,
   fetchedActive: [mk("a1", "fresh"), a2, a3, mk("b1")], fetchedArchived: shownArchived });
 ok(untouched.active[0].v === "fresh" && untouched.active.length === 4, "untouched rows take the fetched copy");
+
+console.log("── returning to Outreach: the list from the last visit (2026-10-15) ──");
+{
+  const st = LEAD_LOAD_FROM_LAST_VISIT(5800);
+  const failed: LeadLoadState = { ...st, phase: "failed", error: "x" };
+  ok(!datasetComplete(st), "a remembered list is NOT complete — every whole-list action stays locked");
+  ok(!datasetComplete(failed), "…nor after its refresh fails");
+  ok(/last visit while it refreshes/.test(leadLoadNotice(st)?.text ?? "") && /unlock when it finishes/.test(leadLoadNotice(st)?.text ?? ""), "the notice says it is the last visit's list and what unlocks");
+  ok(leadLoadNotice(failed)?.tone === "error" && /Could not refresh/.test(leadLoadNotice(failed)?.text ?? ""), "a failed refresh is an error notice (with Retry)");
+  ok(leadCountLabel(st, 5800) === "5,800 active, refreshing" && partialResultsSuffix(st) === " — from your last visit, refreshing", "the count and pager say refreshing");
+  ok(visibleWhileLoading(st, [{ is_archived: true }, { is_archived: false }]).length === 1, "while refreshing the table shows active rows only, as on a first load");
+  ok(datasetComplete(LEAD_LOAD_COMPLETE(5800)) && !LEAD_LOAD_COMPLETE(5800).fromLastVisit, "the fresh copy landing is complete and clears the flag");
+  forgetOutreachList();
+  ok(recallOutreachList("u1", "admin") === null, "nothing remembered → nothing recalled (the first visit loads as before)");
+  rememberOutreachList("u1", "admin", [{ id: "a" }], []);
+  ok(recallOutreachList<{ id: string }>("u1", "admin")?.active.length === 1, "the same person and role get their list back");
+  ok(recallOutreachList("u2", "admin") === null && recallOutreachList("u1", "sales") === null, "another person, or the same person in another role, never does");
+  rememberOutreachList("u1", null, [{ id: "b" }], []);
+  ok(recallOutreachList<{ id: string }>("u1", "admin")?.active[0].id === "a" && recallOutreachList("u1", null) === null, "an unresolved role is never stored or recalled");
+  forgetOutreachList();
+  ok(recallOutreachList("u1", "admin") === null, "forgotten on sign-out");
+  ok(/if \(!currentUserId\) forgetOutreachList\(\);/.test(hook), "useOutreach forgets it when the user signs out");
+  ok(/const remembered = !hasLoadedOnceRef\.current \? recallOutreachList<OutreachLead>\(uid, roleRef\.current\) : null;/.test(hook)
+    && /const st = LEAD_LOAD_FROM_LAST_VISIT\(remembered\.active\.length\);/.test(hook), "only the first load of a visit recalls it, shown as last-visit (partial)");
+  ok(/if \(!progressive \|\| !user\?\.id \|\| !datasetComplete\(leadLoad\)\) return;\s*rememberOutreachList\(/.test(hook), "only a COMPLETE list, on the Outreach page, is remembered");
+  ok(!/localStorage|sessionStorage/.test(norm("../src/lib/outreachListMemory.ts").replace(/\/\*[\s\S]*?\*\//g, "")), "memory only — never written to browser storage");
+}
 
 console.log(f === 0 ? "\nALL PASS" : `\n${f} FAILED`);
 if (f > 0) process.exit(1);

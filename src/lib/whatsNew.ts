@@ -22,6 +22,17 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-15-outreach-instant-return', date: '2026-10-15', title: 'Outreach opens instantly when you come back', audience: 'all',
+    body: 'Going back to Outreach now shows your list straight away, as you left it, while a fresh copy loads behind it. Bulk actions stay locked until the fresh copy arrives, usually a second or two.',
+    report: {
+      added: ['A short "Showing your list from your last visit while it refreshes" notice while the fresh copy loads.'],
+      changed: [
+        'Returning to Outreach shows your whole list at once instead of a spinner and then the newest 1,000.',
+        'Select all, bulk actions, CSV, the Paid filter and the shared-phone count stay locked until the fresh copy lands, exactly as on a first load.',
+      ],
+      removed: [],
+      effect: 'No more waiting each time you come back to Outreach. A reload or signing out starts fresh, as before.',
+    } },
   { id: '2026-10-15-speed-inbox-coverage', date: '2026-10-15', title: 'Faster Inbox and Coverage', audience: 'all',
     body: 'Opening a lead from the WhatsApp Inbox now loads just that lead, the Inbox does far less work each time a lead or audit changes, and adding leads from a Coverage niche no longer downloads your whole lead list first.',
     report: {

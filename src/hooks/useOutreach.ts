@@ -2,7 +2,8 @@ import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { notifyLeadChanged } from '@/lib/leadSync';
 import { useQueryClient } from '@tanstack/react-query';
 import { fetchAllRows, fetchAllRowsParallel, fetchPagesAfterFirst } from '@/lib/fetchAllRows';
-import { OUTREACH_FIRST_BATCH, LEAD_LOAD_INITIAL, LEAD_LOAD_COMPLETE, datasetComplete, mergeAfterBackgroundLoad, type LeadLoadState } from '@/lib/outreachLoad';
+import { OUTREACH_FIRST_BATCH, LEAD_LOAD_INITIAL, LEAD_LOAD_COMPLETE, LEAD_LOAD_FROM_LAST_VISIT, datasetComplete, mergeAfterBackgroundLoad, type LeadLoadState } from '@/lib/outreachLoad';
+import { forgetOutreachList, recallOutreachList, rememberOutreachList } from '@/lib/outreachListMemory';
 import { guardListRows, leadSourceFor } from '@/lib/outreachLeadColumns';
 import { errorMessageOf, leadLoadErrorText, addInFlightKey } from '@/lib/leadLoadError';
 import { leadsSetCampaign, salesPatchLead, salesRemoveLeads } from '@/lib/leadRpc';
@@ -565,6 +566,14 @@ export function useOutreach({ history = true, progressive = false, preload = tru
   /** The notice's Retry: the background half again if the first batch is on screen, else the lot. */
   const retryLeadLoad = useCallback(async () => {
     if (leadLoadRef.current.phase !== 'failed') return;
+    if (leadLoadRef.current.fromLastVisit) {
+      /* The last visit's list is still on screen: run the fresh full load again over it (still locked). */
+      const st: LeadLoadState = { ...leadLoadRef.current, phase: 'partial', error: null };
+      leadLoadRef.current = st;
+      setLeadLoad(st);
+      await fetchLeadsRef.current();
+      return;
+    }
     if (shownRef.current && shownRef.current.first.length > 0) {
       const gen = ++loadGenRef.current;
       setLeadLoad((s) => ({ ...s, phase: 'partial', error: null }));
@@ -574,6 +583,7 @@ export function useOutreach({ history = true, progressive = false, preload = tru
     }
   }, [loadRemainingLeads, progressiveLoad]);
 
+  const fetchLeadsRef = useRef<() => Promise<void>>(async () => {});
   const fetchLeads = useCallback(async () => {
     const uid = userIdRef.current;
     if (!uid) return;
@@ -603,7 +613,26 @@ export function useOutreach({ history = true, progressive = false, preload = tru
     /* Progressive only while the list is not yet complete; a refresh of a COMPLETE list (after a bulk
        job, an import, a claim) reloads it whole in the background and swaps it in, so the page never
        drops back to "loading" and never re-locks the bulk actions. */
-    if (progressive && !datasetComplete(leadLoadRef.current)) { await progressiveLoad(); return; }
+    if (progressive && !datasetComplete(leadLoadRef.current)) {
+      /* ⚡ Coming back to Outreach (Paul, 2026-10-15; src/lib/outreachListMemory.ts): the list from the last visit goes on
+         screen at once as LEAD_LOAD_FROM_LAST_VISIT — partial, so every whole-list action stays locked — and the full
+         fresh load below replaces it (mergeAfterBackgroundLoad keeps anything edited meanwhile). No memory → as before. */
+      const remembered = !hasLoadedOnceRef.current ? recallOutreachList<OutreachLead>(uid, roleRef.current) : null;
+      if (remembered) {
+        latestRef.current = { active: remembered.active, archived: remembered.archived };
+        shownRef.current = null;
+        setLeads(remembered.active);
+        setArchivedLeads(remembered.archived);
+        const st = LEAD_LOAD_FROM_LAST_VISIT(remembered.active.length);
+        leadLoadRef.current = st;
+        setLeadLoad(st);
+        hasLoadedOnceRef.current = true;
+        setIsLoading(false);
+      } else if (!leadLoadRef.current.fromLastVisit) {
+        await progressiveLoad();
+        return;
+      }
+    }
     const gen = ++loadGenRef.current;
     /* What was on screen when this load started. A lead added (or removed) while the load runs must survive
        it: Find Leads loads the whole book here, and pressing Add to CRM during that load used to have its new
@@ -678,6 +707,14 @@ export function useOutreach({ history = true, progressive = false, preload = tru
     setLeadLoad(LEAD_LOAD_COMPLETE(merged.active.length));
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [progressive, progressiveLoad, preload, onlyLeadId]);
+  fetchLeadsRef.current = fetchLeads;
+
+  /* Remember the COMPLETE Outreach list for the next visit in this tab (outreachListMemory.ts) — every change to it too,
+     so a return shows the list as it was left. Only the Outreach page (progressive) remembers. */
+  useEffect(() => {
+    if (!progressive || !user?.id || !datasetComplete(leadLoad)) return;
+    rememberOutreachList(user.id, role, leads, archivedLeads);
+  }, [progressive, user?.id, role, leadLoad, leads, archivedLeads]);
 
   const fetchOutreachHistory = useCallback(async (): Promise<OutreachHistoryEntry[] | null> => {
     const uid = userIdRef.current;
@@ -720,6 +757,7 @@ export function useOutreach({ history = true, progressive = false, preload = tru
     const currentUserId = user?.id ?? null;
     if (currentUserId === userIdRef.current) return;
     userIdRef.current = currentUserId;
+    if (!currentUserId) forgetOutreachList(); // signed out: the remembered list goes with the session
     if (currentUserId) {
       if (!preload) { setIsLoading(false); return; }
       fetchLeads();

@@ -27,10 +27,19 @@ export interface LeadLoadState {
   total: number | null;
   /** Why the background load failed (phase 'failed' only). */
   error: string | null;
+  /** The rows on screen are the list from this person's LAST VISIT (this tab), shown at once while the
+   *  fresh copy loads behind them. Still 'partial' (or 'failed'), so every whole-list action stays locked. */
+  fromLastVisit?: boolean;
 }
 
 export const LEAD_LOAD_INITIAL: LeadLoadState = { phase: 'loading', loaded: 0, total: null, error: null };
 export const LEAD_LOAD_COMPLETE = (loaded: number): LeadLoadState => ({ phase: 'complete', loaded, total: loaded, error: null });
+/* ⚡ RETURNING TO OUTREACH (Paul, 2026-10-15): "show the last list instantly when I come back to it, refresh behind it, and
+   keep bulk actions locked until the fresh copy lands". The remembered list is shown as PARTIAL — never 'complete' — so
+   datasetComplete stays false and every gate below holds until the fresh copy replaces it. */
+export const LEAD_LOAD_FROM_LAST_VISIT = (loaded: number): LeadLoadState => ({ phase: 'partial', loaded, total: loaded, error: null, fromLastVisit: true });
+
+const LOCKED_UNTIL = 'select all, bulk actions, CSV, the Paid filter and the shared-phone count';
 
 /** The ONE gate for everything that needs the complete dataset. */
 export function datasetComplete(s: LeadLoadState | null | undefined): boolean {
@@ -42,6 +51,11 @@ const n = (x: number) => x.toLocaleString('en-GB');
 /** The notice above the table while incomplete; null once complete. */
 export function leadLoadNotice(s: LeadLoadState): { tone: 'info' | 'error'; text: string } | null {
   if (datasetComplete(s) || s.phase === 'loading') return null;
+  if (s.fromLastVisit) {
+    return s.phase === 'failed'
+      ? { tone: 'error', text: `Could not refresh your leads. Showing your list from your last visit, which may be out of date — ${LOCKED_UNTIL} stay off until it loads.` }
+      : { tone: 'info', text: `Showing your list from your last visit while it refreshes — ${LOCKED_UNTIL} unlock when it finishes.` };
+  }
   const remaining = s.total != null ? Math.max(0, s.total - s.loaded) : null;
   if (s.phase === 'failed') {
     return {
@@ -63,6 +77,7 @@ export function leadLoadNotice(s: LeadLoadState): { tone: 'info' | 'error'; text
 /** The count beside the title: the real total once complete, "active loaded of active total" before. */
 export function leadCountLabel(s: LeadLoadState, shownCount: number): string {
   if (datasetComplete(s) || s.total == null) return n(shownCount);
+  if (s.fromLastVisit) return `${n(s.loaded)} active, ${s.phase === 'failed' ? 'not refreshed' : 'refreshing'}`;
   return s.phase === 'failed'
     ? `${n(s.loaded)} of ${n(s.total)} active, incomplete`
     : `${n(s.loaded)} of ${n(s.total)} active, loading`;
@@ -71,6 +86,7 @@ export function leadCountLabel(s: LeadLoadState, shownCount: number): string {
 /** The suffix for "Showing 1 to 15 of N" / filter results while incomplete. */
 export function partialResultsSuffix(s: LeadLoadState): string {
   if (datasetComplete(s)) return '';
+  if (s.fromLastVisit) return s.phase === 'failed' ? ' — from your last visit, not refreshed' : ' — from your last visit, refreshing';
   return s.total != null
     ? ` — partial results: ${n(s.loaded)} of ${n(s.total)} active leads loaded so far`
     : ` — partial results from the newest ${n(s.loaded)} leads`;
