@@ -18,6 +18,9 @@ import {
 } from '@/lib/coverageState';
 import { CoverageWorkers } from '@/components/CoverageWorkers';
 import { CoverageFoundAdded } from '@/components/CoverageFoundAdded';
+import { CoverageMultiTown } from '@/components/CoverageMultiTown';
+import { Checkbox } from '@/components/ui/checkbox';
+import { useSubscription } from '@/hooks/useSubscription';
 import {
   COVERAGE_COUNTRIES, COVERAGE_COUNTRY_LABEL, DEFAULT_COVERAGE_COUNTRY, normaliseCoverageCountry, type CoverageCountry,
 } from '@/lib/coverageCountries';
@@ -48,6 +51,7 @@ const STATE_TONE: Record<CoverageState, Tone> = {
 
 export default function Coverage() {
   const { user } = useAuth();
+  const { isAdmin } = useSubscription();
   const [params, setParams] = useSearchParams();
   /* ⛔ THE COUNTRY (2026-10-14: UK, Malaysia, Singapore). In the URL like the trade — it is WHAT you are looking at —
      but only when it is not the UK, so every UK link reads exactly as before. A bare URL restores the last country
@@ -177,6 +181,22 @@ export default function Coverage() {
     [rows],
   );
 
+  /* The text a town is searched as — the one-town link and the multi-town search use the SAME words. */
+  const townLocation = (name: string) => (isUk || name === 'Singapore' ? name : quickLocationValue(name, country));
+
+  /* ⛔ MULTI-TOWN SELECTION (2026-10-15). Which towns are ticked is a choice for THIS list, never persisted; a new
+     country or trade is a different list, so it starts empty. Only ticked towns still on screen are searched, in
+     the table's order (largest first). */
+  const [pickedTowns, setPickedTowns] = useState<Set<string>>(new Set());
+  useEffect(() => { setPickedTowns(new Set()); }, [country, trade]);
+  const selectedTowns = useMemo(
+    () => sorted.filter((t) => pickedTowns.has(t.name)).map((t) => ({ town: t.name, location: townLocation(t.name), country })),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [sorted, pickedTowns, country, isUk],
+  );
+  const listAllPicked = sorted.length > 0 && sorted.every((t) => pickedTowns.has(t.name));
+  const listSomePicked = sorted.some((t) => pickedTowns.has(t.name));
+
   return (
     <div className="space-y-4 p-4 md:p-6">
       <PageHeader icon={MapIcon} tone="blue" title="Coverage"
@@ -304,6 +324,9 @@ export default function Coverage() {
         </div>
       )}
 
+      <CoverageMultiTown trade={tradeSearchWord(trade)} selected={selectedTowns} isAdmin={isAdmin}
+        onSearched={(towns) => setPickedTowns((p) => { const n = new Set(p); for (const t of towns) n.delete(t); return n; })} />
+
       {isLoading ? (
         <LoadState label={<>Reading your audits, leads and messages&hellip;</>} />
       ) : error ? (
@@ -321,6 +344,11 @@ export default function Coverage() {
           <table className="w-full text-sm">
             <thead className="bg-muted/50 text-xs text-muted-foreground">
               <tr>
+                <th className="w-9 px-3 py-2 text-left">
+                  <Checkbox aria-label="Select all towns in this list" title="Select all towns in this list" data-testid="coverage-select-all-towns"
+                    checked={listAllPicked ? true : listSomePicked ? 'indeterminate' : false}
+                    onCheckedChange={(v) => setPickedTowns(v === true ? new Set(sorted.map((t) => t.name)) : new Set())} />
+                </th>
                 <th className="px-3 py-2 text-left font-medium">Town</th>
                 <th className="px-3 py-2 text-left font-medium">{country === 'Malaysia' ? 'State' : 'Region'}</th>
                 <th className="px-3 py-2 text-right font-medium">{isUk ? 'Population' : 'Population (approx.)'}</th>
@@ -331,6 +359,10 @@ export default function Coverage() {
             <tbody>
               {sorted.map((t) => (
                 <tr key={t.id} className="border-t border-border">
+                  <td className="px-3 py-1.5">
+                    <Checkbox aria-label={`Select ${t.name}`} checked={pickedTowns.has(t.name)}
+                      onCheckedChange={(v) => setPickedTowns((p) => { const n = new Set(p); if (v === true) n.add(t.name); else n.delete(t.name); return n; })} />
+                  </td>
                   <td className="px-3 py-1.5">
                     <span className="font-medium">{t.name}</span>
                     {t.aka && <span className="ml-1.5 text-xs text-muted-foreground">{t.aka}</span>}
@@ -376,7 +408,7 @@ export default function Coverage() {
                         suppressed when it went, the server action and uk_towns.suppressed_at stay, and a
                         suppressed town would still be left off this list. */}
                     <Button variant="ghost" size="sm" className="h-7 text-xs" asChild>
-                      <Link to={findLeadsHref(tradeSearchWord(trade), isUk || t.name === 'Singapore' ? t.name : quickLocationValue(t.name, country), country)} title={`Search Google for ${tradeSearchWord(trade)} in ${t.name} and list them.`}>
+                      <Link to={findLeadsHref(tradeSearchWord(trade), townLocation(t.name), country)} title={`Search Google for ${tradeSearchWord(trade)} in ${t.name} and list them.`}>
                         Find leads
                       </Link>
                     </Button>

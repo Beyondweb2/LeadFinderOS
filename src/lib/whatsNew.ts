@@ -22,6 +22,21 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-15-coverage-multi-town', date: '2026-10-15', title: 'Coverage: find leads in many towns at once', audience: 'all',
+    body: 'Tick towns on Coverage and press Find leads: up to 10 towns are searched together into one list with a Town column, duplicates removed. Tick the leads you want and add them all in one go, into the campaign you choose.',
+    report: {
+      added: [
+        'A tick box on every Coverage town, and one to select all towns in the list.',
+        'One Find leads button for the ticked towns. Up to 10 are searched per press; any others stay ticked for the next press. Results appear as each town finishes.',
+        'One merged list with the town on every row. A business found in more than one town is shown once, and the number removed is shown.',
+        '"Select all on this page" and a separate "Select all results", then Add to CRM: it asks which campaign, skips leads already in the CRM, looks up each new lead’s phone and town, and shows what was added, skipped and not added.',
+      ],
+      changed: [
+        'If a search or add limit is reached part way, the towns or leads that fit are kept and the rest are named plainly, so you can do them later.',
+      ],
+      removed: [],
+      effect: 'You can pull leads for a whole area in one go instead of one town at a time. The one-town Find leads link on each row still works as before.',
+    } },
   { id: '2026-10-15-sequential-audits', date: '2026-10-15', title: 'AI audits now ask one question at a time', audience: 'all',
     body: 'A hook audit asks its first question on ChatGPT and Gemini, and only asks the next if the business was named. It stops at the first miss, so most leads cost less.',
     report: {
