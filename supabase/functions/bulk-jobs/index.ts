@@ -53,13 +53,18 @@ function internalHeadersFor(keys: any): Record<string, string> {
   };
 }
 
-/* ⛔ `audit` RAISED 25 -> 100 (Paul, 2026-08-30). SIZED AGAINST THE MONEY, NOT PICKED: the binding
-   limit on a batch is process-ai-audit-queue's DAILY_CAP_USD ($12 rolling-24h, per user), not
-   concurrency — over-ceiling rows are pushed back to pending with nothing spent, so a bigger job
-   only drains slower. At the dearest shape this job can take (5 questions + an SEO scan on every
-   lead) 100 leads is 100 x (5 x $0.0104 + $0.04) = $9.20, which sits inside $12 with headroom. 300
-   would be ~$27.60 and would trip the cap mid-run, leaving half-finished audits — and a lead whose
-   audit FAILS is then excluded from this button's eligible set, so the damage hides itself.
+/* ⛔ `audit` RAISED 25 -> 100 (Paul, 2026-08-30). SIZED AGAINST THE MONEY, NOT PICKED. The binding limits on a
+   batch are process-ai-audit-queue's, in src/lib/auditLimits.ts + auditBudget.ts — not concurrency:
+     · per run     AUDIT_RUN_CAP_USD ($1) — a run past it stops starting questions;
+     · per day     POOL_DAILY_CAP_USD.prospecting ($12 rolling 24 h, per user) — its OWN pool; baselines and client work
+                   have theirs, so a day of prospecting cannot refuse a paying client;
+     · per month   APIFY_RESERVE_PCT.prospecting (85% of the Apify cap) — prospecting pauses there, client work goes on.
+   Over-ceiling rows are pushed back to pending with nothing spent, so a bigger job only drains slower.
+   A hook audit runs NO site scan and asks its questions ONE AT A TIME, stopping at the first answer that does not name
+   the lead (2026-10-15), so the dearest shape this job can take is 5 questions on every lead: 100 leads is at most
+   100 x 5 x $0.0104 = $5.20 (the quoted $0.014 a question makes it $7.00), inside the daily pool with headroom. 300
+   would trip the pool mid-run and leave half-finished audits — and a lead whose audit FAILS is then excluded from
+   this button's eligible set, so the damage hides itself.
    ⚠️ This is a REFUSAL above the cap, not a slice (see the create branch) — the dialog now says so
    before the press rather than letting the server reject it. */
 const JOB_CAPS: Record<string, number> = { enrich: 200, audit: AUDIT_BULK_JOB_MAX_LEADS };

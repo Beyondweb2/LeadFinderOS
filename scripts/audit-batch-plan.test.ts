@@ -13,7 +13,6 @@ import {
 
 let f = 0;
 const ok = (c: boolean, l: string) => { if (!c) f++; console.log(`${c ? "PASS" : "FAIL"} ${l}`); };
-const isAgg = (u: string) => /facebook\.com|instagram\.com/i.test(u);
 
 console.log("── ALREADY-AUDITED SPLIT: completed vs failed vs in flight ──");
 {
@@ -58,23 +57,18 @@ console.log("\n── OLDEST-ADDED FIRST ──");
 ok(oldestFirst([{ id: "b", created_at: null }, { id: "a", created_at: null }]).map((x) => x.id).join(",") === "a,b",
   "id is the tiebreaker, so the order is stable across renders");
 
-console.log("\n── COST IS PRICED OVER THE SLICE, NOT SCALED ──");
+console.log("\n── COST IS A CEILING: questions only, no site scan (2026-10-15) ──");
 {
-  const rates = { usdPerQuestion: 0.0104, usdPerSeoScan: 0.04 };
-  const withSites = [
-    { id: "1", website: "https://a.co.uk" }, { id: "2", website: "https://b.co.uk" },
-  ];
-  const without = [
-    { id: "3", website: "" }, { id: "4", website: "https://facebook.com/x" },
-  ];
-  const a = estimateBatchCost(withSites, 3, rates, isAgg);
-  const b = estimateBatchCost(without, 3, rates, isAgg);
-  ok(a.withWebsite === 2 && b.withWebsite === 0, "a Facebook-only page is NOT an own website");
-  ok(Math.abs(a.totalUsd - (2 * 3 * 0.0104 + 2 * 0.04)) < 1e-9, "questions + 2 SEO scans");
-  ok(Math.abs(b.totalUsd - (2 * 3 * 0.0104)) < 1e-9, "no site → no scan");
-  ok(a.totalUsd > b.totalUsd * 1.5,
-    "⛔ two slices of the SAME SIZE differ hugely — which is why cost is computed per slice");
-  ok(estimateBatchCost([], 3, rates, isAgg).totalUsd === 0, "an empty run costs nothing");
+  const rates = { usdPerQuestion: 0.0104 };
+  const withSites = [{ id: "1", website: "https://a.co.uk" }, { id: "2", website: "https://b.co.uk" }];
+  const without = [{ id: "3", website: "" }, { id: "4", website: "https://facebook.com/x" }];
+  const a = estimateBatchCost(withSites, 3, rates);
+  const b = estimateBatchCost(without, 3, rates);
+  ok(Math.abs(a.totalUsd - 2 * 3 * 0.0104) < 1e-9, "⛔ a hook audit runs no scan: 2 leads x 3 questions, nothing else");
+  ok(Math.abs(a.totalUsd - b.totalUsd) < 1e-9, "an own website adds nothing to the estimate");
+  ok(!("seoUsd" in a) && !("withWebsite" in a), "the scan line and its website count are gone");
+  ok(Math.abs(estimateBatchCost(withSites, 5, rates).totalUsd - 2 * 5 * 0.0104) < 1e-9, "the picked count is the MOST asked");
+  ok(estimateBatchCost([], 3, rates).totalUsd === 0, "an empty run costs nothing");
 }
 
 console.log("\n── BUDGET: an unreadable figure is UNKNOWN, never 'you have room' ──");

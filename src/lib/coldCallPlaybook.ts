@@ -658,11 +658,18 @@ const spokenTown = (town: string | null): string | null => {
  *  2026-10-04): a FACT shown to the rep — never a status change. The lead keeps its status. */
 export const STRONG_VISIBILITY_HEADLINE = `Strong AI visibility — named in all ${HOOK_SCORE_RESULTS} answers`;
 
-/** True when the stored hook result has every one of its HOOK_SCORE_RESULTS answers present and
- *  naming the business. An unanswered cell, a missing engine or fewer answers is never "all". */
+/** The same finding for a sequential check that asked MORE than the default three questions (4 or 5 picked) and
+ *  was named in every one: the count is the real number of answers, never a typed 6. */
+export function strongVisibilityHeadline(answers: number): string {
+  return answers === HOOK_SCORE_RESULTS ? STRONG_VISIBILITY_HEADLINE : `Strong AI visibility — named in all ${answers} answers`;
+}
+
+/** True when the stored hook result has at least HOOK_SCORE_RESULTS answers (a sequential check that stopped
+ *  early on a miss is never strong, and the miss means not every cell names) and every one names the
+ *  business. An unanswered cell, a missing engine or fewer answers is never "all". */
 export function namedInEveryHookAnswer(report: PlaybookReport | null | undefined): boolean {
   const cells = (report?.hook?.tested ?? []).flatMap((t) => t.perEngine ?? []);
-  return cells.length === HOOK_SCORE_RESULTS && cells.every((c) => c.named === true);
+  return cells.length >= HOOK_SCORE_RESULTS && cells.every((c) => c.named === true);
 }
 
 export function callCardAudit(input: Pick<PlaybookInput, 'lead' | 'reportAudit' | 'report' | 'auditRunning' | 'runCrawls' | 'leadCrawl' | 'nowMs'>): ColdCallPlaybook['audit'] {
@@ -679,7 +686,7 @@ export function callCardAudit(input: Pick<PlaybookInput, 'lead' | 'reportAudit' 
       state: 'ready',
       headline: evidence.kind === 'gap'
         ? engine + ' did not name them' + (top.length ? ' — it named ' + joinNames(top) : '')
-        : namedInEveryHookAnswer(input.report) ? STRONG_VISIBILITY_HEADLINE
+        : namedInEveryHookAnswer(input.report) ? strongVisibilityHeadline((input.report?.hook?.tested ?? []).reduce((n, t) => n + (t.perEngine?.length ?? 0), 0))
         : engine + ' named them',
       finding: lead0 ? lead0.title : siteKind.source === 'none' ? 'No website on file' : siteKind.source === 'own_site' ? null : 'Only a ' + siteKind.label + ' profile, no site of their own',
     };

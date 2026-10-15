@@ -242,8 +242,8 @@ ok(hookForbidsAbsenceCopy(state) === false, 'send guard: the v1 check never misr
 const root = resolve(import.meta.dirname, '..');
 const createAudit = readFileSync(resolve(root, 'supabase/functions/create-ai-audit/index.ts'), 'utf8');
 const queue = readFileSync(resolve(root, 'supabase/functions/process-ai-audit-queue/index.ts'), 'utf8');
-ok(createAudit.includes('hookState = initialHookStateV2(questions, AUDIT_ENGINES);'), 'create-ai-audit writes a version-2 hook marker');
-ok(/const queueRows = questions\.map\(\(q\) => \(\{[\s\S]{0,200}engines: AUDIT_ENGINES,/.test(createAudit), 'every hook question is queued at once, each row asking both engines (same questions, like-for-like)');
+ok(createAudit.includes('hookState = initialSequentialHookStateV2(questions, AUDIT_ENGINES);'), 'create-ai-audit writes a version-2 (sequential) hook marker');
+ok(/const queueRows = queuedNow\.map\(\(q\) => \(\{[\s\S]{0,200}engines: AUDIT_ENGINES,/.test(createAudit), 'each queued hook question asks both engines (same questions, like-for-like); a sequential hook queues the first and the processor the rest (2026-10-15)');
 const released = queue.indexOf('if (!error) readyRuns.add(p.runId);');
 /* 6/6 → "Not interested" is RETIRED 2026-10-04 (Paul, fix/07): an audit result never changes a lead's status. The result itself is still scored and stored. */
 ok(released > 0 && !/autoMarkSixOfSixNotInterested|hook-not-interested/.test(queue), '6/6 moves no lead: the queue no longer calls the status rule after release');

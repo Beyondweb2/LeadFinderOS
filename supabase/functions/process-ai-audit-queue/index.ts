@@ -22,6 +22,7 @@ import { cellNamed } from "../../../src/lib/namedSignal.ts";
 import { CRAWL_CHECK_VERSION } from "../../../src/lib/crawlCheck.ts";
 import { SITE_EVIDENCE_VERSION } from "../../../src/lib/siteEvidence.ts";
 import { HOOK_DECIDING_ENGINE, advanceHookState, evaluateHookQuestion, isHookState, shouldDeepCrawl } from "../../../src/lib/hookAudit.ts";
+import { advanceSequentialHook, isSequentialHookState } from "../../../src/lib/hookScore.ts";
 import { RETRY_CLEAN_CAP, runSettlement, shouldInvokeCleaning, finaliseReadiness, markCleaningExhausted } from "../_shared/run-finalise.ts";
 import { cleaningSweepDue } from "../_shared/cleaning-sweep.ts";
 import { AUDIT_RUN_CAP_USD } from "../../../src/lib/auditLimits.ts";
@@ -82,27 +83,19 @@ const POLL_BATCH = 32;           // max in-flight 'running' rows to POLL per tic
    A paid baseline run is 10 questions = $0.125, or $0.245 with a scan, so it still cannot be
    truncated by the cap — the guarantee path is unaffected. A runaway run stops at $1. */
 const CAP_USD = AUDIT_RUN_CAP_USD; // per-RUN Apify cost ceiling (this audit run) — src/lib/auditLimits.ts, the one figure the dialog also reads
-/* DAILY_CAP_USD: recomputed at the measured rate. A normal day of ~30 outreach audits (3 questions +
-   a scan = $0.1575 each) is $4.73, plus three paid baselines (3 runs x (10 questions + scan) =
-   $0.735 each) at $2.21 — a busy day lands near $6.94.
-
-   RAISED 8.0 -> 12.0 on 2026-07-30, on Paul's decision. At $8 a busy day left only ~15% margin, and
-   the failure mode of tripping is worse than the failure mode of spending: the cap stops a run
-   part-drained, which leaves an audit with some questions answered and some 'capped' — broken data on
-   the measurement the guarantee is settled against. $12 restores roughly the 55% headroom the original
-   $8 was believed to have before the per-question cost was corrected.
-
-   This is a per-USER rolling-24h ceiling this app enforces on ITSELF. It says nothing about the shared
-   Apify account's own balance, which is what actually took the audit engine down for five hours — that
-   is only visible in the Apify dashboard.
-   Note the SEO scan is ~76% of an outreach audit, so days dominated by no-website leads (which skip
-   the scan) cost far less.
-
-   ⛔ SUPERSEDED 2026-10-04 BY THE BUDGET POOLS (src/lib/auditBudget.ts POOL_DAILY_CAP_USD). The one
-   shared ceiling above let a day of prospecting refuse a paying client's baseline or re-measure.
-   Prospecting keeps that same ceiling as its own pool; the guarantee (baseline, remeasure) and other
-   client work each have their own, summed over their own spend, plus an Apify reserve so the last
-   slice of the month is kept for the guarantee. */
+/* ⛔ THERE IS NO SINGLE $12 CAP ANY MORE (corrected 2026-10-15; the note that stood here described the
+   2026-07-30 world). The spend ceilings are, in src/lib/auditBudget.ts + auditLimits.ts:
+     · per RUN     CAP_USD = AUDIT_RUN_CAP_USD ($1), enforced below;
+     · per DAY     POOL_DAILY_CAP_USD — a rolling-24h ceiling PER BUDGET POOL, per user: prospecting $12 (the old
+                   "$12" — it is now only the prospecting pool), the guarantee (baseline, remeasure) and other
+                   client work each their own, so a day of prospecting can never refuse a paying client;
+     · per MONTH   APIFY_RESERVE_PCT — prospecting pauses at 85% of the Apify cap, client work keeps going to its own
+                   reserve, baselines to 100% (at the cap itself every audit AND every SEO scan stops).
+   These are ceilings this app enforces on ITSELF; none says anything about the shared Apify account's balance,
+   which is what actually took the audit engine down for five hours (visible only in the Apify dashboard).
+   History kept short: $8 → $12 on 2026-07-30 (a tripped cap leaves a part-drained audit, which is worse than the
+   spend), then split into pools on 2026-10-04. A hook / bulk prospecting audit runs no SEO scan and, since
+   2026-10-15, asks one question at a time and stops at the first answer that does not name the lead. */
 const MAX_ATTEMPTS = 3;          // per queue row (= actor runs STARTED) before it's marked failed
 // Async guards (RUN_TIMEOUT_MS is gone — nothing blocks on the scrape any more):
 const MAX_RUN_AGE_MS = 12 * 60 * 1000;  // a started run must reach terminal within 12 min, else the
@@ -1108,6 +1101,53 @@ async function finaliseSettledRuns(service: any, runIds: string[], estCost: numb
       }
       existingResults.hook = step.state;
       console.log(`[process-ai-audit-queue] hook run ${runId}: stopped after ${step.state.executed} question(s) — ${step.state.stop_reason}${step.state.gap ? ` on ${step.state.gap.engine}` : ""}`);
+    }
+    /* ── SEQUENTIAL HOOK STEP (2026-10-15, Paul; src/lib/hookScore.ts advanceSequentialHook) ─────────
+       A sequential hook (create-ai-audit queues ONLY its first question) reaches this point with every
+       queued row settled. The question that just settled decides: every engine answered and named the
+       business → queue the NEXT planned question on THIS run (up to the plan's length) and skip finalising
+       this tick; any engine answered and did not name it → stop, that answer is the proof; a failed answer
+       → stop with no score. Same exactly-once shape as the version-1 step above: the state write is
+       conditional on results->hook->>next_index still holding the value this tick read, so only the tick
+       that wins the update inserts the queue row. Never a second ai_audit_run. A CAPPED run stops here as
+       'capped' (the cap stops spend) and finalises incomplete — it never asks another question. */
+    const seqPrev = existingResults.hook;
+    if (isSequentialHookState(seqPrev) && !seqPrev.stop_reason) {
+      const asked = Math.max(1, Number(seqPrev.next_index) || 1);
+      const lastQ = String(seqPrev.planned[asked - 1] ?? "").trim().toLowerCase();
+      const lastRow = (rows as Row[]).find((r) => String(r.question ?? "").trim().toLowerCase() === lastQ) ?? null;
+      const cells = lastRow?.status === "done" && lastRow.result && typeof lastRow.result === "object"
+        ? lastRow.result as Record<string, unknown> : null;
+      const step = isCapped
+        ? { action: "stop" as const, nextQuestion: null, state: { ...seqPrev, executed: asked, next_index: asked, stop_reason: "capped" as const } }
+        : advanceSequentialHook(seqPrev, cells, namedCtx);
+      if (step.action === "next" && step.nextQuestion) {
+        const { data: claimed, error: claimErr } = await service.from("ai_audit_runs")
+          .update({ results: { ...existingResults, hook: step.state } })
+          .eq("id", runId)
+          .eq("results->hook->>next_index", String(seqPrev.next_index))
+          .in("status", ["pending", "running"])
+          .select("id");
+        if (claimErr) {
+          console.error(`[process-ai-audit-queue] sequential hook: could not record progress for run ${runId}: ${claimErr.message}`);
+          continue;
+        }
+        if (!Array.isArray(claimed) || claimed.length !== 1) continue; // another tick queued it
+        const { error: qErr } = await service.from("ai_audit_queue").insert({
+          audit_id: runRow?.audit_id, run_id: runId, user_id: runRow?.user_id ?? null,
+          question: step.nextQuestion, engines: seqPrev.engines.length ? seqPrev.engines : DEFAULT_ENGINES, status: "pending",
+        });
+        if (qErr) {
+          console.error(`[process-ai-audit-queue] sequential hook: could not queue Q${asked + 1} for run ${runId}: ${qErr.message}`);
+          // Roll the state back so the next tick re-evaluates and retries the insert.
+          await service.from("ai_audit_runs").update({ results: { ...existingResults, hook: seqPrev } }).eq("id", runId);
+          continue;
+        }
+        console.log(`[process-ai-audit-queue] sequential hook run ${runId}: Q${asked} named the business on every engine — queued Q${asked + 1}`);
+        continue; // not finalised: the new row keeps the run open
+      }
+      existingResults.hook = step.state;
+      console.log(`[process-ai-audit-queue] sequential hook run ${runId}: stopped after ${step.state.executed} question(s) — ${step.state.stop_reason}`);
     }
     const existingSeo = existingResults.seo;
 
