@@ -45,8 +45,8 @@ export function cleanTypedTown(raw: string | null | undefined): string {
        Only the LAST comma segment, and only when it is itself a short real town; prose gets nothing. */
     const last = s.includes(',') ? s.split(',').pop()!.trim() : '';
     /* every word capitalised (or a slash / digit): a list of place names, never a sentence */
-    const namesOnly = s.split(/[s,]+/).every((w) => !/^[a-z]/.test(w));
-    return namesOnly && last && last.split(' ').length <= 3 && !NOT_A_PLACE_FIRST_WORDS.has(last.toLowerCase()) ? last : '';
+    const namesOnly = s.split(/[\s,]+/).every((w) => !/^[a-z]/.test(w));
+    return namesOnly && last && !/\d/.test(s) && last.split(' ').length <= 3 && !NOT_A_PLACE_FIRST_WORDS.has(last.toLowerCase()) ? last : '';
   }
   if (!/[a-zÀ-ɏЀ-ӿ؀-ۿऀ-ॿ一-鿿]/i.test(s)) return '';
   return s;

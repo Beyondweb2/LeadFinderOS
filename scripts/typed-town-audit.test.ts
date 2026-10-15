@@ -36,6 +36,7 @@ ok(cleanTypedTown("we cover all of the central region and nearby areas") === "",
 ok(cleanTypedTown("Tangga Batu / Tanjung Kling, Melaka") === "Melaka", "a neighbourhood list ending in the city → the city");
 ok(cleanTypedTown("Teluk Kumbar / Balik Pulau, Penang") === "Penang", "…Penang");
 ok(cleanTypedTown("team reports tutors in Singapore, Malaysia, Australia and Brunei") === "", "prose with commas is still not a town");
+ok(cleanTypedTown("12 Jalan Bukit Bintang Utara, Kuala Lumpur 50200") === "", "a street address is not a town (digits)");
 ok(isRealTown("Leeds") && !isRealTown("Online") && !isRealTown("Klang (Pandamaran)"), "isRealTown is 'a town exactly as written'");
 
 console.log("── ⛔ the gate: imported + real town passes; everything else as before ──");
