@@ -2,6 +2,7 @@
    edge functions (process-whatsapp-queue, bulk-jobs, create-ai-audit)
    and Deno cannot resolve the Vite alias. Same convention as marketView.ts and auditReport.ts. */
 import { SETTLED_TOWN_NOTES } from "../../supabase/functions/_shared/place-details.ts";
+import { isRealTown } from "./typedTown.ts";
 
 /* ============================================================
    THE TOWN VERDICT — is this lead's town VERIFIED, UNVERIFIABLE, or simply UNCHECKED?
@@ -38,7 +39,9 @@ export interface TownVerdictRow {
 export function townVerdict(row: TownVerdictRow | null | undefined): TownVerdict {
   /* A present town is a verified town, whatever the note says — the note describes the LAST
      attempt, and derived_town is only ever written from Google's own address components. */
-  if (String(row?.derived_town ?? "").trim()) return "verified";
+  /* ⚠️ A derived town that is not a place ("Online" — Google's own address for an online-only business) is
+     not a verified town: it must neither pass the gate nor be the town a question is asked about. */
+  if (isRealTown(row?.derived_town)) return "verified";
   const note = String(row?.town_fetch_note ?? "").trim();
   if (note && SETTLED_TOWN_NOTES.has(note)) return "unverifiable";
   return "unchecked";

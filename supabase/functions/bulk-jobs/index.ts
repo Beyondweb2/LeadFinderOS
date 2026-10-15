@@ -1,6 +1,9 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { guardAction, paidMode } from "../_shared/protection.ts";
-import { townGated, TOWN_GATE_REASON } from "../../../src/lib/townVerdict.ts";
+import { TOWN_GATE_REASON } from "../../../src/lib/townVerdict.ts";
+import { auditTownGated } from "../_shared/typed-town.ts";
+import { cleanTypedTown, isRealTown } from "../../../src/lib/typedTown.ts";
+import { AUDIT_BULK_JOB_MAX_LEADS } from "../../../src/lib/auditLimits.ts";
 import { checkSuppressed } from "../_shared/suppression.ts";
 import { selectInChunks } from "../_shared/chunked-in.ts";
 import { OUTREACH_HOOK_QUESTIONS } from "../../../src/lib/auditQuestionCounts.ts";
@@ -59,7 +62,7 @@ function internalHeadersFor(keys: any): Record<string, string> {
    audit FAILS is then excluded from this button's eligible set, so the damage hides itself.
    ⚠️ This is a REFUSAL above the cap, not a slice (see the create branch) — the dialog now says so
    before the press rather than letting the server reject it. */
-const JOB_CAPS: Record<string, number> = { enrich: 200, audit: 100 };
+const JOB_CAPS: Record<string, number> = { enrich: 200, audit: AUDIT_BULK_JOB_MAX_LEADS };
 /** ⛔ TRY THE TOWN'S MARKET AUDIT BEFORE BUYING A PER-BUSINESS ONE. £0 against ~8p a lead, and every
  *  refusal falls through to the paid audit unchanged — see the call site in phase A.
  *  A kill switch rather than a hardcoded `true` so a bad market audit can be taken out of the loop in
@@ -223,7 +226,7 @@ async function runItem(service: any, job: JobRow, item: JobItem): Promise<{ stat
     // own concurrency/cost caps. So this branch only enqueues — it never fires Apify directly.
     const { data: lead } = await service
       .from("outreach_leads")
-      .select("id, user_id, business_name, search_keyword, category, search_location, address, country, website, phone, email, is_archived, derived_town, town_fetch_note")
+      .select("id, user_id, business_name, search_keyword, category, search_location, address, country, website, phone, email, is_archived, derived_town, town_fetch_note, place_id, lead_source, import_batch")
       .eq("id", item.lead_id)
       .eq("user_id", job.user_id)
       .maybeSingle();
@@ -245,9 +248,25 @@ async function runItem(service: any, job: JobRow, item: JobItem): Promise<{ stat
        an unverifiable-town lead would fall back to search_location — the searched town, the exact
        wrong-town fault (Wilson's, RG). "skipped", not "failed": nothing is wrong with the item, the
        lead is held until its town verifies, and a failed status would invite a retry. */
-    if (townGated(lead)) {
+    /* A lead whose town was TYPED by a person (hand-added, or a CSV import) with no Google place is let through
+       on that typed town when it is a real one — auditTownGated, the same predicate create-ai-audit applies. */
+    if (auditTownGated(lead)) {
       console.log(`[bulk-jobs] audit skipped for town-unverified lead ${lead.id}`);
       return { status: "skipped_town_unverified", error: TOWN_GATE_REASON };
+    }
+    /* ⛔ NO REAL TOWN, NO AUDIT — refused here, before a call, with a reason a person can act on. A typed
+       location like "Online; team reports tutors in Singapore…" is not a place, and neither is a derived
+       "Online". Not "failed": nothing went wrong, the lead needs a town, and a failed item invites a retry. */
+    const auditTown = isRealTown(lead.derived_town) ? String(lead.derived_town).trim()
+      : (cleanTypedTown(lead.search_location) || cleanTypedTown(lead.address));
+    /* A Google-resolved lead whose town simply has not been derived yet (place id, no derived town) keeps the
+       old behaviour: create-ai-audit derives it from the place. Only a lead with nothing to derive from is refused. */
+    const googleCanDerive = !!String(lead.place_id ?? "").trim() && !String(lead.derived_town ?? "").trim();
+    if (!auditTown && !googleCanDerive) {
+      return {
+        status: "skipped_town_unverified",
+        error: "No usable town: this lead's location is blank or not a place (for example \"Online\"). Add the town on the lead, then retry",
+      };
     }
 
     // Idempotency: create-ai-audit is NOT idempotent (every call inserts a fresh audit+run). If a
@@ -294,7 +313,7 @@ async function runItem(service: any, job: JobRow, item: JobItem): Promise<{ stat
         lead_id: lead.id,                                            // links audit → lead → per-lead report (/a/<auditId>)
         business_name: lead.business_name ?? "",
         business_type: (lead.search_keyword || lead.category || "").trim(),
-        location_text: (lead.search_location || lead.address || "").trim(),
+        location_text: auditTown || (lead.search_location || lead.address || "").trim(),
         country: lead.country ?? null,
         has_website: !!website,
         website: website || undefined,

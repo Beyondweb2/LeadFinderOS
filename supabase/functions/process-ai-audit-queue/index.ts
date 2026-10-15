@@ -24,6 +24,7 @@ import { SITE_EVIDENCE_VERSION } from "../../../src/lib/siteEvidence.ts";
 import { HOOK_DECIDING_ENGINE, advanceHookState, evaluateHookQuestion, isHookState, shouldDeepCrawl } from "../../../src/lib/hookAudit.ts";
 import { RETRY_CLEAN_CAP, runSettlement, shouldInvokeCleaning, finaliseReadiness, markCleaningExhausted } from "../_shared/run-finalise.ts";
 import { cleaningSweepDue } from "../_shared/cleaning-sweep.ts";
+import { AUDIT_RUN_CAP_USD } from "../../../src/lib/auditLimits.ts";
 import { POOL_DAILY_CAP_USD, budgetDecision, budgetPoolForPurpose, refusalRowError, type ApifyUsage, type BudgetPool } from "../../../src/lib/auditBudget.ts";
 import { latestApifyUsage } from "../_shared/audit-budget.ts";
 import { isAggregatorUrl } from "../_shared/aggregators.ts";
@@ -80,7 +81,7 @@ const POLL_BATCH = 32;           // max in-flight 'running' rows to POLL per tic
    (previously believed $0.15). $1.00 leaves ~3.7x headroom, not the ~7x this comment used to claim.
    A paid baseline run is 10 questions = $0.125, or $0.245 with a scan, so it still cannot be
    truncated by the cap — the guarantee path is unaffected. A runaway run stops at $1. */
-const CAP_USD = 1.0;             // per-RUN Apify cost ceiling (this audit run)
+const CAP_USD = AUDIT_RUN_CAP_USD; // per-RUN Apify cost ceiling (this audit run) — src/lib/auditLimits.ts, the one figure the dialog also reads
 /* DAILY_CAP_USD: recomputed at the measured rate. A normal day of ~30 outreach audits (3 questions +
    a scan = $0.1575 each) is $4.73, plus three paid baselines (3 runs x (10 questions + scan) =
    $0.735 each) at $2.21 — a busy day lands near $6.94.
