@@ -35,7 +35,7 @@ console.log("── the server path ──");
 {
   const bj = read("supabase/functions/bulk-jobs/index.ts");
   ok(/has_website: !!website,/.test(bj) && /website: website \|\| undefined,/.test(bj), "bulk-jobs sends has_website false and no URL for a lead without its own site");
-  ok(/business_type: \(lead\.search_keyword \|\| lead\.category \|\| ""\)\.trim\(\)/.test(bj) && /location_text: \(lead\.search_location \|\| lead\.address \|\| ""\)\.trim\(\)/.test(bj), "the questions use the stored business type and location");
+  ok(/business_type: \(lead\.search_keyword \|\| lead\.category \|\| ""\)\.trim\(\)/.test(bj) && /location_text: auditTown \|\| \(lead\.search_location \|\| lead\.address \|\| ""\)\.trim\(\)/.test(bj) && /cleanTypedTown\(lead\.search_location\)/.test(bj), "the questions use the stored business type and location (the typed town cleaned, never raw free text)");
   const q = read("supabase/functions/process-ai-audit-queue/index.ts");
   ok(/if \(!audit\?\.has_website \|\| !audit\?\.website\) continue; \/\/ no-website audits get no SEO section/.test(q), "the queue never scans a no-website audit");
   ok(/crawl_check: \{ status: "unavailable", reason: "no_website" \}/.test(q), "the crawl is recorded as not possible, not as a failure");

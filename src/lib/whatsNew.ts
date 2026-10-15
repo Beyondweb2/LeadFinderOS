@@ -22,6 +22,14 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-15-imported-town-audits', date: '2026-10-15', title: 'Imported leads can be audited on the town in your file', audience: 'admin',
+    body: 'Leads from a CSV import are no longer refused with "Google could not confirm the town" when the file gave a real town. The Run AI audits box now states the real limits.',
+    report: {
+      added: ['An imported lead with a typed town (no Google place) is audited on that town, the way a hand-added lead already was.', 'The Run AI audits box lists the real limits: per-audit cost cap, the daily prospecting budget, leads per run and the Apify reserve.'],
+      changed: ['A location that is not a place ("Online", "Remote", a sentence) is never used as a town; the lead is held with a clear reason instead.', 'A bracketed landmark is dropped ("Kuala Lumpur (Sunway Velocity 2)" is audited as Kuala Lumpur).', 'Malaysian and Singapore hook questions always name the country.', 'The monthly budget warning counts what prospecting can still use before it pauses, not the whole Apify cap.'],
+      removed: ['The wrong "Capped at $3/audit + $15/day" line.'],
+      effect: 'The imported leads can now be audited; a lead with no real town is skipped for free and tells you what to fix.',
+    } },
   { id: '2026-10-15-one-website-check', date: '2026-10-15', title: 'One website check everywhere, and the call script lists the issues', audience: 'all',
     body: 'Every screen now shows the same website check for a lead: the Inbox crawl icon, the call script, the report and the lead’s audit. The call script lists the issues as short lines.',
     report: {

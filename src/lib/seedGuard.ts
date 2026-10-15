@@ -784,6 +784,25 @@ export function placeSuffixForCountry(country: string | null | undefined): strin
   return PLACE_SUFFIX_BY_COUNTRY[k] ?? 'UK';
 }
 
+/**
+ * The place a generic hook question (the top-up when the model gave fewer than three usable ones) is asked
+ * about. UK: "<town> UK" unless the town already carries a UK marker — byte for byte what it was. A lead in
+ * another LISTED country names that country with the same join the rest of the audit uses ("Kuala Lumpur,
+ * Malaysia", "Pune India") unless the town already names it; Singapore's town IS the country, so it is never
+ * pinned twice. A blank or unlisted country is left bare, as before.
+ */
+export function hookPlaceFor(town: string, country: string | null | undefined): string {
+  const t = String(town ?? '').trim();
+  if (!t) return t;
+  const c = String(country ?? '').trim().toUpperCase();
+  if (c === 'UK' || c === 'GB') {
+    return /\b(uk|united kingdom|england|scotland|wales)\b/i.test(t) ? t : `${t} UK`;
+  }
+  const suffix = placeSuffixForCountry(country);
+  if (suffix === 'UK') return t;
+  return placeNamesCountry(t, suffix) ? t : `${t}${placeJoin(suffix)}${suffix}`;
+}
+
 /** True when `question` already names `word` as a whole word/phrase ("Pune India", "… in India"). */
 function mentionsWord(question: string, word: string): boolean {
   const w = normalise(word);

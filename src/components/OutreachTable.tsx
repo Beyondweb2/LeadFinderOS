@@ -169,18 +169,17 @@ import { OUTREACH_STATUS_OPTIONS, OUTREACH_STATUS_FILTER_OPTIONS, canonicalFilte
 import { isPaidLead } from '@/lib/leadPayment';
 import { useApifyUsage, apifyWarningText } from '@/hooks/useApifyUsage';
 import {
-  splitAlreadyAudited, oldestFirst, estimateBatchCost, budgetVerdict, monthlyRemainingUsd,
+  splitAlreadyAudited, oldestFirst, estimateBatchCost, budgetVerdict,
   resolveTake,
 } from '@/lib/auditBatchPlan';
+import { AUDIT_BULK_JOB_MAX_LEADS, auditLimitsSentence, prospectingRemainingUsd } from '@/lib/auditLimits';
+import { APIFY_RESERVE_PCT, POOL_DAILY_CAP_USD } from '@/lib/auditBudget';
 
-/* ⛔ MIRRORS bulk-jobs' JOB_CAPS.audit. Stated here because the SPA cannot import an edge module —
-   and the dialog must be able to SAY "that is over the cap" before the press, since bulk-jobs
-   REFUSES a create above it rather than slicing. Change one, change the other. */
-const AUDIT_JOB_CAP = 100;
-/* ⛔ MIRRORS process-ai-audit-queue's DAILY_CAP_USD — the rolling-24h Apify ceiling per user, and
-   the limit a big batch actually meets first (the monthly cap is far larger). NOT changed here and
-   not changeable from here; this is the figure the warning is measured against. */
-const AUDIT_DAILY_CAP_USD = 12.0;
+/* ⛔ THE LIMITS ARE READ FROM THE CODE THAT ENFORCES THEM (src/lib/auditLimits.ts, auditBudget.ts) —
+   never retyped here. bulk-jobs REFUSES a job above AUDIT_BULK_JOB_MAX_LEADS rather than slicing, and the
+   rolling-24h prospecting pool is what a big batch meets first. */
+const AUDIT_JOB_CAP = AUDIT_BULK_JOB_MAX_LEADS;
+const AUDIT_DAILY_CAP_USD = POOL_DAILY_CAP_USD.prospecting;
 import { SingleWhatsAppDialog } from '@/components/SingleWhatsAppDialog';
 import { SingleSmsDialog } from '@/components/SingleSmsDialog';
 import { LeadWhatsAppDialog } from '@/components/LeadWhatsAppDialog';
@@ -1159,7 +1158,7 @@ export function OutreachTable({
     [auditBatchCost.totalUsd],
   );
   const auditMonthlyVerdict = useMemo(
-    () => budgetVerdict(auditBatchCost.totalUsd, monthlyRemainingUsd(apifyUsage)),
+    () => budgetVerdict(auditBatchCost.totalUsd, prospectingRemainingUsd(apifyUsage)),
     [auditBatchCost.totalUsd, apifyUsage],
   );
 
@@ -3402,7 +3401,7 @@ export function OutreachTable({
               One AI-visibility audit per selected lead — enqueued server-side and drained through the
               audit queue (no direct Apify). Uses each lead’s stored business type + location.
               {selectedIds.size - auditSelectedLeads.length > 0 && ` · ${selectedIds.size - auditSelectedLeads.length} skipped (already audited or missing type/location)`}.
-              Capped at $3/audit + $15/day. Safe to leave this page.
+              {auditLimitsSentence()} Safe to leave this page.
             </>}
           />
           <div className="space-y-1.5">
@@ -3486,17 +3485,17 @@ export function OutreachTable({
               itself. That is why this warns rather than merely informing. */}
           {auditDailyVerdict.exceeds && (
             <p className="rounded-md border border-red-500/50 bg-red-500/10 px-3 py-2 text-xs">
-              <span className="font-semibold">Over the ${AUDIT_DAILY_CAP_USD.toFixed(2)} daily Apify cap.</span>{' '}
-              This run is ~${auditBatchCost.totalUsd.toFixed(2)}. Questions will start failing part-way
+              <span className="font-semibold">Over the ${AUDIT_DAILY_CAP_USD.toFixed(2)} daily prospecting budget.</span>{' '}
+              This run is ~${auditBatchCost.totalUsd.toFixed(2)}. Questions will start being refused part-way
               through and leave half-finished audits. Lower the number above, or run the rest tomorrow.
             </p>
           )}
           {auditMonthlyVerdict.exceeds && (
             <p className="rounded-md border border-red-500/50 bg-red-500/10 px-3 py-2 text-xs">
-              <span className="font-semibold">Over the remaining monthly Apify budget</span> — about
-              {' '}${(auditMonthlyVerdict.remainingUsd ?? 0).toFixed(2)} left this cycle, this run is
-              {' '}~${auditBatchCost.totalUsd.toFixed(2)}. Hitting the account cap stops every audit AND
-              every SEO scan, not just this batch.
+              <span className="font-semibold">Over what prospecting can still use this month</span> — about
+              {' '}${(auditMonthlyVerdict.remainingUsd ?? 0).toFixed(2)} left before prospecting pauses at {APIFY_RESERVE_PCT.prospecting}% of
+              the Apify cap, this run is ~${auditBatchCost.totalUsd.toFixed(2)}. Past that, new audits are refused so the rest of the
+              month is kept for client work; at the account cap itself every audit AND every SEO scan stops.
             </p>
           )}
           {/* ⚠️ AN UNREADABLE BUDGET SAYS SO. Rendering nothing would imply headroom nobody checked —

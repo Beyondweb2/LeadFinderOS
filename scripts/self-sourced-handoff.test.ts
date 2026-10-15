@@ -171,8 +171,11 @@ ok(/_channel not in \('email', 'linkedin', 'sms', 'in_person', 'other'\)/.test(M
   const fn = read("supabase/functions/create-ai-audit/index.ts");
   ok((fn.match(/finalHookPlan\(/g) ?? []).length === 3, "ONE hook plan function, used by the preview AND the run");
   ok(/if \(hookAuditRequested && !isBaseline && !isMeasurement && !isDiscovery\) \{\s*qs = finalHookPlan/.test(fn), "the hook preview is planned exactly as the run");
-  ok(/const handTypedTown = !!lead && !lead\.place_id && typeof lead\.lead_source === "string" && lead\.lead_source !== ""\s*&& locationSource === "search" && hasUsableTown\(locationText\);/.test(fn),
-    "the town-gate exemption is a positive match: hand-added (lead_source), NO place id, the typed town in use");
+  ok(/const handTypedTown = !!lead && townWasTyped\(lead\)\s*&& locationSource === "search" && hasUsableTown\(locationText\);/.test(fn),
+    "the town-gate exemption is a positive match: typed town (townWasTyped), the typed town in use");
+  const tt = read("supabase/functions/_shared/typed-town.ts");
+  ok(/if \(filled\(lead\.place_id\)\) return false;\s*return filled\(lead\.lead_source\) \|\| filled\(lead\.import_batch\);/.test(tt),
+    "…and townWasTyped is hand-added (lead_source) or imported (import_batch), with NO place id");
   ok(/!townConfirmed && !handTypedTown && townGated\(lead\)/.test(fn), "…every other lead is gated as before");
   ok(/kind: "audit_run"/.test(fn), "a person's hook audit is written to the lead's history");
   ok(/salesAuditRefusal\(\{ purpose: body\.purpose, hookAudit: body\.hook_audit === true, leadId, reuseAuditId \}\)/.test(fn) && /canWorkLead\(actor, workLead\)/.test(fn), "sales: hook only, on a lead they work (unchanged gate)");
