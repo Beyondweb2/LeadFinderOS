@@ -1418,6 +1418,7 @@ positive allowlist of `baseline`; `isColdOutreachTemplate` treats unknown as COL
 | The WhatsApp cap / pace / auto-pause settings (`whatsappPace.ts`), the CSV import batch + owner (`import_leads_v2`), the price model switch (`priceModel.ts` — the £499 link is OFF until Paul approves its agreement), texted numbers never get a cold WhatsApp | `docs/test-day-outreach.md` |
 | A bulk audit's visibility score, the report offer's {{4}}, the bulk_score marker | `docs/bulk-audit-score.md` |
 | The Inbox (WhatsApp **and** SMS — one component), the SMS status model and failure codes, inbound text handling, Run AI audit vs the reply setting | `docs/twilio-comms.md` (the "One Inbox, two channels…" section) |
+| Malaysia / Singapore town populations on Coverage (fixed approximate table, sources per figure, blanks stay null, no Singapore city-wide filter) | `docs/coverage-my-sg-population.md` |
 | Anything, as a NEW Claude account / fresh start — orientation, reading order, open actions, Paul's preferences | `docs/handover/00-START-HERE.md` (then the folder in its order) |
 | The monthly client update (paid client page step 8), `client_monthly_updates` and its three functions | `docs/monthly-client-update.md` |
 | What the 2026-10-02 closeout audit found complete / fixed / still open | `docs/closeout-2026-10-02.md` |

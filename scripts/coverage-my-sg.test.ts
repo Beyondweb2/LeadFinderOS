@@ -37,7 +37,7 @@ for (const [raw, want] of [["Kuala Lumpur", "Kuala Lumpur"], ["George Town", "Ge
   ok(resolveCoverageTown("Malaysia", raw)?.name === want && resolveCoverageTown("Malaysia", raw)?.listed === true, `Malaysia: "${raw}" → ${want}`);
 }
 ok(resolveCoverageTown("Singapore", "Singapore")?.name === "Singapore", "Singapore itself is a town");
-ok(Object.values(ABROAD_TOWNS).flat().every((t) => !("population" in t)), "no population figure anywhere (none invented)");
+ok(Object.values(ABROAD_TOWNS).flat().every((t) => !("population" in t)), "the town list itself carries no population (figures live only in abroadTownPopulation.ts)");
 
 console.log("── IMPORTED CITY TEXT (Ethan's file, as written) ──");
 const cases: Array<[string, "Malaysia" | "Singapore", string, boolean]> = [
@@ -118,7 +118,7 @@ ok(!new URLSearchParams(findLeadsHref("plumber", "Kettering").split("?")[1]).has
 const sfSrc = readFileSync(new URL("../src/components/SearchForm.tsx", import.meta.url), "utf8");
 ok(/initialCountry && selectedCountry !== initialCountry\) return;/.test(sfSrc), "Find Leads waits for the asked-for country before the arrival search runs");
 const pageSrc = readFileSync(new URL("../src/pages/Coverage.tsx", import.meta.url), "utf8");
-ok(/useCoverage\(country\)/.test(pageSrc) && /isUk\s*\n?\s*\? applyFilters/.test(pageSrc), "the page grades per country; the UK keeps its population band");
+ok(/useCoverage\(country\)/.test(pageSrc) && /if \(isUk\) return applyFilters\(/.test(pageSrc), "the page grades per country; the UK keeps its population band");
 const fnSrc = readFileSync(new URL("../supabase/functions/coverage/index.ts", import.meta.url), "utf8");
 ok(/derived_town, country, status/.test(fnSrc) && /const pair = \{ trade, town, country \}/.test(fnSrc), "the endpoint sends each lead's own country");
 
