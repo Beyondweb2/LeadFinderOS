@@ -33,6 +33,11 @@ Ten paths fetched or judged a website. Five of them showed "website findings", a
 - **Cost**: fetches only, no paid API. The Apify SEO scan stays baseline-only and the audit caps are unchanged. (The "$3/audit + $15/day" in the Outreach UI copy is wording: the code's limits are `CAP_USD = 1.0` per run and the `POOL_DAILY_CAP_USD` pools.)
 - **Not changed**: the WhatsApp templates' own finding rules (`audit_followup_fault`'s `{{6}}`, `ai_site_findings_v2`). Those decide what is SENT and keep their narrower rule.
 
+## Only real issues (found by the 5-site proof, same day)
+
+- **A broken page is a 404 / 410 / 5xx** (`contentTrust.isBrokenPageStatus`). On the proof run, two sites answered 13 pages with 429 (rate-limited) or 403 to our crawl. Those are the site refusing OUR crawler, not a broken page for a customer: they are said as "not judged", never as broken. Older stored audits are corrected when summarised (`trueBrokenOnly`).
+- **Said once:** a content & trust check that repeats an audit finding (no HTTPS, broken pages, viewport, sitemap, robots) keeps only the stronger (`SAME_ISSUE`). "Some services have no page of their own" replaces the vaguer "No dedicated service pages found".
+
 ## The call script (Job 3)
 
 `callScript.ts`: website issues are a LIST, one plain line each (`issueLine` → `plainIssueTitle`: no robots.txt / noindex / H1 words), with what it names (the services crammed onto one page). The strongest come first; `CALL_SCRIPT_ISSUE_LINES` (5) are shown and the rest, plus the minor points, are behind a tap. No serious issue gives ONE line, the check's headline. The client report uses the same plain lines.

@@ -26,6 +26,7 @@
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 
 import { auditFromStoredCrawl, HOME_FETCH_LABELS, type AuditFinding, type StoredCrawlForAudit, type SiteAudit } from './siteAudit.ts';
+import { isBrokenPageStatus } from './contentTrust.ts';
 import { classifyLeadWebsite } from './leadWebsiteKind.ts';
 import { usableSiteEvidence, type EvidenceKind, type SiteEvidence } from './siteEvidence.ts';
 import { SPEAK_MIN_PRIORITY, usableInsights, type InsightKind } from './salesInsights.ts';
@@ -118,7 +119,7 @@ const EVIDENCE_ISSUE: Record<EvidenceKind, { title: string; sameAs: string[] }> 
 const INSIGHT_SUPERSEDES: Record<InsightKind, string[]> = {
   services_on_one_page: ['no_service_pages', 'one_page_site'],
   no_service_pages: ['no_service_pages'],
-  service_page_gaps: [],
+  service_page_gaps: ['no_service_pages'],
   no_contact_details: ['no_phone', 'no_contact_route'],
   name_unclear: ['name_unclear'],
   location_unclear: ['town_missing'],
@@ -165,6 +166,38 @@ function asSeverity(s: AuditFinding['severity']): WebsiteIssueSeverity | null {
   return s === 'high' || s === 'medium' || s === 'low' ? s : null;
 }
 
+/* A content & trust check (ct_<kind>) and the audit finding it repeats. */
+const SAME_ISSUE: Record<string, string | RegExp> = {
+  ct_no_https: 'no_https',
+  ct_broken_links: 'broken_pages',
+  ct_no_viewport: 'no_viewport',
+  ct_no_sitemap: 'no_sitemap',
+  ct_orphan_pages: 'sitemap_only_pages',
+  ct_robots_blocks_ai: /^robots_blocks_/,
+};
+
+/** ⛔ A broken page is a 404 / 410 / 5xx (contentTrust.isBrokenPageStatus). An audit stored before 2026-10-15 counted
+ *  401 / 403 / 429 (the site refusing or rate-limiting our crawler) as broken: those addresses are dropped here, and the
+ *  finding goes when none is left. Reads the "(status)" each address was stored with. */
+function trueBrokenOnly(f: AuditFinding): AuditFinding | null {
+  const statusOf = (s: string) => Number(/\((\d{3})\)\s*$/.exec(s)?.[1] ?? NaN);
+  if (f.id === 'broken_pages') {
+    const urls = (f.urls ?? []).filter((u) => isBrokenPageStatus(statusOf(u)));
+    if (!urls.length) return null;
+    if (urls.length === (f.urls ?? []).length) return f;
+    return { ...f, urls, count: urls.length, saw: `${plural(urls.length, 'address', 'addresses')} linked from the site or listed in its sitemap answered “not found” or a server error (${[...new Set(urls.map(statusOf))].join(', ')}).` };
+  }
+  if (f.id === 'ct_broken_links') {
+    const ev = (f.evidence ?? []).filter((e) => isBrokenPageStatus(statusOf(e)));
+    if (!ev.length) return null;
+    if (ev.length === (f.evidence ?? []).length) return f;
+    const bad = new Set(ev.map((e) => e.replace(/\s*\(\d{3}\)\s*$/, '')));
+    const urls = (f.urls ?? []).filter((u) => bad.has(u));
+    return { ...f, evidence: ev, urls, count: urls.length || ev.length };
+  }
+  return f;
+}
+
 /** The stored summary for a crawl row, built from the ONE audit (siteAudit.auditFromStoredCrawl). Written by the
  *  crawls at store time; computed the same way for a row from before. Pure. */
 export function summariseWebsiteCheck(row: StoredCrawlForAudit | null | undefined): WebsiteCheckSummary | null {
@@ -184,8 +217,10 @@ export function summariseWebsiteCheck(row: StoredCrawlForAudit | null | undefine
   const issues: WebsiteIssue[] = [];
   const strengths: Array<{ id: string; title: string }> = [];
   const seen = new Set<string>();
-  for (const f of audit.findings) {
-    if (f.severity === 'good') { if (strengths.length < WEBSITE_CHECK_MAX_STRENGTHS) strengths.push({ id: f.id, title: f.title }); continue; }
+  for (const raw of audit.findings) {
+    if (raw.severity === 'good') { if (strengths.length < WEBSITE_CHECK_MAX_STRENGTHS) strengths.push({ id: raw.id, title: raw.title }); continue; }
+    const f = trueBrokenOnly(raw);
+    if (!f) continue;
     const sev = asSeverity(f.severity);
     if (!sev || seen.has(f.id)) continue;
     seen.add(f.id);
@@ -194,6 +229,15 @@ export function summariseWebsiteCheck(row: StoredCrawlForAudit | null | undefine
       pages: (f.urls ?? []).slice(0, WEBSITE_CHECK_PAGES_PER_ISSUE),
       ...(f.absence ? { absence: true } : {}),
     });
+  }
+  /* SAID ONCE: a content & trust check that repeats an audit finding (no HTTPS, broken pages, phones, sitemap, robots)
+     keeps only the stronger of the two — the audit's on a tie (it carries the full page list). */
+  for (const [ct, twin] of Object.entries(SAME_ISSUE)) {
+    const a = issues.find((x) => x.id === ct);
+    const b = issues.find((x) => (typeof twin === 'string' ? x.id === twin : twin.test(x.id)));
+    if (!a || !b) continue;
+    const drop = SEV_RANK[a.severity] < SEV_RANK[b.severity] ? b : a;
+    issues.splice(issues.indexOf(drop), 1);
   }
   for (const ins of insightIssues((row.result as { insights?: unknown } | null | undefined)?.insights ?? audit.insights)) {
     const clash = issues.filter((x) => ins.supersedes.includes(x.id) || x.id === ins.id);

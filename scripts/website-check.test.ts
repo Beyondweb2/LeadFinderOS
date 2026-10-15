@@ -16,6 +16,7 @@ import {
   issueLine, NO_WEBSITE_LINE, summariseWebsiteCheck, websiteCheckFor, WEBSITE_CHECK_VERSION, type WebsiteCheckView,
 } from '../src/lib/websiteCheck.ts';
 import { buildCallScript, CALL_SCRIPT_ISSUE_LINES, spokenScriptText } from '../src/lib/callScript.ts';
+import { isBrokenPageStatus } from '../src/lib/contentTrust.ts';
 import { buildCallClose } from '../src/lib/callClose.ts';
 
 const ROOT = path.resolve(import.meta.dirname, '..');
@@ -101,6 +102,23 @@ console.log('\n── 2. one summary, one reader, one headline ──');
   ok(websiteCheckFor(null, { website: 'https://www.facebook.com/someplumber' }).state === 'profile', 'a social profile is never "their website"');
   const stale = websiteCheckFor(row as never, { website: SITE, nowMs: Date.parse('2026-12-20T00:00:00Z') });
   ok(stale.stale && /over 30 days ago/.test(stale.coverageLine ?? ''), 'an old check says it may be out of date');
+}
+
+console.log('\n── 2b. only real issues: true broken pages, each issue said once ──');
+{
+  ok(isBrokenPageStatus(404) && isBrokenPageStatus(410) && isBrokenPageStatus(503) && !isBrokenPageStatus(403) && !isBrokenPageStatus(429) && !isBrokenPageStatus(401), 'broken = 404 / 410 / 5xx; 401 / 403 / 429 is the site refusing OUR crawler');
+  const failedPage = (url: string, httpStatus: number): SiteAuditPage => ({ url, status: 'failed', httpStatus });
+  const a = audit([page(SITE, 'homepage'), failedPage(SITE + 'x', 429), failedPage(SITE + 'y', 403), failedPage(SITE + 'z', 404)]);
+  const b = a.findings.find((f) => f.id === 'broken_pages');
+  ok(!!b && b.urls.length === 1 && /404/.test(b.urls[0]), 'only the 404 is a broken page');
+  ok(a.notChecked.some((n) => /refused or rate-limited our crawler \(HTTP 429, 403\)/.test(n)), 'the 429 / 403 are said as "not judged"');
+  /* An audit stored before this rule (live: 13 pages answered 429 to a fast crawl) is corrected when it is summarised. */
+  const stored = { ...a, findings: [{ id: 'broken_pages', category: 'discovery', severity: 'medium', title: 'Linked pages that return an error', saw: 'x', meaning: '', count: 2, urls: [SITE + 'x (429)', SITE + 'y (403)'], urlsComplete: true },
+    { id: 'no_https', category: 'discovery', severity: 'high', title: 'The site is served without HTTPS', saw: 'x', meaning: '', count: 0, urls: [], urlsComplete: true },
+    { id: 'ct_no_https', category: 'discovery', severity: 'high', title: 'The site is not served securely (no HTTPS)', saw: 'x', meaning: '', count: 0, urls: [], urlsComplete: true }] };
+  const s = summariseWebsiteCheck({ mode: 'full', created_at: '2026-10-15T09:00:00Z', result: { checked_at: '2026-10-15T09:00:00Z' }, full_evidence: { audit: stored, completeness: 'complete' } } as never)!;
+  ok(!s.issues.some((i) => i.id === 'broken_pages'), 'an older stored "broken" list of only 429 / 403 is dropped');
+  ok(s.issues.filter((i) => /no_https/.test(i.id)).length === 1, 'no HTTPS is said once, not twice');
 }
 
 console.log('\n── 3. both crawls write it; every screen reads it ──');
