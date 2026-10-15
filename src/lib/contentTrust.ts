@@ -39,6 +39,17 @@ import { robotsAllows, robotsRulesFor } from './crawlUrl.ts';
 /** Bump when the MEANING of a stored issue changes. Rows with an older (or no) version show nothing new. */
 export const CONTENT_TRUST_VERSION = 1;
 
+/** ⛔ A PAGE IS BROKEN ONLY WHEN THE SITE SAYS IT IS NOT THERE (404 / 410) OR ITS SERVER FAILED (5xx) — 2026-10-15.
+ *  401 / 403 / 429 and the rest mean the site refused or rate-limited OUR crawler (a live site answered 13 pages 429 to a
+ *  fast crawl): that is not a broken page for a customer, so it is never an issue — it is said as "not checked". */
+export function isBrokenPageStatus(status: number | null | undefined): boolean {
+  return status === 404 || status === 410 || (typeof status === 'number' && status >= 500 && status < 600);
+}
+/** The crawler-refusal statuses: said as not checked, never as broken. */
+export function isCrawlerRefusedStatus(status: number | null | undefined): boolean {
+  return status === 401 || status === 403 || status === 429;
+}
+
 export type IssueSeverity = 'high' | 'medium' | 'low';
 /** The Findable AI Visibility Master Standard's evidence classes (9 Oct 2026). */
 export type EvidenceClass = 'A' | 'B' | 'C';
@@ -550,7 +561,7 @@ export function buildContentTrust(input: ContentTrustInput): ContentTrust {
     why: 'A sitemap is the simplest way to tell search engines and AI crawlers every page that exists; without one they rely on following links.',
     evidence: ['Nothing at /sitemap.xml, and none declared in robots.txt'], urls: [], needs: 'Nothing to supply — most site builders can produce one.',
     spoken: 'We couldn’t find a sitemap, the file that lists your pages for search engines.' });
-  const broken = (input.brokenPages ?? []).filter((b) => b.status >= 400);
+  const broken = (input.brokenPages ?? []).filter((b) => isBrokenPageStatus(b.status));
   if (broken.length) add({ kind: 'broken_links', severity: 'medium',
     title: 'Pages on your site that don’t load',
     why: 'Visitors and crawlers following those addresses reach an error instead of a page, so whatever was meant to be there cannot be read.',

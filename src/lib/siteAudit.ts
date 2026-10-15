@@ -27,7 +27,7 @@
 import type { CrawlCoverage, PageBusiness, PageDigest, FullCrawlEvidence } from './fullCrawl.ts';
 import { robotsAllows, robotsRulesFor, sameSite } from './crawlUrl.ts';
 import type { SalesInsights } from './salesInsights.ts';
-import { compareIssues, usableContentTrust, CONTENT_TRUST_KINDS, type ContentIssue, type ContentTrust, type EvidenceClass } from './contentTrust.ts';
+import { compareIssues, isBrokenPageStatus, isCrawlerRefusedStatus, usableContentTrust, CONTENT_TRUST_KINDS, type ContentIssue, type ContentTrust, type EvidenceClass } from './contentTrust.ts';
 
 export const SITE_AUDIT_VERSION = 1;
 /** Affected addresses kept per finding. Above it the list is cut and `urlsComplete` is false. */
@@ -332,7 +332,11 @@ export function buildSiteAudit(input: SiteAuditInput): SiteAudit {
       meaning: 'Search engines may treat those pages as copies and list only the page they point to.', urls: canonOther.map(urlOf),
       evidence: canonOther.slice(0, 3).map((p) => `${urlOf(p)} → ${p.d!.canonical}`) }));
   }
-  const broken = failed.filter((p) => p.httpStatus && p.httpStatus >= 400);
+  /* ⛔ True broken pages only (contentTrust.isBrokenPageStatus): 404 / 410 / 5xx. A 401 / 403 / 429 is the site refusing
+     or rate-limiting our crawler — said as not checked, never as a broken page (2026-10-15). */
+  const broken = failed.filter((p) => isBrokenPageStatus(p.httpStatus));
+  const refusedUs = failed.filter((p) => isCrawlerRefusedStatus(p.httpStatus));
+  if (refusedUs.length) notChecked.push(`${plural(refusedUs.length, 'page')} refused or rate-limited our crawler (HTTP ${[...new Set(refusedUs.map((p) => p.httpStatus))].join(', ')}) — not judged, and not counted as broken.`);
   if (broken.length) {
     out.push(finding({ id: 'broken_pages', category: 'discovery', severity: 'medium',
       title: 'Linked pages that return an error',
