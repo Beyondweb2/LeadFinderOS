@@ -19,6 +19,7 @@
 import { isDecline, looksAutomated } from './inboundClassify.ts';
 import { isRealSend } from './realSend.ts';
 import { serviceWindowState } from './serviceWindow.ts';
+import { partsFromStoredError, type SendErrorParts } from './sendErrorMeaning.ts';
 
 /** Mirrors public.whatsapp_unread_since() in migration 20260929120000 — keep them the same. */
 export const UNREAD_TRACKING_START = '2026-09-28T00:00:00Z';
@@ -28,9 +29,25 @@ export interface ConvMessage {
   status: string | null;
   created_at: string;
   body: string | null;
+  /* 2026-10-15: the provider's raw error on a failed send (Meta for WhatsApp, Twilio for a text). Rows from before the
+     error columns keep only the JSON text in `error`, read back by partsFromStoredError. */
+  error_code?: number | string | null;
+  error_title?: string | null;
+  error_details?: string | null;
+  error?: string | null;
 }
 
 export type ConvTone = 'red' | 'blue' | 'amber' | 'grey' | 'green';
+
+/** The raw error of a failed message: its own columns first, else read back out of the stored error text. */
+export function messageErrorParts(m: ConvMessage | null | undefined): SendErrorParts | null {
+  if (!m) return null;
+  const n = m.error_code == null || m.error_code === '' ? null : Number(m.error_code);
+  const code = n != null && Number.isFinite(n) ? n : null;
+  const stored = partsFromStoredError(m.error ?? null);
+  const parts: SendErrorParts = { code: code ?? stored.code, title: m.error_title ?? stored.title, details: m.error_details ?? stored.details };
+  return parts.code == null && !parts.title && !parts.details ? null : parts;
+}
 
 export interface ConversationState {
   unread: boolean;
@@ -46,6 +63,8 @@ export interface ConversationState {
   tone: ConvTone;
   /** The one short label beside the colour, or null for a quiet row. */
   label: string | null;
+  /** The provider's raw error on the failed last send (code / title / details), or null. */
+  failedError: SendErrorParts | null;
 }
 
 export interface ConvStateInput {
@@ -118,6 +137,7 @@ export function conversationState(input: ConvStateInput): ConversationState {
   return {
     unread, waitingSinceMs, waitingOnThem, windowOpen: win.open, templateRequired: !win.open,
     failed, queued, followUpDue, tone, label,
+    failedError: failed ? messageErrorParts(lastOutbound) : null,
   };
 }
 

@@ -60,6 +60,7 @@ import { buildCallClose, type CallClose } from './callClose.ts';
 import { buildCallScript, type CallScript, type ScriptEvidence, type ScriptStrongSite } from './callScript.ts';
 import { mergePoints, usableInsights, STRONG_SITE_LINE, type InsightKind, type SalesFinding, type SalesInsights } from './salesInsights.ts';
 import { callerFirstName, DEFAULT_CALLER_NAME } from './callerName.ts';
+import { issueLine, NO_WEBSITE_LINE, websiteCheckFor, type WebsiteCheckView, type WebsiteIssue } from './websiteCheck.ts';
 import type { CallAuditProgress } from './callScriptGate.ts';
 
 /* ── Tunables, named ──────────────────────────────────────────────────────────────────────────── */
@@ -441,7 +442,10 @@ export type FindingsStatus = 'findings' | 'no_website' | 'profile' | 'not_crawle
 
 export interface FindingsOutcome {
   status: FindingsStatus;
+  /** The SERIOUS issues (high / medium) of the one website check, worst first. */
   findings: PlaybookFinding[];
+  /** The one website check this was read from (headline, coverage, minor points). */
+  check?: WebsiteCheckView;
   note: string | null;
   crawlAtMs: number | null;
   crawlStale: boolean;
@@ -502,100 +506,49 @@ export function contentIssueToFinding(c: ContentIssue): PlaybookFinding {
   };
 }
 
-/** @param max how many findings to return — the playbook's MAX_SITE_FINDINGS by default; the Inbox
+/** A website-check issue as a playbook finding: what was seen is the explanation, the pages are the proof. */
+export function websiteIssueToFinding(i: WebsiteIssue): PlaybookFinding {
+  return {
+    /* A content & trust issue is stored in the audit as ct_<kind>; the playbook speaks its own kind. */
+    kind: i.id.replace(/^ct_/, '') as PlaybookFinding['kind'], title: i.title, explanation: i.saw, whyItMayMatter: i.meaning ?? '',
+    proof: [i.saw, ...i.pages.map((u) => 'Page: ' + u)], spoken: issueLine(i),
+    evidence: { urls: i.pages, quotes: [] }, confidence: i.severity === 'high' ? 'high' : 'medium',
+  };
+}
+
+/** ⛔ THE WEBSITE FINDINGS COME FROM THE ONE WEBSITE CHECK (2026-10-15, src/lib/websiteCheck.ts): the lead's ONE stored
+ *  crawl row, read by websiteCheckFor — the same reader as the Inbox's crawl icon, the report and the lead's audit, so
+ *  they cannot disagree. An audit run's own copy of an older quick crawl is no longer a source (it is what made the
+ *  call script and the Inbox say different things). `findings` = the SERIOUS issues (high / medium), worst first;
+ *  `check` carries the minor points, the headline and when / how much was checked.
+ *  @param max how many findings to return — the playbook's MAX_SITE_FINDINGS by default; the Inbox
  *        details ask for all of them and show the first few (2026-09-27). */
 export function selectFindings(input: Pick<PlaybookInput, 'lead' | 'runCrawls' | 'leadCrawl' | 'nowMs'>, max: number = MAX_SITE_FINDINGS): FindingsOutcome {
-  const hasWebsite = !!clean(input.lead.website);
-  const all = [...input.runCrawls, ...(input.leadCrawl ? [input.leadCrawl] : [])].filter((s) => s.result);
-  const newestMs = all.length ? Math.max(...all.map((s) => s.createdAtMs)) : null;
-  const crawlStale = newestMs !== null && !(input.nowMs - newestMs < CRAWL_FRESH_MS);
-
-  if (!hasWebsite) {
-    return {
-      status: 'no_website', findings: [], crawlAtMs: newestMs, crawlStale,
-      /* ⛔ NO ABSOLUTE CLAIM (Session A A-05, M-009): "Google AI has not named a business without a website" was
-         contradicted by a lead's own audit. Less to go on — never "never named". */
-      note: 'No website on file, so there is nothing to crawl. Without a site of their own there is a lot less for AI to go on about what they do and where — that is the conversation to have. Never say AI cannot name a business without a website: it sometimes does.',
-    };
-  }
-  /* ⛔ A PROFILE IS NOT THEIR WEBSITE (the voice note's rule, leadWebsiteKind.ts). A crawl of a TradeHQ
-     page describes TradeHQ, so its findings are never offered as "your site". */
-  const kind = classifyLeadWebsite(input.lead.website);
-  if (kind.source === 'directory_profile' || kind.source === 'social_profile') {
-    return {
-      status: 'profile', findings: [], crawlAtMs: newestMs, crawlStale,
-      note: 'No standalone business website found, only a ' + kind.label + ' profile. Never call it their website.',
-    };
-  }
-  const found = resolveFindingsSource(true, input.runCrawls, input.leadCrawl);
-  const insights = freshInsights(input);
-  {
-    const legacy = (found?.candidates ?? []).map((f): PlaybookFinding => {
-      /* ⛔ THE THIN PAGE IS SOMETIMES THE HOMEPAGE. siteFindings.ts says "one of the service pages";
-         read aloud on a call next to proof that is the homepage URL, that is a false statement to
-         the owner (The Royal Locksmiths, 2026-09-23: the only thin page was the homepage). Said as
-         the homepage when every thin URL is the homepage; the WhatsApp copy is left as it is. */
-      if (f.kind === 'thin_pages' && isOnlyHomepage(found!.signals.thinPageUrls ?? [], found!.signals.homeUrl)) {
-        return {
-          kind: f.kind,
-          title: 'Homepage light on detail',
-          explanation: 'Your homepage is really light on detail.',
-          whyItMayMatter: 'It says what you do, but there may not be much useful information there for AI to work with when somebody asks a more specific question.',
-          proof: proofFor(f, found!.signals, found!.evidence),
-        };
-      }
+  const lc = input.leadCrawl;
+  const row = lc?.result ? { result: lc.result as never, created_at: new Date(lc.createdAtMs).toISOString() } : null;
+  const check = websiteCheckFor(row, { website: input.lead.website, nowMs: input.nowMs });
+  const crawlAtMs = lc?.result ? lc.createdAtMs : null;
+  const base = { crawlAtMs, crawlStale: check.stale, check };
+  switch (check.state) {
+    case 'no_website':
       return {
-        kind: f.kind,
-        title: FINDING_TITLES[f.kind],
-        explanation: sentence(f.clause),
-        whyItMayMatter: clean(f.rest),
-        proof: proofFor(f, found!.signals, found!.evidence),
+        ...base, status: 'no_website', findings: [],
+        /* ⛔ NO ABSOLUTE CLAIM (Session A A-05, M-009): "Google AI has not named a business without a website" was
+           contradicted by a lead's own audit. Less to go on — never "never named". */
+        note: NO_WEBSITE_LINE + ' Without a site of their own there is a lot less for AI to go on about what they do and where — that is the conversation to have. Never say AI cannot name a business without a website: it sometimes does.',
       };
-    });
-    /* ONE ordering across the crawl's technical findings and the site's own pages (salesInsights.mergePoints):
-       strongest first, one per theme. */
-    const fromInsights = (insights?.findings ?? []).filter((f) => f.confidence === 'high' || f.confidence === 'medium').map(insightToFinding);
-    const picks = mergePoints(legacy, insights && { ...insights, findings: insights.findings.filter((f) => f.confidence === 'high' || f.confidence === 'medium') }, max);
-    const findings = picks.map((p) => (p.from === 'legacy' ? legacy[p.index] : fromInsights[p.index]));
-    /* THE CONTENT & TRUST ISSUES (2026-10-11, contentTrust.ts) fill any room left, worst first: high and medium
-       only, one per theme, never a second line about something already said. Each carries its own spoken line. */
-    if (findings.length < max) {
-      const taken = new Set(findings.map((f) => CONTENT_THEME_OF[f.kind] ?? f.kind));
-      for (const c of freshContentIssues(input)) {
-        if (findings.length >= max) break;
-        const theme = CONTENT_THEME_OF[c.kind] ?? c.kind;
-        if (c.severity === 'low' || taken.has(theme)) continue;
-        /* A site the pages call strong keeps that verdict against a "we couldn't find…" — only something we SAW
-           (a placeholder, a contradiction, an unnamed claim, a wrong link) may override it (2026-10-11). */
-        if (insights?.state === 'strong_site' && c.absence) continue;
-        taken.add(theme);
-        findings.push(contentIssueToFinding(c));
-      }
-    }
-    /* Nothing speakable (only weak notes, or nothing at all) falls through to "clean" / "strong site" below. */
-    if (findings.length) return { status: 'findings', findings, note: null, crawlAtMs: found?.source.createdAtMs ?? input.nowMs, crawlStale: false };
+    case 'profile':
+      /* ⛔ A PROFILE IS NOT THEIR WEBSITE (the voice note's rule, leadWebsiteKind.ts). */
+      return { ...base, status: 'profile', findings: [], note: check.headline + ' Never call it their website.' };
+    case 'not_checked':
+      return { ...base, status: 'not_crawled', findings: [], note: 'Nobody has checked this website yet, so there are no website points to mention. Keep the call to the AI result.' };
+    case 'unreadable':
+      return { ...base, status: 'unreadable', findings: [], note: check.headline + ' There is nothing reliable to say about the site.' };
+    case 'clean':
+      return { ...base, status: 'clean', findings: [], note: 'The website check found no serious issue — say so plainly and do not invent one.' };
+    default:
+      return { ...base, status: 'findings', findings: check.serious.slice(0, max).map(websiteIssueToFinding), note: null };
   }
-  if (newestMs === null) {
-    return { status: 'not_crawled', findings: [], crawlAtMs: null, crawlStale: false, note: 'Nobody has checked this website yet, so there are no website points to mention. Keep the call to the AI result.' };
-  }
-  if (crawlStale) {
-    return { status: 'crawl_stale', findings: [], crawlAtMs: newestMs, crawlStale, note: 'The newest crawl is more than 30 days old, so its findings are not used — the site may have changed.' };
-  }
-  const usable = all.map((s) => usableCrawlSignals(s.result, s.createdAtMs)).find((s) => !!s);
-  if (usable?.fetchFailed) {
-    return { status: 'unreadable', findings: [], crawlAtMs: newestMs, crawlStale, note: 'The crawl could not read the site at all, so there is nothing reliable to say about it.' };
-  }
-  /* ⛔ A STRONG SITE IS A RESULT, NOT A GAP (2026-10-07). The pages were read (salesInsights.ts) and nothing real was
-     wrong: the script says so and offers the one genuine thing we would add. Without stored insights (an older
-     crawl) the old honest line stands — never a made-up fault either way. */
-  if (insights && insights.state === 'strong_site') {
-    return {
-      status: 'clean', findings: [], crawlAtMs: newestMs, crawlStale,
-      strongSite: { spoken: insights.opportunity?.spoken ?? STRONG_SITE_LINE, evidence: insights.opportunity?.evidence ?? null },
-      note: 'The website looks sound — nothing worth raising. Say the positive line and what we would add. Do not invent a problem.',
-    };
-  }
-  return { status: 'clean', findings: [], crawlAtMs: newestMs, crawlStale, note: 'The crawl found no strong website issues. Do not lead with the website on this call.' };
 }
 
 /* ── WhatsApp history ─────────────────────────────────────────────────────────────────────────── */
@@ -756,7 +709,7 @@ export function buildColdCallPlaybook(input: PlaybookInput): ColdCallPlaybook {
   const warnings: string[] = [];
   if (auditStale) warnings.push('The AI result is from ' + auditDate + ' — more than ' + PLAYBOOK_AUDIT_STALE_DAYS + ' days old. Say "when I checked", not "earlier", or re-run the audit before calling.');
   if (evidence.kind === 'none') warnings.push(input.auditRunning ? 'An audit is still running for this lead — its result is not in yet.' : 'No AI result is stored for this lead. The opening below does not claim one. Run the AI check first if you can (about a minute), or ring anyway: the script works without it.');
-  if (f.crawlStale && !f.findings.length) warnings.push('The website crawl is more than 30 days old.');
+  if (f.crawlStale) warnings.push('The website check is more than 30 days old — the site may have changed. Re-run Crawl site before leaning on it.');
 
   const top = evidence.competitors.slice(0, OPENING_COMPETITORS);
   /* "I asked Gemini for a plumber in Rugby" — or, for an old result, "When I checked, …". */
@@ -801,7 +754,8 @@ export function buildColdCallPlaybook(input: PlaybookInput): ColdCallPlaybook {
     explain.push('When someone asks ChatGPT or Gemini for ' + searchFor + ', they get a few names, not ten links. You were one of them for the search I did. The aim is to keep it that way across more of the searches people make.');
   }
   if (lead0) {
-    explain.push('The main thing I noticed on your site is ' + lowerClause(lead0.explanation) + '. ' + lead0.whyItMayMatter + ' It could be contributing, it\'s not the only thing AI looks at.');
+    /* 2026-10-15: the one website check's issue, by its own title (what was seen is on the screen as proof). */
+    explain.push('The main thing I noticed on your site: ' + (lead0.spoken ?? lead0.title) + '.' + (lead0.whyItMayMatter ? ' ' + lead0.whyItMayMatter : '') + ' It could be contributing, it\'s not the only thing AI looks at.');
   }
   if (!explain.length) explain.push('Keep it simple: we look at what AI tools say when people ask for ' + searchFor + ', and we measure it before and after any work.');
 
@@ -844,7 +798,7 @@ export function buildColdCallPlaybook(input: PlaybookInput): ColdCallPlaybook {
      from the evidence above: the stored answer's own competitors, the stored crawl's own findings. ── */
   const script = buildCallScript({
     searchFor, engine, evidenceKind: evidence.kind, competitors: evidence.competitors, auditStale,
-    findings: f.findings, findingsStatus: f.status, strongSite: f.strongSite ?? null, site: { source: siteKind.source, label: siteKind.label },
+    findings: f.findings, findingsStatus: f.status, strongSite: f.strongSite ?? null, website: f.check ?? null, site: { source: siteKind.source, label: siteKind.label },
     close, contactedBefore: convo.mode === 'follow_up', hasReport: !!reportUrl,
   });
   const opening = script.opener;

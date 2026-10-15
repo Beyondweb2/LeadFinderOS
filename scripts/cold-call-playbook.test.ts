@@ -123,34 +123,39 @@ console.log('── 3. STRONG WEBSITE EVIDENCE ──');
   ok(p.findings[0].proof.some((l) => l.includes('https://old-acme-site.com/services')), 'its proof is the VERBATIM offending URL');
   ok(p.findings[0].proof.some((l) => l.includes('34 of 40')), 'with the count behind it');
   ok(p.findings.length <= 3, 'never more than three findings');
-  ok(p.explain.some((l) => /The main thing I noticed on your site is your sitemap/.test(l)), 'the verbal explanation starts from the strongest finding');
+  /* 2026-10-15 (the ONE website check, src/lib/websiteCheck.ts): the explanation names the issue by its own title. */
+  ok(p.explain.some((l) => /The main thing I noticed on your site: The list of your pages that Google reads points at a different website/.test(l)), 'the verbal explanation starts from the strongest finding');
   ok(p.explain.some((l) => /could be contributing/.test(l)), 'and is hedged — "could be contributing"');
-  /* The findings the playbook shows are the ones the WhatsApp {{6}} would carry — one loop, one rule. */
+  /* The WhatsApp {{6}} keeps its own (narrower) template rule; the strongest point is the same one. */
   const wa = resolveSiteFindingsDetailed(true, [], crawl(THIN, 1, SITEMAP_EVIDENCE));
-  ok(!!wa && wa.kinds.every((k, i) => p.findings[i]?.kind === k), 'same findings, same order as the WhatsApp site findings');
+  ok(!!wa && wa.kinds[0] === p.findings[0]?.kind, 'the strongest finding is the one the WhatsApp site findings lead with too');
 }
 {
   const p = buildColdCallPlaybook(base());
-  ok(p.findings.length === 1 && p.findings[0].kind === 'thin_pages', 'one strong issue → exactly one finding shown');
-  ok(p.findings[0].proof.some((l) => /82 words/.test(l)), 'the thin page proof carries its stored word count');
-  ok(p.findings[0].explanation === 'Your homepage is really light on detail.' && !/service page/.test(allText(p)),
+  ok(p.findings[0]?.kind === 'thin_pages', 'a thin homepage leads the issues');
+  ok(p.findings[0].proof.some((l) => l.includes('https://acmelocks.co.uk/')), 'its proof is the page it was read on');
+  ok(p.findings[0].title === 'Homepage light on detail' && !/service page/.test(allText(p)),
     'a thin HOMEPAGE is called the homepage, never "one of the service pages"');
 }
 {
   const svc: CrawlSignals = { ...CLEAN, thinPages: 1, thinPageUrls: ['https://acmelocks.co.uk/lock-changes/'] };
   const p = buildColdCallPlaybook(base({ leadCrawl: crawl(svc) }));
-  ok(/^One of the service pages is really light on detail/.test(p.findings[0]?.explanation ?? ''), 'a thin SERVICE page keeps the shared wording');
+  ok(p.findings.some((x) => x.kind === 'thin_pages' && x.title === 'Key pages light on detail' && x.proof.some((l) => l.includes('/lock-changes/'))), 'a thin SERVICE page is said as a key page, with the page');
 }
 
 console.log('── 4. NO STRONG WEBSITE EVIDENCE ──');
 {
-  const p = buildColdCallPlaybook(base({ leadCrawl: crawl(CLEAN) }));
-  ok(p.findings.length === 0, 'missing H1 / no structured data are NOT padded in as findings');
-  ok(/no strong website issues/i.test(p.findingsNote ?? ''), 'it says so honestly');
+  /* 2026-10-15: a homepage with no main heading is a real, evidenced issue under the AI Visibility standard (headings);
+     no structured data stays a MINOR point, never a finding read out. */
+  const p = buildColdCallPlaybook(base({ leadCrawl: crawl({ ...CLEAN, missingH1: false }) }));
+  ok(p.findings.length === 0, 'no structured data alone is NOT padded in as a finding');
+  ok(/no serious issue/i.test(p.findingsNote ?? ''), 'it says so honestly');
+  const h1 = buildColdCallPlaybook(base({ leadCrawl: crawl(CLEAN) }));
+  ok(h1.findings.length === 1 && h1.findings[0].kind === 'missing_h1', 'a homepage with no H1 is one real issue, evidenced');
 }
 {
   const p = buildColdCallPlaybook(base({ leadCrawl: crawl(THIN, 45) }));
-  ok(p.findings.length === 0 && /more than 30 days old/.test(p.findingsNote ?? '') && p.context.crawlStale, 'a stale crawl is flagged and not used');
+  ok(p.findings.length > 0 && p.context.crawlStale && p.warnings.some((w) => /more than 30 days old/.test(w)), 'a stale check is still shown everywhere the same, flagged as possibly out of date');
 }
 {
   const p = buildColdCallPlaybook(base({ leadCrawl: null }));
@@ -306,10 +311,12 @@ console.log('── 12. SIMPLIFIED PLAYBOOK (Paul, 2026-09-27) ──');
   ok(script.includes('LockRite Locksmiths Tunbridge Wells') && script.includes('LockFit Tunbridge Wells') && script.includes('TN Locksmith') && !script.includes('S.J. Osborne'),
     'it names the first three competitors from THAT result, no more');
   ok(/Hi mate, I was looking for a locksmith in Tunbridge Wells, so I asked Gemini and it mentioned/.test(script), 'it names the engine that was actually asked (Gemini is said as Gemini), and the search plainly');
-  ok(/I had a look into why they were being named and you weren't, and I found a few potential reasons\./.test(script)
-    && p.callScript.includes("The map of your site that Google reads points at a different web address, so it isn't clear which site is really yours.")
-    && !/that's why/i.test(script), 'it carries the real findings (strongest first) in plain words, as potential reasons (never "that\'s why")');
-  ok(p.script.found.lines.length <= MAX_SPOKEN_FINDINGS, 'never more than MAX_SPOKEN_FINDINGS website points said aloud');
+  /* 2026-10-15 (Paul): the website issues are a LIST — one short line each, the strongest first — never a sentence. */
+  ok(/I had a look into why they were being named and you weren't\./.test(script) && !/a few potential reasons/.test(script)
+    && p.script.found.lines[0] === 'The list of your pages that Google reads points at a different website'
+    && !/that's why/i.test(script), 'it carries the real issues (strongest first) as short lines, never "that\'s why"');
+  ok(p.script.found.lines.length <= 5, 'never more than CALL_SCRIPT_ISSUE_LINES issue lines shown; the rest on a tap');
+  void MAX_SPOKEN_FINDINGS;
   // Plain words, not "AI visibility" (Session A, 2026-10-04: jargon to a plumber).
   ok(script.includes(BRIDGE_LINE) && !/AI visibility/.test(script), 'the Findable line (BRIDGE_LINE) is inside the script, in plain words');
   /* removed 2026-10-06 (sales-team-today, Paul): the "Is now OK …?" line and the report fallback ("I'll WhatsApp
@@ -320,9 +327,10 @@ console.log('── 12. SIMPLIFIED PLAYBOOK (Paul, 2026-09-27) ──');
   ok(JSON.stringify(p.qualify) === JSON.stringify([FIRST_QUESTION, ...DISCOVERY_QUESTIONS]) && FIRST_QUESTION === 'Do you manage the website yourself, or does an agency do it?',
     'the questions: FIRST_QUESTION always first, then the discovery questions');
   {
-    const clean = buildColdCallPlaybook(base({ leadCrawl: crawl(CLEAN) }));
-    ok(clean.script.found.lines.length === 2 && clean.script.found.lines[0] === NO_STRONG_ISSUE_LINE && /do not invent one/.test(clean.script.found.note ?? '') && (clean.script.found.checklist?.length ?? 0) >= 6,
-      'no strong site issue → "not set up for AI" + the short list of what we make sure it has (NO_STRONG_ISSUE_LINE), no invented fault');
+    const clean = buildColdCallPlaybook(base({ leadCrawl: crawl({ ...CLEAN, missingH1: false }) }));
+    ok(clean.script.found.lines.length === 1 && /^No serious website issues found/.test(clean.script.found.lines[0]) && /do not invent one/.test(clean.script.found.note ?? '') && (clean.script.found.checklist?.length ?? 0) >= 6,
+      'no serious site issue → ONE plain line saying so + the short list of what we make sure it has (for the rep), no invented fault');
+    void NO_STRONG_ISSUE_LINE;
   }
   ok((script.match(/but not you/g) ?? []).length === 1, 'the AI miss is said once, not repeated as a separate explanation');
 

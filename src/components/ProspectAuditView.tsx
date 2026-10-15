@@ -318,6 +318,7 @@ function WebsiteSection({ site, crawl }: { site: WebsiteState; crawl: CrawlContr
           {site.checkedAt && <span className="text-xs text-muted-foreground">crawled {new Date(site.checkedAt).toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>}
           <span className="ml-auto">{(audit.basis !== 'full' && audit.basis !== 'capped') ? crawlButton('Run the full crawl', true) : mayForceRecrawl(crawl.role, ageMs) ? crawlButton('Re-crawl now', true) : null}</span>
         </p>
+        <p className="font-semibold" data-testid="pa-website-headline">{site.headline}</p>
         <p className={cn(audit.basis === 'capped' && 'font-medium')} data-testid="pa-coverage-line">{coverageLine(audit)}</p>
         {audit.coverage && audit.coverage.sitemapUrls > 0 && <p className="text-xs text-muted-foreground">The sitemaps list {audit.coverage.sitemapUrls.toLocaleString('en-GB')} addresses.</p>}
         {err}

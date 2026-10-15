@@ -1,6 +1,8 @@
 import { AlertTriangle, CalendarClock, MessageCircleReply, Timer } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { ConversationState } from '@/lib/conversationState';
+import { sendErrorLine, type SendChannel } from '@/lib/sendErrorMeaning';
+import { sendFailedLabel } from '@/components/SendErrorNote';
 
 /* One small chip for a conversation's most urgent state (src/lib/conversationState.ts decides which).
    BLUE = a reply waiting on us · AMBER = follow-up due · RED = send failed · GREY = queued.
@@ -13,7 +15,7 @@ const TONE: Record<string, string> = {
   green: 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300',
 };
 
-export function ConvStateChip({ state, compact = false, hideQueued = false }: { state: ConversationState | undefined; compact?: boolean; hideQueued?: boolean }) {
+export function ConvStateChip({ state, compact = false, hideQueued = false, channel = 'whatsapp' }: { state: ConversationState | undefined; compact?: boolean; hideQueued?: boolean; channel?: SendChannel }) {
   if (!state || !state.label) return null;
   /* ⛔ ONE INDICATOR PER FACT (UI cleanup pass, 2026-09-29): a due Next Action is drawn by the
      NextActionPill beside this chip (Overdue / Today / date) — the chip no longer repeats it as
@@ -25,8 +27,8 @@ export function ConvStateChip({ state, compact = false, hideQueued = false }: { 
   const Icon = state.failed ? AlertTriangle : state.waitingSinceMs !== null ? MessageCircleReply : state.followUpDue ? CalendarClock : Timer;
   return (
     <span className={cn('inline-flex shrink-0 items-center gap-1 rounded-full font-semibold', compact ? 'px-1.5 py-0 text-[10px]' : 'px-2 py-0.5 text-[11px]', TONE[state.tone])}
-      title={state.failed ? 'Our last message failed to send' : state.waitingSinceMs !== null ? 'They replied and nothing has answered yet' : state.followUpDue ? 'A Next Action set by a person is due' : 'In the drip queue'}>
-      <Icon className="h-3 w-3" />{state.label}
+      title={state.failed ? (sendErrorLine(channel, state.failedError) ?? 'Our last message failed to send') : state.waitingSinceMs !== null ? 'They replied and nothing has answered yet' : state.followUpDue ? 'A Next Action set by a person is due' : 'In the drip queue'}>
+      <Icon className="h-3 w-3" />{state.failed ? sendFailedLabel(channel, state.failedError) : state.label}
     </span>
   );
 }

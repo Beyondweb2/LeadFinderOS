@@ -35,7 +35,8 @@ import {
 } from "../../../src/lib/fullCrawl.ts";
 import { leadCrawlWriteDecision, storedCrawlFailed, STORED_CRAWL_STATE_COLUMNS } from "../../../src/lib/crawlWriteRule.ts";
 import { activeJobFor, createCrawlJob, jobCounts, kickCrawlWorker } from "../_shared/crawl-job.ts";
-import { crawlPageCapFor, prospectCrawlReuse } from "../../../src/lib/prospectCrawl.ts";
+import { crawlPageCapFor, prospectCrawlReuse, PROSPECT_CRAWL_PAGE_CAP } from "../../../src/lib/prospectCrawl.ts";
+import { AUTO_DEEP_MAX_RUNNING, summariseWebsiteCheck } from "../../../src/lib/websiteCheck.ts";
 import { insightsFromFetchedPages } from "../../../src/lib/salesInsightsInline.ts";
 import type { SalesInsights } from "../../../src/lib/salesInsights.ts";
 import { buildContentTrust, pageObservations, type ContentTrust } from "../../../src/lib/contentTrust.ts";
@@ -713,6 +714,12 @@ Deno.serve(async (req) => {
       ...(evidence ? { evidence, evidenceVersion: SITE_EVIDENCE_VERSION } : {}),
       ...(homeFetch ? { homeFetch } : {}),
     };
+    /* ⛔ THE ONE WEBSITE CHECK (2026-10-15, src/lib/websiteCheck.ts): the summary every screen reads, stored with the
+       result it summarises. A quick check says it is quick; the deep check (queued below) replaces it. */
+    try {
+      const wc = summariseWebsiteCheck({ result: storedResult as never, mode: "standard", created_at: checkedAt });
+      if (wc) (storedResult as Record<string, unknown>).websiteCheck = wc;
+    } catch (e) { console.error("[crawl-check] website check summary failed:", (e as Error).message); }
 
     /* ⛔ ONE CANONICAL ROW PER LEAD, WHICHEVER SCREEN STARTED THE CRAWL. Every entry point — Outreach,
        Inbox, lead detail, Paid Clients, Website Build — lands here with the lead id, so a crawl run
@@ -763,6 +770,40 @@ Deno.serve(async (req) => {
       }
     }
 
+    /* ⛔ ONE DEEP CHECK FOR EVERY PROSPECT (2026-10-15, docs/website-check.md). A quick check of a prospect's site (the
+       audit finalising, the sales pre-call check, the report filling in) queues the DEEP check behind itself: the same
+       background crawl the Crawl-site button starts, capped at PROSPECT_CRAWL_PAGE_CAP pages, important pages first.
+       It replaces this row when it finishes, so every screen moves to the deep result. Fetches only — no paid API.
+       Skipped for a paying client (their crawls are exhaustive and started on purpose), while one already runs, when a
+       fresh deep check is saved, and while AUTO_DEEP_MAX_RUNNING automatic checks are already queued. Never fails this. */
+    let autoDeepJob: string | null = null;
+    if (leadId && internal && stored === true && home && home.html && signals.fetchFailed !== true) {
+      try {
+        const { data: lr } = await service.from("outreach_leads").select("id, user_id, amount_paid, status").eq("id", leadId).maybeSingle();
+        const running = lr && !isClientLead(lr) ? await activeJobFor(service, leadId, homeUrl) : true;
+        if (lr && !running) {
+          const { count } = await service.from("crawl_jobs").select("id", { count: "exact", head: true })
+            .eq("status", "running").eq("requested_from", "automatic");
+          if ((count ?? 0) < AUTO_DEEP_MAX_RUNNING) {
+            const job = await createCrawlJob(service, {
+              leadId, userId: (lr.user_id as string | null) ?? rowOwnerId, requestedFrom: "automatic", pageCap: PROSPECT_CRAWL_PAGE_CAP,
+              probe: {
+                homeUrl, servedUrl: home.finalUrl || homeUrl, town: town || null, readableUa,
+                readableAs: readableProbe?.c.label ?? null, searchBlocked, respondedAny,
+                clientRendered: detectClientRendered(home.html), missingH1: !hasH1(home.html), noJsonLd: !hasJsonLd(home.html),
+                homeWords: wordCount(home.html), homeStatus: home.status, homeXRobots: home.xRobotsTag, homeHtml: home.html,
+              },
+            });
+            /* No kick: the minute cron picks automatic checks up one after another, so a bulk audit of hundreds of leads
+               never starts hundreds of crawls at once. A person's Crawl-site press still starts at once. */
+            if (!job.reused) autoDeepJob = job.jobId;
+          }
+        }
+      } catch (e) {
+        console.error(`[crawl-check] automatic deep check not queued for lead ${leadId}:`, (e as Error).message);
+      }
+    }
+
     // Attach the result to the exact audit run as well. This is the report contract for
     // standalone audits and prevents a different audit's lead crawl from being shown here.
     if (runId) {
@@ -780,6 +821,9 @@ Deno.serve(async (req) => {
     return json({
       ok: true, url: homeUrl, served_url: servedUrl, town: town || null, verdict, signals, siteInfo, evidence, insights, deep,
       mode, checked_at: checkedAt, fetches, ms: Date.now() - started, stored, preserved_full_crawl: preserved, kept_last_good: keptLastGood,
+      deep_check_job: autoDeepJob,
+      /* The ONE website check of what was just stored (src/lib/websiteCheck.ts) — so a popup reads the same summary. */
+      websiteCheck: (storedResult as Record<string, unknown>).websiteCheck ?? null,
       /* The full evidence's headline only — the row holds the rest, and every screen reads the row. */
       full: null,
       warnings: fullWarnings,

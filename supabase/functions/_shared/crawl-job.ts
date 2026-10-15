@@ -30,6 +30,7 @@ import { leadCrawlWriteDecision, storedCrawlFailed, STORED_CRAWL_STATE_COLUMNS }
 import { classifyCrawlUrl, classifySitemapUrl, parseRobots, type RobotsRules } from "../../../src/lib/crawlUrl.ts";
 import { cleanCounts, decideFetchOutcome, frontierExhausted, type JobCounts } from "../../../src/lib/crawlJob.ts";
 import { buildContentTrust, pageObservations, type ContentTrust, type PageObs } from "../../../src/lib/contentTrust.ts";
+import { summariseWebsiteCheck } from "../../../src/lib/websiteCheck.ts";
 
 /** One page's content observations, or undefined if the analyser trips — never a failed page. */
 function contentObs(html: string, url: string, servedUrl: string, status: number): PageObs | undefined {
@@ -47,6 +48,8 @@ export const CRAWL_UA_FALLBACK = "Mozilla/5.0 (compatible; OAI-SearchBot/1.0; +h
 export interface Fetched {
   url: string; finalUrl: string; ok: boolean; status: number; responded: boolean;
   contentType: string | null; xRobotsTag: string | null; body: string; error?: string;
+  /** How long the fetch took, start to full body (2026-10-15: the page-speed check). */
+  ms?: number;
 }
 
 async function readCapped(res: Response, cap: number): Promise<Uint8Array> {
@@ -72,6 +75,7 @@ async function readCapped(res: Response, cap: number): Promise<Uint8Array> {
 export async function crawlGet(url: string, ua: string): Promise<Fetched> {
   const controller = new AbortController();
   const t = setTimeout(() => controller.abort(), FULL_CRAWL.fetchTimeoutMs);
+  const t0 = Date.now();
   try {
     const res = await fetch(url, {
       method: "GET",
@@ -88,7 +92,7 @@ export async function crawlGet(url: string, ua: string): Promise<Fetched> {
     const body = new TextDecoder("utf-8", { fatal: false }).decode(bytes);
     return {
       url, finalUrl: res.url && /^https?:\/\//i.test(res.url) ? res.url : url, ok: res.ok, status: res.status, responded: true,
-      contentType: res.headers.get("content-type"), xRobotsTag: res.headers.get("x-robots-tag"), body,
+      contentType: res.headers.get("content-type"), xRobotsTag: res.headers.get("x-robots-tag"), body, ms: Date.now() - t0,
     };
   } catch (e) {
     return { url, finalUrl: url, ok: false, status: 0, responded: false, contentType: null, xRobotsTag: null, body: "", error: (e as Error)?.name === "AbortError" ? "timeout" : String((e as Error)?.message ?? e).slice(0, 200) };
@@ -364,6 +368,9 @@ export async function runCrawlTick(service: Client): Promise<{ jobId: string | n
         } else {
           const html = leanHtml(f.body);
           const ev = processPage({ url: r.url, finalUrl: f.finalUrl, status: f.status, xRobotsTag: f.xRobotsTag, html }, servedUrl);
+          /* Page speed (2026-10-15): our own download time and size for this page — one fetch, not a browser test. */
+          if (typeof f.ms === "number") ev.d.ms = f.ms;
+          ev.d.bytes = f.body.length;
           /* The content & trust observations ride on the row (evidence.ct): the raw page is gone by finalize. */
           base.evidence = { ...ev, ct: contentObs(html, f.finalUrl || r.url, servedUrl, f.status) };
           discovered.push(...linkRows(ev, rawLinks(html), f.finalUrl, servedUrl, robots, r.depth + 1));
@@ -578,6 +585,12 @@ export async function finalizeCrawlJob(service: Client, jobId: string): Promise<
     ...(contentTrust ? { contentTrust } : {}),
     ...(evidence ? { evidence, evidenceVersion: SITE_EVIDENCE_VERSION } : {}),
   };
+  /* ⛔ THE ONE WEBSITE CHECK (2026-10-15, src/lib/websiteCheck.ts): the summary every screen reads, built from THIS
+     crawl's grouped audit (content & trust merged above) and stored beside it. Never fails the crawl. */
+  try {
+    const wc = summariseWebsiteCheck({ result, full_evidence: full as never, mode: "full", created_at: checkedAt });
+    if (wc) (result as Record<string, unknown>).websiteCheck = wc;
+  } catch (e) { console.error("[crawl-job] website check summary failed:", (e as Error).message); }
   const status = full.completeness === "complete" ? "complete" : full.completeness === "failed" ? "failed" : "complete_with_failures";
   await service.from("crawl_jobs").update({ status, result, summary: { ...summaryState, full }, completed_at: checkedAt, lease_until: null, updated_at: checkedAt }).eq("id", jobId);
   /* ⛔ A FAILED CRAWL NEVER OVERWRITES THE LAST GOOD ONE (2026-10-11, leadCrawlWriteDecision): a full crawl that could

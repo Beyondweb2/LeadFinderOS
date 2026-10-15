@@ -157,10 +157,13 @@ const elect = build([ELECT_HOME, ELECT_CI, ELECT_EV, ELECT_PV, ELECT_HOMEPAGE]);
     nowMs: now,
   });
   ok(out.status === 'findings' && out.findings.length >= 2 && out.findings.length <= 3, 'E: a crawl with only content issues still gives the call 2–3 website points');
-  ok(out.findings[0].kind === 'placeholder_content' && !!out.findings[0].spoken, 'E: the strongest issue leads, with its own spoken line');
+  /* 2026-10-15: the call script reads the ONE website check (websiteCheck.ts); each point is the issue's own title. */
+  ok(out.findings[0].kind === 'placeholder_content' && !!out.findings[0].title, 'E: the strongest issue leads, by its own title');
   ok(new Set(out.findings.map((f) => f.kind)).size === out.findings.length && !out.findings.some((f) => elect.issues.find((i) => i.kind === f.kind)?.severity === 'low'), 'E: one per theme, never a low one');
   const stale = selectFindings({ lead: { website: HOME } as never, runCrawls: [], leadCrawl: { result: { version: 2, signals, contentTrust: elect } as never, createdAtMs: now - 40 * 86_400_000 }, nowMs: now });
-  ok(stale.findings.length === 0, 'E: a stale crawl’s content issues are never said');
+  /* 2026-10-15: an old check is shown the same everywhere, flagged as possibly out of date (never silently dropped in one
+     place and shown in another). */
+  ok(stale.crawlStale === true && stale.check?.stale === true, 'E: a stale crawl’s content issues are flagged as possibly out of date');
 }
 
 /* ── F. THE OVERVIEW WORDS ───────────────────────────────────────────────────────────────────────── */

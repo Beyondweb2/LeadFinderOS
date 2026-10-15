@@ -89,7 +89,7 @@ export function callFlowText(p: ColdCallPlaybook, model: PriceModel = 'standard'
   const plan = base ? routeOfferForModel(base.route, model) : base;
   return [
     'SAY\n' + s.opener.join('\n'),
-    ...(s.found.lines.length ? ['REASONS\n' + s.found.lines.map((l) => '- ' + l).join('\n')] : []),
+    ...(s.found.lines.length ? ['WEBSITE' + (s.found.coverage ? ' (' + s.found.coverage + ')' : '') + '\n' + [...s.found.lines, ...s.found.more].map((l) => '- ' + l).join('\n')] : []),
     s.bridge.join('\n'),
     'FIRST QUESTION\n' + s.firstQuestion.question,
     'IF AN AGENCY\n- ' + s.ifAgency.questions.join('\n- '),
@@ -107,6 +107,7 @@ function Say({ p }: { p: ColdCallPlaybook }) {
   return (
     <Step title="Say" tone="blue" testId="call-step-open" action={<CopyButton text={callFlowText(p, model)} label="Copy" />}>
       <div className="space-y-2 text-[15px] leading-relaxed" data-testid="playbook-call-script">{s.opener.map((line) => <p key={line}>{line}</p>)}</div>
+      {s.found.coverage && s.found.lines.length > 0 && <p className="text-[11px] text-muted-foreground" data-testid="call-found-coverage">Website · {s.found.coverage}</p>}
       {s.found.lines.length > 0 && (
         <ul className="space-y-1.5" data-testid="call-step-found">
           {s.found.lines.map((l) => (
@@ -115,6 +116,13 @@ function Say({ p }: { p: ColdCallPlaybook }) {
             </li>
           ))}
         </ul>
+      )}
+      {/* The rest of the issues and the minor points: on a tap, never read out first (2026-10-15). */}
+      {s.found.more.length > 0 && (
+        <details className="rounded-lg border border-border/60 px-3 py-2 text-[13px]" data-testid="call-found-more">
+          <summary className="cursor-pointer text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{s.found.more.length} more {s.found.more.length === 1 ? 'point' : 'points'}</summary>
+          <ul className="mt-2 list-disc space-y-0.5 pl-5">{s.found.more.map((l) => <li key={l}>{l}</li>)}</ul>
+        </details>
       )}
       {s.found.sources.some((x) => x.evidence || x.improvement) && (
         <details className="rounded-lg border border-border/60 px-3 py-2 text-[12px] text-muted-foreground" data-testid="call-found-evidence">

@@ -16,6 +16,7 @@
 import type { HookScore } from './hookScore';
 import { auditFromStoredCrawl, HOME_FETCH_LABELS, type AuditFinding, type SiteAudit, type StoredCrawlForAudit } from './siteAudit';
 import { isAggregatorUrl } from './aggregators';
+import { websiteCheckFor } from './websiteCheck';
 import type { OpportunityKind } from './salesInsights';
 
 export const NO_WEBSITE_TEXT = 'No website was found for this business, so there is no site for search engines or AI systems to crawl and verify.';
@@ -28,7 +29,9 @@ export type WebsiteState =
   | { kind: 'not_crawled'; url: string }
   | { kind: 'crawling'; url: string; label: string | null }
   | { kind: 'failed'; url: string; reason: string; checkedAt: string | null }
-  | { kind: 'audited'; url: string; audit: SiteAudit; checkedAt: string | null; source: 'fresh' | 'saved' };
+  | { kind: 'audited'; url: string; audit: SiteAudit; checkedAt: string | null; source: 'fresh' | 'saved';
+      /** THE one-line verdict every screen says (src/lib/websiteCheck.ts) — the Inbox icon, the call script, the report. */
+      headline: string };
 
 export interface LeadForAudit { website?: string | null; place_id?: string | null }
 
@@ -54,7 +57,8 @@ export function websiteState(input: {
   }
   const audit = auditFromStoredCrawl(row);
   if (!audit) return { kind: 'not_crawled', url: site };
-  return { kind: 'audited', url: site, audit, checkedAt, source: input.justRan ? 'fresh' : 'saved' };
+  return { kind: 'audited', url: site, audit, checkedAt, source: input.justRan ? 'fresh' : 'saved',
+    headline: websiteCheckFor(row, { website: site }).headline };
 }
 
 /** A plain coverage line: "Read 500 of 2,340 pages found (capped) · 3 sitemaps · checked 2 Oct". */

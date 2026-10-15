@@ -185,7 +185,8 @@ console.log('\n── Sales can NOT queue an Indian mobile any more; UK rule unc
   /* 2026-10-14: 20261025090000 re-creates it — the UK-only line becomes THE market rule (public.mobile_market) + the per-country
      switch. The UK half of mobile_market is the old test, character for character; India is still never a market. */
   /* 2026-10-14: 20261026090000 re-creates it (the live body + the report-offer template + queued_by_user_id); the market rule is unchanged. */
-  ok(latest === '20261026090000_message_name_report_offer.sql', 'the newest sales_queue_opener is the report-offer migration (' + latest + ')');
+  /* 2026-10-15: 20261029090000 re-creates it (the live body + the Call-campaign confirm); the market rule is unchanged. */
+  ok(latest === '20261029090000_send_error_capture.sql', 'the newest sales_queue_opener is the send-error-capture migration (' + latest + ')');
   ok(fn.includes("elsif public.mobile_market(v_lead.country, v_pk) is null then v_reason := 'not_a_uk_mobile';")
     && fn.includes("elsif not public.outreach_channel_on(public.mobile_market(v_lead.country, v_pk), 'whatsapp') then v_reason := 'country_off';"),
     'the one cold test: a mobile in a market whose WhatsApp switch is on');

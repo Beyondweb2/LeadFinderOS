@@ -152,7 +152,7 @@ console.log('9. Meta acceptance is the only thing that makes a send "sent"');
   const send = drip.slice(drip.indexOf('if (sendLive) {'), drip.indexOf('// Route the lead by outcome:') > 0 ? drip.indexOf('// Route the lead by outcome:') : drip.indexOf('Route the lead'));
   ok(/res\.ok && data\?\.messages\?\.\[0\]\?\.id/.test(send), 'accepted = HTTP ok AND a Meta message id (13)');
   ok(/messageId = data\.messages\[0\]\.id;\s*outcome = "sent";\s*deliveryStatus = "sent";/.test(send), '…and only then is it "sent" with the id kept (14)');
-  ok(/sendError = JSON\.stringify\(data\?\.error \?\? data\)/.test(send) && /classifyFailure\(failCode\) === "permanent" \? "no_whatsapp" : "temporary"/.test(send), 'a rejection keeps Meta\'s error and is permanent or temporary — never sent (15)');
+  ok(/sendError = maskSecrets\(JSON\.stringify\(data\?\.error \?\? data\)\)/.test(send) && /classifyFailure\(failCode\) === "permanent" \? "no_whatsapp" : "temporary"/.test(send), 'a rejection keeps Meta\'s error and is permanent or temporary — never sent (15)');
   ok(/catch \(e\)[\s\S]*outcome = "temporary";[\s\S]*deliveryStatus = "failed_temporary"/.test(send), 'a network throw is a temporary failure, never sent');
   const raw = read('supabase/functions/process-whatsapp-queue/index.ts');
   const afterSend = code(raw.slice(raw.indexOf('// Route the lead by outcome:'), raw.indexOf('// Pace the next send after ANY')));

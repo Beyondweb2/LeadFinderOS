@@ -85,8 +85,9 @@ export function resolveCrawlMode(requested: unknown, isOperator: boolean): Crawl
 }
 
 /** Where the manual crawl was started — recorded, never used to decide anything (except the intake door below).
- *  'client_intake' = the paid client auto-intake (2026-10-06, src/lib/clientIntake.ts). */
-export const CRAWL_REQUEST_SOURCES = ['outreach', 'inbox', 'lead_detail', 'paid_client', 'website_build', 'client_intake'] as const;
+ *  'client_intake' = the paid client auto-intake (2026-10-06, src/lib/clientIntake.ts).
+ *  'automatic' = the deep check a prospect's quick check queues behind itself (2026-10-15, src/lib/websiteCheck.ts). */
+export const CRAWL_REQUEST_SOURCES = ['outreach', 'inbox', 'lead_detail', 'paid_client', 'website_build', 'client_intake', 'automatic'] as const;
 
 /** ⛔ THE ONE INTERNAL FULL CRAWL (2026-10-06): the paid client auto-intake may ask crawl-check for an
  *  exhaustive crawl of a lead's OWN website — an internal caller, exactly `mode: "full"`,
@@ -286,6 +287,26 @@ export interface PageDigest {
   jsonLdInvalid?: number;
   /** H3 headings (question-style headings are read from H2 + H3). */
   h3?: string[];
+  /* ── added 2026-10-15 (one deep website check, docs/website-check.md). ABSENT on older rows = not checked. ── */
+  /** How long the page took to download during our crawl, in milliseconds (one fetch — not a browser speed test). */
+  ms?: number;
+  /** The page's HTML size in bytes, as downloaded. */
+  bytes?: number;
+  /** An enquiry form on the page (a form with an email / phone field or a message box, or an embedded form), or none. */
+  form?: 'enquiry' | 'none';
+}
+
+/** An enquiry form in the page HTML: a <form> holding an email / phone input or a message box (a search box alone is
+ *  not one), or an embedded form-builder frame. Read from the HTML as served: a form that only appears after JavaScript
+ *  runs is not seen (said in the finding). */
+export function detectEnquiryForm(html: string): 'enquiry' | 'none' {
+  const h = html || '';
+  for (const m of h.match(/<form\b[\s\S]*?<\/form>/gi) ?? []) {
+    if (/role=["']search["']/i.test(m.slice(0, 300))) continue;
+    if (/<textarea\b/i.test(m) || /<input\b[^>]*type=["'](email|tel)["']/i.test(m) || /<input\b[^>]*name=["'][^"']*(e-?mail|phone|tel|mobile)[^"']*["']/i.test(m)) return 'enquiry';
+  }
+  if (/<iframe\b[^>]*src=["'][^"']*(jotform|typeform|forms\.gle|docs\.google\.com\/forms|hsforms|formstack|cognitoforms|wufoo|tally\.so)/i.test(h)) return 'enquiry';
+  return 'none';
 }
 
 /** One piece of evidence: what was seen, and where. */
@@ -397,6 +418,7 @@ export function processPage(p: { url: string; finalUrl: string; status: number; 
     viewport: /<meta\b[^>]*name=["']viewport["']/i.test(head),
     jsonLdInvalid: jsonLdBlocks(html).filter((b) => { try { JSON.parse(b); return false; } catch { return true; } }).length,
     h3: headings(html, 3, 12),
+    form: detectEnquiryForm(html),
   };
 
   const b: PageBusiness = { names: [], phones: [], emails: [], addresses: [], people: [], credentials: [], guarantees: [], experience: [], prices: [], reviews: [], profiles: [], schema: [], logo: '', favicon: '', ogImage: '', siteName: '' };

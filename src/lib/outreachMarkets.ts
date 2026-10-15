@@ -62,6 +62,10 @@ export interface CountrySetting {
   send_start_min?: number | null;
   send_end_min?: number | null;
   timezone?: string | null;
+  /* 2026-10-15 (src/lib/countryAutoPause.ts): when WhatsApp was last switched on, and the automatic switch-off note. */
+  whatsapp_on_since?: string | null;
+  whatsapp_auto_paused_at?: string | null;
+  whatsapp_auto_pause_reason?: string | null;
 }
 
 /** What a missing row / missing table means: the UK on (exactly as before), Malaysia and Singapore off. */

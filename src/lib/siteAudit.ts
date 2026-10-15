@@ -43,6 +43,14 @@ export const AUDIT_TITLE_MAX = 65;
 const LINK_GRAPH_MIN_SHARE = 0.9;
 /** Clicks from the homepage beyond which a page is "buried". */
 export const AUDIT_DEEP_CLICKS = 3;
+/* Page speed (2026-10-15): our crawl's own download time per page. Judged only with this many timed pages. */
+export const AUDIT_SPEED_MIN_PAGES = 3;
+/** A typical (median) page slower than this is a MEDIUM finding. */
+export const AUDIT_SLOW_MEDIAN_MS = 3000;
+/** Any single page slower than this is listed. */
+export const AUDIT_SLOW_PAGE_MS = 5000;
+/** HTML bigger than this is "very large". */
+export const AUDIT_HEAVY_PAGE_BYTES = 2_000_000;
 
 export type AuditSeverity = 'high' | 'medium' | 'low' | 'good';
 export type AuditCategory = 'discovery' | 'ai_access' | 'entity' | 'content' | 'structured_data' | 'technical' | 'local_evidence';
@@ -412,6 +420,16 @@ export function buildSiteAudit(input: SiteAuditInput): SiteAudit {
   const phones = biz('phones');
   if (phones.length) out.push(finding({ id: 'phone_shown', category: 'entity', severity: 'good', title: 'Phone number shown', saw: `${String(phones[0].v)} (on ${plural(new Set(phones.map((p) => p.url)).size, 'page')}).`, meaning: 'Customers and AI tools can find how to contact the business.', urls: [...new Set(phones.map((p) => p.url))] }));
   else if (ok.length) out.push(finding({ id: 'no_phone', category: 'entity', severity: 'medium', absence: true, title: 'No phone number found', saw: `No phone number was found${readScope || ' on any page read'}.`, meaning: 'Contact details are one of the ways a website is matched to the business’s listings.', count: 0 }));
+  /* A WORKING CONTACT ROUTE (2026-10-15): a phone number, an email address or an enquiry form, anywhere read. */
+  const emails = biz('emails');
+  const formKnown = ok.filter((p) => p.d!.form === 'enquiry' || p.d!.form === 'none');
+  const formPages = formKnown.filter((p) => p.d!.form === 'enquiry');
+  if (formPages.length) out.push(finding({ id: 'enquiry_form', category: 'entity', severity: 'good', title: 'Enquiry form found', saw: `An enquiry form on ${plural(formPages.length, 'page')}.`, meaning: 'Customers can get in touch from the site.', urls: formPages.map(urlOf) }));
+  if (formKnown.length && !formPages.length && !phones.length && !emails.length) {
+    out.push(finding({ id: 'no_contact_route', category: 'entity', severity: 'high', absence: true, title: 'No way to contact the business found',
+      saw: `No phone number, email address or enquiry form was found${readScope || ' on any page read'} (a form that only appears after JavaScript runs would not be visible to us).`,
+      meaning: 'A customer who finds the site has no clear way to get in touch, and contact details are one of the ways a website is matched to the business.', count: 0 }));
+  }
   const contactPages = ok.filter((p) => fam(p) === 'contact');
   if (!contactPages.length && ok.length > 1) out.push(finding({ id: 'no_contact_page', category: 'entity', severity: 'low', absence: true, title: 'No contact page found', saw: `No page looks like a contact page${readScope}.`, meaning: 'A dedicated contact page is the usual place customers and crawlers look for contact details.', count: 0 }));
   const aboutPages = ok.filter((p) => fam(p) === 'about');
@@ -490,7 +508,30 @@ export function buildSiteAudit(input: SiteAuditInput): SiteAudit {
   const noViewport = viewportKnown.filter((p) => p.d!.viewport === false);
   if (noViewport.length) out.push(finding({ id: 'no_viewport', category: 'technical', severity: noViewport.some((p) => fam(p) === 'homepage') ? 'medium' : 'low', title: 'Pages not set up for phones', saw: `${plural(noViewport.length, 'page')} have no mobile viewport setting${noViewport.some((p) => fam(p) === 'homepage') ? ', including the homepage' : ''}.`, meaning: 'Without it, phones show a shrunken desktop page.', urls: noViewport.map(urlOf) }));
   if (!viewportKnown.length && ok.length) notChecked.push('Mobile viewport — this crawl predates the check.');
-  notChecked.push('Page speed — not measured by this crawl.');
+  /* PAGE SPEED (2026-10-15): how long each page took to download during our crawl. One fetch per page from our server,
+     so it is a server-response measure, not a full browser speed test — said in the words. Judged only on 3+ timed pages. */
+  const timed = ok.filter((p) => typeof p.d!.ms === 'number' && p.d!.ms! > 0);
+  if (timed.length >= AUDIT_SPEED_MIN_PAGES) {
+    const sorted = timed.map((p) => p.d!.ms!).sort((a, b) => a - b);
+    const median = sorted[Math.floor(sorted.length / 2)];
+    const slow = timed.filter((p) => p.d!.ms! >= AUDIT_SLOW_PAGE_MS);
+    const secs = (ms: number) => (ms / 1000).toFixed(1);
+    if (median >= AUDIT_SLOW_MEDIAN_MS) {
+      out.push(finding({ id: 'slow_pages', category: 'technical', severity: 'medium', title: 'Pages were slow to load',
+        saw: `Half the ${fmt(timed.length)} pages we timed took over ${secs(median)} seconds to download (slowest ${secs(sorted[sorted.length - 1])} s).`,
+        meaning: 'Slow pages lose visitors on phones, and a crawler with a short time limit may give up before the page arrives. Measured as download time from our server, not a full browser test.',
+        urls: slow.length ? slow.map(urlOf) : timed.map(urlOf) }));
+    } else if (slow.length) {
+      out.push(finding({ id: 'some_slow_pages', category: 'technical', severity: 'low', title: 'Some pages were slow to load',
+        saw: `${plural(slow.length, 'page')} took over ${secs(AUDIT_SLOW_PAGE_MS)} seconds to download; the typical page took ${secs(median)} s.`,
+        meaning: 'Worth checking those pages; measured as download time from our server, not a full browser test.', urls: slow.map(urlOf) }));
+    }
+    const heavy = ok.filter((p) => typeof p.d!.bytes === 'number' && p.d!.bytes! >= AUDIT_HEAVY_PAGE_BYTES);
+    if (heavy.length) out.push(finding({ id: 'heavy_pages', category: 'technical', severity: 'low', title: 'Very large pages',
+      saw: `${plural(heavy.length, 'page')} send over ${Math.round(AUDIT_HEAVY_PAGE_BYTES / 1_000_000)} MB of HTML.`,
+      meaning: 'Large pages are slower on a phone signal.', urls: heavy.map(urlOf) }));
+    notChecked.push('Page speed — measured as download time from our server during the crawl, not a full browser speed test.');
+  } else notChecked.push('Page speed — not measured by this crawl.');
 
   /* ── Structured data ────────────────────────────────────────────────────────────────────────── */
   const invalidKnown = ok.filter((p) => typeof p.d!.jsonLdInvalid === 'number');
@@ -642,7 +683,17 @@ function auditFromStoredCrawlBase(row: StoredCrawlForAudit | null | undefined): 
     if (s.searchBlocked?.length) findings.push(finding({ id: 'search_crawler_refused', category: 'ai_access', severity: 'high', title: 'The site refused AI search crawlers', saw: `Requested as ${s.searchBlocked.join(', ')}, the homepage answered with an error or a bot-check page.`, meaning: 'An AI assistant that fetches the page may get nothing to read.', evidence: s.searchBlocked, count: 0 }));
     if (s.clientRendered?.flagged) findings.push(finding({ id: 'client_rendered', category: 'ai_access', severity: 'medium', title: 'Homepage text only appears after JavaScript runs', saw: 'The homepage HTML carries very little readable text.', meaning: 'Crawlers that do not run JavaScript may see an almost empty page.', count: 0 }));
     if (s.duplicates) findings.push(finding({ id: 'near_duplicate_pages', category: 'content', severity: 'medium', title: 'Near-identical location or service pages', saw: `${plural(s.duplicates.clusterSize, 'page')} follow one template; those compared are about ${s.duplicates.similarityPct}% the same.`, meaning: 'Pages that differ only by a town name may be treated as copies.', count: s.duplicates.clusterSize }));
-    if (s.thinPageUrls?.length) findings.push(finding({ id: 'thin_pages', category: 'content', severity: 'low', title: 'Thin pages', saw: `${plural(s.thinPageUrls.length, 'checked page')} have under ${AUDIT_THIN_WORDS} words.`, meaning: 'Very short pages say little about what the business does.', urls: s.thinPageUrls }));
+    /* The quick check samples the homepage and the service / location pages, so a thin one is a key page (MEDIUM, as the
+       deep audit's thin_key_pages). ⛔ A thin HOMEPAGE is said as the homepage, never "one of the service pages" (The
+       Royal Locksmiths, 2026-09-23). */
+    if (s.thinPageUrls?.length) {
+      const homeOnly = s.thinPageUrls.every((u) => { try { return (new URL(u).pathname.replace(/\/+$/, '') || '/') === '/'; } catch { return false; } });
+      const n = s.thinPageUrls.length;
+      findings.push(finding({ id: 'thin_pages', category: 'content', severity: 'medium',
+        title: homeOnly ? 'Homepage light on detail' : 'Key pages light on detail',
+        saw: homeOnly ? `The homepage has under ${AUDIT_THIN_WORDS} words of readable text.` : `${plural(n, 'checked page')} ${n === 1 ? 'has' : 'have'} under ${AUDIT_THIN_WORDS} words of readable text.`,
+        meaning: 'Very short pages say little about what the business does.', urls: s.thinPageUrls }));
+    }
     if (s.missingH1) findings.push(finding({ id: 'missing_h1', category: 'content', severity: 'medium', title: 'Homepage has no main heading (H1)', saw: 'The homepage has no H1 heading.', meaning: 'The main heading is the clearest statement of what a page is about.', count: 0 }));
     if (s.noJsonLd) findings.push(finding({ id: 'no_business_schema', category: 'structured_data', severity: 'low', title: 'Homepage has no structured data', saw: 'No JSON-LD on the homepage.', meaning: 'Good housekeeping; on its own not a ranking fix.', count: 0 }));
     if (row.result?.siteInfo?.phone) findings.push(finding({ id: 'phone_shown', category: 'entity', severity: 'good', title: 'Phone number shown', saw: row.result.siteInfo.phone, meaning: 'Customers can find how to contact the business.', count: 0 }));

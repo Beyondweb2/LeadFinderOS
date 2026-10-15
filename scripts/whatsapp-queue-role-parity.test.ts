@@ -91,7 +91,7 @@ console.log("\n── every queue path refreshes the one queue ──");
   ok(/recordQueueBatch\(queuedCount, skippedLines\)/.test(table) && /Promise\.allSettled\(writes\)\.then\(\(\) => announceQueueChanged\(\)\)/.test(table), "Admin bulk queue: records the batch and announces after the writes land");
   ok(/Promise\.allSettled\(followupWrites\)\.then\(\(\) => announceQueueChanged\(\)\)/.test(table), "Admin follow-up queue announces too");
   const controls = strip(read("src/components/WhatsAppLeadControls.tsx"));
-  ok(/salesQueueOpener\(\[lead\.id\], template\)[\s\S]*?announceQueueChanged\(\)/.test(controls) && /finally \{\s*setBusy\(false\);\s*announceQueueChanged\(\);/.test(controls), "the lead popup (both roles) announces the change");
+  ok(/salesQueueOpener\(\[lead\.id\], template, callOk\)[\s\S]*?announceQueueChanged\(\)/.test(controls) && /finally \{\s*setBusy\(false\);\s*announceQueueChanged\(\);/.test(controls), "the lead popup (both roles) announces the change");
   const camp = strip(read("src/hooks/useMyCampaigns.ts"));
   ok(/qc\.invalidateQueries\(\{ queryKey: WHATSAPP_QUEUE_KEY \}\)/.test(camp) && /announceQueueChanged\(\);/.test(camp), "campaign launch / stop / add refresh the queue");
 }

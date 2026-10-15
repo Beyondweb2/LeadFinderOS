@@ -252,6 +252,7 @@ export const QUEUE_SKIP_LABEL: Record<string, string> = {
   country_off: 'a Malaysia / Singapore mobile, but that country is switched off for now (not flagged — Paul can switch it on)',
   opted_out: 'opted out',
   daily_limit: 'over your daily limit',
+  call_campaign: 'in a Call campaign (queue again and confirm to send WhatsApp anyway)',
 };
 
 /* ⛔ THE OUTCOME LIST IS lead_log_contact's ALLOWLIST (newest: migration 20260930140000) — the server refuses

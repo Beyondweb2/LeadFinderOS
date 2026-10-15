@@ -97,7 +97,7 @@ ok(/useEffect\(\(\) => \{ setSelectedIds\(new Set\(\)\); \}, \[ownerScope\]\)/.t
 {
   const h = table.slice(table.indexOf("const handleQueueForWhatsApp"), table.indexOf("// Archive selected leads"));
   const guard = h.indexOf("contactScopeCheck(");
-  ok(guard > 0 && guard < h.indexOf("handleQueueContactFollowup()") && guard < h.indexOf("handleSalesQueue(template)") && guard < h.indexOf("onUpdateLead(id, patch)"),
+  ok(guard > 0 && guard < h.indexOf("handleQueueContactFollowup()") && guard < h.indexOf("handleSalesQueue(template,") && guard < h.indexOf("onUpdateLead(id, patch)"),
     "the queue handler checks owners BEFORE any queue write (opener, follow-up lane, sales path)");
   ok(/needsConfirm && !opts\.crossOwnerConfirmed/.test(h), "a cross-owner batch without the confirmation does not queue");
   ok(/ownerCheck\.refuse/.test(h), "a refused (sales) batch does not queue");

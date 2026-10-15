@@ -22,6 +22,40 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-15-one-website-check', date: '2026-10-15', title: 'One website check everywhere, and the call script lists the issues', audience: 'all',
+    body: 'Every screen now shows the same website check for a lead: the Inbox crawl icon, the call script, the report and the lead’s audit. The call script lists the issues as short lines.',
+    report: {
+      added: [
+        'A deeper website check for every prospect with a site: after the quick check, up to 60 of the most important pages are read automatically (services, about, contact, area pages first). It costs nothing but page downloads.',
+        'Two new checks: page speed (how long each page took to download — not a full browser test) and whether there is any way to contact the business (a phone number, email or enquiry form).',
+        'The date of the check and how many pages it covered, shown with the findings.',
+      ],
+      changed: [
+        'The Inbox crawl icon, the call script, the report and the lead’s audit all read ONE stored check, so they can no longer disagree.',
+        'The call script lists each website issue as one short plain line (most important first, five shown, the rest on a tap). No issues → one line saying so.',
+        'Every issue says the page it was found on. Nothing is invented; llms.txt is never treated as an issue.',
+      ],
+      removed: [
+        'The "I found a few potential reasons" sentence and the "isn’t really set up to be found by AI" line in the call script.',
+      ],
+      effect: 'What you read on the call is exactly what the Inbox and the report show for that lead, and you can see when it was checked and how much of the site was read.',
+    } },
+  { id: '2026-10-15-send-error-capture', date: '2026-10-15', title: 'The real reason a WhatsApp send failed, and safer Malaysia / Singapore sending', audience: 'admin',
+    body: 'A failed WhatsApp message now shows Meta’s own error code and what it means. Malaysia and Singapore switch themselves off if their first sends fail, and a failed send there is never retried by itself.',
+    report: {
+      added: [
+        'Meta’s error code and a one-line meaning next to "Send failed" in the Inbox, and a "Failed sends — last 7 days" list in the WhatsApp queue panel.',
+        'Each country (Malaysia, Singapore) switches its WhatsApp off by itself when sends fail: any failure in its first 5 sends (except "not on WhatsApp"), or 2 of its last 5. A red banner says why.',
+        'Who paused or resumed the queue, and when, under the PAUSED chip.',
+        'A question before WhatsApp is queued for leads in a Call campaign.',
+      ],
+      changed: [
+        'A failed send to a Malaysia or Singapore number is no longer retried automatically: the lead goes to "WhatsApp failed" for a person to decide.',
+        'Malaysia and Singapore WhatsApp were switched off by this rule on release (each failed its only send on 14 Oct). Nothing was switched on.',
+      ],
+      removed: [],
+      effect: 'You can see why a send failed instead of "temporary failure", and a new country cannot keep failing quietly. Turn Malaysia or Singapore back on only to test a handful by hand.',
+    } },
   { id: '2026-10-14-bulk-audit-score', date: '2026-10-14', title: 'Bulk AI audits now give a visibility score', audience: 'admin',
     body: 'A finished bulk AI audit now gives the lead an AI visibility score (for example 67%), worked out the same way as the quick AI check. That lets bulk-audited leads get the report-offer WhatsApp message.',
     report: {

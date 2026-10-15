@@ -63,7 +63,7 @@ console.log('\n── 2. every cold-opener door asks the SAME function ──');
   ok(/BUILD_ID = "2026-10-(0[5-9]|1[0-9])[a-z]-[a-z-]+"/.test(sender) && /opener_contact_block/.test(sender), 'send-whatsapp-message BUILD_ID bumped (the deploy marker) and the contact guard still present');
   ok(/body: \{ mode: 'contact_check', phones, \.\.\.\(wantsColdGuard \? \{ lead_ids: ids \} : \{\}\) \}/.test(table) && /if \(wantsColdGuard && conversation\[id\]\) \{ skipNames\.logged_conversation\.push\(nameOf\(l\)\); return false; \}/.test(table), 'Outreach bulk queue (admin) asks it for a cold template and does not queue those leads');
   ok(/if \(isColdOutreachTemplate\(template\)\) \{[\s\S]{0,400}mode: 'contact_check', phones: \[\], lead_ids: \[lead\.id\]/.test(controls) && /if \(chkErr \|\| !res\?\.ok\) \{ toast\(\{ title: 'Not queued'/.test(controls), 'the per-lead queue toggle (admin) asks it too, failing closed');
-  ok(/salesQueueOpener\(\[lead\.id\], template\)/.test(controls) && /handleSalesQueue|salesQueueOpener/.test(table), 'a salesperson\'s per-lead and bulk queue still go through sales_queue_opener (the same function)');
+  ok(/salesQueueOpener\(\[lead\.id\], template, callOk\)/.test(controls) && /handleSalesQueue|salesQueueOpener/.test(table), 'a salesperson\'s per-lead and bulk queue still go through sales_queue_opener (the same function)');
   ok(/campaign_launch[\s\S]*v_r := public\.sales_queue_opener\(v_chunk, v_template\);/.test(V2), 'campaign launch still goes through sales_queue_opener → therefore the campaign and Outreach decisions are the same function');
 }
 
