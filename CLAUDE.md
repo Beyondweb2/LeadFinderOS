@@ -1268,44 +1268,21 @@ positive allowlist of `baseline`; `isColdOutreachTemplate` treats unknown as COL
 
 | Thing | Path |
 |---|---|
-| Offer, guarantee, prices | `src/lib/findableOffer.ts` (+ `_shared/offer-price.ts`; findable-site `src/lib/site.ts`) |
-| Audit kinds, SEO allowlist | `src/lib/auditKind.ts` (`audit_purpose` is the marker) |
-| Named signal | `src/lib/namedSignal.ts`, `_shared/derivable.ts` (`nameIsJudgeable`) |
-| Measurement folds | `src/lib/measurementCompare.ts`, `measurementRunGroups.ts`, `measurementExport.ts`, `baselineView.ts`, `pooledRuns.ts` |
-| Baseline/replay engine | `_shared/audit-baseline.ts` (`advanceBaseline`, `fireDueRemeasures`), `src/lib/baselineReplay.ts`, `fullMeasure.ts`, `questionFill.ts`, `remeasureDue.ts`, `remeasureFill.ts` |
-| Results sender + document | `_shared/remeasure-results.ts`, `src/lib/remeasureResults.ts`, `remeasureResultsHtml.ts`, fn `render-remeasure-results` |
-| Client report | `src/lib/auditReport.ts` (`buildReportData`), `aiAuditReportHtml.ts`, fn `render-audit-report`, `measuringState.ts` |
-| Report gates | `competitorCleaning.ts`, `knownEntities.ts`, `sourceType.ts`, `seedGuard.ts` |
-| WhatsApp registries | `_shared/whatsapp-send.ts`, `process-whatsapp-queue` mirror, `src/types/outreach.ts`, `src/lib/whatsappTemplates.ts`, `templateBodies.ts`, `templateVars.ts`, `templateRouting.ts`, `coldOutreach.ts`, `rivalHook.ts`, `displayName.ts`, `firstReplyMode.ts` |
-| Senders | fn `send-whatsapp-message` (Inbox, `dry_run`, `test_send`), `process-whatsapp-queue` (drip, first-reply lane, `contact_check`, `suppress_lead`), `_shared/whatsapp-inbound.ts` (via `whatsapp-status`) |
 | Voice notes (Inbox, 24h only) | fn `send-whatsapp-voice`, `_shared/voice-note-send.ts`, `src/lib/oggOpus.ts` (WebM→Ogg remux), `voiceNote.ts`, `VoiceNoteRecorder`/`VoiceNotePlayer` — `docs/whatsapp-voice-notes.md` |
-| Sales pre-call checks ("Check before calling") | `src/lib/salesCheck.ts`, `_shared/sales-check.ts`, fn `sales-prospect-check`, tables `sales_check_batches` / `_items`, `SalesCheckPanel.tsx`, `SalesChecksAdminCard.tsx`, `callCardAudit` (`coldCallPlaybook.ts`) |
-| Free check | `_shared/free-check-lead.ts`, `free-check-audit.ts`, `free-check-result.ts`, `same-business.ts`, `src/lib/freeCheckProgress.ts`, fns `findable-onboarding`, `submissions`, `notify-onboarding-submit` |
-| Town | `src/lib/townVerdict.ts`, `_shared/place-details.ts`, `place-town.ts`, `place-resolve.ts`, `town-distance.ts`, fn `backfill-lead-towns`, table `uk_towns` |
-| Serve gate | `src/lib/serveGate.ts` (+ findable-site mirror) |
-| Multi-user / roles | `src/lib/roleRules.ts`, `src/lib/access.ts` (matrix), `src/components/RequireAccess.tsx`, `_shared/access.ts`, `src/lib/salesCrm.ts`, `src/hooks/useSalesCrm.ts`, `LeadCrmPanel`, `AvailableToClaim`, `src/lib/leadRpc.ts` + `salesPatchPlan.ts`, pages `Team`/`SetPassword`, fn `admin-users` (team actions), migrations `20260927100000…100400` + `140000`, view `sales_leads`, tables `team_members`/`lead_activity` |
-| Sales Team Board | `src/lib/teamBoard.ts`, `src/hooks/useTeamBoard.ts`, `src/components/team/` (TeamBoard, TeamComposer, TeamOversight), `adminMetrics.delegation`, migration `20261001200000`, test `supabase/tests/sales-team-board.sql` |
 | Admin dashboard rules (2026-09-30) | ⛔ Every admin number comes from `_shared/admin-overview-load.ts` → `src/lib/adminMetrics.ts` (the dashboard AND the AI briefing — never a second fold). ⛔ Reply triage (`replyTriage.ts`): opt-out suppression is PHRASES ONLY, never the model, never a paying client; the model only files. ⛔ `audit_purpose = 'weekly_check'` is monitoring, never the guarantee — no pointer trigger reads it and `render-audit-report` refuses it. ⛔ findable.live analytics send only the fields the privacy page lists (`findable-site/src/lib/analytics.ts`); change both or neither. ⛔ The AI briefing is stored only when every number in it is in its facts (`validateNumbers`). |
 | Admin dashboard (control centre) | `src/pages/Dashboard.tsx`, `src/components/admin/controlCentre.tsx`, `src/hooks/useAdminOverview.ts`, fn `admin-overview`, `src/lib/adminMetrics.ts` (every definition), `reportingPeriod.ts` (the ONE London-day clock), `metricExclusions.ts` + table `metric_exclusions`, `apiCostLabels.ts` + SQL `admin_api_cost` — `docs/admin-control-centre.md`. ⛔ Test accounts test1/Test are excluded from performance numbers by ROW, never by name; their leads stay in inventory |
-| Dashboard (older, now unrendered) | `src/hooks/useDashboardMetrics.ts` (still the `FOUNDER_PRICE_GBP` sync source), `useCampaignStats.ts`, `src/lib/templateAttribution.ts`, `armComparison.ts`, `realSend.ts`, `leadPayment.ts`, `dashboardTasks.ts`, `deliveryCockpit.ts` |
-| Coverage / niche | `src/pages/Coverage.tsx`, `NichePanel.tsx`, `src/lib/nicheView.ts`, `coverageState.ts` (`foundAddedByPair`), `websiteStatusClass.ts`, fns `coverage`, `market-view` |
 | Coverage multi-town search + bulk add | `src/lib/multiTownSearch.ts` (every rule), `useMultiTownLeads`, `CoverageMultiTown.tsx`, SQL `coverage_add_leads` — `docs/coverage-multi-town.md`. ⛔ Each town is ordinary `search-leads` with `townOnly` (Google, never Apify); the bulk add writes exactly what a single search add writes (owner, campaign_usable, no lead_source / import_batch) and never adds a lead without its phone / town lookup |
 | Lead ready check ("Needs info") | `src/lib/leadReadiness.ts` (one function), `src/components/LeadReadiness.tsx`, bulk-jobs' town rule `auditTownCheck` (`_shared/typed-town.ts`) — `docs/lead-ready-check.md`. ⛔ It CALLS the gates' predicates, never copies them; a new audit / send gate must be reflected there or `scripts/lead-readiness.test.ts` (an oracle from the server lines) fails |
 | Directory / profile presence (discovery only) — THE one directory engine | `src/lib/directoryPresence.ts`, `presenceSources.ts`, `directoryFacts.ts` (64 hosts), fn `directory-presence`, SQL fn `presence_trade_citation_hosts`, tables `lead_directory_presence` (one row per lead × source) + `_runs`. Retired 2026-09-30: fns `check-directory-listings`, `playbook-evidence`, the Playbook libraries; tables `lead_directory_checks` / `client_listings` kept as history |
 | Website Build (command centre, V2) | `src/pages/WebsiteBuild.tsx`, `src/lib/websiteBuildState.ts` (the ONE shape rule, browser + `paid-client-hub`; `version: 2`, V1 rows read through), `buildRoutes.ts` (routes + stage checklists — stored check keys, never rename), `websiteTemplates.ts` (MCL profile + forbidden seed values, hand-kept), `buildFacts.ts`, `buildArchitecture.ts`, `buildPack.ts`, `stagePrompts.ts`, recon: `reconSchema.ts` (the JSON contract, `reconVersion`), `recon.ts` (prompt, safe import, merge), `manifestSummary.ts` (fenced per-route summaries — never the raw JSON in a prompt), mapping: `templateMapping.ts` (`computeMapping` — trade-agnostic; a template only DECLARES fields / catalogue / slots in `websiteTemplates.ts`; only `ready` values reach the config; recon risk rule `LOW_RISK_FACT_KEYS` is a positive allowlist), execution: `buildExecution.ts` (Build Execution prompt refused while blocked; PREVIEW READY is gated by `previewGateProblems` — pages.dev + noindex + clean seed scrub + passing checks, whatever Claude claims; a failed result never erases the last good build); column `outreach_leads.website_build`. ⛔ Redeploy `paid-client-hub` BEFORE the SPA when the shape changes — the old server drops unknown keys on save |
 | Client-site enquiry forms | fn `site-enquiry`, `_shared/site-enquiry.ts` (`CLIENT_SITES` — recipient never from the request; only the production origin delivers, preview/localhost = test mode), table `site_enquiries` |
-| Page generator / page plan / review replies | Inside Paid Clients since 2026-10-06 (Tools tab + each client's Pages & reviews; old URLs redirect): `src/lib/paidClientTools.ts` (every address), `src/components/clientTools/`, `src/lib/pagePlan.ts`, `pagePlanQueue.ts`, `qaAnswerGuard.ts`, fns `page-generator`/`review-reply`, tables `client_pages`/`client_page_questions` (`docs/operator-design-consistency.md`) |
-| Operator look (dialogs, cards, chips) | `src/components/salesDash/primitives.tsx` (TONE, the leaf), `src/components/operator/ui.tsx` (DialogHero, ToneChip, Callout, SubSection, ActionBar, EDGE) — both LEAVES (no auth/client imports); `Panel` stays in `salesDash/ui.tsx` |
 | Warm reply drafter (Inbox) | `src/lib/warmLeadResearch.ts`, `src/lib/warmReply.ts`, `src/lib/serviceWindow.ts`, `src/components/WarmReplyAssistant.tsx`, fn `warm-lead-reply`, table `warm_lead_research` (`docs/warm-lead-reply.md`). ⛔ It drafts into the composer and NEVER sends; a model finding survives only if its quote is on the page |
-| Sales dashboard / prospect workspace / sync | `src/pages/SalesDashboard.tsx`, fn `sales-performance`, `src/lib/salesPerformance.ts`, `LeadDetailDialog` tabs + `LeadCrmPanel` (`LeadWorkPanel`/`LeadHookPanel`/`LeadHistoryPanel`), `ProspectFacts`, `AddLeadDialog`, `ClientOnboardingStrip`, `src/lib/leadSync.ts`, `src/lib/onboardingLinkStatus.ts` + `useOnboardingLink`, table `onboarding_link_events`, SQL `lead_log_contact` / `lead_onboarding_link_event` (`docs/sales-readiness.md`) |
-| Self-sourced prospect + paid handoff | `src/lib/handoffReadiness.ts` (READY / MISSING, edge-reachable), `src/lib/reportShare.ts` + `useReportShare`, `ProspectProfilePanel` + `LeadHookPanel` (propose → review → run) in `LeadCrmPanel`, `ClientHandoffCard`, `create-ai-audit` `finalHookPlan`, SQL `lead_set_profile` / `lead_report_link_event` / `website_identity`, table `report_link_events`, trigger `trg_outreach_leads_sold_by` (`docs/self-sourced-handoff.md`) |
 | Voice-note script (Inbox, lead popup) | `src/lib/voiceNoteScript.ts`, `src/components/VoiceNoteScriptButton.tsx`, fn `voice-note-script`, table `voice_note_scripts` (`docs/voice-note-script.md`). ⛔ Never sends. The site research is `_shared/site-research.ts`, shared with `warm-lead-reply` — change it, redeploy BOTH |
-| Hook audit score (3 q × 2 engines) | `src/lib/hookScore.ts` (`scoreHookRun`, one ruler for card/report/6-of-6/send guard), `hookVisibility.ts`, `src/components/HookVisibilityCard.tsx` (`docs/hook-audit.md`) |
 | Cold Call Playbook (read-only) | `src/lib/coldCallPlaybook.ts`, `src/hooks/useColdCallPlaybook.ts`, `src/components/ColdCallPlaybook.tsx` (`docs/cold-call-playbook.md`) |
 | Prospect Preview (outreach homepage + evidence card, never sends; NOT a Website Build) | `src/lib/prospectPreview/`, fn `prospect-preview`, `_shared/prospect-preview-shot.ts`, `src/components/ProspectPreviewPanel.tsx`, table `prospect_previews` + private bucket `prospect-previews` (`docs/prospect-preview.md`) |
-| Mockup product (live) | fn `mockup`, `_shared/mockup-*.ts`, `src/pages/Mockups.tsx`, `src/mockup/templates/`, table `generated_sites`, bucket `mockup-assets` |
-| Audit engine | fns `create-ai-audit`, `process-ai-audit-queue`, `extract-competitors`, `run-seo-scan`, `_shared/enrichment/*` |
-| Harness | `scripts/run-tests.mjs`, `check-typecheck-baseline.mjs`, `check-edge-syntax.mjs`, `check-edge-undefined.mjs`, `check-cross-repo-sync.mjs` |
+
+The table above keeps only the rows that carry a rule. Every other path row (offer, audit kinds, measurement folds, senders,
+free check, town, templates, dashboards, page generator, harness…) is in `docs/archive/claude-md-moved-2026-10-15.md` (§7 rows); `docs/code-map.md` is the long form.
 
 - Live operator app **`https://app.leadfinderos.com`** — this is PRODUCTION (`OPERATOR_APP_URL`,
   `src/config/operatorApp.ts`). `https://leadfinderos-next.pages.dev` is the same project's own
@@ -1337,20 +1314,14 @@ positive allowlist of `baseline`; `isColdOutreachTemplate` treats unknown as COL
 
 ## 8. Known open problems — the short list (`docs/open-problems.md` has the long record)
 
-- ✅ **The pre-sales final release is DEPLOYED** (2026-10-05, `main` `c5c4a1b5`; 10 migrations, 38 functions —
-  `docs/pre-sales-certification/production-deployment.md`), followed the same day by Sales workspace v2, the
-  opener contact guard and the simple Website Build. The live open-actions list is
-  `docs/handover/12-OPEN-ACTIONS-AND-NEXT-PRIORITIES.md` (Apify cap still US$40, results copy, Stripe, Meta).
+- Resolved and corrected items (the pre-sales release deployed 2026-10-05, the OpenAI 429 cleared — its hardening stays: audits
+  finalise regardless, `_shared/run-finalise.ts` — `findable.live/w/<code>` live, the Pages auto-deploy "fault" that was never one, the
+  `client_error_reports.message` column, the red gate) are in `docs/archive/claude-md-moved-2026-10-15.md`. **The live open-actions list is
+  `docs/handover/12-OPEN-ACTIONS-AND-NEXT-PRIORITIES.md`.**
 - 🔴 ⛔ **`whatsapp-status` must not be deployed until the Findable Meta App and its exact App Secret are ready**
   (live = v114, 2026-09-30; `WHATSAPP_APP_SECRET` unset) — the new code fails closed without it; the post-call
   reply matcher rides the same deploy, so it waits too. Skip it in any closure redeploy. Cutover order:
   `docs/handover/07-SECURITY-AND-PERMISSIONS.md`.
-- ~~`client_error_reports` has no `message` column~~ — it exists (read back 2026-10-02).
-- ✅ **The OpenAI 429 is CLEARED** (was open 2026-09-20 → 2026-09-21; it was a billing/spend-limit
-  refusal, not a rate limit, fixed by Paul topping the key up). Verified live: competitor extraction
-  succeeded on 8/8 cells and question generation no longer falls back to templates
-  (`docs/measurement.md` §32). The hardening it prompted stays — audits finalise regardless
-  (`_shared/run-finalise.ts`) and the receipt keeps 400 chars of the error.
 - 🔴 **The Apify monthly cap is US$40 (read live 2026-10-05: US$29.04 used, cycle ends 16 Oct)** — Paul's
   decision is ~US$150 and raising it is HIS manual action. Prospecting stops at 85%, client work at 95%, and
   **at 100% every audit question and SEO scan stops, paying clients included** (§4,
@@ -1363,20 +1334,9 @@ positive allowlist of `baseline`; `isColdOutreachTemplate` treats unknown as COL
   biggest markets the day it runs).
 - `run_number` is a read-then-write with no unique index — the stagger stays sequential until it has one.
 - Nothing sends the four-week results by WhatsApp (email only); the email itself waits on copy approval.
-- ~~The gate is red on `origin/main` itself (2026-09-22)~~ — resolved: 268/268 green on 2026-10-02 (§0).
 - Two stranded free checks may still need the card's resend pressed.
 - `FINDABLE_ALLOWED_ORIGINS` may not contain `findable.live` — unfalsifiable and no longer depended on.
 - Website clicks other than the report link are untracked, by design for now.
-- ~~"the Cloudflare Pages auto-deploy is not running"~~ — **WRONG, corrected 2026-09-23.** That
-  entry was written from a check against the LEGACY `leadfinderos.pages.dev` (§7). Production is
-  `leadfinderos-next.pages.dev`, and it was serving current `main` (`3972fd42`): 77 of 79 chunks
-  byte-identical to a local build once filename hashes are neutralised; the other two differ only
-  by the baked-in Supabase URL/key (a local build has no `.env`) and by Windows CRLF line endings in
-  the raw-imported `src/mockup/templates/*.html`. There is no deploy fault.
-- ✅ **`findable.live/w/<code>` is LIVE** (verified 2026-10-02): a baseline code answers 200 with the pack and
-  `noindex, nofollow, noarchive, nosnippet`, a Discovery code and an unknown code answer 404 "Welcome pack
-  unavailable", `/r/<code>` is unchanged. The stale primary findable-site checkout's two dirty edits are already
-  on `master` (`b9286ad`); nothing unique is left in it.
 - **TPS/CTPS screening is POSTPONED by Paul (2026-10-05)** — a future compliance enhancement, not a launch blocker.
   Dormant groundwork only (`phone_tps_checks`, `src/lib/tpsCheck.ts`); no provider, no call block, not in Ready to
   Sell (`docs/salesperson-onboarding.md` §5).
@@ -1399,81 +1359,24 @@ positive allowlist of `baseline`; `isColdOutreachTemplate` treats unknown as COL
 
 ## 9. Parked branches, other docs
 
-- ⚠️ **The ARCHIVED old checkout `C:/Users/paulj/LeadFinderOS`** (the primary until 2026-10-05; the primary is now
-  `C:/Users/paulj/LeadFinderOS-current`, §0) was ~453 commits behind `origin/main` and idle since
-  2026-09-21 (audited 2026-10-02). **Its `CLAUDE.md` is stale: read `git show origin/main:CLAUDE.md`.** Class A:
-  every tracked edit in it is already on main or superseded (its `whatsapp-inbound.ts` edit is for a chain
-  deleted 2026-09-28 — never port it); the one unmerged test block was ported 2026-10-02. Before resetting it,
-  KEEP the untracked `SQL_FOR_PAUL_*.sql` (each is the only copy; `client_error_message` and
-  `unschedule_instantly_poll` look still pending). Never `git worktree remove` anything through it without
-  unlinking `node_modules` junctions first. Do not delete the folder: ~95 older worktrees hang off its `.git`
-  (2026-10-05) and those older worktrees junction to its `node_modules` (new ones use `LeadFinderOS-current`'s).
+- ⚠️ **The ARCHIVED old checkout `C:/Users/paulj/LeadFinderOS`**: its `CLAUDE.md` is stale — read `git show origin/main:CLAUDE.md`.
+  Never port its `whatsapp-inbound.ts` edit (a deleted chain). Before resetting it, KEEP the untracked `SQL_FOR_PAUL_*.sql` (each is
+  the only copy). Never `git worktree remove` anything through it without unlinking `node_modules` junctions first. Never delete the
+  folder (~95 older worktrees hang off its `.git` and junction to its `node_modules`). Audit detail: `docs/archive/claude-md-moved-2026-10-15.md` (§9).
 - **Do not merge:** `edge-check-gate` (`d3fd6713`), `findable-product-rename` (`a8365707`),
   `short-signup-url` (`c8896003`).
-- `HANDOFF.md`, `ONBOARDING.md` (untracked) describe the deleted barber product — the best map of it,
-  nothing else. `HANDOVER_NEXT.md` is from 2026-08-22 and stale. `HANDOVER_MOCKUP.md` (tracked,
-  2026-09-11) is the live mockup product's record. There is no `DEPLOY.md`; §3 is the deploy rule.
+- `HANDOFF.md`, `ONBOARDING.md`, `HANDOVER_NEXT.md` are stale (barber product / 2026-08-22); `HANDOVER_MOCKUP.md` is the live mockup
+  product's record. There is no `DEPLOY.md`; §3 is the deploy rule.
 
 ---
 
 ## 10. The records — read the one for the thing you are about to touch
 
-`docs/INDEX.md` maps every old § to its file. One line each:
+`docs/INDEX.md` maps every old § to its file.
 
-| Touching… | Read first |
-|---|---|
-| Closing items on the Sales dashboard (What to do next / Follow-ups): lead_close_work, the closed-until-they-reply rule (isClosedItem), Done vs Dead lead | `docs/close-dashboard-items.md` |
-| The WhatsApp cap / pace / auto-pause settings (`whatsappPace.ts`), the CSV import batch + owner (`import_leads_v2`), the price model switch (`priceModel.ts` — the £499 link is OFF until Paul approves its agreement), texted numbers never get a cold WhatsApp | `docs/test-day-outreach.md` |
-| A bulk audit's visibility score, the report offer's {{4}}, the bulk_score marker | `docs/bulk-audit-score.md` |
-| The Inbox (WhatsApp **and** SMS — one component), the SMS status model and failure codes, inbound text handling, Run AI audit vs the reply setting | `docs/twilio-comms.md` (the "One Inbox, two channels…" section) |
-| Malaysia / Singapore town populations on Coverage (fixed approximate table, sources per figure, blanks stay null, no Singapore city-wide filter) | `docs/coverage-my-sg-population.md` |
-| Anything, as a NEW Claude account / fresh start — orientation, reading order, open actions, Paul's preferences | `docs/handover/00-START-HERE.md` (then the folder in its order) |
-| The monthly client update (paid client page step 8), `client_monthly_updates` and its three functions | `docs/monthly-client-update.md` |
-| What the 2026-10-02 closeout audit found complete / fixed / still open | `docs/closeout-2026-10-02.md` |
-| Inbox / Outreach load speed, the stored result-part columns, parallel paging, the shared queue status | `docs/inbox-outreach-speed.md` |
-| Site-wide speed: the list columns, the detail-on-demand dialog, the pager, the Dashboard/AI Audit/LeadSearch loads, the connection pool, the proposed DB work | `docs/site-wide-speed.md` |
-| WhatsApp media access for Sales, the Inbox height/header layout, sending an image/video/document | `docs/inbox-media-and-layout.md` |
-| The Sales Dashboard, the prospect workspace, contact logging, sign-up link tracking, the post-payment GBP step | `docs/sales-readiness.md` (+ `supabase/tests/sales-readiness.sql`, re-runnable, always rolled back) |
-| Domain ownership / authority, the domain onboarding pages, ending a service over a dispute, the terms / refunds carve-out | `docs/domain-authority.md` (+ `supabase/tests/domain-authority.sql`) |
-| Add a lead, services/areas on a prospect, the Sales Hook Audit / crawl / report share, sold_by, READY / MISSING, the PAID email's handoff lines | `docs/self-sourced-handoff.md` (+ `supabase/tests/self-sourced-handoff.sql`, re-runnable, always rolled back) |
-| A salesperson's bulk pre-call check, its allowance, reuse windows, the job model | `docs/pre-sales-certification/fixes-07-sales-bulk-audit.md` (+ `fixes-07-rollback-qa.sql`, always rolled back) |
-| Campaigns, the lead popup's four tabs, the Close branching, the sales talking points and their sources, tap ≠ contact | `docs/pre-sales-certification/sales-workspace-v2.md` |
-| Team: admin-created logins with a temporary password, the first-login change, scanner-safe links (Continue page), link expiry (= auth setting `mailer_otp_exp`, not code), the Trial team member switch; the name on your messages (`profiles.message_name`); the `ai_visibility_report_offer` template (checked before queueing, Meta status read before sending, UK-worded templates never to MY/SG) | `docs/team-access-tidy.md` — ⛔ a password is never logged, stored by us, returned or put in an error; ⛔ a message is signed only with the SENDING person's own name (`messageName.ts`, `queued_by_user_id`) |
-| Auth, roles, RLS, a lead read/write, any function a salesperson can reach, the Team page | `docs/multi-user.md` (+ `supabase/tests/multi-user-*.sql`, re-runnable, always rolled back) |
-| The price, the guarantee, checkout, Stripe, the site origin, the report CTA | `docs/business-and-offer.md` (§1, §11, §12, §13, §13b, §26) |
-| The v3 agreement, sign-up link, payment gate, Option B dates, Continuing Service, v3 commission | `docs/pre-sales-certification/client-agreement-commercial-alignment.md` |
-| Baselines, replays, the pointer, the results sender, the noise band, named-by-model | `docs/measurement.md` (§17, §18, §19, §24, §25, §31) |
-| Prepare Baseline, `baseline_status`, the `starting` claim, the hub poller, the approve gate | `docs/paid-baseline-flow.md` (2026-09-22) |
-| The recommended 20, Hook questions locked in, the Opportunity Backlog, the replay run-2 fix, collapsible sections | `docs/baseline-workflow.md` (2026-09-30) |
-| Any WhatsApp template, sender, greeting name, the Inbox list, the reply rule | `docs/whatsapp-templates.md` (§6g, §16, §29, §30–30e, §32) |
-| The client report, wrong-town history, partial results, the name that scores itself | `docs/reports.md` (§6b, §22, §27) |
-| The manual audit wizard, the market model, how a national/hybrid question set is built | `docs/market-model-audits.md` |
-| The free-check lane, its dedupe, its emails, where it meets the baseline | `docs/free-check.md` (§6j, §15, §21) |
-| Dashboard numbers, the campaign card, the client card, stored tasks | `docs/dashboard.md` (§6h, §14, §23) |
-| Website Build: build mode, template profile, build facts, the Build Pack | `docs/website-build-v1.md`, then `docs/website-build-v2.md` (routes, stage prompts, manifest), then `docs/website-build-recon.md` (recon import + fact merge rules), then `docs/website-build-mapping.md` (risk rule, template mapping, readiness, config), then `docs/website-build-execution.md` (build execution, preview, retry) |
-| The page generator, the page-plan queue, Q&A modes | `docs/page-generator.md` (§6i) |
-| Coverage, the town gate, state persistence, the DELETED market view | `docs/state-coverage-market.md` (§6c–§6f; §6e is archive) |
-| findable-site's home page and copy rules | `docs/findable-site.md` (§20, §28) |
-| Closing a sale: the two ways (Close on the phone / Send full setup), the phone questions, the Full Setup link | `docs/pre-sales-certification/two-close-options.md` |
-| Why a trap rule exists — the incident | `docs/traps.md` (§4) |
-| Why an architecture rule exists — the reasoning | `docs/architecture-rules.md` (§6) |
-| The full open-problems record, incl. the WhatsApp cap model and the auth matrix | `docs/open-problems.md` (§8) |
-| The long code map, the playbook documents | `docs/code-map.md` (§9) |
-| The measured findings in detail | `docs/findings.md` (§5) |
-| How things stood on 2026-09-09, the harness repair | `docs/state-of-play-2026-09-09.md` (§0) |
-| The original §2 / §3 / §7 / §10 text | `docs/how-paul-works.md`, `docs/discipline-checklist.md`, `docs/parked-branches.md`, `docs/other-docs.md` |
-| Website Build: fact edits / saves, service-area candidates, asset plan, Cloudflare modes, template fit, readiness | `docs/website-build-pilot-hardening.md` (+ the website-build-*.md phase records) |
-| The crawl's content & trust checks (headings, accreditations, proof, placeholders, areas, conflicting facts, markup vs page, images, links, dates), evidence classes, the Master Standard wording rules | `docs/crawl-content-trust.md` |
-| Website Build: the QUALITY standard — strengths, no-downgrade, completeness, old-vs-new upgrade, the source-site fact rule, the BUILD standard (image roles, Areas → map, mobile hero, reviews, forms) | `docs/website-build-quality-standard.md` |
-| India (or any non-UK country): search bias, lead country, +91 phones, local send hours, audit wording, the measured Places quality, INR/Coverage designs | `docs/india-readiness.md` |
-| Abuse / cost protection: the guard, thresholds, suspension, pause / emergency stop, exports, alerts | `docs/abuse-cost-protection.md` |
-| Sales Experience: WhatsApp unread / states / deep link, the workspace dashboard, earnings, notifications, Focus Mode, feedback | `docs/sales-experience.md` |
-| Directory listings / profile presence, its confidence and recheck rules, the hub integration still owed | `docs/directory-presence.md` |
-| Lead statuses, the sales state, Log Contact outcomes, Last contact, outcome → Next Action | `docs/lead-state-model.md` |
-| WhatsApp outreach compliance (PECR questions, the non-blocking decision, when to reopen) | `docs/whatsapp-outreach-compliance.md` |
-| Salesperson onboarding, the ENFORCED Ready to Sell gate, paperwork handled outside the app, right to work, business type (display only), leavers, TPS/CTPS (postponed) | `docs/salesperson-onboarding.md` — the rule is `public.salesperson_onboarding_missing()`; onboarding rows are admin-only by having NO policy |
-| The deep clean: what is done, what is next, Paul's standing decisions | `docs/deep-clean-phase3-plan.md` (+ `INVENTORY_DEEP_CLEAN.md`, untracked, the Phase 1 evidence) |
-| The Client Service Agreement: its words (v1, pinned), the checkout tick, the agree page, the evidence tables (write-once), the signed PDF | `docs/client-agreement.md` |
+**Before touching an area, look up its record** in the "touching X → read Y first" table, `docs/records-lookup.md`,
+or grep `docs/` for the topic. A NEW Claude account starts at `docs/handover/00-START-HERE.md`; the Inbox / SMS record is
+`docs/twilio-comms.md`; auth / roles / RLS is `docs/multi-user.md`.
 
 **When you finish a piece of work:** write the record into the matching `docs/` file (or a new one,
 added to `docs/INDEX.md`), and put here only the rule it taught or the pointer to it.

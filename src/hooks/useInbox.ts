@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { toWhatsAppDigits } from '@/lib/waNumber';
 import { conversationLeadId, groupInboxMessages, mergeInboxMessages, mergeReconciledLeads, optionalInboxRows, patchInboxLead, upsertAuditById } from '@/lib/inboxCache';
-import { newestUsableAudit, resolveReportsByLead } from '@/lib/auditReportResolver';
+import { newestUsableAuditByLead, resolveReportsByLead } from '@/lib/auditReportResolver';
 import { RUN_USABLE } from '@/lib/queueAuditStatus';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { fetchAllRows, fetchAllRowsParallel } from '@/lib/fetchAllRows';
@@ -561,6 +561,8 @@ export function useInbox(channel: InboxChannel = 'whatsapp') {
   // THE resolver (auditReportResolver.ts): newest eligible usable audit, falling through to an
   // older completed one when the newest hasn't settled — see that file for the full rule.
   const auditByLeadId = useMemo(() => resolveReportsByLead(audits), [audits]);
+  /* newestUsableAudit for every lead in ONE pass (same rule) — the two site-fault sets below asked it once per lead each. */
+  const usableAuditByLead = useMemo(() => newestUsableAuditByLead(audits), [audits]);
 
   /* Lead ids whose site has a NAMEABLE fault — the picker gate for audit_followup_fault (its {{6}}
      names one; Meta rejects an empty parameter). Newest crawl check per lead, and the SAME freshness
@@ -608,7 +610,7 @@ export function useInbox(channel: InboxChannel = 'whatsapp') {
       const c = crawlByLeadId.get(l.id);
       // Deliberately NOT resolveLeadReportAudit — a measurement's crawl result is still real site
       // data even though its report link must never be shown (see newestUsableAudit's own doc).
-      const audit = newestUsableAudit(audits, l.id);
+      const audit = usableAuditByLead.get(l.id) ?? null;
       const runSources = (audit?.ai_audit_runs ?? [])
         .filter((r) => RUN_USABLE.has(String(r.status)))
         .sort((a, b) => (b.run_number ?? 0) - (a.run_number ?? 0))
@@ -617,7 +619,7 @@ export function useInbox(channel: InboxChannel = 'whatsapp') {
       if (resolveSiteFault(hasWebsite, runSources, c ? { result: c.result, createdAtMs: new Date(c.created_at).getTime() } : null, visibilityGap) !== null) s.add(l.id);
     }
     return s;
-  }, [leads, audits, crawlByLeadId]);
+  }, [leads, usableAuditByLead, crawlByLeadId]);
 
   /* Lead ids ai_site_findings_v2's {{6}} has findings for — its own picker gate, and DELIBERATELY A
      SECOND SET rather than a reuse of the one above: hasSiteFindings refuses a lead with no website,
@@ -628,7 +630,7 @@ export function useInbox(channel: InboxChannel = 'whatsapp') {
     for (const l of leads) {
       const hasWebsite = !!(l.website ?? '').trim();
       const c = crawlByLeadId.get(l.id);
-      const audit = newestUsableAudit(audits, l.id);
+      const audit = usableAuditByLead.get(l.id) ?? null;
       const runSources = (audit?.ai_audit_runs ?? [])
         .filter((r) => RUN_USABLE.has(String(r.status)))
         .sort((a, b) => (b.run_number ?? 0) - (a.run_number ?? 0))
@@ -637,7 +639,7 @@ export function useInbox(channel: InboxChannel = 'whatsapp') {
       if (hasSiteFindings(hasWebsite, runSources, c ? { result: c.result, createdAtMs: new Date(c.created_at).getTime() } : null, visibilityGap)) s.add(l.id);
     }
     return s;
-  }, [leads, audits, crawlByLeadId]);
+  }, [leads, usableAuditByLead, crawlByLeadId]);
 
   // Lead ids with an audit run currently IN FLIGHT (pending/running) — drives the Inbox audit
   // button's spinner. Same audits fetch as above; refreshed by refetch() after firing one.

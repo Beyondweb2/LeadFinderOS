@@ -196,7 +196,12 @@ async function applyPlaceDetailsToLead(
    downloaded on mount and fetchLeads does nothing, so the whole book (~5,600 leads + archive + history, ~17
    requests) is never read there. addLead's database dedupe is unchanged, and the outreach_history pre-check it
    can no longer do in memory is asked of the database for that one business. */
-export function useOutreach({ history = true, progressive = false, preload = true }: { history?: boolean; progressive?: boolean; preload?: boolean } = {}) {
+/* ⚡ `onlyLeadId` — the Inbox's lead dialog only (2026-10-15). It shows ONE lead, yet loaded the whole book
+   (~5,800 active leads + the archive, ~8 requests, several MB) every time a lead was opened from the Inbox. With
+   onlyLeadId the list is that one ACTIVE lead (same source, same list columns, same `is_archived = false` the full
+   load uses — so an archived lead still reads as "not found"), and the archive stays empty. The writers are
+   unchanged: they patch the row in the list exactly as before. Never pass it from a screen that shows the list. */
+export function useOutreach({ history = true, progressive = false, preload = true, onlyLeadId }: { history?: boolean; progressive?: boolean; preload?: boolean; onlyLeadId?: string } = {}) {
   const [leads, setLeads] = useState<OutreachLead[]>([]);
   const [archivedLeads, setArchivedLeads] = useState<OutreachLead[]>([]);
   const [leadLoad, setLeadLoad] = useState<LeadLoadState>(LEAD_LOAD_INITIAL);
@@ -573,6 +578,28 @@ export function useOutreach({ history = true, progressive = false, preload = tru
     const uid = userIdRef.current;
     if (!uid) return;
     if (!preload) return; // Find Leads: never the whole book (see preload above)
+    if (onlyLeadId) {
+      /* The Inbox's lead dialog: one row, not the book (see onlyLeadId above). */
+      const gen = ++loadGenRef.current;
+      if (!hasLoadedOnceRef.current) setIsLoading(true);
+      const src = leadSourceFor(roleRef.current);
+      const { data, error } = await (supabase as unknown as { from: (t: string) => any })
+        .from(src.table).select(src.listSelect).eq('id', onlyLeadId).eq('is_archived', false).maybeSingle();
+      if (gen !== loadGenRef.current) return;
+      hasLoadedOnceRef.current = true;
+      setIsLoading(false);
+      if (error) {
+        console.error('Error fetching lead:', error);
+        setLeadLoad((s) => ({ ...s, phase: 'failed', error: errorMessageOf(error) }));
+        toast({ ...leadLoadErrorText(error), variant: 'destructive' });
+        return;
+      }
+      const rows = data ? guardListRows([data as OutreachLead], 'useOutreach') : [];
+      setLeads(rows);
+      setArchivedLeads([]);
+      setLeadLoad(LEAD_LOAD_COMPLETE(rows.length));
+      return;
+    }
     /* Progressive only while the list is not yet complete; a refresh of a COMPLETE list (after a bulk
        job, an import, a claim) reloads it whole in the background and swaps it in, so the page never
        drops back to "loading" and never re-locks the bulk actions. */
@@ -650,7 +677,7 @@ export function useOutreach({ history = true, progressive = false, preload = tru
     setArchivedLeads(merged.archived);
     setLeadLoad(LEAD_LOAD_COMPLETE(merged.active.length));
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [progressive, progressiveLoad, preload]);
+  }, [progressive, progressiveLoad, preload, onlyLeadId]);
 
   const fetchOutreachHistory = useCallback(async (): Promise<OutreachHistoryEntry[] | null> => {
     const uid = userIdRef.current;

@@ -181,7 +181,10 @@ export default function NichePanel({ trade, autoLoad = false }: { trade: string;
      town rows used to mount its own, and every instance downloads the whole lead list (it is not
      shared or cached) — eight copies of the CRM to reach one function, addLead. The rows share this
      one; the add path is unchanged. */
-  const { addLead } = useOutreach();
+  /* ⚡ preload: false (2026-10-15): the panel never reads the list, so it no longer downloads the whole book
+     (~6,000 leads + archive + history) to reach addLead — the same mode Find Leads uses. addLead's database
+     dedupe is unchanged and its "previously added" history check is asked of the database instead. */
+  const { addLead } = useOutreach({ preload: false });
   /* Ticks only while the fold is in flight; cleared on unmount and on completion, so nothing
      keeps running behind a finished panel. */
   const [elapsed, setElapsed] = useState(0);
