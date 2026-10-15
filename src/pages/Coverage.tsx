@@ -22,6 +22,9 @@ import {
   COVERAGE_COUNTRIES, COVERAGE_COUNTRY_LABEL, DEFAULT_COVERAGE_COUNTRY, normaliseCoverageCountry, type CoverageCountry,
 } from '@/lib/coverageCountries';
 import { quickLocationValue } from '@/lib/locationPicker';
+import {
+  filterByPopulationBand, populationFilterShown, populationSourcesFor, townPopulation,
+} from '@/lib/abroadTownPopulation';
 
 /* ══ WHERE HAVE I BEEN? ═══════════════════════════════════════════════════════════════════════
    ⛔ WHAT THIS REPLACES: asking someone for town names. Every candidate town for a trade, with the
@@ -129,6 +132,20 @@ export default function Coverage() {
   );
   const minPop = band.min;
   const maxPop = band.max;
+  /* Malaysia's band is its own setting (its towns run to two million; the UK band would hide most of them). Blank
+     inputs = no bound, so every town shows until a bound is typed. Singapore has none (populationFilterShown). */
+  const [myBand, setMyBand] = usePersistedState<{ min: number | null; max: number | null }>(
+    'coverage-population-band-my', { min: null, max: null },
+    {
+      tier: 'session', scope: user?.id,
+      validate: (d) => {
+        const v = d as { min?: unknown; max?: unknown } | null;
+        const ok = (x: unknown) => x === null || Number.isFinite(x);
+        return v && ok(v.min) && ok(v.max) ? { min: v.min as number | null, max: v.max as number | null } : null;
+      },
+    },
+  );
+  const showPopFilter = populationFilterShown(country);
 
   /* ⛔ WHETHER THE NICHE VERDICT IS OPEN IS CONFIGURATION, NOT AN INTERRUPTION, so it persists —
      §6c's line: a panel you chose to have open is part of how the page is set up, and losing it on
@@ -143,13 +160,15 @@ export default function Coverage() {
   const [storedOpen, setStoredOpen] = useState(false);
 
   /* Suppressed towns (none today) stay off the list; the page no longer offers a way to show them. */
-  /* ⛔ Malaysia / Singapore have no population figures (none is invented), so only the region filters them; the UK
-     keeps its population band exactly as before. */
+  /* The UK keeps its population band exactly as before. Malaysia has approximate figures (abroadTownPopulation.ts)
+     and its own band; Singapore filters by region only. */
   const rows = useMemo(
-    () => (isUk
-      ? applyFilters(gradeFor(trade, false), { region, minPopulation: minPop, maxPopulation: maxPop })
-      : gradeFor(trade, false).filter((r) => !region || r.region === region)),
-    [gradeFor, trade, region, minPop, maxPop, applyFilters, isUk],
+    () => {
+      if (isUk) return applyFilters(gradeFor(trade, false), { region, minPopulation: minPop, maxPopulation: maxPop });
+      const inRegion = gradeFor(trade, false).filter((r) => !region || r.region === region);
+      return country === 'Malaysia' ? filterByPopulationBand(inRegion, myBand) : inRegion;
+    },
+    [gradeFor, trade, region, minPop, maxPop, applyFilters, isUk, country, myBand],
   );
   const summary = useMemo(() => summarise(rows), [rows, summarise]);
 
@@ -232,6 +251,16 @@ export default function Coverage() {
             <Input type="number" value={maxPop} onChange={(e) => setBand((b) => ({ ...b, max: Number(e.target.value) || 0 }))} className="h-9 w-[100px]" />
           </div>
         </div>}
+        {!isUk && showPopFilter && <div className="space-y-1">
+          <label className="text-xs font-medium text-muted-foreground">Population (approx.)</label>
+          <div className="flex items-center gap-1.5">
+            <Input type="number" placeholder="Any" value={myBand.min ?? ''}
+              onChange={(e) => setMyBand((b) => ({ ...b, min: e.target.value === '' ? null : Number(e.target.value) || 0 }))} className="h-9 w-[110px]" />
+            <span className="text-xs text-muted-foreground">to</span>
+            <Input type="number" placeholder="Any" value={myBand.max ?? ''}
+              onChange={(e) => setMyBand((b) => ({ ...b, max: e.target.value === '' ? null : Number(e.target.value) || 0 }))} className="h-9 w-[110px]" />
+          </div>
+        </div>}
       </div>
 
       {/* ⛔ ABOVE THE TOWN TABLE, BECAUSE IT IS THE QUESTION THAT COMES FIRST. "Is this trade worth
@@ -285,7 +314,7 @@ export default function Coverage() {
       ) : sorted.length === 0 ? (
         <EmptyState icon={MapPin} title="No towns match those filters.">
           {isUk ? <>The table holds 12,000&ndash;250,000; widen the population
-          range to see the edges.</> : <>Choose All regions to see every town.</>}
+          range to see the edges.</> : <>Choose All regions{country === 'Malaysia' ? ' and clear the population range' : ''} to see every town.</>}
         </EmptyState>
       ) : (
         <div className="overflow-x-auto rounded-lg border border-border">
@@ -294,7 +323,7 @@ export default function Coverage() {
               <tr>
                 <th className="px-3 py-2 text-left font-medium">Town</th>
                 <th className="px-3 py-2 text-left font-medium">{country === 'Malaysia' ? 'State' : 'Region'}</th>
-                <th className="px-3 py-2 text-right font-medium">Population</th>
+                <th className="px-3 py-2 text-right font-medium">{isUk ? 'Population' : 'Population (approx.)'}</th>
                 <th className="px-3 py-2 text-left font-medium">{trade}</th>
                 <th className="px-3 py-2 text-right font-medium"></th>
               </tr>
@@ -308,8 +337,10 @@ export default function Coverage() {
                     {t.fromLeads && <span className="ml-1.5 text-xs text-muted-foreground" title="Not on the town list: a lead or a search named this place.">from your leads</span>}
                   </td>
                   <td className="px-3 py-1.5 text-muted-foreground">{t.region ?? '—'}</td>
-                  <td className="px-3 py-1.5 text-right tabular-nums text-muted-foreground">
-                    {t.population?.toLocaleString() ?? '—'}
+                  <td className="px-3 py-1.5 text-right tabular-nums text-muted-foreground"
+                    title={isUk ? undefined : (townPopulation(country, t.name).basis ?? 'No source figure')}>
+                    {/* ⛔ A blank figure is a dash, never 0. Abroad figures are approximate, so prefixed "≈". */}
+                    {t.population === null || t.population === undefined ? '—' : `${isUk ? '' : '≈ '}${t.population.toLocaleString()}`}
                   </td>
                   <td className="px-3 py-1.5">
                     {/* 🔴 FOUND vs ADDED (Paul, 2026-09-29) replaced the "Worked" rung badge and the "N leads" count:
@@ -365,7 +396,14 @@ export default function Coverage() {
       </p> : <p className="text-xs text-muted-foreground">
         <MapPin className="mr-1 inline h-3 w-3" />
         Towns are the places Find Leads suggests for {COVERAGE_COUNTRY_LABEL[country]}, plus any place your leads or
-        searches name. No population figures are shown: we have no source for them. A lead counts here by its own country.
+        searches name. A lead counts here by its own country. Populations are approximate, fixed figures
+        {country === 'Malaysia'
+          ? ' for the council area (or district) the town sits in, wider than the town itself; '
+          : ' for residents of each planning area (business districts read small); Singapore as a whole has no figure; '}
+        a dash means no source figure. Source:{' '}
+        {populationSourcesFor(country).map((s, i) => (
+          <span key={s.url}>{i > 0 && '; '}<a href={s.url} target="_blank" rel="noreferrer" className="underline">{s.label}</a> ({s.year})</span>
+        ))}.
       </p>}
     </div>
   );
