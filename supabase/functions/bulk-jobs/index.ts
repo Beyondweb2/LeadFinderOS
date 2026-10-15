@@ -1,8 +1,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { guardAction, paidMode } from "../_shared/protection.ts";
 import { TOWN_GATE_REASON } from "../../../src/lib/townVerdict.ts";
-import { auditTownGated } from "../_shared/typed-town.ts";
-import { cleanTypedTown, isRealTown } from "../../../src/lib/typedTown.ts";
+import { auditTownCheck, NO_USABLE_TOWN_REASON } from "../_shared/typed-town.ts";
 import { AUDIT_BULK_JOB_MAX_LEADS } from "../../../src/lib/auditLimits.ts";
 import { checkSuppressed } from "../_shared/suppression.ts";
 import { selectInChunks } from "../_shared/chunked-in.ts";
@@ -255,24 +254,20 @@ async function runItem(service: any, job: JobRow, item: JobItem): Promise<{ stat
        lead is held until its town verifies, and a failed status would invite a retry. */
     /* A lead whose town was TYPED by a person (hand-added, or a CSV import) with no Google place is let through
        on that typed town when it is a real one — auditTownGated, the same predicate create-ai-audit applies. */
-    if (auditTownGated(lead)) {
+    /* ⛔ NO REAL TOWN, NO AUDIT — refused here, before a call, with a reason a person can act on. A typed
+       location like "Online; team reports tutors in Singapore…" is not a place, and neither is a derived
+       "Online". Not "failed": nothing went wrong, the lead needs a town, and a failed item invites a retry.
+       A Google-resolved lead whose town simply has not been derived yet (place id, no derived town) keeps the
+       old behaviour: create-ai-audit derives it from the place. Only a lead with nothing to derive from is refused.
+       ONE rule (auditTownCheck, _shared/typed-town.ts), also read by src/lib/leadReadiness.ts so the screens say
+       it up front (2026-10-15). */
+    const townCheck = auditTownCheck(lead);
+    if (!townCheck.ok && townCheck.problem === "town_unverified") {
       console.log(`[bulk-jobs] audit skipped for town-unverified lead ${lead.id}`);
       return { status: "skipped_town_unverified", error: TOWN_GATE_REASON };
     }
-    /* ⛔ NO REAL TOWN, NO AUDIT — refused here, before a call, with a reason a person can act on. A typed
-       location like "Online; team reports tutors in Singapore…" is not a place, and neither is a derived
-       "Online". Not "failed": nothing went wrong, the lead needs a town, and a failed item invites a retry. */
-    const auditTown = isRealTown(lead.derived_town) ? String(lead.derived_town).trim()
-      : (cleanTypedTown(lead.search_location) || cleanTypedTown(lead.address));
-    /* A Google-resolved lead whose town simply has not been derived yet (place id, no derived town) keeps the
-       old behaviour: create-ai-audit derives it from the place. Only a lead with nothing to derive from is refused. */
-    const googleCanDerive = !!String(lead.place_id ?? "").trim() && !String(lead.derived_town ?? "").trim();
-    if (!auditTown && !googleCanDerive) {
-      return {
-        status: "skipped_town_unverified",
-        error: "No usable town: this lead's location is blank or not a place (for example \"Online\"). Add the town on the lead, then retry",
-      };
-    }
+    if (!townCheck.ok) return { status: "skipped_town_unverified", error: NO_USABLE_TOWN_REASON };
+    const auditTown = townCheck.town;
 
     // Idempotency: create-ai-audit is NOT idempotent (every call inserts a fresh audit+run). If a
     // prior chunk already created an audit for this lead DURING this job (e.g. the isolate died

@@ -8,6 +8,11 @@ import { Callout, ToneChip, type Tone } from '@/components/operator/ui';
 import { CampaignPicker } from '@/components/CampaignPicker';
 import { useCampaigns } from '@/hooks/useCampaigns';
 import { useMultiTownLeads, type TownToSearch } from '@/hooks/useMultiTownLeads';
+import { useCountrySettings } from '@/hooks/useCountrySettings';
+import { Input } from '@/components/ui/input';
+import { ReadinessFixDialog, ReadinessSummaryBlock, type FixableLead } from '@/components/LeadReadiness';
+import { leadReadiness, summariseReadiness, type ReadinessFix, type ReadinessLead } from '@/lib/leadReadiness';
+import type { MergedLead } from '@/lib/multiTownSearch';
 import { isWithoutWebsite } from '@/lib/websiteStatusClass';
 import {
   ADD_REASON_WORDS, COVERAGE_ADD_MAX_ROWS, MULTI_TOWN_PAGE_SIZE, addLookupEstimate, addSummarySentence, gbpLabel,
@@ -78,6 +83,34 @@ export function CoverageMultiTown({ trade, selected, onSearched, isAdmin }: {
   const townChips = Object.entries(m.statuses);
   const addable = pickedRows.filter((r) => !m.inCrm[r.rowKey]);
   const busy = m.addPhase.kind === 'checking' || m.addPhase.kind === 'lookups' || m.addPhase.kind === 'saving';
+
+  /* ── READINESS (2026-10-15, src/lib/leadReadiness.ts) ─────────────────────────────────────────────────────────
+     Before the add: what each picked lead needs, with the phone and town as "will be looked up" (the add does it).
+     A name or town can be fixed here, in place; "Add only the ready ones" leaves the rest out. After the add: the
+     same check on what was SAVED (with the looked-up phone and town) says what is still missing, with a fix. */
+  const { settings: countrySettings } = useCountrySettings();
+  const [overrides, setOverrides] = useState<Record<string, { name?: string; town?: string }>>({});
+  const [editing, setEditing] = useState<string | null>(null);
+  const [readyOnly, setReadyOnly] = useState(false);
+  const [postFix, setPostFix] = useState<{ lead: FixableLead; fixes: ReadinessFix[] } | null>(null);
+  const withOverrides = (r: MergedLead): MergedLead => {
+    const o = overrides[r.rowKey];
+    return o ? { ...r, name: o.name?.trim() || r.name, searchLocation: o.town?.trim() || r.searchLocation } : r;
+  };
+  const asLead = (r: MergedLead): ReadinessLead => ({
+    business_name: r.name, search_keyword: trade, search_location: r.searchLocation, place_id: r.id || null,
+    country: r.country, phone: r.phone ?? null, address: r.address ?? null,
+  });
+  const preRows = addable.map(withOverrides).map((r) => ({ row: r, readiness: leadReadiness(asLead(r), { willLookUp: true, countrySettings }) }));
+  const preSummary = summariseReadiness(preRows.map((x) => ({ name: x.row.name, readiness: x.readiness })));
+  const readyRows = preRows.filter((x) => x.readiness.ok).map((x) => x.row);
+  const toAdd = readyOnly ? readyRows : [...pickedRows.filter((r) => m.inCrm[r.rowKey]), ...preRows.map((x) => x.row)];
+  const doneRows = m.addPhase.kind === 'done' ? m.addPhase.rows : [];
+  const post = (m.addPhase.kind === 'done' ? m.addPhase.saved ?? [] : []).map((row) => {
+    const created = doneRows.find((a) => a.k === row.k && a.outcome === 'created');
+    return created?.lead_id ? { id: String(created.lead_id), row, readiness: leadReadiness(row as ReadinessLead, { countrySettings }) } : null;
+  }).filter((x): x is { id: string; row: Record<string, unknown>; readiness: ReturnType<typeof leadReadiness> } => !!x);
+  const postSummary = summariseReadiness(post.map((x) => ({ name: String(x.row.business_name ?? ''), readiness: x.readiness })));
 
   if (selected.length === 0 && townChips.length === 0 && rows.length === 0) return null;
 
@@ -199,7 +232,7 @@ export function CoverageMultiTown({ trade, selected, onSearched, isAdmin }: {
       <Dialog open={dialogOpen} onOpenChange={(o) => { if (!busy) setDialogOpen(o); }}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
-            <DialogTitle>Add {picked.size} lead{picked.size === 1 ? '' : 's'} to the CRM</DialogTitle>
+            <DialogTitle>{m.addPhase.kind === 'done' ? 'Added to the CRM' : `Add ${toAdd.length} lead${toAdd.length === 1 ? '' : 's'} to the CRM`}</DialogTitle>
             <DialogDescription>
               One add for all of them. Leads already in the CRM are skipped, never added twice.
             </DialogDescription>
@@ -216,6 +249,32 @@ export function CoverageMultiTown({ trade, selected, onSearched, isAdmin }: {
                 ({addLookupEstimate(addable.length).label}{isAdmin && addable.length > 0 ? `, ${gbpLabel(addLookupEstimate(addable.length).usd)} on Google` : ''}).
                 A business with no phone and no email is not added.
               </p>
+              {preRows.length > 0 && (
+                <div className="space-y-2 rounded-md border border-border/60 p-2">
+                  <ReadinessSummaryBlock summary={preSummary} testId="multi-town-readiness"
+                    onFixName={(name) => { const x = preRows.find((q) => q.row.name === name); if (x) setEditing(x.row.rowKey); }} />
+                  {editing && (() => {
+                    const base = rows.find((x) => x.rowKey === editing);
+                    if (!base) return null;
+                    const r = withOverrides(base);
+                    return (
+                      <div className="grid gap-2 sm:grid-cols-2" data-testid="multi-town-fix">
+                        <Input aria-label="Business name" placeholder="Business name" value={overrides[editing]?.name ?? r.name}
+                          onChange={(e) => setOverrides((q) => ({ ...q, [editing]: { ...q[editing], name: e.target.value } }))} />
+                        <Input aria-label="Town" placeholder="Town" value={overrides[editing]?.town ?? r.searchLocation}
+                          onChange={(e) => setOverrides((q) => ({ ...q, [editing]: { ...q[editing], town: e.target.value } }))} />
+                        <Button size="sm" variant="outline" className="sm:col-span-2" onClick={() => setEditing(null)}>Done</Button>
+                      </div>
+                    );
+                  })()}
+                  {preSummary.needs > 0 && (
+                    <label className="flex items-center gap-2 text-xs">
+                      <Checkbox checked={readyOnly} onCheckedChange={(v) => setReadyOnly(v === true)} data-testid="multi-town-ready-only" />
+                      Add only the ready ones ({readyRows.length})
+                    </label>
+                  )}
+                </div>
+              )}
               {picked.size > COVERAGE_ADD_MAX_ROWS && <Callout tone="red">Up to {COVERAGE_ADD_MAX_ROWS} leads can be added at once. Select fewer.</Callout>}
             </div>
           )}
@@ -232,6 +291,16 @@ export function CoverageMultiTown({ trade, selected, onSearched, isAdmin }: {
           {m.addPhase.kind === 'done' && (
             <div className="space-y-2 text-sm" data-testid="multi-town-summary">
               <Callout tone={m.addPhase.summary.added > 0 ? 'green' : 'amber'} icon={CheckCircle2}>{addSummarySentence(m.addPhase.summary)}</Callout>
+              {post.length > 0 && (
+                <div className="rounded-md border border-border/60 p-2" data-testid="multi-town-post-readiness">
+                  <p className="mb-1 text-xs font-medium text-muted-foreground">After the phone and town lookups:</p>
+                  <ReadinessSummaryBlock summary={postSummary} testId="multi-town-post-summary"
+                    onFixName={(name) => {
+                      const x = post.find((q) => String(q.row.business_name ?? '') === name);
+                      if (x) setPostFix({ lead: { id: x.id, business_name: String(x.row.business_name ?? ''), phone: (x.row.phone as string | null) ?? null, search_keyword: trade, search_location: (x.row.search_location as string | null) ?? null }, fixes: x.readiness.needsInfo.map((i) => i.fix) });
+                    }} />
+                </div>
+              )}
               {m.addPhase.rows.some((r) => r.outcome !== 'created') && (
                 <ul className="max-h-48 space-y-0.5 overflow-y-auto text-xs text-muted-foreground">
                   {m.addPhase.rows.filter((r) => r.outcome !== 'created').map((r, i) => (
@@ -245,13 +314,13 @@ export function CoverageMultiTown({ trade, selected, onSearched, isAdmin }: {
             {m.addPhase.kind === 'idle' ? (
               <>
                 <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancel</Button>
-                <Button disabled={picked.size === 0 || picked.size > COVERAGE_ADD_MAX_ROWS}
+                <Button disabled={toAdd.length === 0 || picked.size > COVERAGE_ADD_MAX_ROWS}
                   onClick={() => {
                     try { if (campaignId) localStorage.setItem(ACTIVE_CAMPAIGN_KEY, campaignId); } catch { /* a convenience only */ }
-                    void m.addLeads(pickedRows, campaignId).then((s) => { if (s) setPicked(new Set()); });
+                    void m.addLeads(toAdd, campaignId).then((s) => { if (s) { setPicked(new Set()); setOverrides({}); setEditing(null); } });
                   }}
                   data-testid="multi-town-add-confirm">
-                  Add {picked.size} lead{picked.size === 1 ? '' : 's'}
+                  Add {toAdd.length} lead{toAdd.length === 1 ? '' : 's'}
                 </Button>
               </>
             ) : (
@@ -260,6 +329,8 @@ export function CoverageMultiTown({ trade, selected, onSearched, isAdmin }: {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      <ReadinessFixDialog lead={postFix?.lead ?? null} fixes={postFix?.fixes ?? []} isAdmin={isAdmin} open={!!postFix}
+        onOpenChange={(o) => { if (!o) setPostFix(null); }} />
     </div>
   );
 }

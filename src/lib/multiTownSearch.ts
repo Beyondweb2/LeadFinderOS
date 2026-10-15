@@ -384,7 +384,7 @@ export type AddPhase =
   | { kind: 'checking' }
   | { kind: 'lookups'; done: number; total: number; waiting: boolean }
   | { kind: 'saving'; total: number }
-  | { kind: 'done'; summary: AddSummary; rows: AddRowAnswer[] }
+  | { kind: 'done'; summary: AddSummary; rows: AddRowAnswer[]; saved?: Record<string, unknown>[] }
   | { kind: 'error'; message: string };
 
 /**
@@ -394,7 +394,7 @@ export type AddPhase =
  * without their lookup); a failed lookup never blocks the add; (3) a lookup that answered with no phone and no
  * email is not added (the single add's rule); (4) ONE committing call saves the rest.
  */
-export async function runBulkAdd(rows: readonly MergedLead[], trade: string, campaignId: string | null, deps: BulkAddDeps): Promise<{ summary: AddSummary; rows: AddRowAnswer[] } | null> {
+export async function runBulkAdd(rows: readonly MergedLead[], trade: string, campaignId: string | null, deps: BulkAddDeps): Promise<{ summary: AddSummary; rows: AddRowAnswer[]; saved: Record<string, unknown>[] } | null> {
   const sleep = deps.sleep ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
   const now = deps.now ?? (() => Date.now());
   if (rows.length === 0) return null;
@@ -471,6 +471,8 @@ export async function runBulkAdd(rows: readonly MergedLead[], trade: string, cam
      counted twice: they are kept out of the rows summariseAdd counts. */
   const summary = summariseAdd(out, { noContact, limit: limitCount, stopped });
   const all = [...out, ...notAdded];
-  deps.onPhase({ kind: 'done', summary, rows: all });
-  return { summary, rows: all };
+  deps.onPhase({ kind: 'done', summary, rows: all, saved: toSave });
+  /* saved = the rows sent to the committing call, WITH their looked-up phone and town — what the readiness re-check
+     reads after the lookups (src/lib/leadReadiness.ts). */
+  return { summary, rows: all, saved: toSave };
 }

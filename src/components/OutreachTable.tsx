@@ -117,6 +117,8 @@ import { PipelineStatusSelect } from './PipelineStatusSelect';
 import { NextActionEditor } from './NextActionEditor';
 import { CSVImportDialog, type CsvImportResult } from './CSVImportDialog';
 import { townGated } from '@/lib/townVerdict';
+import { auditReadiness, leadReadiness, onlyFeature, summariseReadiness } from '@/lib/leadReadiness';
+import { NeedsInfoTag, ReadinessFixDialog, ReadinessSummaryBlock } from '@/components/LeadReadiness';
 import { Badge } from '@/components/ui/badge';
 import { fetchQueueState, queuedLeadLine } from '@/lib/queueStatus';
 import { OutreachMobileCard } from './OutreachMobileCard';
@@ -406,6 +408,18 @@ export function OutreachTable({
   const ITEMS_PER_PAGE = isMobile ? ITEMS_PER_PAGE_MOBILE : ITEMS_PER_PAGE_DESKTOP;
   const { user } = useAuth();
   const { isAdmin, role } = useSubscription();
+  /* LEAD READINESS (2026-10-15, src/lib/leadReadiness.ts): the row tag and its one-click fix. Computed on the fly. */
+  const readinessOf = useCallback((l: OutreachLead) => leadReadiness(l, { countrySettings }), [countrySettings]);
+  const [fixLead, setFixLead] = useState<OutreachLead | null>(null);
+  const openReadinessFix = useCallback((l: OutreachLead) => setFixLead(l), []);
+  /* One readiness object per lead OBJECT (a WeakMap, reset when the country switches change), so a memoised row keeps
+     the same prop until its lead actually changes — row rendering is what Outreach pays for. */
+  const readinessCache = useMemo(() => new WeakMap<OutreachLead, ReturnType<typeof leadReadiness>>(), [countrySettings]);
+  const readinessFor = useCallback((l: OutreachLead) => {
+    let r = readinessCache.get(l);
+    if (!r) { r = readinessOf(l); readinessCache.set(l, r); }
+    return r;
+  }, [readinessCache, readinessOf]);
   // Newest crawl check per lead → the per-row Crawl-site button (same rows the Inbox reads).
   const { crawlByLeadId } = useLeadCrawls();
   const [playbookLeadId, setPlaybookLeadId] = useState<string | null>(null);
@@ -1080,14 +1094,55 @@ export function OutreachTable({
   // (auditsByLead — avoids double-spend), and carrying a usable business type + location
   // (search_keyword||category / search_location||address — the audit's inputs, sourced the
   // same way the wizard's pickLead does). Mirrors siteGenEligibleIds.
-  const auditSelectedLeads = useMemo(
-    () => leads.filter((l) =>
-      selectedIds.has(l.id) &&
-      !isDemoLead(l.id) &&
-      !auditsByLead[l.id] &&
-      !!(l.search_keyword || l.category) &&
-      !!(l.search_location || l.address)),
+  /* ⛔ 2026-10-15: WHO WOULD BE REFUSED IS DECIDED BEFORE THE PRESS (src/lib/leadReadiness.ts auditReadiness — the same
+     rules bulk-jobs and create-ai-audit apply: a business name, a trade, a usable / confirmed town, not on the
+     do-not-contact list). Those leads are never sent, so nothing is spent on them, and the dialog lists them grouped
+     by reason. The trade rule is the one this filter always had: !!(l.search_keyword || l.category). */
+  const auditCandidates = useMemo(
+    () => leads.filter((l) => selectedIds.has(l.id) && !isDemoLead(l.id) && !auditsByLead[l.id]),
     [leads, selectedIds, auditsByLead],
+  );
+  /* Do-not-contact (contact_suppressions), read when the dialog opens. Best-effort like the follow-up check below:
+     unknown (a refused read) leaves the lead in, and bulk-jobs still skips it before any call. */
+  const [auditSuppressedIds, setAuditSuppressedIds] = useState<Set<string>>(new Set());
+  useEffect(() => {
+    if (!auditDialogOpen || auditCandidates.length === 0) return;
+    let live = true;
+    void (async () => {
+      const byPhone = new Map<string, string[]>();
+      for (const l of auditCandidates) {
+        const d = l.phone ? formatPhoneForWhatsApp(l.phone, l.country) : '';
+        const key = d ? '+' + d : '';
+        if (key) byPhone.set(key, [...(byPhone.get(key) ?? []), l.id]);
+      }
+      const hit = new Set<string>();
+      const sb = supabase as unknown as SupabaseClient;
+      const phones = [...byPhone.keys()];
+      for (let i = 0; i < phones.length; i += 200) {
+        const { data } = await sb.from('contact_suppressions').select('phone_e164').in('phone_e164', phones.slice(i, i + 200));
+        for (const r of (data ?? []) as { phone_e164: string }[]) for (const id of byPhone.get(r.phone_e164) ?? []) hit.add(id);
+      }
+      const ids = auditCandidates.map((l) => l.id);
+      for (let i = 0; i < ids.length; i += 200) {
+        const { data } = await sb.from('contact_suppressions').select('lead_id').in('lead_id', ids.slice(i, i + 200));
+        for (const r of (data ?? []) as { lead_id: string | null }[]) if (r.lead_id) hit.add(r.lead_id);
+      }
+      if (live) setAuditSuppressedIds(hit);
+    })().catch(() => undefined);
+    return () => { live = false; };
+  }, [auditDialogOpen, auditCandidates]);
+  const auditReadinessRows = useMemo(
+    () => auditCandidates.map((l) => ({ lead: l, items: auditReadiness(l, { suppressed: auditSuppressedIds.has(l.id) }) })),
+    [auditCandidates, auditSuppressedIds],
+  );
+  const auditSelectedLeads = useMemo(() => auditReadinessRows.filter((r) => r.items.length === 0).map((r) => r.lead), [auditReadinessRows]);
+  /** The leads that would be refused, grouped by reason with their names. */
+  const auditSkipSummary = useMemo(
+    () => summariseReadiness(auditCandidates.map((l) => ({
+      name: l.business_name || 'Unnamed lead',
+      readiness: onlyFeature(leadReadiness(l, { suppressed: auditSuppressedIds.has(l.id) }), 'audit'),
+    }))),
+    [auditCandidates, auditSuppressedIds],
   );
   /* NO WEBSITE = no own site AI can read. isAggregatorUrl is the same classifier search-leads and
      the audit report use, so a Facebook-only listing counts as no website here too — which it is. */
@@ -2969,6 +3024,8 @@ export function OutreachTable({
                 <OutreachMobileCard
                   key={lead.id}
                   lead={lead}
+                  readiness={readinessFor(lead)}
+                  onFixReadiness={openReadinessFix}
                   salesState={rowSalesState(lead)}
                   campaignName={showCampaignName && lead.campaign_id ? (campaignNameByLead?.[lead.id] ?? null) : null}
                   isSelected={selectedIds.has(lead.id)}
@@ -3058,7 +3115,7 @@ export function OutreachTable({
                         />
                       </TableCell>
                       <TableCell className="font-medium">
-                        <div className="flex items-center gap-2 min-w-0">
+                        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 min-w-0">
                           {lead.country === 'Australia' && (
                             <span className="text-xs" title="Australia">🇦🇺</span>
                           )}
@@ -3078,6 +3135,7 @@ export function OutreachTable({
                               Google couldn&rsquo;t confirm the town
                             </Badge>
                           )}
+                          {<NeedsInfoTag readiness={readinessFor(lead)} onEdit={() => setFixLead(lead)} className="flex-shrink-0" />}
                           {lead.is_potential_work && (
                             <Star className="h-3.5 w-3.5 text-yellow-500 fill-yellow-500 flex-shrink-0"><title>Interested</title></Star>
                           )}
@@ -3399,7 +3457,7 @@ export function OutreachTable({
             subtitle={<>
               One AI-visibility audit per selected lead — enqueued server-side and drained through the
               audit queue (no direct Apify). Uses each lead’s stored business type + location.
-              {selectedIds.size - auditSelectedLeads.length > 0 && ` · ${selectedIds.size - auditSelectedLeads.length} skipped (already audited or missing type/location)`}.
+              {auditAlreadySplit.total > 0 && ` · ${auditAlreadySplit.total} already audited`}.
               {auditLimitsSentence()} Safe to leave this page.
             </>}
           />
@@ -3415,6 +3473,14 @@ export function OutreachTable({
             </Select>
           </div>
 
+          {/* ── WILL BE SKIPPED, AND WHY (2026-10-15) — nothing is spent on these; fix and re-run. ── */}
+          {auditSkipSummary.needs > 0 && (
+            <div className="rounded-md border border-amber-500/40 bg-amber-500/5 px-3 py-2" data-testid="audit-skip-groups">
+              <p className="mb-1 text-xs font-semibold">{auditSkipSummary.needs} will be skipped (not sent, nothing spent):</p>
+              <ReadinessSummaryBlock summary={auditSkipSummary} hideHeadline testId="audit-skip-summary"
+                onFixName={(name) => { const l = auditCandidates.find((c) => (c.business_name || 'Unnamed lead') === name); if (l) setFixLead(l); }} />
+            </div>
+          )}
           {/* ── NO WEBSITE: INCLUDED, SAID AS INFORMATION (2026-10-14) ───────────────────────────
               Counted in "Eligible to audit" below. No audit here runs a site scan (estimateBatchCost
               prices questions only). */}
@@ -3748,6 +3814,11 @@ export function OutreachTable({
       />
 
       <HookAuditDialog lead={auditLead} onOpenChange={(open) => { if (!open) setAuditLead(null); }} />
+
+      <ReadinessFixDialog lead={fixLead} open={!!fixLead} isAdmin={isAdmin}
+        fixes={fixLead ? readinessOf(fixLead).needsInfo.map((i) => i.fix) : []}
+        onOpenChange={(o) => { if (!o) setFixLead(null); }}
+        save={onUpdateLead && fixLead ? (patch) => onUpdateLead(fixLead.id, patch as Partial<OutreachLead>) : undefined} />
 
       {/* Lead detail modal (Track Leads fold-in) — opened on row click */}
       <LeadDetailDialog

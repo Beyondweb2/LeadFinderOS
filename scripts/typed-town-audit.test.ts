@@ -83,7 +83,12 @@ ok(!/const AUDIT_DAILY_CAP_USD = \d/.test(dialog) && !/const AUDIT_JOB_CAP = \d/
 const queue = readFileSync("supabase/functions/process-ai-audit-queue/index.ts", "utf8");
 ok(/const CAP_USD = AUDIT_RUN_CAP_USD/.test(queue), "the queue's run cap is the shared constant");
 const bulk = readFileSync("supabase/functions/bulk-jobs/index.ts", "utf8");
-ok(/audit: AUDIT_BULK_JOB_MAX_LEADS/.test(bulk) && /auditTownGated\(lead\)/.test(bulk), "bulk-jobs uses the shared cap and the shared gate");
+/* 2026-10-15: bulk-jobs' town rule moved, unchanged, into auditTownCheck (which calls auditTownGated first) so the screens
+   can say it up front (src/lib/leadReadiness.ts). */
+const typedTownSrc = readFileSync("supabase/functions/_shared/typed-town.ts", "utf8");
+ok(/audit: AUDIT_BULK_JOB_MAX_LEADS/.test(bulk) && /auditTownCheck\(lead\)/.test(bulk)
+  && /export function auditTownCheck[\s\S]*?if \(auditTownGated\(lead\)\) return \{ ok: false, problem: "town_unverified" \}/.test(typedTownSrc),
+  "bulk-jobs uses the shared cap and the shared gate");
 
 if (f > 0) { console.log(`\n${f} FAILURE${f === 1 ? "" : "S"}`); process.exit(1); }
 console.log("\nALL PASS");

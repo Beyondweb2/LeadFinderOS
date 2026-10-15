@@ -1,6 +1,8 @@
 import { OneStatusPill } from '@/components/PipelineStatusSelect';
 import type { SalesStateView } from '@/lib/leadState';
 import { memo } from 'react';
+import { NeedsInfoTag } from '@/components/LeadReadiness';
+import type { LeadReadiness } from '@/lib/leadReadiness';
 import { WhatsAppStatusBadge } from './WhatsAppStatusBadge';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -58,6 +60,10 @@ interface OutreachMobileCardProps {
   onCompleteAction?: () => void;
   phoneFetchStatus?: PhoneFetchStatus;
   onRetryPhoneFetch?: () => void;
+  /** The lead's readiness (src/lib/leadReadiness.ts) — draws the "Needs info" tag; memoised by the table. */
+  readiness?: LeadReadiness;
+  /** Opens the one-click fix for this lead (a stable callback). */
+  onFixReadiness?: (lead: OutreachLead) => void;
   isWalkthroughContacted?: boolean;
   onGenerateSite?: (template: 'barber' | 'salon' | 'plumber', mode?: 'booking_only') => void;
   isGeneratingSite?: boolean;
@@ -72,6 +78,8 @@ interface OutreachMobileCardProps {
 }
 
 export const OutreachMobileCard = memo(function OutreachMobileCard({
+  readiness,
+  onFixReadiness,
   salesState,
   lead,
   campaignName,
@@ -145,6 +153,7 @@ export const OutreachMobileCard = memo(function OutreachMobileCard({
               <span className="text-xs" title="Australia">🇦🇺</span>
             )}
             <span className="font-bold text-[15px] leading-tight">{lead.business_name}</span>
+            {readiness && <NeedsInfoTag readiness={readiness} onEdit={onFixReadiness ? () => onFixReadiness(lead) : undefined} className="flex-shrink-0" />}
             {lead.is_potential_work && (
               <Star className="h-3 w-3 text-yellow-500 fill-yellow-500 flex-shrink-0" />
             )}
