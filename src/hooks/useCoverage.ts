@@ -10,6 +10,7 @@ import {
 } from '@/lib/coverageState';
 import { coverageQueryKey, coverageTownsQueryKey } from '@/lib/coverageFreshness';
 import { ABROAD_TOWNS, pairsForCountry, type CoverageCountry } from '@/lib/coverageCountries';
+import { townPopulation } from '@/lib/abroadTownPopulation';
 
 /* ⚠️ The grading lives in src/lib/coverageState.ts and is unit-tested there. This hook fetches the
    facts and applies it — it deliberately decides nothing about what "worked" means, so the page and
@@ -105,7 +106,8 @@ export function useCoverage(country: CoverageCountry = 'UK') {
   const towns: CoverageTownRow[] = useMemo(() => {
     if (country === 'UK') return ukTowns;
     const row = (t: { name: string; region: string | null; aka?: string }, fromLeads: boolean): CoverageTownRow => ({
-      id: `${country}:${t.name}`, name: t.name, region: t.region, population: null, county: null,
+      /* Approximate, from the fixed sourced table; a town with no source figure stays null (blank). */
+      id: `${country}:${t.name}`, name: t.name, region: t.region, population: townPopulation(country, t.name).population, county: null,
       suppressed_at: null, suppressed_reason: null, aka: t.aka, fromLeads,
     });
     return [...ABROAD_TOWNS[country].map((t) => row(t, false)), ...(countryPairs?.extraTowns ?? []).map((t) => row(t, true))];

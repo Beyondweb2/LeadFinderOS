@@ -22,6 +22,20 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-15-my-sg-town-population', date: '2026-10-15', title: 'Coverage shows town sizes for Malaysia and Singapore', audience: 'all',
+    body: 'Coverage now shows an approximate population for each Malaysian town and Singapore area, with the source and year under the table.',
+    report: {
+      added: [
+        'Malaysia: an approximate population per town (2020 census, council area or district), and a population filter. Leave it blank to see every town.',
+        'Singapore: residents per planning area (June 2026).',
+        'The source and year are named under the table. Hover a figure to see what area it covers.',
+      ],
+      changed: [
+        'The figures are fixed and marked approximate (≈). A town with no source figure shows a dash, never 0: Cyberjaya, Puchong, Marina Bay and Singapore as a whole.',
+      ],
+      removed: ['The note saying Malaysia and Singapore have no population figures.'],
+      effect: 'You can pick bigger or smaller Malaysian towns to work at a glance. Singapore has no population filter because it is one city. The UK view is unchanged.',
+    } },
   { id: '2026-10-14-bulk-audit-score', date: '2026-10-14', title: 'Bulk AI audits now give a visibility score', audience: 'admin',
     body: 'A finished bulk AI audit now gives the lead an AI visibility score (for example 67%), worked out the same way as the quick AI check. That lets bulk-audited leads get the report-offer WhatsApp message.',
     report: {
