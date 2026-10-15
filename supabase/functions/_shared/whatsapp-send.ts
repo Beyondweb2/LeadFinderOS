@@ -6,7 +6,7 @@
 
 import { articleTrade, normaliseTrade, normaliseTown, pluraliseTrade } from "../../../src/lib/templateVars.ts";
 import { RIVAL_VARS, RIVALS_REQUIRED } from "../../../src/lib/rivalHook.ts";
-import { displayBusinessName, IDENTIFY_NAME_TEMPLATES } from "../../../src/lib/displayName.ts";
+import { displayBusinessName, nameStyleFor } from "../../../src/lib/displayName.ts";
 import { AI_SITE_FINDINGS_V2, AI_SITE_FINDINGS_V2_APPROVED } from "../../../src/lib/siteFindings.ts";
 import { STALE_OFFER_TEMPLATES } from "../../../src/lib/findableOffer.ts";
 import { isOnboardingFormUrl, isSignupTemplateLinkUrl, onboardingTemplateBody, signupLinkTemplateBody } from "../../../src/lib/whatsappLinkTemplates.ts";
@@ -99,6 +99,13 @@ export const WA_TEMPLATES: Record<string, { lang: string; vars: TemplateVar[]; h
      ⚠️ Carrying no name is also why it is NOT in IDENTIFY_NAME_TEMPLATES and why the queue's
      no_business_name guard never applies to it — there is no name in the copy to get wrong. */
   initial_opener_v2: { lang: "en", vars: [] },
+  /* initial_contact_short — the SHORT opener, Marketing / English, SUBMITTED TO META 2026-10-15
+     (src/lib/openerVariant.ts). ONE variable: {{1}} = the CLEANED business name (CLEAN_NAME_TEMPLATES in
+     displayName.ts → src/lib/cleanBusinessName.ts; lowercase, no legal suffix, no tagline). vars MUST stay
+     ["name"] (one param). COLD (not a continuation). Approval is NOT a flag: the queue and the Inbox
+     sender read Meta's LIVE status first and refuse with Meta's word while it is in review.
+     MIRRORS process-whatsapp-queue; change both together. */
+  initial_contact_short: { lang: "en", vars: ["name"] },
   // Reply-to-a-reply: 4 vars — {{1}} trade, {{2}} competitors, {{3}} business name, {{4}} report link.
   // Vars resolved server-side per-lead from the lead's own completed audit (see resolveAuditReplyVars).
   audit_reply: { lang: "en", vars: ["trade", "competitors", "name", "url"] },
@@ -321,7 +328,7 @@ export const WA_DEFAULT_TEMPLATE = "booking_page_intro";
    "Hi your business, Paul here from findable" is worse than sending nothing, because it is
    visibly automated in a message whose whole purpose is to sound like a person. For these,
    an empty name refuses rather than degrades. */
-export const TEMPLATES_NEEDING_REAL_NAME = new Set(["book_call", "re_engage_49"]);
+export const TEMPLATES_NEEDING_REAL_NAME = new Set(["book_call", "re_engage_49", "initial_contact_short"]);
 
 /* TEMPLATES WHOSE contact_first_name GREETING MAY DEGRADE TO "there".
    The mirror of TEMPLATES_NEEDING_REAL_NAME, one level down: for most personal-greeting templates a
@@ -390,6 +397,12 @@ const initialContactBody = (b: string, _u: string) =>
 /* initial_opener_v2 — the A/B variant. The Meta-registered body, byte for byte. It takes no
    arguments because the template takes no variables: there is nothing to fill and nothing to trim. */
 const initialOpenerV2Body = () => "Hey, are you taking on more jobs atm? Cheers";
+
+/* initial_contact_short — the Meta-registered body: "Hey, is this {{1}}?" then ONE new line, then "Thanks".
+   {{1}} arrives ALREADY CLEANED (the name style is decided in renderTemplateBody / templateBodyParams, from
+   CLEAN_NAME_TEMPLATES), so this only places it. Mirrors src/lib/templateBodies.ts. */
+const initialContactShortBody = (b: string, _u: string) => `Hey, is this ${b || "your business"}?
+Thanks`;
 
 // audit_reply — reply to a lead who replied. b={{3}} business, u={{4}} report link,
 // trade={{1}}, competitors={{2}}. Keep in sync with the Meta-registered audit_reply body.
@@ -776,6 +789,7 @@ export const WA_TEMPLATE_BODIES: Record<string, (businessName: string, claimUrl:
   barber_fresha_booksy: barberFreshaBooksyBody,
   initial_contact: initialContactBody,
   initial_opener_v2: () => initialOpenerV2Body(),
+  initial_contact_short: initialContactShortBody,
   audit_reply: auditReplyBody,
   video_template: videoTemplateBody,
   competitor_hook: competitorHookBody,
@@ -816,7 +830,7 @@ export function renderTemplateBody(templateName: string, businessName: string, c
      is the rule; nothing is written back to outreach_leads.business_name. */
   businessName = displayBusinessName(businessName, {
     town,
-    style: IDENTIFY_NAME_TEMPLATES.has(templateName) ? "identify" : "greet",
+    style: nameStyleFor(templateName),
   });
   /* `town` is a 6th positional rather than a new object: every existing body function ignores extra
      arguments, so adding it cannot change a single stored transcript. video_template is the only
@@ -1015,7 +1029,7 @@ export function templateBodyParams(
         /* ⛔ THE FRAME DECIDES, AND THE TEMPLATE NAME IS ONLY HOW WE LOOK IT UP. "Hi, is this X?"
            needs enough to identify; "Hi X," wants the short form. Absent templateName falls to
            "greet", which is what every caller got before this existed. */
-        style: extra?.templateName && IDENTIFY_NAME_TEMPLATES.has(extra.templateName) ? "identify" : "greet",
+        style: nameStyleFor(extra?.templateName),
       }) || "your business"; // "name"
     }
   };

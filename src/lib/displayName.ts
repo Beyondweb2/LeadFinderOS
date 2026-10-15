@@ -107,7 +107,9 @@ const tailOk = (w: string) => {
    `identify`; if it opens "Hi X," it wants `greet`. Do not add a template to the identify set
    because it feels formal — read the sentence the name lands in.
    ⚠️ `greet` IS THE DEFAULT so every existing caller is byte-identical to before this existed. */
-export type NameStyle = "greet" | "identify";
+import { cleanBusinessName } from "./cleanBusinessName.ts";
+
+export type NameStyle = "greet" | "identify" | "clean";
 
 /* ⛔ THE ONE PLACE THE SPLIT IS DECIDED. Three renderers read it — the Meta parameter, the stored
    body, and the Inbox mirror — so a template added here changes all three together. Written out at
@@ -116,6 +118,19 @@ export type NameStyle = "greet" | "identify";
    ⚠️ MEMBERSHIP IS DECIDED BY THE SENTENCE, NOT THE TONE: `initial_contact` is here because its
    body is "Hi, is this ${b}?". Every other live body opens "Hi ${b}," and wants the short form. */
 export const IDENTIFY_NAME_TEMPLATES: ReadonlySet<string> = new Set(["initial_contact"]);
+
+/* ⛔ THE THIRD STYLE: "clean" — the short lowercase name of src/lib/cleanBusinessName.ts (Paul, 2026-10-15). A
+   template opts in by being named HERE and nowhere else; the send, the stored body and the Inbox mirror all
+   read this one set through nameStyleFor. Only initial_contact_short uses it today. DISPLAY ONLY: the stored
+   business_name is never written. Takes precedence over IDENTIFY_NAME_TEMPLATES if a name is in both. */
+export const CLEAN_NAME_TEMPLATES: ReadonlySet<string> = new Set(["initial_contact_short"]);
+
+/** The name style a template renders its business name with. The ONE place the three renderers ask. */
+export function nameStyleFor(templateName: string | null | undefined): NameStyle {
+  const t = String(templateName ?? "").trim();
+  if (CLEAN_NAME_TEMPLATES.has(t)) return "clean";
+  return IDENTIFY_NAME_TEMPLATES.has(t) ? "identify" : "greet";
+}
 
 export interface DisplayNameOpts {
   /** The lead's town, when the caller knows it. Stops "Spalding Plumbers" greeting someone as
@@ -275,6 +290,10 @@ export function displayNameFor(name: string | null | undefined, opts: DisplayNam
   const keep = (why: string): DisplayNameResult => ({ display: original, original, shortened: false, why });
   if (!original) return { display: "", original: "", shortened: false, why: "no name" };
 
+  if (opts.style === "clean") {
+    const cleaned = cleanBusinessName(original);
+    return { display: cleaned, original, shortened: cleaned !== original, why: cleaned === original ? "nothing to clean" : "" };
+  }
   if (opts.style === "identify") return identifyName(original, (opts.town ?? "").trim().toLowerCase(), keep);
 
   const t = tok(original);

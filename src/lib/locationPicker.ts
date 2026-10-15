@@ -17,7 +17,7 @@
    another country (Perth, Scotland). search-leads' cache keys depend on that exact text.
 
    Pure, no React, no app wiring. */
-import type { Country } from '@/types/lead';
+import type { Country } from '../types/lead.ts';
 
 export interface SearchCountryOption {
   value: Country;

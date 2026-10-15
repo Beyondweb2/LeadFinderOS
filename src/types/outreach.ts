@@ -3,7 +3,7 @@
    label states the approval — one constant, no second copy of the rule.
    ⚠️ This file is reached by NO edge function (check-import-graph --reached-by), so the import adds
    nothing to any edge closure. */
-import { INITIAL_OPENER_B, INITIAL_OPENER_V2_APPROVED } from '@/lib/openerVariant';
+import { INITIAL_OPENER_B, INITIAL_OPENER_C, INITIAL_OPENER_V2_APPROVED } from '@/lib/openerVariant';
 /* ai_site_findings_v2's name lives in one leaf (src/lib/siteFindings.ts, beside the generator for
    the {{6}} that makes it different). */
 import { AI_SITE_FINDINGS_V2 } from '@/lib/siteFindings';
@@ -552,6 +552,9 @@ export const WHATSAPP_TEMPLATES: { value: string; label: string }[] = [
       ? 'Initial contact v2 — newer opener (no business name)'
       : 'Initial contact v2 — newer opener ⛔ PENDING META APPROVAL, a send will fail',
   },
+  /* initial_contact_short — "Hey, is this {{1}}?" (2026-10-15). Meta's LIVE status gates it server-side: until Meta approves it a send
+     or a queue is refused with Meta's own word. */
+  { value: INITIAL_OPENER_C, label: 'Initial contact short — "Hey, is this …?" (cleaned name)' },
   { value: 'audit_reply', label: 'Audit reply (report + competitors)' },
   /* 🔴 THE LABEL SAID "Audit result hook (outreach)" AND THAT IS THE NAME OF THE TEMPLATE THIS ONE
      REPLACED. `audit_result_hook` was retired on 2026-09-12; `video_template` is its successor,

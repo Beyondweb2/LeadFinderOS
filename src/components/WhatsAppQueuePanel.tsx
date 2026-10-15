@@ -14,6 +14,7 @@ import { leadRpc } from '@/lib/leadRpc';
 import { notifyLeadChanged } from '@/lib/leadSync';
 import { refusalText } from '@/lib/salesCrm';
 import { templateLabel } from '@/types/outreach';
+import { displayBusinessName, nameStyleFor } from '@/lib/displayName';
 import {
   auditStatusFor, AUDIT_STATUS_PRESENTATION,
   type AuditRowForStatus, type QueueAuditStatus,
@@ -398,6 +399,9 @@ export function WhatsAppQueuePanel({ defaultExpanded = true }: { defaultExpanded
   );
 }
 
+/** How many rows at the top of the queue show the cleaned name a message will carry. */
+const CLEAN_PREVIEW_ROWS = 5;
+
 function QueueItem({ index, row, state, audit, busy, disabled, onRemove, removeTitle }: {
   index: number; row: QueueRow; state: QueueRowState; audit?: QueueAuditStatus;
   busy: boolean; disabled: boolean; onRemove?: () => void; removeTitle: string;
@@ -405,12 +409,18 @@ function QueueItem({ index, row, state, audit, busy, disabled, onRemove, removeT
   const s = QUEUE_ROW_STATE[state];
   const name = row.business_name ?? 'Unnamed business';
   const tmpl = state === 'follow_up' ? 'contact_followup' : row.whatsapp_template;
+  /* ⛔ THE NAME THE MESSAGE WILL CARRY, for the first few rows of a template that cleans its name
+     (initial_contact_short): the stored name above is untouched, this is only what {{1}} will say. */
+  const sendsAs = state !== 'follow_up' && index <= CLEAN_PREVIEW_ROWS && nameStyleFor(row.whatsapp_template) === 'clean'
+    ? displayBusinessName(row.business_name, { style: 'clean' })
+    : '';
   return (
     <li className="flex items-center justify-between gap-2 rounded-md px-2 py-1.5 text-xs hover:bg-muted/50" data-testid="queue-row" data-state={state}>
       <span className="flex min-w-0 items-start gap-2">
         <span className="mt-0.5 w-5 shrink-0 text-right text-[10px] tabular-nums text-muted-foreground/50">{index}</span>
         <span className="min-w-0">
           <span className="block truncate font-medium text-foreground/90">{name}</span>
+          {sendsAs && <span className="block truncate text-[11px] text-muted-foreground" data-testid="queue-row-clean-name">Will say: “{sendsAs}”</span>}
           <span className="mt-0.5 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-[11px] text-muted-foreground">
             <ToneChip tone={s.tone} title={s.title} testId="queue-row-state">{s.label}</ToneChip>
             {tmpl && <span className="truncate" title={tmpl}>{templateLabel(tmpl)}</span>}

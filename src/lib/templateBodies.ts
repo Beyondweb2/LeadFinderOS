@@ -24,7 +24,7 @@
 import { hookFollowupBody, contactFollowupBody, questionnaireFollowupBody } from './questionnaireFollowup.ts';
 /* competitor_hook's body prints the SAME plural the parameter carries — see its note below. */
 import { articleTrade, pluraliseTrade } from './templateVars.ts';
-import { transcriptBusinessName, IDENTIFY_NAME_TEMPLATES } from './displayName.ts';
+import { transcriptBusinessName, nameStyleFor } from './displayName.ts';
 import { onboardingTemplateBody, signupLinkTemplateBody } from './whatsappLinkTemplates.ts';
 import { reportOfferBody } from './reportOfferTemplate.ts';
 
@@ -76,6 +76,12 @@ Cheers`;
    ignores both, because the template has nothing to fill. Mirrors whatsapp-send.ts. */
 const initialOpenerV2Body = (_b: string, _u: string) =>
   'Hey, are you taking on more jobs atm? Cheers';
+
+/* initial_contact_short - submitted to Meta 2026-10-15: "Hey, is this {{1}}?" / one new line / "Thanks". {{1}} is the
+   CLEANED name (nameStyleFor → cleanBusinessName). Mirrors whatsapp-send.ts. */
+const initialContactShortBody = (b: string, _u: string) =>
+  `Hey, is this ${b || 'your business'}?
+Thanks`;
 
 /** What initial_contact said before 2026-09-15 — kept so those transcripts stay true. */
 const initialContactBodyPre20260915 = (b: string, _u: string) =>
@@ -420,6 +426,7 @@ export const READABLE_TEMPLATE_BODIES: Record<string, TemplateBodyFn> = {
   barber_fresha_booksy: barberFreshaBooksyBody,
   initial_contact: initialContactBody,
   initial_opener_v2: initialOpenerV2Body,
+  initial_contact_short: initialContactShortBody,
   audit_reply: auditReplyBody,
   video_template: videoTemplateBody,
   competitor_hook: competitorHookBody,
@@ -537,7 +544,7 @@ export function readableTemplateBody(
        Heating" — the transcript drift this file exists to prevent. */
     transcriptBusinessName(opts.businessName, opts.sentAt, {
       town: opts.town,
-      style: templateName && IDENTIFY_NAME_TEMPLATES.has(templateName) ? 'identify' : 'greet',
+      style: nameStyleFor(templateName),
     }),
     opts.url ?? '',
     opts.trade ?? undefined,
