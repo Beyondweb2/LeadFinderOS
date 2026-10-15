@@ -1,5 +1,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { townGated, TOWN_GATE_REASON } from "../../../src/lib/townVerdict.ts";
+import { cleanTypedTown } from "../../../src/lib/typedTown.ts";
+import { townWasTyped } from "../_shared/typed-town.ts";
 import { SOURCES } from "../_shared/enrichment/sources.ts";
 import { resolveDerivedTown, pickAuditTown } from "../_shared/place-town.ts";
 import { buildTownIndex, lookupTownCentroid, checkTownDistance, type TownDistanceCheck } from "../_shared/town-distance.ts";
@@ -7,7 +9,7 @@ import { ukGazetteerApplies } from "../../../src/lib/leadCountry.ts";
 import { toWhatsAppNumber } from "../_shared/whatsapp-send.ts";
 import { DEFAULT_FIRST_REPLY_TEMPLATE, effectiveReplyMode, firstReplyTemplate, pitchEverSent } from "../_shared/auto-reply-rules.ts";
 import { pitchMayFollowAudit, pitchRefusalNote } from "../../../src/lib/auditPitchRule.ts";
-import { dropResearchIntent, dropOffTrade, dropMissingTown, qualifyPlace, placeSuffixForCountry, placeNamesCountry, placeJoin, dedupeQuestions, coverageDirective, stripRepeatedWords, capHeadTerms, headTermCap } from "../../../src/lib/seedGuard.ts";
+import { dropResearchIntent, dropOffTrade, dropMissingTown, qualifyPlace, placeSuffixForCountry, placeNamesCountry, placeJoin, dedupeQuestions, coverageDirective, stripRepeatedWords, capHeadTerms, headTermCap, hookPlaceFor } from "../../../src/lib/seedGuard.ts";
 import { normalizeAuditList, serviceAreaQuestionDirective } from "../../../src/lib/auditQuestionContext.ts";
 import {
   nationalIntentDirective, hybridIntentDirective, nationalFallbackQuestions, marketVocabulary,
@@ -158,7 +160,7 @@ const NATIONAL_LOC_TERMS = new Set([
   "uk", "u.k.", "united kingdom", "great britain", "britain", "gb", "england", "scotland",
   "wales", "northern ireland", "ireland", "eire", "republic of ireland",
   "usa", "u.s.a.", "us", "u.s.", "united states", "united states of america", "america",
-  "canada", "australia", "new zealand", "nz", "thailand",
+  "canada", "australia", "new zealand", "nz", "thailand", "malaysia",
   "nationwide", "national", "online", "remote", "everywhere", "anywhere",
 ]);
 // Location tokens that are national but NOT a usable country/region qualifier for a phrase.
@@ -239,9 +241,7 @@ function buildMarketContext(
 function finalHookPlan(questions: string[], ctx: { town: string; country: string | null; trade: string; businessName: string }): string[] {
   let qs = planHookQuestions(dedupeQuestions(questions).questions, { town: ctx.town });
   if (qs.length < HOOK_SCORE_QUESTIONS) {
-    const isUkHook = ["UK", "GB"].includes((ctx.country ?? "").trim().toUpperCase());
-    const hookPlace = ctx.town && isUkHook && !/\b(uk|united kingdom|england|scotland|wales)\b/i.test(ctx.town)
-      ? `${ctx.town} UK` : ctx.town;
+    const hookPlace = hookPlaceFor(ctx.town, ctx.country);
     const before = qs.length;
     qs = topUpHookQuestions(qs, { trade: ctx.trade, place: hookPlace });
     console.log(`[create-ai-audit] hook: ${before} generated question(s) topped up to ${qs.length} with generic trade/place questions`);
@@ -918,6 +918,13 @@ Deno.serve(async (req) => {
           searchLocation: locationText,
         });
         if (picked.town) { locationText = picked.town; locationSource = picked.source; }
+        else if (locationText && !cleanTypedTown(locationText)) {
+          /* ⛔ A TYPED LOCATION THAT IS NOT A PLACE ("Online; team reports tutors in Singapore…") is no town:
+             never asked about, never stored as the audit's town. The local-scope guard below refuses it
+             with a reason a person can act on. */
+          console.log(`[create-ai-audit] lead ${leadId}: typed location "${locationText.slice(0, 60)}" is not a town — ignored`);
+          locationText = ""; locationSource = "none";
+        }
         townNote = derived.error;
 
         /* ⛔ THE WRONG-TOWN GUARD. Measured 2026-08-09: 31 of 44 measurable audits asked about a town
@@ -1006,7 +1013,10 @@ Deno.serve(async (req) => {
     // branch validates the stored town itself and degrades to classifier scope instead of
     // failing a paying customer's chain.
     if (!effectiveReuseId && businessScope === "local" && !hasUsableTown(locationText)) {
-      return json({ ok: false, error: "local_scope_needs_town" }, 400);
+      return json({
+        ok: false, error: "local_scope_needs_town",
+        message: "no_usable_town: this lead has no real town to ask about (its location is blank or not a place, e.g. \"Online\"). Add the town on the lead, then retry",
+      }, 400);
     }
 
     /* ⛔ ONE CONTEXT, BUILT ONCE, AFTER THE TOWN IS RESOLVED. Null when the caller sent no
@@ -1087,7 +1097,7 @@ Deno.serve(async (req) => {
     // The town columns ride along for the gate below — one read, both questions.
     if (leadId) {
       const { data: lead } = await service.from("outreach_leads")
-        .select("user_id, derived_town, town_fetch_note, place_id, lead_source").eq("id", leadId).maybeSingle();
+        .select("user_id, derived_town, town_fetch_note, place_id, lead_source, import_batch").eq("id", leadId).maybeSingle();
       if (!isInternal && (!lead || lead.user_id !== userId)) return json({ ok: false, error: "lead_not_found" }, 403);
       /* ⛔ THE TOWN GATE — Paul's rule, 2026-08-14: an audit of a lead whose town is settled-
          unverifiable would fall back to search_location, the searched town — the exact wrong-town
@@ -1122,7 +1132,7 @@ Deno.serve(async (req) => {
          carries a lead_source (only sales_add_lead writes one), it has NO place id (a Google-resolved lead
          keeps the gate exactly as before), and the town in use is that typed one (locationSource 'search',
          a usable town). Anything else is gated as it always was. */
-      const handTypedTown = !!lead && !lead.place_id && typeof lead.lead_source === "string" && lead.lead_source !== ""
+      const handTypedTown = !!lead && townWasTyped(lead)
         && locationSource === "search" && hasUsableTown(locationText);
       if (lead && !isBaseline && !isRemeasure && !townConfirmed && !handTypedTown && townGated(lead)) {
         return json({ ok: false, error: `town_unverified: ${TOWN_GATE_REASON}` }, 409);

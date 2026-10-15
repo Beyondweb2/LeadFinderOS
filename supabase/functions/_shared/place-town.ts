@@ -1,4 +1,5 @@
 import { runEnrichSource } from "./enrichment/runner.ts";
+import { cleanTypedTown, isRealTown } from "../../../src/lib/typedTown.ts";
 import { SOURCES } from "./enrichment/sources.ts";
 import {
   ESSENTIALS_FIELDS,
@@ -258,9 +259,11 @@ export function pickAuditTown(args: {
 }): { town: string; source: "confirmed" | "derived" | "search" | "none" } {
   const c = (args.confirmedLocation ?? "").trim();
   if (c) return { town: c, source: "confirmed" };
+  /* A derived "town" that is not a place ("Online") is skipped, and a typed location is read through
+     cleanTypedTown ("Kuala Lumpur (Sunway Velocity 2)" → "Kuala Lumpur"; "Online; …" → nothing). */
   const d = (args.derivedTown ?? "").trim();
-  if (d) return { town: d, source: "derived" };
-  const s = (args.searchLocation ?? "").trim();
+  if (d && isRealTown(d)) return { town: d, source: "derived" };
+  const s = cleanTypedTown(args.searchLocation);
   if (s) return { town: s, source: "search" };
   return { town: "", source: "none" };
 }
