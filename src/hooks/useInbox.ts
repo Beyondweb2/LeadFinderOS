@@ -77,7 +77,7 @@ export function inboxLeadTableFor(role: string | null | undefined): InboxLeadTab
 
 /* next_action / next_action_date (2026-09-28): the thread header shows the human-set next action, so a
    change made in Outreach or the prospect panel is visible here without opening anything. */
-const LEAD_COLUMNS = 'id, business_name, phone, country, campaign_id, status, google_maps_url, website, email, place_id, category, search_keyword, search_location, address, amount_paid, contact_name, hook_followup_queued_at, is_potential_work, facebook_url, instagram_url, linkedin_url, facebook_status, instagram_status, linkedin_status, call_booked_at, whatsapp_sent_at, next_action, next_action_date, next_action_time, next_action_note, sms_queued_at, sms_delivery_status';
+const LEAD_COLUMNS = 'id, business_name, phone, country, campaign_id, status, google_maps_url, website, email, place_id, category, search_keyword, search_location, address, amount_paid, contact_name, hook_followup_queued_at, is_potential_work, facebook_url, instagram_url, linkedin_url, facebook_status, instagram_status, linkedin_status, call_booked_at, whatsapp_sent_at, next_action, next_action_date, next_action_time, next_action_note, sms_queued_at, sms_delivery_status, derived_town, town_fetch_note, lead_source, import_batch';
 
 /** One lead row, freshly read by id — used to close the gap between an inbound reply's message
  *  (visible the instant its realtime INSERT lands) and its status flip to 'replied' (a second,
@@ -158,7 +158,7 @@ export interface WaConversation {
   isPotentialWork: boolean;
 }
 
-export interface LeadLite { id: string; business_name: string; phone: string; country: string | null; campaign_id: string | null; status: string | null; google_maps_url: string | null; website: string | null; email: string | null; place_id: string | null; category: string | null; search_keyword: string | null; search_location: string | null; address: string | null; amount_paid: number | null; contact_name: string | null; hook_followup_queued_at: string | null; is_potential_work: boolean | null; next_action?: string | null; next_action_date?: string | null; next_action_time?: string | null; next_action_note?: string | null; call_booked_at?: string | null; whatsapp_sent_at?: string | null; sms_queued_at?: string | null; sms_delivery_status?: string | null }
+export interface LeadLite { id: string; business_name: string; phone: string; country: string | null; campaign_id: string | null; status: string | null; google_maps_url: string | null; website: string | null; email: string | null; place_id: string | null; category: string | null; search_keyword: string | null; search_location: string | null; address: string | null; amount_paid: number | null; contact_name: string | null; hook_followup_queued_at: string | null; is_potential_work: boolean | null; next_action?: string | null; next_action_date?: string | null; next_action_time?: string | null; next_action_note?: string | null; call_booked_at?: string | null; whatsapp_sent_at?: string | null; sms_queued_at?: string | null; sms_delivery_status?: string | null; derived_town?: string | null; town_fetch_note?: string | null; lead_source?: string | null; import_batch?: string | null }
 
 const convKey = (userId: string | null, phone: string) => `${userId ?? 'unassigned'}::${phone}`;
 

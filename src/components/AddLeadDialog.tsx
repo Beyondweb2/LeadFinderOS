@@ -13,6 +13,8 @@ import { notifyLeadChanged } from '@/lib/leadSync';
 import { LEAD_SOURCE_LABELS } from '@/lib/salesPerformance';
 import { refusalText } from '@/lib/salesCrm';
 import { internationalPhone } from '@/lib/lineType';
+import { useCountrySettings } from '@/hooks/useCountrySettings';
+import { leadReadiness, readinessLines } from '@/lib/leadReadiness';
 
 /* ⛔ THE COUNTRY IS ASKED, NOT ASSUMED (2026-09-28). It was hard-coded UK, so a hand-added Pune lead was
    stored as UK: its audit questions read "Pune UK", the engines were asked from Great Britain, and its
@@ -58,6 +60,12 @@ export function AddLeadDialog({ open, onOpenChange, onAdded }: { open: boolean; 
   const [siteMatch, setSiteMatch] = useState<string | null>(null);
   const set = (k: keyof typeof EMPTY) => (e: { target: { value: string } }) => setF((p) => ({ ...p, [k]: e.target.value }));
   const ready = f.businessName.trim() && f.trade.trim() && f.source && (f.phone.trim() || f.mapsUrl.trim());
+  /* READINESS (2026-10-15, src/lib/leadReadiness.ts): what this lead will still need for the audit and a message, said
+     before it is saved. Never blocks the add — a hand-added lead with no Google place is audited on its typed town. */
+  const { settings: countrySettings } = useCountrySettings();
+  const typed = { business_name: f.businessName, search_keyword: f.trade, search_location: f.town, address: f.address,
+    phone: f.phone, country: f.country, lead_source: f.source || 'other', place_id: null };
+  const typedReadiness = f.businessName.trim() ? leadReadiness(typed, { countrySettings }) : null;
 
   const submit = async (confirmSiteMatch = false) => {
     setRefusal(null); setSiteMatch(null);
@@ -158,6 +166,14 @@ export function AddLeadDialog({ open, onOpenChange, onAdded }: { open: boolean; 
             <Button size="sm" variant="outline" className="mt-2 h-8 text-xs" disabled={busy} onClick={() => void submit(true)}>It's a different branch — add it</Button>
           </Callout>
         )}
+        {typedReadiness && (typedReadiness.ok
+          ? <p className="text-xs text-emerald-700 dark:text-emerald-400" data-testid="add-lead-readiness">Ready for an AI audit and a message.</p>
+          : (
+            <div className="rounded-md bg-amber-500/10 px-3 py-2 text-xs" data-testid="add-lead-readiness">
+              <p className="font-medium">This lead will still need:</p>
+              <ul className="mt-0.5 list-disc pl-4">{readinessLines(typedReadiness).filter((l) => !/^Report offer/.test(l)).map((l) => <li key={l}>{l}</li>)}</ul>
+            </div>
+          ))}
         {refusal && <Callout tone="amber" icon={AlertTriangle} testId="add-lead-refusal">{refusal}</Callout>}
         <DialogFooter>
           <Button variant="ghost" onClick={() => onOpenChange(false)} disabled={busy}>Cancel</Button>

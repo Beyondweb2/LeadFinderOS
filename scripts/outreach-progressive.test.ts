@@ -138,7 +138,8 @@ ok(leadSourceFor("admin").table === "outreach_leads" && leadSourceFor("admin").l
 // 49 the same day: + next_action_time (the optional UK time, every type).
 // 51 since 2026-10-09: + sms_queued_at, sms_delivery_status (the SMS Queued / SMS Failed / No SMS pills).
 // 52 since 2026-10-14: + import_batch (Outreach search finds a CSV import batch).
-ok(OUTREACH_LIST_COLUMNS.length === 52, "admin list is 52 columns");
+// 53 since 2026-10-15: + lead_source (the audit town gate reads it — the "Needs info" tag, src/lib/leadReadiness.ts).
+ok(OUTREACH_LIST_COLUMNS.length === 53, "admin list is 53 columns");
 const sales = leadSourceFor("sales");
 ok(sales.table === "sales_leads", "sales: the safe sales_leads view (their own assigned prospects; the view decides)");
 const salesView = new Set<string>(SALES_VIEW_COLUMNS);

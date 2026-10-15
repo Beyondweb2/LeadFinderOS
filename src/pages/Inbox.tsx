@@ -21,6 +21,8 @@ import { useTemplates } from '@/hooks/useTemplates';
 import { MINE_HEADING, TEAM_HEADING, TEAM_MARK } from '@/lib/teamTemplates';
 import { unresolvedTokens } from '@/lib/leadUtils';
 import { useSubscription } from '@/hooks/useSubscription';
+import { leadReadiness } from '@/lib/leadReadiness';
+import { NeedsInfoTag, ReadinessFixDialog } from '@/components/LeadReadiness';
 import { usePersistedState } from '@/hooks/usePersistedState';
 import { supabase } from '@/integrations/supabase/client';
 import { REPORT_PUBLIC_ORIGIN } from '@/lib/findableOffer';
@@ -822,6 +824,8 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
   // The canonical sales state for the open thread's lead (the same reading Focus Mode and the popup draw).
   const activeSales = useLeadSalesState(active?.leadId ?? '');
   const activeBusinessName = activeLead?.business_name;
+  /* LEAD READINESS (2026-10-15, src/lib/leadReadiness.ts): the same Needs info tag as Outreach, one-click fix. */
+  const [readinessFixOpen, setReadinessFixOpen] = useState(false);
   /* ⛔ INSERTING A QUICK REPLY WRITES THE DRAFT AND REMOUNTS THE COMPOSER. The composer holds its
      own text (see InboxComposer — that is what fixed the typing lag), so the parent can no longer
      push a value into it by setting state. Bumping the seed changes the composer's React key, so it
@@ -1566,6 +1570,7 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
   /* sms: a number that can never receive a text (a landline, a foreign number, or one already marked No SMS) is not offered. */
   const { settings: countrySettings } = useCountrySettings();
   const newPickerLeads = useMemo(() => (sms ? leads.filter((l) => isTextableMobile(l.phone, l.country, marketsOn(countrySettings, 'sms')) && smsPillOf(l) !== 'no_sms') : leads), [leads, sms, countrySettings]);
+  const activeReadiness = useMemo(() => (activeLead ? leadReadiness(activeLead, { countrySettings }) : null), [activeLead, countrySettings]);
 
   const startFromLead = (lead: LeadLite) => {
     const norm = normalizeWaNumber(lead.phone, lead.country);
@@ -2196,6 +2201,7 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
                         in place of "Find email": email outreach is not used). "+ Set next action", or the saved
                         action ("Call · Tomorrow"); the shared editor and the one write (lead_set_follow_up). */}
                     {activeLead && <NextActionEditor lead={activeLead} variant="pill" />}
+                    {activeReadiness && <NeedsInfoTag readiness={activeReadiness} onEdit={() => setReadinessFixOpen(true)} />}
                     <EngagementPills reportOpenedAt={active.reportOpenedAt} siteVisitedAt={active.siteVisitedAt} geminiNamed={active.geminiNamed} geminiAnswers={active.geminiAnswers} />
                     <ConvStateChip state={activeState} hideQueued channel={channel} />
                     <AiDraftChip row={activeAi} />
@@ -2750,6 +2756,9 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
         onOpenChange={(o) => { if (!o) setDetailLeadId(null); }}
         onStatusPatched={patchLeadStatus}
       />
+      <ReadinessFixDialog lead={activeLead ?? null} open={readinessFixOpen && !!activeLead} isAdmin={isAdmin}
+        fixes={activeReadiness ? activeReadiness.needsInfo.map((i) => i.fix) : []}
+        onOpenChange={setReadinessFixOpen} />
     </div>
   );
 };

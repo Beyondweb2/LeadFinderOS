@@ -46,6 +46,9 @@ export const OUTREACH_LIST_COLUMNS = [
   'sms_queued_at', 'sms_delivery_status',
   // 2026-10-14 (migration 20261024100000): the CSV import batch name — Outreach search finds a batch by it.
   'import_batch',
+  // 2026-10-15: the audit town gate lets a hand-added lead through on its typed town (auditTownGated reads it), so the
+  // "Needs info" tag and the bulk audit's skip list (src/lib/leadReadiness.ts) need it. Already in the sales view.
+  'lead_source',
 ] as const;
 
 export type OutreachListColumn = (typeof OUTREACH_LIST_COLUMNS)[number];

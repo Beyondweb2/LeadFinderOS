@@ -22,6 +22,19 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-15-lead-ready-check', date: '2026-10-15', title: 'See what a lead is missing before it fails', audience: 'all',
+    body: 'When you add or import leads, you now see up front which are ready for an AI audit and a message, and what the rest need (a town, a mobile number, a trade, a name). A "Needs info" tag shows on leads in Outreach and the Inbox, and the bulk audit says who will be skipped before anything is spent.',
+    report: {
+      added: [
+        'Coverage add, CSV import and Add a lead show "X ready, Y need something", grouped by what is missing, with the names. Fix a name, town or number in place, or add only the ready ones.',
+        'Coverage add marks the phone and town as "will be looked up", then checks again after the lookups and shows anything still missing. Find Leads says once, after its lookups, which added leads still need info.',
+        'A "Needs info" tag on Outreach rows and in the Inbox. Hover it to see exactly what is missing; click it to fix it.',
+        'The Run AI audits box lists the leads that will be skipped and why, and does not send them, so nothing is spent on them.',
+      ],
+      changed: ['The rules are the same ones the audit and the senders already use, read from one place, so the screen and the server always agree.'],
+      removed: [],
+      effect: 'You find out what a lead is missing when you add it, not after an audit or a message fails.',
+    } },
   { id: '2026-10-15-coverage-multi-town', date: '2026-10-15', title: 'Coverage: find leads in many towns at once', audience: 'all',
     body: 'Tick towns on Coverage and press Find leads: up to 10 towns are searched together into one list with a Town column, duplicates removed. Tick the leads you want and add them all in one go, into the campaign you choose.',
     report: {

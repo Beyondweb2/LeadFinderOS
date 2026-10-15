@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -12,6 +12,9 @@ import { useAuth } from '@/hooks/useAuth';
 import { useTeamDirectory } from '@/hooks/useSalesCrm';
 import { useCampaigns } from '@/hooks/useCampaigns';
 import { CampaignPicker } from '@/components/CampaignPicker';
+import { useCountrySettings } from '@/hooks/useCountrySettings';
+import { ReadinessSummaryBlock } from '@/components/LeadReadiness';
+import { leadReadiness, readinessLeadFromImport, summariseReadiness } from '@/lib/leadReadiness';
 import {
   IMPORT_FIELDS, IMPORT_FIELD_LABEL, IMPORT_FILE_MAX_BYTES, IMPORT_FILE_MAX_ROWS, IMPORT_BATCH_MAX,
   IMPORT_BATCH_NAME_MAX, withDefaultTrade, withImportCountry, countsByCountry, IMPORT_COUNTRIES, type ImportCountry,
@@ -86,6 +89,7 @@ export function CSVImportDialog({ open, onOpenChange, onImported, isAdmin }: CSV
     setStep('pick'); setFile(null); setParsed(null); setMapping(emptyMapping()); setMapNotes([]);
     setError(null); setBusy(false); setProgress(null); setPreview(null); setResult(null); setImportPossible(false);
     setBatchName(''); setDefaultTrade(''); setAssignTo(''); setImportCountry(''); setResearch(false); setCampaignId(null);
+    setRowEdits({}); setEditRow(null); setReadyOnly(false);
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
@@ -130,13 +134,44 @@ export function CSVImportDialog({ open, onOpenChange, onImported, isAdmin }: CSV
   };
 
   /* 2026-10-14: the file's country fills a blank Country (a row's own always wins); phones are read in that country. */
-  const rows = parsed ? withImportCountry(withDefaultTrade(research ? buildResearchRows(parsed) : buildImportRows(parsed, mapping), defaultTrade), importCountry || null) : [];
+  const builtRows = parsed ? withImportCountry(withDefaultTrade(research ? buildResearchRows(parsed) : buildImportRows(parsed, mapping), defaultTrade), importCountry || null) : [];
+
+  /* ── READINESS (2026-10-15, src/lib/leadReadiness.ts) ─────────────────────────────────────────────────────────
+     After the check: of the rows that will be ADDED, how many are ready for an audit and a message, and what the rest
+     need, grouped, with names. A name, town or number can be fixed here (the edit rides in the import; the server
+     re-checks it on import), and "Import only the ready ones" leaves the others out. Nothing here decides a duplicate. */
+  const { settings: countrySettings } = useCountrySettings();
+  const [rowEdits, setRowEdits] = useState<Record<number, { business_name?: string; town?: string; phone?: string }>>({});
+  const [editRow, setEditRow] = useState<number | null>(null);
+  const [readyOnly, setReadyOnly] = useState(false);
+  const rows = builtRows.map((r) => {
+    const e = rowEdits[r.row];
+    if (!e) return r;
+    const out = { ...r };
+    for (const [k, v] of Object.entries(e)) if (String(v ?? '').trim()) (out as Record<string, unknown>)[k] = String(v).trim();
+    return out;
+  });
+  const importReadiness = useMemo(() => {
+    if (!preview) return null;
+    const outcome = new Map(preview.rows.map((r) => [r.row, r]));
+    const adding = rows.filter((r) => {
+      const o = outcome.get(r.row);
+      return !!o && (o.outcome === 'new' || (o.outcome === 'held' && importPossible));
+    });
+    const list = adding.map((r) => ({
+      row: r.row,
+      name: r.business_name || `Row ${r.row}`,
+      readiness: leadReadiness(readinessLeadFromImport(r, outcome.get(r.row)?.country ?? null, batchName), { countrySettings }),
+    }));
+    return { list, summary: summariseReadiness(list), notReady: new Set(list.filter((x) => !x.readiness.ok).map((x) => x.row)) };
+  }, [preview, rows, importPossible, batchName, countrySettings]);
 
   const runCheck = async (commit: boolean) => {
     if (!parsed || !rows.length) return;
     setBusy(true); setError(null); setProgress({ done: 0, total: rows.length });
     try {
-      const rep = await runImport(importRpc, rows, commit, file?.name ?? null, (done, total) => setProgress({ done, total }), commit && importPossible,
+      const sendRows = commit && readyOnly && importReadiness ? rows.filter((r) => !importReadiness.notReady.has(r.row)) : rows;
+      const rep = await runImport(importRpc, sendRows, commit, file?.name ?? null, (done, total) => setProgress({ done, total }), commit && importPossible,
         { assignTo: isAdmin && assignTo ? assignTo : null, batch: batchName, campaignId });
       if (commit) {
         setResult(rep); setStep('done');
@@ -293,6 +328,32 @@ export function CSVImportDialog({ open, onOpenChange, onImported, isAdmin }: CSV
                 ['New', preview.counts.new], ['Fill in blanks', preview.counts.update], ['Held', held],
               ]} />
               <CountryCounts rows={preview.rows} />
+              {importReadiness && importReadiness.list.length > 0 && (
+                <div className="space-y-2 rounded-2xl border border-border/60 p-3" data-testid="csv-readiness">
+                  <ReadinessSummaryBlock summary={importReadiness.summary} testId="csv-readiness-summary"
+                    onFixName={(name) => { const x = importReadiness.list.find((q) => q.name === name); if (x) setEditRow(x.row); }} />
+                  {editRow != null && (() => {
+                    const r = rows.find((q) => q.row === editRow);
+                    if (!r) return null;
+                    const set = (k: 'business_name' | 'town' | 'phone', v: string) => setRowEdits((p) => ({ ...p, [editRow]: { ...p[editRow], [k]: v } }));
+                    return (
+                      <div className="grid gap-2 sm:grid-cols-3" data-testid="csv-fix-row">
+                        <Input aria-label="Business name" placeholder="Business name" value={rowEdits[editRow]?.business_name ?? r.business_name ?? ''} onChange={(e) => set('business_name', e.target.value)} />
+                        <Input aria-label="Town" placeholder="Town" value={rowEdits[editRow]?.town ?? r.town ?? ''} onChange={(e) => set('town', e.target.value)} />
+                        <Input aria-label="Phone" placeholder="Mobile number" value={rowEdits[editRow]?.phone ?? r.phone ?? ''} onChange={(e) => set('phone', e.target.value)} />
+                        <p className="text-[11px] text-muted-foreground sm:col-span-2">Row {editRow}. The change goes in with the import; press Check again to re-run the duplicate check on it.</p>
+                        <Button size="sm" variant="outline" onClick={() => setEditRow(null)}>Done</Button>
+                      </div>
+                    );
+                  })()}
+                  {importReadiness.summary.needs > 0 && (
+                    <label className="flex cursor-pointer items-center gap-2 text-sm" data-testid="csv-ready-only">
+                      <input type="checkbox" className="h-4 w-4 accent-blue-500" checked={readyOnly} onChange={(e) => setReadyOnly(e.target.checked)} />
+                      Import only the ready ones ({importReadiness.summary.ready})
+                    </label>
+                  )}
+                </div>
+              )}
               {preview.stopped && (
                 <Callout tone="red" icon={AlertCircle}>
                   Rows {preview.stopped.fromRow}–{preview.stopped.toRow} could not be checked: {preview.stopped.message}
@@ -372,7 +433,7 @@ export function CSVImportDialog({ open, onOpenChange, onImported, isAdmin }: CSV
               )}
               {step === 'preview' && (
                 <Button onClick={() => runCheck(true)} disabled={busy || campaignId == null || willAdd + willFill === 0} data-testid="csv-import">
-                  {busy ? 'Importing…' : willAdd + willFill === 0 ? 'Nothing to import' : `Import ${willAdd} new${willFill ? ` + fill ${willFill}` : ''}`}
+                  {busy ? 'Importing…' : willAdd + willFill === 0 ? 'Nothing to import' : `Import ${readyOnly && importReadiness ? Math.max(0, willAdd - importReadiness.notReady.size) : willAdd} new${willFill ? ` + fill ${willFill}` : ''}`}
                 </Button>
               )}
             </>
