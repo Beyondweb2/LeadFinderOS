@@ -67,39 +67,32 @@ export function oldestFirst<T extends BatchLead>(leads: readonly T[]): T[] {
   return [...leads].sort((a, b) => key(a) - key(b) || a.id.localeCompare(b.id));
 }
 
-/** Own website (not a Facebook/aggregator page) → this lead's audit also buys an SEO scan. */
-export type OwnWebsiteTest = (url: string) => boolean;
-
 export interface BatchCost {
   /** Leads in the run. */
   leads: number;
-  /** How many of them trigger the SEO scan. */
-  withWebsite: number;
+  /** The MOST the questions can cost: leads × the picked question count × the per-question rate. */
   questionsUsd: number;
-  seoUsd: number;
+  /** Same figure — a hook audit buys no site scan, so there is nothing to add (2026-10-15). */
   totalUsd: number;
 }
 
 /**
- * What this exact run costs — computed over the leads ACTUALLY in it, never scaled from an average.
- * ⛔ Scaling would be wrong the moment the take-N slice changes the website mix: the SEO scan is
- * more than half a lead's cost, so a slice of 20 website-less leads and a slice of 20 with sites
- * differ by ~$0.80. The slice is priced, not the selection.
+ * What this run costs AT MOST — computed over the leads ACTUALLY in it, never scaled from an average.
+ *
+ * ⛔ A HOOK AUDIT RUNS NO SITE SCAN (2026-10-15). The estimate used to add a scan per lead with an own website;
+ * create-ai-audit skips the scan for every purpose but a paid baseline (seoScanAllowed), so that line was
+ * money the press never spends. It is gone, with the rate and the own-website test that fed it.
+ * ⛔ AND IT IS A CEILING. Questions are asked one at a time and stop at the first answer that does not name the
+ * lead, so the real bill is usually below this: `questionsPerLead` is the MOST a lead can be asked.
  */
 export function estimateBatchCost(
   leads: readonly BatchLead[],
   questionsPerLead: number,
-  rates: { usdPerQuestion: number; usdPerSeoScan: number },
-  isAggregatorUrl: OwnWebsiteTest,
+  rates: { usdPerQuestion: number },
 ): BatchCost {
   const q = Math.max(0, questionsPerLead);
-  const withWebsite = leads.filter((l) => {
-    const w = (l.website ?? '').trim();
-    return !!w && !isAggregatorUrl(w);
-  }).length;
   const questionsUsd = leads.length * q * rates.usdPerQuestion;
-  const seoUsd = withWebsite * rates.usdPerSeoScan;
-  return { leads: leads.length, withWebsite, questionsUsd, seoUsd, totalUsd: questionsUsd + seoUsd };
+  return { leads: leads.length, questionsUsd, totalUsd: questionsUsd };
 }
 
 export interface BudgetVerdict {

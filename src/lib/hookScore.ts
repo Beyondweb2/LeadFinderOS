@@ -85,7 +85,29 @@ export interface HookStateV2 {
   /** Set once, by the queue, when a complete 6/6 took the lead out of active outreach. It records
    *  the reason and never deletes anything. */
   auto_not_interested?: { reason: string; lead_id: string; at: string } | null;
+  /* ── SEQUENTIAL MODE (2026-10-15, Paul) — every field optional, so every earlier v2 run reads as it did.
+     Only the FIRST planned question is queued at creation; the queue processor asks the next one only
+     while every engine that answered named the business (advanceSequentialHook). `planned` is the
+     ORDERED PLAN and its length is the ceiling (the 3 / 4 / 5 the operator picked; a hook is 3). */
+  /** True = questions are asked one at a time. Absent = all of `planned` was queued at once. */
+  sequential?: true;
+  /** Questions queued so far (= index of the next planned question to ask). */
+  next_index?: number;
+  /** Questions that settled and were evaluated. Set when the run stops. */
+  executed?: number;
+  /** Why it stopped. A sequential run with NO stop_reason is still running, so it is never complete. */
+  stop_reason?: SequentialStopReason | null;
 }
+
+export type SequentialStopReason =
+  /** A question was answered and an engine did not name the business: that answer is the proof. */
+  | 'not_named'
+  /** Every answer named the business, up to the ceiling. */
+  | 'max_questions_reached'
+  /** An answer failed or never came back: no score, never a "not named". */
+  | 'provider_failure'
+  /** The run's spend cap stopped it. */
+  | 'capped';
 
 export function isHookStateV2(v: unknown): v is HookStateV2 {
   return !!v && typeof v === 'object' && (v as { version?: unknown }).version === 2 &&
@@ -94,6 +116,55 @@ export function isHookStateV2(v: unknown): v is HookStateV2 {
 
 export function initialHookStateV2(planned: readonly string[], engines: readonly string[] = HOOK_ENGINES): HookStateV2 {
   return { version: 2, planned: [...planned], engines: [...engines] };
+}
+
+/** A sequential hook: ONE question queued, the rest planned. `planned` is the ceiling. */
+export function initialSequentialHookStateV2(planned: readonly string[], engines: readonly string[] = HOOK_ENGINES): HookStateV2 {
+  return { version: 2, planned: [...planned], engines: [...engines], sequential: true, next_index: 1, executed: 0, stop_reason: null };
+}
+
+export function isSequentialHookState(v: unknown): v is HookStateV2 & { sequential: true } {
+  return isHookStateV2(v) && (v as HookStateV2).sequential === true;
+}
+
+/** The questions a hook ACTUALLY asked (or has queued so far): all of `planned` for the all-at-once
+ *  shapes, the asked prefix for a sequential one. ONE rule for the score, the report and the card. */
+export function askedHookQuestions(state: HookStateV2): string[] {
+  if (!isSequentialHookState(state)) return state.planned;
+  const n = state.stop_reason ? Number(state.executed) || 0 : Number(state.next_index) || 0;
+  return state.planned.slice(0, Math.max(0, Math.min(state.planned.length, n)));
+}
+
+export type SequentialStep =
+  | { action: 'next'; state: HookStateV2; nextQuestion: string }
+  | { action: 'stop'; state: HookStateV2; nextQuestion: null };
+
+/**
+ * ⛔ THE SEQUENTIAL RULE (Paul, 2026-10-15). Evaluate the question that just settled (`cells` = its
+ * stored row result, null when the row failed):
+ *   · an engine in `state.engines` gave no valid answer      → stop, provider_failure (no score);
+ *   · every engine answered and named the business            → ask the next planned question, or
+ *                                                                stop at the ceiling;
+ *   · any engine answered and did NOT name the business       → stop, not_named. THAT answer is the proof.
+ * Absence is never a "named" and never a "not named": the failure branch is checked FIRST, so a
+ * failed engine can neither continue the run nor be scored as a miss. Pure; the caller persists.
+ * "Named" is cellNamed with the caller's NamedContext, the ruler scoreHookRun uses.
+ */
+export function advanceSequentialHook(
+  state: HookStateV2,
+  cells: Record<string, unknown> | null | undefined,
+  named?: NamedContext,
+): SequentialStep {
+  const asked = Math.max(1, Number(state.next_index) || 1);
+  const stop = (stop_reason: SequentialStopReason): SequentialStep =>
+    ({ action: 'stop', nextQuestion: null, state: { ...state, executed: asked, next_index: asked, stop_reason } });
+  const engines = (state.engines.length ? state.engines : [...HOOK_ENGINES]);
+  if (!cells || typeof cells !== 'object' || engines.some((e) => !hasAnswer((cells as Record<string, unknown>)[e]))) {
+    return stop('provider_failure');
+  }
+  if (engines.some((e) => !cellNamed((cells as Record<string, NamedCell>)[e], named))) return stop('not_named');
+  if (asked >= state.planned.length) return stop('max_questions_reached');
+  return { action: 'next', nextQuestion: state.planned[asked], state: { ...state, executed: asked, next_index: asked + 1 } };
 }
 
 /* ── Exactly three questions (Paul, 2026-09-26) ─────────────────────────────────────────────────
@@ -316,7 +387,7 @@ export function scoreHookRun(state: unknown, rows: readonly HookScoreRow[], ctx:
     if (!prev || (prev.status !== 'done' && r.status === 'done')) byQuestion.set(k, r);
   }
 
-  const questions: string[] = v2 ? v2.planned
+  const questions: string[] = v2 ? askedHookQuestions(v2)
     : v1 ? v1.planned.slice(0, Math.max(0, Math.min(v1.planned.length, Number(v1.executed) || 0)))
     : [...byQuestion.values()].map((r) => r.question);
 
@@ -361,10 +432,14 @@ export function scoreHookRun(state: unknown, rows: readonly HookScoreRow[], ctx:
   /* A version-1 hook that stopped on a provider failure, or never stopped, is not complete, even
      if the cells it has are all valid: the plan itself did not finish. */
   const v1Finished = !v1 || v1.stop_reason === 'visibility_gap_found' || v1.stop_reason === 'max_questions_reached';
+  /* A SEQUENTIAL hook is finished only once it STOPPED for a scoreable reason: a run still asking, a
+     failure or a spend cap never has a score (a stop while some answer failed is also caught by
+     valid === expected below). */
+  const seqFinished = !isSequentialHookState(v2) || v2.stop_reason === 'not_named' || v2.stop_reason === 'max_questions_reached';
   /* A NEW hook must have exactly three questions. Fewer (the plan could not be topped up) means
      incomplete, whatever the results say. Old audits keep their own denominators. */
   const questionShortfall = !!v2 && v2.planned.length < HOOK_SCORE_QUESTIONS;
-  const complete = expected > 0 && valid === expected && v1Finished && !questionShortfall;
+  const complete = expected > 0 && valid === expected && v1Finished && seqFinished && !questionShortfall;
 
   const perEngine: HookEngineTally[] = HOOK_ENGINES.map((engine) => {
     const mine = results.filter((r) => r.engine === engine);

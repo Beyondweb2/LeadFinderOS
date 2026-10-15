@@ -19,16 +19,15 @@ console.log("── the bulk dialog ──");
   ok(!/auditIncludeNoWebsite/.test(ot), "no hold-back switch any more");
   ok(/const auditEligibleLeads = auditSelectedLeads;/.test(ot), "eligible = every selected, unaudited lead with a type and a location — website or not");
   ok(/data-testid="audit-no-website-info"/.test(ot) && !/held back, saving/.test(ot) && !/Tick to audit/.test(ot), "the no-website count is an info line, not a checkbox");
-  ok(/with no website, no scan/.test(ot), "the confirm line says the no-website leads carry no scan");
+  ok(/no site scan\)/.test(ot) && !/with no website, no scan/.test(ot), "the confirm line says no audit here runs a site scan (2026-10-15)");
 }
 
 console.log("── the price ──");
 {
-  const isAgg = (u: string) => /facebook\.com/.test(u);
   const c = estimateBatchCost([{ website: "" }, { website: "https://www.facebook.com/x" }, { website: "https://acme.co.uk" }] as never, 3,
-    { usdPerQuestion: 0.01, usdPerSeoScan: 0.1 }, isAgg);
-  ok(c.leads === 3 && c.withWebsite === 1, "only the lead with its own site is counted for a scan");
-  ok(Math.abs(c.seoUsd - 0.1) < 1e-9 && Math.abs(c.questionsUsd - 0.09) < 1e-9, "no-website leads pay questions only");
+    { usdPerQuestion: 0.01 });
+  ok(c.leads === 3, "every lead is counted");
+  ok(Math.abs(c.totalUsd - 0.09) < 1e-9 && Math.abs(c.questionsUsd - 0.09) < 1e-9, "questions only for every lead, website or not: a hook audit runs no scan (2026-10-15)");
 }
 
 console.log("── the server path ──");

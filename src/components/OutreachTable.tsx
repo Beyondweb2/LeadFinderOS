@@ -5,7 +5,7 @@ import type { PhoneFetchStatus } from '@/hooks/useOutreach';
 import { isAggregatorUrl } from '@/lib/aggregators';
 /* MEASURED audit costs, shared with the market panel and the audit page so no screen quotes a
    different figure. See CLAUDE.md section 8 — these came from actor_cost_usd, not a constant. */
-import { AUDIT_EST_USD_PER_QUESTION, SEO_SCAN_USD } from '@/lib/marketView';
+import { AUDIT_EST_USD_PER_QUESTION } from '@/lib/marketView';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
   Table,
@@ -1145,8 +1145,7 @@ export function OutreachTable({
     () => estimateBatchCost(
       auditBatch,
       Math.max(3, Math.min(5, auditQuestionCount)),
-      { usdPerQuestion: AUDIT_EST_USD_PER_QUESTION, usdPerSeoScan: SEO_SCAN_USD },
-      isAggregatorUrl,
+      { usdPerQuestion: AUDIT_EST_USD_PER_QUESTION },
     ),
     [auditBatch, auditQuestionCount],
   );
@@ -3405,7 +3404,7 @@ export function OutreachTable({
             </>}
           />
           <div className="space-y-1.5">
-            <label className="text-xs font-medium text-muted-foreground">Questions per business</label>
+            <label className="text-xs font-medium text-muted-foreground">Questions per business (the most asked)</label>
             <Select value={String(auditQuestionCount)} onValueChange={(v) => setAuditQuestionCount(Number(v))}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
@@ -3417,15 +3416,15 @@ export function OutreachTable({
           </div>
 
           {/* ── NO WEBSITE: INCLUDED, SAID AS INFORMATION (2026-10-14) ───────────────────────────
-              Counted in "Eligible to audit" below. Their price has no site scan in it (estimateBatchCost
-              counts a scan only for a lead's own website). */}
+              Counted in "Eligible to audit" below. No audit here runs a site scan (estimateBatchCost
+              prices questions only). */}
           {auditNoWebsiteLeads.length > 0 && (
             <p className="rounded-md border border-border/60 bg-muted/30 px-3 py-2 text-xs leading-snug" data-testid="audit-no-website-info">
               <span className="font-semibold">
                 {auditNoWebsiteLeads.length} of these {auditNoWebsiteLeads.length === 1 ? 'has' : 'have'} no website
               </span>
               {' '}— included. The AI questions run on their business type and town; there is no site scan
-              for them, so no scan cost. Their report shows the &ldquo;we&rsquo;ll build you one&rdquo; section instead.
+              for anyone in this run. Their report shows the &ldquo;we&rsquo;ll build you one&rdquo; section instead.
             </p>
           )}
           {/* ══ THE PREVIEW — what is selected, what is already done, and what this press spends,
@@ -3486,7 +3485,7 @@ export function OutreachTable({
           {auditDailyVerdict.exceeds && (
             <p className="rounded-md border border-red-500/50 bg-red-500/10 px-3 py-2 text-xs">
               <span className="font-semibold">Over the ${AUDIT_DAILY_CAP_USD.toFixed(2)} daily prospecting budget.</span>{' '}
-              This run is ~${auditBatchCost.totalUsd.toFixed(2)}. Questions will start being refused part-way
+              This run is up to ~${auditBatchCost.totalUsd.toFixed(2)}. Questions will start being refused part-way
               through and leave half-finished audits. Lower the number above, or run the rest tomorrow.
             </p>
           )}
@@ -3494,7 +3493,7 @@ export function OutreachTable({
             <p className="rounded-md border border-red-500/50 bg-red-500/10 px-3 py-2 text-xs">
               <span className="font-semibold">Over what prospecting can still use this month</span> — about
               {' '}${(auditMonthlyVerdict.remainingUsd ?? 0).toFixed(2)} left before prospecting pauses at {APIFY_RESERVE_PCT.prospecting}% of
-              the Apify cap, this run is ~${auditBatchCost.totalUsd.toFixed(2)}. Past that, new audits are refused so the rest of the
+              the Apify cap, this run is up to ~${auditBatchCost.totalUsd.toFixed(2)}. Past that, new audits are refused so the rest of the
               month is kept for client work; at the account cap itself every audit AND every SEO scan stops.
             </p>
           )}
@@ -3516,16 +3515,16 @@ export function OutreachTable({
 
           <p className="rounded-md bg-muted/50 px-3 py-2 text-xs">
             Audit <span className="font-semibold">{auditBatchCost.leads}</span> business{auditBatchCost.leads === 1 ? '' : 'es'}
-            {' '}× <span className="font-semibold">{auditQuestionCount}</span> question{auditQuestionCount === 1 ? '' : 's'}
-            {' '}(~<span className="font-semibold">${auditBatchCost.totalUsd.toFixed(2)}</span>
-            {auditBatchCost.withWebsite > 0 && <>, incl. {auditBatchCost.withWebsite} site scan{auditBatchCost.withWebsite === 1 ? '' : 's'}</>}
-            {auditBatchCost.leads - auditBatchCost.withWebsite > 0 && <>; {auditBatchCost.leads - auditBatchCost.withWebsite} with no website, no scan</>}). Proceed?
+            {' '}× up to <span className="font-semibold">{auditQuestionCount}</span> question{auditQuestionCount === 1 ? '' : 's'}
+            {' '}(up to ~<span className="font-semibold">${auditBatchCost.totalUsd.toFixed(2)}</span>, no site scan). Proceed?
           </p>
           {/* The score comes from the answers the audit already collects (docs/bulk-audit-score.md) — no extra AI call,
               so the price above is unchanged. Said so nobody wonders whether it costs more. */}
           <p className="text-[11px] text-muted-foreground" data-testid="audit-score-info">
-            Each finished audit also gives the lead an AI visibility score (for example 67%), worked out from its own
-            answers, the same way as the quick AI check. No extra cost. If any answer fails, that lead gets no score.
+            Questions are asked one at a time on ChatGPT and Gemini. The next one is asked only if the business was named
+            in the last answer, so a lead is asked fewer than the number above whenever it is missed early; that number is
+            the most. Each finished audit gives the lead an AI visibility score (for example 67%), worked out from the
+            answers asked, the same way as the quick AI check. No extra cost. If any answer fails, that lead gets no score.
           </p>
           <DialogFooter>
             <Button variant="ghost" size="sm" onClick={() => setAuditDialogOpen(false)}>Cancel</Button>

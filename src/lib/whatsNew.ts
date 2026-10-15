@@ -22,6 +22,18 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-15-sequential-audits', date: '2026-10-15', title: 'AI audits now ask one question at a time', audience: 'all',
+    body: 'A hook audit asks its first question on ChatGPT and Gemini, and only asks the next if the business was named. It stops at the first miss, so most leads cost less.',
+    report: {
+      added: ['One-at-a-time questions for the Outreach bulk audit and the Inbox "Run AI audit".'],
+      changed: [
+        'Question 1 is asked on ChatGPT and Gemini. If both name the business, question 2 is asked, then question 3. If either does not, it stops there and that answer is the proof.',
+        'The score is the answers that named the business out of the answers asked, as a whole-number percentage. Any failed answer means no score.',
+        'The number you pick (3, 4 or 5) is the most that can be asked. The cost shown is "up to", and it no longer includes a website scan, because these audits never run one.',
+      ],
+      removed: ['The $0.04 site-scan line in the audit cost estimate.'],
+      effect: 'Leads that are missed early are checked with fewer questions, so a batch usually costs less than the figure shown. An audit takes a little longer, because the questions run in turn.',
+    } },
   { id: '2026-10-15-initial-contact-short', date: '2026-10-15', title: 'A shorter opener: "Hey, is this …?"', audience: 'all',
     body: 'There is a new, shorter WhatsApp opener, "Initial contact short". It asks "Hey, is this <business>?" and signs off "Thanks", using a tidied-up version of the business name. Meta must approve it before it can send.',
     report: {

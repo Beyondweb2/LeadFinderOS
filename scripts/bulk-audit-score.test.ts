@@ -25,8 +25,8 @@ const read = (p: string) => readFileSync(resolve(p), 'utf8').replace(/\r\n/g, '\
   ok(/bulk_score: true,/.test(bulk), 'bulk-jobs asks create-ai-audit for the score marker');
   const caa = read('supabase/functions/create-ai-audit/index.ts');
   ok(/const bulkScoreRequested: boolean = body\.bulk_score === true && isInternal;/.test(caa), 'create-ai-audit honours bulk_score from internal callers only');
-  const branch = caa.slice(caa.indexOf('} else if (bulkScoreRequested'), caa.indexOf('} else if (bulkScoreRequested') + 600);
-  ok(/ORDINARY_AUDIT_PURPOSE/.test(branch) && /initialHookStateV2\(questions, AUDIT_ENGINES\)/.test(branch), 'the marker is the queued questions × the queued engines, ordinary audits only');
+  const branch = caa.slice(caa.indexOf('} else if (bulkScoreRequested'), caa.indexOf('} else if (bulkScoreRequested') + 1400);
+  ok(/ORDINARY_AUDIT_PURPOSE/.test(branch) && /initialSequentialHookStateV2\(questions, AUDIT_ENGINES\)/.test(branch), 'the marker is the planned questions × the queued engines, ordinary audits only (sequential since 2026-10-15; a re-run by id keeps the all-queued one)');
   ok(!/finalHookPlan|topUpHookQuestions|questions\s*=/.test(branch), 'the marker never changes the questions (no hook plan, no top-up): nothing extra is asked or spent');
   ok(!/bulkScoreRequested/.test(caa.slice(caa.indexOf('const isHookAudit'), caa.indexOf('const isHookAudit') + 200)), 'a bulk audit is not a hook (no one-in-flight rule, no person guard)');
 }

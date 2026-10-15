@@ -48,7 +48,7 @@ import { planHookQuestions } from "../../../src/lib/hookAudit.ts";
 import { canWorkLead, isClientLead, refusalBody, resolveActor, salesAuditRefusal, type Actor } from "../_shared/access.ts";
 import { guardAction, paidMode } from "../_shared/protection.ts";
 import { OUTREACH_AUDIT_EST_USD } from "../_shared/outreach-audit.ts";
-import { HOOK_SCORE_QUESTIONS, initialHookStateV2, topUpHookQuestions, type HookStateV2 } from "../../../src/lib/hookScore.ts";
+import { HOOK_SCORE_QUESTIONS, initialHookStateV2, initialSequentialHookStateV2, isSequentialHookState, topUpHookQuestions, type HookStateV2 } from "../../../src/lib/hookScore.ts";
 import { budgetDecision, budgetPoolForPurpose } from "../../../src/lib/auditBudget.ts";
 import { rollingSpendUsd } from "../_shared/enrichment/runner.ts";
 import { latestApifyUsage } from "../_shared/audit-budget.ts";
@@ -1563,13 +1563,20 @@ Deno.serve(async (req) => {
     let hookState: HookStateV2 | null = null;
     if (isHookAudit) {
       questions = finalHookPlan(questions, { town: locationText, country, trade: businessType, businessName });
-      hookState = initialHookStateV2(questions, AUDIT_ENGINES);
-      console.log(`[create-ai-audit] hook: ${questions.length} question(s) × ${AUDIT_ENGINES.length} engines, all queued`);
+      /* ⛔ SEQUENTIAL (2026-10-15, Paul): ONLY the first planned question is queued. The queue processor asks the
+         next one only while every engine that answered named the business, and stops at the first answer that
+         did not (that answer is the proof). The plan's length is the ceiling. See advanceSequentialHook. */
+      hookState = initialSequentialHookStateV2(questions, AUDIT_ENGINES);
+      console.log(`[create-ai-audit] hook: up to ${questions.length} question(s) × ${AUDIT_ENGINES.length} engines, asked one at a time`);
     } else if (bulkScoreRequested && leadId && auditPurpose === ORDINARY_AUDIT_PURPOSE && !preview) {
       /* The bulk marker: the questions exactly as queued (reuse included), every row on AUDIT_ENGINES. Fewer than
          HOOK_SCORE_QUESTIONS → scoreHookRun calls it incomplete → no score, never a guess. */
-      hookState = initialHookStateV2(questions, AUDIT_ENGINES);
-      console.log(`[create-ai-audit] bulk score marker: ${questions.length} question(s) × ${AUDIT_ENGINES.length} engines`);
+      /* Sequential too (2026-10-15) — the picked 3 / 4 / 5 is the MOST it asks. A re-run of an existing audit by id
+         (reuseAuditId) replays that audit's questions as it always did, all queued, so it keeps the old marker. */
+      hookState = reuseAuditId
+        ? initialHookStateV2(questions, AUDIT_ENGINES)
+        : initialSequentialHookStateV2(questions, AUDIT_ENGINES);
+      console.log(`[create-ai-audit] bulk score marker: ${reuseAuditId ? "" : "up to "}${questions.length} question(s) × ${AUDIT_ENGINES.length} engines${reuseAuditId ? "" : ", asked one at a time"}`);
     }
     /* ⛔ THE MONEY FLAG, INTERSECTED WITH WHAT IS ACTUALLY QUEUED. dedupeQuestions above can drop a
        money question that collided with a standard one, and the guards can reject one earlier — so a
@@ -1635,8 +1642,10 @@ Deno.serve(async (req) => {
     const runId = run.id;
 
     // ── Enqueue one row per question ──────────────────────────────────────────
-    // Every question is queued now, the hook's three included (2026-09-25; no early stop).
-    const queueRows = questions.map((q) => ({
+    // Every question is queued now, except a sequential hook's (2026-10-15): it queues its first only.
+    /* A sequential hook queues ONLY its first question; the processor queues the rest, one at a time. */
+    const queuedNow = isSequentialHookState(hookState) ? questions.slice(0, 1) : questions;
+    const queueRows = queuedNow.map((q) => ({
       audit_id: auditId,
       run_id: runId,
       user_id: userId,

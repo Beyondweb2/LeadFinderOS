@@ -40,7 +40,7 @@
 import { cellNamed, type NamedCell, type NamedContext } from './namedSignal.ts';
 import { OUTREACH_HOOK_QUESTIONS } from './auditQuestionCounts.ts';
 import { searchFillerCount } from './salesStyle.ts';
-import { HOOK_SCORE_QUESTIONS, hasAnswer, hookBreadthScore, isHookStateV2, rowsFromRunResults, scoreHookRun, type HookScoreContext, type HookStateV2 } from './hookScore.ts';
+import { HOOK_SCORE_QUESTIONS, askedHookQuestions, hasAnswer, hookBreadthScore, isHookStateV2, rowsFromRunResults, scoreHookRun, type HookScoreContext, type HookStateV2 } from './hookScore.ts';
 
 /* One copy of each: the v2 score (hookScore.ts) owns them, this v1 module re-exports them. */
 export { hasAnswer, hookBreadthScore };
@@ -508,10 +508,12 @@ function buildHookReportSummaryV2(
 ): HookReportSummary | null {
   const score = scoreHookRun(state, input.rows, { named: input.namedCtx, town: input.town, trade: input.trade });
   if (!score.complete) return null;
+  /* A sequential hook asked only a prefix of its plan: report what was ASKED, never the unasked rest. */
+  const asked = askedHookQuestions(state);
   const pick = score.hook;
   const statusOf = (qi: number, e: string) => score.results.find((r) => r.questionIndex === qi && r.engine === e)?.status;
   const cellOf = (qi: number, e: string): unknown => {
-    const q = state.planned[qi];
+    const q = asked[qi];
     const row = q ? input.rows.find((r) => r.question.trim().toLowerCase() === q.trim().toLowerCase() && r.status === 'done') : null;
     return row?.result && typeof row.result === 'object' ? (row.result as Record<string, unknown>)[e] : null;
   };
@@ -519,7 +521,7 @@ function buildHookReportSummaryV2(
      them, but one business spelled two ways must not read as a competitor). */
   const clientKey = normaliseRivalName(input.namedCtx?.businessName ?? '', input.town);
   const notTheClient = (names: string[]) => clientKey ? names.filter((n) => !sameBusiness(normaliseRivalName(n, input.town), clientKey)) : names;
-  const tested = state.planned.map((question, i) => ({
+  const tested = asked.map((question, i) => ({
     question,
     isGap: pick?.questionIndex === i,
     perEngine: input.engineOrder.filter((e) => score.results.some((r) => r.questionIndex === i && r.engine === e)).map((e) => {
@@ -566,7 +568,7 @@ function buildHookReportSummaryV2(
      score, never re-derived, so the card and the table cannot disagree. */
   let featured: HookReportSummary['featured'] = null;
   const fqi = pick ? pick.questionIndex : 0;
-  const fQuestion = state.planned[fqi];
+  const fQuestion = asked[fqi];
   if (fQuestion) {
     const frow = input.rows.find((r) => r.question.trim().toLowerCase() === fQuestion.trim().toLowerCase() && r.status === 'done');
     const fcells = frow?.result && typeof frow.result === 'object' ? frow.result as Record<string, unknown> : null;
@@ -595,7 +597,7 @@ function buildHookReportSummaryV2(
     rivalsNamedInstead,
     featured,
     overviews,
-    questionsTested: state.planned.length,
+    questionsTested: asked.length,
     maxQuestions: HOOK_SCORE_QUESTIONS,
     stopReason: pick ? 'visibility_gap_found' : 'max_questions_reached',
     gap,
@@ -603,7 +605,7 @@ function buildHookReportSummaryV2(
       named: score.named,
       total: score.expected,
       percent: score.percent ?? 0,
-      questions: state.planned.length,
+      questions: asked.length,
       perEngine: input.engineOrder
         .map((e) => score.perEngine.find((t) => t.engine === e))
         .filter((t): t is NonNullable<typeof t> => !!t)
