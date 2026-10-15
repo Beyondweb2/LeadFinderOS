@@ -13,7 +13,8 @@
 import { WA_TEMPLATE_BODIES, renderTemplateBody } from "../supabase/functions/_shared/whatsapp-send.ts";
 import { READABLE_TEMPLATE_BODIES, readableTemplateBody, isPlaceholderBody } from "../src/lib/templateBodies.ts";
 import { readableTemplateBody } from "../src/lib/templateBodies.ts";
-import { DISPLAY_NAME_LIVE_FROM } from "../src/lib/displayName.ts";
+import { DISPLAY_NAME_LIVE_FROM, nameStyleFor } from "../src/lib/displayName.ts";
+import { cleanBusinessName } from "../src/lib/cleanBusinessName.ts";
 
 let f = 0;
 const ok = (c: boolean, l: string) => { if (!c) f++; console.log(`${c ? "PASS" : "FAIL"} ${l}`); };
@@ -42,7 +43,9 @@ for (const name of Object.keys(WA_TEMPLATE_BODIES)) {
   if (!mine) continue;
   /* BOTH crawl sentences are handed in, each in its own slot, so a body reading the wrong one shows
      up as drift instead of quietly rendering the other template's text. */
-  const shown = mine(B, U, TRADE, COMP, FIRST, undefined, SITE_FAULT, SITE_FINDINGS);
+  /* A template that cleans its name lowercases it on the send side by design; the readable table takes the name already styled. */
+  const BS = nameStyleFor(name) === "clean" ? cleanBusinessName(B) : B;
+  const shown = mine(BS, U, TRADE, COMP, FIRST, undefined, SITE_FAULT, SITE_FINDINGS);
   ok(shown === sent, `${name}: readable body === sent body`);
   if (shown !== sent) {
     console.log(`   sent : ${JSON.stringify(sent).slice(0, 120)}`);

@@ -77,7 +77,9 @@ const WINDOW_MS = 24 * 60 * 60 * 1000;
    asserts "dry_run" is listed IF AND ONLY IF this file actually contains the dry-run return, so the
    marker cannot claim a feature these bytes do not have — a constant that can lie is worse than no
    constant. BUMP `BUILD_ID` in the same commit as any change worth proving live. */
-const CAPABILITIES = ["dry_run", "build_phase_hold", "routing_leaf", "any_approved_opener", "link_templates", "uk_only_cold"] as const;
+const CAPABILITIES = ["dry_run", "build_phase_hold", "routing_leaf", "any_approved_opener", "link_templates", "uk_only_cold", "short_opener_meta_gate"] as const;
+/* 2026-10-15b: initial_contact_short (Marketing, in review at Meta) - Meta's LIVE status is read first and a template that is
+   not approved is refused with Meta's own word, nothing sent (same shape as the queue's META_STATUS_GATED). */
 /* 2026-10-15a: cold WhatsApp is UK-only (src/lib/ukColdDestination.ts) - a cold template to a non-UK destination is refused. */
 /* 2026-10-07a: findable_signup_link / findable_onboarding — server-resolved links, Meta's LIVE template status
    (_shared/template-status.ts), one send per lead unless resent on purpose. */
@@ -95,7 +97,7 @@ const CAPABILITIES = ["dry_run", "build_phase_hold", "routing_leaf", "any_approv
    gone; the capability reads any_approved_opener).
    2026-09-30b: an explicit opt-out refuses MARKETING templates here too (src/lib/marketingConsent.ts).
    2026-10-04a: QA safety — a QA fixture is simulated, a test-account lead is refused (src/lib/qaSafety.ts). */
-const BUILD_ID = "2026-10-15a-send-error-capture";
+const BUILD_ID = "2026-10-15b-initial-contact-short";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -498,6 +500,14 @@ Deno.serve(async (req) => {
          "Hi your business, Paul here" - visibly automated in the one message meant to sound human. */
       if (TEMPLATES_NEEDING_REAL_NAME.has(templateName) && !businessName.trim()) {
         return json({ ok: false, error: "no_business_name" }, 200);
+      }
+      /* ⛔ initial_contact_short (2026-10-15): registered while IN REVIEW at Meta. Its live status is read before anything is
+         built; anything but APPROVED / UNKNOWN is refused with Meta's word and nothing is sent (UNKNOWN still tries — Meta decides). */
+      if (templateName === "initial_contact_short") {
+        const shortAvail = await templateAvailability(service, templateName);
+        if (["PENDING", "IN_APPEAL", "REJECTED", "PAUSED", "DISABLED", "LIMIT_EXCEEDED", "NOT_FOUND"].includes(shortAvail.status)) {
+          return json({ ok: false, error: "template_" + shortAvail.status.toLowerCase(), reason: "Meta says this template is " + shortAvail.status.toLowerCase().replace("_", " ") + " - nothing was sent." }, 200);
+        }
       }
       /* ⛔ ONE RULE, SHARED WITH THE QUEUE — src/lib/templateRouting.ts. This was
          `tvars.includes("trade") || tvars.includes("competitors")` here AND, identically, in

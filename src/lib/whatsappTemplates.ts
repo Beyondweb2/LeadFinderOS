@@ -79,6 +79,8 @@ export const WA_TEMPLATE_REQS: Record<string, TemplateReq> = {
      sibling: no link, no audit, and it is an OPENER, which is what keeps it out of every
      continuation path. It carries no variables at all. */
   initial_opener_v2:      { needsUrl: false, needsAudit: false, group: 'opener' },
+  /* initial_contact_short (2026-10-15) - the short opener. Same shape as initial_contact: one variable (the cleaned name), no link, no audit. */
+  initial_contact_short:  { needsUrl: false, needsAudit: false, group: 'opener' },
   // audit_reply is not yet wired into the manual send path; its rule lives here so the guard is
   // ready the moment it's added to the picker + sender (no drift when that happens).
   audit_reply:            { needsUrl: false, needsAudit: true,  group: 'audit' },

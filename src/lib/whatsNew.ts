@@ -22,6 +22,21 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-15-initial-contact-short', date: '2026-10-15', title: 'A shorter opener: "Hey, is this …?"', audience: 'all',
+    body: 'There is a new, shorter WhatsApp opener, "Initial contact short". It asks "Hey, is this <business>?" and signs off "Thanks", using a tidied-up version of the business name. Meta must approve it before it can send.',
+    report: {
+      added: [
+        'A new opener template, "Initial contact short", in the template pickers. It reads "Hey, is this <name>?" then "Thanks".',
+        'A shared name tidier for messages: lowercase, "Ltd / Sdn Bhd / Pte Ltd" and similar removed from the end, emojis and sales taglines dropped, a bracketed town kept ("(Sibu)" becomes "sibu"), the brand’s own "Co" kept. If it is unsure it keeps the word.',
+        'The WhatsApp queue shows "Will say: …" under the first five leads, so you can see the tidied name before anything sends.',
+      ],
+      changed: [
+        'The stored business name is never changed. Only the name inside this one template is tidied; every other template is exactly as before.',
+        'Until Meta approves the template, queueing or sending it is refused with Meta’s own status and nothing goes out. Nothing needs switching on when it is approved.',
+      ],
+      removed: [],
+      effect: 'You can pick the short opener now and see the exact name it will use; it starts sending by itself once Meta approves it.',
+    } },
   { id: '2026-10-15-one-website-check', date: '2026-10-15', title: 'One website check everywhere, and the call script lists the issues', audience: 'all',
     body: 'Every screen now shows the same website check for a lead: the Inbox crawl icon, the call script, the report and the lead’s audit. The call script lists the issues as short lines.',
     report: {

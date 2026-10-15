@@ -275,6 +275,8 @@ const TEMPLATES: Record<string, { lang: string; vars: TemplateVar[] }> = {
      (src/lib/openerVariant.ts). MIRRORS whatsapp-send.ts; change both together.
      ⛔ ZERO VARIABLES - the registered body carries no {{1}}. vars MUST stay [] (no parameters). */
   initial_opener_v2: { lang: "en", vars: [] },
+  /* initial_contact_short (2026-10-15) — ONE variable, the cleaned business name. MIRRORS whatsapp-send.ts. */
+  initial_contact_short: { lang: "en", vars: ["name"] },
   // Was MISSING while being selectable in the bulk picker, so a lead set to audit_reply silently
   // received booking_page_intro — a barber booking pitch. No lead was ever queued with it, so
   // nothing mis-sent, but the gap was live.
@@ -393,7 +395,7 @@ function reportOfferReasonFromResolver(reason: string): ReportOfferRefusal {
 /** Meta statuses that mean "do not send this template now" (UNKNOWN still tries: Meta decides, never a loop). */
 const META_NOT_SENDABLE = new Set(["PENDING", "IN_APPEAL", "REJECTED", "PAUSED", "DISABLED", "LIMIT_EXCEEDED", "NOT_FOUND"]);
 /** Templates whose live Meta status the drip reads before each send (registered while in review). */
-const META_STATUS_GATED: ReadonlySet<string> = new Set([REPORT_OFFER_TEMPLATE]);
+const META_STATUS_GATED: ReadonlySet<string> = new Set([REPORT_OFFER_TEMPLATE, "initial_contact_short"]);
 /* NO DEFAULT_TEMPLATE.
    It used to be booking_page_intro, applied whenever a lead's whatsapp_template was unset or
    unrecognised. That turned a registration slip into a wrong message: a plumber could receive a

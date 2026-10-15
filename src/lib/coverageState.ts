@@ -1,4 +1,4 @@
-import { canonicalTrade } from './trades';
+import { canonicalTrade } from './trades.ts';
 
 /* ════════════════════════════════════════════════════════════════════════════════════════════
    WHICH TOWNS HAVE I WORKED, FOR THIS TRADE?

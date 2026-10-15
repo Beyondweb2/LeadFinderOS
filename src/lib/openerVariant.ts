@@ -33,11 +33,23 @@ export const INITIAL_OPENER_B = 'initial_opener_v2';
  */
 export const INITIAL_OPENER_V2_APPROVED = true;
 
-/** Both openers, display order: the original first. */
+/**
+ * The SHORT opener (2026-10-15): "Hey, is this {{1}}?" / "Thanks". Marketing, English, submitted to Meta
+ * 2026-10-15. {{1}} is the CLEANED business name (src/lib/cleanBusinessName.ts, via CLEAN_NAME_TEMPLATES).
+ * ⛔ NOT a flag: Meta's LIVE status is the gate (_shared/template-status.ts) — the queue and the Inbox
+ * sender refuse it with Meta's own word until Meta approves it, and the day it does, nothing changes here.
+ */
+export const INITIAL_OPENER_C = 'initial_contact_short';
+
+/** The two openers the SMS lane carries (and its parity tests pin), display order: the original first. The short opener is
+ *  WhatsApp-only and is NOT here — see WHATSAPP_OPENERS. */
 export const INITIAL_OPENERS = [INITIAL_OPENER_A, INITIAL_OPENER_B] as const;
+
+/** Every cold WhatsApp opener (what isInitialOpener answers for). */
+export const WHATSAPP_OPENERS = [INITIAL_OPENER_A, INITIAL_OPENER_B, INITIAL_OPENER_C] as const;
 export type InitialOpener = (typeof INITIAL_OPENERS)[number];
 
-const OPENER_SET: ReadonlySet<string> = new Set(INITIAL_OPENERS);
+const OPENER_SET: ReadonlySet<string> = new Set(WHATSAPP_OPENERS);
 
 /** True when this template is one of the initial cold openers. */
 export function isInitialOpener(name: string | null | undefined): boolean {
@@ -49,5 +61,6 @@ export function openerApproved(name: string | null | undefined): boolean {
   const n = String(name ?? '').trim();
   if (n === INITIAL_OPENER_A) return true;
   if (n === INITIAL_OPENER_B) return INITIAL_OPENER_V2_APPROVED;
+  if (n === INITIAL_OPENER_C) return true;   // Meta's live status decides, server-side — not a constant here
   return false;
 }

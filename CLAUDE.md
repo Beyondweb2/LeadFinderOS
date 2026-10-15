@@ -1257,6 +1257,11 @@ positive allowlist of `baseline`; `isColdOutreachTemplate` treats unknown as COL
   "No mobile" / "No SMS". New sending code asks `channelOn`, never a hand-written country list.
 - **MY / SG send in their own local hours** (`windowForMarket`, default 09:00–19:00 UTC+8) with their own daily caps; the UK windows and the team cap are
   unchanged. **MY / SG phones are stored E.164** (`my_sg_e164` + trigger); `phone_key` is unchanged on purpose (no index rebuild).
+- ⛔ **`initial_contact_short` + the clean message name (2026-10-15, `docs/clean-business-name.md`)**: "Hey, is this {{1}}?" / "Thanks", ONE variable, COLD,
+  Marketing, gated by Meta's LIVE status (queue `META_STATUS_GATED`, `send-whatsapp-message`) — never a flag. {{1}} is `cleanBusinessName`
+  (`src/lib/cleanBusinessName.ts`): lowercase, legal words at the end out (never "co"), taglines / emojis out, bracketed place kept, unsure → keep.
+  A template opts in ONLY by being in `CLEAN_NAME_TEMPLATES` (`displayName.ts`, read through `nameStyleFor` by the send, the stored body and the
+  Inbox mirror) — never write the style choice at a call site. Display only: `business_name` is never written.
 
 ## 7. Where the code lives (`docs/code-map.md` for the long form)
 
