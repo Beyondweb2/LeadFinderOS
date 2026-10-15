@@ -3,6 +3,7 @@ import {
   resolveWhatsAppEnv,
   toWhatsAppNumber,
   sendViaGraph,
+  errorColumns,
   textPayload,
   claimTemplatePayload,
   renderTemplateBody,
@@ -12,6 +13,7 @@ import {
   firstNameFrom,
 } from "../_shared/whatsapp-send.ts";
 import { resolveAuditReplyVars } from "../_shared/audit-reply.ts";
+import type { SendErrorParts } from "../../../src/lib/sendErrorMeaning.ts";
 import { buildsFromAudit } from "../../../src/lib/templateRouting.ts";
 /* 🔴 THE SAME LEAF THE QUEUE READS, AND IT WAS USED HERE FOR A DAY WITHOUT BEING IMPORTED.
    `rivalHookDecision` and `templateNeedsRivals` were written into the audit branch on 2026-09-14 and
@@ -93,7 +95,7 @@ const CAPABILITIES = ["dry_run", "build_phase_hold", "routing_leaf", "any_approv
    gone; the capability reads any_approved_opener).
    2026-09-30b: an explicit opt-out refuses MARKETING templates here too (src/lib/marketingConsent.ts).
    2026-10-04a: QA safety — a QA fixture is simulated, a test-account lead is refused (src/lib/qaSafety.ts). */
-const BUILD_ID = "2026-10-14u-report-offer";
+const BUILD_ID = "2026-10-15a-send-error-capture";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -259,7 +261,7 @@ Deno.serve(async (req) => {
       console.log(`[send-whatsapp-message] test_send ${templateName} -> ${dest}: ${r.ok ? "ok " + r.messageId : "FAILED " + r.error}`);
       return json({
         ok: r.ok, mode: "test_send", template: templateName, to: dest,
-        messageId: r.messageId, failCode: r.failCode ?? null, error: r.error,
+        messageId: r.messageId, failCode: r.failCode ?? null, error: r.error, errorParts: r.errorParts ?? null,
         /* Echoed so the payload that was actually posted is inspectable without a redeploy. */
         payload,
       });
@@ -820,11 +822,12 @@ Deno.serve(async (req) => {
     let messageId: string | null = null;
     let sendError: string | null = null;
     let failCode: number | null = null;
+    let sendParts: SendErrorParts | null = null;
 
     if (env.live) {
       const r = await sendViaGraph(env.accessToken, env.phoneNumberId, to, payload);
       if (r.ok) { status = "sent"; messageId = r.messageId; }
-      else { status = "failed"; sendError = r.error; failCode = r.failCode ?? null; }
+      else { status = "failed"; sendError = r.error; failCode = r.failCode ?? null; sendParts = r.errorParts ?? null; }
     }
     /* A link template Meta refused as unavailable (not approved yet, paused, disabled): re-read its status now,
        so the next screen load says so instead of offering the button again. */
@@ -848,6 +851,7 @@ Deno.serve(async (req) => {
       status,
       test_mode: env.testMode,
       error: sendError,
+      ...errorColumns(sendParts),
       ...(messageType === "template" && usedTemplate ? { template_snapshot: createTemplateSnapshot({ templateName: usedTemplate, language: sentLang ?? WA_TEMPLATES[usedTemplate].lang, body: storedBody, payload }) } : {}),
       ...(findingsShown?.length ? { findings_shown: findingsShown } : {}),
     }).select("*").maybeSingle();
@@ -873,6 +877,7 @@ Deno.serve(async (req) => {
         message_id: messageId,
         delivery_status: status,
         error: sendError,
+        ...errorColumns(sendParts),
       });
       if (sendLogErr) {
         console.error("[send-whatsapp-message] send-audit insert failed (non-blocking):", sendLogErr.message);
@@ -951,6 +956,7 @@ Deno.serve(async (req) => {
       ok: status !== "failed",
       status,
       ...(failCode !== null ? { failCode } : {}),
+      ...(sendParts ? { errorParts: sendParts } : {}),
       ...(linkFailKind ? { reason: templateSendFailureText(failCode, linkFailKind) } : {}),
       simulated: !env.live,
       windowOpen,

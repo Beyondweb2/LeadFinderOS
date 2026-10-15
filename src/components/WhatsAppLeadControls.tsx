@@ -17,6 +17,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { getTemplateSendability } from '@/lib/whatsappTemplates';
 import { useLeadPermissions } from '@/hooks/useLeadPermissions';
 import { salesQueueOpener } from '@/lib/leadRpc';
+import { CALL_CAMPAIGN_EXPLAINER, callCampaignLeads, callCampaignQuestion } from '@/lib/callCampaignGuard';
 import { QUEUE_SKIP_LABEL, refusalText } from '@/lib/salesCrm';
 import { isColdOutreachTemplate } from '@/lib/coldOutreach';
 import { supabase } from '@/integrations/supabase/client';
@@ -76,12 +77,22 @@ export function WhatsAppLeadControls({
   const approval = template ? getTemplateSendability(template, { shareToken: null }, {}) : { ok: true as const };
   const templateChosen = !!template && options.some((t) => t.value === template) && approval.ok;
 
+  /* ⛔ A lead in a Call campaign gets WhatsApp only when the person says so (2026-10-15). Fails closed. Null = do not queue. */
+  const callCampaignAnswer = async (): Promise<boolean | null> => {
+    const cc = await callCampaignLeads(supabase, [lead]);
+    if (!cc.ok) { toast({ title: 'Not queued', description: 'Could not check which campaign this lead is in, so nothing was queued.', variant: 'destructive' }); return null; }
+    if (cc.leads.length === 0) return false;
+    return window.confirm(`${callCampaignQuestion(1)} ${CALL_CAMPAIGN_EXPLAINER}`) ? true : null;
+  };
+
   const salesQueue = async () => {
     if (!templateChosen) return;
     setBusy(true);
     try {
       if (await reportOfferBlocked()) return;
-      const r = await salesQueueOpener([lead.id], template);
+      const callOk = await callCampaignAnswer();
+      if (callOk === null) return;
+      const r = await salesQueueOpener([lead.id], template, callOk);
       if (!r.ok) { toast({ title: 'Not queued', description: refusalText(r.error), variant: 'destructive' }); return; }
       const skipped = Object.keys((r.skipped ?? {}) as Record<string, number>);
       if (!r.queued) {
@@ -133,6 +144,7 @@ export function WhatsAppLeadControls({
           }
         }
         if (await reportOfferBlocked()) return;
+        if (await callCampaignAnswer() === null) return;
         const { lineType, whatsappEligible } = classifyLineType(lead.phone, lead.country);
         if (!whatsappEligible) {
           await onUpdate(lead.id, {

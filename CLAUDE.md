@@ -988,6 +988,18 @@ positive allowlist of `baseline`; `isColdOutreachTemplate` treats unknown as COL
   (`sales_queue_opener`, `campaign_candidates`) and in BOTH senders; the India send window is gone. Australia is supported for search,
   normalisation and checks but is NOT enabled for cold WhatsApp. Old India leads/messages stay as history. The `waNumber.ts` India
   digits branch exists only so old threads normalise. `docs/india-readiness.md` is history.
+- ⛔ **COLD WHATSAPP TO MALAYSIA / SINGAPORE ONLY THROUGH ITS PER-COUNTRY SWITCH, AND ONLY AFTER A HANDFUL ARE TESTED BY HAND**
+  (Paul, 2026-10-15; `docs/send-error-capture.md`). The switch (`outreach_country_settings.whatsapp_on`, `set_outreach_country`) is the
+  only door; it SWITCHES ITSELF OFF (`country_whatsapp_auto_pause`, trigger on every failed write — any failure except 131026 in the first 5
+  sends since switched on, or 2 of the last 5; TS mirror `countryAutoPause.ts`). A MY / SG failure is NEVER retried automatically
+  (`trg_whatsapp_my_sg_no_auto_retry` → `whatsapp_failed`). Both were switched off by the rule on release (14 Oct: 1 of 1 failed each).
+  Never switch a country on from code; never loosen the rule to "get sends through". The UK queue's own burst auto-pause is separate.
+- ⛔ **A FAILED SEND KEEPS META'S OWN ERROR** (2026-10-15): `error_code / error_title / error_details` on `whatsapp_sends` +
+  `whatsapp_messages` (+ `whatsapp_error_*` on the lead), via `sendViaGraph().errorParts` / `errorColumns`; tokens masked. The meaning is
+  ONE table, `src/lib/sendErrorMeaning.ts`, built from Meta's / Twilio's official lists — the raw code is ALWAYS shown, a meaning only when
+  known; never invent one. A delivery-report failure's code needs the held `whatsapp-status` (writes nothing yet). Who paused the queue:
+  `pause_changed_*` in the same write as the flag + `whatsapp_queue_pause_log`. A Call campaign's lead gets WhatsApp only when the person
+  confirms (`sales_queue_opener` `_confirm_call_campaign`, `callCampaignGuard.ts`).
 - **The send window binds the QUEUE only** (07:00–21:30 London for UK numbers); the reply path answers Meta's 24-hour
   window and still counts against `DAILY_CAP`. Name the constants; never write the numbers.
 - **The Inbox bulk confirm dry-runs every lead first** and sends only those that passed (`inboxBulkSend.ts` `applyBulkChecks`). A single-engine body is refused for a hook from the other engine UNLESS waived by name: `audit_followup` ("I asked chatgpt") is waived for either engine by Paul (`TEMPLATE_ENGINE_CLAIM_WAIVED`). See `docs/whatsapp-templates.md` (2026-09-27).
@@ -1064,6 +1076,13 @@ positive allowlist of `baseline`; `isColdOutreachTemplate` treats unknown as COL
   questions ("no hot water" is the customer's words).
 
 **Crawls, onboarding, baseline inputs** (`docs/paid-client-evidence.md`)
+- ⛔ **ONE WEBSITE CHECK PER LEAD, READ BY EVERY SCREEN** (Paul, 2026-10-15, `docs/website-check.md`): both crawls store
+  `result.websiteCheck` (`src/lib/websiteCheck.ts` `summariseWebsiteCheck`, from the ONE grouped audit + evidence + insights); the Inbox
+  icon / popup, call script / call card / hook card, the report and the lead's audit read it through `websiteCheckFor` — never a second
+  rule, never an audit run's own crawl copy. Serious = high / medium; low = minor points; one headline everywhere. Every issue names the
+  page it was read on. A prospect's automated quick check queues the deep crawl (`requested_from 'automatic'`, capped, no kick). The call
+  script LISTS issues as plain lines (`issueLine`, `CALL_SCRIPT_ISSUE_LINES`, the rest on a tap; clean = one line) — never a sentence.
+  The WhatsApp templates' `{{6}}` rules are separate (they decide what is SENT). llms.txt is never an issue.
 - **Every manual Crawl site / Re-crawl site / Crawl check is EXHAUSTIVE** (`mode: "full"`, operator-only,
   `resolveCrawlMode`): a background job (`crawl_jobs`/`crawl_urls`, drained by `crawl-worker`, cron
   `crawl-worker-run` backstop) that runs until the frontier is empty — no page, request or sitemap cap

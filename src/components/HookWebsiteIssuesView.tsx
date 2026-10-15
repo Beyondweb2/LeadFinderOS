@@ -15,13 +15,16 @@ import type { LeadWebsiteIssues } from '@/hooks/useLeadWebsiteIssues';
 export const HOOK_ISSUES_SHOWN = 3;
 const EYEBROW = 'text-[10px] font-semibold uppercase tracking-wider text-muted-foreground';
 
-/** The words for a list that has no findings in it. Only `clean` may say "no strong issues". */
+/** The words for a list that has no findings in it — the ONE website check's own headline (src/lib/websiteCheck.ts),
+ *  so this card says exactly what the Inbox icon, the call script and the report say. Only `clean` says "no issues". */
 export function websiteIssuesEmptyText(d: LeadWebsiteIssues): string | null {
+  const one = d.outcome.check;
+  if (one && (d.outcome.status === 'clean' || d.outcome.status === 'unreadable')) return one.headline;
   switch (d.outcome.status) {
     case 'findings': return null;
     case 'profile': return null;
     case 'no_website': return null;
-    case 'clean': return 'No strong website issues found in this check.';
+    case 'clean': return 'No serious website issues found.';
     case 'not_crawled': return 'The site has not been checked yet, so there are no website findings. (Use Crawl site for one.)';
     case 'crawl_stale': return 'The newest website check is more than 30 days old, so its findings are not used.';
     case 'unreadable': return 'The check could not read the site, so there is nothing reliable to say about it.';
@@ -37,6 +40,7 @@ export function HookWebsiteIssuesView({ data }: { data: LeadWebsiteIssues }) {
   return (
     <div data-testid="hook-website-issues" data-status={outcome.status}>
       <div className={EYEBROW}>{presence ? 'Online presence issues found' : 'Website issues found'}</div>
+      {outcome.check?.coverageLine && <p className="text-[10px] text-muted-foreground" data-testid="hook-website-coverage">{outcome.check.coverageLine}</p>}
       {outcome.status === 'profile' ? (
         <ul className="mt-1 ml-4 list-disc space-y-0.5">
           <li><span className="font-medium">No standalone business website found</span></li>
@@ -48,6 +52,7 @@ export function HookWebsiteIssuesView({ data }: { data: LeadWebsiteIssues }) {
         <p className="mt-0.5 text-muted-foreground">{empty}</p>
       ) : (
         <>
+          {outcome.check?.headline && <p className="mt-0.5 font-medium" data-testid="hook-website-headline">{outcome.check.headline}</p>}
           <ul className="mt-1 space-y-1">
             {shown.map((f) => (
               <li key={f.kind + f.title} className="break-words" data-testid="hook-website-issue">

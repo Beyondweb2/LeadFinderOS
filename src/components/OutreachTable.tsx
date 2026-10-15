@@ -153,6 +153,7 @@ import { useLeadPermissions } from '@/hooks/useLeadPermissions';
 import { logDataAccess } from '@/lib/dataAccessLog';
 import { maySetStatus } from '@/lib/access';
 import { leadRpc, salesQueueOpener } from '@/lib/leadRpc';
+import { CALL_CAMPAIGN_EXPLAINER, callCampaignLeads, callCampaignQuestion } from '@/lib/callCampaignGuard';
 import { notifyLeadChanged } from '@/lib/leadSync';
 import { announceQueueChanged, recordQueueBatch } from '@/lib/whatsappQueueView';
 import { QUEUE_SKIP_LABEL, REMOVE_FROM_MY_LEADS_EXPLAINER, REMOVE_FROM_MY_LEADS_LABEL, refusalText } from '@/lib/salesCrm';
@@ -594,6 +595,8 @@ export function OutreachTable({
   const [reportOfferPreview, setReportOfferPreview] = useState<ReportOfferSummary | 'checking' | 'failed' | null>(null);
   /* The admin's "Queue across team" confirmation — opened only when the ticked leads span more than one owner. */
   const [crossOwnerConfirmOpen, setCrossOwnerConfirmOpen] = useState(false);
+  /* 2026-10-15: leads in a Call campaign get WhatsApp only after this question (src/lib/callCampaignGuard.ts). */
+  const [callCampaignConfirm, setCallCampaignConfirm] = useState<{ template: string; count: number; crossOwnerConfirmed: boolean } | null>(null);
   const [lastContactedLeadId, setLastContactedLeadId] = useState<string | null>(null);
   // Dialog state for the WhatsApp template page
   const [whatsappDialogLead, setWhatsappDialogLead] = useState<OutreachLead | null>(null);
@@ -1463,7 +1466,7 @@ export function OutreachTable({
     });
   };
 
-  const handleSalesQueue = async (template: string) => {
+  const handleSalesQueue = async (template: string, confirmCallCampaign = false) => {
     if (needsFullList()) return;
     if (!salesBulkTemplate(template)) {
       toast({ title: 'Not queued', description: 'Bulk initial outreach sends an approved opener or the report offer. Other templates go from the Inbox conversation.', variant: 'destructive' });
@@ -1482,7 +1485,7 @@ export function OutreachTable({
       offerSkips = s.refused.map((x) => ({ n: x.names.length, label: x.label, names: x.names }));
       offerWarn = s.warnings.map((w) => `${w.names.length} ${w.label}`).join('; ');
     }
-    const r = ids.length ? await salesQueueOpener(ids, template) : { ok: true as const, queued: 0, skipped: {} };
+    const r = ids.length ? await salesQueueOpener(ids, template, confirmCallCampaign) : { ok: true as const, queued: 0, skipped: {} };
     if (!r.ok) { toast({ title: 'Nothing queued', description: refusalText(r.error), variant: 'destructive' }); return; }
     const skipList = [...offerSkips, ...Object.entries((r.skipped ?? {}) as Record<string, number>).map(([k, n]) => ({ n, label: QUEUE_SKIP_LABEL[k] ?? k }))];
     const skipped = skipList.map((s) => `${s.n} ${s.label}`).join(' · ');
@@ -1500,7 +1503,7 @@ export function OutreachTable({
     announceQueueChanged();
   };
 
-  const handleQueueForWhatsApp = async (template: string, opts: { crossOwnerConfirmed?: boolean } = {}) => {
+  const handleQueueForWhatsApp = async (template: string, opts: { crossOwnerConfirmed?: boolean; callCampaignConfirmed?: boolean } = {}) => {
     if (needsFullList()) return;
     if (selectedIds.size === 0 || !onUpdateLead) return;
     /* ⛔ WHOSE LEADS THIS WOULD MESSAGE (2026-10-05, src/lib/outreachOwnerScope.ts). A salesperson's batch holding
@@ -1513,6 +1516,12 @@ export function OutreachTable({
     /* Refuse an unset template here as well as disabling the button. Stamping '' on a batch of leads
        would queue them with no template, and the drainer would then flag every one of them. */
     if (!template) { toast({ title: 'No template chosen', description: 'Pick a template before queueing.', variant: 'destructive' }); return; }
+    /* ⛔ A CALL CAMPAIGN'S LEADS GET WHATSAPP ONLY WHEN THE PERSON SAYS SO (2026-10-15). Fails closed. */
+    if (!opts.callCampaignConfirmed) {
+      const cc = await callCampaignLeads(supabase, leads.filter((l) => selectedIds.has(l.id)));
+      if (!cc.ok) { toast({ title: 'Nothing queued', description: 'Could not check which campaigns these leads are in, so nothing was queued. Try again.', variant: 'destructive' }); return; }
+      if (cc.leads.length > 0) { setCallCampaignConfirm({ template, count: cc.leads.length, crossOwnerConfirmed: !!opts.crossOwnerConfirmed }); return; }
+    }
     /* The OPENER follow-up drains in its OWN lane (contact_followup_queued_at), NOT the status=queued
        opener path: that path's already_sent guard refuses any lead with prior WhatsApp — which every
        Contacted business has — and forces status→initial_contact on send. Route it separately. */
@@ -1523,7 +1532,7 @@ export function OutreachTable({
     /* A salesperson cannot write the lead rows: sales_queue_opener stores this template on each of
        their never-contacted leads and queues it, with the same contact-history, UK-mobile, opt-out
        and ownership checks — and reports every skip. */
-    if (!perms.queueControls) { await handleSalesQueue(template); return; }
+    if (!perms.queueControls) { await handleSalesQueue(template, !!opts.callCampaignConfirmed); return; }
     const now = new Date().toISOString();
     const ids = Array.from(selectedIds);
     const leadOf = (id: string) => leads.find((l) => l.id === id);
@@ -3675,6 +3684,27 @@ export function OutreachTable({
       </Dialog>
 
       {/* The second, deliberate step for a batch that spans owners. Cancel is the default focus. */}
+      <AlertDialog open={!!callCampaignConfirm} onOpenChange={(o) => { if (!o) setCallCampaignConfirm(null); }}>
+        <AlertDialogContent data-testid="queue-call-campaign-confirm">
+          <AlertDialogHeader>
+            <AlertDialogTitle>{callCampaignQuestion(callCampaignConfirm?.count ?? 0)}</AlertDialogTitle>
+            <AlertDialogDescription>{CALL_CAMPAIGN_EXPLAINER}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel autoFocus>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-amber-600 text-white hover:bg-amber-700"
+              onClick={() => {
+                const c = callCampaignConfirm;
+                setCallCampaignConfirm(null);
+                if (c) void handleQueueForWhatsApp(c.template, { crossOwnerConfirmed: c.crossOwnerConfirmed, callCampaignConfirmed: true });
+              }}>
+              Queue WhatsApp anyway
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       <AlertDialog open={crossOwnerConfirmOpen} onOpenChange={setCrossOwnerConfirmOpen}>
         <AlertDialogContent data-testid="queue-cross-owner-confirm">
           <AlertDialogHeader>

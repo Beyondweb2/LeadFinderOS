@@ -13,6 +13,7 @@ import { isOnboardingFormUrl, isSignupTemplateLinkUrl, onboardingTemplateBody, s
 
 import { toWhatsAppDigits } from "../../../src/lib/waNumber.ts";
 import { REPORT_OFFER_NO_NAME, REPORT_OFFER_TEMPLATE, reportOfferBody } from "../../../src/lib/reportOfferTemplate.ts";
+import { maskSecrets, metaErrorPartsFromResponse, type SendErrorParts } from "../../../src/lib/sendErrorMeaning.ts";
 
 export const GRAPH_VERSION = "v21.0";
 
@@ -1123,6 +1124,13 @@ export interface WaSendResult {
   messageId: string | null;
   failCode?: number;
   error: string | null;
+  /** Meta's own error, split out (2026-10-15): code / title / details, never a token. Null parts on success. */
+  errorParts?: SendErrorParts;
+}
+
+/** The three error columns of whatsapp_sends / whatsapp_messages for a send result (all null on success). */
+export function errorColumns(parts: SendErrorParts | null | undefined): { error_code: number | null; error_title: string | null; error_details: string | null } {
+  return { error_code: parts?.code ?? null, error_title: parts?.title ?? null, error_details: parts?.details ?? null };
 }
 
 /** Low-level Graph POST — the same call process-whatsapp-queue makes. The caller
@@ -1144,8 +1152,11 @@ export async function sendViaGraph(
       return { ok: true, messageId: data.messages[0].id, error: null };
     }
     const failCode = typeof data?.error?.code === "number" ? data.error.code : undefined;
-    return { ok: false, messageId: null, failCode, error: JSON.stringify(data?.error ?? data).slice(0, 500) };
+    const errorParts = metaErrorPartsFromResponse(data);
+    if (!errorParts.title && !errorParts.details) errorParts.title = `HTTP ${res.status}`;
+    return { ok: false, messageId: null, failCode, error: maskSecrets(JSON.stringify(data?.error ?? data)).slice(0, 500), errorParts };
   } catch (e) {
-    return { ok: false, messageId: null, error: (e as Error).message };
+    const msg = maskSecrets((e as Error).message ?? "network error").slice(0, 300);
+    return { ok: false, messageId: null, error: msg, errorParts: { code: null, title: "Could not reach Meta (network error)", details: msg } };
   }
 }

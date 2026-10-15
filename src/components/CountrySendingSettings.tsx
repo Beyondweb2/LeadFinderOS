@@ -6,6 +6,7 @@ import { Switch } from '@/components/ui/switch';
 import { useToast } from '@/hooks/use-toast';
 import { Callout } from '@/components/operator/ui';
 import { useCountrySettings } from '@/hooks/useCountrySettings';
+import { countryAutoPauseHeadline } from '@/lib/countryAutoPause';
 import { SMS_SENDER_WORDS, checkCountryValue, hhmm, MARKET_NAME, MAX_COUNTRY_DAILY_CAP, type Market, type CountrySetting } from '@/lib/outreachMarkets';
 
 /* ══ SENDING BY COUNTRY — ADMIN ONLY (2026-10-14, Malaysia / Singapore; src/lib/outreachMarkets.ts) ═════════════════
@@ -64,8 +65,19 @@ export function CountrySendingSettings() {
     return `${MARKET_NAME[m]}: ${on.length ? on.join(', ') : 'off'}`;
   }).join(' · ');
 
+  /* A country that switched ITSELF off (country_whatsapp_auto_pause, 2026-10-15): said in a banner that shows even with
+     the settings folded, in the stored words, until a person switches it back on. */
+  const autoOff = ROWS.filter((m) => m !== 'UK' && settings[m].whatsapp_on !== true && settings[m].whatsapp_auto_pause_reason);
+
   return (
     <div className="mt-2 space-y-2" data-testid="country-sending">
+      {autoOff.map((m) => (
+        <Callout key={m} tone="red" icon={AlertTriangle} className="px-3 py-2 text-[11px]" testId={`country-auto-off-${m}`}>
+          <strong>{countryAutoPauseHeadline(MARKET_NAME[m])}</strong>
+          {settings[m].whatsapp_auto_paused_at ? ` on ${new Date(settings[m].whatsapp_auto_paused_at as string).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: 'Europe/London' })}` : ''}.
+          {' '}{settings[m].whatsapp_auto_pause_reason}
+        </Callout>
+      ))}
       <button type="button" onClick={() => setOpen((v) => !v)} className="flex items-center gap-1 text-[11px] font-medium text-muted-foreground hover:text-foreground" data-testid="country-sending-toggle">
         {open ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
         Countries: UK on · {summary}
@@ -109,7 +121,10 @@ export function CountrySendingSettings() {
             );
           })}
           <p className="text-[11px] text-muted-foreground">
-            Malaysia and Singapore send in their own time (UTC+8). Their caps come on top of the team cap — the team cap still counts every message.
+            ⛔ Cold WhatsApp to Malaysia and Singapore goes only through these switches — test a handful by hand first. Each switches
+            itself off if its first sends fail (any failure in the first 5, or 2 of the last 5), and a failed send there is never retried
+            automatically: the lead is handed back.
+            {' '}Malaysia and Singapore send in their own time (UTC+8). Their caps come on top of the team cap — the team cap still counts every message.
             {' '}WhatsApp templates are written in English for UK businesses: send only the openers, and not explain_offer / explain_offer_v2 (they quote £ prices and “UK businesses”).
           </p>
           <Callout tone="amber" icon={AlertTriangle} className="px-3 py-2 text-[11px]" testId="country-sms-warning">{SMS_SENDER_WORDS}</Callout>

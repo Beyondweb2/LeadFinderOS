@@ -95,6 +95,8 @@ export function leadsSetCampaign(leadIds: string[], campaignId: string | null): 
 
 /** Bulk initial outreach for a salesperson: THE TEMPLATE THEY CHOSE for this batch, stored on each
  *  lead by the server (sales_queue_opener). Never a default, never a substitute. */
-export function salesQueueOpener(leadIds: string[], template: string): Promise<RpcResult> {
-  return leadRpc('sales_queue_opener', { _lead_ids: leadIds, _template: template });
+export function salesQueueOpener(leadIds: string[], template: string, confirmCallCampaign = false): Promise<RpcResult> {
+  /* 2026-10-15: a lead in a Call campaign is skipped ('call_campaign') unless the person confirmed it
+     (src/lib/callCampaignGuard.ts). The argument is sent only when true, so an older database still answers. */
+  return leadRpc('sales_queue_opener', { _lead_ids: leadIds, _template: template, ...(confirmCallCampaign ? { _confirm_call_campaign: true } : {}) });
 }

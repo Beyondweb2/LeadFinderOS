@@ -77,7 +77,7 @@ ok(!/initialOpenerTemplate/.test(strip(q)), 'the queue status no longer reports 
 console.log('\n── bulk: the template chosen for the batch is the template stored and sent ──');
 const table = strip(read('src/components/OutreachTable.tsx'));
 ok(/whatsapp_template: template,/.test(table), "the admin's queue write stores the dialog's template as chosen");
-ok(/if \(!perms\.queueControls\) \{ await handleSalesQueue\(template\); return; \}/.test(table) && /salesQueueOpener\(ids, template\)/.test(table), "a salesperson's batch goes to sales_queue_opener with the chosen template");
+ok(/if \(!perms\.queueControls\) \{ await handleSalesQueue\(template, !!opts\.callCampaignConfirmed\); return; \}/.test(table) && /salesQueueOpener\(ids, template, confirmCallCampaign\)/.test(table), "a salesperson's batch goes to sales_queue_opener with the chosen template");
 ok(/disabled=\{(!listComplete \|\| )?!queueTemplate \|\| openerBlocked\(queueTemplate\)( \|\| selectionOwners\.refuse)?\}/.test(table), 'nothing is queued until a template is chosen (no default)');
 const mig = read('supabase/migrations/20260927140000_sales_shared_workflow.sql');
 const two = mig.slice(mig.indexOf('create or replace function public.sales_queue_opener(_lead_ids uuid[], _template text)'), mig.indexOf('revoke all on function public.sales_queue_opener(uuid[], text)'));
@@ -97,7 +97,7 @@ ok(!/whatsapp_template\s*=\s*INITIAL_OPENER|whatsapp_template:\s*INITIAL_OPENER/
 
 console.log('\n── the per-lead picker and the Inbox ──');
 const controls = strip(read('src/components/WhatsAppLeadControls.tsx'));
-ok(!/useSelectedOpener|openerSendability/.test(controls) && /salesQueueOpener\(\[lead\.id\], template\)/.test(controls), 'the per-lead control offers both openers and queues the chosen one');
+ok(!/useSelectedOpener|openerSendability/.test(controls) && /salesQueueOpener\(\[lead\.id\], template, callOk\)/.test(controls), 'the per-lead control offers both openers and queues the chosen one');
 const inbox = strip(read('src/pages/Inbox.tsx'));
 ok(!/useSelectedOpener|selectedOpener/.test(inbox), 'the Inbox composer passes no selection');
 

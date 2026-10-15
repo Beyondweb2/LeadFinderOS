@@ -17,6 +17,7 @@ import type { CrawlRequestSource } from '@/lib/fullCrawl';
 import { crawlJobStatus, useCrawlJobWatch } from '@/components/LeadCrawlPanel';
 import { ProspectAuditDialog } from '@/components/ProspectAuditDialog';
 import { PROSPECT_CRAWL_REUSE_MS } from '@/lib/prospectCrawl';
+import { issueWhere, websiteCheckFor, type WebsiteCheckView } from '@/lib/websiteCheck';
 
 /** The minimal lead shape the crawl button/dialog need — an id to crawl by and a website to gate on.
  *  Both the Outreach row (OutreachLead) and the Inbox thread (its lead-lite) satisfy it. */
@@ -31,8 +32,10 @@ type CrawlLead = { id: string; website?: string | null };
      (b) CrawlCheckUrlButton — a paste-a-URL box, for a site sent before it's a lead (no storage).
 
    ⛔ THE POPUP HAS TWO SEPARATE SECTIONS AND THEY MUST NOT LEAK INTO EACH OTHER:
-     1. AI VISIBILITY — buildFaultLines(signals), the report's exact wording. THIS is what decides
-        whether audit_followup_fault is available. The button's dot reflects ONLY this.
+     1. WEBSITE ISSUES — the ONE website check (src/lib/websiteCheck.ts, 2026-10-15): the same stored summary
+        the call script, the report and the lead's audit read, so they say the same thing. The button's dot
+        reflects ONLY this. (Whether the audit_followup_fault TEMPLATE can be sent is still its own rule,
+        buildFaultLines — shown to the admin as a template note, never as the findings.)
      2. SITE INFO — everything else in the same HTML (who built it, directories, contact, …), reading
         material for before a conversation. Its presence NEVER changes the button or the template.
 
@@ -52,6 +55,15 @@ interface Result {
   fetches?: number; ms?: number; error?: string; checked_at?: string;
   mode?: 'full' | 'standard'; stored?: boolean | null;
   full?: { completeness?: string; stats?: { pagesFetched?: number; urlsDiscovered?: number; pagesOk?: number; failed?: number; skipped?: number }; warnings?: string[] } | null;
+  /** The whole stored result (signals, contentTrust, websiteCheck…) — what the one website check is read from. */
+  raw?: Record<string, unknown> | null;
+}
+
+/** The ONE website check for what this popup is showing (src/lib/websiteCheck.ts). */
+function checkView(result: Result | null, website: string | null | undefined): WebsiteCheckView | null {
+  if (!result || !result.ok || !result.signals) return null;
+  const raw = (result.raw ?? { url: result.url, signals: result.signals, siteInfo: result.siteInfo, checked_at: result.checked_at }) as never;
+  return websiteCheckFor({ result: raw, created_at: result.checked_at ?? null }, { website: website || result.url || null });
 }
 
 /** Seed the popup's display state from a stored crawl row (so "already run" shows instantly). */
@@ -60,6 +72,7 @@ function resultFromRow(row: CrawlRow | null | undefined): Result | null {
   return {
     ok: true, url: row.result.url,
     verdict: row.result.verdict, signals: row.result.signals, siteInfo: row.result.siteInfo ?? null, checked_at: row.result.checked_at ?? row.created_at,
+    raw: row.result as unknown as Record<string, unknown>,
   };
 }
 
@@ -178,7 +191,7 @@ function CrawlCheckDialog(
       const res = await crawlJobStatus({ job_id: jobId, include_result: true });
       const r = res.result as Record<string, any> | null;
       if (!r?.signals) throw new Error(res.job?.status === 'failed' ? 'The crawl failed.' : 'The crawl finished without a readable result.');
-      setResult({ ok: true, url: r.url, verdict: r.verdict, signals: r.signals, siteInfo: r.siteInfo ?? null, checked_at: r.checked_at, full: res.full ?? null, mode: 'full' });
+      setResult({ ok: true, url: r.url, verdict: r.verdict, signals: r.signals, siteInfo: r.siteInfo ?? null, checked_at: r.checked_at, full: res.full ?? null, mode: 'full', raw: r });
       void queryClient.invalidateQueries({ queryKey: ['lead-crawls'] });
       void queryClient.invalidateQueries({ queryKey: ['inbox'] });
       onDone?.();
@@ -204,7 +217,7 @@ function CrawlCheckDialog(
         return;
       }
       if (body.lead_id && next.stored === false) throw new Error('The crawl ran but could not be saved to this lead. Run it again.');
-      setResult(next);
+      setResult({ ...next, raw: next as unknown as Record<string, unknown> });
       if (body.lead_id) {
         // The ONE crawl row changed: every screen's copy (Outreach, Paid Clients, lead popup) re-reads.
         void queryClient.invalidateQueries({ queryKey: ['lead-crawls'] });
@@ -234,8 +247,10 @@ function CrawlCheckDialog(
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
+  /* The audit_followup_fault TEMPLATE's own rule (admin note only) — never the findings shown. */
   const faults: CrawlFault[] = result?.signals ? buildFaultLines(result.signals) : [];
   const fetchFailed = result?.signals?.fetchFailed === true;
+  const view = checkView(result, lead?.website);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -288,35 +303,40 @@ function CrawlCheckDialog(
               </div>
             )}
 
-            {/* ── SECTION 1: AI VISIBILITY (the faults — this feeds audit_followup_fault) ── */}
-            {result.signals && (
-              <SubSection title="AI visibility" icon={AlertTriangle} tone="amber" className="space-y-2">
-                {fetchFailed ? (
-                  <p className="text-sm text-muted-foreground">Couldn&rsquo;t read the site — it may be down or blocking automated requests.</p>
-                ) : faults.length === 0 ? (
-                  <p className="flex items-center gap-1.5 text-sm text-teal-700 dark:text-teal-300">
-                    <CircleCheck className="h-4 w-4" /> No AI-visibility faults found.
-                  </p>
-                ) : (
+            {/* ── SECTION 1: WEBSITE ISSUES — the ONE website check (src/lib/websiteCheck.ts) ── */}
+            {result.signals && view && (
+              <SubSection title="Website issues" icon={AlertTriangle} tone="amber" className="space-y-2">
+                <p className={`flex items-center gap-1.5 text-sm ${view.state === 'clean' ? 'text-teal-700 dark:text-teal-300' : view.state === 'issues' ? 'font-medium' : 'text-muted-foreground'}`} data-testid="crawl-website-headline">
+                  {view.state === 'clean' && <CircleCheck className="h-4 w-4" />}{view.headline}
+                </p>
+                {view.coverageLine && <p className="text-[11px] text-muted-foreground" data-testid="crawl-website-coverage">{view.coverageLine}</p>}
+                {view.serious.length > 0 && (
                   <>
                   {/* The one sentence Sales may say about any of these (Paul, 2026-09-28): they MAY make
                       it harder — never "this is why AI did not recommend you". */}
                   <p className="text-xs text-muted-foreground" data-testid="crawl-careful-wording">
                     These may make it harder for search engines or AI systems to crawl, understand or verify the business.
                   </p>
-                  <ul className="space-y-2">
-                    {faults.map((f, i) => (
-                      <li key={i} className="flex items-start gap-2 text-sm">
-                        <span className={`mt-1 h-1.5 w-1.5 shrink-0 rounded-full ${f.minor ? 'bg-amber-500' : 'bg-red-500'}`} />
+                  <ul className="space-y-2" data-testid="crawl-website-issues">
+                    {view.serious.map((f) => (
+                      <li key={f.id} className="flex items-start gap-2 text-sm">
+                        <span className={`mt-1 h-1.5 w-1.5 shrink-0 rounded-full ${f.severity === 'high' ? 'bg-red-500' : 'bg-amber-500'}`} />
                         <span className="flex-1">
                           <span className="font-medium">{f.title}. </span>
-                          <span className="text-muted-foreground">{f.detail}</span>
+                          <span className="text-muted-foreground">{f.saw}</span>
+                          {issueWhere(f) && <span className="block break-all text-[11px] text-muted-foreground/80">{issueWhere(f)}</span>}
                         </span>
-                        <CopyIcon text={f.detail} />
+                        <CopyIcon text={f.title + '. ' + f.saw} />
                       </li>
                     ))}
                   </ul>
                   </>
+                )}
+                {view.minor.length > 0 && (
+                  <details className="text-xs text-muted-foreground" data-testid="crawl-website-minor">
+                    <summary className="cursor-pointer">{view.minor.length} minor {view.minor.length === 1 ? 'point' : 'points'}</summary>
+                    <ul className="mt-1 list-disc space-y-0.5 pl-5">{view.minor.map((f) => <li key={f.id}>{f.title} — {f.saw}</li>)}</ul>
+                  </details>
                 )}
               </SubSection>
             )}
@@ -325,8 +345,8 @@ function CrawlCheckDialog(
             {isAdmin && result.signals && !fetchFailed && (
               <p className={`text-xs ${faults.length ? 'text-teal-700 dark:text-teal-300' : 'text-muted-foreground'}`}>
                 {faults.length
-                  ? 'Usable for audit_followup_fault — the first finding is the client-facing fault.'
-                  : 'Not usable for audit_followup_fault — this crawl found no meaningful fault.'}
+                  ? 'WhatsApp template audit_followup_fault: usable — it names "' + faults[0].title + '".'
+                  : 'WhatsApp template audit_followup_fault: not usable — it only names crawler, JavaScript, duplicate-page and thin-page faults, and none were found.'}
               </p>
             )}
 
@@ -374,8 +394,9 @@ export function CrawlCheckButton(
   const hasRealSite = !!lead.website?.trim() && !isAggregatorUrl(lead.website);
   const ran = !!crawl?.result?.signals;
   const crawlFailed = crawl?.result?.signals?.fetchFailed === true;
-  const faults = ran ? buildFaultLines(crawl!.result!.signals!) : [];
-  const faulted = faults.length > 0;
+  /* The dot reflects the ONE website check — the same answer the popup, the call script and the report give. */
+  const view = ran ? websiteCheckFor({ result: crawl!.result as never, created_at: crawl!.created_at ?? null }, { website: lead.website }) : null;
+  const faulted = view?.state === 'issues';
 
   const base = 'inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs font-semibold transition-colors';
   const iconBase = 'inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:pointer-events-none disabled:opacity-40';
@@ -403,7 +424,7 @@ export function CrawlCheckButton(
       ? 'border-red-500/40 bg-red-500/10 text-red-600 dark:text-red-400 hover:bg-red-500/20'
       : 'border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-500/20';
   if (iconOnly) {
-    const iconTitle = running ? 'Crawling website…' : failed || crawlFailed ? 'Crawl failed — click to retry' : ran ? 'View crawl result' : 'Crawl website';
+    const iconTitle = running ? 'Crawling website…' : failed || crawlFailed ? 'Crawl failed — click to retry' : ran ? (view?.headline ?? 'View crawl result') : 'Crawl website';
     return (
       <>
         <button type="button" onClick={() => setOpen(true)} disabled={running} title={iconTitle} aria-label={iconTitle}
@@ -417,9 +438,7 @@ export function CrawlCheckButton(
 
   const title = !ran
     ? 'Not checked yet — click to crawl the site (free)'
-    : faulted
-      ? `AI-visibility fault found — click to view (${faults.length})`
-      : 'Checked — no AI-visibility fault. Click to view what the site says.';
+    : `${view?.headline ?? 'Checked.'} Click to view.`;
 
   return (
     <>

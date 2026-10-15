@@ -83,8 +83,9 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { getQueueStatus, QUEUE_STATUS_KEY, QUEUE_PAUSED_LINE } from '@/lib/queueStatus';
 import { useQueueState } from '@/hooks/useQueueState';
 import { useMarkWhatsAppRead, useWhatsAppReads } from '@/hooks/useWhatsAppUnread';
-import { conversationState, INBOX_QUICK_FILTERS, londonToday, passesQuickFilter, formatWaiting, type ConversationState, type InboxQuickFilter } from '@/lib/conversationState';
+import { conversationState, messageErrorParts, INBOX_QUICK_FILTERS, londonToday, passesQuickFilter, formatWaiting, type ConversationState, type InboxQuickFilter } from '@/lib/conversationState';
 import { ConvStateChip } from '@/components/ConvStateChip';
+import { SendErrorNote } from '@/components/SendErrorNote';
 import { AiRepliesToggle } from '@/components/AiRepliesToggle';
 import { AiDraftChip, AiDraftPanel } from '@/components/AiDraftPanel';
 import { useAiReplyDrafts } from '@/hooks/useAiReplyDrafts';
@@ -2088,7 +2089,7 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
                 </span>
                 <span className="flex shrink-0 items-center gap-1">
                   <AiDraftChip row={ai.forPhone(c.phone)} compact />
-                  {(!aiChipFor(ai.forPhone(c.phone)) || stateByKey.get(c.key)?.failed) && <ConvStateChip state={stateByKey.get(c.key)} compact />}
+                  {(!aiChipFor(ai.forPhone(c.phone)) || stateByKey.get(c.key)?.failed) && <ConvStateChip state={stateByKey.get(c.key)} compact channel={channel} />}
                   {c.lastMessage && <span className={cn('text-[10px]', stateByKey.get(c.key)?.unread ? 'font-semibold text-blue-600 dark:text-blue-400' : 'text-muted-foreground')}>{relTime(c.lastMessageAt)}</span>}
                 </span>
               </div>
@@ -2195,7 +2196,7 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
                         action ("Call · Tomorrow"); the shared editor and the one write (lead_set_follow_up). */}
                     {activeLead && <NextActionEditor lead={activeLead} variant="pill" />}
                     <EngagementPills reportOpenedAt={active.reportOpenedAt} siteVisitedAt={active.siteVisitedAt} geminiNamed={active.geminiNamed} geminiAnswers={active.geminiAnswers} />
-                    <ConvStateChip state={activeState} hideQueued />
+                    <ConvStateChip state={activeState} hideQueued channel={channel} />
                     <AiDraftChip row={activeAi} />
                     {/* The status pill already says Queued; this adds only what it cannot — the queue is paused. */}
                     {active.leadStatus === 'queued' && queueState?.paused && (
@@ -2409,6 +2410,9 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
                           <span>· {m.status === 'simulated' ? 'simulated' : m.status === 'failed' ? '⚠ failed' : m.status}</span>
                         )}
                       </div>
+                      {m.direction === 'outbound' && m.status === 'failed' && (
+                        <SendErrorNote channel={channel} parts={messageErrorParts(m)} className="mt-0.5 block font-medium text-primary-foreground/90" />
+                      )}
                     </div>
                   </div>
                 ); })}

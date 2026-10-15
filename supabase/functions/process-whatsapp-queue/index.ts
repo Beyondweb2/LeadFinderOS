@@ -14,7 +14,7 @@ import { rivalHookDecision, templateNeedsRivals } from "../../../src/lib/rivalHo
 /* ⚠️ templateBodyParams IS DELIBERATELY NOT IMPORTED ANY MORE. This file used to assemble one
    send payload by hand from it, which is how video_template went out without its video header for
    its entire life. Payloads come from claimTemplatePayload, which reads the registry. */
-import { renderTemplateBody, claimTemplatePayload, sendViaGraph, WA_TEMPLATES, TEMPLATES_NEEDING_REAL_NAME, firstNameFrom, templateAwaitingApproval, type TemplateVar } from "../_shared/whatsapp-send.ts";
+import { renderTemplateBody, claimTemplatePayload, sendViaGraph, errorColumns, WA_TEMPLATES, TEMPLATES_NEEDING_REAL_NAME, firstNameFrom, templateAwaitingApproval, type TemplateVar } from "../_shared/whatsapp-send.ts";
 import { hookFollowupEligible } from "../_shared/hook-followup-eligibility.ts";
 import { contactFollowupEligible } from "../_shared/contact-followup-eligibility.ts";
 import { resolveOnboardingFollowupVars } from "../_shared/onboarding-followup.ts";
@@ -39,6 +39,7 @@ import { senderMessageName } from "../_shared/sender-name.ts";
 import { templateAvailability } from "../_shared/template-status.ts";
 import { TEMPLATE_UNAVAILABLE_CODES } from "../../../src/lib/whatsappLinkTemplates.ts";
 import { HOOK_INCOMPLETE_REASON, HOOK_NO_GAP_REASON } from "../_shared/audit-reply.ts";
+import { maskSecrets, metaErrorPartsFromResponse, partsFromStoredError, type SendErrorParts } from "../../../src/lib/sendErrorMeaning.ts";
 
 // process-whatsapp-queue — the WhatsApp outreach processor.
 //
@@ -400,6 +401,25 @@ const META_STATUS_GATED: ReadonlySet<string> = new Set([REPORT_OFFER_TEMPLATE]);
    message is unrecoverable; a send that fails visibly is a five-minute fix. So an unresolvable
    template now refuses and says why. */
 
+/** ⛔ Malaysia / Singapore (2026-10-15): a failed send there is never retried automatically — handed back to a person. */
+function isNoAutoRetryMarket(digits: string | null | undefined): boolean {
+  const m = mobileMarketOf(String(digits ?? ""));
+  return m === "MY" || m === "SG";
+}
+
+/** A team member's name for "Paused by …" (display name, then message name). Null when unknown — never an email. */
+// deno-lint-ignore no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function personName(service: any, userId: string | null): Promise<string | null> {
+  if (!userId) return null;
+  try {
+    const { data: tm } = await service.from("team_members").select("display_name").eq("user_id", userId).maybeSingle();
+    if (tm?.display_name) return String(tm.display_name);
+    const { data: pr } = await service.from("profiles").select("display_name, message_name").eq("user_id", userId).maybeSingle();
+    return (pr?.display_name as string | null) ?? (pr?.message_name as string | null) ?? null;
+  } catch { return null; }
+}
+
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
     status,
@@ -670,6 +690,16 @@ Deno.serve(async (req) => {
         .select("daily_cap, min_gap_minutes, person_daily_limit_default, auto_paused_at, auto_pause_reason").eq("id", 1).maybeSingle();
       if (!prErr) paceRow = (pr ?? null) as Record<string, unknown> | null;
     } catch { paceRow = null; }
+    /* WHO LAST PAUSED / RESUMED THE QUEUE, AND WHEN (2026-10-15). Read on its own: a missing column only hides the line. */
+    let pauseChange: { at: string | null; byUserId: string | null; byName: string | null; source: string | null } | null = null;
+    try {
+      const { data: pc, error: pcErr } = await service.from("whatsapp_outreach_state")
+        .select("pause_changed_at, pause_changed_by, pause_changed_source").eq("id", 1).maybeSingle();
+      if (!pcErr && pc?.pause_changed_at) {
+        pauseChange = { at: pc.pause_changed_at as string, byUserId: (pc.pause_changed_by as string | null) ?? null,
+          byName: await personName(service, (pc.pause_changed_by as string | null) ?? null), source: (pc.pause_changed_source as string | null) ?? null };
+      }
+    } catch { pauseChange = null; }
     const pace = effectivePace(paceRow as never);
     const DAILY_CAP = pace.dailyCap;
     /* ⛔ PER-COUNTRY SWITCHES, HOURS AND CAPS (2026-10-14, src/lib/outreachMarkets.ts). An unreadable table answers the
@@ -726,6 +756,7 @@ Deno.serve(async (req) => {
               stored: { daily_cap: paceRow?.daily_cap ?? null, min_gap_minutes: paceRow?.min_gap_minutes ?? null } },
       autoPausedAt: (paceRow?.auto_paused_at as string | null) ?? null,
       autoPauseReason: (paceRow?.auto_pause_reason as string | null) ?? null,
+      pauseChange,
       // Queued leads held by a TEST ACCOUNT: never sent, by design (qaSafety). Surfaced so they are not mistaken for "waiting".
       testHeldQueuedCount,
       queuedCount: queuedCount ?? 0, archivedQueuedCount: archivedQueuedCount ?? 0,
@@ -824,12 +855,46 @@ Deno.serve(async (req) => {
     // refreshed status with the NEW paused value so the panel reflects it immediately.
     if (mode === "pause" || mode === "resume") {
       const nextPaused = mode === "pause";
-      await service.from("whatsapp_outreach_state")
-        .update({ paused: nextPaused, updated_at: new Date().toISOString() })
+      const changedAt = new Date().toISOString();
+      /* WHO and WHEN (2026-10-15) go in the SAME write as the flag, so the trigger trg_whatsapp_state_pause_logged
+         records the person in whatsapp_queue_pause_log. */
+      const { error: pErr } = await service.from("whatsapp_outreach_state")
+        .update({ paused: nextPaused, updated_at: changedAt, pause_changed_at: changedAt, pause_changed_by: callerId, pause_changed_source: "person" })
         .eq("id", 1);
+      if (pErr) {
+        // The columns are missing (migration not applied): the pause itself must still happen.
+        await service.from("whatsapp_outreach_state").update({ paused: nextPaused, updated_at: changedAt }).eq("id", 1);
+      }
       /* A person resuming (or pausing by hand) clears the auto-pause note. Separate write: a missing column never blocks the pause. */
       await service.from("whatsapp_outreach_state").update({ auto_paused_at: null, auto_pause_reason: null }).eq("id", 1);
-      return json({ ok: true, ...statusPayload, paused: nextPaused, autoPausedAt: null, autoPauseReason: null });
+      return json({ ok: true, ...statusPayload, paused: nextPaused, autoPausedAt: null, autoPauseReason: null,
+        pauseChange: { at: changedAt, byUserId: callerId, byName: await personName(service, callerId), source: "person" } });
+    }
+
+    /* RECENT FAILED SENDS (2026-10-15, admin-gated like this whole handler) — the queue panel's list: every failed
+       WhatsApp send of the last RECENT_FAILURE_DAYS days (queue, Inbox and follow-up lanes), newest first, with Meta's
+       raw code / title / details. Rows from before the error columns existed are read back out of their stored error
+       text (partsFromStoredError) — never guessed. whatsapp_sends is service-role only, so this is the panel's one door. */
+    if (mode === "recent_failures") {
+      const since = new Date(Date.now() - 7 * 24 * 3600_000).toISOString();
+      const { data: rows, error: fErr } = await service.from("whatsapp_sends")
+        .select("id, created_at, lead_id, user_id, template, phone, business_name, delivery_status, error, error_code, error_title, error_details")
+        .in("delivery_status", ["failed", "failed_temporary", "no_whatsapp"]).eq("test_mode", false)
+        .gte("created_at", since).order("created_at", { ascending: false }).limit(50);
+      if (fErr) return json({ ok: false, error: "read_failed" }, 500);
+      const failures = ((rows ?? []) as Array<Record<string, unknown>>).map((r) => {
+        const stored = partsFromStoredError(r.error as string | null);
+        const digits = String(r.phone ?? "");
+        return {
+          id: r.id, at: r.created_at, leadId: r.lead_id, business: r.business_name ?? null, template: r.template ?? null,
+          byPerson: r.user_id != null, deliveryStatus: r.delivery_status,
+          market: mobileMarketOf(digits) ?? (digits.startsWith("447") ? "UK" : null),
+          phoneEnd: digits ? digits.slice(-3) : null,
+          code: (r.error_code as number | null) ?? stored.code, title: (r.error_title as string | null) ?? stored.title,
+          details: (r.error_details as string | null) ?? stored.details,
+        };
+      });
+      return json({ ok: true, failures });
     }
 
     /* ⛔ SET THE CAP AND PACE (2026-10-14, admin-gated like pause). Each value is checked by the ONE rule
@@ -1453,6 +1518,7 @@ Deno.serve(async (req) => {
           let sendStatus = "simulated";
           let messageId: string | null = null;
           let sendErr: string | null = null;
+          let sendParts: SendErrorParts | null = null;
           /* ⛔ QA SAFETY (src/lib/qaSafety.ts): a fixture is simulated; a test-account-held real lead is
              refused and recorded. A failed read throws into this loop's catch (flagged_error) — fail closed. */
           const arQa = await qaSendHold(service, { leadId: row.lead_id, to: row.phone });
@@ -1460,7 +1526,7 @@ Deno.serve(async (req) => {
           const arLive = live && arQa.kind === "live";
           if (arLive) {
             const r = await sendViaGraph(accessToken, phoneNumberId, row.phone, payload);
-            if (r.ok) { sendStatus = "sent"; messageId = r.messageId; } else { sendStatus = "failed"; sendErr = r.error; }
+            if (r.ok) { sendStatus = "sent"; messageId = r.messageId; } else { sendStatus = "failed"; sendErr = r.error; sendParts = r.errorParts ?? null; }
           } else {
             console.log(`[auto-reply] WOULD SEND audit_reply to ${row.phone} (test mode): ${renderedBody.slice(0, 120)}…`);
           }
@@ -1468,7 +1534,7 @@ Deno.serve(async (req) => {
           await service.from("whatsapp_messages").insert({
             direction: "outbound", user_id: (lead.user_id as string | null) ?? null, lead_id: row.lead_id,
             phone: row.phone, body: renderedBody, message_type: "template", template_name: templateName,
-            wa_message_id: messageId, status: sendStatus, test_mode: !arLive, error: sendErr,
+            wa_message_id: messageId, status: sendStatus, test_mode: !arLive, error: sendErr, ...errorColumns(sendParts),
             template_snapshot: createTemplateSnapshot({ templateName, language: tmpl.lang, body: renderedBody, payload }),
             ...(replyFindingsShown?.length ? { findings_shown: replyFindingsShown } : {}),
           });
@@ -1480,7 +1546,7 @@ Deno.serve(async (req) => {
             const { error: sendLogErr } = await service.from("whatsapp_sends").insert({
               lead_id: row.lead_id, user_id: null, template: templateName, phone: row.phone,
               business_name: businessName || null, claim_url: claimUrl, test_mode: !arLive,
-              message_id: messageId, delivery_status: sendStatus, error: sendErr,
+              message_id: messageId, delivery_status: sendStatus, error: sendErr, ...errorColumns(sendParts),
             });
             if (sendLogErr) console.error(`[auto-reply] send-audit insert failed (non-blocking, ${row.lead_id}):`, sendLogErr.message);
           } catch (e) {
@@ -1551,8 +1617,11 @@ Deno.serve(async (req) => {
           const v = autoPauseVerdict(rows.length, failed);
           if (v.pause) {
             const nowIso = new Date().toISOString();
-            await service.from("whatsapp_outreach_state").update({ paused: true, updated_at: nowIso }).eq("id", 1);
             await service.from("whatsapp_outreach_state").update({ auto_paused_at: nowIso, auto_pause_reason: v.reason }).eq("id", 1);
+            // The flag + "the queue did it" in one write (the trigger logs it with the reason written just above).
+            const { error: apErr } = await service.from("whatsapp_outreach_state")
+              .update({ paused: true, updated_at: nowIso, pause_changed_at: nowIso, pause_changed_by: null, pause_changed_source: "auto" }).eq("id", 1);
+            if (apErr) await service.from("whatsapp_outreach_state").update({ paused: true, updated_at: nowIso }).eq("id", 1);
             console.warn("[process-whatsapp-queue] AUTO-PAUSED: " + v.reason);
             return json({ ok: true, skipped: "auto_paused", reason: v.reason, ...statusPayload, paused: true, autoPausedAt: nowIso, autoPauseReason: v.reason });
           }
@@ -1755,6 +1824,7 @@ Deno.serve(async (req) => {
         let hDelivery = "simulated";
         let hOutcome: "sent" | "no_whatsapp" | "temporary" = "sent";
         let hError: string | null = null;
+        let hParts: SendErrorParts | null = null;
         const hBody = renderTemplateBody("hook_followup", (hookLead.business_name as string) ?? "", "", undefined, undefined, first);
         const hPayload = claimTemplatePayload("hook_followup", hLang, (hookLead.business_name as string) ?? "", "", { contactName: first });
         if (hLive) {
@@ -1765,6 +1835,7 @@ Deno.serve(async (req) => {
             hOutcome = classifyFailure(r.failCode) === "permanent" ? "no_whatsapp" : "temporary";
             hDelivery = hOutcome === "no_whatsapp" ? "no_whatsapp" : "failed_temporary";
             hError = r.error;
+            hParts = r.errorParts ?? null;
             console.error(`[hook_followup] send failed (code ${r.failCode ?? "?"}, ${hOutcome}):`, hError);
           }
         } else {
@@ -1776,7 +1847,7 @@ Deno.serve(async (req) => {
         await service.from("whatsapp_sends").insert({
           lead_id: hookLead.id, user_id: null, template: "hook_followup", phone: to,
           business_name: hookLead.business_name, claim_url: "", test_mode: hTestMode,
-          message_id: hMessageId, delivery_status: hDelivery, error: hError,
+          message_id: hMessageId, delivery_status: hDelivery, error: hError, ...errorColumns(hParts),
         });
 
         if (hOutcome === "sent") {
@@ -1795,8 +1866,11 @@ Deno.serve(async (req) => {
         } else if (hOutcome === "no_whatsapp") {
           // Permanent — never retry. Drop the marker.
           await clearMarker();
+        } else if (isNoAutoRetryMarket(to)) {
+          // ⛔ Malaysia / Singapore (2026-10-15): never retried automatically — handed back to a person.
+          await clearMarker();
         }
-        // temporary: keep the marker so it retries on a future eligible tick.
+        // temporary (UK): keep the marker so it retries on a future eligible tick.
 
         // Share the pacing clock, exactly like the opener lane.
         await service.from("whatsapp_outreach_state")
@@ -1861,6 +1935,7 @@ Deno.serve(async (req) => {
         let cDelivery = "simulated";
         let cOutcome: "sent" | "no_whatsapp" | "temporary" = "sent";
         let cError: string | null = null;
+        let cParts: SendErrorParts | null = null;
         const cBody = renderTemplateBody("contact_followup", (contactLead.business_name as string) ?? "", "");
         const cPayload = claimTemplatePayload("contact_followup", cLang, (contactLead.business_name as string) ?? "", "");
         if (cLive) {
@@ -1871,6 +1946,7 @@ Deno.serve(async (req) => {
             cOutcome = classifyFailure(r.failCode) === "permanent" ? "no_whatsapp" : "temporary";
             cDelivery = cOutcome === "no_whatsapp" ? "no_whatsapp" : "failed_temporary";
             cError = r.error;
+            cParts = r.errorParts ?? null;
             console.error(`[contact_followup] send failed (code ${r.failCode ?? "?"}, ${cOutcome}):`, cError);
           }
         } else {
@@ -1882,7 +1958,7 @@ Deno.serve(async (req) => {
         await service.from("whatsapp_sends").insert({
           lead_id: contactLead.id, user_id: null, template: "contact_followup", phone: to,
           business_name: contactLead.business_name, claim_url: "", test_mode: cTestMode,
-          message_id: cMessageId, delivery_status: cDelivery, error: cError,
+          message_id: cMessageId, delivery_status: cDelivery, error: cError, ...errorColumns(cParts),
         });
 
         if (cOutcome === "sent") {
@@ -1901,8 +1977,11 @@ Deno.serve(async (req) => {
         } else if (cOutcome === "no_whatsapp") {
           // Permanent — never retry. Drop the marker.
           await clearMarker();
+        } else if (isNoAutoRetryMarket(to)) {
+          // ⛔ Malaysia / Singapore (2026-10-15): never retried automatically — handed back to a person.
+          await clearMarker();
         }
-        // temporary: keep the marker so it retries on a future eligible tick.
+        // temporary (UK): keep the marker so it retries on a future eligible tick.
 
         // Share the pacing clock, exactly like the opener and hook lanes.
         await service.from("whatsapp_outreach_state")
@@ -2421,6 +2500,7 @@ Deno.serve(async (req) => {
     let deliveryStatus = "simulated";
     let failCode: number | undefined;
     let sendError: string | null = null;
+    let sendParts: SendErrorParts | null = null;
     const campaignPayload = claimTemplatePayload(templateName, lang, lead.business_name as string, resolvedUrl, templateExtra);
     const campaignBody = renderTemplateBody(templateName, lead.business_name as string, resolvedUrl, templateExtra.trade, templateExtra.competitors, undefined, templateExtra.town, templateExtra.siteFault, templateExtra.siteFindings, templateExtra.visibilityScore, templateExtra.senderName);
     const campaignSnapshot = createTemplateSnapshot({ templateName, language: lang, body: campaignBody, payload: campaignPayload });
@@ -2465,7 +2545,9 @@ Deno.serve(async (req) => {
           deliveryStatus = "sent";
         } else {
           failCode = typeof data?.error?.code === "number" ? data.error.code : undefined;
-          sendError = JSON.stringify(data?.error ?? data).slice(0, 500);
+          sendError = maskSecrets(JSON.stringify(data?.error ?? data)).slice(0, 500);
+          sendParts = metaErrorPartsFromResponse(data);
+          if (!sendParts.title && !sendParts.details) sendParts.title = "HTTP " + res.status;
           outcome = classifyFailure(failCode) === "permanent" ? "no_whatsapp" : "temporary";
           deliveryStatus = outcome === "no_whatsapp" ? "no_whatsapp" : "failed_temporary";
           console.error(`[whatsapp] send failed (code ${failCode ?? "?"}, ${outcome}):`, sendError);
@@ -2474,7 +2556,8 @@ Deno.serve(async (req) => {
         // Network/throw → treat as temporary (retryable), never as not-on-WhatsApp.
         outcome = "temporary";
         deliveryStatus = "failed_temporary";
-        sendError = (e as Error).message;
+        sendError = maskSecrets((e as Error).message ?? "network error").slice(0, 300);
+        sendParts = { code: null, title: "Could not reach Meta (network error)", details: sendError };
         console.error("[whatsapp] send threw (temporary):", sendError);
       }
     } else {
@@ -2488,8 +2571,13 @@ Deno.serve(async (req) => {
     await service.from("whatsapp_sends").insert({
       lead_id: lead.id, user_id: null, template: templateName, phone: toNumber,
       business_name: lead.business_name, claim_url: claimUrl, test_mode: rowTestMode,
-      message_id: messageId, delivery_status: deliveryStatus, error: sendError,
+      message_id: messageId, delivery_status: deliveryStatus, error: sendError, ...errorColumns(sendParts),
     });
+
+    /* The lead (the queue row) carries the last failure's raw Meta code + title too (2026-10-15). */
+    const leadErrorCols = sendParts
+      ? { whatsapp_error_code: sendParts.code, whatsapp_error_title: sendParts.title, whatsapp_error_at: nowIso }
+      : {};
 
     // Route the lead by outcome:
     if (outcome === "sent") {
@@ -2574,12 +2662,16 @@ Deno.serve(async (req) => {
           status: statusBeforeQueue(lead.previous_status as string | null),
           whatsapp_delivery_status: failCode === 132000 ? "template_vars_mismatch" : "template_unavailable",
           whatsapp_attempts: attempts, contact_method: null, queued_at: null, previous_status: null,
+          ...leadErrorCols,
         }).eq("id", lead.id);
         if (META_STATUS_GATED.has(templateName)) await templateAvailability(service, templateName, { force: true });
       } else {
         await service.from("outreach_leads")
-          .update(leadFailurePatch(failCode, (lead.whatsapp_attempts as number) ?? 0, nowIso, hasPriorSuccess))
+          .update({ ...leadFailurePatch(failCode, (lead.whatsapp_attempts as number) ?? 0, nowIso, hasPriorSuccess), ...leadErrorCols })
           .eq("id", lead.id);
+        /* ⛔ MALAYSIA / SINGAPORE ARE NEVER RETRIED AUTOMATICALLY (2026-10-15): the database trigger
+           trg_whatsapp_my_sg_no_auto_retry turns the re-queue above into 'whatsapp_failed' — handed back to a person.
+           The same trigger catches the delivery-report webhook's re-queue, which this code does not run. */
       }
     }
 

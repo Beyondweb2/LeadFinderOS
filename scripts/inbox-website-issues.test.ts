@@ -41,8 +41,10 @@ const render = (d: LeadWebsiteIssues) => renderToStaticMarkup(createElement(Hook
   const notCrawled = selectFindings({ lead: lead('https://acme-electrical.co.uk'), runCrawls: [], leadCrawl: null, nowMs: NOW });
   const t = text(render({ website: 'https://acme-electrical.co.uk', site: { source: 'own_site', label: null }, outcome: notCrawled }));
   ok(notCrawled.status === 'not_crawled' && /has not been checked yet/.test(t) && !/No strong website issues/.test(t), 'never crawled → says so; never "no issues found"');
-  const clean = { ...notCrawled, status: 'clean' as const };
-  ok(/No strong website issues found in this check\./.test(text(render({ website: 'https://acme-electrical.co.uk', site: { source: 'own_site', label: null }, outcome: clean }))), 'a clean check → "No strong website issues found in this check."');
+  /* 2026-10-15: a clean check says the ONE website check's own headline (src/lib/websiteCheck.ts). */
+  const clean = { ...notCrawled, status: 'clean' as const, check: notCrawled.check && { ...notCrawled.check, state: 'clean' as const, headline: 'No serious website issues found on the 4 pages checked.' } };
+  ok(/No serious website issues found on the 4 pages checked\./.test(text(render({ website: 'https://acme-electrical.co.uk', site: { source: 'own_site', label: null }, outcome: clean }))), 'a clean check → the one check\'s "No serious website issues found…"');
+  ok(/No serious website issues found\./.test(text(render({ website: 'https://acme-electrical.co.uk', site: { source: 'own_site', label: null }, outcome: { ...clean, check: undefined } }))), '…and without a check object, the same words');
 }
 
 /* ── an owned site with genuine findings: three shown, the rest behind "View all issues" ── */

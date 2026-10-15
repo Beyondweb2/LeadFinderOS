@@ -27,6 +27,8 @@ import { Callout, EmptyState, ErrorState, IconTile, LoadState, SURFACE, ToneChip
 import { cn } from '@/lib/utils';
 import { WhatsAppPaceSettings, type PaceStatus } from '@/components/WhatsAppPaceSettings';
 import { CountrySendingSettings } from '@/components/CountrySendingSettings';
+import { RecentSendFailures } from '@/components/RecentSendFailures';
+import { pauseChangeLine, type PauseChange } from '@/lib/queuePauseChange';
 
 /** The admin's team-wide status (process-whatsapp-queue mode 'status' — admin-only on the server). */
 interface TeamStatus {
@@ -47,6 +49,8 @@ interface TeamStatus {
   autoPauseReason?: PaceStatus['autoPauseReason'];
   perPersonToday?: PaceStatus['perPersonToday'];
   personLimits?: PaceStatus['personLimits'];
+  /** 2026-10-15: who last paused / resumed the queue, and when. Absent on an older deploy. */
+  pauseChange?: PauseChange | null;
 }
 
 /**
@@ -234,6 +238,9 @@ export function WhatsAppQueuePanel({ defaultExpanded = true }: { defaultExpanded
             ? <ToneChip tone="amber">TEST MODE — no real sends</ToneChip>
             : <ToneChip tone="red" dot>LIVE — real sends</ToneChip>)}
           {paused && <ToneChip tone="amber" icon={Pause} testId="queue-paused-chip">PAUSED — no sends</ToneChip>}
+          {teamControls && pauseChangeLine(team?.pauseChange, paused) && (
+            <span className="text-[11px] text-muted-foreground" data-testid="queue-pause-change">{pauseChangeLine(team?.pauseChange, paused)}</span>
+          )}
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <Button size="sm" variant="ghost" className="h-8 gap-1.5 text-xs" onClick={() => void refresh()} disabled={refreshing} data-testid="queue-refresh">
@@ -330,6 +337,8 @@ export function WhatsAppQueuePanel({ defaultExpanded = true }: { defaultExpanded
       {teamControls && <WhatsAppPaceSettings team={team} onSaved={() => refreshTeam(true)} />}
       {/* 2026-10-14: sending by country — UK / Malaysia / Singapore switches, caps and local hours (admin only). */}
       {teamControls && <CountrySendingSettings />}
+      {/* 2026-10-15: every failed send of the last 7 days with Meta's real error code and what it means (admin only). */}
+      {teamControls && <RecentSendFailures />}
       {/* Queued with no number WhatsApp can reach (none, a landline, not a UK mobile): the sender flags these No
           WhatsApp when it reaches them. Counted from the rows on screen. */}
       {view.unsendable > 0 && (

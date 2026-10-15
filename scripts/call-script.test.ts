@@ -35,6 +35,7 @@ import { HOOK_ENGINES, initialHookStateV2, type HookScoreRow } from '../src/lib/
 import { hookReportState, pickHookAudit, scoreHookAuditForCard, type HookCardAudit } from '../src/lib/hookVisibility.ts';
 import { HookVisibilityView } from '../src/components/HookVisibilityView.tsx';
 import { WHY_IT_MATTERS_STATS } from '../src/lib/salesExplainer.ts';
+import { plainIssueTitle } from '../src/lib/websiteCheck.ts';
 
 let f = 0;
 const ok = (cond: unknown, msg: string) => { if (cond) console.log('PASS ' + msg); else { f++; console.error('FAIL ' + msg); } };
@@ -71,10 +72,13 @@ console.log('── 1. Plumber, three competitors, website issues ──');
 {
   const s = buildCallScript(input());
   ok(s.opener[0] === 'Hi mate, I was looking for a plumber in Rugby, so I asked Gemini and it mentioned Rugby Plumbing Co, Swift Heating and A1 Drains, but not you.', 'opener line 1 is Paul\'s structure, word for word');
-  ok(s.opener[1] === "I had a look into why they were being named and you weren't, and I found a few potential reasons.", 'opener line 2: why they were named and you weren\'t — a few potential reasons');
+  /* 2026-10-15 (Paul): the website issues are a LIST of short lines, not a sentence ("I found a few potential reasons"
+     is gone). scripts/website-check.test.ts pins the list's cap, the tap and the clean line. */
+  ok(s.opener[1] === "I had a look into why they were being named and you weren't.", 'opener line 2: why they were named and you weren\'t — no "an issue was found" sentence');
   ok(!s.opener.join(' ').includes('Fourth Name'), 'only the first three competitors are said');
-  ok(s.found.lines.length === 2 && s.found.lines.every((l) => !/near-duplicates|robots\.txt|noindex/.test(l)), 'exactly two reasons (MAX_SPOKEN_FINDINGS, 2026-10-07: one or two hooks, never a list), said in plain words (no jargon)');
-  ok(/near enough the same/.test(s.found.lines[0]) && /light on detail/.test(s.found.lines[1]), '…each the same claim as its stored finding, in the order found');
+  ok(s.found.lines.length === FINDINGS.length && s.found.lines.every((l, k) => l === plainIssueTitle({ id: String(FINDINGS[k].kind), title: FINDINGS[k].title } as never)), 'one short line per issue — each in plain words, in the order found');
+  ok(!/robots\.txt|noindex/i.test(s.found.lines.join(' ')), '…with no technical terms');
+  ok(!/found a few potential reasons|one thing that could be part of it/.test(spokenScriptText(s)), '…never wrapped in a sentence');
   ok(s.bridge[0].startsWith(BRIDGE_LINE) && /give you a better chance of showing up in those answers/.test(s.bridge[0]), 'the bridge: AI is how people find local businesses now + happy to explain what I\'d change');
   noBanned('plumber', spokenScriptText(s));
 }
@@ -105,7 +109,10 @@ console.log('── 4. No invented competitors, no invented findings ──');
   const named = s.opener[0].replace(/^.*it mentioned /, '').replace(/, but not you\.$/, '').split(/, | and /);
   ok(named.every((n) => real.includes(n)), 'every name said is one the stored answer returned (' + named.join(' | ') + ')');
   const clean = buildCallScript(input({ findings: [], findingsStatus: 'clean' }));
-  ok(clean.found.lines.length === 2 && clean.found.lines[0] === NO_STRONG_ISSUE_LINE && clean.found.lines[1] === AI_SETUP_SPOKEN_LINE && clean.found.checklist === AI_SETUP_CHECKLIST, 'good website / no strong issue → "not set up for AI, a lot of sites aren\'t" + what we make sure a site has; no fault invented');
+  /* 2026-10-15 (Paul): no issues → ONE plain line saying so (the one website check's headline); the checklist stays on the
+     rep's screen. The old "isn't really set up to be found by AI" line read like an issue and is no longer said. */
+  ok(clean.found.lines.length === 1 && clean.found.lines[0] === 'No serious website issues found.' && clean.found.checklist === AI_SETUP_CHECKLIST, 'good website / no serious issue → ONE plain line saying so + what we make sure a site has (for the rep); no fault invented');
+  ok(!spokenScriptText(clean).includes(NO_STRONG_ISSUE_LINE) && !spokenScriptText(clean).includes(AI_SETUP_SPOKEN_LINE), '…and the old "not set up for AI" lines are not said');
   ok(!/public evidence|bigger issue/i.test(clean.found.lines.join(' ')), 'the old "the bigger issue is the public evidence" line is gone');
   ok(AI_SETUP_CHECKLIST.some((c) => /duplicate/i.test(c)) && AI_SETUP_CHECKLIST.length >= 6 && /no duplicate pages/.test(AI_SETUP_SPOKEN_LINE), 'the list names the duplicate-pages check and the rest of what we make sure a site has');
   ok(clean.opener[1] === "I had a look into why they were being named and you weren't.", '…and the opener does not claim "a few potential reasons"');
@@ -207,7 +214,7 @@ console.log('── 11. The playbook end to end (real crawl evidence) ──');
   const p = pb();
   const said = [...p.callScript, ...p.qualify, ...p.objections.map((o) => o.answer)].join('\n');
   ok(/^Hi mate, I was looking for a plumber in Rugby, so I asked Gemini and it mentioned Rugby Plumbing Co, Swift Heating and A1 Drains, but not you\.$/.test(p.callScript[0]), 'the real playbook opener (Gemini said as Gemini)');
-  ok(p.script.found.lines.length >= 1 && p.script.found.lines.length <= 3 && /different web address/.test(p.script.found.lines.join(' ')), 'reasons come from the stored crawl evidence (the sitemap finding)');
+  ok(p.script.found.lines.length >= 1 && /^The list of your pages that Google reads points at a different website$/.test(p.script.found.lines[0]), 'the issues come from the stored crawl evidence (the sitemap finding leads)');
   ok(p.qualify[0] === FIRST_QUESTION, 'qualify starts with the website-management question');
   noBanned('playbook (messaged 3 days ago, caller Paul)', said);
   ok(!('gatekeeper' in p) && !('voicemail' in p) && !('fallback' in p), 'no gatekeeper / voicemail / fallback lines exist any more');

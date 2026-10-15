@@ -10,7 +10,8 @@
    The opener Paul has tested, said as natural spoken British English:
      "Hi mate, I was looking for a plumber in Rugby, so I asked Gemini and it mentioned A, B and C, but
       not you. I had a look into why they were being named and you weren't, and I found a few potential
-      reasons." → up to MAX_SPOKEN_FINDINGS real findings in plain words → BRIDGE_LINE.
+      reasons." → the website issues as a LIST (2026-10-15): one short line per issue from the ONE website check
+      (websiteCheck.ts), CALL_SCRIPT_ISSUE_LINES shown, the rest on a tap → BRIDGE_LINE.
 
    ⛔ NEVER IN THE SCRIPT (Paul, 2026-10-06): "It's Paul from Findable", "<anyone> from Findable", "I
       messaged you (on WhatsApp)", the day or date of an earlier message, "I thought it'd be quicker to
@@ -18,8 +19,8 @@
       A rep who has messaged before is told so in a NOTE beside the script, never in words they say.
    ⛔ NOTHING INVENTED. Competitors are the stored AI answer's own names (cleaned and self-excluded by
       coldCallPlaybook.ts) — up to three, and none when there are none. Website points are the stored
-      crawl's findings (siteFindings.ts), each said in plain words making the SAME claim as the finding.
-      No strong finding → NO_STRONG_ISSUE_LINE, never a made-up fault. No crawl → nothing about the site.
+      website check's issues (websiteCheck.ts), each the issue's own plain title.
+      No serious issue → ONE plain line saying so, never a made-up fault. No crawl → nothing about the site.
    ⛔ THE ENGINE IS SAID THE WAY THE PRODUCT SAYS IT: Gemini is "Gemini" (coldCallPlaybook.spokenEngine);
       a ChatGPT miss is said as ChatGPT — never a claim about an engine that was not asked.
    ⛔ THE FIRST QUESTION IS ALWAYS FIRST_QUESTION. The agency branch asks the contract, then — lightly — the
@@ -39,6 +40,7 @@ import type { InsightKind } from './salesInsights.ts';
 import type { ContentTrustKind } from './contentTrust.ts';
 import type { SiteSource } from './leadWebsiteKind.ts';
 import type { CallClose, CallRouteOffer } from './callClose.ts';
+import { issueLine, type WebsiteCheckView } from './websiteCheck.ts';
 
 /* ── The fixed lines ───────────────────────────────────────────────────────────────────────────── */
 
@@ -52,6 +54,11 @@ export const PRICE_ANGLE_LINE = "Depending on what they're doing for you, we may
 /** Website points said on the call. ⚠️ 3 → 2 on 2026-10-07 (Paul's brief): one or two strong conversational hooks,
  *  never a list — the evidence behind every point is on the screen for the rep, not in their mouth. */
 export const MAX_SPOKEN_FINDINGS = 2;
+/** Website issue LINES shown on the call script before "more" (2026-10-15, Paul: a list a caller reads out, most
+ *  important first; the rest on a tap). */
+export const CALL_SCRIPT_ISSUE_LINES = 5;
+/** The one plain line for a checked site with no serious issue, when the check's own headline is not to hand. */
+export const CLEAN_SITE_LINE = 'No serious website issues found.';
 /** Said after a point that came from the site's own pages (a service, the town, a phone number): the Findable half
  *  of REAL ISSUE → WHY IT MATTERS → HOW WE IMPROVE IT. Once, after the last point, never per point. */
 export const FIX_TAIL = "It's the sort of thing we'd fix as part of the work.";
@@ -143,6 +150,8 @@ export interface CallScriptInput {
   findingsStatus: FindingsStatus;
   /** Present only when the pages were read and nothing worth raising was found — see ScriptStrongSite. */
   strongSite?: ScriptStrongSite | null;
+  /** THE one website check (src/lib/websiteCheck.ts) — the issue lines are read from it. */
+  website?: WebsiteCheckView | null;
   site: { source: SiteSource; label: string | null };
   close: CallClose;
   /** The rep has messaged this lead before — told to the REP as a note, never said in the script. */
@@ -155,7 +164,7 @@ export interface CallScript {
   /** For the rep's eyes only. */
   openerNote: string | null;
   /** The real website reasons, spoken, and a note for the rep (never said). */
-  found: { lines: string[]; note: string | null; /** For the rep's screen: what we make sure a site has — set only when the site check found no issue to raise. */ checklist: readonly string[] | null; /** For the rep's eyes only: what each spoken point rests on. */ sources: Array<{ line: string; evidence: ScriptEvidence | null; improvement: string | null }> };
+  found: { lines: string[]; /** The rest of the issues (and the minor points), shown on a tap. */ more: string[]; /** "Checked 15 Oct · 42 pages read (deep check)". */ coverage: string | null; note: string | null; /** For the rep's screen: what we make sure a site has — set only when the site check found no issue to raise. */ checklist: readonly string[] | null; /** For the rep's eyes only: what each spoken point rests on. */ sources: Array<{ line: string; evidence: ScriptEvidence | null; improvement: string | null }> };
   bridge: string[];
   firstQuestion: { question: string; hint: string | null };
   ifAgency: { questions: [string, string]; coaching: string[]; priceAngle: { overGbp: number; line: string } };
@@ -218,20 +227,28 @@ export function buildCallScript(i: CallScriptInput): CallScript {
   const why = i.evidenceKind === 'gap'
     ? (rivals ? "I had a look into why they were being named and you weren't" : "I had a look into why you weren't coming up")
     : null;
-  const picked = i.findings.slice(0, MAX_SPOKEN_FINDINGS);
-  const spoken = picked.map(spokenFinding);
-  /* A point read off the site's own pages gets the Findable half said once, after the last point. */
-  if (picked.length && picked.some((f) => !!f.spoken)) spoken[spoken.length - 1] = spoken[spoken.length - 1] + ' ' + FIX_TAIL;
+  /* ⛔ THE WEBSITE ISSUES ARE A LIST, NOT A SENTENCE (Paul, 2026-10-15). Each line is ONE issue from the ONE website
+     check (src/lib/websiteCheck.ts), short enough to read out — the most important first, CALL_SCRIPT_ISSUE_LINES shown,
+     the rest (and the minor points) behind a tap. No issues → ONE plain line saying so. Nothing is ever invented. */
+  const check = i.website ?? null;
+  /* A caller that hands findings without the check (an older caller, a test) gets the same list from the findings. */
+  const serious = check?.serious ?? i.findings.map((f) => ({
+    id: String(f.kind), severity: 'medium' as const, title: f.title, saw: f.explanation, meaning: '', count: 0, pages: f.evidence?.urls ?? [],
+  }));
+  const minor = check?.minor ?? [];
   const found: string[] = [];
+  let more: string[] = [];
   let foundNote: string | null = null;
   let checklist: readonly string[] | null = null;
   let sources: CallScript['found']['sources'] = [];
-  if (i.findingsStatus === 'findings' && spoken.length) {
-    if (why) opener.push(why + ', and I found ' + (spoken.length > 1 ? 'a few potential reasons.' : 'one thing that could be part of it.'));
-    else if (i.evidenceKind === 'named') opener.push('I had a look at your site to see how solid that is, and found ' + (spoken.length > 1 ? 'a few things' : 'one thing') + ' that could make it more consistent.');
-    else opener.push('I had a quick look at your website as well, and ' + (spoken.length > 1 ? 'a few things' : 'one thing') + ' stood out.');
-    found.push(...spoken);
-    sources = picked.map((f, k) => ({ line: spoken[k], evidence: f.evidence ?? null, improvement: f.improvement ?? null }));
+  const intro = why ? why + '.' : i.evidenceKind === 'named' ? 'I had a look at your website as well.' : 'I had a quick look at your website as well.';
+  if (i.findingsStatus === 'findings' && serious.length) {
+    opener.push(intro);
+    const shown = serious.slice(0, CALL_SCRIPT_ISSUE_LINES);
+    found.push(...shown.map(issueLine));
+    more = [...serious.slice(CALL_SCRIPT_ISSUE_LINES), ...minor].map(issueLine);
+    sources = shown.map((x) => ({ line: issueLine(x), evidence: { urls: x.pages, quotes: [x.saw] }, improvement: null }));
+    foundNote = 'Read the lines as they are — each one was seen on the site (tap a line\'s proof for the page). Say it "may make it harder", never that it is why AI did not name them.';
   } else if (i.findingsStatus === 'no_website') {
     opener.push((why ? why + ', and the first thing I noticed' : 'The first thing I noticed') + " is I couldn't find a website for you.");
     found.push("Without a site of your own there's a lot less for AI to go on about what you do and where you work.");
@@ -240,21 +257,16 @@ export function buildCallScript(i: CallScriptInput): CallScript {
     opener.push((why ? why + ', and I could only find' : 'I could only find') + ' your ' + (i.site.label ?? 'directory') + ' profile, not a site of your own.');
     found.push('That page belongs to ' + (i.site.label ?? 'the directory') + ", so there's a lot less for AI to go on about what you do and where.");
     foundNote = 'Never call the profile their website.';
-  } else if (i.findingsStatus === 'clean' && i.strongSite) {
-    /* The pages were read and nothing real was wrong: say so, and the one genuine thing we would add. */
-    opener.push(why ? why + '.' : 'I had a quick look at your website as well.');
-    found.push(i.strongSite.spoken);
-    sources = [{ line: i.strongSite.spoken, evidence: i.strongSite.evidence, improvement: null }];
-    foundNote = 'The site check found no fault worth raising — say the positive line and what we would add. Do not invent a problem.';
-  } else if (i.findingsStatus === 'clean' && why) {
-    opener.push(why + '.');
-    found.push(NO_STRONG_ISSUE_LINE, AI_SETUP_SPOKEN_LINE);
-    checklist = AI_SETUP_CHECKLIST;
-    foundNote = 'The website check found no strong issue — do not invent one. Say the site is not set up for AI and that a lot of sites are not; the list below is what we make sure it has.';
+  } else if (i.findingsStatus === 'clean') {
+    /* The pages were read and nothing serious was wrong: ONE plain line, the minor points behind the tap. */
+    if (why) opener.push(why + '.');
+    found.push(check?.headline ?? CLEAN_SITE_LINE);
+    more = minor.map(issueLine);
+    if (why) checklist = AI_SETUP_CHECKLIST;
+    foundNote = 'The website check found no serious issue — say so plainly and do not invent one.';
   } else {
-    foundNote = i.findingsStatus === 'clean'
-      ? 'The website check found no strong issue — do not invent one.'
-      : 'No usable website check for this lead, so say nothing about the site. Keep to the AI result.';
+    foundNote = (check && (i.findingsStatus === 'not_crawled' || i.findingsStatus === 'unreadable') ? check.headline + ' ' : '')
+      + 'No usable website check for this lead, so say nothing about the site. Keep to the AI result.';
   }
 
   const bridge = [
@@ -308,7 +320,7 @@ export function buildCallScript(i: CallScriptInput): CallScript {
     openerNote: i.contactedBefore
       ? "You've been in touch with them before. Don't open with it — if they bring it up, that was you."
       : null,
-    found: { lines: found, note: foundNote, checklist, sources },
+    found: { lines: found, more, coverage: check?.coverageLine ?? null, note: foundNote, checklist, sources },
     bridge,
     firstQuestion,
     ifAgency,

@@ -24,6 +24,7 @@ import { WEEKLY_CHECK_AUDIT_PURPOSE } from "../../../src/lib/auditKind.ts";
 import { buildFaultLines, CRAWL_CHECK_VERSION, CRAWL_FRESH_MS, type CrawlSignals } from "../../../src/lib/crawlCheck.ts";
 import { usableSiteEvidence, type SiteEvidence } from "../../../src/lib/siteEvidence.ts";
 import { reportContentIssues } from "../../../src/lib/contentTrust.ts";
+import { issueLine, websiteCheckFor } from "../../../src/lib/websiteCheck.ts";
 
 /** The stored crawl shape this function reads, from either the run's results or the lead-level row.
  *  `evidence` / `evidenceVersion` are optional because every row written before 2026-09-22 has
@@ -411,6 +412,18 @@ Deno.serve(async (req) => {
       if (!data.contentIssues?.length && fresh && currentVer) {
         const leadIssues = reportContentIssues(stored?.contentTrust);
         if (leadIssues.length) data.contentIssues = leadIssues;
+      }
+      /* ⛔ THE ONE WEBSITE CHECK (2026-10-15, src/lib/websiteCheck.ts). A lead's report says what the lead's ONE stored
+         check says — the same issues the call script, the Inbox and the lead's audit show — so it REPLACES the three
+         older picks above (the run's quick-crawl faults, the evidence tiers, the content issues). Serious issues only
+         (high / medium), each the issue's title + what was seen. A clean check says so; no row keeps the old path. */
+      const wc = cc ? websiteCheckFor({ result: stored as never, created_at: (cc as { created_at: string }).created_at }, { website: ownWebsite ?? null }) : null;
+      if (wc && (wc.state === "issues" || wc.state === "clean")) {
+        data.siteChecked = true;
+        const lines = wc.serious.map((i) => ({ title: issueLine(i), detail: i.saw, minor: i.severity !== "high", kind: i.id as never }));
+        if (lines.length) data.crawlFaults = lines; else delete data.crawlFaults;
+        delete data.siteEvidence;
+        delete data.contentIssues;
       }
       /* Background-populate when there's no fresh CURRENT-version check and they have a real site, so
          the section is there on the next open. Fire-and-forget via waitUntil — never blocks this
