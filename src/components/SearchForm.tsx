@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useRef } from 'react';
-import { Search, MapPin, Radius, Loader2, Globe2 } from 'lucide-react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { Search, MapPin, Radius, Loader2, Globe2, X } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { usePersistedState } from '@/hooks/usePersistedState';
 import logoIcon from '@/assets/leadfinder-logo-icon.png';
@@ -15,6 +15,7 @@ import { SEARCH_COUNTRY_OPTIONS, countryName, locationAfterCountryChange, normal
 import { QuickBusinessTypes } from '@/components/QuickBusinessTypes';
 import type { Country } from '@/types/lead';
 import type { SearchFilters } from '@/types/lead';
+import { MANY_TOWNS_MAX_PER_PRESS, parseTownList, townsForPress } from '@/lib/manyTowns';
 
 interface SearchFormProps {
   onSearch: (filters: SearchFilters) => void;
@@ -47,6 +48,15 @@ interface SearchFormProps {
    * results.
    */
   autoSubmit?: boolean;
+  /* ══ MANY TOWNS (2026-10-16, V2's "Many towns" mode; src/lib/manyTowns.ts) ══════════════════════════════════
+     Present = the form offers "One town | Many towns". In Many towns the location box becomes a town list; the press
+     hands the page the SAME trade / country / radius the one-town search sends, with "this town only" on (each town
+     searched as itself, never a radius around it). */
+  many?: boolean;
+  onManyChange?: (many: boolean) => void;
+  pickedTowns?: string[];
+  onPickedTownsChange?: (towns: string[]) => void;
+  onSearchMany?: (base: Omit<SearchFilters, 'location'>) => void;
   onUpgrade?: () => void;
   isUpgradeLoading?: boolean;
   freeSearchesExhausted?: boolean;
@@ -65,6 +75,11 @@ export function SearchForm({
   initialLocation,
   initialCountry,
   autoSubmit = null,
+  many = false,
+  onManyChange,
+  pickedTowns = [],
+  onPickedTownsChange,
+  onSearchMany,
   onUpgrade,
   isUpgradeLoading = false,
   freeSearchesExhausted = false,
@@ -136,9 +151,27 @@ export function SearchForm({
     return true;
   }, [keyword, location, radius, selectedCountry, townOnly, onSearch]);
 
+  /* MANY TOWNS: the one-town filters minus the town — the same trade words, country and radius, "this town only" on. */
+  const runMany = useCallback(() => {
+    if (!keyword.trim() || !pickedTowns.length || !onSearchMany) return false;
+    onSearchMany({ keyword: keyword.trim(), radius: radius * 1000, country: selectedCountry, townOnly: true });
+    return true;
+  }, [keyword, pickedTowns.length, onSearchMany, radius, selectedCountry]);
+  const [townInput, setTownInput] = useState('');
+  const addTowns = (raw: string) => {
+    const next = parseTownList([...pickedTowns, ...raw.split(/[,|\n]+/)]);
+    onPickedTownsChange?.(next);
+  };
+  const press = townsForPress(pickedTowns);
+  /* No template inside a template (CLAUDE.md): the note is built from plain pieces. */
+  const manyNote = pickedTowns.length === 0 ? 'Pick towns, or tick them on Coverage.'
+    : 'Each town is searched on its own, exactly like a one-town search, up to ' + MANY_TOWNS_MAX_PER_PRESS + ' per press.'
+      + (press.later.length ? ' ' + press.later.length + ' more stay selected for the next press.' : '');
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    runSearch();
+    if (many) runMany();
+    else runSearch();
   };
 
   /* THE ARRIVAL RUN, AND EVERY CONDITION ON IT IS A POSITIVE TEST OF WHAT WE WANT.
@@ -173,9 +206,19 @@ export function SearchForm({
               answer ("is this niche worth outreaching?") is answered better and for free by the
               trade-wide niche read on Coverage, so there is one thing this form does now and it
               does not need naming twice. */}
-          <p className="text-[11px] text-muted-foreground">
-            Search returns local businesses you can add to the CRM.
-          </p>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="text-[11px] text-muted-foreground">
+              Search returns local businesses you can add to the CRM.
+            </p>
+            {onManyChange && (
+              <div className="inline-flex rounded-full border border-border bg-muted/40 p-0.5 text-xs font-medium" role="group" aria-label="Search one town or many" data-testid="town-mode">
+                {([[false, 'One town'], [true, 'Many towns']] as const).map(([m, label]) => (
+                  <button key={label} type="button" aria-pressed={many === m} onClick={() => onManyChange(m)}
+                    className={`rounded-full px-3 py-1 transition-colors ${many === m ? 'bg-primary text-primary-foreground' : 'text-foreground/80 hover:text-primary'}`}>{label}</button>
+                ))}
+              </div>
+            )}
+          </div>
 
           {/* Main Search Fields */}
           <div className="grid gap-3 sm:gap-4 sm:grid-cols-2 lg:grid-cols-12">
@@ -235,6 +278,7 @@ export function SearchForm({
                   </SelectContent>
                 </Select>
               </div>
+              {!many ? (<>
               <div className="space-y-1.5">
                 <Label htmlFor="location" className="text-xs font-medium text-foreground/80">
                   Location
@@ -258,6 +302,35 @@ export function SearchForm({
                 location={location}
                 onPick={(city) => setLocation(quickLocationValue(city, selectedCountry))}
               />
+              </>) : (
+                <div className="space-y-1.5" data-testid="many-towns-picker">
+                  <Label htmlFor="many-town-input" className="text-xs font-medium text-foreground/80">Towns</Label>
+                  {pickedTowns.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5" data-testid="many-towns-picked">
+                      {pickedTowns.map((t, i) => (
+                        <span key={t} className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs ring-1 ring-inset ${i < MANY_TOWNS_MAX_PER_PRESS ? 'bg-primary/10 text-foreground ring-primary/40' : 'bg-muted text-muted-foreground ring-border'}`}>
+                          {t}
+                          <button type="button" aria-label={`Remove ${t}`} onClick={() => onPickedTownsChange?.(pickedTowns.filter((x) => x !== t))}><X className="h-3 w-3" /></button>
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                  <div className="flex gap-2">
+                    <div className="relative min-w-0 flex-1">
+                      <MapPin className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 sm:h-4 sm:w-4 text-muted-foreground" />
+                      <Input id="many-town-input" placeholder="Add a town (or several, with commas)" value={townInput}
+                        onChange={(e) => setTownInput(e.target.value)}
+                        onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); if (townInput.trim()) { addTowns(townInput); setTownInput(''); } } }}
+                        className="pl-8 sm:pl-10 h-9 sm:h-10 bg-input border-border focus:ring-primary text-sm" />
+                    </div>
+                    <Button type="button" variant="outline" className="h-9 sm:h-10" disabled={!townInput.trim()} onClick={() => { addTowns(townInput); setTownInput(''); }}>Add</Button>
+                  </div>
+                  <p className="text-[11px] text-muted-foreground" data-testid="many-towns-note">
+                    {manyNote}
+                  </p>
+                  <SuggestedLocations country={selectedCountry} location="" onPick={(city) => addTowns(quickLocationValue(city, selectedCountry))} />
+                </div>
+              )}
             </div>
 
             {/* HOW WIDE TO SEARCH — one control group. The radius and the town boundary answer the
@@ -265,10 +338,10 @@ export function SearchForm({
                 toggle read as an unrelated setting. */}
             <div className="min-w-0 space-y-1.5 sm:space-y-2 sm:col-span-2 lg:col-span-3">
               <div className="flex items-center justify-between gap-3">
-                <Label className={`whitespace-nowrap text-xs font-medium transition-colors ${townOnly ? 'text-muted-foreground/50' : 'text-foreground/80'}`}>
+                <Label className={`whitespace-nowrap text-xs font-medium transition-colors ${townOnly || many ? 'text-muted-foreground/50' : 'text-foreground/80'}`}>
                   Radius: {radius} km
                 </Label>
-                <div className="flex items-center gap-2">
+                {many ? <span className="text-xs font-medium text-foreground/80" data-testid="many-towns-town-only">Each town only</span> : <div className="flex items-center gap-2">
                   <Label
                     htmlFor="town-only"
                     className="whitespace-nowrap text-xs font-medium cursor-pointer text-foreground/80"
@@ -280,14 +353,14 @@ export function SearchForm({
                     checked={townOnly}
                     onCheckedChange={setTownOnly}
                   />
-                </div>
+                </div>}
               </div>
               {/* Dimmed as ONE unit — icon, track and thumb together — so "off" reads as deliberate
                   rather than broken. The shared Slider's own `disabled:opacity-50` sits on the thumb
                   and never fires: Radix sets data-disabled, not the HTML disabled attribute, so
                   without this the control looks live while ignoring every drag. `disabled` stays for
                   the real a11y/interaction state; the opacity is only what makes it legible. */}
-              <div className={`relative flex items-center gap-2 sm:gap-3 pt-0.5 transition-opacity ${townOnly ? 'opacity-40' : ''}`}>
+              <div className={`relative flex items-center gap-2 sm:gap-3 pt-0.5 transition-opacity ${townOnly || many ? 'opacity-40' : ''}`}>
                 <Radius className="h-3.5 w-3.5 sm:h-4 sm:w-4 flex-shrink-0 text-muted-foreground" />
                 <Slider
                   value={[radius]}
@@ -295,7 +368,7 @@ export function SearchForm({
                   min={1}
                   max={50}
                   step={1}
-                  disabled={townOnly}
+                  disabled={townOnly || many}
                   className="flex-1"
                 />
               </div>
@@ -326,7 +399,7 @@ export function SearchForm({
                 <>
                   <Button 
                     type="submit" 
-                    disabled={isLoading || !keyword.trim() || !location.trim() || disabled}
+                    disabled={isLoading || !keyword.trim() || (many ? pickedTowns.length === 0 : !location.trim()) || disabled}
                     className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold px-5 sm:px-8 h-[44px] sm:h-[44px] py-2 w-full sm:w-auto text-sm"
                     data-walkthrough-step="search"
                   >
@@ -338,7 +411,7 @@ export function SearchForm({
                     ) : (
                       <>
                         <Search className="mr-1.5 h-3.5 w-3.5" />
-                        Find Leads
+                        {many && pickedTowns.length > 0 ? `Find leads in ${press.run.length} town${press.run.length === 1 ? '' : 's'}` : 'Find Leads'}
                       </>
                     )}
                   </Button>

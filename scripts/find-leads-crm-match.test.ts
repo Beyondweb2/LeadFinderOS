@@ -158,7 +158,7 @@ console.log("\n── the page never loads the whole book ──");
   ok(/if \(row\) noteAdded\(args\[0\], row, args\[3\] \?\? null\)/.test(index), "every add on the page is marked the moment it answers");
   ok(/if \(res\.ok\) noteRemoved\(p\.id\)/.test(index), "a removal is unmarked the moment it answers");
   ok(!/fetchAllRows/.test(crm), "the lookup never pages through the table");
-  ok(/addToOutreach\(lead, lastSearchCountry, 'no_website', activeCampaign,/.test(index), "Add to CRM call sites unchanged");
+  ok(/addToOutreach\(lead, countryOf\(lead\), 'no_website', activeCampaign,/.test(index), "Add to CRM call sites unchanged");
 }
 
 if (f) { console.log(`\n${f} FAILED`); process.exit(1); }

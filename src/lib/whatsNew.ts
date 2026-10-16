@@ -22,6 +22,22 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-16-coverage-many-towns-find-leads', date: '2026-10-16', title: 'Find leads in many towns at once, from Coverage', audience: 'all',
+    body: 'Tick towns on Coverage and press "Find leads in these towns". Find Leads opens in Many towns mode with them selected. One press searches up to 10 towns, and the results land in the normal Find Leads table, each row naming its town.',
+    report: {
+      added: [
+        'Find Leads: a "One town / Many towns" switch. Many towns takes a list of towns; one press searches up to 10 of them, the rest stay selected for the next press.',
+        'A line showing each town as it is searched (found, place not found, failed) and a town label on every result.',
+      ],
+      changed: [
+        'Coverage: ticked towns now open in Find Leads instead of being searched on the Coverage page.',
+        'Each town is the ordinary Find Leads search, so website checks, Add to CRM and the Coverage found / added counts work exactly as for one town. A lead is saved with its own town.',
+      ],
+      removed: [
+        'The separate results list inside Coverage for ticked towns.',
+      ],
+      effect: 'Pick several towns, press once, and work all the results in the usual table. The usual search limits apply to each town.',
+    } },
   { id: '2026-10-16-agreement-v5-one-plan', date: '2026-10-16', title: 'One plan now: Findable Build, on Client Service Agreement v5', audience: 'all',
     body: 'New clients sign agreement v5. There is one plan: we build, host and manage a new website, 12 payments of £99, the website is theirs after payment 12, and £29.99 a month hosting is optional. Findable Optimise is no longer sold. A business tied into a contract with its current agency or provider is not taken on.',
     report: {

@@ -686,6 +686,10 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
                     {lead.outsideTown && (
                       <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-600 font-medium shrink-0">Outside town</span>
                     )}
+                    {/* MANY TOWNS (2026-10-16): which ticked town this result was searched in. */}
+                    {lead.searchTown && (
+                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/15 text-blue-600 dark:text-blue-300 font-medium shrink-0" data-testid="result-town">{lead.searchTown}</span>
+                    )}
                   </div>
                   <div className="mt-1 flex flex-wrap items-center gap-1.5">
                     <WebsiteStatusToggle lead={lead} onSet={onSetWebsiteStatus} compact />
@@ -848,6 +852,10 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
                       )}
                       {lead.outsideTown && (
                         <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-600 font-medium shrink-0">Outside town</span>
+                      )}
+                      {/* MANY TOWNS (2026-10-16): which ticked town this result was searched in. */}
+                      {lead.searchTown && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/15 text-blue-600 dark:text-blue-300 font-medium shrink-0" data-testid="result-town">{lead.searchTown}</span>
                       )}
                     </div>
                   </TableCell>
