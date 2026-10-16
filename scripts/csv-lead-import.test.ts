@@ -231,7 +231,7 @@ console.log("\n── the browser no longer writes leads itself ──");
   const dlg = read("src/components/CSVImportDialog.tsx");
   ok(/\('import_leads_v3', args\)/.test(dlg) && !/\.from\(/.test(dlg), "the dialog imports through import_leads_v3 only (2026-10-14: v2 + a required campaign)");
   /* 2026-10-14: the campaign is REQUIRED — the screen will not check or import without one, and the server refuses it too. */
-  ok(/campaignId == null \|\| mapping\.business_name == null/.test(dlg) && /disabled=\{busy \|\| campaignId == null \|\| willAdd/.test(dlg) && /batch: batchName, campaignId \}/.test(dlg),
+  ok(/campaignId == null \|\| !research/.test(dlg) && /disabled=\{busy \|\| campaignId == null \|\| willAdd/.test(dlg) && /batch: batchName, campaignId \}/.test(dlg),
     "Check rows and Import both need a campaign, and the campaign rides on every call");
   const v3 = read("supabase/migrations/20261028090000_import_into_campaign.sql");
   ok(/if _campaign_id is null then return jsonb_build_object\('ok', false, 'error', 'campaign_required'\)/.test(v3)

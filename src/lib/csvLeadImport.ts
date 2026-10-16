@@ -38,7 +38,7 @@ export const IMPORT_FILE_MAX_BYTES = 5 * 1024 * 1024;
 const ALIASES: Record<ImportField, string[]> = {
   business_name: ['businessname', 'business', 'company', 'companyname', 'name', 'organisation', 'organization', 'tradingname', 'businesstitle'],
   /* Never a bare "owner" / "assigned to" / "rep": those read like the LEAD's owner, which a CSV can never set. */
-  contact_name: ['contactname', 'contact', 'contactperson', 'person', 'businessowner', 'fullname', 'firstandlastname', 'decisionmaker'],
+  contact_name: ['contactname', 'contact', 'contactperson', 'person', 'businessowner', 'ownername', 'fullname', 'firstandlastname', 'decisionmaker'],
   phone: ['phone', 'phonenumber', 'telephone', 'telephonenumber', 'tel', 'mobile', 'mobilenumber', 'mobilephone', 'contactnumber', 'number', 'whatsapp', 'whatsappnumber'],
   email: ['email', 'emailaddress', 'mail', 'contactemail'],
   website: ['website', 'websiteurl', 'web', 'url', 'site', 'domain', 'homepage'],
@@ -147,6 +147,39 @@ export function autoMapColumns(headers: string[]): MappingResult {
   const unused = headers.map((hd, i) => ({ hd, i })).filter(({ hd, i }) => hd.trim() && !used.has(i));
   if (unused.length) notes.push(`Not imported: ${unused.map(({ hd }) => `"${hd}"`).join(', ')}.`);
   return { mapping, notes };
+}
+
+/* ══ THE SIMPLE FILE (2026-10-16, feat/simple-import; docs/LEAD_FILE_SPEC.md) ═══════════════════════════════════
+   The dialog shows ONLY the fields V1 uses to audit and message: business name, phone, trade, town, country, website
+   and (optional) contact person. The other import fields still exist on the server and in autoMapColumns (old tests,
+   the research preset); the dialog never maps them. ⛔ Place ID is left out on purpose: a lead with a Google place id
+   must have a Google-verified town to be audited, so a made-up id would block the audit. */
+export const FILE_FIELDS = ['business_name', 'phone', 'trade', 'town', 'country', 'website', 'contact_name'] as const satisfies readonly ImportField[];
+export const FILE_FIELD_LABEL: Record<typeof FILE_FIELDS[number], string> = {
+  business_name: 'Business name', phone: 'WhatsApp / mobile number', trade: 'Trade / category', town: 'Town / city',
+  country: 'Country', website: 'Website', contact_name: 'Contact person (optional)',
+};
+
+/** Auto-map ONLY the simple file's fields, by name and common aliases; anything unsure stays unmapped. */
+export function autoMapSimple(headers: string[]): MappingResult {
+  const full = autoMapColumns(headers);
+  const mapping = Object.fromEntries(IMPORT_FIELDS.map((f) => [f, null])) as ColumnMapping;
+  for (const f of FILE_FIELDS) mapping[f] = full.mapping[f];
+  const usedCols = new Set(Object.values(mapping).filter((x): x is number => x != null));
+  const ignored = headers.filter((hd, i) => hd.trim() && !usedCols.has(i)).length;
+  const notes = full.notes.filter((n) => !n.startsWith('Not imported:'));
+  if (ignored) notes.push(`${ignored} other column${ignored === 1 ? '' : 's'} ignored.`);
+  return { mapping, notes };
+}
+
+/** One plain line per thing the file lacks. `tradeTyped` = a trade was typed for the whole file. */
+export function fileWarnings(mapping: ColumnMapping, tradeTyped: boolean): string[] {
+  const out: string[] = [];
+  if (mapping.business_name == null) out.push('No business name column: choose the one that holds the business name.');
+  if (mapping.phone == null) out.push('No phone / WhatsApp number column: choose one. Without a number nobody can be messaged.');
+  if (mapping.trade == null && !tradeTyped) out.push('No trade/category column: type one below for the whole file.');
+  if (mapping.town == null) out.push('No town/city column: leads without a town cannot be audited.');
+  return out;
 }
 
 /** A column label for the mapping selects — repeated headers get their column number. */

@@ -16,10 +16,10 @@ import { useCountrySettings } from '@/hooks/useCountrySettings';
 import { ReadinessSummaryBlock } from '@/components/LeadReadiness';
 import { leadReadiness, readinessLeadFromImport, summariseReadiness } from '@/lib/leadReadiness';
 import {
-  IMPORT_FIELDS, IMPORT_FIELD_LABEL, IMPORT_FILE_MAX_BYTES, IMPORT_FILE_MAX_ROWS, IMPORT_BATCH_MAX,
+  IMPORT_FIELDS, IMPORT_FILE_MAX_BYTES, IMPORT_FILE_MAX_ROWS, IMPORT_BATCH_MAX,
   IMPORT_BATCH_NAME_MAX, withDefaultTrade, withImportCountry, countsByCountry, IMPORT_COUNTRIES, type ImportCountry,
   isResearchFile, buildResearchRows, batchFromFileName, RESEARCH_FILE_DEFAULT_TRADE,
-  parseCsv, autoMapColumns, columnLabel, buildImportRows, runImport, outcomeText, problemRows, possibleMatchRows,
+  parseCsv, autoMapSimple, fileWarnings, FILE_FIELDS, FILE_FIELD_LABEL, columnLabel, buildImportRows, runImport, outcomeText, problemRows, possibleMatchRows,
   type ParsedCsv, type ColumnMapping, type ImportReport, type ImportRpc, type ImportField, type RowResult,
 } from '@/lib/csvLeadImport';
 
@@ -117,7 +117,7 @@ export function CSVImportDialog({ open, onOpenChange, onImported, isAdmin }: CSV
         setError(`That file has ${p.records.length.toLocaleString()} rows. The most in one import is ${IMPORT_FILE_MAX_ROWS.toLocaleString()} — split it into smaller files.`);
         return;
       }
-      const m = autoMapColumns(p.headers);
+      const m = autoMapSimple(p.headers);
       setParsed(p); setMapping(m.mapping); setMapNotes(m.notes); setStep('map');
       /* 2026-10-14: a researched lead file is read by its own rule (csvLeadImport.ts buildResearchRows). Its batch name
          defaults to the file name and its trade to Language schools — both still editable. Other files: as before. */
@@ -240,8 +240,8 @@ export function CSVImportDialog({ open, onOpenChange, onImported, isAdmin }: CSV
               </div>
               <Callout tone="blue" icon={Info}>
                 <div className="space-y-1 text-xs text-muted-foreground">
-                  <p><strong className="text-foreground">Needed:</strong> a business name, and a phone number or an email.</p>
-                  <p><strong className="text-foreground">Also read if present:</strong> contact person, website, address, postcode, town, trade / category, notes, Google Maps link, Google Place ID. You can match the columns on the next step.</p>
+                  <p><strong className="text-foreground">Needed:</strong> business name, WhatsApp / mobile number, trade / category and town.</p>
+                  <p><strong className="text-foreground">Also read if present:</strong> country, website, contact person. Any other column is ignored.</p>
                   <p>Up to {IMPORT_FILE_MAX_ROWS.toLocaleString()} rows. From Excel or Google Sheets, save as "CSV UTF-8".</p>
                 </div>
               </Callout>
@@ -252,14 +252,14 @@ export function CSVImportDialog({ open, onOpenChange, onImported, isAdmin }: CSV
             <>
               <p className="text-sm break-words" data-testid="csv-detected"><strong>{parsed.records.length.toLocaleString()}</strong> row{parsed.records.length === 1 ? '' : 's'} found in <span className="break-all">{file?.name}</span>. Check the columns, then press Check rows.</p>
               {!research && <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-2" data-testid="csv-mapping">
-                {IMPORT_FIELDS.map((f) => (
+                {FILE_FIELDS.map((f) => (
                   <label key={f} className="flex items-center gap-2 text-sm min-w-0">
-                    <span className="w-28 sm:w-32 shrink-0 break-words text-muted-foreground">{IMPORT_FIELD_LABEL[f]}{f === 'business_name' ? ' *' : ''}</span>
+                    <span className="w-28 sm:w-32 shrink-0 break-words text-muted-foreground">{FILE_FIELD_LABEL[f]}{f === 'business_name' || f === 'phone' ? ' *' : ''}</span>
                     <select
                       className="h-9 min-w-0 flex-1 rounded-lg border border-border/70 bg-background px-2 text-sm"
                       value={mapping[f] ?? ''}
                       onChange={(e) => setField(f, e.target.value)}
-                      aria-label={IMPORT_FIELD_LABEL[f]}
+                      aria-label={FILE_FIELD_LABEL[f]}
                       data-field={f}
                     >
                       <option value="">— not imported —</option>
@@ -281,10 +281,12 @@ export function CSVImportDialog({ open, onOpenChange, onImported, isAdmin }: CSV
                     <span className="text-muted-foreground">Batch name</span>
                     <Input value={batchName} maxLength={IMPORT_BATCH_NAME_MAX} onChange={(e) => setBatchName(e.target.value)} placeholder="e.g. Ethan batch 14 Oct" data-testid="csv-batch" />
                   </label>
-                  <label className="flex flex-col gap-1 text-sm min-w-0">
-                    <span className="text-muted-foreground">Trade for rows with none</span>
-                    <Input value={defaultTrade} maxLength={100} onChange={(e) => setDefaultTrade(e.target.value)} placeholder="e.g. Plumbers" data-testid="csv-trade" />
-                  </label>
+                  {(research || mapping.trade == null) && (
+                    <label className="flex flex-col gap-1 text-sm min-w-0">
+                      <span className="text-muted-foreground">{research ? 'Trade for rows with none' : 'Trade for the whole file'}</span>
+                      <Input value={defaultTrade} maxLength={100} onChange={(e) => setDefaultTrade(e.target.value)} placeholder="e.g. Plumbers" data-testid="csv-trade" />
+                    </label>
+                  )}
                   <label className="flex flex-col gap-1 text-sm min-w-0">
                     <span className="text-muted-foreground">Country of these leads</span>
                     <select className="h-9 min-w-0 rounded-lg border border-border/70 bg-background px-2 text-sm" value={importCountry}
@@ -303,7 +305,7 @@ export function CSVImportDialog({ open, onOpenChange, onImported, isAdmin }: CSV
                     </label>
                   )}
                 </div>
-                <p className="mt-1 text-xs text-muted-foreground">Search the batch name in Outreach to see just this import. A row's own trade and country always win. Phone numbers are read in the row's country (Malaysia 012-345 6789 → +60, Singapore 9123 4567 → +65).</p>
+                <p className="mt-1 text-xs text-muted-foreground">Search the batch name in Outreach to see just this import. A row's own country always wins. Phone numbers are read in the row's country (Malaysia 012-345 6789 → +60, Singapore 9123 4567 → +65).</p>
               </SubSection>
               {mapNotes.length > 0 && (
                 <ul className="text-xs text-muted-foreground list-disc pl-4 space-y-0.5">{mapNotes.map((n) => <li key={n}>{n}</li>)}</ul>
@@ -311,12 +313,9 @@ export function CSVImportDialog({ open, onOpenChange, onImported, isAdmin }: CSV
               {campaignId == null && (
                 <p className="text-xs text-destructive">Choose the campaign these leads go into.</p>
               )}
-              {mapping.business_name == null && (
-                <p className="text-xs text-destructive">Choose the column that holds the business name.</p>
-              )}
-              {mapping.business_name != null && mapping.phone == null && mapping.email == null && (
-                <p className="text-xs text-destructive">Choose a phone or an email column — every lead needs one of them.</p>
-              )}
+              {!research && fileWarnings(mapping, !!defaultTrade.trim()).map((w) => (
+                <p key={w} className="text-xs text-destructive" data-testid="csv-warning">{w}</p>
+              ))}
             </>
           )}
 
@@ -427,7 +426,7 @@ export function CSVImportDialog({ open, onOpenChange, onImported, isAdmin }: CSV
                 {step === 'preview' ? 'Back' : 'Cancel'}
               </Button>
               {step === 'map' && (
-                <Button onClick={() => runCheck(false)} disabled={busy || campaignId == null || mapping.business_name == null || (mapping.phone == null && mapping.email == null)} data-testid="csv-check">
+                <Button onClick={() => runCheck(false)} disabled={busy || campaignId == null || !research && (mapping.business_name == null || mapping.phone == null)} data-testid="csv-check">
                   {busy ? 'Checking…' : `Check ${rows.length.toLocaleString()} row${rows.length === 1 ? '' : 's'}`}
                 </Button>
               )}

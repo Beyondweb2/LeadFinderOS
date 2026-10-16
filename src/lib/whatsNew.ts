@@ -22,6 +22,14 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-16-simple-csv-import', date: '2026-10-16', title: 'CSV import shows only what we use', audience: 'all',
+    body: 'The import screen now matches your columns for you and shows only the seven that matter: business name, mobile number, trade, town, country, website and contact person. Everything else in the file is ignored.',
+    report: {
+      added: ['A plain line when the file lacks something, for example "No trade/category column: type one below for the whole file".', 'A count of the other columns that were ignored.'],
+      changed: ['The column pickers are down to seven fields, matched by name (city, category, whatsapp_number and similar).', 'The trade box shows only when the file has no trade column.'],
+      removed: ['The pickers for email, address, postcode, notes, Maps link and Place ID.'],
+      effect: 'Importing a list is: choose the file, check the warnings, press Check. Duplicate checks, campaign, batch name and owner work as before.',
+    } },
   { id: '2026-10-15-outreach-instant-return', date: '2026-10-15', title: 'Outreach opens instantly when you come back', audience: 'all',
     body: 'Going back to Outreach now shows your list straight away, as you left it, while a fresh copy loads behind it. Bulk actions stay locked until the fresh copy arrives, usually a second or two.',
     report: {
