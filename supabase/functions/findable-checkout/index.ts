@@ -170,6 +170,18 @@ Deno.serve(async (req) => {
       });
       return json({ ok: false, error: "already_client" }, 403);
     }
+    /* THE PLAN SCREEN'S "I can get you access" TICK (simple onboarding, 2026-10-16; migration 20261103090000).
+       A RECORD of what the client said, never a gate: stamped ONCE (only while null), strictly `=== true`, and
+       a failed write is swallowed — nothing here may block a payment or change any refusal below. */
+    if (body.access_ack === true) {
+      try {
+        const { error: ackErr } = await service.from("onboarding_responses")
+          .update({ access_ack_at: new Date().toISOString() }).eq("id", onboardingId).is("access_ack_at", null);
+        if (ackErr) console.error("[findable-checkout] access_ack stamp failed (non-fatal):", ackErr.message);
+      } catch (e) {
+        console.error("[findable-checkout] access_ack stamp threw (non-fatal):", (e as Error).message);
+      }
+    }
     /* ══ CAN WE ACTUALLY SERVE THEM? ═══════════════════════════════════════════════════════════
        THIS IS THE REAL BLOCK. The questionnaire also hides the checkout button for a blocked
        answer, but that is presentation: anyone with devtools, a saved URL or a replayed request

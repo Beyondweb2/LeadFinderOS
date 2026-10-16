@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { Fragment, useEffect, useState } from 'react';
 import { Loader2, ClipboardList, MessageCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -9,6 +9,7 @@ import { isPaidLead } from '@/lib/leadPayment';
 import { questionnaireComplete } from '@/lib/questionnaireComplete';
 import type { OutreachLead } from '@/types/outreach';
 import { ClientOnboardingStrip } from '@/components/ClientOnboardingStrip';
+import { simpleOnboardingLines } from '@/lib/onboardingSimpleAnswers';
 
 /* ============================================================
    THE QUESTIONNAIRE, ON THE LEAD CARD — read-only answers + the one manual nudge (2026-08-17).
@@ -192,6 +193,7 @@ export function LeadQuestionnaireSection({ lead, onUpdateLead }: {
               <dt className="text-muted-foreground">Name</dt><dd>{val(row.contact_name, q1Absent)}</dd>
               <dt className="text-muted-foreground">Email</dt><dd>{val(row.contact_email, q1Absent)}</dd>
               <dt className="text-muted-foreground">Consent</dt><dd>{val(row.gbp_consent, q1Absent)}</dd>
+              {simpleOnboardingLines(row as unknown as Record<string, unknown>).map((l) => <Fragment key={l.label}><dt className="text-muted-foreground">{l.label}</dt><dd>{l.value}</dd></Fragment>)}
             </dl>
           </div>
 

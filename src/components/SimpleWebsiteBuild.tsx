@@ -26,6 +26,7 @@ import {
   newSitePages, oldPagesView, setReviewItem, simpleIssues, simpleProgress, technicalCheck, terminalSteps, trustedPack, type BuildIssue, type BuildType, type IssueFix, type PrepareContext, type SimpleInput,
 } from '@/lib/simpleBuild';
 import { isPublishable } from '@/lib/buildFacts';
+import { simpleOnboardingLines } from '@/lib/onboardingSimpleAnswers';
 import {
   MIN_HOME_REASON, REASON_LABEL, addOldUrl, isMandatory, mapOldUrl, noOldSiteRefusal, pathKey, recordNoOldSite, removeOldUrl, setOldUrlImportant,
   type CrawlPageRow, type OldUrl,
@@ -228,6 +229,8 @@ export default function SimpleWebsiteBuild(p: SimpleWebsiteBuildProps) {
   };
 
   /* ── Optimise client: not a new-site build at all ─────────────────────────────────────────────── */
+  /* The client's own design choice / contract end / access tick from the simple findable.live onboarding. */
+  const simpleLines = simpleOnboardingLines(p.onboarding);
   const header = <div className="space-y-4">
     <PageHeader icon={Globe} tone="blue" eyebrow="Paid client" title={`Website — ${businessName}`}
       actions={<div className="text-xs text-muted-foreground" aria-live="polite">{p.saveLabel}</div>} />
@@ -237,6 +240,9 @@ export default function SimpleWebsiteBuild(p: SimpleWebsiteBuildProps) {
       <Fact label="BUILD TYPE"><span className="font-medium">{optimiseClient ? 'Optimise (their own site)' : type ? BUILD_TYPE_INFO[type].label : 'Not chosen'}</span></Fact>
       <Fact label="STATUS"><span className="font-medium">{optimiseClient ? 'Not a new-site build' : progress.status}</span></Fact>
     </dl>
+    {simpleLines.length > 0 && <dl className="grid gap-3 sm:grid-cols-3" data-testid="simple-onboarding-answers">
+      {simpleLines.map((l) => <Fact key={l.label} label={l.label.toUpperCase()}>{l.value}</Fact>)}
+    </dl>}
     {!optimiseClient && <ol className="grid grid-cols-5 gap-1" aria-label="Progress">
       {SIMPLE_STEPS.map((k, n) => { const cur = progress.current === k; const d = progress.done[k];
         return <li key={k} className={`min-w-0 rounded-xl px-1 py-1.5 text-center text-[11px] ring-1 ring-inset sm:text-xs ${cur ? 'bg-primary/10 font-semibold ring-primary/40' : d ? cn(TONE.green.soft, TONE.green.ring) : 'ring-border/60'} ${d ? TONE.green.text : 'text-muted-foreground'}`}>

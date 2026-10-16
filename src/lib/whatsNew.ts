@@ -22,6 +22,17 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-16-simple-onboarding-answers', date: '2026-10-16', title: 'Client sign-up answers: design choice and contract end date are saved', audience: 'admin',
+    body: 'The new findable.live sign-up asks whether the client wants to keep or improve their current design, and when a tied-in agency contract ends. Those answers are now saved and shown on the client page, Website Build and the lead card.',
+    report: {
+      added: [
+        'Design (keep the look / improve the design), Agency contract ends, and Access (the client ticked "I can get you access" before paying), where the onboarding answers are shown.',
+        'The "Paul review required" notice for a client still tied into an agency contract now names the end date they gave.',
+      ],
+      changed: [],
+      removed: [],
+      effect: 'You see the client’s design wish and contract date without asking. Prices, the agreement and existing clients are unchanged.',
+    } },
   { id: '2026-10-16-inbox-faster-open', date: '2026-10-16', title: 'Opening a conversation in the Inbox is much faster', audience: 'all',
     body: 'Clicking a conversation used to redraw the whole list first, which took up to two seconds. Now only the rows that changed are redrawn, so the conversation opens almost at once. The Inbox also loads one slow read faster.',
     report: {

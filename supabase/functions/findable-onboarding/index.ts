@@ -11,6 +11,7 @@ import { planClientConfirmation, resumeDecision, salesSignupFor, type SignupRow 
 import { confirmItemsFor, confirmSummaryFor } from "../../../src/lib/clientConfirm.ts";
 import type { QuickCloseRecord } from "../../../src/lib/quickClose.ts";
 import { selfServeBuildHold, SELF_SERVE_HOLD_TEXT } from "../../../src/lib/selfServeContract.ts";
+import { readContractEnd, readDesignChoice, contractEndWords, simpleAnswerFills } from "../../../src/lib/onboardingSimpleAnswers.ts";
 import { recordSetupSignupCreator } from "../_shared/setup-link-creator.ts";
 
 // findable-onboarding — the PUBLIC backend for findable-site's /onboarding flow
@@ -505,9 +506,13 @@ Deno.serve(async (req) => {
       if (!UUID_RE.test(onboardingId)) return json({ ok: false, error: "bad_onboarding_id" }, 400);
       const { data: row } = await service
         .from("onboarding_responses")
-        .select("id, status, lead_id, services, services_list, areas_list, areas_wanted")
+        .select("id, status, lead_id, services, services_list, areas_list, areas_wanted, confirmed_location")
         .eq("id", onboardingId).maybeSingle();
       if (!row) return json({ ok: false, error: "unknown_onboarding" }, 404);
+      /* + confirmed_location (2026-10-16): the main town they confirmed before paying, so the post-payment
+         town box arrives filled on ANOTHER device too (the browser's own copy only exists in the tab that paid).
+         Their own answer only — the same paid-row gate; absent = null and the box asks. */
+      const confirmedLocation = typeof row.confirmed_location === "string" && row.confirmed_location.trim() ? row.confirmed_location.trim() : null;
       if (!PAID_OR_BEYOND.has((row.status as string) ?? "") && (row.status as string) !== "paid") {
         return json({ ok: false, error: "not_paid" }, 403);
       }
@@ -533,7 +538,7 @@ Deno.serve(async (req) => {
           areas: k.areas ? { items: k.areas.items, source: k.areas.source, line: KNOWN_SOURCE_LINE[k.areas.source] } : null,
         };
       }
-      return json({ ok: true, phone, known });
+      return json({ ok: true, phone, known, confirmed_location: confirmedLocation });
     }
 
     /* ── complete_q2 ────────────────────────────────────────────────────────────────────────────
@@ -943,6 +948,11 @@ Deno.serve(async (req) => {
         /* TWO OPTIONS (2026-10-07): asked only when an agency / web company looks after their site — are they still tied
            into a contract with it? Same words as the salesperson's call (QcAgencyContract). Unknown value → null. */
         agency_contract: a.agency_contract === "in_contract" || a.agency_contract === "free" || a.agency_contract === "not_sure" ? a.agency_contract : null,
+        /* THE SIMPLE ONBOARDING (2026-10-16, src/lib/onboardingSimpleAnswers.ts) — in ALL THREE lists (answers /
+           NEWER_COLS / optional). Keep or improve the current design; the date a tied-in agency contract ends.
+           Anything not a known value / a real yyyy-mm-dd day stores null. */
+        design_choice: readDesignChoice(a.design_choice),
+        agency_contract_ends: readContractEnd(a.agency_contract_ends),
         incomplete,
       };
 
@@ -956,7 +966,7 @@ Deno.serve(async (req) => {
          sent it, the row saved with HTTP 200, and the value was null, because this function builds
          its insert from an explicit key list and an unlisted key simply disappears. A Squarespace
          customer who had said no to moving reached Stripe as a result. */
-      const NEWER_COLS = ["services_list", "areas_list", "website_manager", "website_manager_email", "competitor_name", "website_platform", "website_platform_other", "willing_to_migrate", "gbp_exists", "gbp_status", "gbp_verified", "must_not_say", "photos_status", "contact_name", "confirmed_phone", "business_website", "source", "website_addon", "plan_tier", "domain_status", "domain_owned", "domain_access", "domain_third_party", "site_rights", "authority_confirmed", "dns_permission", "materials_confirmed", "domain_escalated_at", "agency_contract", "services_not_offered", "top_requests"];
+      const NEWER_COLS = ["services_list", "areas_list", "website_manager", "website_manager_email", "competitor_name", "website_platform", "website_platform_other", "willing_to_migrate", "gbp_exists", "gbp_status", "gbp_verified", "must_not_say", "photos_status", "contact_name", "confirmed_phone", "business_website", "source", "website_addon", "plan_tier", "domain_status", "domain_owned", "domain_access", "domain_third_party", "site_rights", "authority_confirmed", "dns_permission", "materials_confirmed", "domain_escalated_at", "agency_contract", "services_not_offered", "top_requests", "design_choice", "agency_contract_ends"];
       for (const col of NEWER_COLS) {
         if ((answers as Record<string, unknown>)[col] == null) delete (answers as Record<string, unknown>)[col];
       }
@@ -971,8 +981,9 @@ Deno.serve(async (req) => {
           service.from("onboarding_responses").insert(payload).select("id").maybeSingle();
         // website_platform_other before website_platform, for the same reason website_manager_email
         // comes before website_manager: the shorter name is a substring of the longer one, so
-        // testing it first would shed both columns on a single miss.
-        const optional = ["business_website", "services_list", "areas_list", "website_manager_email", "website_manager", "website_platform_other", "website_platform", "willing_to_migrate", "gbp_verified", "gbp_exists", "gbp_status", "must_not_say", "photos_status", "competitor_name", "areas_wanted", "incomplete", "contact_email", "contact_name", "confirmed_phone", "business_address", "source", "website_addon", "plan_tier", "domain_status", "domain_owned", "domain_access", "domain_third_party", "site_rights", "authority_confirmed", "dns_permission", "materials_confirmed", "domain_escalated_at", "agency_contract", "services_not_offered", "top_requests"];
+        // testing it first would shed both columns on a single miss. Same for agency_contract_ends before
+        // agency_contract.
+        const optional = ["business_website", "design_choice", "agency_contract_ends", "services_list", "areas_list", "website_manager_email", "website_manager", "website_platform_other", "website_platform", "willing_to_migrate", "gbp_verified", "gbp_exists", "gbp_status", "must_not_say", "photos_status", "competitor_name", "areas_wanted", "incomplete", "contact_email", "contact_name", "confirmed_phone", "business_address", "source", "website_addon", "plan_tier", "domain_status", "domain_owned", "domain_access", "domain_third_party", "site_rights", "authority_confirmed", "dns_permission", "materials_confirmed", "domain_escalated_at", "agency_contract", "services_not_offered", "top_requests"];
         const reduced = { ...answers } as Record<string, unknown>;
         let res = await attempt({ ...reduced, ...extra });
         let guard = 0;
@@ -1185,7 +1196,7 @@ Deno.serve(async (req) => {
         if (decision.kind === "resume") {
           /* Light-touch: anything they typed fills an EMPTY contact field on the held row, never replaces one. */
           try {
-            const fills: [string, string | null][] = [["contact_name", clip(a.contact_name, 120)], ["contact_email", contactEmail], ["confirmed_phone", clip(a.confirmed_phone, 40)]];
+            const fills: [string, string | null][] = [["contact_name", clip(a.contact_name, 120)], ["contact_email", contactEmail], ["confirmed_phone", clip(a.confirmed_phone, 40)], ...simpleAnswerFills(a)];
             for (const [col, val] of fills) if (val) await service.from("onboarding_responses").update({ [col]: val }).eq("id", decision.onboardingId).is(col, null);
           } catch { /* non-fatal — the sales sign-up already carries what Sales recorded */ }
           return json({ ok: true, onboarding_id: decision.onboardingId, resumed: true, route: decision.route });
@@ -1216,9 +1227,11 @@ Deno.serve(async (req) => {
         if (selfServeBuildHold({ plan_tier: (answers as Record<string, unknown>).plan_tier, website_addon: (answers as Record<string, unknown>).website_addon, website_manager: (answers as Record<string, unknown>).website_manager, agency_contract: (answers as Record<string, unknown>).agency_contract })) {
           const { data: owner } = await service.from("team_members").select("user_id").eq("is_book_owner", true).maybeSingle();
           if (owner?.user_id) {
+            /* The end date the client gave for their agency contract, when they gave one (simple onboarding, 2026-10-16). */
+            const ends = contractEndWords((answers as Record<string, unknown>).agency_contract_ends as string | null);
             await service.from("notifications").upsert({
               user_id: owner.user_id, kind: "quick_close_review", title: "WEBSITE ACCESS ISSUE — Paul review required",
-              body: `A client chose Build on their own page: ${SELF_SERVE_HOLD_TEXT}.`,
+              body: `A client chose Build on their own page: ${SELF_SERVE_HOLD_TEXT}.${ends ? ` They say their agency contract ends on ${ends}.` : ""}`,
               link: `/inbox?lead=${leadId}`, lead_id: leadId, priority: 2, dedupe_key: `self_serve_review:${row.id}`,
             }, { onConflict: "user_id,dedupe_key", ignoreDuplicates: true });
           }
