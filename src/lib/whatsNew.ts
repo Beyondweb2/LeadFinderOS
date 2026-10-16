@@ -22,6 +22,14 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-16-import-campaign-per-trade', date: '2026-10-16', title: 'One campaign per trade on import', audience: 'all',
+    body: 'When a CSV has a trade column, tick "Create a campaign for each trade (WhatsApp)" and each trade goes into its own WhatsApp campaign, named exactly the trade. A campaign that already has that name is reused, never duplicated.',
+    report: {
+      added: ['A "Create a campaign for each trade (WhatsApp)" tick in the import dialog, and a plain summary before importing, for example "Will use 4 campaigns: Dental clinics (242, new)".'],
+      changed: ['Spaces and capitals are tidied, so "Dental clinics " and "dental  clinics" land in one campaign. Rows with no trade go into the campaign chosen in the dialog.'],
+      removed: [],
+      effect: 'A mixed-trade file can be imported in one go. Nothing is queued or messaged; launching a campaign is still a separate step.',
+    } },
   { id: '2026-10-16-simple-csv-import', date: '2026-10-16', title: 'CSV import shows only what we use', audience: 'all',
     body: 'The import screen now matches your columns for you and shows only the seven that matter: business name, mobile number, trade, town, country, website and contact person. Everything else in the file is ignored.',
     report: {

@@ -11,6 +11,9 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useTeamDirectory } from '@/hooks/useSalesCrm';
 import { useCampaigns } from '@/hooks/useCampaigns';
+import { useCampaignActions } from '@/hooks/useMyCampaigns';
+import { planTradeCampaigns, tradePlanSummary, runImportPerTrade } from '@/lib/importCampaignPlan';
+import { campaignErrorText } from '@/lib/campaignRules';
 import { CampaignPicker } from '@/components/CampaignPicker';
 import { useCountrySettings } from '@/hooks/useCountrySettings';
 import { ReadinessSummaryBlock } from '@/components/LeadReadiness';
@@ -79,6 +82,8 @@ export function CSVImportDialog({ open, onOpenChange, onImported, isAdmin }: CSV
   const [assignTo, setAssignTo] = useState(''); // '' = the person importing
   const [campaignId, setCampaignId] = useState<string | null>(null); // required — the campaign every new lead joins
   const { campaigns } = useCampaigns();
+  const campaignActions = useCampaignActions();
+  const [perTrade, setPerTrade] = useState(false); // 2026-10-16: one WhatsApp campaign per trade, named exactly the trade
   const qc = useQueryClient();
   const { user } = useAuth();
   const team = useTeamDirectory();
@@ -88,7 +93,7 @@ export function CSVImportDialog({ open, onOpenChange, onImported, isAdmin }: CSV
   const reset = () => {
     setStep('pick'); setFile(null); setParsed(null); setMapping(emptyMapping()); setMapNotes([]);
     setError(null); setBusy(false); setProgress(null); setPreview(null); setResult(null); setImportPossible(false);
-    setBatchName(''); setDefaultTrade(''); setAssignTo(''); setImportCountry(''); setResearch(false); setCampaignId(null);
+    setBatchName(''); setDefaultTrade(''); setAssignTo(''); setImportCountry(''); setResearch(false); setCampaignId(null); setPerTrade(false);
     setRowEdits({}); setEditRow(null); setReadyOnly(false);
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
@@ -171,8 +176,23 @@ export function CSVImportDialog({ open, onOpenChange, onImported, isAdmin }: CSV
     setBusy(true); setError(null); setProgress({ done: 0, total: rows.length });
     try {
       const sendRows = commit && readyOnly && importReadiness ? rows.filter((r) => !importReadiness.notReady.has(r.row)) : rows;
-      const rep = await runImport(importRpc, sendRows, commit, file?.name ?? null, (done, total) => setProgress({ done, total }), commit && importPossible,
-        { assignTo: isAdmin && assignTo ? assignTo : null, batch: batchName, campaignId });
+      const tags = { assignTo: isAdmin && assignTo ? assignTo : null, batch: batchName };
+      let rep;
+      if (commit && perTradeOn) {
+        /* Make (or reuse) each trade's campaign FIRST. If one cannot be made, nothing is imported. */
+        const plan = planTradeCampaigns(sendRows, campaigns, user?.id);
+        const ids = new Map<string, string>();
+        for (const g of plan.groups) {
+          if (g.existingId) { ids.set(g.key, g.existingId); continue; }
+          const made = await campaignActions.create({ name: g.name, trade: g.name, method: 'whatsapp' });
+          if (!made.ok || !made.id) { setError(`The campaign "${g.name}" could not be made: ${campaignErrorText(String(made.error ?? ''))} Nothing was imported.`); return; }
+          ids.set(g.key, String(made.id));
+        }
+        rep = await runImportPerTrade({ rpc: importRpc, rows: sendRows, plan, fileName: file?.name ?? null, campaignIds: ids, fallbackCampaignId: campaignId,
+          importPossible, tags, onProgress: (done, total) => setProgress({ done, total }) });
+      } else {
+        rep = await runImport(importRpc, sendRows, commit, file?.name ?? null, (done, total) => setProgress({ done, total }), commit && importPossible, { ...tags, campaignId });
+      }
       if (commit) {
         setResult(rep); setStep('done');
         if (rep.joinedCampaign) {
@@ -207,6 +227,8 @@ export function CSVImportDialog({ open, onOpenChange, onImported, isAdmin }: CSV
   });
 
   const owner = isAdmin && assignTo ? (team.byId.get(assignTo)?.display_name ?? 'that teammate') : isAdmin ? 'you (Paul)' : 'you';
+  const perTradeOn = perTrade && !research && mapping.trade != null;
+  const tradePlan = useMemo(() => (perTradeOn ? planTradeCampaigns(rows, campaigns, user?.id) : null), [perTradeOn, rows, campaigns, user?.id]);
   const campaign = campaignId ? campaigns.find((c) => c.id === campaignId) ?? null : null;
   /* A campaign launch messages only its OWNER's leads (docs/campaigns.md): say so when the new leads belong to someone else. */
   const leadOwnerId = isAdmin && assignTo ? assignTo : user?.id;
@@ -277,6 +299,19 @@ export function CSVImportDialog({ open, onOpenChange, onImported, isAdmin }: CSV
                       <span className="text-xs text-amber-600 dark:text-amber-400" data-testid="csv-campaign-owner-note">This campaign belongs to someone else. The leads still join it, but launching it only messages its owner's leads.</span>
                     )}
                   </div>
+                  {!research && mapping.trade != null && (
+                    <div className="sm:col-span-2 space-y-1" data-testid="csv-per-trade">
+                      <label className="flex cursor-pointer items-center gap-2 text-sm">
+                        <input type="checkbox" className="h-4 w-4 accent-blue-500" checked={perTrade} onChange={(e) => setPerTrade(e.target.checked)} data-testid="csv-per-trade-toggle" />
+                        Create a campaign for each trade (WhatsApp)
+                      </label>
+                      {perTradeOn && tradePlan && (
+                        <p className="text-xs text-muted-foreground" data-testid="csv-per-trade-summary">
+                          {tradePlanSummary(tradePlan, campaign?.name ?? null)} Nothing is queued or sent.
+                        </p>
+                      )}
+                    </div>
+                  )}
                   <label className="flex flex-col gap-1 text-sm min-w-0">
                     <span className="text-muted-foreground">Batch name</span>
                     <Input value={batchName} maxLength={IMPORT_BATCH_NAME_MAX} onChange={(e) => setBatchName(e.target.value)} placeholder="e.g. Ethan batch 14 Oct" data-testid="csv-batch" />
@@ -359,7 +394,7 @@ export function CSVImportDialog({ open, onOpenChange, onImported, isAdmin }: CSV
                 </Callout>
               )}
               <p className="text-sm break-words">
-                {willAdd > 0 ? <><strong>{willAdd}</strong> new lead{willAdd === 1 ? '' : 's'} will be added, owned by {owner}, into the campaign <strong>{campaign?.name ?? 'you chose'}</strong>. </> : 'No new leads to add. '}
+                {willAdd > 0 ? <><strong>{willAdd}</strong> new lead{willAdd === 1 ? '' : 's'} will be added, owned by {owner}, {perTradeOn && tradePlan ? <>into: {tradePlanSummary(tradePlan, campaign?.name ?? null)} </> : <>into the campaign <strong>{campaign?.name ?? 'you chose'}</strong>. </>}</> : 'No new leads to add. '}
                 {willFill > 0 && <><strong>{willFill}</strong> of your existing leads will have blank details filled in (nothing is overwritten; they keep their campaign). </>}
                 Nobody is messaged, nothing is queued and no status changes.
               </p>
@@ -388,7 +423,7 @@ export function CSVImportDialog({ open, onOpenChange, onImported, isAdmin }: CSV
             <>
               <Callout tone="green" icon={CheckCircle2} testId="csv-import-result">
                 <>
-                  {result.counts.created} lead{result.counts.created === 1 ? '' : 's'} added{result.joinedCampaign ? ` to the campaign ${campaign?.name ?? ''}`.trimEnd() : ''}{result.counts.updated ? `, ${result.counts.updated} filled in` : ''}.
+                  {result.counts.created} lead{result.counts.created === 1 ? '' : 's'} added{result.joinedCampaign ? (perTradeOn ? ' to their trade campaigns' : ` to the campaign ${campaign?.name ?? ''}`.trimEnd()) : ''}{result.counts.updated ? `, ${result.counts.updated} filled in` : ''}.
                   {' '}{result.counts.invalid + result.counts.duplicate_in_file + result.counts.skipped + result.counts.failed + result.counts.held > 0
                     ? `${result.counts.invalid + result.counts.duplicate_in_file + result.counts.skipped + result.counts.failed + result.counts.held} row(s) not added — listed below.`
                     : 'Every row was added.'}
