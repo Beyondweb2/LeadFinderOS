@@ -11,6 +11,7 @@ import { planClientConfirmation, resumeDecision, salesSignupFor, type SignupRow 
 import { confirmItemsFor, confirmSummaryFor } from "../../../src/lib/clientConfirm.ts";
 import type { QuickCloseRecord } from "../../../src/lib/quickClose.ts";
 import { selfServeBuildHold, SELF_SERVE_HOLD_TEXT } from "../../../src/lib/selfServeContract.ts";
+import { readContractEnd, readDesignChoice, contractEndWords, simpleAnswerFills, maskEmail } from "../../../src/lib/onboardingSimpleAnswers.ts";
 import { recordSetupSignupCreator } from "../_shared/setup-link-creator.ts";
 
 // findable-onboarding — the PUBLIC backend for findable-site's /onboarding flow
@@ -235,7 +236,7 @@ Deno.serve(async (req) => {
            column is not bookkeeping here: an unselected column reads as `undefined`, so the
            response would have carried "" and the change would have looked applied while doing
            nothing — the same trap the derived_town note below records. */
-        .select("id, user_id, business_name, category, search_keyword, search_location, derived_town, address, status, amount_paid, phone, website, services_included, service_areas")
+        .select("id, user_id, business_name, category, search_keyword, search_location, derived_town, address, status, amount_paid, phone, website, services_included, service_areas, contact_name, email")
         .eq("id", leadId).maybeSingle();
       /* 🔴 A FAILED READ IS NOT A MISSING ROW, AND FOR MONTHS THEY WERE THE SAME ANSWER.
          This destructured the query's `error` away and tested only `data`, so a database that
@@ -302,12 +303,24 @@ Deno.serve(async (req) => {
          the agreement now; it is the same id the agreement link already pays on. A failed read is
          reported, never read as "no sales sign-up" (absence is never inferred from silence). */
       const { data: signupRows, error: signupErr } = await service.from("onboarding_responses")
-        .select("id, status, created_at, plan_tier, website_addon, quick_close").eq("lead_id", lead.id);
+        .select("id, status, created_at, plan_tier, website_addon, quick_close, contact_name, contact_email, business_address").eq("lead_id", lead.id);
       if (signupErr) {
         console.error("[findable-onboarding] prefill sign-up lookup failed:", signupErr.message);
         return json({ ok: false, error: "lookup_failed" }, 503);
       }
       const held = salesSignupFor((signupRows ?? []) as SignupRow[]);
+      /* ⛔ WHAT WE HOLD ABOUT THE CLIENT (Paul, 2026-10-16): their name, the business address and — MASKED ONLY — the
+         email. The client's own / their salesperson's answer on a sign-up row first (newest), else the lead. Never the
+         full email, never any other contact detail. Same capability as the rest of this action (the lead id, after the
+         already_client refusal above); nothing new is reachable. */
+      const heldFirst = (col: "contact_name" | "contact_email" | "business_address", leadVal: unknown): string => {
+        const rows = [...((signupRows ?? []) as Record<string, unknown>[])].sort((x, y) => String(y.created_at ?? "").localeCompare(String(x.created_at ?? "")));
+        for (const r of rows) { const v = typeof r[col] === "string" ? (r[col] as string).trim() : ""; if (v) return v; }
+        return typeof leadVal === "string" ? leadVal.trim() : "";
+      };
+      const heldName = heldFirst("contact_name", lead.contact_name).slice(0, 120);
+      const heldAddress = heldFirst("business_address", lead.address).slice(0, 300);
+      const heldEmailMasked = maskEmail(heldFirst("contact_email", lead.email)) ?? "";
       /* ── WHAT THIS IS ALLOWED TO HAND BACK ───────────────────────────────────────────────────
          This line used to read "SAFE subset only — never expose phone/email/notes/owner to the
          public page", and phone was on the wrong side of it.
@@ -318,12 +331,9 @@ Deno.serve(async (req) => {
          are Google Places fields — `internationalPhoneNumber` and `websiteUri`, fetched by
          google-place-details and already on the business's own Maps listing. Returning them
          discloses nothing.
-         ⛔ `email`, `contact_name` AND `notes` STAY OUT, and they are the ones that matter. The
-         email comes from enrichment rather than from Google, contact_name is usually the operator's
-         own note about who to ask for, and notes is internal by definition. Measured before
-         deciding: email is present on 10.1% of live leads and contact_name on 0.2%, so they are
-         worth nothing as a prefill AND carry all of the risk — the trade is one-sided in both
-         directions.
+         ⛔ CHANGED BY PAUL, 2026-10-16: the client's name and business address are now returned, and the
+         email ONLY MASKED (contact_email_masked, "p***@gmail.com" — see heldFirst above). The full email
+         and `notes` still never leave this function.
          ⚠️ WHY IT IS WORTH THE CHANGE AT ALL: phone is on 99.7% of unarchived leads and website on
          88.6%. Every WhatsApp prospect arrives with both, and making them retype what we already
          know is friction on the one screen that takes the payment. */
@@ -353,6 +363,10 @@ Deno.serve(async (req) => {
            "the column is missing", and "" renders as an empty box either way. */
         phone_guess: String(lead.phone ?? "").trim(),
         website_guess: String(lead.website ?? "").trim(),
+        /* Paul's OK, 2026-10-16 (see heldFirst above): "" when we hold nothing. The email ONLY masked. */
+        contact_name: heldName,
+        business_address: heldAddress,
+        contact_email_masked: heldEmailMasked,
         /* 🔴 FINAL PASS (2026-10-07): `confirm` = "here's what we have so far" — the four situation facts the
            salesperson recorded, in the client's words (src/lib/clientConfirm.ts), only when the sign-up may go on. */
         sales_signup: held
@@ -505,9 +519,13 @@ Deno.serve(async (req) => {
       if (!UUID_RE.test(onboardingId)) return json({ ok: false, error: "bad_onboarding_id" }, 400);
       const { data: row } = await service
         .from("onboarding_responses")
-        .select("id, status, lead_id, services, services_list, areas_list, areas_wanted")
+        .select("id, status, lead_id, services, services_list, areas_list, areas_wanted, confirmed_location")
         .eq("id", onboardingId).maybeSingle();
       if (!row) return json({ ok: false, error: "unknown_onboarding" }, 404);
+      /* + confirmed_location (2026-10-16): the main town they confirmed before paying, so the post-payment
+         town box arrives filled on ANOTHER device too (the browser's own copy only exists in the tab that paid).
+         Their own answer only — the same paid-row gate; absent = null and the box asks. */
+      const confirmedLocation = typeof row.confirmed_location === "string" && row.confirmed_location.trim() ? row.confirmed_location.trim() : null;
       if (!PAID_OR_BEYOND.has((row.status as string) ?? "") && (row.status as string) !== "paid") {
         return json({ ok: false, error: "not_paid" }, 403);
       }
@@ -533,7 +551,7 @@ Deno.serve(async (req) => {
           areas: k.areas ? { items: k.areas.items, source: k.areas.source, line: KNOWN_SOURCE_LINE[k.areas.source] } : null,
         };
       }
-      return json({ ok: true, phone, known });
+      return json({ ok: true, phone, known, confirmed_location: confirmedLocation });
     }
 
     /* ── complete_q2 ────────────────────────────────────────────────────────────────────────────
@@ -943,6 +961,11 @@ Deno.serve(async (req) => {
         /* TWO OPTIONS (2026-10-07): asked only when an agency / web company looks after their site — are they still tied
            into a contract with it? Same words as the salesperson's call (QcAgencyContract). Unknown value → null. */
         agency_contract: a.agency_contract === "in_contract" || a.agency_contract === "free" || a.agency_contract === "not_sure" ? a.agency_contract : null,
+        /* THE SIMPLE ONBOARDING (2026-10-16, src/lib/onboardingSimpleAnswers.ts) — in ALL THREE lists (answers /
+           NEWER_COLS / optional). Keep or improve the current design; the date a tied-in agency contract ends.
+           Anything not a known value / a real yyyy-mm-dd day stores null. */
+        design_choice: readDesignChoice(a.design_choice),
+        agency_contract_ends: readContractEnd(a.agency_contract_ends),
         incomplete,
       };
 
@@ -956,7 +979,7 @@ Deno.serve(async (req) => {
          sent it, the row saved with HTTP 200, and the value was null, because this function builds
          its insert from an explicit key list and an unlisted key simply disappears. A Squarespace
          customer who had said no to moving reached Stripe as a result. */
-      const NEWER_COLS = ["services_list", "areas_list", "website_manager", "website_manager_email", "competitor_name", "website_platform", "website_platform_other", "willing_to_migrate", "gbp_exists", "gbp_status", "gbp_verified", "must_not_say", "photos_status", "contact_name", "confirmed_phone", "business_website", "source", "website_addon", "plan_tier", "domain_status", "domain_owned", "domain_access", "domain_third_party", "site_rights", "authority_confirmed", "dns_permission", "materials_confirmed", "domain_escalated_at", "agency_contract", "services_not_offered", "top_requests"];
+      const NEWER_COLS = ["services_list", "areas_list", "website_manager", "website_manager_email", "competitor_name", "website_platform", "website_platform_other", "willing_to_migrate", "gbp_exists", "gbp_status", "gbp_verified", "must_not_say", "photos_status", "contact_name", "confirmed_phone", "business_website", "source", "website_addon", "plan_tier", "domain_status", "domain_owned", "domain_access", "domain_third_party", "site_rights", "authority_confirmed", "dns_permission", "materials_confirmed", "domain_escalated_at", "agency_contract", "services_not_offered", "top_requests", "design_choice", "agency_contract_ends"];
       for (const col of NEWER_COLS) {
         if ((answers as Record<string, unknown>)[col] == null) delete (answers as Record<string, unknown>)[col];
       }
@@ -971,8 +994,9 @@ Deno.serve(async (req) => {
           service.from("onboarding_responses").insert(payload).select("id").maybeSingle();
         // website_platform_other before website_platform, for the same reason website_manager_email
         // comes before website_manager: the shorter name is a substring of the longer one, so
-        // testing it first would shed both columns on a single miss.
-        const optional = ["business_website", "services_list", "areas_list", "website_manager_email", "website_manager", "website_platform_other", "website_platform", "willing_to_migrate", "gbp_verified", "gbp_exists", "gbp_status", "must_not_say", "photos_status", "competitor_name", "areas_wanted", "incomplete", "contact_email", "contact_name", "confirmed_phone", "business_address", "source", "website_addon", "plan_tier", "domain_status", "domain_owned", "domain_access", "domain_third_party", "site_rights", "authority_confirmed", "dns_permission", "materials_confirmed", "domain_escalated_at", "agency_contract", "services_not_offered", "top_requests"];
+        // testing it first would shed both columns on a single miss. Same for agency_contract_ends before
+        // agency_contract.
+        const optional = ["business_website", "design_choice", "agency_contract_ends", "services_list", "areas_list", "website_manager_email", "website_manager", "website_platform_other", "website_platform", "willing_to_migrate", "gbp_verified", "gbp_exists", "gbp_status", "must_not_say", "photos_status", "competitor_name", "areas_wanted", "incomplete", "contact_email", "contact_name", "confirmed_phone", "business_address", "source", "website_addon", "plan_tier", "domain_status", "domain_owned", "domain_access", "domain_third_party", "site_rights", "authority_confirmed", "dns_permission", "materials_confirmed", "domain_escalated_at", "agency_contract", "services_not_offered", "top_requests"];
         const reduced = { ...answers } as Record<string, unknown>;
         let res = await attempt({ ...reduced, ...extra });
         let guard = 0;
@@ -1185,7 +1209,7 @@ Deno.serve(async (req) => {
         if (decision.kind === "resume") {
           /* Light-touch: anything they typed fills an EMPTY contact field on the held row, never replaces one. */
           try {
-            const fills: [string, string | null][] = [["contact_name", clip(a.contact_name, 120)], ["contact_email", contactEmail], ["confirmed_phone", clip(a.confirmed_phone, 40)]];
+            const fills: [string, string | null][] = [["contact_name", clip(a.contact_name, 120)], ["contact_email", contactEmail], ["confirmed_phone", clip(a.confirmed_phone, 40)], ...simpleAnswerFills(a)];
             for (const [col, val] of fills) if (val) await service.from("onboarding_responses").update({ [col]: val }).eq("id", decision.onboardingId).is(col, null);
           } catch { /* non-fatal — the sales sign-up already carries what Sales recorded */ }
           return json({ ok: true, onboarding_id: decision.onboardingId, resumed: true, route: decision.route });
@@ -1216,9 +1240,11 @@ Deno.serve(async (req) => {
         if (selfServeBuildHold({ plan_tier: (answers as Record<string, unknown>).plan_tier, website_addon: (answers as Record<string, unknown>).website_addon, website_manager: (answers as Record<string, unknown>).website_manager, agency_contract: (answers as Record<string, unknown>).agency_contract })) {
           const { data: owner } = await service.from("team_members").select("user_id").eq("is_book_owner", true).maybeSingle();
           if (owner?.user_id) {
+            /* The end date the client gave for their agency contract, when they gave one (simple onboarding, 2026-10-16). */
+            const ends = contractEndWords((answers as Record<string, unknown>).agency_contract_ends as string | null);
             await service.from("notifications").upsert({
               user_id: owner.user_id, kind: "quick_close_review", title: "WEBSITE ACCESS ISSUE — Paul review required",
-              body: `A client chose Build on their own page: ${SELF_SERVE_HOLD_TEXT}.`,
+              body: `A client chose Build on their own page: ${SELF_SERVE_HOLD_TEXT}.${ends ? ` They say their agency contract ends on ${ends}.` : ""}`,
               link: `/inbox?lead=${leadId}`, lead_id: leadId, priority: 2, dedupe_key: `self_serve_review:${row.id}`,
             }, { onConflict: "user_id,dedupe_key", ignoreDuplicates: true });
           }

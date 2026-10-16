@@ -38,6 +38,7 @@ import { backlogCounts } from '@/lib/opportunityBacklog';
 import { discoveryPlan } from '@/lib/discoveryProgress';
 import { ManualOnboardingDialog } from '@/components/ManualOnboardingDialog';
 import { onboardingStatus } from '@/lib/manualOnboarding';
+import { simpleOnboardingLines } from '@/lib/onboardingSimpleAnswers';
 import { baselineReadiness } from '@/lib/baselineReadiness';
 import type { LeadCrawlSummary } from '@/lib/leadCrawlSummary';
 import { WORK_LABEL, type ClientContract } from '@/lib/clientContract';
@@ -115,6 +116,7 @@ function ClientDetailsDialog({ lead, onboarding }: { lead: AnyRecord; onboarding
     {f('Services', values(onboarding?.services_list) !== '—' ? values(onboarding?.services_list) : onboarding?.services || values(lead.services_included))}{f('Service areas', values(onboarding?.areas_list) !== '—' ? values(onboarding?.areas_list) : onboarding?.areas_wanted)}
     {f('Onboarding source', onboarding?.client_source || 'onboarding')}{f('Payment', lead.amount_paid ? `Paid ${lead.amount_paid}${lead.payment_date ? ` · ${lead.payment_date}` : ''}` : '—')}
     {f('Website route', onboarding?.website_route?.replaceAll('_', ' '))}{f('Domain', onboarding?.domain_status)}
+    {simpleOnboardingLines(onboarding).map((l) => <div key={l.label}><dt className="text-xs text-muted-foreground">{l.label}</dt><dd className="break-words">{l.value}</dd></div>)}
     {f('Website manager / access', onboarding?.access_status)}{f('Baseline status', paidBaselineStatusLabel(onboarding?.baseline_status))}
     {f('Baseline audit ID', lead.baseline_audit_id || onboarding?.audit_id)}{f('Remeasure date', lead.remeasure_due_date)}
     {f('GBP consent / manager', [onboarding?.gbp_consent, onboarding?.gbp_manager_email].filter(Boolean).join(' · '))}{f('Project status', lead.project_status || lead.status)}
@@ -529,6 +531,7 @@ function OnboardingStage({ onboarding, unpaid, onOpen }: { onboarding: AnyRecord
       <div><span className="text-muted-foreground">Domain: </span>{onboarding.domain_status || '—'} · <span className="text-muted-foreground">route: </span>{onboarding.website_route?.replaceAll('_', ' ') || (onboarding.plan_tier ? `plan ${onboarding.plan_tier}` : '—')}</div>
       <div className="sm:col-span-2"><span className="text-muted-foreground">Services: </span>{services}</div>
       <div className="sm:col-span-2"><span className="text-muted-foreground">Service areas: </span>{areas}</div>
+      {simpleOnboardingLines(onboarding).map((l) => <div key={l.label} className="sm:col-span-2"><span className="text-muted-foreground">{l.label}: </span>{l.value}</div>)}
       {onboarding.operator_edited_at && <div className="sm:col-span-2 text-muted-foreground">Answers entered/edited by operator {new Date(onboarding.operator_edited_at).toLocaleString('en-GB')}.</div>}
     </div>}
     <Button size="sm" variant={st.state === 'complete' || st.state === 'completed_manually' ? 'outline' : 'default'} onClick={onOpen}>

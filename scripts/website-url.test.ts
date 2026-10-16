@@ -92,17 +92,16 @@ ok(fn.indexOf('const optional = ["business_website"') > 0, 'and leads it, so no 
 console.log('\n-- prefill returns Google\'s values, and only Google\'s --');
 ok(/phone_guess: String\(lead\.phone \?\? ""\)\.trim\(\)/.test(fn), 'phone_guess is returned');
 ok(/website_guess: String\(lead\.website \?\? ""\)\.trim\(\)/.test(fn), 'website_guess is returned');
-ok(/amount_paid, phone, website(?:, services_included, service_areas)?"\)/.test(fn), 'and both columns are actually SELECTED — an unselected column reads as undefined');
-/* ⛔ THE LINE THAT MUST NOT MOVE. email/contact_name/notes come from enrichment and from the
-   operator, not from a public Maps listing, and are present on 10.1% / 0.2% of leads — all of the
-   risk, none of the value. */
+ok(/amount_paid, phone, website(?:, services_included, service_areas)?(?:, contact_name, email)?"\)/.test(fn), 'and both columns are actually SELECTED — an unselected column reads as undefined');
+/* ⛔ THE LINE THAT MOVED ONCE, BY PAUL (2026-10-16): the client's name and business address may be returned, the
+   email ONLY masked (contact_email_masked, maskEmail). The full email and notes still never leave. */
 /* ⚠️ COMMENTS STRIPPED FIRST. The block carries a note EXPLAINING that email, contact_name and
    notes stay out, so a raw substring test matches the explanation and fails on prose that is
    saying the right thing — the substring trap, inside the assertion written to prevent it. */
 const prefillBlock = fn.slice(fn.indexOf('const offer = offerPrice();'), fn.indexOf('/* ── revise'))
   .replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/^\s*\/\/.*$/gm, ' ');
-ok(!/\bemail\b\s*:/.test(prefillBlock), 'prefill does NOT return the email');
-ok(!/contact_name/.test(prefillBlock), 'prefill does NOT return the operator\'s contact name');
+ok(!/\bemail\b\s*:/.test(prefillBlock) && /contact_email_masked: heldEmailMasked/.test(prefillBlock) && /maskEmail\(heldFirst\("contact_email"/.test(prefillBlock), 'prefill returns the email MASKED only, never the full address');
+ok(/contact_name: heldName,/.test(prefillBlock) && /business_address: heldAddress,/.test(prefillBlock), 'prefill returns the client name and business address (Paul, 2026-10-16)');
 ok(!/\bnotes\b/.test(prefillBlock), 'prefill does NOT return notes');
 
 console.log(f === 0 ? '\nALL PASS' : `\n${f} FAILURE(S)`);
