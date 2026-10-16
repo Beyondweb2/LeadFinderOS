@@ -61,6 +61,25 @@ Walk `node scripts/check-import-graph.mjs --reached-by <file>` for every changed
 `_shared/payment-hold.ts`) plus the directly changed `client-agreement`, `findable-checkout`, `stripe-webhook`,
 `paid-client-hub`, `quick-close`, `findable-onboarding`. The deploy list is recorded in the release record below.
 
-## Release record
+## Release record (2026-10-16)
 
-(filled in at release)
+* Cut-over check (read-only, just before): 0 signed-v4-unpaid sign-ups, 0 checkout sessions in the last 24 h. Two unsigned,
+  unpaid sign-ups were still on Optimise (Driving Ambition, 16 Oct; Adam Plumbing, Heating & Construction, 6 Oct): their
+  links now say "no longer offered" and Paul re-sends them as Build.
+* Migration `20261104090000_client_agreement_v5.sql` applied once and read back (two columns, both constraints). Historical
+  rows untouched: v1 8, v3 1, v4 17, every stored text re-hashes to its fingerprint.
+* LeadFinderOS `main` `22808d4c`; findable-site `master` `840f556` (site master's simple onboarding merged in first).
+  Gates: LeadFinderOS `npm run check` 400/402 (the two failures, manual-onboarding and onboarding-audit-fields, read
+  findable-site's new simple onboarding and fail on main too; owned by the onboarding-consistency session); findable-site
+  build + `npm test` green, em-dash clean, WebKit tap / visibility / landing / hero audits green on a served dist and on
+  the live origin. `webkit-nav-scrim` is stale (looks for a "Free AI check" hero button removed earlier).
+* 41 edge functions redeployed from `main` (all exit 0), the `--reached-by` closure of every changed module, NOT
+  `whatsapp-status`. SPA marker `2026-10-16-agreement-v5-one-plan` served on app.leadfinderos.com and leadfinderos-next.
+  findable.live deployed (production branch `master`): `/agreement/` v5, `/agreement/v4/` v4.
+* Live ZZ QA (ZZ QA17 v5 Build Plumbing, ZZ QA18 v5 Old Optimise; drama phones, QA email, excluded, archived after):
+  v5 page with the 1.6 questions, Build only, nothing pre-ticked, payment locked; pay before signing 409; "No, tied in"
+  422 with the decline (nothing stored, Paul's report written); unanswered 422; signing with a forged route / v4 / terms
+  stored v5, build, csa_v5_option_b, free to leave true; double submit kept one row; the signed PDF downloads; Continue to
+  secure payment forwarded to Stripe (session £99 GBP, Build, 12 payments; opened, never paid). QA18 (Optimise sign-up):
+  "no longer offered", signing refused 409. Historical v3 and v4 clients: page "Agreement accepted", signed PDF re-renders.
+* Not built: the 9A.5 reminder before payment 12 (nothing sends it). Commission unchanged.
