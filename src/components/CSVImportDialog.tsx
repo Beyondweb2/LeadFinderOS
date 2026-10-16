@@ -59,7 +59,7 @@ interface CSVImportDialogProps {
 type Step = 'pick' | 'map' | 'preview' | 'done';
 
 const importRpc: ImportRpc = (args) =>
-  (supabase.rpc as unknown as (n: string, a: unknown) => Promise<{ data: unknown; error: { message?: string } | null }>)('import_leads_v3', args);
+  (supabase.rpc as unknown as (n: string, a: unknown) => Promise<{ data: unknown; error: { message?: string } | null }>)('import_leads_v4', args);
 
 const emptyMapping = () => Object.fromEntries(IMPORT_FIELDS.map((f) => [f, null])) as ColumnMapping;
 
@@ -83,6 +83,7 @@ export function CSVImportDialog({ open, onOpenChange, onImported, isAdmin }: CSV
   const [campaignId, setCampaignId] = useState<string | null>(null); // required — the campaign every new lead joins
   const { campaigns } = useCampaigns();
   const campaignActions = useCampaignActions();
+  const [townsChecked, setTownsChecked] = useState(false); // 2026-10-16: default OFF — towns in the file were checked by the researcher
   const [perTrade, setPerTrade] = useState(false); // 2026-10-16: one WhatsApp campaign per trade, named exactly the trade
   const qc = useQueryClient();
   const { user } = useAuth();
@@ -93,7 +94,7 @@ export function CSVImportDialog({ open, onOpenChange, onImported, isAdmin }: CSV
   const reset = () => {
     setStep('pick'); setFile(null); setParsed(null); setMapping(emptyMapping()); setMapNotes([]);
     setError(null); setBusy(false); setProgress(null); setPreview(null); setResult(null); setImportPossible(false);
-    setBatchName(''); setDefaultTrade(''); setAssignTo(''); setImportCountry(''); setResearch(false); setCampaignId(null); setPerTrade(false);
+    setBatchName(''); setDefaultTrade(''); setAssignTo(''); setImportCountry(''); setResearch(false); setCampaignId(null); setPerTrade(false); setTownsChecked(false);
     setRowEdits({}); setEditRow(null); setReadyOnly(false);
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
@@ -176,7 +177,7 @@ export function CSVImportDialog({ open, onOpenChange, onImported, isAdmin }: CSV
     setBusy(true); setError(null); setProgress({ done: 0, total: rows.length });
     try {
       const sendRows = commit && readyOnly && importReadiness ? rows.filter((r) => !importReadiness.notReady.has(r.row)) : rows;
-      const tags = { assignTo: isAdmin && assignTo ? assignTo : null, batch: batchName };
+      const tags = { assignTo: isAdmin && assignTo ? assignTo : null, batch: batchName, townsChecked };
       let rep;
       if (commit && perTradeOn) {
         /* Make (or reuse) each trade's campaign FIRST. If one cannot be made, nothing is imported. */
@@ -314,8 +315,15 @@ export function CSVImportDialog({ open, onOpenChange, onImported, isAdmin }: CSV
                   )}
                   <label className="flex flex-col gap-1 text-sm min-w-0">
                     <span className="text-muted-foreground">Batch name</span>
-                    <Input value={batchName} maxLength={IMPORT_BATCH_NAME_MAX} onChange={(e) => setBatchName(e.target.value)} placeholder="e.g. Ethan batch 14 Oct" data-testid="csv-batch" />
+                    <Input value={batchName} maxLength={IMPORT_BATCH_NAME_MAX} onChange={(e) => setBatchName(e.target.value)} placeholder="Left blank, the file name is used" data-testid="csv-batch" />
                   </label>
+                  <div className="sm:col-span-2 space-y-1" data-testid="csv-towns-checked-row">
+                    <label className="flex cursor-pointer items-center gap-2 text-sm">
+                      <input type="checkbox" className="h-4 w-4 accent-blue-500" checked={townsChecked} onChange={(e) => setTownsChecked(e.target.checked)} data-testid="csv-towns-checked" />
+                      Towns in this file were checked by the researcher
+                    </label>
+                    <p className="text-xs text-muted-foreground">Ticked: a real town in the file is saved as confirmed, so the AI audit uses it as it is. A blank town, &ldquo;Online&rdquo; or &ldquo;Not established&rdquo; stays blocked. Unticked: nothing changes.</p>
+                  </div>
                   {(research || mapping.trade == null) && (
                     <label className="flex flex-col gap-1 text-sm min-w-0">
                       <span className="text-muted-foreground">{research ? 'Trade for rows with none' : 'Trade for the whole file'}</span>

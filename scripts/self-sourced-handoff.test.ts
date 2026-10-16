@@ -171,7 +171,7 @@ ok(/_channel not in \('email', 'linkedin', 'sms', 'in_person', 'other'\)/.test(M
   const fn = read("supabase/functions/create-ai-audit/index.ts");
   ok((fn.match(/finalHookPlan\(/g) ?? []).length === 3, "ONE hook plan function, used by the preview AND the run");
   ok(/if \(hookAuditRequested && !isBaseline && !isMeasurement && !isDiscovery\) \{\s*qs = finalHookPlan/.test(fn), "the hook preview is planned exactly as the run");
-  ok(/const handTypedTown = !!lead && townWasTyped\(lead\)\s*&& locationSource === "search" && hasUsableTown\(locationText\);/.test(fn),
+  ok(/const handTypedTown = !!lead && \(townWasTyped\(lead\) \|\| townConfirmedByPerson\(lead\)\)\s*&& locationSource === "search" && hasUsableTown\(locationText\);/.test(fn),
     "the town-gate exemption is a positive match: typed town (townWasTyped), the typed town in use");
   const tt = read("supabase/functions/_shared/typed-town.ts");
   ok(/if \(filled\(lead\.place_id\)\) return false;\s*return filled\(lead\.lead_source\) \|\| filled\(lead\.import_batch\);/.test(tt),

@@ -25,7 +25,7 @@ import { latestApifyUsage } from "../_shared/audit-budget.ts";
 import { rollingSpendUsd } from "../_shared/enrichment/runner.ts";
 import { OUTREACH_AUDIT_EST_USD } from "../_shared/outreach-audit.ts";
 import { advance, adminOverview, batchView, cancelBatch, startBatch, type SalesCheckDeps } from "../_shared/sales-check.ts";
-import { townGated } from "../../../src/lib/townVerdict.ts";
+import { auditTownGated } from "../_shared/typed-town.ts";
 import { OUTREACH_HOOK_QUESTIONS } from "../../../src/lib/auditQuestionCounts.ts";
 
 /** Bumped with every change to this function — the deploy marker (OPTIONS answers it). */
@@ -138,7 +138,7 @@ function depsFor(service: any, actorId: string): SalesCheckDeps {
     estUsd: OUTREACH_AUDIT_EST_USD,
     questionCount: OUTREACH_HOOK_QUESTIONS,
     suppressed: async (lead) => (await checkSuppressed(service, { phone: lead.phone ?? null, email: lead.email ?? null, leadId: lead.id })).suppressed,
-    townGated: (lead) => townGated(lead as Parameters<typeof townGated>[0]),
+    townGated: (lead) => auditTownGated(lead as Parameters<typeof auditTownGated>[0]),
     guard: async (actor, leadId) => {
       const g = await guardAction(service, actor, "sales_check", { fn: "sales-prospect-check", leadId, estCostUsd: OUTREACH_AUDIT_EST_USD, role: "sales" });
       return g.ok ? { ok: true } : { ok: false, reason: g.reason };

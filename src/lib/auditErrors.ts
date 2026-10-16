@@ -21,6 +21,8 @@
    text is what makes the next failure diagnosable in one look instead of one afternoon.
    ============================================================ */
 
+import { isTownRefusal } from './townRefusal.ts';
+
 export type FailureKind =
   | 'vendor_cap'      // Apify's own monthly spend cap — needs money or the cycle to roll
   | 'our_cap'         // OUR internal ceiling stopped it on purpose
@@ -119,6 +121,17 @@ export function explainAuditFailure(
       kind: 'our_cap',
       headline: 'Abandoned on purpose so the market could be read sooner.',
       detail: 'Every other question in this audit had already come back, so this last one was dropped rather than held onto. The market was read off the answers that landed. Nothing failed, and no paid baseline ever does this.',
+      raw: r,
+    };
+  }
+
+  /* The town could not be used (create-ai-audit 409 town_unverified / 400 local_scope_needs_town, bulk-jobs "No usable town"):
+     nothing was asked and nothing was spent. The fix is on the lead — Confirm town in its audit popup (src/lib/townRefusal.ts). */
+  if (isTownRefusal(r)) {
+    return {
+      kind: 'unknown',
+      headline: 'Not checked — we couldn’t confirm which town this business is in.',
+      detail: 'Nothing was asked and nothing was spent. Open the lead, press Run audit, and use Confirm town (or type the right town); then run it again.',
       raw: r,
     };
   }

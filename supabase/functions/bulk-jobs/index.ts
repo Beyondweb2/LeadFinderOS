@@ -230,7 +230,7 @@ async function runItem(service: any, job: JobRow, item: JobItem): Promise<{ stat
     // own concurrency/cost caps. So this branch only enqueues — it never fires Apify directly.
     const { data: lead } = await service
       .from("outreach_leads")
-      .select("id, user_id, business_name, search_keyword, category, search_location, address, country, website, phone, email, is_archived, derived_town, town_fetch_note, place_id, lead_source, import_batch")
+      .select("id, user_id, business_name, search_keyword, category, search_location, address, country, website, phone, email, is_archived, derived_town, town_fetch_note, place_id, lead_source, import_batch, town_confirmed_by")
       .eq("id", item.lead_id)
       .eq("user_id", job.user_id)
       .maybeSingle();

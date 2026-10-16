@@ -58,4 +58,4 @@ export function townGated(row: TownVerdictRow | null | undefined): boolean {
    wrong. What it means is that Google was asked and could not confirm a town — the typed or searched
    town is still on the lead, it just is not Google-confirmed. Say that. */
 export const TOWN_GATE_REASON =
-  "Google could not confirm the town — it was asked where this business is and cannot say; the town on the lead is unconfirmed. Fix or confirm the town on the lead, then retry";
+  "We couldn't confirm which town this business is in (Google could not confirm the town, and nobody has confirmed it on the lead). Press Confirm town on the lead, then run the audit again";

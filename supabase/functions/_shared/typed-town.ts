@@ -18,6 +18,8 @@ export interface TypedTownLead extends TownVerdictRow {
   import_batch?: string | null;
   search_location?: string | null;
   address?: string | null;
+  /** Who vouched for the town: 'researcher' (the import checkbox) or 'operator' (Confirm town in the audit popup). */
+  town_confirmed_by?: string | null;
 }
 
 const filled = (v: unknown): boolean => typeof v === "string" && v.trim() !== "";
@@ -30,10 +32,16 @@ export function townWasTyped(lead: TypedTownLead | null | undefined): boolean {
   return filled(lead.lead_source) || filled(lead.import_batch);
 }
 
-/** `townGated`, EXCEPT a typed-town lead (townWasTyped) whose typed town is a real one. */
+/** A person vouched for this lead's town (import checkbox "checked by the researcher", or Confirm town in the audit
+ *  popup). Positive match on a stored value; says nothing about the town text — the real-town check still applies. */
+export function townConfirmedByPerson(lead: TypedTownLead | null | undefined): boolean {
+  return !!lead && filled(lead.town_confirmed_by);
+}
+
+/** `townGated`, EXCEPT a typed-town lead (townWasTyped) or a person-confirmed one, whose town is a real one. */
 export function auditTownGated(lead: TypedTownLead | null | undefined): boolean {
   if (!townGated(lead)) return false;
-  if (townWasTyped(lead) && cleanTypedTown(lead?.search_location || lead?.address)) return false;
+  if ((townWasTyped(lead) || townConfirmedByPerson(lead)) && cleanTypedTown(lead?.search_location || lead?.address)) return false;
   return true;
 }
 

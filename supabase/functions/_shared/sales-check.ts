@@ -74,7 +74,7 @@ export const BATCH_LOCK_MS = 90_000;
 /** Batches older than this are no longer moved on (their items have long resolved or timed out). */
 const ACTIVE_LOOKBACK_MS = 2 * 86_400_000;
 
-export const LEAD_COLUMNS = "id, user_id, assigned_to_user_id, amount_paid, status, is_archived, business_name, search_keyword, category, search_location, address, derived_town, town_fetch_note, country, website, phone, email, services_included, service_areas";
+export const LEAD_COLUMNS = "id, user_id, assigned_to_user_id, amount_paid, status, is_archived, business_name, search_keyword, category, search_location, address, derived_town, town_fetch_note, country, website, phone, email, services_included, service_areas, place_id, lead_source, import_batch, town_confirmed_by";
 
 type Lead = CheckLead & { phone?: string | null; email?: string | null; town_fetch_note?: string | null };
 

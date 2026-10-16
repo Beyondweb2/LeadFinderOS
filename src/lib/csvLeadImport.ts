@@ -13,6 +13,7 @@
 // Leaf imports only (relative, explicit .ts): scripts/csv-lead-import.test.ts loads it directly. The one import is the
 // refusal wording for a salesperson whose onboarding is incomplete (readinessWords.ts, final sales release).
 import { onboardingWordsForPausedRefusal } from './readinessWords.ts';
+import { isRealTown } from './typedTown.ts';
 
 /** The fields a CSV row may set — the same allowlist import_leads reads. Order = the mapping screen's order.
  *  `country` (2026-10-07, migration 20261014100200) is optional: UK or Australia words; left unmapped, the server
@@ -341,7 +342,16 @@ export interface ImportReport {
  *  only the admin may name a teammate — the server refuses anything else) and a batch name ("Ethan batch 14 Oct"). */
 export interface ImportTags { assignTo?: string | null; batch?: string | null;
   /** 2026-10-14 (import_leads_v3): the campaign every NEW lead joins. Required by the server; null is refused (campaign_required). */
-  campaignId?: string | null }
+  campaignId?: string | null;
+  /** 2026-10-16 (import_leads_v4): "Towns in this file were checked by the researcher". Default off. */
+  townsChecked?: boolean }
+
+/** The file rows whose town the person vouched for: only a REAL town counts (typedTown.ts isRealTown) — blank, "Online",
+ *  "Not established" and prose stay unconfirmed and stay blocked at the audit. Empty unless the box was ticked. */
+export function townRowsToConfirm(rows: readonly ImportRow[], townsChecked: boolean | undefined): number[] {
+  if (!townsChecked) return [];
+  return rows.filter((r) => isRealTown(r.town)).map((r) => r.row);
+}
 
 /** The longest batch name the server keeps (import_leads_v2 cuts nothing silently in the rows, but trims the batch to this). */
 export const IMPORT_BATCH_NAME_MAX = 80;
@@ -382,7 +392,7 @@ export function withDefaultTrade(rows: ImportRow[], trade: string | null | undef
   return rows.map((r) => (r.trade ? r : { ...r, trade: t }));
 }
 
-export type ImportRpc = (args: { _rows: ImportRow[]; _commit: boolean; _file_name: string | null; _import_possible: boolean; _assign_to: string | null; _batch: string | null; _campaign_id: string | null }) =>
+export type ImportRpc = (args: { _rows: ImportRow[]; _commit: boolean; _file_name: string | null; _import_possible: boolean; _assign_to: string | null; _batch: string | null; _campaign_id: string | null; _confirmed_rows?: number[] }) =>
   Promise<{ data: unknown; error: { message?: string } | null }>;
 
 /** Send the rows in calls of IMPORT_BATCH_MAX, one after another. Each call is one transaction on the server, so a
@@ -402,7 +412,8 @@ export async function runImport(
     let message: string | null = null;
     try {
       const { data, error } = await rpc({ _rows: chunk, _commit: commit, _file_name: fileName, _import_possible: importPossible,
-        _assign_to: tags.assignTo ?? null, _batch: (tags.batch ?? '').trim().slice(0, IMPORT_BATCH_NAME_MAX) || null, _campaign_id: tags.campaignId ?? null });
+        _assign_to: tags.assignTo ?? null, _batch: (tags.batch ?? '').trim().slice(0, IMPORT_BATCH_NAME_MAX) || null, _campaign_id: tags.campaignId ?? null,
+        _confirmed_rows: townRowsToConfirm(chunk, tags.townsChecked) });
       if (error) message = error.message ?? 'The import could not be reached.';
       else res = (data ?? null) as ImportCallResult | null;
     } catch (e) {

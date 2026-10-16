@@ -18,7 +18,11 @@ const NOT_A_PLACE_FIRST_WORDS = new Set([
   'online', 'remote', 'virtual', 'worldwide', 'global', 'international', 'internet', 'everywhere', 'anywhere',
   'nationwide', 'national', 'various', 'multiple', 'unknown', 'tbc', 'tba', 'tbd', 'n/a', 'na', 'none', 'nil',
   'null', 'undefined', 'other', 'misc', 'others',
+  'unclear', 'unspecified', 'undetermined', 'unconfirmed', 'unverified', 'unestablished',
 ]);
+
+/** "Not established", "not found", "no town given": a researcher's way of saying the town is unknown — never a place. */
+const NOT_A_PLACE_PHRASE = /^(not|no)\s+(established|found|known|specified|stated|available|confirmed|given|provided|applicable|determined|identified|clear|listed|town|city|location)\b/i;
 
 /** A real town name is a handful of words; a sentence is a note, not a place. */
 const MAX_TOWN_WORDS = 5;
@@ -39,7 +43,7 @@ export function cleanTypedTown(raw: string | null | undefined): string {
   s = s.replace(/^[\s,.\-–—]+|[\s,.\-–—]+$/g, '');
   if (!s) return '';
   const first = s.toLowerCase().split(/[\s,]+/)[0].replace(/[^a-z/]/g, '');
-  if (NOT_A_PLACE_FIRST_WORDS.has(first)) return '';
+  if (NOT_A_PLACE_FIRST_WORDS.has(first) || NOT_A_PLACE_PHRASE.test(s)) return '';
   if (s.split(' ').length > MAX_TOWN_WORDS) {
     /* "Tangga Batu / Tanjung Kling, Melaka": a list of neighbourhoods ending in the city — the city is the town.
        Only the LAST comma segment, and only when it is itself a short real town; prose gets nothing. */
