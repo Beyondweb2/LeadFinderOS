@@ -11,6 +11,9 @@ import { planClientConfirmation, resumeDecision, salesSignupFor, type SignupRow 
 import { confirmItemsFor, confirmSummaryFor } from "../../../src/lib/clientConfirm.ts";
 import type { QuickCloseRecord } from "../../../src/lib/quickClose.ts";
 import { selfServeBuildHold, selfServeDeclined, SELF_SERVE_DECLINE_TEXT, SELF_SERVE_HOLD_TEXT } from "../../../src/lib/selfServeContract.ts";
+import { alertContractAnswer } from "../_shared/contract-alert.ts";
+import { contractAlertAnswerFromQuickClose, contractAlertAnswerFromRow } from "../../../src/lib/contractAlert.ts";
+import { effectiveAnswers } from "../../../src/lib/quickClose.ts";
 import { readContractEnd, readDesignChoice, contractEndWords, simpleAnswerFills, maskEmail } from "../../../src/lib/onboardingSimpleAnswers.ts";
 import { recordSetupSignupCreator } from "../_shared/setup-link-creator.ts";
 
@@ -501,6 +504,8 @@ Deno.serve(async (req) => {
             }
           }
         } catch (e) { console.error("[findable-onboarding] sales_confirm audit failed (non-fatal):", e instanceof Error ? e.message : String(e)); }
+        /* CONTRACT CALL ALERT (2026-10-16): the client's own corrected answer, judged like every other route. */
+        await alertContractAnswer(service, { leadId: confirmLeadId, answer: contractAlertAnswerFromQuickClose(effectiveAnswers(stored as QuickCloseRecord)), source: "sales_confirm" });
         const after = resumeDecision(rows.map((r) => (r.id === confirmOnboardingId ? { ...r, quick_close: stored } : r)));
         return json({ ok: true, onboarding_id: confirmOnboardingId, ready: after.kind === "resume", changed: plan.changed });
       }
@@ -1059,6 +1064,8 @@ Deno.serve(async (req) => {
             const { error: linkErr } = await service
               .from("onboarding_responses").update({ lead_id: outcome.leadId }).eq("id", row.id);
             if (linkErr) console.error(`[findable-onboarding] SIGNUP lead link FAILED for ${row.id}: ${linkErr.message} - this visitor cannot check out`);
+            /* CONTRACT CALL ALERT (2026-10-16): a cold sign-up's agency answer, once it has a lead to point at. */
+            await alertContractAnswer(service, { leadId: outcome.leadId, answer: contractAlertAnswerFromRow({ website_manager: a.website_manager, agency_contract: a.agency_contract }), source: "findable_onboarding", contractEnds: a.agency_contract_ends });
           } else {
             console.error(`[findable-onboarding] SIGNUP made no lead (${outcome.kind}: ${outcome.reason ?? ""}) - this visitor cannot check out`);
           }
@@ -1279,6 +1286,11 @@ Deno.serve(async (req) => {
           }
         }
       } catch (e) { console.error("[findable-onboarding] self-serve review notice failed (non-fatal):", e instanceof Error ? e.message : String(e)); }
+      /* CONTRACT CALL ALERT (2026-10-16): ONE email to Paul for "not sure" / "tied in" (a refresh or a repeat sends nothing). */
+      await alertContractAnswer(service, {
+        leadId, source: "findable_onboarding", contractEnds: (answers as Record<string, unknown>).agency_contract_ends,
+        answer: contractAlertAnswerFromRow({ website_manager: (answers as Record<string, unknown>).website_manager, agency_contract: (answers as Record<string, unknown>).agency_contract }),
+      });
 
       // Customer-confirmed location becomes the lead's location of record (the wizard's
       // write-back convention) — the audit and everything after use CONFIRMED inputs.

@@ -29,6 +29,8 @@
    Pure and edge-safe (relative imports with .ts).
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 import { isRealSend } from './realSend.ts';
+import { contractAlertOpen, newestContractAlerts, type ContractAlertRow } from './contractAlert.ts';
+import { contractEndWords } from './onboardingSimpleAnswers.ts';
 import { followUpBucket } from './salesCrm.ts';
 import { looksAutomated } from './inboundClassify.ts';
 import { isPaidLead } from './leadPayment.ts';
@@ -282,6 +284,8 @@ export interface AdminInput {
   cost: { period: CostRow[]; today: CostRow[]; yesterday: CostRow[]; week: CostRow[]; month: CostRow[] };
   /** Reply triage rows (release 2). Absent = triage not running yet: no reply items, never "all clear". */
   triage?: TriageRow[] | null;
+  /** Contract call alerts (2026-10-16, contract_call_alerts): "not sure" / "tied in" answers. Absent = none read. */
+  contractAlerts?: ContractAlertRow[] | null;
   /** Release 4: the weekly check, opportunities and directory issues for the paying clients. */
   clientExtras?: ClientExtras | null;
   /** Release 5: feature uses in the period and the one before (SQL admin_feature_usage). */
@@ -845,7 +849,7 @@ export function foldAdminOverview(input: AdminInput): AdminOverview {
     features,
     calls: { rows: [...callRows.values()].sort((a, b) => b.total - a.total), total: callTotal },
     money, today: todayBlock, yesterday: yesterdayBlock,
-    ...delegation(attentionItems(input, facts, ledger, nameOf, todayDay, ta.items), input, facts, nameOf),
+    ...delegation(attentionItems(input, facts, ledger, nameOf, todayDay, [...ta.items, ...contractAttention(input, facts, nameOf, actBy)]), input, facts, nameOf),
     triage: triageSummary(input, p),
     triageWaitingInInbox: ta.waitingInInbox,
     clients: clientRows(paidLeads.concat(realLeads.filter((l) => String(l.status) === 'refunded' && (Number(l.amount_paid) || 0) > 0)), route, nameOf)
@@ -1042,6 +1046,33 @@ function delegation(items: AttentionItem[], input: AdminInput, facts: LeadFacts[
    Open = not answered by a person since, no one acted on the lead since, the lead has not settled, and
    not marked handled (replyTriage.ts triageIsOpen). */
 /** The items for Paul's list, and the open replies NOT put on it (a salesperson's, or not a live sale). */
+/* ── Contract call alerts on Paul's list (2026-10-16, docs/contract-call-alert.md) ─────────────────────────────
+   A lead's NEWEST agency-contract answer is "not sure" (call them — TODAY) or "tied in" (follow up when it ends —
+   REVIEW). It leaves the list once a person acts on the lead after the answer (a Next Action, a logged call…), the
+   answer changes to free to leave, or the lead becomes a client. The email is _shared/contract-alert.ts. */
+function contractAttention(input: AdminInput, facts: LeadFacts[], nameOf: (u: string | null) => string, actBy: Map<string, AdminActivity[]>): AttentionItem[] {
+  if (!input.contractAlerts?.length) return [];
+  const factsById = new Map(facts.map((f) => [f.lead.id, f]));
+  const out: AttentionItem[] = [];
+  for (const [leadId, r] of newestContractAlerts(input.contractAlerts)) {
+    const f = factsById.get(leadId);
+    if (!f || f.lead.is_archived) continue; // a test (excluded) lead, or no longer in the book
+    const at = ms(r.created_at);
+    const actedAfter = (actBy.get(leadId) ?? []).some((a) => ACTED_KINDS.has(a.kind) && !!a.actor_user_id && ms(a.created_at) > at);
+    if (!contractAlertOpen({ newest: r, actedAfter, isClient: isPaidLead(f.lead) })) continue;
+    const notSure = r.answer === 'not_sure';
+    const ends = contractEndWords(r.contract_ends);
+    out.push({
+      key: `contract:${r.id}`, group: notSure ? 'today' : 'review', kind: notSure ? 'contract_not_sure' : 'contract_tied_in', leadId,
+      business: f.lead.business_name ?? 'Lead',
+      why: notSure ? 'Not sure about their agency contract' : 'Tied into their agency contract' + (ends ? ' (ends ' + ends + ')' : ''),
+      owner: f.holder ? nameOf(f.holder) : 'Nobody', sinceIso: r.created_at, state: stateLabelOf(f.lead, f, input.nowMs).label,
+      action: notSure ? 'Call them before any payment' : 'Set a follow-up for when it ends', open: 'inbox',
+    });
+  }
+  return out;
+}
+
 function triageAttention(input: AdminInput, facts: LeadFacts[], nameOf: (u: string | null) => string, msgsBy: Map<string, AdminMessage[]>, actBy: Map<string, AdminActivity[]>): { items: AttentionItem[]; waitingInInbox: number } {
   const counts = { waitingInInbox: 0 };
   if (!input.triage?.length) return { items: [], waitingInInbox: 0 };

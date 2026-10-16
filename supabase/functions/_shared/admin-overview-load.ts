@@ -12,6 +12,7 @@ import { buildExclusions, exclusionNote, type ExclusionRow } from "../../../src/
 import { londonDay, previousPeriod, resolvePeriod, type ReportingPeriod } from "../../../src/lib/reportingPeriod.ts";
 import { costProviderOf, UNRECORDED_SPEND } from "../../../src/lib/apiCostLabels.ts";
 import { FINDABLE_START_ISO, foldCostAccounting, fundingOf, isFindableCost, MIGRATION_BOUNDS, type ApifyAccountCheck, type CostAccounting, type CostDetailRow } from "../../../src/lib/apiCostAccounting.ts";
+import type { ContractAlertRow } from "../../../src/lib/contractAlert.ts";
 
 
 // THE ADMIN CONTROL CENTRE'S DATA LOADER (moved verbatim from fn admin-overview, 2026-09-30, so the
@@ -127,6 +128,16 @@ export async function loadAdminOverview(service: Service, period: ReportingPerio
     });
     triage = triage.map((r) => ({ ...r, confidence: r.confidence == null ? null : Number(r.confidence) }));
   } catch (err) { console.error("[admin-overview] triage", err instanceof Error ? err.message : err); triage = null; }
+
+  /* Contract call alerts (2026-10-16): "not sure" / "tied in" answers for Paul's list. A failed read shows none of
+     them (logged); the email already reached him. */
+  let contractAlerts: ContractAlertRow[] | null = null;
+  try {
+    const { data, error } = await service.from("contract_call_alerts").select("id, lead_id, answer, contract_ends, provider, source, created_at")
+      .gte("created_at", new Date(nowMs - 180 * 86_400_000).toISOString()).order("created_at", { ascending: false }).limit(2000);
+    if (error) throw error;
+    contractAlerts = (data ?? []) as ContractAlertRow[];
+  } catch (err) { console.error("[admin-overview] contract alerts", err instanceof Error ? err.message : err); contractAlerts = null; }
 
   /* Release 4 — paying clients' weekly checks, improvement items and directory issues. A failed read
      leaves health off the rows (the panel says so), never a false "all fine". */
@@ -324,7 +335,7 @@ export async function loadAdminOverview(service: Service, period: ReportingPerio
     onboarding: (onboardingRes.data ?? []) as AdminOnboarding[],
     commissionLines, commissionTotals, commissionDueBySeller, payoutsBySeller,
     cost: { period: cPeriod, today: cToday, yesterday: cYesterday, week: cWeek, month: cMonth },
-    triage, clientExtras, usage, delegatedTasks, attributionOf, hideActivityOf,
+    triage, contractAlerts, clientExtras, usage, delegatedTasks, attributionOf, hideActivityOf,
   });
 
   return {
