@@ -164,10 +164,7 @@ ok(leadReadiness(base, { suppressed: true }).byFeature.audit.some((i) => i.key =
 
 console.log("── 5. every add path and screen uses it ──");
 const src = (p: string) => strip(readFileSync(p, "utf8"));
-const cov = src("src/components/CoverageMultiTown.tsx");
-ok(/leadReadiness\(asLead\(r\), \{ willLookUp: true, countrySettings \}\)/.test(cov), "Coverage add: phone and town are 'will be looked up' before the add");
-ok(/leadReadiness\(row as ReadinessLead, \{ countrySettings \}\)/.test(cov) && /m\.addPhase\.saved/.test(cov), "Coverage add: re-checked on what was SAVED, after the lookups");
-ok(/Add only the ready ones/.test(cov) && /data-testid="multi-town-fix"/.test(cov), "Coverage add: fix name / town in place, or add only the ready ones");
+/* The Coverage multi-town add (CoverageMultiTown) was removed 2026-10-16: ticked towns open Find Leads, whose add is checked below. */
 const csv = src("src/components/CSVImportDialog.tsx");
 ok(/readinessLeadFromImport\(r, outcome\.get\(r\.row\)\?\.country \?\? null, batchName\)/.test(csv) && /Import only the ready ones/.test(csv) && /data-testid="csv-fix-row"/.test(csv), "CSV import: grouped readiness, fix in place, import only the ready ones");
 ok(/leadReadiness\(typed, \{ countrySettings \}\)/.test(src("src/components/AddLeadDialog.tsx")), "manual add: said before saving");

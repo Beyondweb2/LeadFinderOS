@@ -52,7 +52,7 @@ console.log('── 1. CAMPAIGNS ──');
   const create = fnBody('campaign_new');
   ok(/v_method not in \('call', 'whatsapp'\)/.test(create) && /trade_required/.test(create) && /values \(v_name, auth\.uid\(\)/.test(create) && /security definer/.test(create), 'campaign_new: four fields, the owner is the signed-in account');
   const idx = read('src/pages/Index.tsx');
-  ok(/addToOutreach\(lead, lastSearchCountry, 'no_website', activeCampaign,/.test(idx) && /campaign_id: a\.campaignId/.test(read('src/lib/salesAddPayload.ts')), 'Find Leads: the selected campaign is assigned to the businesses added');
+  ok(/addToOutreach\(lead, countryOf\(lead\), 'no_website', activeCampaign,/.test(idx) && /campaign_id: a\.campaignId/.test(read('src/lib/salesAddPayload.ts')), 'Find Leads: the selected campaign is assigned to the businesses added');
   ok(/leadRpc\('lead_set_campaign', \{ _lead_id: crmLeadId, _campaign_id: activeCampaign \}\)/.test(idx) && /data-testid="crm-move-to-campaign"/.test(read('src/components/LeadsTable.tsx')), '…and a business ALREADY in the CRM can be put into the selected campaign from its row');
   ok(/if exists \(select 1 from public\.campaigns where id = _campaign_id and method = 'call'\) then\s*return jsonb_build_object\('ok', false, 'error', 'call_campaign'\)/.test(fnBody('campaign_launch')), 'a Call campaign never queues a WhatsApp opener (campaign_launch refuses it)');
   const page = read('src/pages/Campaigns.tsx');

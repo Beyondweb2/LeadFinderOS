@@ -33,8 +33,11 @@ const searchFn = src.slice(src.indexOf("const exclusionsP ="), src.indexOf("setL
 ok(searchFn.length > 500, "search() exclusion flow found");
 const searchBody = src.slice(src.indexOf("const search = useCallback"), src.indexOf("setLeads(filteredLeads)"));
 ok(searchBody.length > 1000 && !/await fetchExcludedBusinesses\(\)/.test(searchBody), "the search does not wait for the lists before calling search-leads");
-ok(searchFn.indexOf("const exclusionsP =") < searchFn.indexOf("functions.invoke<SearchResponse>('search-leads'"), "the lists are requested before the search is sent (so they run together)");
-ok(/const ex = await exclusionsP;/.test(searchFn) && /matchesBusiness\(ex\.checked, lead\) && !matchesBusiness\(ex\.inList, lead\)/.test(searchFn), "results are filtered against the lists THIS search fetched");
+/* 2026-10-16: the search-leads call lives in the shared one-town step (fetchTown), which search() awaits AFTER starting
+   the lists; the filter lives in the shared shownResults, which search() calls with the lists it awaited. */
+ok(searchBody.indexOf("const exclusionsP =") > 0 && searchBody.indexOf("const exclusionsP =") < searchBody.indexOf("await fetchTown("), "the lists are requested before the search is sent (so they run together)");
+ok(/const ex = await exclusionsP;/.test(searchFn) && /shownResults\(data, ex\)/.test(searchFn)
+  && /const shownResults = \(data: SearchResponse, ex:[\s\S]{0,160}matchesBusiness\(ex\.checked, lead\) && !matchesBusiness\(ex\.inList, lead\)/.test(src), "results are filtered against the lists THIS search fetched");
 ok(!/data\.leads\.filter\(lead => !isExcluded\(lead\)\)/.test(src), "the stale pre-await isExcluded closure is no longer the search filter");
 
 // 4. The niche panel asks for the lists.

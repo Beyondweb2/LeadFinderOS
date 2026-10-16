@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
-import { Map as MapIcon, MapPin, Telescope } from 'lucide-react';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { Map as MapIcon, MapPin, Search, Telescope } from 'lucide-react';
 import { EmptyState, ErrorState, LoadState, PageHeader, ToneChip, type Tone } from '@/components/operator/ui';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -18,7 +18,7 @@ import {
 } from '@/lib/coverageState';
 import { CoverageWorkers } from '@/components/CoverageWorkers';
 import { CoverageFoundAdded } from '@/components/CoverageFoundAdded';
-import { CoverageMultiTown } from '@/components/CoverageMultiTown';
+import { manyTownsHref } from '@/lib/manyTowns';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useSubscription } from '@/hooks/useSubscription';
 import {
@@ -185,8 +185,8 @@ export default function Coverage() {
   const townLocation = (name: string) => (isUk || name === 'Singapore' ? name : quickLocationValue(name, country));
 
   /* ⛔ MULTI-TOWN SELECTION (2026-10-15). Which towns are ticked is a choice for THIS list, never persisted; a new
-     country or trade is a different list, so it starts empty. Only ticked towns still on screen are searched, in
-     the table's order (largest first). */
+     country or trade is a different list, so it starts empty. Only ticked towns still on screen are sent, in
+     the table's order (largest first). Since 2026-10-16 they open in Find Leads' Many towns mode (src/lib/manyTowns.ts). */
   const [pickedTowns, setPickedTowns] = useState<Set<string>>(new Set());
   useEffect(() => { setPickedTowns(new Set()); }, [country, trade]);
   const selectedTowns = useMemo(
@@ -194,6 +194,7 @@ export default function Coverage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [sorted, pickedTowns, country, isUk],
   );
+  const navigate = useNavigate();
   const listAllPicked = sorted.length > 0 && sorted.every((t) => pickedTowns.has(t.name));
   const listSomePicked = sorted.some((t) => pickedTowns.has(t.name));
 
@@ -324,8 +325,25 @@ export default function Coverage() {
         </div>
       )}
 
-      <CoverageMultiTown trade={tradeSearchWord(trade)} selected={selectedTowns} isAdmin={isAdmin}
-        onSearched={(towns) => setPickedTowns((p) => { const n = new Set(p); for (const t of towns) n.delete(t); return n; })} />
+      {/* ⛔ MANY TOWNS → FIND LEADS (Paul, 2026-10-16: V2's "Many towns" mode). ONE button: Find Leads opens in Many
+          towns mode with these towns selected, with the same trade words, town words and country as each row's link.
+          Nothing is searched here, and nothing on arrival — the person presses Find leads there (up to ten a press). */}
+      {selectedTowns.length > 0 && (() => {
+        const href = manyTownsHref(tradeSearchWord(trade), selectedTowns.map((t) => t.location), country);
+        const label = selectedTowns.length === 1 ? 'Find leads in ' + selectedTowns[0].town : 'Find leads in these ' + selectedTowns.length + ' towns';
+        return (
+          <div className="flex flex-wrap items-center gap-2 rounded-xl border border-blue-500/30 bg-blue-500/[0.06] px-3 py-2 text-sm" data-testid="coverage-open-many">
+            <span className="font-semibold">{selectedTowns.length} town{selectedTowns.length === 1 ? '' : 's'} ticked</span>
+            <span className="min-w-0 truncate text-xs text-muted-foreground">{selectedTowns.map((t) => t.town).join(', ')}</span>
+            <span className="ml-auto flex items-center gap-2">
+              <Button size="sm" className="h-8 gap-1" disabled={!href} onClick={() => href && navigate(href)} data-testid="coverage-open-many-go">
+                <Search className="h-3.5 w-3.5" />{label}
+              </Button>
+              <Button size="sm" variant="ghost" className="h-8 text-xs" onClick={() => setPickedTowns(new Set())}>Clear</Button>
+            </span>
+          </div>
+        );
+      })()}
 
       {isLoading ? (
         <LoadState label={<>Reading your audits, leads and messages&hellip;</>} />

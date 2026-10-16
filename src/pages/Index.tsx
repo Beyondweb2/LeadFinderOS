@@ -38,6 +38,8 @@ import { useSubscription } from '@/hooks/useSubscription';
 import { lookupIdentities, useSalesActions, useTeamDirectory } from '@/hooks/useSalesCrm';
 import { refusalText } from '@/lib/salesCrm';
 import { NotReadyToSellBanner } from '@/components/NotReadyToSellBanner';
+import { MANY_MODE_VALUE, MANY_TOWNS_PARAM, parseTownList } from '@/lib/manyTowns';
+import { ManyTownsStatus } from '@/components/ManyTownsStatus';
 import { useMyReadiness, type MyReadiness } from '@/hooks/useMyReadiness';
 import { missingItemWords } from '@/lib/readinessWords';
 
@@ -55,7 +57,7 @@ const ACTIVE_CAMPAIGN_KEY = 'leadfinder_active_campaign';
 const ASK_CAMPAIGN_KEY = 'lf_ask_campaign_each_time';
 
 const Index = () => {
-  const { leads, isLoading, search, retryLastSearch, exportToCsv, searchError, searchNotice, expanded, setWebsiteOverride, regionMeta, regionDowngraded, townFilterFallback, resolvedLocation, locationCandidates, lastSearch } = useLeadSearchContext();
+  const { leads, isLoading, search, searchMany, townRun, retryLastSearch, exportToCsv, searchError, searchNotice, expanded, setWebsiteOverride, regionMeta, regionDowngraded, townFilterFallback, resolvedLocation, locationCandidates, lastSearch } = useLeadSearchContext();
   /* ⚡ preload: false (2026-10-13): this page never downloads the lead list. Which results are already in
      the CRM is asked for the results on screen only (useFindLeadsCrm, src/lib/findLeadsCrmMatch.ts). */
   const { addLead: addLeadToCrm, removeFreshLead } = useOutreach({ preload: false });
@@ -135,6 +137,17 @@ const Index = () => {
   /* Coverage's Find leads names the country (2026-10-14); an unknown value is ignored, never used as a bias. */
   const urlCountryRaw = (searchParams.get('country') ?? '').trim();
   const urlCountry: Country | undefined = urlCountryRaw && normaliseSearchCountry(urlCountryRaw) === urlCountryRaw ? (urlCountryRaw as Country) : undefined;
+  /* ⛔ MANY TOWNS (2026-10-16, V2's mode; src/lib/manyTowns.ts). Coverage's ticked towns arrive as mode=many + towns=A|B:
+     the mode stays in the URL (it is what the page is showing); the towns are taken once into the selection and
+     stripped, like run. Nothing is searched on arrival — the person presses Find leads. */
+  const [many, setMany] = useState(() => searchParams.get('mode') === MANY_MODE_VALUE);
+  const [pickedTowns, setPickedTowns] = useState<string[]>(() => parseTownList(searchParams.get(MANY_TOWNS_PARAM)));
+  const switchMany = useCallback((m: boolean) => {
+    setMany(m);
+    const next = new URLSearchParams(searchParams);
+    if (m) next.set('mode', MANY_MODE_VALUE); else next.delete('mode');
+    setSearchParams(next, { replace: true });
+  }, [searchParams, setSearchParams]);
   const { user } = useAuth();
   /* ⛔ THESE WERE useState AND THAT WAS THE BUG. They were set only by pressing Search, while the
      RESULTS came back from sessionStorage on mount — so returning to this page rather than
@@ -220,10 +233,11 @@ const Index = () => {
      runs — and leaving the param behind would make the next refresh try again. Both intents were
      already captured into refs on first render, so removing them here cannot cancel either. */
   useEffect(() => {
-    if (searchParams.get('confirm') !== 'search' && searchParams.get('run') !== 'search') return;
+    if (searchParams.get('confirm') !== 'search' && searchParams.get('run') !== 'search' && !searchParams.has(MANY_TOWNS_PARAM)) return;
     const next = new URLSearchParams(searchParams);
     next.delete('confirm');
     next.delete('run');
+    next.delete(MANY_TOWNS_PARAM);
     setSearchParams(next, { replace: true });
   }, [searchParams, setSearchParams]);
 
@@ -247,6 +261,18 @@ const Index = () => {
     search(filters, false, false);
   }, [search, setSearchParams, readiness.gated, readiness.ready, toast]);
 
+  /* MANY TOWNS: the same selling gate as one search, then each town through the ONE search step (searchMany). The towns
+     searched (found something, or the place was not found) leave the selection; the rest — over ten, a refusal, a
+     failure — stay for the next press. */
+  const handleSearchMany = useCallback(async (base: Parameters<typeof searchMany>[0]) => {
+    if (readiness.gated && !readiness.ready) {
+      toast(findLeadsNotReadyToast(readiness));
+      return;
+    }
+    const searched = await searchMany(base, pickedTowns);
+    setPickedTowns((prev) => prev.filter((t) => !searched.includes(t)));
+  }, [readiness, toast, searchMany, pickedTowns]);
+
   // Notify when a region search was downgraded to a single area (daily budget).
   useEffect(() => {
     if (regionDowngraded) {
@@ -261,14 +287,18 @@ const Index = () => {
   // toast from the component). addToOutreach returns null on dupe/failure.
   // campaignId defaults to the active campaign (toggle OFF); the ask-each-time flow
   // passes the chosen campaign instead.
+  /* ⛔ WHERE A RESULT IS SAVED FROM (2026-10-16): a many-towns result carries the town and country it was searched in —
+     exactly what its own one-town search would have saved; any other result uses the search on screen, as before. */
+  const townOf = useCallback((lead: Lead) => lead.searchTown ?? lastSearchLocation, [lastSearchLocation]);
+  const countryOf = useCallback((lead: Lead): Country => (lead.searchCountry as Country | undefined) ?? lastSearchCountry, [lastSearchCountry]);
   const handleBulkAdd = useCallback(async (sel: Lead[], campaignId: string | null = activeCampaign) => {
     let added = 0, skipped = 0;
     for (const lead of sel) {
-      const res = await addToOutreach(lead, lastSearchCountry, 'no_website', campaignId, getEnrichment(lead.id), true, lastSearchKeyword, lastSearchLocation);
+      const res = await addToOutreach(lead, countryOf(lead), 'no_website', campaignId, getEnrichment(lead.id), true, lastSearchKeyword, townOf(lead));
       if (res) added++; else skipped++;
     }
     return { added, skipped };
-  }, [addToOutreach, lastSearchCountry, lastSearchKeyword, lastSearchLocation, activeCampaign, getEnrichment]);
+  }, [addToOutreach, countryOf, townOf, lastSearchKeyword, activeCampaign, getEnrichment]);
 
   // ── Add-to-CRM entry points (Index decides whether to prompt) ───────────────
   const activeCampaignName = useMemo(
@@ -297,8 +327,8 @@ const Index = () => {
       setPendingAdd({ kind: 'row', lead });
       return Promise.resolve(null);
     }
-    return addToOutreach(lead, lastSearchCountry, 'no_website', activeCampaign, getEnrichment(lead.id), false, lastSearchKeyword, lastSearchLocation);
-  }, [askCampaignEachTime, activeCampaign, addToOutreach, lastSearchCountry, lastSearchKeyword, lastSearchLocation, getEnrichment]);
+    return addToOutreach(lead, countryOf(lead), 'no_website', activeCampaign, getEnrichment(lead.id), false, lastSearchKeyword, townOf(lead));
+  }, [askCampaignEachTime, activeCampaign, addToOutreach, countryOf, townOf, lastSearchKeyword, getEnrichment]);
 
   // Bulk Add: prompt ONCE for the batch when ON, else run as today. When prompting,
   // return a promise that resolves after the dialog so LeadsTable's summary toast is accurate.
@@ -317,13 +347,13 @@ const Index = () => {
     setPendingAdd(null);
     if (!p) return;
     if (p.kind === 'row') {
-      await addToOutreach(p.lead, lastSearchCountry, 'no_website', chosenCampaign, getEnrichment(p.lead.id), false, lastSearchKeyword, lastSearchLocation);
+      await addToOutreach(p.lead, countryOf(p.lead), 'no_website', chosenCampaign, getEnrichment(p.lead.id), false, lastSearchKeyword, townOf(p.lead));
     } else {
       const res = await handleBulkAdd(p.leads, chosenCampaign);
       bulkResolverRef.current?.(res);
       bulkResolverRef.current = null;
     }
-  }, [pendingAdd, chosenCampaign, addToOutreach, lastSearchCountry, lastSearchKeyword, lastSearchLocation, getEnrichment, handleBulkAdd]);
+  }, [pendingAdd, chosenCampaign, addToOutreach, countryOf, townOf, lastSearchKeyword, getEnrichment, handleBulkAdd]);
 
   // Dialog cancel/close: nothing added; resolve a pending bulk promise so the caller unblocks.
   const handleCancelCampaign = useCallback(() => {
@@ -537,8 +567,16 @@ const Index = () => {
           initialCountry={urlCountry}
           /* Runs the search once, on arrival, when Coverage asked for it. */
           autoSubmit={runLeadSearchOnArrival}
+          /* Many towns (V2's mode): the town list, and the press that searches up to ten of them. */
+          many={many}
+          onManyChange={switchMany}
+          pickedTowns={pickedTowns}
+          onPickedTownsChange={setPickedTowns}
+          onSearchMany={(base) => void handleSearchMany(base)}
         />
       </section>
+
+      {townRun && <ManyTownsStatus run={townRun} />}
 
       {/* "THIS TOWN ONLY" ASKED FOR, NOT APPLIED. A persistent banner, deliberately NOT a toast:
           the results below it are wider than the toggle claims, and that has to stay readable for

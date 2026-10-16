@@ -31,6 +31,10 @@ export interface Lead {
   /** The search_history row (search run) this result came from — so a later add is recorded against
    *  the run that found it (Coverage: Found vs Added). Absent on results not from a recorded run. */
   searchRunId?: string;
+  /** MANY TOWNS (2026-10-16): the town this result was searched in, and that search's country. Add saves the lead with
+   *  THESE, so a result from a many-towns search is added exactly as it would be from its own one-town search. */
+  searchTown?: string;
+  searchCountry?: string;
 }
 
 export type Country = 'UK' | 'Australia' | 'USA' | 'Canada' | 'Germany' | 'France' | 'Spain' | 'Italy' | 'Netherlands' | 'Belgium' | 'Ireland' | 'NewZealand' | 'SouthAfrica' | 'India' | 'Singapore' | 'UAE' | 'Brazil' | 'Mexico' | 'Japan' | 'Sweden' | 'Malaysia';

@@ -12,6 +12,7 @@ import { myReadinessSnapshot, notReadyMessage, onboardingWordsForPausedRefusal }
 
 type SearchLeadLike = Parameters<typeof foundRecord>[0][number];
 import type { Country, Lead, SearchFilters, SearchResponse, WebsiteStatus, RegionMeta } from '@/types/lead';
+import { MANY_TOWNS_CONCURRENCY, mergeTownLeads, runPool, townsForPress, type TownAnswerRow, type TownLine, type TownRun } from '@/lib/manyTowns';
 
 /* ══ THE SEARCH THAT PRODUCED THE RESULTS ══════════════════════════════════════════════
    ⛔ THE BUG THIS EXISTS TO FIX, AND IT COST 168 LEADS. The keyword and town used to live in
@@ -32,6 +33,9 @@ export interface LastSearch {
   keyword: string | null;
   location: string | null;
   country: Country;
+  /** MANY TOWNS (2026-10-16): the towns this result set came from. Each result then carries its own town (searchTown),
+   *  which is what Add saves — never `location`, which only names the set. */
+  towns?: string[];
 }
 
 // Manual website-status overrides table isn't in the generated types yet, so its
@@ -53,6 +57,10 @@ interface LeadSearchContextType {
   leads: Lead[];
   isLoading: boolean;
   search: (filters: SearchFilters, skipTrialCount?: boolean, isDemo?: boolean) => Promise<void>;
+  /** MANY TOWNS: search up to MANY_TOWNS_MAX_PER_PRESS towns, each exactly as one search; answers the towns searched. */
+  searchMany: (base: Omit<SearchFilters, 'location'>, towns: readonly string[]) => Promise<string[]>;
+  /** Each town's line while (and after) a many-towns search runs. Null for a one-town search. */
+  townRun: TownRun | null;
   /** What produced `leads`. Survives a reload because it is persisted WITH them. */
   lastSearch: LastSearch | null;
   /** ⛔ THE EXCLUSION RULE, SHARED RATHER THAN COPIED. The niche panel runs its own parallel
@@ -132,6 +140,7 @@ export function LeadSearchProvider({ children }: { children: React.ReactNode }) 
      above is the retry payload and is deliberately separate — it holds the whole filter object
      including flags that must NOT be restored across a reload. */
   const [lastSearch, setLastSearch] = useState<LastSearch | null>(null);
+  const [townRun, setTownRun] = useState<TownRun | null>(null);
   /** The stored set is restored once per signed-in person (see the restore effect). */
   const restoredRef = useRef(false);
   const { toast } = useToast();
@@ -216,7 +225,8 @@ export function LeadSearchProvider({ children }: { children: React.ReactNode }) 
         restoredRef.current = true;
         const s = stored;
         setLeads((cur) => (cur.length ? cur : s.leads));
-        setLastSearch((cur) => cur ?? { keyword: s.lastSearch.keyword, location: s.lastSearch.location, country: s.lastSearch.country as Country });
+        const storedTowns = (s.lastSearch as { towns?: unknown }).towns;
+        setLastSearch((cur) => cur ?? { keyword: s.lastSearch.keyword, location: s.lastSearch.location, country: s.lastSearch.country as Country, ...(Array.isArray(storedTowns) ? { towns: storedTowns.filter((t): t is string => typeof t === 'string') } : {}) });
       }
     } catch {
       // ignore cache parse errors
@@ -358,6 +368,179 @@ export function LeadSearchProvider({ children }: { children: React.ReactNode }) 
     return (row as { id?: string } | null)?.id ?? null;
   };
 
+  /* ══ ONE TOWN, ONE SEARCH — THE SHARED STEP (2026-10-16) ══════════════════════════════════════════════
+     The invoke, its retries and the reading of a refusal used to live inline in search(). Many towns (Coverage →
+     Find Leads, searchMany below) must search each town EXACTLY as one search does, so the step is one function both
+     call: it touches no page state and answers what happened. search() maps the answer onto the page exactly as
+     before; searchMany maps it onto that town's line. */
+  type TownFetch =
+    | { kind: 'ok'; data: SearchResponse }
+    | { kind: 'aborted' }
+    | { kind: 'code'; code: 'POST_ABANDON_EXHAUSTED' | 'FREE_SEARCH_EXHAUSTED' | 'TRIAL_LIMIT_REACHED'; body: any }
+    | { kind: 'notFound'; notice: string }
+    | { kind: 'error'; message: string; errorId: string; refusal: boolean };
+  const fetchTown = useCallback(async (filters: SearchFilters, signal: AbortSignal, skipTrialCount: boolean, isDemo: boolean): Promise<TownFetch> => {
+    // Helper to determine if an error is retryable (network / 5xx / 429)
+    const isRetryable = (err: any): boolean => {
+      const msg = (err?.message || '').toLowerCase();
+      return msg.includes('failed to send') || msg.includes('network') || msg.includes('fetch') || msg.includes('timeout') || msg.includes('aborted');
+    };
+
+    const MAX_RETRIES = 2;
+    // Region tiling fans out many tile searches server-side (~15–30s), so give it
+    // a longer client timeout than a normal single-centre search.
+    const TIMEOUT_MS = filters.region ? 60_000 : 30_000;
+
+    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+      // Check if aborted between retries
+      if (signal.aborted) return { kind: 'aborted' };
+
+      try {
+        // Race the invoke against a timeout
+        const invokePromise = supabase.functions.invoke<SearchResponse>('search-leads', {
+          /* ⛔ skipHistory: THIS path writes its own search_history row (saveSearch below), with the
+             POST-EXCLUSION counts the dashboard reads. search-leads now writes one by default so
+             that direct callers cannot leave a pool unindexed — but both writing would double-count
+             results_count/no_website_count in useDashboardMetrics. One row, from whichever side has
+             the better numbers. */
+          body: { ...filters, skipTrialCount, skipHistory: true, ...(isDemo ? { demo: true } : {}) },
+        });
+
+        const timeoutPromise = new Promise<never>((_, reject) => {
+          const id = setTimeout(() => {
+            reject(new Error('Search timed out — please try again.'));
+          }, TIMEOUT_MS);
+          signal.addEventListener('abort', () => clearTimeout(id));
+        });
+
+        const { data, error } = await Promise.race([invokePromise, timeoutPromise]);
+
+        if (signal.aborted) return { kind: 'aborted' };
+
+        if (error) {
+          console.error(`Search error (attempt ${attempt + 1}):`, error);
+
+          // Check for retryable errors before parsing business logic codes
+          if (isRetryable(error) && attempt < MAX_RETRIES) {
+            await new Promise(r => setTimeout(r, 1000 * (attempt + 1))); // exponential backoff
+            continue;
+          }
+
+          // Try to parse the error for trial limit / paywall codes
+          let body: any = null;
+          try {
+            const errorContext = error.context;
+            if (errorContext && typeof errorContext === 'object') {
+              if (typeof errorContext.json === 'function') {
+                body = await errorContext.json().catch(() => null);
+              }
+              if (!body && typeof errorContext.text === 'function') {
+                const txt = await errorContext.text().catch(() => '');
+                try { body = JSON.parse(txt); } catch {}
+              }
+              if (!body) body = errorContext;
+            }
+          } catch {}
+
+          // Also try parsing the error message itself as JSON
+          if (!body?.code && error.message) {
+            try {
+              const parsed = JSON.parse(error.message);
+              if (parsed?.code) body = parsed;
+            } catch {}
+            if (!body?.code) {
+              if (error.message.includes('FREE_SEARCH_EXHAUSTED') || error.message.includes('free trial to unlock')) {
+                body = { code: 'FREE_SEARCH_EXHAUSTED' };
+              } else if (error.message.includes('POST_ABANDON_EXHAUSTED')) {
+                body = { code: 'POST_ABANDON_EXHAUSTED' };
+              } else if (error.message.includes('Trial limit reached') || error.message.includes('TRIAL_LIMIT_REACHED') || error.message.includes('GUEST_LIMIT_REACHED')) {
+                body = { code: 'TRIAL_LIMIT_REACHED' };
+              }
+            }
+          }
+
+          if (body?.code === 'POST_ABANDON_EXHAUSTED') return { kind: 'code', code: 'POST_ABANDON_EXHAUSTED', body };
+          if (body?.code === 'FREE_SEARCH_EXHAUSTED') return { kind: 'code', code: 'FREE_SEARCH_EXHAUSTED', body };
+          if (body?.code === 'TRIAL_LIMIT_REACHED' || body?.code === 'GUEST_LIMIT_REACHED') return { kind: 'code', code: 'TRIAL_LIMIT_REACHED', body };
+
+          // If the body carries a handled "not found" (older fn / non-2xx path),
+          // treat it as a soft notice, not a scary error card.
+          if (body?.notFound) return { kind: 'notFound', notice: body.notice ?? body.error ?? "Couldn't find that location — try adding a country or county." };
+
+          // Non-retryable error — prefer the function's own friendly message
+          // (body.notice / body.error) over the generic "non-2xx status code".
+          // body.detail first: the usage guard answers { error: 'usage_paused', detail: <sentence> } (2026-09-29).
+          /* An incomplete onboarding is said as itself, with what is still needed (final sales release, E2E-02):
+             the new server says 'not_ready_to_sell'; an older deploy's 'usage_paused' is read with the person's own status. */
+          const snap = myReadinessSnapshot();
+          const notReady = body?.error === 'not_ready_to_sell'
+            ? notReadyMessage('Find Leads', snap?.missing ?? [], snap?.startsOn ?? null)
+            : body?.error === 'usage_paused' ? onboardingWordsForPausedRefusal('Find Leads') : null;
+          const errMsg = notReady || body?.notice || body?.detail || body?.error
+            || (error.message && !/non-2xx/i.test(error.message) ? error.message : null)
+            || 'Search failed. Tap retry to try again.';
+          const httpStatus = (error.context as any)?.status ?? null;
+          const errorId = await reportClientError({
+            functionName: 'search-leads',
+            payload: { keyword: filters.keyword, location: filters.location, radius: filters.radius },
+            userId: user?.id ?? null,
+            httpStatus,
+            responseBody: body ? JSON.stringify(body).slice(0, 4000) : error.message,
+            errorMessage: error.message,
+          }).catch(() => 'UNKNOWN');
+          /* A REFUSAL (a pause, a limit, a spend guard, not ready) is said by the server with a status it chose; many
+             towns stop starting new ones on it — the next town would only be refused the same way. */
+          const refusal = httpStatus === 402 || httpStatus === 403 || httpStatus === 429 || !!body?.error;
+          return { kind: 'error', message: errMsg, errorId, refusal };
+        }
+
+        if (data) {
+          // Handled non-result outcomes (clean 2xx): the location couldn't be
+          // resolved, or the map lookup hiccuped. Show the friendly notice as a soft
+          // empty-state — NOT the generic "non-2xx" error card.
+          if (data.notFound || data.serviceIssue) return { kind: 'notFound', notice: data.notice ?? "Couldn't find that location — try adding a country or county." };
+          return { kind: 'ok', data };
+        }
+        /* No data and no error: nothing to show — the page is left as it was (as before). */
+        return { kind: 'aborted' };
+      } catch (err: any) {
+        if (signal.aborted) return { kind: 'aborted' };
+        console.error(`Search error (attempt ${attempt + 1}):`, err);
+        if (attempt < MAX_RETRIES) {
+          await new Promise(r => setTimeout(r, 1000 * (attempt + 1)));
+          continue;
+        }
+        // All retries exhausted — report diagnostics, keep last results visible
+        const errMsg = err?.message?.includes('timed out')
+          ? 'Search timed out — please try again.'
+          : 'Connection error — please check your internet and try again.';
+        const errorId = await reportClientError({
+          functionName: 'search-leads',
+          payload: { keyword: filters.keyword, location: filters.location, radius: filters.radius },
+          userId: user?.id ?? null,
+          errorMessage: err?.message || String(err),
+          errorStack: err?.stack,
+        }).catch(() => 'UNKNOWN');
+        return { kind: 'error', message: errMsg, errorId, refusal: false };
+      }
+    }
+    return { kind: 'aborted' };
+  }, [user?.id]);
+
+  /** The results a town's answer shows: this search's exclusions applied, no-website first (the one ordering). */
+  const shownResults = (data: SearchResponse, ex: { checked: ExcludedBusiness[]; inList: ExcludedBusiness[] }): Lead[] => {
+    const filteredLeads = data.leads.filter(lead => !(matchesBusiness(ex.checked, lead) && !matchesBusiness(ex.inList, lead)));
+    // Sort: NO_WEBSITE/DIRECTORY_ONLY first, then others
+    const statusOrder: Record<string, number> = {
+      'NO_WEBSITE': 0,
+      'DIRECTORY_ONLY': 0,
+      'UNCERTAIN': 1,
+      'HAS_OWN_WEBSITE': 2,
+    };
+    filteredLeads.sort((a, b) => (statusOrder[a.websiteStatus] ?? 9) - (statusOrder[b.websiteStatus] ?? 9));
+    return filteredLeads;
+  };
+
   const search = useCallback(async (filters: SearchFilters, skipTrialCount: boolean = false, isDemo: boolean = false) => {
     // Cancel any in-flight search
     if (abortRef.current) {
@@ -379,6 +562,7 @@ export function LeadSearchProvider({ children }: { children: React.ReactNode }) 
     };
 
     setIsLoading(true);
+    setTownRun(null);
     setTrialLimitError(null);
     setPostAbandonExhausted(false);
     setFreeSearchExhausted(false);
@@ -396,275 +580,191 @@ export function LeadSearchProvider({ children }: { children: React.ReactNode }) 
        are filtered below. It used to be a full wait in front of every search. */
     const exclusionsP = isDemo ? Promise.resolve(exclusionsRef.current) : fetchExcludedBusinesses();
 
-    // Helper to determine if an error is retryable (network / 5xx / 429)
-    const isRetryable = (err: any): boolean => {
-      const msg = (err?.message || '').toLowerCase();
-      return msg.includes('failed to send') || msg.includes('network') || msg.includes('fetch') || msg.includes('timeout') || msg.includes('aborted');
-    };
-
-    const MAX_RETRIES = 2;
-    // Region tiling fans out many tile searches server-side (~15–30s), so give it
-    // a longer client timeout than a normal single-centre search.
-    const TIMEOUT_MS = filters.region ? 60_000 : 30_000;
-
-    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
-      // Check if aborted between retries
-      if (controller.signal.aborted) {
-        setIsLoading(false);
-        return;
-      }
-
-      try {
-        // Race the invoke against a timeout
-        const invokePromise = supabase.functions.invoke<SearchResponse>('search-leads', {
-          /* ⛔ skipHistory: THIS path writes its own search_history row (saveSearch below), with the
-             POST-EXCLUSION counts the dashboard reads. search-leads now writes one by default so
-             that direct callers cannot leave a pool unindexed — but both writing would double-count
-             results_count/no_website_count in useDashboardMetrics. One row, from whichever side has
-             the better numbers. */
-          body: { ...filters, skipTrialCount, skipHistory: true, ...(isDemo ? { demo: true } : {}) },
-        });
-
-        const timeoutPromise = new Promise<never>((_, reject) => {
-          const id = setTimeout(() => {
-            reject(new Error('Search timed out — please try again.'));
-          }, TIMEOUT_MS);
-          controller.signal.addEventListener('abort', () => clearTimeout(id));
-        });
-
-        const { data, error } = await Promise.race([invokePromise, timeoutPromise]);
-
-        if (controller.signal.aborted) {
-          setIsLoading(false);
-          return;
-        }
-
-        if (error) {
-          console.error(`Search error (attempt ${attempt + 1}):`, error);
-
-          // Check for retryable errors before parsing business logic codes
-          if (isRetryable(error) && attempt < MAX_RETRIES) {
-            await new Promise(r => setTimeout(r, 1000 * (attempt + 1))); // exponential backoff
-            continue;
-          }
-          
-          // Try to parse the error for trial limit / paywall codes
-          let body: any = null;
-          try {
-            const errorContext = error.context;
-            if (errorContext && typeof errorContext === 'object') {
-              if (typeof errorContext.json === 'function') {
-                body = await errorContext.json().catch(() => null);
-              }
-              if (!body && typeof errorContext.text === 'function') {
-                const txt = await errorContext.text().catch(() => '');
-                try { body = JSON.parse(txt); } catch {}
-              }
-              if (!body) body = errorContext;
-            }
-          } catch {}
-          
-          // Also try parsing the error message itself as JSON
-          if (!body?.code && error.message) {
-            try {
-              const parsed = JSON.parse(error.message);
-              if (parsed?.code) body = parsed;
-            } catch {}
-            if (!body?.code) {
-              if (error.message.includes('FREE_SEARCH_EXHAUSTED') || error.message.includes('free trial to unlock')) {
-                body = { code: 'FREE_SEARCH_EXHAUSTED' };
-              } else if (error.message.includes('POST_ABANDON_EXHAUSTED')) {
-                body = { code: 'POST_ABANDON_EXHAUSTED' };
-              } else if (error.message.includes('Trial limit reached') || error.message.includes('TRIAL_LIMIT_REACHED') || error.message.includes('GUEST_LIMIT_REACHED')) {
-                body = { code: 'TRIAL_LIMIT_REACHED' };
-              }
-            }
-          }
-          
-          if (body?.code === 'POST_ABANDON_EXHAUSTED') {
-            setPostAbandonExhausted(true);
-            setIsLoading(false);
-            return;
-          }
-          if (body?.code === 'FREE_SEARCH_EXHAUSTED') {
-            setFreeSearchExhausted(true);
-            setFreeSearchExhaustedPersisted(true);
-            if (user?.id) {
-              try { localStorage.setItem(`leadfinder_free_exhausted:${user.id}`, 'true'); } catch {}
-            }
-            try { supabase.rpc('log_usage_event', { p_event_type: 'search_2_blocked' }); } catch {}
-            setIsLoading(false);
-            return;
-          }
-          if (body?.code === 'TRIAL_LIMIT_REACHED' || body?.code === 'GUEST_LIMIT_REACHED') {
-            setTrialLimitError({
-              searchesToday: body.searches_today || 3,
-              limit: body.limit || 3,
-            });
-            setIsLoading(false);
-            return;
-          }
-          
-          // If the body carries a handled "not found" (older fn / non-2xx path),
-          // treat it as a soft notice, not a scary error card.
-          if (body?.notFound) {
-            setLeads([]);
-            setLastSearch(thisSearch);
-            setSearchError(null);
-            setSearchNotice(body.notice ?? body.error ?? "Couldn't find that location — try adding a country or county.");
-            setIsLoading(false);
-            return;
-          }
-
-          // Non-retryable error — prefer the function's own friendly message
-          // (body.notice / body.error) over the generic "non-2xx status code".
-          // body.detail first: the usage guard answers { error: 'usage_paused', detail: <sentence> } (2026-09-29).
-          /* An incomplete onboarding is said as itself, with what is still needed (final sales release, E2E-02):
-             the new server says 'not_ready_to_sell'; an older deploy's 'usage_paused' is read with the person's own status. */
-          const snap = myReadinessSnapshot();
-          const notReady = body?.error === 'not_ready_to_sell'
-            ? notReadyMessage('Find Leads', snap?.missing ?? [], snap?.startsOn ?? null)
-            : body?.error === 'usage_paused' ? onboardingWordsForPausedRefusal('Find Leads') : null;
-          const errMsg = notReady || body?.notice || body?.detail || body?.error
-            || (error.message && !/non-2xx/i.test(error.message) ? error.message : null)
-            || 'Search failed. Tap retry to try again.';
-          const errorId = await reportClientError({
-            functionName: 'search-leads',
-            payload: { keyword: filters.keyword, location: filters.location, radius: filters.radius },
-            userId: user?.id ?? null,
-            httpStatus: (error.context as any)?.status ?? null,
-            responseBody: body ? JSON.stringify(body).slice(0, 4000) : error.message,
-            errorMessage: error.message,
-          }).catch(() => 'UNKNOWN');
-          setSearchError({ message: errMsg, errorId });
-          toast({
-            title: 'Search failed',
-            description: errMsg,
-            variant: 'destructive',
-          });
-          setIsLoading(false);
-          return;
-        }
-
-        if (data) {
-          // Handled non-result outcomes (clean 2xx): the location couldn't be
-          // resolved, or the map lookup hiccuped. Show the friendly notice as a soft
-          // empty-state — NOT the generic "non-2xx" error card.
-          if (data.notFound || data.serviceIssue) {
-            setLeads([]);
-            setLastSearch(thisSearch);
-            setSearchError(null);
-            setSearchNotice(data.notice ?? "Couldn't find that location — try adding a country or county.");
-            setExpanded(false);
-            setRegionMeta(null);
-            setRegionDowngraded(null);
-            setTownFilterFallback(null);
-            setIsLoading(false);
-            return;
-          }
-
-          // Filter out excluded businesses — against the lists THIS search fetched.
-          const ex = await exclusionsP;
-          if (controller.signal.aborted) {
-            setIsLoading(false);
-            return;
-          }
-          const filteredLeads = data.leads.filter(lead => !(matchesBusiness(ex.checked, lead) && !matchesBusiness(ex.inList, lead)));
-
-          // Sort: NO_WEBSITE/DIRECTORY_ONLY first, then others
-          const statusOrder: Record<string, number> = {
-            'NO_WEBSITE': 0,
-            'DIRECTORY_ONLY': 0,
-            'UNCERTAIN': 1,
-            'HAS_OWN_WEBSITE': 2,
-          };
-          filteredLeads.sort((a, b) => (statusOrder[a.websiteStatus] ?? 9) - (statusOrder[b.websiteStatus] ?? 9));
-
-          /* ⛔ THE COUNTRY GOOGLE RESOLVED, NOT THE FORM'S REMEMBERED ONE (2026-09-28). The form's choice
-             persisted silently from the last Quick Locations click, so a typed "Grimsby" after a US click
-             stored 349 UK businesses as USA. search-leads names the country the place actually is in
-             (resolvedCountry, from Google's formatted address); null — a cached search, an old deploy —
-             keeps the form's value. Each lead is corrected again from its own address on add. Set on
-             thisSearch BEFORE the one update below, so results and search still land together. */
-          if (typeof data.resolvedCountry === 'string' && data.resolvedCountry) thisSearch.country = data.resolvedCountry as Country;
-          setLeads(filteredLeads);
-          setLastSearch(thisSearch);
-          setSearchError(null);
-          setExpanded(!!data.expanded);
-          setRegionMeta(data.region ?? null);
-          setRegionDowngraded(data.downgraded ?? null);
-          /* applied === false is the ONLY case that warns. Absent (normal search) and applied
-             true (it worked) both clear it, so a stale warning cannot survive the next search. */
-          setTownFilterFallback(
-            data.townFilter && data.townFilter.applied === false
-              ? { reason: data.townFilter.reason ?? 'The town boundary could not be resolved, so the radius was used instead.' }
-              : null,
-          );
-          /* SET ON EVERY SEARCH, including the unambiguous ones. Clearing to null/[] when absent
-             matters as much as setting them: a stale "St Ives, Cornwall" left over from the previous
-             search would be worse than showing nothing. */
-          setResolvedLocation(typeof data.resolvedLocation === 'string' ? data.resolvedLocation : null);
-          setLocationCandidates(Array.isArray(data.locationCandidates) ? data.locationCandidates : []);
-          setGated(!!data.gated);
-
-          // Persist gated flag so it survives refresh
-          if (user?.id) {
-            try {
-              localStorage.setItem(`leadfinder_gated:${user.id}`, data.gated ? 'true' : 'false');
-            } catch {}
-          }
-
-          /* The results themselves are persisted WITH this search by the effect above — never here on
-             their own (a separate leads-only copy is what lost the search, 2026-09-28). */
-          if (storageKeys) {
-            try { sessionStorage.setItem(storageKeys.filters, JSON.stringify({ filters })); } catch {}
-          }
-
-          const noWebsiteCount = filteredLeads.filter((l) => isWithoutWebsite(l.websiteStatus)).length;
-
-          const runId = await saveSearch(filters, filteredLeads.length, noWebsiteCount, data.leads as SearchLeadLike[]);
-          /* Each result carries its run, so an add from it is recorded against what this run found. */
-          if (runId && !controller.signal.aborted) setLeads((prev) => prev.map((l) => ({ ...l, searchRunId: runId })));
-
-          // Notify demo checklist that a search completed
-          window.dispatchEvent(new CustomEvent('demo-checklist-search'));
-          setTimeout(() => window.dispatchEvent(new CustomEvent('post-first-search-complete')), 500);
-        }
-
-        setIsLoading(false);
-        return; // success — exit retry loop
-      } catch (err: any) {
-        if (controller.signal.aborted) {
-          setIsLoading(false);
-          return;
-        }
-        console.error(`Search error (attempt ${attempt + 1}):`, err);
-        if (attempt < MAX_RETRIES) {
-          await new Promise(r => setTimeout(r, 1000 * (attempt + 1)));
-          continue;
-        }
-        // All retries exhausted — report diagnostics, keep last results visible
-        const errMsg = err?.message?.includes('timed out')
-          ? 'Search timed out — please try again.'
-          : 'Connection error — please check your internet and try again.';
-        const errorId = await reportClientError({
-          functionName: 'search-leads',
-          payload: { keyword: filters.keyword, location: filters.location, radius: filters.radius },
-          userId: user?.id ?? null,
-          errorMessage: err?.message || String(err),
-          errorStack: err?.stack,
-        }).catch(() => 'UNKNOWN');
-        setSearchError({ message: errMsg, errorId });
-        toast({
-          title: 'Search failed',
-          description: errMsg,
-          variant: 'destructive',
-        });
-        setIsLoading(false);
-        return;
-      }
+    const r = await fetchTown(filters, controller.signal, skipTrialCount, isDemo);
+    if (r.kind === 'aborted') { setIsLoading(false); return; }
+    if (r.kind === 'code') {
+      applyRefusalCode(r);
+      setIsLoading(false);
+      return;
     }
-  }, [toast, fetchExcludedBusinesses, isExcluded, storageKeys, hasProAccess]);
+    if (r.kind === 'notFound') {
+      setLeads([]);
+      setLastSearch(thisSearch);
+      setSearchError(null);
+      setSearchNotice(r.notice);
+      setExpanded(false);
+      setRegionMeta(null);
+      setRegionDowngraded(null);
+      setTownFilterFallback(null);
+      setIsLoading(false);
+      return;
+    }
+    if (r.kind === 'error') {
+      setSearchError({ message: r.message, errorId: r.errorId });
+      toast({
+        title: 'Search failed',
+        description: r.message,
+        variant: 'destructive',
+      });
+      setIsLoading(false);
+      return;
+    }
+    const data = r.data;
+
+    // Filter out excluded businesses — against the lists THIS search fetched.
+    const ex = await exclusionsP;
+    if (controller.signal.aborted) {
+      setIsLoading(false);
+      return;
+    }
+    const filteredLeads = shownResults(data, ex);
+
+    /* ⛔ THE COUNTRY GOOGLE RESOLVED, NOT THE FORM'S REMEMBERED ONE (2026-09-28). The form's choice
+       persisted silently from the last Quick Locations click, so a typed "Grimsby" after a US click
+       stored 349 UK businesses as USA. search-leads names the country the place actually is in
+       (resolvedCountry, from Google's formatted address); null — a cached search, an old deploy —
+       keeps the form's value. Each lead is corrected again from its own address on add. Set on
+       thisSearch BEFORE the one update below, so results and search still land together. */
+    if (typeof data.resolvedCountry === 'string' && data.resolvedCountry) thisSearch.country = data.resolvedCountry as Country;
+    setLeads(filteredLeads);
+    setLastSearch(thisSearch);
+    setSearchError(null);
+    setExpanded(!!data.expanded);
+    setRegionMeta(data.region ?? null);
+    setRegionDowngraded(data.downgraded ?? null);
+    /* applied === false is the ONLY case that warns. Absent (normal search) and applied
+       true (it worked) both clear it, so a stale warning cannot survive the next search. */
+    setTownFilterFallback(
+      data.townFilter && data.townFilter.applied === false
+        ? { reason: data.townFilter.reason ?? 'The town boundary could not be resolved, so the radius was used instead.' }
+        : null,
+    );
+    /* SET ON EVERY SEARCH, including the unambiguous ones. Clearing to null/[] when absent
+       matters as much as setting them: a stale "St Ives, Cornwall" left over from the previous
+       search would be worse than showing nothing. */
+    setResolvedLocation(typeof data.resolvedLocation === 'string' ? data.resolvedLocation : null);
+    setLocationCandidates(Array.isArray(data.locationCandidates) ? data.locationCandidates : []);
+    setGated(!!data.gated);
+
+    // Persist gated flag so it survives refresh
+    if (user?.id) {
+      try {
+        localStorage.setItem(`leadfinder_gated:${user.id}`, data.gated ? 'true' : 'false');
+      } catch {}
+    }
+
+    /* The results themselves are persisted WITH this search by the effect above — never here on
+       their own (a separate leads-only copy is what lost the search, 2026-09-28). */
+    if (storageKeys) {
+      try { sessionStorage.setItem(storageKeys.filters, JSON.stringify({ filters })); } catch {}
+    }
+
+    const noWebsiteCount = filteredLeads.filter((l) => isWithoutWebsite(l.websiteStatus)).length;
+
+    const runId = await saveSearch(filters, filteredLeads.length, noWebsiteCount, data.leads as SearchLeadLike[]);
+    /* Each result carries its run, so an add from it is recorded against what this run found. */
+    if (runId && !controller.signal.aborted) setLeads((prev) => prev.map((l) => ({ ...l, searchRunId: runId })));
+
+    // Notify demo checklist that a search completed
+    window.dispatchEvent(new CustomEvent('demo-checklist-search'));
+    setTimeout(() => window.dispatchEvent(new CustomEvent('post-first-search-complete')), 500);
+
+    setIsLoading(false);
+  }, [toast, fetchExcludedBusinesses, fetchTown, storageKeys, hasProAccess, user?.id]);
+
+  /** The page states a trial / paywall code sets — the same for one search and for many. */
+  const applyRefusalCode = (r: Extract<TownFetch, { kind: 'code' }>) => {
+    if (r.code === 'POST_ABANDON_EXHAUSTED') { setPostAbandonExhausted(true); return; }
+    if (r.code === 'FREE_SEARCH_EXHAUSTED') {
+      setFreeSearchExhausted(true);
+      setFreeSearchExhaustedPersisted(true);
+      if (user?.id) {
+        try { localStorage.setItem(`leadfinder_free_exhausted:${user.id}`, 'true'); } catch {}
+      }
+      try { supabase.rpc('log_usage_event', { p_event_type: 'search_2_blocked' }); } catch {}
+      return;
+    }
+    setTrialLimitError({
+      searchesToday: r.body?.searches_today || 3,
+      limit: r.body?.limit || 3,
+    });
+  };
+
+  /* ══ MANY TOWNS (Paul, 2026-10-16 — V2's "Many towns" mode; rules in src/lib/manyTowns.ts) ═══════════════════
+     Up to MANY_TOWNS_MAX_PER_PRESS towns per press, MANY_TOWNS_CONCURRENCY at a time. EACH TOWN IS THE ONE-TOWN SEARCH:
+     the same search-leads call with the form's own radius / country / "this town only", the same retries and refusal
+     reading (fetchTown), the same exclusions and ordering (shownResults), and its OWN search_history run (so
+     Coverage's Found vs Added is per town, exactly as before). Each result carries its town, country and run, so Add
+     to CRM saves it with ITS town. Results appear as each town finishes, in town order; a business found in two towns
+     is shown once, under the first. A refusal (pause, limit, spend guard) stops new towns starting — what was found
+     stays; one town failing never stops the others. Answers the towns that were searched (the page unticks them). */
+  const searchMany = useCallback(async (base: Omit<SearchFilters, 'location'>, towns: readonly string[]): Promise<string[]> => {
+    const plan = townsForPress(towns);
+    if (!plan.run.length || !base.keyword?.trim()) return [];
+    if (abortRef.current) abortRef.current.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
+    lastSearchRef.current = null;
+    const keyword = base.keyword.trim();
+    const country = (base.country || 'UK') as Country;
+
+    setIsLoading(true);
+    setTrialLimitError(null);
+    setPostAbandonExhausted(false);
+    setFreeSearchExhausted(false);
+    setSearchError(null);
+    setSearchNotice(null);
+    setTownFilterFallback(null);
+    setExpanded(false);
+    setRegionMeta(null);
+    setRegionDowngraded(null);
+    setResolvedLocation(null);
+    setLocationCandidates([]);
+    if (hasProAccess) setGated(false);
+    let lines: TownLine[] = plan.run.map((t) => ({ town: t, state: 'waiting' }));
+    const show = () => setTownRun({ keyword, towns: lines, later: plan.later, running: true });
+    show();
+    /* The list on screen starts empty under its own search; each town's results join it as they land. */
+    setLeads([]);
+    setLastSearch({ keyword, location: plan.run.join(', '), country, towns: plan.run });
+
+    const exclusionsP = fetchExcludedBusinesses();
+    const answers: TownAnswerRow<Lead>[] = [];
+    let stopped = false;
+    const setLine = (town: string, patch: Partial<TownLine>) => { lines = lines.map((l) => (l.town === town ? { ...l, ...patch } : l)); show(); };
+
+    await runPool(plan.run, MANY_TOWNS_CONCURRENCY, async (town) => {
+      if (stopped || controller.signal.aborted) { setLine(town, { state: 'not_searched' }); return; }
+      setLine(town, { state: 'searching' });
+      const filters: SearchFilters = { ...base, keyword, location: town } as SearchFilters;
+      const r = await fetchTown(filters, controller.signal, false, false);
+      if (r.kind === 'aborted') { setLine(town, { state: 'not_searched' }); return; }
+      if (r.kind === 'code') { stopped = true; applyRefusalCode(r); setLine(town, { state: 'failed', message: 'Search limit reached' }); return; }
+      if (r.kind === 'notFound') { setLine(town, { state: 'not_found', message: r.notice }); return; }
+      if (r.kind === 'error') { if (r.refusal) stopped = true; setLine(town, { state: 'failed', message: r.message }); return; }
+      const ex = await exclusionsP;
+      if (controller.signal.aborted) { setLine(town, { state: 'not_searched' }); return; }
+      const shown = shownResults(r.data, ex);
+      const noWebsiteCount = shown.filter((l) => isWithoutWebsite(l.websiteStatus)).length;
+      /* Its own run, written before the results show, so every result can carry it (Found vs Added per town). */
+      const runId = await saveSearch(filters, shown.length, noWebsiteCount, r.data.leads as SearchLeadLike[]);
+      const townCountry = typeof r.data.resolvedCountry === 'string' && r.data.resolvedCountry ? r.data.resolvedCountry : country;
+      answers.push({ town, leads: shown.map((l) => ({ ...l, searchTown: town, searchCountry: townCountry, ...(runId ? { searchRunId: runId } : {}) })) });
+      const merged = mergeTownLeads(plan.run, answers);
+      if (!controller.signal.aborted) setLeads(merged.leads);
+      setLine(town, {
+        state: 'done', found: shown.length, noWebsite: noWebsiteCount,
+        ...(r.data.townFilter && r.data.townFilter.applied === false ? { message: 'Town boundary not found — searched the radius instead' } : {}),
+      });
+    });
+
+    const merged = mergeTownLeads(plan.run, answers);
+    lines = lines.map((l) => (l.state === 'done' ? { ...l, duplicates: merged.alsoIn[l.town] ?? 0 } : l));
+    setTownRun({ keyword, towns: lines, later: plan.later, running: false });
+    setIsLoading(false);
+    window.dispatchEvent(new CustomEvent('demo-checklist-search'));
+    return lines.filter((l) => l.state === 'done' || l.state === 'not_found').map((l) => l.town);
+  }, [fetchTown, fetchExcludedBusinesses, hasProAccess]);
 
   const retryLastSearch = useCallback(() => {
     if (lastSearchRef.current) {
@@ -741,6 +841,7 @@ export function LeadSearchProvider({ children }: { children: React.ReactNode }) 
   const adoptResults = useCallback((incoming: Lead[], search: LastSearch) => {
     setLeads(incoming);
     setLastSearch(search);
+    setTownRun(null);
     /* Clear the states that describe a JUST-FINISHED search on this page, so an adopted set does
        not arrive under a stale error card or an old "town filter fell back" warning. */
     setSearchError(null);
@@ -753,6 +854,8 @@ export function LeadSearchProvider({ children }: { children: React.ReactNode }) 
     leads: displayedLeads,
     isLoading,
     search,
+    searchMany,
+    townRun,
     setWebsiteOverride,
     retryLastSearch,
     exportToCsv,
@@ -773,7 +876,7 @@ export function LeadSearchProvider({ children }: { children: React.ReactNode }) 
     loadExclusions,
     adoptResults,
     locationCandidates,
-  }), [displayedLeads, isLoading, search, setWebsiteOverride, retryLastSearch, exportToCsv, trialLimitError, clearTrialLimitError, postAbandonExhausted, freeSearchExhausted, searchError, searchNotice, expanded, gated, regionMeta, regionDowngraded, townFilterFallback, resolvedLocation, locationCandidates, lastSearch, isExcluded, loadExclusions, adoptResults]);
+  }), [displayedLeads, isLoading, search, searchMany, townRun, setWebsiteOverride, retryLastSearch, exportToCsv, trialLimitError, clearTrialLimitError, postAbandonExhausted, freeSearchExhausted, searchError, searchNotice, expanded, gated, regionMeta, regionDowngraded, townFilterFallback, resolvedLocation, locationCandidates, lastSearch, isExcluded, loadExclusions, adoptResults]);
 
   return (
     <LeadSearchContext.Provider value={contextValue}>
