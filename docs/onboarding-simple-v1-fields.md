@@ -24,8 +24,15 @@ or existing Build / Optimise rows changed.
   already-paid refusal, inside a try — a failure is logged and checkout carries on exactly as before.
 - `q2_prefill` now also returns `confirmed_location` (the row's own answer, same paid-row gate) so the post-payment
   town box can be filled on another device. ⚠️ findable-site does not read it yet — a one-line follow-up there.
-- ⛔ `prefill` / `q2_prefill` still do **not** return the lead's email, contact name or address. That needs Paul's OK
-  (the link is the only capability).
+- **Prefill (Paul's OK, 2026-10-16):** `prefill` also returns `contact_name`, `business_address` and
+  `contact_email_masked` (`maskEmail`: first letter, `***`, `@domain`). Source: the newest sign-up row's own value,
+  else the lead. ⛔ Never the full email, never notes or any other contact detail; same capability as before (the
+  lead id, after the `already_client` refusal). `q2_prefill` returns none of the three.
+- **The /details/ form** (`clientOnboardingForm.ts`, `_shared/client-onboarding.ts`): for a Build client from the new
+  flow it already skipped every answer held on the onboarding row (name, email, phone, town, domain, the three
+  confirmations) and asks only gaps (photos, must-not-say, rights to reuse the current site, services/areas if
+  missing). The loader now also reads `business_address`, `agency_contract`, `design_choice`, `agency_contract_ends`,
+  and a design choice counts as "has a website" (it is only asked of someone with one).
 - Shown on the client page (Onboarding stage + Client details), Website Build (simple screen header) and the lead
   card's Questionnaire section, all through `simpleOnboardingLines`. paid-client-hub selects the three columns.
 - Test: `scripts/onboarding-simple-fields.test.ts`.

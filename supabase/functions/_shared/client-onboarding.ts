@@ -21,6 +21,7 @@ import {
   type KnownField, type OnbKey, type OnbQuestion, type OnboardingKnown,
 } from "../../../src/lib/clientOnboardingForm.ts";
 import { cleanCallNotes } from "../../../src/lib/quickClose.ts";
+import { readDesignChoice } from "../../../src/lib/onboardingSimpleAnswers.ts";
 import { HANDOFF_GBP_CHECKLIST_KEY } from "../../../src/lib/handoffReadiness.ts";
 import { loadIntakeSources, queueIntake } from "./client-intake.ts";
 import { pickOnboarding, recordLeadEvent } from "./client-setup.ts";
@@ -35,7 +36,9 @@ const ROW_COLUMNS =
   "id,lead_id,status,source,updated_at,created_at,business_name,business_website,confirmed_location,services,services_list,areas_list,areas_wanted," +
   "top_requests,contact_name,contact_email,confirmed_phone,website_platform,website_manager,website_manager_email,gbp_status,gbp_exists,domain_status," +
   "domain_owned,domain_access,domain_third_party,authority_confirmed,dns_permission,materials_confirmed,site_rights,photos_status,must_not_say," +
-  "plan_tier,website_addon,quick_close";
+  "plan_tier,website_addon,quick_close," +
+  /* The simple findable.live onboarding's answers (migration 20261103090000): read so "what we hold" sees them. */
+  "business_address,agency_contract,design_choice,agency_contract_ends";
 export const LINK_COLUMNS = "id,lead_id,onboarding_id,route,questions,created_by,created_at,revoked_at,revoked_by,first_opened_at,last_opened_at,open_count,submitted_at,answers,conflicts,shared";
 
 export interface OnboardingContext {
@@ -78,7 +81,8 @@ export async function loadOnboardingContext(service: Service, leadId: string): P
     callJobs: cleanCallNotes(qc?.call).jobs ?? null,
     siteControlKnown: ["client_controls", "agency_controls"].includes(control) || ["owner", "employee", "agency", "third_party"].includes(text(qc?.answers?.manager)),
     gbpConfirmedByFindable: (lead.delivery_checklist as Row | null)?.[HANDOFF_GBP_CHECKLIST_KEY] === true,
-    hasWebsite: !!(text(lead.website) || text(row?.business_website)),
+    /* A design choice (keep / improve) is only asked of a client who HAS a website (simple onboarding, 2026-10-16). */
+    hasWebsite: !!(text(lead.website) || text(row?.business_website) || readDesignChoice(row?.design_choice)),
   };
   const refusal = !isPaidClient(lead as never) ? "not_paid" : clientClosed(lead as never) ? "closed" : !route ? "no_route" : !row ? "no_onboarding_row" : null;
   return { lead, row, route, profile, known, questions: refusal ? [] : onboardingQuestionsFor(known), refusal };

@@ -5,7 +5,8 @@
    confirmed town, and every operator screen reads ONE line builder.
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 import { readFileSync } from 'node:fs';
-import { readContractEnd, readDesignChoice, contractEndWords, simpleOnboardingLines } from '../src/lib/onboardingSimpleAnswers.ts';
+import { readContractEnd, readDesignChoice, contractEndWords, simpleOnboardingLines, maskEmail } from '../src/lib/onboardingSimpleAnswers.ts';
+import { onboardingQuestionsFor } from '../src/lib/clientOnboardingForm.ts';
 
 let f = 0;
 const ok = (c: unknown, l: string) => { if (!c) f++; console.log((c ? 'PASS ' : 'FAIL ') + l); };
@@ -44,7 +45,7 @@ console.log('── 3. findable-onboarding: ALL THREE LISTS ──');
   ok(/They say their agency contract ends on \$\{ends\}/.test(on) && /contractEndWords\(/.test(on), 'the hold notice names the end date when given');
   ok(/select\("id, status, lead_id, services, services_list, areas_list, areas_wanted, confirmed_location"\)/.test(on) && /confirmed_location: confirmedLocation \}\)/.test(on), 'q2_prefill returns the confirmed town');
   const q2 = on.slice(on.indexOf('action === "q2_prefill"'), on.indexOf('action === "complete_q2"'));
-  ok(!/\bemail\b/.test(q2) && !/contact_name/.test(q2) && !/business_address/.test(q2), 'q2_prefill still returns no email, contact name or address (Paul has not approved that)');
+  ok(!/\bemail\b/.test(q2) && !/contact_name/.test(q2) && !/business_address/.test(q2), 'q2_prefill returns no email, contact name or address (prefill does — masked email only)');
 }
 
 console.log('── 4. findable-checkout: A RECORD, NEVER A GATE ──');
@@ -56,6 +57,43 @@ console.log('── 4. findable-checkout: A RECORD, NEVER A GATE ──');
   ok(/\.is\("access_ack_at", null\)/.test(block), 'stamped once (only while null)');
   ok(/try \{/.test(block) && !/return json/.test(block), 'it cannot return a refusal or throw out of the handler');
   ok(i > co.indexOf('checkout_refused_row_already_paid'), 'a paid row is refused before anything is stamped');
+}
+
+console.log('── 4b. PREFILL: NAME, ADDRESS, EMAIL MASKED ONLY (Paul, 2026-10-16) ──');
+ok(maskEmail('paul@gmail.com') === 'p***@gmail.com' && maskEmail(' Jo.Smith@Example.CO.UK ') === 'J***@example.co.uk', 'first letter, ***, then the domain');
+ok(maskEmail('not an email') === null && maskEmail('') === null && maskEmail(undefined) === null && maskEmail('a@b') === null, 'not an address → null, never the raw value');
+{
+  const on = code('supabase/functions/findable-onboarding/index.ts');
+  const pre = on.slice(on.indexOf('action === "prefill"'), on.indexOf('action === "revise"'));
+  ok(/contact_name: heldName,/.test(pre) && /business_address: heldAddress,/.test(pre) && /contact_email_masked: heldEmailMasked,/.test(pre), 'prefill returns exactly the three agreed field names');
+  ok(/maskEmail\(heldFirst\("contact_email", lead\.email\)\)/.test(pre), 'the email goes out only through maskEmail');
+  ok(!/\bcontact_email:/.test(pre) && !/\bemail:/.test(pre) && !/\bnotes\b/.test(pre), 'no full email and no notes in the response');
+  ok(pre.indexOf('error: "already_client"') < pre.indexOf('contact_email_masked'), 'same capability: the already_client refusal still comes first');
+  ok(/contact_name, email"\)/.test(pre) && /quick_close, contact_name, contact_email, business_address"\)/.test(pre), 'the columns are actually selected');
+}
+
+console.log('── 4c. THE /details/ FORM FOR A NEW-FLOW BUILD CLIENT ──');
+{
+  const row = {
+    contact_name: 'Sam Jones', contact_email: 'sam@jonesplumbing.co.uk', confirmed_phone: '07700 900123', confirmed_location: 'Rugby',
+    business_address: '1 High St, Rugby', business_website: null, services_list: ['Boiler repair'], areas_list: ['Coventry'],
+    website_manager: 'web_company', agency_contract: 'free', design_choice: 'keep',
+    domain_status: 'existing', domain_owned: 'yes', domain_access: 'yes', domain_third_party: 'no',
+    authority_confirmed: true, dns_permission: true, materials_confirmed: true, plan_tier: 'new_site', website_addon: true,
+  };
+  const keys = (r: Record<string, unknown>, hasWebsite: boolean) =>
+    onboardingQuestionsFor({ route: 'build', row: r, profile: {}, hasWebsite }).map((q) => q.key);
+  const asked = keys(row, true);
+  for (const held of ['contact_name', 'contact_email', 'confirmed_phone', 'confirmed_location', 'domain_status', 'domain_owned', 'domain_access', 'domain_third_party', 'authority_confirmed', 'dns_permission', 'materials_confirmed', 'services_list', 'areas_list']) {
+    ok(!asked.includes(held as never), `held ${held} is not asked again`);
+  }
+  ok(asked.includes('photos_status') && asked.includes('must_not_say') && asked.includes('site_rights'), 'Build-only gaps still asked: photos, must-not-say, rights to reuse the current site');
+  ok(!asked.some((k) => ['business_website', 'website_platform', 'website_manager'].includes(k)), 'no Optimise question for a Build client');
+  const filled = keys({ ...row, photos_status: 'phone', must_not_say: 'no gas work', site_rights: 'yes', top_requests: 'boilers', gbp_status: 'done' }, true);
+  ok(filled.length === 0, 'once they are answered, nothing is asked');
+  const cs = read('supabase/functions/_shared/client-onboarding.ts');
+  ok(/business_address,agency_contract,design_choice,agency_contract_ends/.test(cs), 'the form reads business_address, agency_contract, design_choice and the contract end');
+  ok(/readDesignChoice\(row\?\.design_choice\)/.test(cs), 'a design choice means they have a website (so the rights question is asked)');
 }
 
 console.log('── 5. THE SCREENS READ ONE BUILDER ──');

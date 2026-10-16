@@ -29,7 +29,9 @@ export const WHATS_NEW: readonly WhatsNewEntry[] = [
         'Design (keep the look / improve the design), Agency contract ends, and Access (the client ticked "I can get you access" before paying), where the onboarding answers are shown.',
         'The "Paul review required" notice for a client still tied into an agency contract now names the end date they gave.',
       ],
-      changed: [],
+      changed: [
+        'The sign-up page can now show the client the name and business address we hold, and their email masked (like p***@gmail.com). Never the full email.',
+      ],
       removed: [],
       effect: 'You see the client’s design wish and contract date without asking. Prices, the agreement and existing clients are unchanged.',
     } },

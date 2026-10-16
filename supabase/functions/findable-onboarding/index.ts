@@ -11,7 +11,7 @@ import { planClientConfirmation, resumeDecision, salesSignupFor, type SignupRow 
 import { confirmItemsFor, confirmSummaryFor } from "../../../src/lib/clientConfirm.ts";
 import type { QuickCloseRecord } from "../../../src/lib/quickClose.ts";
 import { selfServeBuildHold, SELF_SERVE_HOLD_TEXT } from "../../../src/lib/selfServeContract.ts";
-import { readContractEnd, readDesignChoice, contractEndWords, simpleAnswerFills } from "../../../src/lib/onboardingSimpleAnswers.ts";
+import { readContractEnd, readDesignChoice, contractEndWords, simpleAnswerFills, maskEmail } from "../../../src/lib/onboardingSimpleAnswers.ts";
 import { recordSetupSignupCreator } from "../_shared/setup-link-creator.ts";
 
 // findable-onboarding — the PUBLIC backend for findable-site's /onboarding flow
@@ -236,7 +236,7 @@ Deno.serve(async (req) => {
            column is not bookkeeping here: an unselected column reads as `undefined`, so the
            response would have carried "" and the change would have looked applied while doing
            nothing — the same trap the derived_town note below records. */
-        .select("id, user_id, business_name, category, search_keyword, search_location, derived_town, address, status, amount_paid, phone, website, services_included, service_areas")
+        .select("id, user_id, business_name, category, search_keyword, search_location, derived_town, address, status, amount_paid, phone, website, services_included, service_areas, contact_name, email")
         .eq("id", leadId).maybeSingle();
       /* 🔴 A FAILED READ IS NOT A MISSING ROW, AND FOR MONTHS THEY WERE THE SAME ANSWER.
          This destructured the query's `error` away and tested only `data`, so a database that
@@ -303,12 +303,24 @@ Deno.serve(async (req) => {
          the agreement now; it is the same id the agreement link already pays on. A failed read is
          reported, never read as "no sales sign-up" (absence is never inferred from silence). */
       const { data: signupRows, error: signupErr } = await service.from("onboarding_responses")
-        .select("id, status, created_at, plan_tier, website_addon, quick_close").eq("lead_id", lead.id);
+        .select("id, status, created_at, plan_tier, website_addon, quick_close, contact_name, contact_email, business_address").eq("lead_id", lead.id);
       if (signupErr) {
         console.error("[findable-onboarding] prefill sign-up lookup failed:", signupErr.message);
         return json({ ok: false, error: "lookup_failed" }, 503);
       }
       const held = salesSignupFor((signupRows ?? []) as SignupRow[]);
+      /* ⛔ WHAT WE HOLD ABOUT THE CLIENT (Paul, 2026-10-16): their name, the business address and — MASKED ONLY — the
+         email. The client's own / their salesperson's answer on a sign-up row first (newest), else the lead. Never the
+         full email, never any other contact detail. Same capability as the rest of this action (the lead id, after the
+         already_client refusal above); nothing new is reachable. */
+      const heldFirst = (col: "contact_name" | "contact_email" | "business_address", leadVal: unknown): string => {
+        const rows = [...((signupRows ?? []) as Record<string, unknown>[])].sort((x, y) => String(y.created_at ?? "").localeCompare(String(x.created_at ?? "")));
+        for (const r of rows) { const v = typeof r[col] === "string" ? (r[col] as string).trim() : ""; if (v) return v; }
+        return typeof leadVal === "string" ? leadVal.trim() : "";
+      };
+      const heldName = heldFirst("contact_name", lead.contact_name).slice(0, 120);
+      const heldAddress = heldFirst("business_address", lead.address).slice(0, 300);
+      const heldEmailMasked = maskEmail(heldFirst("contact_email", lead.email)) ?? "";
       /* ── WHAT THIS IS ALLOWED TO HAND BACK ───────────────────────────────────────────────────
          This line used to read "SAFE subset only — never expose phone/email/notes/owner to the
          public page", and phone was on the wrong side of it.
@@ -319,12 +331,9 @@ Deno.serve(async (req) => {
          are Google Places fields — `internationalPhoneNumber` and `websiteUri`, fetched by
          google-place-details and already on the business's own Maps listing. Returning them
          discloses nothing.
-         ⛔ `email`, `contact_name` AND `notes` STAY OUT, and they are the ones that matter. The
-         email comes from enrichment rather than from Google, contact_name is usually the operator's
-         own note about who to ask for, and notes is internal by definition. Measured before
-         deciding: email is present on 10.1% of live leads and contact_name on 0.2%, so they are
-         worth nothing as a prefill AND carry all of the risk — the trade is one-sided in both
-         directions.
+         ⛔ CHANGED BY PAUL, 2026-10-16: the client's name and business address are now returned, and the
+         email ONLY MASKED (contact_email_masked, "p***@gmail.com" — see heldFirst above). The full email
+         and `notes` still never leave this function.
          ⚠️ WHY IT IS WORTH THE CHANGE AT ALL: phone is on 99.7% of unarchived leads and website on
          88.6%. Every WhatsApp prospect arrives with both, and making them retype what we already
          know is friction on the one screen that takes the payment. */
@@ -354,6 +363,10 @@ Deno.serve(async (req) => {
            "the column is missing", and "" renders as an empty box either way. */
         phone_guess: String(lead.phone ?? "").trim(),
         website_guess: String(lead.website ?? "").trim(),
+        /* Paul's OK, 2026-10-16 (see heldFirst above): "" when we hold nothing. The email ONLY masked. */
+        contact_name: heldName,
+        business_address: heldAddress,
+        contact_email_masked: heldEmailMasked,
         /* 🔴 FINAL PASS (2026-10-07): `confirm` = "here's what we have so far" — the four situation facts the
            salesperson recorded, in the client's words (src/lib/clientConfirm.ts), only when the sign-up may go on. */
         sales_signup: held

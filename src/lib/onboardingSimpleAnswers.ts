@@ -55,6 +55,13 @@ export function contractEndWords(day: string | null | undefined): string | null 
   return new Date(`${t}T00:00:00Z`).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' });
 }
 
+/** "paul@gmail.com" → "p***@gmail.com" (Paul, 2026-10-16): the ONLY form of an email the public prefill may return —
+ *  the ?lead= link is a bearer link. Not an address → null (never the raw value). */
+export function maskEmail(raw: unknown): string | null {
+  const m = typeof raw === 'string' ? /^([^\s@]+)@([^\s@]+\.[^\s@]+)$/.exec(raw.trim()) : null;
+  return m ? `${m[1][0]}***@${m[2].toLowerCase()}` : null;
+}
+
 /** A sales-held sign-up resumed from the client's page fills these only where EMPTY (findable-onboarding's
  *  light-touch fill) — facts about their site, never the plan, price or seller. */
 export function simpleAnswerFills(a: Record<string, unknown>): [string, string | null][] {
