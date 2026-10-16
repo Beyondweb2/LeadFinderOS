@@ -58,7 +58,7 @@ console.log('── A. BUILD · SELF-MANAGED ──');
   const s = closeSession();
   s.answer({ decision_maker: 'yes' }); s.answer({ manager: 'owner' }); s.answer({ domain: 'yes' }); s.answer({ rights: 'yes' });
   const fit = offerFit(s.qc.answers as QuickCloseAnswers, true);
-  ok(fit.recommended === 'build' && fit.offered.build && fit.offered.optimise && fit.warning === null, 'Build is recommended; both plans open; no warning');
+  ok(fit.recommended === 'build' && fit.offered.build && !fit.offered.optimise && fit.warning === null, 'v5: Build is the plan; Optimise is not offered; no warning');
   ok(fit.notes.includes(REUSE_YES_LINE) && fit.notes.includes(DOMAIN_NOT_WEBSITE_LINE), '…with the reuse line ("very close to the look they already like") and the domain-is-not-the-website line');
   s.answer({ route: 'build' });
   ok(s.state() === 'ready' && s.cols.plan_tier === 'new_site' && s.cols.website_addon === true && serviceRouteFromRow(s.cols) === 'build' && totalPaymentsFor('build') === 12, 'ready; sold as Build (12 payments) from the row');
@@ -82,16 +82,17 @@ console.log('\n── B. BUILD · AGENCY BUT FREE TO LEAVE ──');
   ok(s.state() === 'ready' && g.review.length === 0 && g.flags.includes('domain_handoff'), 'ready; the agency-held domain is a note for Paul, never a stop (keeping the domain ≠ keeping the website)');
 }
 
-console.log('\n── C. OPTIMISE · CONTRACT BLOCKER ──');
+console.log('\n── C. v5: STILL TIED IN = DECLINED (clause 1.6) ──');
 {
   const s = closeSession();
   s.answer({ decision_maker: 'yes', manager: 'agency', agency_contract: 'in_contract', domain: 'yes', rights: 'yes' });
   const fit = offerFit(s.qc.answers as QuickCloseAnswers, true);
-  ok(fit.recommended === 'optimise' && !fit.offered.build && fit.offered.optimise && agencyContractBlocksBuild(s.qc.answers as QuickCloseAnswers), 'agency + still in contract → Optimise recommended; Build not offered to a salesperson');
-  s.answer({ route: 'optimise' });
-  ok(s.state() === 'in_progress' && missingQuestions(s.qc.answers as QuickCloseAnswers).join() === 'access', 'Optimise adds only "can Findable get in?"');
-  s.answer({ access: 'yes' });
-  ok(s.state() === 'ready' && s.cols.plan_tier === 'keep' && s.cols.website_addon === false && totalPaymentsFor('optimise') === 6 && /plan ends/.test(afterTermRepLine('optimise')) && !/29\.99/.test(afterTermRepLine('optimise')), 'ready; Optimise: 6 payments, then it ends — no £29.99');
+  ok(fit.declined && fit.recommended === null && !fit.offered.build && !fit.offered.optimise && agencyContractBlocksBuild(s.qc.answers as QuickCloseAnswers), 'agency + still tied in → DECLINED: nothing offered, never steered to Optimise');
+  ok(s.state() === 'declined' && !mayGenerateLink('answers_saved', s.qc, NOW), 'the close is declined: no link');
+  ok(quickCloseState('answers_saved', { ...s.qc, review_approved_at: iso(NOW) }, NOW) === 'declined', "…and Paul's release cannot lift a decline");
+  let refused = '';
+  try { s.answer({ route: 'optimise' }); } catch (e) { refused = String((e as Error).message); }
+  ok(/route_withdrawn/.test(refused), 'choosing Optimise instead is refused (route_withdrawn)');
   ok(/optional/i.test(afterTermRepLine('build')) || /If they want us to keep hosting/.test(afterTermRepLine('build')), 'Build: the £29.99 is only if they want hosting / maintenance after the term');
 }
 
@@ -100,7 +101,7 @@ console.log('\n── D. UNKNOWN CONTRACT ──');
   const s = closeSession();
   s.answer({ decision_maker: 'yes', manager: 'agency', agency_contract: 'not_sure', domain: 'yes', rights: 'yes' });
   const fit = offerFit(s.qc.answers as QuickCloseAnswers, true);
-  ok(fit.recommended === 'build' && fit.offered.build && fit.warning === CONFIRM_CONTRACT_WARNING, 'contract "Not sure": Build stays the default, with the warning "Confirm their agency contract before finalising Build."');
+  ok(fit.recommended === 'build' && fit.offered.build && !fit.declined && fit.warning === CONFIRM_CONTRACT_WARNING, 'contract "Not sure": Build stays the plan, with the confirm-the-contract warning (not a decline)');
   s.answer({ route: 'build' });
   ok(s.state() === 'needs_review' && !mayGenerateLink('answers_saved', s.qc, NOW), 'the Build still stops for Paul\'s release until the contract is confirmed free (the existing payment stop is unchanged)');
   ok(quickCloseState('answers_saved', { ...s.qc, review_approved_at: iso(NOW) }, NOW) === 'ready', '…and he can release it');
@@ -183,8 +184,9 @@ console.log('\n── CLIENT CONFIRMATION: "here\'s what we have so far" ──'
 
   // The one that matters: a correction that makes Build unsafe.
   const tied = planClientConfirmation(s.qc as never, { manager: 'agency', agency_contract: 'in_contract', domain: 'yes', rights: 'yes' }, iso(NOW));
-  ok(tied.ok && tied.changed.join() === 'agency_contract' && tied.holds, 'saying they ARE still tied into the contract HOLDS the Build sign-up for Paul');
-  ok(tied.ok && state(tied.next) === 'needs_review' && !mayGenerateLink('answers_saved', tied.next, NOW), '…even though the link already exists (the link does not override the client\'s own answer)');
+  ok(tied.ok && tied.changed.join() === 'agency_contract' && tied.holds && tied.declined, 'v5: saying they ARE still tied into the contract DECLINES the sign-up (clause 1.6)');
+  ok(tied.ok && state(tied.next) === 'declined' && !mayGenerateLink('answers_saved', tied.next, NOW), '…even though the link already exists (the link does not override the client\'s own answer)');
+  ok(tied.ok && resumeDecision([row('OB-T', tied.next, s.cols)], NOW).kind !== 'resume', '…and their page no longer resumes it towards payment');
   ok(tied.ok && effectiveAnswers(tied.next).route === 'build', '…and the plan is STILL Build (a correction never changes the plan)');
   const approved = { ...s.qc, review_approved_at: iso(NOW) } as QcRecord;
   const tied2 = planClientConfirmation(approved as never, { manager: 'agency', agency_contract: 'in_contract' }, iso(NOW));
@@ -200,11 +202,11 @@ console.log('\n── CLIENT CONFIRMATION: "here\'s what we have so far" ──'
 
 console.log('\n── PAYMENT SAFETY · AGREEMENT · v4 (unchanged) ──');
 {
-  ok(CLIENT_AGREEMENT_VERSION === 'v4' && FINDABLE_SETUP_PRICE_GBP === 99 && totalPaymentsFor('build') === 12 && totalPaymentsFor('optimise') === 6, 'new sign-ups sign v4; £99 × 12 (Build) / × 6 (Optimise)');
+  ok(CLIENT_AGREEMENT_VERSION === 'v5' && FINDABLE_SETUP_PRICE_GBP === 99 && totalPaymentsFor('build') === 12 && totalPaymentsFor('optimise') === 6, 'new sign-ups sign v5; £99 × 12 (Build); the 6 survives only for v3 / v4 Optimise clients');
   const sha = 'a'.repeat(64);
-  const good = { id: 'A1', lead_id: 'L1', onboarding_id: 'OB1', agreement_version: CLIENT_AGREEMENT_VERSION, service_route: 'build', method: 'agree_page', authority_confirmed: true, agreed_text_sha256: sha };
+  const good = { id: 'A1', lead_id: 'L1', onboarding_id: 'OB1', agreement_version: CLIENT_AGREEMENT_VERSION, service_route: 'build', method: 'agree_page', authority_confirmed: true, agreed_text_sha256: sha, free_to_leave_provider: true };
   const g = (o: Record<string, unknown> = {}, acc: unknown = good) => checkoutAgreementGate({ acceptance: acc as never, leadId: 'L1', onboardingId: 'OB1', route: 'build', currentVersion: CLIENT_AGREEMENT_VERSION, recomputedSha: sha, ...o } as never);
-  ok(g().ok && !g({}, null).ok && !g({ route: 'optimise' }).ok && !g({ onboardingId: 'OB2' }).ok, 'payment opens only on a v4 signature for THIS sign-up and THIS plan');
+  ok(g().ok && !g({}, null).ok && !g({ route: 'optimise' }).ok && !g({ onboardingId: 'OB2' }).ok, 'payment opens only on a v5 signature for THIS sign-up and THIS plan');
   const co = read('supabase/functions/findable-checkout/index.ts');
   ok(!/body\.(price|amount|plan|plan_tier|route|service_route)\b/.test(co) && /const route = serviceRouteFromRow\(ob/.test(co), 'checkout reads the plan from the stored row, never from the request');
   ok(/checkout_refused_client_correction_held/.test(co) && /client_confirmed/.test(co.slice(co.indexOf('checkout_refused_client_correction_held') - 600, co.indexOf('checkout_refused_client_correction_held'))), 'checkout refuses a sign-up the client\'s own correction put on hold');

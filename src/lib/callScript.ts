@@ -27,13 +27,16 @@
       cost. The PRICE ANGLE appears only above AGENCY_PRICE_ANGLE_OVER_GBP a month AND above our own monthly,
       so it can never claim Findable is cheaper when it is not. Never knock their agency.
    ⛔ EVERY FIGURE IS A CONSTANT (findableOffer.ts, callClose.ts). No price is typed here as a number.
+   🔴 v5 (Paul, 2026-10-16): ONE PLAN — Findable Build. Nothing here sells, quotes or recommends Optimise (withdrawn).
+      Still tied into a contract with whoever looks after their website → we can't take them on yet (clause 1.6):
+      the rep notes when it ends and calls back then. The minimum term is said in PAYMENTS, never months.
    Pure. No React, no fetch, no clock.
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 import {
   FINDABLE_MONTHLY_GBP, FINDABLE_SETUP_PRICE_GBP,
   REMEASURE_WEEKS_STANDARD, totalPaymentsFor, type ServiceRoute,
 } from './findableOffer.ts';
-import { afterTermRepLine, bothPlansSpoken, ordinalOf } from './planTerms.ts';
+import { afterTermRepLine, planSpoken } from './planTerms.ts';
 import { SALES_DOMAIN_LINE } from './domainAuthority.ts';
 import type { FindingKind } from './siteFindings.ts';
 import type { InsightKind } from './salesInsights.ts';
@@ -84,7 +87,7 @@ const weeksWord = (n: number) => (['zero', 'one', 'two', 'three', 'four', 'five'
  *  baseline check, the real customer questions, the website work, pages where they help, the same check at
  *  four weeks, then monthly. ⛔ Never a promise of being recommended, cited, ranked or included by AI. */
 export const WHAT_WE_DO_LINE = `First we run an AI visibility check to see where you stand today, and find the real customer questions you've got a genuine chance with. `
-  + `Then we optimise your website so Google and the AI tools properly understand what you do and where — adding or improving pages for your services where it helps. `
+  + `Then we build you a new website, set up so Google and the AI tools properly understand what you do and where, with pages for your services where they help. `
   + `After ${weeksWord(REMEASURE_WEEKS_STANDARD)} weeks we run the same check again, then keep checking every month, so we can see what's improving and what still needs work.`;
 /** ⛔ 2–3 questions, each with a sales purpose. "Where does most of your work come from" is GONE (Paul,
  *  2026-10-06: no use for closing) — scripts/call-script.test.ts fails if it comes back. */
@@ -197,8 +200,8 @@ export function afterFirstQuestion(answer: WebsiteManager, agencyMonthlyGbp: num
   return { ask: [AGENCY_CONTRACT_QUESTION, AGENCY_COST_QUESTION], priceAngle: priceAngleApplies(agencyMonthlyGbp) ? PRICE_ANGLE_LINE : null };
 }
 
-/** The plan to open first: ALWAYS Build (Paul, 2026-10-07). Having their own site is not a reason for Optimise; only a
- *  confirmed agency contract is, and that comes from the call's answers (quickClose.offerFit), not from the site source. */
+/** The plan: ALWAYS Build — since v5 (2026-10-16) the only plan for sale. A client still tied into a contract with their
+ *  current provider is not offered another plan; they are not taken on (quickClose.offerFit, declined). */
 export function preselectedPlan(_source: SiteSource | null | undefined): ServiceRoute {
   return 'build';
 }
@@ -290,27 +293,27 @@ export function buildCallScript(i: CallScriptInput): CallScript {
     questions: [AGENCY_CONTRACT_QUESTION, AGENCY_COST_QUESTION] as [string, string],
     coaching: [
       'Never knock their agency, and never suggest breaking a contract.',
+      "If they're still tied into a contract they can't leave, we can't take them on yet: note when it ends and call back then. Never offer anything else instead.",
+      "If they're not sure, they need to check before they sign up. The sign-up waits until they confirm they're free.",
       SALES_DOMAIN_LINE + " If the agency owns the domain, or they don't know, flag it to Paul and promise nothing.",
     ],
     priceAngle: { overGbp: AGENCY_PRICE_ANGLE_OVER_GBP, line: PRICE_ANGLE_LINE },
   };
 
-  /* OBJECTIONS — spoken answers, short enough to say mid-call. Every figure is a constant. What follows the
-     payments is per plan (planTerms.ts, Paul 2026-10-07): Optimise ends after its 6th payment; Build's £29.99
-     applies only if they want hosting / maintenance to carry on. */
+  /* OBJECTIONS — spoken answers, short enough to say mid-call. Every figure is a constant. v5 (2026-10-16): Build only;
+     after its payments the site is theirs and £29.99 applies only if they want hosting / maintenance to carry on. */
   const build = totalPaymentsFor('build');
-  const optimise = totalPaymentsFor('optimise');
   const objections = [
     { objection: `Why £${FINDABLE_SETUP_PRICE_GBP}?`, answer: `The £${FINDABLE_SETUP_PRICE_GBP} covers measuring where you are now, the first round of work and the re-check at four weeks. If the number hasn't gone up by then, you can claim it back.` },
-    { objection: 'How much is it?', answer: bothPlansSpoken() },
+    { objection: 'How much is it?', answer: planSpoken() },
     { objection: 'I already have an agency', answer: "Fair enough — what do they look after for you at the moment? This is one specific thing: what AI says when someone asks for a business like yours. I can send them what I found too." },
     { objection: 'My agency controls the website / domain', answer: SALES_DOMAIN_LINE + " Your agreement with them is yours to check — I can't advise on that, and we would never ask you to break it." },
     { objection: 'I need to think about it', answer: "Of course — is it mainly the price, the timing, or you're not sure what we'd actually be doing? When's good for a quick ring back?" },
     { objection: 'Is this a scam?', answer: 'Fair question. You read and sign a written agreement before you pay anything, all the terms are at findable.live, and ' + (i.hasReport ? 'I can send you the report showing exactly what AI said.' : "you'll see exactly what AI said before anything else happens.") },
-    { objection: 'Can I cancel?', answer: `It's a minimum term: ${build} payments if we build the site, ${optimise} if we work on yours, today's £${FINDABLE_SETUP_PRICE_GBP} included. If we work on your site, it simply ends after the ${ordinalOf(optimise)} payment. If we build one, the hosting carries on afterwards only if you want it, and you can cancel that with 30 days' notice. And if the number hasn't gone up at four weeks, a valid claim gets your £${FINDABLE_SETUP_PRICE_GBP} back and stops the monthly too.` },
+    { objection: 'Can I cancel?', answer: `There's a minimum term of ${build} payments, today's £${FINDABLE_SETUP_PRICE_GBP} included. Once they're made the website is yours, and the hosting carries on afterwards only if you want it: you can cancel that with 30 days' notice. And if the number hasn't gone up at four weeks, a valid claim gets your £${FINDABLE_SETUP_PRICE_GBP} back and stops the monthly too.` },
     { objection: "Can you guarantee I'll show up?", answer: `No one can promise AI will name you, and I won't. What we do promise is the measurement: if the number hasn't gone up on the same questions, you can claim your £${FINDABLE_SETUP_PRICE_GBP} back.` },
-    { objection: 'Why twelve months?', answer: `That's Findable Build. We build the new website, host it and look after it — ${build} payments including today. ${afterTermRepLine('build')}` },
-    { objection: 'Why six months?', answer: `That's Findable Optimise, where you keep your own website. It's ${optimise} payments including today. ${afterTermRepLine('optimise')}` },
+    { objection: `Why ${build} payments?`, answer: `That's Findable Build. We build the new website, host it and look after it: ${build} payments including today. ${afterTermRepLine('build')}` },
+    { objection: 'Can you just improve my current website?', answer: "That's not something we offer. What we do is build you a new website, set up properly for AI and search from day one, and you can keep your web address." },
     { objection: 'Just send me something', answer: i.hasReport ? "Sure, I'll send you the report — it shows the exact search, what AI said and who it named. Can I give you a ring once you've had a look?" : "Sure, I'll run the check and send it over. Can I give you a ring once you've had a look?" },
     { objection: "I'm busy right now", answer: "No problem. When's a better time for a quick ring back?" },
   ];

@@ -36,6 +36,8 @@
       12 payments on Build, 6 on Optimise (Paul, 2026-09-29); Optimise ends after its 6th, Build's £29.99 only if
       they want hosting to continue (2026-10-07); FINDABLE_GUARANTEE. Until 2026-09-29
       the sources disagreed and the playbook said "check current offer"; they are one source now.
+   🔴 v5 (Paul, 2026-10-16): ONE PLAN — Findable Build, 12 payments in total (said in payments, never months).
+      Findable Optimise is WITHDRAWN: nothing here quotes or recommends it.
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 import { CRAWL_FRESH_MS, usableCrawlSignals, type CrawlSignals } from './crawlCheck.ts';
 import { compareIssues, usableContentTrust, type ContentIssue, type ContentTrustKind } from './contentTrust.ts';
@@ -52,8 +54,8 @@ import { carryOn } from './draftEvidence.ts';
 import { isRealSend } from './realSend.ts';
 import { REPORT_LINK_TEMPLATES } from './templateAttribution.ts';
 import { readableTemplateBody } from './templateBodies.ts';
-import { FINDABLE_GUARANTEE, FINDABLE_SETUP_PRICE_GBP, reportPublicUrl, termMonthsFor, totalPaymentsFor } from './findableOffer.ts';
-import { afterTermRepLine, bothPlansSpoken } from './planTerms.ts';
+import { FINDABLE_GUARANTEE, FINDABLE_SETUP_PRICE_GBP, reportPublicUrl, totalPaymentsFor } from './findableOffer.ts';
+import { afterTermRepLine, planSpoken } from './planTerms.ts';
 import { shortReportUrl } from './reportSlug.ts';
 import { classifyLeadWebsite, type SiteSource } from './leadWebsiteKind.ts';
 import { buildCallClose, type CallClose } from './callClose.ts';
@@ -783,17 +785,14 @@ export function buildColdCallPlaybook(input: PlaybookInput): ColdCallPlaybook {
   if (clean(lead.website)) nextSteps.push('If they can\'t get into their site, ask who owns and controls the domain before offering a new site. ' + SALES_DOMAIN_LINE + ' If an agency owns it, or they don\'t know, flag it to Paul and promise nothing.');
   else nextSteps.push('They have no website on file — talk about getting one built (they register the domain in their own business name).');
   const build = totalPaymentsFor('build');
-  const optimise = totalPaymentsFor('optimise');
   const offer = {
     lines: [
-      bothPlansSpoken(),
+      planSpoken(),
       FINDABLE_GUARANTEE,
     ],
-    /* Paul's two routes (findableOffer.ts, 2026-09-29) — the build terms apply only to a site we build. What follows
-       the payments is per plan (planTerms.ts, 2026-10-07): Optimise ends; Build's £29.99 only if they want it. */
-    monthly: 'If we build the site (Findable Build): we build, host and manage it for the ' + termMonthsFor('build') + ' months (' + build + ' payments). ' + afterTermRepLine('build')
-      + ' If they keep their own site (Findable Optimise): it stays theirs, ' + optimise + ' payments. ' + afterTermRepLine('optimise')
-      + ' The sign-up £' + FINDABLE_SETUP_PRICE_GBP + ' is the first payment either way.',
+    /* v5 (2026-10-16): ONE plan, Findable Build. After its payments the site is theirs; £29.99 only if they want it. */
+    monthly: 'Findable Build: we build, host and manage a new website for them, ' + build + ' payments in total. ' + afterTermRepLine('build')
+      + ' The sign-up £' + FINDABLE_SETUP_PRICE_GBP + ' is the first of the ' + build + ' payments.',
     nextSteps,
   };
 

@@ -138,34 +138,42 @@ ok(counter(a4) === "4/4" && state(row) === "ready" && missingQuestions(a4).lengt
   ok(row.quick_close!.link_kind === "signup" && row.quick_close!.link_session_id === null && /^https:\/\/findable\.live\/agree\/[0-9a-f]{64}$/.test(String(row.quick_close!.link_url)) && stripeSessionIdFromUrl(row.quick_close!.link_url) === null, "v3: the link is the client's agreement page — no Stripe session exists before they sign");
 }
 
-/* ═══ OPTIMISE ════════════════════════════════════════════════════════════════════════════════════ */
-console.log("\n── OPTIMISE still reaches ready ──");
+/* ═══ v5: OPTIMISE IS WITHDRAWN (2026-10-16) ═══════════════════════════════════════════════════════ */
+console.log("\n── v5: OPTIMISE can no longer be sold; an old close still reads and moves to Build ──");
+/** A ready Build close, one answer per call (the dialog's order). */
+const BUILD_STEPS = [["decision_maker", "yes"], ["manager", "owner"], ["domain", "yes"], ["rights", "yes"], ["route", "build"]] as const;
+/** A close saved on Optimise BEFORE v5 — written straight onto the row (no save can produce one now). */
+const optimiseV4Row = (): Row => ({ status: "answers_saved", cols: { plan_tier: "keep", website_addon: false }, quick_close: { answers: { decision_maker: "yes", manager: "owner", domain: "yes", rights: "yes", approach: "improve", route: "optimise", access: "yes" }, rev: 1 } as QcRecord });
 {
   const row = newRow();
-  let route: unknown = null;
-  for (const [k, v] of [["decision_maker", "yes"], ["manager", "owner"], ["domain", "yes"], ["rights", "yes"], ["approach", "improve"], ["access", "yes"]] as const) {
-    ok(save(row, { [k]: v }, { expectRoute: route }).ok, `save ${k}=${v}`);
-    route = cleanAnswers(row.quick_close?.answers).route ?? null;
-  }
-  const a = cleanAnswers(row.quick_close!.answers);
-  ok(counter(a) === "5/5" && state(row) === "ready" && row.cols.plan_tier === "keep" && row.cols.website_addon === false, "Optimise: 5 of 5 (the situation, the plan, access), ready, sold as Optimise");
-  const bad = save(row, { build_consents: "yes" }, { expectRoute: "optimise" });
-  ok(!bad.ok && bad.error === "answer_not_kept" && /only apply to Findable Build/.test(bad.detail), "Build consents sent on Optimise are REFUSED out loud (never silently kept or dropped)");
-  ok(generate(row) === "stored" && state(row) === "link_generated", "Optimise link generated");
+  for (const [k, v] of [["decision_maker", "yes"], ["manager", "owner"], ["domain", "yes"], ["rights", "yes"]] as const) ok(save(row, { [k]: v }).ok, `save ${k}=${v}`);
+  const viaApproach = save(row, { approach: "improve" }, { expectRoute: null });
+  ok(!viaApproach.ok && viaApproach.error === "route_withdrawn", "save approach=improve (the Optimise approach) → REFUSED out loud: route_withdrawn");
+  const viaRoute = save(row, { route: "optimise" }, { expectRoute: null, routeChange: true });
+  ok(!viaRoute.ok && viaRoute.error === "route_withdrawn" && !cleanAnswers(row.quick_close!.answers).route, "save route=optimise → REFUSED, even confirmed; nothing stored");
+  const old = optimiseV4Row();
+  ok(cleanAnswers(old.quick_close!.answers).route === "optimise" && state(old) === "in_progress" && missingQuestions(cleanAnswers(old.quick_close!.answers)).join() === "route", "a pre-v5 Optimise close still READS (no crash), is in progress, and is asked the plan again");
+  ok(linkStep(old.status, old.quick_close, clock).kind === "refuse", "…and can never make a link");
+  const keepAnswer = save(old, { domain: "yes" }, { expectRoute: "optimise" });
+  ok(keepAnswer.ok, "an unrelated answer on that old close still saves (it is not refused for carrying the old plan)");
+  const silent = save(old, { route: "build" }, { expectRoute: "optimise" });
+  ok(!silent.ok && silent.error === "route_change_unconfirmed", "moving it to Build is a route change — asked, never a stray tap");
+  const moved = save(old, { route: "build" }, { expectRoute: "optimise", routeChange: true });
+  ok(moved.ok && cleanAnswers(old.quick_close!.answers).route === "build" && old.cols.plan_tier === "new_site" && old.cols.website_addon === true && state(old) === "ready", "confirmed → Build: the row's columns follow and it is ready for the sign-up link");
 }
 
 /* ═══ PAYMENT LINK ════════════════════════════════════════════════════════════════════════════════ */
 console.log("\n── PAYMENT LINK: one current link, stale links never 'ready' ──");
 {
   const row = newRow();
-  for (const [k, v] of [["decision_maker", "yes"], ["manager", "owner"], ["domain", "yes"], ["rights", "yes"], ["approach", "improve"], ["access", "yes"]] as const) save(row, { [k]: v });
+  for (const [k, v] of BUILD_STEPS) save(row, { [k]: v });
   checkoutCalls = 0;
   ok(generate(row) === "stored" && generate(row) === "reuse" && checkoutCalls === 1, "double generation → one sign-up link, the second press reuses it");
   const first = row.quick_close!.link_url;
 
   // Two tabs press at the same moment: one claims, the other is told to wait for that link.
   const row2 = newRow();
-  for (const [k, v] of [["decision_maker", "yes"], ["manager", "owner"], ["domain", "yes"], ["rights", "yes"], ["approach", "improve"], ["access", "yes"]] as const) save(row2, { [k]: v });
+  for (const [k, v] of BUILD_STEPS) save(row2, { [k]: v });
   checkoutCalls = 0;
   const tabA = claim(row2);
   const tabB = claim(row2);
@@ -173,7 +181,7 @@ console.log("\n── PAYMENT LINK: one current link, stale links never 'ready' 
   ok(adopt(row2, tabA.key!, checkout()) === "stored" && claim(row2).kind === "reuse" && checkoutCalls === 1, "…and then reuses the first tab's link");
   // A claim abandoned past LINK_CLAIM_MS is taken over; if both sessions come back, only one becomes THE link.
   const row3 = newRow();
-  for (const [k, v] of [["decision_maker", "yes"], ["manager", "owner"], ["domain", "yes"], ["rights", "yes"], ["approach", "improve"], ["access", "yes"]] as const) save(row3, { [k]: v });
+  for (const [k, v] of BUILD_STEPS) save(row3, { [k]: v });
   const slow = claim(row3);
   clock += LINK_CLAIM_MS + 1000;
   const fast = claim(row3);
@@ -199,14 +207,14 @@ console.log("\n── PAYMENT LINK: one current link, stale links never 'ready' 
 
   // An answer changed while Stripe was making the session: that session is cancelled, nothing stored.
   const row4 = newRow();
-  for (const [k, v] of [["decision_maker", "yes"], ["manager", "owner"], ["domain", "yes"], ["rights", "yes"], ["approach", "improve"], ["access", "yes"]] as const) save(row4, { [k]: v });
+  for (const [k, v] of BUILD_STEPS) save(row4, { [k]: v });
   const c4 = claim(row4);
   save(row4, { manager: "employee" });
   const s4 = checkout();
   ok(adopt(row4, c4.key!, s4) === "answers_changed" && !row4.quick_close!.link_url, "answers changed during generation → no link stored");
   // Paid while the session was being made.
   const row5 = newRow();
-  for (const [k, v] of [["decision_maker", "yes"], ["manager", "owner"], ["domain", "yes"], ["rights", "yes"], ["approach", "improve"], ["access", "yes"]] as const) save(row5, { [k]: v });
+  for (const [k, v] of BUILD_STEPS) save(row5, { [k]: v });
   const c5 = claim(row5); row5.status = "paid";
   const s5 = checkout();
   ok(adopt(row5, c5.key!, s5) === "paid" && !row5.quick_close!.link_url, "paid meanwhile → no link stored");
@@ -214,42 +222,37 @@ console.log("\n── PAYMENT LINK: one current link, stale links never 'ready' 
 }
 
 /* ═══ ROUTE ═══════════════════════════════════════════════════════════════════════════════════════ */
-console.log("\n── ROUTE: Build and Optimise never mix; changes are deliberate ──");
+console.log("\n── ROUTE: only Build can be chosen; changes are deliberate ──");
 {
   const row = newRow();
   for (const [k, v] of [["decision_maker", "yes"], ["manager", "owner"], ["domain", "yes"], ["rights", "yes"], ["approach", "unsure"], ["route", "build"], ["build_consents", "yes"]] as const) save(row, { [k]: v });
   generate(row);
   const buildSession = row.quick_close!.link_session_id as string;
-  const silent = save(row, { route: "optimise" }, { expectRoute: "build" });
-  ok(!silent.ok && silent.error === "route_change_unconfirmed" && cleanAnswers(row.quick_close!.answers).route === "build", "Build → Optimise WITHOUT confirming is refused; the route stays Build");
-  const stale = save(row, { route: "optimise" }, { expectRoute: "optimise", routeChange: true });
-  ok(!stale.ok && stale.error === "stale_route", "a screen showing a different route than the saved one is refused (stale tab)");
   const sw = save(row, { route: "optimise" }, { expectRoute: "build", routeChange: true });
-  const a = cleanAnswers(row.quick_close!.answers);
-  ok(sw.ok && a.route === "optimise" && a.build_consents === undefined, "confirmed switch → Optimise, and the Build consents do NOT come along");
-  ok(row.cols.plan_tier === "keep" && row.cols.website_addon === false && row.cols.dns_permission === null && row.cols.materials_confirmed === null, "the row's columns follow: Optimise, consent columns cleared");
-  ok(!row.quick_close!.link_url && sw.ok && buildSession === null && !sw.expired, "the Build sign-up link is cleared (it never had a Stripe session) — it can never be paid for an Optimise row");
-  ok(row.quick_close!.build_consents_confirmed === null, "the stored consent evidence goes with them");
-  const back = save(row, { route: "build" }, { expectRoute: "optimise", routeChange: true });
-  ok(back.ok && cleanAnswers(row.quick_close!.answers).build_consents === undefined && missingQuestions(cleanAnswers(row.quick_close!.answers)).length === 0, "back to Build → the old consents do NOT come back (never carried over); nothing more is asked on the call");
+  ok(!sw.ok && sw.error === "route_withdrawn" && cleanAnswers(row.quick_close!.answers).route === "build" && !!row.quick_close!.link_url && buildSession === null, "v5: Build → Optimise is REFUSED even when confirmed; the route and the sign-up link stay");
+  const stale = save(row, { domain: "agency" }, { expectRoute: "optimise" });
+  ok(!stale.ok && stale.error === "stale_route", "a screen showing a different route than the saved one is refused (stale tab)");
+  /* A pre-v5 Optimise close with Build consents never had them; moving it to Build asks nothing more on the call. */
+  const back = optimiseV4Row();
+  const b2 = save(back, { route: "build" }, { expectRoute: "optimise", routeChange: true });
+  ok(b2.ok && cleanAnswers(back.quick_close!.answers).build_consents === undefined && missingQuestions(cleanAnswers(back.quick_close!.answers)).length === 0, "an old Optimise close moved to Build: no consents carried over, nothing more is asked on the call");
   const nosite = newRow();
   for (const [k, v] of [["decision_maker", "yes"], ["manager", "no_website"], ["domain", "no_domain"], ["approach", "unsure"]] as const) save(nosite, { [k]: v });
   const opt = save(nosite, { route: "optimise" }, { expectRoute: null });
-  ok(!opt.ok && opt.error === "answer_not_kept" && /only Findable Build is possible/.test(opt.detail), "no website + Optimise is refused out loud");
+  ok(!opt.ok && opt.error === "route_withdrawn", "no website + Optimise is refused out loud (the plan is withdrawn)");
   // Consents read with one domain situation do not survive a change to the other.
   const dom = newRow();
   for (const [k, v] of [["decision_maker", "yes"], ["manager", "owner"], ["domain", "no_domain"], ["rights", "yes"], ["approach", "new_template"], ["build_consents", "yes"]] as const) save(dom, { [k]: v });
   save(dom, { domain: "yes" }, { expectRoute: "build" });
   ok(cleanAnswers(dom.quick_close!.answers).build_consents === undefined && buildConsentsFor(cleanAnswers(dom.quick_close!.answers))[0] === BUILD_CONSENTS[0], "No domain → own a domain: the consents are asked again, with the standard wording");
   /* v2: the APPROACH moves the plan, so it is a route change too — confirmed, never a stray tap. */
-  const ap = newRow();
-  for (const [k, v] of [["decision_maker", "yes"], ["manager", "owner"], ["domain", "yes"], ["rights", "yes"], ["approach", "improve"], ["access", "yes"]] as const) save(ap, { [k]: v });
+  const ap = optimiseV4Row();
   const apSilent = save(ap, { approach: "new_template" }, { expectRoute: "optimise" });
-  ok(!apSilent.ok && apSilent.error === "route_change_unconfirmed" && cleanAnswers(ap.quick_close!.answers).route === "optimise", "improve → a new site WITHOUT confirming is refused; still Optimise");
+  ok(!apSilent.ok && apSilent.error === "route_change_unconfirmed" && cleanAnswers(ap.quick_close!.answers).route === "optimise", "an old Optimise close: improve → a new site WITHOUT confirming is refused; still Optimise");
   const apSw = save(ap, { approach: "new_template" }, { expectRoute: "optimise", routeChange: true });
   ok(apSw.ok && cleanAnswers(ap.quick_close!.answers).route === "build" && missingQuestions(cleanAnswers(ap.quick_close!.answers)).length === 0, "confirmed → Build; no domain / consent / site-access questions follow (2026-10-07)");
   const apRoute = save(ap, { route: "optimise" }, { expectRoute: "build", routeChange: true });
-  ok(apRoute.ok && cleanAnswers(ap.quick_close!.answers).route === "optimise" && cleanAnswers(ap.quick_close!.answers).approach === "improve", "2026-10-07: the plan is chosen directly — it brings the approach that agrees with it (a stored Build approach can never flip it back)");
+  ok(!apRoute.ok && apRoute.error === "route_withdrawn" && cleanAnswers(ap.quick_close!.answers).route === "build", "v5: once on Build it can never be moved back to Optimise");
   const fn = read("supabase/functions/quick-close/index.ts");
   ok(/if \(plan\.routeChange\)/.test(fn) && /lead\.contract_total_payments != null\) return json\(\{ ok: false, error: "route_locked"/.test(fn) && /from\("client_agreement_acceptances"\)/.test(fn) && /error: "route_lock_unreadable"[^\n]*503/.test(fn), "locked route: a contract or ANY agreement acceptance refuses a route change; an unreadable record refuses too (fails closed)");
   ok(/if \(row\.status === "paid"\) return json\(\{ ok: false, error: "already_paid"/.test(fn), "after payment nothing in Quick Close can change");
@@ -257,25 +260,26 @@ console.log("\n── ROUTE: Build and Optimise never mix; changes are deliberat
 
 /* ═══ WORDS ═══════════════════════════════════════════════════════════════════════════════════════ */
 console.log("\n── COMMERCIAL TERMS BEFORE THE LINK ──");
-for (const route of ["build", "optimise"] as const) {
-  const n = route === "build" ? 12 : 6;
+ok(/keep their existing website/.test(routeOwnershipLine("optimise")) && /plan ends/.test(routeTermsLines("optimise").join(" ")), "a pre-v5 Optimise client is still described correctly (history only — never sold)");
+for (const route of ["build"] as const) {
+  const n = 12;
   const terms = routeTermsLines(route).join(" | ");
-  ok(terms.includes("£99 today") && terms.includes("£99 a month") && terms.includes(`${n} payments in total`) && terms.includes(`${n}-month minimum term`), `${route}: the card says £99 today, £99 a month, ${n} payments, a ${n}-month minimum term`);
+  ok(terms.includes("£99 today") && terms.includes("£99 a month") && terms.includes(`${n} payments in total`) && terms.includes("(the minimum term)") && !/-month minimum/.test(terms), `${route}: the card says £99 today, £99 a month, ${n} payments (the minimum term), never "a ${n}-month minimum"`);
   const own = routeOwnershipLine(route);
   ok(route === "build" ? /builds, hosts and manages a new website/.test(own) && /website is theirs/.test(terms) : /keep their existing website/.test(own) && /stays theirs/.test(own) && /plan ends/.test(terms) && !/29\.99/.test(terms), `${route}: who owns the website is said; Build: theirs after the payments; Optimise: the plan ends, no £29.99`);
   const url = "https://findable.live/agree/" + "b".repeat(64);
   for (const [label, text] of [["script", quickCloseScript(route)], ["message", quickCloseMessage("Bob Smith", url, route)], ["email", quickCloseEmail({ greetName: "Bob", businessName: "ABC Ltd", url, route, senderName: "Sumi" }).text]] as const) {
-    ok(text.includes(`${n} payments in total`) && text.includes(`${n}-month minimum term`) && text.includes(QUICK_CLOSE_PROMISE) && text.includes(FINDABLE_GUARANTEE) && /read and sign the Client Service Agreement/.test(text) && !/tick to accept/.test(text), `${route} ${label}: payments, minimum term, the guarantee (exact) and signing the agreement before paying (v3)`);
+    ok(text.includes(`${n} payments in total`) && text.includes("(the minimum term)") && !/-month minimum/.test(text) && text.includes(QUICK_CLOSE_PROMISE) && text.includes(FINDABLE_GUARANTEE) && /read and sign the Client Service Agreement/.test(text) && !/tick to accept/.test(text), `${route} ${label}: payments, minimum term, the guarantee (exact) and signing the agreement before paying (v3)`);
     ok(!/guaranteed|rank|top of|recommend|cited|citation|week six/i.test(text), `${route} ${label}: no ranking / recommendation / citation promise, no "week six"`);
     ok(!/\([^)]*\(/.test(text), `${route} ${label}: no nested brackets (A-29)`);
   }
-  ok(!quickCloseMessage(null, url, route).includes(n === 12 ? "6 payments" : "12 payments"), `${route}: never names the other route's count`);
+  ok(!quickCloseMessage(null, url, route).includes("6 payments") && !/optimise/i.test(quickCloseMessage(null, url, route)), `${route}: never names the withdrawn plan or its count`);
 }
 ok(quickCloseGreeting("Bob Smith") === "Hi Bob" && quickCloseGreeting("BRIAN SLATTERY PLUMBERS LIMITED") === "Hi BRIAN" && quickCloseGreeting(null) === "Hi" && quickCloseGreeting("07700 900000") === "Hi", "greets the contact's first name; never a phone number");
 ok(quickCloseEmail({ greetName: null, businessName: "ABC Ltd", url: "u", route: "build", senderName: "Sumi" }).subject === "Your Findable Build sign-up link - ABC Ltd", "email subject names the route and the business");
 ok(QUICK_CLOSE_AGREEMENT_LINE.includes("read and sign the Client Service Agreement") && /payment only opens after they sign/.test(QUICK_CLOSE_AGREEMENT_LINE), "the rep's card says the client signs before payment can open (v3)");
 const dlg = read("src/components/QuickCloseDialog.tsx");
-ok(/data-testid="qc-route-terms"/.test(dlg) && /QUICK_CLOSE_GUARANTEE_LINES\[0\]/.test(dlg) && /QUICK_CLOSE_AGREEMENT_LINE/.test(dlg) && /routeOwnershipLine\(route\)/.test(dlg), "the rep's card shows terms, ownership, guarantee and agreement tick");
+ok(/data-testid="qc-route-terms"/.test(dlg) && /QUICK_CLOSE_GUARANTEE_LINES\[0\]/.test(dlg) && /QUICK_CLOSE_AGREEMENT_LINE/.test(dlg) && /routeOwnershipLine\(sellRoute\)/.test(dlg), "the rep's card shows terms, ownership, guarantee and agreement tick");
 ok(dlg.indexOf('data-testid="qc-route-terms"') < dlg.indexOf('data-testid="qc-handoff"') && dlg.indexOf('data-testid="qc-link"') < dlg.indexOf('data-testid="qc-handoff"'), "M-013: the terms and the link come BEFORE the handoff");
 /* 2026-10-06 (Send to Paul): folded while the rep ANSWERS — it opens once the link is out, after payment, or when
    complete and not yet sent (the link card still comes first on screen, above). */

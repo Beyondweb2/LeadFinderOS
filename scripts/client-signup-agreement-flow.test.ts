@@ -76,13 +76,13 @@ console.log('\n── THE AGREEMENT STEP (findable.live/agree/<token>) ──');
     values: { contactName: 'Sam Test', email: 'qa@example.com', phone: '07700900123', address: '1 Test Street', websiteDomain: 'zzqa.example' } });
   ok(page.includes('Before we take payment, please read and accept the Client Service Agreement.'), 'it says: before we take payment, read and accept the agreement');
   ok(page.includes('Your offer: Findable Build') && /<dt>Today<\/dt>/.test(page) && /<dt>Then<\/dt>/.test(page) && /<dt>Minimum term<\/dt>/.test(page) && /<dt>After the term<\/dt>/.test(page), 'the plan summary (plan, today, then, term, after) is shown above the signature');
-  ok(page.includes('Agreement date</dt><dd>Wednesday, 7 October 2026, the day you sign. Version v4'), 'the agreement date is the day they sign, with the version');
+  ok(page.includes('Agreement date</dt><dd>Wednesday, 7 October 2026, the day you sign. Version v5'), 'the agreement date is the day they sign, with the version');
   ok(/value="Sam Test"/.test(page) && /value="qa@example\.com"/.test(page) && /value="07700900123"/.test(page) && />1 Test Street<\/textarea>/.test(page), 'known details arrive pre-filled (and stay editable)');
   ok(/<td><!--email_off-->paul@findable\.live<!--\/email_off--><\/td>/.test(page) && /Paul James Sales/.test(page), "Findable's own details are already filled in the agreement");
   ok(/<span class="btn off" role="button" aria-disabled="true">Continue to payment<\/span>/.test(page) && !/name="action" value="pay"/.test(page), 'payment is visibly LOCKED on the sign step — no pay control exists before signing');
   ok(/name="agree" value="yes"[^>]*required/.test(page) && /name="authority" value="yes"[^>]*required/.test(page) && (page.match(/<input[^>]*type="checkbox"[^>]*>/g) ?? []).every((b) => !/\bchecked\b/.test(b)),'agree + authority are required, nothing pre-ticked');
   ok(/<button type="submit">Accept the agreement<\/button>/.test(page) && /b\.disabled=!ok/.test(page), 'the accept button (clause 1.2: the tick plus authority) is greyed until both ticks are given');
-  ok(page.includes('9A. OPTIONAL BUILD HOSTING AND MAINTENANCE AFTER PAYMENT 12') && page.includes('16.7'), 'the FULL agreement is on the page');
+  ok(page.includes('9A. OPTIONAL HOSTING AND MAINTENANCE AFTER PAYMENT 12') && page.includes('16.7'), 'the FULL agreement is on the page');
   ok(/<meta name="viewport" content="width=device-width, initial-scale=1"\/>/.test(page) && /overflow-x:hidden/.test(page) && /@media \(max-width:560px\)/.test(page), 'mobile: viewport, no sideways scroll, single-column details');
   const accepted = agreementPageHtml({ mode: 'accepted', businessName: 'ZZ QA', acceptedAtIso: '2026-10-07T10:00:00Z', acceptedBy: 'Sam Test', pdfHref: '?pdf=1', justSigned: true, emailedTo: null, payFor: { signupId: 'OB1', route: 'optimise' }, version: 'v3' });
   ok(/Continue to secure payment/.test(accepted) && /name="action" value="pay"/.test(accepted) && /version v3/.test(accepted), 'after signing: "Continue to secure payment" opens, with the version signed');
@@ -97,7 +97,8 @@ console.log('\n── THE AGREEMENT STEP (findable.live/agree/<token>) ──');
 console.log('\n── PAYMENT GATE, TAMPERING, DUPLICATES ──');
 {
   const sha = 'a'.repeat(64);
-  const good = { id: 'A1', lead_id: 'L1', onboarding_id: 'OB1', agreement_version: CLIENT_AGREEMENT_VERSION, service_route: 'build', method: 'agree_page', authority_confirmed: true, agreed_text_sha256: sha };
+  /* v5 (clause 1.6): a signature that can pay carries the client's own "free to leave" Yes. */
+  const good = { id: 'A1', lead_id: 'L1', onboarding_id: 'OB1', agreement_version: CLIENT_AGREEMENT_VERSION, service_route: 'build', method: 'agree_page', authority_confirmed: true, agreed_text_sha256: sha, free_to_leave_provider: true };
   const g = (o: Record<string, unknown> = {}, acc: unknown = good) => checkoutAgreementGate({ acceptance: acc as never, leadId: 'L1', onboardingId: 'OB1', route: 'build', currentVersion: CLIENT_AGREEMENT_VERSION, recomputedSha: sha, ...o } as never);
   ok(g().ok, 'a valid signature for this client, sign-up and plan opens payment');
   ok(!g({}, null).ok, 'H/G: no signature → no payment');
@@ -146,18 +147,15 @@ console.log('\n── THE SET-UP PAGE (findable-site OnboardingFlow) ──');
     const code = flow.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\{\/\*[\s\S]*?\*\/\}/g, '');
     ok(!/if you want one/i.test(code), 'the Build wording "A brand new website if you want one" is gone');
     ok(/"A new website built and optimised for AI visibility, so customers, search engines and AI understand exactly what you do and where you work"/.test(code), 'Build: "A new website built and optimised for AI visibility…"');
-    ok(/optimise: \[[\s\S]*?"Your current website improved/.test(code) && !/optimise: \[[^\]]*new website/.test(code), 'C: Optimise says the CURRENT website is improved and promises no new one');
     ok(/Let&rsquo;s get Findable set up for \{businessName\}/.test(code) && /We already know some of your details, so we just need to confirm a few things before we get started\./.test(code), 'the page opens personal: "Let\'s get Findable set up for [Business]"');
     const introAt = code.indexOf('phase === "intro" && (');
     const intro = code.slice(introAt, code.indexOf('phase === "questions"', introAt));
     ok(introAt > 0 && !/£|PriceText|SETUP_PRICE|CONTINUATION_MONTHLY/.test(intro), 'F: the first screen names no price');
-    ok(/label: "Build me a new website", badge: "Recommended"/.test(code) && code.indexOf('value: "build"') < code.indexOf('value: "keep"'), 'A: Build is first and recommended');
+    /* 2026-10-16: the simple onboarding (findable-site feat/onboarding-simple) + agreement v5: ONE plan, Build. No keep /
+       Optimise choice exists; a client tied into an agency contract gets a friendly stop, never another plan. */
+    ok(!/value: "keep"/.test(code) && !/Keep and improve my current website/.test(code) && /plan_tier: "new_site"/.test(code), 'A/C: Build only: no keep or Optimise choice, every sign-up is written as Build');
+    ok(/contractOutcome\(/.test(code) && /While you&rsquo;re tied in, it isn&rsquo;t the right time/.test(code), 'B: tied into an agency contract = a friendly stop, not another plan');
     ok(!/Would you like (us )?to build/i.test(code) && !/Are we using an existing domain\?/.test(code), 'A: never "would you like a new website", and the old domain question is gone');
-    ok(/Do you want to keep your current web address\?/.test(code) && /Your web address \(domain\) is separate from your website\./.test(code), 'A: the domain question is separate from the website, and says so');
-    ok(/That’s fine\. We only need their help to point your web address at the new site\. Your arrangement with them stays yours to manage\./.test(code) && !/cancel (your|their) contract|break/i.test(code.slice(code.indexOf('function SiteAccessBranch'), code.indexOf('function PlanBlock'))), 'B: agency — only the practical ask, no contract-breaking language');
-    ok(/We can only improve a website we can edit\./.test(code) && /Build me a new website instead/.test(code), 'keep without access → asked to choose the new website out loud (never a silent switch)');
-    const branchFromChoiceSrc = access.slice(access.indexOf('export function branchFromChoice'), access.indexOf('export function choiceFromBranch'));
-    ok(/if \(keepAccess !== "yes"\) return \{ agencyManages, canGetAccess: null, selfSite: null \};/.test(branchFromChoiceSrc), 'keep without access folds to NO answer');
     const planAt = code.indexOf('What you pay');
     const pre = code.slice(0, planAt);
     ok(planAt > code.indexOf('function WorkPlan') && /<WorkPlan route=\{route\} \/>/.test(code), 'F: the plan and what is included render before the price summary');

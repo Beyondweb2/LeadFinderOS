@@ -20,7 +20,7 @@ export type DomainAccessAnswer = 'yes' | 'no' | 'agency';
 
 /** The onboarding answers this rule reads (onboarding_responses columns of the same names). */
 export interface DomainAuthorityInput {
-  /** The standard NEW-WEBSITE service (we build / host / connect it). false = we optimise their own site. */
+  /** The standard NEW-WEBSITE service (we build / host / connect it). false = no new website (only the pre-v5 Findable Optimise, no longer sold). */
   newSite: boolean;
   /** They have a current website we would be replacing. */
   hasCurrentSite: boolean;
@@ -48,7 +48,7 @@ export type DomainReason =
   | 'materials_not_confirmed';
 
 export interface DomainAuthorityVerdict {
-  /** false = the rule does not apply (we optimise their own site; nothing to connect). */
+  /** false = the rule does not apply (no new website to connect; only a pre-v5 Findable Optimise row). */
   applies: boolean;
   /** Build-ready as far as the domain is concerned. */
   ready: boolean;

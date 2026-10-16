@@ -141,13 +141,9 @@ const PAIRS = [
     theirs: { file: path.join(SITE, 'site.ts'), name: 'BUILD_TOTAL_PAYMENTS' },
     why: 'The site and the pay screen NAME this count and stripe-webhook BILLS it (cancel_at after count - 1 monthly charges). A mismatch sells one length and bills another.',
   },
-  {
-    what: 'the Findable Optimise payment count',
-    kind: 'number',
-    mine: { file: path.join(LFOS, 'findableOffer.ts'), name: 'FINDABLE_OPTIMISE_TOTAL_PAYMENTS' },
-    theirs: { file: path.join(SITE, 'site.ts'), name: 'OPTIMISE_TOTAL_PAYMENTS' },
-    why: 'The site and the pay screen NAME this count and stripe-webhook BILLS it (cancel_at after count - 1 monthly charges). A mismatch sells one length and bills another.',
-  },
+  /* 2026-10-16 (agreement v5): the Findable Optimise payment count is no longer locked. Optimise is not sold any more,
+     so findable.live no longer names it (site.ts OPTIMISE_TOTAL_PAYMENTS is gone); FINDABLE_OPTIMISE_TOTAL_PAYMENTS stays
+     here only for the v3 / v4 clients and subscriptions already on it. Dropped in BOTH copies of this script together. */
   {
     what: 'the monthly price',
     kind: 'number',

@@ -1849,8 +1849,8 @@ Deno.serve(async (req) => {
               await sendOperatorAlert(endMode === "none" ? "Optimise plan complete - nothing continues" : "Build minimum term complete - hosting is opt-in only", [
                 `The subscription ${sub.id} has ended after its last £${FINDABLE_MONTHLY_GBP} payment.`,
                 endMode === "none"
-                  ? "Under the v4 agreement the Optimise plan ends here. There is no continuing charge; nothing was set up."
-                  : `Under the v4 agreement the Build service ends here. The £${FINDABLE_CONTINUING_GBP} a month Hosting and Maintenance starts ONLY if the client opts in; nothing was charged or set up automatically.`,
+                  ? "Under the agreement the client signed (v4) the Optimise plan ends here. There is no continuing charge; nothing was set up."
+                  : `Under the agreement the client signed (v4 or v5) the Build service ends here and the website transfers to them. The £${FINDABLE_CONTINUING_GBP} a month Hosting and Maintenance starts ONLY if the client opts in; nothing was charged or set up automatically.`,
                 `Lead: ${leadId}`,
               ]);
             }

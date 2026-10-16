@@ -99,7 +99,7 @@ console.log('── 2. THE OFFER, BOTH ROUTES, FROM THE CONSTANTS ──');
   ok(o.summary === `£${FINDABLE_SETUP_PRICE_GBP} now · £${FINDABLE_MONTHLY_GBP}/month · ${FINDABLE_OPTIMISE_TOTAL_PAYMENTS} payments in total` && FINDABLE_OPTIMISE_TOTAL_PAYMENTS === 6, 'Optimise: £99 now · £99/month · 6 payments in total');
   ok(/new website, host it and look after it/.test(b.spoken.join(' ')) && /built, hosted and managed by Findable/.test(b.site), 'Build: a new Findable-built, hosted and managed website');
   ok(/keep your own website and it stays yours/.test(o.spoken.join(' ')) && /never take it offline/.test(o.spoken.join(' ')) && /keep their existing website and its ownership/.test(o.site), 'Optimise: they keep their existing site and its ownership; we never take it offline');
-  ok(/12 payments in total, the £99 today included, so a 12-month minimum/.test(b.spoken.join(' ')) && /6 payments in total, the £99 today included, so a 6-month minimum/.test(o.spoken.join(' ')), 'both say the total counts the £99 today and name the minimum term');
+  ok(/12 payments in total, the £99 today included: that's the minimum term/.test(b.spoken.join(' ')) && /6 payments in total, the £99 today included: that's the minimum term/.test(o.spoken.join(' ')) && !/-month minimum/.test(b.spoken.join(' ') + o.spoken.join(' ')), 'both say the total counts the £99 today and name the minimum term — in PAYMENTS, never months (v5)');
   /* 2026-10-05 (v3 clause 5.6): never "six weeks after today" — the day after the refund window. */
   ok(/starting the day after your 14-day refund window closes/.test(b.spoken.join(' ')) && !/six weeks after today/.test(b.spoken.join(' ')), 'the first monthly payment is the day after the refund window (v3), never "six weeks after today"');
   /* 2026-10-07 (Paul): per plan — Build's £29.99 only if they want hosting / maintenance to carry on; Optimise ENDS. */
@@ -108,11 +108,11 @@ console.log('── 2. THE OFFER, BOTH ROUTES, FROM THE CONSTANTS ──');
   ok(!/\b(12|6) (more|further) payments|then (12|6) payments|13 payments|7 payments/i.test(b.spoken.join(' ') + o.spoken.join(' ')), 'no wording that implies an extra payment on top of the 12 / 6');
   const src = read('src/lib/callClose.ts').replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
   ok(!/£\s?\d|\b(12|6) payments\b/.test(src), 'callClose.ts types no price and no payment count — every figure is a constant');
-  ok(routesFor('own_site').routes.join(',') === 'build,optimise' && routesFor('none').routes.join(',') === 'build' && routesFor('directory_profile').routes.join(',') === 'build', 'the route that fits first: Build, then Optimise for an own site; no site or a profile page → Build only');
+  ok(routesFor('own_site').routes.join(',') === 'build' && routesFor('none').routes.join(',') === 'build' && routesFor('directory_profile').routes.join(',') === 'build', 'v5: Build only, whatever site they have (Optimise is withdrawn; routeOffer still describes it for history)');
   const own = buildColdCallPlaybook(base());
   const none = buildColdCallPlaybook(noSite());
-  ok(own.close.routes.map((r) => r.route).join(',') === 'build,optimise' && own.close.routeNote === null, 'the call screen of a lead with a site offers both');
-  ok(none.close.routes.map((r) => r.route).join(',') === 'build' && /Optimise needs their own website/.test(none.close.routeNote ?? ''), '…and of a lead without one, Build only, saying why');
+  ok(own.close.routes.map((r) => r.route).join(',') === 'build' && own.close.routeNote === null, 'v5: the call screen of a lead with a site offers Findable Build only');
+  ok(none.close.routes.map((r) => r.route).join(',') === 'build' && /Findable Build gives them one/.test(none.close.routeNote ?? '') && !/optimise/i.test(none.close.routeNote ?? ''), '…and of a lead without one, Build, saying it gives them one');
   ok(own.close.afterPayment === QUICK_CLOSE_AFTER_PAYMENT, 'what happens after they pay is Quick Close\'s own list, not a copy');
   /* 2026-10-07 (Paul): the scripted close line is GONE and not replaced — the rep closes in their own words. */
   ok(!('closeLine' in own.close) && !/send you the link now|Paul takes it from there/.test(JSON.stringify(own)), 'no scripted close line ("If that sounds good, I\'ll send you the link now…" removed, not replaced)');
@@ -123,7 +123,7 @@ console.log('── 2. THE OFFER, BOTH ROUTES, FROM THE CONSTANTS ──');
   ok(/testId="call-step-close"/.test(ui) && /data-testid="call-plan-switch"/.test(ui) && /data-testid=\{'call-plan-' \+ r\.route\}/.test(ui)
     && /data-testid=\{'call-route-' \+ plan\.route\}/.test(ui) && /const preferred = fit\?\.recommended \?\? s\.plans\.preselected/.test(ui) && (ui.match(/data-testid="call-guarantee"/g) ?? []).length === 1,
     'the call screen renders the close block: a plan switch, ONE route open (the call answers\' recommendation, else the website\'s), the guarantee once');
-  ok(/offerFit\(ans\.answers/.test(ui) && /fit\.offered\[r\.route\] \|\| role === 'admin'/.test(ui), '2026-10-07: the plans offered follow the agency-contract rule (a salesperson is not shown Build while tied in)');
+  ok(/offerFit\(ans\.answers/.test(ui) && /isSaleableRoute\(r\.route\) && \(!fit \|\| fit\.offered\[r\.route\]\)/.test(ui) && /if \(fit\?\.declined\)/.test(ui) && !/role === 'admin'/.test(ui), 'v5: the plans offered follow the agency-contract rule — still tied in shows a decline and no plan, to anyone');
   ok((ui.match(/<QuickCloseButton /g) ?? []).length === 1 && /data-testid="log-this-call"[\s\S]{0,200}<QuickCloseButton leadId=\{leadId\}/.test(ui), '…and Quick Close once, in the sticky bar beside Log this call');
 }
 

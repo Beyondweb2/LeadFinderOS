@@ -222,10 +222,10 @@ console.log('── 5. commercial terms: Build 12 / Optimise 6, £99 + £99/mont
   ok(totalPaymentsFor('build') === 12 && termMonthsFor('build') === 12, 'Build: 12 payments in total, 12-month minimum');
   ok(totalPaymentsFor('optimise') === 6 && termMonthsFor('optimise') === 6, 'Optimise: 6 payments in total, 6-month minimum');
   const own = buildCallClose('own_site'), none = buildCallClose(null);
-  const b = own.routes.find((r) => r.route === 'build')!, o = own.routes.find((r) => r.route === 'optimise')!;
+  const b = own.routes.find((r) => r.route === 'build')!;
   ok(/build you a new website, host it and look after it/.test(b.spoken.join(' ')) && /Once the 12 payments are made the website is theirs/.test(b.spoken.join(' ')), 'Build: Findable builds, hosts and manages; the site is theirs after the final payment');
-  ok(/You keep your own website and it stays yours/.test(o.spoken.join(' ')) && /never take it offline/.test(o.spoken.join(' ')), 'Optimise: they keep their own site; Findable never takes it offline');
-  ok(none.routes.length === 1 && none.routes[0].route === 'build', 'no website → Build only (Optimise needs their own site)');
+  ok(/12 payments in total/.test(b.spoken.join(' ')) && !/-month minimum/.test(b.spoken.join(' ')), 'v5: the term is said in payments, never "a 12-month minimum"');
+  ok(own.routes.length === 1 && own.routes[0].route === 'build' && none.routes.length === 1 && none.routes[0].route === 'build', 'v5: every lead is offered Build only (Optimise is withdrawn)');
   const words = [...own.routes.flatMap((r) => r.spoken), own.guarantee.spoken, own.guarantee.headline].join(' ');
   ok(!/rank(ing)?\b(?! a)|#1|guaranteed (citation|recommend)|will name you|top of/i.test(words.replace('Never promise a ranking', '')), 'no ranking / citation / recommendation guarantee in the spoken offer');
 }

@@ -13,12 +13,12 @@ import { useToast } from '@/hooks/use-toast';
 import { invokeEdge, edgeErrorMessage, EdgeFunctionError } from '@/lib/edgeInvoke';
 import { notifyLeadChanged } from '@/lib/leadSync';
 import {
-  APPROACH_LABEL, APPROACH_ROUTE, QC_REVIEW_HEADING, QUICK_CLOSE_AFTER_PAYMENT, QUICK_CLOSE_AGREEMENT_LINE, QUICK_CLOSE_GUARANTEE_LINES, QUICK_CLOSE_QUESTIONS, QUICK_CLOSE_STATE_LABEL,
+  APPROACH_LABEL, APPROACH_ROUTE, QC_REVIEW_HEADING, ROUTE_WITHDRAWN_TEXT, TIED_IN_DECLINE_HEADING, TIED_IN_DECLINE_REASON, QUICK_CLOSE_AFTER_PAYMENT, QUICK_CLOSE_AGREEMENT_LINE, QUICK_CLOSE_GUARANTEE_LINES, QUICK_CLOSE_QUESTIONS, QUICK_CLOSE_STATE_LABEL,
   closeFlow, linkTimeLeftWords, missingQuestions, phoneCloseNotesComplete, quickCloseMessage, quickCloseScript, routeAfterAnswer, routeAvailable, routeSwitchText, routeOwnershipLine, routePaymentsShort, routeTermsLines,
   type QcApproach, type QcCallNotes, type CloseRoute, type QcKey, type QcLinkShare, type OfferFit, type QuickCloseAnswers, type QuickCloseGate, type QuickCloseState,
 } from '@/lib/quickClose';
 import { LINK_READY_FALLBACK, type LinkRoute } from '@/lib/paymentLinkRoute';
-import { FINDABLE_SETUP_PRICE_GBP, SERVICE_ROUTE_NAME, totalPaymentsFor, type ServiceRoute } from '@/lib/findableOffer';
+import { FINDABLE_SETUP_PRICE_GBP, SERVICE_ROUTE_NAME, isSaleableRoute, totalPaymentsFor, type ServiceRoute } from '@/lib/findableOffer';
 import { cn } from '@/lib/utils';
 import { usePriceModel } from '@/hooks/usePriceModel';
 import { PriceModelSwitch } from '@/components/PriceModelSwitch';
@@ -43,9 +43,12 @@ import { SellerClientInfoForm, type SellerClientInfo } from '@/components/Seller
    a route change asks first and the server refuses a stale one (route integrity).
    ⛔ SALES WORKSPACE V2 (2026-10-05): ONE CLOSE UI. QuickClosePanel is the lead workspace's CLOSE tab; the
    dialog below is only that panel in a frame (for screens outside the workspace). The questions follow the
-   website approach (quickClose.ts closeFlow): a new site is never asked for current-site access, plain
-   Optimise is never asked who controls the domain, and an unresolved domain is a handoff note for Paul, not
-   a stop. Inside the workspace every Quick Close button switches to the Close tab (QuickCloseNav). */
+   website approach (quickClose.ts closeFlow): a new site is never asked for current-site access, and an
+   unresolved domain is a handoff note for Paul, not a stop. Inside the workspace every Quick Close button
+   switches to the Close tab (QuickCloseNav).
+   🔴 v5 (Paul, 2026-10-16): ONE PLAN FOR SALE — Findable Build. Optimise is never offered (a close stored on it
+   before v5 is asked the plan again, Build only). Still tied into a contract with their current provider is
+   DECLINED (clause 1.6): the close stops, nothing else is offered, no link, and Paul's release cannot lift it. */
 
 interface View {
   ok: true; canEdit: boolean;
@@ -55,7 +58,7 @@ interface View {
   onboarding: { id: string; status: string; contact_name: string | null; contact_email: string | null; confirmed_phone: string | null; business_website: string | null } | null;
   answers: QuickCloseAnswers; state: QuickCloseState; gate: QuickCloseGate;
   consents?: { lines: string[]; wording: string; confirmed: { wording: string; at: string } | null };
-  /** reasons = the payment stop (Optimise on a site we cannot get into); flags = for Paul, never a stop (v2). */
+  /** reasons = the payment stop (an unconfirmed agency contract, or a pre-v5 Optimise issue); flags = for Paul, never a stop (v2). */
   review: { approved_at: string | null; reasons: string[]; flags?: string[]; delivery_approach?: QcApproach };
   /** url is null unless the link is safe to hand over right now (usable). */
   link: { url: string | null; usable: boolean; generated_at: string | null; expires_at: string | null; usable_until?: string | null; shared: QcLinkShare[] } | null;
@@ -90,7 +93,7 @@ export const quickCloseKey = (leadId: string | null | undefined) => ['quick-clos
 /** The state chip's colour. Paid is the one success state (drawn green by SUCCESS_CHIP, not the teal tone). */
 const STATE_TONE: Record<QuickCloseState, Tone> = {
   not_started: 'grey', in_progress: 'blue',
-  blocked: 'red', consents_needed: 'amber', needs_review: 'amber',
+  blocked: 'red', declined: 'red', consents_needed: 'amber', needs_review: 'amber',
   ready: 'blue', link_generated: 'blue',
   link_expired: 'amber',
   paid: 'green',
@@ -170,8 +173,11 @@ export function QuickClosePanel({ leadId, active = true, framed = false }: { lea
 
   const answers = v?.answers ?? {};
   const route = answers.route ?? null;
+  /* v5: a plan no longer for sale (Optimise, stored before 2026-10-16) names no terms and makes no link here. */
+  const sellRoute: ServiceRoute | null = route && isSaleableRoute(route) ? route : null;
+  const declined = v?.state === 'declined';
   // The words follow the route: a new route resets them (the rep can still edit freely after).
-  useEffect(() => { setScript(quickCloseScript(route)); }, [route]);
+  useEffect(() => { setScript(quickCloseScript(sellRoute)); }, [sellRoute]);
   const missing = useMemo(() => missingQuestions(answers), [answers]);
   // A decision-maker "No" ends the questions (nothing after it can lead to payment).
   const current: QcKey | null = step && step !== 'review' ? step : answers.decision_maker === 'no' ? null : (missing[0] ?? null);
@@ -195,11 +201,11 @@ export function QuickClosePanel({ leadId, active = true, framed = false }: { lea
     } finally { setBusy(null); }
   };
   const answer = async (key: QcKey, value: string) => {
-    /* ROUTE INTEGRITY: switching Build ⇄ Optimise changes the money — it is asked, never a stray tap.
+    /* ROUTE INTEGRITY: a plan change (since v5 only ever a pre-v5 Optimise close moving to Build) changes the money — it is asked, never a stray tap.
        The server also refuses it unless route_change is true, and refuses any save from a screen showing
        a different route than the saved one (expect_route). */
     let routeChange = false;
-    /* v2: the approach can move the route too (improve → Optimise, a new site → Build). */
+    /* v2: the approach can move the route too (a new site → Build). */
     const nextRoute = routeAfterAnswer(answers, key, value);
     if (route && nextRoute && nextRoute !== route) {
       if (!window.confirm(routeSwitchText(route, nextRoute, !!v?.link))) return;
@@ -280,7 +286,7 @@ export function QuickClosePanel({ leadId, active = true, framed = false }: { lea
   ] : [];
   /* A link that already stands is never hidden by the new step; a NEW link needs what they offer and where (server: call_notes_missing). */
   const showNotes = !!v && v.canEdit && !notesDone && !step && answers.decision_maker !== 'no' && v.state !== 'link_generated' && v.state !== 'paid' && (current === 'route' || (current === null && !!route));
-  const closing = !!v && v.canEdit && !!route && (notesDone || v.state === 'link_generated') && (v.state === 'ready' || v.state === 'link_generated' || v.state === 'link_expired');
+  const closing = !!v && v.canEdit && !!sellRoute && (notesDone || v.state === 'link_generated') && (v.state === 'ready' || v.state === 'link_generated' || v.state === 'link_expired');
   /* THE PRICE MODEL (2026-10-14, src/lib/priceModel.ts): the terms said here follow the person's model. A model whose payment
      is not live gets no new link — the button is off and says why (the server refuses it too: quick-close price_model_not_live). */
   const { model: priceModel } = usePriceModel();
@@ -366,7 +372,8 @@ export function QuickClosePanel({ leadId, active = true, framed = false }: { lea
                   {(v.consents?.lines ?? currentQ.detail ?? []).map((d) => <li key={d}>{d}</li>)}
                 </ul>
               )}
-              {/* THE PLAN, LAST — what the answers so far recommend (offerFit: Build unless a contract blocks it). */}
+              {/* THE PLAN, LAST — Findable Build (offerFit; v5: the one plan for sale). */}
+              {current === 'route' && route && !isSaleableRoute(route) && <p className={cn('mt-2 rounded-xl px-3 py-2 text-xs leading-snug ring-1 ring-inset', TONE.amber.tint, 'ring-amber-500/30')} data-testid="qc-route-withdrawn">{ROUTE_WITHDRAWN_TEXT} This close was started on it: confirm Findable Build with them, or stop here.</p>}
               {current === 'route' && v.offer?.reason && (
                 <div className="mt-2 space-y-1.5" data-testid="qc-offer-fit-block">
                   <p className={cn('rounded-xl px-3 py-2 text-xs leading-snug ring-1 ring-inset', v.offer.offered.build ? 'bg-muted/40 text-muted-foreground ring-border' : cn(TONE.amber.tint, 'ring-amber-500/30'))} data-testid="qc-offer-fit">{v.offer.reason}</p>
@@ -375,18 +382,19 @@ export function QuickClosePanel({ leadId, active = true, framed = false }: { lea
                 </div>
               )}
               <div className={cn('mt-3 grid gap-2', current === 'route' || current === 'build_consents' || current === 'approach' || current === 'domain' || current === 'design_owner' || current === 'agency_contract' || current === 'manager' ? 'grid-cols-1' : 'grid-cols-2')}>
-                {/* The recommended plan goes first (Build normally; Optimise only on a confirmed agency contract). */}
+                {/* v5: the plan question offers Findable Build only. */}
                 {[...currentQ.options]
                   .sort((x, y) => (current === 'route' && v.offer?.recommended ? Number(y.value === v.offer.recommended) - Number(x.value === v.offer.recommended) : 0))
                   /* A LEGACY answer stays readable but is never offered as a new choice (QcOption.legacy). */
                   .filter((o) => !o.legacy || answers[current!] === o.value)
+                  /* ⛔ v5: a withdrawn plan is never a button, even when a pre-v5 close still carries it. */
+                  .filter((o) => current !== 'route' || isSaleableRoute(o.value))
                   .filter((o) => !(current === 'authority' && o.value === 'not_applicable' && (answers.manager === 'agency' || answers.manager === 'freelancer' || answers.manager === 'third_party')))
                   .map((o) => {
-                    const noSite = current === 'route' && (!routeAvailable(answers, o.value as ServiceRoute) || (o.value === 'optimise' && v.has_website === false));
-                    /* ⛔ The agency-contract rule: a salesperson is not offered Build while they are tied into their agency.
-                       Paul (admin) may still pick it — the gate then stops it for his own release. */
+                    const noSite = current === 'route' && !routeAvailable(answers, o.value as ServiceRoute);
+                    /* ⛔ v5 clause 1.6: still tied into their contract → nothing is offered, to anyone (Paul cannot release a decline). */
                     const notOffered = current === 'route' && !noSite && v.offer ? !v.offer.offered[o.value as ServiceRoute] : false;
-                    const off = noSite || (notOffered && role !== 'admin')
+                    const off = noSite || notOffered
                       || (current === 'approach' && !hasSite && NEEDS_CURRENT_SITE.has(o.value));
                     const recommended = current === 'route' && v.offer?.recommended === o.value && !noSite;
                     const planOf = current === 'approach' && o.value !== 'unsure' ? APPROACH_ROUTE[o.value as Exclude<QcApproach, 'unsure'>] : null;
@@ -395,7 +403,7 @@ export function QuickClosePanel({ leadId, active = true, framed = false }: { lea
                         className={cn('flex min-h-[56px] flex-col items-center justify-center rounded-xl border px-3 py-3 text-center text-base font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-50',
                           answers[current!] === o.value ? PICKED : recommended ? 'border-blue-500/50 bg-card hover:bg-muted/60' : 'border-border/70 bg-card hover:border-blue-500/40 hover:bg-muted/60')}>
                         <span className="flex flex-wrap items-center justify-center gap-1.5">{o.label}{recommended && <span className="rounded-full bg-yellow-400/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-yellow-600 ring-1 ring-inset ring-yellow-500/40 dark:text-yellow-300">Recommended</span>}</span>
-                        {current === 'route' && <span className="mt-0.5 text-xs font-normal text-muted-foreground">{noSite ? 'Not possible — they have no website' : notOffered ? (role === 'admin' ? 'Still tied into their contract — needs your release' : 'Not offered — still tied into their contract') : `${SERVICE_ROUTE_NAME[o.value as ServiceRoute]} · ${routePaymentsShort(o.value as ServiceRoute)}`}</span>}
+                        {current === 'route' && <span className="mt-0.5 text-xs font-normal text-muted-foreground">{noSite ? 'Not possible — they have no website' : notOffered ? 'Not offered — still tied into their contract' : `${SERVICE_ROUTE_NAME[o.value as ServiceRoute]} · ${routePaymentsShort(o.value as ServiceRoute)}`}</span>}
                         {current === 'approach' && <span className="mt-0.5 text-xs font-normal text-muted-foreground">{off ? 'Not possible — no website on file' : planOf ? `${SERVICE_ROUTE_NAME[planOf]} · ${routePaymentsShort(planOf)}` : 'Pick the plan next'}</span>}
                       </button>
                     );
@@ -410,9 +418,15 @@ export function QuickClosePanel({ leadId, active = true, framed = false }: { lea
               <span className="text-muted-foreground">No sign-up link can be created. Ask who makes the decision, and send them the sign-up link or arrange a call with them.</span>
             </Callout>
           )}
+          {v && declined && (
+            <Callout tone="red" icon={AlertTriangle} testId="qc-declined" title={TIED_IN_DECLINE_HEADING}>
+              <span className="text-muted-foreground">{v.review.reasons[0] ?? v.offer?.reason ?? TIED_IN_DECLINE_REASON}</span>
+              <p className="mt-2 text-muted-foreground">No sign-up link can be made or sent, and nothing else is offered instead. If they tell you the contract has ended (or ends before work starts), change the contract answer and carry on.</p>
+            </Callout>
+          )}
           {v && v.state === 'consents_needed' && (
             <Callout tone="amber" icon={ShieldAlert} testId="qc-consents-needed" title="Build consents needed before the sign-up link">
-              <span className="text-muted-foreground">A new website can only go ahead once they confirm all three. When they can, change the answer to Yes. If they would rather keep their current site, choose Optimise instead.</span>
+              <span className="text-muted-foreground">A new website can only go ahead once they confirm all three. When they can, change the answer to Yes.</span>
             </Callout>
           )}
           {v && v.state === 'needs_review' && (
@@ -436,12 +450,12 @@ export function QuickClosePanel({ leadId, active = true, framed = false }: { lea
           )}
 
           {/* ── THE CLOSE: terms, then the link (first on screen once the route is chosen — M-013) ── */}
-          {v && route && v.state !== 'paid' && v.state !== 'blocked' && (
+          {v && sellRoute && v.state !== 'paid' && v.state !== 'blocked' && !declined && (
             <section aria-live="polite" className={cn('min-w-0', PANEL, EDGE.blue)} data-testid="qc-route-terms">
-              <p className="flex items-center gap-2 text-sm font-bold tracking-tight"><IconTile icon={PoundSterling} tone="blue" size="sm" />{SERVICE_ROUTE_NAME[route]}</p>
+              <p className="flex items-center gap-2 text-sm font-bold tracking-tight"><IconTile icon={PoundSterling} tone="blue" size="sm" />{SERVICE_ROUTE_NAME[sellRoute]}</p>
               <div className="mt-2"><PriceModelSwitch compact /></div>
-              <ul className="mt-2 space-y-0.5 text-sm" data-testid="qc-terms" data-model={priceModel}>{(upfront ? upfront.terms : routeTermsLines(route)).map((l, i) => <li key={l} className={cn(i === 2 && 'font-semibold')}>{l}</li>)}</ul>
-              <p className="mt-1.5 text-sm">{routeOwnershipLine(route)}</p>
+              <ul className="mt-2 space-y-0.5 text-sm" data-testid="qc-terms" data-model={priceModel}>{(upfront ? upfront.terms : routeTermsLines(sellRoute)).map((l, i) => <li key={l} className={cn(i === 2 && 'font-semibold')}>{l}</li>)}</ul>
+              <p className="mt-1.5 text-sm">{routeOwnershipLine(sellRoute)}</p>
               <div className="mt-2.5 rounded-xl bg-muted/30 p-2.5 text-sm ring-1 ring-inset ring-border/60" data-testid="qc-guarantee">
                 <p className="flex items-center gap-1.5 font-semibold"><ShieldCheck className={cn('h-4 w-4 shrink-0', EMPHASIS_TEXT)} />{upfront ? PRICE_MODEL_GUARANTEE : QUICK_CLOSE_GUARANTEE_LINES[0]}</p>
                 {!upfront && <p className="mt-0.5 text-xs text-muted-foreground">{QUICK_CLOSE_GUARANTEE_LINES[1]}</p>}
@@ -503,7 +517,7 @@ export function QuickClosePanel({ leadId, active = true, framed = false }: { lea
                             {lr?.route === 'whatsapp_template' && lr.reason === 'ok_unverified' && !sentWa && <p className="text-[11px] text-muted-foreground">{lr.template.say}</p>}
                             <SmsLinkSend leadId={leadId} kind="agreement" otherSent={sentWa ? ['whatsapp'] : []} onSend={sendSmsLink} />
                             <CustomerEmailControl testId="qc-customer-email" email={v.share?.email ?? null} busy={busy} onSave={saveEmail} onSend={() => void sendEmail()} />
-                            <Button variant="outline" className="h-12 w-full gap-1.5" onClick={() => void doCopy('message', quickCloseMessage(greetName, usableUrl, route))}><ClipboardCopy className="h-4 w-4" />{copied === 'message' ? 'Copied' : 'Copy message'}</Button>
+                            <Button variant="outline" className="h-12 w-full gap-1.5" onClick={() => void doCopy('message', quickCloseMessage(greetName, usableUrl, sellRoute))}><ClipboardCopy className="h-4 w-4" />{copied === 'message' ? 'Copied' : 'Copy message'}</Button>
                             <p className="text-xs text-muted-foreground" data-testid="qc-share-availability">
                               {lr?.route === 'whatsapp_reply' ? 'WhatsApp: they replied to us in the last 24 hours.' : lr?.route === 'whatsapp_template' && lr.template.sendable ? 'WhatsApp: sends as the approved findable_signup_link template.' : ''}
                             </p>
@@ -524,7 +538,7 @@ export function QuickClosePanel({ leadId, active = true, framed = false }: { lea
             </section>
           )}
 
-          {v && route && v.state !== 'paid' && v.state !== 'blocked' && (
+          {v && sellRoute && v.state !== 'paid' && v.state !== 'blocked' && !declined && (
             <details className={FOLD} open={v.state === 'ready'}>
               <summary className="flex min-h-[36px] cursor-pointer select-none items-center justify-between gap-2 text-sm font-semibold"><span className="flex items-center gap-2"><span className={cn('h-4 w-1 shrink-0 rounded-full', TONE.blue.bar)} aria-hidden />What to tell them</span><button type="button" onClick={(e) => { e.preventDefault(); void doCopy('script', script); }} className="inline-flex min-h-[36px] items-center rounded-lg px-2 text-xs font-medium text-primary hover:bg-muted hover:underline">{copied === 'script' ? 'Copied' : 'Copy'}</button></summary>
               <Textarea value={script} onChange={(e) => setScript(e.target.value)} rows={6} className="mt-2 text-sm" aria-label="What to tell them (edit freely)" />
@@ -552,7 +566,7 @@ export function QuickClosePanel({ leadId, active = true, framed = false }: { lea
 
           {/* The handoff folds to one line while the close is happening (M-013); it can be finished after payment.
               It OPENS once the link is out (or they have paid) until it is sent, and it ENDS with Send to Paul. */}
-          {v?.handoff && v.handoff.canEdit && v.state !== 'not_started' && v.state !== 'blocked' && (() => {
+          {v?.handoff && v.handoff.canEdit && v.state !== 'not_started' && v.state !== 'blocked' && !declined && (() => {
             const h = v.handoff;
             const sent = h.sent ?? null;
             const chip = sent ? { tone: 'green' as Tone, cls: SUCCESS_CHIP, text: 'sent to Paul' }
@@ -563,7 +577,7 @@ export function QuickClosePanel({ leadId, active = true, framed = false }: { lea
               <details className={cn(FOLD, sent ? 'border-l-[3px] border-l-emerald-500' : h.complete ? EDGE.blue : EDGE.amber)} open={openNow} data-testid="qc-handoff">
                 <summary className="flex min-h-[36px] cursor-pointer select-none flex-wrap items-center justify-between gap-x-2 gap-y-1 text-sm font-semibold">Handoff for Paul<ToneChip tone={chip.tone} dot className={chip.cls}>{chip.text}</ToneChip></summary>
                 <p className="mt-1 text-xs text-muted-foreground">{sent ? 'Paul has your handoff. You can still correct an answer.' : 'Most of this is already filled in from the call. Add only what you learned that Paul should know — nothing here is required — then Send to Paul.'}</p>
-                <div className="mt-3"><SalesHandoffForm fields={h.fields} prefilled={h.prefilled} route={route} onSave={saveHandoff} onSend={sendToPaul} sent={sent ? { at: sent.at, by: sent.by_me ? null : sent.by, changed_since: sent.changed_since } : null} busy={busy === 'handoff'} compact /></div>
+                <div className="mt-3"><SalesHandoffForm fields={h.fields} prefilled={h.prefilled} route={route ?? 'build'} onSave={saveHandoff} onSend={sendToPaul} sent={sent ? { at: sent.at, by: sent.by_me ? null : sent.by, changed_since: sent.changed_since } : null} busy={busy === 'handoff'} compact /></div>
               </details>
             );
           })()}
@@ -637,8 +651,8 @@ function FragmentRow({ k, v }: { k: string; v: string | null | undefined }) {
 
 /* ══ THE WEBSITE APPROACH, CAPTURED EARLY (sales workspace v2) ═══════════════════════════════════════
    The DETAILS tab's field and the Close tab's question are ONE stored answer (quick_close.answers.approach,
-   saved by fn quick-close like every other answer). It decides the plan (Build / Optimise) and which Close
-   questions make sense, so a switch of plan asks first, exactly as on the Close tab. */
+   saved by fn quick-close like every other answer). v5 (2026-10-16): every choice is Findable Build — "Improve their
+   current website" (Optimise) is withdrawn and shown only to label a close that already carries it. */
 export function WebsiteApproachField({ leadId }: { leadId: string }) {
   const q = useQuickClose(leadId);
   const qc = useQueryClient();
@@ -673,14 +687,15 @@ export function WebsiteApproachField({ leadId }: { leadId: string }) {
     <div className="space-y-1.5" data-testid="website-approach">
       <label className="block text-[11px] font-medium text-muted-foreground">Website approach — what do they want?</label>
       <div className="grid gap-1.5 sm:grid-cols-2">
-        {(Object.keys(APPROACH_LABEL) as QcApproach[]).map((k) => {
-          const off = !v.canEdit || busy || (!hasSite && NEEDS_CURRENT_SITE.has(k));
+        {(Object.keys(APPROACH_LABEL) as QcApproach[]).filter((k) => k === 'unsure' || isSaleableRoute(APPROACH_ROUTE[k]) || a.approach === k).map((k) => {
+          const withdrawn = k !== 'unsure' && !isSaleableRoute(APPROACH_ROUTE[k]);
+          const off = !v.canEdit || busy || withdrawn || (!hasSite && NEEDS_CURRENT_SITE.has(k));
           return (
             <button key={k} type="button" disabled={off} onClick={() => void choose(k)} aria-pressed={a.approach === k}
               className={cn('rounded-md border px-2.5 py-2 text-left text-xs font-medium transition-colors disabled:opacity-50',
                 a.approach === k ? PICKED : 'border-border/60 hover:bg-muted')}>
               {APPROACH_LABEL[k]}
-              <span className="block text-[10px] font-normal text-muted-foreground">{!hasSite && NEEDS_CURRENT_SITE.has(k) ? 'No website on file' : k === 'unsure' ? 'Paul recommends after payment' : SERVICE_ROUTE_NAME[APPROACH_ROUTE[k]]}</span>
+              <span className="block text-[10px] font-normal text-muted-foreground">{withdrawn ? 'Withdrawn — no longer offered' : !hasSite && NEEDS_CURRENT_SITE.has(k) ? 'No website on file' : k === 'unsure' ? 'Paul recommends after payment' : SERVICE_ROUTE_NAME[APPROACH_ROUTE[k]]}</span>
             </button>
           );
         })}

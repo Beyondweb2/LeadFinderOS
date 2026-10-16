@@ -10,7 +10,7 @@ import { readWebsite, sameWebsite } from "../../../src/lib/websiteUrl.ts";
 import { planClientConfirmation, resumeDecision, salesSignupFor, type SignupRow } from "../../../src/lib/salesSignup.ts";
 import { confirmItemsFor, confirmSummaryFor } from "../../../src/lib/clientConfirm.ts";
 import type { QuickCloseRecord } from "../../../src/lib/quickClose.ts";
-import { selfServeBuildHold, SELF_SERVE_HOLD_TEXT } from "../../../src/lib/selfServeContract.ts";
+import { selfServeBuildHold, selfServeDeclined, SELF_SERVE_DECLINE_TEXT, SELF_SERVE_HOLD_TEXT } from "../../../src/lib/selfServeContract.ts";
 import { readContractEnd, readDesignChoice, contractEndWords, simpleAnswerFills, maskEmail } from "../../../src/lib/onboardingSimpleAnswers.ts";
 import { recordSetupSignupCreator } from "../_shared/setup-link-creator.ts";
 
@@ -103,8 +103,13 @@ const WILLING_TO_MIGRATE = new Set(["yes", "not_sure", "no"]);
    (12 payments), "keep" = Findable Optimise (6 payments). Same price, different length, and the
    ownership/hosting terms apply only to a site Findable builds. findable-checkout reads it off the row
    and REFUSES a row without one — anything not in this set stores null, which is UNDECIDED, never a
-   default route. */
+   default route.
+   🔴 v5 (Paul, 2026-10-16): FINDABLE OPTIMISE IS WITHDRAWN. A NEW sign-up on "keep" is REFUSED out loud
+   (plan_withdrawn, below) — never stored, never quietly turned into Build. "keep" stays in the set only so the
+   validation still reads it; old rows on it are untouched. */
 const PLAN_TIER = new Set(["keep", "new_site"]);
+/** v5: the words for a refused "keep" sign-up (findable.live shows `detail` where it has no mapping of its own). */
+const PLAN_WITHDRAWN_TEXT = "Findable Optimise (keeping and improving your current website) is no longer offered. Findable Build, where we build, host and manage a new website for you, is the plan we offer. Reload the page to sign up for it.";
 /* DOMAIN OWNERSHIP + AUTHORITY (2026-09-28, src/lib/domainAuthority.ts): the new-website service only
    goes ahead where the client owns / controls the domain and may authorise the change. Validated to
    the known sets; anything else stores null, which the rule reads as NOT a yes. */
@@ -489,7 +494,7 @@ Deno.serve(async (req) => {
             if (owner?.user_id) {
               await service.from("notifications").upsert({
                 user_id: owner.user_id, kind: "quick_close_review", title: "The client corrected their set-up details",
-                body: `${cLead.business_name ?? "A client"} changed: ${plan.changed.join(", ")}.${plan.holds ? " The sign-up is on hold until you look." : ""}`,
+                body: `${cLead.business_name ?? "A client"} changed: ${plan.changed.join(", ")}.${plan.declined ? ` ${SELF_SERVE_DECLINE_TEXT}` : plan.holds ? " The sign-up is on hold until you look." : ""}`,
                 link: `/inbox?lead=${confirmLeadId}`, lead_id: confirmLeadId, priority: 2,
                 dedupe_key: `qc_client_confirm:${confirmOnboardingId}:${JSON.stringify(plan.next.client_confirmed?.answers ?? {})}`,
               }, { onConflict: "user_id,dedupe_key", ignoreDuplicates: true });
@@ -1021,6 +1026,8 @@ Deno.serve(async (req) => {
          operator rather than returned to the visitor, who has done nothing wrong and must always
          see success. */
       if (!leadId) {
+        /* 🔴 v5: no new sign-up on the withdrawn plan here either (the lead-less sign-up creates a row too). */
+        if (a.plan_tier === "keep") return json({ ok: false, error: "plan_withdrawn", detail: PLAN_WITHDRAWN_TEXT }, 400);
         const { data: row, error: insErr } = await saveAnswers({ status: "submitted" });
         if (insErr || !row) return json({ ok: false, error: "save_failed" }, 500);
 
@@ -1216,6 +1223,13 @@ Deno.serve(async (req) => {
         }
       }
 
+      /* 🔴 v5 (2026-10-16): NO NEW SIGN-UP ON THE WITHDRAWN PLAN. Checked here — after a sales-held sign-up has been
+         resumed above (its plan is the salesperson's record, never read from this request) and before anything is
+         created. A stale page (or a hand-made request) asking for "keep" gets a plain refusal, not a row. */
+      if (a.plan_tier === "keep") {
+        return json({ ok: false, error: "plan_withdrawn", detail: PLAN_WITHDRAWN_TEXT }, 400);
+      }
+
       // Lockdown #3a: one submission per lead per SUBMIT_COOLDOWN_MS.
       const { data: recent } = await service
         .from("onboarding_responses").select("id, created_at")
@@ -1231,13 +1245,28 @@ Deno.serve(async (req) => {
          1. FULL SETUP KEEPS ITS SALESPERSON. When a salesperson sent this lead the Full Setup link, the sign-up the client's
             page just created is THEIR creation (the same event + trigger a phone close uses), so the sale is theirs at payment.
          2. THE AGENCY-CONTRACT SAFEGUARD. A Build on an agency-run site the client may still be tied into is held for Paul by
-            the SAME rule and the SAME release as the phone close (findable-checkout refuses it: held_for_review). Paul is told. */
+            the SAME rule and the SAME release as the phone close (findable-checkout refuses it: held_for_review). Paul is told.
+            v5 (2026-10-16, clause 1.6): "still tied in" is a DECLINE, not a hold — selfServeDeclined, never released;
+            "not sure" is the hold. */
       try {
         const made = await recordSetupSignupCreator(service, leadId, row.id as string);
         if (!made.recorded && made.reason !== "no_setup_send" && made.reason !== "already_recorded") console.error("[findable-onboarding] setup creator not recorded:", made.reason);
       } catch (e) { console.error("[findable-onboarding] setup creator failed (non-fatal):", e instanceof Error ? e.message : String(e)); }
       try {
-        if (selfServeBuildHold({ plan_tier: (answers as Record<string, unknown>).plan_tier, website_addon: (answers as Record<string, unknown>).website_addon, website_manager: (answers as Record<string, unknown>).website_manager, agency_contract: (answers as Record<string, unknown>).agency_contract })) {
+        const contractRow = { plan_tier: (answers as Record<string, unknown>).plan_tier, website_addon: (answers as Record<string, unknown>).website_addon, website_manager: (answers as Record<string, unknown>).website_manager, agency_contract: (answers as Record<string, unknown>).agency_contract };
+        /* 🔴 v5 clause 1.6: STILL TIED IN = DECLINED. Their answers are kept (so we can get back in touch when the contract
+           ends) but the row can never be paid (selfServeBuildHold stays true; no release lifts it). Paul is told once. */
+        if (selfServeDeclined(contractRow)) {
+          const { data: owner } = await service.from("team_members").select("user_id").eq("is_book_owner", true).maybeSingle();
+          if (owner?.user_id) {
+            const ends = contractEndWords((answers as Record<string, unknown>).agency_contract_ends as string | null);
+            await service.from("notifications").upsert({
+              user_id: owner.user_id, kind: "quick_close_review", title: "Not taken on: still tied into a contract with their current provider",
+              body: `A client said on their own page that they are still tied into a contract with whoever looks after their website, so we cannot take them on (clause 1.6). No payment can be taken.${ends ? ` They say the contract ends on ${ends}: get back in touch then.` : " Get back in touch when it ends."}`,
+              link: `/inbox?lead=${leadId}`, lead_id: leadId, priority: 2, dedupe_key: `self_serve_declined:${row.id}`,
+            }, { onConflict: "user_id,dedupe_key", ignoreDuplicates: true });
+          }
+        } else if (selfServeBuildHold(contractRow)) {
           const { data: owner } = await service.from("team_members").select("user_id").eq("is_book_owner", true).maybeSingle();
           if (owner?.user_id) {
             /* The end date the client gave for their agency contract, when they gave one (simple onboarding, 2026-10-16). */

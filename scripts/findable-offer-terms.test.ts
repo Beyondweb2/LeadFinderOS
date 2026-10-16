@@ -23,7 +23,7 @@ import { minimumTermCancelAt } from '../supabase/functions/_shared/delayed-subsc
 import { getTemplateSendability } from '../src/lib/whatsappTemplates.ts';
 import { templateAwaitingApproval } from '../supabase/functions/_shared/whatsapp-send.ts';
 import { buildColdCallPlaybook } from '../src/lib/coldCallPlaybook.ts';
-import { bothPlansSpoken } from '../src/lib/planTerms.ts';
+import { planSpoken } from '../src/lib/planTerms.ts';
 
 let f = 0;
 const ok = (c: unknown, l: string) => { if (!c) f++; console.log((c ? 'PASS ' : 'FAIL ') + l); };
@@ -41,17 +41,19 @@ ok(recurringPaymentsFor('build') === 11 && recurringPaymentsFor('optimise') === 
 ok(contractTotalGbpFor('build') === 1188 && contractTotalGbpFor('optimise') === 594, 'nominal contract value: £1,188 / £594');
 /* 2026-10-05 (v3 Client Service Agreement): the monthly starts the day after the refund window (5.6), and the
    Continuing Service follows the minimum term (9A). */
-ok(FINDABLE_OFFER_SUMMARY === '£99 to start, then £99 a month from the day after your 14-day refund window closes (normally about six weeks after you give us access) — 12 payments in total if we build you a new website, 6 if we optimise the one you have. Optimise then ends with no continuing charge; after Build, £29.99 a month hosting and maintenance is optional.',
+/* v5 (2026-10-16): ONE plan. */
+ok(FINDABLE_OFFER_SUMMARY === '£99 to start, then £99 a month from the day after your 14-day refund window closes (normally about six weeks after you give us access): we build, host and manage a new website for you, 12 payments in total. After payment 12 the website is yours, and £29.99 a month hosting and maintenance is optional.',
   'the one-line (pre-choice) offer: ' + FINDABLE_OFFER_SUMMARY);
 ok(!/FINDABLE_NEW_SITE_|CARD_SAVED_NOTICE_NEW_SITE|export const FINDABLE_TOTAL_PAYMENTS|export const CARD_SAVED_NOTICE\b/.test(read('src/lib/findableOffer.ts')), 'the retired constants (two-tier and single-plan) are gone');
 
 console.log('── 2. CHECKOUT ──');
 for (const r of SERVICE_ROUTES) {
   const n = totalPaymentsFor(r), notice = cardSavedNoticeFor(r);
-  ok(notice.includes('£99 a month') && notice.includes(`${termMonthsFor(r)}-month minimum term`), `card notice (${r}) names £99/month and the ${termMonthsFor(r)}-month minimum`);
+  /* v5 (clause 4.1): the minimum term is counted in PAYMENTS, never "an N-month minimum". */
+  ok(notice.includes('£99 a month') && notice.includes(`Your minimum term is ${n} payments in total`) && !/month minimum/.test(notice), `card notice (${r}) names £99/month and the minimum term in payments`);
   ok(!/cancel (before|any ?time)|stop any ?time/i.test(notice), `card notice (${r}) offers no "cancel before it starts"`);
   ok(notice.includes(`${n} payments in total, including today's`) && notice.includes(afterTermSummaryWords(r)) && !/continues at £29\.99/.test(notice) && !/six weeks from today/.test(notice), `card notice (${r}) counts today's £99 inside the ${n}, then names the v4 end of term`);
-  ok(checkoutLineNameFor(r).includes(`/month from the day after your refund window, ${n} payments in total (${termMonthsFor(r)}-month minimum)`), `Stripe line item (${r}) names the monthly, ${n} payments and the minimum`);
+  ok(checkoutLineNameFor(r).includes(`/month from the day after your refund window, ${n} payments in total (the minimum term)`), `Stripe line item (${r}) names the monthly, ${n} payments and the minimum`);
 }
 const checkout = code('supabase/functions/findable-checkout/index.ts');
 ok(/custom_text\[submit\]\[message\]", cardSavedNoticeFor\(route\)\)/.test(checkout), 'checkout shows the route\'s notice beside the card field');
@@ -105,7 +107,7 @@ ok(/cancel_at: String\(minimumTermCancelAt\(trialEnd, recurring\)\)/.test(sub) &
 console.log('── 4. EMAILS, WELCOME PACK, PLAYBOOK ──');
 for (const r of SERVICE_ROUTES) {
   const soon = monthlyStartingSoonEmail({ businessName: 'X', startsOn: '4 Nov 2026', cancelUrl: 'https://billing.example/x', route: r }).paragraphs.join(' ');
-  ok(soon.includes('£99') && soon.includes(`${termMonthsFor(r)}-month minimum term`) && soon.includes(`${totalPaymentsFor(r)} payments in total, counting the £99 you paid at sign-up`),
+  ok(soon.includes('£99') && soon.includes('your minimum term') && !/month minimum/.test(soon) && soon.includes(`${totalPaymentsFor(r)} payments in total, counting the £99 you paid at sign-up`),
     `"monthly starts soon" (${r}): names the term and counts the sign-up payment inside the ${totalPaymentsFor(r)}`);
   ok(!/nothing is taken|cancel here/i.test(soon), `"monthly starts soon" (${r}): no free exit`);
 }
@@ -120,15 +122,15 @@ const pb = buildColdCallPlaybook({
   lead: { id: 'l', business_name: 'Acme Plumbing', phone: '07700900123', website: null },
   reportAudit: null, report: null, runCrawls: [], leadCrawl: null, messages: [], nowMs: Date.now(),
 });
-/* 2026-10-07 (Paul): the sales offer is planTerms.ts — both plans, each with its own ending (Optimise ends after 6). */
-ok(pb.offer.lines[0] === bothPlansSpoken(), 'Cold Call Playbook quotes the offer from the one sales source (planTerms.ts)');
-ok(/12 months/.test(pb.offer.monthly) && /12 payments/.test(pb.offer.monthly) && /6 payments/.test(pb.offer.monthly) && /first payment either way/.test(pb.offer.monthly) && !/check current offer/i.test(JSON.stringify(pb)),
-  'and names both routes\' counts, the sign-up counted — no "check current offer"');
+/* v5 (2026-10-16): the sales offer is planTerms.ts — ONE plan, Findable Build (Optimise is withdrawn). */
+ok(pb.offer.lines[0] === planSpoken(), 'Cold Call Playbook quotes the offer from the one sales source (planTerms.ts)');
+ok(/12 payments/.test(pb.offer.monthly) && /first of the 12 payments/.test(pb.offer.monthly) && !/6 payments|optimise|months/i.test(pb.offer.monthly) && !/check current offer/i.test(JSON.stringify(pb)),
+  'and names Build\'s count in payments, the sign-up counted — no Optimise, no months, no "check current offer"');
 /* Nothing customer-facing may describe the count ON TOP of the sign-up. */
 for (const [label, text] of [['card notice (build)', cardSavedNoticeFor('build')], ['card notice (optimise)', cardSavedNoticeFor('optimise')], ['offer summary', FINDABLE_OFFER_SUMMARY], ['playbook offer', JSON.stringify(pb.offer)]] as const) {
   ok(!/(12|6) (more|further|monthly) payments|then (12|6) payments|plus (12|6)\b|13 payments|7 payments/i.test(text), label + ': no wording that implies an extra payment');
 }
-ok(pb.objections.find((o) => o.objection === 'How much is it?')?.answer === bothPlansSpoken(), '"How much is it?" answers with the current offer (planTerms.ts)');
+ok(pb.objections.find((o) => o.objection === 'How much is it?')?.answer === planSpoken(), '"How much is it?" answers with the current offer (planTerms.ts)');
 
 console.log('── 5. NO STALE CURRENT-OFFER WORDING ──');
 const ACTIVE = [

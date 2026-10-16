@@ -320,7 +320,7 @@ export function checkAiReply(reply: string, c: AiReplyContext): string[] {
   if (vagueSiteClaim(r) && !c.findings.length) out.push('Says it found things on the website without saying what (none were found).');
   if (c.search && wrongEngineWords(r, c.engineWords)) out.push(`Names a different AI tool from the one this conversation uses ("${c.engineWords}").`);
   if (saysGoogleAiForGemini(r)) out.push('Says "google ai"; say "gemini".');
-  if (!offersRoutes(r, c.hasWebsite)) out.push(c.hasWebsite ? 'Does not offer both routes (improve the current site, or build a new one).' : 'Does not offer to build them a site.');
+  if (!offersRoutes(r, c.hasWebsite)) out.push('Does not offer to build them a new website.');
   out.push(...salesStyleProblems(r, [...c.competitors, c.businessName]));
   return out;
 }

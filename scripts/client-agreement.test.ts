@@ -24,16 +24,17 @@ async function main() {
   const tsha = await sha256Hex(versionTemplateText('v1'));
   ok(tsha === V1_TEMPLATE_SHA, `v1 template fingerprint is unchanged (got ${tsha.slice(0, 12)}…)`);
   /* 2026-10-05: v3 is current (scripts/client-agreement-v3.test.ts pins it); v1 stays readable, unchanged. */
-  ok(agreementVersion('v1').version === 'v1' && CLIENT_AGREEMENT_VERSION === 'v4', 'v1 stays a pinned, readable version (v4 is the current one)');
+  ok(agreementVersion('v1').version === 'v1' && CLIENT_AGREEMENT_VERSION === 'v5', 'v1 stays a pinned, readable version (v5 is the current one)');
   ok(renderAgreementText(full, 'v1').includes('four weeks after the baseline'), 'v1 still renders its own words exactly');
-  const t = renderAgreementText(full);
+  /* An Optimise fill: rendered on v4, the last version that offered both plans (v5 is Build only). */
+  const t = renderAgreementText(full, 'v4');
   ok(t.includes('[X] Findable Optimise') && t.includes('[ ] Findable Build'), 'the recorded route is the ticked one');
   ok(!/eight weeks|eight if/i.test(t) && t.includes('about four weeks after the Access Date'), 'the agreement says four weeks (from the Access Date under v3), never eight');
-  ok(renderAgreementText(full) === t, 'rendering is deterministic (same fill, same bytes)');
+  ok(renderAgreementText(full, 'v4') === t, 'rendering is deterministic (same fill, same bytes)');
   ok(renderAgreementText({ businessName: 'X', route: 'build' }).includes(`Business address: ${NOT_PROVIDED}`), 'an absent field reads Not provided');
 
   console.log('\n── THE EVIDENCE ROW ──');
-  const row = acceptanceRowFrom({ leadId: 'L', fill: full, method: 'agree_page', agreedText: t, sha256: 'a'.repeat(64), ip: '1.2.3.4', userAgent: 'UA' });
+  const row = acceptanceRowFrom({ leadId: 'L', fill: full, method: 'agree_page', agreedText: t, sha256: 'a'.repeat(64), ip: '1.2.3.4', userAgent: 'UA', version: 'v4' });
   const COLS = ['lead_id', 'business_name', 'service_route', 'agreement_version', 'agreed_text', 'agreed_text_sha256', 'method',
     'legal_business_name', 'company_number', 'typed_name', 'typed_role', 'business_address', 'email', 'phone', 'website_domain',
     'ip_address', 'user_agent', 'stripe_session_id'];

@@ -40,12 +40,14 @@ export interface SalesHandoffRecord extends SalesHandoffFields {
   completed_by?: string | null;
 }
 
-/** Findable Build covers the first three; Optimise is the fourth (src/lib/findableOffer.ts routes). */
-export const WORK_TYPE_OPTIONS: readonly { value: WorkType; label: string; route: 'build' | 'optimise' }[] = [
+/** Findable Build covers the first three; Optimise is the fourth (src/lib/findableOffer.ts routes).
+ *  🔴 v5 (2026-10-16): Optimise is WITHDRAWN — its option stays (legacy) only so a pre-v5 Optimise client's handoff still
+ *  validates and labels. A new sale is always Build, so the form (which filters by the sale's route) never offers it. */
+export const WORK_TYPE_OPTIONS: readonly { value: WorkType; label: string; route: 'build' | 'optimise'; legacy?: boolean }[] = [
   { value: 'new_site', label: 'Brand new website', route: 'build' },
   { value: 'rebuild', label: 'Rebuild their existing website', route: 'build' },
   { value: 'keep_close', label: 'Rebuild, keeping their current design fairly close', route: 'build' },
-  { value: 'optimise', label: 'Optimise their existing website', route: 'optimise' },
+  { value: 'optimise', label: 'Optimise their existing website (pre-v5 plan)', route: 'optimise', legacy: true },
 ];
 export const SITE_SITUATION_OPTIONS: readonly { value: SiteSituation; label: string }[] = [
   { value: 'client', label: 'The client controls it' },

@@ -16,6 +16,11 @@
       found, verbatim, in one of THEIR inbound messages. Facts live on the research row and are never
       written onto the lead, the onboarding record or anything a client-facing surface reads.
 
+   🔴 v5 (Paul, 2026-10-16): ONE OFFER. Findable builds a NEW website, properly set up for ai visibility and seo,
+      and they can keep their web address. "We can fix it on the site you've already got" was Findable Optimise,
+      which is WITHDRAWN: the prompt no longer offers it, the check refuses a draft that does, and the fallback says
+      only the new-site offer. (draftEvidence.ts OFFER_LINE_BOTH / aiReplyDraft.ts are a separate drafter.)
+
    Pure and edge-reachable (relative `.ts` imports only).
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 /* ⛔ The offer constants (findableOffer.ts) are deliberately NOT imported: this stage carries no price
@@ -27,7 +32,7 @@ import {
   type AuditContext, type ResearchFinding, type WarmLeadResearch,
 } from './warmLeadResearch.ts';
 import {
-  GENERIC_SITE_LINE, NO_SITE_LINE, ROUTE_EXISTING_RE as ROUTE_EXISTING, ROUTE_NEW_RE as ROUTE_NEW,
+  GENERIC_SITE_LINE, NO_SITE_LINE, ROUTE_NEW_RE as ROUTE_NEW,
   carryOn, conversationEngine, draftNames, issueMentioned, namesAny, namesLine, offerLine, saysGoogleAiForGemini, vagueSiteClaim, wrongEngineWords,
 } from './draftEvidence.ts';
 
@@ -364,8 +369,8 @@ export function shouldAskOwnership(_research: WarmLeadResearch | null | undefine
 
 export type RouteLean = 'fix_existing' | 'consider_new' | 'new_only';
 
-/** Which of the two routes the research points to. Both are always offered; this only says which
- *  sounds more natural. A site with no website gets the build route alone. */
+/** What the research says about their current setup. v5 (2026-10-16): the offer is ALWAYS a new website (Optimise is
+ *  withdrawn); this only says how much the research supports leaving the current site behind. */
 export function routeLean(r: WarmLeadResearch | null | undefined): RouteLean {
   if (!r || r.status === 'no_website') return r?.status === 'no_website' ? 'new_only' : 'fix_existing';
   const all = [...r.technicalFindings, ...r.contentFindings];
@@ -376,8 +381,8 @@ export function routeLean(r: WarmLeadResearch | null | undefined): RouteLean {
 }
 
 export const ROUTE_LABELS: Record<RouteLean, string> = {
-  fix_existing: 'optimise the existing site (a Findable rebuild offered as the other route)',
-  consider_new: 'optimise the existing site or a Findable rebuild (research leans rebuild)',
+  fix_existing: 'Findable builds a new website, properly set up for ai visibility and seo (they can keep their web address)',
+  consider_new: 'Findable builds a new website, properly set up for ai visibility and seo (research suggests the current setup is not worth keeping)',
   new_only: 'Findable builds a new site (no website on record)',
 };
 
@@ -455,14 +460,14 @@ export const REPLY_SYSTEM_PROMPT = `You draft WhatsApp replies for Paul, who hel
 
 WHERE THIS CONVERSATION IS: Paul messaged them cold and they replied. FOR THIS REPLY says whether Paul has ALREADY sent them the AI check (the search and the businesses it named). This reply has exactly three jobs:
 1. PROVE THERE IS A REAL ISSUE: AI was asked for their service in their area, it recommended their competitors, not them, and (only where a finding is given) here is a specific thing on their website.
-2. SAY WHAT WE CAN DO ABOUT IT: we can fix it on the site they already have, OR build them a new site properly set up for ai visibility and seo. Offer both routes; never imply everyone needs a new site.
+2. SAY WHAT WE CAN DO ABOUT IT: we build them a new website that's properly set up for ai visibility and seo, and they can keep their web address. Never offer to fix, improve or work on the site they already have: that is not something we offer.
 3. FIND OUT WHO CONTROLS THE WEBSITE: end by asking whether they are with an agency or own/manage the site themselves (unless FOR THIS REPLY says they already told us).
 
 THE SHAPE (normally 3 or 4 short paragraphs):
 - respond naturally to what they just said (if they misread the hook, e.g. "do you need an electrician?", put them right in a friendly way: "nah mate, i was checking what gemini recommends when someone's looking for an electrician in addlestone")
 - the AI search: what was asked, using the AI TOOL words given, and who it recommended instead of them. If the AI check has NOT been sent yet, name the businesses listed under AI VISIBILITY (at most three, spelt as given), casually: "it recommended A, B and C". If it says no names could be read, say "it named a few other businesses" and never make a name up. If the AI check HAS already been sent, do not list them again; they have just seen them.
 - the specific issue from the PRIMARY FINDING (or the CRAWL FINDINGS), with its real details, and what it means in plain english ("so a lot of the ai tools can't properly access and understand the site"). With no finding given, use the GENERAL LINE given instead and claim no fault.
-- what we'd do: "that's the sort of thing we fix, either on the site you've already got or we can build you a new one that's properly set up for ai visibility and seo"
+- what we'd do: "that's the sort of thing we sort out, we can build you a new site that's properly set up for ai visibility and seo, and you can keep your web address"
 - the website question last: "are you currently with an agency or do you own/manage the website yourself?"
 
 NO PRICE AT THIS STAGE. Do not mention any price, figure, monthly fee, number of payments, guarantee, refund or pricing link. If they asked how much, say it depends on which route makes sense for them, which is why you're asking about the website, and carry on.
@@ -585,7 +590,7 @@ export function buildReplyPrompt(ctx: ReplyContext): string {
 
   const lean = ctx.route === 'new_only'
     ? 'ROUTE: they have no website, so the route is building them one properly set up for ai visibility and seo.'
-    : `ROUTES: offer both, fixing it on the site they've already got or building a new one properly set up for ai visibility and seo. ${ctx.route === 'consider_new' ? 'The research suggests the current setup may not be worth working with, so the new-site route can sound the more natural of the two.' : 'Fixing the current site is the natural first route here.'}`;
+    : `ROUTE: building them a new website properly set up for ai visibility and seo; they can keep their web address. Never offer to fix or improve the site they already have. ${ctx.route === 'consider_new' ? 'The research suggests the current setup may not be worth working with, which you may say plainly.' : ''}`.trim();
   const known = ctx.salesFacts.owns_website ?? (ctx.salesFacts.has_existing_provider?.value === 'yes' ? ctx.salesFacts.has_existing_provider : null);
   const instructions = [
     ctx.searchContext ? `AI SEARCH CONTEXT: AI was asked for "${ctx.searchContext}".` : '',
@@ -654,7 +659,9 @@ const AI_ABSOLUTE = /\b(?:AI|ChatGPT|Gemini|Google)\s+(?:can(?:['’]|no)?t|cann
 const PRICE_TALK = /£\s?\d|\b\d+\s?(?:quid|pounds?)\b|\bper month\b|\ba month\b|\/\s?month|\bmonthly\b|\b\d+\s+payments?\b|\bpayments? in total\b|\brefund\w*\b|\bmoney back\b|\bguarantee\w*\b|\bminimum term\b/i;
 /** The website question, in its natural forms. */
 const WEBSITE_Q = /\b(agency|agencies|developer|web (?:guy|designer|company|person)|own|owns|manage|manages|control|look(?:s|ing)? after|built|runs?|in charge of|have a (?:web)?site|got a (?:web)?site)\b[^?]{0,140}\?/i;
-/* ROUTE_EXISTING / ROUTE_NEW: imported from draftEvidence.ts (one copy for both drafters). */
+/* ROUTE_NEW: imported from draftEvidence.ts (one copy for both drafters). */
+/** v5: an OFFER to work on their existing site (the withdrawn Optimise), as opposed to merely mentioning it. */
+const OFFERS_EXISTING = /\beither on the (?:site|website)\b|\b(?:fix|fixing|improve|improving|optimi[sz]e|optimi[sz]ing|sort|sorting|work on|working on)\b[^.?!\n]{0,40}\b(?:site|website) you(?:['’]ve| have)? (?:already )?got\b|\bon the (?:site|website) you(?:['’]ve| have)? (?:already )?got,? or\b/i;
 /* ⛔ The AI search must be SAID ("i asked google ai…", "ai brought up…"). A passing "harder for AI tools
    to connect you with local searches" passed the first version (Adcock Heat, live 2026-09-25). */
 const AI_SEARCH_STRICT = /\b(?:asked|asking|checked|checking|searched|searching|looked|looking|tried|typed|put)\b[^.?!\n]{0,60}\b(?:ai|chatgpt|gemini|perplexity|claude|google)\b|\b(?:ai|chatgpt|gemini|perplexity|claude|google ai)\b[^.?!\n]{0,40}\b(?:recommend\w*|brought up|brings up|came up with|comes up with|mention\w*|suggest\w*|named|listed|picked)\b/i;
@@ -718,11 +725,10 @@ export function checkReply(reply: string, ctx: ReplyContext): ReplyCheck {
 
   if (!refusal) {
     if (!AI_SEARCH_STRICT.test(text)) problems.push('It does not mention the AI search that started this conversation.');
-    if (ctx.route === 'new_only') {
-      if (!ROUTE_NEW.test(text)) problems.push('It does not say we can build them a site.');
-    } else if (!ROUTE_EXISTING.test(text) || !ROUTE_NEW.test(text)) {
-      problems.push('It does not offer both routes (fix the site they have, or build a new one).');
-    }
+    /* v5: the one offer is a new site. A draft that offers to work on the site they already have is selling the
+       withdrawn plan. */
+    if (!ROUTE_NEW.test(text)) problems.push('It does not say we can build them a new site.');
+    if (ctx.route !== 'new_only' && OFFERS_EXISTING.test(text)) problems.push('It offers to fix or improve the site they already have. We only build a new one now.');
     if (ctx.askOwnership && !WEBSITE_Q.test(last)) problems.push('It does not end with the website question (agency, or do they own/manage it).');
   }
   if (!ctx.askOwnership && WEBSITE_Q.test(text) && /\b(agency|own|owns|manage|manages|control)\b/i.test(text)) {
@@ -790,9 +796,10 @@ export function fallbackReply(ctx: ReplyContext): string | null {
   /* The offer joins on to what came before it: real issues → "that's the sort of thing we fix"; the general
      line (no issue named) → offerLine's "we can help with that…", never a fix for a fault nobody named. */
   const issuesSaid = !!f || crawl.length > 0;
-  paras.push(issuesSaid && ctx.route === 'new_only'
-    ? `that's the sort of thing we sort out, we can build you a site that's properly set up for ai visibility and seo.`
-    : `${offerLine(!!ctx.website && ctx.route !== 'new_only', issuesSaid)}.`);
+  /* v5: the new-site offer only (offerLine's "on the site you've already got" was the withdrawn Optimise). */
+  paras.push(issuesSaid
+    ? `that's the sort of thing we fix, by building you a new site that's properly set up for ai visibility and seo${ctx.website && ctx.route !== 'new_only' ? ', and you can keep your web address' : ''}.`
+    : `${offerLine(false, false)}${ctx.website && ctx.route !== 'new_only' ? ', and you can keep your web address' : ''}.`);
   if (ctx.askOwnership) {
     paras.push(ctx.route === 'new_only' ? 'have you got a website at the moment or have you been going without one?' : 'are you currently with an agency or do you own/manage the website yourself?');
   } else {

@@ -12,7 +12,7 @@ import {
   agencyContractBlocksBuild, agencyContractTiedIn, BUILD_TECH_BASE_LINE, CONFIRM_CONTRACT_WARNING, DOMAIN_NOT_WEBSITE_LINE, REUSE_NO_LINE, REUSE_YES_LINE, callNotesLines, cleanAnswers, cleanCallNotes, closeFlow, mergeAnswers, missingQuestions, offerFit, quickCloseGate,
   quickCloseMessage, quickCloseState, routeChoiceAnswers, routeTermsLines, splitCallList, mayGenerateLink, QUICK_CLOSE_QUESTIONS,
 } from '../src/lib/quickClose.ts';
-import { afterTermClientWords, afterTermRepLine, bothPlansSpoken, continuingOptionAfter } from '../src/lib/planTerms.ts';
+import { afterTermClientWords, afterTermRepLine, planSpoken, continuingOptionAfter } from '../src/lib/planTerms.ts';
 import { WHAT_WE_DO_LINE, buildCallScript } from '../src/lib/callScript.ts';
 import { buildCallClose } from '../src/lib/callClose.ts';
 import { decideLinkRoute, LINK_READY_FALLBACK, replyRouteOpen } from '../src/lib/paymentLinkRoute.ts';
@@ -44,27 +44,27 @@ const TOKEN = 'a'.repeat(64);
 const SIGNUP = `https://findable.live/agree/${TOKEN}`;
 const ONB = `https://findable.live/details/${'b'.repeat(64)}`;
 
-console.log('── QUICK CLOSE: BUILD is the default; only a contract they are tied into moves it to Optimise ──');
+console.log('── QUICK CLOSE (v5): BUILD is the one plan; a contract they are tied into DECLINES the sale ──');
 {
   const SIT = { manager: 'owner', domain: 'yes', rights: 'yes' } as const;
   const self = offerFit({ manager: 'owner' }, true);
-  ok(self.offered.build && self.offered.optimise && self.recommended === 'build' && self.warning === null, 'self-managed site → both plans offered, BUILD first');
-  ok(/Build is usually the best route/.test(self.reason ?? '') && self.notes.includes(BUILD_TECH_BASE_LINE), '…with the rep line: Build is usually the best route, and it gives us a clean technical base to work from');
+  ok(self.offered.build && !self.offered.optimise && self.recommended === 'build' && self.warning === null, 'self-managed site → Build, and Optimise is not offered (withdrawn)');
+  ok(/Findable Build is the plan/.test(self.reason ?? '') && !/optimise/i.test(self.reason ?? '') && self.notes.includes(BUILD_TECH_BASE_LINE), '…with the rep line: Build is the plan, and it gives us a clean technical base to work from');
   const free = offerFit({ manager: 'agency', agency_contract: 'free' }, true);
-  ok(free.offered.build && free.offered.optimise && free.recommended === 'build' && free.warning === null, 'agency, contract ended / free to leave → Build recommended, no warning');
+  ok(free.offered.build && !free.offered.optimise && free.recommended === 'build' && free.warning === null, 'agency, contract ended / free to leave → Build, no warning');
   const tiedIn = offerFit({ manager: 'agency', agency_contract: 'in_contract' }, true);
-  ok(!tiedIn.offered.build && tiedIn.offered.optimise && tiedIn.recommended === 'optimise' && /Optimise/.test(tiedIn.reason ?? ''), 'agency + still in contract → Optimise only for a salesperson (the ONE blocker)');
-  ok(!offerFit({ manager: 'freelancer', agency_contract: 'in_contract' }, true).offered.build, 'a freelancer still in contract → the same rule');
+  ok(tiedIn.declined && !tiedIn.offered.build && !tiedIn.offered.optimise && tiedIn.recommended === null && !/optimise/i.test(tiedIn.reason ?? ''), 'agency + still tied in → DECLINED: nothing offered (the ONE blocker; clause 1.6)');
+  ok(offerFit({ manager: 'freelancer', agency_contract: 'in_contract' }, true).declined, 'a freelancer still tied in → the same rule');
   for (const c of ['not_sure', undefined] as const) {
     const fit = offerFit({ manager: 'agency', agency_contract: c }, true);
-    ok(fit.offered.build && fit.recommended === 'build' && fit.warning === CONFIRM_CONTRACT_WARNING, `agency + contract ${c ?? 'unanswered'} → BUILD stays the default, with the warning "Confirm their agency contract before finalising Build."`);
+    ok(fit.offered.build && !fit.declined && fit.recommended === 'build' && fit.warning === CONFIRM_CONTRACT_WARNING, `agency + contract ${c ?? 'unanswered'} → BUILD stays the plan, with the confirm-the-contract warning (never a decline on silence)`);
     ok(!/(rubbish|bad|poor|rip|overcharg)/i.test((fit.reason ?? '') + (fit.warning ?? '')), `…and nothing knocks the agency (${c ?? 'unanswered'})`);
   }
-  ok(!offerFit({ manager: 'third_party', agency_contract: 'in_contract' }, true).offered.build, 'another third party in contract → the same rule');
+  ok(offerFit({ manager: 'third_party', agency_contract: 'in_contract' }, true).declined, 'another third party still tied in → the same rule');
   const noSite = offerFit({}, false);
   ok(noSite.offered.build && !noSite.offered.optimise && noSite.recommended === 'build' && noSite.notes.length === 0, 'no website → Build only, and no ownership notes (nothing irrelevant)');
-  ok(agencyContractTiedIn({ manager: 'agency', agency_contract: 'in_contract' }) && !agencyContractTiedIn({ manager: 'agency' }) && !agencyContractTiedIn({ manager: 'agency', agency_contract: 'not_sure' }) && !agencyContractTiedIn({ manager: 'agency', agency_contract: 'free' }) && !agencyContractTiedIn({ manager: 'owner' }), 'the recommendation blocker: ONLY a positive "still in contract" moves it to Optimise');
-  ok(agencyContractBlocksBuild({ manager: 'agency', agency_contract: 'in_contract' }) && agencyContractBlocksBuild({ manager: 'agency', agency_contract: 'not_sure' }) && !agencyContractBlocksBuild({ manager: 'agency', agency_contract: 'free' }) && !agencyContractBlocksBuild({ manager: 'owner' }), 'the payment stop is unchanged: only a contract confirmed FREE is ready (not sure / still in contract stop for Paul)');
+  ok(agencyContractTiedIn({ manager: 'agency', agency_contract: 'in_contract' }) && !agencyContractTiedIn({ manager: 'agency' }) && !agencyContractTiedIn({ manager: 'agency', agency_contract: 'not_sure' }) && !agencyContractTiedIn({ manager: 'agency', agency_contract: 'free' }) && !agencyContractTiedIn({ manager: 'owner' }), 'the decline: ONLY a positive "still in contract" declines the sale');
+  ok(agencyContractBlocksBuild({ manager: 'agency', agency_contract: 'in_contract' }) && agencyContractBlocksBuild({ manager: 'agency', agency_contract: 'not_sure' }) && !agencyContractBlocksBuild({ manager: 'agency', agency_contract: 'free' }) && !agencyContractBlocksBuild({ manager: 'owner' }), 'only a contract confirmed FREE is ready (not sure waits for Paul; still in contract is declined)');
   /* REUSE RIGHTS and the DOMAIN: guidance, never a blocker. */
   const rYes = offerFit({ ...SIT }, true);
   ok(rYes.notes.includes(REUSE_YES_LINE) && !rYes.notes.includes(REUSE_NO_LINE), 'reuse rights yes → "we can keep the new site very close to the look they already like if they want"');
@@ -72,11 +72,11 @@ console.log('── QUICK CLOSE: BUILD is the default; only a contract they are 
     const fit = offerFit({ ...SIT, rights: r }, true);
     ok(fit.notes.includes(REUSE_NO_LINE) && !fit.notes.includes(REUSE_YES_LINE) && fit.offered.build && fit.recommended === 'build' && !/identical|clone|exact copy/i.test(fit.notes.join(' ')), `reuse rights "${r}" → an original site, never a promised copy, and still Build`);
   }
-  ok(offerFit({ ...SIT, domain: 'agency' }, true).recommended === 'build' && offerFit({ ...SIT, domain: 'agency' }, true).notes.includes(DOMAIN_NOT_WEBSITE_LINE), 'a domain held elsewhere never moves them to Optimise; the rep is told the domain is not the website');
-  /* The backstop: a Build saved anyway (by Paul) stops for his release — never a hard ban. */
+  ok(offerFit({ ...SIT, domain: 'agency' }, true).recommended === 'build' && offerFit({ ...SIT, domain: 'agency' }, true).notes.includes(DOMAIN_NOT_WEBSITE_LINE), 'a domain held elsewhere never stops Build; the rep is told the domain is not the website');
+  /* v5 clause 1.6: a Build saved while tied in is DECLINED — not a review, and no release lifts it. */
   const tied = { route: 'build', approach: 'unsure', decision_maker: 'yes', manager: 'agency', agency_contract: 'in_contract', domain: 'yes', rights: 'yes' } as const;
-  ok(quickCloseState('answers_saved', { answers: tied }) === 'needs_review' && !mayGenerateLink('answers_saved', { answers: tied }), 'Build while tied in → Paul review, no link');
-  ok(quickCloseState('answers_saved', { answers: tied, review_approved_at: iso(NOW) }) === 'ready', '…Paul can release it');
+  ok(quickCloseState('answers_saved', { answers: tied }) === 'declined' && !mayGenerateLink('answers_saved', { answers: tied }), 'Build while tied in → DECLINED, no link');
+  ok(quickCloseState('answers_saved', { answers: tied, review_approved_at: iso(NOW) }) === 'declined', '…and Paul cannot release a decline');
   const unsure = { ...tied, agency_contract: 'not_sure' } as const;
   ok(quickCloseState('answers_saved', { answers: unsure }) === 'needs_review' && quickCloseState('answers_saved', { answers: unsure, review_approved_at: iso(NOW) }) === 'ready', 'Build with an unconfirmed contract still stops for Paul (unchanged) — and he can release it');
 }
@@ -84,13 +84,13 @@ console.log('── QUICK CLOSE: BUILD is the default; only a contract they are 
 console.log('\n── QUICK CLOSE: the shortest close, nothing asked twice ──');
 {
   ok(QUICK_CLOSE_QUESTIONS[0].key === 'route', 'the plan question is first in the table, but LAST in the flow (closeFlow)');
-  ok(closeFlow({}).slice(-1)[0] === 'route' && closeFlow({ manager: 'agency' }).slice(-1)[0] === 'route', 'the plan is the LAST question (Optimise then adds only access)');
+  ok(closeFlow({}).slice(-1)[0] === 'route' && closeFlow({ manager: 'agency' }).slice(-1)[0] === 'route', 'the plan is the LAST question (v5: nothing after it)');
   ok(missingQuestions({}).join() === 'decision_maker,manager,domain,route', 'a fresh close asks authority, who runs the site, the domain, then the plan');
   const fromCall = cleanAnswers({ decision_maker: 'yes', manager: 'owner' });
   ok(missingQuestions(fromCall).join() === 'domain,route', 'the call already answered authority and who runs the site → those are not asked again');
   const sit = { ...fromCall, domain: 'yes', rights: 'yes' } as const;
   ok(missingQuestions(sit).join() === 'route', 'with the situation answered, only the plan is left');
-  ok(missingQuestions({ ...sit, ...routeChoiceAnswers(sit, 'optimise') }).join() === 'access', 'Optimise after that: only "can we get in"');
+  ok(missingQuestions({ ...sit, ...routeChoiceAnswers(sit, 'optimise') }).join() === 'route', 'v5: a stored Optimise plan is not an answer — the plan is asked again (Build only)');
   ok(missingQuestions({ ...sit, ...routeChoiceAnswers(sit, 'build') }).length === 0, 'Build after that (self-run): nothing more — ready');
   ok(quickCloseState('answers_saved', { answers: { ...sit, ...routeChoiceAnswers(sit, 'build') } }) === 'ready', '…READY for the sign-up link');
   ok(missingQuestions(cleanAnswers({ decision_maker: 'yes', manager: 'agency', route: 'build', approach: 'unsure' })).join() === 'agency_contract,domain', 'an agency-run site: the contract is asked (once), then the domain');
@@ -115,9 +115,9 @@ console.log('\n── THE WORDS: per plan, no close line, plain "what we do" ─
   ok(continuingOptionAfter('build') && !continuingOptionAfter('optimise'), 'the £29.99 option exists after Build only');
   ok(routeTermsLines('optimise').some((l) => /plan ends/.test(l)) && !routeTermsLines('optimise').join(' ').includes('29.99'), 'the Quick Close card for Optimise names no £29.99');
   ok(!/29\.99/.test(quickCloseMessage('Sam', SIGNUP, 'optimise')) && /29\.99 a month for hosting and maintenance/.test(quickCloseMessage('Sam', SIGNUP, 'build')), 'the message to the client says the same, per plan');
-  ok(/6 payments in total, today's included, and then it ends/.test(bothPlansSpoken()), '"How much is it?" names both plans and their endings');
+  ok(/12 payments in total, today's included/.test(planSpoken()) && /29\.99 a month for hosting and maintenance only if you want/.test(planSpoken()) && !/optimise|6 payments|your current website|month minimum/i.test(planSpoken()), 'v5: "How much is it?" names Findable Build only: 12 payments, then the optional £29.99 — never Optimise, never months');
   ok(!/public evidence/i.test(WHAT_WE_DO_LINE) && /AI visibility check/.test(WHAT_WE_DO_LINE) && /four weeks/.test(WHAT_WE_DO_LINE) && /every month/.test(WHAT_WE_DO_LINE)
-    && !/guarantee|recommend|cite|citation|rank/i.test(WHAT_WE_DO_LINE), '"What we do": plain words — check, real questions, optimise the site, pages, same check at four weeks, monthly; no promised outcome');
+    && !/guarantee|recommend|cite|citation|rank/i.test(WHAT_WE_DO_LINE), '"What we do": plain words — check, real questions, a new website, pages, same check at four weeks, monthly; no promised outcome');
   ok(WHAT_WE_DO_LINE.split(/\s+/).length < 90, '…short enough to say on a call');
   ok(!('closeLine' in buildCallClose('own_site')), 'no scripted close line');
   ok(!/public evidence/.test(read('src/lib/salesExplainer.ts').replace(/whether competitors have much stronger public evidence/, '')), 'the sales explainer no longer says "improve the public evidence"');

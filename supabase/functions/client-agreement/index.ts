@@ -21,8 +21,8 @@
 //    are stored on the row, so the record proves itself.
 // ⛔ ONE REFUSAL FOR A BAD TOKEN. An unknown token gets the same page whatever is wrong with it.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { acceptanceRowFrom, agreePageMissing, CLIENT_AGREEMENT_VERSION, renderAgreementText, sha256Hex, type AgreementFill, type AgreementRoute, type AgreementAcceptanceRow } from "../../../src/lib/clientAgreement.ts";
-import { agreementPageHtml, agreementUnavailableHtml, type AgreementFormValues } from "../../../src/lib/agreementPageHtml.ts";
+import { acceptanceRowFrom, agreePageMissing, asksCurrentProvider, CLIENT_AGREEMENT_VERSION, renderAgreementText, versionOffersRoute, sha256Hex, type AgreementFill, type AgreementRoute, type AgreementAcceptanceRow } from "../../../src/lib/clientAgreement.ts";
+import { agreementPageHtml, agreementUnavailableHtml, TIED_IN_MESSAGE, type AgreementFormValues } from "../../../src/lib/agreementPageHtml.ts";
 import { resolveAgreementRoute } from "../../../src/lib/agreementRoute.ts";
 import { clientClosed } from "../../../src/lib/paymentState.ts";
 import { serviceRouteFromRow } from "../../../src/lib/findableOffer.ts";
@@ -103,6 +103,7 @@ const LABELS: Record<string, string> = {
 const PAY_REFUSAL: Record<string, string> = {
   already_client: "This business has already paid. If you think that is wrong, email paul@findable.live.",
   route_undecided: "Your sign-up does not say which service you chose yet. Your salesperson or Paul will fix this and send the link again.",
+  route_withdrawn: "The plan on this sign-up is no longer offered. Paul will be in touch with an updated link.",
   needs_trade: "We need one more detail about your business before you can pay. Paul will be in touch.",
   domain_unresolved: "We need to check who controls your website domain before you pay. Paul will be in touch.",
   cannot_serve: "We cannot take payment for this website set-up yet. Paul will be in touch.",
@@ -143,6 +144,12 @@ Deno.serve(async (req) => {
     if (signup) {
       if (!signup.route) return html(agreementPageHtml({ mode: "not_ready", businessName: ctx.businessName }));
       const signed = await signupAcceptance(service, ctx.lead.id, signup.id);
+      /* ⛔ v5 (2026-10-16): Findable Optimise is withdrawn. A sign-up still recorded on it (plan_tier "keep", made
+         before the change) is never signed or charged on the current agreement; Paul re-sends it as a Build. */
+      if (!signed && !versionOffersRoute(CLIENT_AGREEMENT_VERSION, signup.route)) {
+        if (form) await reportAgreementError(service, "agreement_route_withdrawn", `sign-up route ${signup.route} is not offered on ${CLIENT_AGREEMENT_VERSION}`, { lead_id: ctx.lead.id, onboarding_id: signup.id });
+        return html(agreementPageHtml({ mode: "not_ready", businessName: ctx.businessName, message: "The plan on this sign-up is no longer offered, so it cannot be signed. Paul will be in touch with an updated link." }), form ? 409 : 200);
+      }
       /* A POST must be for THIS sign-up: a stale tab from an older sign-up never signs or pays for this one. */
       if (form && clip(form.get("s")) !== signup.id) {
         return html(agreementPageHtml({ mode: "not_ready", businessName: ctx.businessName, message: "This page is out of date — your sign-up has changed. Please open your link again." }), 409);
@@ -192,6 +199,15 @@ Deno.serve(async (req) => {
       const fill: AgreementFill = { businessName: ctx.businessName, route: signup.route, ...values };
       const errors = await signatureErrors(service, ctx.lead.id, fill, values);
       if (!values.authority) errors.push("Please confirm you have authority to sign for the business.");
+      /* ⛔ v5 clause 1.6: the client's own answer. No answer is an error; "No" is a refusal, not an error to
+         fix: nothing is signed or charged, Paul is told, and the page says so plainly. */
+      if (asksCurrentProvider(CLIENT_AGREEMENT_VERSION)) {
+        if (values.freeToLeave === false) {
+          await reportAgreementError(service, "agreement_declined_tied_in", "client says they are tied into a contract with their current provider", { lead_id: ctx.lead.id, onboarding_id: signup.id, current_provider: values.currentProvider || null });
+          return html(agreementPageHtml({ mode: "not_ready", businessName: ctx.businessName, message: TIED_IN_MESSAGE }), 422);
+        }
+        if (values.freeToLeave !== true) errors.push("Please say whether you are free to leave your current provider (choose Yes if you have none).");
+      }
       if (errors.length) return html(agreementPageHtml({ mode: "sign", businessName: ctx.businessName, route: signup.route, values, errors, signupId: signup.id, nowIso: new Date().toISOString() }), 422);
       const agreedText = renderAgreementText(fill, CLIENT_AGREEMENT_VERSION);
       const row = acceptanceRowFrom({
@@ -253,6 +269,9 @@ function readForm(form: URLSearchParams): AgreementFormValues {
     contactName: clip(form.get("contactName")), role: clip(form.get("role")),
     address: clip(form.get("address")), email: clip(form.get("email")).toLowerCase(), phone: clip(form.get("phone")),
     websiteDomain: clip(form.get("websiteDomain")),
+    /* v5 clause 1.6: blank provider = none; free to leave is the client's own Yes / No, absent = unanswered. */
+    currentProvider: clip(form.get("currentProvider")),
+    freeToLeave: form.get("freeToLeave") === "yes" ? true : form.get("freeToLeave") === "no" ? false : null,
     /* ⛔ Only an affirmative "yes" from the client's own tick counts — nothing is ticked for them. */
     agree: form.get("agree") === "yes", authority: form.get("authority") === "yes", marketingOptOut: form.get("marketingOptOut") === "yes",
   };

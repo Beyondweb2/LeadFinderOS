@@ -1,6 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { slugifyBusinessName } from "../../../src/lib/reportSlug.ts";
-import { FINDABLE_GUARANTEE, cardSavedNoticeFor, checkoutLineNameFor, serviceRouteFromRow, totalPaymentsFor } from "../../../src/lib/findableOffer.ts";
+import { FINDABLE_GUARANTEE, cardSavedNoticeFor, checkoutLineNameFor, isSaleableRoute, serviceRouteFromRow, totalPaymentsFor } from "../../../src/lib/findableOffer.ts";
 import { mayGenerateLink, quickCloseClosedRefusal, type QuickCloseRecord } from "../../../src/lib/quickClose.ts";
 import { offerPrice } from "../_shared/offer-price.ts";
 import { agreementUrl, CLIENT_AGREEMENT_VERSION, sha256Hex } from "../../../src/lib/clientAgreement.ts";
@@ -226,6 +226,13 @@ Deno.serve(async (req) => {
         lead_id: effectiveLeadId, plan_tier: (ob as { plan_tier?: unknown }).plan_tier ?? null, website_addon: (ob as { website_addon?: unknown }).website_addon ?? null,
       });
       return json({ ok: false, error: "route_undecided" }, 409);
+    }
+    /* ⛔ AGREEMENT v5 (2026-10-16): Findable Optimise is no longer sold. A sign-up still recorded on it (plan_tier "keep",
+       made before the change) is never charged as a new sale; the client's page says the plan is no longer offered and
+       Paul re-sends it as Build. The agreement gate refuses it too (route_withdrawn); this is the belt to that brace. */
+    if (!isSaleableRoute(route)) {
+      await recordRefusal("checkout_refused_route_withdrawn", { lead_id: effectiveLeadId, onboarding_id: onboardingId, route });
+      return json({ ok: false, error: "route_withdrawn" }, 409);
     }
 
     /* ⚠️ QUICK CLOSE KEEPS ITS OWN DOMAIN GATE (2026-09-29). A Quick Close answers the domain questions
@@ -464,7 +471,7 @@ Deno.serve(async (req) => {
     let acceptance: (GateAcceptance & { agreed_text: string }) | null = null;
     {
       const { data: acc, error: accErr } = await service.from("client_agreement_acceptances")
-        .select("id, lead_id, onboarding_id, agreement_version, service_route, method, authority_confirmed, agreed_text, agreed_text_sha256")
+        .select("id, lead_id, onboarding_id, agreement_version, service_route, method, authority_confirmed, agreed_text, agreed_text_sha256, free_to_leave_provider")
         .eq("lead_id", effectiveLeadId).eq("onboarding_id", onboardingId).eq("agreement_version", CLIENT_AGREEMENT_VERSION)
         .order("accepted_at", { ascending: false }).limit(1).maybeSingle();
       if (accErr) {

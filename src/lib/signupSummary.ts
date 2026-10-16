@@ -32,10 +32,13 @@ export const PLAN_ONE_LINE: Record<ServiceRoute, string> = {
 
 /** The rows, or null for an agreement version without a checked summary. */
 export function planSummaryRows(route: ServiceRoute, version: string): PlanSummaryRow[] | null {
-  if (version !== 'v3' && version !== 'v4') return null;
+  if (version !== 'v3' && version !== 'v4' && version !== 'v5') return null;
   const n = totalPaymentsFor(route);
-  /* v4 (clause 9A / 15.1): Optimise ends, Build's £29.99 is optional. v3 signers keep what they signed. */
-  const after = version === 'v4'
+  /* v4 (clause 9A / 15.1): Optimise ends, Build's £29.99 is optional. v3 signers keep what they signed.
+     v5 (clauses 4.3, 9A): Build only; the website transfers after the last payment, then the same optional £29.99. */
+  const after = version === 'v5' && route === 'build'
+    ? `The website transfers to you after payment ${n}. ${afterTermSummaryWords(route)}`
+    : version === 'v4' || version === 'v5'
     ? afterTermSummaryWords(route)
     : `£${FINDABLE_CONTINUING_GBP} a month (${CONTINUING_SCOPE_V3[route]}) until you cancel with 30 days' notice`;
   return [

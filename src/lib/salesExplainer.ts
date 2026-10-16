@@ -60,8 +60,9 @@ export const WHAT_WE_DO: readonly string[] = [
   `${REMEASURE_WEEKS_WORD} weeks later we ask the same ${BASELINE_QUESTIONS} questions again, the same way, so the before and after compare like for like.`,
   'After that we keep working on the website each month — a new page, a monthly AI visibility check and adjustments as we learn — so search engines and AI tools can understand the business more clearly.',
 ];
-/** One line to memorise. (2026-10-07: plain words, Paul.) */
-export const WHAT_WE_DO_SHORT = `We check how often AI names you on ${BASELINE_QUESTIONS} real customer questions, optimise your website so search engines and AI can properly understand what you do and where, and run the same check again after ${REMEASURE_WEEKS_WORD.toLowerCase()} weeks.`;
+/** One line to memorise. (2026-10-07: plain words, Paul. v5, 2026-10-16: Findable Build is the one plan, so the work is a
+ *  NEW website, never "optimising" the one they have.) */
+export const WHAT_WE_DO_SHORT = `We check how often AI names you on ${BASELINE_QUESTIONS} real customer questions, build you a new website so search engines and AI can properly understand what you do and where, and run the same check again after ${REMEASURE_WEEKS_WORD.toLowerCase()} weeks.`;
 
 /* ── HOW DO YOU KNOW WHAT IS WINNABLE? ───────────────────────────────────────────────────────── */
 export const HOW_WE_KNOW: readonly string[] = [
@@ -103,7 +104,7 @@ export const WEBSITE_MATTERS = 'AI still has to get its information from somewhe
 export const FOLLOW_UP_VOICE_NOTE = [
   'Hi, it\'s {rep} from Findable — you asked how it actually works, so here\'s the short version.',
   `We ask ChatGPT and Gemini ${BASELINE_QUESTIONS} questions your customers really ask, three times each, and count how often they name you.`,
-  'Then we optimise your website so AI understands what you do and where.',
+  'Then we build you a new website, set up so AI understands what you do and where.',
   `After ${REMEASURE_WEEKS_WORD.toLowerCase()} weeks we ask the same questions again and compare. ${QUICK_CLOSE_PROMISE}`,
 ].join(' ');
 /** Spoken length at ~150 words a minute, in seconds (the coaching shows it). */

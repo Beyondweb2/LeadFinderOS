@@ -21,6 +21,9 @@
    has already paid. The build route goes in website_route, the operator-path column findableSiteKind
    already reads, so the website answer still drives the 4/8-week rule.
 
+   🔴 v5 (Paul, 2026-10-16): FINDABLE OPTIMISE IS WITHDRAWN. The page no longer says "you can also keep and improve"
+      the current site. The "keep" choice stays ONLY so the operator can record a client who signed Optimise before
+      v5 (a paid client's route is theirs); it is labelled as such and is never the recommendation.
    IMPORTED BY AN EDGE FUNCTION (paid-client-hub): relative imports with an explicit .ts only.
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 
@@ -42,7 +45,7 @@ export const ONBOARDING_COPY = {
   trade: { label: 'What you do', helper: 'One word is plenty.', placeholder: 'e.g. locksmith' },
   town: { label: 'Your town', placeholder: 'e.g. Huntingdon' },
   /* 🔴 2026-10-07 (client sign-up redesign): the website question is CHOICE-FIRST, as on the customer page. */
-  websiteStep: { headline: 'Your website', sub: 'We recommend a new website, built so customers, search engines and AI understand exactly what you do and where you work. You can also keep and improve the one you have.' },
+  websiteStep: { headline: 'Your website', sub: 'We build you a new website, built so customers, search engines and AI understand exactly what you do and where you work.' },
   buildManager: { question: 'Who looks after your current website?', helper: 'So we know who to talk to when your web address moves to the new site.', agencyNote: 'That’s fine. We only need their help to point your web address at the new site. Your arrangement with them stays yours to manage.' },
   buildDomain: { question: 'Do you want to keep your current web address?', helper: 'Your web address (domain) is separate from your website. Keeping it means your new website goes live at the same address. The website itself is still built new: your current site is a reference, not the base.' },
   noneDomain: { question: 'Do you already own a web address?', helper: 'For example yourbusiness.co.uk. If not, we’ll help you register one in your business’s name.' },
@@ -63,7 +66,7 @@ export const ONBOARDING_COPY = {
    SiteAccessBranch, 2026-10-07). The new website is first and recommended, as there. */
 export const WEBSITE_CHOICE_OPTIONS = [
   { value: 'build', label: 'Build me a new website', note: 'A new website built and optimised for AI visibility, so customers, search engines and AI can understand exactly what you do and where you work. Hosting included during your plan, and your web address can stay the same.' },
-  { value: 'keep', label: 'Keep and improve my current website', note: 'We improve the site you already have. We will need access to edit it.' },
+  { value: 'keep', label: 'Keep and improve my current website (Findable Optimise, signed before 16 Oct 2026 only)', note: 'Only for a client who signed Findable Optimise before it was withdrawn. We improve the site they already have and need access to edit it.' },
   { value: 'none', label: "I haven't got a website yet", note: 'We build you one, set up properly for AI and search from day one.' },
 ] as const;
 export const MANAGER_OPTIONS = [

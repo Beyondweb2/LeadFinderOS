@@ -38,7 +38,8 @@ const fill = (route: 'build' | 'optimise'): AgreementFill => ({
 
 async function main() {
   console.log('── THE WORDS: the v4 .docx, verbatim ──');
-  ok(CLIENT_AGREEMENT_VERSION === 'v4', 'v4 is the version a NEW sign-up signs');
+  /* 2026-10-16: v5 replaced v4 for NEW sign-ups (scripts/client-agreement-v5.test.ts). v4 stays pinned and readable for its signers. */
+  ok(CLIENT_AGREEMENT_VERSION === 'v5', 'v4 is no longer what a NEW sign-up signs (v5 is), and stays readable');
   const src = read('scripts/fixtures/client-agreement-v4-source.txt').replace(/^﻿/, '').split('\n').map((l) => l.trim().replace(/ {2,}/g, ' ')).filter(Boolean);
   const start = src.indexOf('1. ABOUT THIS AGREEMENT');
   const end = src.findIndex((l) => l.startsWith('SCHEDULE 1'));
@@ -148,7 +149,7 @@ async function main() {
 
   console.log('\n── ACCEPTANCE: EXPLICIT, BEFORE PAYMENT, NOTHING PRE-TICKED ──');
   {
-    const page = agreementPageHtml({ mode: 'sign', businessName: 'Acme', route: 'build', values: {}, errors: [], signupId: 's1', nowIso: '2026-12-07T10:00:00Z' });
+    const page = agreementPageHtml({ mode: 'sign', businessName: 'Acme', route: 'build', values: {}, errors: [], signupId: 's1', nowIso: '2026-12-07T10:00:00Z', version: 'v4' });
     ok(agreeConsentSentence('Acme', 'v4') === 'I have read and agree to the Client Service Agreement' && page.includes('>I have read and agree to the Client Service Agreement</label>'), 'v4 page: the agree box says exactly "I have read and agree to the Client Service Agreement"');
     ok(page.includes(authoritySentence('Acme')) && /id="authority"[^>]*required/.test(page) && /id="agree"[^>]*required/.test(page), 'both the agree box and the authority confirmation are required');
     ok(!/id="agree"[^>]*checked/.test(page) && !/id="authority"[^>]*checked/.test(page), 'nothing is pre-ticked');
@@ -171,7 +172,7 @@ async function main() {
     ok(row.agreement_version === 'v4' && row.commercial_terms === COMMERCIAL_TERMS_V4 && row.onboarding_id === 'S1' && row.authority_confirmed === true && row.method === 'agree_page', 'the evidence row: version, terms, sign-up, authority, method');
     ok(row.agreed_text === text && row.agreed_text_sha256 === sha && row.service_route === 'build' && row.typed_name === 'Sam Smith' && row.typed_role === 'Director' && row.legal_business_name === 'Acme Plumbing Ltd' && row.company_number === '01234567', 'the exact text, its fingerprint, the plan, the signer and the business are stored');
     const acc: GateAcceptance = { id: 'A1', lead_id: 'L1', onboarding_id: 'S1', agreement_version: 'v4', service_route: 'build', method: 'agree_page', authority_confirmed: true, agreed_text_sha256: sha };
-    const gate = (a: GateAcceptance | null, over: Partial<{ leadId: string; onboardingId: string; route: 'build' | 'optimise'; sha: string | null }> = {}) => checkoutAgreementGate({ acceptance: a, leadId: over.leadId ?? 'L1', onboardingId: over.onboardingId ?? 'S1', route: over.route ?? 'build', currentVersion: CLIENT_AGREEMENT_VERSION, recomputedSha: over.sha === undefined ? sha : over.sha });
+    const gate = (a: GateAcceptance | null, over: Partial<{ leadId: string; onboardingId: string; route: 'build' | 'optimise'; sha: string | null }> = {}) => checkoutAgreementGate({ acceptance: a, leadId: over.leadId ?? 'L1', onboardingId: over.onboardingId ?? 'S1', route: over.route ?? 'build', currentVersion: 'v4', recomputedSha: over.sha === undefined ? sha : over.sha });
     ok(gate(acc).ok, 'a v4 signature opens checkout for ITS sign-up');
     ok(!gate(null).ok, 'payment is blocked until the agreement is accepted');
     ok(!gate({ ...acc, agreement_version: 'v3' }).ok, 'a v3 signature never opens a v4 checkout (re-sign on v4)');
@@ -230,7 +231,8 @@ async function main() {
       if (r === 'optimise') ok(!/29\.99|continues at|until you cancel/.test(checkout), 'Optimise checkout text (card notice, line item, offer line): no £29.99, nothing continues');
       else ok(/optional/.test(checkout) && !/continues at|until you cancel/.test(checkout), 'Build checkout text: £29.99 only as an optional extra');
     }
-    ok(/Optimise then ends with no continuing charge; after Build, £29\.99 a month hosting and maintenance is optional/.test(FINDABLE_OFFER_SUMMARY), 'the pre-choice offer line names both endings');
+    /* v5 (2026-10-16): one plan, so the offer line names Build's ending only (client-agreement-v5.test.ts pins it). */
+  ok(/the website is yours, and £29\.99 a month hosting and maintenance is optional/.test(FINDABLE_OFFER_SUMMARY) && !/Optimise/.test(FINDABLE_OFFER_SUMMARY), 'the offer line names Build\'s ending (the website is theirs, £29.99 optional) and no Optimise');
     const soon = (route: 'build' | 'optimise', afterTerm?: 'automatic' | 'optional' | 'none') => monthlyStartingSoonEmail({ businessName: 'A', startsOn: '22 December 2026', cancelUrl: null, route, ...(afterTerm ? { afterTerm } : {}) }).paragraphs.join(' ');
     ok(!/29\.99/.test(soon('optimise', 'none')) && /ends after payment 6/.test(soon('optimise', 'none')), 'monthly-starting-soon email, v4 Optimise: ends, no £29.99');
     ok(/optional/.test(soon('build', 'optional')) && !/continues at/.test(soon('build', 'optional')), 'monthly-starting-soon email, v4 Build: optional');

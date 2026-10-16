@@ -97,13 +97,14 @@ console.log('── 3, 4. QUICK CLOSE: THE ROUTE IS REQUIRED AND WRITES THE SCHE
 /* v2: 'Unsure — Findable to recommend' is the approach where the plan is picked explicitly — what these checks drive. */
 const base: QuickCloseAnswers = { decision_maker: 'yes', approach: 'unsure', domain: 'yes', manager: 'owner', rights: 'yes', access: 'yes' };
 ok(QUICK_CLOSE_QUESTIONS.some((q) => q.key === 'route' && q.options.map((o) => o.value).join() === 'build,optimise'), 'Quick Close asks the website route: build / optimise (final pass: the plan LAST, Build first)');
-ok(QUICK_CLOSE_QUESTIONS.find((q) => q.key === 'route')!.options.map((o) => o.label).join(' | ') === 'Findable Build — a new website built and optimised for AI visibility | Findable Optimise — improve their current website', 'the two plans, named as the brief names them');
+ok(QUICK_CLOSE_QUESTIONS.find((q) => q.key === 'route')!.options.filter((o) => !o.legacy).map((o) => o.label).join(' | ') === 'Findable Build — we build, host and manage a new website, optimised for AI visibility', 'v5: the one plan offered, named as the agreement names it (Optimise stays a legacy, read-only value)');
 ok(missingQuestions(base).includes('route') && !quickCloseGate(base).complete, 'no route → the close is not complete');
 ok(!mayGenerateLink('answers_saved', { answers: base }), 'no route → no payment link');
 for (const route of ['build', 'optimise'] as const) {
   /* 2026-09-29: Build also needs its three consents confirmed (coverage-found-added.test.ts pins them). */
   const a = cleanAnswers({ ...base, route, ...(route === 'build' ? { build_consents: 'yes' } : {}) });
-  ok(quickCloseGate(a).complete && mayGenerateLink('answers_saved', { answers: a }), `${route}: complete and ready for the link`);
+  /* v5 (2026-10-16): a close still on the withdrawn Optimise is not complete and makes no link; its columns still read. */
+  ok(route === 'build' ? quickCloseGate(a).complete && mayGenerateLink('answers_saved', { answers: a }) : !quickCloseGate(a).complete && !mayGenerateLink('answers_saved', { answers: a }), route === 'build' ? 'build: complete and ready for the link' : 'optimise (pre-v5, withdrawn): NOT complete, no link');
   const cols = onboardingColumnsFor(a);
   ok(cols.plan_tier === planTierForRoute(route) && cols.website_addon === (route === 'build'), `${route}: writes plan_tier=${cols.plan_tier}, website_addon=${cols.website_addon}`);
   ok(serviceRouteFromRow(cols) === route, `${route}: the checkout reads ${route} back off those columns`);
@@ -111,7 +112,7 @@ for (const route of ['build', 'optimise'] as const) {
   /* 2026-10-04 (M-011 / A-29): the minimum term is on the card. 2026-10-05 (E2E-11): the timing is the v3 Option B
      words, like offerSummaryFor and the script — the card said "six weeks after sign-up", against the agreement. */
   const n = route === 'build' ? 12 : 6;
-  ok(routeTermsLines(route).join(' | ') === `£99 today | Then £99 a month, starting the day after your 14-day refund window closes (normally about six weeks after you give us access) | ${n} payments in total, today's included — a ${n}-month minimum term | ${afterTermRepLine(route)}`, `${route}: the screen shows £99 today / £99 a month from the day after the refund window / ${n} payments, a ${n}-month minimum term / what follows (2026-10-07: Optimise ends; Build's £29.99 only if they want hosting)`);
+  ok(routeTermsLines(route).join(' | ') === `£99 today | Then £99 a month, starting the day after your 14-day refund window closes (normally about six weeks after you give us access) | ${n} payments in total, today's included (the minimum term) | ${afterTermRepLine(route)}`, `${route}: the screen shows £99 today / £99 a month from the day after the refund window / ${n} payments in total (the minimum term, v5: counted in payments) / what follows`);
   ok(!/after sign-?up/i.test(routeTermsLines(route).join(' ')), `${route}: the card never times the monthly from sign-up (E2E-11)`);
   const msg = quickCloseMessage('ABC', 'https://checkout.stripe.com/x', route) + quickCloseScript(route);
   ok(msg.includes(`${route === 'build' ? 12 : 6} payments in total`) && !msg.includes(`${route === 'build' ? 6 : 12} payments`), `${route}: the message and script name ONLY this route's count`);
@@ -130,8 +131,8 @@ ok(/"route_undecided"|route_undecided:/.test(read('supabase/functions/quick-clos
 
 console.log('── Quick Close keeps the existing domain / agency safety ──');
 const agencyOpt = cleanAnswers({ decision_maker: 'yes', approach: 'improve', manager: 'agency', agency_contract: 'in_contract', domain: 'yes', rights: 'yes', access: 'not_sure', authority: 'yes' });
-ok(quickCloseGate(agencyOpt).review.includes('optimise_access_unsure') && quickCloseState('answers_saved', { answers: agencyOpt }) === 'needs_review', 'agency-run site + Optimise + access unsure → Paul review (never silently Optimise)');
-ok(quickCloseGate(cleanAnswers({ decision_maker: 'yes', approach: 'improve', manager: 'agency', agency_contract: 'in_contract', domain: 'yes', rights: 'yes', access: 'yes', authority: 'yes' })).review.length === 0, 'agency-run site + Optimise + access confirmed + authority → no review');
+ok(quickCloseGate(agencyOpt).review.includes('optimise_access_unsure') && quickCloseState('answers_saved', { answers: agencyOpt }) === 'declined', 'a pre-v5 Optimise close on an agency site still tied in: the old reason reads, and the sale is DECLINED (v5 clause 1.6)');
+ok(quickCloseGate(cleanAnswers({ decision_maker: 'yes', approach: 'improve', manager: 'agency', agency_contract: 'free', domain: 'yes', rights: 'yes', access: 'yes', authority: 'yes' })).review.length === 0, 'agency-run site + (pre-v5) Optimise + access confirmed + authority → no review reason (history unchanged)');
 /* ⛔ v2 (Paul, 2026-10-05): a domain doubt on a NEW site is a handoff for Paul, never a payment stop. */
 ok(quickCloseGate(cleanAnswers({ ...base, domain: 'not_sure', route: 'build' })).review.length === 0 && quickCloseGate(cleanAnswers({ ...base, domain: 'not_sure', route: 'build' })).flags.includes('domain_handoff'), 'Build with domain doubt → a domain-handoff flag for Paul, not a payment stop (v2)');
 ok(quickCloseGate(cleanAnswers({ decision_maker: 'yes', approach: 'new_template', domain: 'yes', manager: 'agency', access: 'no', authority: 'not_sure' })).review.length === 0, 'a NEW site is never stopped by who runs (or who can get into) the OLD one (v2)');
@@ -259,8 +260,9 @@ ok(opt.name === 'Findable Optimise' && opt.totalPayments === 6 && opt.paymentsMa
 ok(clientContract({ lead: { contract_total_payments: 12, amount_paid: 99 }, onboarding: { plan_tier: 'new_site' } }).note?.includes('No live monthly schedule'), 'a contracted client with no live subscription is flagged');
 
 console.log('── WORDING ──');
-ok(FINDABLE_OFFER_SUMMARY.includes('12 payments in total if we build you a new website, 6 if we optimise the one you have'), 'the pre-choice summary names both lengths');
-ok(offerSummaryFor('optimise').includes('6 payments in total, a 6-month minimum term') && !offerSummaryFor('optimise').includes('12'), 'a route\'s summary names only its own length');
+/* v5 (2026-10-16): one plan for sale, so the summary names Build's 12 payments and never Optimise. */
+ok(FINDABLE_OFFER_SUMMARY.includes('we build, host and manage a new website for you, 12 payments in total') && !/Optimise|optimise the one you have/.test(FINDABLE_OFFER_SUMMARY), 'the pre-choice summary names the one plan and its 12 payments');
+ok(offerSummaryFor('optimise').includes('6 payments in total (the minimum term)') && !offerSummaryFor('optimise').includes('12'), 'a (historical) route\'s summary names only its own length, counted in payments');
 const allCopy = [FINDABLE_OFFER_SUMMARY, offerSummaryFor('build'), offerSummaryFor('optimise'), cardSavedNoticeFor('build'), cardSavedNoticeFor('optimise'), quickCloseScript('build'), quickCloseScript('optimise'), ...routeTermsLines('optimise')].join(' ');
 ok(!/no commitment|cancel any ?time|stop any ?time|no minimum/i.test(allCopy), 'nothing describes either route as "no commitment" or cancel-any-time');
 ok(serviceRouteForTotal(12) === 'build' && serviceRouteForTotal(6) === 'optimise' && serviceRouteForTotal(13) === null, 'a count maps back to its route, positively');
