@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState, type ComponentProps } from 'react';
 import { InboxChannelSwitch, useInboxChannel } from '@/components/InboxChannelSwitch';
 import { smsTemplateAvailability, type InboxChannel } from '@/lib/inboxChannel';
 import { markSmsRead, smsKeys, useSmsUnread } from '@/hooks/useSms';
@@ -91,7 +91,8 @@ import { SendErrorNote } from '@/components/SendErrorNote';
 import { AiRepliesToggle } from '@/components/AiRepliesToggle';
 import { AiDraftChip, AiDraftPanel } from '@/components/AiDraftPanel';
 import { useAiReplyDrafts } from '@/hooks/useAiReplyDrafts';
-import { aiChipFor, needsApproving } from '@/lib/aiReplyDraft';
+import { aiChipFor, needsApproving, type AiReplyRow } from '@/lib/aiReplyDraft';
+import { sameRowProps } from '@/lib/inboxRowMemo';
 import { invokeEdge, edgeErrorMessage } from '@/lib/edgeInvoke';
 import { NEXT_ACTION_KIND_OPTIONS, NEXT_ACTION_WHEN_OPTIONS, nextActionSortKey, passesNextActionFilter, type NextActionKind, type NextActionWhen } from '@/lib/nextActionView';
 import { Eye, Loader2, Send, MessageSquareText, MessageSquare, MessageSquarePlus, Clock, AlertTriangle, Plus, ShieldAlert, MapPin, Globe, Mail, MessageCircle, Trash2, ListChecks, Sparkles, FileText, Copy, Check, Link2, Star, MoreHorizontal, ArrowLeft, PauseCircle, XCircle, Timer } from 'lucide-react';
@@ -292,6 +293,104 @@ const LIST_SORT_OPTIONS = [
   { value: 'recent_reply', label: 'Most recent reply from them', short: 'Latest reply' },
   { value: 'next_action', label: 'Next action: most overdue first', short: 'Most overdue' },
 ] as const;
+
+/* ⚡ ONE CONVERSATION ROW, DRAWN ONLY WHEN ITS OWN DATA CHANGES (2026-10-16, measured). Every row used to be inline JSX in the
+   list, so ANY Inbox render — opening a conversation, marking it read, a query landing — redrew all 150 rows, each with a
+   status dropdown and its chips: 0.5–1.8 s of browser work per click with the live book (6,245 messages, 2,700 threads),
+   before any network. The row is the same markup; memo + sameRowProps skip it unless one of its own inputs changed.
+   ⛔ Every input is a prop. Callbacks arrive stable (openConversation / setStatusFromRow read the latest handler through a
+   ref); `st` is compared by content (src/lib/inboxRowMemo.ts), because stateByKey rebuilds every row's object whenever
+   one read time moves; clockTick is passed so "5m ago" and the AI chip still move once a minute exactly as before. */
+interface ConversationRowProps {
+  c: WaConversation;
+  channel: InboxChannel;
+  isActive: boolean;
+  outsideFilters: boolean;
+  st: ConversationState | undefined;
+  aiRow: AiReplyRow | null;
+  hookDueMode: boolean;
+  hookChecked: boolean;
+  bulkMode: boolean;
+  bulkChecked: boolean;
+  saving: boolean;
+  leadByIdForState: Map<string, LeadLite>;
+  listStageOf: (leadId: string | null) => ComponentProps<typeof PipelineStatusSelect>['stage'];
+  onOpen: (key: string) => void;
+  toggleHookSelect: (leadId: string) => void;
+  toggleBulkSelect: (key: string) => void;
+  handleSetStatus: (c: WaConversation, status: PipelineStatus) => Promise<boolean>;
+  clockTick: number;
+}
+
+const ConversationRow = memo(function ConversationRow({
+  c, channel, isActive, outsideFilters, st, aiRow, hookDueMode, hookChecked, bulkMode, bulkChecked, saving,
+  leadByIdForState, listStageOf, onOpen, toggleHookSelect, toggleBulkSelect, handleSetStatus,
+}: ConversationRowProps) {
+  return (
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={() => onOpen(c.key)}
+      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onOpen(c.key); } }}
+      data-unread={st?.unread ? 'true' : undefined}
+      className={cn('relative flex w-full cursor-pointer flex-col gap-0.5 rounded-md px-2.5 py-2.5 text-left transition-colors md:py-2',
+        isActive ? 'bg-muted' : 'hover:bg-muted/50',
+        st?.unread && !isActive && 'bg-blue-500/[0.06]')}>
+      {st?.unread && <span className="absolute left-0.5 top-3.5 h-2 w-2 rounded-full bg-blue-500" aria-label="Unread" />}
+      {outsideFilters && <span className="text-[10px] font-medium text-primary">Opened · outside your current filters</span>}
+      <div className="flex items-center justify-between gap-2">
+        <span className="flex items-center gap-1.5 truncate text-sm font-medium">
+          {hookDueMode && c.leadId && (
+            <Checkbox
+              checked={hookChecked}
+              onCheckedChange={() => toggleHookSelect(c.leadId!)}
+              onClick={(e) => e.stopPropagation()}
+              aria-label={`Select ${c.label} for hook follow-up`}
+              className="mr-0.5 shrink-0"
+            />
+          )}
+          {bulkMode && !hookDueMode && (
+            <Checkbox
+              checked={bulkChecked}
+              onCheckedChange={() => toggleBulkSelect(c.key)}
+              onClick={(e) => e.stopPropagation()}
+              aria-label={`Select ${c.label} for a bulk send`}
+              className="mr-0.5 shrink-0"
+            />
+          )}
+          {c.unassigned && <ShieldAlert className="h-3.5 w-3.5 shrink-0 text-amber-500" />}
+          <span className={cn('truncate', st?.unread && 'font-bold')}>{c.unassigned ? `Unassigned · +${c.phone}` : c.label}</span>
+          {!c.unassigned && c.isPotentialWork && <Star className="h-3.5 w-3.5 shrink-0 fill-amber-400 text-amber-500"><title>Interested</title></Star>}
+        </span>
+        <span className="flex shrink-0 items-center gap-1">
+          <AiDraftChip row={aiRow} compact />
+          {(!aiChipFor(aiRow) || st?.failed) && <ConvStateChip state={st} compact channel={channel} />}
+          {c.lastMessage && <span className={cn('text-[10px]', st?.unread ? 'font-semibold text-blue-600 dark:text-blue-400' : 'text-muted-foreground')}>{relTime(c.lastMessageAt)}</span>}
+        </span>
+      </div>
+      {c.lastMessage && (
+        <span className="truncate text-xs text-muted-foreground">
+          {c.lastMessage.direction === 'outbound' ? 'You: ' : ''}
+          {listPreview(c.lastMessage, c.label)}
+        </span>
+      )}
+      {/* Editable status pill — only for conversations linked to a lead
+          (Unassigned has none). Two-way synced with Outreach. Beside it, ONE
+          engagement pill for the furthest milestone the lead reached
+          (Upsell > Claimed > Opened; nothing if none) — from generated_sites. */}
+      {c.leadId && (
+        <div className="mt-0.5 flex items-center gap-1">
+          {saving
+            ? <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
+            : <PipelineStatusSelect value={c.leadStatus} stage={listStageOf(c.leadId)} onValueChange={(status) => handleSetStatus(c, status)} askReasonFor={{ leadId: c.leadId, businessName: c.label }} />}
+          <EngagementPills reportOpenedAt={c.reportOpenedAt} siteVisitedAt={c.siteVisitedAt} geminiNamed={c.geminiNamed} geminiAnswers={c.geminiAnswers} />
+          {/* Next action at a glance: red overdue, amber today, grey later; nothing when none. */}
+          <NextActionPill lead={leadByIdForState.get(c.leadId)} size="xs" className="ml-auto" />
+        </div>
+      )}
+    </div>
+  );
+}, sameRowProps);
 
 /* ══ THE ONE INBOX (2026-10-09, Paul: the SMS inbox must be the SAME inbox as WhatsApp) ═══════════════════════════════════════
    ConversationInbox renders BOTH channels. `channel` picks the message source and the send path (useInbox(channel)) and nothing else;
@@ -752,6 +851,12 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
   // change, so confirm first), optimistically drop it now, then hand ownership to the
   // default hide filter once the refetch lands. It stays in Outreach and reappears
   // here if the prospect replies (whatsapp-inbound flips it back to 'replied').
+  /* The list rows are memoised (ConversationRow): they get these two STABLE functions, which always call the newest handler. */
+  const rowHandlersRef = useRef({ setActiveKey, handleSetStatus });
+  rowHandlersRef.current = { setActiveKey, handleSetStatus };
+  const openConversation = useCallback((key: string) => rowHandlersRef.current.setActiveKey(key), []);
+  const setStatusFromRow = useCallback((c: WaConversation, status: PipelineStatus) => rowHandlersRef.current.handleSetStatus(c, status), []);
+
   const handleRemoveFromInbox = async (c: WaConversation) => {
     if (!c.leadId) return;
     if (!window.confirm(`Remove ${c.label} from the inbox? This marks the lead Closed. It stays in Outreach and reappears here if they reply.`)) return;
@@ -1117,20 +1222,20 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
     () => (hookDueMode ? filteredList.filter((c) => c.leadId && hookState.eligible.has(c.key)).map((c) => c.leadId as string) : []),
     [hookDueMode, filteredList, hookState],
   );
-  const toggleHookSelect = (leadId: string) => setHookSelected((s) => {
+  const toggleHookSelect = useCallback((leadId: string) => setHookSelected((s) => {
     const n = new Set(s);
     if (n.has(leadId)) n.delete(leadId); else n.add(leadId);
     return n;
-  });
+  }), []);
   const selectAllHookEligible = () => setHookSelected(new Set(hookEligibleLeadIds));
   const clearHookSelection = () => setHookSelected(new Set());
 
   /* ══ BULK SEND — the plan, then the sending ═══════════════════════════════════════════════════ */
-  const toggleBulkSelect = (key: string) => setBulkSelected((s) => {
+  const toggleBulkSelect = useCallback((key: string) => setBulkSelected((s) => {
     const n = new Set(s);
     if (n.has(key)) n.delete(key); else n.add(key);
     return n;
-  });
+  }), []);
   const exitBulkMode = () => { setBulkMode(false); setBulkSelected(new Set()); setBulkReport(null); };
 
   /* The plan is recomputed from the CURRENT list every render, so a conversation that leaves the
@@ -2057,69 +2162,27 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
               )}
             </div>
           ) : shownList.map((c) => (
-            <div
+            <ConversationRow
               key={c.key}
-              role="button"
-              tabIndex={0}
-              onClick={() => setActiveKey(c.key)}
-              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setActiveKey(c.key); } }}
-              data-unread={stateByKey.get(c.key)?.unread ? 'true' : undefined}
-              className={cn('relative flex w-full cursor-pointer flex-col gap-0.5 rounded-md px-2.5 py-2.5 text-left transition-colors md:py-2',
-                activeKey === c.key ? 'bg-muted' : 'hover:bg-muted/50',
-                stateByKey.get(c.key)?.unread && activeKey !== c.key && 'bg-blue-500/[0.06]')}>
-              {stateByKey.get(c.key)?.unread && <span className="absolute left-0.5 top-3.5 h-2 w-2 rounded-full bg-blue-500" aria-label="Unread" />}
-              {activeOutsideFilters && activeKey === c.key && <span className="text-[10px] font-medium text-primary">Opened · outside your current filters</span>}
-              <div className="flex items-center justify-between gap-2">
-                <span className="flex items-center gap-1.5 truncate text-sm font-medium">
-                  {hookDueMode && c.leadId && (
-                    <Checkbox
-                      checked={hookSelected.has(c.leadId)}
-                      onCheckedChange={() => toggleHookSelect(c.leadId!)}
-                      onClick={(e) => e.stopPropagation()}
-                      aria-label={`Select ${c.label} for hook follow-up`}
-                      className="mr-0.5 shrink-0"
-                    />
-                  )}
-                  {bulkMode && !hookDueMode && (
-                    <Checkbox
-                      checked={bulkSelected.has(c.key)}
-                      onCheckedChange={() => toggleBulkSelect(c.key)}
-                      onClick={(e) => e.stopPropagation()}
-                      aria-label={`Select ${c.label} for a bulk send`}
-                      className="mr-0.5 shrink-0"
-                    />
-                  )}
-                  {c.unassigned && <ShieldAlert className="h-3.5 w-3.5 shrink-0 text-amber-500" />}
-                  <span className={cn('truncate', stateByKey.get(c.key)?.unread && 'font-bold')}>{c.unassigned ? `Unassigned · +${c.phone}` : c.label}</span>
-                  {!c.unassigned && c.isPotentialWork && <Star className="h-3.5 w-3.5 shrink-0 fill-amber-400 text-amber-500"><title>Interested</title></Star>}
-                </span>
-                <span className="flex shrink-0 items-center gap-1">
-                  <AiDraftChip row={ai.forPhone(c.phone)} compact />
-                  {(!aiChipFor(ai.forPhone(c.phone)) || stateByKey.get(c.key)?.failed) && <ConvStateChip state={stateByKey.get(c.key)} compact channel={channel} />}
-                  {c.lastMessage && <span className={cn('text-[10px]', stateByKey.get(c.key)?.unread ? 'font-semibold text-blue-600 dark:text-blue-400' : 'text-muted-foreground')}>{relTime(c.lastMessageAt)}</span>}
-                </span>
-              </div>
-              {c.lastMessage && (
-                <span className="truncate text-xs text-muted-foreground">
-                  {c.lastMessage.direction === 'outbound' ? 'You: ' : ''}
-                  {listPreview(c.lastMessage, c.label)}
-                </span>
-              )}
-              {/* Editable status pill — only for conversations linked to a lead
-                  (Unassigned has none). Two-way synced with Outreach. Beside it, ONE
-                  engagement pill for the furthest milestone the lead reached
-                  (Upsell > Claimed > Opened; nothing if none) — from generated_sites. */}
-              {c.leadId && (
-                <div className="mt-0.5 flex items-center gap-1">
-                  {savingStatusKey === c.key
-                    ? <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
-                    : <PipelineStatusSelect value={c.leadStatus} stage={listStageOf(c.leadId)} onValueChange={(status) => handleSetStatus(c, status)} askReasonFor={{ leadId: c.leadId, businessName: c.label }} />}
-                  <EngagementPills reportOpenedAt={c.reportOpenedAt} siteVisitedAt={c.siteVisitedAt} geminiNamed={c.geminiNamed} geminiAnswers={c.geminiAnswers} />
-                  {/* Next action at a glance: red overdue, amber today, grey later; nothing when none. */}
-                  <NextActionPill lead={leadByIdForState.get(c.leadId)} size="xs" className="ml-auto" />
-                </div>
-              )}
-            </div>
+              c={c}
+              channel={channel}
+              isActive={activeKey === c.key}
+              outsideFilters={activeOutsideFilters && activeKey === c.key}
+              st={stateByKey.get(c.key)}
+              aiRow={ai.forPhone(c.phone)}
+              hookDueMode={hookDueMode}
+              hookChecked={!!c.leadId && hookSelected.has(c.leadId)}
+              bulkMode={bulkMode}
+              bulkChecked={bulkSelected.has(c.key)}
+              saving={savingStatusKey === c.key}
+              leadByIdForState={leadByIdForState}
+              listStageOf={listStageOf}
+              onOpen={openConversation}
+              toggleHookSelect={toggleHookSelect}
+              toggleBulkSelect={toggleBulkSelect}
+              handleSetStatus={setStatusFromRow}
+              clockTick={clockTick}
+            />
           ))}
           {filteredList.length > listLimit && (
             <button type="button" onClick={() => setListLimit((n) => n + LIST_PAGE)} className="mx-2 my-2 rounded-md border border-border/60 py-2 text-xs font-medium text-muted-foreground hover:bg-muted/50">

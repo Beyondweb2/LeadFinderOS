@@ -53,7 +53,8 @@ console.log('2. every element of the WhatsApp inbox is in the shared component')
     ['list: search', /aria-label="Search conversations by business name"/],
     ['list: Select several', /Select several…/],
     ['list: unread dot', /aria-label="Unread"/],
-    ['list: state / failure chip', /<ConvStateChip state=\{stateByKey\.get\(c\.key\)\} compact channel=\{channel\} \/>/],
+    /* The list row is the memoised ConversationRow (2026-10-16, speed): its state arrives as `st` = stateByKey.get(c.key). */
+    ['list: state / failure chip', /<ConvStateChip state=\{st\} compact channel=\{channel\} \/>/],
     ['list: status dropdown', /<PipelineStatusSelect value=\{c\.leadStatus\}/],
     ['list: site + gemini chips', /<EngagementPills reportOpenedAt=\{c\.reportOpenedAt\}/],
     ['list: next action pill', /<NextActionPill lead=\{leadByIdForState\.get\(c\.leadId\)\}/],

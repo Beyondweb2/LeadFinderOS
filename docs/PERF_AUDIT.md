@@ -59,3 +59,59 @@ never uses it under the admin RESTRICTIVE policy; see `docs/site-wide-speed.md` 
   and the dev guard; NichePanel downloads no list; the dialog remounts per lead), `npm run test:changed`, `npm run check:quick`.
 - `src/lib/auditReportResolver.ts` is reached by no edge function (import graph) — SPA only, no function redeploy.
 - No layout changed, so no desktop / phone screenshot comparison was needed.
+
+---
+
+# Inbox messages load (2026-10-16)
+
+Paul: "the Inbox is slow to load messages (opening a conversation and/or the conversation list)". Live book that day: 7,125 leads
+(6,866 active with a phone), 6,245 WhatsApp messages in 2,741 threads, 1,698 audits, 2,189 runs, 8,768 queue rows, 392 crawl checks.
+
+## How it was measured
+
+- **Database** (read-only, as the admin user so RLS applies): `EXPLAIN ANALYZE` of every Inbox read, three times each.
+- **Network**: a Node replay of the Inbox's opening reads against live PostgREST (service-role key, read-only — RLS bypassed, so
+  slightly optimistic), and the click reads for three real conversations.
+- **Browser**: a production build pointed at a fake offline backend serving the live rows (captured read-only, deleted after),
+  driven by headless Edge over CDP, zero network delay so only browser work is timed; a CPU profile of five clicks.
+
+## What it found (the three biggest costs)
+
+1. **Clicking a conversation redrew every list row: 0.5–1.8 s of browser work per click, before any network.** The rows were inline
+   JSX, so any Inbox render (the click, mark-as-read, each query that lands after it) redrew all 150 rows with their status
+   dropdowns. Profile: 15 s of React rendering across five clicks; `londonToday()` (a new `Intl.DateTimeFormat` per Next Action pill
+   per render) alone was 1.8 s of it.
+2. **The Gemini signal read** (`audit_gemini_signal`, 1,680 rows, paged): each page re-ran the whole aggregate to keep 1,000 rows.
+   Warm it is 20–90 ms, but live it spiked to 1.5–6.4 s and was the long pole of the opening reads in two of three runs.
+3. **Opening reads in general**: ~7 s wall clock in the replay, 25–34 requests (fewer once the row-count hints are warm), ~15 MB
+   of JSON (~3 MB gzipped): leads 6.2 MB (36 columns × 6,866), messages 4.7 MB (`select *`), audits 2.3 MB (each run's
+   crawl result). The database answers each page in 6–30 ms warm; the time is round trips and the ~10-connection pool.
+
+## What changed
+
+1. ✅ **`ConversationRow`** (`src/pages/Inbox.tsx`): the same row markup as one `memo` component; it redraws only when its own
+   conversation, state, AI draft, selection, saving flag, the lead/stage maps or the minute clock change. `st` is compared by content
+   (`src/lib/inboxRowMemo.ts`); the open / status handlers reach it stable through a ref and always call the newest handler.
+   **Measured headless (live-shaped data, zero network): a click 0.5–1.8 s → 0.07–0.40 s.** (`londonToday` was left alone: it is
+   reached by four edge functions, and with the rows memoised it is no longer a measurable cost.)
+2. ✅ **`inbox_gemini_signals()`** (migration `20261102090000`, applied 2026-10-16, read back): the same view's rows as one JSON
+   array — one request, one aggregate, security invoker (the caller's RLS, checked equal to the view for an admin and a
+   salesperson). Live: one ~0.8 s call instead of two back-to-back pages (~1.4 s). The paged view read stays as the fallback.
+
+## Not done (and why)
+
+- **Paging the conversation list / loading only the last 30–50 messages per thread.** Every message is in memory because the
+  unread marks, waiting timers, follow-up-due filters, report-opened pills and search are all derived from the full log in the
+  browser. Moving that to the server is a redesign, not a speed fix, and would risk "same conversations, same unread counts".
+- **Narrowing `select('*')` on messages** (drop `wa_message_id`, the only unused column, ~13 %) and the leads columns: small win,
+  needs a reader-by-reader field audit. **The audits read's crawl blobs**: they feed the fault-template gate.
+- **The AI visibility card on click** (1.2–1.7 s live, two reads in sequence that read the runs' full `results` and the queue rows'
+  `result`): it fills in after the thread is already on screen; narrowing it needs a field audit of the hook scorer.
+- **Found, not changed (behaviour, not speed):** `lead_crawl_checks` has no SELECT policy for the admin (only for sales), so the
+  admin's Inbox reads 0 stored crawl checks and the Crawl-site icon relies on the audit-run fallback. Worth a separate look.
+
+## Verification
+
+- `scripts/inbox-messages-load.test.ts` (row memo rules, the row reads no page state, the RPC + fallback, the function is invoker
+  and signed-in only), `scripts/inbox-channel-parity.test.ts` (every Inbox element still present), the full gate (migration).
+- No layout changed (the row markup is moved, not edited).
