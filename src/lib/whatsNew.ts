@@ -22,6 +22,17 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-16-inbox-faster-open', date: '2026-10-16', title: 'Opening a conversation in the Inbox is much faster', audience: 'all',
+    body: 'Clicking a conversation used to redraw the whole list first, which took up to two seconds. Now only the rows that changed are redrawn, so the conversation opens almost at once. The Inbox also loads one slow read faster.',
+    report: {
+      added: [],
+      changed: [
+        'Opening a conversation: about 0.1–0.4 s instead of 0.5–1.8 s of work in the browser (measured on a copy of the live Inbox).',
+        'The Gemini counts beside each conversation load in one request instead of a slow paged read.',
+      ],
+      removed: [],
+      effect: 'Same conversations, unread marks, order, pills and buttons as before. It just responds sooner.',
+    } },
   { id: '2026-10-16-town-confirm-import', date: '2026-10-16', title: 'Imported leads can be audited: towns can be confirmed', audience: 'admin',
     body: 'The audit no longer refuses imported leads with "Google could not confirm the town". The import has a new tick box, and the audit popup can confirm a town in one click.',
     report: {

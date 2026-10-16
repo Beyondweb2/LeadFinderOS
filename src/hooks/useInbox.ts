@@ -51,6 +51,19 @@ async function fetchInboxAudits(from: number, to: number) {
     .order('created_at', { ascending: false }).order('id', { ascending: true }).range(from, to);
 }
 
+/* ⚡ THE GEMINI COUNTS IN ONE CALL (2026-10-16, measured). Paging the audit_gemini_signal view re-ran its whole
+   aggregate for every page — the slowest opening read (1.5–6.4 s live). inbox_gemini_signals() returns the same rows of
+   the same view (security invoker: the caller's own RLS) as one JSON array. If the function is not there (an old
+   database), the paged view read below is the fallback, so the order of deploys cannot break the pill. */
+async function fetchGeminiSignals(): Promise<{ rows: InboxData['geminiSignals']; truncated: boolean }> {
+  const { data, error } = await (supabase as unknown as { rpc: (fn: string) => Promise<{ data: unknown; error: unknown }> }).rpc('inbox_gemini_signals');
+  if (!error && Array.isArray(data)) return { rows: data as InboxData['geminiSignals'], truncated: false };
+  console.warn('Inbox (gemini signal): one-call read unavailable; paging the view instead', error);
+  return fetchAllRowsParallel<InboxData['geminiSignals'][number]>('Inbox (gemini signal)', (from, to) =>
+    sb.from('audit_gemini_signal').select('audit_id, lead_id, gemini_answers, gemini_named')
+      .order('audit_id', { ascending: true }).range(from, to), (g) => g.audit_id);
+}
+
 /** One audit row, freshly read by id — the SMALL targeted fetch a single `ai_audits`/`ai_audit_runs`
  *  realtime event triggers, instead of re-running the whole paginated audits read. Falls back the
  *  same way fetchInboxAudits does if the rich projection is rejected. */
@@ -257,9 +270,7 @@ async function fetchInboxData(leadTable: InboxLeadTable, previous?: InboxData, e
        audit_id is unique → the pagination tiebreaker. A failed read degrades to no pill. */
     /* ⚡ Paged in parallel (2026-09-27, site-wide speed pass): at 1,554 rows it was three waits in a
        row (~3 s), level with the slowest essential read — and the list waits for all six. */
-    essentialOnly ? { rows: previous?.geminiSignals ?? NO_GEMINI } : optionalInboxRows<InboxData['geminiSignals'][number]>(fetchAllRowsParallel<InboxData['geminiSignals'][number]>('Inbox (gemini signal)', (from, to) =>
-      sb.from('audit_gemini_signal').select('audit_id, lead_id, gemini_answers, gemini_named')
-        .order('audit_id', { ascending: true }).range(from, to), (g) => g.audit_id)),
+    essentialOnly ? { rows: previous?.geminiSignals ?? NO_GEMINI } : optionalInboxRows<InboxData['geminiSignals'][number]>(fetchGeminiSignals()),
     /* Stored crawl checks → whether a lead's site has a nameable fault, which gates the
        audit_followup_fault template in the picker (its {{6}} names one and Meta rejects an empty
        parameter). Paginated with the id tiebreaker; newest-per-lead is chosen in the hook. A failed

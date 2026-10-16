@@ -90,7 +90,9 @@ console.log('5. the "Needs approving" filter');
 ok(INBOX_QUICK_FILTERS.some((x) => x.value === 'needs_approving' && x.label === 'Needs approving'), 'the filter exists');
 ok(passesQuickFilter('needs_approving', { unread: false, waitingSinceMs: 1, needsApproving: true }) && !passesQuickFilter('needs_approving', { unread: true, waitingSinceMs: 1 }), 'it keeps only conversations with a draft to approve');
 ok(/INBOX_QUICK_FILTERS\.filter\(\(f\) => f\.value !== 'needs_approving' \|\| aiOn\)/.test(INBOX), 'WhatsApp only (hidden on the SMS tab)');
-ok(/<AiDraftChip row=\{ai\.forPhone\(c\.phone\)\} compact \/>/.test(INBOX) && /\(!aiChipFor\(ai\.forPhone\(c\.phone\)\) \|\| stateByKey\.get\(c\.key\)\?\.failed\) && <ConvStateChip/.test(INBOX), 'the list shows "Needs approving" in place of "Waiting" (a failed send still shows)');
+/* The list row is the memoised ConversationRow (2026-10-16, speed): aiRow = ai.forPhone(c.phone), st = stateByKey.get(c.key). */
+ok(/aiRow=\{ai\.forPhone\(c\.phone\)\}/.test(INBOX) && /st=\{stateByKey\.get\(c\.key\)\}/.test(INBOX)
+  && /<AiDraftChip row=\{aiRow\} compact \/>/.test(INBOX) && /\(!aiChipFor\(aiRow\) \|\| st\?\.failed\) && <ConvStateChip/.test(INBOX), 'the list shows "Needs approving" in place of "Waiting" (a failed send still shows)');
 
 console.log('6. approve sends ONCE; discard sends nothing; the function itself never sends');
 ok(!/sendViaGraph|graph\.facebook\.com|whatsapp-send\.ts|from\("whatsapp_messages"\)\.insert|from\("whatsapp_sends"\)/.test(FN), 'ai-reply-drafts has no send path and writes no message row');
