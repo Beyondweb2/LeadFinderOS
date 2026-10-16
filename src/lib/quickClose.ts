@@ -72,6 +72,7 @@ import {
   type ServiceRoute,
 } from './findableOffer.ts';
 import { afterTermClientWords, afterTermRepLine } from './planTerms.ts';
+import { agencyContractOutcome } from './agencyContractRule.ts';
 
 export type QcDecisionMaker = 'yes' | 'no';
 /** 'agency' (v2): an agency / provider controls it — a handoff, not a refusal. */
@@ -205,12 +206,14 @@ export const thirdPartyManaged = (a: QuickCloseAnswers): boolean => !!a.manager 
  *  provider looks after the site AND the client is still tied into a contract they cannot leave (a positive match on
  *  'in_contract') → we do not take them on. Nothing else is offered instead (Optimise is withdrawn). "Not sure" or
  *  "not asked" is never a decline: Build stays the plan and the link waits (agencyContractBlocksBuild). */
-export const agencyContractTiedIn = (a: QuickCloseAnswers): boolean => thirdPartyManaged(a) && a.agency_contract === 'in_contract';
+/* 2026-10-16: all three read the ONE rule (agencyContractRule.ts), shared with the manual onboarding dialog. */
+const contractOutcome = (a: QuickCloseAnswers) => agencyContractOutcome(thirdPartyManaged(a), a.agency_contract);
+export const agencyContractTiedIn = (a: QuickCloseAnswers): boolean => contractOutcome(a) === 'stop';
 /** A Build on an agency-run site is not ready unless the contract is confirmed FREE — still in contract (declined), or
  *  not sure (waits for Paul's review). ⛔ Positive match on 'free'. */
-export const agencyContractBlocksBuild = (a: QuickCloseAnswers): boolean => thirdPartyManaged(a) && a.agency_contract !== 'free';
+export const agencyContractBlocksBuild = (a: QuickCloseAnswers): boolean => thirdPartyManaged(a) && contractOutcome(a) !== 'go';
 /** A third party runs the site and nobody has confirmed the contract is over (not sure, or not asked yet). */
-export const agencyContractUnconfirmed = (a: QuickCloseAnswers): boolean => thirdPartyManaged(a) && a.agency_contract !== 'in_contract' && a.agency_contract !== 'free';
+export const agencyContractUnconfirmed = (a: QuickCloseAnswers): boolean => { const o = contractOutcome(a); return thirdPartyManaged(a) && (o === 'hold' || o === 'unanswered'); };
 export const CONFIRM_CONTRACT_WARNING = 'Confirm their agency contract has ended (or ends before work starts) before the sign-up link. If they are still tied in, we cannot take them on.';
 /** What the rep is told when the answers decline the sale (clause 1.6). Never shown to the client. */
 export const TIED_IN_DECLINE_REASON =

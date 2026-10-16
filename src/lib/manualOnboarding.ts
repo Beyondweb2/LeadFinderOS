@@ -24,44 +24,105 @@
    🔴 v5 (Paul, 2026-10-16): FINDABLE OPTIMISE IS WITHDRAWN. The page no longer says "you can also keep and improve"
       the current site. The "keep" choice stays ONLY so the operator can record a client who signed Optimise before
       v5 (a paid client's route is theirs); it is labelled as such and is never the recommendation.
+   🔴 BUILD ONLY (Paul, 2026-10-16, docs/onboarding-consistency.md): the website questions are the simple findable.live
+   onboarding's five — are you with a web agency or provider → (yes) tied into a contract → happy for us to build an
+   AI-optimised site → keep or improve the design (with a website) → do you own your domain and can you log in — copied
+   from findable-site src/lib/onboardingSimple.ts + OnboardingFlow (SIMPLE_COPY below; the test pins them). The contract
+   answer means what it means everywhere (agencyContractRule.ts). "Keep and improve my current website" (Optimise) is no
+   longer offered: a row already on it keeps its old questions, read back exactly as before.
+
    IMPORTED BY AN EDGE FUNCTION (paid-client-hub): relative imports with an explicit .ts only.
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 
 import { effectiveQuestionnaireServices, missingQuestionnaireFields } from './questionnaireComplete.ts';
 import { FINDABLE_BUILD_TOTAL_PAYMENTS, FINDABLE_OPTIMISE_TOTAL_PAYMENTS } from './findableOffer.ts';
 import type { DomainAccessAnswer, YesNoNotSure } from './domainAuthority.ts';
+import { AGENCY_CONTRACT_ANSWERS, AGENCY_CONTRACT_LABEL, readAgencyContract, type AgencyContractAnswer } from './agencyContractRule.ts';
+import { readContractEnd, readDesignChoice, type DesignChoice } from './onboardingSimpleAnswers.ts';
 
 /* ── the questions, verbatim ──────────────────────────────────────────────────────────────────── */
 
+/* 🔴 2026-10-16: the customer page's FIRST screen is "Is this right?" — what we already hold, shown, with gaps to fill
+   and a Fix for anything wrong (findable-site OnboardingFlow, the simple onboarding). Never asked again when held. */
 export const ONBOARDING_COPY = {
-  you: { headline: 'Your details', sub: 'Check what we already have and fill any gaps. This is where we send your results and your agreement.' },
+  you: { headline: 'Is this right?', sub: "Here's what we already have. Fill any gaps, or fix anything that's wrong." },
+  fix: { action: 'Fix' },
   contactName: { label: 'Your name' },
-  contactEmail: { label: 'Your email', helper: 'Where your report goes.', error: "That doesn't look like an email address." },
-  phone: { label: 'Your mobile', helper: 'So we can reach you on WhatsApp about your results.', placeholder: '07700 900123', error: 'Start with 0 or +44 so we can dial it.' },
-  website: { label: 'Your website', optional: '(if you have one)', helper: "So we check the right site. Leave it empty if you haven't got one.", placeholder: 'yourbusiness.co.uk', error: "That doesn't look like a web address." },
-  business: { headline: "What's the business called?", sub: 'This is the name we look for on Google.' },
-  businessName: { label: 'Your business name', helper: 'As it appears on Google, so we measure the right one.', placeholder: 'e.g. Halstead Locks' },
-  tradeTown: { headline: 'What you do, and where', sub: "This is what we ask ChatGPT and Google's AI." },
-  trade: { label: 'What you do', helper: 'One word is plenty.', placeholder: 'e.g. locksmith' },
-  town: { label: 'Your town', placeholder: 'e.g. Huntingdon' },
-  /* 🔴 2026-10-07 (client sign-up redesign): the website question is CHOICE-FIRST, as on the customer page. */
+  contactEmail: { label: 'Email', error: "That doesn't look like an email address." },
+  phone: { label: 'Mobile', placeholder: '07700 900123', error: 'Start with 0 or +44 so we can dial it.' },
+  website: { label: 'Website', placeholder: 'yourbusiness.co.uk', error: "That doesn't look like a web address." },
+  businessName: { label: 'Business name', helper: 'As it appears on Google, so we measure the right one.', placeholder: 'e.g. Halstead Locks' },
+  trade: { label: 'What you do', placeholder: 'e.g. locksmith' },
+  town: { label: 'Your town' },
+  permission: { discuss: "I'd rather talk it through first" },
+  /* ⛔ NOT "one page per town" (2026-10-04, fix/04 — Session C C-07): that promised the cloned town pages
+     the method rejects. Verbatim from findable-site's OnboardingFlow (same commit pair). */
+  q2: { headline: 'What you do, and where', sub: "Each main service gets its own clear page. The towns you list tell us where to measure you and where real local pages make sense. That's the last thing we need." },
+  services: { label: 'Services you offer', chipsHint: 'Tap the ones you do. Add anything missing below.', noChips: 'One service per line, in the words a customer would use.', add: 'Add another service' },
+  areas: { label: 'Towns you want work from', optional: 'Optional', placeholder: 'e.g. March', helper: 'We judge the refund on the same questions before and after, asked about your main town and the towns you list here.' },
+} as const;
+
+/* ⛔ LEGACY — OPTIMISE ONLY (no longer on the customer page since 2026-10-16, so NOT pinned): the old website questions,
+   still drawn for a client already on Findable Optimise so their answers read back exactly as they were given. */
+export const LEGACY_KEEP_COPY = {
   websiteStep: { headline: 'Your website', sub: 'We build you a new website, built so customers, search engines and AI understand exactly what you do and where you work.' },
-  buildManager: { question: 'Who looks after your current website?', helper: 'So we know who to talk to when your web address moves to the new site.', agencyNote: 'That’s fine. We only need their help to point your web address at the new site. Your arrangement with them stays yours to manage.' },
-  buildDomain: { question: 'Do you want to keep your current web address?', helper: 'Your web address (domain) is separate from your website. Keeping it means your new website goes live at the same address. The website itself is still built new: your current site is a reference, not the base.' },
-  noneDomain: { question: 'Do you already own a web address?', helper: 'For example yourbusiness.co.uk. If not, we’ll help you register one in your business’s name.' },
   keepManager: { question: 'Who looks after your website?' },
   access: { question: 'Can you get us access to edit it?', helper: 'To improve your current website we need editing access to it. Never send us a password here.' },
   keepNoAccess: { note: 'We can only improve a website we can edit. A new website avoids that, and your web address can stay the same.', action: 'Build me a new website instead' },
   managerEmail: { label: 'Who should we ask?', optional: '(optional)', placeholder: 'name@theirwebcompany.co.uk', helper: 'Their email, so we can send them exactly what we need. Your agreement with them stays yours to manage.' },
   selfSite: { question: 'Can you give us access to edit it?' },
-  permission: { headline: 'Permission to do the work', sub: 'One thing to agree, then we show you your plan.', discuss: "I'd rather talk it through first" },
-  /* ⛔ NOT "one page per town" (2026-10-04, fix/04 — Session C C-07): that promised the cloned town pages
-     the method rejects. Verbatim from findable-site's OnboardingFlow (same commit pair). */
-  q2: { headline: 'What you do, and where', sub: "Each main service gets its own clear page. The towns you list tell us where to measure you and where real local pages make sense. That's the last thing we need." },
-  services: { label: 'Services you offer', chipsHint: 'Tap the ones you do. Add anything missing below.', noChips: 'One service per line, in the words a customer would use.', add: 'Add another service' },
-  areas: { label: 'Towns you want work from', optional: 'Optional', placeholder: 'e.g. March', helper: 'We judge the refund on the same questions before and after — asked about your home town and the towns you list here.' },
 } as const;
 
+/* ── THE SIMPLE ONBOARDING'S WEBSITE QUESTIONS (findable.live, 2026-10-16), verbatim ──────────────────────────── */
+export const SIMPLE_COPY = {
+  noWebsite: "I haven't got a website yet",
+  agency: { headline: 'Are you with a web agency or provider?', sub: 'Someone you pay to run or host your website.' },
+  contract: { question: 'Are you tied into a contract with them?' },
+  tiedIn: { stop: "Thanks for telling us. While you're tied in, it isn't the right time to build you a new website.", ends: 'When does your contract end?' },
+  buildOk: { headline: 'Happy for us to build you an AI-optimised website?', sub: 'Built so customers, search engines and AI understand exactly what you do and where you work. Hosting is included during your plan.' },
+  design: { headline: 'Keep your current design, or improve it?', sub: 'Either way your new site is built properly for AI and search.' },
+  domain: { headline: 'Do you own your domain, and can you log in to it?', sub: 'Your domain is your web address, like yourbusiness.co.uk.' },
+  legal: { headline: 'Last thing: a few quick confirmations', sub: 'So we can build your new website and connect it cleanly.' },
+} as const;
+export type HasAgency = 'yes' | 'no';
+export const AGENCY_OPTIONS: ReadonlyArray<{ value: HasAgency; label: string }> = [{ value: 'no', label: 'No' }, { value: 'yes', label: 'Yes' }];
+export const CONTRACT_OPTIONS: ReadonlyArray<{ value: AgencyContractAnswer; label: string }> = AGENCY_CONTRACT_ANSWERS.map((v) => ({ value: v, label: AGENCY_CONTRACT_LABEL[v] }));
+export type BuildOk = 'yes' | 'no';
+export const BUILD_OK_OPTIONS: ReadonlyArray<{ value: BuildOk; label: string }> = [{ value: 'yes', label: 'Yes' }, { value: 'no', label: 'No' }];
+export const DESIGN_OPTIONS: ReadonlyArray<{ value: DesignChoice; label: string }> = [{ value: 'keep', label: 'Keep my current design' }, { value: 'improve', label: 'Improve it' }];
+export type DomainAnswer = 'yes' | 'cant_login' | 'not_sure' | 'agency_owns' | 'none';
+export const DOMAIN_ANSWER_OPTIONS: ReadonlyArray<{ value: DomainAnswer; label: string }> = [
+  { value: 'yes', label: "Yes, it's ours and I can log in" },
+  { value: 'cant_login', label: "We own it, but I can't log in" },
+  { value: 'not_sure', label: 'Not sure' },
+  { value: 'agency_owns', label: 'My agency or web company owns it' },
+];
+export const NO_DOMAIN_OPTION: { value: DomainAnswer; label: string } = { value: 'none', label: "I don't have one yet" };
+export const domainOptionsFor = (hasSite: boolean) => (hasSite ? DOMAIN_ANSWER_OPTIONS : [...DOMAIN_ANSWER_OPTIONS, NO_DOMAIN_OPTION]);
+type DomainCols = Pick<OnboardingAnswers, 'domain_status' | 'domain_owned' | 'domain_access' | 'domain_third_party'>;
+/** findable-site domainColumnsFor — the answer onto the four columns domainAuthority reads; only what it says is written. */
+export function domainColumnsFor(answer: DomainAnswer | null, hasSite: boolean): DomainCols {
+  const none: DomainCols = { domain_status: null, domain_owned: null, domain_access: null, domain_third_party: null };
+  switch (answer) {
+    case 'yes': return { domain_status: 'existing', domain_owned: 'yes', domain_access: 'yes', domain_third_party: 'no' };
+    case 'cant_login': return { domain_status: 'existing', domain_owned: 'yes', domain_access: 'no', domain_third_party: null };
+    case 'not_sure': return { domain_status: 'existing', domain_owned: 'not_sure', domain_access: null, domain_third_party: null };
+    case 'agency_owns': return { domain_status: 'existing', domain_owned: 'no', domain_access: null, domain_third_party: 'yes' };
+    case 'none': return hasSite ? none : { ...none, domain_status: 'new' };
+    default: return none;
+  }
+}
+/** The stored columns read back as the one answer (null when they say something the five answers do not). */
+export function domainAnswerOf(a: DomainCols): DomainAnswer | null {
+  if (a.domain_status === 'new') return 'none';
+  if (a.domain_status !== 'existing') return null;
+  if (a.domain_owned === 'yes') return a.domain_access === 'yes' ? 'yes' : a.domain_access === 'no' ? 'cant_login' : null;
+  if (a.domain_owned === 'not_sure') return 'not_sure';
+  if (a.domain_owned === 'no' && a.domain_third_party === 'yes') return 'agency_owns';
+  return null;
+}
+
+/* ── LEGACY (Optimise, sold before 2026-10-16): no longer on the customer page; drawn only for a row already on it. ── */
 /* The website choices and follow-ups, verbatim from the customer page (findable-site WEBSITE_CHOICES and
    SiteAccessBranch, 2026-10-07). The new website is first and recommended, as there. */
 export const WEBSITE_CHOICE_OPTIONS = [
@@ -76,14 +137,6 @@ export const MANAGER_OPTIONS = [
 export const KEEP_ACCESS_OPTIONS = [
   { value: 'yes', label: 'Yes, I can get you access' },
   { value: 'no', label: 'No, that isn’t possible' },
-] as const;
-export const BUILD_DOMAIN_OPTIONS = [
-  { value: 'existing', label: 'Yes, keep my current web address' },
-  { value: 'new', label: 'No, I’d like a new web address' },
-] as const;
-export const NONE_DOMAIN_OPTIONS = [
-  { value: 'existing', label: 'Yes, I already own one' },
-  { value: 'new', label: 'No, I’ll need a new one' },
 ] as const;
 
 export type DomainStatus = 'existing' | 'new';
@@ -131,10 +184,10 @@ export function accessConsequenceText(answer: SiteAccessAnswer | null): string {
 }
 /** findable-site siteAccess.ts permissionAckText — three states, the unanswered one names no site. */
 export function permissionAckText(answer: SiteAccessAnswer | null): string {
-  if (!answer) return 'Yes — complete my Google Business Profile and publish the pages you write for me.';
+  if (!answer) return 'Yes, complete my Google Business Profile and publish the pages you write for me.';
   return answer !== 'yes_access'
-    ? 'Yes — complete my Google Business Profile and publish the pages you write onto the new site you build me.'
-    : 'Yes — complete my Google Business Profile and publish the pages you write onto my site.';
+    ? 'Yes, complete my Google Business Profile and publish the pages you write onto the new site you build me.'
+    : 'Yes, complete my Google Business Profile and publish the pages you write onto my site.';
 }
 
 /** The build route the website answer implies — the operator-path column (website_route) that
@@ -197,6 +250,11 @@ export interface OnboardingAnswers {
   authority_confirmed: boolean;
   dns_permission: boolean;
   materials_confirmed: boolean;
+  /* The simple onboarding (2026-10-16): the contract with their agency, when it ends, and the design choice. */
+  agency_contract: AgencyContractAnswer | null;
+  /** yyyy-mm-dd or '' (only when tied in). */
+  agency_contract_ends: string;
+  design_choice: DesignChoice | null;
 }
 
 type Row = Record<string, unknown> | null | undefined;
@@ -259,6 +317,7 @@ export function answersFromRecords(row: Row, lead: Row): OnboardingAnswers {
     domain_owned: yns(r.domain_owned), domain_access: dacc(r.domain_access), domain_third_party: yns(r.domain_third_party),
     site_rights: yns(r.site_rights),
     authority_confirmed: r.authority_confirmed === true, dns_permission: r.dns_permission === true, materials_confirmed: r.materials_confirmed === true,
+    agency_contract: readAgencyContract(r.agency_contract), agency_contract_ends: readContractEnd(r.agency_contract_ends) ?? '', design_choice: readDesignChoice(r.design_choice),
   };
 }
 function yns(v: unknown): YesNoNotSure | null { return v === 'yes' || v === 'no' || v === 'not_sure' ? v : null; }
@@ -297,6 +356,7 @@ export function cleanAnswers(raw: unknown): OnboardingAnswers {
     domain_owned: yns(r.domain_owned), domain_access: dacc(r.domain_access), domain_third_party: yns(r.domain_third_party),
     site_rights: yns(r.site_rights),
     authority_confirmed: r.authority_confirmed === true, dns_permission: r.dns_permission === true, materials_confirmed: r.materials_confirmed === true,
+    agency_contract: readAgencyContract(r.agency_contract), agency_contract_ends: readContractEnd(r.agency_contract_ends) ?? '', design_choice: readDesignChoice(r.design_choice),
   };
 }
 
@@ -330,6 +390,11 @@ export function buildOnboardingPatch(a: OnboardingAnswers, operatorId: string, n
        customer form uses), so on the optimise path they are written null rather than left behind. The
        operator records what the CLIENT said; ticking a confirmation here asserts the client gave it. */
     ...domainPatch(a, siteAccess),
+    /* The simple onboarding's answers own their lifetime too: the contract only with an agency, its end only when tied in,
+       the design only with a current website. */
+    agency_contract: a.agency_manages === 'yes' ? a.agency_contract : null,
+    agency_contract_ends: a.agency_manages === 'yes' && a.agency_contract === 'in_contract' ? readContractEnd(a.agency_contract_ends) : null,
+    design_choice: siteAccess && siteAccess !== 'no_website' ? a.design_choice : null,
     incomplete: !complete,
     operator_edited_at: nowIso,
     operator_edited_by: operatorId,
@@ -360,6 +425,8 @@ export const ONBOARDING_COLUMN_GROUPS: ReadonlyArray<{ answers: readonly (keyof 
   { answers: ['gbp_consent'], columns: ['gbp_consent'] },
   { answers: ['services'], columns: ['services', 'services_list'] },
   { answers: ['areas'], columns: ['areas_list'] },
+  { answers: [...BRANCH_ANSWER_KEYS, 'agency_contract', 'agency_contract_ends'], columns: ['agency_contract', 'agency_contract_ends'] },
+  { answers: [...BRANCH_ANSWER_KEYS, 'design_choice'], columns: ['design_choice'] },
   /* The domain answers live on the new-site branch, so a change to the branch or the domain question
      re-decides them; nothing else touches them. */
   { answers: [...BRANCH_ANSWER_KEYS, 'domain_status', ...DOMAIN_ANSWER_KEYS], columns: ['domain_owned', 'domain_access', 'domain_third_party', 'site_rights', 'authority_confirmed', 'dns_permission', 'materials_confirmed'] },
@@ -395,6 +462,8 @@ export function visibleAnswers(a: OnboardingAnswers): OnboardingAnswers {
     can_get_access: a.agency_manages === 'yes' ? a.can_get_access : null,
     self_site: a.agency_manages === 'no' ? a.self_site : null,
     website_manager_email: a.agency_manages === 'yes' && a.can_get_access === 'yes' ? a.website_manager_email : '',
+    agency_contract: a.agency_manages === 'yes' ? a.agency_contract : null,
+    agency_contract_ends: a.agency_manages === 'yes' && a.agency_contract === 'in_contract' ? a.agency_contract_ends : '',
   };
 }
 

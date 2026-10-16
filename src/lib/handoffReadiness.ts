@@ -216,9 +216,14 @@ export function handoffReadiness(
      need an existing website or a login to one: Findable builds, hosts and manages the new site, so
      neither is ever a blocker (an old site, if there is one, is shown for reference). OPTIMISE works on
      their own site, so the site and who controls it stay required. The route is the one they PAID on
-     (contract_total_payments), else the onboarding row's; unknown keeps the old, stricter rule. */
+     (contract_total_payments), else the onboarding row's.
+     🔴 BUILD ONLY (Paul, 2026-10-16, docs/onboarding-consistency.md): the site and its access are required ONLY for a
+     client actually on Optimise — paid on that route, or an onboarding row that chose it (plan_tier keep / website_route
+     optimise_existing). Everyone else, an unknown route included, is a Build client: Findable builds and hosts the site,
+     so neither is ever asked for. Existing Optimise clients keep their two items exactly as before. */
   const route: ServiceRoute | null = serviceRouteForTotal(L.contract_total_payments) ?? serviceRouteFromRow(O as never);
-  const build = route === 'build';
+  const optimise = route === 'optimise' || (!route && O?.website_route === 'optimise_existing');
+  const build = !optimise;
   // Website: a site on file, or a positive "no website / build a new one".
   const site = text(O?.business_website) || text(L.website);
   const control = text(L.website_control);

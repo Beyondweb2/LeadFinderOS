@@ -38,6 +38,8 @@ const MIG = read("supabase/migrations/20260928160000_self_sourced_handoff.sql");
 
 /* ── READY / MISSING ─────────────────────────────────────────────────────────────────────────── */
 const paidLead: HandoffLead = { business_name: "QA Plumbing", phone: "07700900401", website: "https://qa.example", amount_paid: 99, status: "payment_received" };
+/* 2026-10-16 (Build only): the website and its access are asked ONLY of a client actually on Optimise (here: paid on its 6). */
+const optimiseLead: HandoffLead = { ...paidLead, contract_total_payments: 6 } as HandoffLead;
 const fullOnboarding: HandoffOnboarding = {
   services_list: ["Boiler repair"], areas_list: ["Wakefield"], business_website: "https://qa.example", confirmed_location: "Wakefield",
   website_route: "optimise_existing", website_manager: "direct_access", gbp_status: "done",
@@ -49,7 +51,7 @@ const fullOnboarding: HandoffOnboarding = {
 }
 {
   // Sales-entered equivalents satisfy readiness with NO onboarding row at all.
-  const salesLead: HandoffLead = { ...paidLead, services_included: ["Boiler repair"], service_areas: ["Wakefield", "Ossett"], website_control: "client_controls",
+  const salesLead: HandoffLead = { ...optimiseLead, services_included: ["Boiler repair"], service_areas: ["Wakefield", "Ossett"], website_control: "client_controls",
     delivery_checklist: { [HANDOFF_GBP_CHECKLIST_KEY]: true } };
   const r = handoffReadiness(salesLead, null, ev(true, true));
   /* 2026-09-28 (the domain rule): with no onboarding the client has not confirmed the domain / authority
@@ -65,7 +67,7 @@ const fullOnboarding: HandoffOnboarding = {
   ok(r.ready, "a missing hook audit never blocks READY (informational)");
 }
 {
-  const r = handoffReadiness(paidLead, null, ev(false, false));
+  const r = handoffReadiness(optimiseLead, null, ev(false, false));
   ok(!r.ready && r.label === "WAITING FOR INFORMATION", "nothing collected → WAITING FOR INFORMATION");
   for (const m of ["Services", "Service areas", "Website access / control", "Google Business Profile access", "Website crawled"]) ok(r.missing.includes(m), `…names "${m}"`);
   ok(!r.missing.includes("Hook Audit"), "…never lists the hook audit as missing");
@@ -73,8 +75,10 @@ const fullOnboarding: HandoffOnboarding = {
 }
 {
   // Positive matches only: unknown / later / no access are missing.
-  const r1 = handoffReadiness({ ...paidLead, website_control: "unknown" }, { ...fullOnboarding, website_route: null, website_manager: null }, ev(true, true));
+  const r1 = handoffReadiness({ ...optimiseLead, website_control: "unknown" }, { ...fullOnboarding, website_route: null, website_manager: null }, ev(true, true));
   ok(r1.missing.includes("Website access / control"), "website control 'unknown' is missing, not an answer");
+  const b1 = handoffReadiness({ ...paidLead, website_control: "unknown" }, null, ev(false, false));
+  ok(!b1.missing.includes("Website") && !b1.missing.includes("Website access / control"), "a Build (or not-yet-known) client is never asked for a website or access to it");
   for (const g of ["will_do", "no_access", null]) {
     const r = handoffReadiness(paidLead, { ...fullOnboarding, gbp_status: g }, ev(true, true));
     ok(r.missing.includes("Google Business Profile access"), `GBP '${g}' is missing`);
