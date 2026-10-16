@@ -171,13 +171,16 @@ console.log('── 9. Build / Optimise preselection, live v3 terms only ──'
 {
   ok(preselectedPlan('own_site') === 'build' && preselectedPlan('none') === 'build' && preselectedPlan('directory_profile') === 'build' && preselectedPlan(null) === 'build', 'BUILD is the plan opened first, whatever the site (final pass, 2026-10-07)');
   const o = buildCallScript(input());
-  ok(o.plans.preselected === 'build' && o.plans.routes.map((r) => r.route).join() === 'build,optimise', 'existing usable website → Build selected first, Optimise available to switch');
+  ok(o.plans.preselected === 'build' && o.plans.routes.map((r) => r.route).join() === 'build', 'v5: existing usable website → Findable Build, the one plan (Optimise is withdrawn)');
   const all = spokenScriptText(o);
   ok(!/payments stop|one final month|nothing more to pay|then they stop/i.test(all), 'none of the unapproved v4 AGREEMENT phrases (the sales words say Optimise ends; the contract wording is a separate, unapproved change)');
-  /* 2026-10-07 (Paul): Optimise ENDS after its 6th payment; Build's £29.99 only if they want hosting to continue. */
-  ok(o.plans.routes.find((r) => r.route === 'build')!.spoken.join(' ').includes('£' + FINDABLE_CONTINUING_GBP + ' a month for hosting and maintenance') && !o.plans.routes.find((r) => r.route === 'optimise')!.spoken.join(' ').includes('£' + FINDABLE_CONTINUING_GBP), 'Build: £29.99 only for continued hosting; Optimise: no £29.99 at all');
-  const sixMonths = o.objections.find((x) => x.objection === 'Why six months?')?.answer ?? '';
-  ok(/6th payment is the last one/.test(sixMonths) && /plan ends/.test(sixMonths) && !sixMonths.includes('£' + FINDABLE_CONTINUING_GBP), '"Why six months?": the 6th payment is the last, then the plan ends');
+  /* Build's £29.99 only if they want hosting to continue. */
+  ok(o.plans.routes.find((r) => r.route === 'build')!.spoken.join(' ').includes('£' + FINDABLE_CONTINUING_GBP + ' a month for hosting and maintenance'), 'Build: £29.99 only for continued hosting');
+  ok(!o.objections.some((x) => /six months|Optimise/i.test(x.objection + ' ' + x.answer)) && !/optimise|6 payments|six months|month minimum/i.test(all + ' ' + o.objections.map((x) => x.answer).join(' ')), 'v5: no objection or spoken line sells, quotes or recommends Optimise, and no term is said in months');
+  const twelve = o.objections.find((x) => x.objection === 'Why 12 payments?')?.answer ?? '';
+  ok(/Findable Build/.test(twelve) && /12 payments including today/.test(twelve), '"Why 12 payments?": Findable Build, said in payments');
+  ok(/That's not something we offer/.test(o.objections.find((x) => x.objection === 'Can you just improve my current website?')?.answer ?? ''), '"Can you just improve my current website?": not something we offer — a new website, same web address');
+  ok(o.ifAgency.coaching.some((c) => /can't take them on yet/.test(c)) && o.ifAgency.coaching.some((c) => /not sure/.test(c)), 'the agency branch: still tied in → we cannot take them on yet; not sure → check before signing up');
 }
 
 console.log('── 10. Guarantee once, objections short ──');

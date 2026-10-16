@@ -8,6 +8,7 @@ import path from "node:path";
 import {
   cleanAnswers, mergeAnswers, buildConsentsFor, BUILD_CONSENT_DOMAIN_PENDING, missingQuestions, mayGenerateLink, onboardingColumnsFor, quickCloseGate, quickCloseHandoffLines, quickCloseMessage,
   quickCloseState, LINK_REUSE_MS, QUICK_CLOSE_QUESTIONS, quickCloseScript, QUICK_CLOSE_AFTER_PAYMENT, QUICK_CLOSE_PROMISE, closeFlow,
+  offerFit, planQuickCloseSave, routeTermsLines, routePaymentsShort,
 } from "../src/lib/quickClose.ts";
 import { FINDABLE_GUARANTEE, FINDABLE_MONTHLY_GBP, FINDABLE_SETUP_PRICE_GBP } from "../src/lib/findableOffer.ts";
 
@@ -21,8 +22,11 @@ const read = (p: string) => fs.readFileSync(path.join(root, p), "utf8").replace(
    questions that approach needs are asked. SAFE = improve their current site (Optimise) with access. */
 /* FINAL PASS (2026-10-07): the close now asks the SITUATION first — who looks after the site, (agency / freelancer
    only) the contract, domain control, (existing site only) the right to reuse its design — and the plan LAST. */
+/* 🔴 v5 (2026-10-16): Findable Optimise is WITHDRAWN. SAFE is now a ready BUILD close; OPTIMISE_V4 is a close saved on the
+   withdrawn plan before v5 — still READ (labels, handoff lines, the gate's old reasons), never sold. */
 const SITUATION = { manager: "owner", domain: "yes", rights: "yes" } as const;
-const SAFE = { decision_maker: "yes", approach: "improve", access: "yes", ...SITUATION } as const;
+const OPTIMISE_V4 = { decision_maker: "yes", approach: "improve", access: "yes", ...SITUATION } as const;
+const SAFE = { decision_maker: "yes", route: "build", ...SITUATION } as const;
 const NEW_SITE = { decision_maker: "yes", approach: "new_template", build_consents: "yes", ...SITUATION } as const;
 
 console.log("\n── the bare minimum, in the v2 order ──");
@@ -33,7 +37,8 @@ ok(QUICK_CLOSE_QUESTIONS[0].key === "route" && QUICK_CLOSE_QUESTIONS[1].key === 
 ok(!/service|opening hours|credential|description|google business/i.test(JSON.stringify(QUICK_CLOSE_QUESTIONS.map((q) => ({ key: q.key, text: q.text, options: q.options })))), "no services, hours, credentials, copy or GBP questions before payment");
 ok(JSON.stringify(cleanAnswers({ decision_maker: "yes", domain: "maybe", evil: "x" })) === JSON.stringify({ decision_maker: "yes" }), "only known answers survive");
 ok(missingQuestions({}).join() === "decision_maker,manager,domain,route", "nothing answered: authority, who looks after the site, the domain — and the PLAN LAST");
-ok(missingQuestions({ decision_maker: "yes", ...SITUATION, approach: "improve" }).join() === "access", "improve their site (Optimise): only whether Findable can get in");
+ok(missingQuestions({ decision_maker: "yes", ...SITUATION, approach: "improve" }).join() === "route", "v5: a pre-v5 Optimise close (improve their site) is asked the PLAN again — the withdrawn plan is not an answer, and the site-access question is gone");
+ok(!closeFlow(OPTIMISE_V4).includes("access") && !closeFlow({ route: "optimise" }).includes("access"), "v5: the Optimise-only site-access question is never part of a close");
 ok(missingQuestions({ decision_maker: "yes", ...SITUATION, approach: "new_template" }).length === 0 && missingQuestions({ decision_maker: "yes", ...SITUATION, route: "build" }).length === 0, "Build, self-managed: nothing more — no consents, no registrar, no logins on the call");
 ok(missingQuestions({ decision_maker: "yes", manager: "no_website", domain: "no_domain", route: "build" }).length === 0, "NO WEBSITE: the reuse question is never asked (no irrelevant ownership questions)");
 ok(closeFlow({ manager: "no_website" }).join() === "decision_maker,manager,domain,route" && !closeFlow({ manager: "owner" }).includes("agency_contract"), "the flow: no website skips the reuse question; the contract only appears for an agency / freelancer");
@@ -42,7 +47,8 @@ ok(missingQuestions({ decision_maker: "yes", route: "build", manager: "freelance
 ok(missingQuestions({ decision_maker: "yes", ...SITUATION, approach: "unsure" }).join() === "route", "unsure: the plan is picked explicitly");
 ok(missingQuestions({ decision_maker: "yes", manager: "owner", domain: "yes", rights: "yes" }).join() === "route" && missingQuestions({ decision_maker: "yes", manager: "owner" }).join() === "domain,route", "what the Call screen already saved (who looks after the site, the decision maker) is never asked again");
 ok(closeFlow({}).length <= 5 && closeFlow({ manager: "agency" }).length <= 6, "4–5 questions, one more only when an agency / freelancer is involved");
-ok(QUICK_CLOSE_QUESTIONS.find((q) => q.key === "route")!.options[0].value === "build", "BUILD FIRST on the plan question");
+ok(QUICK_CLOSE_QUESTIONS.find((q) => q.key === "route")!.options.filter((o) => !o.legacy).map((o) => o.value).join() === "build", "v5: the plan question OFFERS Findable Build only (Optimise is a legacy, read-only value)");
+ok(cleanAnswers({ route: "optimise" }).route === "optimise", "…and an old close stored on Optimise still reads without crashing");
 ok(["manager", "domain"].every((k) => QUICK_CLOSE_QUESTIONS.find((q) => q.key === k)!.options.filter((o) => !o.legacy).every((o) => !/employee|third party|do not control/i.test(o.label))) && QUICK_CLOSE_QUESTIONS.find((q) => q.key === "manager")!.options.filter((o) => !o.legacy).map((o) => o.value).join() === "owner,freelancer,agency,no_website,not_sure", "the offered site-manager choices are exactly: themselves, freelancer, agency, no website, not sure (legacy answers stay readable, not offered)");
 ok(missingQuestions(SAFE).length === 0 && missingQuestions(NEW_SITE).length === 0, "both complete answer sets are complete");
 ok(cleanAnswers({ approach: "improve", route: "build" }).route === "optimise" && cleanAnswers({ approach: "new_template", route: "optimise" }).route === "build", "a known approach DECIDES the route (prices unchanged)");
@@ -52,17 +58,24 @@ console.log("\n── the gate ──");
 {
   const g = quickCloseGate({ ...SAFE, decision_maker: "no" });
   ok(g.blocked && quickCloseState("answers_saved", { answers: { ...SAFE, decision_maker: "no" } }) === "blocked" && !mayGenerateLink("answers_saved", { answers: { ...SAFE, decision_maker: "no" } }), "decision maker 'No' blocks payment");
-  ok(quickCloseGate(SAFE).review.length === 0 && quickCloseState("answers_saved", { answers: SAFE }) === "ready" && mayGenerateLink("answers_saved", { answers: SAFE }), "Optimise with access → ready for payment");
+  ok(quickCloseGate(SAFE).review.length === 0 && quickCloseState("answers_saved", { answers: SAFE }) === "ready" && mayGenerateLink("answers_saved", { answers: SAFE }), "Build, self-managed, domain theirs → ready for payment");
+  ok(quickCloseState("answers_saved", { answers: OPTIMISE_V4 }) === "in_progress" && !mayGenerateLink("answers_saved", { answers: OPTIMISE_V4 }), "v5: a pre-v5 Optimise close is NOT ready — no link until the plan is confirmed as Build");
+  const oldLink = { answers: OPTIMISE_V4, link_url: "https://findable.live/agree/x", link_kind: "signup" as const, link_generated_at: new Date(Date.now() - 3_600_000).toISOString() };
+  ok(quickCloseState("answers_saved", oldLink) === "in_progress" && !mayGenerateLink("answers_saved", oldLink), "v5: a sign-up link made for Optimise before v5 is no longer 'link ready' (nothing can be paid on the withdrawn plan from Quick Close)");
   ok(quickCloseState("answers_saved", { answers: NEW_SITE }) === "ready", "a new Findable site with the domain theirs → ready");
   /* ⛔ THE SCREENSHOT FIX: a new site where they cannot give access to the old one is NOT a review. */
   const newNoAccess = { ...NEW_SITE, access: "no", manager: "agency", agency_contract: "free" } as const;
   ok(quickCloseGate(newNoAccess).review.length === 0 && quickCloseState("answers_saved", { answers: newNoAccess }) === "ready", "Build + no access to the CURRENT site (agency contract ended) → no review, ready (we never need the old backend)");
-  /* ⛔ THE AGENCY-CONTRACT RULE: Build on an agency / freelancer-run site stops for Paul's release unless the contract
-     is confirmed FREE (still in contract, or not sure). The RECOMMENDATION is a different question (below). */
+  /* 🔴 v5 clause 1.6: STILL TIED IN = DECLINED. Not a review, not releasable, no other plan. */
   for (const m of ["agency", "freelancer"] as const) {
     const a = { ...NEW_SITE, manager: m, agency_contract: "in_contract" } as const;
-    ok(quickCloseGate(a).review.includes("agency_contract_build") && quickCloseState("answers_saved", { answers: a }) === "needs_review" && !mayGenerateLink("answers_saved", { answers: a }), `Build + ${m} + still in contract → Paul review (no link)`);
-    ok(quickCloseState("answers_saved", { answers: a, review_approved_at: "2026-10-07T10:00:00Z" }) === "ready", `…which Paul can release (never a hard ban) — ${m}`);
+    ok(quickCloseGate(a).declined && !quickCloseGate(a).review.includes("agency_contract_build") && quickCloseState("answers_saved", { answers: a }) === "declined" && !mayGenerateLink("answers_saved", { answers: a }), `Build + ${m} + still tied in → DECLINED (no link, not a review)`);
+    ok(quickCloseState("answers_saved", { answers: a, review_approved_at: "2026-10-07T10:00:00Z" }) === "declined", `…and Paul's release does NOT lift a decline — ${m}`);
+  }
+  {
+    const tied = { decision_maker: "yes", manager: "agency", agency_contract: "in_contract" } as const;
+    ok(closeFlow(tied).join() === "decision_maker,manager,agency_contract" && missingQuestions(tied).length === 0 && quickCloseState("answers_saved", { answers: tied }) === "declined", "a tied-in answer ENDS the close: no domain or plan question follows it, the state is declined");
+    ok(quickCloseState("answers_saved", { answers: { ...NEW_SITE, manager: "agency", agency_contract: "in_contract" }, link_url: "https://x", link_generated_at: new Date(Date.now() - 3_600_000).toISOString(), link_kind: "signup" }) === "declined", "a decline beats a link that still stands");
   }
   {
     const a = { ...NEW_SITE, manager: "agency", agency_contract: "not_sure" } as const;
@@ -70,24 +83,25 @@ console.log("\n── the gate ──");
     const free = { ...NEW_SITE, manager: "agency", agency_contract: "free" } as const;
     ok(quickCloseGate(free).review.length === 0 && quickCloseState("answers_saved", { answers: free }) === "ready", "Build + agency + free to leave → no stop");
   }
-  ok(quickCloseGate({ ...SAFE, manager: "agency", agency_contract: "in_contract", access: "yes" }).review.length === 0, "Optimise on an agency site still in contract (with access) → fine: Optimise IS the route for them");
+  ok(quickCloseState("answers_saved", { answers: { ...OPTIMISE_V4, manager: "agency", agency_contract: "in_contract" } }) === "declined", "v5: an old Optimise close on a tied-in agency site is DECLINED too — nothing is sold to a tied-in client");
   for (const d of ["not_sure", "agency", "no"] as const) {
     const a = { ...NEW_SITE, domain: d };
     const gd = quickCloseGate(a);
     ok(gd.review.length === 0 && gd.flags.includes("domain_handoff") && quickCloseState("answers_saved", { answers: { ...a } }) === "ready", `Build + domain "${d}" → a domain-handoff FLAG, not a review — still ready to pay`);
     ok(mergeAnswers(NEW_SITE, { domain: d }).build_consents === undefined && buildConsentsFor({ ...NEW_SITE, domain: d })[0] === BUILD_CONSENT_DOMAIN_PENDING, `…and consents read for a controlled domain are asked again, in the pending wording (domain "${d}")`);
   }
+  /* A pre-v5 Optimise close keeps its old reasons READABLE (the handoff, Paul's email) but can never reach a link. */
   for (const [label, a, reason] of [
-    ["Optimise + no site access", { ...SAFE, access: "no" }, "no_site_access"],
-    ["Optimise on an agency site, access not sure", { ...SAFE, manager: "agency", agency_contract: "in_contract", access: "not_sure" }, "optimise_access_unsure"],
-    ["Optimise, agency + no authority (legacy answer)", { ...SAFE, manager: "agency", agency_contract: "in_contract", authority: "no" }, "third_party_no_authority"],
+    ["Optimise + no site access", { ...OPTIMISE_V4, access: "no" }, "no_site_access"],
+    ["Optimise on an agency site, access not sure", { ...OPTIMISE_V4, manager: "agency", agency_contract: "free", access: "not_sure" }, "optimise_access_unsure"],
+    ["Optimise, agency + no authority (legacy answer)", { ...OPTIMISE_V4, manager: "agency", agency_contract: "free", authority: "no" }, "third_party_no_authority"],
   ] as const) {
     const g2 = quickCloseGate(a);
-    ok(g2.review.includes(reason as never) && quickCloseState("answers_saved", { answers: a }) === "needs_review" && !mayGenerateLink("answers_saved", { answers: a }), `${label} → WEBSITE ACCESS ISSUE, Paul review (never silently safe)`);
+    ok(g2.review.includes(reason as never) && quickCloseState("answers_saved", { answers: a }) !== "ready" && !mayGenerateLink("answers_saved", { answers: a }), `${label} (pre-v5) → the old WEBSITE ACCESS reason still reads, and there is no link`);
   }
-  ok(quickCloseGate({ ...SAFE, domain: "not_sure" }).review.length === 0 && quickCloseGate({ ...SAFE, domain: "not_sure" }).flags.length === 0, "Optimise is never stopped (or flagged) over the domain — we edit the site in place");
-  const flagged = { ...SAFE, access: "no" } as const;
-  ok(quickCloseState("answers_saved", { answers: flagged, review_approved_at: "2026-09-29T10:00:00Z" }) === "ready", "…Paul can release it, so the opportunity is kept");
+  ok(quickCloseGate({ ...OPTIMISE_V4, domain: "not_sure" }).review.length === 0 && quickCloseGate({ ...OPTIMISE_V4, domain: "not_sure" }).flags.length === 0, "a pre-v5 Optimise close is never stopped (or flagged) over the domain (history unchanged)");
+  const flagged = { ...OPTIMISE_V4, access: "no" } as const;
+  ok(quickCloseState("answers_saved", { answers: flagged, review_approved_at: "2026-09-29T10:00:00Z" }) === "in_progress", "v5: Paul's release cannot sell the withdrawn plan — the plan must be confirmed as Build first");
   ok(quickCloseState("answers_saved", { answers: { decision_maker: "yes" } }) === "in_progress" && quickCloseState(null, null) === "not_started", "partial answers: in progress; nothing: not started");
   const recent = new Date(Date.now() - 3_600_000).toISOString();
   /* 2026-10-05 (v3): only a SIGN-UP link is ever usable; a stored Stripe payment link reads expired. */
@@ -99,6 +113,28 @@ console.log("\n── the gate ──");
   /* Recreation: rights unclear never blocks Build, never promises an exact copy. */
   const rec = { decision_maker: "yes", approach: "recreation", rights: "not_sure", design_owner: "agency", domain: "yes", manager: "owner", build_consents: "yes" } as const;
   ok(quickCloseGate(rec).review.length === 0 && quickCloseGate(rec).flags.includes("exact_copy_rights") && quickCloseState("answers_saved", { answers: rec }) === "ready", "recreation with unclear rights → still sellable as Build, flagged for Paul");
+}
+
+console.log("\n── v5: one plan for sale, tied in = declined, not sure = waits ──");
+{
+  const own = offerFit({ manager: "owner" }, true);
+  ok(own.recommended === "build" && own.offered.build && !own.offered.optimise && !own.declined, "their own site: Findable Build, and Optimise is never offered");
+  ok(!offerFit({ manager: "no_website" }, false).offered.optimise && offerFit({ manager: "no_website" }, false).recommended === "build", "no website: Build");
+  const tied = offerFit({ manager: "agency", agency_contract: "in_contract" }, true);
+  ok(tied.declined && tied.recommended === null && !tied.offered.build && !tied.offered.optimise && /clause 1\.6/.test(tied.reason ?? "") && !/optimise/i.test(tied.reason ?? ""), "still tied in: DECLINED with a plain reason — nothing offered, never steered to another plan");
+  const unsure = offerFit({ manager: "freelancer", agency_contract: "not_sure" }, true);
+  ok(!unsure.declined && unsure.recommended === "build" && unsure.offered.build && !!unsure.warning, "not sure: Build stays the plan, with a confirm-the-contract warning");
+  ok(!offerFit({ manager: "agency", agency_contract: "free" }, true).declined && offerFit({ manager: "agency", agency_contract: "free" }, true).warning === null, "free to leave: Build, no warning");
+  const fit = [own, tied, unsure].map((x) => [x.reason, x.warning, ...x.notes].join(" ")).join(" ");
+  ok(!/optimise/i.test(fit), "no offer line mentions Optimise");
+  const NOW = "2026-10-16T10:00:00Z";
+  for (const inc of [{ route: "optimise" }, { approach: "improve" }]) {
+    const p = planQuickCloseSave({ answers: { decision_maker: "yes", manager: "owner" } } as never, inc, { actorId: "u1", nowIso: NOW });
+    ok(!p.ok && p.error === "route_withdrawn", `a save that sends ${JSON.stringify(inc)} is REFUSED (route_withdrawn), never stored`);
+  }
+  const moved = planQuickCloseSave({ answers: OPTIMISE_V4 } as never, { route: "build" }, { expectRoute: "optimise", routeChangeConfirmed: true, actorId: "u1", nowIso: NOW });
+  ok(moved.ok && moved.answers.route === "build" && moved.cols.plan_tier === "new_site", "a pre-v5 Optimise close can be moved to Build (a confirmed route change)");
+  ok(routeTermsLines("build").join(" ").includes("12 payments in total") && !/month minimum|-month/.test(routeTermsLines("build").join(" ") + routePaymentsShort("build") + quickCloseScript("build")), "the term is said in PAYMENTS, never as a number of months");
 }
 
 console.log("\n── one onboarding record: the canonical columns ──");
@@ -121,7 +157,7 @@ ok([quickCloseScript("build"), quickCloseScript("optimise"), msg].every((s) => s
 
 console.log("\n── the handoff ──");
 {
-  const lines = quickCloseHandoffLines({ qc: { answers: { ...SAFE, access: "no" }, completed_at: "2026-09-29T10:00:00Z", review_approved_at: "2026-09-29T11:00:00Z", review_note: "Client will add us" }, closedBy: "Test", campaign: "Plumbers", leadSource: "linkedin", contact: { name: "Bob", email: "b@x.invalid" }, latestNote: "Wants it done by Friday", latestMessages: [{ direction: "inbound", body: "Yes send it" }] })!;
+  const lines = quickCloseHandoffLines({ qc: { answers: { ...OPTIMISE_V4, access: "no" }, completed_at: "2026-09-29T10:00:00Z", review_approved_at: "2026-09-29T11:00:00Z", review_note: "Client will add us" }, closedBy: "Test", campaign: "Plumbers", leadSource: "linkedin", contact: { name: "Bob", email: "b@x.invalid" }, latestNote: "Wants it done by Friday", latestMessages: [{ direction: "inbound", body: "Yes send it" }] })!;
   const t = lines.join("\n");
   ok(/QUICK CLOSE by Test on 2026-09-29/.test(t) && /Website approach: Improve their current website/.test(t) && /Can give site access: No/.test(t) && /WEBSITE ACCESS ISSUE/.test(t) && /you released it: Client will add us/.test(t), "closer, the approach, the answers and the access issue (with Paul's release)");
   const nl = quickCloseHandoffLines({ qc: { answers: { ...NEW_SITE, domain: "agency" } }, closedBy: "Test", campaign: null, leadSource: null, contact: {}, latestNote: null, latestMessages: [] })!.join("\n");

@@ -16,11 +16,13 @@
       £29.99 Hosting and Maintenance is a separate OPT-IN (clause 9A). The signed v3 agreement still says a £29.99
       continuation for BOTH routes — that is what those clients signed, and continuingModeFor (clientTimeline.ts)
       keeps it for them. This file never edits legal terms, Stripe or the guarantee.
+   🔴 v5 (Paul, 2026-10-16): FINDABLE OPTIMISE IS WITHDRAWN. The sales words name Build only (planSpoken); the
+      Optimise lines below remain ONLY so a client who signed Optimise under v3 / v4 is still described correctly.
    ⛔ Every figure is a findableOffer.ts constant; nothing here is a typed price.
    Pure. Edge-reachable (quick-close via quickClose.ts): relative imports, explicit .ts.
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 import {
-  FINDABLE_CONTINUING_GBP, FINDABLE_MONTHLY_GBP, FINDABLE_SETUP_PRICE_GBP, totalPaymentsFor, type ServiceRoute,
+  FINDABLE_CONTINUING_GBP, FINDABLE_MONTHLY_GBP, FINDABLE_SETUP_PRICE_GBP, MONTHLY_START_V3_WORDS, totalPaymentsFor, type ServiceRoute,
 } from './findableOffer.ts';
 
 const ORDINAL: Record<number, string> = { 1: '1st', 2: '2nd', 3: '3rd', 6: '6th', 12: '12th' };
@@ -51,11 +53,10 @@ export { afterTermSummaryWords, endOfTermKeyPoint } from './findableOffer.ts';
 /* ⛔ The end-of-term words (afterTermSummaryWords, endOfTermKeyPoint) live in findableOffer.ts, the constants module, and are
    re-exported above: findableOffer.ts uses them in its own offer lines, so they cannot be defined here (an import cycle). */
 
-/** One spoken line per plan for "How much is it?" — both plans, each with its own ending. */
-export function bothPlansSpoken(): string {
-  const o = totalPaymentsFor('optimise');
+/** The spoken answer to "How much is it?" — v5 (2026-10-16): ONE plan, Findable Build. The minimum term is said in
+ *  PAYMENTS ("12 payments in total"), never as a number of months. ⛔ Never names Optimise (withdrawn). */
+export function planSpoken(): string {
   const b = totalPaymentsFor('build');
-  return `If we work on your current website, it's £${FINDABLE_SETUP_PRICE_GBP} today, then £${FINDABLE_MONTHLY_GBP} a month — ${o} payments in total, today's included, and then it ends. `
-    + `If we build you a new website, it's £${FINDABLE_SETUP_PRICE_GBP} today, then £${FINDABLE_MONTHLY_GBP} a month — ${b} payments in total, and then the site's yours; `
-    + `then £${FINDABLE_CONTINUING_GBP} a month for hosting and maintenance only if you want us to keep looking after it.`;
+  return `We build, host and manage a new website for you. It's £${FINDABLE_SETUP_PRICE_GBP} today, then £${FINDABLE_MONTHLY_GBP} a month from ${MONTHLY_START_V3_WORDS}: ${b} payments in total, today's included. `
+    + `Once the ${b} payments are made the site's yours, and then it's £${FINDABLE_CONTINUING_GBP} a month for hosting and maintenance only if you want us to keep looking after it.`;
 }

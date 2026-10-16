@@ -13,7 +13,7 @@
    it (winAnsi) — the STORED record keeps exactly what was typed; only this copy approximates.
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 import {
-  agreementSectionTitles, agreementVersion, clientDetailRows, CLIENT_AGREEMENT_TITLE, methodWords, NOT_PROVIDED, ukDate, ukDateTime, utcStamp,
+  agreementSectionTitles, agreementVersion, clientDetailRows, versionRoutes, CLIENT_AGREEMENT_TITLE, methodWords, NOT_PROVIDED, ukDate, ukDateTime, utcStamp,
   type AgreementFill, type AgreementRoute,
 } from './clientAgreement.ts';
 
@@ -151,8 +151,8 @@ export async function buildAgreementPdf(lib: PdfLib, fill: AgreementFill, acc: A
   table(clientDetailRows(fill, v).map(([k, val]) => [k, val]), [190, W - 190], { boldFirst: true });
 
   heading(titles.service, 9.5);
-  for (const r of ['build', 'optimise'] as AgreementRoute[]) {
-    const s = v.services[r]; const on = fill.route === r;
+  for (const r of versionRoutes(v)) {
+    const s = v.services[r]!; const on = fill.route === r;
     const lines = wrap(s.description, font, 9, W - 150);
     const h = Math.max(lines.length * lh(9), 16) + 8;
     ensure(h);
@@ -198,7 +198,7 @@ export async function buildAgreementPdf(lib: PdfLib, fill: AgreementFill, acc: A
   // ── schedule 1: always starts a page, so its heading and header row are never stranded ──────
   newPage();
   heading(v.schedule.title);
-  const sc = [110, (W - 110) / 2, (W - 110) / 2];
+  const sc = [110, ...v.schedule.columns.map(() => (W - 110) / v.schedule.columns.length)];
   table([['', ...v.schedule.columns], ...v.schedule.rows], sc, { header: true, boldFirst: true, size: 8.5 });
 
   // ── signatures: always its own page, fully filled ───────────────────────────────────────────

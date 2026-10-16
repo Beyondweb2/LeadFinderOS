@@ -23,7 +23,7 @@ import { carriesMoney, clientClosed } from "../../../src/lib/paymentState.ts";
 import { sendOperatorAlert } from "../_shared/operator-alert.ts";
 import { handoffPrefill, handoffWithPrefill, type SalesHandoffRecord } from "../../../src/lib/salesHandoff.ts";
 import { cleanAnswers as cleanQuickClose } from "../../../src/lib/quickClose.ts";
-import { serviceRouteForTotal, serviceRouteFromRow } from "../../../src/lib/findableOffer.ts";
+import { FINDABLE_OPTIMISE_TOTAL_PAYMENTS, serviceRouteForTotal, serviceRouteFromRow } from "../../../src/lib/findableOffer.ts";
 import { agreementUrl, AGREEMENT_COPY_TO_PAUL } from "../../../src/lib/clientAgreement.ts";
 import { ACCEPTANCE_COLUMNS, agreementPdfForRow } from "../_shared/client-agreement.ts";
 import { weeklyStart } from "../../../src/lib/weeklyCheck.ts";
@@ -995,6 +995,8 @@ Deno.serve(async (req) => {
       if (action === "agreement_set_route") {
         const route = text(body.route);
         if (route !== "build" && route !== "optimise") return json({ ok: false, error: "bad_route", detail: "Choose Build or Optimise." }, 400);
+        /* v5 (2026-10-16): Optimise is withdrawn. It may be recorded only for a client who already paid on it (6 payments). */
+        if (route === "optimise" && Number(L.contract_total_payments) !== FINDABLE_OPTIMISE_TOTAL_PAYMENTS) return json({ ok: false, error: "route_withdrawn", detail: "Findable Optimise is no longer offered. Choose Build." }, 409);
         /* ⛔ THE ROUTE LOCKS AT THE FIRST BINDING FACT (M-021, src/lib/agreementRoute.ts): the checkout's
            stamped contract OR any acceptance — checkout included, not only an agree-page signature. */
         const lock = agreementRouteLock({ contractTotalPayments: L.contract_total_payments, acceptances: await loadAcceptances() });

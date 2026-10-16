@@ -19,7 +19,7 @@
       Anything else — including no row at all — is a refusal, and the visitor is sent to the agreement page.
    Pure. ⚠️ Edge-reachable — explicit .ts on every relative import.
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
-import type { AgreementRoute } from './clientAgreement.ts';
+import { asksCurrentProvider, versionOffersRoute, type AgreementRoute } from './clientAgreement.ts';
 
 export interface GateAcceptance {
   id: string;
@@ -30,11 +30,13 @@ export interface GateAcceptance {
   method: string;
   authority_confirmed?: boolean | null;
   agreed_text_sha256: string;
+  /** v5 clause 1.6 (absent on older versions, which never asked). Callers must select it. */
+  free_to_leave_provider?: boolean | null;
 }
 
 export type GateRefusal =
   | 'not_signed' | 'wrong_method' | 'old_version' | 'other_client' | 'other_signup' | 'other_route'
-  | 'no_authority' | 'tampered';
+  | 'no_authority' | 'tampered' | 'route_withdrawn' | 'not_free_to_leave';
 
 export type GateResult = { ok: true; acceptanceId: string } | { ok: false; refusal: GateRefusal; reason: string };
 
@@ -47,6 +49,8 @@ const REASONS: Record<GateRefusal, string> = {
   other_route: 'The signature is for the other service (Build / Optimise).',
   no_authority: 'The signer did not confirm they are authorised to bind the business.',
   tampered: 'The stored agreement text no longer matches its fingerprint.',
+  route_withdrawn: 'This service is not offered under the current agreement (v5 offers Findable Build only).',
+  not_free_to_leave: 'The client did not confirm they are free to leave their current provider (clause 1.6).',
 };
 
 /**
@@ -70,6 +74,9 @@ export function checkoutAgreementGate(args: {
   if ((a.onboarding_id ?? '') !== args.onboardingId) return no('other_signup');
   if (a.service_route !== args.route) return no('other_route');
   if (a.authority_confirmed !== true) return no('no_authority');
+  /* v5: Optimise is withdrawn, and a signature without "free to leave" is not one we can take payment on. */
+  if (!versionOffersRoute(a.agreement_version, a.service_route)) return no('route_withdrawn');
+  if (asksCurrentProvider(a.agreement_version) && a.free_to_leave_provider !== true) return no('not_free_to_leave');
   if (!args.recomputedSha || args.recomputedSha !== a.agreed_text_sha256) return no('tampered');
   return { ok: true, acceptanceId: a.id };
 }

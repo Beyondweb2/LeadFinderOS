@@ -338,7 +338,7 @@ function upkeepPhrase(totalPayments: number | null | undefined): string {
 function termPhrase(totalPayments: number | null | undefined): string {
   const route = serviceRouteForTotal(totalPayments);
   return route
-    ? `, for your ${termMonthsFor(route)}-month minimum term (${totalPaymentsFor(route)} payments in total, counting your first)`
+    ? `, for your minimum term (${totalPaymentsFor(route)} payments in total, counting your first)`
     : `, until your agreed payments are complete (counting your first)`;
 }
 
@@ -499,7 +499,7 @@ export const AGREEMENT_KEY_POINTS: Record<'build' | 'optimise' | 'unknown', read
  *  v4 gets it, and an unknown route names nothing. */
 export function agreementKeyPointsFor(a: { route?: 'build' | 'optimise' | null; version?: string | null }): readonly string[] {
   const base = AGREEMENT_KEY_POINTS[a.route ?? 'unknown'];
-  return a.version === 'v4' && a.route ? [...base, endOfTermKeyPoint(a.route)] : base;
+  return (a.version === 'v4' || a.version === 'v5') && a.route ? [...base, endOfTermKeyPoint(a.route)] : base;
 }
 const AGREEMENT_ALWAYS_YOURS = 'Your domain, logo and photos are always yours.';
 

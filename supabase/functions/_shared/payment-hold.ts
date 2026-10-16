@@ -40,7 +40,7 @@ export async function verifyV3Checkout(service: Service, s: HoldSession, leadId:
   let acceptance: (GateAcceptance & { agreed_text: string }) | null = null;
   if (accId) {
     const { data, error } = await service.from("client_agreement_acceptances")
-      .select("id, lead_id, onboarding_id, agreement_version, service_route, method, authority_confirmed, agreed_text, agreed_text_sha256")
+      .select("id, lead_id, onboarding_id, agreement_version, service_route, method, authority_confirmed, agreed_text, agreed_text_sha256, free_to_leave_provider")
       .eq("id", accId).maybeSingle();
     if (error) throw new Error(`could not read the acceptance: ${error.message}`);
     acceptance = data ?? null;

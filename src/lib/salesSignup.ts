@@ -85,7 +85,10 @@ const CONFIRM_COLUMNS: readonly string[] = ['website_manager', 'website_platform
 
 export type ClientConfirmPlan =
   | { ok: false; error: 'nothing_to_confirm' }
-  | { ok: true; next: QuickCloseRecord & Record<string, unknown>; changed: QcKey[]; columns: Record<string, unknown>; holds: boolean };
+  | { ok: true; next: QuickCloseRecord & Record<string, unknown>; changed: QcKey[]; columns: Record<string, unknown>; holds: boolean;
+      /** 🔴 v5 clause 1.6: the client says they are still tied into a contract with their current provider — the sale is
+       *  DECLINED (never released, nothing else offered). Always also `holds`. */
+      declined: boolean };
 
 /** 🔴 THE CLIENT'S CONFIRMATION, DECIDED. From the stored Quick Close record and what the page sent:
  *  · only the four situation facts are read; anything else the request carries is ignored;
@@ -93,7 +96,8 @@ export type ClientConfirmPlan =
  *  · it is recorded BESIDE the salesperson's answers (client_confirmed) — the rep's record is never rewritten;
  *  · `changed` = the facts that differ from what the salesperson recorded; a change withdraws any review release,
  *    so Paul sees the new situation (the gate judges effectiveAnswers);
- *  · `holds` = the corrected answers now stop the sign-up (a contract blocker on Build, an unanswered question).
+ *  · `holds` = the corrected answers now stop the sign-up (a contract not confirmed ended, an unanswered question);
+ *  · `declined` = v5 clause 1.6: they are still tied in, so we do not take them on (quickCloseState 'declined').
  *  The caller writes `next` conditionally on the rev it read. */
 export function planClientConfirmation(cur: (QuickCloseRecord & Record<string, unknown>) | null | undefined, rawIncoming: unknown, nowIso: string): ClientConfirmPlan {
   const rep = cleanAnswers(cur?.answers);
@@ -111,5 +115,5 @@ export function planClientConfirmation(cur: (QuickCloseRecord & Record<string, u
     const cols = onboardingColumnsFor(eff);
     for (const c of CONFIRM_COLUMNS) if (c in cols) columns[c] = cols[c];
   }
-  return { ok: true, next, changed, columns, holds: !gate.complete || gate.blocked || (gate.review.length > 0 && !next.review_approved_at) };
+  return { ok: true, next, changed, columns, declined: gate.declined, holds: gate.declined || !gate.complete || gate.blocked || (gate.review.length > 0 && !next.review_approved_at) };
 }

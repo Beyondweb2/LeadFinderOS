@@ -178,14 +178,14 @@ console.log("-- The monthly: Stripe's date from sign-up, not the claim window (2
   for (const text of [...withMonthly, ...rem.paragraphs, CARD_SAVED_NOTICE, cardSavedNoticeFor('optimise')].map((x) => x.split(afterTermSummaryWords('build')).join(''))) {
     ok(!/maintain|maintenance/i.test(text), `no "maintain": "${text.slice(0, 44)}"`);
   }
-  ok(/today/.test(CARD_SAVED_NOTICE) && /12-month minimum term/.test(CARD_SAVED_NOTICE) && /ends after payment 12/.test(CARD_SAVED_NOTICE) && /£29\.99 a month Hosting and Maintenance is optional/.test(CARD_SAVED_NOTICE) && !/continues at £29\.99/.test(CARD_SAVED_NOTICE), 'the card notice says what is taken today, the term, and that Build ends after payment 12 with the £29.99 only as an option (v4 clause 9A)');
+  ok(/today/.test(CARD_SAVED_NOTICE) && /minimum term is 12 payments/.test(CARD_SAVED_NOTICE) && /ends after payment 12/.test(CARD_SAVED_NOTICE) && /£29\.99 a month Hosting and Maintenance is optional/.test(CARD_SAVED_NOTICE) && !/continues at £29\.99/.test(CARD_SAVED_NOTICE), 'the card notice says what is taken today, the term, and that Build ends after payment 12 with the £29.99 only as an option (v4 clause 9A)');
 }
 
 console.log("-- Billing notices: the right message, and never the wrong one --");
 {
   const withLink = monthlyStartingSoonEmail({ businessName: 'X', startsOn: '25 October 2026', cancelUrl: 'https://billing.stripe.com/p/session_123', route: 'build' });
   /* 2026-09-23: no free-cancel offer in the reminder any more — the 12-month minimum was sold. */
-  ok(!withLink.paragraphs.some((p) => /cancel|nothing is taken/i.test(p)) && withLink.paragraphs.some((p) => /12-month minimum term/.test(p)), 'the reminder names the minimum term and offers no free exit');
+  ok(!withLink.paragraphs.some((p) => /cancel|nothing is taken/i.test(p)) && withLink.paragraphs.some((p) => /minimum term: 12 payments/.test(p)), 'the reminder names the minimum term and offers no free exit');
   const noLink = monthlyStartingSoonEmail({ businessName: 'X', startsOn: '25 October 2026', cancelUrl: null, route: 'optimise' });
   ok(noLink.paragraphs.some((p) => /reply to this email/i.test(p)), 'and questions go to a reply');
   ok(!noLink.paragraphs.some((p) => /http/i.test(p)), 'never a half-built or empty link');

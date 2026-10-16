@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Callout } from '@/components/operator/ui';
 import { useToast } from '@/hooks/use-toast';
 import { useSubscription } from '@/hooks/useSubscription';
-import { QC_REVIEW_HEADING } from '@/lib/quickClose';
+import { QC_REVIEW_HEADING, TIED_IN_DECLINE_HEADING } from '@/lib/quickClose';
 import { invokeEdge, edgeErrorMessage } from '@/lib/edgeInvoke';
 import { notifyLeadChanged } from '@/lib/leadSync';
 import { LINK_READY_FALLBACK } from '@/lib/paymentLinkRoute';
@@ -44,6 +44,7 @@ export function ClosePanel({ leadId, active = true, framed = false }: { leadId: 
   return (
     <div className={cn(framed && 'h-full overflow-y-auto px-4 py-4')} data-testid="close-panel">
       {v.state === 'needs_review' && Object.keys(v.answers ?? {}).length === 0 && <SelfServeHold leadId={leadId} reasons={v.review.reasons} />}
+      {v.state === 'declined' && Object.keys(v.answers ?? {}).length === 0 && <SelfServeDeclined reasons={v.review.reasons} />}
       {way === null && (
         <section className="space-y-3" data-testid="close-chooser">
           <p className="text-lg font-bold tracking-tight">How do you want to close them?</p>
@@ -63,8 +64,22 @@ export function ClosePanel({ leadId, active = true, framed = false }: { leadId: 
   );
 }
 
-/** The client's OWN sign-up chose Build on an agency-run site they may still be tied into: the SAME stop as a phone close, the same
- *  release (quick-close approve_review, Paul only). The client is told "we need to check one thing"; nothing is charged meanwhile. */
+/** 🔴 v5 clause 1.6 (2026-10-16): the client said on their OWN page that they are still tied into a contract with whoever looks after
+ *  their website. We do not take them on: no release, no other plan. Their details are kept so someone can get back in touch. */
+function SelfServeDeclined({ reasons }: { reasons: string[] }) {
+  return (
+    <div className="mb-3" data-testid="self-serve-declined">
+      <Callout tone="red" icon={AlertTriangle} title={TIED_IN_DECLINE_HEADING}>
+        <p className="text-muted-foreground">They said on their own page that they are still tied into a contract with their current provider.</p>
+        <ul className="mt-1 list-disc pl-5 text-muted-foreground">{reasons.map((r) => <li key={r}>{r}</li>)}</ul>
+        <p className="mt-2 text-muted-foreground">No payment can be taken and nothing else is offered. Get back in touch when their contract ends.</p>
+      </Callout>
+    </div>
+  );
+}
+
+/** The client's OWN sign-up chose Build on an agency-run site and is NOT SURE whether they are still tied in: the SAME stop as a phone
+ *  close, the same release (quick-close approve_review, Paul only), given only once they confirm they are free. Nothing is charged meanwhile. */
 function SelfServeHold({ leadId, reasons }: { leadId: string; reasons: string[] }) {
   const { role } = useSubscription();
   const qc = useQueryClient();
@@ -99,6 +114,18 @@ export function FullSetupPanel({ leadId }: { leadId: string }) {
   const [copied, setCopied] = useState(false);
   const v = q.data;
   if (!v) return <p className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" />Loading…</p>;
+  /* v5 clause 1.6: the call's answers say they are still tied into a contract with their current provider — no set-up
+     link (the server refuses it too: share_setup → declined). */
+  if (v.state === 'declined') {
+    return (
+      <section className="space-y-3" data-testid="full-setup-panel">
+        <p className="text-lg font-bold tracking-tight">Send full setup</p>
+        <Callout tone="red" icon={AlertTriangle} testId="setup-declined" title={TIED_IN_DECLINE_HEADING}>
+          <span className="text-muted-foreground">They are still tied into a contract with whoever looks after their website, so we can't take them on now and no set-up link is sent. Get back in touch when the contract ends.</span>
+        </Callout>
+      </section>
+    );
+  }
   const setup = v.full_setup;
   const lr = v.link_route;
   const canWa = lr?.route === 'whatsapp_reply' || lr?.route === 'whatsapp_template';

@@ -22,19 +22,21 @@ console.log('\n── PHONE CLOSE: the questions ──');
 ok(closeFlow({}).join() === 'decision_maker,manager,domain,route', 'owner-run site: authority, who looks after the site, the domain, then the plan LAST');
 ok(closeFlow({ manager: 'agency' }).join() === 'decision_maker,manager,agency_contract,domain,route', 'an agency / developer adds exactly one question: are they still tied into a contract');
 ok(!closeFlow({ manager: 'owner' }).includes('rights') && !closeFlow({ manager: 'agency', route: 'optimise' }).includes('rights'), 'the reuse-of-design question is not asked any more');
-ok(closeFlow({ route: 'optimise' }).join() === 'decision_maker,manager,domain,route,access', 'Optimise still adds only whether Findable can get in');
+ok(closeFlow({ route: 'optimise' }).join() === 'decision_maker,manager,domain,route', 'v5: the Optimise-only site-access question is gone (Optimise is withdrawn)');
+ok(closeFlow({ manager: 'agency', agency_contract: 'in_contract' }).join() === 'decision_maker,manager,agency_contract', 'v5: still tied in ENDS the close (declined) — no domain or plan question after it');
 ok(!/dns|registrar|password|login|hosting|logo|photo|opening hours/i.test(closeFlow({ manager: 'agency', route: 'optimise' }).join()), 'no DNS / registrar / hosting / CMS login, photo, logo or hours on the call');
 ok(!phoneCloseNotesComplete(undefined) && !phoneCloseNotesComplete({ jobs: 'Lock changes' }) && !phoneCloseNotesComplete({ areas: 'Canterbury' }) && !phoneCloseNotesComplete({ jobs: ' ', areas: ' ' }), 'services AND areas are both needed — one, blank or nothing is not complete');
 ok(phoneCloseNotesComplete({ jobs: 'Emergency lockouts, lock changes', areas: 'Canterbury, Whitstable' }), 'what they offer + where they want to be found → complete');
 ok(missingQuestions({ decision_maker: 'yes', manager: 'owner', domain: 'yes', route: 'build' }).length === 0, 'Build with the short answers is ready on the answers alone (the notes are checked when the link is made)');
 
-console.log('\n── BUILD DEFAULT / OPTIMISE ONLY ON A CONFIRMED CONTRACT (unchanged) ──');
+console.log('\n── v5: BUILD ONLY; STILL TIED IN = DECLINED ──');
 ok(offerFit({}, true).recommended === 'build' && offerFit({ manager: 'owner' }, true).recommended === 'build', 'a site they run → Build');
 ok(offerFit({ manager: 'agency', agency_contract: 'free' }, true).recommended === 'build', 'an agency they can leave → Build');
 ok(offerFit({ manager: 'agency', agency_contract: 'not_sure' }, true).recommended === 'build' && !!offerFit({ manager: 'agency', agency_contract: 'not_sure' }, true).warning, 'agency + not sure → still Build, with the warning');
 ok(offerFit({ manager: 'owner', domain: 'not_sure' }, true).recommended === 'build', 'an unclear domain never moves the recommendation');
 ok(offerFit({}, false).recommended === 'build' && !offerFit({}, false).offered.optimise, 'no website → Build');
-ok(offerFit({ manager: 'agency', agency_contract: 'in_contract' }, true).recommended === 'optimise' && offerFit({ manager: 'freelancer', agency_contract: 'in_contract' }, true).recommended === 'optimise', 'Optimise is recommended ONLY for an agency / developer they are confirmed still tied into');
+ok(['agency', 'freelancer'].every((m) => { const f = offerFit({ manager: m as 'agency', agency_contract: 'in_contract' }, true); return f.declined && f.recommended === null && !f.offered.build && !f.offered.optimise; }), 'an agency / developer they are still tied into → DECLINED: nothing offered (never steered to Optimise)');
+ok([{}, { manager: 'owner' }, { manager: 'agency', agency_contract: 'free' }, { manager: 'agency', agency_contract: 'not_sure' }].every((a) => !offerFit(a, true).offered.optimise), 'Optimise is never offered, whatever the answers');
 
 console.log('\n── ONE SIGN-UP, TWO ROUTES ──');
 ok(closeRouteOf(null) === 'full_setup' && closeRouteOf({ answers: {} }) === 'full_setup', 'a row with no salesperson answers is the client doing it themselves');

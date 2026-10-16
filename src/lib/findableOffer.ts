@@ -87,11 +87,22 @@ export const MONTHLY_START_V3_WORDS = 'the day after your 14-day refund window c
    ⛔ DO NOT INVENT penalties, early-exit charges or cancellation rights beyond the above.
    ⚠️ findable-site carries its own copies (site.ts BUILD_TOTAL_PAYMENTS / OPTIMISE_TOTAL_PAYMENTS);
    scripts/check-cross-repo-sync.mjs fails on drift. */
+/* 🔴 ONE PLAN FOR SALE (agreement v5, Paul, 2026-10-16): Findable OPTIMISE IS WITHDRAWN. Nothing sells it, quotes it or
+   recommends it; a client tied into a contract with their current provider is DECLINED (v5 clause 1.6), never steered
+   to a lighter plan. The 'optimise' route stays in the TYPE only so the clients who signed v3 / v4 on it, their Stripe
+   subscriptions (total_payments 6) and their records still read correctly. Sell from SALEABLE_ROUTES, never SERVICE_ROUTES. */
 export type ServiceRoute = 'build' | 'optimise';
+/** Every route a stored record may carry (history included). */
 export const SERVICE_ROUTES: readonly ServiceRoute[] = ['build', 'optimise'];
+/** ⛔ The routes a NEW sale may be made on: Build only. */
+export const SALEABLE_ROUTES: readonly ServiceRoute[] = ['build'];
+export function isSaleableRoute(v: unknown): v is ServiceRoute {
+  return (SALEABLE_ROUTES as readonly unknown[]).includes(v);
+}
 /** Payments in total on the Build route, the sign-up £99 included. */
 export const FINDABLE_BUILD_TOTAL_PAYMENTS = 12;
-/** Payments in total on the Optimise route, the sign-up £99 included. */
+/** Payments in total on the (withdrawn) Optimise route, the sign-up £99 included. HISTORY ONLY: v3 / v4 Optimise
+ *  clients and their subscriptions. Not offered since v5 (2026-10-16), and no longer mirrored by findable.live. */
 export const FINDABLE_OPTIMISE_TOTAL_PAYMENTS = 6;
 
 export const SERVICE_ROUTE_NAME: Record<ServiceRoute, string> = { build: 'Findable Build', optimise: 'Findable Optimise' };
@@ -146,9 +157,11 @@ export function serviceRouteFromRow(row: { plan_tier?: unknown; website_addon?: 
   return route;
 }
 
-/** The term in words for one route: "12 payments in total, including the sign-up payment (a 12-month minimum term)". */
+/** The term in words for one route: "12 payments in total, including the £99 at sign-up (the minimum term)".
+ *  ⛔ COUNTED IN PAYMENTS, NOT MONTHS (v5 clause 4.1, 2026-10-16): the monthly starts after the Refund Window, so twelve
+ *  payments run a little over twelve months and "a 12-month minimum term" was not what the agreement says. */
 export function termLineFor(route: ServiceRoute): string {
-  return `${totalPaymentsFor(route)} payments in total, including the £${FINDABLE_SETUP_PRICE_GBP} at sign-up (a ${termMonthsFor(route)}-month minimum term)`;
+  return `${totalPaymentsFor(route)} payments in total, including the £${FINDABLE_SETUP_PRICE_GBP} at sign-up (the minimum term)`;
 }
 
 /** 🔴 THE ONE CALCULATION OF WHEN THE FIRST RECURRING PAYMENT IS: FINDABLE_MONTHLY_DELAY_DAYS after
@@ -198,11 +211,11 @@ export function remeasureWeeksFor(_row?: { plan_tier?: unknown; website_route?: 
  *  names both lengths. Built from the constants so a price move cannot leave a stale figure in a call
  *  script. ⛔ Where the route is known, use offerSummaryFor(route) — never both options to a client who
  *  has already chosen one. */
-/* 🔴 v3 TERMS (Paul, 2026-10-05): the monthly starts the day after the refund window, not at a fixed six
-   weeks; after the minimum term the service continues at FINDABLE_CONTINUING_GBP a month until cancelled (clause 9A).
+/* 🔴 v5 TERMS (Paul, 2026-10-16): ONE plan. The monthly starts the day after the refund window; the website transfers to
+   the client after the last payment; £29.99 a month Hosting and Maintenance only if they opt in (clause 9A).
    Salespeople quote ONLY these (contractor checklist Part 2, "Prices and terms"). */
 export const FINDABLE_OFFER_SUMMARY =
-  `£${FINDABLE_SETUP_PRICE_GBP} to start, then £${FINDABLE_MONTHLY_GBP} a month from ${MONTHLY_START_V3_WORDS} — ${FINDABLE_BUILD_TOTAL_PAYMENTS} payments in total if we build you a new website, ${FINDABLE_OPTIMISE_TOTAL_PAYMENTS} if we optimise the one you have. Optimise then ends with no continuing charge; after Build, £${FINDABLE_CONTINUING_GBP} a month hosting and maintenance is optional.`;
+  `£${FINDABLE_SETUP_PRICE_GBP} to start, then £${FINDABLE_MONTHLY_GBP} a month from ${MONTHLY_START_V3_WORDS}: we build, host and manage a new website for you, ${FINDABLE_BUILD_TOTAL_PAYMENTS} payments in total. After payment ${FINDABLE_BUILD_TOTAL_PAYMENTS} the website is yours, and £${FINDABLE_CONTINUING_GBP} a month hosting and maintenance is optional.`;
 
 /* ⛔ THE END-OF-TERM WORDS (agreement v4, clause 9A / 15.1) — written HERE, in the constants module, because the offer lines
    below use them and planTerms.ts (which re-exports these) imports THIS file: the other direction would be a cycle. */
@@ -226,7 +239,7 @@ const afterTermInline = (route: ServiceRoute): string => route === 'build'
 
 /** The offer in one line for ONE route. */
 export function offerSummaryFor(route: ServiceRoute): string {
-  return `${SERVICE_ROUTE_NAME[route]}: £${FINDABLE_SETUP_PRICE_GBP} to start, then £${FINDABLE_MONTHLY_GBP} a month from ${MONTHLY_START_V3_WORDS} — ${totalPaymentsFor(route)} payments in total, a ${termMonthsFor(route)}-month minimum term, ${afterTermInline(route)}.`;
+  return `${SERVICE_ROUTE_NAME[route]}: £${FINDABLE_SETUP_PRICE_GBP} to start, then £${FINDABLE_MONTHLY_GBP} a month from ${MONTHLY_START_V3_WORDS}, ${totalPaymentsFor(route)} payments in total (the minimum term), ${afterTermInline(route)}.`;
 }
 
 /** 🔴 WhatsApp templates whose META-REGISTERED body quotes an offer we no longer sell ("After that
@@ -498,7 +511,7 @@ export function monthlyStartingSoonEmail(i: { businessName: string; startsOn: st
       `Your monthly payment of £${FINDABLE_MONTHLY_GBP} starts on ${i.startsOn}.`,
       `It covers the work we keep doing every week to add another way for people to find you: pages improved on what the newer data shows, new pages where there is something worth going after, and an eye on who else is being named.`,
       i.route
-        ? `It runs for your ${termMonthsFor(i.route)}-month minimum term: ${totalPaymentsFor(i.route)} payments in total, counting the £${FINDABLE_SETUP_PRICE_GBP} you paid at sign-up${sep}${after}`
+        ? `It runs for your minimum term: ${totalPaymentsFor(i.route)} payments in total, counting the £${FINDABLE_SETUP_PRICE_GBP} you paid at sign-up${sep}${after}`
         : `It runs until your agreed payments are complete, counting the £${FINDABLE_SETUP_PRICE_GBP} you paid at sign-up${sep}${after}`,
       `Any questions, just reply to this email.`,
       `Paul, findable`,
@@ -528,15 +541,17 @@ export function monthlyStartingSoonEmail(i: { businessName: string; startsOn: st
 /* 🔴 PER ROUTE (2026-09-29): the checkout reads the route off the row and shows THAT route's count —
    the Stripe page a customer pays on names exactly the schedule the webhook then creates. */
 /* 🔴 v4 (2026-10-07): the agreement's own timing and its end — Optimise ends after payment 6, Build ends after payment 12 and
-   the £29.99 service is a separate opt-in (clause 9A). Every sale is checked out under these words. */
+   the £29.99 service is a separate opt-in (clause 9A). Every sale is checked out under these words.
+   🔴 v5 (2026-10-16): the minimum term is COUNTED IN PAYMENTS (clause 4.1, "12 payments"), never "a 12-month minimum term";
+   and no em dash (findable.live shows this sentence on its own pre-pay screen, where the rule is enforced by a script). */
 export function cardSavedNoticeFor(route: ServiceRoute): string {
   const n = totalPaymentsFor(route);
-  return `You pay £${FINDABLE_SETUP_PRICE_GBP} today. We save your card. £${FINDABLE_MONTHLY_GBP} a month starts ${MONTHLY_START_V3_WORDS}, for a ${termMonthsFor(route)}-month minimum term — ${n} payments in total, including today's. ${afterTermSummaryWords(route)} That is what your signed agreement says.`;
+  return `You pay £${FINDABLE_SETUP_PRICE_GBP} today. We save your card. £${FINDABLE_MONTHLY_GBP} a month starts ${MONTHLY_START_V3_WORDS}. Your minimum term is ${n} payments in total, including today's. ${afterTermSummaryWords(route)} That is what your signed agreement says.`;
 }
 /** The Stripe line-item name for a route — what the payer sees on the Stripe page and the receipt. */
 export function checkoutLineNameFor(route: ServiceRoute): string {
   const what = route === 'build' ? 'AI visibility + a new website we build and manage' : 'AI visibility on your existing website';
-  return `${SERVICE_ROUTE_NAME[route]} — ${what}: £${FINDABLE_SETUP_PRICE_GBP} today, then £${FINDABLE_MONTHLY_GBP}/month from the day after your refund window, ${totalPaymentsFor(route)} payments in total (${termMonthsFor(route)}-month minimum), ${route === 'build' ? `then optional £${FINDABLE_CONTINUING_GBP}/month hosting and maintenance` : 'then the plan ends'}`;
+  return `${SERVICE_ROUTE_NAME[route]} — ${what}: £${FINDABLE_SETUP_PRICE_GBP} today, then £${FINDABLE_MONTHLY_GBP}/month from the day after your refund window, ${totalPaymentsFor(route)} payments in total (the minimum term), ${route === 'build' ? `then optional £${FINDABLE_CONTINUING_GBP}/month hosting and maintenance` : 'then the plan ends'}`;
 }
 
 export const FINDABLE_CONTACT_EMAIL = "paul@findable.live";

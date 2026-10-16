@@ -6,10 +6,11 @@ import {
   adoptLink, answersKey, buildConsentsFor, buildConsentsWording, cleanAnswers, linkExpiresAtMs, linkStep, linkUsable, linkUsableUntilMs, planQuickCloseSave,
   quickCloseEmail, quickCloseGate, quickCloseMessage, quickCloseState, QC_REVIEW_TEXT, QC_REVIEW_HEADING, paulFlagText, deliveryApproach, STRIPE_SESSION_LIFETIME_MS,
   stripeSessionIdFromUrl, quickCloseClosedRefusal, cleanCallNotes, splitCallList, offerFit, callNotesLines, closeRouteOf, phoneCloseNotesComplete, quickCloseGreeting, type QcLinkShare, type QcRecord, type QuickCloseRecord,
+  ROUTE_WITHDRAWN_TEXT, TIED_IN_DECLINE_REASON,
 } from "../../../src/lib/quickClose.ts";
 import { cleanCloseEmail, closeRecipient, CLOSE_EMAIL_INVALID_TEXT, fullSetupEmail } from "../../../src/lib/closeEmail.ts";
 import { serviceWindowState } from "../../../src/lib/serviceWindow.ts";
-import { selfServeBuildHold, SELF_SERVE_HOLD_TEXT } from "../../../src/lib/selfServeContract.ts";
+import { selfServeBuildHold, selfServeDeclined, SELF_SERVE_DECLINE_TEXT, SELF_SERVE_HOLD_TEXT } from "../../../src/lib/selfServeContract.ts";
 import { decideLinkRoute, LINK_ROUTE_SAY, type ConversationFacts } from "../../../src/lib/paymentLinkRoute.ts";
 import { SIGNUP_LINK_TEMPLATE_NAME, setupLinkUrl, templateSendState } from "../../../src/lib/whatsappLinkTemplates.ts";
 import { templateAvailability } from "../_shared/template-status.ts";
@@ -18,7 +19,7 @@ import {
   HANDOFF_SEND_REFUSAL_TEXT, handoffSendRefusal, handoffSentBody, handoffSentTitle,
   type SalesHandoffFields, type SalesHandoffRecord,
 } from "../../../src/lib/salesHandoff.ts";
-import { FINDABLE_CONTACT_EMAIL, SERVICE_ROUTE_NAME, serviceRouteFromRow } from "../../../src/lib/findableOffer.ts";
+import { FINDABLE_CONTACT_EMAIL, SERVICE_ROUTE_NAME, isSaleableRoute, serviceRouteFromRow } from "../../../src/lib/findableOffer.ts";
 import { isPaidLead } from "../../../src/lib/leadPayment.ts";
 import { loadClientSetup, recordLeadEvent, submitForDelivery } from "../_shared/client-setup.ts";
 import { sendOperatorAlert } from "../_shared/operator-alert.ts";
@@ -80,7 +81,11 @@ const CHECKOUT_REFUSAL_TEXT: Record<string, string> = {
   already_client: "This business has already paid.",
   cannot_serve: "The website answers mean Findable cannot deliver on this site as it stands — Paul needs to look at it.",
   domain_unresolved: "The domain answers need Paul's review before payment.",
-  route_undecided: "Choose the website route (Build or Optimise) first.",
+  route_undecided: "Confirm the plan (Findable Build) first.",
+  /* v5 (2026-10-16): Findable Optimise is withdrawn; a close still carrying it must be moved to Build first. */
+  route_withdrawn: ROUTE_WITHDRAWN_TEXT,
+  /* v5 clause 1.6: still tied into a contract with their current provider — not taken on. */
+  declined: TIED_IN_DECLINE_REASON,
   needs_trade: "Add the business's trade first (it decides what the baseline measures).",
   no_lead_attribution: "This payment could not be tied to the lead.",
   unknown_onboarding: "The onboarding record was not found.",
@@ -366,7 +371,10 @@ Deno.serve(async (req) => {
       const cur = (row?.quick_close ?? null) as (QuickCloseRecord & Obj) | null;
       const answers = cleanAnswers(cur?.answers);
       const nowMs = Date.now();
-      const selfHold = row?.status !== "paid" && Object.keys(answers).length === 0 && selfServeBuildHold(row as never);
+      /* v5 clause 1.6: a client who said on their own page that they are still tied in is DECLINED (no release); a "not sure"
+         one is HELD for Paul. Only for a client-made sign-up (no salesperson answers on the row). */
+      const selfDeclined = row?.status !== "paid" && Object.keys(answers).length === 0 && selfServeDeclined(row as never);
+      const selfHold = !selfDeclined && row?.status !== "paid" && Object.keys(answers).length === 0 && selfServeBuildHold(row as never);
       /* THE HANDOFF, with what we already know pre-filled (saved answers win). After payment, the
          client's setup checklist too — the same loader Paid Clients uses — so the seller sees what is
          still missing and may submit for delivery when everything required is in. */
@@ -439,9 +447,9 @@ Deno.serve(async (req) => {
         onboarding: row ? { id: row.id, status: row.status, contact_name: row.contact_name, contact_email: row.contact_email, confirmed_phone: row.confirmed_phone, business_website: row.business_website } : null,
         /* THE CLIENT'S OWN SIGN-UP (Full Setup) that chose Build on an agency-run site they may still be tied into is HELD for Paul by the
            same rule as a phone close; the Close tab shows the same stop and the same Release button (approve_review). */
-        answers, state: closedNow ? "paid" : selfHold ? "needs_review" : quickCloseState(row?.status, cur, nowMs), gate: quickCloseGate(answers),
+        answers, state: closedNow ? "paid" : selfDeclined ? "declined" : selfHold ? "needs_review" : quickCloseState(row?.status, cur, nowMs), gate: quickCloseGate(answers),
         consents: { lines: buildConsentsFor(answers), wording: buildConsentsWording(answers), confirmed: cur?.build_consents_confirmed ?? null },
-        review: { approved_at: cur?.review_approved_at ?? null, reasons: selfHold ? [SELF_SERVE_HOLD_TEXT] : quickCloseGate(answers).review.map((r) => QC_REVIEW_TEXT[r]),
+        review: { approved_at: cur?.review_approved_at ?? null, reasons: selfDeclined ? [SELF_SERVE_DECLINE_TEXT] : selfHold ? [SELF_SERVE_HOLD_TEXT] : quickCloseGate(answers).review.map((r) => QC_REVIEW_TEXT[r]),
           /* v2: for Paul after payment, never a stop (domain handoff, an exact copy without confirmed rights). */
           flags: quickCloseGate(answers).flags.map((f) => paulFlagText(f, answers)), delivery_approach: deliveryApproach(answers) },
         link: cur?.link_url && cur.link_generated_at ? {
@@ -726,6 +734,10 @@ Deno.serve(async (req) => {
     if (mode === "approve_review") {
       if (actor.role !== "admin") { await recordDenial(service, actor.id, "quick-close:approve_review", leadId); return json({ ok: false, error: "admin_only", detail: "Only Paul can release a flagged Quick Close." }, 403); }
       if (!row) return json({ ok: false, error: "not_started" }, 409);
+      /* ⛔ v5 clause 1.6: a decline (still tied into a contract) is not a review — there is nothing to release. */
+      if (quickCloseState(row.status, row.quick_close as never) === "declined" || (Object.keys(cleanAnswers((row.quick_close as Obj | null)?.answers)).length === 0 && selfServeDeclined(row as never))) {
+        return json({ ok: false, error: "declined", detail: `${CHECKOUT_REFUSAL_TEXT.declined} This cannot be released.` }, 409);
+      }
       for (let attempt = 0; attempt < 4; attempt++) {
         if (attempt > 0) row = (await loadRow(service, row!.id)) ?? row;
         const qcNow = (row!.quick_close ?? null) as Obj | null;
@@ -765,7 +777,7 @@ Deno.serve(async (req) => {
         if (step.kind === "refuse") {
           const s = step.state;
           await event(service, leadId, rowId, actor.id, "link_refused", { state: s });
-          return json({ ok: false, error: s, detail: s === "blocked" ? "The decision maker needs to approve and sign up." : s === "consents_needed" ? "For a new website they need to confirm the three Build consents first (domain, DNS, content)." : s === "needs_review" ? "Domain / agency issue — Paul needs to review this first." : "Finish the questions first." }, 409);
+          return json({ ok: false, error: s, detail: s === "declined" ? CHECKOUT_REFUSAL_TEXT.declined : s === "blocked" ? "The decision maker needs to approve and sign up." : s === "consents_needed" ? "For a new website they need to confirm the three Build consents first (domain, DNS, content)." : s === "needs_review" ? "Domain / agency issue — Paul needs to review this first." : "Finish the questions first." }, 409);
         }
         if (step.kind === "reuse") {
           await event(service, leadId, rowId, actor.id, "link_reused", {});
@@ -867,6 +879,10 @@ Deno.serve(async (req) => {
       if (!linkUsable(qc)) return json({ ok: false, error: "link_expired", detail: "Make the sign-up link first." }, 409);
       const route = cleanAnswers(qc!.answers).route;
       if (!route) return json({ ok: false, error: "route_undecided", detail: CHECKOUT_REFUSAL_TEXT.route_undecided }, 409);
+      /* ⛔ v5 (2026-10-16): a link made for the withdrawn plan, or for a sale now declined (the client corrected the contract
+         answer to "still tied in" after the link was made), is never handed over. */
+      if (!isSaleableRoute(route)) return json({ ok: false, error: "route_withdrawn", detail: CHECKOUT_REFUSAL_TEXT.route_withdrawn }, 409);
+      if (quickCloseState(row.status, qc) === "declined") return json({ ok: false, error: "declined", detail: CHECKOUT_REFUSAL_TEXT.declined }, 409);
       const url = qc!.link_url as string;
       const session = (qc!.link_session_id as string | null) ?? stripeSessionIdFromUrl(url);
       const greetName = row.contact_name ?? lead.contact_name ?? null;
@@ -990,6 +1006,10 @@ Deno.serve(async (req) => {
       if (!access.ok || isPaidLead(lead) || row?.status === "paid") return json({ ok: false, error: "not_open", detail: "This lead can't be sent a set-up link (it is a client, or no longer yours)." }, 409);
       const closedNow = quickCloseClosedRefusal(lead as never, row as never);
       if (closedNow) return json({ ok: false, error: closedNow.error, detail: closedNow.detail }, 409);
+      /* ⛔ v5 clause 1.6: the call's answers (or the client's own) say they are still tied into a contract — no set-up link. */
+      if (row && (quickCloseState(row.status, row.quick_close as never) === "declined" || selfServeDeclined(row as never))) {
+        return json({ ok: false, error: "declined", detail: CHECKOUT_REFUSAL_TEXT.declined }, 409);
+      }
       const url = setupLinkUrl(leadId);
       let status: string | null = null; let template: string | null = null; let emailedTo: string | null = null;
       if (channel === "email") {

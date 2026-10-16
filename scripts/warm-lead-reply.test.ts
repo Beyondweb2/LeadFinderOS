@@ -154,7 +154,7 @@ ok(!REPLY_SYSTEM_PROMPT.includes(FINDABLE_OFFER_SUMMARY) && !REPLY_SYSTEM_PROMPT
 ok(/NO PRICE AT THIS STAGE/.test(REPLY_SYSTEM_PROMPT), 'the system prompt says so explicitly');
 ok(!/£\s?\d/.test(LIB.replace(/\$\{[^}]+\}/g, '')), 'warmReply.ts writes no price as a literal');
 ok(!/import \{[^}]*FINDABLE_OFFER_SUMMARY[^}]*\} from '\.\/findableOffer\.ts'/.test(LIB), 'the offer constants are not even imported by the reply module (the canonical data is untouched)');
-ok(/fix it on the site they already have, OR build them a new site/.test(REPLY_SYSTEM_PROMPT) && /never imply everyone needs a new site/.test(REPLY_SYSTEM_PROMPT), 'both routes are stated; a rebuild is not assumed');
+ok(/we build them a new website that's properly set up for ai visibility and seo/.test(REPLY_SYSTEM_PROMPT) && /Never offer to fix, improve or work on the site they already have/.test(REPLY_SYSTEM_PROMPT) && !/Offer both routes/.test(REPLY_SYSTEM_PROMPT), 'v5: one offer, a new website; never work on the site they already have (Optimise is withdrawn)');
 ok(/say Findable can take over, take down or own their existing site/.test(REPLY_SYSTEM_PROMPT), 'taking over an existing site is ruled out');
 ok(/promise or imply rankings, recommendations, citations, customers or leads/.test(REPLY_SYSTEM_PROMPT), 'rankings / recommendations / customers / leads are never promised');
 
@@ -163,7 +163,7 @@ const GOOD = `no worries mate, it depends which route makes sense for you so i'l
 
 i asked ai who it recommends for a plumber in scunthorpe and it brought up other businesses instead of you. i checked your site to see why and one of the main things is it says "nationwide across england" in one place and scunthorpe-based in another, so ai is getting mixed signals about where you actually work.
 
-that's the sort of thing we fix, either on the site you've already got or we can build you a new one that's properly set up for ai visibility and seo.
+that's the sort of thing we fix, we can build you a new one that's properly set up for ai visibility and seo.
 
 are you currently with an agency or do you own/manage the website yourself?`;
 const good = checkReply(GOOD, ryli);
@@ -178,14 +178,15 @@ ok(bad.problems.some((p) => /report link/.test(p)), 'an uninvited report link is
 ok(bad.problems.some((p) => /how an AI model decides/.test(p)), 'an absolute claim about AI is caught');
 ok(bad.problems.some((p) => /dash/.test(p)), 'an em dash is caught');
 ok(bad.problems.some((p) => /website question/.test(p)), 'no website question at the end is caught');
-ok(bad.problems.some((p) => /both routes/.test(p)), 'not offering both routes is caught');
+ok(bad.problems.some((p) => /build them a new site/.test(p)), 'not offering the new site is caught');
+ok(checkReply(GOOD.replace('we can build you a new one', "either on the site you've already got or we can build you a new one"), ryli).problems.some((p) => /fix or improve the site they already have/.test(p)), 'v5: a draft that offers to work on their existing site is caught');
 
 // No model? The rule-built fallback has the same shape and carries no price.
 const fb = fallbackReply(ryli)!;
 ok(!!fb && /i asked ai for a plumber in Scunthorpe and it brought up other businesses, not you/.test(fb), 'fallback: leads from the AI search, said plainly');
 ok(salesStyleProblems(fb).length === 0 && checkReply(fb, ryli).problems.length === 0, 'fallback: passes the house style and every draft check');
 ok(!/£\s?\d|refund|guarantee|findable\.live/i.test(fb), 'fallback: no price, no guarantee, no pricing link');
-ok(/either on the site you've already got or by building you a new one/.test(fb), 'fallback: both routes');
+ok(/by building you a new site/.test(fb) && !/already got/.test(fb), 'fallback: the new-site offer only (v5)');
 ok(fb.trim().endsWith('are you currently with an agency or do you own/manage the website yourself?'), 'fallback: ends with the website question');
 ok(checkReply(fb, ryli).problems.length === 0, `fallback passes its own checks (${checkReply(fb, ryli).problems.join(' | ') || 'none'})`);
 ok(fallbackReply(ctxFor({ latest: msg('x', 'inbound', 'Not interested thanks', 1), thread: [msg('x', 'inbound', 'Not interested thanks', 1)] })) === null,

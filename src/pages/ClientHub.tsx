@@ -435,14 +435,15 @@ function AgreementStage({ lead, ended = false }: { lead: AnyRecord; ended?: bool
       </div>}
       {!ended && <><div className="flex flex-wrap items-center gap-2 pt-1">
         <span className="text-sm text-muted-foreground">Service:</span>
-        {(['build', 'optimise'] as const).map((r) => (
+        {/* v5 (2026-10-16): Optimise is no longer sold. Its button shows only for a client already recorded on it. */}
+        {(view.route === 'optimise' ? (['build', 'optimise'] as const) : (['build'] as const)).map((r) => (
           <Button key={r} size="sm" variant={view.route === r ? 'default' : 'outline'} disabled={!!busy || ((!!signed || !!view.route_locked) && view.route !== r)}
             onClick={() => void run({ action: 'agreement_set_route', route: r }, r === 'build' ? 'Route set to Build' : 'Route set to Optimise')}>
             {r === 'build' ? 'Build' : 'Optimise'}
           </Button>
         ))}
         {!view.route && <span className="text-xs text-amber-600">Set the route first: the agreement page will not open until it is set.</span>}
-        {!view.route && <p className="w-full text-xs text-muted-foreground">Choosing Build or Optimise puts this client on the current agreement (£99 to start, then £99 a month, 12 or 6 payments). Only choose it for a client on those terms; until then their pack and agreement page show no prices.</p>}
+        {!view.route && <p className="w-full text-xs text-muted-foreground">Choosing Build records what this client bought (£99 to start, then £99 a month, 12 payments). Only choose it for a client on those terms; until then their pack and agreement page show no prices. Findable Optimise is no longer sold.</p>}
         {view.route_source === 'checkout' && <span className="text-xs text-muted-foreground">(from their checkout)</span>}
         {view.route_locked && view.route_lock_reason && <p className="w-full text-xs text-muted-foreground">{view.route_lock_reason}</p>}
       </div>

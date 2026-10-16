@@ -52,10 +52,23 @@
       · KEEPING THEIR DOMAIN IS NOT KEEPING THEIR WEBSITE. The domain answer is a note for Paul, never a plan.
       · The client sees the same facts back on their own sign-up page and may correct them (clientConfirm.ts,
         client_confirmed / effectiveAnswers) — never the plan, price or seller.
+   🔴 AGREEMENT v5 (Paul, 2026-10-16) — SUPERSEDES every Optimise rule above:
+      · ONE PLAN FOR SALE: Findable Build (SALEABLE_ROUTES). Findable Optimise is WITHDRAWN: the plan question offers
+        Build only, a save that sends route 'optimise' (or the approach 'improve', which maps to it) is refused
+        (route_withdrawn), and an unpaid close still carrying 'optimise' from before is treated as having NO plan: the
+        rep picks Build (a confirmed route change) before any link. Old answers with route 'optimise' still READ.
+      · TIED IN = DECLINED (clause 1.6): an agency / developer / other provider looks after the site and the client is
+        still tied into a contract they cannot leave → we do NOT take them on. offerFit offers nothing (declined), the
+        gate says `declined`, the state is 'declined', no link can be made or shared, and Paul's review release does
+        NOT lift it. Never steered to another plan.
+      · "Not sure" waits: Build stays the plan, and the existing Paul-review stop (agency_contract_build) holds the
+        link until the contract is confirmed ended (or ending before work starts). "Free" is Build, ready.
+      · The site-access question is no longer asked (it was Optimise's). The minimum term is said in PAYMENTS
+        ("12 payments"), never "a 12-month minimum".
    Pure, no imports beyond the offer constants: read by fn quick-close, the SPA and the tests.
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 import {
-  FINDABLE_GUARANTEE, FINDABLE_MONTHLY_GBP, FINDABLE_SETUP_PRICE_GBP, MONTHLY_START_V3_WORDS, SERVICE_ROUTE_NAME, planTierForRoute, termMonthsFor, totalPaymentsFor,
+  FINDABLE_GUARANTEE, FINDABLE_MONTHLY_GBP, FINDABLE_SETUP_PRICE_GBP, MONTHLY_START_V3_WORDS, SERVICE_ROUTE_NAME, isSaleableRoute, planTierForRoute, totalPaymentsFor,
   type ServiceRoute,
 } from './findableOffer.ts';
 import { afterTermClientWords, afterTermRepLine } from './planTerms.ts';
@@ -149,7 +162,9 @@ export const QUICK_CLOSE_QUESTIONS: readonly { key: QcKey; text: string; detail?
      situation first (who looks after the site, the contract, the domain, the right to reuse the design) and
      the PLAN LAST, Build first — Build is the normal recommendation (offerFit). Answers the Call screen
      already saved are never asked again (missingQuestions). */
-  { key: 'route', text: 'Which plan are they going with?', options: [{ value: 'build', label: 'Findable Build — a new website built and optimised for AI visibility' }, { value: 'optimise', label: 'Findable Optimise — improve their current website' }] },
+  /* v5 (2026-10-16): Build is the one plan for sale. 'optimise' stays a LEGACY value so a close stored before v5 still
+     reads and labels; it is never offered as a choice and a save that sends it is refused (planQuickCloseSave). */
+  { key: 'route', text: 'Confirm the plan', options: [{ value: 'build', label: 'Findable Build — we build, host and manage a new website, optimised for AI visibility' }, { value: 'optimise', label: 'Findable Optimise (withdrawn) — improve their current website', legacy: true }] },
   { key: 'decision_maker', text: 'Are they authorised to make this decision for the business?', options: [{ value: 'yes', label: 'Yes' }, { value: 'no', label: 'No' }] },
   { key: 'access', text: 'Can Findable get access to their current website (its CMS / admin)?', options: [{ value: 'yes', label: 'Yes' }, { value: 'no', label: 'No' }, { value: 'not_sure', label: 'Not sure' }, { value: 'not_applicable', label: 'Not applicable' }] },
   { key: 'manager', text: 'Who currently looks after their website?', options: [{ value: 'owner', label: 'They manage it themselves' }, { value: 'freelancer', label: 'Freelancer / individual developer' }, { value: 'agency', label: 'Agency' }, { value: 'no_website', label: 'No website' }, { value: 'not_sure', label: 'Not sure' }, { value: 'employee', label: 'Employee', legacy: true }, { value: 'third_party', label: 'Other third party', legacy: true }] },
@@ -175,7 +190,7 @@ export function routeTermsLines(route: ServiceRoute): string[] {
   return [
     `£${FINDABLE_SETUP_PRICE_GBP} today`,
     `Then £${FINDABLE_MONTHLY_GBP} a month, starting ${MONTHLY_START_V3_WORDS}`,
-    `${totalPaymentsFor(route)} payments in total, today's included — a ${termMonthsFor(route)}-month minimum term`,
+    `${totalPaymentsFor(route)} payments in total, today's included (the minimum term)`,
     /* 2026-10-07: what happens after the payments, per plan (planTerms.ts — Optimise ends, Build may continue). */
     afterTermRepLine(route),
   ];
@@ -186,68 +201,70 @@ export function routeTermsLines(route: ServiceRoute): string[] {
 /** The managers that mean someone OUTSIDE the business runs the site (the contract question applies). */
 export const THIRD_PARTY_MANAGERS: readonly string[] = ['agency', 'freelancer', 'third_party'];
 export const thirdPartyManaged = (a: QuickCloseAnswers): boolean => !!a.manager && THIRD_PARTY_MANAGERS.includes(a.manager);
-/** 🔴 FINAL PASS (Paul, 2026-10-07): BUILD IS THE DEFAULT. The ONLY thing that moves the RECOMMENDATION to
- *  Optimise is a genuine contractual blocker: an agency / developer runs the site AND they are still tied into
- *  the contract (agencyContractTiedIn — a positive match on 'in_contract'). "Not sure" or "not asked" never
- *  recommends Optimise: it keeps Build and warns. A website, a domain held elsewhere, or no right to reuse the
- *  current design never blocks Build. */
+/** 🔴 v5 (Paul, 2026-10-16, Client Service Agreement clause 1.6): TIED IN = DECLINED. An agency / developer / other
+ *  provider looks after the site AND the client is still tied into a contract they cannot leave (a positive match on
+ *  'in_contract') → we do not take them on. Nothing else is offered instead (Optimise is withdrawn). "Not sure" or
+ *  "not asked" is never a decline: Build stays the plan and the link waits (agencyContractBlocksBuild). */
 export const agencyContractTiedIn = (a: QuickCloseAnswers): boolean => thirdPartyManaged(a) && a.agency_contract === 'in_contract';
-/** THE PAYMENT STOP (unchanged since 2026-10-07 morning): a Build on an agency-run site stops for Paul's release unless
- *  the contract is confirmed FREE — still in contract, or not sure. ⛔ Positive match on 'free'. */
+/** A Build on an agency-run site is not ready unless the contract is confirmed FREE — still in contract (declined), or
+ *  not sure (waits for Paul's review). ⛔ Positive match on 'free'. */
 export const agencyContractBlocksBuild = (a: QuickCloseAnswers): boolean => thirdPartyManaged(a) && a.agency_contract !== 'free';
 /** A third party runs the site and nobody has confirmed the contract is over (not sure, or not asked yet). */
 export const agencyContractUnconfirmed = (a: QuickCloseAnswers): boolean => thirdPartyManaged(a) && a.agency_contract !== 'in_contract' && a.agency_contract !== 'free';
-export const CONFIRM_CONTRACT_WARNING = 'Confirm their agency contract before finalising Build.';
+export const CONFIRM_CONTRACT_WARNING = 'Confirm their agency contract has ended (or ends before work starts) before the sign-up link. If they are still tied in, we cannot take them on.';
+/** What the rep is told when the answers decline the sale (clause 1.6). Never shown to the client. */
+export const TIED_IN_DECLINE_REASON =
+  "They're still tied into a contract with whoever looks after their website, so we can't take them on now (Client Service Agreement, clause 1.6). Nothing else is offered instead. Note when the contract ends and get back in touch then.";
+/** The state chip / refusal words for a declined sale. */
+export const TIED_IN_DECLINE_HEADING = 'Not taken on — still tied into a contract with their current provider';
+/** A save that tries to sell the withdrawn plan. */
+export const ROUTE_WITHDRAWN_TEXT = 'Findable Optimise is no longer offered. Findable Build is the one plan we sell.';
 /** The rep's helper lines (never shown to the client). ⛔ No promise of an identical clone when rights are unclear. */
 export const BUILD_TECH_BASE_LINE = 'Build gives us a clean technical base to work from.';
 export const DOMAIN_NOT_WEBSITE_LINE = 'Keeping their domain is not the same as keeping their website — they can keep their web address and still get a new Build site.';
 export const REUSE_YES_LINE = 'We can keep the new site very close to the look they already like if they want.';
 export const REUSE_NO_LINE = "We'll build an original site rather than copy their current one.";
 export interface OfferFit {
-  /** The plan to put first (null = either fits equally). */
+  /** The plan to put first: always Build, or null when the sale is declined. */
   recommended: ServiceRoute | null;
-  /** May a SALESPERSON offer / pick this plan? (Paul — the admin — may still choose Build; it then stops for his release.) */
+  /** May a SALESPERSON offer / pick this plan? v5: Build only, and nothing at all when declined. Optimise is always false. */
   offered: Record<ServiceRoute, boolean>;
-  /** One line for the rep explaining the recommendation (never shown to the client). */
+  /** 🔴 v5 clause 1.6: still tied into a contract with their current provider → we do not take them on. */
+  declined: boolean;
+  /** One line for the rep explaining the offer (never shown to the client). */
   reason: string | null;
-  /** A caution to show beside the recommendation (the contract is unconfirmed). Null when there is none. */
+  /** A caution to show beside the offer (the contract is unconfirmed). Null when there is none. */
   warning: string | null;
   /** Short helper lines for the rep: the domain is not the website, what the reuse answer means. */
   notes: string[];
 }
+/** 🔴 v5 (Paul, 2026-10-16): THE OFFER IS ALWAYS FINDABLE BUILD — or nothing. The one positive blocker (an agency /
+ *  provider looks after the site AND the client is still tied into the contract) DECLINES the sale; it is never steered
+ *  to another plan. Unknown contract status (not asked, or "not sure") keeps Build with a warning, and the link then
+ *  waits for Paul's review until the contract is confirmed ended. */
 export function offerFit(a: QuickCloseAnswers, hasWebsite: boolean): OfferFit {
-  if (!hasWebsite || a.manager === 'no_website') {
-    return { recommended: 'build', offered: { build: true, optimise: false }, reason: 'No website of their own — Optimise needs one to work on, so the offer is Build.', warning: null, notes: [] };
-  }
-  /* The ONE positive blocker: an agency / third party runs the site AND the contract is confirmed still on. */
   if (agencyContractTiedIn(a)) {
-    return {
-      recommended: 'optimise', offered: { build: false, optimise: true },
-      reason: "They're still in contract with the agency that runs their site — offer Optimise, so they're not paying for two websites.",
-      warning: null, notes: [DOMAIN_NOT_WEBSITE_LINE],
-    };
+    return { recommended: null, offered: { build: false, optimise: false }, declined: true, reason: TIED_IN_DECLINE_REASON, warning: null, notes: [] };
   }
-  /* 🔴 BUILD IS THE DEFAULT (Paul, 2026-10-07). Owning, keeping or having access to a website is NEVER a reason for
-     Optimise — the preferred outcome is a new Findable website. Optimise is recommended ONLY on the positive blocker
-     above (an agency / third party runs the site and the contract is confirmed still on). Unknown contract status
-     (not asked, or "not sure") keeps Build, with the rep told to confirm before closing; that Build then still has to
-     answer the contract question (closeFlow) and, if the answer is "not sure" / "in contract", stops for Paul. */
+  if (!hasWebsite || a.manager === 'no_website') {
+    return { recommended: 'build', offered: { build: true, optimise: false }, declined: false, reason: 'No website of their own: Findable Build gives them one, built, hosted and managed by us.', warning: null, notes: [] };
+  }
   const notes: string[] = [BUILD_TECH_BASE_LINE];
   if (a.rights === 'yes') notes.push(REUSE_YES_LINE);
   else if (a.rights === 'no' || a.rights === 'not_sure') notes.push(REUSE_NO_LINE);
   notes.push(DOMAIN_NOT_WEBSITE_LINE);
   return {
-    recommended: 'build', offered: { build: true, optimise: true }, reason: buildDefaultReason(a),
+    recommended: 'build', offered: { build: true, optimise: false }, declined: false, reason: buildDefaultReason(a),
     warning: agencyContractUnconfirmed(a) ? CONFIRM_CONTRACT_WARNING : null, notes,
   };
 }
-/** The one line for the rep when Build is the recommendation (never shown to the client). */
+/** The one line for the rep when Build is the offer (never shown to the client). */
 export const BUILD_DEFAULT_REASON =
-  "Build is usually the best route. Use Optimise if they need to keep their current website because they're still tied into an existing agency contract.";
+  'Findable Build is the plan: we build, host and manage a new website for them.';
 export const AGENCY_CONTRACT_UNCONFIRMED_REASON =
-  "An agency runs their site. Build is usually the best route, but confirm whether they're still in contract before you close. If they are, offer Optimise.";
+  "An agency or provider looks after their website. Ask whether they're still tied into a contract with them before you close: if they are, we can't take them on.";
 function buildDefaultReason(a: QuickCloseAnswers): string {
-  if (thirdPartyManaged(a)) return a.agency_contract === 'free' ? 'Their agency contract has ended, so Build is the route: a new website they own.' : AGENCY_CONTRACT_UNCONFIRMED_REASON;
+  if (thirdPartyManaged(a)) return a.agency_contract === 'free' ? 'Their contract with their current provider has ended, so Findable Build goes ahead: a new website, built for them.' : AGENCY_CONTRACT_UNCONFIRMED_REASON;
   return BUILD_DEFAULT_REASON;
 }
 
@@ -329,7 +346,7 @@ export function callNotesLines(a: QuickCloseAnswers, n: QcCallNotes | null | und
 }
 
 /** The short count line used on the route buttons. */
-export const routePaymentsShort = (route: ServiceRoute) => `${totalPaymentsFor(route)} payments · ${termMonthsFor(route)}-month minimum`;
+export const routePaymentsShort = (route: ServiceRoute) => `${totalPaymentsFor(route)} payments in total (the minimum term)`;
 
 /** Who owns the website, per route, in the REP's words (findableOffer.ts's TWO ROUTES note is the source:
  *  a site Findable builds transfers once the term is complete and paid; Optimise never takes a site over). */
@@ -415,18 +432,21 @@ export function withRoute(a: QuickCloseAnswers): QuickCloseAnswers {
  *  design owner, domain, Build consents) stay stored and readable, and are no longer required. */
 export function missingQuestions(raw: QuickCloseAnswers): QcKey[] {
   const a = withRoute(raw);
-  return closeFlow(a).filter((k) => !a[k] || (a[k] as string) === 'not_applicable');
+  /* v5: a stored plan that is no longer for sale (Optimise, from before 2026-10-16) is NOT an answer — the plan
+     question is asked again, and only Build can answer it. */
+  return closeFlow(a).filter((k) => !a[k] || (a[k] as string) === 'not_applicable' || (k === 'route' && !isSaleableRoute(a.route)));
 }
 
-/** What only the CHOSEN plan adds after the plan question. ⛔ Build never asks for current-site access.
- *  Optimise works on their site, so it asks whether Findable can get in. */
-export function routeQuestions(raw: QuickCloseAnswers): QcKey[] {
-  return withRoute(raw).route === 'optimise' ? ['access'] : [];
+/** What only the CHOSEN plan adds after the plan question. v5 (2026-10-16): nothing — Build never asks for
+ *  current-site access, and the site-access question belonged to Optimise, which is withdrawn. An old 'access'
+ *  answer still reads (Details tab, the handoff). Kept as a function so the close order stays in one place. */
+export function routeQuestions(_raw: QuickCloseAnswers): QcKey[] {
+  return [];
 }
 
 /** 🔴 THE CLOSE, IN ORDER (final pass, 2026-10-07; TWO OPTIONS, 2026-10-07): authority → who looks after the site →
  *  (only if an agency or freelancer does) the contract → domain control → [what they offer and where — saved as the
- *  call notes, see phoneCloseNotesComplete] → THE PLAN, LAST → (Optimise only) access. The "may we reuse your
+ *  call notes, see phoneCloseNotesComplete] → THE PLAN, LAST (Build; v5: no access question after it). The "may we reuse your
  *  current design" question is no longer asked (Build is the default; it never changed the plan). Fewer when the Call
  *  screen already saved the answers (missingQuestions). No registrar, DNS / CMS / hosting logins, logos, photos or
  *  contract dates: those belong to the paid client's onboarding form. */
@@ -434,6 +454,8 @@ export function closeFlow(raw: QuickCloseAnswers): QcKey[] {
   const a = withRoute(raw);
   const flow: QcKey[] = ['decision_maker', 'manager'];
   if (thirdPartyManaged(a)) flow.push('agency_contract');
+  /* v5 clause 1.6: still tied in → the close ends here (declined). Nothing after it can lead to a sale. */
+  if (agencyContractTiedIn(a)) return flow;
   flow.push('domain');
   flow.push('route');
   flow.push(...routeQuestions(a));
@@ -458,7 +480,8 @@ export function routeSwitchText(from: ServiceRoute, to: ServiceRoute, hasLink: b
  *  the legacy authority answers still stop an Optimise on a site an agency runs. */
 export type QcReviewReason = 'third_party_no_authority' | 'third_party_authority_unsure' | 'no_site_access' | 'optimise_access_unsure' | 'agency_contract_build';
 export const QC_REVIEW_TEXT: Record<QcReviewReason, string> = {
-  agency_contract_build: 'Build chosen, but an agency / developer runs their website and they are still tied into a contract with them (or not sure) — a new website now could mean paying two providers. Optimise is the normal route here',
+  /* v5 (2026-10-16): only "not sure" reaches this stop — still tied in is a decline (clause 1.6), never a review. */
+  agency_contract_build: 'An agency / developer looks after their website and nobody is sure yet whether they are still tied into a contract with them. If they are, we cannot take them on (clause 1.6). Release only once they confirm they are free to leave, or the contract ends before work starts',
   third_party_no_authority: 'An agency / third party runs the site and they do not have authority to let Findable change it',
   third_party_authority_unsure: 'An agency / third party runs the site and authority to let Findable change it is unclear',
   no_site_access: 'Optimise works on their current website, and they could not give Findable access to it',
@@ -493,6 +516,8 @@ export interface QuickCloseGate {
   missing: QcKey[];
   /** A decision-maker "No": payment is never generated. */
   blocked: boolean;
+  /** 🔴 v5 clause 1.6: still tied into a contract with their current provider — not taken on. Paul's release never lifts it. */
+  declined: boolean;
   /** Optimise on a site we cannot get into: flagged for Paul; payment waits for his release. */
   review: QcReviewReason[];
   /** For Paul after payment — never a stop. */
@@ -523,9 +548,9 @@ export function quickCloseGate(raw: QuickCloseAnswers): QuickCloseGate {
     if (thirdPartyManaged(a) && a.access === 'yes') notes.push('An agency / third party runs the site; the client says Findable can get access');
   }
   if (a.route === 'build') {
-    /* ⛔ THE AGENCY-CONTRACT RULE's backstop (offerFit): Build on a site an agency runs while they are still
-       tied in stops for Paul — he can release it; a salesperson is never shown Build for these answers. */
-    if (agencyContractBlocksBuild(a) && a.agency_contract) review.push('agency_contract_build');
+    /* ⛔ v5: still tied in is DECLINED (below), never a review. "Not sure" stops for Paul: he releases it only once
+       they confirm they are free to leave (or the contract ends before work starts). */
+    if (agencyContractBlocksBuild(a) && agencyContractUnconfirmed(a) && a.agency_contract) review.push('agency_contract_build');
     if (domainPending(a)) flags.push('domain_handoff');
     if (a.approach === 'recreation' && (a.rights !== 'yes' || a.design_owner !== 'business')) flags.push('exact_copy_rights');
     if (a.approach === 'refresh' && a.rights && a.rights !== 'yes') notes.push('Reuse only content, branding and photos the business owns — replace anything else');
@@ -533,7 +558,7 @@ export function quickCloseGate(raw: QuickCloseAnswers): QuickCloseGate {
   }
   /* 2026-10-07: the three Build consents are no longer asked on the call (the signed agreement covers them;
      the onboarding form collects the practical domain / materials answers) — so they never hold the link. */
-  return { complete: missing.length === 0, missing, blocked: a.decision_maker === 'no', review, flags, notes, consentsNeeded: false };
+  return { complete: missing.length === 0, missing, blocked: a.decision_maker === 'no', declined: agencyContractTiedIn(a), review, flags, notes, consentsNeeded: false };
 }
 
 /** The canonical onboarding columns these answers set (the same ones the self-service form writes). */
@@ -581,7 +606,7 @@ export function effectiveAnswers(qc: QuickCloseRecord | null | undefined): Quick
   return cleanAnswers(merged);
 }
 
-export type QuickCloseState = 'not_started' | 'in_progress' | 'blocked' | 'consents_needed' | 'needs_review' | 'ready' | 'link_generated' | 'link_expired' | 'paid';
+export type QuickCloseState = 'not_started' | 'in_progress' | 'blocked' | 'declined' | 'consents_needed' | 'needs_review' | 'ready' | 'link_generated' | 'link_expired' | 'paid';
 /** One record of the link being handed to the prospect (M-015). `channel` says HOW; a copy is recorded as
  *  copied, never as sent — the app cannot know where it was pasted. */
 export interface QcLinkShare { channel: 'copy' | 'email' | 'whatsapp' | 'sms'; at: string; by: string | null; to?: string | null; status?: string | null; session?: string | null;
@@ -607,7 +632,7 @@ export interface QuickCloseRecord {
   rev?: number | null;
 }
 export const QUICK_CLOSE_STATE_LABEL: Record<QuickCloseState, string> = {
-  not_started: 'Not started', in_progress: 'In progress', blocked: 'Decision maker needed', consents_needed: 'Build consents needed', needs_review: 'Paul review required',
+  not_started: 'Not started', in_progress: 'In progress', blocked: 'Decision maker needed', declined: 'Not taken on (tied into a contract)', consents_needed: 'Build consents needed', needs_review: 'Paul review required',
   ready: 'Ready for the link', link_generated: 'Agreement & payment link ready', link_expired: 'Link expired', paid: 'Paid',
 };
 
@@ -678,6 +703,13 @@ export function quickCloseState(rowStatus: string | null | undefined, qc: QuickC
   if (rowStatus === 'paid') return 'paid';
   if (!qc || !qc.answers || Object.keys(cleanAnswers(qc.answers)).length === 0) return 'not_started';
   const eff = effectiveAnswers(qc);
+  /* 🔴 v5 clause 1.6: STILL TIED IN = DECLINED, whoever said so (the rep, or the client correcting it on their own
+     page), whatever link stands and whatever Paul released. Nothing can be made or sent. */
+  if (agencyContractTiedIn(eff)) return 'declined';
+  /* v5: a close still carrying the withdrawn plan is never "link ready", even with a sign-up link made before v5 — the
+     plan must be confirmed as Build first (and that change clears the old link). */
+  const r = withRoute(eff).route;
+  if (r && !isSaleableRoute(r)) return 'in_progress';
   /* ⛔ A CLIENT'S OWN CORRECTION IS JUDGED EVEN WHILE THE LINK STANDS (final pass, 2026-10-07): if what they
      confirmed makes the sale unsafe (Build while still tied into an agency contract, a decision-maker that is
      not them, an answer now missing), the sign-up holds for Paul — the link they already hold does not
@@ -767,13 +799,14 @@ export function answersKey(a: unknown): string {
 }
 
 function notKeptText(k: QcKey, a: QuickCloseAnswers): string {
+  if ((k === 'route' || k === 'approach') && a.route && !isSaleableRoute(a.route)) return ROUTE_WITHDRAWN_TEXT;
   if (k === 'route' && a.approach && a.approach !== 'unsure') return `The plan follows the website approach (${APPROACH_LABEL[a.approach]}) — change the approach to change the plan.`;
   if (k === 'route' || k === 'approach') return 'Optimise needs a website to work on — with no website only Findable Build is possible.';
   if (k === 'build_consents') return `The Build consents only apply to Findable Build${a.route ? ` — the route is ${SERVICE_ROUTE_NAME[a.route]}` : ' — choose the route first'}.`;
   return 'That answer could not be saved. Refresh and try again.';
 }
 
-export type SaveRefusalCode = 'stale_route' | 'route_change_unconfirmed' | 'answer_not_kept';
+export type SaveRefusalCode = 'stale_route' | 'route_change_unconfirmed' | 'answer_not_kept' | 'route_withdrawn';
 export type SavePlan =
   | { ok: false; error: SaveRefusalCode; detail: string }
   | { ok: true; prev: QuickCloseAnswers; answers: QuickCloseAnswers; changed: QcKey[]; routeChange: boolean; cols: Record<string, unknown>; next: QcRecord; superseded: string | null };
@@ -800,6 +833,10 @@ export function planQuickCloseSave(
       return { ok: false, error: 'stale_route', detail: `The route was changed to ${prev.route ? SERVICE_ROUTE_NAME[prev.route] : 'not chosen'} in another window. The screen has been refreshed — check it before carrying on.` };
     }
   }
+  /* 🔴 v5 (2026-10-16): NOTHING SELLS THE WITHDRAWN PLAN. A save that sends route 'optimise', or the approach that maps
+     to it ('improve'), is refused out loud — never stored. An old record that already carries it still reads. */
+  const incRoute = inc.route ?? (inc.approach && inc.approach !== 'unsure' ? APPROACH_ROUTE[inc.approach] : null);
+  if (incRoute && !isSaleableRoute(incRoute)) return { ok: false, error: 'route_withdrawn', detail: ROUTE_WITHDRAWN_TEXT };
   const answers = mergeAnswers(prev, rawIncoming);
   /* v2: the approach can move the route (improve → Optimise, a new site → Build), so the change is judged on
      the MERGED answers, not only on a route the screen sent. Build ⇄ Optimise is never a stray tap. */
@@ -879,7 +916,7 @@ export function adoptLink(
    🔴 2026-10-07 (Paul): what follows the payments is PER PLAN (planTerms.ts) — Optimise ends after its sixth
    payment; Build's £29.99 applies only if they want hosting / maintenance to continue. */
 const priceSentence = (route: ServiceRoute) =>
-  `£${FINDABLE_SETUP_PRICE_GBP} today, then £${FINDABLE_MONTHLY_GBP} a month starting ${MONTHLY_START_V3_WORDS} — ${totalPaymentsFor(route)} payments in total, so a ${termMonthsFor(route)}-month minimum term. ${afterTermClientWords(route)}`;
+  `£${FINDABLE_SETUP_PRICE_GBP} today, then £${FINDABLE_MONTHLY_GBP} a month starting ${MONTHLY_START_V3_WORDS} — ${totalPaymentsFor(route)} payments in total, today's included (the minimum term). ${afterTermClientWords(route)}`;
 /** What happens on the link, in the client's words. */
 export const SIGNUP_LINK_SENTENCE = "On the link you'll check your details, read and sign the Client Service Agreement, and then pay securely.";
 /** The ownership sentence in the CLIENT's words ("you"). Same facts as routeOwnershipLine. */

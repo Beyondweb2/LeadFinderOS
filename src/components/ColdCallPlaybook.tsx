@@ -8,7 +8,6 @@ import { logFeatureUse } from '@/lib/featureUsage';
 import { invokeEdge, edgeErrorMessage } from '@/lib/edgeInvoke';
 import { notifyLeadChanged } from '@/lib/leadSync';
 import { useToast } from '@/hooks/use-toast';
-import { useSubscription } from '@/hooks/useSubscription';
 import { offerFit, thirdPartyManaged, type QcAgencyContract, type QuickCloseAnswers } from '@/lib/quickClose';
 import { AlertTriangle, ArrowUp, Building2, Lock, Check, ChevronDown, Copy, Globe, HelpCircle, Loader2, MessageSquareQuote, PhoneCall, ScrollText, ShieldCheck, Sparkles, Wrench } from 'lucide-react';
 import { GOOGLE_STILL_MATTERS_SHORT, WHY_IT_MATTERS_STATS } from '@/lib/salesExplainer';
@@ -23,7 +22,7 @@ import { useColdCallPlaybook } from '@/hooks/useColdCallPlaybook';
 import { type ColdCallPlaybook } from '@/lib/coldCallPlaybook';
 import { afterFirstQuestion, type WebsiteManager } from '@/lib/callScript';
 import { callScriptGate, type CallScriptGate } from '@/lib/callScriptGate';
-import type { ServiceRoute } from '@/lib/findableOffer';
+import { isSaleableRoute, type ServiceRoute } from '@/lib/findableOffer';
 
 /* ════════════════════════════════════════════════════════════════════════════════════════════════
    COLD CALL PLAYBOOK — the one shared call screen, opened from BOTH Inbox and Outreach (2026-09-23).
@@ -33,8 +32,8 @@ import type { ServiceRoute } from '@/lib/findableOffer';
       ASK        — the first question, ALWAYS "Do you manage the website yourself, or does an agency do
                    it?", with two answer buttons; the agency branch (contract, cost, an honest price angle)
                    opens only after "Agency"; then 2–3 discovery questions.
-      OFFER      — Optimise | Build, ONE plan open at a time, preselected from the lead's website; the
-                   guarantee once; the close line.
+      OFFER      — Findable Build (v5, 2026-10-16: the one plan for sale); the guarantee once. Still tied into a
+                   contract with their current provider → no offer at all (declined, clause 1.6).
       OBJECTIONS — closed; one answer open at a time.
       Sticky bar: LOG THIS CALL + QUICK CLOSE — the only Quick Close on this screen.
    ⛔ REMOVED (Paul, 2026-10-06) and pinned absent by scripts/call-script.test.ts: the LinkedIn and Email
@@ -44,7 +43,7 @@ import type { ServiceRoute } from '@/lib/findableOffer';
    🔴 THE ANSWERS ARE KEPT (Paul, 2026-10-07): who runs the site, the agency contract and spend, the jobs, the
       areas and the decision maker are SAVED as they are given — on the lead's Quick Close record (fn
       quick-close `save` / `save_call`) — so Quick Close, the handoff and the paid client never ask again. The
-      Offer follows the AGENCY-CONTRACT RULE (quickClose.offerFit): still in contract → Optimise only.
+      Offer follows the AGENCY-CONTRACT RULE (quickClose.offerFit): still tied in → DECLINED, nothing offered (v5).
    ⛔ No send, no audit and no crawl control. Writes: those answers, and a feature-usage row
       (src/lib/featureUsage.ts: the call script shown for a lead, at most one a day).
    ⛔ Operator-only, behind the app's authenticated routes. Nothing here is ever written into a public URL.
@@ -198,7 +197,7 @@ function SavedText({ value, onSave, placeholder, testId, label, inputMode }: { v
 
 const MANAGER_OF: Record<WebsiteManager, string> = { self: 'owner', agency: 'agency' };
 const CONTRACT_OPTIONS: { value: QcAgencyContract; label: string }[] = [
-  { value: 'in_contract', label: 'Still in contract' },
+  { value: 'in_contract', label: 'Still tied in' },
   { value: 'free', label: 'Ended / free to move' },
   { value: 'not_sure', label: 'Not sure' },
 ];
@@ -290,22 +289,28 @@ function WhyAndWhat({ p }: { p: ColdCallPlaybook }) {
 /* ── THE OFFER: one plan open at a time, the guarantee once ───────────────────────────────────── */
 function Offer({ p, ans }: { p: ColdCallPlaybook; ans: ReturnType<typeof useCallAnswers> }) {
   const s = p.script;
-  const { role } = useSubscription();
-  /* THE AGENCY-CONTRACT RULE (offerFit): the call's answers decide which plans a salesperson offers. Paul (admin)
-     still sees both — a Build on those answers stops for his release in Quick Close. */
+  /* THE AGENCY-CONTRACT RULE (offerFit, v5 2026-10-16): Build is the one plan; still tied into a contract with their current
+     provider DECLINES the sale — nothing is offered, to anyone (there is no release for a decline). */
   const fit = ans.v ? offerFit(ans.answers, ans.v.has_website ?? (p.context.website ? true : false)) : null;
   const { model } = usePriceModel();
-  const routes = s.plans.routes.filter((r) => !fit || fit.offered[r.route] || role === 'admin').map((r) => routeOfferForModel(r.route, model));
+  const routes = s.plans.routes.filter((r) => isSaleableRoute(r.route) && (!fit || fit.offered[r.route])).map((r) => routeOfferForModel(r.route, model));
   const guarantee = guaranteeForModel(s.guarantee, model);
   const preferred = fit?.recommended ?? s.plans.preselected;
   const [picked, setPicked] = useState<ServiceRoute | null>(null);
   const route = picked && routes.some((r) => r.route === picked) ? picked : routes.some((r) => r.route === preferred) ? preferred : routes[0]?.route;
   const plan = routes.find((r) => r.route === route) ?? routes[0];
+  if (fit?.declined) {
+    return (
+      <Step title="Offer" tone="green" testId="call-step-close">
+        <p className="rounded-xl bg-red-500/[0.08] px-3 py-2 text-xs font-semibold leading-snug text-red-800 ring-1 ring-inset ring-red-500/30 dark:text-red-200" data-testid="call-offer-declined">{fit.reason}</p>
+      </Step>
+    );
+  }
   if (!plan) return null;
   return (
     <Step title="Offer" tone="green" testId="call-step-close">
       <PriceModelSwitch compact />
-      {fit?.reason && <p className={cn('rounded-xl px-3 py-2 text-xs leading-snug ring-1 ring-inset', fit.offered.build ? 'bg-muted/40 text-muted-foreground ring-border' : 'bg-amber-500/[0.08] text-amber-800 ring-amber-500/30 dark:text-amber-200')} data-testid="call-offer-fit">{fit.reason}{!fit.offered.build && role === 'admin' && fit.offered.optimise ? ' (You can still choose Build — it will need your release.)' : ''}</p>}
+      {fit?.reason && <p className={cn('rounded-xl px-3 py-2 text-xs leading-snug ring-1 ring-inset', fit.offered.build ? 'bg-muted/40 text-muted-foreground ring-border' : 'bg-amber-500/[0.08] text-amber-800 ring-amber-500/30 dark:text-amber-200')} data-testid="call-offer-fit">{fit.reason}</p>}
       {fit?.warning && <p className="rounded-xl bg-amber-500/[0.08] px-3 py-2 text-xs font-semibold leading-snug text-amber-800 ring-1 ring-inset ring-amber-500/30 dark:text-amber-200" data-testid="call-offer-warning">{fit.warning}</p>}
       {routes.length > 1 ? (
         <div className="inline-flex rounded-full bg-muted p-0.5" role="tablist" aria-label="Plan" data-testid="call-plan-switch">
@@ -313,7 +318,7 @@ function Offer({ p, ans }: { p: ColdCallPlaybook; ans: ReturnType<typeof useCall
             <button key={r.route} type="button" role="tab" aria-selected={r.route === plan.route} data-testid={'call-plan-' + r.route}
               onClick={() => setPicked(r.route)}
               className={cn('rounded-full px-3.5 py-1 text-xs font-semibold transition', r.route === plan.route ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground')}>
-              {r.route === 'optimise' ? 'Optimise' : 'Build'}
+              {r.route === 'build' ? 'Build' : r.route}
             </button>
           ))}
         </div>

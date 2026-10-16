@@ -130,9 +130,10 @@ export const NO_SITE_LINE =
 
 /** The offer: both routes, never "everyone needs a new site". It follows the GENERAL LINE ("…that's what
  *  we help with"), so "help with that" has something to point at. */
-export const OFFER_LINE_BOTH = "we can help with that on the site you've already got, or build you a new one that's properly set up for ai visibility and seo";
+/* v5 (2026-10-16): one plan, a new website. Never offer to work on the site they already have (Optimise is withdrawn). */
+export const OFFER_LINE_BOTH = "we can help with that by building you a new website that's properly set up for ai visibility and seo, and you keep your web address";
 /** The offer when the line before it named real website issues: it joins on to them, never "do that". */
-export const OFFER_LINE_AFTER_ISSUES = "that's the sort of thing we fix, either on the site you've already got or by building you a new one that's properly set up for ai visibility and seo";
+export const OFFER_LINE_AFTER_ISSUES = "that's the sort of thing we fix, by building you a new website that's properly set up for ai visibility and seo";
 export const OFFER_LINE_NEW = "we can build you a site that's properly set up for ai visibility and seo";
 /** The offer for what came before it: no site → build one; real issues named → OFFER_LINE_AFTER_ISSUES; else OFFER_LINE_BOTH. */
 export function offerLine(hasWebsite: boolean, issuesNamed: boolean): string {
@@ -142,10 +143,10 @@ export function offerLine(hasWebsite: boolean, issuesNamed: boolean): string {
 /** The two routes as a draft says them (also warmReply's checks — one copy). */
 export const ROUTE_EXISTING_RE = /\b(site|website) you(?:['’]ve| have)? (?:already )?got\b|\b(?:current|existing) (?:web)?site\b|\bsite you already have\b|\byour (?:current )?(?:web)?site as it is\b|\bon (?:the|your) (?:current )?(?:web)?site\b/i;
 export const ROUTE_NEW_RE = /\bnew (?:one|site|website)\b|\bbuild (?:you )?(?:a|one|a new)\b|\brebuild\b/i;
-/** Does the draft make the offer: both routes when they have a site, building one when they do not. */
-export function offersRoutes(text: string, hasWebsite: boolean): boolean {
-  const t = String(text ?? '');
-  return hasWebsite ? ROUTE_EXISTING_RE.test(t) && ROUTE_NEW_RE.test(t) : ROUTE_NEW_RE.test(t);
+/** Does the draft make the offer? v5 (2026-10-16): ONE plan, a new website, whether or not they have a site today
+ *  (Findable Optimise, "on the site you've already got", is withdrawn). `hasWebsite` is kept for the callers. */
+export function offersRoutes(text: string, _hasWebsite: boolean): boolean {
+  return ROUTE_NEW_RE.test(String(text ?? ''));
 }
 
 /** "found some things", "spotted a few issues", "some things we could fix" — a fault claim with no fault named. */

@@ -19,7 +19,7 @@ import {
 } from '../src/lib/commission.ts';
 import { ATTRIBUTION_HELD_STATUSES, isAttributionHeld } from '../src/lib/saleAttribution.ts';
 import {
-  ACCESS_DEADLINE_DAYS, COMMERCIAL_TERMS_V3, COMMERCIAL_TERMS_V4, CONTINUING_SERVICE_AUTOMATION, CONTINUING_SERVICE_GBP, FALLBACK_START_WEEKS, OPTION_B_TIMING,
+  ACCESS_DEADLINE_DAYS, COMMERCIAL_TERMS_V3, COMMERCIAL_TERMS_V4, commercialTermsFor, CONTINUING_SERVICE_AUTOMATION, CONTINUING_SERVICE_GBP, FALLBACK_START_WEEKS, OPTION_B_TIMING,
   REFUND_WINDOW_DAYS, approvalDay, approvalDayFromResults, chargeAllowedOn, guaranteeNumberWentUp, minimumTerm, minimumTermPayments,
   paymentStart, refundWindowEndDay, timelineActions, timelineView, ukDay, ukDayAtHourIso, type TimelineFacts,
 } from '../src/lib/clientTimeline.ts';
@@ -415,11 +415,11 @@ async function main() {
   {
     const text = 'the agreed text';
     const sha = await sha256Hex(text);
-    const good: GateAcceptance = { id: 'acc1', lead_id: 'L1', onboarding_id: 'OB1', agreement_version: CLIENT_AGREEMENT_VERSION, service_route: 'build', method: 'agree_page', authority_confirmed: true, agreed_text_sha256: sha };
+    const good: GateAcceptance = { id: 'acc1', lead_id: 'L1', onboarding_id: 'OB1', agreement_version: CLIENT_AGREEMENT_VERSION, service_route: 'build', method: 'agree_page', authority_confirmed: true, agreed_text_sha256: sha, free_to_leave_provider: true };
     const gate = (a: GateAcceptance | null, over: Partial<{ leadId: string; onboardingId: string; route: 'build' | 'optimise' }> = {}) =>
       checkoutAgreementGate({ acceptance: a, leadId: over.leadId ?? 'L1', onboardingId: over.onboardingId ?? 'OB1', route: over.route ?? 'build', currentVersion: CLIENT_AGREEMENT_VERSION, recomputedSha: a ? sha : null });
     const refusal = (r: ReturnType<typeof gate>) => ('refusal' in r ? r.refusal : 'ok');
-    ok(CLIENT_AGREEMENT_VERSION === 'v4' && gate(good).ok === true, 'G1 signed v4 acceptance for this sign-up → checkout permitted');
+    ok(CLIENT_AGREEMENT_VERSION === 'v5' && gate(good).ok === true, 'G1 signed v5 acceptance for this sign-up → checkout permitted');
     ok(refusal(gate(null)) === 'not_signed', 'G2 unsigned → refused (not_signed)');
     ok(refusal(gate({ ...good, agreement_version: 'v1', method: 'checkout' })) === 'wrong_method' && refusal(gate({ ...good, agreement_version: 'v1' })) === 'old_version',
       'G3 a v1 / legacy acceptance (checkout tick, or v1 on the page) → refused');
@@ -435,8 +435,8 @@ async function main() {
     const stripeAt = co.indexOf('https://api.stripe.com/v1/checkout/sessions');
     ok(gateAt > 0 && gateAt < stripeAt && /if \(!gateResult\.ok\) \{[\s\S]{0,300}kind: "agreement_required"/.test(co) && (co.match(/api\.stripe\.com\/v1\/checkout\/sessions/g) ?? []).length === 1,
       'G7 source: findable-checkout runs the gate before its ONLY Stripe session create, and answers agreement_required');
-    const meta = { commercial_terms: COMMERCIAL_TERMS_V4, agreement_version: CLIENT_AGREEMENT_VERSION, agreement_acceptance_id: 'acc1', service_route: 'build' };
-    const v = (m: Record<string, string | undefined>, a: GateAcceptance | null = good) => webhookV3Verdict({ metadata: m, acceptance: a, leadId: 'L1', onboardingId: 'OB1', currentVersion: CLIENT_AGREEMENT_VERSION, recomputedSha: sha, expectedTerms: COMMERCIAL_TERMS_V4 });
+    const meta = { commercial_terms: commercialTermsFor(CLIENT_AGREEMENT_VERSION)!, agreement_version: CLIENT_AGREEMENT_VERSION, agreement_acceptance_id: 'acc1', service_route: 'build' };
+    const v = (m: Record<string, string | undefined>, a: GateAcceptance | null = good) => webhookV3Verdict({ metadata: m, acceptance: a, leadId: 'L1', onboardingId: 'OB1', currentVersion: CLIENT_AGREEMENT_VERSION, recomputedSha: sha, expectedTerms: commercialTermsFor(CLIENT_AGREEMENT_VERSION) });
     ok(v(meta).ok === true && v({}).ok === false && v({ ...meta, agreement_version: 'v1' }).ok === false && v(meta, { ...good, onboarding_id: 'OB9' }).ok === false,
       'F1 webhook backstop: a legacy / v1 / other-sign-up payment is NOT a v3 sale (it is held)');
     const inserted: string[] = [];

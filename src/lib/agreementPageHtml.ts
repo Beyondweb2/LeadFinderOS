@@ -24,7 +24,7 @@
    ⚠️ EXPLICIT .ts ON EVERY RELATIVE IMPORT — reached from an edge function.
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 import {
-  agreementSectionTitles, agreementVersion, agreeConsentSentence, clientDetailRows, CLIENT_AGREEMENT_TITLE, CLIENT_AGREEMENT_VERSION, NOT_PROVIDED, ukDateTime,
+  agreementSectionTitles, agreementVersion, agreeConsentSentence, asksCurrentProvider, clientDetailRows, CLIENT_AGREEMENT_TITLE, CLIENT_AGREEMENT_VERSION, NOT_PROVIDED, ukDateTime, versionRoutes,
   type AgreementFill, type AgreementRoute,
 } from './clientAgreement.ts';
 import { afterTermSummaryWords } from './planTerms.ts';
@@ -40,6 +40,8 @@ export interface AgreementFormValues {
   legalName?: string; companyNumber?: string; contactName?: string; role?: string;
   address?: string; email?: string; phone?: string; websiteDomain?: string;
   agree?: boolean; authority?: boolean; marketingOptOut?: boolean;
+  /** v5 clause 1.6: the current provider (blank = none) and the client's own Yes / No (null = not answered). */
+  currentProvider?: string; freeToLeave?: boolean | null;
 }
 
 export type AgreementPageModel =
@@ -159,7 +161,8 @@ function agreementHtml(fill: AgreementFill | null, version: string = CLIENT_AGRE
     : Object.values(v.clientDetailLabels).map((l) => [l, ''] as [string, string]);
   const svc = (r: AgreementRoute) => {
     const on = !!fill && fill.route === r;
-    return `<div class="svc${on ? ' on' : ''}"><div class="box">${on ? '&#10003;' : ''}</div><div><b>${esc(v.services[r].name)}</b><br/>${esc(v.services[r].description)}</div></div>`;
+    const s = v.services[r]!;
+    return `<div class="svc${on ? ' on' : ''}"><div class="box">${on ? '&#10003;' : ''}</div><div><b>${esc(s.name)}</b><br/>${esc(s.description)}</div></div>`;
   };
   const body = v.body.map((b) => {
     if (b.kind === 'heading') return `<h3>${esc(b.text)}</h3>`;
@@ -168,8 +171,8 @@ function agreementHtml(fill: AgreementFill | null, version: string = CLIENT_AGRE
     if (b.kind === 'bullet') return `<ul><li>${esc(b.text)}</li></ul>`;
     return `<p>${esc(b.text)}</p>`;
   }).join('\n');
-  const sched = `<table><tr><th></th><th>${esc(v.schedule.columns[0])}</th><th>${esc(v.schedule.columns[1])}</th></tr>${
-    v.schedule.rows.map(([a, b, c]) => `<tr><th>${esc(a)}</th><td>${esc(b)}</td><td>${esc(c)}</td></tr>`).join('')}</table>`;
+  const sched = `<table><tr><th></th>${v.schedule.columns.map((c) => `<th>${esc(c)}</th>`).join('')}</tr>${
+    v.schedule.rows.map(([a, ...cells]) => `<tr><th>${esc(a)}</th>${cells.map((c) => `<td>${esc(c)}</td>`).join('')}</tr>`).join('')}</table>`;
   const keys = v.keyPoints ? `<div class="keys"><b>${esc(v.keyPoints.title)}</b><ul>${v.keyPoints.points.map((p) => `<li>${esc(p)}</li>`).join('')}</ul></div>` : '';
   return `<div class="agreement">
     <h1>${esc(CLIENT_AGREEMENT_TITLE)}</h1>
@@ -179,7 +182,7 @@ function agreementHtml(fill: AgreementFill | null, version: string = CLIENT_AGRE
     <h2>${esc(titles.client)}</h2>
     <table>${rows.map(([k, val]) => `<tr><th>${esc(k)}</th><td>${escMail(val === NOT_PROVIDED && fill ? 'Filled in from the form below' : val)}</td></tr>`).join('')}</table>
     <h2>${esc(titles.service)}</h2>
-    ${svc('build')}${svc('optimise')}
+    ${versionRoutes(v).map(svc).join('')}
     ${v.serviceNote !== undefined ? `<p class="muted">${esc(v.serviceNote)}</p>` : ''}
     ${keys}
     ${body}
@@ -207,6 +210,29 @@ function offerHtml(route: AgreementRoute, version: string = CLIENT_AGREEMENT_VER
     <dl class="sum">${rows.map((r) => `<div><dt>${esc(r.label)}</dt><dd${r.key === 'today' ? ' class="big"' : ''}>${esc(r.value)}</dd></div>`).join('')}${dated}</dl></div>`;
 }
 
+/* ⛔ v5 CLAUSE 1.6, CURRENT PROVIDERS. The two client-detail rows the agreement adds, asked before acceptance:
+   the provider (blank = none, printed "None") and the client's OWN Yes / No to "free to leave". Nothing is
+   pre-selected. "No" is a refusal, not a choice of plan: we do not enter the agreement (1.6, 7.2), so the
+   server refuses to sign and the script greys the button and says so. */
+export const PROVIDER_LABEL = 'Your current agency, developer, host or other provider for your website, domain, hosting or online marketing';
+export const FREE_TO_LEAVE_QUESTION = 'Are you free to leave that provider without breaching a contract?';
+export const FREE_TO_LEAVE_HELP = 'You are free to leave if any notice period has ended, or will end before we start work. If you have no current provider, answer Yes. If you are not sure, please check before you accept.';
+export const TIED_IN_MESSAGE = 'Thank you for telling us. While you are tied into a contract you cannot leave, we cannot take you on (clause 1.6), so nothing has been signed or charged. Get in touch when you are free to leave and we will pick it up from there.';
+function providerHtml(v: AgreementFormValues): string {
+  const r = (val: 'yes' | 'no', label: string, on: boolean) =>
+    `<label class="consent plain" style="margin:6px 0;cursor:pointer"><input type="radio" name="freeToLeave" value="${val}" ${on ? 'checked' : ''} required/><span>${esc(label)}</span></label>`;
+  return `<div class="card" style="background:transparent;margin:14px 0 0;padding:16px" data-provider>
+      <p class="eyebrow" style="margin:0 0 4px">Your current provider (clause 1.6)</p>
+      <label for="currentProvider" style="margin-top:6px">${esc(PROVIDER_LABEL)} <span class="opt">(leave blank if none)</span></label>
+      <input id="currentProvider" name="currentProvider" type="text" value="${esc(v.currentProvider)}" maxlength="300"/>
+      <p style="font-weight:700;margin:14px 0 4px">${esc(FREE_TO_LEAVE_QUESTION)}</p>
+      <p class="muted small" style="margin:0 0 4px">${esc(FREE_TO_LEAVE_HELP)}</p>
+      ${r('yes', 'Yes, I am free to leave (or I have no current provider)', v.freeToLeave === true)}
+      ${r('no', 'No, I am tied into a contract I cannot leave', v.freeToLeave === false)}
+      <p class="errors" data-tied-in ${v.freeToLeave === false ? '' : 'hidden'} style="margin-top:8px">${esc(TIED_IN_MESSAGE)}</p>
+    </div>`;
+}
+
 /** The authority sentence (clause 1.4), its own box beside the signature. */
 export function authoritySentence(businessName: string): string {
   return `I confirm I am entering this agreement for ${businessName}, not as a private consumer, and that I have authority to bind the business.`;
@@ -225,9 +251,12 @@ const CONTACT = '<p class="muted small">Any questions, email <!--email_off-->pau
 
 /* The sign button stays greyed until BOTH required ticks are given (progressive: `required` already
    refuses an unticked submit without JavaScript). It never ticks anything and never submits. */
+/* v5: the button also stays greyed until "free to leave" is answered Yes, and a No shows why (the server
+   refuses a No whatever the browser does). */
 const SIGN_SCRIPT = `<script>(function(){var f=document.getElementById('sign');if(!f)return;var b=f.querySelector('button[type=submit]');
-var need=[].slice.call(f.querySelectorAll('input[type=checkbox][required]'));function u(){var ok=need.every(function(x){return x.checked});b.disabled=!ok;}
-need.forEach(function(x){x.addEventListener('change',u)});u();})();</script>`;
+var need=[].slice.call(f.querySelectorAll('input[type=checkbox][required]'));var ftl=[].slice.call(f.querySelectorAll('input[name=freeToLeave]'));var tied=f.querySelector('[data-tied-in]');
+function u(){var ok=need.every(function(x){return x.checked});if(ftl.length){var y=ftl.some(function(x){return x.checked&&x.value==='yes'});var n=ftl.some(function(x){return x.checked&&x.value==='no'});if(tied)tied.hidden=!n;ok=ok&&y;}b.disabled=!ok;}
+need.concat(ftl).forEach(function(x){x.addEventListener('change',u)});u();})();</script>`;
 
 export function agreementPageHtml(m: AgreementPageModel): string {
   if (m.mode === 'blank') {
@@ -270,6 +299,7 @@ export function agreementPageHtml(m: AgreementPageModel): string {
   const version = m.version ?? CLIENT_AGREEMENT_VERSION;
   const fill: AgreementFill = { businessName: m.businessName, route: m.route };
   const v3 = !!m.signupId;
+  const accepted = version === 'v4' || version === 'v5';
   return shell(`${CLIENT_AGREEMENT_TITLE} for ${m.businessName}`, `
     ${v3 ? stepsHtml('sign') : ''}
     <div class="card">
@@ -300,13 +330,14 @@ export function agreementPageHtml(m: AgreementPageModel): string {
       ${field('address', 'Business address', v.address, 'text', false, '', true)}
       ${field('websiteDomain', 'Website domain', v.websiteDomain, 'text', true, 'url', true)}
       </div>
+      ${v3 && asksCurrentProvider(version) ? providerHtml(v) : ''}
       ${v3 ? `<div class="consent"><input id="authority" type="checkbox" name="authority" value="yes" ${v.authority ? 'checked' : ''} required/>
         <label for="authority">${esc(authoritySentence(m.businessName))}</label></div>` : ''}
       <div class="consent"><input id="agree" type="checkbox" name="agree" value="yes" ${v.agree ? 'checked' : ''} required/>
         <label for="agree">${esc(agreeConsentSentence(m.businessName, version))}</label></div>
       ${v3 ? `<div class="consent plain"><input id="marketingOptOut" type="checkbox" name="marketingOptOut" value="yes" ${v.marketingOptOut ? 'checked' : ''}/>
-        <label for="marketingOptOut" style="font-weight:400">${esc(MARKETING_OPT_OUT_SENTENCE)} <span class="opt">(optional, clause ${version === 'v4' ? '12.5' : '12.4'})</span></label></div>` : ''}
-      <button type="submit">${version === 'v4' ? 'Accept the agreement' : 'I agree and sign'}</button>
+        <label for="marketingOptOut" style="font-weight:400">${esc(MARKETING_OPT_OUT_SENTENCE)} <span class="opt">(optional, clause ${accepted ? '12.5' : '12.4'})</span></label></div>` : ''}
+      <button type="submit">${accepted ? 'Accept the agreement' : 'I agree and sign'}</button>
       ${v3 ? `<div class="locked" aria-label="Step 3, secure payment, opens after you sign">
         <p class="eyebrow" style="margin:0 0 8px">Step 3 · Secure payment</p>
         <span class="btn off" role="button" aria-disabled="true">Continue to payment</span>

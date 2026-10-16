@@ -7,9 +7,9 @@
 
    ⛔ PURE, AND EVERY FIGURE IS A findableOffer.ts CONSTANT. No £ amount, payment count or term is typed
       here as a number — a price move cannot leave a stale figure on the call screen.
-   ⛔ THE ROUTE THAT FITS, NEVER A GUESS AT THE OTHER: no website (or only a directory / social profile) →
-      Findable Build only; Optimise needs a site of their own to work on. Their own website → both, Optimise
-      first (they keep it), because the app cannot know whether they want a new one.
+   🔴 ONE PLAN (agreement v5, Paul, 2026-10-16): FINDABLE BUILD, whatever website they have. Findable Optimise is
+      WITHDRAWN and is never offered here (routeOffer still describes it, for a pre-v5 client's record only).
+      The minimum term is said in PAYMENTS ("12 payments in total"), never as months.
    ⛔ THE GUARANTEE IS THE MEASURED NUMBER OR THE £99 BACK — never a ranking, a citation, a recommendation
       or "AI will name you". GUARANTEE_HEADLINE is findable.live's own line (Guarantee.astro, Pricing.astro);
       the spoken explanation is FINDABLE_GUARANTEE's facts said aloud (four weeks, same questions, 14 days,
@@ -18,7 +18,7 @@
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 import {
   FINDABLE_MONTHLY_GBP, FINDABLE_SETUP_PRICE_GBP, MONTHLY_START_V3_WORDS, REMEASURE_WEEKS_STANDARD,
-  SERVICE_ROUTE_NAME, termMonthsFor, totalPaymentsFor, type ServiceRoute,
+  SALEABLE_ROUTES, SERVICE_ROUTE_NAME, totalPaymentsFor, type ServiceRoute,
 } from './findableOffer.ts';
 import { QUICK_CLOSE_AFTER_PAYMENT, QUICK_CLOSE_PROMISE } from './quickClose.ts';
 import { afterTermRepLine } from './planTerms.ts';
@@ -69,9 +69,8 @@ const ROUTE_WHAT: Record<ServiceRoute, string> = {
 
 export function routeOffer(route: ServiceRoute): CallRouteOffer {
   const total = totalPaymentsFor(route);
-  const term = termMonthsFor(route);
   const spokenPrice = `It's £${FINDABLE_SETUP_PRICE_GBP} today, then £${FINDABLE_MONTHLY_GBP} a month starting ${MONTHLY_STARTS_SPOKEN}.`;
-  const spokenTerm = `That's ${total} payments in total, the £${FINDABLE_SETUP_PRICE_GBP} today included, so a ${term}-month minimum.`;
+  const spokenTerm = `That's ${total} payments in total, the £${FINDABLE_SETUP_PRICE_GBP} today included: that's the minimum term.`;
   return route === 'build'
     ? {
       route, name: SERVICE_ROUTE_NAME.build,
@@ -93,16 +92,15 @@ export function routeOffer(route: ServiceRoute): CallRouteOffer {
     };
 }
 
-/** The routes for this lead's website, best fit first. 🔴 FINAL PASS (Paul, 2026-10-07): BUILD FIRST — a site of
- *  their own no longer makes Optimise the default (the agency-contract rule, quickClose.offerFit, is the only
- *  thing that moves the recommendation). */
+/** The routes to offer for this lead's website. 🔴 v5 (Paul, 2026-10-16): FINDABLE BUILD ONLY, whatever site they have
+ *  (SALEABLE_ROUTES). A client still tied into a contract with their current provider is not offered anything
+ *  (quickClose.offerFit, declined) — that is decided by the call's answers, not by the website on file. */
 export function routesFor(source: SiteSource | null | undefined): { routes: ServiceRoute[]; note: string | null } {
-  if (source === 'own_site') return { routes: ['build', 'optimise'], note: null };
   return {
-    routes: ['build'],
+    routes: [...SALEABLE_ROUTES],
     note: source === 'directory_profile' || source === 'social_profile'
-      ? 'Only a profile page on file, not a site of their own — Optimise needs their own website, so offer Build.'
-      : 'No website on file — Optimise needs their own website, so offer Build.',
+      ? 'Only a profile page on file, not a site of their own: Findable Build gives them one.'
+      : source === 'own_site' ? null : 'No website on file: Findable Build gives them one.',
   };
 }
 

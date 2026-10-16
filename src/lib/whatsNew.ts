@@ -22,6 +22,20 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-16-agreement-v5-one-plan', date: '2026-10-16', title: 'One plan now: Findable Build, on Client Service Agreement v5', audience: 'all',
+    body: 'New clients sign agreement v5. There is one plan: we build, host and manage a new website, 12 payments of £99, the website is theirs after payment 12, and £29.99 a month hosting is optional. Findable Optimise is no longer sold. A business tied into a contract with its current agency or provider is not taken on.',
+    report: {
+      added: [
+        'The agreement page asks two questions before signing: who looks after their website, domain, hosting or marketing now (if anyone), and whether they are free to leave. "No" means they cannot sign and nothing is charged; Paul is told.',
+      ],
+      changed: [
+        'New sign-ups sign v5 (clients on v4 or v3 keep what they signed). A v4 signature that has not been paid for must be signed again on v5.',
+        'Quick Close and the call screens offer Findable Build only. A client still tied into an agency contract is declined, not offered a lighter plan.',
+        'The checkout and Stripe page say "12 payments in total", not "a 12-month minimum term".',
+      ],
+      removed: ['Findable Optimise (6 payments) from every sales screen, script and offer line.'],
+      effect: 'Sell Findable Build only. If the business is tied into a contract it cannot leave, do not send the sign-up link; note when it ends and follow up then.',
+    } },
   { id: '2026-10-16-simple-onboarding-answers', date: '2026-10-16', title: 'Client sign-up answers: design choice and contract end date are saved', audience: 'admin',
     body: 'The new findable.live sign-up asks whether the client wants to keep or improve their current design, and when a tied-in agency contract ends. Those answers are now saved and shown on the client page, Website Build and the lead card.',
     report: {

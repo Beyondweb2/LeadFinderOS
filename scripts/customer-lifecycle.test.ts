@@ -166,7 +166,7 @@ for (const k of KINDS) {
 }
 const report = read('src/lib/aiAuditReportHtml.ts');
 ok(!/Building it is included in\s+your &pound;99/.test(report) && /no separate build fee\. \$\{esc\(offerSummaryFor\('build'\)\)\}/.test(report), 'report no-website panel: no "included in your £99", names the Build offer (the only route with no website)');
-ok(/If we build the site \(Findable Build\):/.test(pb.offer.monthly) && /If they keep their own site \(Findable Optimise\): it stays theirs/.test(pb.offer.monthly), 'the playbook scopes its ownership line to "If we build the site", and says an Optimise site stays theirs');
+ok(/^Findable Build: we build, host and manage a new website for them/.test(pb.offer.monthly) && /website is theirs/.test(pb.offer.monthly) && !/optimise/i.test(pb.offer.monthly), 'v5: the playbook\'s ownership line is Findable Build\'s (the site is theirs after the payments); Optimise is not mentioned');
 
 console.log('── 12. THE END OF THE TERM IS RECOGNISED, AND ONLY THE END ──');
 {

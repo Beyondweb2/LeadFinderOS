@@ -36,17 +36,21 @@ export const COMMERCIAL_TERMS_V3 = 'csa_v3_option_b';
  *  same Access / Results / Refund Window / Payment Start rules as v3 — what changes is what follows the
  *  minimum term (see continuingModeFor). */
 export const COMMERCIAL_TERMS_V4 = 'csa_v4_option_b';
-export type CommercialTerms = typeof COMMERCIAL_TERMS_V3 | typeof COMMERCIAL_TERMS_V4;
+/** v5 (2026-10-16, Findable_Client_Service_Agreement_v5_clean.docx): the SAME Option B timing again. One plan, Build:
+ *  12 payments, the website transfers after payment 12, the £29.99 Hosting and Maintenance is an opt-in (9A). */
+export const COMMERCIAL_TERMS_V5 = 'csa_v5_option_b';
+export type CommercialTerms = typeof COMMERCIAL_TERMS_V3 | typeof COMMERCIAL_TERMS_V4 | typeof COMMERCIAL_TERMS_V5;
 /** STRICTLY v3. Almost nothing wants this — see isOptionBTerms. */
 export function isV3Terms(v: unknown): v is typeof COMMERCIAL_TERMS_V3 { return v === COMMERCIAL_TERMS_V3; }
 export function isV4Terms(v: unknown): v is typeof COMMERCIAL_TERMS_V4 { return v === COMMERCIAL_TERMS_V4; }
-/** ⛔ THE ONE QUESTION "is this client on the agreement-first (Option B) terms?" — v3 OR v4. Every timeline,
+export function isV5Terms(v: unknown): v is typeof COMMERCIAL_TERMS_V5 { return v === COMMERCIAL_TERMS_V5; }
+/** ⛔ THE ONE QUESTION "is this client on the agreement-first (Option B) terms?" — v3, v4 OR v5. Every timeline,
  *  payment-start, baseline-gate, commission and cutover rule asks THIS, never === a version. A client with no
  *  stamp (Ronnie, MCL, RG, the QA clients) is on neither and is never re-ruled. */
-export function isOptionBTerms(v: unknown): v is CommercialTerms { return v === COMMERCIAL_TERMS_V3 || v === COMMERCIAL_TERMS_V4; }
+export function isOptionBTerms(v: unknown): v is CommercialTerms { return v === COMMERCIAL_TERMS_V3 || v === COMMERCIAL_TERMS_V4 || v === COMMERCIAL_TERMS_V5; }
 /** The terms a signed agreement VERSION puts a sale on; null for a version that is not agreement-first (v1). */
 export function commercialTermsFor(agreementVersion: string | null | undefined): CommercialTerms | null {
-  return agreementVersion === 'v3' ? COMMERCIAL_TERMS_V3 : agreementVersion === 'v4' ? COMMERCIAL_TERMS_V4 : null;
+  return agreementVersion === 'v3' ? COMMERCIAL_TERMS_V3 : agreementVersion === 'v4' ? COMMERCIAL_TERMS_V4 : agreementVersion === 'v5' ? COMMERCIAL_TERMS_V5 : null;
 }
 /** The terms a Stripe subscription was created under (its metadata). A subscription with the Option B timing marker
  *  and no `commercial_terms` was created under v3, before the v4 stamp existed. Anything else: null. */
@@ -62,11 +66,13 @@ export function termsOfSubscriptionMeta(m: Record<string, unknown> | null | unde
  *                  starts only if the client separately opts in. Never started by us.
  *    'none'      — v4 Optimise (clause 15.1): the plan ends after payment 6 and the final service period; there
  *                  is no continuing charge of any kind.
+ *    v5 (clause 9A, 15.1): Build only, 'optional' exactly like v4 Build. v5 has no Optimise, so an Optimise route
+ *    on v5 terms (which the gate refuses to sign) reads 'none'.
  *  Absent / unknown terms or route → 'none' (on a spending path, absent means "do not"). */
 export type ContinuingMode = 'automatic' | 'optional' | 'none';
 export function continuingModeFor(terms: unknown, route: ServiceRoute | null | undefined): ContinuingMode {
   if (isV3Terms(terms)) return route === 'build' || route === 'optimise' ? 'automatic' : 'none';
-  if (isV4Terms(terms)) return route === 'build' ? 'optional' : 'none';
+  if (isV4Terms(terms) || isV5Terms(terms)) return route === 'build' ? 'optional' : 'none';
   return 'none';
 }
 /** The marker a v3 checkout and its Stripe subscription carry (metadata payment_timing): the monthly is
@@ -291,6 +297,8 @@ export function minimumTerm(f: TimelineFacts): MinimumTerm {
   }
   const continuingStart = addMonthsClamped(anchor, needed);
   const cs = continuingStart > finalDay ? continuingStart : addMonthsClamped(finalDay, 1);
+  /* ⚠️ v5 clause 9A.5 promises "We will remind you before payment 12 that you can opt in". NOTHING SENDS IT TODAY:
+     this date drives only Paul's timeline prompt, and can fall a day after payment 12. Its own piece of work (Paul, 2026-10-16). */
   const reminderDue = addDays(cs, -CLIENT_REMINDER_NOTICE_DAYS);
   return {
     recurringNeeded: needed, recurringPaid: paid.length, finalPaymentDay: finalDay, finalPaymentActual: actual,

@@ -24,7 +24,7 @@ const fill: AgreementFill = {
 
 async function main() {
   console.log('── THE WORDS: Paul\'s v3 .docx, verbatim ──');
-  ok(agreementVersion('v3').version === 'v3' && CLIENT_AGREEMENT_VERSION === 'v4', 'v3 stays a pinned, readable version (v4 is the current one: scripts/client-agreement-v4.test.ts)');
+  ok(agreementVersion('v3').version === 'v3' && CLIENT_AGREEMENT_VERSION === 'v5', 'v3 stays a pinned, readable version (v5 is the current one: scripts/client-agreement-v5.test.ts)');
   /* scripts/fixtures/client-agreement-v3-source.txt is the plain text of Findable_Client_Service_Agreement_v3_clean.docx
      (one paragraph per line, tabs as spaces). Every clause paragraph — "1. ABOUT…" to the end of 16.7 — must
      appear, in order, as a line of the agreed text. One changed word fails. */

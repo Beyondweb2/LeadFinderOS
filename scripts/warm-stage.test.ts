@@ -120,11 +120,11 @@ const GOOD = `depends which route suits you mate, so i'll go through that once i
 
 i asked ai who it recommends for a plumber in scunthorpe and it brought up other businesses instead of you. i checked your site to see why and it says "nationwide across england" in one place and scunthorpe-based in another, so ai gets mixed signals about where you actually work.
 
-that's the sort of thing we fix, either on the site you've already got or we can build you a new one that's properly set up for ai visibility and seo.
+that's the sort of thing we fix, we can build you a new one that's properly set up for ai visibility and seo.
 
 are you currently with an agency or do you own/manage the website yourself?`;
 const good = checkReply(GOOD, ctx);
-ok(good.problems.length === 0, `a stage reply (AI search, the finding, both routes, the website question, no price) passes (${good.problems.join(' | ') || 'no problems'})`);
+ok(good.problems.length === 0, `a stage reply (AI search, the finding, the new-site offer, the website question, no price) passes (${good.problems.join(' | ') || 'no problems'})`);
 const RESEND = `i asked ai and it mentioned JC Plumbing & Heating and James Broadbent Plumbing and Heating instead of you.\n\nwe can fix it on the site you've already got or build you a new one.\n\nare you with an agency or do you manage the website yourself?`;
 ok(checkReply(RESEND, ctx).problems.some((p) => /repeats the competitor hook/.test(p)), 'a draft that re-lists the hook\'s competitors is caught');
 const fb = fallbackReply(ctx)!;
@@ -137,7 +137,7 @@ const LIVE_1 = "£99 to start, then £99 a month from week 6, with 12 payments i
 const live1 = checkReply(LIVE_1, ctx);
 ok(live1.problems.some((p) => /carries no price/.test(p)), 'the old price-first live draft is refused: price at this stage');
 ok(live1.problems.includes(PRIMARY_MISSING_PROBLEM), '…and for its generic "mixed signals about where you operate"');
-ok(live1.problems.some((p) => /AI search/.test(p)) && live1.problems.some((p) => /both routes/.test(p)), '…and for no AI search and no routes');
+ok(live1.problems.some((p) => /AI search/.test(p)) && live1.problems.some((p) => /build them a new site/.test(p)), '…and for no AI search and no offer');
 // Paul had already answered "How much" by hand at 10:52 in that thread.
 const answered = [...thread, { id: 'paul', direction: 'outbound' as const, text: 'depends on the route mate…', at: at(10) }];
 const ctxAnswered = buildReplyContext({ ...ctx, thread: answered });

@@ -87,7 +87,8 @@ console.log("\n── 5. SALES CHASING STOPS ──");
 console.log("\n── HANDOFF ──");
 {
   ok(HANDOFF_QUESTIONS.filter((q) => q.required).length === 0 && HANDOFF_QUESTIONS.filter((q) => q.asked).map((q) => q.key).join() === "decision_maker_name,decision_maker_role,promised,preferred_contact,notes_for_paul", "2026-10-07: nothing required; the rep is asked only contact, role, any promise, how to reach them, a note");
-  ok(WORK_TYPE_OPTIONS.map((o) => o.label).join("|") === "Brand new website|Rebuild their existing website|Rebuild, keeping their current design fairly close|Optimise their existing website", "the four 'what are we doing' options, mapped to the two real routes");
+  ok(WORK_TYPE_OPTIONS.map((o) => o.label).join("|") === "Brand new website|Rebuild their existing website|Rebuild, keeping their current design fairly close|Optimise their existing website (pre-v5 plan)", "the four 'what are we doing' options, mapped to the two real routes");
+  ok(WORK_TYPE_OPTIONS.filter((o) => !o.legacy).every((o) => o.route === "build") && WORK_TYPE_OPTIONS.find((o) => o.value === "optimise")?.legacy === true, "v5: only the Build work types are current; Optimise is a legacy label for pre-v5 clients");
   const c = cleanHandoff({ work_type: "rocket", site_situation: "agency", client_wants: "  More   calls ", junk: "x", promised: 5 });
   ok(!c.work_type && c.site_situation === "agency" && c.client_wants === "More calls" && !("junk" in c) && !c.promised, "cleanHandoff is an allowlist: unknown keys / tokens / types dropped, whitespace collapsed");
   ok(cleanHandoff({ client_wants: "x".repeat(900) }).client_wants!.length === 500, "…lengths capped");

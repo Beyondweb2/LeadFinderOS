@@ -22,8 +22,7 @@ import {
 import { resolveSiteFindingsDetailed } from '../src/lib/siteFindings.ts';
 import { CRAWL_CHECK_VERSION, type CrawlSignals } from '../src/lib/crawlCheck.ts';
 import { SITE_EVIDENCE_VERSION, type SiteEvidence } from '../src/lib/siteEvidence.ts';
-import { termMonthsFor } from '../src/lib/findableOffer.ts';
-import { bothPlansSpoken } from '../src/lib/planTerms.ts';
+import { planSpoken } from '../src/lib/planTerms.ts';
 import { salesStyleProblems } from '../src/lib/salesStyle.ts';
 import { BRIDGE_LINE, DISCOVERY_QUESTIONS, FIRST_QUESTION, MAX_SPOKEN_FINDINGS, NO_STRONG_ISSUE_LINE } from '../src/lib/callScript.ts';
 
@@ -243,8 +242,9 @@ console.log('── 10. OFFER AND CLAIMS ──');
 {
   const p = buildColdCallPlaybook(base({ leadCrawl: crawl(THIN, 1, SITEMAP_EVIDENCE) }));
   const text = allText(p);
-  ok(p.offer.lines[0] === bothPlansSpoken(), 'the offer comes from planTerms.ts (both plans, each with its own ending): ' + bothPlansSpoken());
-  ok(p.offer.monthly.includes(termMonthsFor('build') + ' months') && /12 payments/.test(p.offer.monthly) && /6 payments/.test(p.offer.monthly) && /6th payment is the last one/.test(p.offer.monthly) && !/check current offer/i.test(text), 'both routes\' terms are stated (Build 12, Optimise 6 — the 6th the last); no "check current offer"');
+  ok(p.offer.lines[0] === planSpoken(), 'the offer comes from planTerms.ts (v5: Findable Build, the one plan): ' + planSpoken());
+  ok(/12 payments/.test(p.offer.monthly) && /Findable Build/.test(p.offer.monthly) && !/optimise|6 payments|months/i.test(p.offer.monthly) && !/check current offer/i.test(text), 'v5: Build\'s terms are stated in payments (12); no Optimise, no months; no "check current offer"');
+  ok(!/optimise/i.test(JSON.stringify(p.offer) + JSON.stringify(p.objections) + JSON.stringify(p.close.routes)), 'v5: nothing in the offer, the objections or the close sells, quotes or recommends Optimise');
   /* 2026-10-07: £29.99 appears ONLY as Build's optional hosting / maintenance after its 12 payments. */
   ok(!/£9\.99|£49\.99/.test(text) && !/£29\.99(?! a month for hosting and maintenance)/.test(text), 'no stale or invented price anywhere (£29.99 only as Build\'s optional hosting and maintenance)');
   ok(!/Optimise[^.]*£29\.99|carries on at £29\.99 a month for monitoring/.test(text), 'Optimise is never followed by £29.99');
@@ -254,18 +254,18 @@ console.log('── 10. OFFER AND CLAIMS ──');
   /* 2026-10-06 (sales-team-today, Paul): the short list a rep can use DURING a call, exactly, in this order.
      The long 2026-09-30 list (website guy, rank on Google, SEO company, …) was removed deliberately. */
   const EXPECTED = ['Why £99?', 'How much is it?', 'I already have an agency', 'My agency controls the website / domain', 'I need to think about it',
-    'Is this a scam?', 'Can I cancel?', "Can you guarantee I'll show up?", 'Why twelve months?', 'Why six months?', 'Just send me something', "I'm busy right now"];
+    'Is this a scam?', 'Can I cancel?', "Can you guarantee I'll show up?", 'Why 12 payments?', 'Can you just improve my current website?', 'Just send me something', "I'm busy right now"];
   for (const o of EXPECTED) ok(objections.includes(o), 'objection covered: ' + o);
   ok(JSON.stringify(objections) === JSON.stringify(EXPECTED), 'the objection list is exactly the call-time list, in order');
   ok(!objections.some((o) => /Why six payments\?|What happens after\?/.test(o)), 'the objection list keeps its call-time shape');
   const ans = (t: string) => p.objections.find((o) => o.objection === t)?.answer ?? '';
-  /* 2026-10-07 (Paul): Optimise = 6 payments in total, then it ENDS; Build's £29.99 only if they want hosting to continue. */
-  ok(/12 payments if we build the site, 6 if we work on yours/.test(ans('Can I cancel?')) && /simply ends after the 6th payment/.test(ans('Can I cancel?')) && /only if you want it, and you can cancel that with 30 days' notice/.test(ans('Can I cancel?')),
-    '"Can I cancel?": 12 / 6 minimum; Optimise simply ends; Build\'s hosting only if they want it, cancellable with notice');
-  ok(/6th payment is the last one/.test(ans('Why six months?')) && /plan ends/.test(ans('Why six months?')) && !/£29\.99/.test(ans('Why six months?')),
-    '"Why six months?": the 6th payment is the last, then the plan ends — no £29.99');
-  ok(/keep hosting and maintaining it after that, it's £29\.99 a month for hosting and maintenance/.test(ans('Why twelve months?')),
-    '"Why twelve months?": £29.99 a month only if they want hosting / maintenance to continue');
+  /* v5 (2026-10-16): Build only; its £29.99 only if they want hosting to continue. */
+  ok(/minimum term of 12 payments/.test(ans('Can I cancel?')) && !/6 if we work on yours|6th payment/.test(ans('Can I cancel?')) && /only if you want it: you can cancel that with 30 days' notice/.test(ans('Can I cancel?')),
+    '"Can I cancel?": a minimum term of 12 payments; the hosting only if they want it, cancellable with notice; no Optimise');
+  ok(/not something we offer/.test(ans('Can you just improve my current website?')) && /keep your web address/.test(ans('Can you just improve my current website?')),
+    '"Can you just improve my current website?": not offered — a new website, and they keep their web address');
+  ok(/keep hosting and maintaining it after that, it's £29\.99 a month for hosting and maintenance/.test(ans('Why 12 payments?')),
+    '"Why 12 payments?": £29.99 a month only if they want hosting / maintenance to continue');
   ok(/^No one can promise AI will name you/.test(ans("Can you guarantee I'll show up?")) && /claim your £99 back/.test(ans("Can you guarantee I'll show up?")),
     '"Can you guarantee …?": nobody can promise a placement; the measurement or the £99 back');
 }
@@ -359,11 +359,11 @@ console.log('── 12. SIMPLIFIED PLAYBOOK (Paul, 2026-09-27) ──');
   ok(prof.script.found.lines.some((l) => /belongs to TradeHQ/.test(l)) && /Never call the profile their website/.test(prof.script.found.note ?? ''), 'what we found says truthfully that the profile page is TradeHQ\'s');
   ok(ps.includes('Able Group (Shrewsbury Service)') && /asked Gemini/.test(ps), 'the profile lead keeps its exact engine and competitors');
 
-  // "How much" is the canonical offer sentence itself (2026-10-06); the ownership line moved to "Why twelve months?".
+  // "How much" is the canonical offer sentence itself (2026-10-06); the ownership line is on "Why 12 payments?".
   const howMuch = p.objections.find((o) => o.objection === 'How much is it?')?.answer ?? '';
-  ok(howMuch === bothPlansSpoken() && /6 payments in total, today's included, and then it ends/.test(howMuch) && /£29\.99 a month for hosting and maintenance only if you want us to keep looking after it/.test(howMuch),
-    '"How much is it?" names both plans: Optimise 6 then it ends; Build 12, £29.99 after only if they want hosting (2026-10-07)');
-  ok(/the website is theirs/.test(p.objections.find((o) => o.objection === 'Why twelve months?')?.answer ?? ''), 'the ownership line: on Build the site is theirs once the payments are made');
+  ok(howMuch === planSpoken() && /12 payments in total, today's included/.test(howMuch) && !/6 payments|optimise/i.test(howMuch) && /£29\.99 a month for hosting and maintenance only if you want us to keep looking after it/.test(howMuch),
+    '"How much is it?" names Findable Build: 12 payments, £29.99 after only if they want hosting (v5)');
+  ok(/the website is theirs/.test(p.objections.find((o) => o.objection === 'Why 12 payments?')?.answer ?? ''), 'the ownership line: on Build the site is theirs once the payments are made');
 
   // The panel: the new hierarchy, the old A–H headings gone.
   const ui = readFileSync(new URL('../src/components/ColdCallPlaybook.tsx', import.meta.url), 'utf8');

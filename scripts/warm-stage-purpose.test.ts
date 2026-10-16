@@ -65,7 +65,7 @@ const EXPECTED = `nah mate, i was checking what gemini recommends when someone i
 
 i checked your site to see why and one of the main issues is oai-searchbot, chatgpt-user, claude-user and perplexitybot are blocked from fetching your pages, so a lot of the ai tools can't properly access and understand the site.
 
-that's the sort of thing we fix, either on the site you've already got or we can build you a new one that's properly set up for ai visibility and seo.
+that's the sort of thing we fix, we can build you a new one that's properly set up for ai visibility and seo.
 
 are you currently with an agency or do you own/manage the website yourself?`;
 const good = checkReply(EXPECTED, ctx);
@@ -85,7 +85,8 @@ const breaks: Array<[string, string, RegExp]> = [
   ['goes generic on the issue', EXPECTED.replace(/one of the main issues is[^.]*\./, 'there are a few technical issues.'), new RegExp(PRIMARY_MISSING_PROBLEM.replace('.', '\\.'))],
   ['blocks without naming the crawlers', EXPECTED.replace('oai-searchbot, chatgpt-user, claude-user and perplexitybot are', 'some crawlers are'), new RegExp(PRIMARY_MISSING_PROBLEM.replace('.', '\\.'))],
   ['forgets the AI search', EXPECTED.replace(/^nah mate[^\n]*\n\n/, 'nah mate.\n\n'), /AI search/],
-  ['offers only a rebuild', EXPECTED.replace('either on the site you\'ve already got or we can build you a new one', 'we can build you a new one'), /both routes/],
+  ['offers to work on the existing site (v5: withdrawn)', EXPECTED.replace('we can build you a new one', 'either on the site you\'ve already got or we can build you a new one'), /fix or improve the site they already have/],
+  ['offers no new site', EXPECTED.replace(', we can build you a new one that\'s properly set up for ai visibility and seo', ''), /build them a new site/],
   ['does not end with the website question', EXPECTED.replace(/\n\nare you currently[^\n]*$/, '\n\nlet me know.'), /website question/],
   ['uses an em dash', EXPECTED.replace('so a lot of', '— so a lot of'), /dash/],
   ['sounds like a script', `great question! ${EXPECTED}`, /sales-script/],
@@ -125,7 +126,7 @@ ok(e1.selection.primary?.id.startsWith('crawl:crawler_blocked') === true, 'E.E.S
 ok(/could not be read today, but an earlier crawl check MEASURED the finding below\. Use ONLY that finding/.test(buildReplyPrompt(e1)), '…and the model is told to use only that');
 const failedRules = { ...failedToday, strongestFindings: failedToday.strongestFindings.filter((x) => x.source !== 'crawl'), technicalFindings: failedToday.technicalFindings.filter((x) => x.source !== 'crawl') };
 ok(buildReplyContext({ ...mk(), research: failedRules }).selection.primary === null, '…but nothing read (or not read) TODAY is used after a failed read');
-const LIVE_EES = "i found your number on your public google business listing, that’s how i got in touch.\n\nwhen i asked AI for an electrician in Addlestone, it mentioned you in one of the answers, but it also highlighted some competitors. one issue is that ai tools can’t properly access your site, which can make it harder for you to show up.\n\nthat’s the sort of thing we fix, either on the site you've already got or we can build you a new one that's properly set up for ai visibility and seo.\n\nif you’re interested in exploring this further, let me know what works for you.";
+const LIVE_EES = "i found your number on your public google business listing, that’s how i got in touch.\n\nwhen i asked AI for an electrician in Addlestone, it mentioned you in one of the answers, but it also highlighted some competitors. one issue is that ai tools can’t properly access your site, which can make it harder for you to show up.\n\nthat’s the sort of thing we fix, we can build you a new one that's properly set up for ai visibility and seo.\n\nif you’re interested in exploring this further, let me know what works for you.";
 const noFindingCtx = buildReplyContext({ ...mk(eesFacts, ees), research: failedRules });
 ok(checkReply(LIVE_EES, noFindingCtx).problems.some((p) => /cannot access the site, but no finding shows that/.test(p)), 'E.E.S live draft: "ai tools can’t properly access your site" with no finding behind it is refused');
 ok(!checkReply(LIVE_EES, buildReplyContext({ ...mk(eesFacts, ees), research: failedToday })).problems.some((p) => /no finding shows that/.test(p)), '…and allowed when the blocked-crawler finding is the primary');
@@ -148,7 +149,7 @@ const c = buildReplyContext({ ...mk(), research: cleanResearch });
 ok(c.selection.primary === null && c.primaryRequired === false, 'a healthy site with nothing strong → no primary, none invented');
 /* 2026-10-12 (Paul): no finding → the general line, never a fault (draftEvidence.GENERIC_SITE_LINE). */
 ok(/The site itself is not badly built: you may say so honestly\. GENERAL LINE/.test(buildReplyPrompt(c)), 'the no-finding reply claims no fault and uses the general line');
-const NOFIND = `nah mate, i was checking what gemini recommends for an electrician in addlestone and it brought up your competitors instead.\n\nyour site itself isn't badly built, but ai still isn't linking you strongly enough with electrician searches in addlestone, while it is with those other businesses.\n\nthat's the sort of thing we'd work on, either on the site you've already got or we can build you a new one that's properly set up for ai visibility and seo.\n\nare you currently with an agency or do you own/manage the website yourself?`;
+const NOFIND = `nah mate, i was checking what gemini recommends for an electrician in addlestone and it brought up your competitors instead.\n\nyour site itself isn't badly built, but ai still isn't linking you strongly enough with electrician searches in addlestone, while it is with those other businesses.\n\nthat's the sort of thing we'd work on, we can build you a new one that's properly set up for ai visibility and seo.\n\nare you currently with an agency or do you own/manage the website yourself?`;
 const nf = checkReply(NOFIND, c);
 ok(nf.problems.length === 0, `the honest no-finding reply passes (${nf.problems.join(' | ') || 'ok'})`);
 ok(nf.warnings.some((w) => /No website finding was strong enough/.test(w)), 'Paul is told internally that no site finding was used');
