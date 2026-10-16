@@ -15,6 +15,8 @@ import { isPaidClient, paidClientSource, PAID_CLIENT_OR_FILTER } from "../../../
 import { summariseLeadCrawl, LEAD_CRAWL_SUMMARY_COLUMNS, type LeadCrawlRowLike, type CrawlJobLike } from "../../../src/lib/leadCrawlSummary.ts";
 import { cleanCounts, progressLabel, type JobStatus } from "../../../src/lib/crawlJob.ts";
 import { answerProblems, buildOnboardingPatch, changedOnboardingPatch, cleanAnswers, consentsCleared, leadPatchFromAnswers } from "../../../src/lib/manualOnboarding.ts";
+import { alertContractAnswer } from "../_shared/contract-alert.ts";
+import { contractAlertAnswer } from "../../../src/lib/contractAlert.ts";
 import { cellNamed } from "../../../src/lib/namedSignal.ts";
 import { loadClientSetup, loadClientSetups, recordFirstContact, recordLeadEvent, submitForDelivery, SETUP_LEAD_COLUMNS, type ClientSetup } from "../_shared/client-setup.ts";
 import { agreementRouteLock, maySetAgreementRoute, resolveAgreementRoute } from "../../../src/lib/agreementRoute.ts";
@@ -1371,6 +1373,11 @@ Deno.serve(async (req) => {
         const { error } = await service.from("outreach_leads").update(leadPatch).eq("id", leadId).eq("user_id", user.id);
         if (error) throw error;
       }
+      /* CONTRACT CALL ALERT (2026-10-16): the agency answer typed here is judged like every other route (once per answer). */
+      await alertContractAnswer(service, {
+        leadId, source: "manual_onboarding", contractEnds: answers.agency_contract_ends,
+        answer: contractAlertAnswer(answers.agency_manages === "yes" ? true : answers.agency_manages === "no" ? false : null, answers.agency_contract),
+      });
       return json({ ok: true, onboarding: saved });
     }
 

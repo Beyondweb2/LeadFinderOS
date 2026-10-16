@@ -10,6 +10,8 @@ import {
 } from "../../../src/lib/quickClose.ts";
 import { cleanCloseEmail, closeRecipient, CLOSE_EMAIL_INVALID_TEXT, fullSetupEmail } from "../../../src/lib/closeEmail.ts";
 import { serviceWindowState } from "../../../src/lib/serviceWindow.ts";
+import { alertContractAnswer } from "../_shared/contract-alert.ts";
+import { contractAlertAnswerFromQuickClose } from "../../../src/lib/contractAlert.ts";
 import { selfServeBuildHold, selfServeDeclined, SELF_SERVE_DECLINE_TEXT, SELF_SERVE_HOLD_TEXT } from "../../../src/lib/selfServeContract.ts";
 import { decideLinkRoute, LINK_ROUTE_SAY, type ConversationFacts } from "../../../src/lib/paymentLinkRoute.ts";
 import { SIGNUP_LINK_TEMPLATE_NAME, setupLinkUrl, templateSendState } from "../../../src/lib/whatsappLinkTemplates.ts";
@@ -706,6 +708,10 @@ Deno.serve(async (req) => {
         const patch: Obj = { ...plan.cols, ...cols, updated_at: now };
         const stored = await writeQc(service, rowId, revOf(qcNow), next, patch);
         if (!stored) continue; // someone else wrote first: re-read and decide again
+        /* CONTRACT CALL ALERT (2026-10-16): who runs the site or the contract changed → the ledger decides whether Paul is emailed. */
+        if (changed.includes("manager") || changed.includes("agency_contract")) {
+          await alertContractAnswer(service, { leadId, answer: contractAlertAnswerFromQuickClose(answers), source: "quick_close" });
+        }
         /* The old link was for the old answers (B-16): it is closed at Stripe, so only one link can ever be paid. */
         if (superseded) {
           const result = await expireSession(superseded);

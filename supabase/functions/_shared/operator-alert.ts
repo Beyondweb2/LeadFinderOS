@@ -10,11 +10,13 @@ export const OPERATOR_ALERT_TO = "paul@findable.live";
 
 const escapeHtml = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
-export async function sendOperatorAlert(subject: string, lines: string[]): Promise<{ ok: boolean; status: number; error: string | null }> {
+/** `opts.html` (2026-10-16, the contract call alert): a caller that needs a link (tap to call) passes its own HTML, built
+ *  and escaped by a pure, tested builder; the plain-text lines still go as the text part. Absent = the lines, escaped. */
+export async function sendOperatorAlert(subject: string, lines: string[], opts: { html?: string } = {}): Promise<{ ok: boolean; status: number; error: string | null }> {
   const key = Deno.env.get("RESEND_API_KEY");
   if (!key) return { ok: false, status: 0, error: "RESEND_API_KEY not set" };
   const text = lines.join("\n");
-  const html = `<div style="font-family:system-ui,sans-serif;font-size:14px;line-height:1.5">${
+  const html = opts.html ?? `<div style="font-family:system-ui,sans-serif;font-size:14px;line-height:1.5">${
     lines.map((l) => (l.trim() === "" ? "<br>" : `<div>${escapeHtml(l)}</div>`)).join("")
   }</div>`;
   try {

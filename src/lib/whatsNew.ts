@@ -22,6 +22,19 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-16-contract-call-alert', date: '2026-10-16', title: 'An email when a lead is not sure, or tied into their agency contract', audience: 'admin',
+    body: 'When a lead answers "not sure" or "tied in" about their agency contract, on any route, you get one email and the lead appears on Needs your attention.',
+    report: {
+      added: [
+        'One email to you: "CALL: [business] not sure about agency contract" or "NO-GO: [business] tied into agency contract", with the contact, a tap-to-call phone, their email, what they ticked, the contract end date and a link to the lead.',
+        'The lead on Needs your attention: not sure under Today, tied in under Review, until someone acts on the lead or the answer changes.',
+      ],
+      changed: [
+        'Every route sends it: the findable.live sign-up and its copied link, the agreement page, Quick Close and the Call screen, and your manual onboarding.',
+      ],
+      removed: [],
+      effect: 'You hear about every not-sure or tied-in lead once, with what you need to call them. A refresh or a repeat sends nothing; a changed answer sends again. Nothing goes to the prospect.',
+    } },
   { id: '2026-10-16-onboarding-consistency', date: '2026-10-16', title: 'Manual onboarding asks the same short questions as the client page', audience: 'admin',
     body: 'Your "Complete onboarding manually" form now matches the new findable.live sign-up: it shows what we already hold, then asks about their agency and contract, the build, the design and the domain. Paid Clients no longer asks for a website or site access unless the client is on the old Optimise plan.',
     report: {

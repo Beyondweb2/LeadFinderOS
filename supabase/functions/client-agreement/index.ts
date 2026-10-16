@@ -29,6 +29,7 @@ import { serviceRouteFromRow } from "../../../src/lib/findableOffer.ts";
 import { commercialTermsFor } from "../../../src/lib/clientTimeline.ts";
 import { ACCEPTANCE_COLUMNS, agreementPdfForRow, reportAgreementError, storeAndSendAcceptance } from "../_shared/client-agreement.ts";
 import { qaEmailHold } from "../_shared/qa-guard.ts";
+import { alertContractAnswer } from "../_shared/contract-alert.ts";
 
 // deno-lint-ignore no-explicit-any
 type Service = any;
@@ -202,6 +203,10 @@ Deno.serve(async (req) => {
       /* ⛔ v5 clause 1.6: the client's own answer. No answer is an error; "No" is a refusal, not an error to
          fix: nothing is signed or charged, Paul is told, and the page says so plainly. */
       if (asksCurrentProvider(CLIENT_AGREEMENT_VERSION)) {
+        /* CONTRACT CALL ALERT (2026-10-16): "No, tied in" emails Paul once; "Yes, free to leave" closes an earlier alert. */
+        if (values.freeToLeave === false || values.freeToLeave === true) {
+          await alertContractAnswer(service, { leadId: ctx.lead.id, answer: values.freeToLeave ? "free" : "in_contract", provider: values.currentProvider || null, source: "agreement" });
+        }
         if (values.freeToLeave === false) {
           await reportAgreementError(service, "agreement_declined_tied_in", "client says they are tied into a contract with their current provider", { lead_id: ctx.lead.id, onboarding_id: signup.id, current_provider: values.currentProvider || null });
           return html(agreementPageHtml({ mode: "not_ready", businessName: ctx.businessName, message: TIED_IN_MESSAGE }), 422);
