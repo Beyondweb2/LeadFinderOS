@@ -81,7 +81,7 @@ console.log("── Job 2: CSV import — messy real-world files ──");
   ok(/admin/.test(callErrorText({ ok: false, error: "owner_not_yours" })) && /not an active member/.test(callErrorText({ ok: false, error: "not_an_active_member" })), "the two new refusals have words");
 
   const dialog = read("src/components/CSVImportDialog.tsx");
-  ok(/\('import_leads_v3', args\)/.test(dialog), "the screen calls import_leads_v3 (import_leads_v2 + the required campaign)");
+  ok(/\(('import_leads_v4', args)\)/.test(dialog), "the screen calls import_leads_v4 (v3 + batch default + town confirmation)");
   ok(/assignTo: isAdmin && assignTo \? assignTo : null/.test(dialog), "only the admin's screen ever sends an owner");
 
   const mig = read("supabase/migrations/20261024100000_csv_import_batch_owner.sql");

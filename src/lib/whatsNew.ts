@@ -22,6 +22,22 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-16-town-confirm-import', date: '2026-10-16', title: 'Imported leads can be audited: towns can be confirmed', audience: 'admin',
+    body: 'The audit no longer refuses imported leads with "Google could not confirm the town". The import has a new tick box, and the audit popup can confirm a town in one click.',
+    report: {
+      added: [
+        'Import box: "Towns in this file were checked by the researcher". Ticked, a real town in the file is saved as confirmed, so the audit uses it. Off by default.',
+        'Audit popup: when the town cannot be used it now says so in plain words and offers "Confirm town and try again" with the town filled in.',
+        'The Batch name, if left blank, now takes the file name, so every import is recognisable as one.',
+      ],
+      changed: [
+        'The refusal message is plain English instead of a code.',
+        '"Not established", "not found" and similar are treated as no town. A blank town, "Online" and prose stay blocked.',
+        'Salesperson pre-call checks use the same town rule as the audit.',
+      ],
+      removed: [],
+      effect: 'Ethan’s lists can be audited once their towns are confirmed. A lead with no real town is still skipped for free, and nothing about the cost limits changed.',
+    } },
   { id: '2026-10-16-import-campaign-per-trade', date: '2026-10-16', title: 'One campaign per trade on import', audience: 'all',
     body: 'When a CSV has a trade column, tick "Create a campaign for each trade (WhatsApp)" and each trade goes into its own WhatsApp campaign, named exactly the trade. A campaign that already has that name is reused, never duplicated.',
     report: {

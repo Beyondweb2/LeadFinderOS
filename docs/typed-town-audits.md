@@ -44,3 +44,11 @@ prospecting pool, 100 leads per job, 85% Apify reserve.
 scrape (a few minutes each), not one scrape in total. Per-row age guard (12 min) is per question, so it is unaffected.
 
 Test: `scripts/sequential-hook-audit.test.ts`.
+
+## A person vouches for the town (2026-10-16)
+
+**Root cause of "town_unverified" on Ethan's list** (read from the live row, "Majesty Event"): the import ran with the Batch name blank, so `import_batch` was NULL and `townWasTyped` (lead_source / import_batch) was false; 851 leads imported that day had no batch. A lead with no Google place is never looked up (`resolveDerivedTown` stamps `no_place_id` without a call), so the audit was never about Google re-verifying; it was this marker.
+
+**Fix.** `outreach_leads.town_confirmed_by` ('researcher' = the import tick box, 'operator' = Confirm town in the audit popup) + `town_confirmed_at`. `townConfirmedByPerson` joins `townWasTyped` inside `auditTownGated`; the real-town text check (`cleanTypedTown`, which now also refuses "Not established" / "not found" / "no town given") still applies, so blank / "Online" / "Not established" stay blocked. `import_leads_v4` = v3 + batch defaults to the file name + `_confirmed_rows` (file rows the client says are real towns; only leads CREATED by that call are stamped). `lead_confirm_town` uses `_require_work` (same rule as `lead_set_details`). The audit popup (`LeadHookPanel`) turns the refusal into plain words (`src/lib/townRefusal.ts`) with Confirm town. `sales-prospect-check` now uses the same `auditTownGated` as the audit it calls. Caps unchanged. Test: `scripts/town-confirm-import.test.ts`.
+
+**Leads imported before this (no batch):** they stay gated until given a batch or confirmed. Backfill (a fill of NULLs, run by Paul): set `import_batch` from the file name in the lead's `lead_added` activity (`data->>'file'`, `source = 'csv_import'`) where `import_batch is null and place_id is null`.

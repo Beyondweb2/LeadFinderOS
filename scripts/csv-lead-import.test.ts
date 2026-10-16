@@ -105,7 +105,7 @@ console.log("\n── sending: calls of IMPORT_BATCH_MAX, one transaction each, 
   const rep = await runImport(rpc, mk(1201), true, "big.csv");
   ok(calls.length === 3 && calls.map((c) => c.n).join(",") === `${IMPORT_BATCH_MAX},${IMPORT_BATCH_MAX},201`, `1,201 rows → 3 calls of at most ${IMPORT_BATCH_MAX}`);
   /* 2026-10-14 (import_leads_v2): two more keys, both NULL unless the screen set them — the owner (admin only, server-checked) and the batch name. */
-  ok(calls.every((c) => c.commit && c.keys === "_assign_to,_batch,_campaign_id,_commit,_file_name,_import_possible,_rows" && c.possible === false), "every call carries only rows, commit, the file name, the held-matches choice (off unless ticked), and the owner / batch tags (null unless set)");
+  ok(calls.every((c) => c.commit && c.keys === "_assign_to,_batch,_campaign_id,_commit,_confirmed_rows,_file_name,_import_possible,_rows" && c.possible === false), "every call carries only rows, commit, the file name, the held-matches choice (off unless ticked), and the owner / batch tags (null unless set)");
   calls.length = 0;
   await runImport(rpc, mk(3), true, "x.csv", undefined, true);
   ok(calls.length === 1 && calls[0].possible === true, "ticking \"import these too\" sends _import_possible = true");
@@ -229,9 +229,9 @@ console.log("\n── the browser no longer writes leads itself ──");
   ok(/await fetchLeads\(\);\n\s+return \{ verified: 0, unverifiable: 0 \};/.test(salesBranch) && !/backfill-lead-towns/.test(salesBranch),
     "a SALESPERSON's import never triggers the paid town check (Paul, 2026-10-05: same as their manual Add a lead)");
   const dlg = read("src/components/CSVImportDialog.tsx");
-  ok(/\('import_leads_v3', args\)/.test(dlg) && !/\.from\(/.test(dlg), "the dialog imports through import_leads_v3 only (2026-10-14: v2 + a required campaign)");
+  ok(/\(('import_leads_v4', args)\)/.test(dlg) && !/\.from\(/.test(dlg), "the dialog imports through import_leads_v4 only (v3 + batch default + town confirmation)");
   /* 2026-10-14: the campaign is REQUIRED — the screen will not check or import without one, and the server refuses it too. */
-  ok(/campaignId == null \|\| !research/.test(dlg) && /disabled=\{busy \|\| campaignId == null \|\| willAdd/.test(dlg) && /batch: batchName \}/.test(dlg) && /\{ \.\.\.tags, campaignId \}/.test(dlg),
+  ok(/campaignId == null \|\| !research/.test(dlg) && /disabled=\{busy \|\| campaignId == null \|\| willAdd/.test(dlg) && /batch: batchName, townsChecked \}/.test(dlg) && /\{ \.\.\.tags, campaignId \}/.test(dlg),
     "Check rows and Import both need a campaign, and the campaign rides on every call");
   const v3 = read("supabase/migrations/20261028090000_import_into_campaign.sql");
   ok(/if _campaign_id is null then return jsonb_build_object\('ok', false, 'error', 'campaign_required'\)/.test(v3)

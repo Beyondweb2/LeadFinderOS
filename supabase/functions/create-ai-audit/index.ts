@@ -1,7 +1,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { townGated, TOWN_GATE_REASON } from "../../../src/lib/townVerdict.ts";
 import { cleanTypedTown } from "../../../src/lib/typedTown.ts";
-import { townWasTyped } from "../_shared/typed-town.ts";
+import { townWasTyped, townConfirmedByPerson } from "../_shared/typed-town.ts";
 import { SOURCES } from "../_shared/enrichment/sources.ts";
 import { resolveDerivedTown, pickAuditTown } from "../_shared/place-town.ts";
 import { buildTownIndex, lookupTownCentroid, checkTownDistance, type TownDistanceCheck } from "../_shared/town-distance.ts";
@@ -1097,7 +1097,7 @@ Deno.serve(async (req) => {
     // The town columns ride along for the gate below — one read, both questions.
     if (leadId) {
       const { data: lead } = await service.from("outreach_leads")
-        .select("user_id, derived_town, town_fetch_note, place_id, lead_source, import_batch").eq("id", leadId).maybeSingle();
+        .select("user_id, derived_town, town_fetch_note, place_id, lead_source, import_batch, town_confirmed_by").eq("id", leadId).maybeSingle();
       if (!isInternal && (!lead || lead.user_id !== userId)) return json({ ok: false, error: "lead_not_found" }, 403);
       /* ⛔ THE TOWN GATE — Paul's rule, 2026-08-14: an audit of a lead whose town is settled-
          unverifiable would fall back to search_location, the searched town — the exact wrong-town
@@ -1132,7 +1132,7 @@ Deno.serve(async (req) => {
          carries a lead_source (only sales_add_lead writes one), it has NO place id (a Google-resolved lead
          keeps the gate exactly as before), and the town in use is that typed one (locationSource 'search',
          a usable town). Anything else is gated as it always was. */
-      const handTypedTown = !!lead && townWasTyped(lead)
+      const handTypedTown = !!lead && (townWasTyped(lead) || townConfirmedByPerson(lead))
         && locationSource === "search" && hasUsableTown(locationText);
       if (lead && !isBaseline && !isRemeasure && !townConfirmed && !handTypedTown && townGated(lead)) {
         return json({ ok: false, error: `town_unverified: ${TOWN_GATE_REASON}` }, 409);

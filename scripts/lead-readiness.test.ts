@@ -31,7 +31,7 @@ ok(/const townCheck = auditTownCheck\(lead\);/.test(bulk) && /problem === "town_
 ok(/checkSuppressed\(service, \{ phone: lead\.phone, email: lead\.email, leadId: lead\.id \}\)/.test(bulk), "bulk-jobs skips a suppressed lead (leadReadiness: optedOut)");
 const caa = strip(readFileSync("supabase/functions/create-ai-audit/index.ts", "utf8"));
 ok(/if \(!businessName && !reuseAuditId\) return json\(\{ ok: false, error: "business_name required" \}, 400\);/.test(caa), "create-ai-audit refuses an empty business name");
-ok(/const handTypedTown = !!lead && townWasTyped\(lead\)\s*&& locationSource === "search" && hasUsableTown\(locationText\);/.test(caa)
+ok(/const handTypedTown = !!lead && \(townWasTyped\(lead\) \|\| townConfirmedByPerson\(lead\)\)\s*&& locationSource === "search" && hasUsableTown\(locationText\);/.test(caa)
   && /!townConfirmed && !handTypedTown && townGated\(lead\)\)/.test(caa), "create-ai-audit's town gate: townGated unless a real typed town");
 const table = strip(readFileSync("src/components/OutreachTable.tsx", "utf8"));
 ok(/items: auditReadiness\(l, \{ suppressed: auditSuppressedIds\.has\(l\.id\) \}\)/.test(table)

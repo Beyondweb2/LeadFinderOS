@@ -16,6 +16,7 @@ import { hookVisibilityQueryKey, useHookVisibility } from '@/hooks/useHookVisibi
 import { useOnboardingLink } from '@/hooks/useOnboardingLink';
 import { reportShareKey, useReportShare } from '@/hooks/useReportShare';
 import { edgeErrorMessage, invokeEdge } from '@/lib/edgeInvoke';
+import { isTownRefusal, townRefusalWords } from '@/lib/townRefusal';
 import { REPORT_CHANNEL_LABEL, REPORT_SEND_CHANNELS } from '@/lib/reportShare';
 import { HookVisibilityCard } from '@/components/HookVisibilityCard';
 import { CampaignPicker } from '@/components/CampaignPicker';
@@ -565,6 +566,8 @@ export function LeadHookPanel({ leadId, autoPropose = false, variant }: { leadId
      saves (lead_set_details for sales, the row for the admin), so "add them first" has somewhere to go. */
   const [details, setDetails] = useState<{ type: string; loc: string } | null>(null);
   const [override, setOverride] = useState<{ type: string; loc: string } | null>(null);
+  /* The audit refused the lead's town (town_unverified / no usable town): say so in words and offer Confirm town here. */
+  const [townFix, setTownFix] = useState<string | null>(null);
   const autoProposed = useRef(false);
   const lead = crm.data;
   const needsProposal = autoPropose && !!lead && !hookQ.isLoading && !hookQ.isError && !hook?.audit && !proposed;
@@ -590,11 +593,29 @@ export function LeadHookPanel({ leadId, autoPropose = false, variant }: { leadId
     try {
       const data = await invokeEdge<{ ok: boolean; questions?: string[]; error?: string }>('create-ai-audit', { ...body, preview: true });
       const qs = (data.questions ?? []).filter((q) => typeof q === 'string' && q.trim());
+      if (!qs.length && isTownRefusal(data.error)) { setTownFix(loc); return; }
       if (!qs.length) { toast({ title: "Couldn't propose questions", description: data.error ?? 'Try again', variant: 'destructive' }); return; }
       setProposed(qs);
     } catch (e) {
+      if (isTownRefusal(`${(e as { code?: string })?.code ?? ''} ${edgeErrorMessage(e, '')}`)) { setTownFix(loc); return; }
       toast({ title: "Couldn't propose questions", description: edgeErrorMessage(e, 'Try again'), variant: 'destructive' });
     } finally { setHookBusy(false); }
+  };
+
+  /* Confirm town: lead_confirm_town (same ownership rule as lead_set_details) saves the town AND records that a person confirmed it. */
+  const confirmTownThenPropose = async () => {
+    const town = (townFix ?? '').trim();
+    if (!town) { toast({ title: 'Type the town first', description: 'Enter the town the business is in.', variant: 'destructive' }); return; }
+    setHookBusy(true);
+    try {
+      const write = await leadRpc('lead_confirm_town', { _lead_id: lead.id, _town: town });
+      if (!write.ok) { toast({ title: "Couldn't confirm the town", description: refusalText(write.error), variant: 'destructive' }); return; }
+      setTownFix(null);
+      setOverride((o) => ({ type: o?.type ?? '', loc: town }));
+      void qc.invalidateQueries({ queryKey: leadCrmKey(lead.id) });
+      notifyLeadChanged(lead.id);
+    } finally { setHookBusy(false); }
+    void propose({ type: inputs().bizType, loc: town });
   };
 
   const reviewed = proposed ? reviewedHookQuestions(proposed) : null;
@@ -620,6 +641,7 @@ export function LeadHookPanel({ leadId, autoPropose = false, variant }: { leadId
     setHookBusy(true);
     try {
       const data = await invokeEdge<{ ok: boolean; error?: string; message?: string; already_running?: boolean }>('create-ai-audit', { ...body, questions: reviewed.questions });
+      if (!data?.ok && isTownRefusal(`${data?.error ?? ''} ${data?.message ?? ''}`)) { setProposed(null); setTownFix(body.location_text ?? ''); return; }
       if (!data?.ok) { toast({ title: "Couldn't start the check", description: data?.message ?? data?.error ?? 'Try again', variant: 'destructive' }); return; }
       setProposed(null);
       await Promise.all([
@@ -631,6 +653,7 @@ export function LeadHookPanel({ leadId, autoPropose = false, variant }: { leadId
         ? { title: 'Already running', description: 'This business already has a check in progress, so nothing new was started. Its progress shows here.' }
         : { title: 'AI visibility check started', description: 'It runs on the server, so you can close this and carry on. The result appears on the lead in a few minutes. Nothing is sent to the lead.' });
     } catch (e) {
+      if (isTownRefusal(`${(e as { code?: string })?.code ?? ''} ${edgeErrorMessage(e, '')}`)) { setProposed(null); setTownFix(body.location_text ?? ''); return; }
       toast({ title: "Couldn't start the check", description: edgeErrorMessage(e, 'Try again'), variant: 'destructive' });
     } finally { setHookBusy(false); }
   };
@@ -672,7 +695,21 @@ export function LeadHookPanel({ leadId, autoPropose = false, variant }: { leadId
           </div>
         </section>
       )}
-      {details && !proposed && (
+      {townFix !== null && (
+        <section className={cn(CARD, 'space-y-2 border-amber-500/40')} data-testid="hook-town-fix">
+          <div className={LABEL}>{townRefusalWords(townFix).headline}</div>
+          <p className="text-xs text-muted-foreground">{townRefusalWords(townFix).detail}</p>
+          <Input value={townFix} maxLength={100} onChange={(e) => setTownFix(e.target.value)} placeholder="Town, e.g. Kuala Lumpur" className="h-9 text-sm" aria-label="Town" data-testid="hook-town-input" />
+          <p className="text-[11px] text-muted-foreground">Saved on the lead as confirmed by you. Nothing is sent to the lead.</p>
+          <div className="flex justify-end gap-2">
+            <Button size="sm" variant="ghost" className="h-8 text-xs" disabled={hookBusy} onClick={() => setTownFix(null)}>Cancel</Button>
+            <Button size="sm" className="h-8 gap-1 text-xs" disabled={hookBusy} onClick={() => void confirmTownThenPropose()} data-testid="hook-confirm-town">
+              {hookBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}Confirm town and try again
+            </Button>
+          </div>
+        </section>
+      )}
+      {details && !proposed && townFix === null && (
         <section className={cn(CARD, 'space-y-2')} data-testid="hook-need-details">
           <div className={LABEL}>The check needs this lead&rsquo;s trade and town</div>
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
