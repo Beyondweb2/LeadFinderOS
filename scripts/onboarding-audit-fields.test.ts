@@ -59,21 +59,19 @@ ok(/skipped: "no_business_type"/.test(baseline), 'startPaidBaseline still refuse
 ok(/skipped: "no_location"/.test(baseline), 'and without a town');
 ok(/skipped: "no_lead_id"/.test(baseline), 'and without a lead');
 
-console.log('\n-- business name is asked whenever it would otherwise be BLANK --');
-/* 🔴 REVISED 2026-10-02. This used to demand the panel UNCONDITIONALLY. Paul's 2026-09-18
-   simplification (findable-site e48f787) hid it on the tagged path, where the lead row already holds
-   the name, and this test was red from then on. What it protects is unchanged and still enforced:
-   nobody reaches the pay screen with business_name blank (create-ai-audit 400s without one). So: the
-   cold path always; the tagged path whenever the prefilled name is blank, through a MONOTONIC latch
-   (askBusiness, the same shape as askTradeTown). Gating on isGeneric ALONE fails here. */
+console.log('\n-- the first screen: what we hold is shown, a blank is a field, and nothing blank gets past it --');
+/* 🔴 REVISED 2026-10-16 FOR THE SIMPLE ONBOARDING (findable-site 58e5497, merged to master). The separate "business",
+   "trade_town" and "you" panels are gone: the first panel, "Is this right?" (preSub "confirm"), SHOWS what the lead
+   already holds and opens a field for anything blank or invalid. What this suite protects is unchanged: nobody reaches
+   the pay screen with the business name, the trade or the town blank (create-ai-audit / startPaidBaseline refuse each). */
 const list = flow.slice(flow.indexOf('const preSubs: PreSub[] = ['), flow.indexOf('];', flow.indexOf('const preSubs: PreSub[] = [')));
-ok(/"you",/.test(list) && /\.\.\.\(isGeneric \|\| askBusiness \? \(\["business"\] as PreSub\[\]\) : \[\]\),/.test(list),
-   'the panel list asks "business" on the cold path OR when the tagged name is blank');
-ok(!/\.\.\.\(isGeneric \? \(\["business"\]/.test(list), 'and it is NOT gated on the cold path alone');
-ok(/if \(!isGeneric && !businessName\.trim\(\)\) setAskBusiness\(true\);/.test(flow),
-   'a tagged lead with a blank name turns the panel on');
-ok(!/setAskBusiness\(false\)/.test(flow), 'and it is never turned back off');
-ok(/case "business": return bizName\.trim\(\)\.length > 1;/.test(flow), 'and it is required to advance');
+ok(list.replace(/\s+/g, ' ').startsWith('const preSubs: PreSub[] = [ "confirm",'), 'the first panel is "Is this right?" (confirm), on every path');
+const confirmCase = flow.slice(flow.indexOf('case "confirm": return'), flow.indexOf('case "agency":'));
+ok(confirmCase.includes('bizName.trim().length > 1') && confirmCase.includes('tradeValue.trim().length > 1') && confirmCase.includes('location.trim().length > 1'),
+   'it will not advance with the business name, the trade or the town blank');
+ok(flow.includes('["biz", bizName.trim().length > 1], ["trade", tradeValue.trim().length > 1], ["town", location.trim().length > 1]'),
+   'a blank business name, trade or town opens as a field (hidden when known, asked when blank)');
+ok(!flow.includes('setOpenRows(new Set())') && !flow.includes('openRows.delete'), 'and an open field is never closed under the person typing');
 
 console.log('\n-- one business-name value, not two --');
 /* 🔴 THE CONFLATION THIS REPLACES. Two backing states are fine; two MEANINGS are not. */
@@ -85,24 +83,11 @@ ok(/businessName\?: string;/.test(flow), 'the draft carries the tagged business 
 ok(/if \(draft\.businessName\) setBusinessName\(draft\.businessName\);/.test(flow), 'and restores it');
 
 console.log('\n-- the contact-name field is only ever the person --');
-ok(/<label className="mb-1\.5 block text-\[0\.82rem\] font-semibold text-ink">Your name<\/label>/.test(flow),
-   'the label is "Your name"');
-/* ⚠️ COMMENTS STRIPPED. Three comment blocks legitimately QUOTE the old label as the record of
-   what was wrong — matching the raw file would fail on prose that is saying the right thing. The
-   substring trap, inside the assertion written to catch a substring problem. */
+ok(flow.includes('<KnownRow label="Your name" htmlFor="ob-name"'), 'the label is "Your name"');
+ok(flow.includes('<KnownRow label="Business name" htmlFor="ob-biz" value={bizName}'), 'and the business name is its own row');
+/* ⚠️ COMMENTS STRIPPED. Comment blocks legitimately QUOTE the old label as the record of what was wrong. */
 const flowCode = flow.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/^\s*\/\/.*$/gm, ' ');
 ok(!/Your name or business name/.test(flowCode), 'and "Your name or business name" is gone from the UI');
-
-console.log('\n-- trade and town: asked when blank, hidden when known --');
-ok(/askTradeTown \? \(\["trade_town"\] as PreSub\[\]\) : \[\]/.test(flow), 'the panel appears only when asked for');
-ok(/if \(!businessType\.trim\(\) \|\| !location\.trim\(\)\) setAskTradeTown\(true\);/.test(flow),
-   'and it is asked for when EITHER is blank — not only when there is no lead');
-/* 🔴 THE REGRESSION THAT WOULD REOPEN THE HOLE: gating on isGeneric again would leave the 62
-   tagged-but-incomplete leads exactly where they were. */
-ok(!/isGeneric[\s\S]{0,40}\["you", "business", "trade_town"/.test(flow),
-   'the old isGeneric-only panel list is gone');
-/* ⛔ MONOTONIC. A panel appearing is safe; one disappearing mid-flow is not. */
-ok(!/setAskTradeTown\(false\)/.test(flow), 'it is never turned back off');
 
 console.log('\n-- every step opens at the top --');
 ok(/window\.scrollTo\(\{ top: 0, behavior: "auto" \}\)/.test(flow), 'it scrolls to the top');
@@ -111,20 +96,12 @@ ok(/\}, \[step, preSubIdx, phase\]\);/.test(flow), 'on the step, the panel AND t
 ok(!/behavior: "smooth"/.test(flow), 'instantly, never smoothly');
 ok(/typeof window === "undefined"/.test(flow), 'and it is SSR-guarded — this is an Astro island');
 
-console.log('\n-- the confirmation line, and it has to actually DO something --');
-/* ⛔ A CONTROL THAT VISIBLY DOES NOTHING IS WORSE THAN NO CONTROL. On the tagged path the trade
-   the audit uses comes from the LEAD, not from this form, so the inline edit only means anything
-   because it is sent AND written back. The town needs no plumbing: confirmed_location is already
-   sent on both paths and outranks everything in pickAuditTown. */
-ok(/We&rsquo;ll check how AI answers for/.test(flow), 'the line states what will be measured');
-ok(/Not right\?/.test(flow), 'with a way out');
-ok(/!askTradeTown && businessType\.trim\(\) && location\.trim\(\)/.test(flow),
-   'shown ONLY when we hold both — otherwise the trade_town panel has already asked');
-/* Flipping askTradeTown would insert a panel EARLIER than the one being read, shifting preSubIdx
-   under the visitor and jumping them backwards mid-sentence. */
-ok(/const \[correctTradeTown, setCorrectTradeTown\] = useState\(false\);/.test(flow),
-   'the reveal is inline state, not a panel insert');
-ok(/business_type_correction: correctTradeTown && businessType\.trim\(\)/.test(flow),
+console.log('\n-- a corrected trade is sent, and it has to actually DO something --');
+/* ⛔ On the tagged path the trade the audit uses comes from the LEAD, so an edit on the first panel only means anything
+   because it is sent AND written back. The simple onboarding sends it only when it differs from what prefill gave. */
+ok(flow.includes('<KnownRow label="What you do" htmlFor="ob-trade" value={tradeValue}') && flow.includes('<KnownRow label="Your town" htmlFor="ob-town" value={location}'),
+   'the trade and the town are shown on the first panel, with a way to fix them');
+ok(flow.includes('business_type_correction: !isGeneric && businessType.trim() && businessType.trim() !== prefillTrade.current ? businessType.trim() : null'),
    'and a typed correction is actually sent');
 const fn2 = read('supabase/functions/findable-onboarding/index.ts');
 ok(/const tradeFix = clip\(a\.business_type_correction, 120\);/.test(fn2), 'the server reads it');

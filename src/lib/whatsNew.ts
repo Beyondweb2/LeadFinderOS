@@ -22,6 +22,22 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-16-onboarding-consistency', date: '2026-10-16', title: 'Manual onboarding asks the same short questions as the client page', audience: 'admin',
+    body: 'Your "Complete onboarding manually" form now matches the new findable.live sign-up: it shows what we already hold, then asks about their agency and contract, the build, the design and the domain. Paid Clients no longer asks for a website or site access unless the client is on the old Optimise plan.',
+    report: {
+      added: [
+        'Manual onboarding: "Is this right?" first (what we already hold, shown, with Fix), then agency or provider, tied into a contract (free to leave / tied in / not sure, with the end date when tied in), happy for us to build, keep or improve the design, and owning and logging in to the domain.',
+        'Tied in shows the decline wording; not sure shows that you check it before any payment. Same rule as Quick Close and the client page.',
+      ],
+      changed: [
+        'Paid Clients checklist: "Website" and "Website access / control" are only asked for a client on the old Optimise plan. Every other client is a Build client, so they are not needed.',
+        'The sales handoff fills in the work type from the client’s keep or improve design answer.',
+      ],
+      removed: [
+        'The old website choice questions in the manual form (they stay only for a client already on Optimise).',
+      ],
+      effect: 'One set of questions everywhere, nothing asked twice, and no website steps holding up a Build client.',
+    } },
   { id: '2026-10-16-coverage-many-towns-find-leads', date: '2026-10-16', title: 'Find leads in many towns at once, from Coverage', audience: 'all',
     body: 'Tick towns on Coverage and press "Find leads in these towns". Find Leads opens in Many towns mode with them selected. One press searches up to 10 towns, and the results land in the normal Find Leads table, each row naming its town.',
     report: {

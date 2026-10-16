@@ -10,9 +10,11 @@
    ============================================================ */
 import fs from 'node:fs';
 import path from 'node:path';
+import { execFileSync } from 'node:child_process';
 import { findableSiteDir } from './findable-site-dir.mjs';
 import {
-  ONBOARDING_COPY, WEBSITE_CHOICE_OPTIONS, MANAGER_OPTIONS, KEEP_ACCESS_OPTIONS, BUILD_DOMAIN_OPTIONS, NONE_DOMAIN_OPTIONS,
+  ONBOARDING_COPY,
+  SIMPLE_COPY, AGENCY_OPTIONS, CONTRACT_OPTIONS, BUILD_OK_OPTIONS, DESIGN_OPTIONS, DOMAIN_ANSWER_OPTIONS, NO_DOMAIN_OPTION, domainColumnsFor, domainAnswerOf,
   branchFromChoice, choiceFromBranch, siteAccessFromBranch, websiteManagerFromBranch, permissionAckText, accessConsequenceText, websiteRouteFor,
   answersFromRecords, buildOnboardingPatch, cleanAnswers, answerProblems, leadPatchFromAnswers, onboardingStatus,
   type OnboardingAnswers,
@@ -72,9 +74,9 @@ console.log('\n── SAME QUESTIONS: every string is the customer flow\'s own (
     const strings: string[] = [];
     const walk = (v: unknown) => { if (typeof v === 'string') strings.push(v); else if (v && typeof v === 'object') Object.values(v).forEach(walk); };
     walk(ONBOARDING_COPY);
-    for (const opts of [WEBSITE_CHOICE_OPTIONS, MANAGER_OPTIONS, KEEP_ACCESS_OPTIONS, BUILD_DOMAIN_OPTIONS, NONE_DOMAIN_OPTIONS]) for (const o of opts) strings.push(o.label);
-    for (const o of WEBSITE_CHOICE_OPTIONS) strings.push(o.note);
-    strings.push(permissionAckText(null), permissionAckText('yes_access'), permissionAckText('want_new'), accessConsequenceText('yes_access'), accessConsequenceText('no_website'));
+    /* 2026-10-16: the Optimise-only questions (LEGACY_KEEP_COPY, WEBSITE_CHOICE_OPTIONS, …) left the customer page and are no
+       longer pinned; they are drawn only for a client already on Optimise. */
+    strings.push(permissionAckText(null), permissionAckText('yes_access'), permissionAckText('want_new'));
     const missing = strings.filter((s) => !customer.includes(norm(s)));
     /* A MISSING string is first a question about WHICH findable-site was read: a sibling checkout
        left behind its master reports the new wording as missing (2026-10-05, the Q2 sub). */
@@ -89,9 +91,10 @@ console.log('\n── SAME QUESTIONS: every string is the customer flow\'s own (
     && siteAccessFromBranch('no', null, 'none') === 'no_website' && siteAccessFromBranch('yes', null, null) === null && siteAccessFromBranch(null, 'yes', 'access') === null,
     'the website branch folds exactly as the customer flow\'s siteAccessFromBranch');
   ok(websiteManagerFromBranch('yes') === 'web_company' && websiteManagerFromBranch('no') === 'direct_access' && websiteManagerFromBranch(null) === null, 'website_manager folds the same way');
-  /* 2026-10-07: the website question is CHOICE-FIRST on the customer page, so it is here too. */
-  ok(/choice === 'build' && <>/.test(dialog) && /choice === 'keep' && <>/.test(dialog) && /choice === 'none' && <div>/.test(dialog)
-    && /manager === 'agency' && keep === 'yes' && <div/.test(dialog) && /keep === 'no' && <div/.test(dialog) && /a\.domain_status === 'new' &&/.test(dialog),
+  /* 2026-10-16 (Build only): the simple questions' show conditions — the contract only with an agency, the design only
+     with a website, nothing after a tied-in contract or a "no" to the build; the Optimise branch only for a row on it. */
+  ok(/hasAgency === 'yes' && <div data-testid="manual-agency-contract">/.test(dialog) && /contract !== 'stop' && buildOk !== 'no' && !noWebsite && <Panel headline=\{S\.design\.headline\}/.test(dialog)
+    && /contract === 'stop' && <Callout/.test(dialog) && /\{legacyKeep && <Panel/.test(dialog) && /manager === 'agency' && keep === 'yes' && <div/.test(dialog) && /keep === 'no' && <div/.test(dialog),
     'the conditional questions keep the customer\'s show conditions');
   const bf = (c: Parameters<typeof branchFromChoice>[0], m: Parameters<typeof branchFromChoice>[1], k: Parameters<typeof branchFromChoice>[2]) => {
     const b = branchFromChoice(c, m, k); return siteAccessFromBranch(b.agency_manages, b.can_get_access, b.self_site);
@@ -105,6 +108,48 @@ console.log('\n── SAME QUESTIONS: every string is the customer flow\'s own (
     const b = branchFromChoice(c, m, k); const back = choiceFromBranch(b.agency_manages, b.can_get_access, b.self_site);
     if (bf(c, m, k) !== null) ok(back.choice === c, `a stored ${c}/${m}/${k} answer reads back as the ${c} choice`);
   }
+}
+
+console.log('\n── 7b. THE SIMPLE ONBOARDING\'S QUESTIONS (2026-10-16), word for word ──');
+{
+  /* Read from findable-site's simple flow: the resolved tree when it has it (src/lib/onboardingSimple.ts), otherwise the
+     feat/onboarding-simple branch of that clone (it was not on master when this was written). Neither = a FAIL. */
+  const dir = findableSiteDir(ROOT);
+  const files = ['src/components/OnboardingFlow.tsx', 'src/lib/onboardingSimple.ts', 'src/lib/agencyContract.ts'];
+  let src = '';
+  let from = '';
+  if (fs.existsSync(path.join(dir, 'src', 'lib', 'onboardingSimple.ts'))) {
+    src = files.map((f) => { try { return fs.readFileSync(path.join(dir, f), 'utf8'); } catch { return ''; } }).join('\n'); from = dir;
+  } else {
+    try {
+      src = files.map((f) => { try { return execFileSync('git', ['-C', dir, 'show', 'origin/feat/onboarding-simple:' + f], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }); } catch { return ''; } }).join('\n');
+      from = dir + ' @ origin/feat/onboarding-simple';
+      if (src.trim()) console.log('WARN findable-site master has no simple onboarding yet — pinned against its feat/onboarding-simple branch');
+    } catch { src = ''; }
+  }
+  if (!src.trim()) ok(false, 'the simple onboarding source was not found in findable-site — the wording CANNOT be verified (this is not a pass)');
+  else {
+    const norm = (s: string) => s.replace(/&rsquo;|&#39;|&apos;|’/g, "'").replace(/\{"\s*"\}/g, ' ').replace(/\s+/g, ' ');
+    const customer = norm(src);
+    const strings: string[] = [];
+    const walk = (v: unknown) => { if (typeof v === 'string') strings.push(v); else if (v && typeof v === 'object') Object.values(v).forEach(walk); };
+    walk(SIMPLE_COPY);
+    for (const opts of [AGENCY_OPTIONS, BUILD_OK_OPTIONS, DESIGN_OPTIONS, DOMAIN_ANSWER_OPTIONS, [NO_DOMAIN_OPTION]]) for (const o of opts) strings.push(o.label);
+    const missing = strings.filter((s) => !customer.includes(norm(s)));
+    ok(missing.length === 0, `all ${strings.length} simple-onboarding texts appear verbatim in the customer flow${missing.length ? ' — MISSING: ' + missing.join(' | ') + ' — compared against ' + from : ''}`);
+    ok(CONTRACT_OPTIONS.map((o) => o.label).join('|') === 'Free to leave|Tied in|Not sure' && /"Free to leave"/.test(src) && /"Tied in"/.test(src), 'the contract answers are the customer page\'s three, in its order');
+  }
+  /* The domain answer folds onto the SAME four columns the customer page writes, and reads back as itself. */
+  for (const d of ['yes', 'cant_login', 'not_sure', 'agency_owns'] as const) ok(domainAnswerOf(domainColumnsFor(d, true)) === d, `domain answer "${d}" round-trips through the columns`);
+  ok(domainAnswerOf(domainColumnsFor('none', false)) === 'none' && domainColumnsFor('none', true).domain_status === null, '"no domain yet" only without a website');
+  /* The new answers own their lifetime. */
+  const tied = buildOnboardingPatch({ ...cleanAnswers({}), agency_manages: 'yes', can_get_access: 'no', agency_contract: 'in_contract', agency_contract_ends: '2027-03-17', design_choice: 'keep' }, OP, NOW);
+  ok(tied.agency_contract === 'in_contract' && tied.agency_contract_ends === '2027-03-17' && tied.design_choice === 'keep', 'an agency, tied in, keep the design → the three columns are written');
+  const own = buildOnboardingPatch({ ...cleanAnswers({}), agency_manages: 'no', self_site: 'rebuild', agency_contract: 'in_contract', agency_contract_ends: '2027-03-17', design_choice: 'improve' }, OP, NOW);
+  ok(own.agency_contract === null && own.agency_contract_ends === null && own.design_choice === 'improve', 'no agency → no contract and no end date are written (a hidden answer is not kept)');
+  const none = buildOnboardingPatch({ ...cleanAnswers({}), agency_manages: 'no', self_site: 'none', design_choice: 'keep' }, OP, NOW);
+  ok(none.design_choice === null, 'no website → no design choice');
+  ok(!/agencyContractOutcome\(/.test(read('src/lib/manualOnboarding.ts')) && /agencyContractOutcome\(/.test(dialog), 'the dialog asks the ONE contract rule (agencyContractRule.ts), never a copy');
 }
 
 console.log('\n── 8. CUSTOMER-SUBMITTED ONBOARDING STILL WORKS ──');
@@ -125,7 +170,9 @@ const patch = buildOnboardingPatch(full, OP, NOW);
 {
   /* 2026-09-28: + the domain rule's answers (src/lib/domainAuthority.ts), the same columns the customer path writes. */
   const answerCols = ['contact_name', 'contact_email', 'confirmed_phone', 'business_website', 'business_name', 'confirmed_location', 'domain_status', 'website_manager', 'website_manager_email', 'gbp_consent', 'services', 'services_list', 'areas_list',
-    'domain_owned', 'domain_access', 'domain_third_party', 'site_rights', 'authority_confirmed', 'dns_permission', 'materials_confirmed'];
+    'domain_owned', 'domain_access', 'domain_third_party', 'site_rights', 'authority_confirmed', 'dns_permission', 'materials_confirmed',
+    /* 2026-10-16: the simple onboarding's answers, the same columns the customer page writes. */
+    'agency_contract', 'agency_contract_ends', 'design_choice'];
   ok(answerCols.every((k) => k in patch), '9. the patch sets every answer column');
   const notCustomer = answerCols.filter((k) => !new RegExp(`\\b${k}\\s*:`).test(onboardingFn));
   ok(notCustomer.length === 0, `9. every one of them is a column the customer path (findable-onboarding) also writes${notCustomer.length ? ' — not found: ' + notCustomer.join(', ') : ''}`);

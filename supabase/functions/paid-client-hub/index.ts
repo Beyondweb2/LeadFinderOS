@@ -117,7 +117,7 @@ const HUB_ONBOARDING_COLUMNS =
   /* wave 1 integration: Workstream 4 service truth for Website Build (migration 20261007040100 — run it first). */
   "services_not_offered," +
   /* The simple findable.live onboarding (migration 20261103090000 — run it first): design choice, agency contract end, access tick. */
-  "design_choice,agency_contract_ends,access_ack_at";
+  "design_choice,agency_contract_ends,access_ack_at,agency_contract";
 
 /* `audit_purpose` is why this list grew: welcomePackReadiness ASSERTS the purpose of the row rather
    than trusting the claim trigger that set baseline_audit_id (CLAUDE.md §4 — test the property). */

@@ -186,5 +186,6 @@
 - `docs/lead-ready-check.md` — 2026-10-15: leadReadiness (one function, the gates' own predicates) — what a lead needs for the audit / WhatsApp / SMS / report offer, shown on every add path, the Needs info tag + one-click fix, the bulk audit skip list; the parity test
 - `docs/PERF_AUDIT.md` — 2026-10-15: speed pass on Inbox / Find Leads / Coverage / Outreach — what each loads on open, the ranked list, the Inbox one-pass audit map (251 ms → 3 ms), the one-lead Inbox popup, the niche panel without the whole book; Outreach revisit cache left for Paul
 - `docs/onboarding-simple-v1-fields.md` — 2026-10-16: what V1 stores for the simple findable.live onboarding (design_choice, agency_contract_ends, access_ack_at), the three-lists rule, the record-not-gate access tick, q2_prefill town
+- `docs/onboarding-consistency.md` — 2026-10-16: the ONE agency-contract rule (agencyContractRule.ts: go / stop / hold / unanswered), the manual onboarding dialog on the simple questions ("Is this right?" first), Paid Clients website + access asked of Optimise clients only
 - `docs/records-lookup.md` — the "touching X → read Y first" table (moved from CLAUDE.md §10, 2026-10-15; live — add rows here)
 - `docs/archive/claude-md-moved-2026-10-15.md` — what left CLAUDE.md on 2026-10-15, verbatim: §7 path rows with no rule, resolved §8 items, the §9 old-checkout audit detail

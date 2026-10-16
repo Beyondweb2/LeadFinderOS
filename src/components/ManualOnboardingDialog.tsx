@@ -9,12 +9,14 @@ import { useToast } from '@/hooks/use-toast';
 import { EdgeFunctionError, edgeErrorMessage, invokeEdge } from '@/lib/edgeInvoke';
 import { tradeWord } from '@/lib/trade';
 import { chipsForTrade, serviceExamplesFor } from '@/lib/onboardingChips';
-import { AGENCY_CONTRACT_NOTE, DOMAIN_ACCESS_OPTIONS, DOMAIN_OWNED_OPTIONS, DOMAIN_QUESTIONS, DOMAIN_REASON_TEXT, DOMAIN_THIRD_PARTY_OPTIONS, NEW_DOMAIN_REGISTRATION_NOTE, SITE_RIGHTS_OPTIONS, domainAuthority } from '@/lib/domainAuthority';
+import { AGENCY_CONTRACT_NOTE, DOMAIN_QUESTIONS, DOMAIN_REASON_TEXT, NEW_DOMAIN_REGISTRATION_NOTE, SITE_RIGHTS_OPTIONS, domainAuthority } from '@/lib/domainAuthority';
 import {
-  BUILD_DOMAIN_OPTIONS, KEEP_ACCESS_OPTIONS, MANAGER_OPTIONS, NONE_DOMAIN_OPTIONS, ONBOARDING_COPY as C, WEBSITE_CHOICE_OPTIONS,
-  accessConsequenceText, answerProblems, answersFromRecords, branchFromChoice, choiceFromBranch, onboardingStatus, permissionAckText, siteAccessFromBranch,
-  type OnboardingAnswers, type SiteManager, type WebsiteChoice,
+  AGENCY_OPTIONS, BUILD_OK_OPTIONS, CONTRACT_OPTIONS, DESIGN_OPTIONS, KEEP_ACCESS_OPTIONS, LEGACY_KEEP_COPY as L, MANAGER_OPTIONS, ONBOARDING_COPY as C, SIMPLE_COPY as S, WEBSITE_CHOICE_OPTIONS,
+  accessConsequenceText, answerProblems, answersFromRecords, branchFromChoice, choiceFromBranch, domainAnswerOf, domainColumnsFor, domainOptionsFor, onboardingStatus, permissionAckText, siteAccessFromBranch,
+  type BuildOk, type HasAgency, type OnboardingAnswers, type SiteManager, type WebsiteChoice,
 } from '@/lib/manualOnboarding';
+import { agencyContractOutcome } from '@/lib/agencyContractRule';
+import { QC_REVIEW_TEXT, TIED_IN_DECLINE_REASON } from '@/lib/quickClose';
 
 /* ════════════════════════════════════════════════════════════════════════════════════════════════
    COMPLETE / EDIT ONBOARDING MANUALLY — the customer's own onboarding questions, answered by Paul
@@ -49,6 +51,12 @@ function Radio<T extends string>({ name, value, options, onChange }: { name: str
     </label>)}</div>;
 }
 
+/** One row of "Is this right?": a value we already hold is shown as text (Fix opens it); a gap is a field. */
+function Known({ label, held, value, fixing, children }: { label: string; held: boolean; value: string; fixing: boolean; children: ReactNode }) {
+  return <div className="min-w-0"><dt className="text-xs font-medium text-muted-foreground">{label}</dt>
+    <dd className="mt-0.5">{held && !fixing ? <span className="font-medium">{value}</span> : children}</dd></div>;
+}
+
 function Pills({ items, onRemove }: { items: string[]; onRemove: (i: number) => void }) {
   if (!items.length) return null;
   return <div className="flex flex-wrap gap-1.5">{items.map((x, i) =>
@@ -72,6 +80,13 @@ export function ManualOnboardingDialog({ leadId, open, onOpenChange, onSaved }: 
   const [choiceState, setChoiceState] = useState<WebsiteChoice | null>(null);
   const [managerState, setManagerState] = useState<SiteManager | null>(null);
   const [keepAccess, setKeepAccess] = useState<'yes' | 'no' | null>(null);
+  /* 2026-10-16: "Happy for us to build you an AI-optimised website?" — the form's own answer (no column; the client's
+     page does not store it either). A Build sign-up already said yes by choosing it. */
+  const [buildOk, setBuildOk] = useState<BuildOk | null>(null);
+  /* What the record already held when the form opened: shown, not asked (Fix opens it). */
+  const [loaded, setLoaded] = useState<OnboardingAnswers | null>(null);
+  const [fixing, setFixing] = useState(false);
+  const held = (k: 'business_name' | 'trade' | 'confirmed_location' | 'contact_name' | 'contact_email' | 'confirmed_phone' | 'business_website') => !!loaded?.[k]?.trim();
   const [areaInput, setAreaInput] = useState('');
 
   useEffect(() => {
@@ -82,9 +97,11 @@ export function ManualOnboardingDialog({ leadId, open, onOpenChange, onSaved }: 
       .then((res) => {
         if (cancelled) return;
         const f = res.form as { lead: Record<string, unknown>; onboarding: Record<string, unknown> | null; detected: { services: string[]; towns: string[] } };
-        setRow(f.onboarding); setA(answersFromRecords(f.onboarding, f.lead)); setDetected(f.detected ?? { services: [], towns: [] });
+        const first = answersFromRecords(f.onboarding, f.lead);
+        setRow(f.onboarding); setA(first); setLoaded(first); setFixing(false); setDetected(f.detected ?? { services: [], towns: [] });
         /* A fresh load reads the website choice back from the stored answers, never from the last client's form. */
         setChoiceState(null); setManagerState(null); setKeepAccess(null);
+        setBuildOk(String(f.onboarding?.plan_tier ?? '') === 'new_site' ? 'yes' : null);
       })
       .catch((e) => { if (!cancelled) setError(edgeErrorMessage(e, 'Could not load the onboarding answers')); })
       .finally(() => { if (!cancelled) setLoading(false); });
@@ -104,6 +121,14 @@ export function ManualOnboardingDialog({ leadId, open, onOpenChange, onSaved }: 
   const pickManager = (m: SiteManager) => { setManagerState(m); applyWebsite(choice, m, keep); };
   const pickKeep = (k: 'yes' | 'no') => { setKeepAccess(k); applyWebsite(choice, manager, k); };
   const siteAccess = a ? siteAccessFromBranch(a.agency_manages, a.can_get_access, a.self_site) : null;
+  /* 🔴 BUILD ONLY (2026-10-16): the simple questions. Optimise ("keep") is drawn only for a row already on it. */
+  const legacyKeep = choice === 'keep';
+  const noWebsite = choice === 'none';
+  const hasAgency: HasAgency | null = noWebsite ? null : manager === 'agency' ? 'yes' : manager === 'self' ? 'no' : null;
+  const pickNoWebsite = (on: boolean) => (on ? pickChoice('none') : (() => { setChoiceState('build'); setManagerState(null); setKeepAccess(null); applyWebsite('build', null, null); })());
+  const pickAgency = (v: HasAgency) => { const m: SiteManager = v === 'yes' ? 'agency' : 'self'; setChoiceState('build'); setManagerState(m); setKeepAccess(null); applyWebsite('build', m, null); };
+  const contract = a ? (legacyKeep ? 'go' : agencyContractOutcome(noWebsite ? false : hasAgency === null ? null : hasAgency === 'yes', a.agency_contract)) : 'unanswered';
+  const domainAnswer = a ? domainAnswerOf(a) : null;
   const chips = useMemo(() => chipsForTrade(tradeWord(a?.trade ?? '')).services, [a?.trade]);
   const problems = a ? answerProblems(a) : [];
   const problemFor = (f: keyof OnboardingAnswers) => problems.find((p) => p.field === f)?.message;
@@ -164,68 +189,76 @@ export function ManualOnboardingDialog({ leadId, open, onOpenChange, onSaved }: 
         <Callout tone="blue" icon={Info} className="text-xs">You are answering the client’s onboarding questions on their behalf. These are the same questions, saved to the same record; it is marked as entered by you, never as submitted by the client. Current state: <b>{status.label}</b>. Blank answers are prefilled from the client record where it has one — check each before saving. Nothing is sent to the client and no baseline starts.</Callout>
         {row && String(row.status ?? '') !== 'paid' && <Callout tone="amber" className="text-xs">The client started onboarding themselves (status “{String(row.status)}”) but it was never marked paid. Saving adopts that record and marks it paid — no second record is created.</Callout>}
 
+        {/* 2026-10-16: the customer page's first screen — what we already hold is SHOWN, not asked; a gap is a field;
+            Fix opens everything (never ask for anything the lead already holds). */}
         <Panel headline={C.you.headline} sub={C.you.sub}>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div><Label>{C.contactName.label}</Label><Input aria-label={C.contactName.label} value={a.contact_name} placeholder={C.contactName.label} onChange={(e) => set('contact_name', e.target.value)} /></div>
-            <div><Label>{C.contactEmail.label}</Label><Input aria-label={C.contactEmail.label} type="email" value={a.contact_email} onChange={(e) => set('contact_email', e.target.value)} /><p className="mt-1 text-xs text-muted-foreground">{C.contactEmail.helper}</p>{problemFor('contact_email') && <p className="text-xs text-destructive">{problemFor('contact_email')}</p>}</div>
-            <div><Label>{C.phone.label}</Label><Input aria-label={C.phone.label} type="tel" value={a.confirmed_phone} placeholder={C.phone.placeholder} onChange={(e) => set('confirmed_phone', e.target.value)} /><p className="mt-1 text-xs text-muted-foreground">{C.phone.helper}</p>{problemFor('confirmed_phone') && <p className="text-xs text-destructive">{problemFor('confirmed_phone')}</p>}</div>
-            <div><Label>{C.website.label} <span className="font-normal text-muted-foreground">{C.website.optional}</span></Label><Input aria-label={C.website.label} value={a.business_website} placeholder={C.website.placeholder} onChange={(e) => set('business_website', e.target.value)} /><p className="mt-1 text-xs text-muted-foreground">{C.website.helper}</p>{problemFor('business_website') && <p className="text-xs text-destructive">{problemFor('business_website')}</p>}</div>
-          </div>
+          <dl className="grid gap-x-4 gap-y-2.5 sm:grid-cols-2" data-testid="manual-known">
+            <Known label={C.businessName.label} held={held('business_name')} value={a.business_name} fixing={fixing}><Input aria-label={C.businessName.label} value={a.business_name} placeholder={C.businessName.placeholder} onChange={(e) => set('business_name', e.target.value)} /><p className="mt-1 text-xs text-muted-foreground">{C.businessName.helper}</p></Known>
+            <Known label={C.trade.label} held={held('trade')} value={a.trade} fixing={fixing}><Input aria-label={C.trade.label} value={a.trade} placeholder={C.trade.placeholder} onChange={(e) => set('trade', e.target.value)} /></Known>
+            <Known label={C.town.label} held={held('confirmed_location')} value={a.confirmed_location} fixing={fixing}><Input aria-label={C.town.label} value={a.confirmed_location} onChange={(e) => set('confirmed_location', e.target.value)} /></Known>
+            <Known label={C.contactName.label} held={held('contact_name')} value={a.contact_name} fixing={fixing}><Input aria-label={C.contactName.label} value={a.contact_name} placeholder={C.contactName.label} onChange={(e) => set('contact_name', e.target.value)} /></Known>
+            <Known label={C.contactEmail.label} held={held('contact_email')} value={a.contact_email} fixing={fixing}><Input aria-label={C.contactEmail.label} type="email" value={a.contact_email} onChange={(e) => set('contact_email', e.target.value)} />{problemFor('contact_email') && <p className="text-xs text-destructive">{problemFor('contact_email')}</p>}</Known>
+            <Known label={C.phone.label} held={held('confirmed_phone')} value={a.confirmed_phone} fixing={fixing}><Input aria-label={C.phone.label} type="tel" value={a.confirmed_phone} placeholder={C.phone.placeholder} onChange={(e) => set('confirmed_phone', e.target.value)} />{problemFor('confirmed_phone') && <p className="text-xs text-destructive">{problemFor('confirmed_phone')}</p>}</Known>
+            <Known label={C.website.label} held={held('business_website') || choice === 'none'} value={choice === 'none' ? 'No website yet' : a.business_website} fixing={fixing}><Input aria-label={C.website.label} value={a.business_website} placeholder={C.website.placeholder} onChange={(e) => set('business_website', e.target.value)} />{problemFor('business_website') && <p className="text-xs text-destructive">{problemFor('business_website')}</p>}</Known>
+          </dl>
+          {!fixing && <Button type="button" variant="outline" size="sm" className="w-fit" onClick={() => setFixing(true)} data-testid="manual-fix">{C.fix.action}</Button>}
         </Panel>
 
-        <Panel headline={C.business.headline} sub={C.business.sub}>
-          <div><Label>{C.businessName.label}</Label><Input aria-label={C.businessName.label} value={a.business_name} placeholder={C.businessName.placeholder} onChange={(e) => set('business_name', e.target.value)} /><p className="mt-1 text-xs text-muted-foreground">{C.businessName.helper}</p></div>
-        </Panel>
+        {!legacyKeep && <>
+          <Panel headline={S.agency.headline} sub={S.agency.sub}>
+            <label className="flex items-center gap-2" data-testid="manual-no-website"><input type="checkbox" checked={noWebsite} onChange={(e) => pickNoWebsite(e.target.checked)} /><span>{S.noWebsite}</span></label>
+            {!noWebsite && <Radio name="has-agency" value={hasAgency} options={AGENCY_OPTIONS} onChange={pickAgency} />}
+            {hasAgency === 'yes' && <div data-testid="manual-agency-contract"><p className="mb-1 font-medium">{S.contract.question}</p><Radio name="agency-contract" value={a.agency_contract} options={CONTRACT_OPTIONS} onChange={(v) => set('agency_contract', v)} /></div>}
+            {contract === 'stop' && <Callout tone="red" icon={AlertCircle} testId="manual-tied-in" title={S.tiedIn.stop}>
+              <p className="text-xs text-muted-foreground">{TIED_IN_DECLINE_REASON}</p>
+              <label className="mt-2 block text-xs font-medium">{S.tiedIn.ends} <span className="font-normal text-muted-foreground">(optional)</span><Input type="date" className="mt-1 h-9 w-48" value={a.agency_contract_ends} onChange={(e) => set('agency_contract_ends', e.target.value)} /></label>
+            </Callout>}
+            {contract === 'hold' && <Callout tone="amber" icon={Info} testId="manual-contract-hold" className="text-xs">{QC_REVIEW_TEXT.agency_contract_build}.</Callout>}
+          </Panel>
+          {contract !== 'stop' && <Panel headline={S.buildOk.headline} sub={S.buildOk.sub}>
+            <Radio name="build-ok" value={buildOk} options={BUILD_OK_OPTIONS} onChange={(v) => setBuildOk(v as BuildOk)} />
+            {buildOk === 'no' && <Callout tone="red" icon={AlertCircle} testId="manual-build-declined" className="text-xs">Do not sell: building them a website set up properly for AI is how Findable works, so there is nothing else to offer. Note why, and leave the door open.</Callout>}
+          </Panel>}
+          {contract !== 'stop' && buildOk !== 'no' && !noWebsite && <Panel headline={S.design.headline} sub={S.design.sub}>
+            <Radio name="design-choice" value={a.design_choice} options={DESIGN_OPTIONS} onChange={(v) => set('design_choice', v)} />
+          </Panel>}
+          {contract !== 'stop' && buildOk !== 'no' && choice && <Panel headline={S.domain.headline} sub={S.domain.sub}>
+            <Radio name="domain-answer" value={domainAnswer} options={domainOptionsFor(!noWebsite)} onChange={(v) => setA((p) => (p ? { ...p, ...domainColumnsFor(v, !noWebsite) } : p))} />
+            {domainAnswer === 'none' && <p className="text-xs text-muted-foreground">{NEW_DOMAIN_REGISTRATION_NOTE}</p>}
+            {domainAnswer && domainAnswer !== 'yes' && domainAnswer !== 'none' && <p className="text-xs text-amber-700 dark:text-amber-300">The domain is not ready to connect — sort this out with the client before launch (the site can still be built and previewed).</p>}
+          </Panel>}
+        </>}
 
-        <Panel headline={C.tradeTown.headline} sub={C.tradeTown.sub}>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div><Label>{C.trade.label}</Label><Input aria-label={C.trade.label} value={a.trade} placeholder={C.trade.placeholder} onChange={(e) => set('trade', e.target.value)} /><p className="mt-1 text-xs text-muted-foreground">{C.trade.helper}</p></div>
-            <div><Label>{C.town.label}</Label><Input aria-label={C.town.label} value={a.confirmed_location} placeholder={C.town.placeholder} onChange={(e) => set('confirmed_location', e.target.value)} /></div>
-          </div>
-        </Panel>
-
-        <Panel headline={C.websiteStep.headline} sub={C.websiteStep.sub}>
+        {legacyKeep && <Panel headline={L.websiteStep.headline} sub={L.websiteStep.sub}>
+          <Callout tone="grey" icon={Info} className="text-xs" testId="manual-legacy-optimise">This client is on Findable Optimise (sold before 16 October 2026). Their website answers keep the questions they were sold with. Optimise is no longer offered to new clients.</Callout>
           <div><Radio name="website-choice" value={choice} options={WEBSITE_CHOICE_OPTIONS} onChange={pickChoice} />
             {choice && <p className="mt-1 text-xs text-muted-foreground">{WEBSITE_CHOICE_OPTIONS.find((o) => o.value === choice)?.note}</p>}</div>
-          {choice === 'build' && <>
-            <div><p className="mb-1 font-medium">{C.buildManager.question}</p><p className="mb-1 text-xs text-muted-foreground">{C.buildManager.helper}</p><Radio name="build-manager" value={manager} options={MANAGER_OPTIONS} onChange={pickManager} />
-              {manager === 'agency' && <p className="mt-1 text-xs text-muted-foreground">{C.buildManager.agencyNote}</p>}</div>
-            <div><p className="mb-1 font-medium">{C.buildDomain.question}</p><p className="mb-1 text-xs text-muted-foreground">{C.buildDomain.helper}</p><Radio name="domain" value={a.domain_status} options={BUILD_DOMAIN_OPTIONS} onChange={(v) => set('domain_status', v)} /></div>
-          </>}
-          {choice === 'none' && <div><p className="mb-1 font-medium">{C.noneDomain.question}</p><p className="mb-1 text-xs text-muted-foreground">{C.noneDomain.helper}</p><Radio name="domain" value={a.domain_status} options={NONE_DOMAIN_OPTIONS} onChange={(v) => set('domain_status', v)} /></div>}
           {choice === 'keep' && <>
-            <div><p className="mb-1 font-medium">{C.keepManager.question}</p><Radio name="keep-manager" value={manager} options={MANAGER_OPTIONS} onChange={pickManager} /></div>
-            {manager && <div><p className="mb-1 font-medium">{manager === 'agency' ? C.access.question : C.selfSite.question}</p><p className="mb-1 text-xs text-muted-foreground">{C.access.helper}</p><Radio name="access" value={keep} options={KEEP_ACCESS_OPTIONS} onChange={pickKeep} />
-              {manager === 'agency' && keep === 'yes' && <div className="mt-2"><Label>{C.managerEmail.label} <span className="font-normal text-muted-foreground">{C.managerEmail.optional}</span></Label><Input aria-label={C.managerEmail.label} value={a.website_manager_email} placeholder={C.managerEmail.placeholder} onChange={(e) => set('website_manager_email', e.target.value)} /><p className="mt-1 text-xs text-muted-foreground">{C.managerEmail.helper}</p>{problemFor('website_manager_email') && <p className="text-xs text-destructive">{problemFor('website_manager_email')}</p>}</div>}
-              {keep === 'no' && <div className="mt-2 rounded-md border border-amber-500/40 p-2 text-xs"><p>{C.keepNoAccess.note}</p><button type="button" className="mt-1 font-semibold underline" onClick={() => pickChoice('build')}>{C.keepNoAccess.action}</button></div>}
+            <div><p className="mb-1 font-medium">{L.keepManager.question}</p><Radio name="keep-manager" value={manager} options={MANAGER_OPTIONS} onChange={pickManager} /></div>
+            {manager && <div><p className="mb-1 font-medium">{manager === 'agency' ? L.access.question : L.selfSite.question}</p><p className="mb-1 text-xs text-muted-foreground">{L.access.helper}</p><Radio name="access" value={keep} options={KEEP_ACCESS_OPTIONS} onChange={pickKeep} />
+              {manager === 'agency' && keep === 'yes' && <div className="mt-2"><Label>{L.managerEmail.label} <span className="font-normal text-muted-foreground">{L.managerEmail.optional}</span></Label><Input aria-label={L.managerEmail.label} value={a.website_manager_email} placeholder={L.managerEmail.placeholder} onChange={(e) => set('website_manager_email', e.target.value)} /><p className="mt-1 text-xs text-muted-foreground">{L.managerEmail.helper}</p>{problemFor('website_manager_email') && <p className="text-xs text-destructive">{problemFor('website_manager_email')}</p>}</div>}
+              {keep === 'no' && <div className="mt-2 rounded-md border border-amber-500/40 p-2 text-xs"><p>{L.keepNoAccess.note}</p><button type="button" className="mt-1 font-semibold underline" onClick={() => pickChoice('build')}>{L.keepNoAccess.action}</button></div>}
             </div>}
           </>}
           {siteAccess && <p className="text-xs text-muted-foreground">{accessConsequenceText(siteAccess)}</p>}
-          {/* ⛔ THE DOMAIN RULE (2026-09-28): the same questions the customer is asked on the new-site
-              path. Record only what the CLIENT confirmed — never tick a confirmation on their behalf. */}
-          {siteAccess && siteAccess !== 'yes_access' && (() => {
-            const hasSite = siteAccess !== 'no_website';
-            const v = domainAuthority({ newSite: true, hasCurrentSite: hasSite, domain_status: a.domain_status, domain_owned: a.domain_owned, domain_access: a.domain_access, domain_third_party: a.domain_third_party, authority_confirmed: a.authority_confirmed, dns_permission: a.dns_permission, materials_confirmed: a.materials_confirmed, site_rights: a.site_rights });
-            return <div className="space-y-3 rounded-xl border border-border/70 p-3" data-testid="manual-domain-section">
-              <p className="font-medium">Your domain</p>
-              <p className="text-xs text-muted-foreground">{AGENCY_CONTRACT_NOTE}</p>
-              {a.domain_status === 'new' && <p className="text-xs text-muted-foreground">{NEW_DOMAIN_REGISTRATION_NOTE}</p>}
-              {a.domain_status === 'existing' && <>
-                <div><p className="mb-1">{DOMAIN_QUESTIONS.owned}</p><Radio name="domain-owned" value={a.domain_owned} options={DOMAIN_OWNED_OPTIONS} onChange={(x) => set('domain_owned', x)} /></div>
-                <div><p className="mb-1">{DOMAIN_QUESTIONS.access}</p><Radio name="domain-access" value={a.domain_access} options={DOMAIN_ACCESS_OPTIONS} onChange={(x) => set('domain_access', x)} /></div>
-                <div><p className="mb-1">{DOMAIN_QUESTIONS.thirdParty}</p><Radio name="domain-third" value={a.domain_third_party} options={DOMAIN_THIRD_PARTY_OPTIONS} onChange={(x) => set('domain_third_party', x)} /></div>
-              </>}
-              {hasSite && <div><p className="mb-1">{DOMAIN_QUESTIONS.siteRights}</p><Radio name="site-rights" value={a.site_rights} options={SITE_RIGHTS_OPTIONS} onChange={(x) => set('site_rights', x)} /></div>}
-              {hasSite && <label className="flex items-start gap-2"><input type="checkbox" className="mt-1" checked={a.authority_confirmed} onChange={(e) => set('authority_confirmed', e.target.checked)} /><span>{DOMAIN_QUESTIONS.authority}</span></label>}
-              <label className="flex items-start gap-2"><input type="checkbox" className="mt-1" checked={a.dns_permission} onChange={(e) => set('dns_permission', e.target.checked)} /><span>{DOMAIN_QUESTIONS.dns}</span></label>
-              <label className="flex items-start gap-2"><input type="checkbox" className="mt-1" checked={a.materials_confirmed} onChange={(e) => set('materials_confirmed', e.target.checked)} /><span>{DOMAIN_QUESTIONS.materials}</span></label>
-              <p className={`text-xs font-semibold ${v.ready ? 'text-teal-700 dark:text-teal-300' : 'text-amber-700 dark:text-amber-300'}`}>{v.label}{v.reasons.length ? `: ${v.reasons.map((r) => DOMAIN_REASON_TEXT[r]).join(', ')}` : ''}</p>
-              <p className="text-xs text-muted-foreground">Tick only what the client has actually confirmed.</p>
-            </div>;
-          })()}
-        </Panel>
+        </Panel>}
 
-        <Panel headline={C.permission.headline} sub={C.permission.sub}>
+        <Panel headline={S.legal.headline} sub={S.legal.sub}>
+            {/* ⛔ THE DOMAIN RULE (2026-09-28): the confirmations the customer gives on the new-site path (the simple
+                onboarding's one confirmations screen). Record only what the CLIENT confirmed — never tick one on their behalf. */}
+            {!legacyKeep && contract !== 'stop' && buildOk !== 'no' && siteAccess && siteAccess !== 'yes_access' && (() => {
+              const hasSite = siteAccess !== 'no_website';
+              const v = domainAuthority({ newSite: true, hasCurrentSite: hasSite, domain_status: a.domain_status, domain_owned: a.domain_owned, domain_access: a.domain_access, domain_third_party: a.domain_third_party, authority_confirmed: a.authority_confirmed, dns_permission: a.dns_permission, materials_confirmed: a.materials_confirmed, site_rights: a.site_rights });
+              return <div className="space-y-3" data-testid="manual-domain-section">
+                {hasAgency === 'yes' && <p className="text-xs text-muted-foreground">{AGENCY_CONTRACT_NOTE}</p>}
+                {hasSite && <div><p className="mb-1">{DOMAIN_QUESTIONS.siteRights}</p><Radio name="site-rights" value={a.site_rights} options={SITE_RIGHTS_OPTIONS} onChange={(x) => set('site_rights', x)} /></div>}
+                {hasSite && <label className="flex items-start gap-2"><input type="checkbox" className="mt-1" checked={a.authority_confirmed} onChange={(e) => set('authority_confirmed', e.target.checked)} /><span>{DOMAIN_QUESTIONS.authority}</span></label>}
+                <label className="flex items-start gap-2"><input type="checkbox" className="mt-1" checked={a.dns_permission} onChange={(e) => set('dns_permission', e.target.checked)} /><span>{DOMAIN_QUESTIONS.dns}</span></label>
+                <label className="flex items-start gap-2"><input type="checkbox" className="mt-1" checked={a.materials_confirmed} onChange={(e) => set('materials_confirmed', e.target.checked)} /><span>{DOMAIN_QUESTIONS.materials}</span></label>
+                <p className={`text-xs font-semibold ${v.ready ? 'text-teal-700 dark:text-teal-300' : 'text-amber-700 dark:text-amber-300'}`}>{v.label}{v.reasons.length ? `: ${v.reasons.map((r) => DOMAIN_REASON_TEXT[r]).join(', ')}` : ''}</p>
+                <p className="text-xs text-muted-foreground">Tick only what the client has actually confirmed.</p>
+              </div>;
+            })()}
           <label className="flex items-start gap-2"><input type="checkbox" aria-label={permissionAckText(siteAccess)} className="mt-1" checked={a.gbp_consent === 'yes_all'} onChange={(e) => set('gbp_consent', e.target.checked ? 'yes_all' : null)} /><span>{permissionAckText(siteAccess)}</span></label>
           <label className="flex items-start gap-2 text-xs text-muted-foreground"><input type="checkbox" aria-label={C.permission.discuss} className="mt-0.5" checked={a.gbp_consent === 'discuss'} onChange={(e) => set('gbp_consent', e.target.checked ? 'discuss' : null)} /><span>{C.permission.discuss}</span></label>
           <p className="text-xs text-muted-foreground">Tick only what the client has actually agreed to.</p>

@@ -311,7 +311,9 @@ console.log('\n── 4. ROUTE: Build needs no existing website; Optimise keeps 
   ok(!o2.missing.includes('Website') && o2.missing.includes('Website access / control'), 'Optimise with a site but nobody known to control it → access still required');
   // Unknown route keeps the old, stricter rule.
   const u1 = handoffReadiness({ business_name: 'ZZ', phone: '07700900606', amount_paid: 99, status: 'payment_received' }, { services_list: ['x'], areas_list: ['y'], confirmed_location: 'y', gbp_status: 'done' }, ev);
-  ok(u1.missing.includes('Website'), 'unknown route and no positive "no site" → still asks (absence is never an answer)');
+  /* 2026-10-16 (Paul, Build only): the website and its access are required ONLY for a client actually on Optimise. An unknown
+     route is a Build client now (the only plan sold), so neither is asked. */
+  ok(!u1.missing.includes('Website') && !u1.missing.includes('Website access / control'), 'unknown route → treated as Build: no website or access asked');
 }
 
 console.log('\n── 4b. ONBOARDING EDIT DOES NOT WIPE THE BUILD CONSENTS (the B1 replay) ──');

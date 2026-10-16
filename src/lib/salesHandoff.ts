@@ -127,7 +127,7 @@ export function handoffChangedKeys(prev: SalesHandoffFields | null | undefined, 
 /* ══ PREFILL — from what the system already knows ══════════════════════════════════════════════════ */
 export interface HandoffPrefillInput {
   /** Quick Close answers (onboarding_responses.quick_close.answers), cleaned by quickClose.ts. */
-  quickClose?: { route?: 'build' | 'optimise' | null; manager?: string | null } | null;
+  quickClose?: { route?: 'build' | 'optimise' | null; manager?: string | null; design?: string | null } | null;
   /** onboarding_responses.plan_tier route, when the client chose it themselves. */
   route?: 'build' | 'optimise' | null;
   /** outreach_leads.website_control — what the salesperson recorded about who runs the site. */
@@ -149,7 +149,10 @@ export function handoffPrefill(i: HandoffPrefillInput): { fields: SalesHandoffFi
   const noSite = control === 'no_website' || manager === 'no_website' || i.hasWebsite === false;
   if (route === 'optimise') f.work_type = 'optimise';
   else if (route === 'build' && noSite) f.work_type = 'new_site';
-  // Build on an existing site: rebuild vs keep-close is the salesperson's call — never guessed.
+  /* Build on an existing site: the client's own "keep or improve the design" answer (2026-10-16) decides it; with no
+     answer it is the salesperson's call — never guessed. */
+  else if (route === 'build' && qc?.design === 'keep') f.work_type = 'keep_close';
+  else if (route === 'build' && qc?.design === 'improve') f.work_type = 'rebuild';
   if (control === 'client_controls' || manager === 'owner' || manager === 'employee') f.site_situation = 'client';
   else if (control === 'agency_controls' || manager === 'agency' || manager === 'freelancer' || manager === 'third_party') f.site_situation = 'agency';
   else if (noSite) f.site_situation = 'no_website';
