@@ -22,6 +22,19 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-17-trade-phrase-rule', date: '2026-10-17', title: 'Message wording: two- and three-word trades now work', audience: 'admin',
+    body: 'A trade such as "interior designers" or "dental clinics" is now accepted in the AI-check messages. Lists ("X and Y"), symbols, digits and phrases over three words are still held. A held trade is now shown in lowercase inside the sentence.',
+    report: {
+      added: [
+        'Short trade phrases of up to three words (for example "interior designers", "english language schools") pass the message checks.',
+      ],
+      changed: [
+        'One rule now decides this for every message slot, so the singular, plural and "a / an" versions cannot disagree.',
+        'A trade shown as it stands in a message preview is lowercase, not "Interior" mid-sentence.',
+      ],
+      removed: [],
+      effect: 'Leads whose niche is a short phrase are no longer held for "not a single noun". A niche written as a list ("X and Y") is still held, on purpose, until you give it one clear phrase.',
+    } },
   { id: '2026-10-17-clear-whatsapp-queue', date: '2026-10-17', title: 'Clear queue: empty the WhatsApp queue in one press', audience: 'all',
     body: 'The WhatsApp queue page has a new Clear queue button. It asks how many leads it will remove, then takes them all out of the queue at once and tells you how many it removed. Nothing is sent.',
     report: {
