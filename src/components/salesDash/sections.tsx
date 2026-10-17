@@ -1,4 +1,4 @@
-import { AlertTriangle, ArrowRight, CalendarCheck, CalendarClock, CheckCircle2, Clock, Flame, MessageCircle, MessageCircleReply, PoundSterling, Send, Snowflake, Sparkles, Star, Target, X } from 'lucide-react';
+import { AlertTriangle, ArrowRight, Ban, CalendarCheck, CalendarClock, CheckCircle2, Clock, Flame, MessageCircle, MessageCircleReply, PoundSterling, Send, Snowflake, Sparkles, Star, Target, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { cn } from '@/lib/utils';
 import type { FollowUpGroup, NextAction, SalesWorkspace } from '@/lib/salesWorkspace';
@@ -57,6 +57,7 @@ const ACTION_ICON: Record<string, typeof Clock> = {
   reply_waiting: MessageCircleReply, follow_up_overdue: AlertTriangle, follow_up_due: CalendarClock, signup_opened: Flame,
   interested_untouched: Star, signup_unopened: Send, audit_ready: Sparkles, going_cold: Snowflake,
   quick_close_finish: PoundSterling, quick_close_link: PoundSterling, quick_close_review: AlertTriangle,
+  quick_close_declined: Ban,
 };
 export function NextActions({ items, go, onClose, title = "Your next best actions", hint = "The most useful thing to do for each lead, most urgent first. Tap to open it." , collapseKey = 'sales.next-actions' }: { items: NextAction[]; go: Go; onClose?: CloseItems; title?: string; hint?: string; collapseKey?: string }) {
   /* 2026-10-02: the most urgent NEXT_ACTIONS_SHOWN first, the rest one tap away — a long list buried the page. */

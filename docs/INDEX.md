@@ -188,5 +188,7 @@
 - `docs/onboarding-simple-v1-fields.md` — 2026-10-16: what V1 stores for the simple findable.live onboarding (design_choice, agency_contract_ends, access_ack_at), the three-lists rule, the record-not-gate access tick, q2_prefill town
 - `docs/contract-call-alert.md` — 2026-10-16: one email to Paul (and a Needs your attention line) when a lead answers not sure / tied in about their agency contract, on any route; the contract_call_alerts ledger (once per answer)
 - `docs/onboarding-consistency.md` — 2026-10-16: the ONE agency-contract rule (agencyContractRule.ts: go / stop / hold / unanswered), the manual onboarding dialog on the simple questions ("Is this right?" first), Paid Clients website + access asked of Optimise clients only
+- `docs/find-leads-bulk-add.md` — 2026-10-17: Find Leads Add to CRM in ONE batch (coverage_add_leads), UK mobiles only, the summary, Needs info removed, the call-list decision
+- `docs/month12-reminder.md` — 2026-10-17: v5 clause 9A.5 payment-12 reminder email (once per client, kill switch, dry run, QA drill), finalPaymentDates, what the handover still needs
 - `docs/records-lookup.md` — the "touching X → read Y first" table (moved from CLAUDE.md §10, 2026-10-15; live — add rows here)
 - `docs/archive/claude-md-moved-2026-10-15.md` — what left CLAUDE.md on 2026-10-15, verbatim: §7 path rows with no rule, resolved §8 items, the §9 old-checkout audit detail

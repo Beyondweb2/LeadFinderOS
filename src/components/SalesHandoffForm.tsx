@@ -39,7 +39,9 @@ export function SalesHandoffForm({ fields, prefilled, route, onSave, onSend, sen
   useEffect(() => { setDraft(fields); }, [JSON.stringify(fields)]); // eslint-disable-line react-hooks/exhaustive-deps
   const missing = useMemo(() => handoffMissing(draft), [draft]);
   const set = (k: HandoffFieldKey, v: string) => { setSaved(false); setDraft((d) => ({ ...d, [k]: v })); };
-  const workOptions = WORK_TYPE_OPTIONS.filter((o) => !route || o.route === route);
+  /* v5: Optimise is withdrawn — its LEGACY option shows only for a client already recorded on it (route 'optimise', or a
+     stored answer), never for a client whose route is not yet recorded (removed from that case 2026-10-17). */
+  const workOptions = WORK_TYPE_OPTIONS.filter((o) => (o.legacy ? route === o.route || fields.work_type === o.value : !route || o.route === route));
   const suggested = (k: HandoffFieldKey) => prefilled.includes(k) && draft[k] === fields[k];
   const save = async () => {
     const ok = await onSave(cleanHandoff(draft));

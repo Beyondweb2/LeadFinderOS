@@ -169,9 +169,11 @@ const csv = src("src/components/CSVImportDialog.tsx");
 ok(/readinessLeadFromImport\(r, outcome\.get\(r\.row\)\?\.country \?\? null, batchName\)/.test(csv) && /Import only the ready ones/.test(csv) && /data-testid="csv-fix-row"/.test(csv), "CSV import: grouped readiness, fix in place, import only the ready ones");
 ok(/leadReadiness\(typed, \{ countrySettings \}\)/.test(src("src/components/AddLeadDialog.tsx")), "manual add: said before saving");
 const uo = src("src/hooks/useOutreach.ts");
-ok(/noteNeedsInfo\(item\.businessName, updated\)/.test(uo) && /noteNeedsInfo\(lead\.name, salesAddPayload\(/.test(uo), "Find Leads add: re-checked after the lookup (both roles), one notice");
-ok(/<NeedsInfoTag readiness=\{readinessFor\(lead\)\}/.test(src("src/components/OutreachTable.tsx")) && /readiness=\{readinessFor\(lead\)\}/.test(src("src/components/OutreachTable.tsx")), "Outreach: Needs info tag on desktop rows and phone cards");
-ok(/<NeedsInfoTag readiness=\{activeReadiness\}/.test(src("src/pages/Inbox.tsx")), "Inbox: Needs info tag on the conversation");
+/* ⛔ 2026-10-17 (Paul): the "Needs info" tag, its fix dialog and the add-time "still needs info" notice are GONE. */
+ok(!/noteNeedsInfo|leadReadiness/.test(uo), "Find Leads add: no 'still needs info' notice");
+ok(!/NeedsInfoTag|ReadinessFixDialog|Needs info/.test(src("src/components/OutreachTable.tsx") + src("src/components/OutreachMobileCard.tsx")), "Outreach: no Needs info tag on rows or phone cards");
+ok(!/NeedsInfoTag|ReadinessFixDialog|leadReadiness/.test(src("src/pages/Inbox.tsx")), "Inbox: no Needs info tag");
+ok(!/export function (NeedsInfoTag|ReadinessFixDialog)/.test(src("src/components/LeadReadiness.tsx")), "the tag and the fix dialog no longer exist");
 ok(/data-testid="audit-skip-groups"/.test(src("src/components/OutreachTable.tsx")), "bulk audit dialog: skipped leads grouped by reason");
 
 console.log(f ? `\n${f} FAILURE(S)` : "\nALL PASS");

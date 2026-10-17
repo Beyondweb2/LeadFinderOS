@@ -26,6 +26,8 @@ import { useCampaigns } from '@/hooks/useCampaigns';
 import { useSearchEnrichment } from '@/hooks/useSearchEnrichment';
 import { useFindEmails } from '@/hooks/useFindEmails';
 import { useCheckedBusinesses } from '@/hooks/useCheckedBusinesses';
+import { useFindLeadsBulkAdd } from '@/hooks/useFindLeadsBulkAdd';
+import { addSummaryReasons, addSummaryTitle, SKIP_GROUP_WORDS, skipGroupOf, type AddRowAnswer, type BulkAddLead } from '@/lib/findLeadsBulkAdd';
 import { Flame, Zap, Search, MapPin, Info, Globe2, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { PageHeader } from '@/components/salesDash/primitives';
@@ -60,7 +62,7 @@ const Index = () => {
   const { leads, isLoading, search, searchMany, townRun, retryLastSearch, exportToCsv, searchError, searchNotice, expanded, setWebsiteOverride, regionMeta, regionDowngraded, townFilterFallback, resolvedLocation, locationCandidates, lastSearch } = useLeadSearchContext();
   /* ⚡ preload: false (2026-10-13): this page never downloads the lead list. Which results are already in
      the CRM is asked for the results on screen only (useFindLeadsCrm, src/lib/findLeadsCrmMatch.ts). */
-  const { addLead: addLeadToCrm, removeFreshLead } = useOutreach({ preload: false });
+  const { removeFreshLead } = useOutreach({ preload: false });
   const { searchEnrichment, patchEnrichment, getEnrichment } = useSearchEnrichment();
   const { markAsChecked, isChecked } = useCheckedBusinesses();
   const { toast } = useToast();
@@ -74,12 +76,6 @@ const Index = () => {
   const { role: viewerRole } = useSubscription();
   const crmMatch = useFindLeadsCrm(leads, viewerRole);
   const { getCrmState, isInOutreach, noteAdded, noteRemoved, refresh: refetchCrm } = crmMatch;
-  /* Every add on this page goes through here, so the row shows as added the moment the add answers. */
-  const addToOutreach = useCallback(async (...args: Parameters<typeof addLeadToCrm>) => {
-    const row = await addLeadToCrm(...args);
-    if (row) noteAdded(args[0], row, args[3] ?? null);
-    return row;
-  }, [addLeadToCrm, noteAdded]);
   const teamDir = useTeamDirectory();
   const salesActions = useSalesActions();
   const identityQc = useQueryClient();
@@ -197,7 +193,7 @@ const Index = () => {
     | null
   >(null);
   const [chosenCampaign, setChosenCampaign] = useState<string | null>(null);
-  const bulkResolverRef = useRef<((r: { added: number; skipped: number }) => void) | null>(null);
+  const bulkResolverRef = useRef<((r: BulkAddAnswer) => void) | null>(null);
 
   // Self-heal a stale active campaign: if the persisted id no longer exists
   // (campaign deleted by anyone, or the whole account was wiped), fall back to
@@ -283,22 +279,43 @@ const Index = () => {
     }
   }, [regionDowngraded, toast]);
 
-  // Bulk add (list-builder): add each selected lead, deduped + silent (one summary
-  // toast from the component). addToOutreach returns null on dupe/failure.
-  // campaignId defaults to the active campaign (toggle OFF); the ask-each-time flow
+  // Bulk add (list-builder): campaignId defaults to the active campaign (toggle OFF); the ask-each-time flow
   // passes the chosen campaign instead.
   /* ⛔ WHERE A RESULT IS SAVED FROM (2026-10-16): a many-towns result carries the town and country it was searched in —
      exactly what its own one-town search would have saved; any other result uses the search on screen, as before. */
   const townOf = useCallback((lead: Lead) => lead.searchTown ?? lastSearchLocation, [lastSearchLocation]);
   const countryOf = useCallback((lead: Lead): Country => (lead.searchCountry as Country | undefined) ?? lastSearchCountry, [lastSearchCountry]);
+  /* ⛔ EVERY FIND LEADS ADD IS ONE BATCH (2026-10-17, src/lib/findLeadsBulkAdd.ts): a free duplicate preview, each new
+     lead's phone looked up FIRST, UK landlines and no-number leads dropped, then ONE coverage_add_leads save — the row
+     button is a batch of one. The database is the dedupe. Answers the counts LeadsTable's summary toast reads. */
+  const bulkAdd = useFindLeadsBulkAdd();
   const handleBulkAdd = useCallback(async (sel: Lead[], campaignId: string | null = activeCampaign) => {
-    let added = 0, skipped = 0;
-    for (const lead of sel) {
-      const res = await addToOutreach(lead, countryOf(lead), 'no_website', campaignId, getEnrichment(lead.id), true, lastSearchKeyword, townOf(lead));
-      if (res) added++; else skipped++;
+    const res = await bulkAdd(
+      sel as BulkAddLead[],
+      (l) => ({ trade: lastSearchKeyword, town: townOf(l as Lead), country: countryOf(l as Lead) }),
+      (l) => String(getEnrichment(l.id)?.email ?? '').trim() || null,
+      campaignId,
+    );
+    if (res.ok === false) return { added: 0, skipped: sel.length, title: 'Nothing added', description: (res as { message: string }).message, rows: [] as AddRowAnswer[] };
+    const byId = new Map(sel.map((l) => [l.id, l]));
+    for (const r of res.rows) {
+      const lead = r.k ? byId.get(r.k) : undefined;
+      if (r.outcome === 'created' && r.lead_id && lead) noteAdded(lead, { id: r.lead_id }, campaignId);
     }
-    return { added, skipped };
-  }, [addToOutreach, countryOf, townOf, lastSearchKeyword, activeCampaign, getEnrichment]);
+    return {
+      added: res.summary.added, skipped: res.summary.skipped,
+      title: addSummaryTitle(res.summary), description: addSummaryReasons(res.summary) || undefined, rows: res.rows,
+    };
+  }, [bulkAdd, countryOf, townOf, lastSearchKeyword, activeCampaign, getEnrichment, noteAdded]);
+  /* The row button: a batch of one. Silent when added (as before); says why when not. */
+  const addOne = useCallback(async (lead: Lead, campaignId: string | null) => {
+    const res = await handleBulkAdd([lead], campaignId);
+    if (res.added > 0) return { id: res.rows.find((r) => r.outcome === 'created')?.lead_id ?? null };
+    const r = res.rows[0];
+    const g = r ? skipGroupOf(r) : null;
+    toast({ title: `${lead.name} not added`, description: g ? SKIP_GROUP_WORDS[g] : res.description, variant: 'destructive' });
+    return null;
+  }, [handleBulkAdd, toast]);
 
   // ── Add-to-CRM entry points (Index decides whether to prompt) ───────────────
   const activeCampaignName = useMemo(
@@ -327,8 +344,8 @@ const Index = () => {
       setPendingAdd({ kind: 'row', lead });
       return Promise.resolve(null);
     }
-    return addToOutreach(lead, countryOf(lead), 'no_website', activeCampaign, getEnrichment(lead.id), false, lastSearchKeyword, townOf(lead));
-  }, [askCampaignEachTime, activeCampaign, addToOutreach, countryOf, townOf, lastSearchKeyword, getEnrichment]);
+    return addOne(lead, activeCampaign);
+  }, [askCampaignEachTime, activeCampaign, addOne]);
 
   // Bulk Add: prompt ONCE for the batch when ON, else run as today. When prompting,
   // return a promise that resolves after the dialog so LeadsTable's summary toast is accurate.
@@ -336,7 +353,7 @@ const Index = () => {
     if (askCampaignEachTime) {
       setChosenCampaign(activeCampaign);
       setPendingAdd({ kind: 'bulk', leads: sel });
-      return new Promise<{ added: number; skipped: number }>((resolve) => { bulkResolverRef.current = resolve; });
+      return new Promise<BulkAddAnswer>((resolve) => { bulkResolverRef.current = resolve; });
     }
     return handleBulkAdd(sel, activeCampaign);
   }, [askCampaignEachTime, activeCampaign, handleBulkAdd]);
@@ -347,17 +364,17 @@ const Index = () => {
     setPendingAdd(null);
     if (!p) return;
     if (p.kind === 'row') {
-      await addToOutreach(p.lead, countryOf(p.lead), 'no_website', chosenCampaign, getEnrichment(p.lead.id), false, lastSearchKeyword, townOf(p.lead));
+      await addOne(p.lead, chosenCampaign);
     } else {
       const res = await handleBulkAdd(p.leads, chosenCampaign);
       bulkResolverRef.current?.(res);
       bulkResolverRef.current = null;
     }
-  }, [pendingAdd, chosenCampaign, addToOutreach, countryOf, townOf, lastSearchKeyword, getEnrichment, handleBulkAdd]);
+  }, [pendingAdd, chosenCampaign, addOne, handleBulkAdd]);
 
   // Dialog cancel/close: nothing added; resolve a pending bulk promise so the caller unblocks.
   const handleCancelCampaign = useCallback(() => {
-    if (pendingAdd?.kind === 'bulk') { bulkResolverRef.current?.({ added: 0, skipped: 0 }); bulkResolverRef.current = null; }
+    if (pendingAdd?.kind === 'bulk') { bulkResolverRef.current?.({ added: 0, skipped: 0, cancelled: true }); bulkResolverRef.current = null; }
     setPendingAdd(null);
   }, [pendingAdd]);
 
@@ -402,17 +419,13 @@ const Index = () => {
     [leads, searchEnrichment, isInOutreach],
   );
 
-  // Adds every with-email candidate into the CURRENT campaign via the exact single-add
-  // path (reuses handleBulkAdd → addToOutreach: same status/fields, deduped, silent).
+  // Adds every with-email candidate into the CURRENT campaign through the same batch add (handleBulkAdd).
   const handleAddAllWithEmails = useCallback(async () => {
     if (!leadsWithEmail.length || addingEmails) return;
     setAddingEmails(true);
     try {
-      const { added } = await handleBulkAdd(leadsWithEmail);
-      toast({
-        title: `Added ${added} lead${added === 1 ? '' : 's'} with emails`,
-        description: activeCampaign ? 'to the current campaign.' : 'to outreach.',
-      });
+      const res = await handleBulkAdd(leadsWithEmail);
+      toast({ title: res.title ?? `Added ${res.added}`, description: res.description });
     } finally {
       setAddingEmails(false);
     }
@@ -808,5 +821,8 @@ const Index = () => {
     </div>
   );
 };
+
+/** What a Find Leads add answers (LeadsTable's summary toast reads title / description). */
+type BulkAddAnswer = { added: number; skipped: number; title?: string; description?: string; cancelled?: boolean; rows?: unknown[] };
 
 export default Index;

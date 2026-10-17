@@ -118,7 +118,7 @@ import { NextActionEditor } from './NextActionEditor';
 import { CSVImportDialog, type CsvImportResult } from './CSVImportDialog';
 import { townGated } from '@/lib/townVerdict';
 import { auditReadiness, leadReadiness, onlyFeature, summariseReadiness } from '@/lib/leadReadiness';
-import { NeedsInfoTag, ReadinessFixDialog, ReadinessSummaryBlock } from '@/components/LeadReadiness';
+import { ReadinessSummaryBlock } from '@/components/LeadReadiness';
 import { Badge } from '@/components/ui/badge';
 import { fetchQueueState, queuedLeadLine } from '@/lib/queueStatus';
 import { OutreachMobileCard } from './OutreachMobileCard';
@@ -408,18 +408,8 @@ export function OutreachTable({
   const ITEMS_PER_PAGE = isMobile ? ITEMS_PER_PAGE_MOBILE : ITEMS_PER_PAGE_DESKTOP;
   const { user } = useAuth();
   const { isAdmin, role } = useSubscription();
-  /* LEAD READINESS (2026-10-15, src/lib/leadReadiness.ts): the row tag and its one-click fix. Computed on the fly. */
-  const readinessOf = useCallback((l: OutreachLead) => leadReadiness(l, { countrySettings }), [countrySettings]);
-  const [fixLead, setFixLead] = useState<OutreachLead | null>(null);
-  const openReadinessFix = useCallback((l: OutreachLead) => setFixLead(l), []);
-  /* One readiness object per lead OBJECT (a WeakMap, reset when the country switches change), so a memoised row keeps
-     the same prop until its lead actually changes — row rendering is what Outreach pays for. */
-  const readinessCache = useMemo(() => new WeakMap<OutreachLead, ReturnType<typeof leadReadiness>>(), [countrySettings]);
-  const readinessFor = useCallback((l: OutreachLead) => {
-    let r = readinessCache.get(l);
-    if (!r) { r = readinessOf(l); readinessCache.set(l, r); }
-    return r;
-  }, [readinessCache, readinessOf]);
+  /* ⛔ The "Needs info" row tag and its fix popup are GONE (Paul, 2026-10-17). leadReadiness is still read by the
+     bulk audit's "will be skipped" list below — nothing else on this table. */
   // Newest crawl check per lead → the per-row Crawl-site button (same rows the Inbox reads).
   const { crawlByLeadId } = useLeadCrawls();
   const [playbookLeadId, setPlaybookLeadId] = useState<string | null>(null);
@@ -3024,8 +3014,6 @@ export function OutreachTable({
                 <OutreachMobileCard
                   key={lead.id}
                   lead={lead}
-                  readiness={readinessFor(lead)}
-                  onFixReadiness={openReadinessFix}
                   salesState={rowSalesState(lead)}
                   campaignName={showCampaignName && lead.campaign_id ? (campaignNameByLead?.[lead.id] ?? null) : null}
                   isSelected={selectedIds.has(lead.id)}
@@ -3135,7 +3123,6 @@ export function OutreachTable({
                               Google couldn&rsquo;t confirm the town
                             </Badge>
                           )}
-                          {<NeedsInfoTag readiness={readinessFor(lead)} onEdit={() => setFixLead(lead)} className="flex-shrink-0" />}
                           {lead.is_potential_work && (
                             <Star className="h-3.5 w-3.5 text-yellow-500 fill-yellow-500 flex-shrink-0"><title>Interested</title></Star>
                           )}
@@ -3477,8 +3464,7 @@ export function OutreachTable({
           {auditSkipSummary.needs > 0 && (
             <div className="rounded-md border border-amber-500/40 bg-amber-500/5 px-3 py-2" data-testid="audit-skip-groups">
               <p className="mb-1 text-xs font-semibold">{auditSkipSummary.needs} will be skipped (not sent, nothing spent):</p>
-              <ReadinessSummaryBlock summary={auditSkipSummary} hideHeadline testId="audit-skip-summary"
-                onFixName={(name) => { const l = auditCandidates.find((c) => (c.business_name || 'Unnamed lead') === name); if (l) setFixLead(l); }} />
+              <ReadinessSummaryBlock summary={auditSkipSummary} hideHeadline testId="audit-skip-summary" />
             </div>
           )}
           {/* ── NO WEBSITE: INCLUDED, SAID AS INFORMATION (2026-10-14) ───────────────────────────
@@ -3814,11 +3800,6 @@ export function OutreachTable({
       />
 
       <HookAuditDialog lead={auditLead} onOpenChange={(open) => { if (!open) setAuditLead(null); }} />
-
-      <ReadinessFixDialog lead={fixLead} open={!!fixLead} isAdmin={isAdmin}
-        fixes={fixLead ? readinessOf(fixLead).needsInfo.map((i) => i.fix) : []}
-        onOpenChange={(o) => { if (!o) setFixLead(null); }}
-        save={onUpdateLead && fixLead ? (patch) => onUpdateLead(fixLead.id, patch as Partial<OutreachLead>) : undefined} />
 
       {/* Lead detail modal (Track Leads fold-in) — opened on row click */}
       <LeadDetailDialog

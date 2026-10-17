@@ -15,7 +15,6 @@ import { useAuth } from '@/hooks/useAuth';
 import { useSubscription } from '@/hooks/useSubscription';
 import { campaignMoveText, refusalText, removeOutcomeText } from '@/lib/salesCrm';
 import { salesAddPayload } from '@/lib/salesAddPayload';
-import { leadReadiness, type ReadinessLead } from '@/lib/leadReadiness';
 import { countryFromAddress } from '@/lib/leadCountry';
 import { supabase } from '@/integrations/supabase/client';
 import type { OutreachLead, OutreachActivity, LeadStatus, NextActionType, Country, ListType } from '@/types/outreach';
@@ -356,27 +355,6 @@ export function useOutreach({ history = true, progressive = false, preload = tru
   // queue drain so a bulk add surfaces ONE "N skipped — no contact method" toast
   // instead of one per lead.
   const removedNoPhoneRef = useRef<string[]>([]);
-  /* LEAD READINESS AFTER THE LOOKUP (2026-10-15, src/lib/leadReadiness.ts): a lead added from a search whose lookup
-     still left it missing something a person must fill in (a town, a mobile, a name, a trade). Collected and said
-     ONCE, a moment after the last add / lookup, so a bulk add never sprays a toast per lead. Only the fixable items:
-     a country switch or an opt-out is not "missing info". */
-  const needsInfoRef = useRef<string[]>([]);
-  const needsInfoTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const noteNeedsInfo = useCallback((name: string, lead: ReadinessLead) => {
-    const r = leadReadiness(lead);
-    if (r.needsInfo.length === 0) return;
-    needsInfoRef.current.push(`${name} (${[...new Set(r.needsInfo.map((i) => i.words))].join('; ')})`);
-    if (needsInfoTimerRef.current) clearTimeout(needsInfoTimerRef.current);
-    needsInfoTimerRef.current = setTimeout(() => {
-      const list = needsInfoRef.current;
-      needsInfoRef.current = [];
-      if (!list.length) return;
-      toast({
-        title: list.length === 1 ? 'Added — still needs info' : `${list.length} added leads still need info`,
-        description: `${list.slice(0, 5).join(' · ')}${list.length > 5 ? ` and ${list.length - 5} more` : ''}. Look for the "Needs info" tag in Outreach to fix them.`,
-      });
-    }, 2000);
-  }, [toast]);
 
   const removeLeadNoPhone = useCallback(async (outreachLeadId: string, businessName: string) => {
     // Delete the lead from the database
@@ -415,8 +393,6 @@ export function useOutreach({ history = true, progressive = false, preload = tru
       const updated = await applyPlaceDetailsToLead(item.outreachLeadId, details as PlaceDetailsResponse);
       if (updated) {
         setLeads(prev => prev.map(l => l.id === item.outreachLeadId ? updated : l));
-        // A lead about to be dropped for no contact method is said by that toast instead.
-        if (details.phone || String(details.email ?? item.email ?? '').trim()) noteNeedsInfo(item.businessName, updated);
       }
 
       if (!details.phone) {
@@ -439,7 +415,7 @@ export function useOutreach({ history = true, progressive = false, preload = tru
       console.error('Phone enrichment failed (non-blocking):', e);
       setPhoneFetchStatus(prev => ({ ...prev, [item.outreachLeadId]: 'failed' }));
     }
-  }, [removeLeadNoPhone, noteNeedsInfo]);
+  }, [removeLeadNoPhone]);
 
   const processPhoneQueue = useCallback(async () => {
     if (isProcessingQueueRef.current) return;
@@ -917,8 +893,6 @@ export function useOutreach({ history = true, progressive = false, preload = tru
       window.dispatchEvent(new CustomEvent('crm-lead-added'));
       window.dispatchEvent(new CustomEvent('sales-lead-changed'));
       recordSearchAddition(lead);
-      /* The lookup ran BEFORE this add (a salesperson's path), so the re-check reads what was saved. */
-      noteNeedsInfo(lead.name, salesAddPayload({ lead, details, email, searchKeyword, searchLocation, country, listType, campaignId }) as ReadinessLead);
       if (!silent) toast({ title: 'Added to My leads', description: lead.name });
       return { id: r.lead_id, business_name: lead.name } as unknown as OutreachLead;
     }
