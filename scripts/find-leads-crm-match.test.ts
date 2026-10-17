@@ -155,10 +155,11 @@ console.log("\n── the page never loads the whole book ──");
   ok(/if \(!preload\) return; \/\/ Find Leads/.test(hook) && /if \(!preload\) \{ setIsLoading\(false\); return; \}/.test(hook), "preload: false downloads nothing on mount and fetchLeads does nothing");
   ok(/if \(!preload\) \{\s*const \{ data: byName[\s\S]{0,200}from\('outreach_history'\)/.test(hook), "addLead still refuses a business in outreach_history (asked in the database)");
   ok(/useFindLeadsCrm\(leads, viewerRole\)/.test(index) && /lookupCrmMatches\(identities/.test(crm), "the markers come from the targeted lookup");
-  ok(/if \(row\) noteAdded\(args\[0\], row, args\[3\] \?\? null\)/.test(index), "every add on the page is marked the moment it answers");
+  ok(/if \(r\.outcome === 'created' && r\.lead_id && lead\) noteAdded\(lead, \{ id: r\.lead_id \}, campaignId\)/.test(index), "every add on the page is marked the moment it answers");
   ok(/if \(res\.ok\) noteRemoved\(p\.id\)/.test(index), "a removal is unmarked the moment it answers");
   ok(!/fetchAllRows/.test(crm), "the lookup never pages through the table");
-  ok(/addToOutreach\(lead, countryOf\(lead\), 'no_website', activeCampaign,/.test(index), "Add to CRM call sites unchanged");
+  /* 2026-10-17: every Find Leads add is the ONE batch add (src/lib/findLeadsBulkAdd.ts); the row button is a batch of one. */
+  ok(/return addOne\(lead, activeCampaign\)/.test(index) && /await addOne\(p\.lead, chosenCampaign\)/.test(index) && /return handleBulkAdd\(sel, activeCampaign\)/.test(index), "Add to CRM call sites: row, campaign dialog and bulk all go through the batch add");
 }
 
 if (f) { console.log(`\n${f} FAILED`); process.exit(1); }

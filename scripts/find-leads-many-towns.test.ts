@@ -85,9 +85,10 @@ function ok(cond: boolean, msg: string) { console.log(`${cond ? 'PASS' : 'FAIL'}
     ok(/useState\(\(\) => searchParams\.get\('mode'\) === MANY_MODE_VALUE\)/.test(page) && /parseTownList\(searchParams\.get\(MANY_TOWNS_PARAM\)\)/.test(page), 'mode=many opens Many towns with the towns selected');
     ok(/next\.delete\(MANY_TOWNS_PARAM\)/.test(page), 'the towns are taken once and stripped from the URL');
     ok(/if \(readiness\.gated && !readiness\.ready\)/.test(page.slice(page.indexOf('const handleSearchMany'))), 'the same selling gate as one search');
-    ok(/addToOutreach\(lead, countryOf\(lead\), 'no_website', campaignId, getEnrichment\(lead\.id\), true, lastSearchKeyword, townOf\(lead\)\)/.test(page)
-      && /addToOutreach\(lead, countryOf\(lead\), 'no_website', activeCampaign/.test(page) && /addToOutreach\(p\.lead, countryOf\(p\.lead\)/.test(page)
-      && !/addToOutreach\([^)]*lastSearchLocation\)/.test(page), 'every Add saves the result with ITS town and country');
+    /* 2026-10-17: every Add is the one batch add (src/lib/findLeadsBulkAdd.ts); each row's context is ITS town and country. */
+    ok(/\(l\) => \(\{ trade: lastSearchKeyword, town: townOf\(l as Lead\), country: countryOf\(l as Lead\) \}\)/.test(page)
+      && /return addOne\(lead, activeCampaign\)/.test(page) && /await addOne\(p\.lead, chosenCampaign\)/.test(page)
+      && !/addToOutreach/.test(page), 'every Add saves the result with ITS town and country');
     ok(/lead\.searchTown \?\? lastSearchLocation/.test(page), '…and a one-town result exactly as before');
     ok(/onSearchMany\(\{ keyword: keyword\.trim\(\), radius: radius \* 1000, country: selectedCountry, townOnly: true \}\)/.test(form), 'the form sends the one-town filters, each town only');
     ok((form.match(/onSearch\(\{/g) ?? []).length === 1, 'the one-town search still has ONE place that builds its filters');

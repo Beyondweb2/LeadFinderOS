@@ -33,7 +33,7 @@ import type { LeadFacts, PerfActivity } from './salesPerformance.ts';
 import { conversationState, formatWaiting, londonToday, type ConvMessage } from './conversationState.ts';
 import { isStopMessage } from './smsMessages.ts';
 import { NEXT_ACTION_OPTIONS, followUpBucket } from './salesCrm.ts';
-import type { QuickCloseState } from './quickClose.ts';
+import { QUICK_CLOSE_STATE_LABEL, type QuickCloseState } from './quickClose.ts';
 import { meetingWhen } from './leadState.ts';
 import { WHATSAPP_NEXT_ACTIONS } from './nextActionView.ts';
 
@@ -364,6 +364,9 @@ export function foldSalesWorkspace(input: WorkspaceInput): SalesWorkspace {
       else if (qcs.state === 'link_generated') act({ kind: 'quick_close_link', leadId: f.lead.id, name, title: 'Sign-up link sent — not paid yet', detail: qcs.linkAt ? `Link made ${new Date(qcs.linkAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}` : 'Check they received it', at: qcs.linkAt, tone: 'green', link: 'whatsapp', rank: 3 });
       /* M-014 (2026-10-04): an expired link is never "sent, not paid" — the rep needs a fresh one. */
       else if (qcs.state === 'link_expired') act({ kind: 'quick_close_finish', leadId: f.lead.id, name, title: 'Sign-up link needed — make a fresh one', detail: qcs.linkAt ? `Old link made ${new Date(qcs.linkAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}` : 'Open Quick Close to make a fresh link', at: qcs.linkAt, tone: 'amber', link: 'lead', rank: 2 });
+      /* 2026-10-17: v5 clause 1.6 — still tied into a contract with their current provider, so we do not take them on.
+         Said in the state's own words (QUICK_CLOSE_STATE_LABEL), red, like every other close state — never silent. */
+      else if (qcs.state === 'declined') act({ kind: 'quick_close_declined', leadId: f.lead.id, name, title: QUICK_CLOSE_STATE_LABEL.declined, detail: 'Do not send a sign-up link. Note when their contract ends and follow up then.', at: null, tone: 'red', link: 'lead', rank: 2 });
       else if (qcs.state === 'needs_review') act({ kind: 'quick_close_review', leadId: f.lead.id, name, title: 'Quick Close waiting for Paul', detail: 'Domain / agency issue under review', at: null, tone: 'amber', link: 'lead', rank: 8 });
     }
 

@@ -297,8 +297,9 @@ export function minimumTerm(f: TimelineFacts): MinimumTerm {
   }
   const continuingStart = addMonthsClamped(anchor, needed);
   const cs = continuingStart > finalDay ? continuingStart : addMonthsClamped(finalDay, 1);
-  /* ⚠️ v5 clause 9A.5 promises "We will remind you before payment 12 that you can opt in". NOTHING SENDS IT TODAY:
-     this date drives only Paul's timeline prompt, and can fall a day after payment 12. Its own piece of work (Paul, 2026-10-16). */
+  /* ⚠️ This is the v3 9A.3 date (30 days before the Continuing Service). v5 clause 9A.5's "We will remind you before
+     payment 12 that you can opt in" is a DIFFERENT date — finalPaymentDates.ts — sent by fn month12-reminder,
+     which also stamps continuing_reminder_sent_at, so Paul's prompt here clears when it is sent (2026-10-17). */
   const reminderDue = addDays(cs, -CLIENT_REMINDER_NOTICE_DAYS);
   return {
     recurringNeeded: needed, recurringPaid: paid.length, finalPaymentDay: finalDay, finalPaymentActual: actual,

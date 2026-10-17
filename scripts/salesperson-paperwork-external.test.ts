@@ -57,7 +57,7 @@ ok(/<NotReadyToSellBanner \/>/.test(index) && /if \(readiness\.gated && !readine
 console.log('\n── the CLIENT agreement is untouched ──');
 const co = read('supabase/functions/findable-checkout/index.ts');
 ok(/checkoutAgreementGate\(\{/.test(co) && /kind: "agreement_required"/.test(co), 'the client v3 agreement-before-payment gate is still in findable-checkout');
-const newer = readdirSync(path.join(ROOT, 'supabase/migrations')).filter((n) => n.slice(0, 14) >= '20261010140000' && n !== '20261015100000_client_agreement_v4.sql' && n !== '20261104090000_client_agreement_v5.sql' /* the v4 and v5 agreement migrations is the one that SHOULD touch the agreement objects */);
+const newer = readdirSync(path.join(ROOT, 'supabase/migrations')).filter((n) => n.slice(0, 14) >= '20261010140000' && n !== '20261015100000_client_agreement_v4.sql' && n !== '20261104090000_client_agreement_v5.sql' && n !== '20261106090000_month12_reminder.sql' /* 2026-10-17: the payment-12 reminder only REFERENCES client_agreement_acceptances / client_service_terms (a foreign key, a read), it changes neither; the v4 and v5 agreement migrations is the one that SHOULD touch the agreement objects */);
 ok(newer.every((n) => !/client_agreement|client_service|checkout/i.test(read(`supabase/migrations/${n}`).replace(/--[^\n]*/g, ''))), 'this change touches no client agreement / checkout object');
 
 console.log(failures ? `\n${failures} FAILED` : '\nALL PASS');

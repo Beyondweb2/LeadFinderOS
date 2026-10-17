@@ -1476,7 +1476,10 @@ Deno.serve(async (req) => {
         lead_id: leadId, business_name: businessName, confirmed_location: location, services: services.join(", "),
         services_list: services, areas_list: array(body.service_areas), areas_wanted: array(body.service_areas).join(", "),
         contact_email: text(body.email) || null, gbp_consent: "discuss", status: "paid", baseline_status: "needs_questions",
-        client_source: "manual", website_route: text(body.website_route) || "optimise_existing",
+        /* v5 (2026-10-17): a manual client is a Build client — Optimise is withdrawn, so "optimise_existing" (once the
+           blank default) is never written for a new manual client. Rebuild when they have a site, else a new site. */
+        client_source: "manual",
+        website_route: ["rebuild_existing", "new_site"].includes(text(body.website_route)) ? text(body.website_route) : (text(body.website) ? "rebuild_existing" : "new_site"),
         domain_status: text(body.domain_status) || (text(body.website) ? "existing" : "new"), access_status: text(body.access_status) || null,
       };
       const { data: existingOnboarding } = await service.from("onboarding_responses").select("id")

@@ -49,6 +49,8 @@ function renderedText(src: string): string {
 
 const RENDERERS: Array<[string, string]> = [
   ["welcome pack (paying client)", "src/lib/welcomePackHtml.ts"],
+  /* 2026-10-17: the v5 9A.5 payment-12 reminder email (paying client). */
+  ["payment-12 reminder email (paying client)", "src/lib/month12Reminder.ts"],
   /* 2026-10-02: the Client Service Agreement page, its words and the signed PDF (paying client). */
   ["agreement page (paying client)", "src/lib/agreementPageHtml.ts"],
   ["agreement words (paying client)", "src/lib/clientAgreement.ts"],

@@ -70,7 +70,8 @@ interface LeadsTableProps {
   /** Manually correct a result's website status (persists + wins over auto-detection). */
   onSetWebsiteStatus?: (lead: Lead, status: WebsiteStatus) => void;
   /** Bulk-add the given leads to Outreach (silent per-lead, deduped). */
-  onBulkAdd?: (leads: Lead[]) => Promise<{ added: number; skipped: number }>;
+  /** Find Leads' one batch add (src/lib/findLeadsBulkAdd.ts): the counts plus the summary it words. */
+  onBulkAdd?: (leads: Lead[]) => Promise<{ added: number; skipped: number; title?: string; description?: string; cancelled?: boolean }>;
   /** Bulk in-place enrich (writes to searchEnrichment; does NOT add to CRM). */
   onBulkEnrich?: (
     leads: Lead[],
@@ -363,17 +364,14 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
   const statusFilterOptions: WebsiteStatus[] = useMemo(() => ['NO_WEBSITE', 'HAS_OWN_WEBSITE', 'UNCERTAIN'], []);
 
   // ── Bulk ADD to CRM: the selected rows, or (with nothing selected) every
-  // filtered row not already in Outreach. Silent per-lead adds; one summary toast.
+  // filtered row not already in Outreach. ONE batch add; one summary toast: "Added N, skipped M" + reasons.
   const [bulkAdding, setBulkAdding] = useState(false);
   const runBulkAdd = useCallback(async (targets: Lead[]) => {
     if (!targets.length || !onBulkAdd || bulkAdding) return;
     setBulkAdding(true);
     try {
-      const { added, skipped } = await onBulkAdd(targets);
-      toast({
-        title: `Added ${added} lead${added === 1 ? '' : 's'} to your CRM`,
-        description: skipped ? `${skipped} skipped (already in your list).` : undefined,
-      });
+      const res = await onBulkAdd(targets);
+      if (!res.cancelled) toast({ title: res.title ?? `Added ${res.added}, skipped ${res.skipped}`, description: res.description });
       setSelectedIds(new Set());
     } finally {
       setBulkAdding(false);

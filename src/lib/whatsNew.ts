@@ -22,6 +22,37 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-17-find-leads-batch-add', date: '2026-10-17', title: 'Find Leads: Add to CRM adds the whole selection at once, mobiles only for the UK', audience: 'all',
+    body: 'Add to CRM now saves every selected lead in one go and tells you "Added N, skipped M" with the reasons. UK landlines and leads with no number are no longer added. The "Needs info" tag is gone.',
+    report: {
+      added: [
+        'One summary after every add: "Added N, skipped M", then why: already in CRM, landline, no number, or a number that could not be looked up.',
+      ],
+      changed: [
+        'Add to CRM (the row button and the bulk buttons) checks for duplicates, looks up each new lead\'s number first, and saves them all in one batch instead of one at a time.',
+        'UK leads are added only with a mobile (07…). Landlines (01, 02, 03, 0333, 0808 and other non-mobile numbers) and leads with no number are skipped and counted. Malaysia and Singapore leads are unchanged.',
+        'Sales dashboard next actions: a lead still tied into a contract with their current provider shows "Not taken on (tied into a contract)" in red, like the other close states.',
+      ],
+      removed: [
+        'The "Needs info" tag on Outreach rows and in WhatsApp, its fix popup, and the "added leads still need info" message after adding.',
+      ],
+      effect: 'Adding a list is one step and you see exactly what went in and what did not. No landline lands in the CRM from Find Leads any more.',
+    } },
+  { id: '2026-10-17-month12-reminder', date: '2026-10-17', title: 'The payment-12 reminder email (agreement v5, clause 9A.5)', audience: 'admin',
+    body: 'A v5 Build client is emailed once, from 30 days before payment 12, that they can opt in to the optional £29.99 a month Hosting and Maintenance. Only clients whose signed agreement promises it.',
+    report: {
+      added: [
+        'A daily job: Build clients whose signed agreement contains the 9A.5 promise and whose payment 12 is due within 30 days are emailed once, before payment 12, at their email for notices. You get a notice each time.',
+        'An on/off switch, a dry run that lists who would be emailed in the next 60 days, and a test drill that only ever reaches a ZZ QA client.',
+      ],
+      changed: [
+        'When it sends, the client\'s "reminder sent" is recorded, so the timeline prompt for that reminder clears by itself.',
+      ],
+      removed: [
+        'The old Optimise choices in "Add paid client manually" and in a paid client\'s sales handoff form (Optimise is no longer sold).',
+      ],
+      effect: 'The promise in clause 9A.5 is kept without you having to remember it. Nobody is due one yet: no paying client is near payment 12.',
+    } },
   { id: '2026-10-16-contract-call-alert', date: '2026-10-16', title: 'An email when a lead is not sure, or tied into their agency contract', audience: 'admin',
     body: 'When a lead answers "not sure" or "tied in" about their agency contract, on any route, you get one email and the lead appears on Needs your attention.',
     report: {

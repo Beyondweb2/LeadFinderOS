@@ -1229,6 +1229,11 @@ positive allowlist of `baseline`; `isColdOutreachTemplate` treats unknown as COL
 - ⛔ **The warm drafter has no stage gate any more** (Paul, 2026-10-11): Draft reply and Refresh research show in every stage.
 - ⛔ **A failed crawl never overwrites the last good one** (`src/lib/crawlWriteRule.ts`, `lead_crawl_checks.last_failed_attempt`).
 
+### 6m. Find Leads adds and the payment-12 reminder (2026-10-17 — records: `docs/find-leads-bulk-add.md`, `docs/month12-reminder.md`)
+
+- ⛔ **Every Find Leads add is ONE batch** (`src/lib/findLeadsBulkAdd.ts`: preview → each new lead's number looked up FIRST → `findLeadsPhoneSkip` → ONE `coverage_add_leads` save). UK = mobiles only, by the digits; non-UK unchanged. The "Needs info" tag is deleted — do not bring it back. Coverage's niche panel still uses `addLead`.
+- ⛔ **"When is payment 12" is `src/lib/finalPaymentDates.ts`** — the v5 9A.5 reminder (fn `month12-reminder`, once per client, `month12_reminder_settings.enabled` is the kill switch) and the future ownership handover both read it. Sent only when the SIGNED text contains the 9A.5 sentence.
+
 ### 6k. One Inbox for two channels; SMS status; the reply setting (2026-10-10 — record: `docs/twilio-comms.md`)
 
 - ⛔ **WhatsApp and SMS are ONE component** (`ConversationInbox({ channel })` in `src/pages/Inbox.tsx`) with a thin channel adapter (`useInbox(channel)`,

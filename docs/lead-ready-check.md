@@ -1,5 +1,7 @@
 # Lead ready check (2026-10-15)
 
+> ⛔ **2026-10-17 (Paul): the "Needs info" tag, its one-click fix dialog and the add-time "still needs info" notice are REMOVED.** Find Leads now refuses a lead that cannot be added and counts it in the add summary (`docs/find-leads-bulk-add.md`). What remains below: the bulk audit skip list, the CSV import and Add a lead readiness lines.
+
 **Problem.** Audits and sends were refused for a missing town, number, trade or name, and Paul only found out afterwards.
 
 **Rule.** ONE function, `leadReadiness(lead, ctx)` (`src/lib/leadReadiness.ts`), says per feature what is missing. It

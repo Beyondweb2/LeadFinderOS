@@ -76,7 +76,9 @@ console.log('\n── SAME QUESTIONS: every string is the customer flow\'s own (
     walk(ONBOARDING_COPY);
     /* 2026-10-16: the Optimise-only questions (LEGACY_KEEP_COPY, WEBSITE_CHOICE_OPTIONS, …) left the customer page and are no
        longer pinned; they are drawn only for a client already on Optimise. */
-    strings.push(permissionAckText(null), permissionAckText('yes_access'), permissionAckText('want_new'));
+    /* 2026-10-17: permissionAckText('yes_access') is the LEGACY Optimise sentence ("onto my site"), shown only for a client already
+       on Optimise; findable-site's v5 release (840f556) removed it from the customer flow, so it is no longer a parity string. */
+    strings.push(permissionAckText(null), permissionAckText('want_new'));
     const missing = strings.filter((s) => !customer.includes(norm(s)));
     /* A MISSING string is first a question about WHICH findable-site was read: a sibling checkout
        left behind its master reports the new wording as missing (2026-10-05, the Q2 sub). */
