@@ -311,10 +311,10 @@ console.log('\n── 22. a specific finding, with its evidence, reaches the scr
   const line = pb.script.found.lines.join(' ');
   /* 2026-10-15 (Paul): the issues are a LIST of short plain lines from the ONE website check (websiteCheck.ts) — the
      specific services are named ON the line; no "how we'd fix it" tail is read out (it is on the rep's screen). */
-  ok(pb.script.found.lines.length <= 5 && /Boiler Repair/.test(line) && /Leak Repair/.test(line) && /Bathroom Fitting/.test(line), '22. the script says the SPECIFIC services that are crammed together, not generic filler (' + line.slice(0, 120) + '…)');
+  ok(pb.script.found.lines.length >= 1 && pb.script.found.lines.length <= 5 && /share one page/i.test(line), '22. the script lists the services-on-one-page issue by its TITLE only (' + line.slice(0, 120) + '…)');
   ok(!pb.script.found.lines.some((l) => l.endsWith(FIX_TAIL)), '22. one line per issue — no sentence tail');
   const src = pb.script.found.sources[0];
-  ok(!!src && src.evidence!.urls.includes(O + '/services') && src.evidence!.quotes.some((q) => /Leak Repair/.test(q)), '22. the page and the headings read survive to the script layer (the rep\'s "How do we know?")');
+  ok(!src && !pb.script.found.lines.some((l) => l.includes('http') || l.includes('/services')), '22. titles only: no page, no URL in the script (2026-10-17)');
   ok(pb.findings[0].kind === 'services_on_one_page' && pb.findings[0].proof.some((p) => p === 'Page: ' + O + '/services'), '22. the operator view keeps the proof lines (Page: …)');
   ok(!UNSUPPORTED.test([...pb.script.opener, ...pb.script.found.lines, ...pb.script.bridge].join(' ')), '22. nothing said about the site makes an unsupported AI or ranking claim');
   ok(!/\b(?:schema|canonical|noindex|sitemap|robots)\b/i.test(pb.script.found.lines.join(' ')), '22. plain words, no SEO jargon');
@@ -340,7 +340,7 @@ console.log('\n── 23. a strong site is a result, not a gap ──');
   const outcomeNote = pb.findingsNote ?? '';
   /* 2026-10-15 (Paul): no issues → ONE plain line saying so — the one website check's headline, the same words on every
      screen (it replaced the strong-site pitch line here). */
-  ok(pb.findings.length === 0 && pb.script.found.lines.length === 1 && /^No serious website issues found on the \d+ pages checked\./.test(pb.script.found.lines[0]), '23. the script says the site is in good shape and invents no criticism (' + pb.script.found.lines.join(' | ').slice(0, 90) + ')');
+  ok(pb.findings.length === 0 && pb.script.found.lines.length === 0 && /say nothing about the site/.test(pb.script.found.note ?? ''), '23. completed with no serious issue: the script says nothing about the site (2026-10-17)');
   void STRONG_SITE_LINE;
   ok(!/need to create|missing|isn't|doesn't|couldn't find a/.test(pb.script.found.lines[0]) || /couldn't find anything wrong/.test(pb.script.found.lines[0]), '23. no manufactured fault in the fallback');
   ok(/do not invent/i.test(pb.script.found.note ?? ''), '23. the rep is told not to invent one (' + (pb.script.found.note ?? '').slice(0, 60) + ')');
@@ -359,7 +359,7 @@ console.log('\n── 23. a strong site is a result, not a gap ──');
   const ins = usableInsights(leadRow.result.insights);
   ok(ins?.state === 'strong_site' && ins.opportunity?.kind === 'service_pages', '23. a clean site with one service page → the service-page opportunity (' + ins?.opportunity?.kind + ')');
   const pb = playbookFor(leadRow, O);
-  ok(/^No serious website issues found/.test(pb.script.found.lines[0]) && pb.script.found.lines.length === 1, '23. a clean site with one service page → the same one plain line (the opportunity is not read out as a fault)');
+  ok(pb.script.found.lines.length === 0, '23. a clean site with one service page → nothing said (the opportunity is not read out as a fault)');
   ok(/Your site's actually in decent shape\. What we'd mainly do is build stronger dedicated pages around each of your services/.test(SERVICE_PAGES_OPPORTUNITY_LINE), '23. Paul\'s opportunity wording is kept for the insights it belongs to');
 }
 
@@ -389,7 +389,7 @@ console.log('\n── 25. an older crawl without insights still works ──');
   ok(pb.script.found.lines.length === 1 && /light on detail/.test(pb.script.found.lines[0]) && !pb.script.found.lines[0].endsWith(FIX_TAIL), '25. a crawl stored before insights existed still gives its technical point, unchanged');
   const clean = { result: { ...row.result, signals: { ...row.result.signals, thinPages: 0, thinPageUrls: [] } } };
   const pc = playbookFor({ lead_id: 'x', result: clean.result }, 'https://old.example');
-  ok(pc.script.found.lines.length === 1 && /^No serious website issues found/.test(pc.script.found.lines[0]), '25. …and a clean old crawl says so in one plain line');
+  ok(pc.script.found.lines.length === 0, '25. …and a clean old crawl says nothing about the site');
   ok(usableInsights({ version: 1, state: 'issues', findings: 'x' }) === null, '25. a malformed stored insight is ignored, never half-used');
 }
 

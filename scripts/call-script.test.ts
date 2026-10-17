@@ -111,7 +111,7 @@ console.log('── 4. No invented competitors, no invented findings ──');
   const clean = buildCallScript(input({ findings: [], findingsStatus: 'clean' }));
   /* 2026-10-15 (Paul): no issues → ONE plain line saying so (the one website check's headline); the checklist stays on the
      rep's screen. The old "isn't really set up to be found by AI" line read like an issue and is no longer said. */
-  ok(clean.found.lines.length === 1 && clean.found.lines[0] === 'No serious website issues found.' && clean.found.checklist === AI_SETUP_CHECKLIST, 'good website / no serious issue → ONE plain line saying so + what we make sure a site has (for the rep); no fault invented');
+  ok(clean.found.lines.length === 0 && clean.found.more.length === 0 && clean.found.coverage === null && /say nothing about the site/.test(clean.found.note ?? '') && clean.found.checklist === AI_SETUP_CHECKLIST, 'completed with no serious issue → NOTHING said about the site (2026-10-17); the checklist stays on the rep screen; no fault invented');
   ok(!spokenScriptText(clean).includes(NO_STRONG_ISSUE_LINE) && !spokenScriptText(clean).includes(AI_SETUP_SPOKEN_LINE), '…and the old "not set up for AI" lines are not said');
   ok(!/public evidence|bigger issue/i.test(clean.found.lines.join(' ')), 'the old "the bigger issue is the public evidence" line is gone');
   ok(AI_SETUP_CHECKLIST.some((c) => /duplicate/i.test(c)) && AI_SETUP_CHECKLIST.length >= 6 && /no duplicate pages/.test(AI_SETUP_SPOKEN_LINE), 'the list names the duplicate-pages check and the rest of what we make sure a site has');

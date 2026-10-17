@@ -98,6 +98,10 @@ export interface WebsiteCheckView {
   coverageLine: string | null;
   /** Older than WEBSITE_CHECK_FRESH_MS. */
   stale: boolean;
+  /** Whole days since the check ran (null when unknown). The call script's own 14-day rule reads it. */
+  ageDays: number | null;
+  /** "13 Oct" — the day it ran, London time (null when unknown). */
+  checkedDay: string | null;
 }
 
 const SEV_RANK: Record<WebsiteIssueSeverity, number> = { high: 0, medium: 1, low: 2 };
@@ -299,7 +303,7 @@ export function websiteCheckFor(
   opts: { website: string | null | undefined; nowMs?: number },
 ): WebsiteCheckView {
   const empty = (state: WebsiteCheckState, headline: string): WebsiteCheckView =>
-    ({ state, summary: null, serious: [], minor: [], headline, coverageLine: null, stale: false });
+    ({ state, summary: null, serious: [], minor: [], headline, coverageLine: null, stale: false, ageDays: null, checkedDay: null });
   const kind = classifyLeadWebsite(opts.website);
   if (kind.source === 'none') return empty('no_website', NO_WEBSITE_LINE);
   if (kind.source === 'directory_profile' || kind.source === 'social_profile') {
@@ -311,8 +315,10 @@ export function websiteCheckFor(
   const at = summary.checkedAt ? Date.parse(summary.checkedAt) : NaN;
   const stale = Number.isFinite(at) && !(now - at < WEBSITE_CHECK_FRESH_MS);
   const coverageLine = coverageLineFor(summary, stale);
+  const ageDays = Number.isFinite(at) ? Math.max(0, Math.floor((now - at) / 86_400_000)) : null;
+  const checkedDay = dayLabel(summary.checkedAt);
   if (summary.depth === 'failed') {
-    return { state: 'unreadable', summary, serious: [], minor: [], stale, coverageLine,
+    return { state: 'unreadable', summary, serious: [], minor: [], stale, coverageLine, ageDays, checkedDay,
       headline: `We could not read the website: ${summary.failure ?? 'it did not answer.'}` };
   }
   const serious = summary.issues.filter((i) => i.severity !== 'low');
@@ -321,7 +327,7 @@ export function websiteCheckFor(
   const headline = serious.length
     ? `${plural(serious.length, 'website issue')} found${pages}.`
     : `No serious website issues found${pages}.${minor.length ? ` ${plural(minor.length, 'minor point')}.` : ''}`;
-  return { state: serious.length ? 'issues' : 'clean', summary, serious, minor, headline, coverageLine, stale };
+  return { state: serious.length ? 'issues' : 'clean', summary, serious, minor, headline, coverageLine, stale, ageDays, checkedDay };
 }
 
 /* ONE ISSUE, ONE PLAIN LINE (Paul, 2026-10-15: "each line is one issue in plain English"). The technical title stays on the

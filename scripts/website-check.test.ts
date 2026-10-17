@@ -15,7 +15,7 @@ import { detectEnquiryForm, type PageDigest } from '../src/lib/fullCrawl.ts';
 import {
   issueLine, NO_WEBSITE_LINE, summariseWebsiteCheck, websiteCheckFor, WEBSITE_CHECK_VERSION, type WebsiteCheckView,
 } from '../src/lib/websiteCheck.ts';
-import { buildCallScript, CALL_SCRIPT_ISSUE_LINES, spokenScriptText } from '../src/lib/callScript.ts';
+import { buildCallScript, CALL_SCRIPT_CHECK_OLD_DAYS, CALL_SCRIPT_ISSUE_LINES, spokenScriptText } from '../src/lib/callScript.ts';
 import { isBrokenPageStatus } from '../src/lib/contentTrust.ts';
 import { buildCallClose } from '../src/lib/callClose.ts';
 
@@ -158,7 +158,7 @@ console.log('\n── 5. the call script lists the issues (Job 3) ──');
 {
   const mk = (n: number): WebsiteCheckView => {
     const issues = Array.from({ length: n }, (_, k) => ({ id: 'i' + k, severity: k < 2 ? 'high' as const : 'medium' as const, title: 'Issue number ' + k, saw: 'Seen ' + k, meaning: '', count: k === 0 ? 3 : 0, pages: [SITE] }));
-    return { state: 'issues', summary: null, serious: issues, minor: [{ id: 'm', severity: 'low', title: 'Minor thing', saw: '', meaning: '', count: 0, pages: [] }], headline: n + ' website issues found on the 9 pages checked.', coverageLine: 'Checked 15 Oct · 9 pages read (deep check)', stale: false };
+    return { state: 'issues', summary: null, serious: issues, minor: [{ id: 'm', severity: 'low', title: 'Minor thing', saw: '', meaning: '', count: 0, pages: [] }], headline: n + ' website issues found on the 9 pages checked.', coverageLine: 'Checked 15 Oct · 9 pages read (deep check)', stale: false, ageDays: 2, checkedDay: '15 Oct' };
   };
   const base = {
     searchFor: 'a plumber in Rugby', engine: 'Gemini', evidenceKind: 'gap' as const, competitors: ['A Ltd', 'B Ltd'], auditStale: false,
@@ -166,17 +166,24 @@ console.log('\n── 5. the call script lists the issues (Job 3) ──');
     site: { source: 'own_site' as const, label: null }, close: buildCallClose('own_site'), contactedBefore: false, hasReport: true,
   };
   const s = buildCallScript({ ...base, website: mk(8) });
-  ok(s.found.lines.length === CALL_SCRIPT_ISSUE_LINES && s.found.lines[0] === 'Issue number 0 (3 pages)' && s.found.lines[1] === 'Issue number 1', 'one short line per issue, most important first, capped');
-  ok(s.found.more.length === 8 - CALL_SCRIPT_ISSUE_LINES + 1 && s.found.more.includes('Minor thing'), 'the rest (and the minor points) behind the tap');
-  ok(s.found.coverage === 'Checked 15 Oct · 9 pages read (deep check)', 'says when and how much was checked');
+  ok(s.found.lines.length === CALL_SCRIPT_ISSUE_LINES && s.found.lines[0] === 'Issue number 0' && s.found.lines[1] === 'Issue number 1', 'TITLES ONLY (no page counts), most important first, max 5');
+  ok(s.found.more.length === 0 && s.found.sources.length === 0, 'a sixth issue, the minor points and the page proof stay out (2026-10-17)');
+  ok(s.found.coverage === 'Checked 15 Oct' && s.found.oldNote === null, 'says when it was checked; a 2-day-old check has no old note');
+  const old = buildCallScript({ ...base, website: { ...mk(2), ageDays: CALL_SCRIPT_CHECK_OLD_DAYS + 1 } });
+  const edge = buildCallScript({ ...base, website: { ...mk(2), ageDays: CALL_SCRIPT_CHECK_OLD_DAYS } });
+  ok(old.found.oldNote === 'Check is old, press Run again before the call' && edge.found.oldNote === null, 'older than 14 days → "Check is old, press Run again before the call"; exactly 14 is not old');
+  ok(!/https?:|.uk|.com/.test(s.found.lines.join(' ')), 'no URLs in the list');
   const said = spokenScriptText(s);
   ok(!/found a few potential reasons|an issue was found|one thing that could be part of it|stood out/i.test(said), 'no "I found a few potential reasons" sentence around the issues');
   const clean = buildCallScript({ ...base, findings: [], findingsStatus: 'clean', website: { ...mk(0), state: 'clean', serious: [], headline: 'No serious website issues found on the 9 pages checked. 1 minor point.' } });
-  ok(clean.found.lines.length === 1 && clean.found.lines[0].startsWith('No serious website issues found'), 'no issues → ONE plain line saying so');
+  ok(clean.found.lines.length === 0 && clean.found.more.length === 0, 'completed with no serious issue (minor points only) → nothing said about the site');
+  const nc = buildCallScript({ ...base, findings: [], findingsStatus: 'not_crawled', website: { ...mk(0), state: 'not_checked', serious: [], minor: [], headline: 'Website not checked yet.' } });
+  ok(nc.found.lines.length === 0 && /Website not checked yet./.test(nc.found.note ?? '') && /say nothing about the site/.test(nc.found.note ?? ''), 'not complete → the "not checked yet, say nothing about the site" wording stays');
   ok(!/isn't really set up to be found by AI/.test(spokenScriptText(clean)), '…not the old "isn\'t really set up for AI" line that read like an issue');
   ok(issueLine({ id: 'x', severity: 'high', title: 'No phone number found', saw: '', meaning: '', count: 0, pages: [] }) === 'No phone number found', 'a site-wide issue is just its title');
   const ui = read('src/components/ColdCallPlaybook.tsx');
-  ok(/data-testid="call-found-more"/.test(ui) && /data-testid="call-found-coverage"/.test(ui), 'the screen shows the coverage line and the "more" tap');
+  ok(/data-testid="call-found-coverage"/.test(ui) && /CALL_SCRIPT_ISSUES_HEADING/.test(ui) && /data-testid="call-found-old"/.test(ui), 'the screen shows the heading, the checked day and the old-check note');
+  ok(read('src/components/CrawlCheckButton.tsx').includes("queryKey: ['cold-call-playbook']"), 'a finished crawl refreshes the call script (it kept "not checked yet" otherwise)');
 }
 
 console.log(failures ? `\n${failures} FAILED` : '\nall passed');

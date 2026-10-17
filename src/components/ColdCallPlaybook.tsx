@@ -20,7 +20,7 @@ import { IconTile } from '@/components/operator/ui';
 import { cn } from '@/lib/utils';
 import { useColdCallPlaybook } from '@/hooks/useColdCallPlaybook';
 import { type ColdCallPlaybook } from '@/lib/coldCallPlaybook';
-import { afterFirstQuestion, type WebsiteManager } from '@/lib/callScript';
+import { afterFirstQuestion, CALL_SCRIPT_ISSUES_HEADING, type WebsiteManager } from '@/lib/callScript';
 import { callScriptGate, type CallScriptGate } from '@/lib/callScriptGate';
 import { isSaleableRoute, type ServiceRoute } from '@/lib/findableOffer';
 
@@ -88,7 +88,7 @@ export function callFlowText(p: ColdCallPlaybook, model: PriceModel = 'standard'
   const plan = base ? routeOfferForModel(base.route, model) : base;
   return [
     'SAY\n' + s.opener.join('\n'),
-    ...(s.found.lines.length ? ['WEBSITE' + (s.found.coverage ? ' (' + s.found.coverage + ')' : '') + '\n' + [...s.found.lines, ...s.found.more].map((l) => '- ' + l).join('\n')] : []),
+    ...(s.found.lines.length ? [(s.found.coverage ? CALL_SCRIPT_ISSUES_HEADING.toUpperCase() + ' (' + s.found.coverage + ')' : 'WEBSITE') + '\n' + s.found.lines.map((l) => '- ' + l).join('\n')] : []),
     s.bridge.join('\n'),
     'FIRST QUESTION\n' + s.firstQuestion.question,
     'IF AN AGENCY\n- ' + s.ifAgency.questions.join('\n- '),
@@ -106,7 +106,13 @@ function Say({ p }: { p: ColdCallPlaybook }) {
   return (
     <Step title="Say" tone="blue" testId="call-step-open" action={<CopyButton text={callFlowText(p, model)} label="Copy" />}>
       <div className="space-y-2 text-[15px] leading-relaxed" data-testid="playbook-call-script">{s.opener.map((line) => <p key={line}>{line}</p>)}</div>
-      {s.found.coverage && s.found.lines.length > 0 && <p className="text-[11px] text-muted-foreground" data-testid="call-found-coverage">Website · {s.found.coverage}</p>}
+      {s.found.coverage && s.found.lines.length > 0 && (
+        <p className="flex flex-wrap items-baseline gap-x-2 text-[11px] text-muted-foreground" data-testid="call-found-coverage">
+          <span className="font-semibold uppercase tracking-wider">{CALL_SCRIPT_ISSUES_HEADING}</span>
+          <span>{s.found.coverage}</span>
+          {s.found.oldNote && <span className="font-medium text-amber-700 dark:text-amber-400" data-testid="call-found-old">{s.found.oldNote}</span>}
+        </p>
+      )}
       {s.found.lines.length > 0 && (
         <ul className="space-y-1.5" data-testid="call-step-found">
           {s.found.lines.map((l) => (

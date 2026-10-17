@@ -328,8 +328,8 @@ console.log('── 12. SIMPLIFIED PLAYBOOK (Paul, 2026-09-27) ──');
     'the questions: FIRST_QUESTION always first, then the discovery questions');
   {
     const clean = buildColdCallPlaybook(base({ leadCrawl: crawl({ ...CLEAN, missingH1: false }) }));
-    ok(clean.script.found.lines.length === 1 && /^No serious website issues found/.test(clean.script.found.lines[0]) && /do not invent one/.test(clean.script.found.note ?? '') && (clean.script.found.checklist?.length ?? 0) >= 6,
-      'no serious site issue → ONE plain line saying so + the short list of what we make sure it has (for the rep), no invented fault');
+    ok(clean.script.found.lines.length === 0 && /say nothing about the site/.test(clean.script.found.note ?? '') && /do not invent one/.test(clean.script.found.note ?? '') && (clean.script.found.checklist?.length ?? 0) >= 6,
+      'completed, no serious site issue → NOTHING said about the site (2026-10-17) + the short list of what we make sure it has (for the rep), no invented fault');
     void NO_STRONG_ISSUE_LINE;
   }
   ok((script.match(/but not you/g) ?? []).length === 1, 'the AI miss is said once, not repeated as a separate explanation');

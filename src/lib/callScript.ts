@@ -43,7 +43,7 @@ import type { InsightKind } from './salesInsights.ts';
 import type { ContentTrustKind } from './contentTrust.ts';
 import type { SiteSource } from './leadWebsiteKind.ts';
 import type { CallClose, CallRouteOffer } from './callClose.ts';
-import { issueLine, type WebsiteCheckView } from './websiteCheck.ts';
+import { plainIssueTitle, type WebsiteCheckView } from './websiteCheck.ts';
 
 /* ── The fixed lines ───────────────────────────────────────────────────────────────────────────── */
 
@@ -62,6 +62,11 @@ export const MAX_SPOKEN_FINDINGS = 2;
 export const CALL_SCRIPT_ISSUE_LINES = 5;
 /** The one plain line for a checked site with no serious issue, when the check's own headline is not to hand. */
 export const CLEAN_SITE_LINE = 'No serious website issues found.';
+/** The heading over the website issues in the script (Paul, 2026-10-17): titles only, most useful first, none minor. */
+export const CALL_SCRIPT_ISSUES_HEADING = 'Website issues to mention';
+/** A check older than this is flagged in the script. */
+export const CALL_SCRIPT_CHECK_OLD_DAYS = 14;
+export const CALL_SCRIPT_CHECK_OLD_NOTE = 'Check is old, press Run again before the call';
 /** Said after a point that came from the site's own pages (a service, the town, a phone number): the Findable half
  *  of REAL ISSUE → WHY IT MATTERS → HOW WE IMPROVE IT. Once, after the last point, never per point. */
 export const FIX_TAIL = "It's the sort of thing we'd fix as part of the work.";
@@ -167,7 +172,7 @@ export interface CallScript {
   /** For the rep's eyes only. */
   openerNote: string | null;
   /** The real website reasons, spoken, and a note for the rep (never said). */
-  found: { lines: string[]; /** The rest of the issues (and the minor points), shown on a tap. */ more: string[]; /** "Checked 15 Oct · 42 pages read (deep check)". */ coverage: string | null; note: string | null; /** For the rep's screen: what we make sure a site has — set only when the site check found no issue to raise. */ checklist: readonly string[] | null; /** For the rep's eyes only: what each spoken point rests on. */ sources: Array<{ line: string; evidence: ScriptEvidence | null; improvement: string | null }> };
+  found: { lines: string[]; /** Always empty since 2026-10-17: a sixth issue and the minor points stay out. */ more: string[]; /** "Checked 13 Oct", shown beside the issues. */ coverage: string | null; /** Set when the check is older than CALL_SCRIPT_CHECK_OLD_DAYS. */ oldNote: string | null; note: string | null; /** For the rep's screen: what we make sure a site has — set only when the site check found no issue to raise. */ checklist: readonly string[] | null; /** For the rep's eyes only: what each spoken point rests on. */ sources: Array<{ line: string; evidence: ScriptEvidence | null; improvement: string | null }> };
   bridge: string[];
   firstQuestion: { question: string; hint: string | null };
   ifAgency: { questions: [string, string]; coaching: string[]; priceAngle: { overGbp: number; line: string } };
@@ -238,20 +243,18 @@ export function buildCallScript(i: CallScriptInput): CallScript {
   const serious = check?.serious ?? i.findings.map((f) => ({
     id: String(f.kind), severity: 'medium' as const, title: f.title, saw: f.explanation, meaning: '', count: 0, pages: f.evidence?.urls ?? [],
   }));
-  const minor = check?.minor ?? [];
   const found: string[] = [];
-  let more: string[] = [];
+  const more: string[] = [];
   let foundNote: string | null = null;
   let checklist: readonly string[] | null = null;
-  let sources: CallScript['found']['sources'] = [];
+  const sources: CallScript['found']['sources'] = [];
   const intro = why ? why + '.' : i.evidenceKind === 'named' ? 'I had a look at your website as well.' : 'I had a quick look at your website as well.';
   if (i.findingsStatus === 'findings' && serious.length) {
     opener.push(intro);
     const shown = serious.slice(0, CALL_SCRIPT_ISSUE_LINES);
-    found.push(...shown.map(issueLine));
-    more = [...serious.slice(CALL_SCRIPT_ISSUE_LINES), ...minor].map(issueLine);
-    sources = shown.map((x) => ({ line: issueLine(x), evidence: { urls: x.pages, quotes: [x.saw] }, improvement: null }));
-    foundNote = 'Read the lines as they are — each one was seen on the site (tap a line\'s proof for the page). Say it "may make it harder", never that it is why AI did not name them.';
+    /* TITLES ONLY (Paul, 2026-10-17): no page counts, no URLs, no minor points, no sixth issue. */
+    found.push(...shown.map(plainIssueTitle));
+    foundNote = 'Each of these was seen on the site by the crawl. Say it "may make it harder", never that it is why AI did not name them.';
   } else if (i.findingsStatus === 'no_website') {
     opener.push((why ? why + ', and the first thing I noticed' : 'The first thing I noticed') + " is I couldn't find a website for you.");
     found.push("Without a site of your own there's a lot less for AI to go on about what you do and where you work.");
@@ -263,10 +266,9 @@ export function buildCallScript(i: CallScriptInput): CallScript {
   } else if (i.findingsStatus === 'clean') {
     /* The pages were read and nothing serious was wrong: ONE plain line, the minor points behind the tap. */
     if (why) opener.push(why + '.');
-    found.push(check?.headline ?? CLEAN_SITE_LINE);
-    more = minor.map(issueLine);
+    /* Completed with nothing serious: SAY NOTHING about the site (Paul, 2026-10-17). Minor points stay out. */
     if (why) checklist = AI_SETUP_CHECKLIST;
-    foundNote = 'The website check found no serious issue — say so plainly and do not invent one.';
+    foundNote = 'The website check found no serious issue, so say nothing about the site; do not invent one.';
   } else {
     foundNote = (check && (i.findingsStatus === 'not_crawled' || i.findingsStatus === 'unreadable') ? check.headline + ' ' : '')
       + 'No usable website check for this lead, so say nothing about the site. Keep to the AI result.';
@@ -323,7 +325,8 @@ export function buildCallScript(i: CallScriptInput): CallScript {
     openerNote: i.contactedBefore
       ? "You've been in touch with them before. Don't open with it — if they bring it up, that was you."
       : null,
-    found: { lines: found, more, coverage: check?.coverageLine ?? null, note: foundNote, checklist, sources },
+    found: { lines: found, more, coverage: found.length && check?.checkedDay ? 'Checked ' + check.checkedDay : null,
+      oldNote: found.length && check?.ageDays != null && check.ageDays > CALL_SCRIPT_CHECK_OLD_DAYS ? CALL_SCRIPT_CHECK_OLD_NOTE : null, note: foundNote, checklist, sources },
     bridge,
     firstQuestion,
     ifAgency,
