@@ -117,6 +117,32 @@ export const UNCOUNTABLE_TRADE_WORDS: ReadonlySet<string> = new Set([
    map entry if he wants those leads sendable. */
 const MULTI_CLAUSE = /[,&/]|\band\b/;
 
+/* 🟢 A TRADE MAY BE A SHORT NOUN PHRASE (2026-10-17). "interior designers", "english language schools",
+   "dental clinics" are single trades in plain words. What a trade may NOT be is a list or a sentence:
+   no "and" / "&" / comma / slash (MULTI_CLAUSE), no digit, no symbol, and no more than TRADE_MAX_WORDS
+   words or TRADE_MAX_CHARS characters. ONE rule, read by the singular, plural and article paths
+   (tradePhraseProblem) — never copy it into a fourth place. A value that fails is HELD, never trimmed:
+   cutting a longer phrase down would be a guess about a prospect's trade. */
+export const TRADE_MAX_WORDS = 3;
+export const TRADE_MAX_CHARS = 40;
+const TRADE_LETTERS_ONLY = /^[\p{L}][\p{L}'’\- ]*$/u;
+
+function tradePhraseProblem(lower: string, trimmed: string): VarCheck | null {
+  if (/\d/.test(lower)) return { ok: false, reason: "trade_has_digits", detail: trimmed };
+  if (MULTI_CLAUSE.test(lower)) return { ok: false, reason: "trade_not_a_single_noun", detail: trimmed };
+  if (!TRADE_LETTERS_ONLY.test(lower)) return { ok: false, reason: "trade_has_symbols", detail: trimmed };
+  if (lower.length > TRADE_MAX_CHARS || lower.split(" ").length > TRADE_MAX_WORDS) {
+    return { ok: false, reason: "trade_phrase_too_long", detail: trimmed };
+  }
+  return null;
+}
+
+/** A trade as it reads INSIDE a sentence: lowercase, single-spaced. Used where a blocked or unresolved
+ *  value is shown as it stands (display fallbacks), so "Interior" never appears mid-sentence. */
+export function tradeInSentence(raw: string | null | undefined): string {
+  return (raw ?? "").replace(/\s+/g, " ").trim().toLowerCase();
+}
+
 /* ════════════════════════════════════════════════════════════════════════════════════════════════
    🔴 {{2}} MAY NEVER START WITH A VOWEL SOUND, AND THAT IS A CONSTRAINT FROM META, NOT A STYLE
    CHOICE. DO NOT "FIX" THIS BY DELETING THE CHECK.
@@ -203,8 +229,8 @@ function singulariseTrade(raw: string | null | undefined): VarCheck {
   const mapped = TRADE_SINGULAR[lower];
   if (mapped) return { ok: true, value: mapped };
 
-  if (/\d/.test(lower)) return { ok: false, reason: "trade_has_digits", detail: trimmed };
-  if (MULTI_CLAUSE.test(lower)) return { ok: false, reason: "trade_not_a_single_noun", detail: trimmed };
+  const phraseProblem = tradePhraseProblem(lower, trimmed);
+  if (phraseProblem) return phraseProblem;
 
   /* 1b. UNCOUNTABLE → BLOCK. Checked on the LAST word, before singularising, because that is the
          word the article attaches to ("gas heating" is held on "heating"; "carpet cleaning" on
@@ -392,8 +418,8 @@ export function pluraliseTrade(raw: string | null | undefined): VarCheck {
     return pluralBackstop(words.join(" "), trimmed);
   }
 
-  if (/\d/.test(lower)) return { ok: false, reason: "trade_has_digits", detail: trimmed };
-  if (MULTI_CLAUSE.test(lower)) return { ok: false, reason: "trade_not_a_single_noun", detail: trimmed };
+  const phraseProblem = tradePhraseProblem(lower, trimmed);
+  if (phraseProblem) return phraseProblem;
 
   /* 2. UNCOUNTABLE STILL BLOCKS, AND THE REASON IS NOT THE ARTICLE. "find joinery in your area"
         and "find plumbing in your area" are as wrong as their singular versions — an activity noun

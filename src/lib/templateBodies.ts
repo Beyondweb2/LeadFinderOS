@@ -23,7 +23,7 @@
 
 import { hookFollowupBody, contactFollowupBody, questionnaireFollowupBody } from './questionnaireFollowup.ts';
 /* competitor_hook's body prints the SAME plural the parameter carries — see its note below. */
-import { articleTrade, pluraliseTrade } from './templateVars.ts';
+import { articleTrade, pluraliseTrade, tradeInSentence } from './templateVars.ts';
 import { transcriptBusinessName, nameStyleFor } from './displayName.ts';
 import { onboardingTemplateBody, signupLinkTemplateBody } from './whatsappLinkTemplates.ts';
 import { reportOfferBody } from './reportOfferTemplate.ts';
@@ -102,7 +102,7 @@ const explainOfferBodyPreWebsiteUrl = (_b: string, u: string, trade?: string, _c
   const t = pluraliseTrade(trade);
   return `Nobody's doing this yet, which is the point.
 
-People ask ChatGPT and Gemini for ${t.ok ? t.value : (trade || 'businesses')} in ${town || 'your area'} instead of googling. I get you named in those answers.
+People ask ChatGPT and Gemini for ${t.ok ? t.value : (tradeInSentence(trade) || 'businesses')} in ${town || 'your area'} instead of googling. I get you named in those answers.
 
 Keep your website and I'll optimise it so AI can read you. Or if you can't give me access, or want a new one, I'll build it. No extra cost.
 
@@ -122,7 +122,7 @@ const explainOfferBody = (_b: string, u: string, trade?: string, _c?: string, _f
   const t = pluraliseTrade(trade);
   return `Nobody's doing this yet, which is the point.
 
-People ask ChatGPT and Gemini for ${t.ok ? t.value : (trade || 'businesses')} in ${town || 'your area'} instead of googling. I get you named in those answers.
+People ask ChatGPT and Gemini for ${t.ok ? t.value : (tradeInSentence(trade) || 'businesses')} in ${town || 'your area'} instead of googling. I get you named in those answers.
 
 Keep your website and I'll optimise it so AI can read you. Or if you can't give me access, or want a new one, I'll build it. No extra cost.
 
@@ -152,7 +152,7 @@ const explainOfferV2Body = (_b: string, u: string, trade?: string, _c?: string, 
   const t = pluraliseTrade(trade);
   return `Nobody's doing this yet, which is the point.
 
-People ask chatgpt and gemini for ${t.ok ? t.value : (trade || 'businesses')} in ${town || 'your area'} instead of googling, and they call whoever gets named. Right now that's not you.
+People ask chatgpt and gemini for ${t.ok ? t.value : (tradeInSentence(trade) || 'businesses')} in ${town || 'your area'} instead of googling, and they call whoever gets named. Right now that's not you.
 
 I've audited 941 UK businesses to work out what actually gets a firm named. A locksmith I did this for went from named once in twelve questions to named three times, in four weeks, on the pages I built.
 
@@ -179,7 +179,7 @@ https://findable.live/`;
    exactly as audit_reply's competitors do. The words the prospect received are on Meta's side. */
 const auditFollowupBody = (_b: string, u: string, trade?: string, competitors?: string, _first?: string, town?: string) => {
   const t = pluraliseTrade(trade);
-  return `I asked chatgpt for ${t.ok ? t.value : (trade || 'businesses')} in ${town || 'your area'} this morning.
+  return `I asked chatgpt for ${t.ok ? t.value : (tradeInSentence(trade) || 'businesses')} in ${town || 'your area'} this morning.
 
 It came back with ${competitors || 'other firms'}.
 
@@ -198,7 +198,7 @@ Want me to explain?`;
    exactly as its sibling's do. The words the prospect received are on Meta's side. */
 const auditFollowupCallBody = (_b: string, u: string, trade?: string, competitors?: string, _first?: string, town?: string) => {
   const t = articleTrade(trade);
-  return `Hi mate, i was looking for ${t.ok ? t.value : (trade || 'a local business')} in ${town || 'your area'} so i asked AI and it mentioned ${competitors || 'other firms'}
+  return `Hi mate, i was looking for ${t.ok ? t.value : (tradeInSentence(trade) || 'a local business')} in ${town || 'your area'} so i asked AI and it mentioned ${competitors || 'other firms'}
 
 I know how to get you showing up more in those answers so people are more likely to find you
 
@@ -215,7 +215,7 @@ Paul✌️`;
    degrades its rivals. {{7}} (u) is the real report link. */
 const auditFollowupFaultBody = (_b: string, u: string, trade?: string, competitors?: string, _first?: string, town?: string, siteFault?: string) => {
   const t = articleTrade(trade);
-  return `Hi mate, i was looking for ${t.ok ? t.value : (trade || 'a local business')} in ${town || 'your area'} so i asked AI and it mentioned ${competitors || 'other firms'}
+  return `Hi mate, i was looking for ${t.ok ? t.value : (tradeInSentence(trade) || 'a local business')} in ${town || 'your area'} so i asked AI and it mentioned ${competitors || 'other firms'}
 
 Here's the main thing holding you back.
 
@@ -238,7 +238,7 @@ Paul✌️`;
    {{3}}-{{5}} degrade to "other firms". The words the prospect received are on Meta's side. */
 const aiSiteFindingsV2Body = (_b: string, _u: string, trade?: string, competitors?: string, _first?: string, town?: string, _siteFault?: string, siteFindings?: string) => {
   const t = articleTrade(trade);
-  return `Hi mate, i was looking for ${t.ok ? t.value : (trade || 'a local business')} in ${town || 'your area'} so i asked AI and it mentioned
+  return `Hi mate, i was looking for ${t.ok ? t.value : (tradeInSentence(trade) || 'a local business')} in ${town || 'your area'} so i asked AI and it mentioned
 
 ${competitors || 'other firms'}
 
@@ -257,7 +257,7 @@ Paul✌️`;
 
 const auditReplyBody = (b: string, u: string, trade?: string, competitors?: string) =>
   `Hi, thanks for getting back.
-We asked AI tools like ChatGPT to recommend a ${trade || 'provider'} in your area, it's naming ${competitors || 'other firms'} - not ${b || 'you'}.
+We asked AI tools like ChatGPT to recommend a ${tradeInSentence(trade) || 'provider'} in your area, it's naming ${competitors || 'other firms'} - not ${b || 'you'}.
 We ran a full report on your business for AI and SEO visibility: ${u}
 We could get you showing up in those results - it's mostly stuff we handle at our end.
 Want me to explain?`;
@@ -272,7 +272,7 @@ Want me to explain?`;
    what a template used to say. Do not "update" this one — it is what those 135 prospects read. */
 const auditResultHookBody = (b: string, u: string, trade?: string, _c?: string, _first?: string, town?: string) =>
   `Hi, is this ${b || 'your business'}? We ran a free AI visibility audit for you.
-When people ask ChatGPT or Google's AI for a ${trade || 'provider'} in ${town || 'your area'}, it's naming other firms, not you.
+When people ask ChatGPT or Google's AI for a ${tradeInSentence(trade) || 'provider'} in ${town || 'your area'}, it's naming other firms, not you.
 Here's your result: ${u}
 More on how we can fix it, and how to get started: https://findable.live`;
 
@@ -290,7 +290,7 @@ const videoTemplateBody = (b: string, u: string, trade?: string, _c?: string, _f
 
 I ran a quick AI visibility check on your business and found something you'll probably want to see.
 
-When people ask ChatGPT or Gemini for a ${trade || 'provider'} in ${town || 'your area'}, you're not showing up as often as you should be.
+When people ask ChatGPT or Gemini for a ${tradeInSentence(trade) || 'provider'} in ${town || 'your area'}, you're not showing up as often as you should be.
 
 I've put the full findings together for you here:
 
@@ -330,7 +330,7 @@ const competitorHookBody = (b: string, u: string, trade?: string, competitors?: 
   const t = pluraliseTrade(trade);
   return `Hi ${b || "your business"},
 
-I asked ChatGPT and Gemini to find ${t.ok ? t.value : (trade || "businesses")} in your area.
+I asked ChatGPT and Gemini to find ${t.ok ? t.value : (tradeInSentence(trade) || "businesses")} in your area.
 
 They came back with businesses including ${competitors || "other firms"}.
 
@@ -358,7 +358,7 @@ Paul.`;
    ⚠️ DISPLAY ONLY, like every body here — Meta renders what the prospect reads from its own
    registered copy. This decides what the OPERATOR sees in the Inbox transcript. */
 const auditReplyWarmBody = (_b: string, u: string, trade?: string, _c?: string, _first?: string, town?: string) =>
-  `We ran a free AI visibility audit for you. When people ask ChatGPT or Google's AI for a ${trade || 'provider'} in ${town || 'your area'}, it's naming other firms, not you.
+  `We ran a free AI visibility audit for you. When people ask ChatGPT or Google's AI for a ${tradeInSentence(trade) || 'provider'} in ${town || 'your area'}, it's naming other firms, not you.
 Here's your result: ${u}
 More on how we can fix it, and how to get started: https://findable.live`;
 
