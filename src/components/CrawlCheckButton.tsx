@@ -194,6 +194,7 @@ function CrawlCheckDialog(
       setResult({ ok: true, url: r.url, verdict: r.verdict, signals: r.signals, siteInfo: r.siteInfo ?? null, checked_at: r.checked_at, full: res.full ?? null, mode: 'full', raw: r });
       void queryClient.invalidateQueries({ queryKey: ['lead-crawls'] });
       void queryClient.invalidateQueries({ queryKey: ['inbox'] });
+      void queryClient.invalidateQueries({ queryKey: ['cold-call-playbook'] });   // the call script reads this crawl too
       onDone?.();
     } catch (e) {
       setResult({ ok: false, error: e instanceof Error ? e.message : 'crawl failed' });
@@ -224,6 +225,8 @@ function CrawlCheckDialog(
         // Inbox intentionally has a five-minute cache; invalidate it so returning to a
         // conversation immediately re-reads this manual crawl for audit_followup_fault.
         void queryClient.invalidateQueries({ queryKey: ['inbox'] });
+        // The call script reads this crawl too: without this it kept "Website not checked yet" from before the run.
+        void queryClient.invalidateQueries({ queryKey: ['cold-call-playbook'] });
       }
       if (body.lead_id) onDone?.();     // stored → let the parent refresh the button state
     } catch (e) {

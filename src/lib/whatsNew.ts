@@ -22,6 +22,23 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-17-call-script-site-issues', date: '2026-10-17', title: 'Call script: "Website issues to mention" and a fresh script after a crawl', audience: 'all',
+    body: 'The call script now lists the website issues the crawl found as short titles (up to 5, most useful first) with the day it was checked. A check over 14 days old says to press Run again. Pressing Run on the crawl now refreshes the script straight away.',
+    report: {
+      added: [
+        'A "Website issues to mention" block in the Call script: short titles only, up to 5, with "Checked 13 Oct" beside it.',
+        'A note "Check is old, press Run again before the call" when the check is more than 14 days old.',
+      ],
+      changed: [
+        'When the crawl finished with no serious issue, the script now says nothing about the site (it used to read out a "no serious issues" line).',
+        'A finished crawl refreshes the Call script. Before, a script opened earlier kept saying "Website not checked yet" until you closed and reopened the lead.',
+      ],
+      removed: [
+        'Page counts, web addresses, the "more points" tap and the minor points are no longer in the script.',
+      ],
+      effect: 'You get a short list of real issues to mention, and the script matches the crawl you just ran.',
+    },
+  },
   { id: '2026-10-17-find-leads-batch-add', date: '2026-10-17', title: 'Find Leads: Add to CRM adds the whole selection at once, mobiles only for the UK', audience: 'all',
     body: 'Add to CRM now saves every selected lead in one go and tells you "Added N, skipped M" with the reasons. UK landlines and leads with no number are no longer added. The "Needs info" tag is gone.',
     report: {
