@@ -3,7 +3,11 @@ import { useCountrySettings } from '@/hooks/useCountrySettings';
 import { marketsOn } from '@/lib/outreachMarkets';
 import { useQueryClient } from '@tanstack/react-query';
 import { getQueueStatus, rememberQueueStatus, QUEUE_STATE_KEY, queuedLeadLine } from '@/lib/queueStatus';
-import { MessageSquare, Loader2, Play, Pause, RefreshCw, ChevronDown, ChevronRight, X, Inbox as InboxIcon } from 'lucide-react';
+import { MessageSquare, Loader2, Play, Pause, RefreshCw, ChevronDown, ChevronRight, X, Trash2, Inbox as InboxIcon } from 'lucide-react';
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter,
+  AlertDialogHeader, AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
@@ -209,6 +213,24 @@ export function WhatsAppQueuePanel({ defaultExpanded = true }: { defaultExpanded
     } finally { setBusy(null); }
   };
 
+  /* Clear EVERY waiting opener in one act — both roles, one server call (lead_unqueue_all): the admin's whole
+     queue, a salesperson's own leads only (the server decides per lead, as lead_unqueue does). Each lead goes back
+     to its pre-queue status. Sends nothing; no-reply follow-ups and the pause setting are not touched. */
+  const [confirmClear, setConfirmClear] = useState(false);
+  const [clearing, setClearing] = useState(false);
+  const clearAll = async () => {
+    setClearing(true);
+    try {
+      const r = await leadRpc('lead_unqueue_all', {});
+      if (!r.ok) { toast({ title: 'Queue not cleared', description: refusalText(r.error), variant: 'destructive' }); return; }
+      const ids = Array.isArray(r.lead_ids) ? (r.lead_ids as string[]) : [];
+      for (const id of ids.slice(0, 500)) notifyLeadChanged(id);
+      announceQueueChanged();
+      const n = typeof r.removed === 'number' ? r.removed : ids.length;
+      toast({ title: `Removed ${n} ${n === 1 ? 'lead' : 'leads'} from the queue`, description: 'Nothing was sent. You can queue them again later.' });
+    } finally { setClearing(false); setConfirmClear(false); }
+  };
+
   /* Cancel ONE no-reply follow-up (admin): clear the lane marker so the drainer skips it, and restore the
      pre-2nd-attempt status (→ Contacted). Sends nothing and suppresses nothing. */
   const removeContactFollowup = async (l: QueueRow) => {
@@ -247,6 +269,18 @@ export function WhatsAppQueuePanel({ defaultExpanded = true }: { defaultExpanded
           <Button size="sm" variant="ghost" className="h-8 gap-1.5 text-xs" onClick={() => void refresh()} disabled={refreshing} data-testid="queue-refresh">
             <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? 'animate-spin' : ''}`} /> Refresh
           </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-8 gap-1.5 text-xs"
+            onClick={() => setConfirmClear(true)}
+            disabled={clearing || !q.isSuccess || view.waiting.length === 0}
+            data-testid="queue-clear-all"
+            title="Remove every waiting lead from the queue. Nothing is sent."
+          >
+            {clearing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+            Clear queue
+          </Button>
           {teamControls && <>
             <Button
               size="sm"
@@ -278,6 +312,24 @@ export function WhatsAppQueuePanel({ defaultExpanded = true }: { defaultExpanded
           </>}
         </div>
       </div>
+
+      <AlertDialog open={confirmClear} onOpenChange={(o) => { if (!clearing) setConfirmClear(o); }}>
+        <AlertDialogContent data-testid="queue-clear-confirm">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remove {view.waiting.length} {view.waiting.length === 1 ? 'lead' : 'leads'} from the queue?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {teamControls ? 'This empties the whole team queue.' : 'This empties your queued leads only.'} Each lead goes back to the
+              status it had before it was queued. Nothing is sent. No-reply follow-ups are not touched.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={clearing}>Keep them queued</AlertDialogCancel>
+            <AlertDialogAction disabled={clearing} onClick={(e) => { e.preventDefault(); void clearAll(); }} data-testid="queue-clear-confirm-go">
+              {clearing ? 'Removing…' : `Remove ${view.waiting.length}`}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <p role="status" data-testid="queue-line" className={cn('mt-2 text-sm', line.tone === 'paused' ? 'text-amber-600 dark:text-amber-400' : 'text-muted-foreground')}>
         {line.text.replace(/^In the queue — (.)/, (_m, c: string) => c.toUpperCase())}

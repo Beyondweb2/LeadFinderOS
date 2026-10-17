@@ -22,6 +22,19 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-17-clear-whatsapp-queue', date: '2026-10-17', title: 'Clear queue: empty the WhatsApp queue in one press', audience: 'all',
+    body: 'The WhatsApp queue page has a new Clear queue button. It asks how many leads it will remove, then takes them all out of the queue at once and tells you how many it removed. Nothing is sent.',
+    report: {
+      added: [
+        'A "Clear queue" button on the WhatsApp queue page, with a confirm that states the number of leads.',
+        'A result message afterwards: "Removed N leads from the queue".',
+      ],
+      changed: [
+        'Removing leads from the queue no longer has to be done one by one (the X on each row still works).',
+      ],
+      removed: [],
+      effect: 'You can empty the queue in one press. Each lead goes back to the status it had before it was queued, and nothing is sent. Admin clears the whole team queue; a salesperson clears only their own leads. No-reply follow-ups and the pause setting are not touched.',
+    } },
   { id: '2026-10-17-call-script-site-issues', date: '2026-10-17', title: 'Call script: "Website issues to mention" and a fresh script after a crawl', audience: 'all',
     body: 'The call script now lists the website issues the crawl found as short titles (up to 5, most useful first) with the day it was checked. A check over 14 days old says to press Run again. Pressing Run on the crawl now refreshes the script straight away.',
     report: {
