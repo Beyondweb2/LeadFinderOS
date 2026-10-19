@@ -124,7 +124,7 @@ export function ProspectAuditView({ score, rivalsWithheld, aiInFlight, site, poi
                 <div className={TILE} data-testid="pa-engine-ai_overview">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <h3 className="flex min-w-0 items-center gap-2 text-sm font-bold tracking-tight"><IconTile icon={MessageSquareText} tone="grey" size="sm" />{AI_OVERVIEW_LABEL}</h3>
-                    <span className="text-xs text-muted-foreground">{AI_OVERVIEW_NOT_SCORED}</span>
+                    <span className="text-xs text-muted-foreground">{score!.scored.googleAi.inScore ? 'In the score' : AI_OVERVIEW_NOT_SCORED}</span>
                   </div>
                   <ol className="mt-3 space-y-3">{score!.overviews.map((o) => <OverviewResult key={o.questionIndex} o={o} rivalsWithheld={rivalsWithheld} />)}</ol>
                 </div>

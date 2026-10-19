@@ -22,6 +22,23 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-19-website-crawl-call-screen', date: '2026-10-19', title: 'Website crawl on the call screen, a ready-made voice note, and Google AI in the score', audience: 'all',
+    body: 'The call screen now has a Website crawl section under the AI result: the real issues found on the site, when it was checked, and "Checking the website..." while it runs. If a lead has an AI result but no website check, opening the call screen starts one. The voice note is written for you straight away from the same facts as the call script. "Google AI Overview" is now called "Google AI" and counts in the score on new audits.',
+    report: {
+      added: [
+        'A "Website crawl" section on the call screen: up to five issues, worst first, each with the page and what was found. "Checked <day>", and "Press Run again before the call" when the check is over 14 days old.',
+        'The crawl now checks: generic business markup with no phone or address, FAQs with no FAQ markup, the address missing from the homepage, the business name written different ways, area pages that are the same text with the town swapped, repeated FAQ pages, a second copy of the homepage, key pages with no heading or description, and link code showing as text.',
+        'Opening the call screen on a lead with an AI result and no website check starts the check once, in the background.',
+      ],
+      changed: [
+        'The call script says "I looked into why this could be happening and I found multiple issues with your site…" (or "an issue") when the crawl found something. When it found nothing, the script says nothing about the site.',
+        'The voice note is built from the call script. No Write or Regenerate button, nothing to wait for.',
+        'A crawl always starts at the site\'s homepage, even when the lead\'s saved website is a deeper page.',
+        '"Google AI Overview" is now "Google AI". On audits from today it counts in the named percentage, but only for searches where Google showed an AI answer. Older audits keep their score and show Google AI as "not in score".',
+      ],
+      removed: ['The "Website not checked yet. No usable website check…" line in the script.', 'The voice-note Write / Regenerate buttons.'],
+      effect: 'You can see what is actually wrong with a prospect\'s site before you ring, and the script and voice note say the same thing. No client\'s guarantee number changes.',
+    } },
   { id: '2026-10-19-every-business-addable', date: '2026-10-19', title: 'Add to CRM: every business is added, and it is much faster', audience: 'all',
     body: 'Find Leads and the Coverage niche panel now add every business you select, landlines and leads with no phone included. Only a business already in the CRM is skipped. A big add takes seconds and shows "Adding 23 of 40" as it goes. WhatsApp still never goes to a landline.',
     report: {

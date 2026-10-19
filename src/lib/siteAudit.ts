@@ -27,6 +27,7 @@
 import type { CrawlCoverage, PageBusiness, PageDigest, FullCrawlEvidence } from './fullCrawl.ts';
 import { robotsAllows, robotsRulesFor, sameSite } from './crawlUrl.ts';
 import type { SalesInsights } from './salesInsights.ts';
+import { usableVisibilityChecks, VISIBILITY_SUPERSEDES, type VisibilityChecks } from './visibilityChecks.ts';
 import { compareIssues, isBrokenPageStatus, isCrawlerRefusedStatus, usableContentTrust, CONTENT_TRUST_KINDS, type ContentIssue, type ContentTrust, type EvidenceClass } from './contentTrust.ts';
 
 export const SITE_AUDIT_VERSION = 1;
@@ -615,7 +616,20 @@ export function classifyFetchError(input: { message?: string | null; status?: nu
  *  row honestly supports. Null when there is nothing to show (no row, or the site was not reachable —
  *  the caller shows the failure instead). Pure. */
 export function auditFromStoredCrawl(row: StoredCrawlForAudit | null | undefined): SiteAudit | null {
-  return withContentTrust(auditFromStoredCrawlBase(row), row);
+  const a = withContentTrust(auditFromStoredCrawlBase(row), row);
+  return a ? mergeVisibilityChecks(a, usableVisibilityChecks((row?.result as { visibility?: unknown } | null | undefined)?.visibility)) : a;
+}
+
+/** An audit with the AI-visibility page checks added (visibilityChecks.ts): one copy each, and the older, vaguer finding
+ *  of the same thing dropped (VISIBILITY_SUPERSEDES). A deep crawl stores them merged; reading it again changes nothing. */
+export function mergeVisibilityChecks(audit: SiteAudit, v: VisibilityChecks | null): SiteAudit {
+  if (!v || !v.findings.length) return audit;
+  const have = new Set(audit.findings.map((f) => f.id));
+  const extra = v.findings.filter((f) => !have.has(f.id));
+  if (!extra.length) return audit;
+  const drop = new Set(extra.flatMap((f) => VISIBILITY_SUPERSEDES[f.id] ?? []));
+  const findings = [...audit.findings.filter((f) => !drop.has(f.id)), ...extra].sort((a, b) => SEVERITY_RANK[a.severity] - SEVERITY_RANK[b.severity] || b.count - a.count);
+  return { ...audit, findings, notChecked: [...new Set([...audit.notChecked, ...v.notChecked])] };
 }
 
 /** A content & trust issue as an audit finding, with its evidence class and what the business would supply. */

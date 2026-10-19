@@ -204,7 +204,7 @@ const V2 = initialHookStateV2(Q);
   ok(!/Selected outreach search|Other Google AI misses|Other ChatGPT misses|Named searches/.test(te), 'H: the old grouped headings are gone');
   ok(/Gemini<\/span> <span class="font-bold text-red-700/.test(collapsed), 'H: the collapsed best-miss line says NOT NAMED in red too');
   const card2 = [collapsed, expanded].join('');
-  ok(!/Google AI(?! Overview)/.test(text(card2)), 'H: the card never says "Google AI" for Gemini');
+  ok(!/Google AI \d+\/3\b|asked Google AI|Google AI (?:missed|didn['’]t|did not|named you)/.test(text(card2)), 'H: the card never says "Google AI" for Gemini');
 }
 
 /* ── Report fixtures ───────────────────────────────────────────────────────────────────────── */
@@ -237,7 +237,7 @@ function report(grid: Array<[G, G]>, extra: Record<string, unknown> = {}) {
   ok(gpt.includes('Commercial Power Ltd') && !gai.includes('Commercial Power Ltd'), 'J: never another engine’s competitors inside a reply');
   ok(/If you are looking for reliable commercial electricians/.test(t), 'J: a short real snippet of the answer is quoted');
   ok(!/<mark/.test(html), 'J: no highlighter marks');
-  ok(!/Google AI(?! Overview)/.test(t.replace(/<style[\s\S]*?<\/style>/g, '')), 'the quick report never says "Google AI" for Gemini');
+  ok(!/Google AI \d+\/3\b|asked Google AI|Google AI (?:missed|didn['’]t|did not|named you)/.test(t.replace(/<style[\s\S]*?<\/style>/g, '')), 'the quick report never says "Google AI" for Gemini');
   ok(!/Where you show up, and where you don/.test(t) && !/Why you&rsquo;re not in the answer/.test(html), 'the long "the fix" section is dropped from the quick report');
 }
 
@@ -272,7 +272,7 @@ function report(grid: Array<[G, G]>, extra: Record<string, unknown> = {}) {
   ok(/This check didn’t finish/.test(o.t) && !/%/.test(o.t.replace(/100%/g, '')), 'O: the public page shows the incomplete notice and no percentage');
   ok(!/of AI answers named/.test(o.t) && !/out of \d+ answers?/.test(o.t), 'O: never the ordinary count hero');
   ok(!/If that number has not gone up/.test(o.t), 'O: no refund line about a number that is not shown');
-  ok(!/Google AI(?! Overview)/.test(o.t) && /Gemini/.test(o.t), 'O: the incomplete page says Gemini, not Google AI');
+  ok(!/Google AI \d+\/3\b|asked Google AI|Google AI (?:missed|didn['’]t|did not|named you)/.test(o.t) && /Gemini/.test(o.t), 'O: the incomplete page says Gemini, not Google AI');
   const cur = audit('a-inc-00011', '2026-09-26T10:00:00Z', 'complete', V2);
   const { card, report: st, view } = inbox([cur], grid);
   ok(!card.score.complete && card.score.percent === null && card.score.hook === null, 'O: the card has no percentage and no hook');

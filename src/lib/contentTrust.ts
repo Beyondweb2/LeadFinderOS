@@ -666,9 +666,13 @@ export function buildContentTrust(input: ContentTrustInput): ContentTrust {
     if (/^\/(?:our-)?(?:services?|what-we-do|areas?|areas-we-cover|locations?)$/i.test(pathOf(p.url))) continue;
     const h = p.h1[0];
     const w = words(h).filter((x) => !bizWords.has(x) && !['welcome', 'to', 'hello', 'hi'].includes(x));
-    const hasPlace = w.some((x) => placeWords.has(x));
+    /* ⛔ A PLACE OR A SERVICE IN THE HEADING COUNTS EVEN WHEN THE BUSINESS NAME HOLDS THE SAME WORD (2026-10-19): a lead
+       named "Driving Lessons Canterbury" had "Driving Lessons in Canterbury" called vague, because the name's words were
+       taken out first. The name filter only decides whether ANYTHING ELSE is said ("specific"). */
+    const all = words(h);
+    const hasPlace = all.some((x) => placeWords.has(x));
     const specific = w.filter((x) => !GENERIC_TRADE.has(x));
-    const names = SERVICE_WORDS.test(w.join(' ')) || w.some((x) => serviceSlugWords.has(x) && !GENERIC_TRADE.has(x)) || (!!trade && w.some((x) => trade.includes(x.slice(0, 5))));
+    const names = SERVICE_WORDS.test(all.join(' ')) || all.some((x) => serviceSlugWords.has(x) && !GENERIC_TRADE.has(x)) || (!!trade && all.some((x) => trade.includes(x.slice(0, 5))));
     const isVague = p.family === 'homepage' ? (!names && !hasPlace) : (!specific.length && !hasPlace);
     if (isVague) vagueH1.push({ h, url: p.url, home: p.family === 'homepage' });
   }

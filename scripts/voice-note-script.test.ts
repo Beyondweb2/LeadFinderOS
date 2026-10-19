@@ -319,7 +319,7 @@ for (const [name, src] of [['voice-note-script function', FN], ['VoiceNoteScript
 const latestFn = FN.match(/async function handleLatest[\s\S]*?\n}\n/)?.[0] ?? '';
 ok(latestFn.includes('loadHookEvidence(service, lead)') && latestFn.includes('voiceNoteBasisIsCurrent(') && !/callModel\(|runSiteResearch\(/.test(latestFn), 'latest compares the saved basis with the current pick, with no fetch and no model call');
 ok(/selectVoiceNoteEvidence\(score\.results, \{ business, town: area, trade \}, score\.hook\)/.test(FN), 'the function hands the card\'s pick to the selection');
-ok(/Voice note out of date/.test(UI) && /Regenerate using latest audit/.test(UI) && /data-testid="voice-note-out-of-date"/.test(UI), 'the panel says VOICE NOTE OUT OF DATE with a regenerate-using-latest button');
+ok(/voiceNoteFromCall\(p\)/.test(UI) && !/Regenerate/.test(UI) && !/invokeEdge/.test(UI), 'the panel builds the note from the call script playbook (2026-10-19): nothing to regenerate, no edge call');
 ok(!/useEffect\([^)]*generate/.test(UI), 'nothing regenerates on its own');
 ok(!/onSend|doSend|onDraft|setDraft/.test(UI), 'the button has no send or composer callback — Copy and Regenerate only');
 const gen = FN.match(/async function handleGenerate[\s\S]*?\n}\n/)?.[0] ?? '';

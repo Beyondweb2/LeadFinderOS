@@ -137,6 +137,10 @@ const sites = new Map<string, (p: string) => Resp | null>();
   return resp;
 };
 const words = (n: number) => 'useful local plumbing detail '.repeat(Math.ceil(n / 4));
+/** The business address, said on the main pages (the 2026-10-19 address check reads every key page). */
+const ADDR = '1 High Street, Bath BA1 1AA.';
+/** A page's own words, ~420 of them: one sentence of its own, repeated (pages with the SAME text are now a finding). */
+const own = (sentence: string) => Array(Math.ceil(420 / sentence.split(' ').length)).fill(sentence).join(' ');
 const html = (o: { title?: string; desc?: string | null; h1?: string | null; body?: string; head?: string; links?: string[]; canonical?: string; viewport?: boolean }) =>
   `<html><head>${o.title !== undefined ? `<title>${o.title}</title>` : ''}${o.desc === null ? '' : `<meta name="description" content="${o.desc ?? (o.title ?? '') + ' desc'}">`}${o.viewport === false ? '' : '<meta name="viewport" content="width=device-width">'}${o.canonical ? `<link rel="canonical" href="${o.canonical}">` : ''}${o.head ?? ''}</head>`
   + `<body><nav>${(o.links ?? []).map((l) => `<a href="${l}">${l}</a>`).join('')}</nav>${o.h1 === null ? '' : `<h1>${o.h1 ?? o.title ?? 'Page'}</h1>`}<p>${o.body ?? words(200)}</p></body></html>`;
@@ -297,9 +301,9 @@ console.log('\n── 22. a specific finding, with its evidence, reaches the scr
   const O = 'https://crammed.example';
   const nav: Array<[string, string]> = [['Home', '/'], ['Services', '/services'], ['About', '/about'], ['Contact', '/contact']];
   const pages: Record<string, string> = {
-    '/': rich({ title: 'Bath Plumbing Co | Plumber in Bath', h1: 'Bath Plumbing Co — plumbers in Bath', nav, links: ['/services'], body: 'Call 01225 123456. Gas Safe registered. ' + words(300) + ' "Highly recommended" — Jane' }),
-    '/services': rich({ title: 'Our Services', h2: ['Boiler Repair', 'Leak Repair', 'Bathroom Fitting'], nav }),
-    '/about': rich({ title: 'About Bath Plumbing Co', nav, body: 'Run by owner Sam since 2009. ' + words(300) }),
+    '/': rich({ title: 'Bath Plumbing Co | Plumber in Bath', h1: 'Bath Plumbing Co — plumbers in Bath', nav, links: ['/services'], body: 'Call 01225 123456. Gas Safe registered. ' + words(300) + ' "Highly recommended" — Jane. ' + ADDR }),
+    '/services': rich({ title: 'Our Services', h2: ['Boiler Repair', 'Leak Repair', 'Bathroom Fitting'], nav, body: words(420) + ' ' + ADDR }),
+    '/about': rich({ title: 'About Bath Plumbing Co', nav, body: 'Run by owner Sam since 2009. ' + words(300) + ' ' + ADDR }),
     '/contact': rich({ title: 'Contact Bath Plumbing Co', nav, body: 'Call 01225 123456 BA1 1AA' }),
   };
   siteOf(O, 'crammed.example', pages);
@@ -326,10 +330,11 @@ console.log('\n── 23. a strong site is a result, not a gap ──');
   const O = 'https://strong.example';
   const nav: Array<[string, string]> = [['Home', '/'], ['Boiler Repair', '/boiler-repair'], ['Leak Repair', '/leak-repair'], ['Bathroom Fitting', '/bathroom-fitting'], ['About', '/about'], ['Contact', '/contact']];
   const pages: Record<string, string> = {
-    '/': rich({ title: 'Bath Plumbing Co | Plumber in Bath', h1: 'Bath Plumbing Co — plumbers in Bath', nav, links: ['/boiler-repair', '/leak-repair', '/bathroom-fitting'], body: 'Call 01225 123456. Gas Safe registered. ' + words(400) + ' "Highly recommended" — Jane' }),
-    '/boiler-repair': rich({ title: 'Boiler Repair in Bath', nav, body: words(420) }), '/leak-repair': rich({ title: 'Leak Repair in Bath', nav, body: words(420) }),
-    '/bathroom-fitting': rich({ title: 'Bathroom Fitting in Bath', nav, body: words(420) }),
-    '/about': rich({ title: 'About Bath Plumbing Co', nav, body: 'Run by owner Sam since 2009. ' + words(300) }), '/contact': rich({ title: 'Contact Bath Plumbing Co', nav, body: 'Call 01225 123456 BA1 1AA' }),
+    '/': rich({ title: 'Bath Plumbing Co | Plumber in Bath', h1: 'Bath Plumbing Co — plumbers in Bath', nav, links: ['/boiler-repair', '/leak-repair', '/bathroom-fitting'], body: 'Call 01225 123456. Gas Safe registered. ' + words(400) + ' "Highly recommended" — Jane. ' + ADDR }),
+    '/boiler-repair': rich({ title: 'Boiler Repair in Bath', nav, body: own('We repair combi and system boilers, replace diverter valves and fix pressure loss on most makes.') + ' ' + ADDR }),
+    '/leak-repair': rich({ title: 'Leak Repair in Bath', nav, body: own('Hidden pipe leaks are traced with thermal cameras, then the joint is cut out and soldered cleanly.') + ' ' + ADDR }),
+    '/bathroom-fitting': rich({ title: 'Bathroom Fitting in Bath', nav, body: own('Full bathrooms are stripped, re-plumbed, tiled and finished with new suites and showers in under two weeks.') + ' ' + ADDR }),
+    '/about': rich({ title: 'About Bath Plumbing Co', nav, body: 'Run by owner Sam since 2009. ' + words(300) + ' ' + ADDR }), '/contact': rich({ title: 'Contact Bath Plumbing Co', nav, body: 'Call 01225 123456 BA1 1AA' }),
   };
   siteOf(O, 'strong.example', pages);
   const { leadRow } = await crawl('lead-strong', O, pages['/'], PROSPECT_CRAWL_PAGE_CAP);
@@ -350,9 +355,9 @@ console.log('\n── 23. a strong site is a result, not a gap ──');
   const O = 'https://fewpages.example';
   const nav: Array<[string, string]> = [['Home', '/'], ['Boiler Repair', '/boiler-repair'], ['About', '/about'], ['Contact', '/contact']];
   const pages: Record<string, string> = {
-    '/': rich({ title: 'Bath Plumbing Co | Plumber in Bath', h1: 'Bath Plumbing Co — plumbers in Bath', nav, links: ['/boiler-repair'], body: 'Call 01225 123456. Gas Safe registered. ' + words(400) + ' "Highly recommended" — Jane' }),
-    '/boiler-repair': rich({ title: 'Boiler Repair in Bath', nav, body: words(420) }),
-    '/about': rich({ title: 'About Bath Plumbing Co', nav, body: 'Run by owner Sam since 2009. ' + words(300) }), '/contact': rich({ title: 'Contact Bath Plumbing Co', nav, body: 'Call 01225 123456 BA1 1AA' }),
+    '/': rich({ title: 'Bath Plumbing Co | Plumber in Bath', h1: 'Bath Plumbing Co — plumbers in Bath', nav, links: ['/boiler-repair'], body: 'Call 01225 123456. Gas Safe registered. ' + words(400) + ' "Highly recommended" — Jane. ' + ADDR }),
+    '/boiler-repair': rich({ title: 'Boiler Repair in Bath', nav, body: words(420) + ' ' + ADDR }),
+    '/about': rich({ title: 'About Bath Plumbing Co', nav, body: 'Run by owner Sam since 2009. ' + words(300) + ' ' + ADDR }), '/contact': rich({ title: 'Contact Bath Plumbing Co', nav, body: 'Call 01225 123456 BA1 1AA' }),
   };
   siteOf(O, 'fewpages.example', pages);
   const { leadRow } = await crawl('lead-few', O, pages['/'], PROSPECT_CRAWL_PAGE_CAP);

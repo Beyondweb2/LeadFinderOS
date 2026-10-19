@@ -312,7 +312,8 @@ console.log('── 12. SIMPLIFIED PLAYBOOK (Paul, 2026-09-27) ──');
     'it names the first three competitors from THAT result, no more');
   ok(/Hi mate, I was looking for a locksmith in Tunbridge Wells, so I asked Gemini and it mentioned/.test(script), 'it names the engine that was actually asked (Gemini is said as Gemini), and the search plainly');
   /* 2026-10-15 (Paul): the website issues are a LIST — one short line each, the strongest first — never a sentence. */
-  ok(/I had a look into why they were being named and you weren't\./.test(script) && !/a few potential reasons/.test(script)
+  /* 2026-10-19 (Paul): "I looked into why this could be happening and I found an issue / multiple issues with your site…". */
+  ok(/I looked into why this could be happening and I found (?:an issue|multiple issues) with your site that could be preventing you from being recommended\./.test(script) && !/a few potential reasons/.test(script)
     && p.script.found.lines[0] === 'The list of your pages that Google reads points at a different website'
     && !/that's why/i.test(script), 'it carries the real issues (strongest first) as short lines, never "that\'s why"');
   ok(p.script.found.lines.length <= 5, 'never more than CALL_SCRIPT_ISSUE_LINES issue lines shown; the rest on a tap');
@@ -328,8 +329,8 @@ console.log('── 12. SIMPLIFIED PLAYBOOK (Paul, 2026-09-27) ──');
     'the questions: FIRST_QUESTION always first, then the discovery questions');
   {
     const clean = buildColdCallPlaybook(base({ leadCrawl: crawl({ ...CLEAN, missingH1: false }) }));
-    ok(clean.script.found.lines.length === 0 && /say nothing about the site/.test(clean.script.found.note ?? '') && /do not invent one/.test(clean.script.found.note ?? '') && (clean.script.found.checklist?.length ?? 0) >= 6,
-      'completed, no serious site issue → NOTHING said about the site (2026-10-17) + the short list of what we make sure it has (for the rep), no invented fault');
+    ok(clean.script.found.lines.length === 0 && /say nothing about the site/.test(clean.script.found.note ?? '') && /do not invent one/.test(clean.script.found.note ?? '') && clean.script.found.checklist === null && clean.script.opener.length === 1,
+      'completed, no serious site issue → NOTHING said about the site, no "why" line, no checklist (Paul, 2026-10-19), no invented fault');
     void NO_STRONG_ISSUE_LINE;
   }
   ok((script.match(/but not you/g) ?? []).length === 1, 'the AI miss is said once, not repeated as a separate explanation');
@@ -378,7 +379,12 @@ console.log('── 12. SIMPLIFIED PLAYBOOK (Paul, 2026-09-27) ──');
   // removed 2026-10-06 (sales-team-today, Paul): the LinkedIn and Email tabs — only Call script and Voice note remain.
   ok(/const tabs: Array<\[ScriptTab, string\]> = \[\['call', 'Call script'\], \['voice', 'Voice note'\]\];/.test(ui) && /type ScriptTab = 'call' \| 'voice';/.test(ui) && !/'linkedin'|'email'/.test(ui),
     'the script tabs are exactly Call script and Voice note (no LinkedIn, no Email)');
-  ok(/\{tab === 'voice' && <VoiceNoteScriptBody leadId=\{leadId\} currentAuditId=\{p\.auditId\} \/>\}/.test(ui) && /data-testid="voice-note-out-of-date"/.test(readFileSync(new URL('../src/components/VoiceNoteScriptButton.tsx', import.meta.url), 'utf8')), 'the voice-note script sits in the Voice note tab (loaded only when that tab is opened)');
+  /* 2026-10-19 (Paul): the voice note is BUILT from the same playbook (voiceNoteFromCall.ts) — no generating, no edge call. */
+  {
+    const vn = readFileSync(new URL('../src/components/VoiceNoteScriptButton.tsx', import.meta.url), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
+    ok(/\{tab === 'voice' && <VoiceNoteScriptBody leadId=\{leadId\} playbook=\{p\} \/>\}/.test(ui) && /voiceNoteFromCall\(p\)/.test(vn) && !/invokeEdge|voice-note-script'|functions\.invoke/.test(vn),
+      'the Voice note tab shows the note built from the call script\'s playbook (no model call, no edge function)');
+  }
   /* The AI result is no longer inside the playbook body: it is the ONE summary above it (LeadHookPanel 'call' →
      HookVisibilityView), which still reads the Inbox card's scored results and labels an older check. */
   ok(!/useHookVisibility\(leadId\)/.test(ui), 'the inline playbook carries no second copy of the AI result');

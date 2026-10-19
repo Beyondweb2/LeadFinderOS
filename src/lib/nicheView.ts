@@ -129,7 +129,7 @@ export interface NicheAnalysis {
 }
 
 export const ENGINE_LABELS_NICHE: Record<string, string> = {
-  chatgpt: 'ChatGPT', gemini: 'Gemini', ai_overview: 'Google AI Overview', google_organic: 'Google organic',
+  chatgpt: 'ChatGPT', gemini: 'Gemini', ai_overview: 'Google AI', google_organic: 'Google organic',
 };
 
 /** "109 of 476 (22.9%)" — the honest rate line; never a bare percentage without its n. */

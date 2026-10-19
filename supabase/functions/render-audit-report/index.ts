@@ -185,7 +185,7 @@ Deno.serve(async (req) => {
       // for everything a prospect sees before paying (seoStyleForAudit).
       // audit_purpose decides the one purpose refused below (the weekly check). Measurement audits ARE
       // served as client reports since 15634d49 (Paul, 2026-09-18).
-      .select("id, short_code, business_name, business_type, location_text, specialism, website, has_website, is_market, lead_id, baseline_target_runs, is_measurement, audit_purpose")
+      .select("id, short_code, business_name, business_type, location_text, specialism, website, has_website, is_market, lead_id, baseline_target_runs, is_measurement, audit_purpose, created_at")
       .eq("id", auditId).maybeSingle();
     if (!audit) return unavailable("Audit not found.");
     // Every non-market audit is rendered as the same client-facing report, whether it contains a
@@ -281,6 +281,8 @@ Deno.serve(async (req) => {
       isAggregatorUrl,
       ownWebsite,
       hasWebsite,
+      /* The audit's own date decides its scoring method (Google AI in the score from 2026-10-19; older audits unchanged). */
+      auditCreatedAt: (audit as { created_at?: string | null }).created_at ?? null,
       /* Graded only for a paid baseline; every prospect-facing report gets the plain issues list. */
       seoStyle: seoStyleForAudit(
         (audit as { baseline_target_runs?: unknown }).baseline_target_runs,

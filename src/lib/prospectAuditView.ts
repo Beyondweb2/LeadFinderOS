@@ -96,13 +96,13 @@ export function callPoint(input: { score: HookScore | null; rivalsWithheld?: boo
   let ai: CallPoint['ai'] = null;
   if (s && s.complete) {
     /* Google AI Overview beside the engines (2026-10-19): an evidence line, display only, never the headline. */
-    const aio = overviewEvidenceLine(overviewTally(s.overviews));
+    const aio = overviewEvidenceLine(overviewTally(s.overviews), s.scored.googleAi.inScore);
     if (s.allNamed) ai = { headline: `Strong AI visibility — named in all ${s.expected} answers.`, evidence: [...s.perEngine.map((t) => `${t.label}: named ${t.named} of ${t.expected}`), aio] };
     else if (s.hook) {
       const rivals = !input.rivalsWithheld && s.hook.competitors.length ? `It named ${s.hook.competitors.slice(0, 3).join(', ')} instead.` : '';
       ai = {
         headline: `${s.hook.label} did not name them when asked “${s.hook.question}”.`,
-        evidence: [`Named in ${s.named} of ${s.expected} AI answers overall.`, ...(rivals ? [rivals] : []), aio],
+        evidence: [`Named in ${s.scored.named} of ${s.scored.expected} AI answers overall.`, ...(rivals ? [rivals] : []), aio],
       };
     } else ai = { headline: `Named in ${s.named} of ${s.expected} AI answers.`, evidence: [...s.perEngine.map((t) => `${t.label}: named ${t.named} of ${t.expected}`), aio] };
   }

@@ -1238,6 +1238,15 @@ positive allowlist of `baseline`; `isColdOutreachTemplate` treats unknown as COL
 - **google-place-details has no in-memory rate limit** — the ONE limit is `guardAction('place_details')` (protection_settings). Do not put a fixed per-minute counter back in front of it: it was the 65 s wall on a 40-lead add.
 - ⛔ **"When is payment 12" is `src/lib/finalPaymentDates.ts`** — the v5 9A.5 reminder (fn `month12-reminder`, once per client, `month12_reminder_settings.enabled` is the kill switch) and the future ownership handover both read it. Sent only when the SIGNED text contains the 9A.5 sentence.
 
+### 6j2. The call screen's website crawl, the page checks, the voice note, Google AI scored (2026-10-19 — record: `docs/website-check.md`, last section)
+
+- ⛔ **A crawl starts at the site's homepage** (`crawlStartUrl`), never the deep page a lead's website points at. ⛔ The call screen starts a
+  check only when it is MISSING (`callScreenCrawl.ts`); a stored check is re-run only by a person's Run again.
+- ⛔ **The page checks are `visibilityChecks.ts`, run by BOTH crawls** — evidence quoted from the page; schema findings stay LOW.
+- ⛔ **The voice note is `voiceNoteFromCall(playbook)`** — no model call; it can never disagree with the call script.
+- ⛔ **Google AI scoring is DERIVED from the audit date** (`scoringMethodFor`) and lives in `HookScore.scored` only. Send gates, the hook pick,
+  6/6, full reports and the guarantee comparison read method 1. Never rewrite a stored score.
+
 ### 6k. One Inbox for two channels; SMS status; the reply setting (2026-10-10 — record: `docs/twilio-comms.md`)
 
 - ⛔ **WhatsApp and SMS are ONE component** (`ConversationInbox({ channel })` in `src/pages/Inbox.tsx`) with a thin channel adapter (`useInbox(channel)`,

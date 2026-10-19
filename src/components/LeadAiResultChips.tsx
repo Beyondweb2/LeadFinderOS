@@ -25,7 +25,7 @@ export function LeadAiResultChips({ leadId, className }: { leadId: string | null
           </span>
         );
       })}
-      <AiOverviewChip tally={overviewTally(score.overviews)} showNotScored testId="lead-ai-overview-chip" />
+      <AiOverviewChip tally={overviewTally(score.overviews)} showNotScored inScore={score.scored.googleAi.inScore} testId="lead-ai-overview-chip" />
     </div>
   );
 }
