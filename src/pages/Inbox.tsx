@@ -87,9 +87,10 @@ import { conversationState, messageErrorParts, INBOX_QUICK_FILTERS, londonToday,
 import { ConvStateChip } from '@/components/ConvStateChip';
 import { SendErrorNote } from '@/components/SendErrorNote';
 import { AiRepliesToggle } from '@/components/AiRepliesToggle';
-import { AiDraftChip, AiDraftPanel } from '@/components/AiDraftPanel';
+import { AiDraftButton, AiDraftChip, AiDraftPanel, InboundLabelChip } from '@/components/AiDraftPanel';
 import { useAiReplyDrafts } from '@/hooks/useAiReplyDrafts';
-import { aiChipFor, needsApproving, type AiReplyRow } from '@/lib/aiReplyDraft';
+import { aiChipFor, needsApproving, needsYou, rowSendable, type AiReplyRow } from '@/lib/aiReplyDraft';
+import { inboundLabel } from '@/lib/replyMove';
 import { sameRowProps } from '@/lib/inboxRowMemo';
 import { invokeEdge, edgeErrorMessage } from '@/lib/edgeInvoke';
 import { NEXT_ACTION_KIND_OPTIONS, NEXT_ACTION_WHEN_OPTIONS, nextActionSortKey, passesNextActionFilter, type NextActionKind, type NextActionWhen } from '@/lib/nextActionView';
@@ -361,11 +362,16 @@ const ConversationRow = memo(function ConversationRow({
           {!c.unassigned && c.isPotentialWork && <Star className="h-3.5 w-3.5 shrink-0 fill-amber-400 text-amber-500"><title>Interested</title></Star>}
         </span>
         <span className="flex shrink-0 items-center gap-1">
+          {c.lastMessage?.direction === 'inbound' && !aiChipFor(aiRow) && <InboundLabelChip label={inboundLabel(c.lastMessage.body, c.lastMessage.message_type)} />}
           <AiDraftChip row={aiRow} compact />
           {(!aiChipFor(aiRow) || st?.failed) && <ConvStateChip state={st} compact channel={channel} />}
           {c.lastMessage && <span className={cn('text-[10px]', st?.unread ? 'font-semibold text-blue-600 dark:text-blue-400' : 'text-muted-foreground')}>{relTime(c.lastMessageAt)}</span>}
         </span>
       </div>
+      {/* Needs you: the reason, in words, on the row itself (Paul, 2026-10-20). */}
+      {aiRow?.kind === 'needs_you' && aiChipFor(aiRow)?.label === 'Needs you' && aiRow.reason_label && (
+        <span className="truncate text-[11px] font-medium text-red-700 dark:text-red-300" data-testid="needs-you-reason">{aiRow.reason_label}</span>
+      )}
       {c.lastMessage && (
         <span className="truncate text-xs text-muted-foreground">
           {c.lastMessage.direction === 'outbound' ? 'You: ' : ''}
@@ -738,10 +744,10 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [list, messagesForKey, reads, readsLoaded, leadByIdForState, clockTick, sms, smsUnreadByPhone]);
   const quickCounts = useMemo(() => {
-    let unread = 0; let waiting = 0; let approving = 0;
+    let unread = 0; let waiting = 0; let approving = 0; let mine = 0;
     for (const st of stateByKey.values()) { if (st.unread) unread++; if (st.waitingSinceMs !== null) waiting++; }
-    for (const c of list) if (needsApproving(ai.forPhone(c.phone))) approving++;
-    return { unread, waiting, approving };
+    for (const c of list) { const r = ai.forPhone(c.phone); if (needsApproving(r)) approving++; if (needsYou(r)) mine++; }
+    return { unread, waiting, approving, needsYou: mine };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [stateByKey, list, ai.rows]);
 
@@ -752,7 +758,7 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
     const today = londonToday();
     const byNa = naWhen === 'all' && naKind === 'all' ? searched
       : searched.filter((c) => passesNextActionFilter(c.leadId ? leadByIdForState.get(c.leadId) : null, naWhen, naKind, today));
-    const kept = quickFilter === 'all' ? [...byNa] : byNa.filter((c) => { const st = stateByKey.get(c.key); return !!st && passesQuickFilter(quickFilter, { ...st, needsApproving: needsApproving(ai.forPhone(c.phone)) }); });
+    const kept = quickFilter === 'all' ? [...byNa] : byNa.filter((c) => { const st = stateByKey.get(c.key); return !!st && passesQuickFilter(quickFilter, { ...st, needsApproving: needsApproving(ai.forPhone(c.phone)), needsYou: needsYou(ai.forPhone(c.phone)) }); });
     if (listSort === 'next_action') {
       kept.sort((a, b) => nextActionSortKey(a.leadId ? leadByIdForState.get(a.leadId) : null).localeCompare(nextActionSortKey(b.leadId ? leadByIdForState.get(b.leadId) : null)));
     } else if (listSort === 'recent_reply') {
@@ -761,6 +767,8 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
       /* Waiting on us: the longest wait first — the reply that has waited most is the next one to answer. */
       kept.sort((a, b) => (stateByKey.get(a.key)?.waitingSinceMs ?? 0) - (stateByKey.get(b.key)?.waitingSinceMs ?? 0));
     }
+    /* ⛔ NEEDS YOU SORTS TO THE TOP (Paul, 2026-10-20), whatever the sort: a stable partition, the chosen order kept inside each part. */
+    if (aiOn) { const top = kept.filter((c) => needsYou(ai.forPhone(c.phone))); if (top.length) { const rest = kept.filter((c) => !needsYou(ai.forPhone(c.phone))); return [...top, ...rest]; } }
     return kept;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [list, searchTerm, quickFilter, stateByKey, naWhen, naKind, listSort, leadByIdForState, ai.rows]);
@@ -969,9 +977,10 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
      server-side) → the Inbox's own send (useInbox.send → send-whatsapp-message, unchanged) → complete (records who,
      when and the text actually sent). Discard and Dismiss send nothing. */
   const activeAi = active ? ai.forPhone(active.phone) : null;
-  const [aiBusy, setAiBusy] = useState<'approve' | 'regenerate' | 'discard' | null>(null);
+  const [aiBusy, setAiBusy] = useState<'approve' | 'regenerate' | 'discard' | 'optout' | null>(null);
+  const [aiDrafting, setAiDrafting] = useState(false);
   const aiInsertedRef = useRef<Map<string, string>>(new Map());
-  const activeAiDraft = activeAi && activeAi.kind === 'draft' && activeAi.status === 'pending' && win.open ? (activeAi.draft_text ?? '') : '';
+  const activeAiDraft = activeAi && rowSendable(activeAi) && win.open ? (activeAi.draft_text ?? '') : '';
   useEffect(() => {
     if (!active || !activeAiDraft || !activeAi) return;
     const version = activeAi.id + ':' + (activeAi.regenerations ?? 0);
@@ -1034,6 +1043,35 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
       await invokeEdge('ai-reply-drafts', { action: 'regenerate', draft_id: activeAi.id });
     } catch (e) {
       toast({ title: "Couldn't write another version", description: edgeErrorMessage(e), variant: 'destructive' });
+    } finally {
+      setAiBusy(null);
+      void ai.refetch();
+    }
+  };
+  /* "Draft reply": always a draft, except a stop (then the panel offers Mark opted out). Never sends. */
+  const draftAiReply = async () => {
+    if (!active?.leadId || aiDrafting) return;
+    setAiDrafting(true);
+    try {
+      const res = await invokeEdge<{ ok: boolean; stop?: boolean; detail?: string; error?: string }>('ai-reply-drafts', { action: 'draft', lead_id: active.leadId, phone: active.phone });
+      if (res && res.ok === false) toast({ title: "Couldn't draft a reply", description: res.detail ?? res.error ?? 'Try again.', variant: 'destructive' });
+      else if (res?.stop) toast({ title: 'No draft: they asked to stop', description: 'Use Mark opted out if it is not already done.' });
+      aiInsertedRef.current.delete(active.key);
+    } catch (e) {
+      toast({ title: "Couldn't draft a reply", description: edgeErrorMessage(e), variant: 'destructive' });
+    } finally {
+      setAiDrafting(false);
+      void ai.refetch();
+    }
+  };
+  const markAiOptedOut = async () => {
+    if (!active?.leadId || !activeAi || aiBusy) return;
+    setAiBusy('optout');
+    try {
+      await invokeEdge('ai-reply-drafts', { action: 'mark_opted_out', lead_id: active.leadId, phone: active.phone, draft_id: activeAi.id });
+      toast({ title: 'Marked opted out', description: 'Queued follow-ups were cancelled. Nothing was sent.' });
+    } catch (e) {
+      toast({ title: "Couldn't mark opted out", description: edgeErrorMessage(e), variant: 'destructive' });
     } finally {
       setAiBusy(null);
       void ai.refetch();
@@ -1980,12 +2018,12 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
           {/* Four views in a 2 × 2 grid: the 300px column cannot hold all four on one line, and a free wrap
               left "Waiting on them" alone on a second row (2026-10-01). */}
           <div className="mb-1.5 grid grid-cols-2 gap-1 px-0.5" role="tablist" aria-label="Show conversations">
-            {INBOX_QUICK_FILTERS.filter((f) => f.value !== 'needs_approving' || aiOn).map((f) => {
-              const n = f.value === 'unread' ? quickCounts.unread : f.value === 'waiting' ? quickCounts.waiting : f.value === 'needs_approving' ? quickCounts.approving : null;
+            {INBOX_QUICK_FILTERS.filter((f) => (f.value !== 'needs_approving' && f.value !== 'needs_you') || aiOn).map((f) => {
+              const n = f.value === 'unread' ? quickCounts.unread : f.value === 'waiting' ? quickCounts.waiting : f.value === 'needs_approving' ? quickCounts.approving : f.value === 'needs_you' ? quickCounts.needsYou : null;
               const on = quickFilter === f.value;
               return (
                 <button key={f.value} type="button" role="tab" aria-selected={on} onClick={() => setQuickFilter(f.value)}
-                  className={cn('flex h-8 items-center justify-center gap-1 whitespace-nowrap rounded-md px-1.5 text-xs font-medium transition-colors', f.value === 'needs_approving' && 'col-span-2',
+                  className={cn('flex h-8 items-center justify-center gap-1 whitespace-nowrap rounded-md px-1.5 text-xs font-medium transition-colors', 
                     on ? 'bg-blue-500/15 text-blue-700 ring-1 ring-blue-500/30 dark:text-blue-300' : 'text-muted-foreground hover:bg-muted/60')}>
                   {f.label}{n !== null && n > 0 && <span className={cn('rounded-full px-1.5 text-[10px] font-bold tabular-nums', on ? 'bg-blue-500 text-white' : 'bg-muted text-foreground')}>{n}</span>}
                 </button>
@@ -2488,7 +2526,7 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
                 {activeAi && (
                   <div className="mb-2">
                     <AiDraftPanel row={activeAi} busy={aiBusy} boxDiffers={aiBoxDiffers} onApprove={() => void approveAiDraft()}
-                      onRegenerate={() => void regenerateAiDraft()} onDiscard={() => void discardAiDraft()}
+                      onRegenerate={() => void regenerateAiDraft()} onDiscard={() => void discardAiDraft()} onMarkOptedOut={() => void markAiOptedOut()}
                       onUseDraft={() => { if (active && activeAi.draft_text) insertWarmDraft(active.key, activeAi.draft_text); }} />
                   </div>
                 )}
@@ -2500,7 +2538,12 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
                     <div className="flex flex-wrap items-center gap-1.5">
                     {/* Research & draft reply — only once they have replied and a lead is linked. It
                         writes a DRAFT into the composer below; it never sends (WarmReplyAssistant). */}
-                    {active.leadId && active.lastInboundAt && (
+                    {/* WhatsApp: "Draft reply" is fn ai-reply-drafts (the fact sheet + the move picker, 2026-10-20). The SMS tab keeps
+                        the older helper (ai-replies difference). */}
+                    {aiOn && active.leadId && active.lastInboundAt && (
+                      <AiDraftButton busy={aiDrafting} hasDraft={!!activeAi?.draft_text} onDraft={() => void draftAiReply()} />
+                    )}
+                    {!aiOn && active.leadId && active.lastInboundAt && (
                       <div className="min-w-0">
                       <WarmReplyAssistant
                         key={active.key}

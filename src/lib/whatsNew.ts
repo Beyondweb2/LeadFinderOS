@@ -22,6 +22,24 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-19-needs-you-fact-sheet', date: '2026-10-19', title: 'WhatsApp: "Needs you" flags, a better Draft reply, and stops handled at once', audience: 'all',
+    body: 'Replies that need a person are flagged "Needs you" with the reason, at the top of the Inbox and on the bell. Draft reply writes a short reply in Paul\'s style from the offer fact sheet and the stored audit. Nothing is ever sent without someone pressing Approve & send.',
+    report: {
+      added: [
+        '"Needs you" flag on WhatsApp conversations, with the reason on the row (for example "Asked something the fact sheet does not answer"). They sort to the top, have their own filter and a count on the bell.',
+        '"Auto-reply" and "Only confirmed" labels: an automatic reply or a bare "yes it is" is no longer counted as Replied (new messages only).',
+        'Mark opted out: one tap on a stop message adds the number to the opt-out list and cancels its queued follow-ups.',
+      ],
+      changed: [
+        'Draft reply (WhatsApp) always writes a draft, except for a stop. It is 1 to 3 short lines, one question, offers a voice note first and a call after, and never sends a link or a price unless they asked.',
+        'Drafts take offer facts only from the fact sheet (the signed agreement v5). Anything not on it is flagged Needs you.',
+        'Warnings, not blocks: a draft is checked for a wrong competitor, wrong town, a site issue the crawl did not record, an unstated owner name, price or guarantee wording that is not the sheet\'s, ranking promises and more than one question.',
+        'A stop or an angry reply now opts the number out and cancels queued follow-ups straight away.',
+        '"AI named others instead" messages only go to businesses AI named in a third of the answers or fewer.',
+      ],
+      removed: ['The draft no longer asks every prospect whether they use an agency, and never offers "a new site, keep your web address" before domain control is known.'],
+      effect: 'You see at a glance which replies need you and why, and the suggested replies sound like you and stick to the contract. "AI handles replies" is still off, so nothing is drafted or sent on its own.',
+    } },
   { id: '2026-10-19-hide-outside-town', date: '2026-10-19', title: 'Find Leads: the orange Outside town label is gone', audience: 'all',
     body: 'Find Leads results no longer show the orange Outside town label on each row. Nothing else about the search changed.',
     report: {

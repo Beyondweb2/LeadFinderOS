@@ -160,14 +160,17 @@ export const INBOX_QUICK_FILTERS = [
   { value: 'waiting_them', label: 'Waiting on them' },
   /* 2026-10-11: AI handles replies (src/lib/aiReplyDraft.ts) — a WhatsApp conversation with an AI draft waiting for approval. */
   { value: 'needs_approving', label: 'Needs approving' },
+  /* 2026-10-20: a reply the drafter flagged for a person (src/lib/replyMove.ts NEEDS_YOU_LABELS). WhatsApp only. */
+  { value: 'needs_you', label: 'Needs you' },
 ] as const;
 export type InboxQuickFilter = typeof INBOX_QUICK_FILTERS[number]['value'];
 
-export function passesQuickFilter(f: InboxQuickFilter | string | null | undefined, s: Pick<ConversationState, 'unread' | 'waitingSinceMs'> & { waitingOnThem?: boolean; needsApproving?: boolean }): boolean {
+export function passesQuickFilter(f: InboxQuickFilter | string | null | undefined, s: Pick<ConversationState, 'unread' | 'waitingSinceMs'> & { waitingOnThem?: boolean; needsApproving?: boolean; needsYou?: boolean }): boolean {
   if (f === 'unread') return s.unread;
   if (f === 'waiting') return s.waitingSinceMs !== null;
   if (f === 'waiting_them') return s.waitingOnThem === true;
   if (f === 'needs_approving') return s.needsApproving === true;
+  if (f === 'needs_you') return s.needsYou === true;
   return true;
 }
 

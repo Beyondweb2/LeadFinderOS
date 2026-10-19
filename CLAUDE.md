@@ -1232,6 +1232,9 @@ positive allowlist of `baseline`; `isColdOutreachTemplate` treats unknown as COL
 - ⛔ **One row per inbound** (`ai_reply_drafts`, unique `inbound_message_id`), one open row per conversation. Rules: `src/lib/aiReplyDraft.ts`; hand-over phrases come from `replyTriage`. Absent facts are left out, never invented.
 - ⛔ **The warm drafter has no stage gate any more** (Paul, 2026-10-11): Draft reply and Refresh research show in every stage.
 - ⛔ **A failed crawl never overwrites the last good one** (`src/lib/crawlWriteRule.ts`, `lead_crawl_checks.last_failed_attempt`).
+- ⛔ **Code picks the move, the model only phrases it** (2026-10-20, `docs/ai-handles-replies.md` last section): `src/lib/replyMove.ts` `pickMove`. Offer facts come ONLY from `src/lib/offerFactSheet.ts` (versioned, pinned to the live agreement; case studies are drafts until `caseStudyUsable`). Anything not on the sheet, or unsure → "Needs you" with a reason. The checker WARNS, never blocks. Capitals in code (`tidyCaps`), never on an approved template.
+- ⛔ **Needs you flags run whatever the switch says** (rules only, no model call; `reply_flags_since`); the model drafts on its own ONLY while "AI handles replies" is on. A stop / angry reply opts out + cancels queued follow-ups (`applyStop`) at once. An auto-reply / bare "yes it is" is never Replied (new messages only).
+- ⛔ **"AI named others instead" templates go only when named in ≤ a third of valid answers** (`src/lib/namedShareRule.ts`, enforced in `resolveAuditReplyVars`). A new claim template goes in `NAMED_INSTEAD_TEMPLATES` (`scripts/named-share-rule.test.ts` sweeps).
 
 ### 6m. Find Leads adds and the payment-12 reminder (2026-10-17 — records: `docs/find-leads-bulk-add.md`, `docs/month12-reminder.md`)
 

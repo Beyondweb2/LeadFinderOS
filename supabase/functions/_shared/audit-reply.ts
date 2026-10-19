@@ -9,6 +9,7 @@ import { buildReportData, seoStyleForAudit, type QueueRow, type RunRow } from ".
 import { isAggregatorUrl } from "./aggregators.ts";
 import { countAnsweredCells, readCleaningStamp } from "../../../src/lib/competitorCleaning.ts";
 import { usableRivals, excludeSelfRivals, templateEngineConflict } from "../../../src/lib/rivalHook.ts";
+import { NAMED_INSTEAD_TEMPLATES, mayClaimNamedInstead, namedShareRefusal } from "../../../src/lib/namedShareRule.ts";
 import { nameMatches } from "../../../src/lib/nameMatch.ts";
 import { shortReportUrl } from "../../../src/lib/reportSlug.ts";
 import { auditShowsVisibilityGap, resolveSiteFault, type CrawlSignals } from "../../../src/lib/crawlCheck.ts";
@@ -199,6 +200,11 @@ export async function resolveAuditReplyVars(service: any, leadId: string, opts: 
         `in all ${hookScore?.expected ?? HOOK_SCORE_RESULTS} ChatGPT and Google AI results, so there is no absence to message about. ` +
         `No audit-based template can be sent from this check; the report shows the result honestly.`,
     };
+  }
+  /* ⛔ "NAMED OTHERS INSTEAD" ONLY WHEN NAMED IN AT MOST A THIRD (Paul, 2026-10-20, src/lib/namedShareRule.ts): keyed on the
+     template asked for, so the drafters (no templateName) are unchanged. The text is never edited; this decides who gets it. */
+  if (hookScore && hookScore.complete && opts.templateName && NAMED_INSTEAD_TEMPLATES.has(opts.templateName) && !mayClaimNamedInstead(hookScore.named, hookScore.valid)) {
+    return { ok: false, reason: `${HOOK_NO_GAP_REASON}: ${namedShareRefusal(String(audit.business_name ?? "").trim(), hookScore.named, hookScore.valid)}` };
   }
   const visibilityPct = hookScore && hookScore.complete ? hookScore.percent : null;
   const answered = countAnsweredCells((qrows ?? []) as Parameters<typeof countAnsweredCells>[0]);

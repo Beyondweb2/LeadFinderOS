@@ -1,0 +1,3037 @@
+[
+  {
+    "id": "zz-real-01",
+    "source": "real",
+    "businessName": "ZZ Fixture Driving 01",
+    "trade": "driving instructor",
+    "town": "Herne Bay",
+    "hasWebsite": true,
+    "ownerName": null,
+    "audit": {
+      "engine": "chatgpt",
+      "namedAnswers": 0,
+      "validAnswers": 6,
+      "competitors": [
+        "Rival A Driving",
+        "Rival B Driving",
+        "Rival C Driving"
+      ]
+    },
+    "findings": [
+      {
+        "title": "Some links go to the wrong place",
+        "said": "“Mock driving tests” goes to /about-1 (a page about it is at /mock-driving-tests-cont)"
+      },
+      {
+        "title": "Main headings don’t say what you do or where",
+        "said": "Homepage: “07700 900123”"
+      }
+    ],
+    "thread": [
+      {
+        "from": "us",
+        "text": "Hi, is this ZZ Fixture Driving 01?\n\nCheers",
+        "templateName": "initial_contact",
+        "messageType": "text"
+      },
+      {
+        "from": "them",
+        "text": "Yes it is, how can I help?",
+        "templateName": null,
+        "messageType": "text"
+      },
+      {
+        "from": "us",
+        "text": "I asked chatgpt for driving instructors in Herne Bay this morning.\n\nIt came back with Rival A Driving, Rival B Driving and Rival C Driving.\n\nRan you a free audit, you can see the results here:\nhttps://findable.live/r/zzf01\n\n45% of people now use AI to find local businesses. Same on Gemini, and I know how to get you showing up in those searches.\n\nWant me to explain?",
+        "templateName": "audit_followup",
+        "messageType": "text"
+      },
+      {
+        "from": "them",
+        "text": "Yes, please, I’m interested",
+        "templateName": null,
+        "messageType": "text"
+      }
+    ],
+    "expect": {
+      "outcome": "draft",
+      "topic": null,
+      "notes": "They said yes please: offer a call or short voice note now and ask what time suits; no re-pitch, no site issues, no agency question."
+    }
+  },
+  {
+    "id": "zz-real-02",
+    "source": "real",
+    "businessName": "ZZ Fixture Electrical 02",
+    "trade": "electrician",
+    "town": "St Albans",
+    "hasWebsite": true,
+    "ownerName": null,
+    "audit": {
+      "engine": "gemini",
+      "namedAnswers": 0,
+      "validAnswers": 2,
+      "competitors": [
+        "Rival A Electrical",
+        "Rival B Electrical",
+        "Rival C Electrical"
+      ]
+    },
+    "findings": [],
+    "thread": [
+      {
+        "from": "us",
+        "text": "Hi, is this ZZ Fixture Electrical 02?\n\nCheers",
+        "templateName": "initial_contact",
+        "messageType": "text"
+      },
+      {
+        "from": "them",
+        "text": "Yes it is how can I help.",
+        "templateName": null,
+        "messageType": "text"
+      },
+      {
+        "from": "them",
+        "text": "?*",
+        "templateName": null,
+        "messageType": "text"
+      },
+      {
+        "from": "us",
+        "text": "Hi mate, i was looking for an electrician in St Albans so i asked AI and it mentioned Rival A Electrical, Rival B Electrical and Rival C Electrical\n\nI know how to get you showing up more in those answers so people are more likely to find you\n\nHappy to explain it here or jump on a quick call if you'd rather\n\nPaul✌️",
+        "templateName": "audit_followup_call",
+        "messageType": "text"
+      },
+      {
+        "from": "them",
+        "text": "Im off today with a bug but send me over some detials please",
+        "templateName": null,
+        "messageType": "text"
+      }
+    ],
+    "expect": {
+      "outcome": "draft",
+      "topic": null,
+      "notes": "Asked for details while off ill: short plain explanation of what we checked plus a call or voice note offer; no \"keep your web address\", no new-site promise."
+    }
+  },
+  {
+    "id": "zz-real-03",
+    "source": "real",
+    "businessName": "ZZ Fixture Plumbing 03",
+    "trade": "plumber",
+    "town": "Peterborough",
+    "hasWebsite": true,
+    "ownerName": null,
+    "audit": {
+      "engine": "gemini",
+      "namedAnswers": 3,
+      "validAnswers": 6,
+      "competitors": [
+        "Rival D Plumbing",
+        "Rival E Plumbing",
+        "Rival F Plumbing"
+      ]
+    },
+    "findings": [],
+    "thread": [
+      {
+        "from": "us",
+        "text": "Hi, is this the right number for ZZ Fixture Plumbing 03? Cheers",
+        "templateName": "initial_contact",
+        "messageType": "text"
+      },
+      {
+        "from": "them",
+        "text": "Hi it is , how can i help you?",
+        "templateName": null,
+        "messageType": "text"
+      },
+      {
+        "from": "us",
+        "text": "Hi, thanks for getting back.\nWe asked AI tools like ChatGPT to recommend a Plumbers in your area, it's naming Rival A Plumbing, Rival B Plumbing and Rival C Plumbing - not ZZ Fixture Plumbing 03.\nWe ran a full report on your business for AI and SEO visibility: https://findable.live/r/zzf03\nWe could get you showing up in those results - it's mostly stuff we handle at our end.\nWant me to explain?",
+        "templateName": "audit_reply",
+        "messageType": "text"
+      },
+      {
+        "from": "them",
+        "text": "Yeah",
+        "templateName": null,
+        "messageType": "text"
+      },
+      {
+        "from": "us",
+        "text": "So when someone asks ChatGPT or Gemini to recommend a plumber in your area, they pull from what they can find about you online. Right now there's not enough for them to go on, so they name others instead.\n\nWe fix that at our end, build the right pages and get your details set up so the AI tools can actually see you and start naming you. Most of it needs nothing from you.\n\nIt's £49.99 to start, with a money-back guarantee: if we don't do the work and re-measure at 8 weeks, you get a full refund.\n\nWant me to send the link to get started?",
+        "templateName": null,
+        "messageType": "text"
+      },
+      {
+        "from": "them",
+        "text": "It is one off payment ?",
+        "templateName": null,
+        "messageType": "text"
+      },
+      {
+        "from": "us",
+        "text": "For the time being yes, we are offering this at a discount and all we ask for in return in a honest review in return once completed\n\nWe have a simple questionare for you to fill out before we can get started\nhttps://findable.live/onboarding/zz-fixture-03/",
+        "templateName": null,
+        "messageType": "text"
+      },
+      {
+        "from": "us",
+        "text": "Hey, I noticed you started the questionnaire, nice one. If you've got any questions before you finish it, I'm happy to answer them so we can get started right away.",
+        "templateName": null,
+        "messageType": "text"
+      },
+      {
+        "from": "them",
+        "text": "Whats the name of your company?",
+        "templateName": null,
+        "messageType": "text"
+      },
+      {
+        "from": "us",
+        "text": "https://findable.live/",
+        "templateName": null,
+        "messageType": "text"
+      },
+      {
+        "from": "us",
+        "text": "Would you like to jump on a call or like any more information?",
+        "templateName": null,
+        "messageType": "text"
+      },
+      {
+        "from": "them",
+        "text": "[audio]",
+        "templateName": null,
+        "messageType": "audio"
+      },
+      {
+        "from": "us",
+        "text": "I cant see that on my end what is it?",
+        "templateName": null,
+        "messageType": "text"
+      },
+      {
+        "from": "them",
+        "text": "R u human ?",
+        "templateName": null,
+        "messageType": "text"
+      }
+    ],
+    "expect": {
+      "outcome": "draft",
+      "topic": null,
+      "notes": "Answer \"R u human?\" honestly in one line (yes, Paul, a real person), say we could not play their voice note and ask them to type it or take a call; no pitch, no price."
+    }
+  },
+  {
+    "id": "zz-real-04",
+    "source": "real",
+    "businessName": "ZZ Fixture Plumbing 04",
+    "trade": "plumber",
+    "town": "Scunthorpe",
+    "hasWebsite": true,
+    "ownerName": null,
+    "audit": {
+      "engine": "gemini",
+      "namedAnswers": 0,
+      "validAnswers": 2,
+      "competitors": [
+        "Rival A Plumbing",
+        "Rival B Plumbing",
+        "Rival C Plumbing"
+      ]
+    },
+    "findings": [],
+    "thread": [
+      {
+        "from": "us",
+        "text": "Hey, are you taking on more jobs atm? Cheers",
+        "templateName": "initial_opener_v2",
+        "messageType": "text"
+      },
+      {
+        "from": "them",
+        "text": "Yeah",
+        "templateName": null,
+        "messageType": "text"
+      },
+      {
+        "from": "us",
+        "text": "Hi mate, i was looking for a plumber in Scunthorpe so i asked AI and it mentioned Rival A Plumbing, Rival B Plumbing and Rival C Plumbing\n\nI know how to get you showing up more in those answers so people are more likely to find you\n\nHappy to explain it here or jump on a quick call if you'd rather\n\nPaul✌️",
+        "templateName": "audit_followup_call",
+        "messageType": "text"
+      },
+      {
+        "from": "them",
+        "text": "How much",
+        "templateName": null,
+        "messageType": "text"
+      },
+      {
+        "from": "us",
+        "text": "£99 to start mate, then £99/month from week 6, 12 payments in total.\n\nIf your measured AI visibility hasn’t improved after 4 weeks, I’ll refund your first £99.\n\nI’ve had a look through zz-fixture-04.example as well. There are a few things I’d change straight away. The site gives mixed signals about where you actually operate, the opening hours aren’t consistent, and your main plumbing/boiler/emergency services aren’t structured strongly enough around the searches you’d want to appear for locally.\n\nWe’d clean that up, strengthen the service and local structure and make the business much clearer for Google and AI to understand and recommend.\n\nFull details are here: https://findable.live/\n\nQuick one, do you own/control the current website or is it owned/managed by Acme Web Ltd?",
+        "templateName": null,
+        "messageType": "text"
+      },
+      {
+        "from": "them",
+        "text": "I pay him",
+        "templateName": null,
+        "messageType": "text"
+      }
+    ],
+    "expect": {
+      "outcome": "draft",
+      "topic": null,
+      "notes": "Do not ask the agency question again, they said \"I pay him\"; he can stay on it; offer a 2 minute call; no new-site or domain promise; crawl failed so no site claims."
+    }
+  },
+  {
+    "id": "zz-real-05",
+    "source": "real",
+    "businessName": "ZZ Fixture Electrical 05",
+    "trade": "electrician",
+    "town": "Leeds",
+    "hasWebsite": true,
+    "ownerName": null,
+    "audit": {
+      "engine": "chatgpt",
+      "namedAnswers": 0,
+      "validAnswers": 6,
+      "competitors": [
+        "Rival A Electrical",
+        "Rival B Electrical",
+        "Rival C Electrical"
+      ]
+    },
+    "findings": [],
+    "thread": [
+      {
+        "from": "us",
+        "text": "Hi, is this ZZ Fixture Electrical 05?\n\nCheers",
+        "templateName": "initial_contact",
+        "messageType": "text"
+      },
+      {
+        "from": "them",
+        "text": "Yes",
+        "templateName": null,
+        "messageType": "text"
+      },
+      {
+        "from": "us",
+        "text": "I asked chatgpt for electricians in Leeds this morning.\n\nIt came back with Rival A Electrical, Rival B Electrical and Rival C Electrical.\n\nRan you a free audit, you can see the results here:\nhttps://findable.live/r/zzf05\n\n45% of people now use AI to find local businesses. Same on Gemini, and I know how to get you showing up in those searches.\n\nWant me to explain?",
+        "templateName": "audit_followup",
+        "messageType": "text"
+      },
+      {
+        "from": "them",
+        "text": "I already show up on ai search because of my 70 5start reviews on Google",
+        "templateName": null,
+        "messageType": "text"
+      }
+    ],
+    "expect": {
+      "outcome": "draft",
+      "topic": null,
+      "notes": "Agree the reviews are great, one true line that the AI search did not name them, then a call offer; no crawler-blocking claim (crawl fetch failed), no rebuild pitch."
+    }
+  },
+  {
+    "id": "zz-real-06",
+    "source": "real",
+    "businessName": "ZZ Fixture Electrical 06",
+    "trade": "electrician",
+    "town": "Sheffield",
+    "hasWebsite": true,
+    "ownerName": null,
+    "audit": {
+      "engine": "gemini",
+      "namedAnswers": 0,
+      "validAnswers": 6,
+      "competitors": [
+        "Rival A Electrical",
+        "Rival B Electrical",
+        "Rival C Electrical"
+      ]
+    },
+    "findings": [
+      {
+        "title": "Unfinished placeholder blocks are live on the site",
+        "said": "“Project 1” links to “#” on the homepage"
+      },
+      {
+        "title": "Some links go to the wrong place",
+        "said": "The phone number “07700 900123” is linked as an email (mailto:owner@example.com)"
+      }
+    ],
+    "thread": [
+      {
+        "from": "us",
+        "text": "Hi, is this ZZ Fixture Electrical 06?\n\nCheers",
+        "templateName": "initial_contact",
+        "messageType": "text"
+      },
+      {
+        "from": "them",
+        "text": "Yes",
+        "templateName": null,
+        "messageType": "text"
+      },
+      {
+        "from": "us",
+        "text": "Hi mate, i was looking for an electrician in Sheffield so i asked AI and it mentioned Rival A Electrical, Rival B Electrical and Rival C Electrical\n\nHere's the main thing holding you back.\n\nRight now, AI has stronger reasons to recommend other local businesses ahead of you.\n\nI know how to get you showing up more in those answers so people are more likely to find you\n\nHere's the proof: https://findable.live/r/zzf06\n\nHappy to explain more here or jump on a quick call if you'd rather\n\nPaul✌️",
+        "templateName": "audit_followup_fault",
+        "messageType": "text"
+      },
+      {
+        "from": "them",
+        "text": "We've got someone on with it thanks Paul.",
+        "templateName": null,
+        "messageType": "text"
+      },
+      {
+        "from": "us",
+        "text": "No worries mate, just checking because your current visibility is 0% - might be worth checking up with them about this, don't wanna be losing customers :)",
+        "templateName": null,
+        "messageType": "text"
+      },
+      {
+        "from": "them",
+        "text": "Only got website up properly last week.",
+        "templateName": null,
+        "messageType": "text"
+      }
+    ],
+    "expect": {
+      "outcome": "draft",
+      "topic": null,
+      "notes": "New site just launched and someone is on it: acknowledge, mention at most one concrete fixable item, offer to recheck later or a quick call; no rebuild, do not ask the agency question again."
+    }
+  },
+  {
+    "id": "zz-real-07",
+    "source": "real",
+    "businessName": "ZZ Fixture Electrical 07",
+    "trade": "electrician",
+    "town": "Addlestone",
+    "hasWebsite": true,
+    "ownerName": null,
+    "audit": {
+      "engine": "chatgpt",
+      "namedAnswers": 5,
+      "validAnswers": 6,
+      "competitors": [
+        "Rival D Electrical",
+        "Rival E Electrical",
+        "Rival F Electrical"
+      ]
+    },
+    "findings": [
+      {
+        "title": "The site refused AI search crawlers",
+        "said": "Requested as OAI-SearchBot, ChatGPT-User, Claude-User, PerplexityBot, the homepage answered with an error or a bot-check page."
+      }
+    ],
+    "thread": [
+      {
+        "from": "us",
+        "text": "Hi, is this ZZ Fixture Electrical 07?\n\nCheers",
+        "templateName": "initial_contact",
+        "messageType": "text"
+      },
+      {
+        "from": "them",
+        "text": "Yep",
+        "templateName": null,
+        "messageType": "text"
+      },
+      {
+        "from": "us",
+        "text": "Hi mate, i was looking for an electrician in Addlestone so i asked AI and it mentioned Rival A Electrical, Rival B Electrical and Rival C Electrical\n\nI know how to get you showing up more in those answers so people are more likely to find you\n\nHappy to explain it here or jump on a quick call if you'd rather\n\nPaul✌️",
+        "templateName": "audit_followup_call",
+        "messageType": "text"
+      },
+      {
+        "from": "them",
+        "text": "Ahhh ok, so do you need an electrician?",
+        "templateName": null,
+        "messageType": "text"
+      },
+      {
+        "from": "them",
+        "text": "Have you asked so who the best electrician in addlestone is?",
+        "templateName": null,
+        "messageType": "text"
+      },
+      {
+        "from": "us",
+        "text": "yeah mate, i asked google ai who it recommends for electricians in addlestone and it brought up your competitors instead of you.\n\ni checked your site to see why and one of the issues is that oai-searchbot, chatgpt-user, claude-user and perplexitybot are blocked from fetching your pages, so a lot of the ai tools can’t properly access and understand the site.\n\nthat’s the sort of thing we fix, either on your current site or by building you a new one that’s properly set up for ai visibility and seo.\n\nare you currently with an agency or does someone else manage the website for you?",
+        "templateName": null,
+        "messageType": "text"
+      },
+      {
+        "from": "them",
+        "text": "Someone manages the website for me acme marketing. How did you get my details then?",
+        "templateName": null,
+        "messageType": "text"
+      },
+      {
+        "from": "us",
+        "text": "I found you on google maps, i run ai audits on local businesses and reach out to the ones that arent visible to AI\n\nI specialise in AI visibility, here is my website - https://findable.live/\n\n45% of people use AI to find services and most sites arent set up to be crawled by AI and your business is impossble to show up in these searches due to major issues with your current site setup",
+        "templateName": null,
+        "messageType": "text"
+      },
+      {
+        "from": "them",
+        "text": "Ahhh ok. Thanks. Il let my website guys know",
+        "templateName": null,
+        "messageType": "text"
+      },
+      {
+        "from": "us",
+        "text": "I can explain some of these issues to you if youd like",
+        "templateName": null,
+        "messageType": "text"
+      },
+      {
+        "from": "them",
+        "text": "No, it's okay. I don't understand it enough. I've just let my website guys know.",
+        "templateName": null,
+        "messageType": "text"
+      },
+      {
+        "from": "us",
+        "text": "Okay man, there is alot that needs fixing - hopefully they understand AI visibility \n\nAll the best",
+        "templateName": null,
+        "messageType": "text"
+      },
+      {
+        "from": "them",
+        "text": "👍. Maybe you should speak to the smaller website designers?",
+        "templateName": null,
+        "messageType": "text"
+      },
+      {
+        "from": "us",
+        "text": "Why?",
+        "templateName": null,
+        "messageType": "text"
+      },
+      {
+        "from": "them",
+        "text": "Because people like me just leave the website stuff to them.",
+        "templateName": null,
+        "messageType": "text"
+      }
+    ],
+    "expect": {
+      "outcome": "draft",
+      "topic": null,
+      "notes": "Named in 5 of 6 answers: say they show up well, the one gap is the blocked crawlers their web people could look at; no \"invisible\" claim, no rebuild, no agency question."
+    }
+  },
+  {
+    "id": "zz-real-08",
+    "source": "real",
+    "businessName": "ZZ Fixture Driving 08",
+    "trade": "driving instructor",
+    "town": "Norwich",
+    "hasWebsite": true,
+    "ownerName": "Kim",
+    "audit": {
+      "engine": "gemini",
+      "namedAnswers": 0,
+      "validAnswers": 2,
+      "competitors": [
+        "Rival A Driving",
+        "Rival B Driving",
+        "Rival C Driving"
+      ]
+    },
+    "findings": [
+      {
+        "title": "Norwich is not mentioned on the site",
+        "said": "Norwich does not appear in the title, headings or opening text of any of the 12 pages read."
+      },
+      {
+        "title": "Unfinished placeholder blocks are live on the site",
+        "said": "“…Sample small text. Lorem ipsum dolor sit amet.” on /post-1-headline"
+      }
+    ],
+    "thread": [
+      {
+        "from": "us",
+        "text": "Hey, is this ZZ Fixture Driving 08?\nThanks",
+        "templateName": "initial_contact_short",
+        "messageType": "text"
+      },
+      {
+        "from": "them",
+        "text": "Thank you for contacting ZZ Fixture Driving 08. If you are messaging outside of our working hours Monday-Friday 08:00-18:00 then please be assured we will get back to you at our earliest opportunity. Please forward your postcode, availability for lessons, and if you've passed your theory, as this will enable us to get back to you with further information. 😁",
+        "templateName": null,
+        "messageType": "text"
+      },
+      {
+        "from": "them",
+        "text": "Yes it is. How can we help",
+        "templateName": null,
+        "messageType": "text"
+      }
+    ],
+    "expect": {
+      "outcome": "draft",
+      "topic": null,
+      "notes": "Say who we are and the gemini result in a line or two; quote the crawl wording (not in titles/headings/opening text), no double counting of placeholder and near-identical pages, no rebuild pitch; offer a call."
+    }
+  },
+  {
+    "id": "zz-real-09",
+    "source": "real",
+    "businessName": "ZZ Fixture Driving 09",
+    "trade": "driving instructor",
+    "town": "London",
+    "hasWebsite": false,
+    "ownerName": null,
+    "audit": {
+      "engine": "gemini",
+      "namedAnswers": 0,
+      "validAnswers": 2,
+      "competitors": [
+        "Rival A Driving",
+        "Rival B Driving",
+        "Rival C Driving"
+      ]
+    },
+    "findings": [],
+    "thread": [
+      {
+        "from": "us",
+        "text": "Hi, is this ZZ Fixture Driving 09?\n\nCheers",
+        "templateName": "initial_contact",
+        "messageType": "text"
+      },
+      {
+        "from": "them",
+        "text": "Yes",
+        "templateName": null,
+        "messageType": "text"
+      }
+    ],
+    "expect": {
+      "outcome": "draft",
+      "topic": null,
+      "notes": "Opener confirmed: who we are plus the gemini result, offer to explain here or on a call; site is a third-party subdomain so no site findings, no \"keep your web address\"."
+    }
+  },
+  {
+    "id": "zz-real-10",
+    "source": "real",
+    "businessName": "ZZ Fixture Driving 10",
+    "trade": "driving instructor",
+    "town": "Stourbridge",
+    "hasWebsite": true,
+    "ownerName": null,
+    "audit": {
+      "engine": "gemini",
+      "namedAnswers": 0,
+      "validAnswers": 6,
+      "competitors": [
+        "Rival A Driving",
+        "Rival B Driving",
+        "Rival C Driving"
+      ]
+    },
+    "findings": [],
+    "thread": [
+      {
+        "from": "us",
+        "text": "Hi, is this ZZ Fixture Driving 10?\n\nCheers",
+        "templateName": "initial_contact",
+        "messageType": "text"
+      },
+      {
+        "from": "them",
+        "text": "Hi, yes it is 👍",
+        "templateName": null,
+        "messageType": "text"
+      }
+    ],
+    "expect": {
+      "outcome": "draft",
+      "topic": null,
+      "notes": "Opener confirmed: who we are plus the gemini result, call offer; the crawled site may belong to a different business, so make no site claims."
+    }
+  },
+  {
+    "id": "zz-real-11",
+    "source": "real",
+    "businessName": "ZZ Fixture Driving 11",
+    "trade": "driving instructor",
+    "town": "Jarrow",
+    "hasWebsite": false,
+    "ownerName": null,
+    "audit": {
+      "engine": "gemini",
+      "namedAnswers": 3,
+      "validAnswers": 6,
+      "competitors": [
+        "Rival A Driving",
+        "Rival B Driving",
+        "Rival C Driving"
+      ]
+    },
+    "findings": [],
+    "thread": [
+      {
+        "from": "us",
+        "text": "Hi, is this ZZ Fixture Driving 11?\n\nCheers",
+        "templateName": "initial_contact",
+        "messageType": "text"
+      },
+      {
+        "from": "them",
+        "text": "Thank you for contacting ZZ Fixture Driving 11! Please let us know how we can help you.",
+        "templateName": null,
+        "messageType": "text"
+      },
+      {
+        "from": "them",
+        "text": "Yeah",
+        "templateName": null,
+        "messageType": "text"
+      }
+    ],
+    "expect": {
+      "outcome": "draft",
+      "topic": null,
+      "notes": "ChatGPT named them in 3 of 3, Gemini in none: say where they are strong and the gemini gap only; no website so never ask about an agency, ask \"do you have a website at the moment?\" or offer a call; no causal claim."
+    }
+  },
+  {
+    "id": "zz-real-12",
+    "source": "real",
+    "businessName": "ZZ Fixture Driving 12",
+    "trade": "driving instructor",
+    "town": "Canterbury",
+    "hasWebsite": true,
+    "ownerName": null,
+    "audit": {
+      "engine": "gemini",
+      "namedAnswers": 0,
+      "validAnswers": 6,
+      "competitors": [
+        "Rival A Driving",
+        "Rival B Driving",
+        "Rival C Driving"
+      ]
+    },
+    "findings": [
+      {
+        "title": "Your site claims accreditation or qualifications but names no scheme",
+        "said": "“…About Sam Hey, I'm Sam, a fully qualified local driving instructor with…”"
+      }
+    ],
+    "thread": [
+      {
+        "from": "us",
+        "text": "Hi, is this ZZ Fixture Driving 12?\n\nCheers",
+        "templateName": "initial_contact",
+        "messageType": "text"
+      },
+      {
+        "from": "them",
+        "text": "Yes",
+        "templateName": null,
+        "messageType": "text"
+      }
+    ],
+    "expect": {
+      "outcome": "draft",
+      "topic": null,
+      "notes": "Opener confirmed: who we are plus the gemini result; if a site point is used say it \"could\" matter, never \"why you were not coming up\"; no rebuild for one item; call offer."
+    }
+  },
+  {
+    "id": "zz-real-13",
+    "source": "real",
+    "businessName": "ZZ Fixture Driving 13",
+    "trade": "driving instructor",
+    "town": "Newcastle upon Tyne",
+    "hasWebsite": true,
+    "ownerName": null,
+    "audit": {
+      "engine": "gemini",
+      "namedAnswers": 3,
+      "validAnswers": 6,
+      "competitors": [
+        "Rival A Driving",
+        "Rival B Driving",
+        "Rival C Driving"
+      ]
+    },
+    "findings": [
+      {
+        "title": "Newcastle upon Tyne is not mentioned on the site",
+        "said": "Newcastle upon Tyne does not appear in the title, headings or opening text of any of the 13 pages read."
+      },
+      {
+        "title": "Your site claims accreditation or qualifications but names no scheme",
+        "said": "“…Why learners choose ZZ Fixture Driving 13 Fully qualified Green-badge DVSA Approved…”"
+      }
+    ],
+    "thread": [
+      {
+        "from": "us",
+        "text": "Hi, is this ZZ Fixture Driving 13?\n\nCheers",
+        "templateName": "initial_contact",
+        "messageType": "text"
+      },
+      {
+        "from": "them",
+        "text": "It is yes",
+        "templateName": null,
+        "messageType": "text"
+      }
+    ],
+    "expect": {
+      "outcome": "draft",
+      "topic": null,
+      "notes": "Only confirmed their name: named in 3 of 6, so lead with where they show up and the gap; no sign-up link, no price, no terms; quote crawl wording exactly; offer a call."
+    }
+  },
+  {
+    "id": "zz-real-14",
+    "source": "real",
+    "businessName": "ZZ Fixture Electrical 14",
+    "trade": "electrician",
+    "town": "Doncaster",
+    "hasWebsite": true,
+    "ownerName": null,
+    "audit": {
+      "engine": "chatgpt",
+      "namedAnswers": 0,
+      "validAnswers": 6,
+      "competitors": [
+        "Rival A Electrical",
+        "Rival B Electrical",
+        "Rival C Electrical"
+      ]
+    },
+    "findings": [
+      {
+        "title": "Homepage has no main heading (H1)",
+        "said": "The homepage has no H1 heading."
+      }
+    ],
+    "thread": [
+      {
+        "from": "us",
+        "text": "Hi, is this ZZ Fixture Electrical 14?\n\nCheers",
+        "templateName": "initial_contact",
+        "messageType": "text"
+      },
+      {
+        "from": "them",
+        "text": "Yes",
+        "templateName": null,
+        "messageType": "text"
+      },
+      {
+        "from": "us",
+        "text": "Hi mate, i was looking for an electrician in Doncaster so i asked AI and it mentioned Rival A Electrical, Rival B Electrical and Rival C Electrical\n\nI know how to get you showing up more in those answers so people are more likely to find you\n\nHappy to explain it here or jump on a quick call if you'd rather\n\nPaul✌️",
+        "templateName": "audit_followup_call",
+        "messageType": "text"
+      },
+      {
+        "from": "them",
+        "text": "How much does it cost?",
+        "templateName": null,
+        "messageType": "text"
+      }
+    ],
+    "expect": {
+      "outcome": "draft",
+      "topic": "price",
+      "notes": "Price question: give the canonical offer from the offer constants only (no invented discounts or other figures) in a short line, then offer a call; an editable suggestion for Paul."
+    }
+  },
+  {
+    "id": "zz-real-15",
+    "source": "real",
+    "businessName": "ZZ Fixture Driving 15",
+    "trade": "driving instructor",
+    "town": "Canterbury",
+    "hasWebsite": true,
+    "ownerName": null,
+    "audit": {
+      "engine": "gemini",
+      "namedAnswers": 4,
+      "validAnswers": 6,
+      "competitors": [
+        "Rival A Driving",
+        "Rival B Driving",
+        "Rival C Driving"
+      ]
+    },
+    "findings": [
+      {
+        "title": "Some services have no page of their own",
+        "said": "2 of 16 services named on the site have their own page; Manual lessons, Automatic lessons, Two-hour lessons and Refresher lessons do not in the pages read."
+      }
+    ],
+    "thread": [
+      {
+        "from": "us",
+        "text": "Hi, is this ZZ Fixture Driving 15?\n\nCheers",
+        "templateName": "initial_contact",
+        "messageType": "text"
+      },
+      {
+        "from": "them",
+        "text": "Yes",
+        "templateName": null,
+        "messageType": "text"
+      },
+      {
+        "from": "us",
+        "text": "I asked chatgpt for driving instructors in Canterbury this morning.\n\nIt came back with Rival A Driving, Rival B Driving and Rival C Driving.\n\nRan you a free audit, you can see the results here:\nhttps://findable.live/r/zzf15\n\n45% of people now use AI to find local businesses. Same on Gemini, and I know how to get you showing up in those searches.\n\nWant me to explain?",
+        "templateName": "audit_followup",
+        "messageType": "text"
+      },
+      {
+        "from": "them",
+        "text": "Thanks for contacting ZZ Fixture Driving 15 🚗\nI may be teaching or away from my phone. Please leave your name, town, whether you’d like manual or automatic lessons, and your preferred days and times. I’ll reply as soon as I can.\nThanks, Sam",
+        "templateName": null,
+        "messageType": "text"
+      },
+      {
+        "from": "them",
+        "text": "Where did my business come up on google",
+        "templateName": null,
+        "messageType": "text"
+      },
+      {
+        "from": "us",
+        "text": "I found you on google maps, you actually have a really strong chatgpt score, gemini and googleAI is where you are weak, ive checked why this is and there are a list of issues with your website that are preventing AI from recommending you\n\nDo you manage the site yourself or are you with an agency?",
+        "templateName": null,
+        "messageType": "text"
+      },
+      {
+        "from": "them",
+        "text": "“Thanks. Please send the specific issues you found, the affected page links, and screenshots showing the searches and scoring tool you used. I’d like to review the evidence first.”",
+        "templateName": null,
+        "messageType": "text"
+      },
+      {
+        "from": "us",
+        "text": "Sure, I've copied my report my system generates when it scanned your site, these are all things we would fix\n\n1. Most of it is generic. The only Canterbury specific part is the test centre history. Nothing on local routes, pickup areas or where you cover in Canterbury, and the same list of 8 areas is repeated across your other town pages. AI tools tend to skip pages that look like the same page with a different town name.\n2. No ADI number or qualifications on that page, and no business address (it says you're based in Margate). AI looks for things it can verify.\n3. The FAQ says lessons are two hours, but you also list a separate two-hour option and price per hour. Mixed signals.\n4. Your Birchington link shows as raw code text, and one image is empty - This has a negative impact on SEO rating also.\n5. 3 reviews shown, but no overall rating or review count.\n\nThe good news is Google can crawl the site fine and nothing's blocking AI tools, so it's all fixable.\n\nIf you like how your site looks now, we can keep the design and copy it across, then optimise it properly for AI. On day 1 we would run a full baseline audit of 20 questions to see where you stand today, and that's what we measure against going forward so you can see what actually changes.\n\nIs the site just yours, or is anyone else involved with it?",
+        "templateName": null,
+        "messageType": "text"
+      },
+      {
+        "from": "us",
+        "text": "https://findable.live/r/zzf15 \n\nHere is your initial report, it just has 3 questions, you are strong on chatgpt but weak on google's models, this is mostly due to poor website structure",
+        "templateName": null,
+        "messageType": "text"
+      },
+      {
+        "from": "them",
+        "text": "Can I see  the full report, exact fixes, total price and ongoing fees before agreeing. These messages alone don’t establish that your website needs rebuilding or moving to his service.",
+        "templateName": null,
+        "messageType": "text"
+      }
+    ],
+    "expect": {
+      "outcome": "draft",
+      "topic": "price",
+      "notes": "Wants the full report, fixes, total price and fees: give the canonical price and term from the offer constants (no \"£99 per month for 12 months\" drift), only stored crawl findings, no unverifiable list; offer a call."
+    }
+  },
+  {
+    "id": "zz-real-16",
+    "source": "real",
+    "businessName": "ZZ Fixture Electrical 16",
+    "trade": "electrician",
+    "town": "Woking",
+    "hasWebsite": true,
+    "ownerName": null,
+    "audit": {
+      "engine": "chatgpt",
+      "namedAnswers": 0,
+      "validAnswers": 6,
+      "competitors": [
+        "Rival A Electrical",
+        "Rival B Electrical",
+        "Rival C Electrical"
+      ]
+    },
+    "findings": [
+      {
+        "title": "Key pages light on detail",
+        "said": "1 checked page has under 120 words of readable text."
+      }
+    ],
+    "thread": [
+      {
+        "from": "us",
+        "text": "Hi, is this ZZ Fixture Electrical 16?\n\nCheers",
+        "templateName": "initial_contact",
+        "messageType": "text"
+      },
+      {
+        "from": "them",
+        "text": "Hi can I ask who is enquiring please",
+        "templateName": null,
+        "messageType": "text"
+      },
+      {
+        "from": "us",
+        "text": "Hi mate, i was looking for an electrician in Woking so i asked AI and it mentioned Rival A Electrical, Rival B Electrical and Rival C Electrical\n\nI know how to get you showing up more in those answers so people are more likely to find you\n\nHappy to explain it here or jump on a quick call if you'd rather\n\nPaul✌️",
+        "templateName": "audit_followup_call",
+        "messageType": "text"
+      },
+      {
+        "from": "them",
+        "text": "No thanks mate. Cheers anyway",
+        "templateName": null,
+        "messageType": "text"
+      }
+    ],
+    "expect": {
+      "outcome": "needs_you",
+      "topic": null,
+      "notes": "Polite no: hand to Paul; at most a \"no worries, thanks for your time\" draft, no re-pitch."
+    }
+  },
+  {
+    "id": "zz-real-17",
+    "source": "real",
+    "businessName": "ZZ Fixture Driving 17",
+    "trade": "driving instructor",
+    "town": "Newcastle upon Tyne",
+    "hasWebsite": true,
+    "ownerName": null,
+    "audit": {
+      "engine": "chatgpt",
+      "namedAnswers": 0,
+      "validAnswers": 6,
+      "competitors": [
+        "Rival A Driving",
+        "Rival B Driving",
+        "Rival C Driving"
+      ]
+    },
+    "findings": [
+      {
+        "title": "The site is not served securely (no HTTPS)",
+        "said": "Served at http://zz-fixture-17.example/"
+      },
+      {
+        "title": "The site refused AI search crawlers",
+        "said": "When we requested the homepage as OAI-SearchBot, Claude-User, the site answered with an error or a bot-check page."
+      }
+    ],
+    "thread": [
+      {
+        "from": "us",
+        "text": "Hi, is this ZZ Fixture Driving 17?\n\nCheers",
+        "templateName": "initial_contact",
+        "messageType": "text"
+      },
+      {
+        "from": "them",
+        "text": "Yes",
+        "templateName": null,
+        "messageType": "text"
+      },
+      {
+        "from": "them",
+        "text": "How can I help you ?",
+        "templateName": null,
+        "messageType": "text"
+      },
+      {
+        "from": "them",
+        "text": "?",
+        "templateName": null,
+        "messageType": "text"
+      },
+      {
+        "from": "us",
+        "text": "I asked chatgpt for driving instructors in Newcastle upon Tyne this morning.\n\nIt came back with Rival A Driving, Rival B Driving and Rival C Driving.\n\nRan you a free audit, you can see the results here:\nhttps://findable.live/r/zzf17\n\n45% of people now use AI to find local businesses. Same on Gemini, and I know how to get you showing up in those searches.\n\nWant me to explain?",
+        "templateName": "audit_followup",
+        "messageType": "text"
+      },
+      {
+        "from": "them",
+        "text": "Are you looking to start lessons ?",
+        "templateName": null,
+        "messageType": "text"
+      },
+      {
+        "from": "us",
+        "text": "No mate, i know how to get you more students, people are looking for driving instructors by asking AI models and you arent currently showing up in the answers it gives - i know how to fix that for you",
+        "templateName": null,
+        "messageType": "text"
+      },
+      {
+        "from": "them",
+        "text": "I am fine no thank you",
+        "templateName": null,
+        "messageType": "text"
+      }
+    ],
+    "expect": {
+      "outcome": "needs_you",
+      "topic": null,
+      "notes": "Not interested: hand to Paul; only a polite sign-off if anything, no re-pitch."
+    }
+  },
+  {
+    "id": "zz-real-18",
+    "source": "real",
+    "businessName": "ZZ Fixture Driving 18",
+    "trade": "driving instructor",
+    "town": "Canterbury",
+    "hasWebsite": true,
+    "ownerName": null,
+    "audit": {
+      "engine": "chatgpt",
+      "namedAnswers": 1,
+      "validAnswers": 6,
+      "competitors": [
+        "Rival A Driving",
+        "Rival B Driving",
+        "Rival C Driving"
+      ]
+    },
+    "findings": [
+      {
+        "title": "Canterbury is not mentioned on the site",
+        "said": "Canterbury does not appear in the title, headings or opening text of any of the 13 pages read."
+      }
+    ],
+    "thread": [
+      {
+        "from": "us",
+        "text": "Hi, is this ZZ Fixture Driving 18?\n\nCheers",
+        "templateName": "initial_contact",
+        "messageType": "text"
+      },
+      {
+        "from": "them",
+        "text": "Hi yes",
+        "templateName": null,
+        "messageType": "text"
+      },
+      {
+        "from": "us",
+        "text": "I asked chatgpt for driving instructors in Canterbury this morning.\n\nIt came back with Rival A Driving, Rival B Driving and Rival C Driving.\n\nRan you a free audit, you can see the results here:\nhttps://findable.live/r/zzf18\n\n45% of people now use AI to find local businesses. Same on Gemini, and I know how to get you showing up in those searches.\n\nWant me to explain?",
+        "templateName": "audit_followup",
+        "messageType": "text"
+      },
+      {
+        "from": "them",
+        "text": "lol let me tell people about your rubbish",
+        "templateName": null,
+        "messageType": "text"
+      },
+      {
+        "from": "us",
+        "text": "What's rubbish about showing up in AI searches?\n\nI've found a long list of reasons to why your not being recommended, I'm happy to share this with you",
+        "templateName": null,
+        "messageType": "text"
+      },
+      {
+        "from": "them",
+        "text": "😆🤣🤣🤣🤣🤣",
+        "templateName": null,
+        "messageType": "text"
+      },
+      {
+        "from": "them",
+        "text": "Move on",
+        "templateName": null,
+        "messageType": "text"
+      },
+      {
+        "from": "us",
+        "text": "What's your problem.. I've started a business that genuinely helps people get more customers\n\nI've ran an visibility audit on you and your not showing up in GoogleAI searches at all... If you dont care thats fine",
+        "templateName": null,
+        "messageType": "text"
+      },
+      {
+        "from": "them",
+        "text": "🤣🤣🤣🤣",
+        "templateName": null,
+        "messageType": "text"
+      }
+    ],
+    "expect": {
+      "outcome": "needs_you",
+      "topic": null,
+      "notes": "Mocking / laughing and \"Move on\": hand to Paul, never argue or escalate; at most a calm sign-off."
+    }
+  },
+  {
+    "id": "zz-real-19",
+    "source": "real",
+    "businessName": "ZZ Fixture Driving 19",
+    "trade": "driving instructor",
+    "town": "Brierley Hill",
+    "hasWebsite": false,
+    "ownerName": null,
+    "audit": {
+      "engine": "gemini",
+      "namedAnswers": 2,
+      "validAnswers": 6,
+      "competitors": [
+        "Rival A Driving",
+        "Rival B Driving",
+        "Rival C Driving"
+      ]
+    },
+    "findings": [],
+    "thread": [
+      {
+        "from": "us",
+        "text": "Hi, is this ZZ Fixture Driving 19?\n\nCheers",
+        "templateName": "initial_contact",
+        "messageType": "text"
+      },
+      {
+        "from": "them",
+        "text": "Who is this?",
+        "templateName": null,
+        "messageType": "text"
+      },
+      {
+        "from": "us",
+        "text": "hi mate, i'm Paul. i asked gemini for a driving instructor in Brierley Hill and it recommended Rival A Driving, Rival B Driving and Rival C Driving. without a site of your own, there's a lot less for ai tools to go on about what you do and where you work, and that's what we help with. we can fix that on the site you've already got, or we can build you a new one that's properly set up for ai visibility and seo. are you currently with an agency or do you own/manage the website yourself?",
+        "templateName": null,
+        "messageType": "text"
+      },
+      {
+        "from": "them",
+        "text": "Thanks anyway but I am fine. Busy as it is with recommendations and with 23 years in the job I am fine with how I run my driving school.",
+        "templateName": null,
+        "messageType": "text"
+      }
+    ],
+    "expect": {
+      "outcome": "needs_you",
+      "topic": null,
+      "notes": "Already busy and happy: hand to Paul; at most \"fair enough, thanks for your time\"; no re-pitch."
+    }
+  },
+  {
+    "id": "zz-real-20",
+    "source": "real",
+    "businessName": "ZZ Fixture Locksmith 20",
+    "trade": "locksmith",
+    "town": "Aldershot",
+    "hasWebsite": true,
+    "ownerName": null,
+    "audit": {
+      "engine": "chatgpt",
+      "namedAnswers": 4,
+      "validAnswers": 6,
+      "competitors": [
+        "Rival A Locksmith",
+        "Rival B Locksmith",
+        "Rival C Locksmith"
+      ]
+    },
+    "findings": [],
+    "thread": [
+      {
+        "from": "us",
+        "text": "Hi, is this ZZ Fixture Locksmith 20?\n\nCheers",
+        "templateName": "initial_contact",
+        "messageType": "text"
+      },
+      {
+        "from": "them",
+        "text": "Yes how may I help you",
+        "templateName": null,
+        "messageType": "text"
+      },
+      {
+        "from": "us",
+        "text": "Hi mate, i was looking for a locksmith in Aldershot so i asked AI and it mentioned Rival A Locksmith, Rival B Locksmith and Rival C Locksmith\n\nI know how to get you showing up more in those answers so people are more likely to find you\n\nHappy to explain it here or jump on a quick call if you'd rather\n\nPaul✌️",
+        "templateName": "audit_followup_call",
+        "messageType": "text"
+      },
+      {
+        "from": "them",
+        "text": "Stop",
+        "templateName": null,
+        "messageType": "text"
+      }
+    ],
+    "expect": {
+      "outcome": "stop",
+      "topic": null,
+      "notes": "Opt-out: no draft, suppress and stop any queued template."
+    }
+  },
+  {
+    "id": "zz-real-21",
+    "source": "real",
+    "businessName": "ZZ Fixture Plumbing 21",
+    "trade": "plumber",
+    "town": "Doncaster",
+    "hasWebsite": true,
+    "ownerName": null,
+    "audit": {
+      "engine": "chatgpt",
+      "namedAnswers": 0,
+      "validAnswers": 6,
+      "competitors": [
+        "Rival A Plumbing",
+        "Rival B Plumbing",
+        "Rival C Plumbing"
+      ]
+    },
+    "findings": [
+      {
+        "title": "Homepage has no structured data",
+        "said": "No JSON-LD on the homepage."
+      }
+    ],
+    "thread": [
+      {
+        "from": "us",
+        "text": "Hi, is this ZZ Fixture Plumbing 21?\n\nCheers",
+        "templateName": "initial_contact",
+        "messageType": "text"
+      },
+      {
+        "from": "them",
+        "text": "No. Bugger off!",
+        "templateName": null,
+        "messageType": "text"
+      }
+    ],
+    "expect": {
+      "outcome": "stop",
+      "topic": null,
+      "notes": "Hostile reply to the opener: no draft, suppress and cancel the queued follow-up template."
+    }
+  },
+  {
+    "id": "zz-real-22",
+    "source": "real",
+    "businessName": "ZZ Fixture Locksmith 22",
+    "trade": "locksmith",
+    "town": "Barnsley",
+    "hasWebsite": true,
+    "ownerName": null,
+    "audit": {
+      "engine": "chatgpt",
+      "namedAnswers": 3,
+      "validAnswers": 6,
+      "competitors": [
+        "Rival A Locksmith",
+        "Rival B Locksmith"
+      ]
+    },
+    "findings": [],
+    "thread": [
+      {
+        "from": "us",
+        "text": "Hi, is this the right number for ZZ Fixture Locksmith 22? Cheers",
+        "templateName": "initial_contact",
+        "messageType": "text"
+      },
+      {
+        "from": "them",
+        "text": "Yes",
+        "templateName": null,
+        "messageType": "text"
+      },
+      {
+        "from": "us",
+        "text": "Hi, thanks for getting back.\nWe asked AI tools like ChatGPT to recommend a Locksmiths in your area, it's naming Rival A Locksmith, Checkatrade and Rival B Locksmith - not ZZ Fixture Locksmith 22.\nWe ran a full report on your business for AI and SEO visibility: https://findable.live/r/zzf22\nWe could get you showing up in those results - it's mostly stuff we handle at our end.\nWant me to explain?",
+        "templateName": "audit_reply",
+        "messageType": "text"
+      },
+      {
+        "from": "them",
+        "text": "Im glad its not because im the longest serving locksmith of 28 years in Barnsley with thousands of repeat customers and I dont want anymore work due to semi retirement so you can scrub me off your list and stop bothering me with advertising.  Thanks.",
+        "templateName": null,
+        "messageType": "text"
+      }
+    ],
+    "expect": {
+      "outcome": "stop",
+      "topic": null,
+      "notes": "Asked to be removed: no draft, suppress."
+    }
+  },
+  {
+    "id": "zz-real-23",
+    "source": "real",
+    "businessName": "ZZ Fixture Plumbing 23",
+    "trade": "plumber",
+    "town": "Wellingborough",
+    "hasWebsite": true,
+    "ownerName": null,
+    "audit": null,
+    "findings": [],
+    "thread": [
+      {
+        "from": "us",
+        "text": "Hi, is this the right number for ZZ Fixture Plumbing 23? Cheers",
+        "templateName": "initial_contact",
+        "messageType": "text"
+      },
+      {
+        "from": "them",
+        "text": "Thanks for messaging ZZ Fixture Plumbing 23. If it’s an emergency, Call 07700 900123 now. If it’s not emergency then please tell us your postcode, a short issue (e.g ‘leak under sink’) and send photo of issue if possible.",
+        "templateName": null,
+        "messageType": "text"
+      }
+    ],
+    "expect": {
+      "outcome": "auto_reply",
+      "topic": null,
+      "notes": "Business auto-responder: do nothing, not interest. (Stored audit was run on the wrong town, so it is left out.)"
+    }
+  },
+  {
+    "id": "zz-real-24",
+    "source": "real",
+    "businessName": "ZZ Fixture Plumbing 24",
+    "trade": "plumber",
+    "town": "Hinckley",
+    "hasWebsite": true,
+    "ownerName": null,
+    "audit": {
+      "engine": "gemini",
+      "namedAnswers": 0,
+      "validAnswers": 6,
+      "competitors": [
+        "Dyno-Rod Plumbing Hinckley",
+        "Rival A Plumbing",
+        "Rival B Plumbing"
+      ]
+    },
+    "findings": [],
+    "thread": [
+      {
+        "from": "us",
+        "text": "Hi, is this the right number for ZZ Fixture Plumbing 24? Cheers",
+        "templateName": "initial_contact",
+        "messageType": "text"
+      },
+      {
+        "from": "them",
+        "text": "Thank you for your message. My working hours are between 8am - 4:30pm. Monday-Friday. I will be in contact during these hours.\nThanks",
+        "templateName": null,
+        "messageType": "text"
+      }
+    ],
+    "expect": {
+      "outcome": "auto_reply",
+      "topic": null,
+      "notes": "Working-hours auto-reply: do nothing, not interest."
+    }
+  },
+  {
+    "id": "zz-real-25",
+    "source": "real",
+    "businessName": "ZZ Fixture Locksmith 25",
+    "trade": "locksmith",
+    "town": "Gillingham",
+    "hasWebsite": true,
+    "ownerName": null,
+    "audit": {
+      "engine": "chatgpt",
+      "namedAnswers": 4,
+      "validAnswers": 58,
+      "competitors": [
+        "Rival A Locksmith",
+        "Rival B Locksmith"
+      ]
+    },
+    "findings": [],
+    "thread": [
+      {
+        "from": "us",
+        "text": "Hi, is this the right number for ZZ Fixture Locksmith 25? Cheers",
+        "templateName": "initial_contact",
+        "messageType": "text"
+      },
+      {
+        "from": "them",
+        "text": "Hi what can I assist you with?",
+        "templateName": null,
+        "messageType": "text"
+      },
+      {
+        "from": "us",
+        "text": "Hi, thanks for getting back.\nWe asked AI tools like ChatGPT to recommend a Locksmiths in your area, it's naming Rival A Locksmith, Rival B Locksmith and Kent - not ZZ Fixture Locksmith 25.\nWe ran a full report on your business for AI and SEO visibility: https://findable.live/r/zzf25\nWe could get you showing up in those results - it's mostly stuff we handle at our end.\nWant me to explain?",
+        "templateName": "audit_reply",
+        "messageType": "text"
+      }
+    ],
+    "expect": {
+      "outcome": "none",
+      "topic": null,
+      "notes": "Thread ends on our message; the prospect has not replied to it, so there is nothing to draft."
+    }
+  },
+  {
+    "id": "zz-odd-01",
+    "source": "odd",
+    "businessName": "ZZ Fixture Plumbing 26",
+    "trade": "plumber",
+    "town": "Bristol",
+    "hasWebsite": true,
+    "ownerName": null,
+    "audit": {
+      "engine": "gemini",
+      "namedAnswers": 0,
+      "validAnswers": 6,
+      "competitors": [
+        "Rival A Plumbing",
+        "Rival B Plumbing",
+        "Rival C Plumbing"
+      ]
+    },
+    "findings": [
+      {
+        "title": "Bristol is not mentioned on the site",
+        "said": "Bristol does not appear in the title, headings or opening text of any of the 10 pages read."
+      }
+    ],
+    "thread": [
+      {
+        "from": "us",
+        "text": "Hi, is this ZZ Fixture Plumbing 26?\n\nCheers",
+        "templateName": "initial_contact",
+        "messageType": "text"
+      },
+      {
+        "from": "them",
+        "text": "Yes",
+        "templateName": null,
+        "messageType": "text"
+      },
+      {
+        "from": "us",
+        "text": "Hi mate, i was looking for a plumber in Bristol so i asked AI and it mentioned Rival A Plumbing, Rival B Plumbing and Rival C Plumbing\n\nI know how to get you showing up more in those answers so people are more likely to find you\n\nHappy to explain it here or jump on a quick call if you'd rather\n\nPaul✌️",
+        "templateName": "audit_followup_call",
+        "messageType": "text"
+      },
+      {
+        "from": "them",
+        "text": "is this a wind up lol",
+        "templateName": null,
+        "messageType": "text"
+      }
+    ],
+    "expect": {
+      "outcome": "draft",
+      "topic": null,
+      "notes": "Light one-line answer that it is genuine (Paul, a real person who checked AI answers), then offer to explain or a quick call; no hard pitch."
+    }
+  },
+  {
+    "id": "zz-odd-02",
+    "source": "odd",
+    "businessName": "ZZ Fixture Electrical 27",
+    "trade": "electrician",
+    "town": "Coventry",
+    "hasWebsite": true,
+    "ownerName": null,
+    "audit": {
+      "engine": "chatgpt",
+      "namedAnswers": 0,
+      "validAnswers": 6,
+      "competitors": [
+        "Rival A Electrical",
+        "Rival B Electrical",
+        "Rival C Electrical"
+      ]
+    },
+    "findings": [],
+    "thread": [
+      {
+        "from": "us",
+        "text": "Hi, is this ZZ Fixture Electrical 27?\n\nCheers",
+        "templateName": "initial_contact",
+        "messageType": "text"
+      },
+      {
+        "from": "them",
+        "text": "Yes",
+        "templateName": null,
+        "messageType": "text"
+      },
+      {
+        "from": "us",
+        "text": "Hi mate, i was looking for an electrician in Coventry so i asked AI and it mentioned Rival A Electrical, Rival B Electrical and Rival C Electrical\n\nI know how to get you showing up more in those answers so people are more likely to find you\n\nHappy to explain it here or jump on a quick call if you'd rather\n\nPaul✌️",
+        "templateName": "audit_followup_call",
+        "messageType": "text"
+      },
+      {
+        "from": "them",
+        "text": "ok",
+        "templateName": null,
+        "messageType": "text"
+      }
+    ],
+    "expect": {
+      "outcome": "ack",
+      "topic": null,
+      "notes": "\"ok\" is not interest: no pitch; at most a very short nudge offering a call, or nothing."
+    }
+  },
+  {
+    "id": "zz-odd-03",
+    "source": "odd",
+    "businessName": "ZZ Fixture Locksmith 28",
+    "trade": "locksmith",
+    "town": "Derby",
+    "hasWebsite": true,
+    "ownerName": null,
+    "audit": null,
+    "findings": [],
+    "thread": [
+      {
+        "from": "us",
+        "text": "Hi, is this ZZ Fixture Locksmith 28?\n\nCheers",
+        "templateName": "initial_contact",
+        "messageType": "text"
+      },
+      {
+        "from": "them",
+        "text": "?",
+        "templateName": null,
+        "messageType": "text"
+      }
+    ],
+    "expect": {
+      "outcome": "draft",
+      "topic": null,
+      "notes": "They are confused by the opener: say who we are in one plain line and why we messaged; one question."
+    }
+  },
+  {
+    "id": "zz-odd-04",
+    "source": "odd",
+    "businessName": "ZZ Fixture Driving 29",
+    "trade": "driving instructor",
+    "town": "Swindon",
+    "hasWebsite": true,
+    "ownerName": null,
+    "audit": {
+      "engine": "gemini",
+      "namedAnswers": 0,
+      "validAnswers": 6,
+      "competitors": [
+        "Rival A Driving",
+        "Rival B Driving",
+        "Rival C Driving"
+      ]
+    },
+    "findings": [
+      {
+        "title": "Your site claims accreditation or qualifications but names no scheme",
+        "said": "“…fully qualified instructor with years of experience…”"
+      }
+    ],
+    "thread": [
+      {
+        "from": "us",
+        "text": "Hi, is this ZZ Fixture Driving 29?\n\nCheers",
+        "templateName": "initial_contact",
+        "messageType": "text"
+      },
+      {
+        "from": "them",
+        "text": "who",
+        "templateName": null,
+        "messageType": "text"
+      }
+    ],
+    "expect": {
+      "outcome": "draft",
+      "topic": null,
+      "notes": "Say who we are in one line (Paul, Findable, checks how AI tools recommend local businesses) and the one true audit line; no pitch paragraph."
+    }
+  },
+  {
+    "id": "zz-odd-05",
+    "source": "odd",
+    "businessName": "ZZ Fixture Roofing 30",
+    "trade": "roofer",
+    "town": "Exeter",
+    "hasWebsite": true,
+    "ownerName": null,
+    "audit": {
+      "engine": "gemini",
+      "namedAnswers": 1,
+      "validAnswers": 6,
+      "competitors": [
+        "Rival A Roofing",
+        "Rival B Roofing",
+        "Rival C Roofing"
+      ]
+    },
+    "findings": [],
+    "thread": [
+      {
+        "from": "us",
+        "text": "Hi, is this ZZ Fixture Roofing 30?\n\nCheers",
+        "templateName": "initial_contact",
+        "messageType": "text"
+      },
+      {
+        "from": "them",
+        "text": "Yes",
+        "templateName": null,
+        "messageType": "text"
+      },
+      {
+        "from": "us",
+        "text": "Hi mate, i was looking for a roofer in Exeter so i asked AI and it mentioned Rival A Roofing, Rival B Roofing and Rival C Roofing\n\nI know how to get you showing up more in those answers so people are more likely to find you\n\nHappy to explain it here or jump on a quick call if you'd rather\n\nPaul✌️",
+        "templateName": "audit_followup_call",
+        "messageType": "text"
+      },
+      {
+        "from": "them",
+        "text": "yes",
+        "templateName": null,
+        "messageType": "text"
+      }
+    ],
+    "expect": {
+      "outcome": "draft",
+      "topic": null,
+      "notes": "\"yes\" to \"want me to explain?\": two short lines on what we checked and found, then offer a call or voice note; no price, no link."
+    }
+  },
+  {
+    "id": "zz-odd-06",
+    "source": "odd",
+    "businessName": "ZZ Fixture Accounting 31",
+    "trade": "accountant",
+    "town": "Reading",
+    "hasWebsite": true,
+    "ownerName": null,
+    "audit": {
+      "engine": "chatgpt",
+      "namedAnswers": 0,
+      "validAnswers": 6,
+      "competitors": [
+        "Rival A Accounting",
+        "Rival B Accounting",
+        "Rival C Accounting"
+      ]
+    },
+    "findings": [],
+    "thread": [
+      {
+        "from": "us",
+        "text": "Hi, is this ZZ Fixture Accounting 31?\n\nCheers",
+        "templateName": "initial_contact",
+        "messageType": "text"
+      },
+      {
+        "from": "them",
+        "text": "Yes",
+        "templateName": null,
+        "messageType": "text"
+      },
+      {
+        "from": "us",
+        "text": "Hi mate, i was looking for an accountant in Reading so i asked AI and it mentioned Rival A Accounting, Rival B Accounting and Rival C Accounting\n\nI know how to get you showing up more in those answers so people are more likely to find you\n\nHappy to explain it here or jump on a quick call if you'd rather\n\nPaul✌️",
+        "templateName": "audit_followup_call",
+        "messageType": "text"
+      },
+      {
+        "from": "them",
+        "text": "no",
+        "templateName": null,
+        "messageType": "text"
+      }
+    ],
+    "expect": {
+      "outcome": "needs_you",
+      "topic": null,
+      "notes": "A flat no after the hook: hand to Paul; at most \"no worries, thanks for your time\"."
+    }
+  },
+  {
+    "id": "zz-odd-07",
+    "source": "odd",
+    "businessName": "ZZ Fixture Plumbing 32",
+    "trade": "plumber",
+    "town": "Norwich",
+    "hasWebsite": true,
+    "ownerName": null,
+    "audit": null,
+    "findings": [],
+    "thread": [
+      {
+        "from": "us",
+        "text": "Hi, is this ZZ Fixture Plumbing 32?\n\nCheers",
+        "templateName": "initial_contact",
+        "messageType": "text"
+      },
+      {
+        "from": "them",
+        "text": "who gave you my number",
+        "templateName": null,
+        "messageType": "text"
+      }
+    ],
+    "expect": {
+      "outcome": "needs_you",
+      "topic": null,
+      "notes": "Asks where we got the number: hand to Paul; if drafted, say honestly it is from their public Google Maps listing and offer to stop messaging."
+    }
+  },
+  {
+    "id": "zz-odd-08",
+    "source": "odd",
+    "businessName": "ZZ Fixture Electrical 33",
+    "trade": "electrician",
+    "town": "Luton",
+    "hasWebsite": true,
+    "ownerName": null,
+    "audit": null,
+    "findings": [],
+    "thread": [
+      {
+        "from": "us",
+        "text": "Hi, is this ZZ Fixture Electrical 33?\n\nCheers",
+        "templateName": "initial_contact",
+        "messageType": "text"
+      },
+      {
+        "from": "them",
+        "text": "wrong number mate",
+        "templateName": null,
+        "messageType": "text"
+      }
+    ],
+    "expect": {
+      "outcome": "needs_you",
+      "topic": null,
+      "notes": "Wrong person: hand to Paul, apologise, no pitch; check the number before any further contact."
+    }
+  },
+  {
+    "id": "zz-odd-09",
+    "source": "odd",
+    "businessName": "ZZ Fixture Locksmith 34",
+    "trade": "locksmith",
+    "town": "York",
+    "hasWebsite": true,
+    "ownerName": null,
+    "audit": {
+      "engine": "gemini",
+      "namedAnswers": 0,
+      "validAnswers": 6,
+      "competitors": [
+        "Rival A Locksmith",
+        "Rival B Locksmith",
+        "Rival C Locksmith"
+      ]
+    },
+    "findings": [
+      {
+        "title": "The site refused AI search crawlers",
+        "said": "Requested as OAI-SearchBot, ChatGPT-User, the homepage answered with an error or a bot-check page."
+      }
+    ],
+    "thread": [
+      {
+        "from": "us",
+        "text": "Hi, is this ZZ Fixture Locksmith 34?\n\nCheers",
+        "templateName": "initial_contact",
+        "messageType": "text"
+      },
+      {
+        "from": "them",
+        "text": "Yes",
+        "templateName": null,
+        "messageType": "text"
+      },
+      {
+        "from": "us",
+        "text": "Hi mate, i was looking for a locksmith in York so i asked AI and it mentioned Rival A Locksmith, Rival B Locksmith and Rival C Locksmith\n\nI know how to get you showing up more in those answers so people are more likely to find you\n\nHappy to explain it here or jump on a quick call if you'd rather\n\nPaul✌️",
+        "templateName": "audit_followup_call",
+        "messageType": "text"
+      },
+      {
+        "from": "them",
+        "text": "is this a bot?",
+        "templateName": null,
+        "messageType": "text"
+      }
+    ],
+    "expect": {
+      "outcome": "draft",
+      "topic": null,
+      "notes": "must not deny AI help: say it is Paul, a real person, who uses AI tools to help with checks and messages; one line, then the call offer."
+    }
+  },
+  {
+    "id": "zz-odd-10",
+    "source": "odd",
+    "businessName": "ZZ Fixture Driving 35",
+    "trade": "driving instructor",
+    "town": "Leicester",
+    "hasWebsite": false,
+    "ownerName": null,
+    "audit": {
+      "engine": "gemini",
+      "namedAnswers": 2,
+      "validAnswers": 6,
+      "competitors": [
+        "Rival A Driving",
+        "Rival B Driving",
+        "Rival C Driving"
+      ]
+    },
+    "findings": [],
+    "thread": [
+      {
+        "from": "us",
+        "text": "Hi, is this ZZ Fixture Driving 35?\n\nCheers",
+        "templateName": "initial_contact",
+        "messageType": "text"
+      },
+      {
+        "from": "them",
+        "text": "Yes",
+        "templateName": null,
+        "messageType": "text"
+      },
+      {
+        "from": "us",
+        "text": "Hi mate, i was looking for a driving instructor in Leicester so i asked AI and it mentioned Rival A Driving, Rival B Driving and Rival C Driving\n\nI know how to get you showing up more in those answers so people are more likely to find you\n\nHappy to explain it here or jump on a quick call if you'd rather\n\nPaul✌️",
+        "templateName": "audit_followup_call",
+        "messageType": "text"
+      },
+      {
+        "from": "them",
+        "text": "are you real?",
+        "templateName": null,
+        "messageType": "text"
+      }
+    ],
+    "expect": {
+      "outcome": "draft",
+      "topic": null,
+      "notes": "must not deny AI help: yes, Paul is real and reads every message, AI helps with the checks; offer a call so they can hear it is a person."
+    }
+  },
+  {
+    "id": "zz-odd-11",
+    "source": "odd",
+    "businessName": "ZZ Fixture Plumbing 36",
+    "trade": "plumber",
+    "town": "Kuala Lumpur",
+    "hasWebsite": true,
+    "ownerName": null,
+    "audit": null,
+    "findings": [],
+    "thread": [
+      {
+        "from": "us",
+        "text": "Hi, is this ZZ Fixture Plumbing 36?\n\nCheers",
+        "templateName": "initial_contact",
+        "messageType": "text"
+      },
+      {
+        "from": "them",
+        "text": "Ya, boleh saya bantu?",
+        "templateName": null,
+        "messageType": "text"
+      }
+    ],
+    "expect": {
+      "outcome": "needs_you",
+      "topic": null,
+      "notes": "Malay reply (\"Yes, can I help you?\"): hand to Paul; non-UK market, cold outreach is UK only, do not draft a pitch in English or Malay."
+    }
+  },
+  {
+    "id": "zz-odd-12",
+    "source": "odd",
+    "businessName": "ZZ Fixture Electrical 37",
+    "trade": "electrician",
+    "town": "Petaling Jaya",
+    "hasWebsite": true,
+    "ownerName": null,
+    "audit": null,
+    "findings": [],
+    "thread": [
+      {
+        "from": "us",
+        "text": "Hi, is this ZZ Fixture Electrical 37?\n\nCheers",
+        "templateName": "initial_contact",
+        "messageType": "text"
+      },
+      {
+        "from": "them",
+        "text": "Tak berminat",
+        "templateName": null,
+        "messageType": "text"
+      }
+    ],
+    "expect": {
+      "outcome": "needs_you",
+      "topic": null,
+      "notes": "Malay \"Not interested\": hand to Paul and suppress; no draft pitch."
+    }
+  },
+  {
+    "id": "zz-odd-13",
+    "source": "odd",
+    "businessName": "ZZ Fixture Mechanic 38",
+    "trade": "mobile mechanic",
+    "town": "Wolverhampton",
+    "hasWebsite": false,
+    "ownerName": null,
+    "audit": {
+      "engine": "chatgpt",
+      "namedAnswers": 0,
+      "validAnswers": 6,
+      "competitors": [
+        "Rival A Mechanic",
+        "Rival B Mechanic",
+        "Rival C Mechanic"
+      ]
+    },
+    "findings": [],
+    "thread": [
+      {
+        "from": "us",
+        "text": "Hi, is this ZZ Fixture Mechanic 38?\n\nCheers",
+        "templateName": "initial_contact",
+        "messageType": "text"
+      },
+      {
+        "from": "them",
+        "text": "Yes",
+        "templateName": null,
+        "messageType": "text"
+      },
+      {
+        "from": "us",
+        "text": "Hi mate, i was looking for a mobile mechanic in Wolverhampton so i asked AI and it mentioned Rival A Mechanic, Rival B Mechanic and Rival C Mechanic\n\nI know how to get you showing up more in those answers so people are more likely to find you\n\nHappy to explain it here or jump on a quick call if you'd rather\n\nPaul✌️",
+        "templateName": "audit_followup_call",
+        "messageType": "text"
+      },
+      {
+        "from": "them",
+        "text": "https://maps.app.goo.gl/xxx",
+        "templateName": null,
+        "messageType": "text"
+      }
+    ],
+    "expect": {
+      "outcome": "needs_you",
+      "topic": null,
+      "notes": "They sent a link only: we cannot tell what they mean; hand to Paul, never open or describe an unknown link in a draft."
+    }
+  },
+  {
+    "id": "zz-odd-14",
+    "source": "odd",
+    "businessName": "ZZ Fixture Roofing 39",
+    "trade": "roofer",
+    "town": "Stoke-on-Trent",
+    "hasWebsite": true,
+    "ownerName": null,
+    "audit": {
+      "engine": "gemini",
+      "namedAnswers": 0,
+      "validAnswers": 6,
+      "competitors": [
+        "Rival A Roofing",
+        "Rival B Roofing",
+        "Rival C Roofing"
+      ]
+    },
+    "findings": [
+      {
+        "title": "Unfinished placeholder blocks are live on the site",
+        "said": "“Project 1” links to “#” on the homepage"
+      }
+    ],
+    "thread": [
+      {
+        "from": "us",
+        "text": "Hi, is this ZZ Fixture Roofing 39?\n\nCheers",
+        "templateName": "initial_contact",
+        "messageType": "text"
+      },
+      {
+        "from": "them",
+        "text": "Yes",
+        "templateName": null,
+        "messageType": "text"
+      },
+      {
+        "from": "us",
+        "text": "Hi mate, i was looking for a roofer in Stoke-on-Trent so i asked AI and it mentioned Rival A Roofing, Rival B Roofing and Rival C Roofing\n\nI know how to get you showing up more in those answers so people are more likely to find you\n\nHappy to explain it here or jump on a quick call if you'd rather\n\nPaul✌️",
+        "templateName": "audit_followup_call",
+        "messageType": "text"
+      },
+      {
+        "from": "them",
+        "text": "f*** off",
+        "templateName": null,
+        "messageType": "text"
+      }
+    ],
+    "expect": {
+      "outcome": "stop",
+      "topic": null,
+      "notes": "Abusive: no draft, suppress and stop queued templates."
+    }
+  },
+  {
+    "id": "zz-odd-15",
+    "source": "odd",
+    "businessName": "ZZ Fixture Plumbing 40",
+    "trade": "plumber",
+    "town": "Hull",
+    "hasWebsite": true,
+    "ownerName": null,
+    "audit": {
+      "engine": "chatgpt",
+      "namedAnswers": 0,
+      "validAnswers": 6,
+      "competitors": [
+        "Rival A Plumbing",
+        "Rival B Plumbing",
+        "Rival C Plumbing"
+      ]
+    },
+    "findings": [],
+    "thread": [
+      {
+        "from": "us",
+        "text": "Hi, is this ZZ Fixture Plumbing 40?\n\nCheers",
+        "templateName": "initial_contact",
+        "messageType": "text"
+      },
+      {
+        "from": "them",
+        "text": "Yes",
+        "templateName": null,
+        "messageType": "text"
+      },
+      {
+        "from": "us",
+        "text": "Hi mate, i was looking for a plumber in Hull so i asked AI and it mentioned Rival A Plumbing, Rival B Plumbing and Rival C Plumbing\n\nI know how to get you showing up more in those answers so people are more likely to find you\n\nHappy to explain it here or jump on a quick call if you'd rather\n\nPaul✌️",
+        "templateName": "audit_followup_call",
+        "messageType": "text"
+      },
+      {
+        "from": "them",
+        "text": "piss off spammer",
+        "templateName": null,
+        "messageType": "text"
+      }
+    ],
+    "expect": {
+      "outcome": "stop",
+      "topic": null,
+      "notes": "Abusive opt-out: no draft, suppress and stop queued templates."
+    }
+  },
+  {
+    "id": "zz-odd-16",
+    "source": "odd",
+    "businessName": "ZZ Fixture Electrical 41",
+    "trade": "electrician",
+    "town": "Sunderland",
+    "hasWebsite": true,
+    "ownerName": null,
+    "audit": {
+      "engine": "gemini",
+      "namedAnswers": 0,
+      "validAnswers": 6,
+      "competitors": [
+        "Rival A Electrical",
+        "Rival B Electrical",
+        "Rival C Electrical"
+      ]
+    },
+    "findings": [
+      {
+        "title": "Some links go to the wrong place",
+        "said": "“Book a job” goes to /about (a page about it is at /contact)"
+      }
+    ],
+    "thread": [
+      {
+        "from": "us",
+        "text": "Hi, is this ZZ Fixture Electrical 41?\n\nCheers",
+        "templateName": "initial_contact",
+        "messageType": "text"
+      },
+      {
+        "from": "them",
+        "text": "Yes",
+        "templateName": null,
+        "messageType": "text"
+      },
+      {
+        "from": "us",
+        "text": "Hi mate, i was looking for an electrician in Sunderland so i asked AI and it mentioned Rival A Electrical, Rival B Electrical and Rival C Electrical\n\nI know how to get you showing up more in those answers so people are more likely to find you\n\nHappy to explain it here or jump on a quick call if you'd rather\n\nPaul✌️",
+        "templateName": "audit_followup_call",
+        "messageType": "text"
+      },
+      {
+        "from": "them",
+        "text": "bloody hell go on then, how much?",
+        "templateName": null,
+        "messageType": "text"
+      }
+    ],
+    "expect": {
+      "outcome": "draft",
+      "topic": "price",
+      "notes": "Positive despite swearing: canonical price from the offer constants only, in a line, then offer a quick call; do not mirror the swearing."
+    }
+  },
+  {
+    "id": "zz-odd-17",
+    "source": "odd",
+    "businessName": "ZZ Fixture Driving 42",
+    "trade": "driving instructor",
+    "town": "Plymouth",
+    "hasWebsite": true,
+    "ownerName": null,
+    "audit": {
+      "engine": "gemini",
+      "namedAnswers": 1,
+      "validAnswers": 6,
+      "competitors": [
+        "Rival A Driving",
+        "Rival B Driving",
+        "Rival C Driving"
+      ]
+    },
+    "findings": [
+      {
+        "title": "Your site claims accreditation or qualifications but names no scheme",
+        "said": "“…fully qualified instructor with years of experience…”"
+      }
+    ],
+    "thread": [
+      {
+        "from": "us",
+        "text": "Hi, is this ZZ Fixture Driving 42?\n\nCheers",
+        "templateName": "initial_contact",
+        "messageType": "text"
+      },
+      {
+        "from": "them",
+        "text": "Yes",
+        "templateName": null,
+        "messageType": "text"
+      },
+      {
+        "from": "us",
+        "text": "Hi mate, i was looking for a driving instructor in Plymouth so i asked AI and it mentioned Rival A Driving, Rival B Driving and Rival C Driving\n\nI know how to get you showing up more in those answers so people are more likely to find you\n\nHappy to explain it here or jump on a quick call if you'd rather\n\nPaul✌️",
+        "templateName": "audit_followup_call",
+        "messageType": "text"
+      },
+      {
+        "from": "them",
+        "text": "send me a voice note",
+        "templateName": null,
+        "messageType": "text"
+      }
+    ],
+    "expect": {
+      "outcome": "draft",
+      "topic": null,
+      "notes": "They asked for a voice note: a one-line reply saying Paul will send one shortly (Paul records it); no text pitch."
+    }
+  },
+  {
+    "id": "zz-odd-18",
+    "source": "odd",
+    "businessName": "ZZ Fixture Locksmith 43",
+    "trade": "locksmith",
+    "town": "Bolton",
+    "hasWebsite": true,
+    "ownerName": null,
+    "audit": {
+      "engine": "chatgpt",
+      "namedAnswers": 0,
+      "validAnswers": 6,
+      "competitors": [
+        "Rival A Locksmith",
+        "Rival B Locksmith",
+        "Rival C Locksmith"
+      ]
+    },
+    "findings": [],
+    "thread": [
+      {
+        "from": "us",
+        "text": "Hi, is this ZZ Fixture Locksmith 43?\n\nCheers",
+        "templateName": "initial_contact",
+        "messageType": "text"
+      },
+      {
+        "from": "them",
+        "text": "Yes",
+        "templateName": null,
+        "messageType": "text"
+      },
+      {
+        "from": "us",
+        "text": "Hi mate, i was looking for a locksmith in Bolton so i asked AI and it mentioned Rival A Locksmith, Rival B Locksmith and Rival C Locksmith\n\nI know how to get you showing up more in those answers so people are more likely to find you\n\nHappy to explain it here or jump on a quick call if you'd rather\n\nPaul✌️",
+        "templateName": "audit_followup_call",
+        "messageType": "text"
+      },
+      {
+        "from": "them",
+        "text": "call me after 5",
+        "templateName": null,
+        "messageType": "text"
+      }
+    ],
+    "expect": {
+      "outcome": "draft",
+      "topic": null,
+      "notes": "Confirm the call after 5 today in one line (\"will ring you just after 5\"); no pitch, no extra questions."
+    }
+  },
+  {
+    "id": "zz-odd-19",
+    "source": "odd",
+    "businessName": "ZZ Fixture Accounting 44",
+    "trade": "accountant",
+    "town": "Cheltenham",
+    "hasWebsite": true,
+    "ownerName": null,
+    "audit": {
+      "engine": "gemini",
+      "namedAnswers": 0,
+      "validAnswers": 6,
+      "competitors": [
+        "Rival A Accounting",
+        "Rival B Accounting",
+        "Rival C Accounting"
+      ]
+    },
+    "findings": [
+      {
+        "title": "Main headings don’t say what you do or where",
+        "said": "Homepage: “Welcome”"
+      }
+    ],
+    "thread": [
+      {
+        "from": "us",
+        "text": "Hi, is this ZZ Fixture Accounting 44?\n\nCheers",
+        "templateName": "initial_contact",
+        "messageType": "text"
+      },
+      {
+        "from": "them",
+        "text": "Yes",
+        "templateName": null,
+        "messageType": "text"
+      },
+      {
+        "from": "us",
+        "text": "Hi mate, i was looking for an accountant in Cheltenham so i asked AI and it mentioned Rival A Accounting, Rival B Accounting and Rival C Accounting\n\nI know how to get you showing up more in those answers so people are more likely to find you\n\nHappy to explain it here or jump on a quick call if you'd rather\n\nPaul✌️",
+        "templateName": "audit_followup_call",
+        "messageType": "text"
+      },
+      {
+        "from": "them",
+        "text": "how much is it",
+        "templateName": null,
+        "messageType": "text"
+      }
+    ],
+    "expect": {
+      "outcome": "draft",
+      "topic": "price",
+      "notes": "Canonical price and route counts from the offer constants only, short, then offer a call; never invent a discount."
+    }
+  },
+  {
+    "id": "zz-odd-20",
+    "source": "odd",
+    "businessName": "ZZ Fixture Roofing 45",
+    "trade": "roofer",
+    "town": "Lincoln",
+    "hasWebsite": true,
+    "ownerName": null,
+    "audit": {
+      "engine": "gemini",
+      "namedAnswers": 0,
+      "validAnswers": 6,
+      "competitors": [
+        "Rival A Roofing",
+        "Rival B Roofing",
+        "Rival C Roofing"
+      ]
+    },
+    "findings": [],
+    "thread": [
+      {
+        "from": "us",
+        "text": "Hi, is this ZZ Fixture Roofing 45?\n\nCheers",
+        "templateName": "initial_contact",
+        "messageType": "text"
+      },
+      {
+        "from": "them",
+        "text": "Yes",
+        "templateName": null,
+        "messageType": "text"
+      },
+      {
+        "from": "us",
+        "text": "Hi mate, i was looking for a roofer in Lincoln so i asked AI and it mentioned Rival A Roofing, Rival B Roofing and Rival C Roofing\n\nI know how to get you showing up more in those answers so people are more likely to find you\n\nHappy to explain it here or jump on a quick call if you'd rather\n\nPaul✌️",
+        "templateName": "audit_followup_call",
+        "messageType": "text"
+      },
+      {
+        "from": "them",
+        "text": "what's the catch",
+        "templateName": null,
+        "messageType": "text"
+      }
+    ],
+    "expect": {
+      "outcome": "draft",
+      "topic": "term",
+      "notes": "Honest answer: there is a minimum term (route payment count) and the guarantee terms; no \"no commitment\" or \"cancel any time\"; offer a call."
+    }
+  },
+  {
+    "id": "zz-odd-21",
+    "source": "odd",
+    "businessName": "ZZ Fixture Plumbing 46",
+    "trade": "plumber",
+    "town": "Southampton",
+    "hasWebsite": true,
+    "ownerName": null,
+    "audit": {
+      "engine": "chatgpt",
+      "namedAnswers": 0,
+      "validAnswers": 6,
+      "competitors": [
+        "Rival A Plumbing",
+        "Rival B Plumbing",
+        "Rival C Plumbing"
+      ]
+    },
+    "findings": [
+      {
+        "title": "Southampton is not mentioned on the site",
+        "said": "Southampton does not appear in the title, headings or opening text of any of the 10 pages read."
+      }
+    ],
+    "thread": [
+      {
+        "from": "us",
+        "text": "Hi, is this ZZ Fixture Plumbing 46?\n\nCheers",
+        "templateName": "initial_contact",
+        "messageType": "text"
+      },
+      {
+        "from": "them",
+        "text": "Yes",
+        "templateName": null,
+        "messageType": "text"
+      },
+      {
+        "from": "us",
+        "text": "Hi mate, i was looking for a plumber in Southampton so i asked AI and it mentioned Rival A Plumbing, Rival B Plumbing and Rival C Plumbing\n\nI know how to get you showing up more in those answers so people are more likely to find you\n\nHappy to explain it here or jump on a quick call if you'd rather\n\nPaul✌️",
+        "templateName": "audit_followup_call",
+        "messageType": "text"
+      },
+      {
+        "from": "them",
+        "text": "do I own the website",
+        "templateName": null,
+        "messageType": "text"
+      }
+    ],
+    "expect": {
+      "outcome": "draft",
+      "topic": "ownership",
+      "notes": "Ownership depends on the route (Build vs Optimise) and domain control; do not promise anything before knowing; offer a call to go through it."
+    }
+  },
+  {
+    "id": "zz-odd-22",
+    "source": "odd",
+    "businessName": "ZZ Fixture Electrical 47",
+    "trade": "electrician",
+    "town": "Preston",
+    "hasWebsite": true,
+    "ownerName": null,
+    "audit": {
+      "engine": "gemini",
+      "namedAnswers": 0,
+      "validAnswers": 6,
+      "competitors": [
+        "Rival A Electrical",
+        "Rival B Electrical",
+        "Rival C Electrical"
+      ]
+    },
+    "findings": [],
+    "thread": [
+      {
+        "from": "us",
+        "text": "Hi, is this ZZ Fixture Electrical 47?\n\nCheers",
+        "templateName": "initial_contact",
+        "messageType": "text"
+      },
+      {
+        "from": "them",
+        "text": "Yes",
+        "templateName": null,
+        "messageType": "text"
+      },
+      {
+        "from": "us",
+        "text": "Hi mate, i was looking for an electrician in Preston so i asked AI and it mentioned Rival A Electrical, Rival B Electrical and Rival C Electrical\n\nI know how to get you showing up more in those answers so people are more likely to find you\n\nHappy to explain it here or jump on a quick call if you'd rather\n\nPaul✌️",
+        "templateName": "audit_followup_call",
+        "messageType": "text"
+      },
+      {
+        "from": "them",
+        "text": "how long is the contract",
+        "templateName": null,
+        "messageType": "text"
+      }
+    ],
+    "expect": {
+      "outcome": "draft",
+      "topic": "term",
+      "notes": "State the route payment counts from the offer constants (Build 12, Optimise 6, including the first) with no invented exit rights; one question about which fits."
+    }
+  },
+  {
+    "id": "zz-odd-23",
+    "source": "odd",
+    "businessName": "ZZ Fixture Locksmith 48",
+    "trade": "locksmith",
+    "town": "Ipswich",
+    "hasWebsite": true,
+    "ownerName": null,
+    "audit": {
+      "engine": "gemini",
+      "namedAnswers": 1,
+      "validAnswers": 6,
+      "competitors": [
+        "Rival A Locksmith",
+        "Rival B Locksmith",
+        "Rival C Locksmith"
+      ]
+    },
+    "findings": [
+      {
+        "title": "The site refused AI search crawlers",
+        "said": "Requested as OAI-SearchBot, ChatGPT-User, the homepage answered with an error or a bot-check page."
+      }
+    ],
+    "thread": [
+      {
+        "from": "us",
+        "text": "Hi, is this ZZ Fixture Locksmith 48?\n\nCheers",
+        "templateName": "initial_contact",
+        "messageType": "text"
+      },
+      {
+        "from": "them",
+        "text": "Yes",
+        "templateName": null,
+        "messageType": "text"
+      },
+      {
+        "from": "us",
+        "text": "Hi mate, i was looking for a locksmith in Ipswich so i asked AI and it mentioned Rival A Locksmith, Rival B Locksmith and Rival C Locksmith\n\nI know how to get you showing up more in those answers so people are more likely to find you\n\nHappy to explain it here or jump on a quick call if you'd rather\n\nPaul✌️",
+        "templateName": "audit_followup_call",
+        "messageType": "text"
+      },
+      {
+        "from": "them",
+        "text": "is there a guarantee",
+        "templateName": null,
+        "messageType": "text"
+      }
+    ],
+    "expect": {
+      "outcome": "draft",
+      "topic": "guarantee",
+      "notes": "State the guarantee exactly as the offer constants word it (re-measure, refund rule); no hedge stapled on, no ranking promise."
+    }
+  },
+  {
+    "id": "zz-odd-24",
+    "source": "odd",
+    "businessName": "ZZ Fixture Driving 49",
+    "trade": "driving instructor",
+    "town": "Chelmsford",
+    "hasWebsite": true,
+    "ownerName": null,
+    "audit": {
+      "engine": "chatgpt",
+      "namedAnswers": 0,
+      "validAnswers": 6,
+      "competitors": [
+        "Rival A Driving",
+        "Rival B Driving",
+        "Rival C Driving"
+      ]
+    },
+    "findings": [],
+    "thread": [
+      {
+        "from": "us",
+        "text": "Hi, is this ZZ Fixture Driving 49?\n\nCheers",
+        "templateName": "initial_contact",
+        "messageType": "text"
+      },
+      {
+        "from": "them",
+        "text": "Yes",
+        "templateName": null,
+        "messageType": "text"
+      },
+      {
+        "from": "us",
+        "text": "Hi mate, i was looking for a driving instructor in Chelmsford so i asked AI and it mentioned Rival A Driving, Rival B Driving and Rival C Driving\n\nI know how to get you showing up more in those answers so people are more likely to find you\n\nHappy to explain it here or jump on a quick call if you'd rather\n\nPaul✌️",
+        "templateName": "audit_followup_call",
+        "messageType": "text"
+      },
+      {
+        "from": "them",
+        "text": "can I cancel",
+        "templateName": null,
+        "messageType": "text"
+      }
+    ],
+    "expect": {
+      "outcome": "needs_you",
+      "topic": "cancel",
+      "notes": "Cancellation / exit terms go to Paul; never invent exit rights or say \"cancel any time\"."
+    }
+  },
+  {
+    "id": "zz-odd-25",
+    "source": "odd",
+    "businessName": "ZZ Fixture Mechanic 50",
+    "trade": "mobile mechanic",
+    "town": "Northampton",
+    "hasWebsite": false,
+    "ownerName": null,
+    "audit": {
+      "engine": "gemini",
+      "namedAnswers": 0,
+      "validAnswers": 6,
+      "competitors": [
+        "Rival A Mechanic",
+        "Rival B Mechanic",
+        "Rival C Mechanic"
+      ]
+    },
+    "findings": [],
+    "thread": [
+      {
+        "from": "us",
+        "text": "Hi, is this ZZ Fixture Mechanic 50?\n\nCheers",
+        "templateName": "initial_contact",
+        "messageType": "text"
+      },
+      {
+        "from": "them",
+        "text": "Yes",
+        "templateName": null,
+        "messageType": "text"
+      },
+      {
+        "from": "us",
+        "text": "Hi mate, i was looking for a mobile mechanic in Northampton so i asked AI and it mentioned Rival A Mechanic, Rival B Mechanic and Rival C Mechanic\n\nI know how to get you showing up more in those answers so people are more likely to find you\n\nHappy to explain it here or jump on a quick call if you'd rather\n\nPaul✌️",
+        "templateName": "audit_followup_call",
+        "messageType": "text"
+      },
+      {
+        "from": "them",
+        "text": "what do you need from me",
+        "templateName": null,
+        "messageType": "text"
+      }
+    ],
+    "expect": {
+      "outcome": "draft",
+      "topic": "needs",
+      "notes": "Plain short list in one sentence (a quick call, then the sign-up details) and offer a call time; no link unless asked."
+    }
+  },
+  {
+    "id": "zz-odd-26",
+    "source": "odd",
+    "businessName": "ZZ Fixture Plumbing 51",
+    "trade": "plumber",
+    "town": "Gloucester",
+    "hasWebsite": true,
+    "ownerName": null,
+    "audit": {
+      "engine": "gemini",
+      "namedAnswers": 0,
+      "validAnswers": 6,
+      "competitors": [
+        "Rival A Plumbing",
+        "Rival B Plumbing",
+        "Rival C Plumbing"
+      ]
+    },
+    "findings": [
+      {
+        "title": "Gloucester is not mentioned on the site",
+        "said": "Gloucester does not appear in the title, headings or opening text of any of the 10 pages read."
+      }
+    ],
+    "thread": [
+      {
+        "from": "us",
+        "text": "Hi, is this ZZ Fixture Plumbing 51?\n\nCheers",
+        "templateName": "initial_contact",
+        "messageType": "text"
+      },
+      {
+        "from": "them",
+        "text": "Yes",
+        "templateName": null,
+        "messageType": "text"
+      },
+      {
+        "from": "us",
+        "text": "Hi mate, i was looking for a plumber in Gloucester so i asked AI and it mentioned Rival A Plumbing, Rival B Plumbing and Rival C Plumbing\n\nI know how to get you showing up more in those answers so people are more likely to find you\n\nHappy to explain it here or jump on a quick call if you'd rather\n\nPaul✌️",
+        "templateName": "audit_followup_call",
+        "messageType": "text"
+      },
+      {
+        "from": "them",
+        "text": "I already rank first on Google",
+        "templateName": null,
+        "messageType": "text"
+      }
+    ],
+    "expect": {
+      "outcome": "draft",
+      "topic": null,
+      "notes": "Agree that is great; AI answers can differ from Google rankings; quote only the stored audit (which engine, how many answers); offer to show on a call."
+    }
+  },
+  {
+    "id": "zz-odd-27",
+    "source": "odd",
+    "businessName": "ZZ Fixture Electrical 52",
+    "trade": "electrician",
+    "town": "Warrington",
+    "hasWebsite": true,
+    "ownerName": null,
+    "audit": {
+      "engine": "chatgpt",
+      "namedAnswers": 1,
+      "validAnswers": 6,
+      "competitors": [
+        "Rival A Electrical",
+        "Rival B Electrical",
+        "Rival C Electrical"
+      ]
+    },
+    "findings": [
+      {
+        "title": "Some links go to the wrong place",
+        "said": "“Book a job” goes to /about (a page about it is at /contact)"
+      }
+    ],
+    "thread": [
+      {
+        "from": "us",
+        "text": "Hi, is this ZZ Fixture Electrical 52?\n\nCheers",
+        "templateName": "initial_contact",
+        "messageType": "text"
+      },
+      {
+        "from": "them",
+        "text": "Yes",
+        "templateName": null,
+        "messageType": "text"
+      },
+      {
+        "from": "us",
+        "text": "Hi mate, i was looking for an electrician in Warrington so i asked AI and it mentioned Rival A Electrical, Rival B Electrical and Rival C Electrical\n\nI know how to get you showing up more in those answers so people are more likely to find you\n\nHappy to explain it here or jump on a quick call if you'd rather\n\nPaul✌️",
+        "templateName": "audit_followup_call",
+        "messageType": "text"
+      },
+      {
+        "from": "them",
+        "text": "my nephew does my website",
+        "templateName": null,
+        "messageType": "text"
+      }
+    ],
+    "expect": {
+      "outcome": "draft",
+      "topic": null,
+      "notes": "Ownership answered: the nephew can stay on it; do not ask the agency question; offer a 2 minute call; no new-site promise."
+    }
+  },
+  {
+    "id": "zz-odd-28",
+    "source": "odd",
+    "businessName": "ZZ Fixture Locksmith 53",
+    "trade": "locksmith",
+    "town": "Worthing",
+    "hasWebsite": true,
+    "ownerName": null,
+    "audit": {
+      "engine": "gemini",
+      "namedAnswers": 0,
+      "validAnswers": 6,
+      "competitors": [
+        "Rival A Locksmith",
+        "Rival B Locksmith",
+        "Rival C Locksmith"
+      ]
+    },
+    "findings": [],
+    "thread": [
+      {
+        "from": "us",
+        "text": "Hi, is this ZZ Fixture Locksmith 53?\n\nCheers",
+        "templateName": "initial_contact",
+        "messageType": "text"
+      },
+      {
+        "from": "them",
+        "text": "Yes",
+        "templateName": null,
+        "messageType": "text"
+      },
+      {
+        "from": "us",
+        "text": "Hi mate, i was looking for a locksmith in Worthing so i asked AI and it mentioned Rival A Locksmith, Rival B Locksmith and Rival C Locksmith\n\nI know how to get you showing up more in those answers so people are more likely to find you\n\nHappy to explain it here or jump on a quick call if you'd rather\n\nPaul✌️",
+        "templateName": "audit_followup_call",
+        "messageType": "text"
+      },
+      {
+        "from": "them",
+        "text": "👍",
+        "templateName": null,
+        "messageType": "text"
+      }
+    ],
+    "expect": {
+      "outcome": "ack",
+      "topic": null,
+      "notes": "Bare emoji is not interest: do nothing (or at most a very short call offer later)."
+    }
+  },
+  {
+    "id": "zz-odd-29",
+    "source": "odd",
+    "businessName": "ZZ Fixture Roofing 54",
+    "trade": "roofer",
+    "town": "Carlisle",
+    "hasWebsite": true,
+    "ownerName": null,
+    "audit": null,
+    "findings": [],
+    "thread": [
+      {
+        "from": "us",
+        "text": "Hi, is this ZZ Fixture Roofing 54?\n\nCheers",
+        "templateName": "initial_contact",
+        "messageType": "text"
+      },
+      {
+        "from": "them",
+        "text": "I am currently out of the office and will return on Monday. For urgent jobs please call the office.",
+        "templateName": null,
+        "messageType": "text"
+      }
+    ],
+    "expect": {
+      "outcome": "auto_reply",
+      "topic": null,
+      "notes": "Out-of-office auto reply: do nothing."
+    }
+  },
+  {
+    "id": "zz-odd-30",
+    "source": "odd",
+    "businessName": "ZZ Fixture Accounting 55",
+    "trade": "accountant",
+    "town": "Bath",
+    "hasWebsite": true,
+    "ownerName": null,
+    "audit": {
+      "engine": "gemini",
+      "namedAnswers": 0,
+      "validAnswers": 6,
+      "competitors": [
+        "Rival A Accounting",
+        "Rival B Accounting",
+        "Rival C Accounting"
+      ]
+    },
+    "findings": [],
+    "thread": [
+      {
+        "from": "us",
+        "text": "Hi, is this ZZ Fixture Accounting 55?\n\nCheers",
+        "templateName": "initial_contact",
+        "messageType": "text"
+      },
+      {
+        "from": "them",
+        "text": "Thank you for your message, we will get back to you",
+        "templateName": null,
+        "messageType": "text"
+      }
+    ],
+    "expect": {
+      "outcome": "auto_reply",
+      "topic": null,
+      "notes": "Business auto-responder: do nothing, not interest."
+    }
+  },
+  {
+    "id": "zz-odd-31",
+    "source": "odd",
+    "businessName": "ZZ Fixture Plumbing 56",
+    "trade": "plumber",
+    "town": "Blackpool",
+    "hasWebsite": true,
+    "ownerName": null,
+    "audit": {
+      "engine": "chatgpt",
+      "namedAnswers": 0,
+      "validAnswers": 6,
+      "competitors": [
+        "Rival A Plumbing",
+        "Rival B Plumbing",
+        "Rival C Plumbing"
+      ]
+    },
+    "findings": [
+      {
+        "title": "Blackpool is not mentioned on the site",
+        "said": "Blackpool does not appear in the title, headings or opening text of any of the 10 pages read."
+      }
+    ],
+    "thread": [
+      {
+        "from": "us",
+        "text": "Hi, is this ZZ Fixture Plumbing 56?\n\nCheers",
+        "templateName": "initial_contact",
+        "messageType": "text"
+      },
+      {
+        "from": "them",
+        "text": "Yes",
+        "templateName": null,
+        "messageType": "text"
+      },
+      {
+        "from": "us",
+        "text": "Hi mate, i was looking for a plumber in Blackpool so i asked AI and it mentioned Rival A Plumbing, Rival B Plumbing and Rival C Plumbing\n\nI know how to get you showing up more in those answers so people are more likely to find you\n\nHappy to explain it here or jump on a quick call if you'd rather\n\nPaul✌️",
+        "templateName": "audit_followup_call",
+        "messageType": "text"
+      },
+      {
+        "from": "them",
+        "text": "I'm driving, call later",
+        "templateName": null,
+        "messageType": "text"
+      }
+    ],
+    "expect": {
+      "outcome": "draft",
+      "topic": null,
+      "notes": "One line: \"no worries, what time suits later?\"; no pitch while they are driving."
+    }
+  },
+  {
+    "id": "zz-odd-32",
+    "source": "odd",
+    "businessName": "ZZ Fixture Driving 57",
+    "trade": "driving instructor",
+    "town": "Milton Keynes",
+    "hasWebsite": true,
+    "ownerName": null,
+    "audit": {
+      "engine": "gemini",
+      "namedAnswers": 0,
+      "validAnswers": 6,
+      "competitors": [
+        "Rival A Driving",
+        "Rival B Driving",
+        "Rival C Driving"
+      ]
+    },
+    "findings": [
+      {
+        "title": "Your site claims accreditation or qualifications but names no scheme",
+        "said": "“…fully qualified instructor with years of experience…”"
+      }
+    ],
+    "thread": [
+      {
+        "from": "us",
+        "text": "Hi, is this ZZ Fixture Driving 57?\n\nCheers",
+        "templateName": "initial_contact",
+        "messageType": "text"
+      },
+      {
+        "from": "them",
+        "text": "Yes",
+        "templateName": null,
+        "messageType": "text"
+      },
+      {
+        "from": "us",
+        "text": "Hi mate, i was looking for a driving instructor in Milton Keynes so i asked AI and it mentioned Rival A Driving, Rival B Driving and Rival C Driving\n\nI know how to get you showing up more in those answers so people are more likely to find you\n\nHappy to explain it here or jump on a quick call if you'd rather\n\nPaul✌️",
+        "templateName": "audit_followup_call",
+        "messageType": "text"
+      },
+      {
+        "from": "them",
+        "text": "Stop",
+        "templateName": null,
+        "messageType": "text"
+      }
+    ],
+    "expect": {
+      "outcome": "stop",
+      "topic": null,
+      "notes": "Opt-out: no draft, suppress and stop queued templates."
+    }
+  }
+]

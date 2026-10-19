@@ -10,7 +10,7 @@ import { buildHookReportSummary, hookReportCopy } from '../src/lib/hookAudit.ts'
 import { buildReportData } from '../src/lib/auditReport.ts';
 import { renderReportHtml } from '../src/lib/aiAuditReportHtml.ts';
 import { TEMPLATE_ENGINE_CLAIM_WAIVED, TEMPLATE_SINGLE_ENGINE_CLAIM, templateEngineConflict } from '../src/lib/rivalHook.ts';
-import { HOOK_INCOMPLETE_REASON, resolveAuditReplyVars } from '../supabase/functions/_shared/audit-reply.ts';
+import { HOOK_INCOMPLETE_REASON, HOOK_NO_GAP_REASON, resolveAuditReplyVars } from '../supabase/functions/_shared/audit-reply.ts';
 import { WA_TEMPLATES, renderTemplateBody, templateBodyParams } from '../supabase/functions/_shared/whatsapp-send.ts';
 
 let failures = 0;
@@ -83,7 +83,11 @@ await (async () => {
   /* A. Google AI hook → that question's own Google AI competitors */
   {
     const grid: Array<[boolean, boolean]> = [[true, true], [true, false], [true, true]];
-    const v = await resolveAuditReplyVars(fakeService({ hookState: state, qrows: rows(grid) }), 'lead-1', { templateName: 'competitor_hook' });
+    /* Named in 5 of 6: since 2026-10-20 a "named others" template is refused here (namedShareRule.ts). The tuple is checked
+       without a template; the refusal is pinned beside it. */
+    const claim = await resolveAuditReplyVars(fakeService({ hookState: state, qrows: rows(grid) }), 'lead-1', { templateName: 'competitor_hook' });
+    ok(!claim.ok && claim.reason.startsWith(HOOK_NO_GAP_REASON) && /more than a third/.test(claim.reason), 'A: named in 5 of 6 → competitor_hook ("named others") is refused (one-third rule)');
+    const v = await resolveAuditReplyVars(fakeService({ hookState: state, qrows: rows(grid) }), 'lead-1', {});
     ok(v.ok, 'A: resolves');
     if (v.ok) {
       ok(v.hookEngine === 'gemini' && v.hookQuestion === Q[1], 'A: the selected hook is the Google AI miss on Q2');
@@ -97,12 +101,12 @@ await (async () => {
     }
     // Paul's approval (2026-09-27): audit_followup may carry a Google AI hook; its names are still THIS cell's.
     const f = await resolveAuditReplyVars(fakeService({ hookState: state, qrows: rows(grid) }), 'lead-1', { templateName: 'audit_followup' });
-    ok(f.ok && f.hookEngine === 'gemini' && JSON.stringify(f.rivals) === JSON.stringify(CELL_RIVALS['1:gemini']), 'A: audit_followup is allowed for a Google AI hook (approved), with exactly that cell\'s names');
+    ok(!f.ok && f.reason.startsWith(HOOK_NO_GAP_REASON), 'A: named in 5 of 6 → audit_followup is refused too (one-third rule; the engine waiver still holds, see templateEngineConflict below)');
   }
   /* B. ChatGPT fallback hook → that ChatGPT result's competitors */
   {
     const grid: Array<[boolean, boolean]> = [[true, true], [true, true], [false, true]];
-    const v = await resolveAuditReplyVars(fakeService({ hookState: state, qrows: rows(grid) }), 'lead-1', { templateName: 'competitor_hook' });
+    const v = await resolveAuditReplyVars(fakeService({ hookState: state, qrows: rows(grid) }), 'lead-1', {});
     ok(v.ok && v.hookEngine === 'chatgpt' && v.hookQuestion === Q[2], 'B: Google AI named them everywhere, so the ChatGPT miss on Q3 is the hook');
     if (v.ok) {
       ok(JSON.stringify(v.rivals) === JSON.stringify(CELL_RIVALS['2:chatgpt']), `B: the rivals are exactly Q3's ChatGPT competitors (${v.rivals.join(', ')})`);
@@ -110,7 +114,7 @@ await (async () => {
       ok(competitorHookParams(v.rivals).includes('Plug Electrical'), 'B: the payload carries the ChatGPT cell\'s names');
     }
     const f = await resolveAuditReplyVars(fakeService({ hookState: state, qrows: rows(grid) }), 'lead-1', { templateName: 'audit_followup' });
-    ok(f.ok, 'B: audit_followup ("I asked chatgpt") is allowed when the hook really is a ChatGPT result');
+    ok(!f.ok && f.reason.startsWith(HOOK_NO_GAP_REASON), 'B: named in 5 of 6 → audit_followup ("named others") is refused (one-third rule), whatever the engine');
   }
   /* An ordinary (non-hook) audit keeps the audit-wide leaders, exactly as before. */
   {

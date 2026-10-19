@@ -48,7 +48,7 @@ console.log('2. every element of the WhatsApp inbox is in the shared component')
     ['filters: next action due', /aria-label="Next action due"/],
     ['filters: next action type', /aria-label="Next action type"/],
     ['filters: sort', /aria-label="Sort conversations"/],
-    ['list: All / Unread / Waiting tabs', /INBOX_QUICK_FILTERS(\.filter\(\(f\) => f\.value !== 'needs_approving' \|\| aiOn\))?\.map/],
+    ['list: All / Unread / Waiting tabs', /INBOX_QUICK_FILTERS(\.filter\(\(f\) => \(f\.value !== 'needs_approving' && f\.value !== 'needs_you'\) \|\| aiOn\))?\.map/],
     ['list: Show hidden', /Show hidden \(/],
     ['list: search', /aria-label="Search conversations by business name"/],
     ['list: Select several', /Select several…/],

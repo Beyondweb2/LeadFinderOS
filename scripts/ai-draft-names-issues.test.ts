@@ -12,7 +12,7 @@ import {
   OFFER_LINE_BOTH, OFFER_LINE_AFTER_ISSUES, namesLine, vagueSiteClaim, wrongEngineWords, offersRoutes, issueMentioned,
   GENERIC_SITE_LINE, NO_SITE_LINE, DRAFT_MAX_NAMES,
 } from '../src/lib/draftEvidence.ts';
-import { buildAiReplyPrompt, checkAiReply, fallbackAiReply, AI_REPLY_SYSTEM_PROMPT, type AiReplyContext } from '../src/lib/aiReplyDraft.ts';
+import { AI_REPLY_SYSTEM_PROMPT } from '../src/lib/aiReplyDraft.ts';
 import { buildReplyContext, buildReplyPrompt, checkReply, fallbackReply, latestInbound, REPLY_SYSTEM_PROMPT, VAGUE_CLAIM_PROBLEM, type ThreadMessage } from '../src/lib/warmReply.ts';
 import type { AuditContext } from '../src/lib/warmLeadResearch.ts';
 
@@ -44,55 +44,16 @@ console.log('0. the shared rules');
   ok(!/\b(?:wrong|broken|missing|problem|issue|fault)\b/i.test(GENERIC_SITE_LINE + NO_SITE_LINE), 'the general lines claim no fault');
 }
 
-/* ─────────── 1. ai-reply-drafts (aiReplyDraft.ts) ─────────── */
-console.log('1. ai-reply-drafts');
-const base: AiReplyContext = {
-  firstName: null, businessName: 'Safety First Electrical', latestInbound: 'Hi. Yes it is. How can I help?',
-  thread: [{ from: 'us', text: '[initial_contact]' }, { from: 'them', text: 'Hi. Yes it is. How can I help?' }],
-  search: { trade: 'Electricians', town: 'Rotherham' }, competitors: draftNames(RECORDED, 'Rotherham'), engineWords: 'gemini', hasWebsite: true,
-  namedEverywhere: false, hookAlreadySent: false, findings: [], ownershipKnown: false,
-};
-const ISSUE = { title: 'Contact page has no phone number', said: 'Your contact page has no phone number on it, only a form.' };
-const cases: Array<[string, AiReplyContext]> = [
-  ['names present', base],
-  ['names unreadable', { ...base, competitors: [] }],
-  ['issues found', { ...base, findings: [ISSUE] }],
-  ['no issues', { ...base, findings: [] }],
-  ['crawl failed (no findings handed over)', { ...base, findings: [] }],
-  ['strong site (no findings handed over)', { ...base, findings: [] }],
-];
-for (const [name, c] of cases) {
-  const fb = fallbackAiReply(c);
-  const probs = checkAiReply(fb, c);
-  ok(probs.length === 0, `${name}: the rule-built draft passes every check${probs.length ? ' — ' + probs.join(' | ') : ''}`);
-  ok(!vagueSiteClaim(fb), `${name}: never "found some things"`);
-  if (c.competitors.length) ok(fb.includes('GF Electrical Contractors Ltd, NIC Electrical Solutions Ltd and Glasby Electrical Ltd'), `${name}: names the three rivals`);
-  else ok(/it named a few other businesses/.test(fb) && !/Ltd/.test(fb), `${name}: no names readable → "a few other businesses", nothing invented`);
-  if (c.findings.length) ok(issueMentioned(fb, c.findings[0]) && !fb.includes(GENERIC_SITE_LINE), `${name}: says the real issue, not the general line`);
-  else ok(fb.includes(GENERIC_SITE_LINE), `${name}: the general line, no fault claimed`);
-  ok(/i asked gemini for an electrician in Rotherham/.test(fb), `${name}: the engine wording is the audit's ("gemini")`);
-}
-{
-  const p = buildAiReplyPrompt(base);
-  ok(/AI NAMED INSTEAD \(name these, at most three, spelt exactly like this\): GF Electrical Contractors Ltd, NIC Electrical Solutions Ltd, Glasby Electrical Ltd/.test(p), 'the prompt carries the three names');
-  ok(/AI TOOL: say it as "gemini"/.test(p), '…and the AI tool');
-  ok(/GENERAL LINE/.test(p) && /OFFER:/.test(p), '…the general line when nothing was found, and the offer');
-  ok(/no names could be read/.test(buildAiReplyPrompt({ ...base, competitors: [] })), 'unreadable names: the prompt says so, never a guess');
-  ok(/WEBSITE ISSUES \(actually found by our crawl/.test(buildAiReplyPrompt({ ...base, findings: [ISSUE] })), 'issues found: listed as the crawl\'s own');
-  ok(/Never say you "found some things"/.test(AI_REPLY_SYSTEM_PROMPT), 'the system prompt forbids the vague claim');
-  const bad = checkAiReply(SAFETY_FIRST_DRAFT, base);
-  ok(bad.some((x) => /without saying what/.test(x)), 'the Safety First draft is now flagged: vague site claim');
-  ok(bad.some((x) => /Does not name who AI recommended/.test(x)), '…and: rivals not named');
-  ok(checkAiReply(fallbackAiReply(base).replace('gemini', 'chatgpt'), base).some((x) => /different AI tool/.test(x)), 'a draft naming the wrong AI tool is flagged');
-  ok(checkAiReply(fallbackAiReply({ ...base, findings: [ISSUE] }).replace(/i had a look[^\n]*/, 'i had a look at your website too'), { ...base, findings: [ISSUE] }).some((x) => /website issues found/.test(x)), 'issues found but not said → flagged');
-}
+/* ─────────── 1. ai-reply-drafts: since 2026-10-20 the move picker decides (replyMove.ts); its tests are
+   scripts/reply-move.test.ts. Only the dry-run guard is kept here. ─────────── */
+console.log('1. ai-reply-drafts (dry run)');
 {
   const FN = read('supabase/functions/ai-reply-drafts/index.ts');
-  ok(/findings: found\.status === "findings" \? found\.findings\.slice\(0, 2\)/.test(FN), 'only a crawl that FOUND something hands over issues (failed / clean / strong → none), at most 2');
-  ok(/engineWords: conversationEngine\(sentRows\.map\(/.test(FN) && /audit\?\.engine \?\? null\)\.words/.test(FN), 'the engine words: what our sent messages named, else the audit\'s hook engine');
+  ok(FN.includes('findings: found.status === "findings" ? found.findings.slice(0, 2)'), 'only a crawl that FOUND something hands over issues (failed / clean / strong → none), at most 2');
   const dry = FN.slice(FN.indexOf('async function handleDryRun'), FN.indexOf('async function handleSettings'));
-  ok(/actor\.role !== "admin"/.test(dry) && !/from\("ai_reply_drafts"\)|whatsapp_messages"\)\.insert|sendViaGraph/.test(dry), 'dry_run: admin only, writes no draft row, sends nothing');
+  ok(dry.includes('actor && actor.role !== "admin"') && !/from\("ai_reply_drafts"\)|whatsapp_messages"\)\.insert|sendViaGraph/.test(dry), 'dry_run: admin only, writes no draft row, sends nothing');
 }
+const ISSUE = { title: 'Contact page has no phone number', said: 'Your contact page has no phone number on it, only a form.' };
 
 /* ─────────── 2. "Draft reply" (warmReply.ts / warm-lead-reply) ─────────── */
 console.log('2. Draft reply (warm-lead-reply)');
@@ -168,24 +129,17 @@ console.log('3. one engine per conversation, "gemini", the tidy');
   ok(checkReply(fallbackReply(w)!.replace('chatgpt', 'gemini'), w).problems.some((x) => /different AI tool/.test(x)), '…and a draft switching to gemini is flagged');
   const u = wctx({ audit: { ...audit, engine: null } });
   ok(u.engineWords === 'ai' && /i asked ai for/.test(fallbackReply(u)!) && /say it as "ai"/.test(buildReplyPrompt(u)), 'unsure → the draft says "ai"');
-  const a2 = { ...base, engineWords: 'chatgpt', hookAlreadySent: true };
-  ok(/i asked chatgpt/.test(fallbackAiReply(a2)) && checkAiReply(fallbackAiReply(a2).replace('chatgpt', 'gemini'), a2).some((x) => /different AI tool/.test(x)), 'AI handles replies: the same rule, the same check');
 
   // "gemini", never "google ai" (the Overview keeps its name).
   ok(saysGoogleAiForGemini('i asked google ai for a plumber') && !saysGoogleAiForGemini('it showed in the google ai overview') && !saysGoogleAiForGemini('i asked gemini'), '"google ai" for Gemini is caught; the AI Overview is not');
-  ok(checkAiReply(fallbackAiReply(base).replace('gemini', 'google ai'), base).some((x) => /say "gemini"/.test(x)), 'AI handles replies flags "google ai"');
   ok(checkReply(fallbackReply(wctx())!.replace('gemini', 'google ai'), wctx()).problems.some((x) => /say "gemini"/.test(x)), 'Draft reply flags "google ai"');
   ok(!/google ai(?! overview)/i.test(AI_REPLY_SYSTEM_PROMPT + REPLY_SYSTEM_PROMPT), 'neither drafter\'s system prompt teaches "google ai"');
 
   // The tidy: no "aI tools", and the offer joins on to the issues.
   ok(carryOn('AI tools may find it harder.') === 'AI tools may find it harder' && carryOn('Your contact page has no phone.') === 'your contact page has no phone' && carryOn("I'd fix it") === "I'd fix it" && carryOn('SEO titles repeat') === 'SEO titles repeat', 'carryOn: lower-cases a word, never an acronym or "I"');
   const AI_ISSUE = { title: 'AI crawlers blocked', said: 'AI tools like ChatGPT are blocked from reading the site by its robots file.' };
-  const fbAi = fallbackAiReply({ ...base, findings: [AI_ISSUE] });
-  ok(!/\baI\b/.test(fbAi) && /and AI tools like ChatGPT are blocked/.test(fbAi), 'AI handles replies: "AI tools", never "aI tools"');
   const fbWarm = fallbackReply(wctx({ crawlFindings: [AI_ISSUE] }))!;
   ok(!/\baI\b/.test(fbWarm), 'Draft reply: never "aI tools"');
-  ok(!/\bdo that\b/.test(fbAi) && fbAi.includes(OFFER_LINE_AFTER_ISSUES), 'after real issues the offer joins on ("that\'s the sort of thing we fix…"), never "do that"');
-  ok(!/\bdo that\b/.test(fallbackAiReply(base)) && fallbackAiReply(base).includes(GENERIC_SITE_LINE + '\n\n' + OFFER_LINE_BOTH), 'after the general line: "we can help with that…", which points at "what we help with"');
   ok(offerLine(false, true) === offerLine(false, false) && offersRoutes(OFFER_LINE_AFTER_ISSUES, true) && offersRoutes(OFFER_LINE_BOTH, true), 'every offer line still offers both routes (or building one with no site)');
   ok(!/\bdo that\b/.test(fbWarm) && /that's the sort of thing we fix/.test(fbWarm), 'Draft reply: the same join after the issues');
 }
