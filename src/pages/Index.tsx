@@ -79,12 +79,19 @@ const Index = () => {
   const teamDir = useTeamDirectory();
   const salesActions = useSalesActions();
   const identityQc = useQueryClient();
-  const identityKey = useMemo(() => leads.map((l) => l.id).join('|'), [leads]);
+  const identityCountry = lastSearch?.country ?? 'UK';
+  const identityKey = useMemo(() => `${identityCountry}|` + leads.map((l) => l.id).join('|'), [leads, identityCountry]);
   const identity = useQuery({
     queryKey: ['sales', 'identity', identityKey],
     enabled: !!viewerRole && leads.length > 0,
     staleTime: 15_000,
-    queryFn: () => lookupIdentities(leads.map((l) => ({ k: l.id, place_id: l.id, phone: l.phone ?? null, maps_url: l.googleMapsUrl ?? null }))),
+    /* ⛔ The country, website, name, town and address (2026-10-19) let the server recognise a Malaysian / Singapore lead
+       that came in by FILE; for a UK result the server runs exactly the old three checks (place id, phone, Maps link). */
+    queryFn: () => lookupIdentities(leads.map((l) => ({
+      k: l.id, place_id: l.id, phone: l.phone ?? null, maps_url: l.googleMapsUrl ?? null,
+      country: l.searchCountry ?? identityCountry, website: l.websiteUrl ?? null, name: l.name,
+      town: l.searchTown ?? lastSearch?.location ?? null, address: l.address ?? null,
+    }))),
   });
   useEffect(() => {
     const refresh = () => { void identityQc.invalidateQueries({ queryKey: ['sales', 'identity'] }); };

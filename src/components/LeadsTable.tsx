@@ -1,5 +1,5 @@
 import { useState, useMemo, useCallback, memo, useEffect, useRef } from 'react';
-import { salesOwnershipCell, adminOwnerMarker, type OwnershipInfo } from '@/components/FindLeadsOwnership';
+import { salesOwnershipCell, adminOwnerMarker, isAlreadyAdded, AlreadyAddedMarker, type OwnershipInfo } from '@/components/FindLeadsOwnership';
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table';
@@ -749,6 +749,9 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
                         <Check className="h-3.5 w-3.5" />
                         In your list
                       </span>
+                    ) : viewerRole === 'admin' && isAlreadyAdded(ownership?.(lead)) ? (
+                      /* The server knows it (a lead that came in by file, 2026-10-19): never an Add button. */
+                      <AlreadyAddedMarker own={ownership!(lead)!} compact />
                     ) : gated && !canSave ? (
                       <div className="relative">
                         <Button
@@ -966,6 +969,13 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
                             </Tooltip>
                           );
                         }
+                        /* ⛔ THE SERVER RECOGNISES IT, THIS PAGE'S OWN MATCH DID NOT (2026-10-19): a lead that came in by FILE
+                           (Ethan's Malaysian / Singapore leads — no place id, phone +60, a different spelling) is matched by
+                           lead_identity_lookup on phone, website or name + town. It is already added: no Add button, the
+                           owner's avatar ("Added by <name>") or a neutral In CRM tick, not clickable. */
+                        if (viewerRole === 'admin' && !crm?.inCrm && isAlreadyAdded(ownership?.(lead))) {
+                          return <AlreadyAddedMarker own={ownership!(lead)!} />;
+                        }
                         // Legacy indicator when no live CRM state is provided.
                         if (!crm && inOutreach) {
                           return (
@@ -1018,7 +1028,8 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
                           </Tooltip>
                         );
                       })()}
-                      {viewerRole === 'admin' && adminOwnerMarker(ownership?.(lead))}
+                      {/* Beside In CRM / Remove only — the AlreadyAddedMarker above carries its own avatar. */}
+                      {viewerRole === 'admin' && (getCrmState ? getCrmState(lead).inCrm : true) && adminOwnerMarker(ownership?.(lead))}
                     </div>
                   </TableCell>
                 </TableRow>

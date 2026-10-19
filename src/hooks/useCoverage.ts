@@ -9,7 +9,8 @@ import {
   type SuppressionPatch, type CoverageWorker, type WorkedByEntry, type FoundAdded, type SearchRunRecord,
 } from '@/lib/coverageState';
 import { coverageQueryKey, coverageTownsQueryKey } from '@/lib/coverageFreshness';
-import { ABROAD_TOWNS, pairsForCountry, type CoverageCountry } from '@/lib/coverageCountries';
+import { ABROAD_TOWNS, type CoverageCountry } from '@/lib/coverageCountries';
+import { coveragePairsFor } from '@/lib/malaysiaCoverage';
 import { townPopulation } from '@/lib/abroadTownPopulation';
 
 /* ⚠️ The grading lives in src/lib/coverageState.ts and is unit-tested there. This hook fetches the
@@ -101,13 +102,13 @@ export function useCoverage(country: CoverageCountry = 'UK') {
   const rawPairs = pairsQuery.data?.pairs ?? null;
   /* The pairs cut to the chosen country (UK: every pair except a Malaysia / Singapore lead's — the same towns
      match as before). `pooled` / `measured` are UK-only facts and pass through untouched. */
-  const countryPairs = useMemo(() => (rawPairs ? pairsForCountry(country, rawPairs) : null), [rawPairs, country]);
+  const countryPairs = useMemo(() => (rawPairs ? coveragePairsFor(country, rawPairs) : null), [rawPairs, country]);
   const pairs = useMemo(() => (rawPairs && countryPairs ? { ...rawPairs, ...countryPairs } : null), [rawPairs, countryPairs]);
   const towns: CoverageTownRow[] = useMemo(() => {
     if (country === 'UK') return ukTowns;
     const row = (t: { name: string; region: string | null; aka?: string }, fromLeads: boolean): CoverageTownRow => ({
       /* Approximate, from the fixed sourced table; a town with no source figure stays null (blank). */
-      id: `${country}:${t.name}`, name: t.name, region: t.region, population: townPopulation(country, t.name).population, county: null,
+      id: `${country}:${t.name}`, name: t.name, region: t.region, population: townPopulation(country, t.name, t.region).population, county: null,
       suppressed_at: null, suppressed_reason: null, aka: t.aka, fromLeads,
     });
     return [...ABROAD_TOWNS[country].map((t) => row(t, false)), ...(countryPairs?.extraTowns ?? []).map((t) => row(t, true))];
@@ -205,7 +206,10 @@ export function useCoverage(country: CoverageCountry = 'UK') {
     await Promise.all([townsRefetch(), pairsRefetch()]);
   }, [townsRefetch, pairsRefetch]);
 
-  return { towns, isLoading, error, gradeFor, setSuppressed, regions, refetch, applyFilters, summarise };
+  /* Malaysia: place text that is not one town, with its lead counts (shown apart, counted under no town). */
+  const unclearPlaces = useMemo(() => countryPairs?.unclearPlaces ?? [], [countryPairs]);
+
+  return { towns, isLoading, error, gradeFor, setSuppressed, regions, refetch, applyFilters, summarise, unclearPlaces };
 }
 
 export type { CoverageRow, CoverageSummary };

@@ -47,13 +47,39 @@ export function salesOwnershipCell(own: OwnershipInfo | null | undefined, onClai
   return <AlreadyAddedBadge ownerName={own.ownerName} avatarUrl={own.avatarUrl} addedAt={own.addedAt} />;
 }
 
-/** Admin: a small owner marker beside the existing In-CRM / Remove control. */
+/** The server says this business is already in LeadFinderOS (any owner). 'paused' is a refusal, not an answer. */
+export function isAlreadyAdded(own: OwnershipInfo | null | undefined): boolean {
+  return !!own && own.state !== 'new' && own.state !== 'paused';
+}
+
+/** "Added by Paul" — the ONE tooltip for every already-added marker (Paul, 2026-10-19). */
+export function addedByText(ownerName: string | null | undefined): string {
+  return ownerName ? `Added by ${ownerName}` : 'Already in the CRM';
+}
+
+/** Admin: the owner's avatar beside the existing In-CRM / Remove control, tooltip "Added by <name>". Not clickable.
+ *  No owner on record → nothing here (the In CRM control beside it already says so). */
 export function adminOwnerMarker(own: OwnershipInfo | null | undefined): ReactNode | null {
-  if (!own || own.state === 'new') return null;
+  if (!isAlreadyAdded(own) || !own?.ownerName) return null;
   return (
-    <span className="ml-1.5 inline-flex items-center gap-1 text-[11px] text-muted-foreground whitespace-nowrap" title={own.ownerName ? `Owner: ${own.ownerName}` : 'Unassigned'}>
-      {own.ownerName ? <OwnerAvatar name={own.ownerName} avatarUrl={own.avatarUrl} /> : null}
-      {own.ownerName ?? 'Unassigned'}
+    <span className="ml-1.5 inline-flex cursor-default items-center" title={addedByText(own.ownerName)}
+      aria-label={addedByText(own.ownerName)} data-testid="find-leads-added-by">
+      <OwnerAvatar name={own.ownerName} avatarUrl={own.avatarUrl} />
+    </span>
+  );
+}
+
+/**
+ * Admin: what replaces Add to CRM when the SERVER recognises a business this browser's own match missed (a lead that
+ * came in by file — 2026-10-19). Not a button and not clickable: the owner's avatar with "Added by <name>", or, with no
+ * owner on record, a neutral "In CRM" tick.
+ */
+export function AlreadyAddedMarker({ own, compact = false }: { own: OwnershipInfo; compact?: boolean }) {
+  return (
+    <span className={`inline-flex cursor-default select-none items-center gap-1.5 rounded-md bg-green-500/10 text-green-600 dark:text-green-400 font-medium whitespace-nowrap ${compact ? 'h-8 px-2 text-[11px]' : 'h-8 px-2.5 text-xs'}`}
+      title={addedByText(own.ownerName)} aria-label={addedByText(own.ownerName)} aria-disabled="true" data-testid="find-leads-already-added">
+      {own.ownerName ? <OwnerAvatar name={own.ownerName} avatarUrl={own.avatarUrl} /> : <Check className="h-3.5 w-3.5" />}
+      In CRM
     </span>
   );
 }
