@@ -28,7 +28,7 @@ import { isSuppressed, recordOptOut } from "../_shared/suppression.ts";
 import { logOpenAiUsage } from "../_shared/openai-usage.ts";
 import { loadAuditContext, leadTrade, leadTown, RESEARCH_LEAD_COLUMNS, type ResearchLead } from "../_shared/site-research.ts";
 import {
-  aiReplyDecision, buildAiReplyPrompt, checkAiReply, fallbackAiReply, finishDraft, mayCallWithin, callUsd,
+  aiReplyDecision, buildAiReplyPrompt, checkAiReply, evidenceNames, fallbackAiReply, finishDraft, mayCallWithin, callUsd,
   AI_REPLY_MODEL, AI_REPLY_SYSTEM_PROMPT, AI_REPLY_TOOL, AI_REPLY_MAX_OUTPUT_TOKENS, AI_REPLY_MAX_REGENERATIONS,
   AI_REPLY_DRAFT_MAX_USD, BEST_TEMPLATE_STYLE_NOTE, DRY_RUN_MODELS, DRY_RUN_DRAFT_MAX_USD, HANDOVER_LABELS, STOP_REASONS,
   type AiReplyContext, type AiReplyWhy,
@@ -47,7 +47,7 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-internal-job, x-cron-secret",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
   /* The deploy marker: only this build answers with it. */
-  "x-ai-reply-drafts": "2026-10-20-needs-you",
+  "x-ai-reply-drafts": "2026-10-20b-needs-you",
 };
 const json = (b: unknown, s = 200) => new Response(JSON.stringify(b), { status: s, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 const str = (v: unknown) => (typeof v === "string" ? v.trim() : "");
@@ -198,7 +198,7 @@ async function writeDraft(service: Service | null, ctx: AiReplyContext, opts: { 
     calls++; promptTokens += r.promptTokens; completionTokens += r.completionTokens; spent += callUsd(r.promptTokens, r.completionTokens, model);
     if (service && opts.log !== false) await logOpenAiUsage(service, { functionName: "ai-reply-drafts", apiType: "openai_ai_reply_draft", model, promptTokens: r.promptTokens, completionTokens: r.completionTokens, userId: opts.userId, triggerSource: opts.triggerSource });
     if (!r.reply) { modelError = "model_empty_reply"; continue; }
-    const candidate = finishDraft(r.reply);
+    const candidate = finishDraft(r.reply, evidenceNames(ctx.evidence));
     const cp = checkAiReply(candidate, ctx);
     if (reply === null || cp.length < problems.length) { reply = candidate; problems = cp; }
     if (!cp.length) break;

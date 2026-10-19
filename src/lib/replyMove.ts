@@ -248,7 +248,7 @@ export function pickMove(i: MoveInput): MovePlan {
     const prevTheirs = theirs.length >= 2 ? theirs[theirs.length - 2] : null;
     const repeat = !!prevTheirs && isAutoReply(prevTheirs.text, prevTheirs.messageType);
     return plan({ move: 'auto_reply', read: 'automated', autoDraft: false, label: 'Auto-reply', needsYou: repeat ? flag('repeat_auto_reply') : null,
-      points: ['That was their automatic reply. One short friendly line saying no rush, no pitch.'] });
+      points: ['Say: "No rush, speak soon." Do not mention their automatic reply. No pitch.'] });
   }
 
   /* A loop guard wins the reason: it is why nothing should be drafted on its own. */
@@ -275,7 +275,7 @@ export function pickMove(i: MoveInput): MovePlan {
 
   /* 5. Things code can answer. */
   if (BOT.test(text)) {
-    return g(plan({ move: 'is_bot', read: 'is_bot', points: ["Be honest: it's Paul from Findable. You use AI to help write some messages but you read and send every one yourself. Never say you are not using AI."], question: offeredVoice ? null : VOICE_Q }));
+    return g(plan({ move: 'is_bot', read: 'is_bot', points: ["Say, in the first person: \"It's Paul from Findable. I use AI to help write some messages, but I read and send every one myself.\" Never say you are not using AI."], question: offeredVoice ? null : VOICE_Q }));
   }
   if (VOICE_REQUEST.test(text) && !/\b(can'?t|cannot)\b/i.test(text)) {
     return g(plan({ move: 'offer_voice_note', read: 'asked_voice_note', points: ['Say yes, you will send them a short voice note shortly.'], question: null, allowPrice: clearYesEarlier }));
@@ -296,7 +296,7 @@ export function pickMove(i: MoveInput): MovePlan {
       points: [`Use this answer, word for word: "${fact.say}"`], question: offeredVoice ? 'Want me to give you a quick call to explain the rest?' : VOICE_Q }));
   }
   if (PROVIDER.test(text)) {
-    return g(plan({ move: 'objection_provider', read: 'provider', points: ['Say no problem, they can carry on looking after it. Do not offer a new website.'], question: offeredVoice ? 'Would a quick 2 minute call be ok so I can show you what I found?' : 'Want me to send you a quick voice note showing what I found?' }));
+    return g(plan({ move: 'objection_provider', read: 'provider', points: ['Say no problem, whoever looks after their site now can carry on doing it (use their own word for that person, e.g. "him" or "your nephew"). Do not offer a new website.'], question: offeredVoice ? 'Would a quick 2 minute call be ok so I can show you what I found?' : 'Want me to send you a quick voice note showing what I found?' }));
   }
   if (RANKS.test(text)) {
     const line = auditLine(e);
@@ -325,7 +325,7 @@ export function pickMove(i: MoveInput): MovePlan {
   if (t.category === 'question') {
     return g(plan({ move: 'unknown_question', read: 'question', autoDraft: false, needsYou: flag('question_not_on_sheet'), points: ["Say it's a good question and you'd rather explain it properly."], question: VOICE_Q }));
   }
-  return g(plan({ move: 'unsure', read: 'unclear', autoDraft: false, needsYou: flag('unsure'), points: ['Answer briefly and warmly, no pitch.'], question: VOICE_Q }));
+  return g(plan({ move: 'unsure', read: 'unclear', autoDraft: false, needsYou: flag('unsure'), points: ['Answer briefly and warmly, no pitch. Do not explain why anything happened and give no reason or claim of your own.'], question: VOICE_Q }));
 }
 
 /* ── capitals, done in code (never trusted to the model) ──────────────────────────────────────── */
