@@ -97,6 +97,9 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { formatPhoneForWhatsApp } from '@/lib/leadUtils';
 import { classifyLineType } from '@/lib/lineType';
+import { templateDestinationRefusal } from '@/lib/whatsAppDestination';
+import { toWhatsAppDigits } from '@/lib/waNumber';
+import { phoneLabelOf } from '@/lib/findLeadsBulkAdd';
 import { coldWhatsAppVerdict, statusWhenWhatsAppUnavailable, COLD_NOT_ELIGIBLE_LABEL, marksNoMobile, type ColdNotEligibleReason } from '@/lib/coldWhatsAppEligibility';
 import { useCountrySettings } from '@/hooks/useCountrySettings';
 import { marketsOn } from '@/lib/outreachMarkets';
@@ -1683,7 +1686,9 @@ export function OutreachTable({
         if (v.eligible === false) reason = v.reason;
       } else if (!String(lead?.phone ?? '').trim()) {
         reason = 'no_phone';
-      } else if (!classifyLineType(lead?.phone, lead?.country).whatsappEligible) {
+      } else if (!classifyLineType(lead?.phone, lead?.country).whatsappEligible
+        /* 2026-10-19: the digit rule every template shares (src/lib/whatsAppDestination.ts). */
+        || templateDestinationRefusal(toWhatsAppDigits(lead?.phone, lead?.country)) !== null) {
         reason = 'landline';
       }
       if (reason) {
@@ -3166,6 +3171,11 @@ export function OutreachTable({
                               <Phone className="h-3.5 w-3.5 flex-shrink-0" />
                               <span className="font-mono">{lead.phone}</span>
                             </button>
+                            {/* A quiet grey label for a number WhatsApp cannot reach (2026-10-19) — it is still callable. */}
+                            {phoneLabelOf(lead.phone, lead.country) && (
+                              <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground" data-testid="phone-kind-label"
+                                title="Callable. Not sendable on WhatsApp.">{phoneLabelOf(lead.phone, lead.country)}</span>
+                            )}
                             {isPhoneCopied(lead.id) && (
                               <span title="Copied">
                                 <CheckCheck className="h-3.5 w-3.5 text-primary" />
@@ -3183,14 +3193,14 @@ export function OutreachTable({
                             Retry
                           </Button>
                         ) : phoneFetchStatus[lead.id] === 'no_phone' ? (
-                          <span className="text-muted-foreground text-xs">No phone listed</span>
+                          <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground" data-testid="phone-kind-label" title="No phone number on this lead.">No phone</span>
                         ) : phoneFetchStatus[lead.id] === 'pending' ? (
                           <div className="flex items-center gap-1.5 text-muted-foreground text-sm">
                             <Loader2 className="h-3.5 w-3.5 animate-spin" />
                             <span>Fetching…</span>
                           </div>
                         ) : (
-                          <span className="text-muted-foreground text-xs">No phone listed</span>
+                          <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground" data-testid="phone-kind-label" title="No phone number on this lead.">No phone</span>
                         )}
                       </TableCell>
                       {!readOnly && (

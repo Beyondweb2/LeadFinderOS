@@ -2,7 +2,6 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { mayLookUpBusiness, userTeamRole } from "../_shared/access.ts";
 import { guardAction, guardResponse } from "../_shared/protection.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { checkRateLimit, rateLimitHeaders } from "../_shared/rate-limiter.ts";
 import {
   ENTERPRISE_FIELDS,
   ESSENTIALS_FIELDS,
@@ -16,8 +15,10 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 };
 
-const RATE_LIMIT = 30;
-const RATE_WINDOW_MS = 60000;
+/* ⛔ NO PER-ISOLATE RATE LIMIT HERE (2026-10-19). A fixed 30-a-minute in-memory counter used to sit in front of the
+   guard and was the wall a 40-lead Find Leads add hit (65 s, measured with mocks). The ONE limit is guardAction below
+   ('place_details': per minute / per hour / spend caps in protection_settings — never a number in code), which
+   answers 429 to a burst; the add waits that out and retries. */
 const CACHE_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
 const NULL_PHONE_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days (matches positive cache to stop expensive re-checks)
 
@@ -90,14 +91,7 @@ serve(async (req) => {
     const role = await userTeamRole(String(userId));
     if (!role) return new Response(JSON.stringify({ ok: false, success: false, error: "no_role" }), { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
-    // ─── RATE LIMIT ──────────────────────────
-    const rl = checkRateLimit(`details:${userId}`, RATE_LIMIT, RATE_WINDOW_MS);
-    if (!rl.allowed) {
-      return new Response(
-        JSON.stringify({ error: 'Too many requests. Please slow down.' }),
-        { status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json', ...rateLimitHeaders(rl, RATE_LIMIT) } }
-      );
-    }
+    // ─── RATE LIMIT: the guard below (per person, per minute / hour, in protection_settings) ───
 
     // ─── INPUT ───────────────────────────────
     const { placeId, forceRefresh, triggerSource } = await req.json();

@@ -22,6 +22,23 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-19-every-business-addable', date: '2026-10-19', title: 'Add to CRM: every business is added, and it is much faster', audience: 'all',
+    body: 'Find Leads and the Coverage niche panel now add every business you select, landlines and leads with no phone included. Only a business already in the CRM is skipped. A big add takes seconds and shows "Adding 23 of 40" as it goes. WhatsApp still never goes to a landline.',
+    report: {
+      added: [
+        'A small grey "Landline" or "No phone" label beside the number in Outreach. A landline keeps its Call button.',
+        'A live count on the add button: "Adding 23 of 40", then "Added N, skipped M".',
+      ],
+      changed: [
+        'UK, Malaysian and Singapore landlines and leads with no phone are now added. The only skip is a duplicate (reverses the 16 October landline rule).',
+        'A 40-lead add went from about 65 seconds to about 5 (numbers are looked up 8 at a time instead of 3, with no fixed 30-a-minute wall).',
+        'Every WhatsApp template, not only the first message, now refuses a landline, including the sign-up link from Quick Close and the audit-complete pitch. The queue says how many it skipped and why.',
+      ],
+      removed: [
+        'The rule that kept landlines and no-phone leads out of the CRM.',
+      ],
+      effect: 'You can add landlines and call them. WhatsApp skips them automatically and tells you, so nothing is sent to a number that cannot get it. Leads skipped by the old rule can simply be added again.',
+    } },
   { id: '2026-10-19-ai-overview-everywhere', date: '2026-10-19', title: 'Google AI Overview shown beside ChatGPT and Gemini everywhere', audience: 'all',
     body: 'Every place that shows the ChatGPT and Gemini results now shows a Google AI Overview chip next to them: named (for example 1/2), "No AI Overview shown", or "not recorded". It is for context only and is not part of the score. Audits from before 11 October now show the AI Overview they captured.',
     report: {
@@ -46,7 +63,7 @@ export const WHATS_NEW: readonly WhatsNewEntry[] = [
       ],
       changed: [
         'A Malaysian or Singapore search result now counts as already added when its phone, website, or name and town match a lead that came in by file. UK matching is unchanged.',
-        'The Coverage niche panel’s "Add all" now uses the same batch add as Find Leads: mobiles only, landlines skipped, with an "Added N, skipped M" summary.',
+        'The Coverage niche panel’s "Add all" now uses the same batch add as Find Leads, with an "Added N, skipped M" summary.',
       ],
       removed: [
         'States, regions and lists of places no longer appear as rows in the Malaysia town table.',
