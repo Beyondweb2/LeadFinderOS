@@ -259,25 +259,34 @@ export function buildAiReplyPrompt(c: AiReplyContext): string {
 }
 
 /** What the draft becomes after the model: capitals fixed in code, spaces tidied. Templates never pass through here. */
-export function finishDraft(text: string): string {
-  return tidyCaps(String(text ?? '').replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim());
+export function finishDraft(text: string, names: readonly (string | null | undefined)[] = []): string {
+  let s = tidyCaps(String(text ?? '').replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim());
+  /* A town, business or rival the evidence spells is written the evidence's way ("leeds" → "Leeds"). Whole words only. */
+  for (const n of names) {
+    const name = String(n ?? '').trim();
+    if (name.length < 3) continue;
+    s = s.replace(new RegExp(`\\b${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'gi'), name);
+  }
+  return s;
 }
+/** The names finishDraft spells the evidence's way. */
+export const evidenceNames = (e: MoveEvidence): string[] => [e.town, e.businessName, ...e.competitors].filter((x): x is string => !!x);
 
 /* ── the checker: WARNINGS only ───────────────────────────────────────────────────────────────── */
 
 const LINK = /https?:\/\/|www\.|\b[a-z0-9-]+\.(?:co\.uk|com|live|uk|net|org)\b/i;
-const MONEY = /£\s?\d[\d,.]*/g;
+const MONEY = /£\s?\d[\d,]*(?:\.\d+)?/g;
 const PRICE_WORDS = /£|\bper month\b|\ba month\b|\bmonthly\b|\bprice\b|\bcosts?\b/i;
 const RANKING = /\b(first\s+page|page\s+one|top\s+of\s+google|number\s+one|#\s?1\b|top\s+spot|rank(?:ing|ed)?\s+(?:you|first|top|higher)|get\s+you\s+(?:to|on)\s+(?:the\s+)?top|guaranteed?\s+(?:to|you|results|ranking|leads|customers)|recommend\s+you\s+every\s+time)\b/i;
 const GUARANTEE_WORD = /\b(guarantee[sd]?|money\s+back|refund)\b/i;
-const TERM_DRIFT = /\b(12|twelve)\s*[- ]?\s*months?\b|\bcancel\s+any\s*time\b|\bno\s+(contract|commitment|tie[- ]?in)\b|\bunlimited\b|\bmonthly\s+(audits?|reports?|improvements?)\b|\bevery\s+month\s+we\b/i;
+const TERM_DRIFT = /\b(12|twelve)\s*[- ]?\s*months?\b|(?<!\bnot\s+a\s+)\bcancel\s+any\s*time\b|\bno\s+(contract|commitment|tie[- ]?in)\b|\bunlimited\b|\bmonthly\s+(audits?|reports?|improvements?)\b|\bevery\s+month\s+we\b/i;
 const INSTEAD_CLAIM = /\b(instead|not\s+you|ahead\s+of\s+you|named\s+(?:other|others)|other\s+(?:businesses|firms|companies)\s+(?:came\s+up|were\s+named|got\s+named))\b/i;
 const BOT_DENIAL = /\b(not\s+a\s+bot|i'?m\s+(?:a\s+)?(?:real|human)\b(?!.*\bai\b)|no(?:,)?\s+(?:it'?s\s+)?not\s+(?:a\s+)?bot|not\s+automated|this\s+is\s+not\s+ai|no\s+ai\b)/i;
 const SITE_FAULT = /\b(broken|missing|slow|placeholder|headings?|h1|links?\s+(?:go|point)|sitemap|https|ssl|not\s+secure|blocked|crawl\w*|schema|not\s+mentioned|doesn'?t\s+mention|title\s+tags?|loads?\s+slowly|mobile\s+version|duplicate|near(?:ly)?\s+(?:the\s+)?same)\b/i;
 const NAME_GREETING = /^\s*(?:[Hh]i|[Hh]ey|[Hh]ello|[Tt]hanks|[Cc]heers|[Mm]orning|[Aa]fternoon),?\s+([A-Z][a-z]{2,})\b/;
 const PLACE_PHRASE = /\b(?:in|around|near|across)\s+([A-Z][a-z]+(?:[\s-][A-Z][a-z]+){0,2})/g;
 const NAME_SEQ = /\b([A-Z][\w'&]*(?:\s+(?:&\s+)?[A-Z][\w'&]*)+)\b/g;
-const COMMON_CAPS = new Set(['I', "I'm", "I'll", "I've", "I'd", 'AI', 'ChatGPT', 'Gemini', 'Google', 'Paul', 'Findable', 'Hi', 'Hey', 'Thanks', 'No', 'Yes', 'Sure', 'Okay', 'Ok', 'Great', 'Fair', 'Like', 'When', 'Shall', 'Want', 'What', 'Would', 'Happy', 'Sorry', 'Brilliant', 'Cheers', 'Business', 'Profile', 'Maps', 'WhatsApp', 'UK', 'The', 'It', 'If', 'That', 'Is', 'Can', 'Just', 'We', 'You', 'Your', 'My', 'Me', 'Morning', 'Afternoon', 'Worth', 'Good', 'Nice', 'Mate', 'And', 'So', 'Or', 'Not', 'All']);
+const COMMON_CAPS = new Set(['I', "I'm", "I'll", "I've", "I'd", 'AI', 'ChatGPT', 'Gemini', 'Google', 'Paul', 'Findable', 'Hi', 'Hey', 'Thanks', 'No', 'Yes', 'Sure', 'Okay', 'Ok', 'Great', 'Fair', 'Like', 'When', 'Shall', 'Want', 'What', 'Would', 'Happy', 'Sorry', 'Brilliant', 'Cheers', 'Business', 'Profile', 'Maps', 'WhatsApp', 'UK', 'The', 'It', 'If', 'That', 'Is', 'Can', 'Just', 'We', 'You', 'Your', 'My', 'Me', 'Morning', 'Afternoon', 'Worth', 'Good', 'Nice', 'Mate', 'And', 'So', 'Or', 'Not', 'All', 'English', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']);
 
 const lower = (s: string | null | undefined) => String(s ?? '').toLowerCase();
 
@@ -345,6 +354,7 @@ export function fallbackAiReply(c: AiReplyContext): string {
     if (quoted) return quoted[1];
     return s.replace(/^(Say|Agree with what is true:|Confirm|Thank them and say|In English: say|Be honest:)\s*/i, '');
   };
+  if (c.plan.move === 'auto_reply') return finishDraft('No rush, speak soon.');
   const parts: string[] = [];
   for (const pt of c.plan.points) {
     if (/^(Say who you are|One short friendly line|Answer briefly|No worries|Great|They have not replied|That was their automatic reply|Confirm you will call)/i.test(pt)) {
