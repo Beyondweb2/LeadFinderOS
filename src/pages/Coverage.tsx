@@ -20,6 +20,8 @@ import { CoverageWorkers } from '@/components/CoverageWorkers';
 import { CoverageFoundAdded } from '@/components/CoverageFoundAdded';
 import { manyTownsHref } from '@/lib/manyTowns';
 import { Checkbox } from '@/components/ui/checkbox';
+import { CollapsibleBlock } from '@/components/CollapsibleSection';
+import { UNCLEAR_WORDS } from '@/lib/malaysiaPlaces';
 import { useSubscription } from '@/hooks/useSubscription';
 import {
   COVERAGE_COUNTRIES, COVERAGE_COUNTRY_LABEL, DEFAULT_COVERAGE_COUNTRY, normaliseCoverageCountry, type CoverageCountry,
@@ -62,7 +64,7 @@ export default function Coverage() {
   );
   const country: CoverageCountry = normaliseCoverageCountry(params.get('country') || savedCountry);
   const isUk = country === 'UK';
-  const { isLoading, error, gradeFor, regions, applyFilters, summarise, refetch } = useCoverage(country);
+  const { isLoading, error, gradeFor, regions, applyFilters, summarise, refetch, unclearPlaces } = useCoverage(country);
 
   /* ⛔ THE URL STILL WINS; THE MEMORY ONLY FILLS A BARE ONE — fixed 2026-08-17 after Paul's report.
      The sidebar links to plain /coverage, so "URL is for what I am looking at" (§6c) was resetting
@@ -388,7 +390,7 @@ export default function Coverage() {
                   </td>
                   <td className="px-3 py-1.5 text-muted-foreground">{t.region ?? '—'}</td>
                   <td className="px-3 py-1.5 text-right tabular-nums text-muted-foreground"
-                    title={isUk ? undefined : (townPopulation(country, t.name).basis ?? 'No source figure')}>
+                    title={isUk ? undefined : (townPopulation(country, t.name, t.region).basis ?? 'No source figure')}>
                     {/* ⛔ A blank figure is a dash, never 0. Abroad figures are approximate, so prefixed "≈". */}
                     {t.population === null || t.population === undefined ? '—' : `${isUk ? '' : '≈ '}${t.population.toLocaleString()}`}
                   </td>
@@ -438,6 +440,27 @@ export default function Coverage() {
         </div>
       )}
 
+      {/* ⛔ UNCLEAR PLACES (Malaysia, 2026-10-19, src/lib/malaysiaPlaces.ts): imported place text that is not one town — a
+          state, a region, several places. Those leads count under no town; they are listed here with how many leads
+          carry each, folded by default. Nothing here changes a lead. */}
+      {country === 'Malaysia' && !isLoading && !error && unclearPlaces.length > 0 && (
+        <CollapsibleBlock persistKey="coverage-unclear-places" defaultOpen={false}
+          className="rounded-lg border border-border px-3 py-2" titleClassName="text-sm font-medium"
+          title={`Unclear places (${unclearPlaces.length})`}
+          summary={<span className="text-xs text-muted-foreground">{unclearPlaces.reduce((n, u) => n + u.leads, 0)} leads, all trades &mdash; not counted under any town</span>}>
+          <ul className="mt-2 space-y-1 text-sm" data-testid="coverage-unclear-places">
+            {unclearPlaces.map((u) => (
+              <li key={u.text} className="flex flex-wrap items-baseline gap-x-2">
+                <span className="font-medium">{u.text}</span>
+                <span className="text-xs text-muted-foreground">{UNCLEAR_WORDS[u.reason]}{u.state && u.reason !== 'state' ? ` · ${u.state}` : ''}</span>
+                <span className="ml-auto tabular-nums text-xs text-muted-foreground">{u.leads} lead{u.leads === 1 ? '' : 's'}</span>
+              </li>
+            ))}
+          </ul>
+          <p className="mt-2 text-xs text-muted-foreground">These leads keep the place their file gave them. Set a lead&rsquo;s town on the lead to count it under that town.</p>
+        </CollapsibleBlock>
+      )}
+
       {/* Required by the Open Government Licence wherever the list is shown. */}
       {isUk ? <p className="text-xs text-muted-foreground">
         <MapPin className="mr-1 inline h-3 w-3" />
@@ -448,7 +471,7 @@ export default function Coverage() {
         Towns are the places Find Leads suggests for {COVERAGE_COUNTRY_LABEL[country]}, plus any place your leads or
         searches name. A lead counts here by its own country. Populations are approximate, fixed figures
         {country === 'Malaysia'
-          ? ' for the council area (or district) the town sits in, wider than the town itself; '
+          ? ' for the council area (or district) the town sits in, wider than the town itself, or, where that has none, GeoNames’ figure for the place itself; '
           : ' for residents of each planning area (business districts read small); Singapore as a whole has no figure; '}
         a dash means no source figure. Source:{' '}
         {populationSourcesFor(country).map((s, i) => (

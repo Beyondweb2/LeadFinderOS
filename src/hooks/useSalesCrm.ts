@@ -54,8 +54,14 @@ export function useLeadActivity(leadId: string | undefined) {
   });
 }
 
-/** Find Leads: the ownership state of up to 500 search results in one call. */
-export async function lookupIdentities(items: Array<{ k: string; place_id?: string | null; phone?: string | null; maps_url?: string | null }>): Promise<Map<string, IdentityHit>> {
+/** Find Leads: the ownership state of up to 500 search results in one call. `country` / `website` / `name` / `town` /
+ *  `address` (2026-10-19) let the server also recognise a Malaysian / Singapore lead that came in by file (its phone in
+ *  +60 / +65 form, its website, its name in that town); a UK item is matched exactly as before. */
+export interface IdentityItem {
+  k: string; place_id?: string | null; phone?: string | null; maps_url?: string | null;
+  country?: string | null; website?: string | null; name?: string | null; town?: string | null; address?: string | null;
+}
+export async function lookupIdentities(items: IdentityItem[]): Promise<Map<string, IdentityHit>> {
   const out = new Map<string, IdentityHit>();
   for (let i = 0; i < items.length; i += 500) {
     const { data, error } = await sb.rpc('lead_identity_lookup', { _items: items.slice(i, i + 500) });

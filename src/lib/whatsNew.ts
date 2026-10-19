@@ -22,6 +22,23 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-19-malaysia-coverage-cleanup', date: '2026-10-19', title: 'Malaysia Coverage tidied, and imported leads show as already added', audience: 'all',
+    body: 'Every Malaysian town on Coverage now shows its state and, where there is a real figure, a population. Places from imported files that are not one town (a state, a region, several places) are in a folded "Unclear places" list. Find Leads now recognises leads that came in by file and shows who added them.',
+    report: {
+      added: [
+        'A state and a population for the Malaysian towns that came from your leads (Bayan Lepas, Seri Kembangan, Gelang Patah and more), and for Cyberjaya and Puchong. The figures come from GeoNames, a public place database.',
+        'An "Unclear places (N)" list under the Malaysia table, folded, showing how many leads carry each value ("Penang and Kuala Lumpur", "Klang Valley", "Sabah").',
+        'Find Leads: a business already in the CRM shows its owner’s picture with "Added by <name>" (or a plain "In CRM" tick when it has no owner) in place of Add to CRM. You cannot click it.',
+      ],
+      changed: [
+        'A Malaysian or Singapore search result now counts as already added when its phone, website, or name and town match a lead that came in by file. UK matching is unchanged.',
+        'The Coverage niche panel’s "Add all" now uses the same batch add as Find Leads: mobiles only, landlines skipped, with an "Added N, skipped M" summary.',
+      ],
+      removed: [
+        'States, regions and lists of places no longer appear as rows in the Malaysia town table.',
+      ],
+      effect: 'The Malaysia table is now real towns only, and you will not add Ethan’s imported leads a second time from Find Leads. No lead’s town was changed. Set a town on an unclear lead yourself to count it under that town.',
+    } },
   { id: '2026-10-17-trade-phrase-rule', date: '2026-10-17', title: 'Message wording: two- and three-word trades now work', audience: 'admin',
     body: 'A trade such as "interior designers" or "dental clinics" is now accepted in the AI-check messages. Lists ("X and Y"), symbols, digits and phrases over three words are still held. A held trade is now shown in lowercase inside the sentence.',
     report: {

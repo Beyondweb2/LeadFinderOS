@@ -24,7 +24,6 @@ const ENTRIES = [
   "src/hooks/useOutreach.ts",
   "src/pages/Outreach.tsx",
   "src/pages/Index.tsx",
-  "src/components/NichePanel.tsx",
   "src/components/LeadDetailFromInbox.tsx",
 ];
 /* The dialog reads its own complete row (useFullLeadRow) — the walk stops there. The column lists
@@ -105,7 +104,8 @@ ok(OUTREACH_LIST_SELECT === OUTREACH_LIST_COLUMNS.join(", ") && !OUTREACH_LIST_S
   const walk = (d: string): string[] => fs.readdirSync(path.join(root, d), { withFileTypes: true }).flatMap((e) => e.isDirectory() ? walk(`${d}/${e.name}`) : /\.tsx?$/.test(e.name) ? [`${d}/${e.name}`] : []);
   const callers = walk("src").filter((p) => p !== "src/hooks/useOutreach.ts" && /\buseOutreach\(/.test(read(p)));
   const unwalked = callers.filter((c) => !ENTRIES.includes(c));
-  ok(callers.length >= 4 && unwalked.length === 0, unwalked.length ? `useOutreach() is called in ${unwalked.join(", ")} — add it to ENTRIES` : `all ${callers.length} callers of useOutreach are walked`);
+  // 3 since 2026-10-19: the Coverage niche panel adds through Find Leads' batch add and no longer calls useOutreach.
+  ok(callers.length >= 3 && unwalked.length === 0, unwalked.length ? `useOutreach() is called in ${unwalked.join(", ")} — add it to ENTRIES` : `all ${callers.length} callers of useOutreach are walked`);
   // A caller that opts out of the history must not use its two readers.
   for (const c of callers) {
     const src = read(c);
@@ -136,13 +136,14 @@ ok(OUTREACH_LIST_SELECT === OUTREACH_LIST_COLUMNS.join(", ") && !OUTREACH_LIST_S
   ok(!/\bfetchAllRows</.test(src), "every Dashboard list is paged in parallel");
 }
 
-// The Coverage niche panel downloads the lead list ONCE, not once per town row.
+// The Coverage niche panel downloads NO lead list: since 2026-10-19 it adds through Find Leads' batch add (the
+// database is the dedupe), mounted once for the panel, never per town row.
 {
   const src = read("src/components/NichePanel.tsx");
   const row = src.slice(src.indexOf("function TownRow("), src.indexOf("export default function NichePanel("));
-  ok(row.length > 100 && !/useOutreach\(/.test(row), "TownRow has no useOutreach of its own");
-  ok((src.match(/useOutreach\(/g) ?? []).length === 1, "NichePanel mounts exactly one useOutreach");
-  ok(/useOutreach\(\{ preload: false \}\)/.test(src), "…and it downloads no list (preload: false, 2026-10-15)");
+  ok(row.length > 100 && !/useOutreach\(/.test(row) && !/useFindLeadsBulkAdd\(/.test(row), "TownRow mounts no add hook of its own");
+  ok(!/useOutreach\(/.test(src), "NichePanel no longer mounts useOutreach at all");
+  ok((src.match(/useFindLeadsBulkAdd\(\)/g) ?? []).length === 1, "…it mounts exactly one batch add");
 }
 
 // The Inbox's lead dialog loads ONE lead, never the book (2026-10-15).

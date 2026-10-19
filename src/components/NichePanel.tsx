@@ -8,7 +8,8 @@ import { ErrorState } from '@/components/operator/ui';
 import { rateLabel, sharePct, nicheVerdict, type NicheAnalysis } from '@/lib/nicheView';
 import { useNavigate } from 'react-router-dom';
 import { useLeadSearchContext } from '@/contexts/LeadSearchContext';
-import { useOutreach } from '@/hooks/useOutreach';
+import { useFindLeadsBulkAdd } from '@/hooks/useFindLeadsBulkAdd';
+import { addSummaryReasons, addSummaryTitle, type BulkAddLead } from '@/lib/findLeadsBulkAdd';
 import { useCampaigns } from '@/hooks/useCampaigns';
 import { pickCampaignForTrade } from '@/lib/campaignForTrade';
 import { useToast } from '@/hooks/use-toast';
@@ -50,14 +51,15 @@ type State =
  * niche verdict button at the top of Coverage is the market read now).
  */
 function TownRow({
-  trade, town, businesses, cells, state, onSearch, onAdded, addLead,
+  trade, town, businesses, cells, state, onSearch, onAdded, bulkAdd,
 }: {
   trade: string; town: string; businesses: number; cells: number;
   state: TownSearchState;
   onSearch: () => void;
-  onAdded: (added: number, dupes: number) => void;
-  /** From the panel's ONE useOutreach — see NichePanel. */
-  addLead: ReturnType<typeof useOutreach>['addLead'];
+  /** `skipped` = everything not added (already in the CRM, landline, no number…), as the summary says. */
+  onAdded: (added: number, skipped: number) => void;
+  /** From the panel's ONE useFindLeadsBulkAdd — see NichePanel. */
+  bulkAdd: ReturnType<typeof useFindLeadsBulkAdd>;
 }) {
   const { toast } = useToast();
   const navigate = useNavigate();
@@ -84,19 +86,16 @@ function TownRow({
     setAdding(true);
     try {
       const campaignId = pickCampaignForTrade(trade, campaigns, null).campaignId;
-      let ok = 0; let dupes = 0;
-      /* The SAME single-add path Find Leads uses: addLead, silent, with the trade and town stamped
-         on the row so the lead is auditable (no trade = no audit, and addLead blocks that anyway).
-         A duplicate returns null and is COUNTED, never re-added. */
-      for (const lead of rowLeads) {
-        const created = await addLead(lead, 'UK', 'no_website', campaignId, null, true, trade, town);
-        if (created) ok++; else dupes++;
+      /* ⛔ THE SAME ONE-GO BATCH ADD AS FIND LEADS (2026-10-19, src/lib/findLeadsBulkAdd.ts): a free duplicate preview
+         (the database's dedupe — already-added businesses are skipped), each new lead's phone looked up FIRST, UK
+         landlines and no-number leads skipped, then ONE save. The trade and town are stamped on every row. */
+      const res = await bulkAdd(rowLeads as BulkAddLead[], () => ({ trade, town, country: 'UK' }), () => null, campaignId);
+      if (res.ok === false) {
+        toast({ title: `${town}: nothing added`, description: (res as { message: string }).message, variant: 'destructive' });
+        return;
       }
-      onAdded(ok, dupes);
-      toast({
-        title: `${town}: added ${ok} lead${ok === 1 ? '' : 's'}`,
-        description: dupes > 0 ? `${dupes} were already in the CRM and were skipped.` : 'All new.',
-      });
+      onAdded(res.summary.added, res.summary.skipped);
+      toast({ title: `${town}: ${addSummaryTitle(res.summary)}`, description: addSummaryReasons(res.summary) || 'All new.' });
     } finally {
       setAdding(false);
     }
@@ -132,7 +131,7 @@ function TownRow({
 
       {state.kind === 'added' && (
         <span className="shrink-0 text-[11px] text-emerald-600">
-          Added {state.added}{state.dupes ? ` · ${state.dupes} already there` : ''}
+          Added {state.added}, skipped {state.dupes}
         </span>
       )}
 
@@ -177,14 +176,10 @@ export default function NichePanel({ trade, autoLoad = false }: { trade: string;
      (LeadSearchContext) — this panel asks for them when it opens, long before a town search lands. */
   useEffect(() => { void loadExclusions(); }, [loadExclusions]);
   const { stateFor, start, markAdded, searchingCount } = useTownLeadSearch(isLeadExcluded);
-  /* ⚡ ONE useOutreach FOR THE WHOLE PANEL (2026-09-27, site-wide speed pass). Each of the up-to-8
-     town rows used to mount its own, and every instance downloads the whole lead list (it is not
-     shared or cached) — eight copies of the CRM to reach one function, addLead. The rows share this
-     one; the add path is unchanged. */
-  /* ⚡ preload: false (2026-10-15): the panel never reads the list, so it no longer downloads the whole book
-     (~6,000 leads + archive + history) to reach addLead — the same mode Find Leads uses. addLead's database
-     dedupe is unchanged and its "previously added" history check is asked of the database instead. */
-  const { addLead } = useOutreach({ preload: false });
+  /* ⛔ ONE ADD PATH FOR THE WHOLE PANEL, AND IT IS FIND LEADS' (2026-10-19): the batch add (useFindLeadsBulkAdd —
+     a duplicate preview, phones looked up first, landlines skipped, one save). It replaced one addLead per lead,
+     which added landlines and ran N inserts. No lead list is downloaded (the database is the dedupe). */
+  const bulkAdd = useFindLeadsBulkAdd();
   /* Ticks only while the fold is in flight; cleared on unmount and on completion, so nothing
      keeps running behind a finished panel. */
   const [elapsed, setElapsed] = useState(0);
@@ -429,8 +424,8 @@ export default function NichePanel({ trade, autoLoad = false }: { trade: string;
                 cells={t.cells}
                 state={stateFor(trade, t.town)}
                 onSearch={() => start(trade, t.town)}
-                onAdded={(added, dupes) => markAdded(trade, t.town, added, dupes)}
-                addLead={addLead}
+                onAdded={(added, skipped) => markAdded(trade, t.town, added, skipped)}
+                bulkAdd={bulkAdd}
               />
             ))}
             {n.towns.length > 8 && <p className="text-[11px] text-muted-foreground">+{n.towns.length - 8} more towns</p>}

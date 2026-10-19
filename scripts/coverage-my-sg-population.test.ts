@@ -40,11 +40,15 @@ for (const c of ["Malaysia", "Singapore"] as const) {
   }
 }
 ok(Object.values(TOWN_POPULATION).flatMap((m) => Object.values(m)).every((t) => t.population !== 0), "no figure is 0 (a blank is null)");
-ok(townPopulation("Malaysia", "Pasir Gudang").population === null, "a town only a lead named is blank, never a guess");
+ok(townPopulation("Malaysia", "Simpang Ampat").population === null, "a town the dataset has no figure for is blank, never a guess");
+ok(townPopulation("Malaysia", "Puchong").population === 375181 && townPopulation("Malaysia", "Puchong").source?.url === "https://www.geonames.org/", "a table blank falls back to GeoNames' figure for the place itself (Puchong)");
+ok(townPopulation("Malaysia", "Kuala Lumpur").population === 1982112, "a table figure is never replaced by GeoNames");
+ok(townPopulation("Malaysia", "Ampang", "Selangor").population === null && townPopulation("Malaysia", "Ampang", "Kuala Lumpur").population === 126285, "a same-named place in another state never lends its figure");
+ok(townPopulation("Singapore", "Puchong").population === null, "Singapore never reads the Malaysian dataset");
 
 console.log("── SOURCES ──");
 ok(MY_COUNCIL_SOURCE.year === 2020 && MY_DISTRICT_SOURCE.year === 2020 && SG_SOURCE.year === 2026, "years: Malaysia census 2020, Singapore June 2026");
-ok(populationSourcesFor("Malaysia").length === 2 && populationSourcesFor("Singapore").length === 1, "the sources named under each country's table");
+ok(populationSourcesFor("Malaysia").length === 3 && populationSourcesFor("Singapore").length === 1, "the sources named under each country's table");
 ok(TOWN_POPULATION.Malaysia.Kluang.source === MY_DISTRICT_SOURCE && TOWN_POPULATION.Malaysia.Ipoh.source === MY_COUNCIL_SOURCE, "district figures are labelled as district figures");
 
 console.log("── SINGAPORE AS A WHOLE ──");
@@ -60,7 +64,7 @@ ok(filterByPopulationBand(rows, { min: null, max: 500_000 }).map((r) => r.name).
 console.log("── THE PAGE ──");
 const page = readFileSync(new URL("../src/pages/Coverage.tsx", import.meta.url), "utf8");
 const hook = readFileSync(new URL("../src/hooks/useCoverage.ts", import.meta.url), "utf8");
-ok(/population: townPopulation\(country, t\.name\)\.population/.test(hook), "Coverage rows take the figure from the table");
+ok(/population: townPopulation\(country, t\.name, t\.region\)\.population/.test(hook), "Coverage rows take the figure from the table");
 ok(/showPopFilter = populationFilterShown\(country\)/.test(page) && /!isUk && showPopFilter &&/.test(page), "the page asks populationFilterShown before drawing the abroad filter");
 ok(/t\.population === null \|\| t\.population === undefined \? '—'/.test(page), "a blank figure is drawn as a dash");
 ok(/populationSourcesFor\(country\)\.map/.test(page) && /\(\{s\.year\}\)/.test(page), "the source and year are shown under the table");
