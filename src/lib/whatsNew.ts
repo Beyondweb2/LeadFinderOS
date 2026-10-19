@@ -22,6 +22,14 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-19-hide-outside-town', date: '2026-10-19', title: 'Find Leads: the orange Outside town label is gone', audience: 'all',
+    body: 'Find Leads results no longer show the orange Outside town label on each row. Nothing else about the search changed.',
+    report: {
+      added: [],
+      changed: [],
+      removed: ['The orange Outside town label on Find Leads result rows.'],
+      effect: 'Cleaner rows. Which businesses are found, added or skipped is exactly as before.',
+    } },
   { id: '2026-10-19-guarantee-google-ai', date: '2026-10-19', title: 'New clients: Google AI counts in the money-back number', audience: 'admin',
     body: 'For a client whose baseline is measured from today, Google AI is counted in the baseline and in the four-week re-measure, on both sides the same way, wherever Google showed an AI answer. Every existing client is judged exactly as before.',
     report: {
