@@ -4,10 +4,10 @@
    Nothing here sends anything: the rules are pure and the function / Inbox are read as source. */
 import { readFileSync } from 'node:fs';
 import {
-  aiReplyDecision, aiChipFor, needsApproving, checkAiReply, fallbackAiReply, buildAiReplyPrompt, worstCaseCallUsd, mayCallWithin,
-  AI_REPLY_DRAFT_MAX_USD, AI_REPLY_MAX_PROMPT_CHARS, AI_REPLY_SYSTEM_PROMPT, OWNERSHIP_QUESTION, type AiReplyContext, type AiReplyRow,
+  aiReplyDecision, aiChipFor, needsApproving, rowSendable, checkAiReply, fallbackAiReply, buildAiReplyPrompt, worstCaseCallUsd, mayCallWithin,
+  AI_REPLY_DRAFT_MAX_USD, AI_REPLY_MAX_PROMPT_CHARS, AI_REPLY_SYSTEM_PROMPT, type AiReplyContext, type AiReplyRow,
 } from '../src/lib/aiReplyDraft.ts';
-import { GENERIC_SITE_LINE, OFFER_LINE_BOTH } from '../src/lib/draftEvidence.ts';
+import { pickMove, type MoveEvidence } from '../src/lib/replyMove.ts';
 import { leadCrawlWriteDecision, storedCrawlFailed } from '../src/lib/crawlWriteRule.ts';
 import { passesQuickFilter, INBOX_QUICK_FILTERS } from '../src/lib/conversationState.ts';
 
@@ -22,18 +22,19 @@ const PANEL = read('src/components/AiDraftPanel.tsx');
 const NOW = Date.parse('2026-10-11T12:00:00Z');
 const ago = (min: number) => new Date(NOW - min * 60_000).toISOString();
 const lead = { amount_paid: null, status: 'replied', is_archived: false };
-const base = { enabled: true, body: 'Yeah go on what did you find', messageType: 'text', inboundAt: ago(2), lead, suppressed: false, hadOutreach: true, nowMs: NOW };
-const kindOf = (o: Partial<typeof base>) => aiReplyDecision({ ...base, ...o });
 
-console.log('1. switch off → no drafts');
-ok(kindOf({ enabled: false }).kind === 'skipped', 'off: the rule skips');
-ok(/default false/.test(MIG.match(/ai_handles_replies boolean[^;]*/)?.[0] ?? ''), 'the switch defaults OFF in the database');
-ok(/where id = 1 and ai_handles_replies\)/.test(MIG), 'the candidate query returns nothing while the switch is off');
+console.log('1. flags always, drafts only behind the switch (2026-10-20)');
 {
-  const tick = FN.slice(FN.indexOf('async function handleTick'));
-  ok(tick.indexOf('ai_handles_replies !== true') > 0 && tick.indexOf('ai_handles_replies !== true') < tick.indexOf('ai_reply_draft_candidates'), 'the tick stops before reading candidates when the switch is off');
+  const FLAGS = read('supabase/migrations/20261109090000_reply_flags_always.sql');
+  ok(/default false/.test(MIG.match(/ai_handles_replies boolean[^;]*/)?.[0] ?? ''), 'the switch still defaults OFF in the database');
+  ok(/reply_flags_since timestamptz not null default now\(\)/.test(FLAGS) && /m\.created_at >= s\.since/.test(FLAGS), 'flags read NEW replies only (from when the migration ran)');
+  ok(!/set_enabled|ai_handles_replies\s*=/.test(FLAGS.replace(/--[^\n]*/g, '')), 'the migration never turns the switch on');
+  const tick = FN.slice(FN.indexOf('async function handleTick'), FN.indexOf('/* ───────────────────────── person actions'));
+  const iGate = tick.indexOf('!switchOn || Date.parse(c.inbound_at) < since'); const iWrite = tick.indexOf('writeDraft(');
+  ok(iGate > 0 && iGate < iWrite, 'the tick writes a model draft only after the switch gate (off → no model call)');
+  ok(!/writeDraft\(/.test(tick.slice(0, iGate)), '…and no model call happens on the flag path before it');
 }
-ok(/ai_handles_replies_since = new Date\(\)\.toISOString\(\)/.test(FN.replace(/patch\.ai_handles_replies_since/, 'ai_handles_replies_since')) && /m\.created_at >= s\.since/.test(MIG), 'turning it on starts the clock: older replies are never drafted (no backlog spend)');
+ok(/ai_handles_replies_since = new Date\(\)\.toISOString\(\)/.test(FN.replace(/patch\.ai_handles_replies_since/, 'ai_handles_replies_since')), 'turning it on starts the clock: older replies are never drafted (no backlog spend)');
 ok(/if \(actor\.role !== "admin"\) return json\(\{ ok: false, error: "admin_only" \}, 403\)/.test(FN), 'only an admin can read or flip the switch');
 
 console.log('2. one draft per inbound; a newer inbound replaces the old draft');
@@ -48,48 +49,54 @@ ok(/ai_reply_drafts_one_open_per_phone on public\.ai_reply_drafts \(user_id, pho
 }
 ok(/distinct on \(m\.user_id, m\.phone\)/.test(MIG) && /interval '30 seconds'/.test(MIG), 'only the newest inbound per conversation, after it settles (a burst gets one draft)');
 
-console.log('3. hand-over cases → "Needs you", no draft');
-const handover: Array<[string, Partial<typeof base>, string]> = [
-  ['stop', { body: 'STOP' }, 'opt_out'],
-  ['please stop messaging me', { body: 'please stop messaging me' }, 'opt_out'],
-  ['not interested', { body: 'Not interested thanks' }, 'not_interested'],
-  ['no thanks', { body: 'No thanks mate' }, 'not_interested'],
-  ['call request', { body: 'Can you give me a call tomorrow' }, 'call_request'],
-  ['price', { body: 'How much is it?' }, 'price'],
-  ['angry', { body: 'who the f*** gave you my number, this is spam' }, 'angry'],
-  ['angry (swearing)', { body: 'fuck off' }, 'angry'],
-  ['legal', { body: 'I will report you to trading standards' }, 'legal'],
-  ['solicitor', { body: 'my solicitor will be in touch' }, 'legal'],
-  ['photo, no words', { body: '[image]', messageType: 'image' }, 'media'],
-  ['Do Not Contact / opted out', { suppressed: true }, 'do_not_contact'],
-];
-for (const [name, o, reason] of handover) {
-  const d = kindOf(o);
-  ok(d.kind === 'needs_you' && d.reason === reason, `hand-over: ${name} → Needs you (${reason})${d.kind === 'needs_you' ? '' : ' — got ' + d.kind}`);
+console.log('3. the decision: stops, flags, auto-replies, the window');
+const ev: MoveEvidence = { businessName: 'ZZ Fixture Electrical 01', trade: 'electricians', town: 'Leeds', engineWords: 'gemini', named: { named: 0, valid: 6 }, competitors: ['Rival A Electrical'], hookAlreadySent: false, findings: [], hasWebsite: true, ownerName: null, foundOnGoogle: true };
+const planFor = (body: string, o: { suppressed?: boolean; messageType?: string } = {}) => pickMove({ thread: [{ from: 'us', text: 'Hi, is this ZZ Fixture Electrical 01?', templateName: 'initial_contact' }, { from: 'them', text: body, messageType: o.messageType ?? 'text' }], suppressed: o.suppressed ?? false, aiSentSinceWin: 0, evidence: ev });
+const decide = (body: string, o: { suppressed?: boolean; messageType?: string; inboundAt?: string; lead?: typeof lead | null; hadOutreach?: boolean } = {}) =>
+  aiReplyDecision({ inboundAt: o.inboundAt ?? ago(2), lead: o.lead === undefined ? lead : o.lead, hadOutreach: o.hadOutreach ?? true, plan: planFor(body, o), nowMs: NOW });
+for (const [body, reason] of [['STOP', 'opt_out'], ['please stop messaging me', 'opt_out'], ['scrub me off your list', 'opt_out'], ['fuck off', 'angry'], ['No. Bugger off!', 'angry'], ['f*** off', 'angry']] as const) {
+  const d = decide(body);
+  ok(d.kind === 'needs_you' && d.stop === true && d.reason === reason, `stop: "${body}" → Needs you, no draft (${reason})`);
 }
-ok(kindOf({ lead: { amount_paid: 99, status: 'paid' } }).kind === 'skipped', 'a paying client never gets a prospect draft');
-ok(kindOf({ hadOutreach: false }).kind === 'skipped', 'a message that is not a reply to our outreach gets nothing');
-ok(kindOf({ lead: null }).kind === 'skipped', 'no lead → nothing');
-ok(kindOf({ body: 'Thanks for contacting us, we will get back to you' }).kind === 'skipped', 'an auto-responder gets nothing');
-ok(kindOf({}).kind === 'draft', 'an ordinary reply in the window → a draft');
-ok(kindOf({ body: 'Yes it is, who is this?' }).kind === 'draft', 'the opener answer ("Yes it is, who is this?") → a draft');
-ok(/const suppressed = await isSuppressed\(service, \{ phone: c\.phone, leadId: c\.lead_id \}\); \/\/ fails closed/.test(FN), 'Do Not Contact is the shared suppression check, which fails closed');
+ok((() => { const d = decide('hi', { suppressed: true }); return d.kind === 'needs_you' && d.stop && d.reason === 'do_not_contact'; })(), 'Do Not Contact → a stop');
+for (const [body, reason] of [['No thanks mate', 'not_interested'], ['wrong number mate', 'wrong_person'], ['my solicitor will be in touch', 'legal'], ['who gave you my number?', 'privacy'], ['Tak berminat', 'other_language'], ['https://maps.app.goo.gl/xxx', 'link'], ['can I cancel if it does not work?', 'paul_looks']] as const) {
+  const d = decide(body);
+  ok(d.kind === 'needs_you' && !d.stop && d.reason === reason, `Needs you: "${body}" → ${reason}${d.kind === 'needs_you' ? '' : ' — got ' + d.kind}`);
+}
+ok((() => { const d = decide('[audio]', { messageType: 'audio' }); return d.kind === 'needs_you' && d.reason === 'media'; })(), 'a voice note → Needs you (listen first)');
+for (const body of ['How much is it?', 'Can you give me a call tomorrow', 'Yes please, sounds good', 'Yes it is', 'I pay him to do the website']) ok(decide(body).kind === 'draft', `drafted (no hand-over): "${body}"`);
+ok(decide('Thanks for contacting us, we will get back to you').kind === 'skipped', 'an auto-responder gets no row to answer');
+ok(decide('hi', { lead: { amount_paid: 99, status: 'paid', is_archived: false } }).kind === 'skipped', 'a paying client never gets a prospect draft');
+ok(decide('hi', { hadOutreach: false }).kind === 'skipped' && decide('hi', { lead: null }).kind === 'skipped', 'not our outreach / no lead → nothing');
+ok(/input\.suppressed = await isSuppressed\(service, \{ phone: c\.phone, leadId: c\.lead_id \}\); \/\/ fails closed/.test(FN), 'Do Not Contact is the shared suppression check, which fails closed');
+{
+  const tick = FN.slice(FN.indexOf('async function handleTick'));
+  ok(/if \(decision\.stop && decision\.reason !== "do_not_contact"\) optedOut = await applyStop\(/.test(tick), 'a stop / angry reply opts out at once (the existing recordOptOut)');
+  const stop = FN.slice(FN.indexOf('async function applyStop'), FN.indexOf('async function undoReplied'));
+  ok(/recordOptOut\(service/.test(stop) && /whatsapp_auto_replies/.test(stop) && /skipped_suppressed/.test(stop) && /\.eq\("status", "queued"\)/.test(stop), '…and cancels queued follow-ups: the waiting pitch and the drip queue');
+  ok(!/whatsapp_messages"\)\.insert|sendViaGraph/.test(stop), '…and sends nothing');
+}
 
 console.log('4. outside the 24-hour window → "Needs a template", no free text');
-ok(kindOf({ inboundAt: ago(25 * 60) }).kind === 'needs_template', 'a reply older than 24h → needs a template');
+ok(decide('Yes please', { inboundAt: ago(25 * 60) }).kind === 'needs_template', 'a draftable reply older than 24h → needs a template');
+ok(decide('STOP', { inboundAt: ago(25 * 60) }).kind === 'needs_you', '…but a stop is a stop whatever the window');
 {
   const row: AiReplyRow = { id: 'd1', phone: '447700900001', lead_id: 'l', kind: 'draft', status: 'pending', inbound_at: ago(25 * 60), draft_text: 'hi' };
   ok(aiChipFor(row, NOW)?.label === 'Needs a template' && !needsApproving(row, NOW), 'a pending draft whose window has since closed reads "Needs a template", never "Needs approving"');
   ok(aiChipFor({ ...row, inbound_at: ago(5) }, NOW)?.label === 'Needs approving', 'inside the window it reads "Needs approving"');
-  ok(aiChipFor({ ...row, status: 'sent' }, NOW) === null && aiChipFor({ ...row, status: 'discarded' }, NOW) === null, 'sent / discarded rows show nothing (plain "Waiting" stays)');
-  ok(aiChipFor({ ...row, kind: 'needs_you', inbound_at: ago(5) }, NOW)?.label === 'Needs you', 'a hand-over reads "Needs you"');
+  ok(aiChipFor({ ...row, status: 'sent' }, NOW) === null && aiChipFor({ ...row, status: 'discarded' }, NOW) === null, 'sent / discarded rows show nothing');
+  ok(aiChipFor({ ...row, kind: 'needs_you', inbound_at: ago(5) }, NOW)?.label === 'Needs you' && aiChipFor({ ...row, kind: 'needs_you' }, NOW)?.label === 'Needs you', 'a Needs you flag stays a flag whatever the window');
+  ok(rowSendable({ ...row, kind: 'needs_you', inbound_at: ago(5), draft_text: 'Sure' }, NOW) && !rowSendable({ ...row, kind: 'needs_you', inbound_at: ago(5), draft_text: 'x', why: { stop: true } as never }, NOW), 'a Needs you row with a draft can be approved; a stop never');
 }
 ok(/if \(!serviceWindowState\(d\.inbound_at\)\.open\) return json\(\{ ok: false, error: "window_closed"/.test(FN), 'claim refuses a closed window before anything is sent');
+ok(/STOP_REASONS\.has\(d\.reason/.test(FN) && /error: "suppressed"/.test(FN), 'claim refuses a stop and a suppressed number');
 
 console.log('5. the "Needs approving" filter');
 ok(INBOX_QUICK_FILTERS.some((x) => x.value === 'needs_approving' && x.label === 'Needs approving'), 'the filter exists');
 ok(passesQuickFilter('needs_approving', { unread: false, waitingSinceMs: 1, needsApproving: true }) && !passesQuickFilter('needs_approving', { unread: true, waitingSinceMs: 1 }), 'it keeps only conversations with a draft to approve');
-ok(/INBOX_QUICK_FILTERS\.filter\(\(f\) => f\.value !== 'needs_approving' \|\| aiOn\)/.test(INBOX), 'WhatsApp only (hidden on the SMS tab)');
+ok(INBOX.includes("INBOX_QUICK_FILTERS.filter((f) => (f.value !== 'needs_approving' && f.value !== 'needs_you') || aiOn)"), 'Needs approving and Needs you: WhatsApp only (hidden on the SMS tab)');
+ok(INBOX_QUICK_FILTERS.some((x) => x.value === 'needs_you' && x.label === 'Needs you') && passesQuickFilter('needs_you', { unread: false, waitingSinceMs: null, needsYou: true }) && !passesQuickFilter('needs_you', { unread: true, waitingSinceMs: 1 }), 'the Needs you filter keeps only flagged conversations');
+ok(/NEEDS YOU SORTS TO THE TOP/.test(INBOX) && /data-testid="needs-you-reason"/.test(INBOX), 'Needs you sorts to the top and shows its reason on the row');
 /* The list row is the memoised ConversationRow (2026-10-16, speed): aiRow = ai.forPhone(c.phone), st = stateByKey.get(c.key). */
 ok(/aiRow=\{ai\.forPhone\(c\.phone\)\}/.test(INBOX) && /st=\{stateByKey\.get\(c\.key\)\}/.test(INBOX)
   && /<AiDraftChip row=\{aiRow\} compact \/>/.test(INBOX) && /\(!aiChipFor\(aiRow\) \|\| st\?\.failed\) && <ConvStateChip/.test(INBOX), 'the list shows "Needs approving" in place of "Waiting" (a failed send still shows)');
@@ -136,27 +143,34 @@ ok(/cost_usd: w\.spentUsd/.test(FN) && /cost_usd numeric/.test(MIG), 'the draft 
 ok(/guardAction\(service, actor\.id, "ai_draft"/.test(FN), 'Regenerate (a person asking for a model call) asks the usage guard');
 ok(/mode !== "running"/.test(FN), 'paid AI paused → hand over instead of spending');
 
-console.log('8. the draft: the brief\'s structure, nothing invented');
-const ctx: AiReplyContext = {
-  firstName: null, businessName: 'Safety First Electrical', latestInbound: 'Yes it is, who is this?',
-  thread: [{ from: 'us', text: 'Hi, is this Safety First Electrical?' }, { from: 'them', text: 'Yes it is, who is this?' }],
-  search: { trade: 'an electrician', town: 'Leeds' }, competitors: ['Spark Bros', 'Leeds Electric'], namedEverywhere: false, hookAlreadySent: false,
-  findings: [{ title: 'Placeholder blocks', said: 'Your projects page still shows placeholder blocks like Project 1 and Project 2.' }], ownershipKnown: false,
-  engineWords: 'ai', hasWebsite: true,
-};
+console.log('8. the draft: code picks the move, the model phrases it, the checker warns');
 {
+  const plan = planFor('Yes it is');
+  const ctx: AiReplyContext = { businessName: ev.businessName, latestInbound: 'Yes it is', thread: [{ from: 'us', text: 'Hi, is this ZZ Fixture Electrical 01?' }, { from: 'them', text: 'Yes it is' }], plan, evidence: ev };
   const fb = fallbackAiReply(ctx);
-  ok(/Spark Bros/.test(fb) && /placeholder/i.test(fb) && fb.endsWith(OWNERSHIP_QUESTION), 'rule-built draft: search + names → the real issue → the agency question');
+  ok(plan.move === 'intro_hook' && /Rival A Electrical/.test(fb) && (fb.match(/\?/g) ?? []).length === 1, 'bare "yes it is" → who I am + the search line + ONE question');
   ok(checkAiReply(fb, ctx).length === 0, `the rule-built draft passes the checks${checkAiReply(fb, ctx).length ? ' — ' + checkAiReply(fb, ctx).join(' | ') : ''}`);
-  const bare = { ...ctx, search: null, competitors: [], findings: [] };
-  const fb2 = fallbackAiReply(bare);
-  ok(!/AI|placeholder|issue/i.test(fb2.replace(OWNERSHIP_QUESTION, '').replace(GENERIC_SITE_LINE, '').replace(OFFER_LINE_BOTH, '')) && fb2.includes(GENERIC_SITE_LINE) && fb2.endsWith(OWNERSHIP_QUESTION), 'no audit, no crawl → no AI claim and no site issue is invented (the general line instead)');
-  const p = buildAiReplyPrompt(bare);
-  ok(/SEARCH: none on record\. Leave the AI part out\./.test(p) && /WEBSITE ISSUES: none to mention\. Do not claim any fault\./.test(p), 'the prompt says to leave the absent parts out');
+  ok(!/£|https?:|sign/i.test(fb), '…no price, no link, no sign-up on a bare yes');
+  const p = buildAiReplyPrompt(ctx);
+  ok(/POINTS \(say these, in this order, nothing else\)/.test(p) && /QUESTION \(end with exactly this one question/.test(p), 'the prompt hands the model the points and the one question');
+  ok(/At most 3 short lines/.test(AI_REPLY_SYSTEM_PROMPT) && /never deny it/.test(AI_REPLY_SYSTEM_PROMPT) && /What time is best to call tomorrow\?/.test(AI_REPLY_SYSTEM_PROMPT), 'the system prompt: 3 lines, never deny AI, Paul\'s own examples');
 }
-ok(checkAiReply('Hi mate, it is £99 a month, see https://findable.live — are you with an agency?', ctx).some((x) => /price or a link/.test(x)), 'a draft with a price or a link is flagged');
-ok(checkAiReply('Hi mate, i asked AI and it named Spark Bros. Your projects page shows placeholder blocks. Want a call?', ctx).some((x) => /agency/.test(x)), 'a draft that does not ask the agency question is flagged');
-ok(/selectFindings\(/.test(FN) && /, 3\);/.test(FN.slice(FN.indexOf('selectFindings('), FN.indexOf('selectFindings(') + 400)), 'site issues come from the call script\'s own rule (selectFindings), at most 3');
+{
+  const ctx: AiReplyContext = { businessName: ev.businessName, latestInbound: 'Yes it is', thread: [], plan: planFor('Yes it is'), evidence: ev };
+  const w = (t: string) => checkAiReply(t, ctx);
+  ok(w('Great, it is £49.99 a month. Want a call?').some((x) => /price before|not on the fact sheet/.test(x)), 'a price before a price question / not on the sheet → warning');
+  ok(w('We will get you on the first page of Google. Want a call?').some((x) => /ranking/.test(x)), 'a ranking / first page promise → warning');
+  ok(w('Sign up here https://findable.live/agree/x').some((x) => /link/.test(x)), 'a link → warning');
+  ok(w('Is that ok? What time suits?').some((x) => /more than one question/.test(x)), 'two questions → warning');
+  ok(w('No I am not a bot, I am a real person.').some((x) => /Denies being AI-assisted/.test(x)), 'denying AI help → warning');
+  ok(w('When I asked Gemini it named Smith And Sons Plumbing instead.').some((x) => /not in the audit/.test(x)), 'a business not in the audit → warning');
+  ok(w('Lots of people search in Bristol for that.').some((x) => /not the audit's town/.test(x)), 'a different town → warning');
+  ok(w('Your site has broken links. Want a call?').some((x) => /crawl does not record/.test(x)), 'a website issue the crawl did not record → warning');
+  ok(w('Hi Dave, quick one. Want a call?').some((x) => /does not state that name/.test(x)), 'a first name the site does not state → warning');
+  const named = { ...ctx, evidence: { ...ev, named: { named: 3, valid: 6 } } };
+  ok(checkAiReply('When I asked Gemini it named others instead. Want a call?', named).some((x) => /more than a third/.test(x)), '"named others instead" when named in half the answers → warning');
+}
+ok(/rowSendable\(activeAi\)/.test(INBOX) && /action: 'draft'/.test(INBOX) && /action: 'mark_opted_out'/.test(INBOX), 'Inbox: Draft reply (always) and Mark opted out (a stop) go through ai-reply-drafts');
 
 console.log('9. a failed crawl never overwrites the last good one');
 const DAY = 86_400_000;

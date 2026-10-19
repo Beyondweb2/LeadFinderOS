@@ -98,3 +98,42 @@ Tests: `scripts/ai-draft-names-issues.test.ts` (names present / unreadable, issu
   `OFFER_LINE_BOTH` ("we can help with that…", pointing at "that's what we help with"); `offerLine` chooses.
 
 Tests: `scripts/ai-draft-names-issues.test.ts` section 3.
+
+## 2026-10-20 — Needs you, the offer fact sheet, code picks the move (Paul)
+
+Branch `feat/inbox-needs-you-fact-sheet`. Source: `Documents/Findable/inbox-analysis-2026-10-19.md` (15 missing rules).
+The switch "AI handles replies" is still OFF and is not touched. NOTHING auto-sends.
+
+- **Offer Fact Sheet** `src/lib/offerFactSheet.ts` (`FACT_SHEET_VERSION`, agreement `v5`): the only offer facts a draft may say,
+  each citing its v5 clause; pinned to the live agreement text by `scripts/offer-fact-sheet.test.ts`. Guarantee line word for
+  word: "We improve AI visibility or you get your money back." One engine wording (`ENGINE_WORDING`). Case studies (ABLM, MCL,
+  BS4, a review) are DRAFTS, never used until `caseStudyUsable` (approved + permission + evidence + quote). Gaps / conflicts with
+  Paul's brief: `FACT_SHEET_CONFLICTS`.
+- **The move** `src/lib/replyMove.ts` `pickMove`: code reads the reply + thread + stored audit / crawl and returns the move, the
+  points (facts only), the ONE question, a Needs you reason, stop, autoDraft and the Auto-reply / Only confirmed label. The model
+  (`aiReplyDraft.ts`) only phrases the points in Paul's register (9 of his hand-typed messages as examples), max 3 lines, one
+  question. Voice note first, call after. No link ever; a price only after a price question or a clear yes. Capitals by code
+  (`tidyCaps`: sentences, lines, I / I'm / I'll, ChatGPT / Gemini; links, emails, numbers untouched). Templates never pass through it.
+- **Checker** `checkAiReply` WARNS (never blocks): competitor not in the audit, wrong town, a site issue the crawl did not record,
+  an owner name the site does not state, £ / term / guarantee wording not on the sheet, ranking / first page, > 1 question, a link,
+  denying AI help, "named others instead" above a third.
+- **Needs you** = an `ai_reply_drafts` row `kind 'needs_you'` + `reason` / `reason_label` (no new table). Written for every NEW
+  reply by the tick, rules only (no model, no spend), whatever the switch says — migration `20261109090000_reply_flags_always.sql`
+  (`reply_flags_since`, candidates no longer gated by the switch, the cron posts only when there is a new reply). Chip with the
+  reason on the row, sorts to the top, `needs_you` filter, a card + count on the bell (`NEEDS_YOU_CARD_LINK`). Clears on send
+  (`my_ai_reply_drafts` hides answered rows) or Dismiss.
+- **Draft reply** (WhatsApp tools row) = fn `ai-reply-drafts` `action: 'draft'`: always a draft, except a stop (then "Mark opted out",
+  `action: 'mark_opted_out'`). A Needs you row may carry a draft and can be approved (`rowSendable`); a stop never.
+  The SMS tab keeps the older `WarmReplyAssistant` (ai-replies difference).
+- **Safeguards**: a stop / angry reply → `recordOptOut` + waiting pitches `skipped_suppressed` + a queued drip lead unqueued
+  (`applyStop`). Auto-replies and bare "yes it is" → `undoReplied` puts a NEW Replied back to Contacted only when nothing they
+  ever sent was a real reply. Loop guards (pickMove): never twice without a prospect message, three AI sends with no win (our voice
+  note / a booked call) → Needs you, no reply to repeated auto-replies. Claim refuses a stop and a suppressed number.
+- **One-third rule** `src/lib/namedShareRule.ts`: `NAMED_INSTEAD_TEMPLATES` go only when named ≤ a third of valid answers —
+  enforced in `_shared/audit-reply.ts` `resolveAuditReplyVars` (Inbox single + bulk dry run, queue pitch + drip, report offer).
+  Template text unchanged. Not covered: `hook_followup`'s own lane (it needs a prior `audit_reply`, which is now gated).
+- **Dry run** `action: 'dry_run'` (admin JWT, or the internal job header): `{ fixtures: [...], model }` runs the deployed drafter
+  on ZZ fixtures (`scripts/fixtures/ai-reply-eval.json`, 25 anonymised real + 32 odd), saves nothing, logs nothing.
+
+Tests: `scripts/reply-move.test.ts` (57/57 hand-over decisions), `offer-fact-sheet.test.ts`, `named-share-rule.test.ts`,
+`ai-reply-drafts.test.ts`, `ai-draft-names-issues.test.ts`, `bulk-send-precheck.test.ts`, `hook-send-integrity.test.ts`.

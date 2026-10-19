@@ -14,7 +14,7 @@
 import { readFileSync } from 'node:fs';
 import { initialHookStateV2, type HookScoreRow } from '../src/lib/hookScore.ts';
 import { templateEngineConflict } from '../src/lib/rivalHook.ts';
-import { resolveAuditReplyVars } from '../supabase/functions/_shared/audit-reply.ts';
+import { HOOK_NO_GAP_REASON, resolveAuditReplyVars } from '../supabase/functions/_shared/audit-reply.ts';
 import { scoreHookAuditForCard } from '../src/lib/hookVisibility.ts';
 import { selectVoiceNoteEvidence } from '../src/lib/voiceNoteScript.ts';
 import { applyBulkChecks, explainBulkRefusal, planBulkSend, type BulkCandidate } from '../src/lib/inboxBulkSend.ts';
@@ -65,6 +65,10 @@ function fakeService(audits: FakeAudit[]) {
 }
 const V2 = initialHookStateV2(Q);
 const resolve = (audits: FakeAudit[], templateName: string) => resolveAuditReplyVars(fakeService(audits), 'lead-fb', { templateName });
+/* The tuple alone (no template): since 2026-10-20 a "named others" template is refused when the audit named them in more than a
+   third of answers (namedShareRule.ts), so the tuple checks on those audits ask without one; the refusal is pinned beside them. */
+const resolveTuple = (audits: FakeAudit[]) => resolveAuditReplyVars(fakeService(audits), 'lead-fb', {});
+const refusedOverThird = (v: Awaited<ReturnType<typeof resolve>>) => !v.ok && v.reason.startsWith(HOOK_NO_GAP_REASON) && /more than a third/.test(v.reason);
 
 await (async () => {
   /* 1. Firebeard's shape: a newer 3×2 audit whose best miss is Google AI Q2, an older one whose was ChatGPT. */
@@ -77,19 +81,21 @@ await (async () => {
     const af = await resolve([older, newer], 'audit_followup');
     ok(af.ok && af.hookEngine === 'gemini' && af.hookQuestion === Q[1] && JSON.stringify(af.rivals) === JSON.stringify(RIVALS['1:gemini']), '1/2: audit_followup + Google AI miss → ALLOWED (Paul, 2026-09-27), same exact tuple');
     const oldOnly = await resolve([older], 'audit_followup');
-    ok(oldOnly.ok && oldOnly.hookEngine === 'chatgpt', '1: before the re-audit the same lead WAS sendable with audit_followup (its hook was ChatGPT) — a rerun changes the answer, resolved fresh at send time');
+    ok(refusedOverThird(oldOnly), '1: the older audit named them in 5 of 6, so audit_followup ("named others") is refused there (one-third rule); a rerun changes the answer, resolved fresh at send time');
   }
   /* 2. A current Google AI miss. */
   {
     const a: FakeAudit = { id: 'a', created_at: '2026-09-27T00:00:00Z', hook: V2, qrows: rows([[true, true], [true, false], [true, true]]) };
-    const v = await resolve([a], 'audit_followup_fault');
+    ok(refusedOverThird(await resolve([a], 'audit_followup_fault')), '2: named in 5 of 6 → the claim template is refused (one-third rule)');
+    const v = await resolveTuple([a]);
     ok(v.ok && v.hookEngine === 'gemini' && JSON.stringify(v.rivals) === JSON.stringify(RIVALS['1:gemini']), '2: Google AI miss → engine-neutral templates carry it, same tuple');
     ok(templateEngineConflict('audit_followup_call', 'gemini') === null && templateEngineConflict('audit_followup_fault', 'gemini') === null, '2: "i asked AI" templates never conflict');
   }
   /* 3. Google AI 3/3, ChatGPT supplies the miss. */
   {
     const a: FakeAudit = { id: 'a', created_at: '2026-09-27T00:00:00Z', hook: V2, qrows: rows([[true, true], [true, true], [false, true]]) };
-    const v = await resolve([a], 'audit_followup');
+    ok(refusedOverThird(await resolve([a], 'audit_followup')), '3: named in 5 of 6 → audit_followup is refused (one-third rule)');
+    const v = await resolveTuple([a]);
     ok(v.ok && v.hookEngine === 'chatgpt' && v.hookQuestion === Q[2] && JSON.stringify(v.rivals) === JSON.stringify(RIVALS['2:chatgpt']), '3: Google AI 3/3 → the ChatGPT miss, and audit_followup is allowed with ChatGPT\'s own names');
   }
   /* 4. An old early-stop (v1) audit only: its stored gap is the hook. */
@@ -128,7 +134,7 @@ await (async () => {
   /* 6. Result did not change: resolving twice gives the same tuple. */
   {
     const a: FakeAudit = { id: 'a', created_at: '2026-09-27T00:00:00Z', hook: V2, qrows: rows([[true, true], [true, false], [true, true]]) };
-    const x = await resolve([a], 'audit_followup_call'); const y = await resolve([a], 'audit_followup_call');
+    const x = await resolveTuple([a]); const y = await resolveTuple([a]);
     ok(x.ok && y.ok && x.hookQuestion === y.hookQuestion && x.hookEngine === y.hookEngine && x.rivals.join() === y.rivals.join(), '6: unchanged audit → identical tuple every time');
   }
   /* 7. Named 6/6 → no hook is manufactured. */

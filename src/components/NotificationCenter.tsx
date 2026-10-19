@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   AlertTriangle, Bell, BellRing, CalendarClock, CheckCheck, FileCheck2, Flame, Megaphone, MessageCircleReply, MessageSquareHeart,
-  ListChecks, PoundSterling, Sparkles, Trash2, Trophy, Undo2, UserPlus, X,
+  ListChecks, PoundSterling, Sparkles, Trash2, Trophy, Undo2, UserPlus, UserRound, X,
 } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
@@ -10,7 +10,9 @@ import { Switch } from '@/components/ui/switch';
 import { cn } from '@/lib/utils';
 import { useNotifications, type AppNotification } from '@/hooks/useNotifications';
 import { useWhatsAppUnreadCounts } from '@/hooks/useWhatsAppUnread';
-import { GROUPED_NOTIFICATION_KINDS, REPLY_CARD_LINK, bellCount, replyCardBody, replyCardTitle, replySummary, type ReplySummary } from '@/lib/notificationGrouping';
+import { useAiReplyDrafts } from '@/hooks/useAiReplyDrafts';
+import { needsYou } from '@/lib/aiReplyDraft';
+import { GROUPED_NOTIFICATION_KINDS, NEEDS_YOU_CARD_LINK, REPLY_CARD_LINK, bellCount, replyCardBody, replyCardTitle, replySummary, type ReplySummary } from '@/lib/notificationGrouping';
 import { TONE, ago, type Tone } from '@/components/salesDash/ui';
 
 /* ══ THE NOTIFICATION CENTRE (Sales Experience release 3, 2026-09-28) ═════════════════════════════════
@@ -47,7 +49,7 @@ const KIND: Record<string, { icon: typeof Bell; tone: Tone }> = {
 const ALERTS_KEY = 'lf-desktop-alerts';
 const readAlerts = () => { try { return localStorage.getItem(ALERTS_KEY) === 'on'; } catch { return false; } };
 
-function List({ n, onGo, onClose, replies, onReplies, count }: { n: ReturnType<typeof useNotifications>; onGo: (x: AppNotification) => void; onClose?: () => void; replies: ReplySummary; onReplies: () => void; count: number }) {
+function List({ n, onGo, onClose, replies, onReplies, count, needsYouCount, onNeedsYou }: { n: ReturnType<typeof useNotifications>; onGo: (x: AppNotification) => void; onClose?: () => void; replies: ReplySummary; onReplies: () => void; count: number; needsYouCount: number; onNeedsYou: () => void }) {
   /* Replies are ONE card (notificationGrouping.ts); their stored rows are never drawn one by one. */
   const shown = n.rows.filter((r) => !GROUPED_NOTIFICATION_KINDS.has(r.kind));
   const [alerts, setAlerts] = useState(readAlerts);
@@ -70,6 +72,19 @@ function List({ n, onGo, onClose, replies, onReplies, count }: { n: ReturnType<t
         </div>
       </div>
       <ul className="min-h-0 flex-1 overflow-y-auto p-1.5">
+        {/* NEEDS YOU (2026-10-20): replies the drafter flagged for a person. One card; it falls as each is sent or dismissed. */}
+        {needsYouCount > 0 && (
+          <li>
+            <button type="button" onClick={onNeedsYou} data-testid="needs-you-card" className="flex w-full items-start gap-2.5 rounded-lg bg-red-500/[0.06] px-2.5 py-2 text-left hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary">
+              <span className={cn('mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg', TONE.red.icon)}><UserRound className="h-4 w-4" /></span>
+              <span className="min-w-0 flex-1">
+                <span className="block text-sm font-semibold leading-snug">{needsYouCount === 1 ? '1 reply needs you' : `${needsYouCount} replies need you`}</span>
+                <span className="mt-0.5 block text-xs text-muted-foreground">Flagged with a reason. Nothing has been sent.</span>
+                <span className="mt-1 inline-block text-xs font-medium text-primary">Open Inbox</span>
+              </span>
+            </button>
+          </li>
+        )}
         {replies.messages > 0 && (
           <li>
             <button type="button" onClick={onReplies} data-testid="grouped-replies" className="flex w-full items-start gap-2.5 rounded-lg bg-blue-500/[0.06] px-2.5 py-2 text-left hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary">
@@ -82,7 +97,7 @@ function List({ n, onGo, onClose, replies, onReplies, count }: { n: ReturnType<t
             </button>
           </li>
         )}
-        {shown.length === 0 && replies.messages === 0 && <li className="px-3 py-8 text-center text-xs text-muted-foreground">You're all caught up. New replies, payments and follow-ups will appear here.</li>}
+        {shown.length === 0 && replies.messages === 0 && needsYouCount === 0 && <li className="px-3 py-8 text-center text-xs text-muted-foreground">You're all caught up. New replies, payments and follow-ups will appear here.</li>}
         {shown.map((x) => {
           const k = KIND[x.kind] ?? { icon: Bell, tone: 'grey' as Tone };
           return (
@@ -121,7 +136,11 @@ export function NotificationCenter({ variant }: { variant: 'desktop' | 'mobile' 
   /* The grouped reply card, from the Inbox's own unread state — it falls as conversations are opened. */
   const wa = useWhatsAppUnreadCounts();
   const replies = replySummary(wa.rows);
-  const count = bellCount(wa.rows.length, n.rows);
+  /* Needs you (2026-10-20): the same read the Inbox uses (my_ai_reply_drafts, scoped per person). */
+  const ai = useAiReplyDrafts(true);
+  const needsYouCount = ai.rows.filter((r) => needsYou(r)).length;
+  const count = bellCount(wa.rows.length, n.rows) + needsYouCount;
+  const openNeedsYou = () => { setOpen(false); navigate(NEEDS_YOU_CARD_LINK); };
   const openReplies = () => {
     const ids = n.rows.filter((r) => GROUPED_NOTIFICATION_KINDS.has(r.kind) && !r.read_at).map((r) => r.id);
     if (ids.length) void n.markRead(ids);
@@ -145,7 +164,7 @@ export function NotificationCenter({ variant }: { variant: 'desktop' | 'mobile' 
         <Sheet open={open} onOpenChange={setOpen}>
           <SheetContent side="top" className="p-0 [&>button]:hidden">
             <SheetHeader className="sr-only"><SheetTitle>Notifications</SheetTitle></SheetHeader>
-            <List n={n} onGo={go} onClose={() => setOpen(false)} replies={replies} onReplies={openReplies} count={count} />
+            <List n={n} onGo={go} onClose={() => setOpen(false)} replies={replies} onReplies={openReplies} count={count} needsYouCount={needsYouCount} onNeedsYou={openNeedsYou} />
           </SheetContent>
         </Sheet>
       </>
@@ -159,7 +178,7 @@ export function NotificationCenter({ variant }: { variant: 'desktop' | 'mobile' 
         </button>
       </PopoverTrigger>
       <PopoverContent side="top" align="end" sideOffset={10} className="w-[380px] p-0">
-        <List n={n} onGo={go} replies={replies} onReplies={openReplies} count={count} />
+        <List n={n} onGo={go} replies={replies} onReplies={openReplies} count={count} needsYouCount={needsYouCount} onNeedsYou={openNeedsYou} />
       </PopoverContent>
     </Popover>
   );

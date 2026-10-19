@@ -43,3 +43,5 @@ export function bellCount(unreadConversations: number, notifications: readonly {
 
 /** Where the grouped card goes: the Inbox showing exactly the unread conversations. */
 export const REPLY_CARD_LINK = '/inbox?filter=unread';
+/** Where the Needs you card goes: the Inbox showing exactly the flagged conversations (2026-10-20). */
+export const NEEDS_YOU_CARD_LINK = '/inbox?filter=needs_you';
