@@ -38,6 +38,7 @@ export const WHATS_NEW: readonly WhatsNewEntry[] = [
         'The rule that kept landlines and no-phone leads out of the CRM.',
       ],
       effect: 'You can add landlines and call them. WhatsApp skips them automatically and tells you, so nothing is sent to a number that cannot get it. Leads skipped by the old rule can simply be added again.',
+    } },
   { id: '2026-10-19-ai-overview-everywhere', date: '2026-10-19', title: 'Google AI Overview shown beside ChatGPT and Gemini everywhere', audience: 'all',
     body: 'Every place that shows the ChatGPT and Gemini results now shows a Google AI Overview chip next to them: named (for example 1/2), "No AI Overview shown", or "not recorded". It is for context only and is not part of the score. Audits from before 11 October now show the AI Overview they captured.',
     report: {
