@@ -42,7 +42,7 @@ export function renderRemeasureResultsHtml(d: RemeasureResultsDoc): string {
     businessName: d.businessName, town: d.town,
     beforeNamed: c.before.named, beforeAnswered: c.before.answered,
     afterNamed: c.after.named, afterAnswered: c.after.answered,
-    questions: c.matchedCount, wentUp: up, withinNoise: c.withinNoise, documentUrl: '', weeks: d.weeks,
+    questions: c.matchedCount, wentUp: up, withinNoise: c.withinNoise, documentUrl: '', weeks: d.weeks, googleAiInScore: c.scoringMethod === 2,
   });
   const w = weeksWord(d.weeks);
   const W = w.charAt(0).toUpperCase() + w.slice(1);
@@ -66,7 +66,9 @@ export function renderRemeasureResultsHtml(d: RemeasureResultsDoc): string {
   const foot = renderSiteFooter({
     businessName: d.businessName,
     metaHtml: `Findable &middot; ${W}-week results &middot; ${esc(d.sentAtLabel)}`,
-    note: 'Both measurements asked the same questions on the same engines, ChatGPT and Gemini, and counted the answers that named you.',
+    note: c.scoringMethod === 2
+      ? 'Both measurements asked the same questions on the same engines, ChatGPT and Gemini, plus Google AI where Google showed an AI answer, and counted the answers that named you.'
+      : 'Both measurements asked the same questions on the same engines, ChatGPT and Gemini, and counted the answers that named you.',
   });
 
   return `<!doctype html>
@@ -109,7 +111,7 @@ ${REPORT_CHROME_CSS_PRINT}
     <section class="rr-wrap">
       <div class="rr-eyebrow">Before and after</div>
       <div class="rr-title">${esc(d.businessName)}${d.town ? ` in ${esc(d.town)}` : ''}</div>
-      <p class="rr-intro">${W} weeks ago we asked ChatGPT and Gemini the ${c.matchedCount} questions your customers ask and counted how many answers named you. We have just asked the same questions again, on the same engines. Here are both sets of numbers.</p>
+      <p class="rr-intro">${W} weeks ago we asked ${c.scoringMethod === 2 ? 'ChatGPT and Gemini (and read Google AI where Google showed an AI answer)' : 'ChatGPT and Gemini'} the ${c.matchedCount} questions your customers ask and counted how many answers named you. We have just asked the same questions again, on the same engines. Here are both sets of numbers.</p>
       <div class="rr-cards">
         ${card('Before', c.before.named, c.before.answered, d.beforeDate, c.before.runs)}
         ${card('After', c.after.named, c.after.answered, d.afterDate, c.after.runs)}

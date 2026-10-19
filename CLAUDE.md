@@ -296,9 +296,11 @@ Full history and reasoning: `docs/business-and-offer.md`, `docs/measurement.md`.
 - **Guarantee is outcome-conditional:** measure before, re-measure at four weeks on the same
   questions and engines, **judged on all 20 frozen questions — the home town AND the approved service
   areas** (Paul, 2026-09-23; was home-town-only from 2026-09-12; older frozen sets stay as they
-  were). **Scored engines: ChatGPT + Gemini only** (`SCORED_ENGINES`). ⛔ Google AI Overview IS
-  collected and SHOWN on every new audit (2026-10-11, `docs/ai-overview.md`, `src/lib/aiOverview.ts`) but is DISPLAY ONLY —
-  never scored, never in the guarantee, never claim it is measured. Since 2026-10-19 it is a CHIP beside ChatGPT and
+  were). **Scored engines: ChatGPT + Gemini** (`SCORED_ENGINES`), ⛔ **plus Google AI (renamed from "Google AI Overview")
+  for a client whose BASELINE was created on or after `GOOGLE_AI_SCORED_SINCE`** (Paul, 2026-10-19): `scoringMethodFor(baseline
+  created_at)` decides BOTH sides (like with like), Google AI counted only where Google showed an AI answer (none shown = left
+  out). Every older baseline is judged exactly as before. Before 2026-10-19 the overview was display only (2026-10-11,
+  `docs/ai-overview.md`, `src/lib/aiOverview.ts`). Since 2026-10-19 it is a CHIP beside ChatGPT and
   Gemini on every surface (`AiOverviewChip`), and an audit's overview is read ONLY through `overviewReadingOf` (stamp →
   stored answer → results page → "not recorded") — never the stamp alone (older audits then showed nothing). The actor input asks for the FULL overview
   EXPLICITLY (`scrapeFullAiOverview: true`, Paul 2026-10-11, ~+$0.002 a question shown) — never rely on the actor
@@ -1244,8 +1246,9 @@ positive allowlist of `baseline`; `isColdOutreachTemplate` treats unknown as COL
   check only when it is MISSING (`callScreenCrawl.ts`); a stored check is re-run only by a person's Run again.
 - ⛔ **The page checks are `visibilityChecks.ts`, run by BOTH crawls** — evidence quoted from the page; schema findings stay LOW.
 - ⛔ **The voice note is `voiceNoteFromCall(playbook)`** — no model call; it can never disagree with the call script.
-- ⛔ **Google AI scoring is DERIVED from the audit date** (`scoringMethodFor`) and lives in `HookScore.scored` only. Send gates, the hook pick,
-  6/6, full reports and the guarantee comparison read method 1. Never rewrite a stored score.
+- ⛔ **Google AI scoring is DERIVED from the audit date** (`scoringMethodFor`), never stored; never rewrite a stored score. Method 2 is in
+  `HookScore.scored`, the report's named / total (`buildReportData` `auditCreatedAt`) and the GUARANTEE (`compareMeasurements`
+  `scoringMethod` = the BASELINE's, both sides). Send gates, the hook pick and 6/6 read method 1. A new caller of either must pass the date.
 
 ### 6k. One Inbox for two channels; SMS status; the reply setting (2026-10-10 — record: `docs/twilio-comms.md`)
 

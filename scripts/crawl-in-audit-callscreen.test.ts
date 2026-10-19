@@ -155,8 +155,7 @@ console.log('── 5. Google AI scoring is versioned ──');
   ok(v1.scored.method === 1 && v1.scored.named === v1.named && v1.scored.expected === 6 && v1.scored.googleAi.inScore === false, 'method 1: the stored score, unchanged, Google AI not in it');
   ok(v2.scored.expected === 8 && v2.scored.googleAi.shown === 2 && v2.scored.googleAi.notShown === 1, 'method 2: Google AI counted only where Google showed an AI answer (the "none shown" search is left out, not a penalty)');
   ok(v2.named === v1.named && v2.expected === v1.expected && v2.allNamed === v1.allNamed && JSON.stringify(v2.hook) === JSON.stringify(v1.hook), 'the send gates, the hook pick and the 6/6 rule are untouched (method 1 fields)');
-  const mc = readFileSync(new URL('../src/lib/measurementCompare.ts', import.meta.url), 'utf8');
-  ok(/export function googleAiExtraFigure/.test(mc) && !/scoringMethod/.test(mc.slice(0, mc.indexOf('export function googleAiExtraFigure'))), 'the guarantee comparison is unchanged (baseline method); the new figure is extra information only');
+  /* The guarantee follows the BASELINE's method (Paul, 2026-10-19): scripts/guarantee-google-ai.test.ts. */
 }
 
 if (failures) throw new Error(`${failures} crawl / call screen checks failed`);

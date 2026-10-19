@@ -140,6 +140,7 @@ export default function Baseline() {
         isAggregatorUrl,
         seoStyle: seoStyleForAudit(audit.baseline_target_runs, audit.is_measurement),
         ownWebsite: audit.website ?? '',
+        auditCreatedAt: (audit as { created_at?: string | null }).created_at ?? null,
       });
       /* The operator's view of a paid baseline shows the SAME top the client sees, so this page and
          findable.live/r/<code> cannot disagree about what the report looks like. Legacy rows with no
@@ -182,7 +183,7 @@ export default function Baseline() {
       const client = supabase as unknown as SupabaseClient;
       const { data: a, error: aErr } = await client
         .from('ai_audits')
-        .select('id, lead_id, business_name, baseline, baseline_completed_at, is_measurement, baseline_target_runs, audit_purpose, business_type, location_text, website')
+        .select('id, lead_id, business_name, baseline, baseline_completed_at, is_measurement, baseline_target_runs, audit_purpose, business_type, location_text, website, created_at')
         .eq('id', auditId).maybeSingle();
       if (aErr) throw aErr;
       if (!a) { setError('No audit with that id.'); setAudit(null); setView(null); return; }

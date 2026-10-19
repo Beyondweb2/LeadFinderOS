@@ -592,7 +592,7 @@ function detailsPage(name: string, facts: WelcomePackFacts): string {
    whether it is named more often. The engine observations are stated as what OUR MEASUREMENTS have
    often shown, never as a rule about how a model works. */
 function planPage1(name: string, totalPayments: number | null | undefined, amountPaid: number | null | undefined,
-  remeasure: { weeks: number; label: string } | null): string {
+  remeasure: { weeks: number; label: string } | null, googleAiInScore = false): string {
   const n = esc(name);
   const current = agreedCurrentOffer(totalPayments, amountPaid);
   const W = remeasure ? weeksWord(remeasure.weeks) : '';
@@ -620,7 +620,7 @@ function planPage1(name: string, totalPayments: number | null | undefined, amoun
       <div class="wp-box">
         <p class="wp-boxtitle">What you get</p>
         <ul class="wp-ticks">
-          <li><b>Your starting point, measured.</b> Real customer questions, asked several times on ChatGPT and Gemini.</li>
+          <li><b>Your starting point, measured.</b> Real customer questions, asked several times on ChatGPT and Gemini${googleAiInScore ? ', plus Google AI where Google shows an AI answer' : ''}.</li>
           ${pagesLine}
           <li><b>Your Google Business Profile corrected,</b> so it matches your website.</li>
           <li><b>The right directories for your trade.</b> Added where you are missing, fixed where you are wrong.</li>
@@ -869,7 +869,7 @@ export function buildWelcomePackHtml(input: WelcomePackInput): string {
   const remeasure = recordedRemeasure(input.remeasureDueDate, input.baseline?.completedAt ?? null);
   const packPages = [
     coverPage(name, !!input.facts, !!input.baseline, !!input.agreement, !!(input.agreement?.termsKnown || input.agreement?.acceptedAtIso)),
-    planPage1(name, input.totalPayments, input.amountPaid, remeasure),
+    planPage1(name, input.totalPayments, input.amountPaid, remeasure, input.report.googleAiInScore === true),
     planPage2(name),
     ...(input.baseline ? [baselinePage(name, input.baseline), nextPage(input.totalPayments, remeasure)] : []),
     ...(input.agreement ? [agreementPage(input.agreement)] : []),

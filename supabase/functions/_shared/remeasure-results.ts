@@ -22,6 +22,7 @@
    The recipient is the onboarding contact_email (newest paid row first), else the lead's email.
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 import { compareMeasurements, type MeasurementComparison } from "../../../src/lib/measurementCompare.ts";
+import { scoringMethodFor } from "../../../src/lib/aiOverview.ts";
 import type { QueueRowLite } from "../../../src/lib/baselineView.ts";
 import {
   remeasureResultsDecision, numberWentUp, resultsEmailSubject, resultsEmailParagraphs, REMEASURE_CLAIM_WINDOW_DAYS,
@@ -81,7 +82,7 @@ export async function loadRemeasureBundle(service: Client, remeasureAuditId: str
      the baseline is created; the replay carries none. Read here so the sender and the public page
      cannot disagree about whether this client is on today's offer. */
   const { data: bl } = await service.from("ai_audits")
-    .select("baseline_contract, baseline_completed_at")
+    .select("baseline_contract, baseline_completed_at, created_at")
     .eq("id", lead.baseline_audit_id).maybeSingle();
   /* The client's clock: their STORED interval first (storedRemeasureWeeks), else the standard four
      weeks (remeasureWeeksFor). It sets the expected due date in the terms gate and the words. */
@@ -126,6 +127,9 @@ export async function loadRemeasureBundle(service: Client, remeasureAuditId: str
   const comparison = compareMeasurements(baselineRows, replayRows, {
     businessName, ownWebsite: audit.website ?? lead.website ?? "",
     trade: audit.business_type ?? null, town: audit.location_text ?? lead.derived_town ?? lead.search_location ?? null,
+    /* ⛔ THE BASELINE'S METHOD, NEVER THE REPLAY'S (2026-10-19): a baseline created before Google AI was scored is judged on
+       ChatGPT + Gemini on both sides; one created after counts Google AI on both sides. Like with like. */
+    scoringMethod: scoringMethodFor((bl as { created_at?: string | null } | null)?.created_at ?? null),
   });
   const town = (audit.location_text ?? lead.derived_town ?? lead.search_location ?? "").trim() || null;
   return { bundle: { audit, lead, baselineRuns, replayRuns, comparison, town, terms, weeks }, reason: null };
@@ -233,6 +237,7 @@ export async function maybeSendRemeasureResults(service: Client, auditId: string
     beforeNamed: comparison.before.named, beforeAnswered: comparison.before.answered,
     afterNamed: comparison.after.named, afterAnswered: comparison.after.answered,
     questions: comparison.matchedCount, wentUp: numberWentUp(comparison), withinNoise: comparison.withinNoise,
+    googleAiInScore: comparison.scoringMethod === 2,
     documentUrl: resultsPublicUrl(audit.id),
     weeks: bundle.weeks,
     monthlyStartsOn: prettyDate(billingStartIso),

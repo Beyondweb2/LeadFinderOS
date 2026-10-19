@@ -44,7 +44,7 @@ export const ONBOARDING_CLIENT_COLUMNS =
   "business_name,business_website,confirmed_location,services,services_list,areas_list,areas_wanted,contact_name,contact_email,confirmed_phone,incomplete";
 
 const AUDIT_COLUMNS =
-  "id,short_code,business_name,business_type,location_text,specialism,website,has_website,is_market,lead_id,baseline_target_runs,is_measurement,audit_purpose,baseline_completed_at";
+  "id,short_code,business_name,business_type,location_text,specialism,website,has_website,is_market,lead_id,baseline_target_runs,is_measurement,audit_purpose,baseline_completed_at,created_at";
 
 export interface WelcomePackRenderResult {
   ok: boolean;
@@ -146,6 +146,7 @@ export async function renderWelcomePack(service: any, slug: string): Promise<Wel
     isAggregatorUrl,
     ownWebsite,
     hasWebsite,
+    auditCreatedAt: (audit as { created_at?: string | null }).created_at ?? null,
     seoStyle: seoStyleForAudit(
       (audit as { baseline_target_runs?: unknown }).baseline_target_runs,
       (audit as { is_measurement?: unknown }).is_measurement,

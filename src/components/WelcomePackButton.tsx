@@ -123,6 +123,7 @@ export function WelcomePackButton({
         locationText: audit.location_text ?? '',
         specialisms: '',
         isAggregatorUrl,
+        auditCreatedAt: (audit as { created_at?: string | null }).created_at ?? null,
       });
       if (!report) {
         toast({ title: 'No completed results to report yet', description: 'Run an audit for this lead first.', variant: 'destructive' });
