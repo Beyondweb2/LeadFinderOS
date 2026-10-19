@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { LeadAiResultChips } from '@/components/LeadAiResultChips';
 import { AlertTriangle, Check, ChevronDown, FileText, Loader2, RefreshCw, Sparkles, UserRound, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -101,6 +102,7 @@ export function AiDraftPanel({ row, busy, boxDiffers, onApprove, onRegenerate, o
       {why && whyOpen && (
         <div className="space-y-0.5 rounded-md bg-background/60 px-2 py-1.5 text-[11px] leading-snug text-muted-foreground">
           <p>For you only. Nothing has been sent.</p>
+          <LeadAiResultChips leadId={row.lead_id} />
           <p><span className="font-medium text-foreground">Search: </span>{why.search ?? 'No completed AI check on record, so the AI part was left out.'}</p>
           {why.search && <p><span className="font-medium text-foreground">AI named instead: </span>{why.competitors.length ? why.competitors.join(', ') : 'nobody instead (or names not available)'}{why.hookAlreadySent ? ' · the hook has already gone, so names are not repeated' : ''}</p>}
           <p><span className="font-medium text-foreground">Website issues used: </span>{why.findings.length ? why.findings.join(' · ') : (why.findingsNote ?? 'None found, so none mentioned.')}</p>

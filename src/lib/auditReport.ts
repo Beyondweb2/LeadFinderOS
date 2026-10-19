@@ -39,7 +39,7 @@ import { sourceMix } from './sourceType.ts';
 import type { AiAuditReportData, AiAuditSeo, SeoFinding } from './aiAuditReportHtml.ts';
 import { nameMatches } from './nameMatch.ts';
 import { cleanAnswerText, isJunkAnswer } from './answerText.ts';
-import { AI_OVERVIEW_ENGINE, AI_OVERVIEW_REPORT_LABEL, AI_OVERVIEW_STAMP_KEY } from './aiOverview.ts';
+import { AI_OVERVIEW_ENGINE, AI_OVERVIEW_REPORT_LABEL, overviewFullText, overviewReadingOf, overviewSummaryText, overviewTallyFromRows } from './aiOverview.ts';
 
 // Engines shown in results (queue targets chatgpt+gemini; the actor also returns
 // AI Overview + Google organic, shown for context). mention_rate is over chatgpt+gemini.
@@ -1110,13 +1110,27 @@ export function buildReportData(
       /* Google AI Overview only (2026-10-11): runs where the queue RECORDED that Google showed no
          overview. Old audits carry no stamp, so this stays 0 and they render exactly as before. */
       let notShown = 0; let recorded = 0;
+      /* Google AI Overview only (2026-10-19): Google's own answer per run, cleaned for reading (never a
+         word written — aiOverview.ts overviewSummaryText / overviewFullText), one copy per distinct text.
+         The report quotes it under the overview row; ChatGPT / Gemini rows carry no text here. */
+      const overviewAnswers: Array<{ text: string; truncated: boolean; full: string }> = [];
+      const seenA = new Set<string>();
       const seenR = new Set<string>(); const engRivals: string[] = [];
       const cm = new Map<string, string>();
       for (const r of rows) {
         if (engine === AI_OVERVIEW_ENGINE) {
-          const stamp = (r.result as Record<string, unknown>)[AI_OVERVIEW_STAMP_KEY];
-          if (stamp === 'shown' || stamp === 'not_shown') recorded++;
-          if (stamp === 'not_shown') notShown++;
+          /* Read through the one reader (2026-10-19): the stamp where the queue wrote one, else the
+             captured answer / the results page — so an audit from before 11 Oct says what it captured. */
+          const reading = overviewReadingOf(r.result);
+          if (reading) recorded++;
+          if (reading === 'not_shown') notShown++;
+          const raw = typeof r.result?.[AI_OVERVIEW_ENGINE]?.answer_text === 'string' ? r.result[AI_OVERVIEW_ENGINE]!.answer_text.trim() : '';
+          if (reading === 'shown' && raw) {
+            const sum = overviewSummaryText(raw);
+            const full = overviewFullText(raw);
+            const key = full.toLowerCase();
+            if ((sum.text || full) && !seenA.has(key)) { seenA.add(key); overviewAnswers.push({ text: sum.text, truncated: sum.truncated, full }); }
+          }
         }
         const er = r.result![engine]; if (!er) continue;
         ranCount++; if (cellNamed(er, namedCtx)) named++;
@@ -1169,6 +1183,7 @@ export function buildReportData(
         counted: (SCORED_ENGINES as readonly string[]).includes(engine),
         ran: ranCount > 0, ranCount, runs: rows.length, named, recommended, cited,
         ...(recorded > 0 ? { overviewRecorded: true, notShown } : {}),
+        ...(overviewAnswers.length ? { overviewAnswers } : {}),
         rivals: engRivals,
         /* How many names AI returned for this engine BEFORE filtering - see the loop above. */
         rivalsRaw: rawRivals,
@@ -1252,6 +1267,9 @@ export function buildReportData(
     enginesUsed: enginesSeen.size, // scored engines that actually returned something
     pct: total > 0 ? Math.round((named / total) * 100) : 0,
     perEngine,
+    /* Google AI Overview across the audit's done questions (2026-10-19) — the chip beside ChatGPT and
+       Gemini on the report and Outreach. DISPLAY ONLY: never in pct, named, total or any verdict. */
+    overview: overviewTallyFromRows(queueRows, namedCtx),
     competitors,
     /* The audit-wide leaders. The report names THESE, not whoever happened to appear in the one
        answer gutPunch quotes — that is what put "Get A Splash, Fresh Car, Clean Me" on Wilson's

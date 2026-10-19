@@ -16,6 +16,8 @@ import { Clock, Loader2, PhoneCall, RotateCcw, SearchCheck, Square } from 'lucid
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { engineScoreText, ROW_CHECK_WORD, type RowCheckState, type RowScore } from '@/lib/outreachRowCheck';
+import { AiOverviewChip } from '@/components/AiOverviewChip';
+import { AI_OVERVIEW_REPORT_LABEL } from '@/lib/aiOverview';
 import { scoreTone, SCORE_TONE_CLASS } from '@/lib/scoreTone';
 
 export function AiCheckSummary({ state, score, scoreLoading = false, onCallScreen, onRetry, className }: {
@@ -40,7 +42,7 @@ export function AiCheckSummary({ state, score, scoreLoading = false, onCallScree
                 SCORE_TONE_CLASS[e.answered === 0 ? 'none' : scoreTone(e.named, e.answered)].text)}>
               {engineScoreText(e)}
             </span>
-          ))
+          )).concat(<AiOverviewChip key="aio" tally={score.overview} label={AI_OVERVIEW_REPORT_LABEL} className="px-1.5 py-px font-semibold tabular-nums" testId="row-ai-overview" />)
         : <span className="text-muted-foreground">{scoreLoading || score === undefined ? 'Checked…' : 'Checked'}</span>)}
       {/* A reused (cached) result looks exactly like any ready result — `cached` stays internal (final release, 2026-10-05). */}
       {state.kind === 'checking' && <span className="inline-flex items-center gap-1 text-sky-600 dark:text-sky-300"><Loader2 className="h-3 w-3 animate-spin" />{ROW_CHECK_WORD.checking}</span>}

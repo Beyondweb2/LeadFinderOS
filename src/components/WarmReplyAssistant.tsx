@@ -22,6 +22,7 @@
    Mounted per conversation (keyed by it in the Inbox), so a draft or its "why" can never follow Paul
    into someone else's thread.
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
+import { LeadAiResultChips } from '@/components/LeadAiResultChips';
 import { useEffect, useState, type ReactNode } from 'react';
 import { AlertTriangle, Check, ChevronDown, Loader2, RefreshCw, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -216,16 +217,17 @@ export function WarmReplyAssistant({ leadId, phone, windowOpen, stage, getReadab
           <span><span className="font-semibold">CHECK THIS DRAFT</span> — {why.problems.includes(PRIMARY_MISSING_PROBLEM) ? PRIMARY_MISSING_PROBLEM : why.problems[0]}</span>
         </p>
       )}
-      {why && whyOpen && <WhyPanel why={why} />}
+      {why && whyOpen && <WhyPanel why={why} leadId={leadId} />}
     </div>
   );
 }
 
-function WhyPanel({ why }: { why: DraftWhy }) {
+function WhyPanel({ why, leadId }: { why: DraftWhy; leadId: string }) {
   const facts = SALES_FACT_KEYS.filter((k) => why.salesFacts?.[k]);
   return (
     <div className="space-y-1.5 rounded-xl bg-muted/40 px-3 py-2 text-[11px] leading-snug ring-1 ring-inset ring-border/50">
       <p className="text-muted-foreground">For you only — none of this is sent. Nothing has been sent.</p>
+      <LeadAiResultChips leadId={leadId} />
       <Row label="Question detected">
         {why.latestInbound?.text ? `“${why.latestInbound.text}” · ` : ''}{QUESTION_LABELS[why.questionType] ?? why.questionType}
       </Row>

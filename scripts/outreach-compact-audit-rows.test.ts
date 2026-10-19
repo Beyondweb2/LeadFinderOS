@@ -51,7 +51,7 @@ console.log('── the row score: ChatGPT x/3 · Gemini y/3, from the report\'s
   ok(scoreLine(scoreOf([[true, null], [false, false], [false, true]])) === 'ChatGPT 1/3 · Gemini 1/2', 'the denominator is the STORED answered count: a lost Gemini answer reads 1/2, not 1/3');
   ok(scoreLine(scoreOf([[false, null], [false, null], [false, null]])) === 'ChatGPT 0/3 · Gemini –', 'an engine with no answers reads "Gemini –", never 0/3');
   const six = rowScoreFromPerEngine([{ label: 'ChatGPT', named: 2, total: 9 }, { label: 'Gemini', named: 1, total: 9 }, { label: 'AI Overview', named: 5, total: 9 }]);
-  ok(scoreLine(six) === 'ChatGPT 2/9 · Gemini 1/9', 'a three-run method change reads x/9 with no code change; AI Overview is never on the row');
+  ok(scoreLine(six) === 'ChatGPT 2/9 · Gemini 1/9', 'a three-run method change reads x/9 with no code change; AI Overview is never in the score line (its chip sits beside it)');
   ok(rowScoreFromPerEngine([]) === null && rowScoreFromPerEngine(null) === null, 'nothing answered → no score (never 0/0)');
   const json = JSON.stringify(s);
   ok(!json.includes('Pennine') && !json.includes(FINDING) && !json.includes('well reviewed') && !json.includes('Halifax'),

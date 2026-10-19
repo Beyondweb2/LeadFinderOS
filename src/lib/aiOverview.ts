@@ -11,8 +11,9 @@
    ⛔ DISPLAY ONLY. The overview is never in SCORED_ENGINES or HOOK_ENGINES, never in a "named X of Y"
    count, never the hook pick, never the guarantee. It is shown beside the score, labelled so.
    ⛔ "NO OVERVIEW SHOWN" IS A RESULT, NOT AN ERROR. Google does not show one for every search.
-   ⛔ OLD AUDITS ARE UNCHANGED. A question with no stamp is 'not_recorded' and every screen draws
-   exactly what it drew before (nothing about the overview on the hook surfaces).
+   ⛔ OLD AUDITS SHOW WHAT THEY CAPTURED (2026-10-19; until then they showed nothing). A question with no
+   stamp is read from its stored overview answer / results page (overviewReadingOf); only when neither
+   says anything is it 'not_recorded', drawn as a neutral "not recorded" chip — never a guess.
 
    Plain TypeScript, no React, relative imports with explicit `.ts`: edge functions reach this file.
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
@@ -28,7 +29,7 @@ export const AI_OVERVIEW_LABEL = 'Google AI Overview';
 /** The short column / row label the client report uses (auditReport ENGINE_LABELS reads it). */
 export const AI_OVERVIEW_REPORT_LABEL = 'AI Overview';
 /** The words when Google showed none for a search. */
-export const NO_OVERVIEW_TEXT = 'No overview shown';
+export const NO_OVERVIEW_TEXT = 'No AI Overview shown';
 /** The one-line explanation beside it, for the screens with room. */
 export const NO_OVERVIEW_DETAIL = 'Google did not show an AI Overview for this search.';
 /** The words when Google showed an overview and no business name could be READ from it (state 2 of 3:
@@ -178,11 +179,33 @@ function answerOf(cell: unknown): string {
   return typeof t === 'string' ? t.trim() : '';
 }
 
-/** Did this question's stored cells carry the stamp at all? (False on every audit before 2026-10-11.) */
+/* ══ WHAT THE STORED QUESTION SAYS ABOUT THE OVERVIEW (2026-10-19, Paul: "AI Overview everywhere") ══
+   🔴 THE BUG THIS FIXES: every screen read the overview ONLY through the `_ai_overview` stamp, which the
+   queue has written since 2026-10-11. But the overview's ANSWER has been stored in the `ai_overview` cell
+   since July (measured 2026-10-19: 3,712 stored overview answers across ~1,300 audits with no stamp), so
+   every audit before 11 Oct showed no overview at all although Google's answer was sitting in the row.
+   The stamp is now one of three readings, each only from what was captured:
+     · the stamp, where the queue wrote one (the queue's own verdict);
+     · else an `ai_overview` cell with answer text → 'shown' (Google's answer is right there);
+     · else the organic results page came back (`_google_serp`, stored since 2026-09-15) and carried no
+       overview → 'not_shown' — the SAME test aiOverviewStamp (ai-search.ts) applies to a new question;
+     · else nothing is known → null ('not_recorded'), never a guess. */
+export type OverviewReading = 'shown' | 'not_shown';
+
+export function overviewReadingOf(cells: unknown): OverviewReading | null {
+  if (!cells || typeof cells !== 'object') return null;
+  const c = cells as Record<string, unknown>;
+  const s = c[AI_OVERVIEW_STAMP_KEY];
+  if (s === 'shown' || s === 'not_shown') return s;
+  if (answerOf(c[AI_OVERVIEW_ENGINE])) return 'shown';
+  const serp = c['_google_serp'];
+  return serp && typeof serp === 'object' ? 'not_shown' : null;
+}
+
+/** Does this question's stored result say anything about the overview (the stamp, a captured answer,
+ *  or a results page that came back without one)? */
 export function hasOverviewStamp(cells: unknown): boolean {
-  if (!cells || typeof cells !== 'object') return false;
-  const s = (cells as Record<string, unknown>)[AI_OVERVIEW_STAMP_KEY];
-  return s === 'shown' || s === 'not_shown';
+  return overviewReadingOf(cells) !== null;
 }
 
 /**
@@ -196,10 +219,11 @@ export function overviewFor(
 ): AiOverviewView {
   const empty = (state: AiOverviewState): AiOverviewView => ({ state, named: null, answerText: '', truncated: false, fullText: '', citations: [], competitors: [] });
   const cells = row?.status === 'done' && row.cells && typeof row.cells === 'object' ? row.cells as Record<string, unknown> : null;
-  if (cells && hasOverviewStamp(cells)) {
+  const reading = cells ? overviewReadingOf(cells) : null;
+  if (cells && reading) {
     const cell = cells[AI_OVERVIEW_ENGINE];
     const text = answerOf(cell);
-    if (cells[AI_OVERVIEW_STAMP_KEY] === 'shown' && text) {
+    if (reading === 'shown' && text) {
       const c = cell as { citations?: unknown; competitors?: unknown };
       const summary = overviewSummaryText(text);
       return {
@@ -236,8 +260,84 @@ export function overviewStatusWord(v: Pick<AiOverviewView, 'state' | 'named'>): 
     case 'not_shown': return NO_OVERVIEW_TEXT;
     case 'pending': return 'Waiting';
     case 'failed': return 'Not available';
-    case 'not_recorded': return '';
+    case 'not_recorded': return NOT_RECORDED_TEXT;
   }
+}
+
+/** The words when the audit holds nothing about the overview for a search (an audit from before it was
+ *  captured, or a results page that did not come back). Neutral — never "not shown", never a failure. */
+export const NOT_RECORDED_TEXT = 'Not recorded';
+/** The chip while the audit's searches are still being asked. */
+const WAITING_TEXT = 'Waiting';
+
+/* ══ THE CHIP (2026-10-19) ════════════════════════════════════════════════════════════════════════
+   Google AI Overview beside ChatGPT and Gemini, as a chip, on every surface that shows those two. One
+   tally and one set of words, so the Inbox, the audit window, Outreach and the reports cannot disagree.
+   ⛔ DISPLAY ONLY: `named` / `shown` count what was captured and are never part of any score. The chip
+   says "not scored" where there is room and in its tooltip everywhere. */
+export interface OverviewTally {
+  /** Searches (question × run) where Google showed an overview. */
+  shown: number;
+  /** Of those, the overview named the business. */
+  named: number;
+  /** Searches where the results page came back with no overview. */
+  notShown: number;
+  /** Searches where nothing is known (pending, failed, or not recorded). */
+  unknown: number;
+  /** Of `unknown`, the searches still being asked. */
+  pending: number;
+  total: number;
+}
+
+export function overviewTally(views: ReadonlyArray<Pick<AiOverviewView, 'state' | 'named'>>): OverviewTally | null {
+  if (!views.length) return null;
+  const shown = views.filter((v) => v.state === 'shown').length;
+  const named = views.filter((v) => v.state === 'shown' && v.named === true).length;
+  const notShown = views.filter((v) => v.state === 'not_shown').length;
+  const pending = views.filter((v) => v.state === 'pending').length;
+  return { shown, named, notShown, unknown: views.length - shown - notShown, pending, total: views.length };
+}
+
+/** Every done question's overview straight from stored queue rows (the report / Outreach fold). A row
+ *  that is not done is left out, like the ChatGPT and Gemini counts beside it. */
+export function overviewTallyFromRows(rows: ReadonlyArray<{ status?: string | null; result?: unknown }>, named?: NamedContext): OverviewTally | null {
+  const done = rows.filter((r) => r.status === 'done' && r.result && typeof r.result === 'object');
+  return overviewTally(done.map((r) => overviewFor({ status: 'done', cells: r.result }, { stamped: true, named })));
+}
+
+export type OverviewChipTone = 'named' | 'not_named' | 'neutral';
+
+/** The chip's figure: "1/1" (named of the searches that showed one), "No AI Overview shown", or
+ *  "Not recorded". An older payload with no tally says "Not recorded". */
+export function overviewChipValue(t: OverviewTally | null | undefined): string {
+  if (!t || t.total === 0) return NOT_RECORDED_TEXT;
+  if (t.shown > 0) return `${t.named}/${t.shown}`;
+  if (t.notShown > 0) return NO_OVERVIEW_TEXT;
+  return t.pending > 0 ? WAITING_TEXT : NOT_RECORDED_TEXT;
+}
+
+/** The whole chip as text: "Google AI Overview 1/1", "No AI Overview shown", "Google AI Overview not recorded". */
+export function overviewChipText(t: OverviewTally | null | undefined, label: string = AI_OVERVIEW_LABEL): string {
+  const v = overviewChipValue(t);
+  if (v === NO_OVERVIEW_TEXT) return v;
+  if (v === WAITING_TEXT) return `${label} checking…`;
+  return v === NOT_RECORDED_TEXT ? `${label} not recorded` : `${label} ${v}`;
+}
+
+/** Named on every overview shown → named; shown and missed at least once → not_named; else neutral. */
+export function overviewChipTone(t: OverviewTally | null | undefined): OverviewChipTone {
+  if (!t || t.shown === 0) return 'neutral';
+  return t.named === t.shown ? 'named' : 'not_named';
+}
+
+/** The tooltip: what the figure means, and that it is not scored. */
+export function overviewChipTitle(t: OverviewTally | null | undefined): string {
+  if (t && t.shown === 0 && t.notShown === 0 && t.pending > 0) return `${AI_OVERVIEW_LABEL}: the searches are still being asked. Not scored.`;
+  if (!t || t.total === 0 || (t.shown === 0 && t.notShown === 0)) return `${AI_OVERVIEW_LABEL}: nothing recorded for this audit. Not scored.`;
+  if (t.shown === 0) return `${AI_OVERVIEW_LABEL}: Google showed no AI Overview for ${t.total === 1 ? 'this search' : `these ${t.total} searches`}. Not scored.`;
+  let s = `${AI_OVERVIEW_LABEL}: shown on ${t.shown} of ${t.total} ${t.total === 1 ? 'search' : 'searches'}, named in ${t.named}.`;
+  if (t.notShown) s += ` ${t.notShown} showed none.`;
+  return s + ' Shown for context, not counted in the score.';
 }
 
 /** The overview across an audit's questions, for a one-line summary. Null when nothing is recorded. */
@@ -260,4 +360,15 @@ export function overviewSummary(views: ReadonlyArray<Pick<AiOverviewView, 'state
     if (notShown) line += ` · ${notShown} showed none`;
   }
   return { shown, notShown, named, unknown, total, line };
+}
+
+/** The overview as one plain evidence line (call screen, call script): "Google AI Overview: named in 1 of 1
+ *  shown (not scored)" / "No AI Overview shown (not scored)" / "Google AI Overview: not recorded". Display
+ *  only — never a spoken claim, never part of the score line before it. */
+export function overviewEvidenceLine(t: OverviewTally | null | undefined): string {
+  const v = overviewChipValue(t);
+  if (t && t.shown > 0) return `${AI_OVERVIEW_LABEL}: named in ${t.named} of ${t.shown} shown (not scored)`;
+  if (v === NO_OVERVIEW_TEXT) return `${NO_OVERVIEW_TEXT} (not scored)`;
+  if (v === WAITING_TEXT) return `${AI_OVERVIEW_LABEL}: checking…`;
+  return `${AI_OVERVIEW_LABEL}: not recorded`;
 }
