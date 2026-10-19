@@ -19,7 +19,7 @@ export function AlreadyAddedBadge({ ownerName, avatarUrl, addedAt, className }: 
   const date = addedAt ? new Date(addedAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'Europe/London' }) : null;
   return (
     <span className={cn('inline-flex items-center gap-1.5 rounded-md border border-border/60 bg-muted/40 px-2 py-0.5 text-xs text-muted-foreground whitespace-nowrap', className)}
-      title={date ? `Added ${date}` : undefined}>
+      title={[ownerName ? `Added by ${ownerName}` : null, date ? `added ${date}` : null].filter(Boolean).join(' · ') || undefined}>
       {ownerName ? <OwnerAvatar name={ownerName} avatarUrl={avatarUrl} /> : null}
       <span>Already added{ownerName ? ` · ${ownerName}` : ''}</span>
     </span>

@@ -10,8 +10,12 @@
       business district (Orchard, Changi) reads small.
    ⛔ SINGAPORE AS A WHOLE HAS NO FIGURE HERE and no population filter: it is one city, its row is the catch-all for
       leads that give no area, and a 4.2 million figure beside ten planning areas would read as one more town.
-   Only the towns Coverage already lists (coverageCountries.ts ABROAD_TOWNS) — this file adds none.
+   The table holds only the towns Coverage already lists (coverageCountries.ts ABROAD_TOWNS). Since 2026-10-19 a
+   Malaysian town the table leaves blank, or does not list, falls back to GeoNames' figure for the place itself
+   (townPopulation below; the dataset is src/data/malaysiaPlaces.ts).
    ════════════════════════════════════════════════════════════════════════════════════════════════════════════ */
+
+import { datasetPlace, MALAYSIA_PLACES_SOURCE } from './malaysiaPlaces.ts';
 
 export type PopulationCountry = 'Malaysia' | 'Singapore';
 
@@ -98,15 +102,34 @@ export const TOWN_POPULATION: Record<PopulationCountry, Readonly<Record<string, 
   },
 };
 
-/** The approximate figure for a listed town; anything not in the table (a town only a lead named) is blank. */
-export function townPopulation(country: PopulationCountry, name: string): TownPopulation {
-  return TOWN_POPULATION[country][name] ?? { population: null, basis: null, source: null };
+/* ══ MALAYSIA'S SECOND SOURCE: GEONAMES (2026-10-19) ══════════════════════════════════════════════════════════════
+   The council / district table above stays first and unchanged. A Malaysian town it has no figure for (Cyberjaya,
+   Puchong, every town only a lead named) takes GeoNames' own figure for a place of exactly that name — in the state
+   the row names when it names one (malaysiaPlaces.ts datasetPlace). Two same-named places with no state to choose
+   between, or no place at all → still blank. Never a district, never a neighbour. */
+export const MY_GEONAMES_SOURCE: PopulationSource = {
+  label: `${MALAYSIA_PLACES_SOURCE.label} (downloaded ${MALAYSIA_PLACES_SOURCE.downloaded})`,
+  year: Number(MALAYSIA_PLACES_SOURCE.downloaded.slice(0, 4)),
+  url: MALAYSIA_PLACES_SOURCE.url,
+};
+
+/** The approximate figure for a town: the fixed table first; for Malaysia, GeoNames' figure for the place itself
+ *  when the table has none (`state` = the row's state, to tell same-named places apart); otherwise blank. */
+export function townPopulation(country: PopulationCountry, name: string, state?: string | null): TownPopulation {
+  const tabled = TOWN_POPULATION[country][name];
+  if (tabled && tabled.population !== null) return tabled;
+  if (country === 'Malaysia') {
+    const d = datasetPlace(name, state ?? null);
+    if (d && d !== 'ambiguous') return { population: d.population, basis: `GeoNames figure for ${d.name} (${d.state}), the place itself`, source: MY_GEONAMES_SOURCE };
+  }
+  return tabled ?? { population: null, basis: null, source: null };
 }
 
 /** The sources a country's figures come from, for the note under the table. */
 export function populationSourcesFor(country: PopulationCountry): PopulationSource[] {
   const seen = new Map<string, PopulationSource>();
   for (const t of Object.values(TOWN_POPULATION[country])) if (t.source) seen.set(t.source.url, t.source);
+  if (country === 'Malaysia') seen.set(MY_GEONAMES_SOURCE.url, MY_GEONAMES_SOURCE);
   return [...seen.values()];
 }
 
