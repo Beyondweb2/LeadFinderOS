@@ -137,3 +137,19 @@ The switch "AI handles replies" is still OFF and is not touched. NOTHING auto-se
 
 Tests: `scripts/reply-move.test.ts` (57/57 hand-over decisions), `offer-fact-sheet.test.ts`, `named-share-rule.test.ts`,
 `ai-reply-drafts.test.ts`, `ai-draft-names-issues.test.ts`, `bulk-send-precheck.test.ts`, `hook-send-integrity.test.ts`.
+
+### Model test (2026-10-20, deployed dry run, 57 ZZ fixtures, nothing saved or sent)
+
+| | gpt-4o-mini (first run) | gpt-4o-mini (after the wording fixes, live) | gpt-4.1 (first run) |
+|---|---|---|---|
+| Hand-over decisions right (code decides, same for every model) | 56/57 | 56/57 | 56/57 |
+| Drafts written (stops get none) | 51 | 51 | 51 |
+| Unsupported claims (read by hand + checker) | 1 ("it can take time to build visibility") | 0 | 1 ("that explains it") |
+| Checker warnings | 3 (2 false: "English", "£99.") | 0 | 3 (same false ones) |
+| Wording slips | 3 (bot answer in 2nd person, "you can carry on looking after it", "that's their automatic reply") | 1 (repeats itself on a bare "ok") | 0 |
+| Tone, 1 to 5 | 3.8 | 4.0 | 4.4 |
+| Cost for 57 conversations | $0.013 | $0.012 | $0.16 |
+
+The one hand-over "miss" is deliberate: "Only got website up properly last week" goes to Needs you (unsure), not a guessed draft.
+Decision: keep gpt-4o-mini. gpt-4.1 reads a little warmer but is ~13× the cost and was not needed to pass.
+Re-run: `action: 'dry_run'` with `fixtures` (8 per call) and `model` (`DRY_RUN_MODELS`).
