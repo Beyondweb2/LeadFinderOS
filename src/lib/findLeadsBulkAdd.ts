@@ -1,18 +1,21 @@
 /* ════════════════════════════════════════════════════════════════════════════════════════════════
-   FIND LEADS: ADD TO CRM IN ONE BATCH, MOBILES ONLY FOR THE UK (2026-10-17, Paul) — the rules, pure.
+   FIND LEADS: ADD TO CRM IN ONE BATCH (2026-10-17; EVERY BUSINESS IS ADDABLE since 2026-10-19, Paul) — pure.
 
-   Before: "Add to CRM (N)" ran one add per lead, one after another (N inserts, N duplicate checks), and the
-   phone was looked up AFTER the insert, so a landline was only discovered once it was already in the CRM.
-   Now every Find Leads add (the row button and the bulk buttons) runs ONE path:
+   Every Find Leads add (the row button, the bulk buttons, the Coverage niche panel) runs ONE path:
      1. a free preview call to coverage_add_leads (_commit=false) says which rows are new — the rest are
         already in the CRM (the database's own dedupe: place id → phone → Maps link, same name in the same
-        country, added before, same website, repeated in this batch) and are skipped;
-     2. each NEW lead's phone (+ address, town) is looked up first — Google's text search returns no phone,
-        so this is the only way to know a landline before it is added — paced under google-place-details'
-        own per-minute limit; a LIMIT refusal stops the lookups and those rows are reported, never added blind;
-     3. the phone rule below drops landlines and leads with no number;
-     4. ONE committing call to coverage_add_leads saves the rest (one request, one transaction; more than
+        country, added before, same website, repeated in this batch, and for MY / SG the +60 / +65 phone,
+        website and name + town) and are skipped. ⛔ A DUPLICATE IS THE ONLY SKIP.
+     2. each NEW lead's phone (+ address, town) is looked up — Google's text search returns no phone — so the
+        lead is saved with its number and the phone dedupe can run. PLACE_LOOKUP_CONCURRENCY at a time; a
+        throttled lookup (429) waits and retries (LOOKUP_RETRY_DELAYS_MS); an answer is remembered for this
+        page session (lookupCache) so a second add never pays for the same place twice. A lookup that still
+        fails, or a refusal, does NOT stop the add: that lead is saved without a phone ("No phone").
+     3. ONE committing call to coverage_add_leads saves them all (one request, one transaction; more than
         COVERAGE_ADD_MAX_ROWS rows go in chunks of that size).
+   ⛔ 16 Oct–19 Oct 2026 this path skipped UK landlines and no-number leads. Paul reversed it (19 Oct): a
+      landline is a callable lead. WhatsApp is protected where it SENDS — every queue / send path refuses a
+      non-mobile (docs/find-leads-bulk-add.md lists them) — never by keeping the lead out of the CRM.
    ⛔ The database stays the dedupe — nothing here decides a duplicate.
    ⛔ Network injected (deps), so scripts/find-leads-bulk-add.test.ts drives the whole thing with fakes.
    Record: docs/find-leads-bulk-add.md.
@@ -20,25 +23,23 @@
 import { businessKey, isWithoutWebsite } from './websiteStatusClass.ts';
 import { salesAddPayload, type PlaceDetailsForAdd, type SearchResultForAdd } from './salesAddPayload.ts';
 import { toWhatsAppDigits } from './waNumber.ts';
-import { isUkColdDestination } from './ukColdDestination.ts';
+import { mobileMarketOf } from './outreachMarkets.ts';
 
 /** Rows per coverage_add_leads call — the SQL function's own ceiling (v_max). */
 export const COVERAGE_ADD_MAX_ROWS = 500;
-/** Lookups started per minute. google-place-details allows 30 a minute per person; staying under it means the
- *  add never trips the limit it would then have to wait out. */
-export const PLACE_LOOKUPS_PER_MINUTE = 25;
-/** Lookups in flight at once. */
-export const PLACE_LOOKUP_CONCURRENCY = 3;
+/** Lookups in flight at once (Paul, 2026-10-19: "cap about 8 to 10"). The server's own guard (guard_action
+ *  'place_details', per minute / per hour, protection_settings) is the limit; a throttled call is retried. */
+export const PLACE_LOOKUP_CONCURRENCY = 8;
+/** Waits before each retry of a throttled lookup. Together they span a full minute, the guard's window. */
+export const LOOKUP_RETRY_DELAYS_MS: readonly number[] = [2_000, 5_000, 10_000, 20_000, 30_000];
+/** How long a looked-up answer is reused on this page. */
+export const LOOKUP_CACHE_MS = 30 * 60_000;
 
-/* ── THE PHONE RULE ───────────────────────────────────────────────────────────────────────────────
-   ⛔ UK: ONLY A MOBILE IS ADDED. A UK number is decided by its DIGITS (the same 44-then-7 test the cold
-   WhatsApp queue uses, ukColdDestination.ts) — never by the search's country alone. Every other UK number is
-   skipped as a landline: 01 / 02 / 03 (incl. 0333) / 0808 and every other non-07 number (0800, 0845, 05…).
-   A UK lead (or a lead whose country is unknown — the column default is UK) with no number is skipped.
-   ⛔ NON-UK (Malaysia, Singapore, Australia…): UNCHANGED. A phone of that country's own is added as before;
-   with no phone, the old rule — kept if it has an email, else skipped as "no number". */
-
-export type PhoneSkip = 'landline' | 'no_number' | null;
+/* ── WHAT KIND OF NUMBER (a label only — never a reason to skip) ─────────────────────────────────────
+   'mobile' = a UK / MY / SG mobile by its digits (outreachMarkets.mobileMarketOf, the queue's own test);
+   'landline' = any other number; 'no_phone' = none. Shown as a small grey label, never a block. */
+export type PhoneKind = 'mobile' | 'landline' | 'no_phone';
+export const PHONE_KIND_LABEL: Record<Exclude<PhoneKind, 'mobile'>, string> = { landline: 'Landline', no_phone: 'No phone' };
 
 const UK_COUNTRIES = new Set(['UK', 'GB', 'UNITED KINGDOM', 'GREAT BRITAIN', 'ENGLAND', 'SCOTLAND', 'WALES', 'NORTHERN IRELAND']);
 /** A blank country is the column default, UK. */
@@ -54,19 +55,18 @@ function digitsOf(phone: string | null | undefined, country: string | null | und
   return /^440\d{10}$/.test(d) ? '44' + d.slice(3) : d;
 }
 
-/** Why a Find Leads result may not be added for its number, or null when its number is fine. */
-export function findLeadsPhoneSkip(phone: string | null | undefined, country: string | null | undefined, email?: string | null): PhoneSkip {
+/** The kind of a lead's number, for its grey label. */
+export function phoneKindOf(phone: string | null | undefined, country: string | null | undefined): PhoneKind {
   const raw = String(phone ?? '').trim();
+  if (!raw.replace(/\D/g, '')) return 'no_phone';
   const digits = digitsOf(raw, country);
-  if (digits && digits.startsWith('44')) return isUkColdDestination(digits) ? null : 'landline';
-  if (isUkCountry(country)) {
-    // A UK lead whose number is not a +44 number at all: a foreign number is that country's business (unchanged);
-    // nothing usable is "no number".
-    if (digits) return null;
-    return 'no_number';
-  }
-  if (raw) return null;
-  return String(email ?? '').trim() ? null : 'no_number';
+  return digits && mobileMarketOf(digits) ? 'mobile' : 'landline';
+}
+
+/** The grey label for a lead's number, or null for a mobile. */
+export function phoneLabelOf(phone: string | null | undefined, country: string | null | undefined): string | null {
+  const k = phoneKindOf(phone, country);
+  return k === 'mobile' ? null : PHONE_KIND_LABEL[k];
 }
 
 /* ── ONE ROW FOR coverage_add_leads ──────────────────────────────────────────────────────────── */
@@ -102,18 +102,15 @@ export function addRowFor(lead: BulkAddLead, ctx: AddContext, details: PlaceDeta
 export type AddRowOutcome = 'new' | 'created' | 'skipped' | 'invalid' | 'limit' | 'failed';
 export interface AddRowAnswer { k?: string; business_name?: string; outcome: AddRowOutcome; reasons?: string[]; owner_name?: string; lead_id?: string }
 
-/** The reasons a row was not added, grouped the way the summary says them. */
-export type SkipGroup = 'in_crm' | 'landline' | 'no_number' | 'lookup_failed' | 'limit' | 'no_search' | 'failed';
+/** The reasons a row was not added, grouped the way the summary says them. A duplicate is the only reason the
+ *  ADD skips a business; the others are the database refusing a row (no search behind it) or a failed save. */
+export type SkipGroup = 'in_crm' | 'no_search' | 'failed';
 
 const IN_CRM = new Set(['already_yours', 'owned_by_other', 'exists_unassigned', 'same_name', 'previously_added', 'same_website', 'duplicate_in_batch', 'duplicate_race']);
 
 export function skipGroupOf(r: AddRowAnswer): SkipGroup | null {
   if (r.outcome === 'created' || r.outcome === 'new') return null;
   const reason = r.reasons?.[0] ?? '';
-  if (r.outcome === 'limit') return 'limit';
-  if (reason === 'landline') return 'landline';
-  if (reason === 'no_number') return 'no_number';
-  if (reason === 'lookup_failed') return 'lookup_failed';
   if (IN_CRM.has(reason)) return 'in_crm';
   if (r.outcome === 'invalid' && (r.reasons ?? []).some((x) => x === 'no_trade' || x === 'no_town')) return 'no_search';
   if (r.outcome === 'skipped') return 'in_crm';
@@ -122,10 +119,6 @@ export function skipGroupOf(r: AddRowAnswer): SkipGroup | null {
 
 export const SKIP_GROUP_WORDS: Record<SkipGroup, string> = {
   in_crm: 'already in CRM',
-  landline: 'landline',
-  no_number: 'no number',
-  lookup_failed: 'number could not be looked up — try again',
-  limit: 'limit reached — try again later',
   no_search: 'no search behind it — run the search again',
   failed: 'could not be saved',
 };
@@ -133,7 +126,7 @@ export const SKIP_GROUP_WORDS: Record<SkipGroup, string> = {
 export interface AddSummary { added: number; skipped: number; by: Record<SkipGroup, number>; total: number }
 
 export function summariseAdd(rows: readonly AddRowAnswer[]): AddSummary {
-  const by: Record<SkipGroup, number> = { in_crm: 0, landline: 0, no_number: 0, lookup_failed: 0, limit: 0, no_search: 0, failed: 0 };
+  const by: Record<SkipGroup, number> = { in_crm: 0, no_search: 0, failed: 0 };
   let added = 0;
   for (const r of rows) {
     if (r.outcome === 'created') { added++; continue; }
@@ -144,7 +137,7 @@ export function summariseAdd(rows: readonly AddRowAnswer[]): AddSummary {
   return { added, skipped, by, total: rows.length };
 }
 
-/** "Added 12, skipped 8" + the reasons, biggest first: "5 already in CRM · 2 landline · 1 no number". */
+/** "Added 12, skipped 8" + the reasons, biggest first: "8 already in CRM". */
 export function addSummaryTitle(s: AddSummary): string {
   return `Added ${s.added}, skipped ${s.skipped}`;
 }
@@ -166,28 +159,54 @@ export function addRefusalText(code: string | null | undefined): string {
   }
 }
 
+/* ── THE PROGRESS LINE ("Adding 23 of 40") ──────────────────────────────────────────────────────── */
+
+export interface AddProgress { phase: 'checking' | 'lookups' | 'saving' | 'done'; done: number; total: number }
+export function addProgressText(p: AddProgress | null | undefined): string | null {
+  if (!p) return null;
+  if (p.phase === 'checking') return `Checking ${p.total}…`;
+  if (p.phase === 'saving') return `Saving ${p.total}…`;
+  return `Adding ${Math.min(p.done, p.total)} of ${p.total}`;
+}
+
 /* ── THE ADD, START TO FINISH ──────────────────────────────────────────────────────────────────── */
 
 export type LookupAnswer = (PlaceDetailsForAdd & { email?: string | null }) | null;
+/** A lookup's answer: the details; null = failed (saved without them); { throttled } = 429, wait and retry;
+ *  { limit } = a refusal no retry will change (suspended, paused, not allowed) — no further lookups are made. */
+export type LookupResult = LookupAnswer | { throttled: true } | { limit: true };
 export interface BulkAddDeps {
   /** coverage_add_leads. Returns the function's JSON (or { ok:false, error }). */
   addLeads: (rows: Record<string, unknown>[], campaignId: string | null, commit: boolean) => Promise<{ ok?: boolean; error?: string; rows?: AddRowAnswer[] }>;
-  /** google-place-details for one place id: the details, null for a failed lookup, or { limit: true } when a limit refused it. */
-  lookup: (placeId: string) => Promise<LookupAnswer | { limit: true }>;
-  onProgress?: (p: { phase: 'checking' | 'lookups' | 'saving'; done: number; total: number }) => void;
-  /** Injected so the tests do not wait real minutes. */
+  /** google-place-details for one place id. */
+  lookup: (placeId: string) => Promise<LookupResult>;
+  onProgress?: (p: AddProgress) => void;
+  /** Injected so the tests do not wait real seconds. */
   sleep?: (ms: number) => Promise<void>;
   now?: () => number;
 }
 
-export interface BulkAddResult { ok: true; summary: AddSummary; rows: AddRowAnswer[]; saveCalls: number }
+export interface BulkAddResult {
+  ok: true; summary: AddSummary; rows: AddRowAnswer[]; saveCalls: number;
+  /** Lookups actually made / answered from this page's cache / saved without a lookup answer. */
+  lookups: { made: number; cached: number; withoutAnswer: number; retries: number };
+}
 export type BulkAddOutcome = BulkAddResult | { ok: false; message: string };
+
+/* ── THE LOOKUP CACHE (this page session) ─────────────────────────────────────────────────────────
+   Only real answers are kept, never a failure, for LOOKUP_CACHE_MS. A preview-then-add, a retry after a failed
+   save, or the same business on two many-towns searches costs one lookup, not several. */
+const lookupCache = new Map<string, { at: number; d: NonNullable<LookupAnswer> }>();
+export function clearLookupCache(): void { lookupCache.clear(); }
 
 function chunks<T>(a: readonly T[], n: number): T[][] {
   const out: T[][] = [];
   for (let i = 0; i < a.length; i += n) out.push(a.slice(i, i + n));
   return out;
 }
+
+const isThrottled = (d: LookupResult): d is { throttled: true } => !!d && typeof d === 'object' && 'throttled' in d;
+const isLimit = (d: LookupResult): d is { limit: true } => !!d && typeof d === 'object' && 'limit' in d;
 
 export async function runFindLeadsBulkAdd(
   leads: readonly BulkAddLead[],
@@ -202,9 +221,10 @@ export async function runFindLeadsBulkAdd(
   const seen = new Set<string>();
   const rows = leads.filter((l) => (seen.has(l.id) ? false : (seen.add(l.id), true)));
   if (rows.length === 0) return { ok: false, message: addRefusalText('no_rows') };
+  const total = rows.length;
 
-  // 1. The free preview: which are new.
-  deps.onProgress?.({ phase: 'checking', done: 0, total: rows.length });
+  // 1. The free preview: which are new. A duplicate is the only skip.
+  deps.onProgress?.({ phase: 'checking', done: 0, total });
   const preRows: AddRowAnswer[] = [];
   for (const part of chunks(rows, COVERAGE_ADD_MAX_ROWS)) {
     let pre: Awaited<ReturnType<BulkAddDeps['addLeads']>>;
@@ -215,68 +235,59 @@ export async function runFindLeadsBulkAdd(
   const isNew = new Set(preRows.filter((r) => r.outcome === 'new' && r.k).map((r) => r.k as string));
   const fresh = rows.filter((l) => isNew.has(l.id));
 
-  // 2. The lookups, paced.
-  const details = new Map<string, LookupAnswer>();
-  let limited = false;
-  let done = 0;
-  let idx = 0;
-  const started: number[] = [];
+  // 2. The lookups: PLACE_LOOKUP_CONCURRENCY at a time, cached, a throttled one retried.
   const needsLookup = (l: BulkAddLead) => !String(l.phone ?? '').trim() || !String(l.address ?? '').trim();
-  const toLookUp = fresh.filter(needsLookup);
-  deps.onProgress?.({ phase: 'lookups', done, total: toLookUp.length });
+  const details = new Map<string, LookupAnswer>();
+  const stats = { made: 0, cached: 0, withoutAnswer: 0, retries: 0 };
+  let done = total - fresh.length;          // duplicates are done
+  const tick = () => deps.onProgress?.({ phase: 'lookups', done, total });
+  for (const l of fresh) {
+    if (!needsLookup(l)) { done++; continue; }
+    const c = lookupCache.get(l.id);
+    if (c && now() - c.at < LOOKUP_CACHE_MS) { details.set(l.id, c.d); stats.cached++; done++; }
+  }
+  tick();
+  const toLookUp = fresh.filter((l) => needsLookup(l) && !details.has(l.id));
+  let refused = false;
+  let idx = 0;
   const worker = async () => {
     for (;;) {
-      if (limited) return;
       const i = idx++;
       if (i >= toLookUp.length) return;
-      while (started.length && now() - started[0] >= 60_000) started.shift();
-      if (started.length >= PLACE_LOOKUPS_PER_MINUTE) {
-        await sleep(Math.max(0, 60_000 - (now() - started[0])) + 250);
-        while (started.length && now() - started[0] >= 60_000) started.shift();
-      }
-      if (limited) return;
-      started.push(now());
       const l = toLookUp[i];
-      let d: LookupAnswer | { limit: true };
-      try { d = await deps.lookup(l.id); } catch { d = null; }
-      if (d && 'limit' in d) { limited = true; return; }
-      details.set(l.id, d as LookupAnswer);
+      let d: LookupResult = null;
+      if (!refused) {
+        for (let attempt = 0; ; attempt++) {
+          try { d = await deps.lookup(l.id); } catch { d = null; }
+          stats.made++;
+          if (!isThrottled(d)) break;
+          if (attempt >= LOOKUP_RETRY_DELAYS_MS.length) { d = null; break; }
+          stats.retries++;
+          await sleep(LOOKUP_RETRY_DELAYS_MS[attempt]);
+        }
+        if (isLimit(d)) { refused = true; d = null; }
+      }
+      const answer = (d && !isThrottled(d) && !isLimit(d)) ? d : null;
+      if (answer) lookupCache.set(l.id, { at: now(), d: answer }); else stats.withoutAnswer++;
+      details.set(l.id, answer);
       done++;
-      deps.onProgress?.({ phase: 'lookups', done, total: toLookUp.length });
+      tick();
     }
   };
   await Promise.all(Array.from({ length: Math.min(PLACE_LOOKUP_CONCURRENCY, Math.max(1, toLookUp.length)) }, worker));
 
-  // 3. The phone rule.
-  const toSave: Record<string, unknown>[] = [];
-  const notAdded: AddRowAnswer[] = [];
-  for (const l of fresh) {
-    const looked = needsLookup(l);
-    if (looked && !details.has(l.id)) {
-      notAdded.push({ k: l.id, business_name: l.name, outcome: 'limit', reasons: ['limit'] });
-      continue;
-    }
-    const d = looked ? details.get(l.id) ?? null : null;
-    const ctx = ctxOf(l);
+  // 3. Every new business is saved — with its looked-up number, or without one ("No phone").
+  const toSave = fresh.map((l) => {
+    const d = needsLookup(l) ? details.get(l.id) ?? null : null;
     const email = String(d?.email ?? '').trim() || emailOf(l);
-    const phone = String(l.phone ?? '').trim() || String(d?.phone ?? '').trim();
-    const row = addRowFor(l, ctx, d, email, campaignId);
-    const country = String(row.country ?? ctx.country ?? '');
-    const skip = findLeadsPhoneSkip(phone, country, email);
-    if (skip) {
-      // A failed lookup on a lead with no number is not "no number" — we never got to see one.
-      const reason = skip === 'no_number' && looked && !d ? 'lookup_failed' : skip;
-      notAdded.push({ k: l.id, business_name: l.name, outcome: 'skipped', reasons: [reason] });
-      continue;
-    }
-    toSave.push(row);
-  }
+    return addRowFor(l, ctxOf(l), d, email, campaignId);
+  });
 
   // 4. ONE committing call (per COVERAGE_ADD_MAX_ROWS rows).
   let out: AddRowAnswer[] = preRows.filter((r) => r.outcome !== 'new');
   let saveCalls = 0;
   if (toSave.length > 0) {
-    deps.onProgress?.({ phase: 'saving', done: 0, total: toSave.length });
+    deps.onProgress?.({ phase: 'saving', done, total: toSave.length });
     for (const part of chunks(toSave, COVERAGE_ADD_MAX_ROWS)) {
       let a: Awaited<ReturnType<BulkAddDeps['addLeads']>>;
       try { a = await deps.addLeads(part, campaignId, true); } catch { a = { ok: false }; }
@@ -289,6 +300,6 @@ export async function runFindLeadsBulkAdd(
       out = [...out, ...(a.rows ?? [])];
     }
   }
-  const all = [...out, ...notAdded];
-  return { ok: true, summary: summariseAdd(all), rows: all, saveCalls };
+  deps.onProgress?.({ phase: 'done', done: total, total });
+  return { ok: true, summary: summariseAdd(out), rows: out, saveCalls, lookups: stats };
 }

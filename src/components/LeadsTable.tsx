@@ -1,4 +1,5 @@
 import { useState, useMemo, useCallback, memo, useEffect, useRef } from 'react';
+import { addProgressText, type AddProgress } from '@/lib/findLeadsBulkAdd';
 import { salesOwnershipCell, adminOwnerMarker, isAlreadyAdded, AlreadyAddedMarker, type OwnershipInfo } from '@/components/FindLeadsOwnership';
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
@@ -116,9 +117,11 @@ interface LeadsTableProps {
   /** Remove a FRESH lead from the CRM (Index opens a confirm, then deletes with a
    *  live freshness re-check). */
   onRemoveFromCrm?: (leadId: string, businessName: string) => void;
+  /** A batch add in progress ("Adding 23 of 40"); null when idle. */
+  addProgress?: AddProgress | null;
 }
 
-export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onMapLinkClick, isChecked, blurred = false, gated = false, onGatedAction, savedLeadCount = 0, maxFreeSaves = 3, onViewDetailsGated, viewDetailsExhausted = false, searchEnrichment, onEnrichPatch, onSetWebsiteStatus, onBulkAdd, onBulkEnrich, isLeadEnriched, onFindEmails, onCancelFindEmails, findingEmails = false, emailProgress, emailResult, withWebsiteCount = 0, onAddAllWithEmails, addingEmails = false, addAllWithEmailsCount = 0, onExportWithEmails, addCampaignTooltip = 'Add to CRM', getCrmState, onRemoveFromCrm, ownership, onClaim, claiming, viewerRole, activeCampaign, onMoveToCampaign }: LeadsTableProps) {
+export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onMapLinkClick, isChecked, blurred = false, gated = false, onGatedAction, savedLeadCount = 0, maxFreeSaves = 3, onViewDetailsGated, viewDetailsExhausted = false, searchEnrichment, onEnrichPatch, onSetWebsiteStatus, onBulkAdd, onBulkEnrich, isLeadEnriched, onFindEmails, onCancelFindEmails, findingEmails = false, emailProgress, emailResult, withWebsiteCount = 0, onAddAllWithEmails, addingEmails = false, addAllWithEmailsCount = 0, onExportWithEmails, addCampaignTooltip = 'Add to CRM', getCrmState, onRemoveFromCrm, ownership, onClaim, claiming, viewerRole, activeCampaign, onMoveToCampaign, addProgress }: LeadsTableProps) {
   const isLocked = blurred || gated;
   const handleExport = isLocked ? undefined : onExport;
   const { user } = useAuth();
@@ -366,14 +369,18 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
   // ── Bulk ADD to CRM: the selected rows, or (with nothing selected) every
   // filtered row not already in Outreach. ONE batch add; one summary toast: "Added N, skipped M" + reasons.
   const [bulkAdding, setBulkAdding] = useState(false);
+  /* A ref as well as the state: two clicks in one frame both read bulkAdding === false. No second run while one runs. */
+  const bulkRunning = useRef(false);
   const runBulkAdd = useCallback(async (targets: Lead[]) => {
-    if (!targets.length || !onBulkAdd || bulkAdding) return;
+    if (!targets.length || !onBulkAdd || bulkAdding || bulkRunning.current) return;
+    bulkRunning.current = true;
     setBulkAdding(true);
     try {
       const res = await onBulkAdd(targets);
       if (!res.cancelled) toast({ title: res.title ?? `Added ${res.added}, skipped ${res.skipped}`, description: res.description });
       setSelectedIds(new Set());
     } finally {
+      bulkRunning.current = false;
       setBulkAdding(false);
     }
   }, [onBulkAdd, bulkAdding, toast]);
@@ -483,7 +490,7 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
           <TooltipTrigger asChild>
             <Button size="sm" onClick={() => runBulkAdd(selectedLeads)} disabled={bulkAdding} className="h-9 px-3 text-xs">
               {bulkAdding ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <ClipboardList className="h-3.5 w-3.5 mr-1.5" />}
-              Add to CRM ({selectedLeads.length})
+              {bulkAdding ? (addProgressText(addProgress) ?? 'Adding…') : `Add to CRM (${selectedLeads.length})`}
             </Button>
           </TooltipTrigger>
           <TooltipContent>{addCampaignTooltip}</TooltipContent>
@@ -498,7 +505,7 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
           <TooltipTrigger asChild>
             <Button size="sm" variant="outline" onClick={() => runBulkAdd(selectAllPool)} disabled={bulkAdding} className="h-9 px-3 text-xs border-border" data-testid="add-all-shown">
               {bulkAdding ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <ClipboardList className="h-3.5 w-3.5 mr-1.5" />}
-              Add all shown ({selectAllPool.length})
+              {bulkAdding ? (addProgressText(addProgress) ?? 'Adding…') : `Add all shown (${selectAllPool.length})`}
             </Button>
           </TooltipTrigger>
           <TooltipContent>{left > 0 ? `${addCampaignTooltip}. Leaves out ${left} site${left === 1 ? '' : 's'} an agency likely runs — add ${left === 1 ? 'it' : 'them'} one by one if you want.` : addCampaignTooltip}</TooltipContent>
@@ -506,7 +513,7 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
       );
     }
     return null;
-  }, [bulkAllowed, onBulkAdd, selectedLeads, selectableLeads, selectAllPool, bulkAdding, runBulkAdd, addCampaignTooltip]);
+  }, [bulkAllowed, onBulkAdd, selectedLeads, selectableLeads, selectAllPool, bulkAdding, runBulkAdd, addCampaignTooltip, addProgress]);
 
   // Secondary bulk/scan actions, grouped under one "Bulk ▾" menu:
   //   Enrich selected · Check for websites · Find emails · Add all with emails.

@@ -2,6 +2,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { toWhatsAppDigits } from "../../../src/lib/waNumber.ts";
 import { marketWindowOpen, windowOpenForDigits } from "../../../src/lib/sendWindow.ts";
 import { COUNTRY_OFF, channelOn, mobileMarketOf, type Market } from "../../../src/lib/outreachMarkets.ts";
+import { NOT_A_MOBILE, NOT_A_MOBILE_REASON, templateDestinationRefusal } from "../../../src/lib/whatsAppDestination.ts";
 import { loadCountrySettings, marketAtDailyCap } from "../_shared/country-settings.ts";
 import { isUkColdDestination, NOT_A_UK_MOBILE } from "../../../src/lib/ukColdDestination.ts";
 import { statusBeforeQueue, statusWhenWhatsAppUnavailable, statusWithContactEvidence } from "../../../src/lib/coldWhatsAppEligibility.ts";
@@ -1330,6 +1331,14 @@ Deno.serve(async (req) => {
           service.from("whatsapp_auto_replies")
             .update({ status, reason: reason ? reason.slice(0, 300) : null, updated_at: new Date().toISOString() })
             .eq("id", row.id);
+        /* ⛔ NOT A MOBILE → NOT SENT (2026-10-19, src/lib/whatsAppDestination.ts). A first_reply answers the number that
+           just messaged us, so WhatsApp reaches it. Every other trigger (audit_complete) sends to the lead's STORED
+           phone, which since 19 Oct may be a landline: a UK / MY / SG number that is not a mobile is skipped, never tried. */
+        if (trigger !== "first_reply" && templateDestinationRefusal(toWhatsAppNumber(String(row.phone ?? ""), null) ?? row.phone) === NOT_A_MOBILE) {
+          await finish("skipped_not_mobile", NOT_A_MOBILE_REASON);
+          results[row.lead_id] = "skipped_not_mobile";
+          continue;
+        }
         try {
           // 1) A decline arriving AFTER queueing cancels the send — the whole point of the delay.
           const { data: newer } = await service.from("whatsapp_messages")
@@ -2483,11 +2492,14 @@ Deno.serve(async (req) => {
     // Re-check here so we NEVER spend a send at a landline/VoIP — flag it for SMS and
     // pull it from the queue instead. Offline + free, no Meta call, no cap usage.
     const lineType = classifyLineType(lead.phone as string, lead.country as string | null);
-    if (!lineType.whatsappEligible) {
+    /* 2026-10-19: also the digit rule every template now shares (src/lib/whatsAppDestination.ts) — a UK / MY / SG number
+       that is not a mobile there is a landline even when the phone library cannot type it. */
+    const knownNonMobile = templateDestinationRefusal(toWhatsAppNumber(String(lead.phone ?? ""), (lead.country as string | null) ?? null)) === NOT_A_MOBILE;
+    if (!lineType.whatsappEligible || knownNonMobile) {
       await service.from("outreach_leads").update({
         status: "no_whatsapp_needs_sms",
         whatsapp_delivery_status: "non_mobile",
-        line_type: lineType.lineType,
+        line_type: lineType.whatsappEligible ? "landline" : lineType.lineType,
         line_type_checked_at: new Date().toISOString(),
         contact_method: null,
       }).eq("id", lead.id);

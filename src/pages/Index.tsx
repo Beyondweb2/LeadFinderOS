@@ -27,7 +27,7 @@ import { useSearchEnrichment } from '@/hooks/useSearchEnrichment';
 import { useFindEmails } from '@/hooks/useFindEmails';
 import { useCheckedBusinesses } from '@/hooks/useCheckedBusinesses';
 import { useFindLeadsBulkAdd } from '@/hooks/useFindLeadsBulkAdd';
-import { addSummaryReasons, addSummaryTitle, SKIP_GROUP_WORDS, skipGroupOf, type AddRowAnswer, type BulkAddLead } from '@/lib/findLeadsBulkAdd';
+import { addSummaryReasons, addSummaryTitle, SKIP_GROUP_WORDS, skipGroupOf, type AddProgress, type AddRowAnswer, type BulkAddLead } from '@/lib/findLeadsBulkAdd';
 import { Flame, Zap, Search, MapPin, Info, Globe2, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { PageHeader } from '@/components/salesDash/primitives';
@@ -293,16 +293,25 @@ const Index = () => {
   const townOf = useCallback((lead: Lead) => lead.searchTown ?? lastSearchLocation, [lastSearchLocation]);
   const countryOf = useCallback((lead: Lead): Country => (lead.searchCountry as Country | undefined) ?? lastSearchCountry, [lastSearchCountry]);
   /* ⛔ EVERY FIND LEADS ADD IS ONE BATCH (2026-10-17, src/lib/findLeadsBulkAdd.ts): a free duplicate preview, each new
-     lead's phone looked up FIRST, UK landlines and no-number leads dropped, then ONE coverage_add_leads save — the row
-     button is a batch of one. The database is the dedupe. Answers the counts LeadsTable's summary toast reads. */
+     lead's phone looked up first (8 at a time, cached, a throttled one retried), then ONE coverage_add_leads save — the
+     row button is a batch of one. Since 2026-10-19 EVERY business is added (landlines, no phone); a duplicate is the
+     only skip. The database is the dedupe. Answers the counts LeadsTable's summary toast reads. */
   const bulkAdd = useFindLeadsBulkAdd();
+  /* "Adding 23 of 40" while a batch runs; null when idle. */
+  const [addProgress, setAddProgress] = useState<AddProgress | null>(null);
   const handleBulkAdd = useCallback(async (sel: Lead[], campaignId: string | null = activeCampaign) => {
-    const res = await bulkAdd(
-      sel as BulkAddLead[],
-      (l) => ({ trade: lastSearchKeyword, town: townOf(l as Lead), country: countryOf(l as Lead) }),
-      (l) => String(getEnrichment(l.id)?.email ?? '').trim() || null,
-      campaignId,
-    );
+    let res: Awaited<ReturnType<typeof bulkAdd>>;
+    try {
+      res = await bulkAdd(
+        sel as BulkAddLead[],
+        (l) => ({ trade: lastSearchKeyword, town: townOf(l as Lead), country: countryOf(l as Lead) }),
+        (l) => String(getEnrichment(l.id)?.email ?? '').trim() || null,
+        campaignId,
+        sel.length > 1 ? setAddProgress : undefined,
+      );
+    } finally {
+      setAddProgress(null);
+    }
     if (res.ok === false) return { added: 0, skipped: sel.length, title: 'Nothing added', description: (res as { message: string }).message, rows: [] as AddRowAnswer[] };
     const byId = new Map(sel.map((l) => [l.id, l]));
     for (const r of res.rows) {
@@ -753,6 +762,7 @@ const Index = () => {
                 isChecked={isChecked}
                 onSetWebsiteStatus={setWebsiteOverride}
                 onBulkAdd={handleBulkAddEntry}
+                addProgress={addProgress}
                 onBulkEnrich={handleBulkEnrich}
                 isLeadEnriched={isLeadEnriched}
                 onFindEmails={findEmails}

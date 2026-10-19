@@ -7,7 +7,9 @@ import { WHATSAPP_TEMPLATES, type OutreachLead } from '@/types/outreach';
 import { TemplatePreviewButton, TemplateSnippet } from '@/components/TemplateWordingPreview';
 import { RequestTemplateButton } from '@/components/RequestTemplateButton';
 import { classifyLineType } from '@/lib/lineType';
-import { coldWhatsAppVerdict } from '@/lib/coldWhatsAppEligibility';
+import { coldWhatsAppVerdict, COLD_NOT_ELIGIBLE_LABEL } from '@/lib/coldWhatsAppEligibility';
+import { templateDestinationRefusal } from '@/lib/whatsAppDestination';
+import { toWhatsAppDigits } from '@/lib/waNumber';
 import { COUNTRY_OFF, marketsOn } from '@/lib/outreachMarkets';
 import { useCountrySettings } from '@/hooks/useCountrySettings';
 import { isInitialOpener } from '@/lib/openerVariant';
@@ -142,16 +144,26 @@ export function WhatsAppLeadControls({
             toast({ title: 'Not queued', description: 'WhatsApp to this country is switched off. Paul can turn it on in the WhatsApp queue settings.', variant: 'destructive' });
             return;
           }
+          /* ⛔ 2026-10-19: the WHOLE cold verdict, as the bulk queue and the drip use it — no phone, an unusable number
+             or a non-mobile is flagged No mobile and NOT queued, and the person is told (it used to be silent, and a
+             no-phone lead was queued). */
+          if (v.eligible === false) {
+            await onUpdate(lead.id, { status: 'no_whatsapp_needs_sms', line_type: classifyLineType(lead.phone, lead.country).lineType, line_type_checked_at: new Date().toISOString() });
+            toast({ title: 'Not queued', description: `Skipped: ${COLD_NOT_ELIGIBLE_LABEL[v.reason]}. Not sendable on WhatsApp.`, variant: 'destructive' });
+            return;
+          }
         }
         if (await reportOfferBlocked()) return;
         if (await callCampaignAnswer() === null) return;
         const { lineType, whatsappEligible } = classifyLineType(lead.phone, lead.country);
-        if (!whatsappEligible) {
+        const knownNonMobile = templateDestinationRefusal(toWhatsAppDigits(lead.phone, lead.country)) !== null;
+        if (!whatsappEligible || knownNonMobile) {
           await onUpdate(lead.id, {
             status: 'no_whatsapp_needs_sms',
-            line_type: lineType,
+            line_type: whatsappEligible ? (lead.phone ? 'landline' : lineType) : lineType,
             line_type_checked_at: new Date().toISOString(),
           });
+          toast({ title: 'Not queued', description: lead.phone ? 'Skipped: landline, not sendable on WhatsApp.' : 'Skipped: no phone number, not sendable on WhatsApp.', variant: 'destructive' });
           return;
         }
         await onUpdate(lead.id, {

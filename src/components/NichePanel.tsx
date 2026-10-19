@@ -9,7 +9,7 @@ import { rateLabel, sharePct, nicheVerdict, type NicheAnalysis } from '@/lib/nic
 import { useNavigate } from 'react-router-dom';
 import { useLeadSearchContext } from '@/contexts/LeadSearchContext';
 import { useFindLeadsBulkAdd } from '@/hooks/useFindLeadsBulkAdd';
-import { addSummaryReasons, addSummaryTitle, type BulkAddLead } from '@/lib/findLeadsBulkAdd';
+import { addProgressText, addSummaryReasons, addSummaryTitle, type AddProgress, type BulkAddLead } from '@/lib/findLeadsBulkAdd';
 import { useCampaigns } from '@/hooks/useCampaigns';
 import { pickCampaignForTrade } from '@/lib/campaignForTrade';
 import { useToast } from '@/hooks/use-toast';
@@ -66,6 +66,7 @@ function TownRow({
   const { adoptResults } = useLeadSearchContext();
   const { campaigns } = useCampaigns();
   const [adding, setAdding] = useState(false);
+  const [progress, setProgress] = useState<AddProgress | null>(null);
   const [elapsed, setElapsed] = useState(0);
 
   /* Ticks only while THIS row is searching. A number that moves is what separates "working" from
@@ -89,7 +90,7 @@ function TownRow({
       /* ⛔ THE SAME ONE-GO BATCH ADD AS FIND LEADS (2026-10-19, src/lib/findLeadsBulkAdd.ts): a free duplicate preview
          (the database's dedupe — already-added businesses are skipped), each new lead's phone looked up FIRST, UK
          landlines and no-number leads skipped, then ONE save. The trade and town are stamped on every row. */
-      const res = await bulkAdd(rowLeads as BulkAddLead[], () => ({ trade, town, country: 'UK' }), () => null, campaignId);
+      const res = await bulkAdd(rowLeads as BulkAddLead[], () => ({ trade, town, country: 'UK' }), () => null, campaignId, setProgress);
       if (res.ok === false) {
         toast({ title: `${town}: nothing added`, description: (res as { message: string }).message, variant: 'destructive' });
         return;
@@ -97,6 +98,7 @@ function TownRow({
       onAdded(res.summary.added, res.summary.skipped);
       toast({ title: `${town}: ${addSummaryTitle(res.summary)}`, description: addSummaryReasons(res.summary) || 'All new.' });
     } finally {
+      setProgress(null);
       setAdding(false);
     }
   };
@@ -141,7 +143,7 @@ function TownRow({
             <Button size="sm" variant="default" className="h-6 shrink-0 px-2 text-[11px]" onClick={addAll} disabled={adding}
               title={`Add all ${rowLeads.length} businesses found in ${town} to the CRM`}>
               {adding ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : <Store className="mr-1 h-3 w-3" />}
-              {adding ? 'Adding…' : `Add all ${rowLeads.length} to CRM`}
+              {adding ? (addProgressText(progress) ?? 'Adding…') : `Add all ${rowLeads.length} to CRM`}
             </Button>
           )}
           <Button size="sm" variant="ghost" className="h-6 shrink-0 px-2 text-[11px]" onClick={openInFindLeads}

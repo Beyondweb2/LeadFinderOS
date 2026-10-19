@@ -26,6 +26,7 @@ import { pitchEverSent } from "../_shared/auto-reply-rules.ts";
 import { isColdOutreachTemplate } from "../../../src/lib/coldOutreach.ts";
 import { isUkColdDestination, NOT_A_UK_MOBILE } from "../../../src/lib/ukColdDestination.ts";
 import { COUNTRY_OFF, channelOn, mobileMarketOf } from "../../../src/lib/outreachMarkets.ts";
+import { NOT_A_MOBILE, NOT_A_MOBILE_REASON, templateDestinationRefusal } from "../../../src/lib/whatsAppDestination.ts";
 import { loadCountrySettings } from "../_shared/country-settings.ts";
 import { resolveOnboardingFollowupVars } from "../_shared/onboarding-followup.ts";
 import { createTemplateSnapshot } from "../../../src/lib/whatsappTemplateSnapshot.ts";
@@ -96,8 +97,9 @@ const CAPABILITIES = ["dry_run", "build_phase_hold", "routing_leaf", "any_approv
    2026-09-27c: NO SELECTED OPENER — either approved opener sends as chosen (opener_not_selected is
    gone; the capability reads any_approved_opener).
    2026-09-30b: an explicit opt-out refuses MARKETING templates here too (src/lib/marketingConsent.ts).
-   2026-10-04a: QA safety — a QA fixture is simulated, a test-account lead is refused (src/lib/qaSafety.ts). */
-const BUILD_ID = "2026-10-16a-onboarding-consistency";
+   2026-10-04a: QA safety — a QA fixture is simulated, a test-account lead is refused (src/lib/qaSafety.ts).
+   2026-10-19a: EVERY template refuses a UK / MY / SG number that is not a mobile (src/lib/whatsAppDestination.ts). */
+const BUILD_ID = "2026-10-19a-template-non-mobile";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -448,6 +450,13 @@ Deno.serve(async (req) => {
       if (isColdOutreachTemplate(templateName) && !isUkColdDestination(to) && !(coldMarket && coldMarket !== "UK")) {
         return json({ ok: false, error: NOT_A_UK_MOBILE, template: templateName,
           reason: "Cold WhatsApp outreach is UK only - this is not a UK mobile, so nothing was sent. Use a reply or a follow-up in an open conversation." }, 200);
+      }
+      /* ⛔ EVERY TEMPLATE, NOT ONLY COLD (2026-10-19, src/lib/whatsAppDestination.ts): since landlines are added to the CRM,
+         a follow-up, the sign-up / onboarding link (Quick Close, the client hub) or any other template is refused for a
+         UK / Malaysian / Singapore number that is not a mobile. Not overridable by allow_resend. Free-form replies in an
+         open thread never reach this block. */
+      if (templateDestinationRefusal(to) === NOT_A_MOBILE) {
+        return json({ ok: false, error: NOT_A_MOBILE, template: templateName, reason: NOT_A_MOBILE_REASON }, 200);
       }
       /* ⛔ allow_resend confirms repeating a pitch on THIS lead's own thread. For a salesperson it never reaches
          across lead rows (test-day roles check, 2026-10-14): a number already messaged on ANOTHER row — a duplicate
