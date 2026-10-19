@@ -161,6 +161,7 @@ async function buildBaselineReport(service: any, audit: Record<string, unknown>,
     isAggregatorUrl,
     ownWebsite,
     hasWebsite: ownWebsite ? true : (lead.place_id ? false : null),
+    auditCreatedAt: (audit as { created_at?: string | null }).created_at ?? null,
     seoStyle: seoStyleForAudit(audit.baseline_target_runs, audit.is_measurement),
   });
   /* ⛔ NEVER the internal view. Winnability must not leave the report module even into a prompt that

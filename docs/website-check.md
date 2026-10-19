@@ -77,9 +77,12 @@ said "not checked" instead of "checking", and stopped re-reading once the AI res
 - **Google AI (`aiOverview.ts`):** renamed (display only; Meta templates and agreement wording untouched). Scoring is
   VERSIONED and DERIVED (`scoringMethodFor(audit.created_at)` vs `GOOGLE_AI_SCORED_SINCE`, no stored row rewritten): method 2
   adds Google AI where Google showed an answer (none shown = left out, grey "No AI answer shown"). It is `HookScore.scored` —
-  display only; send gates, the hook pick and 6/6 read method 1. Full baseline / measurement reports and the guarantee
-  comparison are UNCHANGED (method 1); compare screens show the with-Google-AI figure as extra information
-  (`googleAiExtraFigure`). Whether a future client's guarantee counts Google AI is Paul's decision.
+  display only; send gates, the hook pick and 6/6 read method 1. **Guarantee (Paul, same day): a client whose BASELINE was created
+  from `GOOGLE_AI_SCORED_SINCE` is judged with Google AI on BOTH sides** (`compareMeasurements` `scoringMethod`, read from the
+  baseline audit's created_at by remeasure-results and both compare screens); the report / welcome pack baseline figure uses
+  the same rule, so it IS the before side; the results email names Google AI only for those clients (method-1 wording is
+  byte-identical). Older baselines: unchanged, with the with-Google-AI figure shown as extra information on the compare screens
+  (`googleAiExtraFigure`, null for method 2). Tests: `scripts/guarantee-google-ai.test.ts`.
 
 Learning Curve acceptance (live fetch, 19 Oct): found — generic Organization schema with no phone/address (minor), no FAQPage
 (minor), name written two ways (site name/titles vs markup), 7 town-swapped area pages, 6 repeated FAQ pages, the indexable

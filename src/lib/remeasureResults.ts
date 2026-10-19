@@ -232,6 +232,9 @@ export interface ResultsCopyInput {
   documentUrl: string;
   /** The client's re-measure clock in weeks (remeasureWeeksFor). Absent = four. */
   weeks?: number | null;
+  /** The baseline was scored with Google AI (scoring method 2, 2026-10-19): the engines are named that way. Absent = the
+   *  approved ChatGPT-and-Gemini wording, byte for byte. */
+  googleAiInScore?: boolean;
   /** The first recurring payment's date, as a person reads it — from resultsBillingStartIso, so
    *  only when a trialing subscription will charge on it. Absent otherwise (no subscription, already
    *  billing), and then the email says nothing about billing. */
@@ -274,7 +277,7 @@ export function resultsEmailParagraphs(i: ResultsCopyInput): string[] {
   const where = i.town ? ` in ${i.town}` : '';
   const out = [
     `Hi,`,
-    `${cap(weeksWord(i.weeks))} weeks ago we measured how often ChatGPT and Gemini named ${i.businessName} when people asked the questions your customers ask${where}. We have just asked the same ${i.questions} questions again, on the same engines.`,
+    `${cap(weeksWord(i.weeks))} weeks ago we measured how often ${i.googleAiInScore ? 'ChatGPT, Gemini and Google AI (where Google showed an AI answer)' : 'ChatGPT and Gemini'} named ${i.businessName} when people asked the questions your customers ask${where}. We have just asked the same ${i.questions} questions again, on the same engines.`,
     `Before: named in ${i.beforeNamed} of ${i.beforeAnswered} answers (${pct(i.beforeNamed, i.beforeAnswered)}%).`,
     `After: named in ${i.afterNamed} of ${i.afterAnswered} answers (${pct(i.afterNamed, i.afterAnswered)}%).`,
     `The full before-and-after, question by question, is here: ${i.documentUrl}`,

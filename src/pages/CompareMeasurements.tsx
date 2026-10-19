@@ -28,6 +28,7 @@ import type { QueueRowLite } from '@/lib/baselineView';
 import {
   compareMeasurements, NOISE_BAND_PP, type MeasurementComparison, type Movement,
 } from '@/lib/measurementCompare';
+import { scoringMethodFor } from '@/lib/aiOverview';
 import { MeasurementCompareTable } from '@/components/MeasurementCompareTable';
 
 interface RunLite {
@@ -78,6 +79,8 @@ export default function CompareMeasurements() {
   const [error, setError] = useState<string | null>(null);
   const [businessName, setBusinessName] = useState('');
   const [website, setWebsite] = useState('');
+  /* Each audit's created_at: the BEFORE side's audit decides the scoring method (aiOverview.ts scoringMethodFor). */
+  const [auditCreated, setAuditCreated] = useState<Map<string, string | null>>(new Map());
   const [runs, setRuns] = useState<RunLite[]>([]);
   const [rows, setRows] = useState<Array<QueueRowLite & { run_id: string }>>([]);
   const [beforeIds, setBeforeIds] = useState<Set<string>>(new Set());
@@ -104,8 +107,9 @@ export default function CompareMeasurements() {
          wants as the "after". Matched on the business name, which is what the copy carries. */
       const { data: sibs } = await client
         .from('ai_audits')
-        .select('id')
+        .select('id, created_at')
         .eq('business_name', audit.business_name);
+      setAuditCreated(new Map(((sibs ?? []) as Array<{ id: string; created_at: string | null }>).map((s) => [s.id, s.created_at])));
       const auditIds = Array.from(new Set([auditId, ...((sibs ?? []) as Array<{ id: string }>).map((s) => s.id)]));
 
       const { data: runData, error: rErr } = await client
@@ -170,8 +174,9 @@ export default function CompareMeasurements() {
     if (!beforeIds.size || !afterIds.size) return null;
     const before = rows.filter((r) => beforeIds.has(r.run_id));
     const after = rows.filter((r) => afterIds.has(r.run_id));
-    return compareMeasurements(before, after, { businessName, ownWebsite: website });
-  }, [rows, beforeIds, afterIds, businessName, website]);
+    const beforeAudit = runs.filter((r) => beforeIds.has(r.id)).sort((x, y) => x.created_at.localeCompare(y.created_at))[0]?.audit_id ?? null;
+    return compareMeasurements(before, after, { businessName, ownWebsite: website, scoringMethod: scoringMethodFor(beforeAudit ? auditCreated.get(beforeAudit) ?? null : null) });
+  }, [rows, runs, beforeIds, afterIds, businessName, website, auditCreated]);
 
   if (isLoading) {
     return <LoadState label="Loading the measurements…" className="py-16" />;

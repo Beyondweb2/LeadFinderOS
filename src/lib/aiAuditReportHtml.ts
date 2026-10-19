@@ -73,6 +73,8 @@ export interface AiAuditReportData {
   /* Google AI Overview across the audit (aiOverview.ts overviewTallyFromRows, 2026-10-19). DISPLAY ONLY.
      Absent on an older payload: the chip then reads "not recorded". */
   overview?: OverviewTally | null;
+  /** Google AI is counted in named / total / pct (scoring method 2, 2026-10-19). Absent / false = not. */
+  googleAiInScore?: boolean;
   competitors: string[];         // real brands AI named instead (aggregate)
   /* The audit-wide leaders WITH their grouped mention counts, most-named first. Optional so a
      caller built before this existed still renders — absent means the document simply omits the
@@ -1247,9 +1249,10 @@ function quickOverviewChip(h: HookReportSummary): string {
 }
 /** The full report's chip (2026-10-19): Google AI Overview beside the ChatGPT / Gemini figures, named N of
  *  the searches that showed one. Display only, said so on the chip. */
-function reportOverviewChip(t: OverviewTally | null | undefined): string {
+function reportOverviewChip(t: OverviewTally | null | undefined, inScore = false): string {
   const tt = t ?? null;
-  return `<p class="aio-chip aio-chip--${overviewChipTone(tt)}" data-aio="${aioDataState(tt)}" title="${esc(overviewChipTitle(tt))}"><span class="aio-chip-t">${esc(overviewChipText(tt))}</span><span class="aio-chip-n">${esc(AI_OVERVIEW_CONTEXT_LABEL)}</span></p>`;
+  const tag = inScore ? (tt && tt.shown > 0 ? 'In score' : '') : AI_OVERVIEW_CONTEXT_LABEL;
+  return `<p class="aio-chip aio-chip--${overviewChipTone(tt)}" data-aio="${aioDataState(tt)}" data-in-score="${inScore}" title="${esc(overviewChipTitle(tt, inScore))}"><span class="aio-chip-t">${esc(overviewChipText(tt))}</span>${tag ? `<span class="aio-chip-n">${esc(tag)}</span>` : ''}</p>`;
 }
 /** shown / none / unknown — a test hook on every overview chip. */
 function aioDataState(t: OverviewTally | null): string {
@@ -1895,7 +1898,7 @@ export function renderReportHtml(d: AiAuditReportData): string {
         <div class="pv-sub">${d.named} of ${d.total} measured ${plural(d.total, "answer")}${working ? ` &middot; ${working}` : ""}</div>
       </div>
       ${cards ? `<div class="pv-cards">${cards}</div>` : ""}
-      ${reportOverviewChip(d.overview)}
+      ${reportOverviewChip(d.overview, d.googleAiInScore === true)}
       ${reading ? `<p class="pv-read">${esc(reading)}</p>` : ""}
     </section>
     <div class="pv-split"></div>`;
@@ -1952,10 +1955,10 @@ export function renderReportHtml(d: AiAuditReportData): string {
   const questionsList = qOther.length ? `
     <section class="qlist">
       <div class="sec-eyebrow">${d.paidSummary ? "Question by question" : "The other questions we asked"}</div>
-      ${d.paidSummary ? "" : reportOverviewChip(d.overview)}
+      ${d.paidSummary ? "" : reportOverviewChip(d.overview, d.googleAiInScore === true)}
       <div class="qrow qrow-head"><span class="qrow-q"></span>${SCORED_LABELS.map((l) => `<span class="qrow-e">${l}</span>`).join("")}${aioRecorded ? `<span class="qrow-e qrow-aio">AI Overview</span>` : ""}</div>
       ${qOther.map((q) => `<div class="qrow"><span class="qrow-q">${esc(q.question)}</span>${SCORED_LABELS.map((l) => `<span class="qrow-e">${qMark(engNamed(q, l))}</span>`).join("")}${aioRecorded ? `<span class="qrow-e qrow-aio">${aioMark(q)}</span>` : ""}</div>${aioText(q)}`).join("")}
-      ${aioRecorded ? `<p class="qlist-note">Google AI (Google&rsquo;s own AI answer) is shown for context and is not counted in this report&rsquo;s score. &ldquo;none&rdquo; = ${NO_OVERVIEW_TEXT} for that search; &ldquo;&ndash;&rdquo; = not recorded.</p>` : ""}
+      ${aioRecorded ? `<p class="qlist-note">Google AI (Google&rsquo;s own AI answer) ${d.googleAiInScore ? 'is counted in the score wherever Google showed one; a search with none is left out, never counted against you.' : 'is shown for context and is not counted in this report&rsquo;s score.'} &ldquo;none&rdquo; = ${NO_OVERVIEW_TEXT} for that search; &ldquo;&ndash;&rdquo; = not recorded.</p>` : ""}
     </section>` : "";
 
   /* 🔴 THE NAME REFUSAL — IT REPLACES THE HERO. Paul's words, 2026-09-15, and the phrasing is his

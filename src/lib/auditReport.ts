@@ -998,8 +998,13 @@ export function buildReportData(
      run.results.summary is a SINGLE run's tally and would undercount a multi-run audit, so it is no
      longer used. For a single-run audit liveNamed/liveTotal equal that summary anyway (measured:
      1,670 claimed = 1,670 real), so this changes nothing for old audits. */
-  const named = liveNamed;
-  const total = liveTotal;
+  /* ⛔ GOOGLE AI IN THE SCORE, BY THE AUDIT'S OWN METHOD (Paul, 2026-10-19; aiOverview.ts scoringMethodFor). An audit
+     created on or after GOOGLE_AI_SCORED_SINCE counts Google AI on every answer where Google showed one (none shown =
+     left out, never a penalty) — the SAME rule the guarantee comparison applies (measurementCompare scoringMethod), so a
+     new client's baseline figure IS the guarantee's before side. Older audits: exactly as before. */
+  const googleAiTally = scoringMethodFor(ctx.auditCreatedAt ?? null) === 2 ? overviewTallyFromRows(queueRows, namedCtx) : null;
+  const named = liveNamed + (googleAiTally?.named ?? 0);
+  const total = liveTotal + (googleAiTally?.shown ?? 0);
   // Distinct questions asked (each appears once PER RUN in queueRows) — the "N ways of asking" line
   // and the per-question breakdown are keyed on this, never on the row count.
   const distinctQuestions = new Set(
@@ -1273,6 +1278,8 @@ export function buildReportData(
     /* Google AI Overview across the audit's done questions (2026-10-19) — the chip beside ChatGPT and
        Gemini on the report and Outreach. DISPLAY ONLY: never in pct, named, total or any verdict. */
     overview: overviewTallyFromRows(queueRows, namedCtx),
+    /* Google AI is in named / total / pct (scoring method 2). Absent = not (every older audit). */
+    googleAiInScore: !!googleAiTally,
     competitors,
     /* The audit-wide leaders. The report names THESE, not whoever happened to appear in the one
        answer gutPunch quotes — that is what put "Get A Splash, Fresh Car, Clean Me" on Wilson's

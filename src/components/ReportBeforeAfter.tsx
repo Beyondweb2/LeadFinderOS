@@ -29,6 +29,7 @@ import { ArrowLeft, Loader2, ArrowUp, ArrowDown, Minus, CircleHelp, SlidersHoriz
 import { renderReportHtml, type AiAuditReportData } from '@/lib/aiAuditReportHtml';
 import type { QueueRow, RunRow } from '@/lib/auditReport';
 import type { QueueRowLite } from '@/lib/baselineView';
+import { scoringMethodFor } from '@/lib/aiOverview';
 import { compareMeasurements, googleAiExtraFigure, type MeasurementComparison, type Movement } from '@/lib/measurementCompare';
 import { MeasurementCompareTable } from '@/components/MeasurementCompareTable';
 import { usePersistedState } from '@/hooks/usePersistedState';
@@ -148,7 +149,7 @@ export function ReportBeforeAfter({
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [runs, setRuns] = useState<RunLite[]>([]);
-  const [auditRows, setAuditRows] = useState<Array<{ id: string; baseline_target_runs: number | null }>>([]);
+  const [auditRows, setAuditRows] = useState<Array<{ id: string; baseline_target_runs: number | null; created_at?: string | null }>>([]);
   const [rows, setRows] = useState<Row[]>([]);
   /* ⛔ THE SELECTION SURVIVES LEAVING THE PAGE. AppLayout remounts on every navigation
      (CLAUDE.md §6c), so this Set state was rebuilt from the day-split default on every visit and
@@ -188,8 +189,8 @@ export function ReportBeforeAfter({
          baseline repeats too, and the grouper infers isMeasurement from the target), so the
          picker asks only for what the types know about rather than casting through unknown. */
       const { data: sibs } = await client.from('ai_audits')
-        .select('id, baseline_target_runs').eq('business_name', businessName);
-      const sibRows = (sibs ?? []) as Array<{ id: string; baseline_target_runs: number | null }>;
+        .select('id, baseline_target_runs, created_at').eq('business_name', businessName);
+      const sibRows = (sibs ?? []) as Array<{ id: string; baseline_target_runs: number | null; created_at?: string | null }>;
       setAuditRows(sibRows);
       const auditIds = Array.from(new Set([auditId, ...sibRows.map((s) => s.id)]));
 
@@ -301,8 +302,11 @@ export function ReportBeforeAfter({
 
   const comparison: MeasurementComparison | null = useMemo(() => {
     if (!split.before.length || !split.after.length) return null;
-    return compareMeasurements(split.before, split.after, { businessName, ownWebsite });
-  }, [split, businessName, ownWebsite]);
+    /* The BEFORE side's audit decides the scoring method (like with like, aiOverview.ts scoringMethodFor). */
+    const beforeAudit = runs.filter((r) => beforeIds.has(r.id)).sort((x, y) => x.created_at.localeCompare(y.created_at))[0]?.audit_id ?? null;
+    const created = auditRows.find((a) => a.id === beforeAudit)?.created_at ?? null;
+    return compareMeasurements(split.before, split.after, { businessName, ownWebsite, scoringMethod: scoringMethodFor(created) });
+  }, [split, businessName, ownWebsite, runs, beforeIds, auditRows]);
 
   /* ⛔ CLIENT VERSION ON BOTH SIDES. `internal: false` is forced here rather than inherited: the
      internal build carries winnability annotations, and this is the view most likely to be turned

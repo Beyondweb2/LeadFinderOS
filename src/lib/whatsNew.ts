@@ -22,6 +22,14 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-19-guarantee-google-ai', date: '2026-10-19', title: 'New clients: Google AI counts in the money-back number', audience: 'admin',
+    body: 'For a client whose baseline is measured from today, Google AI is counted in the baseline and in the four-week re-measure, on both sides the same way, wherever Google showed an AI answer. Every existing client is judged exactly as before.',
+    report: {
+      added: ['A new client’s baseline, welcome pack and four-week results count Google AI where Google showed an AI answer, and the results email says so.'],
+      changed: ['The compare screens judge both sides by the baseline’s own method. For an older baseline they still show the with-Google-AI figure as extra information only.'],
+      removed: [],
+      effect: 'New clients get one number that includes Google AI from day 0 to week 4. No existing client’s number or guarantee changes.',
+    } },
   { id: '2026-10-19-website-crawl-call-screen', date: '2026-10-19', title: 'Website crawl on the call screen, a ready-made voice note, and Google AI in the score', audience: 'all',
     body: 'The call screen now has a Website crawl section under the AI result: the real issues found on the site, when it was checked, and "Checking the website..." while it runs. If a lead has an AI result but no website check, opening the call screen starts one. The voice note is written for you straight away from the same facts as the call script. "Google AI Overview" is now called "Google AI" and counts in the score on new audits.',
     report: {
