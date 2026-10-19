@@ -298,7 +298,9 @@ Full history and reasoning: `docs/business-and-offer.md`, `docs/measurement.md`.
   areas** (Paul, 2026-09-23; was home-town-only from 2026-09-12; older frozen sets stay as they
   were). **Scored engines: ChatGPT + Gemini only** (`SCORED_ENGINES`). ⛔ Google AI Overview IS
   collected and SHOWN on every new audit (2026-10-11, `docs/ai-overview.md`, `src/lib/aiOverview.ts`) but is DISPLAY ONLY —
-  never scored, never in the guarantee, never claim it is measured. The actor input asks for the FULL overview
+  never scored, never in the guarantee, never claim it is measured. Since 2026-10-19 it is a CHIP beside ChatGPT and
+  Gemini on every surface (`AiOverviewChip`), and an audit's overview is read ONLY through `overviewReadingOf` (stamp →
+  stored answer → results page → "not recorded") — never the stamp alone (older audits then showed nothing). The actor input asks for the FULL overview
   EXPLICITLY (`scrapeFullAiOverview: true`, Paul 2026-10-11, ~+$0.002 a question shown) — never rely on the actor
   default. ⛔ **Screens say "Gemini"; spoken scripts say "Google AI"** (Paul, 2026-10-11): `HOOK_ENGINE_LABELS` vs
   `HOOK_SPOKEN_ENGINE_LABELS` (`hookScore.ts`) — call script, playbook and voice note use the spoken one. "The number" = named answers ÷ answered answers pooled over every frozen question,

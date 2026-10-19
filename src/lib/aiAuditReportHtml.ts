@@ -1,6 +1,6 @@
 import { hookReportCopy, type HookReportSummary } from './hookAudit.ts';
 import { articleTrade } from './templateVars.ts';
-import { AI_OVERVIEW_LABEL, AI_OVERVIEW_NOT_SCORED, AI_OVERVIEW_REPORT_LABEL as AI_OVERVIEW_ROW_LABEL, NO_OVERVIEW_DETAIL, NO_OVERVIEW_TEXT, OVERVIEW_NO_NAMES_TEXT } from './aiOverview.ts';
+import { AI_OVERVIEW_CONTEXT_LABEL, AI_OVERVIEW_LABEL, AI_OVERVIEW_NOT_SCORED, AI_OVERVIEW_REPORT_LABEL as AI_OVERVIEW_ROW_LABEL, NO_OVERVIEW_DETAIL, NO_OVERVIEW_TEXT, NOT_RECORDED_TEXT, OVERVIEW_NO_NAMES_TEXT, overviewChipText, overviewChipTitle, overviewChipTone, overviewChipValue, overviewTally, type OverviewTally } from './aiOverview.ts';
 // Client-facing AI Visibility Audit report — shared data shape + a standalone,
 // self-contained, PRINT-READY one-page HTML document for download (Findable-branded,
 // inline styles, no dependencies). Deliberately client-friendly: no engine keys, no
@@ -70,6 +70,9 @@ export interface AiAuditReportData {
   enginesUsed?: number;
   pct: number;                   // 0–100
   perEngine: ReportEngineRow[];
+  /* Google AI Overview across the audit (aiOverview.ts overviewTallyFromRows, 2026-10-19). DISPLAY ONLY.
+     Absent on an older payload: the chip then reads "not recorded". */
+  overview?: OverviewTally | null;
   competitors: string[];         // real brands AI named instead (aggregate)
   /* The audit-wide leaders WITH their grouped mention counts, most-named first. Optional so a
      caller built before this existed still renders — absent means the document simply omits the
@@ -110,7 +113,7 @@ export interface AiAuditReportData {
        ranCount = how many runs the engine answered in; named = how many of those it named you in
        (a count now; older payloads carried a boolean, handled in the renderer). ran=false → the
        engine never returned an answer. */
-    perEngine?: { label: string; ran: boolean; ranCount?: number; runs?: number; notShown?: number; overviewRecorded?: boolean; counted?: boolean; named: number | boolean; recommended?: number; cited?: number; rivals: string[]; rivalsRaw?: number; citations: { domain: string; url: string }[] }[];
+    perEngine?: { label: string; ran: boolean; ranCount?: number; runs?: number; notShown?: number; overviewRecorded?: boolean; overviewAnswers?: Array<{ text: string; truncated: boolean; full: string }>; counted?: boolean; named: number | boolean; recommended?: number; cited?: number; rivals: string[]; rivalsRaw?: number; citations: { domain: string; url: string }[] }[];
     /* INTERNAL winnability signal (rendered only when `internal` is true — never on the client doc).
        Structural match for QuestionWinnability in auditReport.ts (kept inline to avoid a circular
        type import between this file and auditReport.ts). */
@@ -1230,6 +1233,24 @@ function quickReply(o: { engine: string; label: string; tag?: string; named: boo
           <div class="q4-reply q4-reply--${kind}">${head}${miss}${list}${note}${snip}</div>`;
 }
 
+/** Google AI Overview beside the two engine cards (2026-10-19): one slim chip under them, never a third
+ *  percentage — the overview is display only and is not in the score. Named N of the searches where
+ *  Google showed one / "No AI Overview shown" / "not recorded" (overviewChipText). */
+function quickOverviewChip(h: HookReportSummary): string {
+  const t = overviewTally(h.overviews ?? []);
+  return `<div class="q4-aio q4-aio--${overviewChipTone(t)}" data-aio="${aioDataState(t)}" title="${esc(overviewChipTitle(t))}">${q4Mark('ai_overview')}<span class="q4-aio-t">${esc(overviewChipText(t))}</span><span class="q4-aio-n">${esc(AI_OVERVIEW_CONTEXT_LABEL)}</span></div>`;
+}
+/** The full report's chip (2026-10-19): Google AI Overview beside the ChatGPT / Gemini figures, named N of
+ *  the searches that showed one. Display only, said so on the chip. */
+function reportOverviewChip(t: OverviewTally | null | undefined): string {
+  const tt = t ?? null;
+  return `<p class="aio-chip aio-chip--${overviewChipTone(tt)}" data-aio="${aioDataState(tt)}" title="${esc(overviewChipTitle(tt))}"><span class="aio-chip-t">${esc(overviewChipText(tt))}</span><span class="aio-chip-n">${esc(AI_OVERVIEW_CONTEXT_LABEL)}</span></p>`;
+}
+/** shown / none / unknown — a test hook on every overview chip. */
+function aioDataState(t: OverviewTally | null): string {
+  return t && t.shown > 0 ? 'shown' : overviewChipValue(t) === NO_OVERVIEW_TEXT ? 'none' : 'unknown';
+}
+
 /** The six-answer report's body (chat view, Paul 2026-10-13): the dark score section, ONE plain line of
  *  figures, then one chat window per question — the question as a grey bubble, each engine's reply under
  *  it listing who it named — then the honest "quick check" note and the website section. The caller
@@ -1263,6 +1284,7 @@ export function renderQuickCheckReport(h: HookReportSummary, businessName: strin
         </div>
         <div class="q4-engs">${engines}
         </div>
+        ${quickOverviewChip(h)}
       </div>
       <p class="q4-verdict">${esc(c.headline)}</p>
     </section>`;
@@ -1392,6 +1414,11 @@ const QUICK_REPORT_CSS = `
   .q4-eng-v{font-size:46px;font-weight:900;letter-spacing:-.05em;line-height:1;margin-top:12px;color:#fff}
   .q4-eng-v.q4-t-red{color:#ff6b75} .q4-eng-v.q4-t-amber{color:#ffbe3d} .q4-eng-v.q4-t-green{color:#4ade80}
   .q4-eng-s{font-size:13px;color:#bdbec3;margin-top:6px}
+  .q4-aio{grid-column:1/-1;display:flex;flex-wrap:wrap;align-items:center;gap:8px 10px;border-radius:14px;padding:9px 14px;border:1px dashed rgba(255,255,255,.18);background:rgba(255,255,255,.04);font-size:14px;color:#fff}
+  .q4-aio .q4-mk{width:22px;height:22px}
+  .q4-aio-t{font-weight:750}
+  .q4-aio--named .q4-aio-t{color:#4ade80} .q4-aio--not_named .q4-aio-t{color:#ff6b75}
+  .q4-aio-n{font-size:12px;color:#bdbec3}
   .q4-verdict{margin:16px 2px 0;font-size:18px;font-weight:750;color:#fff;letter-spacing:-.01em;padding-left:12px;border-left:3px solid #fcc933}
   .q4-mk{display:inline-flex;align-items:center;justify-content:center;flex:none;border-radius:50%;width:22px;height:22px;vertical-align:middle}
   .q4-mk svg{width:62%;height:62%;display:block}
@@ -1863,6 +1890,7 @@ export function renderReportHtml(d: AiAuditReportData): string {
         <div class="pv-sub">${d.named} of ${d.total} measured ${plural(d.total, "answer")}${working ? ` &middot; ${working}` : ""}</div>
       </div>
       ${cards ? `<div class="pv-cards">${cards}</div>` : ""}
+      ${reportOverviewChip(d.overview)}
       ${reading ? `<p class="pv-read">${esc(reading)}</p>` : ""}
     </section>
     <div class="pv-split"></div>`;
@@ -1900,19 +1928,29 @@ export function renderReportHtml(d: AiAuditReportData): string {
      shows one or says none was shown), so every older report keeps its two columns. Display only:
      the note under the table says it is not counted. */
   const aioOf = (q: NonNullable<typeof d.questionBreakdown>[number]) => q.perEngine?.find((pe) => pe.label === AI_OVERVIEW_ROW_LABEL);
-  const aioRecorded = qOther.some((q) => aioOf(q)?.overviewRecorded === true);
+  /* Always shown since 2026-10-19 (Paul: "AI Overview everywhere"); a search the audit holds nothing
+     about reads "–", like an engine that did not answer. */
+  const aioRecorded = true;
   const aioMark = (q: NonNullable<typeof d.questionBreakdown>[number]): string => {
     const a = aioOf(q);
     if (a && a.ran) return qMark(engNamed(q, AI_OVERVIEW_ROW_LABEL));
     if (a && (a.notShown ?? 0) > 0) return `<span class="qm qm-none" title="${NO_OVERVIEW_TEXT}">none</span>`;
     return qMark(null);
   };
+  /* Google AI Overview's own answer under the row (2026-10-19), folded: only where one was captured, quoted
+     as captured (aiOverview.ts readable text, never a word written), labelled Google AI Overview. */
+  const aioText = (q: NonNullable<typeof d.questionBreakdown>[number]): string => {
+    const ans = (aioOf(q)?.overviewAnswers ?? []).slice(0, 3);
+    if (!ans.length) return "";
+    return `<details class="qrow-aio-ans"><summary>${esc(AI_OVERVIEW_LABEL)} said</summary>${ans.map((a) => `<p>&ldquo;${esc(a.full || a.text)}&rdquo;</p>`).join("")}</details>`;
+  };
   const questionsList = qOther.length ? `
     <section class="qlist">
       <div class="sec-eyebrow">${d.paidSummary ? "Question by question" : "The other questions we asked"}</div>
+      ${d.paidSummary ? "" : reportOverviewChip(d.overview)}
       <div class="qrow qrow-head"><span class="qrow-q"></span>${SCORED_LABELS.map((l) => `<span class="qrow-e">${l}</span>`).join("")}${aioRecorded ? `<span class="qrow-e qrow-aio">AI Overview</span>` : ""}</div>
-      ${qOther.map((q) => `<div class="qrow"><span class="qrow-q">${esc(q.question)}</span>${SCORED_LABELS.map((l) => `<span class="qrow-e">${qMark(engNamed(q, l))}</span>`).join("")}${aioRecorded ? `<span class="qrow-e qrow-aio">${aioMark(q)}</span>` : ""}</div>`).join("")}
-      ${aioRecorded ? `<p class="qlist-note">Google&rsquo;s AI Overview is shown for context and is not counted in the score. &ldquo;none&rdquo; = ${NO_OVERVIEW_TEXT.toLowerCase()} for that search.</p>` : ""}
+      ${qOther.map((q) => `<div class="qrow"><span class="qrow-q">${esc(q.question)}</span>${SCORED_LABELS.map((l) => `<span class="qrow-e">${qMark(engNamed(q, l))}</span>`).join("")}${aioRecorded ? `<span class="qrow-e qrow-aio">${aioMark(q)}</span>` : ""}</div>${aioText(q)}`).join("")}
+      ${aioRecorded ? `<p class="qlist-note">Google&rsquo;s AI Overview is shown for context and is not counted in the score. &ldquo;none&rdquo; = ${NO_OVERVIEW_TEXT} for that search; &ldquo;&ndash;&rdquo; = not recorded.</p>` : ""}
     </section>` : "";
 
   /* 🔴 THE NAME REFUSAL — IT REPLACES THE HERO. Paul's words, 2026-09-15, and the phrasing is his
@@ -2050,7 +2088,7 @@ export function renderReportHtml(d: AiAuditReportData): string {
     if (!e.ran) {
       /* Google AI Overview on a new audit: the queue recorded that Google showed none — a result,
          said as one. Anything else (and every old audit) keeps "Didn't appear". */
-      const none = (e.notShown ?? 0) > 0 ? NO_OVERVIEW_TEXT : 'Didn&rsquo;t appear';
+      const none = (e.notShown ?? 0) > 0 ? NO_OVERVIEW_TEXT : e.label === AI_OVERVIEW_ROW_LABEL ? NOT_RECORDED_TEXT : 'Didn&rsquo;t appear';
       return `<div class="qb-eng"><div class="qb-eng-head"><span class="qb-eng-name">${esc(e.label)}</span><span class="qb-eng-empty">${none}</span></div></div>`;
     }
     // named is a COUNT now (across runs); older payloads carried a boolean.
@@ -2138,7 +2176,15 @@ export function renderReportHtml(d: AiAuditReportData): string {
     const sources = e.citations.length
       ? `<div class="qb-eng-line"><span class="qb-slabel">Sources:</span> ${e.citations.map((c) => `<a class="qb-cite" href="${esc(c.url)}" target="_blank" rel="noopener noreferrer nofollow">${esc(c.domain)}</a>`).join(" ")}</div>`
       : `<div class="qb-eng-line"><span class="qb-none">No sources cited.</span></div>`;
-    return `<div class="qb-eng"><div class="qb-eng-head"><span class="qb-eng-name">${esc(e.label)}</span>${state}${uncounted}</div>${split}${rivals}${sources}</div>`;
+    /* Google AI Overview (2026-10-19): Google's own answer, quoted as captured (spaces restored, Google's
+       controls cut, never a word written — aiOverview.ts). Only on the overview row; one block per distinct
+       answer across runs, at most three; the whole overview behind "Read the full overview". */
+    const aioAnswers = (e.overviewAnswers ?? []).slice(0, 3).map((a) => {
+      const lead = a.text || a.full.slice(0, 420);
+      const more = a.full && a.full.length > lead.length + 20;
+      return `<div class="qb-aio-ans"><span class="qb-aio-k">${esc(AI_OVERVIEW_LABEL)} said</span>&ldquo;${esc(lead)}${a.truncated || more ? " &hellip;" : ""}&rdquo;${more ? `<details><summary>Read the full overview</summary>${esc(a.full)}</details>` : ""}</div>`;
+    }).join("");
+    return `<div class="qb-eng"><div class="qb-eng-head"><span class="qb-eng-name">${esc(e.label)}</span>${state}${uncounted}</div>${split}${rivals}${sources}${aioAnswers}</div>`;
   };
 
   // INTERNAL-ONLY winnability chip + the numbers behind it. Rendered only when d.internal === true,
@@ -2389,6 +2435,13 @@ ${REPORT_CHROME_CSS_CORE}
   .qb-split{ display:flex; gap:14px; flex-wrap:wrap; font-size:11px; color:var(--ink); margin:2px 0 1px; }
   .qb-split-i b{ font-weight:800; }
   .qm-none{ font-size:10px; color:#8a8f98; font-weight:600; }
+  .aio-chip{ display:inline-flex; flex-wrap:wrap; align-items:center; gap:4px 8px; margin:10px 0 4px; padding:4px 10px; border-radius:999px; border:1px dashed #c9ccd2; background:#f6f7f9; font-size:12px; color:#374151; }
+  .aio-chip-t{ font-weight:700; }
+  .aio-chip--named .aio-chip-t{ color:#15803d; } .aio-chip--not_named .aio-chip-t{ color:#b91c1c; }
+  .aio-chip-n{ font-size:11px; color:#6b7280; }
+  .qb-aio-ans{ margin:6px 0 0; padding:8px 10px; border-left:3px solid #d1d5db; background:#f9fafb; border-radius:6px; font-size:12px; line-height:1.55; color:#374151; }
+  .qb-aio-ans summary{ cursor:pointer; color:#6b7280; font-size:11px; margin-top:4px; }
+  .qb-aio-k{ display:block; font-size:10px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:#6b7280; margin-bottom:3px; }
   .qlist-note{ font-size:11px; color:#6b7280; margin:8px 0 0; font-style:italic; }
   .qb-uncounted{ font-size:10px; color:var(--muted); font-style:italic; margin-left:6px; }
   .qb-rlabel{ font-weight:700; color:var(--ink); font-size:12px; margin-right:2px; }
@@ -2664,6 +2717,10 @@ ${REPORT_CHROME_CSS_PRINT}
   .qm-yes{background:var(--green-tint);color:var(--green)}
   .qm-no{background:var(--red-tint-2);color:var(--red)}
   .qm-na{background:var(--blue-tint);color:var(--faint)}
+  .qrow-aio-ans{margin:-2px 0 8px;font-size:12.5px;color:var(--muted)}
+  .qrow-aio-ans summary{cursor:pointer;font-size:11.5px;font-weight:600;color:var(--faint)}
+  @media print{ .qrow-aio-ans::details-content{content-visibility:visible;display:block} .qrow-aio-ans summary{display:none} }
+  .qrow-aio-ans p{margin:6px 0 0;padding:8px 10px;border-left:3px solid var(--line);background:rgba(0,0,0,.02);border-radius:6px;line-height:1.55;max-width:72ch}
   @media(max-width:560px){.qlist{padding-left:18px;padding-right:18px}.qrow-e{width:52px;flex-basis:52px}}
 
   /* Chat card — official mark in the header + as the avatar, a numbered list of the real firms. */

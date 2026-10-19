@@ -67,7 +67,7 @@ export async function loadOutreachRowScores(leads: RowScoreLead[]): Promise<Reco
       businessName: a.business_name ?? l.business_name ?? '', businessType: a.business_type ?? '',
       locationText: a.location_text ?? '', specialisms: '', isAggregatorUrl, ownWebsite: website || undefined,
     });
-    out[l.id] = rowScoreFromPerEngine(report?.perEngine ?? null);
+    out[l.id] = rowScoreFromPerEngine(report?.perEngine ?? null, report?.overview ?? null);
   }
   return out;
 }
