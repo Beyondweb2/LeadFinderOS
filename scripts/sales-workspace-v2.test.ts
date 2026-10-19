@@ -134,7 +134,7 @@ console.log('\n── 3. THE CALL TAB ──');
   ok(/lead_set_follow_up/.test(read('src/lib/nextActionWrite.ts')) && /_expected/.test(read('src/lib/nextActionWrite.ts')), 'stale-write protection kept (lead_set_follow_up _expected)');
   ok(spokenSeconds(FOLLOW_UP_VOICE_NOTE) >= 18 && spokenSeconds(FOLLOW_UP_VOICE_NOTE) <= 32 && FOLLOW_UP_VOICE_NOTE.includes(QUICK_CLOSE_PROMISE), `the "how does it work?" voice note is ~20–30 s (${spokenSeconds(FOLLOW_UP_VOICE_NOTE)} s) and says the guarantee as written`);
   // removed 2026-10-06 (sales-team-today, Paul): the coaching block beside the voice note (VoiceCoaching).
-  ok(!/data-testid="voice-coaching"|VoiceCoaching/.test(ui) && /\{tab === 'voice' && <VoiceNoteScriptBody leadId=\{leadId\} currentAuditId=\{p\.auditId\} \/>\}/.test(ui), 'the Voice note tab is the voice note alone — no coaching block beside it');
+  ok(!/data-testid="voice-coaching"|VoiceCoaching/.test(ui) && /\{tab === 'voice' && <VoiceNoteScriptBody leadId=\{leadId\} playbook=\{p\} \/>\}/.test(ui), 'the Voice note tab is the voice note alone — no coaching block beside it');
 }
 
 console.log('\n── 4. DETAILS ──');

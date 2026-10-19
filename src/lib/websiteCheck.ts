@@ -257,6 +257,11 @@ export function summariseWebsiteCheck(row: StoredCrawlForAudit | null | undefine
     seen.add(e.id);
     issues.push(e);
   }
+  /* SAID ONCE (2026-10-19): the key-page check names the main pages with no heading / description, so the site-wide
+     counts of the same thing stay in the deep audit and out of this list. */
+  if (issues.some((x) => x.id === 'vs_key_page_basics')) {
+    for (const id of ['missing_h1', 'missing_description']) { const k = issues.findIndex((x) => x.id === id); if (k >= 0) issues.splice(k, 1); }
+  }
   issues.sort((a, b) => SEV_RANK[a.severity] - SEV_RANK[b.severity] || b.count - a.count);
   const signals = row.result?.signals;
   const pagesRead = audit.coverage?.pagesCrawled ?? (typeof signals?.pagesChecked === 'number' ? signals.pagesChecked : null);
@@ -360,11 +365,25 @@ const PLAIN_LINE: Record<string, string> = {
   no_phone: 'There is no phone number on the site',
   slow_pages: 'Your pages are slow to load',
   robots_disallowed_pages: 'Some pages are closed off to search tools',
+  /* The AI-visibility page checks (visibilityChecks.ts, 2026-10-19). */
+  vs_business_schema: 'The hidden business details on your site leave out your phone number or address',
+  vs_faq_no_schema: 'Your FAQs are not marked up for search tools',
+  vs_address_not_on_key_pages: 'Your address is not on your homepage or main pages',
+  vs_name_inconsistent: 'Your business name is written different ways across the site',
+  vs_town_swapped_pages: 'Several of your pages are the same text with only the town or service swapped',
+  vs_duplicate_faq_pages: 'Several FAQ pages repeat the same questions',
+  vs_duplicate_homepage: 'There is a second copy of your homepage that Google can list',
+  vs_raw_link_markup: 'A broken link shows its code on your pages',
 };
 
 /** The plain words for an issue (no technical terms). */
 export function plainIssueTitle(i: WebsiteIssue): string {
   if (i.id === 'missing_h1' && /homepage/i.test(i.title)) return 'Your homepage has no main heading';
+  if (i.id === 'vs_key_page_basics') {
+    const h = /H1/.test(i.title), d = /description/.test(i.title);
+    return h && d ? 'Some main pages have no main heading or description' : h ? 'Some main pages have no main heading' : 'Some main pages have no description for Google';
+  }
+  if (i.id === 'vs_address_not_on_key_pages' && /homepage/i.test(i.title)) return 'Your address is not on your homepage';
   if (i.id.startsWith('robots_blocks_pages_')) return 'Parts of your site are closed off to an AI or search tool';
   if (i.id.startsWith('robots_blocks_')) return 'Your site tells an AI or search tool not to read it';
   return PLAIN_LINE[i.id] ?? i.title;

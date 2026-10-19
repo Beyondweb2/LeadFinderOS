@@ -1,261 +1,68 @@
 /* ════════════════════════════════════════════════════════════════════════════════════════════════
-   VOICE-NOTE SCRIPT — the Inbox / lead popup button (Paul, 2026-09-26).
+   VOICE-NOTE SCRIPT — the Inbox button and the call screen's Voice note tab (Paul, 2026-09-26; rebuilt 2026-10-19).
 
-   Opens a panel with the lead's newest saved script (a read, no spend), or generates one: the
-   `voice-note-script` function picks ONE missed hook result (question + engine + that engine's
-   competitors), reuses the saved site research, writes the script and checks it. Paul copies it and
-   records the note himself.
-
-   ⛔ NOTHING SENDS FROM HERE. There is no send callback, no composer write and no message row — only
-   Copy (to the clipboard) and Regenerate. scripts/voice-note-script.test.ts pins this.
+   🔴 NO GENERATING (Paul, 2026-10-19): the note is built from the SAME playbook as the call script
+      (src/lib/voiceNoteFromCall.ts) — the AI result, who was named instead, the website-issues line — in a
+      spoken tone, and shown at once. No model call, no cost, nothing stored, nothing to regenerate. It changes
+      when the evidence changes, so it can never be out of date.
+   ⛔ NOTHING SENDS FROM HERE. Only Copy (to the clipboard). Paul records the note himself.
+   ⛔ Same gate as the call script (callScriptGate.ts): no valid completed AI check → no note.
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
-import { LeadAiResultChips } from '@/components/LeadAiResultChips';
-import { useCallback, useEffect, useState } from 'react';
-import { AlertTriangle, Check, Copy, Loader2, Mic, RefreshCw } from 'lucide-react';
+import { useCallback, useState } from 'react';
+import { Check, Copy, Loader2, Lock, Mic } from 'lucide-react';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
-import { Callout, DialogHero, LoadState } from '@/components/operator/ui';
+import { DialogHero } from '@/components/operator/ui';
 import { Button } from '@/components/ui/button';
-import { invokeEdge, edgeErrorMessage } from '@/lib/edgeInvoke';
+import { LeadAiResultChips } from '@/components/LeadAiResultChips';
 import { cn } from '@/lib/utils';
+import { useColdCallPlaybook } from '@/hooks/useColdCallPlaybook';
+import { callScriptGate } from '@/lib/callScriptGate';
+import { voiceNoteFromCall } from '@/lib/voiceNoteFromCall';
+import type { ColdCallPlaybook } from '@/lib/coldCallPlaybook';
 
 export const VOICE_NOTE_SCRIPT_LABEL = 'Voice-note script';
 
-interface FindingRecord { id: string; kind: string; title: string; source: string; details: string[] }
-interface ScriptRow {
-  id: string;
-  audit_id: string | null;
-  hook_question_index: number | null;
-  hook_question: string;
-  hook_engine: string;
-  competitors: string[];
-  findings: FindingRecord[];
-  site_mode: 'findings' | 'clean' | 'unread' | 'profile' | 'no_website';
-  site_source: 'own_site' | 'directory_profile' | 'social_profile' | 'none' | null;
-  site_source_label: string | null;
-  research_basis: { plan?: string | null; usedFullCrawl?: boolean | null; status?: string | null; generatedAt?: string | null; sourceCrawlAt?: string | null; sources?: string[] } | null;
-  script: string;
-  word_count: number | null;
-  problems: string[];
-  warnings: string[];
-  operator_note: string | null;
-  generator_version: number | null;
-  generated_at: string;
-  /** The 20-second version (shortVoiceNote), derived by the function from this row. Never stored. */
-  short_script?: string | null;
-}
-/** What a Regenerate would use today (the function's loadHookEvidence), or why it cannot write one. */
-type CurrentBasis =
-  | { ok: true; auditId: string; questionIndex: number; engine: string; engineLabel: string; question: string; competitors: string[] }
-  | { ok: false; error: string; detail: string };
-interface LatestResponse { ok: true; script: ScriptRow | null; versions: number; current?: CurrentBasis; stale?: boolean; generatorVersion?: number }
-interface GenerateResponse { ok: true; script: ScriptRow }
-
-const ENGINE_LABEL: Record<string, string> = { gemini: 'Gemini', chatgpt: 'ChatGPT' };
-const SITE_MODE_TEXT: Record<Exclude<ScriptRow['site_mode'], 'findings'>, string> = {
-  clean: 'Nothing strong found on the site, so the script uses the "nothing obviously broken" line.',
-  unread: 'The site could not be read, so the script says nothing specific about it.',
-  profile: 'The website on record is a profile page, not their own site. It was not researched.',
-  no_website: 'No website on record.',
-};
-const SOURCE_TEXT: Record<string, string> = { page: 'live site', full_crawl: 'full crawl', crawl_check: 'crawl check', audit: 'AI audit' };
-
-/** ~2.4 spoken words a second, Paul's relaxed pace. */
-const seconds = (words: number) => Math.round(words / 2.4);
-const when = (iso: string | null | undefined) => (iso ? new Date(iso).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '');
-
-function Row({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div className="grid grid-cols-[88px_1fr] gap-2 text-xs">
-      <span className="text-muted-foreground">{label}</span>
-      <div className="min-w-0 break-words">{children}</div>
-    </div>
-  );
-}
-
-/** The panel's content: the saved script (or Write), Copy, Regenerate, word count, "Based on". Shared by the
- *  dialog below and the Cold Call Playbook's Voice note tab (2026-09-27). Nothing sends from here. */
-export function VoiceNoteScriptBody({ leadId, currentAuditId }: { leadId: string; currentAuditId?: string | null }) {
-  const [row, setRow] = useState<ScriptRow | null>(null);
-  const [versions, setVersions] = useState(0);
-  const [loading, setLoading] = useState(true);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+/** The note itself, from a built playbook. */
+export function VoiceNoteFromCall({ p, leadId }: { p: ColdCallPlaybook; leadId: string }) {
+  const note = voiceNoteFromCall(p);
   const [copied, setCopied] = useState(false);
-  const [current, setCurrent] = useState<CurrentBasis | null>(null);
-  const [stale, setStale] = useState(false);
-  const [latestVersion, setLatestVersion] = useState<number | null>(null);
-
-  // The newest saved script: a read of our own table, no fetch, no model.
-  useEffect(() => {
-    let live = true;
-    setLoading(true);
-    invokeEdge<LatestResponse>('voice-note-script', { action: 'latest', lead_id: leadId })
-      .then((d) => { if (live) { setRow(d.script); setVersions(d.versions); setCurrent(d.current ?? null); setStale(d.stale === true); setLatestVersion(d.generatorVersion ?? null); } })
-      .catch((e) => { if (live) setError(edgeErrorMessage(e, 'Could not load the saved script')); })
-      .finally(() => { if (live) setLoading(false); });
-    return () => { live = false; };
-  }, [leadId]);
-
-  const generate = useCallback(async () => {
-    setBusy(true); setError(null); setCopied(false);
-    try {
-      const d = await invokeEdge<GenerateResponse>('voice-note-script', { action: 'generate', lead_id: leadId, regenerate_of: row?.id ?? null });
-      setRow(d.script); setVersions((v) => v + 1); setStale(false);
-    } catch (e) {
-      setError(edgeErrorMessage(e, 'Could not write the script'));
-    } finally {
-      setBusy(false);
-    }
-  }, [leadId, row?.id]);
-
   const copy = useCallback(async () => {
-    if (!row) return;
-    try { await navigator.clipboard.writeText(row.script); setCopied(true); setTimeout(() => setCopied(false), 1500); }
-    catch { setError('Could not copy. Select the text and copy it by hand.'); }
-  }, [row]);
-  const [copiedShort, setCopiedShort] = useState(false);
-  const copyShort = useCallback(async () => {
-    if (!row?.short_script) return;
-    try { await navigator.clipboard.writeText(row.short_script); setCopiedShort(true); setTimeout(() => setCopiedShort(false), 1500); }
-    catch { setError('Could not copy. Select the text and copy it by hand.'); }
-  }, [row]);
-
-  const basis = row?.research_basis;
-  const outOfDate = !!row && (stale || (!!currentAuditId && !!row.audit_id && row.audit_id !== currentAuditId));
-  const oldStyle = !!row && latestVersion !== null && (row.generator_version ?? 0) < latestVersion;
-  const words = row?.word_count ?? 0;
+    try { await navigator.clipboard.writeText(note.text); setCopied(true); setTimeout(() => setCopied(false), 1500); } catch { /* select and copy by hand */ }
+  }, [note.text]);
   return (
-    <div data-testid="voice-note-script-body">
-        {loading ? (
-          <LoadState compact label="Loading…" />
-        ) : (
-          <div className="space-y-3">
-            {error && (
-              <Callout tone="amber" icon={AlertTriangle} className="text-xs">{error}</Callout>
-            )}
-
-            {row ? (
-              <>
-                {/* ⛔ AN OUT-OF-DATE SCRIPT IS NEVER PRESENTED AS CURRENT (Paul, 2026-09-27). The function compares
-                    the result this script quotes with the one a Regenerate would pick now. The playbook also
-                    passes the audit its AI opportunity reads. Nothing regenerates on its own (a model call). */}
-                {outOfDate && (
-                  <div className="rounded-xl border-2 border-red-500/60 bg-red-500/10 p-2.5 text-xs text-red-800 dark:text-red-200" data-testid="voice-note-out-of-date">
-                    <p className="text-sm font-bold uppercase tracking-wide">Voice note out of date</p>
-                    <p className="mt-0.5">
-                      {current && 'detail' in current
-                        ? current.detail
-                        : current?.ok && current.auditId !== row.audit_id
-                          ? 'A newer audit exists. This script quotes an earlier audit’s search and competitors.'
-                          : 'The best missed search has changed since this script was written.'}
-                    </p>
-                    {current?.ok && (
-                      <p className="mt-1 break-words">
-                        Latest: <span className="font-semibold">{current.engineLabel}</span>, “{current.question}”
-                        {current.competitors.length > 0 && <> · named {current.competitors.join(', ')}</>}
-                      </p>
-                    )}
-                    {(!current || current.ok) && (
-                      <Button size="sm" className="mt-2 h-8 gap-1" onClick={generate} disabled={busy}>
-                        {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />} Regenerate using latest audit
-                      </Button>
-                    )}
-                  </div>
-                )}
-                {!outOfDate && oldStyle && (
-                  <p className="rounded-xl bg-amber-500/10 px-3 py-2 text-xs text-amber-800 ring-1 ring-inset ring-amber-500/25 dark:text-amber-200" data-testid="voice-note-old-style">
-                    {(row.generator_version ?? 0) < 3
-                      ? 'Written with the older script style (longer, and it ends by offering to explain changes). Regenerate for the short version that asks who controls the website.'
-                      : (row.generator_version ?? 0) < 5
-                        ? 'Written before the voice note said who is speaking. Regenerate so it opens with your name and Findable.'
-                        : 'Written before the plain-English style update. Regenerate for the newer wording.'}
-                  </p>
-                )}
-                {row.problems.length > 0 && (
-                  <Callout tone="amber" icon={AlertTriangle} title="Check this script before recording:" className="text-xs">
-                    <ul className="ml-4 list-disc">{row.problems.map((p) => <li key={p}>{p}</li>)}</ul>
-                  </Callout>
-                )}
-                <LeadAiResultChips leadId={leadId} />
-                <div className={cn('rounded-xl bg-muted/40 p-3 ring-1 ring-inset ring-border/50', outOfDate && 'opacity-60')}>
-                  {outOfDate && <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Old script, from the earlier result</p>}
-                  <p className="whitespace-pre-wrap break-words text-sm leading-relaxed">{row.script}</p>
-                </div>
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="text-xs text-muted-foreground">{words} words · about {seconds(words)}s</span>
-                  <div className="ml-auto flex gap-2">
-                    <Button size="sm" variant="outline" className="h-8 gap-1" onClick={copy}>
-                      {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />} {copied ? 'Copied' : 'Copy'}
-                    </Button>
-                    <Button size="sm" className="h-8 gap-1" onClick={generate} disabled={busy}>
-                      {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />} Regenerate
-                    </Button>
-                  </div>
-                </div>
-                {row.warnings.length > 0 && <p className="text-[11px] text-muted-foreground">{row.warnings.join(' ')}</p>}
-                {row.short_script && !outOfDate && (
-                  <div className="space-y-1.5 rounded-xl p-3 ring-1 ring-inset ring-border/60" data-testid="voice-note-short">
-                    <div className="flex items-center gap-2">
-                      <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Short version · about 20s</p>
-                      <Button size="sm" variant="outline" className="ml-auto h-7 gap-1 px-2 text-xs" onClick={copyShort}>
-                        {copiedShort ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />} {copiedShort ? 'Copied' : 'Copy'}
-                      </Button>
-                    </div>
-                    <p className="whitespace-pre-wrap break-words text-sm leading-relaxed">{row.short_script}</p>
-                    <p className="text-[11px] text-muted-foreground">Same search and competitors, no website point. For a quick first note.</p>
-                  </div>
-                )}
-
-                <div className="space-y-1.5 border-t border-border/60 pt-2">
-                  <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Based on</p>
-                  <Row label="Search">
-                    <span className="font-medium">{ENGINE_LABEL[row.hook_engine] ?? row.hook_engine}</span>: “{row.hook_question}”
-                  </Row>
-                  <Row label="Named instead">{row.competitors.join(', ')}</Row>
-                  <Row label="Website">
-                    {row.site_mode === 'findings' ? (
-                      <ul className="space-y-1">
-                        {row.findings.map((f) => (
-                          <li key={f.id}>
-                            <span className="font-medium">{f.title}</span>
-                            <span className="text-muted-foreground"> · {f.source}</span>
-                            {f.details.length > 0 && <span className="block text-muted-foreground">{f.details.join(' · ')}</span>}
-                          </li>
-                        ))}
-                      </ul>
-                    ) : row.site_mode === 'profile'
-                      ? `The website on record is a ${row.site_source_label ?? 'directory'} profile, not their own site. It was not researched.`
-                      : SITE_MODE_TEXT[row.site_mode]}
-                  </Row>
-                  {basis && (basis.sources?.length ?? 0) > 0 && (
-                    <Row label="Research">
-                      <span className="text-muted-foreground">
-                        {basis.sources!.map((s) => SOURCE_TEXT[s] ?? s).join(', ')}
-                        {basis.plan === 'reuse' || basis.plan === 'revalidated' ? ', saved' : ''}
-                        {basis.generatedAt ? ` · ${when(basis.generatedAt)}` : ''}
-                      </span>
-                    </Row>
-                  )}
-                  {row.operator_note && <Row label="Note"><span className="text-muted-foreground">{row.operator_note}</span></Row>}
-                  <p className="text-[10px] text-muted-foreground">Written {when(row.generated_at)}{versions > 1 ? ` · version ${versions}` : ''}</p>
-                </div>
-              </>
-            ) : (
-              <div className="space-y-2">
-                <p className="text-sm text-muted-foreground">
-                  No script yet. It uses one AI search this business was missed in, the competitors named for that exact search,
-                  and the strongest real finding from the website research.
-                </p>
-                <Button size="sm" className="gap-1" onClick={generate} disabled={busy}>
-                  {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Mic className="h-3.5 w-3.5" />}
-                  {busy ? 'Writing… (can take ~30s if the site needs reading)' : 'Write the script'}
-                </Button>
-              </div>
-            )}
-          </div>
-        )}
+    <div className="space-y-3" data-testid="voice-note-script-body">
+      <LeadAiResultChips leadId={leadId} />
+      <div className="space-y-1.5 rounded-xl bg-muted/40 p-3 text-sm leading-relaxed ring-1 ring-inset ring-border/50" data-testid="voice-note-text">
+        {note.lines.map((l) => <p key={l} className="break-words">{l}</p>)}
+      </div>
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-xs text-muted-foreground">{note.words} words · about {note.seconds}s</span>
+        <Button size="sm" variant="outline" className="ml-auto h-8 gap-1" onClick={() => void copy()} data-testid="voice-note-copy">
+          {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />} {copied ? 'Copied' : 'Copy'}
+        </Button>
+      </div>
+      {note.note && <p className="text-[11px] text-muted-foreground" data-testid="voice-note-in-touch">{note.note}</p>}
+      <p className="text-[11px] text-muted-foreground">Built from the same AI result and website check as the call script. Nothing is sent from here.</p>
     </div>
   );
+}
+
+/** The panel's content for a lead: loads the playbook (reads only) and shows the note, or why there is none yet. */
+export function VoiceNoteScriptBody({ leadId, playbook }: { leadId: string; playbook?: ColdCallPlaybook | null }) {
+  const q = useColdCallPlaybook(leadId, !playbook);
+  const p = playbook ?? q.data ?? null;
+  if (!p && q.isLoading) return <p className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" />Loading…</p>;
+  if (!p) return <p className="text-sm text-muted-foreground">{q.isError ? 'Could not load this lead.' : 'Lead not found.'}</p>;
+  const gate = callScriptGate(leadId, p);
+  if (!gate.show) {
+    return (
+      <div className="space-y-1 rounded-xl border border-dashed border-border bg-muted/30 p-3" data-testid="voice-note-locked">
+        <p className="flex items-center gap-2 text-sm font-semibold"><Lock className="h-4 w-4 text-muted-foreground" />{gate.title}</p>
+        <p className="text-xs text-muted-foreground">{gate.detail}</p>
+      </div>
+    );
+  }
+  return <VoiceNoteFromCall p={p} leadId={leadId} />;
 }
 
 function VoiceNoteScriptPanel({ leadId, open, onOpenChange }: { leadId: string; open: boolean; onOpenChange: (v: boolean) => void }) {
@@ -271,8 +78,7 @@ function VoiceNoteScriptPanel({ leadId, open, onOpenChange }: { leadId: string; 
 
 export function VoiceNoteScriptButton({ leadId, compact, prominent, className }: { leadId: string; compact?: boolean; prominent?: boolean; className?: string }) {
   const [open, setOpen] = useState(false);
-  /* PROMINENT: the Inbox's open 24h window, beside the voice-note recorder (Paul, 2026-09-26). A real
-     button, not a pill; closed-window threads do not get one at all. */
+  /* PROMINENT: the Inbox's open 24h window, beside the voice-note recorder (Paul, 2026-09-26). */
   if (prominent) {
     return (
       <>

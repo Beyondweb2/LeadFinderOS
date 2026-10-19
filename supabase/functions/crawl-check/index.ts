@@ -31,8 +31,11 @@ import {
 } from "../../../src/lib/siteEvidence.ts";
 import {
   resolveCrawlMode, STANDARD_CRAWL, cleanRequestSource, toServedUrl, isPageUrl, internalPageLinks,
-  orderSitemapChildren, isIntakeCrawlRequest,
+  orderSitemapChildren, isIntakeCrawlRequest, processPage,
 } from "../../../src/lib/fullCrawl.ts";
+import { buildVisibilityChecks, type VisibilityChecks } from "../../../src/lib/visibilityChecks.ts";
+import { crawlStartUrl } from "../../../src/lib/crawlUrl.ts";
+import { CALL_SCREEN_CRAWL_SOURCE, CALL_SCREEN_CRAWL_WINDOW_MS, callScreenCrawlRefusal } from "../../../src/lib/callScreenCrawl.ts";
 import { leadCrawlWriteDecision, storedCrawlFailed, STORED_CRAWL_STATE_COLUMNS } from "../../../src/lib/crawlWriteRule.ts";
 import { activeJobFor, createCrawlJob, jobCounts, kickCrawlWorker } from "../_shared/crawl-job.ts";
 import { crawlPageCapFor, prospectCrawlReuse, PROSPECT_CRAWL_PAGE_CAP } from "../../../src/lib/prospectCrawl.ts";
@@ -280,6 +283,42 @@ Deno.serve(async (req) => {
       }
       return json({ ok: true, job: { ...jobRow, counts, label: progressLabel(jobRow.status as JobStatus, counts) }, result, full });
     }
+    /* ══ THE CALL SCREEN'S ONE-TIME START (2026-10-19, src/lib/callScreenCrawl.ts) ══════════════════════════
+       A signed-in person's call screen opened on a lead with an AI result and no website check: start the QUICK
+       check once (the deep check queues behind it, below). Refused quietly (200, `skipped`) unless the check is
+       genuinely missing, no crawl runs, nobody started one for this lead in the last few minutes, and this person
+       is under the per-person limit. The lead check above already proved a salesperson works this lead. */
+    const callScreen = !internal && body?.requested_from === CALL_SCREEN_CRAWL_SOURCE;
+    if (callScreen) {
+      const csLead = typeof body?.lead_id === "string" ? body.lead_id : null;
+      if (body?.url || body?.audit_id || body?.run_id || body?.mode === "full") return json({ ok: false, error: "lead_website_only" }, 400);
+      const since = new Date(Date.now() - CALL_SCREEN_CRAWL_WINDOW_MS).toISOString();
+      const [leadQ, auditQ, rowQ, lastQ, mineQ] = csLead ? await Promise.all([
+        service.from("outreach_leads").select("website").eq("id", csLead).maybeSingle(),
+        service.from("ai_audits").select("id, ai_audit_runs!inner(status)").eq("lead_id", csLead).in("ai_audit_runs.status", ["complete", "capped"]).limit(1),
+        service.from("lead_crawl_checks").select("lead_id").eq("lead_id", csLead).limit(1),
+        service.from("lead_activity").select("created_at").eq("lead_id", csLead).eq("kind", "crawl_run").eq("data->>source", CALL_SCREEN_CRAWL_SOURCE).order("created_at", { ascending: false }).limit(1),
+        service.from("lead_activity").select("id", { count: "exact", head: true }).eq("actor_user_id", userId).eq("kind", "crawl_run").eq("data->>source", CALL_SCREEN_CRAWL_SOURCE).gte("created_at", since),
+      ]) : [null, null, null, null, null];
+      if (csLead && [leadQ, auditQ, rowQ, lastQ, mineQ].some((q) => q?.error)) return json({ ok: false, error: "lookup_failed" }, 503);
+      const csWebsite = (leadQ?.data as { website?: string | null } | null)?.website ?? null;
+      const refusal = callScreenCrawlRefusal({
+        leadId: csLead, website: csWebsite,
+        hasCompletedAudit: ((auditQ?.data as unknown[] | null) ?? []).length > 0,
+        hasCrawlRow: ((rowQ?.data as unknown[] | null) ?? []).length > 0,
+        jobRunning: csLead && csWebsite ? !!(await activeJobFor(service, csLead, crawlStartUrl(csWebsite))) : false,
+        lastStartMs: (() => { const t = (lastQ?.data as Array<{ created_at: string }> | null)?.[0]?.created_at; return t ? Date.parse(t) : null; })(),
+        startsByPersonInWindow: mineQ?.count ?? 0,
+        nowMs: Date.now(),
+      });
+      if (refusal) return json({ ok: true, skipped: refusal });
+      /* Recorded BEFORE the crawl, so a second screen opening this lead now is refused (one at a time per lead). */
+      const { error: actErr } = await service.from("lead_activity").insert({
+        lead_id: csLead, actor_user_id: userId, kind: "crawl_run", data: { source: CALL_SCREEN_CRAWL_SOURCE, url: crawlStartUrl(String(csWebsite)) },
+      });
+      if (actErr) return json({ ok: false, error: "could_not_record_start" }, 503);
+    }
+
     /* The crawl row is filed under the book: an admin's own id (as always), or the LEAD'S owner for a
        salesperson — never the rep's id, which owns no rows. */
     const rowOwnerId: string | null = salesLead ? salesLead.user_id : userId;
@@ -338,7 +377,8 @@ Deno.serve(async (req) => {
     try {
       const u = new URL(/^https?:\/\//i.test(rawUrl) ? rawUrl : `https://${rawUrl}`);
       origin = u.origin;
-      homeUrl = u.href;
+      /* The site's own homepage, never the deep page a listing linked to (crawlUrl.crawlStartUrl, 2026-10-19). */
+      homeUrl = crawlStartUrl(u.href);
     } catch {
       return json({ ok: false, error: `That doesn't look like a website: ${rawUrl}` }, 400);
     }
@@ -454,6 +494,7 @@ Deno.serve(async (req) => {
        fetched below — no extra request (src/lib/salesInsightsInline.ts). Best-effort: it never fails the crawl. */
     let insights: SalesInsights | null = null;
     let contentTrust: ContentTrust | null = null;
+    let visibility: VisibilityChecks | null = null;
     const checkedPages: Array<{ url: string; kind: ReturnType<typeof crawlPageKind>; words: number; hasH1: boolean; readable: boolean }> = [];
     const thinPageUrls: string[] = [];
     /* Carried out of the block below so the SITE-INFO extraction (services from titles, towns from
@@ -626,6 +667,14 @@ Deno.serve(async (req) => {
       } catch (e) {
         console.error(`[crawl-check] content checks failed for ${homeUrl}:`, (e as Error).message);
       }
+      /* THE AI-VISIBILITY PAGE CHECKS (2026-10-19, src/lib/visibilityChecks.ts): markup, FAQs, address, the name, copied
+         pages, key-page basics, link code shown as text — read off the SAME pages, no extra request. Best-effort. */
+      try {
+        const evPages = [home, ...readableSamples].map((r, i) => processPage({ url: r.url, finalUrl: r.finalUrl || r.url, status: r.status || 200, xRobotsTag: r.xRobotsTag ?? null, html: r.html, isHome: i === 0 }, servedUrl));
+        visibility = buildVisibilityChecks({ servedUrl, pages: evPages.map((p) => ({ url: p.d.finalUrl, d: p.d, b: p.b, t: p.t, footer: p.footer ?? null, nav: p.nav ?? null })), partial: true });
+      } catch (e) {
+        console.error(`[crawl-check] visibility checks failed for ${homeUrl}:`, (e as Error).message);
+      }
     }
 
     const signals: CrawlSignals = {
@@ -711,6 +760,7 @@ Deno.serve(async (req) => {
       checked_at: checkedAt, url: homeUrl, town: town || null, signals, verdict, siteInfo,
       ...(insights ? { insights } : {}),
       ...(contentTrust ? { contentTrust } : {}),
+      ...(visibility ? { visibility } : {}),
       ...(evidence ? { evidence, evidenceVersion: SITE_EVIDENCE_VERSION } : {}),
       ...(homeFetch ? { homeFetch } : {}),
     };
@@ -777,7 +827,7 @@ Deno.serve(async (req) => {
        Skipped for a paying client (their crawls are exhaustive and started on purpose), while one already runs, when a
        fresh deep check is saved, and while AUTO_DEEP_MAX_RUNNING automatic checks are already queued. Never fails this. */
     let autoDeepJob: string | null = null;
-    if (leadId && internal && stored === true && home && home.html && signals.fetchFailed !== true) {
+    if (leadId && (internal || callScreen) && stored === true && home && home.html && signals.fetchFailed !== true) {
       try {
         const { data: lr } = await service.from("outreach_leads").select("id, user_id, amount_paid, status").eq("id", leadId).maybeSingle();
         const running = lr && !isClientLead(lr) ? await activeJobFor(service, leadId, homeUrl) : true;

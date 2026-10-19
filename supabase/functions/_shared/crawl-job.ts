@@ -17,7 +17,8 @@ import {
   extractSitemapLocs, clusterUrls, pageSimilarity, buildVerdict, crawlPageKind, THIN_WORDS,
   CRAWL_CHECK_VERSION, visibleText, type CrawlSignals,
 } from "../../../src/lib/crawlCheck.ts";
-import { buildSiteAudit, mergeContentTrust, type SiteAuditPage } from "../../../src/lib/siteAudit.ts";
+import { buildSiteAudit, mergeContentTrust, mergeVisibilityChecks, type SiteAuditPage } from "../../../src/lib/siteAudit.ts";
+import { buildVisibilityChecks, VISIBILITY_MAX_PAGES, type VisibilityChecks } from "../../../src/lib/visibilityChecks.ts";
 import { buildSalesInsights, type SalesInsights } from "../../../src/lib/salesInsights.ts";
 import { planCappedBatch } from "../../../src/lib/prospectCrawl.ts";
 import { extractSiteInfo, SITE_INFO_VERSION } from "../../../src/lib/siteInfo.ts";
@@ -577,12 +578,33 @@ export async function finalizeCrawlJob(service: Client, jobId: string): Promise<
     }
   } catch (e) { console.error("[crawl-job] content checks failed:", (e as Error).message); }
 
+  /* THE AI-VISIBILITY PAGE CHECKS (2026-10-19, src/lib/visibilityChecks.ts) — the same builder the quick check runs, over
+     the shallowest VISIBILITY_MAX_PAGES pages read, with their kept text (read here only, in pages of 200). Merged into the
+     stored audit (one copy per finding) and kept beside the result. Best-effort: never fails the crawl. */
+  let visibility: VisibilityChecks | null = null;
+  try {
+    const vRows = [...done].sort((a, b) => a.depth - b.depth || a.id - b.id).slice(0, VISIBILITY_MAX_PAGES);
+    const texts = new Map<number, string>();
+    for (let i = 0; i < vRows.length; i += 200) {
+      const ids = vRows.slice(i, i + 200).map((r) => r.id);
+      const { data: tr } = await service.from("crawl_urls").select("id,t:evidence->t").in("id", ids);
+      for (const x of (tr ?? []) as Array<{ id: number; t: string | null }>) if (typeof x.t === "string") texts.set(x.id, x.t);
+    }
+    visibility = buildVisibilityChecks({
+      servedUrl,
+      pages: vRows.map((r) => ({ url: r.final_url || r.url, d: r.evidence!.d, b: r.evidence!.b ?? null, t: texts.get(r.id) ?? null, footer: r.evidence!.footer ?? null, nav: r.evidence!.nav ?? null })),
+      partial: !!full.coverage?.capped || done.length > VISIBILITY_MAX_PAGES,
+    });
+    if (full.audit) full.audit = mergeVisibilityChecks(full.audit, visibility);
+  } catch (e) { console.error("[crawl-job] visibility checks failed:", (e as Error).message); }
+
   const checkedAt = new Date().toISOString();
   const result = {
     version: CRAWL_CHECK_VERSION, siteInfoVersion: SITE_INFO_VERSION, checked_at: checkedAt, url: job.start_url, town,
     signals, verdict, siteInfo, job_id: jobId,
     ...(insights ? { insights } : {}),
     ...(contentTrust ? { contentTrust } : {}),
+    ...(visibility ? { visibility } : {}),
     ...(evidence ? { evidence, evidenceVersion: SITE_EVIDENCE_VERSION } : {}),
   };
   /* ⛔ THE ONE WEBSITE CHECK (2026-10-15, src/lib/websiteCheck.ts): the summary every screen reads, built from THIS

@@ -66,7 +66,15 @@ export const CLEAN_SITE_LINE = 'No serious website issues found.';
 export const CALL_SCRIPT_ISSUES_HEADING = 'Website issues to mention';
 /** A check older than this is flagged in the script. */
 export const CALL_SCRIPT_CHECK_OLD_DAYS = 14;
-export const CALL_SCRIPT_CHECK_OLD_NOTE = 'Check is old, press Run again before the call';
+export const CALL_SCRIPT_CHECK_OLD_NOTE = 'Press Run again before the call';
+/** THE WEBSITE LINE (Paul, 2026-10-19): said after a miss when the completed crawl found serious issues — "multiple" for two
+ *  or more, "an issue" for one — then the issue titles. ⛔ "could be preventing", never "is why". */
+export const ISSUES_FOUND_MANY_LINE = 'I looked into why this could be happening and I found multiple issues with your site that could be preventing you from being recommended.';
+export const ISSUES_FOUND_ONE_LINE = 'I looked into why this could be happening and I found an issue with your site that could be preventing you from being recommended.';
+/** The rep's note while the crawl is still running (the call screen's Website crawl section says "Checking the website…"). */
+export const CHECKING_NOTE = 'The website is being checked now. The website line appears here when it is done; until then say nothing about the site.';
+/** The rep's note when there is no website check to go on. Replaces "Website not checked yet. No usable website check …" (2026-10-19). */
+export const NOT_CHECKED_NOTE = 'The website has not been checked, so say nothing about the site. Keep to the AI result.';
 /** Said after a point that came from the site's own pages (a service, the town, a phone number): the Findable half
  *  of REAL ISSUE → WHY IT MATTERS → HOW WE IMPROVE IT. Once, after the last point, never per point. */
 export const FIX_TAIL = "It's the sort of thing we'd fix as part of the work.";
@@ -142,7 +150,7 @@ export function spokenFinding(f: ScriptFinding): string {
 }
 
 /* ── The input ─────────────────────────────────────────────────────────────────────────────────── */
-export type FindingsStatus = 'findings' | 'no_website' | 'profile' | 'not_crawled' | 'crawl_stale' | 'unreadable' | 'clean';
+export type FindingsStatus = 'findings' | 'no_website' | 'profile' | 'not_crawled' | 'checking' | 'crawl_stale' | 'unreadable' | 'clean';
 
 export interface CallScriptInput {
   /** "a plumber in Rugby" — the search said plainly (coldCallPlaybook builds it). */
@@ -246,11 +254,13 @@ export function buildCallScript(i: CallScriptInput): CallScript {
   const found: string[] = [];
   const more: string[] = [];
   let foundNote: string | null = null;
-  let checklist: readonly string[] | null = null;
+  /* The "what we make sure a site has" list went with the clean-site talk (2026-10-19): kept as a field, always empty. */
+  const checklist: readonly string[] | null = null;
   const sources: CallScript['found']['sources'] = [];
   const intro = why ? why + '.' : i.evidenceKind === 'named' ? 'I had a look at your website as well.' : 'I had a quick look at your website as well.';
   if (i.findingsStatus === 'findings' && serious.length) {
-    opener.push(intro);
+    /* After a miss: Paul's line (2026-10-19), one issue or several. Named / no AI result: the plain look-at-the-site line. */
+    opener.push(i.evidenceKind === 'gap' ? (serious.length >= 2 ? ISSUES_FOUND_MANY_LINE : ISSUES_FOUND_ONE_LINE) : intro);
     const shown = serious.slice(0, CALL_SCRIPT_ISSUE_LINES);
     /* TITLES ONLY (Paul, 2026-10-17): no page counts, no URLs, no minor points, no sixth issue. */
     found.push(...shown.map(plainIssueTitle));
@@ -264,14 +274,15 @@ export function buildCallScript(i: CallScriptInput): CallScript {
     found.push('That page belongs to ' + (i.site.label ?? 'the directory') + ", so there's a lot less for AI to go on about what you do and where.");
     foundNote = 'Never call the profile their website.';
   } else if (i.findingsStatus === 'clean') {
-    /* The pages were read and nothing serious was wrong: ONE plain line, the minor points behind the tap. */
-    if (why) opener.push(why + '.');
-    /* Completed with nothing serious: SAY NOTHING about the site (Paul, 2026-10-17). Minor points stay out. */
-    if (why) checklist = AI_SETUP_CHECKLIST;
+    /* Completed with NO serious issue (Paul, 2026-10-19): the "I had a look into why…" line goes too, and nothing at all is
+       said about the site. Minor points stay out. */
     foundNote = 'The website check found no serious issue, so say nothing about the site; do not invent one.';
+  } else if (i.findingsStatus === 'checking') {
+    foundNote = CHECKING_NOTE;
+  } else if (i.findingsStatus === 'unreadable') {
+    foundNote = (check ? check.headline.replace(/.s*$/, '') : 'The website check failed') + ', so say nothing about the site.';
   } else {
-    foundNote = (check && (i.findingsStatus === 'not_crawled' || i.findingsStatus === 'unreadable') ? check.headline + ' ' : '')
-      + 'No usable website check for this lead, so say nothing about the site. Keep to the AI result.';
+    foundNote = NOT_CHECKED_NOTE;
   }
 
   const bridge = [

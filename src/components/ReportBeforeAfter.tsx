@@ -29,7 +29,7 @@ import { ArrowLeft, Loader2, ArrowUp, ArrowDown, Minus, CircleHelp, SlidersHoriz
 import { renderReportHtml, type AiAuditReportData } from '@/lib/aiAuditReportHtml';
 import type { QueueRow, RunRow } from '@/lib/auditReport';
 import type { QueueRowLite } from '@/lib/baselineView';
-import { compareMeasurements, type MeasurementComparison, type Movement } from '@/lib/measurementCompare';
+import { compareMeasurements, googleAiExtraFigure, type MeasurementComparison, type Movement } from '@/lib/measurementCompare';
 import { MeasurementCompareTable } from '@/components/MeasurementCompareTable';
 import { usePersistedState } from '@/hooks/usePersistedState';
 import {
@@ -539,6 +539,11 @@ export function ReportBeforeAfter({
           whose question lists therefore could not line up row by row. That is what made
           like-for-like reading impossible. The joined table goes ABOVE the documents because it
           is the thing being compared; the documents stay for eyeballing the client's-eye view. */}
+      {comparison && (() => {
+        /* The new scoring method's figure, as extra information only — the comparison above keeps the baseline's method. */
+        const x = googleAiExtraFigure(comparison, split.before, split.after, { businessName });
+        return x ? <p className="text-xs text-muted-foreground" data-testid="google-ai-extra">With Google AI counted (extra information, not the guarantee figure): {x.beforePct ?? '–'}% → {x.afterPct ?? '–'}%</p> : null;
+      })()}
       {comparison && comparison.questions.length > 0 && (
         <MeasurementCompareTable
           comparison={comparison}

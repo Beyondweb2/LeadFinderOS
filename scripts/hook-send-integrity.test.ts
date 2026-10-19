@@ -183,18 +183,18 @@ await (async () => {
     const html = renderReportHtml({ ...(d as object), generatedAtLabel: '26 September 2026' } as never);
     const text = html.replace(/<style[\s\S]*?<\/style>/g, '').replace(/<script[\s\S]*?<\/script>/g, '').replace(/<[^>]+>/g, ' ');
     const label = g.every(Boolean) ? '6/6 hook report' : 'gap hook report';
-    ok(!/Google AI(?! Overview)/.test(text) && /Gemini/.test(text), `E: the ${label} says Gemini and never "Google AI"`);
+    ok(!/Google AI \d+\/3\b|asked Google AI|Google AI (?:missed|didn['’]t|did not|named you)/.test(text) && /Gemini/.test(text), `E: the ${label} says Gemini and never "Google AI"`);
     // Soft redesign (2026-10-06): the verdict covers the whole score; the featured question's answer cards name their engine.
     if (d?.hook?.gap) ok(/^You're (not being named|being named)/.test(hookReportCopy(d.hook, BIZ).headline) && /Gemini/i.test(text.slice(text.indexOf('didn'))), 'E: the verdict covers the whole check and each chat window names Gemini on its reply');
   }
   const root = resolve(import.meta.dirname, '..');
   const strip = (src: string) => src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
   const card = strip(readFileSync(resolve(root, 'src/components/HookVisibilityCard.tsx'), 'utf8') + readFileSync(resolve(root, 'src/components/HookVisibilityView.tsx'), 'utf8'));
-  ok(!/Google AI(?! Overview)/.test(card), 'E: the Inbox AI visibility card never says "Google AI" for Gemini');
+  ok(!/Google AI \d+\/3\b|asked Google AI|Google AI (?:missed|didn['’]t|did not|named you)/.test(card), 'E: the Inbox AI visibility card never says "Google AI" for Gemini');
   const inbox = readFileSync(resolve(root, 'src/pages/Inbox.tsx'), 'utf8');
   ok(inbox.includes('Gemini {geminiNamed}/{geminiAnswers}') && !inbox.includes('Google AI {geminiNamed}'), 'E: the Inbox list pill reads "Gemini n/m"');
   const playbook = strip(readFileSync(resolve(root, 'src/lib/coldCallPlaybook.ts'), 'utf8'));
-  ok(!/Google AI(?! Overview)/.test(playbook), 'E: the cold-call playbook script says Gemini, never "Google AI" (2026-10-13)');
+  ok(!/Google AI \d+\/3\b|asked Google AI|Google AI (?:missed|didn['’]t|did not|named you)/.test(playbook), 'E: the cold-call playbook script says Gemini, never "Google AI" (2026-10-13)');
 }
 
 if (failures) throw new Error(`${failures} hook send-integrity checks failed`);

@@ -34,7 +34,7 @@
 import { cellNamed, type NamedCell, type NamedContext } from './namedSignal.ts';
 import { articleTrade } from './templateVars.ts';
 import { RIVALS_REQUIRED } from './rivalHook.ts';
-import { auditRecordsOverviews, overviewFor, type AiOverviewView } from './aiOverview.ts';
+import { auditRecordsOverviews, overviewFor, type AiOverviewView, type ScoringMethod } from './aiOverview.ts';
 
 /** The engines a hook asks, in DISPLAY order. Each queue row lists these, so every question
  *  runs on both. */
@@ -320,6 +320,20 @@ export interface HookScore {
    *  the hook pick or the 6/6. One entry per question (2026-10-19); an audit that holds nothing about
    *  the overview reads 'not_recorded' (aiOverview.ts overviewReadingOf). */
   overviews: HookOverview[];
+  /** THE DISPLAYED SCORE, VERSIONED (aiOverview.ts scoringMethodFor, 2026-10-19). Method 1 = the fields above.
+   *  Method 2 adds Google AI on every question where Google showed an AI answer (none shown = left out, never a
+   *  penalty). ⛔ Display only: send gates, the hook pick and allNamed keep reading method 1. */
+  scored: HookScored;
+}
+
+export interface HookScored {
+  method: ScoringMethod;
+  named: number;
+  expected: number;
+  /** Null until complete (same rule as `percent`). */
+  percent: number | null;
+  /** Google AI on this audit: answers shown / named in, and whether they are in this score. */
+  googleAi: { shown: number; named: number; notShown: number; inScore: boolean };
 }
 
 export interface HookOverview extends AiOverviewView {
@@ -344,6 +358,8 @@ export interface HookScoreContext {
   /** Operator/report cleanliness rules for competitor names (self-exclusion, suppression). Applied
    *  to each cell's own list. It never moves names between cells. */
   cleanCompetitors?: (names: string[]) => string[];
+  /** The audit's scoring method (aiOverview.ts scoringMethodFor(audit.created_at)). Absent = 1. */
+  scoringMethod?: ScoringMethod;
 }
 
 const PENDING_ROW = new Set(['pending', 'running', 'processing', 'queued']);
@@ -464,7 +480,18 @@ export function scoreHookRun(state: unknown, rows: readonly HookScoreRow[], ctx:
   const pick: HookPick | null = storedGap
     ? { questionIndex: storedGap.questionIndex, question: storedGap.question, engine: storedGap.engine, label: storedGap.label, competitors: [...storedGap.competitors], answerExcerpt: storedGap.answerExcerpt }
     : pickHookResult(misses, { town: ctx.town ?? '', trade: ctx.trade ?? '' });
+  const gaShown = overviews.filter((o) => o.state === 'shown').length;
+  const gaNamed = overviews.filter((o) => o.state === 'shown' && o.named === true).length;
+  const method: ScoringMethod = ctx.scoringMethod === 2 ? 2 : 1;
+  const sNamed = method === 2 ? named + gaNamed : named;
+  const sExpected = method === 2 ? expected + gaShown : expected;
+  const scored: HookScored = {
+    method, named: sNamed, expected: sExpected,
+    percent: complete && sExpected > 0 ? Math.round((sNamed / sExpected) * 100) : null,
+    googleAi: { shown: gaShown, named: gaNamed, notShown: overviews.filter((o) => o.state === 'not_shown').length, inScore: method === 2 },
+  };
   return {
+    scored,
     shape, expected, valid, named,
     failed: count('failed'), pending: count('pending'),
     complete,

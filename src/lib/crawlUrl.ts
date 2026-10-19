@@ -206,3 +206,22 @@ export function classifySitemapUrl(raw: string, servedUrl: string): string | nul
     return u.href;
   } catch { return null; }
 }
+
+/* ── WHERE A SITE CHECK STARTS (2026-10-19) ───────────────────────────────────────────────────────
+   A lead's saved website is often a page, not the homepage (Google's listing links to
+   "/driving-lessons-canterbury/", or carries "?utm_campaign=gmb"). The crawl read that page AS the homepage,
+   so a finding quoted the Canterbury page's heading as "your homepage's main heading". A site check now starts
+   at the site's own homepage, "/". ⛔ Except on a host where the site lives UNDER a path (sites.google.com/view/x,
+   x.wixsite.com/site, user.github.io/repo): there the first path part is the site, and it is kept. */
+const PATH_HOSTED = /(?:^|\.)(?:sites\.google\.com|wixsite\.com|github\.io|weebly\.com|webs\.com|jimdosite\.com|square\.site)$/i;
+
+export function crawlStartUrl(raw: string): string {
+  let u: URL;
+  try { u = new URL(/^https?:\/\//i.test(raw) ? raw : `https://${raw}`); } catch { return raw; }
+  if (PATH_HOSTED.test(u.hostname)) {
+    const parts = u.pathname.split('/').filter(Boolean);
+    const keep = u.hostname.toLowerCase().endsWith('sites.google.com') ? parts.slice(0, 2) : parts.slice(0, 1);
+    return `${u.origin}/${keep.length ? keep.join('/') + '/' : ''}`;
+  }
+  return `${u.origin}/`;
+}

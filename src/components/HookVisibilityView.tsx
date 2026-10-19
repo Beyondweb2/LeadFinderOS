@@ -168,8 +168,8 @@ function StatusPill({ r, best }: { r: HookResult; best: boolean }) {
 /** The overview's pill: grey, because it is context, not a scored result. */
 function OverviewPill({ o }: { o: HookScore['overviews'][number] }) {
   return (
-    <span className="inline-flex items-center gap-1 whitespace-nowrap rounded border border-dashed border-border bg-muted px-1.5 py-0.5 text-[11px] leading-none text-muted-foreground" data-testid="hook-overview-pill" data-state={o.state} title="Google AI Overview: shown for context, not counted in the score">
-      {o.state === 'not_shown' ? <span className="font-medium">{overviewStatusWord(o)}</span> : <><span className="font-medium">AI Overview</span>
+    <span className="inline-flex items-center gap-1 whitespace-nowrap rounded border border-dashed border-border bg-muted px-1.5 py-0.5 text-[11px] leading-none text-muted-foreground" data-testid="hook-overview-pill" data-state={o.state} title="Google AI: Google’s own AI answer for this search">
+      {o.state === 'not_shown' ? <span className="font-medium">{overviewStatusWord(o)}</span> : <><span className="font-medium">Google AI</span>
       <span className="font-semibold">{overviewStatusWord(o)}</span></>}
     </span>
   );
@@ -318,7 +318,7 @@ export function HookVisibilityView({ card, inFlight, state, report, onRunNew, ru
   ) : null;
 
   const call = variant === 'call';
-  const overallTone = score.complete ? percentTone(score.percent) : 'none';
+  const overallTone = score.complete ? percentTone(score.scored.percent) : 'none';
   const engineSplit = (
     <div className={cn('flex flex-wrap gap-1.5 text-xs', call && 'gap-2')} data-testid="hook-engine-split">
       {score.perEngine.map((t) => (
@@ -336,17 +336,17 @@ export function HookVisibilityView({ card, inFlight, state, report, onRunNew, ru
           {!inFlight && t.pending > 0 && <span className="text-muted-foreground"> · {t.pending} not run</span>}
         </span>
       ))}
-      {/* Google AI Overview beside them (2026-10-19): display only, dashed, "not scored". */}
-      <AiOverviewChip tally={overviewTally(score.overviews)} showNotScored className={cn(call && 'px-2.5 py-1 text-sm')} testId="hook-overview-chip" />
+      {/* Google AI beside them (2026-10-19): in the score on a method-2 audit (solid), else "not in score" (dashed). */}
+      <AiOverviewChip tally={overviewTally(score.overviews)} showNotScored inScore={score.scored.googleAi.inScore} className={cn(call && 'px-2.5 py-1 text-sm')} testId="hook-overview-chip" />
     </div>
   );
 
   // The headline, right-aligned beside the eyebrow. A percentage only when complete.
-  const headline = score.complete && score.percent !== null ? (
+  const headline = score.complete && score.scored.percent !== null ? (
     <span className={cn('whitespace-nowrap text-sm', call && 'rounded-xl px-2.5 py-1 ring-1 ring-inset', call && SCORE_TONE_CLASS[overallTone].chip)} data-testid="hook-headline" data-tone={overallTone}>
-      <span className={cn('font-bold leading-none tabular-nums', call ? 'text-2xl' : 'text-lg', SCORE_TONE_CLASS[overallTone].text)}>{score.percent}%</span>{' '}
+      <span className={cn('font-bold leading-none tabular-nums', call ? 'text-2xl' : 'text-lg', SCORE_TONE_CLASS[overallTone].text)}>{score.scored.percent}%</span>{' '}
       <span className="font-medium">named</span>{' '}
-      <span className="text-muted-foreground tabular-nums">({score.named}/{score.expected})</span>
+      <span className="text-muted-foreground tabular-nums">({score.scored.named}/{score.scored.expected})</span>
     </span>
   ) : inFlight ? (
     <span className="inline-flex items-center gap-1.5 whitespace-nowrap text-xs" data-testid="hook-headline">

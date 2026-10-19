@@ -34,7 +34,8 @@
    import this from an edge function without fixing that first.
    ============================================================ */
 import { buildBaselineView, type QueueRowLite } from './baselineView.ts';
-import { allCellsModelRead, type NamedCell, type NamedMode } from './namedSignal.ts';
+import { allCellsModelRead, type NamedCell, type NamedMode, type NamedContext } from './namedSignal.ts';
+import { overviewTallyFromRows } from './aiOverview.ts';
 import { SCORED_ENGINES, citationIsClient, domainOfSafe } from './auditReport.ts';
 
 /** Measured sampling swing, in percentage points — see the header. Movement inside this band is
@@ -482,5 +483,21 @@ export function compareMeasurements(
     headline,
     engineBalance,
     engineShort,
+  };
+}
+
+/* ══ THE NEW-METHOD FIGURE, AS EXTRA INFORMATION ONLY (2026-10-19) ════════════════════════════════════
+   The guarantee comparison above is judged by the BASELINE's own method — ChatGPT + Gemini for every baseline
+   created before Google AI was scored (aiOverview.ts GOOGLE_AI_SCORED_SINCE), which is every client today. This is
+   the same two sides with Google AI added where Google showed an AI answer: shown beside the verdict, never
+   deciding anything. Null when neither side recorded a Google AI answer. */
+export function googleAiExtraFigure(comparison: MeasurementComparison, beforeRows: QueueRowLite[], afterRows: QueueRowLite[], named?: NamedContext): { beforePct: number | null; afterPct: number | null } | null {
+  const tb = overviewTallyFromRows(beforeRows as never, named);
+  const ta = overviewTallyFromRows(afterRows as never, named);
+  if (!(tb?.shown || ta?.shown)) return null;
+  const pct = (n: number, d: number) => (d > 0 ? Math.round((n / d) * 100) : null);
+  return {
+    beforePct: pct(comparison.before.named + (tb?.named ?? 0), comparison.before.answered + (tb?.shown ?? 0)),
+    afterPct: pct(comparison.after.named + (ta?.named ?? 0), comparison.after.answered + (ta?.shown ?? 0)),
   };
 }

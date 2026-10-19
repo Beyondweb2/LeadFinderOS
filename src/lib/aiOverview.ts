@@ -25,24 +25,41 @@ export const AI_OVERVIEW_ENGINE = 'ai_overview';
 /** The meta key the queue writes on every new question. Mirrors ai-search.ts AI_OVERVIEW_META_KEY. */
 export const AI_OVERVIEW_STAMP_KEY = '_ai_overview';
 /** What every surface calls it. */
-export const AI_OVERVIEW_LABEL = 'Google AI Overview';
+export const AI_OVERVIEW_LABEL = 'Google AI';
 /** The short column / row label the client report uses (auditReport ENGINE_LABELS reads it). */
-export const AI_OVERVIEW_REPORT_LABEL = 'AI Overview';
+export const AI_OVERVIEW_REPORT_LABEL = 'Google AI';
 /** The words when Google showed none for a search. */
-export const NO_OVERVIEW_TEXT = 'No AI Overview shown';
+export const NO_OVERVIEW_TEXT = 'No AI answer shown';
 /** The one-line explanation beside it, for the screens with room. */
-export const NO_OVERVIEW_DETAIL = 'Google did not show an AI Overview for this search.';
+export const NO_OVERVIEW_DETAIL = 'Google did not show an AI answer for this search, so it is left out of the score (not a penalty).';
 /** The words when Google showed an overview and no business name could be READ from it (state 2 of 3:
  *  none shown / shown, names not read / shown, names listed). Only said when the run's names are not
  *  withheld.
  *  ⛔ NEVER "no businesses named" (Paul, 2026-10-11): an empty extraction is not proof the overview named
  *  nobody — the scrape runs text together and the extractor can miss names. Say what we know: an overview
  *  was shown and its names could not be read. Every surface shows Google's own text beside it. */
-export const OVERVIEW_NO_NAMES_TEXT = 'Overview shown, names could not be read';
+export const OVERVIEW_NO_NAMES_TEXT = 'AI answer shown, names could not be read';
 /** The short label on the public report's overview row. */
-export const AI_OVERVIEW_CONTEXT_LABEL = 'Shown for context, not scored';
+export const AI_OVERVIEW_CONTEXT_LABEL = 'Not in score';
 /** Said wherever the overview sits beside a score. */
-export const AI_OVERVIEW_NOT_SCORED = 'Shown for context, not counted in the score.';
+export const AI_OVERVIEW_NOT_SCORED = 'Not in score: this audit was run before Google AI was scored.';
+
+/* ══ GOOGLE AI IN THE SCORE — VERSIONED (Paul, 2026-10-19) ═══════════════════════════════════════════
+   Renamed "Google AI" (was "Google AI Overview") and counted in the named percentage for audits created on or
+   after GOOGLE_AI_SCORED_SINCE: SCORING METHOD 2. Only the searches where Google showed an AI answer count —
+   none shown is left out of the score, never a penalty ("No AI answer shown", grey).
+   ⛔ NOTHING STORED IS REWRITTEN. The method is DERIVED from the audit's own creation time, so every older audit
+      keeps the score it had (method 1, Google AI "not in score"), and a client's guarantee compares like with like:
+      a re-measure is judged by its BASELINE's method (scoringMethodFor(baseline)), the other number shown as extra.
+   ⛔ The send gates, the hook pick and the 6/6 rule read method 1 (scoreHookRun's own fields) — unchanged. */
+export const GOOGLE_AI_SCORED_SINCE = '2026-10-19T08:57:00Z';
+export type ScoringMethod = 1 | 2;
+export function scoringMethodFor(auditCreatedAt: string | null | undefined): ScoringMethod {
+  const t = auditCreatedAt ? Date.parse(auditCreatedAt) : NaN;
+  return Number.isFinite(t) && t >= Date.parse(GOOGLE_AI_SCORED_SINCE) ? 2 : 1;
+}
+export const IN_SCORE_TEXT = 'in score';
+export const NOT_IN_SCORE_TEXT = 'not in score';
 
 /* ══ THE OVERVIEW'S TEXT, READABLE (2026-10-11) ══════════════════════════════════════════════════════
    The actor returns an overview as the page's text run together with NO separators: a sentence glued to
@@ -331,13 +348,14 @@ export function overviewChipTone(t: OverviewTally | null | undefined): OverviewC
 }
 
 /** The tooltip: what the figure means, and that it is not scored. */
-export function overviewChipTitle(t: OverviewTally | null | undefined): string {
-  if (t && t.shown === 0 && t.notShown === 0 && t.pending > 0) return `${AI_OVERVIEW_LABEL}: the searches are still being asked. Not scored.`;
-  if (!t || t.total === 0 || (t.shown === 0 && t.notShown === 0)) return `${AI_OVERVIEW_LABEL}: nothing recorded for this audit. Not scored.`;
-  if (t.shown === 0) return `${AI_OVERVIEW_LABEL}: Google showed no AI Overview for ${t.total === 1 ? 'this search' : `these ${t.total} searches`}. Not scored.`;
+export function overviewChipTitle(t: OverviewTally | null | undefined, inScore = false): string {
+  const tail = inScore ? 'Counted in the score.' : 'Not in the score for this audit.';
+  if (t && t.shown === 0 && t.notShown === 0 && t.pending > 0) return `${AI_OVERVIEW_LABEL}: the searches are still being asked.`;
+  if (!t || t.total === 0 || (t.shown === 0 && t.notShown === 0)) return `${AI_OVERVIEW_LABEL}: nothing recorded for this audit. Not in score.`;
+  if (t.shown === 0) return `${AI_OVERVIEW_LABEL}: Google showed no AI answer for ${t.total === 1 ? 'this search' : `these ${t.total} searches`}, so it is left out of the score (not a penalty).`;
   let s = `${AI_OVERVIEW_LABEL}: shown on ${t.shown} of ${t.total} ${t.total === 1 ? 'search' : 'searches'}, named in ${t.named}.`;
-  if (t.notShown) s += ` ${t.notShown} showed none.`;
-  return s + ' Shown for context, not counted in the score.';
+  if (t.notShown) s += ` ${t.notShown} showed none${inScore ? ' (left out of the score)' : ''}.`;
+  return s + ' ' + tail;
 }
 
 /** The overview across an audit's questions, for a one-line summary. Null when nothing is recorded. */
@@ -365,10 +383,10 @@ export function overviewSummary(views: ReadonlyArray<Pick<AiOverviewView, 'state
 /** The overview as one plain evidence line (call screen, call script): "Google AI Overview: named in 1 of 1
  *  shown (not scored)" / "No AI Overview shown (not scored)" / "Google AI Overview: not recorded". Display
  *  only — never a spoken claim, never part of the score line before it. */
-export function overviewEvidenceLine(t: OverviewTally | null | undefined): string {
+export function overviewEvidenceLine(t: OverviewTally | null | undefined, inScore = false): string {
   const v = overviewChipValue(t);
-  if (t && t.shown > 0) return `${AI_OVERVIEW_LABEL}: named in ${t.named} of ${t.shown} shown (not scored)`;
-  if (v === NO_OVERVIEW_TEXT) return `${NO_OVERVIEW_TEXT} (not scored)`;
+  if (t && t.shown > 0) return `${AI_OVERVIEW_LABEL}: named in ${t.named} of ${t.shown} shown (${inScore ? IN_SCORE_TEXT : NOT_IN_SCORE_TEXT})`;
+  if (v === NO_OVERVIEW_TEXT) return `${NO_OVERVIEW_TEXT} (left out of the score)`;
   if (v === WAITING_TEXT) return `${AI_OVERVIEW_LABEL}: checking…`;
   return `${AI_OVERVIEW_LABEL}: not recorded`;
 }

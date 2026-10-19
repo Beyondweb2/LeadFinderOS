@@ -27,6 +27,22 @@ import { buildColdCallPlaybook, callCardAudit, type ColdCallPlaybook, type Playb
 import type { FindingsSource } from '@/lib/siteFindings';
 import { callAuditProgress, callScriptRecheckMs } from '@/lib/callScriptGate';
 import type { CrawlStoredResult } from '@/lib/crawlResult';
+import { callScreenCrawlInFlight } from '@/hooks/useCallScreenCrawl';
+
+/** The audit crawls its lead's site when it finishes (process-ai-audit-queue) and files the result on the run. A finished
+ *  run with no crawl result yet, younger than this, is a crawl still landing: "Checking the website…", never "not checked". */
+export const AUDIT_CRAWL_PENDING_MS = 20 * 60_000;
+/** Re-read the playbook this often while a website check is under way, so the website line appears by itself. */
+export const WEBSITE_CHECK_RECHECK_MS = 15_000;
+
+/** Is the newest usable audit's own website crawl still landing? Pure. */
+export function auditCrawlPending(audit: PlaybookAuditRow | null, nowMs: number): boolean {
+  const run = [...(audit?.ai_audit_runs ?? [])].filter((r) => RUN_USABLE.has(String(r.status)))
+    .sort((a, b) => Date.parse(b.created_at ?? '') - Date.parse(a.created_at ?? ''))[0];
+  if (!run || run.crawl_check) return false;
+  const at = Date.parse(run.created_at ?? '');
+  return Number.isFinite(at) && nowMs - at < AUDIT_CRAWL_PENDING_MS;
+}
 
 // Several of these tables are not in the generated types; RLS still enforces access.
 const sb = supabase as unknown as { from: (t: string) => any };
@@ -100,10 +116,12 @@ async function loadPlaybook(leadId: string, callerName: string | null): Promise<
       specialisms: '',
       isAggregatorUrl,
       ownWebsite: website || undefined,
+      auditCreatedAt: reportAudit.created_at ?? null,
     });
   }
 
   const newestCrawl = (crawlRes.data ?? [])[0] as { result: CrawlStoredResult | null; created_at: string } | undefined;
+  const nowMs = Date.now();
   const auditRunning = audits.some((a) => (a.ai_audit_runs ?? []).some((r) => r.status === 'pending' || r.status === 'running'));
 
   return buildColdCallPlaybook({
@@ -116,8 +134,9 @@ async function loadPlaybook(leadId: string, callerName: string | null): Promise<
        measurement's crawl is still real site data even though its report link is never shown. */
     runCrawls: runCrawlSources(newestUsableAudit(audits, leadId)),
     leadCrawl: newestCrawl ? { result: newestCrawl.result, createdAtMs: new Date(newestCrawl.created_at).getTime() } : null,
+    crawlPending: !newestCrawl && (auditCrawlPending(newestUsableAudit(audits, leadId), nowMs) || callScreenCrawlInFlight(leadId)),
     messages: msgRes.rows,
-    nowMs: Date.now(),
+    nowMs,
     callerName,
   });
 }
@@ -219,6 +238,8 @@ export function useColdCallPlaybook(leadId: string | null, enabled: boolean) {
     retry: 1,
     /* The script is locked until the check is in (callScriptGate.ts): while it is queued or running, read again
        so the script appears by itself. Reads only, as above. */
-    refetchInterval: (query) => (leadId ? callScriptRecheckMs(leadId, query.state.data) : false),
+    refetchInterval: (query) => (!leadId ? false
+      : query.state.data?.findingsStatus === 'checking' ? WEBSITE_CHECK_RECHECK_MS
+        : callScriptRecheckMs(leadId, query.state.data)),
   });
 }

@@ -1134,8 +1134,10 @@ export type QuickWebsite =
 export function renderQuickCheckHeader(businessName: string, dateLabel: string, h?: HookReportSummary | null): string {
   const s = h?.score;
   const engines = s ? s.perEngine.length : 0;
-  const method = s && s.questions > 0 && engines > 0
-    ? `${s.questions} ${plural(s.questions, 'question')} &times; ${engines} AI ${plural(engines, 'engine')} &times; 1 ask each &middot; ${s.total} ${plural(s.total, 'answer')} total${h?.overviews?.length ? ' &middot; plus Google&rsquo;s AI Overview, shown for context' : ''}`
+  const method = s && s.googleAiInScore && s.questions > 0 && engines > 0
+    ? `${s.questions} ${plural(s.questions, 'question')} &times; ${engines} AI ${plural(engines, 'engine')}, plus Google AI where Google showed an AI answer &middot; ${s.total} ${plural(s.total, 'answer')} scored`
+    : s && s.questions > 0 && engines > 0
+    ? `${s.questions} ${plural(s.questions, 'question')} &times; ${engines} AI ${plural(engines, 'engine')} &times; 1 ask each &middot; ${s.total} ${plural(s.total, 'answer')} total${h?.overviews?.length ? (h?.score?.googleAiInScore ? ' &middot; plus Google AI where Google showed an AI answer' : ' &middot; plus Google AI, shown for context') : ''}`
     : '';
   return `<header class="q4-head">
       <div class="q4-brand"><div class="q4-wm">Findable<span>.</span></div><div class="q4-sub">AI visibility quick audit</div></div>
@@ -1238,7 +1240,10 @@ function quickReply(o: { engine: string; label: string; tag?: string; named: boo
  *  Google showed one / "No AI Overview shown" / "not recorded" (overviewChipText). */
 function quickOverviewChip(h: HookReportSummary): string {
   const t = overviewTally(h.overviews ?? []);
-  return `<div class="q4-aio q4-aio--${overviewChipTone(t)}" data-aio="${aioDataState(t)}" title="${esc(overviewChipTitle(t))}">${q4Mark('ai_overview')}<span class="q4-aio-t">${esc(overviewChipText(t))}</span><span class="q4-aio-n">${esc(AI_OVERVIEW_CONTEXT_LABEL)}</span></div>`;
+  const inScore = h.score?.googleAiInScore === true;
+  /* In the score (method 2): no "not in score" tag; Google showing none says so in grey (aioDataState 'none'). */
+  const tag = inScore ? (t && t.shown > 0 ? 'In score' : '') : AI_OVERVIEW_CONTEXT_LABEL;
+  return `<div class="q4-aio q4-aio--${overviewChipTone(t)}" data-aio="${aioDataState(t)}" data-in-score="${inScore}" title="${esc(overviewChipTitle(t, inScore))}">${q4Mark('ai_overview')}<span class="q4-aio-t">${esc(overviewChipText(t))}</span>${tag ? `<span class="q4-aio-n">${esc(tag)}</span>` : ''}</div>`;
 }
 /** The full report's chip (2026-10-19): Google AI Overview beside the ChatGPT / Gemini figures, named N of
  *  the searches that showed one. Display only, said so on the chip. */
@@ -1308,7 +1313,7 @@ export function renderQuickCheckReport(h: HookReportSummary, businessName: strin
     }).join('');
     const o = ovs.find((x) => x.questionIndex === qi && (x.state === 'shown' || x.state === 'not_shown'));
     const aio = !o ? '' : quickReply({
-      engine: 'ai_overview', label: AI_OVERVIEW_LABEL, tag: 'Display only · not scored',
+      engine: 'ai_overview', label: AI_OVERVIEW_LABEL, tag: s.googleAiInScore ? (o.state === 'not_shown' ? 'Left out of the score' : 'In score') : 'Shown for context · not in score',
       named: o.state === 'not_shown' ? null : !!o.named, names: o.names, answerText: o.answerText, businessName,
       emptyNote: o.state === 'not_shown' ? NO_OVERVIEW_TEXT : (!o.named && !withheld ? OVERVIEW_NO_NAMES_TEXT : undefined),
     });
@@ -1950,7 +1955,7 @@ export function renderReportHtml(d: AiAuditReportData): string {
       ${d.paidSummary ? "" : reportOverviewChip(d.overview)}
       <div class="qrow qrow-head"><span class="qrow-q"></span>${SCORED_LABELS.map((l) => `<span class="qrow-e">${l}</span>`).join("")}${aioRecorded ? `<span class="qrow-e qrow-aio">AI Overview</span>` : ""}</div>
       ${qOther.map((q) => `<div class="qrow"><span class="qrow-q">${esc(q.question)}</span>${SCORED_LABELS.map((l) => `<span class="qrow-e">${qMark(engNamed(q, l))}</span>`).join("")}${aioRecorded ? `<span class="qrow-e qrow-aio">${aioMark(q)}</span>` : ""}</div>${aioText(q)}`).join("")}
-      ${aioRecorded ? `<p class="qlist-note">Google&rsquo;s AI Overview is shown for context and is not counted in the score. &ldquo;none&rdquo; = ${NO_OVERVIEW_TEXT} for that search; &ldquo;&ndash;&rdquo; = not recorded.</p>` : ""}
+      ${aioRecorded ? `<p class="qlist-note">Google AI (Google&rsquo;s own AI answer) is shown for context and is not counted in this report&rsquo;s score. &ldquo;none&rdquo; = ${NO_OVERVIEW_TEXT} for that search; &ldquo;&ndash;&rdquo; = not recorded.</p>` : ""}
     </section>` : "";
 
   /* 🔴 THE NAME REFUSAL — IT REPLACES THE HERO. Paul's words, 2026-09-15, and the phrasing is his
@@ -2049,7 +2054,7 @@ export function renderReportHtml(d: AiAuditReportData): string {
   const waHref = esc(`https://wa.me/${FINDABLE_CONTACT_WHATSAPP}?text=${encodeURIComponent(`Hi, this is ${d.businessName} - I saw my AI visibility report and I'm interested.`)}`);
   /* "Measured on" names what the page measured (2026-10-11): Gemini by its own name again, and Google AI
      Overview only on an audit that recorded overviews (display only, never scored). */
-  const measuredOnHtml = d.hook?.overviews?.length ? "ChatGPT, Gemini and Google AI Overview" : "ChatGPT &amp; Gemini";
+  const measuredOnHtml = d.hook?.overviews?.length ? "ChatGPT, Gemini and Google AI" : "ChatGPT &amp; Gemini";
   const footNoteHtml = d.paidSummary
     ? "A snapshot of where you stand today. After we make changes we ask the same questions again to show your before and after."
     : "A snapshot of where you stand today. If you join, we first measure a full " + BASELINE_QUESTIONS + " questions, then ask those again after the work to show your before and after.";
@@ -2262,7 +2267,7 @@ export function renderReportHtml(d: AiAuditReportData): string {
       <section class="qbreak">
         ${pi === 0 ? `<div class="sec-eyebrow">The detail</div>
         <div class="sec-title">Every question we asked, engine by engine</div>
-        <p class="qb-intro">These are the exact questions we put to the AI engines. For each one, we show what <b>ChatGPT</b>, <b>Gemini</b> and Google&rsquo;s <b>AI Overview</b> each said &mdash; whether they named <b>${esc(d.businessName)}</b>, who they named instead, and the sources they drew on. The engines behave differently, so telling them apart matters.</p>` : ""}
+        <p class="qb-intro">These are the exact questions we put to the AI engines. For each one, we show what <b>ChatGPT</b>, <b>Gemini</b> and <b>Google AI</b> each said &mdash; whether they named <b>${esc(d.businessName)}</b>, who they named instead, and the sources they drew on. The engines behave differently, so telling them apart matters.</p>` : ""}
         <ul class="qb-list">
           ${chunk.map(qCard).join("")}
         </ul>

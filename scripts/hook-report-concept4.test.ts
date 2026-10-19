@@ -126,7 +126,7 @@ const hit = (rivals: string[]): Cell => ({ named: true, rivals });
   ok(quickEngineTone(0, 3) === 'red' && quickEngineTone(1, 3) === 'amber' && quickEngineTone(2, 3) === 'green' && quickEngineTone(3, 3) === 'green' && quickEngineTone(0, 0) === '', 'C: engine colours 0 red, 1 amber, 2-3 green, no denominator none');
   ok(/q4-eng--gpt[\s\S]*?ChatGPT[\s\S]*?q4-eng-v q4-t-amber">33%/.test(r.html) && /q4-eng--gai[\s\S]*?Gemini[\s\S]*?q4-eng-v q4-t-red">0%/.test(r.html), 'C: ChatGPT 1/3 (33%) amber, Gemini 0/3 (0%) red — tint identifies the engine, colour grades the result');
   ok(/class="q4-t-red">17%/.test(r.html), 'C: 17% overall reads red (poor)');
-  ok(!/Google AI(?! Overview)/.test(r.t) && /Gemini/.test(r.t), 'C: the page says Gemini, never "Google AI" (2026-10-11)');
+  ok(!/Google AI \d+\/3\b|asked Google AI|Google AI (?:missed|didn['’]t|did not|named you)/.test(r.t) && /Gemini/.test(r.t), 'C: the page says Gemini, never "Google AI" (2026-10-11)');
 
   /* ── D. CHAT VIEW (Paul, 2026-10-13): one chat window per question — the question as a grey bubble, a reply
      per engine listing who it named. GREEN + tick = the client, RED + cross = a competitor, a miss is

@@ -23,7 +23,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import {
   AGENCY_CONTRACT_QUESTION, AGENCY_COST_QUESTION, AI_SETUP_CHECKLIST, AI_SETUP_SPOKEN_LINE, BRIDGE_LINE, DISCOVERY_QUESTIONS, FIRST_QUESTION, NO_STRONG_ISSUE_LINE,
   PRICE_ANGLE_LINE, afterFirstQuestion, buildCallScript, preselectedPlan, priceAngleApplies, spokenScriptText,
-  type CallScriptInput, type ScriptFinding,
+  ISSUES_FOUND_MANY_LINE, ISSUES_FOUND_ONE_LINE, type CallScriptInput, type ScriptFinding,
 } from '../src/lib/callScript.ts';
 import { buildCallClose } from '../src/lib/callClose.ts';
 import { buildColdCallPlaybook, type PlaybookInput } from '../src/lib/coldCallPlaybook.ts';
@@ -74,7 +74,10 @@ console.log('── 1. Plumber, three competitors, website issues ──');
   ok(s.opener[0] === 'Hi mate, I was looking for a plumber in Rugby, so I asked Gemini and it mentioned Rugby Plumbing Co, Swift Heating and A1 Drains, but not you.', 'opener line 1 is Paul\'s structure, word for word');
   /* 2026-10-15 (Paul): the website issues are a LIST of short lines, not a sentence ("I found a few potential reasons"
      is gone). scripts/website-check.test.ts pins the list's cap, the tap and the clean line. */
-  ok(s.opener[1] === "I had a look into why they were being named and you weren't.", 'opener line 2: why they were named and you weren\'t — no "an issue was found" sentence');
+  /* 2026-10-19 (Paul): two or more issues from the completed crawl → "multiple issues"; exactly one → "an issue". */
+  ok(s.opener[1] === ISSUES_FOUND_MANY_LINE && /multiple issues with your site that could be preventing you from being recommended/.test(s.opener[1]), 'opener line 2: Paul\'s "multiple issues" line after a miss');
+  const oneIssue = buildCallScript(input({ findings: FINDINGS.slice(0, 1) }));
+  ok(oneIssue.opener[1] === ISSUES_FOUND_ONE_LINE && /I found an issue with your site/.test(oneIssue.opener[1]), 'exactly one issue → "I found an issue with your site"');
   ok(!s.opener.join(' ').includes('Fourth Name'), 'only the first three competitors are said');
   ok(s.found.lines.length === FINDINGS.length && s.found.lines.every((l, k) => l === plainIssueTitle({ id: String(FINDINGS[k].kind), title: FINDINGS[k].title } as never)), 'one short line per issue — each in plain words, in the order found');
   ok(!/robots\.txt|noindex/i.test(s.found.lines.join(' ')), '…with no technical terms');
@@ -97,7 +100,7 @@ console.log('── 3. One competitor / none ──');
   ok(one.opener[0] === 'Hi mate, I was looking for a plumber in Rugby, so I asked Gemini and it mentioned Solo Plumbing, but not you.', 'one competitor, said naturally ("it mentioned Solo Plumbing, but not you")');
   const none = buildCallScript(input({ competitors: [] }));
   ok(none.opener[0] === "Hi mate, I was looking for a plumber in Rugby, so I asked Gemini and you didn't come up in the answer it gave.", 'no competitors → "you didn\'t come up", no names');
-  ok(!/mentioned/.test(none.opener.join(' ')) && /I had a look into why you weren't coming up/.test(none.opener[1] ?? ''), '…and never "it mentioned", the reason line has no "they"');
+  ok(!/mentioned/.test(none.opener.join(' ')) && none.opener[1] === ISSUES_FOUND_MANY_LINE, '…and never "it mentioned"; the website line is the same');
 }
 
 console.log('── 4. No invented competitors, no invented findings ──');
@@ -111,11 +114,11 @@ console.log('── 4. No invented competitors, no invented findings ──');
   const clean = buildCallScript(input({ findings: [], findingsStatus: 'clean' }));
   /* 2026-10-15 (Paul): no issues → ONE plain line saying so (the one website check's headline); the checklist stays on the
      rep's screen. The old "isn't really set up to be found by AI" line read like an issue and is no longer said. */
-  ok(clean.found.lines.length === 0 && clean.found.more.length === 0 && clean.found.coverage === null && /say nothing about the site/.test(clean.found.note ?? '') && clean.found.checklist === AI_SETUP_CHECKLIST, 'completed with no serious issue → NOTHING said about the site (2026-10-17); the checklist stays on the rep screen; no fault invented');
+  ok(clean.found.lines.length === 0 && clean.found.more.length === 0 && clean.found.coverage === null && /say nothing about the site/.test(clean.found.note ?? '') && clean.found.checklist === null, 'completed with no serious issue → NOTHING said about the site (2026-10-19: no checklist either); no fault invented');
   ok(!spokenScriptText(clean).includes(NO_STRONG_ISSUE_LINE) && !spokenScriptText(clean).includes(AI_SETUP_SPOKEN_LINE), '…and the old "not set up for AI" lines are not said');
   ok(!/public evidence|bigger issue/i.test(clean.found.lines.join(' ')), 'the old "the bigger issue is the public evidence" line is gone');
   ok(AI_SETUP_CHECKLIST.some((c) => /duplicate/i.test(c)) && AI_SETUP_CHECKLIST.length >= 6 && /no duplicate pages/.test(AI_SETUP_SPOKEN_LINE), 'the list names the duplicate-pages check and the rest of what we make sure a site has');
-  ok(clean.opener[1] === "I had a look into why they were being named and you weren't.", '…and the opener does not claim "a few potential reasons"');
+  ok(clean.opener.length === 1 && !/I had a look into why/.test(clean.opener.join(' ')), '…and the "I had a look into why they were being named" line is dropped (Paul, 2026-10-19)');
   for (const st of ['not_crawled', 'crawl_stale', 'unreadable'] as const) {
     const n = buildCallScript(input({ findings: [], findingsStatus: st }));
     ok(n.found.lines.length === 0 && n.opener.length === 1 && /say nothing about the site/.test(n.found.note ?? ''), st + ' → nothing said about the site at all');
@@ -275,7 +278,7 @@ console.log('── 13. AI score colours ──');
   const zero = render([[false, false], [false, false], [false, false]]);
   ok(/data-engine="chatgpt" data-tone="poor"/.test(zero) && /data-engine="gemini" data-tone="poor"/.test(zero), 'gym-style 0/3 + 0/3: both engine chips red');
   ok(/data-testid="hook-headline" data-tone="poor"/.test(zero) && /0%/.test(zero), '0% named overall → red headline');
-  ok(/Gemini/.test(zero) && /ChatGPT/.test(zero) && !/Google AI(?! Overview)/.test(zero), 'the engines are drawn separately as ChatGPT and Gemini');
+  ok(/Gemini/.test(zero) && /ChatGPT/.test(zero) && /data-engine="ai_overview"/.test(zero) && !/data-engine="gemini"[^<]*<span[^>]*>Google AI/.test(zero), 'the engines are drawn separately as ChatGPT and Gemini (Gemini is never "Google AI"; the Google AI chip is its own)');
   ok(/data-testid="hook-named-instead"/.test(zero) && /Rugby Plumbing Co/.test(zero), 'the call summary shows who was named instead');
   ok(/View full audit/.test(zero), '"View full audit" is the route to the detail');
   const full = render([[true, true], [true, true], [true, true]]);

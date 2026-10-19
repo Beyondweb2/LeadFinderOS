@@ -150,7 +150,8 @@ console.log('\n── 4. a prospect\'s quick check queues the deep check ──'
   ok(/\(count \?\? 0\) < AUTO_DEEP_MAX_RUNNING/.test(cc), 'capped how many wait at once');
   const block = cc.slice(cc.indexOf('ONE DEEP CHECK FOR EVERY PROSPECT'), cc.indexOf('// Attach the result to the exact audit run'));
   ok(!/kickCrawlWorker/.test(block), 'no kick: the minute cron takes them one after another (a bulk audit never floods the worker)');
-  ok(/leadId && internal && stored === true/.test(cc), 'only behind an automated quick check that was stored (a fresh deep check is never replaced)');
+  /* 2026-10-19: also behind the call screen's one-time start of a MISSING check (callScreenCrawl.ts) — never a person's other presses. */
+  ok(/leadId && \(internal \|\| callScreen\) && stored === true/.test(cc), 'only behind an automated (or call-screen) quick check that was stored (a fresh deep check is never replaced)');
   ok(read('src/lib/fullCrawl.ts').includes("'client_intake', 'automatic'] as const"), "'automatic' is a recorded crawl source");
 }
 
@@ -171,14 +172,15 @@ console.log('\n── 5. the call script lists the issues (Job 3) ──');
   ok(s.found.coverage === 'Checked 15 Oct' && s.found.oldNote === null, 'says when it was checked; a 2-day-old check has no old note');
   const old = buildCallScript({ ...base, website: { ...mk(2), ageDays: CALL_SCRIPT_CHECK_OLD_DAYS + 1 } });
   const edge = buildCallScript({ ...base, website: { ...mk(2), ageDays: CALL_SCRIPT_CHECK_OLD_DAYS } });
-  ok(old.found.oldNote === 'Check is old, press Run again before the call' && edge.found.oldNote === null, 'older than 14 days → "Check is old, press Run again before the call"; exactly 14 is not old');
+  ok(old.found.oldNote === 'Press Run again before the call' && edge.found.oldNote === null, 'older than 14 days → "Press Run again before the call" (Paul, 2026-10-19); exactly 14 is not old');
   ok(!/https?:|.uk|.com/.test(s.found.lines.join(' ')), 'no URLs in the list');
   const said = spokenScriptText(s);
   ok(!/found a few potential reasons|an issue was found|one thing that could be part of it|stood out/i.test(said), 'no "I found a few potential reasons" sentence around the issues');
   const clean = buildCallScript({ ...base, findings: [], findingsStatus: 'clean', website: { ...mk(0), state: 'clean', serious: [], headline: 'No serious website issues found on the 9 pages checked. 1 minor point.' } });
   ok(clean.found.lines.length === 0 && clean.found.more.length === 0, 'completed with no serious issue (minor points only) → nothing said about the site');
   const nc = buildCallScript({ ...base, findings: [], findingsStatus: 'not_crawled', website: { ...mk(0), state: 'not_checked', serious: [], minor: [], headline: 'Website not checked yet.' } });
-  ok(nc.found.lines.length === 0 && /Website not checked yet./.test(nc.found.note ?? '') && /say nothing about the site/.test(nc.found.note ?? ''), 'not complete → the "not checked yet, say nothing about the site" wording stays');
+  /* 2026-10-19 (Paul): the old "Website not checked yet. No usable website check…" line is REPLACED. */
+  ok(nc.found.lines.length === 0 && !/No usable website check/.test(nc.found.note ?? '') && /say nothing about the site/.test(nc.found.note ?? ''), 'not checked → nothing said about the site, and the old "no usable website check" line is gone');
   ok(!/isn't really set up to be found by AI/.test(spokenScriptText(clean)), '…not the old "isn\'t really set up for AI" line that read like an issue');
   ok(issueLine({ id: 'x', severity: 'high', title: 'No phone number found', saw: '', meaning: '', count: 0, pages: [] }) === 'No phone number found', 'a site-wide issue is just its title');
   const ui = read('src/components/ColdCallPlaybook.tsx');

@@ -14,6 +14,7 @@ import { GOOGLE_STILL_MATTERS_SHORT, WHY_IT_MATTERS_STATS } from '@/lib/salesExp
 import { VoiceNoteScriptBody } from '@/components/VoiceNoteScriptButton';
 import { QuickCloseButton, quickCloseKey, useQuickClose } from '@/components/QuickCloseDialog';
 import { HookVisibilityCard } from '@/components/HookVisibilityCard';
+import { WebsiteCrawlSection } from '@/components/WebsiteCrawlSection';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
 import { IconTile } from '@/components/operator/ui';
@@ -44,7 +45,8 @@ import { isSaleableRoute, type ServiceRoute } from '@/lib/findableOffer';
       areas and the decision maker are SAVED as they are given — on the lead's Quick Close record (fn
       quick-close `save` / `save_call`) — so Quick Close, the handoff and the paid client never ask again. The
       Offer follows the AGENCY-CONTRACT RULE (quickClose.offerFit): still tied in → DECLINED, nothing offered (v5).
-   ⛔ No send, no audit and no crawl control. Writes: those answers, and a feature-usage row
+   ⛔ No send and no audit control. The ONE crawl control is the Website crawl section (WebsiteCrawlSection, 2026-10-19):
+      it starts a MISSING check once on open and offers Run again — nothing else here crawls. Writes: those answers, and a feature-usage row
       (src/lib/featureUsage.ts: the call script shown for a lead, at most one a day).
    ⛔ Operator-only, behind the app's authenticated routes. Nothing here is ever written into a public URL.
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
@@ -397,7 +399,7 @@ function Scripts({ p, leadId, initial = 'call' }: { p: ColdCallPlaybook; leadId:
         ))}
       </div>
       {tab === 'call' && <CallFlow p={p} leadId={leadId} />}
-      {tab === 'voice' && <VoiceNoteScriptBody leadId={leadId} currentAuditId={p.auditId} />}
+      {tab === 'voice' && <VoiceNoteScriptBody leadId={leadId} playbook={p} />}
     </section>
   );
 }
@@ -470,6 +472,8 @@ export function ColdCallPlaybookInline({ leadId, initialScript, onLogCall, onSho
      Close stay — a call can be logged with or without a script. */
   return (
     <div className="space-y-3 pb-2" data-testid="cold-call-playbook">
+      {/* Under the AI result (which sits just above this body): what the crawl found on the site (2026-10-19). */}
+      <WebsiteCrawlSection p={q.data} leadId={leadId} />
       {gate.show ? <>
         <Warnings p={q.data} />
         <Scripts p={q.data} leadId={leadId} initial={initialScript} />
@@ -505,6 +509,7 @@ export function ColdCallPlaybookSheet({ leadId, open, onOpenChange, onLogCall }:
               <HookVisibilityCard leadId={leadId} variant="call" />
               {q.data.audit.state !== 'ready' && <p className="text-xs text-muted-foreground">{q.data.audit.headline}</p>}
             </section>
+            <WebsiteCrawlSection p={q.data} leadId={leadId} />
             {(() => {
               const gate = callScriptGate(leadId, q.data);
               return gate.show ? <><Warnings p={q.data} /><Scripts p={q.data} leadId={leadId} /></> : <ScriptLocked gate={gate} />;

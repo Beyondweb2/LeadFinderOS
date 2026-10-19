@@ -341,6 +341,8 @@ export interface HookReportSummary {
     named: number;
     total: number;
     percent: number;
+    /** Google AI is in named / total / percent (scoring method 2, 2026-10-19). Absent = not (method 1). */
+    googleAiInScore?: boolean;
     questions: number;
     perEngine: Array<{ engine: string; label: string; named: number; total: number }>;
   };
@@ -395,6 +397,8 @@ export function buildHookReportSummary(input: {
   namedCtx?: NamedContext;
   town?: string | null;
   trade?: string | null;
+  /** The audit's scoring method (aiOverview.ts scoringMethodFor). 2 = Google AI in the score. Absent = 1. */
+  scoringMethod?: 1 | 2;
 }): HookReportSummary | null {
   const { state } = input;
   if (isHookStateV2(state)) return buildHookReportSummaryV2(state, input);
@@ -506,7 +510,7 @@ function buildHookReportSummaryV2(
   state: HookStateV2,
   input: Parameters<typeof buildHookReportSummary>[0],
 ): HookReportSummary | null {
-  const score = scoreHookRun(state, input.rows, { named: input.namedCtx, town: input.town, trade: input.trade });
+  const score = scoreHookRun(state, input.rows, { named: input.namedCtx, town: input.town, trade: input.trade, scoringMethod: input.scoringMethod });
   if (!score.complete) return null;
   /* A sequential hook asked only a prefix of its plan: report what was ASKED, never the unasked rest. */
   const asked = askedHookQuestions(state);
@@ -602,9 +606,11 @@ function buildHookReportSummaryV2(
     stopReason: pick ? 'visibility_gap_found' : 'max_questions_reached',
     gap,
     score: {
-      named: score.named,
-      total: score.expected,
-      percent: score.percent ?? 0,
+      /* The DISPLAYED score, versioned (hookScore.ts scored): method 2 adds Google AI where Google showed an answer. */
+      named: score.scored.named,
+      total: score.scored.expected,
+      percent: score.scored.percent ?? 0,
+      googleAiInScore: score.scored.googleAi.inScore,
       questions: asked.length,
       perEngine: input.engineOrder
         .map((e) => score.perEngine.find((t) => t.engine === e))

@@ -13,6 +13,7 @@
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 
 import { auditKind, type AuditKindRow } from './auditKind';
+import { scoringMethodFor } from './aiOverview';
 import { assessCompetitorCleanliness, collectCompetitorNames, countAnsweredCells, isProvableJunkName } from './competitorCleaning';
 import { excludeSelfRivals } from './rivalHook';
 import { nameMatches } from './nameMatch';
@@ -74,7 +75,7 @@ export interface HookCardScore {
 }
 
 export function scoreHookAuditForCard(input: {
-  audit: Pick<HookCardAudit, 'business_name' | 'business_type' | 'location_text'>;
+  audit: Pick<HookCardAudit, 'business_name' | 'business_type' | 'location_text'> & { created_at?: string | null };
   state: unknown;
   runResults: unknown;
   rows: readonly HookScoreRow[];
@@ -88,6 +89,7 @@ export function scoreHookAuditForCard(input: {
     named: { businessName: business, trade: input.audit.business_type || null, town: input.audit.location_text || null },
     town: input.audit.location_text ?? null,
     trade: input.audit.business_type ?? null,
+    scoringMethod: scoringMethodFor(input.audit.created_at ?? null),
     cleanCompetitors: (names) => rivalsWithheld ? [] : excludeSelfRivals(names.filter((n) => !isProvableJunkName(n)), business, nameMatches),
   });
   return { score, rivalsWithheld };

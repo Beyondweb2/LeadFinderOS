@@ -39,7 +39,7 @@ import { sourceMix } from './sourceType.ts';
 import type { AiAuditReportData, AiAuditSeo, SeoFinding } from './aiAuditReportHtml.ts';
 import { nameMatches } from './nameMatch.ts';
 import { cleanAnswerText, isJunkAnswer } from './answerText.ts';
-import { AI_OVERVIEW_ENGINE, AI_OVERVIEW_REPORT_LABEL, overviewFullText, overviewReadingOf, overviewSummaryText, overviewTallyFromRows } from './aiOverview.ts';
+import { AI_OVERVIEW_ENGINE, AI_OVERVIEW_REPORT_LABEL, overviewFullText, overviewReadingOf, overviewSummaryText, overviewTallyFromRows, scoringMethodFor } from './aiOverview.ts';
 
 // Engines shown in results (queue targets chatgpt+gemini; the actor also returns
 // AI Overview + Google organic, shown for context). mention_rate is over chatgpt+gemini.
@@ -916,6 +916,8 @@ export function buildReportData(
      *  Google was consulted and returned none); null = unknown, and the report then says nothing
      *  about their website. Omit to derive true from `ownWebsite` and null otherwise. */
     hasWebsite?: boolean | null;
+    /** The audit's created_at: decides its scoring method (aiOverview.ts scoringMethodFor). Absent = method 1. */
+    auditCreatedAt?: string | null;
   },
 ): AiAuditReportData | null {
   /* ⛔ A RUN WE CANNOT PROVE WAS CLEANED PRINTS NO RIVAL NAMES AT ALL. Paul's rule, 2026-08-28:
@@ -1244,6 +1246,7 @@ export function buildReportData(
       namedCtx,
       town: ctx.locationText || null,
       trade: ctx.businessType || null,
+      scoringMethod: scoringMethodFor(ctx.auditCreatedAt ?? null),
     });
 
   return {

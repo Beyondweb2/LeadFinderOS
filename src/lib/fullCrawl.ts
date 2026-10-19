@@ -294,6 +294,9 @@ export interface PageDigest {
   bytes?: number;
   /** An enquiry form on the page (a form with an email / phone field or a message box, or an embedded form), or none. */
   form?: 'enquiry' | 'none';
+  /* ── added 2026-10-19 (the AI-visibility page checks, visibilityChecks.ts). ABSENT on older rows = not checked. ── */
+  /** UK postcodes read anywhere in the page's visible text (the WHOLE page, before the kept text is cut), at most 5. */
+  postcodes?: string[];
 }
 
 /** An enquiry form in the page HTML: a <form> holding an email / phone input or a message box (a search box alone is
@@ -419,6 +422,7 @@ export function processPage(p: { url: string; finalUrl: string; status: number; 
     jsonLdInvalid: jsonLdBlocks(html).filter((b) => { try { JSON.parse(b); return false; } catch { return true; } }).length,
     h3: headings(html, 3, 12),
     form: detectEnquiryForm(html),
+    postcodes: [...new Set((text.match(new RegExp(UK_POSTCODE.source, 'gi')) ?? []).map((x) => x.toUpperCase().replace(/\s+/g, ' ')))].slice(0, 5),
   };
 
   const b: PageBusiness = { names: [], phones: [], emails: [], addresses: [], people: [], credentials: [], guarantees: [], experience: [], prices: [], reviews: [], profiles: [], schema: [], logo: '', favicon: '', ogImage: '', siteName: '' };

@@ -82,7 +82,7 @@ console.log('── the row markup: compact, scores only ──');
   const s = scoreOf([[true, false], [false, false], [false, false]]);
   const html = renderToStaticMarkup(createElement(AiCheckSummary, { state: ready, score: s, onCallScreen: () => {}, onRetry: () => {} }));
   const t = text(html);
-  ok(/ChatGPT 1\/3/.test(t) && /Gemini 0\/3/.test(t) && !/Google AI(?! Overview)/.test(t), 'the checked row shows ChatGPT and Gemini (never "Google AI")');
+  ok(/ChatGPT 1\/3/.test(t) && /Gemini 0\/3/.test(t) && !/Google AI \d+\/3\b|asked Google AI|Google AI (?:missed|didn['’]t|did not|named you)/.test(t), 'the checked row shows ChatGPT and Gemini (never "Google AI")');
   ok(/Call screen/.test(t) && /data-testid="row-call-screen"/.test(html), 'the checked row has a Call screen button');
   ok(!/Pennine|Rival|named them|did not name|website|Website|crawl|finding|missed/i.test(t), 'no rival name, no headline, no website finding, no missed query in the row');
   ok(t.length <= 60, `the whole ready row summary is one short line (${t.length} chars: "${t}")`);

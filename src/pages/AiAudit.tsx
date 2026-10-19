@@ -2476,7 +2476,7 @@ const AiAudit = () => {
   return (
     <div className="space-y-5 sm:space-y-7">
       <PageHeader icon={Sparkles} tone="purple" title="AI Visibility Audit"
-        subtitle="See whether AI assistants name a business when customers ask. Scored on ChatGPT and Gemini; Google's AI Overview is recorded where Google shows one." />
+        subtitle="See whether AI assistants name a business when customers ask. Scored on ChatGPT and Gemini; Google AI is recorded where Google shows an AI answer." />
 
       {/* APIFY SPEND — outside the step blocks on purpose, so it shows on the list, the results view
           and the empty state alike. It is the thing that silently stops every audit working. */}
@@ -2861,7 +2861,7 @@ const AiAudit = () => {
                 </Button>
               </div>
               <p className="text-xs text-muted-foreground -mt-1">
-                These are the searches we'll run across {SCORED_ENGINES.map((e) => ENGINE_LABELS[e]).join(' + ')} (plus AI Overview & Google). Edit, add or remove any.
+                These are the searches we'll run across {SCORED_ENGINES.map((e) => ENGINE_LABELS[e]).join(' + ')} (plus Google AI & Google). Edit, add or remove any.
               </p>
               {/* WHY THIS SET. Without it the operator is judging questions with no sight of the
                   context they came from, which is how a national business's local-looking set got

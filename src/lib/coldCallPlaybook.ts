@@ -146,6 +146,9 @@ export interface PlaybookInput {
   /** Crawl sources in the order resolveFindingsSource wants them: audit-run crawls newest first. */
   runCrawls: FindingsSource[];
   leadCrawl: FindingsSource | null;
+  /** A website check for this lead is under way right now (the audit's own crawl, or one the call screen started) and
+   *  nothing is stored yet: said as "Checking the website…", never as "not checked" (2026-10-19). */
+  crawlPending?: boolean;
   messages: PlaybookMessage[];
   nowMs: number;
   /** Who is ringing: the signed-in person's display name (team_members). Absent means the book
@@ -213,6 +216,8 @@ export interface ColdCallPlaybook {
     crawlStale: boolean;
     whatsappStatus: string;
     leadStatus: string | null;
+    /** Who is ringing / recording, first name (callerName.ts) — the voice note says it first. */
+    caller: string;
   };
   warnings: string[];
   /** Their own site, a directory / social profile, or none (leadWebsiteKind.ts, the voice note's rule). */
@@ -249,6 +254,10 @@ export interface ColdCallPlaybook {
   auditLeadId: string | null;
   /** Where the newest check has got to: only the words of the locked call script (callScriptGate.ts). */
   auditProgress: CallAuditProgress;
+  /** THE ONE WEBSITE CHECK this playbook read (websiteCheck.ts) — the call screen's "Website crawl" section draws it. */
+  websiteCheck: WebsiteCheckView;
+  /** Why the website half is what it is (incl. 'checking' while a crawl is under way). */
+  findingsStatus: FindingsStatus;
 }
 
 /* ── Small, pure helpers ──────────────────────────────────────────────────────────────────────── */
@@ -440,7 +449,7 @@ function isOnlyHomepage(urls: string[], homeUrl: string): boolean {
 
 /** Why the findings list is what it is. Lets another surface (the Inbox AI visibility details) word
  *  the empty cases itself without parsing the playbook's operator note. */
-export type FindingsStatus = 'findings' | 'no_website' | 'profile' | 'not_crawled' | 'crawl_stale' | 'unreadable' | 'clean';
+export type FindingsStatus = 'findings' | 'no_website' | 'profile' | 'not_crawled' | 'checking' | 'crawl_stale' | 'unreadable' | 'clean';
 
 export interface FindingsOutcome {
   status: FindingsStatus;
@@ -525,7 +534,7 @@ export function websiteIssueToFinding(i: WebsiteIssue): PlaybookFinding {
  *  `check` carries the minor points, the headline and when / how much was checked.
  *  @param max how many findings to return — the playbook's MAX_SITE_FINDINGS by default; the Inbox
  *        details ask for all of them and show the first few (2026-09-27). */
-export function selectFindings(input: Pick<PlaybookInput, 'lead' | 'runCrawls' | 'leadCrawl' | 'nowMs'>, max: number = MAX_SITE_FINDINGS): FindingsOutcome {
+export function selectFindings(input: Pick<PlaybookInput, 'lead' | 'runCrawls' | 'leadCrawl' | 'nowMs' | 'crawlPending'>, max: number = MAX_SITE_FINDINGS): FindingsOutcome {
   const lc = input.leadCrawl;
   const row = lc?.result ? { result: lc.result as never, created_at: new Date(lc.createdAtMs).toISOString() } : null;
   const check = websiteCheckFor(row, { website: input.lead.website, nowMs: input.nowMs });
@@ -543,6 +552,7 @@ export function selectFindings(input: Pick<PlaybookInput, 'lead' | 'runCrawls' |
       /* ⛔ A PROFILE IS NOT THEIR WEBSITE (the voice note's rule, leadWebsiteKind.ts). */
       return { ...base, status: 'profile', findings: [], note: check.headline + ' Never call it their website.' };
     case 'not_checked':
+      if (input.crawlPending === true) return { ...base, status: 'checking', findings: [], note: 'Checking the website… the website line appears here when it is done. Until then, keep to the AI result.' };
       return { ...base, status: 'not_crawled', findings: [], note: 'Nobody has checked this website yet, so there are no website points to mention. Keep the call to the AI result.' };
     case 'unreadable':
       return { ...base, status: 'unreadable', findings: [], note: check.headline + ' There is nothing reliable to say about the site.' };
@@ -874,6 +884,7 @@ export function buildColdCallPlaybook(input: PlaybookInput): ColdCallPlaybook {
       crawlStale: f.crawlStale,
       whatsappStatus: convo.status,
       leadStatus: lead.status ?? null,
+      caller,
     },
     warnings,
     opening,
@@ -893,6 +904,8 @@ export function buildColdCallPlaybook(input: PlaybookInput): ColdCallPlaybook {
     auditId: reportAudit?.id ?? null,
     auditLeadId: reportAudit?.lead_id ?? null,
     auditProgress: input.auditProgress ?? (input.auditRunning ? 'running' : reportAudit ? 'complete' : 'none'),
+    websiteCheck: f.check ?? websiteCheckFor(null, { website: lead.website, nowMs }),
+    findingsStatus: f.status,
     reportNote: reportUrl ? null : (input.auditRunning ? 'The audit is still running — no report link yet.' : 'No usable public report for this lead.'),
   };
 }

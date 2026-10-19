@@ -650,7 +650,7 @@ export interface PresenceReviewItem { source_key: string; label: string; why: st
 
 const CONF_RANK: Record<MatchConfidence, number> = { confirmed: 3, likely: 2, unverified: 1 };
 const VIA_RANK: Record<DiscoveredVia, number> = { lead_record: 6, places: 5, website: 4, citation: 3, search: 2, trade_evidence: 1, credential: 1 };
-const ENGINE_NAME: Record<string, string> = { chatgpt: 'ChatGPT', gemini: 'Gemini', ai_overview: 'AI Overview', google_organic: 'Google' };
+const ENGINE_NAME: Record<string, string> = { chatgpt: 'ChatGPT', gemini: 'Gemini', ai_overview: 'Google AI', google_organic: 'Google' };
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 
 /** The trade keys the evidence could be folded under for this business ("locksmiths" and
