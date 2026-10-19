@@ -21,21 +21,27 @@
 import { auditRowState, type LeadAuditState } from './auditRowState.ts';
 import { SCORED_ENGINES, ENGINE_LABELS } from './auditReport.ts';
 import { salesEngineLabel } from './scoreTone.ts';
+import type { OverviewTally } from './aiOverview.ts';
 
 export interface EngineScore { label: string; named: number; answered: number }
 /** The two scored engines, in a fixed order (ChatGPT, Gemini). An engine with no answers is
  *  present with answered 0 — "Gemini –", never dropped and never 0/3. */
-export interface RowScore { engines: EngineScore[] }
+export interface RowScore {
+  engines: EngineScore[];
+  /** Google AI Overview across the same audit (aiOverview.ts overviewTallyFromRows, 2026-10-19). DISPLAY
+   *  ONLY — a count of what was captured, drawn as a dashed chip after the two scores; never in them. */
+  overview?: OverviewTally | null;
+}
 
 /** From buildReportData's perEngine ({label, named, total}) — the report's own fold. */
-export function rowScoreFromPerEngine(perEngine: ReadonlyArray<{ label: string; named: number; total: number }> | null | undefined): RowScore | null {
+export function rowScoreFromPerEngine(perEngine: ReadonlyArray<{ label: string; named: number; total: number }> | null | undefined, overview?: OverviewTally | null): RowScore | null {
   if (!perEngine) return null;
   const engines = SCORED_ENGINES.map((e) => {
     const label = ENGINE_LABELS[e] ?? e;
     const row = perEngine.find((p) => p.label === label);
     return { label, named: row ? Math.max(0, Math.floor(row.named)) : 0, answered: row ? Math.max(0, Math.floor(row.total)) : 0 };
   });
-  return engines.some((e) => e.answered > 0) ? { engines } : null;
+  return engines.some((e) => e.answered > 0) ? { engines, overview: overview ?? null } : null;
 }
 
 /** "ChatGPT 1/3" / "Gemini –" (no answer came back from that engine). ⛔ Sales screens say "Gemini" (2026-10-11; "Google AI" from
@@ -44,7 +50,8 @@ export function engineScoreText(e: EngineScore): string {
   const label = salesEngineLabel(e.label);
   return e.answered > 0 ? `${label} ${e.named}/${e.answered}` : `${label} –`;
 }
-/** "ChatGPT 1/3 · Gemini 0/3" — the whole row summary. */
+/** "ChatGPT 1/3 · Gemini 0/3" — the two SCORES. The Google AI Overview chip is drawn beside them by the
+ *  row (OutreachAiCheck, 2026-10-19) and is never part of this line. */
 export function scoreLine(s: RowScore | null | undefined): string | null {
   return s ? s.engines.map(engineScoreText).join(' · ') : null;
 }

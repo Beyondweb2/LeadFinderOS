@@ -68,3 +68,22 @@ already in every billed run. One small knock-on that already existed: extract-co
   trailing heading / Maps card / Google's copy controls dropped, never a word written.
 - The rival count and the table names are one per BUSINESS (`hookAudit.ts` `sameBusiness` / `distinctNames`): two
   spellings of one firm ("Martin Day Electrician" / "Martin Day Commercial Electricians") count once.
+
+## AI Overview everywhere, and older audits show what they captured (2026-10-19)
+- **Root cause of "the report does not give the AI Overview answer":** every screen read the overview only through the
+  `_ai_overview` stamp, written since 2026-10-11. The overview ANSWER has been stored in the `ai_overview` cell since July
+  (measured 2026-10-19: 3,712 stored overview answers across ~1,300 audits, none stamped), so every older audit showed
+  nothing. And the client full report never quoted the overview text at all (its per-engine cards are internal-only).
+- `aiOverview.ts` `overviewReadingOf` is now the one reading: the stamp where present → else a stored answer = shown →
+  else `_google_serp` present (results page came back, since 2026-09-15) = not shown (the same test `aiOverviewStamp`
+  uses) → else unknown = "not recorded". Never a guess.
+- One chip, one set of words (`overviewTally` / `overviewChipText` / `overviewChipTone` / `overviewChipTitle`): "Google AI
+  Overview 1/2" (named of the searches that showed one), "No AI Overview shown" (neutral), "Google AI Overview not
+  recorded". React: `src/components/AiOverviewChip.tsx`; panels that quote one engine use `LeadAiResultChips.tsx` (reads
+  the cached `useHookVisibility` query, no new request).
+- Where it shows: Inbox strip + details, call tab / prospect page (same card), full audit window (chip + "For this call"
+  evidence line), Outreach rows (`RowScore.overview`, `scoreLine` stays the two scores), voice-note script panel, both
+  drafters' "Why this reply?", quick report (chip under the engine cards, per-question replies), full / paid report
+  (chip, an always-on AI Overview column, "Google AI Overview said" folded under each row — prints open).
+- ⛔ Still display only: `buildReportData.overview` is never in pct / named / total; hook score unchanged; no prompt and
+  no message text changed. Test: `scripts/ai-overview-three-engines.test.ts` section H.

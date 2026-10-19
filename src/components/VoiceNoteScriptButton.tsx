@@ -9,6 +9,7 @@
    ⛔ NOTHING SENDS FROM HERE. There is no send callback, no composer write and no message row — only
    Copy (to the clipboard) and Regenerate. scripts/voice-note-script.test.ts pins this.
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
+import { LeadAiResultChips } from '@/components/LeadAiResultChips';
 import { useCallback, useEffect, useState } from 'react';
 import { AlertTriangle, Check, Copy, Loader2, Mic, RefreshCw } from 'lucide-react';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
@@ -175,6 +176,7 @@ export function VoiceNoteScriptBody({ leadId, currentAuditId }: { leadId: string
                     <ul className="ml-4 list-disc">{row.problems.map((p) => <li key={p}>{p}</li>)}</ul>
                   </Callout>
                 )}
+                <LeadAiResultChips leadId={leadId} />
                 <div className={cn('rounded-xl bg-muted/40 p-3 ring-1 ring-inset ring-border/50', outOfDate && 'opacity-60')}>
                   {outOfDate && <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Old script, from the earlier result</p>}
                   <p className="whitespace-pre-wrap break-words text-sm leading-relaxed">{row.script}</p>

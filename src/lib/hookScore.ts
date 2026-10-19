@@ -317,8 +317,8 @@ export interface HookScore {
   /** A NEW hook that could not be given three valid questions. It is never complete. */
   questionShortfall: boolean;
   /** Google AI Overview per question (2026-10-11). DISPLAY ONLY: never in a count, the percentage,
-   *  the hook pick or the 6/6. Empty for an audit from before overviews were recorded (aiOverview.ts),
-   *  so an old audit draws exactly what it drew before. */
+   *  the hook pick or the 6/6. One entry per question (2026-10-19); an audit that holds nothing about
+   *  the overview reads 'not_recorded' (aiOverview.ts overviewReadingOf). */
   overviews: HookOverview[];
 }
 
@@ -415,7 +415,9 @@ export function scoreHookRun(state: unknown, rows: readonly HookScoreRow[], ctx:
         citations: valid ? citationList((cell as { citations?: unknown }).citations) : [],
       });
     }
-    if (stamped) {
+    /* Every question gets an overview entry (2026-10-19): the chip is always drawn; an audit that holds
+       nothing about the overview reads 'not_recorded', never "not shown". */
+    {
       const ov = overviewFor(row ? { status: row.status, cells: row.result } : null, { stamped, named: ctx.named });
       overviews.push({
         ...ov, questionIndex, question,

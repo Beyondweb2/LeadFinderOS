@@ -22,6 +22,20 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-19-ai-overview-everywhere', date: '2026-10-19', title: 'Google AI Overview shown beside ChatGPT and Gemini everywhere', audience: 'all',
+    body: 'Every place that shows the ChatGPT and Gemini results now shows a Google AI Overview chip next to them: named (for example 1/2), "No AI Overview shown", or "not recorded". It is for context only and is not part of the score. Audits from before 11 October now show the AI Overview they captured.',
+    report: {
+      added: [
+        'A Google AI Overview chip next to ChatGPT and Gemini: the Inbox AI visibility strip, the call tab, the full audit window, Outreach rows, the voice-note script and both reply drafters ("Why this reply?").',
+        'Reports: the chip under the scores, an AI Overview column in the question table, and what Google AI Overview said for each search where it was captured.',
+      ],
+      changed: [
+        'Audits from before 11 October showed no AI Overview although Google\'s answer was stored. They now show it.',
+        'The wording for a search with none is "No AI Overview shown".',
+      ],
+      removed: ['The one-line AI Overview text under the Inbox scores (replaced by the chip).'],
+      effect: 'You can see what Google\'s own AI summary said next to ChatGPT and Gemini. The scores, the percentages and every client\'s baseline are exactly as before.',
+    } },
   { id: '2026-10-19-malaysia-coverage-cleanup', date: '2026-10-19', title: 'Malaysia Coverage tidied, and imported leads show as already added', audience: 'all',
     body: 'Every Malaysian town on Coverage now shows its state and, where there is a real figure, a population. Places from imported files that are not one town (a state, a region, several places) are in a folded "Unclear places" list. Find Leads now recognises leads that came in by file and shows who added them.',
     report: {

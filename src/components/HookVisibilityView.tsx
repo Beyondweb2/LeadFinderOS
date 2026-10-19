@@ -2,7 +2,8 @@ import { useState, type ReactNode } from 'react';
 import { Check, ChevronDown, ChevronRight, Copy, ExternalLink, Loader2, RefreshCw } from 'lucide-react';
 import { HOOK_ALL_NAMED_REASON, HOOK_SCORE_QUESTIONS, HOOK_ENGINES, isHookStateV2, type HookResult, type HookScore } from '@/lib/hookScore';
 import type { HookCardScore, HookReportLink, HookReportState } from '@/lib/hookVisibility';
-import { AI_OVERVIEW_LABEL, NO_OVERVIEW_DETAIL, OVERVIEW_NO_NAMES_TEXT, overviewStatusWord, overviewSummary } from '@/lib/aiOverview';
+import { AI_OVERVIEW_LABEL, NO_OVERVIEW_DETAIL, OVERVIEW_NO_NAMES_TEXT, overviewStatusWord, overviewTally } from '@/lib/aiOverview';
+import { AiOverviewChip } from '@/components/AiOverviewChip';
 import { useToast } from '@/hooks/use-toast';
 import { staffPreviewUrl } from '@/lib/reportShare';
 import { cn } from '@/lib/utils';
@@ -168,8 +169,8 @@ function StatusPill({ r, best }: { r: HookResult; best: boolean }) {
 function OverviewPill({ o }: { o: HookScore['overviews'][number] }) {
   return (
     <span className="inline-flex items-center gap-1 whitespace-nowrap rounded border border-dashed border-border bg-muted px-1.5 py-0.5 text-[11px] leading-none text-muted-foreground" data-testid="hook-overview-pill" data-state={o.state} title="Google AI Overview: shown for context, not counted in the score">
-      <span className="font-medium">AI Overview</span>
-      <span className="font-semibold">{overviewStatusWord(o)}</span>
+      {o.state === 'not_shown' ? <span className="font-medium">{overviewStatusWord(o)}</span> : <><span className="font-medium">AI Overview</span>
+      <span className="font-semibold">{overviewStatusWord(o)}</span></>}
     </span>
   );
 }
@@ -188,8 +189,8 @@ function Details({ score, rivalsWithheld, legacy, issues }: { score: HookScore; 
   // One row per question, in the order asked; each row carries that question's own cells only.
   const questions = [...new Set(score.results.map((r) => r.questionIndex))].sort((a, b) => a - b)
     .map((qi) => ({ qi, cells: score.results.filter((r) => r.questionIndex === qi) }));
-  // Google AI Overview per question: display only, and absent on audits from before it was recorded.
-  const overviewOf = (qi: number) => score.overviews.find((o) => o.questionIndex === qi && o.state !== 'not_recorded') ?? null;
+  // Google AI Overview per question: display only; every question has one ('not_recorded' when the audit holds nothing).
+  const overviewOf = (qi: number) => score.overviews.find((o) => o.questionIndex === qi) ?? null;
   return (
     <div className="absolute inset-x-2 top-full z-30 mt-1 max-h-[40vh] space-y-2.5 overflow-y-auto overscroll-contain rounded-md border border-border bg-popover p-2 text-xs text-popover-foreground shadow-lg" data-testid="hook-visibility-details">
       {hook && (
@@ -335,6 +336,8 @@ export function HookVisibilityView({ card, inFlight, state, report, onRunNew, ru
           {!inFlight && t.pending > 0 && <span className="text-muted-foreground"> · {t.pending} not run</span>}
         </span>
       ))}
+      {/* Google AI Overview beside them (2026-10-19): display only, dashed, "not scored". */}
+      <AiOverviewChip tally={overviewTally(score.overviews)} showNotScored className={cn(call && 'px-2.5 py-1 text-sm')} testId="hook-overview-chip" />
     </div>
   );
 
@@ -368,12 +371,6 @@ export function HookVisibilityView({ card, inFlight, state, report, onRunNew, ru
         </span>
         {headline}
       </div>
-
-      {overviewSummary(score.overviews) && (
-        <p className="mt-0.5 text-[11px] text-muted-foreground" data-testid="hook-overview-line">
-          <span className="font-medium">{AI_OVERVIEW_LABEL}:</span> {overviewSummary(score.overviews)!.line} (not scored)
-        </p>
-      )}
 
       {legacy && (
         <p className="mt-0.5 text-[11px] text-muted-foreground">

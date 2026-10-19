@@ -9,9 +9,13 @@
      C. the score, the hook pick and the 6/6 are untouched by an overview;
      D. "No overview shown" is a result, an old audit draws nothing new;
      E. the quick public report and the full report show it, labelled not scored.
+     H. (2026-10-19) audits from BEFORE the stamp show what they captured: a stored overview answer is
+        'shown', a results page with none is 'not shown', nothing is 'not recorded'; the chip words; the
+        full report quotes the overview text; Outreach carries the tally beside its two scores.
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 import { aiOverviewStamp, normalizeAiSearch, buildAiSearchInput, AI_OVERVIEW_META_KEY } from '../supabase/functions/_shared/enrichment/ai-search.ts';
-import { AI_OVERVIEW_STAMP_KEY, NO_OVERVIEW_TEXT, overviewFor, overviewSummary } from '../src/lib/aiOverview.ts';
+import { AI_OVERVIEW_STAMP_KEY, NO_OVERVIEW_TEXT, overviewFor, overviewSummary, overviewReadingOf, overviewTally, overviewChipText, overviewChipTone, overviewEvidenceLine } from '../src/lib/aiOverview.ts';
+import { rowScoreFromPerEngine } from '../src/lib/outreachRowCheck.ts';
 import { HOOK_ENGINES, HOOK_SCORE_RESULTS, initialHookStateV2, scoreHookRun } from '../src/lib/hookScore.ts';
 import { SCORED_ENGINES, buildReportData } from '../src/lib/auditReport.ts';
 import { renderReportHtml } from '../src/lib/aiAuditReportHtml.ts';
@@ -63,7 +67,7 @@ ok(mixed.overviews[0].state === 'shown' && mixed.overviews[0].named === true, 'D
 ok(mixed.overviews[1].state === 'shown' && mixed.overviews[1].named === false && mixed.overviews[1].competitors.length === 3, 'D: Q2 shown, not named, its own competitors');
 ok(mixed.overviews[2].state === 'not_shown', 'D: Q3 "no overview shown" is a result, not a failure');
 ok(mixed.complete && mixed.failed === 0, 'D: a question with no overview does not make the audit incomplete');
-ok(base.overviews.length === 0, 'D: an OLD audit (no stamp) gets no overview at all — drawn exactly as before');
+ok(base.overviews.length === 3 && base.overviews.every((o) => o.state === 'not_recorded'), 'D: an audit holding NOTHING about the overview (no stamp, no answer, no results page) reads not_recorded per question, never "not shown" (2026-10-19)');
 ok(overviewSummary(mixed.overviews)?.line === 'Shown on 2 of 3 searches, named in 1 · 1 showed none', `D: the summary line (${overviewSummary(mixed.overviews)?.line})`);
 ok(overviewSummary(scoreHookRun(state, rowsWith(['none', 'none', 'none']), ctx).overviews)?.line === `${NO_OVERVIEW_TEXT} for any of the 3 searches`, 'D: none shown anywhere says so plainly');
 ok(overviewSummary(base.overviews) === null, 'D: no summary for an old audit');
@@ -85,7 +89,8 @@ ok(/Google AI Overview/.test(fresh.t), 'E: the quick public report shows Google 
 ok(/Display only · not scored/.test(fresh.t), 'E: and says it is not scored');
 ok(fresh.t.includes(NO_OVERVIEW_TEXT), 'E: the "No overview shown" state appears for the question with none');
 ok(/plus Google’s AI Overview, shown for context/.test(fresh.t), 'E: the header method line mentions it');
-ok(!/AI Overview/.test(old.t), 'E: an OLD hook report is unchanged — no overview anywhere');
+ok(/Google AI Overview not recorded/.test(old.t) && !old.t.includes(NO_OVERVIEW_TEXT) && !/Display only · not scored/.test(old.t), 'E: a hook report holding nothing about the overview shows the chip as "not recorded" and invents no overview reply');
+ok(/Google AI Overview 1\/2/.test(fresh.t), 'E: the quick report chip beside the two engine cards: named in 1 of the 2 searches that showed one');
 const qb = fresh.d.questionBreakdown!.find((q) => q.question === Q[2])!;
 const aioRow = qb.perEngine.find((e) => e.label === 'AI Overview') as { ran: boolean; notShown?: number; overviewRecorded?: boolean; counted: boolean };
 ok(!!aioRow && !aioRow.ran && aioRow.notShown === 1 && aioRow.overviewRecorded === true && aioRow.counted === false, 'E: the full report records "not shown" for that question, and never counts it');
@@ -145,6 +150,45 @@ ok(oldRow.notShown === undefined && oldRow.overviewRecorded === undefined, 'E: a
   ok(!/q4-np--|#4285F4/i.test(html), 'G: no coloured name pills and no blue');
   ok(/Measured on[\s\S]*ChatGPT, Gemini and Google AI Overview/.test(tt), 'G: "Measured on" names all three');
   ok(d!.hook!.score!.total === 6, 'G: the score is still 3 × 2 = 6');
+}
+
+/* ── H. Audits from before the stamp show what they captured (2026-10-19) ───────────────────── */
+{
+  const preStamp = (kind: 'cell' | 'serp' | 'nothing', named = false): Record<string, unknown> => ({
+    chatgpt: ans(false), gemini: ans(false),
+    ...(kind === 'cell' ? { ai_overview: ans(named) } : {}),
+    ...(kind === 'serp' ? { _google_serp: { count: 3, results: [] } } : {}),
+  });
+  ok(overviewReadingOf(preStamp('cell')) === 'shown', 'H: a stored overview answer with no stamp → shown (the bug: these showed nothing)');
+  ok(overviewReadingOf(preStamp('serp')) === 'not_shown', 'H: a results page that came back with no overview → not shown (the same test as aiOverviewStamp)');
+  ok(overviewReadingOf(preStamp('nothing')) === null, 'H: nothing captured → unknown, never a guess');
+  ok(overviewReadingOf({ ...preStamp('cell'), [AI_OVERVIEW_STAMP_KEY]: 'not_shown' }) === 'not_shown', 'H: the queue’s own stamp always wins');
+  const oldRows = [preStamp('cell', true), preStamp('cell', false), preStamp('serp')].map((result, i) => ({ question: Q[i], status: 'done', result }));
+  const sc = scoreHookRun(state, oldRows, ctx);
+  ok(sc.overviews.map((o) => o.state).join() === 'shown,shown,not_shown' && sc.overviews[0].named === true && sc.overviews[1].named === false, 'H: an old hook audit now shows its captured overviews (named / not named / none)');
+  ok(sc.overviews[1].answerText.length > 0, 'H: with the captured answer text, never an invented one');
+  const stripped = oldRows.map((r) => ({ ...r, result: { chatgpt: r.result.chatgpt, gemini: r.result.gemini } }));
+  const sc0 = scoreHookRun(state, stripped, ctx);
+  ok(sc.named === sc0.named && sc.expected === sc0.expected && sc.percent === sc0.percent, 'H: the score is untouched by reading old overviews');
+  const t = overviewTally(sc.overviews)!;
+  ok(t.shown === 2 && t.named === 1 && t.notShown === 1 && overviewChipText(t) === 'Google AI Overview 1/2' && overviewChipTone(t) === 'not_named', `H: chip "Google AI Overview 1/2" (${overviewChipText(t)})`);
+  const none3 = { shown: 0, named: 0, notShown: 3, unknown: 0, pending: 0, total: 3 };
+  ok(overviewChipText(none3) === 'No AI Overview shown' && overviewChipTone(none3) === 'neutral', 'H: chip "No AI Overview shown", neutral, not a failure');
+  ok(overviewChipText(null) === 'Google AI Overview not recorded' && overviewChipText(overviewTally([])) === 'Google AI Overview not recorded', 'H: an old payload / no questions → "not recorded"');
+  ok(/not scored/.test(overviewEvidenceLine(t)), 'H: the call screen evidence line keeps "(not scored)"');
+  const run = { id: 'r1', run_number: 1, status: 'complete', mention_rate: 0, created_at: '2026-09-20T10:00:00Z', results: {} };
+  const reportCtx = { businessName: BIZ, businessType: 'roofer', locationText: 'Leeds', specialisms: '', isAggregatorUrl: () => false, hasWebsite: true };
+  const d = buildReportData(oldRows.map((r, i) => ({ id: `o${i}`, ...r })) as never, run as never, reportCtx)!;
+  const d0 = buildReportData(stripped.map((r, i) => ({ id: `p${i}`, ...r })) as never, run as never, reportCtx)!;
+  ok(d.overview?.shown === 2 && d.overview?.named === 1, 'H: buildReportData carries the audit-wide tally');
+  ok(d.pct === d0.pct && d.named === d0.named && d.total === d0.total, 'H: the report percentage and counts are unchanged by the overview');
+  const aio = d.questionBreakdown!.find((q) => q.question === Q[1])!.perEngine.find((e) => e.label === 'AI Overview') as { overviewAnswers?: Array<{ text: string; full: string }>; overviewRecorded?: boolean };
+  ok(aio.overviewRecorded === true && (aio.overviewAnswers?.[0]?.full ?? '').includes('Ridge Roofing Ltd'), 'H: the full report row carries the overview answer text, as captured');
+  const tt = text(renderReportHtml({ ...(d as object), generatedAtLabel: '20 September 2026', showOffer: true, offerUrl: '#', auditId: 'a1', requestCallUrl: '#' } as never));
+  ok(/Google AI Overview said/.test(tt) && tt.includes('Ridge Roofing Ltd, Slate Masters and Top Roofs'), 'H: the full report quotes the overview, labelled Google AI Overview');
+  ok(/Google AI Overview 1\/2/.test(tt), 'H: the full report shows the chip');
+  const row = rowScoreFromPerEngine(d.perEngine, d.overview);
+  ok(row?.engines.length === 2 && row.overview?.shown === 2, 'H: Outreach keeps its two scores and carries the overview beside them');
 }
 
 console.log(f ? `\n${f} FAILED` : '\nall passed');

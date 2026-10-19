@@ -6,7 +6,8 @@ import { Button } from '@/components/ui/button';
 import { DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import { mayForceRecrawl } from '@/lib/prospectCrawl';
 import type { HookOverview, HookResult, HookScore } from '@/lib/hookScore';
-import { AI_OVERVIEW_LABEL, AI_OVERVIEW_NOT_SCORED, NO_OVERVIEW_DETAIL, NO_OVERVIEW_TEXT, OVERVIEW_NO_NAMES_TEXT, overviewSummary } from '@/lib/aiOverview';
+import { AI_OVERVIEW_LABEL, AI_OVERVIEW_NOT_SCORED, NO_OVERVIEW_DETAIL, OVERVIEW_NO_NAMES_TEXT, overviewStatusWord, overviewTally } from '@/lib/aiOverview';
+import { AiOverviewChip } from '@/components/AiOverviewChip';
 import { AUDIT_SEVERITY_LABELS, groupFindings, severityCounts, type AuditFinding, type AuditSeverity, type SiteAudit } from '@/lib/siteAudit';
 import { EVIDENCE_CLASS_LABELS } from '@/lib/contentTrust';
 import {
@@ -82,8 +83,7 @@ export function ProspectAuditView({ score, rivalsWithheld, aiInFlight, site, poi
               <>
                 <p className={cn('text-2xl font-extrabold tabular-nums tracking-tight', TONE.purple.text)}>{score!.named}<span className="text-base font-medium text-muted-foreground"> / {score!.expected}</span></p>
                 <p className="text-xs text-muted-foreground">answers named this business</p>
-                <ul className="mt-2 flex flex-wrap gap-1.5 text-sm">{score!.perEngine.map((t) => { const tone = t.valid === t.expected ? scoreTone(t.named, t.expected) : 'none'; return <li key={t.engine}><span data-testid="pa-engine-score" data-tone={tone} className={cn('inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold ring-1 ring-inset', SCORE_TONE_CLASS[tone].chip, SCORE_TONE_CLASS[tone].text)}>{t.label}: <span className="tabular-nums">{t.named}/{t.expected}</span></span></li>; })}</ul>
-                <OverviewGlance score={score!} />
+                <ul className="mt-2 flex flex-wrap gap-1.5 text-sm">{score!.perEngine.map((t) => { const tone = t.valid === t.expected ? scoreTone(t.named, t.expected) : 'none'; return <li key={t.engine}><span data-testid="pa-engine-score" data-tone={tone} className={cn('inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold ring-1 ring-inset', SCORE_TONE_CLASS[tone].chip, SCORE_TONE_CLASS[tone].text)}>{t.label}: <span className="tabular-nums">{t.named}/{t.expected}</span></span></li>; })}<li><AiOverviewChip tally={overviewTally(score!.overviews)} showNotScored className="text-[11px]" testId="pa-overview-chip" /></li></ul>
               </>
             ) : hasScore && aiInFlight ? <p className="flex items-center gap-1.5 text-sm"><Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin" />The AI check is still running ({score!.valid + score!.failed}/{score!.expected}).</p>
               : hasScore ? <p className="text-sm">Incomplete check — {score!.valid} of {score!.expected} answers valid. No final score.</p>
@@ -221,19 +221,12 @@ function AiResult({ r, rivalsWithheld }: { r: HookResult; rivalsWithheld: boolea
   );
 }
 
-/** One line in the score card: the overview, said as context. Nothing for an audit from before overviews were recorded. */
-function OverviewGlance({ score }: { score: HookScore }) {
-  const sum = overviewSummary(score.overviews);
-  if (!sum) return null;
-  return <p className="mt-2 text-[11px] text-muted-foreground" data-testid="pa-overview-glance"><span className="font-medium text-foreground/80">{AI_OVERVIEW_LABEL}:</span> {sum.line} (not scored)</p>;
-}
-
 function OverviewResult({ o, rivalsWithheld }: { o: HookOverview; rivalsWithheld: boolean }) {
   /* Shown, but no names could be read from it: Google’s own text is open from the start, so the reader sees what it said (2026-10-11). */
   const namesUnread = o.state === 'shown' && !o.named && !rivalsWithheld && !o.competitors.length;
   const [open, setOpen] = useState(namesUnread);
   const tone: Tone = o.state === 'shown' ? (o.named ? 'green' : 'red') : 'grey';
-  const word = o.state === 'shown' ? (o.named ? 'Named' : 'Not named') : o.state === 'not_shown' ? NO_OVERVIEW_TEXT : o.state === 'pending' ? 'Pending' : 'Not available';
+  const word = overviewStatusWord(o);
   return (
     <li className="min-w-0 border-t border-border/50 pt-3 first:border-t-0 first:pt-0" data-testid="pa-overview-result" data-state={o.state}>
       <p className="text-sm"><span className="mr-1.5 rounded-md bg-muted px-1.5 py-0.5 text-[10px] font-bold tabular-nums text-muted-foreground">Q{o.questionIndex + 1}</span><span className="break-words">“{o.question}”</span></p>

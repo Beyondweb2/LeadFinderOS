@@ -33,9 +33,10 @@ const dataRows = (html: string) => (rendered(html).match(/<div class="qrow">/g) 
 const tableQuestions = (html: string) =>
   [...rendered(html).matchAll(/<div class="qrow"><span class="qrow-q">([\s\S]*?)<\/span>/g)]
     .map((m) => m[1].replace(/&#8217;|&rsquo;/g, '’').replace(/&amp;/g, '&'));
-/** The per-engine result cells actually drawn: named / not-named / engine did not answer. */
+/** The per-engine result cells actually drawn: named / not-named / engine did not answer. The SCORED
+ *  engines only: the Google AI Overview column (always drawn since 2026-10-19, display only) is left out. */
 const markers = (html: string) => {
-  const b = rendered(html);
+  const b = rendered(html).replace(/<span class="qrow-e qrow-aio"><span class="qm [^"]*"[^>]*>[^<]*<\/span><\/span>/g, '');
   return {
     yes: (b.match(/<span class="qm qm-yes"/g) ?? []).length,
     no: (b.match(/<span class="qm qm-no"/g) ?? []).length,

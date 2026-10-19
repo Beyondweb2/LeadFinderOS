@@ -13,6 +13,7 @@
    ⛔ NO SCORE IS RE-COMPUTED HERE. The AI numbers are HookScore's; the website has no number at all.
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 
+import { overviewEvidenceLine, overviewTally } from './aiOverview';
 import type { HookScore } from './hookScore';
 import { auditFromStoredCrawl, HOME_FETCH_LABELS, type AuditFinding, type SiteAudit, type StoredCrawlForAudit } from './siteAudit';
 import { isAggregatorUrl } from './aggregators';
@@ -94,14 +95,16 @@ export function callPoint(input: { score: HookScore | null; rivalsWithheld?: boo
   const s = input.score;
   let ai: CallPoint['ai'] = null;
   if (s && s.complete) {
-    if (s.allNamed) ai = { headline: `Strong AI visibility — named in all ${s.expected} answers.`, evidence: s.perEngine.map((t) => `${t.label}: named ${t.named} of ${t.expected}`) };
+    /* Google AI Overview beside the engines (2026-10-19): an evidence line, display only, never the headline. */
+    const aio = overviewEvidenceLine(overviewTally(s.overviews));
+    if (s.allNamed) ai = { headline: `Strong AI visibility — named in all ${s.expected} answers.`, evidence: [...s.perEngine.map((t) => `${t.label}: named ${t.named} of ${t.expected}`), aio] };
     else if (s.hook) {
       const rivals = !input.rivalsWithheld && s.hook.competitors.length ? `It named ${s.hook.competitors.slice(0, 3).join(', ')} instead.` : '';
       ai = {
         headline: `${s.hook.label} did not name them when asked “${s.hook.question}”.`,
-        evidence: [`Named in ${s.named} of ${s.expected} AI answers overall.`, ...(rivals ? [rivals] : [])],
+        evidence: [`Named in ${s.named} of ${s.expected} AI answers overall.`, ...(rivals ? [rivals] : []), aio],
       };
-    } else ai = { headline: `Named in ${s.named} of ${s.expected} AI answers.`, evidence: s.perEngine.map((t) => `${t.label}: named ${t.named} of ${t.expected}`) };
+    } else ai = { headline: `Named in ${s.named} of ${s.expected} AI answers.`, evidence: [...s.perEngine.map((t) => `${t.label}: named ${t.named} of ${t.expected}`), aio] };
   }
   let site: CallPoint['site'] = null;
   if (input.site.kind === 'no_website' && input.site.confirmed) site = { headline: NO_WEBSITE_TEXT, evidence: ['Google’s listing for the business has no website.'], findingId: 'no_website' };
