@@ -35,6 +35,7 @@ export const WHATS_NEW: readonly WhatsNewEntry[] = [
       ],
       removed: ['The one-line AI Overview text under the Inbox scores (replaced by the chip).'],
       effect: 'You can see what Google\'s own AI summary said next to ChatGPT and Gemini. The scores, the percentages and every client\'s baseline are exactly as before.',
+    } },
   { id: '2026-10-19-malaysia-coverage-cleanup', date: '2026-10-19', title: 'Malaysia Coverage tidied, and imported leads show as already added', audience: 'all',
     body: 'Every Malaysian town on Coverage now shows its state and, where there is a real figure, a population. Places from imported files that are not one town (a state, a region, several places) are in a folded "Unclear places" list. Find Leads now recognises leads that came in by file and shows who added them.',
     report: {
