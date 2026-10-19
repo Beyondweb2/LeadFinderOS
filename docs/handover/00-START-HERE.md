@@ -78,7 +78,7 @@ Map: `13-REPOSITORIES-AND-FILE-MAP.md`.
 4. **Never put a secret value in a file, commit, chat or log.** Names only.
 5. **Ask Paul first** before destructive SQL, deleting anything, Stripe/money, Meta/WhatsApp credentials, access/auth
    changes, real messages to real people, or touching historical client rows. Otherwise Paul's default is: implement →
-   test (`npm run check`) → commit → push → deploy → verify live.
+   test (typecheck + changed-file tests + build; `npm run check` only for migrations / sending / auth / tenancy / payments / secrets, CLAUDE.md §3a) → commit → push → deploy → verify live.
 6. **Never promise** rankings, citations, recommendations or Google AI inclusion; never hedge the guarantee; never turn a
    Discovery guess into a confirmed service; never invent client facts.
 7. **No audit result changes a lead's status.** No automation writes a Next Action. A tap on Call is not a contact.
