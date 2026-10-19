@@ -455,7 +455,7 @@ Full history and reasoning: `docs/business-and-offer.md`, `docs/measurement.md`.
       `INVENTORY_DEEP_CLEAN.md`, `SQL_FOR_PAUL_*.sql`, `scripts/_*.ts`. Stage files explicitly; never
       `git add -A`.
 
-**Checks — run `npm run check` before claiming anything works, and know what it cannot see**
+**Checks — default = typecheck + changed-file tests + build (§3a); the full gate only for the §3a risk list. Know what it cannot see**
 - [ ] Typecheck baseline is **9 errors as a LIST** (`scripts/typecheck-baseline.txt`). Do not fix them.
 - [ ] tsc at baseline ≠ compiles — `npm run build` catches a stray backtick inside a template
       literal that tsc recovers from. ⛔ **Never put a backtick inside a template literal, not even in
@@ -512,15 +512,15 @@ existing findings and exits non-zero). There is **no browser / e2e suite** in th
 |---|---|---|---|
 | Quick | `npm run check:quick` | ~30 s | While working: typecheck vs baseline + eslint on changed files (advisory) + the edge static checks when edge/shared-lib code changed |
 | Targeted | `npm run test:changed` (`-- --list` shows the mapping) | seconds–1 min | While working: only suites whose text names a changed file (or that changed themselves) |
-| Full | `npm run check` | ~3½ min | **ONCE, after all changes are finished, before commit / push / deploy** |
+| Full | `npm run check` | ~3½ min | **ONLY** for migrations, sending, auth, tenancy, payments or secrets (list below) — ONCE, after the last edit |
 
 - **While working:** quick check + targeted tests. **Do not run the full gate after every edit.**
-- **Before the final commit / push / deploy:** run the full gate **once**, after the last edit.
+- **Before the final commit / push / deploy, everything else (Paul, 2026-10-19):** `npm run check:quick` (typecheck vs baseline) + `npm run test:changed` (changed-file tests) + `npm run build`. **No full gate** — not for "just in case", not for size, not because a deploy follows.
 - **Do not re-run the full gate if nothing changed since it last passed.** (Check `git status` / the diff; a re-run on an identical tree proves nothing.)
 - **Copy-only, styling-only, docs-only changes:** quick checks only, then verify the deployed site. (A `whatsNew.ts` entry, wording, CSS, a doc.)
-- ⛔ **Always run the full gate, whatever the size**, for changes touching: **auth, tenancy / permissions / RLS, the database or migrations,
-  messaging (WhatsApp / SMS / email) sending, payments / Stripe / pricing, or secrets handling.** The two scripts print a yellow
-  "FULL GATE REQUIRED" warning when the changed paths look like these — a green quick check is not permission to ship them.
+- ⛔ **The full gate is for these ONLY** (run it once, after the last edit, whatever the size): **migrations / the database, messaging (WhatsApp / SMS / email) sending,
+  auth, tenancy / permissions / RLS, payments / Stripe / pricing, or secrets handling.** The two scripts print a yellow
+  "FULL GATE REQUIRED" warning when the changed paths look like these — a green quick check is not permission to ship them. Nothing else forces it.
 - **Browser / e2e:** there is none to run. If one is ever added, run only the specs for the UI flows you changed while working, and the
   whole suite as part of the pre-deploy gate.
 - ⛔ **Always still verify the real deployed site after a deploy** (§4 "The deploy check": fetch the live bundle, assert a marker only your
@@ -1264,8 +1264,8 @@ positive allowlist of `baseline`; `isColdOutreachTemplate` treats unknown as COL
   (any lane, any row with the phone), a real WhatsApp send, a WhatsApp conversation and a failed WhatsApp send; `no_whatsapp` mobiles may be texted. Every
   queue path asks it `_dry_run` first through `src/lib/smsQueueBatch.ts` and shows THAT count; ONE limit `SMS_QUEUE_MAX_PER_ACTION` (= daily cap), over it
   = the first that pass + `over_cap`. `no_whatsapp_needs_sms` reads **"No mobile"**, `no_whatsapp` **"No WhatsApp"** (Paul; reverses 2026-08-08).
-- **Verification tiers** are §3a: `check:quick` / `test:changed` while working, ONE full gate before shipping, always for messaging / auth / database /
-  payments / secrets; always verify the deployed site.
+- **Verification tiers** are §3a: `check:quick` / `test:changed` while working, full gate ONLY for messaging / auth / tenancy / database / migrations /
+  payments / secrets (else typecheck + changed-file tests + build); always verify the deployed site.
 
 ### 6l. Malaysia and Singapore (2026-10-14 — record: `docs/my-sg-support.md`)
 
