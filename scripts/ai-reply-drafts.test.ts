@@ -59,7 +59,7 @@ for (const [body, reason] of [['STOP', 'opt_out'], ['please stop messaging me', 
   ok(d.kind === 'needs_you' && d.stop === true && d.reason === reason, `stop: "${body}" → Needs you, no draft (${reason})`);
 }
 ok((() => { const d = decide('hi', { suppressed: true }); return d.kind === 'needs_you' && d.stop && d.reason === 'do_not_contact'; })(), 'Do Not Contact → a stop');
-for (const [body, reason] of [['No thanks mate', 'not_interested'], ['wrong number mate', 'wrong_person'], ['my solicitor will be in touch', 'legal'], ['who gave you my number?', 'privacy'], ['Tak berminat', 'other_language'], ['https://maps.app.goo.gl/xxx', 'link'], ['can I cancel if it does not work?', 'paul_looks']] as const) {
+for (const [body, reason] of [['No thanks mate', 'not_interested'], ['wrong number mate', 'wrong_person'], ['my solicitor will be in touch', 'legal'],['Tak berminat', 'other_language'], ['https://maps.app.goo.gl/xxx', 'link'], ['can I cancel if it does not work?', 'paul_looks']] as const) {
   const d = decide(body);
   ok(d.kind === 'needs_you' && !d.stop && d.reason === reason, `Needs you: "${body}" → ${reason}${d.kind === 'needs_you' ? '' : ' — got ' + d.kind}`);
 }

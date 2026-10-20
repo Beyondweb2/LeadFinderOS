@@ -79,7 +79,7 @@ export function AiDraftPanel({ row, busy, boxDiffers, onApprove, onRegenerate, o
         <AiDraftChip row={row} />
         <span className="min-w-0 flex-1 text-muted-foreground">
           {chip.label === 'Needs you' && stop && <>No draft: <span className="font-medium text-foreground">{row.reason_label ?? 'asked to stop'}</span>.{optedOut ? ' Opted out, and any queued follow-ups were cancelled.' : ''}</>}
-          {chip.label === 'Needs you' && !stop && <>Why it needs you: <span className="font-medium text-foreground">{row.reason_label ?? 'a person should answer this one'}</span>. Press Draft reply for a suggestion.</>}
+          {chip.label === 'Needs you' && !stop && <>Why it needs you: <span className="font-medium text-foreground">{row.reason_label ?? 'a person should answer this one'}</span>.{why?.noDraft ? ' No playbook reply fits, so no draft: answer it yourself.' : ' Press Draft reply for a suggestion.'}</>}
           {chip.label === 'Needs a template' && <>Their last message is more than 24 hours old, so no free-text draft. Send an approved template.</>}
           {(chip.label === 'Drafting…' || chip.label === 'Sending…') && <>{chip.label}</>}
         </span>
@@ -125,6 +125,9 @@ export function AiDraftPanel({ row, busy, boxDiffers, onApprove, onRegenerate, o
           <button type="button" className="font-medium underline" onClick={onUseDraft}>Put the AI draft back</button>
         </p>
       )}
+      {why?.note && (
+        <p className="text-[11px] font-medium text-foreground" data-testid="ai-draft-note">{why.note}</p>
+      )}
       {why && why.problems.length > 0 && (
         <div className="space-y-0.5 text-[11px] text-amber-700 dark:text-amber-300" data-testid="ai-draft-warnings">
           {why.problems.slice(0, 3).map((p) => (
@@ -141,7 +144,7 @@ export function AiDraftPanel({ row, busy, boxDiffers, onApprove, onRegenerate, o
         <div className="space-y-0.5 rounded-md bg-background/60 px-2 py-1.5 text-[11px] leading-snug text-muted-foreground">
           <p>For you only. Nothing has been sent.</p>
           {row.lead_id && <LeadAiResultChips leadId={row.lead_id} />}
-          <p><span className="font-medium text-foreground">Next move (picked by code): </span>{(why.move ?? '').replace(/_/g, ' ')}{why.question ? ` · ends with: "${why.question}"` : ' · no question'}</p>
+          <p><span className="font-medium text-foreground">Next move (picked by code): </span>{(why.intent ?? why.move ?? '').replace(/_/g, ' ')}{why.question ? ` · ends with: "${why.question}"` : ' · no question'}</p>
           {(why.points ?? []).length > 0 && <p><span className="font-medium text-foreground">Says: </span>{(why.points ?? []).join(' · ')}</p>}
           <p><span className="font-medium text-foreground">Search: </span>{why.search ?? 'No completed AI check on record, so the AI part was left out.'}{why.named ? ` · named in ${why.named.named} of ${why.named.valid} answers` : ''}</p>
           {why.search && why.competitors.length > 0 && <p><span className="font-medium text-foreground">AI named: </span>{why.competitors.join(', ')}</p>}

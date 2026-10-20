@@ -1795,9 +1795,9 @@
       }
     ],
     "expect": {
-      "outcome": "needs_you",
+      "outcome": "draft",
       "topic": null,
-      "notes": "Asks where we got the number: hand to Paul; if drafted, say honestly it is from their public Google Maps listing and offer to stop messaging."
+      "notes": "Asks where we got the number: the playbook privacy answer (found on Google, offer to stop, offer to send what we found). Paul, 2026-10-20: drafted, not handed over."
     }
   },
   {
