@@ -38,6 +38,17 @@ export const WHATS_NEW: readonly WhatsNewEntry[] = [
       removed: [],
       effect: 'You keep your place in the list while you work through replies. "Newest message" is still in the Sort menu if you want the old order.',
     } },
+  { id: '2026-10-20-find-leads-hide-agency', date: '2026-10-20', title: 'Find Leads: tick which kinds of site to show', audience: 'all',
+    body: 'The Site management filter is now tick boxes, all ticked. Untick Agency likely and those results disappear; everything else stays.',
+    report: {
+      added: ['Tick boxes for No agency evidence, Agency likely, Unknown and No website, in any combination. Your ticks are remembered on this browser.'],
+      changed: [
+        'The result count, Select this page, Select all, Add all shown and Export now use only the results showing, never the ones you hid.',
+        'A result still being checked stays in the list until its check finishes.',
+      ],
+      removed: ['The pick-one list (All sites / one kind at a time).'],
+      effect: 'You can hide agency-run sites and work only through the rest, and what you add or export is exactly what you can see.',
+    } },
   { id: '2026-10-20-reply-playbook', date: '2026-10-20', title: 'WhatsApp Draft reply: follows one playbook', audience: 'all',
     body: 'Draft reply now gives every first reply the pitch, then follows one script: agency, then contract, then a quick call or a voice note. Nothing is sent until you approve it.',
     report: {

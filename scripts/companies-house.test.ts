@@ -239,7 +239,7 @@ console.log('── 11. FIND LEADS WIRING — and the agency check is untouched 
 {
   const t = code('src/components/LeadsTable.tsx');
   ok(/const agency = useAgencyChecks\(agencyItems\)/.test(t) && /hasOwnWebsite: hasOwnSite\(l\)/.test(t), 'the agency check still runs for every own-website result');
-  ok(/passesSiteFilter\(siteFilter/.test(t) && /SITE_FILTERS\.map/.test(t), 'the site-management filter is still there');
+  ok(/passesSiteFilter\(siteFilters/.test(t) && /SITE_FILTERS\.map/.test(t), 'the site-management filter is still there');
   ok(/if \(agency\.pending > 0\) return shown;/.test(t), 'rows never jump while the agency checks are still running');
   ok(/\.\.\.last\]/.test(t), 'high-confidence agency sites still sort last');
   ok(!/Business age/.test(t) && !/age-filter/.test(t) && !/passesAgeFilter|ageFilter/.test(t), 'no Business age column, filter or sort remains in Find Leads');
