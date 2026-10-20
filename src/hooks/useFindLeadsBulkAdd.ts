@@ -2,9 +2,11 @@
 import { useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { invokeEdge, EdgeFunctionError } from '@/lib/edgeInvoke';
+import { useSubscription } from '@/hooks/useSubscription';
+import { leadSourceFor } from '@/lib/outreachLeadColumns';
 import {
   runFindLeadsBulkAdd, type AddContext, type AddProgress, type BulkAddLead, type BulkAddOutcome, type LookupAnswer,
-  type LookupResult, type AddRowAnswer,
+  type LookupResult, type AddRowAnswer, type AddVisibility, visibilityOf,
 } from '@/lib/findLeadsBulkAdd';
 
 type RpcAnswer = { ok?: boolean; error?: string; rows?: AddRowAnswer[] };
@@ -20,7 +22,24 @@ export function lookupRefusal(e: { status?: number | null; code?: string | null 
   return null;
 }
 
+/** Reads just-created leads back through the person's OWN source (the same table their Outreach reads). null = the
+ *  read did not answer — the caller then claims nothing about visibility. */
+async function readBack(role: 'admin' | 'sales' | null | undefined, ids: readonly string[]): Promise<AddVisibility | null> {
+  if (ids.length === 0) return { visible: 0, queued: 0 };
+  const table = leadSourceFor(role).table;
+  const rows: { status?: string | null; sms_queued_at?: string | null }[] = [];
+  for (let i = 0; i < ids.length; i += 200) {
+    const { data, error } = await (supabase.from(table as 'outreach_leads') as unknown as {
+      select: (c: string) => { in: (k: string, v: readonly string[]) => Promise<{ data: unknown; error: unknown }> };
+    }).select('id, status, sms_queued_at').in('id', ids.slice(i, i + 200));
+    if (error) return null;
+    rows.push(...((data ?? []) as typeof rows));
+  }
+  return visibilityOf(rows);
+}
+
 export function useFindLeadsBulkAdd() {
+  const { role } = useSubscription();
   return useCallback(async (
     leads: readonly BulkAddLead[],
     ctxOf: (lead: BulkAddLead) => AddContext,
@@ -45,10 +64,12 @@ export function useFindLeadsBulkAdd() {
       onProgress,
     });
     /* The list refreshes ONCE, at the end (useFindLeadsCrm coalesces these into one re-check). */
-    if (res.ok && (res as { summary: { added: number } }).summary.added > 0) {
+    if (res.ok && res.summary.added > 0) {
       window.dispatchEvent(new CustomEvent('crm-lead-added'));
       window.dispatchEvent(new CustomEvent('sales-lead-changed'));
+      const ids = res.rows.filter((r) => r.outcome === 'created' && r.lead_id).map((r) => r.lead_id as string);
+      try { res.visibility = await readBack(role, ids); } catch { res.visibility = null; }
     }
     return res;
-  }, []);
+  }, [role]);
 }

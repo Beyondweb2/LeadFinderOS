@@ -170,6 +170,28 @@ export function addRefusalText(code: string | null | undefined): string {
   }
 }
 
+/* ── CAN THE PERSON SEE WHAT THEY JUST ADDED? (2026-10-20, fix/sales-leads-view-invoker) ─────────────────────────
+   "Added to CRM" was true while every salesperson's Outreach read 0 rows (sales_leads had been switched to the
+   caller's rights outside the code). After a save the new leads are read back through the person's OWN source
+   (leadSourceFor: sales_leads for a rep, outreach_leads for the admin) and the line says what is really there.
+   null = the read-back did not answer: nothing is claimed either way. */
+export interface AddVisibility { visible: number; queued: number }
+
+/** The person's own read of just-created leads: how many came back, how many of those are queued. */
+export function visibilityOf(rows: readonly { status?: string | null; sms_queued_at?: string | null }[]): AddVisibility {
+  return { visible: rows.length, queued: rows.filter((r) => r.status === 'queued' || !!r.sms_queued_at).length };
+}
+
+/** "21 added to CRM, 0 visible in your Outreach: tell Paul (lead access problem)" · "21 added to CRM, 0 queued: you
+ *  haven't queued them yet" · "21 added to CRM, 5 queued". null when nothing was added or the read-back failed. */
+export function addVisibilityLine(added: number, v: AddVisibility | null | undefined): string | null {
+  if (added <= 0 || !v) return null;
+  if (v.visible < added) return `${added} added to CRM, ${v.visible} visible in your Outreach: tell Paul (lead access problem)`;
+  return v.queued > 0 ? `${added} added to CRM, ${v.queued} queued` : `${added} added to CRM, 0 queued: you haven't queued them yet`;
+}
+
+export const isAccessProblem = (added: number, v: AddVisibility | null | undefined): boolean => !!v && added > 0 && v.visible < added;
+
 /* ── THE PROGRESS LINE ("Adding 23 of 40") ──────────────────────────────────────────────────────── */
 
 export interface AddProgress { phase: 'checking' | 'lookups' | 'saving' | 'done'; done: number; total: number }
@@ -201,6 +223,8 @@ export interface BulkAddResult {
   ok: true; summary: AddSummary; rows: AddRowAnswer[]; saveCalls: number;
   /** Lookups actually made / answered from this page's cache / saved without a lookup answer. */
   lookups: { made: number; cached: number; withoutAnswer: number; retries: number };
+  /** Filled by the hook after the save: the person's own read-back of the created leads (null = it did not answer). */
+  visibility?: AddVisibility | null;
 }
 export type BulkAddOutcome = BulkAddResult | { ok: false; message: string };
 

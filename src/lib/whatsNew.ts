@@ -22,6 +22,14 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-20-sales-leads-visible', date: '2026-10-20', title: 'Salespeople can see their own leads in Outreach again', audience: 'all',
+    body: 'A database setting changed outside the app had hidden every salesperson\'s leads from Outreach, the WhatsApp list, the lead popup and search. It is put back, and Find Leads now checks your new leads really show in your Outreach after you add them.',
+    report: {
+      added: ['After Add to CRM, Find Leads reads your new leads back the way your Outreach does and says what is there: "21 added to CRM, 0 queued: you haven\'t queued them yet". If they do not show, it says "… 0 visible in your Outreach: tell Paul (lead access problem)".'],
+      changed: ['Salespeople see their own leads again in Outreach, the WhatsApp list, the lead popup and search. Each person still sees only their own.'],
+      removed: [],
+      effect: 'Leads you added are back in your Outreach, and if this ever happens again Find Leads tells you straight away.',
+    } },
   { id: '2026-10-20-coverage-town-strict', date: '2026-10-20', title: 'Find Leads keeps to the town you searched, and the AI audit asks about that town', audience: 'all',
     body: 'A "This town only" search (what Coverage uses) now checks each business is really in that town, from its address and where it is. Only those can be added, and the AI audit asks about that town. Inner-London businesses are asked about their own area (Tottenham, Pimlico), not just "London".',
     report: {
