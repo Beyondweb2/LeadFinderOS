@@ -33,6 +33,8 @@ export const WHATS_NEW: readonly WhatsNewEntry[] = [
       changed: [
         'The pitch opens "I asked Gemini “Who is the best driving instructor for beginners in Halstead?” and it mentioned A, B and C." using that answer\'s own names.',
         'Named in 1 of 3 answers (ChatGPT, Gemini and Google AI) now gets the full pitch. The softer version is only for more than a third.',
+        'The "AI named others instead" templates use the same score as the audit screen, Google AI included, so a lead named in 1 of 3 can get them.',
+        'A site that blocked our check now reads "Our check could not read your site, which AI tools may also struggle with", and every website issue in a list is a whole sentence.',
       ],
       removed: ['"It named you in 1 of 2 answers, so there\'s a gap in the rest" from every draft.'],
       effect: 'Drafts quote a real search the prospect lost, with real names, and an auto-responder no longer gets a "cheers for your reply".',

@@ -2,7 +2,9 @@
    The template text is never edited; the rule decides who gets it, inside resolveAuditReplyVars (every audit-class door).
    The sweep: any readable template body that makes the claim must be in NAMED_INSTEAD_TEMPLATES. Pure. */
 import { readFileSync } from 'node:fs';
-import { NAMED_INSTEAD_TEMPLATES, mayClaimNamedInstead } from '../src/lib/namedShareRule.ts';
+import { NAMED_INSTEAD_TEMPLATES, mayClaimNamedInstead, namedShareOf } from '../src/lib/namedShareRule.ts';
+import { scoreHookRun, type HookStateV2 } from '../src/lib/hookScore.ts';
+import { AI_OVERVIEW_STAMP_KEY, scoringMethodFor } from '../src/lib/aiOverview.ts';
 import { READABLE_TEMPLATE_BODIES } from '../src/lib/templateBodies.ts';
 
 let f = 0;
@@ -16,12 +18,33 @@ ok(!mayClaimNamedInstead(null, 6) && !mayClaimNamedInstead(0, 0) && !mayClaimNam
 
 console.log('2. every door goes through it');
 const AR = read('supabase/functions/_shared/audit-reply.ts');
-ok(/opts\.templateName && NAMED_INSTEAD_TEMPLATES\.has\(opts\.templateName\) && !mayClaimNamedInstead\(hookScore\.named, hookScore\.valid\)/.test(AR), 'resolveAuditReplyVars refuses the claim templates above a third');
+ok(/const share = namedShareOf\(hookScore\);\s*if \(share && opts\.templateName && NAMED_INSTEAD_TEMPLATES\.has\(opts\.templateName\) && !mayClaimNamedInstead\(share\.named, share\.total\)\)/.test(AR), 'resolveAuditReplyVars refuses the claim templates above a third, counted with namedShareOf');
+ok(/scoringMethod: scoringMethodFor\(audit\.created_at/.test(AR) && /scoreNamed: share\?\.named \?\? null, scoreTotal: share\?\.total \?\? null/.test(AR), "the send gate and the reply drafter read the SAME count (the audit screen's score)");
+ok(!/mayClaimNamedInstead\(hookScore\./.test(AR), 'no second, two-engine count left in the send path');
 ok(/reason: `\$\{HOOK_NO_GAP_REASON\}: \$\{namedShareRefusal/.test(AR), '…with the no-gap prefix every caller already handles');
 for (const fn of ['supabase/functions/send-whatsapp-message/index.ts', 'supabase/functions/process-whatsapp-queue/index.ts']) {
   const src = read(fn);
   const calls = src.match(/resolveAuditReplyVars\([^)]*\)/g) ?? [];
   ok(calls.length > 0 && calls.every((c) => /templateName/.test(c)), `${fn.split('/')[2]}: every call passes the template name`);
+}
+
+console.log('2b. Nola: Google AI counts (Paul, 2026-10-20)');
+{
+  /* Nola's Driving School, live audit 2026-10-19 16:03 (after Google AI joined the score): one sequential question,
+     ChatGPT named her, Gemini did not, Google showed an AI answer that did not. The audit screen says 1 of 3 (33%). */
+  const BIZ = "Nola's Driving School";
+  const cell = (named: boolean) => ({ named, self_named: named, answer_text: named ? `Try ${BIZ} in Halstead.` : 'Try Driving 4CE Driving School, Reliant Driver Training or One Direction Driving School.', competitors: named ? [] : ['Driving 4CE Driving School', 'Reliant Driver Training', 'One Direction Driving School'], citations: [] });
+  const state = { version: 2, engines: ['chatgpt', 'gemini'], planned: ['who is the best driving instructor for beginners in Halstead UK', 'driving instructors in Halstead UK', 'emergency driving lessons in Halstead UK'], sequential: true, next_index: 1, executed: 1, stop_reason: 'not_named' } as HookStateV2;
+  const rows = [{ question: state.planned[0], status: 'done', engines: ['chatgpt', 'gemini'], result: { chatgpt: cell(true), gemini: cell(false), ai_overview: cell(false), [AI_OVERVIEW_STAMP_KEY]: 'shown' } }];
+  const ctx = { named: { businessName: BIZ, trade: 'Driving instructors', town: 'Halstead' }, town: 'Halstead', trade: 'Driving instructors' };
+  const now = scoreHookRun(state, rows, { ...ctx, scoringMethod: scoringMethodFor('2026-10-19T16:03:39Z') });
+  const share = namedShareOf(now);
+  ok(now.scored.percent === 33 && share?.named === 1 && share?.total === 3, `Nola: the audit screen's score is 1 of 3 (33%), and that is the count the rule reads (${share?.named} of ${share?.total})`);
+  ok(mayClaimNamedInstead(share?.named, share?.total), 'Nola: 1 of 3 → the "named others instead" templates are allowed');
+  ok(!mayClaimNamedInstead(now.named, now.valid) && now.valid === 2, 'the old two-engine count (1 of 2) would have refused her: that is the bug');
+  const old = namedShareOf(scoreHookRun(state, rows, { ...ctx, scoringMethod: scoringMethodFor('2026-10-18T12:00:00Z') }));
+  ok(old?.named === 1 && old?.total === 2, 'an audit from before Google AI joined the score keeps its own two-engine score (like for like)');
+  ok(namedShareOf(null) === null && namedShareOf({ complete: false, scored: { named: 0, expected: 3 } }) === null, 'no score, or an incomplete one → no count (the claim is never allowed on absence)');
 }
 
 console.log('3. the sweep: a body that claims it is in the set');

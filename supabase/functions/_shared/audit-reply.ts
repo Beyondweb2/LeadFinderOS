@@ -9,7 +9,7 @@ import { buildReportData, seoStyleForAudit, type QueueRow, type RunRow } from ".
 import { isAggregatorUrl } from "./aggregators.ts";
 import { countAnsweredCells, readCleaningStamp } from "../../../src/lib/competitorCleaning.ts";
 import { usableRivals, excludeSelfRivals, templateEngineConflict } from "../../../src/lib/rivalHook.ts";
-import { NAMED_INSTEAD_TEMPLATES, mayClaimNamedInstead, namedShareRefusal } from "../../../src/lib/namedShareRule.ts";
+import { NAMED_INSTEAD_TEMPLATES, mayClaimNamedInstead, namedShareOf, namedShareRefusal } from "../../../src/lib/namedShareRule.ts";
 import { nameMatches } from "../../../src/lib/nameMatch.ts";
 import { shortReportUrl } from "../../../src/lib/reportSlug.ts";
 import { auditShowsVisibilityGap, resolveSiteFault, type CrawlSignals } from "../../../src/lib/crawlCheck.ts";
@@ -206,9 +206,11 @@ export async function resolveAuditReplyVars(service: any, leadId: string, opts: 
     };
   }
   /* ⛔ "NAMED OTHERS INSTEAD" ONLY WHEN NAMED IN AT MOST A THIRD (Paul, 2026-10-20, src/lib/namedShareRule.ts): keyed on the
-     template asked for, so the drafters (no templateName) are unchanged. The text is never edited; this decides who gets it. */
-  if (hookScore && hookScore.complete && opts.templateName && NAMED_INSTEAD_TEMPLATES.has(opts.templateName) && !mayClaimNamedInstead(hookScore.named, hookScore.valid)) {
-    return { ok: false, reason: `${HOOK_NO_GAP_REASON}: ${namedShareRefusal(String(audit.business_name ?? "").trim(), hookScore.named, hookScore.valid)}` };
+     template asked for. The text is never edited; this decides who gets it. ⛔ Counted with namedShareOf: the score the audit
+     screen shows, Google AI included where scored (Paul, 2026-10-20) — the same count the reply drafter reads (scoreNamed). */
+  const share = namedShareOf(hookScore);
+  if (share && opts.templateName && NAMED_INSTEAD_TEMPLATES.has(opts.templateName) && !mayClaimNamedInstead(share.named, share.total)) {
+    return { ok: false, reason: `${HOOK_NO_GAP_REASON}: ${namedShareRefusal(String(audit.business_name ?? "").trim(), share.named, share.total)}` };
   }
   const visibilityPct = hookScore && hookScore.complete ? hookScore.percent : null;
   const answered = countAnsweredCells((qrows ?? []) as Parameters<typeof countAnsweredCells>[0]);
@@ -408,5 +410,5 @@ export async function resolveAuditReplyVars(service: any, leadId: string, opts: 
   const siteFindings = siteFindingsDetail?.text ?? null;
   const siteFindingsKinds = siteFindingsDetail?.kinds ?? null;
   return { ok: true, trade, competitors, rivals: usableRivals(rivalPool), business, link, town: (audit.location_text ?? "").trim(), auditId: audit.id, siteFault, siteFindings, siteFindingsKinds, hookQuestion: hookGap?.question ?? null, hookEngine: hookGap?.engine ?? null, visibilityPct,
-    scoreNamed: hookScore && hookScore.complete ? hookScore.scored.named : null, scoreTotal: hookScore && hookScore.complete ? hookScore.scored.expected : null };
+    scoreNamed: share?.named ?? null, scoreTotal: share?.total ?? null };
 }

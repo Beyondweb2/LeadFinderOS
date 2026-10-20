@@ -99,7 +99,7 @@ const CAPABILITIES = ["dry_run", "build_phase_hold", "routing_leaf", "any_approv
    2026-09-30b: an explicit opt-out refuses MARKETING templates here too (src/lib/marketingConsent.ts).
    2026-10-04a: QA safety — a QA fixture is simulated, a test-account lead is refused (src/lib/qaSafety.ts).
    2026-10-19a: EVERY template refuses a UK / MY / SG number that is not a mobile (src/lib/whatsAppDestination.ts). */
-const BUILD_ID = "2026-10-19b-named-share-third";
+const BUILD_ID = "2026-10-20a-named-share-google-ai";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",

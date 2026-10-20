@@ -265,7 +265,9 @@ export const engineName = (w: string) => (w === 'chatgpt' ? 'ChatGPT' : w === 'g
 const withA = (s: string) => (/^[aeiou]/i.test(s) ? `an ${s}` : `a ${s}`);
 const listNames = (n: string[]) => (n.length <= 1 ? n.join('') : `${n.slice(0, -1).join(', ')} and ${n[n.length - 1]}`);
 /** Issue titles as one list: semicolons when a title has its own comma, so the list still reads. */
-const listIssues = (n: string[]) => (n.some((x) => x.includes(',')) && n.length > 1 ? `${n.slice(0, -1).join('; ')}; and ${n[n.length - 1]}` : listNames(n));
+const listIssues = (n: string[]) => (n.some((x) => x.includes(',')) && n.length > 1 ? `${n.slice(0, -1).join('; ')}; and ${n[n.length - 1]}`
+  /* Each title is a whole sentence (websiteCheck PLAIN_LINE); three or more take ", and" so a title holding "and" stays apart. */
+  : n.length >= 3 ? `${n.slice(0, -1).join(', ')}, and ${n[n.length - 1]}` : listNames(n));
 /** "Driving instructors" → "driving instructor" (an audit stores the trade capitalised; an acronym such as MOT stays). */
 const tradeWord = (t: string) => t.trim().replace(/s$/i, '').replace(/^([A-Z])(?=[a-z])/, (c) => c.toLowerCase());
 

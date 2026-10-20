@@ -207,7 +207,8 @@ Rules now (`src/lib/replyMove.ts`):
 - **The count is the score the audit SHOWS**: `resolveAuditReplyVars` scores with `scoringMethodFor(audit.created_at)` and
   returns `scoreNamed` / `scoreTotal` (= `hookScore.scored`: Google AI counted where Google showed an AI answer). The drafter's
   one-third rule reads it; only an audit with no complete quick-check score falls back to the run summary. The template SEND
-  gate (`NAMED_INSTEAD_TEMPLATES`) still reads method 1 — unchanged here.
+  gate (`NAMED_INSTEAD_TEMPLATES`) reads the SAME count: `namedShareOf` (`namedShareRule.ts`), one source for both (Nola 1 of 3 → allowed;
+  `named-share-rule.test.ts` §2b). Pre-2026-10-19 audits keep their two-engine score.
 - **Lead with the best missed search** (`askedPhrase`, `spokenSearch`): the hook pick's engine + question, and that answer's
   names: `I asked Gemini "Who is the best driving instructor for beginners in Halstead?" and it mentioned A, B and C.` A
   search phrase follows "for"; ", UK" is dropped. Only when the pick's engine is the conversation's engine (never two tools);
@@ -218,3 +219,6 @@ Rules now (`src/lib/replyMove.ts`):
 Preview (local, live data, read-only, nothing sent): Alisons "Yes it is." (1/2, Google AI showed no answer) → soft; Nola
 "Yes" (1/3) → full pitch led by Gemini's missed question; Ven burst → Auto-reply + full pitch; a Spanish auto-reply → Auto-reply
 + pitch. 0 checker warnings. Tests: `reply-move.test.ts` §9 (Nola), §10 (Ven), `ai-reply-drafts.test.ts` §3.
+- **Site line** (`websiteCheck.ts` PLAIN_LINE): a refused crawler reads "Our check could not read your site, which AI tools may also
+  struggle with" (hedged: we saw our check refused, never an AI tool). Every serious title is a whole sentence (name / town /
+  service pages / thin / deep / unlinked pages rewritten); three or more join with ", and" (`reply-move.test.ts` §9b).

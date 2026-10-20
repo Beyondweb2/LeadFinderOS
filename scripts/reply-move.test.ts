@@ -6,6 +6,7 @@ import { pickMove, tidyCaps, auditLine, inboundLabel, firstReplyPitch, autoReply
 import { CONFIDENCE_LINE, GUARANTEE_LINE } from '../src/lib/offerFactSheet.ts';
 import { checkAiReply, fallbackAiReply, type AiReplyContext } from '../src/lib/aiReplyDraft.ts';
 import { conversationEngine, draftNames } from '../src/lib/draftEvidence.ts';
+import { plainIssueTitle } from '../src/lib/websiteCheck.ts';
 
 let f = 0;
 const ok = (c: unknown, m: string) => { if (c) console.log('  PASS ' + m); else { f++; console.log('  FAIL ' + m); } };
@@ -89,7 +90,7 @@ console.log('6. the first-reply pitch (Paul, 2026-10-20)');
   const p1 = firstReplyPitch(issuesEv);
   const txt = p1.lines.join(' ');
   ok(p1.lines[0] === 'I asked Gemini for a plumber in Rugby and it mentioned Rival A Plumbing and Rival B Plumbing.', 'line 1: I asked <engine> for <trade in town> and it mentioned <rivals>');
-  ok(txt.includes('AI is recommending your competitors instead. I looked into why this might be happening and found a few things on your website: some pages have no main heading, your site is not secure (no padlock) and there is no phone number on the site.') && !/fourth/.test(txt), 'line 2: up to three crawl issue titles, in order');
+  ok(txt.includes('AI is recommending your competitors instead. I looked into why this might be happening and found a few things on your website: some pages have no main heading, your site is not secure (no padlock), and there is no phone number on the site.') && !/fourth/.test(txt), 'line 2: up to three crawl issue titles, in order');
   ok(p1.lines[p1.lines.length - 1] === PITCH_POINTED_LINE && p1.question === PITCH_EMOTIONAL_Q && p1.closer === 'emotional', 'ends: the pointed line, then ONE emotional question');
   ok(!/agency|voice note|guarantee|money back|£|confident/i.test(txt + p1.question), 'no agency question, voice note, guarantee or price in the pitch');
   const caps = firstReplyPitch({ ...issuesEv, trade: 'Driving instructors', site: { state: 'issues', issues: ['Some pages are unfinished, with sample text on them', 'Lots of your pages are near enough the same'] } });
@@ -185,6 +186,15 @@ console.log('9. Nola: counted over every engine in the score, led by the missed 
   ok(checkAiReply("When I asked Gemini for a driving instructor in Halstead it named you in 1 of 2 answers, so there's a gap in the rest.", ctx).some((x) => /X of Y/.test(x)), 'a draft saying "named you in 1 of 2 answers … gap in the rest" → warning');
   ok(/^I asked ChatGPT for a driving instructor in Halstead/.test(firstReplyPitch({ ...nola, engineWords: 'chatgpt' }).lines[0]), 'the missed search was Gemini but the conversation already named ChatGPT → never two tools: trade + town on ChatGPT');
   ok(/^I asked Gemini for driving instructors in Halstead and/.test(firstReplyPitch({ ...nola, missed: { engine: 'gemini', question: 'Driving instructors in Halstead UK' } }).lines[0]), 'a search phrase (not a question) follows "for", the trade lower case, no "UK"');
+}
+
+console.log('9b. the site line: hedged, and a list that reads in parallel (Paul, 2026-10-20)');
+{
+  const t = (id: string, title = '') => plainIssueTitle({ id, title, severity: 'medium', count: 1 } as unknown as Parameters<typeof plainIssueTitle>[0]);
+  ok(t('search_crawler_refused') === 'Our check could not read your site, which AI tools may also struggle with' && !/turned away/i.test(t('search_crawler_refused')), 'a refused crawler is OUR check failing, hedged: never "turned away the AI search tools"');
+  ok(t('name_unclear', 'Business name not found on the homepage') === 'Your business name is not on your homepage' && t('town_missing', 'Homepage does not mention Halstead') === 'Your homepage does not mention Halstead', 'noun-phrase titles become whole sentences');
+  const ven = firstReplyPitch({ ...ev, site: { state: 'issues', issues: ['Some main pages have no description for Google', 'Several of your pages are the same text with only the town or service swapped', t('name_unclear', 'Business name not found on the homepage')] } });
+  ok(ven.lines[1].endsWith('found a few things on your website: some main pages have no description for Google, several of your pages are the same text with only the town or service swapped, and your business name is not on your homepage.'), 'three issues: three whole sentences, ", and" before the last');
 }
 
 console.log('10. Ven: multi-message and non-English auto-responders (Paul, 2026-10-20)');

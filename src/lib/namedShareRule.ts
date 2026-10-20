@@ -17,6 +17,15 @@ export const NAMED_INSTEAD_TEMPLATES: ReadonlySet<string> = new Set([
   'ai_site_findings_v2', 'ai_visibility_report_offer', 'hook_followup',
 ]);
 
+/** THE ONE COUNT this rule reads (Paul, 2026-10-20): the score the audit screen shows — hookScore's `scored`, i.e.
+ *  ChatGPT + Gemini, plus Google AI wherever Google showed an AI answer (audits from GOOGLE_AI_SCORED_SINCE; older audits
+ *  keep their two-engine score). Nola's Driving School: ChatGPT 1/1, Gemini 0/1, Google AI 0/1 = 1 of 3 → allowed.
+ *  Null until the score is complete. Both the template send gate and the reply drafter read it. */
+export function namedShareOf(s: { complete: boolean; scored: { named: number; expected: number } } | null | undefined): { named: number; total: number } | null {
+  if (!s || !s.complete || !(s.scored.expected > 0)) return null;
+  return { named: s.scored.named, total: s.scored.expected };
+}
+
 /** ⛔ POSITIVE: the claim is allowed only with counts on record, at least one valid answer, and named ≤ a third.
  *  Unknown counts never allow it. */
 export function mayClaimNamedInstead(named: number | null | undefined, valid: number | null | undefined): boolean {
