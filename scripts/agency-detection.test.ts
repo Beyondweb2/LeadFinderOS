@@ -221,3 +221,8 @@ console.log('── v2 (2026-10-02): BETTER EVIDENCE, SAME CAUTION ──');
 
 console.log(f === 0 ? '\nALL PASS' : `\n${f} FAILURE(S)`);
 process.exit(f === 0 ? 0 : 1);
+
+{
+  const idx = read('src/pages/Index.tsx');
+  ok(/useFindEmails\(shownLeads,/.test(idx) && /shownLeads\.filter\(/.test(idx) && /onShownChange=\{setShownReported\}/.test(idx), 'Find emails and Add all with emails act on the rows showing only');
+}

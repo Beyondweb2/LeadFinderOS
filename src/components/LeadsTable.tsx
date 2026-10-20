@@ -51,6 +51,8 @@ EyeIcon.displayName = 'EyeIcon';
 interface LeadsTableProps {
   leads: Lead[];
   /** Absent = no Export menu (Sales, 2026-09-29: CSV export is admin-only). */
+  /** Told which rows are showing (after every filter), so Find emails / Add all with emails act on them only. */
+  onShownChange?: (rows: Lead[]) => void;
   /** Receives the rows showing now (after every filter), never the whole result set. */
   onExport?: (rows: Lead[]) => void;
   onAddToOutreach?: (lead: Lead) => Promise<any>;
@@ -121,7 +123,7 @@ interface LeadsTableProps {
   addProgress?: AddProgress | null;
 }
 
-export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onMapLinkClick, isChecked, blurred = false, gated = false, onGatedAction, savedLeadCount = 0, maxFreeSaves = 3, onViewDetailsGated, viewDetailsExhausted = false, searchEnrichment, onEnrichPatch, onSetWebsiteStatus, onBulkAdd, onBulkEnrich, isLeadEnriched, onFindEmails, onCancelFindEmails, findingEmails = false, emailProgress, emailResult, withWebsiteCount = 0, onAddAllWithEmails, addingEmails = false, addAllWithEmailsCount = 0, onExportWithEmails, addCampaignTooltip = 'Add to CRM', getCrmState, onRemoveFromCrm, ownership, onClaim, claiming, viewerRole, activeCampaign, onMoveToCampaign, addProgress }: LeadsTableProps) {
+export function LeadsTable({ leads, onShownChange, onExport, onAddToOutreach, isInOutreach, onMapLinkClick, isChecked, blurred = false, gated = false, onGatedAction, savedLeadCount = 0, maxFreeSaves = 3, onViewDetailsGated, viewDetailsExhausted = false, searchEnrichment, onEnrichPatch, onSetWebsiteStatus, onBulkAdd, onBulkEnrich, isLeadEnriched, onFindEmails, onCancelFindEmails, findingEmails = false, emailProgress, emailResult, withWebsiteCount = 0, onAddAllWithEmails, addingEmails = false, addAllWithEmailsCount = 0, onExportWithEmails, addCampaignTooltip = 'Add to CRM', getCrmState, onRemoveFromCrm, ownership, onClaim, claiming, viewerRole, activeCampaign, onMoveToCampaign, addProgress }: LeadsTableProps) {
   const isLocked = blurred || gated;
   const handleExport = isLocked ? undefined : onExport;
   const { user } = useAuth();
@@ -205,6 +207,7 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
     return [...rest, ...last];
   }, [leads, statusFilters, socialFilters, siteFilters, agency, hasOwnSite, highAgency]);
 
+  useEffect(() => { onShownChange?.(filteredLeads); }, [filteredLeads, onShownChange]);
   const visible = visibleResults(leads.length, filteredLeads.length);
   const filterNotice = visible.filtered ? (
     <span className="ml-2 inline-flex items-center gap-1.5 text-amber-700 dark:text-amber-400" data-testid="results-filtered">
