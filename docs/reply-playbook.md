@@ -102,6 +102,15 @@ payment, an email address given (send it yourself), a question the playbook cann
 unmatched. "Draft reply" and Regenerate refuse these too. A map pin, social or directory link stays "Sent a link: look
 at it first".
 
+## 5b. Live-bug fixes (2026-10-20, from the reply recon)
+
+* **Merged turns:** prospect messages with nothing of ours between them and no more than five minutes apart are ONE turn (`mergeBursts`, `replyMove.ts`). "Yes" then "How can I help?" gets the pitch.
+* **Busy is a phrase, never a word in a name:** "driving" counts only as "I'm driving / driving at the moment". "Hi yes this is Pass Me Driving" gets the pitch.
+* **Names:** only from "my name is X", "this is X", "it's X", "I'm X", "X here / speaking", or the whole message being a known first name, typed with a capital (a stoplist and the business name never count). Unsure = no greeting.
+* **Away / on leave / out of action** gets the not-now wording ("No problem, I'll check back then."), the date noted for the person to set. Never the pitch.
+* **The "how can I help" family** ("how can I assist", "anything I can help with?", "what can I do for you", "what's it concerning?", "nature of your enquiry") and emoji-only replies get the pitch on a first reply.
+* Tests: `scripts/reply-live-bugs.test.ts` (real cases from the recon).
+
 ## 6. Where Paul's brief and v5 differ (v5 wins)
 
 * **how much**: the brief said "covers the new site, hosting, changes and monthly audits". v5 2.6 / 2.7 only promise a

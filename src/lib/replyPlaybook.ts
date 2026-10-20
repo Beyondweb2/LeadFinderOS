@@ -131,7 +131,7 @@ export const RE = {
   interested: /\b(i'?m\s+interested|we'?re\s+interested|i\s+am\s+interested|interested|tell\s+me\s+more|more\s+info|more\s+details|sounds\s+(good|great|interesting)|keen|what\s+do\s+you\s+suggest)\b/i,
   whatWeDo: /\b(what\s+(do|would)\s+you\s+(do|offer)|what\s+is\s+it\s+you\s+do|what\s+does\s+findable\s+do|what'?s\s+findable|what\s+are\s+you\s+offering|what\s+do\s+you\s+actually\s+do|how\s+does\s+(it|this)\s+work|what\s+exactly)\b/i,
   /** "What's this about?" on the FIRST reply is answered by the pitch itself. */
-  whatsThisAbout: /\b(what'?s\s+(this|it)\s+(about|regarding|for)|what\s+is\s+(this|it)\s+(about|regarding|for)|what\s+do\s+you\s+want|what'?s\s+up|how\s+can\s+i\s+help|what\s+can\s+i\s+do\s+for\s+you|regarding\??)\b/i,
+  whatsThisAbout: /\b(what'?s\s+(this|it)\s+(about|regarding|for)|what\s+is\s+(this|it)\s+(about|regarding|for)|what\s+do\s+you\s+want|what'?s\s+up|how\s+(can|may|could)\s+(i|we)\s+(help|assist)|can\s+(i|we)\s+(help|assist)|what\s+(can|could|may)\s+(i|we)\s+(do|help|assist)(\s+(you\s+)?(for|with))?|is\s+there\s+anything\s+(i|we)\s+can\s+(help|do)|anything\s+(i|we)\s+can\s+(help|do|assist)|do\s+you\s+need\s+(any\s+)?help|what('?s|\s+is|\s+was)\s+(it|this)\s+(concerning|regarding|about)|how\s+(i|we)\s+can\s+(help|assist)|nature\s+of\s+(your|the)\s+(enquiry|inquiry|query|message)|what\s+do\s+you\s+need|what\s+brings\s+you|regarding\??)\b/i,
   howMuch: /\b(how\s+much|price|pricing|cost|costs|charge|fee|fees|what\s+do\s+you\s+charge|rates?)\b|£/i,
   catch: /\b(catch|what'?s\s+the\s+(snag|deal|small\s+print)|too\s+good\s+to\s+be\s+true|hidden\s+(fees|costs|charges))\b/i,
   howLong: /\b(how\s+long\s+(does\s+it|will\s+it|to|would\s+it)\s*(take|build)?|how\s+quick(ly)?|how\s+fast|when\s+would\s+it\s+be\s+(ready|live|done)|turnaround)\b/i,
@@ -146,7 +146,11 @@ export const RE = {
   doesAiMatter: /\b(nobody|no\s+one|noone|none\s+of\s+my\s+customers|my\s+customers\s+(don'?t|do\s+not))\s+(uses?|ask|asks)\s+(ai|chatgpt|gemini)|\bdoes\s+(ai|it|that)\s+(even\s+)?(matter|make\s+a\s+difference)|\bwho\s+uses\s+(ai|chatgpt|gemini)|\bai\s+(is\s+)?(rubbish|a\s+fad|nonsense|doesn'?t\s+matter)|\bwhy\s+would\s+(i|that)\s+(care|matter)\b|\bnot\s+bothered\s+about\s+ai\b/i,
   sendEmail: /\b(send|drop|pop|put)\s+(me\s+|it\s+|that\s+|the\s+details\s+|something\s+|some\s+info\s+)?(an?\s+|it\s+in\s+an?\s+|via\s+|by\s+|over\s+(by\s+|via\s+)?)?e-?mail\b|\be-?mail\s+(me|it|over|instead)\b|\bvia\s+e-?mail\b|\bby\s+e-?mail\b/i,
   notOwner: /\b(not\s+the\s+(owner|boss|manager|right\s+person|one\s+who\s+(deals|decides))|i\s+(just|only)\s+work\s+(here|for)|i'?m\s+(just\s+)?(the\s+)?(receptionist|admin|office\s+manager|staff|employee|apprentice)|you\s+(need|want)\s+to\s+speak\s+to|speak\s+to\s+(the\s+)?(owner|boss|manager|my\s+(boss|husband|wife|dad|partner))|(owner|boss|manager)\s+(is|isn'?t)\s+(away|out|not\s+here|in))\b/i,
-  busy: /\b(busy|driving|on\s+a\s+job|at\s+work|in\s+a\s+meeting|with\s+a\s+customer|can'?t\s+talk|cant\s+talk|up\s+a\s+ladder|on\s+site)\b/i,
+  /** ⛔ Real "busy / call me later" phrases only (reply recon 2026-10-20): the bare word "driving" matched every driving school's
+   *  name ("Hi yes this is Pass Me Driving" was answered "What day and time suits you?"). Driving counts only as "I'm driving". */
+  busy: /\b(busy|on\s+a\s+job|at\s+work|in\s+a\s+meeting|with\s+a\s+customer|can'?t\s+talk|cant\s+talk|up\s+a\s+ladder|on\s+site|call\s+(me\s+)?(back\s+)?later|(i'?m|im|i\s+am|we'?re|am|currently|just|still)\s+(out\s+)?driving|driving\s+(at\s+the\s+moment|right\s+now|atm|currently|just\s+now|today))\b/i,
+  /** Away / on leave / out of action, said as the reason they cannot talk ("I'm away until the 18th"). Parked, never pitched. */
+  away: /\b(i'?m|im|i\s+am|we'?re|we\s+are|i'?ll\s+be|we'?ll\s+be)\s+(away|off|on\s+(annual\s+)?leave|on\s+holiday|out\s+of\s+action|unavailable|abroad)\b|\b(away|unavailable|out\s+of\s+action|off\s+work)\s+(until|till|til|for)\b|\bon\s+(annual\s+)?(leave|holiday)\b|\bout\s+of\s+action\b|\bannual\s+leave\b/i,
   /** A day / time they named. */
   namedTime: /\b(\d{1,2}(:\d{2})?\s*(am|pm)|\d{1,2}\s*o'?clock|after\s+\d|before\s+\d|around\s+\d|about\s+\d|at\s+\d|tomorrow|today|tonight|this\s+(morning|afternoon|evening)|(mon|tues|wednes|thurs|fri|satur|sun)day|lunch(time)?|later\s+today|in\s+(an?|\d+)\s*(hour|hours|mins?|minutes))\b/i,
   monthYear: /\b(next\s+(week|month|year)|in\s+(a|\d+|a\s+few|a\s+couple\s+of|two|three|four|six)\s+(weeks?|months?|years?)|(jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*|end\s+of\s+(the\s+)?(year|month)|new\s+year|after\s+(christmas|xmas|easter|the\s+summer))\b/i,
@@ -218,26 +222,45 @@ export function readEndDate(text: string, nowMs: number = Date.now()): FollowUpN
 const NOT_A_NAME = new Set(['yes', 'yeah', 'yep', 'yup', 'yh', 'ye', 'ya', 'aye', 'no', 'nope', 'hi', 'hello', 'hey', 'hiya', 'speaking', 'correct',
   'right', 'sure', 'ok', 'okay', 'mate', 'pal', 'bud', 'buddy', 'here', 'me', 'him', 'her', 'he', 'she', 'us', 'we', 'it', 'this', 'that', 'the', 'owner',
   'boss', 'manager', 'sorry', 'thanks', 'cheers', 'morning', 'afternoon', 'evening', 'indeed', 'certainly', 'who', 'what', 'how', 'why', 'busy',
-  'driving', 'working', 'just', 'still', 'not', 'is', 'am', 'are', 'was', 'good', 'fine', 'great', 'interested', 'help', 'possible', 'speak', 'talking']);
+  'driving', 'working', 'just', 'still', 'not', 'is', 'am', 'are', 'was', 'good', 'fine', 'great', 'interested', 'help', 'possible', 'speak', 'talking',
+  /* Reply recon 2026-10-20: the words that were greeted as names ("Hi Away,", "Hi About,"). */
+  'away', 'on', 'out', 'off', 'about', 'fully', 'always', 'retired', 'my', 'there', 'one', 'our', 'all', 'so', 'actually', 'unavailable', 'probably',
+  'urgent', 'free', 'currently', 'in', 'an', 'a', 'at', 'back', 'closed', 'open', 'abroad', 'leave', 'holiday', 'ues', 'yeas', 'yess', 'yea', 'also',
+  'only', 'very', 'really', 'quite', 'now', 'today', 'sorry', 'apologies', 'unfortunately', 'thank', 'please', 'welcome', 'dear', 'sir', 'madam',
+  'regards', 'kind', 'best', 'many', 'much', 'some', 'any', 'no', 'for', 'from', 'with', 'and', 'but', 'or', 'if', 'then', 'when', 'where', 'which',
+  'driver', 'driving', 'school', 'electrical', 'plumbing', 'heating', 'locksmith', 'locksmiths', 'services', 'service', 'ltd', 'limited', 'group']);
+/** Common UK first names: the only words accepted when a name is the WHOLE message ("Dom") or follows "yes". A name introduced by
+ *  "my name is / this is / it's / I'm / X here" is checked against the stoplist instead. Not a mine of people; a guard. */
+const FIRST_NAMES = new Set(('adam alan alex alexander alfie andrew andy anthony barry ben benjamin bill billy bob brian callum carl charlie chris christopher colin craig dan daniel danny darren dave david dean declan dennis derek dom dominic don donald doug duncan ed eddie edward elliot ewan frank fred gareth gary gavin geoff george gerald glen gordon graham grant greg harry henry ian jack jacob jake james jamie jason jay jeff jeremy jim jimmy joe joel john johnny jon jonathan joseph josh joshua keith ken kenny kevin kieran kyle lee leon leo lewis liam luke malcolm marc mark martin matt matthew mick mike mohammed muhammad nathan neil nick nigel noel oliver oscar owen pat patrick paul peter phil philip ray rhys richard rob robert robbie roger ron ross roy russell ryan sam samuel scott sean shane simon spencer stephen steve steven stuart ted terry thomas tim timothy toby tom tommy tony trevor vince wayne will william zak zach zac aaron abdul ahmed ali amir asif imran omar raj sanjay ravi amy angela anna anne beth becky bethany carol caroline charlotte chloe claire dawn debbie deborah diane donna eleanor ella ellie emily emma eve fiona gemma gill gillian hannah helen holly jackie jane janet jean jemma jenny jess jessica jill joanne jo julie karen kate katie kath kathy kay kim kirsty laura lauren leanne linda lisa lorraine louise lucy lynn margaret maria mary megan michelle mandy nicola nicole pam pamela patricia paula penny rachel rebecca rosie ruth sally sam sandra sarah sharon sheila sophie stacey susan suzanne tina tracy vicky victoria wendy zoe').split(/\s+/));
 const asName = (w: string | undefined) => {
   const s = String(w ?? '').replace(/[^A-Za-z'-]/g, '');
-  if (s.length < 2 || s.length > 15 || NOT_A_NAME.has(s.toLowerCase()) || !/^[A-Za-z][a-z'-]*$|^[A-Z][A-Za-z'-]*$/.test(s)) return null;
+  if (s.length < 2 || s.length > 15 || NOT_A_NAME.has(s.toLowerCase()) || !/^[A-Z][a-z'-]+$/.test(s)) return null; // Capitalised as typed; "UPC" and "im mark" are no name
   return s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
 };
-/** A first name they gave in this reply, or null. Only clear forms: "this is Dom", "it's Dom", "Dom here", "Dom speaking",
- *  "I'm Dom", "my name is Dom", "yes Dom", or a single word that is a name. Never a business word. */
+/** A first name they gave in this reply, or null. ⛔ Only clear forms (Paul, 2026-10-21; reply recon: 3 of 21 greetings were right):
+ *  "my name is Dom", "this is Dom", "it's Dom", "I'm Dom", "Dom here / Dom speaking" (a surname after it is dropped), or the WHOLE message
+ *  being a known first name ("Dom", "Yes Dom"). Typed with a capital. Never a stoplist word or a word of the business's name.
+ *  "This is Pass Smart Driving School" (a capital word follows) and "this is Steve Bullimore the locksmith" give no name. Unsure = null. */
 export function nameFromReply(text: string, businessName = ''): string | null {
   const t = norm(text).replace(/[!.?,]+$/g, '');
   const biz = norm(businessName).toLowerCase();
-  const pick = (w: string | undefined) => { const n = asName(w); return n && !biz.split(/\W+/).includes(n.toLowerCase()) ? n : null; };
-  const m = t.match(/\b(?:this\s+is|it'?s|its|i'?m|im|i\s+am|my\s+name'?s|my\s+name\s+is|name'?s)\s+([A-Za-z][a-z'-]+)\b/i)
-    ?? t.match(/^\W*(?:(?:yes|yeah|yep|hi|hello|hey)\W+)?([A-Za-z][a-z'-]+)\s+(?:here|speaking)\b/i)
-    ?? t.match(/^\W*(?:yes|yeah|yep|yh)\W+(?:it\s+is\W+)?([A-Z][a-z'-]+)\W*$/)
-    ?? t.match(/^\W*([A-Z][a-z'-]+)\W*$/);
-  if (!m) return null;
-  const n = pick(m[1]);
-  /* "it's me / it's him" never a name; "I'm busy" is in NOT_A_NAME. */
-  return n;
+  const pick = (w: string | undefined, listed = false) => {
+    const n = asName(w);
+    if (!n || biz.split(/\W+/).includes(n.toLowerCase())) return null;
+    return !listed || FIRST_NAMES.has(n.toLowerCase()) ? n : null;
+  };
+  /* An introduction: the next word must not start a business name ("this is Pass Smart Driving") unless it is "from / the / and / ,". */
+  const intro = t.match(/(?:\b(?:[Tt]his\s+is|[Ii]t'?s|[Ii]ts|[Ii]'?m|[Ii]\s+am|[Mm]y\s+name'?s|[Mm]y\s+name\s+is|[Nn]ame'?s))\s+([A-Z][a-z'-]+)(?:\s+([A-Za-z][A-Za-z'-]*))?/);
+  if (intro) {
+    const follow = intro[2] ?? '';
+    if (/^[A-Z]/.test(follow)) return null; // two capitalised words: a business or a full name, not a clear first name
+    return pick(intro[1]);
+  }
+  const here = t.match(/^\W*(?:(?:[Yy]es|[Yy]eah|[Yy]ep|[Hh]i|[Hh]ello|[Hh]ey)\W+)?([A-Za-z][a-z'-]+)(?:\s+[A-Z][a-z'-]+)?\s+(?:here|speaking)\b/);
+  /* A name typed in lower case ("dom here") counts only when it is a known first name. */
+  if (here) return /^[a-z]/.test(here[1]) ? pick(here[1].charAt(0).toUpperCase() + here[1].slice(1), true) : pick(here[1]);
+  const lone = t.match(/^\W*(?:(?:[Yy]es|[Yy]eah|[Yy]ep|[Yy]h)\W+(?:[Ii]t\s+is\W+)?)?([A-Z][a-z'-]+)\W*$/);
+  return lone ? pick(lone[1], true) : null;
 }
 
 /* ── a rival with (nearly) the lead's own name is not a rival ──────────────────────────────────── */

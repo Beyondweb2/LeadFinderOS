@@ -22,6 +22,14 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-20-drafter-live-bugs', date: '2026-10-20', title: 'Reply drafts: four mistakes fixed', audience: 'admin',
+    body: 'Reply drafts no longer treat a driving school as busy, no longer greet people by the wrong word, read quick back-to-back messages as one, and recognise more ways of asking how they can help.',
+    report: {
+      added: ['Replies like "away until the 18th" get the "check back then" wording, with the date noted for you to set.'],
+      changed: ['Messages from the same person within five minutes are read as one ("Yes" then "How can I help?" gets the pitch).', 'A greeting name is only used when they clearly gave one ("my name is", "this is", "Dom here"). Otherwise no greeting.', '"Driving" in a business name no longer reads as "busy, call me later".', '"How can I assist", "anything I can help with?", "what is it concerning?" and emoji-only replies get the pitch.'],
+      removed: [],
+      effect: 'Fewer first replies land in Needs you, and no more "Hi Away," or "What day and time suits you?" to a driving school. Drafts only: nothing sends until you press send.',
+    } },
   { id: '2026-10-20-inbox-keep-position', date: '2026-10-20', title: 'Inbox: sending no longer moves the conversation', audience: 'all',
     body: 'The Inbox list is now ordered by the last message from the prospect, so a conversation stays where it is when you reply.',
     report: {

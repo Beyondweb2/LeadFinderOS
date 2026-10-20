@@ -72,6 +72,48 @@ export interface MoveThreadMsg {
   templateName?: string | null;
   /** When it arrived (ISO). Absent on fixtures: then no burst is read (each message stands alone). */
   at?: string | null;
+  /** Set by mergeBursts: one of the merged messages was an auto-reply on its own wording (the whole turn then reads as one). */
+  autoPart?: boolean;
+}
+
+/** Messages from the same prospect with nothing of ours between them and no more than this apart are ONE turn ("Yes" then
+ *  "How can I help?"). Measured: 75% of follow-on messages arrive within 5 minutes (reply recon 2026-10-20). */
+export const MERGE_WINDOW_MS = 300_000;
+/** One turn per burst of prospect messages (Paul, 2026-10-21). Chained: each message within MERGE_WINDOW_MS of the one before. No
+ *  timestamp on either side = not merged. Identical repeats are dropped. Text joins with ". " unless the part already ends in
+ *  punctuation. The turn's time is its newest message. */
+export function mergeBursts(thread: MoveThreadMsg[]): MoveThreadMsg[] {
+  const out: MoveThreadMsg[] = [];
+  let run: MoveThreadMsg[] = [];
+  const flush = () => {
+    if (!run.length) return;
+    if (run.length === 1) { out.push(run[0]); run = []; return; }
+    const parts: string[] = []; const seen = new Set<string>();
+    for (const m of run) {
+      const t = String(m.text ?? '').replace(/\s+/g, ' ').trim();
+      const key = t.toLowerCase();
+      /* A lone "?" or "." sent as its own message adds nothing ("Yes / How can I help you? / ?"). */
+      if (!t || !/[\p{L}\p{N}\p{Extended_Pictographic}]/u.test(t) || seen.has(key)) continue;
+      seen.add(key); parts.push(t);
+    }
+    const text = parts.reduce((acc, p) => (acc ? `${acc}${/[.!?:;,]$/.test(acc) ? ' ' : '. '}${p}` : p), '');
+    const real = run.filter((m) => (m.messageType ?? 'text') === 'text' && !/^\[[a-z_]+\]$/i.test(String(m.text ?? '').trim()));
+    const last = run[run.length - 1];
+    out.push({ from: 'them', text, messageType: real.length ? 'text' : last.messageType ?? 'text', templateName: last.templateName ?? null, at: last.at ?? null,
+      autoPart: run.some((m) => m.autoPart ?? isAutoReply(m.text, m.messageType)) });
+    run = [];
+  };
+  for (const m of thread) {
+    if (m.from !== 'them') { flush(); out.push(m); continue; }
+    const prev = run[run.length - 1];
+    if (prev) {
+      const a = Date.parse(prev.at ?? ''); const b = Date.parse(m.at ?? '');
+      if (!(Number.isFinite(a) && Number.isFinite(b) && b - a >= 0 && b - a <= MERGE_WINDOW_MS)) flush();
+    }
+    run.push(m);
+  }
+  flush();
+  return out;
 }
 
 export interface MoveEvidence {
@@ -271,7 +313,7 @@ function burstStart(thread: MoveThreadMsg[], idx: number): number {
  *  or as part of a MULTI-MESSAGE BURST that holds one: Ven's "Buenas noches" / "Thanks for contacting Ven Language
  *  Services" / "Are you interested in Spanish lessons?..." arrived together, so none of the three is a real reply. */
 export function autoReplyFlags(thread: MoveThreadMsg[]): boolean[] {
-  const own = thread.map((m) => m.from === 'them' && isAutoReply(m.text, m.messageType));
+  const own = thread.map((m) => m.from === 'them' && (m.autoPart ?? isAutoReply(m.text, m.messageType)));
   const out = [...own];
   for (let i = 0; i < thread.length; i++) {
     if (thread[i].from !== 'them') continue;
@@ -411,6 +453,27 @@ export const pitchText = (p: { lines: string[]; question: string; closer: string
 /** What our previous message asked, read from its words (our drafts are edited by a person, so loosely). */
 type OurAsk = 'emotional' | 'emotional_no_site' | 'agency' | 'site' | 'contract' | 'end_date' | 'pay_monthly' | 'happy_change'
   | 'email' | 'best_person' | 'call_time' | 'better_time' | 'offer';
+/** "away until the 18th": a date readEndDate can read, or the next 18th (their day of the month, no month said). Check back the day AFTER they are
+ *  back (not 14 days before, which is the contract rule). null when no day can be read. */
+function awayUntil(text: string, nowMs: number): FollowUpNote | null {
+  const t = norm(text).toLowerCase();
+  const now = new Date(nowMs);
+  const today = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+  const ymd = (d: Date) => d.toISOString().slice(0, 10);
+  const next = (end: Date, said: string): FollowUpNote => ({ said, endsOn: ymd(end), checkBackOn: ymd(new Date(end.getTime() + 86_400_000)) });
+  const dated = readEndDate(text, nowMs);
+  if (dated) return next(new Date(`${dated.endsOn}T00:00:00Z`), dated.said);
+  const dom = t.match(/\b(?:until|till|til|back\s+(?:on\s+)?)\s*(?:the\s+)?(\d{1,2})(st|nd|rd|th)\b/);
+  if (dom) {
+    const d = Number(dom[1]);
+    if (d >= 1 && d <= 31) {
+      let c = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), d));
+      if (c <= today) c = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth() + 1, d));
+      return next(c, `the ${dom[1]}${dom[2]}`);
+    }
+  }
+  return null;
+}
 function ourAsk(m: MoveThreadMsg | null): OurAsk | null {
   const t = norm(m?.text ?? '');
   /* An offer said without a question mark ("Happy to explain it here or jump on a quick call") is still an offer. */
@@ -482,11 +545,12 @@ function whoRunsKnown(thread: MoveThreadMsg[]): boolean {
 }
 
 export function pickMove(i: MoveInput): MovePlan {
-  const { latest, prevOurs, idx } = latestPair(i.thread);
+  const thread = mergeBursts(i.thread);
+  const { latest, prevOurs, idx } = latestPair(thread);
   const e = i.evidence;
   const nowMs = i.nowMs ?? Date.now();
-  const autoFlags = autoReplyFlags(i.thread);
-  const lastIsOurs = idx >= 0 && idx < i.thread.length - 1 && i.thread.slice(idx + 1).some((m) => m.from === 'us');
+  const autoFlags = autoReplyFlags(thread);
+  const lastIsOurs = idx >= 0 && idx < thread.length - 1 && thread.slice(idx + 1).some((m) => m.from === 'us');
 
   if (!latest) return plan({ move: 'unsure', read: 'no reply', autoDraft: false, needsYou: flag('unsure'), points: ['They have not replied yet. Do not chase with a pitch.'] });
   const text = norm(latest.text);
@@ -504,16 +568,16 @@ export function pickMove(i: MoveInput): MovePlan {
 
   /* 3. Not a real reply: its own wording, or a multi-message burst holding one (autoReplyFlags). */
   if (autoFlags[idx]) {
-    const start = burstStart(i.thread, idx);
+    const start = burstStart(thread, idx);
     let prevTheirs = -1;
-    for (let j = start - 1; j >= 0; j--) if (i.thread[j].from === 'them') { prevTheirs = j; break; }
+    for (let j = start - 1; j >= 0; j--) if (thread[j].from === 'them') { prevTheirs = j; break; }
     const repeat = prevTheirs >= 0 && autoFlags[prevTheirs];
     /* ⛔ THEY HAVE NOT REALLY CONFIRMED WHO THEY ARE (Paul, 2026-10-20, Ven): an auto-reply to the opener, with nothing real
        from them before it, gets the usual FIRST-REPLY PITCH as its draft, never a generic line. Still labelled Auto-reply
        (not a real reply, never counted as Replied). A repeat or a loop guard keeps the old rule: nothing drafted. */
     let prevUs: MoveThreadMsg | null = null;
-    for (let j = start - 1; j >= 0; j--) if (i.thread[j].from === 'us') { prevUs = i.thread[j]; break; }
-    const realBefore = i.thread.slice(0, start).some((m, k) => m.from === 'them' && !autoFlags[k]);
+    for (let j = start - 1; j >= 0; j--) if (thread[j].from === 'us') { prevUs = thread[j]; break; }
+    const realBefore = thread.slice(0, start).some((m, k) => m.from === 'them' && !autoFlags[k]);
     if (!repeat && !guard && !realBefore && prevUs && wasOpener(prevUs)) {
       const pitch = firstReplyPitch(e);
       return plan({ move: 'auto_reply', read: 'automated', label: 'Auto-reply',
@@ -528,7 +592,7 @@ export function pickMove(i: MoveInput): MovePlan {
 
   /* The FIRST real reply to our opener (Paul, 2026-10-20): the pitch, unless it is a no / stop / angry, a wrong person or a
      direct question. A name they give in it ("Dom here") may open the pitch. */
-  const realBefore = i.thread.slice(0, idx).some((m, k) => m.from === 'them' && !autoFlags[k]);
+  const realBefore = thread.slice(0, idx).some((m, k) => m.from === 'them' && !autoFlags[k]);
   const first = !realBefore && !!prevOurs && wasOpener(prevOurs);
   const theirName = first ? nameFromReply(latest.text, e.businessName) : null;
   const pitchPlan = (): MovePlan => {
@@ -553,7 +617,7 @@ export function pickMove(i: MoveInput): MovePlan {
     if (note) return fromPlaybook('in_contract', { followUp: note, note: `Tied into a contract until ${note.said} (${note.endsOn}). Set the Next Action for ${note.checkBackOn} when you send.` });
     return fromPlaybook('tied_no_date');
   };
-  const known = whoRunsKnown(i.thread);
+  const known = whoRunsKnown(thread);
   if (ask && !first && !CLEAR_NO.test(text) && !NEGATED.test(text) && !asksItsOwn && t.category !== 'wrong_person' && !RE.emailAddr.test(text)) {
     let p: MovePlan | null = null;
     if (ask === 'emotional' || ask === 'emotional_no_site') {
@@ -611,12 +675,19 @@ export function pickMove(i: MoveInput): MovePlan {
   if (LINK.test(text)) {
     /* The first reply: a link only changes the pitch when we have no website on record for them. */
     if (!first || noSiteOf(e)) {
-      return g(fromPlaybook('website_given', { note: 'They gave a website. Run Crawl site on it from the lead (the draft does not crawl).' }, whoRunsKnown(i.thread) ? WEBSITE_GIVEN_KNOWN : undefined));
+      return g(fromPlaybook('website_given', { note: 'They gave a website. Run Crawl site on it from the lead (the draft does not crawl).' }, whoRunsKnown(thread) ? WEBSITE_GIVEN_KNOWN : undefined));
     }
   }
   if (RE.notOwner.test(text)) return g(fromPlaybook('not_owner'));
   if (t.category === 'wrong_person') return g(plan({ move: 'close_politely', read: 'wrong_person', autoDraft: false, needsYou: flag('wrong_person'), points: ['Say sorry, your mistake, and you will not message again.'] }));
   if (RE.tooExpensive.test(text) && !CLEAR_NO.test(text)) return g(fromPlaybook('too_expensive'));
+  /* ⛔ "I'm away until the 18th", "on annual leave", "out of action for a couple of months" (Paul, 2026-10-21; recon: 8 first replies were
+     pitched with "Hi Away,"): parked with the not-now wording, never the pitch. Their date is noted, never written. */
+  if (RE.away.test(text) && !/\binterested\b/i.test(text) && !CLEAR_NO.test(text) && !RE.phoneNumber.test(text) && !RE.emailAddr.test(text)) {
+    const back = awayUntil(text, nowMs);
+    return g(plan({ move: 'playbook', read: 'away', intent: 'not_now', guide: NOT_NOW_WITH_TIME, points: [`Say this, close to these words: "${NOT_NOW_WITH_TIME}"`], question: null,
+      followUp: back, note: back ? `They are away until ${back.said}. Check back on ${back.checkBackOn}: set the Next Action when you send.` : 'They said they are away: set the Next Action for when they are back when you send.' }));
+  }
   if (RE.notNow.test(text) && !/\binterested\b/i.test(text) && !CLEAR_NO.test(text)) {
     const note = readEndDate(text, nowMs);
     if (note || RE.monthYear.test(text)) {
