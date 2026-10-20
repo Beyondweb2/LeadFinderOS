@@ -238,7 +238,15 @@ export function fileWords(src: string): string {
 /** Claimed "N years" that belong to the BUSINESS. A sentence about one person's career is not the
  *  company's age ("Rob has spent 20 years…"), so it never makes a conflict. */
 const YEARS_RE = /\b(?:(more than|over|almost|nearly|around|about)\s+)?(\d{1,2})\s*(\+)?\s*(?:years?|yrs)['’]?\s+(?:of\s+)?(?:experience|in business|trading|in the (?:trade|industry)|serving)/gi;
-const PERSONAL_RE = /\b(?:he|she|his|her|has spent|has worked|have worked|started (?:his|her)|career|apprentice|i have|i've|myself)\b/i;
+const PERSONAL_RE = /\b(?:he|she|his|her|has spent|has worked|have worked|started (?:his|her)|career|apprentice|i have|i[’']ve|i[’']m|my|myself)\b/i;
+/** The sentence a match sits in (both sides of it). */
+function sentenceAround(text: string, index: number, len: number): string {
+  const before = text.slice(Math.max(0, index - 120), index);
+  const start = Math.max(before.lastIndexOf('. '), before.lastIndexOf('! '), before.lastIndexOf('? '));
+  const after = text.slice(index + len, index + len + 160);
+  const end = after.search(/[.!?](?:\s|$)/);
+  return before.slice(start + 1) + text.slice(index, index + len) + (end >= 0 ? after.slice(0, end) : after);
+}
 const FOUNDED_RE = /\b(?:established|est\.?|founded|trading since|since|started in)\s+(?:in\s+)?((?:19|20)\d{2})\b/gi;
 const COMPANY_NO_RE = /\b(?:company|registration|reg\.?|registered)\s*(?:no\.?|number|num\.?)?\s*[:.]?\s*((?:SC|NI|OC)?\d{6,8})\b|\bregistered in (?:england|scotland|wales|northern ireland)[^.]{0,60}?\b((?:SC|NI|OC)?\d{8})\b/i;
 const VAGUE_CRED_RE = /\b(?:accredited|fully accredited|approved (?:electrician|contractor|installer|engineer|tradesm[ae]n|plumber|gas engineer)s?|certified (?:electrician|installer|engineer|contractor)s?|registered (?:installer|electrician|contractor|engineer)s?|industry[- ]approved|fully (?:qualified|certified))\b/gi;
@@ -347,12 +355,18 @@ export function pageObservations(html: string, pageUrl: string, homeUrl: string,
   for (const m of text.matchAll(YEARS_RE)) {
     const before = text.slice(Math.max(0, (m.index ?? 0) - 120), m.index ?? 0);
     const sentenceStart = Math.max(before.lastIndexOf('. '), before.lastIndexOf('! '), before.lastIndexOf('? '));
-    const sentence = before.slice(sentenceStart + 1) + m[0];
+    /* The whole sentence, the words AFTER the claim included (2026-10-20, KSM: "With over 15 years of experience in health
+       and social care, I’ve built …" is one instructor's career, read as the business's age). */
+    const after = text.slice((m.index ?? 0) + m[0].length, (m.index ?? 0) + m[0].length + 160);
+    const sentenceEnd = after.search(/[.!?](?:\s|$)/);
+    const sentence = before.slice(sentenceStart + 1) + m[0] + (sentenceEnd >= 0 ? after.slice(0, sentenceEnd) : after);
     if (PERSONAL_RE.test(sentence)) continue;
     const n = Number(m[2]);
     if (n >= 2 && n <= 99 && obs.years.length < 6) obs.years.push({ n, q: quote(text, m.index ?? 0, m[0].length, 40) });
   }
   for (const m of text.matchAll(FOUNDED_RE)) {
+    /* "I have been driving since 2005" is a person, not the business's start (2026-10-20, KSM). */
+    if (PERSONAL_RE.test(sentenceAround(text, m.index ?? 0, m[0].length))) continue;
     const y = Number(m[1]);
     if (y >= 1850 && y <= new Date().getUTCFullYear() && obs.founded.length < 4) obs.founded.push({ y, q: quote(text, m.index ?? 0, m[0].length, 40) });
   }
