@@ -180,6 +180,7 @@ export async function loadAuditContext(service: Service, lead: ResearchLead): Pr
     scoreNamed: sameAudit && vars.ok ? vars.scoreNamed : null,
     scoreTotal: sameAudit && vars.ok ? vars.scoreTotal : null,
     missedQuestion: sameAudit && vars.ok ? vars.hookQuestion : null,
+    worst: sameAudit && vars.ok ? vars.worstMiss : null,
     unavailableReason: !vars.ok && !vars.reason.startsWith(HOOK_NO_GAP_REASON) ? vars.reason : null,
   };
 }

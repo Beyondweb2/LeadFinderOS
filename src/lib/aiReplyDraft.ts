@@ -303,7 +303,8 @@ const TIMING_PROMISE = /\b(send|sending|sent|record|recording|do|doing|get)\b[^.
 /** The first-reply pitch is code-built and may run to five lines (Paul, 2026-10-20). */
 const isPitch = (p: MovePlan) => p.move === 'first_reply_pitch' || (p.move === 'auto_reply' && !!p.fixedText);
 const lineCap = (p: MovePlan) => (isPitch(p) ? 5 : 3);
-const charCap = (p: MovePlan) => (isPitch(p) ? 640 : p.confidence ? 480 : 320);
+/* The pitch (wording A, 2026-10-20): greeting, the search, why, what we do, the agency question. */
+const charCap = (p: MovePlan) => (isPitch(p) ? 800 : p.confidence ? 480 : 320);
 /** "named you in 1 of 2 answers", "there's a gap in the rest": never in any draft (Paul, 2026-10-20, Nola). Lead with the
  *  missed search instead. */
 const SHARE_WORDING = /\bnamed\s+you\s+in\s+\d+\s+(?:of|out\s+of)\s+\d+|\bgap\s+in\s+the\s+rest\b|\bin\s+\d+\s+(?:of|out\s+of)\s+\d+\s+answers\b/i;

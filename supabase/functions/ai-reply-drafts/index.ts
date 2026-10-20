@@ -48,7 +48,7 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-internal-job, x-cron-secret",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
   /* The deploy marker: only this build answers with it. */
-  "x-ai-reply-drafts": "2026-10-20d-missed-search-auto-burst",
+  "x-ai-reply-drafts": "2026-10-20e-pitch-wording-a",
 };
 const json = (b: unknown, s = 200) => new Response(JSON.stringify(b), { status: s, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 const str = (v: unknown) => (typeof v === "string" ? v.trim() : "");
@@ -163,20 +163,23 @@ async function buildContext(service: Service, lead: LeadRow, thread: MsgRow[], i
   /* ⛔ THE SCORE THE AUDIT SHOWS, every engine in it (Google AI where scored): Nola is 1 of 3, never 1 of 2 (Paul,
      2026-10-20). Only an audit with no complete quick-check score falls back to the run summary. */
   const scored = typeof audit?.scoreNamed === "number" && typeof audit?.scoreTotal === "number" && audit.scoreTotal > 0;
+  const worst = audit?.worst ?? null;
   const nd = scored ? audit!.scoreNamed : audit?.namedDatapoints; const td = scored ? audit!.scoreTotal : audit?.totalDatapoints;
   const evidence: MoveEvidence = {
     businessName: lead.business_name ?? "",
     trade: audit && trade ? trade : null,
     town: audit && town ? town : null,
-    engineWords: conversationEngine(sentRows.map((m) => ({ text: sentText(m), templateName: m.template_name })), audit?.engine ?? null).words,
+    /* THE WORST RESULT leads the pitch (worstMiss.ts): its engine, its question, its own names. Else the hook gap. */
+    engineWords: conversationEngine(sentRows.map((m) => ({ text: sentText(m), templateName: m.template_name })), worst?.engine ?? audit?.engine ?? null).words,
     named: typeof nd === "number" && typeof td === "number" && td > 0 ? { named: nd, valid: td } : null,
-    competitors: draftNames(audit?.competitors ?? [], town),
+    competitors: draftNames(worst ? worst.rivals : audit?.competitors ?? [], town),
     /* The best missed search: its engine + question (the competitors above are that answer's names). */
-    missed: audit?.missedQuestion && audit?.engine ? { engine: audit.engine, question: audit.missedQuestion } : null,
+    missed: worst ? { engine: worst.engine, question: worst.question } : audit?.missedQuestion && audit?.engine ? { engine: audit.engine, question: audit.missedQuestion } : null,
     hookAlreadySent: stage.stage === "warm" || stage.stage === "waiting_for_hook_reply",
     findings: found.status === "findings" ? found.findings.slice(0, 2).map((f) => ({ title: f.title, said: (f.spoken ?? f.explanation ?? "").trim() || f.title })) : [],
     hasWebsite: found.status !== "no_website" && found.status !== "profile",
-    ownerName: null,
+    /* "Hi Kylie,": only a person the site's own crawl states as owner / founder (contentTrust ownerOf). First name only. */
+    ownerName: (found.check.summary?.owner?.name ?? "").trim().split(/\s+/)[0] || null,
     foundOnGoogle: !!lead.place_id,
     /* The ONE website check: its state and the serious issues' plain titles, worst first (the first-reply pitch). */
     site: { state: found.check.state, issues: found.check.serious.map(plainIssueTitle),
