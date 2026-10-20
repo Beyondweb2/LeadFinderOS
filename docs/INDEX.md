@@ -193,3 +193,4 @@
 - `docs/month12-reminder.md` — 2026-10-17: v5 clause 9A.5 payment-12 reminder email (once per client, kill switch, dry run, QA drill), finalPaymentDates, what the handover still needs
 - `docs/records-lookup.md` — the "touching X → read Y first" table (moved from CLAUDE.md §10, 2026-10-15; live — add rows here)
 - `docs/archive/claude-md-moved-2026-10-15.md` — what left CLAUDE.md on 2026-10-15, verbatim: §7 path rows with no rule, resolved §8 items, the §9 old-checkout audit detail
+- `docs/suppression-read.md` — 2026-10-20: the screen never reads contact_suppressions (no policies → always empty); Outreach bulk audit + follow-up count ask the role-checked `leads_suppressed` (lead ids in / out, no reason, can_work_lead); the sweep test

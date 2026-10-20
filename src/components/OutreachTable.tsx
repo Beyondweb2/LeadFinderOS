@@ -96,6 +96,7 @@ import {
   DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
 import { formatPhoneForWhatsApp } from '@/lib/leadUtils';
+import { fetchSuppressedLeadIds } from '@/lib/leadSuppression';
 import { classifyLineType } from '@/lib/lineType';
 import { templateDestinationRefusal } from '@/lib/whatsAppDestination';
 import { toWhatsAppDigits } from '@/lib/waNumber';
@@ -1095,32 +1096,17 @@ export function OutreachTable({
     () => leads.filter((l) => selectedIds.has(l.id) && !isDemoLead(l.id) && !auditsByLead[l.id]),
     [leads, selectedIds, auditsByLead],
   );
-  /* Do-not-contact (contact_suppressions), read when the dialog opens. Best-effort like the follow-up check below:
-     unknown (a refused read) leaves the lead in, and bulk-jobs still skips it before any call. */
+  /* Do-not-contact, read when the dialog opens through the role-checked leads_suppressed (src/lib/leadSuppression.ts;
+     until 2026-10-20 this read contact_suppressions directly, which has no browser policies, so it never found one).
+     Best-effort like the follow-up check below: unknown (a failed check) leaves the lead in, and bulk-jobs still
+     skips it before any call. */
   const [auditSuppressedIds, setAuditSuppressedIds] = useState<Set<string>>(new Set());
   useEffect(() => {
     if (!auditDialogOpen || auditCandidates.length === 0) return;
     let live = true;
     void (async () => {
-      const byPhone = new Map<string, string[]>();
-      for (const l of auditCandidates) {
-        const d = l.phone ? formatPhoneForWhatsApp(l.phone, l.country) : '';
-        const key = d ? '+' + d : '';
-        if (key) byPhone.set(key, [...(byPhone.get(key) ?? []), l.id]);
-      }
-      const hit = new Set<string>();
-      const sb = supabase as unknown as SupabaseClient;
-      const phones = [...byPhone.keys()];
-      for (let i = 0; i < phones.length; i += 200) {
-        const { data } = await sb.from('contact_suppressions').select('phone_e164').in('phone_e164', phones.slice(i, i + 200));
-        for (const r of (data ?? []) as { phone_e164: string }[]) for (const id of byPhone.get(r.phone_e164) ?? []) hit.add(id);
-      }
-      const ids = auditCandidates.map((l) => l.id);
-      for (let i = 0; i < ids.length; i += 200) {
-        const { data } = await sb.from('contact_suppressions').select('lead_id').in('lead_id', ids.slice(i, i + 200));
-        for (const r of (data ?? []) as { lead_id: string | null }[]) if (r.lead_id) hit.add(r.lead_id);
-      }
-      if (live) setAuditSuppressedIds(hit);
+      const hit = await fetchSuppressedLeadIds(auditCandidates.map((l) => l.id));
+      if (live && hit) setAuditSuppressedIds(hit);
     })().catch(() => undefined);
     return () => { live = false; };
   }, [auditDialogOpen, auditCandidates]);
@@ -1443,16 +1429,11 @@ export function OutreachTable({
     const cutoff = Date.now() - CONTACT_FOLLOWUP_MIN_DAYS * 24 * 60 * 60 * 1000;
     const ids = Array.from(selectedIds);
     const leadOf = (id: string) => leads.find((l) => l.id === id);
-    const e164 = (l?: OutreachLead) => { const d = l?.phone ? formatPhoneForWhatsApp(l.phone, l.country) : ''; return d ? `+${d}` : ''; };
 
-    // Cross-channel suppression (one-no-forever): best-effort; the drainer is authoritative.
-    const phones = [...new Set(ids.map((id) => e164(leadOf(id))).filter(Boolean))];
-    let suppressed = new Set<string>();
-    if (phones.length) {
-      const { data: supp } = await (supabase as unknown as SupabaseClient)
-        .from('contact_suppressions').select('phone_e164').in('phone_e164', phones);
-      suppressed = new Set(((supp ?? []) as { phone_e164: string }[]).map((r) => r.phone_e164));
-    }
+    /* Cross-channel suppression (one-no-forever): best-effort; the drainer is authoritative. Read through the
+       role-checked leads_suppressed (lead ids in, suppressed lead ids out) — the table itself has no browser policies,
+       so the direct read this replaced (2026-10-20) always came back empty. */
+    const suppressed = (await fetchSuppressedLeadIds(ids)) ?? new Set<string>();
 
     // Bucket every selected lead so the toast can account for all of them.
     let notContacted = 0;   // never got the opener / progressed past it (not an un-replied Contacted lead)
@@ -1466,7 +1447,7 @@ export function OutreachTable({
       const l = leadOf(id);
       if (!l) continue;
       if (!l.phone) { noPhone++; continue; }
-      if (suppressed.has(e164(l))) { suppressedN++; continue; }
+      if (suppressed.has(l.id)) { suppressedN++; continue; }
       // "Never replied to the opener" proxy: still sitting at initial_contact. A lead that replied
       // has moved on (replied/interested/…), a fresh lead is not_contacted — both excluded. The
       // server's no-inbound-since check is authoritative; this keeps the batch honest up front.

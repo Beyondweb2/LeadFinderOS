@@ -22,6 +22,17 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-20-suppressed-counts', date: '2026-10-20', title: 'Outreach now spots opted-out leads before a bulk audit or follow-up', audience: 'all',
+    body: 'The bulk AI audit window and the bulk follow-up count could never see who was on the do-not-contact list, so they counted those leads as ready. They now check properly. Nothing was ever sent to them: the send step always refused them.',
+    report: {
+      added: [],
+      changed: [
+        'Run AI audit on selected leads: a lead that opted out, said no or was archived as do-not-contact is listed under its reason and not audited.',
+        'Queue follow-up: those leads are counted as "said no" instead of being queued and dropped later.',
+      ],
+      removed: [],
+      effect: 'The numbers in those two windows match what will actually happen. You only ever see this for your own leads.',
+    } },
   { id: '2026-10-20-sales-leads-visible', date: '2026-10-20', title: 'Salespeople can see their own leads in Outreach again', audience: 'all',
     body: 'A database setting changed outside the app had hidden every salesperson\'s leads from Outreach, the WhatsApp list, the lead popup and search. It is put back, and Find Leads now checks your new leads really show in your Outreach after you add them.',
     report: {
