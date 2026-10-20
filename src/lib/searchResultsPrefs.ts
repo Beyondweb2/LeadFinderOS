@@ -40,6 +40,30 @@ export function readSearchResultsView(userId?: string | null): SearchResultsView
   }
 }
 
+/* The site-management ticks are a standing preference ("hide agency sites"), not a view of one result set, so
+   they are remembered apart from the view above and apply to later searches too (the notice + Show all say so).
+   Anything unreadable = every box ticked. */
+const SITE_KEY = 'leadfinder_search_site_filters';
+export function readSiteFilters<T extends string>(userId: string | null | undefined, all: readonly T[]): T[] {
+  try {
+    const k = userId ? `${SITE_KEY}:${userId}` : SITE_KEY;
+    const raw = localStorage.getItem(k);
+    if (!raw) return [...all];
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [...all];
+    return all.filter((v) => parsed.includes(v));
+  } catch {
+    return [...all];
+  }
+}
+export function writeSiteFilters(userId: string | null | undefined, ticked: readonly string[]): void {
+  try {
+    localStorage.setItem(userId ? `${SITE_KEY}:${userId}` : SITE_KEY, JSON.stringify(ticked));
+  } catch {
+    // ignore quota / privacy-mode / blocked-storage issues
+  }
+}
+
 export function writeSearchResultsView(userId: string | null | undefined, view: SearchResultsView): void {
   try {
     const k = key(userId);

@@ -533,13 +533,13 @@ const Index = () => {
   }, [lastSearch, toast]);
 
   // CSV export including any emails found this session (from searchEnrichment).
-  const handleExportWithEmails = useCallback(() => {
+  const handleExportWithEmails = useCallback((shown: typeof leads = leads) => {
     const cell = (v: string) => {
       const s = (v ?? '').replace(/"/g, '""');
       return /[",\n]/.test(s) ? `"${s}"` : s;
     };
     const header = ['Business', 'Email', 'Phone', 'Maps', 'Website'];
-    const rows = leads.map((l) => [
+    const rows = shown.map((l) => [
       l.name,
       (searchEnrichment[l.id]?.email as string) ?? '',
       l.phone ?? '',
@@ -754,7 +754,7 @@ const Index = () => {
                   cost (find-emails free) and gating are unchanged. */}
               <LeadsTable
                 leads={leads}
-                onExport={canExport ? () => void loggedExport(exportToCsv, leads.length, 'results') : undefined}
+                onExport={canExport ? (shown) => void loggedExport(() => exportToCsv(shown), shown.length, 'results') : undefined}
                 onAddToOutreach={handleRowAdd}
                 addCampaignTooltip={addCampaignTooltip}
                 getCrmState={getCrmState}
@@ -786,7 +786,7 @@ const Index = () => {
                 onAddAllWithEmails={handleAddAllWithEmails}
                 addingEmails={addingEmails}
                 addAllWithEmailsCount={leadsWithEmail.length}
-                onExportWithEmails={canExport ? () => void loggedExport(handleExportWithEmails, leads.length, 'results_with_emails') : undefined}
+                onExportWithEmails={canExport ? (shown) => void loggedExport(() => handleExportWithEmails(shown), shown.length, 'results_with_emails') : undefined}
               />
             </div>
           )}

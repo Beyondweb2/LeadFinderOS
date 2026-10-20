@@ -18,11 +18,10 @@ import { useToast } from '@/hooks/use-toast';
 import { socialKindOf } from '@/lib/socialUrl';
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuCheckboxItem, DropdownMenuTrigger, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator,
-  DropdownMenuRadioGroup, DropdownMenuRadioItem,
 } from '@/components/ui/dropdown-menu';
 import { useAgencyChecks } from '@/hooks/useAgencyChecks';
 import { SiteManagementCell } from './SiteManagementCell';
-import { agencyCheckDomain, isHighConfidenceAgency, passesSiteFilter, siteStateOf, SITE_FILTERS, type SiteFilter } from '@/lib/agencyCheck';
+import { agencyCheckDomain, ALL_SITE_FILTERS, isHighConfidenceAgency, passesSiteFilter, siteStateOf, SITE_FILTERS, type SiteFilter } from '@/lib/agencyCheck';
 import {
   Tooltip, TooltipContent, TooltipTrigger,
 } from '@/components/ui/tooltip';
@@ -31,7 +30,7 @@ import type { Lead, WebsiteStatus } from '@/types/lead';
 import type { OutreachLead } from '@/types/outreach';
 import { SearchLeadContact } from './SearchLeadContact';
 import { useAuth } from '@/hooks/useAuth';
-import { readSearchResultsView, writeSearchResultsView } from '@/lib/searchResultsPrefs';
+import { readSearchResultsView, writeSearchResultsView, readSiteFilters, writeSiteFilters } from '@/lib/searchResultsPrefs';
 import { resultSetSignature } from '@/lib/searchResultsCache';
 import { visibleResults } from '@/lib/searchResultsView';
 import { SelectionModeBar } from './SelectionModeBar';
@@ -52,7 +51,8 @@ EyeIcon.displayName = 'EyeIcon';
 interface LeadsTableProps {
   leads: Lead[];
   /** Absent = no Export menu (Sales, 2026-09-29: CSV export is admin-only). */
-  onExport?: () => void;
+  /** Receives the rows showing now (after every filter), never the whole result set. */
+  onExport?: (rows: Lead[]) => void;
   onAddToOutreach?: (lead: Lead) => Promise<any>;
   isInOutreach?: (leadName: string, googleMapsUrl?: string) => boolean;
   onMapLinkClick?: (businessName: string, googleMapsUrl?: string) => void;
@@ -95,7 +95,7 @@ interface LeadsTableProps {
   addingEmails?: boolean;
   addAllWithEmailsCount?: number;
   /** Export CSV including any emails found this session. */
-  onExportWithEmails?: () => void;
+  onExportWithEmails?: (rows: Lead[]) => void;
   /** Precomputed hover-tooltip text for the Add-to-CRM buttons (per-row + bulk).
    *  Index decides the wording: "Add to {campaign}" when adding silently, or
    *  "Choose a campaign…" when the ask-each-time toggle is on. */
@@ -173,10 +173,14 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
   const [currentPage, setCurrentPage] = useState<number>(() => Math.max(1, savedView?.page ?? 1));
   /* ══ WHO RUNS THEIR WEBSITE? (2026-10-01) ══ Every result with its own website is checked as soon as
      the results arrive (useAgencyChecks, a few at a time; each row fills in as it finishes). */
-  const [siteFilter, setSiteFilter] = useState<SiteFilter>('all');
+  const [siteFilters, setSiteFilters] = useState<SiteFilter[]>(() => readSiteFilters(user?.id, ALL_SITE_FILTERS));
+  useEffect(() => { writeSiteFilters(user?.id, siteFilters); }, [user?.id, siteFilters]);
+  const toggleSiteFilter = useCallback((f: SiteFilter, on: boolean) => {
+    setSiteFilters((prev) => ALL_SITE_FILTERS.filter((v) => (v === f ? on : prev.includes(v))));
+  }, []);
   /* ⛔ NO BUSINESS AGE (2026-10-09, Paul): the Business age column, its filter, its sort boost and its Companies House lookups are
      gone from Find Leads. Nothing here calls Companies House any more; the stored data and the companies-house-check function are untouched. */
-  const clearFilters = useCallback(() => { setStatusFilters(ALL_STATUSES); setSocialFilters([]); setSiteFilter('all'); }, [ALL_STATUSES]);
+  const clearFilters = useCallback(() => { setStatusFilters(ALL_STATUSES); setSocialFilters([]); setSiteFilters(ALL_SITE_FILTERS); }, [ALL_STATUSES]);
   const hasOwnSite = useCallback((l: Lead) => l.websiteStatus === 'HAS_OWN_WEBSITE' && !!agencyCheckDomain(l.websiteUrl), []);
   const agencyItems = useMemo(() => leads.map((l) => ({ websiteUrl: l.websiteUrl, hasOwnWebsite: hasOwnSite(l) })), [leads, hasOwnSite]);
   const agency = useAgencyChecks(agencyItems);
@@ -190,7 +194,7 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
         const kind = socialKindOf(lead.websiteUrl);
         if (!kind || !socialFilters.includes(kind)) return false;
       }
-      if (!passesSiteFilter(siteFilter, siteStateOf(hasOwnSite(lead), agency.rowFor(lead.websiteUrl)))) return false;
+      if (!passesSiteFilter(siteFilters, siteStateOf(hasOwnSite(lead), agency.rowFor(lead.websiteUrl)))) return false;
       return true;
     });
     /* High-confidence agency sites go to the bottom (kept, never hidden) once every check has finished —
@@ -199,7 +203,7 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
     const last = shown.filter((l) => highAgency(l));
     const rest = shown.filter((l) => !highAgency(l));
     return [...rest, ...last];
-  }, [leads, statusFilters, socialFilters, siteFilter, agency, hasOwnSite, highAgency]);
+  }, [leads, statusFilters, socialFilters, siteFilters, agency, hasOwnSite, highAgency]);
 
   const visible = visibleResults(leads.length, filteredLeads.length);
   const filterNotice = visible.filtered ? (
@@ -354,7 +358,7 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
     if (!bulkCancelRef.current) toast({ title: 'Website check done', description: `Checked ${done} of ${targets.length}.` });
   }, [noWebsiteFiltered, runWebsiteCheck, toast]);
 
-  const noWebsiteCount = leads.filter((l) => l.websiteStatus === 'NO_WEBSITE' || l.websiteStatus === 'DIRECTORY_ONLY').length;
+  const noWebsiteCount = filteredLeads.filter((l) => l.websiteStatus === 'NO_WEBSITE' || l.websiteStatus === 'DIRECTORY_ONLY').length;
 
   const toggleFilter = useCallback((status: WebsiteStatus, checked: boolean) => {
     setStatusFilters(prev => checked ? [...prev, status] : prev.filter(s => s !== status));
@@ -471,12 +475,12 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
         </DropdownMenuCheckboxItem>
         <DropdownMenuSeparator />
         <DropdownMenuLabel className="px-2 pb-0.5 pt-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Website · site management</DropdownMenuLabel>
-        <DropdownMenuRadioGroup value={siteFilter} onValueChange={(v) => setSiteFilter(v as SiteFilter)}>
-          {SITE_FILTERS.map((f) => <DropdownMenuRadioItem key={f.value} value={f.value} onSelect={(e) => e.preventDefault()} className="py-1 text-sm" data-testid={`site-filter-${f.value}`}>{f.label}</DropdownMenuRadioItem>)}
-        </DropdownMenuRadioGroup>
+        {SITE_FILTERS.map((f) => (
+          <DropdownMenuCheckboxItem key={f.value} checked={siteFilters.includes(f.value)} onCheckedChange={(on) => toggleSiteFilter(f.value, !!on)} onSelect={(e) => e.preventDefault()} className="py-1 text-sm" data-testid={`site-filter-${f.value}`}>{f.label}</DropdownMenuCheckboxItem>
+        ))}
       </DropdownMenuContent>
     </DropdownMenu>
-  ), [statusFilters, toggleFilter, statusFilterOptions, socialFilters, toggleSocialFilter, siteFilter]);
+  ), [statusFilters, toggleFilter, statusFilterOptions, socialFilters, toggleSocialFilter, siteFilters, toggleSiteFilter]);
 
   // Bulk action buttons (shared by the mobile + desktop headers), mirroring the
   // Outreach pattern: appear with a selection; "Add all shown" when none selected.
@@ -590,17 +594,17 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
-        <DropdownMenuItem onSelect={(e) => { e.preventDefault(); isLocked ? onGatedAction?.() : handleExport?.(); }}>
+        <DropdownMenuItem onSelect={(e) => { e.preventDefault(); isLocked ? onGatedAction?.() : handleExport?.(filteredLeads); }}>
           <Download className="mr-2 h-3.5 w-3.5" /> Export CSV
         </DropdownMenuItem>
         {onExportWithEmails && (
-          <DropdownMenuItem disabled={!leads.length} onSelect={(e) => { e.preventDefault(); onExportWithEmails(); }}>
+          <DropdownMenuItem disabled={!filteredLeads.length} onSelect={(e) => { e.preventDefault(); onExportWithEmails(filteredLeads); }}>
             <Mail className="mr-2 h-3.5 w-3.5" /> Export with emails
           </DropdownMenuItem>
         )}
       </DropdownMenuContent>
     </DropdownMenu>
-  ), [blurred, gated, isLocked, onGatedAction, handleExport, onExportWithEmails, leads.length]);
+  ), [blurred, gated, isLocked, onGatedAction, handleExport, onExportWithEmails, filteredLeads]);
 
   // View Details is always accessible — paywall only triggers on save/contact actions
 
@@ -615,7 +619,7 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
               {selectedIds.size > 0 && <span className="ml-2 text-xs font-normal text-primary">{selectedIds.size} sel</span>}
             </CardTitle>
             <p className="text-xs text-muted-foreground mt-1">
-              {leads.length} found • <span className="text-status-hot font-medium">{noWebsiteCount} hot leads</span>
+              {filteredLeads.length} found • <span className="text-status-hot font-medium">{noWebsiteCount} hot leads</span>
               {filterNotice && <><br />{filterNotice}</>}
             </p>
              <p className="text-[11px] text-muted-foreground/70 mt-0.5">
@@ -638,7 +642,7 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
               {selectedIds.size > 0 && <span className="ml-2 text-sm font-normal text-primary">{selectedIds.size} sel</span>}
             </CardTitle>
             <p className="text-sm text-muted-foreground">
-              Found {leads.length} businesses •
+              Found {filteredLeads.length} businesses •
                <span className="text-status-hot font-semibold ml-1">{noWebsiteCount} without websites</span>
                {filterNotice ?? <span className="text-muted-foreground/70 ml-2">— Click 👁 to view details, 📋 to save to your list</span>}
             </p>
