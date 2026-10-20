@@ -5,7 +5,8 @@
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 import { readFileSync } from 'node:fs';
 import { classifyAgency, selectSamplePages, AGENCY_DEPRIORITISE_CONFIDENCE, AGENCY_CHECK_VERSION, type AgencyPage } from '../src/lib/agencyDetect.ts';
-import { agencyCheckDomain, agencyCellText, isCheckFresh, isHighConfidenceAgency, passesSiteFilter, siteStateOf } from '../src/lib/agencyCheck.ts';
+import { readSiteFilters } from '../src/lib/searchResultsPrefs.ts';
+import { ALL_SITE_FILTERS, agencyCheckDomain, agencyCellText, isCheckFresh, isHighConfidenceAgency, passesSiteFilter, siteStateOf } from '../src/lib/agencyCheck.ts';
 import { crawlForAgency, AGENCY_CRAWLER_UA, AGENCY_MAX_REQUESTS } from '../supabase/functions/_shared/agency-crawl.ts';
 
 let f = 0;
@@ -136,12 +137,17 @@ ok(agencyCheckDomain('https://www.acme.co.uk/contact?utm=x') === agencyCheckDoma
 ok(agencyCheckDomain('https://acme-new.co.uk') !== agencyCheckDomain('https://acme.co.uk'), 'a changed domain is a new key → checked fresh at once');
 ok(agencyCheckDomain('https://www.facebook.com/acme') === null && agencyCheckDomain('https://www.yell.com/biz/acme') === null && agencyCheckDomain('') === null, 'a directory / social listing or a blank is never crawled');
 ok(siteStateOf(false, null) === 'no_website' && siteStateOf(true, null) === null && siteStateOf(true, { classification: 'agency_likely' }) === 'agency_likely', 'each result has one site state (no website / not checked yet / its class)');
-ok(passesSiteFilter('all', null) && passesSiteFilter('agency_likely', 'agency_likely') && !passesSiteFilter('agency_likely', 'no_evidence') && passesSiteFilter('no_website', 'no_website') && !passesSiteFilter('unknown', null), 'the filter shows exactly its state; one still checking shows under All only');
+const everyBox = [...ALL_SITE_FILTERS];
+const withoutAgency = ALL_SITE_FILTERS.filter((f) => f !== 'agency_likely');
+ok(ALL_SITE_FILTERS.length === 4 && ALL_SITE_FILTERS.every((f) => passesSiteFilter(everyBox, f)) && passesSiteFilter(everyBox, null), 'every box ticked (the default) shows every result, one still checking included');
+ok(!passesSiteFilter(withoutAgency, 'agency_likely') && ['no_evidence', 'unknown', 'no_website'].every((f) => passesSiteFilter(withoutAgency, f as never)) && passesSiteFilter(withoutAgency, null), 'unticking Agency likely hides only those; everything else stays');
+ok(passesSiteFilter(['unknown', 'no_website'], 'unknown') && !passesSiteFilter(['unknown', 'no_website'], 'no_evidence') && !passesSiteFilter([], 'unknown') && !passesSiteFilter([], null), 'any combination works; none ticked shows nothing');
+ok(readSiteFilters('nobody', ALL_SITE_FILTERS).length === 4, 'with no storage at all every box is ticked');
 
 console.log('── 4. WIRING ──');
 const table = read('src/components/LeadsTable.tsx');
 ok(/<TableHead[^>]*>Site management<\/TableHead>/.test(table) && /<SiteManagementCell row=\{agency\.rowFor\(lead\.websiteUrl\)\}/.test(table), 'Find Leads has its own Site management column');
-ok(/SITE_FILTERS\.map/.test(table) && /passesSiteFilter\(siteFilter, siteStateOf\(hasOwnSite\(lead\), agency\.rowFor\(lead\.websiteUrl\)\)\)/.test(table), 'and a site-management filter');
+ok(/SITE_FILTERS\.map/.test(table) && /passesSiteFilter\(siteFilters, siteStateOf\(hasOwnSite\(lead\), agency\.rowFor\(lead\.websiteUrl\)\)\)/.test(table), 'and a site-management filter');
 // 2026-10-02: the order also waits for the Companies House check (ch.pending) and lifts new strong matches
 // within the non-agency rows; agency sites are still last and still never hidden.
 ok(/if \(agency\.pending > 0\) return shown;\s*const last = shown\.filter\(\(l\) => highAgency\(l\)\);\s*const rest = shown\.filter\(\(l\) => !highAgency\(l\)\);\s*return \[[^\]]*\.\.\.last\];/.test(table),'high-confidence agency sites sort last once the checks finish (rows never jump mid-check), never hidden');
@@ -215,3 +221,8 @@ console.log('── v2 (2026-10-02): BETTER EVIDENCE, SAME CAUTION ──');
 
 console.log(f === 0 ? '\nALL PASS' : `\n${f} FAILURE(S)`);
 process.exit(f === 0 ? 0 : 1);
+
+{
+  const idx = read('src/pages/Index.tsx');
+  ok(/useFindEmails\(shownLeads,/.test(idx) && /shownLeads\.filter\(/.test(idx) && /onShownChange=\{setShownReported\}/.test(idx), 'Find emails and Add all with emails act on the rows showing only');
+}

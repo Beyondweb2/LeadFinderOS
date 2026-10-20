@@ -121,7 +121,7 @@ console.log("\n── coverage → find leads: visible results ──");
   ok(visibleResults(10, 10).line === "" && !visibleResults(10, 10).filtered, "nothing hidden → no notice");
   ok(visibleResults(0, 0).emptyText === "No results for this search.", "an empty search is not blamed on filters");
   ok(visibleResults(5, 99).shown === 5 && visibleResults(NaN, NaN).shown === 0, "absurd inputs clamp");
-  ok(/Show all \{(leads|baseLeads)\.length\}/.test(table) && /onClick=\{clearFilters\}/.test(table), "Show all is offered wherever filters hide rows");
+  ok(/Show all \{(leads|baseLeads|filteredLeads)\.length\}/.test(table) && /onClick=\{clearFilters\}/.test(table), "Show all is offered wherever filters hide rows");
   ok(!/>No leads match your current filters\.|^\s+No leads match your current filters\.$/m.test(table), "the old unexplained empty sentence is no longer rendered");
 }
 
@@ -131,7 +131,7 @@ console.log("\n── find leads: no summary banner ──");
   const index = read("src/pages/Index.tsx");
   ok(!/nothing is added by searching|searchOutcome|summariseSearchResults/.test(index), "the banner and its sentence are gone");
   ok(!existsSync(new URL("../src/lib/searchOutcome.ts", import.meta.url)), "…and its helper is deleted");
-  ok(/Found \{(leads|baseLeads)\.length\} businesses/.test(read("src/components/LeadsTable.tsx")), "the Search Results heading keeps its count");
+  ok(/Found \{(leads|baseLeads|filteredLeads)\.length\} businesses/.test(read("src/components/LeadsTable.tsx")), "the Search Results heading keeps its count");
 }
 
 /* ── 7. LEAVE AND RETURN: results are never shown without the search behind them ─────────────────── */

@@ -437,14 +437,22 @@ const Index = () => {
   // aren't already in Outreach. Recomputes as emails are found / leads are added, so
   // the button count is always live and excludes anything already added.
   const [addingEmails, setAddingEmails] = useState(false);
+  /* The rows the results table is showing (after every filter). Find emails and Add all with emails act on THESE,
+     never on a lead the person has filtered out. null until the table reports (then every result). */
+  const [shownReported, setShownReported] = useState<Lead[] | null>(null);
+  const shownLeads = useMemo(() => {
+    if (!shownReported) return leads;
+    const ids = new Set(leads.map((l) => l.id));
+    return shownReported.filter((l) => ids.has(l.id));
+  }, [shownReported, leads]);
   const leadsWithEmail = useMemo(
     () =>
-      leads.filter(
+      shownLeads.filter(
         (l) =>
           (((searchEnrichment[l.id]?.email as string | undefined) ?? '').trim().length > 0) &&
           !isInOutreach(l.name, l.googleMapsUrl) && !outsideSearchedTown(l),
       ),
-    [leads, searchEnrichment, isInOutreach],
+    [shownLeads, searchEnrichment, isInOutreach],
   );
 
   // Adds every with-email candidate into the CURRENT campaign through the same batch add (handleBulkAdd).
@@ -517,7 +525,7 @@ const Index = () => {
   // In-place email scan for the Targeted results (writes into searchEnrichment →
   // Mail icon appears on rows via LeadEnrichButtons → carries over on add).
   const { findEmails, cancel: cancelFindEmails, finding, progress: emailProgress, result: emailResult, withWebsiteCount } =
-    useFindEmails(leads, patchEnrichment);
+    useFindEmails(shownLeads, patchEnrichment);
 
   /* ⛔ CSV EXPORT IS ADMIN ONLY (Paul, 2026-09-29, docs/abuse-cost-protection.md) and every export is
      recorded first (who, when, rows, the search); a refused or failed record downloads nothing. Sales
@@ -533,13 +541,13 @@ const Index = () => {
   }, [lastSearch, toast]);
 
   // CSV export including any emails found this session (from searchEnrichment).
-  const handleExportWithEmails = useCallback(() => {
+  const handleExportWithEmails = useCallback((shown: typeof leads = leads) => {
     const cell = (v: string) => {
       const s = (v ?? '').replace(/"/g, '""');
       return /[",\n]/.test(s) ? `"${s}"` : s;
     };
     const header = ['Business', 'Email', 'Phone', 'Maps', 'Website'];
-    const rows = leads.map((l) => [
+    const rows = shown.map((l) => [
       l.name,
       (searchEnrichment[l.id]?.email as string) ?? '',
       l.phone ?? '',
@@ -754,7 +762,8 @@ const Index = () => {
                   cost (find-emails free) and gating are unchanged. */}
               <LeadsTable
                 leads={leads}
-                onExport={canExport ? () => void loggedExport(exportToCsv, leads.length, 'results') : undefined}
+                onShownChange={setShownReported}
+                onExport={canExport ? (shown) => void loggedExport(() => exportToCsv(shown), shown.length, 'results') : undefined}
                 onAddToOutreach={handleRowAdd}
                 addCampaignTooltip={addCampaignTooltip}
                 getCrmState={getCrmState}
@@ -786,7 +795,7 @@ const Index = () => {
                 onAddAllWithEmails={handleAddAllWithEmails}
                 addingEmails={addingEmails}
                 addAllWithEmailsCount={leadsWithEmail.length}
-                onExportWithEmails={canExport ? () => void loggedExport(handleExportWithEmails, leads.length, 'results_with_emails') : undefined}
+                onExportWithEmails={canExport ? (shown) => void loggedExport(() => handleExportWithEmails(shown), shown.length, 'results_with_emails') : undefined}
               />
             </div>
           )}

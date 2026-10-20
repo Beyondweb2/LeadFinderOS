@@ -57,21 +57,23 @@ export function agencyCellText(row: Pick<AgencyCheckRow, 'classification' | 'con
   return `${words} · ${row.confidence}%`;
 }
 
-/** The Find Leads site-management filter. 'all' shows everything; the rest match one state. */
-export type SiteFilter = 'all' | 'no_evidence' | 'agency_likely' | 'unknown' | 'no_website';
+/** The Find Leads site-management filter: tick boxes, ALL ticked by default (2026-10-20). An unticked state
+ *  hides only those results. */
+export type SiteFilter = 'no_evidence' | 'agency_likely' | 'unknown' | 'no_website';
 export const SITE_FILTERS: { value: SiteFilter; label: string }[] = [
-  { value: 'all', label: 'All sites' },
   { value: 'no_evidence', label: 'No agency evidence' },
   { value: 'agency_likely', label: 'Agency likely' },
   { value: 'unknown', label: 'Unknown' },
   { value: 'no_website', label: 'No website' },
 ];
 /** What one result is, for the filter: no own website; checked (its class); or not checked yet (null). */
-export function siteStateOf(hasOwnWebsite: boolean, row: Pick<AgencyCheckRow, 'classification'> | null | undefined): Exclude<SiteFilter, 'all'> | null {
+export function siteStateOf(hasOwnWebsite: boolean, row: Pick<AgencyCheckRow, 'classification'> | null | undefined): SiteFilter | null {
   if (!hasOwnWebsite) return 'no_website';
   return row ? row.classification : null;
 }
-/** Does a result pass the filter? A result still being checked shows only under All. */
-export function passesSiteFilter(filter: SiteFilter, state: Exclude<SiteFilter, 'all'> | null): boolean {
-  return filter === 'all' || state === filter;
+export const ALL_SITE_FILTERS: SiteFilter[] = SITE_FILTERS.map((f) => f.value);
+/** Does a result pass the ticked boxes? A result still being checked has no state yet: it shows while any box is
+ *  ticked (it is not known to be an unticked kind), and nothing shows when every box is unticked. */
+export function passesSiteFilter(ticked: readonly SiteFilter[], state: SiteFilter | null): boolean {
+  return state === null ? ticked.length > 0 : ticked.includes(state);
 }

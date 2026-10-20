@@ -79,7 +79,8 @@ interface LeadSearchContextType {
   /** Manually correct a result's website status. Persists + wins over auto-detection. */
   setWebsiteOverride: (lead: Lead, status: WebsiteStatus) => void;
   retryLastSearch: () => void;
-  exportToCsv: () => void;
+  /** Exports the rows given (what Find Leads is showing), else every result. */
+  exportToCsv: (rows?: Lead[]) => void;
   trialLimitError: TrialLimitError | null;
   clearTrialLimitError: () => void;
   postAbandonExhausted: boolean;
@@ -773,8 +774,9 @@ export function LeadSearchProvider({ children }: { children: React.ReactNode }) 
     }
   }, [search]);
 
-  const exportToCsv = useCallback(() => {
-    if (leads.length === 0) {
+  const exportToCsv = useCallback((rows?: Lead[]) => {
+    const exportLeads = rows ?? leads;
+    if (exportLeads.length === 0) {
       toast({
         title: 'No data to export',
         description: 'Run a search first to get leads.',
@@ -790,7 +792,7 @@ export function LeadSearchProvider({ children }: { children: React.ReactNode }) 
       'Website URL',
     ];
 
-    const rows = leads.map((lead) => [
+    const csvRows = exportLeads.map((lead) => [
       lead.name,
       lead.googleMapsUrl,
       lead.websiteStatus,
@@ -798,7 +800,7 @@ export function LeadSearchProvider({ children }: { children: React.ReactNode }) 
     ]);
 
     const BOM = '\uFEFF';
-    const csvContent = BOM + [headers, ...rows]
+    const csvContent = BOM + [headers, ...csvRows]
       .map((row) => row.map((cell) => `"${cell.replace(/"/g, '""')}"`).join(','))
       .join('\r\n');
 
