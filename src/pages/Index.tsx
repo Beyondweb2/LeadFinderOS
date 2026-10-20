@@ -749,6 +749,7 @@ const Index = () => {
                 onExport={canExport ? () => void loggedExport(exportToCsv, leads.length, 'results') : undefined}
                 onAddToOutreach={handleRowAdd}
                 addCampaignTooltip={addCampaignTooltip}
+                searchedTown={lastSearchLocation}
                 getCrmState={getCrmState}
                 onRemoveFromCrm={handleRequestRemove}
                 activeCampaign={activeCampaign && activeCampaignName ? { id: activeCampaign, name: activeCampaignName } : null}
