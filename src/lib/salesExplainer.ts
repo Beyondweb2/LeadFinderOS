@@ -22,6 +22,7 @@
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 import { BASELINE_QUESTIONS, BASELINE_RUNS } from './auditQuestionCounts.ts';
 import { QUICK_CLOSE_PROMISE } from './quickClose.ts';
+import { GUARANTEE_LINE } from './offerFactSheet.ts';
 
 export const SCORED_ENGINE_NAMES = ['ChatGPT', 'Gemini'] as const;
 /** 20 × 3 × 2 = 120 — derived, never typed. */
@@ -109,3 +110,44 @@ export const FOLLOW_UP_VOICE_NOTE = [
 ].join(' ');
 /** Spoken length at ~150 words a minute, in seconds (the coaching shows it). */
 export const spokenSeconds = (text: string) => Math.round((text.trim().split(/\s+/).length / 150) * 60);
+
+/* ── E. WHAT WE DO, AS FIVE NUMBERED STEPS (the Call tab, Paul 2026-10-20) ─────────────────────────────────────────
+   Short lines a rep can glance at mid-call; **double stars** mark the key words drawn bold. Every line checked against the
+   code and the LIVE agreement v5 (clientAgreement.ts) and the Offer Fact Sheet (offerFactSheet.ts):
+     1 · Discovery: around DISCOVERY_ABOUT questions × 3 (perTownCounts, DISCOVERY_RUNS); "open" = no agreed incumbent =
+         winnable (auditReport winnability verdict, discoveryOpportunity 'winnable').
+     2 · Baseline: v5 5.2 — BASELINE_QUESTIONS × BASELINE_RUNS on the scored engines.
+     3 · v5 Schedule 1: a new website; Google Business Profile and relevant listings REVIEWED FOR CONSISTENCY where access
+         is given. ⛔ Not "added to directories" (nothing creates a listing). Review replies are NOT a deliverable — shown
+         only as not included (`soon`).
+     4 · v5 5.3: ONE re-measure, about four weeks in, the same frozen questions. ⛔ Not "every 4 weeks". The guarantee is
+         the fact sheet's GUARANTEE_LINE word for word.
+     5 · v5 2.6 / Schedule 1: regular review and updates guided by the data; v5 16.3 changes on request. ⛔ Never a fixed
+         amount of monthly work. */
+export interface CallWhatWeDoStep { n: number; title: string; lines: Array<{ text: string; soon?: boolean }> }
+export const CALL_WHAT_WE_DO_STEPS: readonly CallWhatWeDoStep[] = [
+  { n: 1, title: 'Find the winnable questions', lines: [
+    { text: `A discovery audit of around **${DISCOVERY_ABOUT} questions**, each asked **${BASELINE_RUNS} times**.` },
+    { text: 'Where **no one is clearly winning**, that question is **winnable**.' },
+  ] },
+  { n: 2, title: 'Baseline', lines: [
+    { text: `**${BASELINE_QUESTIONS} questions**, each asked ${BASELINE_RUNS} times on ${SCORED_ENGINE_NAMES.join(' and ')}.` },
+    { text: 'Shows **where you stand today**.' },
+  ] },
+  { n: 3, title: 'Do the work', lines: [
+    { text: 'A **new website**, built for **AI and search**.' },
+    { text: 'Your **Google Business Profile** and **listings** checked and tidied (with your access).' },
+    { text: '**Replying to reviews**: coming soon, not included yet.', soon: true },
+  ] },
+  { n: 4, title: `Re-check at ${REMEASURE_WEEKS} weeks`, lines: [
+    { text: `The **same ${BASELINE_QUESTIONS} questions**, asked the same way.` },
+    { text: `**${GUARANTEE_LINE}**` },
+  ] },
+  { n: 5, title: 'Every month', lines: [
+    { text: '**Review** your AI visibility.' },
+    { text: '**Changes** whenever you ask.' },
+    { text: 'Keep **improving** how AI finds you, **based on the data**.' },
+  ] },
+];
+/** The source line under the two stat cards (Paul, 2026-10-20: shown, as text — never a link). */
+export const WHY_IT_MATTERS_SOURCE_LINE = 'Source: Yext, 2026 UK Consumer Search Behaviours (600 UK consumers).';

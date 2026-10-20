@@ -22,6 +22,14 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-20-call-tab-layout', date: '2026-10-20', title: 'Call tab: "What we do" as five numbered steps, and the AI stats in their own card', audience: 'all',
+    body: '"What we do" on the Call tab is now five short numbered steps with the key words in bold, so you can glance at it mid-call. The 37% and 24% figures have their own card with the source underneath.',
+    report: {
+      added: ['A "Why it matters" card with the 37% / 24% figures and their source (Yext, 2026 UK Consumer Search Behaviours, 600 UK consumers).'],
+      changed: ['"What we do" is five steps: find the winnable questions, baseline, do the work, re-check at 4 weeks, every month. Replying to reviews is shown greyed as not included yet.'],
+      removed: ['The one-line "Findable Build is the plan…" above the price card. The price card stays.'],
+      effect: 'The Call tab is quicker to read while you are on the phone, and every step says only what we actually do.',
+    } },
   { id: '2026-10-20-crawl-always', date: '2026-10-20', title: 'Every audited lead gets its website checked, and the call screen never shows an empty website section', audience: 'all',
     body: 'The Website crawl section on the call screen now always shows one of four things: Checking the website, what it found, "Couldn\'t check the site", or "No website found". Older leads with an AI result and no check are being checked in the background, a few a minute. The check now spots unfinished sample pages, a site that never says which areas it covers, and the owner\'s name.',
     report: {
