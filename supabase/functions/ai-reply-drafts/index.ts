@@ -138,6 +138,13 @@ async function aiSentSinceWin(service: Service, lead: LeadRow, thread: MsgRow[])
   return count ?? 0;
 }
 
+/** The "AI handles replies" switch. ⛔ Fails toward ON: if it cannot be read, the bot answer never claims a person sent it. */
+async function aiSwitchOn(service: Service): Promise<boolean> {
+  const { data, error } = await service.from("whatsapp_outreach_state").select("ai_handles_replies").eq("id", 1).maybeSingle();
+  if (error || !data) return true;
+  return data.ai_handles_replies === true;
+}
+
 /** Everything the draft may say — from the audit, the crawl and the conversation. Nothing else. */
 async function buildContext(service: Service, lead: LeadRow, thread: MsgRow[], inbound: MsgRow): Promise<{ ctx: AiReplyContext; findingsNote: string | null; input: MoveInput }> {
   const audit = await loadAuditContext(service, lead).catch(() => null);
@@ -167,7 +174,10 @@ async function buildContext(service: Service, lead: LeadRow, thread: MsgRow[], i
     ownerName: null,
     foundOnGoogle: !!lead.place_id,
     /* The ONE website check: its state and the serious issues' plain titles, worst first (the first-reply pitch). */
-    site: { state: found.check.state, issues: found.check.serious.map(plainIssueTitle) },
+    site: { state: found.check.state, issues: found.check.serious.map(plainIssueTitle),
+      evidence: found.check.serious.map((i) => ({ title: plainIssueTitle(i), pages: i.pages })) },
+    /* The bot answer follows the AI auto-reply switch; an unreadable switch reads as ON (never claim a person sent it). */
+    aiAutoReplies: await aiSwitchOn(service),
   };
   const mt = moveThread(thread, inbound);
   const input: MoveInput = {
@@ -225,6 +235,8 @@ function whyOf(ctx: AiReplyContext, findingsNote: string | null, w: { problems: 
     competitors: e.competitors, named: e.named, engineWords: e.trade ? e.engineWords : null,
     hookAlreadySent: e.hookAlreadySent,
     findings: e.findings.map((f) => f.title), findingsNote,
+    /* The website issues the draft could name, each with the pages it was read on (the stored evidence). */
+    siteIssues: e.site?.evidence ?? null, aiAutoReplies: e.aiAutoReplies === true,
     factSheetVersion: FACT_SHEET_VERSION,
     problems: w?.problems ?? [], usedFallback: w?.usedFallback ?? false, model: w?.model,
     costUsd, calls, styleSource: BEST_TEMPLATE_STYLE_NOTE,
@@ -555,7 +567,7 @@ interface Fixture {
   findings: Array<{ title: string; said: string }>;
   thread: Array<{ from: "us" | "them"; text: string; templateName: string | null; messageType: string }>;
   aiSentSinceWin?: number; suppressed?: boolean; foundOnGoogle?: boolean;
-  site?: MoveEvidence["site"];
+  site?: MoveEvidence["site"]; aiAutoReplies?: boolean;
 }
 
 function fixtureContext(f: Fixture): AiReplyContext {
@@ -567,7 +579,7 @@ function fixtureContext(f: Fixture): AiReplyContext {
     engineWords: conversationEngine(sent, f.audit?.engine ?? null).words,
     named: f.audit && f.audit.validAnswers > 0 ? { named: f.audit.namedAnswers, valid: f.audit.validAnswers } : null,
     competitors: draftNames(f.audit?.competitors ?? [], f.town), hookAlreadySent: hook, findings: f.findings ?? [],
-    hasWebsite: f.hasWebsite, ownerName: f.ownerName, foundOnGoogle: f.foundOnGoogle ?? true, site: f.site ?? null,
+    hasWebsite: f.hasWebsite, ownerName: f.ownerName, foundOnGoogle: f.foundOnGoogle ?? true, site: f.site ?? null, aiAutoReplies: f.aiAutoReplies === true,
   };
   const plan = pickMove({ thread, suppressed: f.suppressed === true, aiSentSinceWin: f.aiSentSinceWin ?? 0, evidence });
   const latest = [...thread].reverse().find((m) => m.from === "them");
@@ -587,7 +599,7 @@ async function handleDryRun(service: Service, actor: Actor | null, body: Record<
       const ctx = fixtureContext(f);
       const p = ctx.plan;
       const w = p.stop ? null : await writeDraft(null, ctx, { temperature: 0.5, userId: null, triggerSource: "dry_run", model, capUsd: DRY_RUN_DRAFT_MAX_USD, log: false });
-      results.push({ id: f.id, move: p.move, closer: p.closer ?? null, confidence: !!p.confidence, read: p.read, needs_you: p.needsYou?.reason ?? null, stop: p.stop, auto_draft: p.autoDraft, label: p.label, points: p.points, question: p.question,
+      results.push({ id: f.id, move: p.move, closer: p.closer ?? null, confidence: !!p.confidence, site_issues: ctx.evidence.site?.evidence ?? null, read: p.read, needs_you: p.needsYou?.reason ?? null, stop: p.stop, auto_draft: p.autoDraft, label: p.label, points: p.points, question: p.question,
         draft: w?.reply ?? null, warnings: w?.problems ?? [], used_fallback: w?.usedFallback ?? false, model_error: w?.modelError ?? null, cost_usd: w?.spentUsd ?? 0 });
     }
     return json({ ok: true, dry_run: true, saved: false, model, fact_sheet: FACT_SHEET_VERSION, results });

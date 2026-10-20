@@ -31,7 +31,7 @@ export const GUARANTEE_LINE = 'We improve AI visibility or you get your money ba
  *  verbatim; never "100%" or "if I fail". The refund is the £99 first payment (v5 5.4, GUARANTEE_REFUND). */
 export const CONFIDENCE_LINE = `I'm confident enough in it that it's backed by a guarantee: ${GUARANTEE_LINE.charAt(0).toLowerCase()}${GUARANTEE_LINE.slice(1)} We re-run the same questions after ${REMEASURE_WEEKS_STANDARD} weeks to check.`;
 /** What the guarantee pays back (v5 5.4). */
-export const GUARANTEE_REFUND = `If that number hasn't gone up, you get your £${FINDABLE_SETUP_PRICE_GBP} back.`;
+export const GUARANTEE_REFUND = `If we haven't improved your AI visibility at the ${REMEASURE_WEEKS_STANDARD}-week re-check, you get your £${FINDABLE_SETUP_PRICE_GBP} back.`;
 
 /** The ONE way a reply names the measured engines. v5 2.2 says "ChatGPT and Google AI / Gemini"; the drafter says
  *  "Gemini" (never "google ai"). See FACT_SHEET_CONFLICTS: engine-wording. */

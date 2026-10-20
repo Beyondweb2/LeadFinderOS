@@ -2,7 +2,7 @@
    Runs every ZZ fixture (scripts/fixtures/ai-reply-eval.json: 25 anonymised real conversations + 32 odd replies) through
    pickMove and checks the hand-over decision; pins the loop guards, the capitals and the safeguards. Pure: no model, no DB. */
 import { readFileSync } from 'node:fs';
-import { pickMove, tidyCaps, auditLine, inboundLabel, firstReplyPitch, PITCH_EMOTIONAL_Q, PITCH_POINTED_LINE, PITCH_AGENCY_VOICE, PITCH_SITE_Q, PITCH_VOICE_Q, PITCH_NO_SITE_LINE, type MoveEvidence, type MoveThreadMsg } from '../src/lib/replyMove.ts';
+import { pickMove, tidyCaps, auditLine, inboundLabel, firstReplyPitch, PITCH_EMOTIONAL_Q, PITCH_POINTED_LINE, PITCH_AGENCY_VOICE, PITCH_SITE_Q, PITCH_VOICE_Q, PITCH_NO_SITE_LINE, PITCH_SELF_MANAGED_REPLY, BOT_ANSWER_SWITCH_OFF, BOT_ANSWER_SWITCH_ON, type MoveEvidence, type MoveThreadMsg } from '../src/lib/replyMove.ts';
 import { CONFIDENCE_LINE, GUARANTEE_LINE } from '../src/lib/offerFactSheet.ts';
 import { checkAiReply, fallbackAiReply, type AiReplyContext } from '../src/lib/aiReplyDraft.ts';
 import { conversationEngine, draftNames } from '../src/lib/draftEvidence.ts';
@@ -54,7 +54,7 @@ const pm = (thread: MoveThreadMsg[], o: Partial<{ aiSentSinceWin: number; eviden
   const unknown = pm([opener, { from: 'them', text: 'Do you do Instagram ads as well?' }]);
   ok(unknown.needsYou?.reason === 'question_not_on_sheet', 'a question the sheet does not answer → Needs you');
   const bot = pm([opener, { from: 'them', text: 'is this a bot?' }]);
-  ok(bot.move === 'is_bot' && /Never say you are not using AI/.test(bot.points[0]), '"is this a bot" → honest, never denied');
+  ok(bot.move === 'is_bot' && /Never say you are not using AI/.test(bot.points.join(' ')), '"is this a bot" → honest, never denied');
   const provider = pm([opener, { from: 'them', text: 'I pay him to do it' }]);
   ok(provider.move === 'objection_provider' && /Do not offer a new website/.test(provider.points[0]), '"I pay him" → no new-site pitch, no second agency question');
   ok(pm([opener, { from: 'them', text: 'Thank you for your message, we are away until Monday' }]).label === 'Auto-reply', 'an auto-responder is labelled Auto-reply');
@@ -119,7 +119,10 @@ console.log('6. the first-reply pitch (Paul, 2026-10-20)');
   ok(no.needsYou?.reason === 'not_interested', 'a bare "no" to the closer → Needs you (not interested), no follow-up');
   const agencyMsg: MoveThreadMsg = { from: 'us', text: PITCH_AGENCY_VOICE, templateName: null };
   const ans = pm([opener, { from: 'them', text: 'Yes it is' }, pitchMsg, { from: 'them', text: 'Yes' }, agencyMsg, { from: 'them', text: 'I do it myself' }], { evidence: issuesEv });
-  ok(ans.move === 'offer_voice_note' && ans.question === null && /Never say when/.test(ans.points.join(' ')), 'their answer to the agency question → the voice note, no timing promised, no second question');
+  ok(ans.fixedText === PITCH_SELF_MANAGED_REPLY && ans.question === PITCH_VOICE_Q, '"I do it myself" → "Nice one. Ok if I send a quick voice note on what I found?" (asks, never assumes)');
+  const agencyAns = pm([opener, { from: 'them', text: 'Yes it is' }, pitchMsg, { from: 'them', text: 'Yes' }, agencyMsg, { from: 'them', text: 'An agency does it' }], { evidence: issuesEv });
+  ok(agencyAns.move === 'offer_voice_note' && agencyAns.question === PITCH_VOICE_Q && !agencyAns.fixedText, 'an agency answer → thanks, then asks before the voice note');
+  ok(PITCH_POINTED_LINE === 'Anyone asking AI that question gets pointed to them instead of you.', 'the line before the closer says "that question"');
   const siteNo = pm([opener, { from: 'them', text: 'Yes' }, { from: 'us', text: PITCH_SITE_Q, templateName: null }, { from: 'them', text: 'No not got one' }]);
   ok(siteNo.question === PITCH_VOICE_Q, 'no website to show → "Ok if I send a quick voice note on what I found?"');
 }
@@ -133,6 +136,24 @@ console.log('7. the confidence line: only where Paul said');
   ok(has(pm([opener, { from: 'them', text: 'Yes' }, hook, { from: 'them', text: 'is there a guarantee' }])), 'the guarantee → the confidence line (said once)');
   ok(has(pm([opener, { from: 'them', text: 'who is this?' }])), '"who is this?" → the confidence line');
   ok(!pm([opener, { from: 'them', text: 'Yes it is' }]).confidence, 'never in the first pitch');
+  const g = pm([opener, { from: 'them', text: 'Yes' }, hook, { from: 'them', text: 'is there a guarantee' }]).points.join(' ');
+  ok(g.includes("If we haven't improved your AI visibility at the 4-week re-check, you get your £99 back.") && !/hasn't gone up/.test(g), 'the guarantee reply: "If we haven\'t improved your AI visibility at the 4-week re-check, you get your £99 back."');
+}
+console.log('8. the bot answer follows the AI auto-reply switch (Paul, 2026-10-20)');
+{
+  const ask = [opener, { from: 'them' as const, text: 'Yes' }, hook, { from: 'them' as const, text: 'is this a bot?' }];
+  const off = pm(ask, { evidence: { ...ev, aiAutoReplies: false } });
+  const on = pm(ask, { evidence: { ...ev, aiAutoReplies: true } });
+  const unset = pm(ask);
+  ok(off.points.join(' ').includes(BOT_ANSWER_SWITCH_OFF) && /read and send every one myself/.test(BOT_ANSWER_SWITCH_OFF), 'switch OFF → "I read and send every one myself"');
+  ok(on.points.join(' ').includes(BOT_ANSWER_SWITCH_ON) && !/every one myself/.test(on.points.join(' ')) && /may be automated/.test(BOT_ANSWER_SWITCH_ON), 'switch ON → replies may be automated, never "every one myself"');
+  ok(unset.points.join(' ').includes(BOT_ANSWER_SWITCH_OFF), 'no switch value given (older callers, fixtures) → the switch-off answer; the function itself reads the switch and fails toward ON');
+  const ctxOn: AiReplyContext = { businessName: ev.businessName, latestInbound: 'is this a bot?', thread: [], plan: on, evidence: { ...ev, aiAutoReplies: true } };
+  ok(fallbackAiReply(ctxOn).includes(BOT_ANSWER_SWITCH_ON) && !/every one myself/.test(fallbackAiReply(ctxOn)), 'the rule-built fallback follows the switch too');
+  ok(checkAiReply(BOT_ANSWER_SWITCH_OFF + ' Shall I send you a quick voice note explaining it?', ctxOn).some((x) => /auto-replies are switched on/.test(x)), 'switch ON and the draft says "I send every one myself" → warning');
+  ok(!checkAiReply(BOT_ANSWER_SWITCH_OFF + ' Shall I send you a quick voice note explaining it?', { ...ctxOn, plan: off, evidence: { ...ev, aiAutoReplies: false } }).some((x) => /switched on/.test(x)), 'switch OFF → no warning');
+  const FN = readFileSync(new URL('../supabase/functions/ai-reply-drafts/index.ts', import.meta.url), 'utf8');
+  ok(/aiAutoReplies: await aiSwitchOn\(service\)/.test(FN) && /if \(error \|\| !data\) return true;/.test(FN), 'the function reads the switch for every draft and fails toward ON');
   const ctx: AiReplyContext = { businessName: ev.businessName, latestInbound: 'x', thread: [], plan: pm([opener, { from: 'them', text: 'Yes' }, hook, { from: 'them', text: 'ok' }]), evidence: ev };
   ok(checkAiReply('Our clients loved it and saw great results. Want a call?', ctx).some((x) => /past results/.test(x)), 'a past-results claim with no approved case study → warning');
   ok(checkAiReply("I'll send the voice note now.", ctx).some((x) => /timing/.test(x)), 'a timing promise ("now") → warning');

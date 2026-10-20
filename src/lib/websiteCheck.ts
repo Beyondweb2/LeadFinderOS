@@ -107,6 +107,10 @@ export interface WebsiteCheckView {
 }
 
 const SEV_RANK: Record<WebsiteIssueSeverity, number> = { high: 0, medium: 1, low: 2 };
+/** Said first within a severity (Paul, 2026-10-20, KSM): the site not saying the town / areas it covers ranks above a
+ *  missing heading or description. Order only; nothing is added or dropped. */
+const SAY_FIRST: ReadonlySet<string> = new Set(['ct_areas_not_stated', 'location_unclear', 'town_missing']);
+const sayRank = (i: WebsiteIssue) => (SAY_FIRST.has(i.id) ? 0 : 1);
 
 /* THE DEEP-EVIDENCE FINDINGS (siteEvidence.ts) — a wrong-domain sitemap / canonical / business markup, a noindex on an
    important page — read by BOTH crawls into result.evidence, each with its verbatim proof. Tier A and B only (a Tier C
@@ -374,7 +378,9 @@ export function websiteCheckFor(
     return { state: 'unreadable', summary, serious: [], minor: [], stale, coverageLine, ageDays, checkedDay,
       headline: `We could not read the website: ${summary.failure ?? 'it did not answer.'}` };
   }
-  const serious = summary.issues.filter((i) => i.severity !== 'low');
+  /* Worst first; within a severity, where they work before how the pages are marked up (SAY_FIRST), then stored order. */
+  const serious = summary.issues.map((i, n) => ({ i, n })).filter((x) => x.i.severity !== 'low')
+    .sort((a, b) => SEV_RANK[a.i.severity] - SEV_RANK[b.i.severity] || sayRank(a.i) - sayRank(b.i) || a.n - b.n).map((x) => x.i);
   const minor = summary.issues.filter((i) => i.severity === 'low');
   const pages = summary.pagesRead != null ? ` on the ${plural(summary.pagesRead, 'page')} checked` : '';
   const headline = serious.length

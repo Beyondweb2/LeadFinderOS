@@ -202,6 +202,10 @@ export interface AiReplyWhy {
   /** How the message ends ('emotional' closer, 'agency' / 'site' next step, 'question', or null) and the confidence line used. */
   closer?: string | null;
   confidence?: string | null;
+  /** The website issues the draft could name, each with its stored pages (evidence). */
+  siteIssues?: Array<{ title: string; pages: string[] }> | null;
+  /** The AI auto-reply switch when the draft was written (the bot answer follows it). */
+  aiAutoReplies?: boolean;
 }
 
 /** Paul's own hand-typed messages (inbox analysis 2026-10-19, names removed). The FEEL to copy, not the spelling. */
@@ -360,6 +364,10 @@ export function checkAiReply(reply: string, c: AiReplyContext): string[] {
     out.push(`Uses the name "${contact}", which the site does not state as the owner or founder.`);
   }
   if (BOT_DENIAL.test(r)) out.push('Denies being AI-assisted. Never deny it.');
+  /* ⛔ With the AI auto-reply switch ON, replies may be automated: never claim a person sends every one (Paul, 2026-10-20). */
+  if (e.aiAutoReplies === true && /\b(send|read|write|check)\w*\s+(?:and\s+\w+\s+)?every\s+(?:one|message|reply)\b|\bevery\s+(?:one|message|reply)\s+(?:is\s+)?(?:sent|read|written)\s+by\s+me\b/i.test(r)) {
+    out.push('Says you send every message yourself, but AI auto-replies are switched on. Say replies may be automated.');
+  }
   /* The sheet's engine wording and Paul's no-website line name the tools on purpose: read around them. */
   const forEngine = r.split(ENGINE_WORDING).join(' ').split(PITCH_NO_SITE_LINE).join(' ');
   if (e.engineWords && wrongEngineWords(forEngine, e.engineWords)) out.push(`Names a different AI tool from the one this conversation uses (${engineName(e.engineWords)}).`);
@@ -390,7 +398,7 @@ export function fallbackAiReply(c: AiReplyContext): string {
       continue;
     }
     if (/^(When I asked|Like I said|One thing I saw)/.test(pt) || /word for word/.test(pt)) { parts.push(strip(pt)); continue; }
-    if (c.plan.move === 'is_bot') { parts.push("It's Paul from Findable. I use AI to help write some messages but I read and send every one myself."); continue; }
+    if (c.plan.move === 'is_bot') continue; // its answer is the word-for-word point above (it follows the AI switch)
     if (c.plan.move === 'objection_provider') { parts.push('No problem, they can carry on looking after it.'); continue; }
     if (c.plan.move === 'close_politely') { parts.push('Sorry about that, I won\'t message again.'); continue; }
     if (c.plan.move === 'media') { parts.push("Sorry, I can't play voice notes or open files on here."); continue; }

@@ -82,7 +82,10 @@ export interface MoveEvidence {
   foundOnGoogle: boolean;
   /** THE ONE WEBSITE CHECK (websiteCheck.ts websiteCheckFor): its state and the SERIOUS issues' plain titles
    *  (plainIssueTitle), worst first. Absent = read from hasWebsite / findings (older callers, fixtures). */
-  site?: { state: SiteState; issues: string[] } | null;
+  site?: { state: SiteState; issues: string[]; evidence?: Array<{ title: string; pages: string[] }> } | null;
+  /** The "AI handles replies" switch (whatsapp_outreach_state.ai_handles_replies). ON: never say "I read and send every
+   *  one myself" — replies may be automated. Absent = off. */
+  aiAutoReplies?: boolean;
 }
 export type SiteState = 'issues' | 'clean' | 'not_checked' | 'unreadable' | 'no_website' | 'profile';
 
@@ -235,8 +238,13 @@ export function auditLine(e: MoveEvidence): string | null {
 
 /** THE CLOSER: the pitch ends on ONE emotional question, with the line before it. Only what the audit showed: never
  *  that they ARE losing customers or money. */
-export const PITCH_POINTED_LINE = 'Anyone asking AI that gets pointed to them instead of you.';
-export const PITCH_POINTED_LINE_NO_NAMES = 'Anyone asking AI that gets pointed to other businesses instead of you.';
+export const PITCH_POINTED_LINE = 'Anyone asking AI that question gets pointed to them instead of you.';
+export const PITCH_POINTED_LINE_NO_NAMES = 'Anyone asking AI that question gets pointed to other businesses instead of you.';
+/** Their answer to the agency question when they run the site themselves: ask, never assume (Paul, 2026-10-20). */
+export const PITCH_SELF_MANAGED_REPLY = 'Nice one. Ok if I send a quick voice note on what I found?';
+/** "Is this a bot?" — the answer depends on the AI auto-reply switch (Paul, 2026-10-20). */
+export const BOT_ANSWER_SWITCH_OFF = "It's Paul from Findable. I use AI to help write some messages, but I read and send every one myself.";
+export const BOT_ANSWER_SWITCH_ON = "It's Paul from Findable. I use AI to help with messages, and some replies on here may be automated.";
 export const PITCH_EMOTIONAL_Q = 'Would you rather those customers came to you?';
 /** The NEXT reply after the pitch (a website on record): the agency question and the voice note offer, one question. */
 export const PITCH_AGENCY_VOICE = 'Are you with an agency, or do you manage the website yourself? Either way I can send a quick voice note on what I found.';
@@ -306,6 +314,8 @@ function pitchAsked(m: MoveThreadMsg | null): PitchStep | null {
 /** An answer to "agency or yourself?". */
 const SITE_ANSWER = /\b(agency|agencies|myself|my\s+self|me|i\s+do|we\s+do|i\s+manage|we\s+manage|i\s+look\s+after|we\s+look\s+after|in[- ]?house|freelancer?|designer|developer|web\s*(guy|company|person|man|team)|nephew|son|daughter|brother|sister|wife|husband|partner|mate|friend|someone|somebody|wix|squarespace|wordpress|go\s*daddy|yell|both|neither)\b/i;
 const BARE_YES = /^\W*(yes|yeah|yep|yup|yh|ya|ye)\W*$/i;
+/** "I do it myself", "we manage it", "in house": they run the site themselves. */
+const SELF_MANAGED = /\b(myself|my\s+self|ourselves|i\s+do(\s+it)?|we\s+do(\s+it)?|i\s+manage|we\s+manage|i\s+look\s+after|we\s+look\s+after|in[- ]?house|me)\b/i;
 const BARE_NO = /^\W*(no|nope|nah|na)\b/i;
 const NO_SITE_ANSWER = /^\W*(no|nope|nah|na)\b|\b(don'?t|do\s+not|haven'?t|have\s+not)\s+(have|got)\s+(one|a\s+(web)?site)|\bno\s+(web)?site\b/i;
 const CLEAR_NO = /\b(not\s+interested|no\s+thanks?|no\s+thank\s+you|not\s+for\s+(me|us)|(we'?re|i'?m)\s+(ok|fine|good|alright|sorted|busy\s+enough))\b/i;
@@ -377,10 +387,13 @@ export function pickMove(i: MoveInput): MovePlan {
     } else if (asked === 'site' && NO_SITE_ANSWER.test(text)) {
       return g(plan({ move: 'offer_voice_note', read: 'answered_pitch', points: ['No worries, thank them.'], question: offeredVoice ? CALL_Q : PITCH_VOICE_Q }));
     } else if (asked === 'agency' && (SITE_ANSWER.test(text) || BARE_YES.test(text) || BARE_NO.test(text))) {
+      /* Ask before sending the voice note, never assume (Paul, 2026-10-20). Running it themselves: his words exactly. */
+      if (SELF_MANAGED.test(text)) {
+        return g(plan({ move: 'offer_voice_note', read: 'answered_agency_self', points: [`Use this line, word for word: "${PITCH_SELF_MANAGED_REPLY}"`], question: PITCH_VOICE_Q, fixedText: PITCH_SELF_MANAGED_REPLY }));
+      }
       return g(plan({ move: 'offer_voice_note', read: 'answered_agency',
-        points: ['Thank them for letting you know, in a few words, using their own word for whoever looks after the site. Do not offer a new website and do not ask about the website again.',
-          ...(offeredVoice ? ['Say you will record them a quick voice note on what you found. Never say when it will come: no "now", "shortly" or "today".'] : [])],
-        question: offeredVoice ? null : PITCH_VOICE_Q }));
+        points: ['Thank them for letting you know, in a few words, using their own word for whoever looks after the site. Do not offer a new website and do not ask about the website again.'],
+        question: PITCH_VOICE_Q }));
     }
   }
   if (t.category === 'wrong_person') return g(plan({ move: 'close_politely', read: 'wrong_person', autoDraft: false, needsYou: flag('wrong_person'), points: ['Say sorry, your mistake, and you will not message again.'] }));
@@ -398,7 +411,9 @@ export function pickMove(i: MoveInput): MovePlan {
 
   /* 5. Things code can answer. */
   if (BOT.test(text)) {
-    return g(plan({ move: 'is_bot', read: 'is_bot', points: ["Say, in the first person: \"It's Paul from Findable. I use AI to help write some messages, but I read and send every one myself.\" Never say you are not using AI."], question: offeredVoice ? null : VOICE_Q }));
+    /* ⛔ "I read and send every one myself" only while the AI auto-reply switch is OFF (Paul, 2026-10-20). */
+    const answer = e.aiAutoReplies === true ? BOT_ANSWER_SWITCH_ON : BOT_ANSWER_SWITCH_OFF;
+    return g(plan({ move: 'is_bot', read: 'is_bot', points: [`Use this line, word for word: "${answer}"`, 'Never say you are not using AI.'], question: offeredVoice ? null : VOICE_Q }));
   }
   if (VOICE_REQUEST.test(text) && !/\b(can'?t|cannot)\b/i.test(text)) {
     return g(plan({ move: 'offer_voice_note', read: 'asked_voice_note', points: ['Say yes, you will record them a short voice note. Never say when it will come: no "now", "shortly" or "today".'], question: null, allowPrice: clearYesEarlier }));
