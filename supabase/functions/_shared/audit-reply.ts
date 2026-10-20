@@ -9,13 +9,14 @@ import { buildReportData, seoStyleForAudit, type QueueRow, type RunRow } from ".
 import { isAggregatorUrl } from "./aggregators.ts";
 import { countAnsweredCells, readCleaningStamp } from "../../../src/lib/competitorCleaning.ts";
 import { usableRivals, excludeSelfRivals, templateEngineConflict } from "../../../src/lib/rivalHook.ts";
-import { NAMED_INSTEAD_TEMPLATES, mayClaimNamedInstead, namedShareRefusal } from "../../../src/lib/namedShareRule.ts";
+import { NAMED_INSTEAD_TEMPLATES, mayClaimNamedInstead, namedShareOf, namedShareRefusal } from "../../../src/lib/namedShareRule.ts";
 import { nameMatches } from "../../../src/lib/nameMatch.ts";
 import { shortReportUrl } from "../../../src/lib/reportSlug.ts";
 import { auditShowsVisibilityGap, resolveSiteFault, type CrawlSignals } from "../../../src/lib/crawlCheck.ts";
 import { resolveSiteFindingsDetailed } from "../../../src/lib/siteFindings.ts";
 import { isHookState } from "../../../src/lib/hookAudit.ts";
 import { HOOK_SCORE_RESULTS, isHookStateV2, scoreHookRun, type HookScoreContext, type HookScoreRow } from "../../../src/lib/hookScore.ts";
+import { scoringMethodFor } from "../../../src/lib/aiOverview.ts";
 
 /* ── The all-named hook guard ──────────────────────────────────────────────────────────────────────
    ⛔ A HOOK THAT NAMED THEM EVERYWHERE FORBIDS ABSENCE COPY (Paul, 2026-09-21). Several audit-class
@@ -119,7 +120,7 @@ export type AuditReplyVars =
   /* `hookQuestion` / `hookEngine`: the hook search the rivals were read from (the report's hook gap,
      which for a six-result hook is the pick). Null for an audit with no hook gap, whose rivals come
      from the audit-wide leaders as before. */
-  | { ok: true; trade: string; competitors: string; rivals: string[]; business: string; link: string; town: string; auditId: string; siteFault: string | null; siteFindings: string | null; siteFindingsKinds: string[] | null; hookQuestion: string | null; hookEngine: string | null; visibilityPct: number | null }
+  | { ok: true; trade: string; competitors: string; rivals: string[]; business: string; link: string; town: string; auditId: string; siteFault: string | null; siteFindings: string | null; siteFindingsKinds: string[] | null; hookQuestion: string | null; hookEngine: string | null; visibilityPct: number | null; scoreNamed: number | null; scoreTotal: number | null }
   | { ok: false; reason: string };
 
 /**
@@ -188,8 +189,11 @@ export async function resolveAuditReplyVars(service: any, leadId: string, opts: 
      percentage the report's "Overall AI visibility" shows. NULL for anything but a complete version-2 run (a quick check,
      or a bulk audit carrying its score marker — docs/bulk-audit-score.md), so a message can never quote a score the
      report does not show. */
+  /* scoringMethod changes ONLY hookScore.scored (the score the report shows: Google AI counted where scored). Every gate
+     here keeps reading method 1 (named / valid / percent / hook). `scored` is handed to the reply drafter (scoreNamed). */
   const hookScore = isHookStateV2(hookState) ? scoreHookRun(hookState, (qrows ?? []) as HookScoreRow[], {
     named: { businessName: audit.business_name ?? "", trade: audit.business_type || null, town: audit.location_text || null },
+    scoringMethod: scoringMethodFor(audit.created_at ?? null),
   }) : null;
   if (sixResultHookForbidsAbsenceCopy(hookState, (qrows ?? []) as HookScoreRow[], {
     named: { businessName: audit.business_name ?? "", trade: audit.business_type || null, town: audit.location_text || null },
@@ -202,9 +206,11 @@ export async function resolveAuditReplyVars(service: any, leadId: string, opts: 
     };
   }
   /* ⛔ "NAMED OTHERS INSTEAD" ONLY WHEN NAMED IN AT MOST A THIRD (Paul, 2026-10-20, src/lib/namedShareRule.ts): keyed on the
-     template asked for, so the drafters (no templateName) are unchanged. The text is never edited; this decides who gets it. */
-  if (hookScore && hookScore.complete && opts.templateName && NAMED_INSTEAD_TEMPLATES.has(opts.templateName) && !mayClaimNamedInstead(hookScore.named, hookScore.valid)) {
-    return { ok: false, reason: `${HOOK_NO_GAP_REASON}: ${namedShareRefusal(String(audit.business_name ?? "").trim(), hookScore.named, hookScore.valid)}` };
+     template asked for. The text is never edited; this decides who gets it. ⛔ Counted with namedShareOf: the score the audit
+     screen shows, Google AI included where scored (Paul, 2026-10-20) — the same count the reply drafter reads (scoreNamed). */
+  const share = namedShareOf(hookScore);
+  if (share && opts.templateName && NAMED_INSTEAD_TEMPLATES.has(opts.templateName) && !mayClaimNamedInstead(share.named, share.total)) {
+    return { ok: false, reason: `${HOOK_NO_GAP_REASON}: ${namedShareRefusal(String(audit.business_name ?? "").trim(), share.named, share.total)}` };
   }
   const visibilityPct = hookScore && hookScore.complete ? hookScore.percent : null;
   const answered = countAnsweredCells((qrows ?? []) as Parameters<typeof countAnsweredCells>[0]);
@@ -403,5 +409,6 @@ export async function resolveAuditReplyVars(service: any, leadId: string, opts: 
   );
   const siteFindings = siteFindingsDetail?.text ?? null;
   const siteFindingsKinds = siteFindingsDetail?.kinds ?? null;
-  return { ok: true, trade, competitors, rivals: usableRivals(rivalPool), business, link, town: (audit.location_text ?? "").trim(), auditId: audit.id, siteFault, siteFindings, siteFindingsKinds, hookQuestion: hookGap?.question ?? null, hookEngine: hookGap?.engine ?? null, visibilityPct };
+  return { ok: true, trade, competitors, rivals: usableRivals(rivalPool), business, link, town: (audit.location_text ?? "").trim(), auditId: audit.id, siteFault, siteFindings, siteFindingsKinds, hookQuestion: hookGap?.question ?? null, hookEngine: hookGap?.engine ?? null, visibilityPct,
+    scoreNamed: share?.named ?? null, scoreTotal: share?.total ?? null };
 }

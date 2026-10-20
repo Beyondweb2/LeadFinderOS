@@ -65,7 +65,15 @@ for (const [body, reason] of [['No thanks mate', 'not_interested'], ['wrong numb
 }
 ok((() => { const d = decide('[audio]', { messageType: 'audio' }); return d.kind === 'needs_you' && d.reason === 'media'; })(), 'a voice note → Needs you (listen first)');
 for (const body of ['How much is it?', 'Can you give me a call tomorrow', 'Yes please, sounds good', 'Yes it is', 'I pay him to do the website']) ok(decide(body).kind === 'draft', `drafted (no hand-over): "${body}"`);
-ok(decide('Thanks for contacting us, we will get back to you').kind === 'skipped', 'an auto-responder gets no row to answer');
+/* The first auto-reply to the opener: they have not confirmed who they are, so its draft is the first-reply pitch (Paul,
+   2026-10-20, Ven). A repeated auto-reply still gets nothing (reply-move.test.ts, loop guards). */
+{
+  const d = decide('Thanks for contacting us, we will get back to you');
+  const p = planFor('Thanks for contacting us, we will get back to you');
+  ok(d.kind === 'draft' && p.move === 'auto_reply' && p.label === 'Auto-reply' && !!p.fixedText, 'an auto-responder to the opener → labelled Auto-reply, drafted as the first-reply pitch');
+  const rep = pickMove({ thread: [{ from: 'us', text: 'Hi, is this ZZ Fixture Electrical 01?', templateName: 'initial_contact' }, { from: 'them', text: 'Thanks for your message, we will reply soon' }, { from: 'us', text: 'No rush, speak soon.' }, { from: 'them', text: 'Thanks for your message, we will reply soon' }], suppressed: false, aiSentSinceWin: 0, evidence: ev });
+  ok(aiReplyDecision({ inboundAt: ago(2), lead, hadOutreach: true, plan: rep, nowMs: NOW }).kind !== 'draft' && !rep.fixedText, 'a repeated auto-reply → never drafted');
+}
 ok(decide('hi', { lead: { amount_paid: 99, status: 'paid', is_archived: false } }).kind === 'skipped', 'a paying client never gets a prospect draft');
 ok(decide('hi', { hadOutreach: false }).kind === 'skipped' && decide('hi', { lead: null }).kind === 'skipped', 'not our outreach / no lead → nothing');
 ok(/input\.suppressed = await isSuppressed\(service, \{ phone: c\.phone, leadId: c\.lead_id \}\); \/\/ fails closed/.test(FN), 'Do Not Contact is the shared suppression check, which fails closed');

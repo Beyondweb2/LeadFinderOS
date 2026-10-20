@@ -394,7 +394,14 @@ export function websiteCheckFor(
    canonical / schema words. An id without a line here keeps its title (those are plain already). */
 const PLAIN_LINE: Record<string, string> = {
   robots_blocks_all: 'Your site tells every search and AI tool to stay away',
-  search_crawler_refused: 'Your site turned away the AI search tools we tried',
+  /* ⛔ Hedged (Paul, 2026-10-20): we saw OUR check refused, never what an AI tool does. */
+  search_crawler_refused: 'Our check could not read your site, which AI tools may also struggle with',
+  /* Every line is a whole sentence ("X is / has …"), so a joined list reads in parallel (Paul, 2026-10-20). */
+  no_service_pages: 'There are no separate pages for your services',
+  one_page_site: 'Your website is a single page',
+  thin_key_pages: 'Your service, area or home pages have very little text on them',
+  deep_pages: 'Some important pages are hard to reach from your homepage',
+  sitemap_only_pages: 'Some important pages are not linked from anywhere on your site',
   client_rendered: 'Your homepage text only appears after the page code runs, so some tools may see an almost empty page',
   no_https: 'Your site is not secure (no padlock)',
   no_sitemap: 'There is no page list for Google to follow',
@@ -440,6 +447,8 @@ export function plainIssueTitle(i: WebsiteIssue): string {
     return h && d ? 'Some main pages have no main heading or description' : h ? 'Some main pages have no main heading' : 'Some main pages have no description for Google';
   }
   if (i.id === 'vs_address_not_on_key_pages' && /homepage/i.test(i.title)) return 'Your address is not on your homepage';
+  if (i.id === 'name_unclear') return /title or main heading/i.test(i.title) ? 'Your business name is not in your homepage title or main heading' : 'Your business name is not on your homepage';
+  if (i.id === 'town_missing') return i.title.replace(/^Homepage\b/, 'Your homepage');
   if (i.id.startsWith('robots_blocks_pages_')) return 'Parts of your site are closed off to an AI or search tool';
   if (i.id.startsWith('robots_blocks_')) return 'Your site tells an AI or search tool not to read it';
   return PLAIN_LINE[i.id] ?? i.title;
