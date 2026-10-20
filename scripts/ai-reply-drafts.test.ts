@@ -148,7 +148,7 @@ console.log('8. the draft: code picks the move, the model phrases it, the checke
   const plan = planFor('Yes it is');
   const ctx: AiReplyContext = { businessName: ev.businessName, latestInbound: 'Yes it is', thread: [{ from: 'us', text: 'Hi, is this ZZ Fixture Electrical 01?' }, { from: 'them', text: 'Yes it is' }], plan, evidence: ev };
   const fb = fallbackAiReply(ctx);
-  ok(plan.move === 'intro_hook' && /Rival A Electrical/.test(fb) && (fb.match(/\?/g) ?? []).length === 1, 'bare "yes it is" → who I am + the search line + ONE question');
+  ok(plan.move === 'first_reply_pitch' && /Rival A Electrical/.test(fb) && (fb.match(/\?/g) ?? []).length === 1, 'bare "yes it is" → the full pitch: the search line + ONE question (Paul, 2026-10-20)');
   ok(checkAiReply(fb, ctx).length === 0, `the rule-built draft passes the checks${checkAiReply(fb, ctx).length ? ' — ' + checkAiReply(fb, ctx).join(' | ') : ''}`);
   ok(!/£|https?:|sign/i.test(fb), '…no price, no link, no sign-up on a bare yes');
   const p = buildAiReplyPrompt(ctx);

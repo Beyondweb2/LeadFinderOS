@@ -25,9 +25,9 @@ import { salesStyleProblems, SALES_STYLE_RULES } from './salesStyle.ts';
 import { serviceWindowState } from './serviceWindow.ts';
 import { isClientLead } from './roleRules.ts';
 import { issueMentioned, saysGoogleAiForGemini, vagueSiteClaim, wrongEngineWords } from './draftEvidence.ts';
-import { ENGINE_WORDING, FACT_SHEET_VERSION, GUARANTEE_LINE, SHEET_MONEY, factFor } from './offerFactSheet.ts';
+import { ENGINE_WORDING, FACT_SHEET_VERSION, GUARANTEE_LINE, SHEET_MONEY, factFor, usableCaseStudies } from './offerFactSheet.ts';
 import { mayClaimNamedInstead } from './namedShareRule.ts';
-import { engineName, tidyCaps, NEEDS_YOU_LABELS, type MoveEvidence, type MovePlan, type NeedsYouReason } from './replyMove.ts';
+import { engineName, siteOf, tidyCaps, NEEDS_YOU_LABELS, PITCH_NO_SITE_LINE, type MoveEvidence, type MovePlan, type NeedsYouReason } from './replyMove.ts';
 
 /* ── cost ─────────────────────────────────────────────────────────────────────────────────────── */
 
@@ -199,6 +199,9 @@ export interface AiReplyWhy {
   costUsd: number;
   calls: number;
   styleSource: string;
+  /** How the message ends ('emotional' closer, 'agency' / 'site' next step, 'question', or null) and the confidence line used. */
+  closer?: string | null;
+  confidence?: string | null;
 }
 
 /** Paul's own hand-typed messages (inbox analysis 2026-10-19, names removed). The FEEL to copy, not the spelling. */
@@ -229,6 +232,8 @@ RULES:
 - No guarantee, ranking, "first page" or "recommend you" promises. Never say how an AI decides or that something caused a result.
 - Casual and kind, like a tradesperson texting: "mate" is fine sometimes, "no worries" is fine. No headings, lists, bold, dashes or exclamation marks. No sign off.
 - If asked whether you are a bot or AI, never deny it.
+- Never mention past results, other clients or success stories.
+- Never say when something will be sent or done (no "now", "shortly", "today"). Never say "100%" or "if I fail".
 
 ${SALES_STYLE_RULES}
 
@@ -288,6 +293,16 @@ const PLACE_PHRASE = /\b(?:in|around|near|across)\s+([A-Z][a-z]+(?:[\s-][A-Z][a-
 const NAME_SEQ = /\b([A-Z][\w'&]*(?:\s+(?:&\s+)?[A-Z][\w'&]*)+)\b/g;
 const COMMON_CAPS = new Set(['I', "I'm", "I'll", "I've", "I'd", 'AI', 'ChatGPT', 'Gemini', 'Google', 'Paul', 'Findable', 'Hi', 'Hey', 'Thanks', 'No', 'Yes', 'Sure', 'Okay', 'Ok', 'Great', 'Fair', 'Like', 'When', 'Shall', 'Want', 'What', 'Would', 'Happy', 'Sorry', 'Brilliant', 'Cheers', 'Business', 'Profile', 'Maps', 'WhatsApp', 'UK', 'The', 'It', 'If', 'That', 'Is', 'Can', 'Just', 'We', 'You', 'Your', 'My', 'Me', 'Morning', 'Afternoon', 'Worth', 'Good', 'Nice', 'Mate', 'And', 'So', 'Or', 'Not', 'All', 'English', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']);
 
+/** A promise of WHEN something comes ("I'll send it now", "recording it shortly"). Paul, 2026-10-20: never. */
+const TIMING_PROMISE = /\b(send|sending|sent|record|recording|do|doing|get)\b[^.?!\n]{0,40}\b(now|right\s+away|straight\s+away|shortly|in\s+a\s+(minute|min|sec|second|moment|bit)|later\s+today|today|tonight|this\s+(morning|afternoon|evening)|in\s+\d+\s*(mins?|minutes|hours?))\b/i;
+/** The first-reply pitch is code-built and may run to five lines (Paul, 2026-10-20). */
+const lineCap = (p: MovePlan) => (p.move === 'first_reply_pitch' ? 5 : 3);
+const charCap = (p: MovePlan) => (p.move === 'first_reply_pitch' ? 640 : p.confidence ? 480 : 320);
+/** A claim about past results or other clients (Paul, 2026-10-20): only through an APPROVED case study (none today). */
+const PAST_RESULTS = /\b(success(?:es|ful)?|(?<!\b(?:your|the)\s)results?|clients?\s+(?:loved|love|are\s+(?:happy|delighted))|case\s+stud(?:y|ies)|(?:other|our|happy|past)\s+(?:clients|customers)|we'?ve\s+helped|helped\s+(?:loads|lots|many|plenty|other))\b/i;
+/** Never an absolute promise around the guarantee (Paul, 2026-10-20). */
+const ABSOLUTE = /\b100\s?%|\bif\s+i\s+fail\b|\bhundred\s+per\s*cent\b/i;
+
 const lower = (s: string | null | undefined) => String(s ?? '').toLowerCase();
 
 /** The checks a draft is held to. Each is a WARNING shown to the person ("Check this draft"); nothing is blocked. */
@@ -297,8 +312,10 @@ export function checkAiReply(reply: string, c: AiReplyContext): string[] {
   if (!r) return ['Empty draft.'];
   const e = c.evidence; const p = c.plan;
   const lines = r.split('\n').filter((l) => l.trim());
-  if (lines.length > 3) out.push('More than 3 lines.');
-  if (r.length > 320) out.push('Long for a reply (over 320 characters).');
+  if (lines.length > lineCap(p)) out.push(`More than ${lineCap(p)} lines.`);
+  if (r.length > charCap(p)) out.push(`Long for a reply (over ${charCap(p)} characters).`);
+  if (TIMING_PROMISE.test(r) && p.move !== 'set_call') out.push('Promises when something will come ("now", "shortly"). Never promise timing.');
+  if (/\bi\s+was\s+looking\s+for\b/i.test(r)) out.push('Says "I was looking for"; say "I asked".');
   const qs = (r.match(/\?/g) ?? []).length;
   if (qs > 1) out.push('Asks more than one question.');
   if (usesDash(r)) out.push('Uses a dash.');
@@ -309,7 +326,9 @@ export function checkAiReply(reply: string, c: AiReplyContext): string[] {
   for (const m of r.match(MONEY) ?? []) if (!SHEET_MONEY.includes(m.replace(/\s/g, '').replace(/\.00$/, ''))) out.push(`Names ${m}, which is not on the fact sheet.`);
   if (TERM_DRIFT.test(r)) out.push('A term or promise that is not on the fact sheet (12 months, cancel any time, unlimited, monthly audits).');
   if (RANKING.test(r)) out.push('Promises a ranking, first page or recommendation.');
-  if (GUARANTEE_WORD.test(r) && !r.includes(GUARANTEE_LINE) && !r.includes(factFor('cancel')?.say ?? '\u0000')) {
+  if (PAST_RESULTS.test(r) && !usableCaseStudies().length) out.push('Claims past results or other clients, but no case study is approved on the fact sheet.');
+  if (ABSOLUTE.test(r)) out.push('Says "100%" or "if I fail". Use the guarantee line only.');
+  if (GUARANTEE_WORD.test(r) && !lower(r).includes(lower(GUARANTEE_LINE)) && !r.includes(factFor('cancel')?.say ?? '\u0000')) {
     out.push(`Mentions the guarantee in words that are not the sheet's ("${GUARANTEE_LINE}").`);
   }
   /* Evidence. */
@@ -329,7 +348,9 @@ export function checkAiReply(reply: string, c: AiReplyContext): string[] {
     if (!e.town || !lower(e.town).includes(lower(place)) && !lower(place).includes(lower(e.town))) out.push(`Mentions ${place}, which is not the audit's town${e.town ? ` (${e.town})` : ''}.`);
   }
   if (SITE_FAULT.test(r) || vagueSiteClaim(r)) {
-    const backed = e.findings.length > 0 && e.findings.some((f) => issueMentioned(r, f));
+    /* The crawl's findings, or the website check's own serious-issue titles quoted as they are (the pitch). */
+    const backed = (e.findings.length > 0 && e.findings.some((f) => issueMentioned(r, f)))
+      || siteOf(e).issues.some((t) => lower(r).includes(lower(t)));
     if (!backed) out.push('Talks about a website issue the stored crawl does not record.');
   }
   const greet = r.match(NAME_GREETING)?.[1] ?? null;
@@ -339,9 +360,10 @@ export function checkAiReply(reply: string, c: AiReplyContext): string[] {
     out.push(`Uses the name "${contact}", which the site does not state as the owner or founder.`);
   }
   if (BOT_DENIAL.test(r)) out.push('Denies being AI-assisted. Never deny it.');
-  const forEngine = r.split(ENGINE_WORDING).join(' ');
+  /* The sheet's engine wording and Paul's no-website line name the tools on purpose: read around them. */
+  const forEngine = r.split(ENGINE_WORDING).join(' ').split(PITCH_NO_SITE_LINE).join(' ');
   if (e.engineWords && wrongEngineWords(forEngine, e.engineWords)) out.push(`Names a different AI tool from the one this conversation uses (${engineName(e.engineWords)}).`);
-  if (saysGoogleAiForGemini(r)) out.push('Says "Google AI"; say "Gemini".');
+  if (saysGoogleAiForGemini(r.split(PITCH_NO_SITE_LINE).join(' '))) out.push('Says "Google AI"; say "Gemini".');
   if (p.question === null && qs > 0) out.push('Asks a question where none was planned.');
   out.push(...salesStyleProblems(r, [...e.competitors, e.businessName]));
   return [...new Set(out)];
@@ -354,6 +376,7 @@ export function fallbackAiReply(c: AiReplyContext): string {
     if (quoted) return quoted[1];
     return s.replace(/^(Say|Agree with what is true:|Confirm|Thank them and say|In English: say|Be honest:)\s*/i, '');
   };
+  if (c.plan.fixedText) return finishDraft(c.plan.fixedText, evidenceNames(c.evidence));
   if (c.plan.move === 'auto_reply') return finishDraft('No rush, speak soon.');
   const parts: string[] = [];
   for (const pt of c.plan.points) {
