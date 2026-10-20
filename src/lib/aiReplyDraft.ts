@@ -27,7 +27,7 @@ import { isClientLead } from './roleRules.ts';
 import { issueMentioned, saysGoogleAiForGemini, vagueSiteClaim, wrongEngineWords } from './draftEvidence.ts';
 import { ENGINE_WORDING, FACT_SHEET_VERSION, GUARANTEE_LINE, SHEET_MONEY, factFor, usableCaseStudies } from './offerFactSheet.ts';
 import { mayClaimNamedInstead } from './namedShareRule.ts';
-import { engineName, siteOf, tidyCaps, NEEDS_YOU_LABELS, PITCH_NO_SITE_LINE, type MoveEvidence, type MovePlan, type NeedsYouReason } from './replyMove.ts';
+import { engineName, siteOf, tidyCaps, NEEDS_YOU_LABELS, PITCH_NO_SITE_LINE, PITCH_SPECIALISE_LINE, type MoveEvidence, type MovePlan, type NeedsYouReason } from './replyMove.ts';
 
 /* ── cost ─────────────────────────────────────────────────────────────────────────────────────── */
 
@@ -303,7 +303,8 @@ const TIMING_PROMISE = /\b(send|sending|sent|record|recording|do|doing|get)\b[^.
 /** The first-reply pitch is code-built and may run to five lines (Paul, 2026-10-20). */
 const isPitch = (p: MovePlan) => p.move === 'first_reply_pitch' || (p.move === 'auto_reply' && !!p.fixedText);
 const lineCap = (p: MovePlan) => (isPitch(p) ? 5 : 3);
-const charCap = (p: MovePlan) => (isPitch(p) ? 640 : p.confidence ? 480 : 320);
+/* The pitch (wording A, 2026-10-20): greeting, the search, why, what we do, the agency question. */
+const charCap = (p: MovePlan) => (isPitch(p) ? 800 : p.confidence ? 480 : 320);
 /** "named you in 1 of 2 answers", "there's a gap in the rest": never in any draft (Paul, 2026-10-20, Nola). Lead with the
  *  missed search instead. */
 const SHARE_WORDING = /\bnamed\s+you\s+in\s+\d+\s+(?:of|out\s+of)\s+\d+|\bgap\s+in\s+the\s+rest\b|\bin\s+\d+\s+(?:of|out\s+of)\s+\d+\s+answers\b/i;
@@ -343,7 +344,8 @@ export function checkAiReply(reply: string, c: AiReplyContext): string[] {
   }
   /* Evidence. */
   if (SHARE_WORDING.test(r)) out.push('Says "named you in X of Y answers" or "a gap in the rest". Say the search where they were not named, and who came up.');
-  if (INSTEAD_CLAIM.test(r) && !(e.named && mayClaimNamedInstead(e.named.named, e.named.valid))) {
+  /* "…so those customers come to you instead" is what we do, Paul's own words, not a claim about the audit: read around it. */
+  if (INSTEAD_CLAIM.test(r.split(PITCH_SPECIALISE_LINE).join(' ')) && !(e.named && mayClaimNamedInstead(e.named.named, e.named.valid))) {
     out.push('Says AI named others instead, but they were named in more than a third of answers (or no counts are on record).');
   }
   const allowedNames = [e.businessName, ...e.competitors, e.town ?? '', e.ownerName ?? ''].map(lower).filter(Boolean);

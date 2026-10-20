@@ -280,14 +280,14 @@ export function spokenSearch(question: string, trade: string | null): string {
   if (/^(who|what|which|where|can|could|is|are|how|any|do|does|should|would|recommend)\b/i.test(q)) return `"${q.charAt(0).toUpperCase()}${q.slice(1)}?"`;
   return `for ${q}`;
 }
-/** "I asked Gemini <the missed search>": the engine and question where they were NOT named (Paul, 2026-10-20), when that
- *  engine is the one this conversation uses (never two tools in one conversation); else trade + town on its engine. */
+/** "I asked Gemini <the missed search>": the engine and question where they were NOT named (Paul, 2026-10-20). ⛔ Never
+ *  name an engine that DID name them, and never two tools in one conversation: when a message we already sent named a
+ *  different tool, the missed search is said as "AI". No missed search on record: trade + town on the conversation's tool. */
 export function askedPhrase(e: MoveEvidence): string | null {
   if (!e.trade || !e.town) return null;
-  const tool = engineName(e.engineWords);
   const m = e.missed;
-  if (m && m.question.trim() && m.engine === e.engineWords) return `I asked ${tool} ${spokenSearch(m.question, e.trade)}`;
-  return `I asked ${tool} for ${withA(tradeWord(e.trade))} in ${e.town}`;
+  if (m && m.question.trim()) return `I asked ${m.engine === e.engineWords ? engineName(e.engineWords) : 'AI'} ${spokenSearch(m.question, e.trade)}`;
+  return `I asked ${engineName(e.engineWords)} for ${withA(tradeWord(e.trade))} in ${e.town}`;
 }
 const lowerFirst = (s: string) => s.charAt(0).toLowerCase() + s.slice(1);
 
@@ -309,26 +309,23 @@ export function auditLine(e: MoveEvidence): string | null {
   return e.competitors.length ? `${asked} and it mentioned ${listNames(e.competitors.slice(0, 3))}.` : `${asked} and it didn't mention you.`;
 }
 
-/* ── the first-reply pitch (Paul, 2026-10-20): every word built here ───────────────────────────── */
+/* ── the first-reply pitch (Paul, 2026-10-20, wording A): every word built here ───────────────────── */
 
-/** THE CLOSER: the pitch ends on ONE emotional question, with the line before it. Only what the audit showed: never
- *  that they ARE losing customers or money. */
-export const PITCH_POINTED_LINE = 'Anyone asking AI that question gets pointed to them instead of you.';
-export const PITCH_POINTED_LINE_NO_NAMES = 'Anyone asking AI that question gets pointed to other businesses instead of you.';
 /** Their answer to the agency question when they run the site themselves: ask, never assume (Paul, 2026-10-20). */
 export const PITCH_SELF_MANAGED_REPLY = 'Nice one. Ok if I send a quick voice note on what I found?';
 /** "Is this a bot?" — the answer depends on the AI auto-reply switch (Paul, 2026-10-20). */
 export const BOT_ANSWER_SWITCH_OFF = "It's Paul from Findable. I use AI to help write some messages, but I read and send every one myself.";
 export const BOT_ANSWER_SWITCH_ON = "It's Paul from Findable. I use AI to help with messages, and some replies on here may be automated.";
-export const PITCH_EMOTIONAL_Q = 'Would you rather those customers came to you?';
-/** The NEXT reply after the pitch (a website on record): the agency question and the voice note offer, one question. */
+/** THE ONE QUESTION the pitch ends on (a website on record): the agency question and the voice note offer. */
 export const PITCH_AGENCY_VOICE = 'Are you with an agency, or do you manage the website yourself? Either way I can send a quick voice note on what I found.';
-/** The NEXT reply after the pitch when no website is on record (never the agency question). */
+/** The pitch's question when no website is on record (never the agency question). */
 export const PITCH_SITE_Q = "Do you have a website I've missed?";
 /** After "no, I haven't got one": the voice note offer. */
 export const PITCH_VOICE_Q = 'Ok if I send a quick voice note on what I found?';
 export const PITCH_INSTEAD_LINE = 'AI is recommending your competitors instead.';
 export const PITCH_WHY_LEAD = 'I looked into why this might be happening and';
+/** What we do, said once, with no promise of a result (Paul, 2026-10-20). */
+export const PITCH_SPECIALISE_LINE = 'I specialise in helping local businesses get recommended by AI, so those customers come to you instead.';
 /** Paul's no-website words for the pitch. It names both tools on purpose; the checker reads around it. */
 export const PITCH_NO_SITE_LINE = "I couldn't find a website for you, so Gemini and Google AI have nothing of yours to read.";
 export const PITCH_INTRO_LINE = "It's Paul from Findable. I help local businesses show up when people ask AI tools for their trade in their area.";
@@ -343,39 +340,43 @@ export function siteOf(e: MoveEvidence): { state: SiteState; issues: string[] } 
 }
 const noSiteOf = (e: MoveEvidence) => { const s = siteOf(e).state; return s === 'no_website' || s === 'profile'; };
 
-/** THE FIRST-REPLY PITCH. Line 1 the AI result, line 2 why (the crawl's serious issues, or no website), then the closer:
- *  "Anyone asking AI that gets pointed to them instead of you." + "Would you rather those customers came to you?".
- *  ⛔ "instead" / "not you" / the closer only under the one-third rule. Above it (or no counts on record) the neutral line,
- *     and the message ends on the NEXT step's question instead (agency + voice note, or "a website I've missed?").
- *  ⛔ A check with no serious issue, one still running or one that failed: line 1 ending "not you", no "looked into why".
- *  ⛔ No confidence line, no guarantee, no price, no past results here. Nothing absent is invented. */
-export function firstReplyPitch(e: MoveEvidence): { lines: string[]; question: string; closer: 'emotional' | 'agency' | 'site' } {
+/** "Hi Kylie," only when the site's own crawl states a person as owner / founder (MoveEvidence.ownerName). First name only;
+ *  never guessed from the business name. No name → no greeting line. */
+export function pitchGreeting(e: MoveEvidence): string | null {
+  const first = String(e.ownerName ?? '').trim().split(/\s+/)[0] ?? '';
+  return /^[A-Z][a-z]+(?:['’-][A-Za-z]+)?$/.test(first) ? `Hi ${first},` : null;
+}
+
+/** THE FIRST-REPLY PITCH (Paul, 2026-10-20, wording A):
+ *    [Hi <first name>,]
+ *    I asked <worst engine> "<its question>" and it mentioned <that answer's names>.
+ *    AI is recommending your competitors instead. I looked into why this might be happening and found <issues>.
+ *    I specialise in helping local businesses get recommended by AI, so those customers come to you instead.
+ *    <the agency question> (no website: "Do you have a website I've missed?") — the ONLY question.
+ *  ⛔ "AI is recommending your competitors instead" only under the one-third rule; above it (the soft version) the same shape
+ *     without that sentence. ⛔ No closer question, no "pointed to them", no guarantee, no price, no past results here; the
+ *     confidence line stays on price / does-it-work / catch / who-are-you / guarantee replies. Nothing absent is invented. */
+export function firstReplyPitch(e: MoveEvidence): { lines: string[]; question: string; closer: 'agency' | 'site' } {
   const noSite = noSiteOf(e);
   const next = noSite ? { question: PITCH_SITE_Q, closer: 'site' as const } : { question: PITCH_AGENCY_VOICE, closer: 'agency' as const };
+  const hi = pitchGreeting(e);
+  const withHi = (lines: string[]) => (hi ? [hi, ...lines] : lines);
   const counts = e.named && e.named.valid > 0 ? e.named : null;
-  if (!e.trade || !e.town || !counts) return { lines: [PITCH_INTRO_LINE, ...(noSite ? [PITCH_NO_SITE_LINE] : [])], ...next };
-  if (!mayClaimNamedInstead(counts.named, counts.valid)) {
-    const neutral = auditLine({ ...e, hookAlreadySent: false });
-    return { lines: [neutral ?? PITCH_INTRO_LINE, ...(noSite ? [PITCH_NO_SITE_LINE] : [])], ...next };
-  }
+  if (!e.trade || !e.town || !counts) return { lines: withHi([PITCH_INTRO_LINE, ...(noSite ? [PITCH_NO_SITE_LINE] : [])]), ...next };
+  const full = mayClaimNamedInstead(counts.named, counts.valid);
   const site = siteOf(e);
   const asked = askedPhrase(e) as string;
   const rivals = e.competitors.slice(0, 3);
-  const pointed = rivals.length ? PITCH_POINTED_LINE : PITCH_POINTED_LINE_NO_NAMES;
   const issues = site.state === 'issues' ? site.issues.slice(0, PITCH_MAX_ISSUES) : [];
-  const close = { question: PITCH_EMOTIONAL_Q, closer: 'emotional' as const };
-  if (!noSite && !issues.length) {
-    return { lines: [rivals.length ? `${asked} and it mentioned ${listNames(rivals)}, not you.` : `${asked} and it didn't mention you.`, pointed], ...close };
-  }
-  const first = rivals.length ? `${asked} and it mentioned ${listNames(rivals)}.` : `${asked} and it mentioned other businesses, not you.`;
+  const first = rivals.length ? `${asked} and it mentioned ${listNames(rivals)}.` : full ? `${asked} and it mentioned other businesses, not you.` : `${asked} and it didn't mention you.`;
   const why = noSite
     ? `${PITCH_WHY_LEAD} ${PITCH_NO_SITE_LINE}`
-    : `${PITCH_WHY_LEAD} found ${issues.length > 1 ? 'a few things' : 'one thing'} on your website: ${listIssues(issues.map(carryOn))}.`;
-  return { lines: [first, `${PITCH_INSTEAD_LINE} ${why}`, pointed], ...close };
+    : issues.length ? `${PITCH_WHY_LEAD} found ${issues.length > 1 ? 'a few things' : 'one thing'} on your website: ${listIssues(issues.map(carryOn))}.` : null;
+  const second = [full ? PITCH_INSTEAD_LINE : null, why].filter(Boolean).join(' ');
+  return { lines: withHi([first, ...(second ? [second] : []), PITCH_SPECIALISE_LINE]), ...next };
 }
-/** The pitch as one message: its lines with a blank line between; the closer's question sits under the line before it. */
-export const pitchText = (p: { lines: string[]; question: string; closer: string }): string =>
-  p.closer === 'emotional' ? [...p.lines.slice(0, -1), `${p.lines[p.lines.length - 1]}\n${p.question}`].join('\n\n') : [...p.lines, p.question].join('\n\n');
+/** The pitch as one message: each line its own paragraph, the question last. */
+export const pitchText = (p: { lines: string[]; question: string; closer: string }): string => [...p.lines, p.question].join('\n\n');
 
 /** Our previous message was a step of the pitch: which question it ended on. */
 type PitchStep = 'emotional' | 'emotional_no_site' | 'agency' | 'site';

@@ -22,6 +22,20 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-20-pitch-wording-a', date: '2026-10-20', title: 'WhatsApp Draft reply: the first-reply pitch has a new shape', audience: 'all',
+    body: 'The first-reply pitch now opens with the AI answer that did the business most harm, says what we do, and ends on one question: agency or yourself.',
+    report: {
+      added: [
+        '"Hi <first name>," when the website crawl found the owner or founder named on their own site. Never guessed from the business name.',
+        '"I specialise in helping local businesses get recommended by AI, so those customers come to you instead."',
+      ],
+      changed: [
+        'The opening line uses the answer that did not name them and named the most other businesses, with that answer\'s own AI tool, question and names.',
+        'The agency question is now the only question in the pitch.',
+      ],
+      removed: ['"Anyone asking AI that question gets pointed to them instead of you." and "Would you rather those customers came to you?"'],
+      effect: 'The pitch is more personal and leads with the strongest real result, with one clear next step.',
+    } },
   { id: '2026-10-20-draft-missed-search', date: '2026-10-20', title: 'WhatsApp Draft reply: the pitch leads with the search they were missed on, and auto-replies get the pitch too', audience: 'all',
     body: 'The first-reply pitch now starts with the AI tool and the exact question where the business was not named, and who that answer mentioned. The "named too often" check counts every answer in the score, Google AI included. Auto-replies sent as several messages at once, or in another language, are now spotted.',
     report: {

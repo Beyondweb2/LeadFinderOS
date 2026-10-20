@@ -17,6 +17,7 @@ import { resolveSiteFindingsDetailed } from "../../../src/lib/siteFindings.ts";
 import { isHookState } from "../../../src/lib/hookAudit.ts";
 import { HOOK_SCORE_RESULTS, isHookStateV2, scoreHookRun, type HookScoreContext, type HookScoreRow } from "../../../src/lib/hookScore.ts";
 import { scoringMethodFor } from "../../../src/lib/aiOverview.ts";
+import { worstMiss } from "../../../src/lib/worstMiss.ts";
 
 /* ── The all-named hook guard ──────────────────────────────────────────────────────────────────────
    ⛔ A HOOK THAT NAMED THEM EVERYWHERE FORBIDS ABSENCE COPY (Paul, 2026-09-21). Several audit-class
@@ -120,7 +121,7 @@ export type AuditReplyVars =
   /* `hookQuestion` / `hookEngine`: the hook search the rivals were read from (the report's hook gap,
      which for a six-result hook is the pick). Null for an audit with no hook gap, whose rivals come
      from the audit-wide leaders as before. */
-  | { ok: true; trade: string; competitors: string; rivals: string[]; business: string; link: string; town: string; auditId: string; siteFault: string | null; siteFindings: string | null; siteFindingsKinds: string[] | null; hookQuestion: string | null; hookEngine: string | null; visibilityPct: number | null; scoreNamed: number | null; scoreTotal: number | null }
+  | { ok: true; trade: string; competitors: string; rivals: string[]; business: string; link: string; town: string; auditId: string; siteFault: string | null; siteFindings: string | null; siteFindingsKinds: string[] | null; hookQuestion: string | null; hookEngine: string | null; visibilityPct: number | null; scoreNamed: number | null; scoreTotal: number | null; worstMiss: { engine: string; question: string; rivals: string[] } | null }
   | { ok: false; reason: string };
 
 /**
@@ -407,8 +408,12 @@ export async function resolveAuditReplyVars(service: any, leadId: string, opts: 
        so it is only produced with one — the same value useInbox's picker gate passes. */
     { seed: leadId, auditVisibilityGap },
   );
+  /* THE WORST RESULT (worstMiss.ts, Paul 2026-10-20): the not-named answer that named the most others, its own engine,
+     question and cleaned names, self excluded. Read only by the reply drafter's first-reply pitch. */
+  const worst = worstMiss({ tested: data?.hook?.tested ?? [], gap: hookGap ? { question: hookGap.question, engine: hookGap.engine } : null });
+  const worstOut = worst ? { engine: worst.engine, question: worst.question, rivals: usableRivals(excludeSelfRivals(worst.names, business, nameMatches)) } : null;
   const siteFindings = siteFindingsDetail?.text ?? null;
   const siteFindingsKinds = siteFindingsDetail?.kinds ?? null;
   return { ok: true, trade, competitors, rivals: usableRivals(rivalPool), business, link, town: (audit.location_text ?? "").trim(), auditId: audit.id, siteFault, siteFindings, siteFindingsKinds, hookQuestion: hookGap?.question ?? null, hookEngine: hookGap?.engine ?? null, visibilityPct,
-    scoreNamed: share?.named ?? null, scoreTotal: share?.total ?? null };
+    scoreNamed: share?.named ?? null, scoreTotal: share?.total ?? null, worstMiss: worstOut };
 }

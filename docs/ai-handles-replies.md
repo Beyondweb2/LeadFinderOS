@@ -222,3 +222,24 @@ Preview (local, live data, read-only, nothing sent): Alisons "Yes it is." (1/2, 
 - **Site line** (`websiteCheck.ts` PLAIN_LINE): a refused crawler reads "Our check could not read your site, which AI tools may also
   struggle with" (hedged: we saw our check refused, never an AI tool). Every serious title is a whole sentence (name / town /
   service pages / thin / deep / unlinked pages rewritten); three or more join with ", and" (`reply-move.test.ts` §9b).
+
+## 2026-10-20 — first-reply pitch, wording A (Paul)
+
+Shape (`replyMove.ts` `firstReplyPitch`, code-built word for word; nothing sends):
+```
+Hi <first name>,                                   ← only a person the crawl states as owner / founder (contentTrust ownerOf)
+I asked <engine> "<question>" and it mentioned <A>, <B> and <C>.
+AI is recommending your competitors instead. I looked into why this might be happening and found … on your website: <issues>.
+I specialise in helping local businesses get recommended by AI, so those customers come to you instead.
+Are you with an agency, or do you manage the website yourself? Either way I can send a quick voice note on what I found.
+```
+- **The worst result leads** (`src/lib/worstMiss.ts`): of the ChatGPT / Gemini answers that did NOT name the business, the one
+  naming the most others; its own engine, question and cleaned names (`HookReportSummary.tested`, self excluded). Tie: the
+  report's hook gap, then Gemini, then the earlier question. Google's AI Overview is never "the engine I asked". A conversation
+  that already named a different tool says "AI" (never two tools, never one that named them).
+- **Greeting**: first name only, from `check.summary.owner` (the crawl's stated owner / founder); never from the business name; no
+  name → no greeting. (The crawl reads owner / founder wording; it has no separate "contact person" reading.)
+- Dropped: "Anyone asking AI that question gets pointed to them…" and "Would you rather those customers came to you?". The agency
+  question is the only question (no website: "Do you have a website I've missed?"). A reply to an OLD pitch still gets its old
+  next step. **Soft version** (named in more than a third): the same shape without "AI is recommending your competitors instead".
+- Checker: still warns on more than one question (a quoted search's "?" is not counted); the pitch's length cap is 800.

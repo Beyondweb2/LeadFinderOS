@@ -813,6 +813,9 @@ export interface AuditContext {
   scoreTotal?: number | null;
   /** The best missed search's question (the hook gap, on `engine`). Optional. */
   missedQuestion?: string | null;
+  /** THE WORST RESULT (worstMiss.ts): the not-named answer that named the most others — its engine, question and names.
+   *  Read only by the reply drafter's first-reply pitch. Optional. */
+  worst?: { engine: string; question: string; rivals: string[] } | null;
   /** Why no audit context is available, for the operator. */
   unavailableReason: string | null;
 }
