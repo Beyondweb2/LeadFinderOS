@@ -698,6 +698,8 @@ Paul runs several Claude Code sessions at once across LeadFinderOS V1, V2 and AB
   state (`hookReportState`, `docs/hook-audit.md`).
 - **RLS enabled with no policies reads as "no data"** (`200 []`), not "denied". Check `pg_policies`,
   not the prose. Route such reads through an edge function on the service role.
+  ⛔ The screen never reads `contact_suppressions`: ask `leads_suppressed` (`src/lib/leadSuppression.ts`, lead ids
+  in/out, role-checked; `docs/suppression-read.md`) — `scripts/no-browser-suppression-read.test.ts` sweeps `src/`.
 - **An allowlist is not an address book** — never read `ALLOWED_ORIGINS[0]` as canonical; when a
   fallback must guess an outward-facing address, refuse (`resolveSiteOrigin`).
 - **UTC end-of-day formats as the next day in BST** — pass `timeZone: 'UTC'` for a stored day.
