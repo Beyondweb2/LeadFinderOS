@@ -22,6 +22,22 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-20-reply-playbook', date: '2026-10-20', title: 'WhatsApp Draft reply: follows one playbook', audience: 'all',
+    body: 'Draft reply now gives every first reply the pitch, then follows one script: agency, then contract, then a quick call or a voice note. Nothing is sent until you approve it.',
+    report: {
+      added: [
+        'A set reply for 33 kinds of answer (website, no website, agency, tied in, price, catch, who are you, busy, not now and more).',
+        'A name they give ("Dom here") can open the pitch: "Hi Dom,".',
+        'Tied into a contract until a date: the draft shows the date to set your Next Action for.',
+      ],
+      changed: [
+        'Any first reply that is not a no, a stop, a wrong person or a question gets the pitch ("yes", "how can I help", "hello?").',
+        'Follow-ups write chatgpt, gemini and ai in lower case.',
+        'A business with nearly the same name as theirs is never listed as a competitor.',
+      ],
+      removed: ['Drafts for replies the script does not cover: those are "Needs you" with no draft, so you answer them yourself.'],
+      effect: 'Drafts read the same way every time and follow the conversation one question at a time. You still check and send each one.',
+    } },
   { id: '2026-10-20-pitch-wording-a', date: '2026-10-20', title: 'WhatsApp Draft reply: the first-reply pitch has a new shape', audience: 'all',
     body: 'The first-reply pitch now opens with the AI answer that did the business most harm, says what we do, and ends on one question: agency or yourself.',
     report: {

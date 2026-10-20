@@ -1,5 +1,6 @@
 // ai-reply-drafts — reply flags + drafts (2026-10-11, Paul; reworked 2026-10-20). WhatsApp only. NOTHING AUTO-SENDS.
-// Rules: src/lib/aiReplyDraft.ts (rows, checker), src/lib/replyMove.ts (the move), src/lib/offerFactSheet.ts (what may be said).
+// Rules: src/lib/aiReplyDraft.ts (rows, checker), src/lib/replyMove.ts (the move), src/lib/replyPlaybook.ts (the wording per
+// intent, docs/reply-playbook.md), src/lib/offerFactSheet.ts (what may be said).
 // Record: docs/ai-handles-replies.md.
 //
 // ⛔ THIS FUNCTION NEVER SENDS A MESSAGE. There is no Graph call, no import of the sender and no write to
@@ -28,7 +29,7 @@ import { isSuppressed, recordOptOut } from "../_shared/suppression.ts";
 import { logOpenAiUsage } from "../_shared/openai-usage.ts";
 import { loadAuditContext, leadTrade, leadTown, RESEARCH_LEAD_COLUMNS, type ResearchLead } from "../_shared/site-research.ts";
 import {
-  aiReplyDecision, buildAiReplyPrompt, checkAiReply, evidenceNames, fallbackAiReply, finishDraft, mayCallWithin, callUsd,
+  aiReplyDecision, buildAiReplyPrompt, checkAiReply, evidenceNames, fallbackAiReply, finishDraft, isFollowUp, mayCallWithin, callUsd,
   AI_REPLY_MODEL, AI_REPLY_SYSTEM_PROMPT, AI_REPLY_TOOL, AI_REPLY_MAX_OUTPUT_TOKENS, AI_REPLY_MAX_REGENERATIONS,
   AI_REPLY_DRAFT_MAX_USD, BEST_TEMPLATE_STYLE_NOTE, DRY_RUN_MODELS, DRY_RUN_DRAFT_MAX_USD, HANDOVER_LABELS, STOP_REASONS,
   type AiReplyContext, type AiReplyWhy,
@@ -48,7 +49,7 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-internal-job, x-cron-secret",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
   /* The deploy marker: only this build answers with it. */
-  "x-ai-reply-drafts": "2026-10-20e-pitch-wording-a",
+  "x-ai-reply-drafts": "2026-10-20f-reply-playbook",
 };
 const json = (b: unknown, s = 200) => new Response(JSON.stringify(b), { status: s, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 const str = (v: unknown) => (typeof v === "string" ? v.trim() : "");
@@ -128,14 +129,16 @@ function moveThread(thread: MsgRow[], inbound: MsgRow): MoveThreadMsg[] {
     .map((m) => ({ from: m.direction === "inbound" ? "them" as const : "us" as const, text: (m.direction === "inbound" ? m.body ?? "" : sentText(m)) || (m.template_name ? `[${m.template_name}]` : ""), messageType: m.message_type, templateName: m.template_name, at: m.created_at }));
 }
 
-/** AI drafts sent since the last WIN (a voice note we sent, or a booked call): the loop guard's count. */
+/** AI drafts sent since the last WIN (a voice note we sent, a booked call, or a sent draft that agreed a call time — the
+ *  playbook's "busy / call later" win): the loop guard's count. */
 async function aiSentSinceWin(service: Service, lead: LeadRow, thread: MsgRow[]): Promise<number> {
   const lastVoice = [...thread].reverse().find((m) => isOurs(m) && (m.message_type === "audio" || m.message_type === "voice"))?.created_at ?? null;
-  const win = [lastVoice, lead.call_booked_at ?? null].filter(Boolean).sort().pop() ?? null;
-  let q = service.from("ai_reply_drafts").select("id", { count: "exact", head: true }).eq("lead_id", lead.id).eq("status", "sent");
-  if (win) q = q.gt("approved_at", win);
-  const { count } = await q;
-  return count ?? 0;
+  const { data: sent } = await service.from("ai_reply_drafts").select("approved_at, why").eq("lead_id", lead.id).eq("status", "sent").order("approved_at", { ascending: true }).limit(200);
+  const rows = ((sent ?? []) as Array<{ approved_at: string | null; why: { win?: string | null } | null }>).filter((r) => !!r.approved_at);
+  const lastAgreed = [...rows].reverse().find((r) => r.why?.win === "call_time_agreed")?.approved_at ?? null;
+  const win = [lastVoice, lead.call_booked_at ?? null, lastAgreed].filter(Boolean).sort().pop() ?? null;
+  /* The winning draft itself is not counted: "after" the win only. */
+  return rows.filter((r) => !win || (r.approved_at as string) > win).length;
 }
 
 /** The "AI handles replies" switch. ⛔ Fails toward ON: if it cannot be read, the bot answer never claims a person sent it. */
@@ -224,7 +227,7 @@ async function writeDraft(service: Service | null, ctx: AiReplyContext, opts: { 
     calls++; promptTokens += r.promptTokens; completionTokens += r.completionTokens; spent += callUsd(r.promptTokens, r.completionTokens, model);
     if (service && opts.log !== false) await logOpenAiUsage(service, { functionName: "ai-reply-drafts", apiType: "openai_ai_reply_draft", model, promptTokens: r.promptTokens, completionTokens: r.completionTokens, userId: opts.userId, triggerSource: opts.triggerSource });
     if (!r.reply) { modelError = "model_empty_reply"; continue; }
-    const candidate = finishDraft(r.reply, evidenceNames(ctx.evidence));
+    const candidate = finishDraft(r.reply, evidenceNames(ctx.evidence), { followUp: isFollowUp(ctx.plan) });
     const cp = checkAiReply(candidate, ctx);
     if (reply === null || cp.length < problems.length) { reply = candidate; problems = cp; }
     if (!cp.length) break;
@@ -249,6 +252,8 @@ function whyOf(ctx: AiReplyContext, findingsNote: string | null, w: { problems: 
     problems: w?.problems ?? [], usedFallback: w?.usedFallback ?? false, model: w?.model,
     costUsd, calls, styleSource: BEST_TEMPLATE_STYLE_NOTE,
     closer: p.closer ?? (p.question ? "question" : null), confidence: p.confidence ? CONFIDENCE_LINE : null,
+    /* The playbook (replyPlaybook.ts): the intent read, "no draft", a note and a tied-in end date for the person's Next Action. */
+    intent: p.intent ?? null, noDraft: p.noDraft === true, note: p.note ?? null, followUp: p.followUp ?? null, win: p.win ?? null,
     ...extra,
   };
 }
@@ -486,6 +491,7 @@ async function handleRegenerate(service: Service, actor: Actor, body: Record<str
   const inbound = thread.find((m) => m.id === d.inbound_message_id);
   if (!inbound) return json({ ok: false, error: "inbound_not_found" }, 404);
   const { ctx, findingsNote } = await buildContext(service, lead, thread, inbound);
+  if (ctx.plan.stop || ctx.plan.noDraft) return json({ ok: false, error: "no_draft", detail: "The playbook has no reply for this one. Answer it yourself." });
   const pd = await personDraft(service, actor, d.lead_id, ctx, str(body.avoid) || d.draft_text);
   if (!pd.ok) return pd.res;
   const w = pd.w;
@@ -528,7 +534,7 @@ async function handleDraft(service: Service, actor: Actor, body: Record<string, 
   await service.from("ai_reply_drafts").update({ status: "superseded", updated_at: new Date().toISOString() }).eq("user_id", access.bookUserId).eq("phone", convPhone).eq("status", "pending").neq("inbound_message_id", inbound.id);
   let row: Record<string, unknown>;
   let w: Awaited<ReturnType<typeof writeDraft>> | null = null;
-  if (plan.stop) {
+  if (plan.stop || plan.noDraft) {
     row = { kind: "needs_you", status: "pending", reason: plan.needsYou?.reason ?? "opt_out", reason_label: plan.needsYou?.label ?? HANDOVER_LABELS.opt_out, draft_text: null, why: whyOf(ctx, findingsNote, null, 0, 0) };
   } else {
     const pd = await personDraft(service, actor, leadId, ctx, null);
@@ -550,7 +556,7 @@ async function handleDraft(service: Service, actor: Actor, body: Record<string, 
       .select("id, phone, lead_id, kind, status, inbound_at, reason, reason_label, draft_text, why, error, regenerations").maybeSingle());
   }
   if (!saved) return json({ ok: false, error: "not_saved", detail: "The draft could not be saved. Try again." });
-  return json({ ok: true, draft: saved, stop: plan.stop });
+  return json({ ok: true, draft: saved, stop: plan.stop, no_draft: plan.noDraft === true });
 }
 
 /** The one-tap opt-out on a stop (or any conversation the person is working). The existing mechanism; sends nothing. */
@@ -610,8 +616,8 @@ async function handleDryRun(service: Service, actor: Actor | null, body: Record<
     for (const f of fixtures) {
       const ctx = fixtureContext(f);
       const p = ctx.plan;
-      const w = p.stop ? null : await writeDraft(null, ctx, { temperature: 0.5, userId: null, triggerSource: "dry_run", model, capUsd: DRY_RUN_DRAFT_MAX_USD, log: false });
-      results.push({ id: f.id, move: p.move, closer: p.closer ?? null, confidence: !!p.confidence, site_issues: ctx.evidence.site?.evidence ?? null, read: p.read, needs_you: p.needsYou?.reason ?? null, stop: p.stop, auto_draft: p.autoDraft, label: p.label, points: p.points, question: p.question,
+      const w = p.stop || p.noDraft ? null : await writeDraft(null, ctx, { temperature: 0.5, userId: null, triggerSource: "dry_run", model, capUsd: DRY_RUN_DRAFT_MAX_USD, log: false });
+      results.push({ id: f.id, move: p.move, intent: p.intent ?? null, no_draft: p.noDraft === true, note: p.note ?? null, follow_up: p.followUp ?? null, win: p.win ?? null, closer: p.closer ?? null, confidence: !!p.confidence, site_issues: ctx.evidence.site?.evidence ?? null, read: p.read, needs_you: p.needsYou?.reason ?? null, stop: p.stop, auto_draft: p.autoDraft, label: p.label, points: p.points, question: p.question,
         draft: w?.reply ?? null, warnings: w?.problems ?? [], used_fallback: w?.usedFallback ?? false, model_error: w?.modelError ?? null, cost_usd: w?.spentUsd ?? 0 });
     }
     return json({ ok: true, dry_run: true, saved: false, model, fact_sheet: FACT_SHEET_VERSION, results });
@@ -632,7 +638,7 @@ async function handleDryRun(service: Service, actor: Actor | null, body: Record<
   const inbound: MsgRow = real ?? { id: "dry-run", created_at: new Date().toISOString(), direction: "inbound", body: sample, message_type: "text", template_name: null, status: "received", lead_id: leadId };
   const withInbound = real ? thread : [...thread, inbound];
   const { ctx, findingsNote } = await buildContext(service, lead, withInbound, inbound);
-  const w = ctx.plan.stop ? null : await writeDraft(service, ctx, { temperature: 0.5, userId: actor.id, triggerSource: "user", model, capUsd: model === AI_REPLY_MODEL ? AI_REPLY_DRAFT_MAX_USD : DRY_RUN_DRAFT_MAX_USD });
+  const w = ctx.plan.stop || ctx.plan.noDraft ? null : await writeDraft(service, ctx, { temperature: 0.5, userId: actor.id, triggerSource: "user", model, capUsd: model === AI_REPLY_MODEL ? AI_REPLY_DRAFT_MAX_USD : DRY_RUN_DRAFT_MAX_USD });
   return json({ ok: true, dry_run: true, saved: false, lead: lead.business_name, inbound: { text: inbound.body, at: inbound.created_at, stand_in: !real },
     plan: ctx.plan, draft: w?.reply ?? null, why: whyOf(ctx, findingsNote, w, w?.spentUsd ?? 0, w?.calls ?? 0), model_error: w?.modelError ?? null });
 }

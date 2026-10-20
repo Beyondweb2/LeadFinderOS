@@ -21,16 +21,24 @@ import { triageByRules } from './replyTriage.ts';
 import { factFor, CONFIDENCE_LINE, GUARANTEE_REFUND, type FactTopic } from './offerFactSheet.ts';
 import { mayClaimNamedInstead } from './namedShareRule.ts';
 import { carryOn } from './draftEvidence.ts';
+import {
+  PLAYBOOK, RE, splitQuestion, readEndDate, nameFromReply, rivalsExcludingSelf, DONT_NEED_SOFT, DOES_AI_MATTER_SOFT,
+  DONT_NEED_NO_AUDIT, DOES_AI_MATTER_NO_AUDIT, PRIVACY_NOT_GOOGLE, GO_ON_KNOWN, NOT_NOW_WITH_TIME, WEBSITE_GIVEN_KNOWN,
+  type PlaybookIntent, type FollowUpNote,
+} from './replyPlaybook.ts';
+/* ⛔ THE PLAYBOOK (Paul, 2026-10-20, replyPlaybook.ts, docs/reply-playbook.md): the FIRST reply to our opener gets the pitch
+   unless it is a no / stop / angry, a wrong person or a direct question; from then on one intent per reply, one question per
+   message, the agency → contract → call / voice note order. Anything unmatched is Needs you with NO draft. */
 
 export type MoveId =
   | 'stop' | 'intro_hook' | 'first_reply_pitch' | 'pitch_next' | 'site_followup' | 'offer_voice_note' | 'set_call' | 'answer_fact' | 'objection_provider' | 'objection_rank'
   | 'close_politely' | 'is_bot' | 'media' | 'ack' | 'auto_reply' | 'privacy' | 'other_language' | 'link'
-  | 'escalate' | 'unknown_question' | 'unsure';
+  | 'escalate' | 'unknown_question' | 'unsure' | 'playbook';
 
 export type NeedsYouReason =
   | 'opt_out' | 'angry' | 'do_not_contact' | 'not_interested' | 'wrong_person' | 'legal' | 'complaint' | 'payment'
   | 'media' | 'privacy' | 'other_language' | 'link' | 'question_not_on_sheet' | 'paul_looks' | 'unsure'
-  | 'already_replied' | 'ai_limit' | 'repeat_auto_reply' | 'draft_failed' | 'paused';
+  | 'already_replied' | 'ai_limit' | 'repeat_auto_reply' | 'draft_failed' | 'paused' | 'email_given' | 'off_topic';
 
 export const NEEDS_YOU_LABELS: Record<NeedsYouReason, string> = {
   opt_out: 'Asked to stop',
@@ -53,6 +61,8 @@ export const NEEDS_YOU_LABELS: Record<NeedsYouReason, string> = {
   repeat_auto_reply: 'Another auto-reply',
   draft_failed: 'The draft could not be written',
   paused: 'Paid AI is paused',
+  email_given: 'Gave an email address: send it yourself',
+  off_topic: 'No playbook reply fits: answer it yourself',
 };
 
 export interface MoveThreadMsg {
@@ -102,6 +112,8 @@ export interface MoveInput {
   /** AI drafts sent since the last win event (a voice note we sent, a booked call). */
   aiSentSinceWin: number;
   evidence: MoveEvidence;
+  /** Today, for reading an end date ("until March"). Absent = now. */
+  nowMs?: number;
 }
 
 export interface MovePlan {
@@ -125,6 +137,23 @@ export interface MovePlan {
   closer?: 'emotional' | 'agency' | 'site' | null;
   /** The confidence line (offerFactSheet CONFIDENCE_LINE) is one of the points, recorded on the draft. */
   confidence?: boolean;
+  /** No draft at all, not even on "Draft reply": a person answers (Paul, 2026-10-20: stop, not interested, off-topic, unmatched). */
+  noDraft?: boolean;
+  /** The playbook intent code read (replyPlaybook.ts), for the "why" panel. */
+  intent?: PlaybookIntent | null;
+  /** The playbook line in full: the model's guide and the rule-built fallback. */
+  guide?: string | null;
+  /** Paul's own timing words are allowed ("Sending it now"). */
+  timingOk?: boolean;
+  /** A first name THEY gave in this conversation ("Dom here"): the greeting may use it. */
+  greetName?: string | null;
+  /** Tied into a contract until a day we could read: noted on the draft. ⛔ Never written to the lead (Next Action is
+   *  human-set): the person sets it when they send. */
+  followUp?: FollowUpNote | null;
+  /** A win for the loop guard once this draft is sent (a call time agreed). */
+  win?: 'call_time_agreed' | null;
+  /** A note for the person ("They gave a new website: run Crawl site on it"). */
+  note?: string | null;
 }
 
 /* ── reading words ────────────────────────────────────────────────────────────────────────────── */
@@ -298,24 +327,24 @@ export function auditLine(e: MoveEvidence): string | null {
   const asked = askedPhrase(e);
   if (!asked || !e.named || e.named.valid <= 0) return null;
   const { named, valid } = e.named;
+  const rivals = rivalsExcludingSelf(e.competitors, e.businessName);
   if (named >= valid) return `When ${lowerFirst(asked)} it named you every time, which is great.`;
   if (mayClaimNamedInstead(named, valid)) {
     if (e.hookAlreadySent) return `Like I said, when ${lowerFirst(asked)} it put other businesses forward.`;
-    return e.competitors.length
-      ? `${asked} and it mentioned ${listNames(e.competitors.slice(0, 3))}.`
+    return rivals.length
+      ? `${asked} and it mentioned ${listNames(rivals.slice(0, 3))}.`
       : `${asked} and it mentioned other businesses, not you.`;
   }
   /* The soft version: what that ONE missed answer said, with no "instead", no "not you", no closer. */
-  return e.competitors.length ? `${asked} and it mentioned ${listNames(e.competitors.slice(0, 3))}.` : `${asked} and it didn't mention you.`;
+  return rivals.length ? `${asked} and it mentioned ${listNames(rivals.slice(0, 3))}.` : `${asked} and it didn't mention you.`;
 }
 
 /* ── the first-reply pitch (Paul, 2026-10-20, wording A): every word built here ───────────────────── */
 
 /** Their answer to the agency question when they run the site themselves: ask, never assume (Paul, 2026-10-20). */
-export const PITCH_SELF_MANAGED_REPLY = 'Nice one. Ok if I send a quick voice note on what I found?';
-/** "Is this a bot?" — the answer depends on the AI auto-reply switch (Paul, 2026-10-20). */
-export const BOT_ANSWER_SWITCH_OFF = "It's Paul from Findable. I use AI to help write some messages, but I read and send every one myself.";
-export const BOT_ANSWER_SWITCH_ON = "It's Paul from Findable. I use AI to help with messages, and some replies on here may be automated.";
+export const PITCH_SELF_MANAGED_REPLY = PLAYBOOK.self_managed.line;
+/** "Is this a bot?" — Paul's one answer (2026-10-20, the playbook): true whatever the AI auto-reply switch says. */
+export const BOT_ANSWER = PLAYBOOK.is_bot.line;
 /** THE ONE QUESTION the pitch ends on (a website on record): the agency question and the voice note offer. */
 export const PITCH_AGENCY_VOICE = 'Are you with an agency, or do you manage the website yourself? Either way I can send a quick voice note on what I found.';
 /** The pitch's question when no website is on record (never the agency question). */
@@ -342,8 +371,8 @@ const noSiteOf = (e: MoveEvidence) => { const s = siteOf(e).state; return s === 
 
 /** "Hi Kylie," only when the site's own crawl states a person as owner / founder (MoveEvidence.ownerName). First name only;
  *  never guessed from the business name. No name → no greeting line. */
-export function pitchGreeting(e: MoveEvidence): string | null {
-  const first = String(e.ownerName ?? '').trim().split(/\s+/)[0] ?? '';
+export function pitchGreeting(e: MoveEvidence, theirName: string | null = null): string | null {
+  const first = String(theirName || e.ownerName || '').trim().split(/\s+/)[0] ?? '';
   return /^[A-Z][a-z]+(?:['’-][A-Za-z]+)?$/.test(first) ? `Hi ${first},` : null;
 }
 
@@ -356,17 +385,18 @@ export function pitchGreeting(e: MoveEvidence): string | null {
  *  ⛔ "AI is recommending your competitors instead" only under the one-third rule; above it (the soft version) the same shape
  *     without that sentence. ⛔ No closer question, no "pointed to them", no guarantee, no price, no past results here; the
  *     confidence line stays on price / does-it-work / catch / who-are-you / guarantee replies. Nothing absent is invented. */
-export function firstReplyPitch(e: MoveEvidence): { lines: string[]; question: string; closer: 'agency' | 'site' } {
+export function firstReplyPitch(e: MoveEvidence, theirName: string | null = null): { lines: string[]; question: string; closer: 'agency' | 'site' } {
   const noSite = noSiteOf(e);
   const next = noSite ? { question: PITCH_SITE_Q, closer: 'site' as const } : { question: PITCH_AGENCY_VOICE, closer: 'agency' as const };
-  const hi = pitchGreeting(e);
+  const hi = pitchGreeting(e, theirName);
   const withHi = (lines: string[]) => (hi ? [hi, ...lines] : lines);
   const counts = e.named && e.named.valid > 0 ? e.named : null;
   if (!e.trade || !e.town || !counts) return { lines: withHi([PITCH_INTRO_LINE, ...(noSite ? [PITCH_NO_SITE_LINE] : [])]), ...next };
   const full = mayClaimNamedInstead(counts.named, counts.valid);
   const site = siteOf(e);
   const asked = askedPhrase(e) as string;
-  const rivals = e.competitors.slice(0, 3);
+  /* ⛔ Never a rival with (nearly) their own name (Paul, 2026-10-20). */
+  const rivals = rivalsExcludingSelf(e.competitors, e.businessName).slice(0, 3);
   const issues = site.state === 'issues' ? site.issues.slice(0, PITCH_MAX_ISSUES) : [];
   const first = rivals.length ? `${asked} and it mentioned ${listNames(rivals)}.` : full ? `${asked} and it mentioned other businesses, not you.` : `${asked} and it didn't mention you.`;
   const why = noSite
@@ -378,45 +408,84 @@ export function firstReplyPitch(e: MoveEvidence): { lines: string[]; question: s
 /** The pitch as one message: each line its own paragraph, the question last. */
 export const pitchText = (p: { lines: string[]; question: string; closer: string }): string => [...p.lines, p.question].join('\n\n');
 
-/** Our previous message was a step of the pitch: which question it ended on. */
-type PitchStep = 'emotional' | 'emotional_no_site' | 'agency' | 'site';
-function pitchAsked(m: MoveThreadMsg | null): PitchStep | null {
+/** What our previous message asked, read from its words (our drafts are edited by a person, so loosely). */
+type OurAsk = 'emotional' | 'emotional_no_site' | 'agency' | 'site' | 'contract' | 'end_date' | 'pay_monthly' | 'happy_change'
+  | 'email' | 'best_person' | 'call_time' | 'better_time' | 'offer';
+function ourAsk(m: MoveThreadMsg | null): OurAsk | null {
   const t = norm(m?.text ?? '');
+  /* An offer said without a question mark ("Happy to explain it here or jump on a quick call") is still an offer. */
+  if (!t.includes('?')) return /\b(happy\s+to\s+explain|jump\s+on\s+a\s+(quick\s+)?call|send\s+(you\s+)?a\s+(quick\s+)?voice\s+note)\b/i.test(t) ? 'offer' : null;
   if (/\bwould\s+you\s+rather\s+those\s+customers\s+came\s+to\s+you\b/i.test(t)) return /couldn'?t\s+find\s+a\s+website/i.test(t) ? 'emotional_no_site' : 'emotional';
-  if (/\bagency\b[^?]{0,80}\byourself\b[^?]*\?/i.test(t)) return 'agency';
+  if (/\bwhen\s+does\s+(the|your)\s+contract\s+(end|finish|run\s+out)\b/i.test(t)) return 'end_date';
+  if (/\b(tied\s+into|tied\s+in|in\s+a\s+contract)\b[^?]*\?/i.test(t) || /\bfree\s+to\s+leave\b[^?]*\?/i.test(t)) return 'contract';
+  if (/\bpay\s+anyone\s+monthly\b/i.test(t)) return 'pay_monthly';
+  if (/\bhappy\s+to\s+change\b/i.test(t)) return 'happy_change';
+  if (/\bbest\s+e-?mail\b/i.test(t)) return 'email';
+  if (/\bbest\s+person\s+to\s+speak\s+to\b/i.test(t)) return 'best_person';
+  if (/\bwhen\s+would\s+be\s+a\s+better\s+time\b/i.test(t)) return 'better_time';
+  if (/\b(what\s+(day\s+and\s+)?time\s+suits|give\s+me\s+a\s+uk\s+time|good\s+time\s+(today|to\s+(call|ring)))\b/i.test(t)) return 'call_time';
+  if (/\bagency\b/i.test(t) && /\byourself\b/i.test(t)) return 'agency';
   if (/\bwebsite\s+i'?ve\s+missed\b/i.test(t)) return 'site';
+  if (/\b(voice\s+note|call|ring)\b[^?]*\?/i.test(t)) return 'offer';
   return null;
 }
-/** An answer to "agency or yourself?". */
-const SITE_ANSWER = /\b(agency|agencies|myself|my\s+self|me|i\s+do|we\s+do|i\s+manage|we\s+manage|i\s+look\s+after|we\s+look\s+after|in[- ]?house|freelancer?|designer|developer|web\s*(guy|company|person|man|team)|nephew|son|daughter|brother|sister|wife|husband|partner|mate|friend|someone|somebody|wix|squarespace|wordpress|go\s*daddy|yell|both|neither)\b/i;
 const BARE_YES = /^\W*(yes|yeah|yep|yup|yh|ya|ye)\W*$/i;
-/** "I do it myself", "we manage it", "in house": they run the site themselves. */
-const SELF_MANAGED = /\b(myself|my\s+self|ourselves|i\s+do(\s+it)?|we\s+do(\s+it)?|i\s+manage|we\s+manage|i\s+look\s+after|we\s+look\s+after|in[- ]?house|me)\b/i;
 const BARE_NO = /^\W*(no|nope|nah|na)\b/i;
 const NO_SITE_ANSWER = /^\W*(no|nope|nah|na)\b|\b(don'?t|do\s+not|haven'?t|have\s+not)\s+(have|got)\s+(one|a\s+(web)?site)|\bno\s+(web)?site\b/i;
-const CLEAR_NO = /\b(not\s+interested|no\s+thanks?|no\s+thank\s+you|not\s+for\s+(me|us)|(we'?re|i'?m)\s+(ok|fine|good|alright|sorted|busy\s+enough))\b/i;
+const CLEAR_NO = /\b(not\s+interested|no\s+thanks?|no\s+thank\s+you|not\s+for\s+(me|us)|(we'?re|i'?m)\s+(ok|fine|good|alright|sorted))\b/i;
 /** "Does it actually work?", "is it legit?", "how do I know it'll work?" — the guarantee answer, with the confidence line. */
 const WORKS = /\b(does\s+(it|this|that)\s+(actually\s+|really\s+)?work|will\s+(it|this|that)\s+(actually\s+|really\s+)?work|is\s+(it|this)\s+legit|how\s+do\s+(i|we)\s+know\s+(it'?ll|it\s+will|it\s+works))\b/i;
+/** "Keep it with them" after "happy to change?": they stay. */
+const KEEP_THEM = /\b(keep\s+(it\s+)?with\s+them|stay\s+with\s+them|keep\s+(him|her|them)|stick\s+with\s+(him|her|them)|not\s+changing|happy\s+with\s+(him|her|them|it))\b/i;
+/** Links that are not a business website (maps, social, directories). */
+const NOT_THEIR_SITE = /\b(maps\.app\.goo\.gl|goo\.gl|g\.page|maps\.google|google\.[a-z.]+\/maps|instagram\.com|tiktok\.com|youtube\.com|youtu\.be|wa\.me|checkatrade\.com|yell\.com|trustatrader\.com|mybuilder\.com|bark\.com|linkedin\.com|x\.com|twitter\.com)\b/i;
+/** A "scam?" question with none of the legal / police / report words: the privacy answer, not a hand-over. */
+const SCAM_ONLY = /\bscam(mer|mers|ming)?\b/i;
+const LEGAL_WORDS = /\bharass|\breport(ed|ing)?\s+(you|this|your)|\bsolicitor|\blawyer|\blegal\s+action|\bsue\s+you\b|\bcourt\b|\bpolice\b|\bfraud|\bgdpr\b|\bico\b|\btrading\s+standards\b|\bombudsman\b|\bdata\s+protection\b/i;
 
 /* ── the one rule ─────────────────────────────────────────────────────────────────────────────── */
 
 const VOICE_Q = 'Shall I send you a quick voice note explaining it?';
-const CALL_Q = 'What time suits you for a quick call?';
 
 function plan(p: Partial<MovePlan> & { move: MoveId; read: string }): MovePlan {
   return { topic: null, needsYou: null, stop: false, autoDraft: true, points: [], question: null, allowPrice: false, label: null, ...p };
 }
 const flag = (reason: NeedsYouReason) => ({ reason, label: NEEDS_YOU_LABELS[reason] });
 
+/** A playbook intent as a plan: the line is the guide (word for word when it carries a fact), its last "?" the question. */
+function fromPlaybook(intent: PlaybookIntent, extra: Partial<MovePlan> = {}, line?: string): MovePlan {
+  const entry = PLAYBOOK[intent];
+  const text = line ?? entry.line;
+  const { body, question } = splitQuestion(text);
+  const points = entry.factual
+    ? [`Use this answer, word for word: "${body}"`]
+    : [`Say this in Paul's voice, close to these words (keep every fact; you may change the first few words so it answers what they said): "${body}"`];
+  return plan({ move: 'playbook', read: intent, intent, guide: text, points, question, allowPrice: !!entry.allowPrice, confidence: !!entry.confidence,
+    timingOk: !!entry.timingOk, fixedText: entry.fixed ? text : null, ...extra });
+}
+/** Needs you, and NO draft (Paul, 2026-10-20). */
+const noDraft = (reason: NeedsYouReason, read: string, move: MoveId = 'unsure'): MovePlan =>
+  plan({ move, read, autoDraft: false, noDraft: true, needsYou: flag(reason) });
+
+/** Did we already learn who runs their site (agency / themselves / a friend), so the agency question is done? */
+function whoRunsKnown(thread: MoveThreadMsg[]): boolean {
+  let prev: MoveThreadMsg | null = null;
+  for (const m of thread) {
+    if (m.from === 'us') {
+      const a = ourAsk(m);
+      if (a === 'contract' || a === 'end_date' || a === 'pay_monthly' || a === 'happy_change' || /\bmakes\s+changes\s+easy\b/i.test(m.text)) return true;
+      prev = m; continue;
+    }
+    if (ourAsk(prev) === 'agency' && (RE.agency.test(m.text) || RE.self.test(m.text) || RE.friend.test(m.text) || BARE_NO.test(m.text))) return true;
+  }
+  return false;
+}
+
 export function pickMove(i: MoveInput): MovePlan {
   const { latest, prevOurs, idx } = latestPair(i.thread);
   const e = i.evidence;
+  const nowMs = i.nowMs ?? Date.now();
   const autoFlags = autoReplyFlags(i.thread);
-  /* An auto-responder's "Are you interested in …?" is never their yes. */
-  const theirs = i.thread.filter((m, k) => m.from === 'them' && !autoFlags[k]);
-  const clearYesEarlier = theirs.some((m) => CLEAR_YES.test(norm(m.text)) && !NEGATED.test(norm(m.text)));
-  const offeredVoice = i.thread.some((m) => m.from === 'us' && VOICE_REQUEST.test(m.text));
-  const asked = pitchAsked(prevOurs);
   const lastIsOurs = idx >= 0 && idx < i.thread.length - 1 && i.thread.slice(idx + 1).some((m) => m.from === 'us');
 
   if (!latest) return plan({ move: 'unsure', read: 'no reply', autoDraft: false, needsYou: flag('unsure'), points: ['They have not replied yet. Do not chase with a pitch.'] });
@@ -457,117 +526,182 @@ export function pickMove(i: MoveInput): MovePlan {
   /* A loop guard wins the reason: it is why nothing should be drafted on its own. */
   const g = (p: MovePlan): MovePlan => (guard ? { ...p, autoDraft: false, needsYou: flag(guard) } : p);
 
-  /* 4. Hand to Paul, with a holding draft. */
-  if (t.category === 'escalation') return g(plan({ move: 'escalate', read: 'legal', autoDraft: false, needsYou: flag('legal'), points: ['Say sorry for any trouble and that you will not message again unless they want you to.'] }));
-  if (t.category === 'complaint') return g(plan({ move: 'escalate', read: 'complaint', autoDraft: false, needsYou: flag('complaint'), points: ['Say sorry, no excuses, no pitch.'] }));
-  if (t.category === 'payment_issue' && questionTopic(text) !== 'guarantee' && questionTopic(text) !== 'cancel') return g(plan({ move: 'escalate', read: 'payment', autoDraft: false, needsYou: flag('payment'), points: ['Say thanks, you will look into it and come back to them today.'] }));
-  if (PRIVACY.test(text)) return g(plan({ move: 'privacy', read: 'privacy', autoDraft: false, needsYou: flag('privacy'),
-    points: [e.foundOnGoogle ? 'Say you found the business and number on its Google listing.' : 'Say you found the business online.', 'Say sorry if it is not a good time and you will leave them be if they would rather.'] }));
-  /* 4b. Their answer to a pitch step. After the closer: the agency question + voice note offer (or "a website I've missed?"),
-     word for word. After that: the voice note. A clear no, a link, a question about the offer or a wrong number keeps its
-     own rule below. */
-  if (asked && !LINK.test(text) && !CLEAR_NO.test(text) && !NEGATED.test(text) && !questionTopic(text) && t.category !== 'wrong_person') {
-    if (asked === 'emotional' || asked === 'emotional_no_site') {
+  /* The FIRST real reply to our opener (Paul, 2026-10-20): the pitch, unless it is a no / stop / angry, a wrong person or a
+     direct question. A name they give in it ("Dom here") may open the pitch. */
+  const realBefore = i.thread.slice(0, idx).some((m, k) => m.from === 'them' && !autoFlags[k]);
+  const first = !realBefore && !!prevOurs && wasOpener(prevOurs);
+  const theirName = first ? nameFromReply(latest.text, e.businessName) : null;
+  const pitchPlan = (): MovePlan => {
+    const pitch = firstReplyPitch(e, theirName);
+    return plan({ move: 'first_reply_pitch', read: 'first_reply', label: t.category === 'confirmed_contact' ? 'Only confirmed' : null, greetName: theirName,
+      points: pitch.lines.map((l) => `Use this line, word for word: "${l}"`), question: pitch.question, fixedText: pitchText(pitch), closer: pitch.closer });
+  };
+
+  /* 4. Hand to Paul, no draft: legal, a complaint, a payment problem. "Is this a scam?" alone is the privacy answer. */
+  const scamQuestion = t.category === 'escalation' && SCAM_ONLY.test(text) && !LEGAL_WORDS.test(text);
+  if (t.category === 'escalation' && !scamQuestion) return g(noDraft('legal', 'legal', 'escalate'));
+  if (t.category === 'complaint') return g(noDraft('complaint', 'complaint', 'escalate'));
+  if (t.category === 'payment_issue' && questionTopic(text) !== 'guarantee' && questionTopic(text) !== 'cancel') return g(noDraft('payment', 'payment', 'escalate'));
+  if (PRIVACY.test(text) || scamQuestion) return g(fromPlaybook('privacy', {}, e.foundOnGoogle ? undefined : PRIVACY_NOT_GOOGLE));
+
+  /* 5. An answer to the question our last message asked. */
+  const ask = ourAsk(prevOurs);
+  const ownTopic = questionTopic(text);
+  const asksItsOwn = (!!ownTopic && (ownTopic !== 'term' || /\?/.test(text))) || (RE.howMuch.test(text) && /\?/.test(text));
+  const contract = (): MovePlan => {
+    const note = readEndDate(text, nowMs);
+    if (note) return fromPlaybook('in_contract', { followUp: note, note: `Tied into a contract until ${note.said} (${note.endsOn}). Set the Next Action for ${note.checkBackOn} when you send.` });
+    return fromPlaybook('tied_no_date');
+  };
+  const known = whoRunsKnown(i.thread);
+  if (ask && !first && !CLEAR_NO.test(text) && !NEGATED.test(text) && !asksItsOwn && t.category !== 'wrong_person' && !RE.emailAddr.test(text)) {
+    let p: MovePlan | null = null;
+    if (ask === 'emotional' || ask === 'emotional_no_site') {
       if (!BARE_NO.test(text) && t.category !== 'not_interested' && t.category !== 'already_sorted') {
-        const site = asked === 'emotional_no_site' || noSiteOf(e);
+        const site = ask === 'emotional_no_site' || noSiteOf(e);
         const q = site ? PITCH_SITE_Q : PITCH_AGENCY_VOICE;
-        return g(plan({ move: 'pitch_next', read: 'answered_closer', points: [`Use this line, word for word: "${q}"`], question: q, fixedText: q, closer: site ? 'site' : 'agency' }));
+        p = plan({ move: 'pitch_next', read: 'answered_closer', points: [`Use this line, word for word: "${q}"`], question: q, fixedText: q, closer: site ? 'site' : 'agency' });
       }
-    } else if (asked === 'site' && BARE_YES.test(text)) {
-      return g(plan({ move: 'site_followup', read: 'has_website', points: ['Thank them.'], question: "What's the web address so I can take a look?" }));
-    } else if (asked === 'site' && NO_SITE_ANSWER.test(text)) {
-      return g(plan({ move: 'offer_voice_note', read: 'answered_pitch', points: ['No worries, thank them.'], question: offeredVoice ? CALL_Q : PITCH_VOICE_Q }));
-    } else if (asked === 'agency' && (SITE_ANSWER.test(text) || BARE_YES.test(text) || BARE_NO.test(text))) {
-      /* Ask before sending the voice note, never assume (Paul, 2026-10-20). Running it themselves: his words exactly. */
-      if (SELF_MANAGED.test(text)) {
-        return g(plan({ move: 'offer_voice_note', read: 'answered_agency_self', points: [`Use this line, word for word: "${PITCH_SELF_MANAGED_REPLY}"`], question: PITCH_VOICE_Q, fixedText: PITCH_SELF_MANAGED_REPLY }));
+    } else if (ask === 'agency') {
+      if (RE.tied.test(text)) p = contract();
+      else if (RE.free.test(text)) p = fromPlaybook('free_to_leave');
+      else if (RE.notSure.test(text)) p = fromPlaybook('not_sure_who');
+      else if (RE.friend.test(text)) p = fromPlaybook('friend_built');
+      else if (RE.agency.test(text) || /\bboth\b/i.test(text)) p = fromPlaybook('agency');
+      else if (RE.self.test(text) || BARE_NO.test(text)) p = fromPlaybook('self_managed');
+      else if (BARE_YES.test(text)) p = fromPlaybook('not_sure_who');
+    } else if (ask === 'contract' || ask === 'end_date') {
+      if (RE.free.test(text) || BARE_NO.test(text)) p = fromPlaybook('free_to_leave');
+      else if (readEndDate(text, nowMs)) p = contract();
+      else if (RE.tied.test(text) || BARE_YES.test(text)) p = ask === 'end_date' ? null : fromPlaybook('tied_no_date');
+    } else if (ask === 'pay_monthly') {
+      if (BARE_NO.test(text) && !RE.tied.test(text)) p = fromPlaybook('free_to_leave');
+      else if (RE.tied.test(text)) p = contract();
+      else if (RE.yesish.test(text) || /\byes\b|£|\bmonth\b/i.test(text)) p = fromPlaybook('agency');
+    } else if (ask === 'happy_change') {
+      if (KEEP_THEM.test(text) || BARE_NO.test(text)) p = noDraft('not_interested', 'keeps_provider');
+      else if (RE.yesish.test(text) || /\b(happy\s+to|would\s+change|open\s+to|yes)\b/i.test(text)) p = fromPlaybook('free_to_leave');
+    } else if (ask === 'site') {
+      if (RE.facebook.test(text) && !/https?:\/\/(?!(www\.|m\.)?facebook\.)/i.test(text)) p = fromPlaybook('facebook_only');
+      else if (LINK.test(text)) p = null; // the website-given rule below
+      else if (BARE_YES.test(text)) p = plan({ move: 'site_followup', read: 'has_website', points: ['Thank them.'], question: "What's the web address so I can take a look?" });
+      else if (NO_SITE_ANSWER.test(text)) p = fromPlaybook('no_website');
+    } else if (ask === 'offer') {
+      if (RE.voiceWord.test(text) && !/\b(can'?t|cannot|no)\b/i.test(text)) p = fromPlaybook('voice_yes', { note: 'They said yes to the voice note: record it with the voice-note script.' });
+      else if (RE.callWord.test(text) || RE.namedTime.test(text)) p = null; // the call rules below
+      else if (RE.yesish.test(text) || BARE_YES.test(text)) p = fromPlaybook('voice_yes', { note: 'They said yes to the voice note: record it with the voice-note script.' });
+    } else if (ask === 'call_time' || ask === 'better_time') {
+      const note = readEndDate(text, nowMs);
+      if (ask === 'call_time' && RE.namedTime.test(text)) {
+        p = plan({ move: 'set_call', read: 'call_time_agreed', win: 'call_time_agreed', points: ['Confirm you will call them at the time they said, using their words for the time. One short line.'], question: null });
+      } else if (ask === 'better_time' && (note || RE.namedTime.test(text) || RE.monthYear.test(text))) {
+        p = plan({ move: 'playbook', read: 'not_now_time', intent: 'not_now', guide: NOT_NOW_WITH_TIME, points: [`Say this, close to these words, using their words for the time: "${NOT_NOW_WITH_TIME}"`], question: null,
+          followUp: note, note: note ? `Check back on ${note.checkBackOn} (they said ${note.said}). Set the Next Action when you send.` : 'They named a time to check back: set the Next Action when you send.' });
       }
-      return g(plan({ move: 'offer_voice_note', read: 'answered_agency',
-        points: ['Thank them for letting you know, in a few words, using their own word for whoever looks after the site. Do not offer a new website and do not ask about the website again.'],
-        question: PITCH_VOICE_Q }));
+    }
+    if (p) return g(p);
+  }
+
+  /* 6. What they said, one intent each (the playbook). Order matters: the specific before the general. */
+  if (RE.emailAddr.test(text)) return g(noDraft('email_given', 'email_given'));
+  if (RE.phoneNumber.test(text) && text.length < 80) return g(fromPlaybook('number_sent'));
+  if (RE.facebookOnly.test(text)) return g(fromPlaybook('facebook_only'));
+  /* A map pin, a social profile or a directory page is not their website: a person looks first. */
+  if (LINK.test(text) && NOT_THEIR_SITE.test(text) && !RE.facebookOnly.test(text)) return g(plan({ move: 'link', read: 'link', autoDraft: false, needsYou: flag('link'), points: ['Thank them and say you will take a look.'] }));
+  if (LINK.test(text)) {
+    /* The first reply: a link only changes the pitch when we have no website on record for them. */
+    if (!first || noSiteOf(e)) {
+      return g(fromPlaybook('website_given', { note: 'They gave a website. Run Crawl site on it from the lead (the draft does not crawl).' }, whoRunsKnown(i.thread) ? WEBSITE_GIVEN_KNOWN : undefined));
     }
   }
+  if (RE.notOwner.test(text)) return g(fromPlaybook('not_owner'));
   if (t.category === 'wrong_person') return g(plan({ move: 'close_politely', read: 'wrong_person', autoDraft: false, needsYou: flag('wrong_person'), points: ['Say sorry, your mistake, and you will not message again.'] }));
-  if (t.category === 'not_interested' || (t.category === 'already_sorted' && !PROVIDER.test(text) && !RANKS.test(text))) {
-    return g(plan({ move: 'close_politely', read: 'not_interested', autoDraft: false, needsYou: flag('not_interested'), points: ['No worries, thank them for their time. No pitch, no question.'] }));
+  if (RE.tooExpensive.test(text) && !CLEAR_NO.test(text)) return g(fromPlaybook('too_expensive'));
+  if (RE.notNow.test(text) && !/\binterested\b/i.test(text) && !CLEAR_NO.test(text)) {
+    const note = readEndDate(text, nowMs);
+    if (note || RE.monthYear.test(text)) {
+      return g(plan({ move: 'playbook', read: 'not_now_time', intent: 'not_now', guide: NOT_NOW_WITH_TIME, points: [`Say this, close to these words, using their words for the time: "${NOT_NOW_WITH_TIME}"`], question: null,
+        followUp: note, note: note ? `Check back on ${note.checkBackOn} (they said ${note.said}). Set the Next Action when you send.` : 'They named a time to check back: set the Next Action when you send.' }));
+    }
+    return g(fromPlaybook('not_now'));
+  }
+  const rule = mayClaimNamedInstead(e.named?.named ?? 0, e.named?.valid ?? 0) && !!e.named && e.named.valid > 0;
+  const audited = !!e.named && e.named.valid > 0;
+  if (RE.dontNeed.test(text) && !CLEAR_NO.test(text)) return g(fromPlaybook('dont_need', {}, rule ? undefined : audited ? DONT_NEED_SOFT : DONT_NEED_NO_AUDIT));
+  if (t.category === 'not_interested' || CLEAR_NO.test(text) || (t.category === 'already_sorted' && !PROVIDER.test(text) && !RANKS.test(text))) {
+    return g(noDraft('not_interested', 'not_interested', 'close_politely'));
   }
   if (latest.messageType && !['text', 'button', 'interactive'].includes(latest.messageType) && (!text || /^\[[a-z_]+\]$/i.test(text))) {
     return g(plan({ move: 'media', read: 'media', autoDraft: false, needsYou: flag('media'),
       points: ['Say sorry, you cannot play voice notes or open files on here.'], question: 'Can you type it, or shall I give you a quick call?' }));
   }
-  if (LINK.test(text)) return g(plan({ move: 'link', read: 'link', autoDraft: false, needsYou: flag('link'), points: ['Thank them and say you will take a look.'] }));
   if (MALAY.test(text) && !ENGLISH_HINT.test(text)) {
     return g(plan({ move: 'other_language', read: 'other_language', autoDraft: false, needsYou: flag('other_language'), points: ['In English: say sorry, you only speak English.'], question: 'Is it ok to carry on in English?' }));
   }
-
-  /* 5. Things code can answer. */
-  if (BOT.test(text)) {
-    /* ⛔ "I read and send every one myself" only while the AI auto-reply switch is OFF (Paul, 2026-10-20). */
-    const answer = e.aiAutoReplies === true ? BOT_ANSWER_SWITCH_ON : BOT_ANSWER_SWITCH_OFF;
-    return g(plan({ move: 'is_bot', read: 'is_bot', points: [`Use this line, word for word: "${answer}"`, 'Never say you are not using AI.'], question: offeredVoice ? null : VOICE_Q }));
-  }
-  if (VOICE_REQUEST.test(text) && !/\b(can'?t|cannot)\b/i.test(text)) {
-    return g(plan({ move: 'offer_voice_note', read: 'asked_voice_note', points: ['Say yes, you will record them a short voice note. Never say when it will come: no "now", "shortly" or "today".'], question: null, allowPrice: clearYesEarlier }));
-  }
+  if (BOT.test(text)) return g(fromPlaybook('is_bot', { move: 'is_bot' }));
+  if (VOICE_REQUEST.test(text) && !/\b(can'?t|cannot)\b/i.test(text)) return g(fromPlaybook('voice_yes', { note: 'They asked for a voice note: record it with the voice-note script.' }));
+  if (RE.sendEmail.test(text)) return g(fromPlaybook('send_email'));
+  /* "We're in a contract until June", said without being asked: noted, never answered as a contract question. */
+  if (!first && RE.tied.test(text) && /\b(contract|tied|locked)\b/i.test(text) && !/\?/.test(text)) return g(contract());
   const topic = questionTopic(text);
-  if (t.category === 'call_request' || t.category === 'booking' || (/\b(call|ring|phone)\b/i.test(text) && NAMED_TIME.test(text) && !topicOf(text))) {
-    const timeNamed = NAMED_TIME.test(text);
-    return g(plan({ move: 'set_call', read: t.category, allowPrice: clearYesEarlier,
-      points: timeNamed ? ['Confirm you will call them at the time they said, using their words for the time.'] : ['Say happy to have a quick call.'],
-      question: timeNamed ? null : CALL_Q }));
+  if (t.category === 'call_request' || t.category === 'booking' || (/\b(call|ring|phone)\b/i.test(text) && (RE.namedTime.test(text) || NAMED_TIME.test(text)) && !topic)) {
+    if (RE.namedTime.test(text)) return g(plan({ move: 'set_call', read: 'call_time_agreed', win: 'call_time_agreed', points: ['Confirm you will call them at the time they said, using their words for the time. One short line.'], question: null }));
+    return g(fromPlaybook(RE.busy.test(text) || /\blater\b/i.test(text) ? 'busy' : 'call_yes'));
   }
+  if (RE.busy.test(text) && !/\?/.test(text)) return g(fromPlaybook('busy'));
+  if (RE.thinkAboutIt.test(text)) return g(fromPlaybook('think_about_it'));
+  if (RE.doesAiMatter.test(text)) return g(fromPlaybook('does_ai_matter', {}, rule ? undefined : audited ? DOES_AI_MATTER_SOFT : DOES_AI_MATTER_NO_AUDIT));
+  if (RE.examples.test(text)) return g(fromPlaybook('examples'));
+  if (RE.definitely.test(text)) return g(fromPlaybook('definitely'));
+  if (RE.catch.test(text)) return g(fromPlaybook('catch'));
+  if (topic === 'price' || (RE.howMuch.test(text) && !topic)) return g(fromPlaybook('how_much', { topic: 'price' }));
+  if (topic === 'ownership' || topic === 'domain' || RE.ownSite.test(text)) return g(fromPlaybook('own_site', { topic: topic ?? 'ownership' }));
+  if (topic === 'build_time' || RE.howLong.test(text)) return g(fromPlaybook('how_long', { topic: 'build_time' }));
+  if (RE.whoAreYou.test(text) || WHO_ONLY.test(text)) return g(fromPlaybook('who_are_you'));
+  /* "What's this about?" on the first reply: the pitch IS the answer. */
+  if (first && RE.whatsThisAbout.test(text)) return g(pitchPlan());
+  if (RE.whatWeDo.test(text) || topic === 'what_we_do') return g(fromPlaybook('what_we_do', { topic: 'what_we_do' }));
   if (topic) {
+    /* The fact sheet's other answers (term, cancel, monthly start, after the term, the guarantee, measurement, what we
+       need, changes): word for word from the sheet. */
     const fact = factFor(topic);
-    if (!fact) return g(plan({ move: 'unknown_question', read: `question:${topic}`, autoDraft: false, needsYou: flag('question_not_on_sheet'), points: ["Say it's a good question and you'd rather explain it properly."], question: VOICE_Q }));
-    const priceFamily = topic === 'price' || topic === 'term' || topic === 'monthly_start' || topic === 'cancel' || topic === 'after_term' || topic === 'guarantee';
-    /* THE CONFIDENCE LINE (Paul, 2026-10-20): a price question, "does it work" / the guarantee, "what's the catch".
-       The guarantee answer IS the line plus the refund (never said twice). */
-    const confidence = topic === 'price' || topic === 'guarantee' || topic === 'what_we_do';
+    if (!fact) return g(noDraft('question_not_on_sheet', `question:${topic}`, 'unknown_question'));
+    const priceFamily = topic === 'term' || topic === 'monthly_start' || topic === 'cancel' || topic === 'after_term' || topic === 'guarantee';
+    const confidence = topic === 'guarantee';
     const say = topic === 'guarantee' ? `${CONFIDENCE_LINE} ${GUARANTEE_REFUND}` : fact.say;
-    return g(plan({ move: 'answer_fact', read: `question:${topic}`, topic, allowPrice: priceFamily || clearYesEarlier,
-      needsYou: fact.paulLooks ? flag('paul_looks') : null, autoDraft: !fact.paulLooks, confidence,
-      points: [`Use this answer, word for word: "${say}"`, ...(confidence && topic !== 'guarantee' ? [`Then this line, word for word: "${CONFIDENCE_LINE}"`] : [])], question: offeredVoice ? 'Want me to give you a quick call to explain the rest?' : VOICE_Q }));
+    return g(plan({ move: 'answer_fact', read: `question:${topic}`, topic, allowPrice: priceFamily, confidence,
+      needsYou: fact.paulLooks ? flag('paul_looks') : null, autoDraft: !fact.paulLooks,
+      points: [`Use this answer, word for word: "${say}"`], question: VOICE_Q }));
   }
-  if (PROVIDER.test(text)) {
-    return g(plan({ move: 'objection_provider', read: 'provider', points: ['Say no problem, whoever looks after their site now can carry on doing it (use their own word for that person, e.g. "him" or "your nephew"). Do not offer a new website.'], question: offeredVoice ? 'Would a quick 2 minute call be ok so I can show you what I found?' : 'Want me to send you a quick voice note showing what I found?' }));
+  /* The first reply, when nothing above matched: THE PITCH ("yes", "that's correct", "how can I help", a name, "hello?",
+     even "interested"). Only an unanswerable question goes to a person. */
+  if (first) {
+    if (t.category === 'question' && !RE.whatsThisAbout.test(text)) return g(noDraft('question_not_on_sheet', 'question', 'unknown_question'));
+    if (LAUGH_ONLY.test(text)) return g(noDraft('unsure', 'laughing'));
+    return g(pitchPlan());
   }
+  /* Who runs the site, said without being asked. */
+  if (RE.tied.test(text) && /\b(contract|tied|locked)\b/i.test(text)) return g(contract());
+  if (RE.friend.test(text) && /\b(site|website|web|does|did|built|made|look)\b/i.test(text)) return g(fromPlaybook('friend_built'));
+  if (PROVIDER.test(text) || (RE.agency.test(text) && /\b(site|website|web|does|do|look|with|use|pay)\b/i.test(text))) return g(fromPlaybook('agency'));
   if (RANKS.test(text)) {
     const line = auditLine(e);
-    return g(plan({ move: 'objection_rank', read: 'already_ranks', points: ['Agree with what is true: fair enough, that is good.', ...(line ? [line] : [])], question: offeredVoice ? 'Worth a quick 2 minute call so I can show you?' : 'Want me to send you a quick voice note showing what I found?' }));
+    return g(plan({ move: 'objection_rank', read: 'already_ranks', points: ['Agree with what is true: fair enough, that is good.', ...(line ? [line] : [])], question: 'Want me to send you a quick voice note showing what I found?' }));
   }
-  if (t.category === 'interested' || CLEAR_YES.test(text)) {
-    return g(plan({ move: 'offer_voice_note', read: 'interested', allowPrice: true, points: ['Great, thank them. Do not pitch again.'], question: 'Shall I send you a quick voice note explaining how it works, or would you rather a quick call?' }));
+  if (RE.interested.test(text) || ((t.category === 'interested' || CLEAR_YES.test(text)) && !RE.goOn.test(text))) return g(fromPlaybook('interested', { allowPrice: true }));
+  if (RE.goOn.test(text) || BARE_YES.test(text) || RE.yesish.test(text)) {
+    /* "go on then" / "ok": the agency question, or (no website) the website question, or the call / voice note once known. */
+    if (known) return g(fromPlaybook('go_on', {}, GO_ON_KNOWN));
+    if (noSiteOf(e)) return g(fromPlaybook('go_on', {}, PITCH_SITE_Q));
+    return g(fromPlaybook('go_on'));
   }
-  if (LAUGH_ONLY.test(text)) return g(plan({ move: 'unsure', read: 'laughing', autoDraft: false, needsYou: flag('unsure'), points: ['Keep it light and short, no pitch.'], question: null }));
-  const whoOnly = WHO_ONLY.test(text);
-  if (whoOnly || t.category === 'confirmed_contact' || /^\W*(yes|yeah|yep|yh|ye|ya)\W*$/i.test(text)) {
-    /* A bare confirmation to the opener: THE FULL PITCH, code-built word for word (Paul, 2026-10-20). */
-    if (!whoOnly && wasOpener(prevOurs)) {
-      const pitch = firstReplyPitch(e);
-      return g(plan({ move: 'first_reply_pitch', read: 'confirmed', label: 'Only confirmed',
-        points: pitch.lines.map((l) => `Use this line, word for word: "${l}"`), question: pitch.question, fixedText: pitchText(pitch), closer: pitch.closer }));
-    }
-    if (whoOnly) {
-      const line = auditLine(e);
-      const points = ["Say who you are: Paul from Findable. You help local businesses show up when people ask AI tools for their trade in their area."];
-      if (line) points.push(line);
-      /* No audit line: at most ONE real crawl finding, in the crawl's own words, hedged. Nothing when the crawl is empty. */
-      else if (e.hasWebsite && e.findings[0]) points.push(`One thing I saw on your website: ${e.findings[0].said.replace(/\s+/g, ' ').trim().replace(/\.?$/, '.')} That could be making it harder for AI to put you forward.`);
-      /* "Who is this?": who we are, then the confidence line (Paul, 2026-10-20). */
-      points.push(`Then this line, word for word: "${CONFIDENCE_LINE}"`);
-      return g(plan({ move: 'intro_hook', read: 'confirmed', label: 'Only confirmed', confidence: true, points, question: offeredVoice ? 'Happy to explain it here or on a quick call, which suits?' : VOICE_Q }));
-    }
-    // A bare yes to our offer of a voice note / call / explanation: a yes to THAT, never a sign-up or a price.
-    return g(plan({ move: 'offer_voice_note', read: 'yes_to_offer', points: ['Great, thank them. Say you will record them a quick voice note. Never say when it will come: no "now", "shortly" or "today".'], question: null }));
-  }
+  if (LAUGH_ONLY.test(text)) return g(noDraft('unsure', 'laughing'));
   if (t.category === 'acknowledgement' || t.category === 'irrelevant') {
-    return g(plan({ move: 'ack', read: 'ack', autoDraft: false, points: ['One short friendly line.'], question: offeredVoice ? null : VOICE_Q }));
+    return g(plan({ move: 'ack', read: 'ack', autoDraft: false, noDraft: true, points: [], question: null }));
   }
-  if (t.category === 'question') {
-    return g(plan({ move: 'unknown_question', read: 'question', autoDraft: false, needsYou: flag('question_not_on_sheet'), points: ["Say it's a good question and you'd rather explain it properly."], question: VOICE_Q }));
-  }
-  return g(plan({ move: 'unsure', read: 'unclear', autoDraft: false, needsYou: flag('unsure'), confidence: true,
-    points: ['Answer briefly and warmly, no pitch. Do not explain why anything happened and give no reason or claim of your own.', `Then this line, word for word: "${CONFIDENCE_LINE}"`], question: VOICE_Q }));
+  /* Anything unmatched: Needs you, no draft (Paul, 2026-10-20). */
+  if (t.category === 'question') return g(noDraft('question_not_on_sheet', 'question', 'unknown_question'));
+  return g(noDraft('off_topic', 'unclear'));
 }
 
 /* ── capitals, done in code (never trusted to the model) ──────────────────────────────────────── */

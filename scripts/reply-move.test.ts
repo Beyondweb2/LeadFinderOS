@@ -2,7 +2,7 @@
    Runs every ZZ fixture (scripts/fixtures/ai-reply-eval.json: 25 anonymised real conversations + 32 odd replies) through
    pickMove and checks the hand-over decision; pins the loop guards, the capitals and the safeguards. Pure: no model, no DB. */
 import { readFileSync } from 'node:fs';
-import { pickMove, tidyCaps, auditLine, inboundLabel, firstReplyPitch, autoReplyFlags, isAutoReply, PITCH_AGENCY_VOICE, PITCH_SPECIALISE_LINE, PITCH_INSTEAD_LINE, pitchText, PITCH_SITE_Q, PITCH_VOICE_Q, PITCH_NO_SITE_LINE, PITCH_SELF_MANAGED_REPLY, BOT_ANSWER_SWITCH_OFF, BOT_ANSWER_SWITCH_ON, type MoveEvidence, type MoveThreadMsg } from '../src/lib/replyMove.ts';
+import { pickMove, tidyCaps, auditLine, inboundLabel, firstReplyPitch, autoReplyFlags, isAutoReply, PITCH_AGENCY_VOICE, PITCH_SPECIALISE_LINE, PITCH_INSTEAD_LINE, pitchText, PITCH_SITE_Q, PITCH_VOICE_Q, PITCH_NO_SITE_LINE, PITCH_SELF_MANAGED_REPLY, BOT_ANSWER, type MoveEvidence, type MoveThreadMsg } from '../src/lib/replyMove.ts';
 import { CONFIDENCE_LINE, GUARANTEE_LINE } from '../src/lib/offerFactSheet.ts';
 import { checkAiReply, fallbackAiReply, type AiReplyContext } from '../src/lib/aiReplyDraft.ts';
 import { conversationEngine, draftNames } from '../src/lib/draftEvidence.ts';
@@ -48,17 +48,19 @@ const pm = (thread: MoveThreadMsg[], o: Partial<{ aiSentSinceWin: number; eviden
   const yesOpener = pm([opener, { from: 'them', text: 'Yes it is' }]);
   ok(yesOpener.move === 'first_reply_pitch' && !!yesOpener.fixedText && !yesOpener.allowPrice && yesOpener.label === 'Only confirmed', 'bare "yes it is" → the full first-reply pitch (code-built), never a price, labelled "Only confirmed"');
   const yesHook = pm([opener, { from: 'them', text: 'Yes it is' }, hook, { from: 'them', text: 'yes' }]);
-  ok(yesHook.move === 'offer_voice_note' && !yesHook.allowPrice && !yesHook.points.join(' ').match(/sign|link|£/i), 'a bare "yes" to our offer → the voice note, never a sign-up link or a price');
+  ok(yesHook.intent === 'voice_yes' && !yesHook.allowPrice && !yesHook.points.join(' ').match(/sign|link|£/i), 'a bare "yes" to our offer → the voice note, never a sign-up link or a price');
   const keen = pm([opener, { from: 'them', text: 'Yes please, I\'m interested' }]);
-  ok(keen.move === 'offer_voice_note' && /voice note/.test(keen.question ?? '') && (keen.question ?? '').indexOf('voice note') < (keen.question ?? '').indexOf('call'), 'interested → voice note first, call after');
+  ok(keen.move === 'first_reply_pitch', 'the FIRST reply, even "interested" → the pitch (they have not heard it yet)');
+  const keen2 = pm([opener, { from: 'them', text: 'Yes' }, hook, { from: 'them', text: "I'm interested, tell me more" }]);
+  ok(keen2.intent === 'interested' && /quick call/.test(keen2.guide ?? '') && /voice note/.test(keen2.question ?? ''), 'interested later → the call, or a voice note if easier');
   const price = pm([opener, { from: 'them', text: 'how much is it?' }]);
-  ok(price.move === 'answer_fact' && price.topic === 'price' && /word for word: "It's £99 to start/.test(price.points[0]), 'a price question → the sheet\'s price, word for word');
+  ok(price.intent === 'how_much' && price.topic === 'price' && price.allowPrice && /word for word: "It's £99 to start/.test(price.points[0]), 'a price question → the playbook price line, word for word');
   const unknown = pm([opener, { from: 'them', text: 'Do you do Instagram ads as well?' }]);
-  ok(unknown.needsYou?.reason === 'question_not_on_sheet', 'a question the sheet does not answer → Needs you');
+  ok(unknown.needsYou?.reason === 'question_not_on_sheet' && unknown.noDraft === true, 'a question the sheet does not answer → Needs you, no draft');
   const bot = pm([opener, { from: 'them', text: 'is this a bot?' }]);
-  ok(bot.move === 'is_bot' && /Never say you are not using AI/.test(bot.points.join(' ')), '"is this a bot" → honest, never denied');
-  const provider = pm([opener, { from: 'them', text: 'I pay him to do it' }]);
-  ok(provider.move === 'objection_provider' && /Do not offer a new website/.test(provider.points[0]), '"I pay him" → no new-site pitch, no second agency question');
+  ok(bot.move === 'is_bot' && bot.guide === BOT_ANSWER, '"is this a bot" → honest, never denied');
+  const provider = pm([opener, { from: 'them', text: 'Yes' }, hook, { from: 'them', text: 'I pay him to do it' }]);
+  ok(provider.intent === 'agency' && /tied into a contract/.test(provider.question ?? ''), '"I pay him" → the contract question (never badmouthing whoever it is)');
   ok(pm([opener, { from: 'them', text: 'Thank you for your message, we are away until Monday' }]).label === 'Auto-reply', 'an auto-responder is labelled Auto-reply');
   ok(inboundLabel('Yes it is', 'text') === 'Only confirmed' && inboundLabel('Thank you for your message, we will get back to you shortly', 'text') === 'Auto-reply' && inboundLabel('How much?', 'text') === null, 'inboundLabel: the Inbox label');
 }
@@ -131,14 +133,14 @@ console.log('6. the first-reply pitch (Paul, 2026-10-20, wording A)');
   /* The pitch now ends on the agency question, so their answer is the agency answer. */
   const pitchMsg: MoveThreadMsg = { from: 'us', text: d, templateName: null };
   const ans = pm([opener, { from: 'them', text: 'Yes it is' }, pitchMsg, { from: 'them', text: 'I do it myself' }], { evidence: issuesEv });
-  ok(ans.fixedText === PITCH_SELF_MANAGED_REPLY && ans.question === PITCH_VOICE_Q, 'answer to the pitch "I do it myself" → "Nice one. Ok if I send a quick voice note on what I found?"');
+  ok(ans.intent === 'self_managed' && ans.guide === PITCH_SELF_MANAGED_REPLY, 'answer to the pitch "I do it myself" → "Good, that makes changes easy. Quick call, or…"');
   const agencyAns = pm([opener, { from: 'them', text: 'Yes it is' }, pitchMsg, { from: 'them', text: 'An agency does it' }], { evidence: issuesEv });
-  ok(agencyAns.move === 'offer_voice_note' && agencyAns.question === PITCH_VOICE_Q && !agencyAns.fixedText, 'an agency answer → thanks, then asks before the voice note');
+  ok(agencyAns.intent === 'agency' && /tied into a contract with them, or free to leave/.test(agencyAns.question ?? ''), 'an agency answer → are you tied into a contract, or free to leave?');
   const no = pm([opener, { from: 'them', text: 'Yes it is' }, pitchMsg, { from: 'them', text: 'no thanks' }], { evidence: issuesEv });
   ok(no.needsYou?.reason === 'not_interested', 'a clear no to the pitch → Needs you (not interested), no follow-up');
   const noSitePitch: MoveThreadMsg = { from: 'us', text: fallbackAiReply({ ...ctx, evidence: noSiteEv, plan: pm([opener, { from: 'them', text: 'Yes' }], { evidence: noSiteEv }) }), templateName: null };
   const nextNoSite = pm([opener, { from: 'them', text: 'Yes' }, noSitePitch, { from: 'them', text: 'No not got one' }], { evidence: noSiteEv });
-  ok(nextNoSite.question === PITCH_VOICE_Q, 'no website to show → "Ok if I send a quick voice note on what I found?"');
+  ok(nextNoSite.intent === 'no_website' && /voice note explaining it\?$/.test(nextNoSite.question ?? ''), 'no website → "That\'s probably why ai has nothing to recommend…"');
   /* A pitch already SENT in the old wording still gets its old next step. */
   const oldPitch: MoveThreadMsg = { from: 'us', text: 'I asked Gemini for a plumber in Rugby and it mentioned Rival A Plumbing.\n\nAnyone asking AI that question gets pointed to them instead of you.\nWould you rather those customers came to you?', templateName: null };
   const next = pm([opener, { from: 'them', text: 'Yes it is' }, oldPitch, { from: 'them', text: 'Yes of course' }], { evidence: issuesEv });
@@ -174,31 +176,28 @@ console.log('7. the confidence line: only where Paul said');
 {
   const has = (p: { points: string[]; confidence?: boolean }) => p.confidence === true && p.points.join(' ').includes(CONFIDENCE_LINE);
   ok(CONFIDENCE_LINE.toLowerCase().includes(GUARANTEE_LINE.toLowerCase()) && !/100|if i fail/i.test(CONFIDENCE_LINE), 'the line quotes the sheet\'s guarantee verbatim; never "100%" or "if I fail"');
-  ok(has(pm([opener, { from: 'them', text: 'Yes' }, hook, { from: 'them', text: 'how much is it?' }])), 'a price question → the confidence line');
+  const priceLine = pm([opener, { from: 'them', text: 'Yes' }, hook, { from: 'them', text: 'how much is it?' }]);
+  ok(priceLine.confidence === true && (priceLine.guide ?? '').includes("backed by a guarantee: we improve ai visibility or you get your money back."), 'a price question → the confidence line inside the price line');
   ok(has(pm([opener, { from: 'them', text: 'Yes' }, hook, { from: 'them', text: 'does it actually work?' }])), '"does it work" → the confidence line');
-  ok(has(pm([opener, { from: 'them', text: 'Yes' }, hook, { from: 'them', text: "what's the catch" }])), '"what\'s the catch" → the confidence line');
+  ok(pm([opener, { from: 'them', text: 'Yes' }, hook, { from: 'them', text: "what's the catch" }]).intent === 'catch', '"what\'s the catch" → the catch line (the £99 back)');
   ok(has(pm([opener, { from: 'them', text: 'Yes' }, hook, { from: 'them', text: 'is there a guarantee' }])), 'the guarantee → the confidence line (said once)');
-  ok(has(pm([opener, { from: 'them', text: 'who is this?' }])), '"who is this?" → the confidence line');
+  ok(pm([opener, { from: 'them', text: 'who is this?' }]).intent === 'who_are_you', '"who is this?" → "I\'m Paul, I run Findable…"');
+  for (const x of ['Yes', 'yeah go on', 'ok', 'hmm', 'Dom here']) ok(!pm([opener, { from: 'them', text: 'Yes' }, hook, { from: 'them', text: x }]).points.join(' ').includes(CONFIDENCE_LINE), `never the money-back line unasked ("${x}")`);
   ok(!pm([opener, { from: 'them', text: 'Yes it is' }]).confidence, 'never in the first pitch');
   const g = pm([opener, { from: 'them', text: 'Yes' }, hook, { from: 'them', text: 'is there a guarantee' }]).points.join(' ');
   ok(g.includes("If we haven't improved your AI visibility at the 4-week re-check, you get your £99 back.") && !/hasn't gone up/.test(g), 'the guarantee reply: "If we haven\'t improved your AI visibility at the 4-week re-check, you get your £99 back."');
 }
-console.log('8. the bot answer follows the AI auto-reply switch (Paul, 2026-10-20)');
+console.log('8. the bot answer: Paul\'s one line, never a denial (the playbook, 2026-10-20)');
 {
   const ask = [opener, { from: 'them' as const, text: 'Yes' }, hook, { from: 'them' as const, text: 'is this a bot?' }];
-  const off = pm(ask, { evidence: { ...ev, aiAutoReplies: false } });
   const on = pm(ask, { evidence: { ...ev, aiAutoReplies: true } });
-  const unset = pm(ask);
-  ok(off.points.join(' ').includes(BOT_ANSWER_SWITCH_OFF) && /read and send every one myself/.test(BOT_ANSWER_SWITCH_OFF), 'switch OFF → "I read and send every one myself"');
-  ok(on.points.join(' ').includes(BOT_ANSWER_SWITCH_ON) && !/every one myself/.test(on.points.join(' ')) && /may be automated/.test(BOT_ANSWER_SWITCH_ON), 'switch ON → replies may be automated, never "every one myself"');
-  ok(unset.points.join(' ').includes(BOT_ANSWER_SWITCH_OFF), 'no switch value given (older callers, fixtures) → the switch-off answer; the function itself reads the switch and fails toward ON');
+  const off = pm(ask, { evidence: { ...ev, aiAutoReplies: false } });
+  ok(on.guide === BOT_ANSWER && off.guide === BOT_ANSWER && /I use ai to help write and check my messages/.test(BOT_ANSWER) && !/every one myself/.test(BOT_ANSWER), 'one answer whatever the switch: AI helps write and check, never "every one myself"');
   const ctxOn: AiReplyContext = { businessName: ev.businessName, latestInbound: 'is this a bot?', thread: [], plan: on, evidence: { ...ev, aiAutoReplies: true } };
-  ok(fallbackAiReply(ctxOn).includes(BOT_ANSWER_SWITCH_ON) && !/every one myself/.test(fallbackAiReply(ctxOn)), 'the rule-built fallback follows the switch too');
-  ok(checkAiReply(BOT_ANSWER_SWITCH_OFF + ' Shall I send you a quick voice note explaining it?', ctxOn).some((x) => /auto-replies are switched on/.test(x)), 'switch ON and the draft says "I send every one myself" → warning');
-  ok(!checkAiReply(BOT_ANSWER_SWITCH_OFF + ' Shall I send you a quick voice note explaining it?', { ...ctxOn, plan: off, evidence: { ...ev, aiAutoReplies: false } }).some((x) => /switched on/.test(x)), 'switch OFF → no warning');
-  const FN = readFileSync(new URL('../supabase/functions/ai-reply-drafts/index.ts', import.meta.url), 'utf8');
-  ok(/aiAutoReplies: await aiSwitchOn\(service\)/.test(FN) && /if \(error \|\| !data\) return true;/.test(FN), 'the function reads the switch for every draft and fails toward ON');
-  const ctx: AiReplyContext = { businessName: ev.businessName, latestInbound: 'x', thread: [], plan: pm([opener, { from: 'them', text: 'Yes' }, hook, { from: 'them', text: 'ok' }]), evidence: ev };
+  const fb = fallbackAiReply(ctxOn);
+  ok(fb.startsWith('I use ai to help write') && checkAiReply(fb, ctxOn).length === 0, `the rule-built fallback is the line, and passes the checker${checkAiReply(fb, ctxOn).length ? ' — ' + checkAiReply(fb, ctxOn).join(' | ') : ''}`);
+  ok(checkAiReply("It's Paul from Findable. I use AI to help write some messages, but I read and send every one myself.", ctxOn).some((x) => /auto-replies are switched on/.test(x)), 'switch ON and a draft saying "I send every one myself" → still a warning');
+  const ctx: AiReplyContext = { businessName: ev.businessName, latestInbound: 'x', thread: [], plan: pm([opener, { from: 'them', text: 'Yes' }, hook, { from: 'them', text: 'how long does it take?' }]), evidence: ev };
   ok(checkAiReply('Our clients loved it and saw great results. Want a call?', ctx).some((x) => /past results/.test(x)), 'a past-results claim with no approved case study → warning');
   ok(checkAiReply("I'll send the voice note now.", ctx).some((x) => /timing/.test(x)), 'a timing promise ("now") → warning');
   ok(checkAiReply('It works 100%, if I fail you get your money back.', ctx).some((x) => /100%/.test(x)), '"100%" / "if I fail" → warning');

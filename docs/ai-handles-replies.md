@@ -1,5 +1,8 @@
 # AI handles replies (2026-10-11)
 
+> **What a draft SAYS is the reply playbook since 2026-10-20: `docs/reply-playbook.md`** (`src/lib/replyPlaybook.ts`).
+> This file is the machinery (rows, switch, claim → send → complete, cost cap).
+
 Branch `feat/ai-assisted-replies`. WhatsApp only, **approve-to-send only** — there is no auto-send.
 
 ## What it does

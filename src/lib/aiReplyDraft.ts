@@ -28,6 +28,7 @@ import { issueMentioned, saysGoogleAiForGemini, vagueSiteClaim, wrongEngineWords
 import { ENGINE_WORDING, FACT_SHEET_VERSION, GUARANTEE_LINE, SHEET_MONEY, factFor, usableCaseStudies } from './offerFactSheet.ts';
 import { mayClaimNamedInstead } from './namedShareRule.ts';
 import { engineName, siteOf, tidyCaps, NEEDS_YOU_LABELS, PITCH_NO_SITE_LINE, PITCH_SPECIALISE_LINE, type MoveEvidence, type MovePlan, type NeedsYouReason } from './replyMove.ts';
+import { PLAYBOOK, lowerBrands, startsWithBrand } from './replyPlaybook.ts';
 
 /* ── cost ─────────────────────────────────────────────────────────────────────────────────────── */
 
@@ -205,8 +206,15 @@ export interface AiReplyWhy {
   confidence?: string | null;
   /** The website issues the draft could name, each with its stored pages (evidence). */
   siteIssues?: Array<{ title: string; pages: string[] }> | null;
-  /** The AI auto-reply switch when the draft was written (the bot answer follows it). */
+  /** The AI auto-reply switch when the draft was written. */
   aiAutoReplies?: boolean;
+  /** The playbook intent (replyPlaybook.ts), a note for the person, and a tied-in end date to set the Next Action for. */
+  intent?: string | null;
+  noDraft?: boolean;
+  note?: string | null;
+  followUp?: { said: string; endsOn: string; checkBackOn: string } | null;
+  /** A win for the loop guard once sent (a call time agreed). */
+  win?: string | null;
 }
 
 /** Paul's own hand-typed messages (inbox analysis 2026-10-19, names removed). The FEEL to copy, not the spelling. */
@@ -237,8 +245,11 @@ RULES:
 - No guarantee, ranking, "first page" or "recommend you" promises. Never say how an AI decides or that something caused a result.
 - Casual and kind, like a tradesperson texting: "mate" is fine sometimes, "no worries" is fine. No headings, lists, bold, dashes or exclamation marks. No sign off.
 - If asked whether you are a bot or AI, never deny it.
-- Never mention past results, other clients or success stories.
-- Never say when something will be sent or done (no "now", "shortly", "today"). Never say "100%" or "if I fail".
+- Never mention past results, other clients or success stories, unless a point gives the line word for word.
+- Never say when something will be sent or done (no "now", "shortly", "today") unless the given line says it. Never say "100%" or "if I fail".
+- Never say anything bad about an agency, a web designer or whoever looks after their site.
+- Do not start with "Perfect" or "Great" every time: vary how you open, and never open the same way as Paul's last message.
+- When STYLE says follow-up: write the AI tools' names (chatgpt, gemini) and the word ai in lower case, and never start a sentence with one of them (start the sentence another way). Sentences still start with a capital.
 
 ${SALES_STYLE_RULES}
 
@@ -260,8 +271,10 @@ export function buildAiReplyPrompt(c: AiReplyContext): string {
   lines.push(`BUSINESS: ${c.businessName}`);
   lines.push(`POINTS (say these, in this order, nothing else):\n${c.plan.points.map((p, i) => `${i + 1}. ${p}`).join('\n') || '1. One short friendly line.'}`);
   lines.push(c.plan.question ? `QUESTION (end with exactly this one question, in your words): ${c.plan.question}` : 'QUESTION: none. Do not ask anything.');
-  if (c.evidence.ownerName) lines.push(`NAME: you may greet them as ${c.evidence.ownerName}.`);
+  const greet = c.plan.greetName || c.evidence.ownerName;
+  if (greet) lines.push(`NAME: you may greet them as ${greet}.`);
   else lines.push('NAME: do not use a first name.');
+  lines.push(isPitch(c.plan) ? 'STYLE: first message.' : 'STYLE: follow-up (chatgpt, gemini and ai in lower case; never start a sentence with one).');
   const thread = c.thread.slice(-8).map((m) => `${m.from === 'us' ? 'PAUL' : 'THEM'}: ${m.text.replace(/\s+/g, ' ').slice(0, 400)}`).join('\n');
   lines.push(`CONVERSATION SO FAR (oldest first, for context only; never repeat what Paul already said):\n${thread}`);
   const out = lines.join('\n\n');
@@ -269,7 +282,7 @@ export function buildAiReplyPrompt(c: AiReplyContext): string {
 }
 
 /** What the draft becomes after the model: capitals fixed in code, spaces tidied. Templates never pass through here. */
-export function finishDraft(text: string, names: readonly (string | null | undefined)[] = []): string {
+export function finishDraft(text: string, names: readonly (string | null | undefined)[] = [], opts: { followUp?: boolean } = {}): string {
   let s = tidyCaps(String(text ?? '').replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim());
   /* A town, business or rival the evidence spells is written the evidence's way ("leeds" → "Leeds"). Whole words only. */
   for (const n of names) {
@@ -277,8 +290,11 @@ export function finishDraft(text: string, names: readonly (string | null | undef
     if (name.length < 3) continue;
     s = s.replace(new RegExp(`\\b${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'gi'), name);
   }
-  return s;
+  /* A follow-up writes the tools in lower case (Paul, 2026-10-20); the first pitch keeps its capitals. */
+  return opts.followUp ? lowerBrands(s) : s;
 }
+/** Every draft but the first-reply pitch is a follow-up (the lower-case style). */
+export const isFollowUp = (p: MovePlan) => !isPitch(p);
 /** The names finishDraft spells the evidence's way. */
 export const evidenceNames = (e: MoveEvidence): string[] => [e.town, e.businessName, ...e.competitors].filter((x): x is string => !!x);
 
@@ -324,7 +340,7 @@ export function checkAiReply(reply: string, c: AiReplyContext): string[] {
   const lines = r.split('\n').filter((l) => l.trim());
   if (lines.length > lineCap(p)) out.push(`More than ${lineCap(p)} lines.`);
   if (r.length > charCap(p)) out.push(`Long for a reply (over ${charCap(p)} characters).`);
-  if (TIMING_PROMISE.test(r) && p.move !== 'set_call') out.push('Promises when something will come ("now", "shortly"). Never promise timing.');
+  if (TIMING_PROMISE.test(r) && p.move !== 'set_call' && !p.timingOk) out.push('Promises when something will come ("now", "shortly"). Never promise timing.');
   if (/\bi\s+was\s+looking\s+for\b/i.test(r)) out.push('Says "I was looking for"; say "I asked".');
   /* A quoted search ("Who is the best … in Halstead?") is what we asked AI, not a question to them. */
   const qs = (r.replace(/"[^"\n]*"/g, '').match(/\?/g) ?? []).length;
@@ -337,7 +353,9 @@ export function checkAiReply(reply: string, c: AiReplyContext): string[] {
   for (const m of r.match(MONEY) ?? []) if (!SHEET_MONEY.includes(m.replace(/\s/g, '').replace(/\.00$/, ''))) out.push(`Names ${m}, which is not on the fact sheet.`);
   if (TERM_DRIFT.test(r)) out.push('A term or promise that is not on the fact sheet (12 months, cancel any time, unlimited, monthly audits).');
   if (RANKING.test(r)) out.push('Promises a ranking, first page or recommendation.');
-  if (PAST_RESULTS.test(r) && !usableCaseStudies().length) out.push('Claims past results or other clients, but no case study is approved on the fact sheet.');
+  /* Paul's one results line (the playbook) is allowed word for word; any other results claim still warns. */
+  const withoutResultsLine = r.split(new RegExp(PLAYBOOK.examples.line.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i')).join(' ');
+  if (PAST_RESULTS.test(withoutResultsLine) && !usableCaseStudies().length) out.push('Claims past results or other clients, but no case study is approved on the fact sheet.');
   if (ABSOLUTE.test(r)) out.push('Says "100%" or "if I fail". Use the guarantee line only.');
   if (GUARANTEE_WORD.test(r) && !lower(r).includes(lower(GUARANTEE_LINE)) && !r.includes(factFor('cancel')?.say ?? '\u0000')) {
     out.push(`Mentions the guarantee in words that are not the sheet's ("${GUARANTEE_LINE}").`);
@@ -368,8 +386,8 @@ export function checkAiReply(reply: string, c: AiReplyContext): string[] {
   }
   const greet = r.match(NAME_GREETING)?.[1] ?? null;
   const contact = (c.contactFirstName ?? '').trim();
-  if (greet && greet !== e.ownerName) out.push(`Calls them "${greet}", but the site does not state that name as the owner or founder.`);
-  else if (contact && contact.length >= 3 && new RegExp(`\\b${contact.replace(/[^A-Za-z]/g, '')}\\b`, 'i').test(r) && contact !== e.ownerName) {
+  if (greet && greet !== e.ownerName && greet !== p.greetName) out.push(`Calls them "${greet}", but the site does not state that name as the owner or founder, and they did not give it.`);
+  else if (contact && contact.length >= 3 && new RegExp(`\\b${contact.replace(/[^A-Za-z]/g, '')}\\b`, 'i').test(r) && contact !== e.ownerName && contact !== p.greetName) {
     out.push(`Uses the name "${contact}", which the site does not state as the owner or founder.`);
   }
   if (BOT_DENIAL.test(r)) out.push('Denies being AI-assisted. Never deny it.');
@@ -378,12 +396,32 @@ export function checkAiReply(reply: string, c: AiReplyContext): string[] {
     out.push('Says you send every message yourself, but AI auto-replies are switched on. Say replies may be automated.');
   }
   /* The sheet's engine wording and Paul's no-website line name the tools on purpose: read around them. */
-  const forEngine = r.split(ENGINE_WORDING).join(' ').split(PITCH_NO_SITE_LINE).join(' ');
+  const forEngine = r.replace(/\bchat\s?gpt\s+and\s+gemini\b/gi, ' ').split(ENGINE_WORDING).join(' ').split(PITCH_NO_SITE_LINE).join(' ');
   if (e.engineWords && wrongEngineWords(forEngine, e.engineWords)) out.push(`Names a different AI tool from the one this conversation uses (${engineName(e.engineWords)}).`);
   if (saysGoogleAiForGemini(r.split(PITCH_NO_SITE_LINE).join(' '))) out.push('Says "Google AI"; say "Gemini".');
   if (p.question === null && qs > 0) out.push('Asks a question where none was planned.');
+  /* The follow-up style (Paul, 2026-10-20): never a sentence that starts with a tool's name, and vary the opener. */
+  if (isFollowUp(p) && startsWithBrand(r)) out.push('Starts a sentence with chatgpt, gemini, google or ai. Start it another way.');
+  const opener = (x: string) => (x.trim().match(/^[A-Za-z']+/)?.[0] ?? '').toLowerCase();
+  const ours = c.thread.filter((m) => m.from === 'us').slice(-2).map((m) => opener(m.text)).filter(Boolean);
+  const mine = opener(r);
+  if (mine && !['i', 'hi', "i'm", "i'll", "i've"].includes(mine) && ours.includes(mine)) out.push(`Opens with "${mine}" again, like your last message. Vary it.`);
   out.push(...salesStyleProblems(r, [...e.competitors, e.businessName]));
   return [...new Set(out)];
+}
+
+/** Paul's short openers. When the playbook line opens the way our last message did ("Good to know." then "Good."), the
+ *  rule-built draft swaps in another so two messages in a row never start alike (Paul: vary openers). */
+const OPENERS = ['Good', 'Nice', 'Fair enough', 'Right', 'Great', 'No worries', 'Of course', 'Sure', 'Thanks', 'Happy to'];
+export function varyOpener(line: string, thread: ReadonlyArray<{ from: 'us' | 'them'; text: string }>): string {
+  const first = (x: string) => (x.trim().match(/^[A-Za-z']+/)?.[0] ?? '').toLowerCase();
+  const recent = thread.filter((m) => m.from === 'us').slice(-2).map((m) => first(m.text));
+  const mine = first(line);
+  if (!mine || !recent.includes(mine)) return line;
+  const m = line.match(/^([A-Za-z' ]+?)([.,])\s+/);
+  if (!m || !OPENERS.some((o) => o.toLowerCase() === m[1].toLowerCase())) return line;
+  const alt = OPENERS.find((o) => !recent.includes(first(o)) && o.toLowerCase() !== m[1].toLowerCase());
+  return alt ? `${alt}${m[2]} ${line.slice(m[0].length)}` : line;
 }
 
 /** The rule-built draft when the model is unavailable or over budget: the points, then the question. Built only from facts. */
@@ -393,7 +431,9 @@ export function fallbackAiReply(c: AiReplyContext): string {
     if (quoted) return quoted[1];
     return s.replace(/^(Say|Agree with what is true:|Confirm|Thank them and say|In English: say|Be honest:)\s*/i, '');
   };
-  if (c.plan.fixedText) return finishDraft(c.plan.fixedText, evidenceNames(c.evidence));
+  const fu = { followUp: isFollowUp(c.plan) };
+  if (c.plan.fixedText) return finishDraft(c.plan.fixedText, evidenceNames(c.evidence), fu);
+  if (c.plan.guide) return finishDraft(varyOpener(c.plan.guide, c.thread), evidenceNames(c.evidence), fu);
   if (c.plan.move === 'auto_reply') return finishDraft('No rush, speak soon.');
   const parts: string[] = [];
   for (const pt of c.plan.points) {
@@ -401,7 +441,7 @@ export function fallbackAiReply(c: AiReplyContext): string {
       parts.push(pt.startsWith('Say who you are') ? "It's Paul from Findable, I help local businesses show up when people ask AI for their trade."
         : pt.startsWith('No worries') ? 'No worries, thanks for your time.'
         : pt.startsWith('Great') ? 'Great stuff.'
-        : pt.startsWith('Confirm you will call') ? "Perfect, I'll call you then."
+        : pt.startsWith('Confirm you will call') ? "Lovely, I'll call you then."
         : pt.startsWith('That was their automatic reply') ? 'No rush, speak soon.'
         : '');
       continue;
@@ -414,7 +454,7 @@ export function fallbackAiReply(c: AiReplyContext): string {
     if (c.plan.move === 'privacy') { parts.push(c.evidence.foundOnGoogle ? 'I found your business and number on your Google listing.' : 'I found your business online.'); continue; }
   }
   const text = [...new Set(parts.filter(Boolean))].slice(0, 2).join(' ');
-  return finishDraft([text, c.plan.question ?? ''].filter(Boolean).join('\n'));
+  return finishDraft([text, c.plan.question ?? ''].filter(Boolean).join('\n'), [], fu);
 }
 
 export { FACT_SHEET_VERSION };
