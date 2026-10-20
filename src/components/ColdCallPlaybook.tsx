@@ -8,9 +8,9 @@ import { logFeatureUse } from '@/lib/featureUsage';
 import { invokeEdge, edgeErrorMessage } from '@/lib/edgeInvoke';
 import { notifyLeadChanged } from '@/lib/leadSync';
 import { useToast } from '@/hooks/use-toast';
-import { offerFit, thirdPartyManaged, type QcAgencyContract, type QuickCloseAnswers } from '@/lib/quickClose';
+import { BUILD_DEFAULT_REASON, offerFit, thirdPartyManaged, type QcAgencyContract, type QuickCloseAnswers } from '@/lib/quickClose';
 import { AlertTriangle, ArrowUp, Building2, Lock, Check, ChevronDown, Copy, Globe, HelpCircle, Loader2, MessageSquareQuote, PhoneCall, ScrollText, ShieldCheck, Sparkles, Wrench } from 'lucide-react';
-import { GOOGLE_STILL_MATTERS_SHORT, WHY_IT_MATTERS_STATS } from '@/lib/salesExplainer';
+import { CALL_WHAT_WE_DO_STEPS, GOOGLE_STILL_MATTERS_SHORT, WHY_IT_MATTERS_SOURCE_LINE, WHY_IT_MATTERS_STATS } from '@/lib/salesExplainer';
 import { VoiceNoteScriptBody } from '@/components/VoiceNoteScriptButton';
 import { QuickCloseButton, quickCloseKey, useQuickClose } from '@/components/QuickCloseDialog';
 import { HookVisibilityCard } from '@/components/HookVisibilityCard';
@@ -95,7 +95,7 @@ export function callFlowText(p: ColdCallPlaybook, model: PriceModel = 'standard'
     'FIRST QUESTION\n' + s.firstQuestion.question,
     'IF AN AGENCY\n- ' + s.ifAgency.questions.join('\n- '),
     'THEN ASK\n' + s.discovery.map((q) => '- ' + q).join('\n'),
-    'WHAT WE DO\n' + s.whatWeDo,
+    'WHAT WE DO\n' + CALL_WHAT_WE_DO_STEPS.map((st) => st.n + '. ' + st.title + '\n' + st.lines.map((l) => '- ' + l.text.replace(/\*\*/g, '')).join('\n')).join('\n'),
     ...(plan ? ['PLAN: ' + plan.name + ' (' + plan.summary + ')\n' + plan.spoken.join(' ')] : []),
     'GUARANTEE\n' + guaranteeForModel(s.guarantee, model).spoken,
   ].join('\n\n');
@@ -276,21 +276,50 @@ function Ask({ p, ans }: { p: ColdCallPlaybook; ans: ReturnType<typeof useCallAn
   );
 }
 
-/* ── WHAT WE DO: one sentence, two figures, one line ───────────────────────────────────────────── */
-function WhyAndWhat({ p }: { p: ColdCallPlaybook }) {
+/* ── WHAT WE DO: five numbered steps, key words bold (Paul, 2026-10-20) — then WHY IT MATTERS, its own card ── */
+/** "**word**" → bold. The steps' words live in salesExplainer.CALL_WHAT_WE_DO_STEPS. */
+function Bolded({ text }: { text: string }) {
+  return <>{text.split(/\*\*/).map((part, i) => (i % 2 ? <strong key={i} className="font-bold text-foreground">{part}</strong> : <span key={i}>{part}</span>))}</>;
+}
+function WhyAndWhat({ p: _p }: { p: ColdCallPlaybook }) {
   return (
-    <Step title="What we do" tone="blue" testId="call-step-explain">
-      <p className="text-[15px] leading-relaxed">{p.script.whatWeDo}</p>
-      <div className="grid grid-cols-2 gap-2" data-testid="why-it-matters">
-        {WHY_IT_MATTERS_STATS.map((s) => (
-          <div key={s.figure} className="rounded-xl bg-blue-500/[0.07] px-3 py-2 ring-1 ring-inset ring-blue-500/20">
-            <p className="text-xl font-bold leading-none text-blue-700 dark:text-blue-300">{s.figure}</p>
-            <p className="mt-1 text-[11px] leading-snug text-muted-foreground">{s.label}</p>
-          </div>
-        ))}
-      </div>
-      <p className="text-xs text-muted-foreground">{GOOGLE_STILL_MATTERS_SHORT}</p>
-    </Step>
+    <>
+      <Step title="What we do" tone="blue" testId="call-step-explain">
+        <ol className="space-y-2.5" data-testid="what-we-do-steps">
+          {CALL_WHAT_WE_DO_STEPS.map((st) => (
+            <li key={st.n} className="flex gap-3" data-testid={'what-we-do-' + st.n}>
+              <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-blue-500/15 text-xs font-bold text-blue-700 dark:text-blue-300" aria-hidden>{st.n}</span>
+              <div className="min-w-0 space-y-0.5">
+                <p className="text-sm font-bold leading-6">{st.title}</p>
+                <ul className="space-y-0.5 text-[15px] leading-snug text-foreground/85">
+                  {st.lines.map((l) => (
+                    <li key={l.text} className={cn(l.soon && 'text-muted-foreground/60')} data-soon={l.soon ? 'true' : undefined}>
+                      <Bolded text={l.text} />
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </li>
+          ))}
+        </ol>
+      </Step>
+      <section className="space-y-2 rounded-2xl border border-violet-500/25 bg-violet-500/[0.04] p-3" data-testid="why-it-matters-card">
+        <header className="flex items-center gap-2">
+          <span className="h-4 w-1 shrink-0 rounded-full bg-violet-500" aria-hidden />
+          <h3 className="text-[11px] font-bold uppercase tracking-wider text-foreground/80">Why it matters</h3>
+        </header>
+        <div className="grid grid-cols-2 gap-2" data-testid="why-it-matters">
+          {WHY_IT_MATTERS_STATS.map((s) => (
+            <div key={s.figure} className="rounded-xl bg-background px-3 py-2 ring-1 ring-inset ring-violet-500/20">
+              <p className="text-2xl font-extrabold leading-none text-violet-700 dark:text-violet-300">{s.figure}</p>
+              <p className="mt-1 text-xs leading-snug text-muted-foreground">{s.label}</p>
+            </div>
+          ))}
+        </div>
+        <p className="text-[11px] text-muted-foreground" data-testid="why-it-matters-source">{WHY_IT_MATTERS_SOURCE_LINE}</p>
+        <p className="text-xs text-muted-foreground">{GOOGLE_STILL_MATTERS_SHORT}</p>
+      </section>
+    </>
   );
 }
 
@@ -318,7 +347,9 @@ function Offer({ p, ans }: { p: ColdCallPlaybook; ans: ReturnType<typeof useCall
   return (
     <Step title="Offer" tone="green" testId="call-step-close">
       <PriceModelSwitch compact />
-      {fit?.reason && <p className={cn('rounded-xl px-3 py-2 text-xs leading-snug ring-1 ring-inset', fit.offered.build ? 'bg-muted/40 text-muted-foreground ring-border' : 'bg-amber-500/[0.08] text-amber-800 ring-amber-500/30 dark:text-amber-200')} data-testid="call-offer-fit">{fit.reason}</p>}
+      {/* The one-line "Findable Build is the plan…" is gone (Paul, 2026-10-20): the price card says it. A reason that asks
+          the rep to do something (the agency contract) stays. */}
+      {fit?.reason && fit.reason !== BUILD_DEFAULT_REASON && <p className={cn('rounded-xl px-3 py-2 text-xs leading-snug ring-1 ring-inset', fit.offered.build ? 'bg-muted/40 text-muted-foreground ring-border' : 'bg-amber-500/[0.08] text-amber-800 ring-amber-500/30 dark:text-amber-200')} data-testid="call-offer-fit">{fit.reason}</p>}
       {fit?.warning && <p className="rounded-xl bg-amber-500/[0.08] px-3 py-2 text-xs font-semibold leading-snug text-amber-800 ring-1 ring-inset ring-amber-500/30 dark:text-amber-200" data-testid="call-offer-warning">{fit.warning}</p>}
       {routes.length > 1 ? (
         <div className="inline-flex rounded-full bg-muted p-0.5" role="tablist" aria-label="Plan" data-testid="call-plan-switch">
