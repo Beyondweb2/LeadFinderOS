@@ -15,6 +15,7 @@ import { buildVisibilityChecks, footerName, titleBrand } from '../src/lib/visibi
 import { crawlStartUrl } from '../src/lib/crawlUrl.ts';
 import { callScreenCrawlRefusal, CALL_SCREEN_CRAWL_COOLDOWN_MS, CALL_SCREEN_CRAWL_PER_PERSON } from '../src/lib/callScreenCrawl.ts';
 import { voiceNoteFromCall, VOICE_NOTE_IN_TOUCH_NOTE } from '../src/lib/voiceNoteFromCall.ts';
+import { CONFIDENCE_LINE } from '../src/lib/offerFactSheet.ts';
 import { ISSUES_FOUND_MANY_LINE, ISSUES_FOUND_ONE_LINE } from '../src/lib/callScript.ts';
 import { scoringMethodFor, GOOGLE_AI_SCORED_SINCE, AI_OVERVIEW_LABEL, NO_OVERVIEW_TEXT } from '../src/lib/aiOverview.ts';
 import { scoreHookRun, initialHookStateV2 } from '../src/lib/hookScore.ts';
@@ -132,7 +133,7 @@ console.log('── 4. The voice note is the call script, spoken ──');
   ok(voiceNoteFromCall(p('findings', [issue('vs_raw_link_markup', 'z')])).lines.includes(ISSUES_FOUND_ONE_LINE), 'one issue → "an issue"');
   const clean = voiceNoteFromCall(p('clean', []));
   ok(!/website|site/i.test(clean.lines.slice(0, -1).join(' ')) && /look after the website yourself/.test(clean.text), 'no serious issue → nothing about the site (only the closing question)');
-  ok(!/report|audit|show you|link|£|guarantee/i.test(two.text), 'no report offer, no link, no price, no guarantee');
+  ok(!/report|audit|show you|link|£/i.test(two.text.replace(CONFIDENCE_LINE, '')) && two.lines.includes(CONFIDENCE_LINE) && (two.text.match(/guarantee/gi) ?? []).length === 1, 'no report offer, no link, no price; the guarantee only as the fact sheet confidence line (Paul, 2026-10-20)');
   ok(voiceNoteFromCall(p('findings', [issue('a', 'b')], 'follow_up')).note === VOICE_NOTE_IN_TOUCH_NOTE && !/messaged|in touch/i.test(voiceNoteFromCall(p('findings', [issue('a', 'b')], 'follow_up')).text), 'already in touch → a note for the person recording, never said');
   const ui = readFileSync(new URL('../src/components/VoiceNoteScriptButton.tsx', import.meta.url), 'utf8');
   ok(!/invokeEdge|functions\.invoke/.test(ui), 'no model call and no edge function: nothing to generate');

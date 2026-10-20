@@ -10,7 +10,9 @@
       · ALREADY IN TOUCH: an earlier message is never mentioned in the words; the person recording is told in a note;
       · NO REPORT OFFER: it never offers to send the audit / report or to "show you what I'd change" — it ends on the
         question about who controls the website (voiceNoteCtaKind), and nothing after it;
-      · no price, no link, no guarantee; "could be preventing", never "this is why".
+      · no price, no link; "could be preventing", never "this is why";
+      · the CONFIDENCE LINE (offerFactSheet.ts CONFIDENCE_LINE, Paul 2026-10-20) after the bridge, before the question:
+        the guarantee in the fact sheet's own words, nothing else about it.
    ⛔ NOTHING INVENTED: competitors are the stored answer's own (up to three), issues are the website check's own
       plain titles (up to two said), and a site with no serious issue gets no website line at all.
    Pure; relative imports with an explicit .ts.
@@ -19,6 +21,7 @@ import { ISSUES_FOUND_MANY_LINE, ISSUES_FOUND_ONE_LINE, NO_WEBSITE_SPOKEN } from
 import { plainIssueTitle } from './websiteCheck.ts';
 import { callerFirstName } from './callerName.ts';
 import type { ColdCallPlaybook } from './coldCallPlaybook.ts';
+import { CONFIDENCE_LINE } from './offerFactSheet.ts';
 
 /** Website issues said in the note (the rest are on the call screen). */
 export const VOICE_NOTE_ISSUES_SAID = 2;
@@ -63,6 +66,7 @@ export function voiceNoteFromCall(p: Pick<ColdCallPlaybook, 'evidence' | 'script
   /* clean / checking / not checked / unreadable: nothing about the site (Paul, 2026-10-19). */
 
   lines.push(VOICE_NOTE_BRIDGE);
+  lines.push(CONFIDENCE_LINE);
 
   /* THE QUESTION — who controls the website; it ends the note (no report offer, voiceNoteScript.ts). */
   const label = p.site.label ?? 'directory';

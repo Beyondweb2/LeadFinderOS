@@ -188,5 +188,25 @@ console.log('\n── 5. the call script lists the issues (Job 3) ──');
   ok(read('src/components/CrawlCheckButton.tsx').includes("queryKey: ['cold-call-playbook']"), 'a finished crawl refreshes the call script (it kept "not checked yet" otherwise)');
 }
 
+console.log('\n── 6. KSM (Paul, 2026-10-20): placeholder posts counted once, areas said before headings ──');
+{
+  const K = 'https://ksm-example.co.uk/';
+  const posts = [1, 2, 3].map((n) => `${K}post-${n}-headline/`);
+  const iss = (id: string, severity: 'high' | 'medium' | 'low', count: number, pages: string[]) => ({ id, severity, title: id, saw: id, meaning: '', count, pages });
+  const stored = {
+    version: WEBSITE_CHECK_VERSION, depth: 'deep', checkedAt: '2026-10-19T10:27:04Z', pagesRead: 12, pagesFound: 12, capped: false,
+    issues: [iss('ct_placeholder_content', 'high', 6, posts), iss('near_duplicate_pages', 'medium', 6, []),
+      iss('vs_key_page_basics', 'medium', 5, [K, K + 'prices/']), iss('ct_conflicting_facts', 'medium', 2, [K]), iss('location_unclear', 'medium', 0, [K])],
+    strengths: [], notChecked: [], failure: null,
+  };
+  const v = websiteCheckFor({ result: { websiteCheck: stored } as never, created_at: '2026-10-19T10:27:04Z' } as never, { website: K, nowMs: Date.parse('2026-10-20T10:00:00Z') });
+  const ids = v.serious.map((i) => i.id);
+  ok(!ids.includes('near_duplicate_pages'), 'the six "Post N Headline" placeholder posts are counted once: no "near enough the same" issue for them');
+  ok(ids.indexOf('location_unclear') < ids.indexOf('vs_key_page_basics') && ids[0] === 'ct_placeholder_content', 'within a severity, the town / areas issue is said before the heading / description issue');
+  ok(v.serious.find((i) => i.id === 'ct_placeholder_content')?.pages.join() === posts.join() && v.serious.find((i) => i.id === 'location_unclear')?.pages[0] === K, 'every issue keeps its stored pages (the evidence)');
+  const real = { ...stored, issues: [iss('near_duplicate_pages', 'medium', 4, [K + 'a/', K + 'b/'])] };
+  ok(websiteCheckFor({ result: { websiteCheck: real } as never, created_at: '2026-10-19T10:27:04Z' } as never, { website: K, nowMs: Date.parse('2026-10-20T10:00:00Z') }).serious.some((i) => i.id === 'near_duplicate_pages'), 'real near-duplicate pages (no placeholder posts) are still an issue');
+}
+
 console.log(failures ? `\n${failures} FAILED` : '\nall passed');
 process.exit(failures ? 1 : 0);

@@ -26,6 +26,12 @@ export const FACT_SHEET_AGREEMENT = 'v5';
 
 /** Paul's guarantee line, word for word. v5 5.4: the £99 initial payment back if the count is not higher. */
 export const GUARANTEE_LINE = 'We improve AI visibility or you get your money back.';
+/** THE CONFIDENCE LINE (Paul, 2026-10-20): said only when they ask about price, whether it works, "the catch", who we are,
+ *  the guarantee, or sound unsure, and in the voice note. NEVER in the first pitch. The guarantee words are GUARANTEE_LINE
+ *  verbatim; never "100%" or "if I fail". The refund is the £99 first payment (v5 5.4, GUARANTEE_REFUND). */
+export const CONFIDENCE_LINE = `I'm confident enough in it that it's backed by a guarantee: ${GUARANTEE_LINE.charAt(0).toLowerCase()}${GUARANTEE_LINE.slice(1)} We re-run the same questions after ${REMEASURE_WEEKS_STANDARD} weeks to check.`;
+/** What the guarantee pays back (v5 5.4). */
+export const GUARANTEE_REFUND = `If we haven't improved your AI visibility at the ${REMEASURE_WEEKS_STANDARD}-week re-check, you get your £${FINDABLE_SETUP_PRICE_GBP} back.`;
 
 /** The ONE way a reply names the measured engines. v5 2.2 says "ChatGPT and Google AI / Gemini"; the drafter says
  *  "Gemini" (never "google ai"). See FACT_SHEET_CONFLICTS: engine-wording. */
@@ -58,7 +64,7 @@ export const FACT_SHEET: readonly Fact[] = [
   { topic: 'cancel', status: 'live', source: 'v5 4.2, 5.5', paulLooks: true,
     say: `It's a ${FINDABLE_BUILD_TOTAL_PAYMENTS} payment minimum, so ending early leaves those payments due. The exception is the guarantee: if the number hasn't gone up at the re-check you can claim your ${gbp(FINDABLE_SETUP_PRICE_GBP)} back and it ends there.` },
   { topic: 'guarantee', status: 'live', source: 'v5 5.2 to 5.5',
-    say: `${GUARANTEE_LINE} We count how many AI answers name you before we start and again after ${REMEASURE_WEEKS_STANDARD} weeks on the same questions. If that number hasn't gone up, you get your ${gbp(FINDABLE_SETUP_PRICE_GBP)} back.` },
+    say: `${GUARANTEE_LINE} We count how many AI answers name you before we start and again after ${REMEASURE_WEEKS_STANDARD} weeks on the same questions. ${GUARANTEE_REFUND}` },
   { topic: 'measurement', status: 'live', source: 'v5 2.2, 5.2, 5.3',
     say: `We ask 20 real customer style questions, 3 times each, on ${ENGINE_WORDING}, then ask the same ones again about ${REMEASURE_WEEKS_STANDARD} weeks later.` },
   { topic: 'domain', status: 'live', source: 'v5 9.1',
@@ -110,6 +116,8 @@ export const CASE_STUDIES: readonly CaseStudy[] = [
 export function caseStudyUsable(c: CaseStudy): boolean {
   return c.status === 'approved' && !!c.permission?.trim() && !!c.evidence?.trim() && !!c.quote?.trim();
 }
+/** The approved case studies a draft may use. Empty today: a draft says nothing about past results. */
+export const usableCaseStudies = (): CaseStudy[] => CASE_STUDIES.filter(caseStudyUsable);
 
 /* ── what the sheet means for the drafter ─────────────────────────────────────────────────────── */
 

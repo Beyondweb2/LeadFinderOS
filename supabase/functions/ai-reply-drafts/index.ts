@@ -34,9 +34,10 @@ import {
   type AiReplyContext, type AiReplyWhy,
 } from "../../../src/lib/aiReplyDraft.ts";
 import { pickMove, inboundLabel, type MoveEvidence, type MoveInput, type MovePlan, type MoveThreadMsg } from "../../../src/lib/replyMove.ts";
-import { FACT_SHEET_VERSION } from "../../../src/lib/offerFactSheet.ts";
+import { CONFIDENCE_LINE, FACT_SHEET_VERSION } from "../../../src/lib/offerFactSheet.ts";
 import { WAITING_PITCH_STATUSES } from "../../../src/lib/auditPitchRule.ts";
 import { selectFindings } from "../../../src/lib/coldCallPlaybook.ts";
+import { plainIssueTitle } from "../../../src/lib/websiteCheck.ts";
 import { conversationEngine, draftNames } from "../../../src/lib/draftEvidence.ts";
 import { warmStage } from "../../../src/lib/warmStage.ts";
 import { serviceWindowState } from "../../../src/lib/serviceWindow.ts";
@@ -47,7 +48,7 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-internal-job, x-cron-secret",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
   /* The deploy marker: only this build answers with it. */
-  "x-ai-reply-drafts": "2026-10-20b-needs-you",
+  "x-ai-reply-drafts": "2026-10-20c-first-reply-pitch",
 };
 const json = (b: unknown, s = 200) => new Response(JSON.stringify(b), { status: s, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 const str = (v: unknown) => (typeof v === "string" ? v.trim() : "");
@@ -137,6 +138,13 @@ async function aiSentSinceWin(service: Service, lead: LeadRow, thread: MsgRow[])
   return count ?? 0;
 }
 
+/** The "AI handles replies" switch. ⛔ Fails toward ON: if it cannot be read, the bot answer never claims a person sent it. */
+async function aiSwitchOn(service: Service): Promise<boolean> {
+  const { data, error } = await service.from("whatsapp_outreach_state").select("ai_handles_replies").eq("id", 1).maybeSingle();
+  if (error || !data) return true;
+  return data.ai_handles_replies === true;
+}
+
 /** Everything the draft may say — from the audit, the crawl and the conversation. Nothing else. */
 async function buildContext(service: Service, lead: LeadRow, thread: MsgRow[], inbound: MsgRow): Promise<{ ctx: AiReplyContext; findingsNote: string | null; input: MoveInput }> {
   const audit = await loadAuditContext(service, lead).catch(() => null);
@@ -165,6 +173,11 @@ async function buildContext(service: Service, lead: LeadRow, thread: MsgRow[], i
     hasWebsite: found.status !== "no_website" && found.status !== "profile",
     ownerName: null,
     foundOnGoogle: !!lead.place_id,
+    /* The ONE website check: its state and the serious issues' plain titles, worst first (the first-reply pitch). */
+    site: { state: found.check.state, issues: found.check.serious.map(plainIssueTitle),
+      evidence: found.check.serious.map((i) => ({ title: plainIssueTitle(i), pages: i.pages })) },
+    /* The bot answer follows the AI auto-reply switch; an unreadable switch reads as ON (never claim a person sent it). */
+    aiAutoReplies: await aiSwitchOn(service),
   };
   const mt = moveThread(thread, inbound);
   const input: MoveInput = {
@@ -188,6 +201,11 @@ async function buildContext(service: Service, lead: LeadRow, thread: MsgRow[], i
 /** Write a draft for this context, inside the per-draft cost cap. One retry if the checks warn and the cap allows. */
 async function writeDraft(service: Service | null, ctx: AiReplyContext, opts: { temperature: number; avoid?: string | null; userId: string | null; triggerSource: string; model?: string; capUsd?: number; log?: boolean }) {
   const model = opts.model ?? AI_REPLY_MODEL; const cap = opts.capUsd ?? AI_REPLY_DRAFT_MAX_USD;
+  /* CODE WROTE EVERY WORD (the first-reply pitch, replyMove.ts): no model call, nothing spent, nothing reworded. */
+  if (ctx.plan.fixedText) {
+    const reply = fallbackAiReply(ctx);
+    return { reply, problems: checkAiReply(reply, ctx), usedFallback: false, modelError: null as string | null, calls: 0, promptTokens: 0, completionTokens: 0, spentUsd: 0, model: "code" };
+  }
   let spent = 0; let calls = 0; let promptTokens = 0; let completionTokens = 0;
   let prompt = buildAiReplyPrompt(ctx) + (opts.avoid ? `\n\nWRITE A DIFFERENT VERSION FROM THIS ONE:\n"""${opts.avoid.slice(0, 800)}"""` : "");
   let reply: string | null = null; let problems: string[] = []; let modelError: string | null = null;
@@ -217,9 +235,12 @@ function whyOf(ctx: AiReplyContext, findingsNote: string | null, w: { problems: 
     competitors: e.competitors, named: e.named, engineWords: e.trade ? e.engineWords : null,
     hookAlreadySent: e.hookAlreadySent,
     findings: e.findings.map((f) => f.title), findingsNote,
+    /* The website issues the draft could name, each with the pages it was read on (the stored evidence). */
+    siteIssues: e.site?.evidence ?? null, aiAutoReplies: e.aiAutoReplies === true,
     factSheetVersion: FACT_SHEET_VERSION,
     problems: w?.problems ?? [], usedFallback: w?.usedFallback ?? false, model: w?.model,
     costUsd, calls, styleSource: BEST_TEMPLATE_STYLE_NOTE,
+    closer: p.closer ?? (p.question ? "question" : null), confidence: p.confidence ? CONFIDENCE_LINE : null,
     ...extra,
   };
 }
@@ -546,6 +567,7 @@ interface Fixture {
   findings: Array<{ title: string; said: string }>;
   thread: Array<{ from: "us" | "them"; text: string; templateName: string | null; messageType: string }>;
   aiSentSinceWin?: number; suppressed?: boolean; foundOnGoogle?: boolean;
+  site?: MoveEvidence["site"]; aiAutoReplies?: boolean;
 }
 
 function fixtureContext(f: Fixture): AiReplyContext {
@@ -557,7 +579,7 @@ function fixtureContext(f: Fixture): AiReplyContext {
     engineWords: conversationEngine(sent, f.audit?.engine ?? null).words,
     named: f.audit && f.audit.validAnswers > 0 ? { named: f.audit.namedAnswers, valid: f.audit.validAnswers } : null,
     competitors: draftNames(f.audit?.competitors ?? [], f.town), hookAlreadySent: hook, findings: f.findings ?? [],
-    hasWebsite: f.hasWebsite, ownerName: f.ownerName, foundOnGoogle: f.foundOnGoogle ?? true,
+    hasWebsite: f.hasWebsite, ownerName: f.ownerName, foundOnGoogle: f.foundOnGoogle ?? true, site: f.site ?? null, aiAutoReplies: f.aiAutoReplies === true,
   };
   const plan = pickMove({ thread, suppressed: f.suppressed === true, aiSentSinceWin: f.aiSentSinceWin ?? 0, evidence });
   const latest = [...thread].reverse().find((m) => m.from === "them");
@@ -577,7 +599,7 @@ async function handleDryRun(service: Service, actor: Actor | null, body: Record<
       const ctx = fixtureContext(f);
       const p = ctx.plan;
       const w = p.stop ? null : await writeDraft(null, ctx, { temperature: 0.5, userId: null, triggerSource: "dry_run", model, capUsd: DRY_RUN_DRAFT_MAX_USD, log: false });
-      results.push({ id: f.id, move: p.move, read: p.read, needs_you: p.needsYou?.reason ?? null, stop: p.stop, auto_draft: p.autoDraft, label: p.label, points: p.points, question: p.question,
+      results.push({ id: f.id, move: p.move, closer: p.closer ?? null, confidence: !!p.confidence, site_issues: ctx.evidence.site?.evidence ?? null, read: p.read, needs_you: p.needsYou?.reason ?? null, stop: p.stop, auto_draft: p.autoDraft, label: p.label, points: p.points, question: p.question,
         draft: w?.reply ?? null, warnings: w?.problems ?? [], used_fallback: w?.usedFallback ?? false, model_error: w?.modelError ?? null, cost_usd: w?.spentUsd ?? 0 });
     }
     return json({ ok: true, dry_run: true, saved: false, model, fact_sheet: FACT_SHEET_VERSION, results });

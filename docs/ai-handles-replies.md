@@ -153,3 +153,34 @@ Tests: `scripts/reply-move.test.ts` (57/57 hand-over decisions), `offer-fact-she
 The one hand-over "miss" is deliberate: "Only got website up properly last week" goes to Needs you (unsure), not a guessed draft.
 Decision: keep gpt-4o-mini. gpt-4.1 reads a little warmer but is ~13× the cost and was not needed to pass.
 Re-run: `action: 'dry_run'` with `fixtures` (8 per call) and `model` (`DRY_RUN_MODELS`).
+
+## 2026-10-20 — the first-reply pitch (Paul)
+
+Branch `feat/drafter-first-reply-pitch`. Cause (KSM Driving Tuition): its opener was `initial_contact_short` with no stored
+text, `wasOpener` knew only `initial_contact` / `initial_opener_v2`, so "Yes it is" read as a yes to a voice-note offer and the
+draft said "I'll send a short voice note now". Every `initial_*` template is now the opener.
+
+- **`first_reply_pitch`** (`replyMove.ts` `firstReplyPitch`, code-built word for word via `plan.fixedText`; the model is not
+  asked): "I asked <engine> for <a trade in town> and it mentioned <rivals>." → "AI is recommending your competitors instead. I
+  looked into why this might be happening and found … on your website: <up to 3 serious issue titles>." (or the no-website
+  line) → "Anyone asking AI that question gets pointed to them instead of you." → "Would you rather those customers came to you?".
+  Clean / running / failed check: line 1 ends "not you", no "looked into why". Named in more than a third (or no counts): the
+  neutral `auditLine`, no closer, ending on the next step's question.
+- **Next steps**: after the closer → `pitch_next` "Are you with an agency, or do you manage the website yourself? Either way I can
+  send a quick voice note on what I found." (no website: "Do you have a website I've missed?"). "I do it myself" → "Nice one. Ok
+  if I send a quick voice note on what I found?"; any other answer → thanks + the same question. Never "now" / "shortly".
+- **Confidence line** `offerFactSheet.ts` `CONFIDENCE_LINE` (the sheet's `GUARANTEE_LINE` verbatim): price, guarantee / "does it
+  work", "what's the catch", "who is this", unsure, and the voice note script. Never in the first pitch. Guarantee reply ends
+  `GUARANTEE_REFUND`.
+- **Bot answer** follows the "AI handles replies" switch (`aiSwitchOn`, fails toward ON): OFF "I read and send every one
+  myself"; ON "some replies on here may be automated". The checker warns on the first with the switch on.
+- **Checker** adds: timing promises, "I was looking for", past results with no approved case study, "100%" / "if I fail".
+- **Recorded on every draft** (`why`): `move`, `closer`, `confidence`, `siteIssues` (titles + pages), `aiAutoReplies`. Sent
+  drafts link to `whatsapp_messages` by `sent_message_id`. No migration.
+- **Website check order** (`websiteCheck.ts` `SAY_FIRST`): within a severity the town / areas issue comes before headings.
+  Placeholder posts were already counted once (`placeholderPagesOnce`); KSM's live row reads placeholder → Norwich → headings.
+  There is no "generic page titles" check in the crawl today.
+
+Preview: deployed dry run, gpt-4o-mini, 67 fixtures (57 + KSM + no website / zero issues / running / failed / above a third /
+the follow-up steps), 0 warnings, $0.012; the changed ones re-run after Paul's edits, 0 warnings. Tests: `reply-move.test.ts`
+§6–8, `website-check.test.ts` §6, `ai-reply-drafts.test.ts`, `crawl-in-audit-callscreen.test.ts`.

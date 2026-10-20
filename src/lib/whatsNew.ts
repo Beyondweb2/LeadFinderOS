@@ -22,6 +22,23 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-20-first-reply-pitch', date: '2026-10-20', title: 'WhatsApp Draft reply: a "yes it is" now gets the full pitch', audience: 'all',
+    body: 'When someone only confirms who they are, Draft reply now writes the full pitch: what AI said for their trade and town, up to three things the website check found (or that there is no website), and "Would you rather those customers came to you?". The agency question and the voice note offer come in the next reply. Nothing is sent without Approve & send.',
+    report: {
+      added: [
+        'The first-reply pitch, written word for word from the audit and the website check. Each issue keeps the pages it was read on.',
+        'The confidence line on price, "does it work", the guarantee, "what\'s the catch" and "who is this", and in the voice note script. It is never in the first pitch.',
+        'Warnings when a draft promises timing ("now", "shortly"), claims past results, or says "100%" or "if I fail".',
+      ],
+      changed: [
+        'Draft reply no longer says "I\'ll send a short voice note now". It asks "Ok if I send a quick voice note on what I found?" and never promises when.',
+        'The "is this a bot?" answer says "I read and send every one myself" only while AI handles replies is off. With it on, it says some replies may be automated.',
+        'The guarantee reply ends "If we haven\'t improved your AI visibility at the 4-week re-check, you get your £99 back."',
+        'Website issues: the site not saying the town or areas it covers is listed before a missing heading or description.',
+      ],
+      removed: ['The voice note offer in the first reply after "yes it is".'],
+      effect: 'A prospect who says "yes it is" gets the real reason to talk straight away, and every claim in it comes from their own audit and site.',
+    } },
   { id: '2026-10-20-call-tab-layout', date: '2026-10-20', title: 'Call tab: "What we do" as five numbered steps, and the AI stats in their own card', audience: 'all',
     body: '"What we do" on the Call tab is now five short numbered steps with the key words in bold, so you can glance at it mid-call. The 37% and 24% figures have their own card with the source underneath.',
     report: {
