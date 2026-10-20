@@ -41,6 +41,7 @@ const QUICK_CHECK_CONCURRENCY = 1;
 import { CALL_SCREEN_CRAWL_SOURCE, CALL_SCREEN_CRAWL_WINDOW_MS, callScreenCrawlRefusal, isCallScreenRetry } from "../../../src/lib/callScreenCrawl.ts";
 import { leadCrawlWriteDecision, storedCrawlFailed, STORED_CRAWL_STATE_COLUMNS } from "../../../src/lib/crawlWriteRule.ts";
 import { activeJobFor, createCrawlJob, jobCounts, kickCrawlWorker } from "../_shared/crawl-job.ts";
+import { questionTownForLead } from "../_shared/question-town.ts";
 import { crawlPageCapFor, prospectCrawlReuse, PROSPECT_CRAWL_PAGE_CAP } from "../../../src/lib/prospectCrawl.ts";
 import { AUTO_DEEP_MAX_RUNNING, summariseWebsiteCheck } from "../../../src/lib/websiteCheck.ts";
 import { insightsFromFetchedPages } from "../../../src/lib/salesInsightsInline.ts";
@@ -362,12 +363,13 @@ Deno.serve(async (req) => {
     const profile = STANDARD_CRAWL;
     const requestedFrom = mode === "full" ? cleanRequestSource(body?.requested_from) : null;
 
-    // lead_id → the lead's website + town (search_location, then address).
+    // lead_id → the lead's website + town: the town its audit question asked (2026-10-20, _shared/question-town.ts),
+    // then search_location, then address.
     if (leadId && !rawUrl) {
       const { data: lead } = await service
         .from("outreach_leads").select("website, search_location, address").eq("id", leadId).maybeSingle();
       rawUrl = (lead?.website ?? "").toString().trim();
-      if (!town) town = (lead?.search_location ?? lead?.address ?? "").toString().trim();
+      if (!town) town = ((await questionTownForLead(service, leadId)) ?? lead?.search_location ?? lead?.address ?? "").toString().trim();
     }
     // Standalone/manual audits have no lead row; use the audit snapshot directly.
     if (auditId && !rawUrl) {
@@ -636,6 +638,8 @@ Deno.serve(async (req) => {
       thinPages = readableSamples.filter((r) => wordCount(r.html) < THIN_WORDS && ["service", "location"].includes(crawlPageKind(r.url))).length;
       if (!cr.flagged && homeWords < THIN_WORDS) { thinPages++; thinPageUrls.unshift(home.url); }
       let leadRow: Record<string, unknown> | null = null;
+      /* The question's town (set above), never an address that fell through as the town. */
+      const insightTown = town && town.split(/\s+/).length <= 4 && !/\d/.test(town) ? town : null;
       try {
         leadRow = leadId
           ? (await service.from("outreach_leads").select("business_name, derived_town, category, search_keyword, services_included").eq("id", leadId).maybeSingle()).data as Record<string, unknown> | null
@@ -647,7 +651,7 @@ Deno.serve(async (req) => {
           knownUrls: pool,
           lead: {
             name: (leadRow?.business_name as string | null) ?? null,
-            town: ((leadRow?.derived_town as string | null) || town || null),
+            town: (insightTown || (leadRow?.derived_town as string | null) || null),
             trade: ((leadRow?.category as string | null) || (leadRow?.search_keyword as string | null)) ?? null,
             services: Array.isArray(leadRow?.services_included) ? (leadRow!.services_included as unknown[]).filter((x): x is string => typeof x === "string") : [],
           },
@@ -668,7 +672,7 @@ Deno.serve(async (req) => {
           sitemapOnly: null,
           lead: {
             name: (leadRow?.business_name as string | null) ?? null,
-            town: ((leadRow?.derived_town as string | null) || town || null),
+            town: (insightTown || (leadRow?.derived_town as string | null) || null),
             trade: ((leadRow?.category as string | null) || (leadRow?.search_keyword as string | null)) ?? null,
           },
           partial: true,

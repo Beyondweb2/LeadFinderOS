@@ -228,6 +228,11 @@ Full history and reasoning: `docs/business-and-offer.md`, `docs/measurement.md`.
   theirs and is never taken over or down. Where the route is known, name ONLY its count; pre-choice
   surfaces name both. Do not invent penalties or exit rights. The guarantee applies on top, identical on
   both. ⛔ The £9.99 hosting add-on is RETIRED; only a LEGACY row still carries `website_addon` alone.
+- ⛔ **The Coverage town is the question's town** (2026-10-20, `docs/coverage-town-strict.md`): "in the town" is ONE rule,
+  `src/lib/inTown.ts` `inTownVerdict` (run by search-leads on every town-only answer); Find Leads never adds a result judged
+  outside (`Index.tsx` `handleBulkAdd`) and saves `outreach_leads.coverage_town` only for one judged IN; create-ai-audit asks
+  that town with no distance cap; never a bare "London" when the postcode gives the area (else `BROAD_TOWN_NOTE`); the crawl's
+  town is `_shared/question-town.ts` (the newest audit's asked town).
 - **Coverage Found vs Added** (2026-09-29, `docs/state-coverage-market.md` last section): per trade+town, FOUND = distinct
   businesses the recorded search runs RETURNED (`search_history.found_keys`, written when the run happens,
   BEFORE the page's exclusions), ADDED = those then successfully inserted (`added_keys`, written by

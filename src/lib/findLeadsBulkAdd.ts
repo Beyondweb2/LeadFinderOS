@@ -24,6 +24,8 @@ import { businessKey, isWithoutWebsite } from './websiteStatusClass.ts';
 import { salesAddPayload, type PlaceDetailsForAdd, type SearchResultForAdd } from './salesAddPayload.ts';
 import { toWhatsAppDigits } from './waNumber.ts';
 import { mobileMarketOf } from './outreachMarkets.ts';
+import { verifiedInSearchedTown } from './inTown.ts';
+import { cleanTypedTown } from './typedTown.ts';
 
 /** Rows per coverage_add_leads call — the SQL function's own ceiling (v_max). */
 export const COVERAGE_ADD_MAX_ROWS = 500;
@@ -76,6 +78,14 @@ export interface BulkAddLead extends SearchResultForAdd {
   name: string;
   websiteStatus?: string | null;
   searchRunId?: string;
+  townCheck?: { inTown: boolean | null } | null;
+}
+
+/** The Coverage town saved on the lead (2026-10-20): the town it was searched in, ONLY when search-leads judged it IN
+ *  that town (src/lib/inTown.ts). The audit then asks about it with no distance cap. Anything else: null. */
+export function coverageTownFor(lead: BulkAddLead, town: string | null): string | null {
+  if (!verifiedInSearchedTown(lead)) return null;
+  return cleanTypedTown(town).split(',')[0].trim() || null;
 }
 
 /** What the search behind a result says: the trade, the town it was searched in, its country. */
@@ -94,6 +104,7 @@ export function addRowFor(lead: BulkAddLead, ctx: AddContext, details: PlaceDeta
     search_run_id: lead.searchRunId ?? null,
     search_key: key || null,
     without_website: isWithoutWebsite(lead.websiteStatus ?? null),
+    coverage_town: coverageTownFor(lead, ctx.town),
   };
 }
 

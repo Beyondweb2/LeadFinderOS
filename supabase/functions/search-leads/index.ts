@@ -8,6 +8,9 @@ import { qualifierInfo, resolveGeoBias, pickedCountryKeySuffix } from '../_share
 import { generateCacheKey } from '../_shared/search-cache-key.ts';
 import { countryFromAddress } from '../../../src/lib/leadCountry.ts';
 import { foundRecord } from '../../../src/lib/websiteStatusClass.ts';
+import { inTownVerdict, townKey, type InTownVerdict } from '../../../src/lib/inTown.ts';
+import { cleanTypedTown } from '../../../src/lib/typedTown.ts';
+import { datasetPlace } from '../../../src/lib/malaysiaPlaces.ts';
 
 // ═══════════════════════════════════════════════
 // CORS
@@ -463,6 +466,13 @@ interface SearchLead {
      age needs it: a result is looked up on Companies House only when it is a UK address
      (isCompaniesHouseTarget), and without it NO search result ever was. Absent on rows cached before. */
   address?: string;
+  /* WHERE IT IS (2026-10-20). places.location: an Essentials field, FREE here (the mask already bills at Text Search
+     Enterprise for websiteUri). The in-the-town rule's distance step reads it. Absent on rows cached before. */
+  lat?: number;
+  lng?: number;
+  /* IN THE SEARCHED TOWN? (2026-10-20, src/lib/inTown.ts). Set on every town-only answer, fresh or cached, and
+     recomputed each time so a rule change applies at once. outsideTown (Google's boundary) is kept beside it. */
+  townCheck?: InTownVerdict;
 }
 
 function classifyWebsite(websiteUri: string | null | undefined): { status: SearchLead['websiteStatus']; confidence: number; reason: string } {
@@ -511,7 +521,7 @@ async function textSearchPlaces(
   let pageToken: string | undefined;
   const MAX_PAGES = Math.max(1, maxPages);
   const ENDPOINT = 'https://places.googleapis.com/v1/places:searchText';
-  const FIELD_MASK = 'places.id,places.displayName,places.googleMapsUri,places.websiteUri,places.primaryType,places.primaryTypeDisplayName,places.formattedAddress,nextPageToken';
+  const FIELD_MASK = 'places.id,places.displayName,places.googleMapsUri,places.websiteUri,places.primaryType,places.primaryTypeDisplayName,places.formattedAddress,places.location,nextPageToken';
   // Google Places API (New) max radius is 50,000m
   const clampedRadius = Math.min(radius, 50000);
 
@@ -627,6 +637,8 @@ async function textSearchPlaces(
         primaryType: place.primaryType || undefined,
         primaryTypeLabel: place.primaryTypeDisplayName?.text || undefined,
         address: place.formattedAddress || undefined,
+        lat: typeof place.location?.latitude === 'number' ? place.location.latitude : undefined,
+        lng: typeof place.location?.longitude === 'number' ? place.location.longitude : undefined,
       });
 
       if (status === 'NO_WEBSITE') {
@@ -739,7 +751,7 @@ async function expandSearch(
 
     try {
       const ENDPOINT = 'https://places.googleapis.com/v1/places:searchText';
-      const FIELD_MASK = 'places.id,places.displayName,places.googleMapsUri,places.websiteUri,places.primaryType,places.primaryTypeDisplayName,places.formattedAddress,nextPageToken';
+      const FIELD_MASK = 'places.id,places.displayName,places.googleMapsUri,places.websiteUri,places.primaryType,places.primaryTypeDisplayName,places.formattedAddress,places.location,nextPageToken';
       const clampedRadius = Math.min(radius, 50000);
 
       // Fetch 1 page per expansion centre to limit API spend
@@ -798,6 +810,8 @@ async function expandSearch(
             primaryType: place.primaryType || undefined,
             primaryTypeLabel: place.primaryTypeDisplayName?.text || undefined,
             address: place.formattedAddress || undefined,
+        lat: typeof place.location?.latitude === 'number' ? place.location.latitude : undefined,
+        lng: typeof place.location?.longitude === 'number' ? place.location.longitude : undefined,
             isExpanded: true,
           });
           totalNoWebsite++;
@@ -831,6 +845,43 @@ function sanitizeError(error: unknown): { message: string; status: number } {
     }
   }
   return { message: 'An unexpected error occurred. Please try again.', status: 500 };
+}
+
+/* ══ IN THE SEARCHED TOWN (2026-10-20, src/lib/inTown.ts) ════════════════════════════════════════════════════════
+   A town-only search marks every result with the in-the-town verdict; Find Leads hides the ones outside and never adds
+   them. The centre is the searched town's own geocode (geocode_cache, which the search itself already wrote), the size
+   its population (uk_towns for the UK, the bundled GeoNames list for Malaysia). Never fatal: on any failure the
+   results go out unmarked and the page falls back to Google's boundary (outsideTown). */
+async function attachTownChecks(
+  leads: SearchLead[], location: string, country: string | undefined, apiKey: string, debug: DebugMeta,
+  // deno-lint-ignore no-explicit-any -- loose-typed to avoid supabase-js generic 'never' friction
+  serviceClient: any,
+): Promise<SearchLead[]> {
+  const town = cleanTypedTown(location).split(',')[0].trim();
+  if (!town || leads.length === 0) return leads;
+  try {
+    let centre: { lat: number; lng: number } | null = null;
+    try {
+      const geo = await geocodeLocation(location, apiKey, debug, serviceClient, true, country);
+      centre = { lat: geo.lat, lng: geo.lng };
+    } catch { centre = null; }
+    let population: number | null = null;
+    if (country === 'Malaysia') {
+      const hit = datasetPlace(town);
+      population = hit && hit !== 'ambiguous' ? hit.population : null;
+    } else {
+      const { data } = await serviceClient.from('uk_towns').select('name, population');
+      const hits = ((data ?? []) as Array<{ name: string; population: number | null }>).filter((r) => townKey(r.name) === townKey(town));
+      population = hits.length === 1 ? hits[0].population : null;
+    }
+    return leads.map((l) => ({
+      ...l,
+      townCheck: inTownVerdict({ town, country: country ?? 'UK', address: l.address ?? null, lat: l.lat ?? null, lng: l.lng ?? null, centre, population }),
+    }));
+  } catch (e) {
+    console.warn('[TOWN-CHECK] not applied (results unmarked):', e instanceof Error ? e.message : e);
+    return leads;
+  }
 }
 
 function jsonResponse(body: unknown, status = 200, extraHeaders: Record<string, string> = {}): Response {
@@ -1078,7 +1129,7 @@ async function fetchTile(
   keyword: string, lat: number, lng: number, radiusM: number, apiKey: string, debug: DebugMeta,
 ): Promise<SearchLead[]> {
   const ENDPOINT = 'https://places.googleapis.com/v1/places:searchText';
-  const FIELD_MASK = 'places.id,places.displayName,places.googleMapsUri,places.websiteUri,places.primaryType,places.primaryTypeDisplayName,places.formattedAddress,nextPageToken';
+  const FIELD_MASK = 'places.id,places.displayName,places.googleMapsUri,places.websiteUri,places.primaryType,places.primaryTypeDisplayName,places.formattedAddress,places.location,nextPageToken';
   const out: SearchLead[] = [];
   let pageToken: string | undefined;
 
@@ -1116,6 +1167,8 @@ async function fetchTile(
         primaryType: place.primaryType || undefined,
         primaryTypeLabel: place.primaryTypeDisplayName?.text || undefined,
         address: place.formattedAddress || undefined,
+        lat: typeof place.location?.latitude === 'number' ? place.location.latitude : undefined,
+        lng: typeof place.location?.longitude === 'number' ? place.location.longitude : undefined,
       });
     }
     pageToken = data.nextPageToken;
@@ -1452,8 +1505,10 @@ Deno.serve(async (req) => {
         });
       } catch {}
 
+      /* A cached town-only answer is marked afresh, so a rule change reaches it at once (src/lib/inTown.ts). */
+      const markedCached = townOnly && !region ? await attachTownChecks(cachedLeads, location, country, GOOGLE_MAPS_API_KEY, debug, serviceClient) : cachedLeads;
       return jsonResponse({
-        leads: isGated ? stripGatedFields(cachedLeads) : cachedLeads,
+        leads: isGated ? stripGatedFields(markedCached) : markedCached,
         totalFound: cachedLeads.length,
         searchId: crypto.randomUUID(),
         source: 'google',
@@ -1616,6 +1671,8 @@ Deno.serve(async (req) => {
       console.error('API usage logging failed (non-blocking):', e);
     }
 
+    /* Marked AFTER the cache store: the verdict is recomputed on every answer, never served stale from the cache. */
+    if (townOnly && !regionMeta) leads = await attachTownChecks(leads, location, country, GOOGLE_MAPS_API_KEY, debug, serviceClient);
     return jsonResponse({
       searchRunId,
       leads: isGated ? stripGatedFields(leads) : leads,

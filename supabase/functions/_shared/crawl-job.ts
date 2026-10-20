@@ -33,6 +33,7 @@ const PROSPECT_CRAWL_CONCURRENCY = 1;
 import { cleanCounts, decideFetchOutcome, frontierExhausted, type JobCounts } from "../../../src/lib/crawlJob.ts";
 import { buildContentTrust, pageObservations, type ContentTrust, type PageObs } from "../../../src/lib/contentTrust.ts";
 import { summariseWebsiteCheck } from "../../../src/lib/websiteCheck.ts";
+import { questionTownForLead } from "./question-town.ts";
 
 /** One page's content observations, or undefined if the analyser trips — never a failed page. */
 function contentObs(html: string, url: string, servedUrl: string, status: number): PageObs | undefined {
@@ -526,7 +527,8 @@ export async function finalizeCrawlJob(service: Client, jobId: string): Promise<
       const { data: l } = await service.from("outreach_leads").select("business_name, derived_town, category, search_keyword, services_included").eq("id", job.lead_id).maybeSingle();
       leadForInsights = { name: (l?.business_name as string | null) ?? null, trade: ((l?.category as string | null) || (l?.search_keyword as string | null)) ?? null, services: Array.isArray(l?.services_included) ? (l.services_included as unknown[]).filter((x): x is string => typeof x === "string") : [] };
       const fallbackTown = typeof home.town === "string" && home.town.trim().split(/\s+/).length <= 3 ? home.town : null;
-      lead = { name: (l?.business_name as string | null) ?? null, town: (l?.derived_town as string | null) ?? fallbackTown };
+      /* The town the audit question asked (2026-10-20), so "<town> is not mentioned" checks the question's town. */
+      lead = { name: (l?.business_name as string | null) ?? null, town: (await questionTownForLead(service, job.lead_id)) ?? fallbackTown ?? (l?.derived_town as string | null) ?? null };
     }
     const auditPages: SiteAuditPage[] = rows.map((r) => ({
       url: r.url, finalUrl: r.final_url ?? null, status: r.status, httpStatus: r.http_status ?? null, skipReason: r.skip_reason ?? null,
@@ -564,7 +566,7 @@ export async function finalizeCrawlJob(service: Client, jobId: string): Promise<
       if (job.lead_id) {
         const { data: l } = await service.from("outreach_leads").select("business_name, derived_town, category, search_keyword").eq("id", job.lead_id).maybeSingle();
         leadName = (l?.business_name as string | null) ?? null;
-        leadTown = (l?.derived_town as string | null) ?? leadTown;
+        leadTown = (await questionTownForLead(service, job.lead_id)) ?? leadTown ?? (l?.derived_town as string | null) ?? null;
         leadTrade = ((l?.category as string | null) || (l?.search_keyword as string | null)) ?? null;
       }
       contentTrust = buildContentTrust({

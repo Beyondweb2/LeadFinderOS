@@ -28,6 +28,12 @@ export interface Lead {
      town they were searched from — Keyworx Auto Locksmiths CORBY from a Wisbech search. A mark
      nobody can see is worse than no mark, because the search LOOKS town-scoped. */
   outsideTown?: boolean;
+  /** Where Google puts the business (places.location); absent on results cached before 2026-10-20. */
+  lat?: number;
+  lng?: number;
+  /** IN THE SEARCHED TOWN? (2026-10-20, src/lib/inTown.ts) — set by search-leads on every town-only answer. A result
+   *  judged outside is hidden behind one grey line and never added; null = not judged (outsideTown decides). */
+  townCheck?: { inTown: boolean | null; reason: string; area: string | null; km: number | null };
   /** The search_history row (search run) this result came from — so a later add is recorded against
    *  the run that found it (Coverage: Found vs Added). Absent on results not from a recorded run. */
   searchRunId?: string;

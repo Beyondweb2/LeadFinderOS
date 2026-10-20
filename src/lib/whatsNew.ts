@@ -22,6 +22,22 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-20-coverage-town-strict', date: '2026-10-20', title: 'Find Leads keeps to the town you searched, and the AI audit asks about that town', audience: 'all',
+    body: 'A "This town only" search (what Coverage uses) now checks each business is really in that town, from its address and where it is. Only those can be added, and the AI audit asks about that town. Inner-London businesses are asked about their own area (Tottenham, Pimlico), not just "London".',
+    report: {
+      added: [
+        'An in-town check on every "This town only" result: the post town, the London postcode area, or the distance from the town centre (scaled to the town\'s size).',
+        'The town a lead was found in is saved on the lead when it is confirmed in that town.',
+      ],
+      changed: [
+        'A business outside the searched town is not added, from the row button, Add all or Add all with emails.',
+        'New AI audits of those leads ask about the saved town, with no distance limit.',
+        'Leads with no saved town: a London address is asked about its area from the postcode (N17 is Tottenham). If only "London" is known, it stays London and the audit is marked a broad town.',
+        'The website check\'s "<town> is not mentioned on the site" now checks the same town the AI audit asked about.',
+      ],
+      removed: [],
+      effect: 'The audit and the call talk about the town the business is actually in, and you stop adding businesses from the next town over. Existing audits are unchanged.',
+    } },
   { id: '2026-10-20-first-reply-pitch', date: '2026-10-20', title: 'WhatsApp Draft reply: a "yes it is" now gets the full pitch', audience: 'all',
     body: 'When someone only confirms who they are, Draft reply now writes the full pitch: what AI said for their trade and town, up to three things the website check found (or that there is no website), and "Would you rather those customers came to you?". The agency question and the voice note offer come in the next reply. Nothing is sent without Approve & send.',
     report: {
