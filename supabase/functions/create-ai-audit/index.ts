@@ -6,6 +6,7 @@ import { SOURCES } from "../_shared/enrichment/sources.ts";
 import { resolveDerivedTown, pickAuditTown } from "../_shared/place-town.ts";
 import { buildTownIndex, lookupTownCentroid, checkTownDistance, type TownDistanceCheck } from "../_shared/town-distance.ts";
 import { ukGazetteerApplies } from "../../../src/lib/leadCountry.ts";
+import { areaFromAddress, isBroadTown, BROAD_TOWN_NOTE } from "../../../src/lib/inTown.ts";
 import { toWhatsAppNumber } from "../_shared/whatsapp-send.ts";
 import { DEFAULT_FIRST_REPLY_TEMPLATE, effectiveReplyMode, firstReplyTemplate, pitchEverSent } from "../_shared/auto-reply-rules.ts";
 import { pitchMayFollowAudit, pitchRefusalNote } from "../../../src/lib/auditPitchRule.ts";
@@ -911,14 +912,19 @@ Deno.serve(async (req) => {
           service.from("onboarding_responses").select("confirmed_location")
             .eq("lead_id", leadId).order("created_at", { ascending: false }).limit(1).maybeSingle(),
           resolveDerivedTown(service, leadId),
-          service.from("outreach_leads").select("search_location").eq("id", leadId).maybeSingle(),
+          service.from("outreach_leads").select("search_location, coverage_town, address").eq("id", leadId).maybeSingle(),
         ]);
+        const foundRow = foundRes?.data as { search_location?: string | null; coverage_town?: string | null; address?: string | null } | null;
         /* THE COVERAGE AREA THE LEAD WAS FOUND UNDER (Paul, 2026-10-20): outreach_leads.search_location, written by every
            Find Leads add. Preferred over Google's postal town ("London" for every London postcode, "Norwich" for a village
            17 km out) — but ONLY when the business is within the wrong-town guard's limit of it (checked below, real
            coordinates on both sides). Further than that, the searched town is where the Wisbech fault came from, so
            Google's town stands. A human-confirmed town always wins. */
-        const foundUnder = cleanTypedTown((foundRes?.data as { search_location?: string | null } | null)?.search_location ?? null);
+        const foundUnder = cleanTypedTown(foundRow?.search_location ?? null);
+        /* ⛔ THE COVERAGE TOWN (2026-10-20, src/lib/inTown.ts): the town Find Leads verified this business IN when it was
+           added (outreach_leads.coverage_town). It IS the question's town, with no distance cap. A broad one ("London")
+           is not used: the finer area from the address is (below). A human-confirmed town still wins. */
+        const coverageTown = cleanTypedTown(foundRow?.coverage_town ?? null);
         const picked = pickAuditTown({
           confirmedLocation: onbRes?.data?.confirmed_location ?? null,
           derivedTown: derived.town,
@@ -933,6 +939,11 @@ Deno.serve(async (req) => {
           locationText = ""; locationSource = "none";
         }
         townNote = derived.error;
+        let townFixed = false;
+        if (picked.source !== "confirmed" && coverageTown && !isBroadTown(coverageTown)) {
+          console.log("[create-ai-audit] lead " + leadId + ": Coverage town \"" + coverageTown + "\" (verified in town when added) used instead of \"" + locationText + "\"");
+          locationText = coverageTown; locationSource = "search"; townFixed = true;
+        }
 
         /* ⛔ THE WRONG-TOWN GUARD. Measured 2026-08-09: 31 of 44 measurable audits asked about a town
            more than 10 km from the business, up to 79 km; 28 of those reached a prospect and 20 were
@@ -945,7 +956,9 @@ Deno.serve(async (req) => {
            "Newcastle" or "Perth" would be measured to Newcastle upon Tyne / Perth, Scotland — ~16,000 km — and
            BLOCKED. Outside the UK there is no gazetteer, so the distance stays unchecked (`distance` null =
            "not checked", which blocks nothing), exactly as for a town missing from the gazetteer. */
-        if (!ukGazetteerApplies(country, derived.address)) {
+        if (townFixed) {
+          console.log(`[create-ai-audit] lead ${leadId}: distance not checked (Coverage town, verified in town when added)`);
+        } else if (!ukGazetteerApplies(country, derived.address)) {
           console.log(`[create-ai-audit] lead ${leadId}: distance not checked (not a UK lead — no gazetteer)`);
         } else {
           try {
@@ -974,6 +987,18 @@ Deno.serve(async (req) => {
             );
           } catch (e) {
             console.warn(`[create-ai-audit] distance check unavailable, not blocking: ${(e as Error).message}`);
+          }
+        }
+        /* ⛔ NEVER A BARE "LONDON" WHEN A FINER AREA IS KNOWN (2026-10-20): Google's post town for every inner-London
+           business. The postcode district names the area (N17 → Tottenham, src/data/londonPostcodeAreas.ts). Only "London"
+           possible: kept, and the audit is marked a broad town in location_note. */
+        if (picked.source !== "confirmed" && !townFixed && isBroadTown(locationText)) {
+          const finer = areaFromAddress(derived.address ?? foundRow?.address ?? null, country);
+          if (finer && !isBroadTown(finer)) {
+            console.log(`[create-ai-audit] lead ${leadId}: broad town "${locationText}" narrowed to "${finer}" from the postcode`);
+            locationText = finer; locationSource = "derived"; distance = null;
+          } else {
+            townNote = [townNote, BROAD_TOWN_NOTE].filter(Boolean).join(" · ");
           }
         }
         console.log(

@@ -93,7 +93,7 @@ ok(plainIssueTitle(once.issues[0]) !== 't', 'the placeholder issue has a plain l
 
 console.log('\n── 5. the audit town ──');
 const ca = read('../supabase/functions/create-ai-audit/index.ts');
-ok(/select\("search_location"\)/.test(ca) && /near\.verdict !== "block"/.test(ca) && /picked\.source !== "confirmed"/.test(ca), 'the found-under Coverage area is used when within the guard; a confirmed town still wins');
+ok(/select\("search_location(, coverage_town, address)?"\)/.test(ca) && /near\.verdict !== "block"/.test(ca) && /picked\.source !== "confirmed"/.test(ca), 'the found-under Coverage area is used when within the guard; a confirmed town still wins');
 
 console.log('\n── 6. polite crawling ──');
 ok(/QUICK_CHECK_CONCURRENCY = 1/.test(cc) && /robotsAllows\(rules/.test(cc), 'the quick check reads one page at a time and obeys robots.txt');

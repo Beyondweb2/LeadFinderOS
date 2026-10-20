@@ -28,6 +28,7 @@ import { useFindEmails } from '@/hooks/useFindEmails';
 import { useCheckedBusinesses } from '@/hooks/useCheckedBusinesses';
 import { useFindLeadsBulkAdd } from '@/hooks/useFindLeadsBulkAdd';
 import { addSummaryReasons, addSummaryTitle, SKIP_GROUP_WORDS, skipGroupOf, type AddProgress, type AddRowAnswer, type BulkAddLead } from '@/lib/findLeadsBulkAdd';
+import { outsideSearchedTown } from '@/lib/inTown';
 import { Flame, Zap, Search, MapPin, Info, Globe2, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { PageHeader } from '@/components/salesDash/primitives';
@@ -299,7 +300,10 @@ const Index = () => {
   const bulkAdd = useFindLeadsBulkAdd();
   /* "Adding 23 of 40" while a batch runs; null when idle. */
   const [addProgress, setAddProgress] = useState<AddProgress | null>(null);
-  const handleBulkAdd = useCallback(async (sel: Lead[], campaignId: string | null = activeCampaign) => {
+  const handleBulkAdd = useCallback(async (selAll: Lead[], campaignId: string | null = activeCampaign) => {
+    /* ⛔ ONE DOOR FOR EVERY ADD (2026-10-20): a result judged outside the town it was searched in is never added. */
+    const sel = selAll.filter((l) => !outsideSearchedTown(l));
+    if (sel.length === 0) return { added: 0, skipped: selAll.length, title: 'Nothing added', description: 'Outside the town that was searched.', rows: [] as AddRowAnswer[] };
     let res: Awaited<ReturnType<typeof bulkAdd>>;
     try {
       res = await bulkAdd(
@@ -430,7 +434,7 @@ const Index = () => {
       leads.filter(
         (l) =>
           (((searchEnrichment[l.id]?.email as string | undefined) ?? '').trim().length > 0) &&
-          !isInOutreach(l.name, l.googleMapsUrl),
+          !isInOutreach(l.name, l.googleMapsUrl) && !outsideSearchedTown(l),
       ),
     [leads, searchEnrichment, isInOutreach],
   );
