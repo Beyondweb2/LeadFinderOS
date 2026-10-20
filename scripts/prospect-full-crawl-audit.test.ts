@@ -539,7 +539,7 @@ console.log('\n── 14. cache reuse ──');
   ok(prospectCrawlReuse(row(60_000), { nowMs: now, websiteUrl: 'small.example', force: true, role: 'admin' }).reuse === false, '14. an admin may force any time');
   ok(mayForceRecrawl('sales', 3600_000) === false && mayForceRecrawl('admin', 0) === true, '14. the Re-crawl button follows the same rule');
   const src = read('supabase/functions/crawl-check/index.ts');
-  const reuseAt = src.indexOf('prospectCrawlReuse(savedRow'), probeAt = src.indexOf('const probes = await Promise.all');
+  const reuseAt = src.indexOf('prospectCrawlReuse(savedRow'), probeAt = src.indexOf('const probes = await mapPool');
   ok(reuseAt > 0 && reuseAt < probeAt, '14. crawl-check decides reuse BEFORE fetching anything');
   ok(/cached: true, job_id: reuse\.jobId/.test(src) && /activeJobFor\(service, leadId, homeUrl\)/.test(src), '14. a reuse answers cached with the saved job; a running job always wins');
   ok(!/sales_check|guardAction|guard_action|auditBudget|create-ai-audit/.test((read('src/lib/prospectCrawl.ts') + read('src/lib/siteAudit.ts')).replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '')), '14. crawling touches no AI-check allowance, audit budget or guard');

@@ -14,6 +14,7 @@
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 import { HOUSE_STYLE_EXAMPLE, SALES_STYLE_RULES, salesStyleProblems, searchFillerCount } from '../src/lib/salesStyle.ts';
 import { buildColdCallPlaybook, type PlaybookInput } from '../src/lib/coldCallPlaybook.ts';
+import { NO_WEBSITE_SPOKEN } from '../src/lib/callScript.ts';
 import { VOICE_NOTE_SYSTEM_PROMPT, checkVoiceNoteScript, shortVoiceNote, type VoiceNoteEvidence, type VoiceNoteSite } from '../src/lib/voiceNoteScript.ts';
 import { REPLY_SYSTEM_PROMPT, buildReplyContext, fallbackReply } from '../src/lib/warmReply.ts';
 import { RESEARCH_SYSTEM_PROMPT } from '../src/lib/warmLeadResearch.ts';
@@ -120,7 +121,7 @@ for (const t of TRADES) {
   ok(script.startsWith('Hi mate, I was looking for ' + t.spoken + ' in ' + t.town + ', so I asked ') && / and it mentioned /.test(script) && !/reliable|who can come today|\bUK\b/.test(script), t.trade + ': the search is said plainly ("' + t.spoken + ' in ' + t.town + '"), not "reliable … who can come today"');
   ok(t.rivals.slice(0, 3).every((r) => script.includes(r)) && !script.includes('Fourth Name'), t.trade + ': exactly the first three competitors from the evidence, no more');
   ok(!/undefined|null|\{\{|\[[a-z ]+\]|NaN/.test(said), t.trade + ': no placeholder or missing value leaks into the words');
-  ok(/Gemini|ChatGPT/.test(script) && !/Google AI(?! Overview)/.test(script), t.trade + ': the engine is said as the product says it (Gemini since 2026-10-13, an old "Google AI" label too)');
+  ok(/Gemini|ChatGPT/.test(script) && !/Google AI(?! Overview)/.test(script.replace(NO_WEBSITE_SPOKEN, '')), t.trade + ': the engine is said as the product says it (Gemini since 2026-10-13, an old "Google AI" label too; Paul’s no-website line names both, 2026-10-20)');
 
   // LinkedIn and email: the SAME facts, written for the channel.
   const { linkedin, email } = p.messages;

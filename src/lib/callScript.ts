@@ -73,8 +73,12 @@ export const ISSUES_FOUND_MANY_LINE = 'I looked into why this could be happening
 export const ISSUES_FOUND_ONE_LINE = 'I looked into why this could be happening and I found an issue with your site that could be preventing you from being recommended.';
 /** The rep's note while the crawl is still running (the call screen's Website crawl section says "Checking the website…"). */
 export const CHECKING_NOTE = 'The website is being checked now. The website line appears here when it is done; until then say nothing about the site.';
-/** The rep's note when there is no website check to go on. Replaces "Website not checked yet. No usable website check …" (2026-10-19). */
-export const NOT_CHECKED_NOTE = 'The website has not been checked, so say nothing about the site. Keep to the AI result.';
+/** The rep's note when there is no website check to go on. Since 2026-10-20 a missing check is being run (the call screen
+ *  starts it), so this is only for a check that could not be made. */
+export const NOT_CHECKED_NOTE = "The website couldn't be checked, so say nothing about the site. Keep to the AI result.";
+/** THE NO-WEBSITE LINE (Paul, 2026-10-20), said on the call and in the voice note. ⛔ Never "harming" or "can't be named":
+ *  only that there is no site to read. The call screen's section says it as websiteCheck.NO_WEBSITE_LINE. */
+export const NO_WEBSITE_SPOKEN = "I couldn't find a website for you, so Gemini and Google AI have no site of yours to read.";
 /** Said after a point that came from the site's own pages (a service, the town, a phone number): the Findable half
  *  of REAL ISSUE → WHY IT MATTERS → HOW WE IMPROVE IT. Once, after the last point, never per point. */
 export const FIX_TAIL = "It's the sort of thing we'd fix as part of the work.";
@@ -266,9 +270,8 @@ export function buildCallScript(i: CallScriptInput): CallScript {
     found.push(...shown.map(plainIssueTitle));
     foundNote = 'Each of these was seen on the site by the crawl. Say it "may make it harder", never that it is why AI did not name them.';
   } else if (i.findingsStatus === 'no_website') {
-    opener.push((why ? why + ', and the first thing I noticed' : 'The first thing I noticed') + " is I couldn't find a website for you.");
-    found.push("Without a site of your own there's a lot less for AI to go on about what you do and where you work.");
-    foundNote = 'No website on file. Never say AI cannot name a business without one.';
+    opener.push((why ? why + '. ' : '') + NO_WEBSITE_SPOKEN);
+    foundNote = 'No website on file. Never say it is harming them, or that AI cannot name a business without one.';
   } else if (i.findingsStatus === 'profile') {
     opener.push((why ? why + ', and I could only find' : 'I could only find') + ' your ' + (i.site.label ?? 'directory') + ' profile, not a site of your own.');
     found.push('That page belongs to ' + (i.site.label ?? 'the directory') + ", so there's a lot less for AI to go on about what you do and where.");
@@ -277,10 +280,9 @@ export function buildCallScript(i: CallScriptInput): CallScript {
     /* Completed with NO serious issue (Paul, 2026-10-19): the "I had a look into why…" line goes too, and nothing at all is
        said about the site. Minor points stay out. */
     foundNote = 'The website check found no serious issue, so say nothing about the site; do not invent one.';
-  } else if (i.findingsStatus === 'checking') {
+  } else if (i.findingsStatus === 'checking' || i.findingsStatus === 'not_crawled') {
+    /* not_crawled: the call screen starts the missing check (Paul, 2026-10-20), so it is said as running. */
     foundNote = CHECKING_NOTE;
-  } else if (i.findingsStatus === 'unreadable') {
-    foundNote = (check ? check.headline.replace(/.s*$/, '') : 'The website check failed') + ', so say nothing about the site.';
   } else {
     foundNote = NOT_CHECKED_NOTE;
   }

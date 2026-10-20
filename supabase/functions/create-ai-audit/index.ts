@@ -907,11 +907,18 @@ Deno.serve(async (req) => {
     let distance: TownDistanceCheck | null = null;
     if (!effectiveReuseId && leadId) {
       try {
-        const [onbRes, derived] = await Promise.all([
+        const [onbRes, derived, foundRes] = await Promise.all([
           service.from("onboarding_responses").select("confirmed_location")
             .eq("lead_id", leadId).order("created_at", { ascending: false }).limit(1).maybeSingle(),
           resolveDerivedTown(service, leadId),
+          service.from("outreach_leads").select("search_location").eq("id", leadId).maybeSingle(),
         ]);
+        /* THE COVERAGE AREA THE LEAD WAS FOUND UNDER (Paul, 2026-10-20): outreach_leads.search_location, written by every
+           Find Leads add. Preferred over Google's postal town ("London" for every London postcode, "Norwich" for a village
+           17 km out) — but ONLY when the business is within the wrong-town guard's limit of it (checked below, real
+           coordinates on both sides). Further than that, the searched town is where the Wisbech fault came from, so
+           Google's town stands. A human-confirmed town always wins. */
+        const foundUnder = cleanTypedTown((foundRes?.data as { search_location?: string | null } | null)?.search_location ?? null);
         const picked = pickAuditTown({
           confirmedLocation: onbRes?.data?.confirmed_location ?? null,
           derivedTown: derived.town,
@@ -945,6 +952,16 @@ Deno.serve(async (req) => {
             const { data: townRows } = await service
               .from("uk_towns").select("name, lat, lng").not("lat", "is", null);
             const index = buildTownIndex((townRows ?? []) as Array<{ name: string; lat: number; lng: number }>);
+            if (picked.source !== "confirmed" && foundUnder && foundUnder.toLowerCase() !== locationText.toLowerCase()) {
+              const near = checkTownDistance({
+                businessLat: derived.lat, businessLng: derived.lng,
+                townName: foundUnder, townCentroid: lookupTownCentroid(index, foundUnder),
+              });
+              if (near.km !== null && near.verdict !== "block") {
+                console.log("[create-ai-audit] lead " + leadId + ": found-under town \"" + foundUnder + "\" (" + Math.round(near.km) + "km) used instead of \"" + locationText + "\"");
+                locationText = foundUnder; locationSource = "search";
+              }
+            }
             distance = checkTownDistance({
               businessLat: derived.lat,
               businessLng: derived.lng,

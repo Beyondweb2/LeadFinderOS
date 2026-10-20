@@ -162,7 +162,7 @@ console.log('── 4. NO STRONG WEBSITE EVIDENCE ──');
 }
 {
   const p = buildColdCallPlaybook(base({ lead: { ...base().lead, website: null } }));
-  ok(p.findings.length === 0 && /No website on file/.test(p.findingsNote ?? ''), 'no website → no findings, and the right conversation');
+  ok(p.findings.length === 0 && /No website found/.test(p.findingsNote ?? ''), 'no website → no findings, and the right conversation');
 }
 
 console.log('── 5. MISSING / UNUSABLE EXCERPT ──');

@@ -34,8 +34,11 @@ import {
   orderSitemapChildren, isIntakeCrawlRequest, processPage,
 } from "../../../src/lib/fullCrawl.ts";
 import { buildVisibilityChecks, type VisibilityChecks } from "../../../src/lib/visibilityChecks.ts";
-import { crawlStartUrl } from "../../../src/lib/crawlUrl.ts";
-import { CALL_SCREEN_CRAWL_SOURCE, CALL_SCREEN_CRAWL_WINDOW_MS, callScreenCrawlRefusal } from "../../../src/lib/callScreenCrawl.ts";
+import { crawlStartUrl, parseRobots, robotsAllows } from "../../../src/lib/crawlUrl.ts";
+/** ⛔ ONE REQUEST AT A TIME PER SITE (Paul, 2026-10-20): the quick check reads its pages one after another, never in
+ *  parallel at one host, and skips any page robots.txt's "User-agent: *" rules disallow (the deep job already does). */
+const QUICK_CHECK_CONCURRENCY = 1;
+import { CALL_SCREEN_CRAWL_SOURCE, CALL_SCREEN_CRAWL_WINDOW_MS, callScreenCrawlRefusal, isCallScreenRetry } from "../../../src/lib/callScreenCrawl.ts";
 import { leadCrawlWriteDecision, storedCrawlFailed, STORED_CRAWL_STATE_COLUMNS } from "../../../src/lib/crawlWriteRule.ts";
 import { activeJobFor, createCrawlJob, jobCounts, kickCrawlWorker } from "../_shared/crawl-job.ts";
 import { crawlPageCapFor, prospectCrawlReuse, PROSPECT_CRAWL_PAGE_CAP } from "../../../src/lib/prospectCrawl.ts";
@@ -293,19 +296,23 @@ Deno.serve(async (req) => {
       const csLead = typeof body?.lead_id === "string" ? body.lead_id : null;
       if (body?.url || body?.audit_id || body?.run_id || body?.mode === "full") return json({ ok: false, error: "lead_website_only" }, 400);
       const since = new Date(Date.now() - CALL_SCREEN_CRAWL_WINDOW_MS).toISOString();
-      const [leadQ, auditQ, rowQ, lastQ, mineQ] = csLead ? await Promise.all([
+      const [leadQ, auditQ, rowQ, lastQ, mineQ, retryQ] = csLead ? await Promise.all([
         service.from("outreach_leads").select("website").eq("id", csLead).maybeSingle(),
         service.from("ai_audits").select("id, ai_audit_runs!inner(status)").eq("lead_id", csLead).in("ai_audit_runs.status", ["complete", "capped"]).limit(1),
-        service.from("lead_crawl_checks").select("lead_id").eq("lead_id", csLead).limit(1),
+        service.from("lead_crawl_checks").select("lead_id, fetch_failed:result->signals->fetchFailed").eq("lead_id", csLead).limit(1),
         service.from("lead_activity").select("created_at").eq("lead_id", csLead).eq("kind", "crawl_run").eq("data->>source", CALL_SCREEN_CRAWL_SOURCE).order("created_at", { ascending: false }).limit(1),
         service.from("lead_activity").select("id", { count: "exact", head: true }).eq("actor_user_id", userId).eq("kind", "crawl_run").eq("data->>source", CALL_SCREEN_CRAWL_SOURCE).gte("created_at", since),
-      ]) : [null, null, null, null, null];
-      if (csLead && [leadQ, auditQ, rowQ, lastQ, mineQ].some((q) => q?.error)) return json({ ok: false, error: "lookup_failed" }, 503);
+        service.from("lead_activity").select("id", { count: "exact", head: true }).eq("lead_id", csLead).eq("kind", "crawl_run").eq("data->>source", CALL_SCREEN_CRAWL_SOURCE).eq("data->>retry", "true"),
+      ]) : [null, null, null, null, null, null];
+      if (csLead && [leadQ, auditQ, rowQ, lastQ, mineQ, retryQ].some((q) => q?.error)) return json({ ok: false, error: "lookup_failed" }, 503);
+      const csRow = ((rowQ?.data as Array<{ fetch_failed?: unknown }> | null) ?? [])[0] ?? null;
       const csWebsite = (leadQ?.data as { website?: string | null } | null)?.website ?? null;
       const refusal = callScreenCrawlRefusal({
         leadId: csLead, website: csWebsite,
         hasCompletedAudit: ((auditQ?.data as unknown[] | null) ?? []).length > 0,
-        hasCrawlRow: ((rowQ?.data as unknown[] | null) ?? []).length > 0,
+        hasCrawlRow: !!csRow,
+        crawlRowFailed: csRow?.fetch_failed === true,
+        retriedBefore: (retryQ?.count ?? 0) > 0,
         jobRunning: csLead && csWebsite ? !!(await activeJobFor(service, csLead, crawlStartUrl(csWebsite))) : false,
         lastStartMs: (() => { const t = (lastQ?.data as Array<{ created_at: string }> | null)?.[0]?.created_at; return t ? Date.parse(t) : null; })(),
         startsByPersonInWindow: mineQ?.count ?? 0,
@@ -314,7 +321,7 @@ Deno.serve(async (req) => {
       if (refusal) return json({ ok: true, skipped: refusal });
       /* Recorded BEFORE the crawl, so a second screen opening this lead now is refused (one at a time per lead). */
       const { error: actErr } = await service.from("lead_activity").insert({
-        lead_id: csLead, actor_user_id: userId, kind: "crawl_run", data: { source: CALL_SCREEN_CRAWL_SOURCE, url: crawlStartUrl(String(csWebsite)) },
+        lead_id: csLead, actor_user_id: userId, kind: "crawl_run", data: { source: CALL_SCREEN_CRAWL_SOURCE, url: crawlStartUrl(String(csWebsite)), ...(isCallScreenRetry({ hasCrawlRow: !!csRow, crawlRowFailed: csRow?.fetch_failed === true }) ? { retry: true } : {}) },
       });
       if (actErr) return json({ ok: false, error: "could_not_record_start" }, 503);
     }
@@ -445,7 +452,7 @@ Deno.serve(async (req) => {
     // Probe the homepage AS EACH SEARCH CRAWLER (parallel): which are blocked, and which lets us read
     // the content. robots.txt is NOT consulted for this — a site can "Allow" a crawler there and
     // still block it at the edge; only the actual fetch is evidence (Paul, 2026-09-16).
-    const probes = await Promise.all(SEARCH_CRAWLERS.map((c) => budgeted(homeUrl, c.ua).then((r) => ({ c, r }))));
+    const probes = await mapPool([...SEARCH_CRAWLERS], QUICK_CHECK_CONCURRENCY, (c) => budgeted(homeUrl, c.ua).then((r) => ({ c, r })));
     const searchBlocked = probes.filter((p) => p.r.blocked).map((p) => p.c.label);
     const respondedAny = probes.some((p) => p.r.responded);
     const readableProbe = probes.find((p) => p.r.ok && p.r.html.trim().length > 0) ?? null;
@@ -585,8 +592,10 @@ Deno.serve(async (req) => {
       // the standard profile's page limit.
       let sampleFetched: Fetched[] = [];
       {
-        const sampleUrls = selectCrawlUrls([...(biggest?.urls ?? []), ...pool], servedUrl, profile.maxPages);
-        sampleFetched = await mapPool(sampleUrls, profile.concurrency, (u) => budgeted(u, readableUa));
+        const rules = robotsBody ? parseRobots(robotsBody) : null;
+        const allowed = (u: string) => { try { const x = new URL(u); return robotsAllows(rules, x.pathname + x.search); } catch { return false; } };
+        const sampleUrls = selectCrawlUrls([...(biggest?.urls ?? []), ...pool].filter(allowed), servedUrl, profile.maxPages);
+        sampleFetched = await mapPool(sampleUrls, QUICK_CHECK_CONCURRENCY, (u) => budgeted(u, readableUa));
         discoveredAll = pool;
         pagesQueuedCount = sampleUrls.length;
       }

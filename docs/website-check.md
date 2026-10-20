@@ -90,3 +90,30 @@ Learning Curve acceptance (live fetch, 19 Oct): found — generic Organization s
 visible on 7 area pages. Already fixed on the live site: the address is on the homepage and most area pages (only the
 Canterbury page lacks it); "PassFirstTimeInKent" survives only inside a Facebook link, not as a written name.
 Tests: `scripts/crawl-in-audit-callscreen.test.ts`.
+
+## 2026-10-20 — the crawl always follows the audit (feat/crawl-always-callscreen)
+
+- **The call screen's Website crawl section is never empty** (`src/lib/websiteCrawlShown.ts`): Checking / Done / Couldn't check the
+  site / No website. A lead with an AI result and no check is shown as Checking (the screen starts it; if someone else started it the
+  section re-reads every 15 s for up to 5 minutes, then says Couldn't check).
+- **A failed check is retried once, ever** (`callScreenCrawl.ts`: `crawlRowFailed` + `retriedBefore`; crawl-check records
+  `lead_activity.data.retry = true`). After that only a person's Run again / Try again starts one.
+- **Backfill** (migration `20261110090000_audit_crawl_backfill.sql`): `audit_crawl_backfill_tick()` on cron `audit-crawl-backfill`, 3 leads a
+  minute, open CRM leads with a completed non-market audit whose `ai_audits.website` is set and no `lead_crawl_checks` row; paused while 20
+  deep jobs run; each lead once (`audit_crawl_backfill`); unschedules itself when nothing is left. Same internal call the audit makes. 861
+  leads on 2026-10-20.
+- **Politeness:** the quick check reads one page at a time (`QUICK_CHECK_CONCURRENCY`) and drops sample pages robots.txt's `User-agent: *`
+  disallows; a prospect's deep job (page-capped) reads one page at a time (`PROSPECT_CRAWL_CONCURRENCY`); a client's exhaustive crawl keeps
+  `FULL_CRAWL.concurrency`. No paid service anywhere in the closure.
+- **New page readings** (`contentTrust.ts`): `coverage` (an areas list / areaServed / "we cover · serving · covering · work across <Place>"
+  — a place named in a bio is not coverage) → `areas_not_stated` (medium; low when the town is already in a title / H1); `owner`
+  ("owned / run / founded by X", "I'm X, the owner", "My name is X and I'm the founder") → `ContentTrust.owner` → `WebsiteCheckSummary.owner`,
+  shown with its page. Older checks carry no owner field: nothing is shown.
+- **The same pages counted once** (`websiteCheck.ts`): pages in `ct_placeholder_content` are taken out of thin / unlinked / near-duplicate /
+  heading findings at summary time, and `placeholderPagesOnce` does the same for summaries stored before (they keep only 3 pages per issue).
+- **Words:** `NO_WEBSITE_LINE` / `NO_WEBSITE_SPOKEN` (Paul's no-website line; never "harming"); a missing check is said as running.
+- **Audit town** (`create-ai-audit`): `outreach_leads.search_location` (the Coverage area the lead was found under) replaces Google's
+  postal town when the business is within the wrong-town guard (≤ 25 km, real coordinates both sides); a confirmed town still wins. Further
+  than that Google's town stands — the searched town at any distance is the 2026-08 Wisbech fault. Existing audits untouched.
+- **"Outside town"** (Find Leads) is not the same logic: it means "not returned by the town-rectangle search" (`search-leads`), never a
+  distance check, and is not stored. No shared cause to fix.
