@@ -109,6 +109,13 @@ console.log('6. the first-reply pitch (Paul, 2026-10-20, wording A)');
   }
   const above = firstReplyPitch({ ...issuesEv, named: { named: 3, valid: 6 } });
   ok(!/instead|not you|3 of 6|gap in the rest/.test(above.lines.slice(0, 2).join(' ')) && above.lines[1].startsWith('I looked into why this might be happening') && above.lines[2] === PITCH_SPECIALISE_LINE && above.question === PITCH_AGENCY_VOICE, 'the soft version (more than a third): the same shape without "AI is recommending your competitors instead"');
+  {
+    const softEv: MoveEvidence = { ...issuesEv, named: { named: 3, valid: 6 } };
+    const softCtx: AiReplyContext = { businessName: ev.businessName, latestInbound: 'Yes it is', thread: [], plan: pm([opener, { from: 'them', text: 'Yes it is' }], { evidence: softEv }), evidence: softEv };
+    const sw = checkAiReply(fallbackAiReply(softCtx), softCtx);
+    ok(sw.length === 0, `the soft version passes the checker: "…come to you instead" is what we do, not an audit claim${sw.length ? ' — ' + sw.join(' | ') : ''}`);
+    ok(checkAiReply('AI is recommending your competitors instead.', softCtx).some((x) => /more than a third/.test(x)), 'the soft version saying "AI is recommending your competitors instead" → still a warning');
+  }
   /* The greeting: a name the site's own crawl states as owner / founder, first name only. Never the business name. */
   const named = firstReplyPitch({ ...issuesEv, ownerName: 'Kylie' });
   ok(named.lines[0] === 'Hi Kylie,' && named.lines[1].startsWith('I asked Gemini'), 'a stated owner → "Hi Kylie," on its own line first');

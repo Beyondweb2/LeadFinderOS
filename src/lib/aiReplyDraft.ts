@@ -27,7 +27,7 @@ import { isClientLead } from './roleRules.ts';
 import { issueMentioned, saysGoogleAiForGemini, vagueSiteClaim, wrongEngineWords } from './draftEvidence.ts';
 import { ENGINE_WORDING, FACT_SHEET_VERSION, GUARANTEE_LINE, SHEET_MONEY, factFor, usableCaseStudies } from './offerFactSheet.ts';
 import { mayClaimNamedInstead } from './namedShareRule.ts';
-import { engineName, siteOf, tidyCaps, NEEDS_YOU_LABELS, PITCH_NO_SITE_LINE, type MoveEvidence, type MovePlan, type NeedsYouReason } from './replyMove.ts';
+import { engineName, siteOf, tidyCaps, NEEDS_YOU_LABELS, PITCH_NO_SITE_LINE, PITCH_SPECIALISE_LINE, type MoveEvidence, type MovePlan, type NeedsYouReason } from './replyMove.ts';
 
 /* ── cost ─────────────────────────────────────────────────────────────────────────────────────── */
 
@@ -344,7 +344,8 @@ export function checkAiReply(reply: string, c: AiReplyContext): string[] {
   }
   /* Evidence. */
   if (SHARE_WORDING.test(r)) out.push('Says "named you in X of Y answers" or "a gap in the rest". Say the search where they were not named, and who came up.');
-  if (INSTEAD_CLAIM.test(r) && !(e.named && mayClaimNamedInstead(e.named.named, e.named.valid))) {
+  /* "…so those customers come to you instead" is what we do, Paul's own words, not a claim about the audit: read around it. */
+  if (INSTEAD_CLAIM.test(r.split(PITCH_SPECIALISE_LINE).join(' ')) && !(e.named && mayClaimNamedInstead(e.named.named, e.named.valid))) {
     out.push('Says AI named others instead, but they were named in more than a third of answers (or no counts are on record).');
   }
   const allowedNames = [e.businessName, ...e.competitors, e.town ?? '', e.ownerName ?? ''].map(lower).filter(Boolean);
