@@ -33,7 +33,7 @@ import {
   AI_REPLY_DRAFT_MAX_USD, BEST_TEMPLATE_STYLE_NOTE, DRY_RUN_MODELS, DRY_RUN_DRAFT_MAX_USD, HANDOVER_LABELS, STOP_REASONS,
   type AiReplyContext, type AiReplyWhy,
 } from "../../../src/lib/aiReplyDraft.ts";
-import { pickMove, inboundLabel, type MoveEvidence, type MoveInput, type MovePlan, type MoveThreadMsg } from "../../../src/lib/replyMove.ts";
+import { pickMove, inboundLabel, autoReplyFlags, type MoveEvidence, type MoveInput, type MovePlan, type MoveThreadMsg } from "../../../src/lib/replyMove.ts";
 import { CONFIDENCE_LINE, FACT_SHEET_VERSION } from "../../../src/lib/offerFactSheet.ts";
 import { WAITING_PITCH_STATUSES } from "../../../src/lib/auditPitchRule.ts";
 import { selectFindings } from "../../../src/lib/coldCallPlaybook.ts";
@@ -48,7 +48,7 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-internal-job, x-cron-secret",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
   /* The deploy marker: only this build answers with it. */
-  "x-ai-reply-drafts": "2026-10-20c-first-reply-pitch",
+  "x-ai-reply-drafts": "2026-10-20d-missed-search-auto-burst",
 };
 const json = (b: unknown, s = 200) => new Response(JSON.stringify(b), { status: s, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 const str = (v: unknown) => (typeof v === "string" ? v.trim() : "");
@@ -125,7 +125,7 @@ async function loadLead(service: Service, leadId: string): Promise<LeadRow | nul
 /** The thread up to and including this inbound, as the move picker reads it. */
 function moveThread(thread: MsgRow[], inbound: MsgRow): MoveThreadMsg[] {
   return thread.filter((m) => m.created_at <= inbound.created_at && (m.direction === "inbound" || isOurs(m)))
-    .map((m) => ({ from: m.direction === "inbound" ? "them" as const : "us" as const, text: (m.direction === "inbound" ? m.body ?? "" : sentText(m)) || (m.template_name ? `[${m.template_name}]` : ""), messageType: m.message_type, templateName: m.template_name }));
+    .map((m) => ({ from: m.direction === "inbound" ? "them" as const : "us" as const, text: (m.direction === "inbound" ? m.body ?? "" : sentText(m)) || (m.template_name ? `[${m.template_name}]` : ""), messageType: m.message_type, templateName: m.template_name, at: m.created_at }));
 }
 
 /** AI drafts sent since the last WIN (a voice note we sent, or a booked call): the loop guard's count. */
@@ -160,7 +160,10 @@ async function buildContext(service: Service, lead: LeadRow, thread: MsgRow[], i
   const sentRows = upTo.filter(isOurs);
   const trade = audit?.trade ?? leadTrade(lead);
   const town = audit?.town ?? leadTown(lead);
-  const nd = audit?.namedDatapoints; const td = audit?.totalDatapoints;
+  /* ⛔ THE SCORE THE AUDIT SHOWS, every engine in it (Google AI where scored): Nola is 1 of 3, never 1 of 2 (Paul,
+     2026-10-20). Only an audit with no complete quick-check score falls back to the run summary. */
+  const scored = typeof audit?.scoreNamed === "number" && typeof audit?.scoreTotal === "number" && audit.scoreTotal > 0;
+  const nd = scored ? audit!.scoreNamed : audit?.namedDatapoints; const td = scored ? audit!.scoreTotal : audit?.totalDatapoints;
   const evidence: MoveEvidence = {
     businessName: lead.business_name ?? "",
     trade: audit && trade ? trade : null,
@@ -168,6 +171,8 @@ async function buildContext(service: Service, lead: LeadRow, thread: MsgRow[], i
     engineWords: conversationEngine(sentRows.map((m) => ({ text: sentText(m), templateName: m.template_name })), audit?.engine ?? null).words,
     named: typeof nd === "number" && typeof td === "number" && td > 0 ? { named: nd, valid: td } : null,
     competitors: draftNames(audit?.competitors ?? [], town),
+    /* The best missed search: its engine + question (the competitors above are that answer's names). */
+    missed: audit?.missedQuestion && audit?.engine ? { engine: audit.engine, question: audit.missedQuestion } : null,
     hookAlreadySent: stage.stage === "warm" || stage.stage === "waiting_for_hook_reply",
     findings: found.status === "findings" ? found.findings.slice(0, 2).map((f) => ({ title: f.title, said: (f.spoken ?? f.explanation ?? "").trim() || f.title })) : [],
     hasWebsite: found.status !== "no_website" && found.status !== "profile",
@@ -269,7 +274,10 @@ async function applyStop(service: Service, who: { phone: string | null; leadId: 
 async function undoReplied(service: Service, lead: LeadRow, thread: MsgRow[]): Promise<boolean> {
   if (lead.status !== "replied") return false;
   const inbound = thread.filter((m) => m.direction === "inbound");
-  if (!inbound.length || inbound.some((m) => inboundLabel(m.body, m.message_type) === null)) return false;
+  /* Read with the thread, so every message of an auto-responder BURST counts as automated (Ven, 2026-10-20). */
+  const msgs = thread.map((m) => ({ from: m.direction === "inbound" ? "them" as const : "us" as const, text: m.body ?? "", messageType: m.message_type, at: m.created_at }));
+  const auto = autoReplyFlags(msgs);
+  if (!inbound.length || thread.some((m, k) => m.direction === "inbound" && !auto[k] && inboundLabel(m.body, m.message_type) === null)) return false;
   const { data } = await service.from("outreach_leads").update({ status: "initial_contact" }).eq("id", lead.id).eq("status", "replied").select("id").maybeSingle();
   if (data) await service.from("lead_activity").insert({ lead_id: lead.id, actor_user_id: null, kind: "details_set", data: { status: "initial_contact", reason: "auto_reply_not_a_reply" } }).then(() => undefined, () => undefined);
   return !!data;
@@ -563,22 +571,23 @@ async function handleMarkOptedOut(service: Service, actor: Actor, body: Record<s
 
 interface Fixture {
   id: string; businessName: string; trade: string; town: string; hasWebsite: boolean; ownerName: string | null;
-  audit: null | { engine: string; namedAnswers: number; validAnswers: number; competitors: string[] };
+  audit: null | { engine: string; namedAnswers: number; validAnswers: number; competitors: string[]; missedQuestion?: string | null };
   findings: Array<{ title: string; said: string }>;
-  thread: Array<{ from: "us" | "them"; text: string; templateName: string | null; messageType: string }>;
+  thread: Array<{ from: "us" | "them"; text: string; templateName: string | null; messageType: string; at?: string | null }>;
   aiSentSinceWin?: number; suppressed?: boolean; foundOnGoogle?: boolean;
   site?: MoveEvidence["site"]; aiAutoReplies?: boolean;
 }
 
 function fixtureContext(f: Fixture): AiReplyContext {
-  const thread: MoveThreadMsg[] = f.thread.map((m) => ({ from: m.from, text: m.text, templateName: m.templateName, messageType: m.messageType }));
+  const thread: MoveThreadMsg[] = f.thread.map((m) => ({ from: m.from, text: m.text, templateName: m.templateName, messageType: m.messageType, at: m.at ?? null }));
   const sent = thread.filter((m) => m.from === "us").map((m) => ({ text: m.text, templateName: m.templateName }));
   const hook = f.thread.some((m) => m.from === "us" && !!m.templateName && m.templateName !== "initial_contact" && m.templateName !== "initial_opener_v2");
   const evidence: MoveEvidence = {
     businessName: f.businessName, trade: f.audit ? f.trade : null, town: f.audit ? f.town : null,
     engineWords: conversationEngine(sent, f.audit?.engine ?? null).words,
     named: f.audit && f.audit.validAnswers > 0 ? { named: f.audit.namedAnswers, valid: f.audit.validAnswers } : null,
-    competitors: draftNames(f.audit?.competitors ?? [], f.town), hookAlreadySent: hook, findings: f.findings ?? [],
+    competitors: draftNames(f.audit?.competitors ?? [], f.town),
+    missed: f.audit?.missedQuestion ? { engine: f.audit.engine, question: f.audit.missedQuestion } : null, hookAlreadySent: hook, findings: f.findings ?? [],
     hasWebsite: f.hasWebsite, ownerName: f.ownerName, foundOnGoogle: f.foundOnGoogle ?? true, site: f.site ?? null, aiAutoReplies: f.aiAutoReplies === true,
   };
   const plan = pickMove({ thread, suppressed: f.suppressed === true, aiSentSinceWin: f.aiSentSinceWin ?? 0, evidence });

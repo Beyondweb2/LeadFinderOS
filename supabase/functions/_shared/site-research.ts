@@ -176,6 +176,10 @@ export async function loadAuditContext(service: Service, lead: ResearchLead): Pr
     namedEverywhere: !vars.ok && vars.reason.startsWith(HOOK_NO_GAP_REASON),
     namedDatapoints: typeof summary?.named_datapoints === "number" ? summary.named_datapoints : null,
     totalDatapoints: typeof summary?.total_datapoints === "number" ? summary.total_datapoints : null,
+    /* The score the audit SHOWS (every scored engine, Google AI included where scored) and the best missed search. */
+    scoreNamed: sameAudit && vars.ok ? vars.scoreNamed : null,
+    scoreTotal: sameAudit && vars.ok ? vars.scoreTotal : null,
+    missedQuestion: sameAudit && vars.ok ? vars.hookQuestion : null,
     unavailableReason: !vars.ok && !vars.reason.startsWith(HOOK_NO_GAP_REASON) ? vars.reason : null,
   };
 }

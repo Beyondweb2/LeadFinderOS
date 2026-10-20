@@ -60,6 +60,8 @@ export interface MoveThreadMsg {
   text: string;
   messageType?: string | null;
   templateName?: string | null;
+  /** When it arrived (ISO). Absent on fixtures: then no burst is read (each message stands alone). */
+  at?: string | null;
 }
 
 export interface MoveEvidence {
@@ -68,8 +70,12 @@ export interface MoveEvidence {
   town: string | null;
   /** The AI tool this conversation names: 'chatgpt' | 'gemini' | 'ai' (draftEvidence.conversationEngine). */
   engineWords: string;
-  /** Named / valid answers in the stored audit. null = no counts on record (then no "instead" claim). */
+  /** Named / total answers IN THE SCORE the audit shows: every engine scored, Google AI included where it is scored
+   *  (hookScore `scored`, Paul 2026-10-20: Nola is 1 of 3, never 1 of 2). null = no counts on record (then no "instead" claim). */
   named: { named: number; valid: number } | null;
+  /** THE BEST MISSED SEARCH: the engine + question where the business was NOT named (the hook pick); `competitors` are
+   *  that answer's names. Absent = the search is said as trade + town. */
+  missed?: { engine: string; question: string } | null;
   /** At most three, from the audit only. */
   competitors: string[];
   hookAlreadySent: boolean;
@@ -195,9 +201,55 @@ function wasOpener(m: MoveThreadMsg | null): boolean {
 /** Auto-responder wording the shared triage list misses ("Thanks for your message, we are away until Monday"). Local on
  *  purpose: the shared list also drives the live first-reply automation. Never a question from a person. */
 const AUTO_EXTRA = /\bthank(?:s|\s+you)\s+for\s+(?:your|the)\s+(?:message|enquiry|inquiry)\b[^?]*\b(?:away|out\s+of\s+(?:the\s+)?office|on\s+holiday|get\s+back|reply|respond|be\s+in\s+touch|shortly|as\s+soon\s+as)\b/i;
+/** A WhatsApp Business greeting message: "Thanks for contacting Ven Language Services", "Welcome to …" (Ven, 2026-10-19).
+ *  People do not thank you for contacting them; a question at the end means a person, so that is left alone. */
+const AUTO_GREETING = /\b(?:thanks|thank\s+you)\s+for\s+(?:contacting|messaging|choosing|calling)\b|^\W*(?:hi|hello)?\W*welcome\s+to\s+\w/i;
+/** An auto-responder in another language (Spanish, French, Portuguese, Italian, German): "Gracias por contactarnos, le
+ *  responderemos lo antes posible". Auto-reply wording only, never a person simply writing in another language. */
+const FOREIGN_AUTO = new RegExp([
+  /\bgracias\s+por\s+(?:contactar\w*|comunicar\w*|escribir\w*|su\s+mensaje|tu\s+mensaje|elegir\w*)/.source,
+  /\b(?:te|le|les|os)\s+(?:responderemos|contestaremos|atenderemos)\b/.source, /\blo\s+antes\s+posible\b/.source,
+  /\bfuera\s+de\s+(?:la\s+)?oficina\b/.source, /\bhorario\s+de\s+atenci[oó]n\b/.source,
+  /\bmerci\s+(?:pour|de)\s+votre\s+(?:message|demande)/.source, /\bnous\s+vous\s+r[eé]pondrons\b/.source, /\bdans\s+les\s+plus\s+brefs\s+d[eé]lais\b/.source,
+  /\bobrigad[oa]\s+(?:pelo|por)\s+(?:o\s+|a\s+)?(?:seu\s+|sua\s+)?(?:contato|contacto|mensagem)/.source, /\bresponderemos\b/.source,
+  /\bgrazie\s+per\s+(?:averci\s+contattat\w|il\s+(?:tuo|suo)\s+messaggio)/.source, /\brisponderemo\b/.source,
+  /\bdanke\s+f[uü]r\s+(?:ihre|deine)\s+nachricht/.source, /\bwir\s+melden\s+uns\b/.source,
+].join('|'), 'i');
 export function isAutoReply(text: string | null | undefined, messageType?: string | null): boolean {
   const t = String(text ?? '');
-  return triageByRules(t, { isClient: false, messageType: messageType ?? 'text' }).category === 'automated' || (AUTO_EXTRA.test(t) && !/\?\s*$/.test(t.trim()));
+  const notAQuestion = !/\?\s*$/.test(t.trim());
+  return triageByRules(t, { isClient: false, messageType: messageType ?? 'text' }).category === 'automated'
+    || (notAQuestion && (AUTO_EXTRA.test(t) || AUTO_GREETING.test(t))) || FOREIGN_AUTO.test(t);
+}
+
+/** Messages an auto-responder sends together arrive within this long of each other (Ven: three in 72 seconds). */
+export const AUTO_BURST_MS = 120_000;
+/** Where the burst holding thread[idx] starts: the prospect messages just before it with nothing of ours between, all
+ *  timed and all within AUTO_BURST_MS of it. No timestamps → the message stands alone. */
+function burstStart(thread: MoveThreadMsg[], idx: number): number {
+  const at = Date.parse(thread[idx]?.at ?? '');
+  if (!Number.isFinite(at)) return idx;
+  let s = idx;
+  for (let j = idx - 1; j >= 0; j--) {
+    if (thread[j].from !== 'them') break;
+    const t = Date.parse(thread[j].at ?? '');
+    if (!Number.isFinite(t) || at - t > AUTO_BURST_MS) break;
+    s = j;
+  }
+  return s;
+}
+/** THE AUTO-REPLY READING, per message (Paul, 2026-10-20). A message is an auto-reply on its own wording (isAutoReply),
+ *  or as part of a MULTI-MESSAGE BURST that holds one: Ven's "Buenas noches" / "Thanks for contacting Ven Language
+ *  Services" / "Are you interested in Spanish lessons?..." arrived together, so none of the three is a real reply. */
+export function autoReplyFlags(thread: MoveThreadMsg[]): boolean[] {
+  const own = thread.map((m) => m.from === 'them' && isAutoReply(m.text, m.messageType));
+  const out = [...own];
+  for (let i = 0; i < thread.length; i++) {
+    if (thread[i].from !== 'them') continue;
+    const s = burstStart(thread, i);
+    if (s < i && own.slice(s, i + 1).some(Boolean)) for (let k = s; k <= i; k++) out[k] = true;
+  }
+  return out;
 }
 
 export function inboundLabel(text: string | null | undefined, messageType?: string | null): 'Auto-reply' | 'Only confirmed' | null {
@@ -217,21 +269,42 @@ const listIssues = (n: string[]) => (n.some((x) => x.includes(',')) && n.length 
 /** "Driving instructors" → "driving instructor" (an audit stores the trade capitalised; an acronym such as MOT stays). */
 const tradeWord = (t: string) => t.trim().replace(/s$/i, '').replace(/^([A-Z])(?=[a-z])/, (c) => c.toLowerCase());
 
-/** One true sentence from the audit, or null. "Named others instead" only under the one-third rule. */
-export function auditLine(e: MoveEvidence): string | null {
+/** The best missed search as a person says it. A question is quoted ("Who is the best driving instructor for beginners
+ *  in Halstead?"); a search phrase follows "for". The audit's country marker (", UK") is dropped; the trade is lower case. */
+export function spokenSearch(question: string, trade: string | null): string {
+  let q = norm(question).replace(/\?+\s*$/, '').replace(/,?\s+(?:UK|U\.K\.|United\s+Kingdom)$/i, '').trim();
+  const tr = String(trade ?? '').trim();
+  if (tr) q = q.replace(new RegExp(`\\b${tr.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'gi'), (m) => m.toLowerCase());
+  if (/^(who|what|which|where|can|could|is|are|how|any|do|does|should|would|recommend)\b/i.test(q)) return `"${q.charAt(0).toUpperCase()}${q.slice(1)}?"`;
+  return `for ${q}`;
+}
+/** "I asked Gemini <the missed search>": the engine and question where they were NOT named (Paul, 2026-10-20), when that
+ *  engine is the one this conversation uses (never two tools in one conversation); else trade + town on its engine. */
+export function askedPhrase(e: MoveEvidence): string | null {
   if (!e.trade || !e.town) return null;
   const tool = engineName(e.engineWords);
-  const search = `${withA(tradeWord(e.trade))} in ${e.town}`;
-  if (!e.named || e.named.valid <= 0) return null;
+  const m = e.missed;
+  if (m && m.question.trim() && m.engine === e.engineWords) return `I asked ${tool} ${spokenSearch(m.question, e.trade)}`;
+  return `I asked ${tool} for ${withA(tradeWord(e.trade))} in ${e.town}`;
+}
+const lowerFirst = (s: string) => s.charAt(0).toLowerCase() + s.slice(1);
+
+/** One true sentence from the audit, or null. "Named others instead" only under the one-third rule, counted over EVERY
+ *  answer in the score. ⛔ Never "named you in X of Y answers" or "a gap in the rest" (Paul, 2026-10-20): above a third
+ *  it says what the missed search showed, nothing more. */
+export function auditLine(e: MoveEvidence): string | null {
+  const asked = askedPhrase(e);
+  if (!asked || !e.named || e.named.valid <= 0) return null;
   const { named, valid } = e.named;
-  if (named >= valid) return `When I asked ${tool} for ${search} it named you every time, which is great.`;
+  if (named >= valid) return `When ${lowerFirst(asked)} it named you every time, which is great.`;
   if (mayClaimNamedInstead(named, valid)) {
-    if (e.hookAlreadySent) return `Like I said, when I asked ${tool} for ${search} it put other businesses forward.`;
+    if (e.hookAlreadySent) return `Like I said, when ${lowerFirst(asked)} it put other businesses forward.`;
     return e.competitors.length
-      ? `When I asked ${tool} for ${search} it named ${listNames(e.competitors.slice(0, 3))} instead.`
-      : `When I asked ${tool} for ${search} it named other businesses instead.`;
+      ? `${asked} and it mentioned ${listNames(e.competitors.slice(0, 3))}.`
+      : `${asked} and it mentioned other businesses, not you.`;
   }
-  return `When I asked ${tool} for ${search} it named you in ${named} of ${valid} answers, so there's a gap in the rest.`;
+  /* The soft version: what that ONE missed answer said, with no "instead", no "not you", no closer. */
+  return e.competitors.length ? `${asked} and it mentioned ${listNames(e.competitors.slice(0, 3))}.` : `${asked} and it didn't mention you.`;
 }
 
 /* ── the first-reply pitch (Paul, 2026-10-20): every word built here ───────────────────────────── */
@@ -284,7 +357,7 @@ export function firstReplyPitch(e: MoveEvidence): { lines: string[]; question: s
     return { lines: [neutral ?? PITCH_INTRO_LINE, ...(noSite ? [PITCH_NO_SITE_LINE] : [])], ...next };
   }
   const site = siteOf(e);
-  const asked = `I asked ${engineName(e.engineWords)} for ${withA(tradeWord(e.trade))} in ${e.town}`;
+  const asked = askedPhrase(e) as string;
   const rivals = e.competitors.slice(0, 3);
   const pointed = rivals.length ? PITCH_POINTED_LINE : PITCH_POINTED_LINE_NO_NAMES;
   const issues = site.state === 'issues' ? site.issues.slice(0, PITCH_MAX_ISSUES) : [];
@@ -335,7 +408,9 @@ const flag = (reason: NeedsYouReason) => ({ reason, label: NEEDS_YOU_LABELS[reas
 export function pickMove(i: MoveInput): MovePlan {
   const { latest, prevOurs, idx } = latestPair(i.thread);
   const e = i.evidence;
-  const theirs = i.thread.filter((m) => m.from === 'them');
+  const autoFlags = autoReplyFlags(i.thread);
+  /* An auto-responder's "Are you interested in …?" is never their yes. */
+  const theirs = i.thread.filter((m, k) => m.from === 'them' && !autoFlags[k]);
   const clearYesEarlier = theirs.some((m) => CLEAR_YES.test(norm(m.text)) && !NEGATED.test(norm(m.text)));
   const offeredVoice = i.thread.some((m) => m.from === 'us' && VOICE_REQUEST.test(m.text));
   const asked = pitchAsked(prevOurs);
@@ -355,10 +430,23 @@ export function pickMove(i: MoveInput): MovePlan {
   if (lastIsOurs) guard = 'already_replied';
   else if (i.aiSentSinceWin >= 3) guard = 'ai_limit';
 
-  /* 3. Not a real reply. */
-  if (isAutoReply(text, latest.messageType)) {
-    const prevTheirs = theirs.length >= 2 ? theirs[theirs.length - 2] : null;
-    const repeat = !!prevTheirs && isAutoReply(prevTheirs.text, prevTheirs.messageType);
+  /* 3. Not a real reply: its own wording, or a multi-message burst holding one (autoReplyFlags). */
+  if (autoFlags[idx]) {
+    const start = burstStart(i.thread, idx);
+    let prevTheirs = -1;
+    for (let j = start - 1; j >= 0; j--) if (i.thread[j].from === 'them') { prevTheirs = j; break; }
+    const repeat = prevTheirs >= 0 && autoFlags[prevTheirs];
+    /* ⛔ THEY HAVE NOT REALLY CONFIRMED WHO THEY ARE (Paul, 2026-10-20, Ven): an auto-reply to the opener, with nothing real
+       from them before it, gets the usual FIRST-REPLY PITCH as its draft, never a generic line. Still labelled Auto-reply
+       (not a real reply, never counted as Replied). A repeat or a loop guard keeps the old rule: nothing drafted. */
+    let prevUs: MoveThreadMsg | null = null;
+    for (let j = start - 1; j >= 0; j--) if (i.thread[j].from === 'us') { prevUs = i.thread[j]; break; }
+    const realBefore = i.thread.slice(0, start).some((m, k) => m.from === 'them' && !autoFlags[k]);
+    if (!repeat && !guard && !realBefore && prevUs && wasOpener(prevUs)) {
+      const pitch = firstReplyPitch(e);
+      return plan({ move: 'auto_reply', read: 'automated', label: 'Auto-reply',
+        points: pitch.lines.map((l) => `Use this line, word for word: "${l}"`), question: pitch.question, fixedText: pitchText(pitch), closer: pitch.closer });
+    }
     return plan({ move: 'auto_reply', read: 'automated', autoDraft: false, label: 'Auto-reply', needsYou: repeat ? flag('repeat_auto_reply') : null,
       points: ['Say: "No rush, speak soon." Do not mention their automatic reply. No pitch.'] });
   }

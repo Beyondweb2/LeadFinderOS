@@ -22,6 +22,21 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-20-draft-missed-search', date: '2026-10-20', title: 'WhatsApp Draft reply: the pitch leads with the search they were missed on, and auto-replies get the pitch too', audience: 'all',
+    body: 'The first-reply pitch now starts with the AI tool and the exact question where the business was not named, and who that answer mentioned. The "named too often" check counts every answer in the score, Google AI included. Auto-replies sent as several messages at once, or in another language, are now spotted.',
+    report: {
+      added: [
+        'Auto-replies that arrive as a burst of messages (like "Buenas noches" / "Thanks for contacting …" / "Are you interested in …?") and auto-replies in Spanish, French, Portuguese, Italian or German are labelled Auto-reply.',
+        'An auto-reply to the opener, before they have really replied, gets the usual first-reply pitch as its draft.',
+        'A warning if a draft says "named you in X of Y answers" or "a gap in the rest".',
+      ],
+      changed: [
+        'The pitch opens "I asked Gemini “Who is the best driving instructor for beginners in Halstead?” and it mentioned A, B and C." using that answer\'s own names.',
+        'Named in 1 of 3 answers (ChatGPT, Gemini and Google AI) now gets the full pitch. The softer version is only for more than a third.',
+      ],
+      removed: ['"It named you in 1 of 2 answers, so there\'s a gap in the rest" from every draft.'],
+      effect: 'Drafts quote a real search the prospect lost, with real names, and an auto-responder no longer gets a "cheers for your reply".',
+    } },
   { id: '2026-10-20-suppressed-counts', date: '2026-10-20', title: 'Outreach now spots opted-out leads before a bulk audit or follow-up', audience: 'all',
     body: 'The bulk AI audit window and the bulk follow-up count could never see who was on the do-not-contact list, so they counted those leads as ready. They now check properly. Nothing was ever sent to them: the send step always refused them.',
     report: {

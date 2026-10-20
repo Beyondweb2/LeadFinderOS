@@ -806,6 +806,13 @@ export interface AuditContext {
   namedEverywhere: boolean;
   namedDatapoints: number | null;
   totalDatapoints: number | null;
+  /** Named / total IN THE SCORE the audit shows (hookScore `scored`: Google AI counted where it is scored). Null when the
+   *  audit has no complete quick-check score. Optional: older callers and stored research omit it. Read by the reply
+   *  drafter's one-third rule (Paul, 2026-10-20). */
+  scoreNamed?: number | null;
+  scoreTotal?: number | null;
+  /** The best missed search's question (the hook gap, on `engine`). Optional. */
+  missedQuestion?: string | null;
   /** Why no audit context is available, for the operator. */
   unavailableReason: string | null;
 }

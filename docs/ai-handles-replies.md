@@ -184,3 +184,37 @@ draft said "I'll send a short voice note now". Every `initial_*` template is now
 Preview: deployed dry run, gpt-4o-mini, 67 fixtures (57 + KSM + no website / zero issues / running / failed / above a third /
 the follow-up steps), 0 warnings, $0.012; the changed ones re-run after Paul's edits, 0 warnings. Tests: `reply-move.test.ts`
 §6–8, `website-check.test.ts` §6, `ai-reply-drafts.test.ts`, `crawl-in-audit-callscreen.test.ts`.
+
+## 2026-10-20 (later) — missed search first, the full score, auto-reply bursts (Paul)
+
+Three faults seen live on 2026-10-19:
+- **Ven Language Services** answered the opener with an auto-responder burst ("Buenas noches" / "Thanks for contacting Ven
+  Language Services" / "Are you interested in Spanish lessons?...", 72 seconds) and got "Cheers for your reply… voice note or call?".
+- **Nola's Driving School** (ChatGPT 1/1, Gemini 0/1, Google AI 0/1 = 33%) got "named you in 1 of 2 answers, so there's a gap in
+  the rest" with no names: the drafter read the run summary (ChatGPT + Gemini only), so 1 of 2 looked above a third.
+
+Rules now (`src/lib/replyMove.ts`):
+- **Auto-reply reading** `autoReplyFlags(thread)`: a message is an auto-reply on its own wording (`isAutoReply`: the shared
+  triage, the away/"thanks for your message" wording, a WhatsApp Business greeting "Thanks for contacting …" / "Welcome to …"
+  with no question at the end, or auto-reply wording in Spanish / French / Portuguese / Italian / German), OR as part of a
+  BURST holding one: prospect messages with nothing of ours between, each within `AUTO_BURST_MS` (2 min). No timestamps = no
+  burst (fixtures). A burst with no auto-reply wording (a person typing fast) is never one. An auto-responder's "interested"
+  is never a clear yes.
+- **The first auto-reply to the opener** (nothing real from them before it, no loop guard) → move `auto_reply`, label
+  Auto-reply (not a real reply, never counted as Replied), draft = the code-built first-reply pitch (`fixedText`).
+  `aiReplyDecision` drafts an `auto_reply` only when it carries `fixedText`. A repeat, or an auto-reply after a real reply,
+  keeps the old rule: nothing drafted. `undoReplied` reads the whole thread, so every message of a burst counts as automated.
+- **The count is the score the audit SHOWS**: `resolveAuditReplyVars` scores with `scoringMethodFor(audit.created_at)` and
+  returns `scoreNamed` / `scoreTotal` (= `hookScore.scored`: Google AI counted where Google showed an AI answer). The drafter's
+  one-third rule reads it; only an audit with no complete quick-check score falls back to the run summary. The template SEND
+  gate (`NAMED_INSTEAD_TEMPLATES`) still reads method 1 — unchanged here.
+- **Lead with the best missed search** (`askedPhrase`, `spokenSearch`): the hook pick's engine + question, and that answer's
+  names: `I asked Gemini "Who is the best driving instructor for beginners in Halstead?" and it mentioned A, B and C.` A
+  search phrase follows "for"; ", UK" is dropped. Only when the pick's engine is the conversation's engine (never two tools);
+  else trade + town. The checker ignores a "?" inside the quoted search.
+- **Soft version** (named in MORE than a third): the same missed search and its names, no "instead", no closer. ⛔ No draft
+  says "named you in X of Y answers" or "a gap in the rest"; the checker warns on both.
+
+Preview (local, live data, read-only, nothing sent): Alisons "Yes it is." (1/2, Google AI showed no answer) → soft; Nola
+"Yes" (1/3) → full pitch led by Gemini's missed question; Ven burst → Auto-reply + full pitch; a Spanish auto-reply → Auto-reply
++ pitch. 0 checker warnings. Tests: `reply-move.test.ts` §9 (Nola), §10 (Ven), `ai-reply-drafts.test.ts` §3.

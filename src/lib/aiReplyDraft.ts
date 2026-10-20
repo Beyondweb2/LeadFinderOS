@@ -113,8 +113,9 @@ export function aiReplyDecision(i: AiReplyDecisionInput): AiReplyDecision {
   if (i.hadOutreach !== true) return { kind: 'skipped', reason: 'not_outreach' };
   const p = i.plan;
   if (p.stop && p.needsYou) return { kind: 'needs_you', reason: p.needsYou.reason, label: p.needsYou.label, stop: true };
-  /* An auto-reply (even a repeated one) is never answered and never flagged: nothing for a person to do. */
-  if (p.move === 'auto_reply') return { kind: 'skipped', reason: 'automated' };
+  /* An auto-reply (even a repeated one) is never answered and never flagged: nothing for a person to do. EXCEPT the first
+     auto-reply to the opener (they have not confirmed who they are): its draft is the code-built first-reply pitch. */
+  if (p.move === 'auto_reply' && !p.fixedText) return { kind: 'skipped', reason: 'automated' };
   if (p.needsYou) return { kind: 'needs_you', reason: p.needsYou.reason, label: p.needsYou.label, stop: false };
   if (p.move === 'ack') return { kind: 'skipped', reason: 'acknowledgement' };
   if (!serviceWindowState(i.inboundAt, i.nowMs ?? Date.now()).open) return { kind: 'needs_template' };
@@ -300,8 +301,12 @@ const COMMON_CAPS = new Set(['I', "I'm", "I'll", "I've", "I'd", 'AI', 'ChatGPT',
 /** A promise of WHEN something comes ("I'll send it now", "recording it shortly"). Paul, 2026-10-20: never. */
 const TIMING_PROMISE = /\b(send|sending|sent|record|recording|do|doing|get)\b[^.?!\n]{0,40}\b(now|right\s+away|straight\s+away|shortly|in\s+a\s+(minute|min|sec|second|moment|bit)|later\s+today|today|tonight|this\s+(morning|afternoon|evening)|in\s+\d+\s*(mins?|minutes|hours?))\b/i;
 /** The first-reply pitch is code-built and may run to five lines (Paul, 2026-10-20). */
-const lineCap = (p: MovePlan) => (p.move === 'first_reply_pitch' ? 5 : 3);
-const charCap = (p: MovePlan) => (p.move === 'first_reply_pitch' ? 640 : p.confidence ? 480 : 320);
+const isPitch = (p: MovePlan) => p.move === 'first_reply_pitch' || (p.move === 'auto_reply' && !!p.fixedText);
+const lineCap = (p: MovePlan) => (isPitch(p) ? 5 : 3);
+const charCap = (p: MovePlan) => (isPitch(p) ? 640 : p.confidence ? 480 : 320);
+/** "named you in 1 of 2 answers", "there's a gap in the rest": never in any draft (Paul, 2026-10-20, Nola). Lead with the
+ *  missed search instead. */
+const SHARE_WORDING = /\bnamed\s+you\s+in\s+\d+\s+(?:of|out\s+of)\s+\d+|\bgap\s+in\s+the\s+rest\b|\bin\s+\d+\s+(?:of|out\s+of)\s+\d+\s+answers\b/i;
 /** A claim about past results or other clients (Paul, 2026-10-20): only through an APPROVED case study (none today). */
 const PAST_RESULTS = /\b(success(?:es|ful)?|(?<!\b(?:your|the)\s)results?|clients?\s+(?:loved|love|are\s+(?:happy|delighted))|case\s+stud(?:y|ies)|(?:other|our|happy|past)\s+(?:clients|customers)|we'?ve\s+helped|helped\s+(?:loads|lots|many|plenty|other))\b/i;
 /** Never an absolute promise around the guarantee (Paul, 2026-10-20). */
@@ -320,7 +325,8 @@ export function checkAiReply(reply: string, c: AiReplyContext): string[] {
   if (r.length > charCap(p)) out.push(`Long for a reply (over ${charCap(p)} characters).`);
   if (TIMING_PROMISE.test(r) && p.move !== 'set_call') out.push('Promises when something will come ("now", "shortly"). Never promise timing.');
   if (/\bi\s+was\s+looking\s+for\b/i.test(r)) out.push('Says "I was looking for"; say "I asked".');
-  const qs = (r.match(/\?/g) ?? []).length;
+  /* A quoted search ("Who is the best … in Halstead?") is what we asked AI, not a question to them. */
+  const qs = (r.replace(/"[^"\n]*"/g, '').match(/\?/g) ?? []).length;
   if (qs > 1) out.push('Asks more than one question.');
   if (usesDash(r)) out.push('Uses a dash.');
   if (LINK.test(r)) out.push('Has a link. Never send the sign-up link from a draft.');
@@ -336,6 +342,7 @@ export function checkAiReply(reply: string, c: AiReplyContext): string[] {
     out.push(`Mentions the guarantee in words that are not the sheet's ("${GUARANTEE_LINE}").`);
   }
   /* Evidence. */
+  if (SHARE_WORDING.test(r)) out.push('Says "named you in X of Y answers" or "a gap in the rest". Say the search where they were not named, and who came up.');
   if (INSTEAD_CLAIM.test(r) && !(e.named && mayClaimNamedInstead(e.named.named, e.named.valid))) {
     out.push('Says AI named others instead, but they were named in more than a third of answers (or no counts are on record).');
   }
