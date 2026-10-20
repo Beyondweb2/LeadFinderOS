@@ -27,7 +27,7 @@ import { useSearchEnrichment } from '@/hooks/useSearchEnrichment';
 import { useFindEmails } from '@/hooks/useFindEmails';
 import { useCheckedBusinesses } from '@/hooks/useCheckedBusinesses';
 import { useFindLeadsBulkAdd } from '@/hooks/useFindLeadsBulkAdd';
-import { addSummaryReasons, addSummaryTitle, SKIP_GROUP_WORDS, skipGroupOf, type AddProgress, type AddRowAnswer, type BulkAddLead } from '@/lib/findLeadsBulkAdd';
+import { addSummaryReasons, addSummaryTitle, addVisibilityLine, isAccessProblem, SKIP_GROUP_WORDS, skipGroupOf, type AddProgress, type AddRowAnswer, type BulkAddLead } from '@/lib/findLeadsBulkAdd';
 import { outsideSearchedTown } from '@/lib/inTown';
 import { Flame, Zap, Search, MapPin, Info, Globe2, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -322,14 +322,22 @@ const Index = () => {
       const lead = r.k ? byId.get(r.k) : undefined;
       if (r.outcome === 'created' && r.lead_id && lead) noteAdded(lead, { id: r.lead_id }, campaignId);
     }
+    /* ⛔ SAY WHAT IS REALLY IN THEIR OUTREACH (2026-10-20): the created leads are read back the way the person's own
+       Outreach reads them (useFindLeadsBulkAdd → readBack). Fewer than added = an access problem, said as one. */
+    const seen = addVisibilityLine(res.summary.added, res.visibility);
+    const reasons = addSummaryReasons(res.summary);
+    const accessProblem = isAccessProblem(res.summary.added, res.visibility);
     return {
-      added: res.summary.added, skipped: res.summary.skipped,
-      title: addSummaryTitle(res.summary), description: addSummaryReasons(res.summary) || undefined, rows: res.rows,
+      added: res.summary.added, skipped: res.summary.skipped, accessProblem,
+      title: seen ?? addSummaryTitle(res.summary),
+      description: reasons || undefined,
+      rows: res.rows,
     };
   }, [bulkAdd, countryOf, townOf, lastSearchKeyword, activeCampaign, getEnrichment, noteAdded]);
   /* The row button: a batch of one. Silent when added (as before); says why when not. */
   const addOne = useCallback(async (lead: Lead, campaignId: string | null) => {
     const res = await handleBulkAdd([lead], campaignId);
+    if (res.added > 0 && 'accessProblem' in res && res.accessProblem) toast({ title: res.title, variant: 'destructive' });
     if (res.added > 0) return { id: res.rows.find((r) => r.outcome === 'created')?.lead_id ?? null };
     const r = res.rows[0];
     const g = r ? skipGroupOf(r) : null;
