@@ -209,12 +209,16 @@ export function inboundLabel(text: string | null | undefined, messageType?: stri
 export const engineName = (w: string) => (w === 'chatgpt' ? 'ChatGPT' : w === 'gemini' ? 'Gemini' : 'AI');
 const withA = (s: string) => (/^[aeiou]/i.test(s) ? `an ${s}` : `a ${s}`);
 const listNames = (n: string[]) => (n.length <= 1 ? n.join('') : `${n.slice(0, -1).join(', ')} and ${n[n.length - 1]}`);
+/** Issue titles as one list: semicolons when a title has its own comma, so the list still reads. */
+const listIssues = (n: string[]) => (n.some((x) => x.includes(',')) && n.length > 1 ? `${n.slice(0, -1).join('; ')}; and ${n[n.length - 1]}` : listNames(n));
+/** "Driving instructors" → "driving instructor" (an audit stores the trade capitalised; an acronym such as MOT stays). */
+const tradeWord = (t: string) => t.trim().replace(/s$/i, '').replace(/^([A-Z])(?=[a-z])/, (c) => c.toLowerCase());
 
 /** One true sentence from the audit, or null. "Named others instead" only under the one-third rule. */
 export function auditLine(e: MoveEvidence): string | null {
   if (!e.trade || !e.town) return null;
   const tool = engineName(e.engineWords);
-  const search = `${withA(e.trade.replace(/s$/i, ''))} in ${e.town}`;
+  const search = `${withA(tradeWord(e.trade))} in ${e.town}`;
   if (!e.named || e.named.valid <= 0) return null;
   const { named, valid } = e.named;
   if (named >= valid) return `When I asked ${tool} for ${search} it named you every time, which is great.`;
@@ -272,7 +276,7 @@ export function firstReplyPitch(e: MoveEvidence): { lines: string[]; question: s
     return { lines: [neutral ?? PITCH_INTRO_LINE, ...(noSite ? [PITCH_NO_SITE_LINE] : [])], ...next };
   }
   const site = siteOf(e);
-  const asked = `I asked ${engineName(e.engineWords)} for ${withA(e.trade.replace(/s$/i, ''))} in ${e.town}`;
+  const asked = `I asked ${engineName(e.engineWords)} for ${withA(tradeWord(e.trade))} in ${e.town}`;
   const rivals = e.competitors.slice(0, 3);
   const pointed = rivals.length ? PITCH_POINTED_LINE : PITCH_POINTED_LINE_NO_NAMES;
   const issues = site.state === 'issues' ? site.issues.slice(0, PITCH_MAX_ISSUES) : [];
@@ -283,7 +287,7 @@ export function firstReplyPitch(e: MoveEvidence): { lines: string[]; question: s
   const first = rivals.length ? `${asked} and it mentioned ${listNames(rivals)}.` : `${asked} and it mentioned other businesses, not you.`;
   const why = noSite
     ? `${PITCH_WHY_LEAD} ${PITCH_NO_SITE_LINE}`
-    : `${PITCH_WHY_LEAD} found ${issues.length > 1 ? 'a few things' : 'one thing'} on your website: ${listNames(issues.map(carryOn))}.`;
+    : `${PITCH_WHY_LEAD} found ${issues.length > 1 ? 'a few things' : 'one thing'} on your website: ${listIssues(issues.map(carryOn))}.`;
   return { lines: [first, `${PITCH_INSTEAD_LINE} ${why}`, pointed], ...close };
 }
 /** The pitch as one message: its lines with a blank line between; the closer's question sits under the line before it. */

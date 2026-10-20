@@ -92,6 +92,9 @@ console.log('6. the first-reply pitch (Paul, 2026-10-20)');
   ok(txt.includes('AI is recommending your competitors instead. I looked into why this might be happening and found a few things on your website: some pages have no main heading, your site is not secure (no padlock) and there is no phone number on the site.') && !/fourth/.test(txt), 'line 2: up to three crawl issue titles, in order');
   ok(p1.lines[p1.lines.length - 1] === PITCH_POINTED_LINE && p1.question === PITCH_EMOTIONAL_Q && p1.closer === 'emotional', 'ends: the pointed line, then ONE emotional question');
   ok(!/agency|voice note|guarantee|money back|£|confident/i.test(txt + p1.question), 'no agency question, voice note, guarantee or price in the pitch');
+  const caps = firstReplyPitch({ ...issuesEv, trade: 'Driving instructors', site: { state: 'issues', issues: ['Some pages are unfinished, with sample text on them', 'Lots of your pages are near enough the same'] } });
+  ok(caps.lines[0].startsWith('I asked Gemini for a driving instructor in Rugby'), 'a capitalised stored trade is said lower case ("a driving instructor")');
+  ok(caps.lines[1].includes('some pages are unfinished, with sample text on them; and lots of your pages are near enough the same.'), 'a title with its own comma: the list uses semicolons');
   const none = firstReplyPitch(noSiteEv);
   ok(none.lines[1].endsWith(PITCH_NO_SITE_LINE) && none.question === PITCH_EMOTIONAL_Q && !/agency/i.test(none.lines.join(' ')), 'no website: the no-site line, the emotional question, never the agency question');
   for (const state of ['clean', 'not_checked', 'unreadable'] as const) {
