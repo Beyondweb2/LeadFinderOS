@@ -26,7 +26,7 @@
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 
 import { auditFromStoredCrawl, HOME_FETCH_LABELS, type AuditFinding, type StoredCrawlForAudit, type SiteAudit } from './siteAudit.ts';
-import { isBrokenPageStatus } from './contentTrust.ts';
+import { isBrokenPageStatus, usableContentTrust, type SiteOwner } from './contentTrust.ts';
 import { classifyLeadWebsite } from './leadWebsiteKind.ts';
 import { usableSiteEvidence, type EvidenceKind, type SiteEvidence } from './siteEvidence.ts';
 import { SPEAK_MIN_PRIORITY, usableInsights, type InsightKind } from './salesInsights.ts';
@@ -81,6 +81,8 @@ export interface WebsiteCheckSummary {
   notChecked: string[];
   /** Why the site could not be read (depth 'failed'). */
   failure: string | null;
+  /** The owner / founder the site names, with the page it was read on (contentTrust.ownerOf). Absent = not read. */
+  owner?: SiteOwner | null;
 }
 
 export type WebsiteCheckState = 'no_website' | 'profile' | 'not_checked' | 'unreadable' | 'issues' | 'clean';
@@ -163,7 +165,8 @@ function evidenceIssues(result: { evidence?: SiteEvidence | null; evidenceVersio
 }
 
 /* The no-website words, said the same on every internal screen (the client report keeps its own build-one panel). */
-export const NO_WEBSITE_LINE = 'No website on file, so there is nothing to crawl.';
+/** Paul, 2026-10-20. ⛔ Never "harming" / "cannot be named": only that there is no site to read. */
+export const NO_WEBSITE_LINE = 'No website found. Gemini and Google AI have no site of yours to read.';
 export const NOT_CHECKED_LINE = 'Website not checked yet.';
 
 function asSeverity(s: AuditFinding['severity']): WebsiteIssueSeverity | null {
@@ -221,7 +224,13 @@ export function summariseWebsiteCheck(row: StoredCrawlForAudit | null | undefine
   const issues: WebsiteIssue[] = [];
   const strengths: Array<{ id: string; title: string }> = [];
   const seen = new Set<string>();
-  for (const raw of audit.findings) {
+  /* ⛔ THE SAME PAGES ARE COUNTED ONCE (Paul, 2026-10-20). Pages already raised as unfinished placeholders (KSM: six
+     "Post N Headline" pages of lorem ipsum) are taken out of the thin / unlinked / duplicate / heading findings; a finding
+     left with none of its own pages goes. A template set with no page list that is exactly the placeholder set goes too. */
+  const placeholderPaths = new Set((audit.findings.find((x) => x.id === 'ct_placeholder_content')?.urls ?? []).map(pagePath));
+  for (const raw0 of audit.findings) {
+    const raw = placeholderPaths.size ? withoutPlaceholderPages(raw0, placeholderPaths) : raw0;
+    if (!raw) continue;
     if (raw.severity === 'good') { if (strengths.length < WEBSITE_CHECK_MAX_STRENGTHS) strengths.push({ id: raw.id, title: raw.title }); continue; }
     const f = trueBrokenOnly(raw);
     if (!f) continue;
@@ -269,7 +278,45 @@ export function summariseWebsiteCheck(row: StoredCrawlForAudit | null | undefine
     version: WEBSITE_CHECK_VERSION, depth: deep ? 'deep' : 'quick', checkedAt,
     pagesRead, pagesFound: audit.coverage?.urlsDiscovered ?? null, capped: audit.coverage?.capped === true,
     issues: issues.slice(0, WEBSITE_CHECK_MAX_ISSUES), strengths, notChecked: audit.notChecked.slice(0, 8), failure: null,
+    ...ownerField(row),
   };
+}
+
+/** The owner the content check read, when it read one (an older check carries no owner field: nothing is said). */
+function ownerField(row: StoredCrawlForAudit): { owner?: SiteOwner | null } {
+  const ct = usableContentTrust((row.result as { contentTrust?: unknown } | null | undefined)?.contentTrust);
+  return ct && 'owner' in ct ? { owner: ct.owner ?? null } : {};
+}
+
+const pagePath = (u: string): string => { try { const x = new URL(u); return x.hostname.replace(/^www\./, '') + (x.pathname.replace(/\/+$/, '') || '/'); } catch { return u; } };
+/** Findings that can repeat the placeholder pages. */
+const PLACEHOLDER_OVERLAP = new Set(['near_duplicate_pages', 'thin_pages', 'thin_key_pages', 'sitemap_only_pages', 'ct_orphan_pages', 'duplicate_titles',
+  'vs_town_swapped_pages', 'missing_h1', 'missing_description', 'multiple_h1', 'missing_title', 'long_titles', 'vs_key_page_basics']);
+function withoutPlaceholderPages(f: AuditFinding, placeholders: Set<string>): AuditFinding | null {
+  if (!PLACEHOLDER_OVERLAP.has(f.id)) return f;
+  const urls = f.urls ?? [];
+  if (!urls.length) return f.id === 'near_duplicate_pages' && f.count === placeholders.size ? null : f;
+  const kept = urls.filter((u) => !placeholders.has(pagePath(u.replace(/\s*\(\d{3}\)\s*$/, ''))));
+  if (kept.length === urls.length) return f;
+  if (!kept.length) return null;
+  const n = kept.length;
+  return { ...f, urls: kept, count: n, saw: f.saw.replace(/^\d[\d,]*\s+(pages?)\b/, () => n + ' ' + (n === 1 ? 'page' : 'pages')) };
+}
+
+/** The same pages counted once, on a summary stored before summariseWebsiteCheck did it (it keeps only the first few pages
+ *  of each issue): an issue whose pages shown are all placeholder pages and that counts no more of them goes, and so does
+ *  a template set with no page list that is exactly the placeholder count. */
+export function placeholderPagesOnce(s: WebsiteCheckSummary): WebsiteCheckSummary {
+  const ph = s.issues.find((i) => i.id === 'ct_placeholder_content');
+  if (!ph || !ph.pages.length) return s;
+  const set = new Set(ph.pages.map(pagePath));
+  const phCount = Math.max(ph.count, ph.pages.length);
+  const issues = s.issues.filter((i) => {
+    if (i === ph || !PLACEHOLDER_OVERLAP.has(i.id)) return true;
+    if (!i.pages.length) return !(i.id === 'near_duplicate_pages' && i.count === phCount);
+    return !(i.pages.every((u) => set.has(pagePath(u))) && i.count <= phCount);
+  });
+  return issues.length === s.issues.length ? s : { ...s, issues };
 }
 
 /** A stored summary, when it is one this code reads. */
@@ -314,7 +361,8 @@ export function websiteCheckFor(
   if (kind.source === 'directory_profile' || kind.source === 'social_profile') {
     return empty('profile', `No standalone business website found, only a ${kind.label} profile — nothing of their own to check.`);
   }
-  const summary = usableWebsiteCheck(row?.result?.websiteCheck) ?? summariseWebsiteCheck(row);
+  const stored = usableWebsiteCheck(row?.result?.websiteCheck);
+  const summary = stored ? placeholderPagesOnce(stored) : summariseWebsiteCheck(row);
   if (!summary) return empty('not_checked', NOT_CHECKED_LINE);
   const now = opts.nowMs ?? Date.now();
   const at = summary.checkedAt ? Date.parse(summary.checkedAt) : NaN;
@@ -374,6 +422,8 @@ const PLAIN_LINE: Record<string, string> = {
   vs_duplicate_faq_pages: 'Several FAQ pages repeat the same questions',
   vs_duplicate_homepage: 'There is a second copy of your homepage that Google can list',
   vs_raw_link_markup: 'A broken link shows its code on your pages',
+  ct_placeholder_content: 'Some pages on your site are unfinished, with sample text still on them',
+  ct_areas_not_stated: 'Your site doesn’t say which areas you cover',
 };
 
 /** The plain words for an issue (no technical terms). */

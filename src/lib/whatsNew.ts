@@ -22,6 +22,24 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-20-crawl-always', date: '2026-10-20', title: 'Every audited lead gets its website checked, and the call screen never shows an empty website section', audience: 'all',
+    body: 'The Website crawl section on the call screen now always shows one of four things: Checking the website, what it found, "Couldn\'t check the site", or "No website found". Older leads with an AI result and no check are being checked in the background, a few a minute. The check now spots unfinished sample pages, a site that never says which areas it covers, and the owner\'s name.',
+    report: {
+      added: [
+        'The owner\'s name, when the site states it, shown in the Website crawl section with the page it was read on.',
+        'A new issue: "Your site doesn\'t say which areas you cover", when there is no areas list or statement anywhere on the site.',
+        'A slow background catch-up that checks the website of every open lead that has an AI result but no website check.',
+      ],
+      changed: [
+        'A failed check is tried again once automatically. If it fails again the section says "Couldn\'t check the site."',
+        'No website: the section says "No website found. Gemini and Google AI have no site of yours to read." The call script and voice note say "I couldn\'t find a website for you, so Gemini and Google AI have no site of yours to read."',
+        'The same pages are counted once: placeholder pages are no longer also counted as thin, unlinked or near-identical pages.',
+        'New AI audits ask about the area the lead was found under in Find Leads, when the business is within 25 km of it. Otherwise they use the town from Google\'s address, as before.',
+        'The website check reads one page at a time and skips pages the site\'s robots.txt asks crawlers to leave alone.',
+      ],
+      removed: ['"Not checked yet" and the "Check now" button in the Website crawl section.'],
+      effect: 'Before you ring, there is always a website answer next to the AI result, and the script only mentions the site when the check found something.',
+    } },
   { id: '2026-10-19-needs-you-fact-sheet', date: '2026-10-19', title: 'WhatsApp: "Needs you" flags, a better Draft reply, and stops handled at once', audience: 'all',
     body: 'Replies that need a person are flagged "Needs you" with the reason, at the top of the Inbox and on the bell. Draft reply writes a short reply in Paul\'s style from the offer fact sheet and the stored audit. Nothing is ever sent without someone pressing Approve & send.',
     report: {

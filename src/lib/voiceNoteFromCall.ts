@@ -15,7 +15,7 @@
       plain titles (up to two said), and a site with no serious issue gets no website line at all.
    Pure; relative imports with an explicit .ts.
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
-import { ISSUES_FOUND_MANY_LINE, ISSUES_FOUND_ONE_LINE } from './callScript.ts';
+import { ISSUES_FOUND_MANY_LINE, ISSUES_FOUND_ONE_LINE, NO_WEBSITE_SPOKEN } from './callScript.ts';
 import { plainIssueTitle } from './websiteCheck.ts';
 import { callerFirstName } from './callerName.ts';
 import type { ColdCallPlaybook } from './coldCallPlaybook.ts';
@@ -56,7 +56,7 @@ export function voiceNoteFromCall(p: Pick<ColdCallPlaybook, 'evidence' | 'script
     const said = check.serious.slice(0, VOICE_NOTE_ISSUES_SAID).map((i) => lowerFirst(plainIssueTitle(i)));
     lines.push(said.length === 1 ? `It's that ${said[0]}.` : `Things like: ${said[0]}, and ${said[1]}.`);
   } else if (p.findingsStatus === 'no_website') {
-    lines.push("I couldn't find a website for you, so there's a lot less for AI to go on about what you do and where.");
+    lines.push(NO_WEBSITE_SPOKEN);
   } else if (p.findingsStatus === 'profile') {
     lines.push(`I could only find your ${p.site.label ?? 'directory'} profile, not a site of your own, so there's a lot less for AI to go on.`);
   }

@@ -64,7 +64,7 @@ export type ContentTrustKind =
   | 'conflicting_facts' | 'no_proof' | 'accreditations_unnamed' | 'vague_headings' | 'area_coverage'
   | 'ai_images' | 'link_mismatch' | 'no_viewport' | 'logo_alt_mismatch' | 'image_alt' | 'identical_dates'
   | 'generic_copy' | 'mixed_audience' | 'missing_entity_facts' | 'no_people' | 'no_accreditations'
-  | 'schema_incomplete' | 'schema_unverified' | 'dead_links' | 'orphan_pages' | 'no_sitemap';
+  | 'schema_incomplete' | 'schema_unverified' | 'dead_links' | 'orphan_pages' | 'no_sitemap' | 'areas_not_stated';
 
 /** Where a kind sits in the operator's grouped audit (siteAudit categories). */
 export type ContentTrustCategory = 'discovery' | 'ai_access' | 'entity' | 'content' | 'structured_data' | 'technical' | 'local_evidence';
@@ -82,6 +82,7 @@ export const CONTENT_TRUST_KINDS: Record<ContentTrustKind, { evidenceClass: Evid
   accreditations_unnamed: { evidenceClass: 'B', category: 'local_evidence', priority: 7 },
   vague_headings: { evidenceClass: 'B', category: 'content', priority: 8 },
   area_coverage: { evidenceClass: 'B', category: 'local_evidence', priority: 9 },
+  areas_not_stated: { evidenceClass: 'B', category: 'local_evidence', priority: 9 },
   ai_images: { evidenceClass: 'B', category: 'local_evidence', priority: 10 },
   link_mismatch: { evidenceClass: 'B', category: 'discovery', priority: 11 },
   broken_links: { evidenceClass: 'A', category: 'discovery', priority: 12 },
@@ -129,6 +130,25 @@ export interface ContentTrust {
   /** Checks that could not be made on this evidence. */
   notChecked: string[];
   pagesRead: number;
+  /** The owner / founder the site names, with the page and the words it was read in (2026-10-20). Null = none stated;
+   *  absent = a check from before this was read. ⛔ Never guessed from a name that is only mentioned. */
+  owner?: SiteOwner | null;
+}
+
+export interface SiteOwner { name: string; url: string; quote: string }
+
+/** The name the site gives most often as its owner; ties go to the page read first. */
+export function ownerOf(pages: Array<Pick<PageObs, 'url' | 'owner'>>): SiteOwner | null {
+  const seen = new Map<string, { n: number; first: SiteOwner }>();
+  for (const p of pages) for (const o of p.owner ?? []) {
+    const k = o.name.split(' ')[0].toLowerCase();
+    const cur = seen.get(k);
+    if (cur) { cur.n += 1; if (!cur.first.name.includes(' ') && o.name.includes(' ')) cur.first.name = o.name; }
+    else seen.set(k, { n: 1, first: { name: o.name, url: p.url, quote: o.q } });
+  }
+  let best: { n: number; first: SiteOwner } | null = null;
+  for (const v of seen.values()) if (!best || v.n > best.n) best = v;
+  return best ? best.first : null;
 }
 
 /* ── one page → its observations ──────────────────────────────────────────────────────────────── */
@@ -165,6 +185,11 @@ export interface PageObs {
   /** Post dates on this page, as YYYY-MM-DD, keyed by the post address they belong to. */
   dates: Array<{ p: string; d: string }>;
   places: string[];
+  /** Where the site SAYS which areas it covers ("Areas we cover", "serving Norwich…"), quoted (2026-10-20).
+   *  Absent on observations stored before it existed — then the areas check keeps its older reading. */
+  coverage?: string[];
+  /** A person the page names as the owner / founder ("owned by Kylie", "I’m Kylie, the owner"), with the words read (2026-10-20). */
+  owner?: Array<{ name: string; q: string }>;
   schema: { blocks: number; bad: number; biz: Array<{ name: string; tel: string; pc: string; url: string }> };
   phones: string[];
   postcodes: string[];
@@ -274,6 +299,24 @@ const GENERIC_PHRASES = [
 ];
 const COMMERCIAL_RE = /\b(?:commercial|industrial|c&i|b2b|businesses|factories|warehouses?|offices|facilities management|contractors?)\b/i;
 const DOMESTIC_RE = /\b(?:domestic|residential|homeowners?|households?|your home|home ?owners?|elect home|homes)\b/i;
+/** A statement of the areas a business covers, followed by a place ("We cover Norwich", "Serving Great Yarmouth"). */
+const COVERAGE_RE = /\b(?:[Aa]reas? (?:we|I) (?:cover|serve|work in)|[Aa]reas? [Cc]overed|[Ss]ervice [Aa]reas?|(?:[Ww]e|I) (?:cover|serve|travel to|work across)|\b(?:[Ww]ork|[Ww]orking|[Oo]perate|[Oo]perating) (?:across|throughout)|(?:[Pp]roudly )?[Ss]erving|[Cc]overing)[:\s]+(?:the\s+)?(?:(?:whole|wider|surrounding)\s+)?(?:areas? of\s+|towns? of\s+)?[A-Z][a-z]{2,}/g;
+/** "owned by Kylie", "founded by Pete Dixon", "I’m Kylie, the owner", "My name is Sam and I’m the founder". */
+const OWNER_RES: RegExp[] = [
+  /\b(?:owned|run|founded|started|set up|established) by ([A-Z][a-z]+(?: [A-Z][a-z]+)?)\b/g,
+  /\bI[’']m ([A-Z][a-z]+(?: [A-Z][a-z]+)?),? (?:the )?(?:owner|founder|proprietor|managing director)\b/g,
+  /\b[Mm]y name is ([A-Z][a-z]+(?: [A-Z][a-z]+)?)[,.]? (?:and )?I[’']?(?:m| am) the (?:owner|founder|proprietor)\b/g,
+];
+const NOT_A_NAME = new Set(['the', 'our', 'us', 'we', 'me', 'my', 'a', 'an', 'this', 'family', 'local', 'experienced', 'qualified', 'professional', 'friendly', 'people', 'customers', 'locals', 'professionals', 'experts', 'mum', 'dad', 'husband', 'wife', 'brothers', 'sisters', 'google', 'facebook']);
+function ownersIn(text: string): Array<{ name: string; q: string }> {
+  const out: Array<{ name: string; q: string }> = [];
+  for (const re of OWNER_RES) for (const m of text.matchAll(re)) {
+    const name = m[1].trim();
+    if (NOT_A_NAME.has(name.split(' ')[0].toLowerCase()) || out.length >= 4) continue;
+    out.push({ name, q: `“${quote(text, m.index ?? 0, m[0].length, 20)}”` });
+  }
+  return out;
+}
 const PLACE_PREP_RE = /\b(?:in|across|throughout|covering|cover|covers|serving|serve|serves|around|near|based in|areas? of)\s+((?:the\s+)?[A-Z][a-zA-Z'’]+(?:[ -](?:upon|on|under|le|de|in|by)?[ -]?[A-Z][a-zA-Z'’]+){0,2})/g;
 const NOT_PLACE = new Set(['the', 'our', 'your', 'we', 'all', 'each', 'every', 'any', 'this', 'that', 'these', 'business', 'businesses', 'commercial', 'industrial',
   'domestic', 'residential', 'addition', 'order', 'touch', 'case', 'line', 'time', 'place', 'practice', 'person', 'house', 'stock', 'charge', 'total',
@@ -296,7 +339,7 @@ export function pageObservations(html: string, pageUrl: string, homeUrl: string,
     years: [], founded: [], companyNo: null, creds: [], vagueCreds: [], reviews: [], cases: [], people: false,
     placeholders: [], deadLinks: [], links: [], contactMix: [],
     img: { n: 0, noAlt: 0, ai: [], altBad: [], logos: 0, photos: [] },
-    dates: [], places: [], schema: { blocks: 0, bad: 0, biz: [] }, phones: [], postcodes: [], generic: [], specifics: 0,
+    dates: [], places: [], coverage: [], owner: [], schema: { blocks: 0, bad: 0, biz: [] }, phones: [], postcodes: [], generic: [], specifics: 0,
     audience: { com: false, dom: false },
   };
 
@@ -459,6 +502,15 @@ export function pageObservations(html: string, pageUrl: string, homeUrl: string,
     if (typeof loc === 'string') addPlace(loc);
   }
   obs.places = [...places].slice(0, 30);
+
+  /* WHERE THE SITE SAYS IT WORKS (2026-10-20). A place named in passing ("lived in Norwich", "a career in Kent") is not a
+     statement of coverage; only an areas list, areaServed markup, or "we cover / serving / covering <Place>" is. */
+  const coverage: string[] = [];
+  for (const m of text.matchAll(COVERAGE_RE)) { if (coverage.length < 4) coverage.push(`“${quote(text, m.index ?? 0, m[0].length, 20)}”`); }
+  if (areasHead && places.size) coverage.push(`An areas list: “${clip(tagText(areasHead[0]), 120)}”`);
+  if (nodes.some((n) => n?.areaServed)) coverage.push('areaServed in the business markup');
+  obs.coverage = coverage.slice(0, 5);
+  obs.owner = ownersIn(text);
 
   // Business markup: what it says, to compare with what the page shows.
   const blocks = [...raw.matchAll(/<script\b[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi)].map((m) => m[1].trim());
@@ -692,7 +744,21 @@ export function buildContentTrust(input: ContentTrustInput): ContentTrust {
     return toks.some((t) => /^(?:areas?|locations?|towns?|coverage|near)$/.test(t)) || toks.some((t) => placeTokens.has(t));
   });
   const national = pages.some((p) => p.places.some((x) => /^(?:UK|United Kingdom)$/i.test(x))) || pages.some((p) => /across the uk|nationwide|uk-wide/i.test(p.title + ' ' + p.h1.join(' ')));
-  if (!areaPages.length) {
+  /* ⛔ AREAS SERVED NOT STATED (2026-10-20, Paul — KSM Driving Tuition names only its own village). Judged only when every
+     page read carries the coverage reading (an older stored observation has none: the older reading below stands). */
+  const coverageKnown = pages.every((p) => Array.isArray(p.coverage));
+  const coverageSaid = pages.some((p) => (p.coverage ?? []).length > 0);
+  const townInHeadings = townW.length > 0 && pages.some((p) => { const hw = new Set(words(`${p.title} ${p.h1.join(' ')}`)); return townW.every((t) => hw.has(t)); });
+  if (!areaPages.length && coverageKnown && !coverageSaid && !national) {
+    /* Medium when the site does not even put its town in a title or main heading; low (a minor point) when it does. */
+    add({ kind: 'areas_not_stated', severity: townInHeadings ? 'low' : 'medium', absence: true,
+      title: 'We couldn’t find which areas you cover',
+      why: 'When someone asks for a business in a particular town, a clear list of the areas you serve gives search engines and AI tools something specific to match.',
+      evidence: [`No “areas we cover” list or statement${scope || ' on any page read'}`, `No area pages among the ${plural(uniq(input.knownUrls.map(pathOf)).length, 'address', 'addresses')} we know of`],
+      urls: home ? [home.url] : [],
+      needs: 'Which towns and areas you genuinely serve.',
+      spoken: 'Your site doesn’t really say which areas you cover.' });
+  } else if (!areaPages.length) {
     /* Medium only when the site barely says where it works at all — its home town in no title or main heading
        either. A local business whose pages already say its town gets the gentler (low) note. */
     const townInHeads = townW.length > 0 && pages.some((p) => { const hw = new Set(words(`${p.title} ${p.h1.join(' ')}`)); return townW.every((t) => hw.has(t)); });
@@ -845,7 +911,7 @@ export function buildContentTrust(input: ContentTrustInput): ContentTrust {
   } else if (!blocks) notChecked.push('Business structured data — none found in the page code we read, so there was nothing to compare.');
 
   out.sort(compareIssues);
-  return { version: CONTENT_TRUST_VERSION, issues: out, verified, notChecked, pagesRead: pages.length };
+  return { version: CONTENT_TRUST_VERSION, issues: out, verified, notChecked, pagesRead: pages.length, owner: ownerOf(pages) };
 }
 
 const SEVERITY_RANK: Record<IssueSeverity, number> = { high: 0, medium: 1, low: 2 };

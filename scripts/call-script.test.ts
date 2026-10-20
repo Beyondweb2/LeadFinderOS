@@ -129,7 +129,7 @@ console.log('── 4. No invented competitors, no invented findings ──');
 console.log('── 5. No website / a profile ──');
 {
   const s = buildCallScript(input({ findings: [], findingsStatus: 'no_website', site: { source: 'none', label: null }, close: buildCallClose('none') }));
-  ok(/couldn't find a website for you/.test(s.opener[1] ?? '') && s.found.lines.length === 1, 'no website → said once, plainly');
+  ok(/couldn't find a website for you, so Gemini and Google AI have no site of yours to read/.test(s.opener[1] ?? '') && s.found.lines.length === 0, 'no website → said once, plainly (Paul, 2026-10-20)');
   ok(!/can't name|cannot name|never name/i.test(spokenScriptText(s)), '…never "AI cannot name you without one"');
   ok(s.plans.preselected === 'build' && s.plans.routes.map((r) => r.route).join() === 'build', 'no website → Build preselected (and the only plan)');
   ok(/Findable Build conversation/.test(s.firstQuestion.hint ?? ''), 'the first-question hint points at Build');

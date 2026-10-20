@@ -27,7 +27,8 @@ export function callScreenCrawlInFlight(leadId: string): boolean {
 /** Should this opened call screen ask for the missing check? Pure, so the rule is testable. */
 export function shouldStartCallScreenCrawl(p: Pick<ColdCallPlaybook, 'audit' | 'site' | 'findingsStatus'> | null | undefined, alreadyStarted: boolean): boolean {
   if (!p || alreadyStarted) return false;
-  return p.audit.state === 'ready' && p.site.source === 'own_site' && p.findingsStatus === 'not_crawled';
+  /* A failed check is asked for again too: the server allows that once per lead, ever (callScreenCrawl.ts). */
+  return p.audit.state === 'ready' && p.site.source === 'own_site' && (p.findingsStatus === 'not_crawled' || p.findingsStatus === 'unreadable');
 }
 
 export type CallScreenCrawlState = 'idle' | 'checking' | 'skipped' | 'failed';

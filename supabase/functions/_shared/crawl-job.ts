@@ -29,6 +29,7 @@ import {
 } from "../../../src/lib/fullCrawl.ts";
 import { leadCrawlWriteDecision, storedCrawlFailed, STORED_CRAWL_STATE_COLUMNS } from "../../../src/lib/crawlWriteRule.ts";
 import { classifyCrawlUrl, classifySitemapUrl, parseRobots, type RobotsRules } from "../../../src/lib/crawlUrl.ts";
+const PROSPECT_CRAWL_CONCURRENCY = 1;
 import { cleanCounts, decideFetchOutcome, frontierExhausted, type JobCounts } from "../../../src/lib/crawlJob.ts";
 import { buildContentTrust, pageObservations, type ContentTrust, type PageObs } from "../../../src/lib/contentTrust.ts";
 import { summariseWebsiteCheck } from "../../../src/lib/websiteCheck.ts";
@@ -328,7 +329,9 @@ export async function runCrawlTick(service: Client): Promise<{ jobId: string | n
     for (const r of rows) r.attempts += 1;
     await Promise.all(rows.map((r) => service.from("crawl_urls").update({ attempts: r.attempts }).eq("id", r.id)));
 
-    const results = await mapPool(rows, FULL_CRAWL.concurrency, (r) => crawlGet(r.url, ua));
+    /* ⛔ A PROSPECT'S CRAWL ASKS ONE PAGE AT A TIME (Paul, 2026-10-20: polite to sites we have not been asked to crawl);
+       a client's exhaustive crawl keeps FULL_CRAWL.concurrency. */
+    const results = await mapPool(rows, pageCap ? PROSPECT_CRAWL_CONCURRENCY : FULL_CRAWL.concurrency, (r) => crawlGet(r.url, ua));
     const updates: Array<Record<string, unknown>> = [];
     const discovered: NewRow[] = [];
     const now = new Date().toISOString();
