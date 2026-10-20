@@ -359,6 +359,8 @@ export const CREDENTIALS: Array<{ name: string; re: RegExp }> = [
   { name: 'ACCA', re: /\bACCA\b/ }, { name: 'ICAEW', re: /\bICAEW\b/ }, { name: 'AAT', re: /\bAAT\b/ }, { name: 'CIPHE', re: /\bCIPHE\b/i },
   { name: 'Worcester Bosch Accredited', re: /\bWorcester\s+(?:Bosch\s+)?Accredited\b/i }, { name: 'Vaillant Advance', re: /\bVaillant\s+Advance\b/i },
   { name: 'OZEV approved', re: /\bOZEV\b|\bOLEV\b/i }, { name: 'MCS certified', re: /\bMCS\s+(?:certified|accredited)\b/i },
+  /* Driving instructors (2026-10-20, KSM): the DVSA's register, so "fully qualified ADI" names its scheme. */
+  { name: 'DVSA Approved Driving Instructor (ADI)', re: /\bADI\b|\bApproved\s+Driving\s+Instructor\b|\bDVSA[\s-]+(?:approved|registered|qualified)\b/ },
 ];
 
 const THIRD_PARTY: Array<{ name: string; host: RegExp }> = [

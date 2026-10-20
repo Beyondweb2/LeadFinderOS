@@ -75,6 +75,9 @@ ok(!ct.issues.some((i) => i.kind === 'area_coverage'), '…said once, not also a
 ok(ct.owner?.name === 'Kylie' && ct.owner.url === H && /owned by Kylie/.test(ct.owner.quote), 'the owner is read with the page and the words');
 const cover = pageObservations('<html><body><p>We are based in Sheffield and work across South Yorkshire. Areas we cover: Rotherham, Barnsley.</p></body></html>', H, H);
 ok((cover.coverage ?? []).length > 0, 'a real coverage statement is read as one');
+const bios = pageObservations('<p>8+ years experience teaching. With over 15 years of experience in health and social care, I’ve built strong skills. I have been driving since 2005. Hi, I’m Rob, a fully qualified ADI.</p>', H, H);
+ok(bios.years.length === 1 && bios.years[0].n === 8 && bios.founded.length === 0, 'an instructor’s own career and "driving since 2005" are not the business’s age (no false "different figures" conflict)');
+ok(bios.creds.some((c) => /ADI/.test(c)), '"fully qualified ADI" names its scheme (the DVSA register)');
 ok(ownerOf([{ url: H, owner: [] }]) === null, 'a site that names no owner stores nothing');
 ok(pageObservations('<p>Our team is run by experienced instructors.</p>', H, H).owner?.length === 0, 'never a guessed name ("run by experienced …")');
 const sum = (issues: WebsiteCheckSummary['issues']): WebsiteCheckSummary => ({ version: 1, depth: 'deep', checkedAt: null, pagesRead: 12, pagesFound: 15, capped: false, issues, strengths: [], notChecked: [], failure: null });
