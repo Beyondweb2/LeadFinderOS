@@ -37,7 +37,7 @@ console.log('\n── the Inbox uses them, for both roles ──');
 {
   const inbox = read('src/pages/Inbox.tsx');
   ok(/passesNextActionFilter\(c\.leadId \? leadByIdForState\.get\(c\.leadId\) : null, naWhen, naKind, today\)/.test(inbox), 'the Inbox filters on the lead\'s stored next action');
-  ok(/'inbox-na-when'/.test(inbox) && /'inbox-na-kind'/.test(inbox) && /'inbox-sort'/.test(inbox), 'the choices are remembered per person (session)');
+  ok(/'inbox-na-when'/.test(inbox) && /'inbox-na-kind'/.test(inbox) && /'inbox-sort-v2'/.test(inbox), 'the choices are remembered per person (session)');
   ok(/Reset next action filters/.test(inbox), 'one click resets them');
   ok(!/isAdmin && \(\s*<Select value=\{naWhen\}/.test(inbox), 'not an admin-only control');
 }

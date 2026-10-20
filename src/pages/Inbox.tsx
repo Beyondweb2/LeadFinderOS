@@ -93,6 +93,7 @@ import { aiChipFor, needsApproving, needsYou, rowSendable, type AiReplyRow } fro
 import { inboundLabel } from '@/lib/replyMove';
 import { sameRowProps } from '@/lib/inboxRowMemo';
 import { invokeEdge, edgeErrorMessage } from '@/lib/edgeInvoke';
+import { DEFAULT_INBOX_SORT, compareLastProspectMessage, type InboxSort } from '@/lib/inboxSort';
 import { NEXT_ACTION_KIND_OPTIONS, NEXT_ACTION_WHEN_OPTIONS, nextActionSortKey, passesNextActionFilter, type NextActionKind, type NextActionWhen } from '@/lib/nextActionView';
 import { Eye, Loader2, Send, MessageSquareText, MessageSquare, MessageSquarePlus, Clock, AlertTriangle, Plus, ShieldAlert, MapPin, Globe, Mail, MessageCircle, Trash2, ListChecks, Sparkles, FileText, Copy, Check, Link2, Star, MoreHorizontal, ArrowLeft, PauseCircle, XCircle, Timer } from 'lucide-react';
 import { isPaidLead } from '@/lib/leadPayment';
@@ -288,8 +289,8 @@ function PreviewLinkedText({ text }: { text: string }) {
 
 /** The list orders: the menu shows `label`, the trigger shows `short` so it fits the filter row. */
 const LIST_SORT_OPTIONS = [
+  { value: 'recent_reply', label: 'Last prospect message', short: 'Last prospect message' },
   { value: 'recent', label: 'Newest message', short: 'Newest message' },
-  { value: 'recent_reply', label: 'Most recent reply from them', short: 'Latest reply' },
   { value: 'next_action', label: 'Next action: most overdue first', short: 'Most overdue' },
 ] as const;
 
@@ -510,7 +511,7 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
   /* Next Action filters + sort (2026-09-30, both roles; the one rule is src/lib/nextActionView.ts). */
   const [naWhen, setNaWhen] = usePersistedState<NextActionWhen>(pk('inbox-na-when'), 'all', { tier: 'session', scope: user?.id });
   const [naKind, setNaKind] = usePersistedState<NextActionKind>(pk('inbox-na-kind'), 'all', { tier: 'session', scope: user?.id });
-  const [listSort, setListSort] = usePersistedState<'recent' | 'next_action' | 'recent_reply'>(pk('inbox-sort'), 'recent', { tier: 'session', scope: user?.id });
+  const [listSort, setListSort] = usePersistedState<InboxSort>(pk('inbox-sort-v2'), DEFAULT_INBOX_SORT, { tier: 'session', scope: user?.id });
   /* ?filter=<quick filter> (2026-09-30): a dashboard count ("N replies waiting in the Inbox") opens the
      Inbox on that view. Applied once, then dropped from the URL — the choice is then the person's own. */
   const filterParam = searchParams.get('filter');
@@ -761,18 +762,19 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
     const kept = quickFilter === 'all' ? [...byNa] : byNa.filter((c) => { const st = stateByKey.get(c.key); return !!st && passesQuickFilter(quickFilter, { ...st, needsApproving: needsApproving(ai.forPhone(c.phone)), needsYou: needsYou(ai.forPhone(c.phone)) }); });
     if (listSort === 'next_action') {
       kept.sort((a, b) => nextActionSortKey(a.leadId ? leadByIdForState.get(a.leadId) : null).localeCompare(nextActionSortKey(b.leadId ? leadByIdForState.get(b.leadId) : null)));
-    } else if (listSort === 'recent_reply') {
-      kept.sort((a, b) => (b.lastInboundAt ?? '').localeCompare(a.lastInboundAt ?? ''));
     } else if (quickFilter === 'waiting') {
       /* Waiting on us: the longest wait first — the reply that has waited most is the next one to answer. */
       kept.sort((a, b) => (stateByKey.get(a.key)?.waitingSinceMs ?? 0) - (stateByKey.get(b.key)?.waitingSinceMs ?? 0));
+    } else if (listSort === 'recent_reply') {
+      /* Default: the prospect's newest message, so SENDING never reorders the list (Paul, 2026-10-20). */
+      kept.sort(compareLastProspectMessage);
     }
     /* ⛔ NEEDS YOU SORTS TO THE TOP (Paul, 2026-10-20), whatever the sort: a stable partition, the chosen order kept inside each part. */
     if (aiOn) { const top = kept.filter((c) => needsYou(ai.forPhone(c.phone))); if (top.length) { const rest = kept.filter((c) => !needsYou(ai.forPhone(c.phone))); return [...top, ...rest]; } }
     return kept;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [list, searchTerm, quickFilter, stateByKey, naWhen, naKind, listSort, leadByIdForState, ai.rows]);
-  const naFiltered = naWhen !== 'all' || naKind !== 'all' || listSort !== 'recent';
+  const naFiltered = naWhen !== 'all' || naKind !== 'all' || listSort !== DEFAULT_INBOX_SORT;
 
   /* ⚡ THE LIST DRAWS 150 ROWS AT A TIME (2026-09-28, measured). Every row carries a status dropdown, so
      with the whole book (2,201 conversations) ANY change to one lead — a status, a star, a next
@@ -1981,7 +1983,7 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
           </Select>
           {/* The trigger shows a short name for the order; the menu keeps the full wording. */}
           <Select value={listSort} onValueChange={(v) => setListSort(v as typeof listSort)}>
-            <SelectTrigger className={cn('h-9 md:col-span-3 xl:w-[200px]', perms.campaigns && 'col-span-2', listSort !== 'recent' && 'border-primary/50 text-primary')} aria-label="Sort conversations"><span className="truncate"><span className="mr-1.5 text-muted-foreground">Sort:</span>{LIST_SORT_OPTIONS.find((o) => o.value === listSort)?.short}</span></SelectTrigger>
+            <SelectTrigger className={cn('h-9 md:col-span-3 xl:w-[200px]', perms.campaigns && 'col-span-2', listSort !== DEFAULT_INBOX_SORT && 'border-primary/50 text-primary')} aria-label="Sort conversations"><span className="truncate"><span className="mr-1.5 text-muted-foreground">Sort:</span>{LIST_SORT_OPTIONS.find((o) => o.value === listSort)?.short}</span></SelectTrigger>
             <SelectContent>{LIST_SORT_OPTIONS.map((o) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}</SelectContent>
           </Select>
         </div>
@@ -2063,7 +2065,7 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
           {/* Next Action filters + sort live in the top bar (Paul, 2026-10-01); Reset stays by the list, with its count. */}
           {naFiltered && (
             <div className="mb-1.5 px-0.5">
-              <button type="button" onClick={() => { setNaWhen('all'); setNaKind('all'); setListSort('recent'); }} className="text-left text-[11px] font-medium text-primary hover:underline">
+              <button type="button" onClick={() => { setNaWhen('all'); setNaKind('all'); setListSort(DEFAULT_INBOX_SORT); }} className="text-left text-[11px] font-medium text-primary hover:underline">
                 Reset next action filters · {filteredList.length} shown
               </button>
             </div>

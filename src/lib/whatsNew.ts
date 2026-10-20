@@ -22,6 +22,14 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-20-inbox-keep-position', date: '2026-10-20', title: 'Inbox: sending no longer moves the conversation', audience: 'all',
+    body: 'The Inbox list is now ordered by the last message from the prospect, so a conversation stays where it is when you reply.',
+    report: {
+      added: ['A Sort option "Last prospect message" (the new default).'],
+      changed: ['Sending a message no longer moves that conversation to the top. A new message from the prospect still does.'],
+      removed: [],
+      effect: 'You keep your place in the list while you work through replies. "Newest message" is still in the Sort menu if you want the old order.',
+    } },
   { id: '2026-10-20-reply-playbook', date: '2026-10-20', title: 'WhatsApp Draft reply: follows one playbook', audience: 'all',
     body: 'Draft reply now gives every first reply the pitch, then follows one script: agency, then contract, then a quick call or a voice note. Nothing is sent until you approve it.',
     report: {
