@@ -22,6 +22,14 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-21-draft-outcomes', date: '2026-10-21', title: 'Inbox: what happened to each AI draft', audience: 'admin',
+    body: 'Every AI reply draft now records what happened to it, and "Draft outcomes" beside AI handles replies shows the share sent unchanged and which kinds of reply get edited most.',
+    report: {
+      added: ['"Draft outcomes" next to the AI handles replies switch (admin only): the share of drafts sent unchanged, then each kind of reply with how many were sent, edited, regenerated and discarded, and the average number of words changed.', 'Each draft keeps the text that was actually sent, however it was sent (Approve & send or the ordinary Send button).'],
+      changed: ['An approved draft that was queued for the business’s send hours counts as sent, not discarded.'],
+      removed: [],
+      effect: 'You can see whether the drafts are good enough to send as they are, and which replies need work. Earlier drafts are counted too; regenerations before today have no text kept.',
+    } },
   { id: '2026-10-21-inbox-send-window', date: '2026-10-21', title: 'Inbox: messages wait for the business’s send hours', audience: 'all',
     body: 'Anything you send from the Inbox outside the business’s send hours is queued and goes when their hours open. The header shows their time.',
     report: {
