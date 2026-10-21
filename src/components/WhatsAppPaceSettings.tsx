@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
-import { ChevronDown, ChevronRight, Loader2, AlertTriangle } from 'lucide-react';
+import { ChevronDown, ChevronRight, Loader2, AlertTriangle, ShieldCheck } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
-import { Callout } from '@/components/operator/ui';
+import { Callout, ToneChip } from '@/components/operator/ui';
+import { tierWords, type HealthState } from '@/lib/whatsappNumberHealth';
 import {
   DEFAULT_DAILY_CAP, DEFAULT_GAP_FLOOR_MIN, MAX_DAILY_CAP, MAX_GAP_FLOOR_MIN, MAX_PERSON_DAILY_LIMIT, checkPaceValue,
 } from '@/lib/whatsappPace';
@@ -19,7 +20,12 @@ export interface PaceStatus {
   sentToday: number;
   cap: number;
   paused: boolean;
-  pace?: { dailyCap: number; gapFloorMin: number; personDefault: number | null; maxDailyCap: number; stored?: { daily_cap: number | null; min_gap_minutes: number | null } };
+  pace?: { dailyCap: number; gapFloorMin: number; personDefault: number | null; maxDailyCap: number; stored?: { daily_cap: number | null; min_gap_minutes: number | null }; setCap?: number };
+  /** 2026-10-21: Meta's quality rating and messaging tier for the number (src/lib/whatsappNumberHealth.ts). Absent on an older deploy. */
+  numberHealth?: {
+    state: HealthState; rating: string; tier: string | null; tierLimit: number | null; halved: boolean; capRiseBlocked: boolean;
+    limitText: string | null; okAt: string | null; checkedAt: string | null; error: string | null;
+  } | null;
   autoPausedAt?: string | null;
   autoPauseReason?: string | null;
   perPersonToday?: Array<{ user_id: string | null; name: string; sent: number }> | null;
@@ -27,6 +33,43 @@ export interface PaceStatus {
 }
 
 const asText = (n: number | null | undefined) => (n == null ? '' : String(n));
+
+const RATING_TONE: Record<HealthState, 'green' | 'amber' | 'red' | 'grey'> = { green: 'green', yellow: 'amber', red: 'red', unreadable: 'grey' };
+const RATING_WORD: Record<HealthState, string> = { green: 'Green', yellow: 'Yellow', red: 'Red', unreadable: 'Not read' };
+const londonTime = (iso: string | null) => {
+  if (!iso) return null;
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? null : d.toLocaleString('en-GB', { timeZone: 'Europe/London', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+};
+
+/** The number's rating, tier and any active limit — one line, plus the limit in words when there is one. */
+export function NumberHealthLine({ health, cap, setCap }: { health: NonNullable<PaceStatus['numberHealth']>; cap: number; setCap: number | undefined }) {
+  const read = londonTime(health.okAt);
+  const tier = tierWords(health.tier);
+  const overTier = health.tierLimit != null && cap > health.tierLimit;
+  return (
+    <div className="space-y-1.5" data-testid="queue-number-health">
+      <p className="flex flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground">
+        <ShieldCheck className="h-3 w-3" aria-hidden />
+        <span className="font-medium text-foreground/80">WhatsApp number:</span>
+        <ToneChip tone={RATING_TONE[health.state]} dot testId="queue-number-rating">Quality {RATING_WORD[health.state]}</ToneChip>
+        <span>· Tier {tier ?? 'not read'}</span>
+        {read && <span>· read {read}</span>}
+      </p>
+      {health.limitText && (
+        <Callout tone={health.state === 'red' ? 'red' : health.state === 'yellow' ? 'amber' : 'grey'} icon={AlertTriangle} className="px-3 py-2 text-[11px]" testId="queue-number-limit">
+          {health.limitText}
+          {health.halved && setCap != null && <> Cap today: <strong>{cap}</strong> (set to {setCap}).</>}
+        </Callout>
+      )}
+      {overTier && (
+        <Callout tone="amber" icon={AlertTriangle} className="px-3 py-2 text-[11px]" testId="queue-number-over-tier">
+          The cap ({cap}) is above the number’s Meta tier ({health.tierLimit!.toLocaleString('en-GB')} new people a day). Lower it to stay inside the tier.
+        </Callout>
+      )}
+    </div>
+  );
+}
 
 export function WhatsAppPaceSettings({ team, onSaved }: { team: PaceStatus | null; onSaved: () => Promise<void> | void }) {
   const { toast } = useToast();
@@ -69,7 +112,7 @@ export function WhatsAppPaceSettings({ team, onSaved }: { team: PaceStatus | nul
       };
       const { data, error } = await supabase.functions.invoke('process-whatsapp-queue', { body });
       if (error) throw error;
-      if (!data?.ok) throw new Error(String(data?.error ?? 'refused'));
+      if (!data?.ok) throw new Error(String(data?.detail ?? data?.error ?? 'refused'));
       toast({ title: 'WhatsApp limits saved', description: 'They apply from the next queue tick.' });
       await onSaved();
     } catch (e) {
@@ -84,6 +127,7 @@ export function WhatsAppPaceSettings({ team, onSaved }: { team: PaceStatus | nul
           <strong>The queue paused itself.</strong> {team.autoPauseReason}
         </Callout>
       )}
+      {team.numberHealth && <NumberHealthLine health={team.numberHealth} cap={team.pace?.dailyCap ?? team.cap} setCap={team.pace?.setCap} />}
       {perPerson && perPerson.length > 0 && (
         <p className="text-[11px] text-muted-foreground" data-testid="queue-per-person">
           <span className="font-medium text-foreground/80">Sent today: </span>

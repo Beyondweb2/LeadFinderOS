@@ -22,6 +22,19 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-21-whatsapp-number-rating', date: '2026-10-21', title: 'The WhatsApp number’s Meta quality rating now protects the queue', audience: 'admin',
+    body: 'Every 15 minutes the app reads the number’s quality rating and messaging tier from Meta and slows or pauses the queue if the rating drops.',
+    report: {
+      added: [
+        'WhatsApp queue → Limits: the number’s quality rating (Green / Yellow / Red), its Meta tier and when it was last read.',
+        'Yellow: the team daily cap is halved and cannot be raised until the rating is green again.',
+        'Red: the queue pauses itself once (press Resume when the number is fine). The cap stays halved.',
+        'If the rating cannot be read, sending carries on as normal; only raising the cap is blocked.',
+      ],
+      changed: ['Saving a higher daily cap is refused while the rating is yellow, red or cannot be read. Lowering it always works.'],
+      removed: [],
+      effect: 'If Meta starts to mark the number down, the queue slows or stops by itself before the number is limited or blocked. Nothing is sent by this change.',
+    } },
   { id: '2026-10-21-first-reply-and-visible-half', date: '2026-10-21', title: 'AI replies: "Yes" then "How can I help" gets the pitch; Visible means named in more than half', audience: 'all',
     body: 'A prospect who confirms and then asks how they can help, even an hour later, now gets the first-reply pitch instead of Needs you. ChatGPT no longer counts towards "named too often".',
     report: {
