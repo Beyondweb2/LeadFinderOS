@@ -147,6 +147,7 @@ export function AiDraftPanel({ row, busy, boxDiffers, onApprove, onRegenerate, o
           <p><span className="font-medium text-foreground">Next move (picked by code): </span>{(why.intent ?? why.move ?? '').replace(/_/g, ' ')}{why.question ? ` · ends with: "${why.question}"` : ' · no question'}</p>
           {(why.points ?? []).length > 0 && <p><span className="font-medium text-foreground">Says: </span>{(why.points ?? []).join(' · ')}</p>}
           <p><span className="font-medium text-foreground">Search: </span>{why.search ?? 'No completed AI check on record, so the AI part was left out.'}{why.named ? ` · named in ${why.named.named} of ${why.named.valid} answers` : ''}</p>
+          {why.missed && <p><span className="font-medium text-foreground">Missed on: </span>{why.missed.engine === 'chatgpt' ? 'ChatGPT' : why.missed.engine === 'gemini' ? 'Gemini' : why.missed.engine === 'ai_overview' ? 'Google AI' : why.missed.engine} · {why.missed.question} <span className="opacity-70">(the draft says "AI")</span></p>}
           {why.search && why.competitors.length > 0 && <p><span className="font-medium text-foreground">AI named: </span>{why.competitors.join(', ')}</p>}
           <p><span className="font-medium text-foreground">Website issues on record: </span>{why.findings.length ? why.findings.join(' · ') : (why.findingsNote ?? 'None, so none mentioned.')}</p>
           <p><span className="font-medium text-foreground">Offer facts from: </span>fact sheet {why.factSheetVersion}</p>

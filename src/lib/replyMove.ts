@@ -18,7 +18,7 @@
    Pure and edge-reachable: relative imports with .ts, no Deno, no DOM.
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 import { triageByRules } from './replyTriage.ts';
-import { factFor, CONFIDENCE_LINE, GUARANTEE_REFUND, type FactTopic } from './offerFactSheet.ts';
+import { factFor, CONFIDENCE_LINE, GUARANTEE_REFUND, ENGINE_WORDING, type FactTopic } from './offerFactSheet.ts';
 import { mayClaimNamedInstead } from './namedShareRule.ts';
 import { carryOn } from './draftEvidence.ts';
 import {
@@ -189,6 +189,8 @@ export interface MovePlan {
   timingOk?: boolean;
   /** A first name THEY gave in this conversation ("Dom here"): the greeting may use it. */
   greetName?: string | null;
+  /** They asked WHICH AI tool (RE.whichTool): the only draft that may name one (Paul, 2026-10-21). Absent = no brand names. */
+  brandsAllowed?: boolean;
   /** Tied into a contract until a day we could read: noted on the draft. ⛔ Never written to the lead (Next Action is
    *  human-set): the person sets it when they send. */
   followUp?: FollowUpNote | null;
@@ -333,6 +335,21 @@ export function inboundLabel(text: string | null | undefined, messageType?: stri
 /* ── the evidence line (code-built, never the model's) ────────────────────────────────────────── */
 
 export const engineName = (w: string) => (w === 'chatgpt' ? 'ChatGPT' : w === 'gemini' ? 'Gemini' : 'AI');
+/** The tool by name for the which-tool answer only: null when the engine is not one we can name honestly. */
+const toolByName = (w: string | null | undefined): string | null => {
+  const k = String(w ?? '').trim().toLowerCase();
+  if (k === 'chatgpt') return 'ChatGPT';
+  if (k === 'gemini' || k === 'google ai') return 'Gemini';
+  if (k === 'ai_overview') return "Google's AI answer at the top of the search";
+  return null;
+};
+/** "Which AI did you use?" (Paul, 2026-10-21): the missed search's own engine, then the tools we check. The ONLY draft that
+ *  names an AI tool. */
+export function whichToolLine(e: MoveEvidence): string {
+  const tool = toolByName(e.missed?.engine) ?? toolByName(e.engineWords);
+  const base = PLAYBOOK.which_tool.line;
+  return tool && e.named && e.named.valid > 0 ? `That one was ${tool}. ${base}` : base;
+}
 const withA = (s: string) => (/^[aeiou]/i.test(s) ? `an ${s}` : `a ${s}`);
 const listNames = (n: string[]) => (n.length <= 1 ? n.join('') : `${n.slice(0, -1).join(', ')} and ${n[n.length - 1]}`);
 /** Issue titles as one list: semicolons when a title has its own comma, so the list still reads. */
@@ -351,14 +368,14 @@ export function spokenSearch(question: string, trade: string | null): string {
   if (/^(who|what|which|where|can|could|is|are|how|any|do|does|should|would|recommend)\b/i.test(q)) return `"${q.charAt(0).toUpperCase()}${q.slice(1)}?"`;
   return `for ${q}`;
 }
-/** "I asked Gemini <the missed search>": the engine and question where they were NOT named (Paul, 2026-10-20). ⛔ Never
- *  name an engine that DID name them, and never two tools in one conversation: when a message we already sent named a
- *  different tool, the missed search is said as "AI". No missed search on record: trade + town on the conversation's tool. */
+/** "I asked AI <the missed search>": the question where they were NOT named (the worst-engine pick, Paul 2026-10-20).
+ *  ⛔ NEVER AN AI BRAND (Paul, 2026-10-21): always "AI"; the engine stays in the evidence ("why" panel) and is named only
+ *  when they ask which tool (whichToolLine). No missed search on record: trade + town. */
 export function askedPhrase(e: MoveEvidence): string | null {
   if (!e.trade || !e.town) return null;
   const m = e.missed;
-  if (m && m.question.trim()) return `I asked ${m.engine === e.engineWords ? engineName(e.engineWords) : 'AI'} ${spokenSearch(m.question, e.trade)}`;
-  return `I asked ${engineName(e.engineWords)} for ${withA(tradeWord(e.trade))} in ${e.town}`;
+  if (m && m.question.trim()) return `I asked AI ${spokenSearch(m.question, e.trade)}`;
+  return `I asked AI for ${withA(tradeWord(e.trade))} in ${e.town}`;
 }
 const lowerFirst = (s: string) => s.charAt(0).toLowerCase() + s.slice(1);
 
@@ -395,10 +412,10 @@ export const PITCH_SITE_Q = "Do you have a website I've missed?";
 export const PITCH_VOICE_Q = 'Ok if I send a quick voice note on what I found?';
 export const PITCH_INSTEAD_LINE = 'AI is recommending your competitors instead.';
 export const PITCH_WHY_LEAD = 'I looked into why this might be happening and';
-/** What we do, said once, with no promise of a result (Paul, 2026-10-20). */
-export const PITCH_SPECIALISE_LINE = 'I specialise in helping local businesses get recommended by AI, so those customers come to you instead.';
-/** Paul's no-website words for the pitch. It names both tools on purpose; the checker reads around it. */
-export const PITCH_NO_SITE_LINE = "I couldn't find a website for you, so Gemini and Google AI have nothing of yours to read.";
+/** What we do, said once, with no promise of a result (Paul, 2026-10-21). */
+export const PITCH_SPECIALISE_LINE = 'I specialise in getting local businesses to show up in those results, so the customers go to you instead.';
+/** Paul's no-website words for the pitch (2026-10-21): no AI brand. */
+export const PITCH_NO_SITE_LINE = "I couldn't find a website for you, so AI has nothing of yours to read.";
 export const PITCH_INTRO_LINE = "It's Paul from Findable. I help local businesses show up when people ask AI tools for their trade in their area.";
 /** Site issues named in the pitch, most serious first. */
 export const PITCH_MAX_ISSUES = 3;
@@ -411,18 +428,20 @@ export function siteOf(e: MoveEvidence): { state: SiteState; issues: string[] } 
 }
 const noSiteOf = (e: MoveEvidence) => { const s = siteOf(e).state; return s === 'no_website' || s === 'profile'; };
 
-/** "Hi Kylie," only when the site's own crawl states a person as owner / founder (MoveEvidence.ownerName). First name only;
- *  never guessed from the business name. No name → no greeting line. */
-export function pitchGreeting(e: MoveEvidence, theirName: string | null = null): string | null {
+/** No name found (Paul, 2026-10-21): the pitch opens "Hi mate,". */
+export const PITCH_NO_NAME_GREETING = 'Hi mate,';
+/** "Hi Kylie," when they gave a name in their reply or the site's own crawl states a person as owner / founder
+ *  (MoveEvidence.ownerName). First name only; never guessed from the business name. No name → "Hi mate,". */
+export function pitchGreeting(e: MoveEvidence, theirName: string | null = null): string {
   const first = String(theirName || e.ownerName || '').trim().split(/\s+/)[0] ?? '';
-  return /^[A-Z][a-z]+(?:['’-][A-Za-z]+)?$/.test(first) ? `Hi ${first},` : null;
+  return /^[A-Z][a-z]+(?:['’-][A-Za-z]+)?$/.test(first) ? `Hi ${first},` : PITCH_NO_NAME_GREETING;
 }
 
 /** THE FIRST-REPLY PITCH (Paul, 2026-10-20, wording A):
- *    [Hi <first name>,]
- *    I asked <worst engine> "<its question>" and it mentioned <that answer's names>.
+ *    Hi <first name>, / Hi mate,
+ *    I asked AI "<the worst engine's missed question>" and it mentioned <that answer's names>.
  *    AI is recommending your competitors instead. I looked into why this might be happening and found <issues>.
- *    I specialise in helping local businesses get recommended by AI, so those customers come to you instead.
+ *    I specialise in getting local businesses to show up in those results, so the customers go to you instead.
  *    <the agency question> (no website: "Do you have a website I've missed?") — the ONLY question.
  *  ⛔ "AI is recommending your competitors instead" only under the one-third rule; above it (the soft version) the same shape
  *     without that sentence. ⛔ No closer question, no "pointed to them", no guarantee, no price, no past results here; the
@@ -431,7 +450,7 @@ export function firstReplyPitch(e: MoveEvidence, theirName: string | null = null
   const noSite = noSiteOf(e);
   const next = noSite ? { question: PITCH_SITE_Q, closer: 'site' as const } : { question: PITCH_AGENCY_VOICE, closer: 'agency' as const };
   const hi = pitchGreeting(e, theirName);
-  const withHi = (lines: string[]) => (hi ? [hi, ...lines] : lines);
+  const withHi = (lines: string[]) => [hi, ...lines];
   const counts = e.named && e.named.valid > 0 ? e.named : null;
   if (!e.trade || !e.town || !counts) return { lines: withHi([PITCH_INTRO_LINE, ...(noSite ? [PITCH_NO_SITE_LINE] : [])]), ...next };
   const full = mayClaimNamedInstead(counts.named, counts.valid);
@@ -607,6 +626,8 @@ export function pickMove(i: MoveInput): MovePlan {
   if (t.category === 'complaint') return g(noDraft('complaint', 'complaint', 'escalate'));
   if (t.category === 'payment_issue' && questionTopic(text) !== 'guarantee' && questionTopic(text) !== 'cancel') return g(noDraft('payment', 'payment', 'escalate'));
   if (PRIVACY.test(text) || scamQuestion) return g(fromPlaybook('privacy', {}, e.foundOnGoogle ? undefined : PRIVACY_NOT_GOOGLE));
+  /* "Which AI did you use?" (Paul, 2026-10-21): the one reply that may name the tool. */
+  if (RE.whichTool.test(text)) return g(fromPlaybook('which_tool', { brandsAllowed: true }, whichToolLine(e)));
 
   /* 5. An answer to the question our last message asked. */
   const ask = ourAsk(prevOurs);
@@ -739,7 +760,8 @@ export function pickMove(i: MoveInput): MovePlan {
     if (!fact) return g(noDraft('question_not_on_sheet', `question:${topic}`, 'unknown_question'));
     const priceFamily = topic === 'term' || topic === 'monthly_start' || topic === 'cancel' || topic === 'after_term' || topic === 'guarantee';
     const confidence = topic === 'guarantee';
-    const say = topic === 'guarantee' ? `${CONFIDENCE_LINE} ${GUARANTEE_REFUND}` : fact.say;
+    /* ⛔ No AI brand unless they asked which tool (caught above): the measurement answer says "the main AI tools". */
+    const say = topic === 'guarantee' ? `${CONFIDENCE_LINE} ${GUARANTEE_REFUND}` : fact.say.split(ENGINE_WORDING).join('the main AI tools');
     return g(plan({ move: 'answer_fact', read: `question:${topic}`, topic, allowPrice: priceFamily, confidence,
       needsYou: fact.paulLooks ? flag('paul_looks') : null, autoDraft: !fact.paulLooks,
       points: [`Use this answer, word for word: "${say}"`], question: VOICE_Q }));

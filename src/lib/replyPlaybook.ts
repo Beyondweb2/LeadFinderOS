@@ -11,14 +11,14 @@
    Pure and edge-reachable: relative imports with .ts, no Deno, no DOM.
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 import { FINDABLE_SETUP_PRICE_GBP, FINDABLE_MONTHLY_GBP, FINDABLE_BUILD_TOTAL_PAYMENTS, FINDABLE_CONTINUING_GBP, REMEASURE_WEEKS_STANDARD } from './findableOffer.ts';
-import { GUARANTEE_LINE } from './offerFactSheet.ts';
+import { GUARANTEE_LINE, ENGINE_WORDING } from './offerFactSheet.ts';
 
 export type PlaybookIntent =
   | 'website_given' | 'no_website' | 'facebook_only' | 'agency' | 'in_contract' | 'tied_no_date' | 'free_to_leave'
   | 'self_managed' | 'friend_built' | 'not_sure_who' | 'voice_yes' | 'call_yes' | 'interested' | 'go_on'
   | 'what_we_do' | 'how_much' | 'catch' | 'how_long' | 'who_are_you' | 'examples' | 'definitely' | 'own_site'
   | 'not_now' | 'too_expensive' | 'think_about_it' | 'dont_need' | 'does_ai_matter' | 'is_bot' | 'privacy'
-  | 'send_email' | 'not_owner' | 'busy' | 'number_sent';
+  | 'send_email' | 'not_owner' | 'busy' | 'number_sent' | 'which_tool';
 
 const gbp = (n: number) => (Number.isInteger(n) ? `£${n}` : `£${n.toFixed(2)}`);
 const P1 = gbp(FINDABLE_SETUP_PRICE_GBP);
@@ -64,7 +64,7 @@ export const PLAYBOOK: Record<PlaybookIntent, PlaybookEntry> = {
   catch: { factual: true, allowPrice: true, confidence: true,
     line: `No catch. You pay ${P1} to start and if we don't improve ai visibility you get that ${P1} back. We re-run the same questions after ${REMEASURE_WEEKS_STANDARD} weeks to check. The one thing to know is it's a ${FINDABLE_BUILD_TOTAL_PAYMENTS} payment minimum, counting the first.` },
   how_long: { factual: true, line: `The site build usually takes a few days. Then we re-check after ${REMEASURE_WEEKS_STANDARD} weeks to see the difference.` },
-  who_are_you: { line: "I'm Paul, I run Findable. We help local businesses show up when people ask ai tools like chatgpt and gemini for a recommendation. Happy to jump on a quick call if you'd rather talk." },
+  who_are_you: { line: "I'm Paul, I run Findable. We help local businesses show up when people ask ai tools for a recommendation. Happy to jump on a quick call if you'd rather talk." },
   /* ⛔ THE ONLY PAST-RESULTS LINE (Paul): no numbers, no client names, no percentages, no "100%". */
   examples: { factual: true, line: "I've had success with all the clients I've worked with so far. Easiest to show you on a quick call." },
   definitely: { factual: true, allowPrice: true, line: `I can't promise ai will recommend you, nobody honestly can. What I do promise is we improve ai visibility or you get your ${P1} back.` },
@@ -81,6 +81,9 @@ export const PLAYBOOK: Record<PlaybookIntent, PlaybookEntry> = {
   not_owner: { line: "No worries. Who's the best person to speak to, and is there a good time?" },
   busy: { line: "No problem. What day and time suits you? I'll call then." },
   number_sent: { line: "Thanks, I'll give you a ring. Is there a good time today?", timingOk: true },
+  /* ⛔ THE ONLY LINE THAT NAMES AN AI TOOL (Paul, 2026-10-21): they asked which one. replyMove.whichToolLine puts the
+     missed search's own engine in front when it is known. */
+  which_tool: { factual: true, line: `I check the same questions on ${ENGINE_WORDING}. Want a voice note showing what it said?` },
 };
 
 /** The soft lines when AI did NOT name others in two thirds or more (namedShareRule): no "not you", no "instead". */
@@ -135,6 +138,8 @@ export const RE = {
   howMuch: /\b(how\s+much|price|pricing|cost|costs|charge|fee|fees|what\s+do\s+you\s+charge|rates?)\b|£/i,
   catch: /\b(catch|what'?s\s+the\s+(snag|deal|small\s+print)|too\s+good\s+to\s+be\s+true|hidden\s+(fees|costs|charges))\b/i,
   howLong: /\b(how\s+long\s+(does\s+it|will\s+it|to|would\s+it)\s*(take|build)?|how\s+quick(ly)?|how\s+fast|when\s+would\s+it\s+be\s+(ready|live|done)|turnaround)\b/i,
+  /** "Which AI?", "what tool did you use?", "was it chatgpt?": the one time a draft may name the tool. */
+  whichTool: /\b(?:which|what)\s+(?:ai|a\.i\.?|tool|app|engine|chat\s?bot|search\s+engine|platform)(?:\s+tool)?\b(?!\s+(?:visibility|is\s+recommending))|\bwhat\s+did\s+(?:you|u)\s+(?:use|search\s+(?:on|with))\b|\b(?:was|is)\s+(?:it|that|this)\s+(?:on\s+)?(?:chat\s?gpt|gemini|google|copilot|perplexity)\b|\b(?:chat\s?gpt|gemini|copilot|perplexity)\s*\?/i,
   whoAreYou: /\b(who\s+(are\s+(you|u)|is\s+this|'?s\s+this|is\s+that|am\s+i\s+(speaking|talking)\s+(to|with))|what\s+company|which\s+company|who\s+do\s+you\s+(work|represent)|who\s+you\s+with)\b|^\W*who\W*$/i,
   examples: /\b(examples?|case\s+stud(y|ies)|proof|testimonials?|other\s+(clients|customers|businesses)\s+(you|you'?ve)|who\s+else\s+have\s+you|worked\s+with\s+(anyone|others|before)|any\s+results|show\s+me\s+results|results\s+(for|from)\s+(others|other|anyone)|track\s+record|done\s+this\s+before|has\s+it\s+worked)\b/i,
   definitely: /\b(definitely|will\s+(i|we)\s+(definitely\s+)?(be|get)\s+(recommended|found|on\s+(top|there)|first|more\s+(work|customers|jobs))|can\s+you\s+guarantee|do\s+you\s+guarantee|guarantee(d)?\s+(that\s+)?(i|we|it)'?ll|promise\s+(me|that)|for\s+sure)\b/i,

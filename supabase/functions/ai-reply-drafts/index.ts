@@ -49,7 +49,7 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-internal-job, x-cron-secret",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
   /* The deploy marker: only this build answers with it. */
-  "x-ai-reply-drafts": "2026-10-20g-live-bugs",
+  "x-ai-reply-drafts": "2026-10-21a-hi-mate-no-brands",
 };
 const json = (b: unknown, s = 200) => new Response(JSON.stringify(b), { status: s, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 const str = (v: unknown) => (typeof v === "string" ? v.trim() : "");
@@ -243,7 +243,7 @@ function whyOf(ctx: AiReplyContext, findingsNote: string | null, w: { problems: 
   return {
     move: p.move, read: p.read, points: p.points, question: p.question, needsYou: p.needsYou, stop: p.stop, label: p.label,
     search: e.trade && e.town ? `${e.trade} in ${e.town}` : null,
-    competitors: e.competitors, named: e.named, engineWords: e.trade ? e.engineWords : null,
+    competitors: e.competitors, named: e.named, engineWords: e.trade ? e.engineWords : null, missed: e.missed ?? null,
     hookAlreadySent: e.hookAlreadySent,
     findings: e.findings.map((f) => f.title), findingsNote,
     /* The website issues the draft could name, each with the pages it was read on (the stored evidence). */

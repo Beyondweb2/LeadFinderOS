@@ -22,6 +22,14 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-21-drafter-hi-mate-no-brands', date: '2026-10-21', title: 'Reply drafts: "Hi mate," and no AI brand names', audience: 'admin',
+    body: 'Reply drafts now open "Hi mate," when no name is known, say "AI" instead of ChatGPT or Gemini, and use a new line about what you do.',
+    report: {
+      added: ['"Hi mate," at the start of the pitch when no name was found (a name still wins: "Hi Sarah,").', 'A reply for "which AI did you use?": the only draft that names the tool.', 'The draft panel shows which AI tool missed them and on what question.', 'A warning on any draft that names an AI tool when they did not ask which one.'],
+      changed: ['The first message says "I asked AI ..." and the no-website line says "AI has nothing of yours to read".', 'The line about what you do is now "I specialise in getting local businesses to show up in those results, so the customers go to you instead."', 'Who-are-you and how-do-you-measure answers say "ai tools", not ChatGPT or Gemini.'],
+      removed: ['ChatGPT, Gemini and Google AI from every draft a prospect reads, unless they ask which tool.'],
+      effect: 'Prospects see plainer wording and a friendlier opener. The evidence behind each draft is unchanged. Drafts only: nothing sends until you press send.',
+    } },
   { id: '2026-10-20-drafter-live-bugs', date: '2026-10-20', title: 'Reply drafts: four mistakes fixed', audience: 'admin',
     body: 'Reply drafts no longer treat a driving school as busy, no longer greet people by the wrong word, read quick back-to-back messages as one, and recognise more ways of asking how they can help.',
     report: {
