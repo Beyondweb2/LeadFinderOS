@@ -1109,7 +1109,9 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
     if (!active || !activeAi || aiBusy) return;
     setAiBusy('regenerate');
     try {
-      await invokeEdge('ai-reply-drafts', { action: 'regenerate', draft_id: activeAi.id });
+      const res = await invokeEdge<{ ok: boolean; detail?: string; error?: string }>('ai-reply-drafts', { action: 'regenerate', draft_id: activeAi.id });
+      // A refusal (the audit is still running, the rewrite limit…) says why instead of doing nothing.
+      if (res && res.ok === false) toast({ title: "Couldn't write another version", description: res.detail ?? res.error ?? 'Try again.', variant: 'destructive' });
     } catch (e) {
       toast({ title: "Couldn't write another version", description: edgeErrorMessage(e), variant: 'destructive' });
     } finally {
