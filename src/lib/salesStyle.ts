@@ -41,6 +41,10 @@ export const SALES_STYLE_RULES = `HOW IT MUST SOUND (Findable's house style; it 
 THE STANDARD TO MATCH (its quality, not its words; do not copy it): "${HOUSE_STYLE_EXAMPLE}"
 Where this message's own SHAPE or rules differ from that example (how it ends, what it may offer, what it may claim), the SHAPE and rules win.`;
 
+/** The same rules with the example search said as "AI" (Paul, 2026-10-21): for prompts whose text a PROSPECT reads or hears
+ *  (the reply drafter, the voice-note script), which never name an AI brand. The call script keeps SALES_STYLE_RULES. */
+export const SALES_STYLE_RULES_NO_BRAND = SALES_STYLE_RULES.replace(/\bGemini\b/g, 'AI');
+
 /* ── The check ─────────────────────────────────────────────────────────────────────────────────── */
 
 /** Lower case, curly quotes straightened, apostrophes dropped ("don't" → "dont"), spaces collapsed. */

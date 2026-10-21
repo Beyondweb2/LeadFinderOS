@@ -12,7 +12,7 @@
         "undefined", no adjective on the search, and a plain line when a piece is missing.
      5. The voice-note checker refuses a draft with an adjective on the search.
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
-import { HOUSE_STYLE_EXAMPLE, SALES_STYLE_RULES, salesStyleProblems, searchFillerCount } from '../src/lib/salesStyle.ts';
+import { HOUSE_STYLE_EXAMPLE, SALES_STYLE_RULES, SALES_STYLE_RULES_NO_BRAND, salesStyleProblems, searchFillerCount } from '../src/lib/salesStyle.ts';
 import { buildColdCallPlaybook, type PlaybookInput } from '../src/lib/coldCallPlaybook.ts';
 import { NO_WEBSITE_SPOKEN } from '../src/lib/callScript.ts';
 import { VOICE_NOTE_SYSTEM_PROMPT, checkVoiceNoteScript, shortVoiceNote, type VoiceNoteEvidence, type VoiceNoteSite } from '../src/lib/voiceNoteScript.ts';
@@ -77,7 +77,8 @@ console.log('── 1. THE CHECK ──');
 
 console.log('── 2. ONE COPY OF THE RULES ──');
 {
-  ok(VOICE_NOTE_SYSTEM_PROMPT.includes(SALES_STYLE_RULES), 'the voice-note prompt carries the shared rules');
+  /* The voice-note script is brand-free (Paul, 2026-10-21): the same shared rules, example search said as "AI". */
+  ok(VOICE_NOTE_SYSTEM_PROMPT.includes(SALES_STYLE_RULES_NO_BRAND) && SALES_STYLE_RULES_NO_BRAND === SALES_STYLE_RULES.replace(/\bGemini\b/g, 'AI') && !/Gemini/.test(SALES_STYLE_RULES_NO_BRAND), 'the voice-note prompt carries the shared rules (brand-free copy)');
   ok(REPLY_SYSTEM_PROMPT.includes(SALES_STYLE_RULES), 'the warm-reply prompt carries the shared rules');
   ok(/plain English a tradesperson uses/.test(RESEARCH_SYSTEM_PROMPT) && /useful_questions:[^\n]*Short and spoken/.test(RESEARCH_SYSTEM_PROMPT),
     'the site research asks for plain-English findings and spoken questions');
@@ -188,7 +189,8 @@ console.log('── 5. THE VOICE-NOTE CHECK REFUSES FILLER ON THE SEARCH ──'
   const site: VoiceNoteSite = { mode: 'clean', findings: [], source: 'own_site', sourceLabel: null, services: [], serviceEvidence: '' };
   // The real v2 script from 2026-09-27 (voice_note_scripts), opening line.
   const old = 'hi mate, i was trying to find a reliable electrician for commercial work in Woking and asked Google AI. it came up with BETEC Electrical Contractors, Big Green Electrical, and EA Electrical Ltd, but you didn\'t come up.\ni had a look at what might be holding you back, and nothing\'s obviously broken on the site, but there\'s a few things i\'d tighten up around how clearly it tells AI what you do and where.\ni actually specialise in AI visibility for local businesses.\nquick one mate, do you own and control the website yourself, or is it managed by an agency?';
-  const plain = old.replace('i was trying to find a reliable electrician for commercial work in Woking and asked Google AI', 'i asked Google AI for an electrician in Woking');
+  /* Brand-free since 2026-10-21: the plain version says "i asked AI". */
+  const plain = old.replace('i was trying to find a reliable electrician for commercial work in Woking and asked Google AI', 'i asked AI for an electrician in Woking');
   ok(checkVoiceNoteScript(old, { evidence: ev, site, town: 'Woking', trade: 'Electricians', business: 'JG Electrics' }).problems.some((p) => /filler adjective on the search/.test(p)), 'the real "reliable electrician" line is now sent back');
   ok(checkVoiceNoteScript(plain, { evidence: ev, site, town: 'Woking', trade: 'Electricians', business: 'JG Electrics' }).problems.length === 0, 'the plain version passes every check');
 }

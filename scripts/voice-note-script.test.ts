@@ -9,7 +9,7 @@ import {
   competitorNamed, wordCount, betterAttempt, VOICE_NOTE_SYSTEM_PROMPT, VOICE_NOTE_MODEL,
   classifyLeadWebsite, servicesNamed, serviceSupported, findingRecord, readsSearchVerbatim, isInterpretiveFinding,
   narratesSearchQualifiers, asksWebsiteControl, voiceNoteCtaKind, voiceNoteBasisIsCurrent, VOICE_NOTE_TARGET_WORDS, VOICE_NOTE_GENERATOR_VERSION,
-  type VoiceNoteEvidence, type VoiceNoteSite,
+  shortVoiceNote, type VoiceNoteEvidence, type VoiceNoteSite,
 } from '../src/lib/voiceNoteScript.ts';
 import type { HookResult } from '../src/lib/hookScore.ts';
 import type { ResearchFinding, WarmLeadResearch } from '../src/lib/warmLeadResearch.ts';
@@ -101,7 +101,9 @@ const OWN_SITE = { source: 'own_site' as const, sourceLabel: null, services: [] 
 const SITE_F: VoiceNoteSite = { ...OWN_SITE, mode: 'findings', findings: [blocked], serviceEvidence: 'OAI-SearchBot | PerplexityBot' };
 const SITE_C: VoiceNoteSite = { ...OWN_SITE, mode: 'clean', findings: [] };
 const P = buildVoiceNotePrompt({ business: 'Acme Plumbing', trade: 'Plumbers', area: 'Leicester', website: 'acme.example', evidence: EV, site: SITE_F });
-ok(P.includes('ENGINE NAME (say exactly this): Google AI') && EV.competitors.every((c) => P.includes(c)), 'the prompt carries the engine label and exactly the picked competitors');
+/* ⛔ Brand-free (Paul, 2026-10-21, v6): the prompt says "AI" and never hands the model the engine's brand. */
+ok(P.includes('THE TOOL (say exactly this, never a brand): AI') && !/Google AI|Gemini|ChatGPT/.test(P) && EV.competitors.every((c) => P.includes(c)), 'the prompt says "AI", names no brand, and carries exactly the picked competitors');
+ok(!/asked (Gemini|ChatGPT|Google AI)/.test(VOICE_NOTE_SYSTEM_PROMPT) && /i asked AI for an electrician/.test(VOICE_NOTE_SYSTEM_PROMPT), 'the system prompt\'s examples say "i asked AI"');
 ok(P.includes('say it like "a plumber"'), 'a plural trade is given in speakable form');
 ok(P.includes('AI search crawlers are blocked') && P.includes('OAI-SearchBot'), 'the finding goes in with its concrete details');
 const PC = buildVoiceNotePrompt({ business: 'Acme Plumbing', trade: 'plumber', area: 'Leicester', website: 'acme.example', evidence: EV, site: SITE_C });
@@ -111,25 +113,27 @@ ok(VOICE_NOTE_MODEL === 'gpt-4o', 'the stronger writing model');
 
 /* ─────────── 4. the checks ─────────── */
 const OWN_CTA = "quick one mate, do you own and control the website yourself, or is it managed by an agency?";
-const GOOD = "hi mate, i was looking for a plumber in Leicester, so i asked Google AI who it recommended. it came up with Smith & Sons Plumbing, Leicester Heating Co and PipeFix, but you didn't come up. i had a look at what might be holding you back, and some of the AI search crawlers, like OAI-SearchBot and PerplexityBot, are blocked from reading your site. i actually specialise in AI visibility for local businesses. " + OWN_CTA;
+const GOOD = "hi mate, i was looking for a plumber in Leicester, so i asked AI who it recommended. it came up with Smith & Sons Plumbing, Leicester Heating Co and PipeFix, but you didn't come up. i had a look at what might be holding you back, and some of the AI search crawlers, like OAI-SearchBot and PerplexityBot, are blocked from reading your site. i actually specialise in AI visibility for local businesses. " + OWN_CTA;
 const g = checkVoiceNoteScript(GOOD, { evidence: EV, site: SITE_F, town: 'Leicester' });
 ok(g.problems.length === 0, `a good script passes (${g.problems.join(' | ')})`);
 ok(g.wordCount >= VOICE_NOTE_TARGET_WORDS.min && g.wordCount <= VOICE_NOTE_TARGET_WORDS.max, `word count is inside the 30–45 second target (${g.wordCount})`);
 
 const missing = checkVoiceNoteScript(GOOD.replace(' and PipeFix', ''), { evidence: EV, site: SITE_F });
 ok(missing.problems.some((p) => /PipeFix/.test(p)), 'a dropped competitor is a problem');
-const wrongEngine = checkVoiceNoteScript(GOOD.replace('asked Google AI', 'asked ChatGPT'), { evidence: EV, site: SITE_F });
-ok(wrongEngine.problems.some((p) => /came from Gemini/.test(p)) && wrongEngine.problems.some((p) => /Does not say it was Gemini/.test(p)), 'saying ChatGPT for a Gemini result is a problem');
+for (const brand of ['ChatGPT', 'Gemini', 'Google AI', "Google's AI", 'chat gpt']) {
+  ok(checkVoiceNoteScript(GOOD.replace('asked AI', `asked ${brand}`), { evidence: EV, site: SITE_F }).problems.some((p) => /AI brand/.test(p)), `saying "${brand}" is a problem (brand-free, 2026-10-21)`);
+}
 const gptEv = { ...EV, engine: 'chatgpt', engineLabel: 'ChatGPT' };
-ok(checkVoiceNoteScript(GOOD.replace('asked Google AI', 'asked ChatGPT'), { evidence: gptEv, site: SITE_F }).problems.length === 0, '…and correct for a ChatGPT result');
-ok(checkVoiceNoteScript(GOOD, { evidence: gptEv, site: SITE_F }).problems.some((p) => /came from ChatGPT/.test(p)), 'saying Google AI for a ChatGPT result is a problem');
+ok(checkVoiceNoteScript(GOOD, { evidence: gptEv, site: SITE_F }).problems.length === 0, '"i asked AI" passes whichever engine the evidence came from');
+ok(/i asked AI for a plumber in Leicester/.test(shortVoiceNote({ engineLabel: 'Gemini', competitors: EV.competitors, trade: 'plumbers', area: 'Leicester', site: { mode: 'clean', source: 'own_site', sourceLabel: null } }) ?? '')
+  && !/Gemini|ChatGPT|Google AI/.test(shortVoiceNote({ engineLabel: 'Gemini', competitors: EV.competitors, trade: 'plumbers', area: 'Leicester', site: { mode: 'clean', source: 'own_site', sourceLabel: null } }) ?? 'Gemini'), 'the 20-second version says "i asked AI", no brand');
 const causal = checkVoiceNoteScript(GOOD.replace('are blocked from reading your site', "are blocked from reading your site, and that's why Google AI isn't recommending you"), { evidence: EV, site: SITE_F });
 ok(causal.problems.some((p) => /reason/.test(p)), 'causation ("that\'s why Google AI isn\'t recommending you") is a problem');
 ok(checkVoiceNoteScript(GOOD + ' it is only £99 to start.', { evidence: EV, site: SITE_F }).problems.some((p) => /price/.test(p)), 'a price is a problem');
 ok(checkVoiceNoteScript(GOOD + ' have a look at findable.live', { evidence: EV, site: SITE_F }).problems.some((p) => /link/.test(p)), 'a link is a problem');
 const invented = checkVoiceNoteScript(GOOD, { evidence: EV, site: SITE_C });
 ok(invented.problems.some((p) => /blocked crawlers/.test(p)), 'claiming blocked crawlers with NO supporting finding is a problem (invented finding)');
-const fallback = "hi mate, i was looking for a plumber in Leicester, so i asked Google AI who it recommended. it came up with Smith & Sons Plumbing, Leicester Heating Co and PipeFix, but you didn't come up. i had a look at what might be holding you back, and nothing's obviously broken on the site, but there's a few things i'd tighten up around how clearly it tells AI what you do and where. i actually specialise in AI visibility for local businesses. " + OWN_CTA;
+const fallback = "hi mate, i was looking for a plumber in Leicester, so i asked AI who it recommended. it came up with Smith & Sons Plumbing, Leicester Heating Co and PipeFix, but you didn't come up. i had a look at what might be holding you back, and nothing's obviously broken on the site, but there's a few things i'd tighten up around how clearly it tells AI what you do and where. i actually specialise in AI visibility for local businesses. " + OWN_CTA;
 const fb = checkVoiceNoteScript(fallback, { evidence: EV, site: SITE_C });
 ok(fb.problems.length === 0, `the honest fallback passes with no finding (${fb.problems.join(' | ')})`);
 const noPrimary = checkVoiceNoteScript(fallback, { evidence: EV, site: SITE_F });
@@ -138,7 +142,7 @@ ok(checkVoiceNoteScript(GOOD.replace('Smith & Sons Plumbing', 'Block Paving Co')
 
 // Length is a target, not a gate.
 const words = (n: number) => Array.from({ length: n }, () => 'word').join(' ');
-const lenOnly = (n: number) => checkVoiceNoteScript(`asked Google AI ai visibility Smith & Sons Plumbing Leicester Heating Co PipeFix ${words(n)} do you own and control the website yourself, or is it managed by an agency?`, { evidence: EV, site: SITE_C });
+const lenOnly = (n: number) => checkVoiceNoteScript(`asked AI ai visibility Smith & Sons Plumbing Leicester Heating Co PipeFix ${words(n)} do you own and control the website yourself, or is it managed by an agency?`, { evidence: EV, site: SITE_C });
 ok(lenOnly(18).problems.length === 0 && lenOnly(18).warnings.some((w) => /outside/.test(w)), '45 words: a note only, never a rewrite');
 ok(lenOnly(55).problems.length === 0 && lenOnly(55).warnings.length === 0, '82 words: no problem, no warning');
 ok(lenOnly(90).problems.length === 0 && lenOnly(90).warnings.some((w) => /outside/.test(w)), '117 words: a note only, never a rewrite');
@@ -166,7 +170,7 @@ ok(classifyLeadWebsite('').source === 'none' && classifyLeadWebsite(null).source
   ok(prof.mode === 'profile' && prof.findings.length === 0 && prof.sourceLabel === 'TradeHQ', 'a profile page is never mined for findings, even when research exists');
   const pp = buildVoiceNotePrompt({ business: 'Firebeard Electrical', trade: 'Electricians', area: 'Shrewsbury', website: 'https://tradehq.co.uk/firebeardelectrical', evidence: EV, site: prof });
   ok(pp.includes('WEBSITE SOURCE: a TradeHQ profile page, NOT their own website') && pp.includes('just your TradeHQ profile') && !pp.includes('{LABEL}'), 'the prompt says it is a TradeHQ profile, not their website');
-  const PROF_GOOD = "hi mate, i was looking for a plumber in Leicester, so i asked Google AI who it recommended. it came up with Smith & Sons Plumbing, Leicester Heating Co and PipeFix, but you didn't come up. i had a look at what might be holding you back, and i couldn't find a website of your own, just your TradeHQ profile. i actually specialise in AI visibility for local businesses. have you got a website of your own as well, or is TradeHQ basically what you're using at the moment?";
+  const PROF_GOOD = "hi mate, i was looking for a plumber in Leicester, so i asked AI who it recommended. it came up with Smith & Sons Plumbing, Leicester Heating Co and PipeFix, but you didn't come up. i had a look at what might be holding you back, and i couldn't find a website of your own, just your TradeHQ profile. i actually specialise in AI visibility for local businesses. have you got a website of your own as well, or is TradeHQ basically what you're using at the moment?";
   const bad = checkVoiceNoteScript(PROF_GOOD.replace("i couldn't find a website of your own, just your TradeHQ profile", "i had a look at your website and there isn't anything obviously broken"), { evidence: EV, site: prof });
   ok(bad.problems.some((x) => /Calls the TradeHQ profile their website/.test(x)), 'calling the TradeHQ profile "your website" is a problem');
   const good = PROF_GOOD;
@@ -183,7 +187,7 @@ ok(classifyLeadWebsite('').source === 'none' && classifyLeadWebsite(null).source
   ok(site.mode === 'findings' && !/rewiring|fuse board/i.test(pr), 'the rule\'s generic examples ("rewiring, fuse boards") never reach the prompt');
   ok(pr.includes('SERVICES THEY OFFER: none confirmed'), '…and the model is told no services are confirmed');
   ok(!findingRecord(missing).details.some((d) => /such as/.test(d)), '…nor the "Based on" record');
-  const script = "hi mate, i was looking for an electrician in Woking and asked Google AI who it'd recommend. it came back with Smith & Sons Plumbing, Leicester Heating Co and PipeFix, and you weren't in there, which could mean work going elsewhere. i had a look at your site to see what might be contributing. there aren't really pages for the actual work, like rewiring or fuse boards, the menu's mostly contact us and legal bits. i specialise in AI visibility for local businesses, so if you want mate i'm happy to explain what i'd change to give you a better chance of getting named in those searches.";
+  const script = "hi mate, i was looking for an electrician in Woking and asked AI who it'd recommend. it came back with Smith & Sons Plumbing, Leicester Heating Co and PipeFix, and you weren't in there, which could mean work going elsewhere. i had a look at your site to see what might be contributing. there aren't really pages for the actual work, like rewiring or fuse boards, the menu's mostly contact us and legal bits. i specialise in AI visibility for local businesses, so if you want mate i'm happy to explain what i'd change to give you a better chance of getting named in those searches.";
   const c1 = checkVoiceNoteScript(script, { evidence: EV, site, trade: 'Electricians' });
   ok(c1.problems.some((x) => /"rewiring"/.test(x)) && c1.problems.some((x) => /"fuse boards"/.test(x)), `naming rewiring / fuse boards with no evidence is a problem (${c1.problems.join(' | ')})`);
   const withServices = { ...site, services: ['Full and partial rewires', 'Fuse board upgrades'], serviceEvidence: site.serviceEvidence + ' | Full and partial rewires | Fuse board upgrades' };
@@ -208,28 +212,28 @@ ok(classifyLeadWebsite('').source === 'none' && classifyLeadWebsite(null).source
 
 // 4. The first live script (RP Electrics, 2026-09-26): quoting the crawler "ChatGPT-User" is not an engine claim.
 {
-  const rp = "hi mate, i was looking for an electrician in Woking on Google AI, specifically for commercial work, and it suggested Smith & Sons Plumbing, Leicester Heating Co, and PipeFix. if AI's recommending others, that could be potential customers going elsewhere. i had a quick look at your site and noticed some of the AI search crawlers are blocked, like OAI-SearchBot and ChatGPT-User. that might be making it harder for AI to properly understand your site. i specialise in AI visibility for local businesses, so if you'd like, i can explain what i'd change to give you a better chance of being named in those searches. just let me know.";
+  const rp = "hi mate, i was looking for an electrician in Woking on AI, specifically for commercial work, and it suggested Smith & Sons Plumbing, Leicester Heating Co, and PipeFix. if AI's recommending others, that could be potential customers going elsewhere. i had a quick look at your site and noticed some of the AI search crawlers are blocked, like OAI-SearchBot and ChatGPT-User. that might be making it harder for AI to properly understand your site. i specialise in AI visibility for local businesses, so if you'd like, i can explain what i'd change to give you a better chance of being named in those searches. just let me know.";
   const c = checkVoiceNoteScript(rp, { evidence: EV, site: SITE_F });
   ok(!c.problems.some((x) => /ChatGPT|Google AI/.test(x)), `naming the ChatGPT-User crawler is not claiming ChatGPT was asked (${c.problems.join(' | ')})`);
-  ok(checkVoiceNoteScript(rp.replace('on Google AI', 'on ChatGPT'), { evidence: EV, site: SITE_F }).problems.some((x) => /came from Gemini/.test(x)), '…while actually saying ChatGPT for a Gemini result is still caught');
+  ok(checkVoiceNoteScript(rp.replace('on AI', 'on ChatGPT'), { evidence: EV, site: SITE_F }).problems.some((x) => /AI brand/.test(x)), '…while actually saying ChatGPT is still caught (a brand)');
 }
 
 /* ─────────── 4c. tone and evidence pass (Paul, 2026-09-27) — the three real v1 scripts are the fixtures ─────────── */
 {
   const FB_EV = { ...EV, question: 'emergency electrician in Shrewsbury UK who can come today', competitors: ['Able Group (Shrewsbury Service)', 'Shrewsbury Emergency Electricians', 'Whitfield Plumbing & Electrical'] };
   const FB_SITE = selectVoiceNoteFindings(null, 'https://tradehq.co.uk/firebeardelectrical', 'Shrewsbury');
-  const FB_V1 = 'hi mate, i was looking for an electrician in Shrewsbury and asked Google AI about "emergency electrician in Shrewsbury UK who can come today". it suggested Able Group, Shrewsbury Emergency Electricians, and Whitfield Plumbing & Electrical, but not Firebeard Electrical. now, if AI\'s pointing folks to other companies, that could be potential customers going elsewhere. i had a quick look, and i couldn\'t find a website of your own, just your TradeHQ profile. without your own site, there\'s a lot less for AI to go on about what you do and where you work. i specialise in AI visibility for local businesses. if you fancy, i can share what i\'d change to give you a better shot at being named in those searches.';
+  const FB_V1 = 'hi mate, i was looking for an electrician in Shrewsbury and asked AI about "emergency electrician in Shrewsbury UK who can come today". it suggested Able Group, Shrewsbury Emergency Electricians, and Whitfield Plumbing & Electrical, but not Firebeard Electrical. now, if AI\'s pointing folks to other companies, that could be potential customers going elsewhere. i had a quick look, and i couldn\'t find a website of your own, just your TradeHQ profile. without your own site, there\'s a lot less for AI to go on about what you do and where you work. i specialise in AI visibility for local businesses. if you fancy, i can share what i\'d change to give you a better shot at being named in those searches.';
   const fb = checkVoiceNoteScript(FB_V1, { evidence: FB_EV, site: FB_SITE, business: 'Firebeard Electrical' });
   ok(fb.problems.some((x) => /word for word or in quotes/.test(x)), 'Firebeard v1: the quoted, verbatim search is rejected');
   ok(fb.problems.some((x) => /Refers to the business by name/.test(x)), 'Firebeard v1: "but not Firebeard Electrical" is rejected');
-  const FB_OK = "hi mate, i was looking for an electrician in Shrewsbury, so i asked Google AI who it recommended. it came up with Able Group, Shrewsbury Emergency Electricians and Whitfield Plumbing & Electrical, but you didn't come up. i had a look at what might be holding you back, and i couldn't find a website of your own, just your TradeHQ profile. i actually specialise in AI visibility for local businesses. have you got a website of your own as well, or is TradeHQ basically what you're using at the moment?";
+  const FB_OK = "hi mate, i was looking for an electrician in Shrewsbury, so i asked AI who it recommended. it came up with Able Group, Shrewsbury Emergency Electricians and Whitfield Plumbing & Electrical, but you didn't come up. i had a look at what might be holding you back, and i couldn't find a website of your own, just your TradeHQ profile. i actually specialise in AI visibility for local businesses. have you got a website of your own as well, or is TradeHQ basically what you're using at the moment?";
   const fbOk = checkVoiceNoteScript(FB_OK, { evidence: FB_EV, site: FB_SITE, business: 'Firebeard Electrical', town: 'Shrewsbury', trade: 'Electricians' });
   ok(fbOk.problems.length === 0, `a paraphrased, second-person Firebeard script passes (${fbOk.problems.join(' | ')})`);
   ok(readsSearchVerbatim('i asked google ai who they would recommend for an emergency electrician in shrewsbury uk who can come today', FB_EV.question), 'reading the search unquoted is still caught');
   ok(readsSearchVerbatim('i asked about an emergency electrician in shrewsbury uk', FB_EV.question), '"<town> uk" copied from the query is caught');
   ok(!readsSearchVerbatim(FB_OK, FB_EV.question) && !narratesSearchQualifiers(FB_OK, FB_EV.question, 'Shrewsbury'), 'the short context ("an electrician in Shrewsbury") is fine');
   ok(!readsSearchVerbatim(FB_OK.replace('an electrician', 'an emergency electrician'), FB_EV.question), '…and one colouring word before the town ("emergency") is allowed');
-  const FB_TAIL = FB_OK.replace('so i asked Google AI who it recommended', 'so i asked Google AI who can come today');
+  const FB_TAIL = FB_OK.replace('so i asked AI who it recommended', 'so i asked AI who can come today');
   ok(narratesSearchQualifiers(FB_TAIL, FB_EV.question, 'Shrewsbury') && checkVoiceNoteScript(FB_TAIL, { evidence: FB_EV, site: FB_SITE, town: 'Shrewsbury' }).problems.some((x) => /qualifiers/.test(x)), 'narrating the query tail ("…who can come today") is sent back');
   const FB_V2_END = FB_OK.replace("have you got a website of your own as well, or is TradeHQ basically what you're using at the moment?", "so if you want mate i'm happy to explain what i'd change to give you a better chance of coming up in those searches.");
   const v2end = checkVoiceNoteScript(FB_V2_END, { evidence: FB_EV, site: FB_SITE, town: 'Shrewsbury' }).problems;
@@ -239,7 +243,7 @@ ok(classifyLeadWebsite('').source === 'none' && classifyLeadWebsite(null).source
   ok(asksWebsiteControl("do you have a site of your own that you control, mate, or are you mainly using the TradeHQ profile?", FB_SITE), 'the other profile wording passes');
 
   // JG v1: an evaluative verdict and 144 words.
-  const JG_V1 = "hi mate, i was looking for an electrician in Woking on Google AI, and it came up with BETEC Electrical Contractors, Big Green Electrical, and EA Electrical Ltd. if AI's recommending them instead, that could mean potential customers going elsewhere. i had a quick look at your site, and a couple of things stood out. none of the pages linked from your homepage are about the services you offer, like re-wires or fuseboard changes, so there's less on the site that clearly says what you do and where. also, i noticed you mention being fully insured and qualified, but there's no evidence or details there. that's probably not ideal for showing up in searches. i specialise in AI visibility for local businesses, so if you want, i can explain what i'd change to give you a better chance of being named in those searches.";
+  const JG_V1 = "hi mate, i was looking for an electrician in Woking on AI, and it came up with BETEC Electrical Contractors, Big Green Electrical, and EA Electrical Ltd. if AI's recommending them instead, that could mean potential customers going elsewhere. i had a quick look at your site, and a couple of things stood out. none of the pages linked from your homepage are about the services you offer, like re-wires or fuseboard changes, so there's less on the site that clearly says what you do and where. also, i noticed you mention being fully insured and qualified, but there's no evidence or details there. that's probably not ideal for showing up in searches. i specialise in AI visibility for local businesses, so if you want, i can explain what i'd change to give you a better chance of being named in those searches.";
   const jgEv = { ...EV, competitors: ['BETEC Electrical Contractors', 'Big Green Electrical', 'EA Electrical Ltd'] };
   const jgSite = { ...SITE_C, services: ['Full and partial re-wires', 'Consumer unit (fuseboard) changes'], serviceEvidence: 'Full and partial re-wires | Consumer unit (fuseboard) changes' };
   const jg = checkVoiceNoteScript(JG_V1, { evidence: jgEv, site: jgSite, business: 'JG Electrics', trade: 'Electricians' });
@@ -277,14 +281,14 @@ ok(classifyLeadWebsite('').source === 'none' && classifyLeadWebsite(null).source
   const pp = buildVoiceNotePrompt({ business: 'Firebeard Electrical', trade: 'Electricians', area: 'Shrewsbury', website: 'https://tradehq.co.uk/firebeardelectrical', evidence: EV, site: prof });
   ok(/have you got a website of your own as well, or is TradeHQ basically what you're using/.test(pp) && /Never ask whether they own "the website"/.test(pp), 'the profile prompt adapts the CTA to TradeHQ');
   ok(/say it as just "an electrician in Shrewsbury"/.test(pp), 'the prompt gives the short spoken context (trade + town)');
-  const nw = "hi mate, i was looking for a plumber in Leicester, so i asked Google AI who it recommended. it came up with Smith & Sons Plumbing, Leicester Heating Co and PipeFix, but you didn't come up. i had a look at what might be holding you back, and i couldn't find a website for you. i actually specialise in AI visibility for local businesses. have you got a website at the moment, mate, or not yet?";
+  const nw = "hi mate, i was looking for a plumber in Leicester, so i asked AI who it recommended. it came up with Smith & Sons Plumbing, Leicester Heating Co and PipeFix, but you didn't come up. i had a look at what might be holding you back, and i couldn't find a website for you. i actually specialise in AI visibility for local businesses. have you got a website at the moment, mate, or not yet?";
   const nwSite = selectVoiceNoteFindings(null, null);
   ok(checkVoiceNoteScript(nw, { evidence: EV, site: nwSite }).problems.length === 0, 'a no-website script ending "have you got a website at the moment?" passes');
   ok(checkVoiceNoteScript(GOOD.replace(OWN_CTA, 'speak soon.'), { evidence: EV, site: SITE_F }).problems.some((x) => /own and control the website/.test(x)), 'an own-site script with no ownership question is sent back');
   ok(asksWebsiteControl('just so i know what would actually be possible, do you own the site yourself or is it with an agency?', SITE_F), 'a natural variation of the own-site question passes');
   ok(checkVoiceNoteScript(GOOD.replace('i had a look at what might be holding you back', 'i looked into why Google AI recommended them instead'), { evidence: EV, site: SITE_F }).problems.some((x) => /reason/.test(x)), '"i looked into why Google AI recommended them" is a causation claim');
   ok(checkVoiceNoteScript(GOOD.replace(OWN_CTA, "i can send you the audit and show you exactly what i'd change. " + OWN_CTA), { evidence: EV, site: SITE_F }).problems.some((x) => /change plan/.test(x)), '"send you the audit and show you exactly what i\'d change" is rejected');
-  ok(VOICE_NOTE_GENERATOR_VERSION === 5, 'generator version 5 marks the who-is-speaking pass in stored rows (4 was the house style)');
+  ok(VOICE_NOTE_GENERATOR_VERSION === 6, "generator version 6 marks the brand-free pass in stored rows (5 was who-is-speaking, 4 the house style)");
 }
 {
   // The card's pick (score.hook) wins whenever it has two usable names — even over a three-name miss.

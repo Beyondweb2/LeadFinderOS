@@ -1,0 +1,1554 @@
+[
+ {
+  "id": "R001",
+  "date": "2026-10-19 14:23",
+  "pattern": "confirms only (no website on record)",
+  "context_before": [
+   "US[template initial_contact_short]"
+  ],
+  "prospect_messages": [
+   "Yes"
+  ],
+  "expected": "PITCH-SITE",
+  "note": "",
+  "drafter_2026_10_20": "PITCH"
+ },
+ {
+  "id": "R002",
+  "date": "2026-10-13 12:28",
+  "pattern": "auto-reply then \"Yeah\" in one burst",
+  "context_before": [
+   "US[template initial_contact]"
+  ],
+  "prospect_messages": [
+   "Thank you for contacting Brill DrivingSchool! Please let us know how we can help you.",
+   "Yeah"
+  ],
+  "expected": "PITCH",
+  "note": "merge the burst: the real word is the last one",
+  "drafter_2026_10_20": "AUTO"
+ },
+ {
+  "id": "R003",
+  "date": "2026-10-19 12:03",
+  "pattern": "same message sent twice",
+  "context_before": [
+   "US[template initial_contact_short]"
+  ],
+  "prospect_messages": [
+   "🇬🇧Thank you for getting in touch. I’ll return your message as soon as I can. Our working hours are Monday to Friday, 9:00 - 16:00. Meanwhile, please let me know how we can help you. 🇧🇷Obrigado pelo contato. Eu vou retornar tua mensagem assim que puder. Nosso horário de funcionamento é de segunda a sexta-feira, das 9h às 16h. Enquanto isso, me fala aqui como eu posso te ajudar.",
+   "Yes, it is located in Liverpool.",
+   "Hey, yes it is located in Liverpool."
+  ],
+  "expected": "PITCH",
+  "note": "merge duplicates, one pitch",
+  "drafter_2026_10_20": "NEEDS:off_topic"
+ },
+ {
+  "id": "R004",
+  "date": "2026-10-19 10:19",
+  "pattern": "confirms + how can we help (name known from site)",
+  "context_before": [
+   "US[template initial_contact_short]"
+  ],
+  "prospect_messages": [
+   "Thank you for contacting KSM Driving Tuition. If you are messaging outside of our working hours Monday-Friday 08:00-18:00 then please be assured we will get back to you at our earliest opportunity. Please forward your postcode, availability for lessons, and if you've passed your theory, as this will enable us to get back to you with further information. 😁",
+   "Yes it is. How can we help"
+  ],
+  "expected": "PITCH",
+  "note": "",
+  "drafter_2026_10_20": "PITCH"
+ },
+ {
+  "id": "R005",
+  "date": "2026-10-19 12:05",
+  "pattern": "gives a first name",
+  "context_before": [
+   "US[template initial_contact_short]"
+  ],
+  "prospect_messages": [
+   "Yes can I help My name is Mark"
+  ],
+  "expected": "PITCH",
+  "note": "greeting \"Hi Mark,\"",
+  "drafter_2026_10_20": "PITCH"
+ },
+ {
+  "id": "R006",
+  "date": "2026-10-19 13:15",
+  "pattern": "gives a first name",
+  "context_before": [
+   "US[template initial_contact_short]"
+  ],
+  "prospect_messages": [
+   "Yes, Sarah Hart here."
+  ],
+  "expected": "PITCH",
+  "note": "greeting \"Hi Sarah,\"",
+  "drafter_2026_10_20": "PITCH"
+ },
+ {
+  "id": "R007",
+  "date": "2026-10-19 13:47",
+  "pattern": "busy but confirms",
+  "context_before": [
+   "US[template initial_contact_short]"
+  ],
+  "prospect_messages": [
+   "Yes,apologies I'm about to start a lesson."
+  ],
+  "expected": "PITCH",
+  "note": "NO greeting; current code greets \"Hi About,\"",
+  "drafter_2026_10_20": "PITCH"
+ },
+ {
+  "id": "R008",
+  "date": "2026-08-11 07:58",
+  "pattern": "late reply, gives name",
+  "context_before": [
+   "US[template initial_contact]"
+  ],
+  "prospect_messages": [
+   "Hi, sorry for late reply, this is Michael, driving instructor thanks"
+  ],
+  "expected": "PITCH",
+  "note": "greeting \"Hi Michael,\"; \"driving\" must not read as busy",
+  "drafter_2026_10_20": "DRAFT:busy"
+ },
+ {
+  "id": "R009",
+  "date": "2026-08-08 16:18",
+  "pattern": "driving school confirms",
+  "context_before": [
+   "US[template initial_contact]"
+  ],
+  "prospect_messages": [
+   "Good afternoon, this is the correct number and only number for First Class Pass Driving School"
+  ],
+  "expected": "PITCH",
+  "note": "current: busy (\"I'll call then\")",
+  "drafter_2026_10_20": "DRAFT:busy"
+ },
+ {
+  "id": "R010",
+  "date": "2026-10-13 12:43",
+  "pattern": "driving school confirms",
+  "context_before": [
+   "US[template initial_contact]"
+  ],
+  "prospect_messages": [
+   "Hi yes is All Seasons Driving"
+  ],
+  "expected": "PITCH",
+  "note": "current: busy",
+  "drafter_2026_10_20": "DRAFT:busy"
+ },
+ {
+  "id": "R011",
+  "date": "2026-10-14 11:53",
+  "pattern": "confirms + \"anything I can help with?\"",
+  "context_before": [
+   "US[template initial_contact]"
+  ],
+  "prospect_messages": [
+   "Yes, is there anything I can help you with?"
+  ],
+  "expected": "PITCH",
+  "note": "current: Needs you",
+  "drafter_2026_10_20": "NEEDS:question_not_on_sheet"
+ },
+ {
+  "id": "R012",
+  "date": "2026-08-17 14:21",
+  "pattern": "\"what can I assist you with?\"",
+  "context_before": [
+   "US[template initial_contact]",
+   "US[template initial_contact]"
+  ],
+  "prospect_messages": [
+   "Hi what can I assist you with?"
+  ],
+  "expected": "PITCH",
+  "note": "current: Needs you",
+  "drafter_2026_10_20": "NEEDS:question_not_on_sheet"
+ },
+ {
+  "id": "R013",
+  "date": "2026-08-26 12:53",
+  "pattern": "\"what is it concerning?\"",
+  "context_before": [
+   "US[template initial_contact]"
+  ],
+  "prospect_messages": [
+   "Yes what’s it concerning? Cheers, [first last] secure"
+  ],
+  "expected": "PITCH",
+  "note": "current: Needs you",
+  "drafter_2026_10_20": "NEEDS:question_not_on_sheet"
+ },
+ {
+  "id": "R014",
+  "date": "2026-10-19 14:57",
+  "pattern": "\"what is the nature of your enquiry?\"",
+  "context_before": [
+   "US[template initial_contact_short]"
+  ],
+  "prospect_messages": [
+   "What is fhe nature of your enquiry?"
+  ],
+  "expected": "PITCH",
+  "note": "current: Needs you",
+  "drafter_2026_10_20": "NEEDS:question_not_on_sheet"
+ },
+ {
+  "id": "R015",
+  "date": "2026-08-22 07:36",
+  "pattern": "late reply",
+  "context_before": [
+   "US[template initial_contact]",
+   "US[template contact_followup]"
+  ],
+  "prospect_messages": [
+   "Hi yes I’ve only just seen it how can I help"
+  ],
+  "expected": "PITCH",
+  "note": "current: Needs you (off topic)",
+  "drafter_2026_10_20": "NEEDS:off_topic"
+ },
+ {
+  "id": "R016",
+  "date": "2026-08-22 08:32",
+  "pattern": "replies to \"Paul\" by name",
+  "context_before": [
+   "US[template initial_contact]",
+   "US[template contact_followup]"
+  ],
+  "prospect_messages": [
+   "Hi Paul. This is [first last] the locksmith."
+  ],
+  "expected": "PITCH",
+  "note": "current: Needs you",
+  "drafter_2026_10_20": "NEEDS:off_topic"
+ },
+ {
+  "id": "R017",
+  "date": "2026-08-22 08:57",
+  "pattern": "replies to \"Paul\" by name",
+  "context_before": [
+   "US[template initial_contact]",
+   "US[template contact_followup]"
+  ],
+  "prospect_messages": [
+   "Hi Paul it’s there but I have only just seen it sorry about that Yes this is the number for No Shut Sure Lock"
+  ],
+  "expected": "PITCH",
+  "note": "current: Needs you",
+  "drafter_2026_10_20": "NEEDS:off_topic"
+ },
+ {
+  "id": "R018",
+  "date": "2026-10-19 16:54",
+  "pattern": "confirms + \"what brings you here\"",
+  "context_before": [
+   "US[template initial_contact]"
+  ],
+  "prospect_messages": [
+   "Hello! Yes it is",
+   "Let me know what brings you here ☺️ I’d love to help",
+   "Hellooo, just wanted to follow up"
+  ],
+  "expected": "PITCH",
+  "note": "",
+  "drafter_2026_10_20": "NEEDS:off_topic"
+ },
+ {
+  "id": "R019",
+  "date": "2026-07-29 21:31",
+  "pattern": "TWO messages: \"Hi, yes\" then \"How I can help you?\"",
+  "context_before": [
+   "US[template initial_contact]"
+  ],
+  "prospect_messages": [
+   "Hi, yes",
+   "How I can help you?"
+  ],
+  "expected": "PITCH",
+  "note": "merge the burst into one reading; current: Needs you",
+  "drafter_2026_10_20": "NEEDS:question_not_on_sheet"
+ },
+ {
+  "id": "R020",
+  "date": "2026-09-19 17:21",
+  "pattern": "TWO messages: \"Yes\" then \"How can I help you\"",
+  "context_before": [
+   "US[template initial_contact]"
+  ],
+  "prospect_messages": [
+   "Yes",
+   "How can I help you"
+  ],
+  "expected": "PITCH",
+  "note": "current: Needs you",
+  "drafter_2026_10_20": "NEEDS:off_topic"
+ },
+ {
+  "id": "R021",
+  "date": "2026-08-30 12:36",
+  "pattern": "THREE messages: Hi / Yes / How can I help",
+  "context_before": [
+   "US[template initial_contact]"
+  ],
+  "prospect_messages": [
+   "Hi",
+   "Yes",
+   "How can I help"
+  ],
+  "expected": "PITCH",
+  "note": "current: Needs you",
+  "drafter_2026_10_20": "NEEDS:off_topic"
+ },
+ {
+  "id": "R022",
+  "date": "2026-10-15 07:01",
+  "pattern": "Yes / How can I help you? / ?",
+  "context_before": [
+   "US[template initial_contact]"
+  ],
+  "prospect_messages": [
+   "Yes",
+   "How can I help you ?",
+   "?"
+  ],
+  "expected": "PITCH",
+  "note": "current: who_are_you",
+  "drafter_2026_10_20": "DRAFT:who_are_you"
+ },
+ {
+  "id": "R023",
+  "date": "2026-09-16 07:43",
+  "pattern": "Yes / Go on",
+  "context_before": [
+   "US[template initial_contact]"
+  ],
+  "prospect_messages": [
+   "Yes",
+   "Go on"
+  ],
+  "expected": "PITCH",
+  "note": "current: go_on, which asks the agency question without the hook",
+  "drafter_2026_10_20": "DRAFT:go_on"
+ },
+ {
+  "id": "R024",
+  "date": "2026-08-25 09:57",
+  "pattern": "Yes, then \"do not need your services\"",
+  "context_before": [
+   "US[template initial_contact]"
+  ],
+  "prospect_messages": [
+   "Yes",
+   "Sorry do not need your services thanx"
+  ],
+  "expected": "NEEDS:not_interested",
+  "note": "the no wins over the yes",
+  "drafter_2026_10_20": "NEEDS:not_interested"
+ },
+ {
+  "id": "R025",
+  "date": "2026-09-21 15:32",
+  "pattern": "thinks we want lessons",
+  "context_before": [
+   "US[template initial_contact]"
+  ],
+  "prospect_messages": [
+   "Yes, it is. If you are wanting driving lessons!"
+  ],
+  "expected": "NEW:thinks_customer",
+  "note": "",
+  "drafter_2026_10_20": "DRAFT:busy"
+ },
+ {
+  "id": "R026",
+  "date": "2026-10-19 13:23",
+  "pattern": "thinks we want lessons",
+  "context_before": [
+   "US[template initial_contact_short]"
+  ],
+  "prospect_messages": [
+   "Can I help you, you want to take some lessons 😊"
+  ],
+  "expected": "NEW:thinks_customer",
+  "note": "",
+  "drafter_2026_10_20": "NEEDS:question_not_on_sheet"
+ },
+ {
+  "id": "R027",
+  "date": "2026-09-21 13:18",
+  "pattern": "thinks we want lessons",
+  "context_before": [
+   "US[template initial_contact]"
+  ],
+  "prospect_messages": [
+   "Yes it is. Are you looking for driving lessons? Andy."
+  ],
+  "expected": "NEW:thinks_customer",
+  "note": "",
+  "drafter_2026_10_20": "NEEDS:question_not_on_sheet"
+ },
+ {
+  "id": "R028",
+  "date": "2026-10-13 14:29",
+  "pattern": "thinks we want lessons (3 messages)",
+  "context_before": [
+   "US[template initial_contact]"
+  ],
+  "prospect_messages": [
+   "Yes",
+   "Automatic or manual",
+   "Any previous experience"
+  ],
+  "expected": "NEW:thinks_customer",
+  "note": "merge the 3 messages",
+  "drafter_2026_10_20": "NEEDS:off_topic"
+ },
+ {
+  "id": "R029",
+  "date": "2026-09-21 11:46",
+  "pattern": "thinks we want lessons (after our hook)",
+  "context_before": [
+   "US[template initial_contact]",
+   "THEM: Yes it is",
+   "US[template audit_followup_call]"
+  ],
+  "prospect_messages": [
+   "We do automatics but only cover certain areas if you could text your postcode then we can let you know, if we can accommodate you we would need to know if you have a practical test booked"
+  ],
+  "expected": "NEW:thinks_customer",
+  "note": "",
+  "drafter_2026_10_20": "DRAFT:think_about_it"
+ },
+ {
+  "id": "R030",
+  "date": "2026-09-16 08:31",
+  "pattern": "what are you selling?",
+  "context_before": [
+   "US[template initial_contact]"
+  ],
+  "prospect_messages": [
+   "What are you selling?"
+  ],
+  "expected": "NEW:straight_answer_then_pitch",
+  "note": "current: Needs you",
+  "drafter_2026_10_20": "NEEDS:question_not_on_sheet"
+ },
+ {
+  "id": "R031",
+  "date": "2026-08-22 13:36",
+  "pattern": "what do you want?",
+  "context_before": [
+   "US[template initial_contact]",
+   "US[template contact_followup]"
+  ],
+  "prospect_messages": [
+   "What do you want?"
+  ],
+  "expected": "NEW:straight_answer_then_pitch",
+  "note": "current: Needs you",
+  "drafter_2026_10_20": "NEEDS:question_not_on_sheet"
+ },
+ {
+  "id": "R032",
+  "date": "2026-09-17 13:16",
+  "pattern": "are you going to sell me a website?",
+  "context_before": [
+   "US[template initial_contact]"
+  ],
+  "prospect_messages": [
+   "Yep. Are you going to try and sell me a website?"
+  ],
+  "expected": "NEW:straight_answer_then_pitch",
+  "note": "current: Needs you",
+  "drafter_2026_10_20": "NEEDS:question_not_on_sheet"
+ },
+ {
+  "id": "R033",
+  "date": "2026-09-16 10:06",
+  "pattern": "is this a cold call?",
+  "context_before": [
+   "US[template initial_contact]"
+  ],
+  "prospect_messages": [
+   "Is this an electrical call or a cold call for business?"
+  ],
+  "expected": "NEW:straight_answer_then_pitch",
+  "note": "current: Needs you",
+  "drafter_2026_10_20": "NEEDS:question_not_on_sheet"
+ },
+ {
+  "id": "R034",
+  "date": "2026-09-17 16:00",
+  "pattern": "\"Why\"",
+  "context_before": [
+   "US[template initial_contact]"
+  ],
+  "prospect_messages": [
+   "Why"
+  ],
+  "expected": "NEW:straight_answer_then_pitch",
+  "note": "current: Needs you",
+  "drafter_2026_10_20": "NEEDS:question_not_on_sheet"
+ },
+ {
+  "id": "R035",
+  "date": "2026-09-01 09:28",
+  "pattern": "who is this?",
+  "context_before": [
+   "US[template initial_contact]"
+  ],
+  "prospect_messages": [
+   "Who’s this"
+  ],
+  "expected": "DRAFT:who_are_you",
+  "note": "add the hook after the intro (one question)",
+  "drafter_2026_10_20": "DRAFT:who_are_you"
+ },
+ {
+  "id": "R036",
+  "date": "2026-07-28 19:29",
+  "pattern": "confirms + who is this",
+  "context_before": [
+   "US[template initial_contact]"
+  ],
+  "prospect_messages": [
+   "Yes, who's this please?"
+  ],
+  "expected": "DRAFT:who_are_you",
+  "note": "current: Needs you",
+  "drafter_2026_10_20": "NEEDS:question_not_on_sheet"
+ },
+ {
+  "id": "R037",
+  "date": "2026-08-28 16:45",
+  "pattern": "are you AI / selling?, then a no",
+  "context_before": [
+   "US[template initial_contact]"
+  ],
+  "prospect_messages": [
+   "Depends Are you AI ? Are you trying to sell me something? If yes to either of the above, I am sorry but I am not interested. If you are genuinely after a plumber then yes"
+  ],
+  "expected": "NEEDS:is_bot",
+  "note": "person decides; never deny being AI",
+  "drafter_2026_10_20": "NEEDS:not_interested"
+ },
+ {
+  "id": "R038",
+  "date": "2026-07-23 19:36",
+  "pattern": "\"if this is a sales call I'm not interested\"",
+  "context_before": [
+   "US[template initial_contact]"
+  ],
+  "prospect_messages": [
+   "yes it is if this is a sales call i’m not interested"
+  ],
+  "expected": "NEEDS:not_interested",
+  "note": "soft exit, no pitch",
+  "drafter_2026_10_20": "NEEDS:not_interested"
+ },
+ {
+  "id": "R039",
+  "date": "2026-09-12 12:56",
+  "pattern": "business auto-reply",
+  "context_before": [
+   "US[template payment_recieved]"
+  ],
+  "prospect_messages": [
+   "Thank you for contacting The Lock Specialist Ltd! Please let us know how we can help you. Please state the nature of your enquiry and promptly provide us with the necessary information so we can assist you as quickly as possible. To expedite your query, we would suggest sending us clear visible photos of the lock in question and a brief video illustrating the issue you’re experiencing. This will be very useful for our team and allow us to provide an accurate quote for the service you’re seeking today! Our team is on standby ready to help! Kind regards, Team TLS"
+  ],
+  "expected": "AUTO",
+  "note": "pitch drafted, labelled Auto-reply",
+  "drafter_2026_10_20": "AUTO"
+ },
+ {
+  "id": "R040",
+  "date": "2026-10-19 19:31",
+  "pattern": "auto-reply + Spanish",
+  "context_before": [
+   "US[template initial_contact_short]"
+  ],
+  "prospect_messages": [
+   "Buenas noches",
+   "Thanks for contacting Ven Language Services",
+   "Are you interested in Spanish lessons?..."
+  ],
+  "expected": "AUTO",
+  "note": "pitch drafted, labelled Auto-reply",
+  "drafter_2026_10_20": "AUTO"
+ },
+ {
+  "id": "R041",
+  "date": "2026-08-26 14:57",
+  "pattern": "three auto-replies then \"yes\"",
+  "context_before": [
+   "US[template initial_contact]"
+  ],
+  "prospect_messages": [
+   "Thank you for your message. We’re unavailable right now, but will respond as soon as possible.",
+   "Thank you for contacting DSS Driving School! Please let us know how we can help you. YOU CAN BOOK ONLINE 24/7 driving lessons Instructors are available in your area from 06:00-23:00 ( 7 days a week ) follow the link below. Providing services: 1: automatic & manual driving lessons 2: private driving lessons 1 to 1 3:intermediate driving courses 4:intensive driving courses 5:pass in 10 days course 6: intensive driving course with multiple test deals 7: refresher driving course 8: pass plus driving course 9: motorway lesson 10: Mock driving test 11: become driving instructor 12:Adi part 2 course 13: ADI part 3 course 14: standard check [link]",
+   "Hello, This is DSS Driving School. How may we assist you today?",
+   "yes"
+  ],
+  "expected": "PITCH",
+  "note": "the \"yes\" is the real reply",
+  "drafter_2026_10_20": "AUTO"
+ },
+ {
+  "id": "R042",
+  "date": "2026-07-25 18:50",
+  "pattern": "our template looped and got the auto-reply 3 times",
+  "context_before": [
+   "US[template initial_contact]"
+  ],
+  "prospect_messages": [
+   "Thanks for contacting Jack The Plumber. We are a little busy right now but will get back to you shortly. Please leave full job details and postcode and any photos of your requirements will help. [link] Email: [email]"
+  ],
+  "expected": "NEEDS:repeat_auto_reply",
+  "note": "no draft",
+  "drafter_2026_10_20": "AUTO"
+ },
+ {
+  "id": "R043",
+  "date": "2026-09-03 15:32",
+  "pattern": "image only",
+  "context_before": [
+   "US[template audit_result_hook]"
+  ],
+  "prospect_messages": [
+   "[image]"
+  ],
+  "expected": "NEEDS:media",
+  "note": "",
+  "drafter_2026_10_20": "NEEDS:ack"
+ },
+ {
+  "id": "R044",
+  "date": "2026-09-03 18:20",
+  "pattern": "voice note",
+  "context_before": [
+   "THEM: Whats the name of your company?",
+   "US: [link]",
+   "US: Would you like to jump on a call or like any more information?"
+  ],
+  "prospect_messages": [
+   "[audio]"
+  ],
+  "expected": "NEEDS:media",
+  "note": "",
+  "drafter_2026_10_20": "DRAFT:voice_yes"
+ },
+ {
+  "id": "R045",
+  "date": "2026-09-17 15:27",
+  "pattern": "voice note, they say they sent one",
+  "context_before": [
+   "US[template audit_followup_call]",
+   "THEM: It’s one of many websites I have mate. We have this all sorted already but if you want to let me have your proposal I’d be interested to see what you think you ",
+   "US: Yeah mate, absolutely. I’ve run an AI visibility audit on this site and, on the questions we tested, it scored 0, so at the moment AI is consistently recommendi"
+  ],
+  "prospect_messages": [
+   "[audio]"
+  ],
+  "expected": "NEEDS:media",
+  "note": "",
+  "drafter_2026_10_20": "NEEDS:ack"
+ },
+ {
+  "id": "R046",
+  "date": "2026-08-11 10:44",
+  "pattern": "video + text after a polite no",
+  "context_before": [
+   "THEM: Yes… address please?",
+   "THEM: Hi, it is.. sorry, I’m in 2 conversations at the moment. How can I help?",
+   "US[template audit_reply]"
+  ],
+  "prospect_messages": [
+   "No thanks…. The locksmiths above do mainly domestic, as do I but I’ve set most of my SEO up as Automotive. I also don’t use cold callers. Have a good day.",
+   "[video]",
+   "That’s what chat GBT came up with for lost car keys."
+  ],
+  "expected": "NEEDS:not_interested",
+  "note": "they showed ChatGPT output; a person replies",
+  "drafter_2026_10_20": "NEEDS:off_topic"
+ },
+ {
+  "id": "R047",
+  "date": "2026-09-16 14:19",
+  "pattern": "unsupported + 3 images + \"your information is incorrect\"",
+  "context_before": [
+   "THEM: it is",
+   "THEM: Can I help you ?",
+   "US[template audit_followup_call]"
+  ],
+  "prospect_messages": [
+   "Sorry buddy , not interested.",
+   "[unsupported]",
+   "[image]",
+   "[image]",
+   "[image]",
+   "your information is incorrect by the way"
+  ],
+  "expected": "NEEDS:media",
+  "note": "",
+  "drafter_2026_10_20": "NEEDS:off_topic"
+ },
+ {
+  "id": "R048",
+  "date": "2026-08-11 14:30",
+  "pattern": "emoji reaction after \"No thanks\"",
+  "context_before": [
+   "US[template initial_contact]",
+   "THEM: If you require a Locksmith , we aim to respond straight away. No reply within 30 minutes, please call [number]. Ian Mackay Locksmiths",
+   "US[template audit_reply]"
+  ],
+  "prospect_messages": [
+   "It is",
+   "[reaction]",
+   "No thanks"
+  ],
+  "expected": "NEEDS:not_interested",
+  "note": "no reply to a reaction",
+  "drafter_2026_10_20": "NEEDS:not_interested"
+ },
+ {
+  "id": "R049",
+  "date": "2026-07-01 15:43",
+  "pattern": "French football chant",
+  "context_before": [],
+  "prospect_messages": [
+   "Allez les bleus!!! 🇫🇷🥖"
+  ],
+  "expected": "NEEDS:other_language",
+  "note": "",
+  "drafter_2026_10_20": "NEEDS:off_topic"
+ },
+ {
+  "id": "R050",
+  "date": "2026-07-05 12:40",
+  "pattern": "Arabic broadcast message",
+  "context_before": [
+   "US[template no_website_barbers]"
+  ],
+  "prospect_messages": [
+   "السلام عليكم ورحمة الله وبركاته 🌹مرحباً بكم شركة عبودي للتحاويل المالية 🌹 عملائنا الكرام 🌹 يتم تغيير رقم الحساب على مدار الساعة فعليه رجاءا وفضلا ليس امرا نرجوا المطالبة برقم الحساب المتاح قبل التحويل 🌹 👈🏼 إذا تم الايداع في حسابنا قبل التواصل معنا الشركه غير مسؤله🌹 دمتم بخير🌹",
+   "السلام عليكم ورحمة الله وبركاته عملائنا الكرام 🌹 أعضاء شركة عبودي للتحاويل الماليه ارجو التواصل معنا قبل الإيداع في حسابنا إذا تم الإيداع في حسابنا قبل التواصل معنا الشركه غيّر مسوله 👆👆👆👆👆👆👆👆👆👆👆👆👆👆👆👆👆👆👆👆👆👆👆👆👆👆👆👆👆👆👆👆👆👆👆👆👆👆👆👆👆👆👆👆👆👆👆👆👆👆👆👆👆👆👆👆👆👆👆👆👆👆👆👆👆 📢📢📢📢📢📢📢📢📢📢📢📢📢📢📢📢📣📣📣📣📣📣📣📣📣📣📣📣📣📣📣📣📣📣📣📣📣📣📣📣📣📣📣📣📣📣📣📣🔥🔥🔥🔥🔥🔥💥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥👇👇👇👇👇👇👇👇👇👇👇👇👇👇👇👇👇👇👇👇👇👇👇👇👇👇👇👇👇👇👇👇 وشكرا جزيلا لحسن تفهمكم الإدارة عبودي"
+  ],
+  "expected": "NEEDS:other_language",
+  "note": "wrong/non-business sender",
+  "drafter_2026_10_20": "NEEDS:off_topic"
+ },
+ {
+  "id": "R051",
+  "date": "2026-08-13 15:34",
+  "pattern": "wrong trade",
+  "context_before": [
+   "US[template initial_contact]",
+   "THEM: Yes👍",
+   "US[template audit_reply]"
+  ],
+  "prospect_messages": [
+   "Thank you , but we don't do locksmithing cheers Ronnie"
+  ],
+  "expected": "NEW:wrong_trade",
+  "note": "also fix the audit trade",
+  "drafter_2026_10_20": "NEEDS:off_topic"
+ },
+ {
+  "id": "R052",
+  "date": "2026-08-21 08:46",
+  "pattern": "wrong trade",
+  "context_before": [
+   "US[template initial_contact]",
+   "THEM: Hi, yes it is 👍🏻",
+   "US[template audit_reply]"
+  ],
+  "prospect_messages": [
+   "Why would be pat testing be under a locksmiths?"
+  ],
+  "expected": "NEW:wrong_trade",
+  "note": "",
+  "drafter_2026_10_20": "NEEDS:question_not_on_sheet"
+ },
+ {
+  "id": "R053",
+  "date": "2026-07-30 07:15",
+  "pattern": "wrong trade (auto vs domestic)",
+  "context_before": [
+   "US[template initial_contact]",
+   "THEM: Thank you for contacting Panther Locksmiths Ltd! We will respond asap during working hours Monday-Friday 9:00-17:00",
+   "US[template audit_reply]"
+  ],
+  "prospect_messages": [
+   "I’m an auto locksmith. Those are all domestic.",
+   "[image]"
+  ],
+  "expected": "NEW:wrong_trade",
+  "note": "",
+  "drafter_2026_10_20": "NEEDS:ack"
+ },
+ {
+  "id": "R054",
+  "date": "2026-08-18 09:08",
+  "pattern": "moved area",
+  "context_before": [
+   "US[template initial_contact]",
+   "THEM: Yes Dave Frontline Locksmith",
+   "US[template audit_reply]"
+  ],
+  "prospect_messages": [
+   "No thanks I no longer live and work in that area. 👍"
+  ],
+  "expected": "NEW:moved_area",
+  "note": "",
+  "drafter_2026_10_20": "NEEDS:not_interested"
+ },
+ {
+  "id": "R055",
+  "date": "2026-09-16 12:23",
+  "pattern": "moved area",
+  "context_before": [
+   "US[template initial_contact]",
+   "THEM: Hi, yes it is. How can I help? Thanks",
+   "US[template audit_followup_call]"
+  ],
+  "prospect_messages": [
+   "Hi, I'm not in Sowerby bridge anymore. Sorry"
+  ],
+  "expected": "NEW:moved_area",
+  "note": "",
+  "drafter_2026_10_20": "NEEDS:off_topic"
+ },
+ {
+  "id": "R056",
+  "date": "2026-08-19 14:54",
+  "pattern": "closed down",
+  "context_before": [
+   "US[template initial_contact]"
+  ],
+  "prospect_messages": [
+   "No longer trading pal 👍"
+  ],
+  "expected": "NEW:closed_retired",
+  "note": "",
+  "drafter_2026_10_20": "NEEDS:not_interested"
+ },
+ {
+  "id": "R057",
+  "date": "2026-08-22 11:13",
+  "pattern": "gives a different business number",
+  "context_before": [
+   "US[template initial_contact]",
+   "US[template contact_followup]"
+  ],
+  "prospect_messages": [
+   "Hi Paul. Sorry for the late reply, yes I did get your last message. I've broken my ankle so I'm out of action for a while. This is the number for Leon's locks...."
+  ],
+  "expected": "NEEDS:paul_looks",
+  "note": "note: run a check on the other business",
+  "drafter_2026_10_20": "NEEDS:off_topic"
+ },
+ {
+  "id": "R058",
+  "date": "2026-09-22 18:42",
+  "pattern": "angry",
+  "context_before": [
+   "US[template initial_contact]"
+  ],
+  "prospect_messages": [
+   "Thank you for contacting AJC Electrical Services Ltd, Please let us know how we can help you today?. ,Please allow upto 2Hrs for a response...However for a more prompt reply please call/ text/email ☎️ [number]/@ [email]",
+   "Switch your phone on amd we can talk.",
+   "No FUCK OFF AND STOP WASTING OUR TIME!!!!!"
+  ],
+  "expected": "STOP",
+  "note": "",
+  "drafter_2026_10_20": "NEEDS:angry"
+ },
+ {
+  "id": "R059",
+  "date": "2026-08-22 13:21",
+  "pattern": "angry (Saturday)",
+  "context_before": [
+   "US[template initial_contact]",
+   "US[template contact_followup]"
+  ],
+  "prospect_messages": [
+   "It fucking Saturday. Give it a rest."
+  ],
+  "expected": "STOP",
+  "note": "",
+  "drafter_2026_10_20": "NEEDS:angry"
+ },
+ {
+  "id": "R060",
+  "date": "2026-08-06 12:33",
+  "pattern": "opt-out",
+  "context_before": [
+   "US[template initial_contact]",
+   "THEM: Thank you for contacting BDH Chartered Certified Accountants! I will review your message and come back to you shortly",
+   "US[template audit_reply]"
+  ],
+  "prospect_messages": [
+   "No thank you. Please remove us from your contact list"
+  ],
+  "expected": "STOP",
+  "note": "",
+  "drafter_2026_10_20": "NEEDS:opt_out"
+ },
+ {
+  "id": "R061",
+  "date": "2026-10-16 15:06",
+  "pattern": "rude / threat",
+  "context_before": [
+   "US[template initial_contact]",
+   "THEM: Hi yes",
+   "US[template audit_followup]"
+  ],
+  "prospect_messages": [
+   "lol let me tell people about your rubbish"
+  ],
+  "expected": "NEEDS:angry",
+  "note": "no reply; opt out",
+  "drafter_2026_10_20": "NEEDS:off_topic"
+ },
+ {
+  "id": "R062",
+  "date": "2026-07-29 13:30",
+  "pattern": "complaint about tactics",
+  "context_before": [
+   "US[template initial_contact]",
+   "THEM: It is yes",
+   "US[template audit_reply]"
+  ],
+  "prospect_messages": [
+   "Underhand tactics, no thank you"
+  ],
+  "expected": "NEEDS:complaint",
+  "note": "",
+  "drafter_2026_10_20": "NEEDS:not_interested"
+ },
+ {
+  "id": "R063",
+  "date": "2026-08-30 13:24",
+  "pattern": "\"it's a Sunday, have a day off\"",
+  "context_before": [
+   "US[template initial_contact]",
+   "THEM: Yeah",
+   "US[template audit_reply]"
+  ],
+  "prospect_messages": [
+   "It’s a Sunday mate have a day off"
+  ],
+  "expected": "NEW:sorry_wrong_day",
+  "note": "one line, no question",
+  "drafter_2026_10_20": "NEEDS:off_topic"
+ },
+ {
+  "id": "R064",
+  "date": "2026-08-10 10:39",
+  "pattern": "no thanks",
+  "context_before": [
+   "THEM: Hi. Yes is correct number",
+   "THEM: How can I help you?",
+   "US[template audit_reply]"
+  ],
+  "prospect_messages": [
+   "No thank you"
+  ],
+  "expected": "NEEDS:not_interested",
+  "note": "no draft; optional one-line exit",
+  "drafter_2026_10_20": "NEEDS:not_interested"
+ },
+ {
+  "id": "R065",
+  "date": "2026-10-13 12:07",
+  "pattern": "fully booked",
+  "context_before": [
+   "THEM: Hi there yes",
+   "THEM: How can I help",
+   "US[template audit_followup]"
+  ],
+  "prospect_messages": [
+   "Hi there thanks for the message I really appreciate it but currently we are so fully booked and not taking any further enquiries this will just add more enquiries which we can not handle Thanks for the offer Regards"
+  ],
+  "expected": "NEW:fully_booked",
+  "note": "",
+  "drafter_2026_10_20": "NEEDS:off_topic"
+ },
+ {
+  "id": "R066",
+  "date": "2026-10-13 17:22",
+  "pattern": "word of mouth, 23 years",
+  "context_before": [
+   "US[template initial_contact]",
+   "THEM: Who is this?",
+   "US: hi mate, i'm Paul. i asked gemini for a driving instructor in Brierley Hill and it recommended iPass Driving School, PassLand Driving School and AMZ Driving Les"
+  ],
+  "prospect_messages": [
+   "Thanks anyway but I am fine. Busy as it is with recommendations and with 23 years in the job I am fine with how I run my driving school."
+  ],
+  "expected": "NEW:word_of_mouth",
+  "note": "",
+  "drafter_2026_10_20": "NEEDS:not_interested"
+ },
+ {
+  "id": "R067",
+  "date": "2026-10-20 11:01",
+  "pattern": "fine thanks (1 minute after our pitch)",
+  "context_before": [
+   "THEM: Welcome to Drive with AAA Driving School! Thanks for your enquiry. To help us find the best lesson availability, please send: • Your name • Your postcode • Manu",
+   "THEM: Hi how can we help",
+   "US: I asked Gemini \"Who is the best driving instructor in Rotherham?\" and it mentioned Madinah Driving School, Strive2Drive Driving Academy and MA Driving School. A"
+  ],
+  "prospect_messages": [
+   "I'm fine thanks"
+  ],
+  "expected": "NEEDS:not_interested",
+  "note": "",
+  "drafter_2026_10_20": "NEEDS:not_interested"
+ },
+ {
+  "id": "R068",
+  "date": "2026-09-21 08:36",
+  "pattern": "already has someone",
+  "context_before": [
+   "THEM: Thanks for contacting AKL Locksmiths. Please send the following information and I will respond as soon as possible. • Vehicle make and model • Registration numb",
+   "THEM: Yes, how can I help?",
+   "US[template audit_followup_call]"
+  ],
+  "prospect_messages": [
+   "That’s okay I already have someone getting this sorted for me. Thanks."
+  ],
+  "expected": "DRAFT:agency",
+  "note": "",
+  "drafter_2026_10_20": "DRAFT:agency"
+ },
+ {
+  "id": "R069",
+  "date": "2026-09-17 11:53",
+  "pattern": "company deals with it + new site",
+  "context_before": [
+   "US[template initial_contact]",
+   "THEM: Yes",
+   "US[template audit_followup_call]"
+  ],
+  "prospect_messages": [
+   "I've already got a company who deal with it all just having a new website built which is AI and all search engines compatible."
+  ],
+  "expected": "NEW:new_site_being_built",
+  "note": "",
+  "drafter_2026_10_20": "DRAFT:agency"
+ },
+ {
+  "id": "R070",
+  "date": "2026-10-19 11:54",
+  "pattern": "new site being built (after our hook)",
+  "context_before": [
+   "THEM: Thank you for contacting KSM Driving Tuition. If you are messaging outside of our working hours Monday-Friday 08:00-18:00 then please be assured we will get bac",
+   "THEM: Yes it is. How can we help",
+   "US: hi Kylie, i asked gemini for a driving instructor in norwich and it recommended Evolution Driver Training, Your Driving Coach and Victory Driving Tuition. i had"
+  ],
+  "prospect_messages": [
+   "Thankyou we are In process of getting a new website built"
+  ],
+  "expected": "NEW:new_site_being_built",
+  "note": "current reply called agencies rubbish",
+  "drafter_2026_10_20": "NEEDS:off_topic"
+ },
+ {
+  "id": "R071",
+  "date": "2026-09-23 14:33",
+  "pattern": "site just rebuilt by an agency",
+  "context_before": [
+   "US[template audit_followup_call]",
+   "THEM: That’s fine as I’m based in Droitwich anyway",
+   "US: Ahh got you mate - that makes sense. I can rerun the free AI visibility audit properly for Droitwich so you can see where you currently stand there and which bu"
+  ],
+  "prospect_messages": [
+   "It’s just been rebuilt mate I’m happy with the website"
+  ],
+  "expected": "NEW:new_site_being_built",
+  "note": "",
+  "drafter_2026_10_20": "NEEDS:off_topic"
+ },
+ {
+  "id": "R072",
+  "date": "2026-10-11 07:48",
+  "pattern": "I already show up (reviews)",
+  "context_before": [
+   "US[template initial_contact]",
+   "THEM: Yes",
+   "US[template audit_followup]"
+  ],
+  "prospect_messages": [
+   "I already show up on ai search because of my 70 5start reviews on Google"
+  ],
+  "expected": "NEW:already_show_up",
+  "note": "",
+  "drafter_2026_10_20": "DRAFT:objection_rank"
+ },
+ {
+  "id": "R073",
+  "date": "2026-08-17 16:39",
+  "pattern": "a caller said ChatGPT recommended me",
+  "context_before": [
+   "US[template initial_contact]",
+   "THEM: Yeah How can I help?",
+   "US[template audit_reply]"
+  ],
+  "prospect_messages": [
+   "Weird, I just had a call from a guy who said chat gpt recommended me just this second"
+  ],
+  "expected": "NEW:already_show_up",
+  "note": "",
+  "drafter_2026_10_20": "NEEDS:off_topic"
+ },
+ {
+  "id": "R074",
+  "date": "2026-09-18 14:23",
+  "pattern": "asks for prices again",
+  "context_before": [
+   "THEM: Yes",
+   "US: Yeah mate. Different AI models look for different signals, so the first thing I’d do is work out which searches/questions you’ve actually got a realistic chance",
+   "US: Is AI visibility something you would want?"
+  ],
+  "prospect_messages": [
+   "You’ve still not told me any prices"
+  ],
+  "expected": "DRAFT:how_much",
+  "note": "",
+  "drafter_2026_10_20": "NEEDS:off_topic"
+ },
+ {
+  "id": "R075",
+  "date": "2026-09-02 19:42",
+  "pattern": "price after month one + demo",
+  "context_before": [
+   "US[template audit_reply]",
+   "THEM: Hi please explain",
+   "US: No problem. So when someone asks ChatGPT or Google's AI for a plumber in your area, it picks out a few names to recommend. Right now it's naming other firms and"
+  ],
+  "prospect_messages": [
+   "And how much is it after the first month? Do you have any demo of your work I can look at ?"
+  ],
+  "expected": "NEW:proof_request",
+  "note": "price part uses how_much, proof part needs a fact-sheet answer",
+  "drafter_2026_10_20": "DRAFT:how_much"
+ },
+ {
+  "id": "R076",
+  "date": "2026-10-16 11:17",
+  "pattern": "wants the evidence first",
+  "context_before": [
+   "THEM: Thanks for contacting Learning Curve Driving Lessons 🚗 I may be teaching or away from my phone. Please leave your name, town, whether you’d like manual or auto",
+   "THEM: Where did my business come up on google",
+   "US: I found you on google maps, you actually have a really strong chatgpt score, gemini and googleAI is where you are weak, ive checked why this is and there are a "
+  ],
+  "prospect_messages": [
+   "“Thanks. Please send the specific issues you found, the affected page links, and screenshots showing the searches and scoring tool you used. I’d like to review the evidence first.”"
+  ],
+  "expected": "NEW:proof_request",
+  "note": "",
+  "drafter_2026_10_20": "NEEDS:off_topic"
+ },
+ {
+  "id": "R077",
+  "date": "2026-07-28 15:05",
+  "pattern": "references or a website",
+  "context_before": [
+   "US[template audit_reply]",
+   "THEM: Ok",
+   "US: Yeah course. So when someone asks ChatGPT or Google's AI for someone in your trade near them, it doesn't give a list like Google does - it names two or three bu"
+  ],
+  "prospect_messages": [
+   "You got references / a website to look at?"
+  ],
+  "expected": "NEW:proof_request",
+  "note": "fact sheet must say what we can show",
+  "drafter_2026_10_20": "NEEDS:question_not_on_sheet"
+ },
+ {
+  "id": "R078",
+  "date": "2026-09-18 16:51",
+  "pattern": "\"how much to get to top?\"",
+  "context_before": [
+   "US[template initial_contact]",
+   "THEM: Yeah mate",
+   "US[template audit_followup_call]"
+  ],
+  "prospect_messages": [
+   "It's not something I'm interested in at moment because we're busy maybe in the future how much would it be to get to top thanks"
+  ],
+  "expected": "DRAFT:definitely",
+  "note": "never promise top",
+  "drafter_2026_10_20": "DRAFT:busy"
+ },
+ {
+  "id": "R079",
+  "date": "2026-10-16 08:28",
+  "pattern": "yes please, interested",
+  "context_before": [
+   "US[template initial_contact]",
+   "THEM: Yes it is, how can I help?",
+   "US[template audit_followup]"
+  ],
+  "prospect_messages": [
+   "Yes, please, I’m interested"
+  ],
+  "expected": "DRAFT:interested",
+  "note": "",
+  "drafter_2026_10_20": "DRAFT:interested"
+ },
+ {
+  "id": "R080",
+  "date": "2026-09-15 13:07",
+  "pattern": "call me",
+  "context_before": [
+   "US[template initial_contact]",
+   "THEM: Yes",
+   "US[template audit_followup]"
+  ],
+  "prospect_messages": [
+   "Call me then",
+   "👍",
+   "Hello"
+  ],
+  "expected": "DRAFT:call_yes",
+  "note": "",
+  "drafter_2026_10_20": "NEEDS:off_topic"
+ },
+ {
+  "id": "R081",
+  "date": "2026-09-15 14:51",
+  "pattern": "call time given",
+  "context_before": [
+   "US: Can we schedule a call tomorrow? what time works for you?",
+   "THEM: Yes 6",
+   "US: Sorry i cant call after 5pm, can we do any earlier?"
+  ],
+  "prospect_messages": [
+   "Yeah tomorrow at 5"
+  ],
+  "expected": "NEEDS:set_call",
+  "note": "confirm the time; win event",
+  "drafter_2026_10_20": "NEEDS:off_topic"
+ },
+ {
+  "id": "R082",
+  "date": "2026-09-16 12:52",
+  "pattern": "\"are you free now?\"",
+  "context_before": [
+   "US: Sorry i cant call after 5pm, can we do any earlier?",
+   "THEM: Yeah tomorrow at 5",
+   "US: Okay mate ill call you around then on my personal number"
+  ],
+  "prospect_messages": [
+   "You free now?"
+  ],
+  "expected": "NEW:call_now",
+  "note": "",
+  "drafter_2026_10_20": "NEEDS:question_not_on_sheet"
+ },
+ {
+  "id": "R083",
+  "date": "2026-08-29 09:53",
+  "pattern": "they ask to call us",
+  "context_before": [
+   "THEM: Yes",
+   "US: Nice one. So right now when someone asks AI like ChatGPT for a driving instructor in your area, you don't come up, but DGN, SAIF and Farid do. That's just becau",
+   "US[template re_engage]"
+  ],
+  "prospect_messages": [
+   "Can I call you ?"
+  ],
+  "expected": "NEW:call_now",
+  "note": "",
+  "drafter_2026_10_20": "NEEDS:question_not_on_sheet"
+ },
+ {
+  "id": "R084",
+  "date": "2026-07-28 09:06",
+  "pattern": "ring me",
+  "context_before": [
+   "US[template audit_reply]",
+   "THEM: Rude start to the message",
+   "US: Fair enough, wasn't meant like that - poor wording on my part All I meant is those three are the ones the AI tools are putting forward at the minute and you're "
+  ],
+  "prospect_messages": [
+   "Ring me"
+  ],
+  "expected": "DRAFT:call_yes",
+  "note": "",
+  "drafter_2026_10_20": "DRAFT:call_yes"
+ },
+ {
+  "id": "R085",
+  "date": "2026-09-21 09:59",
+  "pattern": "\"will ring later\"",
+  "context_before": [
+   "US[template initial_contact]",
+   "THEM: Yes can I help you john",
+   "US[template audit_followup_call]"
+  ],
+  "prospect_messages": [
+   "Will ring later"
+  ],
+  "expected": "NEW:acknowledge_wait",
+  "note": "one line, no question",
+  "drafter_2026_10_20": "DRAFT:busy"
+ },
+ {
+  "id": "R086",
+  "date": "2026-09-18 17:44",
+  "pattern": "wants to start in October",
+  "context_before": [
+   "US: Ah that's my end causing confusion, sorry, one of my automated follow-ups went out with the wrong number on it. It's £49.99, one off, no subscription. That's th",
+   "US: Are you still interested?",
+   "US[template re_engage]"
+  ],
+  "prospect_messages": [
+   "Hi can we start this just after end of month about first week or so October as just bought a new van and shelving system to be fitted"
+  ],
+  "expected": "DRAFT:not_now",
+  "note": "note the date, do not write it",
+  "drafter_2026_10_20": "NEEDS:off_topic"
+ },
+ {
+  "id": "R087",
+  "date": "2026-08-12 13:07",
+  "pattern": "bit busy at the moment",
+  "context_before": [
+   "US[template initial_contact]",
+   "THEM: Hi, yes it is",
+   "US[template audit_reply]"
+  ],
+  "prospect_messages": [
+   "Bit busy at the moment."
+  ],
+  "expected": "DRAFT:not_now",
+  "note": "",
+  "drafter_2026_10_20": "DRAFT:busy"
+ },
+ {
+  "id": "R088",
+  "date": "2026-09-19 11:02",
+  "pattern": "too busy, send offers and prices",
+  "context_before": [
+   "THEM: Welcome to P D Boilers Plumbing and Heating — your trusted experts for reliable boiler, plumbing, and heating services. How can we help you today?",
+   "THEM: Hi, yes, how can I help?",
+   "US[template audit_followup_call]"
+  ],
+  "prospect_messages": [
+   "Thanks mate but honestly I stopped all kinds of advertising as too busy atm. You can leave some offers and prices of what you do and in the future I will consider it. Thanks"
+  ],
+  "expected": "NEW:fully_booked",
+  "note": "current: busy / how_much",
+  "drafter_2026_10_20": "DRAFT:busy"
+ },
+ {
+  "id": "R089",
+  "date": "2026-08-11 08:09",
+  "pattern": "about to go out, will think",
+  "context_before": [
+   "US[template initial_contact]",
+   "THEM: Hi, sorry for late reply, this is Michael, driving instructor thanks",
+   "US[template audit_reply]"
+  ],
+  "prospect_messages": [
+   "Am just about to go out on lessons, but will have a think about it and get back to you,, many thanks Michael"
+  ],
+  "expected": "DRAFT:think_about_it",
+  "note": "",
+  "drafter_2026_10_20": "DRAFT:think_about_it"
+ },
+ {
+  "id": "R090",
+  "date": "2026-08-30 10:57",
+  "pattern": "pay only on results",
+  "context_before": [
+   "US[template initial_contact]",
+   "THEM: Hi yes",
+   "US[template audit_reply]"
+  ],
+  "prospect_messages": [
+   "Hi, thanks for reaching out. I’m interested in your service and I’m happy to work with you, but I would only agree if payment is made after we achieve results and my business starts appearing on the first page of Google for the agreed keywords. If you’re happy with this arrangement, please let me know and we can discuss the details."
+  ],
+  "expected": "NEW:pay_on_results",
+  "note": "",
+  "drafter_2026_10_20": "AUTO"
+ },
+ {
+  "id": "R091",
+  "date": "2026-09-17 16:12",
+  "pattern": "\"show me FOC first\"",
+  "context_before": [
+   "US: Yeah mate, absolutely. I’ve run an AI visibility audit on this site and, on the questions we tested, it scored 0, so at the moment AI is consistently recommendi",
+   "THEM: [audio]",
+   "US: I cant see that on my system, is it an image?"
+  ],
+  "prospect_messages": [
+   "See what sorry? I sent a voice note",
+   "I basically said I get a call or two a day about this. If you want the business then show us what you can do FOC if we are happy with the traffic you bring then we will use you. I wouldn’t be interested in spending anything until I saw some results. I have a lot of websites so up to you. Let me know. Thanks."
+  ],
+  "expected": "NEW:pay_on_results",
+  "note": "",
+  "drafter_2026_10_20": "NEEDS:not_interested"
+ },
+ {
+  "id": "R092",
+  "date": "2026-08-15 16:57",
+  "pattern": "will learn and do it myself",
+  "context_before": [
+   "THEM: Mate it’s Saturday and I’m on the booze.",
+   "US: same",
+   "US: Will catch up another day"
+  ],
+  "prospect_messages": [
+   "I’ll probably learn what you’re on about and do it my self"
+  ],
+  "expected": "NEW:do_it_myself",
+  "note": "",
+  "drafter_2026_10_20": "NEEDS:off_topic"
+ },
+ {
+  "id": "R093",
+  "date": "2026-09-21 09:00",
+  "pattern": "\"copy and paste AI slop\"",
+  "context_before": [
+   "US[template audit_followup_call]",
+   "THEM: That’s okay I already have someone getting this sorted for me. Thanks.",
+   "US: No worries mate, completely understand. I did have a proper look at the site after messaging you and there are a few things I’d be addressing straight away rath"
+  ],
+  "prospect_messages": [
+   "[image]",
+   "Now I understand the importance of using AI to make things better but come on bro, you’re copy and paste AI slop leads me to think that paying you any money would be a waste of my time and money."
+  ],
+  "expected": "NEEDS:complaint",
+  "note": "do not defend; person decides",
+  "drafter_2026_10_20": "NEEDS:angry"
+ },
+ {
+  "id": "R094",
+  "date": "2026-08-11 11:06",
+  "pattern": "are you UK based?",
+  "context_before": [
+   "US: Good list. I'd start with Huntingdon, St Neots and Peterborough - those have the most room, and Peterborough's the biggest of the three. Cambridge I'd come back",
+   "THEM: Hi",
+   "US: Hi mate, all good? Still up for getting going on Huntingdon, St Neots and Peterborough? Worth saying, the easiest way to do it is we take a copy of your site on"
+  ],
+  "prospect_messages": [
+   "Are you uk based I've been with so many companies all promises tbe world and delivering nothing"
+  ],
+  "expected": "NEW:where_based",
+  "note": "needs fact-sheet entry",
+  "drafter_2026_10_20": "NEEDS:question_not_on_sheet"
+ },
+ {
+  "id": "R095",
+  "date": "2026-08-16 07:12",
+  "pattern": "company name and website",
+  "context_before": [
+   "US: Will catch up another day",
+   "THEM: I’ll probably learn what you’re on about and do it my self",
+   "US: We add pages to your site that ai reads when searching for services, we also handle auto replies to reviews you get and add you to directories ai reads if you a"
+  ],
+  "prospect_messages": [
+   "What’s your company called and what’s your website"
+  ],
+  "expected": "DRAFT:who_are_you",
+  "note": "",
+  "drafter_2026_10_20": "NEEDS:question_not_on_sheet"
+ },
+ {
+  "id": "R096",
+  "date": "2026-08-29 11:50",
+  "pattern": "tells us a service they want",
+  "context_before": [
+   "US[template audit_reply]",
+   "THEM: Ok",
+   "US: Nice one. So the way it works: when someone asks ChatGPT or Gemini to recommend a plumber in your area, those tools pull from what they can find online. Right n"
+  ],
+  "prospect_messages": [
+   "I want to be showing up for heat pumps in Norfolk"
+  ],
+  "expected": "NEEDS:paul_looks",
+  "note": "person; the service list is Paul's to confirm",
+  "drafter_2026_10_20": "NEEDS:off_topic"
+ },
+ {
+  "id": "R097",
+  "date": "2026-08-17 19:38",
+  "pattern": "paying client: form will not load",
+  "context_before": [
+   "US: [link] Ronnie, had a proper look. Two things are going on: AI's naming other Halifax shops and not you (you came up once out of six), and a big reason why is yo",
+   "US[template re_engage]",
+   "US[template payment_recieved]"
+  ],
+  "prospect_messages": [
+   "Trying to fill out questions it won't prosed me"
+  ],
+  "expected": "CLIENT",
+  "note": "never a sales draft",
+  "drafter_2026_10_20": "NEEDS:off_topic"
+ },
+ {
+  "id": "R098",
+  "date": "2026-09-19 11:04",
+  "pattern": "paying client chasing the build",
+  "context_before": [
+   "THEM: Down to dover and folkstone",
+   "THEM: and over to thanet",
+   "US: Got it - that gives me plenty to work with"
+  ],
+  "prospect_messages": [
+   "Hope that helps",
+   "Main focus is canterbury",
+   "Hi mate not to rush you",
+   "but he’s got shitty with me this morning and is threatening to take the site down",
+   "I really need that duplicate up asap"
+  ],
+  "expected": "CLIENT",
+  "note": "never a sales draft",
+  "drafter_2026_10_20": "NEEDS:off_topic"
+ },
+ {
+  "id": "R099",
+  "date": "2026-09-19 10:38",
+  "pattern": "client chasing updates",
+  "context_before": [
+   "US: Ah, worth clearing up because there's some overlap. We do work on your SEO, that's part of what we do, getting your site healthy and well-built so search engine",
+   "THEM: It's dead at min no work come in for weeks",
+   "US: Sorry to hear it's quiet mate Straight with you on where we're at. The early signs are genuinely good. The pages we've built for you are already being picked up"
+  ],
+  "prospect_messages": [
+   "??",
+   "Don't seem to be any updates for a while now"
+  ],
+  "expected": "CLIENT",
+  "note": "never a sales draft",
+  "drafter_2026_10_20": "NEEDS:off_topic"
+ },
+ {
+  "id": "R100",
+  "date": "2026-10-19 16:54",
+  "pattern": "\"just wanted to follow up\" three days later",
+  "context_before": [
+   "US[template initial_contact]"
+  ],
+  "prospect_messages": [
+   "Hello! Yes it is",
+   "Let me know what brings you here ☺️ I’d love to help",
+   "Hellooo, just wanted to follow up"
+  ],
+  "expected": "NEW:they_chased",
+  "note": "apologise for the delay",
+  "drafter_2026_10_20": "NEEDS:off_topic"
+ }
+]

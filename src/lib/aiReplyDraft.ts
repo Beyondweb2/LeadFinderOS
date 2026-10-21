@@ -21,14 +21,14 @@
    Pure and edge-reachable: relative imports with .ts, no Deno, no DOM.
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 import { usesDash } from './warmReply.ts';
-import { salesStyleProblems, SALES_STYLE_RULES } from './salesStyle.ts';
+import { salesStyleProblems, SALES_STYLE_RULES_NO_BRAND } from './salesStyle.ts';
 import { serviceWindowState } from './serviceWindow.ts';
 import { isClientLead } from './roleRules.ts';
 import { issueMentioned, saysGoogleAiForGemini, vagueSiteClaim, wrongEngineWords } from './draftEvidence.ts';
 import { ENGINE_WORDING, FACT_SHEET_VERSION, GUARANTEE_LINE, SHEET_MONEY, factFor, usableCaseStudies } from './offerFactSheet.ts';
 import { mayClaimNamedInstead } from './namedShareRule.ts';
 import { engineName, siteOf, tidyCaps, NEEDS_YOU_LABELS, PITCH_SPECIALISE_LINE, type MoveEvidence, type MovePlan, type NeedsYouReason } from './replyMove.ts';
-import { PLAYBOOK, lowerBrands, startsWithBrand } from './replyPlaybook.ts';
+import { PLAYBOOK, BUILT_SITE_EXAMPLE_URL, PROOF_WORDS, lowerBrands, startsWithBrand } from './replyPlaybook.ts';
 
 /* ── cost ─────────────────────────────────────────────────────────────────────────────────────── */
 
@@ -254,7 +254,7 @@ RULES:
 - Never name an AI tool or brand. Say "ai" or "ai tools". The only exception is a point that names the tool word for word (they asked which one).
 - When STYLE says follow-up: write ai in lower case, and never start a sentence with it (start the sentence another way). Sentences still start with a capital.
 
-${SALES_STYLE_RULES}
+${SALES_STYLE_RULES_NO_BRAND}
 
 PAUL'S REAL MESSAGES (match this feel and length; do not copy them or their spelling mistakes):
 ${PAUL_EXAMPLES.map((e) => `- "${e}"`).join('\n')}`;
@@ -322,7 +322,11 @@ const COMMON_CAPS = new Set(['I', "I'm", "I'll", "I've", "I'd", 'AI', 'ChatGPT',
 const TIMING_PROMISE = /\b(send|sending|sent|record|recording|do|doing|get)\b[^.?!\n]{0,40}\b(now|right\s+away|straight\s+away|shortly|in\s+a\s+(minute|min|sec|second|moment|bit)|later\s+today|today|tonight|this\s+(morning|afternoon|evening)|in\s+\d+\s*(mins?|minutes|hours?))\b/i;
 /** The first-reply pitch is code-built and may run to five lines (Paul, 2026-10-20). */
 const isPitch = (p: MovePlan) => p.move === 'first_reply_pitch' || (p.move === 'auto_reply' && !!p.fixedText);
-const lineCap = (p: MovePlan) => (isPitch(p) ? 5 : 3);
+/* The straight-answer and chased pitches carry one more line (the answer / the apology) in front of the pitch. */
+const lineCap = (p: MovePlan) => (isPitch(p) ? (p.intent === 'straight_answer_then_pitch' || p.intent === 'they_chased' ? 6 : 5) : 3);
+/** Our own two links (Paul, 2026-10-21): findable.live itself (never a path on it) and the site we built for a locksmith. */
+const OWN_LINKS = [new RegExp(BUILT_SITE_EXAMPLE_URL.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/\/$/, '\\/?'), 'gi'), /\bfindable\.live\b(?![/\w])/gi];
+const withoutOwnLinks = (r: string, p: MovePlan) => (p.linkOk ? OWN_LINKS.reduce((s, re) => s.replace(re, ' '), r) : r);
 /* The pitch (wording A, 2026-10-20): greeting, the search, why, what we do, the agency question. */
 const charCap = (p: MovePlan) => (isPitch(p) ? 800 : p.confidence ? 480 : 320);
 /** "named you in 1 of 2 answers", "there's a gap in the rest": never in any draft (Paul, 2026-10-20, Nola). Lead with the
@@ -352,7 +356,7 @@ export function checkAiReply(reply: string, c: AiReplyContext): string[] {
   const qs = (r.replace(/"[^"\n]*"/g, '').match(/\?/g) ?? []).length;
   if (qs > 1) out.push('Asks more than one question.');
   if (usesDash(r)) out.push('Uses a dash.');
-  if (LINK.test(r)) out.push('Has a link. Never send the sign-up link from a draft.');
+  if (LINK.test(withoutOwnLinks(r, p))) out.push('Has a link. Never send the sign-up link from a draft.');
   if (/\bsign[\s-]?up\b|\bonboarding\s+link\b|\bagreement\s+link\b/i.test(r)) out.push('Talks about the sign-up link.');
   /* Money and terms must match the sheet, and only after a price question or a clear yes. */
   if (PRICE_WORDS.test(r) && !p.allowPrice) out.push('Mentions a price before they asked or said a clear yes.');
@@ -361,7 +365,9 @@ export function checkAiReply(reply: string, c: AiReplyContext): string[] {
   if (RANKING.test(r)) out.push('Promises a ranking, first page or recommendation.');
   /* Paul's one results line (the playbook) is allowed word for word; any other results claim still warns. */
   /* "…show up in those results" (the confidence line) is what we do, not a past-results claim: read around it too. */
-  const withoutResultsLine = r.split(new RegExp(PLAYBOOK.examples.line.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i')).join(' ').split(PITCH_SPECIALISE_LINE).join(' ');
+  /* "I don't work pay-after-results" (pay_on_results) names the deal they asked for, not our results. */
+  const withoutResultsLine = r.split(new RegExp(PLAYBOOK.examples.line.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i')).join(' ').split(PITCH_SPECIALISE_LINE).join(' ')
+    .replace(/\bpay[- ]after[- ]results\b/gi, ' ');
   if (PAST_RESULTS.test(withoutResultsLine) && !usableCaseStudies().length) out.push('Claims past results or other clients, but no case study is approved on the fact sheet.');
   if (ABSOLUTE.test(r)) out.push('Says "100%" or "if I fail". Use the guarantee line only.');
   if (GUARANTEE_WORD.test(r) && !lower(r).includes(lower(GUARANTEE_LINE)) && !r.includes(factFor('cancel')?.say ?? '\u0000')) {
@@ -385,7 +391,9 @@ export function checkAiReply(reply: string, c: AiReplyContext): string[] {
     if (COMMON_CAPS.has(place) || /^(ChatGPT|Gemini|Google|Findable)/.test(place)) continue;
     if (!e.town || !lower(e.town).includes(lower(place)) && !lower(place).includes(lower(e.town))) out.push(`Mentions ${place}, which is not the audit's town${e.town ? ` (${e.town})` : ''}.`);
   }
-  if (SITE_FAULT.test(r) || vagueSiteClaim(r)) {
+  /* "I built this site for a locksmith" (Paul's proof words) is about our work, not their site: read around it. */
+  const siteText = r.split(PROOF_WORDS).join(' ');
+  if (SITE_FAULT.test(siteText) || vagueSiteClaim(siteText)) {
     /* The crawl's findings, or the website check's own serious-issue titles quoted as they are (the pitch). */
     const backed = (e.findings.length > 0 && e.findings.some((f) => issueMentioned(r, f)))
       || siteOf(e).issues.some((t) => lower(r).includes(lower(t)));
