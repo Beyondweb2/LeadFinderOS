@@ -3,7 +3,7 @@
    follow-up style, no money-back line unasked. Prints one preview draft per intent (PREVIEW lines). Pure: no model, no DB. */
 import { readFileSync } from 'node:fs';
 import { pickMove, firstReplyPitch, pitchText, PITCH_SPECIALISE_LINE, PITCH_NO_SITE_LINE, type MoveEvidence, type MoveThreadMsg } from '../src/lib/replyMove.ts';
-import { PLAYBOOK, readEndDate, nameFromReply, nearSameName, lowerBrands, startsWithBrand, type PlaybookIntent } from '../src/lib/replyPlaybook.ts';
+import { PLAYBOOK, NEW_INTENTS, readEndDate, nameFromReply, nearSameName, lowerBrands, startsWithBrand, type PlaybookIntent } from '../src/lib/replyPlaybook.ts';
 import { checkAiReply, fallbackAiReply, buildAiReplyPrompt, AI_REPLY_SYSTEM_PROMPT, AI_BRAND, type AiReplyContext } from '../src/lib/aiReplyDraft.ts';
 import { CONFIDENCE_LINE } from '../src/lib/offerFactSheet.ts';
 
@@ -81,7 +81,8 @@ for (const c of CASES) {
   if (!['how_much', 'catch'].includes(c.intent)) ok(!(d.text ?? '').includes('backed by a guarantee'), `${c.intent}: no money-back confidence line`);
   previews.push(`PREVIEW ${c.intent} | them: "${[...c.thread].reverse().find((m) => m.from === 'them')?.text}" | draft: "${(d.text ?? '').replace(/\n+/g, ' / ')}"`);
 }
-ok(new Set(CASES.map((c) => c.intent)).size === Object.keys(PLAYBOOK).length, 'a case for every playbook intent');
+/* The reply recon's 18 have their own cases in scripts/reply-new-intents.test.ts. */
+ok(new Set(CASES.map((c) => c.intent)).size === Object.keys(PLAYBOOK).filter((k) => !NEW_INTENTS.includes(k as PlaybookIntent)).length, 'a case for every playbook intent');
 
 console.log('2. the first reply: the pitch, unless no / stop / angry, a wrong person or a direct question');
 for (const x of ['Yes', "that's correct", 'Yes, how can I help?', 'Dom', 'hello?', 'Speaking', 'Yes please, interested', 'ok']) {
@@ -100,7 +101,8 @@ ok(pm([opener, ...said('No thanks')]).noDraft === true && pm([opener, ...said('s
 ok(pm([opener, ...said('wrong number mate')]).move === 'close_politely' && !pm([opener, ...said('wrong number mate')]).noDraft, 'a wrong person → a short polite reply');
 ok(pm([opener, ...said('how much do you charge?')]).intent === 'how_much' && pm([opener, ...said('who is this?')]).intent === 'who_are_you', 'a direct question on the first reply → answered');
 ok(pm([opener, ...said("Yes, what's this about?")]).move === 'first_reply_pitch', '"what\'s this about?" → the pitch answers it');
-ok(pm([opener, ...said('Do you do Instagram ads?')]).noDraft === true, 'a question the playbook cannot answer → Needs you, no draft');
+/* "Do you do Instagram ads?" is ads_question since 2026-10-21; a logo is still not on the sheet. */
+ok(pm([opener, ...said('Can you do my logo as well?')]).noDraft === true, 'a question the playbook cannot answer → Needs you, no draft');
 {
   const self = pitchText(firstReplyPitch({ ...ev, competitors: ['ZZ Fixture Plumbing 90 Ltd', 'Rival A Plumbing'] }));
   ok(!/ZZ Fixture Plumbing 90 Ltd/.test(self) && /Rival A Plumbing/.test(self), 'a rival with (nearly) their own name is never listed');
@@ -139,7 +141,7 @@ ok(startsWithBrand('Fine. chatgpt named them') && !startsWithBrand('I asked chat
   const ctx: AiReplyContext = { businessName: ev.businessName, latestInbound: 'x', thread: thread.map((m) => ({ from: m.from, text: m.text })), plan: { ...p, noDraft: false }, evidence: ev };
   ok(checkAiReply('Good, I can send a voice note instead?', ctx).some((w) => /Opens with "good" again/.test(w)), 'the same opener as our last message → warning');
   ok(checkAiReply('Gemini named three others.', { ...ctx, plan: pm(after('how long does it take?')) }).some((w) => /Starts a sentence/.test(w)), 'a follow-up starting a sentence with a tool → warning');
-  ok(checkAiReply("I've had success with all the clients I've worked with so far. Easiest to show you on a quick call.", { ...ctx, plan: pm(after('any examples?')) }).length === 0
+  ok(checkAiReply(PLAYBOOK.examples.line, { ...ctx, plan: pm(after('any examples?')) }).length === 0
     && checkAiReply('Our clients saw 40% more calls.', ctx).some((w) => /past results/.test(w)), 'the one results line is allowed; any other results claim still warns');
 }
 

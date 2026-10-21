@@ -18,7 +18,24 @@ export type PlaybookIntent =
   | 'self_managed' | 'friend_built' | 'not_sure_who' | 'voice_yes' | 'call_yes' | 'interested' | 'go_on'
   | 'what_we_do' | 'how_much' | 'catch' | 'how_long' | 'who_are_you' | 'examples' | 'definitely' | 'own_site'
   | 'not_now' | 'too_expensive' | 'think_about_it' | 'dont_need' | 'does_ai_matter' | 'is_bot' | 'privacy'
-  | 'send_email' | 'not_owner' | 'busy' | 'number_sent' | 'which_tool';
+  | 'send_email' | 'not_owner' | 'busy' | 'number_sent' | 'which_tool'
+  /* Reply recon 2026-10-20 §5b, Paul's wording 2026-10-21 (NEW_INTENTS below). */
+  | 'thinks_customer' | 'straight_answer_then_pitch' | 'wrong_trade' | 'moved_area' | 'closed_retired' | 'fully_booked'
+  | 'word_of_mouth' | 'already_show_up' | 'new_site_being_built' | 'proof_request' | 'explain_here' | 'pay_on_results'
+  | 'ads_question' | 'do_it_myself' | 'where_based' | 'call_now' | 'sorry_wrong_day' | 'they_chased';
+
+/** The 18 intents added from the reply recon (2026-10-21). scripts/reply-new-intents.test.ts has a case for each. */
+export const NEW_INTENTS: readonly PlaybookIntent[] = ['thinks_customer', 'straight_answer_then_pitch', 'wrong_trade', 'moved_area', 'closed_retired',
+  'fully_booked', 'word_of_mouth', 'already_show_up', 'new_site_being_built', 'proof_request', 'explain_here', 'pay_on_results', 'ads_question',
+  'do_it_myself', 'where_based', 'call_now', 'sorry_wrong_day', 'they_chased'];
+/** The new intents that are always Needs you (Paul, 2026-10-21): the line is only the suggested text a person may send. */
+export const NEEDS_YOU_INTENTS: readonly PlaybookIntent[] = ['pay_on_results', 'call_now', 'wrong_trade'];
+
+/** The only links a draft may carry (Paul, 2026-10-21): our own site and the site we built for a locksmith. Never a sign-up link. */
+export const FINDABLE_SITE_WORDS = 'findable.live';
+export const BUILT_SITE_EXAMPLE_URL = 'https://mclocksmiths-new.pages.dev/';
+/** Paul's proof words (2026-10-21): no client name, no number, no percentage, no result claim. */
+export const PROOF_WORDS = `I've had good reviews and great feedback from the businesses I've worked with, and I built this site for a locksmith recently: ${BUILT_SITE_EXAMPLE_URL}`;
 
 const gbp = (n: number) => (Number.isInteger(n) ? `£${n}` : `£${n.toFixed(2)}`);
 const P1 = gbp(FINDABLE_SETUP_PRICE_GBP);
@@ -39,6 +56,8 @@ export interface PlaybookEntry {
   timingOk?: boolean;
   /** Code writes every word: no model call. */
   fixed?: boolean;
+  /** May carry our own links (FINDABLE_SITE_WORDS, BUILT_SITE_EXAMPLE_URL) and nothing else. */
+  linkOk?: boolean;
 }
 
 /** THE PLAYBOOK. docs/reply-playbook.md mirrors it (scripts/reply-playbook.test.ts checks every line is there). */
@@ -65,8 +84,9 @@ export const PLAYBOOK: Record<PlaybookIntent, PlaybookEntry> = {
     line: `No catch. You pay ${P1} to start and if we don't improve ai visibility you get that ${P1} back. We re-run the same questions after ${REMEASURE_WEEKS_STANDARD} weeks to check. The one thing to know is it's a ${FINDABLE_BUILD_TOTAL_PAYMENTS} payment minimum, counting the first.` },
   how_long: { factual: true, line: `The site build usually takes a few days. Then we re-check after ${REMEASURE_WEEKS_STANDARD} weeks to see the difference.` },
   who_are_you: { line: "I'm Paul, I run Findable. We help local businesses show up when people ask ai tools for a recommendation. Happy to jump on a quick call if you'd rather talk." },
-  /* ⛔ THE ONLY PAST-RESULTS LINE (Paul): no numbers, no client names, no percentages, no "100%". */
-  examples: { factual: true, line: "I've had success with all the clients I've worked with so far. Easiest to show you on a quick call." },
+  /* ⛔ THE ONLY PAST-WORK WORDS (Paul, 2026-10-21): reviews, feedback and the one site we built. No numbers, no client names,
+     no percentages, no "100%", no result claim. It offers their report (EXAMPLES_NO_AUDIT when there is none). */
+  examples: { factual: true, fixed: true, linkOk: true, line: `${PROOF_WORDS} Happy to talk you through it on a call. Want me to send over the report I did for you too?` },
   definitely: { factual: true, allowPrice: true, line: `I can't promise ai will recommend you, nobody honestly can. What I do promise is we improve ai visibility or you get your ${P1} back.` },
   own_site: { factual: true, allowPrice: true, line: `You always own your domain, and you own the site after the final payment. If you want, I can keep hosting it after that for ${gbp(FINDABLE_CONTINUING_GBP)} a month.` },
   not_now: { line: "No problem. When would be a better time? I'll check back then." },
@@ -84,7 +104,47 @@ export const PLAYBOOK: Record<PlaybookIntent, PlaybookEntry> = {
   /* ⛔ THE ONLY LINE THAT NAMES AN AI TOOL (Paul, 2026-10-21): they asked which one. replyMove.whichToolLine puts the
      missed search's own engine in front when it is known. */
   which_tool: { factual: true, line: `I check the same questions on ${ENGINE_WORDING}. Want a voice note showing what it said?` },
+
+  /* ── the reply recon's 18 (Paul, 2026-10-21). ⛔ No AI brand ("ai tools"), "regular checks" never "monthly", never "free". ── */
+  /* {thing} = "lessons" for a driving school, else "a <trade>"; {trades} in {town} from the lead (replyMove.thinksCustomerLine). */
+  thinks_customer: { fixed: true, line: "Ha, sorry for the confusion, I'm not looking for {thing} myself. I'm Paul from Findable. I checked how ai tools recommend {trades} in {town} and wanted to show you what came back. Ok if I send it over?" },
+  /* Code-built like the pitch (replyMove.straightAnswerPitch): this answer, then the pitch's lines and its one question. */
+  straight_answer_then_pitch: { fixed: true, line: "Fair question, I'm Paul from Findable and yes, I'm offering a service. I only got in touch because of what I found:" },
+  /* Needs you: fix the trade on the lead before any re-check. */
+  wrong_trade: { line: "Sorry about that, my mistake. What is it you mainly do? I'll check it properly." },
+  moved_area: { line: 'No worries, thanks for letting me know. Where are you working now? I can check how you show up there.' },
+  closed_retired: { line: 'No worries, sorry to bother you. Best of luck with it.' },
+  fully_booked: { line: "Good problem to have. I'll leave you to it, and if it ever goes quiet you know where I am." },
+  word_of_mouth: { line: "Fair enough, that's the best kind of work. I'll leave you to it. If you ever want to see how ai tools recommend you, just say." },
+  already_show_up: { line: "Fair enough, that's good to hear. It can come out differently depending on who asks and where, so I'd still like to show you what came back when I checked. Want a quick voice note?" },
+  /* ⛔ Never "free" (Paul, 2026-10-21). The check back is NOTED on the draft, never written (Next Action is human-set). */
+  new_site_being_built: { line: 'Good timing. Is it with an agency, or are you building it yourself?' },
+  proof_request: { factual: true, fixed: true, linkOk: true, line: `Fair ask. I can send you the report with the exact searches I ran and what came back. ${PROOF_WORDS} Want me to send the report here?` },
+  explain_here: { line: "Sure. Short version: I build you a new site that's set up for ai and google, sort your google business profile, and keep checking how you show up. Want me to send what I found here?" },
+  /* Needs you (a commercial ask): the figures and the guarantee are how_much's, word for word. */
+  pay_on_results: { factual: true, allowPrice: true,
+    line: `I don't work pay-after-results, but you're covered: it's ${P1} to start, and ${GUARANTEE_LOWER} After your results it's ${PM} a month, ${FINDABLE_BUILD_TOTAL_PAYMENTS} payments in total including the first. Quick call to go through it?` },
+  ads_question: { line: "No, I don't do ads. I only work on getting businesses recommended when people ask ai tools. Want a quick voice note on what I found for you?" },
+  do_it_myself: { line: 'Fair enough, and good luck with it. If you want a second pair of eyes on what I found, just say.' },
+  where_based: { fixed: true, linkOk: true, line: `Findable is a UK company, but we work with businesses worldwide. The site's ${FINDABLE_SITE_WORDS} if you want a look. Quick call, or shall I send a voice note?` },
+  /* Needs you: only Paul knows if he is free. */
+  call_now: { timingOk: true, line: "Yes, I'm free now. Ring me on this number, or give me a time and I'll ring you." },
+  sorry_wrong_day: { fixed: true, line: "Fair enough, sorry for the message. I'll leave you in peace." },
+  /* Code-built: this apology, then the pitch (replyMove.chasedPitch). */
+  they_chased: { fixed: true, line: 'Sorry for the slow reply.' },
 };
+
+/** examples / proof_request when no search is on record: offer to run it, never "the report I did". */
+export const EXAMPLES_NO_AUDIT = `${PROOF_WORDS} Happy to talk you through it on a call. Want me to run the same check on your business?`;
+export const PROOF_NO_AUDIT = `Fair ask. I can run the check and send you the report with the exact searches and what came back. ${PROOF_WORDS} Want me to do that?`;
+/** already_show_up when they really were named every time: concede it (recon: the only re-opened no's came from conceding). */
+export const ALREADY_SHOW_UP_TRUE = "Fair enough, you're right, you came up every time I checked too. I'll leave you to it.";
+/** already_show_up with no search on record. */
+export const ALREADY_SHOW_UP_NO_AUDIT = 'Fair enough, that\'s good to hear. It can come out differently depending on who asks and where. Want me to run a quick check and show you what comes back?';
+/** After they answer the new-site question (or said who builds it already). */
+export const NEW_SITE_CHECK_BACK = `No problem. I'll check back in about ${REMEASURE_WEEKS_STANDARD} weeks once it's settled and re-run the same searches so you can compare.`;
+/** A voice note from a prospect (Paul, 2026-10-21): we cannot listen to it on here. Needs you; this is the suggested text. */
+export const VOICE_NOTE_FROM_THEM = "Sorry, I can't listen to voice notes on here. Can you type it, or shall I give you a quick call?";
 
 /** The soft lines when AI did NOT name others in two thirds or more (namedShareRule): no "not you", no "instead". */
 export const DONT_NEED_SOFT = 'Good problem to have. I only got in touch because when I checked, ai put other businesses forward too. Want a voice note so you can see for yourself?';
@@ -113,6 +173,9 @@ export function splitQuestion(line: string): { body: string; question: string | 
 
 const norm = (t: string) => String(t ?? '').replace(/[’‘ʼ]/g, "'").replace(/\s+/g, ' ').trim();
 
+/** A trade word in a "we're not a locksmith" / "we don't do pat testing" reply (wrong_trade). */
+const TRADE_NOUN = "(?:locksmith\\w*|plumb\\w*|electric\\w*|driving(?:\\s+school)?|instructor\\w*|builder\\w*|roof\\w*|garage|mechanic\\w*|clean\\w*|accountan\\w*|barber\\w*|salon|tutor\\w*|language\\s+school|pat\\s+test\\w*|domestic|commercial|auto\\s+\\w+|gas\\s+\\w+|heating|boiler\\w*|key\\s+cutting|shoe\\s+repairs?)";
+
 export const RE = {
   /** An email address (before a link: "gmail.com" is not their website). */
   emailAddr: /[\w.+-]+@[\w-]+(?:\.[\w-]+)+/,
@@ -135,12 +198,12 @@ export const RE = {
   whatWeDo: /\b(what\s+(do|would)\s+you\s+(do|offer)|what\s+is\s+it\s+you\s+do|what\s+does\s+findable\s+do|what'?s\s+findable|what\s+are\s+you\s+offering|what\s+do\s+you\s+actually\s+do|how\s+does\s+(it|this)\s+work|what\s+exactly)\b/i,
   /** "What's this about?" on the FIRST reply is answered by the pitch itself. */
   whatsThisAbout: /\b(what'?s\s+(this|it)\s+(about|regarding|for)|what\s+is\s+(this|it)\s+(about|regarding|for)|what\s+do\s+you\s+want|what'?s\s+up|how\s+(can|may|could)\s+(i|we)\s+(help|assist)|can\s+(i|we)\s+(help|assist)|what\s+(can|could|may)\s+(i|we)\s+(do|help|assist)(\s+(you\s+)?(for|with))?|is\s+there\s+anything\s+(i|we)\s+can\s+(help|do)|anything\s+(i|we)\s+can\s+(help|do|assist)|do\s+you\s+need\s+(any\s+)?help|what('?s|\s+is|\s+was)\s+(it|this)\s+(concerning|regarding|about)|how\s+(i|we)\s+can\s+(help|assist)|nature\s+of\s+(your|the)\s+(enquiry|inquiry|query|message)|what\s+do\s+you\s+need|what\s+brings\s+you|regarding\??)\b/i,
-  howMuch: /\b(how\s+much|price|pricing|cost|costs|charge|fee|fees|what\s+do\s+you\s+charge|rates?)\b|£/i,
+  howMuch: /\b(how\s+much|prices?|pricing|cost|costs|charge|fee|fees|what\s+do\s+you\s+charge|rates?)\b|£/i,
   catch: /\b(catch|what'?s\s+the\s+(snag|deal|small\s+print)|too\s+good\s+to\s+be\s+true|hidden\s+(fees|costs|charges))\b/i,
   howLong: /\b(how\s+long\s+(does\s+it|will\s+it|to|would\s+it)\s*(take|build)?|how\s+quick(ly)?|how\s+fast|when\s+would\s+it\s+be\s+(ready|live|done)|turnaround)\b/i,
   /** "Which AI?", "what tool did you use?", "was it chatgpt?": the one time a draft may name the tool. */
   whichTool: /\b(?:which|what)\s+(?:ai|a\.i\.?|tool|app|engine|chat\s?bot|search\s+engine|platform)(?:\s+tool)?\b(?!\s+(?:visibility|is\s+recommending))|\bwhat\s+did\s+(?:you|u)\s+(?:use|search\s+(?:on|with))\b|\b(?:was|is)\s+(?:it|that|this)\s+(?:on\s+)?(?:chat\s?gpt|gemini|google|copilot|perplexity)\b|\b(?:chat\s?gpt|gemini|copilot|perplexity)\s*\?/i,
-  whoAreYou: /\b(who\s+(are\s+(you|u)|is\s+this|'?s\s+this|is\s+that|am\s+i\s+(speaking|talking)\s+(to|with))|what\s+company|which\s+company|who\s+do\s+you\s+(work|represent)|who\s+you\s+with)\b|^\W*who\W*$/i,
+  whoAreYou: /\b(who\s*'?s\s+(this|asking)|who\s+(are\s+(you|u)|is\s+this|asking|is\s+that|am\s+i\s+(speaking|talking)\s+(to|with))|what\s+company|which\s+company|who\s+do\s+you\s+(work|represent)|who\s+you\s+with)\b|^\W*who\W*$/i,
   examples: /\b(examples?|case\s+stud(y|ies)|proof|testimonials?|other\s+(clients|customers|businesses)\s+(you|you'?ve)|who\s+else\s+have\s+you|worked\s+with\s+(anyone|others|before)|any\s+results|show\s+me\s+results|results\s+(for|from)\s+(others|other|anyone)|track\s+record|done\s+this\s+before|has\s+it\s+worked)\b/i,
   definitely: /\b(definitely|will\s+(i|we)\s+(definitely\s+)?(be|get)\s+(recommended|found|on\s+(top|there)|first|more\s+(work|customers|jobs))|can\s+you\s+guarantee|do\s+you\s+guarantee|guarantee(d)?\s+(that\s+)?(i|we|it)'?ll|promise\s+(me|that)|for\s+sure)\b/i,
   ownSite: /\b(who\s+owns|do\s+i\s+own|will\s+i\s+own|would\s+i\s+own|own\s+the\s+(site|website|domain)|whose\s+(site|website)|keep\s+(the|my)\s+(site|website|domain)|my\s+domain|the\s+domain)\b/i,
@@ -159,6 +222,48 @@ export const RE = {
   /** A day / time they named. */
   namedTime: /\b(\d{1,2}(:\d{2})?\s*(am|pm)|\d{1,2}\s*o'?clock|after\s+\d|before\s+\d|around\s+\d|about\s+\d|at\s+\d|tomorrow|today|tonight|this\s+(morning|afternoon|evening)|(mon|tues|wednes|thurs|fri|satur|sun)day|lunch(time)?|later\s+today|in\s+(an?|\d+)\s*(hour|hours|mins?|minutes))\b/i,
   monthYear: /\b(next\s+(week|month|year)|in\s+(a|\d+|a\s+few|a\s+couple\s+of|two|three|four|six)\s+(weeks?|months?|years?)|(jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*|end\s+of\s+(the\s+)?(year|month)|new\s+year|after\s+(christmas|xmas|easter|the\s+summer))\b/i,
+
+  /* ── the reply recon's readers (2026-10-21, §5a / §5b). Real wordings from the book. ─────────────── */
+  /** B7: who runs the site, the wider forms ("an seo guy", "a company who deal with it", "my business partner is in marketing"). */
+  agencyStrong: /\b(?:a|an|my|our|the)\s+seo\s+(?:guy|man|bloke|person|company|firm|agency|expert|team)\b|\b(?:a|an|my|our|the)\s+(?:\w+\s+)?company\s+(?:who|that|which)\s+(?:deals?|does|looks?\s+after|handles?|manages?|sorts?|runs?)\b|\bin\s+marketing\b|\b(?:a|my|our|the)\s+marketing\s+(?:company|firm|guy|person|team|people|agency|partner)\b|\bsomeone\s+(?:who\s+)?(?:manages|looks\s+after|does)\s+(?:the|my|our)\s+(?:web)?site\b|\bmassive\s+marketing\b/i,
+  /** They think WE are the customer ("are you looking for lessons?", "automatic or manual?", "do you need a locksmith?"). */
+  thinksCustomer: /\b(?:are\s+(?:you|u)|r\s+u|you|u)\s+(?:looking\s+(?:for|to\s+(?:book|take))|wanting|after|want(?:ing)?\s+to\s+(?:take|book))\s+(?:some\s+|a\s+)?(?:driving\s+)?(?:lessons?|course)\b|\bif\s+you\s+are\s+wanting\s+(?:driving\s+)?lessons\b|\bautomatic\s+or\s+manual\b|\bany\s+previous\s+(?:driving\s+)?experience\b|\bdo\s+(?:you|u)\s+need\s+(?:a|an)\s+(?:electrician|plumber|locksmith|instructor|lesson|quote|engineer|builder|roofer|cleaner)\b|\bdid\s+(?:you|u)\s+still\s+want\s+(?:lessons|a\s+quote|the\s+job)\b|\btext\s+(?:me\s+|us\s+)?your\s+postcode\b|\bpractical\s+test\s+booked\b|\bwhat\s+(?:job|work)\s+(?:do\s+you\s+need|is\s+it)\b/i,
+  /** "What are you selling?", "is this a sales / cold call?", "what do you want?", and a bare "Why" / "What?" (B4). */
+  straightAsk: /\bwhat\s+(?:are|r)\s+(?:you|u)\s+selling\b|\b(?:going\s+to|gonna)\s+(?:try\s+(?:and|to)\s+)?sell\s+me\b|\btry(?:ing)?\s+(?:and|to)\s+sell\s+me\b|\b(?:a\s+)?(?:sales|cold)\s+call\b|\bwhat\s+do\s+(?:you|u)\s+want\b|\bwhat\s+is\s+it\s+you\s+want\b|^\W*(?:why|what|wot|wat|eh)\W*$/i,
+  wrongTrade: new RegExp(['\\b(?:we|i)\\s+(?:don\'?t|do\\s+not|dont)\\s+(?:do|offer|operate|teach)\\s+(?:any\\s+)?(?:an?\\s+)?' + TRADE_NOUN,
+    '\\b(?:we\'?re|we\\s+are|i\'?m|i\\s+am|im)\\s+not\\s+(?:an?\\s+)?' + TRADE_NOUN, '\\bi\'?m\\s+an?\\s+auto\\s+\\w+', '\\bthose\\s+are\\s+(?:all\\s+)?(?:domestic|commercial)\\b',
+    '\\bwhy\\s+would\\b.{0,60}\\bbe\\s+under\\b', '\\bwrong\\s+(?:trade|business|category|type\\s+of\\s+business)\\b', '\\bnot\\s+the\\s+same\\s+thing\\b', '\\bwe\\s+don\'?t\\s+operate\\s+an?\\b'].join('|'), 'i'),
+  movedArea: /\b(?:i'?m|we'?re|i\s+am|we\s+are|im)\s+not\s+(?:in|based\s+in|working\s+in)\s+[\w ]{2,30}?\s+any\s?more\b|\bno\s+longer\s+(?:live|work|based|cover|operate)\b.{0,25}\b(?:area|in|there)\b|\b(?:i'?ve|we'?ve|i\s+have|we\s+have)\s+moved\s+(?:away|to|out)\b|\bdon'?t\s+(?:cover|work\s+in)\s+that\s+area\s+any\s?more\b/i,
+  closedRetired: /\bno\s+longer\s+trading\b|\b(?:i'?ve|i\s+have|i'?m|i\s+am|we'?ve|we\s+have|im)\s+(?:recently\s+|now\s+|just\s+)?retired\b|\bclos(?:ing|ed)\s+(?:the\s+|my\s+|our\s+)?(?:business|company|shop)\b|\bceased\s+trading\b|\bgone\s+out\s+of\s+business\b|\bwound\s+(?:the\s+business\s+)?up\b|\bstopped\s+trading\b/i,
+  fullyBooked: /\bfully\s+booked\b|\bwaiting\s+list\b|\bdiary\s+is\s+(?:full|booked|rammed)\b|\b(?:booked|full)\s+(?:up\s+)?(?:for|until|till)\s+(?:months|weeks|the\s+foreseeable)\b|\bnot\s+taking\s+(?:on\s+)?(?:any\s+)?(?:more|new|further)\s+(?:work|enquiries|customers|pupils|students|clients|jobs)\b|\btoo\s+busy\s+(?:for|to\s+take)\b|\bstopped\s+(?:all\s+)?(?:kinds\s+of\s+)?advertising\b|\bturning\s+(?:work|people|customers|jobs)\s+away\b|\bcan\s*(?:not|'?t)\s+(?:handle|cope\s+with|take)\s+(?:any\s+)?more\b/i,
+  wordOfMouth: /\bword\s+of\s+mouth\b|\b(?:busy|work|jobs)\b.{0,30}\b(?:recommendations|referrals)\b|\b(?:all|mostly|only)\s+(?:from\s+)?(?:recommendations|referrals)\b|\b\d+\s+years\s+in\s+the\s+(?:job|trade|business)\b/i,
+  alreadyShowUp: /\bi\s+(?:already\s+|actually\s+|do\s+)*(?:show\s+up|come\s+up|appear|come\s+top|rank)\b.{0,40}\b(?:ai|chat\s?gpt|gemini|search|top)\b|\b(?:chat\s?gpt|ai|gemini)\s+(?:has\s+)?recommended\s+me\b|\bsaid\s+(?:chat\s?gpt|ai|gemini)\s+recommended\b|\bi\s+(?:actually\s+)?come\s+top\b|\byou\s+(?:still\s+)?found\s+me\b|\bcan'?t\s+be\s+that\s+hard\s+to\s+find\b/i,
+  newSite: /\b(?:getting|having|got)\s+(?:a\s+)?new\s+(?:web)?site\s+(?:built|made|done|designed)\b|\bnew\s+(?:web)?site\s+(?:is\s+)?(?:being\s+)?(?:built|made|designed|in\s+progress|on\s+the\s+way|coming)\b|\b(?:it'?s|its|site'?s|website'?s|site\s+has|website\s+has)\s+(?:just\s+)?(?:been\s+)?(?:re-?built|re-?done|re-?designed|launched)\b|\bjust\s+(?:had|got)\s+(?:a\s+|the\s+|my\s+)?(?:web)?site\s+(?:re-?built|re-?done|re-?designed|built|made)\b|\bonly\s+just\s+launched\b|\bbeing\s+re-?built\b|\bin\s+(?:the\s+)?process\s+of\s+(?:getting|building|having)\s+(?:a\s+)?new\s+(?:web)?site\b/i,
+  /** Evidence of THEIR result, or of our work ("send the evidence", "screenshots", "a demo", "references", "the full report"). */
+  proofRequest: /\b(?:send|show)\s+(?:me\s+|us\s+)?(?:the\s+)?(?:specific\s+|exact\s+)?(?:evidence|screenshots?|proof|issues\s+you\s+found|exact\s+fixes)\b|\breview\s+the\s+evidence\b|\b(?:any\s+)?demo\b|\breferences?\b|\ba\s+website\s+(?:to\s+look\s+at|you'?ve\s+(?:done|built|made))\b|\b(?:see|send)\s+(?:me\s+)?the\s+full\s+report\b|\bexamples?\s+of\s+(?:your|the)\s+work\b/i,
+  /** Proof we cannot send (Paul, 2026-10-21): a reference / client contact, a testimonial or case study. Needs you. */
+  proofCantSend: /\breferences?\b|\btestimonials?\b|\bcase\s+stud(?:y|ies)\b|\b(?:speak|talk)\s+to\s+(?:one\s+of\s+)?(?:your\s+)?(?:clients|customers)\b|\bclient\s+(?:list|contacts?|details)\b/i,
+  /** They asked for it in writing ("please explain here", "send me some details"): keep their channel. */
+  explainHere: /\b(?:explain|tell\s+me)\s+(?:it\s+|me\s+)?(?:here|on\s+here|in\s+writing|by\s+text|over\s+text|via\s+(?:text|message|whatsapp))\b|\bplease\s+explain\b|\byou\s+can\s+explain\b|\bexplain\s+in\s+writing\b|\bsend\s+(?:me\s+)?(?:over\s+)?(?:some\s+)?(?:details|info|information|more\s+info)\b|\bput\s+it\s+in\s+writing\b/i,
+  payOnResults: /\bpay(?:ment)?\s+(?:is\s+)?(?:made\s+)?(?:only\s+)?(?:after|on|once|when)\s+(?:we\s+|i\s+)?(?:see\s+|achieve\s+|get\s+)?(?:results|it\s+works)\b|\bonly\s+(?:pay|agree)\b.{0,60}\b(?:after|once|when)\b.{0,40}\bresults\b|\bfoc\b|\bfree\s+of\s+charge\b|\bshow\s+(?:us|me)\s+what\s+you\s+can\s+do\b.{0,30}\b(?:first|free|foc)\b|\bno\s+win\s+no\s+fee\b|\buntil\s+i\s+(?:saw|see)\s+(?:some\s+)?results\b|\bpay\s+on\s+results\b/i,
+  ads: /\b(?:google\s+)?ads\b|\badwords\b|\bppc\b|\bpay\s+per\s+click\b|\b(?:tried|done|did)\s+seo\b|\bseo\s+(?:didn'?t|did\s+not|doesn'?t)\s+work\b/i,
+  doItMyself: /\b(?:i'?ll|i\s+will|we'?ll|we\s+will|gonna|going\s+to)\s+(?:probably\s+)?(?:just\s+)?(?:learn|do|sort|fix|figure)\b.{0,60}\b(?:my\s*self|ourselves)\b|\bget\s+(?:claude|chat\s?gpt|ai|gemini)(?:\s+ai)?\s+to\s+(?:fix|sort|resolve|do)\b|\bi'?m\s+an?\s+(?:ai|seo)\s+(?:expert|developer|engineer)\b|\bi\s+know\s+(?:ai|seo)\b/i,
+  whereBased: /\b(?:are\s+(?:you|u)|r\s+u)\s+(?:uk|u\.k\.|british)\s*(?:based)?\b|\bwhere\s+(?:are\s+(?:you|u)|r\s+u|is\s+(?:your\s+)?(?:company|business))\s+based\b|\bwhere\s+are\s+(?:you|u)\s+from\b|\bwhat'?s\s+(?:your|the)\s+(?:company|business)\s+(?:called|name)\b|\bname\s+of\s+(?:your|the)\s+company\b|\bwhat'?s\s+your\s+website\b|\bhave\s+(?:you|u)\s+got\s+a\s+website\b/i,
+  /** They want to talk now / call us ("you free now?", "can I call you?", "are you free to call?"). */
+  callNow: /\b(?:are\s+)?(?:you|u)\s+free\s+(?:now|to\s+(?:talk|call|chat|speak))\b|\bcan\s+i\s+(?:call|ring|phone)\s+(?:you|u)\b|\bshall\s+i\s+(?:call|ring)\s+(?:you|u)\b|\bcan\s+(?:you|u)\s+(?:talk|speak|call)\s+(?:now|right\s+now)\b|\bfree\s+for\s+a\s+(?:call|chat)\s+now\b/i,
+  sorryWrongDay: /\b(?:it'?s|its)\s+(?:a\s+)?(?:sunday|saturday|bank\s+holiday|christmas|boxing\s+day)\b|\bhave\s+a\s+day\s+off\b|\bon\s+the\s+booze\b|\bat\s+this\s+time\s+of\s+(?:night|the\s+morning)\b|\bon\s+a\s+(?:sunday|saturday)\b.{0,20}\breally\b/i,
+  /** They chased us after we did not answer ("just wanted to follow up", "??", "any update?"). */
+  chase: /\b(?:just\s+)?(?:wanted\s+to\s+)?follow(?:ing)?\s+up\b|\bany\s+updates?\b|^\W*\?+\W*$|\bdid\s+(?:you|u)\s+get\s+my\s+(?:last\s+)?message\b|\bstill\s+there\b|\bhel+o+\s*\?|\bhel+o{3,}\b/i,
+  /** Someone else's business or number given ("this is the number for Leon's locks", "I'll give you my son's details"). */
+  thirdParty: /\bthis\s+is\s+the\s+number\s+for\b|\bgive\s+you\s+(?:my|his|her)\s+\w+'?s\s+(?:number|details)\b|\b(?:my|his|her)\s+(?:son|daughter|brother|dad|mate|friend|partner|wife|husband)'?s\s+(?:details|number|business)\b|\bmy\s+other\s+business\b/i,
+  /** B9: a decline in their own words. A reason after it does not make it a conversation. */
+  decline: /\b(?:thanks|thank\s+you)\s+(?:anyway|but\s+no)\b|\bi\s+am\s+(?:ok|fine|good|alright|sorted)\b|\b(?:i'?m|we'?re|im)\s+all\s+good\b|\bnot\s+(?:needed|required)\b|\bdon'?t\s+need\s+(?:your|any|the)\s+(?:services?|help)\b|\bnot\s+interested\b|\bno\s+thanks?\b|\bno\s+thank\s+you\b|\bnot\s+for\s+(?:me|us)\b/i,
+  /** "How much to get to the top?": the honest no-promise answer, even inside a not-now (R078). */
+  topAsk: /\bget\s+(?:me\s+|us\s+)?(?:to\s+)?(?:the\s+)?top\b|\bnumber\s+one\s+spot\b/i,
+  /** "Can we start after the end of the month?": not now, with their timing noted. */
+  startLater: /\b(?:can|could)\s+we\s+(?:start|do\s+(?:it|this)|begin|look\s+at\s+(?:it|this))\s+(?:this\s+)?(?:just\s+)?(?:after|in|next|from|at\s+the\s+(?:end|start))\b/i,
+  /** B10: rude, underhand, attacks on the message. A complaint (no draft), never an opt-out on its own. */
+  complaint: /\b(?:rude|underhand|out\s+of\s+order|cheeky|slop|your\s+rubbish|bad\s+manners|unprofessional|tactics)\b/i,
 };
 
 /* ── end dates: "until March", "another 6 months", "end of the year" → a check-back day ──────────── */

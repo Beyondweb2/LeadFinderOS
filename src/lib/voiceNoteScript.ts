@@ -8,7 +8,8 @@
    THE EVIDENCE TUPLE IS INSEPARABLE: QUESTION + ENGINE + ANSWER + COMPETITORS all come from ONE
    hook result (one question, one engine's answer to it). The competitors are that cell's own list,
    through the report's suppression / junk gates and the self-exclusion — never another question's,
-   never the other engine's, never padded. The script must name the engine that was actually asked.
+   never the other engine's, never padded. ⛔ The script says "AI", never the engine's brand (Paul,
+   2026-10-21, generator v6): the engine stays in the stored evidence for the operator.
 
    THE PICK (selectVoiceNoteEvidence), Paul's order:
      1. a Gemini miss with 2–3 usable competitor names (3 preferred, then the hook rank);
@@ -21,14 +22,14 @@
    (selectReplyFindings): one primary finding and at most one supporting one. No finding strong enough
    → the honest "nothing obviously broken" fallback. Nothing is ever invented.
 
-   THE CHECKS (checkVoiceNoteScript) guard FACTS, not style: every competitor named and no other engine
-   claimed, no causation claim, no price, no link, no technical fault that no finding supports, and the
+   THE CHECKS (checkVoiceNoteScript) guard FACTS, not style: every competitor named and no AI brand
+   said, no causation claim, no price, no link, no technical fault that no finding supports, and the
    primary finding actually used. Length is a target, not a gate; only a script that is plainly too
    short or too long is sent back.
 
    🔴 THE SHAPE (Paul, 2026-09-27, generator v3). Five beats, 30–45 seconds, nothing padded:
-     1. SEARCH CONTEXT, short: trade + town + engine ("i was looking for an electrician in Shrewsbury,
-        so i asked Gemini who it recommended"). Never the audit query's qualifiers ("who can come
+     1. SEARCH CONTEXT, short: trade + town + "AI" ("i was looking for an electrician in Shrewsbury,
+        so i asked AI who it recommended"). Never the audit query's qualifiers ("who can come
         today") — they are the tell of a machine-worded search.
      2. "it came up with X, Y and Z, but you didn't come up."
      3. "i had a look at why you weren't coming up and found something that could be holding you back" +
@@ -53,13 +54,17 @@ import { articleTrade } from './templateVars.ts';
 import { findingMentioned, sayableDetails, findingSourceLabel, selectReplyFindings } from './warmReply.ts';
 import type { ResearchFinding, WarmLeadResearch } from './warmLeadResearch.ts';
 import { classifyLeadWebsite, type SiteSource } from './leadWebsiteKind.ts';
-import { SALES_STYLE_RULES, salesStyleProblems } from './salesStyle.ts';
+import { SALES_STYLE_RULES_NO_BRAND, salesStyleProblems } from './salesStyle.ts';
 import { callerFirstName } from './callerName.ts';
 
 /** Bump when the prompt, the pick or the checks change in a way worth telling apart in stored rows.
  *  v4 (2026-09-30): the shared house style (salesStyle.ts) in the prompt and the checks, one beat per
  *  line so it reads aloud with a breath between, and the derived short version (shortVoiceNote). */
-export const VOICE_NOTE_GENERATOR_VERSION = 5;
+export const VOICE_NOTE_GENERATOR_VERSION = 6;
+/** What the script calls the tool (Paul, 2026-10-21): "AI", never a brand. Version 6 marks the brand-free pass in stored rows. */
+export const SPOKEN_AI = 'AI';
+/** A brand said in a script (normalised text: lower case, punctuation as spaces). Crawler names are taken out first. */
+export const SPOKEN_BRAND = /\b(chat ?gpt|gemini|google ai|googles ai|google s ai|copilot|perplexity|open ?ai|bard)\b/;
 /** The stronger writing model (Paul, 2026-09-26: tone matters, ~1–2p a script is fine). */
 export const VOICE_NOTE_MODEL = 'gpt-4o';
 /** The spoken target, ~30–45 seconds at Paul's pace (Paul, 2026-09-27: shorter is better). */
@@ -265,11 +270,11 @@ export function findingRecord(f: ResearchFinding): VoiceNoteFindingRecord {
 
 /* ─────────────────────────────── 3. the prompt ─────────────────────────────── */
 
-export const VOICE_NOTE_SYSTEM_PROMPT = `You write WhatsApp voice-note scripts for Paul, a British guy who helps local trades businesses get named by AI search (ChatGPT and Gemini). Paul reads the script out loud and records it himself. You return ONLY the script, via the return_script tool.
+export const VOICE_NOTE_SYSTEM_PROMPT = `You write WhatsApp voice-note scripts for Paul, a British guy who helps local trades businesses get named by AI search. Paul reads the script out loud and records it himself. You return ONLY the script, via the return_script tool.
 
 THE SHAPE, five short beats, in this order. Every sentence has to earn its place:
 0. WHO IS SPEAKING, first, in a few words: "hi mate, it's Paul from Findable." Use the name given under WHO IS SPEAKING (Paul when none is given). Never skip it: the owner has to know who is talking before anything else.
-1. SEARCH CONTEXT, one short sentence: the trade, the town and the engine, nothing else. "hi mate, i asked Gemini for an electrician in Shrewsbury" or "hi mate, i was looking for an electrician in Shrewsbury, so i asked Gemini". No adjective on the trade ("a reliable electrician", "a trusted electrician") and no reason for the search. Do NOT read the search back and do NOT narrate its qualifiers ("who can come out today", "near me", "for a same-day job", "UK"). At most ONE word of the search may colour the trade, and only if it is the heart of it (an "emergency locksmith"); usually leave it out.
+1. SEARCH CONTEXT, one short sentence: the trade, the town and that you asked AI, nothing else. "hi mate, i asked AI for an electrician in Shrewsbury" or "hi mate, i was looking for an electrician in Shrewsbury, so i asked AI". No adjective on the trade ("a reliable electrician", "a trusted electrician") and no reason for the search. Do NOT read the search back and do NOT narrate its qualifiers ("who can come out today", "near me", "for a same-day job", "UK"). At most ONE word of the search may colour the trade, and only if it is the heart of it (an "emergency locksmith"); usually leave it out.
 2. THE MISS, one sentence: "it came up with [the competitors], but you didn't come up." Name every competitor given, exactly, and no others.
 3. THE FINDING: "i had a look at why you weren't coming up and found something that could be holding you back:" (or "a few things that could be holding you back" ONLY when you are given two website points) + the website point, in very plain English, keeping its concrete details. Use a second point only if it is the same kind of problem and fits in the same sentence. The conclusion stays hedged: "could be holding you back", never "this is why".
 4. POSITIONING, one short sentence: "i actually specialise in AI visibility for local businesses." Do not explain the service.
@@ -280,14 +285,14 @@ LAYOUT: put each beat on its own line, so Paul can take a breath between them. S
 
 STYLE: Paul talking into his phone, not reading. Relaxed, British, conversational, direct. Contractions everywhere (i'm, i'd, you're, didn't, there's, it's). Short sentences, simple joins ("and", "so", "but"). "mate" once or twice, never more. No corporate language, nothing polished, nothing salesy. Lowercase is fine.
 
-${SALES_STYLE_RULES}
+${SALES_STYLE_RULES_NO_BRAND}
 TALK TO THEM: the note is addressed to the business owner. Never say the business's own name; say "you" ("you didn't come up").
 NEVER put the search in quotation marks, never read it word for word, never say "UK" after the town.
 NEVER: "I hope this message finds you well", "unlock your potential", "leverage", "digital presence", "revolutionise", "dominate Google", any guarantee. No em dash or en dash. No price, no figures about money, no link, no website address. Do not offer to send the audit, do not offer to "show you exactly what i'd change" or "explain what i'd change": the quick check does not contain a change plan. Do not ask for a call.
 
 EVIDENCE RULES, which override everything:
 - The competitors are exactly the ones listed, from that one search on that one engine. Never add, swap or drop one. If only one or two are listed, name just those.
-- Say the engine exactly as given ("Gemini" or "ChatGPT"). Never name the other engine as the one you asked.
+- Call the tool "AI" ("i asked AI"). Never name ChatGPT, Gemini, Google AI, Copilot, Perplexity or any other AI brand (Paul, 2026-10-21).
 - Website points: ONLY the ones in WEBSITE POINTS. Never invent or add a problem. Never claim a technical issue that is not listed.
 - OBSERVATION, NOT JUDGEMENT: say what the site says or shows, and what it doesn't show. "your service pages don't give much detail about the work you actually do" is right; "you have weak evidence of qualifications", "there's no evidence" or "your site is poor" are judgements, never say them.
 - If there are no website points, follow the NO WEBSITE POINTS instruction in spirit, with a natural variation.
@@ -394,7 +399,8 @@ export function shortVoiceNote(i: {
       ? `have you got a website of your own, or is ${label} mainly what you're using?`
       : "have you got a website i missed, or is it something you've not got round to?";
   return [
-    `hi mate, it's ${callerFirstName(i.caller)} from Findable. i asked ${i.engineLabel} for ${t.value}${town ? ` in ${town}` : ''} and it came up with ${list}, but you didn't come up.`,
+    /* ⛔ "AI", never the brand (Paul, 2026-10-21): the engine stays in the stored evidence for the operator. */
+    `hi mate, it's ${callerFirstName(i.caller)} from Findable. i asked ${SPOKEN_AI} for ${t.value}${town ? ` in ${town}` : ''} and it came up with ${list}, but you didn't come up.`,
     'i specialise in AI visibility for local businesses.',
     ask,
   ].join('\n');
@@ -413,10 +419,10 @@ export function buildVoiceNotePrompt(input: VoiceNotePromptInput): string {
       ? `SERVICES THEY OFFER (from their own site): ${input.site.services.slice(0, 8).join(', ')}`
       : 'SERVICES THEY OFFER: none confirmed. Do not name any specific service or job type unless it is in the search.',
     '',
-    `ENGINE NAME (say exactly this): ${e.engineLabel}`,
-    `THE SEARCH YOU ASKED ${e.engineLabel.toUpperCase()} (for meaning only; say it as just "${spokenTrade(input.trade)} in ${input.area}", never read it out, quote it or narrate its qualifiers): ${e.question}`,
-    `${input.business} was NOT named in ${e.engineLabel}'s answer.`,
-    `COMPETITORS ${e.engineLabel.toUpperCase()} NAMED FOR THIS EXACT SEARCH (name all ${e.competitors.length}, exactly, no others):`,
+    `THE TOOL (say exactly this, never a brand): ${SPOKEN_AI}`,
+    `THE SEARCH YOU ASKED AI (for meaning only; say it as just "${spokenTrade(input.trade)} in ${input.area}", never read it out, quote it or narrate its qualifiers): ${e.question}`,
+    `${input.business} was NOT named in AI's answer.`,
+    `COMPETITORS AI NAMED FOR THIS EXACT SEARCH (name all ${e.competitors.length}, exactly, no others):`,
     ...e.competitors.map((c, i) => `${i + 1}. ${c}`),
     '',
   ];
@@ -647,19 +653,11 @@ export function checkVoiceNoteScript(raw: string, ctx: { evidence: VoiceNoteEvid
   for (const c of ctx.evidence.competitors) {
     if (!competitorNamed(script, c)) problems.push(`Competitor not named exactly: ${c}.`);
   }
-  // The engine: the one actually asked, never the other.
+  // ⛔ No AI brand in the script (Paul, 2026-10-21): "i asked AI", whichever engine the evidence came from.
   /* ⛔ A CRAWLER'S NAME IS NOT AN ENGINE CLAIM. The first live script (RP Electrics) was flagged
      "mentions ChatGPT" for quoting the blocked crawler "ChatGPT-User" from its own finding. */
   const tEngine = t.replace(/\b(chat ?gpt user|oai searchbot|gptbot|claude user|perplexitybot|google extended|googlebot)\b/g, ' ');
-  const saysGoogleAi = /\b(google ai|googles ai|google s ai|gemini)\b/.test(tEngine);
-  const saysChatGpt = /\bchat ?gpt\b/.test(tEngine);
-  if (ctx.evidence.engine === 'gemini') {
-    if (!saysGoogleAi) problems.push('Does not say it was Gemini that was asked.');
-    if (saysChatGpt) problems.push('Mentions ChatGPT, but these competitors came from Gemini.');
-  } else if (ctx.evidence.engine === 'chatgpt') {
-    if (!saysChatGpt) problems.push('Does not say it was ChatGPT that was asked.');
-    if (saysGoogleAi) problems.push('Mentions Gemini, but these competitors came from ChatGPT.');
-  }
+  if (SPOKEN_BRAND.test(tEngine)) problems.push('Names an AI brand (ChatGPT, Gemini, Google AI). Say "AI".');
   // Causation, price, link, banned phrases.
   if (CAUSATION.some((re) => re.test(tb))) problems.push('States a website issue as the reason the AI left them out. Use "might be contributing" instead.');
   if (PRICE.test(tb) || /£/.test(bare)) problems.push('Mentions a price or money.');

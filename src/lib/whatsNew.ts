@@ -22,6 +22,14 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-21-drafter-new-intents', date: '2026-10-21', title: 'Reply drafts: 18 new kinds of reply', audience: 'admin',
+    body: 'The reply drafter now has a line for 18 more kinds of reply from the reply recon, reads a few more replies correctly, and the voice-note script no longer names ChatGPT or Gemini.',
+    report: {
+      added: ['Lines for: they think we want lessons, "what are you selling?", wrong trade, moved area, closed or retired, fully booked, word of mouth, "I already show up", a new site being built, proof and evidence, "explain it here", pay on results, ads, "I\'ll do it myself", "are you UK based?", "are you free now?", "it\'s a Sunday", and they chased us.', 'Needs you, with a suggested reply, for pay on results, "are you free now?", a wrong trade (fix the trade on the lead first), references we cannot send, and a voice note from them ("Sorry, I can\'t listen to voice notes on here…").', 'Proof and examples offer their report, and may mention your reviews and the locksmith site you built.'],
+      changed: ['A "no thanks" with a reason after it is now always a no (no draft).', 'Rude or "underhand" replies are complaints (no draft).', 'Bare "Why" or "What?" get a straight answer, then the pitch.', '"Yes 6" after you asked a time is the time; "what time works for you?" counts as asking.', 'More ways of saying an agency or someone else runs the site.', 'Auto-replies with a form link or a consultation fee are no longer read as their website or a price question.', '"Bit busy at the moment" gets the not-now line, not "I\'ll call then".', 'The voice-note script says "I asked AI", never ChatGPT, Gemini or Google AI.'],
+      removed: ['The old "I\'ve had success with all the clients" line.'],
+      effect: 'Far fewer replies land in Needs you with nothing to send, and the drafter no longer pushes after a no. Drafts only: nothing sends until you press send.',
+    } },
   { id: '2026-10-21-drafter-hi-mate-no-brands', date: '2026-10-21', title: 'Reply drafts: "Hi mate," and no AI brand names', audience: 'admin',
     body: 'Reply drafts now open "Hi mate," when no name is known, say "AI" instead of ChatGPT or Gemini, and use a new line about what you do.',
     report: {

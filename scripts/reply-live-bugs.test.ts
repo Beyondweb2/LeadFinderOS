@@ -23,7 +23,8 @@ for (const t of ['Hi yes this is Pass Me Driving', 'Good afternoon, this is the 
   'Yes, it is. If you are wanting driving lessons!']) {
   const p = pick([them(t, 30)]);
   ok(p.intent !== 'busy' && !/What day and time suits/.test(p.fixedText ?? p.guide ?? ''), `not busy: "${t.slice(0, 50)}"`);
-  ok(isPitch(p) || p.needsYou !== null, `no "I'll call then" line: "${t.slice(0, 40)}" -> ${p.move}`);
+  /* "If you are wanting driving lessons!" is thinks_customer since 2026-10-21 (Paul's correction line). */
+  ok(isPitch(p) || p.needsYou !== null || p.intent === 'thinks_customer', `no "I'll call then" line: "${t.slice(0, 40)}" -> ${p.move}`);
 }
 ok(isPitch(pick([them('Hi yes this is Pass Me Driving', 30)])), 'a plain confirmation from a driving school is the pitch');
 for (const t of ["I'm driving at the moment", "I'm driving, can you call me later", 'Bit busy at the moment', 'Can you call me later']) {
@@ -85,7 +86,8 @@ for (const t of ['Yes, is there anything I can help you with?', 'Hi what can I a
 }
 const noSite = pick([them('Yes how can I assist you?', 30)], { ...EV, hasWebsite: false, site: { state: 'no_website', issues: [] } });
 ok(isPitch(noSite) && /website/i.test(noSite.fixedText ?? ''), 'no website on record: the pitch asks the website question');
-for (const t of ['Is this a sales call', 'No thanks', "Who's this?"]) ok(!isPitch(pick([them(t, 30)])) || t === "Who's this?", `not widened too far: "${t}"`);
+/* "Is this a sales call" gets the straight answer, then the pitch (straight_answer_then_pitch, 2026-10-21): never the plain pitch. */
+for (const t of ['Is this a sales call', 'No thanks', "Who's this?"]) { const p = pick([them(t, 30)]); ok(!isPitch(p) || t === "Who's this?" || p.intent === 'straight_answer_then_pitch', `not widened too far: "${t}"`); }
 
 console.log(f ? `\n${f} FAILED` : '\nall passed');
 process.exit(f ? 1 : 0);
