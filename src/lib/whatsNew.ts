@@ -30,6 +30,14 @@ export const WHATS_NEW: readonly WhatsNewEntry[] = [
       removed: ['Close (sign-up and set-up links) for Australian leads. Call notes still save.'],
       effect: 'You can work Australian towns the same way as UK ones. No price or sign-up link reaches an Australian business, and cold WhatsApp to Australia stays off.',
     } },
+  { id: '2026-10-21-drafter-will-ring', date: '2026-10-21', title: 'Reply drafts: "Will ring later"', audience: 'admin',
+    body: 'When a prospect says they will call you, the draft now says "No problem, speak soon."',
+    report: {
+      added: ['A reply for "Will ring later" and "I\'ll give you a call tomorrow": "No problem, speak soon."'],
+      changed: ['Those replies no longer get "What day and time suits you? I\'ll call then."'],
+      removed: [],
+      effect: 'You don\'t ask for a call time when they have already said they will ring you. Drafts only: nothing sends until you press send.',
+    } },
   { id: '2026-10-21-drafter-new-intents', date: '2026-10-21', title: 'Reply drafts: 18 new kinds of reply', audience: 'admin',
     body: 'The reply drafter now has a line for 18 more kinds of reply from the reply recon, reads a few more replies correctly, and the voice-note script no longer names ChatGPT or Gemini.',
     report: {

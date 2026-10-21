@@ -30,8 +30,8 @@ const OVERRIDES: Record<string, { expected: string; why: string }> = {
   R095: { expected: 'NEW:where_based', why: '"Company name and website": where_based gives both (findable.live); who_are_you gives neither.' },
   R077: { expected: 'NEEDS:proof_request', why: 'References are something we cannot send (Paul: proof we cannot send is Needs you). Suggested text is the proof line.' },
 };
-/* Not scored: an intent Paul did not ask for this round. */
-const NOT_BUILT: Record<string, string> = { R085: 'acknowledge_wait ("Will ring later") is in the recon table but not in the 18; it stays busy.' };
+/* Not scored: an intent not built yet. (R085 acknowledge_wait was built 2026-10-21, Paul: "No problem, speak soon.") */
+const NOT_BUILT: Record<string, string> = {};
 
 /* ── the evidence every case reads (route and intent are tested, not pitch content: the recon used one stand-in) ── */
 const EV: MoveEvidence = { businessName: 'ZZ Fixture Business', trade: 'driving instructor', town: 'Rugby', engineWords: 'gemini', named: { named: 0, valid: 6 },
