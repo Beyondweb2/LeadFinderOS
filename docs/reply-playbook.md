@@ -18,20 +18,21 @@ reply, Needs you), or ask a direct question (answered with the matching line bel
 I help", a name only, "hello?", "what's this about?", even "interested" all get the pitch.
 
 ```
-[Hi Dom,]
-I asked <worst engine> "<its question>" and it mentioned A, B and C.
-AI is recommending your competitors instead. I looked into why this might be happening and <the site issues, or: I couldn't find a website for you, so Gemini and Google AI have nothing of yours to read.>
-I specialise in helping local businesses get recommended by AI, so those customers come to you instead.
+Hi Dom, / Hi mate,
+I asked AI "<the worst engine's missed question>" and it mentioned A, B and C.
+AI is recommending your competitors instead. I looked into why this might be happening and <the site issues, or: I couldn't find a website for you, so AI has nothing of yours to read.>
+I specialise in getting local businesses to show up in those results, so the customers go to you instead.
 <website: Are you with an agency, or do you manage the website yourself? Either way I can send a quick voice note on what I found.>
 <no website: Do you have a website I've missed?>
 ```
 
 * The greeting uses a name **they gave in this reply** ("this is Dom", "Dom here", a name only), else a person the site's
-  own crawl states as owner / founder, else none.
+  own crawl states as owner / founder, else **"Hi mate,"** (Paul, 2026-10-21; `PITCH_NO_NAME_GREETING`).
 * A rival with (nearly) the lead's own name is never listed (`nearSameName`).
 * "AI is recommending your competitors instead" stays under the one-third rule (`namedShareRule.ts`); above a third the
   same shape without that sentence.
-* Never the money-back line in the pitch.
+* Never the money-back line in the pitch, and no wording that promises a result. The guarantee is said only on a price,
+  catch or guarantee question (and "will I definitely be recommended?").
 
 ## 2. From then on
 
@@ -48,8 +49,13 @@ guard, like a voice note sent or a booked call.
 
 ## 3. Style
 
-* Follow-ups write chatgpt, gemini, google ai and ai in lower case (`lowerBrands`), and never start a sentence with one
-  (a checker warning). Sentences still start with a capital. The first pitch keeps its capitals.
+* ⛔ **No AI brand in any prospect-facing draft (Paul, 2026-10-21).** Drafts say "AI" or "ai tools", never ChatGPT,
+  Gemini or Google AI. The worst-engine pick still chooses the missed question underneath, and the engine shows in the
+  "why" panel ("Missed on: Gemini · <question> (the draft says "AI")"). The checker warns on any brand name (`AI_BRAND`,
+  `aiReplyDraft.ts`) **unless they asked which tool** (`RE.whichTool` → the `which_tool` line, `plan.brandsAllowed`).
+  The measurement answer says "the main AI tools" unless they asked which.
+* Follow-ups write ai in lower case (`lowerBrands`), and never start a sentence with it (a checker warning). Sentences
+  still start with a capital. The first pitch keeps its capitals.
 * No "Perfect." / "Great." every time: the checker warns when a draft opens with the same word as one of our last two
   messages.
 * Facts only from the fact sheet and agreement v5.
@@ -76,7 +82,8 @@ guard, like a voice note sent or a booked call.
 | how_much | price (word for word) | It's £99 to start, and I'm confident enough in it that it's backed by a guarantee: we improve ai visibility or you get your money back. After your results it's £99 a month, 12 payments in total including the first, and that covers the new site, hosting, changes and regular checks. Quick call, or a voice note to go through it? |
 | catch | "what's the catch?" (word for word) | No catch. You pay £99 to start and if we don't improve ai visibility you get that £99 back. We re-run the same questions after 4 weeks to check. The one thing to know is it's a 12 payment minimum, counting the first. |
 | how_long | "how long?" (word for word) | The site build usually takes a few days. Then we re-check after 4 weeks to see the difference. |
-| who_are_you | "who are you?" | I'm Paul, I run Findable. We help local businesses show up when people ask ai tools like chatgpt and gemini for a recommendation. Happy to jump on a quick call if you'd rather talk. |
+| who_are_you | "who are you?" | I'm Paul, I run Findable. We help local businesses show up when people ask ai tools for a recommendation. Happy to jump on a quick call if you'd rather talk. |
+| which_tool | "which ai?", "what tool?", "was it chatgpt?" (word for word) | I check the same questions on ChatGPT and Gemini. Want a voice note showing what it said? (with "That one was <the missed search's engine>." in front when it is known; the only draft that names a tool) |
 | examples | "examples?", "results?" (word for word) | I've had success with all the clients I've worked with so far. Easiest to show you on a quick call. |
 | definitely | "will I definitely be recommended?" (word for word) | I can't promise ai will recommend you, nobody honestly can. What I do promise is we improve ai visibility or you get your £99 back. |
 | own_site | "do I own the site?" (word for word) | You always own your domain, and you own the site after the final payment. If you want, I can keep hosting it after that for £29.99 a month. |
@@ -110,6 +117,16 @@ at it first".
 * **Away / on leave / out of action** gets the not-now wording ("No problem, I'll check back then."), the date noted for the person to set. Never the pitch.
 * **The "how can I help" family** ("how can I assist", "anything I can help with?", "what can I do for you", "what's it concerning?", "nature of your enquiry") and emoji-only replies get the pitch on a first reply.
 * Tests: `scripts/reply-live-bugs.test.ts` (real cases from the recon).
+
+## 5c. Hi mate, no brands, the new confidence line (Paul, 2026-10-21)
+
+* No name found → "Hi mate,". A name (theirs, or the site's stated owner) still wins.
+* No AI brand anywhere a prospect reads, except the which-tool answer (section 3). Evidence unchanged underneath.
+* The confidence line is "I specialise in getting local businesses to show up in those results, so the customers go to
+  you instead." (`PITCH_SPECIALISE_LINE`), replacing "…get recommended by AI…".
+* The voice-note script is NOT part of this drafter: it lives in `src/lib/voiceNoteScript.ts` + fn `voice-note-script`
+  (`docs/voice-note-script.md`) and still says "Google AI"; it was not changed here.
+* Tests: `scripts/reply-playbook.test.ts` section 5b (`--preview-pitch` prints four preview drafts).
 
 ## 6. Where Paul's brief and v5 differ (v5 wins)
 

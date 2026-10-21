@@ -27,7 +27,7 @@ import { isClientLead } from './roleRules.ts';
 import { issueMentioned, saysGoogleAiForGemini, vagueSiteClaim, wrongEngineWords } from './draftEvidence.ts';
 import { ENGINE_WORDING, FACT_SHEET_VERSION, GUARANTEE_LINE, SHEET_MONEY, factFor, usableCaseStudies } from './offerFactSheet.ts';
 import { mayClaimNamedInstead } from './namedShareRule.ts';
-import { engineName, siteOf, tidyCaps, NEEDS_YOU_LABELS, PITCH_NO_SITE_LINE, PITCH_SPECIALISE_LINE, type MoveEvidence, type MovePlan, type NeedsYouReason } from './replyMove.ts';
+import { engineName, siteOf, tidyCaps, NEEDS_YOU_LABELS, PITCH_SPECIALISE_LINE, type MoveEvidence, type MovePlan, type NeedsYouReason } from './replyMove.ts';
 import { PLAYBOOK, lowerBrands, startsWithBrand } from './replyPlaybook.ts';
 
 /* ── cost ─────────────────────────────────────────────────────────────────────────────────────── */
@@ -190,6 +190,8 @@ export interface AiReplyWhy {
   competitors: string[];
   named: { named: number; valid: number } | null;
   engineWords?: string | null;
+  /** The worst-engine pick behind the pitch: the engine and question where they were not named. Shown here, never named in a draft. */
+  missed?: { engine: string; question: string } | null;
   hookAlreadySent: boolean;
   findings: string[];
   findingsNote: string | null;
@@ -249,7 +251,8 @@ RULES:
 - Never say when something will be sent or done (no "now", "shortly", "today") unless the given line says it. Never say "100%" or "if I fail".
 - Never say anything bad about an agency, a web designer or whoever looks after their site.
 - Do not start with "Perfect" or "Great" every time: vary how you open, and never open the same way as Paul's last message.
-- When STYLE says follow-up: write the AI tools' names (chatgpt, gemini) and the word ai in lower case, and never start a sentence with one of them (start the sentence another way). Sentences still start with a capital.
+- Never name an AI tool or brand. Say "ai" or "ai tools". The only exception is a point that names the tool word for word (they asked which one).
+- When STYLE says follow-up: write ai in lower case, and never start a sentence with it (start the sentence another way). Sentences still start with a capital.
 
 ${SALES_STYLE_RULES}
 
@@ -274,7 +277,8 @@ export function buildAiReplyPrompt(c: AiReplyContext): string {
   const greet = c.plan.greetName || c.evidence.ownerName;
   if (greet) lines.push(`NAME: you may greet them as ${greet}.`);
   else lines.push('NAME: do not use a first name.');
-  lines.push(isPitch(c.plan) ? 'STYLE: first message.' : 'STYLE: follow-up (chatgpt, gemini and ai in lower case; never start a sentence with one).');
+  lines.push(isPitch(c.plan) ? 'STYLE: first message.' : 'STYLE: follow-up (ai in lower case; never start a sentence with it).');
+  if (!c.plan.brandsAllowed) lines.push('AI TOOLS: never name one by its brand. Say ai.');
   const thread = c.thread.slice(-8).map((m) => `${m.from === 'us' ? 'PAUL' : 'THEM'}: ${m.text.replace(/\s+/g, ' ').slice(0, 400)}`).join('\n');
   lines.push(`CONVERSATION SO FAR (oldest first, for context only; never repeat what Paul already said):\n${thread}`);
   const out = lines.join('\n\n');
@@ -326,6 +330,8 @@ const charCap = (p: MovePlan) => (isPitch(p) ? 800 : p.confidence ? 480 : 320);
 const SHARE_WORDING = /\bnamed\s+you\s+in\s+\d+\s+(?:of|out\s+of)\s+\d+|\bgap\s+in\s+the\s+rest\b|\bin\s+\d+\s+(?:of|out\s+of)\s+\d+\s+answers\b/i;
 /** A claim about past results or other clients (Paul, 2026-10-20): only through an APPROVED case study (none today). */
 const PAST_RESULTS = /\b(success(?:es|ful)?|(?<!\b(?:your|the)\s)results?|clients?\s+(?:loved|love|are\s+(?:happy|delighted))|case\s+stud(?:y|ies)|(?:other|our|happy|past)\s+(?:clients|customers)|we'?ve\s+helped|helped\s+(?:loads|lots|many|plenty|other))\b/i;
+/** An AI brand in a prospect-facing draft (Paul, 2026-10-21): a warning unless they asked which tool (plan.brandsAllowed). */
+export const AI_BRAND = /\b(?:chat\s?gpt|gemini|google(?:['’]?s)?\s+ai|ai\s+overviews?|copilot|perplexity|open\s?ai|bard)\b/i;
 /** Never an absolute promise around the guarantee (Paul, 2026-10-20). */
 const ABSOLUTE = /\b100\s?%|\bif\s+i\s+fail\b|\bhundred\s+per\s*cent\b/i;
 
@@ -354,7 +360,8 @@ export function checkAiReply(reply: string, c: AiReplyContext): string[] {
   if (TERM_DRIFT.test(r)) out.push('A term or promise that is not on the fact sheet (12 months, cancel any time, unlimited, monthly audits).');
   if (RANKING.test(r)) out.push('Promises a ranking, first page or recommendation.');
   /* Paul's one results line (the playbook) is allowed word for word; any other results claim still warns. */
-  const withoutResultsLine = r.split(new RegExp(PLAYBOOK.examples.line.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i')).join(' ');
+  /* "…show up in those results" (the confidence line) is what we do, not a past-results claim: read around it too. */
+  const withoutResultsLine = r.split(new RegExp(PLAYBOOK.examples.line.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i')).join(' ').split(PITCH_SPECIALISE_LINE).join(' ');
   if (PAST_RESULTS.test(withoutResultsLine) && !usableCaseStudies().length) out.push('Claims past results or other clients, but no case study is approved on the fact sheet.');
   if (ABSOLUTE.test(r)) out.push('Says "100%" or "if I fail". Use the guarantee line only.');
   if (GUARANTEE_WORD.test(r) && !lower(r).includes(lower(GUARANTEE_LINE)) && !r.includes(factFor('cancel')?.say ?? '\u0000')) {
@@ -395,13 +402,18 @@ export function checkAiReply(reply: string, c: AiReplyContext): string[] {
   if (e.aiAutoReplies === true && /\b(send|read|write|check)\w*\s+(?:and\s+\w+\s+)?every\s+(?:one|message|reply)\b|\bevery\s+(?:one|message|reply)\s+(?:is\s+)?(?:sent|read|written)\s+by\s+me\b/i.test(r)) {
     out.push('Says you send every message yourself, but AI auto-replies are switched on. Say replies may be automated.');
   }
-  /* The sheet's engine wording and Paul's no-website line name the tools on purpose: read around them. */
-  const forEngine = r.replace(/\bchat\s?gpt\s+and\s+gemini\b/gi, ' ').split(ENGINE_WORDING).join(' ').split(PITCH_NO_SITE_LINE).join(' ');
-  if (e.engineWords && wrongEngineWords(forEngine, e.engineWords)) out.push(`Names a different AI tool from the one this conversation uses (${engineName(e.engineWords)}).`);
-  if (saysGoogleAiForGemini(r.split(PITCH_NO_SITE_LINE).join(' '))) out.push('Says "Google AI"; say "Gemini".');
+  /* ⛔ No AI brand in any draft unless they asked which tool (Paul, 2026-10-21). When they did, the old engine checks apply:
+     the sheet's engine wording names the tools on purpose, so read around it. */
+  if (!p.brandsAllowed) {
+    if (AI_BRAND.test(r)) out.push('Names an AI tool (ChatGPT, Gemini, Google AI). Say "AI" unless they asked which tool.');
+  } else {
+    const forEngine = r.replace(/\bchat\s?gpt\s+and\s+gemini\b/gi, ' ').split(ENGINE_WORDING).join(' ');
+    if (e.engineWords && wrongEngineWords(forEngine, e.engineWords) && !/\bthat\s+one\s+was\b/i.test(r)) out.push(`Names a different AI tool from the one this conversation uses (${engineName(e.engineWords)}).`);
+    if (saysGoogleAiForGemini(r)) out.push('Says "Google AI"; say "Gemini".');
+  }
   if (p.question === null && qs > 0) out.push('Asks a question where none was planned.');
   /* The follow-up style (Paul, 2026-10-20): never a sentence that starts with a tool's name, and vary the opener. */
-  if (isFollowUp(p) && startsWithBrand(r)) out.push('Starts a sentence with chatgpt, gemini, google or ai. Start it another way.');
+  if (isFollowUp(p) && startsWithBrand(r) && !p.brandsAllowed) out.push('Starts a sentence with chatgpt, gemini, google or ai. Start it another way.');
   const opener = (x: string) => (x.trim().match(/^[A-Za-z']+/)?.[0] ?? '').toLowerCase();
   const ours = c.thread.filter((m) => m.from === 'us').slice(-2).map((m) => opener(m.text)).filter(Boolean);
   const mine = opener(r);

@@ -246,3 +246,14 @@ Are you with an agency, or do you manage the website yourself? Either way I can 
   question is the only question (no website: "Do you have a website I've missed?"). A reply to an OLD pitch still gets its old
   next step. **Soft version** (named in more than a third): the same shape without "AI is recommending your competitors instead".
 - Checker: still warns on more than one question (a quoted search's "?" is not counted); the pitch's length cap is 800.
+
+## 2026-10-21 — "Hi mate,", no AI brands, the new confidence line (Paul)
+
+- No name found → the pitch opens "Hi mate," (`PITCH_NO_NAME_GREETING`); a name they gave or the site's stated owner still wins.
+- ⛔ No AI brand in any prospect-facing draft: "I asked AI "<question>" and it mentioned A, B and C."; no website: "I couldn't find
+  a website for you, so AI has nothing of yours to read."; the playbook lines say "ai tools". The worst-engine pick and the
+  evidence are unchanged; the "why" carries `missed` (engine + question) and the panel shows it. The checker warns on any brand
+  (`AI_BRAND`) unless they asked which tool (`RE.whichTool` → `which_tool`, `plan.brandsAllowed`).
+- The confidence line is now "I specialise in getting local businesses to show up in those results, so the customers go to you
+  instead." (the 2026-10-20 records above keep the words used then).
+- Record: `docs/reply-playbook.md` §3, §5c. Marker `x-ai-reply-drafts: 2026-10-21a-hi-mate-no-brands`.

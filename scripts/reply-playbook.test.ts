@@ -2,9 +2,9 @@
    intent: code picks the intent, the rule-built draft (the playbook line) passes the checker, one question at most, the
    follow-up style, no money-back line unasked. Prints one preview draft per intent (PREVIEW lines). Pure: no model, no DB. */
 import { readFileSync } from 'node:fs';
-import { pickMove, firstReplyPitch, type MoveEvidence, type MoveThreadMsg } from '../src/lib/replyMove.ts';
+import { pickMove, firstReplyPitch, pitchText, PITCH_SPECIALISE_LINE, PITCH_NO_SITE_LINE, type MoveEvidence, type MoveThreadMsg } from '../src/lib/replyMove.ts';
 import { PLAYBOOK, readEndDate, nameFromReply, nearSameName, lowerBrands, startsWithBrand, type PlaybookIntent } from '../src/lib/replyPlaybook.ts';
-import { checkAiReply, fallbackAiReply, type AiReplyContext } from '../src/lib/aiReplyDraft.ts';
+import { checkAiReply, fallbackAiReply, buildAiReplyPrompt, AI_REPLY_SYSTEM_PROMPT, AI_BRAND, type AiReplyContext } from '../src/lib/aiReplyDraft.ts';
 import { CONFIDENCE_LINE } from '../src/lib/offerFactSheet.ts';
 
 let f = 0;
@@ -67,6 +67,7 @@ const CASES: Array<{ intent: PlaybookIntent; thread: MoveThreadMsg[]; evidence?:
   { intent: 'not_owner', label: '"I\'m not the owner"', thread: [opener, ...said("I'm not the owner, I just work here")] },
   { intent: 'busy', label: '"busy, call later"', thread: after("I'm busy at the moment, call me later") },
   { intent: 'number_sent', label: 'they send a number', thread: after('07700 900123') },
+  { intent: 'which_tool', label: '"which ai did you use?"', thread: after('which ai did you use?') },
 ];
 
 console.log('1. every intent: picked by code, a draft that passes the checker, one question at most');
@@ -87,12 +88,13 @@ for (const x of ['Yes', "that's correct", 'Yes, how can I help?', 'Dom', 'hello?
   const p = pm([opener, ...said(x)]);
   ok(p.move === 'first_reply_pitch' && !!p.fixedText && !p.allowPrice && !(p.fixedText ?? '').includes(CONFIDENCE_LINE), `first reply "${x}" → the pitch (no price, no money-back line)`);
 }
-ok((pm([opener, ...said('Yes this is Dom')]).fixedText ?? '').startsWith('Hi Dom,\n\nI asked Gemini "Who is the best plumber in Rugby?" and it mentioned Rival A Plumbing'), 'a name they give → "Hi Dom," then the worst search');
+ok((pm([opener, ...said('Yes this is Dom')]).fixedText ?? '').startsWith('Hi Dom,\n\nI asked AI "Who is the best plumber in Rugby?" and it mentioned Rival A Plumbing'), 'a name they give → "Hi Dom," then the worst search');
 {
   const d = draftOf([opener, ...said('Dom here')]);
   ok(d.text?.startsWith('Hi Dom,') && d.warnings.length === 0, `the "Hi Dom," pitch passes the checker${d.warnings.length ? ' — ' + d.warnings.join(' | ') : ''}`);
 }
-ok(!/^Hi\b/.test(pm([opener, ...said('Yes it is')]).fixedText ?? ''), 'no name given, none on the site → no greeting');
+ok((pm([opener, ...said('Yes it is')]).fixedText ?? '').startsWith('Hi mate,\n\nI asked AI'), 'no name given, none on the site → "Hi mate," (Paul, 2026-10-21)');
+ok((pm([opener, ...said('Yes it is')], { ...ev, ownerName: 'Sarah Jones' }).fixedText ?? '').startsWith('Hi Sarah,\n\n'), 'an owner the site states → "Hi Sarah," (a name still wins)');
 ok(nameFromReply('Yes this is Dom') === 'Dom' && nameFromReply('dom here') === 'Dom' && nameFromReply('Speaking') === null && nameFromReply('Yes it is') === null && nameFromReply('its me') === null && nameFromReply('Plumbing', 'ZZ Plumbing') === null, 'names are read only in clear forms; never "speaking", "me" or a business word');
 ok(pm([opener, ...said('No thanks')]).noDraft === true && pm([opener, ...said('stop')]).stop, 'a no → Needs you, no draft; a stop → the stop');
 ok(pm([opener, ...said('wrong number mate')]).move === 'close_politely' && !pm([opener, ...said('wrong number mate')]).noDraft, 'a wrong person → a short polite reply');
@@ -139,6 +141,49 @@ ok(startsWithBrand('Fine. chatgpt named them') && !startsWithBrand('I asked chat
   ok(checkAiReply('Gemini named three others.', { ...ctx, plan: pm(after('how long does it take?')) }).some((w) => /Starts a sentence/.test(w)), 'a follow-up starting a sentence with a tool → warning');
   ok(checkAiReply("I've had success with all the clients I've worked with so far. Easiest to show you on a quick call.", { ...ctx, plan: pm(after('any examples?')) }).length === 0
     && checkAiReply('Our clients saw 40% more calls.', ctx).some((w) => /past results/.test(w)), 'the one results line is allowed; any other results claim still warns');
+}
+
+console.log('5b. no AI brand in a prospect-facing draft (Paul, 2026-10-21)');
+for (const c of CASES) {
+  const d = draftOf(c.thread, c.evidence);
+  if (c.intent === 'which_tool') continue;
+  ok(!!d.text && !AI_BRAND.test(d.text), `${c.intent}: names no AI tool`);
+}
+for (const [label, e] of [['issues', ev], ['no website', noSiteEv], ['no audit', { ...ev, named: null }], ['soft', { ...ev, named: { named: 3, valid: 6 } }]] as const) {
+  const t = pitchText(firstReplyPitch(e as MoveEvidence));
+  ok(!AI_BRAND.test(t), `the pitch (${label}) names no AI tool`);
+}
+ok(PITCH_SPECIALISE_LINE === 'I specialise in getting local businesses to show up in those results, so the customers go to you instead.', 'the confidence line is Paul\'s 2026-10-21 wording');
+ok(PITCH_NO_SITE_LINE === "I couldn't find a website for you, so AI has nothing of yours to read.", 'the no-website line names no tool');
+{
+  const t = pitchText(firstReplyPitch(ev));
+  ok(t.includes('I asked AI "Who is the best plumber in Rugby?" and it mentioned Rival A Plumbing, Rival B Plumbing and Rival C Plumbing.'), 'first message: I asked AI "<question>" and it mentioned A, B and C');
+  ok(!/recommended by AI|get recommended|guarantee|money back/i.test(t), 'the pitch promises no result and carries no guarantee');
+}
+{
+  const w = draftOf(after('which ai did you use?'));
+  ok(w.plan.intent === 'which_tool' && w.plan.brandsAllowed === true && /\bgemini\b/.test(w.text ?? '') && w.warnings.length === 0, `"which ai?" → the reply names the engine (the missed search's own), no warning${w.warnings.length ? ' — ' + w.warnings.join(' | ') : ''}`);
+  for (const q of ['what tool was that?', 'was it chatgpt?', 'Which AI?', 'what app did you use']) ok(pm(after(q)).intent === 'which_tool', `"${q}" → which_tool`);
+  ok(pm(after('what ai visibility?')).intent !== 'which_tool', '"what ai visibility" is not a which-tool question');
+  const meas = draftOf(after('how do you measure it?'));
+  ok(meas.plan.read === 'question:measurement' && !AI_BRAND.test(meas.text ?? ''), 'the measurement answer says "the main AI tools", no brand (they did not ask which)');
+}
+{
+  const plan = pm(after('I do it myself'));
+  const ctx: AiReplyContext = { businessName: ev.businessName, latestInbound: 'I do it myself', thread: [], plan, evidence: ev };
+  ok(checkAiReply('Good, I asked gemini again and it still named others. Quick call?', ctx).some((x) => /Names an AI tool/.test(x)), 'the checker warns on a brand name in a draft');
+  ok(checkAiReply(pitchText(firstReplyPitch(ev)).replace('I asked AI', 'I asked Gemini'), { ...ctx, plan: pm([opener, ...said('Yes')]) }).some((x) => /Names an AI tool/.test(x)), '…in the pitch too');
+  ok(/never name one/i.test(buildAiReplyPrompt(ctx)) && /Never name an AI tool/.test(AI_REPLY_SYSTEM_PROMPT), 'the model is told never to name a tool');
+  const wctx: AiReplyContext = { ...ctx, plan: pm(after('which ai did you use?')) };
+  ok(!/never name one/i.test(buildAiReplyPrompt(wctx)) && !checkAiReply('That one was gemini. I check the same questions on chatgpt and gemini. Want a voice note showing what it said?', wctx).some((x) => /Names an AI tool/.test(x)), 'they asked which tool → no brand warning');
+}
+if (process.argv.includes('--preview-pitch')) {
+  const thread = (x: string) => [opener, ...said(x)];
+  const d = (t: MoveThreadMsg[], e: MoveEvidence = ev) => fallbackAiReply({ businessName: e.businessName, latestInbound: '', thread: t.map((m) => ({ from: m.from, text: m.text })), plan: pm(t, e), evidence: e });
+  console.log('\n=== PREVIEW no name, first reply "Yes it is" ===\n' + d(thread('Yes it is')));
+  console.log('\n=== PREVIEW named, first reply "Yes this is Sarah" ===\n' + d(thread('Yes this is Sarah')));
+  console.log('\n=== PREVIEW no website, first reply "Yes" ===\n' + d(thread('Yes'), noSiteEv));
+  console.log('\n=== PREVIEW "which tool did you use?" after the pitch ===\n' + d(after('which tool did you use?')) + '\n');
 }
 
 console.log('6. the function and the docs');
