@@ -251,3 +251,9 @@ function questionTownOf(row: LeadTownRow): { town: string | null; broad: boolean
   if (finer && !isBroadTown(finer)) return { town: finer, broad: false };
   return { town: derived || null, broad: !!derived };
 }
+
+/** A result that is judged outside the searched town AND whose "outside" line is still on Hide. Once the person presses
+ *  Show, those rows are ordinary rows: selected, added, emailed and exported like any other. */
+export function heldOutOfTown(lead: { townCheck?: { inTown: boolean | null } | null; outsideTown?: boolean }, showOutside: boolean): boolean {
+  return !showOutside && outsideSearchedTown(lead);
+}

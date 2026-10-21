@@ -110,7 +110,7 @@ ok(/const addLeadSingleFlight = useCallback\(\(lead: Lead[\s\S]{0,200}addInFligh
 ok(/addsInFlightRef\.current\.delete\(key\)/.test(hook), "the key is released when the add answers, so a later press works");
 const table = norm("../src/components/LeadsTable.tsx");
 ok(/if \(addingIds\.has\(lead\.id\)\) return;/.test(table), "the table ignores a press on a row already adding");
-ok((table.match(/disabled=\{addingIds\.has\(lead\.id\)( \|\| outsideSearchedTown\(lead\))?\}/g) ?? []).length >= 2, "both Add buttons are disabled while their add runs");
+ok((table.match(/disabled=\{addingIds\.has\(lead\.id\)( \|\| heldOutOfTown\(lead, showOutside\))?\}/g) ?? []).length >= 2, "both Add buttons are disabled while their add runs");
 ok(/'Adding…' : 'Add to CRM'/.test(table), "the desktop button says Adding… while it runs");
 
 if (f) { console.log(`\n${f} FAILED`); process.exit(1); }

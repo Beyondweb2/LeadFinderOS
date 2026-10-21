@@ -1,6 +1,6 @@
 import { useState, useMemo, useCallback, memo, useEffect, useRef } from 'react';
 import { addProgressText, type AddProgress } from '@/lib/findLeadsBulkAdd';
-import { outsideSearchedTown } from '@/lib/inTown';
+import { outsideSearchedTown, heldOutOfTown } from '@/lib/inTown';
 import { salesOwnershipCell, adminOwnerMarker, isAlreadyAdded, AlreadyAddedMarker, type OwnershipInfo } from '@/components/FindLeadsOwnership';
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
@@ -135,10 +135,12 @@ export function LeadsTable({ leads, onShownChange, onExport, onAddToOutreach, is
   const canSave = !gated || savedLeadCount < maxFreeSaves;
   /* Rows whose Add to CRM is running: the button shows a spinner and cannot be pressed again until the add
      answers (useOutreach.addLead also joins a repeat press to the same add — this is the visible half). */
+  /* Show/Hide on the grey "outside" line. Shown = those rows are ordinary rows for every count and action (heldOutOfTown). */
+  const [showOutside, setShowOutside] = useState(false);
   const [addingIds, setAddingIds] = useState<ReadonlySet<string>>(() => new Set());
   const handleAddToOutreach = useCallback((lead: Lead) => {
     if (gated && !canSave) { onGatedAction?.(); return; }
-    if (outsideSearchedTown(lead)) return; // never added: not in the town that was searched
+    if (heldOutOfTown(lead, showOutside)) return; // hidden out-of-town rows are never added
     if (addingIds.has(lead.id)) return;
     const run = onAddToOutreach?.(lead);
     if (!run || typeof (run as Promise<unknown>).finally !== 'function') return run;
@@ -146,7 +148,7 @@ export function LeadsTable({ leads, onShownChange, onExport, onAddToOutreach, is
     return (run as Promise<unknown>).finally(() => {
       setAddingIds((prev) => { const next = new Set(prev); next.delete(lead.id); return next; });
     });
-  }, [onAddToOutreach, gated, canSave, onGatedAction, addingIds]);
+  }, [onAddToOutreach, gated, canSave, onGatedAction, addingIds, showOutside]);
 
   const checkIsInOutreach = useCallback((name: string, url?: string) => {
     return isInOutreach?.(name, url) ?? false;
@@ -195,7 +197,6 @@ export function LeadsTable({ leads, onShownChange, onExport, onAddToOutreach, is
 
   /* ⛔ OUTSIDE THE SEARCHED TOWN (2026-10-20, src/lib/inTown.ts): hidden by default behind ONE grey line, never a badge,
      never added (Add, Select all and Add all leave them out). Show lists them at the bottom, still not addable. */
-  const [showOutside, setShowOutside] = useState(false);
   const outsideCount = useMemo(() => leads.filter(outsideSearchedTown).length, [leads]);
   const baseLeads = useMemo(() => (showOutside ? leads : leads.filter((l) => !outsideSearchedTown(l))), [leads, showOutside]);
   const outsideTownName = useMemo(() => {
@@ -224,7 +225,7 @@ export function LeadsTable({ leads, onShownChange, onExport, onAddToOutreach, is
     return [...rest, ...last];
   }, [baseLeads, statusFilters, socialFilters, siteFilters, agency, hasOwnSite, highAgency]);
 
-  useEffect(() => { onShownChange?.(filteredLeads.filter((l) => !outsideSearchedTown(l))); }, [filteredLeads, onShownChange]);
+  useEffect(() => { onShownChange?.(filteredLeads); }, [filteredLeads, onShownChange]);
   const visible = visibleResults(baseLeads.length, filteredLeads.length);
   const filterNotice = visible.filtered ? (
     <span className="ml-2 inline-flex items-center gap-1.5 text-amber-700 dark:text-amber-400" data-testid="results-filtered">
@@ -279,8 +280,8 @@ export function LeadsTable({ leads, onShownChange, onExport, onAddToOutreach, is
   // Rows already in Outreach are unselectable (can't be re-added).
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const selectableLeads = useMemo(
-    () => filteredLeads.filter((l) => !checkIsInOutreach(l.name, l.googleMapsUrl) && !outsideSearchedTown(l)),
-    [filteredLeads, checkIsInOutreach],
+    () => filteredLeads.filter((l) => !checkIsInOutreach(l.name, l.googleMapsUrl) && !heldOutOfTown(l, showOutside)),
+    [filteredLeads, checkIsInOutreach, showOutside],
   );
   // Resolve the selection against the CURRENT filtered set, so a filter change
   // after selecting can never bulk-act on rows that are no longer shown.
@@ -708,7 +709,7 @@ export function LeadsTable({ leads, onShownChange, onExport, onAddToOutreach, is
                   <Checkbox
                     checked={selectedIds.has(lead.id)}
                     onCheckedChange={(checked) => handleSelectOne(lead.id, checked as boolean)}
-                    disabled={inOutreach || outsideSearchedTown(lead)}
+                    disabled={inOutreach || heldOutOfTown(lead, showOutside)}
                     aria-label={`Select ${lead.name}`}
                     className="mr-2.5 shrink-0"
                   />
@@ -813,7 +814,7 @@ export function LeadsTable({ leads, onShownChange, onExport, onAddToOutreach, is
                             size="icon"
                             className={`h-8 w-8 bg-primary hover:bg-primary/90`}
                             onClick={() => handleAddToOutreach(lead)}
-                            disabled={addingIds.has(lead.id) || outsideSearchedTown(lead)}
+                            disabled={addingIds.has(lead.id) || heldOutOfTown(lead, showOutside)}
                             aria-busy={addingIds.has(lead.id)}
                             data-walkthrough-step="add-to-crm"
                             data-walkthrough="add-crm"
@@ -821,7 +822,7 @@ export function LeadsTable({ leads, onShownChange, onExport, onAddToOutreach, is
                             {addingIds.has(lead.id) ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ClipboardList className="h-3.5 w-3.5" />}
                           </Button>
                         </TooltipTrigger>
-                         <TooltipContent>{outsideSearchedTown(lead) ? `Outside ${outsideTownName}: not added` : 'Save this lead'}</TooltipContent>
+                         <TooltipContent>{heldOutOfTown(lead, showOutside) ? `Outside ${outsideTownName}: not added` : 'Save this lead'}</TooltipContent>
                       </Tooltip>
                     )
                   )}
@@ -873,7 +874,7 @@ export function LeadsTable({ leads, onShownChange, onExport, onAddToOutreach, is
                       <Checkbox
                         checked={selectedIds.has(lead.id)}
                         onCheckedChange={(checked) => handleSelectOne(lead.id, checked as boolean)}
-                        disabled={inOutreach || outsideSearchedTown(lead)}
+                        disabled={inOutreach || heldOutOfTown(lead, showOutside)}
                         aria-label={`Select ${lead.name}`}
                       />
                     </TableCell>
@@ -1046,7 +1047,7 @@ export function LeadsTable({ leads, onShownChange, onExport, onAddToOutreach, is
                                 size="sm"
                                 className={`h-8 px-3 text-xs gap-1.5 text-green-600 dark:text-green-500 border-green-600/30 hover:bg-green-500/10 hover:text-green-500`}
                                 onClick={() => handleAddToOutreach(lead)}
-                                disabled={addingIds.has(lead.id) || outsideSearchedTown(lead)}
+                                disabled={addingIds.has(lead.id) || heldOutOfTown(lead, showOutside)}
                                 aria-busy={addingIds.has(lead.id)}
                                 data-testid="find-leads-add-to-crm"
                                 data-walkthrough-step="add-to-crm"
@@ -1056,7 +1057,7 @@ export function LeadsTable({ leads, onShownChange, onExport, onAddToOutreach, is
                                 {addingIds.has(lead.id) ? 'Adding…' : 'Add to CRM'}
                               </Button>
                             </TooltipTrigger>
-                            <TooltipContent>{outsideSearchedTown(lead) ? `Outside ${outsideTownName}: not added` : addCampaignTooltip}</TooltipContent>
+                            <TooltipContent>{heldOutOfTown(lead, showOutside) ? `Outside ${outsideTownName}: not added` : addCampaignTooltip}</TooltipContent>
                           </Tooltip>
                         );
                       })()}

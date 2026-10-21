@@ -301,9 +301,12 @@ const Index = () => {
   const bulkAdd = useFindLeadsBulkAdd();
   /* "Adding 23 of 40" while a batch runs; null when idle. */
   const [addProgress, setAddProgress] = useState<AddProgress | null>(null);
+  const shownIdsRef = useRef<ReadonlySet<string>>(new Set());
   const handleBulkAdd = useCallback(async (selAll: Lead[], campaignId: string | null = activeCampaign) => {
     /* ⛔ ONE DOOR FOR EVERY ADD (2026-10-20): a result judged outside the town it was searched in is never added. */
-    const sel = selAll.filter((l) => !outsideSearchedTown(l));
+    /* …unless the person pressed Show on the "outside" line: the table then reports those rows as shown, and they are
+       ordinary rows (saved with their own town: coverageTownFor only gives a Coverage town to one judged IN). */
+    const sel = selAll.filter((l) => !outsideSearchedTown(l) || shownIdsRef.current.has(l.id));
     if (sel.length === 0) return { added: 0, skipped: selAll.length, title: 'Nothing added', description: 'Outside the town that was searched.', rows: [] as AddRowAnswer[] };
     let res: Awaited<ReturnType<typeof bulkAdd>>;
     try {
@@ -441,7 +444,7 @@ const Index = () => {
   /* The rows the results table is showing (after every filter). Find emails and Add all with emails act on THESE,
      never on a lead the person has filtered out. null until the table reports (then every result). */
   const [shownReported, setShownReported] = useState<Lead[] | null>(null);
-  const reportShown = useCallback((rows: Lead[]) => setShownReported((prev) => keepIfSame(prev, rows)), []);
+  const reportShown = useCallback((rows: Lead[]) => { shownIdsRef.current = new Set(rows.map((l) => l.id)); setShownReported((prev) => keepIfSame(prev, rows)); }, []);
   const shownLeads = useMemo(() => {
     if (!shownReported) return leads;
     const ids = new Set(leads.map((l) => l.id));
@@ -452,7 +455,7 @@ const Index = () => {
       shownLeads.filter(
         (l) =>
           (((searchEnrichment[l.id]?.email as string | undefined) ?? '').trim().length > 0) &&
-          !isInOutreach(l.name, l.googleMapsUrl) && !outsideSearchedTown(l),
+          !isInOutreach(l.name, l.googleMapsUrl),
       ),
     [shownLeads, searchEnrichment, isInOutreach],
   );
