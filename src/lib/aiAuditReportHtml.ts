@@ -182,6 +182,12 @@ export interface AiAuditReportData {
    *  actually opens) is what passes it. */
   showOffer?: boolean;
   /**
+   * PROSPECT-ONLY COUNTRY (Australia, 2026-10-21, src/lib/prospectOnly.ts): the report carries NO price anywhere — no
+   * sign-up button, no guarantee / refund line (it names £99), no offer summary in the no-website panel. Request a
+   * call and Ask me anything stay. Set only by render-audit-report from the lead's country; absent = unchanged.
+   */
+  prospectOnly?: boolean;
+  /**
    * Drop the three SELLING sections — "Why this matters" (the 45% stat), the three-step "why you're
    * named so rarely", and the "Ready to get started" CTA — leaving the measurement itself intact.
    *
@@ -522,20 +528,21 @@ function siteCheckPendingSection(): string {
 /* The approved no-website words, ONE copy: the ordinary report's section below and the six-answer
    quick report's panel (renderQuickCheckReport) both print exactly these. */
 const NO_WEBSITE_TITLE_HTML = "You don&rsquo;t have a website yet, so we&rsquo;ll build you one.";
-function noWebsiteBodyHtml(): string {
+function noWebsiteBodyHtml(prospectOnly = false): string {
+  /* A prospect-only country (Australia) gets the same words WITHOUT the offer sentence — no price, no payment count. */
   return `AI can&rsquo;t recommend a business it can&rsquo;t read, and right now there&rsquo;s nothing for it to read.
         We&rsquo;ll build you a simple site that&rsquo;s set up properly for AI from the start: your services,
-        your area, your credentials, all written the way AI quotes them. Building and hosting it are
-        part of the service, with no separate build fee. ${esc(offerSummaryFor('build'))}`;
+        your area, your credentials, all written the way AI quotes them.${prospectOnly ? '' : ` Building and hosting it are
+        part of the service, with no separate build fee. ${esc(offerSummaryFor('build'))}`}`;
 }
-function noWebsiteSection(): string {
+function noWebsiteSection(prospectOnly = false): string {
   return `
     <!-- NO WEBSITE &mdash; what we will build, where the SEO grade would be -->
     <section class="why" style="border-top:1px solid var(--line)">
       <div class="sec-eyebrow">Your website</div>
       <div class="sec-title">${NO_WEBSITE_TITLE_HTML}</div>
       <p style="margin:0;max-width:70ch;font-size:14px;line-height:1.55;color:var(--muted)">
-        ${noWebsiteBodyHtml()}
+        ${noWebsiteBodyHtml(prospectOnly)}
       </p>
     </section>`;
 }
@@ -1263,7 +1270,7 @@ function aioDataState(t: OverviewTally | null): string {
  *  figures, then one chat window per question — the question as a grey bubble, each engine's reply under
  *  it listing who it named — then the honest "quick check" note and the website section. The caller
  *  appends the CTA and footer (renderQuickCheckFooter). */
-export function renderQuickCheckReport(h: HookReportSummary, businessName: string, website: QuickWebsite): string {
+export function renderQuickCheckReport(h: HookReportSummary, businessName: string, website: QuickWebsite, prospectOnly = false): string {
   const s = h.score;
   if (h.shape !== 'six' || !s) return renderHookSection(h, businessName);
   q4MarkSeq = 0;
@@ -1340,7 +1347,7 @@ export function renderQuickCheckReport(h: HookReportSummary, businessName: strin
     : website.state === 'none' ? `
       <section class="q4-panel q4-panel--site">
         <h2 class="q4-h">Your website</h2>
-        <div class="q4-issue"><span class="q4-ic q4-ic--high">${Q4_ICONS.globe}</span><div><div class="q4-issue-t">${NO_WEBSITE_TITLE_HTML}</div><p class="q4-issue-p">${noWebsiteBodyHtml()}</p></div></div>
+        <div class="q4-issue"><span class="q4-ic q4-ic--high">${Q4_ICONS.globe}</span><div><div class="q4-issue-t">${NO_WEBSITE_TITLE_HTML}</div><p class="q4-issue-p">${noWebsiteBodyHtml(prospectOnly)}</p></div></div>
       </section>`
     : website.state === 'clean' ? `
       <section class="q4-panel q4-panel--site">
@@ -1377,7 +1384,7 @@ export function renderQuickCheckFooter(o: {
         </div>
         <a class="cta-site" href="${esc(REPORT_SITE_URL)}" target="_blank" rel="noopener noreferrer">See how it works at findable.live &rarr;</a>
       </div>
-      <div class="q4-foot-card q4-foot-promise"><span class="foot-k">Your guarantee</span><p class="cta-promise">${o.promiseHtml}</p></div>` : ''}
+      ${o.promiseHtml ? `<div class="q4-foot-card q4-foot-promise"><span class="foot-k">Your guarantee</span><p class="cta-promise">${o.promiseHtml}</p></div>` : ''}` : ''}
       <div class="q4-foot-grid">
         <div class="q4-foot-card"><span class="foot-k">Prepared for</span><span class="foot-v">${esc(o.businessName)}</span></div>
         <div class="q4-foot-card"><span class="foot-k">Report date</span><span class="foot-v">${esc(o.dateLabel)}</span></div>
@@ -1719,7 +1726,7 @@ export function renderReportHtml(d: AiAuditReportData): string {
   const seoSlot = d.seo
     ? (d.seoStyle === 'issues' ? seoIssuesSection(d.seo) : d.seoStyle === 'pack' ? seoPackSection(d.seo, d.seoAfter ?? null) : seoSection(d.seo))
     : (d.crawlFaults && d.crawlFaults.length) ? faultsSection
-    : d.hasWebsite === false ? noWebsiteSection()
+    : d.hasWebsite === false ? noWebsiteSection(d.prospectOnly === true)
     : "";
 
   /* THE HOOK REPORT'S OWN WEBSITE SLOT (2026-09-21). A hook audit never buys the paid SEO scan
@@ -1771,7 +1778,7 @@ export function renderReportHtml(d: AiAuditReportData): string {
         </ul>
       </div>
     </section>`
-    : d.hasWebsite === false ? noWebsiteSection()
+    : d.hasWebsite === false ? noWebsiteSection(d.prospectOnly === true)
     /* ⛔ SILENCE, NOT REASSURANCE (2026-09-21, Paul — reverting the previous session's "we also
        checked your website" line). A clean crawl or one that never completed both render nothing:
        the earlier reassurance text read as a claim worth making on its own, when it isn't one. */
@@ -2038,7 +2045,8 @@ export function renderReportHtml(d: AiAuditReportData): string {
      "Get started — £99". The price is still stated where it is binding: the guarantee line below and
      the onboarding flow itself. */
   const startLabel = concept4 ? "Improve AI visibility" : "Get started &mdash; &pound;99";
-  const startBtn = d.showOffer === true && startUrl
+  /* ⛔ A prospect-only country (Australia) never gets the sign-up button, whatever showOffer says. */
+  const startBtn = d.showOffer === true && d.prospectOnly !== true && startUrl
     ? `<a class="cta-btn start" href="${esc(startUrl)}" target="_blank" rel="noopener noreferrer">${startLabel}</a>`
     : "";
   if (d.showOffer === true && !startUrl) {
@@ -2065,7 +2073,8 @@ export function renderReportHtml(d: AiAuditReportData): string {
      guarantee sentence, as cards on the dark band. Every other report keeps the .cta + .site-foot below. */
   const quickFooter = concept4 ? renderQuickCheckFooter({
     pitch: !(d.hidePitch || d.paidSummary), startBtn, requestCallBtn, waHref,
-    promiseHtml: `Your guarantee is judged on a full ${BASELINE_QUESTIONS}-question measurement we run after you join, not on this quick check. ${esc(REMEASURE_CLAIM_SENTENCE)}`,
+    /* No guarantee card for a prospect-only country: the locked sentence names the £99 (renderQuickCheckFooter drops an empty one). */
+    promiseHtml: d.prospectOnly === true ? '' : `Your guarantee is judged on a full ${BASELINE_QUESTIONS}-question measurement we run after you join, not on this quick check. ${esc(REMEASURE_CLAIM_SENTENCE)}`,
     businessName: d.businessName, dateLabel: d.generatedAtLabel, measuredOnHtml, noteHtml: footNoteHtml,
   }) : "";
 
@@ -2821,7 +2830,7 @@ ${d.measuring ? `
       <p class="measuring-progress"><b>${d.measuring.runsDone} of ${d.measuring.runsTarget}</b> ${plural(d.measuring.runsTarget, "round")} of questions ${d.measuring.runsDone === 1 ? "is" : "are"} complete. Each round takes a few minutes. This page updates itself &mdash; check back shortly.</p>
     </section>` : d.nameNotJudgeable ? `${nameCheckSection}
 ${seoSlot}
-` : concept4 && d.hook ? `${renderQuickCheckReport(d.hook, d.businessName, quickWebsite)}
+` : concept4 && d.hook ? `${renderQuickCheckReport(d.hook, d.businessName, quickWebsite, d.prospectOnly === true)}
 ` : quickIncomplete ? `${renderQuickCheckIncomplete()}
 ` : d.hook ? `${renderHookSection(d.hook, d.businessName, d.generatedAtLabel)}
 ${hookCrawlSection}
@@ -2999,7 +3008,7 @@ ${concept4 || d.hidePitch || d.paidSummary || quickIncomplete ? "" : `
            check the sentence sat directly under a 3-question score, so "that number" read as THIS
            figure. The line in front says which number the guarantee is judged on; the locked sentence
            follows it unchanged. -->
-      <p class="cta-promise">Your guarantee is judged on a full ${BASELINE_QUESTIONS}-question measurement we run after you join, not on this quick check. ${esc(REMEASURE_CLAIM_SENTENCE)}</p>
+      ${d.prospectOnly === true ? '' : `<p class="cta-promise">Your guarantee is judged on a full ${BASELINE_QUESTIONS}-question measurement we run after you join, not on this quick check. ${esc(REMEASURE_CLAIM_SENTENCE)}</p>`}
     </section>`}
 
 ${concept4 ? quickFooter : `

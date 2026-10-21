@@ -155,7 +155,7 @@ console.log('\n── 2. QUICK CLOSE → PAYMENT → PAID CLIENT ──');
     'still refused once the row has moved on to in_delivery / completed (the gap the old row-only check left)');
   ok(quickCloseClosedRefusal({ status: 'interested', amount_paid: null }, { status: 'paid' })?.error === 'already_paid', 'a row that already reads paid is refused even before the lead row catches up (the second signal)');
   const qcSrc = read('supabase/functions/quick-close/index.ts');
-  ok(/const closedNow = quickCloseClosedRefusal\(lead as never, row as never\);\s*const usable = linkUsable\(cur, nowMs\) && !closedNow;/.test(qcSrc), 'the dialog is never handed a link URL for a paid / ended client, even one still in its window');
+  ok(/const closedNow = quickCloseClosedRefusal\(lead as never, row as never\);[\s\S]{0,200}?const usable = linkUsable\(cur, nowMs\) && !closedNow(?: && !prospectOnlyLead\(lead as never\))?;/.test(qcSrc), 'the dialog is never handed a link URL for a paid / ended client, even one still in its window');
   ok(/first_contact: \{ state: s\.stage\.firstContact\.state, due: s\.stage\.firstContact\.due \}/.test(qcSrc) && /firstContactDueLabel\(v\.setup\.first_contact\.due\)/.test(read('src/components/QuickCloseDialog.tsx')),
     'the seller sees Paul will be in touch, with the SAME due day Paul\u2019s own screen shows');
   const lock = agreementRouteLock({ contractTotalPayments: L.contract_total_payments ?? totalPaymentsFor('build'), linkRoute: 'build', acceptances: [] } as never);

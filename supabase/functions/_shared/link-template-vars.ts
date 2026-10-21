@@ -12,6 +12,7 @@
 import { isPaidClient } from "../../../src/lib/paidClient.ts";
 import { clientClosed } from "../../../src/lib/paymentState.ts";
 import { linkUsable, quickCloseClosedRefusal, type QuickCloseRecord } from "../../../src/lib/quickClose.ts";
+import { PROSPECT_ONLY_DETAIL, prospectOnlyLead } from "../../../src/lib/prospectOnly.ts";
 import { displayBusinessName } from "../../../src/lib/displayName.ts";
 import { onboardingFormUrl } from "../../../src/lib/clientOnboardingForm.ts";
 import { isOnboardingFormUrl, isSetupLinkUrl, isSignupLinkUrl, linkTemplateGreeting, setupLinkUrl } from "../../../src/lib/whatsappLinkTemplates.ts";
@@ -25,7 +26,7 @@ export type LinkVars = { ok: true; greeting: string; url: string; business: stri
 
 async function leadAndRows(service: Service, leadId: string) {
   const [{ data: lead, error }, { data: rows, error: rErr }] = await Promise.all([
-    service.from("outreach_leads").select("id,business_name,contact_name,derived_town,amount_paid,status,service_terminated_at").eq("id", leadId).maybeSingle(),
+    service.from("outreach_leads").select("id,business_name,contact_name,derived_town,amount_paid,status,service_terminated_at,country,address").eq("id", leadId).maybeSingle(),
     service.from("onboarding_responses").select("id,status,source,contact_name,quick_close,created_at").eq("lead_id", leadId).order("created_at", { ascending: false }).limit(10),
   ]);
   if (error) throw error;
@@ -45,6 +46,8 @@ export async function resolveSignupLinkVars(service: Service, leadId: string, va
   if (!lead) return { ok: false, reason: "Lead not found." };
   const closed = quickCloseClosedRefusal(lead as never, null);
   if (closed) return { ok: false, reason: closed.detail };
+  /* ⛔ Australia is prospect-only (src/lib/prospectOnly.ts): no sign-up or set-up link is ever built for it. */
+  if (prospectOnlyLead(lead as never)) return { ok: false, reason: PROSPECT_ONLY_DETAIL };
   if (variant === "setup") {
     /* The set-up page is the lead's own and is made from the lead id alone: nothing to store, nothing to expire. */
     const url = setupLinkUrl(leadId);

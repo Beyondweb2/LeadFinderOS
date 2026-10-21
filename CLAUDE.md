@@ -995,6 +995,11 @@ positive allowlist of `baseline`; `isColdOutreachTemplate` treats unknown as COL
   who knows more than we do spots one instantly. Write "can make it harder", "may mean", "gives AI
   less information to work with". `site-findings.test.ts` blocks both scanner phrasing and absolute
   claims; every finding is WHAT I SAW → WHAT IT MEANS → WHY IT MAY MAKE AI VISIBILITY HARDER.
+- ⛔ **AUSTRALIA IS PROSPECT-ONLY (2026-10-21, `docs/australia-coverage.md`)**: find, audit and call — never a price, a guarantee
+  line or a sign-up link (report, Quick Close, checkout, link templates, +61 template sends all ask `src/lib/prospectOnly.ts`).
+  An Australian town is ALWAYS `Name STATE` ("Ballarat VIC") in the Coverage key, the search, `coverage_town` and the audit town
+  (`src/lib/australiaTowns.ts`; a bare ambiguous name is never guessed). Its wrong-town guard is `australianTownCheck`, never
+  `uk_towns`. Towns = bundled ABS list (`scripts/build-australia-towns.mjs`), no table. Cold WhatsApp to Australia stays refused.
 - ⛔ **COLD WHATSAPP IS UK MOBILES ONLY — India is no longer an outreach market (2026-10-07).** Decided from the digits we send
   to (`src/lib/ukColdDestination.ts`), never `outreach_leads.country` (measured wrong on 374 rows). Enforced in the SQL
   (`sales_queue_opener`, `campaign_candidates`) and in BOTH senders; the India send window is gone. Australia is supported for search,

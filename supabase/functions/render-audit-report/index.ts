@@ -16,6 +16,7 @@ import { isAggregatorUrl } from "../_shared/aggregators.ts";
 import { renderReportHtml } from "../../../src/lib/aiAuditReportHtml.ts";
 import { measuringState } from "../../../src/lib/measuringState.ts";
 import { showOffer } from "../../../src/lib/buyOffer.ts";
+import { prospectOnlyLead } from "../../../src/lib/prospectOnly.ts";
 import { onboardingUrl, resolveSiteOrigin, ORIGIN_ENV } from "../_shared/onboarding-followup.ts";
 
 import { auditCodeFromSlug, isShortCode, shortReportUrl } from "../../../src/lib/reportSlug.ts";
@@ -246,6 +247,8 @@ Deno.serve(async (req) => {
     let amountPaid = 0;
     let leadWebsite = "";
     let leadPlaceId: string | null = null;
+    /* Australia (prospect-only, src/lib/prospectOnly.ts): read from the lead's country / address. */
+    let leadProspectOnly = false;
     const leadId = (audit as { lead_id?: string | null }).lead_id ?? null;
     if (leadId) {
       const { data: lead } = await service
@@ -253,8 +256,9 @@ Deno.serve(async (req) => {
            paid before audit_purpose existed (2026-09-12) carry NULL on their baseline rows, and the
            lead claiming an audit is the only evidence those are paid baselines. Both columns are set
            by DB triggers and are immutable once set (src/lib/reportKind.ts). */
-        .from("outreach_leads").select("amount_paid, website, place_id, baseline_audit_id, remeasure_audit_id").eq("id", leadId).maybeSingle();
-      const l = lead as { amount_paid?: unknown; website?: string | null; place_id?: string | null; baseline_audit_id?: string | null; remeasure_audit_id?: string | null } | null;
+        .from("outreach_leads").select("amount_paid, website, place_id, baseline_audit_id, remeasure_audit_id, country, address").eq("id", leadId).maybeSingle();
+      const l = lead as { amount_paid?: unknown; website?: string | null; place_id?: string | null; baseline_audit_id?: string | null; remeasure_audit_id?: string | null; country?: string | null; address?: string | null } | null;
+      leadProspectOnly = prospectOnlyLead(l);
       amountPaid = Number(l?.amount_paid ?? 0) || 0;
       leadWebsite = String(l?.website ?? "").trim();
       leadPlaceId = l?.place_id ? String(l.place_id) : null;
@@ -314,7 +318,9 @@ Deno.serve(async (req) => {
     });
     if (kind) data.paidSummary = kind;
 
-    data.showOffer = showOffer({ auditId: audit.id, amountPaid });
+    /* ⛔ PROSPECT-ONLY COUNTRY (Australia, 2026-10-21): no offer, no sign-up link, no price anywhere on the page. */
+    data.prospectOnly = leadProspectOnly;
+    data.showOffer = !leadProspectOnly && showOffer({ auditId: audit.id, amountPaid });
 
     /* ── WHERE THE OFFER BUTTON GOES ────────────────────────────────────────────────────────────
        ⛔ THE ONBOARDING FLOW, NOT STRIPE. It used to be a raw Stripe Payment Link, which skipped the
@@ -333,7 +339,7 @@ Deno.serve(async (req) => {
        the URL shape lives in exactly one place — and that shape is proven: three of those links were
        sent and opened on 28 July. */
     const offerOrigin = resolveSiteOrigin();
-    data.offerUrl = leadId && offerOrigin
+    data.offerUrl = leadId && offerOrigin && !leadProspectOnly
       ? onboardingUrl(offerOrigin, leadId, audit.business_name ?? null)
       : null;
     if (data.showOffer === true && !data.offerUrl) {

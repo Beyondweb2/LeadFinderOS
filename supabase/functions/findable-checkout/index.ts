@@ -6,6 +6,7 @@ import { offerPrice } from "../_shared/offer-price.ts";
 import { agreementUrl, CLIENT_AGREEMENT_VERSION, sha256Hex } from "../../../src/lib/clientAgreement.ts";
 import { checkoutAgreementGate, type GateAcceptance } from "../../../src/lib/signupGate.ts";
 import { SIGNUP_LINK_LIFETIME_MS } from "../../../src/lib/quickClose.ts";
+import { prospectOnlyLead } from "../../../src/lib/prospectOnly.ts";
 import { selfServeBuildHold } from "../../../src/lib/selfServeContract.ts";
 import { commercialTermsFor, OPTION_B_TIMING } from "../../../src/lib/clientTimeline.ts";
 import { openHoldFor } from "../_shared/payment-hold.ts";
@@ -273,9 +274,15 @@ Deno.serve(async (req) => {
     if (effectiveLeadId) {
       const { data: lead } = await service
         .from("outreach_leads")
-        .select("id, business_name, status, amount_paid, category, search_keyword, service_terminated_at")
+        .select("id, business_name, status, amount_paid, category, search_keyword, service_terminated_at, country, address")
         .eq("id", effectiveLeadId).maybeSingle();
       leadBusinessName = (lead?.business_name as string | null) ?? null;
+      /* ⛔ PROSPECT-ONLY COUNTRY (2026-10-21, src/lib/prospectOnly.ts): an Australian lead never reaches Stripe — the
+         offer is GBP and the agreement UK law, and Paul has not decided either for Australia. */
+      if (lead && prospectOnlyLead(lead as { country?: string | null; address?: string | null })) {
+        await recordRefusal("checkout_refused_prospect_only", { lead_id: effectiveLeadId, country: lead.country ?? null });
+        return json({ ok: false, error: "prospect_only_country" }, 403);
+      }
       /* ⛔ ONE RULE WITH QUICK CLOSE (2026-10-05, pre-sales final): money on the lead, a paid-or-beyond
          status, REFUNDED, or an ENDED engagement (service_terminated_at) — quickCloseClosedRefusal. The
          old test here read only the money and three statuses, so an ended or refunded client whose amount

@@ -90,7 +90,7 @@ ok(broad.town === 'London' && broad.broad, 'only London possible → kept, marke
 ok(leadQuestionTown({ coverage_town: 'London', address: MWAY }).town === 'Tottenham', 'a broad Coverage town is narrowed too');
 ok(isBroadTown('London') && !isBroadTown('Tottenham') && !isBroadTown('Kuala Lumpur'), 'broad = London / a nation, not a city like KL');
 const ca = read('../supabase/functions/create-ai-audit/index.ts');
-ok(/coverageTown && !isBroadTown\(coverageTown\)\) \{[\s\S]{0,400}townFixed = true;/.test(ca) && /if \(townFixed\) \{[\s\S]{0,200}distance not checked/.test(ca), 'Coverage town used with no distance cap');
+ok(/coverageTown && !isBroadTown\(coverageTown\)\) \{[\s\S]{0,400}townFixed = true;/.test(ca) && /if \(townFixed\) \{[\s\S]{0,400}distance not checked/.test(ca), 'Coverage town used with no distance cap');
 ok(/else if \(!ukGazetteerApplies\(country, derived\.address\)\)[\s\S]{0,1500}foundUnder && foundUnder\.toLowerCase\(\) !== locationText\.toLowerCase\(\)/.test(ca), 'older leads keep the 25 km found-under rule');
 ok(/isBroadTown\(locationText\)\) \{[\s\S]{0,200}areaFromAddress\(derived\.address/.test(ca) && /BROAD_TOWN_NOTE\]/.test(ca) && BROAD_TOWN_NOTE.startsWith('Broad town'), 'broad → finer area, else the audit is marked broad in location_note');
 
