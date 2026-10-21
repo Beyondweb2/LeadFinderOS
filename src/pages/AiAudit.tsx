@@ -1454,7 +1454,8 @@ const AiAudit = () => {
      the town the questions would ask about. Held in STATE rather than thrown into a toast, because
      the operator needs a decision here, not a notification — and because "business_not_in_town" on
      its own is the catch-all-error fault again. The dialog carries the server's sentence verbatim. */
-  const [distanceBlock, setDistanceBlock] = useState<{ message: string; km: number; town: string } | null>(null);
+  /* km null = an Australian wrong-STATE block (no distance measured) — the title then says so instead of "0 km". */
+  const [distanceBlock, setDistanceBlock] = useState<{ message: string; km: number | null; town: string } | null>(null);
 
   const confirmAndRun = async (overrideDistance = false) => {
     /* ⛔ THE SELECTED SET IS WHAT RUNS, AND IT IS THE SAME LIST EVERY NUMBER ON SCREEN WAS
@@ -1511,7 +1512,7 @@ const AiAudit = () => {
         const block = refusal ?? (data as Record<string, unknown>);
         setDistanceBlock({
           message: String(block?.message ?? ''),
-          km: Number(block?.distance_km) || 0,
+          km: block?.distance_km == null ? null : Number(block.distance_km) || 0,
           town: String(block?.town ?? ''),
         });
         return;
@@ -3028,7 +3029,9 @@ const AiAudit = () => {
         <DialogContent className="sm:max-w-md">
           {/* The description is the server's own sentence, verbatim. One wording, one place to change it. */}
           <DialogHero icon={MapPin} tone="amber"
-            title={<>This business is {distanceBlock?.km} km from {distanceBlock?.town}</>}
+            title={distanceBlock?.km == null
+              ? <>This business may not be in {distanceBlock?.town}</>
+              : <>This business is {distanceBlock?.km} km from {distanceBlock?.town}</>}
             subtitle={distanceBlock?.message} />
           <p className="rounded-md bg-muted/50 px-3 py-2 text-xs">
             Nothing has been spent. Cancel and fix the town on the lead, or audit anyway if you know

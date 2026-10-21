@@ -1,6 +1,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { directPoolCacheKeys, generateCacheKey } from "../_shared/search-cache-key.ts";
 import { bookOwnerId, refusalBody, resolveActor } from "../_shared/access.ts";
+import { isAustralianLead, withAuState } from "../../../src/lib/australiaTowns.ts";
 
 /* ════════════════════════════════════════════════════════════════════════════════════════════
    WHERE HAVE I BEEN? — the candidate town list, and the raw facts to grade it against.
@@ -189,7 +190,7 @@ Deno.serve(async (req) => {
       });
       const leadsP = allInWaves((from, to) => service
         .from("outreach_leads")
-        .select("id, search_keyword, category, search_location, derived_town, country, status, whatsapp_sent_at, instantly_pushed_at, last_outreach_attempt_at, assigned_to_user_id")
+        .select("id, search_keyword, category, search_location, derived_town, coverage_town, address, country, status, whatsapp_sent_at, instantly_pushed_at, last_outreach_attempt_at, assigned_to_user_id")
         .eq("user_id", userId).eq("is_archived", false).order("id", { ascending: true }).range(from, to));
       const historyP = all((from, to) => service
         .from("search_history").select("keyword, location, radius")
@@ -228,9 +229,14 @@ Deno.serve(async (req) => {
       const workedBy = new Map<string, { trade: string; town: string; country: string | null; users: Map<string, number> }>();
       for (const l of leads) {
         const trade = String(l.search_keyword || l.category || "").trim();
-        const town = String(l.derived_town || l.search_location || "").trim();
-        if (!trade || !town) continue;
         const country = typeof l.country === "string" && l.country ? l.country : null;
+        /* ⛔ AN AUSTRALIAN LEAD'S TOWN CARRIES ITS STATE (2026-10-21, src/lib/australiaTowns.ts): the Coverage town it was
+           verified in when added ("Ballarat VIC") first, else Google's town with the state read from its own address
+           ("Perth" + "…WA 6000" → "Perth WA"), so Perth WA and Perth TAS never share a row. Every other lead: unchanged. */
+        const town = isAustralianLead(country, l.address)
+          ? withAuState(String(l.coverage_town || l.derived_town || l.search_location || "").trim(), l.address)
+          : String(l.derived_town || l.search_location || "").trim();
+        if (!trade || !town) continue;
         const pair = { trade, town, country };
         leadPairs.push(pair);
         /* ⛔ CONTACTED IS A POSITIVE TEST ON EVIDENCE OF A SEND, not "status is not new". Statuses are

@@ -27,6 +27,7 @@ import {
   COVERAGE_COUNTRIES, COVERAGE_COUNTRY_LABEL, DEFAULT_COVERAGE_COUNTRY, normaliseCoverageCountry, type CoverageCountry,
 } from '@/lib/coverageCountries';
 import { quickLocationValue } from '@/lib/locationPicker';
+import { AU_BAND_DEFAULT_MAX, AU_BAND_DEFAULT_MIN } from '@/lib/australiaTowns';
 import {
   filterByPopulationBand, populationFilterShown, populationSourcesFor, townPopulation,
 } from '@/lib/abroadTownPopulation';
@@ -151,6 +152,24 @@ export default function Coverage() {
       },
     },
   );
+  /* Australia's band is its own setting too, and it STARTS at 10,000–250,000 (AU_BAND_DEFAULT_*, australiaTowns.ts):
+     the mid-size urban centres, leaving out the small places and the eleven metropolitan areas. Clear it to see all. */
+  const [auBand, setAuBand] = usePersistedState<{ min: number | null; max: number | null }>(
+    'coverage-population-band-au', { min: AU_BAND_DEFAULT_MIN, max: AU_BAND_DEFAULT_MAX },
+    {
+      tier: 'session', scope: user?.id,
+      validate: (d) => {
+        const v = d as { min?: unknown; max?: unknown } | null;
+        const ok = (x: unknown) => x === null || Number.isFinite(x);
+        return v && ok(v.min) && ok(v.max) ? { min: v.min as number | null, max: v.max as number | null } : null;
+      },
+    },
+  );
+  const isAu = country === 'Australia';
+  const abroadBand = isAu ? auBand : myBand;
+  const setAbroadBand = isAu ? setAuBand : setMyBand;
+  /* Malaysia / Singapore figures are approximate (a council or planning area); Australia's are the ABS Census count. */
+  const approxPop = country === 'Malaysia' || country === 'Singapore';
   const showPopFilter = populationFilterShown(country);
 
   /* ⛔ WHETHER THE NICHE VERDICT IS OPEN IS CONFIGURATION, NOT AN INTERRUPTION, so it persists —
@@ -172,9 +191,9 @@ export default function Coverage() {
     () => {
       if (isUk) return applyFilters(gradeFor(trade, false), { region, minPopulation: minPop, maxPopulation: maxPop });
       const inRegion = gradeFor(trade, false).filter((r) => !region || r.region === region);
-      return country === 'Malaysia' ? filterByPopulationBand(inRegion, myBand) : inRegion;
+      return country === 'Malaysia' || country === 'Australia' ? filterByPopulationBand(inRegion, abroadBand) : inRegion;
     },
-    [gradeFor, trade, region, minPop, maxPop, applyFilters, isUk, country, myBand],
+    [gradeFor, trade, region, minPop, maxPop, applyFilters, isUk, country, abroadBand],
   );
   const summary = useMemo(() => summarise(rows), [rows, summarise]);
 
@@ -275,13 +294,13 @@ export default function Coverage() {
           </div>
         </div>}
         {!isUk && showPopFilter && <div className="space-y-1">
-          <label className="text-xs font-medium text-muted-foreground">Population (approx.)</label>
+          <label className="text-xs font-medium text-muted-foreground">{approxPop ? 'Population (approx.)' : 'Population'}</label>
           <div className="flex items-center gap-1.5">
-            <Input type="number" placeholder="Any" value={myBand.min ?? ''}
-              onChange={(e) => setMyBand((b) => ({ ...b, min: e.target.value === '' ? null : Number(e.target.value) || 0 }))} className="h-9 w-[110px]" />
+            <Input type="number" placeholder="Any" value={abroadBand.min ?? ''}
+              onChange={(e) => setAbroadBand((b) => ({ ...b, min: e.target.value === '' ? null : Number(e.target.value) || 0 }))} className="h-9 w-[110px]" />
             <span className="text-xs text-muted-foreground">to</span>
-            <Input type="number" placeholder="Any" value={myBand.max ?? ''}
-              onChange={(e) => setMyBand((b) => ({ ...b, max: e.target.value === '' ? null : Number(e.target.value) || 0 }))} className="h-9 w-[110px]" />
+            <Input type="number" placeholder="Any" value={abroadBand.max ?? ''}
+              onChange={(e) => setAbroadBand((b) => ({ ...b, max: e.target.value === '' ? null : Number(e.target.value) || 0 }))} className="h-9 w-[110px]" />
           </div>
         </div>}
       </div>
@@ -357,7 +376,7 @@ export default function Coverage() {
       ) : sorted.length === 0 ? (
         <EmptyState icon={MapPin} title="No towns match those filters.">
           {isUk ? <>The table holds 12,000&ndash;250,000; widen the population
-          range to see the edges.</> : <>Choose All regions{country === 'Malaysia' ? ' and clear the population range' : ''} to see every town.</>}
+          range to see the edges.</> : <>Choose All regions{country === 'Malaysia' || isAu ? ' and clear the population range' : ''} to see every town.</>}
         </EmptyState>
       ) : (
         <div className="overflow-x-auto rounded-lg border border-border">
@@ -370,8 +389,8 @@ export default function Coverage() {
                     onCheckedChange={(v) => setPickedTowns(v === true ? new Set(sorted.map((t) => t.name)) : new Set())} />
                 </th>
                 <th className="px-3 py-2 text-left font-medium">Town</th>
-                <th className="px-3 py-2 text-left font-medium">{country === 'Malaysia' ? 'State' : 'Region'}</th>
-                <th className="px-3 py-2 text-right font-medium">{isUk ? 'Population' : 'Population (approx.)'}</th>
+                <th className="px-3 py-2 text-left font-medium">{country === 'Malaysia' || isAu ? 'State' : 'Region'}</th>
+                <th className="px-3 py-2 text-right font-medium">{approxPop ? 'Population (approx.)' : 'Population'}</th>
                 <th className="px-3 py-2 text-left font-medium">{trade}</th>
                 <th className="px-3 py-2 text-right font-medium"></th>
               </tr>
@@ -392,7 +411,7 @@ export default function Coverage() {
                   <td className="px-3 py-1.5 text-right tabular-nums text-muted-foreground"
                     title={isUk ? undefined : (townPopulation(country, t.name, t.region).basis ?? 'No source figure')}>
                     {/* ⛔ A blank figure is a dash, never 0. Abroad figures are approximate, so prefixed "≈". */}
-                    {t.population === null || t.population === undefined ? '—' : `${isUk ? '' : '≈ '}${t.population.toLocaleString()}`}
+                    {t.population === null || t.population === undefined ? '—' : `${approxPop ? '≈ ' : ''}${t.population.toLocaleString()}`}
                   </td>
                   <td className="px-3 py-1.5">
                     {/* 🔴 FOUND vs ADDED (Paul, 2026-09-29) replaced the "Worked" rung badge and the "N leads" count:
@@ -466,6 +485,14 @@ export default function Coverage() {
         <MapPin className="mr-1 inline h-3 w-3" />
         Towns are ONS Built-Up Areas 2022. Contains OS data &copy; Crown copyright and database right
         2024. Source: Office for National Statistics licensed under the Open Government Licence v3.0.
+      </p> : isAu ? <p className="text-xs text-muted-foreground" data-testid="coverage-au-note">
+        <MapPin className="mr-1 inline h-3 w-3" />
+        Towns are the ABS Urban Centres of 1,000+ people, named with their state so towns of the same name in two states
+        stay apart (Perth WA, Perth TAS). Population is the Census 2021 count for the whole urban centre. Australia is
+        prospect-only: find, audit and call &mdash; no price and no sign-up link. Source:{' '}
+        {populationSourcesFor(country).map((s) => (
+          <span key={s.url}><a href={s.url} target="_blank" rel="noreferrer" className="underline">{s.label}</a> ({s.year})</span>
+        ))}.
       </p> : <p className="text-xs text-muted-foreground">
         <MapPin className="mr-1 inline h-3 w-3" />
         Towns are the places Find Leads suggests for {COVERAGE_COUNTRY_LABEL[country]}, plus any place your leads or

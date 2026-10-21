@@ -43,7 +43,7 @@ console.log("── the server path ──");
 console.log("── the report ──");
 {
   const r = read("src/lib/aiAuditReportHtml.ts");
-  ok(/d\.hasWebsite === false \? noWebsiteSection\(\)/.test(r), "the report's website slot becomes the no-website section (never an empty grade)");
+  ok(/d\.hasWebsite === false \? noWebsiteSection\((?:d\.prospectOnly === true)?\)/.test(r), "the report's website slot becomes the no-website section (never an empty grade)");
 }
 
 console.log("── the report-offer guard ──");

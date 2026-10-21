@@ -17,11 +17,21 @@
    A big city's post town (London, Birmingham, Kuala Lumpur…) is never step 2: it covers many neighbourhoods, so a
    search for one of them goes to steps 3–4.
 
-   UK and Malaysia read their own address shapes (UK "Town POSTCODE", Malaysia "12345 Town"). Pure, no I/O. */
+   UK and Malaysia read their own address shapes (UK "Town POSTCODE", Malaysia "12345 Town"). Pure, no I/O.
+
+   AUSTRALIA (2026-10-21, src/lib/australiaTowns.ts) reads "Suburb STATE 1234" and has its OWN order:
+     1. The STATE first: a searched town that names a state ("Richmond VIC") and an address in another state
+        ("Richmond NSW 2753") → OUT ('other_state'). The postcode gives the state when the word is missing.
+     2. A name match (the suburb, or a whole address part) → IN.
+     3. Distance from the searched town's centre, as step 4 above (ABS population for the size).
+     4. Otherwise null (Google's boundary decides).
+   ⚠️ No "different suburb → OUT" step: an Australian urban centre is many suburbs (Ballarat is Wendouree,
+   Sebastopol, Ballarat Central…), so a different suburb name is not evidence of being outside it. */
 import { LONDON_POSTCODE_AREAS, type LondonArea } from '../data/londonPostcodeAreas.ts';
 import { resolveCoverageTown } from './coverageCountries.ts';
+import { auTownLabel, isAustralianLead, parseAuAddress, parseAuTown, sameAuTown, withAuState } from './australiaTowns.ts';
 
-export type InTownReason = 'post_town' | 'postcode_district' | 'address_part' | 'other_town' | 'other_district' | 'distance' | 'too_far' | 'unknown';
+export type InTownReason = 'post_town' | 'postcode_district' | 'address_part' | 'other_town' | 'other_district' | 'other_state' | 'distance' | 'too_far' | 'unknown';
 
 export interface InTownVerdict {
   /** true = in the town; false = outside it; null = could not be judged (fall back to outsideTown). */
@@ -51,7 +61,7 @@ const CITY_POST_TOWNS = new Set([
 ]);
 
 /** Too broad to be an audit question's town: one name for a whole capital, or a country / nation. */
-const BROAD_TOWNS = new Set(['london', 'greater london', 'england', 'scotland', 'wales', 'northern ireland', 'united kingdom', 'uk', 'great britain', 'malaysia']);
+const BROAD_TOWNS = new Set(['london', 'greater london', 'england', 'scotland', 'wales', 'northern ireland', 'united kingdom', 'uk', 'great britain', 'malaysia', 'australia']);
 
 export const TOWN_RADIUS_MIN_KM = 2;
 export const TOWN_RADIUS_MAX_KM = 15;
@@ -98,6 +108,10 @@ const UK_POSTCODE = /\b([A-Z]{1,2}\d[A-Z\d]?)(?:\s*(\d[A-Z]{2}))?\s*$/i;
 
 /** The post town, postcode district and the other parts of a Google formattedAddress. */
 export function parseAddress(address: string | null | undefined, country?: string | null): ParsedAddress {
+  if (isAustralianLead(country, null)) {
+    const a = parseAuAddress(address);
+    return { postTown: a.suburb, district: null, parts: a.parts };
+  }
   const parts = String(address ?? '').split(',').map((p) => p.trim()).filter(Boolean);
   while (parts.length && /^(uk|united kingdom|great britain|england|scotland|wales|malaysia)$/i.test(parts[parts.length - 1])) parts.pop();
   let postTown: string | null = null, district: string | null = null, at = -1;
@@ -129,6 +143,11 @@ export function isLondonAreaName(name: string): boolean { return LONDON_NAMES.ha
 
 /** The finest place an address names: the London district's area, else the post town. */
 export function areaFromAddress(address: string | null | undefined, country?: string | null): string | null {
+  if (isAustralianLead(country, null)) {
+    /* The suburb WITH its state ("Richmond VIC"), never a bare name another state shares. */
+    const a = parseAuAddress(address);
+    return a.suburb ? (a.state ? auTownLabel(a.suburb, a.state) : a.suburb) : null;
+  }
   const p = parseAddress(address, country);
   if (p.postTown && townKey(p.postTown) === 'london') return londonAreaFor(p.district)?.area ?? p.postTown;
   return p.postTown;
@@ -148,7 +167,27 @@ export function kmBetween(a: { lat: number; lng: number }, b: { lat: number; lng
 
 const real = (n: unknown): n is number => typeof n === 'number' && Number.isFinite(n) && n !== 0;
 
+/** Australia's own order (header): the state, then a name, then distance. */
+function auInTownVerdict(i: InTownInput): InTownVerdict {
+  const t = parseAuTown(i.town);
+  const a = parseAuAddress(i.address);
+  const area = a.suburb ? (a.state ? auTownLabel(a.suburb, a.state) : a.suburb) : null;
+  if (!t.name) return { inTown: null, reason: 'unknown', area, km: null };
+  // 1. the state
+  if (t.state && a.state && t.state !== a.state) return { inTown: false, reason: 'other_state', area, km: null };
+  // 2. a name match
+  if (a.suburb && sameAuTown(a.suburb, t.name)) return { inTown: true, reason: 'post_town', area, km: null };
+  if (a.parts.some((x) => !/\d/.test(x) && sameAuTown(x, t.name))) return { inTown: true, reason: 'address_part', area, km: null };
+  // 3. distance, scaled to the town's size
+  if (real(i.lat) && real(i.lng) && i.centre && real(i.centre.lat) && real(i.centre.lng)) {
+    const km = kmBetween({ lat: i.lat, lng: i.lng }, i.centre);
+    return { inTown: km <= townRadiusKm(i.population), reason: km <= townRadiusKm(i.population) ? 'distance' : 'too_far', area, km: Math.round(km * 10) / 10 };
+  }
+  return { inTown: null, reason: 'unknown', area, km: null };
+}
+
 export function inTownVerdict(i: InTownInput): InTownVerdict {
+  if (isAustralianLead(i.country, null)) return auInTownVerdict(i);
   const town = String(i.town ?? '').trim();
   const p = parseAddress(i.address, i.country);
   const ldn = p.postTown && townKey(p.postTown) === 'london' ? londonAreaFor(p.district) : null;
@@ -197,6 +236,13 @@ export interface LeadTownRow {
  * else the searched location. `broad` = only a broad name was possible.
  */
 export function leadQuestionTown(row: LeadTownRow): { town: string | null; broad: boolean } {
+  const r = questionTownOf(row);
+  /* ⛔ AN AUSTRALIAN TOWN ALWAYS CARRIES ITS STATE ("Perth WA", never a bare "Perth" — australiaTowns.ts). */
+  if (r.town && isAustralianLead(row.country, row.address)) return { ...r, town: withAuState(r.town, row.address) };
+  return r;
+}
+
+function questionTownOf(row: LeadTownRow): { town: string | null; broad: boolean } {
   const cov = String(row.coverage_town ?? '').trim();
   if (cov && !isBroadTown(cov)) return { town: cov, broad: false };
   const derived = String(row.derived_town ?? '').trim() || cov || String(row.search_location ?? '').trim();

@@ -40,7 +40,8 @@ import { qaSendHold } from "../_shared/qa-guard.ts";
 import { templateAvailability } from "../_shared/template-status.ts";
 import { queueGate, replyWindowOpenNow, scheduledSendFor } from "../_shared/inbox-schedule.ts";
 import { keepsSendHours } from "../../../src/lib/inboxSendWindow.ts";
-import { formatVisibilityScore, REPORT_OFFER_REFUSAL_WORDS, REPORT_OFFER_TEMPLATE, reportOfferRefusal, ukWordedTemplateRefusal } from "../../../src/lib/reportOfferTemplate.ts";
+import { formatVisibilityScore, REPORT_OFFER_REFUSAL_WORDS, REPORT_OFFER_TEMPLATE, reportOfferRefusal, UK_WORDED_TEMPLATES, ukWordedTemplateRefusal } from "../../../src/lib/reportOfferTemplate.ts";
+import { prospectOnlyTemplateRefusal } from "../../../src/lib/prospectOnly.ts";
 import { senderMessageName } from "../_shared/sender-name.ts";
 import { resolveOnboardingFormVars, resolveSignupLinkVars } from "../_shared/link-template-vars.ts";
 import { LINK_TEMPLATE_NAMES, SIGNUP_LINK_TEMPLATE_NAME, TEMPLATE_UNAVAILABLE_CODES, templateSendFailureText, templateSendState } from "../../../src/lib/whatsappLinkTemplates.ts";
@@ -101,8 +102,10 @@ const CAPABILITIES = ["dry_run", "build_phase_hold", "routing_leaf", "any_approv
    2026-09-30b: an explicit opt-out refuses MARKETING templates here too (src/lib/marketingConsent.ts).
    2026-10-04a: QA safety — a QA fixture is simulated, a test-account lead is refused (src/lib/qaSafety.ts).
    2026-10-19a: EVERY template refuses a UK / MY / SG number that is not a mobile (src/lib/whatsAppDestination.ts).
-   2026-10-21a: the Inbox send window — via:"inbox" outside the lead's hours is QUEUED, not sent (src/lib/inboxSendWindow.ts). */
-const BUILD_ID = "2026-10-21b-send-window-panels";
+   2026-10-21a: a sign-up-link or £-priced template is refused to an Australian number (src/lib/prospectOnly.ts).
+   2026-10-21a: the Inbox send window — via:"inbox" outside the lead's hours is QUEUED, not sent (src/lib/inboxSendWindow.ts).
+   2026-10-21c: both of the above (the send window + Australia prospect-only). */
+const BUILD_ID = "2026-10-21c-send-window-au";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -398,6 +401,12 @@ Deno.serve(async (req) => {
     /* ⛔ THE FOUR UK-WORDED TEMPLATES NEVER GO OUTSIDE THE UK (2026-10-14, src/lib/reportOfferTemplate.ts). */
     const ukWorded = templateName ? ukWordedTemplateRefusal(templateName, mobileMarketOf(to)) : null;
     if (ukWorded) return json({ ok: false, error: "uk_template_wrong_country", reason: ukWorded }, 200);
+    /* ⛔ AUSTRALIA IS PROSPECT-ONLY (2026-10-21, src/lib/prospectOnly.ts): no template carrying a sign-up / onboarding
+       link (judged by its variables) or a £ price goes to an Australian number. Not overridable. */
+    const prospectOnly = templateName && WA_TEMPLATES[templateName]
+      ? prospectOnlyTemplateRefusal({ name: templateName, vars: WA_TEMPLATES[templateName].vars }, to, UK_WORDED_TEMPLATES)
+      : null;
+    if (prospectOnly) return json({ ok: false, error: "prospect_only_country", reason: prospectOnly }, 200);
     const qa = await qaSendHold(service, { leadId: resolvedLeadId, to, actorUserId: actor.id });
     if (qa.kind === "refuse") return json({ ok: false, error: "qa_test_account", reason: QA_REFUSAL_REASON }, 200);
     const liveEnv = resolveWhatsAppEnv();

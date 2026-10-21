@@ -26,6 +26,7 @@ import { toWhatsAppDigits } from './waNumber.ts';
 import { mobileMarketOf } from './outreachMarkets.ts';
 import { verifiedInSearchedTown } from './inTown.ts';
 import { cleanTypedTown } from './typedTown.ts';
+import { isAustralianLead, withAuState } from './australiaTowns.ts';
 
 /** Rows per coverage_add_leads call — the SQL function's own ceiling (v_max). */
 export const COVERAGE_ADD_MAX_ROWS = 500;
@@ -83,9 +84,12 @@ export interface BulkAddLead extends SearchResultForAdd {
 
 /** The Coverage town saved on the lead (2026-10-20): the town it was searched in, ONLY when search-leads judged it IN
  *  that town (src/lib/inTown.ts). The audit then asks about it with no distance cap. Anything else: null. */
-export function coverageTownFor(lead: BulkAddLead, town: string | null): string | null {
+export function coverageTownFor(lead: BulkAddLead, town: string | null, country?: string | null): string | null {
   if (!verifiedInSearchedTown(lead)) return null;
-  return cleanTypedTown(town).split(',')[0].trim() || null;
+  const t = cleanTypedTown(town).split(',')[0].trim();
+  /* ⛔ An Australian Coverage town keeps its STATE ("Ballarat VIC"); a town typed bare takes it from the address. */
+  if (t && isAustralianLead(country ?? null, lead.address ?? null)) return withAuState(t, lead.address ?? null) || null;
+  return t || null;
 }
 
 /** What the search behind a result says: the trade, the town it was searched in, its country. */
@@ -104,7 +108,7 @@ export function addRowFor(lead: BulkAddLead, ctx: AddContext, details: PlaceDeta
     search_run_id: lead.searchRunId ?? null,
     search_key: key || null,
     without_website: isWithoutWebsite(lead.websiteStatus ?? null),
-    coverage_town: coverageTownFor(lead, ctx.town),
+    coverage_town: coverageTownFor(lead, ctx.town, ctx.country),
   };
 }
 

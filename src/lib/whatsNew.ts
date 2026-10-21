@@ -30,6 +30,14 @@ export const WHATS_NEW: readonly WhatsNewEntry[] = [
       removed: [],
       effect: 'Nobody gets a message from you at night. A queued message is checked again before it goes: an opt-out or a stop cancels it, and a new message from them holds it for you to look at.',
     } },
+  { id: '2026-10-21-australia-coverage', date: '2026-10-21', title: 'Coverage: Australia (find, audit and call)', audience: 'all',
+    body: 'Coverage has Australia: every town of 1,000+ people with its state and its 2021 Census population. Australian leads are for finding, auditing and calling only.',
+    report: {
+      added: ['Australia in the Coverage country picker: 726 towns, each named with its state ("Ballarat VIC"), filtered by state and population (starts at 10,000 to 250,000; clear the boxes to see all).', 'A wrong-town check for Australian audits: a business in another state, or more than 25 km from the town, is stopped before the audit (you can override).'],
+      changed: ['Find Leads and the audit keep the state with an Australian town, so Richmond VIC and Richmond NSW never mix.', 'An Australian prospect\'s report shows no price, no guarantee line and no sign-up button. Request a call and Ask me anything stay.'],
+      removed: ['Close (sign-up and set-up links) for Australian leads. Call notes still save.'],
+      effect: 'You can work Australian towns the same way as UK ones. No price or sign-up link reaches an Australian business, and cold WhatsApp to Australia stays off.',
+    } },
   { id: '2026-10-21-drafter-will-ring', date: '2026-10-21', title: 'Reply drafts: "Will ring later"', audience: 'admin',
     body: 'When a prospect says they will call you, the draft now says "No problem, speak soon."',
     report: {

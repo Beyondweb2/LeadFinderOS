@@ -16,8 +16,12 @@
    ════════════════════════════════════════════════════════════════════════════════════════════════════════════ */
 
 import { datasetPlace, MALAYSIA_PLACES_SOURCE } from './malaysiaPlaces.ts';
+import { AUSTRALIA_TOWNS_SOURCE, findAuTownText } from './australiaTowns.ts';
 
-export type PopulationCountry = 'Malaysia' | 'Singapore';
+/* Australia (2026-10-21): NOT a hand table. Each listed town carries its ABS Census 2021 urban-centre count
+   (australiaTowns.ts) — an official count, so it is shown without "≈". A town only a lead named has none (blank). */
+export type PopulationCountry = 'Malaysia' | 'Singapore' | 'Australia';
+type TabledCountry = 'Malaysia' | 'Singapore';
 
 export interface PopulationSource {
   /** Shown beside the table. */
@@ -56,7 +60,7 @@ const district = (population: number, basis: string): TownPopulation => ({ popul
 const area = (population: number, name: string): TownPopulation => ({ population, basis: `${name} planning area, residents`, source: SG_SOURCE });
 const blank = (basis: string): TownPopulation => ({ population: null, basis, source: null });
 
-export const TOWN_POPULATION: Record<PopulationCountry, Readonly<Record<string, TownPopulation>>> = {
+export const TOWN_POPULATION: Record<TabledCountry, Readonly<Record<string, TownPopulation>>> = {
   Malaysia: {
     'Kuala Lumpur': council(1_982_112, 'Federal Territory of Kuala Lumpur'),
     'Petaling Jaya': council(771_687, 'Petaling Jaya City Council area'),
@@ -115,7 +119,17 @@ export const MY_GEONAMES_SOURCE: PopulationSource = {
 
 /** The approximate figure for a town: the fixed table first; for Malaysia, GeoNames' figure for the place itself
  *  when the table has none (`state` = the row's state, to tell same-named places apart); otherwise blank. */
+export const AU_ABS_SOURCE: PopulationSource = {
+  label: AUSTRALIA_TOWNS_SOURCE.label, year: AUSTRALIA_TOWNS_SOURCE.year, url: AUSTRALIA_TOWNS_SOURCE.url,
+};
+
 export function townPopulation(country: PopulationCountry, name: string, state?: string | null): TownPopulation {
+  if (country === 'Australia') {
+    const t = findAuTownText(name);
+    return t && t !== 'ambiguous'
+      ? { population: t.population, basis: `ABS urban centre ${t.abs ?? t.name} (${t.state}), Census 2021 usual residents`, source: AU_ABS_SOURCE }
+      : { population: null, basis: null, source: null };
+  }
   const tabled = TOWN_POPULATION[country][name];
   if (tabled && tabled.population !== null) return tabled;
   if (country === 'Malaysia') {
@@ -127,13 +141,14 @@ export function townPopulation(country: PopulationCountry, name: string, state?:
 
 /** The sources a country's figures come from, for the note under the table. */
 export function populationSourcesFor(country: PopulationCountry): PopulationSource[] {
+  if (country === 'Australia') return [AU_ABS_SOURCE];
   const seen = new Map<string, PopulationSource>();
   for (const t of Object.values(TOWN_POPULATION[country])) if (t.source) seen.set(t.source.url, t.source);
   if (country === 'Malaysia') seen.set(MY_GEONAMES_SOURCE.url, MY_GEONAMES_SOURCE);
   return [...seen.values()];
 }
 
-/** The population filter is offered for the UK and Malaysia only — never for Singapore (one city). */
+/** The population filter is offered for the UK, Malaysia and Australia — never for Singapore (one city). */
 export function populationFilterShown(country: 'UK' | PopulationCountry): boolean {
   return country !== 'Singapore';
 }

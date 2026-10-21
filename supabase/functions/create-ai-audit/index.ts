@@ -4,7 +4,8 @@ import { cleanTypedTown } from "../../../src/lib/typedTown.ts";
 import { townWasTyped, townConfirmedByPerson } from "../_shared/typed-town.ts";
 import { SOURCES } from "../_shared/enrichment/sources.ts";
 import { resolveDerivedTown, pickAuditTown } from "../_shared/place-town.ts";
-import { buildTownIndex, lookupTownCentroid, checkTownDistance, type TownDistanceCheck } from "../_shared/town-distance.ts";
+import { australianTownCheck, buildTownIndex, lookupTownCentroid, checkTownDistance, type TownDistanceCheck } from "../_shared/town-distance.ts";
+import { isAustralianLead, withAuState } from "../../../src/lib/australiaTowns.ts";
 import { ukGazetteerApplies } from "../../../src/lib/leadCountry.ts";
 import { areaFromAddress, isBroadTown, BROAD_TOWN_NOTE } from "../../../src/lib/inTown.ts";
 import { toWhatsAppNumber } from "../_shared/whatsapp-send.ts";
@@ -956,8 +957,22 @@ Deno.serve(async (req) => {
            "Newcastle" or "Perth" would be measured to Newcastle upon Tyne / Perth, Scotland — ~16,000 km — and
            BLOCKED. Outside the UK there is no gazetteer, so the distance stays unchecked (`distance` null =
            "not checked", which blocks nothing), exactly as for a town missing from the gazetteer. */
+        /* ⛔ AUSTRALIA (2026-10-21, src/lib/australiaTowns.ts): the question's town ALWAYS carries its state ("Perth WA",
+           never a bare "Perth"), and an Australian audit gets its own wrong-town guard (australianTownCheck): the
+           state, then the distance from the ABS urban centre. A verified Coverage town has its state checked only. */
+        const auAddress = derived.address ?? foundRow?.address ?? null;
+        const auLead = isAustralianLead(country, auAddress);
+        if (auLead && picked.source !== "confirmed" && locationText) locationText = withAuState(locationText, auAddress);
         if (townFixed) {
-          console.log(`[create-ai-audit] lead ${leadId}: distance not checked (Coverage town, verified in town when added)`);
+          if (auLead) distance = australianTownCheck({ town: locationText, address: auAddress, businessLat: derived.lat, businessLng: derived.lng, stateOnly: true });
+          console.log(`[create-ai-audit] lead ${leadId}: distance not checked (Coverage town, verified in town when added)`
+            + (auLead ? ` — state ${distance?.verdict === "block" ? "MISMATCH" : "checked"}` : ""));
+        } else if (auLead) {
+          distance = australianTownCheck({ town: locationText, address: auAddress, businessLat: derived.lat, businessLng: derived.lng });
+          console.log(
+            `[create-ai-audit] lead ${leadId}: Australian town check ${distance?.verdict ?? "none"}`
+            + (distance?.km == null ? (distance?.unknownReason ? ` (${distance.unknownReason})` : "") : ` ${Math.round(distance.km)}km from "${locationText}"`),
+          );
         } else if (!ukGazetteerApplies(country, derived.address)) {
           console.log(`[create-ai-audit] lead ${leadId}: distance not checked (not a UK lead — no gazetteer)`);
         } else {
@@ -1032,7 +1047,8 @@ Deno.serve(async (req) => {
           ok: false,
           error: "business_not_in_town",
           message: distance.message,
-          distance_km: Math.round(distance.km ?? 0),
+          /* null for an Australian wrong-STATE block with no distance — never a made-up 0 km. */
+          distance_km: distance.km === null ? null : Math.round(distance.km),
           town: locationText,
           /* Named so the caller can offer the override without hardcoding the flag. */
           override_field: "override_distance",
