@@ -1252,6 +1252,15 @@ positive allowlist of `baseline`; `isColdOutreachTemplate` treats unknown as COL
 - ⛔ **Needs you flags run whatever the switch says** (rules only, no model call; `reply_flags_since`); the model drafts on its own ONLY while "AI handles replies" is on. A stop / angry reply opts out + cancels queued follow-ups (`applyStop`) at once. An auto-reply / bare "yes it is" is never Replied (new messages only).
 - ⛔ **"AI named others instead" templates go only when named in ≤ a third of valid answers** (`src/lib/namedShareRule.ts`, enforced in `resolveAuditReplyVars`). A new claim template goes in `NAMED_INSTEAD_TEMPLATES` (`scripts/named-share-rule.test.ts` sweeps).
 
+### 6n. The status follows the messages; the Visible flag (2026-10-21 — record: `docs/lead-status-and-visible.md`)
+
+- ⛔ **Replied / You replied / back-to-Contacted are DERIVED IN THE DATABASE from the stored messages** (`lead_conversation_signal` +
+  `lead_status_target`, triggers on `whatsapp_messages` AND `sms_messages`, a BEFORE guard on `outreach_leads` that corrects a SYSTEM write the
+  messages contradict; a person's own choice stands). Never add a sender-side status write for these; a new message table must get the trigger.
+  Every change goes to `lead_status_sync_log`. `whatsapp_messages.reply_kind` is written ONLY by ai-reply-drafts from `src/lib/replyKindTag.ts`.
+- ⛔ **Visible is a FLAG, not a status** (`outreach_leads.ai_visible_*`, rules `src/lib/visibleFlag.ts`): written ONLY by `apply_lead_visible`
+  (ai-reply-drafts `judgeLeadVisible`). ChatGPT never counts; no Google AI answer is never named. A Visible lead gets no pitch and no Needs you.
+
 ### 6m. Find Leads adds and the payment-12 reminder (2026-10-17 — records: `docs/find-leads-bulk-add.md`, `docs/month12-reminder.md`)
 
 - ⛔ **Every Find Leads add is ONE batch** (`src/lib/findLeadsBulkAdd.ts`: preview → each new lead's number looked up, `PLACE_LOOKUP_CONCURRENCY` at a time, a 429 retried, cached for the page → ONE `coverage_add_leads` save), for Find Leads AND Coverage's niche panel. ⛔ **EVERY business is addable (Paul, 2026-10-19; reverses the 16 Oct landline rule)**: a duplicate is the ONLY skip; a landline / no-phone lead gets a grey "Landline" / "No phone" label (`phoneLabelOf`), never a block. The "Needs info" tag is deleted — do not bring it back.

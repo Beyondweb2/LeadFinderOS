@@ -37,7 +37,7 @@ const mig = src('supabase/migrations/20261116100000_inbox_engine_signals.sql');
 check(/security invoker/.test(mig) && !/generated always/i.test(mig) && /grant execute on function public\.inbox_engine_signals\(\) to authenticated/.test(mig), 'migration: security invoker, no generated column, authenticated only');
 
 console.log('4. the list row: three chips replace the Gemini chip; the tab strip is gone');
-check(/<EngineChips scores=\{c\.engineScores\} \/>/.test(inbox), 'every lead row draws the chips');
+check(/<EngineChips scores=\{c\.engineScores\}( visible=\{c\.visible\})? \/>/.test(inbox), 'every lead row draws the chips');
 check(!/<EngagementPills reportOpenedAt=\{c\.reportOpenedAt\} siteVisitedAt=\{c\.siteVisitedAt\} geminiNamed/.test(inbox), 'the list row no longer draws the old "Gemini n/m" chip');
 check(!/role="tablist"/.test(inbox), 'no tab strip');
 check(/data-testid="inbox-views-select"/.test(inbox) && /INBOX_QUICK_FILTERS\.filter\(/.test(inbox), 'the views (incl. Needs you, Needs approving) are in the Show dropdown');

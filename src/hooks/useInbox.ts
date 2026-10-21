@@ -65,6 +65,13 @@ async function fetchEngineSignals(): Promise<{ rows: InboxData['engineSignals'];
   console.warn('Inbox (engine signals): one-call read unavailable; engine chips stay grey', error);
   return { rows: NO_ENGINE, truncated: false };
 }
+/* The Visible leads (src/lib/visibleFlag.ts), one small call scoped server-side (admin: all; sales: the leads they work). Missing
+   function (deploy order) → no chip, never a wrong one. */
+async function fetchVisibleLeads(): Promise<{ rows: string[]; truncated: boolean }> {
+  const { data, error } = await (supabase as unknown as { rpc: (fn: string) => Promise<{ data: unknown; error: unknown }> }).rpc('inbox_visible_leads');
+  if (!error && Array.isArray(data)) return { rows: data.filter((x): x is string => typeof x === 'string'), truncated: false };
+  return { rows: NO_VISIBLE, truncated: false };
+}
 async function fetchGeminiSignals(): Promise<{ rows: InboxData['geminiSignals']; truncated: boolean }> {
   const { data, error } = await (supabase as unknown as { rpc: (fn: string) => Promise<{ data: unknown; error: unknown }> }).rpc('inbox_gemini_signals');
   if (!error && Array.isArray(data)) return { rows: data as InboxData['geminiSignals'], truncated: false };
@@ -181,6 +188,8 @@ export interface WaConversation {
   geminiAnswers: number | null;
   /** The three small engine chips on the list row (src/lib/engineScores.ts). Null = no audit answers known (all grey). */
   engineScores: EngineScores | null;
+  /** AI already names this business (the Visible flag, src/lib/visibleFlag.ts): a chip, a Show filter, no pitch. */
+  visible: boolean;
   /** Interested is a separate operator marker, persisted as is_potential_work. */
   isPotentialWork: boolean;
 }
@@ -214,6 +223,8 @@ interface InboxData {
   geminiSignals: Array<{ audit_id: string; lead_id: string | null; gemini_answers: number; gemini_named: number }>;
   /** Per-audit ChatGPT / Gemini / Google AI named-of-answers (inbox_engine_signals, one call) → the list row's engine chips. */
   engineSignals: EngineSignalRow[];
+  /** Lead ids flagged Visible (inbox_visible_leads). */
+  visibleLeads: string[];
   /** Per-lead stored crawl checks (result blob + when) → whether the site has a nameable fault (which
    *  gates the audit_followup_fault template) AND the stored result the Crawl-site popup shows.
    *  Newest per lead wins in the hook. */
@@ -232,13 +243,14 @@ const NO_PAGE_HITS: InboxData['pageHits'] = [];
 const NO_GEMINI: InboxData['geminiSignals'] = [];
 const NO_CRAWL: InboxData['crawlChecks'] = [];
 const NO_ENGINE: InboxData['engineSignals'] = [];
+const NO_VISIBLE: string[] = [];
 
 /** The message table a channel reads, and the mapping of its rows onto the Inbox's own message shape (the rest of the Inbox cannot tell). */
 const messageTableFor = (channel: InboxChannel) => (channel === 'sms' ? 'sms_messages' : 'whatsapp_messages');
 const toInboxMessage = (channel: InboxChannel, row: unknown): WaMessage => (channel === 'sms' ? smsRowToInboxMessage(row as SmsMessageRow) as WaMessage : row as WaMessage);
 
 async function fetchInboxData(leadTable: InboxLeadTable, previous?: InboxData, essentialOnly = false, channel: InboxChannel = 'whatsapp'): Promise<InboxData> {
-  const [msgRes, leadRes, reportRes, hitRes, gemRes, crawlRes, engRes] = await Promise.all([
+  const [msgRes, leadRes, reportRes, hitRes, gemRes, crawlRes, engRes, visRes] = await Promise.all([
     /* Paginated, and with the id tiebreaker it never had: 3 groups of rows share a created_at, and
        on a non-unique sort a tied row can be fetched twice and another missed at a page boundary.
        This is the fastest-growing table in the system — every send and every reply. */
@@ -296,6 +308,7 @@ async function fetchInboxData(leadTable: InboxLeadTable, previous?: InboxData, e
       sb.from('lead_crawl_checks').select('lead_id, result, created_at')
         .order('id', { ascending: true }).range(from, to))),
     essentialOnly ? { rows: previous?.engineSignals ?? NO_ENGINE } : optionalInboxRows<InboxData['engineSignals'][number]>(fetchEngineSignals()),
+    essentialOnly ? { rows: previous?.visibleLeads ?? NO_VISIBLE } : optionalInboxRows<string>(fetchVisibleLeads()),
   ]);
   return {
     messages: channel === 'sms' ? msgRes.rows.map((m) => toInboxMessage(channel, m)) : msgRes.rows,
@@ -305,6 +318,7 @@ async function fetchInboxData(leadTable: InboxLeadTable, previous?: InboxData, e
     geminiSignals: gemRes?.rows ?? previous?.geminiSignals ?? NO_GEMINI,
     crawlChecks: crawlRes?.rows ?? previous?.crawlChecks ?? NO_CRAWL,
     engineSignals: engRes?.rows ?? previous?.engineSignals ?? NO_ENGINE,
+    visibleLeads: visRes?.rows ?? previous?.visibleLeads ?? NO_VISIBLE,
   };
 }
 
@@ -553,6 +567,8 @@ export function useInbox(channel: InboxChannel = 'whatsapp') {
   const geminiSignals = query.data?.geminiSignals ?? NO_GEMINI;
   const crawlChecks = query.data?.crawlChecks ?? NO_CRAWL;
   const engineSignals = query.data?.engineSignals ?? NO_ENGINE;
+  const visibleLeads = query.data?.visibleLeads ?? NO_VISIBLE;
+  const visibleSet = useMemo(() => new Set(visibleLeads), [visibleLeads]);
   const isLoading = query.isLoading;
   const isError = query.isError;
 
@@ -807,11 +823,12 @@ export function useInbox(channel: InboxChannel = 'whatsapp') {
         geminiNamed: geminiByLead.get(leadId)?.named ?? null,
         geminiAnswers: geminiByLead.get(leadId)?.answers ?? null,
         engineScores: engineByLead.get(leadId) ?? null,
+        visible: visibleSet.has(leadId),
         isPotentialWork: leadId ? (potentialWorkByLeadId[leadId] ?? false) : false,
       });
     }
     return out.sort((a, b) => new Date(b.lastMessageAt).getTime() - new Date(a.lastMessageAt).getTime());
-  }, [messagesByConversation, leadNameById, campaignByLeadId, statusByLeadId, potentialWorkByLeadId, paidLeadIds, ownLeadIds, reportOpenedAtByLead, siteVisitedAtByLead, geminiByLead, engineByLead]);
+  }, [messagesByConversation, leadNameById, campaignByLeadId, statusByLeadId, potentialWorkByLeadId, paidLeadIds, ownLeadIds, reportOpenedAtByLead, siteVisitedAtByLead, geminiByLead, engineByLead, visibleSet]);
 
   const messagesForKey = useCallback(
     (key: string) => messagesByConversation.get(key) ?? NO_MESSAGES,

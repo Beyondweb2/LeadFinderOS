@@ -87,6 +87,7 @@ import { conversationState, messageErrorParts, INBOX_QUICK_FILTERS, londonToday,
 import { ConvStateChip } from '@/components/ConvStateChip';
 import { SendErrorNote } from '@/components/SendErrorNote';
 import { ENGINE_KEYS, ENGINE_CHIP_LABELS, engineTone, engineChipTitle, type EngineScores } from '@/lib/engineScores';
+import { VISIBLE_LABEL, VISIBLE_TITLE } from '@/lib/visibleFlag';
 import { AiDraftButton, AiDraftChip, AiDraftPanel, InboundLabelChip } from '@/components/AiDraftPanel';
 import { useAiReplyDrafts } from '@/hooks/useAiReplyDrafts';
 import { aiChipFor, needsApproving, needsYou, rowSendable, type AiReplyRow } from '@/lib/aiReplyDraft';
@@ -221,7 +222,17 @@ const ENGINE_CHIP_TONE = {
   not_named: 'bg-red-500/20 text-red-700 dark:text-red-400',
   none: 'bg-muted text-muted-foreground',
 } as const;
-function EngineChips({ scores }: { scores: EngineScores | null }) {
+/* AI already names this business (src/lib/visibleFlag.ts): no pitch, no Needs you, follow-ups cancelled. A flag, not a stage. */
+function VisibleChip() {
+  return (
+    <span title={VISIBLE_TITLE} data-testid="visible-chip"
+      className="inline-flex items-center rounded bg-sky-500/15 px-1 text-[9px] font-semibold leading-tight text-sky-700 dark:text-sky-300">
+      {VISIBLE_LABEL}
+    </span>
+  );
+}
+
+function EngineChips({ scores, visible }: { scores: EngineScores | null; visible?: boolean }) {
   return (
     <div className="flex items-center gap-1" data-testid="engine-chips">
       {ENGINE_KEYS.map((k) => {
@@ -233,6 +244,7 @@ function EngineChips({ scores }: { scores: EngineScores | null }) {
           </span>
         );
       })}
+      {visible && <VisibleChip />}
     </div>
   );
 }
@@ -406,7 +418,7 @@ const ConversationRow = memo(function ConversationRow({
         </span>
       )}
       {/* The three engine scores from the lead's newest audit (the old "Gemini n/m" chip is replaced by these). */}
-      {c.leadId && <EngineChips scores={c.engineScores} />}
+      {c.leadId && <EngineChips scores={c.engineScores} visible={c.visible} />}
       {/* Editable status pill — only for conversations linked to a lead
           (Unassigned has none). Two-way synced with Outreach. Beside it, ONE
           engagement pill for the furthest milestone the lead reached
@@ -787,14 +799,14 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [list, messagesForKey, reads, readsLoaded, leadByIdForState, clockTick, sms, smsUnreadByPhone]);
   const quickCounts = useMemo(() => {
-    let unread = 0; let waiting = 0; let approving = 0; let mine = 0;
+    let unread = 0; let waiting = 0; let approving = 0; let mine = 0; let visible = 0;
     for (const st of stateByKey.values()) { if (st.unread) unread++; if (st.waitingSinceMs !== null) waiting++; }
-    for (const c of list) { const r = ai.forPhone(c.phone); if (needsApproving(r)) approving++; if (needsYouFor(c.phone)) mine++; }
-    return { unread, waiting, approving, needsYou: mine };
+    for (const c of list) { const r = ai.forPhone(c.phone); if (needsApproving(r)) approving++; if (needsYouFor(c.phone)) mine++; if (c.visible) visible++; }
+    return { unread, waiting, approving, needsYou: mine, visible };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [stateByKey, list, ai.rows, sched.rows]);
   /* The number beside each view in the Show dropdown (same counts the tab strip carried). */
-  const quickViewCount = (v: string): number => v === 'unread' ? quickCounts.unread : v === 'waiting' ? quickCounts.waiting : v === 'needs_approving' ? quickCounts.approving : v === 'needs_you' ? quickCounts.needsYou : 0;
+  const quickViewCount = (v: string): number => v === 'unread' ? quickCounts.unread : v === 'waiting' ? quickCounts.waiting : v === 'needs_approving' ? quickCounts.approving : v === 'needs_you' ? quickCounts.needsYou : v === 'visible' ? quickCounts.visible : 0;
 
   const searchTerm = search.trim().toLowerCase();
   const filteredList = useMemo(() => {
@@ -803,7 +815,7 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
     const today = londonToday();
     const byNa = naWhen === 'all' && naKind === 'all' ? searched
       : searched.filter((c) => passesNextActionFilter(c.leadId ? leadByIdForState.get(c.leadId) : null, naWhen, naKind, today));
-    const kept = quickFilter === 'all' ? [...byNa] : byNa.filter((c) => { const st = stateByKey.get(c.key); return !!st && passesQuickFilter(quickFilter, { ...st, needsApproving: needsApproving(ai.forPhone(c.phone)), needsYou: needsYouFor(c.phone) }); });
+    const kept = quickFilter === 'all' ? [...byNa] : byNa.filter((c) => { const st = stateByKey.get(c.key); return !!st && passesQuickFilter(quickFilter, { ...st, needsApproving: needsApproving(ai.forPhone(c.phone)), needsYou: needsYouFor(c.phone), visible: c.visible }); });
     if (listSort === 'next_action') {
       kept.sort((a, b) => nextActionSortKey(a.leadId ? leadByIdForState.get(a.leadId) : null).localeCompare(nextActionSortKey(b.leadId ? leadByIdForState.get(b.leadId) : null)));
     } else if (quickFilter === 'waiting') {
@@ -1829,7 +1841,7 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
         /* A freshly-opened thread has no messages, so no report link was sent and no engagement is
            attributable yet; a lead with real engagement has real messages and a real conversation. */
         reportOpenedAt: null, siteVisitedAt: null,
-        geminiNamed: null, geminiAnswers: null, engineScores: null, isPotentialWork: !!lead.is_potential_work,
+        geminiNamed: null, geminiAnswers: null, engineScores: null, visible: false, isPotentialWork: !!lead.is_potential_work,
       };
       setSynthetic(synth);
       setActiveKey(key);
@@ -2398,6 +2410,7 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
                     <EngagementPills reportOpenedAt={active.reportOpenedAt} siteVisitedAt={active.siteVisitedAt} geminiNamed={active.geminiNamed} geminiAnswers={active.geminiAnswers} />
                     <ConvStateChip state={activeState} hideQueued channel={channel} />
                     <AiDraftChip row={activeAi} />
+                    {active.visible && <VisibleChip />}
                     {/* The status pill already says Queued; this adds only what it cannot — the queue is paused. */}
                     {active.leadStatus === 'queued' && queueState?.paused && (
                       <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/15 px-2 py-0.5 text-[11px] font-medium text-amber-700 dark:text-amber-300">

@@ -42,7 +42,12 @@ import {
   AI_REPLY_DRAFT_MAX_USD, BEST_TEMPLATE_STYLE_NOTE, DRY_RUN_MODELS, DRY_RUN_DRAFT_MAX_USD, HANDOVER_LABELS, STOP_REASONS,
   type AiReplyContext, type AiReplyWhy,
 } from "../../../src/lib/aiReplyDraft.ts";
-import { pickMove, inboundLabel, autoReplyFlags, type MoveEvidence, type MoveInput, type MovePlan, type MoveThreadMsg } from "../../../src/lib/replyMove.ts";
+import { pickMove, type MoveEvidence, type MoveInput, type MovePlan, type MoveThreadMsg } from "../../../src/lib/replyMove.ts";
+import { replyKindChanges } from "../../../src/lib/replyKindTag.ts";
+import {
+  isVisible, parseVisibleRule, visibleCounts, VISIBLE_NO_PITCH_DETAIL, VISIBLE_NO_PITCH_ERROR, VISIBLE_RECHECK_DAYS, VISIBLE_SKIP_REASON, VISIBLE_LABEL,
+  type VisibleRule,
+} from "../../../src/lib/visibleFlag.ts";
 import { CONFIDENCE_LINE, FACT_SHEET_VERSION } from "../../../src/lib/offerFactSheet.ts";
 import { WAITING_PITCH_STATUSES } from "../../../src/lib/auditPitchRule.ts";
 import { selectFindings } from "../../../src/lib/coldCallPlaybook.ts";
@@ -61,7 +66,7 @@ import { loadReplyHours } from "../_shared/inbox-schedule.ts";
 import { loadCountrySettings } from "../_shared/country-settings.ts";
 import { autoSendCounts, loadAutoSendState, personActiveAt, sendAsIsAdmin, stopAutoSend, type AutoSendState } from "../_shared/ai-auto-send.ts";
 import {
-  auditPhaseOf, crawlPhaseOf, draftLackedEvidence, evidenceVerdict, pitchNeedsEvidence, AUDIT_NOT_FINISHED_LABEL, AUDIT_NOT_FINISHED_REASON,
+  auditPhaseOf, crawlPhaseOf, draftLackedEvidence, evidenceVerdict, isDrafterAudit, pitchNeedsEvidence, AUDIT_NOT_FINISHED_LABEL, AUDIT_NOT_FINISHED_REASON,
   AUDIT_RUNNING_DETAIL, AUDIT_RUNNING_ERROR, EVIDENCE_WAIT_MS, WAITING_LABEL, WAITING_REASON, type EvidenceVerdict, type WhyEvidence,
 } from "../../../src/lib/draftEvidenceWait.ts";
 
@@ -70,7 +75,7 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-internal-job, x-cron-secret",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
   /* The deploy marker: only this build answers with it. */
-  "x-ai-reply-drafts": "2026-10-21f-inbox-reply-mode",
+  "x-ai-reply-drafts": "2026-10-21g-status-visible",
 };
 const json = (b: unknown, s = 200) => new Response(JSON.stringify(b), { status: s, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 const str = (v: unknown) => (typeof v === "string" ? v.trim() : "");
@@ -85,6 +90,8 @@ const GENERATING_STALE_MS = 5 * 60_000;
 const AI_REPLY_SENDING_STALE_MS = 5 * 60_000;
 const OPENAI_TIMEOUT_MS = 25_000;
 const SENT_OR_SIMULATED = ["sent", "delivered", "read", "simulated"];
+/** Leads judged for the Visible flag per tick (each is a few small reads). */
+const VISIBLE_SWEEP_MAX = 25;
 
 /* ───────────────────────── the model call (capped) ───────────────────────── */
 
@@ -123,8 +130,8 @@ async function callReplyModel(model: string, system: string, user: string, tempe
 
 /* ───────────────────────── what we already hold (DB only) ───────────────────────── */
 
-interface MsgRow { id: string; created_at: string; direction: string; body: string | null; message_type: string | null; template_name: string | null; status: string | null; lead_id: string | null; template_snapshot?: { body?: unknown } | null }
-type LeadRow = ResearchLead & { amount_paid: unknown; status: unknown; call_booked_at: string | null; previous_status?: string | null };
+interface MsgRow { id: string; created_at: string; direction: string; body: string | null; message_type: string | null; template_name: string | null; status: string | null; lead_id: string | null; template_snapshot?: { body?: unknown } | null; reply_kind?: string | null }
+type LeadRow = ResearchLead & { amount_paid: unknown; status: unknown; call_booked_at: string | null; previous_status?: string | null; ai_visible_at?: string | null };
 
 /** What a sent row SAID: a template's stored rendered body (template_snapshot), else its body. */
 const sentText = (m: MsgRow): string => (m.template_snapshot && typeof m.template_snapshot.body === "string" && m.template_snapshot.body.trim()) ? m.template_snapshot.body.trim() : (m.body ?? "");
@@ -132,14 +139,14 @@ const isOurs = (m: MsgRow) => m.direction !== "inbound" && (isRealSend(m.status)
 
 async function loadThread(service: Service, bookUserId: string, phone: string): Promise<MsgRow[]> {
   const { data, error } = await service.from("whatsapp_messages")
-    .select("id, created_at, direction, body, message_type, template_name, status, lead_id, template_snapshot")
+    .select("id, created_at, direction, body, message_type, template_name, status, lead_id, template_snapshot, reply_kind")
     .eq("user_id", bookUserId).eq("phone", phone).order("created_at", { ascending: false }).limit(60);
   if (error) throw error;
   return ((data ?? []) as MsgRow[]).slice().reverse();
 }
 
 async function loadLead(service: Service, leadId: string): Promise<LeadRow | null> {
-  const { data, error } = await service.from("outreach_leads").select(`${RESEARCH_LEAD_COLUMNS}, amount_paid, status, call_booked_at`).eq("id", leadId).maybeSingle();
+  const { data, error } = await service.from("outreach_leads").select(`${RESEARCH_LEAD_COLUMNS}, amount_paid, status, call_booked_at, ai_visible_at`).eq("id", leadId).maybeSingle();
   if (error) throw error;
   return data ?? null;
 }
@@ -318,18 +325,82 @@ async function applyStop(service: Service, who: { phone: string | null; leadId: 
   return outcome;
 }
 
-/** An auto-reply or a bare "yes it is" is not a reply (Paul, 2026-10-20): NEW messages only. If the inbound handler just
- *  marked the lead Replied and nothing they ever sent was a real reply, it goes back to Contacted. Never touches a deal. */
-async function undoReplied(service: Service, lead: LeadRow, thread: MsgRow[]): Promise<boolean> {
-  if (lead.status !== "replied") return false;
-  const inbound = thread.filter((m) => m.direction === "inbound");
-  /* Read with the thread, so every message of an auto-responder BURST counts as automated (Ven, 2026-10-20). */
-  const msgs = thread.map((m) => ({ from: m.direction === "inbound" ? "them" as const : "us" as const, text: m.body ?? "", messageType: m.message_type, at: m.created_at }));
-  const auto = autoReplyFlags(msgs);
-  if (!inbound.length || thread.some((m, k) => m.direction === "inbound" && !auto[k] && inboundLabel(m.body, m.message_type) === null)) return false;
-  const { data } = await service.from("outreach_leads").update({ status: "initial_contact" }).eq("id", lead.id).eq("status", "replied").select("id").maybeSingle();
-  if (data) await service.from("lead_activity").insert({ lead_id: lead.id, actor_user_id: null, kind: "details_set", data: { status: "initial_contact", reason: "auto_reply_not_a_reply" } }).then(() => undefined, () => undefined);
-  return !!data;
+/** An auto-reply or a bare "yes it is" is not a reply (Paul, 2026-10-20). Since 2026-10-21 this function no longer writes the
+ *  lead's status: it TAGS each inbound (whatsapp_messages.reply_kind, src/lib/replyKindTag.ts) and the database derives the
+ *  status from the messages (migration 20261118090000) — Contacted for an auto-reply / a bare yes, You replied once we answer a
+ *  person, Replied for a real reply. Writes only the rows whose tag changed. Never touches a deal (the rule protects them). */
+async function tagReplies(service: Service, thread: MsgRow[]): Promise<number> {
+  const changes = replyKindChanges(thread.map((m) => ({ ...m, sent: isOurs(m) })));
+  for (const ch of changes) {
+    await service.from("whatsapp_messages").update({ reply_kind: ch.reply_kind }).eq("id", ch.id).eq("direction", "inbound");
+  }
+  return changes.length;
+}
+
+/* ───────────────────────── the Visible flag (src/lib/visibleFlag.ts) ───────────────────────── */
+
+async function visibleRuleNow(service: Service): Promise<VisibleRule> {
+  const { data } = await service.from("whatsapp_outreach_state").select("visible_rule").eq("id", 1).maybeSingle();
+  return parseVisibleRule(data?.visible_rule);
+}
+
+/** Judge ONE lead: its newest ordinary audit, once that audit and the website check are final. Writes only through
+ *  apply_lead_visible (which cancels the queued follow-ups on a new flag). Returns whether the lead is Visible now.
+ *  ⛔ An audit still running, or a website check still running (inside EVIDENCE_WAIT_MS of the audit), changes nothing. */
+async function judgeLeadVisible(service: Service, leadId: string, rule: VisibleRule): Promise<boolean> {
+  const [{ data: lead }, { data: audits }] = await Promise.all([
+    service.from("outreach_leads").select("id, ai_visible_at, ai_visible_checked_audit_id, ai_visible_checked_rule").eq("id", leadId).maybeSingle(),
+    service.from("ai_audits").select("id, audit_purpose, is_measurement, created_at, runs:ai_audit_runs(id, status)")
+      .eq("lead_id", leadId).order("created_at", { ascending: false }).limit(10),
+  ]);
+  if (!lead) return false;
+  const was = !!lead.ai_visible_at;
+  // deno-lint-ignore no-explicit-any
+  const newest = ((audits ?? []) as any[]).find(isDrafterAudit) as { id: string; created_at: string; runs?: Array<{ id: string; status: string | null }> } | undefined;
+  if (!newest) {
+    if (was) await service.rpc("apply_lead_visible", { p_lead: leadId, p_visible: false, p_audit: null, p_rule: rule });
+    return false;
+  }
+  const runs = newest.runs ?? [];
+  const done = runs.filter((r) => r.status === "complete" || r.status === "capped");
+  if (!done.length) return was;
+  if (lead.ai_visible_checked_audit_id === newest.id && lead.ai_visible_checked_rule === rule) return was;
+  const phases = await loadPhases(service, leadId);
+  if (phases.crawl !== "final" && Date.now() - Date.parse(newest.created_at) < EVIDENCE_WAIT_MS) return was;
+  const { data: rows, error } = await service.from("ai_audit_queue").select("gemini_answered, gemini_self_named, overview_answered, overview_self_named")
+    .in("run_id", done.map((r) => r.id)).eq("status", "done");
+  if (error) return was;
+  const visible = isVisible(visibleCounts(rows ?? []), rule);
+  await service.rpc("apply_lead_visible", { p_lead: leadId, p_visible: visible, p_audit: newest.id, p_rule: rule });
+  return visible;
+}
+
+/** The tick's sweep: leads whose newest recent audit has not been judged under the current rule, and flagged leads judged
+ *  under an older rule. Capped per tick; the rest are judged on the next ones. */
+async function refreshVisibleFlags(service: Service, started: number) {
+  const rule = await visibleRuleNow(service);
+  const sinceIso = new Date(Date.now() - VISIBLE_RECHECK_DAYS * 86_400_000).toISOString();
+  const { data: audits, error } = await service.from("ai_audits").select("id, lead_id, audit_purpose, is_measurement")
+    .not("lead_id", "is", null).gte("created_at", sinceIso).order("created_at", { ascending: false }).limit(2000);
+  if (error) throw error;
+  const newest = new Map<string, string>();
+  // deno-lint-ignore no-explicit-any
+  for (const a of (audits ?? []) as any[]) if (isDrafterAudit(a) && !newest.has(a.lead_id)) newest.set(a.lead_id, a.id);
+  const { data: flagged } = await service.from("outreach_leads").select("id, ai_visible_checked_rule").not("ai_visible_at", "is", null).limit(1000);
+  const due: string[] = ((flagged ?? []) as Array<{ id: string; ai_visible_checked_rule: string | null }>).filter((l) => l.ai_visible_checked_rule !== rule).map((l) => l.id);
+  const ids = [...newest.keys()];
+  for (let i = 0; i < ids.length && due.length < VISIBLE_SWEEP_MAX * 4; i += 150) {
+    const { data: ls } = await service.from("outreach_leads").select("id, ai_visible_checked_audit_id, ai_visible_checked_rule").in("id", ids.slice(i, i + 150));
+    for (const l of (ls ?? []) as Array<{ id: string; ai_visible_checked_audit_id: string | null; ai_visible_checked_rule: string | null }>) {
+      if (l.ai_visible_checked_audit_id !== newest.get(l.id) || l.ai_visible_checked_rule !== rule) due.push(l.id);
+    }
+  }
+  let judged = 0;
+  for (const id of [...new Set(due)]) {
+    if (judged >= VISIBLE_SWEEP_MAX || Date.now() - started > 30_000) break;
+    await judgeLeadVisible(service, id, rule);
+    judged++;
+  }
 }
 
 /* ───────────────────────── Level 2: queue a draft to send by itself (src/lib/aiAutoSend.ts) ───────────────────────── */
@@ -405,6 +476,9 @@ async function settleOpenClaims(service: Service) {
 async function handleTick(service: Service) {
   const started = Date.now();
   await settleOpenClaims(service);
+  /* Visible first, so a reply on a lead AI already names never gets a pitch or a Needs you this tick. */
+  await refreshVisibleFlags(service, started).catch((e) =>
+    console.error("[ai-reply-drafts] visible sweep failed:", String((e as { message?: unknown })?.message ?? e).slice(0, 200)));
   const { data: st } = await service.from("whatsapp_outreach_state").select("ai_handles_replies, ai_handles_replies_since").eq("id", 1).maybeSingle();
   const switchOn = st?.ai_handles_replies === true;
   const since = st?.ai_handles_replies_since ? Date.parse(st.ai_handles_replies_since) : Infinity;
@@ -477,14 +551,23 @@ async function processInbound(service: Service, id: string, c: Cand, env: TickEn
       await service.from("ai_reply_drafts").update({ kind: "skipped", status: "resolved", reason: "no_lead", updated_at: new Date().toISOString() }).eq("id", id);
       return { inbound: c.inbound_id, kind: "skipped", reason: "no_lead" };
     }
+    /* The status follows the messages (the database rule); this only tags what each of their messages is. */
+    await tagReplies(service, thread).catch((e) => console.error("[ai-reply-drafts] reply tags failed:", String((e as { message?: unknown })?.message ?? e).slice(0, 200)));
     const { ctx, findingsNote, input, phases } = await buildContext(service, lead, thread, inbound);
     input.suppressed = await isSuppressed(service, { phone: c.phone, leadId: c.lead_id }); // fails closed
     const plan: MovePlan = pickMove(input); ctx.plan = plan;
     const decision = aiReplyDecision({ inboundAt: c.inbound_at, lead, hadOutreach, plan });
     const now = new Date().toISOString();
+    /* ⛔ VISIBLE (visibleFlag.ts): AI already names them — no pitch, no draft, no Needs you. A stop still opts them out. A pitch
+       whose evidence just became final is judged here first, so the sweep's order can never let one through. */
+    const stopping = decision.kind === "needs_you" && decision.stop;
+    const visible = !stopping && (!!lead.ai_visible_at || (pitchNeedsEvidence(plan) && verdictFor(phases, c.inbound_at).state === "ready"
+      && await judgeLeadVisible(service, lead.id, await visibleRuleNow(service))));
+    if (visible) {
+      await service.from("ai_reply_drafts").update({ kind: "skipped", status: "resolved", reason: VISIBLE_SKIP_REASON, reason_label: VISIBLE_LABEL, draft_text: null, why: whyOf(ctx, findingsNote, null, 0, 0), updated_at: now }).eq("id", id);
+      return { inbound: c.inbound_id, kind: "skipped", reason: VISIBLE_SKIP_REASON };
+    }
     if (decision.kind === "skipped") {
-      // Not a real reply: never counted as Replied (new messages only).
-      if (plan.label && decision.reason !== "client" && decision.reason !== "archived") await undoReplied(service, lead, thread.filter((m) => m.created_at <= c.inbound_at));
       await service.from("ai_reply_drafts").update({ kind: "skipped", status: "resolved", reason: decision.reason, why: whyOf(ctx, findingsNote, null, 0, 0), updated_at: now }).eq("id", id);
     } else if (decision.kind === "needs_you") {
       let optedOut: "recorded" | "already" | "failed" | null = null;
@@ -495,12 +578,10 @@ async function processInbound(service: Service, id: string, c: Cand, env: TickEn
       await service.from("ai_reply_drafts").update({ kind: "needs_template", status: "pending", reason: "window_closed", reason_label: "Outside the 24-hour window", updated_at: now }).eq("id", id);
     } else if (!env.switchOn || Date.parse(c.inbound_at) < env.since || !plan.autoDraft) {
       // ⛔ The switch is off (or this reply is from before it went on): no model call. "Draft reply" writes it on demand.
-      if (plan.label) await undoReplied(service, lead, thread.filter((m) => m.created_at <= c.inbound_at));
       await service.from("ai_reply_drafts").update({ kind: "skipped", status: "resolved", reason: "awaiting_person", why: whyOf(ctx, findingsNote, null, 0, 0), updated_at: now }).eq("id", id);
     } else if (env.mode !== "running") {
       await service.from("ai_reply_drafts").update({ kind: "needs_you", status: "pending", reason: "paused", reason_label: HANDOVER_LABELS.paused, updated_at: now }).eq("id", id);
     } else {
-      if (plan.label) await undoReplied(service, lead, thread.filter((m) => m.created_at <= c.inbound_at));
       const ev = verdictFor(phases, c.inbound_at);
       /* ⛔ THE PITCH WAITS FOR ITS EVIDENCE (draftEvidenceWait.ts): the audit and the website check both final, else wait
          (no chip, no panel), and after EVIDENCE_WAIT_MS a person takes it. Every flag above never waits. */
@@ -676,6 +757,7 @@ async function handleRegenerate(service: Service, actor: Actor, body: Record<str
   // ⛔ A pitch is never rewritten without its evidence while the audit / website check are still running (draftEvidenceWait.ts).
   const ev = verdictFor(phases, d.inbound_at);
   if (pitchNeedsEvidence(ctx.plan) && ev.state === "waiting") return json({ ok: false, error: AUDIT_RUNNING_ERROR, detail: AUDIT_RUNNING_DETAIL });
+  if (pitchNeedsEvidence(ctx.plan) && lead.ai_visible_at) return json({ ok: false, error: VISIBLE_NO_PITCH_ERROR, detail: VISIBLE_NO_PITCH_DETAIL });
   if (d.auto_send_id && !(await stopAutoSend(service, d.auto_send_id, "ai_person_regenerated"))) {
     return json({ ok: false, error: "not_open", detail: "The AI is sending this reply right now." });
   }
@@ -705,7 +787,7 @@ async function handleDraft(service: Service, actor: Actor, body: Record<string, 
   let thread: MsgRow[];
   if (phone) thread = await loadThread(service, access.bookUserId, phone);
   else {
-    const { data } = await service.from("whatsapp_messages").select("id, created_at, direction, body, message_type, template_name, status, lead_id, template_snapshot, phone").eq("lead_id", leadId).order("created_at", { ascending: false }).limit(60);
+    const { data } = await service.from("whatsapp_messages").select("id, created_at, direction, body, message_type, template_name, status, lead_id, template_snapshot, phone, reply_kind").eq("lead_id", leadId).order("created_at", { ascending: false }).limit(60);
     thread = ((data ?? []) as MsgRow[]).slice().reverse();
   }
   const inbound = [...thread].reverse().find((m) => m.direction === "inbound");
@@ -718,6 +800,8 @@ async function handleDraft(service: Service, actor: Actor, body: Record<string, 
   // ⛔ No pitch before its evidence (draftEvidenceWait.ts): said before anything is touched. The tick writes it when ready.
   const ev = verdictFor(phases, inbound.created_at);
   if (!plan.stop && !plan.noDraft && pitchNeedsEvidence(plan) && ev.state === "waiting") return json({ ok: false, error: AUDIT_RUNNING_ERROR, detail: AUDIT_RUNNING_DETAIL });
+  // ⛔ No pitch for a lead AI already names (visibleFlag.ts). Any other reply may still be drafted on demand.
+  if (!plan.stop && !plan.noDraft && pitchNeedsEvidence(plan) && lead.ai_visible_at) return json({ ok: false, error: VISIBLE_NO_PITCH_ERROR, detail: VISIBLE_NO_PITCH_DETAIL });
   const { data: existing } = await service.from("ai_reply_drafts").select("id, status, cost_usd, model_calls, prompt_tokens, completion_tokens, draft_text").eq("inbound_message_id", inbound.id).maybeSingle();
   if (existing && (existing.status === "sending" || existing.status === "generating")) return json({ ok: false, error: "busy", detail: "A draft is being written or sent on this conversation already." });
   // Level 2: a person drafting takes the conversation back from any automatic reply still waiting (one being sent wins).
