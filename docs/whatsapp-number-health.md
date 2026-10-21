@@ -6,6 +6,8 @@ Branch `feat/whatsapp-rating-watcher`. Rules: `src/lib/whatsappNumberHealth.ts` 
 - **fn `whatsapp-number-health`** (cron every 15 min via `public.invoke_whatsapp_number_health()`, or an admin) asks Meta
   `GET /{WHATSAPP_PHONE_NUMBER_ID}?fields=quality_rating,messaging_limit_tier` with the sender's own token. If the API version
   no longer knows the tier field (#100) it asks for the rating alone and keeps the last known tier.
+  When `messaging_limit_tier` comes back EMPTY (Meta moved limits to the business portfolio), it asks
+  `whatsapp_business_manager_messaging_limit` once. Live on 2026-10-21: GREEN, `TIER_2K` (from the newer field).
   - `mode: "probe"` answers and writes nothing.
   - `mode: "check"` stores `meta_quality_rating`, `meta_messaging_tier`, `meta_health_ok_at`, `meta_health_checked_at`,
     `meta_health_error` on `whatsapp_outreach_state` (id 1) and logs every change to `whatsapp_number_health_log`
@@ -28,6 +30,11 @@ Branch `feat/whatsapp-rating-watcher`. Rules: `src/lib/whatsappNumberHealth.ts` 
 2. `npx supabase functions deploy whatsapp-number-health` → `mode: "probe"` to prove the token reads the rating (step 1 of the brief).
 3. `process-whatsapp-queue` (reads the new columns defensively — safe before or after 1), then the SPA.
 4. Cron, by hand: `select cron.schedule('whatsapp-number-health-run', '*/15 * * * *', 'select public.invoke_whatsapp_number_health();');`
+
+## Live (2026-10-21)
+Migration applied and read back; `whatsapp-number-health` and `process-whatsapp-queue` deployed from `main` `c2a17e8d`;
+cron `whatsapp-number-health-run` (`*/15 * * * *`) active; first check logged `rating_changed → GREEN`, `tier_changed → TIER_2K`;
+the queue's status payload carries `numberHealth`; the panel chunk `WhatsAppQueuePanel-*.js` is live on app.leadfinderos.com.
 
 ## The 7 failed sends of 21 Oct 2026 (read-only finding)
 All 7 were cold `initial_contact_short` openers from the queue, 07:20–08:41 UTC, out of 97 sends that day (90 delivered / read).
