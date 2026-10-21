@@ -43,8 +43,8 @@ console.log('── 2. one send path ──');
   const inboxSendBlock = inbox.slice(inbox.indexOf('const send = useCallback('), inbox.indexOf('const sendVoice = useCallback('));
   ok(!/'send-whatsapp-message'/.test(code(inboxSendBlock)), '…and no longer has its own copy of the request');
   const c = code(panel);
-  ok(/sendWhatsAppRequest\(sb, \{ phone, leadId: lead\.id, country: lead\.country \?\? null, templateName: tpl, allowResend: alreadySent \}\)/.test(c), 'the dialog sends a template through it (repeat override as the Inbox does)');
-  ok(/sendWhatsAppRequest\(sb, \{ phone, leadId: lead\.id, country: lead\.country \?\? null, body \}\)/.test(c), 'the dialog sends free text through it');
+  ok(/sendWhatsAppRequest\(sb, \{ phone, leadId: lead\.id, country: lead\.country \?\? null, templateName: tpl, allowResend: alreadySent, via: 'lead_panel' \}\)/.test(c), 'the dialog sends a template through it (repeat override as the Inbox does)');
+  ok(/sendWhatsAppRequest\(sb, \{ phone, leadId: lead\.id, country: lead\.country \?\? null, body, via: 'lead_panel' \}\)/.test(c), 'the dialog sends free text through it');
   ok(!/functions\.invoke|invokeEdge|\.insert\(|\.update\(|\.upsert\(|\.delete\(|\.rpc\(|leadRpc|executeContact/.test(c), 'the dialog writes nothing itself — no status, Next Action, queue or log row');
   ok(!/wa\.me|window\.open/.test(c), 'and opens nothing external');
 }
