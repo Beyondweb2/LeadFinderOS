@@ -10,7 +10,7 @@ let f = 0;
 const ok = (c: unknown, m: string) => { if (c) console.log('  PASS ' + m); else { f++; console.log('  FAIL ' + m); } };
 const read = (p: string) => readFileSync(new URL(`../${p}`, import.meta.url), 'utf8').replace(/\r\n/g, '\n');
 const MIG = read('supabase/migrations/20261115090000_ai_draft_outcomes.sql');
-const TOGGLE = read('src/components/AiRepliesToggle.tsx');
+const TOGGLE = read('src/components/InboxReplyModeControl.tsx'); // the switch became the Inbox mode (2026-10-21)
 const READOUT = read('src/components/AiDraftOutcomes.tsx');
 const FN = read('supabase/functions/ai-reply-drafts/index.ts');
 
@@ -33,7 +33,7 @@ console.log('access');
   ok(/revoke all on public\.ai_reply_draft_outcomes from anon, authenticated/.test(MIG), 'grants revoked');
   ok(/public\.my_role\(\) is distinct from 'admin' then return/.test(MIG), 'the summary answers nothing to a non-admin');
   ok(/revoke all on function public\._ai_draft_record_outcome/.test(MIG), 'the recorder cannot be called by a person');
-  ok(/<AiDraftOutcomes \/>/.test(TOGGLE) && /if \(!visible\) return null/.test(TOGGLE), 'the readout sits inside the admin-only switch, hidden with it');
+  ok(/<AiDraftOutcomes \/>/.test(TOGGLE) && /if \(!visible\) return null/.test(TOGGLE), 'the readout sits inside the admin-only mode control, hidden with it');
   ok(/onOpenChange/.test(READOUT) && !/setInterval|refetchInterval/.test(READOUT), 'read on open, never polled');
 }
 

@@ -46,12 +46,10 @@ check(/quickCounts\.needsYou/.test(inbox) && /quickCounts\.approving/.test(inbox
 console.log('5. Settings: one button on the top row, everything inside it');
 check(/<InboxSettings channel=\{channel\}/.test(inbox) && !/<AutoReplyToggle|<AiRepliesToggle/.test(inbox), 'the top row has Settings and no loose reply controls');
 const set = src('src/components/InboxSettings.tsx');
-check(/<AutoReplyToggle channel=\{channel\} layout="panel" \/>/.test(set) && /<AiRepliesToggle layout="panel" \/>/.test(set) && /ReplyHoursDialog/.test(set), 'it holds the reply rule, AI handles replies (with Draft outcomes) and reply hours');
-check(/settings-auto-send-slot/.test(set), 'room is left for the per-reply-type auto-send section');
-const auto = src('src/components/AutoReplyToggle.tsx');
-check(/Sends automatically/.test(auto) && /Warning: this messages the prospect by itself/.test(auto), 'the option that sends by itself carries a clear warning');
-check(/parked \{readyCount === 1/.test(auto) && /not a send queue/.test(auto) && !/\} ready to send/.test(auto), 'the count is worded as parked pitches, not a send queue');
-check(/pickMode\(m\)/.test(auto) && /set_first_reply_mode/.test(auto) && /set_enabled/.test(src('src/components/AiRepliesToggle.tsx')), 'same handlers and server calls as before');
+/* 2026-10-21 (later): the reply rule and AI handles replies are ONE mode control (scripts/inbox-reply-mode.test.ts holds its rules). */
+check(/<InboxReplyModeControl channel=\{channel\} \/>/.test(set) && /ReplyHoursDialog/.test(set) && !/<AutoReplyToggle|<AiRepliesToggle/.test(set), 'it holds the Inbox mode (with Draft outcomes) and reply hours');
+const auto = src('src/components/InboxReplyModeControl.tsx');
+check(/Can send by itself/.test(auto) && /<AutoSendSwitches/.test(auto), 'the mode that can send by itself is marked, with its switches under it');
 
 console.log(failures === 0 ? '\nAll checks passed.' : `\n${failures} check(s) FAILED.`);
 process.exit(failures === 0 ? 0 : 1);

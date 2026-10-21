@@ -5,6 +5,7 @@
 //    unreadable typing mark is "a person is active now", an unreadable role is "no admin", an unreadable answer check is
 //    "someone answered".
 import { AUTO_SEND_DEFAULT_DAILY_CAP } from "../../../src/lib/aiAutoSend.ts";
+import { modeMayAutoSend, parseInboxReplyMode } from "../../../src/lib/inboxReplyMode.ts";
 
 // deno-lint-ignore no-explicit-any
 type Service = any;
@@ -16,10 +17,11 @@ export const AUTO_SEND_OFF: AutoSendState = { masterOn: false, intents: [], dail
 export async function loadAutoSendState(service: Service): Promise<AutoSendState> {
   try {
     const { data, error } = await service.from("whatsapp_outreach_state")
-      .select("ai_handles_replies, ai_auto_send_intents, ai_auto_send_daily_cap, ai_auto_send_by").eq("id", 1).maybeSingle();
+      .select("ai_reply_mode, ai_handles_replies, ai_auto_send_intents, ai_auto_send_daily_cap, ai_auto_send_by").eq("id", 1).maybeSingle();
     if (error || !data) return AUTO_SEND_OFF;
     return {
-      masterOn: data.ai_handles_replies === true,
+      /* Only the Inbox mode Auto (src/lib/inboxReplyMode.ts) — Draft for approval and Manual never send by themselves. */
+      masterOn: modeMayAutoSend(parseInboxReplyMode(data.ai_reply_mode)) && data.ai_handles_replies === true,
       intents: Array.isArray(data.ai_auto_send_intents) ? data.ai_auto_send_intents.filter((x: unknown) => typeof x === "string") : [],
       dailyCap: Number.isInteger(data.ai_auto_send_daily_cap) ? data.ai_auto_send_daily_cap : AUTO_SEND_DEFAULT_DAILY_CAP,
       sendAs: typeof data.ai_auto_send_by === "string" ? data.ai_auto_send_by : null,

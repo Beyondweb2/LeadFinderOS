@@ -43,8 +43,8 @@ for (const label of ['Lead status', 'Next action due', 'Next action type', 'Sort
 }
 ok(!/text-xs|text-\[1[01]px\]/.test(filterGroup), 'no filter shrinks its own text: every control on the bar is text-sm');
 ok((filterGroup.match(/'h-9/g) ?? []).length === 6, 'all six filters (Show, campaign, status, next action ×2, sort) are h-9');
-const toggle = readFileSync(new URL('../src/components/AutoReplyToggle.tsx', import.meta.url), 'utf8');
-ok(/order-last flex w-full flex-wrap/.test(toggle) && !/text-\[11px\]/.test(toggle), 'the reply rule takes its own row on a narrower screen, at the bar\'s text size');
+/* 2026-10-21: the reply rule is no longer on the bar (Inbox Settings → the Inbox mode, InboxReplyModeControl). */
+ok(!/<AutoReplyToggle|<InboxReplyModeControl/.test(inbox), 'the reply rule is not on the top bar (it is in Settings)');
 ok(!/role="tablist"/.test(inbox) && /aria-label="Show conversations" data-testid="inbox-views-select"/.test(inbox), 'the list views (the old tab strip) are one Show dropdown in the filter group');
 
 console.log('── less chrome ──');

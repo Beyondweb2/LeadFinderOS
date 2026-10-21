@@ -2,8 +2,7 @@ import { useState } from 'react';
 import { Clock, Settings } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { AutoReplyToggle } from '@/components/AutoReplyToggle';
-import { AiRepliesToggle } from '@/components/AiRepliesToggle';
+import { InboxReplyModeControl } from '@/components/InboxReplyModeControl';
 import { ReplyHoursDialog } from '@/components/InboxSendWindow';
 import { replyWindowFor, type ReplyHours } from '@/lib/inboxSendWindow';
 import type { InboxChannel } from '@/lib/inboxChannel';
@@ -12,7 +11,9 @@ import { useCountrySettings } from '@/hooks/useCountrySettings';
 /* THE INBOX SETTINGS POPUP (2026-10-21, Paul). The top row used to carry the reply rule, the AI switch, Draft outcomes, the parked-pitch
    count and more; now one Settings button opens them, grouped, each with a plain line on what it does. ⛔ LAYOUT ONLY: every control here
    is the same component with the same handlers and the same server call as before (AutoReplyToggle / AiRepliesToggle with layout="panel",
-   ReplyHoursDialog) — nothing about what a setting DOES changed. Admin only (the caller renders it for perms.queueControls). */
+   ReplyHoursDialog) — nothing about what a setting DOES changed. Admin only (the caller renders it for perms.queueControls).
+   2026-10-21 (later, Paul): the reply rule and the AI switch became ONE mode — Manual / Draft for approval / Auto
+   (InboxReplyModeControl, src/lib/inboxReplyMode.ts), with the "Sends by itself" switches under Auto. "Audit and reply" is retired. */
 const hhmm = (min: number | null): string => (min == null ? '' : `${String(Math.floor(min / 60)).padStart(2, '0')}:${String(min % 60).padStart(2, '0')}`);
 
 function Section({ title, hint, children, testId }: { title: string; hint?: string; children: React.ReactNode; testId?: string }) {
@@ -50,17 +51,12 @@ export function InboxSettings({ channel, aiOn, isAdmin, replyHours, onSaveReplyH
         <DialogContent className="max-h-[88dvh] overflow-y-auto sm:max-w-xl" data-testid="inbox-settings-dialog">
           <DialogHeader>
             <DialogTitle>Inbox settings</DialogTitle>
-            <DialogDescription>Only the controls moved here. What each one does has not changed.</DialogDescription>
+            <DialogDescription>How replies are handled, and when Inbox messages go out.</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
-            <Section title="When a prospect replies" hint="Applies to WhatsApp and texts. It does not touch the outreach queue." testId="settings-replies">
-              <AutoReplyToggle channel={channel} layout="panel" />
+            <Section title="When a prospect replies" hint="One mode for WhatsApp and texts. It does not touch the outreach queue." testId="settings-replies">
+              <InboxReplyModeControl channel={channel} />
             </Section>
-            {aiOn && (
-              <Section title="AI reply drafts" testId="settings-ai">
-                <AiRepliesToggle layout="panel" />
-              </Section>
-            )}
             {isAdmin && (
               <Section title="Sending hours" testId="settings-hours">
                 <div className="flex items-start justify-between gap-3">
@@ -72,8 +68,6 @@ export function InboxSettings({ channel, aiOn, isAdmin, replyHours, onSaveReplyH
                 </div>
               </Section>
             )}
-            {/* The per-reply-type "Sends by itself" switches (Level 2) live in Draft outcomes, inside "AI reply drafts" above. A future per-type section goes here as a Section. */}
-            <div data-testid="settings-auto-send-slot" />
           </div>
         </DialogContent>
       </Dialog>
