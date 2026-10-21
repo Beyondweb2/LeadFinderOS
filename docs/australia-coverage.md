@@ -69,3 +69,14 @@ SPA (Coverage, AI Audit dialog, What's New). Edge, by hand: `coverage`, `search-
 `_shared/link-template-vars.ts`, `_shared/town-distance.ts`, `src/lib/inTown.ts`, `src/lib/coverageCountries.ts` or
 `src/lib/findLeadsBulkAdd.ts` (walk with `node scripts/check-import-graph.mjs --reached-by <file>`). ⛔ Skip
 `whatsapp-status` (held).
+
+## Deployed 2026-10-21 (main `29e7ad29`)
+
+- Live, proven by markers in each deployed body: `coverage`, `search-leads`, `create-ai-audit`, `crawl-check`,
+  `crawl-worker`, `render-audit-report`, `findable-checkout`. SPA live on app.leadfinderos.com (Coverage chunk carries
+  `coverage-population-band-au`; the town list and the picker's Australia are in the entry chunk).
+- ⛔ **HELD: `send-whatsapp-message`, `quick-close`, `twilio-sms-send`, `process-sms-queue`.** They are live from the
+  UNMERGED `feat/inbox-send-window` branch (deployed 03:25 that day; live `x-swm-build` = `2026-10-21b-send-window-panels`).
+  Deploying them from main would remove that work. Deploy them once `feat/inbox-send-window` is merged into main,
+  from main. Until then: Quick Close can still make a link for an Australian lead and the +61 template refusal is
+  not live — but findable-checkout (live) refuses any Australian lead before Stripe, and the report shows no price.
