@@ -55,7 +55,14 @@ async function readMeta(): Promise<Reading | ReadFailure> {
   if (!res.ok) return { ok: false, error: metaError(res.status, res.data) };
   const rawRating = typeof res.data.quality_rating === "string" ? res.data.quality_rating : null;
   if (rawRating == null) return { ok: false, error: "no_quality_rating_in_answer" };
-  const tier = typeof res.data.messaging_limit_tier === "string" ? res.data.messaging_limit_tier : null;
+  let tier = typeof res.data.messaging_limit_tier === "string" ? res.data.messaging_limit_tier : null;
+  /* Meta moved messaging limits to the business portfolio (2025): the old field can come back empty. Ask the newer
+     field once; an unknown field (#100) or no value just leaves the tier unread. */
+  if (!tier) {
+    const alt = await ask("whatsapp_business_manager_messaging_limit");
+    const v = alt.ok ? alt.data.whatsapp_business_manager_messaging_limit : null;
+    if (typeof v === "string" && v) { tier = v; tierField = true; }
+  }
   return { ok: true, rating: normaliseRating(rawRating), rawRating, tier, tierField };
 }
 
