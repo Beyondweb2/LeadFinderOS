@@ -67,10 +67,15 @@ export interface VoiceSendDeps {
   insertSendLog(row: Record<string, unknown>): Promise<void>;
   /** Replied → awaiting_reply, as any other in-window reply does. Best-effort. */
   markAnswered(leadId: string): Promise<void>;
+  /** THE INBOX SEND WINDOW (2026-10-21, src/lib/inboxSendWindow.ts): asked after the audio is checked and before the claim. null =
+   *  inside the lead's send hours, send now; otherwise the answer to return (the recording stored and queued, or a refusal).
+   *  The Inbox's own sender always wires it; the drain does not (it sends only once the window is open). */
+  queueOutsideWindow?(a: { to: string; leadId: string; ogg: Uint8Array; durationMs: number; lastInboundAt: string | null }): Promise<VoiceSendResult | null>;
 }
 
 export type VoiceSendResult =
   | { status: 200; body: { ok: true; status: "sent" | "simulated"; simulated: boolean; messageId: string | null; message: Record<string, unknown> | null; durationMs: number } }
+  | { status: 200; body: { ok: true; status: "scheduled"; scheduled: Record<string, unknown>; reply_window?: Record<string, unknown> } }
   | { status: number; body: { ok: false; error: string; reason?: string; retryable?: boolean } };
 
 /** The Meta payload for a voice note. `voice: true` is what makes WhatsApp render it as one. */
@@ -97,7 +102,8 @@ export async function sendVoiceNote(input: VoiceSendInput, deps: VoiceSendDeps):
   if (claimed !== to) return no(409, "phone_mismatch");
 
   // 3 — the 24-hour window, at send time, before anything is converted, stored or sent
-  const w = serviceWindowState(await deps.lastInboundAt(input.operatorId, to), deps.now());
+  const lastInbound = await deps.lastInboundAt(input.operatorId, to);
+  const w = serviceWindowState(lastInbound, deps.now());
   if (!w.open) return { status: 200, body: { ok: false, error: "window_closed" } };
 
   // 4 — the audio itself
@@ -109,6 +115,12 @@ export async function sendVoiceNote(input: VoiceSendInput, deps: VoiceSendDeps):
   if (converted.durationMs < VOICE_NOTE_MIN_MS) return no(422, "too_short");
   if (converted.durationMs > VOICE_NOTE_MAX_SECONDS * 1000 + VOICE_NOTE_DURATION_SLACK_MS) return no(422, "too_long");
   if (converted.ogg.length > WHATSAPP_AUDIO_MAX_BYTES) return no(413, "too_large");
+
+  // 4b — the lead's send hours (the Inbox send window): outside them the note is stored and queued, nothing is sent
+  if (deps.queueOutsideWindow) {
+    const queued = await deps.queueOutsideWindow({ to, leadId: lead.id, ogg: converted.ogg, durationMs: converted.durationMs, lastInboundAt: lastInbound });
+    if (queued) return queued;
+  }
 
   // 5 — the claim (and the one stored copy the Inbox plays back)
   const path = voiceNoteObjectPath(input.operatorId, input.sendId);

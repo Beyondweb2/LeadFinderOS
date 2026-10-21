@@ -12,6 +12,9 @@ export interface WhatsAppSendArgs {
   templateName?: string;
   /** Only true when the operator is repeating a template this lead already had (the server's explicit override). */
   allowResend?: boolean;
+  /** Where the person pressed Send. 'inbox' (the Inbox) and 'lead_panel' (the Outreach WhatsApp popup): outside the lead's send hours
+   *  the server QUEUES it (src/lib/inboxSendWindow.ts, SEND_WINDOW_SURFACES) instead of sending (Paul, 2026-10-21). */
+  via?: 'inbox' | 'lead_panel';
 }
 
 export interface WhatsAppSendResult {
@@ -21,6 +24,8 @@ export interface WhatsAppSendResult {
   reason?: string;
   /** The whatsapp_messages row the server wrote, when it returns one. */
   message?: { id?: string } & Record<string, unknown>;
+  /** Present when it was QUEUED for the lead's send hours instead of sent (nothing has gone yet). */
+  scheduled?: { id: string; send_at: string; tz: string };
 }
 
 export async function sendWhatsAppRequest(sb: { functions: typeof Supabase.functions }, args: WhatsAppSendArgs): Promise<WhatsAppSendResult> {
@@ -32,9 +37,11 @@ export async function sendWhatsAppRequest(sb: { functions: typeof Supabase.funct
       body: args.body,
       template_name: args.templateName,
       allow_resend: args.allowResend === true,
+      ...(args.via ? { via: args.via } : {}),
     },
   });
   if (error) return { ok: false, error: error.message };
   if (!data?.ok) return { ok: false, error: data?.error ?? 'send_failed', reason: data?.reason };
+  if (data.scheduled) return { ok: true, scheduled: data.scheduled };
   return { ok: true, simulated: data.simulated, message: data.message ?? undefined };
 }

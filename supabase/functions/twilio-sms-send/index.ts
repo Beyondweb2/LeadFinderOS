@@ -1,6 +1,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { refusalBody, resolveActor } from "../_shared/access.ts";
 import { sendSmsToLead } from "../_shared/twilio-sms.ts";
+import { queueGate } from "../_shared/inbox-schedule.ts";
 import { resolveTwilioEnv } from "../_shared/twilio.ts";
 import { diagnoseTwilio } from "../_shared/twilio-diagnose.ts";
 import { isSmsTemplate, SMS_LINK_TEMPLATE } from "../../../src/lib/smsMessages.ts";
@@ -86,6 +87,13 @@ Deno.serve(async (req) => {
       actor: who.actor, leadId,
       template: extended ? undefined : ((template as never) ?? undefined), extended, text: template ? null : text,
       idempotencyKey: String(body.idempotency_key ?? ""), allowResend: body.allow_resend === true,
+      /* ⛔ THE SEND WINDOW (2026-10-21): EVERY text a person sends here — the Inbox and the lead's text panel, the only two callers —
+         is queued outside the lead's send hours (inbox-scheduled-send sends it). No flag: nothing can ask to skip it. The drain and the
+         SMS drip call sendSmsToLead directly and are unaffected. */
+      queueOutsideWindow: ({ digits, body: words, bookUserId, leadId: id }) => queueGate(service, {
+        bookUserId, leadId: id, phone: digits, channel: "sms", kind: template ? "template" : "text", body: words,
+        templateName: extended?.template ?? template, allowResend: body.allow_resend === true, smsExtended: extended, queuedBy: who.actor.id,
+      }, null),
     });
     return json(r, r.ok ? 200 : (r.status ?? 200));
   } catch (e) {

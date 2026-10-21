@@ -12,6 +12,9 @@ import { SMS_STATE_LABEL, smsDeliveryState, type SmsTemplateName } from '@/lib/s
 import { SMS_COLD_CHOICES, SMS_CONVERSATION_CHOICES, smsPreview } from '@/lib/smsPreview';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { notifyLeadChanged } from '@/lib/leadSync';
+import { toWhatsAppDigits } from '@/lib/waNumber';
+import { queuedLabel, sendVerb } from '@/lib/inboxSendWindow';
+import { LeadQueuedSends, ReplyWindowChip, useLeadSendHours } from '@/components/InboxSendWindow';
 
 /* ONE LEAD'S TEXT CONVERSATION (2026-10-09): the thread, delivery marks, the composer and the two approved quick
    texts. Used in the prospect workspace and as the right-hand pane of the SMS inbox — one component, so the two can
@@ -59,6 +62,8 @@ export function LeadSmsPanel({ leadId, className, height = 'max-h-[320px]' }: { 
   const sms = decision?.options.find((o) => o.channel === 'sms');
   const state = smsDeliveryState(rows);
   const size = useMemo(() => smsSize(text), [text]);
+  /* THE SEND WINDOW (2026-10-21): outside the lead's send hours the server queues every text (src/lib/inboxSendWindow.ts). */
+  const hours = useLeadSendHours('sms', toWhatsAppDigits(lead?.phone ?? phone ?? null, lead?.country ?? null));
 
   useEffect(() => { endRef.current?.scrollIntoView({ block: 'end' }); }, [rows.length]);
   // Opening the thread is reading it (per person, per number) — the unread count follows.
@@ -69,13 +74,18 @@ export function LeadSmsPanel({ leadId, className, height = 'max-h-[320px]' }: { 
   }, [phone, hasInbound, rows.length, qc]);
 
   const done = (r: Awaited<ReturnType<typeof sendSms>>, okTitle: string) => {
-    if (r.ok) {
+    const queued = (r as { scheduled?: { send_at: string; tz: string } }).scheduled;
+    if (r.ok && queued) {
+      hours.sched.refresh();
+      toast({ title: 'Text queued', description: `Outside their send hours. ${queuedLabel(queued.send_at, queued.tz)}. You can edit or cancel it until then.` });
+      keyRef.current = newSendKey();
+    } else if (r.ok) {
       toast({ title: (r as SmsSendOk).simulated ? `${okTitle} (test mode — not sent)` : okTitle, description: (r as SmsSendOk).duplicate ? 'That text had already gone.' : 'Delivery is confirmed once the network reports it.' });
       keyRef.current = newSendKey();
       void qc.invalidateQueries({ queryKey: smsKeys.all });
       notifyLeadChanged(leadId); // a real text moves the lead's Contact Method to Text; every screen re-reads it
     } else {
-      toast({ title: 'Text not sent', description: (r as SmsSendRefused).detail, variant: 'destructive' });
+      toast({ title: 'Text not sent', description: (r as SmsSendRefused).detail ?? (r as { reason?: string }).reason, variant: 'destructive' });
     }
     return r.ok;
   };
@@ -108,7 +118,7 @@ export function LeadSmsPanel({ leadId, className, height = 'max-h-[320px]' }: { 
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-[11px] text-muted-foreground" data-testid="sms-template-size">{previewSize.characters} characters · {previewSize.segments} text{previewSize.segments === 1 ? '' : 's'} · {costWords(smsCostGbp(preview))}</p>
         <Button size="sm" className="h-9 gap-1.5 bg-blue-600 font-bold text-white hover:bg-blue-700" disabled={!!busy || !chosen} onClick={() => void sendTemplate()} data-testid="sms-send-template">
-          {busy === 'template' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}Send template
+          {busy === 'template' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}{sendVerb(hours.open)} template
         </Button>
       </div>
     </div>
@@ -129,8 +139,10 @@ export function LeadSmsPanel({ leadId, className, height = 'max-h-[320px]' }: { 
               ))}
             </ul>
           )}
+        <LeadQueuedSends hours={hours} leadId={leadId} />
         <div ref={endRef} />
       </div>
+      {hours.status && <div className="flex justify-end"><ReplyWindowChip open={hours.status.open} text={hours.status.text} /></div>}
       {state === 'failed' && (
         <p className="flex items-start gap-1.5 rounded-lg bg-red-500/10 px-2.5 py-2 text-xs text-red-700 dark:text-red-300" data-testid="sms-failed-help"><AlertTriangle className="mt-px h-3.5 w-3.5 shrink-0" />The last text did not arrive. Check the number with them, or try another way to reach them.</p>
       )}
@@ -149,7 +161,7 @@ export function LeadSmsPanel({ leadId, className, height = 'max-h-[320px]' }: { 
                   {size.characters} characters · {size.segments || 0} text{size.segments === 1 ? '' : 's'}{size.segments ? ` · ${costWords(smsCostGbp(text))}` : ''}{size.encoding === 'UCS-2' ? ' · special characters make it longer' : ''}
                 </p>
                 <Button size="sm" className="h-9 gap-1.5 bg-blue-600 font-bold text-white hover:bg-blue-700" disabled={!!busy || !text.trim()} onClick={() => void sendText()} data-testid="sms-send">
-                  {busy === 'text' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}Send text
+                  {busy === 'text' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}{sendVerb(hours.open)} text
                 </Button>
               </div>
               <p className="text-[10px] text-muted-foreground">{SMS_STATE_LABEL[state]}. Links to set up or pay are sent from the Close tab, not typed here.</p>

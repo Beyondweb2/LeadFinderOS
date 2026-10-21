@@ -1,7 +1,7 @@
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
-import { Loader2, Send } from 'lucide-react';
+import { Clock, Loader2, Send } from 'lucide-react';
 
 /* ════════════════════════════════════════════════════════════════════════════════════════════
    THE REPLY BOX — its own component with its OWN state, and that is the entire point.
@@ -55,10 +55,12 @@ export interface InboxComposerProps {
   onPersist: (key: string, value: string) => void;
   /** Send this body. Resolves true when it actually went — only then is the box cleared. */
   onSend: (body: string) => Promise<boolean>;
+  /** Outside the lead's send hours: the button says "Queue" and this says when it goes ("sends at 07:00 their time"). */
+  queueHint?: string | null;
 }
 
 export const InboxComposer = memo(function InboxComposer({
-  convKey, initialText, sending, onPersist, onSend,
+  convKey, initialText, sending, onPersist, onSend, queueHint,
 }: InboxComposerProps) {
   const [value, setValue] = useState(initialText);
 
@@ -121,15 +123,22 @@ export const InboxComposer = memo(function InboxComposer({
         value={value}
         onChange={(e) => change(e.target.value)}
         onBlur={flush}
-        placeholder="Type a reply…"
+        placeholder={queueHint ? `Type a reply — queued, ${queueHint}` : 'Type a reply…'}
         className="min-h-[44px] max-h-32 flex-1 resize-none"
         maxLength={4000}
         onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); void submit(); } }}
         disabled={sending}
       />
-      <Button onClick={() => void submit()} disabled={sending || !value.trim()} size="icon" className="h-11 w-11 shrink-0">
-        {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-      </Button>
+      {queueHint ? (
+        <Button onClick={() => void submit()} disabled={sending || !value.trim()} className="h-11 shrink-0 gap-1.5 px-3"
+          title={`Outside their send hours — it is saved and ${queueHint}`} data-testid="composer-queue">
+          {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Clock className="h-4 w-4" />} Queue
+        </Button>
+      ) : (
+        <Button onClick={() => void submit()} disabled={sending || !value.trim()} size="icon" className="h-11 w-11 shrink-0">
+          {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+        </Button>
+      )}
     </div>
   );
 });

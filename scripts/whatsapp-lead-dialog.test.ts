@@ -38,12 +38,13 @@ console.log('── 2. one send path ──');
 {
   ok((req.match(/functions\.invoke\('send-whatsapp-message'/g) ?? []).length === 1, 'whatsAppSendRequest makes the one send-whatsapp-message call');
   ok(/phone: args\.phone,\s*lead_id: args\.leadId,\s*country: args\.country \?\? null,\s*body: args\.body,\s*template_name: args\.templateName,\s*allow_resend: args\.allowResend === true,/.test(req), 'with exactly the body the Inbox has always sent');
-  ok(/await sendWhatsAppRequest\(sb, args\)/.test(inbox), 'the Inbox sends through it');
+  /* 2026-10-21: the Inbox adds via:'inbox' (its send window — src/lib/inboxSendWindow.ts); the rest of the body is the same request. */
+  ok(/await sendWhatsAppRequest\(sb, \{ \.\.\.args, via: 'inbox' \}\)/.test(inbox), 'the Inbox sends through it');
   const inboxSendBlock = inbox.slice(inbox.indexOf('const send = useCallback('), inbox.indexOf('const sendVoice = useCallback('));
   ok(!/'send-whatsapp-message'/.test(code(inboxSendBlock)), '…and no longer has its own copy of the request');
   const c = code(panel);
-  ok(/sendWhatsAppRequest\(sb, \{ phone, leadId: lead\.id, country: lead\.country \?\? null, templateName: tpl, allowResend: alreadySent \}\)/.test(c), 'the dialog sends a template through it (repeat override as the Inbox does)');
-  ok(/sendWhatsAppRequest\(sb, \{ phone, leadId: lead\.id, country: lead\.country \?\? null, body \}\)/.test(c), 'the dialog sends free text through it');
+  ok(/sendWhatsAppRequest\(sb, \{ phone, leadId: lead\.id, country: lead\.country \?\? null, templateName: tpl, allowResend: alreadySent, via: 'lead_panel' \}\)/.test(c), 'the dialog sends a template through it (repeat override as the Inbox does)');
+  ok(/sendWhatsAppRequest\(sb, \{ phone, leadId: lead\.id, country: lead\.country \?\? null, body, via: 'lead_panel' \}\)/.test(c), 'the dialog sends free text through it');
   ok(!/functions\.invoke|invokeEdge|\.insert\(|\.update\(|\.upsert\(|\.delete\(|\.rpc\(|leadRpc|executeContact/.test(c), 'the dialog writes nothing itself — no status, Next Action, queue or log row');
   ok(!/wa\.me|window\.open/.test(c), 'and opens nothing external');
 }

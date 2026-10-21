@@ -30,7 +30,7 @@ import { NOT_A_MOBILE, NOT_A_MOBILE_REASON, templateDestinationRefusal } from ".
 import { loadCountrySettings } from "../_shared/country-settings.ts";
 import { resolveOnboardingFollowupVars } from "../_shared/onboarding-followup.ts";
 import { createTemplateSnapshot } from "../../../src/lib/whatsappTemplateSnapshot.ts";
-import { canWorkLead, isClientLead, refusalBody, resolveActor } from "../_shared/access.ts";
+import { canWorkLead, isClientLead, refusalBody, resolveActor, type Actor } from "../_shared/access.ts";
 import { guardAction } from "../_shared/protection.ts";
 import { checkOptedOut, checkWrongNumber } from "../_shared/suppression.ts";
 import { OPT_OUT_REFUSAL_REASON, optOutBlocksTemplate } from "../../../src/lib/marketingConsent.ts";
@@ -38,6 +38,8 @@ import { STRONG_STATUSES, postgrestList } from "../../../src/lib/strongStatuses.
 import { QA_REFUSAL_REASON } from "../../../src/lib/qaSafety.ts";
 import { qaSendHold } from "../_shared/qa-guard.ts";
 import { templateAvailability } from "../_shared/template-status.ts";
+import { queueGate, replyWindowOpenNow, scheduledSendFor } from "../_shared/inbox-schedule.ts";
+import { keepsSendHours } from "../../../src/lib/inboxSendWindow.ts";
 import { formatVisibilityScore, REPORT_OFFER_REFUSAL_WORDS, REPORT_OFFER_TEMPLATE, reportOfferRefusal, UK_WORDED_TEMPLATES, ukWordedTemplateRefusal } from "../../../src/lib/reportOfferTemplate.ts";
 import { prospectOnlyTemplateRefusal } from "../../../src/lib/prospectOnly.ts";
 import { senderMessageName } from "../_shared/sender-name.ts";
@@ -100,12 +102,14 @@ const CAPABILITIES = ["dry_run", "build_phase_hold", "routing_leaf", "any_approv
    2026-09-30b: an explicit opt-out refuses MARKETING templates here too (src/lib/marketingConsent.ts).
    2026-10-04a: QA safety — a QA fixture is simulated, a test-account lead is refused (src/lib/qaSafety.ts).
    2026-10-19a: EVERY template refuses a UK / MY / SG number that is not a mobile (src/lib/whatsAppDestination.ts).
-   2026-10-21a: a sign-up-link or £-priced template is refused to an Australian number (src/lib/prospectOnly.ts). */
-const BUILD_ID = "2026-10-21a-au-prospect-only";
+   2026-10-21a: a sign-up-link or £-priced template is refused to an Australian number (src/lib/prospectOnly.ts).
+   2026-10-21a: the Inbox send window — via:"inbox" outside the lead's hours is QUEUED, not sent (src/lib/inboxSendWindow.ts).
+   2026-10-21c: both of the above (the send window + Australia prospect-only). */
+const BUILD_ID = "2026-10-21c-send-window-au";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-cron-secret, x-internal-job",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
   /* Exposed so a browser can read it too, not only curl. */
   "Access-Control-Expose-Headers": "x-swm-build, x-swm-caps",
@@ -141,14 +145,34 @@ Deno.serve(async (req) => {
     void anonKey;
     const service = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false } });
 
-    // --- Auth the operator: a signed-in team member with a role (admin or sales) ---
-    const who = await resolveActor(req, service);
-    if (!who.ok) return json(refusalBody(who), who.status);
-    const actor = who.actor;
-    const operatorId = actor.id;
-
-    // --- Parse ---
+    // --- Parse (first: the drain's door is named in the body) ---
     const body = await req.json().catch(() => ({}));
+    /* ⛔ THE INBOX SEND WINDOW'S DRAIN (2026-10-21, _shared/inbox-schedule.ts). A CRON_SECRET call naming a CLAIMED
+       inbox_scheduled_sends row sends that row AS the person who queued it (role re-read now). Everything the send is made of —
+       number, lead, words, template — is taken from the ROW; the request carries nothing else. Every check below runs again. */
+    const sched = await scheduledSendFor(req, service, body.scheduled_id, "whatsapp");
+    if (sched && !sched.ok) return json({ ok: false, error: sched.error }, 403);
+    if (sched) {
+      const r = sched.row;
+      if (r.kind !== "text" && r.kind !== "template") return json({ ok: false, error: "scheduled_wrong_kind" }, 400);
+      body.phone = r.phone; body.lead_id = r.lead_id; body.country = null;
+      body.body = r.kind === "text" ? (r.body ?? "") : "";
+      body.template_name = r.kind === "template" ? r.template_name : null;
+      body.allow_resend = r.allow_resend === true; body.link_variant = r.link_variant; body.mode = undefined; body.via = undefined;
+    }
+
+    // --- Auth the operator: a signed-in team member with a role (admin or sales) ---
+    let actor: Actor;
+    if (sched) actor = sched.actor;
+    else {
+      const who = await resolveActor(req, service);
+      if (!who.ok) return json(refusalBody(who), who.status);
+      actor = who.actor;
+    }
+    const operatorId = actor.id;
+    /* ⛔ THE SCREEN SAYS WHERE IT IS SENDING FROM. The Inbox (via:"inbox") and the Outreach WhatsApp popup (via:"lead_panel") — the
+       SEND_WINDOW_SURFACES list, scripts/inbox-send-window.test.ts sweeps them — are queued below outside the lead's send hours. */
+    const viaInbox = !sched && keepsSendHours(body.via);
     const rawPhone: string = typeof body.phone === "string" ? body.phone : "";
     const leadId: string | null = typeof body.lead_id === "string" && body.lead_id ? body.lead_id : null;
     const text: string = typeof body.body === "string" ? body.body.trim() : "";
@@ -810,6 +834,19 @@ Deno.serve(async (req) => {
       messageType = "text";
       storedBody = text;
     }
+
+    /* ⛔ THE INBOX SEND WINDOW (2026-10-21). Here — after every guard above and the real payload build, before the usage guard and
+       anything that leaves — an Inbox send outside the lead's own hours is QUEUED: one inbox_scheduled_sends row, nothing sent,
+       nothing else written. Inside the hours this answers null and the send goes on exactly as before. The drain's own call must
+       find the window open NOW, so there is no door around the hours. */
+    if (viaInbox && !dryRun) {
+      const gate = await queueGate(service, {
+        bookUserId, leadId: resolvedLeadId, phone: to, channel: "whatsapp", kind: messageType === "template" ? "template" : "text",
+        body: storedBody, templateName: usedTemplate, allowResend, linkVariant: usedTemplate ? signupLinkVariant : null, queuedBy: operatorId,
+      }, lastInboundAt);
+      if (gate) return json({ ...gate, ...(gate.ok && fellBackReason ? { template: usedTemplate, fell_back: fellBackReason } : {}) }, 200);
+    }
+    if (sched && !(await replyWindowOpenNow(service, "whatsapp", to))) return json({ ok: false, error: "outside_reply_window" }, 200);
 
     /* ⛔ A SUSPENDED SALESPERSON SENDS NOTHING (2026-09-29, docs/abuse-cost-protection.md). The guard is
        asked for a REAL send only — a dry run leaves nothing and costs nothing — and only for a

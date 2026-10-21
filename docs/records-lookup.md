@@ -4,6 +4,7 @@ Moved verbatim from CLAUDE.md §10 on 2026-10-15. Add a row here when you write 
 
 | Touching… | Read first |
 |---|---|
+| Sending from the Inbox outside the lead's send hours: the queue (inbox_scheduled_sends), its drain, the holds (they replied since / 24h expired), the reply-hours setting | `docs/inbox-send-window.md` |
 | Closing items on the Sales dashboard (What to do next / Follow-ups): lead_close_work, the closed-until-they-reply rule (isClosedItem), Done vs Dead lead | `docs/close-dashboard-items.md` |
 | The WhatsApp cap / pace / auto-pause settings (`whatsappPace.ts`), the CSV import batch + owner (`import_leads_v2`), the price model switch (`priceModel.ts` — the £499 link is OFF until Paul approves its agreement), texted numbers never get a cold WhatsApp | `docs/test-day-outreach.md` |
 | A bulk audit's visibility score, the report offer's {{4}}, the bulk_score marker | `docs/bulk-audit-score.md` |

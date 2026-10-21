@@ -368,3 +368,8 @@ verify_jwt = false
 # the handler refuses anything else. verify_jwt must stay false.
 [functions.process-sms-queue]
 verify_jwt = false
+
+# inbox-scheduled-send (2026-10-21): the Inbox send window drain. Called every minute by pg_cron (invoke_inbox_scheduled_send)
+# with x-cron-secret; the handler refuses anything else. verify_jwt must stay false.
+[functions.inbox-scheduled-send]
+verify_jwt = false

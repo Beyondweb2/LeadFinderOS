@@ -12,7 +12,7 @@ import { AutoReplyToggle } from '@/components/AutoReplyToggle';
 import { hookAuditRequestBody } from '@/lib/hookAuditRequest';
 import { auditButtonCopy, auditStartedDescription, pitchMayFollowAudit } from '@/lib/auditPitchRule';
 import { getDraft, setDraft, type DraftMap } from '@/lib/inboxDrafts';
-import { planBulkSend, groupSkips, applyBulkChecks, type BulkCandidate, type BulkCheck } from '@/lib/inboxBulkSend';
+import { planBulkSend, groupSkips, applyBulkChecks, bulkSummaryText, type BulkCandidate, type BulkCheck } from '@/lib/inboxBulkSend';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { useInbox, windowFor, normalizeWaNumber, type WaConversation, type LeadLite, type WaMessage } from '@/hooks/useInbox';
 import { getTemplateSendability, WA_TEMPLATE_REQS, canonicalTemplate } from '@/lib/whatsappTemplates';
@@ -90,6 +90,9 @@ import { AiRepliesToggle } from '@/components/AiRepliesToggle';
 import { AiDraftButton, AiDraftChip, AiDraftPanel, InboundLabelChip } from '@/components/AiDraftPanel';
 import { useAiReplyDrafts } from '@/hooks/useAiReplyDrafts';
 import { aiChipFor, needsApproving, needsYou, rowSendable, type AiReplyRow } from '@/lib/aiReplyDraft';
+import { useInboxScheduled, INBOX_SCHEDULED_KEY } from '@/hooks/useInboxScheduled';
+import { ReplyHoursDialog, ReplyWindowChip, ScheduledSendBubble } from '@/components/InboxSendWindow';
+import { hhmm, queuedLabel, replyWindowFor, sendVerb, windowStatusLine } from '@/lib/inboxSendWindow';
 import { inboundLabel } from '@/lib/replyMove';
 import { sameRowProps } from '@/lib/inboxRowMemo';
 import { invokeEdge, edgeErrorMessage } from '@/lib/edgeInvoke';
@@ -407,6 +410,11 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
   /* AI handles replies (2026-10-11) is WhatsApp only: the SMS tab reads no drafts and shows no switch (ai-replies difference). */
   const aiOn = !sms;
   const ai = useAiReplyDrafts(aiOn);
+  /* ⛔ THE INBOX SEND WINDOW (2026-10-21, src/lib/inboxSendWindow.ts): messages queued outside the lead's send hours, the one reply-hours
+     setting, and Needs you for a held one ("they replied since" / "24h window expired"). The SERVER decides every queue and send. */
+  const sched = useInboxScheduled(channel);
+  const { settings: replyCountrySettings } = useCountrySettings();
+  const needsYouFor = (phone: string) => needsYou(ai.forPhone(phone)) || sched.heldForPhone(phone);
   /* Remembered per channel (storage-keys difference): a text filter, search or half-typed draft must never appear on a WhatsApp thread. */
   const pk = (k: string) => (sms ? `sms-${k}` : k);
   const { user, conversations, messages, messagesForKey, leads, auditByLeadId, auditRunningLeadIds, hasSiteFaultLeadIds, hasSiteFindingsLeadIds, crawlByLeadId, isLoading, isError, send, sendVoice, sendMedia, preview, refetch, loadLead, patchLeadStatus, patchLeadPotentialWork } = useInbox(channel);
@@ -747,10 +755,10 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
   const quickCounts = useMemo(() => {
     let unread = 0; let waiting = 0; let approving = 0; let mine = 0;
     for (const st of stateByKey.values()) { if (st.unread) unread++; if (st.waitingSinceMs !== null) waiting++; }
-    for (const c of list) { const r = ai.forPhone(c.phone); if (needsApproving(r)) approving++; if (needsYou(r)) mine++; }
+    for (const c of list) { const r = ai.forPhone(c.phone); if (needsApproving(r)) approving++; if (needsYouFor(c.phone)) mine++; }
     return { unread, waiting, approving, needsYou: mine };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [stateByKey, list, ai.rows]);
+  }, [stateByKey, list, ai.rows, sched.rows]);
 
   const searchTerm = search.trim().toLowerCase();
   const filteredList = useMemo(() => {
@@ -759,7 +767,7 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
     const today = londonToday();
     const byNa = naWhen === 'all' && naKind === 'all' ? searched
       : searched.filter((c) => passesNextActionFilter(c.leadId ? leadByIdForState.get(c.leadId) : null, naWhen, naKind, today));
-    const kept = quickFilter === 'all' ? [...byNa] : byNa.filter((c) => { const st = stateByKey.get(c.key); return !!st && passesQuickFilter(quickFilter, { ...st, needsApproving: needsApproving(ai.forPhone(c.phone)), needsYou: needsYou(ai.forPhone(c.phone)) }); });
+    const kept = quickFilter === 'all' ? [...byNa] : byNa.filter((c) => { const st = stateByKey.get(c.key); return !!st && passesQuickFilter(quickFilter, { ...st, needsApproving: needsApproving(ai.forPhone(c.phone)), needsYou: needsYouFor(c.phone) }); });
     if (listSort === 'next_action') {
       kept.sort((a, b) => nextActionSortKey(a.leadId ? leadByIdForState.get(a.leadId) : null).localeCompare(nextActionSortKey(b.leadId ? leadByIdForState.get(b.leadId) : null)));
     } else if (quickFilter === 'waiting') {
@@ -770,10 +778,10 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
       kept.sort(compareLastProspectMessage);
     }
     /* ⛔ NEEDS YOU SORTS TO THE TOP (Paul, 2026-10-20), whatever the sort: a stable partition, the chosen order kept inside each part. */
-    if (aiOn) { const top = kept.filter((c) => needsYou(ai.forPhone(c.phone))); if (top.length) { const rest = kept.filter((c) => !needsYou(ai.forPhone(c.phone))); return [...top, ...rest]; } }
+    { const top = kept.filter((c) => needsYouFor(c.phone)); if (top.length) { const rest = kept.filter((c) => !needsYouFor(c.phone)); return [...top, ...rest]; } }
     return kept;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [list, searchTerm, quickFilter, stateByKey, naWhen, naKind, listSort, leadByIdForState, ai.rows]);
+  }, [list, searchTerm, quickFilter, stateByKey, naWhen, naKind, listSort, leadByIdForState, ai.rows, sched.rows]);
   const naFiltered = naWhen !== 'all' || naKind !== 'all' || listSort !== DEFAULT_INBOX_SORT;
 
   /* ⚡ THE LIST DRAWS 150 ROWS AT A TIME (2026-09-28, measured). Every row carries a status dropdown, so
@@ -911,6 +919,18 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
   );
   /* A text has no 24-hour window: it is always "open" for free text (the SMS sender's own conversation gate still decides who may be texted). */
   const win = sms ? { open: true, hoursLeft: 0 } : active ? windowFor(active.lastInboundAt) : { open: false, hoursLeft: 0 };
+  /* The lead's OWN send hours (src/lib/inboxSendWindow.ts) — separate from WhatsApp's 24 hours above. Outside them every send button
+     says Queue and the server queues instead of sending. Re-read each minute (clockTick re-renders). */
+  const activeDigits = active ? active.phone.replace(/\D/g, '') : '';
+  const replyWin = active ? replyWindowFor(channel, activeDigits, { replyHours: sched.replyHours, countrySettings: replyCountrySettings }) : null;
+  const outreachWin = active ? replyWindowFor(channel, activeDigits, { countrySettings: replyCountrySettings }) : null;
+  const replyStatus = replyWin ? windowStatusLine(replyWin) : null;
+  const replyOpen = replyStatus?.open ?? true;
+  const queueHint = replyWin && !replyOpen ? `sends at ${hhmm(replyWin.startMin)} their time` : null;
+  const activeScheduled = active ? sched.forPhone(active.phone) : [];
+  const [replyHoursOpen, setReplyHoursOpen] = useState(false);
+  const queuedToast = (sc: { send_at: string; tz: string }, what = 'Message') =>
+    toast({ title: `${what} queued`, description: `Outside their send hours. ${queuedLabel(sc.send_at, sc.tz)}. You can edit or cancel it until then.` });
   const activeState = active ? stateByKey.get(active.key) : undefined;
   /* ⛔ OPENING A THREAD READS IT — and a reply that lands while it is open and on screen is read too.
      A just-started (synthetic) thread has nothing to read. A hidden tab marks nothing. */
@@ -1023,6 +1043,17 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
       sendingKeysRef.current.delete(sendKey);
       setSendingKeys((prev) => { const next = new Set(prev); next.delete(sendKey); return next; });
       /* 3. Record the outcome (the server checks the message row itself). A refusal hands the draft back. */
+      /* Queued for their send hours: the draft is closed here (complete → discard) and the queued row carries the words, so the
+         same draft can never be approved and sent a second time. The drafter itself is unchanged. */
+      if (res.ok && res.scheduled) {
+        await invokeEdge('ai-reply-drafts', { action: 'complete', draft_id: activeAi.id, message_id: null, error: 'queued_for_send_hours' }).catch(() => undefined);
+        await invokeEdge('ai-reply-drafts', { action: 'discard', draft_id: activeAi.id }).catch(() => undefined);
+        setDrafts((prev) => setDraft(prev, sendKey, ''));
+        aiInsertedRef.current.delete(sendKey);
+        setComposerSeed((n) => n + 1);
+        queuedToast(res.scheduled, 'Approved reply');
+        return;
+      }
       await invokeEdge('ai-reply-drafts', { action: 'complete', draft_id: activeAi.id, message_id: res.ok ? (res.messageId ?? null) : null, error: res.ok ? null : (res.reason ?? res.error ?? 'send_failed') }).catch(() => undefined);
       if (!res.ok) {
         toast({ title: 'Not sent', description: res.reason ?? (res.error === 'window_closed' ? 'The 24h reply window is closed — send an approved template instead.' : res.error) ?? 'Send failed.', variant: 'destructive' });
@@ -1170,7 +1201,7 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
   const [bulkConfirm, setBulkConfirm] = useState(false);
   const [bulkBusy, setBulkBusy] = useState(false);
   const [bulkProgress, setBulkProgress] = useState({ done: 0, total: 0 });
-  const [bulkReport, setBulkReport] = useState<null | { sent: number; failed: { key: string; label: string; reason: string }[] }>(null);
+  const [bulkReport, setBulkReport] = useState<null | { sent: number; queued: number; failed: { key: string; label: string; reason: string }[] }>(null);
   /* The server's dry-run answer per conversation key, for the CURRENT template (inboxBulkSend.ts
      applyBulkChecks). Cleared whenever the template or the selection changes. Never persisted. */
   const [bulkChecks, setBulkChecks] = useState<Record<string, BulkCheck>>({});
@@ -1180,11 +1211,12 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
   const hookExistingFirst = firstNameFrom(activeLead?.contact_name);
   const hookEffectiveFirst = hookExistingFirst || firstNameFrom(hookName);
   /* The two manual follow-ups send a NAMED template through the open channel's own sender (WhatsApp: Meta; SMS: the text sender). */
-  const sendNamed = async (templateName: string): Promise<{ data: { ok?: boolean; error?: string } | null; error: { message: string } | null }> => {
+  const sendNamed = async (templateName: string): Promise<{ data: { ok?: boolean; error?: string; scheduled?: { send_at: string; tz: string } } | null; error: { message: string } | null }> => {
     if (!active?.leadId) return { data: { ok: false, error: 'no lead' }, error: null };
-    if (!sms) return supabase.functions.invoke('send-whatsapp-message', { body: { lead_id: active.leadId, phone: active.phone, country: activeLead?.country ?? undefined, template_name: templateName } });
+    if (!sms) return supabase.functions.invoke('send-whatsapp-message', { body: { lead_id: active.leadId, phone: active.phone, country: activeLead?.country ?? undefined, template_name: templateName, via: 'inbox' } })
+      .then((r) => { if (r.data?.scheduled) void queryClient.invalidateQueries({ queryKey: INBOX_SCHEDULED_KEY }); return r; });
     const res = await send({ phone: active.phone, leadId: active.leadId, templateName });
-    return { data: { ok: res.ok, error: res.reason ?? res.error }, error: null };
+    return { data: { ok: res.ok, error: res.reason ?? res.error, scheduled: res.scheduled }, error: null };
   };
   const sendHookFollowup = async () => {
     /* First name is OPTIONAL for hook_followup — a blank sends "Hi there, …" (the server allows it
@@ -1214,7 +1246,8 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
         return;
       }
       setHookOpen(false);
-      toast({ title: 'Hook follow-up sent', description: `hook_followup to ${activeLead.business_name}.` });
+      if (data.scheduled) queuedToast(data.scheduled, 'Hook follow-up');
+      else toast({ title: 'Hook follow-up sent', description: `hook_followup to ${activeLead.business_name}.` });
       await refetch(); // picks up the outbound row → the button flips to "sent"
     } finally {
       setHookSending(false);
@@ -1241,7 +1274,8 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
         return;
       }
       setContactOpen(false);
-      toast({ title: 'Contact follow-up sent', description: `contact_followup to ${activeLead.business_name}.` });
+      if (data.scheduled) queuedToast(data.scheduled, 'Contact follow-up');
+      else toast({ title: 'Contact follow-up sent', description: `contact_followup to ${activeLead.business_name}.` });
       await refetch(); // picks up the outbound row → the button flips to "sent"
     } finally {
       setContactSending(false);
@@ -1343,11 +1377,11 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
         const rpc: SmsQueueRpc = (args) => (supabase as unknown as { rpc: (n: string, a: Parameters<SmsQueueRpc>[0]) => ReturnType<SmsQueueRpc> }).rpc('queue_sms_openers', args);
         const plan = await checkSmsQueue(rpc, targets.map((t) => t.leadId).filter(Boolean) as string[], bulkTemplate);
         const r = await runSmsQueue(rpc, plan, bulkTemplate);
-        setBulkReport({ sent: r.queued, failed: r.skipped.map((l) => ({ key: l.key, label: `${l.n} lead${l.n === 1 ? '' : 's'}`, reason: l.label })) });
+        setBulkReport({ sent: 0, queued: r.queued, failed: r.skipped.map((l) => ({ key: l.key, label: `${l.n} lead${l.n === 1 ? '' : 's'}`, reason: l.label })) });
         toast({ title: `Queued ${r.queued} text${r.queued === 1 ? '' : 's'}`, description: 'They go out one at a time inside the text sending hours. Nothing was sent now.' });
         void queryClient.invalidateQueries({ queryKey: ['sms-queue'] });
       } catch (e) {
-        setBulkReport({ sent: 0, failed: [{ key: 'queue', label: 'Text queue', reason: e instanceof Error ? e.message : 'could not queue' }] });
+        setBulkReport({ sent: 0, queued: 0, failed: [{ key: 'queue', label: 'Text queue', reason: e instanceof Error ? e.message : 'could not queue' }] });
       } finally {
         setBulkBusy(false);
         setBulkConfirm(false);
@@ -1358,6 +1392,7 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
     }
     const failed: { key: string; label: string; reason: string }[] = [];
     let sent = 0;
+    let queued = 0;
     for (const target of targets) {
       try {
         const res = await send({
@@ -1365,7 +1400,9 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
           leadId: target.leadId,
           templateName: bulkTemplate,
         });
-        if (res.ok) sent++;
+        /* Queued for their send hours is NOT sent (src/lib/inboxSendWindow.ts) — counted on its own. */
+        if (res.ok && res.scheduled) queued++;
+        else if (res.ok) sent++;
         else failed.push({ key: target.key, label: target.label, reason: res.reason ?? res.error ?? 'send failed' });
       } catch (e) {
         failed.push({ key: target.key, label: target.label, reason: e instanceof Error ? e.message : 'send failed' });
@@ -1374,11 +1411,11 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
     }
     setBulkBusy(false);
     setBulkConfirm(false);
-    setBulkReport({ sent, failed });
+    setBulkReport({ sent, queued, failed });
     setBulkSelected(new Set());
     toast({
-      title: failed.length ? `Sent ${sent}, ${failed.length} failed` : `Sent ${sent}`,
-      description: failed.length ? 'The ones that did not go are listed above the conversation list.' : undefined,
+      title: bulkSummaryText({ sent, queued, failed: failed.length }),
+      description: [queued ? 'Queued ones go when each business’s send hours open; you can edit or cancel them in the thread.' : '', failed.length ? 'The ones that did not go are listed above the conversation list.' : ''].filter(Boolean).join(' ') || undefined,
       variant: failed.length ? 'destructive' : undefined,
     });
     await refetch();
@@ -1487,8 +1524,8 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
           Preview
         </Button>
         <Button onClick={() => doSend(true)} disabled={sending || !active?.leadId || !template || !selectedSendability.ok} className="shrink-0">
-          {sending ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Send className="mr-1.5 h-4 w-4" />}
-          Send template
+          {sending ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : replyOpen ? <Send className="mr-1.5 h-4 w-4" /> : <Clock className="mr-1.5 h-4 w-4" />}
+          {sendVerb(replyOpen)} template
         </Button>
       </div>
       {/* One line of the chosen template, with this lead's details. No hover preview (Paul, 2026-09-29):
@@ -1830,6 +1867,7 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
     const target = { key: active.key, phone: active.phone, leadId: active.leadId };
     const res = await sendVoice({ phone: target.phone, leadId: target.leadId, audio: clip.blob, mime: clip.mime, sendId: clip.sendId });
     if (!res.ok) return { ok: false, error: voiceSendErrorMessage(res.error, res.reason), retryable: res.retryable };
+    if (res.scheduled) { queuedToast(res.scheduled, 'Voice note'); return { ok: true }; }
     toast({ title: res.simulated ? 'Voice note sent (simulated — test mode)' : 'Voice note sent ✓' });
     if (activeKey === target.key) setTimeout(() => threadRef.current?.scrollTo({ top: threadRef.current.scrollHeight }), 50);
     return { ok: true };
@@ -1889,6 +1927,7 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
     if (!res.ok) {
       const map: Record<string, string> = {
         window_closed: 'The 24h reply window is closed — send an approved template instead.',
+        service_window_closes_first: '24h window expired, use a template: WhatsApp’s 24 hours run out before their send hours open.',
         no_claim_link: 'That lead has no generated site yet, so there’s no claim link to send.',
         forbidden: 'You can only message your own conversations.',
         template_needs_lead: 'A template needs a linked lead.',
@@ -1904,6 +1943,7 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
     /* The composer clears ITSELF on a true return (and clears its own draft). This still runs for
        the template path, which has no composer text to clear but may hold a draft. */
     setDrafts((prev) => setDraft(prev, sendKey, ''));
+    if (res.scheduled) { queuedToast(res.scheduled, useTemplate ? 'Template' : 'Reply'); return true; }
     if (activeKey === sendKey) setSynthetic(null); // the real conversation now exists under the same key
     toast({ title: res.simulated ? 'Sent (simulated — test mode)' : 'Sent ✓' });
     if (activeKey === sendKey) setTimeout(() => threadRef.current?.scrollTo({ top: threadRef.current.scrollHeight }), 50);
@@ -2137,7 +2177,7 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
           {bulkReport && (
             <div className="mb-1.5 rounded-md border border-border/60 bg-background px-2 py-1.5 text-[11px]">
               <div className="flex items-center gap-2">
-                <span className="font-medium">Sent {bulkReport.sent}{bulkReport.failed.length ? `, ${bulkReport.failed.length} failed` : ''}</span>
+                <span className="font-medium" data-testid="bulk-summary">{bulkSummaryText({ sent: bulkReport.sent, queued: bulkReport.queued, failed: bulkReport.failed.length })}</span>
                 <span className="flex-1" />
                 {bulkReport.failed.length > 0 && (
                   <button type="button" className="font-medium text-primary hover:underline" data-testid="bulk-reselect-failed"
@@ -2268,18 +2308,27 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
                       <Star className={cn('h-4 w-4', active.isPotentialWork ? 'fill-amber-400 text-amber-500' : 'text-muted-foreground/60')} />
                     </button>
                   )}
+                  <span className="ml-auto flex shrink-0 items-center gap-1">
+                  {/* The lead's own send hours (both channels): "Their time 21:40 · opens 07:00". Admin: click to set the reply hours. */}
+                  {replyStatus && <ReplyWindowChip className="hidden sm:flex" open={replyStatus.open} text={replyStatus.text} onClick={isAdmin ? () => setReplyHoursOpen(true) : undefined} />}
                   {/* window difference: a text has no 24-hour window, so no chip at all. */}
                   {!sms && (win.open ? (
-                    <span className="ml-auto flex shrink-0 items-center gap-1 rounded-full bg-green-500/15 px-2 py-0.5 text-[11px] font-semibold text-green-600 dark:text-green-400">
+                    <span className="flex shrink-0 items-center gap-1 rounded-full bg-green-500/15 px-2 py-0.5 text-[11px] font-semibold text-green-600 dark:text-green-400">
                       <Clock className="h-3 w-3" /> Window open · ~{win.hoursLeft}h left
                     </span>
                   ) : (
-                    <span className="ml-auto flex shrink-0 items-center gap-1 rounded-full bg-amber-500/15 px-2 py-0.5 text-[11px] font-semibold text-amber-600 dark:text-amber-400">
+                    <span className="flex shrink-0 items-center gap-1 rounded-full bg-amber-500/15 px-2 py-0.5 text-[11px] font-semibold text-amber-600 dark:text-amber-400">
                       <AlertTriangle className="h-3 w-3" /> Window closed · template only
                     </span>
                   ))}
+                  </span>
+                  {isAdmin && outreachWin && replyHoursOpen && (
+                    <ReplyHoursDialog open={replyHoursOpen} onOpenChange={setReplyHoursOpen} current={sched.replyHours} outreach={outreachWin} onSave={sched.saveReplyHours} />
+                  )}
                 </div>
                 <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                  {/* On a phone the name keeps the top line; their time moves down here. */}
+                  {replyStatus && <ReplyWindowChip className="sm:hidden" open={replyStatus.open} text={replyStatus.text} onClick={isAdmin ? () => setReplyHoursOpen(true) : undefined} />}
                   {/* ⛔ SAME PILL, SAME STATE, SAME HANDLER as the list pill below — deliberately NOT a
                       second copy. `active` IS the list's own conversation object (conversations.find
                       by activeKey), and handleSetStatus → patchLeadStatus patches `leads` by leadId in
@@ -2520,6 +2569,12 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
                     </div>
                   </div>
                 ); })}
+                {/* Queued for their send hours — after the sent messages, oldest first (they go in this order). */}
+                {activeScheduled.map((r) => (
+                  <ScheduledSendBubble key={r.id} row={r}
+                    label={r.kind === 'voice' ? (r.body || 'Voice note') : r.body || templateLabel(r.template_name)}
+                    onEdit={sched.edit} onCancel={sched.cancel} onRelease={sched.release} />
+                ))}
               </div>
 
               {/* Reply box */}
@@ -2618,9 +2673,11 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
                           sending={sending}
                           onPersist={persistDraft}
                           onSend={(bodyText) => doSend(false, bodyText)}
+                          queueHint={queueHint}
                         />
                       </div>
-                      {!sms && active.leadId && (
+                      {/* Files are never queued: outside their send hours the paperclip is not offered (the server refuses it too). */}
+                      {!sms && active.leadId && replyOpen && (
                         <div className={cn('contents', voiceActive && '[&>*]:hidden')}>
                           <AttachmentPicker key={active.key} disabled={sending} onActiveChange={setAttachActive} onSend={sendAttachment} />
                         </div>
@@ -2632,6 +2689,7 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
                             disabled={sending}
                             onActiveChange={setVoiceActive}
                             onSend={sendVoiceNote}
+                            sendVerb={sendVerb(replyOpen)}
                           />
                         </div>
                       )}

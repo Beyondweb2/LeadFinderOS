@@ -17,6 +17,9 @@ import { resolveLeadReport, type ResolvableAudit } from '@/lib/auditReportResolv
 import { whatsAppLinkForLead } from '@/lib/conversationState';
 import { LEAD_CHANGED_EVENT, notifyLeadChanged } from '@/lib/leadSync';
 import { sendWhatsAppRequest } from '@/lib/whatsAppSendRequest';
+import { toWhatsAppDigits } from '@/lib/waNumber';
+import { queuedLabel, sendVerb } from '@/lib/inboxSendWindow';
+import { LeadQueuedSends, ReplyWindowChip, useLeadSendHours } from '@/components/InboxSendWindow';
 
 /* ══ ONE LEAD'S WHATSAPP, IN A DIALOG (2026-10-11) — the twin of LeadSmsPanel ══════════════════════════════════════════════
    The Outreach WhatsApp button opens this instead of jumping to the Inbox: the recent thread, the approved-template picker
@@ -69,6 +72,8 @@ export function LeadWhatsAppPanel({ lead, height = 'max-h-[320px]', className }:
   const navigate = useNavigate();
   const endRef = useRef<HTMLDivElement>(null);
   const phone = (lead.phone ?? '').trim();
+  /* THE SEND WINDOW (2026-10-21): outside the lead's send hours the server queues this popup's sends too (via:'lead_panel'). */
+  const hours = useLeadSendHours('whatsapp', toWhatsAppDigits(phone, lead.country ?? null));
 
   const thread = useQuery({
     queryKey: ['lead-whatsapp-dialog', lead.id],
@@ -123,6 +128,11 @@ export function LeadWhatsAppPanel({ lead, height = 'max-h-[320px]', className }:
       toast({ title: 'Not sent', description: r.reason ?? ERROR_WORDS[r.error ?? ''] ?? r.error ?? 'Send failed.', variant: 'destructive' });
       return false;
     }
+    if (r.scheduled) {
+      hours.sched.refresh();
+      toast({ title: 'Queued', description: `Outside their send hours. ${queuedLabel(r.scheduled.send_at, r.scheduled.tz)}. You can edit or cancel it until then.` });
+      return true;
+    }
     toast({ title: r.simulated ? 'Sent (simulated — test mode)' : 'Sent ✓' });
     void thread.refetch();
     notifyLeadChanged(lead.id); // every screen re-reads the lead (the server may have moved its status)
@@ -133,7 +143,7 @@ export function LeadWhatsAppPanel({ lead, height = 'max-h-[320px]', className }:
     // The Inbox's rule: a repeat of a template this lead already had carries the explicit server override.
     const alreadySent = rows.some((m) => m.direction === 'outbound' && m.template_name === tpl);
     setBusy('template');
-    try { finish(await sendWhatsAppRequest(sb, { phone, leadId: lead.id, country: lead.country ?? null, templateName: tpl, allowResend: alreadySent })); } finally { setBusy(null); }
+    try { finish(await sendWhatsAppRequest(sb, { phone, leadId: lead.id, country: lead.country ?? null, templateName: tpl, allowResend: alreadySent, via: 'lead_panel' })); } finally { setBusy(null); }
   };
   const sendText = async () => {
     const body = text.trim();
@@ -141,7 +151,7 @@ export function LeadWhatsAppPanel({ lead, height = 'max-h-[320px]', className }:
     const left = unresolvedTokens(body);
     if (left.length) { toast({ title: 'Fill in the blanks first', description: `This message still contains ${left.join(', ')}. Replace it with the real wording, then send.`, variant: 'destructive' }); return; }
     setBusy('text');
-    try { if (finish(await sendWhatsAppRequest(sb, { phone, leadId: lead.id, country: lead.country ?? null, body }))) setText(''); } finally { setBusy(null); }
+    try { if (finish(await sendWhatsAppRequest(sb, { phone, leadId: lead.id, country: lead.country ?? null, body, via: 'lead_panel' }))) setText(''); } finally { setBusy(null); }
   };
 
   return (
@@ -162,8 +172,10 @@ export function LeadWhatsAppPanel({ lead, height = 'max-h-[320px]', className }:
               ))}
             </ul>
           )}
+        <LeadQueuedSends hours={hours} leadId={lead.id} />
         <div ref={endRef} />
       </div>
+      {hours.status && <div className="flex justify-end"><ReplyWindowChip open={hours.status.open} text={hours.status.text} /></div>}
 
       {!phone ? (
         <p className="rounded-lg bg-muted/50 px-2.5 py-2 text-xs text-muted-foreground" data-testid="whatsapp-no-phone">This lead has no phone number to message.</p>
@@ -192,7 +204,7 @@ export function LeadWhatsAppPanel({ lead, height = 'max-h-[320px]', className }:
             <div className="flex flex-wrap items-center justify-between gap-2">
               <p className="text-[11px] text-muted-foreground">The server fills in the details and checks it is allowed before it goes.</p>
               <Button size="sm" className="h-9 gap-1.5 bg-emerald-600 font-bold text-white hover:bg-emerald-700" disabled={!!busy || !tpl || !chosenOk.ok} onClick={() => void sendTemplate()} data-testid="whatsapp-send-template">
-                {busy === 'template' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}Send template
+                {busy === 'template' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}{sendVerb(hours.open)} template
               </Button>
             </div>
           </div>
@@ -205,7 +217,7 @@ export function LeadWhatsAppPanel({ lead, height = 'max-h-[320px]', className }:
               {win.open ? `Reply window open — about ${win.hoursLeft} hour${win.hoursLeft === 1 ? '' : 's'} left.` : 'Outside the 24-hour reply window, only an approved template can be sent.'}
             </p>
             <Button size="sm" className="h-9 gap-1.5 bg-emerald-600 font-bold text-white hover:bg-emerald-700" disabled={!!busy || !win.open || !text.trim()} onClick={() => void sendText()} data-testid="whatsapp-send">
-              {busy === 'text' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}Send
+              {busy === 'text' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}{sendVerb(hours.open)}
             </Button>
           </div>
         </>

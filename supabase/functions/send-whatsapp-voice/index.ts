@@ -13,16 +13,16 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { leadAccess, refusalBody, resolveActor } from "../_shared/access.ts";
 import { guardAction } from "../_shared/protection.ts";
-import { resolveWhatsAppEnv, toWhatsAppNumber, sendViaGraph } from "../_shared/whatsapp-send.ts";
-import { uploadMediaToGraph } from "../_shared/whatsapp-media-upload.ts";
 import { sendVoiceNote } from "../_shared/voice-note-send.ts";
-import { VOICE_NOTE_MAX_UPLOAD_BYTES } from "../../../src/lib/voiceNote.ts";
+import { voiceSendDeps } from "../_shared/voice-note-deps.ts";
+import { queueGate } from "../_shared/inbox-schedule.ts";
+import { VOICE_NOTE_MAX_UPLOAD_BYTES, voiceNoteBody } from "../../../src/lib/voiceNote.ts";
 import { QA_REFUSAL_REASON } from "../../../src/lib/qaSafety.ts";
 import { qaSendHold } from "../_shared/qa-guard.ts";
 
 /* The deploy marker, on the OPTIONS preflight like send-whatsapp-message's x-swm-build: readable
    with no credential, carries no secret. Bump it with any change worth proving live. */
-const BUILD_ID = "2026-10-04a-voice-qa";
+const BUILD_ID = "2026-10-21a-voice-send-window";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -67,8 +67,6 @@ Deno.serve(async (req) => {
        one, is refused. A failed read throws — fail closed. */
     const qa = await qaSendHold(service, { leadId: str("lead_id") || null, to: str("phone") || null, actorUserId: actor.id });
     if (qa.kind === "refuse") return json({ ok: false, error: "qa_test_account", reason: QA_REFUSAL_REASON }, 200);
-    const liveEnv = resolveWhatsAppEnv();
-    const env = qa.kind === "simulate" ? { ...liveEnv, live: false, testMode: true } : liveEnv;
     /* ⛔ WHOSE BOOK, WHO PRESSED SEND (2026-09-27, multi-user). admin: unchanged. sales: must name a
        lead assigned to them; the thread is the lead's book, the person goes in sent_by_user_id and
        in whatsapp_sends.user_id (the sender diagnostic). */
@@ -84,6 +82,8 @@ Deno.serve(async (req) => {
       if (!guard.ok) return json(guard.body, guard.status);
     }
 
+    const deps = voiceSendDeps(service, qa, actor.id);
+    if (!deps) return json({ ok: false, error: "qa_test_account", reason: QA_REFUSAL_REASON }, 200);
     const result = await sendVoiceNote({
       operatorId,
       leadId: str("lead_id") || null,
@@ -93,60 +93,29 @@ Deno.serve(async (req) => {
       /* Read only if the declared size is under the cap; the module re-checks the real length. */
       audio: audioFile && audioFile.size <= VOICE_NOTE_MAX_UPLOAD_BYTES ? new Uint8Array(await audioFile.arrayBuffer()) : null,
     }, {
-      now: () => Date.now(),
-      live: env.live,
-      testMode: env.testMode,
-      normalise: toWhatsAppNumber,
-      async getLead(id) {
-        const { data } = await service.from("outreach_leads").select("id, user_id, phone, country, is_archived").eq("id", id).maybeSingle();
-        return (data as { id: string; user_id: string; phone: string | null; country: string | null; is_archived: boolean | null } | null) ?? null;
-      },
-      async lastInboundAt(uid, to) {
-        /* Same read as send-whatsapp-message's window: the operator's own inbound rows for this number. */
-        const { data } = await service.from("whatsapp_messages").select("created_at")
-          .eq("user_id", uid).eq("phone", to).eq("direction", "inbound")
-          .order("created_at", { ascending: false }).limit(1);
-        return (data?.[0] as { created_at?: string } | undefined)?.created_at ?? null;
-      },
-      async claimStorage(path, ogg) {
-        const { error } = await service.storage.from("whatsapp-media").upload(path, ogg, { contentType: "audio/ogg", upsert: false });
-        if (!error) return { ok: true };
-        const msg = String((error as { message?: string }).message ?? "");
-        const code = String((error as { statusCode?: string | number }).statusCode ?? "");
-        return { ok: false, exists: /exist|duplicate/i.test(msg) || code === "409", error: msg };
-      },
-      async releaseStorage(path) {
-        await service.storage.from("whatsapp-media").remove([path]);
-      },
-      uploadMedia: (ogg) => uploadMediaToGraph(env.accessToken, env.phoneNumberId, ogg, "audio/ogg", "voice-note.ogg"),
-      async sendAudio(to, payload) {
-        const r = await sendViaGraph(env.accessToken, env.phoneNumberId, to, payload);
-        if (r.ok && r.messageId) return { ok: true, messageId: r.messageId };
-        /* Meta answered with an error code → definitely not sent. Anything else (a throw, a non-JSON
-           5xx) → unknown, and the module keeps the claim so a retry cannot double-send. */
-        return { ok: false, definitive: typeof r.failCode === "number", error: r.error ?? "send failed" };
-      },
-      async insertMessage(row) {
-        const { data, error } = await service.from("whatsapp_messages").insert({ ...row, sent_by_user_id: actor.id }).select("*").maybeSingle();
-        if (error) console.error("[send-whatsapp-voice] message insert failed:", error.message);
-        return (data as Record<string, unknown> | null) ?? null;
-      },
-      async insertSendLog(row) {
-        const { error } = await service.from("whatsapp_sends").insert({ ...row, user_id: actor.id });
-        if (error) console.error("[send-whatsapp-voice] send-audit insert failed (non-blocking):", error.message);
-      },
-      async markAnswered(leadId) {
-        /* The same scoped move send-whatsapp-message makes for a free-form reply: only a lead that is
-           currently on Replied, so no later pipeline status can be overwritten. */
-        await service.from("outreach_leads")
-          .update({ status: "awaiting_reply", whatsapp_template: null, whatsapp_sent_at: new Date().toISOString() })
-          .eq("id", leadId).eq("status", "replied");
+      ...deps,
+      /* ⛔ THE INBOX SEND WINDOW (2026-10-21, src/lib/inboxSendWindow.ts): outside the lead's send hours the checked recording is
+         stored once (whatsapp-media, its own path) and queued; inbox-scheduled-send sends it when the hours open, re-checking first. */
+      async queueOutsideWindow({ to, leadId, ogg, durationMs, lastInboundAt }) {
+        const sendId = str("send_id").toLowerCase();
+        const mediaPath = `${operatorId}/scheduled-voice-${sendId}.ogg`;
+        const gate = await queueGate(service, {
+          bookUserId: operatorId, leadId, phone: to, channel: "whatsapp", kind: "voice", body: voiceNoteBody(durationMs),
+          mediaPath, durationMs, queuedBy: actor.id,
+        }, lastInboundAt, async () => {
+          const { error } = await service.storage.from("whatsapp-media").upload(mediaPath, ogg, { contentType: "audio/ogg", upsert: false });
+          if (!error) return { ok: true as const };
+          const msg = String((error as { message?: string }).message ?? "");
+          if (/exist|duplicate/i.test(msg)) return { ok: false as const, error: "duplicate_send", reason: "This voice note is already queued." };
+          return { ok: false as const, error: "storage_failed", reason: "The voice note could not be saved, so nothing was queued. Try again." };
+        });
+        return gate ? { status: 200, body: gate } as never : null;
       },
     });
     /* ⛔ QA: a SIMULATED fixture send moves the lead exactly as a live one would — the module above only
        does it when live. Same scoped update as markAnswered (Replied only). */
     const qaLeadId = str("lead_id");
-    if (qa.kind === "simulate" && (result.body as { ok?: boolean }).ok === true && qaLeadId) {
+    if (qa.kind === "simulate" && (result.body as { ok?: boolean }).ok === true && (result.body as { status?: string }).status !== "scheduled" && qaLeadId) {
       await service.from("outreach_leads")
         .update({ status: "awaiting_reply", whatsapp_template: null, whatsapp_sent_at: new Date().toISOString() })
         .eq("id", qaLeadId).eq("status", "replied");
