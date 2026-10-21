@@ -5,7 +5,8 @@
    pitch, the Inbox shows the chip / filter / setting. Nothing here sends. */
 import { readFileSync } from 'node:fs';
 import { replyKinds, replyKindChanges, type TagMsg } from '../src/lib/replyKindTag.ts';
-import { engineNamesThem, isVisible, parseVisibleRule, visibleCounts, DEFAULT_VISIBLE_RULE } from '../src/lib/visibleFlag.ts';
+import { engineNamesThem, isVisible, parseVisibleRule, parseVisibleShare, visibleCounts, visibleRuleKey, DEFAULT_VISIBLE_RULE } from '../src/lib/visibleFlag.ts';
+import { isPlainConfirm, pickMove, type MoveEvidence, type MoveThreadMsg } from '../src/lib/replyMove.ts';
 import { INBOX_QUICK_FILTERS, passesQuickFilter } from '../src/lib/conversationState.ts';
 
 let f = 0;
@@ -51,7 +52,14 @@ console.log('2. the Visible rule');
   ok(isVisible({ gemini: none, overview: one }, 'either'), 'Google AI named: Visible');
   ok(!isVisible({ gemini: none, overview: noAnswer }, 'either'), '"No AI answer shown" is never named');
   ok(!isVisible({ gemini: null, overview: null }, 'either'), 'no audit answers: not Visible');
-  ok(!isVisible({ gemini: { named: 1, answers: 3 }, overview: null }, 'either') && engineNamesThem({ named: 3, answers: 3 }), 'a partial naming on a 3-question audit is not Visible; every answer is');
+  /* Per engine, MORE THAN HALF of its own answers (Paul, 2026-10-21). */
+  ok(engineNamesThem({ named: 1, answers: 1 }) && engineNamesThem({ named: 2, answers: 2 }) && engineNamesThem({ named: 2, answers: 3 }), '1/1, 2/2, 2/3: named');
+  ok(!engineNamesThem({ named: 1, answers: 2 }) && !engineNamesThem({ named: 1, answers: 3 }) && !engineNamesThem({ named: 0, answers: 2 }), '1/2, 1/3, 0/2: not named');
+  ok(!isVisible({ gemini: { named: 1, answers: 2 }, overview: { named: 0, answers: 1 } }, 'either'), 'GSI Driving School (Gemini 1/2, Google AI 0/1, ChatGPT 2/2 ignored): NOT Visible — gets the pitch');
+  ok(!isVisible({ gemini: { named: 1, answers: 2 }, overview: { named: 1, answers: 2 } }, 'either'), 'engines are judged separately, never pooled (1/2 + 1/2 is not 2/4 of anything)');
+  ok(parseVisibleShare('x') === 'half' && !engineNamesThem({ named: 2, answers: 3 }, 'two_thirds') && engineNamesThem({ named: 3, answers: 3 }, 'two_thirds')
+    && !engineNamesThem({ named: 2, answers: 3 }, 'all') && engineNamesThem({ named: 3, answers: 3 }, 'all'), 'the threshold is a setting: two-thirds / every answer');
+  ok(visibleRuleKey('either', 'half') === 'either:half', 'a lead is re-judged when either setting changes');
   ok(!isVisible({ gemini: one, overview: none }, 'both') && isVisible({ gemini: one, overview: one }, 'both'), '"both" needs both engines');
   ok(!isVisible({ gemini: one, overview: one }, 'off'), '"off" never marks Visible');
   const c = visibleCounts([{ gemini_answered: true, gemini_self_named: true, overview_answered: false, overview_self_named: true }]);
@@ -88,7 +96,8 @@ console.log('4. the drafter tags, never writes a status; Visible comes before an
   ok(/const stopping = decision\.kind === "needs_you" && decision\.stop/.test(proc), '…but a stop still opts them out');
   ok((FN.match(/VISIBLE_NO_PITCH_ERROR, detail: VISIBLE_NO_PITCH_DETAIL/g) ?? []).length === 2, 'Draft reply and Regenerate refuse a pitch on a Visible lead');
   ok(/rpc\("apply_lead_visible"/.test(FN) && !/ai_visible_at:/.test(FN), 'the flag is written only through apply_lead_visible');
-  ok(/x-ai-reply-drafts": "2026-10-21g-status-visible"/.test(FN), 'deploy marker bumped');
+  ok(/x-ai-reply-drafts": "2026-10-21h-visible-half-first-reply"/.test(FN), 'deploy marker bumped');
+  ok(/visible_rule, visible_min_share/.test(FN) && /isVisible\(visibleCounts\(rows \?\? \[\]\), vs\.rule, vs\.share\)/.test(FN), 'the tick judges with the rule AND the threshold setting');
 }
 
 console.log('5. the Inbox: chip, Show filter, setting');
@@ -97,6 +106,33 @@ console.log('5. the Inbox: chip, Show filter, setting');
   ok(passesQuickFilter('visible', { unread: false, waitingSinceMs: null, visible: true }) && !passesQuickFilter('visible', { unread: false, waitingSinceMs: null }), 'the filter keeps only Visible leads');
   ok(/<EngineChips scores=\{c\.engineScores\} visible=\{c\.visible\} \/>/.test(INBOX) && /\{active\.visible && <VisibleChip \/>\}/.test(INBOX), 'the chip on the row and in the thread');
   ok(/<InboxVisibleRuleControl \/>/.test(SETTINGS), 'the rule is a setting in Inbox Settings');
+}
+
+console.log('6. GSI Driving School: "Yes", then "How can I help" an hour later, gets the first-reply pitch (Paul, 2026-10-21)');
+{
+  /* The live thread, 21 Oct (times as stored). Before the fix the second message read as a second reply and got
+     "No playbook reply fits: answer it yourself". Counts without ChatGPT: Gemini 1/2 + Google AI 0/1 = 1 of 3. */
+  const thread: MoveThreadMsg[] = [
+    { from: 'us', text: '[initial_contact_short]', templateName: 'initial_contact_short', messageType: 'template', at: '2026-10-21T08:02:03Z' },
+    { from: 'them', text: 'Yes', messageType: 'text', at: '2026-10-21T08:26:07Z' },
+    { from: 'them', text: 'How can I help', messageType: 'text', at: '2026-10-21T09:35:13Z' },
+  ];
+  const e = { businessName: 'GSI Driving School', trade: 'Driving instructors', town: 'Woking', engineWords: 'ai', named: { named: 1, valid: 3 },
+    competitors: ['PassMeFast', 'LPOD Academy', "driveJohnson's"], hookAlreadySent: false, findings: [], hasWebsite: true, ownerName: null, foundOnGoogle: true,
+    site: { state: 'issues', issues: ['the hidden business details on some pages are broken'] } } as unknown as MoveEvidence;
+  const run = (t: MoveThreadMsg[]) => pickMove({ thread: t, suppressed: false, aiSentSinceWin: 0, evidence: e });
+  const p = run(thread);
+  ok(p.move === 'first_reply_pitch' && !p.needsYou && !p.noDraft, `"How can I help" an hour after "Yes": the pitch (got ${p.move}${p.needsYou ? ` / ${p.needsYou.label}` : ''})`);
+  ok(/recommending your competitors instead/i.test(p.fixedText ?? ''), '…the full pitch: 1 of 3 without ChatGPT allows "AI is recommending your competitors instead"');
+  ok(run(thread.slice(0, 2)).move === 'first_reply_pitch', '"Yes" alone: the pitch (unchanged)');
+  /* Once the pitch has gone, a later "how can I help" is not pitched again (and is never "No playbook reply fits"). */
+  const after = run([...thread.slice(0, 2), { from: 'us', text: p.fixedText ?? 'pitch', messageType: 'text', at: '2026-10-21T08:40:00Z' }, thread[2]]);
+  ok(after.move !== 'first_reply_pitch' && after.needsYou?.reason !== 'off_topic', `after the pitch went, "How can I help" is the next step, not a repeat pitch or Needs you (got ${after.move})`);
+  /* 4. Plain confirms and "how can I help" never fall to "No playbook reply fits". */
+  for (const s of ['Yes', 'Yes it is', 'How can I help?', 'Hi yes, how can I help you', 'Yeah speaking', 'What can I do for you?']) ok(isPlainConfirm(s, null), `a plain confirm: "${s}"`);
+  for (const s of ['How much is it?', 'Who is this?', 'Not interested', 'Yes but how much']) ok(!isPlainConfirm(s, null), `not a plain confirm: "${s}"`);
+  const late = run([thread[0], { from: 'them', text: 'Hi yes, how can I help you?', messageType: 'text', at: '2026-10-21T10:00:00Z' }]);
+  ok(late.move === 'first_reply_pitch', '"Hi yes, how can I help you?" as a first reply: the pitch');
 }
 
 if (f) { console.log(`\n${f} FAILED`); process.exit(1); }

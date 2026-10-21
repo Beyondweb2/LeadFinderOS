@@ -1259,7 +1259,10 @@ positive allowlist of `baseline`; `isColdOutreachTemplate` treats unknown as COL
   messages contradict; a person's own choice stands). Never add a sender-side status write for these; a new message table must get the trigger.
   Every change goes to `lead_status_sync_log`. `whatsapp_messages.reply_kind` is written ONLY by ai-reply-drafts from `src/lib/replyKindTag.ts`.
 - ⛔ **Visible is a FLAG, not a status** (`outreach_leads.ai_visible_*`, rules `src/lib/visibleFlag.ts`): written ONLY by `apply_lead_visible`
-  (ai-reply-drafts `judgeLeadVisible`). ChatGPT never counts; no Google AI answer is never named. A Visible lead gets no pitch and no Needs you.
+  (ai-reply-drafts `judgeLeadVisible`). PER ENGINE, named in MORE THAN HALF of that engine's answers (threshold `visible_min_share`, a setting);
+  ChatGPT never counts; no Google AI answer is never named. A Visible lead gets no pitch and no Needs you.
+- ⛔ **"First reply" = no pitch sent yet** (`pickMove` `first` uses `pitchOwed`), never a time window; a plain confirm / "how can I help" is never
+  "No playbook reply fits" (`isPlainConfirm`). ⛔ **`namedShareOf` never counts ChatGPT** (drafter + template gate; GSI Driving School, 2026-10-21).
 
 ### 6m. Find Leads adds and the payment-12 reminder (2026-10-17 — records: `docs/find-leads-bulk-add.md`, `docs/month12-reminder.md`)
 

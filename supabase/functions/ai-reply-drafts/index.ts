@@ -45,8 +45,8 @@ import {
 import { pickMove, type MoveEvidence, type MoveInput, type MovePlan, type MoveThreadMsg } from "../../../src/lib/replyMove.ts";
 import { replyKindChanges } from "../../../src/lib/replyKindTag.ts";
 import {
-  isVisible, parseVisibleRule, visibleCounts, VISIBLE_NO_PITCH_DETAIL, VISIBLE_NO_PITCH_ERROR, VISIBLE_RECHECK_DAYS, VISIBLE_SKIP_REASON, VISIBLE_LABEL,
-  type VisibleRule,
+  isVisible, parseVisibleRule, parseVisibleShare, visibleCounts, visibleRuleKey, VISIBLE_NO_PITCH_DETAIL, VISIBLE_NO_PITCH_ERROR, VISIBLE_RECHECK_DAYS, VISIBLE_SKIP_REASON, VISIBLE_LABEL,
+  type VisibleRule, type VisibleShare,
 } from "../../../src/lib/visibleFlag.ts";
 import { CONFIDENCE_LINE, FACT_SHEET_VERSION } from "../../../src/lib/offerFactSheet.ts";
 import { WAITING_PITCH_STATUSES } from "../../../src/lib/auditPitchRule.ts";
@@ -75,7 +75,7 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-internal-job, x-cron-secret",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
   /* The deploy marker: only this build answers with it. */
-  "x-ai-reply-drafts": "2026-10-21g-status-visible",
+  "x-ai-reply-drafts": "2026-10-21h-visible-half-first-reply",
 };
 const json = (b: unknown, s = 200) => new Response(JSON.stringify(b), { status: s, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 const str = (v: unknown) => (typeof v === "string" ? v.trim() : "");
@@ -339,15 +339,18 @@ async function tagReplies(service: Service, thread: MsgRow[]): Promise<number> {
 
 /* ───────────────────────── the Visible flag (src/lib/visibleFlag.ts) ───────────────────────── */
 
-async function visibleRuleNow(service: Service): Promise<VisibleRule> {
-  const { data } = await service.from("whatsapp_outreach_state").select("visible_rule").eq("id", 1).maybeSingle();
-  return parseVisibleRule(data?.visible_rule);
+/** The two settings (rule + per-engine threshold) and the key a lead is judged under. */
+type VisibleSettings = { rule: VisibleRule; share: VisibleShare; key: string };
+async function visibleRuleNow(service: Service): Promise<VisibleSettings> {
+  const { data } = await service.from("whatsapp_outreach_state").select("visible_rule, visible_min_share").eq("id", 1).maybeSingle();
+  const rule = parseVisibleRule(data?.visible_rule); const share = parseVisibleShare(data?.visible_min_share);
+  return { rule, share, key: visibleRuleKey(rule, share) };
 }
 
 /** Judge ONE lead: its newest ordinary audit, once that audit and the website check are final. Writes only through
  *  apply_lead_visible (which cancels the queued follow-ups on a new flag). Returns whether the lead is Visible now.
  *  ⛔ An audit still running, or a website check still running (inside EVIDENCE_WAIT_MS of the audit), changes nothing. */
-async function judgeLeadVisible(service: Service, leadId: string, rule: VisibleRule): Promise<boolean> {
+async function judgeLeadVisible(service: Service, leadId: string, vs: VisibleSettings): Promise<boolean> {
   const [{ data: lead }, { data: audits }] = await Promise.all([
     service.from("outreach_leads").select("id, ai_visible_at, ai_visible_checked_audit_id, ai_visible_checked_rule").eq("id", leadId).maybeSingle(),
     service.from("ai_audits").select("id, audit_purpose, is_measurement, created_at, runs:ai_audit_runs(id, status)")
@@ -358,27 +361,28 @@ async function judgeLeadVisible(service: Service, leadId: string, rule: VisibleR
   // deno-lint-ignore no-explicit-any
   const newest = ((audits ?? []) as any[]).find(isDrafterAudit) as { id: string; created_at: string; runs?: Array<{ id: string; status: string | null }> } | undefined;
   if (!newest) {
-    if (was) await service.rpc("apply_lead_visible", { p_lead: leadId, p_visible: false, p_audit: null, p_rule: rule });
+    if (was) await service.rpc("apply_lead_visible", { p_lead: leadId, p_visible: false, p_audit: null, p_rule: vs.key });
     return false;
   }
   const runs = newest.runs ?? [];
   const done = runs.filter((r) => r.status === "complete" || r.status === "capped");
   if (!done.length) return was;
-  if (lead.ai_visible_checked_audit_id === newest.id && lead.ai_visible_checked_rule === rule) return was;
+  if (lead.ai_visible_checked_audit_id === newest.id && lead.ai_visible_checked_rule === vs.key) return was;
   const phases = await loadPhases(service, leadId);
   if (phases.crawl !== "final" && Date.now() - Date.parse(newest.created_at) < EVIDENCE_WAIT_MS) return was;
   const { data: rows, error } = await service.from("ai_audit_queue").select("gemini_answered, gemini_self_named, overview_answered, overview_self_named")
     .in("run_id", done.map((r) => r.id)).eq("status", "done");
   if (error) return was;
-  const visible = isVisible(visibleCounts(rows ?? []), rule);
-  await service.rpc("apply_lead_visible", { p_lead: leadId, p_visible: visible, p_audit: newest.id, p_rule: rule });
+  const visible = isVisible(visibleCounts(rows ?? []), vs.rule, vs.share);
+  await service.rpc("apply_lead_visible", { p_lead: leadId, p_visible: visible, p_audit: newest.id, p_rule: vs.key });
   return visible;
 }
 
 /** The tick's sweep: leads whose newest recent audit has not been judged under the current rule, and flagged leads judged
  *  under an older rule. Capped per tick; the rest are judged on the next ones. */
 async function refreshVisibleFlags(service: Service, started: number) {
-  const rule = await visibleRuleNow(service);
+  const vs = await visibleRuleNow(service);
+  const rule = vs.key;
   const sinceIso = new Date(Date.now() - VISIBLE_RECHECK_DAYS * 86_400_000).toISOString();
   const { data: audits, error } = await service.from("ai_audits").select("id, lead_id, audit_purpose, is_measurement")
     .not("lead_id", "is", null).gte("created_at", sinceIso).order("created_at", { ascending: false }).limit(2000);
@@ -398,7 +402,7 @@ async function refreshVisibleFlags(service: Service, started: number) {
   let judged = 0;
   for (const id of [...new Set(due)]) {
     if (judged >= VISIBLE_SWEEP_MAX || Date.now() - started > 30_000) break;
-    await judgeLeadVisible(service, id, rule);
+    await judgeLeadVisible(service, id, vs);
     judged++;
   }
 }

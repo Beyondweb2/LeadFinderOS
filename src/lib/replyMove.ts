@@ -290,6 +290,20 @@ function wasOpener(m: MoveThreadMsg | null): boolean {
   if (/^\W*hi,?\s+did\s+you\s+get\s+my\s+last\s+message\?/i.test(m.text ?? '')) return true;
   return /\bis\s+this\b.{0,60}\?/i.test(m.text) && m.text.length < 160;
 }
+/** A name they gave in an earlier message of theirs before thread[idx] ("Dom here", then "how can I help"). */
+function earliestReplyName(thread: MoveThreadMsg[], idx: number, businessName: string): string | null {
+  for (const m of thread.slice(0, idx)) if (m.from === 'them') { const n = nameFromReply(m.text, businessName); if (n) return n; }
+  return null;
+}
+/** A message that only confirms who they are or offers help ("Yes", "Yes it is", "How can I help?", "Hi yes, how can I help you"):
+ *  never "No playbook reply fits" (Paul, 2026-10-21) — the pitch when it is owed, else the go-on step. */
+const HOW_HELP = /^\W*(?:(?:hi|hello|hey|yes|yeah|yep|yup|yh|ok|okay|it\s+is|this\s+is\s+\w+|speaking)\W+)*(?:how\s+(?:can|may)\s+(?:i|we)\s+help(?:\s+you)?|(?:can|may)\s+(?:i|we)\s+help(?:\s+you)?|what\s+can\s+(?:i|we)\s+do\s+for\s+you)(?:\s+today)?\W*$/i;
+const HUMAN_CONFIRM_ONLY = /^\W*(?:(?:hi|hello|hey)\W+)?(?:yes|yeah|yea|yep|yup|yh|ya|ye|correct|speaking|it\s+is|it'?s\s+me|that'?s\s+(?:right|correct|us|me))(?:\W+(?:yes|it\s+is|that'?s\s+(?:right|correct|us|me)|correct|speaking|thanks?|thank\s+you))*\W*$/i;
+export function isPlainConfirm(text: string, category: string | null | undefined): boolean {
+  const t = String(text ?? '').trim();
+  if (!t) return false;
+  return category === 'confirmed_contact' || HOW_HELP.test(t) || HUMAN_CONFIRM_ONLY.test(t);
+}
 /** Nothing of ours before thread[idx] but the opener and its nudge: the pitch has not been sent yet. */
 function pitchOwed(thread: MoveThreadMsg[], idx: number): boolean {
   const ours = thread.slice(0, idx).filter((m) => m.from === 'us');
@@ -676,11 +690,14 @@ export function pickMove(i: MoveInput): MovePlan {
   /* A loop guard wins the reason: it is why nothing should be drafted on its own. */
   const g = (p: MovePlan): MovePlan => (guard ? { ...p, autoDraft: false, needsYou: flag(guard) } : p);
 
-  /* The FIRST real reply to our opener (Paul, 2026-10-20): the pitch, unless it is a no / stop / angry, a wrong person or a
-     direct question. A name they give in it ("Dom here") may open the pitch. */
-  const realBefore = thread.slice(0, idx).some((m, k) => m.from === 'them' && !autoFlags[k]);
-  const first = !realBefore && !!prevOurs && wasOpener(prevOurs);
-  const theirName = first ? nameFromReply(latest.text, e.businessName) : null;
+  /* The FIRST reply to our opener (Paul, 2026-10-20): the pitch, unless it is a no / stop / angry, a wrong person or a
+     direct question. A name they give in it ("Dom here") may open the pitch.
+     ⛔ "FIRST" = NO PITCH SENT SINCE THEIR FIRST REPLY, never a time window (Paul, 2026-10-21, GSI Driving School: "Yes", then
+     "How can I help" an hour later — beyond the 5-minute burst merge — read as a second reply and got "No playbook reply fits").
+     Nothing of ours since the opener (and its nudge) = the pitch is still owed, however many messages they sent. The burst
+     merge (MERGE_WINDOW_MS) still only joins messages into one turn. */
+  const first = !!prevOurs && wasOpener(prevOurs) && pitchOwed(thread, idx);
+  const theirName = first ? (nameFromReply(latest.text, e.businessName) ?? earliestReplyName(thread, idx, e.businessName)) : null;
   const pitchPlan = (): MovePlan => {
     const pitch = firstReplyPitch(e, theirName);
     return plan({ move: 'first_reply_pitch', read: 'first_reply', label: t.category === 'confirmed_contact' ? 'Only confirmed' : null, greetName: theirName,
@@ -917,6 +934,10 @@ export function pickMove(i: MoveInput): MovePlan {
   }
   /* The first reply, when nothing above matched: THE PITCH ("yes", "that's correct", "how can I help", a name, "hello?",
      even "interested"). Only an unanswerable question goes to a person. */
+  /* ⛔ A plain confirm or "how can I help" is never "No playbook reply fits" (Paul, 2026-10-21): the pitch while it is owed
+     (checked BEFORE the first-reply question rule — "How can I help?" is a question to triage), else the go-on step below. */
+  const plain = isPlainConfirm(text, t.category);
+  if (plain && first) return g(pitchPlan());
   if (first) {
     if (t.category === 'question' && !RE.whatsThisAbout.test(text)) return g(noDraft('question_not_on_sheet', 'question', 'unknown_question'));
     if (LAUGH_ONLY.test(text)) return g(noDraft('unsure', 'laughing'));
@@ -931,7 +952,7 @@ export function pickMove(i: MoveInput): MovePlan {
     return g(plan({ move: 'objection_rank', read: 'already_ranks', points: ['Agree with what is true: fair enough, that is good.', ...(line ? [line] : [])], question: 'Want me to send you a quick voice note showing what I found?' }));
   }
   if (RE.interested.test(text) || ((t.category === 'interested' || CLEAR_YES.test(text)) && !RE.goOn.test(text))) return g(fromPlaybook('interested', { allowPrice: true }));
-  if (RE.goOn.test(text) || BARE_YES.test(text) || RE.yesish.test(text)) {
+  if (RE.goOn.test(text) || BARE_YES.test(text) || RE.yesish.test(text) || plain) {
     /* "go on then" / "ok": the agency question, or (no website) the website question, or the call / voice note once known. */
     if (known) return g(fromPlaybook('go_on', {}, GO_ON_KNOWN));
     if (noSiteOf(e)) return g(fromPlaybook('go_on', {}, PITCH_SITE_Q));

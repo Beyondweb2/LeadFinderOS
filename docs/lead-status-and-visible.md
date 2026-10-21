@@ -35,9 +35,11 @@ in the WhatsApp Business phone app under coexistence) are never stored, so nothi
 ## Job 2 — the Visible flag
 
 Rules: `src/lib/visibleFlag.ts`. Newest ordinary audit (`isDrafterAudit`), counted on the chips' ruler (`ai_audit_queue`
-`gemini_*` / `overview_*`, done rows). An engine names them when it named them in EVERY answer it gave (the hook's single answer).
-ChatGPT never counts; Google AI with no answer is never named. Setting `whatsapp_outreach_state.visible_rule`: `either` (default) /
-`both` / `off`, admin-only via `set_inbox_visible_rule`.
+`gemini_*` / `overview_*`, done rows). ⛔ Per engine, SEPARATELY (Paul, later 2026-10-21): an engine names them when it named them in
+MORE THAN HALF of its own answers (1/1, 2/2, 2/3 yes; 1/2 no — GSI Driving School gets the pitch). ChatGPT never counts; Google AI with
+no answer is never named. Settings: `whatsapp_outreach_state.visible_rule` `either` (default) / `both` / `off`
+(`set_inbox_visible_rule`) and `visible_min_share` `half` (default) / `two_thirds` / `all` (`set_inbox_visible_threshold`, migration
+`20261118100000`); `inbox_visible_settings()` reads both. A lead is re-judged when either changes (`ai_visible_checked_rule` = `rule:share`).
 
 Judged by ai-reply-drafts (`judgeLeadVisible`): only once the audit has a complete run AND the website check is final (or 30 min after the
 audit). The tick's `refreshVisibleFlags` runs FIRST each minute (audits from the last `VISIBLE_RECHECK_DAYS`, flagged leads on a rule
@@ -48,5 +50,15 @@ resolves open drafts / Needs you rows. Clearing restores nothing.
 A Visible lead's replies get a `skipped` row, reason `visible` (no draft, no Needs you); a stop still opts them out. Draft reply /
 Regenerate refuse a pitch (`VISIBLE_NO_PITCH_DETAIL`). Inbox: `inbox_visible_leads()` → `WaConversation.visible` → the chip (row +
 thread), Show → Visible. Not a pipeline status: `outreach_leads.status` is untouched.
+
+## The first reply and "named too often" (later 2026-10-21, GSI Driving School)
+
+GSI sent "Yes" (pitched) then "How can I help" 69 minutes later — outside the 5-minute burst merge — and got "No playbook reply fits".
+- ⛔ `pickMove`'s `first` = the opener was our last kind of message AND no pitch has been sent (`pitchOwed`): never a time window. The
+  burst merge (`MERGE_WINDOW_MS`) still only joins messages into one turn.
+- ⛔ A plain confirm or "how can I help" (`isPlainConfirm`) is never "No playbook reply fits": the pitch while owed, else the go-on step
+  (the pitch is not repeated once sent).
+- ⛔ `namedShareOf` (the "named others instead" count, read by the drafter AND the template send gate) counts Gemini + Google AI where
+  shown and scored — never ChatGPT. GSI: ChatGPT 2/2 + Gemini 1/2 + Google AI 0/1 read 3 of 5 (soft pitch); now 1 of 3 (full pitch).
 
 Tests: `scripts/lead-status-and-visible.test.ts`; SQL replay `supabase/tests/lead-status-from-messages.sql` (39 checks, rolled back).

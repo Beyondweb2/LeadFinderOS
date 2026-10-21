@@ -105,7 +105,7 @@ const CAPABILITIES = ["dry_run", "build_phase_hold", "routing_leaf", "any_approv
    2026-10-21a: a sign-up-link or £-priced template is refused to an Australian number (src/lib/prospectOnly.ts).
    2026-10-21a: the Inbox send window — via:"inbox" outside the lead's hours is QUEUED, not sent (src/lib/inboxSendWindow.ts).
    2026-10-21c: both of the above (the send window + Australia prospect-only). */
-const BUILD_ID = "2026-10-21c-send-window-au";
+const BUILD_ID = "2026-10-21d-named-share-no-chatgpt";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",

@@ -207,8 +207,8 @@ export async function resolveAuditReplyVars(service: any, leadId: string, opts: 
     };
   }
   /* ⛔ "NAMED OTHERS INSTEAD" ONLY WHEN NAMED IN AT MOST A THIRD (Paul, 2026-10-20, src/lib/namedShareRule.ts): keyed on the
-     template asked for. The text is never edited; this decides who gets it. ⛔ Counted with namedShareOf: the score the audit
-     screen shows, Google AI included where scored (Paul, 2026-10-20) — the same count the reply drafter reads (scoreNamed). */
+     template asked for. The text is never edited; this decides who gets it. ⛔ Counted with namedShareOf: Gemini + Google AI
+     where shown and scored, NEVER ChatGPT (Paul, 2026-10-21; was the whole displayed score, 2026-10-20) — the same count the reply drafter reads (scoreNamed). */
   const share = namedShareOf(hookScore);
   if (share && opts.templateName && NAMED_INSTEAD_TEMPLATES.has(opts.templateName) && !mayClaimNamedInstead(share.named, share.total)) {
     return { ok: false, reason: `${HOOK_NO_GAP_REASON}: ${namedShareRefusal(String(audit.business_name ?? "").trim(), share.named, share.total)}` };
