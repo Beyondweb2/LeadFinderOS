@@ -3,6 +3,7 @@ import { Clock, Settings } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { InboxReplyModeControl } from '@/components/InboxReplyModeControl';
+import { InboxVisibleRuleControl } from '@/components/InboxVisibleRuleControl';
 import { ReplyHoursDialog } from '@/components/InboxSendWindow';
 import { replyWindowFor, type ReplyHours } from '@/lib/inboxSendWindow';
 import type { InboxChannel } from '@/lib/inboxChannel';
@@ -57,6 +58,11 @@ export function InboxSettings({ channel, aiOn, isAdmin, replyHours, onSaveReplyH
             <Section title="When a prospect replies" hint="One mode for WhatsApp and texts. It does not touch the outreach queue." testId="settings-replies">
               <InboxReplyModeControl channel={channel} />
             </Section>
+            {isAdmin && (
+              <Section title="Visible" hint="AI already names the business: no pitch is drafted or sent, it never shows Needs you, and its queued follow-ups are cancelled." testId="settings-visible">
+                <InboxVisibleRuleControl />
+              </Section>
+            )}
             {isAdmin && (
               <Section title="Sending hours" testId="settings-hours">
                 <div className="flex items-start justify-between gap-3">

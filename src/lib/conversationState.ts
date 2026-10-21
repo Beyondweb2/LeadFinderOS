@@ -162,15 +162,18 @@ export const INBOX_QUICK_FILTERS = [
   { value: 'needs_approving', label: 'Needs approving' },
   /* 2026-10-20: a reply the drafter flagged for a person (src/lib/replyMove.ts NEEDS_YOU_LABELS). WhatsApp only. */
   { value: 'needs_you', label: 'Needs you' },
+  /* 2026-10-21: leads AI already names (the Visible flag, src/lib/visibleFlag.ts). Both roles, both channels. */
+  { value: 'visible', label: 'Visible' },
 ] as const;
 export type InboxQuickFilter = typeof INBOX_QUICK_FILTERS[number]['value'];
 
-export function passesQuickFilter(f: InboxQuickFilter | string | null | undefined, s: Pick<ConversationState, 'unread' | 'waitingSinceMs'> & { waitingOnThem?: boolean; needsApproving?: boolean; needsYou?: boolean }): boolean {
+export function passesQuickFilter(f: InboxQuickFilter | string | null | undefined, s: Pick<ConversationState, 'unread' | 'waitingSinceMs'> & { waitingOnThem?: boolean; needsApproving?: boolean; needsYou?: boolean; visible?: boolean }): boolean {
   if (f === 'unread') return s.unread;
   if (f === 'waiting') return s.waitingSinceMs !== null;
   if (f === 'waiting_them') return s.waitingOnThem === true;
   if (f === 'needs_approving') return s.needsApproving === true;
   if (f === 'needs_you') return s.needsYou === true;
+  if (f === 'visible') return s.visible === true;
   return true;
 }
 

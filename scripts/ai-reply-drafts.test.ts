@@ -84,7 +84,7 @@ ok(/input\.suppressed = await isSuppressed\(service, \{ phone: c\.phone, leadId:
 {
   const tick = FN.slice(FN.indexOf('async function handleTick'));
   ok(/if \(decision\.stop && decision\.reason !== "do_not_contact"\) optedOut = await applyStop\(/.test(tick), 'a stop / angry reply opts out at once (the existing recordOptOut)');
-  const stop = FN.slice(FN.indexOf('async function applyStop'), FN.indexOf('async function undoReplied'));
+  const stop = FN.slice(FN.indexOf('async function applyStop'), FN.indexOf('async function tagReplies'));
   ok(/recordOptOut\(service/.test(stop) && /whatsapp_auto_replies/.test(stop) && /skipped_suppressed/.test(stop) && /\.eq\("status", "queued"\)/.test(stop), '…and cancels queued follow-ups: the waiting pitch and the drip queue');
   ok(!/whatsapp_messages"\)\.insert|sendViaGraph/.test(stop), '…and sends nothing');
 }

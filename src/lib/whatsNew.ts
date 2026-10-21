@@ -22,6 +22,22 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-21-status-and-visible', date: '2026-10-21', title: 'Lead statuses follow the messages, and a new "Visible" flag', audience: 'all',
+    body: 'Replied, You replied and Contacted now update from the messages themselves, the moment one is stored. Leads that AI already names are marked Visible and get no pitch.',
+    report: {
+      added: [
+        'A "Visible" chip on the Inbox row and in the thread when the newest audit shows Gemini or Google AI naming the business (ChatGPT does not count, and "no AI answer shown" is not a naming).',
+        '"Visible" in the Inbox Show filter.',
+        'Admin: a "Visible" setting in Inbox Settings (Gemini or Google AI / both / off).',
+      ],
+      changed: [
+        'When you answer a "yes it is" or "how can I help?", the lead now shows You replied instead of staying on Contacted.',
+        'Texts you send move the lead to You replied too. A send that fails afterwards puts the lead back to Replied.',
+        'A Visible lead gets no pitch draft, no Needs you, and its queued follow-ups are cancelled. A later audit that no longer names them removes the flag.',
+      ],
+      removed: [],
+      effect: 'The status shows who spoke last, whichever screen or phone sent it. No pitch goes to a business AI already recommends. Nothing is sent by this change.',
+    } },
   { id: '2026-10-21-inbox-reply-mode', date: '2026-10-21', title: 'Inbox: one reply mode — Manual, Draft for approval or Auto', audience: 'admin',
     body: 'Inbox → Settings now has one choice for what happens when a prospect replies. It is set to Draft for approval, which is how it worked before. Every automatic sending switch is off.',
     report: {
