@@ -3,7 +3,8 @@
 > **What a draft SAYS is the reply playbook since 2026-10-20: `docs/reply-playbook.md`** (`src/lib/replyPlaybook.ts`).
 > This file is the machinery (rows, switch, claim → send → complete, cost cap).
 
-Branch `feat/ai-assisted-replies`. WhatsApp only, **approve-to-send only** — there is no auto-send.
+Branch `feat/ai-assisted-replies`. WhatsApp only, **approve-to-send only** — there was no auto-send until Level 2
+(2026-10-21, last section): per-reply-type switches, all OFF when shipped.
 
 ## What it does
 
@@ -283,3 +284,50 @@ The log table is service-role only (RLS on, no policies). "Draft reply" through 
 fn `warm-lead-reply`) writes into the composer and stores nothing, so it is not counted.
 
 Tests: `scripts/draft-outcomes.test.ts`; live, always rolled back: `supabase/tests/ai-draft-outcomes.sql`.
+
+## Level 2 — the AI sends its own reply, one reply type at a time (2026-10-21, Paul)
+
+Branch `feat/level2-auto-send`, migration `20261116090000_ai_auto_send.sql`. **Shipped with every switch OFF**: nothing sends by
+itself until an admin switches a reply type on (Paul switches on "First reply pitch" himself).
+
+**The rule** is ONE pure function, `src/lib/aiAutoSend.ts` `autoSendVerdict`, read twice: by the tick when it writes a draft
+(fn `ai-reply-drafts`, `maybeQueueAutoSend`) and by the drain just before the message goes (fn `inbox-scheduled-send`,
+`autoRecheck`). Every check must pass (positive; anything unreadable = no):
+- the master switch "AI handles replies" AND that type's own switch (`whatsapp_outreach_state.ai_auto_send_intents`);
+- the type is on `AUTO_SEND_CHOICES` (29 types; never a price / guarantee / proof / pay-on-results / timing-promise / link line,
+  a Needs you intent or a soft no — `NEVER_AUTO_KEYS`, and the test refuses any choice whose playbook entry is factual / priced);
+- a plain draft: no checker warning, not the rule-built fallback, no Needs you, no stop, not labelled Auto-reply;
+- their words carry no price / guarantee / proof wording (`PRICE_OR_PROOF`) and nothing hostile (`HOSTILE_WORDS`);
+- the whole thread never had a stop, anger, complaint, legal, payment, commercial ask, wrong person, privacy or a soft no
+  (`threadHardReason`: pickMove re-read at every prospect message);
+- a UK mobile (`mobileMarketOf === 'UK'`), not a client (`isClientLead`), not archived, not suppressed;
+- nobody typed in / sent into / queued for the conversation in the last 10 minutes (`ai_auto_send_person_active_at`: the
+  Inbox reply box's `inbox_mark_typing` marks, person-sent messages, person-queued rows);
+- under the daily cap (`ai_auto_send_daily_cap`, default 30; draft time counts queued today, send time counts sent today, London day);
+- the account it is sent as (`ai_auto_send_by` = the admin who last saved the switches) is an admin now.
+The existing loop guards (never twice without a prospect message, three AI sends with no win, repeated auto-replies) come
+from `pickMove` as before; an auto-sent draft counts toward the three (it is `status 'sent'` with `approved_at`).
+
+**The send** is an ordinary `inbox_scheduled_sends` row (`ai_draft_id`, `ai_intent`, `queued_by` = the admin) with
+`send_at` = now (or the next opening of the lead's send hours) + 3–8 minutes, never past WhatsApp's 24 hours less 15 minutes.
+The drain runs its own checks (suppression, stopped lead, a newer message, the 24 hours, the hours) and sends through
+`send-whatsapp-message`'s claimed-row door like any queued Inbox reply. For an automatic row a hold becomes a CANCEL
+(`ai_replied_since` / `ai_window_expired`) — the draft goes back to waiting for approval. `autoRecheck` also drops it when the
+draft closed or changed, someone answered, or any verdict check now fails.
+
+**Settled by trigger** `trg_ai_auto_send_row`: sent → the draft is `sent` (`auto_sent_at`, `final_text`, `sent_message_id`) and the
+message gets `whatsapp_messages.sent_by_ai = true` ("Sent by AI" in the thread); cancelled / failed → `auto_send_id` cleared, the
+draft stays pending, `why.autoSend.stopped` says why. The outcome log records `auto_sent` (the outcome trigger).
+
+**Kill switches**: master off → `trg_ai_auto_send_switch` cancels every waiting automatic row (`ai_switched_off`); a type switched
+off → its rows (`ai_type_off`). Approve / Discard / Regenerate / Draft reply / "Don't send automatically" / typing stop it
+(`stopAutoSend`; a row already `sending` wins and the person is told). A new message from them cancels it in the tick.
+
+**Screens**: the switches + daily limit and "sent by AI today / per type" are inside the existing Draft outcomes popover
+(`AiDraftOutcomes`, admin only; `ai_auto_send_summary`). The draft panel says when it will go. Automatic rows are left out of
+`my_inbox_scheduled_sends` (no Edit / Release on them).
+
+Tests: `scripts/ai-auto-send.test.ts` — §2 is the hard gate (stop / angry / complaint / no / client / price / guarantee / proof
+threads never auto-send with every switch on, through the real pickMove + aiReplyDecision, plus a positive control).
+Found while building: the shared anger rule does not read "F off" as angry; Level 2 blocks it with `HOSTILE_WORDS`, the drafter's
+own rule is unchanged.

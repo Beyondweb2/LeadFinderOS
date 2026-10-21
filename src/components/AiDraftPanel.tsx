@@ -3,7 +3,7 @@ import { LeadAiResultChips } from '@/components/LeadAiResultChips';
 import { AlertTriangle, Ban, Check, ChevronDown, FileText, Loader2, RefreshCw, Sparkles, UserRound, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import { aiChipFor, rowSendable, STOP_REASONS, type AiChip, type AiReplyRow } from '@/lib/aiReplyDraft';
+import { aiChipFor, autoSendWaiting, rowSendable, STOP_REASONS, type AiChip, type AiReplyRow } from '@/lib/aiReplyDraft';
 
 /* The badge in the conversation list and the thread header. */
 const CHIP_TONE: Record<AiChip['tone'], string> = {
@@ -53,7 +53,7 @@ export function AiDraftButton({ busy, onDraft, hasDraft }: { busy: boolean; onDr
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 export interface AiDraftPanelProps {
   row: AiReplyRow;
-  busy: 'approve' | 'regenerate' | 'discard' | 'optout' | null;
+  busy: 'approve' | 'regenerate' | 'discard' | 'optout' | 'stopauto' | null;
   /** True when the reply box no longer holds the AI's text (someone typed their own). */
   boxDiffers: boolean;
   onApprove: () => void;
@@ -61,9 +61,11 @@ export interface AiDraftPanelProps {
   onDiscard: () => void;
   onUseDraft: () => void;
   onMarkOptedOut: () => void;
+  /** Level 2: stop the automatic send; the draft stays here for approval. */
+  onStopAutoSend?: () => void;
 }
 
-export function AiDraftPanel({ row, busy, boxDiffers, onApprove, onRegenerate, onDiscard, onUseDraft, onMarkOptedOut }: AiDraftPanelProps) {
+export function AiDraftPanel({ row, busy, boxDiffers, onApprove, onRegenerate, onDiscard, onUseDraft, onMarkOptedOut, onStopAutoSend }: AiDraftPanelProps) {
   const [whyOpen, setWhyOpen] = useState(false);
   const chip = aiChipFor(row);
   if (!chip) return null;
@@ -71,6 +73,7 @@ export function AiDraftPanel({ row, busy, boxDiffers, onApprove, onRegenerate, o
   const stop = STOP_REASONS.has(row.reason ?? '');
   const optedOut = why?.optedOut === 'recorded' || why?.optedOut === 'already' || row.reason === 'do_not_contact';
   const sendable = rowSendable(row);
+  const autoAt = autoSendWaiting(row);
 
   if (!sendable) {
     return (
@@ -118,6 +121,17 @@ export function AiDraftPanel({ row, busy, boxDiffers, onApprove, onRegenerate, o
           {busy === 'discard' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <X className="h-3.5 w-3.5" />} Discard
         </Button>
       </div>
+      {autoAt && (
+        <p className="flex flex-wrap items-center gap-1 text-[11px] font-medium text-violet-700 dark:text-violet-300" data-testid="ai-auto-send-waiting">
+          <Sparkles className="h-3 w-3 shrink-0" />
+          The AI will send this by itself at {new Date(autoAt).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/London' })} UK time unless you act. Typing, approving or discarding stops it.
+          {onStopAutoSend && (
+            <button type="button" className="underline" disabled={busy !== null} onClick={onStopAutoSend} data-testid="ai-stop-auto-send">
+              {busy === 'stopauto' ? 'Stopping…' : "Don't send automatically"}
+            </button>
+          )}
+        </p>
+      )}
       {boxDiffers && (
         <p className="flex items-center gap-1 text-[11px] text-amber-700 dark:text-amber-300">
           <AlertTriangle className="h-3 w-3 shrink-0" />

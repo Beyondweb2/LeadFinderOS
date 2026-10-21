@@ -217,6 +217,16 @@ export interface AiReplyWhy {
   followUp?: { said: string; endsOn: string; checkBackOn: string } | null;
   /** A win for the loop guard once sent (a call time agreed). */
   win?: string | null;
+  /** Level 2 (aiAutoSend.ts): the verdict when the draft was written — queued to send by itself at `at`, or why not; then
+   *  `stopped` (cancel reason) or `sentAt` once its queued row settles. Written by the worker and trg_ai_auto_send_row. */
+  autoSend?: { send: boolean; reason?: string; intent?: string; at?: string; scheduledId?: string; threadHard?: string | null; stopped?: string | null; sentAt?: string } | null;
+}
+
+/** A draft that will go by itself unless someone acts (Level 2). */
+export function autoSendWaiting(row: Pick<AiReplyRow, 'status' | 'why'> | null | undefined): string | null {
+  const a = row?.why?.autoSend;
+  if (!row || row.status !== 'pending' || !a || a.send !== true || a.stopped || a.sentAt || !a.at) return null;
+  return a.at;
 }
 
 /** Paul's own hand-typed messages (inbox analysis 2026-10-19, names removed). The FEEL to copy, not the spelling. */

@@ -94,6 +94,7 @@ import { useInboxScheduled, INBOX_SCHEDULED_KEY } from '@/hooks/useInboxSchedule
 import { ReplyHoursDialog, ReplyWindowChip, ScheduledSendBubble } from '@/components/InboxSendWindow';
 import { hhmm, queuedLabel, replyWindowFor, sendVerb, windowStatusLine } from '@/lib/inboxSendWindow';
 import { inboundLabel } from '@/lib/replyMove';
+import { SENT_BY_AI_LABEL, TYPING_MARK_EVERY_MS } from '@/lib/aiAutoSend';
 import { sameRowProps } from '@/lib/inboxRowMemo';
 import { invokeEdge, edgeErrorMessage } from '@/lib/edgeInvoke';
 import { DEFAULT_INBOX_SORT, compareLastProspectMessage, type InboxSort } from '@/lib/inboxSort';
@@ -570,6 +571,15 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
   const persistDraft = useCallback((key: string, v: string) => {
     setDrafts((prev) => setDraft(prev, key, v));
   }, [setDrafts]);
+  /* LEVEL 2 (aiAutoSend.ts): a person typing in a conversation keeps the AI out of it for 10 minutes, and stops an automatic
+     reply already waiting there (inbox_mark_typing). At most one mark per conversation every TYPING_MARK_EVERY_MS. */
+  const typingMarkedAt = useRef(new Map<string, number>());
+  const markTyping = useCallback((phone: string) => {
+    const now = Date.now();
+    if (!phone || now - (typingMarkedAt.current.get(phone) ?? 0) < TYPING_MARK_EVERY_MS) return;
+    typingMarkedAt.current.set(phone, now);
+    void (supabase.rpc as unknown as (fn: string, a: unknown) => Promise<unknown>)('inbox_mark_typing', { _phone: phone }).catch(() => undefined);
+  }, []);
   /* Starts UNSELECTED, deliberately. This used to default to the sendable list's [0], which was
      booking_page_intro — the barber booking pitch — so every thread opened with a barber template
      armed regardless of trade. On an accountant thread only the "no site link yet" guard stood
@@ -999,7 +1009,7 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
      server-side) → the Inbox's own send (useInbox.send → send-whatsapp-message, unchanged) → complete (records who,
      when and the text actually sent). Discard and Dismiss send nothing. */
   const activeAi = active ? ai.forPhone(active.phone) : null;
-  const [aiBusy, setAiBusy] = useState<'approve' | 'regenerate' | 'discard' | 'optout' | null>(null);
+  const [aiBusy, setAiBusy] = useState<'approve' | 'regenerate' | 'discard' | 'optout' | 'stopauto' | null>(null);
   const [aiDrafting, setAiDrafting] = useState(false);
   const aiInsertedRef = useRef<Map<string, string>>(new Map());
   const activeAiDraft = activeAi && rowSendable(activeAi) && win.open ? (activeAi.draft_text ?? '') : '';
@@ -1105,6 +1115,20 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
       toast({ title: 'Marked opted out', description: 'Queued follow-ups were cancelled. Nothing was sent.' });
     } catch (e) {
       toast({ title: "Couldn't mark opted out", description: edgeErrorMessage(e), variant: 'destructive' });
+    } finally {
+      setAiBusy(null);
+      void ai.refetch();
+    }
+  };
+  /* Level 2: stop the automatic send; the draft stays for approval. */
+  const stopAiAutoSend = async () => {
+    if (!activeAi || aiBusy) return;
+    setAiBusy('stopauto');
+    try {
+      await invokeEdge('ai-reply-drafts', { action: 'stop_auto_send', draft_id: activeAi.id });
+      toast({ title: 'Automatic send stopped', description: 'The draft stays here for you to approve, edit or discard.' });
+    } catch (e) {
+      toast({ title: "Couldn't stop the automatic send", description: edgeErrorMessage(e), variant: 'destructive' });
     } finally {
       setAiBusy(null);
       void ai.refetch();
@@ -2559,6 +2583,10 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
                         m.direction === 'outbound' ? 'text-primary-foreground/70' : 'text-muted-foreground')}>
                         <span>{relTime(m.created_at)}</span>
                         {m.message_type === 'template' && <span>· template</span>}
+                        {m.direction === 'outbound' && m.sent_by_ai === true && (
+                          <span className="inline-flex items-center gap-0.5 font-semibold" data-testid="sent-by-ai"
+                            title="The AI sent this reply by itself (AI handles replies, automatic sending)."><Sparkles className="h-2.5 w-2.5" />{SENT_BY_AI_LABEL}</span>
+                        )}
                         {m.direction === 'outbound' && (
                           <span>· {m.status === 'simulated' ? 'simulated' : m.status === 'failed' ? '⚠ failed' : m.status}</span>
                         )}
@@ -2584,6 +2612,7 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
                   <div className="mb-2">
                     <AiDraftPanel row={activeAi} busy={aiBusy} boxDiffers={aiBoxDiffers} onApprove={() => void approveAiDraft()}
                       onRegenerate={() => void regenerateAiDraft()} onDiscard={() => void discardAiDraft()} onMarkOptedOut={() => void markAiOptedOut()}
+                      onStopAutoSend={() => void stopAiAutoSend()}
                       onUseDraft={() => { if (active && activeAi.draft_text) insertWarmDraft(active.key, activeAi.draft_text); }} />
                   </div>
                 )}
@@ -2674,6 +2703,8 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
                           onPersist={persistDraft}
                           onSend={(bodyText) => doSend(false, bodyText)}
                           queueHint={queueHint}
+                          typingPhone={active.phone}
+                          onTyping={markTyping}
                         />
                       </div>
                       {/* Files are never queued: outside their send hours the paperclip is not offered (the server refuses it too). */}

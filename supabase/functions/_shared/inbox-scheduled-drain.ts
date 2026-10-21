@@ -26,7 +26,12 @@ export const STUCK_SENDING_MS = 10 * 60_000;
 export interface DueRow {
   id: string; user_id: string; lead_id: string | null; phone: string; channel: InboxChannel; kind: ScheduledKind;
   send_at: string; created_at: string; checked_at: string;
+  /** Level 2: an automatic AI reply (its draft). Null / absent = a person queued it. */
+  ai_draft_id?: string | null;
 }
+
+/** Why an automatic AI reply was dropped (its draft then waits for a person). Stored as cancel_reason. */
+export type AutoCancelReason = `ai_${string}`;
 
 export type SendOutcome = { ok: true; messageId: string | null } | { ok: false; error: string };
 
@@ -43,7 +48,10 @@ export interface DrainDeps {
   /** Conditional writes: each applies only while the row is still 'scheduled'. `claim` answers whether this tick won. */
   reschedule(id: string, sendAtIso: string): Promise<void>;
   hold(id: string, reason: HoldReason): Promise<void>;
-  cancel(id: string, reason: CancelReason): Promise<void>;
+  cancel(id: string, reason: CancelReason | AutoCancelReason): Promise<void>;
+  /** Level 2 (src/lib/aiAutoSend.ts): an automatic reply's own re-check just before it goes — null = still allowed, else why
+   *  it is dropped. An absent dep drops every automatic row (fails towards not sending). */
+  autoRecheck?(row: DueRow): Promise<AutoCancelReason | null>;
   claim(id: string): Promise<boolean>;
   send(row: DueRow): Promise<SendOutcome>;
   finish(id: string, outcome: SendOutcome): Promise<void>;
@@ -76,12 +84,20 @@ export async function drainTick(deps: DrainDeps): Promise<TickReport> {
       earlierPending: await deps.earlierPending(row),
     });
     if (decision.kind === "cancel") { await deps.cancel(row.id, decision.reason); report.cancelled++; continue; }
+    /* ⛔ AN AUTOMATIC REPLY IS NEVER HELD FOR A PERSON TO RELEASE: a newer message from them, or the 24 hours gone, drops it
+       and its draft waits for approval (Paul, 2026-10-21). */
+    if (decision.kind === "hold" && row.ai_draft_id) { await deps.cancel(row.id, `ai_${decision.reason}`); report.cancelled++; continue; }
     if (decision.kind === "hold") { await deps.hold(row.id, decision.reason); report.held++; continue; }
     if (decision.kind === "wait") {
       /* The hours moved (the setting changed) or the clock is before them: park it at the next opening so it is not re-read every minute. */
       if (decision.why === "window_closed") await deps.reschedule(row.id, nextWindowOpenAt(window, at).toISOString());
       report.waiting++;
       continue;
+    }
+    if (row.ai_draft_id) {
+      let why: AutoCancelReason | null = "ai_recheck_unavailable";
+      try { why = deps.autoRecheck ? await deps.autoRecheck(row) : "ai_recheck_unavailable"; } catch { why = "ai_recheck_failed"; }
+      if (why) { await deps.cancel(row.id, why); report.cancelled++; continue; }
     }
     if (!(await deps.claim(row.id))) continue;
     if (sends > 0) await deps.sleep(PACE_MS);

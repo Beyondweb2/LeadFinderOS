@@ -19,8 +19,10 @@ import { voiceSendDeps } from "../_shared/voice-note-deps.ts";
 import { sendSmsToLead } from "../_shared/twilio-sms.ts";
 import { qaSendHold } from "../_shared/qa-guard.ts";
 import { guardAction } from "../_shared/protection.ts";
+import { answeredAfter, autoSendCounts, loadAutoSendState, personActiveAt, sendAsIsAdmin } from "../_shared/ai-auto-send.ts";
+import { autoSendVerdict, draftFactsFromRow } from "../../../src/lib/aiAutoSend.ts";
 
-const BUILD_ID = "2026-10-21a-inbox-send-window";
+const BUILD_ID = "2026-10-21b-ai-auto-send";
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-cron-secret",
@@ -113,7 +115,7 @@ Deno.serve(async (req) => {
         return (data ?? []).length;
       },
       async dueRows(nowIso, limit) {
-        const { data, error } = await service.from("inbox_scheduled_sends").select(SCHEDULED_COLUMNS)
+        const { data, error } = await service.from("inbox_scheduled_sends").select(`${SCHEDULED_COLUMNS}, ai_draft_id, ai_intent`)
           .eq("status", "scheduled").lte("send_at", nowIso).order("send_at", { ascending: true }).order("created_at", { ascending: true }).limit(limit);
         if (error) throw new Error(`due read failed: ${error.message}`);
         for (const r of (data ?? []) as ScheduledRow[]) full.set(r.id, r);
@@ -156,6 +158,38 @@ Deno.serve(async (req) => {
       },
       async cancel(id, reason) {
         await service.from("inbox_scheduled_sends").update({ status: "cancelled", cancel_reason: reason, updated_at: stamp() }).eq("id", id).eq("status", "scheduled");
+      },
+      /* LEVEL 2 — an automatic AI reply's last check, with the same rule that queued it (src/lib/aiAutoSend.ts). Its draft must
+         still be open, unchanged and linked to this row; nobody may have answered, typed or sent since; the switches, the cap,
+         the sender and every safety fact are read again NOW. Anything else drops it and the draft waits for a person. */
+      async autoRecheck(row) {
+        const r = full.get(row.id) as (ScheduledRow & { ai_draft_id?: string | null; ai_intent?: string | null }) | undefined;
+        if (!r || !r.ai_draft_id) return "ai_row_unreadable";
+        const { data: d, error: dErr } = await service.from("ai_reply_drafts")
+          .select("id, kind, status, draft_text, why, inbound_at, inbound_message_id, auto_send_id").eq("id", r.ai_draft_id).maybeSingle();
+        if (dErr || !d) return "ai_draft_unreadable";
+        if (d.status !== "pending" || d.auto_send_id !== r.id) return "ai_draft_closed";
+        if ((d.draft_text ?? "") !== (r.body ?? "")) return "ai_text_changed";
+        const facts = draftFactsFromRow(d);
+        if (facts.key !== (r.ai_intent ?? "")) return "ai_type_changed";
+        const auto = (d.why as { autoSend?: Record<string, unknown> } | null)?.autoSend ?? null;
+        if (!auto || !("threadHard" in auto)) return "ai_thread_unreadable";
+        if (await answeredAfter(service, r.phone, d.inbound_at)) return "ai_answered";
+        const [st, counts, active, inb, lead] = await Promise.all([
+          loadAutoSendState(service), autoSendCounts(service), personActiveAt(service, r.phone),
+          service.from("whatsapp_messages").select("body").eq("id", d.inbound_message_id).maybeSingle(),
+          r.lead_id ? service.from("outreach_leads").select("amount_paid, status, is_archived").eq("id", r.lead_id).maybeSingle() : Promise.resolve({ data: null, error: null }),
+        ]);
+        if (inb.error || lead.error) return "ai_facts_unreadable";
+        const verdict = autoSendVerdict({
+          masterOn: st.masterOn, intentsOn: st.intents, dailyCap: st.dailyCap, usedToday: counts.sentToday, draft: facts,
+          latestInbound: (inb.data as { body?: string | null } | null)?.body ?? "", threadHard: (auto.threadHard as string | null) ?? null,
+          digits: r.phone, lead: lead.data as { amount_paid?: unknown; status?: unknown; is_archived?: unknown } | null,
+          /* The drain has just read the suppression list for this row (drainDecision cancels a suppressed one). */
+          suppressed: false,
+          personActiveAt: active, senderIsAdmin: st.sendAs === r.queued_by && await sendAsIsAdmin(service, r.queued_by), nowMs: Date.now(),
+        });
+        return verdict.send ? null : `ai_${verdict.reason}`;
       },
       async claim(id) {
         const { data } = await service.from("inbox_scheduled_sends").update({ status: "sending", claimed_at: stamp(), updated_at: stamp() })

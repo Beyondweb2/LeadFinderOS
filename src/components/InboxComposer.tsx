@@ -57,10 +57,13 @@ export interface InboxComposerProps {
   onSend: (body: string) => Promise<boolean>;
   /** Outside the lead's send hours: the button says "Queue" and this says when it goes ("sends at 07:00 their time"). */
   queueHint?: string | null;
+  /** Level 2: "a person is typing here" (the parent throttles it), so no automatic AI reply goes into this conversation. */
+  typingPhone?: string;
+  onTyping?: (phone: string) => void;
 }
 
 export const InboxComposer = memo(function InboxComposer({
-  convKey, initialText, sending, onPersist, onSend, queueHint,
+  convKey, initialText, sending, onPersist, onSend, queueHint, typingPhone, onTyping,
 }: InboxComposerProps) {
   const [value, setValue] = useState(initialText);
 
@@ -97,6 +100,7 @@ export const InboxComposer = memo(function InboxComposer({
   const change = (next: string) => {
     setValue(next);
     sent.current = false;
+    if (typingPhone && onTyping) onTyping(typingPhone);
     if (timer.current) clearTimeout(timer.current);
     timer.current = setTimeout(() => {
       timer.current = null;

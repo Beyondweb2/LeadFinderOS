@@ -136,6 +136,8 @@ export interface WaMessage {
   test_mode: boolean;
   error: string | null;
   template_snapshot?: WhatsAppTemplateSnapshot | null;
+  /** Level 2: the AI sent this reply by itself (set by trg_ai_auto_send_row). */
+  sent_by_ai?: boolean | null;
 }
 
 export interface WaConversation {
