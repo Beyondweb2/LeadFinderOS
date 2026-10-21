@@ -22,6 +22,14 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-21-draft-after-audit', date: '2026-10-21', title: 'AI replies: the first-reply pitch now waits for the audit', audience: 'all',
+    body: 'The AI no longer writes the first-reply pitch before the audit and website check have finished, so it always has the competitors and the site issues.',
+    report: {
+      added: ['If someone replies while their audit or website check is still running, the draft is written automatically as soon as both finish.', 'If they have not finished 30 minutes after the reply, the conversation shows Needs you: "Audit did not finish".'],
+      changed: ['Draft reply and Regenerate on a first reply say "The audit and website check are still running" instead of writing a pitch with no evidence.', 'An open pitch draft that was written without the audit is rewritten once the audit and website check are done.', 'Regenerate now tells you when it could not write another version, instead of doing nothing.'],
+      removed: [],
+      effect: 'First-reply drafts name the competitors and the website issues, or they wait. Stop, angry, not interested and voice notes are handled straight away as before. Nothing is sent by this change.',
+    } },
   { id: '2026-10-21-inbox-settings-and-scores', date: '2026-10-21', title: 'Inbox: engine scores on every lead, and one Settings button', audience: 'all',
     body: 'Each lead in the Inbox list now shows how ChatGPT, Gemini and Google AI answered. The reply controls moved into one Settings button.',
     report: {

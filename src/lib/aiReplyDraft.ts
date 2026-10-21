@@ -27,6 +27,7 @@ import { isClientLead } from './roleRules.ts';
 import { issueMentioned, saysGoogleAiForGemini, vagueSiteClaim, wrongEngineWords } from './draftEvidence.ts';
 import { ENGINE_WORDING, FACT_SHEET_VERSION, GUARANTEE_LINE, SHEET_MONEY, factFor, usableCaseStudies } from './offerFactSheet.ts';
 import { mayClaimNamedInstead } from './namedShareRule.ts';
+import type { WhyEvidence } from './draftEvidenceWait.ts';
 import { engineName, siteOf, tidyCaps, NEEDS_YOU_LABELS, PITCH_SPECIALISE_LINE, type MoveEvidence, type MovePlan, type NeedsYouReason } from './replyMove.ts';
 import { PLAYBOOK, BUILT_SITE_EXAMPLE_URL, PROOF_WORDS, lowerBrands, startsWithBrand } from './replyPlaybook.ts';
 
@@ -217,6 +218,12 @@ export interface AiReplyWhy {
   followUp?: { said: string; endsOn: string; checkBackOn: string } | null;
   /** A win for the loop guard once sent (a call time agreed). */
   win?: string | null;
+  /** The audit + website check when it was written (draftEvidenceWait.ts): a pitch is written only when `ready`. */
+  evidence?: WhyEvidence | null;
+  /** An open pitch written without its evidence whose rewrite was not a pitch any more: Regenerate it. */
+  evidenceStale?: boolean;
+  /** When the tick rewrote an open pitch once its evidence was final. */
+  evidenceRefreshedAt?: string | null;
   /** Level 2 (aiAutoSend.ts): the verdict when the draft was written — queued to send by itself at `at`, or why not; then
    *  `stopped` (cancel reason) or `sentAt` once its queued row settles. Written by the worker and trg_ai_auto_send_row. */
   autoSend?: { send: boolean; reason?: string; intent?: string; at?: string; scheduledId?: string; threadHard?: string | null; stopped?: string | null; sentAt?: string } | null;

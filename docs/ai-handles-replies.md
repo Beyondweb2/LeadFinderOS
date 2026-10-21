@@ -331,3 +331,30 @@ Tests: `scripts/ai-auto-send.test.ts` — §2 is the hard gate (stop / angry / c
 threads never auto-send with every switch on, through the real pickMove + aiReplyDecision, plus a positive control).
 Found while building: the shared anger rule does not read "F off" as angry; Level 2 blocks it with `HOSTILE_WORDS`, the drafter's
 own rule is unchanged.
+
+## Draft after the audit (2026-10-21, Paul)
+
+**Bug:** the tick wrote the first-reply pitch the minute a reply arrived, often before the audit the reply had just started (and
+the website check) had finished, so the pitch had no competitors and no site issues ("It's Paul from Findable…").
+
+**Rule** (`src/lib/draftEvidenceWait.ts`, one place): a PITCH (`pitchNeedsEvidence`: `first_reply_pitch`, or the first auto-reply's
+pitch) is written only when the audit AND the website check are final — audit: a complete / capped run, or every run of the newest
+hook audit failed / cancelled; website: a stored check (issues / clean / could not read), no website, a profile, or a failed last
+attempt. No audit yet counts as running (the reply may have just started one).
+- **Tick**: not final → the inbound's row WAITS: `kind 'skipped'`, `status 'pending'`, `reason 'waiting_for_audit'` (existing columns,
+  no migration; 'skipped' draws no chip or panel). Every minute the tick re-checks waiting rows (cheap read) and, when both are final,
+  claims the row (`pending → generating`, conditional) and runs the same per-reply path (`processInbound`) — draft, Level 2 check
+  and all. After `EVIDENCE_WAIT_MS` (30 min) from the reply: Needs you, "Audit did not finish", no draft (Draft reply then works with
+  whatever there is).
+- **Draft reply / Regenerate**: a pitch inside the wait answers `audit_running` ("The audit and website check are still running…"),
+  before anything is touched or spent. The Inbox now shows a Regenerate refusal (it used to be silent).
+- **Open drafts written without evidence** (`draftLackedEvidence`: `why.evidence.ready === false`; older rows: no search / counts,
+  an unchecked website note, or the no-audit opening in the text) are rewritten by the tick once both are final — code-built, no model
+  call, only if the row is unchanged and has no automatic send waiting. A rewrite that is no longer a pitch marks `why.evidenceStale`.
+- Every draft records `why.evidence` (`ready`, `audit`, `crawl`).
+- ⛔ Stop / angry / no / media / every Needs you flag are decided BEFORE the wait and never wait.
+
+Report of sent pitches that went out without evidence (read-only, 21 Oct): `C:\Users\paulj\Documents\Findable\drafts-without-evidence-2026-10-21.md`
+— 2 leads (Start & Go Driving School, Pass With Paul - Crewe), both sent 21 Oct before 09:10 UTC, neither has replied; both now have
+a finished audit and website check. Tests: `scripts/draft-evidence-wait.test.ts` (incl. a reply before the audit finishes).
+Marker `x-ai-reply-drafts: 2026-10-21e-draft-after-audit`.

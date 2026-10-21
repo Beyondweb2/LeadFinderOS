@@ -29,10 +29,13 @@ console.log('1. flags always, drafts only behind the switch (2026-10-20)');
   ok(/default false/.test(MIG.match(/ai_handles_replies boolean[^;]*/)?.[0] ?? ''), 'the switch still defaults OFF in the database');
   ok(/reply_flags_since timestamptz not null default now\(\)/.test(FLAGS) && /m\.created_at >= s\.since/.test(FLAGS), 'flags read NEW replies only (from when the migration ran)');
   ok(!/set_enabled|ai_handles_replies\s*=/.test(FLAGS.replace(/--[^\n]*/g, '')), 'the migration never turns the switch on');
-  const tick = FN.slice(FN.indexOf('async function handleTick'), FN.indexOf('/* ───────────────────────── person actions'));
-  const iGate = tick.indexOf('!switchOn || Date.parse(c.inbound_at) < since'); const iWrite = tick.indexOf('writeDraft(');
+  /* The tick's per-reply work is processInbound (2026-10-21: new replies and replies that waited for their audit share it). */
+  const tick = FN.slice(FN.indexOf('async function processInbound'), FN.indexOf('async function refreshEvidenceLessPitches'));
+  const iGate = tick.indexOf('!env.switchOn || Date.parse(c.inbound_at) < env.since'); const iWrite = tick.indexOf('writeDraft(');
   ok(iGate > 0 && iGate < iWrite, 'the tick writes a model draft only after the switch gate (off → no model call)');
   ok(!/writeDraft\(/.test(tick.slice(0, iGate)), '…and no model call happens on the flag path before it');
+  const refresh = FN.slice(FN.indexOf('async function refreshEvidenceLessPitches'), FN.indexOf('/* ───────────────────────── person actions'));
+  ok(refresh.indexOf('plan.fixedText') > 0 && refresh.indexOf('plan.fixedText') < refresh.indexOf('writeDraft('), 'the pitch refresh rewrites only a code-built pitch (no model call)');
 }
 ok(/ai_handles_replies_since = new Date\(\)\.toISOString\(\)/.test(FN.replace(/patch\.ai_handles_replies_since/, 'ai_handles_replies_since')), 'turning it on starts the clock: older replies are never drafted (no backlog spend)');
 ok(/if \(actor\.role !== "admin"\) return json\(\{ ok: false, error: "admin_only" \}, 403\)/.test(FN), 'only an admin can read or flip the switch');

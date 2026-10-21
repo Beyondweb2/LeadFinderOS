@@ -45,7 +45,7 @@ import { pickMove, inboundLabel, autoReplyFlags, type MoveEvidence, type MoveInp
 import { CONFIDENCE_LINE, FACT_SHEET_VERSION } from "../../../src/lib/offerFactSheet.ts";
 import { WAITING_PITCH_STATUSES } from "../../../src/lib/auditPitchRule.ts";
 import { selectFindings } from "../../../src/lib/coldCallPlaybook.ts";
-import { plainIssueTitle } from "../../../src/lib/websiteCheck.ts";
+import { plainIssueTitle, websiteCheckFor } from "../../../src/lib/websiteCheck.ts";
 import { conversationEngine, draftNames } from "../../../src/lib/draftEvidence.ts";
 import { warmStage } from "../../../src/lib/warmStage.ts";
 import { serviceWindowState } from "../../../src/lib/serviceWindow.ts";
@@ -58,13 +58,17 @@ import { nextWindowOpenAt, replyWindowFor, replyWindowOpen } from "../../../src/
 import { loadReplyHours } from "../_shared/inbox-schedule.ts";
 import { loadCountrySettings } from "../_shared/country-settings.ts";
 import { autoSendCounts, loadAutoSendState, personActiveAt, sendAsIsAdmin, stopAutoSend, type AutoSendState } from "../_shared/ai-auto-send.ts";
+import {
+  auditPhaseOf, crawlPhaseOf, draftLackedEvidence, evidenceVerdict, pitchNeedsEvidence, AUDIT_NOT_FINISHED_LABEL, AUDIT_NOT_FINISHED_REASON,
+  AUDIT_RUNNING_DETAIL, AUDIT_RUNNING_ERROR, EVIDENCE_WAIT_MS, WAITING_LABEL, WAITING_REASON, type EvidenceVerdict, type WhyEvidence,
+} from "../../../src/lib/draftEvidenceWait.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-internal-job, x-cron-secret",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
   /* The deploy marker: only this build answers with it. */
-  "x-ai-reply-drafts": "2026-10-21d-auto-send",
+  "x-ai-reply-drafts": "2026-10-21e-draft-after-audit",
 };
 const json = (b: unknown, s = 200) => new Response(JSON.stringify(b), { status: s, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 const str = (v: unknown) => (typeof v === "string" ? v.trim() : "");
@@ -163,10 +167,24 @@ async function aiSwitchOn(service: Service): Promise<boolean> {
   return data.ai_handles_replies === true;
 }
 
+/** The lead's audit phase (draftEvidenceWait.ts): its newest ordinary audits and their runs. Unreadable → 'running'
+ *  (the wait, bounded by EVIDENCE_WAIT_MS, never a pitch without evidence). */
+async function loadAuditPhase(service: Service, leadId: string) {
+  const { data, error } = await service.from("ai_audits").select("audit_purpose, is_measurement, created_at, runs:ai_audit_runs(status)")
+    .eq("lead_id", leadId).order("created_at", { ascending: false }).limit(10);
+  if (error) return "running" as const;
+  return auditPhaseOf((data ?? []) as Parameters<typeof auditPhaseOf>[0]);
+}
+
+/** Is the evidence for a pitch on this inbound final yet? */
+const verdictFor = (phases: Omit<WhyEvidence, "ready">, inboundAt: string): EvidenceVerdict =>
+  evidenceVerdict({ audit: phases.audit, crawl: phases.crawl, inboundAtMs: Date.parse(inboundAt), nowMs: Date.now() });
+const whyEvidence = (v: EvidenceVerdict): WhyEvidence => ({ ready: v.state === "ready", audit: v.audit, crawl: v.crawl });
+
 /** Everything the draft may say — from the audit, the crawl and the conversation. Nothing else. */
-async function buildContext(service: Service, lead: LeadRow, thread: MsgRow[], inbound: MsgRow): Promise<{ ctx: AiReplyContext; findingsNote: string | null; input: MoveInput }> {
+async function buildContext(service: Service, lead: LeadRow, thread: MsgRow[], inbound: MsgRow): Promise<{ ctx: AiReplyContext; findingsNote: string | null; input: MoveInput; phases: Omit<WhyEvidence, "ready"> }> {
   const audit = await loadAuditContext(service, lead).catch(() => null);
-  const { data: crawl } = await service.from("lead_crawl_checks").select("result, created_at").eq("lead_id", lead.id).maybeSingle();
+  const { data: crawl } = await service.from("lead_crawl_checks").select("result, created_at, last_failed_attempt").eq("lead_id", lead.id).maybeSingle();
   const found = selectFindings({
     lead: { website: lead.website } as Parameters<typeof selectFindings>[0]["lead"],
     runCrawls: [],
@@ -221,7 +239,8 @@ async function buildContext(service: Service, lead: LeadRow, thread: MsgRow[], i
     plan, evidence,
     contactFirstName: (lead.contact_name ?? "").trim().split(/\s+/)[0] || null,
   };
-  return { ctx, findingsNote: found.status === "findings" ? null : found.note, input };
+  const phases = { audit: await loadAuditPhase(service, lead.id), crawl: crawlPhaseOf(found.check.state, !!crawl?.last_failed_attempt) };
+  return { ctx, findingsNote: found.status === "findings" ? null : found.note, input, phases };
 }
 
 /** Write a draft for this context, inside the per-draft cost cap. One retry if the checks warn and the cap allows. */
@@ -385,10 +404,11 @@ async function handleTick(service: Service) {
   const { data: cands, error } = await service.rpc("ai_reply_draft_candidates", { p_limit: TICK_MAX_ROWS });
   if (error) throw error;
   const out: Array<{ inbound: string; kind: string; reason?: string | null }> = [];
-  let autoState: AutoSendState | null = null;
-  for (const c of (cands ?? []) as Array<{ inbound_id: string; user_id: string; phone: string; lead_id: string | null; inbound_at: string; body: string | null; message_type: string | null }>) {
+  const env: TickEnv = { switchOn, since, mode, autoState: null };
+  for (const row of (cands ?? []) as Array<Omit<Cand, "lead_id"> & { lead_id: string | null }>) {
     if (Date.now() - started > 90_000) break;
-    if (!c.lead_id) continue; // an unmatched number: no lead (the Inbox shows it as Unassigned)
+    if (!row.lead_id) continue; // an unmatched number: no lead (the Inbox shows it as Unassigned)
+    const c: Cand = { ...row, lead_id: row.lead_id };
     /* A newer message from them: an automatic reply still waiting on this conversation is dropped first (its draft is
        superseded just below). The drain would drop it too; this makes it immediate. */
     await service.from("inbox_scheduled_sends").update({ status: "cancelled", cancel_reason: "ai_replied_since", updated_at: new Date().toISOString() })
@@ -403,59 +423,138 @@ async function handleTick(service: Service) {
     if (insErr || !claimed) continue;
     const id = claimed.id as string;
     await service.from("ai_reply_drafts").update({ superseded_by: id }).eq("user_id", c.user_id).eq("phone", c.phone).eq("status", "superseded").is("superseded_by", null);
-    try {
-      const lead = await loadLead(service, c.lead_id);
-      const thread = await loadThread(service, c.user_id, c.phone);
-      const inbound = thread.find((m) => m.id === c.inbound_id) ?? { id: c.inbound_id, created_at: c.inbound_at, direction: "inbound", body: c.body, message_type: c.message_type, template_name: null, status: null, lead_id: c.lead_id };
-      const hadOutreach = thread.some((m) => m.direction === "outbound" && isOurs(m) && m.created_at < c.inbound_at);
-      if (!lead) {
-        await service.from("ai_reply_drafts").update({ kind: "skipped", status: "resolved", reason: "no_lead", updated_at: new Date().toISOString() }).eq("id", id);
-        continue;
+    out.push(await processInbound(service, id, c, env));
+  }
+  /* Replies that waited for their audit + website check: drafted the tick both are final, or flagged after the wait. */
+  const { data: waiting } = await service.from("ai_reply_drafts").select("id, user_id, phone, lead_id, inbound_message_id, inbound_at")
+    .eq("status", "pending").eq("kind", "skipped").eq("reason", WAITING_REASON).order("inbound_at", { ascending: true }).limit(50);
+  for (const d of (waiting ?? []) as Array<{ id: string; user_id: string; phone: string; lead_id: string | null; inbound_message_id: string; inbound_at: string }>) {
+    if (Date.now() - started > 90_000) break;
+    if (!d.lead_id) continue;
+    const due = Date.now() - Date.parse(d.inbound_at) >= EVIDENCE_WAIT_MS;
+    if (!due && verdictFor(await loadPhases(service, d.lead_id), d.inbound_at).state !== "ready") continue;
+    // The claim: a person's Draft reply or a newer message may have moved this row on.
+    const { data: won } = await service.from("ai_reply_drafts").update({ status: "generating", updated_at: new Date().toISOString() })
+      .eq("id", d.id).eq("status", "pending").eq("reason", WAITING_REASON).select("id").maybeSingle();
+    if (!won) continue;
+    out.push(await processInbound(service, d.id, { inbound_id: d.inbound_message_id, user_id: d.user_id, phone: d.phone, lead_id: d.lead_id, inbound_at: d.inbound_at, body: null, message_type: null }, env));
+  }
+  if (Date.now() - started < 90_000) await refreshEvidenceLessPitches(service).catch((e) =>
+    console.error("[ai-reply-drafts] pitch refresh failed:", String((e as { message?: unknown })?.message ?? e).slice(0, 200)));
+  return json({ ok: true, switch_on: switchOn, mode, handled: out.length, results: out, ms: Date.now() - started });
+}
+
+/** The audit + website check phases for a lead, without building a whole context (the waiting rows' cheap check). */
+async function loadPhases(service: Service, leadId: string): Promise<Omit<WhyEvidence, "ready">> {
+  const [{ data: lead }, { data: crawl }, audit] = await Promise.all([
+    service.from("outreach_leads").select("website").eq("id", leadId).maybeSingle(),
+    service.from("lead_crawl_checks").select("result, created_at, last_failed_attempt").eq("lead_id", leadId).maybeSingle(),
+    loadAuditPhase(service, leadId),
+  ]);
+  const check = websiteCheckFor(crawl?.result ? { result: crawl.result, created_at: crawl.created_at } : null, { website: lead?.website ?? null });
+  return { audit, crawl: crawlPhaseOf(check.state, !!crawl?.last_failed_attempt) };
+}
+
+interface TickEnv { switchOn: boolean; since: number; mode: string; autoState: AutoSendState | null }
+type Cand = { inbound_id: string; user_id: string; phone: string; lead_id: string; inbound_at: string; body: string | null; message_type: string | null };
+
+/** One inbound, on its claimed row (status 'generating'): the flag, the wait for evidence, or the draft. */
+async function processInbound(service: Service, id: string, c: Cand, env: TickEnv): Promise<{ inbound: string; kind: string; reason?: string | null }> {
+  try {
+    const lead = await loadLead(service, c.lead_id);
+    const thread = await loadThread(service, c.user_id, c.phone);
+    const inbound = thread.find((m) => m.id === c.inbound_id) ?? { id: c.inbound_id, created_at: c.inbound_at, direction: "inbound", body: c.body, message_type: c.message_type, template_name: null, status: null, lead_id: c.lead_id };
+    const hadOutreach = thread.some((m) => m.direction === "outbound" && isOurs(m) && m.created_at < c.inbound_at);
+    if (!lead) {
+      await service.from("ai_reply_drafts").update({ kind: "skipped", status: "resolved", reason: "no_lead", updated_at: new Date().toISOString() }).eq("id", id);
+      return { inbound: c.inbound_id, kind: "skipped", reason: "no_lead" };
+    }
+    const { ctx, findingsNote, input, phases } = await buildContext(service, lead, thread, inbound);
+    input.suppressed = await isSuppressed(service, { phone: c.phone, leadId: c.lead_id }); // fails closed
+    const plan: MovePlan = pickMove(input); ctx.plan = plan;
+    const decision = aiReplyDecision({ inboundAt: c.inbound_at, lead, hadOutreach, plan });
+    const now = new Date().toISOString();
+    if (decision.kind === "skipped") {
+      // Not a real reply: never counted as Replied (new messages only).
+      if (plan.label && decision.reason !== "client" && decision.reason !== "archived") await undoReplied(service, lead, thread.filter((m) => m.created_at <= c.inbound_at));
+      await service.from("ai_reply_drafts").update({ kind: "skipped", status: "resolved", reason: decision.reason, why: whyOf(ctx, findingsNote, null, 0, 0), updated_at: now }).eq("id", id);
+    } else if (decision.kind === "needs_you") {
+      let optedOut: "recorded" | "already" | "failed" | null = null;
+      // ⛔ A stop or an angry reply: opt out + cancel the queued follow-ups at once, through the existing mechanisms.
+      if (decision.stop && decision.reason !== "do_not_contact") optedOut = await applyStop(service, { phone: c.phone, leadId: c.lead_id }, `ai_reply_${decision.reason}`);
+      await service.from("ai_reply_drafts").update({ kind: "needs_you", status: "pending", reason: decision.reason, reason_label: decision.label, why: whyOf(ctx, findingsNote, null, 0, 0, { optedOut }), updated_at: now }).eq("id", id);
+    } else if (decision.kind === "needs_template") {
+      await service.from("ai_reply_drafts").update({ kind: "needs_template", status: "pending", reason: "window_closed", reason_label: "Outside the 24-hour window", updated_at: now }).eq("id", id);
+    } else if (!env.switchOn || Date.parse(c.inbound_at) < env.since || !plan.autoDraft) {
+      // ⛔ The switch is off (or this reply is from before it went on): no model call. "Draft reply" writes it on demand.
+      if (plan.label) await undoReplied(service, lead, thread.filter((m) => m.created_at <= c.inbound_at));
+      await service.from("ai_reply_drafts").update({ kind: "skipped", status: "resolved", reason: "awaiting_person", why: whyOf(ctx, findingsNote, null, 0, 0), updated_at: now }).eq("id", id);
+    } else if (env.mode !== "running") {
+      await service.from("ai_reply_drafts").update({ kind: "needs_you", status: "pending", reason: "paused", reason_label: HANDOVER_LABELS.paused, updated_at: now }).eq("id", id);
+    } else {
+      if (plan.label) await undoReplied(service, lead, thread.filter((m) => m.created_at <= c.inbound_at));
+      const ev = verdictFor(phases, c.inbound_at);
+      /* ⛔ THE PITCH WAITS FOR ITS EVIDENCE (draftEvidenceWait.ts): the audit and the website check both final, else wait
+         (no chip, no panel), and after EVIDENCE_WAIT_MS a person takes it. Every flag above never waits. */
+      if (pitchNeedsEvidence(plan) && ev.state === "waiting") {
+        await service.from("ai_reply_drafts").update({ kind: "skipped", status: "pending", reason: WAITING_REASON, reason_label: WAITING_LABEL, draft_text: null,
+          why: whyOf(ctx, findingsNote, null, 0, 0, { evidence: whyEvidence(ev) }), updated_at: now }).eq("id", id);
+        return { inbound: c.inbound_id, kind: "waiting", reason: `waiting_for_${ev.waitingFor.join("_and_")}` };
       }
-      const { ctx, findingsNote, input } = await buildContext(service, lead, thread, inbound);
-      input.suppressed = await isSuppressed(service, { phone: c.phone, leadId: c.lead_id }); // fails closed
-      const plan: MovePlan = pickMove(input); ctx.plan = plan;
-      const decision = aiReplyDecision({ inboundAt: c.inbound_at, lead, hadOutreach, plan });
-      const now = new Date().toISOString();
-      if (decision.kind === "skipped") {
-        // Not a real reply: never counted as Replied (new messages only).
-        if (plan.label && decision.reason !== "client" && decision.reason !== "archived") await undoReplied(service, lead, thread.filter((m) => m.created_at <= c.inbound_at));
-        await service.from("ai_reply_drafts").update({ kind: "skipped", status: "resolved", reason: decision.reason, why: whyOf(ctx, findingsNote, null, 0, 0), updated_at: now }).eq("id", id);
-      } else if (decision.kind === "needs_you") {
-        let optedOut: "recorded" | "already" | "failed" | null = null;
-        // ⛔ A stop or an angry reply: opt out + cancel the queued follow-ups at once, through the existing mechanisms.
-        if (decision.stop && decision.reason !== "do_not_contact") optedOut = await applyStop(service, { phone: c.phone, leadId: c.lead_id }, `ai_reply_${decision.reason}`);
-        await service.from("ai_reply_drafts").update({ kind: "needs_you", status: "pending", reason: decision.reason, reason_label: decision.label, why: whyOf(ctx, findingsNote, null, 0, 0, { optedOut }), updated_at: now }).eq("id", id);
-      } else if (decision.kind === "needs_template") {
-        await service.from("ai_reply_drafts").update({ kind: "needs_template", status: "pending", reason: "window_closed", reason_label: "Outside the 24-hour window", updated_at: now }).eq("id", id);
-      } else if (!switchOn || Date.parse(c.inbound_at) < since || !plan.autoDraft) {
-        // ⛔ The switch is off (or this reply is from before it went on): no model call. "Draft reply" writes it on demand.
-        if (plan.label) await undoReplied(service, lead, thread.filter((m) => m.created_at <= c.inbound_at));
-        await service.from("ai_reply_drafts").update({ kind: "skipped", status: "resolved", reason: "awaiting_person", why: whyOf(ctx, findingsNote, null, 0, 0), updated_at: now }).eq("id", id);
-      } else if (mode !== "running") {
-        await service.from("ai_reply_drafts").update({ kind: "needs_you", status: "pending", reason: "paused", reason_label: HANDOVER_LABELS.paused, updated_at: now }).eq("id", id);
-      } else {
-        if (plan.label) await undoReplied(service, lead, thread.filter((m) => m.created_at <= c.inbound_at));
-        const w = await writeDraft(service, ctx, { temperature: 0.5, userId: c.user_id, triggerSource: "auto" });
-        const why = whyOf(ctx, findingsNote, w, w.spentUsd, w.calls);
-        await service.from("ai_reply_drafts").update({
-          kind: "draft", status: "pending", draft_text: w.reply, why,
-          model: w.model, prompt_tokens: w.promptTokens, completion_tokens: w.completionTokens, cost_usd: w.spentUsd, model_calls: w.calls,
-          error: w.modelError, updated_at: now,
-        }).eq("id", id);
-        // LEVEL 2: queue it to send by itself, or leave it for approval (the default). Never throws into the tick.
-        autoState ??= await loadAutoSendState(service);
-        await maybeQueueAutoSend(service, autoState, { draftId: id, cand: c, lead, input, plan, why, w }).catch((e) =>
-          console.error("[ai-reply-drafts] auto-send check failed:", String((e as { message?: unknown })?.message ?? e).slice(0, 200)));
+      if (pitchNeedsEvidence(plan) && ev.state === "timed_out") {
+        await service.from("ai_reply_drafts").update({ kind: "needs_you", status: "pending", reason: AUDIT_NOT_FINISHED_REASON, reason_label: AUDIT_NOT_FINISHED_LABEL, draft_text: null,
+          why: whyOf(ctx, findingsNote, null, 0, 0, { evidence: whyEvidence(ev) }), updated_at: now }).eq("id", id);
+        return { inbound: c.inbound_id, kind: "needs_you", reason: AUDIT_NOT_FINISHED_REASON };
       }
-      out.push({ inbound: c.inbound_id, kind: decision.kind, reason: "reason" in decision ? decision.reason : null });
-    } catch (e) {
-      const msg = String((e as { message?: unknown })?.message ?? e).slice(0, 300);
-      await service.from("ai_reply_drafts").update({ kind: "needs_you", status: "pending", reason: "draft_failed", reason_label: HANDOVER_LABELS.draft_failed, error: msg, updated_at: new Date().toISOString() }).eq("id", id);
-      out.push({ inbound: c.inbound_id, kind: "needs_you", reason: "draft_failed" });
+      const w = await writeDraft(service, ctx, { temperature: 0.5, userId: c.user_id, triggerSource: "auto" });
+      const why = whyOf(ctx, findingsNote, w, w.spentUsd, w.calls, { evidence: whyEvidence(ev) });
+      await service.from("ai_reply_drafts").update({
+        kind: "draft", status: "pending", draft_text: w.reply, why, reason: null, reason_label: null,
+        model: w.model, prompt_tokens: w.promptTokens, completion_tokens: w.completionTokens, cost_usd: w.spentUsd, model_calls: w.calls,
+        error: w.modelError, updated_at: now,
+      }).eq("id", id);
+      // LEVEL 2: queue it to send by itself, or leave it for approval (the default). Never throws into the tick.
+      env.autoState ??= await loadAutoSendState(service);
+      await maybeQueueAutoSend(service, env.autoState, { draftId: id, cand: c, lead, input, plan, why, w }).catch((e) =>
+        console.error("[ai-reply-drafts] auto-send check failed:", String((e as { message?: unknown })?.message ?? e).slice(0, 200)));
+    }
+    return { inbound: c.inbound_id, kind: decision.kind, reason: "reason" in decision ? decision.reason : null };
+  } catch (e) {
+    const msg = String((e as { message?: unknown })?.message ?? e).slice(0, 300);
+    await service.from("ai_reply_drafts").update({ kind: "needs_you", status: "pending", reason: "draft_failed", reason_label: HANDOVER_LABELS.draft_failed, error: msg, updated_at: new Date().toISOString() }).eq("id", id);
+    return { inbound: c.inbound_id, kind: "needs_you", reason: "draft_failed" };
+  }
+}
+
+/** An OPEN pitch draft written without its audit / website check (before this release, or after the wait ran out) is
+ *  rewritten once both are final. The pitch is code-built (no model call, nothing spent). A row a person or the AI is
+ *  acting on is left alone (conditional on the row being unchanged); a rewrite that is no longer a pitch only marks the
+ *  draft `evidenceStale` (Regenerate it). Nothing sends. */
+async function refreshEvidenceLessPitches(service: Service) {
+  const { data } = await service.from("ai_reply_drafts").select("id, user_id, phone, lead_id, inbound_message_id, inbound_at, draft_text, why, updated_at")
+    .eq("status", "pending").eq("kind", "draft").is("auto_send_id", null).gt("inbound_at", new Date(Date.now() - 24 * 3600_000).toISOString())
+    .order("inbound_at", { ascending: false }).limit(200);
+  // deno-lint-ignore no-explicit-any
+  const rows = ((data ?? []) as any[]).filter((d) => d.lead_id && d.why?.evidenceStale !== true && draftLackedEvidence(d.why, d.draft_text)).slice(0, TICK_MAX_ROWS);
+  for (const d of rows) {
+    if (verdictFor(await loadPhases(service, d.lead_id), d.inbound_at).state !== "ready") continue;
+    const lead = await loadLead(service, d.lead_id);
+    if (!lead) continue;
+    const thread = await loadThread(service, d.user_id, d.phone);
+    const inbound = thread.find((m) => m.id === d.inbound_message_id);
+    if (!inbound) continue;
+    const { ctx, findingsNote, input, phases: now } = await buildContext(service, lead, thread, inbound);
+    input.suppressed = await isSuppressed(service, { phone: d.phone, leadId: d.lead_id });
+    const plan = pickMove(input); ctx.plan = plan;
+    const ev = verdictFor(now, d.inbound_at);
+    const still = (q: Service) => q.eq("id", d.id).eq("status", "pending").eq("updated_at", d.updated_at).is("auto_send_id", null);
+    if (pitchNeedsEvidence(plan) && plan.fixedText && !plan.stop && !plan.needsYou && ev.state === "ready") {
+      const w = await writeDraft(service, ctx, { temperature: 0.5, userId: d.user_id, triggerSource: "auto" });
+      await still(service.from("ai_reply_drafts").update({ draft_text: w.reply, why: whyOf(ctx, findingsNote, w, 0, 0, { evidence: whyEvidence(ev), evidenceRefreshedAt: new Date().toISOString() }), updated_at: new Date().toISOString() }));
+    } else {
+      await still(service.from("ai_reply_drafts").update({ why: { ...(d.why ?? {}), evidenceStale: true }, updated_at: new Date().toISOString() }));
     }
   }
-  return json({ ok: true, switch_on: switchOn, mode, handled: out.length, results: out, ms: Date.now() - started });
 }
 
 /* ───────────────────────── person actions ───────────────────────── */
@@ -564,8 +663,11 @@ async function handleRegenerate(service: Service, actor: Actor, body: Record<str
   const thread = await loadThread(service, d.user_id, d.phone);
   const inbound = thread.find((m) => m.id === d.inbound_message_id);
   if (!inbound) return json({ ok: false, error: "inbound_not_found" }, 404);
-  const { ctx, findingsNote } = await buildContext(service, lead, thread, inbound);
+  const { ctx, findingsNote, phases } = await buildContext(service, lead, thread, inbound);
   if (ctx.plan.stop || ctx.plan.noDraft) return json({ ok: false, error: "no_draft", detail: "The playbook has no reply for this one. Answer it yourself." });
+  // ⛔ A pitch is never rewritten without its evidence while the audit / website check are still running (draftEvidenceWait.ts).
+  const ev = verdictFor(phases, d.inbound_at);
+  if (pitchNeedsEvidence(ctx.plan) && ev.state === "waiting") return json({ ok: false, error: AUDIT_RUNNING_ERROR, detail: AUDIT_RUNNING_DETAIL });
   if (d.auto_send_id && !(await stopAutoSend(service, d.auto_send_id, "ai_person_regenerated"))) {
     return json({ ok: false, error: "not_open", detail: "The AI is sending this reply right now." });
   }
@@ -575,7 +677,7 @@ async function handleRegenerate(service: Service, actor: Actor, body: Record<str
   const totalUsd = Number((Number(d.cost_usd ?? 0) + w.spentUsd).toFixed(6));
   const calls = (d.model_calls ?? 0) + w.calls;
   const { data: saved } = await service.from("ai_reply_drafts").update({
-    draft_text: w.reply, why: whyOf(ctx, findingsNote, w, totalUsd, calls), regenerations: (d.regenerations ?? 0) + 1,
+    draft_text: w.reply, why: whyOf(ctx, findingsNote, w, totalUsd, calls, { evidence: whyEvidence(ev) }), regenerations: (d.regenerations ?? 0) + 1,
     prompt_tokens: (d.prompt_tokens ?? 0) + w.promptTokens, completion_tokens: (d.completion_tokens ?? 0) + w.completionTokens,
     cost_usd: totalUsd, model_calls: calls, error: w.modelError, updated_at: new Date().toISOString(),
   }).eq("id", d.id).eq("status", "pending").select("id, draft_text, why, regenerations").maybeSingle();
@@ -602,9 +704,12 @@ async function handleDraft(service: Service, actor: Actor, body: Record<string, 
   if (!inbound) return json({ ok: false, error: "no_reply_yet", detail: "They have not replied yet, so there is nothing to answer." });
   const convPhone = phone ?? (inbound as MsgRow & { phone?: string }).phone ?? lead.phone ?? "";
   if (!serviceWindowState(inbound.created_at).open) return json({ ok: false, error: "window_closed", detail: "Their last message was more than 24 hours ago. Only an approved template can be sent now." });
-  const { ctx, findingsNote, input } = await buildContext(service, lead, thread, inbound);
+  const { ctx, findingsNote, input, phases } = await buildContext(service, lead, thread, inbound);
   input.suppressed = await isSuppressed(service, { phone: convPhone, leadId });
   const plan = pickMove(input); ctx.plan = plan;
+  // ⛔ No pitch before its evidence (draftEvidenceWait.ts): said before anything is touched. The tick writes it when ready.
+  const ev = verdictFor(phases, inbound.created_at);
+  if (!plan.stop && !plan.noDraft && pitchNeedsEvidence(plan) && ev.state === "waiting") return json({ ok: false, error: AUDIT_RUNNING_ERROR, detail: AUDIT_RUNNING_DETAIL });
   const { data: existing } = await service.from("ai_reply_drafts").select("id, status, cost_usd, model_calls, prompt_tokens, completion_tokens, draft_text").eq("inbound_message_id", inbound.id).maybeSingle();
   if (existing && (existing.status === "sending" || existing.status === "generating")) return json({ ok: false, error: "busy", detail: "A draft is being written or sent on this conversation already." });
   // Level 2: a person drafting takes the conversation back from any automatic reply still waiting (one being sent wins).
@@ -625,7 +730,7 @@ async function handleDraft(service: Service, actor: Actor, body: Record<string, 
     row = {
       kind: plan.needsYou ? "needs_you" : "draft", status: "pending",
       reason: plan.needsYou?.reason ?? null, reason_label: plan.needsYou?.label ?? null,
-      draft_text: w.reply, why: whyOf(ctx, findingsNote, w, w.spentUsd, w.calls), model: w.model,
+      draft_text: w.reply, why: whyOf(ctx, findingsNote, w, w.spentUsd, w.calls, { evidence: whyEvidence(ev) }), model: w.model,
       prompt_tokens: w.promptTokens, completion_tokens: w.completionTokens, cost_usd: w.spentUsd, model_calls: w.calls, error: w.modelError,
     };
   }
