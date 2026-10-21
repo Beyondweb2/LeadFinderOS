@@ -22,6 +22,14 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-21-find-leads-crash', date: '2026-10-21', title: 'Find Leads: searches no longer crash the page', audience: 'all',
+    body: 'A search that found results could blank the page with "Something went wrong". Fixed, for one town or several. The error screen also says why now.',
+    report: {
+      added: ['A short reason under "Something went wrong" if a page ever does fail.'],
+      changed: ['Find Leads results now appear for every search, one town or many towns, in every country.'],
+      removed: [],
+      effect: 'Searching from Find Leads or from Coverage works again. Nothing you saved was lost.',
+    } },
   { id: '2026-10-21-draft-outcomes', date: '2026-10-21', title: 'Inbox: what happened to each AI draft', audience: 'admin',
     body: 'Every AI reply draft now records what happened to it, and "Draft outcomes" beside AI handles replies shows the share sent unchanged and which kinds of reply get edited most.',
     report: {

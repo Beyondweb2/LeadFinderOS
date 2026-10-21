@@ -77,13 +77,15 @@ installLeadSync(queryClient);
  * React Error Boundary — catches render crashes and shows a fallback
  * instead of a blank screen or infinite refresh loop.
  */
-class ErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean }> {
+class ErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean; reason: string }> {
   constructor(props: { children: ReactNode }) {
     super(props);
-    this.state = { hasError: false };
+    this.state = { hasError: false, reason: '' };
   }
-  static getDerivedStateFromError() {
-    return { hasError: true };
+  static getDerivedStateFromError(error: unknown) {
+    /* A short readable reason under the message (2026-10-21): the first line of the error, never a stack. */
+    const reason = String((error as { message?: string } | null)?.message ?? error ?? '').split(/\r?\n/)[0].slice(0, 160);
+    return { hasError: true, reason };
   }
   componentDidCatch(error: Error, info: React.ErrorInfo) {
     console.error('[ErrorBoundary] Render crash caught:', error, info.componentStack);
@@ -93,7 +95,8 @@ class ErrorBoundary extends Component<{ children: ReactNode }, { hasError: boole
       return (
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', fontFamily: 'system-ui', gap: 12 }}>
           <p style={{ fontSize: 16, color: '#888' }}>Something went wrong.</p>
-          <button onClick={() => { this.setState({ hasError: false }); }} style={{ padding: '8px 16px', borderRadius: 6, border: '1px solid #ccc', cursor: 'pointer' }}>
+          {this.state.reason && <p data-testid="error-reason" style={{ fontSize: 13, color: '#aaa', maxWidth: 480, textAlign: 'center' }}>{this.state.reason}</p>}
+          <button onClick={() => { this.setState({ hasError: false, reason: '' }); }} style={{ padding: '8px 16px', borderRadius: 6, border: '1px solid #ccc', cursor: 'pointer' }}>
             Try again
           </button>
         </div>
