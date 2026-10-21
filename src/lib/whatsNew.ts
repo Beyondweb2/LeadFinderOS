@@ -22,6 +22,14 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-21-find-leads-show-outside', date: '2026-10-21', title: 'Find Leads: Show now includes the outside-town leads', audience: 'all',
+    body: 'After you press Show on the "N outside the searched towns" line, those leads count like any other: Select, Add all, Find emails, Add all with emails and Export all use every lead you can see.',
+    report: {
+      added: [],
+      changed: ['With the outside-town leads shown, the button counts match the rows on screen (for example 53, not 14).', 'Each outside-town lead is saved with its own town, not the town you searched.'],
+      removed: [],
+      effect: 'Choosing to show them means you can work them. Hidden (the default) still leaves them out of every count and add.',
+    } },
   { id: '2026-10-21-find-leads-crash', date: '2026-10-21', title: 'Find Leads: searches no longer crash the page', audience: 'all',
     body: 'A search that found results could blank the page with "Something went wrong". Fixed, for one town or several. The error screen also says why now.',
     report: {
