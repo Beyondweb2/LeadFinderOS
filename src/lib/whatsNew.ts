@@ -22,6 +22,14 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-21-inbox-settings-and-scores', date: '2026-10-21', title: 'Inbox: engine scores on every lead, and one Settings button', audience: 'all',
+    body: 'Each lead in the Inbox list now shows how ChatGPT, Gemini and Google AI answered. The reply controls moved into one Settings button.',
+    report: {
+      added: ['Three small chips under each lead’s message: ChatGPT, Gemini and Google AI. Green = named, red = answered but not named, grey = no answer or no audit. Hover for the count.', 'A Settings button (admin) holding "When a prospect replies", AI handles replies, Draft outcomes and reply hours, each with a plain line saying what it does and a warning on the option that sends automatically.'],
+      changed: ['The Unread / Waiting / Needs approving / Needs you tabs are now one "Show" dropdown beside the other filters, with the same counts.', 'The "ready to send" count is now worded as parked pitches: audits waiting for you to send by hand, not a send queue.', 'The old "Gemini n/m" chip on a list row is replaced by the three chips.'],
+      removed: ['The loose reply controls on the Inbox top row.'],
+      effect: 'You can see at a glance which leads AI already names, without opening them, and the top row is just Send now, Settings and New. No setting changed what it does.',
+    } },
   { id: '2026-10-21-ai-auto-send', date: '2026-10-21', title: 'AI replies: switches to let chosen reply types send themselves (all off)', audience: 'admin',
     body: 'Under Inbox → Draft outcomes there is now a "Sends by itself" list. Every switch is off. Nothing sends by itself until you switch a reply type on.',
     report: {

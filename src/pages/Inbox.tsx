@@ -8,7 +8,7 @@ import { marketsOn } from '@/lib/outreachMarkets';
 import { isColdSmsTemplate } from '@/lib/smsMessages';
 import { checkSmsQueue, runSmsQueue, type SmsQueueRpc } from '@/lib/smsQueueBatch';
 import { CHANNEL_COST_GBP, costWords } from '@/lib/channelCosts';
-import { AutoReplyToggle } from '@/components/AutoReplyToggle';
+import { InboxSettings } from '@/components/InboxSettings';
 import { hookAuditRequestBody } from '@/lib/hookAuditRequest';
 import { auditButtonCopy, auditStartedDescription, pitchMayFollowAudit } from '@/lib/auditPitchRule';
 import { getDraft, setDraft, type DraftMap } from '@/lib/inboxDrafts';
@@ -86,7 +86,7 @@ import { useMarkWhatsAppRead, useWhatsAppReads } from '@/hooks/useWhatsAppUnread
 import { conversationState, messageErrorParts, INBOX_QUICK_FILTERS, londonToday, passesQuickFilter, formatWaiting, type ConversationState, type InboxQuickFilter } from '@/lib/conversationState';
 import { ConvStateChip } from '@/components/ConvStateChip';
 import { SendErrorNote } from '@/components/SendErrorNote';
-import { AiRepliesToggle } from '@/components/AiRepliesToggle';
+import { ENGINE_KEYS, ENGINE_CHIP_LABELS, engineTone, engineChipTitle, type EngineScores } from '@/lib/engineScores';
 import { AiDraftButton, AiDraftChip, AiDraftPanel, InboundLabelChip } from '@/components/AiDraftPanel';
 import { useAiReplyDrafts } from '@/hooks/useAiReplyDrafts';
 import { aiChipFor, needsApproving, needsYou, rowSendable, type AiReplyRow } from '@/lib/aiReplyDraft';
@@ -212,6 +212,28 @@ function EngagementPills(
         </span>
       )}
     </>
+  );
+}
+
+/* Three tiny chips, one line: green = named, red = not named, grey = no answer or no audit. Counts are in the hover. */
+const ENGINE_CHIP_TONE = {
+  named: 'bg-emerald-500/20 text-emerald-700 dark:text-emerald-400',
+  not_named: 'bg-red-500/20 text-red-700 dark:text-red-400',
+  none: 'bg-muted text-muted-foreground',
+} as const;
+function EngineChips({ scores }: { scores: EngineScores | null }) {
+  return (
+    <div className="flex items-center gap-1" data-testid="engine-chips">
+      {ENGINE_KEYS.map((k) => {
+        const sc = scores?.[k] ?? null;
+        return (
+          <span key={k} data-tone={engineTone(sc)} title={engineChipTitle(k, sc)}
+            className={cn('inline-flex items-center rounded px-1 text-[9px] font-semibold leading-tight tabular-nums', ENGINE_CHIP_TONE[engineTone(sc)])}>
+            {ENGINE_CHIP_LABELS[k]} {sc && sc.answers > 0 ? `${sc.named}/${sc.answers}` : '–'}
+          </span>
+        );
+      })}
+    </div>
   );
 }
 
@@ -383,6 +405,8 @@ const ConversationRow = memo(function ConversationRow({
           {listPreview(c.lastMessage, c.label)}
         </span>
       )}
+      {/* The three engine scores from the lead's newest audit (the old "Gemini n/m" chip is replaced by these). */}
+      {c.leadId && <EngineChips scores={c.engineScores} />}
       {/* Editable status pill — only for conversations linked to a lead
           (Unassigned has none). Two-way synced with Outreach. Beside it, ONE
           engagement pill for the furthest milestone the lead reached
@@ -392,7 +416,7 @@ const ConversationRow = memo(function ConversationRow({
           {saving
             ? <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
             : <PipelineStatusSelect value={c.leadStatus} stage={listStageOf(c.leadId)} onValueChange={(status) => handleSetStatus(c, status)} askReasonFor={{ leadId: c.leadId, businessName: c.label }} />}
-          <EngagementPills reportOpenedAt={c.reportOpenedAt} siteVisitedAt={c.siteVisitedAt} geminiNamed={c.geminiNamed} geminiAnswers={c.geminiAnswers} />
+          <EngagementPills reportOpenedAt={c.reportOpenedAt} siteVisitedAt={c.siteVisitedAt} />
           {/* Next action at a glance: red overdue, amber today, grey later; nothing when none. */}
           <NextActionPill lead={leadByIdForState.get(c.leadId)} size="xs" className="ml-auto" />
         </div>
@@ -769,6 +793,8 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
     return { unread, waiting, approving, needsYou: mine };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [stateByKey, list, ai.rows, sched.rows]);
+  /* The number beside each view in the Show dropdown (same counts the tab strip carried). */
+  const quickViewCount = (v: string): number => v === 'unread' ? quickCounts.unread : v === 'waiting' ? quickCounts.waiting : v === 'needs_approving' ? quickCounts.approving : v === 'needs_you' ? quickCounts.needsYou : 0;
 
   const searchTerm = search.trim().toLowerCase();
   const filteredList = useMemo(() => {
@@ -1801,7 +1827,7 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
         /* A freshly-opened thread has no messages, so no report link was sent and no engagement is
            attributable yet; a lead with real engagement has real messages and a real conversation. */
         reportOpenedAt: null, siteVisitedAt: null,
-        geminiNamed: null, geminiAnswers: null, isPotentialWork: !!lead.is_potential_work,
+        geminiNamed: null, geminiAnswers: null, engineScores: null, isPotentialWork: !!lead.is_potential_work,
       };
       setSynthetic(synth);
       setActiveKey(key);
@@ -1999,9 +2025,6 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
             <InboxChannelSwitch current={channel} />
             <p className="hidden truncate text-sm text-muted-foreground min-[1760px]:block">{sms ? 'Every text conversation with your leads.' : 'Every WhatsApp conversation with your leads.'}</p>
           </div>
-          {/* The one auto-reply rule's switch (admin-only — hides itself otherwise). */}
-          {perms.queueControls && <AutoReplyToggle channel={channel} />}
-          {perms.queueControls && aiOn && <AiRepliesToggle />}
           <div className="flex shrink-0 items-center gap-2">
             {sms && (smsQueueRows.data?.length ?? 0) > 0 && <span className="rounded-full bg-sky-500/15 px-2.5 py-1 text-xs font-semibold text-sky-700 dark:text-sky-300" data-testid="sms-queued-count">{smsQueueRows.data?.length} queued</span>}
             {isAdmin && (
@@ -2016,10 +2039,23 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
                 {sendingNow ? <Loader2 className="h-4 w-4 animate-spin sm:mr-1.5" /> : <Send className="h-4 w-4 sm:mr-1.5" />}<span className="hidden sm:inline">Send now</span>
               </Button>
             )}
+            {/* Everything else that lived on this row (the reply rule, AI handles replies, Draft outcomes, reply hours) is in Settings. */}
+            {perms.queueControls && <InboxSettings channel={channel} aiOn={aiOn} isAdmin={isAdmin} replyHours={sched.replyHours} onSaveReplyHours={sched.saveReplyHours} />}
             <Button size="sm" onClick={() => setNewOpen((v) => !v)}><Plus className="mr-1.5 h-4 w-4" /> New</Button>
           </div>
         </div>
         <div className="grid grid-cols-2 gap-2 md:grid-cols-6 xl:flex xl:flex-nowrap xl:items-center" role="group" aria-label="Filter conversations">
+          {/* The views that were the tab strip (Unread, Waiting on us/them, Needs approving, Needs you) — one dropdown, counts beside each. */}
+          <Select value={quickFilter} onValueChange={(v) => setQuickFilter(v as InboxQuickFilter)}>
+            <SelectTrigger className={cn('h-9 xl:w-[190px]', perms.campaigns ? 'md:col-span-2' : 'md:col-span-3', quickFilter !== 'all' && 'border-primary/50 text-primary')} aria-label="Show conversations" data-testid="inbox-views-select">
+              <span className="truncate"><span className="mr-1.5 text-muted-foreground">Show:</span>{INBOX_QUICK_FILTERS.find((f) => f.value === quickFilter)?.label}{quickViewCount(quickFilter) > 0 ? ` (${quickViewCount(quickFilter)})` : ''}</span>
+            </SelectTrigger>
+            <SelectContent>
+              {INBOX_QUICK_FILTERS.filter((f) => (f.value !== 'needs_approving' && f.value !== 'needs_you') || aiOn).map((f) => (
+                <SelectItem key={f.value} value={f.value}>{f.label}{quickViewCount(f.value) > 0 ? ` (${quickViewCount(f.value)})` : ''}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
           {/* Filter conversations by campaign + status. Both keep Unassigned visible. */}
           {perms.campaigns && <CampaignPicker mode="filter" hideCreate value={campaignFilter} onChange={setCampaignFilter} className={cn('h-9 w-full md:col-span-2 xl:w-[170px]', campaignFilter && 'border-primary/50 text-primary')} />}
           <Select value={statusFilter ?? '__all__'} onValueChange={(v) => setStatusFilter(v === '__all__' ? null : v)}>
@@ -2081,21 +2117,6 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
       <div className="grid gap-3 md:min-h-0 md:flex-1 md:grid-cols-[300px_1fr] md:grid-rows-[minmax(0,1fr)]">
         {/* Conversation list */}
         <Card className={cn('overflow-y-auto p-1.5 md:h-full md:max-h-none', active ? 'hidden md:block' : 'min-h-[50vh]')}>
-          {/* Four views in a 2 × 2 grid: the 300px column cannot hold all four on one line, and a free wrap
-              left "Waiting on them" alone on a second row (2026-10-01). */}
-          <div className="mb-1.5 grid grid-cols-2 gap-1 px-0.5" role="tablist" aria-label="Show conversations">
-            {INBOX_QUICK_FILTERS.filter((f) => (f.value !== 'needs_approving' && f.value !== 'needs_you') || aiOn).map((f) => {
-              const n = f.value === 'unread' ? quickCounts.unread : f.value === 'waiting' ? quickCounts.waiting : f.value === 'needs_approving' ? quickCounts.approving : f.value === 'needs_you' ? quickCounts.needsYou : null;
-              const on = quickFilter === f.value;
-              return (
-                <button key={f.value} type="button" role="tab" aria-selected={on} onClick={() => setQuickFilter(f.value)}
-                  className={cn('flex h-8 items-center justify-center gap-1 whitespace-nowrap rounded-md px-1.5 text-xs font-medium transition-colors', 
-                    on ? 'bg-blue-500/15 text-blue-700 ring-1 ring-blue-500/30 dark:text-blue-300' : 'text-muted-foreground hover:bg-muted/60')}>
-                  {f.label}{n !== null && n > 0 && <span className={cn('rounded-full px-1.5 text-[10px] font-bold tabular-nums', on ? 'bg-blue-500 text-white' : 'bg-muted text-foreground')}>{n}</span>}
-                </button>
-              );
-            })}
-          </div>
           {/* Show-hidden toggle — only when there are hidden (not_interested) convos. */}
           {(hiddenCount > 0 || showHidden) && (
             <button

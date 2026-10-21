@@ -188,7 +188,7 @@ console.log('7. STOP still opts out and starts nothing');
 console.log('8. the SMS inbox header');
 {
   const s = read('src/pages/Inbox.tsx');
-  ok(/<AutoReplyToggle channel=\{channel\} \/>/.test(s) && /perms\.queueControls && <AutoReplyToggle/.test(s), 'the "When a prospect replies" control is in the shared header (admin-only), told which channel it is on');
+  ok(/<AutoReplyToggle channel=\{channel\} layout="panel" \/>/.test(read('src/components/InboxSettings.tsx')) && /perms\.queueControls && <InboxSettings channel=\{channel\}/.test(s),'the "When a prospect replies" control is in the shared header (admin-only), told which channel it is on');
   const t = read('src/components/AutoReplyToggle.tsx');
   ok(/disabled=\{saving \|\| \(sms && m === 'send'\)\}/.test(t) && /Audit and reply is WhatsApp only/.test(t), '"Audit and reply" is disabled on texts, with a plain note');
   ok(/queue_pitch_on_complete: pitchMayFollowAudit/.test(s) && /aria-label="Run AI audit"/.test(s), 'the one Run AI audit header button queues NO pitch on the text channel');

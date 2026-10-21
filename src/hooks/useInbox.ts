@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { toWhatsAppDigits } from '@/lib/waNumber';
+import { engineScoresByLead, type EngineScores, type EngineSignalRow } from '@/lib/engineScores';
 import { conversationLeadId, groupInboxMessages, mergeInboxMessages, mergeReconciledLeads, optionalInboxRows, patchInboxLead, upsertAuditById } from '@/lib/inboxCache';
 import { newestUsableAuditByLead, resolveReportsByLead } from '@/lib/auditReportResolver';
 import { RUN_USABLE } from '@/lib/queueAuditStatus';
@@ -56,6 +57,14 @@ async function fetchInboxAudits(from: number, to: number) {
    aggregate for every page — the slowest opening read (1.5–6.4 s live). inbox_gemini_signals() returns the same rows of
    the same view (security invoker: the caller's own RLS) as one JSON array. If the function is not there (an old
    database), the paged view read below is the fallback, so the order of deploys cannot break the pill. */
+/* The engine chips' counts, in ONE call (inbox_engine_signals, security invoker). If the function is not there yet (deploy order) the
+   chips are simply grey — never a wrong colour, never a per-row request. */
+async function fetchEngineSignals(): Promise<{ rows: InboxData['engineSignals']; truncated: boolean }> {
+  const { data, error } = await (supabase as unknown as { rpc: (fn: string) => Promise<{ data: unknown; error: unknown }> }).rpc('inbox_engine_signals');
+  if (!error && Array.isArray(data)) return { rows: data as InboxData['engineSignals'], truncated: false };
+  console.warn('Inbox (engine signals): one-call read unavailable; engine chips stay grey', error);
+  return { rows: NO_ENGINE, truncated: false };
+}
 async function fetchGeminiSignals(): Promise<{ rows: InboxData['geminiSignals']; truncated: boolean }> {
   const { data, error } = await (supabase as unknown as { rpc: (fn: string) => Promise<{ data: unknown; error: unknown }> }).rpc('inbox_gemini_signals');
   if (!error && Array.isArray(data)) return { rows: data as InboxData['geminiSignals'], truncated: false };
@@ -170,6 +179,8 @@ export interface WaConversation {
    *  The pill fires at >= 2/3 (Inbox), a look-before-you-send signal, never an automatic skip. */
   geminiNamed: number | null;
   geminiAnswers: number | null;
+  /** The three small engine chips on the list row (src/lib/engineScores.ts). Null = no audit answers known (all grey). */
+  engineScores: EngineScores | null;
   /** Interested is a separate operator marker, persisted as is_potential_work. */
   isPotentialWork: boolean;
 }
@@ -201,6 +212,8 @@ interface InboxData {
    *  Inbox never ships 6k+ result blobs). Drives the "Gemini X/Y" flag — judged on Gemini alone,
    *  the engine pages move, per Paul 2026-09-16. */
   geminiSignals: Array<{ audit_id: string; lead_id: string | null; gemini_answers: number; gemini_named: number }>;
+  /** Per-audit ChatGPT / Gemini / Google AI named-of-answers (inbox_engine_signals, one call) → the list row's engine chips. */
+  engineSignals: EngineSignalRow[];
   /** Per-lead stored crawl checks (result blob + when) → whether the site has a nameable fault (which
    *  gates the audit_followup_fault template) AND the stored result the Crawl-site popup shows.
    *  Newest per lead wins in the hook. */
@@ -218,13 +231,14 @@ const NO_AUDITS: InboxData['audits'] = [];
 const NO_PAGE_HITS: InboxData['pageHits'] = [];
 const NO_GEMINI: InboxData['geminiSignals'] = [];
 const NO_CRAWL: InboxData['crawlChecks'] = [];
+const NO_ENGINE: InboxData['engineSignals'] = [];
 
 /** The message table a channel reads, and the mapping of its rows onto the Inbox's own message shape (the rest of the Inbox cannot tell). */
 const messageTableFor = (channel: InboxChannel) => (channel === 'sms' ? 'sms_messages' : 'whatsapp_messages');
 const toInboxMessage = (channel: InboxChannel, row: unknown): WaMessage => (channel === 'sms' ? smsRowToInboxMessage(row as SmsMessageRow) as WaMessage : row as WaMessage);
 
 async function fetchInboxData(leadTable: InboxLeadTable, previous?: InboxData, essentialOnly = false, channel: InboxChannel = 'whatsapp'): Promise<InboxData> {
-  const [msgRes, leadRes, reportRes, hitRes, gemRes, crawlRes] = await Promise.all([
+  const [msgRes, leadRes, reportRes, hitRes, gemRes, crawlRes, engRes] = await Promise.all([
     /* Paginated, and with the id tiebreaker it never had: 3 groups of rows share a created_at, and
        on a non-unique sort a tied row can be fetched twice and another missed at a page boundary.
        This is the fastest-growing table in the system — every send and every reply. */
@@ -281,6 +295,7 @@ async function fetchInboxData(leadTable: InboxLeadTable, previous?: InboxData, e
     essentialOnly ? { rows: previous?.crawlChecks ?? NO_CRAWL } : optionalInboxRows<InboxData['crawlChecks'][number]>(fetchAllRows<InboxData['crawlChecks'][number]>('Inbox (crawl checks)', (from, to) =>
       sb.from('lead_crawl_checks').select('lead_id, result, created_at')
         .order('id', { ascending: true }).range(from, to))),
+    essentialOnly ? { rows: previous?.engineSignals ?? NO_ENGINE } : optionalInboxRows<InboxData['engineSignals'][number]>(fetchEngineSignals()),
   ]);
   return {
     messages: channel === 'sms' ? msgRes.rows.map((m) => toInboxMessage(channel, m)) : msgRes.rows,
@@ -289,6 +304,7 @@ async function fetchInboxData(leadTable: InboxLeadTable, previous?: InboxData, e
     pageHits: hitRes?.rows ?? previous?.pageHits ?? NO_PAGE_HITS,
     geminiSignals: gemRes?.rows ?? previous?.geminiSignals ?? NO_GEMINI,
     crawlChecks: crawlRes?.rows ?? previous?.crawlChecks ?? NO_CRAWL,
+    engineSignals: engRes?.rows ?? previous?.engineSignals ?? NO_ENGINE,
   };
 }
 
@@ -536,6 +552,7 @@ export function useInbox(channel: InboxChannel = 'whatsapp') {
   const pageHits = query.data?.pageHits ?? NO_PAGE_HITS;
   const geminiSignals = query.data?.geminiSignals ?? NO_GEMINI;
   const crawlChecks = query.data?.crawlChecks ?? NO_CRAWL;
+  const engineSignals = query.data?.engineSignals ?? NO_ENGINE;
   const isLoading = query.isLoading;
   const isError = query.isError;
 
@@ -753,6 +770,8 @@ export function useInbox(channel: InboxChannel = 'whatsapp') {
     return m;
   }, [audits, geminiSignals]);
 
+  const engineByLead = useMemo(() => engineScoresByLead(audits, engineSignals), [audits, engineSignals]);
+
   // Derive conversations from the message log, grouped by (user_id, phone).
   const messagesByConversation = useMemo(() => groupInboxMessages<WaMessage>(messages), [messages]);
 
@@ -787,11 +806,12 @@ export function useInbox(channel: InboxChannel = 'whatsapp') {
         siteVisitedAt: siteVisitedAtByLead.get(leadId) ?? null,
         geminiNamed: geminiByLead.get(leadId)?.named ?? null,
         geminiAnswers: geminiByLead.get(leadId)?.answers ?? null,
+        engineScores: engineByLead.get(leadId) ?? null,
         isPotentialWork: leadId ? (potentialWorkByLeadId[leadId] ?? false) : false,
       });
     }
     return out.sort((a, b) => new Date(b.lastMessageAt).getTime() - new Date(a.lastMessageAt).getTime());
-  }, [messagesByConversation, leadNameById, campaignByLeadId, statusByLeadId, potentialWorkByLeadId, paidLeadIds, ownLeadIds, reportOpenedAtByLead, siteVisitedAtByLead, geminiByLead]);
+  }, [messagesByConversation, leadNameById, campaignByLeadId, statusByLeadId, potentialWorkByLeadId, paidLeadIds, ownLeadIds, reportOpenedAtByLead, siteVisitedAtByLead, geminiByLead, engineByLead]);
 
   const messagesForKey = useCallback(
     (key: string) => messagesByConversation.get(key) ?? NO_MESSAGES,
