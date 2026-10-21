@@ -257,3 +257,29 @@ Are you with an agency, or do you manage the website yourself? Either way I can 
 - The confidence line is now "I specialise in getting local businesses to show up in those results, so the customers go to you
   instead." (the 2026-10-20 records above keep the words used then).
 - Record: `docs/reply-playbook.md` §3, §5c. Marker `x-ai-reply-drafts: 2026-10-21a-hi-mate-no-brands`.
+
+## Draft outcomes (2026-10-21)
+
+**Why:** `final_text` was on 3 of 33 drafts. Most drafts (29) go out through the Inbox's ORDINARY Send with the draft
+pre-filled, not Approve & send, and the tick closes them later as `resolved` — no code path saw the text that was sent.
+
+**One writer: the trigger `trg_ai_reply_draft_outcome`** (BEFORE UPDATE on `ai_reply_drafts`, migration
+`20261115090000_ai_draft_outcomes.sql`). Whichever path changes a draft, it writes one `ai_reply_draft_outcomes` row per
+draft VERSION: `sent_unchanged` · `sent_edited` (final text + `words_changed`) · `regenerated` (an open draft's text was
+rewritten) · `discarded` · `superseded` · `not_used` (answered by a template / media). `resolved` looks up the first real
+outbound after the inbound (the tick's own rule) and also fills the draft's `final_text` / `sent_message_id`. An Approve &
+send queued for send hours (complete → discard with `error = 'queued_for_send_hours'`) is recorded as sent, `queued = true`.
+Intent = `why.intent` (playbook), else `why.move`, else `reason`. Words changed = word-level edit distance
+(`word_edit_distance`; 0 ⇔ same words in the same order, spacing ignored). ⛔ The trigger swallows its own errors — it can
+never block the worker or the Inbox. Nothing in fn `ai-reply-drafts` changed (no redeploy).
+
+**Backfill** (in the migration): every draft that existed got its outcome from the same recorder; each old regeneration is
+one `regenerated` row with no text (`backfilled = true`).
+
+**Readout:** "Draft outcomes" beside the AI handles replies switch (admin only, hidden with it), read on open from
+`ai_draft_outcome_summary(p_days)` (SECURITY DEFINER, admin only, last 90 days). Fold: `src/lib/draftOutcomes.ts`.
+The log table is service-role only (RLS on, no policies). "Draft reply" through fn `ai-reply-drafts`
+(`action: 'draft'`) IS counted (it writes an `ai_reply_drafts` row). The older warm-reply assistant (`WarmReplyAssistant`,
+fn `warm-lead-reply`) writes into the composer and stores nothing, so it is not counted.
+
+Tests: `scripts/draft-outcomes.test.ts`; live, always rolled back: `supabase/tests/ai-draft-outcomes.sql`.

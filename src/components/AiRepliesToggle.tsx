@@ -3,6 +3,7 @@ import { Sparkles } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
 import { useToast } from '@/hooks/use-toast';
 import { invokeEdge, edgeErrorMessage } from '@/lib/edgeInvoke';
+import { AiDraftOutcomes } from '@/components/AiDraftOutcomes';
 
 /* "AI HANDLES REPLIES" — the on/off switch (2026-10-11, Paul). Default OFF. Admin only: a non-admin's read is
    refused and the switch stays hidden. It lives beside "When a prospect replies" because that is where the reply
@@ -47,11 +48,15 @@ export function AiRepliesToggle() {
   };
 
   return (
+    <div className="flex shrink-0 items-center gap-1">
     <label className="flex h-9 shrink-0 items-center gap-2 whitespace-nowrap text-sm font-medium text-muted-foreground"
       title="When on, each new WhatsApp reply gets an AI draft to approve. It never sends by itself.">
       <Sparkles className="h-4 w-4 text-violet-600 dark:text-violet-300" />
       AI handles replies
       <Switch checked={on} disabled={saving} onCheckedChange={(v) => void flip(v)} aria-label="AI handles replies" data-testid="ai-replies-switch" />
     </label>
+    {/* What happened to each draft (admin only, like the switch). */}
+    <AiDraftOutcomes />
+    </div>
   );
 }
