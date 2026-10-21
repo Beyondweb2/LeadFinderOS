@@ -115,7 +115,7 @@ console.log('5. the function (source pins)');
     'open pitches written without evidence are rewritten once ready, only if nobody touched them');
   ok(/evidenceStale: true/.test(refresh), 'a rewrite that is no longer a pitch is marked for Regenerate instead');
   ok(!/graph\.facebook\.com|functions\/v1\/send-whatsapp|from\("whatsapp_messages"\)\.insert|from\("whatsapp_sends"\)/.test(FN), 'the function still never sends');
-  ok(/x-ai-reply-drafts": "2026-10-21e-draft-after-audit"/.test(FN), 'deploy marker bumped');
+  ok(/x-ai-reply-drafts": "2026-10-21[e-z]-[a-z-]+"/.test(FN), 'deploy marker bumped (this release or a later one)');
 }
 
 console.log(f ? `\n${f} FAILURE(S)` : '\nALL PASS');

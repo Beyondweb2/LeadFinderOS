@@ -22,6 +22,21 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-21-inbox-reply-mode', date: '2026-10-21', title: 'Inbox: one reply mode — Manual, Draft for approval or Auto', audience: 'admin',
+    body: 'Inbox → Settings now has one choice for what happens when a prospect replies. It is set to Draft for approval, which is how it worked before. Every automatic sending switch is off.',
+    report: {
+      added: [
+        'Three modes: Manual (nothing drafted, no audit), Draft for approval (the audit runs and every reply gets a draft that waits for you) and Auto (as Draft for approval, plus the reply types you switch on send by themselves).',
+        'Under Auto: the "Sends by itself" switches and the daily limit, moved here from Draft outcomes. The first switch is the first-reply pitch, and it only ever goes on a plain "yes" or "how can I help".',
+        'An automatic reply now also needs the audit and the website check to be complete.',
+      ],
+      changed: [
+        'Switching to Manual or Draft for approval cancels anything waiting to send by itself straight away.',
+        'The "is this a bot?" answer only says "I read and send every one myself" in Manual or Draft for approval.',
+      ],
+      removed: ['"Audit and reply" (the old automatic template reply). Nothing sends that template by itself any more.', 'The separate "AI handles replies" switch and the old "When a prospect replies" buttons.'],
+      effect: 'One place decides how replies are handled. Nothing sends by itself unless you choose Auto and switch a reply type on.',
+    } },
   { id: '2026-10-21-draft-after-audit', date: '2026-10-21', title: 'AI replies: the first-reply pitch now waits for the audit', audience: 'all',
     body: 'The AI no longer writes the first-reply pitch before the audit and website check have finished, so it always has the competitors and the site issues.',
     report: {

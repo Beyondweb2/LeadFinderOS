@@ -37,7 +37,8 @@ console.log('1. flags always, drafts only behind the switch (2026-10-20)');
   const refresh = FN.slice(FN.indexOf('async function refreshEvidenceLessPitches'), FN.indexOf('/* ───────────────────────── person actions'));
   ok(refresh.indexOf('plan.fixedText') > 0 && refresh.indexOf('plan.fixedText') < refresh.indexOf('writeDraft('), 'the pitch refresh rewrites only a code-built pitch (no model call)');
 }
-ok(/ai_handles_replies_since = new Date\(\)\.toISOString\(\)/.test(FN.replace(/patch\.ai_handles_replies_since/, 'ai_handles_replies_since')), 'turning it on starts the clock: older replies are never drafted (no backlog spend)');
+/* 2026-10-21: the switch is the Inbox mode; the clock is stamped by the database when the mode leaves Manual (trg_inbox_reply_mode_sync). */
+ok(/old\.ai_reply_mode = 'manual'\) then\s+new\.ai_handles_replies_since := now\(\)/.test(readFileSync(new URL('../supabase/migrations/20261117090000_inbox_reply_mode.sql', import.meta.url), 'utf8').replace(/\r\n/g, '\n')), 'turning it on starts the clock: older replies are never drafted (no backlog spend)');
 ok(/if \(actor\.role !== "admin"\) return json\(\{ ok: false, error: "admin_only" \}, 403\)/.test(FN), 'only an admin can read or flip the switch');
 
 console.log('2. one draft per inbound; a newer inbound replaces the old draft');

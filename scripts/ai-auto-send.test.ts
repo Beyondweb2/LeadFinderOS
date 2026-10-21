@@ -7,7 +7,7 @@ import { readFileSync } from 'node:fs';
 import {
   AUTO_SEND_CHOICES, NEVER_AUTO_KEYS, AUTO_SEND_MIN_DELAY_MS, AUTO_SEND_MAX_DELAY_MS, PERSON_ACTIVE_MS, AUTO_SEND_DEFAULT_DAILY_CAP,
   autoSendable, autoSendVerdict, autoSendDelayMs, autoSendAt, autoSendKey, cleanAutoSendKeys, cleanDailyCap, draftFactsFromPlan,
-  draftFactsFromRow, threadHardReason, type AutoSendFacts,
+  draftFactsFromRow, theirMessagesSinceUs, threadHardReason, type AutoSendFacts,
 } from '../src/lib/aiAutoSend.ts';
 import { pickMove, type MoveEvidence, type MoveThreadMsg, type MoveInput } from '../src/lib/replyMove.ts';
 import { aiReplyDecision, autoSendWaiting } from '../src/lib/aiReplyDraft.ts';
@@ -40,8 +40,8 @@ function verdictFor(thread: MoveThreadMsg[], o: Partial<AutoSendFacts> & { lead?
   const decision = aiReplyDecision({ inboundAt: new Date(NOW - 60_000).toISOString(), lead, hadOutreach: true, plan, nowMs: NOW });
   const latest = [...thread].reverse().find((m) => m.from === 'them')?.text ?? '';
   const facts: AutoSendFacts = {
-    masterOn: true, intentsOn: ALL_ON, dailyCap: 30, usedToday: 0,
-    draft: draftFactsFromPlan(plan, { kind: decision.kind === 'draft' ? 'draft' : decision.kind, text: plan.fixedText ?? 'A clean draft.', problems: [], usedFallback: false }),
+    masterOn: true, intentsOn: ALL_ON, dailyCap: 30, usedToday: 0, theirMessages: theirMessagesSinceUs(thread),
+    draft: draftFactsFromPlan(plan, { kind: decision.kind === 'draft' ? 'draft' : decision.kind, text: plan.fixedText ?? 'A clean draft.', problems: [], usedFallback: false, evidenceComplete: true }),
     latestInbound: latest, threadHard: threadHardReason(input), digits: UK, lead, suppressed: false, personActiveAt: null, senderIsAdmin: true, nowMs: NOW,
     ...o,
   };
@@ -134,7 +134,7 @@ console.log('3. every other condition');
   ok(autoSendVerdict({ ...verdictFor(base).facts, lead: { amount_paid: null, status: 'replied', is_archived: true } }).send === false, 'an archived lead → no, even on a clean draft');
   const twice = verdictFor([opener, them('Yes it is'), us('pitch')]);
   ok(twice.verdict.send === false, `never twice without a prospect message (${twice.verdict.send ? 'SENT' : twice.verdict.reason})`);
-  const loop = (() => { const input: MoveInput = { thread: base, suppressed: false, aiSentSinceWin: 3, evidence: ev, nowMs: NOW }; const p = pickMove(input); return autoSendVerdict({ ...verdictFor(base).facts, draft: draftFactsFromPlan(p, { kind: 'draft', text: 'x', problems: [], usedFallback: false }) }); })();
+  const loop = (() => { const input: MoveInput = { thread: base, suppressed: false, aiSentSinceWin: 3, evidence: ev, nowMs: NOW }; const p = pickMove(input); return autoSendVerdict({ ...verdictFor(base).facts, draft: draftFactsFromPlan(p, { kind: 'draft', text: 'x', problems: [], usedFallback: false, evidenceComplete: true }) }); })();
   ok(loop.send === false, `three AI messages with no win → no (${loop.send ? 'SENT' : loop.reason})`);
 }
 

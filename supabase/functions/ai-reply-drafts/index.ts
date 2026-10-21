@@ -19,7 +19,8 @@
 //       A DRAFT is written by the model only while the switch "AI handles replies" is on (default off; never changed here).
 //   · draft (the person working the lead) — "Draft reply": a draft for the newest inbound, always, except a stop
 //   · mark_opted_out (the person working the lead) — the one-tap opt-out on a stop
-//   · settings / set_enabled (admin) — the switch (whatsapp_outreach_state.ai_handles_replies, default OFF)
+//   · settings / set_mode (admin) — the Inbox reply mode, Manual / Draft for approval / Auto (whatsapp_outreach_state.ai_reply_mode,
+//     src/lib/inboxReplyMode.ts; 2026-10-21). set_enabled = the old switch (on = Draft for approval, never Auto)
 //   · regenerate / discard / claim / complete (the person working the lead)
 //   · dry_run (admin, or the internal job) — the draft for one lead or for a FIXTURE; writes no row, sends nothing, logs nothing
 //   · set_auto_send (admin) — LEVEL 2's per-reply-type switches + the daily cap (src/lib/aiAutoSend.ts); stop_auto_send (person)
@@ -51,10 +52,11 @@ import { warmStage } from "../../../src/lib/warmStage.ts";
 import { serviceWindowState } from "../../../src/lib/serviceWindow.ts";
 import { isRealSend } from "../../../src/lib/realSend.ts";
 import {
-  autoSendVerdict, autoSendAt, autoSendDelayMs, autoSendKey, cleanAutoSendKeys, cleanDailyCap, draftFactsFromPlan, threadHardReason,
+  autoSendVerdict, autoSendAt, autoSendDelayMs, autoSendKey, cleanAutoSendKeys, cleanDailyCap, draftFactsFromPlan, evidenceComplete, theirMessagesSinceUs, threadHardReason,
   AUTO_SEND_CHOICES, AUTO_SEND_DEFAULT_DAILY_CAP, AUTO_SEND_MAX_DAILY_CAP,
 } from "../../../src/lib/aiAutoSend.ts";
 import { nextWindowOpenAt, replyWindowFor, replyWindowOpen } from "../../../src/lib/inboxSendWindow.ts";
+import { botMaySaySendsEveryOne, parseInboxReplyMode, INBOX_REPLY_MODES } from "../../../src/lib/inboxReplyMode.ts";
 import { loadReplyHours } from "../_shared/inbox-schedule.ts";
 import { loadCountrySettings } from "../_shared/country-settings.ts";
 import { autoSendCounts, loadAutoSendState, personActiveAt, sendAsIsAdmin, stopAutoSend, type AutoSendState } from "../_shared/ai-auto-send.ts";
@@ -68,7 +70,7 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-internal-job, x-cron-secret",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
   /* The deploy marker: only this build answers with it. */
-  "x-ai-reply-drafts": "2026-10-21e-draft-after-audit",
+  "x-ai-reply-drafts": "2026-10-21f-inbox-reply-mode",
 };
 const json = (b: unknown, s = 200) => new Response(JSON.stringify(b), { status: s, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 const str = (v: unknown) => (typeof v === "string" ? v.trim() : "");
@@ -160,11 +162,13 @@ async function aiSentSinceWin(service: Service, lead: LeadRow, thread: MsgRow[])
   return rows.filter((r) => !win || (r.approved_at as string) > win).length;
 }
 
-/** The "AI handles replies" switch. ⛔ Fails toward ON: if it cannot be read, the bot answer never claims a person sent it. */
+/** May replies on here be automated (the bot answer)? The Inbox mode (inboxReplyMode.ts, 2026-10-21): only Manual and Draft
+ *  for approval may say "I read and send every one myself" — a person sends every message there. ⛔ Fails toward ON: if the
+ *  mode cannot be read, the bot answer never claims a person sent it. */
 async function aiSwitchOn(service: Service): Promise<boolean> {
-  const { data, error } = await service.from("whatsapp_outreach_state").select("ai_handles_replies").eq("id", 1).maybeSingle();
+  const { data, error } = await service.from("whatsapp_outreach_state").select("ai_reply_mode").eq("id", 1).maybeSingle();
   if (error || !data) return true;
-  return data.ai_handles_replies === true;
+  return !botMaySaySendsEveryOne(typeof data.ai_reply_mode === "string" ? data.ai_reply_mode : null);
 }
 
 /** The lead's audit phase (draftEvidenceWait.ts): its newest ordinary audits and their runs. Unreadable → 'running'
@@ -177,12 +181,15 @@ async function loadAuditPhase(service: Service, leadId: string) {
 }
 
 /** Is the evidence for a pitch on this inbound final yet? */
-const verdictFor = (phases: Omit<WhyEvidence, "ready">, inboundAt: string): EvidenceVerdict =>
+const verdictFor = (phases: Phases, inboundAt: string): EvidenceVerdict =>
   evidenceVerdict({ audit: phases.audit, crawl: phases.crawl, inboundAtMs: Date.parse(inboundAt), nowMs: Date.now() });
-const whyEvidence = (v: EvidenceVerdict): WhyEvidence => ({ ready: v.state === "ready", audit: v.audit, crawl: v.crawl });
+/** `complete` (Level 2): the audit has a complete run AND the site was read or there is none (aiAutoSend.ts evidenceComplete).
+ *  Only a complete draft may ever send itself. */
+const whyEvidence = (v: EvidenceVerdict, site?: string | null): WhyEvidence => ({ ready: v.state === "ready", audit: v.audit, crawl: v.crawl, complete: v.state === "ready" && evidenceComplete(v.audit, site) });
+type Phases = Omit<WhyEvidence, "ready" | "complete"> & { site?: string | null };
 
 /** Everything the draft may say — from the audit, the crawl and the conversation. Nothing else. */
-async function buildContext(service: Service, lead: LeadRow, thread: MsgRow[], inbound: MsgRow): Promise<{ ctx: AiReplyContext; findingsNote: string | null; input: MoveInput; phases: Omit<WhyEvidence, "ready"> }> {
+async function buildContext(service: Service, lead: LeadRow, thread: MsgRow[], inbound: MsgRow): Promise<{ ctx: AiReplyContext; findingsNote: string | null; input: MoveInput; phases: Phases }> {
   const audit = await loadAuditContext(service, lead).catch(() => null);
   const { data: crawl } = await service.from("lead_crawl_checks").select("result, created_at, last_failed_attempt").eq("lead_id", lead.id).maybeSingle();
   const found = selectFindings({
@@ -239,7 +246,7 @@ async function buildContext(service: Service, lead: LeadRow, thread: MsgRow[], i
     plan, evidence,
     contactFirstName: (lead.contact_name ?? "").trim().split(/\s+/)[0] || null,
   };
-  const phases = { audit: await loadAuditPhase(service, lead.id), crawl: crawlPhaseOf(found.check.state, !!crawl?.last_failed_attempt) };
+  const phases: Phases = { audit: await loadAuditPhase(service, lead.id), crawl: crawlPhaseOf(found.check.state, !!crawl?.last_failed_attempt), site: found.check.state };
   return { ctx, findingsNote: found.status === "findings" ? null : found.note, input, phases };
 }
 
@@ -340,7 +347,8 @@ async function maybeQueueAutoSend(service: Service, st: AutoSendState, a: {
   const [counts, active, admin] = await Promise.all([autoSendCounts(service), personActiveAt(service, a.cand.phone), sendAsIsAdmin(service, st.sendAs)]);
   const verdict = autoSendVerdict({
     masterOn: st.masterOn, intentsOn: st.intents, dailyCap: st.dailyCap, usedToday: counts.queuedToday,
-    draft: draftFactsFromPlan(a.plan, { kind: "draft", text: a.w.reply, problems: a.w.problems, usedFallback: a.w.usedFallback }),
+    draft: draftFactsFromPlan(a.plan, { kind: "draft", text: a.w.reply, problems: a.w.problems, usedFallback: a.w.usedFallback, evidenceComplete: a.why.evidence?.complete === true }),
+    theirMessages: theirMessagesSinceUs(a.input.thread),
     latestInbound: a.cand.body ?? "", threadHard, digits: a.cand.phone, lead: a.lead, suppressed: a.input.suppressed,
     personActiveAt: active, senderIsAdmin: admin, nowMs,
   });
@@ -445,14 +453,14 @@ async function handleTick(service: Service) {
 }
 
 /** The audit + website check phases for a lead, without building a whole context (the waiting rows' cheap check). */
-async function loadPhases(service: Service, leadId: string): Promise<Omit<WhyEvidence, "ready">> {
+async function loadPhases(service: Service, leadId: string): Promise<Phases> {
   const [{ data: lead }, { data: crawl }, audit] = await Promise.all([
     service.from("outreach_leads").select("website").eq("id", leadId).maybeSingle(),
     service.from("lead_crawl_checks").select("result, created_at, last_failed_attempt").eq("lead_id", leadId).maybeSingle(),
     loadAuditPhase(service, leadId),
   ]);
   const check = websiteCheckFor(crawl?.result ? { result: crawl.result, created_at: crawl.created_at } : null, { website: lead?.website ?? null });
-  return { audit, crawl: crawlPhaseOf(check.state, !!crawl?.last_failed_attempt) };
+  return { audit, crawl: crawlPhaseOf(check.state, !!crawl?.last_failed_attempt), site: check.state };
 }
 
 interface TickEnv { switchOn: boolean; since: number; mode: string; autoState: AutoSendState | null }
@@ -498,16 +506,16 @@ async function processInbound(service: Service, id: string, c: Cand, env: TickEn
          (no chip, no panel), and after EVIDENCE_WAIT_MS a person takes it. Every flag above never waits. */
       if (pitchNeedsEvidence(plan) && ev.state === "waiting") {
         await service.from("ai_reply_drafts").update({ kind: "skipped", status: "pending", reason: WAITING_REASON, reason_label: WAITING_LABEL, draft_text: null,
-          why: whyOf(ctx, findingsNote, null, 0, 0, { evidence: whyEvidence(ev) }), updated_at: now }).eq("id", id);
+          why: whyOf(ctx, findingsNote, null, 0, 0, { evidence: whyEvidence(ev, phases.site) }), updated_at: now }).eq("id", id);
         return { inbound: c.inbound_id, kind: "waiting", reason: `waiting_for_${ev.waitingFor.join("_and_")}` };
       }
       if (pitchNeedsEvidence(plan) && ev.state === "timed_out") {
         await service.from("ai_reply_drafts").update({ kind: "needs_you", status: "pending", reason: AUDIT_NOT_FINISHED_REASON, reason_label: AUDIT_NOT_FINISHED_LABEL, draft_text: null,
-          why: whyOf(ctx, findingsNote, null, 0, 0, { evidence: whyEvidence(ev) }), updated_at: now }).eq("id", id);
+          why: whyOf(ctx, findingsNote, null, 0, 0, { evidence: whyEvidence(ev, phases.site) }), updated_at: now }).eq("id", id);
         return { inbound: c.inbound_id, kind: "needs_you", reason: AUDIT_NOT_FINISHED_REASON };
       }
       const w = await writeDraft(service, ctx, { temperature: 0.5, userId: c.user_id, triggerSource: "auto" });
-      const why = whyOf(ctx, findingsNote, w, w.spentUsd, w.calls, { evidence: whyEvidence(ev) });
+      const why = whyOf(ctx, findingsNote, w, w.spentUsd, w.calls, { evidence: whyEvidence(ev, phases.site) });
       await service.from("ai_reply_drafts").update({
         kind: "draft", status: "pending", draft_text: w.reply, why, reason: null, reason_label: null,
         model: w.model, prompt_tokens: w.promptTokens, completion_tokens: w.completionTokens, cost_usd: w.spentUsd, model_calls: w.calls,
@@ -550,7 +558,7 @@ async function refreshEvidenceLessPitches(service: Service) {
     const still = (q: Service) => q.eq("id", d.id).eq("status", "pending").eq("updated_at", d.updated_at).is("auto_send_id", null);
     if (pitchNeedsEvidence(plan) && plan.fixedText && !plan.stop && !plan.needsYou && ev.state === "ready") {
       const w = await writeDraft(service, ctx, { temperature: 0.5, userId: d.user_id, triggerSource: "auto" });
-      await still(service.from("ai_reply_drafts").update({ draft_text: w.reply, why: whyOf(ctx, findingsNote, w, 0, 0, { evidence: whyEvidence(ev), evidenceRefreshedAt: new Date().toISOString() }), updated_at: new Date().toISOString() }));
+      await still(service.from("ai_reply_drafts").update({ draft_text: w.reply, why: whyOf(ctx, findingsNote, w, 0, 0, { evidence: whyEvidence(ev, now.site), evidenceRefreshedAt: new Date().toISOString() }), updated_at: new Date().toISOString() }));
     } else {
       await still(service.from("ai_reply_drafts").update({ why: { ...(d.why ?? {}), evidenceStale: true }, updated_at: new Date().toISOString() }));
     }
@@ -677,7 +685,7 @@ async function handleRegenerate(service: Service, actor: Actor, body: Record<str
   const totalUsd = Number((Number(d.cost_usd ?? 0) + w.spentUsd).toFixed(6));
   const calls = (d.model_calls ?? 0) + w.calls;
   const { data: saved } = await service.from("ai_reply_drafts").update({
-    draft_text: w.reply, why: whyOf(ctx, findingsNote, w, totalUsd, calls, { evidence: whyEvidence(ev) }), regenerations: (d.regenerations ?? 0) + 1,
+    draft_text: w.reply, why: whyOf(ctx, findingsNote, w, totalUsd, calls, { evidence: whyEvidence(ev, phases.site) }), regenerations: (d.regenerations ?? 0) + 1,
     prompt_tokens: (d.prompt_tokens ?? 0) + w.promptTokens, completion_tokens: (d.completion_tokens ?? 0) + w.completionTokens,
     cost_usd: totalUsd, model_calls: calls, error: w.modelError, updated_at: new Date().toISOString(),
   }).eq("id", d.id).eq("status", "pending").select("id, draft_text, why, regenerations").maybeSingle();
@@ -730,7 +738,7 @@ async function handleDraft(service: Service, actor: Actor, body: Record<string, 
     row = {
       kind: plan.needsYou ? "needs_you" : "draft", status: "pending",
       reason: plan.needsYou?.reason ?? null, reason_label: plan.needsYou?.label ?? null,
-      draft_text: w.reply, why: whyOf(ctx, findingsNote, w, w.spentUsd, w.calls, { evidence: whyEvidence(ev) }), model: w.model,
+      draft_text: w.reply, why: whyOf(ctx, findingsNote, w, w.spentUsd, w.calls, { evidence: whyEvidence(ev, phases.site) }), model: w.model,
       prompt_tokens: w.promptTokens, completion_tokens: w.completionTokens, cost_usd: w.spentUsd, model_calls: w.calls, error: w.modelError,
     };
   }
@@ -830,18 +838,20 @@ async function handleDryRun(service: Service, actor: Actor | null, body: Record<
     plan: ctx.plan, draft: w?.reply ?? null, why: whyOf(ctx, findingsNote, w, w?.spentUsd ?? 0, w?.calls ?? 0), model_error: w?.modelError ?? null });
 }
 
-async function handleSettings(service: Service, actor: Actor, body: Record<string, unknown>, set: boolean) {
+/** THE INBOX REPLY MODE (src/lib/inboxReplyMode.ts): `set_mode` stores Manual / Draft for approval / Auto. The database keeps
+ *  the old columns in step (trg_inbox_reply_mode_sync: the switch, the reply audit, and the clock that stops a backlog being
+ *  drafted) and leaving Auto cancels every automatic reply waiting (trg_ai_auto_send_switch). `set_enabled` (the old switch)
+ *  still works for an older screen: on = Draft for approval, never Auto. */
+async function handleSettings(service: Service, actor: Actor, body: Record<string, unknown>, set: "mode" | "enabled" | null) {
   if (actor.role !== "admin") return json({ ok: false, error: "admin_only" }, 403);
   if (set) {
-    const on = body.enabled === true;
-    const patch: Record<string, unknown> = { ai_handles_replies: on, updated_at: new Date().toISOString() };
-    // Turning it on starts the clock: replies from before are never drafted (no backlog spend).
-    if (on) patch.ai_handles_replies_since = new Date().toISOString();
-    const { error } = await service.from("whatsapp_outreach_state").update(patch).eq("id", 1);
+    const raw = set === "mode" ? str(body.mode) : body.enabled === true ? "draft" : "manual";
+    if (!(INBOX_REPLY_MODES as readonly string[]).includes(raw)) return json({ ok: false, error: "bad_mode", detail: "Choose Manual, Draft for approval or Auto." }, 400);
+    const { error } = await service.from("whatsapp_outreach_state").update({ ai_reply_mode: raw, updated_at: new Date().toISOString() }).eq("id", 1);
     if (error) throw error;
   }
-  const { data } = await service.from("whatsapp_outreach_state").select("ai_handles_replies, ai_handles_replies_since, ai_auto_send_intents, ai_auto_send_daily_cap").eq("id", 1).maybeSingle();
-  return json({ ok: true, enabled: data?.ai_handles_replies === true, since: data?.ai_handles_replies_since ?? null, auto_send: autoSendSettings(data) });
+  const { data } = await service.from("whatsapp_outreach_state").select("ai_reply_mode, ai_handles_replies, ai_handles_replies_since, ai_auto_send_intents, ai_auto_send_daily_cap").eq("id", 1).maybeSingle();
+  return json({ ok: true, mode: parseInboxReplyMode(data?.ai_reply_mode), enabled: data?.ai_handles_replies === true, since: data?.ai_handles_replies_since ?? null, auto_send: autoSendSettings(data) });
 }
 
 function autoSendSettings(data: Record<string, unknown> | null | undefined) {
@@ -893,8 +903,9 @@ Deno.serve(async (req) => {
     if (action === "dry_run" && internal) return await handleDryRun(service, null, body);
     const who = await resolveActor(req, service);
     if (!who.ok) return json(refusalBody(who), who.status);
-    if (action === "settings") return await handleSettings(service, who.actor, body, false);
-    if (action === "set_enabled") return await handleSettings(service, who.actor, body, true);
+    if (action === "settings") return await handleSettings(service, who.actor, body, null);
+    if (action === "set_mode") return await handleSettings(service, who.actor, body, "mode");
+    if (action === "set_enabled") return await handleSettings(service, who.actor, body, "enabled");
     if (action === "set_auto_send") return await handleSetAutoSend(service, who.actor, body);
     if (action === "stop_auto_send") return await handleStopAutoSend(service, who.actor, body);
     if (action === "claim") return await handleClaim(service, who.actor, body);

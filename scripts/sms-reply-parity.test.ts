@@ -188,9 +188,9 @@ console.log('7. STOP still opts out and starts nothing');
 console.log('8. the SMS inbox header');
 {
   const s = read('src/pages/Inbox.tsx');
-  ok(/<AutoReplyToggle channel=\{channel\} layout="panel" \/>/.test(read('src/components/InboxSettings.tsx')) && /perms\.queueControls && <InboxSettings channel=\{channel\}/.test(s),'the "When a prospect replies" control is in the shared header (admin-only), told which channel it is on');
-  const t = read('src/components/AutoReplyToggle.tsx');
-  ok(/disabled=\{saving \|\| \(sms && m === 'send'\)\}/.test(t) && /Audit and reply is WhatsApp only/.test(t), '"Audit and reply" is disabled on texts, with a plain note');
+  ok(/<InboxReplyModeControl channel=\{channel\} \/>/.test(read('src/components/InboxSettings.tsx')) && /perms\.queueControls && <InboxSettings channel=\{channel\}/.test(s),'the "When a prospect replies" mode is in the shared header (admin-only), told which channel it is on');
+  const t = read('src/components/InboxReplyModeControl.tsx');
+  ok(/channel === 'sms'/.test(t) && /Texts are never drafted or sent automatically/.test(t) && !/'send'/.test(t), 'on texts the mode says plainly that nothing is drafted or sent ("Audit and reply" is retired)');
   ok(/queue_pitch_on_complete: pitchMayFollowAudit/.test(s) && /aria-label="Run AI audit"/.test(s), 'the one Run AI audit header button queues NO pitch on the text channel');
   ok(/hookAuditRequestBody\(activeLead, bizType, loc, old\?\.business_name\)/.test(read('src/pages/Inbox.tsx')), 'WhatsApp\'s "Run new" uses the same request body (one copy)');
   const body = read('src/lib/hookAuditRequest.ts');

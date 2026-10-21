@@ -358,3 +358,32 @@ Report of sent pitches that went out without evidence (read-only, 21 Oct): `C:\U
 — 2 leads (Start & Go Driving School, Pass With Paul - Crewe), both sent 21 Oct before 09:10 UTC, neither has replied; both now have
 a finished audit and website check. Tests: `scripts/draft-evidence-wait.test.ts` (incl. a reply before the audit finishes).
 Marker `x-ai-reply-drafts: 2026-10-21e-draft-after-audit`.
+
+## One mode — Manual / Draft for approval / Auto (2026-10-21, Paul)
+
+Branch `feat/inbox-mode-auto-send`, migration `20261117090000_inbox_reply_mode.sql`. ONE control in Inbox → Settings replaces
+"When a prospect replies" (Do nothing / Audit only / Audit and reply) AND the "AI handles replies" switch. Stored as
+`whatsapp_outreach_state.ai_reply_mode`; rules `src/lib/inboxReplyMode.ts`; screen `InboxReplyModeControl` (+ `AutoSendSwitches` under Auto).
+- **Manual**: nothing automatic on a reply — no audit, no draft. Needs you flags still run (rules only).
+- **Draft for approval** (the live row migrated here: AI on + Audit only): the reply audit runs, every reply gets a draft that waits.
+- **Auto**: as Draft for approval, and a reply type an admin switched on may send itself (Level 2's rule, all switches OFF).
+- ⛔ **"Audit and reply" is RETIRED**: the database CHECK allows `first_reply_mode = 'audit_only'` only, so no path (the queue's
+  first-reply drain, create-ai-audit's parked pitch, the completion step) can arm the old template reply. Any parked
+  `whatsapp_auto_replies` row in `awaiting_audit` / `pending` was cancelled (none existed). process-whatsapp-queue and
+  `firstReplyMode.ts` were NOT changed or redeployed — the database is the gate.
+- **Old columns kept in step** by `trg_inbox_reply_mode_sync` (BEFORE): `ai_handles_replies` / `auto_reply_enabled` = mode ≠ manual,
+  `first_reply_mode` = audit_only, and leaving Manual stamps `ai_handles_replies_since` (no backlog drafted). An old writer of
+  `ai_handles_replies` alone moves the mode to draft / manual — never auto. fn `ai-reply-drafts` `set_mode` (admin); `set_enabled` kept.
+- **Leaving Auto** cancels every waiting automatic reply (`trg_ai_auto_send_switch`, now on `ai_reply_mode` too; reason `ai_mode_not_auto`).
+- **Level 2 additions** (`aiAutoSend.ts`): `evidence_incomplete` — the draft's `why.evidence.complete` (audit `done` AND site
+  `issues` / `clean` / `no_website` / `profile`; a failed audit, an unreadable site or a failed crawl is not complete);
+  `not_simple_first_reply` — the first-reply pitch goes only when every message since ours is a plain confirmation or the
+  "how can I help" family (`SIMPLE_FIRST_REPLY`; a name, "hello?", "what's this about", "interested" wait). Both re-read at send time.
+  `masterOn` = the mode is Auto (`_shared/ai-auto-send.ts`).
+- **Bot answer**: "I read and send every one myself" only in Manual / Draft for approval (`botMaySaySendsEveryOne`); Auto or an
+  unreadable mode = "some replies may be automated".
+- The per-type switches moved out of the Draft outcomes popover; the popover keeps the auto-sent counts ("sent by AI today").
+- Not changed: the Run AI audit toast still names the old setting words (`auditPitchRule.ts` is reached by process-whatsapp-queue;
+  a text-only change was not worth redeploying the queue).
+Tests: `scripts/inbox-reply-mode.test.ts`, `scripts/ai-auto-send.test.ts`. Markers `x-ai-reply-drafts: 2026-10-21f-inbox-reply-mode`,
+`x-iss-build: 2026-10-21c-inbox-reply-mode`.

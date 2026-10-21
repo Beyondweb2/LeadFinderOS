@@ -20,9 +20,9 @@ import { sendSmsToLead } from "../_shared/twilio-sms.ts";
 import { qaSendHold } from "../_shared/qa-guard.ts";
 import { guardAction } from "../_shared/protection.ts";
 import { answeredAfter, autoSendCounts, loadAutoSendState, personActiveAt, sendAsIsAdmin } from "../_shared/ai-auto-send.ts";
-import { autoSendVerdict, draftFactsFromRow } from "../../../src/lib/aiAutoSend.ts";
+import { autoSendVerdict, draftFactsFromRow, theirMessagesSinceUs } from "../../../src/lib/aiAutoSend.ts";
 
-const BUILD_ID = "2026-10-21b-ai-auto-send";
+const BUILD_ID = "2026-10-21c-inbox-reply-mode";
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-cron-secret",
@@ -175,14 +175,19 @@ Deno.serve(async (req) => {
         const auto = (d.why as { autoSend?: Record<string, unknown> } | null)?.autoSend ?? null;
         if (!auto || !("threadHard" in auto)) return "ai_thread_unreadable";
         if (await answeredAfter(service, r.phone, d.inbound_at)) return "ai_answered";
-        const [st, counts, active, inb, lead] = await Promise.all([
+        const [st, counts, active, inb, lead, recent] = await Promise.all([
           loadAutoSendState(service), autoSendCounts(service), personActiveAt(service, r.phone),
           service.from("whatsapp_messages").select("body").eq("id", d.inbound_message_id).maybeSingle(),
           r.lead_id ? service.from("outreach_leads").select("amount_paid, status, is_archived").eq("id", r.lead_id).maybeSingle() : Promise.resolve({ data: null, error: null }),
+          /* Their messages since our last one (the first-reply pitch goes only on a plain "yes" / "how can I help"). */
+          service.from("whatsapp_messages").select("direction, body").eq("phone", r.phone).order("created_at", { ascending: false }).limit(20),
         ]);
-        if (inb.error || lead.error) return "ai_facts_unreadable";
+        if (inb.error || lead.error || recent.error) return "ai_facts_unreadable";
+        const thread = ((recent.data ?? []) as Array<{ direction: string; body: string | null }>).slice().reverse()
+          .map((m) => ({ from: m.direction === "inbound" ? "them" as const : "us" as const, text: m.body }));
         const verdict = autoSendVerdict({
           masterOn: st.masterOn, intentsOn: st.intents, dailyCap: st.dailyCap, usedToday: counts.sentToday, draft: facts,
+          theirMessages: theirMessagesSinceUs(thread),
           latestInbound: (inb.data as { body?: string | null } | null)?.body ?? "", threadHard: (auto.threadHard as string | null) ?? null,
           digits: r.phone, lead: lead.data as { amount_paid?: unknown; status?: unknown; is_archived?: unknown } | null,
           /* The drain has just read the suppression list for this row (drainDecision cancels a suppressed one). */

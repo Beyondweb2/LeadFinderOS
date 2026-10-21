@@ -81,9 +81,10 @@ console.log("\n── 3. the Sales dashboard re-reads after a lead change (debou
 console.log("\n── 4. the first-reply control reads the server's rule ──");
 {
   const inbox = strip(read("src/pages/Inbox.tsx"));
-  const toggle = strip(read("src/components/AutoReplyToggle.tsx")); // moved out of Inbox.tsx 2026-10-09 (shared with the SMS tab)
-  ok(/setMode\(effectiveFirstReplyMode\(data\.autoReplyEnabled, data\.firstReplyMode\)\)/.test(toggle), "Inbox uses effectiveFirstReplyMode");
-  ok(!/autoReplyEnabled === true \?/.test(inbox) && !/autoReplyEnabled === true \?/.test(toggle), "no hand-written copy of the rule in the Inbox");
+  /* 2026-10-21: the reply control is the Inbox mode (InboxReplyModeControl): it reads the server's stored mode, never the queue flags. */
+  const toggle = strip(read("src/components/InboxReplyModeControl.tsx"));
+  ok(/setMode\(parseInboxReplyMode\(r\.mode\)\)/.test(toggle), "the Inbox mode reads the server's stored mode");
+  ok(!/autoReplyEnabled === true \?/.test(inbox) && !/autoReplyEnabled/.test(toggle), "no hand-written copy of the rule in the Inbox");
 }
 
 if (f) { console.log(`\n${f} failure(s)`); process.exit(1); }

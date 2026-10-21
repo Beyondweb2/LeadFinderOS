@@ -73,7 +73,7 @@ export function evidenceVerdict(i: { audit: AuditPhase; crawl: CrawlPhase; inbou
 }
 
 /** What a draft's `why` records about its evidence (written on every draft since this release). */
-export interface WhyEvidence { ready: boolean; audit: AuditPhase; crawl: CrawlPhase }
+export interface WhyEvidence { ready: boolean; audit: AuditPhase; crawl: CrawlPhase; /** Level 2 (aiAutoSend.ts evidenceComplete). */ complete?: boolean }
 
 /** The website notes selectFindings gives when nothing has been checked yet. */
 const UNCHECKED_NOTE = /^(Nobody has checked this website yet|Checking the website)/;

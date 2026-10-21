@@ -5,9 +5,11 @@
    message goes (fn inbox-scheduled-send). Both call `autoSendVerdict` with the facts they hold; anything but `send: true`
    leaves the draft waiting for a person, exactly as before Level 2.
 
-   ⛔ POSITIVE, EVERY CHECK MUST PASS. The master switch ("AI handles replies") AND that reply type's own switch, a type on
+   ⛔ POSITIVE, EVERY CHECK MUST PASS. The Inbox mode is Auto (2026-10-21: src/lib/inboxReplyMode.ts; Draft for approval and
+      Manual never send) AND that reply type's own switch, a type on
       `AUTO_SEND_CHOICES` (nothing else can ever be switched on), a clean draft (no checker warning, not the rule-built
-      fallback), no Needs you / stop / Auto-reply label, no price / guarantee / proof words, a UK mobile, not a client,
+      fallback), the audit AND website check complete when it was written, the first-reply pitch only on a plain "yes" /
+      "how can I help", no Needs you / stop / Auto-reply label, no price / guarantee / proof words, a UK mobile, not a client,
       no stop / angry / complaint / not-interested anywhere in the thread, nobody typing or sending in the last
       `PERSON_ACTIVE_MS`, under the daily cap, and an admin to send as. Absent or unreadable = do not send.
    ⛔ IT NEVER SENDS. The send is an ordinary inbox_scheduled_sends row (the lead's send hours, the drain's opt-out / newer
@@ -24,7 +26,7 @@ import { isClientLead } from './roleRules.ts';
  *  ⛔ Never add a price / guarantee / proof / pay-on-results line, a Needs you intent, a line that promises a person's
  *  action ("Sending it now", "I'll ring you") or a soft no — scripts/ai-auto-send.test.ts refuses each. */
 export const AUTO_SEND_CHOICES: ReadonlyArray<{ key: string; label: string }> = [
-  { key: 'first_reply_pitch', label: 'First reply pitch' },
+  { key: 'first_reply_pitch', label: 'First reply pitch (a plain "yes" or "how can I help")' },
   { key: 'pitch_next', label: 'Agency question after the pitch' },
   { key: 'straight_answer_then_pitch', label: 'Straight answer, then the pitch' },
   { key: 'they_chased', label: 'They chased us (sorry + pitch)' },
@@ -94,6 +96,29 @@ export const AUTO_SEND_WINDOW_MARGIN_MS = 15 * 60_000;
 /** The thread label on a message the AI sent by itself. */
 export const SENT_BY_AI_LABEL = 'Sent by AI';
 
+/* THE FIRST REPLY PITCH GOES BY ITSELF ONLY ON A SIMPLE CONFIRMATION OR THE "HOW CAN I HELP" FAMILY (Paul, 2026-10-21).
+   pickMove also pitches on a name, "hello?", "what's this about", "interested"… — those wait for approval. Every message
+   they sent since our last one must be one of these (a lone "?" / "." adds nothing and is skipped). */
+const GREET = '(?:hi|hiya|hello|hey|morning|afternoon|evening|good (?:morning|afternoon|evening))';
+const CONFIRM = "(?:yes|yeah|yea|yep|yup|ya|yh|aye|ok|okay|correct|speaking|it is|yes it is|yeah it is|that'?s (?:right|correct|me|us|it|him|her)|this is (?:he|she|him|her|me|us))";
+const HELP = '(?:how (?:can|may) (?:i|we) (?:help|assist)(?: you)?|(?:can|may) (?:i|we) help(?: you)?|what can (?:i|we) do for you|what can (?:i|we) help (?:you )?with)';
+const TAIL = '(?:thanks|thank you|mate|pal|please)';
+export const SIMPLE_FIRST_REPLY = new RegExp(`^(?:${GREET} )?(?:${CONFIRM} )*(?:${CONFIRM}|${HELP})(?: ${HELP})?(?: ${TAIL})?$`);
+/** Lowercase, emojis and punctuation out (apostrophes kept), spaces collapsed. */
+const plainWords = (s: string): string => String(s ?? '').toLowerCase().replace(/[’`]/g, "'").replace(/[^a-z' ]+/g, ' ').replace(/\s+/g, ' ').trim();
+export function isSimpleFirstReply(theirMessages: readonly string[]): boolean {
+  const said = theirMessages.map(plainWords).filter((w) => w.length > 0);
+  return said.length > 0 && said.every((w) => SIMPLE_FIRST_REPLY.test(w));
+}
+
+/** The audit AND the website check are complete — not merely final (draftEvidenceWait.ts): the audit has a complete run and
+ *  the site was read (issues / clean), or there is none to read (no website / only a profile). A failed audit, a site we
+ *  could not read or a failed crawl is NOT complete. Absent = not complete. */
+export const COMPLETE_SITE_STATES: ReadonlySet<string> = new Set(['issues', 'clean', 'no_website', 'profile']);
+export function evidenceComplete(audit: string | null | undefined, siteState: string | null | undefined): boolean {
+  return audit === 'done' && COMPLETE_SITE_STATES.has(String(siteState ?? ''));
+}
+
 /** The reply type of a plan: the playbook intent, else the move (the same key the draft outcome log uses). */
 export const autoSendKey = (p: Pick<MovePlan, 'intent' | 'move'>): string => String(p.intent || p.move || '');
 
@@ -154,10 +179,15 @@ export interface DraftFacts {
   allowPrice: boolean;
   problems: readonly string[];  // the checker's warnings
   usedFallback: boolean;
+  /** The audit and the website check were complete when it was written (evidenceComplete). Absent = false. */
+  evidenceComplete: boolean;
 }
 
 export interface AutoSendFacts {
+  /** The Inbox reply mode is Auto (src/lib/inboxReplyMode.ts). Draft for approval and Manual never send by themselves. */
   masterOn: boolean;
+  /** Every message they sent since our last one, oldest first (the first-reply pitch's simple-confirmation rule). */
+  theirMessages: readonly string[];
   intentsOn: readonly string[];
   dailyCap: number;
   /** Automatic sends already counted today (London day): at draft time queued + sent, at send time sent. */
@@ -180,12 +210,14 @@ export interface AutoSendFacts {
 export type AutoSendRefusal =
   | 'master_off' | 'intent_off' | 'not_auto_type' | 'not_a_draft' | 'no_text' | 'needs_you' | 'stop' | 'auto_reply_label'
   | 'price_or_proof' | 'checker_warned' | 'fallback' | 'non_uk' | 'client' | 'archived' | 'thread_flagged' | 'suppressed'
-  | 'person_active' | 'daily_cap' | 'no_sender';
+  | 'person_active' | 'daily_cap' | 'no_sender' | 'evidence_incomplete' | 'not_simple_first_reply';
 
 export type AutoSendVerdict = { send: true; key: string } | { send: false; reason: AutoSendRefusal };
 
 export const AUTO_SEND_REFUSAL_LABELS: Record<AutoSendRefusal, string> = {
-  master_off: 'AI handles replies is off',
+  master_off: 'The Inbox mode is not Auto',
+  evidence_incomplete: 'The audit or website check was not complete',
+  not_simple_first_reply: 'Their first reply was not a plain "yes" or "how can I help"',
   intent_off: 'This reply type is not switched on',
   not_auto_type: 'This reply type is never sent automatically',
   not_a_draft: 'Not a plain draft',
@@ -225,6 +257,8 @@ export function autoSendVerdict(f: AutoSendFacts): AutoSendVerdict {
   if (HOSTILE_WORDS.test(String(f.latestInbound ?? ''))) return no('thread_flagged');
   if (d.problems.length > 0) return no('checker_warned');
   if (d.usedFallback) return no('fallback');
+  if (d.evidenceComplete !== true) return no('evidence_incomplete');
+  if (d.key === 'first_reply_pitch' && !isSimpleFirstReply(f.theirMessages ?? [])) return no('not_simple_first_reply');
   if (mobileMarketOf(f.digits) !== 'UK') return no('non_uk');
   if (!f.lead) return no('client');
   if (isClientLead(f.lead)) return no('client');
@@ -238,11 +272,19 @@ export function autoSendVerdict(f: AutoSendFacts): AutoSendVerdict {
 }
 
 /** The draft's facts from pickMove's plan and the written draft (the tick). */
-export function draftFactsFromPlan(plan: MovePlan, w: { kind: string; text: string | null; problems: readonly string[]; usedFallback: boolean }): DraftFacts {
+export function draftFactsFromPlan(plan: MovePlan, w: { kind: string; text: string | null; problems: readonly string[]; usedFallback: boolean; evidenceComplete: boolean }): DraftFacts {
   return {
     key: autoSendKey(plan), kind: w.kind, text: w.text, needsYou: !!plan.needsYou, stop: plan.stop === true, noDraft: plan.noDraft === true,
     label: plan.label ?? null, confidence: plan.confidence === true, allowPrice: plan.allowPrice === true, problems: w.problems, usedFallback: w.usedFallback,
+    evidenceComplete: w.evidenceComplete === true,
   };
+}
+
+/** Their messages since our last one, oldest first (a thread in pickMove's shape). */
+export function theirMessagesSinceUs(thread: ReadonlyArray<{ from: 'us' | 'them'; text?: string | null }>): string[] {
+  const out: string[] = [];
+  for (let k = thread.length - 1; k >= 0 && thread[k].from === 'them'; k--) out.unshift(String(thread[k].text ?? ''));
+  return out;
 }
 
 /** The draft's facts from the stored row (the drain, just before sending). Missing fields read as the unsafe value. */
@@ -258,6 +300,7 @@ export function draftFactsFromRow(row: { kind?: unknown; draft_text?: unknown; w
     allowPrice: false,
     problems: Array.isArray(w.problems) ? (w.problems as string[]) : ['unreadable'],
     usedFallback: w.usedFallback !== false,
+    evidenceComplete: (w.evidence as { complete?: unknown } | null | undefined)?.complete === true,
   };
 }
 

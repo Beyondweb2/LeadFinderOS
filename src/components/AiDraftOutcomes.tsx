@@ -1,29 +1,19 @@
 import { useState } from 'react';
 import { BarChart3 } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Switch } from '@/components/ui/switch';
 import { supabase } from '@/integrations/supabase/client';
-import { useToast } from '@/hooks/use-toast';
-import { invokeEdge, edgeErrorMessage } from '@/lib/edgeInvoke';
 import { summariseDraftOutcomes, summariseAutoSent, intentLabel, pct, type AutoSentRow, type AutoSentSummary, type DraftOutcomeRow, type DraftOutcomeSummary } from '@/lib/draftOutcomes';
 
 /* AI DRAFT OUTCOMES (2026-10-21, Paul) — a small admin-only readout beside "AI handles replies": what share of AI drafts
    went out unchanged, and which intents get edited most. Read on open (never polled) from ai_draft_outcome_summary(),
    which answers nothing to a non-admin. Rules: src/lib/draftOutcomes.ts.
-   LEVEL 2 (same day): the automatic replies sent today and per reply type (ai_auto_send_summary), and the per-type
-   "Sends by itself" switches + daily limit (fn ai-reply-drafts set_auto_send, admin only; all off when shipped). The rule
-   that decides each send is src/lib/aiAutoSend.ts; "AI handles replies" stays the master kill switch. */
+   LEVEL 2 (same day): the automatic replies sent today and per reply type (ai_auto_send_summary). The per-type "Sends by
+   itself" switches moved to Inbox Settings under the Auto mode (AutoSendSwitches, 2026-10-21). */
 const DAYS = 90;
 
-interface AutoSendSettings { intents: string[]; daily_cap: number; max_daily_cap: number; choices: Array<{ key: string; label: string }> }
-
 export function AiDraftOutcomes() {
-  const { toast } = useToast();
   const [data, setData] = useState<DraftOutcomeSummary | null>(null);
   const [auto, setAuto] = useState<AutoSentSummary | null>(null);
-  const [settings, setSettings] = useState<AutoSendSettings | null>(null);
-  const [capText, setCapText] = useState('');
-  const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -32,46 +22,18 @@ export function AiDraftOutcomes() {
     setLoading(true);
     setError(null);
     try {
-      const [{ data: rows, error: e }, { data: autoRows, error: ae }, s] = await Promise.all([
+      const [{ data: rows, error: e }, { data: autoRows, error: ae }] = await Promise.all([
         rpc('ai_draft_outcome_summary', { p_days: DAYS }),
         rpc('ai_auto_send_summary', { p_days: DAYS }),
-        invokeEdge<{ ok: true; auto_send?: AutoSendSettings }>('ai-reply-drafts', { action: 'settings' }).catch(() => null),
       ]);
       if (e) throw new Error(e.message);
       setData(summariseDraftOutcomes((rows ?? []) as DraftOutcomeRow[]));
       setAuto(ae ? null : summariseAutoSent((autoRows ?? []) as AutoSentRow[]));
-      if (s?.auto_send) { setSettings(s.auto_send); setCapText(String(s.auto_send.daily_cap)); }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not load draft outcomes.');
     } finally {
       setLoading(false);
     }
-  };
-
-  const save = async (patch: { intents?: string[]; daily_cap?: number }) => {
-    if (!settings) return;
-    setSaving(true);
-    try {
-      const r = await invokeEdge<{ ok: true; auto_send: AutoSendSettings }>('ai-reply-drafts', { action: 'set_auto_send', ...patch });
-      setSettings(r.auto_send);
-      setCapText(String(r.auto_send.daily_cap));
-    } catch (e) {
-      toast({ title: "Couldn't save automatic sending", description: edgeErrorMessage(e), variant: 'destructive' });
-      setCapText(String(settings.daily_cap));
-    } finally {
-      setSaving(false);
-    }
-  };
-  const flip = (key: string, on: boolean) => {
-    if (!settings) return;
-    const next = on ? [...settings.intents, key] : settings.intents.filter((k) => k !== key);
-    void save({ intents: next });
-  };
-  const saveCap = () => {
-    if (!settings) return;
-    const n = Number(capText);
-    if (!Number.isInteger(n) || n === settings.daily_cap) { setCapText(String(settings.daily_cap)); return; }
-    void save({ daily_cap: n });
   };
 
   return (
@@ -122,7 +84,7 @@ export function AiDraftOutcomes() {
           </>
         ))}
 
-        {/* LEVEL 2 — automatic replies: the count, then the switches. */}
+        {/* LEVEL 2 — automatic replies sent (recorded as auto_sent). */}
         {auto && !error && (
           <div className="mt-3 border-t border-border/60 pt-3" data-testid="ai-auto-sent">
             <p className="text-sm"><span className="text-lg font-bold">{auto.today}</span> sent by AI today
@@ -132,33 +94,6 @@ export function AiDraftOutcomes() {
                 {auto.intents.map((i) => `${intentLabel(i.intent)}: ${i.today} today, ${i.inPeriod} in ${DAYS} days`).join(' · ')}
               </p>
             )}
-          </div>
-        )}
-        {settings && !error && (
-          <div className="mt-3 border-t border-border/60 pt-3" data-testid="ai-auto-send-switches">
-            <p className="text-sm font-semibold">Sends by itself</p>
-            <p className="mb-2 text-[11px] leading-snug text-muted-foreground">
-              Only the reply types switched on here are sent automatically, 3 to 8 minutes later and inside the lead's send hours.
-              Everything else stays a draft to approve. Never sent by itself: price, guarantee or proof answers, Needs you, stops,
-              complaints, clients, non-UK numbers, or a conversation someone typed in during the last 10 minutes.
-              Turning off AI handles replies stops all of it, including replies already waiting.
-            </p>
-            <label className="mb-2 flex items-center gap-2 text-xs">
-              Daily limit
-              <input type="number" min={0} max={settings.max_daily_cap} value={capText} disabled={saving}
-                onChange={(e) => setCapText(e.target.value)} onBlur={saveCap} onKeyDown={(e) => { if (e.key === 'Enter') saveCap(); }}
-                className="h-7 w-16 rounded-md border border-input bg-background px-2 text-xs tabular-nums" data-testid="ai-auto-send-cap" />
-              <span className="text-muted-foreground">automatic replies a day</span>
-            </label>
-            <ul className="space-y-1">
-              {settings.choices.map((c) => (
-                <li key={c.key} className="flex items-center justify-between gap-2 text-xs">
-                  <span title={c.key}>{c.label}</span>
-                  <Switch checked={settings.intents.includes(c.key)} disabled={saving} onCheckedChange={(v) => flip(c.key, v)}
-                    aria-label={`Send "${c.label}" automatically`} data-testid={`ai-auto-send-${c.key}`} />
-                </li>
-              ))}
-            </ul>
           </div>
         )}
       </PopoverContent>
