@@ -1264,6 +1264,13 @@ positive allowlist of `baseline`; `isColdOutreachTemplate` treats unknown as COL
 - ⛔ **"First reply" = no pitch sent yet** (`pickMove` `first` uses `pitchOwed`), never a time window; a plain confirm / "how can I help" is never
   "No playbook reply fits" (`isPlainConfirm`). ⛔ **`namedShareOf` never counts ChatGPT** (drafter + template gate; GSI Driving School, 2026-10-21).
 
+### 6o. The WhatsApp number's quality rating (2026-10-21 — record: `docs/whatsapp-number-health.md`)
+
+- ⛔ **ONE rule, `src/lib/whatsappNumberHealth.ts`**: fn `whatsapp-number-health` (cron 15 min) stores Meta's rating + tier on
+  `whatsapp_outreach_state`; YELLOW halves the cap the drip uses and blocks cap rises; RED pauses the queue ONCE on the turn into red
+  (a person resumes; never re-paused while red); CANNOT BE READ never pauses or slows, only blocks cap rises. The admin's stored cap is
+  never rewritten. Every change is in `whatsapp_number_health_log`. It reads only — never sends.
+
 ### 6m. Find Leads adds and the payment-12 reminder (2026-10-17 — records: `docs/find-leads-bulk-add.md`, `docs/month12-reminder.md`)
 
 - ⛔ **Every Find Leads add is ONE batch** (`src/lib/findLeadsBulkAdd.ts`: preview → each new lead's number looked up, `PLACE_LOOKUP_CONCURRENCY` at a time, a 429 retried, cached for the page → ONE `coverage_add_leads` save), for Find Leads AND Coverage's niche panel. ⛔ **EVERY business is addable (Paul, 2026-10-19; reverses the 16 Oct landline rule)**: a duplicate is the ONLY skip; a landline / no-phone lead gets a grey "Landline" / "No phone" label (`phoneLabelOf`), never a block. The "Needs info" tag is deleted — do not bring it back.

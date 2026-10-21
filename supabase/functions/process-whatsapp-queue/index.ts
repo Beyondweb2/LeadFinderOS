@@ -31,7 +31,8 @@ import { effectiveFirstReplyMode } from "../../../src/lib/firstReplyAutomation.t
 import { WAITING_PITCH_EXPIRED_REASON, WAITING_PITCH_STATUSES, isWaitingPitchExpired, waitingPitchCutoffIso } from "../../../src/lib/auditPitchRule.ts";
 import { SETTLED_TOWN_NOTES } from "../_shared/place-details.ts";
 import { createTemplateSnapshot } from "../../../src/lib/whatsappTemplateSnapshot.ts";
-import { AUTO_PAUSE_WINDOW_MIN, FAILED_SEND_STATUSES, MAX_DAILY_CAP, autoPauseVerdict, checkPaceValue, effectivePace, type EffectivePace } from "../../../src/lib/whatsappPace.ts";
+import { AUTO_PAUSE_WINDOW_MIN, DEFAULT_DAILY_CAP, FAILED_SEND_STATUSES, MAX_DAILY_CAP, autoPauseVerdict, checkPaceValue, effectivePace, type EffectivePace } from "../../../src/lib/whatsappPace.ts";
+import { capRiseRefused, healthLimitedCap, healthVerdict, tierLimit, type StoredHealth } from "../../../src/lib/whatsappNumberHealth.ts";
 import { STRONG_STATUSES, postgrestList } from "../../../src/lib/strongStatuses.ts";
 import { qaSendVerdict } from "../../../src/lib/qaSafety.ts";
 import { loadQaExclusions, qaSendHold } from "../_shared/qa-guard.ts";
@@ -703,7 +704,18 @@ Deno.serve(async (req) => {
           byName: await personName(service, (pc.pause_changed_by as string | null) ?? null), source: (pc.pause_changed_source as string | null) ?? null };
       }
     } catch { pauseChange = null; }
-    const pace = effectivePace(paceRow as never);
+    const setPace = effectivePace(paceRow as never);
+    /* ⛔ THE NUMBER'S QUALITY RATING (2026-10-21, src/lib/whatsappNumberHealth.ts). Read on its own: a missing column or a
+       failed read is "cannot be read", which never slows or pauses sending (it only blocks cap rises in set_pace).
+       Yellow / red halve the cap the drip uses; the admin's stored cap is unchanged (shown as setCap). */
+    let healthRow: StoredHealth | null = null;
+    try {
+      const { data: hr, error: hrErr } = await service.from("whatsapp_outreach_state")
+        .select("meta_quality_rating, meta_messaging_tier, meta_health_ok_at, meta_health_checked_at, meta_health_error").eq("id", 1).maybeSingle();
+      if (!hrErr) healthRow = (hr ?? null) as StoredHealth | null;
+    } catch { healthRow = null; }
+    const health = healthVerdict(healthRow);
+    const pace: EffectivePace = { ...setPace, dailyCap: healthLimitedCap(setPace.dailyCap, health) };
     const DAILY_CAP = pace.dailyCap;
     /* ⛔ PER-COUNTRY SWITCHES, HOURS AND CAPS (2026-10-14, src/lib/outreachMarkets.ts). An unreadable table answers the
        defaults: the UK exactly as before, Malaysia and Singapore OFF. */
@@ -756,7 +768,15 @@ Deno.serve(async (req) => {
       testMode, live, sentToday: sentToday ?? 0, cap: DAILY_CAP,
       /* 2026-10-14: the admin-set numbers (stored null = the default) and the auto-pause note, for the queue panel. */
       pace: { dailyCap: pace.dailyCap, gapFloorMin: pace.gapFloorMin, personDefault: pace.personDefault, maxDailyCap: MAX_DAILY_CAP,
-              stored: { daily_cap: paceRow?.daily_cap ?? null, min_gap_minutes: paceRow?.min_gap_minutes ?? null } },
+              stored: { daily_cap: paceRow?.daily_cap ?? null, min_gap_minutes: paceRow?.min_gap_minutes ?? null },
+              /* 2026-10-21: the cap the admin set, before the rating rule (equal to dailyCap unless yellow / red). */
+              setCap: setPace.dailyCap },
+      /* 2026-10-21: Meta's quality rating and messaging tier for the number (display; the rule is already in dailyCap). */
+      numberHealth: {
+        state: health.state, rating: health.rating, tier: health.tier, tierLimit: tierLimit(health.tier),
+        halved: health.halveCap, capRiseBlocked: health.blockCapRise, limitText: health.limitText,
+        okAt: healthRow?.meta_health_ok_at ?? null, checkedAt: healthRow?.meta_health_checked_at ?? null, error: healthRow?.meta_health_error ?? null,
+      },
       autoPausedAt: (paceRow?.auto_paused_at as string | null) ?? null,
       autoPauseReason: (paceRow?.auto_pause_reason as string | null) ?? null,
       pauseChange,
@@ -910,6 +930,15 @@ Deno.serve(async (req) => {
         const c = checkPaceValue(k, body[k]);
         if (!c.ok) return json({ ok: false, error: c.error }, 400);
         patch[k] = c.value;
+      }
+      /* ⛔ NO CAP RISE WHILE THE RATING IS YELLOW / RED OR CANNOT BE READ (2026-10-21). Compared as EFFECTIVE caps
+         (blank = the default), so clearing a low cap back to the default is a rise too. A cut is always allowed. */
+      if ("daily_cap" in patch) {
+        const nextCap = (patch.daily_cap as number | null) ?? DEFAULT_DAILY_CAP;
+        if (capRiseRefused(setPace.dailyCap, nextCap, health)) {
+          await service.from("whatsapp_number_health_log").insert({ kind: "cap_rise_refused", from_value: String(setPace.dailyCap), to_value: String(nextCap), detail: `rating ${health.rating}, ${health.state}` });
+          return json({ ok: false, error: "cap_rise_blocked", detail: health.limitText });
+        }
       }
       const people = Array.isArray(body.person_limits) ? body.person_limits as Array<{ user_id?: unknown; limit?: unknown }> : [];
       const personWrites: Array<{ user_id: string; limit: number | null }> = [];
