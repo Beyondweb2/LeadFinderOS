@@ -29,6 +29,7 @@ export const WHATS_NEW: readonly WhatsNewEntry[] = [
       changed: ['Typed replies, Quick replies, approved AI drafts, templates, the follow-up buttons, voice notes and texts all keep to the hours. Inside the hours nothing changes.', 'Files are only offered inside the hours (they are not queued).', 'A bulk send says how many were sent and how many were queued, separately.'],
       removed: [],
       effect: 'Nobody gets a message from you at night. A queued message is checked again before it goes: an opt-out or a stop cancels it, and a new message from them holds it for you to look at.',
+    } },
   { id: '2026-10-21-drafter-will-ring', date: '2026-10-21', title: 'Reply drafts: "Will ring later"', audience: 'admin',
     body: 'When a prospect says they will call you, the draft now says "No problem, speak soon."',
     report: {
