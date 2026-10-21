@@ -1278,6 +1278,9 @@ positive allowlist of `baseline`; `isColdOutreachTemplate` treats unknown as COL
   (any lane, any row with the phone), a real WhatsApp send, a WhatsApp conversation and a failed WhatsApp send; `no_whatsapp` mobiles may be texted. Every
   queue path asks it `_dry_run` first through `src/lib/smsQueueBatch.ts` and shows THAT count; ONE limit `SMS_QUEUE_MAX_PER_ACTION` (= daily cap), over it
   = the first that pass + `over_cap`. `no_whatsapp_needs_sms` reads **"No mobile"**, `no_whatsapp` **"No WhatsApp"** (Paul; reverses 2026-08-08).
+- ⛔ **Every Inbox send keeps to the lead's send hours** (`src/lib/inboxSendWindow.ts`, `docs/inbox-send-window.md`, 2026-10-21): outside them the
+  SENDER queues it (`inbox_scheduled_sends`, after all its own checks) and fn `inbox-scheduled-send` sends it as the queuer, re-checked (a
+  suppression cancels; a newer reply or an expired 24h holds as Needs you). A new Inbox send path passes `via:"inbox"` (the sweep test).
 - **Verification tiers** are §3a: `check:quick` / `test:changed` while working, full gate ONLY for messaging / auth / tenancy / database / migrations /
   payments / secrets (else typecheck + changed-file tests + build); always verify the deployed site.
 

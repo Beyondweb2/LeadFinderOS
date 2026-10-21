@@ -18,6 +18,7 @@ import type { WhatsAppTemplateSnapshot } from '@/lib/whatsappTemplateSnapshot';
 import { serviceWindowState } from '@/lib/serviceWindow';
 import { sendMediaAttachmentRequest } from '@/lib/sendMediaAttachment';
 import { sendWhatsAppRequest } from '@/lib/whatsAppSendRequest';
+import { INBOX_SCHEDULED_KEY, type InboxScheduledInfo } from '@/hooks/useInboxScheduled';
 import { isRealSend } from '@/lib/realSend';
 import { smsRowToInboxMessage, smsTemplateAvailability, type InboxChannel, type SmsMessageRow } from '@/lib/inboxChannel';
 import { newSendKey, previewSms, sendSms } from '@/lib/smsClient';
@@ -800,13 +801,16 @@ export function useInbox(channel: InboxChannel = 'whatsapp') {
     /** Only true when the operator confirmed a repeat of a pitch this lead already had. The edge
      *  refuses a duplicate pitch by default; this is the deliberate override, never a default. */
     allowResend?: boolean;
-  }): Promise<{ ok: boolean; simulated?: boolean; error?: string; reason?: string; messageId?: string }> => {
+  }): Promise<{ ok: boolean; simulated?: boolean; error?: string; reason?: string; messageId?: string; scheduled?: InboxScheduledInfo }> => {
     if (sms) {
       /* A TEXT: through the SMS sender (every guard lives there — mobile check, opt-outs, the conversation gate, QA safety, the abuse guard).
          The row it wrote is read back and merged so the thread shows it at once, exactly as a WhatsApp send does. */
       if (!args.leadId) return { ok: false, error: 'template_needs_lead', reason: 'A text needs a linked lead.' };
-      const r = await sendSms({ leadId: args.leadId, key: newSendKey(), ...(args.templateName ? { template: args.templateName } : { text: args.body ?? '' }), resend: args.allowResend });
-      if (r.ok !== true) return { ok: false, error: (r as { error: string }).error, reason: (r as { detail: string }).detail };
+      const r = await sendSms({ leadId: args.leadId, key: newSendKey(), ...(args.templateName ? { template: args.templateName } : { text: args.body ?? '' }), resend: args.allowResend, via: 'inbox' });
+      if (r.ok !== true) return { ok: false, error: (r as { error: string }).error, reason: (r as { detail?: string; reason?: string }).detail ?? (r as { reason?: string }).reason };
+      /* Outside their send hours the server queued it (nothing sent): the thread shows the queued row. */
+      const queued = (r as { scheduled?: InboxScheduledInfo }).scheduled;
+      if (queued) { void queryClient.invalidateQueries({ queryKey: INBOX_SCHEDULED_KEY }); return { ok: true, scheduled: queued }; }
       const { data: row } = await sb.from('sms_messages').select('*').eq('id', (r as { message: { id: string } }).message.id).maybeSingle();
       if (row?.id) {
         queryClient.setQueryData<InboxData>(queryKey, (current) => current
@@ -815,8 +819,9 @@ export function useInbox(channel: InboxChannel = 'whatsapp') {
       return { ok: true, simulated: (r as { simulated: boolean }).simulated };
     }
     // The one WhatsApp send request (src/lib/whatsAppSendRequest.ts) — the Outreach WhatsApp dialog sends through it too.
-    const r = await sendWhatsAppRequest(sb, args);
+    const r = await sendWhatsAppRequest(sb, { ...args, via: 'inbox' });
     if (!r.ok) return { ok: false, error: r.error, reason: r.reason };
+    if (r.scheduled) { void queryClient.invalidateQueries({ queryKey: INBOX_SCHEDULED_KEY }); return { ok: true, scheduled: r.scheduled }; }
     if (r.message?.id) {
       queryClient.setQueryData<InboxData>(queryKey, (current) => current
         ? { ...current, messages: mergeInboxMessages(current.messages, [r.message as unknown as WaMessage]) } : current);
@@ -832,7 +837,7 @@ export function useInbox(channel: InboxChannel = 'whatsapp') {
      simulation, in test mode). */
   const sendVoice = useCallback(async (args: {
     phone: string; leadId: string; audio: Blob; mime: string; sendId: string;
-  }): Promise<{ ok: boolean; simulated?: boolean; error?: string; reason?: string; retryable?: boolean }> => {
+  }): Promise<{ ok: boolean; simulated?: boolean; error?: string; reason?: string; retryable?: boolean; scheduled?: InboxScheduledInfo }> => {
     if (sms) return { ok: false, error: 'not_supported', reason: 'Voice notes are WhatsApp only.', retryable: false };
     const form = new FormData();
     form.append('lead_id', args.leadId);
@@ -850,6 +855,7 @@ export function useInbox(channel: InboxChannel = 'whatsapp') {
       return { ok: false, error: body?.error ?? error.message, reason: body?.reason, retryable: body?.retryable ?? true };
     }
     if (!data?.ok) return { ok: false, error: data?.error ?? 'send_failed', reason: data?.reason, retryable: data?.retryable };
+    if (data.scheduled) { void queryClient.invalidateQueries({ queryKey: INBOX_SCHEDULED_KEY }); return { ok: true, scheduled: data.scheduled as InboxScheduledInfo }; }
     if (data.message?.id) {
       queryClient.setQueryData<InboxData>(queryKey, (current) => current
         ? { ...current, messages: mergeInboxMessages(current.messages, [data.message as WaMessage]) } : current);

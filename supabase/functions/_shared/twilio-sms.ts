@@ -57,6 +57,10 @@ export interface SendSmsArgs {
   allowResend?: boolean;
   /** 'queue' = the SMS drip (process-sms-queue) sending as the person who queued it. Changes nothing about the guards. */
   source?: 'manual' | 'queue';
+  /** THE INBOX SEND WINDOW (2026-10-21, src/lib/inboxSendWindow.ts): asked after every check up to QA safety, before the usage guard
+   *  and before anything is written. null = inside the lead's send hours, send now; otherwise its answer is returned as it is (the
+   *  text queued, or a refusal). Only the Inbox's own send passes it. */
+  queueOutsideWindow?: (q: { digits: string; body: string; bookUserId: string; leadId: string }) => Promise<Record<string, unknown> | null>;
 }
 
 export type SendSmsResult =
@@ -169,6 +173,13 @@ export async function sendSmsToLead(service: Service, a: SendSmsArgs): Promise<S
   const qa = qaSendVerdict(ex, { leadId: lead.id as string, phones: [lead.phone as string, digits], holderUserId: (lead.assigned_to_user_id as string | null) ?? null, actorUserId: a.actor.id });
   if (qa.kind === "refuse") return fail("qa_refused", "This is a real business held by a test account, so nothing was sent.");
   const simulated = env.testMode || qa.kind === "simulate";
+
+  // 6b. the lead's send hours (Inbox only): outside them the text is queued and nothing is sent or written here
+  if (a.queueOutsideWindow) {
+    const queued = await a.queueOutsideWindow({ digits, body: body ?? "", bookUserId: lead.user_id as string, leadId: lead.id as string });
+    /* Not one of SendSmsResult's shapes on purpose: only the Inbox (twilio-sms-send) passes the hook, and it returns the answer as JSON. */
+    if (queued) return queued as unknown as SendSmsResult;
+  }
 
   // 7. abuse guard
   const g = await guardAction(service, a.actor.id, "sms_send", { fn: "twilio-sms", leadId: lead.id as string, role: a.actor.role });

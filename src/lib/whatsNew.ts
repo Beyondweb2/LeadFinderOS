@@ -22,6 +22,14 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-21-inbox-send-window', date: '2026-10-21', title: 'Inbox: messages wait for the business’s send hours', audience: 'all',
+    body: 'Anything you send from the Inbox outside the business’s send hours is queued and goes when their hours open. The header shows their time.',
+    report: {
+      added: ['"Their time 21:40 · opens 07:00" in the conversation header.', 'Outside their hours the send buttons say Queue, and the message shows in the thread as "Queued, sends at 07:00 their time" with Edit and Cancel.', 'Needs you for a queued message that was held: "They replied since, check before sending" (Checked — send it, Edit or Cancel) or "24h window expired, use a template".', 'Admin: click their time to set the Inbox reply hours (blank = the outreach hours).'],
+      changed: ['Typed replies, Quick replies, approved AI drafts, templates, the follow-up buttons, voice notes and texts all keep to the hours. Inside the hours nothing changes.', 'Files are only offered inside the hours (they are not queued).'],
+      removed: [],
+      effect: 'Nobody gets a message from you at night. A queued message is checked again before it goes: an opt-out or a stop cancels it, and a new message from them holds it for you to look at.',
+    } },
   { id: '2026-10-21-drafter-hi-mate-no-brands', date: '2026-10-21', title: 'Reply drafts: "Hi mate," and no AI brand names', audience: 'admin',
     body: 'Reply drafts now open "Hi mate," when no name is known, say "AI" instead of ChatGPT or Gemini, and use a new line about what you do.',
     report: {

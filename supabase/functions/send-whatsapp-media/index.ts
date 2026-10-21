@@ -15,6 +15,8 @@
 // lead must be assigned to them and not a client (leadAccess) — checked here, on every request.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { leadAccess, refusalBody, resolveActor } from "../_shared/access.ts";
+import { replyWindowForDest } from "../_shared/inbox-schedule.ts";
+import { replyWindowOpen, windowStatusLine } from "../../../src/lib/inboxSendWindow.ts";
 import { guardAction } from "../_shared/protection.ts";
 import { resolveWhatsAppEnv, toWhatsAppNumber, sendViaGraph } from "../_shared/whatsapp-send.ts";
 import { uploadMediaToGraph } from "../_shared/whatsapp-media-upload.ts";
@@ -24,7 +26,7 @@ import { QA_REFUSAL_REASON } from "../../../src/lib/qaSafety.ts";
 import { qaSendHold } from "../_shared/qa-guard.ts";
 
 /* The deploy marker, on the OPTIONS preflight: readable with no credential, carries no secret. */
-const BUILD_ID = "2026-10-04a-media-qa";
+const BUILD_ID = "2026-10-21a-media-send-window";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -86,6 +88,15 @@ Deno.serve(async (req) => {
     if (qa.kind === "refuse") return json({ ok: false, error: "qa_test_account", reason: QA_REFUSAL_REASON }, 200);
     const liveEnv = resolveWhatsAppEnv();
     const env = qa.kind === "simulate" ? { ...liveEnv, live: false, testMode: true } : liveEnv;
+    /* ⛔ THE INBOX SEND WINDOW (2026-10-21, src/lib/inboxSendWindow.ts): a file is never sent outside the lead's send hours. It is not
+       queued (an attachment is sent while you are there to see it go); the Inbox hides the button and says when the hours open. */
+    if (str("mode") !== "dry_run") {
+      const digits = toWhatsAppNumber(str("phone"));
+      if (digits) {
+        const w = await replyWindowForDest(service, "whatsapp", digits);
+        if (!replyWindowOpen(w)) return json({ ok: false, error: "outside_reply_window", reason: `Outside their send hours, so files are not sent now. ${windowStatusLine(w).text}.` }, 200);
+      }
+    }
     const result = await sendMediaAttachment({
       operatorId,
       leadId: str("lead_id") || null,

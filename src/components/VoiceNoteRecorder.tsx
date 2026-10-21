@@ -26,9 +26,11 @@ export interface VoiceNoteRecorderProps {
   onActiveChange: (active: boolean) => void;
   /** Send this clip to THIS conversation. Resolves ok only when Meta confirmed the send. */
   onSend: (clip: VoiceClip) => Promise<{ ok: boolean; error?: string; retryable?: boolean }>;
+  /** Outside the lead's send hours the button says Queue (src/lib/inboxSendWindow.ts sendVerb); the server queues it. */
+  sendVerb?: 'Send' | 'Queue';
 }
 
-export const VoiceNoteRecorder = memo(function VoiceNoteRecorder({ disabled, onActiveChange, onSend }: VoiceNoteRecorderProps) {
+export const VoiceNoteRecorder = memo(function VoiceNoteRecorder({ disabled, onActiveChange, onSend, sendVerb = 'Send' }: VoiceNoteRecorderProps) {
   const { state, elapsedMs, start, stop, cancel, remove, reRecord, send } = useVoiceRecorder();
   const { toast } = useToast();
   const active = voiceTakesComposer(state);
@@ -111,10 +113,10 @@ export const VoiceNoteRecorder = memo(function VoiceNoteRecorder({ disabled, onA
           className="h-9 shrink-0 px-3"
           onClick={() => void send(clip, onSend)}
           disabled={sending || !retryable}
-          aria-label="Send voice note"
+          aria-label={sendVerb === 'Queue' ? 'Queue voice note' : 'Send voice note'}
         >
           {sending ? <Loader2 className="h-4 w-4 animate-spin sm:mr-1" /> : <Send className="h-4 w-4 sm:mr-1" />}
-          <span className="hidden sm:inline">{sending ? 'Sending…' : error ? 'Retry' : 'Send'}</span>
+          <span className="hidden sm:inline">{sending ? 'Sending…' : error ? 'Retry' : sendVerb}</span>
         </Button>
       </div>
       {sending && <p className="text-[11px] text-muted-foreground" role="status">Sending voice note…</p>}

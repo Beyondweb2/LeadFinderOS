@@ -38,7 +38,8 @@ console.log('── 2. one send path ──');
 {
   ok((req.match(/functions\.invoke\('send-whatsapp-message'/g) ?? []).length === 1, 'whatsAppSendRequest makes the one send-whatsapp-message call');
   ok(/phone: args\.phone,\s*lead_id: args\.leadId,\s*country: args\.country \?\? null,\s*body: args\.body,\s*template_name: args\.templateName,\s*allow_resend: args\.allowResend === true,/.test(req), 'with exactly the body the Inbox has always sent');
-  ok(/await sendWhatsAppRequest\(sb, args\)/.test(inbox), 'the Inbox sends through it');
+  /* 2026-10-21: the Inbox adds via:'inbox' (its send window — src/lib/inboxSendWindow.ts); the rest of the body is the same request. */
+  ok(/await sendWhatsAppRequest\(sb, \{ \.\.\.args, via: 'inbox' \}\)/.test(inbox), 'the Inbox sends through it');
   const inboxSendBlock = inbox.slice(inbox.indexOf('const send = useCallback('), inbox.indexOf('const sendVoice = useCallback('));
   ok(!/'send-whatsapp-message'/.test(code(inboxSendBlock)), '…and no longer has its own copy of the request');
   const c = code(panel);

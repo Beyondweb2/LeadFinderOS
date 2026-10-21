@@ -23,9 +23,11 @@ async function call<T>(body: Record<string, unknown>): Promise<T | SmsSendRefuse
 }
 
 /** `template` is any WhatsApp template name: the six the sender renders itself, or any other the server builds with the WhatsApp sender's own code. */
-export function sendSms(a: { leadId: string; template?: string; text?: string; key: string; resend?: boolean }): Promise<SmsSendResult> {
+export function sendSms(a: { leadId: string; template?: string; text?: string; key: string; resend?: boolean; via?: 'inbox' }): Promise<SmsSendResult> {
   return call<SmsSendResult>({
     mode: 'send', lead_id: a.leadId, idempotency_key: a.key,
+    /* 'inbox': outside the lead's send hours the server queues it (src/lib/inboxSendWindow.ts). The answer then carries `scheduled`. */
+    ...(a.via ? { via: a.via } : {}),
     ...(a.template ? { template_name: a.template } : { text: a.text ?? '' }),
     ...(a.resend ? { allow_resend: true } : {}),
   }) as Promise<SmsSendResult>;
