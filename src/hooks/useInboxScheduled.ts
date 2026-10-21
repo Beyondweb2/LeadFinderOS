@@ -44,6 +44,7 @@ export function useInboxScheduled(channel: InboxChannel) {
     return m;
   }, [rows]);
   const forPhone = useCallback((phone: string) => byPhone.get(last10(phone)) ?? [], [byPhone]);
+  const forLead = useCallback((leadId: string) => rows.filter((r) => r.lead_id === leadId), [rows]);
   const heldForPhone = useCallback((phone: string) => (byPhone.get(last10(phone)) ?? []).some((r) => r.status === 'held'), [byPhone]);
 
   const act = useCallback(async (fn: string, args: Record<string, unknown>): Promise<{ ok: boolean; error?: string }> => {
@@ -63,5 +64,6 @@ export function useInboxScheduled(channel: InboxChannel) {
     if (error || !res?.ok) throw new Error(error?.message ?? res?.error ?? 'save_failed');
   }, [qc]);
 
-  return { rows, forPhone, heldForPhone, replyHours: hoursQ.data ?? null, edit, cancel, release, saveReplyHours, loaded: q.isSuccess };
+  const refresh = useCallback(() => { void qc.invalidateQueries({ queryKey: INBOX_SCHEDULED_KEY }); }, [qc]);
+  return { rows, forPhone, forLead, heldForPhone, refresh, replyHours: hoursQ.data ?? null, edit, cancel, release, saveReplyHours, loaded: q.isSuccess };
 }

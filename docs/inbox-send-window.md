@@ -31,8 +31,13 @@ Paul: "every message I send from the Inbox must respect the lead's local send wi
   reply_end_min` (admin, `set_inbox_reply_hours`; blank = outreach hours). A half-set or bad value is "not set".
 - **Every Inbox path:** typed reply, Quick reply, approved AI draft, template, hook / contact follow-up buttons → `send-whatsapp-message`
   with `via:"inbox"`; texts → `twilio-sms-send` with `via:"inbox"`; voice notes → `send-whatsapp-voice` (always, it is Inbox-only).
-  Files (`send-whatsapp-media`) are **refused** outside the hours, not queued, and the button is hidden. Other screens (the Outreach
-  WhatsApp dialog, Quick Close) are unchanged.
+  Files (`send-whatsapp-media`) are **refused** outside the hours, not queued, and the button is hidden.
+- **The Outreach WhatsApp popup and the lead's text panel too** (Paul, same day): the popup passes `via:"lead_panel"`
+  (`SEND_WINDOW_SURFACES` / `keepsSendHours` in the leaf is the one list), and `twilio-sms-send` queues **every** person-pressed text
+  with no flag at all (its only callers are the Inbox and the text panel; Quick Close, the SMS drip and the drain call
+  `sendSmsToLead` in process). Quick Close's WhatsApp links and the other screens are unchanged. Both panels show their time,
+  say Queue, and list the lead's queued messages with Edit / Cancel.
+- **Bulk send** counts a queued message separately: "Sent 3, queued 2 for their send hours, 1 failed" (`bulkSummaryText`).
 - **Queued only after every check.** Each sender queues at the point its dry run would return: after ownership, opt-out,
   wrong number, cold rules, QA safety and the payload build; before the usage guard and anything written or sent.
 - **At Send:** free-form WhatsApp (text, AI draft, voice) whose 24 hours end before the window opens is refused on the spot
@@ -56,6 +61,5 @@ Paul: "every message I send from the Inbox must respect the lead's local send wi
 
 ## Not done / follow-ups
 
-- The Outreach WhatsApp dialog (`LeadWhatsAppPanel`) and `LeadSmsPanel` still send at any hour (Paul's brief named the Inbox).
 - Needs you is shown through the existing filter/count; the held row itself carries the actions.
 - The queue's own hours are still a second copy inside `process-whatsapp-queue` (pre-existing).

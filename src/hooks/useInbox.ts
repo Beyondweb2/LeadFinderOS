@@ -806,7 +806,7 @@ export function useInbox(channel: InboxChannel = 'whatsapp') {
       /* A TEXT: through the SMS sender (every guard lives there — mobile check, opt-outs, the conversation gate, QA safety, the abuse guard).
          The row it wrote is read back and merged so the thread shows it at once, exactly as a WhatsApp send does. */
       if (!args.leadId) return { ok: false, error: 'template_needs_lead', reason: 'A text needs a linked lead.' };
-      const r = await sendSms({ leadId: args.leadId, key: newSendKey(), ...(args.templateName ? { template: args.templateName } : { text: args.body ?? '' }), resend: args.allowResend, via: 'inbox' });
+      const r = await sendSms({ leadId: args.leadId, key: newSendKey(), ...(args.templateName ? { template: args.templateName } : { text: args.body ?? '' }), resend: args.allowResend });
       if (r.ok !== true) return { ok: false, error: (r as { error: string }).error, reason: (r as { detail?: string; reason?: string }).detail ?? (r as { reason?: string }).reason };
       /* Outside their send hours the server queued it (nothing sent): the thread shows the queued row. */
       const queued = (r as { scheduled?: InboxScheduledInfo }).scheduled;

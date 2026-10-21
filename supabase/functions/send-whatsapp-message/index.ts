@@ -39,6 +39,7 @@ import { QA_REFUSAL_REASON } from "../../../src/lib/qaSafety.ts";
 import { qaSendHold } from "../_shared/qa-guard.ts";
 import { templateAvailability } from "../_shared/template-status.ts";
 import { queueGate, replyWindowOpenNow, scheduledSendFor } from "../_shared/inbox-schedule.ts";
+import { keepsSendHours } from "../../../src/lib/inboxSendWindow.ts";
 import { formatVisibilityScore, REPORT_OFFER_REFUSAL_WORDS, REPORT_OFFER_TEMPLATE, reportOfferRefusal, ukWordedTemplateRefusal } from "../../../src/lib/reportOfferTemplate.ts";
 import { senderMessageName } from "../_shared/sender-name.ts";
 import { resolveOnboardingFormVars, resolveSignupLinkVars } from "../_shared/link-template-vars.ts";
@@ -101,7 +102,7 @@ const CAPABILITIES = ["dry_run", "build_phase_hold", "routing_leaf", "any_approv
    2026-10-04a: QA safety — a QA fixture is simulated, a test-account lead is refused (src/lib/qaSafety.ts).
    2026-10-19a: EVERY template refuses a UK / MY / SG number that is not a mobile (src/lib/whatsAppDestination.ts).
    2026-10-21a: the Inbox send window — via:"inbox" outside the lead's hours is QUEUED, not sent (src/lib/inboxSendWindow.ts). */
-const BUILD_ID = "2026-10-21a-inbox-send-window";
+const BUILD_ID = "2026-10-21b-send-window-panels";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -166,9 +167,9 @@ Deno.serve(async (req) => {
       actor = who.actor;
     }
     const operatorId = actor.id;
-    /* ⛔ THE INBOX SAYS WHERE IT IS SENDING FROM. Every Inbox send path passes via:"inbox" (scripts/inbox-send-window.test.ts sweeps
-       them); outside the lead's send window that send is queued below instead of sent. Other screens are unchanged. */
-    const viaInbox = !sched && body.via === "inbox";
+    /* ⛔ THE SCREEN SAYS WHERE IT IS SENDING FROM. The Inbox (via:"inbox") and the Outreach WhatsApp popup (via:"lead_panel") — the
+       SEND_WINDOW_SURFACES list, scripts/inbox-send-window.test.ts sweeps them — are queued below outside the lead's send hours. */
+    const viaInbox = !sched && keepsSendHours(body.via);
     const rawPhone: string = typeof body.phone === "string" ? body.phone : "";
     const leadId: string | null = typeof body.lead_id === "string" && body.lead_id ? body.lead_id : null;
     const text: string = typeof body.body === "string" ? body.body.trim() : "";

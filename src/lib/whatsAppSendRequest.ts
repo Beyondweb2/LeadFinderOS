@@ -12,9 +12,9 @@ export interface WhatsAppSendArgs {
   templateName?: string;
   /** Only true when the operator is repeating a template this lead already had (the server's explicit override). */
   allowResend?: boolean;
-  /** 'inbox' = sent from the Inbox: outside the lead's send hours the server QUEUES it (src/lib/inboxSendWindow.ts) instead of
-   *  sending. Only the Inbox passes it (Paul's brief, 2026-10-21); the other screen sends exactly as before. */
-  via?: 'inbox';
+  /** Where the person pressed Send. 'inbox' (the Inbox) and 'lead_panel' (the Outreach WhatsApp popup): outside the lead's send hours
+   *  the server QUEUES it (src/lib/inboxSendWindow.ts, SEND_WINDOW_SURFACES) instead of sending (Paul, 2026-10-21). */
+  via?: 'inbox' | 'lead_panel';
 }
 
 export interface WhatsAppSendResult {

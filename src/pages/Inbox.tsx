@@ -12,7 +12,7 @@ import { AutoReplyToggle } from '@/components/AutoReplyToggle';
 import { hookAuditRequestBody } from '@/lib/hookAuditRequest';
 import { auditButtonCopy, auditStartedDescription, pitchMayFollowAudit } from '@/lib/auditPitchRule';
 import { getDraft, setDraft, type DraftMap } from '@/lib/inboxDrafts';
-import { planBulkSend, groupSkips, applyBulkChecks, type BulkCandidate, type BulkCheck } from '@/lib/inboxBulkSend';
+import { planBulkSend, groupSkips, applyBulkChecks, bulkSummaryText, type BulkCandidate, type BulkCheck } from '@/lib/inboxBulkSend';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { useInbox, windowFor, normalizeWaNumber, type WaConversation, type LeadLite, type WaMessage } from '@/hooks/useInbox';
 import { getTemplateSendability, WA_TEMPLATE_REQS, canonicalTemplate } from '@/lib/whatsappTemplates';
@@ -1201,7 +1201,7 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
   const [bulkConfirm, setBulkConfirm] = useState(false);
   const [bulkBusy, setBulkBusy] = useState(false);
   const [bulkProgress, setBulkProgress] = useState({ done: 0, total: 0 });
-  const [bulkReport, setBulkReport] = useState<null | { sent: number; failed: { key: string; label: string; reason: string }[] }>(null);
+  const [bulkReport, setBulkReport] = useState<null | { sent: number; queued: number; failed: { key: string; label: string; reason: string }[] }>(null);
   /* The server's dry-run answer per conversation key, for the CURRENT template (inboxBulkSend.ts
      applyBulkChecks). Cleared whenever the template or the selection changes. Never persisted. */
   const [bulkChecks, setBulkChecks] = useState<Record<string, BulkCheck>>({});
@@ -1377,11 +1377,11 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
         const rpc: SmsQueueRpc = (args) => (supabase as unknown as { rpc: (n: string, a: Parameters<SmsQueueRpc>[0]) => ReturnType<SmsQueueRpc> }).rpc('queue_sms_openers', args);
         const plan = await checkSmsQueue(rpc, targets.map((t) => t.leadId).filter(Boolean) as string[], bulkTemplate);
         const r = await runSmsQueue(rpc, plan, bulkTemplate);
-        setBulkReport({ sent: r.queued, failed: r.skipped.map((l) => ({ key: l.key, label: `${l.n} lead${l.n === 1 ? '' : 's'}`, reason: l.label })) });
+        setBulkReport({ sent: 0, queued: r.queued, failed: r.skipped.map((l) => ({ key: l.key, label: `${l.n} lead${l.n === 1 ? '' : 's'}`, reason: l.label })) });
         toast({ title: `Queued ${r.queued} text${r.queued === 1 ? '' : 's'}`, description: 'They go out one at a time inside the text sending hours. Nothing was sent now.' });
         void queryClient.invalidateQueries({ queryKey: ['sms-queue'] });
       } catch (e) {
-        setBulkReport({ sent: 0, failed: [{ key: 'queue', label: 'Text queue', reason: e instanceof Error ? e.message : 'could not queue' }] });
+        setBulkReport({ sent: 0, queued: 0, failed: [{ key: 'queue', label: 'Text queue', reason: e instanceof Error ? e.message : 'could not queue' }] });
       } finally {
         setBulkBusy(false);
         setBulkConfirm(false);
@@ -1392,6 +1392,7 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
     }
     const failed: { key: string; label: string; reason: string }[] = [];
     let sent = 0;
+    let queued = 0;
     for (const target of targets) {
       try {
         const res = await send({
@@ -1399,7 +1400,9 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
           leadId: target.leadId,
           templateName: bulkTemplate,
         });
-        if (res.ok) sent++;
+        /* Queued for their send hours is NOT sent (src/lib/inboxSendWindow.ts) — counted on its own. */
+        if (res.ok && res.scheduled) queued++;
+        else if (res.ok) sent++;
         else failed.push({ key: target.key, label: target.label, reason: res.reason ?? res.error ?? 'send failed' });
       } catch (e) {
         failed.push({ key: target.key, label: target.label, reason: e instanceof Error ? e.message : 'send failed' });
@@ -1408,11 +1411,11 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
     }
     setBulkBusy(false);
     setBulkConfirm(false);
-    setBulkReport({ sent, failed });
+    setBulkReport({ sent, queued, failed });
     setBulkSelected(new Set());
     toast({
-      title: failed.length ? `Sent ${sent}, ${failed.length} failed` : `Sent ${sent}`,
-      description: failed.length ? 'The ones that did not go are listed above the conversation list.' : undefined,
+      title: bulkSummaryText({ sent, queued, failed: failed.length }),
+      description: [queued ? 'Queued ones go when each business’s send hours open; you can edit or cancel them in the thread.' : '', failed.length ? 'The ones that did not go are listed above the conversation list.' : ''].filter(Boolean).join(' ') || undefined,
       variant: failed.length ? 'destructive' : undefined,
     });
     await refetch();
@@ -2174,7 +2177,7 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
           {bulkReport && (
             <div className="mb-1.5 rounded-md border border-border/60 bg-background px-2 py-1.5 text-[11px]">
               <div className="flex items-center gap-2">
-                <span className="font-medium">Sent {bulkReport.sent}{bulkReport.failed.length ? `, ${bulkReport.failed.length} failed` : ''}</span>
+                <span className="font-medium" data-testid="bulk-summary">{bulkSummaryText({ sent: bulkReport.sent, queued: bulkReport.queued, failed: bulkReport.failed.length })}</span>
                 <span className="flex-1" />
                 {bulkReport.failed.length > 0 && (
                   <button type="button" className="font-medium text-primary hover:underline" data-testid="bulk-reselect-failed"

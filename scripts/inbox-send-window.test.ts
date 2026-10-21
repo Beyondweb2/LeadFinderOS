@@ -15,9 +15,10 @@ import fs from 'node:fs';
 import path from 'node:path';
 import {
   replyWindowFor, replyHoursFrom, replyWindowOpen, nextWindowOpenAt, windowStatusLine, queuedLabel, queueDecision,
-  drainDecision, scheduledLine, scheduledEditable, scheduledReleasable, sendVerb, HOLD_LABELS, type DrainFacts,
+  drainDecision, keepsSendHours, scheduledLine, scheduledEditable, scheduledReleasable, sendVerb, HOLD_LABELS, type DrainFacts,
 } from '../src/lib/inboxSendWindow.ts';
 import { LONDON_SEND_WINDOW } from '../src/lib/sendWindow.ts';
+import { bulkSummaryText } from '../src/lib/inboxBulkSend.ts';
 import { DEFAULT_COUNTRY_SETTINGS } from '../src/lib/outreachMarkets.ts';
 import { drainTick, senderOutcome, MAX_SENDS_PER_TICK, type DrainDeps, type DueRow, type SendOutcome } from '../supabase/functions/_shared/inbox-scheduled-drain.ts';
 import { sendVoiceNote, type VoiceSendDeps } from '../supabase/functions/_shared/voice-note-send.ts';
@@ -192,7 +193,7 @@ const row = (id: string, extra: Partial<DueRow> = {}): DueRow => ({
   const inbox = read('src/pages/Inbox.tsx');
   const useInbox = read('src/hooks/useInbox.ts');
   ok(/sendWhatsAppRequest\(sb, \{ \.\.\.args, via: 'inbox' \}\)/.test(useInbox), 'useInbox WhatsApp send passes via:"inbox" (typed reply, Quick reply, template, AI draft, bulk)');
-  ok(/sendSms\(\{[^\n]*via: 'inbox' \}\)/.test(useInbox), 'useInbox text send passes via:"inbox"');
+  ok(/sendSms\(\{ leadId: args\.leadId, key: newSendKey\(\)/.test(useInbox), 'useInbox texts go through the text sender (which queues every person-pressed text)');
   ok(!/functions\.invoke\('send-whatsapp-message'/.test(inbox.replace(/template_name: templateName, via: 'inbox'/, '')) || /template_name: templateName, via: 'inbox'/.test(inbox), 'the follow-up buttons (sendNamed) pass via:"inbox"');
   const directSends = inbox.match(/functions\.invoke\('send-whatsapp-message'[^)]*\)/g) ?? [];
   ok(directSends.every((c) => c.includes("via: 'inbox'") || c.includes("mode: 'dry_run'") || c.includes('dry_run')), 'no direct WhatsApp send from the Inbox page without via:"inbox"');
@@ -205,7 +206,7 @@ const row = (id: string, extra: Partial<DueRow> = {}): DueRow => ({
   const swm = read('supabase/functions/send-whatsapp-message/index.ts');
   const gateAt = swm.indexOf('const gate = await queueGate(');
   ok(gateAt > swm.indexOf('payload = textPayload(text);') && gateAt < swm.indexOf('if (dryRun) {') && gateAt < swm.indexOf('const r = await sendViaGraph(env.accessToken, env.phoneNumberId, to, payload);\n      if (r.ok) { status = "sent"'), 'send-whatsapp-message queues after every guard and the payload build, before the dry-run return and the Graph POST');
-  ok(/const viaInbox = !sched && body\.via === "inbox";/.test(swm), 'only an Inbox request queues; the drain request never re-queues');
+  ok(/const viaInbox = !sched && keepsSendHours\(body\.via\);/.test(swm), 'the listed screens queue; the drain request never re-queues');
   ok(/if \(sched && !\(await replyWindowOpenNow\(service, "whatsapp", to\)\)\) return/.test(swm), "the drain's own send still needs the hours open NOW (no door around them)");
   const sch = read('supabase/functions/_shared/inbox-schedule.ts');
   ok(/if \(!isInternalCall\(req\)\) return \{ ok: false, error: "forbidden" \}/.test(sch) && /row\.status !== "sending"/.test(sch) && /from\("user_roles"\)/.test(sch), "the drain's door: CRON_SECRET + a CLAIMED row + the queuer's role re-read");
@@ -215,10 +216,22 @@ const row = (id: string, extra: Partial<DueRow> = {}): DueRow => ({
   const media = read('supabase/functions/send-whatsapp-media/index.ts');
   ok(/error: "outside_reply_window"/.test(media), 'a file outside the hours is refused by the server');
   const smsSend = read('supabase/functions/twilio-sms-send/index.ts');
-  ok(/queueOutsideWindow: body\.via === "inbox"/.test(smsSend), 'an Inbox text outside the hours is queued');
+  ok(/queueOutsideWindow: \(\{ digits, body: words, bookUserId, leadId: id \}\) => queueGate\(/.test(smsSend) && !/body\.via/.test(smsSend), 'EVERY person-pressed text outside the hours is queued — no flag can skip it');
   const twilio = read('supabase/functions/_shared/twilio-sms.ts');
   ok(twilio.indexOf('// 6b. the lead') > twilio.indexOf('// 6. QA safety') && twilio.indexOf('// 6b. the lead') < twilio.indexOf('// 7. abuse guard'), 'the text sender queues after every check, before the usage guard and the row');
 
+  /* the Outreach WhatsApp popup and the lead's text panel (Paul, 2026-10-21) */
+  const waPanel = read('src/components/LeadWhatsAppPanel.tsx');
+  const waSends = waPanel.match(/sendWhatsAppRequest\(sb, \{[^}]*\}\)/g) ?? [];
+  ok(waSends.length === 2 && waSends.every((c) => c.includes("via: 'lead_panel'")), 'every send in the Outreach WhatsApp popup passes via:"lead_panel"');
+  ok(/<LeadQueuedSends hours=\{hours\}/.test(waPanel) && /sendVerb\(hours\.open\)/.test(waPanel) && /r\.scheduled/.test(waPanel), 'the popup shows their time, Queue and its queued messages');
+  const smsPanel = read('src/components/LeadSmsPanel.tsx');
+  ok(/<LeadQueuedSends hours=\{hours\}/.test(smsPanel) && /sendVerb\(hours\.open\)/.test(smsPanel) && /queued = \(r as/.test(smsPanel), 'the text panel shows their time, Queue and its queued messages');
+  ok(keepsSendHours('inbox') && keepsSendHours('lead_panel') && !keepsSendHours(undefined) && !keepsSendHours('quick_close'), 'the WhatsApp screens that keep the hours: Inbox + the lead popup, a positive list');
+  ok(bulkSummaryText({ sent: 3, queued: 2, failed: 1 }) === 'Sent 3, queued 2 for their send hours, 1 failed', 'bulk summary: queued is never counted as sent');
+  ok(bulkSummaryText({ sent: 0, queued: 4, failed: 0 }) === 'Queued 4 for their send hours', 'bulk summary: all queued');
+  ok(bulkSummaryText({ sent: 5, queued: 0, failed: 0 }) === 'Sent 5', 'bulk summary: all sent (unchanged wording)');
+  ok(/if \(res\.ok && res\.scheduled\) queued\+\+;/.test(inbox) && /data-testid="bulk-summary">\{bulkSummaryText/.test(inbox), 'the Inbox batch counts queued separately, banner and toast');
   const drainFn = read('supabase/functions/inbox-scheduled-send/index.ts');
   ok(/if \(!isInternalCall\(req\)\) return json\(\{ ok: false, error: "forbidden" \}, 403\)/.test(drainFn), 'the drain answers only the cron');
   ok(!/whatsapp_queue_state|sms_queue_state|status", "queued"|\.eq\("status", "queued"\)/.test(drainFn), 'the drain never reads or touches the paused drip queue');

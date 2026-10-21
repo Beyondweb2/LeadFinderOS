@@ -193,3 +193,15 @@ export function explainBulkRefusal(error: string | null | undefined, reason: str
   if (e === 'phone_already_contacted') return 'this number has already been contacted';
   return r || e || 'the server would refuse this send';
 }
+
+/* ══ THE BATCH SUMMARY (2026-10-21, Inbox send window) ══
+   A message queued for the lead's send hours has NOT been sent, so it is never counted as sent: "Sent 3, queued 2, 1 failed".
+   The banner and the toast both use this one sentence. */
+export interface BulkOutcome { sent: number; queued: number; failed: number }
+export function bulkSummaryText(o: BulkOutcome): string {
+  const parts: string[] = [];
+  if (o.sent || (!o.queued && !o.failed)) parts.push(`Sent ${o.sent}`);
+  if (o.queued) parts.push(`${parts.length ? 'queued' : 'Queued'} ${o.queued} for their send hours`);
+  if (o.failed) parts.push(`${o.failed} failed`);
+  return parts.join(', ');
+}

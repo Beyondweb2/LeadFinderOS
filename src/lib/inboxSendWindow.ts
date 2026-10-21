@@ -18,6 +18,13 @@ import { SMS_QUEUE_WINDOW } from './smsMessages.ts';
 import { WHATSAPP_SERVICE_WINDOW_MS } from './serviceWindow.ts';
 
 export type InboxChannel = 'whatsapp' | 'sms';
+
+/** The screens whose WhatsApp sends keep to the lead's send hours (send-whatsapp-message is shared with screens that do not, e.g.
+ *  Quick Close's links). Texts need no list: every person-pressed text (fn twilio-sms-send) keeps to them. Paul, 2026-10-21. */
+export const SEND_WINDOW_SURFACES = ['inbox', 'lead_panel'] as const;
+export function keepsSendHours(via: unknown): boolean {
+  return typeof via === 'string' && (SEND_WINDOW_SURFACES as readonly string[]).includes(via);
+}
 /** What is being sent. `text` covers a typed reply, a Quick reply and an approved AI draft (all free text). */
 export type ScheduledKind = 'text' | 'template' | 'voice';
 
