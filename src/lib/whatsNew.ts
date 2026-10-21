@@ -22,6 +22,14 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-21-find-leads-outside-town-line', date: '2026-10-21', title: 'Find Leads: results outside the town are hidden', audience: 'all',
+    body: 'When you search one town, businesses outside it are hidden behind one grey line. Show lists them last, and they cannot be added.',
+    report: {
+      added: ['A grey line above the results: "N outside {town} hidden · Show". Show lists them at the bottom with Add and the tick box switched off.'],
+      changed: ['The result count, Select all, Add all shown and Find emails leave out anything outside the town, even after Show.'],
+      removed: [],
+      effect: 'You only work through businesses actually in the town you searched, and nothing outside it gets added by mistake.',
+    } },
   { id: '2026-10-21-drafter-hi-mate-no-brands', date: '2026-10-21', title: 'Reply drafts: "Hi mate," and no AI brand names', audience: 'admin',
     body: 'Reply drafts now open "Hi mate," when no name is known, say "AI" instead of ChatGPT or Gemini, and use a new line about what you do.',
     report: {
