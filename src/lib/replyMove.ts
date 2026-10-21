@@ -22,10 +22,12 @@ import { factFor, CONFIDENCE_LINE, GUARANTEE_REFUND, ENGINE_WORDING, type FactTo
 import { mayClaimNamedInstead } from './namedShareRule.ts';
 import { carryOn } from './draftEvidence.ts';
 import {
-  PLAYBOOK, RE, splitQuestion, readEndDate, nameFromReply, rivalsExcludingSelf, DONT_NEED_SOFT, DOES_AI_MATTER_SOFT,
+  PLAYBOOK, RE, splitQuestion, readEndDate, nameFromReply, nearSameName, rivalsExcludingSelf, DONT_NEED_SOFT, DOES_AI_MATTER_SOFT,
   DONT_NEED_NO_AUDIT, DOES_AI_MATTER_NO_AUDIT, PRIVACY_NOT_GOOGLE, GO_ON_KNOWN, NOT_NOW_WITH_TIME, WEBSITE_GIVEN_KNOWN,
+  EXAMPLES_NO_AUDIT, PROOF_NO_AUDIT, ALREADY_SHOW_UP_TRUE, ALREADY_SHOW_UP_NO_AUDIT, NEW_SITE_CHECK_BACK, VOICE_NOTE_FROM_THEM,
   type PlaybookIntent, type FollowUpNote,
 } from './replyPlaybook.ts';
+import { REMEASURE_WEEKS_STANDARD } from './findableOffer.ts';
 /* ⛔ THE PLAYBOOK (Paul, 2026-10-20, replyPlaybook.ts, docs/reply-playbook.md): the FIRST reply to our opener gets the pitch
    unless it is a no / stop / angry, a wrong person or a direct question; from then on one intent per reply, one question per
    message, the agency → contract → call / voice note order. Anything unmatched is Needs you with NO draft. */
@@ -38,7 +40,8 @@ export type MoveId =
 export type NeedsYouReason =
   | 'opt_out' | 'angry' | 'do_not_contact' | 'not_interested' | 'wrong_person' | 'legal' | 'complaint' | 'payment'
   | 'media' | 'privacy' | 'other_language' | 'link' | 'question_not_on_sheet' | 'paul_looks' | 'unsure'
-  | 'already_replied' | 'ai_limit' | 'repeat_auto_reply' | 'draft_failed' | 'paused' | 'email_given' | 'off_topic';
+  | 'already_replied' | 'ai_limit' | 'repeat_auto_reply' | 'draft_failed' | 'paused' | 'email_given' | 'off_topic'
+  | 'commercial_ask' | 'call_now' | 'wrong_trade' | 'cant_send' | 'third_party' | 'chased';
 
 export const NEEDS_YOU_LABELS: Record<NeedsYouReason, string> = {
   opt_out: 'Asked to stop',
@@ -63,6 +66,12 @@ export const NEEDS_YOU_LABELS: Record<NeedsYouReason, string> = {
   paused: 'Paid AI is paused',
   email_given: 'Gave an email address: send it yourself',
   off_topic: 'No playbook reply fits: answer it yourself',
+  commercial_ask: 'Asks for a different deal (pay on results, free first): check the suggested reply',
+  call_now: 'Wants to talk now: only you know if you are free',
+  wrong_trade: 'Says we have the wrong trade: fix the trade on the lead first',
+  cant_send: "Asks for something we can't send (a reference, testimonial or case study)",
+  third_party: 'Gave another business or person: run the check on that one',
+  chased: 'They chased us: answer their earlier message',
 };
 
 export interface MoveThreadMsg {
@@ -88,6 +97,14 @@ export function mergeBursts(thread: MoveThreadMsg[]): MoveThreadMsg[] {
   const flush = () => {
     if (!run.length) return;
     if (run.length === 1) { out.push(run[0]); run = []; return; }
+    /* An auto-reply then a person's own confirmation in the same burst ("Thank you for contacting Brill… / Yeah"): the person's
+       words are the reply, read on their own (reply recon R002, R004, R041). Ven's three auto messages stay one auto-reply. */
+    const autoAt = run.map((m) => m.autoPart ?? isAutoReply(m.text, m.messageType));
+    const lastAuto = autoAt.lastIndexOf(true);
+    const human = lastAuto >= 0 ? run.slice(lastAuto + 1) : [];
+    const humanConfirms = human.some((m) => HUMAN_CONFIRM.test(String(m.text ?? '').trim()));
+    if (humanConfirms) run = human;
+    if (run.length === 1) { out.push({ ...run[0], autoPart: false }); run = []; return; }
     const parts: string[] = []; const seen = new Set<string>();
     for (const m of run) {
       const t = String(m.text ?? '').replace(/\s+/g, ' ').trim();
@@ -100,7 +117,7 @@ export function mergeBursts(thread: MoveThreadMsg[]): MoveThreadMsg[] {
     const real = run.filter((m) => (m.messageType ?? 'text') === 'text' && !/^\[[a-z_]+\]$/i.test(String(m.text ?? '').trim()));
     const last = run[run.length - 1];
     out.push({ from: 'them', text, messageType: real.length ? 'text' : last.messageType ?? 'text', templateName: last.templateName ?? null, at: last.at ?? null,
-      autoPart: run.some((m) => m.autoPart ?? isAutoReply(m.text, m.messageType)) });
+      autoPart: !humanConfirms && run.some((m) => m.autoPart ?? isAutoReply(m.text, m.messageType)) });
     run = [];
   };
   for (const m of thread) {
@@ -198,6 +215,8 @@ export interface MovePlan {
   win?: 'call_time_agreed' | null;
   /** A note for the person ("They gave a new website: run Crawl site on it"). */
   note?: string | null;
+  /** The line carries our own links only (replyPlaybook FINDABLE_SITE_WORDS / BUILT_SITE_EXAMPLE_URL): the checker allows those. */
+  linkOk?: boolean;
 }
 
 /* ── reading words ────────────────────────────────────────────────────────────────────────────── */
@@ -235,7 +254,7 @@ export function questionTopic(text: string): FactTopic | null {
   if (/\b(guarantee|guaranteed|money\s+back|what\s+if\s+it\s+(does\s*n'?t|doesnt|don'?t)\s+work|refund)\b/.test(t) || WORKS.test(t)) return 'guarantee';
   if (/\b(after\s+(the\s+)?(12|twelve)|after\s+(the\s+)?(first\s+)?year|when\s+it\s+ends|end\s+of\s+the\s+(term|contract))\b/.test(t)) return 'after_term';
   if (/\b(how\s+long\s+(is|for)\s+the\s+(contract|term)|contract|minimum|tied\s+in|commit(ment)?|how\s+many\s+(months|payments))\b/.test(t)) return 'term';
-  if (/\b(how\s+much|price|cost|costs|charge|fee|£|pricing|what\s+do\s+you\s+charge|rates?)\b/.test(t)) return 'price';
+  if (/\b(how\s+much|prices?|cost|costs|charge|fee|£|pricing|what\s+do\s+you\s+charge|rates?)\b/.test(t)) return 'price';
   if (/\b(when\s+do\s+(i|we)\s+pay|monthly\s+start|first\s+payment)\b/.test(t)) return 'monthly_start';
   if (/\b(domain|web\s*address|my\s+url|keep\s+my\s+(address|site\s+name))\b/.test(t)) return 'domain';
   if (/\b(who\s+owns|do\s+i\s+own|will\s+i\s+own|own\s+the\s+(site|website)|whose\s+(site|website))\b/.test(t)) return 'ownership';
@@ -266,8 +285,15 @@ function wasOpener(m: MoveThreadMsg | null): boolean {
   if (!m) return true;
   /* Every opener template is initial_* (initial_contact, initial_contact_short, initial_opener_v2). A template row with no
      stored text reads "[initial_contact_short]", so the name decides (KSM, 2026-10-20: that miss drafted "voice note now"). */
-  if (/^initial_/.test(m.templateName ?? '')) return true;
+  /* contact_followup ("Hi, did you get my last message? Paul") only nudges the opener: the pitch is still owed (recon R015-R017). */
+  if (/^(?:initial_|contact_followup$)/.test(m.templateName ?? '')) return true;
+  if (/^\W*hi,?\s+did\s+you\s+get\s+my\s+last\s+message\?/i.test(m.text ?? '')) return true;
   return /\bis\s+this\b.{0,60}\?/i.test(m.text) && m.text.length < 160;
+}
+/** Nothing of ours before thread[idx] but the opener and its nudge: the pitch has not been sent yet. */
+function pitchOwed(thread: MoveThreadMsg[], idx: number): boolean {
+  const ours = thread.slice(0, idx).filter((m) => m.from === 'us');
+  return ours.length > 0 && ours.every((m) => wasOpener(m));
 }
 
 /** Inbound label for the Inbox: an auto-responder or a bare identity confirmation is not a real reply. */
@@ -288,11 +314,20 @@ const FOREIGN_AUTO = new RegExp([
   /\bgrazie\s+per\s+(?:averci\s+contattat\w|il\s+(?:tuo|suo)\s+messaggio)/.source, /\brisponderemo\b/.source,
   /\bdanke\s+f[uü]r\s+(?:ihre|deine)\s+nachricht/.source, /\bwir\s+melden\s+uns\b/.source,
 ].join('|'), 'i');
+/** B8 (reply recon): a business's auto-reply that asks for a form or quotes a consultation fee. Read BEFORE the link, price and
+ *  what-we-do rules, so "fill out our form [link]" is not their website and "consultation fee £75" is not a price question. */
+const AUTO_FORM = /\bthank(?:s|\s+you)\s+for\s+(?:your\s+)?(?:message|enquiry|inquiry|contacting\b[^.!?]*)[^?]*\b(?:fill\s+(?:in|out)|complete)\s+(?:our|the)\s+(?:\w+\s+)?form\b|\bconsultation\s+fee\b[^?]*\b(?:we'?ll|we\s+will)\s+(?:reply|respond|get\s+back|be\s+in\s+touch)\b|\b(?:we'?ll|we\s+will)\s+(?:reply|respond|get\s+back)\b[^?]*\bconsultation\s+fee\b/i;
+/** A person, never an auto-responder: a commercial ask in the first person ("I would only agree if payment is made after…").
+ *  The shared list reads "thanks for reaching out" as automated (R090). */
+const HUMAN_ONLY = /\bi\s+would\s+only\s+(?:agree|pay|work)\b|\b(?:i'?m|i\s+am)\s+interested\s+in\s+your\b|\bhappy\s+to\s+work\s+with\s+you\b/i;
+/** A person's own confirmation after an auto-reply in the same burst ("Yeah", "Yes, it is located in Liverpool"). */
+const HUMAN_CONFIRM = /^\W*(?:(?:hi|hello|hey)\W+)?(?:yes|yeah|yea|yep|yup|yh|ya|ye|it\s+is|it'?s\s+me|that'?s\s+(?:right|correct|us|me)|correct|speaking)\b/i;
 export function isAutoReply(text: string | null | undefined, messageType?: string | null): boolean {
   const t = String(text ?? '');
+  if (HUMAN_ONLY.test(t)) return false;
   const notAQuestion = !/\?\s*$/.test(t.trim());
   return triageByRules(t, { isClient: false, messageType: messageType ?? 'text' }).category === 'automated'
-    || (notAQuestion && (AUTO_EXTRA.test(t) || AUTO_GREETING.test(t))) || FOREIGN_AUTO.test(t);
+    || (notAQuestion && (AUTO_EXTRA.test(t) || AUTO_GREETING.test(t))) || FOREIGN_AUTO.test(t) || AUTO_FORM.test(t);
 }
 
 /** Messages an auto-responder sends together arrive within this long of each other (Ven: three in 72 seconds). */
@@ -469,9 +504,39 @@ export function firstReplyPitch(e: MoveEvidence, theirName: string | null = null
 /** The pitch as one message: each line its own paragraph, the question last. */
 export const pitchText = (p: { lines: string[]; question: string; closer: string }): string => [...p.lines, p.question].join('\n\n');
 
+/* ── the reply recon's code-built lines (Paul, 2026-10-21) ─────────────────────────────────────── */
+
+const pluralTrade = (t: string) => { const w = tradeWord(t); return /(s|sh|ch|x)$/i.test(w) ? `${w}es` : `${w}s`; };
+/** "Are you looking for lessons?": Paul's correction. "lessons" for a driving school, else "a <trade>"; the lead's trade + town. */
+export function thinksCustomerLine(e: MoveEvidence): string {
+  const tr = String(e.trade ?? '').trim();
+  const driving = /\b(driving|instructor|lesson)/i.test(tr) || (!tr && /\bdriving\b/i.test(e.businessName));
+  const base = PLAYBOOK.thinks_customer.line.replace('{thing}', driving ? 'lessons' : tr ? withA(tradeWord(tr)) : 'anything');
+  if (!tr || !e.town) return base.replace('how ai tools recommend {trades} in {town}', 'how ai tools recommend businesses like yours');
+  return base.replace('{trades}', pluralTrade(tr)).replace('{town}', e.town);
+}
+/** "What are you selling?" / "Why?" before the pitch went: a straight answer, then the pitch's own lines and its one question.
+ *  Same greeting rule as the pitch (their name, the site's owner, else "Hi mate,"). Nothing on record: who we are, no claim. */
+export function straightAnswerPitch(e: MoveEvidence, theirName: string | null = null): { lines: string[]; question: string; closer: 'agency' | 'site' } {
+  const p = firstReplyPitch(e, theirName);
+  const [hi, ...rest] = p.lines;
+  const answer = PLAYBOOK.straight_answer_then_pitch.line;
+  if (rest[0] === PITCH_INTRO_LINE) {
+    const short = answer.replace(/\s*I only got in touch because of what I found:$/, '');
+    return { ...p, lines: [hi, short, 'I help local businesses show up when people ask AI tools for their trade in their area.', ...rest.slice(1)] };
+  }
+  return { ...p, lines: [hi, answer, ...rest] };
+}
+/** They chased us before the pitch went: say sorry once, then the pitch (Paul: "Sorry for the slow reply." + the pitch). */
+export function chasedPitch(e: MoveEvidence, theirName: string | null = null): { lines: string[]; question: string; closer: 'agency' | 'site' } {
+  const p = firstReplyPitch(e, theirName);
+  const [hi, ...rest] = p.lines;
+  return { ...p, lines: [hi, PLAYBOOK.they_chased.line, ...rest] };
+}
+
 /** What our previous message asked, read from its words (our drafts are edited by a person, so loosely). */
 type OurAsk = 'emotional' | 'emotional_no_site' | 'agency' | 'site' | 'contract' | 'end_date' | 'pay_monthly' | 'happy_change'
-  | 'email' | 'best_person' | 'call_time' | 'better_time' | 'offer';
+  | 'email' | 'best_person' | 'call_time' | 'better_time' | 'offer' | 'new_site';
 /** "away until the 18th": a date readEndDate can read, or the next 18th (their day of the month, no month said). Check back the day AFTER they are
  *  back (not 14 days before, which is the contract rule). null when no day can be read. */
 function awayUntil(text: string, nowMs: number): FollowUpNote | null {
@@ -505,7 +570,9 @@ function ourAsk(m: MoveThreadMsg | null): OurAsk | null {
   if (/\bbest\s+e-?mail\b/i.test(t)) return 'email';
   if (/\bbest\s+person\s+to\s+speak\s+to\b/i.test(t)) return 'best_person';
   if (/\bwhen\s+would\s+be\s+a\s+better\s+time\b/i.test(t)) return 'better_time';
-  if (/\b(what\s+(day\s+and\s+)?time\s+suits|give\s+me\s+a\s+uk\s+time|good\s+time\s+(today|to\s+(call|ring)))\b/i.test(t)) return 'call_time';
+  /* B6: Paul's real asks ("what time works for you?", "can we do any earlier?", "are you free to call?"). */
+  if (/\b(what\s+(day\s+and\s+)?time\s+(suits|works|is\s+best|would\s+(work|suit|be\s+good))|give\s+me\s+a\s+uk\s+time|good\s+time\s+(today|to\s+(call|ring))|when\s+suits|are\s+you\s+free\s+to\s+(call|talk|chat)|any\s+(earlier|later)|what\s+time\s+(are|r)\s+(you|u)\s+free)\b/i.test(t)) return 'call_time';
+  if (/\bis\s+it\s+with\s+an\s+agency,?\s+or\s+are\s+you\s+building\s+it\s+yourself\b/i.test(t)) return 'new_site';
   if (/\bagency\b/i.test(t) && /\byourself\b/i.test(t)) return 'agency';
   if (/\bwebsite\s+i'?ve\s+missed\b/i.test(t)) return 'site';
   if (/\b(voice\s+note|call|ring)\b[^?]*\?/i.test(t)) return 'offer';
@@ -543,7 +610,7 @@ function fromPlaybook(intent: PlaybookIntent, extra: Partial<MovePlan> = {}, lin
     ? [`Use this answer, word for word: "${body}"`]
     : [`Say this in Paul's voice, close to these words (keep every fact; you may change the first few words so it answers what they said): "${body}"`];
   return plan({ move: 'playbook', read: intent, intent, guide: text, points, question, allowPrice: !!entry.allowPrice, confidence: !!entry.confidence,
-    timingOk: !!entry.timingOk, fixedText: entry.fixed ? text : null, ...extra });
+    timingOk: !!entry.timingOk, fixedText: entry.fixed ? text : null, linkOk: !!entry.linkOk, ...extra });
 }
 /** Needs you, and NO draft (Paul, 2026-10-20). */
 const noDraft = (reason: NeedsYouReason, read: string, move: MoveId = 'unsure'): MovePlan =>
@@ -628,9 +695,92 @@ export function pickMove(i: MoveInput): MovePlan {
   if (PRIVACY.test(text) || scamQuestion) return g(fromPlaybook('privacy', {}, e.foundOnGoogle ? undefined : PRIVACY_NOT_GOOGLE));
   /* "Which AI did you use?" (Paul, 2026-10-21): the one reply that may name the tool. */
   if (RE.whichTool.test(text)) return g(fromPlaybook('which_tool', { brandsAllowed: true }, whichToolLine(e)));
+  /* B10 (reply recon): rude, underhand, an attack on the message. A complaint: no draft, a person decides. */
+  if (RE.complaint.test(text)) return g(noDraft('complaint', 'complaint', 'escalate'));
+
+  /* B11: a body that is only "[audio]", "[image]" … is media, whatever type it was stored as ("[audio]" after our offer once
+     read as a yes to the voice note). A voice note from them gets Paul's line as the suggested text (Paul, 2026-10-21). */
+  const bareMedia = /^\[([a-z_]+)\]$/i.exec(text)?.[1]?.toLowerCase() ?? null;
+  const typedMedia = !!latest.messageType && !['text', 'button', 'interactive'].includes(latest.messageType) && (!text || !!bareMedia);
+  if (bareMedia === 'reaction') return g(plan({ move: 'ack', read: 'reaction', autoDraft: false, noDraft: true }));
+  if (bareMedia || typedMedia) {
+    const kind = bareMedia ?? String(latest.messageType ?? '').toLowerCase();
+    if (/^(audio|voice|ptt)$/.test(kind)) {
+      return g(plan({ move: 'media', read: 'voice_note', autoDraft: false, needsYou: flag('media'), guide: VOICE_NOTE_FROM_THEM, fixedText: VOICE_NOTE_FROM_THEM,
+        points: [`Use this line, word for word: "${VOICE_NOTE_FROM_THEM}"`], question: splitQuestion(VOICE_NOTE_FROM_THEM).question, note: 'They sent a voice note: listen to it on your phone first.' }));
+    }
+    return g(plan({ move: 'media', read: 'media', autoDraft: false, needsYou: flag('media'),
+      points: ['Say sorry, you cannot play voice notes or open files on here.'], question: 'Can you type it, or shall I give you a quick call?' }));
+  }
+
+  /* 4b. THE REPLY RECON'S INTENTS (Paul, 2026-10-21, docs/reply-playbook.md). Read before an answer to our last question: what
+     they said beats what we asked. Order is the point: the soft exits, the commercial asks, a clear no (B9: a reason after a no
+     is still a no), then the rest. */
+  const ask = ourAsk(prevOurs);
+  const auditedHere = !!e.named && e.named.valid > 0;
+  const owed = pitchOwed(thread, idx);
+  const earliestName = () => { for (const m of thread.slice(0, idx)) if (m.from === 'them') { const n = nameFromReply(m.text, e.businessName); if (n) return n; } return null; };
+  const codePitch = (intent: PlaybookIntent, p: { lines: string[]; question: string; closer: 'agency' | 'site' }, name: string | null) =>
+    plan({ move: 'first_reply_pitch', read: intent, intent, greetName: name, points: p.lines.map((l) => `Use this line, word for word: "${l}"`), question: p.question,
+      fixedText: pitchText(p), closer: p.closer, guide: PLAYBOOK[intent].line });
+  if (RE.payOnResults.test(text)) {
+    return g(fromPlaybook('pay_on_results', { needsYou: flag('commercial_ask'), autoDraft: false, topic: 'price', note: 'A commercial ask (pay on results / free first). The suggested reply restates the offer word for word.' }));
+  }
+  if (RE.topAsk.test(text)) return g(fromPlaybook('definitely'));
+  /* ⛔ B9 (Paul, 2026-10-21): a decline with a reason after it is still a no. No draft, before every soft exit below. */
+  if (RE.decline.test(text) || CLEAR_NO.test(text)) return g(noDraft('not_interested', 'not_interested', 'close_politely'));
+  if (RE.closedRetired.test(text)) return g(fromPlaybook('closed_retired', { note: 'They have closed down or retired: mark the lead closed.' }));
+  if (RE.fullyBooked.test(text) && !/\?/.test(text)) return g(fromPlaybook('fully_booked'));
+  if (RE.wordOfMouth.test(text) && !/\?/.test(text)) return g(fromPlaybook('word_of_mouth'));
+  /* "Yes this is the number for No Shut Sure Lock" confirms their OWN business (R017); "…the number for Leon's locks" gives another. */
+  const forWhom = /\bthis\s+is\s+the\s+number\s+for\s+([^.!?,]+)/i.exec(text)?.[1] ?? '';
+  const confirmsOwn = /\b(?:yes|yeah|yep|yh),?\s+(?:it\s+is,?\s+)?this\s+is\s+the\s+number\s+for\b/i.test(text) || (!!forWhom && nearSameName(forWhom, e.businessName));
+  if (RE.thirdParty.test(text) && !confirmsOwn) {
+    return g(plan({ move: 'unsure', read: 'third_party', autoDraft: false, noDraft: true, needsYou: flag('third_party'), note: 'They gave another business or person: run the check on that one.' }));
+  }
+  if (RE.callNow.test(text)) return g(fromPlaybook('call_now', { needsYou: flag('call_now'), autoDraft: false, note: 'They want to talk now. Only you know if you are free.' }));
+  /* "Will ring later" (Paul, 2026-10-21): they will call us, so never the busy "I'll call then" line. */
+  if (RE.willRing.test(text) && !/\?/.test(text)) return g(fromPlaybook('acknowledge_wait', { note: 'They said they will call you.' }));
+  const checkBack = (): MovePlan => {
+    const today = new Date(nowMs);
+    const end = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate() + REMEASURE_WEEKS_STANDARD * 7));
+    const day = end.toISOString().slice(0, 10);
+    return fromPlaybook('new_site_being_built', { followUp: { said: `about ${REMEASURE_WEEKS_STANDARD} weeks`, endsOn: day, checkBackOn: day },
+      note: `New site on the way. Check back on ${day} and re-run the same searches. Set the Next Action when you send.` }, NEW_SITE_CHECK_BACK);
+  };
+  if (ask === 'new_site' && !first && !/\?/.test(text)) return g(checkBack());
+  if (RE.newSite.test(text)) {
+    const whoKnown = RE.agency.test(text) || RE.agencyStrong.test(text) || RE.self.test(text) || RE.friend.test(text);
+    return g(whoKnown ? checkBack() : fromPlaybook('new_site_being_built'));
+  }
+  if (RE.thinksCustomer.test(text)) return g(fromPlaybook('thinks_customer', {}, thinksCustomerLine(e)));
+  if (RE.wrongTrade.test(text)) {
+    return g(fromPlaybook('wrong_trade', { needsYou: flag('wrong_trade'), autoDraft: false, note: 'They say we have the wrong trade. Fix the trade on the lead before any re-check.' }));
+  }
+  if (RE.movedArea.test(text)) return g(fromPlaybook('moved_area', { note: 'They have moved area: fix the town on the lead before any re-check.' }));
+  if (RE.sorryWrongDay.test(text)) return g(fromPlaybook('sorry_wrong_day'));
+  if (RE.doItMyself.test(text)) return g(fromPlaybook('do_it_myself'));
+  if (RE.alreadyShowUp.test(text)) {
+    const all = !!e.named && e.named.valid > 0 && e.named.named >= e.named.valid;
+    return g(fromPlaybook('already_show_up', {}, all ? ALREADY_SHOW_UP_TRUE : auditedHere ? undefined : ALREADY_SHOW_UP_NO_AUDIT));
+  }
+  /* A price question beside a proof ask is answered as the price (zz-real-15: "the full report, exact fixes, total price"). */
+  if ((RE.proofRequest.test(text) || RE.proofCantSend.test(text)) && questionTopic(text) !== 'price') {
+    const cant = RE.proofCantSend.test(text);
+    return g(fromPlaybook('proof_request', cant ? { needsYou: flag('cant_send'), autoDraft: false, note: "They asked for something we can't send. Check the suggested text first." } : {},
+      auditedHere ? undefined : PROOF_NO_AUDIT));
+  }
+  if (RE.explainHere.test(text) && !RE.sendEmail.test(text)) return g(fromPlaybook('explain_here'));
+  if (RE.ads.test(text)) return g(fromPlaybook('ads_question'));
+  if (RE.whereBased.test(text)) return g(fromPlaybook('where_based'));
+  if (RE.straightAsk.test(text)) return g(owed ? codePitch('straight_answer_then_pitch', straightAnswerPitch(e, theirName), theirName) : fromPlaybook('what_we_do', { topic: 'what_we_do' }));
+  /* They chased us: their turn follows their own earlier turn with nothing of ours between (mergeBursts kept them apart). */
+  if (idx > 0 && thread[idx - 1].from === 'them' && !autoFlags[idx - 1] && RE.chase.test(text)) {
+    if (owed) { const n = earliestName(); return g(codePitch('they_chased', chasedPitch(e, n), n)); }
+    return g(noDraft('chased', 'chased'));
+  }
 
   /* 5. An answer to the question our last message asked. */
-  const ask = ourAsk(prevOurs);
   const ownTopic = questionTopic(text);
   const asksItsOwn = (!!ownTopic && (ownTopic !== 'term' || /\?/.test(text))) || (RE.howMuch.test(text) && /\?/.test(text));
   const contract = (): MovePlan => {
@@ -677,7 +827,9 @@ export function pickMove(i: MoveInput): MovePlan {
       else if (RE.yesish.test(text) || BARE_YES.test(text)) p = fromPlaybook('voice_yes', { note: 'They said yes to the voice note: record it with the voice-note script.' });
     } else if (ask === 'call_time' || ask === 'better_time') {
       const note = readEndDate(text, nowMs);
-      if (ask === 'call_time' && RE.namedTime.test(text)) {
+      /* B6: a bare hour after we asked a time ("Yes 6", "5ish") is the time. */
+      const bareHour = /^\W*(?:(?:yes|yeah|yep|ok|okay|sure|go\s+on)\W+)?(?:at\s+|about\s+|around\s+)?(?:[1-9]|1[0-2])(?::[0-5]\d)?\s*(?:am|pm|ish|o'?clock)?\W*$/i.test(text);
+      if (ask === 'call_time' && (RE.namedTime.test(text) || bareHour)) {
         p = plan({ move: 'set_call', read: 'call_time_agreed', win: 'call_time_agreed', points: ['Confirm you will call them at the time they said, using their words for the time. One short line.'], question: null });
       } else if (ask === 'better_time' && (note || RE.namedTime.test(text) || RE.monthYear.test(text))) {
         p = plan({ move: 'playbook', read: 'not_now_time', intent: 'not_now', guide: NOT_NOW_WITH_TIME, points: [`Say this, close to these words, using their words for the time: "${NOT_NOW_WITH_TIME}"`], question: null,
@@ -709,7 +861,7 @@ export function pickMove(i: MoveInput): MovePlan {
     return g(plan({ move: 'playbook', read: 'away', intent: 'not_now', guide: NOT_NOW_WITH_TIME, points: [`Say this, close to these words: "${NOT_NOW_WITH_TIME}"`], question: null,
       followUp: back, note: back ? `They are away until ${back.said}. Check back on ${back.checkBackOn}: set the Next Action when you send.` : 'They said they are away: set the Next Action for when they are back when you send.' }));
   }
-  if (RE.notNow.test(text) && !/\binterested\b/i.test(text) && !CLEAR_NO.test(text)) {
+  if ((RE.notNow.test(text) || RE.startLater.test(text)) && !/\binterested\b/i.test(text) && !CLEAR_NO.test(text)) {
     const note = readEndDate(text, nowMs);
     if (note || RE.monthYear.test(text)) {
       return g(plan({ move: 'playbook', read: 'not_now_time', intent: 'not_now', guide: NOT_NOW_WITH_TIME, points: [`Say this, close to these words, using their words for the time: "${NOT_NOW_WITH_TIME}"`], question: null,
@@ -722,10 +874,6 @@ export function pickMove(i: MoveInput): MovePlan {
   if (RE.dontNeed.test(text) && !CLEAR_NO.test(text)) return g(fromPlaybook('dont_need', {}, rule ? undefined : audited ? DONT_NEED_SOFT : DONT_NEED_NO_AUDIT));
   if (t.category === 'not_interested' || CLEAR_NO.test(text) || (t.category === 'already_sorted' && !PROVIDER.test(text) && !RANKS.test(text))) {
     return g(noDraft('not_interested', 'not_interested', 'close_politely'));
-  }
-  if (latest.messageType && !['text', 'button', 'interactive'].includes(latest.messageType) && (!text || /^\[[a-z_]+\]$/i.test(text))) {
-    return g(plan({ move: 'media', read: 'media', autoDraft: false, needsYou: flag('media'),
-      points: ['Say sorry, you cannot play voice notes or open files on here.'], question: 'Can you type it, or shall I give you a quick call?' }));
   }
   if (MALAY.test(text) && !ENGLISH_HINT.test(text)) {
     return g(plan({ move: 'other_language', read: 'other_language', autoDraft: false, needsYou: flag('other_language'), points: ['In English: say sorry, you only speak English.'], question: 'Is it ok to carry on in English?' }));
@@ -740,10 +888,11 @@ export function pickMove(i: MoveInput): MovePlan {
     if (RE.namedTime.test(text)) return g(plan({ move: 'set_call', read: 'call_time_agreed', win: 'call_time_agreed', points: ['Confirm you will call them at the time they said, using their words for the time. One short line.'], question: null }));
     return g(fromPlaybook(RE.busy.test(text) || /\blater\b/i.test(text) ? 'busy' : 'call_yes'));
   }
-  if (RE.busy.test(text) && !/\?/.test(text)) return g(fromPlaybook('busy'));
+  /* "Bit busy at the moment" with no ask to call later: not now (recon R087). "Busy, call me later" stays busy (the call rule above). */
+  if (RE.busy.test(text) && !/\?/.test(text)) return g(fromPlaybook(/\b(call|ring|phone|bell|later)\b/i.test(text) ? 'busy' : 'not_now'));
   if (RE.thinkAboutIt.test(text)) return g(fromPlaybook('think_about_it'));
   if (RE.doesAiMatter.test(text)) return g(fromPlaybook('does_ai_matter', {}, rule ? undefined : audited ? DOES_AI_MATTER_SOFT : DOES_AI_MATTER_NO_AUDIT));
-  if (RE.examples.test(text)) return g(fromPlaybook('examples'));
+  if (RE.examples.test(text)) return g(fromPlaybook('examples', {}, audited ? undefined : EXAMPLES_NO_AUDIT));
   if (RE.definitely.test(text)) return g(fromPlaybook('definitely'));
   if (RE.catch.test(text)) return g(fromPlaybook('catch'));
   if (topic === 'price' || (RE.howMuch.test(text) && !topic)) return g(fromPlaybook('how_much', { topic: 'price' }));

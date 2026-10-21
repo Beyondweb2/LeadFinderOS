@@ -84,7 +84,7 @@ guard, like a voice note sent or a booked call.
 | how_long | "how long?" (word for word) | The site build usually takes a few days. Then we re-check after 4 weeks to see the difference. |
 | who_are_you | "who are you?" | I'm Paul, I run Findable. We help local businesses show up when people ask ai tools for a recommendation. Happy to jump on a quick call if you'd rather talk. |
 | which_tool | "which ai?", "what tool?", "was it chatgpt?" (word for word) | I check the same questions on ChatGPT and Gemini. Want a voice note showing what it said? (with "That one was <the missed search's engine>." in front when it is known; the only draft that names a tool) |
-| examples | "examples?", "results?" (word for word) | I've had success with all the clients I've worked with so far. Easiest to show you on a quick call. |
+| examples | "examples?", "results?" (word for word, code-built) | I've had good reviews and great feedback from the businesses I've worked with, and I built this site for a locksmith recently: https://mclocksmiths-new.pages.dev/ Happy to talk you through it on a call. Want me to send over the report I did for you too? (no search on record: "…Want me to run the same check on your business?") |
 | definitely | "will I definitely be recommended?" (word for word) | I can't promise ai will recommend you, nobody honestly can. What I do promise is we improve ai visibility or you get your £99 back. |
 | own_site | "do I own the site?" (word for word) | You always own your domain, and you own the site after the final payment. If you want, I can keep hosting it after that for £29.99 a month. |
 | not_now | "not now", "later" | No problem. When would be a better time? I'll check back then. (a time named: "No problem, I'll check back then." + noted) |
@@ -125,8 +125,61 @@ at it first".
 * The confidence line is "I specialise in getting local businesses to show up in those results, so the customers go to
   you instead." (`PITCH_SPECIALISE_LINE`), replacing "…get recommended by AI…".
 * The voice-note script is NOT part of this drafter: it lives in `src/lib/voiceNoteScript.ts` + fn `voice-note-script`
-  (`docs/voice-note-script.md`) and still says "Google AI"; it was not changed here.
+  (`docs/voice-note-script.md`). It went brand-free in section 5d.
 * Tests: `scripts/reply-playbook.test.ts` section 5b (`--preview-pitch` prints four preview drafts).
+
+## 5d. The reply recon's 18 intents and detection fixes (Paul, 2026-10-21)
+
+From `reply-recon-2026-10-20.md` §5a / §5b, with Paul's wording changes. ⛔ No AI brand ("ai tools"). ⛔ "regular checks",
+never "monthly". ⛔ new_site_being_built never says "free". ⛔ Proof words name no client, no number, no result claim.
+Lines marked *code* are written by code word for word (no model call). Tests: `scripts/reply-new-intents.test.ts`
+(`--preview` prints one draft per intent) and `scripts/reply-recon-regression.test.ts` (the 100-case set, §7b scoring,
+hard gate: a stop / angry / complaint / not-interested / client thread never produces a draft).
+
+| Intent | When | Line |
+|---|---|---|
+| thinks_customer | "are you looking for lessons?", "automatic or manual?", "do you need a plumber?" (code) | Ha, sorry for the confusion, I'm not looking for {thing} myself. I'm Paul from Findable. I checked how ai tools recommend {trades} in {town} and wanted to show you what came back. Ok if I send it over? ({thing} = "lessons" for a driving school, else "a plumber"; {trades} in {town} from the lead) |
+| straight_answer_then_pitch | "what are you selling?", "is this a sales call?", "what do you want?", a bare "Why" / "What?" before the pitch went (code) | Fair question, I'm Paul from Findable and yes, I'm offering a service. I only got in touch because of what I found: (then the pitch's lines and its one question, after "Hi <name>," / "Hi mate,") |
+| wrong_trade | "we don't do locksmithing", "I'm an auto locksmith, those are all domestic" (**Needs you**) | Sorry about that, my mistake. What is it you mainly do? I'll check it properly. (note: fix the trade on the lead first) |
+| moved_area | "I'm not in Sowerby Bridge anymore" | No worries, thanks for letting me know. Where are you working now? I can check how you show up there. |
+| closed_retired | "no longer trading", "I've retired" | No worries, sorry to bother you. Best of luck with it. (note: mark the lead closed) |
+| fully_booked | "fully booked", "waiting list", "too busy for advertising" | Good problem to have. I'll leave you to it, and if it ever goes quiet you know where I am. |
+| word_of_mouth | "all word of mouth", "busy with recommendations" | Fair enough, that's the best kind of work. I'll leave you to it. If you ever want to see how ai tools recommend you, just say. |
+| already_show_up | "I already show up on ai", "a caller said chatgpt recommended me", "you found me" | Fair enough, that's good to hear. It can come out differently depending on who asks and where, so I'd still like to show you what came back when I checked. Want a quick voice note? (named every time: "Fair enough, you're right, you came up every time I checked too. I'll leave you to it.") |
+| new_site_being_built | "getting a new website built", "just been rebuilt" | Good timing. Is it with an agency, or are you building it yourself? Then: "No problem. I'll check back in about 4 weeks once it's settled and re-run the same searches so you can compare." (the check back is NOTED on the draft, never written) |
+| proof_request | "send the evidence / screenshots", "a demo" (code; references / testimonials / case studies we cannot send: **Needs you**) | Fair ask. I can send you the report with the exact searches I ran and what came back. I've had good reviews and great feedback from the businesses I've worked with, and I built this site for a locksmith recently: https://mclocksmiths-new.pages.dev/ Want me to send the report here? |
+| explain_here | "please explain here", "send me some details" | Sure. Short version: I build you a new site that's set up for ai and google, sort your google business profile, and keep checking how you show up. Want me to send what I found here? |
+| pay_on_results | "only pay after results", "show us FOC first" (**Needs you**, word for word) | I don't work pay-after-results, but you're covered: it's £99 to start, and we improve ai visibility or you get your money back. After your results it's £99 a month, 12 payments in total including the first. Quick call to go through it? |
+| ads_question | "do you do google ads?", "tried SEO, didn't work" | No, I don't do ads. I only work on getting businesses recommended when people ask ai tools. Want a quick voice note on what I found for you? |
+| do_it_myself | "I'll learn it and do it myself", "I'll get claude to fix it" | Fair enough, and good luck with it. If you want a second pair of eyes on what I found, just say. |
+| where_based | "are you UK based?", "what's your company called / your website?" (code) | Findable is a UK company, but we work with businesses worldwide. The site's findable.live if you want a look. Quick call, or shall I send a voice note? |
+| call_now | "you free now?", "can I call you?" (**Needs you**: only Paul knows) | Yes, I'm free now. Ring me on this number, or give me a time and I'll ring you. |
+| sorry_wrong_day | "it's a Sunday, have a day off" (swearing is still a stop) (code) | Fair enough, sorry for the message. I'll leave you in peace. |
+| they_chased | "just wanted to follow up", "??" after we did not answer (code) | Sorry for the slow reply. (then the pitch, same greeting rule; after the pitch went: Needs you) |
+| acknowledge_wait | "Will ring later", "I'll give you a call tomorrow": they will call us (code, Paul 2026-10-21, R085) | No problem, speak soon. |
+
+**Order** (`pickMove` 4b): pay on results and "how much to get to the top?" first, then a clear no (**B9**: a decline with a
+reason after it is still a no, no draft), then the soft exits, then the rest, all before an answer to our last question.
+A price question beside a proof ask is answered as the price.
+
+**Detection fixes:** B4 bare "Why" / "What?" → straight_answer_then_pitch; "Who's this please?" → who_are_you. B6 call times:
+"what time works", "can we do any earlier?", "are you free to call?" are our asks, and a bare hour ("Yes 6") after one is the
+time; them asking "are you free to call?" is call_now. B7 agency: "an seo guy", "a company who deal with it", "in marketing",
+"someone manages the website". B8 auto-replies with a form link or a consultation fee are read as auto-replies before the
+link and price rules; an auto-reply then "Yeah" in the same burst is a real reply. B9 above. B10 rude / underhand / slop /
+"your rubbish" = complaint, no draft ("spam" still stops, as strict as before). B11 a body that is only "[audio]" /
+"[image]" is media. **A voice note from a prospect**: Needs you, suggested text "Sorry, I can't listen to voice notes on
+here. Can you type it, or shall I give you a quick call?". Busy with no ask to call later ("Bit busy at the moment") is
+not_now. "Yes this is the number for <them>" confirms them; "…the number for Leon's locks" is Needs you (run the check on
+that one). contact_followup ("did you get my last message?") still owes the pitch.
+
+**Where the regression set's expected value was overridden** (the code was not bent): R054 and R066 (B9, a no with a
+reason), R075 (price first), R081 (set_call draft), R095 (where_based), R077 (references: Needs you); Paul agreed all six (2026-10-21). R085 "Will ring later" is acknowledge_wait ("No problem,
+speak soon."), never the busy line.
+
+**Voice-note script, brand-free:** the spoken script says "AI" ("i asked AI for a plumber in Leicester"), never ChatGPT,
+Gemini or Google AI; the checker flags a brand. The engine stays in the stored evidence for the operator.
+`VOICE_NOTE_GENERATOR_VERSION` 6.
 
 ## 6. Where Paul's brief and v5 differ (v5 wins)
 

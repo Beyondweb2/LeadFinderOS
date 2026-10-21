@@ -55,7 +55,8 @@ const pm = (thread: MoveThreadMsg[], o: Partial<{ aiSentSinceWin: number; eviden
   ok(keen2.intent === 'interested' && /quick call/.test(keen2.guide ?? '') && /voice note/.test(keen2.question ?? ''), 'interested later → the call, or a voice note if easier');
   const price = pm([opener, { from: 'them', text: 'how much is it?' }]);
   ok(price.intent === 'how_much' && price.topic === 'price' && price.allowPrice && /word for word: "It's £99 to start/.test(price.points[0]), 'a price question → the playbook price line, word for word');
-  const unknown = pm([opener, { from: 'them', text: 'Do you do Instagram ads as well?' }]);
+  /* Ads are ads_question since 2026-10-21 (reply recon); a logo is still not on the sheet. */
+  const unknown = pm([opener, { from: 'them', text: 'Can you do my logo as well?' }]);
   ok(unknown.needsYou?.reason === 'question_not_on_sheet' && unknown.noDraft === true, 'a question the sheet does not answer → Needs you, no draft');
   const bot = pm([opener, { from: 'them', text: 'is this a bot?' }]);
   ok(bot.move === 'is_bot' && bot.guide === BOT_ANSWER, '"is this a bot" → honest, never denied');

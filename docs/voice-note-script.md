@@ -28,6 +28,10 @@ the research is saved to `warm_lead_research`, so the warm drafter later reuses 
 `selectReplyFindings` → primary + at most one more. Modes: `findings` / `clean` (the "nothing
 obviously broken" line) / `unread` (say nothing specific) / `no_website`.
 
+> ⛔ **Brand-free since 2026-10-21 (Paul, generator v6).** The script says "i asked AI", never ChatGPT, Gemini or Google AI;
+> the checker flags any brand (crawler names such as "ChatGPT-User" excepted). The pick order below still chooses the
+> engine underneath and it is stored with the script for the operator; "the right engine" checks below are retired.
+
 ## Generation and checks
 `gpt-4o`, temperature 0.6 (0.8 on Regenerate, which is shown the old script). Checks = facts, not
 style: every competitor named (a legal suffix or a bracketed descriptor may be dropped), the right

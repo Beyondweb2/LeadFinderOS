@@ -69,6 +69,11 @@ const base = { id: 'p1', name: 'A Plumber', googleMapsUrl: 'https://maps.google.
 ok(coverageTownFor({ ...base, townCheck: { inTown: true } }, 'Kuala Lumpur, Malaysia') === 'Kuala Lumpur', 'Coverage town saved, cleaned (no ", Malaysia")');
 ok(coverageTownFor({ ...base, townCheck: { inTown: null } }, 'Cheshunt') === null && coverageTownFor(base, 'Cheshunt') === null, 'never saved unless verified');
 ok((addRowFor({ ...base, townCheck: { inTown: true } }, { trade: 'plumber', town: 'Cheshunt', country: 'UK' }, null, null, null) as { coverage_town?: string }).coverage_town === 'Cheshunt', 'the add row carries coverage_town');
+const lt = read('../src/components/LeadsTable.tsx');
+ok(/outside \{outsideTownName\} \{showOutside \? 'shown' : 'hidden'\}/.test(lt) && /data-testid="outside-town-line"/.test(lt), 'one grey line "N outside {town} hidden · Show"');
+ok(/!checkIsInOutreach\(l\.name, l\.googleMapsUrl\) && !outsideSearchedTown\(l\)/.test(lt), 'Select all / Add all leave them out');
+ok((lt.match(/disabled=\{addingIds\.has\(lead\.id\) \|\| outsideSearchedTown\(lead\)\}/g) ?? []).length === 2, 'the row Add is disabled for them (phone and desktop)');
+ok(!/Outside town<\/span>/.test(lt), 'no badge');
 const ix = read('../src/pages/Index.tsx');
 ok(/const sel = selAll\.filter\(\(l\) => !outsideSearchedTown\(l\)\)/.test(ix) && /!isInOutreach\(l\.name, l\.googleMapsUrl\) && !outsideSearchedTown\(l\)/.test(ix), 'every add path refuses them (one door + Add all with emails)');
 const sl = read('../supabase/functions/search-leads/index.ts');
