@@ -1241,7 +1241,7 @@ positive allowlist of `baseline`; `isColdOutreachTemplate` treats unknown as COL
 
 ### 6l. AI handles replies (2026-10-11 — record: `docs/ai-handles-replies.md`)
 
-- ⛔ **Approve-to-send only.** fn `ai-reply-drafts` never sends; Approve & send = `claim` (one conditional write) → the Inbox's own send → `complete`. Never add an auto-send without Paul.
+- ⛔ **Approve-to-send, except Level 2's switched-on types** (Paul, 2026-10-21, `docs/ai-handles-replies.md` "Level 2"). fn `ai-reply-drafts` never sends; Approve & send = `claim` (one conditional write) → the Inbox's own send → `complete`. An automatic reply goes ONLY when `src/lib/aiAutoSend.ts` `autoSendVerdict` says so (master switch + that type's switch, all OFF when shipped; read again by the drain before sending) and ONLY as an `inbox_scheduled_sends` row. Never add a type to `AUTO_SEND_CHOICES` that carries a price / guarantee / proof / timing promise, and never switch a type on from code.
 - ⛔ **One row per inbound** (`ai_reply_drafts`, unique `inbound_message_id`), one open row per conversation. Rules: `src/lib/aiReplyDraft.ts`; hand-over phrases come from `replyTriage`. Absent facts are left out, never invented.
 - ⛔ **The warm drafter has no stage gate any more** (Paul, 2026-10-11): Draft reply and Refresh research show in every stage.
 - ⛔ **A failed crawl never overwrites the last good one** (`src/lib/crawlWriteRule.ts`, `lead_crawl_checks.last_failed_attempt`).

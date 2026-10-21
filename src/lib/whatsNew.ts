@@ -22,6 +22,22 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-21-ai-auto-send', date: '2026-10-21', title: 'AI replies: switches to let chosen reply types send themselves (all off)', audience: 'admin',
+    body: 'Under Inbox → Draft outcomes there is now a "Sends by itself" list. Every switch is off. Nothing sends by itself until you switch a reply type on.',
+    report: {
+      added: [
+        'Per reply type switches ("First reply pitch", "Agency question after the pitch" and others) and a daily limit (default 30).',
+        'A switched-on reply goes 3 to 8 minutes after the draft is written, inside the lead\'s send hours.',
+        'The draft shows "The AI will send this by itself at 10:42" with a "Don\'t send automatically" link.',
+        'A "Sent by AI" label on messages the AI sent by itself, and "sent by AI today" counts in Draft outcomes.',
+      ],
+      changed: [
+        'Typing in a conversation, Approve, Discard, Regenerate or Draft reply stops a waiting automatic reply.',
+        'Turning AI handles replies off now also cancels every automatic reply still waiting.',
+      ],
+      removed: [],
+      effect: 'Nothing changes until you switch a type on. Price, guarantee and proof answers, Needs you, stops, complaints, clients and non-UK numbers are never sent by the AI.',
+    } },
   { id: '2026-10-21-find-leads-show-outside', date: '2026-10-21', title: 'Find Leads: Show now includes the outside-town leads', audience: 'all',
     body: 'After you press Show on the "N outside the searched towns" line, those leads count like any other: Select, Add all, Find emails, Add all with emails and Export all use every lead you can see.',
     report: {

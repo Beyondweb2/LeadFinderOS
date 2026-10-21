@@ -1,4 +1,5 @@
-// ai-reply-drafts — reply flags + drafts (2026-10-11, Paul; reworked 2026-10-20). WhatsApp only. NOTHING AUTO-SENDS.
+// ai-reply-drafts — reply flags + drafts (2026-10-11, Paul; reworked 2026-10-20). WhatsApp only. Nothing auto-sends unless an
+// admin switched that reply type on (Level 2, 2026-10-21, below) — and even then this function only QUEUES it.
 // Rules: src/lib/aiReplyDraft.ts (rows, checker), src/lib/replyMove.ts (the move), src/lib/replyPlaybook.ts (the wording per
 // intent, docs/reply-playbook.md), src/lib/offerFactSheet.ts (what may be said).
 // Record: docs/ai-handles-replies.md.
@@ -21,6 +22,12 @@
 //   · settings / set_enabled (admin) — the switch (whatsapp_outreach_state.ai_handles_replies, default OFF)
 //   · regenerate / discard / claim / complete (the person working the lead)
 //   · dry_run (admin, or the internal job) — the draft for one lead or for a FIXTURE; writes no row, sends nothing, logs nothing
+//   · set_auto_send (admin) — LEVEL 2's per-reply-type switches + the daily cap (src/lib/aiAutoSend.ts); stop_auto_send (person)
+//
+// ⛔ LEVEL 2 (2026-10-21): the tick may QUEUE a draft it just wrote as an ordinary inbox_scheduled_sends row (3–8 minutes on, in
+//    the lead's send hours), ONLY when `autoSendVerdict` says so: master switch on AND that reply type switched on (all off when
+//    shipped) AND every safety check. Even then this function sends nothing: fn inbox-scheduled-send does, after re-checking.
+//    Approve / Discard / Regenerate / Draft reply / typing in the reply box stop a waiting automatic reply first.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { isUpstreamOutage } from "../_shared/operator-auth.ts";
 import { leadAccess, refusalBody, resolveActor, type Actor } from "../_shared/access.ts";
@@ -43,13 +50,21 @@ import { conversationEngine, draftNames } from "../../../src/lib/draftEvidence.t
 import { warmStage } from "../../../src/lib/warmStage.ts";
 import { serviceWindowState } from "../../../src/lib/serviceWindow.ts";
 import { isRealSend } from "../../../src/lib/realSend.ts";
+import {
+  autoSendVerdict, autoSendAt, autoSendDelayMs, autoSendKey, cleanAutoSendKeys, cleanDailyCap, draftFactsFromPlan, threadHardReason,
+  AUTO_SEND_CHOICES, AUTO_SEND_DEFAULT_DAILY_CAP, AUTO_SEND_MAX_DAILY_CAP,
+} from "../../../src/lib/aiAutoSend.ts";
+import { nextWindowOpenAt, replyWindowFor, replyWindowOpen } from "../../../src/lib/inboxSendWindow.ts";
+import { loadReplyHours } from "../_shared/inbox-schedule.ts";
+import { loadCountrySettings } from "../_shared/country-settings.ts";
+import { autoSendCounts, loadAutoSendState, personActiveAt, sendAsIsAdmin, stopAutoSend, type AutoSendState } from "../_shared/ai-auto-send.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-internal-job, x-cron-secret",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
   /* The deploy marker: only this build answers with it. */
-  "x-ai-reply-drafts": "2026-10-21c-will-ring",
+  "x-ai-reply-drafts": "2026-10-21d-auto-send",
 };
 const json = (b: unknown, s = 200) => new Response(JSON.stringify(b), { status: s, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 const str = (v: unknown) => (typeof v === "string" ? v.trim() : "");
@@ -291,6 +306,47 @@ async function undoReplied(service: Service, lead: LeadRow, thread: MsgRow[]): P
   return !!data;
 }
 
+/* ───────────────────────── Level 2: queue a draft to send by itself (src/lib/aiAutoSend.ts) ───────────────────────── */
+
+/** Records the verdict on the draft (why.autoSend) and, only on `send: true`, queues ONE ordinary inbox_scheduled_sends row
+ *  3–8 minutes on (inside the lead's send hours, inside WhatsApp's 24 hours). Nothing is sent here. */
+async function maybeQueueAutoSend(service: Service, st: AutoSendState, a: {
+  draftId: string; cand: { user_id: string; phone: string; lead_id: string | null; inbound_at: string; body: string | null };
+  lead: LeadRow; input: MoveInput; plan: MovePlan; why: AiReplyWhy; w: { reply: string; problems: string[]; usedFallback: boolean };
+}) {
+  /* Nothing switched on: nothing to decide, nothing recorded (the default; no extra reads). */
+  if (!st.masterOn || st.intents.length === 0) return;
+  const nowMs = Date.now();
+  const threadHard = threadHardReason(a.input);
+  const [counts, active, admin] = await Promise.all([autoSendCounts(service), personActiveAt(service, a.cand.phone), sendAsIsAdmin(service, st.sendAs)]);
+  const verdict = autoSendVerdict({
+    masterOn: st.masterOn, intentsOn: st.intents, dailyCap: st.dailyCap, usedToday: counts.queuedToday,
+    draft: draftFactsFromPlan(a.plan, { kind: "draft", text: a.w.reply, problems: a.w.problems, usedFallback: a.w.usedFallback }),
+    latestInbound: a.cand.body ?? "", threadHard, digits: a.cand.phone, lead: a.lead, suppressed: a.input.suppressed,
+    personActiveAt: active, senderIsAdmin: admin, nowMs,
+  });
+  const record = async (autoSend: Record<string, unknown>, extra: Record<string, unknown> = {}) =>
+    service.from("ai_reply_drafts").update({ why: { ...a.why, autoSend }, ...extra, updated_at: new Date().toISOString() })
+      .eq("id", a.draftId).eq("status", "pending").select("id").maybeSingle();
+  const key = autoSendKey(a.plan);
+  if (!verdict.send) { await record({ send: false, reason: verdict.reason, intent: key }); return; }
+  const [replyHours, countrySettings] = await Promise.all([loadReplyHours(service), loadCountrySettings(service)]);
+  const window = replyWindowFor("whatsapp", a.cand.phone, { replyHours, countrySettings });
+  const now = new Date(nowMs);
+  const at = autoSendAt({ nowMs, inboundAtMs: Date.parse(a.cand.inbound_at), windowOpenNow: replyWindowOpen(window, now),
+    nextOpenMs: nextWindowOpenAt(window, now).getTime(), delayMs: autoSendDelayMs() });
+  if (at === null) { await record({ send: false, reason: "window_closing", intent: key }); return; }
+  const { data: row, error } = await service.from("inbox_scheduled_sends").insert({
+    user_id: a.cand.user_id, lead_id: a.cand.lead_id, phone: a.cand.phone, channel: "whatsapp", kind: "text", body: a.w.reply,
+    send_at: new Date(at).toISOString(), tz: window.tz, status: "scheduled", queued_by: st.sendAs, checked_at: now.toISOString(),
+    ai_draft_id: a.draftId, ai_intent: key,
+  }).select("id").single();
+  if (error || !row) { await record({ send: false, reason: "queue_failed", intent: key }); return; }
+  const linked = await record({ send: true, at: new Date(at).toISOString(), intent: key, scheduledId: row.id, threadHard: null }, { auto_send_id: row.id });
+  /* The draft moved on (a person acted in the meantime): the queued row must not go. */
+  if (!linked.data) await stopAutoSend(service, row.id, "ai_draft_closed");
+}
+
 /* ───────────────────────── tick (cron) ───────────────────────── */
 
 async function settleOpenClaims(service: Service) {
@@ -310,7 +366,8 @@ async function settleOpenClaims(service: Service) {
     }
   }
   // Someone answered by hand: the open row is done (the Inbox already hides it; this keeps the table honest).
-  const { data: open } = await service.from("ai_reply_drafts").select("id, phone, inbound_at").eq("status", "pending").limit(200);
+  /* A draft whose automatic reply is waiting or going is settled by that row (trg_ai_auto_send_row), never here. */
+  const { data: open } = await service.from("ai_reply_drafts").select("id, phone, inbound_at").eq("status", "pending").is("auto_send_id", null).limit(200);
   for (const d of (open ?? []) as Array<{ id: string; phone: string; inbound_at: string }>) {
     const { data: ans } = await service.from("whatsapp_messages").select("id").eq("phone", d.phone).eq("direction", "outbound")
       .gt("created_at", d.inbound_at).in("status", SENT_OR_SIMULATED).limit(1);
@@ -328,9 +385,14 @@ async function handleTick(service: Service) {
   const { data: cands, error } = await service.rpc("ai_reply_draft_candidates", { p_limit: TICK_MAX_ROWS });
   if (error) throw error;
   const out: Array<{ inbound: string; kind: string; reason?: string | null }> = [];
+  let autoState: AutoSendState | null = null;
   for (const c of (cands ?? []) as Array<{ inbound_id: string; user_id: string; phone: string; lead_id: string | null; inbound_at: string; body: string | null; message_type: string | null }>) {
     if (Date.now() - started > 90_000) break;
     if (!c.lead_id) continue; // an unmatched number: no lead (the Inbox shows it as Unassigned)
+    /* A newer message from them: an automatic reply still waiting on this conversation is dropped first (its draft is
+       superseded just below). The drain would drop it too; this makes it immediate. */
+    await service.from("inbox_scheduled_sends").update({ status: "cancelled", cancel_reason: "ai_replied_since", updated_at: new Date().toISOString() })
+      .eq("phone", c.phone).not("ai_draft_id", "is", null).in("status", ["scheduled", "held"]);
     await service.from("ai_reply_drafts").update({ status: "superseded", updated_at: new Date().toISOString() })
       .eq("user_id", c.user_id).eq("phone", c.phone).eq("status", "pending");
     // THE CLAIM: one row per inbound (unique index) and one open row per conversation (partial unique index).
@@ -375,11 +437,16 @@ async function handleTick(service: Service) {
       } else {
         if (plan.label) await undoReplied(service, lead, thread.filter((m) => m.created_at <= c.inbound_at));
         const w = await writeDraft(service, ctx, { temperature: 0.5, userId: c.user_id, triggerSource: "auto" });
+        const why = whyOf(ctx, findingsNote, w, w.spentUsd, w.calls);
         await service.from("ai_reply_drafts").update({
-          kind: "draft", status: "pending", draft_text: w.reply, why: whyOf(ctx, findingsNote, w, w.spentUsd, w.calls),
+          kind: "draft", status: "pending", draft_text: w.reply, why,
           model: w.model, prompt_tokens: w.promptTokens, completion_tokens: w.completionTokens, cost_usd: w.spentUsd, model_calls: w.calls,
           error: w.modelError, updated_at: now,
         }).eq("id", id);
+        // LEVEL 2: queue it to send by itself, or leave it for approval (the default). Never throws into the tick.
+        autoState ??= await loadAutoSendState(service);
+        await maybeQueueAutoSend(service, autoState, { draftId: id, cand: c, lead, input, plan, why, w }).catch((e) =>
+          console.error("[ai-reply-drafts] auto-send check failed:", String((e as { message?: unknown })?.message ?? e).slice(0, 200)));
       }
       out.push({ inbound: c.inbound_id, kind: decision.kind, reason: "reason" in decision ? decision.reason : null });
     } catch (e) {
@@ -429,6 +496,10 @@ async function handleClaim(service: Service, actor: Actor, body: Record<string, 
   }
   const finalText = str(body.final_text);
   if (!finalText) return json({ ok: false, error: "empty_message" }, 400);
+  // Level 2: a person approving wins over a waiting automatic reply — unless the AI is already sending it.
+  if (d.auto_send_id && !(await stopAutoSend(service, d.auto_send_id, "ai_person_approved"))) {
+    return json({ ok: false, error: "already_claimed", detail: "The AI is sending this reply right now." });
+  }
   // ⛔ THE ONCE-ONLY GATE: one conditional write; a second click, a second tab or a second person loses here.
   const { data: won } = await service.from("ai_reply_drafts")
     .update({ status: "sending", claimed_by: actor.id, claimed_at: new Date().toISOString(), final_text: finalText, updated_at: new Date().toISOString() })
@@ -463,6 +534,9 @@ async function handleComplete(service: Service, actor: Actor, body: Record<strin
 async function handleDiscard(service: Service, actor: Actor, body: Record<string, unknown>) {
   const r = await loadDraftFor(service, actor, str(body.draft_id));
   if (!r.ok) return r.res;
+  if (r.d.auto_send_id && !(await stopAutoSend(service, r.d.auto_send_id, "ai_person_discarded"))) {
+    return json({ ok: false, error: "not_open", status: "sending", detail: "The AI is sending this reply right now." });
+  }
   const { data: done } = await service.from("ai_reply_drafts")
     .update({ status: "discarded", discarded_by: actor.id, discarded_at: new Date().toISOString(), updated_at: new Date().toISOString() })
     .eq("id", r.d.id).eq("status", "pending").select("id").maybeSingle();
@@ -492,6 +566,9 @@ async function handleRegenerate(service: Service, actor: Actor, body: Record<str
   if (!inbound) return json({ ok: false, error: "inbound_not_found" }, 404);
   const { ctx, findingsNote } = await buildContext(service, lead, thread, inbound);
   if (ctx.plan.stop || ctx.plan.noDraft) return json({ ok: false, error: "no_draft", detail: "The playbook has no reply for this one. Answer it yourself." });
+  if (d.auto_send_id && !(await stopAutoSend(service, d.auto_send_id, "ai_person_regenerated"))) {
+    return json({ ok: false, error: "not_open", detail: "The AI is sending this reply right now." });
+  }
   const pd = await personDraft(service, actor, d.lead_id, ctx, str(body.avoid) || d.draft_text);
   if (!pd.ok) return pd.res;
   const w = pd.w;
@@ -530,6 +607,11 @@ async function handleDraft(service: Service, actor: Actor, body: Record<string, 
   const plan = pickMove(input); ctx.plan = plan;
   const { data: existing } = await service.from("ai_reply_drafts").select("id, status, cost_usd, model_calls, prompt_tokens, completion_tokens, draft_text").eq("inbound_message_id", inbound.id).maybeSingle();
   if (existing && (existing.status === "sending" || existing.status === "generating")) return json({ ok: false, error: "busy", detail: "A draft is being written or sent on this conversation already." });
+  // Level 2: a person drafting takes the conversation back from any automatic reply still waiting (one being sent wins).
+  const { data: going } = await service.from("inbox_scheduled_sends").select("id").eq("phone", convPhone).not("ai_draft_id", "is", null).eq("status", "sending").limit(1);
+  if ((going ?? []).length) return json({ ok: false, error: "busy", detail: "The AI is sending a reply on this conversation right now." });
+  await service.from("inbox_scheduled_sends").update({ status: "cancelled", cancel_reason: "ai_person_drafted", updated_at: new Date().toISOString() })
+    .eq("phone", convPhone).not("ai_draft_id", "is", null).in("status", ["scheduled", "held"]);
   // Free the conversation's one open slot: any other open row is superseded first.
   await service.from("ai_reply_drafts").update({ status: "superseded", updated_at: new Date().toISOString() }).eq("user_id", access.bookUserId).eq("phone", convPhone).eq("status", "pending").neq("inbound_message_id", inbound.id);
   let row: Record<string, unknown>;
@@ -653,8 +735,44 @@ async function handleSettings(service: Service, actor: Actor, body: Record<strin
     const { error } = await service.from("whatsapp_outreach_state").update(patch).eq("id", 1);
     if (error) throw error;
   }
-  const { data } = await service.from("whatsapp_outreach_state").select("ai_handles_replies, ai_handles_replies_since").eq("id", 1).maybeSingle();
-  return json({ ok: true, enabled: data?.ai_handles_replies === true, since: data?.ai_handles_replies_since ?? null });
+  const { data } = await service.from("whatsapp_outreach_state").select("ai_handles_replies, ai_handles_replies_since, ai_auto_send_intents, ai_auto_send_daily_cap").eq("id", 1).maybeSingle();
+  return json({ ok: true, enabled: data?.ai_handles_replies === true, since: data?.ai_handles_replies_since ?? null, auto_send: autoSendSettings(data) });
+}
+
+function autoSendSettings(data: Record<string, unknown> | null | undefined) {
+  return {
+    intents: cleanAutoSendKeys(data?.ai_auto_send_intents),
+    daily_cap: Number.isInteger(data?.ai_auto_send_daily_cap) ? data!.ai_auto_send_daily_cap as number : AUTO_SEND_DEFAULT_DAILY_CAP,
+    max_daily_cap: AUTO_SEND_MAX_DAILY_CAP,
+    choices: AUTO_SEND_CHOICES,
+  };
+}
+
+/** LEVEL 2 switches (admin): which reply types send by themselves, and the daily cap. Unknown types are dropped, never
+ *  stored. The admin who saves is the account automatic replies are sent as (re-checked as admin on every send). A type
+ *  switched off cancels its waiting replies (trigger trg_ai_auto_send_switch). */
+async function handleSetAutoSend(service: Service, actor: Actor, body: Record<string, unknown>) {
+  if (actor.role !== "admin") return json({ ok: false, error: "admin_only" }, 403);
+  const patch: Record<string, unknown> = { ai_auto_send_by: actor.id, updated_at: new Date().toISOString() };
+  if ("intents" in body) patch.ai_auto_send_intents = cleanAutoSendKeys(body.intents);
+  if ("daily_cap" in body) {
+    const cap = cleanDailyCap(body.daily_cap);
+    if (cap === null) return json({ ok: false, error: "bad_daily_cap", detail: `The daily limit must be a whole number from 0 to ${AUTO_SEND_MAX_DAILY_CAP}.` }, 400);
+    patch.ai_auto_send_daily_cap = cap;
+  }
+  const { error } = await service.from("whatsapp_outreach_state").update(patch).eq("id", 1);
+  if (error) throw error;
+  const { data } = await service.from("whatsapp_outreach_state").select("ai_auto_send_intents, ai_auto_send_daily_cap").eq("id", 1).maybeSingle();
+  return json({ ok: true, auto_send: autoSendSettings(data) });
+}
+
+/** "Don't send automatically": the person working the lead stops a waiting automatic reply; the draft stays for approval. */
+async function handleStopAutoSend(service: Service, actor: Actor, body: Record<string, unknown>) {
+  const r = await loadDraftFor(service, actor, str(body.draft_id));
+  if (!r.ok) return r.res;
+  if (!r.d.auto_send_id) return json({ ok: true, stopped: true });
+  const stopped = await stopAutoSend(service, r.d.auto_send_id, "ai_person_stopped");
+  return stopped ? json({ ok: true, stopped: true }) : json({ ok: false, error: "already_sending", detail: "The AI is sending this reply right now." });
 }
 
 Deno.serve(async (req) => {
@@ -672,6 +790,8 @@ Deno.serve(async (req) => {
     if (!who.ok) return json(refusalBody(who), who.status);
     if (action === "settings") return await handleSettings(service, who.actor, body, false);
     if (action === "set_enabled") return await handleSettings(service, who.actor, body, true);
+    if (action === "set_auto_send") return await handleSetAutoSend(service, who.actor, body);
+    if (action === "stop_auto_send") return await handleStopAutoSend(service, who.actor, body);
     if (action === "claim") return await handleClaim(service, who.actor, body);
     if (action === "complete") return await handleComplete(service, who.actor, body);
     if (action === "discard") return await handleDiscard(service, who.actor, body);

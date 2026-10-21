@@ -8,8 +8,10 @@ import { AiDraftOutcomes } from '@/components/AiDraftOutcomes';
 /* "AI HANDLES REPLIES" — the on/off switch (2026-10-11, Paul). Default OFF. Admin only: a non-admin's read is
    refused and the switch stays hidden. It lives beside "When a prospect replies" because that is where the reply
    automation already lives (there is no Settings page).
-   ⛔ ON NEVER MEANS SENDING. On = a draft is written for each new WhatsApp reply and waits for a person to press
-   Approve & send. Replies from before it was switched on are never drafted. */
+   ⛔ ON ALONE NEVER MEANS SENDING. On = a draft is written for each new WhatsApp reply and waits for a person to press
+   Approve & send. Replies from before it was switched on are never drafted.
+   LEVEL 2 (2026-10-21): a reply type switched on under Draft outcomes → "Sends by itself" (all off when shipped) may go
+   on its own (src/lib/aiAutoSend.ts). This switch is the MASTER kill switch: off cancels every automatic reply waiting. */
 export function AiRepliesToggle() {
   const { toast } = useToast();
   const [visible, setVisible] = useState(false);
@@ -36,8 +38,8 @@ export function AiRepliesToggle() {
       toast({
         title: r.enabled ? 'AI handles replies: on' : 'AI handles replies: off',
         description: r.enabled
-          ? 'New WhatsApp replies get a draft marked "Needs approving". Nothing is sent until someone presses Approve & send.'
-          : 'No new drafts will be written. Drafts already waiting stay until they are sent or discarded.',
+          ? 'New WhatsApp replies get a draft marked "Needs approving". Only the reply types switched on under Draft outcomes → Sends by itself go out on their own; everything else waits for Approve & send.'
+          : 'No new drafts will be written, and any automatic reply still waiting was cancelled. Drafts already waiting stay until they are sent or discarded.',
       });
     } catch (e) {
       setOn(prev);
@@ -50,7 +52,7 @@ export function AiRepliesToggle() {
   return (
     <div className="flex shrink-0 items-center gap-1">
     <label className="flex h-9 shrink-0 items-center gap-2 whitespace-nowrap text-sm font-medium text-muted-foreground"
-      title="When on, each new WhatsApp reply gets an AI draft to approve. It never sends by itself.">
+      title="When on, each new WhatsApp reply gets an AI draft to approve. Only reply types switched on under Draft outcomes send by themselves. Off stops everything.">
       <Sparkles className="h-4 w-4 text-violet-600 dark:text-violet-300" />
       AI handles replies
       <Switch checked={on} disabled={saving} onCheckedChange={(v) => void flip(v)} aria-label="AI handles replies" data-testid="ai-replies-switch" />

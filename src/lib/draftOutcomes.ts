@@ -78,3 +78,25 @@ export function summariseDraftOutcomes(rows: DraftOutcomeRow[] | null | undefine
 export function pct(v: number | null): string {
   return v == null ? '—' : `${Math.round(v * 100)}%`;
 }
+
+/* LEVEL 2: the automatic replies (outcome 'auto_sent', one writer: trg_ai_reply_draft_outcome), per reply type, from
+   ai_auto_send_summary() — today = the London day. */
+export interface AutoSentRow { intent: string; today: number; in_period: number; waiting: number }
+export interface AutoSentSummary {
+  today: number;
+  inPeriod: number;
+  waiting: number;
+  /** most sent today first, then in the period */
+  intents: Array<{ intent: string; today: number; inPeriod: number; waiting: number }>;
+}
+
+export function summariseAutoSent(rows: AutoSentRow[] | null | undefined): AutoSentSummary {
+  const intents = (rows ?? []).map((r) => ({ intent: r.intent, today: n(r.today), inPeriod: n(r.in_period), waiting: n(r.waiting) }))
+    .sort((a, b) => b.today - a.today || b.inPeriod - a.inPeriod || a.intent.localeCompare(b.intent));
+  return {
+    today: intents.reduce((t, i) => t + i.today, 0),
+    inPeriod: intents.reduce((t, i) => t + i.inPeriod, 0),
+    waiting: intents.reduce((t, i) => t + i.waiting, 0),
+    intents,
+  };
+}
