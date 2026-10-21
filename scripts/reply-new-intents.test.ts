@@ -54,6 +54,7 @@ const CASES: Array<{ intent: PlaybookIntent; thread: MoveThreadMsg[]; evidence?:
   { intent: 'where_based', label: '"are you uk based?"', thread: later(them("Are you uk based I've been with so many companies all promises the world")) },
   { intent: 'call_now', label: '"you free now?"', thread: later(them('You free now?')) },
   { intent: 'sorry_wrong_day', label: '"it\'s a Sunday mate"', thread: later(them("It's a Sunday mate have a day off")) },
+  { intent: 'acknowledge_wait', label: '"Will ring later"', thread: later(them('Will ring later')) },
   { intent: 'they_chased', label: '"just wanted to follow up" three days on', thread: [opener, them('Hello! Yes it is', -4320), them('Hellooo, just wanted to follow up', 0)] },
 ];
 
@@ -108,6 +109,12 @@ console.log("2. Paul's wording (2026-10-21)");
   const refs = pm(later(them('You got references / a website to look at?')));
   ok(refs.intent === 'proof_request' && refs.needsYou?.reason === 'cant_send', 'references (we cannot send them): Needs you, the proof line as the suggested text');
   ok(pm(later(them('Can you send me screenshots as evidence?'))).needsYou === null, 'screenshots of the search (the report has them): a draft');
+}
+
+{
+  ok(draftOf(later(them('Will ring later'))).text === 'No problem, speak soon.', 'acknowledge_wait: "Will ring later" → "No problem, speak soon." (Paul, R085)');
+  for (const t of ["I'll give you a call tomorrow", "I'll ring you after 5"]) ok(pm(later(them(t))).intent === 'acknowledge_wait', `acknowledge_wait: "${t}"`);
+  ok(pm(later(them("I'm busy at the moment, call me later"))).intent === 'busy' && pm(later(them('Can I call you ?'))).intent === 'call_now', '…"call me later" stays busy, "can I call you?" stays call_now');
 }
 
 console.log('3. the Needs-you cases are never auto-drafted, but "Draft reply" still has the suggested text');

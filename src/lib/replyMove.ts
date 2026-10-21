@@ -739,6 +739,8 @@ export function pickMove(i: MoveInput): MovePlan {
     return g(plan({ move: 'unsure', read: 'third_party', autoDraft: false, noDraft: true, needsYou: flag('third_party'), note: 'They gave another business or person: run the check on that one.' }));
   }
   if (RE.callNow.test(text)) return g(fromPlaybook('call_now', { needsYou: flag('call_now'), autoDraft: false, note: 'They want to talk now. Only you know if you are free.' }));
+  /* "Will ring later" (Paul, 2026-10-21): they will call us, so never the busy "I'll call then" line. */
+  if (RE.willRing.test(text) && !/\?/.test(text)) return g(fromPlaybook('acknowledge_wait', { note: 'They said they will call you.' }));
   const checkBack = (): MovePlan => {
     const today = new Date(nowMs);
     const end = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate() + REMEASURE_WEEKS_STANDARD * 7));

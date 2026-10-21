@@ -22,12 +22,12 @@ export type PlaybookIntent =
   /* Reply recon 2026-10-20 §5b, Paul's wording 2026-10-21 (NEW_INTENTS below). */
   | 'thinks_customer' | 'straight_answer_then_pitch' | 'wrong_trade' | 'moved_area' | 'closed_retired' | 'fully_booked'
   | 'word_of_mouth' | 'already_show_up' | 'new_site_being_built' | 'proof_request' | 'explain_here' | 'pay_on_results'
-  | 'ads_question' | 'do_it_myself' | 'where_based' | 'call_now' | 'sorry_wrong_day' | 'they_chased';
+  | 'ads_question' | 'do_it_myself' | 'where_based' | 'call_now' | 'sorry_wrong_day' | 'they_chased' | 'acknowledge_wait';
 
 /** The 18 intents added from the reply recon (2026-10-21). scripts/reply-new-intents.test.ts has a case for each. */
 export const NEW_INTENTS: readonly PlaybookIntent[] = ['thinks_customer', 'straight_answer_then_pitch', 'wrong_trade', 'moved_area', 'closed_retired',
   'fully_booked', 'word_of_mouth', 'already_show_up', 'new_site_being_built', 'proof_request', 'explain_here', 'pay_on_results', 'ads_question',
-  'do_it_myself', 'where_based', 'call_now', 'sorry_wrong_day', 'they_chased'];
+  'do_it_myself', 'where_based', 'call_now', 'sorry_wrong_day', 'they_chased', 'acknowledge_wait'];
 /** The new intents that are always Needs you (Paul, 2026-10-21): the line is only the suggested text a person may send. */
 export const NEEDS_YOU_INTENTS: readonly PlaybookIntent[] = ['pay_on_results', 'call_now', 'wrong_trade'];
 
@@ -132,6 +132,8 @@ export const PLAYBOOK: Record<PlaybookIntent, PlaybookEntry> = {
   sorry_wrong_day: { fixed: true, line: "Fair enough, sorry for the message. I'll leave you in peace." },
   /* Code-built: this apology, then the pitch (replyMove.chasedPitch). */
   they_chased: { fixed: true, line: 'Sorry for the slow reply.' },
+  /* "Will ring later" (Paul, 2026-10-21, R085): THEY will call us. No question, never the busy "I'll call then". */
+  acknowledge_wait: { fixed: true, line: 'No problem, speak soon.' },
 };
 
 /** examples / proof_request when no search is on record: offer to run it, never "the report I did". */
@@ -252,6 +254,8 @@ export const RE = {
   /** They want to talk now / call us ("you free now?", "can I call you?", "are you free to call?"). */
   callNow: /\b(?:are\s+)?(?:you|u)\s+free\s+(?:now|to\s+(?:talk|call|chat|speak))\b|\bcan\s+i\s+(?:call|ring|phone)\s+(?:you|u)\b|\bshall\s+i\s+(?:call|ring)\s+(?:you|u)\b|\bcan\s+(?:you|u)\s+(?:talk|speak|call)\s+(?:now|right\s+now)\b|\bfree\s+for\s+a\s+(?:call|chat)\s+now\b/i,
   sorryWrongDay: /\b(?:it'?s|its)\s+(?:a\s+)?(?:sunday|saturday|bank\s+holiday|christmas|boxing\s+day)\b|\bhave\s+a\s+day\s+off\b|\bon\s+the\s+booze\b|\bat\s+this\s+time\s+of\s+(?:night|the\s+morning)\b|\bon\s+a\s+(?:sunday|saturday)\b.{0,20}\breally\b/i,
+  /** They will call US ("Will ring later", "I'll give you a call tomorrow"). A question ("can I call you?") is callNow. */
+  willRing: /(?:\b(?:i'?ll|i\s+will|we'?ll|we\s+will|i'?m\s+going\s+to|im\s+going\s+to)|^\W*will)\s+(?:give\s+(?:you\s+|u\s+)?a\s+(?:ring|call|bell)|ring|call|phone|bell)\b/i,
   /** They chased us after we did not answer ("just wanted to follow up", "??", "any update?"). */
   chase: /\b(?:just\s+)?(?:wanted\s+to\s+)?follow(?:ing)?\s+up\b|\bany\s+updates?\b|^\W*\?+\W*$|\bdid\s+(?:you|u)\s+get\s+my\s+(?:last\s+)?message\b|\bstill\s+there\b|\bhel+o+\s*\?|\bhel+o{3,}\b/i,
   /** Someone else's business or number given ("this is the number for Leon's locks", "I'll give you my son's details"). */
