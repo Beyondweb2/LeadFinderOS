@@ -39,12 +39,29 @@ console.log('2b. Nola: Google AI counts (Paul, 2026-10-20)');
   const ctx = { named: { businessName: BIZ, trade: 'Driving instructors', town: 'Halstead' }, town: 'Halstead', trade: 'Driving instructors' };
   const now = scoreHookRun(state, rows, { ...ctx, scoringMethod: scoringMethodFor('2026-10-19T16:03:39Z') });
   const share = namedShareOf(now);
-  ok(now.scored.percent === 33 && share?.named === 1 && share?.total === 3, `Nola: the audit screen's score is 1 of 3 (33%), and that is the count the rule reads (${share?.named} of ${share?.total})`);
-  ok(mayClaimNamedInstead(share?.named, share?.total), 'Nola: 1 of 3 → the "named others instead" templates are allowed');
-  ok(!mayClaimNamedInstead(now.named, now.valid) && now.valid === 2, 'the old two-engine count (1 of 2) would have refused her: that is the bug');
+  ok(now.scored.percent === 33 && share?.named === 0 && share?.total === 2, `Nola: ChatGPT is not counted (2026-10-21) — Gemini 0/1 + Google AI 0/1 = 0 of 2 (${share?.named} of ${share?.total})`);
+  ok(mayClaimNamedInstead(share?.named, share?.total), 'Nola: still allowed');
   const old = namedShareOf(scoreHookRun(state, rows, { ...ctx, scoringMethod: scoringMethodFor('2026-10-18T12:00:00Z') }));
-  ok(old?.named === 1 && old?.total === 2, 'an audit from before Google AI joined the score keeps its own two-engine score (like for like)');
+  ok(old?.named === 0 && old?.total === 1, 'an audit from before Google AI joined the score: Gemini alone (ChatGPT never counted)');
   ok(namedShareOf(null) === null && namedShareOf({ complete: false, scored: { named: 0, expected: 3 } }) === null, 'no score, or an incomplete one → no count (the claim is never allowed on absence)');
+}
+
+console.log('2c. GSI Driving School: ChatGPT is not counted (Paul, 2026-10-21)');
+{
+  /* GSI Driving School, live audit 2026-10-21: two questions. ChatGPT named them in both, Gemini in one, Google showed an AI answer
+     once and did not name them. Counted with ChatGPT this read 3 of 5 and lost "AI is recommending your competitors instead". */
+  const BIZ = 'GSI Driving School';
+  const cell = (named: boolean) => ({ named, self_named: named, answer_text: named ? `Try ${BIZ} in Woking.` : "Try PassMeFast, LPOD Academy or driveJohnson's.", competitors: named ? [] : ['PassMeFast', 'LPOD Academy', "driveJohnson's"], citations: [] });
+  const state = { version: 2, engines: ['chatgpt', 'gemini'], planned: ['driving instructors in Woking UK', 'emergency driving lessons for new drivers in Woking UK', 'best driving school in Woking UK'], sequential: true, next_index: 2, executed: 2, stop_reason: 'not_named' } as HookStateV2;
+  const rows = [
+    { question: state.planned[0], status: 'done', engines: ['chatgpt', 'gemini'], result: { chatgpt: cell(true), gemini: cell(true), [AI_OVERVIEW_STAMP_KEY]: 'not_shown' } },
+    { question: state.planned[1], status: 'done', engines: ['chatgpt', 'gemini'], result: { chatgpt: cell(true), gemini: cell(false), ai_overview: cell(false), [AI_OVERVIEW_STAMP_KEY]: 'shown' } },
+  ];
+  const ctx = { named: { businessName: BIZ, trade: 'Driving instructors', town: 'Woking' }, town: 'Woking', trade: 'Driving instructors' };
+  const sc = scoreHookRun(state, rows, { ...ctx, scoringMethod: scoringMethodFor('2026-10-21T08:10:00Z') });
+  const share = namedShareOf(sc);
+  ok(share?.named === 1 && share?.total === 3, `GSI: Gemini 1/2 + Google AI 0/1 = 1 of 3, ChatGPT's 2/2 left out (${share?.named} of ${share?.total})`);
+  ok(mayClaimNamedInstead(share?.named, share?.total), 'GSI: 1 of 3 → the full pitch / claim templates are allowed');
 }
 
 console.log('3. the sweep: a body that claims it is in the set');

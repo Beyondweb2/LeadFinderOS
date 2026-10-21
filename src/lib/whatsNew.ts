@@ -22,6 +22,19 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-21-first-reply-and-visible-half', date: '2026-10-21', title: 'AI replies: "Yes" then "How can I help" gets the pitch; Visible means named in more than half', audience: 'all',
+    body: 'A prospect who confirms and then asks how they can help, even an hour later, now gets the first-reply pitch instead of Needs you. ChatGPT no longer counts towards "named too often".',
+    report: {
+      added: ['Admin: a second Visible setting, how often each engine must name the business (more than half by default, two-thirds, or every answer).'],
+      changed: [
+        'The first reply means "no pitch sent yet", not "within 5 minutes". Two short messages like "Yes" and "How can I help" an hour apart get the pitch.',
+        'A plain "yes" or "how can I help" is never "No playbook reply fits" any more.',
+        'The "named too often" check counts only Gemini and Google AI, never ChatGPT. More leads get the full pitch.',
+        'Visible is judged per engine: named in more than half of that engine\'s answers. 1 of 1 and 2 of 2 are Visible, 1 of 2 is not.',
+      ],
+      removed: [],
+      effect: 'Fewer replies land in Needs you for no reason, and a lead only skips the pitch when Gemini or Google AI clearly recommends them already. Nothing is sent by this change.',
+    } },
   { id: '2026-10-21-status-and-visible', date: '2026-10-21', title: 'Lead statuses follow the messages, and a new "Visible" flag', audience: 'all',
     body: 'Replied, You replied and Contacted now update from the messages themselves, the moment one is stored. Leads that AI already names are marked Visible and get no pitch.',
     report: {

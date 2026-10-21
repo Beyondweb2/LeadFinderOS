@@ -4,8 +4,9 @@
    cancelled, and its replies are not flagged Needs you. A reversible FLAG, not a pipeline stage: a later audit that no longer
    names them removes it and the normal flow resumes.
    ⛔ ChatGPT never counts. "No AI answer shown" (Google AI with no answer) is never "named".
-   ⛔ An engine "names them" when it named them in EVERY answer it gave — the hook asks one question, so that is its single
-      answer; on an older multi-question audit, a partial naming is not Visible (the pitch still has something true to say).
+   ⛔ PER ENGINE, MORE THAN HALF (Paul, 2026-10-21): Gemini and Google AI are judged SEPARATELY; an engine "names them" when it
+      named them in more than half of ITS OWN answers (the threshold is a setting, VISIBLE_SHARES; default 'half'). 1/1 and 2/2
+      are Visible; 1/2 is not (GSI Driving School gets the pitch); 0 answers is never named.
    ⛔ The flag is written ONLY by the database function apply_lead_visible, called by ai-reply-drafts (judgeLeadVisible).
    Counts are the SAME ruler as the Inbox engine chips (ai_audit_queue gemini_* / overview_*, done rows; engineScores.ts).
    Pure and edge-reachable: no imports, no Deno, no DOM. */
@@ -29,6 +30,22 @@ export const VISIBLE_NO_PITCH_DETAIL = 'AI already names this business (Visible)
 /** The ai_reply_drafts.reason on a reply skipped because the lead is Visible. */
 export const VISIBLE_SKIP_REASON = 'visible';
 
+/** The threshold setting (whatsapp_outreach_state.visible_min_share): an engine names them when named / answers is MORE THAN
+ *  this share of its answers. */
+export const VISIBLE_SHARES = ['half', 'two_thirds', 'all'] as const;
+export type VisibleShare = (typeof VISIBLE_SHARES)[number];
+export const DEFAULT_VISIBLE_SHARE: VisibleShare = 'half';
+export const VISIBLE_SHARE_LABELS: Record<VisibleShare, string> = {
+  half: 'in more than half of its answers',
+  two_thirds: 'in more than two-thirds of its answers',
+  all: 'in every answer',
+};
+export function parseVisibleShare(v: unknown): VisibleShare {
+  return (VISIBLE_SHARES as readonly string[]).includes(String(v)) ? (v as VisibleShare) : DEFAULT_VISIBLE_SHARE;
+}
+/** What a lead was judged under (outreach_leads.ai_visible_checked_rule): a change of either setting re-judges it. */
+export const visibleRuleKey = (rule: VisibleRule, share: VisibleShare): string => `${rule}:${share}`;
+
 /** Audits this far back are re-judged by the tick (a flagged lead is always re-judged when the rule changes). */
 export const VISIBLE_RECHECK_DAYS = 30;
 
@@ -38,16 +55,19 @@ export function parseVisibleRule(v: unknown): VisibleRule {
 
 export interface EngineCount { named: number; answers: number }
 
-/** Named in every answer that engine gave; no answer → not named. */
-export function engineNamesThem(c: EngineCount | null | undefined): boolean {
-  return !!c && c.answers > 0 && c.named >= c.answers;
+/** Named in more than the threshold share of that engine's OWN answers; no answer → not named. Integer maths, no rounding. */
+export function engineNamesThem(c: EngineCount | null | undefined, share: VisibleShare = DEFAULT_VISIBLE_SHARE): boolean {
+  if (!c || !(c.answers > 0) || !(c.named > 0)) return false;
+  if (share === 'all') return c.named >= c.answers;
+  if (share === 'two_thirds') return c.named * 3 > c.answers * 2;
+  return c.named * 2 > c.answers;
 }
 
 /** Is the lead Visible under this rule, from its newest audit's Gemini and Google AI counts? */
-export function isVisible(s: { gemini: EngineCount | null; overview: EngineCount | null }, rule: VisibleRule): boolean {
+export function isVisible(s: { gemini: EngineCount | null; overview: EngineCount | null }, rule: VisibleRule, share: VisibleShare = DEFAULT_VISIBLE_SHARE): boolean {
   if (rule === 'off') return false;
-  const g = engineNamesThem(s.gemini);
-  const o = engineNamesThem(s.overview);
+  const g = engineNamesThem(s.gemini, share);
+  const o = engineNamesThem(s.overview, share);
   return rule === 'both' ? g && o : g || o;
 }
 

@@ -22,7 +22,7 @@ import { guardAction } from "../_shared/protection.ts";
 import { answeredAfter, autoSendCounts, loadAutoSendState, personActiveAt, sendAsIsAdmin } from "../_shared/ai-auto-send.ts";
 import { autoSendVerdict, draftFactsFromRow, theirMessagesSinceUs } from "../../../src/lib/aiAutoSend.ts";
 
-const BUILD_ID = "2026-10-21c-inbox-reply-mode";
+const BUILD_ID = "2026-10-21d-named-share-no-chatgpt";
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-cron-secret",
