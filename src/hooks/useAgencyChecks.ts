@@ -71,11 +71,14 @@ export function useAgencyChecks(items: { websiteUrl?: string | null; hasOwnWebsi
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key]);
 
-  const done = domains.filter((d) => rows.has(d)).length;
-  return {
+  /* ⛔ ONE OBJECT PER STATE CHANGE (2026-10-21): this used to return a fresh object on every render, so LeadsTable's
+     filteredLeads (which depends on it) was rebuilt every render and its onShownChange effect re-set the page's state
+     forever — "Maximum update depth exceeded" the moment a search returned rows. Only rows / checking / the domain
+     set change what it says. */
+  return useMemo((): AgencyChecks => ({
     rowFor: (w) => { const d = agencyCheckDomain(w); return d ? rows.get(d) ?? null : null; },
     isChecking: (w) => { const d = agencyCheckDomain(w); return !!d && checking.has(d); },
-    progress: { done, total: domains.length },
+    progress: { done: domains.filter((d) => rows.has(d)).length, total: domains.length },
     pending: checking.size,
-  };
+  }), [rows, checking, domains]);
 }

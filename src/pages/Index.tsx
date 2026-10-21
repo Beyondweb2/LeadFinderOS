@@ -41,6 +41,7 @@ import { useSubscription } from '@/hooks/useSubscription';
 import { lookupIdentities, useSalesActions, useTeamDirectory } from '@/hooks/useSalesCrm';
 import { refusalText } from '@/lib/salesCrm';
 import { NotReadyToSellBanner } from '@/components/NotReadyToSellBanner';
+import { keepIfSame } from '@/lib/shownRows';
 import { MANY_MODE_VALUE, MANY_TOWNS_PARAM, parseTownList } from '@/lib/manyTowns';
 import { ManyTownsStatus } from '@/components/ManyTownsStatus';
 import { useMyReadiness, type MyReadiness } from '@/hooks/useMyReadiness';
@@ -440,6 +441,7 @@ const Index = () => {
   /* The rows the results table is showing (after every filter). Find emails and Add all with emails act on THESE,
      never on a lead the person has filtered out. null until the table reports (then every result). */
   const [shownReported, setShownReported] = useState<Lead[] | null>(null);
+  const reportShown = useCallback((rows: Lead[]) => setShownReported((prev) => keepIfSame(prev, rows)), []);
   const shownLeads = useMemo(() => {
     if (!shownReported) return leads;
     const ids = new Set(leads.map((l) => l.id));
@@ -762,7 +764,7 @@ const Index = () => {
                   cost (find-emails free) and gating are unchanged. */}
               <LeadsTable
                 leads={leads}
-                onShownChange={setShownReported}
+                onShownChange={reportShown}
                 onExport={canExport ? (shown) => void loggedExport(() => exportToCsv(shown), shown.length, 'results') : undefined}
                 onAddToOutreach={handleRowAdd}
                 addCampaignTooltip={addCampaignTooltip}
