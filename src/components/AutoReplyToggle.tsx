@@ -34,7 +34,7 @@ import { effectiveFirstReplyMode } from '@/lib/firstReplyAutomation';
  *  when I thought it was only measuring", and a switch beside a modifier lets the two be read
  *  separately — the eye takes in "on" and stops. Three buttons where exactly one is lit can only
  *  be read as one answer, and the lit one either says the word "send" or it does not. */
-export function AutoReplyToggle({ channel = 'whatsapp' }: { channel?: 'whatsapp' | 'sms' }) {
+export function AutoReplyToggle({ channel = 'whatsapp', layout = 'bar' }: { channel?: 'whatsapp' | 'sms'; layout?: 'bar' | 'panel' }) {
   const sms = channel === 'sms';
   const statusQc = useQueryClient();
   const { toast } = useToast();
@@ -108,6 +108,71 @@ export function AutoReplyToggle({ channel = 'whatsapp' }: { channel?: 'whatsapp'
   };
 
   const sending = mode === 'send';
+  /* ⛔ THE SETTINGS POPUP DRAWS THE SAME CONTROL AS A LIST (2026-10-21, Paul): one answer per row, a plain line under each, a red warning on the
+     one that sends by itself. Same state, same handlers, same server call as the bar layout — only the arrangement differs. */
+  if (layout === 'panel') {
+    return (
+      <div className="space-y-2" data-testid="reply-rule-panel">
+        <p className="text-sm font-semibold" title="This does NOT affect the outreach queue — queued leads are always audited and sent.">{FIRST_REPLY_MODE_QUESTION}</p>
+        <div className="space-y-1.5" role="radiogroup" aria-label={FIRST_REPLY_MODE_QUESTION}>
+          {FIRST_REPLY_MODES.map((m) => {
+            const blocked = sms && m === 'send';
+            const lit = mode === m;
+            return (
+              <button
+                key={m}
+                type="button"
+                role="radio"
+                aria-checked={lit}
+                disabled={saving || blocked}
+                onClick={() => pickMode(m)}
+                className={cn('w-full rounded-md border px-3 py-2 text-left transition disabled:opacity-60',
+                  lit ? (m === 'send' ? 'border-destructive bg-destructive/10' : 'border-primary bg-primary/5') : 'border-input hover:bg-muted/50',
+                  blocked && 'cursor-not-allowed opacity-50')}
+              >
+                <span className="flex items-center gap-2 text-sm font-medium">
+                  <span className={cn('h-3 w-3 shrink-0 rounded-full border', lit ? (m === 'send' ? 'border-destructive bg-destructive' : 'border-primary bg-primary') : 'border-muted-foreground/50')} />
+                  {FIRST_REPLY_MODE_LABELS[m]}
+                  {m === 'send' && <span className="rounded bg-destructive/15 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-destructive">Sends automatically</span>}
+                </span>
+                <span className="mt-0.5 block pl-5 text-xs text-muted-foreground">{FIRST_REPLY_MODE_HINTS[m]}</span>
+                {m === 'send' && (
+                  <span className="mt-1 block pl-5 text-xs font-medium text-destructive">
+                    {blocked
+                      ? 'WhatsApp only. A text reply can run the audit; it never sends an automatic message.'
+                      : `Warning: this messages the prospect by itself, with no one reading it first.${envOn ? '' : ' The AUTO_AUDIT_REPLY_ENABLED secret is off, so nothing will actually send yet.'}`}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+        {mode === 'audit_only' && readyCount !== null && readyCount > 0 && (
+          <p className="text-xs text-muted-foreground" title="Leads whose audit auto-ran and has finished — send the warm template by hand" data-testid="parked-pitches">
+            <span className="font-semibold text-foreground">{readyCount}</span> parked {readyCount === 1 ? 'pitch' : 'pitches'}: audits that finished and are waiting for you to send by hand. This is not a send queue; nothing here goes out by itself.
+          </p>
+        )}
+        {sms && (
+          <p className="text-xs text-muted-foreground" data-testid="sms-reply-note">
+            {sending ? 'On a text reply this runs the audit only — it never sends an automatic text.' : 'Audit and reply is WhatsApp only.'}
+          </p>
+        )}
+        {sending && !sms && (
+          <div className="space-y-1">
+            <p className="text-xs text-muted-foreground">Template it sends:</p>
+            <Select value={replyTemplate} onValueChange={pickTemplate}>
+              <SelectTrigger className="h-9 w-full" aria-label="Template sent on a first reply"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {WHATSAPP_TEMPLATES.map((t) => (
+                  <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
+      </div>
+    );
+  }
   return (
     /* ══ PLACEMENT (Inbox top bar, 2026-10-01) ══ The control is laid out for the page header it lives in:
        from 1440px it sits on the title row beside Send now / New (1600px in send mode, whose template
@@ -150,7 +215,7 @@ export function AutoReplyToggle({ channel = 'whatsapp' }: { channel?: 'whatsapp'
           Counts leads with a COMPLETED audit, never parked rows — see auditOnlyReadyCount. */}
       {mode === 'audit_only' && readyCount !== null && readyCount > 0 && (
         <span className="ml-auto whitespace-nowrap text-xs text-muted-foreground lg:order-last lg:ml-0" title="Leads whose audit auto-ran and has finished — send the warm template by hand">
-          {readyCount} ready to send
+          {readyCount} parked {readyCount === 1 ? 'pitch' : 'pitches'} (not a send queue)
         </span>
       )}
       {sms && (

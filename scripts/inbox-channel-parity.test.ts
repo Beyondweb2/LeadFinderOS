@@ -40,7 +40,7 @@ console.log('2. every element of the WhatsApp inbox is in the shared component')
 {
   const REQUIRED: Array<[string, RegExp]> = [
     ['top bar: title + channel switch', /<InboxChannelSwitch current=\{channel\} \/>/],
-    ['top bar: "When a prospect replies" control (+ ready-to-send count inside it)', /<AutoReplyToggle channel=\{channel\} \/>/],
+    ['top bar: Settings (holds "When a prospect replies", AI handles replies, reply hours)', /<InboxSettings channel=\{channel\}/],
     ['top bar: Send now', /aria-label="Send now"/],
     ['top bar: New', /<Plus className="mr-1\.5 h-4 w-4" \/> New/],
     ['filters: campaign', /<CampaignPicker mode="filter"/],
