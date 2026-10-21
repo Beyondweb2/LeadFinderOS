@@ -156,6 +156,7 @@ hard gate: a stop / angry / complaint / not-interested / client thread never pro
 | call_now | "you free now?", "can I call you?" (**Needs you**: only Paul knows) | Yes, I'm free now. Ring me on this number, or give me a time and I'll ring you. |
 | sorry_wrong_day | "it's a Sunday, have a day off" (swearing is still a stop) (code) | Fair enough, sorry for the message. I'll leave you in peace. |
 | they_chased | "just wanted to follow up", "??" after we did not answer (code) | Sorry for the slow reply. (then the pitch, same greeting rule; after the pitch went: Needs you) |
+| acknowledge_wait | "Will ring later", "I'll give you a call tomorrow": they will call us (code, Paul 2026-10-21, R085) | No problem, speak soon. |
 
 **Order** (`pickMove` 4b): pay on results and "how much to get to the top?" first, then a clear no (**B9**: a decline with a
 reason after it is still a no, no draft), then the soft exits, then the rest, all before an answer to our last question.
@@ -173,8 +174,8 @@ not_now. "Yes this is the number for <them>" confirms them; "…the number for L
 that one). contact_followup ("did you get my last message?") still owes the pitch.
 
 **Where the regression set's expected value was overridden** (the code was not bent): R054 and R066 (B9, a no with a
-reason), R075 (price first), R081 (set_call draft), R095 (where_based), R077 (references: Needs you). R085
-(acknowledge_wait) is not built.
+reason), R075 (price first), R081 (set_call draft), R095 (where_based), R077 (references: Needs you); Paul agreed all six (2026-10-21). R085 "Will ring later" is acknowledge_wait ("No problem,
+speak soon."), never the busy line.
 
 **Voice-note script, brand-free:** the spoken script says "AI" ("i asked AI for a plumber in Leicester"), never ChatGPT,
 Gemini or Google AI; the checker flags a brand. The engine stays in the stored evidence for the operator.
