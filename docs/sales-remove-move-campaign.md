@@ -86,8 +86,8 @@ Migration `20260928230000_sales_remove_and_move_campaign.sql`.
 - **test1** (`c6e21a37`): a Sales account Paul invited at 06:42:45 today and opened 31 s after his own
   admin sign-in, same browser — his second role-QA login (display name "test1"), not a hired rep. It added
   JB7 and MB & Son, logged a call, and at 10:50 queued `initial_contact` on MB & Son (a REAL business,
-  still queued; the WhatsApp queue has been PAUSED since 2026-09-27 10:05, so nothing sends until it is
-  un-paused). The earlier QA-lead `bulk_queued` row was deleted with the lead; nothing retained attributes it.
+  still queued; the WhatsApp queue was PAUSED from 2026-09-27 10:05 when this was written — ⚠️ no longer true:
+  live `whatsapp_outreach_state.paused` is false (since 17 Oct; read back 2026-10-21). Read the live row, not this line). The earlier QA-lead `bulk_queued` row was deleted with the lead; nothing retained attributes it.
 - **QA cleanup:** removed "QA Domain Test Plumbing" (`f67133ec`) and its questionnaire (`96f1af3c`) —
   QA Tester / qa-tester@example.com / 07700 900741 / example.com, no payment, nothing else referenced it.
   Retained campaigns "roofers 2" (82 real roofers) and "test" (49 real dentists, Paul's).

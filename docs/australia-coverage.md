@@ -75,8 +75,11 @@ SPA (Coverage, AI Audit dialog, What's New). Edge, by hand: `coverage`, `search-
 - Live, proven by markers in each deployed body: `coverage`, `search-leads`, `create-ai-audit`, `crawl-check`,
   `crawl-worker`, `render-audit-report`, `findable-checkout`. SPA live on app.leadfinderos.com (Coverage chunk carries
   `coverage-population-band-au`; the town list and the picker's Australia are in the entry chunk).
-- ⛔ **HELD: `send-whatsapp-message`, `quick-close`, `twilio-sms-send`, `process-sms-queue`.** They are live from the
-  UNMERGED `feat/inbox-send-window` branch (deployed 03:25 that day; live `x-swm-build` = `2026-10-21b-send-window-panels`).
-  Deploying them from main would remove that work. Deploy them once `feat/inbox-send-window` is merged into main,
-  from main. Until then: Quick Close can still make a link for an Australian lead and the +61 template refusal is
-  not live — but findable-checkout (live) refuses any Australian lead before Stripe, and the report shows no price.
+- **Nothing is held any more.** `send-whatsapp-message`, `quick-close`, `twilio-sms-send` and `process-sms-queue` were
+  briefly live from `feat/inbox-send-window` (03:25 UTC); that branch was merged (`4023577d`) and all four were
+  redeployed from main at 03:32–03:33 UTC. Read back 2026-10-21: live `x-swm-build` = `2026-10-21c-send-window-au`,
+  the same `BUILD_ID` as main. So Quick Close's prospect-only refusal and the +61 send refusal are live code;
+  findable-checkout also refuses any Australian lead before Stripe, and the report shows no price.
+- Later on 2026-10-21 `process-ai-audit-queue` (Australia town guard, coverage-town rule) and `process-whatsapp-queue`
+  (first-reply wording A) were redeployed from main `4023577d`; `findAuTownText` and the `worstMiss.ts` header read in
+  the new live bodies, absent from the old ones.

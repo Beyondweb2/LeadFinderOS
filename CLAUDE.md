@@ -47,8 +47,8 @@ Facts and warnings, not prose. Correct a stale line when you find one; add a rul
   hand** (`npx supabase functions deploy <name>`) and keep running old code until you do.
 - **Gate: `npm run check`** = typecheck-vs-baseline (9 deliberate errors, compared as a LIST) +
   `check-edge-syntax` + `check-edge-undefined` + `check-import-graph` + `npm run build` + `npm test`
-  (313 suites on 2026-10-05; the count grows — read the runner's own total). **FULLY GREEN since 2026-10-02**
-  (313/313 on 2026-10-05) — there are NO known failures any more; a red suite is a real finding, unless the
+  (427 suites on 2026-10-21; the count grows — read the runner's own total). **FULLY GREEN since 2026-10-02**
+  (427/427 on main `4023577d`, 2026-10-21) — there are NO known failures any more; a red suite is a real finding, unless the
   runner's ⚠️ ENVIRONMENT banner says the findable-site copy is behind (refresh it, below). (The old "known-stale" four were stale tests fixed that day; `site-origin`
   runs under Node with a `Deno.env` stand-in.) Typecheck reads 9 = the deliberate baseline LIST.
   📦 **Dependencies (2026-10-05):** `LeadFinderOS-current` has its OWN `node_modules` (`npm ci` from the lockfile;
@@ -1000,10 +1000,11 @@ positive allowlist of `baseline`; `isColdOutreachTemplate` treats unknown as COL
   An Australian town is ALWAYS `Name STATE` ("Ballarat VIC") in the Coverage key, the search, `coverage_town` and the audit town
   (`src/lib/australiaTowns.ts`; a bare ambiguous name is never guessed). Its wrong-town guard is `australianTownCheck`, never
   `uk_towns`. Towns = bundled ABS list (`scripts/build-australia-towns.mjs`), no table. Cold WhatsApp to Australia stays refused.
-- ⛔ **COLD WHATSAPP IS UK MOBILES ONLY — India is no longer an outreach market (2026-10-07).** Decided from the digits we send
+- ⛔ **COLD WHATSAPP IS UK MOBILES BY DEFAULT — India is no longer an outreach market (2026-10-07).** The only other doors are
+  Malaysia / Singapore, each through its own per-country switch (next bullet). Decided from the digits we send
   to (`src/lib/ukColdDestination.ts`), never `outreach_leads.country` (measured wrong on 374 rows). Enforced in the SQL
   (`sales_queue_opener`, `campaign_candidates`) and in BOTH senders; the India send window is gone. Australia is supported for search,
-  normalisation and checks but is NOT enabled for cold WhatsApp. Old India leads/messages stay as history. The `waNumber.ts` India
+  normalisation and checks but cold WhatsApp / SMS to +61 is REFUSED (prospect-only, `docs/australia-coverage.md`). Old India leads/messages stay as history. The `waNumber.ts` India
   digits branch exists only so old threads normalise. `docs/india-readiness.md` is history.
 - ⛔ **COLD WHATSAPP TO MALAYSIA / SINGAPORE ONLY THROUGH ITS PER-COUNTRY SWITCH, AND ONLY AFTER A HANDFUL ARE TESTED BY HAND**
   (Paul, 2026-10-15; `docs/send-error-capture.md`). The switch (`outreach_country_settings.whatsapp_on`, `set_outreach_country`) is the
@@ -1354,10 +1355,12 @@ free check, town, templates, dashboards, page generator, harness…) is in `docs
 - **Cron jobs live only in the DB** (`cron.job`): `ai-audit-queue-run` (30 s), `bulk-jobs-sweep`,
   `whatsapp-queue-run`, `whatsapp-auto-replies-run`, `notify-onboarding-submit-run` (1 min each),
   `daily-cron-run` (02:00), `crawl-worker-run` (1 min; only fires while a crawl job runs), `client-intake-run` (1 min; only
-  posts while an intake is due — 2026-10-06), `notify-follow-ups-due`, `security-sweep-run`. (`instantly-poll-run` is gone — 13 jobs, read 2026-10-02.)
+  posts while an intake is due — 2026-10-06), `notify-follow-ups-due` (hourly), `security-sweep-run` (5 min),
+  `ai-reply-drafts-run`, `inbox-scheduled-send-run`, `sms-queue-run` (1 min each), `month12-reminder-run` (10:00).
   Admin control centre (2026-09-30): `conversation-triage-run` (2 min), `weekly-visibility-run` (hourly :15),
   `performance-sync-run` (05:00), `business-summary-weekly` (Mon 06:30); each records last run / status in
-  `admin_job_runs`. The
+  `admin_job_runs`. **18 jobs, all active, read live 2026-10-21** (`instantly-poll-run` is gone); re-read `cron.job`
+  before quoting. The
   `bulk_jobs.job_type` CHECK constraint is DB-only too. A rebuild from migrations loses them.
 
 ---
