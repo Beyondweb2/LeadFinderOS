@@ -1,6 +1,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { refusalBody, resolveActor, leadAccess } from "../_shared/access.ts";
 import { recordDenial } from "../_shared/protection.ts";
+import { PROSPECT_ONLY_DETAIL, prospectOnlyLead } from "../../../src/lib/prospectOnly.ts";
 import { NOT_READY_BODY, salesReadiness } from "../_shared/sales-ready.ts";
 import {
   adoptLink, answersKey, buildConsentsFor, buildConsentsWording, cleanAnswers, linkExpiresAtMs, linkStep, linkUsable, linkUsableUntilMs, planQuickCloseSave,
@@ -404,7 +405,8 @@ Deno.serve(async (req) => {
          expired link reports when it was made, and nothing that could be copied. */
       /* ⛔ A paid / refunded / ended client is never handed a link, even one still inside its window. */
       const closedNow = quickCloseClosedRefusal(lead as never, row as never);
-      const usable = linkUsable(cur, nowMs) && !closedNow;
+      /* ⛔ An Australian (prospect-only) lead is never handed a link either (src/lib/prospectOnly.ts). */
+      const usable = linkUsable(cur, nowMs) && !closedNow && !prospectOnlyLead(lead as never);
       const session = cur?.link_session_id ?? stripeSessionIdFromUrl(cur?.link_url);
       const exp = linkExpiresAtMs(cur);
       const until = linkUsableUntilMs(cur);
@@ -598,6 +600,12 @@ Deno.serve(async (req) => {
     /* ⛔ PRE-PAYMENT ONLY, JUDGED ON THE LEAD (wave 1 integration): money on it, a paid-or-beyond status,
        refunded or ENDED refuses every mode below — save, review, link, share — not only a row that still
        reads 'paid' (quickCloseClosedRefusal). */
+    /* ⛔ PROSPECT-ONLY (2026-10-21, src/lib/prospectOnly.ts): an Australian lead is never closed — the close answers,
+       the review and every link / share mode are refused. Call notes and the customer's email still save (calling
+       Australia is allowed). Find, audit and call only, until Paul decides pricing for Australia. */
+    if (prospectOnlyLead(lead as never) && ["save", "approve_review", "generate_link", "share_link", "share_setup"].includes(mode)) {
+      return json({ ok: false, error: "prospect_only_country", detail: PROSPECT_ONLY_DETAIL }, 409);
+    }
     const closedRefusal = quickCloseClosedRefusal(lead as never, row as never);
     if (closedRefusal) return json({ ok: false, error: closedRefusal.error, detail: closedRefusal.detail }, 409);
 

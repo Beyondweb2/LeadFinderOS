@@ -1,5 +1,6 @@
 import { SUGGESTED_LOCATIONS } from './locationPicker.ts';
 import { coverageTownKey } from './coverageState.ts';
+import { AU_TOWNS, auTownLabel, findAuTown, parseAuTown } from './australiaTowns.ts';
 
 /* ══ COVERAGE OUTSIDE THE UK: MALAYSIA AND SINGAPORE (2026-10-14) ═══════════════════════════════════════════════
    The UK list is uk_towns (ONS Built-Up Areas, with populations) and is unchanged. Malaysia and Singapore have no
@@ -13,10 +14,12 @@ import { coverageTownKey } from './coverageState.ts';
    lead is lost; a Singapore lead whose area is not on the list counts under Singapore itself (it is one city).
    ════════════════════════════════════════════════════════════════════════════════════════════════════════════ */
 
-export type CoverageCountry = 'UK' | 'Malaysia' | 'Singapore';
-export const COVERAGE_COUNTRIES: readonly CoverageCountry[] = ['UK', 'Malaysia', 'Singapore'];
+/* Australia (2026-10-21, src/lib/australiaTowns.ts): every ABS urban centre of 1,000+ with its Census population, each
+   named WITH its state ("Ballarat VIC") so same-name towns in two states never share a row. Prospect-only. */
+export type CoverageCountry = 'UK' | 'Malaysia' | 'Singapore' | 'Australia';
+export const COVERAGE_COUNTRIES: readonly CoverageCountry[] = ['UK', 'Malaysia', 'Singapore', 'Australia'];
 export const DEFAULT_COVERAGE_COUNTRY: CoverageCountry = 'UK';
-export const COVERAGE_COUNTRY_LABEL: Record<CoverageCountry, string> = { UK: 'United Kingdom', Malaysia: 'Malaysia', Singapore: 'Singapore' };
+export const COVERAGE_COUNTRY_LABEL: Record<CoverageCountry, string> = { UK: 'United Kingdom', Malaysia: 'Malaysia', Singapore: 'Singapore', Australia: 'Australia' };
 
 /** A URL / stored value read back as a Coverage country; anything else is the UK (the default, as before). */
 export function normaliseCoverageCountry(v: unknown): CoverageCountry {
@@ -85,6 +88,8 @@ export const ABROAD_TOWNS: Record<Exclude<CoverageCountry, 'UK'>, readonly Abroa
     { name: 'Singapore', region: null },
     ...SUGGESTED_LOCATIONS.Singapore.map((name) => ({ name, region: SG_REGION[name] ?? null })),
   ],
+  /* Every ABS urban centre of 1,000+ (australiaTowns.ts), named WITH its state ("Ballarat VIC"), grouped by state. */
+  Australia: AU_TOWNS.map((t) => ({ name: t.label, region: t.stateName, ...(t.abs ? { aka: t.abs } : {}) })),
 };
 
 /** Lowercase, accents and punctuation gone, spaces collapsed. */
@@ -92,7 +97,7 @@ function key(s: string): string {
   return s.normalize('NFKD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim();
 }
 
-const INDEX: Record<Exclude<CoverageCountry, 'UK'>, Map<string, string>> = { Malaysia: new Map(), Singapore: new Map() };
+const INDEX: Record<'Malaysia' | 'Singapore', Map<string, string>> = { Malaysia: new Map(), Singapore: new Map() };
 for (const c of ['Malaysia', 'Singapore'] as const) {
   for (const t of ABROAD_TOWNS[c]) {
     INDEX[c].set(key(t.name), t.name);
@@ -123,6 +128,7 @@ export interface ResolvedTown {
  * Pasir Gudang). Blank → null (counted nowhere, like a UK lead with no town).
  */
 export function resolveCoverageTown(country: Exclude<CoverageCountry, 'UK'>, raw: string | null | undefined): ResolvedTown | null {
+  if (country === 'Australia') return resolveAustralianTown(raw);
   const ps = pieces(raw ?? '').filter((p) => key(p) && key(p) !== 'malaysia');
   for (const p of ps) {
     const hit = INDEX[country].get(key(p));
@@ -143,15 +149,33 @@ export function abroadCountryOfLocation(location: string | null | undefined): Ex
   if (!k) return null;
   if (k === 'malaysia' || k.endsWith(' malaysia')) return 'Malaysia';
   if (k === 'singapore' || k.endsWith(' singapore')) return 'Singapore';
+  if (k === 'australia' || k.endsWith(' australia')) return 'Australia';
+  /* "Ballarat VIC" with no country word: a listed Australian town named WITH its state. */
+  const au = parseAuTown(String(location ?? ''));
+  if (au.state) { const hit = findAuTown(au.name, au.state); if (hit && hit !== 'ambiguous') return 'Australia'; }
   const first = pieces(String(location ?? ''))[0] ?? '';
   if (INDEX.Malaysia.has(key(first))) return 'Malaysia';
   if (INDEX.Singapore.has(key(first))) return 'Singapore';
   return null;
 }
 
-/** A lead's stored country as one of the two (exact words the app stores), else null. */
+/** A lead's stored country as one of the abroad Coverage countries (exact words the app stores), else null. */
 export function abroadCountryOfLead(country: string | null | undefined): Exclude<CoverageCountry, 'UK'> | null {
-  return country === 'Malaysia' || country === 'Singapore' ? country : null;
+  return country === 'Malaysia' || country === 'Singapore' || country === 'Australia' ? country : null;
+}
+
+/**
+ * The Coverage town an Australian lead's / search's town counts under. ⛔ THE STATE DECIDES, NEVER A GUESS:
+ * "Ballarat VIC" / "Ballarat, Victoria" / "Ballarat VIC, Australia" → Ballarat VIC; a bare name in ONE state's list
+ * ("Ballarat") → that town; a bare name in two states ("Perth") or an unlisted one ("Wendouree") → a row of its own,
+ * as written (with its state when it gave one), so Perth WA and Perth TAS never share a count.
+ */
+function resolveAustralianTown(raw: string | null | undefined): ResolvedTown | null {
+  const t = parseAuTown(String(raw ?? '').replace(/\([^)]*\)/g, ' '));
+  if (!t.name) return null;
+  const hit = findAuTown(t.name, t.state);
+  if (hit && hit !== 'ambiguous') return { name: hit.label, listed: true };
+  return { name: t.state ? auTownLabel(t.name, t.state) : t.name.replace(/\s+/g, ' '), listed: false };
 }
 
 /** The Coverage key a row is joined on — the same normalisation as the UK rows. */

@@ -11,6 +11,7 @@ import { foundRecord } from '../../../src/lib/websiteStatusClass.ts';
 import { inTownVerdict, townKey, type InTownVerdict } from '../../../src/lib/inTown.ts';
 import { cleanTypedTown } from '../../../src/lib/typedTown.ts';
 import { datasetPlace } from '../../../src/lib/malaysiaPlaces.ts';
+import { findAuTownText } from '../../../src/lib/australiaTowns.ts';
 
 // ═══════════════════════════════════════════════
 // CORS
@@ -868,6 +869,11 @@ async function attachTownChecks(
     let population: number | null = null;
     if (country === 'Malaysia') {
       const hit = datasetPlace(town);
+      population = hit && hit !== 'ambiguous' ? hit.population : null;
+    } else if (country === 'Australia') {
+      /* ⛔ NEVER uk_towns for Australia (Perth / Newcastle would take the UK town's size). The ABS urban centre named
+         WITH its state ("Ballarat VIC"); a bare name in two states, or an unlisted suburb → unknown (3 km). */
+      const hit = findAuTownText(town);
       population = hit && hit !== 'ambiguous' ? hit.population : null;
     } else {
       const { data } = await serviceClient.from('uk_towns').select('name, population');

@@ -26,6 +26,8 @@
    are in the wrong town" must never produce the same outcome.
    ════════════════════════════════════════════════════════════════════════════════════════════ */
 
+import { AU_METRO_POPULATION, AU_STATE_NAMES, auTownLabel, findAuTown, parseAuAddress, parseAuTown } from "../../../src/lib/australiaTowns.ts";
+
 /** Above this, no honest case: block (overridable). */
 export const BLOCK_KM = 25;
 /** Above this, say so but proceed — commuter-belt businesses legitimately trade in the nearby town. */
@@ -40,7 +42,7 @@ export interface TownDistanceCheck {
   /** What to put in front of the operator. Empty when the verdict is `ok`. */
   message: string;
   /** Why we could not measure, when we could not. Never blocks. */
-  unknownReason?: "no_business_coords" | "town_not_in_gazetteer" | "no_town_asked";
+  unknownReason?: "no_business_coords" | "town_not_in_gazetteer" | "no_town_asked" | "metro_area";
 }
 
 export interface LatLng { lat: number; lng: number }
@@ -178,4 +180,48 @@ export function checkTownDistance(args: {
     };
   }
   return { verdict: "ok", km, message: "" };
+}
+
+/* ══ AUSTRALIA'S WRONG-TOWN GUARD (2026-10-21, src/lib/australiaTowns.ts) ═══════════════════════════════════════
+   uk_towns can never measure an Australian lead (Perth would be measured to Scotland), so until now an Australian
+   audit had NO wrong-town guard. This is it, with the same verdicts and thresholds as the UK:
+     1. THE STATE. A town that names its state ("Richmond VIC") and a business whose address is in another state
+        ("… Richmond NSW 2753") → BLOCK (overridable): same-name towns in two states are different places.
+     2. THE DISTANCE from the ABS urban centre's own point, BLOCK_KM / WARN_KM exactly as the UK.
+   ⛔ A METROPOLITAN AREA (AU_METRO_POPULATION and up: Sydney, Melbourne…) is never measured: its centre is tens of km
+      from its own suburbs, so a distance would block real Sydney businesses. The state is still checked.
+   ⛔ An ambiguous or unlisted town is `unknown`, never a guess — same rule as two St Ives.
+   `stateOnly`: for a Coverage town verified in town when added (no distance cap) — only the state is checked. */
+export function australianTownCheck(args: {
+  town: string | null | undefined;
+  address: string | null | undefined;
+  businessLat: unknown;
+  businessLng: unknown;
+  stateOnly?: boolean;
+}): TownDistanceCheck | null {
+  const t = parseAuTown(args.town);
+  const addrState = parseAuAddress(args.address).state;
+  if (t.name && t.state && addrState && t.state !== addrState) {
+    const listed = findAuTown(t.name, t.state);
+    const km = listed && listed !== "ambiguous" && isRealCoord(args.businessLat, args.businessLng)
+      ? distanceKm({ lat: args.businessLat as number, lng: args.businessLng as number }, listed)
+      : null;
+    return {
+      verdict: "block", km,
+      message: `This business's address is in ${AU_STATE_NAMES[addrState]}, but the audit would ask about `
+        + `${auTownLabel(t.name, t.state)} in ${AU_STATE_NAMES[t.state]}. Towns with the same name in two states `
+        + `are different places, so the report would be about the wrong one. Fix the town on the lead, or override `
+        + `if you know better.`,
+    };
+  }
+  if (args.stateOnly) return null;
+  const hit = t.name ? findAuTown(t.name, t.state ?? addrState) : null;
+  const centroid = hit && hit !== "ambiguous" ? { lat: hit.lat, lng: hit.lng } : null;
+  if (hit && hit !== "ambiguous" && hit.population >= AU_METRO_POPULATION) {
+    return {
+      verdict: "unknown", km: null, unknownReason: "metro_area",
+      message: `${hit.label} is a whole metropolitan area, so the distance is not checked (the state was).`,
+    };
+  }
+  return checkTownDistance({ businessLat: args.businessLat, businessLng: args.businessLng, townName: args.town, townCentroid: centroid });
 }

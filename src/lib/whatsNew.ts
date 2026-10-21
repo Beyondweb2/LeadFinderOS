@@ -22,6 +22,14 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-21-australia-coverage', date: '2026-10-21', title: 'Coverage: Australia (find, audit and call)', audience: 'all',
+    body: 'Coverage has Australia: every town of 1,000+ people with its state and its 2021 Census population. Australian leads are for finding, auditing and calling only.',
+    report: {
+      added: ['Australia in the Coverage country picker: 726 towns, each named with its state ("Ballarat VIC"), filtered by state and population (starts at 10,000 to 250,000; clear the boxes to see all).', 'A wrong-town check for Australian audits: a business in another state, or more than 25 km from the town, is stopped before the audit (you can override).'],
+      changed: ['Find Leads and the audit keep the state with an Australian town, so Richmond VIC and Richmond NSW never mix.', 'An Australian prospect\'s report shows no price, no guarantee line and no sign-up button. Request a call and Ask me anything stay.'],
+      removed: ['Close (sign-up and set-up links) for Australian leads. Call notes still save.'],
+      effect: 'You can work Australian towns the same way as UK ones. No price or sign-up link reaches an Australian business, and cold WhatsApp to Australia stays off.',
+    } },
   { id: '2026-10-21-drafter-new-intents', date: '2026-10-21', title: 'Reply drafts: 18 new kinds of reply', audience: 'admin',
     body: 'The reply drafter now has a line for 18 more kinds of reply from the reply recon, reads a few more replies correctly, and the voice-note script no longer names ChatGPT or Gemini.',
     report: {
