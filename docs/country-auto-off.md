@@ -115,3 +115,15 @@ switch (still off) and hours (09:00–19:00 stored; Paul decides 17:00 or 19:00)
   not on WhatsApp" / "failed for another reason (will be retried / marked WhatsApp failed)", that Meta's exact code was
   not saved, and whether the failure counts toward the switch-off (`src/lib/sendFailureReason.ts`;
   `process-whatsapp-queue` mode `recent_failures` returns each row's lead flag).
+
+### Deployed 2026-10-22 (main `16a2371c`)
+
+- Full gate on the merged branch: 446/446. (The first run had one red suite, `cold-call-playbook.test.ts`, failing on clean
+  main too: a test crawl dated 22 Sep went past the real-clock 30-day freshness at 10:00 UTC. Fixed in the test.)
+- SQL first: `20261124090000` applied and read back — the new rule (`not_on_wa`, NULL-safe), the new trigger
+  `trg_outreach_leads_country_check`, both old triggers kept, grants unchanged (postgres, service_role). All thresholds
+  at the defaults; Australia still OFF, hours unchanged (09:00–19:00 stored); Malaysia / Singapore on.
+- Edge: `process-whatsapp-queue` only (`countryAutoPause.ts` / `sendFailureReason.ts` are reached by no edge function);
+  body carries the lead-flag read. `whatsapp-status` NOT deployed (held).
+- SPA live on app.leadfinderos.com (entry `index-C_9NRk-4.js`; `WhatsAppQueuePanel-BjzxO4Vi.js` has the failure reason,
+  `whatsNew-CRSe0fFm.js` the entry). Nobody has looked at it on screen.
