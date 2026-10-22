@@ -207,7 +207,7 @@ const row = (id: string, extra: Partial<DueRow> = {}): DueRow => ({
   const gateAt = swm.indexOf('const gate = await queueGate(');
   ok(gateAt > swm.indexOf('payload = textPayload(text);') && gateAt < swm.indexOf('if (dryRun) {') && gateAt < swm.indexOf('const r = await sendViaGraph(env.accessToken, env.phoneNumberId, to, payload);\n      if (r.ok) { status = "sent"'), 'send-whatsapp-message queues after every guard and the payload build, before the dry-run return and the Graph POST');
   ok(/const viaInbox = !sched && keepsSendHours\(body\.via\);/.test(swm), 'the listed screens queue; the drain request never re-queues');
-  ok(/if \(sched && !\(await replyWindowOpenNow\(service, "whatsapp", to\)\)\) return/.test(swm), "the drain's own send still needs the hours open NOW (no door around them)");
+  ok(/if \(sched && !\(await replyWindowOpenNow\(service, "whatsapp", to, new Date\(\), \{ leadId: sched\.row\.lead_id, leadTz: sched\.row\.tz \}\)\)\) return/.test(swm), "the drain's own send still needs the hours open NOW (no door around them)");
   const sch = read('supabase/functions/_shared/inbox-schedule.ts');
   ok(/if \(!isInternalCall\(req\)\) return \{ ok: false, error: "forbidden" \}/.test(sch) && /row\.status !== "sending"/.test(sch) && /from\("user_roles"\)/.test(sch), "the drain's door: CRON_SECRET + a CLAIMED row + the queuer's role re-read");
   const voice = read('supabase/functions/send-whatsapp-voice/index.ts');

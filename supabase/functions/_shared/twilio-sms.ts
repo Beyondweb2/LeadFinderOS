@@ -25,7 +25,7 @@ import { resolveSignupLinkVars } from "./link-template-vars.ts";
 import { smsGateOpen } from "../../../src/lib/contactRouting.ts";
 import { smsSize, CHANNEL_COST_GBP } from "../../../src/lib/channelCosts.ts";
 import { isUkColdDestination } from "../../../src/lib/ukColdDestination.ts";
-import { COUNTRY_OFF, channelOn, mobileMarketOf } from "../../../src/lib/outreachMarkets.ts";
+import { COUNTRY_OFF, channelOn, mobileMarketOf, WHATSAPP_ONLY_MARKETS } from "../../../src/lib/outreachMarkets.ts";
 import { loadCountrySettings } from "./country-settings.ts";
 import { toWhatsAppDigits } from "../../../src/lib/waNumber.ts";
 import { leadAccess, type Actor } from "./access.ts";
@@ -91,7 +91,10 @@ export async function sendSmsToLead(service: Service, a: SendSmsArgs): Promise<S
   if (market && market !== "UK" && !channelOn(await loadCountrySettings(service), market, "sms")) {
     /* A real Malaysia / Singapore mobile while texts to that country are switched off: nothing is sent and NOTHING is
        written on the lead — it is a mobile, never No SMS. */
-    return fail(COUNTRY_OFF, "Texts to this country are switched off. Paul can turn them on in the WhatsApp queue settings.");
+    /* Australia (2026-10-22) is WhatsApp-only: its texts are never on (channelOn), and nothing offers to switch them on. */
+    return fail(COUNTRY_OFF, WHATSAPP_ONLY_MARKETS.has(market)
+      ? "Texts to Australia are not sent (WhatsApp only), so nothing was sent."
+      : "Texts to this country are switched off. Paul can turn them on in the WhatsApp queue settings.");
   }
   if (!isUkColdDestination(digits) && !(market && market !== "UK")) {
     /* ⛔ A NUMBER THAT CAN NEVER BE A UK MOBILE is No SMS the moment we find out — before anything is queued or sent (the SMS twin of

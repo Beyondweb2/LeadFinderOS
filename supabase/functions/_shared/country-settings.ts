@@ -22,7 +22,7 @@ export async function loadCountrySettings(service: Service): Promise<CountrySett
 }
 
 /** The digits prefix a market's numbers start with, as stored by each sender ("60…" WhatsApp, "+60…" SMS). */
-const CALLING_CODE: Record<Exclude<Market, "UK">, string> = { MY: "60", SG: "65" };
+const CALLING_CODE: Record<Exclude<Market, "UK">, string> = { MY: "60", SG: "65", AU: "61" };
 
 /** Has `market` reached its own daily cap on this channel today (its own local day)? The UK has no country cap (the
  *  team cap is its cap) → false. A NULL cap → false. A failed count → true (send less, never more). */

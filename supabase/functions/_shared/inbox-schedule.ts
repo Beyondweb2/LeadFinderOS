@@ -18,6 +18,8 @@ import {
   type InboxChannel, type ReplyHours, type ScheduledKind,
 } from "../../../src/lib/inboxSendWindow.ts";
 import type { SendWindow } from "../../../src/lib/sendWindow.ts";
+import { mobileMarketOf, PER_LEAD_ZONE_MARKETS } from "../../../src/lib/outreachMarkets.ts";
+import { AU_ZONE_COLUMNS, auLeadTz } from "../../../src/lib/auLeadZone.ts";
 
 // deno-lint-ignore no-explicit-any
 type Service = any;
@@ -34,9 +36,26 @@ export async function loadReplyHours(service: Service): Promise<ReplyHours | nul
   }
 }
 
-export async function replyWindowForDest(service: Service, channel: InboxChannel, digits: string): Promise<SendWindow> {
-  const [replyHours, countrySettings] = await Promise.all([loadReplyHours(service), loadCountrySettings(service)]);
-  return replyWindowFor(channel, digits, { replyHours, countrySettings });
+/** An Australian lead's zone, read from the LEAD (src/lib/auLeadZone.ts). Null = needs state (also: no lead, a failed read). */
+export async function leadTzFor(service: Service, digits: string, leadId: string | null | undefined): Promise<string | null> {
+  const m = mobileMarketOf(digits);
+  if (!m || !PER_LEAD_ZONE_MARKETS.has(m) || !leadId) return null;
+  try {
+    const { data, error } = await service.from("outreach_leads").select(AU_ZONE_COLUMNS).eq("id", leadId).maybeSingle();
+    return error ? null : auLeadTz(data as Record<string, string | null> | null);
+  } catch {
+    return null;
+  }
+}
+
+/** `ctx.leadTz` (a queued row's stored zone) wins; else an Australian number's zone is read from `ctx.leadId`. Neither = needs
+ *  state for Australia (never sent); every other number is unaffected. */
+export async function replyWindowForDest(service: Service, channel: InboxChannel, digits: string,
+                                         ctx: { leadId?: string | null; leadTz?: string | null } = {}): Promise<SendWindow> {
+  const [replyHours, countrySettings, leadTz] = await Promise.all([
+    loadReplyHours(service), loadCountrySettings(service), ctx.leadTz ? Promise.resolve(ctx.leadTz) : leadTzFor(service, digits, ctx.leadId),
+  ]);
+  return replyWindowFor(channel, digits, { replyHours, countrySettings, leadTz });
 }
 
 export interface QueueRow {
@@ -65,7 +84,7 @@ export type GateAnswer =
 export async function queueGate(service: Service, row: QueueRow, lastInboundAt: string | number | null,
                                 beforeInsert?: () => Promise<{ ok: true } | { ok: false; error: string; reason: string }>,
                                 now: Date = new Date()): Promise<GateAnswer> {
-  const w = await replyWindowForDest(service, row.channel, row.phone);
+  const w = await replyWindowForDest(service, row.channel, row.phone, { leadId: row.leadId });
   const d = queueDecision({ channel: row.channel, kind: row.kind, window: w, now, lastInboundAt });
   if (d.kind === "send_now") return null;
   if (d.kind === "refuse") return { ok: false, error: d.error, reason: d.detail };
@@ -114,6 +133,7 @@ export async function scheduledSendFor(req: Request, service: Service, scheduled
 }
 
 /** The sender's own last word when the drain calls it: the window must be open NOW (no door around the hours). */
-export async function replyWindowOpenNow(service: Service, channel: InboxChannel, digits: string, now: Date = new Date()): Promise<boolean> {
-  return replyWindowOpen(await replyWindowForDest(service, channel, digits), now);
+export async function replyWindowOpenNow(service: Service, channel: InboxChannel, digits: string, now: Date = new Date(),
+                                         ctx: { leadId?: string | null; leadTz?: string | null } = {}): Promise<boolean> {
+  return replyWindowOpen(await replyWindowForDest(service, channel, digits, ctx), now);
 }

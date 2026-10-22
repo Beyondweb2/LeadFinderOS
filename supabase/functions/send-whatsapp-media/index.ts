@@ -93,7 +93,7 @@ Deno.serve(async (req) => {
     if (str("mode") !== "dry_run") {
       const digits = toWhatsAppNumber(str("phone"));
       if (digits) {
-        const w = await replyWindowForDest(service, "whatsapp", digits);
+        const w = await replyWindowForDest(service, "whatsapp", digits, { leadId: str("lead_id") || null });
         if (!replyWindowOpen(w)) return json({ ok: false, error: "outside_reply_window", reason: `Outside their send hours, so files are not sent now. ${windowStatusLine(w).text}.` }, 200);
       }
     }

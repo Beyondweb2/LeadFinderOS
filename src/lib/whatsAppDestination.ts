@@ -20,7 +20,7 @@ export function templateDestinationRefusal(digits: string | null | undefined): '
   const d = String(digits ?? '').replace(/\D/g, '');
   if (!d) return 'no_number';
   if (mobileMarketOf(d)) return null;
-  // A UK, Malaysian or Singapore number that is not a mobile there.
-  if (/^44\d{9,10}$/.test(d) || /^60\d{8,10}$/.test(d) || /^65\d{8}$/.test(d)) return NOT_A_MOBILE;
+  // A UK, Malaysian, Singapore or Australian number that is not a mobile there (Australia 2026-10-22: 02/03/07/08 landlines).
+  if (/^44\d{9,10}$/.test(d) || /^60\d{8,10}$/.test(d) || /^65\d{8}$/.test(d) || /^61[2378]\d{8}$/.test(d)) return NOT_A_MOBILE;
   return null;
 }

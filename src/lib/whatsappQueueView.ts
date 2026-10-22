@@ -24,12 +24,21 @@
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 import type { Tone } from '@/components/salesDash/primitives';
 import { coldWhatsAppVerdict } from './coldWhatsAppEligibility';
-import type { Market } from './outreachMarkets';
+import { mobileMarketOf, PER_LEAD_ZONE_MARKETS, type Market } from './outreachMarkets';
 import { isColdOutreachTemplate } from './coldOutreach';
+import { auLeadTz, AU_ZONE_COLUMNS_SALES } from './auLeadZone';
+import { toWhatsAppDigits } from './waNumber';
 
-/** The columns the queue reads from `sales_leads` — the same list for both roles. */
+/** The columns the queue reads from `sales_leads` — the same list for both roles. The address / town columns are read for an
+ *  Australian lead's state (src/lib/auLeadZone.ts) — its hours are its own zone's. */
 export const QUEUE_ROW_COLUMNS =
-  'id, business_name, status, is_archived, queued_at, whatsapp_template, phone, country, contact_followup_queued_at, hook_followup_queued_at';
+  `id, business_name, status, is_archived, queued_at, whatsapp_template, phone, country, contact_followup_queued_at, hook_followup_queued_at, ${AU_ZONE_COLUMNS_SALES}`;
+
+/** Held in the queue because its local time is unknown: an Australian mobile with no state (the drip never chooses it). */
+export function rowNeedsState(r: Pick<QueueRow, 'phone' | 'country' | 'address' | 'search_location' | 'derived_town'>): boolean {
+  const m = mobileMarketOf(toWhatsAppDigits(r.phone ?? '', r.country ?? null));
+  return !!m && PER_LEAD_ZONE_MARKETS.has(m) && !auLeadTz(r);
+}
 
 /** Rows in ANY lane (or archived-but-queued): the one PostgREST `or` filter, for both roles. */
 export const QUEUE_ROW_FILTER = 'status.eq.queued,contact_followup_queued_at.not.is.null,hook_followup_queued_at.not.is.null';
@@ -55,6 +64,9 @@ export interface QueueRow {
   country?: string | null;
   contact_followup_queued_at: string | null;
   hook_followup_queued_at: string | null;
+  address?: string | null;
+  search_location?: string | null;
+  derived_town?: string | null;
 }
 
 export interface QueueView {
@@ -69,6 +81,8 @@ export interface QueueView {
   /** Waiting COLD openers whose number WhatsApp cannot reach (none, landline, not a UK mobile). The sender flags
    *  them No WhatsApp when it reaches them; this says so before then (positive allowlist: unknown = unsendable). */
   unsendable: number;
+  /** Waiting / follow-up Australian leads with no state: held, never sent, until a state is added (rowNeedsState). */
+  needsState: number;
 }
 
 const byStamp = (k: 'queued_at' | 'contact_followup_queued_at') => (a: QueueRow, b: QueueRow) =>
@@ -87,6 +101,7 @@ export function deriveQueue(rows: readonly QueueRow[], markets?: ReadonlySet<Mar
     unsendable: live.filter((r) => r.status === 'queued'
       && isColdOutreachTemplate(r.whatsapp_template ?? '')
       && !coldWhatsAppVerdict(r.phone, r.country ?? null, markets).eligible).length,
+    needsState: live.filter((r) => (r.status === 'queued' || !!r.contact_followup_queued_at) && rowNeedsState(r)).length,
   };
 }
 
@@ -96,6 +111,9 @@ export const QUEUE_ROW_STATE: Record<QueueRowState, { label: string; tone: Tone;
   waiting: { label: 'Waiting', tone: 'blue', title: 'In the queue. It sends at its paced turn, inside the sending window.' },
   follow_up: { label: 'No-reply follow-up', tone: 'blue', title: 'A follow-up to an opener that got no reply. These send after the openers.' },
 };
+/** The extra chip on a held Australian row (src/lib/auLeadZone.ts). */
+export const NEEDS_STATE_CHIP = { label: 'Needs state', tone: 'amber' as Tone,
+  title: 'Australian lead with no state on its address or town, so its local time is unknown. Held — nothing sends until a state is added.' };
 
 /** The Outreach summary line: "3 waiting · 2 no-reply follow-ups". */
 export function queueSummaryParts(v: QueueView): string[] {

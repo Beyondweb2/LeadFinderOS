@@ -22,6 +22,22 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-22-australia-whatsapp', date: '2026-10-22', title: 'WhatsApp to Australia, in each lead’s own local time', audience: 'all',
+    body: 'Australian mobiles can now be queued for the WhatsApp opener and replied to from the Inbox. Each message goes Monday to Friday, 09:00–17:00 in that lead’s own time zone.',
+    report: {
+      added: [
+        'Australia is a WhatsApp market with its own switch, its own daily cap (100) and the same automatic switch-off as Malaysia if its first sends fail.',
+        'Each Australian lead’s time zone comes from the state in its address or town (Sydney, Melbourne, Hobart, Brisbane, Adelaide, Darwin or Perth).',
+        'A lead with no state is held and shows “Needs state”. Nothing is sent to it until a state is added.',
+        'Inbox: an Australian conversation shows their day, time and city, and whether their hours are open (“Their time Fri 07:30 (Perth) · opens 09:00”).',
+      ],
+      changed: [
+        'Australian sends do not count against the team daily cap, and the team cap does not stop Australia. Each has its own budget.',
+        'A failed Australian send is never retried automatically, the same as Malaysia and Singapore.',
+      ],
+      removed: ['The rule that refused every WhatsApp to a +61 number. Texts to Australia are still never sent.'],
+      effect: 'You can work Australia in your morning and the UK in your afternoon. Australia stays prospect-only: no price, sign-up or checkout message ever goes there.',
+    } },
   { id: '2026-10-21-whatsapp-number-rating', date: '2026-10-21', title: 'The WhatsApp number’s Meta quality rating now protects the queue', audience: 'admin',
     body: 'Every 15 minutes the app reads the number’s quality rating and messaging tier from Meta and slows or pauses the queue if the rating drops.',
     report: {

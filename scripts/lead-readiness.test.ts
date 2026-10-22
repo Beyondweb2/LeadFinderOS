@@ -122,7 +122,7 @@ for (const [label, l] of leads) {
   }
 }
 ok(compared === leads.length * settingsSets.length * 2, `WhatsApp + SMS agreed with the senders on ${compared} lead × switch cases (failures listed above)`);
-ok(JSON.stringify(Object.keys(DEFAULT_COUNTRY_SETTINGS)) === JSON.stringify(["UK", "MY", "SG"]), "the markets covered are UK, Malaysia, Singapore");
+ok(JSON.stringify(Object.keys(DEFAULT_COUNTRY_SETTINGS)) === JSON.stringify(["UK", "MY", "SG", "AU"]), "the markets covered are UK, Malaysia, Singapore, Australia");
 
 console.log("── 3. what it says ──");
 const words = (l: ReadinessLead, ctx = {}) => leadReadiness(l, ctx).needs.map((i) => i.key).join(",");

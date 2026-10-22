@@ -8,7 +8,11 @@
    local by default, set per country in outreach_country_settings — src/lib/outreachMarkets.ts). Every other number keeps
    the London window, byte for byte. Pass the settings; left out, MY / SG use their defaults.
    ⛔ PURE (one relative import of another pure leaf): the queue imports this by relative path. */
-import { channelOn, mobileMarketOf, windowForMarket, type CountrySettings, type Market } from './outreachMarkets.ts';
+/* ⛔ AUSTRALIA (2026-10-22): an Australian mobile's window is read in the LEAD's zone (`leadTz`, src/lib/auLeadZone.ts),
+   Mon–Fri. Without a zone it never opens ("needs state"). A caller that has no lead to read passes nothing and the
+   Australian lead is simply held — never sent in a guessed zone. */
+import { AU_LEAD_ZONES, AU_SEND_DAYS, ABROAD_MARKETS, channelOn, localWeekday, mobileMarketOf, windowForMarket, windowOpenAt,
+         type CountrySettings, type Market } from './outreachMarkets.ts';
 
 export interface SendWindow {
   /** IANA zone the window is read in. */
@@ -17,6 +21,10 @@ export interface SendWindow {
   startMin: number;
   endMin: number;
   label: string;
+  /** Local weekdays it opens on (0 = Sunday). Absent = every day. */
+  days?: readonly number[];
+  /** No zone for a per-lead-zone market (Australia): never open. */
+  needsState?: boolean;
 }
 
 export const LONDON_SEND_WINDOW: SendWindow = { tz: 'Europe/London', startMin: 7 * 60, endMin: 21 * 60 + 30, label: 'UK' };
@@ -24,9 +32,9 @@ export const SEND_WINDOWS: readonly SendWindow[] = [LONDON_SEND_WINDOW];
 
 /** The window for a destination in WhatsApp digits. One window for everyone now (the digits stay in the signature so
  *  a future market is a one-line change here, not a new call site). */
-export function sendWindowForDigits(digits: string | null | undefined, settings?: CountrySettings | null): SendWindow {
+export function sendWindowForDigits(digits: string | null | undefined, settings?: CountrySettings | null, leadTz?: string | null): SendWindow {
   const m = mobileMarketOf(digits);
-  if (m === 'MY' || m === 'SG') return { ...windowForMarket(m, settings, LONDON_SEND_WINDOW), label: m };
+  if (m === 'MY' || m === 'SG' || m === 'AU') return { ...windowForMarket(m, settings, LONDON_SEND_WINDOW, leadTz), label: m };
   return LONDON_SEND_WINDOW;
 }
 
@@ -39,24 +47,28 @@ export function localMinutes(tz: string, now: Date = new Date()): number {
 }
 
 export function windowOpen(w: SendWindow, now: Date = new Date()): boolean {
-  const m = localMinutes(w.tz, now);
-  return m >= w.startMin && m < w.endMin;
+  return windowOpenAt(w, now);
 }
 
-/** Is the window for THIS destination open now? */
-export function windowOpenForDigits(digits: string | null | undefined, now: Date = new Date(), settings?: CountrySettings | null): boolean {
-  return windowOpen(sendWindowForDigits(digits, settings), now);
+/** Is the window for THIS destination open now? `leadTz` = an Australian lead's zone (src/lib/auLeadZone.ts). */
+export function windowOpenForDigits(digits: string | null | undefined, now: Date = new Date(), settings?: CountrySettings | null,
+                                    leadTz?: string | null): boolean {
+  return windowOpen(sendWindowForDigits(digits, settings, leadTz), now);
 }
 
 /** Is ANY window open (the queue's outer gate)? */
 export function anyWindowOpen(now: Date = new Date(), settings?: CountrySettings | null): boolean {
   if (SEND_WINDOWS.some((w) => windowOpen(w, now))) return true;
-  return marketWindowOpen(['MY', 'SG'], 'whatsapp', now, settings);
+  return marketWindowOpen(ABROAD_MARKETS, 'whatsapp', now, settings);
 }
 
-/** Is a switched-on market's own window open now (Malaysia / Singapore)? */
+/** Is a switched-on market's own window open now (Malaysia / Singapore; Australia: in ANY of its zones)? */
 export function marketWindowOpen(markets: readonly Market[], channel: 'whatsapp' | 'sms', now: Date = new Date(),
                                  settings?: CountrySettings | null): boolean {
   return markets.some((m) => m !== 'UK' && channelOn(settings ?? null, m, channel)
-    && windowOpen({ ...windowForMarket(m, settings, LONDON_SEND_WINDOW), label: m }, now));
+    && (m === 'AU'
+      ? AU_LEAD_ZONES.some((tz) => windowOpen({ ...windowForMarket(m, settings, LONDON_SEND_WINDOW, tz), label: m }, now))
+      : windowOpen({ ...windowForMarket(m, settings, LONDON_SEND_WINDOW), label: m }, now)));
 }
+
+export { AU_SEND_DAYS, localWeekday };

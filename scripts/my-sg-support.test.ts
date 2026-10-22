@@ -128,7 +128,7 @@ ok(/before insert or update of phone, country on public\.outreach_leads/.test(MI
 console.log('\n── 5. markets: no "No mobile" on a Malaysia / Singapore mobile ──');
 ok(mobileMarketOf('60123456789') === 'MY' && mobileMarketOf('601112345678') === 'MY' && mobileMarketOf('6591234567') === 'SG' && mobileMarketOf('6581234567') === 'SG', 'MY 01x and SG 8/9 mobiles are mobiles');
 ok(mobileMarketOf('60312345678') === null && mobileMarketOf('6561234567') === null && mobileMarketOf('6531234567') === null, 'MY / SG landlines and SG VoIP are not mobiles');
-ok(mobileMarketOf('447700900123') === 'UK' && mobileMarketOf('441614960000') === null && mobileMarketOf('61412345678') === null && mobileMarketOf(null) === null, 'UK mobile yes; UK landline, Australia, null no');
+ok(mobileMarketOf('447700900123') === 'UK' && mobileMarketOf('441614960000') === null && mobileMarketOf('61412345678') === 'AU' && mobileMarketOf(null) === null, 'UK mobile yes; UK landline, null no (Australia is its own market since 2026-10-22)');
 ok(callMarketOf('60312345678') === 'MY' && callMarketOf('6561234567') === 'SG' && callMarketOf('441614960000') === 'UK', 'calling reaches landlines too');
 const off = DEFAULT_COUNTRY_SETTINGS;
 const on = countrySettingsFrom([{ country: 'MY', whatsapp_on: true, sms_on: true, call_on: true }, { country: 'SG', whatsapp_on: true, sms_on: true, call_on: true }]);
@@ -151,14 +151,14 @@ ok(MIG.includes("and public.outreach_channel_on(public.mobile_market(o.country, 
 console.log('\n── 6. send hours by recipient country ──');
 const at = (iso: string) => new Date(iso);
 ok(sendWindowForDigits('60123456789').tz === 'Asia/Kuala_Lumpur' && sendWindowForDigits('6591234567').tz === 'Asia/Singapore', 'a MY / SG mobile uses its own time zone');
-ok(sendWindowForDigits('447700900123') === LONDON_SEND_WINDOW && sendWindowForDigits('61412345678') === LONDON_SEND_WINDOW, 'everything else keeps the London window');
+ok(sendWindowForDigits('447700900123') === LONDON_SEND_WINDOW && sendWindowForDigits('61298765432') === LONDON_SEND_WINDOW, 'everything else keeps the London window (an Australian mobile has its own, scripts/australia-whatsapp.test.ts)');
 ok(windowOpenForDigits('60123456789', at('2026-10-14T01:00:00Z')) && !windowOpenForDigits('60123456789', at('2026-10-14T00:59:00Z')), 'Malaysia opens 09:00 local (01:00 UTC)');
 ok(windowOpenForDigits('6591234567', at('2026-10-14T10:59:00Z')) && !windowOpenForDigits('6591234567', at('2026-10-14T11:00:00Z')), 'Singapore closes 19:00 local (11:00 UTC)');
 ok(!anyWindowOpen(at('2026-10-14T02:00:00Z')) && !anyWindowOpen(at('2026-10-14T02:00:00Z'), off), '03:00 London: no tick while Malaysia / Singapore are off (UK unchanged)');
 ok(anyWindowOpen(at('2026-10-14T02:00:00Z'), on), '…and the tick runs for a switched-on Malaysia / Singapore at 10:00 their time');
 ok(windowForMarket('MY', countrySettingsFrom([{ country: 'MY', send_start_min: 600, send_end_min: 1080 }]), LONDON_SEND_WINDOW).startMin === 600, 'hours are adjustable per country');
 const q = read('supabase/functions/process-whatsapp-queue/index.ts');
-ok(/const anyWindowOpen = windowOpen \|\| marketWindowOpen\(\["MY", "SG"\], "whatsapp", new Date\(\), countrySettings\);/.test(q), 'the WhatsApp queue opens for a switched-on country in its own hours');
+ok(/const anyWindowOpen = windowOpen \|\| marketWindowOpen\(ABROAD_MARKETS, "whatsapp", new Date\(\), countrySettings\);/.test(q), 'the WhatsApp queue opens for a switched-on country in its own hours');
 ok(/\.find\(leadSendable\) \?\? null;[\s\S]*\.find\(leadSendable\) \?\? null;/.test(q), 'BOTH follow-up lanes use the per-country hours (not London)');
 const sq = read('supabase/functions/process-sms-queue/index.ts');
 ok(/inItsHours\(l\) && !suspended/.test(sq) && /return m === "MY" \|\| m === "SG" \? marketOpen\(m\) && !atCap\.has\(m\) : ukOpen;/.test(sq), 'the SMS queue texts each country in its own hours (UK unchanged)');

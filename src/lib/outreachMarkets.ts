@@ -16,18 +16,34 @@
    mobile we are choosing not to message yet ('country_off'), so nothing is written on the lead.
 
    The SQL twin is public.mobile_market(country, phone_key) (migration 20261025090000_my_sg_markets.sql); keep equal.
+
+   ⛔ AUSTRALIA (2026-10-22, feat/australia-whatsapp, docs/australia-whatsapp.md): a WhatsApp market like Malaysia — its
+   own switch, daily cap and auto-off — with two differences:
+     · WHATSAPP ONLY. channelOn answers false for Australian SMS and browser calls whatever is stored (prospect-only;
+       texts to +61 stay refused). The SQL twin outreach_channel_on and set_outreach_country refuse them too.
+     · ITS HOURS ARE PER LEAD. Australia spans five zones, so the window is read in the zone of the lead's STATE
+       (src/lib/auLeadZone.ts), Mon–Fri only. No zone given = the window never opens ("needs state") — never a guess.
+     AU  61 4 + 8 digits (Australian mobiles are 04…; 02/03/07/08 are landlines).
    ⛔ PURE, NO IMPORTS: edge functions import this by relative path. */
 
-export type Market = 'UK' | 'MY' | 'SG';
+export type Market = 'UK' | 'MY' | 'SG' | 'AU';
 export type OutreachChannel = 'whatsapp' | 'sms' | 'call';
-export const MARKETS: readonly Market[] = ['UK', 'MY', 'SG'];
+export const MARKETS: readonly Market[] = ['UK', 'MY', 'SG', 'AU'];
+/** The markets that are not the UK, in one list (the queue's market loops read this, never a hand-typed pair). */
+export const ABROAD_MARKETS: readonly Exclude<Market, 'UK'>[] = ['MY', 'SG', 'AU'];
+/** Markets reached by WhatsApp ONLY: SMS and browser calls are never on, whatever is stored. */
+export const WHATSAPP_ONLY_MARKETS: ReadonlySet<Market> = new Set<Market>(['AU']);
+/** Markets whose hours are read in each lead's own zone (src/lib/auLeadZone.ts), not one country zone. */
+export const PER_LEAD_ZONE_MARKETS: ReadonlySet<Market> = new Set<Market>(['AU']);
+/** Australia's send days: Monday–Friday in the lead's own zone (0 = Sunday … 6 = Saturday). */
+export const AU_SEND_DAYS: readonly number[] = [1, 2, 3, 4, 5];
 
 /** The reason token when a real mobile is in a market whose channel is switched off. Stored / consumed — never rename. */
 export const COUNTRY_OFF = 'country_off';
 
 /** The lead `country` value for each market (src/types/outreach.ts `Country`). */
-export const MARKET_COUNTRY: Record<Market, string> = { UK: 'UK', MY: 'Malaysia', SG: 'Singapore' };
-export const MARKET_NAME: Record<Market, string> = { UK: 'United Kingdom', MY: 'Malaysia', SG: 'Singapore' };
+export const MARKET_COUNTRY: Record<Market, string> = { UK: 'UK', MY: 'Malaysia', SG: 'Singapore', AU: 'Australia' };
+export const MARKET_NAME: Record<Market, string> = { UK: 'United Kingdom', MY: 'Malaysia', SG: 'Singapore', AU: 'Australia' };
 
 /** The market of a MOBILE number in WhatsApp digits ("60123456789"), or null. */
 export function mobileMarketOf(digits: string | null | undefined): Market | null {
@@ -35,6 +51,7 @@ export function mobileMarketOf(digits: string | null | undefined): Market | null
   if (/^447\d{9}$/.test(d)) return 'UK';
   if (/^601([02-9]\d{7}|1\d{8})$/.test(d)) return 'MY';
   if (/^65[89]\d{7}$/.test(d)) return 'SG';
+  if (/^614\d{8}$/.test(d)) return 'AU';
   return null;
 }
 
@@ -75,6 +92,10 @@ export const DEFAULT_COUNTRY_SETTINGS: Record<Market, CountrySetting> = {
         send_start_min: 9 * 60, send_end_min: 19 * 60, timezone: 'Asia/Kuala_Lumpur' },
   SG: { country: 'SG', whatsapp_on: false, sms_on: false, call_on: false, whatsapp_daily_cap: 50, sms_daily_cap: 25,
         send_start_min: 9 * 60, send_end_min: 19 * 60, timezone: 'Asia/Singapore' },
+  /* Australia: 09:00–17:00 Mon–Fri in each lead's own zone. `timezone` is only where its daily cap's day is counted from
+     (the east coast); the send hours are never read in it. Absent row = OFF, like Malaysia. */
+  AU: { country: 'AU', whatsapp_on: false, sms_on: false, call_on: false, whatsapp_daily_cap: 100, sms_daily_cap: null,
+        send_start_min: 9 * 60, send_end_min: 17 * 60, timezone: 'Australia/Sydney' },
 };
 
 /** The largest per-country daily cap that may be typed (a typo guard; the team cap still binds WhatsApp). */
@@ -84,7 +105,8 @@ export type CountrySettings = Record<Market, CountrySetting>;
 
 /** Stored rows → one complete setting per market. A row's NULL keeps the default; a missing row is the default. */
 export function countrySettingsFrom(rows: ReadonlyArray<Partial<CountrySetting> & { country?: string | null }> | null | undefined): CountrySettings {
-  const out = { UK: { ...DEFAULT_COUNTRY_SETTINGS.UK }, MY: { ...DEFAULT_COUNTRY_SETTINGS.MY }, SG: { ...DEFAULT_COUNTRY_SETTINGS.SG } } as CountrySettings;
+  const out = { UK: { ...DEFAULT_COUNTRY_SETTINGS.UK }, MY: { ...DEFAULT_COUNTRY_SETTINGS.MY }, SG: { ...DEFAULT_COUNTRY_SETTINGS.SG },
+                AU: { ...DEFAULT_COUNTRY_SETTINGS.AU } } as CountrySettings;
   for (const r of rows ?? []) {
     const m = String(r?.country ?? '') as Market;
     if (!MARKETS.includes(m)) continue;
@@ -99,6 +121,7 @@ export function countrySettingsFrom(rows: ReadonlyArray<Partial<CountrySetting> 
 /** Is this channel switched on for this market? Only an explicit true is on (the absent-value law). */
 export function channelOn(settings: CountrySettings | null | undefined, market: Market | null, channel: OutreachChannel): boolean {
   if (!market) return false;
+  if (channel !== 'whatsapp' && WHATSAPP_ONLY_MARKETS.has(market)) return false;
   const s = (settings ?? DEFAULT_COUNTRY_SETTINGS)[market];
   const v = channel === 'whatsapp' ? s?.whatsapp_on : channel === 'sms' ? s?.sms_on : s?.call_on;
   return v === true;
@@ -118,16 +141,49 @@ export function isReachableMobile(digits: string | null | undefined, channel: 'w
 /* ── SEND HOURS BY RECIPIENT COUNTRY ─────────────────────────────────────────────────────────────────────────────
    The UK keeps its existing windows byte for byte (WhatsApp queue 07:00-21:30 London, texts 09:00-20:00 London — the
    callers pass them in as `ukWindow`). Malaysia and Singapore (both UTC+8, no daylight saving) use their own local
-   hours, 09:00-19:00 by default, adjustable per country. */
-export interface SendWindow { tz: string; startMin: number; endMin: number }
+   hours, 09:00-19:00 by default, adjustable per country.
+   Australia (2026-10-22): its hours (09:00-17:00 by default) are read in the LEAD's zone (`leadTz`, from
+   src/lib/auLeadZone.ts), Mon–Fri only. No zone = `needsState`: the window never opens. */
+export interface SendWindow {
+  tz: string; startMin: number; endMin: number;
+  /** Local weekdays the window opens on (0 = Sunday). Absent = every day (the UK, Malaysia, Singapore — unchanged). */
+  days?: readonly number[];
+  /** A per-lead-zone market with no zone for this lead: never open, nothing is guessed. */
+  needsState?: boolean;
+}
 
-export function windowForMarket(market: Market, settings: CountrySettings | null | undefined, ukWindow: SendWindow): SendWindow {
+export function windowForMarket(market: Market, settings: CountrySettings | null | undefined, ukWindow: SendWindow,
+                                leadTz?: string | null): SendWindow {
   if (market === 'UK') return ukWindow;
   const s = (settings ?? DEFAULT_COUNTRY_SETTINGS)[market];
   const d = DEFAULT_COUNTRY_SETTINGS[market];
   const start = wholeIn(s?.send_start_min, 0, 24 * 60) ?? (d.send_start_min as number);
   const end = wholeIn(s?.send_end_min, 0, 24 * 60) ?? (d.send_end_min as number);
+  if (PER_LEAD_ZONE_MARKETS.has(market)) {
+    const ok = typeof leadTz === 'string' && AU_LEAD_ZONES.includes(leadTz);
+    return { tz: ok ? leadTz as string : (d.timezone as string), startMin: start, endMin: end, days: AU_SEND_DAYS, ...(ok ? {} : { needsState: true }) };
+  }
   return { tz: s?.timezone || (d.timezone as string), startMin: start, endMin: end };
+}
+
+/** The IANA zones an Australian lead can be in (src/lib/auLeadZone.ts maps a state to one). A positive list: any other
+ *  string is "no zone". */
+export const AU_LEAD_ZONES: readonly string[] = [
+  'Australia/Sydney', 'Australia/Melbourne', 'Australia/Hobart', 'Australia/Brisbane', 'Australia/Adelaide', 'Australia/Darwin', 'Australia/Perth',
+];
+
+/** The local weekday (0 = Sunday … 6 = Saturday) in `tz` at `now`. */
+export function localWeekday(tz: string, now: Date = new Date()): number {
+  const w = new Intl.DateTimeFormat('en-GB', { timeZone: tz, weekday: 'short' }).format(now);
+  return ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].indexOf(w.slice(0, 3));
+}
+
+/** The one open-or-not rule every window copy uses: never open when it needs a state, only on its days, then the hours. */
+export function windowOpenAt(w: { tz: string; startMin: number; endMin: number; days?: readonly number[]; needsState?: boolean }, now: Date = new Date()): boolean {
+  if (w.needsState) return false;
+  if (w.days && !w.days.includes(localWeekday(w.tz, now))) return false;
+  const m = localMinutes(w.tz, now);
+  return m >= w.startMin && m < w.endMin;
 }
 
 /** Minutes after local midnight in `tz` at `now`. */
@@ -138,8 +194,7 @@ export function localMinutes(tz: string, now: Date = new Date()): number {
 }
 
 export function windowOpen(w: SendWindow, now: Date = new Date()): boolean {
-  const m = localMinutes(w.tz, now);
-  return m >= w.startMin && m < w.endMin;
+  return windowOpenAt(w, now);
 }
 
 /** 00:00 today in `tz`, as a UTC instant — where a country's daily cap counts from. */
