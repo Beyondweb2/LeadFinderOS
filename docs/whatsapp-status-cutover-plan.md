@@ -50,15 +50,28 @@ ready, and the deploy happens on the day of the switch.
 4. Rollback ready BEFORE deploying: version 129's own source, taken from its live bundle, kept as a deployable folder
    outside `main`. Rolling back = deploying that folder. Diffed and dry-built first.
 
+## Built 2026-10-22 (`fix/webhook-error-capture`, Paul chose A)
+
+- Code work 1–3 done: the webhook stores `errors[0]` on the send, the message and the lead; the gate takes
+  `WHATSAPP_APP_SECRET_NEXT` as a second secret; `scripts/webhook-error-capture.test.ts`.
+- Rollback copy: `C:/Users/paulj/LeadFinderOS-wt/whatsapp-status-v129-rollback` (outside the repo; `ROLLBACK.md` has the
+  command; the original live bundle is kept beside it). All 28 modules recovered from the bundle's source maps, all compile.
+- ⚠️ Found while building: **live v129 already checks Meta's signature whenever `WHATSAPP_APP_SECRET` is set** (it was
+  fail-open only while the secret was empty). So saving the secret changes live behaviour at once, before any deploy.
+  That makes it the safest first test: a right secret changes nothing visible; a wrong one stops receipts and replies
+  until the secret is deleted. It also means a rollback to v129 does not rescue a wrong secret — delete the secret too.
+
 ## The cutover day (A), in order
 
-1. Paul sets `WHATSAPP_APP_SECRET` himself (below). Claude confirms the NAME exists (never the value).
-2. Claude deploys `whatsapp-status` from `main` (nothing else).
-3. Claude: an unsigned POST must answer 401, and the GET handshake still works with the existing verify token.
-4. Within minutes, real receipts must keep arriving: `whatsapp_sends` rows going `delivered` / `read`. If they stop and
-   the log says `bad_signature`, the secret is wrong → roll back at once (step 4 of the code work) and tell Paul.
+1. Paul sets `WHATSAPP_APP_SECRET` himself (Move37 app → App settings → Basic → App secret; Supabase → Edge Functions →
+   Secrets). Claude confirms the NAME exists (never the value).
+2. **On v129, before any deploy:** real receipts must keep arriving (`whatsapp_sends` rows going `delivered` / `read`
+   after the moment the secret was saved). If they stop, the secret is wrong → Paul deletes it; nothing else to undo.
+3. Claude deploys `whatsapp-status` from `main` (nothing else).
+4. Claude: an unsigned POST must answer 401, and the GET handshake still works with the existing verify token. Real
+   receipts keep arriving. If they stop, roll back (the folder above) and tell Paul.
 5. Paul sends one WhatsApp from his own phone to the business number → it must appear in the Inbox.
-6. A failure with a code: one template send to the reserved test number 07700 900 0xx (not a real person; it is not on
+6. A failure with a code (Paul approved this one send, 22 Oct): one template send to the reserved test number 07700 900 0xx (not a real person; it is not on
    WhatsApp, so Meta answers 131026) → the row must show `error_code` 131026 and text. Costs one message; only with Paul's OK.
 7. Record in `docs/`, What's New entry for admins, update handover 07.
 

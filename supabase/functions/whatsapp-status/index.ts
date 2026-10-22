@@ -2,6 +2,8 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { leadFailurePatch } from "../_shared/whatsapp-failure.ts";
 import { handleInboundMessages } from "../_shared/whatsapp-inbound.ts";
 import { judgeWhatsAppWebhookPost, QA_INBOUND_HEADER } from "../../../src/lib/metaWebhookGate.ts";
+import { errorColumns } from "../_shared/whatsapp-send.ts";
+import { metaErrorParts, type SendErrorParts } from "../../../src/lib/sendErrorMeaning.ts";
 
 // whatsapp-status — Meta WhatsApp delivery STATUS webhook.
 //
@@ -24,6 +26,16 @@ import { judgeWhatsAppWebhookPost, QA_INBOUND_HEADER } from "../../../src/lib/me
 
 const VERIFY_TOKEN_SECRET = "WHATSAPP_WEBHOOK_VERIFY_TOKEN";
 const APP_SECRET_SECRET = "WHATSAPP_APP_SECRET";
+/* 2026-10-22: the second Meta app's secret, set ONLY during the Move37 → Findable switch (docs/whatsapp-status-cutover-plan.md). */
+const NEXT_APP_SECRET_SECRET = "WHATSAPP_APP_SECRET_NEXT";
+
+/* 2026-10-22 (docs/whatsapp-status-cutover-plan.md): Meta's own error on a FAILED status — errors[0].code / title /
+   error_data.details, masked (sendErrorMeaning.ts). null when Meta sent no error object, so a stored error (e.g. one Meta
+   gave at send time) is never blanked by an empty one. */
+function failureParts(st: { errors?: unknown } | null | undefined): SendErrorParts | null {
+  const p = metaErrorParts(Array.isArray(st?.errors) ? st.errors[0] : null);
+  return p.code != null || p.title || p.details ? p : null;
+}
 
 /* The signature check itself is src/lib/metaSignature.ts (one place, unit-tested): HMAC-SHA256 over the
    RAW BYTES received, "sha256=<hex>", constant-time compare. Who may post at all is
@@ -62,6 +74,7 @@ Deno.serve(async (req) => {
       rawBytes,
       signatureHeader: req.headers.get("x-hub-signature-256"),
       appSecret: Deno.env.get(APP_SECRET_SECRET) ?? "",
+      nextAppSecret: Deno.env.get(NEXT_APP_SECRET_SECRET) ?? "",
       qaHeader: req.headers.get(QA_INBOUND_HEADER),
       cronSecret: Deno.env.get("CRON_SECRET") ?? "",
     });
@@ -101,8 +114,9 @@ Deno.serve(async (req) => {
           const status: string = st?.status ?? ""; // sent | delivered | read | failed
           if (!wamid || !status) continue;
           try {
-            // Mirror the status onto the audit row regardless of lead match.
-            await service.from("whatsapp_sends").update({ delivery_status: status }).eq("message_id", wamid);
+            const parts = status === "failed" ? failureParts(st) : null;
+            // Mirror the status onto the audit row regardless of lead match — with Meta's error on a failure (2026-10-22).
+            await service.from("whatsapp_sends").update({ delivery_status: status, ...(parts ? errorColumns(parts) : {}) }).eq("message_id", wamid);
 
             /* PER-MESSAGE TRUTH. whatsapp_messages was insert-only: every outbound row sat at
                'sent' forever, so "delivered/read" could only ever be read off the lead-level
@@ -128,7 +142,7 @@ Deno.serve(async (req) => {
             if (allowedPrior) {
               const { error: msgStatusErr } = await service
                 .from("whatsapp_messages")
-                .update({ status })
+                .update({ status, ...(parts ? errorColumns(parts) : {}) })
                 .eq("wa_message_id", wamid)
                 .eq("direction", "outbound")
                 .in("status", allowedPrior);
@@ -167,7 +181,11 @@ Deno.serve(async (req) => {
                   hasPriorSuccess = !!openedSite;
                 }
                 await service.from("outreach_leads")
-                  .update(leadFailurePatch(code, (lead.whatsapp_attempts as number) ?? 0, nowIso, hasPriorSuccess))
+                  .update({
+                    ...leadFailurePatch(code, (lead.whatsapp_attempts as number) ?? 0, nowIso, hasPriorSuccess),
+                    // 2026-10-22: the lead's last WhatsApp error, as the queue already writes it at send time.
+                    ...(parts ? { whatsapp_error_code: parts.code, whatsapp_error_title: parts.title, whatsapp_error_at: nowIso } : {}),
+                  })
                   .eq("id", lead.id);
                 console.log(`[whatsapp-status] failed (code ${code ?? "?"}) for lead ${lead.id} — hasPriorSuccess=${hasPriorSuccess}`);
               }

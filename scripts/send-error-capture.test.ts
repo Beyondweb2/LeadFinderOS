@@ -80,10 +80,13 @@ console.log('\n── 3. every failed-send writer stores the three columns ─�
   ok(/alter table public\.outreach_leads\s+add column if not exists whatsapp_error_code integer/.test(MIG), 'outreach_leads.whatsapp_error_code');
 }
 
-console.log('\n── 4. the held whatsapp-status webhook is untouched ──');
+console.log('\n── 4. whatsapp-status writes the error columns (2026-10-22, docs/whatsapp-status-cutover-plan.md) ──');
 {
   const w = read('supabase/functions/whatsapp-status/index.ts');
-  ok(!/errorColumns|sendErrorMeaning|error_code/.test(w), 'whatsapp-status does not import or write the new columns (it is held; not deployed)');
+  /* Was "untouched while held". Paul chose option A on 22 Oct: the webhook now stores Meta's error on a failed delivery
+     report, through the same helpers as the senders (scripts/webhook-error-capture.test.ts pins the detail). */
+  ok(/import \{ errorColumns \} from "\.\.\/_shared\/whatsapp-send\.ts"/.test(w) && /metaErrorParts/.test(w) && /errorColumns\(parts\)/.test(w),
+    'whatsapp-status stores Meta\'s error with the shared helpers (errorColumns / metaErrorParts)');
   ok(!/sendErrorMeaning|countryAutoPause/.test(read('supabase/functions/_shared/whatsapp-failure.ts')), 'its failure module is unchanged in meaning');
 }
 
