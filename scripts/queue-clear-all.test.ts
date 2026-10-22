@@ -21,7 +21,8 @@ ok(!/whatsapp_messages|whatsapp_sends|net\.http/.test(sql), "sends nothing");
 ok(/revoke all on function public\.lead_unqueue_all\(\) from public, anon;/.test(sql) && /grant execute on function public\.lead_unqueue_all\(\) to authenticated;/.test(sql), "not callable by anon");
 
 console.log("── the button ──");
-ok(/leadRpc\('lead_unqueue_all'/.test(panel), "one server call, not N browser calls");
+ok(/leadRpc\('lead_unqueue', \{ _lead_id: id \}\)/.test(panel) && !/leadRpc\('lead_unqueue_all'/.test(panel), "2026-10-22: Clear queue acts on the country on screen, per lead through lead_unqueue (the all-countries function is not called)");
+ok(/from the \$\{TAB_LABEL\[tab\]\} queue/.test(panel) && /Other countries are not touched/.test(panel), "the confirm names the country and says the others are untouched");
 ok(/data-testid="queue-clear-all"/.test(panel) && /data-testid="queue-clear-confirm"/.test(panel), "button + confirm dialog");
 ok(/Remove \{view\.waiting\.length\}/.test(panel) || /Remove \$\{view\.waiting\.length\}/.test(panel), "the confirm states how many leads");
 ok(/Removed \$\{n\}/.test(panel), "the result count is shown afterwards");
