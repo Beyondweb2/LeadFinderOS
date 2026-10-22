@@ -71,3 +71,18 @@ The 08:31–08:50 run (12 queue sends, template `initial_contact_short`, all `te
 All 100 (`not_contacted`, added 17 Oct, all in a campaign) pass every check `sales_queue_opener` makes today (status,
 contact history, conversation, number, market, switch on, suppression) — nothing blocks them. The marker is read only by
 `isFreshLead` (Find Leads' Remove button treats them as touched). Left as they are.
+
+## Deployed 2026-10-22 (main `5f9dd733`)
+
+- Full gate on the branch: 444/444 suites passed. Merged `--no-ff`; origin/main unmoved throughout.
+- SQL first: `20261123090000` applied and read back — `phone_market_country` answers as designed (+44 on USA / bare 44 on
+  Malaysia → UK; a national number keeps its label), the three functions use it, none passes the raw country, grants
+  unchanged (authenticated, postgres, service_role). Australia still off (not switched on); its hours still 09:00–19:00.
+- Edge (23, the whole closure of the changed `src/lib` files): admin-overview, ai-reply-drafts, business-summary,
+  conversation-triage, create-ai-audit, findable-onboarding, inbox-scheduled-send, mockup, paid-client-hub,
+  process-ai-audit-queue, process-sms-queue, process-whatsapp-queue, quick-close, sales-performance, send-whatsapp-media,
+  send-whatsapp-message (x-swm-build `2026-10-22b-country-refusals`), send-whatsapp-voice, stripe-webhook, submissions,
+  twilio-sms-send, twilio-voice-token, twilio-webhook, whatsapp-number-health. Bodies checked for the new code.
+  **`whatsapp-status` NOT deployed (held)** — it only matches inbound numbers, which arrive with their full code.
+- SPA live on app.leadfinderos.com (entry `index-B1_5U9vs.js`): the lead-card warning, the plain words and the What's New
+  entry are in the live chunks. Nobody has looked at it on screen.
