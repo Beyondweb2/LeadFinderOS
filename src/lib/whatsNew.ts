@@ -22,6 +22,19 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-22-auto-off-counts', date: '2026-10-22', title: 'Numbers not on WhatsApp no longer switch a country off', audience: 'admin',
+    body: 'Malaysia, Singapore and Australia now switch themselves off only on failures that are not explained by the number simply not being on WhatsApp. The failed-sends list says why each send failed.',
+    report: {
+      added: [
+        'Failed sends — last 7 days: each failure Meta reported after sending now says whether the number is not on WhatsApp or failed for another reason, and whether it counts toward the country switching itself off.',
+      ],
+      changed: [
+        'A failed send to a number that is not on WhatsApp (the lead is marked No WhatsApp) is no longer counted toward a country switching itself off.',
+        'The rule is otherwise the same: at least 5 failures that are at least half of the last 10 counted sends, or one failure about our WhatsApp account or template.',
+      ],
+      removed: [],
+      effect: 'A cold list with many numbers not on WhatsApp keeps sending; a real problem still stops the country. Australia is still off until switched on.',
+    } },
   { id: '2026-10-22-country-refusals', date: '2026-10-22', title: 'A refused number now says what is wrong', audience: 'all',
     body: 'When WhatsApp, a text or a call is not possible, the reason now says what is actually wrong, for example a Malaysian landline, or a country that does not match the number. A number with its own country code is read as that country.',
     report: {

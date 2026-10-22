@@ -928,6 +928,17 @@ Deno.serve(async (req) => {
         .in("delivery_status", ["failed", "failed_temporary", "no_whatsapp"]).eq("test_mode", false)
         .gte("created_at", since).order("created_at", { ascending: false }).limit(50);
       if (fErr) return json({ ok: false, error: "read_failed" }, 500);
+      /* 2026-10-22 (src/lib/sendFailureReason.ts): the lead's flag is the only stored reason for a failure Meta reported
+         after sending (the live webhook keeps no code), so each row carries it. Read failure = an error, never "no flag". */
+      const failLeadIds = [...new Set(((rows ?? []) as Array<Record<string, unknown>>).map((r) => r.lead_id as string | null).filter((x): x is string => !!x))];
+      const leadFlag = new Map<string, { status: string | null; delivery: string | null }>();
+      if (failLeadIds.length) {
+        const { data: fl, error: flErr } = await service.from("outreach_leads").select("id, status, whatsapp_delivery_status").in("id", failLeadIds);
+        if (flErr) return json({ ok: false, error: "read_failed" }, 500);
+        for (const l of (fl ?? []) as Array<Record<string, unknown>>) {
+          leadFlag.set(l.id as string, { status: (l.status as string | null) ?? null, delivery: (l.whatsapp_delivery_status as string | null) ?? null });
+        }
+      }
       const failures = ((rows ?? []) as Array<Record<string, unknown>>).map((r) => {
         const stored = partsFromStoredError(r.error as string | null);
         const digits = String(r.phone ?? "");
@@ -938,6 +949,8 @@ Deno.serve(async (req) => {
           phoneEnd: digits ? digits.slice(-3) : null,
           code: (r.error_code as number | null) ?? stored.code, title: (r.error_title as string | null) ?? stored.title,
           details: (r.error_details as string | null) ?? stored.details,
+          leadStatus: leadFlag.get(r.lead_id as string)?.status ?? null,
+          leadDelivery: leadFlag.get(r.lead_id as string)?.delivery ?? null,
         };
       });
       return json({ ok: true, failures });

@@ -3,6 +3,7 @@ import { AlertTriangle, ChevronDown, ChevronRight, Loader2 } from 'lucide-react'
 import { edgeErrorMessage, invokeEdge } from '@/lib/edgeInvoke';
 import { SendErrorNote } from '@/components/SendErrorNote';
 import { cn } from '@/lib/utils';
+import { sendFailureReason } from '@/lib/sendFailureReason';
 
 /* FAILED WHATSAPP SENDS, LAST 7 DAYS (2026-10-15, admin only) — the queue panel's list of every failed send (queue,
    Inbox and follow-up lanes) with Meta's raw code and its plain-English meaning. Read through process-whatsapp-queue
@@ -19,9 +20,12 @@ interface FailureRow {
   code: number | null;
   title: string | null;
   details: string | null;
+  /** 2026-10-22: the lead's flag now — the stored reason for a failure Meta reported after sending. */
+  leadStatus?: string | null;
+  leadDelivery?: string | null;
 }
 
-const MARKET_NAME: Record<string, string> = { UK: 'UK', MY: 'Malaysia', SG: 'Singapore' };
+const MARKET_NAME: Record<string, string> = { UK: 'UK', MY: 'Malaysia', SG: 'Singapore', AU: 'Australia' };
 
 function when(iso: string): string {
   const d = new Date(iso);
@@ -63,7 +67,7 @@ export function RecentSendFailures() {
           {loading && <p className="flex items-center gap-1.5 text-[11px] text-muted-foreground"><Loader2 className="h-3 w-3 animate-spin" /> Reading…</p>}
           {err && <p className="text-[11px] text-red-700">{err} <button type="button" className="underline" onClick={() => void load()}>Try again</button></p>}
           {rows && rows.length === 0 && !loading && <p className="text-[11px] text-muted-foreground">No failed WhatsApp sends in the last 7 days.</p>}
-          {rows?.map((r) => (
+          {rows?.map((r) => { const why = sendFailureReason({ code: r.code, deliveryStatus: r.deliveryStatus, leadStatus: r.leadStatus ?? null, leadDelivery: r.leadDelivery ?? null }); return (
             <div key={r.id} className={cn('rounded-lg bg-background/70 px-2 py-1.5 text-[11px]')} data-testid="queue-failure-row">
               <div className="flex flex-wrap items-center gap-x-2 text-muted-foreground">
                 <span className="font-semibold text-foreground">{r.business || 'Unknown business'}</span>
@@ -75,10 +79,11 @@ export function RecentSendFailures() {
               </div>
               {(r.code != null || r.title || r.details)
                 ? <SendErrorNote channel="whatsapp" parts={{ code: r.code, title: r.title, details: r.details }} className="block font-medium text-red-700 dark:text-red-300" />
-                : <span className="block text-red-700 dark:text-red-300">Send failed — Meta gave no error code{r.deliveryStatus === 'failed' ? ' (reported later by delivery report)' : ''}.</span>}
+                : <span className="block text-red-700 dark:text-red-300" data-testid="queue-failure-reason">{why.words}</span>}
               {r.details && <span className="block text-muted-foreground">Meta said: {r.details}</span>}
+              {r.market && r.market !== 'UK' && <span className="block text-muted-foreground">{why.countsTowardAutoOff ? 'Counts toward this country switching itself off.' : 'Not counted toward this country switching itself off.'}</span>}
             </div>
-          ))}
+          ); })}
         </div>
       )}
     </div>
