@@ -10,7 +10,7 @@ import { Switch } from '@/components/ui/switch';
 import { cn } from '@/lib/utils';
 import { useNotifications, type AppNotification } from '@/hooks/useNotifications';
 import { useWhatsAppUnreadCounts } from '@/hooks/useWhatsAppUnread';
-import { useAiReplyDrafts } from '@/hooks/useAiReplyDrafts';
+import { useAiReplyDrafts, SHELL_DRAFTS_POLL_MS } from '@/hooks/useAiReplyDrafts';
 import { needsYou } from '@/lib/aiReplyDraft';
 import { GROUPED_NOTIFICATION_KINDS, NEEDS_YOU_CARD_LINK, REPLY_CARD_LINK, bellCount, replyCardBody, replyCardTitle, replySummary, type ReplySummary } from '@/lib/notificationGrouping';
 import { TONE, ago, type Tone } from '@/components/salesDash/ui';
@@ -131,13 +131,14 @@ export function NotificationCenter({ variant }: { variant: 'desktop' | 'mobile' 
   const n = useNotifications(variant === 'mobile' ? undefined : (x) => {
     if (x.priority < 2 || !readAlerts() || typeof document === 'undefined' || !document.hidden) return;
     try { if (Notification.permission === 'granted') { const w = new Notification(x.title, { body: x.body ?? undefined, tag: x.id }); w.onclick = () => { window.focus(); if (x.link) navigate(x.link); }; } } catch { /* not supported */ }
-  });
+  }, { passive: variant === 'mobile' });
   const go = (x: AppNotification) => { if (!x.read_at) void n.markRead([x.id]); setOpen(false); if (x.link) navigate(x.link); };
   /* The grouped reply card, from the Inbox's own unread state — it falls as conversations are opened. */
   const wa = useWhatsAppUnreadCounts();
   const replies = replySummary(wa.rows);
   /* Needs you (2026-10-20): the same read the Inbox uses (my_ai_reply_drafts, scoped per person). */
-  const ai = useAiReplyDrafts(true);
+  // One poll for the whole shell (the desktop bell owns it; the phone bell reads the same cached rows). The Inbox adds its faster one while open.
+  const ai = useAiReplyDrafts(true, variant === 'mobile' ? false : SHELL_DRAFTS_POLL_MS);
   const needsYouCount = ai.rows.filter((r) => needsYou(r)).length;
   const count = bellCount(wa.rows.length, n.rows) + needsYouCount;
   const openNeedsYou = () => { setOpen(false); navigate(NEEDS_YOU_CARD_LINK); };

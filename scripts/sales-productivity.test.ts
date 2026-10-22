@@ -58,7 +58,7 @@ ok(/canOpenRoute\(role, g\.to\)/.test(pal), "the palette never offers a page the
 ok(/leadSourceFor\(role\)\.table/.test(pal) && /\.eq\('is_archived', false\)/.test(pal), "lead search reads under the person's own permissions (the sales view for Sales), archived excluded");
 const rec = read("src/hooks/useRecentLeads.ts");
 ok(/\.eq\('actor_user_id', user!\.id\)/.test(rec) && /\.eq\('sent_by_user_id', user!\.id\)/.test(rec), "recent leads = what THIS person worked (their activity, their own sends) — not random");
-ok(/<CommandPalette \/>/.test(read("src/components/AppLayout.tsx")), "the palette lives in the shell (every page)");
+ok(/<CommandPaletteHost \/>/.test(read("src/components/AppLayout.tsx")), "the palette lives in the shell (every page)");
 
 if (f) { console.log(`\n${f} FAILURES`); process.exit(1); }
 console.log("\nALL PASS");

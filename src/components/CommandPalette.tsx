@@ -11,7 +11,8 @@ import { useAuth } from '@/hooks/useAuth';
 import { useRecentLeads } from '@/hooks/useRecentLeads';
 import { canOpenRoute } from '@/lib/access';
 import { leadSourceFor } from '@/lib/outreachLeadColumns';
-import { GO_SHORTCUTS, goTarget, isPaletteKey, isTypingTarget } from '@/lib/shortcuts';
+import { GO_SHORTCUTS, isPaletteKey, isTypingTarget } from '@/lib/shortcuts';
+import { OPEN_PALETTE_EVENT } from '@/components/CommandPaletteHost';
 import { outreachLeadLink, whatsAppLinkForLead } from '@/lib/salesLinks';
 import { writeCampaignFilter } from '@/lib/outreachPrefs';
 import { cn } from '@/lib/utils';
@@ -26,14 +27,13 @@ import { DialogHero } from '@/components/operator/ui';
 const sb = supabase as any;
 type Item = { id: string; group: string; label: string; hint?: string; icon: typeof Search; run: () => void; alt?: { label: string; run: () => void }[] };
 const GO_ICON: Record<string, typeof Search> = { '/sales-dashboard': BarChart3, '/inbox': MessageCircle, '/outreach': ClipboardList, '/find-leads': Search, '/coverage': MapIcon };
-export const OPEN_PALETTE_EVENT = 'open-command-palette';
-
-export function CommandPalette() {
+/** `initial`: what the host was asked for when it loaded this (Ctrl K / the Search button: the palette; "?": the shortcut help). */
+export function CommandPalette({ initial }: { initial?: 'open' | 'help' } = {}) {
   const navigate = useNavigate();
   const { role } = useSubscription();
   const { user } = useAuth();
-  const [open, setOpen] = useState(false);
-  const [help, setHelp] = useState(false);
+  const [open, setOpen] = useState(initial === 'open');
+  const [help, setHelp] = useState(initial === 'help');
   const [q, setQ] = useState('');
   const [sel, setSel] = useState(0);
   const recent = useRecentLeads(open);
@@ -56,22 +56,18 @@ export function CommandPalette() {
     queryFn: async () => ((await sb.from('campaigns').select('id, name').order('name')).data ?? []) as { id: string; name: string }[],
   });
 
-  // Global keys: Ctrl/Cmd+K anywhere; "g x" and "?" only when not typing.
-  const last = useRef<{ key: string | null; at: number }>({ key: null, at: 0 });
+  // Global keys once loaded: Ctrl/Cmd+K anywhere, "?" when not typing. (The "g then x" page shortcuts live in CommandPaletteHost.)
   useEffect(() => {
     const onOpen = () => setOpen(true);
     const onKey = (e: KeyboardEvent) => {
       if (isPaletteKey(e)) { e.preventDefault(); setOpen((v) => !v); return; }
       if (open || isTypingTarget(e.target) || e.metaKey || e.ctrlKey || e.altKey) return;
       if (e.key === '?') { e.preventDefault(); setHelp(true); return; }
-      const to = goTarget(last.current.key, last.current.at, e.key, Date.now());
-      if (to && canOpenRoute(role, to)) { e.preventDefault(); navigate(to); last.current = { key: null, at: 0 }; return; }
-      last.current = { key: e.key.toLowerCase(), at: Date.now() };
     };
     window.addEventListener('keydown', onKey);
     window.addEventListener(OPEN_PALETTE_EVENT, onOpen);
     return () => { window.removeEventListener('keydown', onKey); window.removeEventListener(OPEN_PALETTE_EVENT, onOpen); };
-  }, [open, role, navigate]);
+  }, [open]);
   useEffect(() => { if (!open) { setQ(''); setSel(0); } }, [open]);
 
   const close = (fn: () => void) => () => { setOpen(false); fn(); };
@@ -153,15 +149,5 @@ export function CommandPalette() {
         </DialogContent>
       </Dialog>
     </>
-  );
-}
-
-/** A button that opens the palette (the phone top bar, the sidebar). */
-export function PaletteButton({ className, compact = false }: { className?: string; compact?: boolean }) {
-  return (
-    <button type="button" onClick={() => window.dispatchEvent(new Event(OPEN_PALETTE_EVENT))} aria-label="Search leads and pages (Ctrl K)"
-      className={cn('inline-flex items-center gap-2 rounded-lg text-sm text-muted-foreground hover:bg-muted hover:text-foreground', compact ? 'h-10 w-10 justify-center' : 'h-9 w-full border border-border/60 px-2.5', className)}>
-      <Search className="h-4 w-4" />{!compact && <><span className="flex-1 text-left">Search…</span><kbd className="rounded border border-border px-1 text-[10px]">Ctrl K</kbd></>}
-    </button>
   );
 }

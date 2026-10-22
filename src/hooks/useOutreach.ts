@@ -3,7 +3,8 @@ import { notifyLeadChanged } from '@/lib/leadSync';
 import { useQueryClient } from '@tanstack/react-query';
 import { fetchAllRows, fetchAllRowsParallel, fetchPagesAfterFirst } from '@/lib/fetchAllRows';
 import { OUTREACH_FIRST_BATCH, LEAD_LOAD_INITIAL, LEAD_LOAD_COMPLETE, LEAD_LOAD_FROM_LAST_VISIT, datasetComplete, mergeAfterBackgroundLoad, type LeadLoadState } from '@/lib/outreachLoad';
-import { forgetOutreachList, recallOutreachList, rememberOutreachList } from '@/lib/outreachListMemory';
+import { forgetOutreachList, markOutreachListSynced, recallOutreachList, rememberOutreachList } from '@/lib/outreachListMemory';
+import { applyLeadDelta, deltaMatchesCounts, deltaSinceIso, DELTA_MAX_ROWS } from '@/lib/outreachDelta';
 import { guardListRows, leadSourceFor } from '@/lib/outreachLeadColumns';
 import { errorMessageOf, leadLoadErrorText, addInFlightKey } from '@/lib/leadLoadError';
 import { leadsSetCampaign, salesPatchLead, salesRemoveLeads } from '@/lib/leadRpc';
@@ -456,25 +457,36 @@ export function useOutreach({ history = true, progressive = false, preload = tru
   }, [processPhoneQueue]);
 
   /* ── THE BACKGROUND HALF: every page after the first, then the merge. ───────────────────────── */
-  const loadRemainingLeads = useCallback(async (gen: number) => {
+  const loadRemainingLeads = useCallback(async (gen: number, archivedAlready?: Promise<OutreachLead[]>, startedAt: number = Date.now()) => {
     const shown = shownRef.current;
     if (!shown) return;
     const src = leadSourceFor(roleRef.current);
+    /* ⚡ The ARCHIVED list is part of this background half (2026-10-22): the table no longer waits for it. The first
+       request starts it alongside page 0 (archivedAlready); a Retry starts it here. Until it lands the table shows
+       ACTIVE rows only (visibleWhileLoading), as it already did for a partial list. */
+    const archivedP: Promise<OutreachLead[]> = archivedAlready ?? fetchAllRowsParallel<OutreachLead>('Outreach (archived leads)', (from, to) => (supabase as unknown as { from: (t: string) => any })
+        .from(src.table).select(src.listSelect).eq('is_archived', true)
+        .order('updated_at', { ascending: false }).order('id', { ascending: true }).range(from, to), (l) => l.id)
+        .then((r) => guardListRows(r.rows, 'useOutreach'));
     const buildActive = (from: number, to: number) => (supabase as unknown as { from: (t: string) => any })
       .from(src.table).select(src.listSelect).eq('is_archived', false)
       .order('created_at', { ascending: false }).order('id', { ascending: true }).range(from, to);
     try {
-      const all = await fetchPagesAfterFirst<OutreachLead>(buildActive, (l) => l.id, shown.first, shown.total);
+      const [all, fetchedArchivedRows] = await Promise.all([
+        fetchPagesAfterFirst<OutreachLead>(buildActive, (l) => l.id, shown.first, shown.total),
+        archivedP,
+      ]);
       if (gen !== loadGenRef.current) return;
       // Page 0's rows come back as the very objects already on screen; only the new ones are guarded.
       const fetchedActive = [...all.slice(0, shown.first.length), ...guardListRows(all.slice(shown.first.length), 'useOutreach')];
       const merged = mergeAfterBackgroundLoad({
         shownActive: shown.active, shownArchived: shown.archived,
         localActive: latestRef.current.active, localArchived: latestRef.current.archived,
-        fetchedActive, fetchedArchived: shown.archived,
+        fetchedActive, fetchedArchived: fetchedArchivedRows,
       });
       setLeads(merged.active);
       setArchivedLeads(merged.archived);
+      if (userIdRef.current) markOutreachListSynced(userIdRef.current, roleRef.current, startedAt);
       setLeadLoad(LEAD_LOAD_COMPLETE(merged.active.length));
     } catch (e) {
       if (gen !== loadGenRef.current) return;
@@ -498,21 +510,25 @@ export function useOutreach({ history = true, progressive = false, preload = tru
     setLeadLoad(LEAD_LOAD_INITIAL);
     const src = leadSourceFor(roleRef.current);
     const sb = supabase as unknown as { from: (t: string) => any };
+    const startedAt = Date.now();
     let first: OutreachLead[] = [];
     let archived: OutreachLead[] = [];
     let total: number | null = null;
+    /* Started with page 0, awaited only where the table needs it (a list that fits in the first batch) or by the
+       background half. The no-op catch marks a rejection as handled when page 0 fails first; every await still throws. */
+    const archivedP: Promise<OutreachLead[]> = fetchAllRowsParallel<OutreachLead>('Outreach (archived leads)', (from, to) => sb
+      .from(src.table).select(src.listSelect).eq('is_archived', true)
+      .order('updated_at', { ascending: false }).order('id', { ascending: true }).range(from, to), (l) => l.id)
+      .then((r) => guardListRows(r.rows, 'useOutreach'));
+    archivedP.catch(() => {});
     try {
-      const [p0, arc] = await Promise.all([
-        sb.from(src.table).select(src.listSelect, { count: 'exact' }).eq('is_archived', false)
-          .order('created_at', { ascending: false }).order('id', { ascending: true }).range(0, OUTREACH_FIRST_BATCH - 1),
-        fetchAllRowsParallel<OutreachLead>('Outreach (archived leads)', (from, to) => sb
-          .from(src.table).select(src.listSelect).eq('is_archived', true)
-          .order('updated_at', { ascending: false }).order('id', { ascending: true }).range(from, to), (l) => l.id),
-      ]);
+      const p0 = await sb.from(src.table).select(src.listSelect, { count: 'exact' }).eq('is_archived', false)
+        .order('created_at', { ascending: false }).order('id', { ascending: true }).range(0, OUTREACH_FIRST_BATCH - 1);
       if (p0.error) throw p0.error;
       first = guardListRows((p0.data ?? []) as OutreachLead[], 'useOutreach');
       total = typeof p0.count === 'number' ? p0.count : null;
-      archived = guardListRows(arc.rows, 'useOutreach');
+      // A list that fits in the first batch is complete at once, so it needs its archived rows before it shows.
+      if (first.length === 0 || (total != null && first.length >= total && first.length < OUTREACH_FIRST_BATCH)) archived = await archivedP;
     } catch (e) {
       if (gen !== loadGenRef.current) return;
       hasLoadedOnceRef.current = true;
@@ -531,11 +547,12 @@ export function useOutreach({ history = true, progressive = false, preload = tru
     setIsLoading(false);
     // Complete at once only when the count says the first batch IS the list.
     if (first.length === 0 || (total != null && first.length >= total && first.length < OUTREACH_FIRST_BATCH)) {
+      if (userIdRef.current) markOutreachListSynced(userIdRef.current, roleRef.current, startedAt);
       setLeadLoad(LEAD_LOAD_COMPLETE(first.length));
       return;
     }
     setLeadLoad({ phase: 'partial', loaded: first.length, total, error: null });
-    await loadRemainingLeads(gen);
+    await loadRemainingLeads(gen, archivedP, startedAt);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loadRemainingLeads]);
 
@@ -558,6 +575,43 @@ export function useOutreach({ history = true, progressive = false, preload = tru
       await progressiveLoad();
     }
   }, [loadRemainingLeads, progressiveLoad]);
+
+  /** The remembered list brought up to date from the leads changed since `sinceIso`. True = it is now on screen and complete;
+   *  false = nothing was changed on screen and the caller runs the full load (any error, too many changes, or counts that disagree). */
+  const refreshRememberedDelta = useCallback(async (
+    sinceIso: string, remembered: { active: OutreachLead[]; archived: OutreachLead[] }, loadStart: number,
+  ): Promise<boolean> => {
+    const gen = ++loadGenRef.current;
+    const src = leadSourceFor(roleRef.current);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const sb = supabase as unknown as { from: (t: string) => any };
+    try {
+      const [changed, activeCount, archivedCount] = await Promise.all([
+        fetchAllRowsParallel<OutreachLead>('Outreach (changed leads)', (from, to) => sb
+          .from(src.table).select(src.listSelect).gte('updated_at', sinceIso)
+          .order('updated_at', { ascending: false }).order('id', { ascending: true }).range(from, to), (l) => l.id),
+        sb.from(src.table).select('id', { count: 'exact', head: true }).eq('is_archived', false),
+        sb.from(src.table).select('id', { count: 'exact', head: true }).eq('is_archived', true),
+      ]);
+      if (gen !== loadGenRef.current) return true; // a newer load owns the screen
+      if (activeCount.error || archivedCount.error || changed.truncated || changed.rows.length > DELTA_MAX_ROWS) return false;
+      const laid = applyLeadDelta(remembered.active, remembered.archived, guardListRows(changed.rows, 'useOutreach'));
+      if (!deltaMatchesCounts(laid, { active: activeCount.count ?? null, archived: archivedCount.count ?? null })) return false;
+      const merged = mergeAfterBackgroundLoad({
+        shownActive: remembered.active, shownArchived: remembered.archived,
+        localActive: latestRef.current.active, localArchived: latestRef.current.archived,
+        fetchedActive: laid.active, fetchedArchived: laid.archived,
+      });
+      setLeads(merged.active);
+      setArchivedLeads(merged.archived);
+      if (userIdRef.current) markOutreachListSynced(userIdRef.current, roleRef.current, loadStart);
+      setLeadLoad(LEAD_LOAD_COMPLETE(merged.active.length));
+      return true;
+    } catch (e) {
+      console.error('Outreach: the changed-since refresh failed, loading the full list:', e);
+      return false;
+    }
+  }, []);
 
   const fetchLeadsRef = useRef<() => Promise<void>>(async () => {});
   const fetchLeads = useCallback(async () => {
@@ -604,6 +658,11 @@ export function useOutreach({ history = true, progressive = false, preload = tru
         setLeadLoad(st);
         hasLoadedOnceRef.current = true;
         setIsLoading(false);
+        /* ⚡ "Changed since" (2026-10-22, src/lib/outreachDelta.ts): read only the leads touched since this list was last
+           proven current, accept it only when the database's own counts agree, else fall through to the full load below. */
+        const loadStart = Date.now();
+        const since = deltaSinceIso(remembered.syncedAt, loadStart);
+        if (since && await refreshRememberedDelta(since, remembered, loadStart)) return;
       } else if (!leadLoadRef.current.fromLastVisit) {
         await progressiveLoad();
         return;
@@ -614,6 +673,7 @@ export function useOutreach({ history = true, progressive = false, preload = tru
        it: Find Leads loads the whole book here, and pressing Add to CRM during that load used to have its new
        row wiped by the stale result, so the button came back and a second press said "Previously added". */
     const shownAtStart = latestRef.current;
+    const fullLoadStart = Date.now();
     
     // Only show loading spinner on initial load
     if (!hasLoadedOnceRef.current) {
@@ -680,6 +740,7 @@ export function useOutreach({ history = true, progressive = false, preload = tru
     });
     setLeads(merged.active);
     setArchivedLeads(merged.archived);
+    if (!archivedError && userIdRef.current) markOutreachListSynced(userIdRef.current, roleRef.current, fullLoadStart);
     setLeadLoad(LEAD_LOAD_COMPLETE(merged.active.length));
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [progressive, progressiveLoad, preload, onlyLeadId]);

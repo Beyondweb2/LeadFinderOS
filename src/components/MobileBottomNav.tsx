@@ -7,7 +7,7 @@ import {
   MessageSquare, Users, ShieldCheck,
   BarChart3, Map as MapIcon, MessageSquarePlus, Gift, UsersRound, PenLine,
 } from 'lucide-react';
-import { OPEN_FEEDBACK_EVENT, OPEN_WHATS_NEW_EVENT } from '@/components/FeedbackAndNews';
+import { OPEN_FEEDBACK_EVENT, OPEN_WHATS_NEW_EVENT } from '@/components/FeedbackNewsButtons';
 import { OPEN_MESSAGE_NAME_EVENT } from '@/components/MessageNameDialog';
 import { cn } from '@/lib/utils';
 import {
