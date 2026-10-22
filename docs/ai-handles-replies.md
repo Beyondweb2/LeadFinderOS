@@ -398,7 +398,7 @@ Tests: `scripts/inbox-reply-mode.test.ts`, `scripts/ai-auto-send.test.ts`. Marke
 
 ## Two controls, the draft bubble, one pill (2026-10-22, Paul)
 
-Branch `feat/inbox-approval-cleanup`, migration `20261124100000_reply_audit_switch.sql`. Tests: `scripts/inbox-attention.test.ts`.
+Branch `feat/inbox-approval-cleanup`, migration `20261124120000_reply_audit_switch.sql`. Tests: `scripts/inbox-attention.test.ts`.
 - **Two settings** (Inbox → Settings, admin): "Audit after first reply" On / Off (`whatsapp_outreach_state.reply_audit_enabled`,
   fn `ai-reply-drafts` `set_reply_audit`) and "AI replies" Manual / Draft for approval / Auto (`ai_reply_mode`, unchanged).
   `trg_inbox_reply_mode_sync` now copies `auto_reply_enabled` FROM `reply_audit_enabled` (it used to be `mode <> 'manual'`), so

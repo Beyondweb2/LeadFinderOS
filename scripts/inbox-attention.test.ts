@@ -1,5 +1,5 @@
 /* ONE ATTENTION PILL, the draft bubble and the two reply settings (2026-10-22, Paul). The rule (src/lib/inboxAttention.ts),
-   the draft bubble wiring, the list row, and the "Audit after first reply" switch (migration 20261124100000), read as source.
+   the draft bubble wiring, the list row, and the "Audit after first reply" switch (migration 20261124120000), read as source.
    Nothing here can message anyone. */
 import { readFileSync } from 'node:fs';
 import { ATTENTION_ORDER, attentionFor, attentionsFor, INBOUND_LABEL_TITLES } from '../src/lib/inboxAttention.ts';
@@ -71,7 +71,7 @@ console.log('4. the draft bubble');
 
 console.log('5. two reply settings');
 {
-  const MIG = read('supabase/migrations/20261124100000_reply_audit_switch.sql');
+  const MIG = read('supabase/migrations/20261124120000_reply_audit_switch.sql');
   const FN = read('supabase/functions/ai-reply-drafts/index.ts');
   const CTRL = read('src/components/InboxReplyModeControl.tsx');
   ok(/new\.auto_reply_enabled := coalesce\(new\.reply_audit_enabled, false\);/.test(MIG) && !/new\.auto_reply_enabled := new\.ai_reply_mode <> 'manual'/.test(MIG), 'the reply audit follows its OWN switch, no longer the mode (Manual no longer turns it off)');

@@ -2,7 +2,7 @@
 
 Branch `feat/inbox-approval-cleanup`. Paul: "the audit results shown in the Inbox do not sync up properly or are not accurate".
 Rules: `src/lib/auditScore.ts`. Worker: `supabase/functions/_shared/audit-scores.ts` (run by the `ai-reply-drafts` tick).
-Migration `20261124090000_audit_score_one_ruler.sql`. Tests: `scripts/audit-score-one-ruler.test.ts`.
+Migration `20261124110000_audit_score_one_ruler.sql`. Tests: `scripts/audit-score-one-ruler.test.ts`.
 
 ## What was measured (read-only, 22 Oct, the 3,060 Inbox leads; 1,653 with an audit)
 

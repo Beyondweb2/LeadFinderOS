@@ -23,7 +23,7 @@ export const INBOX_REPLY_MODE_LABELS: Record<InboxReplyMode, string> = {
 export const INBOX_REPLY_MODE_QUESTION = 'AI replies';
 
 /* 2026-10-22 (Paul): the mode decides DRAFTING only. The audit on a first reply is its own switch (REPLY_AUDIT_*, below;
-   whatsapp_outreach_state.reply_audit_enabled, migration 20261124100000). Manual no longer turns the audit off. */
+   whatsapp_outreach_state.reply_audit_enabled, migration 20261124120000). Manual no longer turns the audit off. */
 export const INBOX_REPLY_MODE_HINTS: Record<InboxReplyMode, string> = {
   manual: 'Nothing is drafted. You read and answer every reply yourself. Stops and complaints are still flagged.',
   draft: 'Every reply gets an AI draft in the thread, marked Needs approval. Nothing is sent until you press Approve & send.',

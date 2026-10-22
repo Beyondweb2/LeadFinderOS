@@ -85,7 +85,7 @@ console.log('5. wiring');
   const SH = read('supabase/functions/_shared/audit-scores.ts');
   const INBOX = read('src/pages/Inbox.tsx');
   const HOOK = read('src/hooks/useInbox.ts');
-  const MIG = read('supabase/migrations/20261124090000_audit_score_one_ruler.sql');
+  const MIG = read('supabase/migrations/20261124110000_audit_score_one_ruler.sql');
   ok(FN.indexOf('await rescoreDirtyRuns(service)') > 0 && FN.indexOf('await rescoreDirtyRuns(service)') < FN.indexOf('await refreshVisibleFlags(service, started)'), 'the tick rescores BEFORE the Visible sweep (it judges current numbers)');
   ok(/isVisible\(visibleCountsOf\(picked\.score\), vs\.rule, vs\.share\)/.test(FN) && /if \(picked\.updating \|\| !picked\.score\) return was;/.test(FN), 'Visible is judged on the stored score, never while it is updating');
   ok(/if \(auditsErr\) return was;/.test(FN), 'an unreadable audit list never sets or clears Visible');
