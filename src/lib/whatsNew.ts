@@ -36,6 +36,7 @@ export const WHATS_NEW: readonly WhatsNewEntry[] = [
       ],
       removed: [],
       effect: 'You see your own work first, and the number beside Inbox is yours. Nothing was sent or changed on any lead.',
+    } },
   { id: '2026-10-22-country-refusals', date: '2026-10-22', title: 'A refused number now says what is wrong', audience: 'all',
     body: 'When WhatsApp, a text or a call is not possible, the reason now says what is actually wrong, for example a Malaysian landline, or a country that does not match the number. A number with its own country code is read as that country.',
     report: {
