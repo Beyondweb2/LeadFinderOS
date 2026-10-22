@@ -68,3 +68,15 @@ findable-onboarding, inbox-scheduled-send, mockup, paid-client-hub, process-ai-a
 process-whatsapp-queue, quick-close, sales-performance, send-whatsapp-media, send-whatsapp-message (`BUILD_ID`
 `2026-10-22a-australia-whatsapp`), send-whatsapp-voice, stripe-webhook, submissions, twilio-sms-send, twilio-voice-token,
 twilio-webhook, warm-lead-reply, whatsapp-number-health. ⛔ Skip `whatsapp-status` (held). SPA: push main.
+
+## Deployed 2026-10-22 (main `57fb9b73`)
+
+- Edge first (new code with no AU row = Australia off, safe), then SQL. All 24 functions above deployed exit 0; live
+  `x-swm-build` = `2026-10-22a-australia-whatsapp`; `process-whatsapp-queue` body carries `auMaySend` / `auLeadTz`,
+  `twilio-sms-send` / `inbox-scheduled-send` carry the Australia wording. `whatsapp-status` NOT deployed (held).
+- Migration `20261120090000` applied and read back: AU row on (WhatsApp only, cap 100, 540-1020, Australia/Sydney), both CHECKs
+  include AU, `mobile_market` / `outreach_channel_on` / `set_outreach_country` / auto-off / no-retry include AU.
+- Status reset run on Paul's approval: 77 Australian mobiles `no_whatsapp_needs_sms` → `not_contacted` (count read first: 77);
+  the 20 landlines keep No mobile. 0 Australian leads queued and 0 sends at the time of the check.
+- SPA live on app.leadfinderos.com and leadfinderos-next.pages.dev (entry `index-ef7zUOVO.js`; WhatsAppQueuePanel chunk has the
+  Australia row; entry has the zone rule and the What's New entry).
