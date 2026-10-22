@@ -205,3 +205,4 @@
 - `docs/country-refusals.md` — 2026-10-22: refusals say what is wrong (phoneCountry.ts); lead-card warning when the number's code and the country disagree; a number with its own code is read as that country (waNumber + SQL phone_market_country); why Australia switched itself off at 08:03 / 08:50 (the pattern rule, numbers not on WhatsApp; AU hours stored 09:00–19:00)
 - `docs/lead-status-and-visible.md` — 2026-10-21: the lead status follows the messages (one SQL rule + triggers on both message tables, a guard against late sender writes, the repair, the log); the Visible flag (Gemini / Google AI already names them → no pitch, no Needs you, follow-ups cancelled)
 - `docs/whatsapp-number-health.md` — 2026-10-21: fn whatsapp-number-health reads Meta's quality rating + tier every 15 min; yellow halves the cap, red pauses once, unreadable only blocks cap rises; the 21 Oct failed-sends finding
+- Inbox owner view and country filter: docs/inbox-owner-and-country.md

@@ -117,11 +117,44 @@ export function useLeadContactMethod(leadId: string | null): string | null {
   return q.data ?? null;
 }
 
-/** One unread number for the whole Inbox: WhatsApp conversations plus SMS conversations (the nav badge reads this). */
+/** Of these lead ids, the ones assigned to the signed-in user. Small by construction (only leads with an unread reply). */
+const OWNED_CHUNK = 100;
+function useMyLeadIdsAmong(ids: string[], enabled: boolean) {
+  const { user } = useAuth();
+  const key = [...ids].sort().join(',');
+  return useQuery({
+    queryKey: ['inbox-unread-mine', user?.id ?? null, key],
+    enabled: enabled && !!user?.id,
+    staleTime: 30_000,
+    queryFn: async (): Promise<Set<string>> => {
+      const mine = new Set<string>();
+      for (let i = 0; i < ids.length; i += OWNED_CHUNK) {
+        const { data, error } = await sb.from('outreach_leads').select('id').in('id', ids.slice(i, i + OWNED_CHUNK)).eq('assigned_to_user_id', user?.id);
+        if (error) throw error;
+        for (const r of (data ?? []) as { id: string }[]) mine.add(r.id);
+      }
+      return mine;
+    },
+  });
+}
+
+/** One unread number for the whole Inbox: WhatsApp conversations plus SMS conversations (the nav badge reads this).
+ *  ⛔ MY LEADS ONLY (2026-10-22): the Inbox opens on the signed-in person's own leads, so the badge counts the same view. A salesperson's
+ *  unread functions already return only their own leads; for an admin they return every lead, so the count is narrowed to leads assigned to
+ *  them. A conversation with no lead is not in the Inbox and is not counted. Until the ownership read lands the admin's badge shows nothing,
+ *  never the whole team's number. */
 export function useAllInboxUnread() {
+  const { role } = useSubscription();
   const wa = useWhatsAppUnread();
   const sms = useSmsUnread();
-  return { ...wa, count: wa.count + (sms.data ?? []).length };
+  const narrow = role === 'admin';
+  const leadIds = useMemo(() => [...new Set([...wa.rows.map((r) => r.lead_id), ...(sms.data ?? []).map((r) => r.lead_id)].filter((x): x is string => !!x))], [wa.rows, sms.data]);
+  const mine = useMyLeadIdsAmong(leadIds, narrow && leadIds.length > 0);
+  if (!narrow) return { ...wa, count: wa.count + (sms.data ?? []).length };
+  const owned = mine.data;
+  const waMine = leadIds.length === 0 ? [] : owned ? wa.rows.filter((r) => !!r.lead_id && owned.has(r.lead_id)) : [];
+  const smsMine = leadIds.length === 0 ? [] : owned ? (sms.data ?? []).filter((r) => !!r.lead_id && owned.has(r.lead_id)) : [];
+  return { ...wa, rows: waMine, count: waMine.length + smsMine.length };
 }
 
 export async function markSmsRead(phone: string): Promise<void> {
