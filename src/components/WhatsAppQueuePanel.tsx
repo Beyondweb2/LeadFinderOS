@@ -1,13 +1,15 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useCountrySettings } from '@/hooks/useCountrySettings';
-import { marketsOn } from '@/lib/outreachMarkets';
-import { useQueryClient } from '@tanstack/react-query';
+import { localDayStartUtc, marketsOn, windowForMarket, type Market } from '@/lib/outreachMarkets';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { getQueueStatus, rememberQueueStatus, QUEUE_STATE_KEY, queuedLeadLine } from '@/lib/queueStatus';
-import { MessageSquare, Loader2, Play, Pause, RefreshCw, ChevronDown, ChevronRight, X, Trash2, Inbox as InboxIcon } from 'lucide-react';
+import { MessageSquare, Loader2, Play, Pause, RefreshCw, X, Trash2, Settings as SettingsIcon, Inbox as InboxIcon } from 'lucide-react';
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter,
   AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
@@ -25,9 +27,10 @@ import {
 } from '@/lib/queueAuditStatus';
 import { WA_TEMPLATE_REQS } from '@/lib/whatsappTemplates';
 import {
-  announceQueueChanged, batchHeadline, deriveQueue, NEEDS_STATE_CHIP, QUEUE_BATCH_EVENT, QUEUE_ROW_STATE, readQueueBatch, rowNeedsState, ukClock,
+  announceQueueChanged, batchHeadline, deriveQueue, NEEDS_STATE_CHIP, QUEUE_ROW_STATE, rowNeedsState,
   type QueueBatch, type QueueRow, type QueueRowState,
 } from '@/lib/whatsappQueueView';
+import { nextSendWords, QUEUE_TABS, splitByTab, TAB_CALLING_CODE, TAB_LABEL, tabClock } from '@/lib/queueByCountry';
 import { Callout, EmptyState, ErrorState, IconTile, LoadState, SURFACE, ToneChip } from '@/components/operator/ui';
 import { cn } from '@/lib/utils';
 import { WhatsAppPaceSettings, type PaceStatus } from '@/components/WhatsAppPaceSettings';
@@ -50,6 +53,7 @@ interface TeamStatus {
   testHeldQueuedCount?: number | null;
   /* 2026-10-14: the admin-set cap / pace, the auto-pause note, sent today per person (WhatsAppPaceSettings). */
   pace?: PaceStatus['pace'];
+  numberHealth?: PaceStatus['numberHealth'];
   autoPausedAt?: PaceStatus['autoPausedAt'];
   autoPauseReason?: PaceStatus['autoPauseReason'];
   perPersonToday?: PaceStatus['perPersonToday'];
@@ -58,43 +62,71 @@ interface TeamStatus {
   pauseChange?: PauseChange | null;
 }
 
+/** Template messages the queue (and Inbox) sent to one country since that country's local midnight. Admin only, one cheap
+ *  head count for the tab on screen. Failed sends and test-mode sends are left out. null = could not be read. */
+function useSentToday(market: Market, enabled: boolean) {
+  const { settings } = useCountrySettings();
+  return useQuery({
+    queryKey: ['whatsapp-queue-sent-today', market],
+    enabled,
+    staleTime: 30_000,
+    queryFn: async (): Promise<number | null> => {
+      const tz = windowForMarket(market, settings, { tz: 'Europe/London', startMin: 0, endMin: 0 }).tz;
+      const since = localDayStartUtc(tz).toISOString();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { count, error } = await (supabase as any).from('whatsapp_messages').select('id', { count: 'exact', head: true })
+        .eq('direction', 'outbound').eq('test_mode', false).not('template_name', 'is', null)
+        .or('status.is.null,status.neq.failed')
+        .like('phone', `${TAB_CALLING_CODE[market]}%`).gte('created_at', since);
+      return error ? null : (count ?? 0);
+    },
+  });
+}
+
 /**
  * THE WHATSAPP QUEUE — one component, both roles (2026-10-06; src/lib/whatsappQueueView.ts is the rule).
+ * 2026-10-22: ONE TAB PER COUNTRY (src/lib/queueByCountry.ts); every limit, switch, window, rating and failed-send list
+ * lives in the Settings popup. A screen job only: no sending behaviour changed.
  *
  * Rows: useWhatsAppQueue (the `sales_leads` view — the server decides whose rows). Sending state: queue_state
  * (both roles). Everything a salesperson sees, the admin sees in the same place and the same way.
  * ⛔ ADMIN-ONLY, because they act on or describe the WHOLE team's sending: test / live mode, pause / resume,
  *    Run tick, sent today against the cap, the next paced send, and cancelling a no-reply follow-up (a lane
  *    only the admin queues; the Inbox gates it the same way). The server refuses every one of them to Sales.
+ * ⛔ Pause and Run tick are the WHOLE queue's: the server has one pause flag and a tick takes no country. They are
+ *    labelled so; a per-country pause or tick is a sending change and has not been made.
  * Remove a waiting opener = fn lead_unqueue for BOTH roles (role + can_work_lead + only a lead still waiting).
  */
-export function WhatsAppQueuePanel({ defaultExpanded = true }: { defaultExpanded?: boolean }) {
+export function WhatsAppQueuePanel() {
   const { toast } = useToast();
   const qc = useQueryClient();
   const perms = useLeadPermissions();
   const teamControls = perms.queueControls;
   const q = useWhatsAppQueue();
   const { settings: countrySettings } = useCountrySettings();
-  const view = useMemo(() => deriveQueue(q.data ?? [], marketsOn(countrySettings, 'whatsapp')), [q.data, countrySettings]);
+  const markets = useMemo(() => marketsOn(countrySettings, 'whatsapp'), [countrySettings]);
+  const [tab, setTab] = useState<Market>('UK');
+  const byTab = useMemo(() => splitByTab(q.data ?? []), [q.data]);
+  const views = useMemo(() => ({
+    UK: deriveQueue(byTab.UK, markets), MY: deriveQueue(byTab.MY, markets),
+    SG: deriveQueue(byTab.SG, markets), AU: deriveQueue(byTab.AU, markets),
+  }), [byTab, markets]);
+  const view = views[tab];
   const state = useQueueState();
   const [team, setTeam] = useState<TeamStatus | null>(null);
   const [teamLoading, setTeamLoading] = useState(false);
   const [ticking, setTicking] = useState(false);
   const [pausing, setPausing] = useState(false);
-  const [expanded, setExpanded] = useState(defaultExpanded);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
-  const [batch, setBatch] = useState<QueueBatch | null>(() => readQueueBatch());
-  useEffect(() => {
-    const h = () => setBatch(readQueueBatch());
-    window.addEventListener(QUEUE_BATCH_EVENT, h);
-    return () => window.removeEventListener(QUEUE_BATCH_EVENT, h);
-  }, []);
+  const sentToday = useSentToday(tab, teamControls);
 
   /* ══ AUDIT STATUS PER QUEUED LEAD ═════════════════════════════════════════════════════════════
      🔴 WHY THIS IS ON SCREEN AT ALL. A lead queued for an audit-class template cannot send until its
      audit completes — the message carries the report link and templateBodyParams refuses to build it
      without one. From the queue a lead WAITING on its audit looked exactly like a stuck one.
      ⚠️ READ ONLY FOR THE LEADS THAT NEED IT (audit-class templates) — a queue of openers issues no request.
+     Only the tab on screen is read (2026-10-22), so the screen asks for less.
      RLS scopes ai_audits: the admin's own, a salesperson's own leads' (my_sales_audit_ids).
      ⚠️ NOT PAGINATED, DELIBERATELY, AND BOUNDED BY CONSTRUCTION: `.in()` over the queued audit-class
      leads only. */
@@ -154,6 +186,7 @@ export function WhatsAppQueuePanel({ defaultExpanded = true }: { defaultExpanded
     await Promise.all([
       q.refetch(),
       qc.invalidateQueries({ queryKey: QUEUE_STATE_KEY }),
+      qc.invalidateQueries({ queryKey: ['whatsapp-queue-sent-today'] }),
       refreshTeam(true),
     ]);
   };
@@ -192,7 +225,7 @@ export function WhatsAppQueuePanel({ defaultExpanded = true }: { defaultExpanded
       if (data?.ok) setTeam(data as TeamStatus);
       rememberQueueStatus(qc, data);
       void qc.invalidateQueries({ queryKey: QUEUE_STATE_KEY });
-      toast({ title: nextPaused ? 'Queue paused' : 'Queue resumed', description: nextPaused ? 'No WhatsApp messages will send until you resume.' : 'Sending continues on the next tick.' });
+      toast({ title: nextPaused ? 'Queue paused' : 'Queue resumed', description: nextPaused ? 'No WhatsApp messages will send, in any country, until you resume.' : 'Sending continues on the next tick.' });
     } catch (e) {
       toast({ title: "Couldn't change pause state", description: (e as Error)?.message ?? 'Failed', variant: 'destructive' });
     } finally {
@@ -213,21 +246,34 @@ export function WhatsAppQueuePanel({ defaultExpanded = true }: { defaultExpanded
     } finally { setBusy(null); }
   };
 
-  /* Clear EVERY waiting opener in one act — both roles, one server call (lead_unqueue_all): the admin's whole
-     queue, a salesperson's own leads only (the server decides per lead, as lead_unqueue does). Each lead goes back
-     to its pre-queue status. Sends nothing; no-reply follow-ups and the pause setting are not touched. */
+  /* Clear the waiting openers of the COUNTRY ON SCREEN (2026-10-22). The server's lead_unqueue_all empties every country,
+     so this removes this tab's leads one by one through the same per-lead act (lead_unqueue), a few at a time. Each lead
+     goes back to its pre-queue status; a lead the caller may not work, or that already left the queue, is simply counted
+     as not removed. Sends nothing; no-reply follow-ups and the pause setting are not touched. */
   const [confirmClear, setConfirmClear] = useState(false);
   const [clearing, setClearing] = useState(false);
+  const CLEAR_PARALLEL = 5;
   const clearAll = async () => {
+    const ids = view.waiting.map((l) => l.id);
     setClearing(true);
     try {
-      const r = await leadRpc('lead_unqueue_all', {});
-      if (!r.ok) { toast({ title: 'Queue not cleared', description: refusalText(r.error), variant: 'destructive' }); return; }
-      const ids = Array.isArray(r.lead_ids) ? (r.lead_ids as string[]) : [];
-      for (const id of ids.slice(0, 500)) notifyLeadChanged(id);
+      let removed = 0;
+      for (let i = 0; i < ids.length; i += CLEAR_PARALLEL) {
+        const results = await Promise.all(ids.slice(i, i + CLEAR_PARALLEL).map(async (id) => {
+          const r = await leadRpc('lead_unqueue', { _lead_id: id });
+          if (r.ok) notifyLeadChanged(id);
+          return r.ok;
+        }));
+        removed += results.filter(Boolean).length;
+      }
       announceQueueChanged();
-      const n = typeof r.removed === 'number' ? r.removed : ids.length;
-      toast({ title: `Removed ${n} ${n === 1 ? 'lead' : 'leads'} from the queue`, description: 'Nothing was sent. You can queue them again later.' });
+      const n = removed;
+      const left = ids.length - n;
+      toast({
+        title: `Removed ${n} ${n === 1 ? 'lead' : 'leads'} from the ${TAB_LABEL[tab]} queue`,
+        description: left > 0 ? `${left} could not be removed (already sent on, or not yours). Nothing was sent.` : 'Nothing was sent. You can queue them again later.',
+        ...(left > 0 ? { variant: 'destructive' as const } : {}),
+      });
     } finally { setClearing(false); setConfirmClear(false); }
   };
 
@@ -249,6 +295,9 @@ export function WhatsAppQueuePanel({ defaultExpanded = true }: { defaultExpanded
   };
 
   const line = queuedLeadLine(state);
+  const clock = tabClock(tab, countrySettings);
+  const tabCap = tab === 'UK' ? team?.cap ?? null : countrySettings[tab].whatsapp_daily_cap ?? null;
+  const total = q.isSuccess ? QUEUE_TABS.reduce((n, m) => n + views[m].waiting.length, 0) : null;
 
   return (
     <div className={cn(SURFACE, 'p-4')} data-testid="whatsapp-queue" data-scope={teamControls ? 'team' : 'mine'}>
@@ -269,6 +318,11 @@ export function WhatsAppQueuePanel({ defaultExpanded = true }: { defaultExpanded
           <Button size="sm" variant="ghost" className="h-8 gap-1.5 text-xs" onClick={() => void refresh()} disabled={refreshing} data-testid="queue-refresh">
             <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? 'animate-spin' : ''}`} /> Refresh
           </Button>
+          {teamControls && (
+            <Button size="sm" variant="outline" className="h-8 gap-1.5 text-xs" onClick={() => setSettingsOpen(true)} data-testid="queue-settings">
+              <SettingsIcon className="h-3.5 w-3.5" /> Settings
+            </Button>
+          )}
           <Button
             size="sm"
             variant="outline"
@@ -276,7 +330,7 @@ export function WhatsAppQueuePanel({ defaultExpanded = true }: { defaultExpanded
             onClick={() => setConfirmClear(true)}
             disabled={clearing || !q.isSuccess || view.waiting.length === 0}
             data-testid="queue-clear-all"
-            title="Remove every waiting lead from the queue. Nothing is sent."
+            title={`Remove every waiting ${TAB_LABEL[tab]} lead from the queue. Nothing is sent.`}
           >
             {clearing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
             Clear queue
@@ -290,10 +344,10 @@ export function WhatsAppQueuePanel({ defaultExpanded = true }: { defaultExpanded
               disabled={pausing}
               title={paused
                 ? 'Resume the queue — sending continues on the next tick'
-                : 'Pause the queue — no WhatsApp messages send (cron ticks AND manual Run tick) until you resume'}
+                : 'Pause the WHOLE queue, every country — no WhatsApp messages send (cron ticks AND manual Run tick) until you resume'}
             >
               {pausing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : paused ? <Play className="h-3.5 w-3.5" /> : <Pause className="h-3.5 w-3.5" />}
-              {paused ? 'Resume' : 'Pause'}
+              {paused ? 'Resume all' : 'Pause all'}
             </Button>
             <Button
               size="sm"
@@ -304,7 +358,7 @@ export function WhatsAppQueuePanel({ defaultExpanded = true }: { defaultExpanded
                 ? 'Queue is paused — resume to send. A tick sends nothing while paused.'
                 : team?.testMode
                   ? 'Force one simulated processor pass (TEST_MODE — nothing is sent)'
-                  : 'Run one processor pass now — a REAL send, subject to the 7am–9:30pm window, daily cap and pacing'}
+                  : 'Run one processor pass now, for the whole queue — a REAL send, subject to the send window, daily cap and pacing'}
             >
               {ticking ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Play className="h-3.5 w-3.5" />}
               {team?.testMode ? 'Run test tick' : 'Run tick'}
@@ -316,9 +370,9 @@ export function WhatsAppQueuePanel({ defaultExpanded = true }: { defaultExpanded
       <AlertDialog open={confirmClear} onOpenChange={(o) => { if (!clearing) setConfirmClear(o); }}>
         <AlertDialogContent data-testid="queue-clear-confirm">
           <AlertDialogHeader>
-            <AlertDialogTitle>Remove {view.waiting.length} {view.waiting.length === 1 ? 'lead' : 'leads'} from the queue?</AlertDialogTitle>
+            <AlertDialogTitle>Remove {view.waiting.length} {view.waiting.length === 1 ? 'lead' : 'leads'} from the {TAB_LABEL[tab]} queue?</AlertDialogTitle>
             <AlertDialogDescription>
-              {teamControls ? 'This empties the whole team queue.' : 'This empties your queued leads only.'} Each lead goes back to the
+              {teamControls ? `This empties the ${TAB_LABEL[tab]} queue for the whole team.` : `This empties your queued ${TAB_LABEL[tab]} leads only.`} Other countries are not touched. Each lead goes back to the
               status it had before it was queued. Nothing is sent. No-reply follow-ups are not touched.
             </AlertDialogDescription>
           </AlertDialogHeader>
@@ -331,48 +385,61 @@ export function WhatsAppQueuePanel({ defaultExpanded = true }: { defaultExpanded
         </AlertDialogContent>
       </AlertDialog>
 
+      {teamControls && (
+        <Dialog open={settingsOpen} onOpenChange={setSettingsOpen}>
+          <DialogContent className="max-h-[85vh] max-w-3xl overflow-y-auto" data-testid="queue-settings-dialog">
+            <DialogHeader>
+              <DialogTitle>WhatsApp queue settings</DialogTitle>
+              <DialogDescription>Limits, country switches, send hours, the number&apos;s quality rating and failed sends. Changes apply from the next queue tick.</DialogDescription>
+            </DialogHeader>
+            {/* The cap, pace, per-person limits, quality rating and tier, sent today per person; the auto-pause note (2026-10-14). Admin only. */}
+            {teamControls && <WhatsAppPaceSettings team={team} onSaved={() => refreshTeam(true)} />}
+            {/* 2026-10-14: sending by country — UK / Malaysia / Singapore / Australia switches, caps and local hours (admin only). */}
+            {teamControls && <CountrySendingSettings />}
+            {/* 2026-10-15: every failed send of the last 7 days with Meta's real error code and what it means (admin only). */}
+            {teamControls && <RecentSendFailures />}
+          </DialogContent>
+        </Dialog>
+      )}
+
       <p role="status" data-testid="queue-line" className={cn('mt-2 text-sm', line.tone === 'paused' ? 'text-amber-600 dark:text-amber-400' : 'text-muted-foreground')}>
         {line.text.replace(/^In the queue — (.)/, (_m, c: string) => c.toUpperCase())}
       </p>
 
-      <div className="mt-3 grid grid-cols-2 gap-2 text-xs sm:grid-cols-4">
-        {/* Queued — click to show or hide the list (send order). */}
-        <button
-          type="button"
-          onClick={() => setExpanded((v) => !v)}
-          data-testid="queue-toggle"
-          className="flex min-w-0 items-center justify-between rounded-xl bg-muted/40 px-2.5 py-1.5 text-left ring-1 ring-inset ring-border/40 transition-colors hover:ring-border"
-        >
-          <span className="min-w-0">
-            <span className="block text-[10px] uppercase tracking-wide text-muted-foreground/60">Queued</span>
-            <span className="font-semibold text-foreground/90" data-testid="queue-count">{q.isSuccess ? view.waiting.length : '—'}</span>
-            {view.hookCount > 0 && (
-              <span className="block text-[10px] font-medium text-muted-foreground/70">
-                + {view.hookCount} hook follow-up{view.hookCount === 1 ? '' : 's'}
-              </span>
-            )}
-            {view.followUps.length > 0 && (
-              <span className="block text-[10px] font-medium text-sky-600/80 dark:text-sky-400/80">
-                + {view.followUps.length} no-reply follow-up{view.followUps.length === 1 ? '' : 's'}
-              </span>
-            )}
-          </span>
-          {expanded ? <ChevronDown className="h-3.5 w-3.5 shrink-0 text-muted-foreground/60" /> : <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground/60" />}
-        </button>
-        <Stat label="UK time" value={`${ukClock()} ${state ? (state.windowOpen ? '· open' : '· closed') : ''}`.trim()} />
-        {teamControls && <Stat label="Sent today" value={team ? `${team.sentToday} / ${team.cap}` : '—'} />}
-        {/* ⛔ READS nextEligibleSendAt (server, Europe/London), NOT the raw nextSendAt pacing stamp, formatted
-            in Europe/London so it is UK time wherever the operator is. Falls back to nextSendAt only if an
-            older function deploy has not shipped the new field. */}
-        {teamControls && <Stat label="Next send" value={(() => {
-          const iso = team?.nextEligibleSendAt ?? team?.nextSendAt;
-          if (!iso) return '—';
-          return new Date(iso).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/London' }) + ' UK';
-        })()} />}
+      <Tabs value={tab} onValueChange={(v) => setTab(v as Market)} className="mt-3">
+        <TabsList className="h-auto max-w-full flex-wrap justify-start gap-0.5 rounded-2xl" data-testid="queue-country-tabs">
+          {QUEUE_TABS.map((m) => (
+            <TabsTrigger key={m} value={m} className="gap-1.5 rounded-full px-3 py-1.5 text-xs" data-testid={`queue-tab-${m}`}>
+              {TAB_LABEL[m]}
+              <span className="tabular-nums text-[11px] text-muted-foreground/70" data-testid={`queue-tab-count-${m}`}>{q.isSuccess ? views[m].waiting.length : '—'}</span>
+            </TabsTrigger>
+          ))}
+        </TabsList>
+      </Tabs>
+
+      <div className="mt-3 grid grid-cols-2 gap-2 text-xs sm:grid-cols-4" data-testid="queue-numbers" data-tab={tab}>
+        <div className="min-w-0 rounded-xl bg-muted/40 px-2.5 py-1.5 ring-1 ring-inset ring-border/40">
+          <div className="text-[10px] uppercase tracking-wide text-muted-foreground/60">Queued</div>
+          <div className="font-semibold text-foreground/90" data-testid="queue-count">{q.isSuccess ? view.waiting.length : '—'}</div>
+          {view.hookCount > 0 && (
+            <div className="text-[10px] font-medium text-muted-foreground/70">+ {view.hookCount} hook follow-up{view.hookCount === 1 ? '' : 's'}</div>
+          )}
+          {view.followUps.length > 0 && (
+            <div className="text-[10px] font-medium text-sky-600/80 dark:text-sky-400/80">+ {view.followUps.length} no-reply follow-up{view.followUps.length === 1 ? '' : 's'}</div>
+          )}
+        </div>
+        {teamControls && <Stat label="Sent today" value={sentToday.data == null ? '—' : tabCap != null ? `${sentToday.data} / ${tabCap}` : String(sentToday.data)} />}
+        {/* ⛔ READS nextEligibleSendAt (server), NOT the raw nextSendAt pacing stamp, shown in THIS country's own time
+            (nextSendWords). The server has one next-send for the whole queue, so a country shows it only while it could be
+            the one sending; otherwise it says Off / Paused / Opens HH:MM. Falls back to nextSendAt on an older deploy. */}
+        {teamControls && <Stat label="Next send" value={nextSendWords(tab, countrySettings, team?.nextEligibleSendAt ?? team?.nextSendAt,
+          { paused, ukWindowOpen: state?.windowOpen ?? null, ukStartHour: state?.windowStartHour ?? null })} />}
+        <Stat label={clock.perLead ? 'Local time' : `${TAB_LABEL[tab]} time`}
+          value={clock.perLead ? 'Each lead’s own' : `${clock.time}${tab === 'UK' && state ? (state.windowOpen ? ' · open' : ' · closed') : ''}`} />
       </div>
 
       {/* Archived leads still sitting at status='queued' — the processor skips them; saying so stops "the queue
-          looks stuck" being confused with "these were withdrawn". Counted from the rows on screen. */}
+          looks stuck" being confused with "these were withdrawn". Counted from this tab's rows. */}
       {view.archivedWaiting > 0 && (
         <Callout tone="amber" className="mt-2 px-3 py-2 text-[11px]">
           {view.archivedWaiting} archived {view.archivedWaiting === 1 ? 'lead is' : 'leads are'} still marked queued and will <strong>not</strong> be sent to. Archiving stops contact.
@@ -380,18 +447,12 @@ export function WhatsAppQueuePanel({ defaultExpanded = true }: { defaultExpanded
       )}
 
       {/* Held by a TEST ACCOUNT: the sender never chooses these (src/lib/qaSafety.ts), so "Waiting" would be a lie.
-          Server count, admin only (the same status read that gives Sent today). */}
+          Server count for the whole queue, admin only (the same status read that gives Sent today). */}
       {teamControls && (team?.testHeldQueuedCount ?? 0) > 0 && (
         <Callout tone="amber" className="mt-2 px-3 py-2 text-[11px]" data-testid="queue-test-held">
           {team?.testHeldQueuedCount} queued {team?.testHeldQueuedCount === 1 ? 'lead is' : 'leads are'} held by a test account and will <strong>not</strong> be sent to. Reassign {team?.testHeldQueuedCount === 1 ? 'it' : 'them'} to a real owner, or remove {team?.testHeldQueuedCount === 1 ? 'it' : 'them'} from the queue.
         </Callout>
       )}
-      {/* The cap, pace, per-person limits and sent today per person; the auto-pause note (2026-10-14). Admin only. */}
-      {teamControls && <WhatsAppPaceSettings team={team} onSaved={() => refreshTeam(true)} />}
-      {/* 2026-10-14: sending by country — UK / Malaysia / Singapore switches, caps and local hours (admin only). */}
-      {teamControls && <CountrySendingSettings />}
-      {/* 2026-10-15: every failed send of the last 7 days with Meta's real error code and what it means (admin only). */}
-      {teamControls && <RecentSendFailures />}
       {/* Queued with no number WhatsApp can reach (none, a landline, not a UK mobile): the sender flags these No
           WhatsApp when it reaches them. Counted from the rows on screen. */}
       {view.unsendable > 0 && (
@@ -407,53 +468,49 @@ export function WhatsAppQueuePanel({ defaultExpanded = true }: { defaultExpanded
         </Callout>
       )}
 
-      {/* The last batch THIS tab queued — a batch result, never queue rows (whatsappQueueView.ts). */}
-      {batch && <BatchNote batch={batch} className="mt-2" />}
-
-      {expanded && (
-        <div className="mt-2 rounded-xl bg-muted/30 p-2 ring-1 ring-inset ring-border/40" data-testid="queue-list">
-          <div className="px-1 pb-1 text-[10px] uppercase tracking-wide text-muted-foreground/50">In send order (next first)</div>
-          {q.isPending ? <LoadState compact label="Loading the queue…" />
-            : q.isError ? <ErrorState className="py-4" title="Could not load the queue." onRetry={() => void q.refetch()} retryLabel="Try again" />
-            : view.waiting.length === 0 && view.followUps.length === 0 ? (
-              <EmptyState icon={InboxIcon} title="No messages waiting" className="py-6" testId="queue-empty">
-                {view.hookCount > 0 ? 'Only hook follow-ups are waiting (counted above).' : 'Leads you queue for WhatsApp appear here in send order.'}
-              </EmptyState>
-            ) : (
-            /* Fixed-height scroll box so a long list (90+ follow-ups) is a contained panel. Both lanes in one scroller. */
-            <div className="max-h-[420px] space-y-2 overflow-y-auto pr-1">
-              {view.waiting.length > 0 && (
+      <div className="mt-2 rounded-xl bg-muted/30 p-2 ring-1 ring-inset ring-border/40" data-testid="queue-list">
+        <div className="px-1 pb-1 text-[10px] uppercase tracking-wide text-muted-foreground/50">{TAB_LABEL[tab]} — in send order (next first)</div>
+        {q.isPending ? <LoadState compact label="Loading the queue…" />
+          : q.isError ? <ErrorState className="py-4" title="Could not load the queue." onRetry={() => void q.refetch()} retryLabel="Try again" />
+          : view.waiting.length === 0 && view.followUps.length === 0 ? (
+            <EmptyState icon={InboxIcon} title={`No ${TAB_LABEL[tab]} messages waiting`} className="py-6" testId="queue-empty">
+              {view.hookCount > 0 ? 'Only hook follow-ups are waiting (counted above).'
+                : total ? 'Pick another country above to see what is waiting there.' : 'Leads you queue for WhatsApp appear here in send order.'}
+            </EmptyState>
+          ) : (
+          /* Fixed-height scroll box so a long list (90+ follow-ups) is a contained panel. Both lanes in one scroller. */
+          <div className="max-h-[420px] space-y-2 overflow-y-auto pr-1">
+            {view.waiting.length > 0 && (
+              <ol className="space-y-0.5">
+                {view.waiting.map((l, i) => (
+                  <QueueItem key={l.id} index={i + 1} row={l} state="waiting" audit={auditStatusByLead.get(l.id)}
+                    busy={busy === l.id} disabled={busy !== null}
+                    onRemove={() => void removeFromQueue(l)} removeTitle="Remove from queue" />
+                ))}
+              </ol>
+            )}
+            {/* The contact_followup lane, listed after the openers (it drains only once the opener queue is
+                empty each tick). Cancelling one is the admin's (it is the admin's lane). */}
+            {view.followUps.length > 0 && (
+              <div>
+                {view.waiting.length > 0 && (
+                  <div className="px-1 pb-0.5 pt-1 text-[10px] uppercase tracking-wide text-sky-600/70 dark:text-sky-400/70">
+                    No-reply follow-ups (after the openers)
+                  </div>
+                )}
                 <ol className="space-y-0.5">
-                  {view.waiting.map((l, i) => (
-                    <QueueItem key={l.id} index={i + 1} row={l} state="waiting" audit={auditStatusByLead.get(l.id)}
+                  {view.followUps.map((l, i) => (
+                    <QueueItem key={l.id} index={i + 1} row={l} state="follow_up"
                       busy={busy === l.id} disabled={busy !== null}
-                      onRemove={() => void removeFromQueue(l)} removeTitle="Remove from queue" />
+                      onRemove={teamControls ? () => void removeContactFollowup(l) : undefined}
+                      removeTitle="Cancel this follow-up (leaves the business Contacted and contactable)" />
                   ))}
                 </ol>
-              )}
-              {/* The contact_followup lane, listed after the openers (it drains only once the opener queue is
-                  empty each tick). Cancelling one is the admin's (it is the admin's lane). */}
-              {view.followUps.length > 0 && (
-                <div>
-                  {view.waiting.length > 0 && (
-                    <div className="px-1 pb-0.5 pt-1 text-[10px] uppercase tracking-wide text-sky-600/70 dark:text-sky-400/70">
-                      No-reply follow-ups (after the openers)
-                    </div>
-                  )}
-                  <ol className="space-y-0.5">
-                    {view.followUps.map((l, i) => (
-                      <QueueItem key={l.id} index={i + 1} row={l} state="follow_up"
-                        busy={busy === l.id} disabled={busy !== null}
-                        onRemove={teamControls ? () => void removeContactFollowup(l) : undefined}
-                        removeTitle="Cancel this follow-up (leaves the business Contacted and contactable)" />
-                    ))}
-                  </ol>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-      )}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

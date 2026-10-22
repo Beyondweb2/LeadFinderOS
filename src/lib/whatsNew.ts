@@ -22,6 +22,20 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-22-queue-by-country', date: '2026-10-22', title: 'WhatsApp queue: one tab per country, settings in a popup', audience: 'all',
+    body: 'The WhatsApp queue now has a tab for the UK, Malaysia, Singapore and Australia, each showing only that country’s waiting leads. Limits, switches and ratings moved into Settings.',
+    report: {
+      added: [
+        'A tab per country with its own numbers: queued, sent today (admin), next send and the country’s local time.',
+        'A Settings button (admin) holding the daily cap and pace, the quality rating and tier, the country switches, caps and send hours, and failed sends.',
+      ],
+      changed: [
+        'Clear queue now empties only the country you are looking at, and the confirmation says which.',
+        'Pause and Run tick still act on the whole queue and are now labelled Pause all / Resume all.',
+      ],
+      removed: ['The “Last batch” note on the queue page.'],
+      effect: 'You can see and clear one country’s queue at a time, and the page is shorter. Nothing about when or what gets sent has changed.',
+    } },
   { id: '2026-10-22-australia-whatsapp', date: '2026-10-22', title: 'WhatsApp to Australia, in each lead’s own local time', audience: 'all',
     body: 'Australian mobiles can now be queued for the WhatsApp opener and replied to from the Inbox. Each message goes Monday to Friday, 09:00–17:00 in that lead’s own time zone.',
     report: {
