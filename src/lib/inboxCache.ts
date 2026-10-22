@@ -66,3 +66,40 @@ export async function optionalInboxRows<T>(read: Promise<{ rows: T[] }>): Promis
   try { return await read; }
   catch { return null; }
 }
+
+/* ⚡ COMING BACK TO THE TAB READS ONLY WHAT CHANGED (perf, 2026-10-22). Alt-tabbing used to re-read every message,
+   lead and audit (~17 MB live). Now: at most once a minute, a "changed since" read — messages created, leads
+   updated, audits touched — from just before the last sync started. A FULL reconcile still runs on a realtime
+   reconnect (missed events), and on focus when the last full one is older than INBOX_FULL_RECONCILE_MAX_AGE_MS,
+   because a delta cannot see a deletion or a lead taken away. */
+export const INBOX_FOCUS_REFRESH_MIN_MS = 60_000;
+export const INBOX_FULL_RECONCILE_MAX_AGE_MS = 30 * 60_000;
+/** Read from this long before the last sync STARTED — rows written while it ran, and clock skew. */
+export const INBOX_DELTA_OVERLAP_MS = 60_000;
+
+export type InboxFocusRefresh = { kind: 'skip' } | { kind: 'full' } | { kind: 'delta'; sinceMs: number };
+
+/** What a tab focus does. `lastSyncStartedAt` = when the newest load / reconcile / delta began (0 = none has yet:
+ *  the first load's own catch-up covers that gap); `lastFullAt` = when the newest FULL read began. */
+export function inboxFocusRefreshPlan(nowMs: number, lastSyncStartedAt: number, lastFullAt: number): InboxFocusRefresh {
+  if (!(lastSyncStartedAt > 0)) return { kind: 'skip' };
+  if (nowMs - lastSyncStartedAt < INBOX_FOCUS_REFRESH_MIN_MS) return { kind: 'skip' };
+  if (!(lastFullAt > 0) || nowMs - lastFullAt >= INBOX_FULL_RECONCILE_MAX_AGE_MS) return { kind: 'full' };
+  return { kind: 'delta', sinceMs: lastSyncStartedAt - INBOX_DELTA_OVERLAP_MS };
+}
+
+/** The audits a delta must re-read: every one the server says changed (created / updated / given a new run since),
+ *  plus every cached one with a run that has NOT settled — a run settling bumps nothing on its audit, so the
+ *  cache's own in-flight runs are the only way to know to look. `settled` is the one run-status rule
+ *  (queueAuditStatus.ts); an unknown or missing status counts as not settled (re-read, the safe way). */
+export function auditIdsToRefresh(
+  cached: ReadonlyArray<{ id: string; ai_audit_runs?: ReadonlyArray<{ status: string | null }> | null }>,
+  changedIds: Iterable<string>,
+  settled: (status: string | null) => boolean,
+): string[] {
+  const ids = new Set(changedIds);
+  for (const a of cached) {
+    if ((a.ai_audit_runs ?? []).some((r) => !settled(r.status))) ids.add(a.id);
+  }
+  return [...ids];
+}

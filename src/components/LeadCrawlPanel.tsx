@@ -65,8 +65,8 @@ export function LeadCrawlPanel({ leadId, website, summary, from, onDone }: {
   const [startedJob, setStartedJob] = useState<string | null>(null);
   const watchId = startedJob ?? summary.running?.id ?? null;
   const job = useCrawlJobWatch(watchId, async () => {
+    // ['lead-crawls'] is also the Inbox's website-check read (useLeadCrawls) — the whole Inbox is not re-read.
     void queryClient.invalidateQueries({ queryKey: ['lead-crawls'] });
-    void queryClient.invalidateQueries({ queryKey: ['inbox'] });
     setStartedJob(null);
     await onDone();
   });

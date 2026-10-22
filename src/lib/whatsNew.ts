@@ -22,6 +22,18 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-22-lighter-outreach-inbox', date: '2026-10-22', title: 'Outreach and Inbox download much less', audience: 'all',
+    body: 'Outreach and the Inbox now download a small summary of each website check instead of the whole thing, and the Inbox no longer reloads everything when you switch back to its tab.',
+    report: {
+      added: [],
+      changed: [
+        'The website-check icons on Outreach and the Inbox read a small summary (about a sixth of the size). The crawl popup still shows the full check when you open it.',
+        'Coming back to the Inbox tab reads only new messages, changed leads and changed audits, at most once a minute. A full refresh still happens after a dropped connection or every half hour.',
+        'A finished website check refreshes only the website-check list, not the whole Inbox.',
+      ],
+      removed: [],
+      effect: 'The same screens, loading with far less data, so they open and refresh faster. Nothing you see or send has changed.',
+    } },
   { id: '2026-10-22-queue-by-country', date: '2026-10-22', title: 'WhatsApp queue: one tab per country, settings in a popup', audience: 'all',
     body: 'The WhatsApp queue now has a tab for the UK, Malaysia, Singapore and Australia, each showing only that country’s waiting leads. Limits, switches and ratings moved into Settings.',
     report: {

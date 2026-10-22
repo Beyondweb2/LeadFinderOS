@@ -82,8 +82,8 @@ function ProspectAuditBody({ leadId, businessName }: { leadId: string; businessN
   const job = useCrawlJobWatch(watchId, async () => {
     setStartedJob(null);
     setJustRan(true);
+    // ['lead-crawls'] is also the Inbox's website-check read (useLeadCrawls) — the whole Inbox is not re-read.
     await queryClient.invalidateQueries({ queryKey: ['lead-crawls'] });
-    void queryClient.invalidateQueries({ queryKey: ['inbox'] });
   });
 
   const startCrawl = async (force: boolean) => {

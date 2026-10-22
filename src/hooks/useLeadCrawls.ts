@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, type QueryClient } from '@tanstack/react-query';
 import { fetchAllRows } from '@/lib/fetchAllRows';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
@@ -9,22 +9,41 @@ import type { CrawlRow, CrawlStoredResult } from '@/lib/crawlResult';
 // deno-lint-ignore no-explicit-any
 const sb = supabase as unknown as { from: (t: string) => any };
 
-/* The newest stored crawl check per lead — the Crawl-site button's state and the popup's stored
-   result, for the Outreach table. Reads the SAME lead_crawl_checks rows the Inbox reads (useInbox)
-   and the crawl-check edge function writes; no second mechanism. Paginated with the id tiebreaker
-   (PostgREST silently caps at 1,000). React Query, so the two Outreach uses share one fetch and an
-   `onDone` refetch after a run restyles the button. */
+/* The newest stored crawl check per lead — the Crawl-site button's state, for the Outreach table AND the Inbox (one
+   cache, one read). Reads the SAME lead_crawl_checks rows the crawl-check edge function writes; no second
+   mechanism. Paginated with the id tiebreaker (PostgREST silently caps at 1,000). React Query, so every list use
+   shares one fetch and an `onDone` refetch after a run restyles the button. */
 
-interface Row { lead_id: string | null; result: CrawlStoredResult | null; created_at: string }
+/* ⚡ THE LISTS READ THE SUMMARY, NEVER THE WHOLE CHECK (perf, 2026-10-22). `result_slim` is the same JSON with the
+   heavy parts the lists never read taken out, kept by a trigger (migration 20261121090000): 2.7 MB for every lead
+   instead of 18.6 MB. It carries exactly what the icon (websiteCheckFor) and the Inbox template gates
+   (resolveSiteFault, hasSiteFindings) read — proved identical on all 1,339 live rows. ⛔ Anything that SHOWS the
+   check (the popup, the lead popup) reads the full row through useLeadCrawl below. Aliased to `result` so every
+   reader keeps its shape. */
+export const LEAD_CRAWL_LIST_SELECT = 'lead_id, result:result_slim, created_at';
 
-async function fetchLeadCrawls(): Promise<Row[]> {
-  const res = await fetchAllRows<Row>('Outreach (crawl checks)', (from, to) =>
-    sb.from('lead_crawl_checks').select('lead_id, result, created_at')
+export interface LeadCrawlListRow { lead_id: string | null; result: CrawlStoredResult | null; created_at: string }
+
+async function fetchLeadCrawls(label: string): Promise<LeadCrawlListRow[]> {
+  const res = await fetchAllRows<LeadCrawlListRow>(label, (from, to) =>
+    sb.from('lead_crawl_checks').select(LEAD_CRAWL_LIST_SELECT)
       .order('id', { ascending: true }).range(from, to));
   return res.rows;
 }
 
-/** ONE lead's crawl row — the lead popup's button state. Same table, same row every screen reads;
+/* A website check changing (a bulk crawl writes many in a row) re-reads the summary list ONCE, after a pause —
+   never once per row, and never the whole Inbox. */
+export const LEAD_CRAWLS_REFRESH_DEBOUNCE_MS = 3_000;
+let refreshTimer: ReturnType<typeof setTimeout> | null = null;
+export function refreshLeadCrawlsSoon(qc: QueryClient) {
+  if (refreshTimer) clearTimeout(refreshTimer);
+  refreshTimer = setTimeout(() => {
+    refreshTimer = null;
+    void qc.invalidateQueries({ queryKey: ['lead-crawls'] });
+  }, LEAD_CRAWLS_REFRESH_DEBOUNCE_MS);
+}
+
+/** ONE lead's FULL crawl row — the popups' stored result. Same table, same row every screen reads;
  *  the ['lead-crawls', …] key prefix means any crawl run anywhere invalidates it. */
 export function useLeadCrawl(leadId: string | null | undefined) {
   const query = useQuery({
@@ -39,11 +58,11 @@ export function useLeadCrawl(leadId: string | null | undefined) {
   return { crawl: query.data ?? null, refetch: query.refetch, isLoading: query.isLoading };
 }
 
-export function useLeadCrawls() {
+export function useLeadCrawls(label = 'Outreach (crawl checks)') {
   const { user } = useAuth();
   const query = useQuery({
     queryKey: ['lead-crawls', user?.id ?? null],
-    queryFn: fetchLeadCrawls,
+    queryFn: () => fetchLeadCrawls(label),
     enabled: !!user?.id,
   });
 
