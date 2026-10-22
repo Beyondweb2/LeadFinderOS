@@ -23,8 +23,10 @@
    Pure: no React, no Supabase. The hook (src/hooks/useWhatsAppQueue.ts) reads, the panel draws.
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 import type { Tone } from '@/components/salesDash/primitives';
-import { coldWhatsAppVerdict } from './coldWhatsAppEligibility';
-import { mobileMarketOf, PER_LEAD_ZONE_MARKETS, type Market } from './outreachMarkets';
+import { coldWhatsAppVerdict, marksNoMobile } from './coldWhatsAppEligibility';
+import { MARKET_NAME, mobileMarketOf, PER_LEAD_ZONE_MARKETS, type CountrySettings, type Market } from './outreachMarkets';
+import { heldCountryOff, type CountryOffSetting } from './countryHold';
+import { countryAutoPauseHeadline } from './countryAutoPause';
 import { isColdOutreachTemplate } from './coldOutreach';
 import { auLeadTz, AU_ZONE_COLUMNS_SALES } from './auLeadZone';
 import { toWhatsAppDigits } from './waNumber';
@@ -100,9 +102,58 @@ export function deriveQueue(rows: readonly QueueRow[], markets?: ReadonlySet<Mar
     archivedWaiting: rows.filter((r) => r.is_archived === true && r.status === 'queued').length,
     unsendable: live.filter((r) => r.status === 'queued'
       && isColdOutreachTemplate(r.whatsapp_template ?? '')
-      && !coldWhatsAppVerdict(r.phone, r.country ?? null, markets).eligible).length,
+      && notReachable(coldWhatsAppVerdict(r.phone, r.country ?? null, markets))).length,
     needsState: live.filter((r) => (r.status === 'queued' || !!r.contact_followup_queued_at) && rowNeedsState(r)).length,
   };
+}
+
+/* A mobile in a country that is switched off is WAITING, never "no number WhatsApp can reach" (2026-10-22). */
+function notReachable(v: ReturnType<typeof coldWhatsAppVerdict>): boolean {
+  return !v.eligible && 'reason' in v && marksNoMobile(v.reason);
+}
+
+/* ══ A COUNTRY THAT IS OFF (2026-10-22, docs/country-auto-off.md) ═════════════════════════════════════════════════
+   Its queued leads are HELD by the drip (heldCountryOff): they wait and send once it is switched back on. The queue says
+   so on the country's tab — that it is off, why (by hand / automatically after failed sends) and when — and on each row. */
+
+/** Is this row's country off, so it waits (Malaysia / Singapore / Australia; never the UK)? */
+export function rowCountryOff(r: Pick<QueueRow, 'phone' | 'country'>, settings: CountrySettings | null | undefined): Market | null {
+  const m = mobileMarketOf(toWhatsAppDigits(r.phone ?? '', r.country ?? null));
+  return heldCountryOff(settings, m) ? m : null;
+}
+
+/** The chip on a row whose country is off: "Waiting: Australia is off". */
+export function countryOffChip(m: Market): { label: string; tone: Tone; title: string } {
+  return { label: `Waiting: ${MARKET_NAME[m]} is off`, tone: 'amber',
+    title: `WhatsApp to ${MARKET_NAME[m]} is switched off. This lead stays queued and sends when it is switched back on.` };
+}
+
+/** "10:51", or "10:51 on 21 Oct" when not today — in the viewer's own time (timeZone only for tests). */
+export function offTimeWords(iso: string, now = new Date(), timeZone?: string): string {
+  const d = new Date(iso);
+  if (!Number.isFinite(d.getTime())) return '';
+  const opt = timeZone ? { timeZone } : {};
+  const time = d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', ...opt });
+  const day = (x: Date) => x.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', ...opt });
+  return day(d) === day(now) ? time : `${time} on ${day(d)}`;
+}
+
+/** The tab's note for a country that is off, or null when it is on (or the UK). */
+export function countryOffNote(m: Market, s: CountryOffSetting | null | undefined, waiting: number, now = new Date(), timeZone?: string):
+  { title: string; why: string; detail: string | null } | null {
+  if (m === 'UK' || s?.whatsapp_on === true) return null;
+  const name = MARKET_NAME[m];
+  const at = s?.whatsapp_off_at ?? s?.whatsapp_auto_paused_at ?? null;
+  const when = at ? offTimeWords(at, now, timeZone) : '';
+  const reason = s?.whatsapp_auto_pause_reason ?? null;
+  const why = reason
+    ? 'Switched off automatically after failed sends' + (when ? ', at ' + when : '') + '.'
+    : at ? 'Switched off by hand at ' + when + '.'
+    : s?.whatsapp_on_since ? 'Switched off by hand.' : 'Not switched on yet.';
+  const wait = waiting === 0 ? 'Nothing is waiting.'
+    : `${waiting} ${waiting === 1 ? 'lead is' : 'leads are'} waiting and will send when it is switched back on.`;
+  const prefix = `${countryAutoPauseHeadline(name)}: `;
+  return { title: `${name} is off. ${wait}`, why, detail: reason ? (reason.startsWith(prefix) ? reason.slice(prefix.length) : reason) : null };
 }
 
 /** The row chips — one map, both roles, so a state can never look different on the two screens. */
