@@ -113,7 +113,7 @@ ok(none.saidNo === 0 && none.rows.length === 0, 'nobody said no: an empty block,
 console.log('── where it is asked ──');
 const pill = read('src/components/PipelineStatusSelect.tsx');
 ok(/if \(res === false \|\| res === null\) return;\s*if \(v === 'not_interested' && value !== 'not_interested' && askReasonFor\) askLostReason\(askReasonFor\);/.test(pill), 'the status pill asks after its caller\'s write, unless the caller says it was refused');
-for (const [file, n] of [['src/components/OutreachTable.tsx', 1], ['src/components/LeadDetailDialog.tsx', 1], ['src/pages/Inbox.tsx', 1]] as const) {   // 2026-10-22: the Inbox row shows the status as text; the menu is the header's one pill
+for (const [file, n] of [['src/components/OutreachTable.tsx', 1], ['src/components/LeadDetailDialog.tsx', 1], ['src/pages/Inbox.tsx', 2]] as const) {
   const s = read(file);
   const pills = (s.match(/<PipelineStatusSelect\b[\s\S]*?\/>/g) ?? []);
   ok(pills.length === n && pills.every((p) => /askReasonFor=/.test(p)), `${file}: every editable status pill (${n}) asks why`);

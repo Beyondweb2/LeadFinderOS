@@ -54,9 +54,9 @@ console.log('2. every element of the WhatsApp inbox is in the shared component')
     ['list: Select several', /Select several…/],
     ['list: unread dot', /aria-label="Unread"/],
     /* The list row is the memoised ConversationRow (2026-10-16, speed): its state arrives as `st` = stateByKey.get(c.key). */
-    /* 2026-10-22: the row is name + time, preview, ONE attention pill, the status as text and the one score line. */
+    /* 2026-10-22: the row is name + time, preview, ONE attention pill beside the solid status pill, and the one score line. */
     ['list: the one attention pill', /<AttentionPill kind=\{attentionKind\} label=\{attentionLabel\} title=\{attentionTitle\} compact \/>/],
-    ['list: status as text', /<OneStatusText status=\{c\.leadStatus\}/],
+    ['list: status dropdown (the solid pill stays)', /<PipelineStatusSelect value=\{c\.leadStatus\}/],
     ['list: the one score line', /<ScoreLine score=\{auditScore\} visible=\{c\.visible\}/],
     ['header: star', /aria-label=\{active\.isPotentialWork \? 'Remove interested star' : 'Mark as interested'\}/],
     ['header: status', /<PipelineStatusSelect value=\{active\.leadStatus\}/],

@@ -57,10 +57,11 @@ console.log('3. the Inbox list draws ConversationRow, and the row reads nothing 
   ok(/st=\{stateByKey\.get\(c\.key\)\}/.test(inbox) && /\{\.\.\.rowAttention\(c\)\}/.test(inbox), 'state and the one attention pill are read per row by the page (the pill as words, compared by value)');
   ok(/clockTick=\{clockTick\}/.test(inbox), 'the minute clock reaches the row');
   ok(/const openConversation = useCallback\(\(key: string\) => rowHandlersRef\.current\.setActiveKey\(key\), \[\]\)/.test(inbox)
+    && /const setStatusFromRow = useCallback\(\(c: WaConversation, status: PipelineStatus\) => rowHandlersRef\.current\.handleSetStatus\(c, status\), \[\]\)/.test(inbox)
     && /rowHandlersRef\.current = \{ setActiveKey, handleSetStatus \};/.test(inbox), 'row callbacks are stable and always call the newest handler');
   ok(/const toggleHookSelect = useCallback\(/.test(inbox) && /const toggleBulkSelect = useCallback\(/.test(inbox), 'the two select toggles are stable');
-  /* 2026-10-22: the row shows the status as text; the menu lives only in the thread header. */
-  ok(!rowSrc.includes('<PipelineStatusSelect') && rowSrc.includes('<OneStatusText status={c.leadStatus} stage={listStageOf(c.leadId)}'), 'the row shows the status as text, with its one stage; no menu on the row');
+  /* Paul, 2026-10-22: "the status pill must remain" — the solid, editable pill stays on every row beside the attention pill. */
+  ok(rowSrc.includes('onValueChange={(status) => handleSetStatus(c, status)}') && rowSrc.includes('stage={listStageOf(c.leadId)}'), 'the status pill keeps its one handler and its one stage');
 }
 
 console.log('4. the counts: no separate counting reads any more (2026-10-22) — the one stored score rides on the audits read');
