@@ -50,7 +50,7 @@ import { Dialog, DialogContent, DialogFooter } from '@/components/ui/dialog';
 import { DialogHero, EmptyState, ErrorState, IconTile, LoadState, SubSection } from '@/components/operator/ui';
 import { Card } from '@/components/ui/card';
 import { CampaignPicker } from '@/components/CampaignPicker';
-import { OneStatusText, PipelineStatusSelect } from '@/components/PipelineStatusSelect';
+import { PipelineStatusSelect } from '@/components/PipelineStatusSelect';
 import { updateLeadStatus } from '@/lib/leadStatus';
 import { PIPELINE_STATUS_OPTIONS, WHATSAPP_TEMPLATES, type PipelineStatus } from '@/types/outreach';
 import { TemplateSnippet } from '@/components/TemplateWordingPreview';
@@ -292,7 +292,7 @@ const LIST_SORT_OPTIONS = [
    list, so ANY Inbox render — opening a conversation, marking it read, a query landing — redrew all 150 rows, each with a
    status dropdown and its chips: 0.5–1.8 s of browser work per click with the live book (6,245 messages, 2,700 threads),
    before any network. The row is the same markup; memo + sameRowProps skip it unless one of its own inputs changed.
-   ⛔ Every input is a prop. Callbacks arrive stable (openConversation and the select toggles read the latest handler through a
+   ⛔ Every input is a prop. Callbacks arrive stable (openConversation / setStatusFromRow read the latest handler through a
    ref); `st` is compared by content (src/lib/inboxRowMemo.ts), because stateByKey rebuilds every row's object whenever
    one read time moves; clockTick is passed so "5m ago" and the AI chip still move once a minute exactly as before. */
 interface ConversationRowProps {
@@ -317,16 +317,17 @@ interface ConversationRowProps {
   onOpen: (key: string) => void;
   toggleHookSelect: (leadId: string) => void;
   toggleBulkSelect: (key: string) => void;
+  handleSetStatus: (c: WaConversation, status: PipelineStatus) => Promise<boolean>;
   clockTick: number;
 }
 
-/* ⛔ THE LIST ROW SHOWS FOUR THINGS (2026-10-22, Paul): (1) the name and the time, (2) the message preview, (3) ONE attention
-   pill, (4) one compact score line — plus the lead status as small plain text. The status MENU lives only in the thread
-   header now; the AI chip, the state chip, "Only confirmed" / "Auto-reply", the Needs you reason line, the engagement pills
+/* ⛔ THE LIST ROW (2026-10-22, Paul): (1) the name and the time, (2) the message preview, (3) ONE attention pill beside the
+   lead's solid STATUS PILL (the same editable pill as Outreach — Paul: "the status pill must remain"), (4) one compact score line.
+   The AI chip, the state chip, "Only confirmed" / "Auto-reply", the Needs you reason line, the engagement pills
    and the next-action pill are off the row (the pill's hover carries what still matters; the header keeps the rest). */
 const ConversationRow = memo(function ConversationRow({
   c, isActive, outsideFilters, st, attentionKind, attentionLabel, attentionTitle, inboundTitle, auditScore,
-  hookDueMode, hookChecked, bulkMode, bulkChecked, saving, listStageOf, onOpen, toggleHookSelect, toggleBulkSelect,
+  hookDueMode, hookChecked, bulkMode, bulkChecked, saving, listStageOf, onOpen, toggleHookSelect, toggleBulkSelect, handleSetStatus,
 }: ConversationRowProps) {
   return (
     <div
@@ -377,7 +378,7 @@ const ConversationRow = memo(function ConversationRow({
           <AttentionPill kind={attentionKind} label={attentionLabel} title={attentionTitle} compact />
           {c.leadId && (saving
             ? <Loader2 className="h-3 w-3 shrink-0 animate-spin text-muted-foreground" />
-            : <OneStatusText status={c.leadStatus} stage={listStageOf(c.leadId)} className="shrink-0 text-[10px] text-muted-foreground" />)}
+            : <PipelineStatusSelect value={c.leadStatus} stage={listStageOf(c.leadId)} onValueChange={(status) => handleSetStatus(c, status)} askReasonFor={{ leadId: c.leadId, businessName: c.label }} />)}
         </div>
       )}
       {c.leadId && <ScoreLine score={auditScore} visible={c.visible} />}
@@ -889,6 +890,7 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
   const rowHandlersRef = useRef({ setActiveKey, handleSetStatus });
   rowHandlersRef.current = { setActiveKey, handleSetStatus };
   const openConversation = useCallback((key: string) => rowHandlersRef.current.setActiveKey(key), []);
+  const setStatusFromRow = useCallback((c: WaConversation, status: PipelineStatus) => rowHandlersRef.current.handleSetStatus(c, status), []);
 
   const handleRemoveFromInbox = async (c: WaConversation) => {
     if (!c.leadId) return;
@@ -2353,6 +2355,7 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
               onOpen={openConversation}
               toggleHookSelect={toggleHookSelect}
               toggleBulkSelect={toggleBulkSelect}
+              handleSetStatus={setStatusFromRow}
               clockTick={clockTick}
             />
           ))}

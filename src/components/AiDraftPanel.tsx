@@ -62,7 +62,8 @@ export function AiDraftPanel({ row, busy, onDiscard, onMarkOptedOut }: AiDraftPa
       <AiDraftChip row={row} />
       <span className="min-w-0 flex-1 text-muted-foreground">
         {chip.label === 'Needs you' && stop && <>No draft: <span className="font-medium text-foreground">{row.reason_label ?? 'asked to stop'}</span>.{optedOut ? ' Opted out, and any queued follow-ups were cancelled.' : ''}</>}
-        {chip.label === 'Needs you' && !stop && <>Why it needs you: <span className="font-medium text-foreground">{row.reason_label ?? 'a person should answer this one'}</span>.{why?.noDraft ? ' No playbook reply fits, so no draft: answer it yourself.' : ' Press Draft reply for a suggestion.'}</>}
+        {chip.label === 'Needs you' && !stop && <>Why it needs you: <span className="font-medium text-foreground">{row.reason_label ?? 'a person should answer this one'}</span>.{/* The reason label may already say it (reason "no_playbook"): never the same sentence twice (Paul's screenshot, 2026-10-22). */}
+          {why?.noDraft ? (/no playbook reply/i.test(row.reason_label ?? '') ? '' : ' No playbook reply fits, so no draft: answer it yourself.') : ' Press Draft reply for a suggestion.'}</>}
         {chip.label === 'Needs a template' && <>Their last message is more than 24 hours old, so no free-text draft. Send an approved template.</>}
         {(chip.label === 'Drafting…' || chip.label === 'Sending…') && <>{chip.label}</>}
       </span>

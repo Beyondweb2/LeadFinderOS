@@ -22,6 +22,17 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-22-inbox-status-pill-back', date: '2026-10-22', title: 'Inbox: the status pill is back on every row', audience: 'all',
+    body: 'Each conversation in the Inbox list shows the coloured status pill again, and you can change the status from the list as before. The one "what needs doing" pill sits beside it.',
+    report: {
+      added: [],
+      changed: [
+        'List rows show the solid status pill (Contacted, You replied, Replied and so on) with its menu, instead of plain text.',
+        'A Needs you note no longer says "No playbook reply fits" twice.',
+      ],
+      removed: [],
+      effect: 'You can see and change a lead status straight from the list again.',
+    } },
   { id: '2026-10-22-inbox-approval-cleanup', date: '2026-10-22', title: 'Inbox: one status pill, drafts in the thread, and audit scores that match', audience: 'all',
     body: 'Each conversation now shows one pill for what needs doing, an AI draft appears in the thread with Approve & send, Reject and Regenerate, and the audit numbers in the list match the audit card and the report.',
     report: {

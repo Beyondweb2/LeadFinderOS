@@ -414,6 +414,7 @@ Branch `feat/inbox-approval-cleanup`, migration `20261124120000_reply_audit_swit
 - **One attention pill** (`src/lib/inboxAttention.ts`): Needs approval → Needs you → Send failed → Auditing → Waiting → Queued
   (sends at …), the same pill in the list row and the thread header; the hover carries the Needs you reason, how long a reply
   waited and "Only confirmed" / "Auto-reply" (their last message only confirmed who they are, e.g. "yes it is", or was an
-  automatic reply — neither counts as Replied). The list row shows name + time, preview, the pill, the status as text
-  (`OneStatusText`) and the one score line (`docs/audit-score-one-ruler.md`); the status menu, the next action and the
-  engagement pills are in the thread header only. The "Needs approving" filter is now labelled "Needs approval".
+  automatic reply — neither counts as Replied). The list row shows name + time, preview, the attention pill beside the
+  solid, editable status pill (Paul the same evening: "the status pill must remain" — it briefly shipped as plain text) and the
+  one score line (`docs/audit-score-one-ruler.md`); the next action and the engagement pills are in the thread header only.
+  A Needs you note whose reason already says "No playbook reply fits" no longer repeats the sentence. The "Needs approving" filter is now labelled "Needs approval".
