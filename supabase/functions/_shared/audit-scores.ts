@@ -22,7 +22,11 @@ export const SCORED_AUDIT_SELECT =
 export const RESCORE_MAX_RUNS = 60;
 export const RESCORE_BUDGET_MS = 20_000;
 
-const sameJson = (a: unknown, b: unknown) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
+/* By value: the database stores jsonb with its keys re-ordered, so a plain string compare would call every rescore a change
+   (found live, 2026-10-22: 180 of 180 stored scores matched the card only once keys were sorted). */
+const canon = (v: unknown): unknown => Array.isArray(v) ? v.map(canon)
+  : v && typeof v === "object" ? Object.fromEntries(Object.keys(v as Record<string, unknown>).sort().map((k) => [k, canon((v as Record<string, unknown>)[k])])) : v;
+const sameJson = (a: unknown, b: unknown) => JSON.stringify(canon(a ?? null)) === JSON.stringify(canon(b ?? null));
 
 export async function rescoreDirtyRuns(service: Service, opts: { maxRuns?: number; budgetMs?: number } = {}): Promise<{ scored: number; cleared: number; skipped: number; left: boolean }> {
   const t0 = Date.now();

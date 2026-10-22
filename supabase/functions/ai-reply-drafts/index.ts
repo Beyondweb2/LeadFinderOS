@@ -79,7 +79,7 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-internal-job, x-cron-secret",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
   /* The deploy marker: only this build answers with it. */
-  "x-ai-reply-drafts": "2026-10-22b-one-audit-score",
+  "x-ai-reply-drafts": "2026-10-22c-one-audit-score",
 };
 const json = (b: unknown, s = 200) => new Response(JSON.stringify(b), { status: s, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 const str = (v: unknown) => (typeof v === "string" ? v.trim() : "");
