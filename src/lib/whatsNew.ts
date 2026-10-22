@@ -34,6 +34,7 @@ export const WHATS_NEW: readonly WhatsNewEntry[] = [
       ],
       removed: [],
       effect: 'First replies like Robina’s get the approved pitch (press Regenerate on an open draft), and queued morning sends go out.',
+    } },
   { id: '2026-10-22-country-auto-off', date: '2026-10-22', title: 'One failed number no longer switches a country off', audience: 'all',
     body: 'Malaysia, Singapore and Australia now switch themselves off only on a real pattern of failed WhatsApp sends. While a country is off, its queued leads wait and send when it is switched back on.',
     report: {
