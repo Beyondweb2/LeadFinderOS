@@ -52,12 +52,13 @@ Deno.serve(async (req) => {
     }
 
     async function sendWhatsAppText(row: DueRow): Promise<SendOutcome> {
+      /* ⛔ NO Authorization / apikey HEADER (2026-10-22). The door is x-cron-secret + x-internal-job (scheduledSendFor). A
+         "Bearer <service key>" here was refused by the platform gateway before the function ran ({"message":"Invalid API key"}),
+         so every queued WhatsApp send failed with no reason. send-whatsapp-message is verify_jwt = false. */
       const res = await fetch(`${url}/functions/v1/send-whatsapp-message`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "Authorization": `Bearer ${serviceKey}`,
-          "apikey": Deno.env.get("SUPABASE_ANON_KEY") ?? "",
           "x-cron-secret": Deno.env.get("CRON_SECRET") ?? "",
           "x-internal-job": SCHEDULED_JOB_HEADER,
         },
@@ -65,7 +66,7 @@ Deno.serve(async (req) => {
       });
       const body = await res.json().catch(() => null) as Record<string, unknown> | null;
       const msg = body?.message as { id?: string } | null | undefined;
-      return senderOutcome(body, msg?.id);
+      return senderOutcome(body, msg?.id, res.status);
     }
 
     async function sendVoice(row: ScheduledRow): Promise<SendOutcome> {

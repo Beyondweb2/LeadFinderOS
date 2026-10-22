@@ -114,8 +114,8 @@ console.log('5. the function (source pins)');
   ok(/draftLackedEvidence\(d\.why, d\.draft_text\)/.test(refresh) && /\.is\("auto_send_id", null\)/.test(refresh) && /\.eq\("updated_at", d\.updated_at\)/.test(refresh),
     'open pitches written without evidence are rewritten once ready, only if nobody touched them');
   ok(/evidenceStale: true/.test(refresh), 'a rewrite that is no longer a pitch is marked for Regenerate instead');
-  ok(!/graph\.facebook\.com|functions\/v1\/send-whatsapp|from\("whatsapp_messages"\)\.insert|from\("whatsapp_sends"\)/.test(FN), 'the function still never sends');
-  ok(/x-ai-reply-drafts": "2026-10-21[e-z]-[a-z-]+"/.test(FN), 'deploy marker bumped (this release or a later one)');
+  ok(!/graph\.facebook\.com|functions\/v1\/send-whatsapp|from\("whatsapp_messages"\)\.insert|from\("whatsapp_sends"\)(?!\.select\()/.test(FN), 'the function still never sends (it only READS a receipt)');
+  ok(/x-ai-reply-drafts": "2026-10-(?:21[e-z]|2[2-9][a-z]|3[01][a-z])-[a-z-]+"/.test(FN), 'deploy marker bumped (this release or a later one)');
 }
 
 console.log(f ? `\n${f} FAILURE(S)` : '\nALL PASS');

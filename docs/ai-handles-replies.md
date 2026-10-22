@@ -387,3 +387,11 @@ Branch `feat/inbox-mode-auto-send`, migration `20261117090000_inbox_reply_mode.s
   a text-only change was not worth redeploying the queue).
 Tests: `scripts/inbox-reply-mode.test.ts`, `scripts/ai-auto-send.test.ts`. Markers `x-ai-reply-drafts: 2026-10-21f-inbox-reply-mode`,
 `x-iss-build: 2026-10-21c-inbox-reply-mode`.
+
+## The pitch is owed until a pitch was SENT; queued sends fixed (2026-10-22, Robina's Motoring School)
+
+- **What happened.** Robina's opener (`initial_contact_short`, 21 Oct 07:42) is stored `failed` in `whatsapp_messages`, but its receipt row (`whatsapp_sends.delivery_status`) says `read`, and she replied "Yes, how can I help?". Meta's `failed` webhook landed first and whatsapp-status's per-message ratchet never lets a later `read` replace `failed`. The Inbox therefore shows the opener as failed.
+- **Why the wrong draft.** The drafter dropped every non-sent row, so her reply had nothing of ours before it: not a first reply, so `pickMove` chose `playbook / go_on` ("I had a look and saw that you weren't coming up when I asked ai..."). It was never because a refused draft counted as a pitch.
+- **Fix.** `src/lib/draftThread.ts` builds the drafter's thread: a `failed` row whose receipt says delivered / read reached them; nothing else unsent ever counts (draft, refused, failed, pending, null). The pitch stays owed until an outbound pitch actually went. Test: `scripts/draft-thread.test.ts`. Marker `x-ai-reply-drafts: 2026-10-22a-pitch-owed-sent-only`.
+- **"Not sent: The send was refused."** That row was not the pitch: it was an `audit_followup_call` template Paul queued at 03:38 for 06:00. Every queued WhatsApp send (2 so far, both 22 Oct 06:00) failed the same way: the drain called send-whatsapp-message with `Authorization: Bearer <service key>`, which the platform gateway refuses before the function runs (`{"message":"Invalid API key"}`), and `senderOutcome` read only reason / detail / error. Fixed: the drain calls by its cron door only (x-cron-secret + x-internal-job), and `senderOutcome` falls back to the code, the platform's message and the HTTP status — never a bare "refused".
+- **Not fixed here (held):** the opener still reads `failed` on screen; the ratchet lives in whatsapp-status, which must not be deployed until the Meta App cutover.

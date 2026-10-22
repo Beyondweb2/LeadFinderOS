@@ -258,7 +258,7 @@ export function scheduledLine(r: Pick<ScheduledSendRow, 'status' | 'send_at' | '
   if (r.status === 'sending') return 'Sending…';
   if (r.status === 'held') return `Held — ${HOLD_LABELS[r.hold_reason as HoldReason] ?? 'check before sending'}`;
   if (r.status === 'cancelled') return CANCEL_LABELS[r.cancel_reason as CancelReason] ?? 'Cancelled';
-  if (r.status === 'failed') return `Not sent — ${r.error || 'the send was refused'}`;
+  if (r.status === 'failed') return `Not sent — ${r.error || 'no reason was recorded'}`;
   return 'Sent';
 }
 

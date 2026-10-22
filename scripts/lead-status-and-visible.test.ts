@@ -96,7 +96,7 @@ console.log('4. the drafter tags, never writes a status; Visible comes before an
   ok(/const stopping = decision\.kind === "needs_you" && decision\.stop/.test(proc), '…but a stop still opts them out');
   ok((FN.match(/VISIBLE_NO_PITCH_ERROR, detail: VISIBLE_NO_PITCH_DETAIL/g) ?? []).length === 2, 'Draft reply and Regenerate refuse a pitch on a Visible lead');
   ok(/rpc\("apply_lead_visible"/.test(FN) && !/ai_visible_at:/.test(FN), 'the flag is written only through apply_lead_visible');
-  ok(/x-ai-reply-drafts": "2026-10-21h-visible-half-first-reply"/.test(FN), 'deploy marker bumped');
+  ok(/x-ai-reply-drafts": "2026-10-(?:21[h-z]|2[2-9][a-z]|3[01][a-z])-[a-z-]+"/.test(FN), 'deploy marker bumped (this release or a later one)');
   ok(/visible_rule, visible_min_share/.test(FN) && /isVisible\(visibleCounts\(rows \?\? \[\]\), vs\.rule, vs\.share\)/.test(FN), 'the tick judges with the rule AND the threshold setting');
 }
 
