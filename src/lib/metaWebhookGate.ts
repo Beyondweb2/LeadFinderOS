@@ -77,6 +77,8 @@ export async function judgeWhatsAppWebhookPost(input: {
   rawBytes: Uint8Array;
   signatureHeader: string | null;
   appSecret: string;
+  /** The second app's secret, only while two Meta apps may post (the Findable switch). Absent / empty = none. */
+  nextAppSecret?: string;
   qaHeader: string | null;
   cronSecret: string;
 }): Promise<WebhookGateVerdict> {
@@ -90,8 +92,14 @@ export async function judgeWhatsAppWebhookPost(input: {
     if (refusal) return { accept: false, status: refusal === 'qa_not_reserved_number' ? 403 : 400, reason: refusal };
     return { accept: true, via: 'qa_simulation' };
   }
-  if (!input.appSecret) return { accept: false, status: 401, reason: 'not_configured' };
+  /* 2026-10-22 (docs/whatsapp-status-cutover-plan.md): during the Move37 → Findable switch two Meta apps may post, each
+     signing with its OWN App Secret. `nextAppSecret` (WHATSAPP_APP_SECRET_NEXT) is the second one, set only for that
+     window. Either verifies; neither set is still "not configured". An empty one never verifies anything. */
+  const secrets = [input.appSecret, input.nextAppSecret ?? ''].filter((s) => !!s);
+  if (!secrets.length) return { accept: false, status: 401, reason: 'not_configured' };
   if (!input.signatureHeader) return { accept: false, status: 401, reason: 'missing_signature' };
-  const ok = await validMetaSignature(input.rawBytes, input.signatureHeader, input.appSecret);
-  return ok ? { accept: true, via: 'meta_signature' } : { accept: false, status: 401, reason: 'invalid_signature' };
+  for (const secret of secrets) {
+    if (await validMetaSignature(input.rawBytes, input.signatureHeader, secret)) return { accept: true, via: 'meta_signature' };
+  }
+  return { accept: false, status: 401, reason: 'invalid_signature' };
 }
