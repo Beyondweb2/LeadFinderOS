@@ -9,7 +9,11 @@
      • SYSTEMIC — any failed send in that window with a Meta code about OUR account or template (COUNTRY_SYSTEMIC_CODES).
    One failed number never switches a country off: that lead alone is flagged (No WhatsApp for Meta 131026, WhatsApp failed
    otherwise — _shared/whatsapp-failure.ts routing, unchanged). 22 Oct: Australia went off on 1 of 5, a number not on
-   WhatsApp. */
+   WhatsApp.
+   2026-10-22 (fix/auto-off-counts, migration 20261124090000): a failure that is NOT ON WHATSAPP (Meta 131026, or its lead
+   is flagged No WhatsApp) is left out entirely — not a failure and not one of the window's sends — and so is a failure the
+   webhook has not settled on the lead yet (it is counted when the lead is marked; a trigger re-runs the check then).
+   Australia went off twice on 22 Oct with 3 of 5 failures being numbers not on WhatsApp. */
 
 /** The defaults when the country's setting is NULL (outreach_country_settings.whatsapp_auto_off_*). */
 export const COUNTRY_AUTO_OFF_DEFAULTS = { minFails: 5, window: 10, failPct: 50 } as const;
@@ -28,6 +32,10 @@ export interface CountrySendOutcome {
   at: string;
   failed: boolean;
   code: number | null;
+  /** The number is not on WhatsApp (Meta 131026, or the lead is flagged No WhatsApp): never counted. */
+  notOnWhatsApp?: boolean;
+  /** The webhook has not marked the lead yet: not counted until it has. */
+  unsettled?: boolean;
 }
 
 export interface CountryAutoOffSettings {
@@ -41,6 +49,8 @@ export interface CountryAutoPauseVerdict {
   /** Sends in the window counted. */
   sends: number;
   failed: number;
+  /** Sends left out (not on WhatsApp, or not settled yet), over the whole period. */
+  notCounted: number;
   /** The newest systemic code in the window, when that is the reason. */
   systemicCode: number | null;
 }
@@ -57,18 +67,20 @@ export function countryAutoOffRule(s?: CountryAutoOffSettings | null) {
 /** sends: every real send to the country since it was switched on, in any order. */
 export function countryAutoPauseVerdict(sends: readonly CountrySendOutcome[], settings?: CountryAutoOffSettings | null): CountryAutoPauseVerdict {
   const rule = countryAutoOffRule(settings);
-  const last = [...sends].sort((a, b) => (a.at < b.at ? 1 : a.at > b.at ? -1 : 0)).slice(0, rule.window);
+  const counted = sends.filter((s) => !(s.failed && (s.notOnWhatsApp === true || s.unsettled === true)));
+  const last = [...counted].sort((a, b) => (a.at < b.at ? 1 : a.at > b.at ? -1 : 0)).slice(0, rule.window);
   const failed = last.filter((s) => s.failed).length;
   const systemicCode = last.find((s) => s.failed && s.code != null && COUNTRY_SYSTEMIC_CODES.includes(s.code))?.code ?? null;
   const pattern = failed >= rule.minFails && failed * 100 >= rule.failPct * last.length;
-  return { switchOff: systemicCode != null || pattern, sends: last.length, failed, systemicCode };
+  return { switchOff: systemicCode != null || pattern, sends: last.length, failed, notCounted: sends.length - counted.length, systemicCode };
 }
 
 /** The rule in one plain line, for the settings screen. */
 export function countryAutoOffRuleWords(s?: CountryAutoOffSettings | null): string {
   const r = countryAutoOffRule(s);
   return `Each switches itself off only if at least ${r.minFails} sends fail and they are at least ${r.failPct}% of its last ${r.window}, `
-    + 'or if Meta refuses a send for a reason about our account or template. One failed number only marks that lead.';
+    + 'or if Meta refuses a send for a reason about our account or template. Numbers that are not on WhatsApp are not counted, '
+    + 'and one failed number only marks that lead.';
 }
 
 /** The banner's headline for a country that switched itself off. The reason itself is the stored one, word for word. */

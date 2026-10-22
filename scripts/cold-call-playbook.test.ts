@@ -126,7 +126,10 @@ console.log('── 3. STRONG WEBSITE EVIDENCE ──');
   ok(p.explain.some((l) => /The main thing I noticed on your site: The list of your pages that Google reads points at a different website/.test(l)), 'the verbal explanation starts from the strongest finding');
   ok(p.explain.some((l) => /could be contributing/.test(l)), 'and is hedged — "could be contributing"');
   /* The WhatsApp {{6}} keeps its own (narrower) template rule; the strongest point is the same one. */
-  const wa = resolveSiteFindingsDetailed(true, [], crawl(THIN, 1, SITEMAP_EVIDENCE));
+  /* 2026-10-22: resolveSiteFindingsDetailed judges freshness on the REAL clock (crawlCheck CRAWL_FRESH_MS, 30 days), not
+     the playbook's fixed NOW — a crawl dated from NOW went stale at 10:00 UTC on 22 Oct and this check failed. Dated from
+     today, so it tests the property (same strongest finding), never the calendar. */
+  const wa = resolveSiteFindingsDetailed(true, [], { ...crawl(THIN, 1, SITEMAP_EVIDENCE), createdAtMs: Date.now() - DAY });
   ok(!!wa && wa.kinds[0] === p.findings[0]?.kind, 'the strongest finding is the one the WhatsApp site findings lead with too');
 }
 {
