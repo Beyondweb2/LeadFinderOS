@@ -48,3 +48,15 @@ Other faults found in the code (not visible in a SELECT):
   in this task), so it is unchanged.
 - The AiAudit page's live tally counts without the answer-text context; the ProspectAuditView headline leaves Google AI out.
 - `fill_ai_audit_queue_parts` lost the `result_niche` line in migration 20261116100000 (market-view / niche-sample read it).
+
+## Deploy record (2026-10-22, Paul approved)
+
+- Migrations renamed past main's `20261124090000_auto_off_unexplained_only.sql` and applied one at a time:
+  `20261124110000_audit_score_one_ruler.sql` (read back: 3 columns, 3 triggers, `invoke_ai_reply_drafts` posts while a run is
+  dirty) and `20261124120000_reply_audit_switch.sql` (read back: mode `draft`, `reply_audit_enabled` true, `auto_reply_enabled`
+  true — today's behaviour unchanged). Step 2 marked all 2,391 existing runs dirty (5 batches); the tick scores ~60 a minute.
+- Edge: `ai-reply-drafts` (marker `x-ai-reply-drafts: 2026-10-22c-one-audit-score`), `inbox-scheduled-send` and
+  `sales-performance` (wording-only reach). process-whatsapp-queue, send-whatsapp-message and whatsapp-status not touched.
+- Live check: the first 180 stored scores were recomputed off-line with the card's scorer — 180 of 180 identical by value.
+  Found then: jsonb re-orders keys, so the worker's "did the score change" compare now sorts keys (`2026-10-22c`).
+- SPA: the live `Inbox-*.js` chunk carries "Edit in reply box", "Audit after first reply" and "Audit score updating".
