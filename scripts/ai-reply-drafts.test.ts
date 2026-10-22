@@ -114,7 +114,7 @@ ok(/aiRow=\{ai\.forPhone\(c\.phone\)\}/.test(INBOX) && /st=\{stateByKey\.get\(c\
   && /<AiDraftChip row=\{aiRow\} compact \/>/.test(INBOX) && /\(!aiChipFor\(aiRow\) \|\| st\?\.failed\) && <ConvStateChip/.test(INBOX), 'the list shows "Needs approving" in place of "Waiting" (a failed send still shows)');
 
 console.log('6. approve sends ONCE; discard sends nothing; the function itself never sends');
-ok(!/sendViaGraph|graph\.facebook\.com|whatsapp-send\.ts|from\("whatsapp_messages"\)\.insert|from\("whatsapp_sends"\)/.test(FN), 'ai-reply-drafts has no send path and writes no message row');
+ok(!/sendViaGraph|graph\.facebook\.com|whatsapp-send\.ts|from\("whatsapp_messages"\)\.insert|from\("whatsapp_sends"\)(?!\.select\()/.test(FN), 'ai-reply-drafts has no send path and writes no message row');
 {
   const claim = FN.slice(FN.indexOf('async function handleClaim'), FN.indexOf('async function handleComplete'));
   ok(/\.update\(\{ status: "sending", claimed_by: actor\.id/.test(claim) && /\.eq\("id", d\.id\)\.eq\("status", "pending"\)\.select\("id"\)\.maybeSingle\(\)/.test(claim), 'the claim is ONE conditional write pending → sending');

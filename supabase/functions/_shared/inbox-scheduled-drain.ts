@@ -116,11 +116,17 @@ export async function drainTick(deps: DrainDeps): Promise<TickReport> {
   return report;
 }
 
-/** What the senders answer, read into one outcome. A "scheduled" answer here would mean the window was shut after all — not sent. */
-export function senderOutcome(body: Record<string, unknown> | null | undefined, messageId: unknown): SendOutcome {
-  if (!body) return { ok: false, error: "The sender did not answer. Check the conversation before sending again." };
+/** What the senders answer, read into one outcome. A "scheduled" answer here would mean the window was shut after all — not sent.
+ *  ⛔ THE REAL REASON, ALWAYS (2026-10-22): the sender's own words (reason / detail), else its code (error), else the platform's
+ *  own answer (message / msg — "Invalid API key" from the gateway), else the HTTP status. Never a bare "refused". */
+export function senderOutcome(body: Record<string, unknown> | null | undefined, messageId: unknown, httpStatus?: number): SendOutcome {
+  const http = typeof httpStatus === "number" && httpStatus !== 200 ? ` (HTTP ${httpStatus})` : "";
+  if (!body) return { ok: false, error: `The sender did not answer${http}. Check the conversation before sending again.` };
   if (body.scheduled) return { ok: false, error: "Their send hours had closed again, so it was not sent." };
   if (body.ok === true) return { ok: true, messageId: typeof messageId === "string" && messageId ? messageId : null };
-  const words = [body.reason, body.detail, body.error].find((v) => typeof v === "string" && v.trim());
-  return { ok: false, error: String(words ?? "The send was refused.").slice(0, 300) };
+  const said = (v: unknown) => (typeof v === "string" && v.trim() ? v.trim() : null);
+  const words = said(body.reason) ?? said(body.detail);
+  const code = said(body.error) ?? said(body.message) ?? said(body.msg) ?? said(body.code);
+  const error = words ?? (code ? `Refused: ${code}${http}` : `Refused with no reason given${http}.`);
+  return { ok: false, error: error.slice(0, 300) };
 }

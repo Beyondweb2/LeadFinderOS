@@ -55,7 +55,7 @@ import { plainIssueTitle, websiteCheckFor } from "../../../src/lib/websiteCheck.
 import { conversationEngine, draftNames } from "../../../src/lib/draftEvidence.ts";
 import { warmStage } from "../../../src/lib/warmStage.ts";
 import { serviceWindowState } from "../../../src/lib/serviceWindow.ts";
-import { isRealSend } from "../../../src/lib/realSend.ts";
+import { failedWamids, isOurs, moveThread, sentText, withReceipts, type DraftThreadRow } from "../../../src/lib/draftThread.ts";
 import {
   autoSendVerdict, autoSendAt, autoSendDelayMs, autoSendKey, cleanAutoSendKeys, cleanDailyCap, draftFactsFromPlan, evidenceComplete, theirMessagesSinceUs, threadHardReason,
   AUTO_SEND_CHOICES, AUTO_SEND_DEFAULT_DAILY_CAP, AUTO_SEND_MAX_DAILY_CAP,
@@ -75,7 +75,7 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-internal-job, x-cron-secret",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
   /* The deploy marker: only this build answers with it. */
-  "x-ai-reply-drafts": "2026-10-21h-visible-half-first-reply",
+  "x-ai-reply-drafts": "2026-10-22a-pitch-owed-sent-only",
 };
 const json = (b: unknown, s = 200) => new Response(JSON.stringify(b), { status: s, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 const str = (v: unknown) => (typeof v === "string" ? v.trim() : "");
@@ -130,31 +130,28 @@ async function callReplyModel(model: string, system: string, user: string, tempe
 
 /* ───────────────────────── what we already hold (DB only) ───────────────────────── */
 
-interface MsgRow { id: string; created_at: string; direction: string; body: string | null; message_type: string | null; template_name: string | null; status: string | null; lead_id: string | null; template_snapshot?: { body?: unknown } | null; reply_kind?: string | null }
+type MsgRow = DraftThreadRow;
 type LeadRow = ResearchLead & { amount_paid: unknown; status: unknown; call_booked_at: string | null; previous_status?: string | null; ai_visible_at?: string | null };
 
-/** What a sent row SAID: a template's stored rendered body (template_snapshot), else its body. */
-const sentText = (m: MsgRow): string => (m.template_snapshot && typeof m.template_snapshot.body === "string" && m.template_snapshot.body.trim()) ? m.template_snapshot.body.trim() : (m.body ?? "");
-const isOurs = (m: MsgRow) => m.direction !== "inbound" && (isRealSend(m.status) || m.status === "simulated");
-
+/** The thread, oldest first. A 'failed' row of ours is read against its receipt (src/lib/draftThread.ts): delivered / read =
+ *  it reached them. An unreadable receipt leaves it out (the old reading). */
 async function loadThread(service: Service, bookUserId: string, phone: string): Promise<MsgRow[]> {
   const { data, error } = await service.from("whatsapp_messages")
-    .select("id, created_at, direction, body, message_type, template_name, status, lead_id, template_snapshot, reply_kind")
+    .select("id, created_at, direction, body, message_type, template_name, status, lead_id, wa_message_id, template_snapshot, reply_kind")
     .eq("user_id", bookUserId).eq("phone", phone).order("created_at", { ascending: false }).limit(60);
   if (error) throw error;
-  return ((data ?? []) as MsgRow[]).slice().reverse();
+  const rows = ((data ?? []) as MsgRow[]).slice().reverse();
+  const wamids = failedWamids(rows);
+  if (!wamids.length) return rows;
+  const { data: receipts, error: rErr } = await service.from("whatsapp_sends").select("message_id, delivery_status").in("message_id", wamids);
+  if (rErr) return rows;
+  return withReceipts(rows, new Map(((receipts ?? []) as Array<{ message_id: string; delivery_status: string | null }>).map((r) => [r.message_id, r.delivery_status])));
 }
 
 async function loadLead(service: Service, leadId: string): Promise<LeadRow | null> {
   const { data, error } = await service.from("outreach_leads").select(`${RESEARCH_LEAD_COLUMNS}, amount_paid, status, call_booked_at, ai_visible_at`).eq("id", leadId).maybeSingle();
   if (error) throw error;
   return data ?? null;
-}
-
-/** The thread up to and including this inbound, as the move picker reads it. */
-function moveThread(thread: MsgRow[], inbound: MsgRow): MoveThreadMsg[] {
-  return thread.filter((m) => m.created_at <= inbound.created_at && (m.direction === "inbound" || isOurs(m)))
-    .map((m) => ({ from: m.direction === "inbound" ? "them" as const : "us" as const, text: (m.direction === "inbound" ? m.body ?? "" : sentText(m)) || (m.template_name ? `[${m.template_name}]` : ""), messageType: m.message_type, templateName: m.template_name, at: m.created_at }));
 }
 
 /** AI drafts sent since the last WIN (a voice note we sent, a booked call, or a sent draft that agreed a call time — the

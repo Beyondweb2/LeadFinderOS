@@ -162,6 +162,17 @@ const row = (id: string, extra: Partial<DueRow> = {}): DueRow => ({
   const r = senderOutcome({ ok: false, error: 'opted_out', reason: 'They asked to stop.' }, null);
   ok(!r.ok && (r as { error: string }).error === 'They asked to stop.', "a refusal keeps the sender's own words");
   ok(!senderOutcome(null, null).ok, 'no answer → failed (check the conversation)');
+  /* 2026-10-22: the gateway's own refusal carried only "message", and the row read "The send was refused." with no reason. */
+  const gw = senderOutcome({ message: 'Invalid API key', hint: 'Double check your API key.' }, undefined, 401);
+  ok(!gw.ok && (gw as { error: string }).error === 'Refused: Invalid API key (HTTP 401)', `the platform's own refusal is shown (got "${(gw as { error: string }).error}")`);
+  const code = senderOutcome({ ok: false, error: 'pitch_already_sent' }, null, 200);
+  ok(!code.ok && /pitch_already_sent/.test((code as { error: string }).error), 'a bare refusal code is shown, never "The send was refused"');
+  const bare = senderOutcome({ ok: false }, null, 500);
+  ok(!bare.ok && /HTTP 500/.test((bare as { error: string }).error), 'nothing readable: the HTTP status is shown');
+  ok(!/The send was refused/.test(read('supabase/functions/_shared/inbox-scheduled-drain.ts')), 'the reasonless "The send was refused." is gone');
+  const SEND_FN = read('supabase/functions/inbox-scheduled-send/index.ts');
+  const waCall = SEND_FN.slice(SEND_FN.indexOf('functions/v1/send-whatsapp-message'), SEND_FN.indexOf('return senderOutcome(body, msg?.id'));
+  ok(waCall.length > 0 && !/Authorization|apikey/.test(waCall) && /x-cron-secret/.test(waCall), 'the drain calls the WhatsApp sender by its cron door only (a service-key bearer is refused by the gateway)');
 }
 
 /* ── 6. the voice note: outside the hours it is queued before any claim or Meta call ── */

@@ -22,6 +22,19 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-22-pitch-owed-and-queued-sends', date: '2026-10-22', title: 'First-reply pitch fixed, and queued WhatsApp sends now go', audience: 'all',
+    body: 'A first reply now gets the proper first-reply pitch even when the opener was marked failed but reached them. Messages queued for the morning now actually send, and a send that is refused says why.',
+    report: {
+      added: [],
+      changed: [
+        'The drafter counts an opener marked "failed" as sent when WhatsApp later confirmed it was delivered or read, so "Yes, how can I help?" gets the first-reply pitch, not the go-on line.',
+        'The pitch stays owed until a pitch message was actually sent. A draft, a refused send or a failed send never counts.',
+        'Messages queued outside send hours were all being refused before they reached the sender. They now send at the queued time.',
+        'A queued send that is refused shows the real reason instead of "The send was refused".',
+      ],
+      removed: [],
+      effect: 'First replies like Robina’s get the approved pitch (press Regenerate on an open draft), and queued morning sends go out.',
+    } },
   { id: '2026-10-22-lighter-outreach-inbox', date: '2026-10-22', title: 'Outreach and Inbox download much less', audience: 'all',
     body: 'Outreach and the Inbox now download a small summary of each website check instead of the whole thing, and the Inbox no longer reloads everything when you switch back to its tab.',
     report: {
