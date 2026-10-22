@@ -120,7 +120,7 @@ export function ukWordedTemplateRefusal(template: string | null | undefined, mar
   const t = String(template ?? '').trim();
   if (!UK_WORDED_TEMPLATES.has(t)) return null;
   if (market === 'UK') return null;
-  return `${t} is written for UK businesses (UK figures and £ prices), so it is not sent to ${market === 'MY' ? 'Malaysia' : market === 'SG' ? 'Singapore' : 'a number outside the UK'}.`;
+  return `${t} is written for UK businesses (UK figures and £ prices), so it is not sent to ${market === 'MY' ? 'Malaysia' : market === 'SG' ? 'Singapore' : market === 'AU' ? 'Australia' : 'a number outside the UK'}.`;
 }
 
 /* ── Why the queue let a lead go without sending, in plain words (whatsapp_delivery_status tokens, 2026-10-14) ── */

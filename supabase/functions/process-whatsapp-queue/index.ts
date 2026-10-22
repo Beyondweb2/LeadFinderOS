@@ -1,7 +1,8 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { toWhatsAppDigits } from "../../../src/lib/waNumber.ts";
 import { marketWindowOpen, windowOpenForDigits } from "../../../src/lib/sendWindow.ts";
-import { COUNTRY_OFF, channelOn, mobileMarketOf, type Market } from "../../../src/lib/outreachMarkets.ts";
+import { ABROAD_MARKETS, COUNTRY_OFF, channelOn, mobileMarketOf, type Market } from "../../../src/lib/outreachMarkets.ts";
+import { AU_ZONE_COLUMNS, auLeadTz } from "../../../src/lib/auLeadZone.ts";
 import { NOT_A_MOBILE, NOT_A_MOBILE_REASON, templateDestinationRefusal } from "../../../src/lib/whatsAppDestination.ts";
 import { loadCountrySettings, marketAtDailyCap } from "../_shared/country-settings.ts";
 import { isUkColdDestination, NOT_A_UK_MOBILE } from "../../../src/lib/ukColdDestination.ts";
@@ -36,7 +37,8 @@ import { capRiseRefused, healthLimitedCap, healthVerdict, tierLimit, type Stored
 import { STRONG_STATUSES, postgrestList } from "../../../src/lib/strongStatuses.ts";
 import { qaSendVerdict } from "../../../src/lib/qaSafety.ts";
 import { loadQaExclusions, qaSendHold } from "../_shared/qa-guard.ts";
-import { formatVisibilityScore, REPORT_OFFER_REFUSAL_WORDS, REPORT_OFFER_TEMPLATE, REPORT_OFFER_WARNING_WORDS, reportOfferRefusal, reportOfferWarnings, ukWordedTemplateRefusal, type ReportOfferRefusal } from "../../../src/lib/reportOfferTemplate.ts";
+import { formatVisibilityScore, REPORT_OFFER_REFUSAL_WORDS, REPORT_OFFER_TEMPLATE, REPORT_OFFER_WARNING_WORDS, reportOfferRefusal, reportOfferWarnings, ukWordedTemplateRefusal, UK_WORDED_TEMPLATES, type ReportOfferRefusal } from "../../../src/lib/reportOfferTemplate.ts";
+import { prospectOnlyTemplateRefusal } from "../../../src/lib/prospectOnly.ts";
 import { senderMessageName } from "../_shared/sender-name.ts";
 import { templateAvailability } from "../_shared/template-status.ts";
 import { TEMPLATE_UNAVAILABLE_CODES } from "../../../src/lib/whatsappLinkTemplates.ts";
@@ -405,10 +407,11 @@ const META_STATUS_GATED: ReadonlySet<string> = new Set([REPORT_OFFER_TEMPLATE, "
    message is unrecoverable; a send that fails visibly is a five-minute fix. So an unresolvable
    template now refuses and says why. */
 
-/** ⛔ Malaysia / Singapore (2026-10-15): a failed send there is never retried automatically — handed back to a person. */
+/** ⛔ Malaysia / Singapore (2026-10-15), Australia (2026-10-22): a failed send there is never retried automatically — handed
+ *  back to a person. */
 function isNoAutoRetryMarket(digits: string | null | undefined): boolean {
   const m = mobileMarketOf(String(digits ?? ""));
-  return m === "MY" || m === "SG";
+  return m === "MY" || m === "SG" || m === "AU";
 }
 
 /** A team member's name for "Paused by …" (display name, then message name). Null when unknown — never an email. */
@@ -614,8 +617,10 @@ Deno.serve(async (req) => {
       { count: sentToday }, { count: queuedCount }, { count: archivedQueuedCount }, { count: unverifiedQueuedCount }, { count: phoneHistorySkippedCount }, { count: hookQueuedCount }, { count: contactQueuedCount }, { data: stateRow },
       autoReplyEnabledV, auditCompleteTemplateV, firstReplyTemplateV, firstReplyModeV, auditOnlyReadyCountV,
     ] = await Promise.all([
+      /* ⛔ AUSTRALIA HAS ITS OWN BUDGET (2026-10-22): an Australian send (61…) never counts against the team cap, and the team
+         cap never stops Australia (its own country cap does). Every other row is counted exactly as before. */
       service
-        .from("whatsapp_sends").select("id", { count: "exact", head: true }).gte("created_at", dayStart),
+        .from("whatsapp_sends").select("id", { count: "exact", head: true }).gte("created_at", dayStart).not("phone", "like", "61%"),
       /* Queue depth counts what this processor will ACTUALLY send: archived leads are excluded here
          for the same reason they are excluded from the selection below. The archived-but-queued count
          is reported alongside it rather than silently dropped, so "nothing to send" and "skipping N
@@ -731,20 +736,31 @@ Deno.serve(async (req) => {
        outreach_leads.country (measured wrong on ~370 rows). */
     /* 2026-10-14: Malaysia / Singapore mobiles send in THEIR OWN local hours (09:00-19:00 by default, UTC+8), only while
        that country's WhatsApp switch is on. The London window and every UK number are unchanged. */
-    const anyWindowOpen = windowOpen || marketWindowOpen(["MY", "SG"], "whatsapp", new Date(), countrySettings);
-    const leadWindowOpen = (r: { phone?: unknown; country?: unknown }) =>
-      force || windowOpenForDigits(toWhatsAppNumber(String(r.phone ?? ""), (r.country as string | null) ?? null), new Date(), countrySettings);
-    /* A country at its OWN daily cap (Malaysia / Singapore; counted in its own local day) holds its leads, like the window
-       does: not chosen, nothing written. Read once per tick, only for a market that is switched on. */
+    /* 2026-10-22: Australian mobiles send 09:00-17:00 Mon-Fri in the LEAD's own zone (from its state, src/lib/auLeadZone.ts).
+       A lead with no state is held ("needs state"): never chosen, nothing written — even on a forced tick. */
+    const anyWindowOpen = windowOpen || marketWindowOpen(ABROAD_MARKETS, "whatsapp", new Date(), countrySettings);
+    type QRow = { phone?: unknown; country?: unknown; address?: unknown; coverage_town?: unknown; search_location?: unknown; derived_town?: unknown };
+    const rowMarket = (r: QRow) => mobileMarketOf(toWhatsAppNumber(String(r.phone ?? ""), (r.country as string | null) ?? null));
+    const rowTz = (r: QRow) => auLeadTz(r as never);
+    const leadWindowOpen = (r: QRow) =>
+      (force && !(rowMarket(r) === "AU" && !rowTz(r)))
+      || windowOpenForDigits(toWhatsAppNumber(String(r.phone ?? ""), (r.country as string | null) ?? null), new Date(), countrySettings, rowTz(r));
+    /* A country at its OWN daily cap (Malaysia / Singapore / Australia; counted in its own local day) holds its leads, like the
+       window does: not chosen, nothing written. Read once per tick, only for a market that is switched on. */
     const marketsAtCap = new Set<Market>();
-    for (const m of ["MY", "SG"] as const) {
+    for (const m of ABROAD_MARKETS) {
       if (channelOn(countrySettings, m, "whatsapp") && await marketAtDailyCap(service, countrySettings, m, "whatsapp")) marketsAtCap.add(m);
     }
-    const leadSendable = (r: { phone?: unknown; country?: unknown }) => {
+    /* The team cap reached: only Australia (its own budget) may still send this tick. */
+    const teamCapReached = (sentToday ?? 0) >= DAILY_CAP;
+    const leadSendable = (r: QRow) => {
       if (!leadWindowOpen(r)) return false;
-      const m = mobileMarketOf(toWhatsAppNumber(String(r.phone ?? ""), (r.country as string | null) ?? null));
+      const m = rowMarket(r);
+      if (teamCapReached && m !== "AU") return false;
       return !(m && marketsAtCap.has(m));
     };
+    const auMaySend = channelOn(countrySettings, "AU", "whatsapp") && !marketsAtCap.has("AU")
+      && marketWindowOpen(["AU"], "whatsapp", new Date(), countrySettings);
 
     /* ⛔ QUEUED BUT HELD BY A TEST ACCOUNT (2026-10-08). The drip never chooses a real business held by a test
        account (src/lib/qaSafety.ts REFUSE) — correct, but silent: 7 real plumbers queued from "test1" sat
@@ -1697,7 +1713,8 @@ Deno.serve(async (req) => {
       console.error("[outreach-audit] audit-ahead pass threw:", e instanceof Error ? e.message : String(e));
     }
 
-    if ((sentToday ?? 0) >= DAILY_CAP) return json({ ok: true, skipped: "cap_reached", ...statusPayload, auditAhead });
+    /* The team cap stops every market but Australia; Australia then goes on alone (leadSendable) while its own window and cap allow. */
+    if (teamCapReached && !auMaySend) return json({ ok: true, skipped: "cap_reached", ...statusPayload, auditAhead });
     if (nextSendAt && new Date(nextSendAt) > new Date() && !force && !sendNow && !qaDrill) {
       return json({ ok: true, skipped: "not_due", ...statusPayload });
     }
@@ -1715,7 +1732,7 @@ Deno.serve(async (req) => {
        badge, and re-enters the drip the moment its town verifies. */
     const queuedQuery = service
       .from("outreach_leads")
-      .select("id, business_name, phone, email, country, whatsapp_template, whatsapp_attempts, whatsapp_delivery_status, whatsapp_ever_delivered, previous_status, user_id, campaign_id, queued_at, assigned_to_user_id, queued_by_user_id");
+      .select(`id, business_name, phone, email, country, whatsapp_template, whatsapp_attempts, whatsapp_delivery_status, whatsapp_ever_delivered, previous_status, user_id, campaign_id, queued_at, assigned_to_user_id, queued_by_user_id, ${AU_ZONE_COLUMNS}`);
     const { data: queuedRows } = await (qaDrill ? queuedQuery.eq("id", qaDrillLeadId as string) : queuedQuery)
       .eq("status", "queued")
       .eq("is_archived", false)
@@ -1819,7 +1836,7 @@ Deno.serve(async (req) => {
          the client that queued it. */
       const { data: hookRows } = await service
         .from("outreach_leads")
-        .select("id, business_name, phone, email, country, contact_name, amount_paid, user_id")
+        .select(`id, business_name, phone, email, country, contact_name, amount_paid, user_id, ${AU_ZONE_COLUMNS}`)
         .not("hook_followup_queued_at", "is", null)
         .eq("is_archived", false)
         .not("phone", "is", null)
@@ -1933,7 +1950,7 @@ Deno.serve(async (req) => {
          corrupt the pipeline. Leaves the pipeline status untouched; re-checks eligibility HERE. */
       const { data: contactRows } = await service
         .from("outreach_leads")
-        .select("id, business_name, phone, email, country, amount_paid, user_id")
+        .select(`id, business_name, phone, email, country, amount_paid, user_id, ${AU_ZONE_COLUMNS}`)
         .not("contact_followup_queued_at", "is", null)
         .eq("is_archived", false)
         .not("phone", "is", null)
@@ -2346,6 +2363,18 @@ Deno.serve(async (req) => {
         whatsapp_delivery_status: "uk_template_wrong_country", contact_method: null, queued_at: null, previous_status: null,
       }).eq("id", lead.id);
       return json({ ok: true, skipped: "uk_template_wrong_country", reason: ukWorded, lead_id: lead.id, business: lead.business_name, ...statusPayload });
+    }
+    /* ⛔ AUSTRALIA IS PROSPECT-ONLY (2026-10-22, src/lib/prospectOnly.ts): now that the drip can reach +61, it asks the same rule
+       send-whatsapp-message does — no template carrying a sign-up link or a £ price goes to an Australian number. */
+    const prospectOnly = TEMPLATES[templateName]
+      ? prospectOnlyTemplateRefusal({ name: templateName, vars: TEMPLATES[templateName].vars as readonly string[] }, toNumber, UK_WORDED_TEMPLATES)
+      : null;
+    if (prospectOnly) {
+      await service.from("outreach_leads").update({
+        status: statusBeforeQueue(lead.previous_status as string | null),
+        whatsapp_delivery_status: "prospect_only_country", contact_method: null, queued_at: null, previous_status: null,
+      }).eq("id", lead.id);
+      return json({ ok: true, skipped: "prospect_only_country", reason: prospectOnly, lead_id: lead.id, business: lead.business_name, ...statusPayload });
     }
     /* ⛔ META'S LIVE STATUS FOR A TEMPLATE REGISTERED WHILE IN REVIEW (2026-10-14). Not approved / rejected / paused →
        nothing is sent, the lead leaves the queue with Meta's word on it (template_<status>), and nothing retries it. An

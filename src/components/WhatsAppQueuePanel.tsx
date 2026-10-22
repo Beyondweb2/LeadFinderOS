@@ -25,7 +25,7 @@ import {
 } from '@/lib/queueAuditStatus';
 import { WA_TEMPLATE_REQS } from '@/lib/whatsappTemplates';
 import {
-  announceQueueChanged, batchHeadline, deriveQueue, QUEUE_BATCH_EVENT, QUEUE_ROW_STATE, readQueueBatch, ukClock,
+  announceQueueChanged, batchHeadline, deriveQueue, NEEDS_STATE_CHIP, QUEUE_BATCH_EVENT, QUEUE_ROW_STATE, readQueueBatch, rowNeedsState, ukClock,
   type QueueBatch, type QueueRow, type QueueRowState,
 } from '@/lib/whatsappQueueView';
 import { Callout, EmptyState, ErrorState, IconTile, LoadState, SURFACE, ToneChip } from '@/components/operator/ui';
@@ -400,6 +400,13 @@ export function WhatsAppQueuePanel({ defaultExpanded = true }: { defaultExpanded
         </Callout>
       )}
 
+      {/* Australian leads with no state (src/lib/auLeadZone.ts): held, never sent in a guessed time zone. */}
+      {view.needsState > 0 && (
+        <Callout tone="amber" className="mt-2 px-3 py-2 text-[11px]" data-testid="queue-needs-state">
+          {view.needsState} Australian {view.needsState === 1 ? 'lead is' : 'leads are'} held: <strong>Needs state</strong>. Their address or town names no state, so their local time is unknown and nothing is sent until one is added.
+        </Callout>
+      )}
+
       {/* The last batch THIS tab queued — a batch result, never queue rows (whatsappQueueView.ts). */}
       {batch && <BatchNote batch={batch} className="mt-2" />}
 
@@ -475,6 +482,7 @@ function QueueItem({ index, row, state, audit, busy, disabled, onRemove, removeT
           {sendsAs && <span className="block truncate text-[11px] text-muted-foreground" data-testid="queue-row-clean-name">Will say: “{sendsAs}”</span>}
           <span className="mt-0.5 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-[11px] text-muted-foreground">
             <ToneChip tone={s.tone} title={s.title} testId="queue-row-state">{s.label}</ToneChip>
+            {rowNeedsState(row) && <ToneChip tone={NEEDS_STATE_CHIP.tone} title={NEEDS_STATE_CHIP.title} testId="queue-row-needs-state">{NEEDS_STATE_CHIP.label}</ToneChip>}
             {tmpl && <span className="truncate" title={tmpl}>{templateLabel(tmpl)}</span>}
             {audit && audit !== 'not_needed' && (() => {
               const p = AUDIT_STATUS_PRESENTATION[audit];

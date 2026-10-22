@@ -11,6 +11,7 @@ import {
   hhmm, replyWindowFor, windowStatusLine, type InboxChannel, scheduledEditable, scheduledLine, scheduledReleasable, type ReplyHours, type ScheduledSendRow,
 } from '@/lib/inboxSendWindow';
 import type { SendWindow } from '@/lib/sendWindow';
+import { auLeadTz, type AuZoneLead } from '@/lib/auLeadZone';
 
 /* The Inbox send window's pieces of screen (src/lib/inboxSendWindow.ts): the header chip ("Their time 21:40 · opens 07:00"), a queued
    message in the thread (edit / cancel until it goes; a held one says why and is a Needs you), and the admin's one reply-hours setting. */
@@ -132,12 +133,13 @@ export function ReplyHoursDialog({ open, onOpenChange, current, outreach, onSave
 
 /* ══ THE LEAD PANELS (2026-10-21, Paul): the Outreach WhatsApp popup and the lead's text panel keep the same send hours as the Inbox.
    The SERVER queues; these only say so: their time, the Queue word, and the lead's queued messages with Edit / Cancel. ══ */
-export function useLeadSendHours(channel: InboxChannel, digits: string | null | undefined) {
+/** `lead` = the lead's address / town fields: an Australian lead's hours are read in its own zone (src/lib/auLeadZone.ts). */
+export function useLeadSendHours(channel: InboxChannel, digits: string | null | undefined, lead?: AuZoneLead | null) {
   const sched = useInboxScheduled(channel);
   const { settings } = useCountrySettings();
   const [, setTick] = useState(0);
   useEffect(() => { const id = window.setInterval(() => setTick((n) => n + 1), 60_000); return () => window.clearInterval(id); }, []);
-  const w = digits ? replyWindowFor(channel, digits, { replyHours: sched.replyHours, countrySettings: settings }) : null;
+  const w = digits ? replyWindowFor(channel, digits, { replyHours: sched.replyHours, countrySettings: settings, leadTz: auLeadTz(lead) }) : null;
   const status = w ? windowStatusLine(w) : null;
   const open = status?.open ?? true;
   return { sched, status, open, hint: w && !open ? `sends at ${hhmm(w.startMin)} their time` : null };

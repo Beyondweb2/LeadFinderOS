@@ -7,14 +7,16 @@ import { useToast } from '@/hooks/use-toast';
 import { Callout } from '@/components/operator/ui';
 import { useCountrySettings } from '@/hooks/useCountrySettings';
 import { countryAutoPauseHeadline } from '@/lib/countryAutoPause';
-import { SMS_SENDER_WORDS, checkCountryValue, hhmm, MARKET_NAME, MAX_COUNTRY_DAILY_CAP, type Market, type CountrySetting } from '@/lib/outreachMarkets';
+import { SMS_SENDER_WORDS, checkCountryValue, hhmm, MARKET_NAME, MAX_COUNTRY_DAILY_CAP, WHATSAPP_ONLY_MARKETS, PER_LEAD_ZONE_MARKETS, type Market, type CountrySetting } from '@/lib/outreachMarkets';
 
 /* ══ SENDING BY COUNTRY — ADMIN ONLY (2026-10-14, Malaysia / Singapore; src/lib/outreachMarkets.ts) ═════════════════
    One row per country: a switch for WhatsApp, SMS and browser calling, the country's own daily caps and its local send
    hours. Saved through set_outreach_country (admin-only on the server). The UK row's hours and caps are the existing
-   queue settings above (07:00-21:30 London, the team cap), so only its switches are shown here. */
+   queue settings above (07:00-21:30 London, the team cap), so only its switches are shown here.
+   Australia (2026-10-22): WhatsApp only (its SMS / call switches are shown off and cannot be turned on); its hours are read
+   in each lead's own zone, Mon–Fri; its cap is its own budget, outside the team cap. */
 
-const ROWS: Market[] = ['UK', 'MY', 'SG'];
+const ROWS: Market[] = ['UK', 'MY', 'SG', 'AU'];
 const t = (n: number | null | undefined) => (n == null ? '' : String(n));
 const toMin = (s: string): number | null | 'bad' => {
   const v = s.trim();
@@ -31,13 +33,14 @@ export function CountrySendingSettings() {
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState<Market | null>(null);
   const [draft, setDraft] = useState<Record<Market, { wa: string; sms: string; start: string; end: string }>>(
-    { UK: { wa: '', sms: '', start: '', end: '' }, MY: { wa: '', sms: '', start: '', end: '' }, SG: { wa: '', sms: '', start: '', end: '' } });
+    { UK: { wa: '', sms: '', start: '', end: '' }, MY: { wa: '', sms: '', start: '', end: '' }, SG: { wa: '', sms: '', start: '', end: '' },
+      AU: { wa: '', sms: '', start: '', end: '' } });
 
   useEffect(() => {
     if (!open) return;
     const row = (s: CountrySetting) => ({ wa: t(s.whatsapp_daily_cap), sms: t(s.sms_daily_cap),
       start: s.send_start_min == null ? '' : hhmm(s.send_start_min), end: s.send_end_min == null ? '' : hhmm(s.send_end_min) });
-    setDraft({ UK: row(settings.UK), MY: row(settings.MY), SG: row(settings.SG) });
+    setDraft({ UK: row(settings.UK), MY: row(settings.MY), SG: row(settings.SG), AU: row(settings.AU) });
   }, [open, settings]);
 
   const apply = async (m: Market, patch: Record<string, unknown>, done: string) => {
@@ -56,12 +59,15 @@ export function CountrySendingSettings() {
     if (start === 'bad' || end === 'bad' || (start != null && end != null && start >= end)) {
       toast({ title: 'Check the hours', description: 'Use 24-hour times like 09:00 and 19:00, with the start before the end.', variant: 'destructive' }); return;
     }
-    void apply(m, { whatsapp_daily_cap: wa.value, sms_daily_cap: sms.value, send_start_min: start, send_end_min: end }, `${MARKET_NAME[m]} limits saved`);
+    const patch: Record<string, unknown> = { whatsapp_daily_cap: wa.value, send_start_min: start, send_end_min: end };
+    if (!WHATSAPP_ONLY_MARKETS.has(m)) patch.sms_daily_cap = sms.value;
+    void apply(m, patch, `${MARKET_NAME[m]} limits saved`);
   };
 
   const summary = ROWS.filter((m) => m !== 'UK').map((m) => {
     const s = settings[m];
-    const on = [s.whatsapp_on && 'WhatsApp', s.sms_on && 'SMS', s.call_on && 'calls'].filter(Boolean);
+    const waOnly = WHATSAPP_ONLY_MARKETS.has(m);
+    const on = [s.whatsapp_on && 'WhatsApp', !waOnly && s.sms_on && 'SMS', !waOnly && s.call_on && 'calls'].filter(Boolean);
     return `${MARKET_NAME[m]}: ${on.length ? on.join(', ') : 'off'}`;
   }).join(' · ');
 
@@ -84,15 +90,16 @@ export function CountrySendingSettings() {
       </button>
       {open && (
         <div className="rounded-xl bg-muted/30 p-3 ring-1 ring-inset ring-border/40 space-y-3 text-xs" data-testid="country-sending-form">
-          {error && <Callout tone="red" icon={AlertTriangle} className="px-3 py-2 text-[11px]">Could not read the country settings, so Malaysia and Singapore are treated as off.</Callout>}
+          {error && <Callout tone="red" icon={AlertTriangle} className="px-3 py-2 text-[11px]">Could not read the country settings, so Malaysia, Singapore and Australia are treated as off.</Callout>}
           {!loaded && !error && <p className="text-muted-foreground">Loading…</p>}
           {loaded && ROWS.map((m) => {
             const s = settings[m];
+            const waOnly = WHATSAPP_ONLY_MARKETS.has(m);
             return (
               <div key={m} className="rounded-lg bg-background/60 p-2.5 ring-1 ring-inset ring-border/40 space-y-2" data-testid={`country-row-${m}`}>
                 <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5">
                   <span className="w-32 font-medium">{MARKET_NAME[m]}</span>
-                  {([['whatsapp_on', 'WhatsApp'], ['sms_on', 'SMS'], ['call_on', 'Browser calls']] as const).map(([k, label]) => (
+                  {([['whatsapp_on', 'WhatsApp'], ['sms_on', 'SMS'], ['call_on', 'Browser calls']] as const).filter(([k]) => !waOnly || k === 'whatsapp_on').map(([k, label]) => (
                     <label key={k} className="flex items-center gap-1.5">
                       <Switch checked={s[k] === true} disabled={busy === m}
                         onCheckedChange={(v) => void apply(m, { [k]: v }, `${MARKET_NAME[m]} ${label} ${v ? 'on' : 'off'}`)}
@@ -100,6 +107,7 @@ export function CountrySendingSettings() {
                       {label}
                     </label>
                   ))}
+                  {waOnly && <span className="text-[11px] text-muted-foreground" data-testid={`country-${m}-whatsapp-only`}>SMS and browser calls: never (WhatsApp only, prospect-only)</span>}
                   {busy === m && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
                 </div>
                 {m === 'UK' ? (
@@ -107,24 +115,36 @@ export function CountrySendingSettings() {
                 ) : (
                   <div className="grid grid-cols-2 gap-2 sm:grid-cols-5 items-end">
                     <label className="flex flex-col gap-1"><span className="text-muted-foreground">WhatsApp a day</span>
-                      <Input className="h-8" inputMode="numeric" value={draft[m].wa} onChange={(e) => setDraft((d) => ({ ...d, [m]: { ...d[m], wa: e.target.value } }))} placeholder="No country cap" /></label>
-                    <label className="flex flex-col gap-1"><span className="text-muted-foreground">Texts a day</span>
-                      <Input className="h-8" inputMode="numeric" value={draft[m].sms} onChange={(e) => setDraft((d) => ({ ...d, [m]: { ...d[m], sms: e.target.value } }))} placeholder="No country cap" /></label>
-                    <label className="flex flex-col gap-1"><span className="text-muted-foreground">From (local)</span>
+                      <Input className="h-8" inputMode="numeric" value={draft[m].wa} onChange={(e) => setDraft((d) => ({ ...d, [m]: { ...d[m], wa: e.target.value } }))} placeholder="No country cap" data-testid={`country-${m}-wa-cap`} /></label>
+                    {waOnly ? (
+                      <div className="flex flex-col gap-1"><span className="text-muted-foreground">Texts a day</span>
+                        <span className="h-8 flex items-center text-muted-foreground">Never (WhatsApp only)</span></div>
+                    ) : (
+                      <label className="flex flex-col gap-1"><span className="text-muted-foreground">Texts a day</span>
+                        <Input className="h-8" inputMode="numeric" value={draft[m].sms} onChange={(e) => setDraft((d) => ({ ...d, [m]: { ...d[m], sms: e.target.value } }))} placeholder="No country cap" /></label>
+                    )}
+                    <label className="flex flex-col gap-1"><span className="text-muted-foreground">{PER_LEAD_ZONE_MARKETS.has(m) ? 'From (lead’s local)' : 'From (local)'}</span>
                       <Input className="h-8" value={draft[m].start} onChange={(e) => setDraft((d) => ({ ...d, [m]: { ...d[m], start: e.target.value } }))} placeholder="09:00" /></label>
-                    <label className="flex flex-col gap-1"><span className="text-muted-foreground">Until (local)</span>
-                      <Input className="h-8" value={draft[m].end} onChange={(e) => setDraft((d) => ({ ...d, [m]: { ...d[m], end: e.target.value } }))} placeholder="19:00" /></label>
+                    <label className="flex flex-col gap-1"><span className="text-muted-foreground">{PER_LEAD_ZONE_MARKETS.has(m) ? 'Until (lead’s local)' : 'Until (local)'}</span>
+                      <Input className="h-8" value={draft[m].end} onChange={(e) => setDraft((d) => ({ ...d, [m]: { ...d[m], end: e.target.value } }))} placeholder={PER_LEAD_ZONE_MARKETS.has(m) ? '17:00' : '19:00'} /></label>
                     <Button size="sm" className="h-8 text-xs" disabled={busy === m} onClick={() => saveRow(m)} data-testid={`country-${m}-save`}>Save</Button>
                   </div>
+                )}
+                {PER_LEAD_ZONE_MARKETS.has(m) && (
+                  <p className="text-[11px] text-muted-foreground" data-testid={`country-${m}-zone-note`}>
+                    Monday–Friday only, in each lead’s own time zone from its state (Sydney, Melbourne, Hobart, Brisbane, Adelaide, Darwin or Perth).
+                    A lead with no state is held as “Needs state”. Its daily cap is its own budget: it does not count against the team cap, and the team cap does not stop it.
+                  </p>
                 )}
               </div>
             );
           })}
           <p className="text-[11px] text-muted-foreground">
-            ⛔ Cold WhatsApp to Malaysia and Singapore goes only through these switches — test a handful by hand first. Each switches
+            ⛔ Cold WhatsApp to Malaysia, Singapore and Australia goes only through these switches — test a handful by hand first. Each switches
             itself off if its first sends fail (any failure in the first 5, or 2 of the last 5), and a failed send there is never retried
             automatically: the lead is handed back.
             {' '}Malaysia and Singapore send in their own time (UTC+8). Their caps come on top of the team cap — the team cap still counts every message.
+            {' '}Australia is prospect-only: no price, sign-up or checkout message is ever sent there.
             {' '}WhatsApp templates are written in English for UK businesses: send only the openers, and not explain_offer / explain_offer_v2 (they quote £ prices and “UK businesses”).
           </p>
           <Callout tone="amber" icon={AlertTriangle} className="px-3 py-2 text-[11px]" testId="country-sms-warning">{SMS_SENDER_WORDS}</Callout>

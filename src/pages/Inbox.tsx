@@ -94,6 +94,7 @@ import { aiChipFor, needsApproving, needsYou, rowSendable, type AiReplyRow } fro
 import { useInboxScheduled, INBOX_SCHEDULED_KEY } from '@/hooks/useInboxScheduled';
 import { ReplyHoursDialog, ReplyWindowChip, ScheduledSendBubble } from '@/components/InboxSendWindow';
 import { hhmm, queuedLabel, replyWindowFor, sendVerb, windowStatusLine } from '@/lib/inboxSendWindow';
+import { auLeadTz } from '@/lib/auLeadZone';
 import { inboundLabel } from '@/lib/replyMove';
 import { SENT_BY_AI_LABEL, TYPING_MARK_EVERY_MS } from '@/lib/aiAutoSend';
 import { sameRowProps } from '@/lib/inboxRowMemo';
@@ -970,8 +971,10 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
   /* The lead's OWN send hours (src/lib/inboxSendWindow.ts) — separate from WhatsApp's 24 hours above. Outside them every send button
      says Queue and the server queues instead of sending. Re-read each minute (clockTick re-renders). */
   const activeDigits = active ? active.phone.replace(/\D/g, '') : '';
-  const replyWin = active ? replyWindowFor(channel, activeDigits, { replyHours: sched.replyHours, countrySettings: replyCountrySettings }) : null;
-  const outreachWin = active ? replyWindowFor(channel, activeDigits, { countrySettings: replyCountrySettings }) : null;
+  /* Australia (2026-10-22): the hours are read in the LEAD's zone, from its state (src/lib/auLeadZone.ts). No state = "Needs state". */
+  const activeLeadTz = auLeadTz(active?.leadId ? leadByIdForState.get(active.leadId) : null);
+  const replyWin = active ? replyWindowFor(channel, activeDigits, { replyHours: sched.replyHours, countrySettings: replyCountrySettings, leadTz: activeLeadTz }) : null;
+  const outreachWin = active ? replyWindowFor(channel, activeDigits, { countrySettings: replyCountrySettings, leadTz: activeLeadTz }) : null;
   const replyStatus = replyWin ? windowStatusLine(replyWin) : null;
   const replyOpen = replyStatus?.open ?? true;
   const queueHint = replyWin && !replyOpen ? `sends at ${hhmm(replyWin.startMin)} their time` : null;

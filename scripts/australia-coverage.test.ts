@@ -11,7 +11,8 @@
      E. The wrong-town guard for an Australian audit (_shared/town-distance.ts australianTownCheck).
      F. Prospect-only (src/lib/prospectOnly.ts): no price, guarantee or sign-up button on the report; Quick Close,
         checkout and the link templates refuse; a sign-up-link template is refused to a +61 number.
-     G. Cold WhatsApp to Australia STAYS refused: +61 is not a market and not a UK cold destination.
+     G. Cold WhatsApp to Australia goes ONLY through its own market switch (2026-10-22, feat/australia-whatsapp — pinned in
+        scripts/australia-whatsapp.test.ts): +61 is still not a UK cold destination, and texts to it are never on.
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 import { readFileSync } from 'node:fs';
 import { AUSTRALIA_TOWNS } from '../src/data/australiaTowns.ts';
@@ -32,7 +33,7 @@ import { prospectOnlyLead, prospectOnlyNumber, prospectOnlyTemplateRefusal } fro
 import { UK_WORDED_TEMPLATES } from '../src/lib/reportOfferTemplate.ts';
 import { WA_TEMPLATES } from '../supabase/functions/_shared/whatsapp-send.ts';
 import { isUkColdDestination } from '../src/lib/ukColdDestination.ts';
-import { MARKETS, mobileMarketOf } from '../src/lib/outreachMarkets.ts';
+import { channelOn, countrySettingsFrom, MARKETS, mobileMarketOf } from '../src/lib/outreachMarkets.ts';
 import { buildReportData } from '../src/lib/auditReport.ts';
 import { renderReportHtml } from '../src/lib/aiAuditReportHtml.ts';
 import { initialHookStateV2 } from '../src/lib/hookScore.ts';
@@ -188,9 +189,10 @@ ok(/service_terminated_at,country,address"\)/.test(ltv) && /if \(prospectOnlyLea
 const swm = read('../supabase/functions/send-whatsapp-message/index.ts');
 ok(/prospectOnlyTemplateRefusal\(\{ name: templateName, vars: WA_TEMPLATES\[templateName\]\.vars \}, to, UK_WORDED_TEMPLATES\)/.test(swm) && /error: "prospect_only_country"/.test(swm), 'send-whatsapp-message refuses a sign-up-link / £ template to +61');
 
-console.log('G. Cold WhatsApp to Australia stays refused');
+console.log('G. Cold WhatsApp to Australia only through its own switch; never by text');
 ok(!isUkColdDestination('61412345678'), 'an Australian mobile is not a UK cold destination');
-ok(mobileMarketOf('61412345678') === null && !(MARKETS as readonly string[]).includes('AU'), 'Australia is not a WhatsApp market (no +61 mobile rule)');
+ok(mobileMarketOf('61412345678') === 'AU' && (MARKETS as readonly string[]).includes('AU'), 'Australia is a WhatsApp market of its own (2026-10-22)');
+ok(!channelOn(countrySettingsFrom([{ country: 'AU', whatsapp_on: true, sms_on: true, call_on: true }]), 'AU', 'sms'), 'texts to Australia are never on, whatever is stored');
 
 console.log(failures ? `\nFAILED: ${failures}` : '\nAll passed.');
 if (failures) process.exit(1);

@@ -104,8 +104,9 @@ const CAPABILITIES = ["dry_run", "build_phase_hold", "routing_leaf", "any_approv
    2026-10-19a: EVERY template refuses a UK / MY / SG number that is not a mobile (src/lib/whatsAppDestination.ts).
    2026-10-21a: a sign-up-link or £-priced template is refused to an Australian number (src/lib/prospectOnly.ts).
    2026-10-21a: the Inbox send window — via:"inbox" outside the lead's hours is QUEUED, not sent (src/lib/inboxSendWindow.ts).
-   2026-10-21c: both of the above (the send window + Australia prospect-only). */
-const BUILD_ID = "2026-10-21d-named-share-no-chatgpt";
+   2026-10-21c: both of the above (the send window + Australia prospect-only).
+   2026-10-22a: Australia is a WhatsApp market (its own switch); its Inbox hours are read in the lead's zone (src/lib/auLeadZone.ts). */
+const BUILD_ID = "2026-10-22a-australia-whatsapp";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -846,7 +847,8 @@ Deno.serve(async (req) => {
       }, lastInboundAt);
       if (gate) return json({ ...gate, ...(gate.ok && fellBackReason ? { template: usedTemplate, fell_back: fellBackReason } : {}) }, 200);
     }
-    if (sched && !(await replyWindowOpenNow(service, "whatsapp", to))) return json({ ok: false, error: "outside_reply_window" }, 200);
+    /* Australia (2026-10-22): the row's stored zone is the lead's, resolved when it was queued. */
+    if (sched && !(await replyWindowOpenNow(service, "whatsapp", to, new Date(), { leadId: sched.row.lead_id, leadTz: sched.row.tz }))) return json({ ok: false, error: "outside_reply_window" }, 200);
 
     /* ⛔ A SUSPENDED SALESPERSON SENDS NOTHING (2026-09-29, docs/abuse-cost-protection.md). The guard is
        asked for a REAL send only — a dry run leaves nothing and costs nothing — and only for a

@@ -999,12 +999,17 @@ positive allowlist of `baseline`; `isColdOutreachTemplate` treats unknown as COL
   line or a sign-up link (report, Quick Close, checkout, link templates, +61 template sends all ask `src/lib/prospectOnly.ts`).
   An Australian town is ALWAYS `Name STATE` ("Ballarat VIC") in the Coverage key, the search, `coverage_town` and the audit town
   (`src/lib/australiaTowns.ts`; a bare ambiguous name is never guessed). Its wrong-town guard is `australianTownCheck`, never
-  `uk_towns`. Towns = bundled ABS list (`scripts/build-australia-towns.mjs`), no table. Cold WhatsApp to Australia stays refused.
+  `uk_towns`. Towns = bundled ABS list (`scripts/build-australia-towns.mjs`), no table.
+- ⛔ **AUSTRALIA IS A WHATSAPP-ONLY MARKET (2026-10-22, `docs/australia-whatsapp.md`)**: its own switch / cap / auto-off like Malaysia;
+  texts and browser calls to +61 are NEVER on (`WHATSAPP_ONLY_MARKETS`, SQL `outreach_channel_on`). Its hours are the LEAD's zone from
+  its STATE (`src/lib/auLeadZone.ts`: address → coverage_town → search_location → derived_town; never a guessed state), Mon–Fri; no
+  state = "Needs state", held / refused, never sent. Its sends are outside the team cap both ways. A new caller of the send window
+  for an Australian number must pass `leadTz`, or the lead is (safely) held.
 - ⛔ **COLD WHATSAPP IS UK MOBILES BY DEFAULT — India is no longer an outreach market (2026-10-07).** The only other doors are
-  Malaysia / Singapore, each through its own per-country switch (next bullet). Decided from the digits we send
+  Malaysia / Singapore / Australia, each through its own per-country switch (next bullet). Decided from the digits we send
   to (`src/lib/ukColdDestination.ts`), never `outreach_leads.country` (measured wrong on 374 rows). Enforced in the SQL
   (`sales_queue_opener`, `campaign_candidates`) and in BOTH senders; the India send window is gone. Australia is supported for search,
-  normalisation and checks but cold WhatsApp / SMS to +61 is REFUSED (prospect-only, `docs/australia-coverage.md`). Old India leads/messages stay as history. The `waNumber.ts` India
+  normalisation and checks; WhatsApp to +61 goes only through its switch, SMS to +61 is REFUSED (`docs/australia-whatsapp.md`). Old India leads/messages stay as history. The `waNumber.ts` India
   digits branch exists only so old threads normalise. `docs/india-readiness.md` is history.
 - ⛔ **COLD WHATSAPP TO MALAYSIA / SINGAPORE ONLY THROUGH ITS PER-COUNTRY SWITCH, AND ONLY AFTER A HANDFUL ARE TESTED BY HAND**
   (Paul, 2026-10-15; `docs/send-error-capture.md`). The switch (`outreach_country_settings.whatsapp_on`, `set_outreach_country`) is the

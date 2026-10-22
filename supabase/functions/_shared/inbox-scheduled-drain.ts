@@ -26,6 +26,8 @@ export const STUCK_SENDING_MS = 10 * 60_000;
 export interface DueRow {
   id: string; user_id: string; lead_id: string | null; phone: string; channel: InboxChannel; kind: ScheduledKind;
   send_at: string; created_at: string; checked_at: string;
+  /** The zone it was queued in. For Australia it is the LEAD's zone (src/lib/auLeadZone.ts) and the window is read in it. */
+  tz?: string | null;
   /** Level 2: an automatic AI reply (its draft). Null / absent = a person queued it. */
   ai_draft_id?: string | null;
 }
@@ -70,7 +72,7 @@ export async function drainTick(deps: DrainDeps): Promise<TickReport> {
   for (const row of rows) {
     if (sends >= MAX_SENDS_PER_TICK) break;
     const at = deps.now();
-    const window = replyWindowFor(row.channel, row.phone, { replyHours: deps.replyHours, countrySettings: deps.countrySettings });
+    const window = replyWindowFor(row.channel, row.phone, { replyHours: deps.replyHours, countrySettings: deps.countrySettings, leadTz: row.tz ?? null });
     const lead = row.lead_id ? await deps.lead(row.lead_id) : null;
     const inbound = await deps.newestInbound(row);
     const decision = drainDecision({

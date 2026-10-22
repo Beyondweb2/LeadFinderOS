@@ -43,6 +43,9 @@ export interface WhatsAppDialogLead {
   derived_town?: string | null;
   search_location?: string | null;
   search_keyword?: string | null;
+  /** Read for an Australian lead's state → its send hours' zone (src/lib/auLeadZone.ts). */
+  address?: string | null;
+  coverage_town?: string | null;
 }
 
 interface WaRow { id: string; direction: 'inbound' | 'outbound'; body: string | null; message_type: string | null; template_name: string | null; created_at: string; status: string | null }
@@ -65,6 +68,7 @@ const ERROR_WORDS: Record<string, string> = {
   forbidden: 'You can only message your own conversations.',
   template_needs_lead: 'A template needs a linked lead.',
   audit_reply_unavailable: 'Audit report not ready for this lead — run an audit first.',
+  needs_state: 'No Australian state on this lead, so its local time is unknown and nothing was sent. Add the state to its address or town.',
 };
 
 export function LeadWhatsAppPanel({ lead, height = 'max-h-[320px]', className }: { lead: WhatsAppDialogLead; height?: string; className?: string }) {
@@ -73,7 +77,7 @@ export function LeadWhatsAppPanel({ lead, height = 'max-h-[320px]', className }:
   const endRef = useRef<HTMLDivElement>(null);
   const phone = (lead.phone ?? '').trim();
   /* THE SEND WINDOW (2026-10-21): outside the lead's send hours the server queues this popup's sends too (via:'lead_panel'). */
-  const hours = useLeadSendHours('whatsapp', toWhatsAppDigits(phone, lead.country ?? null));
+  const hours = useLeadSendHours('whatsapp', toWhatsAppDigits(phone, lead.country ?? null), lead);
 
   const thread = useQuery({
     queryKey: ['lead-whatsapp-dialog', lead.id],
