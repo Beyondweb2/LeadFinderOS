@@ -1,5 +1,18 @@
 # whatsapp-status cutover — the plan (2026-10-22, planning only, nothing changed)
 
+> **⛔ OPTION A IS OFF (2026-10-22, later the same day).** Paul no longer has access to Move37's App Secret, so it cannot
+> be set. Nothing was changed live: `WHATSAPP_APP_SECRET` was never saved (checked in every project and the Vault) and
+> `whatsapp-status` was not deployed — live is still v129 (fail-open, saves no error code). The error-capture code and the
+> `WHATSAPP_APP_SECRET_NEXT` slot are merged in `main` but NOT deployed; the v129 rollback copy is kept.
+> **The cutover now happens at the Findable switch, in this order** (v129 enforces whatever secret is set, so the secret
+> and the webhook move go together):
+> 1. Findable Meta app, number, token and templates ready (list at the end).
+> 2. In the same few minutes: Paul moves the webhook URL to the Findable app AND saves the Findable App Secret as
+>    `WHATSAPP_APP_SECRET`. On v129 that already verifies Findable-signed deliveries.
+> 3. Claude confirms receipts and a reply still arrive (`scripts`: the receipts query in this record), then deploys the
+>    `whatsapp-status` in `main` (error capture + fail closed), checks unsigned → 401, and runs the one test send.
+> Until then delivery-failure codes stay unrecorded; the lead flag (No WhatsApp / WhatsApp failed) is what the screens show.
+
 Goal: delivery failures save Meta's error code and text, and the webhook checks Meta's signature. Read with
 `docs/handover/07-SECURITY-AND-PERMISSIONS.md` (the hold) and `docs/country-auto-off.md` (why the code matters).
 
