@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useCountrySettings } from '@/hooks/useCountrySettings';
-import { localDayStartUtc, marketsOn, windowForMarket, type Market } from '@/lib/outreachMarkets';
+import { heldCountryOff, localDayStartUtc, marketsOn, windowForMarket, type Market } from '@/lib/outreachMarkets';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { getQueueStatus, rememberQueueStatus, QUEUE_STATE_KEY, queuedLeadLine } from '@/lib/queueStatus';
 import { MessageSquare, Loader2, Play, Pause, RefreshCw, X, Trash2, Settings as SettingsIcon, Inbox as InboxIcon } from 'lucide-react';
@@ -27,7 +27,7 @@ import {
 } from '@/lib/queueAuditStatus';
 import { WA_TEMPLATE_REQS } from '@/lib/whatsappTemplates';
 import {
-  announceQueueChanged, batchHeadline, deriveQueue, NEEDS_STATE_CHIP, QUEUE_ROW_STATE, rowNeedsState,
+  announceQueueChanged, batchHeadline, countryOffChip, countryOffNote, deriveQueue, NEEDS_STATE_CHIP, QUEUE_ROW_STATE, rowCountryOff, rowNeedsState,
   type QueueBatch, type QueueRow, type QueueRowState,
 } from '@/lib/whatsappQueueView';
 import { nextSendWords, QUEUE_TABS, splitByTab, TAB_CALLING_CODE, TAB_LABEL, tabClock } from '@/lib/queueByCountry';
@@ -298,6 +298,7 @@ export function WhatsAppQueuePanel() {
   const clock = tabClock(tab, countrySettings);
   const tabCap = tab === 'UK' ? team?.cap ?? null : countrySettings[tab].whatsapp_daily_cap ?? null;
   const total = q.isSuccess ? QUEUE_TABS.reduce((n, m) => n + views[m].waiting.length, 0) : null;
+  const offNote = countryOffNote(tab, countrySettings[tab], view.waiting.length);
 
   return (
     <div className={cn(SURFACE, 'p-4')} data-testid="whatsapp-queue" data-scope={teamControls ? 'team' : 'mine'}>
@@ -411,6 +412,7 @@ export function WhatsAppQueuePanel() {
           {QUEUE_TABS.map((m) => (
             <TabsTrigger key={m} value={m} className="gap-1.5 rounded-full px-3 py-1.5 text-xs" data-testid={`queue-tab-${m}`}>
               {TAB_LABEL[m]}
+              {heldCountryOff(countrySettings, m) && <span className="text-[10px] font-semibold uppercase text-amber-600 dark:text-amber-400" data-testid={`queue-tab-off-${m}`}>off</span>}
               <span className="tabular-nums text-[11px] text-muted-foreground/70" data-testid={`queue-tab-count-${m}`}>{q.isSuccess ? views[m].waiting.length : '—'}</span>
             </TabsTrigger>
           ))}
@@ -437,6 +439,15 @@ export function WhatsAppQueuePanel() {
         <Stat label={clock.perLead ? 'Local time' : `${TAB_LABEL[tab]} time`}
           value={clock.perLead ? 'Each lead’s own' : `${clock.time}${tab === 'UK' && state ? (state.windowOpen ? ' · open' : ' · closed') : ''}`} />
       </div>
+
+      {/* 2026-10-22: this country is OFF (by hand or automatically). Its leads are HELD by the sender, not released: say so,
+          with why and when (src/lib/whatsappQueueView.ts countryOffNote). */}
+      {offNote && (
+        <Callout tone="amber" className="mt-2 px-3 py-2 text-[11px]" testId="queue-country-off">
+          <strong>{offNote.title}</strong> {offNote.why}
+          {offNote.detail && <span className="block text-muted-foreground" data-testid="queue-country-off-detail">{offNote.detail}</span>}
+        </Callout>
+      )}
 
       {/* Archived leads still sitting at status='queued' — the processor skips them; saying so stops "the queue
           looks stuck" being confused with "these were withdrawn". Counted from this tab's rows. */}
@@ -483,7 +494,7 @@ export function WhatsAppQueuePanel() {
             {view.waiting.length > 0 && (
               <ol className="space-y-0.5">
                 {view.waiting.map((l, i) => (
-                  <QueueItem key={l.id} index={i + 1} row={l} state="waiting" audit={auditStatusByLead.get(l.id)}
+                  <QueueItem key={l.id} index={i + 1} row={l} state="waiting" audit={auditStatusByLead.get(l.id)} offMarket={rowCountryOff(l, countrySettings)}
                     busy={busy === l.id} disabled={busy !== null}
                     onRemove={() => void removeFromQueue(l)} removeTitle="Remove from queue" />
                 ))}
@@ -518,11 +529,13 @@ export function WhatsAppQueuePanel() {
 /** How many rows at the top of the queue show the cleaned name a message will carry. */
 const CLEAN_PREVIEW_ROWS = 5;
 
-function QueueItem({ index, row, state, audit, busy, disabled, onRemove, removeTitle }: {
+function QueueItem({ index, row, state, audit, offMarket, busy, disabled, onRemove, removeTitle }: {
   index: number; row: QueueRow; state: QueueRowState; audit?: QueueAuditStatus;
+  /** The row's country when it is switched off: the row waits ("Waiting: Australia is off"). */
+  offMarket?: Market | null;
   busy: boolean; disabled: boolean; onRemove?: () => void; removeTitle: string;
 }) {
-  const s = QUEUE_ROW_STATE[state];
+  const s = offMarket ? countryOffChip(offMarket) : QUEUE_ROW_STATE[state];
   const name = row.business_name ?? 'Unnamed business';
   const tmpl = state === 'follow_up' ? 'contact_followup' : row.whatsapp_template;
   /* ⛔ THE NAME THE MESSAGE WILL CARRY, for the first few rows of a template that cleans its name

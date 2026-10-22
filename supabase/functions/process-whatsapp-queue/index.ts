@@ -1,7 +1,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { toWhatsAppDigits } from "../../../src/lib/waNumber.ts";
 import { marketWindowOpen, windowOpenForDigits } from "../../../src/lib/sendWindow.ts";
-import { ABROAD_MARKETS, COUNTRY_OFF, channelOn, mobileMarketOf, type Market } from "../../../src/lib/outreachMarkets.ts";
+import { ABROAD_MARKETS, COUNTRY_OFF, channelOn, heldCountryOff, mobileMarketOf, type Market } from "../../../src/lib/outreachMarkets.ts";
 import { AU_ZONE_COLUMNS, auLeadTz } from "../../../src/lib/auLeadZone.ts";
 import { NOT_A_MOBILE, NOT_A_MOBILE_REASON, templateDestinationRefusal } from "../../../src/lib/whatsAppDestination.ts";
 import { loadCountrySettings, marketAtDailyCap } from "../_shared/country-settings.ts";
@@ -237,6 +237,8 @@ const QUEUE_LOOKAHEAD = 60;
    ⚠️ IT IS STILL A HORIZON. Past 400 queued, campaigns queued after the 400th lead are invisible
    until the front clears — the same FIFO truncation this fixes, one order of magnitude out. */
 const QUEUE_SCAN = 400;
+/** The stored phone prefix of each abroad market (MY / SG are stored E.164; Australian numbers come from Google as +61). */
+const HELD_PHONE_PREFIX: Record<Exclude<Market, "UK">, string> = { MY: "+60", SG: "+65", AU: "+61" };
 
 /* ⛔ 3 → 1 ON 2026-09-14, WITH DAILY_CAP → 400 AND THE CRON → EVERY MINUTE. See the DAILY_CAP note
    for the simulation. The rule that decides this constant has not changed since it was written:
@@ -753,7 +755,10 @@ Deno.serve(async (req) => {
     }
     /* The team cap reached: only Australia (its own budget) may still send this tick. */
     const teamCapReached = (sentToday ?? 0) >= DAILY_CAP;
+    /* ⛔ 2026-10-22 (src/lib/outreachMarkets.ts heldCountryOff): a lead whose country's WhatsApp is OFF is held like the
+       window and the cap — not chosen, nothing written — and sends once the country is switched back on. */
     const leadSendable = (r: QRow) => {
+      if (heldCountryOff(countrySettings, rowMarket(r))) return false;
       if (!leadWindowOpen(r)) return false;
       const m = rowMarket(r);
       if (teamCapReached && m !== "AU") return false;
@@ -1733,7 +1738,13 @@ Deno.serve(async (req) => {
     const queuedQuery = service
       .from("outreach_leads")
       .select(`id, business_name, phone, email, country, whatsapp_template, whatsapp_attempts, whatsapp_delivery_status, whatsapp_ever_delivered, previous_status, user_id, campaign_id, queued_at, assigned_to_user_id, queued_by_user_id, ${AU_ZONE_COLUMNS}`);
-    const { data: queuedRows } = await (qaDrill ? queuedQuery.eq("id", qaDrillLeadId as string) : queuedQuery)
+    /* 2026-10-22: leads held because their country is OFF are left out of the read by their stored prefix (+60 / +65 / +61),
+       so a long held queue can never fill QUEUE_SCAN and starve the UK behind it. heldCountryOff below stays the rule. */
+    let queuedFiltered = (qaDrill ? queuedQuery.eq("id", qaDrillLeadId as string) : queuedQuery);
+    for (const m of ABROAD_MARKETS) {
+      if (heldCountryOff(countrySettings, m)) queuedFiltered = queuedFiltered.not("phone", "like", `${HELD_PHONE_PREFIX[m]}%`);
+    }
+    const { data: queuedRows } = await queuedFiltered
       .eq("status", "queued")
       .eq("is_archived", false)
       .not("phone", "is", null)
@@ -2331,6 +2342,15 @@ Deno.serve(async (req) => {
        WhatsApp" — it is a mobile we are not messaging yet. It leaves the queue back to its pre-queue status, nothing else
        is written about the number. A MY / SG mobile whose country is ON passes; everything else keeps the old drop-out. */
     const coldMarket = mobileMarketOf(toNumber);
+    /* ⛔ 2026-10-22: Malaysia / Singapore / Australia OFF → HELD here too, nothing written (the pick above already leaves these
+       out; this is the last exit, e.g. a QA drill). It stays queued and sends when the country is switched back on. */
+    if (heldCountryOff(countrySettings, coldMarket)) {
+      return json({
+        ok: true, skipped: "country_off_held",
+        reason: `${lead.business_name ?? "That lead"} is waiting: its country's WhatsApp is switched off. It stays queued and sends when it is switched back on.`,
+        lead_id: lead.id, business: lead.business_name, ...statusPayload,
+      });
+    }
     if (isColdOutreachTemplate(templateName) && coldMarket && !channelOn(countrySettings, coldMarket, "whatsapp")) {
       await service.from("outreach_leads").update({
         status: statusBeforeQueue(lead.previous_status as string | null),

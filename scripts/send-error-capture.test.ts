@@ -14,9 +14,6 @@ import {
   maskSecrets, META_ERROR_MEANINGS, metaErrorParts, metaErrorPartsFromResponse, partsFromStoredError, sendErrorLine,
   sendErrorMeaning, TWILIO_ERROR_MEANINGS,
 } from '../src/lib/sendErrorMeaning.ts';
-import {
-  COUNTRY_AUTO_PAUSE_FAILS, COUNTRY_AUTO_PAUSE_WINDOW, COUNTRY_TRIAL_SENDS, countryAutoPauseVerdict, NOT_ON_WHATSAPP_CODE,
-} from '../src/lib/countryAutoPause.ts';
 import { conversationState, messageErrorParts } from '../src/lib/conversationState.ts';
 import { pauseChangeLine } from '../src/lib/queuePauseChange.ts';
 import { QUEUE_SKIP_LABEL } from '../src/lib/salesCrm.ts';
@@ -90,21 +87,10 @@ console.log('\n── 4. the held whatsapp-status webhook is untouched ──');
   ok(!/sendErrorMeaning|countryAutoPause/.test(read('supabase/functions/_shared/whatsapp-failure.ts')), 'its failure module is unchanged in meaning');
 }
 
-console.log('\n── 5. the per-country auto switch-off (TS mirror ↔ SQL) ──');
+console.log('\n── 5. the per-country auto switch-off: the trigger plumbing ──');
 {
-  const at = (n: number) => new Date(Date.UTC(2026, 9, 14, 9, n)).toISOString();
-  ok(countryAutoPauseVerdict([{ at: at(26), failed: true, code: null }]).switchOff, '14 Oct: one send, failed, no code → switched off');
-  ok(!countryAutoPauseVerdict([{ at: at(1), failed: true, code: NOT_ON_WHATSAPP_CODE }]).switchOff, 'a first send that fails 131026 (that number is not on WhatsApp) does not switch the country off');
-  ok(countryAutoPauseVerdict([{ at: at(1), failed: true, code: 131026 }, { at: at(2), failed: true, code: 131026 }]).switchOff, '…but two of them do (2 of 5)');
-  const sixOk = Array.from({ length: 6 }, (_, i) => ({ at: at(i), failed: false, code: null }));
-  ok(!countryAutoPauseVerdict(sixOk).switchOff, 'all good → stays on');
-  ok(!countryAutoPauseVerdict([...sixOk, { at: at(10), failed: true, code: 131049 }]).switchOff, 'after the trial, one failure in the last 5 → stays on');
-  ok(countryAutoPauseVerdict([...sixOk, { at: at(10), failed: true, code: 131049 }, { at: at(11), failed: true, code: 131049 }]).switchOff, 'after the trial, 2 of the last 5 → off');
-  ok(!countryAutoPauseVerdict([{ at: at(1), failed: true, code: 131049 }, { at: at(2), failed: true, code: 131049 }, ...Array.from({ length: 5 }, (_, i) => ({ at: at(20 + i), failed: false, code: null }))]).switchOff,
-    'old failures outside the last 5 no longer count');
-  ok(COUNTRY_TRIAL_SENDS === 5 && COUNTRY_AUTO_PAUSE_WINDOW === 5 && COUNTRY_AUTO_PAUSE_FAILS === 2, 'the three numbers');
-  ok(MIG.includes('select * from per order by at desc limit 5') && MIG.includes('(v_all <= 5 and v_trial_fail >= 1) or v_failed >= 2')
-    && MIG.includes('code is distinct from 131026'), 'the SQL rule says the same (5 / trial any non-131026 / 2 of 5)');
+  /* The RULE itself was replaced on 2026-10-22 (one failed number no longer stops a country): its verdict, numbers and SQL
+     are pinned in scripts/country-auto-off.test.ts. What this section still pins is the 2026-10-15 plumbing around it. */
   ok(/create trigger trg_whatsapp_sends_country_check after insert or update of delivery_status on public\.whatsapp_sends/.test(MIG)
     && /create trigger trg_whatsapp_messages_country_check after insert or update of status on public\.whatsapp_messages/.test(MIG),
     'it fires on every failed write, whoever wrote it (queue, Inbox, the delivery-report webhook)');

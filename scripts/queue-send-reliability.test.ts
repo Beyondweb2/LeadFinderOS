@@ -129,7 +129,9 @@ console.log('7. queue panel says so about leads that can never send');
 {
   const row = (o: Record<string, unknown>) => ({ id: String(o.id), business_name: 'b', status: 'queued', is_archived: false, queued_at: '2026-10-08T09:00:00Z', whatsapp_template: 'initial_contact', phone: '07911123456', country: 'UK', contact_followup_queued_at: null, hook_followup_queued_at: null, ...o });
   const v = deriveQueue([row({ id: 'a' }), row({ id: 'b', phone: null }), row({ id: 'c', phone: '' }), row({ id: 'd', phone: '+61 412 345 678', country: 'Australia' }), row({ id: 'e', phone: '020 7946 0123' }), row({ id: 'f', is_archived: true, phone: null })] as never);
-  ok(v.waiting.length === 5 && v.unsendable === 4, 'no number / blank / Australian / landline are unsendable; archived and the UK mobile are not (4 of 5)');
+  /* 2026-10-22 (docs/country-auto-off.md): an Australian MOBILE with Australia off now WAITS (held, sent when it is switched
+     back on) — it is no longer counted as a number WhatsApp cannot reach. */
+  ok(v.waiting.length === 5 && v.unsendable === 3, 'no number / blank / landline are unsendable; archived, the UK mobile and an Australian mobile (country off: waiting) are not (3 of 5)');
   const panel = read('src/components/WhatsAppQueuePanel.tsx');
   ok(/queue-test-held/.test(panel) && /testHeldQueuedCount/.test(panel), 'a lead held by a test account is called out, not shown as waiting');
   const drip = read('supabase/functions/process-whatsapp-queue/index.ts');
