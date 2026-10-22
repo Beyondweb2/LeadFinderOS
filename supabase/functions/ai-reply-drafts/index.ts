@@ -19,6 +19,8 @@
 //       A DRAFT is written by the model only while the switch "AI handles replies" is on (default off; never changed here).
 //   · draft (the person working the lead) — "Draft reply": a draft for the newest inbound, always, except a stop
 //   · mark_opted_out (the person working the lead) — the one-tap opt-out on a stop
+//   · set_reply_audit (admin) — "Audit after first reply" On / Off, independent of the mode (2026-10-22)
+//   · rescore (admin, or the internal job) — drain the stored audit scores (src/lib/auditScore.ts); the tick does it anyway
 //   · settings / set_mode (admin) — the Inbox reply mode, Manual / Draft for approval / Auto (whatsapp_outreach_state.ai_reply_mode,
 //     src/lib/inboxReplyMode.ts; 2026-10-21). set_enabled = the old switch (on = Draft for approval, never Auto)
 //   · regenerate / discard / claim / complete (the person working the lead)
@@ -45,7 +47,7 @@ import {
 import { pickMove, type MoveEvidence, type MoveInput, type MovePlan, type MoveThreadMsg } from "../../../src/lib/replyMove.ts";
 import { replyKindChanges } from "../../../src/lib/replyKindTag.ts";
 import {
-  isVisible, parseVisibleRule, parseVisibleShare, visibleCounts, visibleRuleKey, VISIBLE_NO_PITCH_DETAIL, VISIBLE_NO_PITCH_ERROR, VISIBLE_RECHECK_DAYS, VISIBLE_SKIP_REASON, VISIBLE_LABEL,
+  isVisible, parseVisibleRule, parseVisibleShare, visibleRuleKey, VISIBLE_NO_PITCH_DETAIL, VISIBLE_NO_PITCH_ERROR, VISIBLE_RECHECK_DAYS, VISIBLE_SKIP_REASON, VISIBLE_LABEL,
   type VisibleRule, type VisibleShare,
 } from "../../../src/lib/visibleFlag.ts";
 import { CONFIDENCE_LINE, FACT_SHEET_VERSION } from "../../../src/lib/offerFactSheet.ts";
@@ -63,10 +65,12 @@ import {
 import { nextWindowOpenAt, replyWindowFor, replyWindowOpen } from "../../../src/lib/inboxSendWindow.ts";
 import { botMaySaySendsEveryOne, parseInboxReplyMode, INBOX_REPLY_MODES } from "../../../src/lib/inboxReplyMode.ts";
 import { loadReplyHours } from "../_shared/inbox-schedule.ts";
+import { loadLeadScore, rescoreDirtyRuns, SCORED_AUDIT_SELECT } from "../_shared/audit-scores.ts";
+import { AUDIT_SCORE_VERSION, leadAuditScore, pickHookAudit, visibleCountsOf, type ScoredAudit } from "../../../src/lib/auditScore.ts";
 import { loadCountrySettings } from "../_shared/country-settings.ts";
 import { autoSendCounts, loadAutoSendState, personActiveAt, sendAsIsAdmin, stopAutoSend, type AutoSendState } from "../_shared/ai-auto-send.ts";
 import {
-  auditPhaseOf, crawlPhaseOf, draftLackedEvidence, evidenceVerdict, isDrafterAudit, pitchNeedsEvidence, AUDIT_NOT_FINISHED_LABEL, AUDIT_NOT_FINISHED_REASON,
+  auditPhaseOf, crawlPhaseOf, draftLackedEvidence, evidenceVerdict, pitchNeedsEvidence, AUDIT_NOT_FINISHED_LABEL, AUDIT_NOT_FINISHED_REASON,
   AUDIT_RUNNING_DETAIL, AUDIT_RUNNING_ERROR, EVIDENCE_WAIT_MS, WAITING_LABEL, WAITING_REASON, type EvidenceVerdict, type WhyEvidence,
 } from "../../../src/lib/draftEvidenceWait.ts";
 
@@ -75,7 +79,7 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-internal-job, x-cron-secret",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
   /* The deploy marker: only this build answers with it. */
-  "x-ai-reply-drafts": "2026-10-22a-pitch-owed-sent-only",
+  "x-ai-reply-drafts": "2026-10-22b-one-audit-score",
 };
 const json = (b: unknown, s = 200) => new Response(JSON.stringify(b), { status: s, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 const str = (v: unknown) => (typeof v === "string" ? v.trim() : "");
@@ -211,7 +215,12 @@ async function buildContext(service: Service, lead: LeadRow, thread: MsgRow[], i
      2026-10-20). Only an audit with no complete quick-check score falls back to the run summary. */
   const scored = typeof audit?.scoreNamed === "number" && typeof audit?.scoreTotal === "number" && audit.scoreTotal > 0;
   const worst = audit?.worst ?? null;
-  const nd = scored ? audit!.scoreNamed : audit?.namedDatapoints; const td = scored ? audit!.scoreTotal : audit?.totalDatapoints;
+  /* Fallback (2026-10-22): the lead's stored score share (src/lib/auditScore.ts — Gemini + Google AI where scored, the card's
+     numbers), never the run summary, which counted ChatGPT and was written before the competitor reader finished. Updating
+     or absent = no count (the one-third rule then allows no "named others" claim). */
+  const stored = scored ? null : await loadLeadScore(service, lead.id).catch(() => null);
+  const storedShare = stored && !stored.updating ? stored.score?.share ?? null : null;
+  const nd = scored ? audit!.scoreNamed : storedShare?.named; const td = scored ? audit!.scoreTotal : storedShare?.total;
   const evidence: MoveEvidence = {
     businessName: lead.business_name ?? "",
     trade: audit && trade ? trade : null,
@@ -341,37 +350,41 @@ type VisibleSettings = { rule: VisibleRule; share: VisibleShare; key: string };
 async function visibleRuleNow(service: Service): Promise<VisibleSettings> {
   const { data } = await service.from("whatsapp_outreach_state").select("visible_rule, visible_min_share").eq("id", 1).maybeSingle();
   const rule = parseVisibleRule(data?.visible_rule); const share = parseVisibleShare(data?.visible_min_share);
-  return { rule, share, key: visibleRuleKey(rule, share) };
+  /* The score version is part of what a lead was judged under: a new ruler re-judges every lead (2026-10-22). */
+  return { rule, share, key: `${visibleRuleKey(rule, share)}:s${AUDIT_SCORE_VERSION}` };
 }
 
 /** Judge ONE lead: its newest ordinary audit, once that audit and the website check are final. Writes only through
  *  apply_lead_visible (which cancels the queued follow-ups on a new flag). Returns whether the lead is Visible now.
  *  ⛔ An audit still running, or a website check still running (inside EVIDENCE_WAIT_MS of the audit), changes nothing. */
 async function judgeLeadVisible(service: Service, leadId: string, vs: VisibleSettings): Promise<boolean> {
-  const [{ data: lead }, { data: audits }] = await Promise.all([
+  const [{ data: lead }, { data: audits, error: auditsErr }] = await Promise.all([
     service.from("outreach_leads").select("id, ai_visible_at, ai_visible_checked_audit_id, ai_visible_checked_rule").eq("id", leadId).maybeSingle(),
-    service.from("ai_audits").select("id, audit_purpose, is_measurement, created_at, runs:ai_audit_runs(id, status)")
+    service.from("ai_audits").select(SCORED_AUDIT_SELECT)
       .eq("lead_id", leadId).order("created_at", { ascending: false }).limit(10),
   ]);
   if (!lead) return false;
   const was = !!lead.ai_visible_at;
-  // deno-lint-ignore no-explicit-any
-  const newest = ((audits ?? []) as any[]).find(isDrafterAudit) as { id: string; created_at: string; runs?: Array<{ id: string; status: string | null }> } | undefined;
-  if (!newest) {
+  if (auditsErr) return was; // an unreadable audit list never clears or sets the flag
+  /* ⛔ THE CARD'S AUDIT AND THE CARD'S NUMBERS (src/lib/auditScore.ts, 2026-10-22): the stored score of the newest outreach
+     audit's newest run — the same numbers the Inbox chips, the thread header and the card show. It used to count the stored
+     model verdicts over every finished run, which disagreed with the card on 26 Inbox leads. */
+  const list = (audits ?? []) as ScoredAudit[];
+  const picked = leadAuditScore(list);
+  if (!picked) {
     if (was) await service.rpc("apply_lead_visible", { p_lead: leadId, p_visible: false, p_audit: null, p_rule: vs.key });
     return false;
   }
-  const runs = newest.runs ?? [];
-  const done = runs.filter((r) => r.status === "complete" || r.status === "capped");
-  if (!done.length) return was;
-  if (lead.ai_visible_checked_audit_id === newest.id && lead.ai_visible_checked_rule === vs.key) return was;
+  const audit = list.find((a) => a.id === picked.auditId)!;
+  const run = (audit.ai_audit_runs ?? []).find((r) => r.id === picked.runId);
+  if (!(run?.status === "complete" || run?.status === "capped")) return was;
+  // Still being rescored (an answer changed): judge on the next tick, never on numbers that are out of date.
+  if (picked.updating || !picked.score) return was;
+  if (lead.ai_visible_checked_audit_id === audit.id && lead.ai_visible_checked_rule === vs.key) return was;
   const phases = await loadPhases(service, leadId);
-  if (phases.crawl !== "final" && Date.now() - Date.parse(newest.created_at) < EVIDENCE_WAIT_MS) return was;
-  const { data: rows, error } = await service.from("ai_audit_queue").select("gemini_answered, gemini_self_named, overview_answered, overview_self_named")
-    .in("run_id", done.map((r) => r.id)).eq("status", "done");
-  if (error) return was;
-  const visible = isVisible(visibleCounts(rows ?? []), vs.rule, vs.share);
-  await service.rpc("apply_lead_visible", { p_lead: leadId, p_visible: visible, p_audit: newest.id, p_rule: vs.key });
+  if (phases.crawl !== "final" && Date.now() - Date.parse(audit.created_at ?? "") < EVIDENCE_WAIT_MS) return was;
+  const visible = isVisible(visibleCountsOf(picked.score), vs.rule, vs.share);
+  await service.rpc("apply_lead_visible", { p_lead: leadId, p_visible: visible, p_audit: audit.id, p_rule: vs.key });
   return visible;
 }
 
@@ -381,12 +394,15 @@ async function refreshVisibleFlags(service: Service, started: number) {
   const vs = await visibleRuleNow(service);
   const rule = vs.key;
   const sinceIso = new Date(Date.now() - VISIBLE_RECHECK_DAYS * 86_400_000).toISOString();
-  const { data: audits, error } = await service.from("ai_audits").select("id, lead_id, audit_purpose, is_measurement")
+  const { data: audits, error } = await service.from("ai_audits")
+    .select("id, lead_id, created_at, is_market, audit_purpose, baseline_target_runs, is_measurement, baseline_contract, ai_audit_runs(id, run_number)")
     .not("lead_id", "is", null).gte("created_at", sinceIso).order("created_at", { ascending: false }).limit(2000);
   if (error) throw error;
+  /* The audit each lead would be judged on: the card's pick (pickHookAudit), the same one judgeLeadVisible reads. */
+  const byLead = new Map<string, ScoredAudit[]>();
+  for (const a of (audits ?? []) as ScoredAudit[]) { const l = byLead.get(a.lead_id!); if (l) l.push(a); else byLead.set(a.lead_id!, [a]); }
   const newest = new Map<string, string>();
-  // deno-lint-ignore no-explicit-any
-  for (const a of (audits ?? []) as any[]) if (isDrafterAudit(a) && !newest.has(a.lead_id)) newest.set(a.lead_id, a.id);
+  for (const [lead, list] of byLead) { const p = pickHookAudit(list); if (p) newest.set(lead, p.audit.id); }
   const { data: flagged } = await service.from("outreach_leads").select("id, ai_visible_checked_rule").not("ai_visible_at", "is", null).limit(1000);
   const due: string[] = ((flagged ?? []) as Array<{ id: string; ai_visible_checked_rule: string | null }>).filter((l) => l.ai_visible_checked_rule !== rule).map((l) => l.id);
   const ids = [...newest.keys()];
@@ -477,6 +493,9 @@ async function settleOpenClaims(service: Service) {
 async function handleTick(service: Service) {
   const started = Date.now();
   await settleOpenClaims(service);
+  /* The stored audit scores first (src/lib/auditScore.ts), so the Visible judge and the drafts below read current numbers. */
+  await rescoreDirtyRuns(service).catch((e) =>
+    console.error("[ai-reply-drafts] rescore failed:", String((e as { message?: unknown })?.message ?? e).slice(0, 200)));
   /* Visible first, so a reply on a lead AI already names never gets a pitch or a Needs you this tick. */
   await refreshVisibleFlags(service, started).catch((e) =>
     console.error("[ai-reply-drafts] visible sweep failed:", String((e as { message?: unknown })?.message ?? e).slice(0, 200)));
@@ -927,16 +946,22 @@ async function handleDryRun(service: Service, actor: Actor | null, body: Record<
  *  the old columns in step (trg_inbox_reply_mode_sync: the switch, the reply audit, and the clock that stops a backlog being
  *  drafted) and leaving Auto cancels every automatic reply waiting (trg_ai_auto_send_switch). `set_enabled` (the old switch)
  *  still works for an older screen: on = Draft for approval, never Auto. */
-async function handleSettings(service: Service, actor: Actor, body: Record<string, unknown>, set: "mode" | "enabled" | null) {
+async function handleSettings(service: Service, actor: Actor, body: Record<string, unknown>, set: "mode" | "enabled" | "audit" | null) {
   if (actor.role !== "admin") return json({ ok: false, error: "admin_only" }, 403);
-  if (set) {
+  /* "Audit after first reply" (2026-10-22, Paul): its OWN switch, independent of the AI replies mode. The database copies it to
+     auto_reply_enabled, the column every deployed audit-arming path already reads (trg_inbox_reply_mode_sync). */
+  if (set === "audit") {
+    if (typeof body.on !== "boolean") return json({ ok: false, error: "bad_value", detail: "Choose On or Off." }, 400);
+    const { error } = await service.from("whatsapp_outreach_state").update({ reply_audit_enabled: body.on, updated_at: new Date().toISOString() }).eq("id", 1);
+    if (error) throw error;
+  } else if (set) {
     const raw = set === "mode" ? str(body.mode) : body.enabled === true ? "draft" : "manual";
     if (!(INBOX_REPLY_MODES as readonly string[]).includes(raw)) return json({ ok: false, error: "bad_mode", detail: "Choose Manual, Draft for approval or Auto." }, 400);
     const { error } = await service.from("whatsapp_outreach_state").update({ ai_reply_mode: raw, updated_at: new Date().toISOString() }).eq("id", 1);
     if (error) throw error;
   }
-  const { data } = await service.from("whatsapp_outreach_state").select("ai_reply_mode, ai_handles_replies, ai_handles_replies_since, ai_auto_send_intents, ai_auto_send_daily_cap").eq("id", 1).maybeSingle();
-  return json({ ok: true, mode: parseInboxReplyMode(data?.ai_reply_mode), enabled: data?.ai_handles_replies === true, since: data?.ai_handles_replies_since ?? null, auto_send: autoSendSettings(data) });
+  const { data } = await service.from("whatsapp_outreach_state").select("ai_reply_mode, ai_handles_replies, ai_handles_replies_since, ai_auto_send_intents, ai_auto_send_daily_cap, reply_audit_enabled").eq("id", 1).maybeSingle();
+  return json({ ok: true, mode: parseInboxReplyMode(data?.ai_reply_mode), reply_audit: data?.reply_audit_enabled === true, enabled: data?.ai_handles_replies === true, since: data?.ai_handles_replies_since ?? null, auto_send: autoSendSettings(data) });
 }
 
 function autoSendSettings(data: Record<string, unknown> | null | undefined) {
@@ -986,11 +1011,18 @@ Deno.serve(async (req) => {
       && (req.headers.get("x-cron-secret") || "") === (Deno.env.get("CRON_SECRET") || "\u0000__unset__");
     if (action === "tick") return internal ? await handleTick(service) : json({ ok: false, error: "not_authorised" }, 401);
     if (action === "dry_run" && internal) return await handleDryRun(service, null, body);
+    if (action === "rescore" && internal) return json({ ok: true, ...await rescoreDirtyRuns(service, { maxRuns: 200, budgetMs: 100_000 }) });
     const who = await resolveActor(req, service);
     if (!who.ok) return json(refusalBody(who), who.status);
+    /* The stored audit scores (src/lib/auditScore.ts): an admin can drain the backlog by hand (the tick does it anyway). */
+    if (action === "rescore") {
+      if (who.actor.role !== "admin") return json({ ok: false, error: "admin_only" }, 403);
+      return json({ ok: true, ...await rescoreDirtyRuns(service, { maxRuns: 200, budgetMs: 100_000 }) });
+    }
     if (action === "settings") return await handleSettings(service, who.actor, body, null);
     if (action === "set_mode") return await handleSettings(service, who.actor, body, "mode");
     if (action === "set_enabled") return await handleSettings(service, who.actor, body, "enabled");
+    if (action === "set_reply_audit") return await handleSettings(service, who.actor, body, "audit");
     if (action === "set_auto_send") return await handleSetAutoSend(service, who.actor, body);
     if (action === "stop_auto_send") return await handleStopAutoSend(service, who.actor, body);
     if (action === "claim") return await handleClaim(service, who.actor, body);

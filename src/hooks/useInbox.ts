@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { toWhatsAppDigits } from '@/lib/waNumber';
-import { engineScoresByLead, type EngineScores, type EngineSignalRow } from '@/lib/engineScores';
+import { leadAuditScores, type LeadAuditScore, type ScoredAudit } from '@/lib/auditScore';
 import { auditIdsToRefresh, conversationLeadId, groupInboxMessages, INBOX_DELTA_OVERLAP_MS, inboxFocusRefreshPlan, mergeInboxMessages, mergeReconciledLeads, optionalInboxRows, patchInboxLead, upsertAuditById } from '@/lib/inboxCache';
 import { newestUsableAuditByLead, resolveReportsByLead } from '@/lib/auditReportResolver';
 import { RUN_USABLE, runSettled } from '@/lib/queueAuditStatus';
@@ -42,11 +42,19 @@ const sb = supabase as unknown as { from: (t: string) => any; functions: typeof 
  * are what resolveLeadReportAudit/resolveReportsByLead need to exclude a Full Measurement / day-28
  * replay from ever being resolved as "the report" — without them auditKind() cannot tell one from
  * an ordinary audit and the resolver would (wrongly) treat every purpose as Inbox-eligible. */
-const AUDIT_SELECT = 'id, short_code, lead_id, created_at, open_count, first_opened_at, audit_purpose, baseline_target_runs, is_measurement, baseline_contract, ai_audit_runs(status, run_number, created_at, mention_rate, audit_summary:results_summary, crawl_check:results_crawl_check)';
+/* 2026-10-22: the stored audit score rides on the run (hook_score / score_dirty_at, src/lib/auditScore.ts), so every path that
+ * refreshes an audit here — the full load, the changed-since catch-up, one audit by id — refreshes its score too. If the
+ * score columns are not there yet (deploy order), the projection without them is tried next: the list shows no score, never
+ * a wrong one, and the report / template gates keep working. */
+const AUDIT_SELECT = 'id, short_code, lead_id, created_at, open_count, first_opened_at, is_market, audit_purpose, baseline_target_runs, is_measurement, baseline_contract, ai_audit_runs(id, status, run_number, created_at, mention_rate, hook_score, score_dirty_at, audit_summary:results_summary, crawl_check:results_crawl_check)';
+const AUDIT_SELECT_NO_SCORE = 'id, short_code, lead_id, created_at, open_count, first_opened_at, audit_purpose, baseline_target_runs, is_measurement, baseline_contract, ai_audit_runs(status, run_number, created_at, mention_rate, audit_summary:results_summary, crawl_check:results_crawl_check)';
+const AUDIT_SELECTS = [AUDIT_SELECT, AUDIT_SELECT_NO_SCORE] as const;
 const AUDIT_SELECT_FALLBACK = 'id, short_code, lead_id, created_at, open_count, first_opened_at, audit_purpose, baseline_target_runs, is_measurement, baseline_contract, ai_audit_runs(status, run_number, created_at, crawl_check:results->crawl_check)';
 
 async function fetchInboxAudits(from: number, to: number) {
-  const rich = await sb.from('ai_audits').select(AUDIT_SELECT)
+  let rich = await sb.from('ai_audits').select(AUDIT_SELECTS[0])
+    .order('created_at', { ascending: false }).order('id', { ascending: true }).range(from, to);
+  if (rich.error) rich = await sb.from('ai_audits').select(AUDIT_SELECTS[1])
     .order('created_at', { ascending: false }).order('id', { ascending: true }).range(from, to);
   if (!rich.error) return rich;
   console.warn('Inbox (audits): rich projection failed; retrying report-ready projection', rich.error);
@@ -54,18 +62,9 @@ async function fetchInboxAudits(from: number, to: number) {
     .order('created_at', { ascending: false }).order('id', { ascending: true }).range(from, to);
 }
 
-/* ⚡ THE GEMINI COUNTS IN ONE CALL (2026-10-16, measured). Paging the audit_gemini_signal view re-ran its whole
-   aggregate for every page — the slowest opening read (1.5–6.4 s live). inbox_gemini_signals() returns the same rows of
-   the same view (security invoker: the caller's own RLS) as one JSON array. If the function is not there (an old
-   database), the paged view read below is the fallback, so the order of deploys cannot break the pill. */
-/* The engine chips' counts, in ONE call (inbox_engine_signals, security invoker). If the function is not there yet (deploy order) the
-   chips are simply grey — never a wrong colour, never a per-row request. */
-async function fetchEngineSignals(): Promise<{ rows: InboxData['engineSignals']; truncated: boolean }> {
-  const { data, error } = await (supabase as unknown as { rpc: (fn: string) => Promise<{ data: unknown; error: unknown }> }).rpc('inbox_engine_signals');
-  if (!error && Array.isArray(data)) return { rows: data as InboxData['engineSignals'], truncated: false };
-  console.warn('Inbox (engine signals): one-call read unavailable; engine chips stay grey', error);
-  return { rows: NO_ENGINE, truncated: false };
-}
+/* 2026-10-22: the engine chips' and the Gemini pill's own counting reads (inbox_engine_signals, inbox_gemini_signals) are gone.
+   They counted every run of any audit by the stored model verdict and disagreed with the card on 400+ leads; the one score
+   now rides on the audits read above (src/lib/auditScore.ts). Two fewer reads on every Inbox load. */
 /* The Visible leads (src/lib/visibleFlag.ts), one small call scoped server-side (admin: all; sales: the leads they work). Missing
    function (deploy order) → no chip, never a wrong one. */
 async function fetchVisibleLeads(): Promise<{ rows: string[]; truncated: boolean }> {
@@ -73,28 +72,25 @@ async function fetchVisibleLeads(): Promise<{ rows: string[]; truncated: boolean
   if (!error && Array.isArray(data)) return { rows: data.filter((x): x is string => typeof x === 'string'), truncated: false };
   return { rows: NO_VISIBLE, truncated: false };
 }
-async function fetchGeminiSignals(): Promise<{ rows: InboxData['geminiSignals']; truncated: boolean }> {
-  const { data, error } = await (supabase as unknown as { rpc: (fn: string) => Promise<{ data: unknown; error: unknown }> }).rpc('inbox_gemini_signals');
-  if (!error && Array.isArray(data)) return { rows: data as InboxData['geminiSignals'], truncated: false };
-  console.warn('Inbox (gemini signal): one-call read unavailable; paging the view instead', error);
-  return fetchAllRowsParallel<InboxData['geminiSignals'][number]>('Inbox (gemini signal)', (from, to) =>
-    sb.from('audit_gemini_signal').select('audit_id, lead_id, gemini_answers, gemini_named')
-      .order('audit_id', { ascending: true }).range(from, to), (g) => g.audit_id);
-}
 
-/** The audits touched since `since` — created or updated, or given a new run (a run settling bumps nothing, see
- *  auditIdsToRefresh). Ids only, two tiny reads. null = could not tell (the caller re-reads every audit). */
+/** The audits touched since `since` — created or updated, given a new run, or RESCORED (a run settling bumps nothing, see
+ *  auditIdsToRefresh; a rescore stamps ai_audit_runs.scored_at). Ids only, three tiny reads. null = could not tell (the caller
+ *  re-reads every audit). */
 async function fetchChangedAuditIds(since: string): Promise<string[] | null> {
   try {
-    const [audits, runs] = await Promise.all([
+    const rescored = fetchAllRows<{ audit_id: string | null }>('Inbox (rescored runs)', (from, to) =>
+      sb.from('ai_audit_runs').select('audit_id').gte('scored_at', since)
+        .order('id', { ascending: true }).range(from, to)).catch(() => ({ rows: [] as Array<{ audit_id: string | null }> }));
+    const [audits, runs, scored] = await Promise.all([
       fetchAllRows<{ id: string }>('Inbox (changed audits)', (from, to) =>
         sb.from('ai_audits').select('id').or(`created_at.gte.${since},updated_at.gte.${since}`)
           .order('id', { ascending: true }).range(from, to)),
       fetchAllRows<{ audit_id: string | null }>('Inbox (new audit runs)', (from, to) =>
         sb.from('ai_audit_runs').select('audit_id').gte('created_at', since)
           .order('id', { ascending: true }).range(from, to)),
+      rescored,
     ]);
-    return [...audits.rows.map((a) => a.id), ...runs.rows.map((r) => r.audit_id).filter((id): id is string => !!id)];
+    return [...audits.rows.map((a) => a.id), ...[...runs.rows, ...scored.rows].map((r) => r.audit_id).filter((id): id is string => !!id)];
   } catch { return null; }
 }
 
@@ -104,7 +100,8 @@ async function fetchInboxAuditsByIds(ids: string[]): Promise<InboxData['audits']
   const out: InboxData['audits'] = [];
   for (let i = 0; i < ids.length; i += AUDITS_BY_ID_CHUNK) {
     const chunk = ids.slice(i, i + AUDITS_BY_ID_CHUNK);
-    let res = await sb.from('ai_audits').select(AUDIT_SELECT).in('id', chunk);
+    let res = await sb.from('ai_audits').select(AUDIT_SELECTS[0]).in('id', chunk);
+    if (res.error) res = await sb.from('ai_audits').select(AUDIT_SELECTS[1]).in('id', chunk);
     if (res.error) res = await sb.from('ai_audits').select(AUDIT_SELECT_FALLBACK).in('id', chunk);
     if (res.error) return null;
     out.push(...(res.data ?? []));
@@ -116,7 +113,8 @@ async function fetchInboxAuditsByIds(ids: string[]): Promise<InboxData['audits']
  *  realtime event triggers, instead of re-running the whole paginated audits read. Falls back the
  *  same way fetchInboxAudits does if the rich projection is rejected. */
 async function fetchOneInboxAudit(auditId: string): Promise<InboxData['audits'][number] | null> {
-  const rich = await sb.from('ai_audits').select(AUDIT_SELECT).eq('id', auditId).maybeSingle();
+  let rich = await sb.from('ai_audits').select(AUDIT_SELECTS[0]).eq('id', auditId).maybeSingle();
+  if (rich.error) rich = await sb.from('ai_audits').select(AUDIT_SELECTS[1]).eq('id', auditId).maybeSingle();
   if (!rich.error) return rich.data ?? null;
   const fallback = await sb.from('ai_audits').select(AUDIT_SELECT_FALLBACK).eq('id', auditId).maybeSingle();
   return fallback.error ? null : (fallback.data ?? null);
@@ -217,14 +215,9 @@ export interface WaConversation {
    *  through to findable.live. Null until it happens; both drive an at-a-glance Inbox pill. */
   reportOpenedAt: string | null;
   siteVisitedAt: string | null;
-  /** ⛔ JUDGED ON GEMINI ALONE — the engine pages move (Paul, 2026-09-16). named/answers on the
-   *  lead's newest audit that returned Gemini answers. Null when Gemini never ran. A lead strong on
-   *  ChatGPT but absent on Gemini reads 0 here and does NOT flag — it is still worth contacting.
-   *  The pill fires at >= 2/3 (Inbox), a look-before-you-send signal, never an automatic skip. */
-  geminiNamed: number | null;
-  geminiAnswers: number | null;
-  /** The three small engine chips on the list row (src/lib/engineScores.ts). Null = no audit answers known (all grey). */
-  engineScores: EngineScores | null;
+  /** ⛔ THE ONE AUDIT SCORE (src/lib/auditScore.ts, 2026-10-22): the card's audit, the card's numbers, stored per run.
+   *  Null = no outreach audit. `updating` = its inputs changed since it was worked out (shown greyed, never as final). */
+  auditScore: LeadAuditScore | null;
   /** AI already names this business (the Visible flag, src/lib/visibleFlag.ts): a chip, a Show filter, no pitch. */
   visible: boolean;
   /** Interested is a separate operator marker, persisted as is_potential_work. */
@@ -251,15 +244,9 @@ export function windowFor(lastInboundAt: string | null): { open: boolean; hoursL
 interface InboxData {
   messages: WaMessage[];
   leads: LeadLite[];
-  audits: Array<{ id: string; short_code: string | null; lead_id: string | null; created_at: string | null; open_count: number | null; first_opened_at: string | null; audit_purpose?: string | null; baseline_target_runs?: number | null; is_measurement?: boolean | null; baseline_contract?: unknown; ai_audit_runs: Array<{ status: string | null; run_number: number | null; created_at: string | null; mention_rate: number | null; audit_summary: { mention_rate?: number | null } | null; crawl_check: (CrawlStoredResult & { status?: string }) | null }> | null }>;
+  audits: Array<{ id: string; short_code: string | null; lead_id: string | null; created_at: string | null; open_count: number | null; first_opened_at: string | null; audit_purpose?: string | null; baseline_target_runs?: number | null; is_measurement?: boolean | null; baseline_contract?: unknown; is_market?: boolean | null; ai_audit_runs: Array<{ id?: string; hook_score?: unknown; score_dirty_at?: string | null; status: string | null; run_number: number | null; created_at: string | null; mention_rate: number | null; audit_summary: { mention_rate?: number | null } | null; crawl_check: (CrawlStoredResult & { status?: string }) | null }> | null }>;
   /** Sign-up page landings (findable-onboarding's prefill hook) → the SITE pill. */
   pageHits: Array<{ lead_id: string | null; created_at: string }>;
-  /** Per-audit Gemini named/answers, from the audit_gemini_signal view (aggregated server-side so the
-   *  Inbox never ships 6k+ result blobs). Drives the "Gemini X/Y" flag — judged on Gemini alone,
-   *  the engine pages move, per Paul 2026-09-16. */
-  geminiSignals: Array<{ audit_id: string; lead_id: string | null; gemini_answers: number; gemini_named: number }>;
-  /** Per-audit ChatGPT / Gemini / Google AI named-of-answers (inbox_engine_signals, one call) → the list row's engine chips. */
-  engineSignals: EngineSignalRow[];
   /** Lead ids flagged Visible (inbox_visible_leads). */
   visibleLeads: string[];
 }
@@ -273,8 +260,6 @@ const NO_MESSAGES: WaMessage[] = [];
 const NO_LEADS: LeadLite[] = [];
 const NO_AUDITS: InboxData['audits'] = [];
 const NO_PAGE_HITS: InboxData['pageHits'] = [];
-const NO_GEMINI: InboxData['geminiSignals'] = [];
-const NO_ENGINE: InboxData['engineSignals'] = [];
 const NO_VISIBLE: string[] = [];
 
 /** The message table a channel reads, and the mapping of its rows onto the Inbox's own message shape (the rest of the Inbox cannot tell). */
@@ -283,7 +268,7 @@ const messageSelectFor = (channel: InboxChannel) => (channel === 'sms' ? '*' : W
 const toInboxMessage = (channel: InboxChannel, row: unknown): WaMessage => (channel === 'sms' ? smsRowToInboxMessage(row as SmsMessageRow) as WaMessage : row as WaMessage);
 
 async function fetchInboxData(leadTable: InboxLeadTable, previous?: InboxData, essentialOnly = false, channel: InboxChannel = 'whatsapp'): Promise<InboxData> {
-  const [msgRes, leadRes, reportRes, hitRes, gemRes, engRes, visRes] = await Promise.all([
+  const [msgRes, leadRes, reportRes, hitRes, visRes] = await Promise.all([
     /* Paginated, and with the id tiebreaker it never had: 3 groups of rows share a created_at, and
        on a non-unique sort a tied row can be fetched twice and another missed at a page boundary.
        This is the fastest-growing table in the system — every send and every reply. */
@@ -326,16 +311,9 @@ async function fetchInboxData(leadTable: InboxLeadTable, previous?: InboxData, e
     essentialOnly ? { rows: previous?.pageHits ?? NO_PAGE_HITS } : optionalInboxRows<InboxData['pageHits'][number]>(fetchAllRows<InboxData['pageHits'][number]>('Inbox (page hits)', (from, to) =>
       sb.from('lead_page_hits').select('lead_id, created_at')
         .order('id', { ascending: true }).range(from, to))),
-    /* Per-audit Gemini named/answers → the "Gemini X/Y" flag. Reads the audit_gemini_signal VIEW
-       (security_invoker, so the operator's own-row RLS on ai_audit_queue still applies) rather than
-       the 6.7k result blobs behind it: the DB does the count, the Inbox gets two ints per audit.
-       audit_id is unique → the pagination tiebreaker. A failed read degrades to no pill. */
-    /* ⚡ Paged in parallel (2026-09-27, site-wide speed pass): at 1,554 rows it was three waits in a
-       row (~3 s), level with the slowest essential read — and the list waits for all six. */
-    essentialOnly ? { rows: previous?.geminiSignals ?? NO_GEMINI } : optionalInboxRows<InboxData['geminiSignals'][number]>(fetchGeminiSignals()),
     /* Stored crawl checks are NOT read here any more (perf, 2026-10-22): useLeadCrawls reads their small summary
        once, shared with Outreach. A failed read there still degrades to "no fault known" — the template stays gated off. */
-    essentialOnly ? { rows: previous?.engineSignals ?? NO_ENGINE } : optionalInboxRows<InboxData['engineSignals'][number]>(fetchEngineSignals()),
+    /* The engine counts are NOT read here any more either (2026-10-22): the one stored score rides on the audits read. */
     essentialOnly ? { rows: previous?.visibleLeads ?? NO_VISIBLE } : optionalInboxRows<string>(fetchVisibleLeads()),
   ]);
   return {
@@ -343,8 +321,6 @@ async function fetchInboxData(leadTable: InboxLeadTable, previous?: InboxData, e
     leads: leadRes.rows.filter((l) => (l.phone ?? '').trim()),
     audits: reportRes?.rows ?? previous?.audits ?? NO_AUDITS,
     pageHits: hitRes?.rows ?? previous?.pageHits ?? NO_PAGE_HITS,
-    geminiSignals: gemRes?.rows ?? previous?.geminiSignals ?? NO_GEMINI,
-    engineSignals: engRes?.rows ?? previous?.engineSignals ?? NO_ENGINE,
     visibleLeads: visRes?.rows ?? previous?.visibleLeads ?? NO_VISIBLE,
   };
 }
@@ -623,11 +599,9 @@ export function useInbox(channel: InboxChannel = 'whatsapp') {
   const leads = query.data?.leads ?? NO_LEADS;
   const audits = query.data?.audits ?? NO_AUDITS;
   const pageHits = query.data?.pageHits ?? NO_PAGE_HITS;
-  const geminiSignals = query.data?.geminiSignals ?? NO_GEMINI;
   /* The stored website checks: the SAME summary read and cache the Outreach table uses (useLeadCrawls, result_slim) —
      never the whole check, and never inside the Inbox bundle, so a crawl finishing re-reads only this. */
   const { crawlByLeadId: storedCrawlByLeadId } = useLeadCrawls('Inbox (crawl checks)');
-  const engineSignals = query.data?.engineSignals ?? NO_ENGINE;
   const visibleLeads = query.data?.visibleLeads ?? NO_VISIBLE;
   const visibleSet = useMemo(() => new Set(visibleLeads), [visibleLeads]);
   const isLoading = query.isLoading;
@@ -824,24 +798,30 @@ export function useInbox(channel: InboxChannel = 'whatsapp') {
     return m;
   }, [pageHits]);
 
-  /* Per-lead Gemini named/answers, from the lead's NEWEST audit that returned Gemini answers.
-     `audits` is already sorted newest-first, so the first audit per lead with a Gemini signal wins —
-     the same "newest audit" the report and the pitch resolve to. Keyed by lead_id, own audits only. */
-  const geminiByLead = useMemo(() => {
-    const byAudit = new Map<string, { named: number; answers: number }>();
-    for (const s of geminiSignals) {
-      byAudit.set(s.audit_id, { named: Number(s.gemini_named ?? 0), answers: Number(s.gemini_answers ?? 0) });
-    }
-    const m = new Map<string, { named: number; answers: number }>();
-    for (const a of audits) {
-      if (!a.lead_id || m.has(a.lead_id)) continue;
-      const sig = byAudit.get(a.id);
-      if (sig && sig.answers > 0) m.set(a.lead_id, sig);
-    }
-    return m;
-  }, [audits, geminiSignals]);
+  /* ⛔ THE ONE AUDIT SCORE per lead (src/lib/auditScore.ts): the card's audit and run, that run's stored score. The list row,
+     the thread header and the card all show these numbers; the Visible flag and the drafter read the same stored score. */
+  const scoreByLead = useMemo(() => leadAuditScores(audits as unknown as ScoredAudit[]), [audits]);
 
-  const engineByLead = useMemo(() => engineScoresByLead(audits, engineSignals), [audits, engineSignals]);
+  /* A score the database marked for rescoring is re-read on its own every 45 s while the tab is visible (at most 40 audits,
+     by id), until the tick has rescored it — so a finished audit's numbers reach the list without a reload. ai_audits /
+     ai_audit_runs are not realtime-published, so nothing else would bring them. Never the whole Inbox. */
+  const dirtyAuditIds = useMemo(() => {
+    const ids: string[] = [];
+    for (const sc of scoreByLead.values()) if (sc.dirty) ids.push(sc.auditId);
+    return ids.slice(0, 40).sort().join(',');
+  }, [scoreByLead]);
+  useEffect(() => {
+    if (!dirtyAuditIds) return;
+    const ids = dirtyAuditIds.split(',');
+    const t = window.setInterval(() => {
+      if (document.visibilityState !== 'visible') return;
+      void fetchInboxAuditsByIds(ids).then((fresh) => {
+        if (!fresh?.length) return;
+        queryClient.setQueryData<InboxData>(queryKey, (current) => current ? { ...current, audits: fresh.reduce(upsertAuditById, current.audits) } : current);
+      });
+    }, 45_000);
+    return () => window.clearInterval(t);
+  }, [dirtyAuditIds, queryClient, queryKey]);
 
   // Derive conversations from the message log, grouped by (user_id, phone).
   const messagesByConversation = useMemo(() => groupInboxMessages<WaMessage>(messages), [messages]);
@@ -875,15 +855,13 @@ export function useInbox(channel: InboxChannel = 'whatsapp') {
         lastInboundAt: lastInbound?.created_at ?? null,
         reportOpenedAt: reportOpenedAtByLead.get(leadId) ?? null,
         siteVisitedAt: siteVisitedAtByLead.get(leadId) ?? null,
-        geminiNamed: geminiByLead.get(leadId)?.named ?? null,
-        geminiAnswers: geminiByLead.get(leadId)?.answers ?? null,
-        engineScores: engineByLead.get(leadId) ?? null,
+        auditScore: scoreByLead.get(leadId) ?? null,
         visible: visibleSet.has(leadId),
         isPotentialWork: leadId ? (potentialWorkByLeadId[leadId] ?? false) : false,
       });
     }
     return out.sort((a, b) => new Date(b.lastMessageAt).getTime() - new Date(a.lastMessageAt).getTime());
-  }, [messagesByConversation, leadNameById, campaignByLeadId, statusByLeadId, potentialWorkByLeadId, paidLeadIds, ownLeadIds, reportOpenedAtByLead, siteVisitedAtByLead, geminiByLead, engineByLead, visibleSet]);
+  }, [messagesByConversation, leadNameById, campaignByLeadId, statusByLeadId, potentialWorkByLeadId, paidLeadIds, ownLeadIds, reportOpenedAtByLead, siteVisitedAtByLead, scoreByLead, visibleSet]);
 
   const messagesForKey = useCallback(
     (key: string) => messagesByConversation.get(key) ?? NO_MESSAGES,

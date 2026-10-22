@@ -395,3 +395,25 @@ Tests: `scripts/inbox-reply-mode.test.ts`, `scripts/ai-auto-send.test.ts`. Marke
 - **Fix.** `src/lib/draftThread.ts` builds the drafter's thread: a `failed` row whose receipt says delivered / read reached them; nothing else unsent ever counts (draft, refused, failed, pending, null). The pitch stays owed until an outbound pitch actually went. Test: `scripts/draft-thread.test.ts`. Marker `x-ai-reply-drafts: 2026-10-22a-pitch-owed-sent-only`.
 - **"Not sent: The send was refused."** That row was not the pitch: it was an `audit_followup_call` template Paul queued at 03:38 for 06:00. Every queued WhatsApp send (2 so far, both 22 Oct 06:00) failed the same way: the drain called send-whatsapp-message with `Authorization: Bearer <service key>`, which the platform gateway refuses before the function runs (`{"message":"Invalid API key"}`), and `senderOutcome` read only reason / detail / error. Fixed: the drain calls by its cron door only (x-cron-secret + x-internal-job), and `senderOutcome` falls back to the code, the platform's message and the HTTP status — never a bare "refused".
 - **Not fixed here (held):** the opener still reads `failed` on screen; the ratchet lives in whatsapp-status, which must not be deployed until the Meta App cutover.
+
+## Two controls, the draft bubble, one pill (2026-10-22, Paul)
+
+Branch `feat/inbox-approval-cleanup`, migration `20261124120000_reply_audit_switch.sql`. Tests: `scripts/inbox-attention.test.ts`.
+- **Two settings** (Inbox → Settings, admin): "Audit after first reply" On / Off (`whatsapp_outreach_state.reply_audit_enabled`,
+  fn `ai-reply-drafts` `set_reply_audit`) and "AI replies" Manual / Draft for approval / Auto (`ai_reply_mode`, unchanged).
+  `trg_inbox_reply_mode_sync` now copies `auto_reply_enabled` FROM `reply_audit_enabled` (it used to be `mode <> 'manual'`), so
+  every deployed audit-arming path keeps reading `auto_reply_enabled` and none was redeployed (process-whatsapp-queue untouched).
+  An old writer of `auto_reply_enabled` alone moves the new switch. AI on + audit off shows one hint
+  (`REPLY_AUDIT_OFF_PITCH_HINT`); the draft-after-audit rule (`draftEvidenceWait.ts`) is unchanged, so a pitch still waits for
+  audit evidence and, with none coming, becomes Needs you "Audit did not finish" after 30 minutes.
+- **The draft is a bubble in the thread** (`AiDraftBubble`), after the queued sends: Approve & send · Reject · Regenerate, plus
+  "Edit in reply box" and "Why this reply?". The draft is no longer pre-filled in the reply box. Approve & send sends the
+  bubble's words, or the box's after "Edit in reply box" (claim → the Inbox send → complete, unchanged). Reject = discard
+  (the outcome trigger logs `discarded`). The bar above the reply box remains only for a row with no sendable draft (Needs you
+  with no draft, a stop → Mark opted out, Needs a template).
+- **One attention pill** (`src/lib/inboxAttention.ts`): Needs approval → Needs you → Send failed → Auditing → Waiting → Queued
+  (sends at …), the same pill in the list row and the thread header; the hover carries the Needs you reason, how long a reply
+  waited and "Only confirmed" / "Auto-reply" (their last message only confirmed who they are, e.g. "yes it is", or was an
+  automatic reply — neither counts as Replied). The list row shows name + time, preview, the pill, the status as text
+  (`OneStatusText`) and the one score line (`docs/audit-score-one-ruler.md`); the status menu, the next action and the
+  engagement pills are in the thread header only. The "Needs approving" filter is now labelled "Needs approval".

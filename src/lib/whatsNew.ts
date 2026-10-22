@@ -22,6 +22,26 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-22-inbox-approval-cleanup', date: '2026-10-22', title: 'Inbox: one status pill, drafts in the thread, and audit scores that match', audience: 'all',
+    body: 'Each conversation now shows one pill for what needs doing, an AI draft appears in the thread with Approve & send, Reject and Regenerate, and the audit numbers in the list match the audit card and the report.',
+    report: {
+      added: [
+        'An AI draft waiting for approval is a bubble in the thread with three buttons: Approve & send, Reject and Regenerate. "Edit in reply box" puts it in the box if you want to change it. "Why this reply?" is a small link on the bubble.',
+        'Inbox Settings (admin) has two separate controls: "Audit after first reply" On / Off, and "AI replies" Manual / Draft for approval / Auto.',
+      ],
+      changed: [
+        'One pill per conversation, in this order: Needs approval, Needs you, Send failed, Auditing, Waiting, Queued (with the send time). The same pill shows in the list and the thread header. Hover it for the reason and how long they have waited.',
+        'List rows show the name and time, the last message, the one pill, the status as plain text and one small score line (ChatGPT, Gemini, Google AI). Change the status from the thread header.',
+        'The score line uses the same numbers as the audit card and the report: the newest audit, its newest run, read from the answer text. It used to add up every run and use a different rule, so some leads showed different numbers in different places.',
+        'Manual no longer turns off the audit on a first reply. The audit has its own switch.',
+        'The Visible flag is judged on the same numbers, so a few leads may gain or lose Visible once, when the new numbers are worked out.',
+      ],
+      removed: [
+        'The "Needs approving" bar above the reply box and its duplicate buttons.',
+        'The separate chips on a list row: the AI chip, Waiting 2h, Only confirmed, Auto-reply, the Needs you reason line, the Gemini n/m pill and the next-action pill. Their information is in the pill hover or the thread header.',
+      ],
+      effect: 'You see one clear thing to do per conversation, approve drafts where you read them, and the audit numbers agree everywhere. What is sent, the caps, send hours and safety checks are unchanged.',
+    } },
   { id: '2026-10-22-auto-off-counts', date: '2026-10-22', title: 'Numbers not on WhatsApp no longer switch a country off', audience: 'admin',
     body: 'Malaysia, Singapore and Australia now switch themselves off only on failures that are not explained by the number simply not being on WhatsApp. The failed-sends list says why each send failed.',
     report: {

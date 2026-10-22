@@ -30,14 +30,15 @@ check(engineScoresByLead([], []).size === 0, 'no audits, no scores');
 
 console.log('3. loaded in ONE batched read, never per row');
 const hook = src('src/hooks/useInbox.ts');
-check(/rpc\('inbox_engine_signals'\)/.test(hook) && /optionalInboxRows<InboxData\['engineSignals'\]\[number\]>\(fetchEngineSignals\(\)\)/.test(hook), 'one rpc inside the existing parallel load; a failure degrades to grey');
+/* 2026-10-22: the score rides on the audits read (one stored score per run, src/lib/auditScore.ts) — no separate counting read. */
+check(/hook_score, score_dirty_at/.test(hook) && /leadAuditScores\(audits/.test(hook) && !/rpc\('inbox_engine_signals'\)/.test(hook), 'the score comes with the existing audits read; no per-row or extra counting read');
 const inbox = src('src/pages/Inbox.tsx');
 check(!/supabase\.(from|rpc)/.test(src('src/lib/engineScores.ts')) && !/function EngineChips[\s\S]{0,900}(supabase|useQuery|fetch\()/.test(inbox), 'the chip component reads props only');
 const mig = src('supabase/migrations/20261116100000_inbox_engine_signals.sql');
 check(/security invoker/.test(mig) && !/generated always/i.test(mig) && /grant execute on function public\.inbox_engine_signals\(\) to authenticated/.test(mig), 'migration: security invoker, no generated column, authenticated only');
 
 console.log('4. the list row: three chips replace the Gemini chip; the tab strip is gone');
-check(/<EngineChips scores=\{c\.engineScores\}( visible=\{c\.visible\})? \/>/.test(inbox), 'every lead row draws the chips');
+check(/<ScoreLine score=\{auditScore\} visible=\{c\.visible\}/.test(inbox), 'every lead row draws the one score line');
 check(!/<EngagementPills reportOpenedAt=\{c\.reportOpenedAt\} siteVisitedAt=\{c\.siteVisitedAt\} geminiNamed/.test(inbox), 'the list row no longer draws the old "Gemini n/m" chip');
 check(!/role="tablist"/.test(inbox), 'no tab strip');
 check(/data-testid="inbox-views-select"/.test(inbox) && /INBOX_QUICK_FILTERS\.filter\(/.test(inbox), 'the views (incl. Needs you, Needs approving) are in the Show dropdown');

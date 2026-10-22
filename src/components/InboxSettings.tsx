@@ -55,7 +55,7 @@ export function InboxSettings({ channel, aiOn, isAdmin, replyHours, onSaveReplyH
             <DialogDescription>How replies are handled, and when Inbox messages go out.</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
-            <Section title="When a prospect replies" hint="One mode for WhatsApp and texts. It does not touch the outreach queue." testId="settings-replies">
+            <Section title="When a prospect replies" hint="Two separate settings for WhatsApp and texts: the audit, and AI drafting. Neither touches the outreach queue." testId="settings-replies">
               <InboxReplyModeControl channel={channel} />
             </Section>
             {isAdmin && (

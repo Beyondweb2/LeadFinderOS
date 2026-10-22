@@ -50,11 +50,10 @@ import { Dialog, DialogContent, DialogFooter } from '@/components/ui/dialog';
 import { DialogHero, EmptyState, ErrorState, IconTile, LoadState, SubSection } from '@/components/operator/ui';
 import { Card } from '@/components/ui/card';
 import { CampaignPicker } from '@/components/CampaignPicker';
-import { PipelineStatusSelect } from '@/components/PipelineStatusSelect';
+import { OneStatusText, PipelineStatusSelect } from '@/components/PipelineStatusSelect';
 import { updateLeadStatus } from '@/lib/leadStatus';
 import { PIPELINE_STATUS_OPTIONS, WHATSAPP_TEMPLATES, type PipelineStatus } from '@/types/outreach';
 import { TemplateSnippet } from '@/components/TemplateWordingPreview';
-import { NextActionPill } from '@/components/NextActionPill';
 import { useLeadSalesState } from '@/hooks/useLeadSalesState';
 import { salesStateOf } from '@/lib/leadState';
 import { useAllLoggedContacts } from '@/hooks/useLastLoggedContacts';
@@ -86,13 +85,14 @@ import { getQueueStatus, QUEUE_STATUS_KEY, QUEUE_PAUSED_LINE } from '@/lib/queue
 import { useQueueState } from '@/hooks/useQueueState';
 import { useMarkWhatsAppRead, useWhatsAppReads } from '@/hooks/useWhatsAppUnread';
 import { conversationState, messageErrorParts, INBOX_QUICK_FILTERS, londonToday, passesQuickFilter, formatWaiting, type ConversationState, type InboxQuickFilter } from '@/lib/conversationState';
-import { ConvStateChip } from '@/components/ConvStateChip';
 import { SendErrorNote } from '@/components/SendErrorNote';
-import { ENGINE_KEYS, ENGINE_CHIP_LABELS, engineTone, engineChipTitle, type EngineScores } from '@/lib/engineScores';
-import { VISIBLE_LABEL, VISIBLE_TITLE } from '@/lib/visibleFlag';
-import { AiDraftButton, AiDraftChip, AiDraftPanel, InboundLabelChip } from '@/components/AiDraftPanel';
+import { AiDraftBubble, AiDraftButton, AiDraftPanel } from '@/components/AiDraftPanel';
+import { AttentionPill, ScoreLine } from '@/components/InboxAttention';
+import { attentionFor, INBOUND_LABEL_TITLES, type AttentionKind } from '@/lib/inboxAttention';
+import type { LeadAuditScore } from '@/lib/auditScore';
+import type { ScheduledSendRow } from '@/lib/inboxSendWindow';
 import { useAiReplyDrafts } from '@/hooks/useAiReplyDrafts';
-import { aiChipFor, needsApproving, needsYou, rowSendable, type AiReplyRow } from '@/lib/aiReplyDraft';
+import { needsApproving, needsYou, rowSendable, type AiReplyRow } from '@/lib/aiReplyDraft';
 import { useInboxScheduled, INBOX_SCHEDULED_KEY } from '@/hooks/useInboxScheduled';
 import { ReplyHoursDialog, ReplyWindowChip, ScheduledSendBubble } from '@/components/InboxSendWindow';
 import { hhmm, queuedLabel, replyWindowFor, sendVerb, windowStatusLine } from '@/lib/inboxSendWindow';
@@ -177,31 +177,19 @@ function templateLabel(name: string | null): string {
    templateAttribution.ts (imported as REPORT_TEMPLATES to keep this file's call sites unchanged). */
 const REPORT_TEMPLATES = REPORT_LINK_TEMPLATES;
 
-/* At-a-glance pills beside the status pill:
+/* At-a-glance pills beside the status pill in the thread header:
    · AUDIT (they opened their report link) and SITE (they clicked through to findable.live) — each
      shows ONLY when it happened; the hover gives the date. Same source the campaign card attributes
      by (ai_audits.first_opened_at gated to after the send; lead_page_hits).
-   · GEMINI X/Y — the lead is already named on >= 2/3 of their GEMINI answers (the engine pages move,
-     Paul 2026-09-16). A look-before-you-send flag, never an automatic skip: it puts "he may not need
-     you" in front of the operator at the moment they would press send. Judged on Gemini ALONE, so a
-     lead strong on ChatGPT but absent on Gemini does NOT flag — still worth contacting. Raw fraction,
-     no verdict word (the number carries it); the operator decides. */
-function geminiFlags(named: number | null, answers: number | null): boolean {
-  return (answers ?? 0) > 0 && (named ?? 0) * 3 >= (answers as number) * 2;   // named/answers >= 2/3, integer-safe
-}
-function EngagementPills(
-  { reportOpenedAt, siteVisitedAt, geminiNamed, geminiAnswers }:
-  { reportOpenedAt: string | null; siteVisitedAt: string | null; geminiNamed?: number | null; geminiAnswers?: number | null },
-) {
-  const showGemini = geminiFlags(geminiNamed ?? null, geminiAnswers ?? null);
-  if (!reportOpenedAt && !siteVisitedAt && !showGemini) return null;
+   · The old "GEMINI X/Y" pill is gone (2026-10-22): it counted every run of any audit by the stored verdict and disagreed
+     with the card. The ONE score line beside it (ScoreLine, src/lib/auditScore.ts) shows Gemini with the card's numbers. */
+function EngagementPills({ reportOpenedAt, siteVisitedAt }: { reportOpenedAt: string | null; siteVisitedAt: string | null }) {
+  if (!reportOpenedAt && !siteVisitedAt) return null;
   const when = (iso: string) => {
     const d = new Date(iso);
     return Number.isNaN(d.getTime()) ? '' : d.toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
   };
   const pill = 'inline-flex items-center rounded px-1 py-0 text-[9px] font-semibold uppercase tracking-wide leading-tight';
-  // red once named on EVERY Gemini answer (little room), amber while there is still a gap.
-  const gemTone = (geminiNamed ?? 0) === (geminiAnswers ?? 0) ? ' bg-red-500/20 text-red-400' : ' bg-amber-500/20 text-amber-500';
   return (
     <>
       {reportOpenedAt && (
@@ -210,47 +198,12 @@ function EngagementPills(
       {siteVisitedAt && (
         <span className={pill + ' bg-emerald-500/20 text-emerald-400'} title={'Visited findable.live · ' + when(siteVisitedAt)}>Site</span>
       )}
-      {showGemini && (
-        <span className={pill + gemTone} title={`Already named on Gemini in ${geminiNamed} of ${geminiAnswers} answers — the engine pages move`}>
-          Gemini {geminiNamed}/{geminiAnswers}
-        </span>
-      )}
     </>
   );
 }
 
-/* Three tiny chips, one line: green = named, red = not named, grey = no answer or no audit. Counts are in the hover. */
-const ENGINE_CHIP_TONE = {
-  named: 'bg-emerald-500/20 text-emerald-700 dark:text-emerald-400',
-  not_named: 'bg-red-500/20 text-red-700 dark:text-red-400',
-  none: 'bg-muted text-muted-foreground',
-} as const;
-/* AI already names this business (src/lib/visibleFlag.ts): no pitch, no Needs you, follow-ups cancelled. A flag, not a stage. */
-function VisibleChip() {
-  return (
-    <span title={VISIBLE_TITLE} data-testid="visible-chip"
-      className="inline-flex items-center rounded bg-sky-500/15 px-1 text-[9px] font-semibold leading-tight text-sky-700 dark:text-sky-300">
-      {VISIBLE_LABEL}
-    </span>
-  );
-}
-
-function EngineChips({ scores, visible }: { scores: EngineScores | null; visible?: boolean }) {
-  return (
-    <div className="flex items-center gap-1" data-testid="engine-chips">
-      {ENGINE_KEYS.map((k) => {
-        const sc = scores?.[k] ?? null;
-        return (
-          <span key={k} data-tone={engineTone(sc)} title={engineChipTitle(k, sc)}
-            className={cn('inline-flex items-center rounded px-1 text-[9px] font-semibold leading-tight tabular-nums', ENGINE_CHIP_TONE[engineTone(sc)])}>
-            {ENGINE_CHIP_LABELS[k]} {sc && sc.answers > 0 ? `${sc.named}/${sc.answers}` : '–'}
-          </span>
-        );
-      })}
-      {visible && <VisibleChip />}
-    </div>
-  );
-}
+/* The engine chips are now the ONE score line (src/components/InboxAttention.tsx ScoreLine; src/lib/auditScore.ts), which also
+   carries the Visible tag (src/lib/visibleFlag.ts: no pitch, no Needs you, follow-ups cancelled; a flag, not a stage). */
 
 // Clean display names for templates (incl. the legacy pre-rename name). Unknown → "Template".
 const TEMPLATE_DISPLAY: Record<string, string> = {
@@ -339,7 +292,7 @@ const LIST_SORT_OPTIONS = [
    list, so ANY Inbox render — opening a conversation, marking it read, a query landing — redrew all 150 rows, each with a
    status dropdown and its chips: 0.5–1.8 s of browser work per click with the live book (6,245 messages, 2,700 threads),
    before any network. The row is the same markup; memo + sameRowProps skip it unless one of its own inputs changed.
-   ⛔ Every input is a prop. Callbacks arrive stable (openConversation / setStatusFromRow read the latest handler through a
+   ⛔ Every input is a prop. Callbacks arrive stable (openConversation and the select toggles read the latest handler through a
    ref); `st` is compared by content (src/lib/inboxRowMemo.ts), because stateByKey rebuilds every row's object whenever
    one read time moves; clockTick is passed so "5m ago" and the AI chip still move once a minute exactly as before. */
 interface ConversationRowProps {
@@ -348,24 +301,32 @@ interface ConversationRowProps {
   isActive: boolean;
   outsideFilters: boolean;
   st: ConversationState | undefined;
-  aiRow: AiReplyRow | null;
+  /* The ONE attention pill (src/lib/inboxAttention.ts), passed as words so the row memo compares by value. */
+  attentionKind: AttentionKind | null;
+  attentionLabel: string | null;
+  attentionTitle: string | null;
+  /* "Only confirmed" / "Auto-reply", now the preview's hover (the separate chip is gone, 2026-10-22). */
+  inboundTitle: string | null;
+  auditScore: LeadAuditScore | null;
   hookDueMode: boolean;
   hookChecked: boolean;
   bulkMode: boolean;
   bulkChecked: boolean;
   saving: boolean;
-  leadByIdForState: Map<string, LeadLite>;
   listStageOf: (leadId: string | null) => ComponentProps<typeof PipelineStatusSelect>['stage'];
   onOpen: (key: string) => void;
   toggleHookSelect: (leadId: string) => void;
   toggleBulkSelect: (key: string) => void;
-  handleSetStatus: (c: WaConversation, status: PipelineStatus) => Promise<boolean>;
   clockTick: number;
 }
 
+/* ⛔ THE LIST ROW SHOWS FOUR THINGS (2026-10-22, Paul): (1) the name and the time, (2) the message preview, (3) ONE attention
+   pill, (4) one compact score line — plus the lead status as small plain text. The status MENU lives only in the thread
+   header now; the AI chip, the state chip, "Only confirmed" / "Auto-reply", the Needs you reason line, the engagement pills
+   and the next-action pill are off the row (the pill's hover carries what still matters; the header keeps the rest). */
 const ConversationRow = memo(function ConversationRow({
-  c, channel, isActive, outsideFilters, st, aiRow, hookDueMode, hookChecked, bulkMode, bulkChecked, saving,
-  leadByIdForState, listStageOf, onOpen, toggleHookSelect, toggleBulkSelect, handleSetStatus,
+  c, isActive, outsideFilters, st, attentionKind, attentionLabel, attentionTitle, inboundTitle, auditScore,
+  hookDueMode, hookChecked, bulkMode, bulkChecked, saving, listStageOf, onOpen, toggleHookSelect, toggleBulkSelect,
 }: ConversationRowProps) {
   return (
     <div
@@ -403,39 +364,23 @@ const ConversationRow = memo(function ConversationRow({
           <span className={cn('truncate', st?.unread && 'font-bold')}>{c.unassigned ? `Unassigned · +${c.phone}` : c.label}</span>
           {!c.unassigned && c.isPotentialWork && <Star className="h-3.5 w-3.5 shrink-0 fill-amber-400 text-amber-500"><title>Interested</title></Star>}
         </span>
-        <span className="flex shrink-0 items-center gap-1">
-          {c.lastMessage?.direction === 'inbound' && !aiChipFor(aiRow) && <InboundLabelChip label={inboundLabel(c.lastMessage.body, c.lastMessage.message_type)} />}
-          <AiDraftChip row={aiRow} compact />
-          {(!aiChipFor(aiRow) || st?.failed) && <ConvStateChip state={st} compact channel={channel} />}
-          {c.lastMessage && <span className={cn('text-[10px]', st?.unread ? 'font-semibold text-blue-600 dark:text-blue-400' : 'text-muted-foreground')}>{relTime(c.lastMessageAt)}</span>}
-        </span>
+        {c.lastMessage && <span className={cn('shrink-0 text-[10px]', st?.unread ? 'font-semibold text-blue-600 dark:text-blue-400' : 'text-muted-foreground')}>{relTime(c.lastMessageAt)}</span>}
       </div>
-      {/* Needs you: the reason, in words, on the row itself (Paul, 2026-10-20). */}
-      {aiRow?.kind === 'needs_you' && aiChipFor(aiRow)?.label === 'Needs you' && aiRow.reason_label && (
-        <span className="truncate text-[11px] font-medium text-red-700 dark:text-red-300" data-testid="needs-you-reason">{aiRow.reason_label}</span>
-      )}
       {c.lastMessage && (
-        <span className="truncate text-xs text-muted-foreground">
+        <span className="truncate text-xs text-muted-foreground" title={inboundTitle ?? undefined} data-inbound-label={inboundTitle ? 'true' : undefined}>
           {c.lastMessage.direction === 'outbound' ? 'You: ' : ''}
           {listPreview(c.lastMessage, c.label)}
         </span>
       )}
-      {/* The three engine scores from the lead's newest audit (the old "Gemini n/m" chip is replaced by these). */}
-      {c.leadId && <EngineChips scores={c.engineScores} visible={c.visible} />}
-      {/* Editable status pill — only for conversations linked to a lead
-          (Unassigned has none). Two-way synced with Outreach. Beside it, ONE
-          engagement pill for the furthest milestone the lead reached
-          (Upsell > Claimed > Opened; nothing if none) — from generated_sites. */}
-      {c.leadId && (
-        <div className="mt-0.5 flex items-center gap-1">
-          {saving
-            ? <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
-            : <PipelineStatusSelect value={c.leadStatus} stage={listStageOf(c.leadId)} onValueChange={(status) => handleSetStatus(c, status)} askReasonFor={{ leadId: c.leadId, businessName: c.label }} />}
-          <EngagementPills reportOpenedAt={c.reportOpenedAt} siteVisitedAt={c.siteVisitedAt} />
-          {/* Next action at a glance: red overdue, amber today, grey later; nothing when none. */}
-          <NextActionPill lead={leadByIdForState.get(c.leadId)} size="xs" className="ml-auto" />
+      {(attentionKind || c.leadId) && (
+        <div className="mt-0.5 flex min-w-0 items-center gap-1.5">
+          <AttentionPill kind={attentionKind} label={attentionLabel} title={attentionTitle} compact />
+          {c.leadId && (saving
+            ? <Loader2 className="h-3 w-3 shrink-0 animate-spin text-muted-foreground" />
+            : <OneStatusText status={c.leadStatus} stage={listStageOf(c.leadId)} className="shrink-0 text-[10px] text-muted-foreground" />)}
         </div>
       )}
+      {c.leadId && <ScoreLine score={auditScore} visible={c.visible} />}
     </div>
   );
 }, sameRowProps);
@@ -944,7 +889,6 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
   const rowHandlersRef = useRef({ setActiveKey, handleSetStatus });
   rowHandlersRef.current = { setActiveKey, handleSetStatus };
   const openConversation = useCallback((key: string) => rowHandlersRef.current.setActiveKey(key), []);
-  const setStatusFromRow = useCallback((c: WaConversation, status: PipelineStatus) => rowHandlersRef.current.handleSetStatus(c, status), []);
 
   const handleRemoveFromInbox = async (c: WaConversation) => {
     if (!c.leadId) return;
@@ -1083,38 +1027,43 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
     setDrafts((prev) => setDraft(prev, p.key, p.draft));
   }, [composerSeed, setDrafts]);
 
-  /* ══ AI HANDLES REPLIES (2026-10-11) ══════════════════════════════════════════════════════════════
-     The open AI row for this thread (src/lib/aiReplyDraft.ts). A pending draft is PRE-FILLED in the reply box once
-     per version — never over text a person typed — and is editable there. "Approve & send" = claim (one winner,
+  /* ══ AI HANDLES REPLIES (2026-10-11; the draft is a bubble in the thread since 2026-10-22) ═══════════════════════════════
+     The open AI row for this thread (src/lib/aiReplyDraft.ts). A pending draft is drawn as a BUBBLE in the thread
+     (AiDraftBubble) — no longer pre-filled in the reply box. "Edit in reply box" puts this version in the box once, never
+     over text a person typed; from then on Approve & send sends the box's words. "Approve & send" = claim (one winner,
      server-side) → the Inbox's own send (useInbox.send → send-whatsapp-message, unchanged) → complete (records who,
-     when and the text actually sent). Discard and Dismiss send nothing. */
+     when and the text actually sent). Reject (= discard) and Dismiss send nothing. */
   const activeAi = active ? ai.forPhone(active.phone) : null;
   const [aiBusy, setAiBusy] = useState<'approve' | 'regenerate' | 'discard' | 'optout' | 'stopauto' | null>(null);
   const [aiDrafting, setAiDrafting] = useState(false);
   const aiInsertedRef = useRef<Map<string, string>>(new Map());
   const activeAiDraft = activeAi && rowSendable(activeAi) && win.open ? (activeAi.draft_text ?? '') : '';
-  useEffect(() => {
-    if (!active || !activeAiDraft || !activeAi) return;
-    const version = activeAi.id + ':' + (activeAi.regenerations ?? 0);
-    const seen = aiInsertedRef.current.get(active.key);
-    if (seen === version) return;
+  const activeAiVersion = activeAi ? activeAi.id + ':' + (activeAi.regenerations ?? 0) : '';
+  /* "Edit in reply box": THIS version is in the box (put there by the button) and the box still holds words. */
+  const aiEditedInBox = !!active && !!activeAiDraft && aiInsertedRef.current.get(active.key) === activeAiVersion && !!getDraft(drafts, active.key).trim();
+  const editAiDraftInBox = () => {
+    if (!active || !activeAiDraft) return;
     const box = getDraft(draftsRef.current, active.key).trim();
     /* Never over a person's own typing: fill only an empty box, or one still holding an earlier AI version. */
-    const earlier = seen ? (aiInsertedRef.current.get(active.key + '#text') ?? '') : '';
-    if (box && box !== earlier.trim()) return;
-    aiInsertedRef.current.set(active.key, version);
+    const earlier = aiInsertedRef.current.get(active.key + '#text') ?? '';
+    if (box && box !== earlier.trim()) {
+      toast({ title: 'The reply box has your own text', description: 'Clear it first, then press Edit in reply box again.' });
+      return;
+    }
+    aiInsertedRef.current.set(active.key, activeAiVersion);
     aiInsertedRef.current.set(active.key + '#text', activeAiDraft);
     insertWarmDraft(active.key, activeAiDraft);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [active?.key, activeAi?.id, activeAi?.regenerations, activeAiDraft]);
-  const aiBoxDiffers = !!activeAiDraft && !!active && getDraft(drafts, active.key).trim() !== activeAiDraft.trim();
+  };
 
   const approveAiDraft = async () => {
     if (!active || !activeAi || aiBusy) return;
     const sendKey = active.key;
     if (sendingKeysRef.current.has(sendKey)) return;
-    const body = getDraft(draftsRef.current, sendKey).trim();
-    if (!body) { toast({ title: 'Nothing to send', description: 'The reply box is empty.', variant: 'destructive' }); return; }
+    /* The bubble's words — or, after "Edit in reply box", the box's (the person's edit). */
+    const boxText = getDraft(draftsRef.current, sendKey).trim();
+    const fromBox = aiInsertedRef.current.get(sendKey) === activeAiVersion && !!boxText;
+    const body = fromBox ? boxText : (activeAi.draft_text ?? '').trim();
+    if (!body) { toast({ title: 'Nothing to send', description: 'The draft is empty.', variant: 'destructive' }); return; }
     const left = unresolvedTokens(body);
     if (left.length) { toast({ title: 'Fill in the blanks first', description: 'This message still contains ' + left.join(', ') + '.', variant: 'destructive' }); return; }
     setAiBusy('approve');
@@ -1138,9 +1087,8 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
       if (res.ok && res.scheduled) {
         await invokeEdge('ai-reply-drafts', { action: 'complete', draft_id: activeAi.id, message_id: null, error: 'queued_for_send_hours' }).catch(() => undefined);
         await invokeEdge('ai-reply-drafts', { action: 'discard', draft_id: activeAi.id }).catch(() => undefined);
-        setDrafts((prev) => setDraft(prev, sendKey, ''));
+        if (fromBox) { setDrafts((prev) => setDraft(prev, sendKey, '')); setComposerSeed((n) => n + 1); }
         aiInsertedRef.current.delete(sendKey);
-        setComposerSeed((n) => n + 1);
         queuedToast(res.scheduled, 'Approved reply');
         return;
       }
@@ -1149,9 +1097,8 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
         toast({ title: 'Not sent', description: res.reason ?? (res.error === 'window_closed' ? 'The 24h reply window is closed — send an approved template instead.' : res.error) ?? 'Send failed.', variant: 'destructive' });
         return;
       }
-      setDrafts((prev) => setDraft(prev, sendKey, ''));
+      if (fromBox) { setDrafts((prev) => setDraft(prev, sendKey, '')); setComposerSeed((n) => n + 1); }
       aiInsertedRef.current.delete(sendKey);
-      setComposerSeed((n) => n + 1);
       toast({ title: res.simulated ? 'Sent (simulated — test mode)' : 'Approved and sent ✓' });
       setTimeout(() => threadRef.current?.scrollTo({ top: threadRef.current.scrollHeight }), 50);
     } finally {
@@ -1221,6 +1168,7 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
     setAiBusy('discard');
     try {
       await invokeEdge('ai-reply-drafts', { action: 'discard', draft_id: activeAi.id });
+      if (rowSendable(activeAi)) toast({ title: 'Draft rejected', description: 'Nothing was sent. It is logged in Draft outcomes.' });
       /* Take the AI's words out of the box only if they are still exactly the AI's (never a person's edit). */
       if (activeAi.draft_text && getDraft(draftsRef.current, active.key).trim() === activeAi.draft_text.trim()) {
         setDrafts((prev) => setDraft(prev, active.key, ''));
@@ -1696,6 +1644,21 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
   };
 
   const auditInFlight = !!active?.leadId && (auditRunningLeadIds.has(active.leadId) || firedAudits.has(active.leadId));
+  /* ⛔ THE ONE ATTENTION PILL for a conversation (src/lib/inboxAttention.ts) — the list row and the thread header both call this,
+     so the two can never show different states. Returned as words so the row memo compares by value. */
+  const rowAttention = (c: WaConversation): { attentionKind: AttentionKind | null; attentionLabel: string | null; attentionTitle: string | null; inboundTitle: string | null } => {
+    const last = c.lastMessage;
+    const label = last?.direction === 'inbound' ? inboundLabel(last.body, last.message_type) : null;
+    const at = attentionFor({
+      ai: aiOn ? ai.forPhone(c.phone) : null,
+      state: stateByKey.get(c.key),
+      auditing: !!c.leadId && (auditRunningLeadIds.has(c.leadId) || firedAudits.has(c.leadId)),
+      scheduled: sched.forPhone(c.phone) as readonly ScheduledSendRow[],
+      inboundLabel: label,
+      channel,
+    });
+    return { attentionKind: at?.kind ?? null, attentionLabel: at?.label ?? null, attentionTitle: at?.title ?? null, inboundTitle: label ? INBOUND_LABEL_TITLES[label] : null };
+  };
   // Inline missing-inputs prompt — the inbox is NEVER left to run an audit. Prefilled from
   // whatever partial lead data exists; values are written back to the lead before running.
   const [auditPromptOpen, setAuditPromptOpen] = useState(false);
@@ -1883,7 +1846,7 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
         /* A freshly-opened thread has no messages, so no report link was sent and no engagement is
            attributable yet; a lead with real engagement has real messages and a real conversation. */
         reportOpenedAt: null, siteVisitedAt: null,
-        geminiNamed: null, geminiAnswers: null, engineScores: null, visible: false, isPotentialWork: !!lead.is_potential_work,
+        auditScore: null, visible: false, isPotentialWork: !!lead.is_potential_work,
       };
       setSynthetic(synth);
       setActiveKey(key);
@@ -2379,18 +2342,17 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
               isActive={activeKey === c.key}
               outsideFilters={activeOutsideFilters && activeKey === c.key}
               st={stateByKey.get(c.key)}
-              aiRow={ai.forPhone(c.phone)}
+              {...rowAttention(c)}
+              auditScore={c.auditScore}
               hookDueMode={hookDueMode}
               hookChecked={!!c.leadId && hookSelected.has(c.leadId)}
               bulkMode={bulkMode}
               bulkChecked={bulkSelected.has(c.key)}
               saving={savingStatusKey === c.key}
-              leadByIdForState={leadByIdForState}
               listStageOf={listStageOf}
               onOpen={openConversation}
               toggleHookSelect={toggleHookSelect}
               toggleBulkSelect={toggleBulkSelect}
-              handleSetStatus={setStatusFromRow}
               clockTick={clockTick}
             />
           ))}
@@ -2483,10 +2445,10 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
                         in place of "Find email": email outreach is not used). "+ Set next action", or the saved
                         action ("Call · Tomorrow"); the shared editor and the one write (lead_set_follow_up). */}
                     {activeLead && <NextActionEditor lead={activeLead} variant="pill" />}
-                    <EngagementPills reportOpenedAt={active.reportOpenedAt} siteVisitedAt={active.siteVisitedAt} geminiNamed={active.geminiNamed} geminiAnswers={active.geminiAnswers} />
-                    <ConvStateChip state={activeState} hideQueued channel={channel} />
-                    <AiDraftChip row={activeAi} />
-                    {active.visible && <VisibleChip />}
+                    {/* ⛔ THE ONE ATTENTION PILL (2026-10-22): the same pill, same rule, as the list row (src/lib/inboxAttention.ts). */}
+                    {(() => { const at = rowAttention(active); return <AttentionPill kind={at.attentionKind} label={at.attentionLabel} title={at.attentionTitle} />; })()}
+                    <EngagementPills reportOpenedAt={active.reportOpenedAt} siteVisitedAt={active.siteVisitedAt} />
+                    {active.leadId && <ScoreLine score={active.auditScore} visible={active.visible} />}
                     {/* The status pill already says Queued; this adds only what it cannot — the queue is paused. */}
                     {active.leadStatus === 'queued' && queueState?.paused && (
                       <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/15 px-2 py-0.5 text-[11px] font-medium text-amber-700 dark:text-amber-300">
@@ -2715,6 +2677,12 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
                     label={r.kind === 'voice' ? (r.body || 'Voice note') : r.body || templateLabel(r.template_name)}
                     onEdit={sched.edit} onCancel={sched.cancel} onRelease={sched.release} />
                 ))}
+                {/* The AI draft waiting for approval — a bubble where the reply would go (2026-10-22, Paul). Not in a read-only view. */}
+                {activeAi && win.open && !readOnlyView && (
+                  <AiDraftBubble row={activeAi} busy={aiBusy} editedInBox={aiEditedInBox}
+                    onApprove={() => void approveAiDraft()} onReject={() => void discardAiDraft()} onRegenerate={() => void regenerateAiDraft()}
+                    onEditInBox={editAiDraftInBox} onStopAutoSend={() => void stopAiAutoSend()} />
+                )}
               </div>
 
               {/* Reply box */}
@@ -2724,13 +2692,11 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
                 </div>
               ) : (
               <div className="border-t border-border p-2.5">
-                {/* AI HANDLES REPLIES: the open draft / hand-over for this conversation. Never sends by itself. */}
-                {activeAi && (
+                {/* AI HANDLES REPLIES: the hand-over note (Needs you with no draft, a stop, a template) for this conversation. A written
+                    draft is the bubble in the thread above. Never sends by itself. */}
+                {activeAi && !rowSendable(activeAi) && (
                   <div className="mb-2">
-                    <AiDraftPanel row={activeAi} busy={aiBusy} boxDiffers={aiBoxDiffers} onApprove={() => void approveAiDraft()}
-                      onRegenerate={() => void regenerateAiDraft()} onDiscard={() => void discardAiDraft()} onMarkOptedOut={() => void markAiOptedOut()}
-                      onStopAutoSend={() => void stopAiAutoSend()}
-                      onUseDraft={() => { if (active && activeAi.draft_text) insertWarmDraft(active.key, activeAi.draft_text); }} />
+                    <AiDraftPanel row={activeAi} busy={aiBusy} onDiscard={() => void discardAiDraft()} onMarkOptedOut={() => void markAiOptedOut()} />
                   </div>
                 )}
                 {win.open ? (
