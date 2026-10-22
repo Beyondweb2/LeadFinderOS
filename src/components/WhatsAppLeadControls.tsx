@@ -10,7 +10,8 @@ import { classifyLineType } from '@/lib/lineType';
 import { coldWhatsAppVerdict, COLD_NOT_ELIGIBLE_LABEL } from '@/lib/coldWhatsAppEligibility';
 import { templateDestinationRefusal } from '@/lib/whatsAppDestination';
 import { toWhatsAppDigits } from '@/lib/waNumber';
-import { COUNTRY_OFF, marketsOn } from '@/lib/outreachMarkets';
+import { COUNTRY_OFF, MARKET_NAME, marketsOn, mobileMarketOf } from '@/lib/outreachMarkets';
+import { phoneProblemWords } from '@/lib/phoneCountry';
 import { useCountrySettings } from '@/hooks/useCountrySettings';
 import { isInitialOpener } from '@/lib/openerVariant';
 import { queueDropWords, REPORT_OFFER_TEMPLATE } from '@/lib/reportOfferTemplate';
@@ -141,15 +142,17 @@ export function WhatsAppLeadControls({
         if (isColdOutreachTemplate(template)) {
           const v = coldWhatsAppVerdict(lead.phone, lead.country, marketsOn(countrySettings, 'whatsapp'));
           if (v.eligible === false && v.reason === COUNTRY_OFF) {
-            toast({ title: 'Not queued', description: 'WhatsApp to this country is switched off. Paul can turn it on in the WhatsApp queue settings.', variant: 'destructive' });
+            const m = mobileMarketOf(v.digits);
+            toast({ title: 'Not queued', description: `WhatsApp to ${m ? MARKET_NAME[m] : 'this country'} is switched off right now. Paul can turn it on in the WhatsApp queue settings.`, variant: 'destructive' });
             return;
           }
           /* ⛔ 2026-10-19: the WHOLE cold verdict, as the bulk queue and the drip use it — no phone, an unusable number
              or a non-mobile is flagged No mobile and NOT queued, and the person is told (it used to be silent, and a
-             no-phone lead was queued). */
+             no-phone lead was queued). 2026-10-22: the toast gives this one lead's own reason in plain words
+             (src/lib/phoneCountry.ts), not the list label. */
           if (v.eligible === false) {
             await onUpdate(lead.id, { status: 'no_whatsapp_needs_sms', line_type: classifyLineType(lead.phone, lead.country).lineType, line_type_checked_at: new Date().toISOString() });
-            toast({ title: 'Not queued', description: `Skipped: ${COLD_NOT_ELIGIBLE_LABEL[v.reason]}. Not sendable on WhatsApp.`, variant: 'destructive' });
+            toast({ title: 'Not queued', description: `${phoneProblemWords(lead.phone, lead.country) ?? `Skipped: ${COLD_NOT_ELIGIBLE_LABEL[v.reason]}.`} Flagged No mobile. Not sendable on WhatsApp.`, variant: 'destructive' });
             return;
           }
         }

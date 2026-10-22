@@ -465,11 +465,12 @@ export function WhatsAppQueuePanel() {
           {team?.testHeldQueuedCount} queued {team?.testHeldQueuedCount === 1 ? 'lead is' : 'leads are'} held by a test account and will <strong>not</strong> be sent to. Reassign {team?.testHeldQueuedCount === 1 ? 'it' : 'them'} to a real owner, or remove {team?.testHeldQueuedCount === 1 ? 'it' : 'them'} from the queue.
         </Callout>
       )}
-      {/* Queued with no number WhatsApp can reach (none, a landline, not a UK mobile): the sender flags these No
-          WhatsApp when it reaches them. Counted from the rows on screen. */}
+      {/* Queued with no number WhatsApp can reach (none, a landline, not a mobile of a country we message): the sender
+          flags these No WhatsApp when it reaches them. Counted from the rows on screen. 2026-10-22: the old "(cold
+          WhatsApp is UK mobiles only)" was stale since Malaysia / Singapore / Australia. */}
       {view.unsendable > 0 && (
         <Callout tone="amber" className="mt-2 px-3 py-2 text-[11px]" data-testid="queue-unsendable">
-          {view.unsendable} queued {view.unsendable === 1 ? 'lead has' : 'leads have'} no number WhatsApp can reach (cold WhatsApp is UK mobiles only). {view.unsendable === 1 ? 'It' : 'They'} will be flagged No mobile, not sent.
+          {view.unsendable} queued {view.unsendable === 1 ? 'lead has' : 'leads have'} no number WhatsApp can reach (a landline, no number, or not a UK, Malaysian, Singapore or Australian mobile). {view.unsendable === 1 ? 'It' : 'They'} will be flagged No mobile, not sent. Open a lead to see exactly why.
         </Callout>
       )}
 

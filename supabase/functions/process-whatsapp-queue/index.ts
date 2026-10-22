@@ -1,8 +1,9 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { toWhatsAppDigits } from "../../../src/lib/waNumber.ts";
 import { marketWindowOpen, windowOpenForDigits } from "../../../src/lib/sendWindow.ts";
-import { ABROAD_MARKETS, COUNTRY_OFF, channelOn, mobileMarketOf, type Market } from "../../../src/lib/outreachMarkets.ts";
+import { ABROAD_MARKETS, COUNTRY_OFF, MARKET_NAME, channelOn, mobileMarketOf, type Market } from "../../../src/lib/outreachMarkets.ts";
 import { heldCountryOff } from "../../../src/lib/countryHold.ts";
+import { phoneProblemWords } from "../../../src/lib/phoneCountry.ts";
 import { AU_ZONE_COLUMNS, auLeadTz } from "../../../src/lib/auLeadZone.ts";
 import { NOT_A_MOBILE, NOT_A_MOBILE_REASON, templateDestinationRefusal } from "../../../src/lib/whatsAppDestination.ts";
 import { loadCountrySettings, marketAtDailyCap } from "../_shared/country-settings.ts";
@@ -2359,7 +2360,7 @@ Deno.serve(async (req) => {
       }).eq("id", lead.id);
       return json({
         ok: true, skipped: COUNTRY_OFF,
-        reason: `${lead.business_name ?? "That lead"} is in a country whose WhatsApp is switched off, so nothing was sent.`,
+        reason: `${lead.business_name ?? "That lead"} has a mobile in ${MARKET_NAME[coldMarket]} and WhatsApp to ${MARKET_NAME[coldMarket]} is switched off, so nothing was sent.`,
         lead_id: lead.id, business: lead.business_name, ...statusPayload,
       });
     }
@@ -2371,7 +2372,8 @@ Deno.serve(async (req) => {
       }).eq("id", lead.id);
       return json({
         ok: true, skipped: NOT_A_UK_MOBILE,
-        reason: `${lead.business_name ?? "That lead"} is not a UK mobile - cold WhatsApp outreach is UK only, so nothing was sent.`,
+        /* 2026-10-22 (src/lib/phoneCountry.ts): what is actually wrong, never the stale "UK only". */
+        reason: `${lead.business_name ?? "That lead"}: ${phoneProblemWords(lead.phone as string | null, lead.country as string | null) ?? "not a mobile we message."} Nothing was sent.`,
         lead_id: lead.id, business: lead.business_name, ...statusPayload,
       });
     }

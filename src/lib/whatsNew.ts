@@ -36,6 +36,19 @@ export const WHATS_NEW: readonly WhatsNewEntry[] = [
       ],
       removed: [],
       effect: 'You see your own work first, and the number beside Inbox is yours. Nothing was sent or changed on any lead.',
+  { id: '2026-10-22-country-refusals', date: '2026-10-22', title: 'A refused number now says what is wrong', audience: 'all',
+    body: 'When WhatsApp, a text or a call is not possible, the reason now says what is actually wrong, for example a Malaysian landline, or a country that does not match the number. A number with its own country code is read as that country.',
+    report: {
+      added: [
+        'The lead card shows an amber warning when the number’s country code and the lead’s country disagree, for example “The lead’s country says UK but the number looks like a Malaysian number (+60)”.',
+      ],
+      changed: [
+        'Refusals name the real problem: a landline (and whose), a 1300 / 1800 number, a country we do not message, no country set, or a country label that does not match the number.',
+        'A number written with its country code (+44, +60, +65, +61, or the same digits without the +) is read as that country even when the lead’s country is wrong. A number without a code is still read in the lead’s country, never guessed.',
+        'The old “cold WhatsApp is UK mobiles only” wording is gone from the lead, the queue and the senders.',
+      ],
+      removed: [],
+      effect: 'You can see why a lead cannot be messaged and what to fix, and a UK mobile on a lead wrongly labelled with another country is no longer refused.',
     } },
   { id: '2026-10-22-pitch-owed-and-queued-sends', date: '2026-10-22', title: 'First-reply pitch fixed, and queued WhatsApp sends now go', audience: 'all',
     body: 'A first reply now gets the proper first-reply pitch even when the opener was marked failed but reached them. Messages queued for the morning now actually send, and a send that is refused says why.',

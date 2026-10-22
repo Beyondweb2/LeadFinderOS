@@ -39,6 +39,25 @@ const AUSTRALIA = new Set(['AUSTRALIA', 'AU']);
 const MALAYSIA = new Set(['MALAYSIA', 'MY']);
 const SINGAPORE = new Set(['SINGAPORE', 'SG']);
 
+/* ══ A NUMBER THAT CARRIES ITS OWN COUNTRY CODE IS READ AS THAT COUNTRY (2026-10-22, fix/country-refusals) ════════
+   A "+" / "00" number always kept its code. A number typed WITHOUT "+" but in the full international form of one of
+   our four markets is just as unambiguous — no national number of another of the four has that shape:
+     UK  44 + 1/2/3/7 + 8-9 digits     MY  60 + a Malaysian national number without its 0
+     SG  65 + 3/6/8/9 + 7 digits       AU  61 + 2/3/4/7/8 + 8 digits
+   On a Malaysia / Singapore / Australia lead such a number used to be read as THAT label's national form and refused
+   ("447700900123" on a Malaysia lead → null). It is now read by its code. A UK or blank-country lead already kept these
+   bare digits (unchanged). India is left out: a 10-digit Indian mobile can start 6 (historical leads only).
+   ⛔ A number with no code is never guessed: it is read in the lead's country exactly as before. */
+export function bareInternationalMarketOf(digits: string): 'UK' | 'MY' | 'SG' | 'AU' | null {
+  const d = String(digits ?? '');
+  if (/^44[1237]\d{8,9}$/.test(d)) return 'UK';
+  if (/^60(1([02-9]\d{7}|1\d{8})|[3-9]\d{7,8})$/.test(d)) return 'MY';
+  if (/^65[3689]\d{7}$/.test(d)) return 'SG';
+  if (/^61[23478]\d{8}$/.test(d)) return 'AU';
+  return null;
+}
+const LABEL_MARKET: Record<string, 'MY' | 'SG' | 'AU'> = { MALAYSIA: 'MY', MY: 'MY', SINGAPORE: 'SG', SG: 'SG', AUSTRALIA: 'AU', AU: 'AU' };
+
 /** Malaysia's national form (digits only) → 60… digits, or null. */
 export function malaysiaDigits(d: string): string | null {
   if (/^600?1([02-9]\d{7}|1\d{8})$/.test(d)) return '60' + d.replace(/^600?/, '');    // 60 1x… (and "+60 (0)1x…")
@@ -64,6 +83,11 @@ export function toWhatsAppDigits(raw: string | null | undefined, country?: strin
   // generic 00 rule below, exactly as before.
   if (AUSTRALIA.has(cc) && s.startsWith('0011')) s = '+' + s.slice(4);
   if (s.startsWith('00')) s = '+' + s.slice(2);
+  // 2026-10-22: another of our markets' full international number typed without "+" — read by its code (header above).
+  if (!s.startsWith('+') && LABEL_MARKET[cc]) {
+    const own = bareInternationalMarketOf(s.replace(/\D/g, ''));
+    if (own && own !== LABEL_MARKET[cc]) return s.replace(/\D/g, '');
+  }
   if (MALAYSIA.has(cc) && s.startsWith('+60')) return malaysiaDigits(s.replace(/\D/g, ''));
   if (SINGAPORE.has(cc) && s.startsWith('+65')) return singaporeDigits(s.replace(/\D/g, ''));
   if (s.startsWith('+')) return s.slice(1).replace(/\D/g, '') || null;

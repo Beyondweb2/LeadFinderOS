@@ -25,7 +25,8 @@ import { rivalHookDecision, templateNeedsRivals } from "../../../src/lib/rivalHo
 import { pitchEverSent } from "../_shared/auto-reply-rules.ts";
 import { isColdOutreachTemplate } from "../../../src/lib/coldOutreach.ts";
 import { isUkColdDestination, NOT_A_UK_MOBILE } from "../../../src/lib/ukColdDestination.ts";
-import { COUNTRY_OFF, channelOn, mobileMarketOf } from "../../../src/lib/outreachMarkets.ts";
+import { COUNTRY_OFF, MARKET_NAME, channelOn, mobileMarketOf } from "../../../src/lib/outreachMarkets.ts";
+import { phoneProblemWords } from "../../../src/lib/phoneCountry.ts";
 import { NOT_A_MOBILE, NOT_A_MOBILE_REASON, templateDestinationRefusal } from "../../../src/lib/whatsAppDestination.ts";
 import { loadCountrySettings } from "../_shared/country-settings.ts";
 import { resolveOnboardingFollowupVars } from "../_shared/onboarding-followup.ts";
@@ -106,7 +107,7 @@ const CAPABILITIES = ["dry_run", "build_phase_hold", "routing_leaf", "any_approv
    2026-10-21a: the Inbox send window — via:"inbox" outside the lead's hours is QUEUED, not sent (src/lib/inboxSendWindow.ts).
    2026-10-21c: both of the above (the send window + Australia prospect-only).
    2026-10-22a: Australia is a WhatsApp market (its own switch); its Inbox hours are read in the lead's zone (src/lib/auLeadZone.ts). */
-const BUILD_ID = "2026-10-22a-australia-whatsapp";
+const BUILD_ID = "2026-10-22b-country-refusals";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -478,11 +479,12 @@ Deno.serve(async (req) => {
       const coldMarket = isColdOutreachTemplate(templateName) ? mobileMarketOf(to) : null;
       if (coldMarket && coldMarket !== "UK" && !channelOn(await loadCountrySettings(service), coldMarket, "whatsapp")) {
         return json({ ok: false, error: COUNTRY_OFF, template: templateName,
-          reason: "WhatsApp to this country is switched off, so nothing was sent. Paul can turn it on in the WhatsApp queue settings." }, 200);
+          reason: `WhatsApp to ${MARKET_NAME[coldMarket]} is switched off, so nothing was sent. Paul can turn it on in the WhatsApp queue settings.` }, 200);
       }
       if (isColdOutreachTemplate(templateName) && !isUkColdDestination(to) && !(coldMarket && coldMarket !== "UK")) {
         return json({ ok: false, error: NOT_A_UK_MOBILE, template: templateName,
-          reason: "Cold WhatsApp outreach is UK only - this is not a UK mobile, so nothing was sent. Use a reply or a follow-up in an open conversation." }, 200);
+          /* 2026-10-22 (src/lib/phoneCountry.ts): what is actually wrong with the number, never the stale "UK only". */
+          reason: `${phoneProblemWords(rawPhone, country) ?? "This is not a mobile we message."} Nothing was sent. Use a reply or a follow-up in an open conversation.` }, 200);
       }
       /* ⛔ EVERY TEMPLATE, NOT ONLY COLD (2026-10-19, src/lib/whatsAppDestination.ts): since landlines are added to the CRM,
          a follow-up, the sign-up / onboarding link (Quick Close, the client hub) or any other template is refused for a

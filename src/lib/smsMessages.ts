@@ -163,7 +163,7 @@ export const SMS_QUEUE_SKIP_WORDS: Readonly<Record<string, string>> = {
   whatsapp_failed: 'already tried on WhatsApp (the send failed)',
   not_new: 'already past the start (not a first text)',
   no_phone: 'no mobile (no phone number)', not_a_uk_mobile: 'no mobile (landline, or not a UK / Malaysia / Singapore mobile)',
-  country_off: 'a Malaysia / Singapore mobile, but texts to that country are switched off for now',
+  country_off: 'a Malaysia / Singapore mobile whose texts are switched off right now, or an Australian mobile (texts never go to Australia)',
   opted_out: 'asked not to be contacted', already_texted: 'already texted before',
   contacted_by_phone: 'already spoken to by phone', contacted_logged: 'already in a logged conversation',
   over_cap: 'over the limit for one go (queue them next time)',

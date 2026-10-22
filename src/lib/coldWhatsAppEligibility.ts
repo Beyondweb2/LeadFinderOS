@@ -20,6 +20,7 @@
 import { toWhatsAppDigits } from './waNumber.ts';
 import { isUkColdDestination, NOT_A_UK_MOBILE } from './ukColdDestination.ts';
 import { COUNTRY_OFF, mobileMarketOf, type Market } from './outreachMarkets.ts';
+import { COUNTRY_OFF_WORDS, NOT_A_MOBILE_WE_MESSAGE_WORDS } from './countrySkipWords.ts';
 
 /** The one existing "cannot WhatsApp this number" status. Never rename: stored, consumed everywhere. */
 export const NO_WHATSAPP_STATUS = 'no_whatsapp_needs_sms';
@@ -61,8 +62,8 @@ export const COLD_NOT_ELIGIBLE_LABEL: Record<ColdNotEligibleReason, string> = {
   no_phone: 'no phone number (flagged No mobile)',
   bad_number: 'phone number not usable (flagged No mobile)',
   landline: 'landline (flagged No mobile)',
-  [NOT_A_UK_MOBILE]: 'not a mobile we message (UK, Malaysia or Singapore) - flagged No mobile',
-  [COUNTRY_OFF]: 'a Malaysia / Singapore mobile - that country is switched off for WhatsApp (not flagged; turn it on in WhatsApp queue settings)',
+  [NOT_A_UK_MOBILE]: `${NOT_A_MOBILE_WE_MESSAGE_WORDS} (flagged No mobile)`,
+  [COUNTRY_OFF]: COUNTRY_OFF_WORDS,
 };
 
 /* A status BEFORE any real contact. A positive allowlist: anything not listed here (replied, interested,
