@@ -26,6 +26,8 @@ import { WA_TEMPLATE_REQS } from './whatsappTemplates.ts';
 export const RUN_USABLE = new Set(['complete', 'capped']);
 /** Settled but produced nothing. */
 const RUN_DEAD = new Set(['failed', 'cancelled']);
+/** A run that will not change again (usable or dead). Anything else — pending, running, unknown, missing — may. */
+export const runSettled = (status: string | null | undefined): boolean => RUN_USABLE.has(String(status)) || RUN_DEAD.has(String(status));
 
 export type QueueAuditStatus =
   /** This template needs no audit — show nothing. */

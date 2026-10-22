@@ -60,7 +60,9 @@ ok(bulkWriteLanded({ status: "fulfilled", value: null }, true), "a demo lead (no
 // 6. Crawl check refreshes once.
 {
   const btn = read("src/components/CrawlCheckButton.tsx");
-  ok(/invalidateQueries\(\{ queryKey: \['lead-crawls'\] \}\)/.test(btn) && /invalidateQueries\(\{ queryKey: \['inbox'\] \}\)/.test(btn), "the crawl button invalidates the crawl rows and the Inbox itself");
+  /* Since 2026-10-22 the Inbox's website checks ARE ['lead-crawls'] (useLeadCrawls), so one invalidation refreshes
+     both screens and the whole Inbox bundle is not re-read (docs/lighter-outreach-inbox.md). */
+  ok(/invalidateQueries\(\{ queryKey: \['lead-crawls'\] \}\)/.test(btn) && !/invalidateQueries\(\{ queryKey: \['inbox'\] \}\)/.test(btn), "the crawl button invalidates the crawl rows (the Inbox's too), not the whole Inbox");
   const inbox = read("src/pages/Inbox.tsx");
   const tag = inbox.slice(inbox.indexOf("<CrawlCheckButton"), inbox.indexOf("/>", inbox.indexOf("<CrawlCheckButton")));
   ok(tag.length > 50 && !/onDone=\{refetch\}/.test(tag), "the Inbox does not add a second full six-read refetch");

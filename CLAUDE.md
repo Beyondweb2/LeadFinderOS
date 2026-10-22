@@ -673,6 +673,9 @@ Paul runs several Claude Code sessions at once across LeadFinderOS V1, V2 and AB
   Never read a small key out of `results` in bulk — use `results_summary` / `results_crawl_check` /
   `results_seo_grade` (2026-09-27; a backfill must WALK the primary key, never search the JSON) /
   `gemini_answered` (`docs/inbox-outreach-speed.md`). A policy's `auth.uid()` goes in `(select …)`.
+  ⛔ **A LIST never reads `lead_crawl_checks.result`** — it reads `result_slim` through `useLeadCrawls` (one read for
+  Outreach + Inbox); a screen that SHOWS the check reads the full row (`useLeadCrawl`). The Inbox tab-focus refresh is a
+  once-a-minute delta (`inboxFocusRefreshPlan`); messages are `WA_MESSAGE_COLUMNS`, never `*` (`docs/lighter-outreach-inbox.md`).
 - **PostgREST truncates at 1,000 rows silently** — `src/lib/fetchAllRows.ts`, `.order('id')`; for a big
   list use `fetchAllRowsParallel` (same rows, deduped by id; a short page 0 probes once, the first wave
   is sized from last time's count). A

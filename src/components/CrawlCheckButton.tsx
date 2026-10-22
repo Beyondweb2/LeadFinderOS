@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { ScanSearch, Loader2, Copy, Check, AlertTriangle, CircleCheck, RefreshCw } from 'lucide-react';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { Callout, DialogHero, SubSection } from '@/components/operator/ui';
@@ -13,6 +13,7 @@ import { buildFaultLines, type CrawlSignals, type CrawlFault } from '@/lib/crawl
 import type { SiteInfo } from '@/lib/siteInfo';
 import { siteInfoHasAnything } from '@/lib/siteInfo';
 import type { CrawlRow } from '@/lib/crawlResult';
+import { useLeadCrawl } from '@/hooks/useLeadCrawls';
 import type { CrawlRequestSource } from '@/lib/fullCrawl';
 import { crawlJobStatus, useCrawlJobWatch } from '@/components/LeadCrawlPanel';
 import { ProspectAuditDialog } from '@/components/ProspectAuditDialog';
@@ -192,8 +193,8 @@ function CrawlCheckDialog(
       const r = res.result as Record<string, any> | null;
       if (!r?.signals) throw new Error(res.job?.status === 'failed' ? 'The crawl failed.' : 'The crawl finished without a readable result.');
       setResult({ ok: true, url: r.url, verdict: r.verdict, signals: r.signals, siteInfo: r.siteInfo ?? null, checked_at: r.checked_at, full: res.full ?? null, mode: 'full', raw: r });
+      // ['lead-crawls'] is every list's website-check read, the Inbox's included (useLeadCrawls).
       void queryClient.invalidateQueries({ queryKey: ['lead-crawls'] });
-      void queryClient.invalidateQueries({ queryKey: ['inbox'] });
       void queryClient.invalidateQueries({ queryKey: ['cold-call-playbook'] });   // the call script reads this crawl too
       onDone?.();
     } catch (e) {
@@ -220,11 +221,9 @@ function CrawlCheckDialog(
       if (body.lead_id && next.stored === false) throw new Error('The crawl ran but could not be saved to this lead. Run it again.');
       setResult({ ...next, raw: next as unknown as Record<string, unknown> });
       if (body.lead_id) {
-        // The ONE crawl row changed: every screen's copy (Outreach, Paid Clients, lead popup) re-reads.
+        // The ONE crawl row changed: every screen's copy (Outreach, Inbox, Paid Clients, lead popup) re-reads —
+        // the Inbox's audit_followup_fault gate reads ['lead-crawls'] too (useLeadCrawls), so not the whole Inbox.
         void queryClient.invalidateQueries({ queryKey: ['lead-crawls'] });
-        // Inbox intentionally has a five-minute cache; invalidate it so returning to a
-        // conversation immediately re-reads this manual crawl for audit_followup_fault.
-        void queryClient.invalidateQueries({ queryKey: ['inbox'] });
         // The call script reads this crawl too: without this it kept "Website not checked yet" from before the run.
         void queryClient.invalidateQueries({ queryKey: ['cold-call-playbook'] });
       }
@@ -239,16 +238,23 @@ function CrawlCheckDialog(
   /* A job-less answer (the inline check) is finished the moment it returns. */
   useEffect(() => { if (result && !jobId) { setRunning(false); onRunningChange?.(false); } /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [result, jobId]);
 
+  /* The lists hand the button the SMALL stored summary (result_slim — the icon's fields only). The popup shows the whole
+     check, so on open it reads the lead's FULL row (useLeadCrawl — the lead popup's own read, shared cache) before seeding. */
+  const full = useLeadCrawl(open && lead && !urlMode ? lead.id : null);
+  const seededRef = useRef(false);
+
   /* On open: show the STORED result if there is one (already run → open the popup), otherwise run it
      (not run yet → run the crawl). Reset when closed. */
   useEffect(() => {
-    if (!open) { setResult(null); setUrl(''); setRunning(false); setJobId(null); return; }
-    if (urlMode) return;
-    const stored = resultFromRow(initialCrawl);
+    if (!open) { seededRef.current = false; setResult(null); setUrl(''); setRunning(false); setJobId(null); return; }
+    if (urlMode || seededRef.current) return;
+    if (lead && full.isLoading) return;   // wait for the full row; a failed read falls back to the summary
+    seededRef.current = true;
+    const stored = resultFromRow(full.crawl ?? initialCrawl);
     if (stored) setResult(stored);
     else if (lead && !running) void run({ lead_id: lead.id });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open]);
+  }, [open, full.isLoading, full.crawl]);
 
   /* The audit_followup_fault TEMPLATE's own rule (admin note only) — never the findings shown. */
   const faults: CrawlFault[] = result?.signals ? buildFaultLines(result.signals) : [];

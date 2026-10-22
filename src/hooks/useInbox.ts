@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { toWhatsAppDigits } from '@/lib/waNumber';
 import { engineScoresByLead, type EngineScores, type EngineSignalRow } from '@/lib/engineScores';
-import { conversationLeadId, groupInboxMessages, mergeInboxMessages, mergeReconciledLeads, optionalInboxRows, patchInboxLead, upsertAuditById } from '@/lib/inboxCache';
+import { auditIdsToRefresh, conversationLeadId, groupInboxMessages, INBOX_DELTA_OVERLAP_MS, inboxFocusRefreshPlan, mergeInboxMessages, mergeReconciledLeads, optionalInboxRows, patchInboxLead, upsertAuditById } from '@/lib/inboxCache';
 import { newestUsableAuditByLead, resolveReportsByLead } from '@/lib/auditReportResolver';
-import { RUN_USABLE } from '@/lib/queueAuditStatus';
+import { RUN_USABLE, runSettled } from '@/lib/queueAuditStatus';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { fetchAllRows, fetchAllRowsParallel } from '@/lib/fetchAllRows';
 import { supabase } from '@/integrations/supabase/client';
@@ -14,7 +14,8 @@ import { REPORT_LINK_TEMPLATES, leadReportOpenedAt, leadSiteVisitedAt } from '@/
 import { onLeadChanged } from '@/lib/leadSync';
 import { auditShowsVisibilityGap, resolveSiteFault } from '@/lib/crawlCheck';
 import { hasSiteFindings } from '@/lib/siteFindings';
-import type { CrawlStoredResult } from '@/lib/crawlResult';
+import type { CrawlRow, CrawlStoredResult } from '@/lib/crawlResult';
+import { refreshLeadCrawlsSoon, useLeadCrawls } from '@/hooks/useLeadCrawls';
 import type { WhatsAppTemplateSnapshot } from '@/lib/whatsappTemplateSnapshot';
 import { serviceWindowState } from '@/lib/serviceWindow';
 import { sendMediaAttachmentRequest } from '@/lib/sendMediaAttachment';
@@ -81,6 +82,36 @@ async function fetchGeminiSignals(): Promise<{ rows: InboxData['geminiSignals'];
       .order('audit_id', { ascending: true }).range(from, to), (g) => g.audit_id);
 }
 
+/** The audits touched since `since` — created or updated, or given a new run (a run settling bumps nothing, see
+ *  auditIdsToRefresh). Ids only, two tiny reads. null = could not tell (the caller re-reads every audit). */
+async function fetchChangedAuditIds(since: string): Promise<string[] | null> {
+  try {
+    const [audits, runs] = await Promise.all([
+      fetchAllRows<{ id: string }>('Inbox (changed audits)', (from, to) =>
+        sb.from('ai_audits').select('id').or(`created_at.gte.${since},updated_at.gte.${since}`)
+          .order('id', { ascending: true }).range(from, to)),
+      fetchAllRows<{ audit_id: string | null }>('Inbox (new audit runs)', (from, to) =>
+        sb.from('ai_audit_runs').select('audit_id').gte('created_at', since)
+          .order('id', { ascending: true }).range(from, to)),
+    ]);
+    return [...audits.rows.map((a) => a.id), ...runs.rows.map((r) => r.audit_id).filter((id): id is string => !!id)];
+  } catch { return null; }
+}
+
+/** These audits, freshly read by id (the same projection, with the same fallback). null = the read failed. */
+const AUDITS_BY_ID_CHUNK = 100;
+async function fetchInboxAuditsByIds(ids: string[]): Promise<InboxData['audits'] | null> {
+  const out: InboxData['audits'] = [];
+  for (let i = 0; i < ids.length; i += AUDITS_BY_ID_CHUNK) {
+    const chunk = ids.slice(i, i + AUDITS_BY_ID_CHUNK);
+    let res = await sb.from('ai_audits').select(AUDIT_SELECT).in('id', chunk);
+    if (res.error) res = await sb.from('ai_audits').select(AUDIT_SELECT_FALLBACK).in('id', chunk);
+    if (res.error) return null;
+    out.push(...(res.data ?? []));
+  }
+  return out;
+}
+
 /** One audit row, freshly read by id — the SMALL targeted fetch a single `ai_audits`/`ai_audit_runs`
  *  realtime event triggers, instead of re-running the whole paginated audits read. Falls back the
  *  same way fetchInboxAudits does if the rich projection is rejected. */
@@ -107,6 +138,12 @@ export function inboxLeadTableFor(role: string | null | undefined): InboxLeadTab
 
 /* next_action / next_action_date (2026-09-28): the thread header shows the human-set next action, so a
    change made in Outreach or the prospect panel is visible here without opening anything. */
+/* ⚡ The WhatsApp message columns the Inbox reads — every WaMessage field plus the ones its rules read
+   (conversationState: error_code / error_title / error_details; replyKindTag: reply_kind). Not `*` (perf, 2026-10-22):
+   wa_message_id (Meta's id, ~0.4 MB live) and findings_shown are never read here. A new column the Inbox needs goes in
+   this list. Texts (sms_messages, a handful of rows) keep `*` — their mapping (smsRowToInboxMessage) reads its own names. */
+export const WA_MESSAGE_COLUMNS = 'id, created_at, direction, user_id, lead_id, phone, body, message_type, template_name, status, test_mode, error, media_path, media_mime_type, media_filename, template_snapshot, sent_by_user_id, error_code, error_title, error_details, sent_by_ai, reply_kind';
+
 const LEAD_COLUMNS = 'id, business_name, phone, country, campaign_id, status, google_maps_url, website, email, place_id, category, search_keyword, search_location, address, amount_paid, contact_name, hook_followup_queued_at, is_potential_work, facebook_url, instagram_url, linkedin_url, facebook_status, instagram_status, linkedin_status, call_booked_at, whatsapp_sent_at, next_action, next_action_date, next_action_time, next_action_note, sms_queued_at, sms_delivery_status, derived_town, town_fetch_note, lead_source, import_batch';
 
 /** One lead row, freshly read by id — used to close the gap between an inbound reply's message
@@ -225,10 +262,6 @@ interface InboxData {
   engineSignals: EngineSignalRow[];
   /** Lead ids flagged Visible (inbox_visible_leads). */
   visibleLeads: string[];
-  /** Per-lead stored crawl checks (result blob + when) → whether the site has a nameable fault (which
-   *  gates the audit_followup_fault template) AND the stored result the Crawl-site popup shows.
-   *  Newest per lead wins in the hook. */
-  crawlChecks: Array<{ lead_id: string | null; result: CrawlStoredResult | null; created_at: string }>;
 }
 
 /* Key includes the user id (the useCoverage pattern): firing before it resolves would cache the
@@ -241,21 +274,21 @@ const NO_LEADS: LeadLite[] = [];
 const NO_AUDITS: InboxData['audits'] = [];
 const NO_PAGE_HITS: InboxData['pageHits'] = [];
 const NO_GEMINI: InboxData['geminiSignals'] = [];
-const NO_CRAWL: InboxData['crawlChecks'] = [];
 const NO_ENGINE: InboxData['engineSignals'] = [];
 const NO_VISIBLE: string[] = [];
 
 /** The message table a channel reads, and the mapping of its rows onto the Inbox's own message shape (the rest of the Inbox cannot tell). */
 const messageTableFor = (channel: InboxChannel) => (channel === 'sms' ? 'sms_messages' : 'whatsapp_messages');
+const messageSelectFor = (channel: InboxChannel) => (channel === 'sms' ? '*' : WA_MESSAGE_COLUMNS);
 const toInboxMessage = (channel: InboxChannel, row: unknown): WaMessage => (channel === 'sms' ? smsRowToInboxMessage(row as SmsMessageRow) as WaMessage : row as WaMessage);
 
 async function fetchInboxData(leadTable: InboxLeadTable, previous?: InboxData, essentialOnly = false, channel: InboxChannel = 'whatsapp'): Promise<InboxData> {
-  const [msgRes, leadRes, reportRes, hitRes, gemRes, crawlRes, engRes, visRes] = await Promise.all([
+  const [msgRes, leadRes, reportRes, hitRes, gemRes, engRes, visRes] = await Promise.all([
     /* Paginated, and with the id tiebreaker it never had: 3 groups of rows share a created_at, and
        on a non-unique sort a tied row can be fetched twice and another missed at a page boundary.
        This is the fastest-growing table in the system — every send and every reply. */
     fetchAllRowsParallel<WaMessage>('Inbox (messages)', (from, to) =>
-      sb.from(messageTableFor(channel)).select('*')
+      sb.from(messageTableFor(channel)).select(messageSelectFor(channel))
         .order('created_at', { ascending: true }).order('id', { ascending: true }).range(from, to), (m) => m.id),
     // is_archived = false: an archived lead is one the operator has stopped working, so its thread
     // leaves the Inbox and it also leaves the start-a-conversation picker below. Un-archiving
@@ -300,13 +333,8 @@ async function fetchInboxData(leadTable: InboxLeadTable, previous?: InboxData, e
     /* ⚡ Paged in parallel (2026-09-27, site-wide speed pass): at 1,554 rows it was three waits in a
        row (~3 s), level with the slowest essential read — and the list waits for all six. */
     essentialOnly ? { rows: previous?.geminiSignals ?? NO_GEMINI } : optionalInboxRows<InboxData['geminiSignals'][number]>(fetchGeminiSignals()),
-    /* Stored crawl checks → whether a lead's site has a nameable fault, which gates the
-       audit_followup_fault template in the picker (its {{6}} names one and Meta rejects an empty
-       parameter). Paginated with the id tiebreaker; newest-per-lead is chosen in the hook. A failed
-       read degrades to "no fault known", which simply keeps that template gated off — the safe way. */
-    essentialOnly ? { rows: previous?.crawlChecks ?? NO_CRAWL } : optionalInboxRows<InboxData['crawlChecks'][number]>(fetchAllRows<InboxData['crawlChecks'][number]>('Inbox (crawl checks)', (from, to) =>
-      sb.from('lead_crawl_checks').select('lead_id, result, created_at')
-        .order('id', { ascending: true }).range(from, to))),
+    /* Stored crawl checks are NOT read here any more (perf, 2026-10-22): useLeadCrawls reads their small summary
+       once, shared with Outreach. A failed read there still degrades to "no fault known" — the template stays gated off. */
     essentialOnly ? { rows: previous?.engineSignals ?? NO_ENGINE } : optionalInboxRows<InboxData['engineSignals'][number]>(fetchEngineSignals()),
     essentialOnly ? { rows: previous?.visibleLeads ?? NO_VISIBLE } : optionalInboxRows<string>(fetchVisibleLeads()),
   ]);
@@ -316,7 +344,6 @@ async function fetchInboxData(leadTable: InboxLeadTable, previous?: InboxData, e
     audits: reportRes?.rows ?? previous?.audits ?? NO_AUDITS,
     pageHits: hitRes?.rows ?? previous?.pageHits ?? NO_PAGE_HITS,
     geminiSignals: gemRes?.rows ?? previous?.geminiSignals ?? NO_GEMINI,
-    crawlChecks: crawlRes?.rows ?? previous?.crawlChecks ?? NO_CRAWL,
     engineSignals: engRes?.rows ?? previous?.engineSignals ?? NO_ENGINE,
     visibleLeads: visRes?.rows ?? previous?.visibleLeads ?? NO_VISIBLE,
   };
@@ -343,10 +370,16 @@ export function useInbox(channel: InboxChannel = 'whatsapp') {
      list. patchLeadStatus keeps its optimistic no-spinner behaviour by patching the CACHE. */
   /* When the current full load started — the catch-up below reads only what changed after it. */
   const loadStartedAtRef = useRef<number>(0);
+  /* When the newest sync of any kind (full load, reconcile, delta) began, and the newest FULL one — the tab-focus
+     refresh reads only what changed since the first, and goes full when the second is old (inboxFocusRefreshPlan). */
+  const lastSyncStartedAtRef = useRef<number>(0);
+  const lastFullAtRef = useRef<number>(0);
   const query = useQuery({
     queryKey,
     queryFn: () => {
       loadStartedAtRef.current = Date.now();
+      lastSyncStartedAtRef.current = loadStartedAtRef.current;
+      lastFullAtRef.current = loadStartedAtRef.current;
       return fetchInboxData(leadTable, queryClient.getQueryData<InboxData>(queryKey), false, channel);
     },
     enabled: !!user?.id && !!role,
@@ -363,6 +396,8 @@ export function useInbox(channel: InboxChannel = 'whatsapp') {
   const pendingLeadPatchesRef = useRef(new Map<string, Partial<LeadLite>>());
 
   const reconcile = useCallback(async () => {
+    lastSyncStartedAtRef.current = Date.now();
+    lastFullAtRef.current = lastSyncStartedAtRef.current;
     const fresh = await fetchInboxData(leadTable, queryClient.getQueryData<InboxData>(queryKey), true, channel);
     queryClient.setQueryData<InboxData>(queryKey, (current) => current
       ? {
@@ -420,7 +455,7 @@ export function useInbox(channel: InboxChannel = 'whatsapp') {
       return null;
     }
     const msgs = await fetchAllRows<WaMessage>('Inbox (one lead)', (from, to) =>
-      sb.from(msgTable).select('*').eq('lead_id', leadId)
+      sb.from(msgTable).select(messageSelectFor(channel)).eq('lead_id', leadId)
         .order('created_at', { ascending: true }).order('id', { ascending: true }).range(from, to)).catch(() => null);
     if (msgs && sms) msgs.rows = msgs.rows.map((m) => toInboxMessage(channel, m));
     pendingLeadPatchesRef.current.delete(leadId);
@@ -439,20 +474,28 @@ export function useInbox(channel: InboxChannel = 'whatsapp') {
      minute of overlap for clock skew): messages by created_at, leads by updated_at, and the audit
      list (small and fast since migration 20260927110000). A later reconnect or focus still runs the
      full reconcile(), exactly as before. */
-  const catchUpAfterFirstLoad = useCallback(async () => {
-    try {
-      await queryClient.ensureQueryData({ queryKey, queryFn: () => fetchInboxData(leadTable, queryClient.getQueryData<InboxData>(queryKey), false, channel) });
-    } catch { return; }
-    const since = new Date((loadStartedAtRef.current || Date.now()) - 60_000).toISOString();
-    const [msgs, leadRows, audits] = await Promise.all([
+  /* ⚡ THE "CHANGED SINCE" READ (perf, 2026-10-22) — shared by the first-load catch-up and the tab-focus refresh:
+     messages created, leads updated (an archived one leaves through patchInboxLead), and only the audits that
+     changed or are still running (auditIdsToRefresh) — never the whole audit list again. If the server cannot say
+     which audits changed, every audit is re-read, exactly as before. */
+  const catchUpSince = useCallback(async (sinceMs: number) => {
+    lastSyncStartedAtRef.current = Date.now();
+    const since = new Date(sinceMs).toISOString();
+    const [msgs, leadRows, changedAuditIds] = await Promise.all([
       fetchAllRows<WaMessage>('Inbox (catch-up messages)', (from, to) =>
-        sb.from(msgTable).select('*').gte('created_at', since)
+        sb.from(msgTable).select(messageSelectFor(channel)).gte('created_at', since)
           .order('created_at', { ascending: true }).order('id', { ascending: true }).range(from, to)).catch(() => null),
       fetchAllRows<LeadLite & { is_archived?: boolean }>('Inbox (catch-up leads)', (from, to) =>
         sb.from(leadTable).select(`${LEAD_COLUMNS}, is_archived`).gte('updated_at', since)
           .order('id', { ascending: true }).range(from, to)).catch(() => null),
-      optionalInboxRows<InboxData['audits'][number]>(fetchAllRowsParallel<InboxData['audits'][number]>('Inbox (catch-up audits)', fetchInboxAudits, (a) => a.id)),
+      fetchChangedAuditIds(since),
     ]);
+    const cachedAudits = queryClient.getQueryData<InboxData>(queryKey)?.audits ?? NO_AUDITS;
+    const changedAudits = changedAuditIds
+      ? await fetchInboxAuditsByIds(auditIdsToRefresh(cachedAudits, changedAuditIds, runSettled))
+      : null;
+    const allAudits = changedAudits ? null
+      : await optionalInboxRows<InboxData['audits'][number]>(fetchAllRowsParallel<InboxData['audits'][number]>('Inbox (catch-up audits)', fetchInboxAudits, (a) => a.id));
     queryClient.setQueryData<InboxData>(queryKey, (current) => {
       if (!current) return current;
       let leads = current.leads;
@@ -464,10 +507,17 @@ export function useInbox(channel: InboxChannel = 'whatsapp') {
         ...current,
         messages: msgs ? mergeInboxMessages(current.messages, msgs.rows.map((m) => toInboxMessage(channel, m))) : current.messages,
         leads,
-        audits: audits?.rows ?? current.audits,
+        audits: changedAudits ? changedAudits.reduce(upsertAuditById, current.audits) : (allAudits?.rows ?? current.audits),
       };
     });
   }, [queryClient, queryKey, leadTable, msgTable, channel]);
+
+  const catchUpAfterFirstLoad = useCallback(async () => {
+    try {
+      await queryClient.ensureQueryData({ queryKey, queryFn: () => fetchInboxData(leadTable, queryClient.getQueryData<InboxData>(queryKey), false, channel) });
+    } catch { return; }
+    await catchUpSince((loadStartedAtRef.current || Date.now()) - INBOX_DELTA_OVERLAP_MS);
+  }, [queryClient, queryKey, leadTable, channel, catchUpSince]);
 
   /* Subscription only patches cache. It never calls the six-read loader on connect. */
   useEffect(() => {
@@ -502,8 +552,10 @@ export function useInbox(channel: InboxChannel = 'whatsapp') {
       // Crawl completion is written by the background audit queue, not by either of the rows
       // above. Invalidate the complete Inbox snapshot so the fault-template gate and crawl icon
       // update as soon as the persisted crawl/run result arrives.
+      /* Debounced, and only the website-check summary list (useLeadCrawls) — never the whole Inbox bundle; a bulk
+         crawl writing many rows re-reads it once. */
       .on('postgres_changes', { event: '*', schema: 'public', table: 'lead_crawl_checks' }, () => {
-        void queryClient.invalidateQueries({ queryKey });
+        refreshLeadCrawlsSoon(queryClient);
       })
       /* THE AUTHORITATIVE REPORT-AVAILABILITY EVENTS. A report can become newly usable four ways:
          a brand-new audit row arrives (ai_audits INSERT — short_code is trigger-set at insert, so
@@ -534,7 +586,14 @@ export function useInbox(channel: InboxChannel = 'whatsapp') {
         if (!state?.data || state.fetchStatus === 'fetching') void catchUpAfterFirstLoad();
         else void reconcile();
       });
-    const onFocus = () => { if (document.visibilityState === 'visible') void reconcile(); };
+    /* Back on the tab: at most once a minute, only what changed (inboxFocusRefreshPlan). focus and visibilitychange
+       both fire on one alt-tab; the plan's one-minute floor makes that one read. */
+    const onFocus = () => {
+      if (document.visibilityState !== 'visible') return;
+      const plan = inboxFocusRefreshPlan(Date.now(), lastSyncStartedAtRef.current, lastFullAtRef.current);
+      if (plan.kind === 'full') void reconcile();
+      else if (plan.kind === 'delta') void catchUpSince(plan.sinceMs);
+    };
     window.addEventListener('focus', onFocus);
     document.addEventListener('visibilitychange', onFocus);
     return () => {
@@ -542,7 +601,7 @@ export function useInbox(channel: InboxChannel = 'whatsapp') {
       document.removeEventListener('visibilitychange', onFocus);
       void (supabase as any).removeChannel(rt);
     };
-  }, [user?.id, queryClient, queryKey, reconcile, catchUpAfterFirstLoad, patchOneAudit, patchOneLead, msgTable, channel]);
+  }, [user?.id, queryClient, queryKey, reconcile, catchUpAfterFirstLoad, catchUpSince, patchOneAudit, patchOneLead, msgTable, channel]);
 
   /* ⛔ THE SAME ROW OUTREACH EDITS (2026-09-28). A status, next action, star or note saved anywhere —
      Outreach, the prospect panel, another tab — announces itself (src/lib/leadSync.ts) and the Inbox
@@ -565,7 +624,9 @@ export function useInbox(channel: InboxChannel = 'whatsapp') {
   const audits = query.data?.audits ?? NO_AUDITS;
   const pageHits = query.data?.pageHits ?? NO_PAGE_HITS;
   const geminiSignals = query.data?.geminiSignals ?? NO_GEMINI;
-  const crawlChecks = query.data?.crawlChecks ?? NO_CRAWL;
+  /* The stored website checks: the SAME summary read and cache the Outreach table uses (useLeadCrawls, result_slim) —
+     never the whole check, and never inside the Inbox bundle, so a crawl finishing re-reads only this. */
+  const { crawlByLeadId: storedCrawlByLeadId } = useLeadCrawls('Inbox (crawl checks)');
   const engineSignals = query.data?.engineSignals ?? NO_ENGINE;
   const visibleLeads = query.data?.visibleLeads ?? NO_VISIBLE;
   const visibleSet = useMemo(() => new Set(visibleLeads), [visibleLeads]);
@@ -620,12 +681,7 @@ export function useInbox(channel: InboxChannel = 'whatsapp') {
      stored result), keyed by lead. The button and the audit_followup_fault gate below read the SAME
      rows, so what the button shows and what the template offers can never disagree. */
   const crawlByLeadId = useMemo(() => {
-    const m = new Map<string, InboxData['crawlChecks'][number]>();
-    for (const c of crawlChecks) {
-      if (!c.lead_id) continue;
-      const prev = m.get(c.lead_id);
-      if (!prev || new Date(c.created_at).getTime() > new Date(prev.created_at).getTime()) m.set(c.lead_id, c);
-    }
+    const m = new Map<string, CrawlRow>(storedCrawlByLeadId);
     // A lead-level cache write is best-effort. When an audit has its own completed crawl but that
     // cache row is absent, surface the exact run result in the same icon/modal instead of showing
     // a false “not checked” state.
@@ -636,14 +692,13 @@ export function useInbox(channel: InboxChannel = 'whatsapp') {
         .sort((a, b) => (b.run_number ?? 0) - (a.run_number ?? 0))[0];
       if (run?.crawl_check?.signals) {
         m.set(audit.lead_id, {
-          lead_id: audit.lead_id,
           result: run.crawl_check,
           created_at: run.crawl_check.checked_at ?? run.created_at ?? audit.created_at ?? new Date(0).toISOString(),
         });
       }
     }
     return m;
-  }, [crawlChecks, audits]);
+  }, [storedCrawlByLeadId, audits]);
 
   /* Lead ids audit_followup_fault's {{6}} has a line for — the picker gate. siteFaultLine is the SAME
      rule the sender (audit-reply.ts) applies, so what the picker offers and what the send builds

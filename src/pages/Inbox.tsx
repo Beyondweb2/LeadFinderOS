@@ -2455,8 +2455,8 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
                     <CrawlCheckButton
                       lead={{ id: activeLead.id, website: activeLead.website }}
                       crawl={crawlByLeadId.get(active.leadId) ?? null}
-                      /* No onDone refetch: the button invalidates ['inbox'] itself, and a second
-                         refetch here only cancelled that one and started the full six-read load again. */
+                      /* No onDone refetch: the button invalidates ['lead-crawls'] itself (the Inbox's
+                         website-check read), and a refetch here would start the full Inbox load again. */
                       className="self-center"
                       iconOnly
                       from="inbox"
