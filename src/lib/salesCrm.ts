@@ -11,6 +11,7 @@
 import { CONTACT_METHODS, LOGGED_CONTACT_METHODS, contactMethodLabel } from './contactMethods.ts';
 import { lostReasonLabel } from './lostReason.ts';
 import { myReadinessSnapshot, notReadyMessage, onboardingWordsForPausedRefusal } from './readinessWords.ts';
+import { COUNTRY_OFF_WORDS, NOT_A_MOBILE_WE_MESSAGE_WORDS } from './countrySkipWords.ts';
 
 export type SalesStage =
   | 'new' | 'queued' | 'contacted' | 'replied' | 'interested' | 'awaiting_decision'
@@ -244,12 +245,10 @@ export const QUEUE_SKIP_LABEL: Record<string, string> = {
   contacted_by_phone: 'already contacted by phone — initial opener not queued',
   contacted_logged: 'already in conversation (a logged contact) — initial opener not queued',
   no_phone: 'no phone',
-  /* ⛔ COLD WHATSAPP IS UK ONLY (sales_queue_opener's not_a_uk_mobile; India removed 2026-10-15). An Australian mobile
-     lands here too — the words say so rather than calling it "not a mobile". Switching Australia on is Paul's
-     decision (consent rules + a Sydney send window), not a label change. The reason CODE is a stored token: only
-     this wording changed. */
-  not_a_uk_mobile: 'not a UK mobile (cold WhatsApp goes to UK mobiles, and to Malaysia / Singapore mobiles when switched on — not landlines, and not switched on for Australia or other countries)',
-  country_off: 'a Malaysia / Singapore mobile, but that country is switched off for now (not flagged — Paul can switch it on)',
+  /* sales_queue_opener's not_a_uk_mobile (a stored token — only the words change) and country_off. 2026-10-22: one
+     wording for every list (src/lib/phoneCountry.ts) — the old "not switched on for Australia" was stale. */
+  not_a_uk_mobile: NOT_A_MOBILE_WE_MESSAGE_WORDS,
+  country_off: COUNTRY_OFF_WORDS,
   opted_out: 'opted out',
   daily_limit: 'over your daily limit',
   call_campaign: 'in a Call campaign (queue again and confirm to send WhatsApp anyway)',

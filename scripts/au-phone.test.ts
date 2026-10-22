@@ -118,7 +118,9 @@ console.log('\n── cold WhatsApp is NOT widened to Australia; the words are h
   const sqo = read(`supabase/migrations/${latest}`);
   ok(/'not_a_uk_mobile'/.test(sqo) && !/\^61/.test(sqo.slice(sqo.indexOf('function public.sales_queue_opener'))), `the newest sales_queue_opener (${latest}) still refuses anything but a UK mobile (no 61 clause, no 91 clause)`);
   ok(!/\^91/.test(sqo.slice(sqo.indexOf('function public.sales_queue_opener'))), 'and the newest definition has no India (91) alternative');
-  ok(/Australia/.test(QUEUE_SKIP_LABEL.not_a_uk_mobile) && /not a UK mobile/.test(QUEUE_SKIP_LABEL.not_a_uk_mobile) && !/Indian/.test(QUEUE_SKIP_LABEL.not_a_uk_mobile), 'the queue refusal says "not a UK mobile" (no India) and that Australia is not switched on');
+  /* 2026-10-22 (fix/country-refusals): Australia IS a WhatsApp market now — the words say "not a mobile we message" and name
+     Australia among the countries we message (src/lib/countrySkipWords.ts). */
+  ok(/Australian/.test(QUEUE_SKIP_LABEL.not_a_uk_mobile) && /not a mobile we message/.test(QUEUE_SKIP_LABEL.not_a_uk_mobile) && !/Indian/.test(QUEUE_SKIP_LABEL.not_a_uk_mobile), 'the queue refusal says "not a mobile we message" (no India) and names Australia among the countries we message');
   ok(/Australia/.test(LAUNCH_SKIP_TEXT.not_a_uk_mobile) && !/^not a mobile number$/.test(LAUNCH_SKIP_TEXT.not_a_uk_mobile), 'the campaign launch no longer calls an Australian mobile "not a mobile number"');
 }
 

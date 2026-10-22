@@ -187,10 +187,13 @@ console.log('\n── Sales can NOT queue an Indian mobile any more; UK rule unc
   /* 2026-10-14: 20261026090000 re-creates it (the live body + the report-offer template + queued_by_user_id); the market rule is unchanged. */
   /* 2026-10-15: 20261029090000 re-creates it (the live body + the Call-campaign confirm); the market rule is unchanged. */
   /* 2026-10-15: 20261030090000 re-creates it (the live body + 'initial_contact_short' in the allowlist); the market rule is unchanged. */
-  ok(latest === '20261030090000_initial_contact_short.sql', 'the newest sales_queue_opener is the initial_contact_short migration (' + latest + ')');
-  ok(fn.includes("elsif public.mobile_market(v_lead.country, v_pk) is null then v_reason := 'not_a_uk_mobile';")
-    && fn.includes("elsif not public.outreach_channel_on(public.mobile_market(v_lead.country, v_pk), 'whatsapp') then v_reason := 'country_off';"),
+  /* 2026-10-22: 20261123090000 re-creates it (the live body; mobile_market is given phone_market_country(country, phone) so an
+     explicit +44 is UK whatever the label — docs/country-refusals.md). The market rule is otherwise unchanged; India never a market. */
+  ok(latest === '20261123090000_phone_prefix_country.sql', 'the newest sales_queue_opener is the phone-prefix migration (' + latest + ')');
+  ok(fn.includes("elsif public.mobile_market(public.phone_market_country(v_lead.country, v_lead.phone), v_pk) is null then v_reason := 'not_a_uk_mobile';")
+    && fn.includes("elsif not public.outreach_channel_on(public.mobile_market(public.phone_market_country(v_lead.country, v_lead.phone), v_pk), 'whatsapp') then v_reason := 'country_off';"),
     'the one cold test: a mobile in a market whose WhatsApp switch is on');
+  ok(!/\^9|91/.test(m.slice(m.indexOf('function public.phone_market_country'), m.indexOf('comment on function public.phone_market_country'))), 'phone_market_country names only the UK code (no India)');
   ok(read('supabase/migrations/20261025090000_my_sg_markets.sql').includes("when coalesce(_country, 'UK') = 'UK' and _pk ~ '^7[0-9]{9}$' then 'UK'"), '…whose UK half is the old UK test, unchanged');
   ok(!/\^91/.test(fn), 'no India (91) alternative in it');
   for (const g of ["'not_yours'", "'archived'", "'client'", "'not_new'", "'already_contacted'", "'opted_out'", "'daily_limit'", "'no_phone'", "opener_contact_block"]) ok(fn.includes(g), '…every other guard kept: ' + g);
@@ -198,7 +201,8 @@ console.log('\n── Sales can NOT queue an Indian mobile any more; UK rule unc
   const cc = ukm.slice(ukm.toLowerCase().indexOf('create or replace function public.campaign_candidates'));
   ok(!/\^91/.test(cc) && /coalesce\(o\.country, 'UK'\) = 'UK' and public\.phone_key\(o\.phone\) ~ '\^7\[0-9\]\{9\}\$'/.test(cc), 'campaign_candidates "sendable" is UK-only too');
   const sc = read('src/lib/salesCrm.ts');
-  ok(/not_a_uk_mobile: 'not a UK mobile/.test(sc) && !/not a UK or Indian mobile/.test(sc), 'the refusal reads "not a UK mobile" (code not_a_uk_mobile unchanged)');
+  /* 2026-10-22: the words come from src/lib/countrySkipWords.ts (one wording for every list); still no India. */
+  ok(/not_a_uk_mobile: NOT_A_MOBILE_WE_MESSAGE_WORDS/.test(sc) && !/Indian/.test(read('src/lib/countrySkipWords.ts')), 'the refusal reads "not a mobile we message" (code not_a_uk_mobile unchanged, no India)');
   ok(!/Indian/.test(read('src/lib/campaignRules.ts')), 'campaign launch wording has no India either');
 }
 

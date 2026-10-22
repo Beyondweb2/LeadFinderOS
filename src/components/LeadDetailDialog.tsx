@@ -67,7 +67,8 @@ import { pillStatusOf } from '@/lib/leadState';
 import { leadSourceFor } from '@/lib/outreachLeadColumns';
 import { LeadHistoryPanel, LeadHookPanel, LeadWorkPanel, ProspectProfilePanel } from '@/components/LeadCrmPanel';
 import { DialogHero, IconTile, TONE, ToneChip } from '@/components/operator/ui';
-import { Building2, Sparkles } from 'lucide-react';
+import { AlertTriangle, Building2, Sparkles } from 'lucide-react';
+import { phoneCountryMismatch } from '@/lib/phoneCountry';
 import { HeaderNextAction, LeadCallFlow, LoggedLine, LostReasonLine, type LoggedResult } from '@/components/LeadCallFlow';
 import { isAggregatorUrl } from '@/lib/aggregators';
 
@@ -543,6 +544,17 @@ function LeadDetailBody({
               {site && <a href={/^https?:\/\//i.test(site) ? site : `https://${site}`} target="_blank" rel="noopener noreferrer" className="inline-flex min-w-0 max-w-[14rem] items-center gap-1 hover:text-primary"><Globe className="h-3 w-3 shrink-0" /><span className="truncate">{site.replace(/^https?:\/\//i, '').replace(/\/$/, '')}</span></a>}
               {(trade || town) && <span className="inline-flex min-w-0 items-center gap-1"><MapPin className="h-3 w-3 shrink-0" /><span className="truncate">{[trade, town].filter(Boolean).join(' · ')}</span></span>}
             </div>
+          );
+        })()}
+        {/* 2026-10-22 (src/lib/phoneCountry.ts): the number's own code and the lead's country disagree (or the country is
+            blank). Shown only then — one amber line; nothing is changed on the lead. */}
+        {(() => {
+          const mismatch = phoneCountryMismatch(lead.phone, lead.country);
+          if (!mismatch) return null;
+          return (
+            <p className="mt-1 flex items-start gap-1.5 text-[11px] font-medium text-amber-600 dark:text-amber-400" data-testid="workspace-phone-country-mismatch">
+              <AlertTriangle className="mt-px h-3 w-3 shrink-0" />{mismatch.words}
+            </p>
           );
         })()}
 
