@@ -63,3 +63,16 @@ is no longer counted in "no number WhatsApp can reach".
 ## The 70 released leads
 
 Not touched. They are `not_contacted` / `country_off` and need queueing again (by hand or a re-queue) once Australia is on.
+
+## Deployed 2026-10-22 (main `c924edf8`)
+
+- Full gate on the branch: 442/442 suites passed. Merged `--no-ff`; origin/main was unmoved throughout.
+- SQL first: `20261122090000` applied and read back — new rule (`v_systemic`, no trial), switch trigger stamps
+  `whatsapp_off_at`, `set_outreach_country` takes the three settings, auto-pause still not callable by anon / authenticated.
+  All four rows at the defaults (NULL); Australia off, `whatsapp_off_at` 03:51:17 UTC, `off_by` NULL (automatic).
+- Edge: `process-whatsapp-queue` only (the only function reaching `countryHold.ts`; `outreachMarkets.ts` unchanged), live v246,
+  body carries `heldCountryOff` / `country_off_held` / `HELD_PHONE_PREFIX`. Five normal UK sends in the first 10 minutes, no
+  pause. `whatsapp-status` not touched (held).
+- SPA live on app.leadfinderos.com and leadfinderos-next.pages.dev (entry `index-CVTZAl1G.js`; `WhatsAppQueuePanel-2ml9W8Cq.js`
+  has the off note; `whatsNew-CTw5QoWJ.js` has the entry — What's New is its own chunk now, not in the entry).
+- Australia NOT switched on (Paul's action). The 70 leads released this morning are untouched (New / `country_off`).
