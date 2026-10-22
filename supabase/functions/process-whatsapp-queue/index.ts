@@ -1,7 +1,8 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { toWhatsAppDigits } from "../../../src/lib/waNumber.ts";
 import { marketWindowOpen, windowOpenForDigits } from "../../../src/lib/sendWindow.ts";
-import { ABROAD_MARKETS, COUNTRY_OFF, channelOn, heldCountryOff, mobileMarketOf, type Market } from "../../../src/lib/outreachMarkets.ts";
+import { ABROAD_MARKETS, COUNTRY_OFF, channelOn, mobileMarketOf, type Market } from "../../../src/lib/outreachMarkets.ts";
+import { heldCountryOff } from "../../../src/lib/countryHold.ts";
 import { AU_ZONE_COLUMNS, auLeadTz } from "../../../src/lib/auLeadZone.ts";
 import { NOT_A_MOBILE, NOT_A_MOBILE_REASON, templateDestinationRefusal } from "../../../src/lib/whatsAppDestination.ts";
 import { loadCountrySettings, marketAtDailyCap } from "../_shared/country-settings.ts";
@@ -755,7 +756,7 @@ Deno.serve(async (req) => {
     }
     /* The team cap reached: only Australia (its own budget) may still send this tick. */
     const teamCapReached = (sentToday ?? 0) >= DAILY_CAP;
-    /* ⛔ 2026-10-22 (src/lib/outreachMarkets.ts heldCountryOff): a lead whose country's WhatsApp is OFF is held like the
+    /* ⛔ 2026-10-22 (src/lib/countryHold.ts heldCountryOff): a lead whose country's WhatsApp is OFF is held like the
        window and the cap — not chosen, nothing written — and sends once the country is switched back on. */
     const leadSendable = (r: QRow) => {
       if (heldCountryOff(countrySettings, rowMarket(r))) return false;

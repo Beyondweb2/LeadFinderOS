@@ -14,7 +14,8 @@ import {
   COUNTRY_AUTO_OFF_DEFAULTS, COUNTRY_SYSTEMIC_CODES, countryAutoOffRule, countryAutoOffRuleWords, countryAutoPauseVerdict,
   type CountrySendOutcome,
 } from '../src/lib/countryAutoPause.ts';
-import { countrySettingsFrom, heldCountryOff, mobileMarketOf } from '../src/lib/outreachMarkets.ts';
+import { countrySettingsFrom, mobileMarketOf } from '../src/lib/outreachMarkets.ts';
+import { heldCountryOff } from '../src/lib/countryHold.ts';
 import { countryOffChip, countryOffNote, deriveQueue, offTimeWords, rowCountryOff, type QueueRow } from '../src/lib/whatsappQueueView.ts';
 
 const ROOT = path.resolve(import.meta.dirname, '..');

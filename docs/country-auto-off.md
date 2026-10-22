@@ -41,7 +41,7 @@ cleared on switch-on. Australia's 03:51 auto-off was back-filled.
 
 ## An off country holds its queue
 
-`heldCountryOff` (`src/lib/outreachMarkets.ts`): a queued lead whose country (MY / SG / AU) is off — by hand or
+`heldCountryOff` (`src/lib/countryHold.ts`, a leaf so `outreachMarkets.ts` did not change): a queued lead whose country (MY / SG / AU) is off — by hand or
 automatically — is not chosen and nothing is written; it sends when the country is switched back on, through every
 send-time guard as usual (suppression, phone history, window, cap, pace). The drip also leaves those countries out of its
 queue read by stored prefix (+60 / +65 / +61 — every abroad lead was stored that way on 22 Oct) so a long held queue

@@ -7,6 +7,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Callout } from '@/components/operator/ui';
 import { useCountrySettings } from '@/hooks/useCountrySettings';
 import { countryAutoOffRuleWords, countryAutoPauseHeadline } from '@/lib/countryAutoPause';
+import type { CountryOffSetting } from '@/lib/countryHold';
 import { SMS_SENDER_WORDS, checkCountryValue, hhmm, MARKET_NAME, MAX_COUNTRY_DAILY_CAP, WHATSAPP_ONLY_MARKETS, PER_LEAD_ZONE_MARKETS, type Market, type CountrySetting } from '@/lib/outreachMarkets';
 
 /* ══ SENDING BY COUNTRY — ADMIN ONLY (2026-10-14, Malaysia / Singapore; src/lib/outreachMarkets.ts) ═════════════════
@@ -131,7 +132,7 @@ export function CountrySendingSettings() {
                   </div>
                 )}
                 {m !== 'UK' && (
-                  <p className="text-[11px] text-muted-foreground" data-testid={`country-${m}-auto-off-rule`}>{countryAutoOffRuleWords(s)}</p>
+                  <p className="text-[11px] text-muted-foreground" data-testid={`country-${m}-auto-off-rule`}>{countryAutoOffRuleWords(s as CountryOffSetting)}</p>
                 )}
                 {PER_LEAD_ZONE_MARKETS.has(m) && (
                   <p className="text-[11px] text-muted-foreground" data-testid={`country-${m}-zone-note`}>

@@ -24,7 +24,8 @@
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 import type { Tone } from '@/components/salesDash/primitives';
 import { coldWhatsAppVerdict, marksNoMobile } from './coldWhatsAppEligibility';
-import { heldCountryOff, MARKET_NAME, mobileMarketOf, PER_LEAD_ZONE_MARKETS, type CountrySetting, type CountrySettings, type Market } from './outreachMarkets';
+import { MARKET_NAME, mobileMarketOf, PER_LEAD_ZONE_MARKETS, type CountrySettings, type Market } from './outreachMarkets';
+import { heldCountryOff, type CountryOffSetting } from './countryHold';
 import { countryAutoPauseHeadline } from './countryAutoPause';
 import { isColdOutreachTemplate } from './coldOutreach';
 import { auLeadTz, AU_ZONE_COLUMNS_SALES } from './auLeadZone';
@@ -138,7 +139,7 @@ export function offTimeWords(iso: string, now = new Date(), timeZone?: string): 
 }
 
 /** The tab's note for a country that is off, or null when it is on (or the UK). */
-export function countryOffNote(m: Market, s: CountrySetting | null | undefined, waiting: number, now = new Date(), timeZone?: string):
+export function countryOffNote(m: Market, s: CountryOffSetting | null | undefined, waiting: number, now = new Date(), timeZone?: string):
   { title: string; why: string; detail: string | null } | null {
   if (m === 'UK' || s?.whatsapp_on === true) return null;
   const name = MARKET_NAME[m];
