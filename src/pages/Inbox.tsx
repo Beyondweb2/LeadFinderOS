@@ -71,6 +71,8 @@ import { ClientInfoNeededHelper } from '@/components/ClientInfoNeededHelper';
 import { NEED_PARAM, parseNeedParam } from '@/lib/clientMissingInfo';
 import { warmStage } from '@/lib/warmStage';
 import { LeadOwnerControl } from '@/components/LeadOwnerControl';
+import { useSalesActions, useTeamDirectory } from '@/hooks/useSalesCrm';
+import { COUNTRY_ALL, INBOX_COUNTRY_OPTIONS, VIEW_ME, VIEW_UNASSIGNED, countryInView, inboxIsReadOnly, ownerInView, type InboxCountryFilter } from '@/lib/inboxView';
 import { useLeadPermissions } from '@/hooks/useLeadPermissions';
 import { maySetStatus } from '@/lib/access';
 import { leadRpc, salesPatchLead } from '@/lib/leadRpc';
@@ -543,6 +545,20 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
   // Status filter (null = all statuses). Composes with the campaign filter (AND).
   // Unassigned stays visible regardless (never hidden by a filter).
   const [statusFilter, setStatusFilter] = usePersistedState<string | null>(pk('inbox-status-filter'), null, { tier: 'session', scope: user?.id });
+  /* ⛔ WHOSE INBOX (2026-10-22, src/lib/inboxView.ts): opens on MY leads; the last choice is remembered on this device (tier 'local').
+     A salesperson's database read holds only their own leads, so their choice is always "Me". Another person's inbox is read-only for a
+     non-admin (the banner says so); an admin can send from any inbox. */
+  const [ownerChoice, setOwnerChoice] = usePersistedState<string>(pk('inbox-owner-view'), VIEW_ME, { tier: 'local', scope: user?.id });
+  const [countryFilter, setCountryFilter] = usePersistedState<InboxCountryFilter>(pk('inbox-country-filter'), COUNTRY_ALL, { tier: 'local', scope: user?.id });
+  const team = useTeamDirectory();
+  const salesActions = useSalesActions();
+  const teamViewable = useMemo(() => (team.data ?? []).filter((m) => m.status === 'active' && m.role && m.user_id !== user?.id), [team.data, user?.id]);
+  /* A remembered person who has since left the team (or a non-admin) falls back to Me — never to an empty screen. */
+  const ownerView = !isAdmin ? VIEW_ME
+    : ownerChoice === VIEW_ME || ownerChoice === VIEW_UNASSIGNED || !team.isSuccess || teamViewable.some((m) => m.user_id === ownerChoice) ? ownerChoice : VIEW_ME;
+  const viewedName = ownerView === VIEW_UNASSIGNED ? 'the unassigned' : `${team.byId.get(ownerView)?.display_name ?? 'someone else'}'s`;
+  const readOnlyView = inboxIsReadOnly(ownerView, isAdmin);
+  const [assigningToMe, setAssigningToMe] = useState(false);
   // Not-interested conversations are hidden by default (dead prospects); a toggle
   // reveals them. A new inbound reply flips the lead back to 'replied' server-side
   // (whatsapp-inbound), so re-engaging conversations reappear on their own.
@@ -729,12 +745,19 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
     const lc = allLogged.data?.get(l.id);
     return salesStateOf({ ...l, lastLogged: lc ? { outcome: lc.outcomeValue ?? '', at: lc.at, reached: lc.everReached } : null });
   }, [leadByIdForState, allLogged.data]);
+  const inScope = useCallback((c: WaConversation) => {
+    const lead = c.leadId ? leadByIdForState.get(c.leadId) : undefined;
+    return !!lead && ownerInView(ownerView, lead.assigned_to_user_id, user?.id) && countryInView(countryFilter, lead.country, c.phone);
+  }, [leadByIdForState, ownerView, user?.id, countryFilter]);
   // The list shows fetched conversations; a just-started (synthetic) one is merged in
   // until its first message lands (after which the real row shares its key).
   const list = useMemo(() => {
-    const base = synthetic && !conversations.some((c) => c.key === synthetic.key)
-      ? [synthetic, ...conversations]
-      : conversations;
+    /* Whose inbox + which country (src/lib/inboxView.ts), before every other filter. The Unread count, the Show counts and the
+       sidebar badge all come from this same list. A thread whose lead is not in the read has no owner to match and drops out. */
+    const scoped = conversations.filter(inScope);
+    const base = synthetic && !scoped.some((c) => c.key === synthetic.key)
+      ? [synthetic, ...scoped]
+      : scoped;
     // Campaign + status filters both keep Unassigned ALWAYS visible (never hide the
     // mis-routed/unknown-sender bucket), and compose as AND for assigned convos.
     const byCampaign = !campaignFilter
@@ -775,7 +798,7 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
       ? byStatus
       : byStatus.filter((c) => c.leadStatus !== 'not_interested' && c.leadStatus !== 'closed');
     return visible.filter((c) => !removedKeys.has(c.key));
-  }, [conversations, synthetic, campaignFilter, statusFilter, showHidden, removedKeys, hookState, contactState, listStageOf]);
+  }, [conversations, synthetic, inScope, campaignFilter, statusFilter, showHidden, removedKeys, hookState, contactState, listStageOf]);
 
   /* Search narrows the already-filtered list. Case-insensitive partial match on the business name
      (c.label — for a lead that IS the business name; for an unassigned convo it is "+<phone>"),
@@ -839,7 +862,7 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
      cover every conversation; "Show more" draws the next 150; the open conversation is always drawn. */
   const LIST_PAGE = 150;
   const [listLimit, setListLimit] = useState(LIST_PAGE);
-  useEffect(() => { setListLimit(LIST_PAGE); }, [searchTerm, campaignFilter, quickFilter, naWhen, naKind, listSort]);
+  useEffect(() => { setListLimit(LIST_PAGE); }, [searchTerm, campaignFilter, quickFilter, naWhen, naKind, listSort, ownerView, countryFilter]);
   /* ⛔ THE OPEN CONVERSATION IS ALWAYS IN THE LIST (2026-09-30, Paul: "do not hide an explicitly
      deep-linked conversation merely because the current filters exclude it"). It is drawn at the top,
      marked as outside the filters, from the unfiltered list — the filters are left as they were. */
@@ -854,9 +877,10 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
 
   // How many not_interested conversations the current view is hiding (for the toggle).
   const hiddenCount = useMemo(() => {
-    const base = campaignFilter ? conversations.filter((c) => c.campaignId === campaignFilter || c.unassigned) : conversations;
+    const scoped = conversations.filter(inScope);
+    const base = campaignFilter ? scoped.filter((c) => c.campaignId === campaignFilter || c.unassigned) : scoped;
     return base.filter((c) => c.leadStatus === 'not_interested' || c.leadStatus === 'closed').length;
-  }, [conversations, campaignFilter]);
+  }, [conversations, inScope, campaignFilter]);
 
   // Set a conversation's lead status from the Inbox (two-way sync with Outreach).
   // Manual override — no forward-only guard — EXCEPT a confirm when moving a paying
@@ -1005,6 +1029,21 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
   const teamTextTemplates = useMemo(() => templateGroups.team.filter((t) => t.template_type === 'text'), [templateGroups]);
   const myTextTemplates = useMemo(() => templateGroups.mine.filter((t) => t.template_type === 'text'), [templateGroups]);
   const activeLead = active?.leadId ? leads.find((l) => l.id === active.leadId) : undefined;
+  /* "Assign to me" on the open conversation's lead: the admin's assign_lead_with_brief to themself, or a salesperson's atomic claim_lead (an unowned lead only). The server decides; a refusal is shown, not hidden. */
+  const assignActiveToMe = async () => {
+    const leadId = active?.leadId;
+    if (!leadId || !user?.id) return;
+    setAssigningToMe(true);
+    try {
+      const r = (isAdmin ? await salesActions.assign.mutateAsync({ leadId, to: user.id }) : await salesActions.claim.mutateAsync({ leadId })) as { ok: boolean; error?: string; unchanged?: boolean };
+      if (!r.ok) { toast({ title: 'Not assigned', description: r.error ?? 'The server refused.', variant: 'destructive' }); return; }
+      notifyLeadChanged(leadId);
+      void refetch();
+      toast({ title: r.unchanged ? 'Already yours' : 'Assigned to you', description: 'It is in your inbox now.' });
+    } catch (e) {
+      toast({ title: "Couldn't assign", description: (e as Error)?.message ?? 'Failed', variant: 'destructive' });
+    } finally { setAssigningToMe(false); }
+  };
   // The canonical sales state for the open thread's lead (the same reading Focus Mode and the popup draw).
   const activeSales = useLeadSalesState(active?.leadId ?? '');
   const activeBusinessName = activeLead?.business_name;
@@ -2061,6 +2100,27 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
             <Button size="sm" onClick={() => setNewOpen((v) => !v)}><Plus className="mr-1.5 h-4 w-4" /> New</Button>
           </div>
         </div>
+        {/* WHOSE INBOX + WHICH COUNTRY (src/lib/inboxView.ts). Opens on Me. Only an admin can read other people's leads, so a salesperson sees Me and the country only. */}
+        <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Whose inbox and which country">
+          {isAdmin && (
+            <Select value={ownerView} onValueChange={setOwnerChoice}>
+              <SelectTrigger className={cn('h-9 w-[210px]', ownerView !== VIEW_ME && 'border-primary/50 text-primary')} aria-label="Viewing" data-testid="inbox-viewing-select">
+                <span className="truncate"><span className="mr-1.5 text-muted-foreground">Viewing:</span>{ownerView === VIEW_ME ? 'Me' : ownerView === VIEW_UNASSIGNED ? 'Unassigned' : team.byId.get(ownerView)?.display_name ?? 'Someone'}</span>
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={VIEW_ME}>Me</SelectItem>
+                {teamViewable.map((m) => <SelectItem key={m.user_id} value={m.user_id}>{m.display_name}</SelectItem>)}
+                <SelectItem value={VIEW_UNASSIGNED}>Unassigned</SelectItem>
+              </SelectContent>
+            </Select>
+          )}
+          <Select value={countryFilter} onValueChange={(v) => setCountryFilter(v as InboxCountryFilter)}>
+            <SelectTrigger className={cn('h-9 w-[190px]', countryFilter !== COUNTRY_ALL && 'border-primary/50 text-primary')} aria-label="Country" data-testid="inbox-country-select">
+              <span className="truncate"><span className="mr-1.5 text-muted-foreground">Country:</span>{INBOX_COUNTRY_OPTIONS.find((o) => o.value === countryFilter)?.label.replace('All countries', 'All')}</span>
+            </SelectTrigger>
+            <SelectContent>{INBOX_COUNTRY_OPTIONS.map((o) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}</SelectContent>
+          </Select>
+        </div>
         <div className="grid grid-cols-2 gap-2 md:grid-cols-6 xl:flex xl:flex-nowrap xl:items-center" role="group" aria-label="Filter conversations">
           {/* The views that were the tab strip (Unread, Waiting on us/them, Needs approving, Needs you) — one dropdown, counts beside each. */}
           <Select value={quickFilter} onValueChange={(v) => setQuickFilter(v as InboxQuickFilter)}>
@@ -2110,6 +2170,19 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
       {(sms ? smsQueueInfo.data?.paused : queueState?.paused) && (
         <div className={cn('flex items-center gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs font-medium text-amber-700 dark:text-amber-300 md:shrink-0', active && 'hidden md:flex')} role="status">
           <PauseCircle className="h-4 w-4 shrink-0" />{sms ? 'The text queue is paused.' : QUEUE_PAUSED_LINE} Replies you send by hand still go out.
+        </div>
+      )}
+
+      {/* Outside the filter block on purpose: on a phone that block hides while a thread is open, and this must still show. */}
+      {ownerView !== VIEW_ME && (
+        <div className="flex flex-wrap items-center gap-2 rounded-lg border md:shrink-0 border-sky-500/40 bg-sky-500/10 px-3 py-2 text-xs font-medium text-sky-800 dark:text-sky-200" role="status" data-testid="inbox-viewing-banner">
+          <Eye className="h-4 w-4 shrink-0" />
+          <span>You're viewing {viewedName} inbox.{readOnlyView ? ' Read-only: you can look, not reply.' : ' You can reply from here.'}</span>
+          {active?.leadId && (
+            <Button size="sm" variant="outline" className="ml-auto h-7 text-xs" disabled={assigningToMe} onClick={() => void assignActiveToMe()}>
+              {assigningToMe ? 'Assigning…' : 'Assign to me'}
+            </Button>
+          )}
         </div>
       )}
 
@@ -2645,6 +2718,11 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
               </div>
 
               {/* Reply box */}
+              {readOnlyView ? (
+                <div className="border-t border-border p-3 text-xs text-muted-foreground" data-testid="inbox-read-only-note">
+                  Read-only — this is {viewedName} inbox. Use <span className="font-medium text-foreground">Assign to me</span> above to take this lead and reply.
+                </div>
+              ) : (
               <div className="border-t border-border p-2.5">
                 {/* AI HANDLES REPLIES: the open draft / hand-over for this conversation. Never sends by itself. */}
                 {activeAi && (
@@ -2793,6 +2871,7 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
                   </div>
                 )}
               </div>
+              )}
             </>
           )}
         </Card>
