@@ -22,6 +22,21 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-22-inbox-owner-and-country', date: '2026-10-22', title: 'The Inbox opens on your own leads, with a country filter', audience: 'all',
+    body: 'The Inbox now shows only the leads assigned to you, and the sidebar number counts the same ones. Admins can switch whose inbox they are looking at, and anyone can filter by country.',
+    report: {
+      added: [
+        'A "Viewing" choice at the top of the Inbox (admins): Me, each team member, or Unassigned. Your last choice is remembered on this device.',
+        'A banner saying whose inbox you are viewing, with an "Assign to me" button for the open conversation.',
+        'A Country filter: All, UK, Malaysia, Singapore, Australia. It uses the lead country, or the number prefix when the country is blank.',
+      ],
+      changed: [
+        'The Inbox opens on your own leads instead of everyone. The unread number in the sidebar counts only those.',
+        'The inbox of another person is read-only for anyone who is not an admin. Admins can reply from any inbox.',
+      ],
+      removed: [],
+      effect: 'You see your own work first, and the number beside Inbox is yours. Nothing was sent or changed on any lead.',
+    } },
   { id: '2026-10-22-pitch-owed-and-queued-sends', date: '2026-10-22', title: 'First-reply pitch fixed, and queued WhatsApp sends now go', audience: 'all',
     body: 'A first reply now gets the proper first-reply pitch even when the opener was marked failed but reached them. Messages queued for the morning now actually send, and a send that is refused says why.',
     report: {
