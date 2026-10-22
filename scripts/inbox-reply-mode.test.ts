@@ -109,7 +109,7 @@ console.log('7. the wiring');
   ok(/evidenceComplete: a\.why\.evidence\?\.complete === true/.test(FN) && /theirMessages: theirMessagesSinceUs\(a\.input\.thread\)/.test(FN), 'the worker passes the evidence and their messages to the rule');
   ok(/complete: v\.state === "ready" && evidenceComplete\(v\.audit, site\)/.test(FN) && /site: found\.check\.state/.test(FN), 'every draft records whether its evidence was complete');
   ok(/action === "set_mode"/.test(FN) && /ai_reply_mode: raw/.test(FN) && /INBOX_REPLY_MODES as readonly string\[\]\)\.includes\(raw\)/.test(FN), 'set_mode stores only a known mode (admin only, handleSettings)');
-  ok(/if \(actor\.role !== "admin"\) return json\(\{ ok: false, error: "admin_only" \}, 403\);\s+if \(set\)/.test(FN), '…and only for an admin');
+  ok(/if \(actor\.role !== "admin"\) return json\(\{ ok: false, error: "admin_only" \}, 403\);[\s\S]{0,400}if \(set === "audit"\)[\s\S]{0,400}\} else if \(set\)/.test(FN), '…and only for an admin (the audit switch too)');
   const DRAIN = strip(read('supabase/functions/inbox-scheduled-send/index.ts'));
   ok(/theirMessages: theirMessagesSinceUs\(thread\)/.test(DRAIN) && /recent\.error\) return "ai_facts_unreadable"/.test(DRAIN), 'the send-time check reads their messages again (unreadable = dropped)');
   const UI = read('src/components/InboxReplyModeControl.tsx');

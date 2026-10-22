@@ -42,6 +42,7 @@ Moved verbatim from CLAUDE.md §10 on 2026-10-15. Add a row here when you write 
 | Why an architecture rule exists — the reasoning | `docs/architecture-rules.md` (§6) |
 | The full open-problems record, incl. the WhatsApp cap model and the auth matrix | `docs/open-problems.md` (§8) |
 | The long code map, the playbook documents | `docs/code-map.md` (§9) |
+| An audit score / named count shown anywhere in the Inbox, the Visible flag counts, the drafter fallback count | `docs/audit-score-one-ruler.md` |
 | The measured findings in detail | `docs/findings.md` (§5) |
 | How things stood on 2026-09-09, the harness repair | `docs/state-of-play-2026-09-09.md` (§0) |
 | The original §2 / §3 / §7 / §10 text | `docs/how-paul-works.md`, `docs/discipline-checklist.md`, `docs/parked-branches.md`, `docs/other-docs.md` |

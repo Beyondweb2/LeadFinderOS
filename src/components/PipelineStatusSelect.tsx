@@ -85,6 +85,15 @@ function titleOf(status: string | null | undefined, stage: SalesStateView | null
   return stage && stage.label !== pipe ? `${pipe} · sales stage: ${stage.label}${stage.detail ? ` (${stage.detail})` : ''}` : pipe;
 }
 
+/** The status as small plain text, no pill and no menu (the Inbox list row, 2026-10-22: the menu lives in the thread header). */
+export function OneStatusText({ status, stage, className }: { status: string | null | undefined; stage?: SalesStateView | null; className?: string }) {
+  return (
+    <span className={className ?? 'text-[11px] text-muted-foreground'} title={titleOf(status, stage)} data-testid="one-status-text">
+      {pipelineStatusLabel(pillStatusOf(status, stage))}
+    </span>
+  );
+}
+
 /** The ONE pill, read-only (a row without edit rights, the phone card, a disabled Inbox row). */
 export function OneStatusPill({ status, stage, compact }: { status: string | null | undefined; stage?: SalesStateView | null; compact?: boolean }) {
   return (

@@ -159,7 +159,7 @@ export const INBOX_QUICK_FILTERS = [
   /* 2026-09-30: the other side of the same fact — we wrote last and they have not answered. */
   { value: 'waiting_them', label: 'Waiting on them' },
   /* 2026-10-11: AI handles replies (src/lib/aiReplyDraft.ts) — a WhatsApp conversation with an AI draft waiting for approval. */
-  { value: 'needs_approving', label: 'Needs approving' },
+  { value: 'needs_approving', label: 'Needs approval' },
   /* 2026-10-20: a reply the drafter flagged for a person (src/lib/replyMove.ts NEEDS_YOU_LABELS). WhatsApp only. */
   { value: 'needs_you', label: 'Needs you' },
   /* 2026-10-21: leads AI already names (the Visible flag, src/lib/visibleFlag.ts). Both roles, both channels. */

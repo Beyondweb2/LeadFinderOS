@@ -196,7 +196,9 @@ await (async () => {
   const card = strip(readFileSync(resolve(root, 'src/components/HookVisibilityCard.tsx'), 'utf8') + readFileSync(resolve(root, 'src/components/HookVisibilityView.tsx'), 'utf8'));
   ok(!/Google AI \d+\/3\b|asked Google AI|Google AI (?:missed|didn['’]t|did not|named you)/.test(card), 'E: the Inbox AI visibility card never says "Google AI" for Gemini');
   const inbox = readFileSync(resolve(root, 'src/pages/Inbox.tsx'), 'utf8');
-  ok(inbox.includes('Gemini {geminiNamed}/{geminiAnswers}') && !inbox.includes('Google AI {geminiNamed}'), 'E: the Inbox list pill reads "Gemini n/m"');
+  /* 2026-10-22: the Gemini pill is the one score line (src/components/InboxAttention.tsx), which names Gemini as Gemini. */
+  const line = readFileSync(resolve(root, 'src/components/InboxAttention.tsx'), 'utf8');
+  ok(/label: 'Gemini', named: s\.gemini/.test(line) && /label: 'Google AI', named: s\.googleAi/.test(line) && !inbox.includes('Google AI {geminiNamed}'), 'E: the Inbox score line reads "Gemini n/m" for Gemini, "Google AI" only for the AI overview');
   const playbook = strip(readFileSync(resolve(root, 'src/lib/coldCallPlaybook.ts'), 'utf8'));
   ok(!/Google AI \d+\/3\b|asked Google AI|Google AI (?:missed|didn['’]t|did not|named you)/.test(playbook), 'E: the cold-call playbook script says Gemini, never "Google AI" (2026-10-13)');
 }

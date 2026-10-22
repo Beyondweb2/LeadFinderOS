@@ -54,23 +54,23 @@ console.log('3. the Inbox list draws ConversationRow, and the row reads nothing 
   ok(rowSrc.length > 500, 'ConversationRow is memo(…, sameRowProps)');
   ok(/shownList\.map\(\(c\) => \(\n\s+<ConversationRow\n\s+key=\{c\.key\}/.test(inbox), 'the list maps every shown conversation to ConversationRow');
   ok(!/\b(activeKey|stateByKey|savingStatusKey|hookSelected|bulkSelected|setActiveKey|ai\.forPhone)\b/.test(rowSrc), 'the row closes over no page state (everything is a prop)');
-  ok(/st=\{stateByKey\.get\(c\.key\)\}/.test(inbox) && /aiRow=\{ai\.forPhone\(c\.phone\)\}/.test(inbox), 'state and AI draft are read per row by the page, exactly as before');
+  ok(/st=\{stateByKey\.get\(c\.key\)\}/.test(inbox) && /\{\.\.\.rowAttention\(c\)\}/.test(inbox), 'state and the one attention pill are read per row by the page (the pill as words, compared by value)');
   ok(/clockTick=\{clockTick\}/.test(inbox), 'the minute clock reaches the row');
   ok(/const openConversation = useCallback\(\(key: string\) => rowHandlersRef\.current\.setActiveKey\(key\), \[\]\)/.test(inbox)
-    && /const setStatusFromRow = useCallback\(\(c: WaConversation, status: PipelineStatus\) => rowHandlersRef\.current\.handleSetStatus\(c, status\), \[\]\)/.test(inbox)
     && /rowHandlersRef\.current = \{ setActiveKey, handleSetStatus \};/.test(inbox), 'row callbacks are stable and always call the newest handler');
   ok(/const toggleHookSelect = useCallback\(/.test(inbox) && /const toggleBulkSelect = useCallback\(/.test(inbox), 'the two select toggles are stable');
-  ok(rowSrc.includes('onValueChange={(status) => handleSetStatus(c, status)}') && rowSrc.includes('stage={listStageOf(c.leadId)}'), 'the status pill keeps its one handler and its one stage');
+  /* 2026-10-22: the row shows the status as text; the menu lives only in the thread header. */
+  ok(!rowSrc.includes('<PipelineStatusSelect') && rowSrc.includes('<OneStatusText status={c.leadStatus} stage={listStageOf(c.leadId)}'), 'the row shows the status as text, with its one stage; no menu on the row');
 }
 
-console.log('4. the Gemini counts: one call, same view, paged fallback');
+console.log('4. the counts: no separate counting reads any more (2026-10-22) — the one stored score rides on the audits read');
 {
   const hook = read('src/hooks/useInbox.ts');
   const sql = read('supabase/migrations/20261102090000_inbox_gemini_signals.sql');
-  ok(/\.rpc\('inbox_gemini_signals'\)/.test(hook), 'the Inbox asks inbox_gemini_signals()');
-  ok(/sb\.from\('audit_gemini_signal'\)\.select\('audit_id, lead_id, gemini_answers, gemini_named'\)/.test(hook), 'the paged view read stays as the fallback');
-  ok(/optionalInboxRows<InboxData\['geminiSignals'\]\[number\]>\(fetchGeminiSignals\(\)\)/.test(hook), 'a failure still degrades to "no pill", never a wrong one');
-  ok(/security invoker/.test(sql) && !/security definer/i.test(sql), 'the function runs as the caller (RLS applies), like the view');
+  ok(!/\.rpc\('inbox_gemini_signals'\)/.test(hook) && !/\.rpc\('inbox_engine_signals'\)/.test(hook), 'the Inbox no longer asks inbox_gemini_signals() / inbox_engine_signals() (they disagreed with the card)');
+  ok(/ai_audit_runs\(id, status, run_number, created_at, mention_rate, hook_score, score_dirty_at,/.test(hook), 'the score comes with the audits read (every audit refresh refreshes it)');
+  ok(/const AUDIT_SELECTS = \[AUDIT_SELECT, AUDIT_SELECT_NO_SCORE\] as const;/.test(hook), 'without the score columns (deploy order) the read degrades to no score, never a wrong one');
+  ok(/security invoker/.test(sql) && !/security definer/i.test(sql), 'the old function (kept, unused) still runs as the caller');
   ok(/from public\.audit_gemini_signal s;/.test(sql), 'it reads the same view, nothing else');
   ok(/revoke all on function public\.inbox_gemini_signals\(\) from public, anon;/.test(sql) && /grant execute on function public\.inbox_gemini_signals\(\) to authenticated;/.test(sql), 'signed-in only');
 }

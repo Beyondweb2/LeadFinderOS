@@ -44,7 +44,8 @@ console.log("\n── one pill, every screen ──");
 {
   ok(/<LeadStateStrip leadId=\{lead\.id\}/.test(read("src/components/LeadDetailDialog.tsx")) && /next=\{<span[^\n]*<HeaderNextAction leadId=\{lead\.id\} onEdit=\{\(\) => setNextOpen\(true\)\} \/>/.test(read("src/components/LeadDetailDialog.tsx")) && /\{status\}\s*\{next\}/.test(read("src/components/LeadStateStrip.tsx")), "popup: the next action above the tabs, beside the status; tap → the one editor (compact since 2026-10-06)");
   const inbox = read("src/pages/Inbox.tsx");
-  ok(/<NextActionPill lead=\{leadByIdForState\.get\(c\.leadId\)\} size="xs"/.test(inbox), "Inbox list: a small pill on every row that has one");
+  /* 2026-10-22 (Paul): the list row shows four things only; the next action lives in the thread header (below). */
+  ok(!/<NextActionPill lead=\{leadByIdForState\.get\(c\.leadId\)\}/.test(inbox), "Inbox list: no next-action pill on the row (the row shows four things only)");
   ok(/<NextActionEditor lead=\{activeLead\} variant="pill" \/>/.test(inbox), "Inbox header: the one Next Action, shown and set in place (2026-10-02, replacing Find email)");
   ok(/next_action, next_action_date, next_action_time, next_action_note/.test(read("src/hooks/useInbox.ts")), "…and the Inbox reads the note (and the time), so the header pill carries it");
   ok(/onlyFollowUp/.test(read("src/components/ConvStateChip.tsx")), "the Inbox chip no longer repeats \"Follow-up due\" beside the pill");

@@ -97,14 +97,15 @@ console.log('4. the drafter tags, never writes a status; Visible comes before an
   ok((FN.match(/VISIBLE_NO_PITCH_ERROR, detail: VISIBLE_NO_PITCH_DETAIL/g) ?? []).length === 2, 'Draft reply and Regenerate refuse a pitch on a Visible lead');
   ok(/rpc\("apply_lead_visible"/.test(FN) && !/ai_visible_at:/.test(FN), 'the flag is written only through apply_lead_visible');
   ok(/x-ai-reply-drafts": "2026-10-(?:21[h-z]|2[2-9][a-z]|3[01][a-z])-[a-z-]+"/.test(FN), 'deploy marker bumped (this release or a later one)');
-  ok(/visible_rule, visible_min_share/.test(FN) && /isVisible\(visibleCounts\(rows \?\? \[\]\), vs\.rule, vs\.share\)/.test(FN), 'the tick judges with the rule AND the threshold setting');
+  /* 2026-10-22: judged on the ONE stored score (the card's numbers, src/lib/auditScore.ts). */
+  ok(/visible_rule, visible_min_share/.test(FN) && /isVisible\(visibleCountsOf\(picked\.score\), vs\.rule, vs\.share\)/.test(FN), 'the tick judges with the rule AND the threshold setting, on the one stored score');
 }
 
 console.log('5. the Inbox: chip, Show filter, setting');
 {
   ok(INBOX_QUICK_FILTERS.some((q) => q.value === 'visible' && q.label === 'Visible'), '"Visible" is in the Show filter');
   ok(passesQuickFilter('visible', { unread: false, waitingSinceMs: null, visible: true }) && !passesQuickFilter('visible', { unread: false, waitingSinceMs: null }), 'the filter keeps only Visible leads');
-  ok(/<EngineChips scores=\{c\.engineScores\} visible=\{c\.visible\} \/>/.test(INBOX) && /\{active\.visible && <VisibleChip \/>\}/.test(INBOX), 'the chip on the row and in the thread');
+  ok(/<ScoreLine score=\{auditScore\} visible=\{c\.visible\}/.test(INBOX) && /<ScoreLine score=\{active\.auditScore\} visible=\{active\.visible\} \/>/.test(INBOX), 'the Visible tag on the row and in the thread (on the score line)');
   ok(/<InboxVisibleRuleControl \/>/.test(SETTINGS), 'the rule is a setting in Inbox Settings');
 }
 

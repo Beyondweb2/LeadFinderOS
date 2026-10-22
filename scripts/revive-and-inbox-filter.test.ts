@@ -68,7 +68,7 @@ ok(inbox.includes('byCampaign.filter((c) => shownStatusMatches(statusFilter, { s
 ok(!inbox.includes('c.leadStatus === statusFilter'), '…not the stored status');
 ok(inbox.includes('const allLogged = useAllLoggedContacts();') && !inbox.includes('useLastLoggedContacts(listLeadIds)'), '…with every logged contact (not only the shown rows — the filter decides which rows are shown)');
 ok(inbox.indexOf('const listStageOf = useCallback(') < inbox.indexOf('const list = useMemo(() => {'), '…read before the list is filtered');
-ok(/<PipelineStatusSelect value=\{c\.leadStatus\} stage=\{listStageOf\(c\.leadId\)\}/.test(inbox), 'the list pill reads the same stage as the filter');
+ok(/<OneStatusText status=\{c\.leadStatus\} stage=\{listStageOf\(c\.leadId\)\}/.test(inbox), 'the list status (text since 2026-10-22) reads the same stage as the filter');
 const table = read('src/components/OutreachTable.tsx');
 ok(table.includes('result = result.filter((lead) => shownStatusMatches(statusFilter, lead, rowSalesState(lead)));'), 'Outreach uses the same match (one rule, two pages)');
 

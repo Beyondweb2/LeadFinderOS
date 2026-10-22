@@ -104,14 +104,15 @@ ok(/if \(!serviceWindowState\(d\.inbound_at\)\.open\) return json\(\{ ok: false,
 ok(/STOP_REASONS\.has\(d\.reason/.test(FN) && /error: "suppressed"/.test(FN), 'claim refuses a stop and a suppressed number');
 
 console.log('5. the "Needs approving" filter');
-ok(INBOX_QUICK_FILTERS.some((x) => x.value === 'needs_approving' && x.label === 'Needs approving'), 'the filter exists');
+ok(INBOX_QUICK_FILTERS.some((x) => x.value === 'needs_approving' && x.label === 'Needs approval'), 'the filter exists');
 ok(passesQuickFilter('needs_approving', { unread: false, waitingSinceMs: 1, needsApproving: true }) && !passesQuickFilter('needs_approving', { unread: true, waitingSinceMs: 1 }), 'it keeps only conversations with a draft to approve');
 ok(INBOX.includes("INBOX_QUICK_FILTERS.filter((f) => (f.value !== 'needs_approving' && f.value !== 'needs_you') || aiOn)"), 'Needs approving and Needs you: WhatsApp only (hidden on the SMS tab)');
 ok(INBOX_QUICK_FILTERS.some((x) => x.value === 'needs_you' && x.label === 'Needs you') && passesQuickFilter('needs_you', { unread: false, waitingSinceMs: null, needsYou: true }) && !passesQuickFilter('needs_you', { unread: true, waitingSinceMs: 1 }), 'the Needs you filter keeps only flagged conversations');
-ok(/NEEDS YOU SORTS TO THE TOP/.test(INBOX) && /data-testid="needs-you-reason"/.test(INBOX), 'Needs you sorts to the top and shows its reason on the row');
-/* The list row is the memoised ConversationRow (2026-10-16, speed): aiRow = ai.forPhone(c.phone), st = stateByKey.get(c.key). */
-ok(/aiRow=\{ai\.forPhone\(c\.phone\)\}/.test(INBOX) && /st=\{stateByKey\.get\(c\.key\)\}/.test(INBOX)
-  && /<AiDraftChip row=\{aiRow\} compact \/>/.test(INBOX) && /\(!aiChipFor\(aiRow\) \|\| st\?\.failed\) && <ConvStateChip/.test(INBOX), 'the list shows "Needs approving" in place of "Waiting" (a failed send still shows)');
+/* 2026-10-22: the reason is the ONE attention pill's hover (src/lib/inboxAttention.ts; scripts/inbox-attention.test.ts). */
+ok(/NEEDS YOU SORTS TO THE TOP/.test(INBOX) && /ai: aiOn \? ai\.forPhone\(c\.phone\) : null/.test(INBOX), 'Needs you sorts to the top and its reason is the row pill\'s hover');
+/* The list row is the memoised ConversationRow (2026-10-16, speed): its ONE pill comes from rowAttention(c), st = stateByKey.get(c.key). */
+ok(/\{\.\.\.rowAttention\(c\)\}/.test(INBOX) && /st=\{stateByKey\.get\(c\.key\)\}/.test(INBOX)
+  && /<AttentionPill kind=\{attentionKind\}/.test(INBOX) && !/<ConvStateChip/.test(INBOX) && !/<AiDraftChip/.test(INBOX), 'the list shows ONE pill (Needs approval before Waiting; the old state and AI chips are gone)');
 
 console.log('6. approve sends ONCE; discard sends nothing; the function itself never sends');
 ok(!/sendViaGraph|graph\.facebook\.com|whatsapp-send\.ts|from\("whatsapp_messages"\)\.insert|from\("whatsapp_sends"\)(?!\.select\()/.test(FN), 'ai-reply-drafts has no send path and writes no message row');
