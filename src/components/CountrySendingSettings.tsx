@@ -6,7 +6,8 @@ import { Switch } from '@/components/ui/switch';
 import { useToast } from '@/hooks/use-toast';
 import { Callout } from '@/components/operator/ui';
 import { useCountrySettings } from '@/hooks/useCountrySettings';
-import { countryAutoPauseHeadline } from '@/lib/countryAutoPause';
+import { countryAutoOffRuleWords, countryAutoPauseHeadline } from '@/lib/countryAutoPause';
+import type { CountryOffSetting } from '@/lib/countryHold';
 import { SMS_SENDER_WORDS, checkCountryValue, hhmm, MARKET_NAME, MAX_COUNTRY_DAILY_CAP, WHATSAPP_ONLY_MARKETS, PER_LEAD_ZONE_MARKETS, type Market, type CountrySetting } from '@/lib/outreachMarkets';
 
 /* ══ SENDING BY COUNTRY — ADMIN ONLY (2026-10-14, Malaysia / Singapore; src/lib/outreachMarkets.ts) ═════════════════
@@ -130,6 +131,9 @@ export function CountrySendingSettings() {
                     <Button size="sm" className="h-8 text-xs" disabled={busy === m} onClick={() => saveRow(m)} data-testid={`country-${m}-save`}>Save</Button>
                   </div>
                 )}
+                {m !== 'UK' && (
+                  <p className="text-[11px] text-muted-foreground" data-testid={`country-${m}-auto-off-rule`}>{countryAutoOffRuleWords(s as CountryOffSetting)}</p>
+                )}
                 {PER_LEAD_ZONE_MARKETS.has(m) && (
                   <p className="text-[11px] text-muted-foreground" data-testid={`country-${m}-zone-note`}>
                     Monday–Friday only, in each lead’s own time zone from its state (Sydney, Melbourne, Hobart, Brisbane, Adelaide, Darwin or Perth).
@@ -140,9 +144,9 @@ export function CountrySendingSettings() {
             );
           })}
           <p className="text-[11px] text-muted-foreground">
-            ⛔ Cold WhatsApp to Malaysia, Singapore and Australia goes only through these switches — test a handful by hand first. Each switches
-            itself off if its first sends fail (any failure in the first 5, or 2 of the last 5), and a failed send there is never retried
-            automatically: the lead is handed back.
+            ⛔ Cold WhatsApp to Malaysia, Singapore and Australia goes only through these switches — test a handful by hand first. A failed
+            send there is never retried automatically: that lead is handed back. While a country is off, its queued leads wait in the
+            queue and send when it is switched back on.
             {' '}Malaysia and Singapore send in their own time (UTC+8). Their caps come on top of the team cap — the team cap still counts every message.
             {' '}Australia is prospect-only: no price, sign-up or checkout message is ever sent there.
             {' '}WhatsApp templates are written in English for UK businesses: send only the openers, and not explain_offer / explain_offer_v2 (they quote £ prices and “UK businesses”).

@@ -22,6 +22,21 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-22-country-auto-off', date: '2026-10-22', title: 'One failed number no longer switches a country off', audience: 'all',
+    body: 'Malaysia, Singapore and Australia now switch themselves off only on a real pattern of failed WhatsApp sends. While a country is off, its queued leads wait and send when it is switched back on.',
+    report: {
+      added: [
+        'Queue: a country that is off says so on its tab, with why (by hand, or automatically after failed sends) and when.',
+        'Each waiting lead in a country that is off shows “Waiting: Australia is off” (or Malaysia / Singapore).',
+      ],
+      changed: [
+        'A failed send to one number only marks that lead (No WhatsApp when Meta says the number is not on WhatsApp). The country carries on.',
+        'A country switches itself off only when at least 5 sends fail and they are at least half of its last 10, or when Meta refuses a send for a reason about our account or template.',
+        'When a country is off, its queued leads stay in the queue instead of going back to New.',
+      ],
+      removed: ['The rule that switched a country off on any failure in its first 5 sends.'],
+      effect: 'A number that is not on WhatsApp no longer stops a whole country, and switching a country off no longer empties its queue.',
+    } },
   { id: '2026-10-22-lighter-outreach-inbox', date: '2026-10-22', title: 'Outreach and Inbox download much less', audience: 'all',
     body: 'Outreach and the Inbox now download a small summary of each website check instead of the whole thing, and the Inbox no longer reloads everything when you switch back to its tab.',
     report: {
