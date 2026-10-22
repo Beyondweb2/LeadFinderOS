@@ -20,7 +20,9 @@ ok(inboxMarketOf(null, '447700900123') === 'UK', 'blank country falls back to th
 ok(inboxMarketOf('', '60123456789') === 'MY', 'blank country falls back to the +60 prefix');
 ok(inboxMarketOf('  ', '6591234567') === 'SG', 'whitespace country falls back to the +65 prefix');
 ok(inboxMarketOf(null, '61412345678') === 'AU', 'blank country falls back to the +61 mobile prefix');
-ok(inboxMarketOf('India', '447700900123') === null, 'a country we do not run is not overridden by the number');
+ok(inboxMarketOf('India', null) === null, 'a country we do not run, with no number code, is no market');
+ok(inboxMarketOf('India', '447700900123') === 'UK', 'a number own code wins over the label');
+ok(inboxMarketOf('UK', '60123456789') === 'MY', 'a +60 number labelled UK is Malaysia');
 ok(countryInView('all', 'India', null), 'All shows everything');
 ok(countryInView('UK', 'UK', null) && !countryInView('UK', 'Malaysia', null), 'UK filter keeps UK only');
 
