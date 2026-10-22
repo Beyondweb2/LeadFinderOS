@@ -80,11 +80,17 @@
   `X-Hub-Signature-256` with `WHATSAPP_APP_SECRET` and **refuses every unsigned/unverifiable POST** — deploying it before the
   correct secret exists would cut off all inbound WhatsApp replies. The post-call reply matcher rides the same deploy, so it
   waits too.
-- `WHATSAPP_APP_SECRET` is **not set**. ⛔ **Do not guess the App Secret**, do not set a placeholder, do not copy Move37's.
+- `WHATSAPP_APP_SECRET` is **not set**. ⛔ **Do not guess the App Secret**, do not set a placeholder.
+  **2026-10-22, Paul chose option A** (`docs/whatsapp-status-cutover-plan.md`): Paul sets it to **Move37's** App Secret
+  (the app that really delivers today's webhooks) and the held webhook (now also saving Meta's error code) is deployed on
+  Move37. Live v129 (deployed 2026-09-30; "v114" below was the label in use on 2026-10-05) already enforces the signature
+  whenever the secret is set — a wrong secret stops replies at once; deleting it undoes that.
 - ⚠️ Any routine "redeploy every function that reaches a shared module" must **skip `whatsapp-status`** until cutover.
   `send-whatsapp-message` and `process-whatsapp-queue` CAN be redeployed (they were on 2026-10-05).
 
-**Future cutover order (do not reorder):**
+**Future Findable switch order (do not reorder).** ⚠️ Meta signs with the App Secret of the app that OWNS the webhook, so
+the Findable secret goes in as `WHATSAPP_APP_SECRET_NEXT` before the webhook moves (both verify), and replaces
+`WHATSAPP_APP_SECRET` only after the move; steps 2–4 below as first written would refuse every Move37-signed delivery.
 
 1. Findable Meta app + WhatsApp Business number ready (Paul).
 2. The exact **Findable App Secret** configured as `WHATSAPP_APP_SECRET` (Paul supplies it; Claude never prints it).

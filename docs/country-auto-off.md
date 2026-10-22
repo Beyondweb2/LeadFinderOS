@@ -76,3 +76,54 @@ Not touched. They are `not_contacted` / `country_off` and need queueing again (b
 - SPA live on app.leadfinderos.com and leadfinderos-next.pages.dev (entry `index-CVTZAl1G.js`; `WhatsAppQueuePanel-2ml9W8Cq.js`
   has the off note; `whatsNew-CTw5QoWJ.js` has the entry — What's New is its own chunk now, not in the entry).
 - Australia NOT switched on (Paul's action). The 70 leads released this morning are untouched (New / `country_off`).
+
+## Only unexplained failures count (2026-10-22, `fix/auto-off-counts`, migration `20261124090000`)
+
+Australia switched itself off at 08:03 and 08:50 UTC on 22 Oct ("5 of its last 10 sends failed"). Most of those failures
+were numbers not on WhatsApp — normal for a cold list. The rule (SQL `country_whatsapp_auto_pause`, mirror
+`src/lib/countryAutoPause.ts`) now leaves two kinds of failed send out of the count entirely (not a failure, and not one
+of the window's sends):
+
+| Left out | How it is known |
+|---|---|
+| **Not on WhatsApp** | Meta 131026 on the send, or the lead is flagged No WhatsApp (`status` or `whatsapp_delivery_status` = `no_whatsapp`; the webhook does that only for 131026) |
+| **Not settled yet** | the send is the lead's current message and the lead carries no failure yet — the live webhook writes the send row BEFORE it patches the lead. New trigger `trg_outreach_leads_country_check` (after update of `whatsapp_delivery_status` / `status` to `failed` / `failed_temporary` / `whatsapp_failed`) runs the check again then |
+
+Everything else counts as before: at least **5** failures and at least **50 %** of the last **10** counted sends, or one
+send with a systemic Meta code (account / login / quality or rating / template — `COUNTRY_SYSTEMIC_CODES`, unchanged).
+The three numbers stay editable per country (`set_outreach_country`, NULL = default). Values chosen: the defaults,
+unchanged — leaving the not-on-WhatsApp sends out was enough. Replayed on 22 Oct's Australian sends (read-only): the
+07:04–08:03 run counts **2 of its last 10** (8 not on WhatsApp left out), the 08:31–08:50 run **2 of 9** (3 left out) —
+neither would have switched off. ⚠️ First draft of the SQL dropped every no-code failure (`failed and NULL` is NULL, and
+`not NULL` filters the row out) — fixed with `coalesce(…, false)` and pinned in `scripts/auto-off-counts.test.ts`.
+
+Not changed: the UK queue pause, the rating watcher, the 1–2 minute gap, `whatsapp_my_sg_no_auto_retry`, Australia's
+switch (still off) and hours (09:00–19:00 stored; Paul decides 17:00 or 19:00).
+
+### Where delivery failures come from, and why Meta's code is not saved
+
+- The ONLY receiver of Meta's delivery reports is the live `whatsapp-status` function (version 129, deployed 30 Sep 2026;
+  Meta allows one callback URL per app). Read from its live bundle (read-only): on a `failed` status it writes
+  `whatsapp_sends.delivery_status`, `whatsapp_messages.status`, and the lead patch `leadFailurePatch(code, …)`
+  (`no_whatsapp` for 131026 with no prior success, otherwise `failed_temporary` / `failed` + `whatsapp_failed`). It reads
+  `errors[0].code` only to choose that patch. **No code, title or details are written anywhere, and the raw payload is not
+  stored**, so no database trigger can recover them. Function logs carry the code but are kept for under a minute.
+- Saving the code needs new code at that one function — i.e. deploying `whatsapp-status`, which CLAUDE.md holds until the
+  Findable Meta App and its exact App Secret are ready (the repo's version verifies Meta's signature and fails closed).
+  Not done; Paul's decision (`docs/handover/07-…`).
+- What the screens can show meanwhile is the lead's flag: the queue panel's "Failed sends — last 7 days" now says "Number
+  not on WhatsApp" / "failed for another reason (will be retried / marked WhatsApp failed)", that Meta's exact code was
+  not saved, and whether the failure counts toward the switch-off (`src/lib/sendFailureReason.ts`;
+  `process-whatsapp-queue` mode `recent_failures` returns each row's lead flag).
+
+### Deployed 2026-10-22 (main `16a2371c`)
+
+- Full gate on the merged branch: 446/446. (The first run had one red suite, `cold-call-playbook.test.ts`, failing on clean
+  main too: a test crawl dated 22 Sep went past the real-clock 30-day freshness at 10:00 UTC. Fixed in the test.)
+- SQL first: `20261124090000` applied and read back — the new rule (`not_on_wa`, NULL-safe), the new trigger
+  `trg_outreach_leads_country_check`, both old triggers kept, grants unchanged (postgres, service_role). All thresholds
+  at the defaults; Australia still OFF, hours unchanged (09:00–19:00 stored); Malaysia / Singapore on.
+- Edge: `process-whatsapp-queue` only (`countryAutoPause.ts` / `sendFailureReason.ts` are reached by no edge function);
+  body carries the lead-flag read. `whatsapp-status` NOT deployed (held).
+- SPA live on app.leadfinderos.com (entry `index-C_9NRk-4.js`; `WhatsAppQueuePanel-BjzxO4Vi.js` has the failure reason,
+  `whatsNew-CRSe0fFm.js` the entry). Nobody has looked at it on screen.

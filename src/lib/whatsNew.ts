@@ -42,6 +42,19 @@ export const WHATS_NEW: readonly WhatsNewEntry[] = [
       ],
       effect: 'You see one clear thing to do per conversation, approve drafts where you read them, and the audit numbers agree everywhere. What is sent, the caps, send hours and safety checks are unchanged.',
     } },
+  { id: '2026-10-22-auto-off-counts', date: '2026-10-22', title: 'Numbers not on WhatsApp no longer switch a country off', audience: 'admin',
+    body: 'Malaysia, Singapore and Australia now switch themselves off only on failures that are not explained by the number simply not being on WhatsApp. The failed-sends list says why each send failed.',
+    report: {
+      added: [
+        'Failed sends — last 7 days: each failure Meta reported after sending now says whether the number is not on WhatsApp or failed for another reason, and whether it counts toward the country switching itself off.',
+      ],
+      changed: [
+        'A failed send to a number that is not on WhatsApp (the lead is marked No WhatsApp) is no longer counted toward a country switching itself off.',
+        'The rule is otherwise the same: at least 5 failures that are at least half of the last 10 counted sends, or one failure about our WhatsApp account or template.',
+      ],
+      removed: [],
+      effect: 'A cold list with many numbers not on WhatsApp keeps sending; a real problem still stops the country. Australia is still off until switched on.',
+    } },
   { id: '2026-10-22-inbox-owner-and-country', date: '2026-10-22', title: 'The Inbox opens on your own leads, with a country filter', audience: 'all',
     body: 'The Inbox now shows only the leads assigned to you, and the sidebar number counts the same ones. Admins can switch whose inbox they are looking at, and anyone can filter by country.',
     report: {
