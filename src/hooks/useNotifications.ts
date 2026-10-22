@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
@@ -6,7 +6,10 @@ import { notifyLeadChanged } from '@/lib/leadSync';
 
 /* The signed-in person's notifications (Sales Experience release 3; migration 20260929140000).
    Own rows only (RLS); written by the server (triggers + the ledger writer), never by the browser.
-   Live: realtime on the table (RLS applies), with a slow poll as the safety net. */
+   Live: realtime on the table (RLS applies). The poll is only a safety net: `POLL_MS` while the live channel is NOT connected,
+   the much slower `LIVE_SAFETY_POLL_MS` while it is (2026-10-22, perf audit — it used to do both at full speed, twice: the desktop and the
+   phone bell each mounted this hook). Only the OWNER (the desktop bell) holds the channel and the poll; a passive reader
+   (the phone bell) shares the same cached rows. */
 
 // Not in the generated types.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -21,8 +24,11 @@ const LIMIT = 100;
 /** Kinds that change the Team Board (useTeamBoard's queries live under ['team-board']). */
 const TEAM_BOARD_KINDS: ReadonlySet<string> = new Set(['team_update', 'team_task', 'lead_assigned']);
 const POLL_MS = 120_000;
+const LIVE_SAFETY_POLL_MS = 600_000;
 
-export function useNotifications(onArrive?: (n: AppNotification) => void) {
+export function useNotifications(onArrive?: (n: AppNotification) => void, opts: { passive?: boolean } = {}) {
+  const passive = !!opts.passive;
+  const [live, setLive] = useState(false);
   const { user } = useAuth();
   const qc = useQueryClient();
   const key = useMemo(() => NOTIFICATIONS_KEY(user?.id), [user?.id]);
@@ -30,7 +36,7 @@ export function useNotifications(onArrive?: (n: AppNotification) => void) {
     queryKey: key,
     enabled: !!user?.id,
     staleTime: 30_000,
-    refetchInterval: POLL_MS,
+    refetchInterval: passive ? false : live ? LIVE_SAFETY_POLL_MS : POLL_MS,
     refetchOnWindowFocus: true,
     queryFn: async (): Promise<AppNotification[]> => {
       const { data, error } = await sb.from('notifications')
@@ -43,8 +49,8 @@ export function useNotifications(onArrive?: (n: AppNotification) => void) {
   const arrive = useRef(onArrive);
   arrive.current = onArrive;
   useEffect(() => {
-    if (!user?.id) return;
-    // One channel per mounted reader (the desktop bell and the phone bell are separate components).
+    if (!user?.id || passive) return;
+    // One channel, held by the owner reader only (the phone bell is passive and reads the same cached rows).
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const ch = (supabase.channel(`notifications:${user.id}:${Math.random().toString(36).slice(2, 8)}`) as any)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'notifications', filter: `user_id=eq.${user.id}` }, (p: { eventType: string; new: AppNotification }) => {
@@ -62,9 +68,9 @@ export function useNotifications(onArrive?: (n: AppNotification) => void) {
         /* CLIENT INFO NEEDED (2026-10-05): the seller's "Finish the handoff" list shows Paul's request at once. */
         if (p.new?.kind === 'client_info_request') void qc.invalidateQueries({ queryKey: ['my-handoffs'] });
       })
-      .subscribe();
-    return () => { void supabase.removeChannel(ch); };
-  }, [user?.id, qc, key]);
+      .subscribe((status: string) => setLive(status === 'SUBSCRIBED'));
+    return () => { setLive(false); void supabase.removeChannel(ch); };
+  }, [user?.id, qc, key, passive]);
 
   const patch = (fn: (rows: AppNotification[]) => AppNotification[]) => qc.setQueryData<AppNotification[]>(key, (prev) => fn(prev ?? []));
   const markRead = useCallback(async (ids: string[] | null) => {

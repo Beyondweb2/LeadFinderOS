@@ -22,20 +22,18 @@ import { cn } from '@/lib/utils';
    person sees their own items and where each stands. */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const sb = supabase as any;
-export const OPEN_FEEDBACK_EVENT = 'open-feedback';
-export const OPEN_WHATS_NEW_EVENT = 'open-whats-new';
-const SEEN_KEY = 'lf-whats-new-seen';
-const seenId = () => { try { return localStorage.getItem(SEEN_KEY); } catch { return null; } };
+import { OPEN_FEEDBACK_EVENT, OPEN_WHATS_NEW_EVENT, SEEN_KEY, seenId } from '@/components/FeedbackNewsButtons';
 
 
-export function FeedbackAndNews() {
+/** Loaded by FeedbackAndNewsHost on the first open; `initial` is the one that was asked for. */
+export function FeedbackAndNews({ initial }: { initial?: 'feedback' | 'news' } = {}) {
   const { user } = useAuth();
   const { role } = useSubscription();
   const { toast } = useToast();
   const location = useLocation();
   const qc = useQueryClient();
-  const [fbOpen, setFbOpen] = useState(false);
-  const [newsOpen, setNewsOpen] = useState(false);
+  const [fbOpen, setFbOpen] = useState(initial === 'feedback');
+  const [newsOpen, setNewsOpen] = useState(initial === 'news');
   const [kind, setKind] = useState<FeedbackKind>('feature');
   const [message, setMessage] = useState('');
   const [sending, setSending] = useState(false);
@@ -155,21 +153,5 @@ function NewsCard({ e }: { e: WhatsNewEntry }) {
         </div>
       )}
     </li>
-  );
-}
-
-/** The two menu entries (sidebar footer). The dot shows until the newest What's New entry is seen. */
-export function FeedbackNewsButtons({ className }: { className?: string }) {
-  const { role } = useSubscription();
-  const [seen, setSeen] = useState(seenId);
-  useEffect(() => { const f = () => setSeen(seenId()); window.addEventListener('whats-new-seen', f); return () => window.removeEventListener('whats-new-seen', f); }, []);
-  const newest = whatsNewFor(role)[0]?.id;
-  return (
-    <div className={cn('grid grid-cols-2 gap-1.5', className)}>
-      <button type="button" onClick={() => window.dispatchEvent(new Event(OPEN_FEEDBACK_EVENT))} className="flex items-center justify-center gap-1.5 rounded-lg border border-border/60 px-2 py-1.5 text-xs font-medium text-sidebar-foreground/80 hover:bg-sidebar-accent/60"><MessageSquarePlus className="h-3.5 w-3.5" />Feedback</button>
-      <button type="button" onClick={() => window.dispatchEvent(new Event(OPEN_WHATS_NEW_EVENT))} className="relative flex items-center justify-center gap-1.5 rounded-lg border border-border/60 px-2 py-1.5 text-xs font-medium text-sidebar-foreground/80 hover:bg-sidebar-accent/60">
-        <Sparkles className="h-3.5 w-3.5" />What's new{newest && seen !== newest && <span className="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full bg-violet-500" aria-label="New" />}
-      </button>
-    </div>
   );
 }

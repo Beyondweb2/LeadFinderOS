@@ -38,7 +38,7 @@ ok(!/drop table/i.test(mig), "the old team_feedback table is left in place (Paul
 ok(/when 'fixed' then case when r\.kind = 'feature' then 'Your suggestion was added'/.test(mig), "the feedback loop: 'Your suggestion was added' when a feature is marked fixed");
 
 console.log("\n── entry points and the admin inbox ──");
-ok(/<FeedbackAndNews \/>/.test(read("src/components/AppLayout.tsx")) && /<FeedbackNewsButtons \/>/.test(read("src/components/AppSidebar.tsx")) && /OPEN_FEEDBACK_EVENT/.test(read("src/components/MobileBottomNav.tsx")), "Feedback + What's New: in the shell, the sidebar footer and the phone's More menu");
+ok(/<FeedbackAndNewsHost \/>/.test(read("src/components/AppLayout.tsx")) && /<FeedbackNewsButtons \/>/.test(read("src/components/AppSidebar.tsx")) && /OPEN_FEEDBACK_EVENT/.test(read("src/components/MobileBottomNav.tsx")), "Feedback + What's New: in the shell, the sidebar footer and the phone's More menu");
 ok(/open-feedback/.test(read("src/components/CommandPalette.tsx")), "…and in the command palette");
 ok(!canOpenRoute("sales", "/feedback") && canOpenRoute("admin", "/feedback"), "the Feedback inbox is the admin's only");
 ok(/set_template_request_status/.test(read("src/pages/AdminFeedback.tsx")), "the admin decides template requests there (the requester is told)");

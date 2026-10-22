@@ -1,12 +1,11 @@
-import { useMemo, useRef, Suspense } from 'react';
+import { lazy, useMemo, useRef, Suspense } from 'react';
 import { useLocation } from 'react-router-dom';
 import { SidebarProvider } from '@/components/ui/sidebar';
 import { AppSidebar } from '@/components/AppSidebar';
 import { MobileBottomNav } from '@/components/MobileBottomNav';
-import { ReviewQueueTab } from '@/components/ReviewQueueTab';
 import { NotificationCenter } from '@/components/NotificationCenter';
-import { CommandPalette, PaletteButton } from '@/components/CommandPalette';
-import { FeedbackAndNews } from '@/components/FeedbackAndNews';
+import { CommandPaletteHost, PaletteButton } from '@/components/CommandPaletteHost';
+import { FeedbackAndNewsHost } from '@/components/FeedbackNewsButtons';
 import { LostReasonPrompt } from '@/components/LostReasonPrompt';
 import { MessageNameDialog } from '@/components/MessageNameDialog';
 import appLogo from '@/assets/logo.png';
@@ -14,6 +13,9 @@ import { useAuth } from '@/hooks/useAuth';
 import { useLeadPermissions } from '@/hooks/useLeadPermissions';
 import { usePersistLastRoute } from '@/hooks/usePersistLastRoute';
 import { usePersistedScroll } from '@/hooks/usePersistedScroll';
+
+/* Admin-only and rarely showing: its code loads after the first paint, only for a person who can see client delivery. */
+const ReviewQueueTab = lazy(() => import('@/components/ReviewQueueTab').then((m) => ({ default: m.ReviewQueueTab })));
 
 interface AppLayoutProps {
   children: React.ReactNode;
@@ -79,8 +81,8 @@ export function AppLayout({ children }: AppLayoutProps) {
 
         {/* The notification bell, bottom-right on desktop (the phone's is in the top bar above). */}
         <NotificationCenter variant="desktop" />
-        <CommandPalette />
-        <FeedbackAndNews />
+        <CommandPaletteHost />
+        <FeedbackAndNewsHost />
         {/* "Why did they say no?" — the one prompt every Not interested path opens (src/lib/lostReasonAsk.ts). */}
         <LostReasonPrompt />
         <MessageNameDialog />
@@ -89,7 +91,7 @@ export function AppLayout({ children }: AppLayoutProps) {
             nobody is waiting, so it costs every other screen a single cheap RLS-scoped read and no
             pixels. It is OUTSIDE <main>, so it never scrolls away and never covers the page.
             Client delivery: the admin's only (a salesperson never reads paid clients). */}
-        {perms.clientDelivery && <ReviewQueueTab />}
+        {perms.clientDelivery && <Suspense fallback={null}><ReviewQueueTab /></Suspense>}
 
       </div>
     </SidebarProvider>

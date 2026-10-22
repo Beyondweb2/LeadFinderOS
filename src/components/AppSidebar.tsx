@@ -18,8 +18,8 @@ import {
   Inbox, Sparkles, Map, Users,
   BarChart3, MessageCircle, MessageSquarePlus,
 } from 'lucide-react';
-import { FeedbackNewsButtons } from '@/components/FeedbackAndNews';
-import { PaletteButton } from '@/components/CommandPalette';
+import { FeedbackNewsButtons } from '@/components/FeedbackNewsButtons';
+import { PaletteButton } from '@/components/CommandPaletteHost';
 import { cn } from '@/lib/utils';
 import appLogo from '@/assets/logo.png';
 

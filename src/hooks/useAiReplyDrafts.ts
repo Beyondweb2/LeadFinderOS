@@ -11,12 +11,16 @@ import type { AiReplyRow } from '@/lib/aiReplyDraft';
 export const AI_REPLY_DRAFTS_KEY = ['ai-reply-drafts'] as const;
 const phoneKey = (p: string | null | undefined) => String(p ?? '').replace(/\D/g, '').slice(-10);
 
-export function useAiReplyDrafts(enabled: boolean) {
+/** The shell's bell polls at this pace; the Inbox keeps the 30 s default. Drafts come from a one-minute cron. */
+export const SHELL_DRAFTS_POLL_MS = 60_000;
+
+/** pollMs: how often to re-read (false = never; the cached rows are shared with whoever else reads them). */
+export function useAiReplyDrafts(enabled: boolean, pollMs: number | false = 30_000) {
   const qc = useQueryClient();
   const q = useQuery({
     queryKey: AI_REPLY_DRAFTS_KEY,
     enabled,
-    refetchInterval: 30_000,
+    refetchInterval: pollMs,
     staleTime: 10_000,
     queryFn: async (): Promise<AiReplyRow[]> => {
       const { data, error } = await (supabase.rpc as unknown as (fn: string) => Promise<{ data: unknown; error: { message: string } | null }>)('my_ai_reply_drafts');

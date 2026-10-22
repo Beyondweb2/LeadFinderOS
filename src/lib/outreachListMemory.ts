@@ -14,6 +14,9 @@
 interface Remembered<T> { key: string; active: T[]; archived: T[] }
 
 let remembered: Remembered<unknown> | null = null;
+/* When the remembered list was last known to match the database (the START of the load that proved it), per person+role.
+   The "changed since" refresh reads from here; null = never proven, so the next visit does the full load. */
+let syncedAt: { key: string; at: number } | null = null;
 
 const keyFor = (userId: string, role: string | null | undefined) => `${userId}:${role ?? ''}`;
 
@@ -22,11 +25,18 @@ export function rememberOutreachList<T>(userId: string, role: string | null | un
   remembered = { key: keyFor(userId, role), active, archived };
 }
 
-export function recallOutreachList<T>(userId: string, role: string | null | undefined): { active: T[]; archived: T[] } | null {
+export function markOutreachListSynced(userId: string, role: string | null | undefined, at: number): void {
+  if (!userId || !role) return;
+  syncedAt = { key: keyFor(userId, role), at };
+}
+
+export function recallOutreachList<T>(userId: string, role: string | null | undefined): { active: T[]; archived: T[]; syncedAt: number | null } | null {
   if (!userId || !role || !remembered || remembered.key !== keyFor(userId, role)) return null;
-  return { active: remembered.active as T[], archived: remembered.archived as T[] };
+  const k = keyFor(userId, role);
+  return { active: remembered.active as T[], archived: remembered.archived as T[], syncedAt: syncedAt && syncedAt.key === k ? syncedAt.at : null };
 }
 
 export function forgetOutreachList(): void {
   remembered = null;
+  syncedAt = null;
 }
