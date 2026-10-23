@@ -13,8 +13,12 @@ import { SHOT_WIDTH, SHOT_HEIGHT, NAV_TIMEOUT_MS, SETTLE_MS, hideCss, hideByBeha
 const CF_API = "https://api.cloudflare.com/client/v4/accounts";
 
 export type ShotResult =
-  | { ok: true; bytes: Uint8Array; ms: number; url: string }
+  | { ok: true; bytes: Uint8Array; ms: number; url: string; contentType: string }
   | { ok: false; refusal: ShotRefusal | "not_configured" | "cf_error"; detail?: string; ms: number };
+
+/** The picture's format. DEFAULT = what the mockup has always taken (PNG at 2x), so no existing caller changes.
+ *  fn site-shot asks for a 1x JPEG (src/lib/siteShot.ts): the same viewport and settle policy, a fraction of the bytes. */
+export interface ShotFormat { type: "png" | "jpeg"; quality?: number; scale?: number }
 
 /**
  * Screenshot a prospect's homepage.
@@ -24,7 +28,7 @@ export type ShotResult =
  * Measured over the real book: of the 500 engaged leads, 432 are shootable, 59 have no website
  * and 9 are aggregators.
  */
-export async function shootSite(website: string | null | undefined): Promise<ShotResult> {
+export async function shootSite(website: string | null | undefined, format: ShotFormat = { type: "png" }): Promise<ShotResult> {
   const t0 = Date.now();
   const refusal = shotRefusal(website);
   if (refusal) return { ok: false, refusal, ms: 0 };
@@ -39,7 +43,7 @@ export async function shootSite(website: string | null | undefined): Promise<Sho
   const url = shotUrl(website!);
   const body = {
     url,
-    viewport: { width: SHOT_WIDTH, height: SHOT_HEIGHT, deviceScaleFactor: 2 },
+    viewport: { width: SHOT_WIDTH, height: SHOT_HEIGHT, deviceScaleFactor: format.scale ?? 2 },
     /* ⛔ `load`, NOT `networkidle0`. Analytics polling and chat sockets mean a large share of
        real small-business sites NEVER reach network idle, and refusing those would refuse the
        prospects. The settle delay below is what buys consistency instead. */
@@ -50,7 +54,9 @@ export async function shootSite(website: string | null | undefined): Promise<Sho
     /* The second layer — catches a banner the selector list does not know about. Wix's was missed
        first time round because it carries no "cookie" anywhere in its markup. */
     addScriptTag: [{ content: hideByBehaviourJs() }],
-    screenshotOptions: { type: "png", fullPage: false, captureBeyondViewport: false },
+    screenshotOptions: format.type === "jpeg"
+      ? { type: "jpeg", quality: format.quality ?? 80, fullPage: false, captureBeyondViewport: false }
+      : { type: "png", fullPage: false, captureBeyondViewport: false },
     /* Fonts swap and hero carousels advance after load; without this the same URL returns a
        different image run to run, which is the whole byte-variance fault. */
     waitForTimeout: SETTLE_MS,
@@ -68,7 +74,7 @@ export async function shootSite(website: string | null | undefined): Promise<Sho
       const detail = (await res.text()).slice(0, 300);
       return { ok: false, refusal: "cf_error", detail: `HTTP ${res.status} ${detail}`, ms };
     }
-    return { ok: true, bytes: new Uint8Array(await res.arrayBuffer()), ms, url };
+    return { ok: true, bytes: new Uint8Array(await res.arrayBuffer()), ms, url, contentType: ct.split(";")[0].trim().toLowerCase() };
   } catch (e) {
     return { ok: false, refusal: "cf_error", detail: String((e as Error).message).slice(0, 200), ms: Date.now() - t0 };
   }
