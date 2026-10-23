@@ -72,7 +72,10 @@ export async function shootSite(website: string | null | undefined, format: Shot
     const ct = res.headers.get("content-type") ?? "";
     if (!res.ok || !ct.includes("image")) {
       const detail = (await res.text()).slice(0, 300);
-      return { ok: false, refusal: "cf_error", detail: `HTTP ${res.status} ${detail}`, ms };
+      /* A 429 is Cloudflare's own rate limit ("Rate limit exceeded", measured 2026-10-23: a burst of requests is refused in ~0.2s,
+         nothing is billed). Its Retry-After, when sent, rides in the detail so a caller can wait exactly that long. */
+      const wait = res.status === 429 ? ` retry-after=${res.headers.get("retry-after") ?? "none"}` : "";
+      return { ok: false, refusal: "cf_error", detail: `HTTP ${res.status}${wait} ${detail}`, ms };
     }
     return { ok: true, bytes: new Uint8Array(await res.arrayBuffer()), ms, url, contentType: ct.split(";")[0].trim().toLowerCase() };
   } catch (e) {

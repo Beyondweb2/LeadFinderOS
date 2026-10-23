@@ -1,4 +1,4 @@
-/* SITE SHOT — the rules for taking ONE homepage picture per lead, for the prospect report's left card (2026-10-25).
+/* SITE SHOT — the rules for taking ONE homepage picture per lead, for the prospect report's left card (2026-10-23).
 
    Pure and edge-reachable: no imports, no Deno, no DOM. The driver (Cloudflare Browser Rendering) is
    supabase/functions/_shared/mockup-shot.ts; the door is fn site-shot; the record is docs/site-shot.md.
@@ -98,4 +98,17 @@ export function londonMonthStartIso(now: Date): string {
   const cand = Date.UTC(y, m - 1, 1, 0, 0, 0);
   const h = Number(new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/London', hour: '2-digit', hourCycle: 'h23' }).format(new Date(cand)));
   return new Date(cand - (h === 0 ? 0 : h) * 3_600_000).toISOString();
+}
+
+/** Cloudflare's own rate limit (HTTP 429, "Rate limit exceeded"): a refused burst is not a failed site, costs nothing and
+ *  must never use up a lead's attempts. The driver puts the status in the detail, so this reads that. */
+export function siteShotRateLimited(detail: string | null | undefined): boolean {
+  return /\bHTTP 429\b/.test(String(detail ?? ''));
+}
+
+/** How long to wait before the next try after a rate limit: its Retry-After seconds when sent and sane, else the fallback. */
+export function siteShotRetryAfterMs(detail: string | null | undefined, fallbackMs: number): number {
+  const m = /retry-after=(\d{1,4})\b/.exec(String(detail ?? ''));
+  const s = m ? Number(m[1]) : NaN;
+  return Number.isFinite(s) && s >= 1 && s <= 120 ? s * 1000 : fallbackMs;
 }
