@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Site score mockups</title>
+<style>
+:root{--bg:#0f1318;--card:#171c23;--line:#262d37;--tx:#e6e9ee;--mut:#8b95a3;
+--g:#22c55e;--gb:rgba(34,197,94,.14);--a:#f59e0b;--ab:rgba(245,158,11,.14);--r:#ef4444;--rb:rgba(239,68,68,.14);--n:#6b7685;--nb:rgba(107,118,133,.16)}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--tx);font:14px/1.4 system-ui,Segoe UI,sans-serif;padding:20px}
+h1{font-size:18px;margin:0 0 2px}h2{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--mut);margin:22px 0 8px}
+.sub{color:var(--mut);margin-bottom:6px}
+.v{display:none}.v.on{display:block}
+.cols{display:flex;gap:24px;align-items:flex-start}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px}
+/* outreach row */
+.orow{display:grid;grid-template-columns:230px 110px 1fr 150px;align-items:center;gap:12px;padding:12px 14px;border-bottom:1px solid var(--line);position:relative}
+.orow:last-child{border:0}
+.bn{font-weight:600}.sm{color:var(--mut);font-size:12px}
+.pill{display:inline-block;padding:2px 9px;border-radius:99px;font-size:12px;background:var(--nb);color:#b8c0cc}
+.icons{display:flex;gap:6px;align-items:center;color:var(--mut)}.ic{width:26px;height:26px;border-radius:6px;background:#202733;display:grid;place-items:center;font-size:13px}
+.site{color:#7aa7ff;font-size:12.5px}
+/* inbox */
+.irow{display:flex;gap:12px;align-items:center;padding:12px 14px;border-bottom:1px solid var(--line);position:relative}
+.irow:last-child{border:0}.av{width:36px;height:36px;border-radius:50%;background:#2a3340;display:grid;place-items:center;font-weight:600;flex:none}
+.grow{flex:1;min-width:0}.grow .sm{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.phone{width:390px;flex:none}
+.phone .orow{grid-template-columns:1fr auto;gap:6px}
+.phone .orow .hide-m{display:none}
+/* band colours */
+.b-g{--c:var(--g);--cb:var(--gb)}.b-a{--c:var(--a);--cb:var(--ab)}.b-r{--c:var(--r);--cb:var(--rb)}.b-n{--c:var(--n);--cb:var(--nb)}
+/* popover */
+.pop{display:none;position:absolute;z-index:5;width:290px;background:#1d242e;border:1px solid #38424f;border-radius:10px;padding:11px 12px;box-shadow:0 10px 30px rgba(0,0,0,.45);font-size:12.5px}
+.open .pop{display:block}.pop h4{margin:0 0 6px;font-size:13px;display:flex;justify-content:space-between}
+.pop li{list-style:none;margin:0 0 4px;display:flex;gap:7px}.pop ul{margin:0;padding:0}
+.dn::before{content:"▼";color:var(--r);font-size:9px;margin-top:3px}.up::before{content:"▲";color:var(--g);font-size:9px;margin-top:3px}
+.pop .ft{color:var(--mut);font-size:11.5px;margin-top:7px;border-top:1px solid var(--line);padding-top:6px}
+/* A: pill */
+.sA{display:inline-flex;align-items:center;gap:5px;padding:2px 9px;border-radius:99px;font-weight:700;font-size:13px;color:var(--c);background:var(--cb);border:1px solid var(--c);cursor:default}
+.sA small{font-weight:500;opacity:.7;font-size:10.5px}
+/* B: ring */
+.sB{width:34px;height:34px;border-radius:50%;display:grid;place-items:center;font-weight:700;font-size:12.5px;color:var(--c);background:conic-gradient(var(--c) calc(var(--p)*1%),#2a3340 0);position:relative}
+.sB::before{content:"";position:absolute;inset:3.5px;background:var(--card);border-radius:50%}.sB span{position:relative}
+/* C: bar */
+.sC{display:inline-flex;flex-direction:column;gap:3px;width:74px}.sC b{font-size:13px;color:var(--c);display:flex;justify-content:space-between}
+.sC i{display:block;height:5px;border-radius:3px;background:#2a3340;overflow:hidden}.sC i u{display:block;height:100%;width:calc(var(--p)*1%);background:var(--c)}
+.sC b em{font-style:normal;font-weight:500;font-size:10.5px;color:var(--mut)}
+/* non-scored */
+.cant{--c:#9aa5b4;color:var(--c);border:1px dashed #5c6776;background:repeating-linear-gradient(135deg,#1d232c 0 6px,#232a35 6px 12px);border-radius:99px;padding:2px 9px;font-size:12px;white-space:nowrap}
+.nc{color:var(--mut);border:1px dashed #3a4350;border-radius:99px;padding:2px 9px;font-size:12px;white-space:nowrap}
+.legend{display:flex;gap:14px;color:var(--mut);font-size:12px;margin:6px 0 0;flex-wrap:wrap}.legend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:5px;vertical-align:-1px}
+.pop.cantpop{width:300px}
+</style></head><body>
+<h1 id="ttl"></h1>
+<div class="sub" id="desc"></div>
+<div class="legend"><span><i style="background:var(--g)"></i>75–100 Strong</span><span><i style="background:var(--a)"></i>50–74 Fair</span><span><i style="background:var(--r)"></i>0–49 Weak</span><span><i style="background:#6b7685"></i>Grey = no number (can't read / not checked / none)</span></div>
+<div id="root"></div>
+<script>
+const V=(location.hash||'#A').slice(1);
+const DATA=[
+ {n:'Hartley Electrical Ltd',t:'Electrician · Sheffield',s:'Interested',site:'hartleyelectrical.co.uk',sc:82,open:0,
+  r:[['dn','No page of its own for 1 of 5 services'],['up','Town in title and heading on 9 of 10 pages'],['up','Tap-to-call phone + enquiry form']]},
+ {n:'Brightside Plumbing',t:'Plumber · Leeds',s:'Contacted',site:'brightsideplumbing.com',sc:64,open:0,
+  r:[['dn','No reviews or testimonials found'],['dn','Phone number is plain text, not tap-to-call'],['up','Dedicated page for each service']]},
+ {n:'K. Morgan Driving School',t:'Driving school · Canterbury',s:'New',site:'kmorgandriving.co.uk',sc:38,open:1,
+  r:[['dn','Pages are very short (median 90 words)'],['dn','No area or town pages'],['dn','Slow: median page download 4.1 s']]},
+ {n:'Oakfield Roofing',t:'Roofer · Derby',s:'New',site:'oakfieldroofing.co.uk',sc:null,state:'cant',open:0},
+ {n:"Penny's Cleaning",t:'Cleaner · York',s:'New',site:'pennyscleaning.uk',sc:null,state:'nc',open:0},
+];
+const band=s=>s>=75?'g':s>=50?'a':'r';
+function badge(d,where){
+  if(d.state==='cant')return `<span class="cant" title="">Can't read site</span>`;
+  if(d.state==='nc')return `<span class="nc">Not checked</span>`;
+  const b='b-'+band(d.sc);
+  if(V==='A')return `<span class="sA ${b}">${d.sc}<small>/100</small></span>`;
+  if(V==='B')return `<span class="sB ${b}" style="--p:${d.sc}"><span>${d.sc}</span></span>`;
+  return `<span class="sC ${b}" style="--p:${d.sc}"><b>${d.sc}<em>/100</em></b><i><u></u></i></span>`;
+}
+function pop(d,pos){
+  if(d.state==='cant')return `<div class="pop cantpop" style="${pos}"><h4>Can't read this site</h4><ul><li>The page builds itself in the browser, so the crawl saw almost no text.</li></ul><div class="ft">No number given. This is not a low score.</div></div>`;
+  if(d.state)return '';
+  return `<div class="pop" style="${pos}"><h4><span>Site score</span><span style="color:var(--${band(d.sc)=='g'?'g':band(d.sc)=='a'?'a':'r'})">${d.sc}/100</span></h4><ul>${d.r.map(x=>`<li class="${x[0]}">${x[1]}</li>`).join('')}</ul><div class="ft">Deep check · 42 pages read · 21 Oct · v1</div></div>`;
+}
+const strip=(d)=>`<div class="icons hide-m"><span class="ic">📍</span><span class="ic">🔎</span><span class="ic">📞</span></div>`;
+function orow(d,phone){
+  const popPos=phone?'right:84px;top:-34px':'right:100px;top:-46px';
+  return `<div class="orow ${d.open?'open':''}"><div><div class="bn">${d.n}</div><div class="sm">${d.t}</div></div>
+  ${phone?'':`<div><span class="pill">${d.s}</span></div>`}
+  ${phone?'':`<div class="icons"><span class="site">${d.site}</span>${strip(d)}</div>`}
+  <div style="justify-self:end;display:flex;align-items:center;gap:8px">${phone?`<span class="pill">${d.s}</span>`:''}${badge(d)}</div>${pop(d,popPos)}</div>`;
+}
+const MSG=['Yes go on then, send me the report','Not now thanks','Hi, who is this?','Can you call me tomorrow?','👍'];
+function irow(d,i,phone){
+  return `<div class="irow ${d.open?'open':''}"><div class="av">${d.n[0]}</div><div class="grow"><div class="bn">${d.n}</div><div class="sm">${MSG[i]}</div></div>
+  <div style="display:flex;flex-direction:column;align-items:flex-end;gap:5px"><span class="sm">${['09:12','Yest','Mon','Mon','Sun'][i]}</span>${badge(d)}</div>${pop(d,phone?'right:78px;top:-40px':'right:90px;top:-50px')}</div>`;
+}
+const meta={A:['A · Number pill','A coloured pill with the number, sitting where the crawl icon is. Quietest option; reads like the status pills.'],
+B:['B · Ring','A small dial. Draws the eye fastest in a long list, and still reads at phone size.'],
+C:['C · Number + bar','Number with a thin bar. Easiest to compare two rows side by side; widest, so phone shows the number only.']}[V];
+document.getElementById('ttl').textContent='Site score — variant '+meta[0];
+document.getElementById('desc').textContent=meta[1]+' Hover (shown open on K. Morgan) lists the top reasons. For team use only.';
+const o=DATA.map(d=>orow(d)).join(''), i=DATA.map((d,k)=>irow(d,k)).join('');
+const po=DATA.slice(0,4).map(d=>orow(d,1)).join(''), pi=DATA.slice(0,4).map((d,k)=>irow(d,k,1)).join('');
+document.getElementById('root').innerHTML=
+`<h2>Outreach row · desktop</h2><div class="card" style="min-height:300px">${o}</div>
+<h2>Inbox row · desktop</h2><div class="card" style="max-width:640px;min-height:360px">${i}</div>
+<h2>Phone · Outreach (left) and Inbox (right)</h2><div class="cols"><div class="card phone" style="min-height:380px">${po}</div><div class="card phone" style="min-height:380px">${pi}</div></div>`;
+</script></body></html>
