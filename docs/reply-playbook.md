@@ -233,6 +233,13 @@ Approved before / after sheet: `C:\Users\paulj\Documents\Findable\lean-first-rep
   `contentTrust.ts`, which reaches 31 functions including send-whatsapp-message and process-whatsapp-queue, so it was
   not built in this change; the pitch already has words for it if the check ever quotes one.
 * Tests: `scripts/reply-move.test.ts` §6 / §9b, `scripts/reply-new-intents.test.ts`, `scripts/lean-first-replies.test.ts`.
+* **Deployed 2026-10-23** (main 320fc232): migration 20261124130000 applied and read back (3 nullable columns on
+  voice_note_scripts); edge functions ai-reply-drafts, voice-note-script, inbox-scheduled-send, warm-lead-reply,
+  conversation-triage, business-summary, admin-overview, twilio-webhook (the closure of replyMove / replyPlaybook /
+  warmReply / voiceNoteScript / pitchIssueWords). Live markers: OPTIONS x-ai-reply-drafts 2026-10-23a-lean-first-replies,
+  x-voice-note-script 2026-10-23a-next-thing-to-say; the SPA chunks carry voice-note-generated and the What's New id.
+  Full gate: 450/451; the one red suite (warm-lead-research "a fresh crawl-check row is reused") fails the same on
+  untouched origin/main 50460132 (a date-dependent fixture), not this change. Open drafts keep old wording until Regenerate.
 
 ## 6. Where Paul's brief and v5 differ (v5 wins)
 
