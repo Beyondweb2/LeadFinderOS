@@ -354,6 +354,14 @@ Deno.serve(async (req) => {
        never is). See shareUrlFor and reportSlug.ts. */
     const auditShortCode = (audit as { short_code?: string | null }).short_code ?? null;
     data.shareUrl = auditShortCode ? shortReportUrl(auditShortCode) : shareUrlFor(supabaseUrl, audit.id);
+    /* The prospect's own site as a bare host, for the quick report's site card. An aggregator page (a Facebook
+       or directory listing) is not their website, so it never names one. */
+    if (ownWebsite && !isAggregatorUrl(ownWebsite)) {
+      try {
+        const u = new URL(/^https?:\/\//i.test(ownWebsite) ? ownWebsite : `https://${ownWebsite}`);
+        data.siteHost = u.hostname.replace(/^www\./i, "") || null;
+      } catch { /* an unparseable address names nothing */ }
+    }
 
     /* ── WHAT'S STOPPING AI READING YOUR SITE + the Request-a-call button (2026-09-16) ────────────
        The faults come from the lead's STORED crawl-check (crawl-check writes lead_crawl_checks); we

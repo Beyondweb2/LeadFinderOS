@@ -21,6 +21,7 @@ import { AI_OVERVIEW_CONTEXT_LABEL, AI_OVERVIEW_LABEL, AI_OVERVIEW_NOT_SCORED, A
 import { FINDABLE_CONTACT_EMAIL, FINDABLE_CONTACT_WHATSAPP, FINDABLE_GUARANTEE, REMEASURE_CLAIM_SENTENCE, offerSummaryFor } from './findableOffer.ts';
 import { BASELINE_QUESTIONS } from './auditQuestionCounts.ts';
 import { isGenericSchemaGap, type CrawlFault } from './crawlCheck.ts';
+import { fixLinesFor } from './siteFixLines.ts';
 import type { EvidenceKind, SiteEvidenceFinding } from './siteEvidence.ts';
 import type { ReportContentIssue } from './contentTrust.ts';
 import { answerExcerpt, cleanAnswerText, isJunkAnswer, isMapCardAnswer, type AnswerBlock } from './answerText.ts';
@@ -156,6 +157,8 @@ export interface AiAuditReportData {
    *  Only the quick report reads it: when true and nothing was found, it may say so truthfully
    *  rather than inventing a finding. Absent = unknown, and the report says nothing. */
   siteChecked?: boolean;
+  /** The prospect's website address as a bare host (no scheme, no "www."), for the neutral site card in the quick report. Absent = the card says only "Your website". */
+  siteHost?: string | null;
   /* ⛔ HOW THE WEBSITE SLOT IS PRESENTED. 'graded' (the DEFAULT) is the original: grade circles,
      /100 scores and a lead sentence naming the grade. 'issues' drops all of that and prints the
      findings alone under a plain heading.
@@ -1126,7 +1129,7 @@ export function ownNameVariants(businessName: string): string[] {
 /** The website section's input, decided by renderReportHtml from the stored crawl only. */
 /** One row of "Website issues we found". `severity` is set by the content & trust checks; the older faults
  *  leave it out and read minor → Medium, else High, as they always did. `evidence` is one verbatim line. */
-export interface QuickIssue { title: string; detail: string; minor: boolean; severity?: 'high' | 'medium' | 'low'; evidence?: string | null }
+export interface QuickIssue { title: string; detail: string; minor: boolean; severity?: 'high' | 'medium' | 'low'; evidence?: string | null; /** The finding's stable kind (crawl fault, evidence or content check), so "what to fix first" is keyed by what it IS, never its wording. */ kind?: string }
 const QUICK_SEVERITY_RANK: Record<'high' | 'medium' | 'low', number> = { high: 0, medium: 1, low: 2 };
 const QUICK_SEVERITY_WORD: Record<'high' | 'medium' | 'low', string> = { high: 'High', medium: 'Medium', low: 'Low' };
 const QUICK_SEVERITY_CLASS: Record<'high' | 'medium' | 'low', string> = { high: 'high', medium: 'med', low: 'low' };
@@ -1138,22 +1141,26 @@ export type QuickWebsite =
   | { state: 'clean' }
   | { state: 'unknown' };
 
-/** The six-answer report's header — replaces the wave band and explainer on this one report type.
- *  Dark Findable band; the method line is built from the real score shape, never hard-coded. */
-export function renderQuickCheckHeader(businessName: string, dateLabel: string, h?: HookReportSummary | null): string {
+/** The six-answer report's method line, built from the real score shape, never hard-coded. Printed in the
+ *  hero band (it used to sit in the header; the header is now just the brand, the business and the date). */
+export function quickMethodLine(h?: HookReportSummary | null): string {
   const s = h?.score;
   const engines = s ? s.perEngine.length : 0;
-  const method = s && s.googleAiInScore && s.questions > 0 && engines > 0
+  return s && s.googleAiInScore && s.questions > 0 && engines > 0
     ? `${s.questions} ${plural(s.questions, 'question')} &times; ${engines} AI ${plural(engines, 'engine')}, plus Google AI where Google showed an AI answer &middot; ${s.total} ${plural(s.total, 'answer')} scored`
     : s && s.questions > 0 && engines > 0
     ? `${s.questions} ${plural(s.questions, 'question')} &times; ${engines} AI ${plural(engines, 'engine')} &times; 1 ask each &middot; ${s.total} ${plural(s.total, 'answer')} total${h?.overviews?.length ? (h?.score?.googleAiInScore ? ' &middot; plus Google AI where Google showed an AI answer' : ' &middot; plus Google AI, shown for context') : ''}`
     : '';
+}
+
+/** The six-answer report's header (2026-10-23 redesign): light, the brand on the left, who the report is
+ *  for and its date on the right. The score band that follows is the hero. */
+export function renderQuickCheckHeader(businessName: string, dateLabel: string, _h?: HookReportSummary | null): string {
   return `<header class="q4-head">
       <div class="q4-brand"><div class="q4-wm">Findable<span>.</span></div><div class="q4-sub">AI visibility quick audit</div></div>
       <div class="q4-meta">
-        <div class="q4-meta-top"><span class="q4-meta-k">Report for</span><span class="q4-date">${esc(dateLabel)}</span></div>
-        <div class="q4-biz">${esc(businessName)}</div>${method ? `
-        <div class="q4-method">${method}</div>` : ''}
+        <div class="q4-meta-i"><span class="q4-meta-k">Report for</span><span class="q4-biz">${esc(businessName)}</span></div>
+        <div class="q4-meta-i"><span class="q4-meta-k">Report date</span><span class="q4-date">${esc(dateLabel)}</span></div>
       </div>
     </header>`;
 }
@@ -1266,54 +1273,78 @@ function aioDataState(t: OverviewTally | null): string {
   return t && t.shown > 0 ? 'shown' : overviewChipValue(t) === NO_OVERVIEW_TEXT ? 'none' : 'unknown';
 }
 
-/** The six-answer report's body (chat view, Paul 2026-10-13): the dark score section, ONE plain line of
- *  figures, then one chat window per question — the question as a grey bubble, each engine's reply under
- *  it listing who it named — then the honest "quick check" note and the website section. The caller
- *  appends the CTA and footer (renderQuickCheckFooter). */
-export function renderQuickCheckReport(h: HookReportSummary, businessName: string, website: QuickWebsite, prospectOnly = false): string {
+/** The neutral card that stands where the homepage picture will go (2026-10-23). Their address and the
+ *  count of what we found — nothing drawn, nothing invented. When a real capture exists it replaces this. */
+function quickSiteCard(siteHost: string | null | undefined, found: number): string {
+  const host = String(siteHost ?? '').trim();
+  return `<div class="q4-site" aria-label="Your website">
+          <div class="q4-site-bar"><b></b><b></b><b></b>${host ? `<span>${esc(host)}</span>` : ''}</div>
+          <div class="q4-site-body">
+            <span class="q4-site-k">Your website</span>
+            <div class="q4-site-host">${host ? esc(host) : 'Your website'}</div>
+            <p class="q4-site-p">We read your site and checked how AI tools can use it.</p>
+            <span class="q4-site-n">${found} ${found === 1 ? 'thing' : 'things'} found</span>
+          </div>
+        </div>`;
+}
+
+/** The six-answer report's body (2026-10-23 redesign, Paul's v3): the dark hero band with the overall figure
+ *  in a ring, one white tile per engine, then WHAT WE FOUND (their site beside the issues), then one box per
+ *  question — the question as a dark bar, each engine's reply listing who it named — then WHAT TO FIX FIRST.
+ *  The caller appends the CTA and footer (renderQuickCheckFooter). */
+export function renderQuickCheckReport(h: HookReportSummary, businessName: string, website: QuickWebsite, prospectOnly = false, siteHost: string | null = null): string {
   const s = h.score;
   if (h.shape !== 'six' || !s) return renderHookSection(h, businessName);
   q4MarkSeq = 0;
   const c = hookReportCopy(h, businessName);
   const overall = quickOverallTone(s.named, s.total);
   const misses = Math.max(0, s.total - s.named);
+  const method = quickMethodLine(h);
 
-  /* ── YOUR SCORE ── the dark section, unchanged: the overall figure, one card per engine, the verdict. */
+  /* ── THE HERO BAND ── the question the report answers, the verdict, the overall figure in a ring. The ring's
+     arc is the real percentage (--pct), clamped; the tone of the figure keeps the report's own bands. */
+  const pct = Math.max(0, Math.min(100, Math.round(s.percent)));
+  const hero = `
+      <div class="q4-hero2">
+        <div class="q4-hero2-t">
+          <h1 class="q4-hero2-h">How visible is <em>${esc(businessName)}</em> in AI search?</h1>
+          <p class="q4-verdict">${esc(c.headline)}</p>${method ? `
+          <p class="q4-method">${method}</p>` : ''}
+        </div>
+        <div class="q4-overall">
+          <div class="q4-ring" style="--pct:${pct}"><b class="q4-t-${overall}">${s.percent}%</b></div>
+          <span class="q4-k"><i></i>Overall AI visibility</span>
+          <span class="q4-overall-s">${s.named} of ${s.total} ${plural(s.total, 'answer')} named your business</span>
+        </div>
+      </div>`;
+
+  /* ── ONE WHITE TILE PER ENGINE ── plus Google AI's chip as a tile: display only unless the audit's scoring method puts it in. */
   const engines = s.perEngine.map((e) => {
     const tone = quickEngineTone(e.named, e.total);
-    const pct = e.total > 0 ? Math.round((e.named / e.total) * 100) : 0;
+    const p = e.total > 0 ? Math.round((e.named / e.total) * 100) : 0;
     return `
           <div class="q4-eng q4-eng--${e.engine === 'chatgpt' ? 'gpt' : 'gai'}">
             <div class="q4-eng-h">${q4Mark(e.engine)}<span>${esc(e.label)}</span></div>
-            <b class="q4-eng-v${tone ? ` q4-t-${tone}` : ''}">${pct}%</b>
+            <b class="q4-eng-v${tone ? ` q4-t-${tone}` : ''}">${p}%</b>
             <span class="q4-eng-s">${e.named} of ${e.total} ${plural(e.total, 'answer')}</span>
           </div>`;
   }).join('');
   const score = `
-    <section class="q4-score">
-      <div class="q4-score-in">
-        <div class="q4-overall">
-          <span class="q4-k"><i></i>Overall AI visibility</span>
-          <b class="q4-t-${overall}">${s.percent}%</b>
-          <span class="q4-overall-s">${s.named} of ${s.total} ${plural(s.total, 'answer')} named your business</span>
-        </div>
-        <div class="q4-engs">${engines}
-        </div>
+    <section class="q4-score">${hero}
+      <div class="q4-engs">${engines}
         ${quickOverviewChip(h)}
       </div>
-      <p class="q4-verdict">${esc(c.headline)}</p>
     </section>`;
 
-  /* ── ONE LINE ── replaces the three "why this matters" tiles. Only figures this run supports: the rival
-     figure is DIFFERENT businesses named in the answers that missed (hookAudit sameBusiness); null
-     (names withheld) or 0 → that sentence is left out, never a guess. */
+  /* ── ONE LINE ── only figures this run supports: the rival figure is DIFFERENT businesses named in the
+     answers that missed (hookAudit sameBusiness); null (names withheld) or 0 → that sentence is left out. */
   const rivals = h.rivalsNamedInstead;
   const summary = misses > 0
     ? `${misses} of ${s.total} ${plural(s.total, 'answer')} didn&rsquo;t name you.${typeof rivals === 'number' && rivals > 0 ? ` ${rivals} other ${rivals === 1 ? 'business was' : 'businesses were'} named instead.` : ''}`
     : `All ${s.total} ${plural(s.total, 'answer')} named you.`;
 
-  /* ── ONE CHAT WINDOW PER QUESTION ── the scored engines in score order; the Google AI Overview (when
-     this audit recorded one) as a further reply marked display only — never in the score. */
+  /* ── ONE BOX PER QUESTION ── the scored engines in score order; the Google AI Overview (when this audit
+     recorded one) as a further reply marked display only — never in the score. */
   const ovs = h.overviews ?? [];
   const withheld = h.rivalsNamedInstead === null;
   const chats = h.tested.map((q, qi) => {
@@ -1329,19 +1360,24 @@ export function renderQuickCheckReport(h: HookReportSummary, businessName: strin
     });
     return `
       <article class="q4-chat">
-        <div class="q4-chat-q"><span class="q4-sr">Question ${qi + 1}: </span>${esc(q.question)}</div>
+        <div class="q4-chat-q"><span class="q4-qn" aria-hidden="true">${qi + 1}</span><span class="q4-sr">Question ${qi + 1}: </span>${esc(q.question)}</div>
         <div class="q4-replies">${replies}${aio}
         </div>
       </article>`;
   }).join('');
 
-  /* ── WEBSITE ── stored findings only, worst first: High / Medium / Low, with the one line of evidence
-     a content & trust issue carries ("We found: …"). Neutral colours since 2026-10-13. */
-  const site = website.state === 'issues' ? `
-      <section class="q4-panel q4-panel--site">
-        <h2 class="q4-h">Website issues we found</h2>
-        <div class="q4-rows">${website.issues.map((i) => { const sv = QUICK_SEVERITY_CLASS[quickSeverity(i)]; return `
-          <div class="q4-issue"><span class="q4-ic q4-ic--${sv}">${Q4_ICONS.page}</span><div><div class="q4-issue-t">${esc(i.title)} <span class="q4-sev q4-sev--${sv}">${QUICK_SEVERITY_WORD[quickSeverity(i)]}</span></div><p class="q4-issue-p">${esc(i.detail)}</p>${i.evidence ? `<p class="q4-issue-ev"><b>We found:</b> ${esc(i.evidence)}</p>` : ''}</div></div>`; }).join('')}
+  /* ── WHAT WE FOUND ── stored findings only, worst first: High / Medium / Low, with the one line of evidence a
+     content & trust issue carries ("We found: …"). Their site stands beside the list — a neutral card for now
+     (quickSiteCard), the homepage picture later. The other states keep their own full-width panel. */
+  const issueRows = website.state === 'issues' ? website.issues.map((i) => { const sv = QUICK_SEVERITY_CLASS[quickSeverity(i)]; return `
+          <div class="q4-issue"><span class="q4-ic q4-ic--${sv}">${Q4_ICONS.page}</span><div><div class="q4-issue-t">${esc(i.title)} <span class="q4-sev q4-sev--${sv}">${QUICK_SEVERITY_WORD[quickSeverity(i)]}</span></div><p class="q4-issue-p">${esc(i.detail)}</p>${i.evidence ? `<p class="q4-issue-ev"><b>We found:</b> ${esc(i.evidence)}</p>` : ''}</div></div>`; }).join('') : '';
+  const found = website.state === 'issues' ? `
+      <section class="q4-found">
+        <h2 class="q4-h2">What we found on your website <small>Most important first</small></h2>
+        <div class="q4-split">
+          ${quickSiteCard(siteHost, website.issues.length)}
+          <div class="q4-panel q4-panel--site"><div class="q4-rows">${issueRows}
+          </div></div>
         </div>
       </section>`
     : website.state === 'none' ? `
@@ -1356,13 +1392,25 @@ export function renderQuickCheckReport(h: HookReportSummary, businessName: strin
       </section>`
     : '';
 
+  /* ── WHAT TO FIX FIRST ── one plain line per finding kind the crawl made (siteFixLines.ts), at most three,
+     never for a finding the report did not show. */
+  const fixes = website.state === 'issues' ? fixLinesFor(website.issues.map((i) => i.kind)) : [];
+  const fix = fixes.length ? `
+      <section class="q4-fix">
+        <h2 class="q4-h2">What to fix first <small>From what we found on your site</small></h2>
+        <div class="q4-fixes">${fixes.map((f, k) => `
+          <div class="q4-fixi"><span class="q4-qn" aria-hidden="true">${k + 1}</span><div><b>${esc(f.title)}</b><p>${esc(f.detail)}</p></div></div>`).join('')}
+        </div>
+      </section>` : '';
+
   return `
     <style>${QUICK_REPORT_CSS}</style>${score}
-    <div class="q4-body">
+    <div class="q4-body">${found}
+      <h2 class="q4-h2">The questions we asked <small>Who each AI named</small></h2>
       <p class="q4-sum">${summary}</p>
       <section class="q4-chats" aria-label="What each AI said">${chats}
       </section>
-      <p class="q4-caveat">${esc(c.caveat)}</p>${site}
+      <p class="q4-caveat">${esc(c.caveat)}</p>${fix}
     </div>`;
 }
 
@@ -1400,79 +1448,104 @@ export function renderQuickCheckFooter(o: {
    cream page (#f7f5f1) between, white cards, Findable yellow (#fcc933) for the names named instead.
    ⛔ NO BLUE ANYWHERE on this report, the Gemini mark included. */
 const QUICK_REPORT_CSS = `
-  body{background:#f7f5f1}
-  .sheet{max-width:920px;background:#f7f5f1;box-shadow:0 1px 0 rgba(16,17,20,.06)}
-  .q4-head,.q4-score,.q4-body,.q4-foot{-webkit-print-color-adjust:exact;print-color-adjust:exact}
-  .q4-head{background:#101114;color:#fff;padding:22px 32px 18px;display:flex;justify-content:space-between;align-items:flex-start;gap:16px 28px;flex-wrap:wrap}
-  .q4-wm{font-size:30px;font-weight:800;letter-spacing:-.035em;line-height:1;color:#fff}
+  :root{color-scheme:light}
+  body{background:#eeece6}
+  .sheet{max-width:960px;background:#eeece6;box-shadow:none}
+  .q4-head,.q4-score,.q4-body,.q4-foot,.q4-chat-q{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .q4-head{background:#eeece6;color:#101114;padding:20px 24px 14px;display:flex;justify-content:space-between;align-items:flex-end;gap:12px 24px;flex-wrap:wrap}
+  .q4-wm{font-size:30px;font-weight:800;letter-spacing:-.035em;line-height:1;color:#101114}
   .q4-wm span{color:#fcc933}
-  .q4-sub{margin-top:8px;font-size:10.5px;font-weight:700;letter-spacing:.24em;text-transform:uppercase;color:#a3a5ab}
-  .q4-meta{text-align:right;min-width:0}
-  .q4-meta-top{display:flex;justify-content:flex-end;gap:18px;font-size:10.5px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:#a3a5ab}
-  .q4-date{color:#d4d5d9}
-  .q4-biz{font-size:16px;font-weight:700;color:#fff;margin-top:4px}
-  .q4-method{margin-top:6px;font-size:10px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:#fcc933;opacity:.9}
-  .q4-score{background:#101114;padding:4px 24px 22px}
-  .q4-score-in{display:grid;grid-template-columns:1.15fr 1fr 1fr;gap:14px;align-items:stretch}
-  .q4-overall{background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.09);border-radius:18px;padding:18px 22px}
-  .q4-k{display:flex;align-items:center;gap:8px;font-size:11px;font-weight:800;letter-spacing:.18em;text-transform:uppercase;color:#dcdde0}
+  .q4-sub{margin-top:6px;font-size:10.5px;font-weight:700;letter-spacing:.24em;text-transform:uppercase;color:#5d5e63}
+  .q4-meta{display:flex;gap:18px}
+  .q4-meta-i{display:flex;flex-direction:column;gap:1px}
+  .q4-meta-i + .q4-meta-i{border-left:1px solid #d5d2c9;padding-left:18px}
+  .q4-meta-k{font-size:10.5px;color:#5d5e63}
+  .q4-biz,.q4-date{font-size:15px;font-weight:700;color:#101114}
+  .q4-score{padding:0 24px 4px}
+  .q4-hero2{background:#101114;color:#fff;border-radius:20px;padding:22px 26px;display:grid;grid-template-columns:1fr auto;gap:18px 24px;align-items:center}
+  .q4-hero2-h{margin:0 0 8px;font-size:30px;line-height:1.1;letter-spacing:-.02em;font-weight:800}
+  .q4-hero2-h em{font-style:normal;color:#fcc933}
+  .q4-verdict{margin:0;font-size:16px;font-weight:700;color:#fff}
+  .q4-method{margin:8px 0 0;font-size:10px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:#fcc933;opacity:.9}
+  .q4-overall{display:flex;flex-direction:column;align-items:center;text-align:center;gap:6px}
+  .q4-ring{width:132px;height:132px;border-radius:50%;background:conic-gradient(#fcc933 calc(var(--pct) * 1%),#34363c 0);display:grid;place-items:center;position:relative}
+  .q4-ring::before{content:"";position:absolute;inset:13px;border-radius:50%;background:#101114}
+  .q4-ring b{position:relative;font-size:34px;font-weight:900;letter-spacing:-.05em;line-height:1}
+  .q4-k{display:flex;align-items:center;gap:8px;font-size:11px;font-weight:800;letter-spacing:.16em;text-transform:uppercase;color:#dcdde0}
   .q4-k i{width:10px;height:10px;border-radius:3px;background:#fcc933;display:inline-block}
-  .q4-overall b{display:block;font-size:84px;font-weight:900;letter-spacing:-.06em;line-height:.95;margin-top:10px}
-  .q4-overall-s{display:block;font-size:15px;color:#ebebed;margin-top:8px;line-height:1.35}
+  .q4-overall-s{font-size:12.5px;color:#bdbec3}
   .q4-t-red{color:#ff6b75} .q4-t-amber{color:#ffbe3d} .q4-t-green{color:#4ade80}
-  .q4-engs{display:contents}
-  .q4-eng{border-radius:18px;padding:16px 18px;border:1px solid rgba(255,255,255,.09);display:flex;flex-direction:column;justify-content:center}
-  .q4-eng--gpt{background:linear-gradient(160deg,rgba(74,222,128,.10),rgba(255,255,255,.03))}
-  .q4-eng--gai{background:linear-gradient(160deg,rgba(167,139,250,.16),rgba(255,255,255,.03))}
-  .q4-eng-h{display:flex;align-items:center;gap:10px;font-size:14px;font-weight:700;color:#fff}
+  .q4-engs{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin:12px 0 0}
+  .q4-eng{background:#fff;border:1px solid #e0ddd4;border-radius:16px;padding:12px 14px;display:flex;flex-direction:column;justify-content:center;gap:2px}
+  .q4-eng-h{display:flex;align-items:center;gap:10px;font-size:13.5px;font-weight:700;color:#101114}
   .q4-eng-h .q4-mk{width:28px;height:28px}
-  .q4-eng-v{font-size:46px;font-weight:900;letter-spacing:-.05em;line-height:1;margin-top:12px;color:#fff}
-  .q4-eng-v.q4-t-red{color:#ff6b75} .q4-eng-v.q4-t-amber{color:#ffbe3d} .q4-eng-v.q4-t-green{color:#4ade80}
-  .q4-eng-s{font-size:13px;color:#bdbec3;margin-top:6px}
-  .q4-aio{grid-column:1/-1;display:flex;flex-wrap:wrap;align-items:center;gap:8px 10px;border-radius:14px;padding:9px 14px;border:1px dashed rgba(255,255,255,.18);background:rgba(255,255,255,.04);font-size:14px;color:#fff}
-  .q4-aio .q4-mk{width:22px;height:22px}
-  .q4-aio-t{font-weight:750}
-  .q4-aio--named .q4-aio-t{color:#4ade80} .q4-aio--not_named .q4-aio-t{color:#ff6b75}
-  .q4-aio-n{font-size:12px;color:#bdbec3}
-  .q4-verdict{margin:16px 2px 0;font-size:18px;font-weight:750;color:#fff;letter-spacing:-.01em;padding-left:12px;border-left:3px solid #fcc933}
+  .q4-eng-v{font-size:28px;font-weight:900;letter-spacing:-.04em;line-height:1.1;margin-top:4px;color:#101114}
+  .q4-eng-v.q4-t-red{color:#c81e2b} .q4-eng-v.q4-t-amber{color:#9a6200} .q4-eng-v.q4-t-green{color:#15803d}
+  .q4-eng-s{font-size:12.5px;color:#5d5e63}
+  .q4-aio{background:#fff;border:1px solid #e0ddd4;border-radius:16px;padding:12px 14px;display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;font-size:13px;color:#101114;min-width:0}
+  .q4-aio .q4-mk{width:28px;height:28px}
+  .q4-aio-t{font-weight:800;font-size:15px}
+  .q4-aio--named .q4-aio-t{color:#15803d} .q4-aio--not_named .q4-aio-t{color:#5d5e63}
+  .q4-aio-n{font-size:12px;color:#5d5e63;flex-basis:100%}
   .q4-mk{display:inline-flex;align-items:center;justify-content:center;flex:none;border-radius:50%;width:22px;height:22px;vertical-align:middle}
   .q4-mk svg{width:62%;height:62%;display:block}
   .q4-mk--gpt{background:#0d0d0d;box-shadow:inset 0 0 0 1px rgba(255,255,255,.18)} .q4-mk--gpt svg{fill:#fff}
   .q4-mk--gai{background:#fff;box-shadow:inset 0 0 0 1px #e2e0da} .q4-mk--gai svg{width:70%;height:70%}
-  .q4-body{background:#f7f5f1;padding:20px 24px 8px}
+  .q4-body{background:#eeece6;padding:18px 24px 8px}
   .q4-sr{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
-  .q4-sum{margin:0 0 16px;font-size:16px;font-weight:700;line-height:1.4;color:#101114}
-  .q4-chats{display:grid;gap:16px}
-  .q4-chat{background:#fff;border:1px solid #e6e2d9;border-radius:18px;padding:16px;min-width:0;break-inside:avoid;page-break-inside:avoid}
-  .q4-chat-q{margin:0 0 12px auto;max-width:88%;width:fit-content;background:#ebe9e4;color:#101114;font-size:15px;font-weight:650;line-height:1.4;padding:10px 14px;border-radius:16px 16px 4px 16px;overflow-wrap:anywhere}
-  .q4-replies{display:grid;gap:10px}
-  .q4-reply{max-width:94%;background:#fff;border:1px solid #ebe8e1;border-radius:4px 16px 16px 16px;padding:11px 14px;min-width:0}
-  .q4-reply-h{display:flex;align-items:center;flex-wrap:wrap;gap:6px 8px;margin:0 0 8px}
+  .q4-h2{margin:0 0 10px;font-size:21px;font-weight:800;letter-spacing:-.02em;color:#101114;display:flex;justify-content:space-between;align-items:baseline;gap:6px 12px;flex-wrap:wrap}
+  .q4-h2 small{font-size:12.5px;font-weight:400;color:#5d5e63;letter-spacing:0}
+  .q4-found,.q4-fix{margin:0 0 22px}
+  .q4-split{display:grid;grid-template-columns:1fr 1.15fr;gap:16px;align-items:stretch}
+  .q4-site{background:#fff;border:1px solid #e0ddd4;border-radius:18px;overflow:hidden;display:flex;flex-direction:column;box-shadow:0 8px 24px -14px rgba(16,17,20,.35)}
+  .q4-site-bar{display:flex;align-items:center;gap:5px;padding:9px 12px;background:#efeeea}
+  .q4-site-bar b{width:9px;height:9px;border-radius:50%;background:#cfcdc7}
+  .q4-site-bar span{margin-left:8px;font-size:11px;color:#5d5e63;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .q4-site-body{flex:1;display:flex;flex-direction:column;justify-content:center;gap:8px;padding:22px 20px;background:linear-gradient(135deg,#f6f4ef,#e7e4dc)}
+  .q4-site-k{font-size:10.5px;font-weight:800;letter-spacing:.16em;text-transform:uppercase;color:#5d5e63}
+  .q4-site-host{font-size:24px;font-weight:800;letter-spacing:-.02em;line-height:1.15;color:#101114;overflow-wrap:anywhere}
+  .q4-site-p{margin:0;font-size:13.5px;color:#4f5056;max-width:34ch}
+  .q4-site-n{align-self:flex-start;font-size:12px;font-weight:800;background:#fde4e6;color:#b3121e;border-radius:999px;padding:3px 10px}
+  .q4-sum{margin:0 0 12px;font-size:15px;font-weight:700;line-height:1.4;color:#101114}
+  .q4-chats{display:grid;gap:12px}
+  .q4-chat{background:#dedbd3;border:1px solid #c4c0b6;border-radius:16px;overflow:hidden;min-width:0;break-inside:avoid;page-break-inside:avoid;box-shadow:0 6px 16px -10px rgba(16,17,20,.45)}
+  .q4-chat-q{margin:0;display:flex;gap:10px;align-items:center;background:#101114;color:#fff;font-size:15.5px;font-weight:700;line-height:1.35;padding:12px 14px;overflow-wrap:anywhere}
+  .q4-qn{flex:none;width:26px;height:26px;border-radius:50%;background:#fcc933;color:#101114;display:inline-flex;align-items:center;justify-content:center;font-size:13px;font-weight:800}
+  .q4-replies{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:8px;padding:12px}
+  .q4-reply{background:#fff;border:1px solid #cfccc3;border-radius:12px;padding:9px 11px;min-width:0}
+  .q4-reply-h{display:flex;align-items:center;flex-wrap:wrap;gap:6px 8px;margin:0 0 6px}
   .q4-reply-n{font-size:13.5px;font-weight:800;color:#101114}
   .q4-reply-h .q4-mk{width:22px;height:22px}
-  .q4-tag{font-size:11px;font-weight:600;color:#6b6c72;background:#efeeea;border-radius:999px;padding:2px 8px}
-  .q4-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:3px}
-  .q4-who{display:flex;align-items:flex-start;gap:8px;font-size:14.5px;font-weight:700;line-height:1.35;padding:6px 10px;border-radius:10px;border:1px solid;min-width:0}
+  .q4-tag{font-size:10.5px;font-weight:600;color:#5d5e63;background:#efeeea;border-radius:999px;padding:2px 8px}
+  .q4-list{list-style:none;margin:0;padding:0;display:flex;flex-wrap:wrap;gap:5px}
+  .q4-who{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:700;line-height:1.3;padding:3px 10px 3px 5px;border-radius:999px;border:1px solid;min-width:0}
   .q4-nm{min-width:0;overflow-wrap:anywhere}
-  .q4-ico{flex:none;width:18px;height:18px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:11px;font-weight:900;line-height:1;margin-top:1px;color:#fff}
+  .q4-ico{flex:none;width:16px;height:16px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:10px;font-weight:900;line-height:1;color:#fff}
   .q4-who--me{background:#e7f6ec;border-color:#b9e2c7;color:#0d5c2c}
   .q4-who--me .q4-ico{background:#15803d}
-  .q4-who--rival{background:#fff;border-color:transparent;color:#b3121e;padding:2px 10px}
+  .q4-who--rival{background:#fdecee;border-color:#f6ccd1;color:#b3121e}
   .q4-who--rival .q4-ico{background:#c81e2b}
-  .q4-more{font-size:13px;font-weight:600;color:#6b6c72;padding:2px 2px 0}
-  .q4-none{margin:0 0 6px;font-size:14px;font-weight:600;color:#5d5e63}
-  .q4-snip{margin:8px 0 0;font-size:13px;line-height:1.5;color:#55565c;font-style:italic;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;line-clamp:2;overflow:hidden;overflow-wrap:anywhere}
-  .q4-caveat{margin:14px 2px 18px;font-size:13px;line-height:1.45;color:#5d5e63}
-  .q4-panel{background:#fff;border:1px solid #e6e2d9;border-radius:18px;padding:16px 18px 12px;margin-bottom:18px;break-inside:avoid;page-break-inside:avoid}
-  .q4-h{margin:0 0 8px;font-size:12px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;color:#101114;break-after:avoid;page-break-after:avoid}
+  .q4-more{font-size:12.5px;font-weight:600;color:#5d5e63;padding:2px 2px 0}
+  .q4-none{margin:0 0 6px;font-size:13px;font-weight:600;color:#5d5e63;font-style:italic}
+  .q4-snip{display:none}
+  .q4-caveat{margin:12px 2px 22px;font-size:12.5px;line-height:1.45;color:#5d5e63}
+  .q4-panel{background:#fff;border:1px solid #e0ddd4;border-radius:18px;padding:6px 16px;margin:0 0 18px;break-inside:avoid;page-break-inside:avoid}
+  .q4-split .q4-panel{margin:0}
+  .q4-h{margin:10px 0 4px;font-size:12px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;color:#101114;break-after:avoid;page-break-after:avoid}
   .q4-rows > div + div{border-top:1px solid rgba(16,17,20,.07)}
   .q4-issue{display:grid;grid-template-columns:36px 1fr;gap:12px;align-items:start;padding:10px 0;break-inside:avoid;page-break-inside:avoid}
-  .q4-ic{width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex:none;background:#efeeea;color:#55565c}
-  .q4-ic svg{width:18px;height:18px}
+  .q4-ic{width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex:none;background:#efeeea;color:#55565c}
+  .q4-ic svg{width:16px;height:16px}
+  .q4-ic--high{background:#fde4e6;color:#b3121e} .q4-ic--med{background:#fff0cf;color:#8a5a00}
   .q4-issue-t{font-size:14.5px;font-weight:800;color:#101114;line-height:1.35}
   .q4-sev{display:inline-block;margin-left:6px;font-size:9.5px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;padding:2px 7px;border-radius:999px;vertical-align:2px;background:#efeeea;color:#55565c}
+  .q4-sev--high{background:#fde4e6;color:#b3121e} .q4-sev--med{background:#fff0cf;color:#8a5a00}
   .q4-issue-p{margin:3px 0 0;font-size:13px;color:#4f5056;line-height:1.45}
   .q4-issue-ev{margin:4px 0 0;font-size:12px;color:#6b6c72;line-height:1.4;overflow-wrap:anywhere} .q4-issue-ev b{color:#101114;font-weight:700}
+  .q4-fixes{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+  .q4-fixi{background:#fff;border:1px solid #e0ddd4;border-radius:16px;padding:12px 14px;display:flex;gap:10px;align-items:flex-start;break-inside:avoid;page-break-inside:avoid}
+  .q4-fixi b{display:block;font-size:14.5px;color:#101114;line-height:1.3}
+  .q4-fixi p{margin:3px 0 0;font-size:12.5px;line-height:1.45;color:#4f5056}
   .q4-foot{background:#101114;color:#d4d5d9;padding:26px 28px 22px}
   .q4-foot-cta h3{margin:0 0 16px;font-size:26px;font-weight:800;letter-spacing:-.02em;color:#fff}
   .q4-foot .cta-actions{display:flex;flex-wrap:wrap;gap:10px;margin:0 0 14px}
@@ -1493,67 +1566,45 @@ const QUICK_REPORT_CSS = `
   .q4-foot .foot-cta{font-size:13.5px;font-weight:600;color:#fcc933;text-decoration:none}
   .q4-foot .foot-note{margin-top:10px;font-size:12px;line-height:1.5;color:#9c9da3;max-width:62ch;padding:0;border:0}
   @media (max-width:760px){
-    .q4-score-in{grid-template-columns:1fr 1fr}
-    .q4-overall{grid-column:1/-1}
+    .q4-split{grid-template-columns:1fr}
+    .q4-fixes{grid-template-columns:1fr}
+    .q4-engs{grid-template-columns:1fr 1fr}
+    .q4-aio{grid-column:1/-1}
   }
   @media (max-width:640px){
-    .q4-head{padding:18px 18px 14px;flex-direction:column;gap:12px}
+    .q4-head{padding:16px 16px 12px;align-items:flex-start}
     .q4-wm{font-size:26px}
-    .q4-meta{text-align:left;width:100%}
-    .q4-meta-top{justify-content:space-between}
-    .q4-score{padding:2px 14px 18px}
-    .q4-score-in{gap:10px}
-    .q4-overall{padding:16px 18px}
-    .q4-overall b{font-size:68px}
-    .q4-eng{padding:13px 14px}
-    .q4-eng-h{font-size:13px}
-    .q4-eng-h .q4-mk{width:24px;height:24px}
-    .q4-eng-v{font-size:34px;margin-top:8px}
-    .q4-verdict{font-size:16px}
+    .q4-meta{gap:12px}
+    .q4-meta-i + .q4-meta-i{padding-left:12px}
+    .q4-score{padding:0 12px 2px}
+    .q4-hero2{grid-template-columns:1fr;padding:18px}
+    .q4-hero2-h{font-size:25px}
+    .q4-overall{align-items:flex-start;text-align:left}
+    .q4-ring{width:112px;height:112px}
+    .q4-ring::before{inset:11px}
+    .q4-ring b{font-size:28px}
+    .q4-site-host{font-size:19px}
+    .q4-h2{font-size:19px}
+    .q4-body{padding:16px 12px 4px}
+    .q4-sum{font-size:15px}
+    .q4-chat-q{font-size:14.5px}
+    .q4-replies{grid-template-columns:1fr;padding:10px}
+    .q4-panel{padding:4px 14px;border-radius:16px}
     .q4-foot{padding:22px 16px 18px}
     .q4-foot-cta h3{font-size:22px}
     .q4-foot .cta-actions{flex-direction:column}
     .q4-foot .cta-btn{width:100%;min-height:44px}
     .q4-foot .cta-actions form{display:block !important;width:100%}
     .q4-foot-grid{grid-template-columns:1fr}
-    .q4-body{padding:16px 12px 4px}
-    .q4-sum{font-size:15px}
-    .q4-chat{padding:12px;border-radius:16px}
-    .q4-chat-q{max-width:94%;font-size:14.5px}
-    .q4-reply{max-width:100%;padding:10px 12px}
-    .q4-who{font-size:14px}
-    .q4-panel{padding:14px 14px 10px;border-radius:16px}
   }
   @media print{
     .sheet{max-width:none}
-    .q4-head{padding:14px 22px 12px}
-    .q4-score{padding:2px 18px 14px}
-    .q4-score-in{grid-template-columns:1.15fr 1fr 1fr;gap:10px}
-    .q4-overall,.q4-eng{padding:12px 16px}
-    .q4-overall b{font-size:60px;margin-top:6px}
-    .q4-eng-v{font-size:36px;margin-top:8px}
-    .q4-verdict{margin-top:10px;font-size:16px}
+    .q4-head{padding:14px 22px 10px}
+    .q4-score{padding:0 18px 2px}
+    .q4-hero2{padding:16px 20px}
     .q4-body{padding:14px 18px 2px}
     .q4-chats{gap:10px}
-    .q4-chat{padding:10px 12px}
-    .q4-snip{-webkit-line-clamp:3;line-clamp:3}
-  }
-  @media (prefers-color-scheme: dark){
-    body,.sheet,.q4-body{background:#16171a}
-    .sheet{box-shadow:none}
-    .q4-sum{color:#f2f2f3}
-    .q4-chat,.q4-panel{background:#1e1f23;border-color:#2e3036}
-    .q4-chat-q{background:#33353b;color:#f2f2f3}
-    .q4-reply{background:#25272c;border-color:#34363c}
-    .q4-reply-n,.q4-h,.q4-issue-t,.q4-issue-ev b{color:#f2f2f3}
-    .q4-mk--gai{background:#f2f2f3}
-    .q4-tag,.q4-sev,.q4-ic{background:#33353b;color:#c9cacf}
-    .q4-who--me{background:rgba(34,197,94,.14);border-color:rgba(74,222,128,.38);color:#86efac}
-    .q4-who--me .q4-ico{background:#16a34a}
-    .q4-who--rival{background:transparent;border-color:transparent;color:#fca5a5}
-    .q4-who--rival .q4-ico{background:#dc2626}
-    .q4-none,.q4-more,.q4-caveat,.q4-snip,.q4-issue-p,.q4-issue-ev{color:#b4b5ba}
-    .q4-rows > div + div{border-top-color:rgba(255,255,255,.08)}
+    .q4-replies{grid-template-columns:repeat(3,minmax(0,1fr))}
   }
 `;
 
@@ -1794,20 +1845,20 @@ export function renderReportHtml(d: AiAuditReportData): string {
   const quickIssues = ([
     ...(d.siteEvidence ?? []).flatMap((e) => {
       const copy = EVIDENCE_REPORT_COPY[e.kind];
-      return copy ? [{ title: copy.title, detail: copy.why, minor: false }] : [];
+      return copy ? [{ title: copy.title, detail: copy.why, minor: false, kind: e.kind }] : [];
     }),
     /* ⛔ NOT THE GENERIC "NO STRUCTURED DATA" LINE (Paul, 2026-10-06): absence of schema alone is not a
        defensible reason AI did not name someone (tested negative, CLAUDE.md §5), so it never takes a
        slot on the prospect hook report. Excluded FIRST, before the cap; nothing is added to replace it.
        Misleading schema still qualifies — it arrives as deep-crawl evidence (schema_wrong_domain) above.
        Every other surface keeps the line: this filter is the quick report's alone. */
-    ...(d.crawlFaults ?? []).filter((f) => !isGenericSchemaGap(f)).map((f) => ({ title: f.title, detail: f.detail, minor: !!f.minor })),
+    ...(d.crawlFaults ?? []).filter((f) => !isGenericSchemaGap(f)).map((f) => ({ title: f.title, detail: f.detail, minor: !!f.minor, kind: f.kind })),
     /* THE CONTENT & TRUST ISSUES (2026-10-11): ranked with the technical ones by severity — the faults and
        evidence above keep their place at the top of each tier, so "AI can't reach your site" still leads.
        robots.txt's own block is not said twice beside a real fetch that was refused. */
     ...(d.contentIssues ?? [])
       .filter((c) => !(c.kind === 'robots_blocks_ai' && (d.crawlFaults ?? []).some((f) => f.kind === 'search_blocked')))
-      .map((c) => ({ title: c.title, detail: c.why, minor: c.severity !== 'high', severity: c.severity, evidence: c.evidence })),
+      .map((c) => ({ title: c.title, detail: c.why, minor: c.severity !== 'high', severity: c.severity, evidence: c.evidence, kind: c.kind })),
   ] as QuickIssue[]).filter((x, i, all) => all.findIndex((y) => y.title.trim().toLowerCase() === x.title.trim().toLowerCase()) === i)
     .map((x, i) => ({ x, i, rank: QUICK_SEVERITY_RANK[quickSeverity(x)] }))
     .sort((a, b) => a.rank - b.rank || a.i - b.i).map((r) => r.x)
@@ -2830,7 +2881,7 @@ ${d.measuring ? `
       <p class="measuring-progress"><b>${d.measuring.runsDone} of ${d.measuring.runsTarget}</b> ${plural(d.measuring.runsTarget, "round")} of questions ${d.measuring.runsDone === 1 ? "is" : "are"} complete. Each round takes a few minutes. This page updates itself &mdash; check back shortly.</p>
     </section>` : d.nameNotJudgeable ? `${nameCheckSection}
 ${seoSlot}
-` : concept4 && d.hook ? `${renderQuickCheckReport(d.hook, d.businessName, quickWebsite, d.prospectOnly === true)}
+` : concept4 && d.hook ? `${renderQuickCheckReport(d.hook, d.businessName, quickWebsite, d.prospectOnly === true, d.siteHost ?? null)}
 ` : quickIncomplete ? `${renderQuickCheckIncomplete()}
 ` : d.hook ? `${renderHookSection(d.hook, d.businessName, d.generatedAtLabel)}
 ${hookCrawlSection}
