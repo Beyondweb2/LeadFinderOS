@@ -16,7 +16,7 @@ import { QuickBusinessTypes } from '@/components/QuickBusinessTypes';
 import type { Country } from '@/types/lead';
 import type { SearchFilters } from '@/types/lead';
 import { MANY_TOWNS_MAX_PER_PRESS, parseTownList, townsForPress } from '@/lib/manyTowns';
-import { defaultSearchDepth, THOROUGH_MAX_TOWNS_PER_PRESS, type SearchDepth } from '@/lib/townSearchArea';
+import { defaultSearchDepth, usableSearchDepth, THOROUGH_SEARCH_ENABLED, THOROUGH_MAX_TOWNS_PER_PRESS, type SearchDepth } from '@/lib/townSearchArea';
 import { depthButtonSuffix } from '@/lib/searchDepthWords';
 import { SearchDepthToggle } from '@/components/SearchDepthToggle';
 import { useSubscription } from '@/hooks/useSubscription';
@@ -116,7 +116,7 @@ export function SearchForm({
      applies to a town search only ("This town only", or Many towns); a radius search is always Standard. */
   const { isAdmin } = useSubscription();
   const [depthPick, setDepthPick] = useState<SearchDepth | null>(initialDepth ?? null);
-  const depth: SearchDepth = depthPick ?? defaultSearchDepth(selectedCountry);
+  const depth: SearchDepth = usableSearchDepth(depthPick ?? defaultSearchDepth(selectedCountry));
   const pressCap = depth === 'thorough' ? THOROUGH_MAX_TOWNS_PER_PRESS : MANY_TOWNS_MAX_PER_PRESS;
   const primaryCountries = SEARCH_COUNTRY_OPTIONS.filter((o) => o.primary);
   const otherCountries = SEARCH_COUNTRY_OPTIONS.filter((o) => !o.primary);
@@ -394,9 +394,9 @@ export function SearchForm({
                 />
               </div>
               {/* Standard / Thorough: a town search only (a radius search is always Standard). */}
-              <div className="pt-1">
+              {THOROUGH_SEARCH_ENABLED && <div className="pt-1">
                 <SearchDepthToggle value={townOnly || many ? depth : 'standard'} onChange={setDepthPick} showMoney={isAdmin} disabled={!(townOnly || many)} />
-              </div>
+              </div>}
             </div>
           </div>
 

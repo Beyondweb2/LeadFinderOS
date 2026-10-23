@@ -43,14 +43,25 @@ export const SEARCH_DEPTHS: readonly SearchDepth[] = ['standard', 'thorough'];
 export const SEARCH_DEPTH_LABEL: Record<SearchDepth, string> = { standard: 'Standard', thorough: 'Thorough' };
 export const SEARCH_DEPTH_PARAM = 'depth';
 
-/** The depth a country starts on: Thorough for Australia (its towns are spread out), Standard everywhere else. */
-export function defaultSearchDepth(country: string | null | undefined): SearchDepth {
-  return /^(australia|au|aus)$/i.test(String(country ?? '').trim()) ? 'thorough' : 'standard';
+/* THE ONE OFF SWITCH FOR THOROUGH (2026-10-23, docs/thorough-search-off.md). false = Standard is the only mode, in every
+   country: no button, no "up to" price, nothing a person (or an old link / saved value) can use to pick it. The tile
+   search and the edge function behind it are kept; flip this to true to bring the option back. */
+export const THOROUGH_SEARCH_ENABLED = false;
+
+/** Any depth coming from a click, a link or an old value, made safe: 'thorough' becomes Standard while the switch is off. */
+export function usableSearchDepth(d: SearchDepth | null | undefined): SearchDepth {
+  return d === 'thorough' && THOROUGH_SEARCH_ENABLED ? 'thorough' : 'standard';
 }
 
-/** A URL / stored value read back as a depth; anything else is null (the caller uses the country's default). */
+/** The depth a country starts on: Thorough for Australia when the switch is on (its towns are spread out), else Standard. */
+export function defaultSearchDepth(country: string | null | undefined): SearchDepth {
+  return THOROUGH_SEARCH_ENABLED && /^(australia|au|aus)$/i.test(String(country ?? '').trim()) ? 'thorough' : 'standard';
+}
+
+/** A URL / stored value read back as a depth; anything else is null (the caller uses the country's default).
+ *  'thorough' reads as Standard while the switch is off. */
 export function parseSearchDepth(v: unknown): SearchDepth | null {
-  return v === 'standard' || v === 'thorough' ? v : null;
+  return v === 'standard' || v === 'thorough' ? usableSearchDepth(v) : null;
 }
 
 const KM_PER_DEG_LAT = 110.574;

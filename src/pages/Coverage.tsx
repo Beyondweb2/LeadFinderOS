@@ -31,7 +31,7 @@ import { AU_BAND_DEFAULT_MAX, AU_BAND_DEFAULT_MIN } from '@/lib/australiaTowns';
 import {
   filterByPopulationBand, populationFilterShown, populationSourcesFor, townPopulation,
 } from '@/lib/abroadTownPopulation';
-import { defaultSearchDepth, THOROUGH_MAX_TOWNS_PER_PRESS, type SearchDepth } from '@/lib/townSearchArea';
+import { defaultSearchDepth, usableSearchDepth, THOROUGH_SEARCH_ENABLED, THOROUGH_MAX_TOWNS_PER_PRESS, type SearchDepth } from '@/lib/townSearchArea';
 import { depthButtonSuffix, depthNote } from '@/lib/searchDepthWords';
 import { SearchDepthToggle } from '@/components/SearchDepthToggle';
 
@@ -219,7 +219,7 @@ export default function Coverage() {
      each button says its price (admins) or that it is Thorough (sales never sees a cost). */
   const [depthPick, setDepthPick] = useState<SearchDepth | null>(null);
   useEffect(() => { setDepthPick(null); }, [country]);
-  const depth: SearchDepth = depthPick ?? defaultSearchDepth(country);
+  const depth: SearchDepth = usableSearchDepth(depthPick ?? defaultSearchDepth(country));
   const selectedTowns = useMemo(
     () => sorted.filter((t) => pickedTowns.has(t.name)).map((t) => ({ town: t.name, location: townLocation(t.name), country })),
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -303,10 +303,10 @@ export default function Coverage() {
             <Input type="number" value={maxPop} onChange={(e) => setBand((b) => ({ ...b, max: Number(e.target.value) || 0 }))} className="h-9 w-[100px]" />
           </div>
         </div>}
-        <div className="space-y-1" data-testid="coverage-search-depth">
+        {THOROUGH_SEARCH_ENABLED && <div className="space-y-1" data-testid="coverage-search-depth">
           <label className="text-xs font-medium text-muted-foreground">Search</label>
           <SearchDepthToggle value={depth} onChange={setDepthPick} showMoney={isAdmin} showNote={false} />
-        </div>
+        </div>}
         {!isUk && showPopFilter && <div className="space-y-1">
           <label className="text-xs font-medium text-muted-foreground">{approxPop ? 'Population (approx.)' : 'Population'}</label>
           <div className="flex items-center gap-1.5">
