@@ -1,0 +1,2 @@
+import{cr as t}from"./index-DqyojbXq.js";const s=new Set(["not_interested","opted_out","closed","refunded","no_whatsapp","no_whatsapp_needs_sms","queued"]);function o(e){return e.is_archived||t(e)||s.has(String(e.status??""))?!1:!(e.search_keyword||e.category||"").trim()}const a={no_trade:"Live leads with no trade stored"},i=e=>!!e&&e in a;export{a as O,i as a,o as i};
+//# sourceMappingURL=leadTrade-DDh7bwDi.js.map

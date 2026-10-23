@@ -1,0 +1,2 @@
+const r=["confirmed_location","services"],c=e=>!!String(e??"").trim();function a(e){return r.filter(s=>s==="services"?f(e).length===0:!c(e==null?void 0:e[s]))}function f(e){const s=[...Array.isArray(e==null?void 0:e.services_list)?e.services_list:[],...String((e==null?void 0:e.services)??"").split(",")],i=new Set;return s.flatMap(t=>typeof t=="string"?[t.trim()]:[]).filter(t=>{const n=t.toLocaleLowerCase();return!t||i.has(n)?!1:(i.add(n),!0)})}function l(e){return a(e).length===0}export{f as e,a as m,l as q};
+//# sourceMappingURL=questionnaireComplete-CEC01OBC.js.map
