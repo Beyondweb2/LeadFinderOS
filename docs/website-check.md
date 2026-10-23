@@ -140,3 +140,8 @@ script, report, pitch) gets them through the one summary. They apply to checks r
 - **Pitch words** (`pitchIssueWords.ts`): `GOOGLE_LISTING_NO_LINK` now lives there (replyMove re-exports it); the site-shared
   reply drops its own guessed listing line when the check read Google's record.
 - Tests: `scripts/website-check-rules.test.ts`.
+- **Deployed 2026-10-23** (merge 29969e3f): 40 edge functions by hand — every function the changed files reach, except the
+  held `whatsapp-status`. Live check: the new checks' strings are in 35 function bodies; `send-whatsapp-message` OPTIONS says
+  `x-swm-build: 2026-10-23a-site-check-rules`; market-view, niche-sample, page-generator, run-seo-scan and weekly-visibility
+  reach these files by a type-only import, so their bundles hold none of it (redeployed anyway, a no-op). The What's New entry
+  `2026-10-23-site-check-rules` is in the live `whatsNew` chunk on app.leadfinderos.com.
