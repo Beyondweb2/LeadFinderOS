@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 import {
   SITE_SHOT_BUCKET, SITE_SHOT_DEFAULT_MONTHLY_CAP, SITE_SHOT_FRESH_DAYS, SITE_SHOT_MAX_ATTEMPTS, SITE_SHOT_MEASURE_MAX, SITE_SHOT_MIN_BYTES,
   londonMonthStartIso, siteShotCaption, siteShotGate, siteShotImageProblem, siteShotPath, siteShotRateLimited, siteShotRetryAfterMs, type SiteShotGateInput,
+  SITE_SHOT_VERIFY_BELOW_BYTES, siteShotCspBlocked, siteShotNeedsVerify, siteShotPageProblem, siteShotVisibleText,
 } from '../src/lib/siteShot.ts';
 
 let failures = 0;
@@ -64,7 +65,7 @@ const FN = read('supabase/functions/site-shot/index.ts');
   ok(!/shootSite|mockup-shot|browser-rendering|functions\/v1\/site-shot/.test(RENDER), 'E: opening a report can never start a shot — render-audit-report does not import the driver or call the function');
   ok(!/shootSite|browser-rendering|mockup-shot/.test(HTML), 'E: the report renderer never reaches the driver');
   ok(/x-internal-job/.test(FN) && /CRON_SECRET/.test(FN) && /not_authorised/.test(FN), 'E: the function is internal-only (CRON_SECRET + x-internal-job)');
-  const gateAt = FN.indexOf('siteShotGate('), claimAt = FN.indexOf('claim_site_shot'), shootAt = FN.indexOf('shootSite(lead.website, FORMAT)');
+  const gateAt = FN.indexOf('siteShotGate('), claimAt = FN.indexOf('claim_site_shot'), shootAt = FN.indexOf('const { shot } = await takePicture(lead.website)');
   ok(gateAt > 0 && claimAt > gateAt && shootAt > claimAt, 'E: the order is gate → claim → shoot (spend only after the ONE conditional write is won)');
   ok(!/whatsapp|resend|twilio|sendMessage/i.test(FN), 'E: nothing in the function can send a message');
   ok(/verify_jwt = false/.test(read('supabase/config.toml').split('[functions.site-shot]')[1] ?? ''), 'E: the new function has its config.toml verify_jwt entry');
@@ -77,6 +78,27 @@ const FN = read('supabase/functions/site-shot/index.ts');
   ok(siteShotRateLimited('HTTP 429 retry-after=none {"errors":[]}') && !siteShotRateLimited('HTTP 422 {}') && !siteShotRateLimited(null), 'F: a 429 is recognised, a real page failure is not');
   ok(siteShotRetryAfterMs('HTTP 429 retry-after=7 {}', 15000) === 7000 && siteShotRetryAfterMs('HTTP 429 retry-after=none {}', 15000) === 15000 && siteShotRetryAfterMs('HTTP 429 retry-after=9999 {}', 15000) === 15000, 'F: wait what Cloudflare asked, else the fallback, never an absurd wait');
   ok(/siteShotRateLimited\(shot\.detail\)[\s\S]{0,400}attempts: 0/.test(FN),'F: a rate-limited shot gives the lead its try back (attempts 0) instead of counting as a failure');
+}
+
+/* ── G. is the picture a real page? (measured 2026-10-23: 2 of 20 "pictures" were a bot-challenge page, 21 KB, past the size floor) ── */
+{
+  const challenge = '<html><head><title>bathelectricalsolutions.com</title><script>var a=1;</script></head><body><div class="logo"></div><h1>bathelectricalsolutions.com</h1><p>Checking the site connection security</p></body></html>';
+  ok(siteShotPageProblem(challenge) === 'bot_challenge', 'G: the exact challenge page measured on a real prospect is refused');
+  ok(siteShotPageProblem('<title>Just a moment...</title><body>Enable JavaScript and cookies to continue</body>') === 'bot_challenge', 'G: the common "just a moment" wall is refused');
+  ok(siteShotPageProblem('<title>Access denied</title><body>You have been blocked</body>') === 'access_denied', 'G: an access-denied page is refused');
+  ok(siteShotPageProblem('<title>404 Not Found</title><body>The page you requested was not found on this server.</body>') === 'error_page', 'G: a short error page is refused');
+  ok(siteShotPageProblem('<title>x</title><body>This domain may be for sale. Buy this domain today.</body>') === 'parked_domain', 'G: a parked domain is refused');
+  ok(siteShotPageProblem('<title>Welcome to nginx!</title><body>Welcome to nginx! If you see this page, nginx is working.</body>') === 'server_default_page', 'G: a server default page is refused');
+  ok(siteShotPageProblem('<html><body><script>1</script></body></html>') === 'near_empty' && siteShotPageProblem('') === 'near_empty' && siteShotPageProblem(null) === 'near_empty', 'G: a page with no words (or nothing read) is refused');
+  const real = '<html><head><title>Fix & Flow Plumbing</title></head><body><nav>Home Services Contact</nav><h1>Boiler playing up? Leak, blockage or broken toilet? We\'ll get it sorted.</h1><p>A local plumbing and heating team covering Stockport and across Northwestern England.</p></body></html>';
+  ok(siteShotPageProblem(real) === null, 'G: an ordinary small-business page passes');
+  const longBlog = `<title>Blog</title><body>${'Plumbing tips for your home and garden. '.repeat(80)} If you see 404 not found on a website it means the page is missing.</body>`;
+  ok(siteShotPageProblem(longBlog) === null, 'G: a long page that merely MENTIONS "404 not found" is not an error page');
+  ok(siteShotVisibleText('<style>.a{}</style><script>x</script><p>Hello&nbsp;<b>world</b></p>') === 'Hello world', 'G: visible text drops scripts, styles and tags');
+  ok(siteShotNeedsVerify(21_139) && siteShotNeedsVerify(55_927) && siteShotNeedsVerify(SITE_SHOT_VERIFY_BELOW_BYTES - 1) && !siteShotNeedsVerify(SITE_SHOT_VERIFY_BELOW_BYTES) && siteShotNeedsVerify(NaN), 'G: small pictures (the two measured challenges and the smallest real page) are checked; a missing size is checked too');
+  ok(siteShotCspBlocked('HTTP 422 {"success":false,"errors":[{"code":6004,"message":"Content Security Policy blocked script execution"}]}') && !siteShotCspBlocked('HTTP 422 {"code":5009}'), 'G: the CSP refusal (error 6004) is recognised');
+  ok(/siteShotNeedsVerify\(shot\.bytes\.length\)[\s\S]{0,200}verifyPage/.test(FN) && /readPageContent/.test(FN), 'G: the function checks a small picture\'s page text before storing it');
+  ok(/if \(!c\.ok\) return \{ ok: false, reason: "verify_failed" \}/.test(FN), 'G: a page we could not read means the small picture is not shown (absent = do not)');
 }
 
 if (failures) throw new Error(`${failures} site-shot checks failed`);

@@ -112,3 +112,60 @@ export function siteShotRetryAfterMs(detail: string | null | undefined, fallback
   const s = m ? Number(m[1]) : NaN;
   return Number.isFinite(s) && s >= 1 && s <= 120 ? s * 1000 : fallbackMs;
 }
+
+/* ── IS THE PICTURE A REAL PAGE? (measured 2026-10-23, the 20-site test) ───────────────────────────────────────
+   Two of twenty "pictures" were not the business's homepage at all but a bot-challenge page — "Checking the site
+   connection security" — 21 KB each, which PASSED the size floor above. A size can never tell a thin real page from a
+   challenge, so a SMALL picture is checked against the page's own text (read by the same browser): a challenge, an
+   access-denied page, an error, a parked domain or a server default page is refused, and so is a page with no words.
+   ⛔ ABSENT MEANS "DO NOT": a small picture whose page text could not be read is refused, never shown. A refusal costs
+   nothing but the neutral card; a challenge captioned "your homepage" is a false claim to the one person who will spot it. */
+
+/** A picture under this many bytes has its page text checked first (the challenge pages measured 21 KB; real pages
+ *  measured 41 KB and up, and one real page 56 KB — so the line sits well above both). */
+export const SITE_SHOT_VERIFY_BELOW_BYTES = 90_000;
+
+export function siteShotNeedsVerify(bytes: number): boolean {
+  return !(Number.isFinite(bytes) && bytes >= SITE_SHOT_VERIFY_BELOW_BYTES);
+}
+
+export type SiteShotPageProblem = 'bot_challenge' | 'access_denied' | 'error_page' | 'parked_domain' | 'server_default_page' | 'near_empty';
+
+const PAGE_SIGNS: Array<[SiteShotPageProblem, string[]]> = [
+  ['bot_challenge', ['checking the site connection security', 'just a moment', 'checking your browser', 'verify you are human', 'verifying you are human', 'are you a robot', 'enable javascript and cookies to continue', 'pardon our interruption', 'press & hold', 'complete the security check', 'ddos protection by', 'please wait while we verify']],
+  ['access_denied', ['access denied', 'attention required', 'request blocked', 'you have been blocked', 'sucuri website firewall', 'incapsula incident', 'forbidden: you don']],
+  ['error_page', ['404 not found', '403 forbidden', '502 bad gateway', '503 service unavailable', 'this site can\'t be reached', 'page not found', 'site not found', 'account suspended', 'this account has been suspended', 'error establishing a database connection']],
+  ['parked_domain', ['domain is for sale', 'this domain may be for sale', 'buy this domain', 'this domain is parked', 'domain parking']],
+  ['server_default_page', ['welcome to nginx', 'apache2 ubuntu default page', 'it works!', 'default web site page', 'iis windows server']],
+];
+
+/** The words a visitor would read on this HTML: scripts and styles dropped, tags dropped, spaces collapsed. */
+export function siteShotVisibleText(html: string): string {
+  return String(html ?? '')
+    .replace(/<script[\s\S]*?<\/script>/gi, ' ')
+    .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+    .replace(/<noscript[\s\S]*?<\/noscript>/gi, ' ')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&nbsp;|&#160;/gi, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/** What is wrong with this page, or null when it reads like the business's own site. Title and visible text are both searched. */
+export function siteShotPageProblem(html: string | null | undefined): SiteShotPageProblem | null {
+  const raw = String(html ?? '');
+  const title = /<title[^>]*>([\s\S]*?)<\/title>/i.exec(raw)?.[1] ?? '';
+  const text = siteShotVisibleText(raw);
+  const hay = `${title} ${text}`.toLowerCase().replace(/[‘’]/g, "'");
+  for (const [problem, signs] of PAGE_SIGNS) {
+    // A long page that merely MENTIONS a phrase (a blog about "404 not found") is not an error page: error and challenge pages are short.
+    if (signs.some((s) => hay.includes(s)) && (text.length < 1500 || problem === 'bot_challenge' || problem === 'access_denied')) return problem;
+  }
+  if (text.length < 30) return 'near_empty';
+  return null;
+}
+
+/** Cloudflare error 6004: the site's Content-Security-Policy refused our injected banner-hiding script, which fails the whole shot. */
+export function siteShotCspBlocked(detail: string | null | undefined): boolean {
+  return /"code":6004|Content Security Policy blocked/i.test(String(detail ?? ''));
+}
