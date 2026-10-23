@@ -126,7 +126,7 @@ export function siteShotRetryAfterMs(detail: string | null | undefined, fallback
 export type SiteShotPageProblem = 'bot_challenge' | 'access_denied' | 'error_page' | 'parked_domain' | 'server_default_page' | 'near_empty';
 
 const PAGE_SIGNS: Array<[SiteShotPageProblem, string[]]> = [
-  ['bot_challenge', ['checking the site connection security', 'just a moment', 'checking your browser', 'verify you are human', 'verifying you are human', 'are you a robot', 'enable javascript and cookies to continue', 'pardon our interruption', 'press & hold', 'complete the security check', 'ddos protection by', 'please wait while we verify']],
+  ['bot_challenge', ['checking the site connection security', 'just a moment', 'checking your browser', 'verify you are human', 'verifying you are human', 'are you a robot', 'enable javascript and cookies to continue', 'pardon our interruption', 'press & hold', 'complete the security check', 'ddos protection by', 'please wait while we verify', 'request is being verified', 'please wait while your request', 'verifying your browser', 'checking if the site connection is secure', 'security check to access']],
   ['access_denied', ['access denied', 'attention required', 'request blocked', 'you have been blocked', 'sucuri website firewall', 'incapsula incident', 'forbidden: you don']],
   ['error_page', ['404 not found', '403 forbidden', '502 bad gateway', '503 service unavailable', 'site currently unavailable', 'site is currently unavailable', 'temporarily unavailable', 'currently unavailable', 'under maintenance', 'down for maintenance', 'be right back', 'website is not available','this site can\'t be reached', 'page not found', 'site not found', 'account suspended', 'this account has been suspended', 'error establishing a database connection']],
   ['parked_domain', ['domain is for sale', 'this domain may be for sale', 'buy this domain', 'this domain is parked', 'domain parking']],
@@ -155,6 +155,9 @@ export function siteShotPageProblem(html: string | null | undefined): SiteShotPa
     // A long page that merely MENTIONS a phrase (a blog about "404 not found") is not an error page: error and challenge pages are short.
     if (signs.some((s) => hay.includes(s)) && (text.length < 1500 || problem === 'bot_challenge' || problem === 'access_denied')) return problem;
   }
+  /* A SHORT page that tells the visitor to wait or says it is verifying something is a wall, whatever its exact words (measured: "Please
+     wait while your request is being verified" slipped past the list above at 80 characters). A real page has far more to read. */
+  if (text.length < 250 && /please wait|verif(?:y|ied|ying)|one moment|loading\.\.\./i.test(hay)) return 'bot_challenge';
   if (text.length < 30) return 'near_empty';
   return null;
 }
