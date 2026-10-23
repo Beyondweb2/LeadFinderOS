@@ -46,6 +46,7 @@ const namedCell = (v: unknown): string => {
   return '—';
 };
 
+
 /* Gemini-gap tag, derived from the STORED counts (same rule as the lib): named on ChatGPT in ≥half
    of ≥2 runs but not on Gemini. Pages are the Gemini lever (§5: ChatGPT reads directories, Gemini
    reads the client's own site), so these BUILD — the tag just shows the existing ChatGPT strength. */

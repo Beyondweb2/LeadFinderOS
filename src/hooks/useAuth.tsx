@@ -2,6 +2,11 @@ import { useState, useEffect, useRef, createContext, useContext, ReactNode } fro
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 
+/** Bounds the sign-in request (see signIn below) so a degraded/unresponsive auth backend
+ *  cannot leave the button on "Signing in…" forever. Real observed latency on this project's
+ *  token endpoint has ranged 1–35s, so this is a UX bound, not a fast one — long enough that a
+ *  slow-but-genuine response usually still wins the race. */
+const SIGN_IN_TIMEOUT_MS = 30000;
 
 interface AuthContextType {
   user: User | null;
@@ -109,13 +114,54 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return { error: error as Error | null };
   };
 
+  /* ⛔ signInWithPassword exposes no AbortSignal (GoTrueClient's `_request` takes no cancellation
+     token), and the client that calls it is the generated src/integrations/supabase/client.ts —
+     not the place to bolt on a custom fetch/abort layer for one call site. So the timeout in
+     signIn below can only give UP WAITING; it can never stop the real request, and a late
+     success still runs supabase-js's own SIGNED_IN side effect (the onAuthStateChange listener
+     above), silently signing the browser in after the user already saw a timeout error. That
+     residual risk is accepted, not hidden — see the report this shipped with.
+     What IS fully within our control, and is what this ref does: at most one real request is
+     ever "abandoned" at a time. It is set for the whole lifetime of the REAL request (not just
+     until our timeout gives up) and only clears when that request finally settles — however
+     late — so a second signIn() call while one is still outstanding is refused instead of firing
+     a second, overlapping request against the same account. */
+  const signInRequestRef = useRef<ReturnType<typeof supabase.auth.signInWithPassword> | null>(null);
+
   const signIn = async (email: string, password: string) => {
-    const { error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
-    
-    return { error: error as Error | null };
+    if (signInRequestRef.current) {
+      return { error: new Error('A previous sign-in attempt is still finishing. Please wait a moment and try again.') };
+    }
+
+    let timedOut = false;
+    const request = supabase.auth.signInWithPassword({ email, password });
+    signInRequestRef.current = request;
+    request
+      .then(({ error }) => {
+        if (timedOut) console.warn(`[auth] a sign-in request settled after this hook gave up waiting on it (${error ? `error: ${error.message}` : 'it succeeded — the session below is now signed in'})`);
+      })
+      .catch((err) => {
+        if (timedOut) console.warn('[auth] a sign-in request rejected after this hook gave up waiting on it:', err);
+      })
+      .finally(() => { signInRequestRef.current = null; });
+
+    let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
+    try {
+      const { error } = await Promise.race([
+        request,
+        new Promise<never>((_, reject) => {
+          timeoutHandle = setTimeout(() => {
+            timedOut = true;
+            reject(new Error('Sign-in is taking too long. Please check your connection and try again.'));
+          }, SIGN_IN_TIMEOUT_MS);
+        }),
+      ]);
+      return { error: error as Error | null };
+    } catch (err) {
+      return { error: err as Error };
+    } finally {
+      if (timeoutHandle) clearTimeout(timeoutHandle);
+    }
   };
 
   const signOut = async () => {

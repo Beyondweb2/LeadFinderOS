@@ -41,8 +41,9 @@ const NO_DOWNGRADE = "(payment_received,replied,interested,price_given,in_delive
 
 /** Best text/body for an inbound message. Text → the text body; a template QUICK-REPLY BUTTON
  *  or an INTERACTIVE reply → the button/list LABEL (so "Yes please" is stored and treated as a
- *  real reply, not "[button]"); any other type (image/audio/document/reaction/…) → a "[type]"
- *  placeholder so the operator can see a reply landed and follow up.
+ *  real reply, not "[button]"); reactions retain their actual emoji and attachments retain any
+ *  caption. Other non-text types fall back to a "[type]" placeholder so the operator can see a
+ *  reply landed and follow up.
  *  ⛔ Load-bearing for the auto-pitch: the arm gate keys on isSubstantiveText(body), which rejects
  *  "[...]" placeholders — so a button reply only triggers a pitch because its label is extracted
  *  HERE. WhatsApp shapes: text→msg.text.body, template button→msg.button.text (payload as
@@ -65,6 +66,20 @@ function bodyFor(msg: Record<string, unknown>): string {
     } | undefined;
     const txt = (it?.button_reply?.title ?? it?.list_reply?.title ?? "").toString().trim();
     if (txt) return txt;
+  }
+  // Reactions are normal inbound customer replies too. Preserve the actual emoji rather than
+  // collapsing it to "[reaction]", so the Inbox transcript matches what the operator received.
+  if (type === "reaction") {
+    const reaction = msg?.reaction as { emoji?: string } | undefined;
+    const emoji = (reaction?.emoji ?? "").toString().trim();
+    if (emoji) return emoji;
+  }
+  // Keep a sender-provided caption beside the stored attachment. The image/video itself is
+  // downloaded separately by saveInboundMedia and rendered from the private media bucket.
+  if (type === "image" || type === "video" || type === "document") {
+    const media = msg?.[type] as { caption?: string } | undefined;
+    const caption = (media?.caption ?? "").toString().trim();
+    if (caption) return caption;
   }
   return `[${type}]`;
 }
@@ -167,6 +182,47 @@ async function resolveOwner(
   return { userId: null, leadId: null };
 }
 
+/** The first inbound AFTER OUTREACH begins is a persisted conversation fact, not a body classifier.
+ *  The unique inbound wamid makes webhook redelivery disappear before this query; ordering by
+ *  created_at + id gives a deterministic winner when two genuine replies arrive in the same window. */
+async function firstInboundForLead(
+  // deno-lint-ignore no-explicit-any
+  service: any,
+  leadId: string,
+  insertedMessageId: string,
+): Promise<{ first: boolean; reliable: boolean }> {
+  const { data: firstOutbound, error: outboundError } = await service
+    .from("whatsapp_messages")
+    .select("created_at")
+    .eq("lead_id", leadId)
+    .eq("direction", "outbound")
+    .neq("status", "failed")
+    .order("created_at", { ascending: true })
+    .order("id", { ascending: true })
+    .limit(1)
+    .maybeSingle();
+  if (outboundError) {
+    console.error(`[whatsapp-inbound] first-outbound lookup failed (${leadId}):`, outboundError.message ?? outboundError);
+    return { first: false, reliable: false };
+  }
+  if (!firstOutbound?.created_at) return { first: false, reliable: true };
+  const { data, error } = await service
+    .from("whatsapp_messages")
+    .select("id")
+    .eq("lead_id", leadId)
+    .eq("direction", "inbound")
+    .gte("created_at", firstOutbound.created_at)
+    .order("created_at", { ascending: true })
+    .order("id", { ascending: true })
+    .limit(1)
+    .maybeSingle();
+  if (error) {
+    console.error(`[whatsapp-inbound] first-inbound lookup failed (${leadId}):`, error.message ?? error);
+    return { first: false, reliable: false };
+  }
+  return { first: data?.id === insertedMessageId, reliable: true };
+}
+
 /**
  * Handle every inbound message in a webhook `change.value`. Idempotent per message
  * via the wa_messages_wa_id_uq unique index (23505 on redelivery → skip). Returns
@@ -199,7 +255,7 @@ export async function handleInboundMessages(
       const body = bodyFor(msg);
       const media = await saveInboundMedia(service, msg, userId, wamid);
 
-      const { error: insErr } = await service.from("whatsapp_messages").insert({
+      const { data: insertedRow, error: insErr } = await service.from("whatsapp_messages").insert({
         direction: "inbound",
         user_id: userId,
         lead_id: leadId,
@@ -214,7 +270,7 @@ export async function handleInboundMessages(
         test_mode: false,
         created_at: tsToIso(msg?.timestamp),
         error: media.error,
-      });
+      }).select("id").single();
 
       if (insErr) {
         // Duplicate (Meta redelivery) → unique-index violation. Idempotent skip.
@@ -226,6 +282,10 @@ export async function handleInboundMessages(
         continue;
       }
       inserted++;
+
+      const firstInbound = leadId && insertedRow?.id
+        ? await firstInboundForLead(service, leadId, insertedRow.id as string)
+        : { first: false, reliable: false };
 
       // Best-effort: a reply is a strong signal → move the matched lead to 'replied'.
       // Forward-only (never downgrade/thrash paid/not_interested/already-replied).
@@ -282,12 +342,18 @@ export async function handleInboundMessages(
             .from("ai_audits").select("id").eq("lead_id", leadId).limit(1).maybeSingle();
           // Automation A gated OFF by default while audit_reply is in Meta review / replies are
           // handled manually. Set AUTO_REPLY_FLOW_ENABLED=1 to re-enable (no code change).
-          if (Deno.env.get("AUTO_REPLY_FLOW_ENABLED") === "1" && !existingAudit && !leadArchived) {
+          /* AUTO_REPLY_FLOW_ENABLED is the legacy audit switch. AUTO_AUDIT_REPLY_ENABLED is the
+             current automation master switch; either explicitly enables the audit, while the
+             separate Inbox toggle still controls automatic sending below. */
+          const autoAuditEnabled = Deno.env.get("AUTO_REPLY_FLOW_ENABLED") === "1" || autoReplyEnvOn();
+          if (autoAuditEnabled && firstInbound.reliable && firstInbound.first && !existingAudit && !leadArchived) {
             const { data: lead } = await service
               .from("outreach_leads")
               .select("business_name, category, search_keyword, search_location, address, country, website, user_id")
               .eq("id", leadId).maybeSingle();
-            if (lead?.business_name && lead?.user_id) {
+            const { data: priorOutbound } = await service
+              .from("whatsapp_messages").select("id").eq("lead_id", leadId).eq("direction", "outbound").neq("status", "failed").limit(1).maybeSingle();
+            if (lead?.business_name && lead?.user_id && priorOutbound?.id) {
               const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
               const res = await fetch(`${supabaseUrl}/functions/v1/create-ai-audit`, {
                 method: "POST",
@@ -444,8 +510,16 @@ export async function handleInboundMessages(
                 // audit_reply resolver accepts)? Cheap two-step existence check.
                 let hasCompletedAudit = false;
                 const { data: leadAudits } = await service
-                  .from("ai_audits").select("id").eq("lead_id", leadId);
-                const auditIds = ((leadAudits ?? []) as Array<{ id: string }>).map((a) => a.id);
+                  .from("ai_audits").select("id, ai_audit_runs(status)").eq("lead_id", leadId);
+                const auditRows = (leadAudits ?? []) as Array<{ id: string; ai_audit_runs?: Array<{ status?: string | null }> | null }>;
+                const auditIds = auditRows.map((a) => a.id);
+                /* Automation A above and this chain are deliberately separate switches, but they
+                   share the same audit creator. If A has just queued an audit, the absence of a
+                   completed run must not be interpreted as permission to create another run. Failed
+                   audits are excluded so a later first-reply recovery can retry them. */
+                const hasActiveAudit = auditRows.some((a) =>
+                  (a.ai_audit_runs ?? []).some((r) => ["pending", "queued", "running", "processing"].includes(String(r.status ?? "").toLowerCase()))
+                );
                 if (auditIds.length) {
                   const { data: doneRun } = await service
                     .from("ai_audit_runs").select("id").in("audit_id", auditIds)
@@ -621,8 +695,11 @@ export async function handleInboundMessages(
                          composite PNG needs both. Prepared first so the row exists even if the
                          audit path below returns early. */
                       await prepareMockup();
-                      const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
-                      try {
+                      if (hasActiveAudit) {
+                        console.log(`[auto-reply] lead ${leadId}: audit already queued/running â€” not creating a duplicate.`);
+                      } else {
+                        const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
+                        try {
                         const res = await fetch(`${supabaseUrl}/functions/v1/create-ai-audit`, {
                           method: "POST",
                           headers: {
@@ -656,11 +733,12 @@ export async function handleInboundMessages(
                         } else {
                           console.log(`[auto-reply] lead ${leadId}: no completed audit — auto-audit started, pitch parked as awaiting_audit.`);
                         }
-                      } catch (e) {
-                        await service.from("whatsapp_auto_replies")
-                          .update({ status: "flagged_error", reason: `auto-audit start error: ${(e as Error).message}`.slice(0, 300) })
-                          .eq("lead_id", leadId).eq("status", "awaiting_audit");
-                        console.error(`[auto-reply] chain audit start error for lead ${leadId}:`, (e as Error).message);
+                        } catch (e) {
+                          await service.from("whatsapp_auto_replies")
+                            .update({ status: "flagged_error", reason: `auto-audit start error: ${(e as Error).message}`.slice(0, 300) })
+                            .eq("lead_id", leadId).eq("status", "awaiting_audit");
+                          console.error(`[auto-reply] chain audit start error for lead ${leadId}:`, (e as Error).message);
+                        }
                       }
                     }
                   }

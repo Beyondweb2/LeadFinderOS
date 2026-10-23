@@ -1,0 +1,6 @@
+import { isHeadIntent } from '../src/lib/seedGuard';
+const ws = ['top rated electrician in thetford UK','electrician electrician in thetford UK','certified electrician in thetford UK','affordable electrician in thetford UK','best electrician in thetford UK','which electrician in thetford UK do people recommend','electrician in thetford UK that is easy to contact','recommended electrician in thetford UK','electrician in thetford UK','local electrician in thetford UK','reliable electrician in thetford UK','emergency electrician in thetford UK'];
+const ad = ['affordable locksmith in Newcastle upon tyne UK','auto locksmith in Newcastle upon tyne UK','locksmith in Newcastle upon tyne UK','lock replacement in Newcastle upon tyne UK','emergency locksmith in Newcastle upon tyne UK','lock installation in Newcastle upon tyne UK','24 hour locksmith in Newcastle upon tyne UK','best locksmith in Newcastle upon tyne UK','key cutting in Newcastle upon tyne UK','best locksmith for lock changes in Newcastle upon tyne UK','locksmith services in Newcastle upon tyne UK'];
+const c = (qs: string[], t: string) => qs.filter((q) => isHeadIntent(q, t)).length;
+console.log(`White Sparks baseline : ${c(ws,'electrician')} of ${ws.length} are HEAD TERMS`);
+console.log(`AD Locksmithing base  : ${c(ad,'Locksmith')} of ${ad.length} are head terms`);

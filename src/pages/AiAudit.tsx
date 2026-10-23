@@ -112,6 +112,7 @@ const COUNTRIES: { value: string; label: string }[] = [
 /* The audit book's shapes now live in src/types/auditBook.ts so the list, the wizard and the
    results view can each be their own component and still share them. */
 import type { AuditRow, RunLite, AuditLite, BusinessGroup, LeadOption } from '@/types/auditBook';
+import { auditListQueryKey } from '@/types/auditBook';
 import { AuditBookList } from '@/components/audit/AuditBookList';
 const TERMINAL = new Set(['complete', 'capped', 'failed', 'cancelled']);
 
@@ -314,7 +315,7 @@ const AiAudit = () => {
      row edits below (delete, rename, cancel) still write straight into the cache, so a mutation
      shows immediately instead of waiting for a refetch. */
   const queryClient = useQueryClient();
-  const auditListKey = useMemo(() => ['ai-audit-list', user?.id ?? null] as const, [user?.id]);
+  const auditListKey = useMemo(() => auditListQueryKey(user?.id), [user?.id]);
 
   /* THE AUDIT SEARCH. Purely client-side over what is already loaded — no query, no round trip, so
      it filters as you type. Deliberately NOT persisted: a remembered filter is how you come back to
@@ -1354,6 +1355,7 @@ const AiAudit = () => {
         } catch { /* non-fatal — the audit itself is already running */ }
       }
       dropDraft(); // audit created successfully → the draft is spent, next visit starts clean
+      loadSaved(); // the new audit/run must be in the list cache immediately — see confirmReAudit
       setAuditId(data.audit_id);
       setRunId(data.run_id);
       setOpenRunId(data.run_id);
@@ -1511,6 +1513,7 @@ const AiAudit = () => {
       if (error || !data?.ok) throw new Error(error?.message ?? data?.error ?? 're-run failed');
       // Editor done → clear its persisted state so it doesn't reopen after the new run starts.
       setReRunEditing(false); setReRunForRunId(null); setReRunQuestions([]);
+      loadSaved(); // the new run must be in the list cache immediately — see confirmReAudit
       setRunId(data.run_id);
       setOpenRunId(data.run_id);
       setRun(null); setQueueRows([]);
