@@ -169,6 +169,9 @@ export interface MoveEvidence {
   websiteUrl?: string | null;
   /** A prospect-only country (prospectOnly.ts, Australia): never a price, the guarantee or a sign-up in a draft. */
   prospectOnly?: boolean;
+  /** The lead's own report link (findable.live/r/<code>), set ONLY when its audit has a finished run (loadAuditContext).
+   *  Absent = the audit is not ready: the pitch carries no link and the draft is flagged audit pending. */
+  reportUrl?: string | null;
 }
 export type SiteState = 'issues' | 'clean' | 'not_checked' | 'unreadable' | 'no_website' | 'profile';
 
@@ -229,6 +232,8 @@ export interface MovePlan {
   note?: string | null;
   /** The line carries our own links only (replyPlaybook FINDABLE_SITE_WORDS / BUILT_SITE_EXAMPLE_URL): the checker allows those. */
   linkOk?: boolean;
+  /** A first-reply pitch written with no report link because the lead's audit is not finished (Paul, 2026-10-23). */
+  auditPending?: boolean;
 }
 
 /* ── reading words ────────────────────────────────────────────────────────────────────────────── */
@@ -548,6 +553,24 @@ function issuesParagraph(issues: string[], lead: string | null): { text: string 
  *     without that sentence. ⛔ No voice-note line, no guarantee, no price, no past results here. Nothing absent is invented.
  *  ⛔ The length rule: past PITCH_MAX_WORDS the lowest issue goes, never below PITCH_MIN_LIST. */
 export function firstReplyPitch(e: MoveEvidence, theirName: string | null = null): { lines: string[]; question: string; closer: 'agency' | 'site'; structure: PitchStructure } {
+  const p = firstReplyPitchBase(e, theirName);
+  const link = reportLinkLine(e);
+  return link ? { ...p, lines: [...p.lines, link] } : p;
+}
+/** The lead-in is a few words; the link is the lead's own report, only once its audit is finished (never a sign-up link). */
+export const PITCH_REPORT_LEAD = "Here's the full report:";
+const REPORT_URL_RE = /^https:\/\/findable\.live\/r\/[A-Za-z0-9]{4,12}$/;
+/** The one short report line before the question, or null when there is no ready, well-formed report link. */
+export const reportLinkLine = (e: Pick<MoveEvidence, 'reportUrl'>): string | null =>
+  e.reportUrl && REPORT_URL_RE.test(e.reportUrl) ? `${PITCH_REPORT_LEAD} ${e.reportUrl}` : null;
+/** Marks a code-built pitch: its report link is allowed through the link check; no link means the audit is pending. */
+function markReportLink(p: MovePlan, e: Pick<MoveEvidence, 'reportUrl'>): MovePlan {
+  if (!p.fixedText || (p.move !== 'first_reply_pitch' && p.move !== 'auto_reply')) return p;
+  const link = reportLinkLine(e);
+  if (link && p.fixedText.includes(link)) return { ...p, linkOk: true };
+  return { ...p, auditPending: true, note: p.note ?? 'Audit pending: no report link in this draft.' };
+}
+function firstReplyPitchBase(e: MoveEvidence, theirName: string | null = null): { lines: string[]; question: string; closer: 'agency' | 'site'; structure: PitchStructure } {
   const noSite = noSiteOf(e);
   const next = noSite ? { question: PITCH_SITE_Q, closer: 'site' as const } : { question: PITCH_AGENCY_Q, closer: 'agency' as const };
   const hi = pitchGreeting(e, theirName);
@@ -783,8 +806,8 @@ export function pickMove(i: MoveInput): MovePlan {
     const realBefore = thread.slice(0, start).some((m, k) => m.from === 'them' && !autoFlags[k]);
     if (!repeat && !guard && !realBefore && prevUs && wasOpener(prevUs)) {
       const pitch = firstReplyPitch(e);
-      return plan({ move: 'auto_reply', read: 'automated', label: 'Auto-reply',
-        points: pitch.lines.map((l) => `Use this line, word for word: "${l}"`), question: pitch.question, fixedText: pitchText(pitch), closer: pitch.closer, structure: pitch.structure });
+      return markReportLink(plan({ move: 'auto_reply', read: 'automated', label: 'Auto-reply',
+        points: pitch.lines.map((l) => `Use this line, word for word: "${l}"`), question: pitch.question, fixedText: pitchText(pitch), closer: pitch.closer, structure: pitch.structure }), e);
     }
     return plan({ move: 'auto_reply', read: 'automated', autoDraft: false, label: 'Auto-reply', needsYou: repeat ? flag('repeat_auto_reply') : null,
       points: ['Say: "No rush, speak soon." Do not mention their automatic reply. No pitch.'] });
@@ -793,7 +816,7 @@ export function pickMove(i: MoveInput): MovePlan {
   /* A loop guard wins the reason: it is why nothing should be drafted on its own. Every plan below passes through here:
      the first reply is marked (its "AI" keeps its capitals, Paul 2026-10-23), and a prospect-only lead never gets a price. */
   const g = (p0: MovePlan): MovePlan => {
-    const p = prospectOnlyPlan({ ...p0, firstReply: first }, e);
+    const p = markReportLink(prospectOnlyPlan({ ...p0, firstReply: first }, e), e);
     return guard ? { ...p, autoDraft: false, needsYou: flag(guard) } : p;
   };
 

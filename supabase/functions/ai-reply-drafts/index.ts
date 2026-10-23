@@ -81,7 +81,7 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-internal-job, x-cron-secret",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
   /* The deploy marker: only this build answers with it. */
-  "x-ai-reply-drafts": "2026-10-23a-lean-first-replies",
+  "x-ai-reply-drafts": "2026-10-23b-hook-report-link",
 };
 const json = (b: unknown, s = 200) => new Response(JSON.stringify(b), { status: s, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 const str = (v: unknown) => (typeof v === "string" ? v.trim() : "");
@@ -239,6 +239,8 @@ async function buildContext(service: Service, lead: LeadRow, thread: MsgRow[], i
     /* "Hi Kylie,": only a person the site's own crawl states as owner / founder (contentTrust ownerOf). First name only. */
     ownerName: (found.check.summary?.owner?.name ?? "").trim().split(/\s+/)[0] || null,
     foundOnGoogle: !!lead.place_id,
+    /* The lead's report link, only from a FINISHED audit (loadAuditContext returns null until a run is complete). */
+    reportUrl: audit?.reportUrl ?? null,
     /* The ONE website check: its state and the serious issues' plain titles, worst first (the first-reply pitch). */
     site: { state: found.check.state, issues: found.check.serious.map(plainIssueTitle),
       /* The same issues in the pitch's plain words (Paul, 2026-10-23); one with no plain words is left out. */
@@ -315,6 +317,7 @@ function whyOf(ctx: AiReplyContext, findingsNote: string | null, w: { problems: 
     closer: p.closer ?? (p.question ? "question" : null), confidence: p.confidence ? CONFIDENCE_LINE : null,
     /* Which structure was sent (Paul, 2026-10-23): the outcome log links to this draft, so reply rates compare by structure. */
     structure: p.structure ?? null,
+    auditPending: p.auditPending === true,
     /* The playbook (replyPlaybook.ts): the intent read, "no draft", a note and a tied-in end date for the person's Next Action. */
     intent: p.intent ?? null, noDraft: p.noDraft === true, note: p.note ?? null, followUp: p.followUp ?? null, win: p.win ?? null,
     ...extra,
@@ -888,7 +891,7 @@ async function handleMarkOptedOut(service: Service, actor: Actor, body: Record<s
 
 interface Fixture {
   id: string; businessName: string; trade: string; town: string; hasWebsite: boolean; ownerName: string | null;
-  audit: null | { engine: string; namedAnswers: number; validAnswers: number; competitors: string[]; missedQuestion?: string | null };
+  audit: null | { reportUrl?: string | null; engine: string; namedAnswers: number; validAnswers: number; competitors: string[]; missedQuestion?: string | null };
   findings: Array<{ title: string; said: string }>;
   thread: Array<{ from: "us" | "them"; text: string; templateName: string | null; messageType: string; at?: string | null }>;
   aiSentSinceWin?: number; suppressed?: boolean; foundOnGoogle?: boolean;
@@ -904,7 +907,7 @@ function fixtureContext(f: Fixture): AiReplyContext {
     engineWords: conversationEngine(sent, f.audit?.engine ?? null).words,
     named: f.audit && f.audit.validAnswers > 0 ? { named: f.audit.namedAnswers, valid: f.audit.validAnswers } : null,
     competitors: draftNames(f.audit?.competitors ?? [], f.town),
-    missed: f.audit?.missedQuestion ? { engine: f.audit.engine, question: f.audit.missedQuestion } : null, hookAlreadySent: hook, findings: f.findings ?? [],
+    missed: f.audit?.missedQuestion ? { engine: f.audit.engine, question: f.audit.missedQuestion } : null, hookAlreadySent: hook, findings: f.findings ?? [], reportUrl: f.audit?.reportUrl ?? null,
     hasWebsite: f.hasWebsite, ownerName: f.ownerName, foundOnGoogle: f.foundOnGoogle ?? true, site: f.site ?? null, aiAutoReplies: f.aiAutoReplies === true,
   };
   const plan = pickMove({ thread, suppressed: f.suppressed === true, aiSentSinceWin: f.aiSentSinceWin ?? 0, evidence });

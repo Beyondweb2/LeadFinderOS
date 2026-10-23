@@ -208,6 +208,8 @@ export interface AiReplyWhy {
   closer?: string | null;
   /** How a code-built pitch / site-shared reply was built (Paul, 2026-10-23): compare reply rates by structure. */
   structure?: string | null;
+  /** The pitch went with no report link because the lead's audit was not finished. */
+  auditPending?: boolean;
   confidence?: string | null;
   /** The website issues the draft could name, each with its stored pages (evidence). */
   siteIssues?: Array<{ title: string; pages: string[] }> | null;
@@ -345,9 +347,9 @@ const TIMING_PROMISE = /\b(send|sending|sent|record|recording|do|doing|get)\b[^.
 const isPitch = (p: MovePlan) => p.move === 'first_reply_pitch' || p.move === 'site_shared' || (p.move === 'auto_reply' && !!p.fixedText);
 /* The straight-answer and chased pitches carry one more line (the answer / the apology) in front of the pitch. */
 /* The no-website pitch has six paragraphs (Paul, 2026-10-23: "instead", then the two no-site sentences on their own line). */
-const lineCap = (p: MovePlan) => (isPitch(p) ? (p.intent === 'straight_answer_then_pitch' || p.intent === 'they_chased' ? 7 : 6) : 3);
+const lineCap = (p: MovePlan) => (isPitch(p) ? (p.intent === 'straight_answer_then_pitch' || p.intent === 'they_chased' ? 7 : 6) + (p.linkOk ? 1 : 0) : 3);
 /** Our own two links (Paul, 2026-10-21): findable.live itself (never a path on it) and the site we built for a locksmith. */
-const OWN_LINKS = [new RegExp(BUILT_SITE_EXAMPLE_URL.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/\/$/, '\\/?'), 'gi'), /\bfindable\.live\b(?![/\w])/gi];
+const OWN_LINKS = [/https:\/\/findable\.live\/r\/[A-Za-z0-9]{4,12}\b/gi, new RegExp(BUILT_SITE_EXAMPLE_URL.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/\/$/, '\\/?'), 'gi'), /\bfindable\.live\b(?![/\w])/gi];
 const withoutOwnLinks = (r: string, p: MovePlan) => (p.linkOk ? OWN_LINKS.reduce((s, re) => s.replace(re, ' '), r) : r);
 /* The pitch (wording A, 2026-10-20): greeting, the search, why, what we do, the agency question. */
 const charCap = (p: MovePlan) => (isPitch(p) ? 800 : p.confidence ? 480 : 320);

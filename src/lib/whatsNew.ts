@@ -22,6 +22,14 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-23-hook-report-link', date: '2026-10-23', title: 'First-reply pitch drafts now include the report link', audience: 'admin',
+    body: 'When the audit is finished, the drafted first reply gets one extra line, "Here is the full report:" and their report link, just before the question.',
+    report: {
+      added: ['One short report-link line in the first-reply pitch draft, only when the audit has finished.', 'An "Audit pending" note on a draft written before the audit finished (no link in it).'],
+      changed: ['Nothing else in the pitch: same wording, order and single question.'],
+      removed: [],
+      effect: 'Drafts only, nothing sends itself. If the audit is not ready the draft has no link, so you never send a report that is not there.',
+    } },
   { id: '2026-10-23-find-leads-not-a-match', date: '2026-10-23', title: 'Find Leads: results that are not the trade you searched are tucked away', audience: 'all',
     body: 'A search for driving instructors no longer lists Mackay Hyundai or the Department of Transport among the results. They sit behind one grey "Not a match" line with a Show button.',
     report: {
