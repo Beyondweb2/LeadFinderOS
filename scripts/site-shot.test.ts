@@ -1,9 +1,9 @@
-/* SITE SHOT (2026-10-25) — the rules for one homepage picture per lead: when a shot may be taken, what image is refused,
+/* SITE SHOT (2026-10-23) — the rules for one homepage picture per lead: when a shot may be taken, what image is refused,
    the cap window, the caption, the claim, and the fences that keep spend away from a report being opened. */
 import { readFileSync } from 'node:fs';
 import {
   SITE_SHOT_BUCKET, SITE_SHOT_DEFAULT_MONTHLY_CAP, SITE_SHOT_FRESH_DAYS, SITE_SHOT_MAX_ATTEMPTS, SITE_SHOT_MEASURE_MAX, SITE_SHOT_MIN_BYTES,
-  londonMonthStartIso, siteShotCaption, siteShotGate, siteShotImageProblem, siteShotPath, type SiteShotGateInput,
+  londonMonthStartIso, siteShotCaption, siteShotGate, siteShotImageProblem, siteShotPath, siteShotRateLimited, siteShotRetryAfterMs, type SiteShotGateInput,
 } from '../src/lib/siteShot.ts';
 
 let failures = 0;
@@ -70,6 +70,13 @@ const FN = read('supabase/functions/site-shot/index.ts');
   ok(/verify_jwt = false/.test(read('supabase/config.toml').split('[functions.site-shot]')[1] ?? ''), 'E: the new function has its config.toml verify_jwt entry');
   const DRV = read('supabase/functions/_shared/mockup-shot.ts');
   ok(/format: ShotFormat = \{ type: "png" \}/.test(DRV) && /format\.scale \?\? 2/.test(DRV), 'E: the mockup\'s default shot is unchanged (PNG at 2x); only an explicit format changes it');
+}
+
+/* ── F. Cloudflare's own rate limit (measured 2026-10-23: 16 of 20 requests in a quick run were refused with HTTP 429) ── */
+{
+  ok(siteShotRateLimited('HTTP 429 retry-after=none {"errors":[]}') && !siteShotRateLimited('HTTP 422 {}') && !siteShotRateLimited(null), 'F: a 429 is recognised, a real page failure is not');
+  ok(siteShotRetryAfterMs('HTTP 429 retry-after=7 {}', 15000) === 7000 && siteShotRetryAfterMs('HTTP 429 retry-after=none {}', 15000) === 15000 && siteShotRetryAfterMs('HTTP 429 retry-after=9999 {}', 15000) === 15000, 'F: wait what Cloudflare asked, else the fallback, never an absurd wait');
+  ok(/siteShotRateLimited\(shot\.detail\)[\s\S]{0,400}attempts: 0/.test(FN),'F: a rate-limited shot gives the lead its try back (attempts 0) instead of counting as a failure');
 }
 
 if (failures) throw new Error(`${failures} site-shot checks failed`);

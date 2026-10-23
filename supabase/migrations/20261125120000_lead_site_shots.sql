@@ -1,4 +1,4 @@
--- LEAD SITE SHOTS (2026-10-25) — one homepage picture per lead for the prospect report's left card.
+-- LEAD SITE SHOTS (2026-10-23) — one homepage picture per lead for the prospect report's left card.
 -- ADDITIVE ONLY: two new tables, one function, one private bucket. Nothing existing is changed.
 -- Rollback:
 --   drop function if exists public.claim_site_shot(uuid, timestamptz, interval, integer);

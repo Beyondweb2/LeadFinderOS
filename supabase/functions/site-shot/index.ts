@@ -1,11 +1,11 @@
-// site-shot — ONE homepage picture per lead, for the prospect report's left card (2026-10-25).
+// site-shot — ONE homepage picture per lead, for the prospect report's left card (2026-10-23).
 //
 // Internal only: CRON_SECRET + x-internal-job. Nothing here is reachable from a browser, and nothing here sends or
 // publishes anything. Modes (body.mode):
 //   · "status"  — reads only: the switch, the cap, this London month's count, rows by status.
 //   · "shoot"   — one lead: gate (switch, protection mode, own readable website, cap) → claim (ONE conditional
 //                 write) → shoot → refuse an empty-looking image → store → record. Nothing while the switch is off.
-//   · "measure" — the 20-site measurement (Paul, 2026-10-25): up to SITE_SHOT_MEASURE_MAX leads per call, shot ONCE
+//   · "measure" — the 20-site measurement (Paul, 2026-10-23): up to SITE_SHOT_MEASURE_MAX leads per call, shot ONCE
 //                 each, stored under measure/ (never in lead_site_shots), with every gate verdict reported beside the
 //                 outcome. It ignores the switch and the cap, so it is a door for the operator's session only.
 // Spend is never started by opening a report: render-audit-report only READS a finished shot.
@@ -18,11 +18,11 @@ import { paidMode } from "../_shared/protection.ts";
 import { usableCrawlSignals } from "../../../src/lib/crawlCheck.ts";
 import {
   SITE_SHOT_BUCKET, SITE_SHOT_FRESH_MS, SITE_SHOT_JPEG_QUALITY, SITE_SHOT_MAX_ATTEMPTS, SITE_SHOT_MEASURE_MAX,
-  SITE_SHOT_SCALE, londonMonthStartIso, siteShotGate, siteShotImageProblem, siteShotPath,
+  SITE_SHOT_SCALE, londonMonthStartIso, siteShotGate, siteShotImageProblem, siteShotPath, siteShotRateLimited, siteShotRetryAfterMs,
 } from "../../../src/lib/siteShot.ts";
 
 /** Bumped with every change, so a deploy is proved by the live answer (CLAUDE.md §4). */
-const BUILD_ID = "site-shot-2026-10-25a";
+const BUILD_ID = "site-shot-2026-10-23b";
 const json = (body: unknown, status = 200) => new Response(JSON.stringify({ build: BUILD_ID, ...(body as object) }), { status, headers: { "Content-Type": "application/json" } });
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const FORMAT = { type: "jpeg" as const, quality: SITE_SHOT_JPEG_QUALITY, scale: SITE_SHOT_SCALE };
@@ -103,6 +103,11 @@ Deno.serve(async (req) => {
 
       const shot = await shootSite(lead.website, FORMAT);
       const stamp = new Date().toISOString();
+      if (!shot.ok && siteShotRateLimited(shot.detail)) {
+        /* Cloudflare's own rate limit: nothing was shot or billed, and the lead's try is given back (attempts 0), so the next audit may claim it. */
+        await service.from("lead_site_shots").update({ status: "failed", reason: "rate_limited", attempts: 0, request_ms: shot.ms, updated_at: new Date().toISOString() }).eq("lead_id", leadId);
+        return json({ ok: true, mode, shot: false, reason: "rate_limited" });
+      }
       if (!shot.ok) {
         const refused = shot.refusal !== "cf_error" && shot.refusal !== "not_configured";
         await service.from("lead_site_shots").update({ status: refused ? "refused" : "failed", reason: shot.refusal, request_ms: shot.ms, updated_at: stamp }).eq("lead_id", leadId);
@@ -132,23 +137,36 @@ Deno.serve(async (req) => {
       if (!ids.length || ids.length > SITE_SHOT_MEASURE_MAX) return json({ ok: false, error: "bad_request", detail: `measure needs 1 to ${SITE_SHOT_MEASURE_MAX} lead_ids.` }, 400);
       const protection = await paidMode(service);
       if (protection === "all_stop") return json({ ok: true, mode, shot: false, reason: "all_stop" });
+      const gapMs = Math.min(30_000, Math.max(0, Number(body.gap_ms ?? 0) || 0));
+      const deadline = Date.now() + 110_000;   // the edge limit is ~150s: leave what does not fit for the caller to resubmit
+      const deferred: string[] = [];
       const out = [];
+      let first = true;
       for (const leadId of ids) {
+        if (Date.now() > deadline - 25_000) { deferred.push(leadId); continue; }
+        if (!first && gapMs) await new Promise((r) => setTimeout(r, gapMs));
+        first = false;
         const lead = await readLead(service, leadId);
         if (!lead) { out.push({ lead_id: leadId, error: "no_such_lead" }); continue; }
         const gate = siteShotGate({ enabled: true, mode: "running", websiteRefusal: lead.websiteRefusal, crawl: lead.crawl, claimedThisMonth: 0, monthlyCap: 1 });
         if (lead.websiteRefusal) { out.push({ lead_id: leadId, website: lead.website, gate: gate.ok ? "ok" : gate.reason, shot: false, reason: lead.websiteRefusal }); continue; }
-        const shot = await shootSite(lead.website, FORMAT);
+        let shot = await shootSite(lead.website, FORMAT);
+        let retries = 0;
+        while (!shot.ok && siteShotRateLimited(shot.detail) && retries < 3 && Date.now() < deadline - 25_000) {
+          retries++;
+          await new Promise((r) => setTimeout(r, siteShotRetryAfterMs(shot.ok ? null : shot.detail, 15_000)));
+          shot = await shootSite(lead.website, FORMAT);
+        }
         if (!shot.ok) { out.push({ lead_id: leadId, website: lead.website, gate: gate.ok ? "ok" : gate.reason, shot: false, reason: shot.refusal, detail: shot.detail ?? null, request_ms: shot.ms }); continue; }
         const path = siteShotPath(leadId, true)!;
         const up = await service.storage.from(SITE_SHOT_BUCKET).upload(path, shot.bytes, { contentType: "image/jpeg", upsert: true });
         const signed = up.error ? null : (await service.storage.from(SITE_SHOT_BUCKET).createSignedUrl(path, 3600)).data?.signedUrl ?? null;
         out.push({
-          lead_id: leadId, website: lead.website, gate: gate.ok ? "ok" : gate.reason, shot: !up.error, request_ms: shot.ms, bytes: shot.bytes.length,
+          lead_id: leadId, website: lead.website, gate: gate.ok ? "ok" : gate.reason, shot: !up.error, request_ms: shot.ms, retries, bytes: shot.bytes.length,
           image_problem: siteShotImageProblem(shot.bytes), crawl: lead.crawl, path, signed_url: signed, store_error: up.error ? String(up.error.message ?? up.error).slice(0, 160) : null,
         });
       }
-      return json({ ok: true, mode, results: out });
+      return json({ ok: true, mode, results: out, deferred });
     }
 
     return json({ ok: false, error: "bad_mode", detail: "mode must be status, shoot or measure." }, 400);
