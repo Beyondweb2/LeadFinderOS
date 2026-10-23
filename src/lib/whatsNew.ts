@@ -22,6 +22,14 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-23-audit-on-automated-reply', date: '2026-10-23', title: 'An automated reply now starts the audit too', audience: 'all',
+    body: 'When a business answers with an auto-reply (out of office, booking bot, "thanks for reaching out"), its audit now runs. Before, it was skipped and the lead never got one.',
+    report: {
+      added: ['The audit starts on a lead’s first reply even when that reply is an automated one.'],
+      changed: ['An automated reply runs the audit only. Nothing is ever sent to a bot, whatever the auto-reply setting.'],
+      removed: [],
+      effect: 'More replied leads have an audit waiting. If a bot answers first, a later human reply no longer triggers an automatic send, because the audit was already started; draft it by hand.',
+    } },
   { id: '2026-10-23-interest-buttons', date: '2026-10-23', title: 'Inbox: Interested and Not interested buttons, and no more "why did they say no" pop-up', audience: 'all',
     body: 'The top of a conversation has an Interested and a Not interested button, so you no longer open the status pill to pick them. Marking Not interested no longer asks for a reason.',
     report: {

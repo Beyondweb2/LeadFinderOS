@@ -94,7 +94,7 @@ console.log('5. wiring');
   ok(/\.eq\("score_dirty_at", run\.score_dirty_at\)/.test(SH), 'the dirty mark clears only if nothing re-marked the run while it was scored');
   ok(/ai_visible_checked_audit_id: null/.test(SH), 'a changed score re-judges Visible on that audit');
   ok(!/rpc\('inbox_engine_signals'\)|rpc\('inbox_gemini_signals'\)/.test(HOOK) && /scored_at/.test(HOOK), 'the Inbox reads no separate counts; a rescore is caught by the changed-since read');
-  ok(/<ScoreLine score=\{auditScore\}/.test(INBOX) && /<ScoreLine score=\{active\.auditScore\}/.test(INBOX) && !/Gemini \{geminiNamed\}/.test(INBOX), 'list row draws the score line (the header has the Interested / Not interested buttons instead); the old Gemini pill is gone');
+  ok(/<ScoreLine score=\{auditScore\}/.test(INBOX) && /data-testid="interest-buttons"/.test(INBOX) && !/Gemini \{geminiNamed\}/.test(INBOX), 'list row draws the score line (the header has the Interested / Not interested buttons instead); the old Gemini pill is gone');
   ok(/after insert or update of result, status on public\.ai_audit_queue/.test(MIG) && /before insert or update of status on public\.ai_audit_runs/.test(MIG) && /after update on public\.ai_audits/.test(MIG), 'the database marks a run dirty on every answer, run status and audit-context write');
   ok(/and not exists \(select 1 from public\.ai_audit_runs where score_dirty_at is not null\)/.test(MIG), 'the tick also runs while a score is waiting');
   ok(!/generated always/i.test(MIG) && /set local lock_timeout/.test(MIG), 'plain columns, no rewrite, a lock timeout');

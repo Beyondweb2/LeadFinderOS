@@ -10,7 +10,7 @@
 //   · STOP / opt-out is handled BEFORE any of this, by the caller, and is untouched.
 // A failure here never loses the message: the row is already stored, and every step is best-effort and logged.
 import { armFirstReplyAuditIntent } from "./first-reply-audit.ts";
-import { countsAsFirstReply } from "../../../src/lib/firstReplyAutomation.ts";
+import { countsAsAuditTrigger } from "../../../src/lib/firstReplyAutomation.ts";
 import { INBOUND_NO_DOWNGRADE, postgrestList } from "../../../src/lib/strongStatuses.ts";
 import { chooseInboundLead, type InboundLeadCandidate } from "../../../src/lib/inboundMatch.ts";
 
@@ -62,7 +62,7 @@ async function firstInboundSms(service: Service, leadId: string, messageId: stri
   if (firstOut?.created_at) q = q.gte("created_at", firstOut.created_at);
   const { data, error } = await q.order("created_at", { ascending: true }).order("id", { ascending: true }).limit(50);
   if (error) { console.error(`[sms-inbound] first-inbound lookup failed (${leadId}): ${error.message}`); return { first: false, reliable: false }; }
-  const firstHuman = ((data ?? []) as Array<{ id: string; body: string | null }>).find((m) => countsAsFirstReply(m.body));
+  const firstHuman = ((data ?? []) as Array<{ id: string; body: string | null }>).find((m) => countsAsAuditTrigger(m.body));
   return { first: firstHuman?.id === messageId, reliable: true };
 }
 
