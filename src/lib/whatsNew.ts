@@ -22,6 +22,14 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-23-site-check-rules', date: '2026-10-23', title: 'Website check: broken text, the Google listing link, and unsourced ratings', audience: 'all',
+    body: 'The website check now spots three more real problems, and the first-reply pitch and the "site shared" reply can name them.',
+    report: {
+      added: ['Broken placeholder text, like "Welcome, !" where a name should be, or "{{first_name}}" left on a page.', 'The Google listing does not link to the website (or links to a Facebook page or a different site). This uses Google’s record we already hold; nothing new is looked up.', 'A star rating or pass rate quoted on a page that does not say where it comes from (for example "98% pass rate" with no DVSA figures).'],
+      changed: ['Each one is said in plain words in the pitch, for example "A line on your site reads "Welcome, !" where a name should be".', 'The "site shared" reply uses the check’s own reading of the Google listing when it has one.'],
+      removed: [],
+      effect: 'Only site checks run from now on show these. Old checks are not re-run and nothing costs extra. The name, address and owner checks work as before. Nothing is sent by this change.',
+    } },
   { id: '2026-10-23-lean-first-replies', date: '2026-10-23', title: 'Shorter first replies, a reply for a website they send, and a voice-note script that answers them', audience: 'all',
     body: 'The first reply after a prospect answers the opener is shorter and lists the real website issues one per line. When they send a website we missed, the draft lists what the check found on it. The Voice-note script in the Inbox now reads the whole conversation and writes the next thing to say.',
     report: {

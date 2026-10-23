@@ -34,6 +34,7 @@ import { cleanCounts, decideFetchOutcome, frontierExhausted, type JobCounts } fr
 import { buildContentTrust, pageObservations, type ContentTrust, type PageObs } from "../../../src/lib/contentTrust.ts";
 import { summariseWebsiteCheck } from "../../../src/lib/websiteCheck.ts";
 import { questionTownForLead } from "./question-town.ts";
+import { listingForCheck } from "./listing-website.ts";
 
 /** One page's content observations, or undefined if the analyser trips — never a failed page. */
 function contentObs(html: string, url: string, servedUrl: string, status: number): PageObs | undefined {
@@ -563,13 +564,16 @@ export async function finalizeCrawlJob(service: Client, jobId: string): Promise<
       const graph = full.audit?.findings.find((f) => f.id === "sitemap_only_pages");
       const graphJudged = !!full.audit && !full.audit.notChecked.some((n) => /^Click depth/.test(n));
       let leadName: string | null = null, leadTown: string | null = (home.town as string | null) ?? null, leadTrade: string | null = null;
+      let listing: Awaited<ReturnType<typeof listingForCheck>> = null;
       if (job.lead_id) {
-        const { data: l } = await service.from("outreach_leads").select("business_name, derived_town, category, search_keyword").eq("id", job.lead_id).maybeSingle();
+        const { data: l } = await service.from("outreach_leads").select("business_name, derived_town, category, search_keyword, place_id").eq("id", job.lead_id).maybeSingle();
         leadName = (l?.business_name as string | null) ?? null;
         leadTown = (await questionTownForLead(service, job.lead_id)) ?? leadTown ?? (l?.derived_town as string | null) ?? null;
         leadTrade = ((l?.category as string | null) || (l?.search_keyword as string | null)) ?? null;
+        listing = await listingForCheck(service, (l?.place_id as string | null) ?? null, servedUrl);
       }
       contentTrust = buildContentTrust({
+        listing,
         pages: obsPages, servedUrl,
         knownUrls: [...rows.filter((r) => r.status !== "skipped" || r.skip_reason === "coverage_cap").map((r) => r.final_url || r.url), ...(summaryState.sitemap_locs_sample ?? [])],
         robotsTxt: job.robots_txt ?? null, sitemapsRead: sitemapsRead ?? 0,

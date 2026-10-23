@@ -21,7 +21,7 @@ import { triageByRules } from './replyTriage.ts';
 import { factFor, CONFIDENCE_LINE, GUARANTEE_REFUND, ENGINE_WORDING, type FactTopic } from './offerFactSheet.ts';
 import { mayClaimNamedInstead } from './namedShareRule.ts';
 import { carryOn } from './draftEvidence.ts';
-import { PITCH_MAX_LIST, PITCH_MIN_LIST, PITCH_MAX_WORDS, UNREADABLE_PITCH_LINE as UNREADABLE_LINE, wordCount } from './pitchIssueWords.ts';
+import { GOOGLE_LISTING_NO_LINK, PITCH_MAX_LIST, PITCH_MIN_LIST, PITCH_MAX_WORDS, UNREADABLE_PITCH_LINE as UNREADABLE_LINE, wordCount } from './pitchIssueWords.ts';
 import {
   PLAYBOOK, RE, splitQuestion, readEndDate, nameFromReply, nearSameName, rivalsExcludingSelf, DONT_NEED_SOFT, DOES_AI_MATTER_SOFT,
   DONT_NEED_NO_AUDIT, DOES_AI_MATTER_NO_AUDIT, PRIVACY_NOT_GOOGLE, GO_ON_KNOWN, NOT_NOW_WITH_TIME, WEBSITE_GIVEN_KNOWN,
@@ -585,15 +585,18 @@ export const pitchText = (p: { lines: string[]; question: string }): string => [
 export const SITE_SHARED_OPEN = 'Ah thanks, I missed that one.';
 export const SITE_SHARED_LIST_LEAD = 'Had a proper look and a few things could be holding you back with AI:';
 export const SITE_SHARED_NONE = "Had a proper look and nothing obvious is wrong with it.";
-/** Said without a crawl: our pitch said we couldn't find a website (their Google listing had none), then they sent one. */
-export const GOOGLE_LISTING_NO_LINK = "Your Google listing doesn't link to your website";
+/** Said without a crawl: our pitch said we couldn't find a website (their Google listing had none), then they sent one.
+ *  The same words as the website check's own listing issue (pitchIssueWords.ts), so the list never says it twice. */
+export { GOOGLE_LISTING_NO_LINK };
 /** The next step once we already know who runs the site. */
 export const SITE_SHARED_KNOWN_Q = 'Quick call, or shall I send a voice note on what I found?';
 
 /** THE SITE-SHARED REPLY: only issues the website check really found (plus the Google-listing line when it is true), worst
  *  first, up to four; one issue is one sentence; none is said plainly. Never invented. */
 export function siteSharedReply(issues: string[], o: { googleNoLink: boolean; whoKnown: boolean }): { text: string; question: string; structure: PitchStructure } {
-  const lines = [...new Set([...(o.googleNoLink ? [GOOGLE_LISTING_NO_LINK] : []), ...issues])].slice(0, PITCH_MAX_LIST);
+  /* The website check's own listing line (it read Google's record) wins over the guess from "we said we couldn't find a site". */
+  const checkSaysListing = issues.some((l) => /^Your Google listing\b/.test(l));
+  const lines = [...new Set([...(o.googleNoLink && !checkSaysListing ? [GOOGLE_LISTING_NO_LINK] : []), ...issues])].slice(0, PITCH_MAX_LIST);
   const question = o.whoKnown ? SITE_SHARED_KNOWN_Q : PITCH_AGENCY_Q;
   const body = lines.length >= 2 ? `${SITE_SHARED_OPEN} ${SITE_SHARED_LIST_LEAD}\n${bulletList(lines)}`
     : lines.length === 1 ? `${SITE_SHARED_OPEN} Had a proper look and one thing could be holding you back: ${carryOn(lines[0])}.`

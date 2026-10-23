@@ -638,8 +638,8 @@ export function crawlFindings(row: CrawlRowInput | null | undefined, nowMs: numb
   const fresh = Number.isFinite(createdAtMs) && nowMs - createdAtMs < CRAWL_FRESH_MS;
   const credit = row.result.siteInfo?.builtBy?.credit ?? null;
   if (!fresh) return { findings: [], usedAt: null, credit };
-  const signals = usableCrawlSignals(row.result as { version?: number; signals?: CrawlSignals }, createdAtMs);
-  const evidence = selectableEvidence(usableSiteEvidence(row.result, createdAtMs, CRAWL_FRESH_MS));
+  const signals = usableCrawlSignals(row.result as { version?: number; signals?: CrawlSignals }, createdAtMs, nowMs);
+  const evidence = selectableEvidence(usableSiteEvidence(row.result, createdAtMs, CRAWL_FRESH_MS, nowMs));
   const out: ResearchFinding[] = [];
   if (signals) {
     candidateFindings(signals, evidence).forEach((f, i) => {

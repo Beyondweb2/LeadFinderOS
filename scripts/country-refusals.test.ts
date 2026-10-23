@@ -117,7 +117,8 @@ for (const f of ['src/lib/contactRouting.ts', 'src/components/WhatsAppQueuePanel
 const q = read('supabase/functions/process-whatsapp-queue/index.ts');
 const s = read('supabase/functions/send-whatsapp-message/index.ts');
 ok(/phoneProblemWords\(lead\.phone as string \| null, lead\.country as string \| null\)/.test(q), 'the drip names what is wrong');
-ok(/phoneProblemWords\(rawPhone, country\)/.test(s) && /const BUILD_ID = "2026-10-22b-country-refusals"/.test(s), 'send-whatsapp-message names what is wrong; BUILD_ID bumped');
+/* The build id only ever moves forward: at or after this change's own (a later deploy bumps it again). */
+ok(/phoneProblemWords\(rawPhone, country\)/.test(s) && (/const BUILD_ID = "(\d{4}-\d{2}-\d{2}[a-z])-/.exec(s)?.[1] ?? '') >= '2026-10-22b', 'send-whatsapp-message names what is wrong; BUILD_ID bumped');
 
 console.log('\n── 7. SQL: an explicit UK code is UK whatever the label (only the country argument changed) ──');
 const mig = read('supabase/migrations/20261123090000_phone_prefix_country.sql');
