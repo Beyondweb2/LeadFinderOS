@@ -11,6 +11,10 @@ export interface Lead {
   id: string;
   name: string;
   category?: string;
+  /** Google's category (places.primaryType, e.g. "driving_school") and its label, as search-leads returns them. Read by
+   *  Find Leads' "Not a match" line (src/lib/nicheMatch.ts); absent on older cached results = never judged. */
+  primaryType?: string;
+  primaryTypeLabel?: string;
   address?: string;
   phone?: string;
   rating?: number;

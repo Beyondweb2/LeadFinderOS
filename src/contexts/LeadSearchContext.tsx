@@ -9,6 +9,7 @@ import { legacySearchResultKeys, packSearchResults, searchResultsKey, unpackSear
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { foundRecord, isWithoutWebsite } from '@/lib/websiteStatusClass';
 import { outsideSearchedTown } from '@/lib/inTown';
+import { nicheProfile, notNicheMatch } from '@/lib/nicheMatch';
 import { THOROUGH_MAX_TOWNS_PER_PRESS } from '@/lib/townSearchArea';
 import { myReadinessSnapshot, notReadyMessage, onboardingWordsForPausedRefusal } from '@/lib/readinessWords';
 
@@ -664,10 +665,13 @@ export function LeadSearchProvider({ children }: { children: React.ReactNode }) 
 
     /* ⛔ FOUND = WHAT THE SCREEN SHOWS (2026-10-23). A town search returns the out-of-town results too, behind the
        grey "outside" line; counting them said "Bundaberg: 14 found" over 6 rows. The run records the in-town ones. */
-    const inTownShown = filteredLeads.filter((l) => !outsideSearchedTown(l));
+    /* …nor the "Not a match" ones (2026-10-23, src/lib/nicheMatch.ts): hidden behind their own grey line, never found. */
+    const niche = nicheProfile(filters.keyword);
+    const counted = (l: Lead) => !outsideSearchedTown(l) && !notNicheMatch(l, niche);
+    const inTownShown = filteredLeads.filter(counted);
     const noWebsiteCount = inTownShown.filter((l) => isWithoutWebsite(l.websiteStatus)).length;
 
-    const runId = await saveSearch(filters, inTownShown.length, noWebsiteCount, (data.leads as Lead[]).filter((l) => !outsideSearchedTown(l)) as SearchLeadLike[]);
+    const runId = await saveSearch(filters, inTownShown.length, noWebsiteCount, (data.leads as Lead[]).filter(counted) as SearchLeadLike[]);
     /* Each result carries its run, so an add from it is recorded against what this run found. */
     if (runId && !controller.signal.aborted) setLeads((prev) => prev.map((l) => ({ ...l, searchRunId: runId })));
 
@@ -753,10 +757,12 @@ export function LeadSearchProvider({ children }: { children: React.ReactNode }) 
       if (controller.signal.aborted) { setLine(town, { state: 'not_searched' }); return; }
       const shown = shownResults(r.data, ex);
       /* Found = the in-town rows the screen shows (2026-10-23): the outside ones stay behind the grey line. */
-      const inTownShown = shown.filter((l) => !outsideSearchedTown(l));
+      const niche = nicheProfile(keyword);
+      const counted = (l: Lead) => !outsideSearchedTown(l) && !notNicheMatch(l, niche);   // nor "Not a match" (nicheMatch.ts)
+      const inTownShown = shown.filter(counted);
       const noWebsiteCount = inTownShown.filter((l) => isWithoutWebsite(l.websiteStatus)).length;
       /* Its own run, written before the results show, so every result can carry it (Found vs Added per town). */
-      const runId = await saveSearch(filters, inTownShown.length, noWebsiteCount, r.data.leads.filter((l) => !outsideSearchedTown(l)) as SearchLeadLike[]);
+      const runId = await saveSearch(filters, inTownShown.length, noWebsiteCount, r.data.leads.filter(counted) as SearchLeadLike[]);
       const townCountry = typeof r.data.resolvedCountry === 'string' && r.data.resolvedCountry ? r.data.resolvedCountry : country;
       answers.push({ town, leads: shown.map((l) => ({ ...l, searchTown: town, searchCountry: townCountry, ...(runId ? { searchRunId: runId } : {}) })) });
       const merged = mergeTownLeads(plan.run, answers);

@@ -22,6 +22,14 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-23-find-leads-not-a-match', date: '2026-10-23', title: 'Find Leads: results that are not the trade you searched are tucked away', audience: 'all',
+    body: 'A search for driving instructors no longer lists Mackay Hyundai or the Department of Transport among the results. They sit behind one grey "Not a match" line with a Show button.',
+    report: {
+      added: ['A grey line under the results, for example "2 not a match for driving instructors hidden · Show". Show lists them; Hide tucks them away again.'],
+      changed: ['A result is only tucked away when its name AND Google’s own category both miss the trade searched. A driving school Google files as an "educational institution" always stays.', 'Tucked-away results are not counted in "found", not picked by Select all and not added, until you press Show.'],
+      removed: [],
+      effect: 'Cleaner results with nothing deleted. On the last month of searches about 1 in 60 results would be tucked away; a wrong one is one Show away. Nothing costs extra.',
+    } },
   { id: '2026-10-23-site-check-rules', date: '2026-10-23', title: 'Website check: broken text, the Google listing link, and unsourced ratings', audience: 'all',
     body: 'The website check now spots three more real problems, and the first-reply pitch and the "site shared" reply can name them.',
     report: {
