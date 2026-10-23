@@ -6,13 +6,18 @@
 //    write to whatsapp_messages / whatsapp_sends — Paul reads the script and records the note himself.
 //    scripts/voice-note-script.test.ts pins this.
 //
-// TWO ACTIONS:
-//   · latest   — the newest saved script for the lead. DB read only. No fetch, no model.
+// THREE ACTIONS:
+//   · latest   — the newest saved script for the lead. DB read only. No fetch, no model. Out of date when the audit it
+//                quotes is not the current one, or a newer message from them came in after it was written (v7).
+//   · save_edit — Paul's own version of a saved script (final_script): his edits are kept and become voice samples (v7).
 //   · generate — the hook evidence (DB only) → REFUSE here, before any fetch or spend, if there is no
 //                honest missed search with competitor names → the site research (the shared warm path:
 //                saved research → full crawl → crawl check → a targeted fetch; never a crawl job) → the
 //                model → the checks → one rewrite if a fact is wrong → saved to voice_note_scripts.
 //                `regenerate_of` names the script being replaced, so it is shown the old wording.
+//                v7 (Paul, 2026-10-23): it also reads the WhatsApp conversation (their question answered first), Paul's own
+//                messages and edits (his voice), the website check's real issues (the pitch's plain words) and whether the
+//                lead is prospect-only (Australia: no price, no guarantee).
 //
 // Auth: the operator's own JWT (resolveOperator) and the lead must be theirs — the warm drafter's rule.
 // voice_note_scripts has RLS on and NO policies: service role only; the Inbox reads it through here.
@@ -26,6 +31,9 @@ import { guardAction } from "../_shared/protection.ts";
    openai_voice_note_script rows = $0.043 (api_usage_log, 30 days to 2026-09-29). */
 const VOICE_SCRIPT_EST_USD = 0.01;
 import { logOpenAiUsage, openAiUsd } from "../_shared/openai-usage.ts";
+import { websiteCheckFor } from "../../../src/lib/websiteCheck.ts";
+import { pitchIssueLines } from "../../../src/lib/pitchIssueWords.ts";
+import { prospectOnlyLead, prospectOnlyNumber } from "../../../src/lib/prospectOnly.ts";
 import { runSiteResearch, callModel, leadTrade, leadTown, RESEARCH_LEAD_COLUMNS, type ResearchLead } from "../_shared/site-research.ts";
 import { hookSpokenEngineLabel as hookEngineLabel, scoreHookRun, type HookScoreRow } from "../../../src/lib/hookScore.ts";
 import { assessCompetitorCleanliness, collectCompetitorNames, countAnsweredCells, isProvableJunkName } from "../../../src/lib/competitorCleaning.ts";
@@ -54,14 +62,18 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
   /* The deploy marker: only this build answers with it (brand-free script, generator v6). */
-  "x-voice-note-script": "2026-10-21a-brand-free",
+  "x-voice-note-script": "2026-10-23a-next-thing-to-say",
 };
 const json = (b: unknown, s = 200) =>
   new Response(JSON.stringify(b), { status: s, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 const text = (v: unknown) => (typeof v === "string" ? v.trim() : "");
 
 const TABLE = "voice_note_scripts";
-const ROW_COLUMNS = "id, lead_id, audit_id, run_id, hook_question, hook_engine, hook_question_index, competitors, findings, site_mode, site_source, site_source_label, research_basis, script, word_count, problems, warnings, operator_note, model, generator_version, regenerated_from, generated_at";
+const ROW_COLUMNS = "id, lead_id, audit_id, run_id, hook_question, hook_engine, hook_question_index, competitors, findings, site_mode, site_source, site_source_label, research_basis, script, word_count, problems, warnings, operator_note, model, generator_version, regenerated_from, generated_at, final_script, final_saved_at";
+/** The conversation columns this reads (never `*`, CLAUDE.md WA_MESSAGE_COLUMNS rule). */
+const THREAD_COLUMNS = "direction, body, template_name, message_type, created_at, sent_by_ai, sent_by_user_id";
+/** A saved edit is a script, not an essay. */
+const MAX_EDIT_CHARS = 4000;
 
 // deno-lint-ignore no-explicit-any
 type Service = any;
@@ -149,6 +161,54 @@ async function callerNameFor(service: Service, userId: string): Promise<string |
   } catch { return null; }
 }
 
+/* ───────────────────────── v7: the conversation and Paul's voice (DB reads only) ───────────────────────── */
+
+type ThreadRow = { direction: string; body: string | null; template_name: string | null; message_type: string | null; created_at: string; sent_by_ai: boolean | null; sent_by_user_id: string | null };
+
+/** The lead's WhatsApp conversation, oldest first (the last 30 rows). */
+async function loadThread(service: Service, lead: ResearchLead): Promise<ThreadRow[]> {
+  const { data, error } = await service.from("whatsapp_messages").select(THREAD_COLUMNS).eq("lead_id", lead.id).order("created_at", { ascending: false }).limit(30);
+  if (error) throw error;
+  return ((data ?? []) as ThreadRow[]).reverse();
+}
+const threadText = (m: ThreadRow) => (m.body ?? "").trim() || (m.template_name ? `[${m.template_name}]` : "");
+
+/** PAUL'S VOICE (Paul, 2026-10-23): what the person recording typed by hand, the drafts they edited (their final words)
+ *  and the scripts they saved their own version of. Tone only; the checks still hold every claim. */
+async function loadVoiceSamples(service: Service, bookUserId: string, actorId: string): Promise<string[]> {
+  const out: string[] = [];
+  const handTyped = (b: string) => b.length >= 20 && b.length <= 300 && !b.startsWith("[") && !/https?:\/\//i.test(b);
+  try {
+    const { data } = await service.from("whatsapp_messages").select("body, sent_by_user_id")
+      .eq("user_id", bookUserId).eq("direction", "outbound").is("template_name", null).or("sent_by_ai.is.null,sent_by_ai.eq.false") /* .neq() would drop the NULL rows */
+      .order("created_at", { ascending: false }).limit(80);
+    const rows = ((data ?? []) as Array<{ body: string | null; sent_by_user_id: string | null }>).map((r) => ({ b: (r.body ?? "").trim(), by: r.sent_by_user_id }))
+      .filter((r) => handTyped(r.b));
+    const mine = rows.filter((r) => r.by === actorId);
+    for (const r of (mine.length >= 4 ? mine : rows).slice(0, 8)) out.push(r.b);
+  } catch { /* a voice sample is a nicety, never a reason to fail */ }
+  try {
+    const { data } = await service.from("ai_reply_draft_outcomes").select("final_text").eq("actor_user_id", actorId).gt("words_changed", 0)
+      .not("final_text", "is", null).order("occurred_at", { ascending: false }).limit(4);
+    for (const r of (data ?? []) as Array<{ final_text: string | null }>) if (r.final_text && handTyped(r.final_text.trim())) out.push(r.final_text.trim());
+  } catch { /* as above */ }
+  try {
+    const { data } = await service.from(TABLE).select("final_script").eq("final_saved_by", actorId).not("final_script", "is", null)
+      .order("final_saved_at", { ascending: false }).limit(2);
+    for (const r of (data ?? []) as Array<{ final_script: string | null }>) if (r.final_script?.trim()) out.push(r.final_script.trim().slice(0, 300));
+  } catch { /* as above */ }
+  return out;
+}
+
+/** The website check's real issues in the pitch's plain words (the same ones the first-reply pitch lists). */
+async function loadSitePoints(service: Service, lead: ResearchLead): Promise<string[]> {
+  try {
+    const { data } = await service.from("lead_crawl_checks").select("result, created_at").eq("lead_id", lead.id).maybeSingle();
+    const check = websiteCheckFor(data?.result ? { result: data.result, created_at: data.created_at } : null, { website: lead.website });
+    return check.state === "issues" ? pitchIssueLines(check.serious, check.minor) : [];
+  } catch { return []; }
+}
+
 async function handleLatest(service: Service, lead: ResearchLead, caller: string | null) {
   const { data, error } = await service.from(TABLE).select(ROW_COLUMNS).eq("lead_id", lead.id).order("generated_at", { ascending: false }).limit(1);
   if (error) throw error;
@@ -160,16 +220,38 @@ async function handleLatest(service: Service, lead: ResearchLead, caller: string
   const current = hook.ok
     ? { ok: true as const, auditId: hook.auditId, questionIndex: hook.evidence.questionIndex, engine: hook.evidence.engine, engineLabel: hook.evidence.engineLabel, question: hook.evidence.question, competitors: hook.evidence.competitors }
     : { ok: false as const, error: hook.error, detail: hook.detail };
-  const stale = !!script && (!current.ok || !voiceNoteBasisIsCurrent(
+  const auditStale = !!script && (!current.ok || !voiceNoteBasisIsCurrent(
     { auditId: script.audit_id ?? null, questionIndex: script.hook_question_index ?? null, engine: script.hook_engine ?? null },
     current.ok ? { auditId: current.auditId, questionIndex: current.questionIndex, engine: current.engine } : null,
   ));
+  /* v7: a message from them after the script was written means it no longer answers the conversation. */
+  let newerMessage = false;
+  if (script?.generated_at) {
+    const { data: newer } = await service.from("whatsapp_messages").select("created_at").eq("lead_id", lead.id).eq("direction", "inbound")
+      .gt("created_at", script.generated_at).limit(1);
+    newerMessage = Array.isArray(newer) && newer.length > 0;
+  }
+  const stale = auditStale || newerMessage;
   const trade = hook.ok ? hook.trade : (leadTrade(lead) || null);
   const area = hook.ok ? hook.area : (leadTown(lead) || null);
-  return json({ ok: true, script: withShort(script, trade, area, caller), versions: count ?? 0, current, stale, generatorVersion: VOICE_NOTE_GENERATOR_VERSION });
+  return json({ ok: true, script: withShort(script, trade, area, caller), versions: count ?? 0, current, stale, staleReason: newerMessage ? "new_message" : auditStale ? "audit" : null, generatorVersion: VOICE_NOTE_GENERATOR_VERSION });
 }
 
-async function handleGenerate(service: Service, lead: ResearchLead, operatorId: string, body: Record<string, unknown>, caller: string | null) {
+/** v7: Paul's own version of a saved script. Only that lead's row; only the text he kept. Nothing is sent. */
+async function handleSaveEdit(service: Service, lead: ResearchLead, actorId: string, body: Record<string, unknown>) {
+  const id = text(body.script_id);
+  const edited = typeof body.text === "string" ? body.text.replace(/\r\n/g, "\n").trim() : "";
+  if (!id || !edited) return json({ ok: false, error: "script_and_text_required", detail: "Nothing to save." }, 400);
+  if (edited.length > MAX_EDIT_CHARS) return json({ ok: false, error: "too_long", detail: "That version is too long to save." }, 400);
+  const { data: row } = await service.from(TABLE).select("id, lead_id").eq("id", id).maybeSingle();
+  if (!row || row.lead_id !== lead.id) return json({ ok: false, error: "script_not_found", detail: "That script is not on this lead." }, 404);
+  const { data: saved, error } = await service.from(TABLE).update({ final_script: edited, final_saved_at: new Date().toISOString(), final_saved_by: actorId })
+    .eq("id", id).eq("lead_id", lead.id).select(ROW_COLUMNS).single();
+  if (error) throw error;
+  return json({ ok: true, script: saved });
+}
+
+async function handleGenerate(service: Service, lead: ResearchLead, operatorId: string, body: Record<string, unknown>, caller: string | null, actorId: string) {
   const started = Date.now();
   // 1) The evidence — and the refusal — before anything is fetched or spent.
   const hook = await loadHookEvidence(service, lead);
@@ -190,12 +272,16 @@ async function handleGenerate(service: Service, lead: ResearchLead, operatorId: 
   const research = websiteKind.source === "own_site"
     ? await runSiteResearch(service, lead, operatorId, false, { functionName: "voice-note-script" })
     : null;
-  const site = selectVoiceNoteFindings(research?.research ?? null, lead.website, hook.area);
+  const site = { ...selectVoiceNoteFindings(research?.research ?? null, lead.website, hook.area), points: await loadSitePoints(service, lead) };
+  const thread = (await loadThread(service, lead)).map((m) => ({ from: m.direction === "inbound" ? "them" as const : "us" as const, text: threadText(m) }));
+  const voiceSamples = await loadVoiceSamples(service, lead.user_id, actorId);
+  /* ⛔ Australia is prospect-only (prospectOnly.ts): no price and no guarantee in the script. */
+  const prospectOnly = prospectOnlyLead({ country: lead.country }) || prospectOnlyNumber(lead.phone);
 
   // 4) The model, then the checks; one rewrite if a fact is wrong.
   const promptBase = {
     business: hook.business, trade: hook.trade, area: hook.area, website: lead.website,
-    evidence: hook.evidence, site, avoid: previous?.script ?? null, caller,
+    evidence: hook.evidence, site, avoid: previous?.script ?? null, caller, thread, voiceSamples, prospectOnly,
   };
   let best: VoiceNoteCheck | null = null;
   let promptTokens = 0; let completionTokens = 0; let calls = 0; let modelError: string | null = null;
@@ -206,7 +292,7 @@ async function handleGenerate(service: Service, lead: ResearchLead, operatorId: 
     calls++; promptTokens += call.promptTokens; completionTokens += call.completionTokens;
     const raw = parseVoiceNoteScript(call.args);
     if (!raw) { modelError = "model_empty_script"; continue; }
-    const checked = checkVoiceNoteScript(raw, { evidence: hook.evidence, site, town: hook.area, trade: hook.trade, business: hook.business, caller });
+    const checked = checkVoiceNoteScript(raw, { evidence: hook.evidence, site, town: hook.area, trade: hook.trade, business: hook.business, caller, prospectOnly, offerExpected: !prospectOnly });
     best = best ? betterAttempt(best, checked) : checked;
     if (!best.problems.length) break;
   }
@@ -231,6 +317,8 @@ async function handleGenerate(service: Service, lead: ResearchLead, operatorId: 
     research_basis: {
       plan: research?.plan ?? `not_researched_${site.source}`, usedFullCrawl: research?.usedFullCrawl ?? null, status: r?.status ?? null,
       services: site.services,
+      /* v7: what the script was given, so a reply rate can later be read against it. */
+      points: site.points, prospectOnly, threadMessages: thread.length, voiceSamples: voiceSamples.length,
       generatedAt: r?.generatedAt ?? null, sourceCrawlAt: r?.sourceCrawlAt ?? null, technicallyClean: r?.technicallyClean ?? null,
       sources: r ? [...new Set(r.sources.map((s) => s.kind))] : [],
     },
@@ -268,12 +356,13 @@ Deno.serve(async (req) => {
     if (!lead) return json({ ok: false, error: "lead_not_found", detail: "That lead is not in your account." }, 404);
     const caller = await callerNameFor(service, whoActor.actor.id);
     if (action === "latest") return await handleLatest(service, lead, caller);
+    if (action === "save_edit") return await handleSaveEdit(service, lead, whoActor.actor.id, body);
     if (lead.is_archived === true) return json({ ok: false, error: "lead_archived", detail: "This lead is archived." }, 409);
     if (action === "generate") {
       /* ⛔ USAGE GUARD (2026-09-29): suspension, the pause modes, drafts per hour, spend. */
       const guard = await guardAction(service, whoActor.actor.id, "ai_draft", { fn: "voice-note-script", leadId, role: whoActor.actor.role, estCostUsd: whoActor.actor.role === "admin" ? 0 : VOICE_SCRIPT_EST_USD });
       if (!guard.ok) return json(guard.body, guard.status);
-      return await handleGenerate(service, lead, who.user.id, body, caller);
+      return await handleGenerate(service, lead, who.user.id, body, caller, whoActor.actor.id);
     }
     return json({ ok: false, error: "unknown_action" }, 400);
   } catch (e) {

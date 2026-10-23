@@ -136,7 +136,10 @@ console.log('── 4. The voice note is the call script, spoken ──');
   ok(!/report|audit|show you|link|£/i.test(two.text.replace(CONFIDENCE_LINE, '')) && two.lines.includes(CONFIDENCE_LINE) && (two.text.match(/guarantee/gi) ?? []).length === 1, 'no report offer, no link, no price; the guarantee only as the fact sheet confidence line (Paul, 2026-10-20)');
   ok(voiceNoteFromCall(p('findings', [issue('a', 'b')], 'follow_up')).note === VOICE_NOTE_IN_TOUCH_NOTE && !/messaged|in touch/i.test(voiceNoteFromCall(p('findings', [issue('a', 'b')], 'follow_up')).text), 'already in touch → a note for the person recording, never said');
   const ui = readFileSync(new URL('../src/components/VoiceNoteScriptButton.tsx', import.meta.url), 'utf8');
-  ok(!/invokeEdge|functions\.invoke/.test(ui), 'no model call and no edge function: nothing to generate');
+  /* 2026-10-23: only the Inbox dialog (GeneratedVoiceNote) calls the writer; the call screen's note is still built in place. */
+  const vn = ui;
+  const callTab = vn.includes('export function GeneratedVoiceNote') ? vn.slice(vn.indexOf('export function VoiceNoteFromCall'), vn.indexOf('export function GeneratedVoiceNote')) : '';
+  ok(!!callTab && !/invokeEdge|functions\.invoke/.test(callTab), 'the call screen note: no model call and no edge function, nothing to generate');
 }
 
 console.log('── 5. Google AI scoring is versioned ──');

@@ -82,12 +82,12 @@ for (const [name, c] of wcases) {
   else ok(/it named a few other businesses/.test(fb), `${name}: "a few other businesses", nothing invented`);
   if ((c.crawlFindings ?? []).length) ok(issueMentioned(fb, ISSUE) && !fb.includes(GENERIC_SITE_LINE), `${name}: the crawl's real issue`);
   else ok(fb.includes(GENERIC_SITE_LINE), `${name}: the general line`);
-  ok(/i asked gemini for an electrician in Rotherham/.test(fb), `${name}: "gemini" (the audit's hook engine)`);
+  ok(/i asked ai for an electrician in Rotherham/.test(fb) && !/gemini|chatgpt/i.test(fb), `${name}: "ai", never the audit's engine by brand (Paul, 2026-10-23)`);
 }
 {
   const p = buildReplyPrompt(wctx());
   ok(/Paul has NOT told them this yet\. AI NAMED INSTEAD \(name these, at most three, spelt exactly like this\): GF Electrical Contractors Ltd/.test(p), 'before the hook, the prompt carries the names (the cause of the Safety First draft)');
-  ok(/AI TOOL: say it as "gemini"/.test(p) && /STAGE: Paul has NOT sent them the AI check yet/.test(p), '…the AI tool and the stage');
+  ok(/AI TOOL: say it as "ai"/.test(p) && /STAGE: Paul has NOT sent them the AI check yet/.test(p), '…the AI tool ("ai") and the stage');
   ok(/GENERAL LINE/.test(p), 'no research, no crawl issue → the general line');
   ok(/CRAWL FINDINGS/.test(buildReplyPrompt(wctx({ crawlFindings: [ISSUE] }))), 'no research but the crawl found something → the crawl\'s issue');
   const after = buildReplyPrompt(wctx({ hookTemplate: 'audit_followup' }));
@@ -96,7 +96,7 @@ for (const [name, c] of wcases) {
   const bad = checkReply(SAFETY_FIRST_DRAFT, wctx());
   ok(bad.problems.includes(VAGUE_CLAIM_PROBLEM), 'the Safety First draft is now flagged: vague site claim');
   ok(bad.problems.some((x) => /does not name who AI recommended/.test(x)), '…and: rivals not named');
-  ok(checkReply(fallbackReply(wctx())!.replace('gemini', 'chatgpt'), wctx()).problems.some((x) => /different AI tool/.test(x)), 'the wrong AI tool is flagged');
+  ok(checkReply(fallbackReply(wctx())!.replace('i asked ai', 'i asked chatgpt'), wctx()).problems.some((x) => /different AI tool|by its brand/.test(x)), 'an AI tool named by its brand is flagged');
   const FN = read('supabase/functions/warm-lead-reply/index.ts');
   ok(/const crawlFindings = found\.status === "findings"/.test(FN) && /crawlFindings,\n\s+\}\);/.test(FN), 'warm-lead-reply hands over only a crawl that FOUND something');
   const SR = read('supabase/functions/_shared/site-research.ts');
@@ -124,15 +124,16 @@ console.log('3. one engine per conversation, "gemini", the tidy');
   // Both drafters use it.
   const chatThread = [msg('o1', 'outbound', 'I asked chatgpt for an electrician in Rotherham. It came back with GF Electrical Contractors Ltd', 5), msg('i1', 'inbound', 'Hi. Who are you?', 1)];
   const w = wctx({ thread: chatThread, latest: latestInbound(chatThread)!, hookTemplate: 'audit_followup' });
-  ok(w.engineWords === 'chatgpt', 'Draft reply: the context takes the engine the sent hook named');
-  ok(/AI TOOL: say it as "chatgpt"/.test(buildReplyPrompt(w)) && /i asked chatgpt/.test(fallbackReply(w)!), '…its prompt and its rule-built draft say chatgpt');
-  ok(checkReply(fallbackReply(w)!.replace('chatgpt', 'gemini'), w).problems.some((x) => /different AI tool/.test(x)), '…and a draft switching to gemini is flagged');
+  /* ⛔ NO AI BRAND in a warm reply (Paul, 2026-10-23): "ai" even when an older hook of ours named the tool. */
+  ok(w.engineWords === 'ai', 'Draft reply: "ai", even when the sent hook named chatgpt');
+  ok(/AI TOOL: say it as "ai"/.test(buildReplyPrompt(w)) && !/i asked chatgpt/.test(fallbackReply(w) ?? ''), '…its prompt and its rule-built draft never say chatgpt');
+  ok(checkReply('i asked gemini for an electrician in Rotherham and it named a few other businesses. are you with an agency or do you manage the website yourself?', w).problems.some((x) => /by its brand/.test(x)), '…and a draft naming gemini is flagged');
   const u = wctx({ audit: { ...audit, engine: null } });
   ok(u.engineWords === 'ai' && /i asked ai for/.test(fallbackReply(u)!) && /say it as "ai"/.test(buildReplyPrompt(u)), 'unsure → the draft says "ai"');
 
   // "gemini", never "google ai" (the Overview keeps its name).
   ok(saysGoogleAiForGemini('i asked google ai for a plumber') && !saysGoogleAiForGemini('it showed in the google ai overview') && !saysGoogleAiForGemini('i asked gemini'), '"google ai" for Gemini is caught; the AI Overview is not');
-  ok(checkReply(fallbackReply(wctx())!.replace('gemini', 'google ai'), wctx()).problems.some((x) => /say "gemini"/.test(x)), 'Draft reply flags "google ai"');
+  ok(checkReply(fallbackReply(wctx())!.replace('i asked ai', 'i asked google ai'), wctx()).problems.some((x) => /by its brand/.test(x)), 'Draft reply flags "google ai" (say "ai")');
   ok(!/google ai(?! overview)/i.test(AI_REPLY_SYSTEM_PROMPT + REPLY_SYSTEM_PROMPT), 'neither drafter\'s system prompt teaches "google ai"');
 
   // The tidy: no "aI tools", and the offer joins on to the issues.

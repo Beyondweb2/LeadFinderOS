@@ -3,6 +3,7 @@
    and the structural promises: it never sends, it refuses before it spends, it reuses the shared
    research path, and the table is service-role only.
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
+import { spokenLength } from '../src/lib/spokenLength.ts';
 import { readFileSync } from 'node:fs';
 import {
   selectVoiceNoteEvidence, selectVoiceNoteFindings, buildVoiceNotePrompt, checkVoiceNoteScript, tidyScript,
@@ -103,12 +104,12 @@ const SITE_C: VoiceNoteSite = { ...OWN_SITE, mode: 'clean', findings: [] };
 const P = buildVoiceNotePrompt({ business: 'Acme Plumbing', trade: 'Plumbers', area: 'Leicester', website: 'acme.example', evidence: EV, site: SITE_F });
 /* ⛔ Brand-free (Paul, 2026-10-21, v6): the prompt says "AI" and never hands the model the engine's brand. */
 ok(P.includes('THE TOOL (say exactly this, never a brand): AI') && !/Google AI|Gemini|ChatGPT/.test(P) && EV.competitors.every((c) => P.includes(c)), 'the prompt says "AI", names no brand, and carries exactly the picked competitors');
-ok(!/asked (Gemini|ChatGPT|Google AI)/.test(VOICE_NOTE_SYSTEM_PROMPT) && /i asked AI for an electrician/.test(VOICE_NOTE_SYSTEM_PROMPT), 'the system prompt\'s examples say "i asked AI"');
+ok(!/asked (Gemini|ChatGPT|Google AI)/.test(VOICE_NOTE_SYSTEM_PROMPT) && /Call the tool "AI"/.test(VOICE_NOTE_SYSTEM_PROMPT), 'the system prompt calls the tool "AI", never a brand');
 ok(P.includes('say it like "a plumber"'), 'a plural trade is given in speakable form');
 ok(P.includes('AI search crawlers are blocked') && P.includes('OAI-SearchBot'), 'the finding goes in with its concrete details');
 const PC = buildVoiceNotePrompt({ business: 'Acme Plumbing', trade: 'plumber', area: 'Leicester', website: 'acme.example', evidence: EV, site: SITE_C });
 ok(/nothing obviously broken/.test(PC) && !/WEBSITE POINTS \(use/.test(PC), 'no finding → the fallback instruction, no website points');
-ok(/never say a website issue is why/i.test(VOICE_NOTE_SYSTEM_PROMPT) && /No em dash/.test(VOICE_NOTE_SYSTEM_PROMPT) && /No price/.test(VOICE_NOTE_SYSTEM_PROMPT), 'the system prompt forbids causation, dashes and price');
+ok(/never say a website issue is why/i.test(VOICE_NOTE_SYSTEM_PROMPT) && /No em dash/.test(VOICE_NOTE_SYSTEM_PROMPT) && /MONEY: no price, figure or guarantee unless THE OFFER/.test(VOICE_NOTE_SYSTEM_PROMPT), 'the system prompt forbids causation, dashes, and any money but the offer\'s own words');
 ok(VOICE_NOTE_MODEL === 'gpt-4o', 'the stronger writing model');
 
 /* ─────────── 4. the checks ─────────── */
@@ -116,7 +117,9 @@ const OWN_CTA = "quick one mate, do you own and control the website yourself, or
 const GOOD = "hi mate, i was looking for a plumber in Leicester, so i asked AI who it recommended. it came up with Smith & Sons Plumbing, Leicester Heating Co and PipeFix, but you didn't come up. i had a look at what might be holding you back, and some of the AI search crawlers, like OAI-SearchBot and PerplexityBot, are blocked from reading your site. i actually specialise in AI visibility for local businesses. " + OWN_CTA;
 const g = checkVoiceNoteScript(GOOD, { evidence: EV, site: SITE_F, town: 'Leicester' });
 ok(g.problems.length === 0, `a good script passes (${g.problems.join(' | ')})`);
-ok(g.wordCount >= VOICE_NOTE_TARGET_WORDS.min && g.wordCount <= VOICE_NOTE_TARGET_WORDS.max, `word count is inside the 30–45 second target (${g.wordCount})`);
+/* v7 (Paul, 2026-10-23): under two minutes, about 250 words; the words and seconds are shown under the script. */
+ok(VOICE_NOTE_TARGET_WORDS.max === 250 && spokenLength(Array.from({ length: 212 }, () => 'word').join(' ')).label === '212 words · about 1 min 25 s', 'the target is under two minutes (250 words); "212 words · about 1 min 25 s"');
+ok(g.problems.length === 0 && g.warnings.some((w) => /outside/.test(w)), `a short script (${g.wordCount} words) is a note only, never a rewrite`);
 
 const missing = checkVoiceNoteScript(GOOD.replace(' and PipeFix', ''), { evidence: EV, site: SITE_F });
 ok(missing.problems.some((p) => /PipeFix/.test(p)), 'a dropped competitor is a problem');
@@ -143,11 +146,11 @@ ok(checkVoiceNoteScript(GOOD.replace('Smith & Sons Plumbing', 'Block Paving Co')
 // Length is a target, not a gate.
 const words = (n: number) => Array.from({ length: n }, () => 'word').join(' ');
 const lenOnly = (n: number) => checkVoiceNoteScript(`asked AI ai visibility Smith & Sons Plumbing Leicester Heating Co PipeFix ${words(n)} do you own and control the website yourself, or is it managed by an agency?`, { evidence: EV, site: SITE_C });
-ok(lenOnly(18).problems.length === 0 && lenOnly(18).warnings.some((w) => /outside/.test(w)), '45 words: a note only, never a rewrite');
-ok(lenOnly(55).problems.length === 0 && lenOnly(55).warnings.length === 0, '82 words: no problem, no warning');
-ok(lenOnly(90).problems.length === 0 && lenOnly(90).warnings.some((w) => /outside/.test(w)), '117 words: a note only, never a rewrite');
-ok(lenOnly(100).problems.some((p) => /Far too long/.test(p)), '127 words: over the hard cap is shortened (Paul, 2026-09-27: 30–45 seconds)');
-ok(lenOnly(5).problems.some((p) => /Far too short/.test(p)) && lenOnly(170).problems.some((p) => /Far too long/.test(p)), 'plainly wrong-sized scripts are sent back');
+ok(lenOnly(55).problems.length === 0 && lenOnly(55).warnings.some((w) => /outside/.test(w)), 'about 75 words: a note only, never a rewrite');
+ok(lenOnly(150).problems.length === 0 && lenOnly(150).warnings.length === 0, 'about 170 words: no problem, no warning');
+ok(lenOnly(250).problems.length === 0 && lenOnly(250).warnings.some((w) => /outside/.test(w)), 'about 270 words: a note only, never a rewrite');
+ok(lenOnly(280).problems.some((p) => /Far too long/.test(p)), 'about 300 words: over the hard cap is shortened (Paul, 2026-10-23: under two minutes)');
+ok(lenOnly(30).problems.some((p) => /Far too short/.test(p)) && lenOnly(400).problems.some((p) => /Far too long/.test(p)), 'plainly wrong-sized scripts are sent back');
 
 ok(tidyScript('"hi mate — i was looking – for a plumber"') === 'hi mate, i was looking, for a plumber', 'dashes are replaced mechanically and wrapping quotes dropped');
 ok(checkVoiceNoteScript(GOOD.replace('hi mate, i was', 'hi mate — i was'), { evidence: EV, site: SITE_F }).problems.length === 0, 'a dash alone never causes a rewrite');
@@ -207,7 +210,7 @@ ok(classifyLeadWebsite('').source === 'none' && classifyLeadWebsite(null).source
   ok(checkVoiceNoteScript(withLost("that's someone local ringing them instead"), { evidence: EV, site: SITE_F }).problems.some((x) => /lost work as a fact/.test(x)), '"someone ringing them instead" is rejected');
   ok(!checkVoiceNoteScript(withLost('that can mean potential customers going elsewhere'), { evidence: EV, site: SITE_F }).problems.some((x) => /lost work/.test(x)), '"that can mean potential customers going elsewhere" is fine');
   ok(!checkVoiceNoteScript(withLost('that could be work going to someone else'), { evidence: EV, site: SITE_F }).problems.some((x) => /lost work/.test(x)), '"that could be work going to someone else" is fine');
-  ok(/LOST WORK: .*possibility.*never a fact/.test(VOICE_NOTE_SYSTEM_PROMPT), 'the prompt says so too');
+  ok(/LOST WORK: never a fact; only a possibility/.test(VOICE_NOTE_SYSTEM_PROMPT), 'the prompt says so too');
 }
 
 // 4. The first live script (RP Electrics, 2026-09-26): quoting the crawler "ChatGPT-User" is not an engine claim.
@@ -237,7 +240,7 @@ ok(classifyLeadWebsite('').source === 'none' && classifyLeadWebsite(null).source
   ok(narratesSearchQualifiers(FB_TAIL, FB_EV.question, 'Shrewsbury') && checkVoiceNoteScript(FB_TAIL, { evidence: FB_EV, site: FB_SITE, town: 'Shrewsbury' }).problems.some((x) => /qualifiers/.test(x)), 'narrating the query tail ("…who can come today") is sent back');
   const FB_V2_END = FB_OK.replace("have you got a website of your own as well, or is TradeHQ basically what you're using at the moment?", "so if you want mate i'm happy to explain what i'd change to give you a better chance of coming up in those searches.");
   const v2end = checkVoiceNoteScript(FB_V2_END, { evidence: FB_EV, site: FB_SITE, town: 'Shrewsbury' }).problems;
-  ok(v2end.some((x) => /change plan/.test(x)) && v2end.some((x) => /site of their own besides the TradeHQ profile/.test(x)), 'the v2 ending ("explain what i\'d change") is rejected, and the profile question is required');
+  ok(v2end.some((x) => /change plan/.test(x)), 'the v2 ending ("explain what i\'d change") is rejected');
   const FB_OWN_Q = FB_OK.replace("have you got a website of your own as well, or is TradeHQ basically what you're using at the moment?", OWN_CTA);
   ok(checkVoiceNoteScript(FB_OWN_Q, { evidence: FB_EV, site: FB_SITE, town: 'Shrewsbury' }).problems.some((x) => /only page on record is their TradeHQ profile/.test(x)), 'asking a TradeHQ-only lead "do you own the website?" is rejected');
   ok(asksWebsiteControl("do you have a site of your own that you control, mate, or are you mainly using the TradeHQ profile?", FB_SITE), 'the other profile wording passes');
@@ -266,7 +269,7 @@ ok(classifyLeadWebsite('').source === 'none' && classifyLeadWebsite(null).source
   const pw = buildVoiceNotePrompt({ business: 'JG Electrics', trade: 'Electricians', area: 'Woking', website: 'x', evidence: EV, site: onlyWeak });
   ok(onlyWeak.findings.length === 1 && pw.includes('OBSERVATION ONLY') && !pw.includes('Weak Evidence of Qualifications'), 'no concrete finding → the interpretive one goes in as observation, without its verdict title');
   ok(/OBSERVATION, NOT JUDGEMENT/.test(VOICE_NOTE_SYSTEM_PROMPT) && /never read it word for word/.test(VOICE_NOTE_SYSTEM_PROMPT) && /Never say the business's own name/.test(VOICE_NOTE_SYSTEM_PROMPT), 'the prompt carries the four tone rules');
-  ok(/i had a look at why you weren't coming up and found something that could be holding you back/.test(VOICE_NOTE_SYSTEM_PROMPT) && /i actually specialise in AI visibility for local businesses/.test(VOICE_NOTE_SYSTEM_PROMPT) && /who owns and controls their website/.test(VOICE_NOTE_SYSTEM_PROMPT), 'the prompt carries the five-beat shape');
+  ok(/COVER THESE, in a natural order/.test(VOICE_NOTE_SYSTEM_PROMPT) && /specialise in AI visibility for local businesses/.test(VOICE_NOTE_SYSTEM_PROMPT) && /most websites are not set up for AI\. Say "most", never a percentage/.test(VOICE_NOTE_SYSTEM_PROMPT) && /end with ONE simple question or next step/.test(VOICE_NOTE_SYSTEM_PROMPT) && /ANSWER IT FIRST/.test(VOICE_NOTE_SYSTEM_PROMPT), 'the prompt carries Paul\'s (a)–(k) shape (2026-10-23): their question first, "most", one question last');
   ok(/Do not offer to send the audit/.test(VOICE_NOTE_SYSTEM_PROMPT) && !/happy to explain what i'd change/.test(VOICE_NOTE_SYSTEM_PROMPT), 'the old change-plan ending is gone from the prompt and forbidden');
   ok(/business: hook\.business/.test(read('supabase/functions/voice-note-script/index.ts')), 'the function passes the business name to the checks');
 }
@@ -277,18 +280,19 @@ ok(classifyLeadWebsite('').source === 'none' && classifyLeadWebsite(null).source
   const prof = selectVoiceNoteFindings(null, 'https://tradehq.co.uk/firebeardelectrical', 'Shrewsbury');
   ok(voiceNoteCtaKind(prof) === 'profile' && voiceNoteCtaKind(selectVoiceNoteFindings(null, null)) === 'no_website', 'a profile and no website each get their own question');
   const po = buildVoiceNotePrompt({ business: 'Acme Plumbing', trade: 'plumber', area: 'Leicester', website: 'acme.example', evidence: EV, site: SITE_F });
-  ok(/CTA LINE/.test(po) && /own and control the website yourself, or is it managed by an agency/.test(po), 'the own-site prompt carries the ownership CTA');
+  ok(/THE LAST LINE: one simple question or next step/.test(po) && /own and control the website yourself, or is it managed by an agency/.test(po), 'the own-site prompt carries the ownership question while who runs the site is unknown');
   const pp = buildVoiceNotePrompt({ business: 'Firebeard Electrical', trade: 'Electricians', area: 'Shrewsbury', website: 'https://tradehq.co.uk/firebeardelectrical', evidence: EV, site: prof });
   ok(/have you got a website of your own as well, or is TradeHQ basically what you're using/.test(pp) && /Never ask whether they own "the website"/.test(pp), 'the profile prompt adapts the CTA to TradeHQ');
   ok(/say it as just "an electrician in Shrewsbury"/.test(pp), 'the prompt gives the short spoken context (trade + town)');
   const nw = "hi mate, i was looking for a plumber in Leicester, so i asked AI who it recommended. it came up with Smith & Sons Plumbing, Leicester Heating Co and PipeFix, but you didn't come up. i had a look at what might be holding you back, and i couldn't find a website for you. i actually specialise in AI visibility for local businesses. have you got a website at the moment, mate, or not yet?";
   const nwSite = selectVoiceNoteFindings(null, null);
   ok(checkVoiceNoteScript(nw, { evidence: EV, site: nwSite }).problems.length === 0, 'a no-website script ending "have you got a website at the moment?" passes');
-  ok(checkVoiceNoteScript(GOOD.replace(OWN_CTA, 'speak soon.'), { evidence: EV, site: SITE_F }).problems.some((x) => /own and control the website/.test(x)), 'an own-site script with no ownership question is sent back');
+  ok(checkVoiceNoteScript(GOOD.replace(OWN_CTA, 'speak soon.'), { evidence: EV, site: SITE_F }).warnings.some((x) => /end on a question/.test(x)), 'a script that does not end on a question is noted (v7: one question or next step)');
+ok(checkVoiceNoteScript(GOOD.replace(OWN_CTA, 'is it with an agency? shall we have a call?'), { evidence: EV, site: SITE_F }).problems.some((x) => /more than one question/.test(x)), 'two questions at the end are sent back');
   ok(asksWebsiteControl('just so i know what would actually be possible, do you own the site yourself or is it with an agency?', SITE_F), 'a natural variation of the own-site question passes');
   ok(checkVoiceNoteScript(GOOD.replace('i had a look at what might be holding you back', 'i looked into why Google AI recommended them instead'), { evidence: EV, site: SITE_F }).problems.some((x) => /reason/.test(x)), '"i looked into why Google AI recommended them" is a causation claim');
   ok(checkVoiceNoteScript(GOOD.replace(OWN_CTA, "i can send you the audit and show you exactly what i'd change. " + OWN_CTA), { evidence: EV, site: SITE_F }).problems.some((x) => /change plan/.test(x)), '"send you the audit and show you exactly what i\'d change" is rejected');
-  ok(VOICE_NOTE_GENERATOR_VERSION === 6, "generator version 6 marks the brand-free pass in stored rows (5 was who-is-speaking, 4 the house style)");
+  ok(VOICE_NOTE_GENERATOR_VERSION === 7, "generator version 7 marks the next-thing-to-say pass (6 brand-free, 5 who-is-speaking, 4 the house style)");
 }
 {
   // The card's pick (score.hook) wins whenever it has two usable names — even over a three-name miss.
@@ -318,12 +322,14 @@ const SHARED = read('supabase/functions/_shared/site-research.ts');
 for (const [name, src] of [['voice-note-script function', FN], ['VoiceNoteScriptButton', UI]] as const) {
   ok(!/send-whatsapp-(message|voice)['"]/.test(strip(src)), `${name}: never invokes a sender`);
   ok(!/graph\.facebook\.com|sendViaGraph|whatsapp-send\.ts/.test(src), `${name}: no Graph call, no import of the sender module`);
-  ok(!/from\(["']whatsapp_(?:messages|sends)["']\)/.test(src), `${name}: never touches a message row`);
+  /* v7: the function READS the conversation; it never writes, inserts or deletes a message row, and never reads the sends. */
+  ok(!/from\(["']whatsapp_(?:messages|sends)["']\)[^;]*\.(insert|update|upsert|delete)\(/.test(src) && !/whatsapp_sends/.test(strip(src)), `${name}: never writes a message row`);
 }
 const latestFn = FN.match(/async function handleLatest[\s\S]*?\n}\n/)?.[0] ?? '';
 ok(latestFn.includes('loadHookEvidence(service, lead)') && latestFn.includes('voiceNoteBasisIsCurrent(') && !/callModel\(|runSiteResearch\(/.test(latestFn), 'latest compares the saved basis with the current pick, with no fetch and no model call');
 ok(/selectVoiceNoteEvidence\(score\.results, \{ business, town: area, trade \}, score\.hook\)/.test(FN), 'the function hands the card\'s pick to the selection');
-ok(/voiceNoteFromCall\(p\)/.test(UI) && !/Regenerate/.test(UI) && !/invokeEdge/.test(UI), 'the panel builds the note from the call script playbook (2026-10-19): nothing to regenerate, no edge call');
+/* 2026-10-23 (Paul): the Inbox panel writes the next thing to say (fn voice-note-script); the call screen's tab keeps the instant note. */
+ok(/voiceNoteFromCall\(p\)/.test(UI) && /invokeEdge<[^>]*>\('voice-note-script', \{ action: 'generate'/.test(UI) && /action: 'save_edit'/.test(UI) && /<GeneratedVoiceNote leadId=\{leadId\} \/>/.test(UI), 'the Inbox panel generates from the function (Save my version kept); the call tab keeps the playbook note');
 ok(!/useEffect\([^)]*generate/.test(UI), 'nothing regenerates on its own');
 ok(!/onSend|doSend|onDraft|setDraft/.test(UI), 'the button has no send or composer callback — Copy and Regenerate only');
 const gen = FN.match(/async function handleGenerate[\s\S]*?\n}\n/)?.[0] ?? '';

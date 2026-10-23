@@ -385,7 +385,9 @@ console.log('── 12. SIMPLIFIED PLAYBOOK (Paul, 2026-09-27) ──');
   /* 2026-10-19 (Paul): the voice note is BUILT from the same playbook (voiceNoteFromCall.ts) — no generating, no edge call. */
   {
     const vn = readFileSync(new URL('../src/components/VoiceNoteScriptButton.tsx', import.meta.url), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
-    ok(/\{tab === 'voice' && <VoiceNoteScriptBody leadId=\{leadId\} playbook=\{p\} \/>\}/.test(ui) && /voiceNoteFromCall\(p\)/.test(vn) && !/invokeEdge|voice-note-script'|functions\.invoke/.test(vn),
+    /* 2026-10-23: the Inbox dialog generates (GeneratedVoiceNote); the call screen's tab is still the instant playbook note. */
+    const callTab = vn.includes('export function GeneratedVoiceNote') ? vn.slice(vn.indexOf('export function VoiceNoteFromCall'), vn.indexOf('export function GeneratedVoiceNote')) : '';
+    ok(/\{tab === 'voice' && <VoiceNoteScriptBody leadId=\{leadId\} playbook=\{p\} \/>\}/.test(ui) && /voiceNoteFromCall\(p\)/.test(callTab) && !!callTab && !/invokeEdge|voice-note-script'|functions\.invoke/.test(callTab),
       'the Voice note tab shows the note built from the call script\'s playbook (no model call, no edge function)');
   }
   /* The AI result is no longer inside the playbook body: it is the ONE summary above it (LeadHookPanel 'call' →
@@ -399,7 +401,7 @@ console.log('── 12. SIMPLIFIED PLAYBOOK (Paul, 2026-09-27) ──');
     'objections are closed until opened, one answer open at a time');
   ok(!/onSend|doSend|send-whatsapp/.test(ui), 'the panel has no send action');
   const vn = readFileSync(new URL('../src/components/VoiceNoteScriptButton.tsx', import.meta.url), 'utf8');
-  ok(/export function VoiceNoteScriptBody/.test(vn) && /<VoiceNoteScriptBody leadId=\{leadId\} \/>/.test(vn), 'the voice-note dialog and the playbook share one body');
+  ok(/export function VoiceNoteScriptBody/.test(vn) && /<GeneratedVoiceNote leadId=\{leadId\} \/>/.test(vn), 'the call tab keeps the playbook body; the Inbox dialog writes the next thing to say (Paul, 2026-10-23)');
 }
 
 console.log('── 13. HOUSE STYLE (Paul, 2026-09-30) ──');

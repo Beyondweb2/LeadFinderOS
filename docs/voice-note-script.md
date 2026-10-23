@@ -117,3 +117,31 @@ for the shared website-issues selector (`selectFindings(…, max)` now returns a
 the search is now sent back), one beat per line. The panel also shows a SHORT VERSION (`shortVoiceNote`,
 ~20 s, three lines) derived by the function from the saved row on every `latest` / `generate` — never
 stored, no model call. Record: `docs/sales-language.md`.
+
+## v7: the next thing to say (Paul, 2026-10-23)
+
+Approved sheet: `C:\Users\paulj\Documents\Findable\lean-first-replies-2026-10-23.md` §9 (three sample scripts).
+
+* **The Inbox panel generates again** (`GeneratedVoiceNote`, `VoiceNoteScriptButton.tsx`). This reverses the 2026-10-19
+  "no generating" rule for the Inbox only, at Paul's request. The call screen's Voice note tab keeps the instant playbook
+  note (`VoiceNoteFromCall`). About 1-2p a script (gpt-4o), behind `guardAction`.
+* **Reads:** the WhatsApp conversation (`whatsapp_messages`, last 30 rows, explicit columns, READ only), Paul's voice (his
+  hand-typed outbound messages, his edited drafts' final text from `ai_reply_draft_outcomes`, his saved script versions:
+  tone only, the checks still hold every claim), the website check's real issues in the pitch's plain words
+  (`pitchIssueLines`), and whether the lead is prospect-only (`prospectOnly.ts`: Australia → no price, no guarantee).
+* **Shape (a)-(k):** their question answered first; what was already said gets a callback, not a repeat; AI visibility;
+  the real search and names; "some AI tools get their answers by reading websites"; "most websites" (never a %); up to
+  four real issues; "matters more than ever… able to recommend you" (never "will"); discovery audit + best chance of being
+  named (never "win"); `SPOKEN_PRICE_LINE` + `SPOKEN_INCLUDES` ("before we start", "regular checks"); `GUARANTEE_LINE` word
+  for word; ONE question last. Under 2 minutes: target 120-250 words, hard 60-290 (`spokenLength.ts` shows "212 words ·
+  about 1 min 25 s").
+* **Checks added:** the price and the guarantee only in the sheet's words (required in a generated script, `offerExpected`),
+  neither for a prospect-only lead; "99%" / "win" / "monthly" / "AI will…" sent back; more than one closing question sent
+  back; no closing question noted. The old "must ask who owns the website" rule is now the suggested last line while that
+  is unknown.
+* **Out of date** (`latest`): the audit it quotes is not the current pick, OR a message from them arrived after it was
+  written (`staleReason: 'new_message'`).
+* **Save my version** (`save_edit`): `voice_note_scripts.final_script / final_saved_at / final_saved_by` (migration
+  `20261124130000_voice_note_final_script.sql`, additive). Never sent anywhere.
+* Deploy marker: `x-voice-note-script: 2026-10-23a-next-thing-to-say` on OPTIONS. Tests: `scripts/voice-note-script.test.ts`,
+  `scripts/lean-first-replies.test.ts` §6.

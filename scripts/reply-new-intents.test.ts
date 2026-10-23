@@ -3,7 +3,7 @@
    Needs-you ones never auto-draft. Then B4, B6–B11 and the prospect voice note. `--preview` prints one draft per intent.
    Pure: no model, no DB. Nothing here sends. */
 import { readFileSync } from 'node:fs';
-import { pickMove, firstReplyPitch, PITCH_AGENCY_VOICE, type MoveEvidence, type MoveThreadMsg, type MovePlan } from '../src/lib/replyMove.ts';
+import { pickMove, firstReplyPitch, PITCH_AGENCY_Q, type MoveEvidence, type MoveThreadMsg, type MovePlan } from '../src/lib/replyMove.ts';
 import { PLAYBOOK, NEW_INTENTS, NEEDS_YOU_INTENTS, NEW_SITE_CHECK_BACK, VOICE_NOTE_FROM_THEM, RE, type PlaybookIntent } from '../src/lib/replyPlaybook.ts';
 import { checkAiReply, fallbackAiReply, AI_BRAND, aiReplyDecision, type AiReplyContext } from '../src/lib/aiReplyDraft.ts';
 
@@ -68,7 +68,9 @@ for (const c of CASES) {
   ok(!!d.text && d.warnings.length === 0, `${c.intent}: the draft passes the checker${d.warnings.length ? ' — ' + d.warnings.join(' | ') : ''}`);
   ok(!!d.text && qCount(d.text) <= 1, `${c.intent}: at most one question`);
   ok(!!d.text && !AI_BRAND.test(d.text), `${c.intent}: names no AI tool`);
-  if (!pitchStyle) ok(!!d.text && !/\bAI\b/.test(d.text), `${c.intent}: a follow-up says "ai", lower case`);
+  /* A FIRST reply to our opener keeps "AI" in capitals (Paul, 2026-10-23); a later follow-up says "ai". */
+  if (!pitchStyle && !d.plan.firstReply) ok(!!d.text && !/\bAI\b/.test(d.text), `${c.intent}: a follow-up says "ai", lower case`);
+  if (!pitchStyle && d.plan.firstReply && /\bai\b/i.test(d.text ?? '')) ok(/\bAI\b/.test(d.text ?? '') && !/\bai\b/.test(d.text ?? ''), `${c.intent}: a first reply says "AI" in capitals`);
   ok(!/\bmonthly\b/i.test(d.text ?? '') && !/\bfree\b(?!\s+now)/i.test(d.text ?? ''), `${c.intent}: never "monthly", never "free"`);
   if (NEEDS_YOU_INTENTS.includes(c.intent)) ok(!!d.plan.needsYou && d.plan.autoDraft === false && !d.plan.noDraft, `${c.intent}: Needs you, the line is only the suggested text`);
   previews.push(`PREVIEW ${c.intent}${d.plan.needsYou ? ' [Needs you: ' + d.plan.needsYou.label + ']' : ''}\n  them:  "${[...c.thread].reverse().find((m) => m.from === 'them')?.text}"\n  draft: "${(d.text ?? '').replace(/\n+/g, ' / ')}"${d.plan.note ? `\n  note:  ${d.plan.note}` : ''}`);
@@ -76,11 +78,11 @@ for (const c of CASES) {
 
 console.log("2. Paul's wording (2026-10-21)");
 {
-  ok(draftOf(first('Are you looking for driving lessons?')).text === "Ha, sorry for the confusion, I'm not looking for lessons myself. I'm Paul from Findable. I checked how ai tools recommend driving instructors in Rugby and wanted to show you what came back. Ok if I send it over?",
+  ok(draftOf(first('Are you looking for driving lessons?')).text === "Ha, sorry for the confusion, I'm not after lessons myself. I'm Paul from Findable. I checked how AI recommends driving instructors in Rugby. Ok if I send you what came back?",
     'thinks_customer: Paul\'s line word for word ("lessons", trade + town from the lead)');
-  ok(/I'm not looking for a plumber myself\. .*recommend plumbers in Rugby/.test(draftOf(first('Do you need a plumber?'), plumber).text ?? ''), 'thinks_customer for another trade: "a plumber", "plumbers in Rugby"');
+  ok(/I'm not after a plumber myself\. .*recommends plumbers in Rugby/.test(draftOf(first('Do you need a plumber?'), plumber).text ?? ''), 'thinks_customer for another trade: "a plumber", "plumbers in Rugby"');
   ok(!Object.values(PLAYBOOK).some((x) => /not after anything from you/i.test(x.line)), 'never "I\'m not after anything from you"');
-  ok(PLAYBOOK.ads_question.line.includes('ai tools') && !AI_BRAND.test(PLAYBOOK.ads_question.line), 'ads_question: "ai tools", no brands');
+  ok(PLAYBOOK.ads_question.line.includes('ask AI') && !AI_BRAND.test(PLAYBOOK.ads_question.line), 'ads_question: "AI", no brands');
   ok(PLAYBOOK.sorry_wrong_day.line === "Fair enough, sorry for the message. I'll leave you in peace." && !/day\b/i.test(PLAYBOOK.sorry_wrong_day.line.replace('Fair', '')), 'sorry_wrong_day: Paul\'s line, no weekday');
   const wb = draftOf(later(them('where are you based?'))).text ?? '';
   ok(wb === "Findable is a UK company, but we work with businesses worldwide. The site's findable.live if you want a look. Quick call, or shall I send a voice note?" && !/I'm in the UK/i.test(wb), 'where_based: Paul\'s line, never "I\'m in the UK"');
@@ -94,7 +96,7 @@ console.log("2. Paul's wording (2026-10-21)");
   ok(/regular checks/.test(PLAYBOOK.how_much.line) && !Object.values(PLAYBOOK).some((x) => /\bcheck/i.test(x.line) && /\bmonthly\b/i.test(x.line)), '"regular checks", never "monthly", in every line about checks');
   ok(!/\bfree\b/i.test(PLAYBOOK.new_site_being_built.line + NEW_SITE_CHECK_BACK), 'new_site_being_built never says "free"');
   const sa = draftOf(first('What are you selling?')).text ?? '';
-  ok(sa.startsWith("Hi mate,\n\nFair question, I'm Paul from Findable and yes, I'm offering a service. I only got in touch because of what I found:\n\nI asked AI \"Who is the best driving instructor in Rugby?\"") && sa.endsWith(PITCH_AGENCY_VOICE),
+  ok(sa.startsWith("Hi mate,\n\nFair question. I'm Paul from Findable, and yes, I offer a service. Here's why I got in touch:\n\nI asked AI \"Who is the best driving instructor in Rugby?\"") && sa.endsWith(PITCH_AGENCY_Q),
     'straight_answer_then_pitch: "Hi mate," + the straight answer + the pitch + its one question');
   ok((draftOf(first('Yes this is Dom, what are you selling?')).text ?? '').startsWith('Hi Dom,'), '…a name they gave opens it ("Hi Dom,")');
   const ch = draftOf([opener, them('Hello! Yes this is Dom', -4320), them('Hellooo, just wanted to follow up', 0)]).text ?? '';

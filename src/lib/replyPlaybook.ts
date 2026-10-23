@@ -22,7 +22,9 @@ export type PlaybookIntent =
   /* Reply recon 2026-10-20 §5b, Paul's wording 2026-10-21 (NEW_INTENTS below). */
   | 'thinks_customer' | 'straight_answer_then_pitch' | 'wrong_trade' | 'moved_area' | 'closed_retired' | 'fully_booked'
   | 'word_of_mouth' | 'already_show_up' | 'new_site_being_built' | 'proof_request' | 'explain_here' | 'pay_on_results'
-  | 'ads_question' | 'do_it_myself' | 'where_based' | 'call_now' | 'sorry_wrong_day' | 'they_chased' | 'acknowledge_wait';
+  | 'ads_question' | 'do_it_myself' | 'where_based' | 'call_now' | 'sorry_wrong_day' | 'they_chased' | 'acknowledge_wait'
+  /* Lean first replies (Paul, 2026-10-23). */
+  | 'site_shared' | 'how_to_get_named';
 
 /** The 18 intents added from the reply recon (2026-10-21). scripts/reply-new-intents.test.ts has a case for each. */
 export const NEW_INTENTS: readonly PlaybookIntent[] = ['thinks_customer', 'straight_answer_then_pitch', 'wrong_trade', 'moved_area', 'closed_retired',
@@ -64,7 +66,7 @@ export interface PlaybookEntry {
 export const PLAYBOOK: Record<PlaybookIntent, PlaybookEntry> = {
   website_given: { line: "Thanks, I'll take a proper look at that one. Do you manage it yourself, or is it with an agency?" },
   no_website: { line: "That could be why ai has nothing to recommend. I can build you one that's set up for ai and google, and you'd own the domain. Quick call, or shall I send a voice note explaining it?" },
-  facebook_only: { line: 'I only found a facebook page, so there\'s very little of your own for ai to read. A proper website would fix that. Quick call, or shall I send a voice note?' },
+  facebook_only: { line: 'I only found a Facebook page, so there\'s very little of your own for AI to read. A proper website tends to help with that. Quick call, or shall I send a voice note?' },
   agency: { line: "Good to know. Are you tied into a contract with them, or free to leave if it's not working?" },
   in_contract: { line: 'Thanks for being straight. I\'ll check back near then. Want me to send a voice note in the meantime so you can see what I found?' },
   tied_no_date: { line: "Thanks for being straight. When does the contract end? I'll check back near then." },
@@ -77,13 +79,13 @@ export const PLAYBOOK: Record<PlaybookIntent, PlaybookEntry> = {
   interested: { line: "Happy to. Easiest is a quick call so I can show you what I found, or I can send a voice note if that's easier?" },
   /* "go on then" / "ok": the agency question, or the call / voice note once the agency answer is known (replyMove). */
   go_on: { line: 'Are you with an agency, or do you manage the website yourself?' },
-  what_we_do: { line: "I build you a new site that's set up for ai and google, sort your google business profile, and keep checking how you show up. Easiest to show you what I found. Quick call, or a voice note?" },
+  what_we_do: { line: "I build you a new site set up for AI and Google, sort your Google Business Profile, and keep checking how you show up. Quick call, or a voice note?" },
   how_much: { factual: true, allowPrice: true, confidence: true,
     line: `It's ${P1} to start, and I'm confident enough in it that it's backed by a guarantee: ${GUARANTEE_LOWER} After your results it's ${PM} a month, ${FINDABLE_BUILD_TOTAL_PAYMENTS} payments in total including the first, and that covers the new site, hosting, changes and regular checks. Quick call, or a voice note to go through it?` },
   catch: { factual: true, allowPrice: true, confidence: true,
     line: `No catch. You pay ${P1} to start and if we don't improve ai visibility you get that ${P1} back. We re-run the same questions after ${REMEASURE_WEEKS_STANDARD} weeks to check. The one thing to know is it's a ${FINDABLE_BUILD_TOTAL_PAYMENTS} payment minimum, counting the first.` },
   how_long: { factual: true, line: `The site build usually takes a few days. Then we re-check after ${REMEASURE_WEEKS_STANDARD} weeks to see the difference.` },
-  who_are_you: { line: "I'm Paul, I run Findable. We help local businesses show up when people ask ai tools for a recommendation. Happy to jump on a quick call if you'd rather talk." },
+  who_are_you: { line: "I'm Paul, I run Findable. I help local businesses show up when people ask AI for a recommendation. Would a quick call be easier?" },
   /* ⛔ THE ONLY PAST-WORK WORDS (Paul, 2026-10-21): reviews, feedback and the one site we built. No numbers, no client names,
      no percentages, no "100%", no result claim. It offers their report (EXAMPLES_NO_AUDIT when there is none). */
   examples: { factual: true, fixed: true, linkOk: true, line: `${PROOF_WORDS} Happy to talk you through it on a call. Want me to send over the report I did for you too?` },
@@ -93,12 +95,12 @@ export const PLAYBOOK: Record<PlaybookIntent, PlaybookEntry> = {
   too_expensive: { factual: true, allowPrice: true, line: `Fair. It's ${P1} to start and you get it back if we don't improve things, so the risk is small. Want a quick call so I can show you what I found first?` },
   think_about_it: { line: "Of course. Want me to send a voice note so you've got the details in front of you?" },
   /* The "not you" words only under the one-third rule (replyMove picks the soft line otherwise). */
-  dont_need: { line: 'Good problem to have. I only got in touch because ai named your competitors and not you. Want a voice note so you can see for yourself?' },
+  dont_need: { line: 'Good problem to have. I only got in touch because AI named your competitors and not you. Want a voice note so you can see for yourself?' },
   does_ai_matter: { line: "Fair question. I only reached out because it named your competitors instead of you, and that's easy to check yourself. Want a voice note to show you?" },
-  is_bot: { line: "I use ai to help write and check my messages, but I'm Paul from Findable and the results I found are real. Happy to jump on a call if you'd rather talk." },
-  privacy: { line: "Fair question. I found your business on google and checked how ai recommends you. I won't message again if you'd rather not. Want me to send what I found so you can judge?" },
-  send_email: { line: "Sure, what's the best email? Or I can send a voice note here in a minute if that's quicker.", timingOk: true },
-  not_owner: { line: "No worries. Who's the best person to speak to, and is there a good time?" },
+  is_bot: { line: "I use AI to help write and check my messages, but I'm Paul from Findable and the results I found are real. Would a quick call be easier?" },
+  privacy: { line: "Fair question. I found your business on Google and checked how AI recommends you. I won't message again if you'd rather not. Want me to send what I found?" },
+  send_email: { line: "Sure, what's the best email to send it to?" },
+  not_owner: { line: "No worries. Who's the best person to speak to?" },
   busy: { line: "No problem. What day and time suits you? I'll call then." },
   number_sent: { line: "Thanks, I'll give you a ring. Is there a good time today?", timingOk: true },
   /* ⛔ THE ONLY LINE THAT NAMES AN AI TOOL (Paul, 2026-10-21): they asked which one. replyMove.whichToolLine puts the
@@ -107,24 +109,24 @@ export const PLAYBOOK: Record<PlaybookIntent, PlaybookEntry> = {
 
   /* ── the reply recon's 18 (Paul, 2026-10-21). ⛔ No AI brand ("ai tools"), "regular checks" never "monthly", never "free". ── */
   /* {thing} = "lessons" for a driving school, else "a <trade>"; {trades} in {town} from the lead (replyMove.thinksCustomerLine). */
-  thinks_customer: { fixed: true, line: "Ha, sorry for the confusion, I'm not looking for {thing} myself. I'm Paul from Findable. I checked how ai tools recommend {trades} in {town} and wanted to show you what came back. Ok if I send it over?" },
+  thinks_customer: { fixed: true, line: "Ha, sorry for the confusion, I'm not after {thing} myself. I'm Paul from Findable. I checked how AI recommends {trades} in {town}. Ok if I send you what came back?" },
   /* Code-built like the pitch (replyMove.straightAnswerPitch): this answer, then the pitch's lines and its one question. */
-  straight_answer_then_pitch: { fixed: true, line: "Fair question, I'm Paul from Findable and yes, I'm offering a service. I only got in touch because of what I found:" },
+  straight_answer_then_pitch: { fixed: true, line: "Fair question. I'm Paul from Findable, and yes, I offer a service. Here's why I got in touch:" },
   /* Needs you: fix the trade on the lead before any re-check. */
   wrong_trade: { line: "Sorry about that, my mistake. What is it you mainly do? I'll check it properly." },
   moved_area: { line: 'No worries, thanks for letting me know. Where are you working now? I can check how you show up there.' },
   closed_retired: { line: 'No worries, sorry to bother you. Best of luck with it.' },
   fully_booked: { line: "Good problem to have. I'll leave you to it, and if it ever goes quiet you know where I am." },
-  word_of_mouth: { line: "Fair enough, that's the best kind of work. I'll leave you to it. If you ever want to see how ai tools recommend you, just say." },
-  already_show_up: { line: "Fair enough, that's good to hear. It can come out differently depending on who asks and where, so I'd still like to show you what came back when I checked. Want a quick voice note?" },
+  word_of_mouth: { line: "Fair enough, that's the best kind of work. I'll leave you to it. If you ever want to see how AI recommends you, just say." },
+  already_show_up: { line: "Fair enough, good to hear. It tends to come out differently depending on who asks and where. Want a quick voice note on what came back when I checked?" },
   /* ⛔ Never "free" (Paul, 2026-10-21). The check back is NOTED on the draft, never written (Next Action is human-set). */
   new_site_being_built: { line: 'Good timing. Is it with an agency, or are you building it yourself?' },
   proof_request: { factual: true, fixed: true, linkOk: true, line: `Fair ask. I can send you the report with the exact searches I ran and what came back. ${PROOF_WORDS} Want me to send the report here?` },
-  explain_here: { line: "Sure. Short version: I build you a new site that's set up for ai and google, sort your google business profile, and keep checking how you show up. Want me to send what I found here?" },
+  explain_here: { line: "Sure. Short version: I build you a new site set up for AI and Google, sort your Google Business Profile, and keep checking how you show up. Want me to send what I found here?" },
   /* Needs you (a commercial ask): the figures and the guarantee are how_much's, word for word. */
   pay_on_results: { factual: true, allowPrice: true,
     line: `I don't work pay-after-results, but you're covered: it's ${P1} to start, and ${GUARANTEE_LOWER} After your results it's ${PM} a month, ${FINDABLE_BUILD_TOTAL_PAYMENTS} payments in total including the first. Quick call to go through it?` },
-  ads_question: { line: "No, I don't do ads. I only work on getting businesses recommended when people ask ai tools. Want a quick voice note on what I found for you?" },
+  ads_question: { line: "No, I don't do ads. I only work on getting businesses recommended when people ask AI. Want a quick voice note on what I found?" },
   do_it_myself: { line: 'Fair enough, and good luck with it. If you want a second pair of eyes on what I found, just say.' },
   where_based: { fixed: true, linkOk: true, line: `Findable is a UK company, but we work with businesses worldwide. The site's ${FINDABLE_SITE_WORDS} if you want a look. Quick call, or shall I send a voice note?` },
   /* Needs you: only Paul knows if he is free. */
@@ -134,6 +136,12 @@ export const PLAYBOOK: Record<PlaybookIntent, PlaybookEntry> = {
   they_chased: { fixed: true, line: 'Sorry for the slow reply.' },
   /* "Will ring later" (Paul, 2026-10-21, R085): THEY will call us. No question, never the busy "I'll call then". */
   acknowledge_wait: { fixed: true, line: 'No problem, speak soon.' },
+
+  /* ── lean first replies (Paul, 2026-10-23). ── */
+  /* Code-built (replyMove.siteSharedReply): only what the website check found on the site they sent, up to four lines. */
+  site_shared: { fixed: true, line: "Ah thanks, I missed that one. Had a proper look and a few things could be holding you back with AI: <the check's issues, one per line>. Are you with an agency, or do you manage the website yourself?" },
+  /* "How can I get up on the AI search?" after the issues list: three short lines, no price (replyMove.howToGetNamedLine). */
+  how_to_get_named: { fixed: true, line: "Good question. The main thing I work on is a website AI can read properly, with clear pages for what you do and where you do it. I build that for you, and check how often AI names you before and after. Easiest to explain properly. Voice note, or a quick call?" },
 };
 
 /** examples / proof_request when no search is on record: offer to run it, never "the report I did". */
@@ -149,13 +157,13 @@ export const NEW_SITE_CHECK_BACK = `No problem. I'll check back in about ${REMEA
 export const VOICE_NOTE_FROM_THEM = "Sorry, I can't listen to voice notes on here. Can you type it, or shall I give you a quick call?";
 
 /** The soft lines when AI did NOT name others in two thirds or more (namedShareRule): no "not you", no "instead". */
-export const DONT_NEED_SOFT = 'Good problem to have. I only got in touch because when I checked, ai put other businesses forward too. Want a voice note so you can see for yourself?';
-export const DOES_AI_MATTER_SOFT = "Fair question. I only reached out because of what ai said when I checked, and that's easy to check yourself. Want a voice note to show you?";
+export const DONT_NEED_SOFT = 'Good problem to have. I only got in touch because when I checked, AI put other businesses forward too. Want a voice note so you can see for yourself?';
+export const DOES_AI_MATTER_SOFT = "Fair question. I only reached out because of what AI said when I checked, and that's easy to check yourself. Want a voice note to show you?";
 /** No search on record at all. */
-export const DONT_NEED_NO_AUDIT = 'Good problem to have. I only got in touch to show you how ai recommends businesses like yours. Want a voice note so you can see for yourself?';
-export const DOES_AI_MATTER_NO_AUDIT = "Fair question. More people ask ai tools for a recommendation now, and it's easy to check yourself. Want a voice note to show you?";
+export const DONT_NEED_NO_AUDIT = 'Good problem to have. I only got in touch to show you how AI recommends businesses like yours. Want a voice note so you can see for yourself?';
+export const DOES_AI_MATTER_NO_AUDIT = "Fair question. More people ask AI for a recommendation now, and it's easy to check yourself. Want a voice note to show you?";
 /** "No Google listing" honest answer to "how did you get my number". */
-export const PRIVACY_NOT_GOOGLE = "Fair question. I found your business online and checked how ai recommends you. I won't message again if you'd rather not. Want me to send what I found so you can judge?";
+export const PRIVACY_NOT_GOOGLE = "Fair question. I found your business online and checked how AI recommends you. I won't message again if you'd rather not. Want me to send what I found?";
 /** After "go on then" once we already know who runs the site. */
 export const GO_ON_KNOWN = "Great. Would you like a quick call, or shall I send a voice note to explain how we'd fix it?";
 /** "Not now" with a time already named: no question, check back then. */

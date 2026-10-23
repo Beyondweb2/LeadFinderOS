@@ -56,23 +56,38 @@ import type { ResearchFinding, WarmLeadResearch } from './warmLeadResearch.ts';
 import { classifyLeadWebsite, type SiteSource } from './leadWebsiteKind.ts';
 import { SALES_STYLE_RULES_NO_BRAND, salesStyleProblems } from './salesStyle.ts';
 import { callerFirstName } from './callerName.ts';
+import { FINDABLE_SETUP_PRICE_GBP, FINDABLE_MONTHLY_GBP, FINDABLE_BUILD_TOTAL_PAYMENTS, REMEASURE_WEEKS_STANDARD } from './findableOffer.ts';
+import { GUARANTEE_LINE } from './offerFactSheet.ts';
 
 /** Bump when the prompt, the pick or the checks change in a way worth telling apart in stored rows.
  *  v4 (2026-09-30): the shared house style (salesStyle.ts) in the prompt and the checks, one beat per
  *  line so it reads aloud with a breath between, and the derived short version (shortVoiceNote). */
-export const VOICE_NOTE_GENERATOR_VERSION = 6;
+export const VOICE_NOTE_GENERATOR_VERSION = 7;
+/* v7 (Paul, 2026-10-23): THE NEXT THING TO SAY. Reads the whole conversation (answers their question first, never repeats
+   what was said), Paul's own messages and edits as his voice, up to four real website issues (the pitch's plain words),
+   the offer (price + guarantee word for word; none for a prospect-only lead), under two minutes (~250 words). */
 /** What the script calls the tool (Paul, 2026-10-21): "AI", never a brand. Version 6 marks the brand-free pass in stored rows. */
 export const SPOKEN_AI = 'AI';
 /** A brand said in a script (normalised text: lower case, punctuation as spaces). Crawler names are taken out first. */
 export const SPOKEN_BRAND = /\b(chat ?gpt|gemini|google ai|googles ai|google s ai|copilot|perplexity|open ?ai|bard)\b/;
 /** The stronger writing model (Paul, 2026-09-26: tone matters, ~1–2p a script is fine). */
 export const VOICE_NOTE_MODEL = 'gpt-4o';
-/** The spoken target, ~30–45 seconds at Paul's pace (Paul, 2026-09-27: shorter is better). */
-export const VOICE_NOTE_TARGET_WORDS = { min: 65, max: 100 } as const;
+/** The spoken target (Paul, 2026-10-23): under two minutes, so about 250 words at most. */
+export const VOICE_NOTE_TARGET_WORDS = { min: 120, max: 250 } as const;
 /** Outside this a length is worth a note to Paul — never a rewrite. */
-export const VOICE_NOTE_NOTE_WORDS = { min: 50, max: 110 } as const;
+export const VOICE_NOTE_NOTE_WORDS = { min: 90, max: 260 } as const;
 /** Outside this the script is plainly wrong-sized and is sent back once. */
-export const VOICE_NOTE_HARD_WORDS = { min: 40, max: 125 } as const;
+export const VOICE_NOTE_HARD_WORDS = { min: 60, max: 290 } as const;
+/* The words and seconds shown under a script: one rule, spokenLength.ts. */
+export { SPOKEN_WORDS_PER_MINUTE, spokenLength } from './spokenLength.ts';
+/** The offer said in a voice note, word for word (Paul, 2026-10-23; findableOffer.ts). */
+export const SPOKEN_PRICE_LINE = `£${FINDABLE_SETUP_PRICE_GBP} to start, then £${FINDABLE_MONTHLY_GBP} a month, ${FINDABLE_BUILD_TOTAL_PAYMENTS} payments in total including the first`;
+/** What the price includes (Paul, 2026-10-23): "before we start", never "on day 1". "Regular checks", never "monthly". */
+export const SPOKEN_INCLUDES = `a new high-quality website and a 20-question audit before we start, then the same audit again at week ${REMEASURE_WEEKS_STANDARD === 4 ? 'four' : REMEASURE_WEEKS_STANDARD} and regular checks after that, so you can see how often you're being named`;
+/** The guarantee, word for word (offerFactSheet GUARANTEE_LINE). */
+export const SPOKEN_GUARANTEE_LINE = GUARANTEE_LINE;
+/** Paul's no-website words (2026-10-23, Option 2), the same as the pitch: "tends to", never how AI decides. */
+export const SPOKEN_NO_SITE = "AI tends to lean on websites when it names businesses, and I couldn't find one for you";
 /** A voice note carries the strongest finding and at most one more. */
 export const VOICE_NOTE_MAX_FINDINGS = 2;
 
@@ -215,6 +230,9 @@ export interface VoiceNoteSite {
   /** Everything that may license naming a service: their services, the site summary, and the
    *  findings' own page-derived details (never a rule's generic examples). */
   serviceEvidence: string;
+  /** THE WEBSITE CHECK's real issues in the pitch's plain words (pitchIssueWords.ts), worst first, at most four (v7). When
+   *  present they are the website points the script says; the research findings above still back its claims. */
+  points?: string[];
 }
 
 /* ⛔ A RULE'S GENERIC EXAMPLES ARE NOT THE BUSINESS'S SERVICES. The missing-core-pages finding says
@@ -241,7 +259,7 @@ export function isInterpretiveFinding(f: ResearchFinding): boolean {
 
 export function selectVoiceNoteFindings(research: WarmLeadResearch | null | undefined, website: string | null | undefined, town?: string | null): VoiceNoteSite {
   const kind = classifyLeadWebsite(website);
-  const base = { source: kind.source, sourceLabel: kind.label, services: [] as string[], serviceEvidence: '' };
+  const base = { source: kind.source, sourceLabel: kind.label, services: [] as string[], serviceEvidence: '', points: [] as string[] };
   if (kind.source === 'none' || research?.status === 'no_website') return { ...base, mode: 'no_website', findings: [] };
   if (kind.source !== 'own_site') return { ...base, mode: 'profile', findings: [] };
   const readOk = !!research && research.status !== 'failed';
@@ -270,38 +288,46 @@ export function findingRecord(f: ResearchFinding): VoiceNoteFindingRecord {
 
 /* ─────────────────────────────── 3. the prompt ─────────────────────────────── */
 
-export const VOICE_NOTE_SYSTEM_PROMPT = `You write WhatsApp voice-note scripts for Paul, a British guy who helps local trades businesses get named by AI search. Paul reads the script out loud and records it himself. You return ONLY the script, via the return_script tool.
+export const VOICE_NOTE_SYSTEM_PROMPT = `You write WhatsApp voice-note scripts for Paul, a British guy who helps local businesses get named by AI search. Paul reads the script out loud and records it himself. It is THE NEXT THING PAUL SAYS in an ongoing WhatsApp conversation, usually because the prospect wants more information. You return ONLY the script, via the return_script tool.
 
-THE SHAPE, five short beats, in this order. Every sentence has to earn its place:
-0. WHO IS SPEAKING, first, in a few words: "hi mate, it's Paul from Findable." Use the name given under WHO IS SPEAKING (Paul when none is given). Never skip it: the owner has to know who is talking before anything else.
-1. SEARCH CONTEXT, one short sentence: the trade, the town and that you asked AI, nothing else. "hi mate, i asked AI for an electrician in Shrewsbury" or "hi mate, i was looking for an electrician in Shrewsbury, so i asked AI". No adjective on the trade ("a reliable electrician", "a trusted electrician") and no reason for the search. Do NOT read the search back and do NOT narrate its qualifiers ("who can come out today", "near me", "for a same-day job", "UK"). At most ONE word of the search may colour the trade, and only if it is the heart of it (an "emergency locksmith"); usually leave it out.
-2. THE MISS, one sentence: "it came up with [the competitors], but you didn't come up." Name every competitor given, exactly, and no others.
-3. THE FINDING: "i had a look at why you weren't coming up and found something that could be holding you back:" (or "a few things that could be holding you back" ONLY when you are given two website points) + the website point, in very plain English, keeping its concrete details. Use a second point only if it is the same kind of problem and fits in the same sentence. The conclusion stays hedged: "could be holding you back", never "this is why".
-4. POSITIONING, one short sentence: "i actually specialise in AI visibility for local businesses." Do not explain the service.
-5. THE QUESTION (the CTA line you are given): a simple question about who owns and controls their website. It ends the note. Nothing after it.
+READ THE CONVERSATION FIRST (CONVERSATION SO FAR).
+- If their latest message asks something, ANSWER IT FIRST, in a sentence or two, using only the facts given here.
+- Anything Paul already told them (the search, the names, the website issues) gets a short callback ("like I said in my message"), never a word-for-word repeat or a re-read list.
 
-LENGTH: about 65 to 100 spoken words (30 to 45 seconds). Shorter is better when the evidence is simple. Never pad, never over 125.
-LAYOUT: put each beat on its own line, so Paul can take a breath between them. Short clauses he can say in one go; no sentence he would have to read twice.
+COVER THESE, in a natural order, ONLY when the fact is given (a missing fact is left out, never invented):
+a. who is speaking ("hi mate, it's Paul from Findable", the name under WHO IS SPEAKING) and that you specialise in AI visibility for local businesses.
+b. the search you ran on AI and what came back, said the way a person says it (trade + town); never read it word for word.
+c. the competitors AI named instead of them, every one given, exactly, and no others.
+d. some AI tools get their answers by reading websites.
+e. most websites are not set up for AI. Say "most", never a percentage.
+f. the real website issues given under WEBSITE POINTS (up to four), in very plain English. No website: say the NO WEBSITE line given. Hedged: they "could be holding you back", never "this is why".
+g. it matters more than ever to have a site set up properly so AI can read it and is able to recommend you. Never say AI will, always or definitely recommends anyone.
+h. you run a discovery audit to find the questions worth going for, and build their site to give them the best chance of being named for them. Never "win", never a promised result.
+i. THE OFFER, only when THE OFFER is given below: the price words exactly as given, then what it includes, exactly as given.
+j. THE GUARANTEE, only when given below: the sentence exactly as given, on its own.
+k. end with ONE simple question or next step. Nothing after it.
 
-STYLE: Paul talking into his phone, not reading. Relaxed, British, conversational, direct. Contractions everywhere (i'm, i'd, you're, didn't, there's, it's). Short sentences, simple joins ("and", "so", "but"). "mate" once or twice, never more. No corporate language, nothing polished, nothing salesy. Lowercase is fine.
+LENGTH: under two minutes spoken, so 250 words at most; shorter is better when there is less to say. Never pad.
+LAYOUT: short paragraphs, one idea each, so Paul can breathe between them. No headings, no bullet points, no lists: it is read aloud.
+
+STYLE: Paul talking into his phone, not reading. Plain, human, British, direct. Short sentences. Contractions everywhere (i'm, i'd, you're, didn't, there's, it's). "mate" once or twice, never more. No corporate language, no fluff, no jargon (no "meta description", "main heading", "schema", "indexing", "crawl", "SEO"). PAUL'S OWN WORDS below show how he writes: copy his tone and rhythm, never his claims.
 
 ${SALES_STYLE_RULES_NO_BRAND}
-TALK TO THEM: the note is addressed to the business owner. Never say the business's own name; say "you" ("you didn't come up").
-NEVER put the search in quotation marks, never read it word for word, never say "UK" after the town.
-NEVER: "I hope this message finds you well", "unlock your potential", "leverage", "digital presence", "revolutionise", "dominate Google", any guarantee. No em dash or en dash. No price, no figures about money, no link, no website address. Do not offer to send the audit, do not offer to "show you exactly what i'd change" or "explain what i'd change": the quick check does not contain a change plan. Do not ask for a call.
+TALK TO THEM: the note is addressed to the business owner. Never say the business's own name; say "you".
+NEVER: "I hope this message finds you well", "unlock", "leverage", "digital presence", "revolutionise", "dominate", "99%", "win", "monthly checks" (say "regular checks"). No em dash or en dash. No link and no website address. Do not offer to send the audit or "show you exactly what i'd change". No result claims and no claims about other clients.
 
 EVIDENCE RULES, which override everything:
-- The competitors are exactly the ones listed, from that one search on that one engine. Never add, swap or drop one. If only one or two are listed, name just those.
-- Call the tool "AI" ("i asked AI"). Never name ChatGPT, Gemini, Google AI, Copilot, Perplexity or any other AI brand (Paul, 2026-10-21).
-- Website points: ONLY the ones in WEBSITE POINTS. Never invent or add a problem. Never claim a technical issue that is not listed.
-- OBSERVATION, NOT JUDGEMENT: say what the site says or shows, and what it doesn't show. "your service pages don't give much detail about the work you actually do" is right; "you have weak evidence of qualifications", "there's no evidence" or "your site is poor" are judgements, never say them.
-- If there are no website points, follow the NO WEBSITE POINTS instruction in spirit, with a natural variation.
-- SERVICES: never name a specific service or job type (rewiring, fuse boards, boiler repairs, lock changes...) unless it is listed under SERVICES THEY OFFER or is in the search itself. Otherwise say "the work you do" or "your main services".
-- If the WEBSITE on record is a profile page (see WEBSITE SOURCE), it is NOT their website: never call it "your website" or "your site", never say you looked through their site, and never ask whether they own their website.
-- CAUSATION: never say a website issue is why the AI engine left them out, and never say you looked into why the engine recommended the others. Never "this is why", "that's why", "that's why your competitors are being recommended", "the reason you're not showing", "i looked into why google recommended them". "i had a look at why you weren't coming up" is fine; what you found only "could be holding you back".
-- LOST WORK: do not add a sentence about lost customers. If one slips in it must be a possibility ("that can mean"), never a fact.
+- The competitors are exactly the ones listed, from that one search. Never add, swap or drop one.
+- Call the tool "AI". Never name ChatGPT, Gemini, Google AI, Copilot, Perplexity or any other AI brand.
+- Website points: ONLY the ones given. Never invent or add a problem. Never claim a technical issue that is not listed.
+- OBSERVATION, NOT JUDGEMENT: say what the site shows or doesn't show; never "weak evidence", "no evidence", "your site is poor".
+- SERVICES: never name a specific service or job type unless it is listed under SERVICES THEY OFFER or is in the search itself.
+- If the WEBSITE on record is a profile page (see WEBSITE SOURCE), it is NOT their website: never call it "your website".
+- CAUSATION: never say a website issue is why AI left them out. Never "this is why", "that's why", "the reason you're not showing", "i looked into why". What you found only "could be holding you back".
+- MONEY: no price, figure or guarantee unless THE OFFER / THE GUARANTEE are given below, and then only in those exact words.
+- LOST WORK: never a fact; only a possibility ("that can mean").
 
-OUTPUT: only the script text Paul will read. No heading, no bullet points, no notes, no quotation marks around it.`;
+OUTPUT: only the script text Paul will read. No heading, no notes, no quotation marks around it.`;
 
 export const VOICE_NOTE_TOOL = {
   type: 'function',
@@ -330,13 +356,19 @@ export interface VoiceNotePromptInput {
   rewriteProblems?: string[] | null;
   /** Who records it: the signed-in person's first name (callerName.ts). Absent = the book owner's. */
   caller?: string | null;
+  /** v7: the WhatsApp conversation so far, oldest first (their question is answered first; what was said is not repeated). */
+  thread?: Array<{ from: 'us' | 'them'; text: string }> | null;
+  /** v7: Paul's own hand-typed messages, his edits to drafts and his saved script versions: his voice, never his claims. */
+  voiceSamples?: string[] | null;
+  /** v7: a prospect-only country (prospectOnly.ts, Australia): no price, no guarantee. */
+  prospectOnly?: boolean;
 }
 
 const NO_POINT_LINES: Record<Exclude<VoiceNoteSiteMode, 'findings'>, string> = {
   clean: 'NO WEBSITE POINTS: the site was checked and nothing obviously broken was found. Say, briefly, something like: "i had a look at why you weren\'t coming up, and nothing\'s obviously broken on the site, but there\'s a few things i\'d tighten up around how clearly it tells AI what you do and where." Do not claim any specific fault.',
   unread: 'NO WEBSITE POINTS: the site could not be read properly today, so say nothing specific about it. Say, briefly, something like: "i had a look at why you weren\'t coming up, and there\'s a few things i\'d tighten up around how clearly you come across to AI." Do not claim any specific fault.',
   profile: 'NO WEBSITE POINTS: the only web page on record is their {LABEL} profile, not a website of their own. Say, naturally: "i had a look at why you weren\'t coming up, and i couldn\'t find a website of your own, just your {LABEL} profile." Never call the profile their website. Do not claim anything else.',
-  no_website: 'NO WEBSITE POINTS: there is no website on record for this business. Say, naturally: "i had a look at why you weren\'t coming up, and i couldn\'t find a website for you." Do not claim anything else.',
+  no_website: `NO WEBSITE: there is no website on record for this business. Say, close to these words: "${SPOKEN_NO_SITE}." Do not claim anything else about a site.`,
 };
 
 /* ─────────────────────────────── the CTA: who controls the website ─────────────────────────────── */
@@ -406,6 +438,13 @@ export function shortVoiceNote(i: {
   ].join('\n');
 }
 
+/** A conversation row as the model should read it: our template opener by what it is, never its "[name]" placeholder. */
+export function spokenThreadText(text: string): string {
+  const t = text.replace(/\s+/g, ' ').trim();
+  if (/^\[[a-z0-9_]+\]$/i.test(t)) return /initial|opener|contact/i.test(t) ? "(Paul's opening message, asking if this is their business)" : '(a template message from Paul)';
+  return t.slice(0, 400);
+}
+
 export function buildVoiceNotePrompt(input: VoiceNotePromptInput): string {
   const e = input.evidence;
   const lines: string[] = [
@@ -426,7 +465,11 @@ export function buildVoiceNotePrompt(input: VoiceNotePromptInput): string {
     ...e.competitors.map((c, i) => `${i + 1}. ${c}`),
     '',
   ];
-  if (input.site.mode === 'findings') {
+  if ((input.site.points ?? []).length && input.site.mode !== 'no_website' && input.site.mode !== 'profile') {
+    /* v7: the website check's real issues in plain words, the same ones the pitch lists. */
+    lines.push(`WEBSITE POINTS (the real issues the website check found, worst first; say up to ${Math.min(4, (input.site.points ?? []).length)} in plain words, nothing else about the site):`);
+    (input.site.points ?? []).slice(0, 4).forEach((p, i) => lines.push(`${i + 1}. ${p}`));
+  } else if (input.site.mode === 'findings') {
     lines.push('WEBSITE POINTS (use the first; the second only if it is the same kind of problem and fits the same sentence; nothing else about the site):');
     input.site.findings.forEach((f, i) => {
       const details = findingDetailsForScript(f);
@@ -438,7 +481,25 @@ export function buildVoiceNotePrompt(input: VoiceNotePromptInput): string {
   } else {
     lines.push(NO_POINT_LINES[input.site.mode].split('{LABEL}').join(input.site.sourceLabel ?? 'directory'));
   }
-  lines.push('', voiceNoteCtaInstruction(input.site));
+  /* v7 (i)(j): the offer and the guarantee, word for word; a prospect-only lead gets neither (prospectOnly.ts). */
+  if (input.prospectOnly) {
+    lines.push('', 'PROSPECT-ONLY (Australia): NO price, NO figures, NO guarantee, NO sign-up. Leave THE OFFER and THE GUARANTEE out entirely.');
+  } else {
+    lines.push('', `THE OFFER (say these words exactly): "${SPOKEN_PRICE_LINE}."`,
+      `WHAT IT INCLUDES (say these words exactly, after the offer): "${SPOKEN_INCLUDES}."`,
+      `THE GUARANTEE (say this sentence exactly, on its own): "${SPOKEN_GUARANTEE_LINE}"`);
+  }
+  /* (k): one question. Who runs the site is the usual one while it is not known yet. */
+  lines.push('', `THE LAST LINE: one simple question or next step. If the conversation has not told you who looks after their website yet, ${voiceNoteCtaInstruction(input.site).replace(/^CTA LINE \(end with this question, in a natural variation\): /, 'ask it: ')} Otherwise offer a quick call to go through it.`);
+  const thread = (input.thread ?? []).filter((m) => m.text.trim()).slice(-14);
+  if (thread.length) {
+    lines.push('', 'CONVERSATION SO FAR (oldest first; answer their latest question first; never repeat what Paul already said word for word):',
+      ...thread.map((m) => `${m.from === 'us' ? 'PAUL' : 'THEM'}: ${spokenThreadText(m.text)}`));
+  }
+  const samples = (input.voiceSamples ?? []).map((s) => s.replace(/\s+/g, ' ').trim()).filter(Boolean).slice(0, 12);
+  if (samples.length) {
+    lines.push('', "PAUL'S OWN WORDS (his tone and rhythm only; never copy a claim, a price or a promise from them):", ...samples.map((s) => `- ${s.slice(0, 300)}`));
+  }
   if (input.avoid?.trim()) {
     lines.push('', 'A PREVIOUS VERSION (write a fresh one; same facts, different wording and rhythm):', input.avoid.trim());
   }
@@ -455,9 +516,8 @@ export function parseVoiceNoteScript(args: unknown): string | null {
 
 /* ─────────────────────────────── 4. the checks ─────────────────────────────── */
 
-export function wordCount(text: string): number {
-  return (text.match(/[A-Za-z0-9£$][A-Za-z0-9'’£$.,-]*/g) ?? []).length;
-}
+export { wordCount } from './spokenLength.ts';
+import { wordCount } from './spokenLength.ts';
 
 const norm = (s: string) => s.toLowerCase().replace(/[’']/g, '').replace(/&/g, ' and ').replace(/[^a-z0-9]+/g, ' ').replace(/\s+/g, ' ').trim();
 const LEGAL = /\b(ltd|limited|llp|plc|co|company|uk)\b/g;
@@ -501,8 +561,16 @@ const LINK = /https?:\/\/|\bwww\.|\b[a-z0-9-]+\.(co\.uk|com|uk|live|net|org|io)\
 /* The general filler ("hope this finds you", "unlock", "leverage", "digital presence", "revolutionise"…)
    is salesStyle.ts's list, checked below; these two are the voice note's own. */
 const BANNED: Array<[RegExp, string]> = [
-  [/\bdominat/, '"dominate"'], [/guarantee/, 'a guarantee'],
+  [/\bdominat/, '"dominate"'],
+  /* v7 (Paul, 2026-10-23): "most", never a percentage; never "win"; "regular checks", never "monthly". */
+  /* Read on the normalised text, where "99%" is "99": a number of websites / sites / businesses is a percentage claim. */
+  [/\b\d{1,3} (percent |per cent )?of (all )?(websites|sites|web sites|businesses)\b|\b\d{1,3} (percent|per cent)\b/, 'a percentage of websites (say "most")'],
+  [/\b(win|wins|winning|won)\b/, '"win"'],
+  [/\bmonthly\b/, '"monthly" (say "regular checks")'],
+  [/\b(will|always|definitely) (recommend|name|mention|pick|show|put|find|list)\b|\bai (will|always|definitely)\b/, 'a promise of what AI will do (say "is able to" or "tends to")'],
 ];
+/* The guarantee words in a script: only the sheet's sentence, and only when the offer may be said. */
+const GUARANTEE_WORDS = /\bguarantee|\bmoney back\b|\brefund/;
 
 /** A technical/website claim, and the findings that may back it. */
 const CLAIMS: Array<{ label: string; re: RegExp; backed: (f: ResearchFinding) => boolean }> = [
@@ -638,7 +706,7 @@ export function readsSearchVerbatim(script: string, question: string): boolean {
 const VERDICT = /\b(weak|poor|lacking|insufficient) (evidence|proof|credentials|qualifications|content|site|website)\b|\bno (real )?evidence\b|\byour (site|website) is (poor|weak|bad|rubbish)\b/;
 const POLISHED_ENDING = /\bjust let me know\b|\bif youd like\b|\bfeel free to (reach out|get in touch)\b|\bdont hesitate\b|\blook forward to hearing\b/;
 
-export function checkVoiceNoteScript(raw: string, ctx: { evidence: VoiceNoteEvidence; site: VoiceNoteSite; town?: string | null; trade?: string | null; business?: string | null; caller?: string | null }): VoiceNoteCheck {
+export function checkVoiceNoteScript(raw: string, ctx: { evidence: VoiceNoteEvidence; site: VoiceNoteSite; town?: string | null; trade?: string | null; business?: string | null; caller?: string | null; prospectOnly?: boolean; offerExpected?: boolean }): VoiceNoteCheck {
   const script = tidyScript(raw);
   const t = norm(script);
   /* The claim, link and phrase checks read the script WITHOUT the competitor names: "Block Paving Co"
@@ -660,7 +728,22 @@ export function checkVoiceNoteScript(raw: string, ctx: { evidence: VoiceNoteEvid
   if (SPOKEN_BRAND.test(tEngine)) problems.push('Names an AI brand (ChatGPT, Gemini, Google AI). Say "AI".');
   // Causation, price, link, banned phrases.
   if (CAUSATION.some((re) => re.test(tb))) problems.push('States a website issue as the reason the AI left them out. Use "might be contributing" instead.');
-  if (PRICE.test(tb) || /£/.test(bare)) problems.push('Mentions a price or money.');
+  /* v7 (i)(j): the offer and the guarantee only in the sheet's own words; a prospect-only lead gets neither. */
+  const priceSaid = norm(SPOKEN_PRICE_LINE);
+  const guaranteeSaid = norm(SPOKEN_GUARANTEE_LINE);
+  if (ctx.prospectOnly) {
+    if (PRICE.test(tb) || /£/.test(bare) || /\b\d+ payments\b|\ba month\b/.test(tb)) problems.push('Mentions a price or money, but this lead is prospect-only (Australia).');
+    if (GUARANTEE_WORDS.test(tb)) problems.push('Mentions the guarantee, but this lead is prospect-only (Australia).');
+  } else {
+    /* The full script (offerExpected: the v7 generator) must carry both; any script that says money says only these words. */
+    const withoutOffer = tb.split(priceSaid).join(' ');
+    const saysMoney = /£\s?\d/.test(bare) || PRICE.test(tb);
+    if (!tb.includes(priceSaid) && (ctx.offerExpected || saysMoney)) problems.push(`Does not say the price in the sheet's words ("${SPOKEN_PRICE_LINE}").`);
+    if (/£\s?\d/.test(bare.split(SPOKEN_PRICE_LINE).join(' ')) || /\b\d+\s?(quid|pounds|pence)\b|\bper month\b|\bfee\b|\bdiscount|\b(a|per) year\b/.test(withoutOffer)) problems.push('Mentions a price or money beyond the sheet\'s offer words.');
+    if (!tb.includes(guaranteeSaid)) {
+      if (ctx.offerExpected || GUARANTEE_WORDS.test(tb)) problems.push(`Does not say the guarantee word for word ("${SPOKEN_GUARANTEE_LINE}").`);
+    } else if (GUARANTEE_WORDS.test(tb.split(guaranteeSaid).join(' '))) problems.push('Mentions the guarantee in words that are not the sheet\'s.');
+  }
   if (LINK.test(bare)) problems.push('Contains a link or web address.');
   for (const [re, label] of BANNED) if (re.test(tb)) problems.push(`Uses ${label}.`);
   // The house style (salesStyle.ts): no filler on the search, no stock sales phrases. Names are not ours.
@@ -672,8 +755,10 @@ export function checkVoiceNoteScript(raw: string, ctx: { evidence: VoiceNoteEvid
   /* A claim is also backed when the finding's OWN words carry it: a missing-pages finding whose menu
      reads "contact us | legal notice | sitemap" may be quoted without that being a sitemap claim. */
   const ownWords = (f: ResearchFinding) => norm([f.title, f.detail, ...sayableDetails(f)].join(' '));
+  /* v7: the website check's own plain points back a claim in their words too ("some links on your site are broken"). */
+  const pointWords = norm((ctx.site.points ?? []).join(' | '));
   for (const claim of CLAIMS) {
-    if (claim.re.test(claimText) && !supplied.some((f) => claim.backed(f) || claim.re.test(ownWords(f)))) problems.push(`Mentions ${claim.label}, but no website finding supports that.`);
+    if (claim.re.test(claimText) && !supplied.some((f) => claim.backed(f) || claim.re.test(ownWords(f))) && !claim.re.test(pointWords)) problems.push(`Mentions ${claim.label}, but no website finding supports that.`);
   }
   // Services: only ones the search, the trade or their own site support.
   const supportedServices = norm([ctx.evidence.question, ctx.trade ?? '', ctx.site.serviceEvidence].join(' | '));
@@ -691,15 +776,11 @@ export function checkVoiceNoteScript(raw: string, ctx: { evidence: VoiceNoteEvid
   if (readsSearchVerbatim(script, ctx.evidence.question)) problems.push('Reads the search out word for word or in quotes. Paraphrase it naturally.');
   else if (narratesSearchQualifiers(script, ctx.evidence.question, ctx.town)) problems.push('Narrates the search\'s qualifiers. Say just the trade and the town ("an electrician in Shrewsbury").');
   // The close: who controls the website (Paul, 2026-09-27), never a change plan.
-  if (CHANGE_PLAN_OFFER.test(tb)) problems.push('Offers to send the audit or explain what Paul would change. The quick check has no change plan; end on the website-ownership question instead.');
-  if (!asksWebsiteControl(script, ctx.site)) {
-    const kind = voiceNoteCtaKind(ctx.site);
-    problems.push(kind === 'profile'
-      ? `Does not end by asking whether they have a site of their own besides the ${ctx.site.sourceLabel ?? 'directory'} profile.`
-      : kind === 'no_website'
-        ? 'Does not end by asking whether they have a website at the moment.'
-        : 'Does not end by asking whether they own and control the website themselves or an agency manages it.');
-  }
+  if (CHANGE_PLAN_OFFER.test(tb)) problems.push('Offers to send the audit or explain what Paul would change. The quick check has no change plan; end on one simple question instead.');
+  /* v7 (k): ONE simple question or next step at the end (the website question, or a quick call once that is known). */
+  if (!/\?\s*$/.test(script.trim())) warnings.push('Does not end on a question.');
+  const lastTwo = sentencesOf(script.trim()).slice(-2).join(' ');
+  if ((lastTwo.match(/\?/g) ?? []).length > 1) problems.push('Ends on more than one question. Keep one.');
   if (voiceNoteCtaKind(ctx.site) === 'profile' && ASKS_OWN_THE_WEBSITE.test(tb)) {
     problems.push(`Asks whether they own "the website", but the only page on record is their ${ctx.site.sourceLabel ?? 'directory'} profile.`);
   }
@@ -716,7 +797,11 @@ export function checkVoiceNoteScript(raw: string, ctx: { evidence: VoiceNoteEvid
   }
   // The strongest finding must actually be said.
   const primary = supplied[0];
-  if (primary && !findingMentioned(script, primary, ctx.town ?? null)) problems.push(`Does not clearly explain the main website finding: ${primary.title}.`);
+  if ((ctx.site.points ?? []).length) {
+    /* v7: the first plain point (the worst issue) should be said; a warning, never a rewrite on wording alone. */
+    const keyWords = norm((ctx.site.points ?? [])[0]).split(' ').filter((w) => w.length > 4 && !['their', 'there', 'about', 'which', 'doesnt', 'youre'].includes(w));
+    if (keyWords.length && keyWords.filter((w) => t.includes(w)).length < Math.min(2, keyWords.length)) warnings.push(`Does not clearly say the main website issue: ${(ctx.site.points ?? [])[0]}.`);
+  } else if (primary && !findingMentioned(script, primary, ctx.town ?? null)) problems.push(`Does not clearly explain the main website finding: ${primary.title}.`);
   // Length: a target, not a gate.
   const words = wordCount(script);
   if (words < VOICE_NOTE_HARD_WORDS.min) problems.push(`Far too short (${words} words, aim for ${VOICE_NOTE_TARGET_WORDS.min}–${VOICE_NOTE_TARGET_WORDS.max}).`);

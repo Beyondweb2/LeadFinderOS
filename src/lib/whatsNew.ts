@@ -22,6 +22,25 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-23-lean-first-replies', date: '2026-10-23', title: 'Shorter first replies, a reply for a website they send, and a voice-note script that answers them', audience: 'all',
+    body: 'The first reply after a prospect answers the opener is shorter and lists the real website issues one per line. When they send a website we missed, the draft lists what the check found on it. The Voice-note script in the Inbox now reads the whole conversation and writes the next thing to say.',
+    report: {
+      added: [
+        'A "site shared" reply: when we said we could not find a website and they send one, the draft says "Ah thanks, I missed that one" and lists up to four real issues from the website check, then one question. If that site has not been checked yet the draft waits as Needs you: add the site to the lead, press Crawl site, then Regenerate.',
+        'A reply for "how can I get up on the AI search?" after the issues list: three short lines, no price, then "Voice note, or a quick call?".',
+        'Voice-note script (Inbox): it reads the conversation, answers their question first, uses the real search, names and website issues, gives the price and the guarantee in the approved words, and ends on one question. Under it: the word count and roughly how long it takes to say. You can edit it and press "Save my version"; the next script learns from your edits.',
+      ],
+      changed: [
+        'The first reply is shorter: no "Either way I can send a quick voice note" line (that comes in the next message), up to four plain website issues as bullet lines, and no jargon such as "main heading" or "description for Google". Town names keep their capital letter.',
+        'No website: "AI tends to lean on websites when it names businesses, and I couldn\'t find one for you…", ending "Do you have a website I\'ve missed, or is that something you\'d want sorted?".',
+        'First replies write "AI" in capitals. Several playbook lines are shorter and end on one question.',
+        'An Australian prospect asking about price or the guarantee gets no draft: it shows as Needs you (Australia is prospect-only).',
+        'Warm replies never name an AI tool: they say "ai".',
+        'The call screen\'s voice-note tab is unchanged (the instant version).',
+      ],
+      removed: ['The voice-note offer from the first reply.'],
+      effect: 'First replies are quicker to read and only ever list real issues. Press Regenerate on any open draft to get the new wording.',
+    } },
   { id: '2026-10-23-find-leads-coverage', date: '2026-10-23', title: 'Find Leads finds more of each town: Thorough search, more towns', audience: 'all',
     body: 'Coverage and Find Leads have a Standard / Thorough setting. Thorough searches the town in small squares and finds businesses one search misses. Australian towns now search their whole area, and Coverage lists Scotland, Northern Ireland, the London boroughs and 66 more Malaysian towns.',
     report: {
