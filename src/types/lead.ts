@@ -1,4 +1,7 @@
-export type WebsiteStatus = 
+/* Relative with .ts: this file is reached by edge functions (locationPicker.ts → search-leads). */
+import type { SearchDepth } from '../lib/townSearchArea.ts';
+
+export type WebsiteStatus =
   | 'NO_WEBSITE' 
   | 'DIRECTORY_ONLY' // kept for backward compat, treated as NO_WEBSITE everywhere
   | 'HAS_OWN_WEBSITE' 
@@ -65,6 +68,8 @@ export interface SearchFilters {
    *  is IGNORED in this mode, and the no-website expansion sweep is skipped (it would
    *  search outside the town). Absent/false = today's radius behaviour, unchanged. */
   townOnly?: boolean;
+  /** Standard / Thorough (src/lib/townSearchArea.ts). Thorough applies to a town-only search only; absent = Standard. */
+  depth?: SearchDepth;
   /** Absent or 'leads' = today's behaviour, unchanged. Never sent to search-leads. */
   mode?: SearchMode;
 }
@@ -109,6 +114,9 @@ export interface SearchResponse {
    *  geocoded boundary and the search silently widened to the radius — it always carries
    *  a `reason`, and it must be shown, not swallowed. */
   townFilter?: { requested: true; applied: boolean; reason?: string };
+  /** How a town-only search covered the town: the depth run, the widened Australian box, Thorough's tiles and calls. */
+  townArea?: { depth: SearchDepth; widened: boolean; tiles?: number; calls?: number };
+  depth?: SearchDepth;
   /** Handled "couldn't resolve that location" — empty leads + a friendly notice
    *  (a clean 2xx, not an error). */
   notFound?: boolean;

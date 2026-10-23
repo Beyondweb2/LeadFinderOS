@@ -22,6 +22,23 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-23-find-leads-coverage', date: '2026-10-23', title: 'Find Leads finds more of each town: Thorough search, more towns', audience: 'all',
+    body: 'Coverage and Find Leads have a Standard / Thorough setting. Thorough searches the town in small squares and finds businesses one search misses. Australian towns now search their whole area, and Coverage lists Scotland, Northern Ireland, the London boroughs and 66 more Malaysian towns.',
+    report: {
+      added: [
+        'A Standard / Thorough setting on Coverage and on Find Leads. Thorough splits the town into small squares and searches each one, then removes duplicates. It is pre-selected for Australia; Standard stays the default elsewhere. Thorough searches up to 6 towns a press.',
+        'Coverage lists Scotland (NRS settlements), Northern Ireland (NISRA settlements) and the 32 London boroughs, beside the England and Wales towns.',
+        'Coverage lists 66 more Malaysian towns of 50,000+ people (Sandakan, Tawau, Miri, Teluk Intan…). Suburbs, kampungs and Kuala Lumpur neighbourhoods are left out.',
+      ],
+      changed: [
+        'Australian towns: where Google only knew the town centre (Bundaberg, Albury, Rockhampton), the search now covers the whole town, and suburbs such as Lavington count as in the town. A separate town nearby (Wodonga, Bargara) is still its own row.',
+        'The "found" number for a town counts only the businesses shown, not the ones behind the "outside the town" line.',
+        'Singapore searches use their own rules: a search for Singapore covers the whole city.',
+        'Arriving on Find Leads from Coverage keeps the country you chose (it could switch back to the UK).',
+      ],
+      removed: [],
+      effect: 'Each town search finds more of the businesses that are really there, the counts match the screen, and more of the UK and Malaysia can be worked from Coverage. Standard searches work as before; a Thorough button says it is Thorough.',
+    } },
   { id: '2026-10-22-inbox-status-pill-back', date: '2026-10-22', title: 'Inbox: the status pill is back on every row', audience: 'all',
     body: 'Each conversation in the Inbox list shows the coloured status pill again, and you can change the status from the list as before. The one "what needs doing" pill sits beside it.',
     report: {

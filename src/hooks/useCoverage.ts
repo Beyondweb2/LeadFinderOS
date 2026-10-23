@@ -9,7 +9,8 @@ import {
   type SuppressionPatch, type CoverageWorker, type WorkedByEntry, type FoundAdded, type SearchRunRecord,
 } from '@/lib/coverageState';
 import { coverageQueryKey, coverageTownsQueryKey } from '@/lib/coverageFreshness';
-import { ABROAD_TOWNS, type CoverageCountry } from '@/lib/coverageCountries';
+import { ABROAD_TOWNS, abroadTownKey, type CoverageCountry } from '@/lib/coverageCountries';
+import { MALAYSIA_COVERAGE_TOWNS } from '@/data/malaysiaCoverageTowns';
 import { coveragePairsFor } from '@/lib/malaysiaCoverage';
 import { townPopulation } from '@/lib/abroadTownPopulation';
 
@@ -111,7 +112,19 @@ export function useCoverage(country: CoverageCountry = 'UK') {
       id: `${country}:${t.name}`, name: t.name, region: t.region, population: townPopulation(country, t.name, t.region).population, county: null,
       suppressed_at: null, suppressed_reason: null, aka: t.aka, fromLeads,
     });
-    return [...ABROAD_TOWNS[country].map((t) => row(t, false)), ...(countryPairs?.extraTowns ?? []).map((t) => row(t, true))];
+    /* ⛔ MALAYSIA'S 50,000+ TOWNS (2026-10-23, scripts/build-malaysia-coverage-towns.mjs) ARE ADDED HERE, ON THE
+       COVERAGE SCREEN ONLY, never to ABROAD_TOWNS: that list is also read by the business-name cleaner on every
+       sending path (cleanBusinessName.ts), and widening it would change what messages say. A lead in one of these
+       towns already counts under its own name (an unlisted town is a row of its own), so the row it used to make
+       "from your leads" is now this listed row — never both. */
+    const hand = ABROAD_TOWNS[country];
+    const handKeys = new Set(hand.map((t) => abroadTownKey(t.name)));
+    const more = country === 'Malaysia'
+      ? MALAYSIA_COVERAGE_TOWNS.map(([, name, state]) => ({ name, region: state })).filter((t) => !handKeys.has(abroadTownKey(t.name)))
+      : [];
+    const listed = new Set([...handKeys, ...more.map((t) => abroadTownKey(t.name))]);
+    const fromLeads = (countryPairs?.extraTowns ?? []).filter((t) => !listed.has(abroadTownKey(t.name)));
+    return [...[...hand, ...more].map((t) => row(t, false)), ...fromLeads.map((t) => row(t, true))];
   }, [country, ukTowns, countryPairs]);
   const isLoading = townsQuery.isLoading || pairsQuery.isLoading;
   const queryError = townsQuery.error || pairsQuery.error;

@@ -8,7 +8,10 @@ import { qualifierInfo, resolveGeoBias, pickedCountryKeySuffix } from '../_share
 import { generateCacheKey } from '../_shared/search-cache-key.ts';
 import { countryFromAddress } from '../../../src/lib/leadCountry.ts';
 import { foundRecord } from '../../../src/lib/websiteStatusClass.ts';
-import { inTownVerdict, townKey, type InTownVerdict } from '../../../src/lib/inTown.ts';
+import { inTownVerdict, townKey, townRadiusKm, type InTownVerdict } from '../../../src/lib/inTown.ts';
+import {
+  GEOCODE_USD, TEXT_SEARCH_USD_PER_PAGE, THOROUGH_MAX_CALLS_PER_TOWN, thoroughTiles, townSearchBox, type SearchDepth,
+} from '../../../src/lib/townSearchArea.ts';
 import { cleanTypedTown } from '../../../src/lib/typedTown.ts';
 import { datasetPlace } from '../../../src/lib/malaysiaPlaces.ts';
 import { findAuTownText } from '../../../src/lib/australiaTowns.ts';
@@ -71,6 +74,10 @@ const SearchRequestSchema = z.object({
   // 1km narrows the hint; it does not exclude a neighbouring town.
   // Default false, so every existing call is byte-identical to before.
   townOnly: z.boolean().default(false),
+  /* STANDARD / THOROUGH (2026-10-23, src/lib/townSearchArea.ts). Thorough applies to a town-only search only: a grid
+     of tiles over the town box, at most THOROUGH_MAX_CALLS_PER_TOWN Google calls, whatever else is sent. Default
+     'standard', so every existing call is unchanged. */
+  depth: z.enum(['standard', 'thorough']).default('standard'),
   /* ⛔ HISTORY IS WRITTEN BY DEFAULT, AND THE OPT-OUT IS THE EXCEPTION. Until 2026-08-20 this
      function wrote `search_cache` but never `search_history`, while the browser wrote the history
      row — so any caller that invoked the function DIRECTLY produced a pool nothing pointed at. Seven
@@ -292,6 +299,94 @@ type GeoHit = {
  *  between "the hard boundary was used" and "we fell back to the radius". Absent entirely on a
  *  normal search. `applied: false` must always carry a human-readable `reason`. */
 interface TownFilterResult { requested: true; applied: boolean; reason?: string }
+
+/** How a town-only search covered the town (src/lib/townSearchArea.ts): the depth run, whether the Australian box
+ *  was widened, and for Thorough the tiles laid and the Google calls made. Echoed so the screen and a measurement
+ *  can say what ran. */
+interface TownAreaResult { depth: SearchDepth; widened: boolean; tiles?: number; calls?: number }
+
+/* ══ THOROUGH: A GRID OF HARD TILES OVER THE TOWN BOX (2026-10-23, src/lib/townSearchArea.ts) ═══════════════════
+   Pass 1 asks every tile for one page; pass 2 asks a second page only of a tile whose first page came back full
+   (20) with a next-page token. ⛔ THE CALL CEILING IS A RESERVATION, TAKEN BEFORE EACH CALL, so tiles running at
+   the same time can never between them pass THOROUGH_MAX_CALLS_PER_TOWN. A tile that fails is skipped, never
+   fatal. Results merged by place id (first seen wins), no-website first, up to BROAD_MAX. */
+async function thoroughTownSearch(
+  keyword: string, box: Viewport, apiKey: string, debug: DebugMeta,
+): Promise<{ leads: SearchLead[]; selectionDebug: SelectionDebug; tiles: number; calls: number }> {
+  const ENDPOINT = 'https://places.googleapis.com/v1/places:searchText';
+  const FIELD_MASK = 'places.id,places.displayName,places.googleMapsUri,places.websiteUri,places.primaryType,places.primaryTypeDisplayName,places.formattedAddress,places.location,nextPageToken';
+  const grid = thoroughTiles(box);
+  let reserved = 0, made = 0;
+  const take = () => (reserved < THOROUGH_MAX_CALLS_PER_TOWN ? (reserved++, true) : false);
+
+  type Place = {
+    id?: string; displayName?: { text?: string }; googleMapsUri?: string; websiteUri?: string; primaryType?: string;
+    primaryTypeDisplayName?: { text?: string }; formattedAddress?: string; location?: { latitude?: number; longitude?: number };
+  };
+  const page = async (tile: Viewport, pageToken?: string): Promise<{ places: Place[]; next?: string } | null> => {
+    if (!take()) return null;
+    const body: Record<string, unknown> = {
+      textQuery: keyword,
+      locationRestriction: { rectangle: { low: { latitude: tile.latMin, longitude: tile.lngMin }, high: { latitude: tile.latMax, longitude: tile.lngMax } } },
+      pageSize: 20,
+    };
+    if (pageToken) body.pageToken = pageToken;
+    try {
+      const res = await fetch(ENDPOINT, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Goog-Api-Key': apiKey, 'X-Goog-FieldMask': FIELD_MASK },
+        body: JSON.stringify(body),
+      });
+      debug.googleCallsMade.textSearchPages++; made++;
+      if (!res.ok) { console.warn(`[THOROUGH] tile page failed: ${res.status}`); return null; }
+      const data = await res.json();
+      return { places: data.places || [], next: data.nextPageToken };
+    } catch (e) {
+      console.warn('[THOROUGH] tile page error:', e instanceof Error ? e.message : e);
+      return null;
+    }
+  };
+
+  const first = await mapPool(grid.tiles, TILE_CONCURRENCY, (t) => page(t));
+  const more = grid.tiles.map((t, i) => ({ t, r: first[i] })).filter((x) => x.r && x.r.places.length >= 20 && x.r.next);
+  const second = await mapPool(more, TILE_CONCURRENCY, (x) => page(x.t, x.r!.next));
+
+  const seen = new Set<string>();
+  const pool: SearchLead[] = [];
+  for (const r of [...first, ...second]) {
+    for (const place of r?.places ?? []) {
+      const placeId = (place.id || '').replace(/^places\//, '');
+      if (!placeId || seen.has(placeId)) continue;
+      seen.add(placeId);
+      const { status, confidence, reason } = classifyWebsite(place.websiteUri);
+      pool.push({
+        id: placeId,
+        name: place.displayName?.text || 'Unknown',
+        googleMapsUrl: place.googleMapsUri || `https://www.google.com/maps/place/?q=place_id:${placeId}`,
+        websiteUrl: place.websiteUri || null,
+        websiteStatus: status,
+        confidence,
+        reason,
+        primaryType: place.primaryType || undefined,
+        primaryTypeLabel: place.primaryTypeDisplayName?.text || undefined,
+        address: place.formattedAddress || undefined,
+        lat: typeof place.location?.latitude === 'number' ? place.location.latitude : undefined,
+        lng: typeof place.location?.longitude === 'number' ? place.location.longitude : undefined,
+      });
+    }
+  }
+  const noWeb = pool.filter((l) => l.websiteStatus === 'NO_WEBSITE');
+  const leads = [...noWeb, ...pool.filter((l) => l.websiteStatus === 'HAS_OWN_WEBSITE')].slice(0, BROAD_MAX);
+  console.log(`[THOROUGH] ${grid.cols}x${grid.rows} tiles @ ~${grid.tileKm}km, ${made} calls, ${pool.length} places`);
+  return {
+    leads, tiles: grid.tiles.length, calls: made,
+    selectionDebug: {
+      pagesFetched: made, totalPoolCount: pool.length, noWebsiteCount: noWeb.length,
+      returnedNoWebsite: leads.filter((l) => l.websiteStatus !== 'HAS_OWN_WEBSITE').length,
+      returnedHasWebsite: leads.filter((l) => l.websiteStatus === 'HAS_OWN_WEBSITE').length,
+    },
+  };
+}
 
 async function geocodeLocation(
   location: string,
@@ -853,6 +948,32 @@ function sanitizeError(error: unknown): { message: string; status: number } {
    them. The centre is the searched town's own geocode (geocode_cache, which the search itself already wrote), the size
    its population (uk_towns for the UK, the bundled GeoNames list for Malaysia). Never fatal: on any failure the
    results go out unmarked and the page falls back to Google's boundary (outsideTown). */
+/** The searched town's name and population, by its own country's source: GeoNames for Malaysia, the ABS urban
+ *  centre for Australia, uk_towns for the UK. ⛔ Singapore has none (one city; its areas use a fixed radius,
+ *  inTown.ts) — it used to fall through to uk_towns. Any other country → null (the default radius). */
+async function searchedTownPopulation(
+  location: string, country: string | undefined,
+  // deno-lint-ignore no-explicit-any -- loose-typed to avoid supabase-js generic 'never' friction
+  serviceClient: any,
+): Promise<{ town: string; population: number | null }> {
+  const town = cleanTypedTown(location).split(',')[0].trim();
+  if (!town) return { town, population: null };
+  if (country === 'Malaysia') {
+    const hit = datasetPlace(town);
+    return { town, population: hit && hit !== 'ambiguous' ? hit.population : null };
+  }
+  if (country === 'Australia') {
+    /* ⛔ NEVER uk_towns for Australia (Perth / Newcastle would take the UK town's size). The ABS urban centre named
+       WITH its state ("Ballarat VIC"); a bare name in two states, or an unlisted suburb → unknown (3 km). */
+    const hit = findAuTownText(town);
+    return { town, population: hit && hit !== 'ambiguous' ? hit.population : null };
+  }
+  if (country && country !== 'UK') return { town, population: null };
+  const { data } = await serviceClient.from('uk_towns').select('name, population');
+  const hits = ((data ?? []) as Array<{ name: string; population: number | null }>).filter((r) => townKey(r.name) === townKey(town));
+  return { town, population: hits.length === 1 ? hits[0].population : null };
+}
+
 async function attachTownChecks(
   leads: SearchLead[], location: string, country: string | undefined, apiKey: string, debug: DebugMeta,
   // deno-lint-ignore no-explicit-any -- loose-typed to avoid supabase-js generic 'never' friction
@@ -866,20 +987,7 @@ async function attachTownChecks(
       const geo = await geocodeLocation(location, apiKey, debug, serviceClient, true, country);
       centre = { lat: geo.lat, lng: geo.lng };
     } catch { centre = null; }
-    let population: number | null = null;
-    if (country === 'Malaysia') {
-      const hit = datasetPlace(town);
-      population = hit && hit !== 'ambiguous' ? hit.population : null;
-    } else if (country === 'Australia') {
-      /* ⛔ NEVER uk_towns for Australia (Perth / Newcastle would take the UK town's size). The ABS urban centre named
-         WITH its state ("Ballarat VIC"); a bare name in two states, or an unlisted suburb → unknown (3 km). */
-      const hit = findAuTownText(town);
-      population = hit && hit !== 'ambiguous' ? hit.population : null;
-    } else {
-      const { data } = await serviceClient.from('uk_towns').select('name, population');
-      const hits = ((data ?? []) as Array<{ name: string; population: number | null }>).filter((r) => townKey(r.name) === townKey(town));
-      population = hits.length === 1 ? hits[0].population : null;
-    }
+    const { population } = await searchedTownPopulation(location, country, serviceClient);
     return leads.map((l) => ({
       ...l,
       townCheck: inTownVerdict({ town, country: country ?? 'UK', address: l.address ?? null, lat: l.lat ?? null, lng: l.lng ?? null, centre, population }),
@@ -910,7 +1018,8 @@ async function performSearchGoogle(
   broad = false,
   country?: string,
   townOnly = false,
-): Promise<{ leads: SearchLead[]; selectionDebug: SelectionDebug; expanded: boolean; townFilter?: TownFilterResult }> {
+  depth: SearchDepth = 'standard',
+): Promise<{ leads: SearchLead[]; selectionDebug: SelectionDebug; expanded: boolean; townFilter?: TownFilterResult; townArea?: TownAreaResult }> {
   /* needViewport = townOnly. Same flag, same extraction, same geocode_cache.viewport column that
      region mode already uses — no second geocode path. */
   const geo = await geocodeLocation(location, apiKey, debug, serviceClient, townOnly, country);
@@ -925,7 +1034,17 @@ async function performSearchGoogle(
      no viewport (extractViewport returns null). We could refuse, but an empty result for a real
      town is worse than a wider one — so we run today's bias search and SAY the filter did not
      apply. A filter that quietly did nothing is worse than no filter at all. */
-  const townViewport = townOnly ? geo.viewport : null;
+  /* THE TOWN BOX (src/lib/townSearchArea.ts rule 1): an Australian box that is only the city centre is widened to
+     the town's own size. Every other box goes to Google exactly as before. */
+  let townViewport: Viewport | null = townOnly ? geo.viewport : null;
+  let townArea: TownAreaResult | undefined;
+  if (townViewport && serviceClient) {
+    const { population } = await searchedTownPopulation(location, country, serviceClient);
+    const r = townSearchBox(townViewport, { lat, lng }, country, population ? townRadiusKm(population, country) : null);
+    if (r.widened) console.log(`[TOWN-ONLY] small Australian box widened from the population (${population})`);
+    townViewport = r.box;
+    townArea = { depth, widened: r.widened };
+  }
   const townFilter: TownFilterResult | undefined = townOnly
     ? (townViewport
       ? { requested: true, applied: true }
@@ -933,6 +1052,12 @@ async function performSearchGoogle(
     : undefined;
   if (townOnly && !townViewport) {
     console.warn(`[TOWN-ONLY] no viewport/bounds for "${location}" — FALLING BACK to locationBias radius ${radius}m`);
+  }
+
+  /* THOROUGH (rule 2): a grid of hard tiles over the same box, no nearby pass — the box IS the town. */
+  if (townViewport && depth === 'thorough') {
+    const t = await thoroughTownSearch(keyword, townViewport, apiKey, debug);
+    return { leads: t.leads, selectionDebug: t.selectionDebug, expanded: false, townFilter, townArea: { depth, widened: townArea?.widened ?? false, tiles: t.tiles, calls: t.calls } };
   }
 
   const { leads, selectionDebug } = await textSearchPlaces(keyword, lat, lng, radius, apiKey, debug, broad, townViewport);
@@ -963,7 +1088,7 @@ async function performSearchGoogle(
       // Never fatal: the town pool is the product here, the nearby list is a bonus signal.
       console.warn('[TOWN-ONLY] nearby pass failed (town pool unaffected):', e instanceof Error ? e.message : e);
     }
-    return { leads: [...leads, ...nearby], selectionDebug, expanded: false, townFilter };
+    return { leads: [...leads, ...nearby], selectionDebug, expanded: false, townFilter, townArea };
   }
 
   // List-builder mode casts wide — never expand (expansion chases no-website leads).
@@ -1298,7 +1423,8 @@ async function performSearchWithExpansion(
   broad = false,
   country?: string,
   townOnly = false,
-): Promise<{ leads: SearchLead[]; selectionDebug: SelectionDebug; expanded: boolean; townFilter?: TownFilterResult }> {
+  depth: SearchDepth = 'standard',
+): Promise<{ leads: SearchLead[]; selectionDebug: SelectionDebug; expanded: boolean; townFilter?: TownFilterResult; townArea?: TownAreaResult }> {
   const apifyToken = Deno.env.get('APIFY_TOKEN');
   // DISCOVERY default = Google (fast: ~3s cold, instant cached). Apify discovery
   // is OPT-IN only (DISCOVERY_SOURCE=apify) because the actor has a ~20s run floor
@@ -1318,7 +1444,7 @@ async function performSearchWithExpansion(
       // fall through to Google below
     }
   }
-  return await performSearchGoogle(keyword, location, radius, apiKey, debug, serviceClient, broad, country, townOnly);
+  return await performSearchGoogle(keyword, location, radius, apiKey, debug, serviceClient, broad, country, townOnly, depth);
 }
 
 // ═══════════════════════════════════════════════
@@ -1450,7 +1576,9 @@ Deno.serve(async (req) => {
       return jsonResponse({ error: 'Invalid search parameters. Please check your input.', _debug: debug }, 400);
     }
 
-    const { keyword, location, radius, broad, region: regionAsked, density, country, townOnly, skipHistory } = validationResult.data;
+    const { keyword, location, radius, broad, region: regionAsked, density, country, townOnly, skipHistory, depth: depthAsked } = validationResult.data;
+    /* Thorough is a town-only mode; anything else runs Standard (and is cached and priced as Standard). */
+    const depth: SearchDepth = townOnly && depthAsked === 'thorough' ? 'thorough' : 'standard';
     /* ⛔ REGION MODE IS ADMIN-ONLY (test-day roles check, 2026-10-14). The screen never sends it, but a direct call
        from a salesperson could start the wider (dearer) tiled search and read back the day's Google spend in
        downgraded.spentUsd. Sales never sees a cost (CLAUDE.md §0) - their request runs as a normal search. */
@@ -1470,7 +1598,13 @@ Deno.serve(async (req) => {
        NOTHING, so every existing UK key is byte-identical and still hits. */
     const keyBias = region ? null : resolveGeoBias(location, country);
     const pickSuffix = region ? '' : pickedCountryKeySuffix(location, country);
-    const keyLocation = keyBias && keyBias !== 'GB' ? `${location}##${keyBias}` : pickSuffix ? `${location}##${pickSuffix}` : location;
+    const baseKeyLocation = keyBias && keyBias !== 'GB' ? `${location}##${keyBias}` : pickSuffix ? `${location}##${pickSuffix}` : location;
+    /* 2026-10-23 (townSearchArea.ts): a Thorough answer is its own pool; an Australian town-only answer moved to the
+       widened box, so a pool cached from the old centre-only box is not replayed for three days. Every other key is
+       byte-identical to before. */
+    const keyLocation = baseKeyLocation
+      + (townOnly && country === 'Australia' ? '##aubox2' : '')
+      + (depth === 'thorough' ? '##thorough' : '');
     const cacheKey = region
       ? await generateCacheKey(keyword, `##region:${density}##${location}`, radius)
       : await generateCacheKey(keyword, keyLocation, radius, townOnly);
@@ -1525,6 +1659,7 @@ Deno.serve(async (req) => {
            the '|townonly' key suffix means these results can only have come from a restricted
            run — so a hit on this key is by construction a filtered result. */
         townFilter: townOnly ? { requested: true, applied: true } as TownFilterResult : undefined,
+        depth,
         gated: isGated,
         _debug: debug,
       });
@@ -1537,6 +1672,7 @@ Deno.serve(async (req) => {
     let regionMeta: RegionMeta | undefined;
     let downgraded: { reason: string; spentUsd: number } | undefined;
     let townFilter: TownFilterResult | undefined;
+    let townArea: TownAreaResult | undefined;
 
     // Region daily budget guard: if today's Google spend is over the cap, downgrade
     // region → a normal single-centre search so a big region can't blow the budget.
@@ -1567,8 +1703,8 @@ Deno.serve(async (req) => {
       console.log(`[DIAG-HANDLER] Region: ${leads.length} leads from ${regionMeta.tilesSucceeded}/${regionMeta.tilesTotal} tiles`);
     } else {
       console.log(`[DIAG-HANDLER] Starting search for "${keyword}" in "${location}" within ${radius}m`);
-      const res = await performSearchWithExpansion(keyword, location, radius, GOOGLE_MAPS_API_KEY, debug, serviceClient, broad, country, townOnly);
-      leads = res.leads; selectionDebug = res.selectionDebug; expanded = res.expanded; townFilter = res.townFilter;
+      const res = await performSearchWithExpansion(keyword, location, radius, GOOGLE_MAPS_API_KEY, debug, serviceClient, broad, country, townOnly, depth);
+      leads = res.leads; selectionDebug = res.selectionDebug; expanded = res.expanded; townFilter = res.townFilter; townArea = res.townArea;
       console.log(`[DIAG-HANDLER] Found ${leads.length} leads (${selectionDebug.returnedNoWebsite} noWeb, ${selectionDebug.returnedHasWebsite} hasWeb, expanded: ${expanded})`);
     }
 
@@ -1643,7 +1779,7 @@ Deno.serve(async (req) => {
        ⚠️ Adding places.primaryType the same day cost NOTHING for exactly this reason: primaryType is
        a Pro field arriving on a request already priced at Enterprise. Before adding any field here,
        check its tier — if it is Enterprise and nothing else already is, it re-prices the whole call. */
-    const totalCostUsd = (debug.googleCallsMade.geocode * 0.005) + (debug.googleCallsMade.textSearchPages * 0.035);
+    const totalCostUsd = (debug.googleCallsMade.geocode * GEOCODE_USD) + (debug.googleCallsMade.textSearchPages * TEXT_SEARCH_USD_PER_PAGE);
     console.log(`[COST] userId=${userId} searchSession=${searchSessionId} geocode=${debug.googleCallsMade.geocode} textSearch=${debug.googleCallsMade.textSearchPages} totalCost=$${totalCostUsd.toFixed(3)} expanded=${expanded}`);
 
     try {
@@ -1655,7 +1791,7 @@ Deno.serve(async (req) => {
           api_type: 'geocode',
           calls_made: debug.googleCallsMade.geocode,
           cache_hit: false,
-          estimated_cost_usd: debug.googleCallsMade.geocode * 0.005,
+          estimated_cost_usd: debug.googleCallsMade.geocode * GEOCODE_USD,
           search_session_id: searchSessionId,
         });
       }
@@ -1666,7 +1802,7 @@ Deno.serve(async (req) => {
           api_type: 'text_search',
           calls_made: debug.googleCallsMade.textSearchPages,
           cache_hit: false,
-          estimated_cost_usd: debug.googleCallsMade.textSearchPages * 0.035,  // Enterprise, see above
+          estimated_cost_usd: debug.googleCallsMade.textSearchPages * TEXT_SEARCH_USD_PER_PAGE,  // Enterprise, see above
           search_session_id: searchSessionId,
         });
       }
@@ -1690,6 +1826,8 @@ Deno.serve(async (req) => {
       region: regionMeta,
       downgraded,
       townFilter,
+      townArea,
+      depth,
       /* ⛔ ALWAYS ECHOED, EVEN WHEN UNAMBIGUOUS — Paul's rule, and the right one: an unambiguous town
          never blocks, but the resolution is still shown. A field that appears only when something is
          wrong is a field nobody ever learns to read, and it would have been absent on the one search

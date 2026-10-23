@@ -50,7 +50,9 @@ ok(!foundAddedByPair([run('plumbers', 'wisbech', { a: false })]).has(coverageKey
 
 console.log('── 3. WHERE THE NUMBERS COME FROM ──');
 const ctx = code('src/contexts/LeadSearchContext.tsx');
-ok(/saveSearch\(filters, filteredLeads\.length, noWebsiteCount, data\.leads as SearchLeadLike\[\]\)/.test(ctx), 'Find Leads: Found is the search\'s RAW result (data.leads), not the post-exclusion list');
+/* 2026-10-23 (Paul): Found = what the screen shows: the raw result (data.leads, before exclusions) without the
+   out-of-town rows held behind the grey line. */
+ok(/saveSearch\(filters, inTownShown\.length, noWebsiteCount, \(data\.leads as Lead\[\]\)\.filter\(\(l\) => !outsideSearchedTown\(l\)\) as SearchLeadLike\[\]\)/.test(ctx), 'Find Leads: Found is the search\'s raw result (data.leads) in town, not the post-exclusion list');
 ok(/\.\.\.foundRecord\(found\)/.test(ctx) && /\.select\('id'\)\.single\(\)/.test(ctx), '…written on the run\'s own history row, whose id each result then carries');
 const sl = code('supabase/functions/search-leads/index.ts');
 ok(/\.\.\.foundRecord\(leads\),\s*\}\)\.select\('id'\)\.maybeSingle\(\)/.test(sl) && /searchRunId,\s*leads:/.test(sl), 'search-leads\' own history row (Niche panel) records Found too and returns the run id');

@@ -61,7 +61,8 @@ console.log("\n── coverage ──");
 {
   const page = read("src/pages/Coverage.tsx");
   ok(!/asPence|MARKET_SEARCH_USD|~\{|·\s*~/.test(page), "no price estimate is rendered beside Find leads");
-  ok(/>\s*Find leads\s*</.test(page), "the action is plainly 'Find leads'");
+  /* 2026-10-23: Thorough adds its ceiling (admins) or "Thorough" (sales) after the words (depthButtonSuffix). */
+  ok(/>\s*Find leads\{depthButtonSuffix\(depth, 1, isAdmin\)\}\s*</.test(page), "the action is plainly 'Find leads' (+ the Thorough suffix)");
   ok(!/'Suppress'|'Restore'|Show suppressed|setSuppressed|window\.prompt/.test(page), "no Suppress / Restore / show-suppressed control on the page");
   ok(/gradeFor\(trade, false\)/.test(page), "suppressed towns (none today) still stay off the list — state untouched");
   const fn = read("supabase/functions/coverage/index.ts");
