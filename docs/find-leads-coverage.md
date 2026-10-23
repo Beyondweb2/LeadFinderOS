@@ -53,3 +53,15 @@ Paul's brief: Find Leads finds most of the businesses in a town, in every countr
 - Screens: one `SearchDepthToggle` on Coverage and Find Leads; Thorough pre-selected for Australia; never persisted.
   The button shows the ceiling ("up to 45p", derived from `THOROUGH_MAX_USD_PER_TOWN`) to admins, "Thorough" to sales.
 - Tests: `scripts/find-leads-coverage.test.ts`.
+
+## Deployed 2026-10-23
+
+- Migration applied by the Management API, one statement, read back: `uk_towns` 750 → 859 (Scotland 55, Northern
+  Ireland 22, London 32; none suppressed; every row has a point).
+- Full gate: 449/450. The one failure, `warm-lead-research.test.ts` "a fresh crawl-check row is reused", fails the same
+  way on unchanged `main` (39aa06c0) — not this change; left for its owner.
+- Merged `25aae411`. Edge deployed: search-leads, create-ai-audit, crawl-check, crawl-worker (the whole closure of
+  `inTown.ts`); each live body carries `AU_TOWN_RADIUS_DIVISOR` and `SG_TAIL`, search-leads also `##aubox2`.
+- Live SPA: `Coverage-*.js` carries `coverage-search-depth`; the What's New chunk carries the entry.
+- NOT done (Paul, 2026-10-23: no provider calls): the live before/after on Albury, Bundaberg and Rockhampton
+  (Standard with the Part 1 fixes, then Thorough). Only the cached-pool measurement above exists.
