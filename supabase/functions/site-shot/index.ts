@@ -11,18 +11,18 @@
 // Spend is never started by opening a report: render-audit-report only READS a finished shot.
 // The rules: src/lib/siteShot.ts. The driver: _shared/mockup-shot.ts. Record: docs/site-shot.md.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { readPageContent, shootSite } from "../_shared/mockup-shot.ts";
+import { snapshotSite } from "../_shared/mockup-shot.ts";
 import { isAggregatorUrl } from "../_shared/aggregators.ts";
 import { shotRefusal } from "../_shared/screenshot-policy.ts";
 import { paidMode } from "../_shared/protection.ts";
 import { usableCrawlSignals } from "../../../src/lib/crawlCheck.ts";
 import {
   SITE_SHOT_BUCKET, SITE_SHOT_FRESH_MS, SITE_SHOT_JPEG_QUALITY, SITE_SHOT_MAX_ATTEMPTS, SITE_SHOT_MEASURE_MAX,
-  SITE_SHOT_SCALE, londonMonthStartIso, siteShotGate, siteShotImageProblem, siteShotPath, siteShotRateLimited, siteShotRetryAfterMs, siteShotCspBlocked, siteShotTransient, siteShotNeedsVerify, siteShotPageProblem,
+  SITE_SHOT_SCALE, londonMonthStartIso, siteShotGate, siteShotImageProblem, siteShotPath, siteShotRateLimited, siteShotRetryAfterMs, siteShotCspBlocked, siteShotTransient, siteShotPageProblem, siteShotVisibleText,
 } from "../../../src/lib/siteShot.ts";
 
 /** Bumped with every change, so a deploy is proved by the live answer (CLAUDE.md §4). */
-const BUILD_ID = "site-shot-2026-10-23d";
+const BUILD_ID = "site-shot-2026-10-23e";
 const json = (body: unknown, status = 200) => new Response(JSON.stringify({ build: BUILD_ID, ...(body as object) }), { status, headers: { "Content-Type": "application/json" } });
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const FORMAT = { type: "jpeg" as const, quality: SITE_SHOT_JPEG_QUALITY, scale: SITE_SHOT_SCALE };
@@ -54,30 +54,17 @@ async function readLead(service: Service, leadId: string) {
 /** One picture, with the two known recoveries: a site whose Content-Security-Policy refuses our injected script is shot again
  *  without it (and, if it refuses the style too, bare), and one Cloudflare rate-limit answer is waited out (its own Retry-After, at most 20 s) and tried again. */
 async function takePicture(website: string, budgetUntil?: number) {
-  let shot = await shootSite(website, FORMAT);
-  if (!shot.ok && siteShotCspBlocked(shot.detail)) shot = await shootSite(website, { ...FORMAT, noScript: true });
-  if (!shot.ok && siteShotCspBlocked(shot.detail)) shot = await shootSite(website, { ...FORMAT, noScript: true, noStyle: true });
-  if (!shot.ok && siteShotTransient(shot.detail)) { await new Promise((r) => setTimeout(r, 2_000)); shot = await shootSite(website, FORMAT); }
+  let shot = await snapshotSite(website, FORMAT);
+  if (!shot.ok && siteShotCspBlocked(shot.detail)) shot = await snapshotSite(website, { ...FORMAT, noScript: true });
+  if (!shot.ok && siteShotCspBlocked(shot.detail)) shot = await snapshotSite(website, { ...FORMAT, noScript: true, noStyle: true });
+  if (!shot.ok && siteShotTransient(shot.detail)) { await new Promise((r) => setTimeout(r, 2_000)); shot = await snapshotSite(website, FORMAT); }
   let retries = 0;
   while (!shot.ok && siteShotRateLimited(shot.detail) && retries < (budgetUntil ? 3 : 1) && (!budgetUntil || Date.now() < budgetUntil)) {
     retries++;
     await new Promise((r) => setTimeout(r, Math.min(20_000, siteShotRetryAfterMs(shot.ok ? null : shot.detail, 15_000))));
-    shot = await shootSite(website, FORMAT);
+    shot = await snapshotSite(website, FORMAT);
   }
   return { shot, retries };
-}
-
-/** Is the page behind a small picture a real page? Reads its text with the same browser. A read that fails is "no": a small
- *  picture whose page we could not check is never shown. */
-async function verifyPage(website: string): Promise<{ ok: true } | { ok: false; reason: string }> {
-  let c = await readPageContent(website);
-  if (!c.ok && siteShotRateLimited(c.detail)) {
-    await new Promise((r) => setTimeout(r, Math.min(20_000, siteShotRetryAfterMs(c.ok ? null : c.detail, 12_000))));
-    c = await readPageContent(website);
-  }
-  if (!c.ok) return { ok: false, reason: "verify_failed" };
-  const problem = siteShotPageProblem(c.html);
-  return problem ? { ok: false, reason: problem } : { ok: true };
 }
 
 async function claimedThisMonth(service: Service, now: Date): Promise<number> {
@@ -148,12 +135,12 @@ Deno.serve(async (req) => {
         await service.from("lead_site_shots").update({ status: "refused", reason: `image_${problem}`, bytes: shot.bytes.length, request_ms: shot.ms, updated_at: stamp }).eq("lead_id", leadId);
         return json({ ok: true, mode, shot: false, reason: `image_${problem}` });
       }
-      if (siteShotNeedsVerify(shot.bytes.length)) {
-        const page = await verifyPage(lead.website);
-        if (!page.ok) {
-          await service.from("lead_site_shots").update({ status: "refused", reason: `page_${page.reason}`, bytes: shot.bytes.length, request_ms: shot.ms, updated_at: new Date().toISOString() }).eq("lead_id", leadId);
-          return json({ ok: true, mode, shot: false, reason: `page_${page.reason}` });
-        }
+      /* The page's own text came back in the SAME visit as the picture, so it is judged by what the picture shows: a challenge, an
+         access-denied, unavailable, error, parked or empty page is refused (src/lib/siteShot.ts), for every picture, whatever its size. */
+      const pageProblem = siteShotPageProblem(shot.html);
+      if (pageProblem) {
+        await service.from("lead_site_shots").update({ status: "refused", reason: `page_${pageProblem}`, bytes: shot.bytes.length, request_ms: shot.ms, updated_at: new Date().toISOString() }).eq("lead_id", leadId);
+        return json({ ok: true, mode, shot: false, reason: `page_${pageProblem}` });
       }
       const path = siteShotPath(leadId)!;
       const up = await service.storage.from(SITE_SHOT_BUCKET).upload(path, shot.bytes, { contentType: "image/jpeg", upsert: true });
@@ -188,12 +175,12 @@ Deno.serve(async (req) => {
         if (lead.websiteRefusal) { out.push({ lead_id: leadId, website: lead.website, gate: gate.ok ? "ok" : gate.reason, shot: false, reason: lead.websiteRefusal }); continue; }
         const { shot, retries } = await takePicture(lead.website, deadline - 25_000);
         if (!shot.ok) { out.push({ lead_id: leadId, website: lead.website, gate: gate.ok ? "ok" : gate.reason, shot: false, reason: shot.refusal, detail: shot.detail ?? null, request_ms: shot.ms }); continue; }
-        const page = await verifyPage(lead.website);
+        const pageProblem = siteShotPageProblem(shot.html);
         const path = siteShotPath(leadId, true)!;
         const up = await service.storage.from(SITE_SHOT_BUCKET).upload(path, shot.bytes, { contentType: "image/jpeg", upsert: true });
         const signed = up.error ? null : (await service.storage.from(SITE_SHOT_BUCKET).createSignedUrl(path, 3600)).data?.signedUrl ?? null;
         out.push({
-          lead_id: leadId, website: lead.website, gate: gate.ok ? "ok" : gate.reason, shot: !up.error, request_ms: shot.ms, retries, bytes: shot.bytes.length, needs_verify: siteShotNeedsVerify(shot.bytes.length), page_check: page.ok ? "ok" : page.reason,
+          lead_id: leadId, website: lead.website, gate: gate.ok ? "ok" : gate.reason, shot: !up.error, request_ms: shot.ms, retries, bytes: shot.bytes.length, page_check: pageProblem ?? "ok", text_chars: siteShotVisibleText(shot.html).length,
           image_problem: siteShotImageProblem(shot.bytes), crawl: lead.crawl, path, signed_url: signed, store_error: up.error ? String(up.error.message ?? up.error).slice(0, 160) : null,
         });
       }
