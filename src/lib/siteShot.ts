@@ -169,3 +169,10 @@ export function siteShotPageProblem(html: string | null | undefined): SiteShotPa
 export function siteShotCspBlocked(detail: string | null | undefined): boolean {
   return /"code":6004|Content Security Policy blocked/i.test(String(detail ?? ''));
 }
+
+/** A one-off browser failure worth ONE immediate retry: "Not attached to an active page" (error 6003) and a request blocked
+ *  client-side. Measured 2026-10-23: both sites that hit these shot fine on the runs either side. A page that genuinely refuses
+ *  the browser (an auth prompt, a closed connection, a TrustedScript policy) is not retried. */
+export function siteShotTransient(detail: string | null | undefined): boolean {
+  return /"code":6003|ERR_BLOCKED_BY_CLIENT|Not attached to an active page/i.test(String(detail ?? ''));
+}
