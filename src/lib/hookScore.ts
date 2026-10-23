@@ -188,6 +188,24 @@ function genericHookQuestions(trade: string, place: string): string[] {
   ];
 }
 
+/* ── Question 1 is always "Who is the best [trade] in [town]?" (Paul, 2026-10-23) ─────────────────
+   A NEW hook's first question, for every trade, built from the lead's real trade and town. The
+   trade goes through articleTrade (it REFUSES a trade it cannot read; then null = no best question
+   and the plan is exactly what it was). Existing audits keep their stored questions: nothing reads
+   this to rewrite a stored plan, and the pick below prefers it only when the stored question IS
+   this shape. */
+export function bestFirstHookQuestion(trade: string, place: string): string | null {
+  const t = articleTrade(trade);
+  const where = place.trim();
+  if (!t.ok || !where) return null;
+  return `Who is the best ${t.value.replace(/^an? /, '')} in ${where}?`;
+}
+
+/** True for "Who is the best … in …?" (the question bestFirstHookQuestion writes). */
+export function isBestFirstQuestion(question: string): boolean {
+  return /^who is the best .+ in .+\?$/i.test(question.trim());
+}
+
 /** Top the ordered plan up to HOOK_SCORE_QUESTIONS with generic questions it does not already hold.
  *  Never reorders or drops a planned question, and never returns more than three. */
 export function topUpHookQuestions(planned: readonly string[], ctx: { trade: string; place: string }): string[] {
@@ -547,8 +565,10 @@ export function pickHookResult(misses: readonly HookResult[], ctx: { town: strin
     const pool = misses.filter((m) => m.engine === engine && m.status === 'not_named');
     if (!pool.length) continue;
     const best = pool
-      .map((m) => ({ m, s: hookMissScore(m, ctx), full: m.competitors.length >= RIVALS_REQUIRED }))
-      .sort((a, b) => Number(b.full) - Number(a.full) || b.s - a.s || a.m.questionIndex - b.m.questionIndex)[0].m;
+      .map((m) => ({ m, s: hookMissScore(m, ctx), full: m.competitors.length >= RIVALS_REQUIRED, first: m.questionIndex === 0 && isBestFirstQuestion(m.question) }))
+      /* ⛔ The hook quotes question 1 ("Who is the best … in …?") when it is a miss that can name three rivals
+         (Paul, 2026-10-23). Old audits have no such Q1, so nothing about them changes. */
+      .sort((a, b) => Number(b.full && b.first) - Number(a.full && a.first) || Number(b.full) - Number(a.full) || b.s - a.s || a.m.questionIndex - b.m.questionIndex)[0].m;
     return {
       questionIndex: best.questionIndex, question: best.question, engine: best.engine, label: best.label,
       competitors: [...best.competitors], answerExcerpt: best.answerExcerpt,

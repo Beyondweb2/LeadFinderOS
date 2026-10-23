@@ -46,7 +46,7 @@ import {
   clampDiscoveryRuns, isValidDiscoveryQuestionCount, isValidDiscoveryRuns,
   expectedResponses, planGenerationBatches,
 } from "../../../src/lib/auditPlan.ts";
-import { planHookQuestions } from "../../../src/lib/hookAudit.ts";
+import { planHookQuestionsBestFirst } from "../../../src/lib/hookAudit.ts";
 import { canWorkLead, isClientLead, refusalBody, resolveActor, salesAuditRefusal, type Actor } from "../_shared/access.ts";
 import { guardAction, paidMode } from "../_shared/protection.ts";
 import { OUTREACH_AUDIT_EST_USD } from "../_shared/outreach-audit.ts";
@@ -241,9 +241,10 @@ function buildMarketContext(
    The PREVIEW a salesperson reviews goes through this same function, so the three questions they read
    are the three that run (confirming sends them back verbatim, and the run re-plans them unchanged). */
 function finalHookPlan(questions: string[], ctx: { town: string; country: string | null; trade: string; businessName: string }): string[] {
-  let qs = planHookQuestions(dedupeQuestions(questions).questions, { town: ctx.town });
+  const hookPlace = hookPlaceFor(ctx.town, ctx.country);
+  /* ⛔ QUESTION 1 IS ALWAYS "Who is the best [trade] in [town]?" (Paul, 2026-10-23); the rest keep their order. */
+  let qs = planHookQuestionsBestFirst(dedupeQuestions(questions).questions, { town: ctx.town, trade: ctx.trade, place: hookPlace });
   if (qs.length < HOOK_SCORE_QUESTIONS) {
-    const hookPlace = hookPlaceFor(ctx.town, ctx.country);
     const before = qs.length;
     qs = topUpHookQuestions(qs, { trade: ctx.trade, place: hookPlace });
     console.log(`[create-ai-audit] hook: ${before} generated question(s) topped up to ${qs.length} with generic trade/place questions`);
