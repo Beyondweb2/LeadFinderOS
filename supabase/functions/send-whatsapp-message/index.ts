@@ -107,7 +107,7 @@ const CAPABILITIES = ["dry_run", "build_phase_hold", "routing_leaf", "any_approv
    2026-10-21a: the Inbox send window — via:"inbox" outside the lead's hours is QUEUED, not sent (src/lib/inboxSendWindow.ts).
    2026-10-21c: both of the above (the send window + Australia prospect-only).
    2026-10-22a: Australia is a WhatsApp market (its own switch); its Inbox hours are read in the lead's zone (src/lib/auLeadZone.ts). */
-const BUILD_ID = "2026-10-22b-country-refusals";
+const BUILD_ID = "2026-10-23a-site-check-rules";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",

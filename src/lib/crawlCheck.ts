@@ -360,9 +360,12 @@ export function crawlResultFaults(
 export function usableCrawlSignals(
   result: { version?: number; signals?: CrawlSignals } | null | undefined,
   createdAtMs: number,
+  nowMs: number = Date.now(),
 ): CrawlSignals | null {
   if (!result?.signals) return null;
-  const fresh = (Date.now() - createdAtMs) < CRAWL_FRESH_MS;
+  // nowMs: a caller that already holds "now" (a pass stamped with one time, a test's fixed clock)
+  // judges freshness against it, so the answer never depends on the day the code happens to run.
+  const fresh = (nowMs - createdAtMs) < CRAWL_FRESH_MS;
   const currentVer = (result.version ?? 1) >= CRAWL_CHECK_VERSION;
   return fresh && currentVer ? result.signals : null;
 }

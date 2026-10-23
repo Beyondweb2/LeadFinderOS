@@ -28,6 +28,7 @@
 import { auditFromStoredCrawl, HOME_FETCH_LABELS, type AuditFinding, type StoredCrawlForAudit, type SiteAudit } from './siteAudit.ts';
 import { isBrokenPageStatus, usableContentTrust, type SiteOwner } from './contentTrust.ts';
 import { classifyLeadWebsite } from './leadWebsiteKind.ts';
+import { emptyGreetingIn } from './pitchIssueWords.ts';
 import { usableSiteEvidence, type EvidenceKind, type SiteEvidence } from './siteEvidence.ts';
 import { SPEAK_MIN_PRIORITY, usableInsights, type InsightKind } from './salesInsights.ts';
 
@@ -442,6 +443,7 @@ const PLAIN_LINE: Record<string, string> = {
 /** The plain words for an issue (no technical terms). */
 export function plainIssueTitle(i: WebsiteIssue): string {
   if (i.id === 'missing_h1' && /homepage/i.test(i.title)) return 'Your homepage has no main heading';
+  if (i.id === 'ct_placeholder_content') { const g = emptyGreetingIn(i); if (g) return `A line on your site reads “${g}” where a name should be`; }
   if (i.id === 'vs_key_page_basics') {
     const h = /H1/.test(i.title), d = /description/.test(i.title);
     return h && d ? 'Some main pages have no main heading or description' : h ? 'Some main pages have no main heading' : 'Some main pages have no description for Google';

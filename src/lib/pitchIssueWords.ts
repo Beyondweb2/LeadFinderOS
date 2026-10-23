@@ -25,6 +25,11 @@ export const UNREADABLE_PITCH_LINE = "My check couldn't read your website, and A
 const MAIN_PAGES_UNCLEAR = "Your main pages don't say clearly what you do";
 const NOT_LINKED = "Some important pages aren't linked from anywhere on your site";
 const HIDDEN_PAGES = 'Some of your pages are hidden from Google';
+/** The Google listing has no link to the site (or a social / directory page in its place). Also the "site shared" reply's own line. */
+export const GOOGLE_LISTING_NO_LINK = "Your Google listing doesn't link to your website";
+const GOOGLE_LISTING_OTHER_SITE = 'Your Google listing links to a different website';
+const PASS_RATE_NO_SOURCE = "Your site quotes a pass rate but doesn't say where it comes from";
+const RATING_NO_SOURCE = "Your site shows a star rating but doesn't say where it comes from";
 
 const FIXED: Record<string, string> = {
   robots_blocks_all: 'Your site tells AI tools not to read it',
@@ -79,7 +84,12 @@ function siteNameIn(saw: string | undefined): string | null {
   return t && t.toLowerCase() !== 'none' && t.length <= 40 ? t : null;
 }
 /** An empty greeting the check quoted ("Welcome, !"). */
-const EMPTY_GREETING = /[“"]((?:Welcome|Hi|Hello|Hey|Dear|Thanks|Thank you),\s*[!.?])[”"]/i;
+const EMPTY_GREETING = /[“"]((?:Welcome(?: back)?|Hi|Hello|Hey|Dear|Thanks|Thank you),\s*[!.?])[”"]/i;
+
+/** The empty greeting an issue quotes ("Welcome, !"), or null — the website check's plain title says it too. */
+export function emptyGreetingIn(i: Pick<PitchIssueInput, 'saw' | 'examples'>): string | null {
+  return (i.examples ?? []).map((x) => EMPTY_GREETING.exec(x)?.[1]).find(Boolean) ?? EMPTY_GREETING.exec(i.saw ?? '')?.[1] ?? null;
+}
 
 /** One issue's pitch line, or null (left out of the pitch). */
 export function pitchIssueLine(i: PitchIssueInput): string | null {
@@ -96,9 +106,11 @@ export function pitchIssueLine(i: PitchIssueInput): string | null {
     return `Your site doesn't use the name on your Google listing${said ? ` (it says ${said})` : ''}`;
   }
   if (id === 'ct_placeholder_content') {
-    const g = (i.examples ?? []).map((x) => EMPTY_GREETING.exec(x)?.[1]).find(Boolean) ?? EMPTY_GREETING.exec(i.saw ?? '')?.[1];
+    const g = emptyGreetingIn(i);
     if (g) return `A line on your site reads "${g}" where a name should be`;
   }
+  if (id === 'ct_listing_no_link') return /different website/i.test(i.title) ? GOOGLE_LISTING_OTHER_SITE : GOOGLE_LISTING_NO_LINK;
+  if (id === 'ct_unsourced_claims') return /pass rate/i.test(`${i.title} ${i.saw ?? ''}`) ? PASS_RATE_NO_SOURCE : RATING_NO_SOURCE;
   if (id.startsWith('robots_blocks_pages_')) return 'Parts of your site are closed off to AI tools';
   if (id.startsWith('robots_blocks_')) return 'Your site tells AI tools not to read it';
   return FIXED[id] ?? null;

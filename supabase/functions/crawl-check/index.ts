@@ -42,6 +42,7 @@ import { CALL_SCREEN_CRAWL_SOURCE, CALL_SCREEN_CRAWL_WINDOW_MS, callScreenCrawlR
 import { leadCrawlWriteDecision, storedCrawlFailed, STORED_CRAWL_STATE_COLUMNS } from "../../../src/lib/crawlWriteRule.ts";
 import { activeJobFor, createCrawlJob, jobCounts, kickCrawlWorker } from "../_shared/crawl-job.ts";
 import { questionTownForLead } from "../_shared/question-town.ts";
+import { listingForCheck } from "../_shared/listing-website.ts";
 import { crawlPageCapFor, prospectCrawlReuse, PROSPECT_CRAWL_PAGE_CAP } from "../../../src/lib/prospectCrawl.ts";
 import { AUTO_DEEP_MAX_RUNNING, summariseWebsiteCheck } from "../../../src/lib/websiteCheck.ts";
 import { insightsFromFetchedPages } from "../../../src/lib/salesInsightsInline.ts";
@@ -642,7 +643,7 @@ Deno.serve(async (req) => {
       const insightTown = town && town.split(/\s+/).length <= 4 && !/\d/.test(town) ? town : null;
       try {
         leadRow = leadId
-          ? (await service.from("outreach_leads").select("business_name, derived_town, category, search_keyword, services_included").eq("id", leadId).maybeSingle()).data as Record<string, unknown> | null
+          ? (await service.from("outreach_leads").select("business_name, derived_town, category, search_keyword, services_included, place_id").eq("id", leadId).maybeSingle()).data as Record<string, unknown> | null
           : null;
         insights = insightsFromFetchedPages({
           servedUrl,
@@ -664,7 +665,9 @@ Deno.serve(async (req) => {
          no extra request. Its own key and version; never touches `signals`. Best-effort: never fails the crawl. */
       try {
         const obs = [home, ...readableSamples].map((r) => pageObservations(r.html, r.finalUrl || r.url, servedUrl, r.status || 200));
+        const listing = await listingForCheck(service, (leadRow?.place_id as string | null) ?? null, servedUrl);
         contentTrust = buildContentTrust({
+          listing,
           pages: obs, servedUrl,
           knownUrls: [...new Set([...pool, ...rawSitemapLocs.map((u) => toServedUrl(u, servedUrl)).filter((u): u is string => !!u)])],
           robotsTxt: robotsBody, sitemapsRead: sitemapDocsRead.length,

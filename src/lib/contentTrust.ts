@@ -64,7 +64,8 @@ export type ContentTrustKind =
   | 'conflicting_facts' | 'no_proof' | 'accreditations_unnamed' | 'vague_headings' | 'area_coverage'
   | 'ai_images' | 'link_mismatch' | 'no_viewport' | 'logo_alt_mismatch' | 'image_alt' | 'identical_dates'
   | 'generic_copy' | 'mixed_audience' | 'missing_entity_facts' | 'no_people' | 'no_accreditations'
-  | 'schema_incomplete' | 'schema_unverified' | 'dead_links' | 'orphan_pages' | 'no_sitemap' | 'areas_not_stated';
+  | 'schema_incomplete' | 'schema_unverified' | 'dead_links' | 'orphan_pages' | 'no_sitemap' | 'areas_not_stated'
+  | 'listing_no_link' | 'unsourced_claims';
 
 /** Where a kind sits in the operator's grouped audit (siteAudit categories). */
 export type ContentTrustCategory = 'discovery' | 'ai_access' | 'entity' | 'content' | 'structured_data' | 'technical' | 'local_evidence';
@@ -78,6 +79,8 @@ export const CONTENT_TRUST_KINDS: Record<ContentTrustKind, { evidenceClass: Evid
   placeholder_content: { evidenceClass: 'B', category: 'local_evidence', priority: 3 },
   schema_mismatch: { evidenceClass: 'A', category: 'structured_data', priority: 4 },
   conflicting_facts: { evidenceClass: 'B', category: 'entity', priority: 5 },
+  listing_no_link: { evidenceClass: 'B', category: 'entity', priority: 5 },
+  unsourced_claims: { evidenceClass: 'B', category: 'local_evidence', priority: 6 },
   no_proof: { evidenceClass: 'B', category: 'local_evidence', priority: 6 },
   accreditations_unnamed: { evidenceClass: 'B', category: 'local_evidence', priority: 7 },
   vague_headings: { evidenceClass: 'B', category: 'content', priority: 8 },
@@ -190,6 +193,9 @@ export interface PageObs {
   coverage?: string[];
   /** A person the page names as the owner / founder ("owned by Kylie", "I’m Kylie, the owner"), with the words read (2026-10-20). */
   owner?: Array<{ name: string; q: string }>;
+  /** A star rating or pass rate the page states, and whether the SAME page names where it comes from (2026-10-23).
+   *  Absent on observations stored before it existed — then the claims check is not made. */
+  claims?: Array<{ k: 'stars' | 'pass_rate'; q: string; sourced: boolean }>;
   schema: { blocks: number; bad: number; biz: Array<{ name: string; tel: string; pc: string; url: string }> };
   phones: string[];
   postcodes: string[];
@@ -256,6 +262,17 @@ const CASE_RE = /\bcase stud(?:y|ies)\b/i;
 const PEOPLE_RE = /\b(?:owner|founder|co-founder|director|managing director|proprietor|my name is|i'm [A-Z][a-z]+|run by|family[- ]run|meet the team|our team)\b/i;
 const PLACEHOLDER_TEXT_RE = /\blorem ipsum\b|\byour (?:title|text|heading|content|description) here\b|\b(?:click|double[- ]click) (?:here )?to (?:add|edit)\b|\binsert (?:text|image|title)\b|\bsample (?:text|page)\b/i;
 const PLACEHOLDER_LABEL_RE = /^(?:project|case study|item|post|blog post|title|heading|button|link|card|image|service|testimonial|review|feature)\s*\d+$/i;
+/** Text whose name or detail never filled in (2026-10-23): "Welcome, !", "{{first_name}}", "[Your Name]", "%FIRSTNAME%". */
+const BROKEN_FILL_RE = /\b(?:Welcome(?: back)?|Hi|Hello|Hey|Dear|Thanks|Thank you)\s*,\s*[!.?](?![\w.])|\{\{\s*(?:first_?name|last_?name|name|full_?name|business_?name|company_?name|company|city|town|location|customer_?name)\s*\}\}|\[(?:your|business|company|customer|client|first) name\]|\[(?:town|city|location|area)\]|%(?:FIRST_?NAME|NAME|BUSINESS_?NAME|COMPANY_?NAME)%/gi;
+const BROKEN_FILL_ONE = new RegExp(BROKEN_FILL_RE.source, 'i');
+/** A star rating stated as a figure ("rated 4.9/5", "4.8 out of 5", "4.9 stars", "5-star rated") — never "5 star service". */
+const RATING_CLAIM_RE = /\brated\s+[1-5](?:\.\d)?\s*(?:\/\s*5|out of (?:5|five)|stars?)|\b[1-5](?:\.\d)?\s*(?:\/\s*5|out of (?:5|five))(?:\s*stars?)?(?![\d.])|\b[1-5]\.\d\s*[- ]?stars?\b|\b(?:5|five)[- ]star (?:rated|rating|reviews?)\b/gi;
+/** A pass rate stated as a figure ("98% pass rate", "95% first-time pass", "pass rate of 92%"). */
+const PASS_CLAIM_RE = /\b\d{2,3}(?:\.\d+)?\s*%\s*(?:first[- ]time\s+)?pass(?:\s*rate)?\b|\bpass rate (?:of |is |: ?)?(?:over |above )?\d{2,3}(?:\.\d+)?\s*%/gi;
+/** Where a rating can come from, named anywhere on the page (or a reviews widget / rating markup on it). */
+const RATING_SOURCE_RE = /\b(?:google|trustpilot|checkatrade|trustatrader|rated people|mybuilder|yell|facebook|which\?|feefo|reviews\.io|bark|nextdoor|tripadvisor|freeindex|yelp|houzz)\b/i;
+/** Where a pass rate can come from: the DVSA's own figures, named on the page. */
+const PASS_SOURCE_RE = /\bDVSA\b|\bgov\.uk\b|\bofficial (?:figures|statistics|data)\b|\bsource\s*:/i;
 const AI_FILE_RE = /\b(?:chatgpt\s*image|dall\s*e|midjourney|stable\s*diffusion|firefly|ai\s*generated|gemini\s*generated|leonardo\s*ai|openai)\b/i;
 const PHONE_RE = /(?:\+44\s?\(?0?\)?\s?|\b0)(?:\d[\s-]?){9,10}\b/g;
 const POSTCODE_RE = /\b([A-Z]{1,2}\d[A-Z\d]?)\s*(\d[A-Z]{2})\b/g;
@@ -347,7 +364,7 @@ export function pageObservations(html: string, pageUrl: string, homeUrl: string,
     years: [], founded: [], companyNo: null, creds: [], vagueCreds: [], reviews: [], cases: [], people: false,
     placeholders: [], deadLinks: [], links: [], contactMix: [],
     img: { n: 0, noAlt: 0, ai: [], altBad: [], logos: 0, photos: [] },
-    dates: [], places: [], coverage: [], owner: [], schema: { blocks: 0, bad: 0, biz: [] }, phones: [], postcodes: [], generic: [], specifics: 0,
+    dates: [], places: [], coverage: [], owner: [], claims: [], schema: { blocks: 0, bad: 0, biz: [] }, phones: [], postcodes: [], generic: [], specifics: 0,
     audience: { com: false, dom: false },
   };
 
@@ -469,6 +486,23 @@ export function pageObservations(html: string, pageUrl: string, homeUrl: string,
   }
   const ph = PLACEHOLDER_TEXT_RE.exec(text);
   if (ph) obs.placeholders.push(`“${quote(text, ph.index, ph[0].length, 30)}”`);
+  /* Text that never filled in (2026-10-23): said FIRST, exactly as it reads ("“Welcome, !”"), so the pitch can quote it. */
+  const fills = uniq([...text.matchAll(BROKEN_FILL_RE)].map((m) => m[0].replace(/\s+/g, ' ').replace(/\s*,\s*/, ', ').replace(/,\s+([!.?])$/, ', $1')));
+  if (fills.length) obs.placeholders.unshift(...fills.slice(0, 3).map((f) => `“${f}”`));
+  obs.placeholders = obs.placeholders.slice(0, 8);
+
+  /* Ratings and pass rates the page states, and whether the page names where they come from (2026-10-23). */
+  const ratingSourced = RATING_SOURCE_RE.test(text) || obs.reviews.some((r) => /widget|markup/i.test(r))
+    || /trustpilot|checkatrade|google\.[a-z.]+\/maps|g\.page|reviews\.io|feefo|trustatrader|ratedpeople|mybuilder|yell\.com/i.test(raw);
+  const passSourced = PASS_SOURCE_RE.test(text) || /gov\.uk/i.test(raw);
+  for (const m of text.matchAll(PASS_CLAIM_RE)) {
+    if ((obs.claims?.length ?? 0) >= 4) break;
+    obs.claims?.push({ k: 'pass_rate', q: quote(text, m.index ?? 0, m[0].length, 25), sourced: passSourced });
+  }
+  for (const m of text.matchAll(RATING_CLAIM_RE)) {
+    if ((obs.claims?.length ?? 0) >= 6) break;
+    obs.claims?.push({ k: 'stars', q: quote(text, m.index ?? 0, m[0].length, 25), sourced: ratingSourced });
+  }
 
   // Dates: a post listing ties each date to the post it links to; a post page carries its own.
   for (const m of raw.matchAll(/<a\b([^>]*)>((?:(?!<a\b)[\s\S])*?)<\/a>/gi)) {
@@ -568,6 +602,9 @@ export interface ContentTrustInput {
   /** Pages listed in the sitemap that no page read links to — full crawls only (null = not judged). */
   sitemapOnly?: string[] | null;
   lead?: { name?: string | null; town?: string | null; trade?: string | null } | null;
+  /** Does the business's Google listing link to the site we checked (listingLink.ts listingLinkVerdict, 2026-10-23)?
+   *  null / absent = not judged (no Google record we can read, or its link could not be followed): never an issue. */
+  listing?: { verdict: 'links' | 'no_link' | 'other_site'; website: string | null } | null;
   /** The crawl did not read every page (quick check, or a capped crawl). */
   partial: boolean;
 }
@@ -642,7 +679,16 @@ export function buildContentTrust(input: ContentTrustInput): ContentTrust {
 
   /* ── Unfinished content: placeholders and links to nowhere ────────────────────────────────────── */
   const placeholders = pages.flatMap((p) => p.placeholders.map((x) => ({ x, url: p.url })));
-  if (placeholders.length) add({ kind: 'placeholder_content', severity: 'high',
+  /* Text that never filled in ("Welcome, !") leads, with its own words: it is a broken line, not an empty block. */
+  const isFill = (x: string) => !x.includes(' links to ') && BROKEN_FILL_ONE.test(x);
+  const fills = placeholders.filter((p) => isFill(p.x));
+  if (fills.length) add({ kind: 'placeholder_content', severity: 'high',
+    title: 'Broken placeholder text is live on the site',
+    why: `Text like ${fills[0].x} shows a name or detail that never filled in. It makes the page look broken to visitors, and gives people and AI tools a line that says nothing.`,
+    evidence: [...fills, ...placeholders.filter((p) => !isFill(p.x))].map((p) => `${p.x} on ${where(p.url)}`), urls: placeholders.map((p) => p.url),
+    needs: 'Nothing to supply — the missing name filled in, or the line removed.',
+    spoken: `A line on your site reads ${fills[0].x} where a name should be.` });
+  else if (placeholders.length) add({ kind: 'placeholder_content', severity: 'high',
     title: 'Unfinished placeholder blocks are live on the site',
     why: 'Empty template blocks (like “Project 1” linking nowhere) make the site look unfinished, and give people and AI tools nothing real to read about your work.',
     evidence: placeholders.map((p) => `${p.x} on ${where(p.url)}`), urls: placeholders.map((p) => p.url),
@@ -689,6 +735,31 @@ export function buildContentTrust(input: ContentTrustInput): ContentTrust {
     evidence: [`No owner, director or team named${scope || ' on any page read'}`], urls: [],
     needs: 'The real names (and roles) of the people behind the business, if you are happy to show them.',
     spoken: 'We couldn’t see who actually runs the business anywhere on the site.' });
+
+  /* ── The Google listing's link to the site (2026-10-23) — judged only when Google's own record could be read ── */
+  const lst = input.listing ?? null;
+  if (lst && (lst.verdict === 'no_link' || lst.verdict === 'other_site')) add({ kind: 'listing_no_link', severity: 'medium',
+    title: lst.verdict === 'no_link' ? 'Your Google listing doesn’t link to your website' : 'Your Google listing links to a different website',
+    why: 'People who find the business on Google cannot click through to this site, and the listing and the site are harder to connect as the same business.',
+    evidence: [lst.website ? `Google’s listing links to ${clip(lst.website, 120)}, not to ${clip(input.servedUrl, 120)}` : 'Google’s listing for the business has no website on it'],
+    urls: [], needs: 'Nothing to supply — the website address added to the Google Business Profile.',
+    spoken: lst.verdict === 'no_link' ? 'Your Google listing doesn’t link to your website.' : 'Your Google listing links to a different website from this one.' });
+  else if (lst?.verdict === 'links') verified.push('The Google listing links to this site.');
+
+  /* ── Ratings and pass rates with no source on the page (2026-10-23) — only on pages read since this was added ── */
+  const claims = pages.flatMap((p) => (p.claims ?? []).map((c) => ({ ...c, url: p.url })));
+  const unsourced = [...claims.filter((c) => !c.sourced && c.k === 'pass_rate'), ...claims.filter((c) => !c.sourced && c.k === 'stars')];
+  if (unsourced.length) {
+    const pass = unsourced.some((c) => c.k === 'pass_rate'), stars = unsourced.some((c) => c.k === 'stars');
+    const what = pass && stars ? 'a pass rate and a star rating' : pass ? 'a pass rate' : 'a star rating';
+    add({ kind: 'unsourced_claims', severity: 'medium',
+      title: `Your site quotes ${what} without saying where ${pass && stars ? 'they come' : 'it comes'} from`,
+      why: 'A figure with no source is hard for anyone to check, so people and AI tools may give it less weight than a figure they can confirm.',
+      evidence: unsourced.map((c) => `“${c.q}” (${where(c.url)}) — no source named on that page`), urls: unsourced.map((c) => c.url),
+      needs: pass ? 'Where the pass rate comes from (for example the DVSA’s published figures for your test centre), or the figure taken down.'
+        : 'Where the rating comes from (Google, Trustpilot, Checkatrade…), ideally linked, or the figure taken down.',
+      spoken: pass ? 'Your site quotes a pass rate but doesn’t say where it comes from.' : 'Your site shows a star rating but doesn’t say where it comes from.' });
+  }
 
   /* ── Proof: reviews, testimonials, case studies ───────────────────────────────────────────────── */
   const reviews = pages.filter((p) => p.reviews.length);

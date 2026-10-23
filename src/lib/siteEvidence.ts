@@ -561,12 +561,13 @@ export function usableSiteEvidence(
   result: { evidence?: SiteEvidence | null; evidenceVersion?: number } | null | undefined,
   createdAtMs: number,
   freshMs: number,
+  nowMs: number = Date.now(),
 ): SiteEvidenceFinding[] {
   const ev = result?.evidence;
   if (!ev || !Array.isArray(ev.findings) || !ev.findings.length) return [];
   const version = result?.evidenceVersion ?? ev.version ?? 0;
   if (version < SITE_EVIDENCE_VERSION) return [];
-  if (!(Date.now() - createdAtMs < freshMs)) return [];
+  if (!(nowMs - createdAtMs < freshMs)) return [];
   return ev.findings.filter((f) => !!f && typeof f.kind === 'string');
 }
 

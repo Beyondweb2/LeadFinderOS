@@ -117,3 +117,26 @@ Tests: `scripts/crawl-in-audit-callscreen.test.ts`.
   than that Google's town stands — the searched town at any distance is the 2026-08 Wisbech fault. Existing audits untouched.
 - **"Outside town"** (Find Leads) is not the same logic: it means "not returned by the town-rectangle search" (`search-leads`), never a
   distance check, and is not stored. No shared cause to fix.
+
+## 2026-10-23 — three more rules (chore/loose-ends-and-site-checks)
+
+All three are content & trust kinds (`contentTrust.ts`), so BOTH crawls make them and every reader (Inbox popup, call
+script, report, pitch) gets them through the one summary. They apply to checks run from now on: a stored check has no
+`claims` reading and no listing verdict, so it is never judged by them, and nothing was re-crawled.
+
+- **Broken placeholder text** (`BROKEN_FILL_RE`): "Welcome, !", "Welcome back, !", `{{first_name}}`, "[Your Name]", "[Town]",
+  "%FIRSTNAME%". Joins `placeholder_content` (HIGH), said first and quoted exactly. Not broken: a filled greeting, "Hi, I'm
+  Dave.", an ellipsis, a page-template value that is not a name or place (`{{ item.price }}`).
+- **The Google listing does not link to the site** (`listing_no_link`, MEDIUM; `src/lib/listingLink.ts`,
+  `_shared/listing-website.ts`): Google's record is the `phone_cache` row for the lead's place id (no paid call). Judged only
+  for a `details_version >= 2` row under `LISTING_RECORD_FRESH_DAYS` — every v1 row has website NULL (865 of 865 on
+  2026-10-23) because it was never asked for. No website / a social or directory page → "doesn't link"; a different domain is
+  followed once (plain fetch, 8 s) so an old domain forwarding here is fine; a link that cannot be followed is not judged.
+  Live on 2026-10-23: of 1,288 checked leads with a v2 record, 0 had a listing with no site and 1 a different host — the rule
+  mostly fires when a prospect sends a site their listing never had.
+- **A rating or pass rate with no source** (`unsourced_claims`, MEDIUM): "rated 4.9/5", "4.8 out of 5", "4.9 stars",
+  "5-star rated", "98% pass rate", "pass rate of 92%". Sourced = the same page names a review site / has a reviews widget
+  (rating) or names the DVSA / gov.uk (pass rate). "5 star service" is a boast, not a claim.
+- **Pitch words** (`pitchIssueWords.ts`): `GOOGLE_LISTING_NO_LINK` now lives there (replyMove re-exports it); the site-shared
+  reply drops its own guessed listing line when the check read Google's record.
+- Tests: `scripts/website-check-rules.test.ts`.
