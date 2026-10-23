@@ -49,12 +49,13 @@ export function parseTownList(raw: string | readonly string[] | null | undefined
 
 /** Coverage → Find Leads. ONE ticked town = the single-row link, byte for byte (it runs at once, as it always has).
  *  Several = Many towns mode, the towns selected, NOTHING run until the person presses Find leads. */
-export function manyTownsHref(trade: string, towns: readonly string[], country?: string): string | null {
+export function manyTownsHref(trade: string, towns: readonly string[], country?: string, depth?: 'standard' | 'thorough'): string | null {
   const list = parseTownList(towns);
   if (!list.length) return null;
-  if (list.length === 1) return findLeadsHref(trade, list[0], country);
+  if (list.length === 1) return findLeadsHref(trade, list[0], country, depth);
   const q = new URLSearchParams({ mode: MANY_MODE_VALUE, keyword: trade, [MANY_TOWNS_PARAM]: list.join('|') });
   if (country) q.set('country', country);
+  if (depth) q.set('depth', depth);
   return `/find-leads?${q.toString()}`;
 }
 
