@@ -116,18 +116,12 @@ export function siteShotRetryAfterMs(detail: string | null | undefined, fallback
 /* ── IS THE PICTURE A REAL PAGE? (measured 2026-10-23, the 20-site test) ───────────────────────────────────────
    Two of twenty "pictures" were not the business's homepage at all but a bot-challenge page — "Checking the site
    connection security" — 21 KB each, which PASSED the size floor above. A size can never tell a thin real page from a
-   challenge, so a SMALL picture is checked against the page's own text (read by the same browser): a challenge, an
-   access-denied page, an error, a parked domain or a server default page is refused, and so is a page with no words.
-   ⛔ ABSENT MEANS "DO NOT": a small picture whose page text could not be read is refused, never shown. A refusal costs
+   challenge, so EVERY picture is judged by the text of the very page it shows, returned in the SAME visit (Cloudflare's
+   snapshot): a challenge, an access-denied page, an unavailable or error page, a parked domain, a server default page or a
+   page with no words is refused. ⛔ A SEPARATE SECOND VISIT FOR THE TEXT DOES NOT WORK: it was tried first and passed a
+   challenge picture (a second visit can land on a different page than the first). Same visit, or nothing.
+   ⛔ ABSENT MEANS "DO NOT": a snapshot with no page text is a failed shot, never a picture A refusal costs
    nothing but the neutral card; a challenge captioned "your homepage" is a false claim to the one person who will spot it. */
-
-/** A picture under this many bytes has its page text checked first (the challenge pages measured 21 KB; real pages
- *  measured 41 KB and up, and one real page 56 KB — so the line sits well above both). */
-export const SITE_SHOT_VERIFY_BELOW_BYTES = 90_000;
-
-export function siteShotNeedsVerify(bytes: number): boolean {
-  return !(Number.isFinite(bytes) && bytes >= SITE_SHOT_VERIFY_BELOW_BYTES);
-}
 
 export type SiteShotPageProblem = 'bot_challenge' | 'access_denied' | 'error_page' | 'parked_domain' | 'server_default_page' | 'near_empty';
 

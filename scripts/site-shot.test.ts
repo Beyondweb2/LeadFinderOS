@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 import {
   SITE_SHOT_BUCKET, SITE_SHOT_DEFAULT_MONTHLY_CAP, SITE_SHOT_FRESH_DAYS, SITE_SHOT_MAX_ATTEMPTS, SITE_SHOT_MEASURE_MAX, SITE_SHOT_MIN_BYTES,
   londonMonthStartIso, siteShotCaption, siteShotGate, siteShotImageProblem, siteShotPath, siteShotRateLimited, siteShotRetryAfterMs, type SiteShotGateInput,
-  SITE_SHOT_VERIFY_BELOW_BYTES, siteShotCspBlocked, siteShotNeedsVerify, siteShotPageProblem, siteShotVisibleText, siteShotTransient,
+  siteShotCspBlocked, siteShotPageProblem, siteShotVisibleText, siteShotTransient,
 } from '../src/lib/siteShot.ts';
 
 let failures = 0;
@@ -95,10 +95,9 @@ const FN = read('supabase/functions/site-shot/index.ts');
   const longBlog = `<title>Blog</title><body>${'Plumbing tips for your home and garden. '.repeat(80)} If you see 404 not found on a website it means the page is missing.</body>`;
   ok(siteShotPageProblem(longBlog) === null, 'G: a long page that merely MENTIONS "404 not found" is not an error page');
   ok(siteShotVisibleText('<style>.a{}</style><script>x</script><p>Hello&nbsp;<b>world</b></p>') === 'Hello world', 'G: visible text drops scripts, styles and tags');
-  ok(siteShotNeedsVerify(21_139) && siteShotNeedsVerify(55_927) && siteShotNeedsVerify(SITE_SHOT_VERIFY_BELOW_BYTES - 1) && !siteShotNeedsVerify(SITE_SHOT_VERIFY_BELOW_BYTES) && siteShotNeedsVerify(NaN), 'G: small pictures (the two measured challenges and the smallest real page) are checked; a missing size is checked too');
   ok(siteShotCspBlocked('HTTP 422 {"success":false,"errors":[{"code":6004,"message":"Content Security Policy blocked script execution"}]}') && !siteShotCspBlocked('HTTP 422 {"code":5009}'), 'G: the CSP refusal (error 6004) is recognised');
-  ok(/siteShotNeedsVerify\(shot\.bytes\.length\)[\s\S]{0,200}verifyPage/.test(FN) && /readPageContent/.test(FN), 'G: the function checks a small picture\'s page text before storing it');
-  ok(/if \(!c\.ok\) return \{ ok: false, reason: "verify_failed" \}/.test(FN), 'G: a page we could not read means the small picture is not shown (absent = do not)');
+  ok(/snapshotSite/.test(FN) && !/readPageContent|verifyPage/.test(FN) && !/readPageContent/.test(read('supabase/functions/_shared/mockup-shot.ts')), 'G: the picture and the page text come from ONE visit (snapshot); the separate second visit that passed a challenge is gone');
+  ok(/const pageProblem = siteShotPageProblem\(shot\.html\);\n\s*if \(pageProblem\)/.test(FN), 'G: every picture is judged by its own page text before it is stored, whatever its size');
   ok(siteShotPageProblem('<title>northernpowerelectrical.co.uk</title><body>Site Currently Unavailable. If you are the owner, contact your hosting provider for more information.</body>') === 'error_page', 'G: a hosting provider "Site Currently Unavailable" page (measured on a real prospect, 39 KB, it passed the first page check) is refused');
   ok(siteShotTransient('HTTP 422 {"errors":[{"code":6003,"detail":"Protocol error (Page.captureScreenshot): Not attached to an active page"}]}') && siteShotTransient('net::ERR_BLOCKED_BY_CLIENT at http://x/') && !siteShotTransient('net::ERR_INVALID_AUTH_CREDENTIALS') && !siteShotTransient('Network connection closed.'), 'G: two one-off browser errors get one retry; a site that really refuses the browser does not');
   ok(/siteShotTransient\(shot\.detail\)/.test(FN), 'G: the function retries a transient browser error once');

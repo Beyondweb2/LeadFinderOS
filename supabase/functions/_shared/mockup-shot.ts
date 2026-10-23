@@ -28,6 +28,31 @@ export interface ShotFormat {
   noStyle?: boolean;
 }
 
+/** The ONE request body for a Cloudflare screenshot or snapshot: the same viewport, settle rule, banner hiding and format for both,
+ *  so the picture a snapshot returns is the picture the screenshot would have been. */
+function shotBody(url: string, format: ShotFormat) {
+  return {
+    url,
+    viewport: { width: SHOT_WIDTH, height: SHOT_HEIGHT, deviceScaleFactor: format.scale ?? 2 },
+    /* ⛔ `load`, NOT `networkidle0`. Analytics polling and chat sockets mean a large share of
+       real small-business sites NEVER reach network idle, and refusing those would refuse the
+       prospects. The settle delay below is what buys consistency instead. */
+    gotoOptions: { waitUntil: "load", timeout: NAV_TIMEOUT_MS },
+    /* Hidden with CSS, never clicked: answering a consent prompt on someone else's site from an
+       automated browser is not ours to do. */
+    addStyleTag: format.noStyle ? undefined : [{ content: hideCss() }],
+    /* The second layer — catches a banner the selector list does not know about. Wix's was missed
+       first time round because it carries no "cookie" anywhere in its markup. */
+    addScriptTag: format.noScript ? undefined : [{ content: hideByBehaviourJs() }],
+    screenshotOptions: format.type === "jpeg"
+      ? { type: "jpeg", quality: format.quality ?? 80, fullPage: false, captureBeyondViewport: false }
+      : { type: "png", fullPage: false, captureBeyondViewport: false },
+    /* Fonts swap and hero carousels advance after load; without this the same URL returns a
+       different image run to run, which is the whole byte-variance fault. */
+    waitForTimeout: SETTLE_MS,
+  };
+}
+
 /**
  * Screenshot a prospect's homepage.
  *
@@ -49,26 +74,7 @@ export async function shootSite(website: string | null | undefined, format: Shot
   if (!account || !token) return { ok: false, refusal: "not_configured", ms: 0 };
 
   const url = shotUrl(website!);
-  const body = {
-    url,
-    viewport: { width: SHOT_WIDTH, height: SHOT_HEIGHT, deviceScaleFactor: format.scale ?? 2 },
-    /* ⛔ `load`, NOT `networkidle0`. Analytics polling and chat sockets mean a large share of
-       real small-business sites NEVER reach network idle, and refusing those would refuse the
-       prospects. The settle delay below is what buys consistency instead. */
-    gotoOptions: { waitUntil: "load", timeout: NAV_TIMEOUT_MS },
-    /* Hidden with CSS, never clicked: answering a consent prompt on someone else's site from an
-       automated browser is not ours to do. */
-    addStyleTag: format.noStyle ? undefined : [{ content: hideCss() }],
-    /* The second layer — catches a banner the selector list does not know about. Wix's was missed
-       first time round because it carries no "cookie" anywhere in its markup. */
-    addScriptTag: format.noScript ? undefined : [{ content: hideByBehaviourJs() }],
-    screenshotOptions: format.type === "jpeg"
-      ? { type: "jpeg", quality: format.quality ?? 80, fullPage: false, captureBeyondViewport: false }
-      : { type: "png", fullPage: false, captureBeyondViewport: false },
-    /* Fonts swap and hero carousels advance after load; without this the same URL returns a
-       different image run to run, which is the whole byte-variance fault. */
-    waitForTimeout: SETTLE_MS,
-  };
+  const body = shotBody(url, format);
 
   try {
     const res = await fetch(`${CF_API}/${account}/browser-rendering/screenshot`, {
@@ -91,39 +97,40 @@ export async function shootSite(website: string | null | undefined, format: Shot
   }
 }
 
-/** The rendered page's HTML, read by the same Cloudflare browser (the /content endpoint). fn site-shot uses it ONLY to check
- *  that a small-looking picture is a real page and not a bot-challenge or error page (src/lib/siteShot.ts). Images, fonts and
- *  media are not loaded, so it is the cheaper of the two calls. */
-export type ContentResult =
-  | { ok: true; html: string; ms: number }
-  | { ok: false; detail: string; ms: number };
+/** A homepage's screenshot AND its rendered HTML from ONE visit (Cloudflare's /snapshot endpoint). fn site-shot judges the picture by
+ *  the text of the very page it shows. (Measured 2026-10-23: a separate read of the page text passed a bot-challenge picture, because
+ *  a second visit can land on a different page than the first.) */
+export type SnapshotResult =
+  | { ok: true; bytes: Uint8Array; html: string; ms: number; url: string; contentType: string }
+  | { ok: false; refusal: ShotRefusal | "not_configured" | "cf_error"; detail?: string; ms: number };
 
-export async function readPageContent(website: string | null | undefined): Promise<ContentResult> {
+export async function snapshotSite(website: string | null | undefined, format: ShotFormat = { type: "png" }): Promise<SnapshotResult> {
   const t0 = Date.now();
-  if (shotRefusal(website)) return { ok: false, detail: "refused", ms: 0 };
+  const refusal = shotRefusal(website);
+  if (refusal) return { ok: false, refusal, ms: 0 };
   const account = Deno.env.get("CLOUDFLARE_ACCOUNT_ID") ?? "";
   const token = Deno.env.get("CLOUDFLARE_BROWSER_TOKEN") ?? "";
-  if (!account || !token) return { ok: false, detail: "not_configured", ms: 0 };
+  if (!account || !token) return { ok: false, refusal: "not_configured", ms: 0 };
+  const url = shotUrl(website!);
   try {
-    const res = await fetch(`${CF_API}/${account}/browser-rendering/content`, {
+    const res = await fetch(`${CF_API}/${account}/browser-rendering/snapshot`, {
       method: "POST",
       headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        url: shotUrl(website!),
-        gotoOptions: { waitUntil: "load", timeout: NAV_TIMEOUT_MS },
-        waitForTimeout: SETTLE_MS,
-        rejectResourceTypes: ["image", "font", "media"],
-      }),
+      body: JSON.stringify(shotBody(url, format)),
     });
     const ms = Date.now() - t0;
     if (!res.ok) {
       const wait = res.status === 429 ? ` retry-after=${res.headers.get("retry-after") ?? "none"}` : "";
-      return { ok: false, detail: `HTTP ${res.status}${wait} ${(await res.text()).slice(0, 200)}`, ms };
+      return { ok: false, refusal: "cf_error", detail: `HTTP ${res.status}${wait} ${(await res.text()).slice(0, 300)}`, ms };
     }
-    const j = await res.json() as { success?: boolean; result?: unknown };
-    if (j.success !== true || typeof j.result !== "string") return { ok: false, detail: "no_html", ms };
-    return { ok: true, html: j.result.slice(0, 400_000), ms };
+    const j = await res.json() as { success?: boolean; result?: { screenshot?: unknown; content?: unknown } };
+    const b64 = j.result?.screenshot, html = j.result?.content;
+    if (j.success !== true || typeof b64 !== "string" || typeof html !== "string") return { ok: false, refusal: "cf_error", detail: "snapshot: unexpected response shape", ms };
+    const bin = atob(b64);
+    const bytes = new Uint8Array(bin.length);
+    for (let k = 0; k < bin.length; k++) bytes[k] = bin.charCodeAt(k);
+    return { ok: true, bytes, html: html.slice(0, 400_000), ms, url, contentType: format.type === "jpeg" ? "image/jpeg" : "image/png" };
   } catch (e) {
-    return { ok: false, detail: String((e as Error).message).slice(0, 200), ms: Date.now() - t0 };
+    return { ok: false, refusal: "cf_error", detail: String((e as Error).message).slice(0, 200), ms: Date.now() - t0 };
   }
 }
