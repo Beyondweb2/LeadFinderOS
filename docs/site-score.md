@@ -41,3 +41,21 @@ summary only (no crawl, no fetch); writes only where `site_score_version is null
 
 `scripts/site-score.test.ts` (rubric, states, repeatability, every live issue id mapped, both writers, the team-only
 import fence, migration additive); `scripts/lighter-outreach-inbox.test.ts` (the list select).
+
+## Deployed 2026-10-23
+
+- Pre-check: no other session mid-deploy (the report-v3 session's last function deploy 10:41 UTC, its record committed); no
+  worktree with an uncommitted migration.
+- Migration applied 10:48 UTC by the Management API; read back: six nullable columns, two checks, 1,420 rows untouched.
+- Merge `b3b50d34` into main (one What's New conflict, both entries kept). Typecheck = baseline 9, build passed; the full
+  gate before it: 454/455, the one red suite (`coverage-found-added`, Find Leads "Found") fails on main without this change.
+- Edge, by hand from main: `crawl-check` v52, `crawl-worker` v36 (the whole closure of `siteScore.ts` and `crawl-job.ts`);
+  both bodies hold `siteScoreColumns`. `whatsapp-status` untouched.
+- Backfill from stored checks only (no crawl, no fetch): 1,420 written — 903 scored (median 69, p10 55, p90 81; 257 strong,
+  605 fair, 41 weak), 311 partial (quick check only), 206 unreadable (73 no page read, 40 browser-built homepage, the rest
+  did not answer / bad domain / certificate). 0 rows with a number outside 'scored'.
+- Live: app.leadfinderos.com's shared chunk holds the list select and both grey states; the What's New entry is live. The
+  app's exact list query over REST (HTTP 200) returns St.Annes Key Centre `unreadable` (no number, "did not respond in time")
+  and Patience Plus Driving School `scored` 65 with its reasons. Nobody has SEEN the rows signed in: the browser pane was
+  not signed in, and Claude does not sign in.
+- 311 quick-only leads get a number only when their deep check runs (Crawl site); none was started.
