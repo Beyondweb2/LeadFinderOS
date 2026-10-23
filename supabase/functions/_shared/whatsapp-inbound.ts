@@ -1,6 +1,6 @@
 import { toWhatsAppNumber } from "./whatsapp-send.ts";
 import { armFirstReplyAuditIntent } from "./first-reply-audit.ts";
-import { countsAsFirstReply } from "../../../src/lib/firstReplyAutomation.ts";
+import { countsAsAuditTrigger } from "../../../src/lib/firstReplyAutomation.ts";
 import { INBOUND_NO_DOWNGRADE, postgrestList } from "../../../src/lib/strongStatuses.ts";
 import { createMockupRow, fillMockupFromSite } from "./mockup-trigger.ts";
 import { chooseInboundLead, type InboundLeadCandidate } from "../../../src/lib/inboundMatch.ts";
@@ -209,7 +209,7 @@ async function firstInboundForLead(service: any, leadId: string, insertedMessage
   /* ⛔ THEIR FIRST HUMAN REPLY, not their first inbound row (2026-09-28). A reaction, a bare "[image]"
      or an out-of-office landing first used to BE "the first inbound" — the guard refuses it, and the
      real "yes" a minute later was then not first, so it armed nothing. The first message that counts
-     (countsAsFirstReply: human text, not an auto-responder) is the one. */
+     (countsAsAuditTrigger: any real text, an auto-responder included, which stays audit-only) is the one. */
   const { data, error } = await service.from("whatsapp_messages").select("id, body")
     .eq("lead_id", leadId).eq("direction", "inbound").gte("created_at", firstOutbound.created_at)
     .order("created_at", { ascending: true }).order("id", { ascending: true }).limit(50);
@@ -217,7 +217,7 @@ async function firstInboundForLead(service: any, leadId: string, insertedMessage
     console.error(`[whatsapp-inbound] first-inbound lookup failed (${leadId}): ${error.message}`);
     return { first: false, reliable: false };
   }
-  const firstHuman = ((data ?? []) as Array<{ id: string; body: string | null }>).find((m) => countsAsFirstReply(m.body));
+  const firstHuman = ((data ?? []) as Array<{ id: string; body: string | null }>).find((m) => countsAsAuditTrigger(m.body));
   return { first: firstHuman?.id === insertedMessageId, reliable: true };
 }
 

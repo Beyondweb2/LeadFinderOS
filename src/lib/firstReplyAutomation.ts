@@ -23,7 +23,7 @@ import { isInitialOpener } from './openerVariant.ts';
    an opener. */
 export type FirstReplyGuardOutcome =
   | { kind: 'arm'; sendAllowed: boolean }
-  | { kind: 'skip'; reason: 'client' | 'not_human_text' | 'auto_responder' | 'suppressed' }
+  | { kind: 'skip'; reason: 'client' | 'not_human_text' | 'suppressed' }
   | { kind: 'decline' };
 
 export function firstReplyGuard(input: {
@@ -34,7 +34,10 @@ export function firstReplyGuard(input: {
 }): FirstReplyGuardOutcome {
   if (!input.lead || isClientLead(input.lead)) return { kind: 'skip', reason: 'client' };
   if (!isHumanReplyText(input.body)) return { kind: 'skip', reason: 'not_human_text' };
-  if (looksAutomated(input.body)) return { kind: 'skip', reason: 'auto_responder' };
+  /* ⛔ AN AUTOMATED REPLY STILL RUNS THE AUDIT (Paul, 2026-10-23: "if a business replies with an automated template my
+     audits don't run"). It used to be skipped here AND not counted as their first reply, so a lead whose first message was a
+     booking bot / out-of-office never got an audit. It is audit-only: nothing is ever sent to a bot (sendAllowed false). */
+  if (looksAutomated(input.body)) return input.suppressed ? { kind: 'skip', reason: 'suppressed' } : { kind: 'arm', sendAllowed: false };
   if (isDecline(input.body)) return { kind: 'decline' };
   if (input.suppressed) return { kind: 'skip', reason: 'suppressed' };
   return { kind: 'arm', sendAllowed: isInitialOpener(input.lastOutboundTemplate) };
@@ -48,9 +51,10 @@ export function isHumanReplyText(body: string | null | undefined): boolean {
   return true;
 }
 
-/** Does this inbound count toward "their first reply"? Human text that is not an auto-responder. */
-export function countsAsFirstReply(body: string | null | undefined): boolean {
-  return isHumanReplyText(body) && !looksAutomated(body ?? '');
+/** Does this inbound start the audit? Any real text reply, an automated one included (the guard keeps that audit-only).
+ *  Placeholders ("[image]", a reaction) and a lone character do not. */
+export function countsAsAuditTrigger(body: string | null | undefined): boolean {
+  return isHumanReplyText(body);
 }
 
 /* ⛔ "DO NOTHING" MEANS NOTHING (Paul, 2026-09-28). The Inbox's three-way control stores Off as

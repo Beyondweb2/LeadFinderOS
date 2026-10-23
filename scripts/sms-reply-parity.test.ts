@@ -130,7 +130,7 @@ console.log('3. "Do nothing" and the guards');
   const client = makeDb(seed({ paid: 99, status: 'payment_received' })); await reply(client);
   ok(client.tables.whatsapp_auto_replies.length === 0 && client.tables.outreach_leads[0].status === 'payment_received', 'a paying client: no audit, status untouched');
   const bot = makeDb(seed()); await reply(bot, 'Thanks for your message, we are out of the office and will get back to you');
-  ok(bot.tables.whatsapp_auto_replies.length === 0, 'an auto-responder arms nothing');
+  ok(bot.tables.whatsapp_auto_replies.length === 1 && bot.tables.whatsapp_auto_replies[0].audit_mode === 'audit_only' && bot.tables.whatsapp_auto_replies[0].audit_status === 'pending', 'an auto-responder runs the audit, audit only, never a send (2026-10-23)');
   const media = makeDb(seed()); await reply(media, '[image]');
   ok(media.tables.whatsapp_auto_replies.length === 0, 'a non-text placeholder arms nothing');
   const supp = makeDb({ ...seed(), contact_suppressions: [{ id: 's', phone_e164: '+447700900123', reason: 'wrong_number' }] }); await reply(supp);
