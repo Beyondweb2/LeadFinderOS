@@ -92,3 +92,7 @@ Recommendation: **A** in Inbox (space is tight, one more pill is calm) and **B o
 1. Pick a variant (A / B / C), or mix by screen.
 2. Should the model part be 10 points or left out of v1 (then facts-only, 100% deterministic, and cost is £0)?
 3. Include a real mobile speed test (Google PageSpeed API, free tier) later, or keep "our download time" only?
+
+## 7. Decision (Paul, 2026-10-23)
+
+Outreach = variant B (ring). Inbox = variant A (number pill). Model part (10 points) in or out for v1: not yet answered. Build not yet started.
