@@ -32,7 +32,7 @@ const lit = (s: string) => `'${s.replace(/'/g, "''")}'`;
 type Row = { id: string; wc: unknown; checked_at: string | null; created_at: string };
 
 let after = '00000000-0000-0000-0000-000000000000';
-let read = 0, written = 0, skippedNoSummary = 0;
+let read = 0, written = 0, skippedNoSummary = 0, partial = 0;
 const bands: Record<string, number> = {};
 const unreadable: Record<string, number> = {};
 const scores: number[] = [];
@@ -48,7 +48,8 @@ for (;;) {
     const score: SiteScore | null = r.wc ? siteScoreForRow({ result: { websiteCheck: r.wc, checked_at: r.checked_at ?? undefined } as never, created_at: r.created_at } as never) : null;
     if (!score) { skippedNoSummary++; continue; }
     if (score.state === 'unreadable') { const k = score.reasons[0]?.text ?? '?'; unreadable[k] = (unreadable[k] ?? 0) + 1; }
-    else { scores.push(score.score!); const b = siteScoreBand(score.score!); bands[b] = (bands[b] ?? 0) + 1; }
+    else if (score.state === 'partial' || score.score == null) partial++;
+    else { scores.push(score.score); const b = siteScoreBand(score.score); bands[b] = (bands[b] ?? 0) + 1; }
     updates.push({ id: r.id, ...siteScoreColumns(score, new Date().toISOString()) });
   }
   if (write && updates.length) {
@@ -69,6 +70,6 @@ scores.sort((a, b) => a - b);
 const pct = (p: number) => scores.length ? scores[Math.min(scores.length - 1, Math.floor(p * scores.length))] : null;
 console.log(JSON.stringify({
   version: SITE_SCORE_VERSION, mode: write ? 'write' : 'dry-run', read, written, skippedNoSummary,
-  scored: scores.length, bands, median: pct(0.5), p10: pct(0.1), p90: pct(0.9), min: scores[0] ?? null, max: scores[scores.length - 1] ?? null,
+  scored: scores.length, partial, bands, median: pct(0.5), p10: pct(0.1), p90: pct(0.9), min: scores[0] ?? null, max: scores[scores.length - 1] ?? null,
   unreadable,
 }, null, 1));
