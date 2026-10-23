@@ -1,4 +1,4 @@
-# Find Leads: "Not a match" (2026-10-23, feat/find-leads-not-a-match) — HELD FOR PAUL'S APPROVAL
+# Find Leads: "Not a match" (2026-10-23, feat/find-leads-not-a-match)
 
 A "driving instructors" search also returned Mackay Hyundai and the Department of Transport. Those now sit behind ONE grey
 line under the results — "2 not a match for driving instructors hidden · Show" — exactly like the out-of-town line.
@@ -19,3 +19,6 @@ line under the results — "2 not a match for driving instructors hidden · Show
   and Top Dog Trades (manufacturer); each is one Show away.
 - Screens: `docs/review/find-leads-not-a-match/` (desktop and 390 px, hidden and shown; a mocked harness, not live data).
 - Tests: `scripts/find-leads-not-a-match.test.ts`.
+- **Approved by Paul and deployed 2026-10-23** (merge 104f6177, SPA only — no edge function or SQL). Live check on
+  app.leadfinderos.com: `data-testid="not-a-match-line"` in the Find Leads chunk (`Index-*.js`) and the What's New entry
+  `2026-10-23-find-leads-not-a-match` in the `whatsNew` chunk. Nobody has yet seen it on a real search.
