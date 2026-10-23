@@ -64,7 +64,7 @@ export const ScoreLine = memo(function ScoreLine({ score, visible, className }: 
   );
 });
 
-function VisibleTag() {
+export function VisibleTag() {
   return (
     <span title={VISIBLE_TITLE} data-testid="visible-chip"
       className="inline-flex items-center rounded bg-sky-500/15 px-1 text-[9px] font-semibold leading-tight text-sky-700 dark:text-sky-300">

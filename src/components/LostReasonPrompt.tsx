@@ -10,10 +10,9 @@ import { LOST_REASONS, LOST_REASON_NOTE_MAX, lostReasonLabel, lostReasonProblem,
 import { LOST_REASON_ASK_EVENT, saveLostReason, type LostReasonAsk } from '@/lib/lostReasonAsk';
 
 /* ══ "WHY DID THEY SAY NO?" — the one prompt (2026-10-01) ═════════════════════════════════════════
-   Mounted once in AppLayout; opened by askLostReason (src/lib/lostReasonAsk.ts) from every place a person
-   marks one lead Not interested, and from the lead's "Why they said no" line to add or correct one.
-   Small on purpose: one tap on a reason, an optional note (needed only for Other), Save. Skip leaves the
-   lead "Reason not recorded" — the status change has already happened and is never undone here. */
+   Mounted once in AppLayout; opened by askLostReason (src/lib/lostReasonAsk.ts) ONLY from the lead's "Why they said no"
+   line, to add or correct a reason. (2026-10-23, Paul: "I always skip it") Marking Not interested does not open it.
+   Small on purpose: one tap on a reason, an optional note (needed only for Other), Save. */
 export function LostReasonPrompt() {
   const { toast } = useToast();
   const [ask, setAsk] = useState<LostReasonAsk | null>(null);

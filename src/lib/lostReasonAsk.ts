@@ -1,10 +1,7 @@
-/* ══ ASK WHY THEY SAID NO — the one trigger (2026-10-01) ══════════════════════════════════════════
-   Every place a person marks ONE lead Not interested (the status pill on Outreach, the lead workspace and
-   the Inbox; the Work panel's "Not interested" outcome in the popup and Focus Mode) calls askLostReason
-   after its own write. The one prompt (src/components/LostReasonPrompt.tsx, mounted once in AppLayout)
-   answers it and saves through lead_set_lost_reason. A prompt mounted in the shell outlives the row that
-   asked (Outreach archives a Not interested row, so a prompt anchored to it would vanish).
-   Bulk status changes do not ask: those leads read "Reason not recorded" until someone adds one. */
+/* ══ ASK WHY THEY SAID NO — on request only ═══════════════════════════════════════════════════════
+   (2026-10-23, Paul: "I always skip it") Marking a lead Not interested no longer opens this prompt by itself. It opens only from the lead's "Why they said no" line (Add / Change).
+   The one prompt (src/components/LostReasonPrompt.tsx, mounted once in AppLayout) answers askLostReason and
+   saves through lead_set_lost_reason. Bulk status changes never asked: those leads read "Reason not recorded". */
 import { leadRpc } from '@/lib/leadRpc';
 import { notifyLeadChanged } from '@/lib/leadSync';
 import { lostReasonProblem } from '@/lib/lostReason';

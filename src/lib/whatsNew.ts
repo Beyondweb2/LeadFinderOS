@@ -22,6 +22,22 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-23-interest-buttons', date: '2026-10-23', title: 'Inbox: Interested and Not interested buttons, and no more "why did they say no" pop-up', audience: 'all',
+    body: 'The top of a conversation has an Interested and a Not interested button, so you no longer open the status pill to pick them. Marking Not interested no longer asks for a reason.',
+    report: {
+      added: ['An Interested button (it toggles the star) and a Not interested button at the top of every Inbox conversation.'],
+      changed: ['They take the place of the ChatGPT / Gemini / Google AI score chips at the top of the conversation. The scores still show in the AI VISIBILITY strip and on the list row.', 'Marking a lead Not interested, from any screen, saves at once and does not open the reason pop-up.'],
+      removed: ['The automatic "Why did they say no?" pop-up. A lead that is Not interested still has its "Why they said no" line, where you can add or change a reason.'],
+      effect: 'One tap instead of three, and no pop-up to skip. Nothing else about the status or the pipeline changed.',
+    } },
+  { id: '2026-10-23-best-x-in-y-first', date: '2026-10-23', title: 'New audits ask "Who is the best [trade] in [town]?" first', audience: 'all',
+    body: 'From now on the first question of a new quick audit is "Who is the best [trade] in [town]?", and the first-reply hook quotes it when AI missed you there.',
+    report: {
+      added: ['Question 1 of every new quick audit is "Who is the best [trade] in [town]?", using the lead’s own trade and town.'],
+      changed: ['The other two questions keep their order. The first-reply hook quotes question 1 and the businesses AI named when it missed the lead there and named three.'],
+      removed: ['The "nervous drivers" question for driving instructors.'],
+      effect: 'Audits already run keep the questions they were asked, so day-28 re-checks still repeat them. Scoring, Visible and statuses are unchanged.',
+    } },
   { id: '2026-10-23-site-score', date: '2026-10-23', title: 'A website score on every lead row', audience: 'all',
     body: 'Outreach rows show a small ring and Inbox rows a number pill: the lead’s website out of 100. Hover (or tap on a phone) to see the top reasons.',
     report: {

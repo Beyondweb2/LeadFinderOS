@@ -105,7 +105,7 @@ console.log('5. the Inbox: chip, Show filter, setting');
 {
   ok(INBOX_QUICK_FILTERS.some((q) => q.value === 'visible' && q.label === 'Visible'), '"Visible" is in the Show filter');
   ok(passesQuickFilter('visible', { unread: false, waitingSinceMs: null, visible: true }) && !passesQuickFilter('visible', { unread: false, waitingSinceMs: null }), 'the filter keeps only Visible leads');
-  ok(/<ScoreLine score=\{auditScore\} visible=\{c\.visible\}/.test(INBOX) && /<ScoreLine score=\{active\.auditScore\} visible=\{active\.visible\} \/>/.test(INBOX), 'the Visible tag on the row and in the thread (on the score line)');
+  ok(/<ScoreLine score=\{auditScore\} visible=\{c\.visible\}/.test(INBOX) && /active\.visible && <VisibleTag \/>/.test(INBOX), 'the Visible tag on the row (score line) and in the thread (its own tag)');
   ok(/<InboxVisibleRuleControl \/>/.test(SETTINGS), 'the rule is a setting in Inbox Settings');
 }
 

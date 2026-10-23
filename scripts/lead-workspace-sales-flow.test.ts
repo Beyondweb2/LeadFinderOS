@@ -28,7 +28,7 @@ const code = (s: string) => s.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/
 
 console.log("── 1. the top: status + next action, no scrolling ──");
 ok(header.length > 500 && /<PipelineStatusSelect value=\{lead\.status\} stage=\{salesState\.view\}/.test(header) && /'data-testid': 'workspace-status'/.test(header), "the status is the coloured pill in the HEADER (above the tabs), and its menu is where it changes");
-ok(/askReasonFor=\{\{ leadId: lead\.id, businessName: lead\.business_name \}\}/.test(header), "…choosing Not interested there still asks why");
+ok(!/askReasonFor/.test(header), "…choosing Not interested there no longer asks why (2026-10-23)");
 ok(/<HeaderNextAction leadId=\{lead\.id\} onEdit=\{\(\) => setNextOpen\(true\)\} \/>/.test(header) && /\{status\}\s*\{next\}/.test(strip), "the Next Action sits beside the status, compact");
 ok(/No next action/.test(flow) && /· Set one/.test(flow) && /v\.label\}\{v\.when \? ` · \$\{v\.when\}` : ' · No date set'\}\{v\.time \? ` · \$\{v\.time\}` : ''\}/.test(flow), "…'Call · Tomorrow · 10:30', or 'No next action · Set one'");
 ok(/data-testid="workspace-facts"/.test(header) && /lead\.phone/.test(header) && /isAggregatorUrl\(lead\.website\)/.test(header) && /\[trade, town\]/.test(header), "the header carries phone · website · trade · town");
@@ -78,7 +78,7 @@ ok(JSON.stringify(INTERESTED_NEXT_CHOICES.map((c) => c.label)) === JSON.stringif
 ok(interestedPreset("call_back")?.nextAction === "call" && interestedPreset("follow_up")?.nextAction === "follow_up" && interestedPreset("none") === null && interestedPreset("send_onboarding") === null, "…Call back and Set follow-up pre-fill the one form (saved only by its Save); No next action writes nothing");
 ok(/if \(k === 'send_onboarding'\) \{ setLogOpen\(false\); onSendOnboarding\(\); return; \}/.test(flow), "…Send onboarding there → the Close tab too");
 ok(followStepOf("not_interested", "not_interested") === "none" && outcomePlan("not_interested", L).status === "not_interested", "Not interested: no next step forced (the rule clears it and the lost-reason prompt asks why)");
-ok(/if \(outcome === 'not_interested' && res\.after\.state === 'not_interested' && !res\.failed\.length\) \{\s*askLostReason\(/.test(crm), "…the lost-reason prompt, as before");
+ok(!/askLostReason/.test(crm), "…no lost-reason prompt (2026-10-23)");
 const na = retryPreset("call", "no_answer");
 ok(followStepOf("no_answer", "no_answer") === "retry_when" && na?.nextAction === "call" && na.days === NO_ANSWER_RETRY_DAYS && /later\('Skip'\)/.test(flow) && /'Try again when\?'/.test(flow), "Didn't answer: optional Try again when? — pre-filled tomorrow, Skip is fine");
 ok(followStepOf("left_voicemail", "left_voicemail") === "retry_when" && retryPreset("call", "left_voicemail")?.days === VOICEMAIL_RETRY_DAYS, "Left voicemail: the same, three days");
