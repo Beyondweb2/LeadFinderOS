@@ -22,7 +22,7 @@ import {
 } from "../../../src/lib/siteShot.ts";
 
 /** Bumped with every change, so a deploy is proved by the live answer (CLAUDE.md §4). */
-const BUILD_ID = "site-shot-2026-10-23b";
+const BUILD_ID = "site-shot-2026-10-23c";
 const json = (body: unknown, status = 200) => new Response(JSON.stringify({ build: BUILD_ID, ...(body as object) }), { status, headers: { "Content-Type": "application/json" } });
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const FORMAT = { type: "jpeg" as const, quality: SITE_SHOT_JPEG_QUALITY, scale: SITE_SHOT_SCALE };
@@ -52,10 +52,11 @@ async function readLead(service: Service, leadId: string) {
 }
 
 /** One picture, with the two known recoveries: a site whose Content-Security-Policy refuses our injected script is shot again
- *  without it, and one Cloudflare rate-limit answer is waited out (its own Retry-After, at most 20 s) and tried again. */
+ *  without it (and, if it refuses the style too, bare), and one Cloudflare rate-limit answer is waited out (its own Retry-After, at most 20 s) and tried again. */
 async function takePicture(website: string, budgetUntil?: number) {
   let shot = await shootSite(website, FORMAT);
   if (!shot.ok && siteShotCspBlocked(shot.detail)) shot = await shootSite(website, { ...FORMAT, noScript: true });
+  if (!shot.ok && siteShotCspBlocked(shot.detail)) shot = await shootSite(website, { ...FORMAT, noScript: true, noStyle: true });
   let retries = 0;
   while (!shot.ok && siteShotRateLimited(shot.detail) && retries < (budgetUntil ? 3 : 1) && (!budgetUntil || Date.now() < budgetUntil)) {
     retries++;

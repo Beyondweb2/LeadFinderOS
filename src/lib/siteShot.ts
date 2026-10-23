@@ -134,7 +134,7 @@ export type SiteShotPageProblem = 'bot_challenge' | 'access_denied' | 'error_pag
 const PAGE_SIGNS: Array<[SiteShotPageProblem, string[]]> = [
   ['bot_challenge', ['checking the site connection security', 'just a moment', 'checking your browser', 'verify you are human', 'verifying you are human', 'are you a robot', 'enable javascript and cookies to continue', 'pardon our interruption', 'press & hold', 'complete the security check', 'ddos protection by', 'please wait while we verify']],
   ['access_denied', ['access denied', 'attention required', 'request blocked', 'you have been blocked', 'sucuri website firewall', 'incapsula incident', 'forbidden: you don']],
-  ['error_page', ['404 not found', '403 forbidden', '502 bad gateway', '503 service unavailable', 'this site can\'t be reached', 'page not found', 'site not found', 'account suspended', 'this account has been suspended', 'error establishing a database connection']],
+  ['error_page', ['404 not found', '403 forbidden', '502 bad gateway', '503 service unavailable', 'site currently unavailable', 'site is currently unavailable', 'temporarily unavailable', 'currently unavailable', 'under maintenance', 'down for maintenance', 'be right back', 'website is not available','this site can\'t be reached', 'page not found', 'site not found', 'account suspended', 'this account has been suspended', 'error establishing a database connection']],
   ['parked_domain', ['domain is for sale', 'this domain may be for sale', 'buy this domain', 'this domain is parked', 'domain parking']],
   ['server_default_page', ['welcome to nginx', 'apache2 ubuntu default page', 'it works!', 'default web site page', 'iis windows server']],
 ];
