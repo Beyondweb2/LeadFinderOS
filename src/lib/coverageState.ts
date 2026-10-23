@@ -207,7 +207,7 @@ export interface CoverageRow extends CoverageTown {
 /** Where "Find leads" goes: the NORMAL lead search, pre-filled and run once on arrival.
  *  `run=search` is a ONE-SHOT INTENT, consumed and stripped by Find Leads exactly as `confirm=search`
  *  is — left in the URL it would re-run a paid search on every refresh and back button. */
-export function findLeadsHref(trade: string, town: string, country?: string): string {
+export function findLeadsHref(trade: string, town: string, country?: string, depth?: 'standard' | 'thorough'): string {
   const q = new URLSearchParams({
     mode: 'leads',
     keyword: trade,
@@ -217,6 +217,9 @@ export function findLeadsHref(trade: string, town: string, country?: string): st
   /* 2026-10-14: the country Find Leads searches in, so a Coverage row never searches with whatever country the
      form last held (a UK town searched with a Malaysia bias, or the reverse). */
   if (country) q.set('country', country);
+  /* 2026-10-23: the Standard / Thorough choice made on Coverage (src/lib/townSearchArea.ts), so the search that runs
+     is the one whose price the button showed. Absent = Find Leads' own default for the country. */
+  if (depth) q.set('depth', depth);
   return `/find-leads?${q.toString()}`;
 }
 

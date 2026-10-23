@@ -69,11 +69,12 @@ function ok(cond: boolean, msg: string) { console.log(`${cond ? 'PASS' : 'FAIL'}
     const manyFn = ctx.slice(ctx.indexOf('  const searchMany = useCallback('), ctx.indexOf('  const retryLastSearch'));
     ok((ctx.match(/supabase\.functions\.invoke<SearchResponse>\('search-leads'/g) ?? []).length === 1, 'ONE search-leads call site: the shared step');
     ok(/await fetchTown\(filters, controller\.signal, skipTrialCount, isDemo\)/.test(searchFn) && /shownResults\(data, ex\)/.test(searchFn) && /saveSearch\(filters,/.test(searchFn), 'one search: the shared step, the shared exclusions/order, its search_history run');
-    ok(/await fetchTown\(filters, controller\.signal, false, false\)/.test(manyFn) && /shownResults\(r\.data, ex\)/.test(manyFn) && /saveSearch\(filters, shown\.length, noWebsiteCount, r\.data\.leads/.test(manyFn), 'each town: the same step, the same exclusions/order, its OWN search_history run (Coverage Found vs Added per town)');
+    ok(/await fetchTown\(filters, controller\.signal, false, false\)/.test(manyFn) && /shownResults\(r\.data, ex\)/.test(manyFn) && /saveSearch\(filters, inTownShown\.length, noWebsiteCount, r\.data\.leads/.test(manyFn), 'each town: the same step, the same exclusions/order, its OWN search_history run (Coverage Found vs Added per town)');
     ok(/const filters: SearchFilters = \{ \.\.\.base, keyword, location: town \}/.test(manyFn), 'each town is sent as an ordinary search of that town');
     ok(/searchTown: town, searchCountry: townCountry, \.\.\.\(runId \? \{ searchRunId: runId \} : \{\}\)/.test(manyFn), 'each result carries its town, country and run');
     ok(/if \(r\.kind === 'code'\) \{ stopped = true;/.test(manyFn) && /if \(r\.refusal\) stopped = true;/.test(manyFn) && /if \(stopped \|\| controller\.signal\.aborted\) \{ setLine\(town, \{ state: 'not_searched' \}\)/.test(manyFn), 'a refusal stops new towns starting; a plain failure does not');
-    ok(/townsForPress\(towns\)/.test(manyFn) && /runPool\(plan\.run, MANY_TOWNS_CONCURRENCY/.test(manyFn), 'up to ten, two at a time');
+    /* 2026-10-23: Thorough presses fewer towns (THOROUGH_MAX_TOWNS_PER_PRESS); Standard is still ten. */
+    ok(/townsForPress\(towns, base\.depth === 'thorough' \? THOROUGH_MAX_TOWNS_PER_PRESS : undefined\)/.test(manyFn) && /runPool\(plan\.run, MANY_TOWNS_CONCURRENCY/.test(manyFn), 'up to ten (Standard), two at a time');
     ok(/return lines\.filter\(\(l\) => l\.state === 'done' \|\| l\.state === 'not_found'\)/.test(manyFn), 'searched towns leave the selection; failed and not-searched stay');
   }
 
@@ -90,7 +91,7 @@ function ok(cond: boolean, msg: string) { console.log(`${cond ? 'PASS' : 'FAIL'}
       && /return addOne\(lead, activeCampaign\)/.test(page) && /await addOne\(p\.lead, chosenCampaign\)/.test(page)
       && !/addToOutreach/.test(page), 'every Add saves the result with ITS town and country');
     ok(/lead\.searchTown \?\? lastSearchLocation/.test(page), '…and a one-town result exactly as before');
-    ok(/onSearchMany\(\{ keyword: keyword\.trim\(\), radius: radius \* 1000, country: selectedCountry, townOnly: true \}\)/.test(form), 'the form sends the one-town filters, each town only');
+    ok(/onSearchMany\(\{ keyword: keyword\.trim\(\), radius: radius \* 1000, country: selectedCountry, townOnly: true, depth \}\)/.test(form), 'the form sends the one-town filters, each town only (with the Standard / Thorough choice)');
     ok((form.match(/onSearch\(\{/g) ?? []).length === 1, 'the one-town search still has ONE place that builds its filters');
     ok((table.match(/data-testid="result-town"/g) ?? []).length === 2, 'the same table, each row naming its town (desktop and phone)');
     ok(/<LeadsTable/.test(page) && !/ManyTownsResults|MultiTownTable/.test(page), 'results are the ordinary Find Leads table — no second results list');
@@ -99,8 +100,9 @@ function ok(cond: boolean, msg: string) { console.log(`${cond ? 'PASS' : 'FAIL'}
   console.log('\n── 6. UNCHANGED ──');
   {
     const cov = read('src/pages/Coverage.tsx');
-    ok(/<Link to=\{findLeadsHref\(tradeSearchWord\(trade\), townLocation\(t\.name\), country\)\}/.test(cov), 'the single-row Find leads link is unchanged');
-    ok(/manyTownsHref\(tradeSearchWord\(trade\), selectedTowns\.map\(\(t\) => t\.location\), country\)/.test(cov) && /'Find leads in these ' \+ selectedTowns\.length \+ ' towns'/.test(cov), 'ticked towns: one button, "Find leads in these N towns"');
+    /* 2026-10-23: both links also carry the Standard / Thorough choice (src/lib/townSearchArea.ts). */
+    ok(/<Link to=\{findLeadsHref\(tradeSearchWord\(trade\), townLocation\(t\.name\), country, depth\)\}/.test(cov), 'the single-row Find leads link is unchanged but for the depth');
+    ok(/manyTownsHref\(tradeSearchWord\(trade\), selectedTowns\.map\(\(t\) => t\.location\), country, depth\)/.test(cov) && /'Find leads in these ' \+ selectedTowns\.length \+ ' towns'/.test(cov), 'ticked towns: one button, "Find leads in these N towns"');
     ok(!/CoverageMultiTown|multiTownSearch|useMultiTownLeads/.test(cov), 'the in-Coverage multi-town search is gone');
     for (const gone of ['src/components/CoverageMultiTown.tsx', 'src/hooks/useMultiTownLeads.ts', 'src/lib/multiTownSearch.ts']) ok(!fs.existsSync(path.join(ROOT, gone)), `${gone} deleted`);
   }

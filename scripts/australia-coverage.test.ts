@@ -115,7 +115,8 @@ ok(v2.inTown === true && v2.reason === 'post_town' && v2.area === 'Richmond VIC'
 const v3 = inTownVerdict({ town: 'Ballarat VIC', country: 'Australia', address: '3 Howitt St, Wendouree VIC 3355, Australia', lat: -37.535, lng: 143.83, centre: { lat: BALLARAT.lat, lng: BALLARAT.lng }, population: BALLARAT.population });
 ok(v3.inTown === true && v3.reason === 'distance', `a different suburb inside Ballarat is IN by distance (${v3.km} km), never OUT by name`);
 const v4 = inTownVerdict({ town: 'Ballarat VIC', country: 'Australia', address: '1 Main St, Bendigo VIC 3550, Australia', lat: -36.757, lng: 144.279, centre: { lat: BALLARAT.lat, lng: BALLARAT.lng }, population: BALLARAT.population });
-ok(v4.inTown === false && v4.reason === 'too_far', 'Bendigo is not Ballarat (too far)');
+/* 2026-10-23: Bendigo is its own urban centre, so it is OUT by name before distance is asked (inTown.ts step 3). */
+ok(v4.inTown === false && v4.reason === 'other_town', 'Bendigo is not Ballarat (its own urban centre)');
 ok(inTownVerdict({ town: 'Cheshunt', country: 'UK', address: '1 High St, Cheshunt, Waltham Cross EN8 9AA, UK' }).reason !== 'other_state', 'the UK rule is untouched');
 ok(areaFromAddress('12 Smith St, Richmond VIC 3121, Australia', 'Australia') === 'Richmond VIC', 'the area from an address carries the state');
 ok(isBroadTown('Australia'), '"Australia" alone is too broad to be a town');

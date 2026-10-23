@@ -51,8 +51,8 @@ console.log('── 0. THE ROOT CAUSE: SEARCH RESULTS NOW CARRY THE ADDRESS ─�
 {
   const s = read('supabase/functions/search-leads/index.ts');
   const masks = s.match(/const FIELD_MASK = '[^']*'/g) ?? [];
-  ok(masks.length === 3 && masks.every((m) => m.includes('places.formattedAddress')), 'every Text Search field mask asks for places.formattedAddress (3 of 3)');
-  ok((s.match(/address: place\.formattedAddress \|\| undefined,/g) ?? []).length === 3, 'every result builder puts it on the result as address (3 of 3)');
+  ok(masks.length === 4 && masks.every((m) => m.includes('places.formattedAddress')), 'every Text Search field mask asks for places.formattedAddress (4 of 4, Thorough 2026-10-23)');
+  ok((s.match(/address: place\.formattedAddress \|\| undefined,/g) ?? []).length === 4, 'every result builder puts it on the result as address (4 of 4)');
   ok(/address\?: string;/.test(s) && /FREE for the same reason as\s+primaryType/.test(s), 'SearchLead carries address; recorded as free (the mask already bills at Enterprise for websiteUri)');
   ok(/cachedWithoutAddresses = cachedList\.length > 0 && !cachedList\.some/.test(s) && /if \(cached\?\.results && !cachedWithoutAddresses\)/.test(s), 'a cached set from before the fix (no addresses at all) is fetched fresh once, not served for 72 hours');
   ok(!isCompaniesHouseTarget({ id: 'x', websiteStatus: 'NO_WEBSITE', address: undefined }) && isCompaniesHouseTarget({ id: 'x', websiteStatus: 'NO_WEBSITE', address: '1 High St, Sheffield S1 2AB, UK' }),

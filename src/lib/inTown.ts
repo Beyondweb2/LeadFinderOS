@@ -23,13 +23,19 @@
      1. The STATE first: a searched town that names a state ("Richmond VIC") and an address in another state
         ("Richmond NSW 2753") → OUT ('other_state'). The postcode gives the state when the word is missing.
      2. A name match (the suburb, or a whole address part) → IN.
-     3. Distance from the searched town's centre, as step 4 above (ABS population for the size).
-     4. Otherwise null (Google's boundary decides).
+     3. ANOTHER URBAN CENTRE (2026-10-23): the suburb is itself a different ABS urban centre in the same state
+        ("Wodonga VIC" under an Albury search, "Bargara QLD" under Bundaberg) → OUT ('other_town'). It is its own
+        Coverage row, so it is never counted twice.
+     4. Distance from the searched town's centre, with the WIDER Australian radius: √population ÷ 50 km
+        (AU_TOWN_RADIUS_DIVISOR), same 2–15 km bounds. Albury (53,677) → 4.6 km, so Lavington (3.4–3.8 km, a suburb
+        of Albury, not an urban centre of its own) is IN. ÷80 gave 2.9 km and hid it (measured 2026-10-23).
+     5. Otherwise null (Google's boundary decides).
    ⚠️ No "different suburb → OUT" step: an Australian urban centre is many suburbs (Ballarat is Wendouree,
-   Sebastopol, Ballarat Central…), so a different suburb name is not evidence of being outside it. */
+   Sebastopol, Ballarat Central…), so a different suburb name is not evidence of being outside it. Step 3 is
+   narrower: only a suburb that is a separate listed urban centre. */
 import { LONDON_POSTCODE_AREAS, type LondonArea } from '../data/londonPostcodeAreas.ts';
 import { resolveCoverageTown } from './coverageCountries.ts';
-import { auTownLabel, isAustralianLead, parseAuAddress, parseAuTown, sameAuTown, withAuState } from './australiaTowns.ts';
+import { auTownLabel, findAuTown, isAustralianLead, parseAuAddress, parseAuTown, sameAuTown, withAuState } from './australiaTowns.ts';
 
 export type InTownReason = 'post_town' | 'postcode_district' | 'address_part' | 'other_town' | 'other_district' | 'other_state' | 'distance' | 'too_far' | 'unknown';
 
@@ -66,6 +72,10 @@ const BROAD_TOWNS = new Set(['london', 'greater london', 'england', 'scotland', 
 export const TOWN_RADIUS_MIN_KM = 2;
 export const TOWN_RADIUS_MAX_KM = 15;
 export const TOWN_RADIUS_UNKNOWN_KM = 3;
+/** √population ÷ this = the in-town radius (km). The UK / Malaysia figure. */
+export const TOWN_RADIUS_DIVISOR = 80;
+/** Australia's: its urban centres are spread out (low-density suburbs), so ÷80 hid real suburbs (header, step 4). */
+export const AU_TOWN_RADIUS_DIVISOR = 50;
 
 /** Lowercase, brackets / accents / punctuation gone, "-" as a space. */
 export function townKey(s: string | null | undefined): string {
@@ -154,9 +164,10 @@ export function areaFromAddress(address: string | null | undefined, country?: st
 }
 
 /** How far from the centre still counts as the town, from its population. */
-export function townRadiusKm(population: number | null | undefined): number {
+export function townRadiusKm(population: number | null | undefined, country?: string | null): number {
   if (!population || !(population > 0)) return TOWN_RADIUS_UNKNOWN_KM;
-  return Math.min(TOWN_RADIUS_MAX_KM, Math.max(TOWN_RADIUS_MIN_KM, Math.sqrt(population) / 80));
+  const divisor = isAustralianLead(country, null) ? AU_TOWN_RADIUS_DIVISOR : TOWN_RADIUS_DIVISOR;
+  return Math.min(TOWN_RADIUS_MAX_KM, Math.max(TOWN_RADIUS_MIN_KM, Math.sqrt(population) / divisor));
 }
 
 export function kmBetween(a: { lat: number; lng: number }, b: { lat: number; lng: number }): number {
@@ -178,16 +189,58 @@ function auInTownVerdict(i: InTownInput): InTownVerdict {
   // 2. a name match
   if (a.suburb && sameAuTown(a.suburb, t.name)) return { inTown: true, reason: 'post_town', area, km: null };
   if (a.parts.some((x) => !/\d/.test(x) && sameAuTown(x, t.name))) return { inTown: true, reason: 'address_part', area, km: null };
-  // 3. distance, scaled to the town's size
+  // 3. the suburb is another urban centre of its own (its own Coverage row)
+  const state = t.state ?? a.state;
+  if (a.suburb && state) {
+    const other = findAuTown(a.suburb, state);
+    if (other && other !== 'ambiguous' && !sameAuTown(other.label, i.town)) return { inTown: false, reason: 'other_town', area, km: null };
+  }
+  // 4. distance, scaled to the town's size (Australia's wider radius)
   if (real(i.lat) && real(i.lng) && i.centre && real(i.centre.lat) && real(i.centre.lng)) {
     const km = kmBetween({ lat: i.lat, lng: i.lng }, i.centre);
-    return { inTown: km <= townRadiusKm(i.population), reason: km <= townRadiusKm(i.population) ? 'distance' : 'too_far', area, km: Math.round(km * 10) / 10 };
+    const r = townRadiusKm(i.population, 'Australia');
+    return { inTown: km <= r, reason: km <= r ? 'distance' : 'too_far', area, km: Math.round(km * 10) / 10 };
   }
   return { inTown: null, reason: 'unknown', area, km: null };
 }
 
+function isSingapore(country: string | null | undefined): boolean {
+  return /^(singapore|sg)$/i.test(String(country ?? '').trim());
+}
+
+/* ── SINGAPORE (2026-10-23) ─────────────────────────────────────────────────────────────────────────────────────
+   Until now Singapore fell into the UK branch: a UK postcode parser that never matches "Singapore 238858", and a
+   3 km circle round the city centre — so a search for "Singapore" itself hid every business more than 3 km from the
+   middle of a 50 km island. Its own order:
+     1. An address that is not in Singapore (no "Singapore 123456" / "Singapore" at the end) → OUT ('other_town').
+     2. The search is Singapore itself → IN: it is one city.
+     3. A planning area ("Tampines") named by an address part, whole words from the start ("Tampines Street 81",
+        "Blk 123 Ang Mo Kio Ave 3") → IN.
+     4. Distance from the area's centre, TOWN_RADIUS_UNKNOWN_KM: a planning area is ~10–30 km², and its RESIDENT count
+        (abroadTownPopulation.ts) is far denser than a UK town's, so √population would draw a circle across half
+        the island. 5. Otherwise null. */
+const SG_TAIL = /^singapore(\s+\d{6})?$/i;
+function sgInTownVerdict(i: InTownInput): InTownVerdict {
+  const t = townKey(String(i.town ?? '').replace(/,?\s*singapore\s*$/i, '')) || 'singapore';
+  const parts = String(i.address ?? '').split(',').map((p) => p.trim()).filter(Boolean);
+  const inSg = parts.length > 0 && SG_TAIL.test(parts[parts.length - 1]);
+  if (parts.length && !inSg) return { inTown: false, reason: 'other_town', area: null, km: null };
+  if (t === 'singapore') return inSg ? { inTown: true, reason: 'address_part', area: 'Singapore', km: null } : { inTown: null, reason: 'unknown', area: null, km: null };
+  const named = parts.slice(0, -1).some((p) => {
+    const k = townKey(p.replace(/^(blk|block)\s+\d+[a-z]?\s+/i, '').replace(/^\d+[a-z]?\s+/i, ''));
+    return k === t || k.startsWith(t + ' ');
+  });
+  if (named) return { inTown: true, reason: 'address_part', area: i.town, km: null };
+  if (real(i.lat) && real(i.lng) && i.centre && real(i.centre.lat) && real(i.centre.lng)) {
+    const km = kmBetween({ lat: i.lat, lng: i.lng }, i.centre);
+    return { inTown: km <= TOWN_RADIUS_UNKNOWN_KM, reason: km <= TOWN_RADIUS_UNKNOWN_KM ? 'distance' : 'too_far', area: null, km: Math.round(km * 10) / 10 };
+  }
+  return { inTown: null, reason: 'unknown', area: null, km: null };
+}
+
 export function inTownVerdict(i: InTownInput): InTownVerdict {
   if (isAustralianLead(i.country, null)) return auInTownVerdict(i);
+  if (isSingapore(i.country)) return sgInTownVerdict(i);
   const town = String(i.town ?? '').trim();
   const p = parseAddress(i.address, i.country);
   const ldn = p.postTown && townKey(p.postTown) === 'london' ? londonAreaFor(p.district) : null;

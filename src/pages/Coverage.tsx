@@ -31,6 +31,9 @@ import { AU_BAND_DEFAULT_MAX, AU_BAND_DEFAULT_MIN } from '@/lib/australiaTowns';
 import {
   filterByPopulationBand, populationFilterShown, populationSourcesFor, townPopulation,
 } from '@/lib/abroadTownPopulation';
+import { defaultSearchDepth, THOROUGH_MAX_TOWNS_PER_PRESS, type SearchDepth } from '@/lib/townSearchArea';
+import { depthButtonSuffix, depthNote } from '@/lib/searchDepthWords';
+import { SearchDepthToggle } from '@/components/SearchDepthToggle';
 
 /* ══ WHERE HAVE I BEEN? ═══════════════════════════════════════════════════════════════════════
    ⛔ WHAT THIS REPLACES: asking someone for town names. Every candidate town for a trade, with the
@@ -210,6 +213,13 @@ export default function Coverage() {
      the table's order (largest first). Since 2026-10-16 they open in Find Leads' Many towns mode (src/lib/manyTowns.ts). */
   const [pickedTowns, setPickedTowns] = useState<Set<string>>(new Set());
   useEffect(() => { setPickedTowns(new Set()); }, [country, trade]);
+  /* ⛔ STANDARD / THOROUGH (2026-10-23, src/lib/townSearchArea.ts). A choice for THIS look at the list, never
+     persisted (Thorough costs more and must never be carried silently): it starts on the country's default —
+     Thorough for Australia — and a new country goes back to its default. Every Find leads link carries it, and
+     each button says its price (admins) or that it is Thorough (sales never sees a cost). */
+  const [depthPick, setDepthPick] = useState<SearchDepth | null>(null);
+  useEffect(() => { setDepthPick(null); }, [country]);
+  const depth: SearchDepth = depthPick ?? defaultSearchDepth(country);
   const selectedTowns = useMemo(
     () => sorted.filter((t) => pickedTowns.has(t.name)).map((t) => ({ town: t.name, location: townLocation(t.name), country })),
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -293,6 +303,10 @@ export default function Coverage() {
             <Input type="number" value={maxPop} onChange={(e) => setBand((b) => ({ ...b, max: Number(e.target.value) || 0 }))} className="h-9 w-[100px]" />
           </div>
         </div>}
+        <div className="space-y-1" data-testid="coverage-search-depth">
+          <label className="text-xs font-medium text-muted-foreground">Search</label>
+          <SearchDepthToggle value={depth} onChange={setDepthPick} showMoney={isAdmin} showNote={false} />
+        </div>
         {!isUk && showPopFilter && <div className="space-y-1">
           <label className="text-xs font-medium text-muted-foreground">{approxPop ? 'Population (approx.)' : 'Population'}</label>
           <div className="flex items-center gap-1.5">
@@ -349,14 +363,23 @@ export default function Coverage() {
       {/* ⛔ MANY TOWNS → FIND LEADS (Paul, 2026-10-16: V2's "Many towns" mode). ONE button: Find Leads opens in Many
           towns mode with these towns selected, with the same trade words, town words and country as each row's link.
           Nothing is searched here, and nothing on arrival — the person presses Find leads there (up to ten a press). */}
+      {depth === 'thorough' && (
+        <p className="text-xs text-muted-foreground" data-testid="coverage-depth-note">
+          {depthNote(depth, isAdmin)} Up to {THOROUGH_MAX_TOWNS_PER_PRESS} towns a press; the rest stay ticked for the next.
+        </p>
+      )}
+
       {selectedTowns.length > 0 && (() => {
-        const href = manyTownsHref(tradeSearchWord(trade), selectedTowns.map((t) => t.location), country);
-        const label = selectedTowns.length === 1 ? 'Find leads in ' + selectedTowns[0].town : 'Find leads in these ' + selectedTowns.length + ' towns';
+        const href = manyTownsHref(tradeSearchWord(trade), selectedTowns.map((t) => t.location), country, depth);
+        /* The price is for what ONE press searches: on Thorough, at most THOROUGH_MAX_TOWNS_PER_PRESS towns. */
+        const pressTowns = depth === 'thorough' ? Math.min(selectedTowns.length, THOROUGH_MAX_TOWNS_PER_PRESS) : selectedTowns.length;
+        const label = (selectedTowns.length === 1 ? 'Find leads in ' + selectedTowns[0].town : 'Find leads in these ' + selectedTowns.length + ' towns')
+          + depthButtonSuffix(depth, pressTowns, isAdmin);
         return (
           <div className="flex flex-wrap items-center gap-2 rounded-xl border border-blue-500/30 bg-blue-500/[0.06] px-3 py-2 text-sm" data-testid="coverage-open-many">
             <span className="font-semibold">{selectedTowns.length} town{selectedTowns.length === 1 ? '' : 's'} ticked</span>
             <span className="min-w-0 truncate text-xs text-muted-foreground">{selectedTowns.map((t) => t.town).join(', ')}</span>
-            <span className="ml-auto flex items-center gap-2">
+            <span className="ml-auto flex flex-wrap items-center gap-2">
               <Button size="sm" className="h-8 gap-1" disabled={!href} onClick={() => href && navigate(href)} data-testid="coverage-open-many-go">
                 <Search className="h-3.5 w-3.5" />{label}
               </Button>
@@ -445,10 +468,12 @@ export default function Coverage() {
                         server-side; it is just not printed here. Suppress (hide a town for the whole
                         team, admin-only on the server) is no longer a button: 0 of 733 towns were
                         suppressed when it went, the server action and uk_towns.suppressed_at stay, and a
-                        suppressed town would still be left off this list. */}
+                        suppressed town would still be left off this list.
+                        2026-10-23 (Paul): THOROUGH shows its ceiling on the button ("up to 45p", admins; "Thorough"
+                        for sales, who never see a cost). Standard stays unpriced, as above. */}
                     <Button variant="ghost" size="sm" className="h-7 text-xs" asChild>
-                      <Link to={findLeadsHref(tradeSearchWord(trade), townLocation(t.name), country)} title={`Search Google for ${tradeSearchWord(trade)} in ${t.name} and list them.`}>
-                        Find leads
+                      <Link to={findLeadsHref(tradeSearchWord(trade), townLocation(t.name), country, depth)} title={`Search Google for ${tradeSearchWord(trade)} in ${t.name} and list them.`}>
+                        Find leads{depthButtonSuffix(depth, 1, isAdmin)}
                       </Link>
                     </Button>
                   </td>
@@ -483,8 +508,11 @@ export default function Coverage() {
       {/* Required by the Open Government Licence wherever the list is shown. */}
       {isUk ? <p className="text-xs text-muted-foreground">
         <MapPin className="mr-1 inline h-3 w-3" />
-        Towns are ONS Built-Up Areas 2022. Contains OS data &copy; Crown copyright and database right
-        2024. Source: Office for National Statistics licensed under the Open Government Licence v3.0.
+        Towns are ONS Built-Up Areas 2022 (England and Wales) and London&rsquo;s boroughs (Census 2021); Scotland&rsquo;s
+        are National Records of Scotland settlements (mid-2020 estimates) and Northern Ireland&rsquo;s NISRA settlements
+        (Census 2021). Contains OS data &copy; Crown copyright and database right 2024. Source: Office for National
+        Statistics licensed under the Open Government Licence v3.0. Copyright National Records of Scotland, contains
+        public sector information licensed under the Open Government Licence v3.0. Source: NISRA (www.nisra.gov.uk).
       </p> : isAu ? <p className="text-xs text-muted-foreground" data-testid="coverage-au-note">
         <MapPin className="mr-1 inline h-3 w-3" />
         Towns are the ABS Urban Centres of 1,000+ people, named with their state so towns of the same name in two states

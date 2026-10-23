@@ -16,6 +16,10 @@ import { QuickBusinessTypes } from '@/components/QuickBusinessTypes';
 import type { Country } from '@/types/lead';
 import type { SearchFilters } from '@/types/lead';
 import { MANY_TOWNS_MAX_PER_PRESS, parseTownList, townsForPress } from '@/lib/manyTowns';
+import { defaultSearchDepth, THOROUGH_MAX_TOWNS_PER_PRESS, type SearchDepth } from '@/lib/townSearchArea';
+import { depthButtonSuffix } from '@/lib/searchDepthWords';
+import { SearchDepthToggle } from '@/components/SearchDepthToggle';
+import { useSubscription } from '@/hooks/useSubscription';
 
 interface SearchFormProps {
   onSearch: (filters: SearchFilters) => void;
@@ -34,6 +38,8 @@ interface SearchFormProps {
   initialLocation?: string;
   /** The country to search in, from Coverage's Find leads (2026-10-14) — seeded like the keyword and town. */
   initialCountry?: Country;
+  /** Standard / Thorough from Coverage (2026-10-23, src/lib/townSearchArea.ts); absent = the country's default. */
+  initialDepth?: SearchDepth;
   /**
    * Run the search ONCE on arrival — set by Coverage's "Find leads" button, which exists to run a
    * search rather than to prefill a box and wait.
@@ -74,6 +80,7 @@ export function SearchForm({
   initialKeyword,
   initialLocation,
   initialCountry,
+  initialDepth,
   autoSubmit = null,
   many = false,
   onManyChange,
@@ -101,7 +108,16 @@ export function SearchForm({
     if (next === selectedCountry) return;
     setLocation(locationAfterCountryChange(location, selectedCountry, next));
     setSelectedCountry(next);
+    setDepthPick(null);
   };
+  /* ⛔ STANDARD / THOROUGH (2026-10-23, src/lib/townSearchArea.ts). NEVER PERSISTED: Thorough costs more, so it is
+     never carried silently from one visit to the next. It starts on the URL's choice (Coverage) or the country's
+     default — Thorough for Australia, Standard everywhere else — and a new country goes back to its default. It
+     applies to a town search only ("This town only", or Many towns); a radius search is always Standard. */
+  const { isAdmin } = useSubscription();
+  const [depthPick, setDepthPick] = useState<SearchDepth | null>(initialDepth ?? null);
+  const depth: SearchDepth = depthPick ?? defaultSearchDepth(selectedCountry);
+  const pressCap = depth === 'thorough' ? THOROUGH_MAX_TOWNS_PER_PRESS : MANY_TOWNS_MAX_PER_PRESS;
   const primaryCountries = SEARCH_COUNTRY_OPTIONS.filter((o) => o.primary);
   const otherCountries = SEARCH_COUNTRY_OPTIONS.filter((o) => !o.primary);
   // Persisted exactly like radius — same tier, same per-user scope — so the mode survives a
@@ -147,25 +163,26 @@ export function SearchForm({
       radius: radius * 1000,
       country: selectedCountry,
       townOnly,
+      depth: townOnly ? depth : 'standard',
     });
     return true;
-  }, [keyword, location, radius, selectedCountry, townOnly, onSearch]);
+  }, [keyword, location, radius, selectedCountry, townOnly, depth, onSearch]);
 
   /* MANY TOWNS: the one-town filters minus the town — the same trade words, country and radius, "this town only" on. */
   const runMany = useCallback(() => {
     if (!keyword.trim() || !pickedTowns.length || !onSearchMany) return false;
-    onSearchMany({ keyword: keyword.trim(), radius: radius * 1000, country: selectedCountry, townOnly: true });
+    onSearchMany({ keyword: keyword.trim(), radius: radius * 1000, country: selectedCountry, townOnly: true, depth });
     return true;
-  }, [keyword, pickedTowns.length, onSearchMany, radius, selectedCountry]);
+  }, [keyword, pickedTowns.length, onSearchMany, radius, selectedCountry, depth]);
   const [townInput, setTownInput] = useState('');
   const addTowns = (raw: string) => {
     const next = parseTownList([...pickedTowns, ...raw.split(/[,|\n]+/)]);
     onPickedTownsChange?.(next);
   };
-  const press = townsForPress(pickedTowns);
+  const press = townsForPress(pickedTowns, pressCap);
   /* No template inside a template (CLAUDE.md): the note is built from plain pieces. */
   const manyNote = pickedTowns.length === 0 ? 'Pick towns, or tick them on Coverage.'
-    : 'Each town is searched on its own, exactly like a one-town search, up to ' + MANY_TOWNS_MAX_PER_PRESS + ' per press.'
+    : 'Each town is searched on its own, exactly like a one-town search, up to ' + pressCap + ' per press' + (depth === 'thorough' ? ' on Thorough.' : '.')
       + (press.later.length ? ' ' + press.later.length + ' more stay selected for the next press.' : '');
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -250,7 +267,11 @@ export function SearchForm({
                 <Label htmlFor="find-leads-country" className="text-xs font-medium text-foreground/80">
                   Country
                 </Label>
-                <Select value={selectedCountry} onValueChange={(v) => changeCountry(normaliseSearchCountry(v))}>
+                {/* ⛔ AN EMPTY VALUE IS NOT A CHOICE (2026-10-23). Inside this <form> the Select's hidden native select
+                    fires onValueChange("") when the URL seeds a new country; normalised, "" read as UK, so an arrival
+                    from Coverage with Australia flipped the box back to the UK (and dropped Thorough). Measured in a
+                    headless harness: two "" calls on every seeded arrival. */}
+                <Select value={selectedCountry} onValueChange={(v) => { if (v) changeCountry(normaliseSearchCountry(v)); }}>
                   <SelectTrigger id="find-leads-country" className="h-9 sm:h-10 bg-input border-border text-sm" aria-label="Country" data-testid="find-leads-country">
                     <span className="flex min-w-0 items-center gap-2">
                       <Globe2 className="h-3.5 w-3.5 sm:h-4 sm:w-4 shrink-0 text-muted-foreground" />
@@ -308,7 +329,7 @@ export function SearchForm({
                   {pickedTowns.length > 0 && (
                     <div className="flex flex-wrap gap-1.5" data-testid="many-towns-picked">
                       {pickedTowns.map((t, i) => (
-                        <span key={t} className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs ring-1 ring-inset ${i < MANY_TOWNS_MAX_PER_PRESS ? 'bg-primary/10 text-foreground ring-primary/40' : 'bg-muted text-muted-foreground ring-border'}`}>
+                        <span key={t} className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs ring-1 ring-inset ${i < pressCap ? 'bg-primary/10 text-foreground ring-primary/40' : 'bg-muted text-muted-foreground ring-border'}`}>
                           {t}
                           <button type="button" aria-label={`Remove ${t}`} onClick={() => onPickedTownsChange?.(pickedTowns.filter((x) => x !== t))}><X className="h-3 w-3" /></button>
                         </span>
@@ -372,6 +393,10 @@ export function SearchForm({
                   className="flex-1"
                 />
               </div>
+              {/* Standard / Thorough: a town search only (a radius search is always Standard). */}
+              <div className="pt-1">
+                <SearchDepthToggle value={townOnly || many ? depth : 'standard'} onChange={setDepthPick} showMoney={isAdmin} disabled={!(townOnly || many)} />
+              </div>
             </div>
           </div>
 
@@ -412,6 +437,7 @@ export function SearchForm({
                       <>
                         <Search className="mr-1.5 h-3.5 w-3.5" />
                         {many && pickedTowns.length > 0 ? `Find leads in ${press.run.length} town${press.run.length === 1 ? '' : 's'}` : 'Find Leads'}
+                        {depthButtonSuffix(townOnly || many ? depth : 'standard', many ? press.run.length : 1, isAdmin)}
                       </>
                     )}
                   </Button>

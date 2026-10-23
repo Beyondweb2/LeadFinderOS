@@ -77,7 +77,7 @@ ok(!/Outside town<\/span>/.test(lt), 'no badge');
 const ix = read('../src/pages/Index.tsx');
 ok(/const sel = selAll\.filter\(\(l\) => !outsideSearchedTown\(l\) \|\| shownIdsRef\.current\.has\(l\.id\)\)/.test(ix), 'every add path refuses them (one door + Add all with emails)');
 const sl = read('../supabase/functions/search-leads/index.ts');
-ok((sl.match(/places\.formattedAddress,places\.location,nextPageToken/g) ?? []).length === 3, 'places.location asked on every text search (free at the billed tier)');
+ok((sl.match(/places\.formattedAddress,places\.location,nextPageToken/g) ?? []).length === 4, 'places.location asked on every text search, Thorough included (free at the billed tier)');
 ok(/outsideTown: true/.test(sl) && /townOnly && !region \? await attachTownChecks/.test(sl) && /if \(townOnly && !regionMeta\) leads = await attachTownChecks/.test(sl), 'town-only answers marked, cached or fresh; outsideTown kept');
 const mig = read('../supabase/migrations/20261111090000_coverage_town.sql');
 ok(/add column if not exists coverage_town text/.test(mig) && /town_fetch_note, coverage_town\)/.test(mig) && /o ->> 'coverage_town'\)/.test(mig) && !/drop |delete from|update public\.outreach_leads/i.test(mig), 'additive: one column, written on insert only');

@@ -8,6 +8,8 @@ import { fetchAllRowsParallel } from '@/lib/fetchAllRows';
 import { legacySearchResultKeys, packSearchResults, searchResultsKey, unpackSearchResults } from '@/lib/searchResultsCache';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { foundRecord, isWithoutWebsite } from '@/lib/websiteStatusClass';
+import { outsideSearchedTown } from '@/lib/inTown';
+import { THOROUGH_MAX_TOWNS_PER_PRESS } from '@/lib/townSearchArea';
 import { myReadinessSnapshot, notReadyMessage, onboardingWordsForPausedRefusal } from '@/lib/readinessWords';
 
 type SearchLeadLike = Parameters<typeof foundRecord>[0][number];
@@ -660,9 +662,12 @@ export function LeadSearchProvider({ children }: { children: React.ReactNode }) 
       try { sessionStorage.setItem(storageKeys.filters, JSON.stringify({ filters })); } catch {}
     }
 
-    const noWebsiteCount = filteredLeads.filter((l) => isWithoutWebsite(l.websiteStatus)).length;
+    /* ⛔ FOUND = WHAT THE SCREEN SHOWS (2026-10-23). A town search returns the out-of-town results too, behind the
+       grey "outside" line; counting them said "Bundaberg: 14 found" over 6 rows. The run records the in-town ones. */
+    const inTownShown = filteredLeads.filter((l) => !outsideSearchedTown(l));
+    const noWebsiteCount = inTownShown.filter((l) => isWithoutWebsite(l.websiteStatus)).length;
 
-    const runId = await saveSearch(filters, filteredLeads.length, noWebsiteCount, data.leads as SearchLeadLike[]);
+    const runId = await saveSearch(filters, inTownShown.length, noWebsiteCount, (data.leads as Lead[]).filter((l) => !outsideSearchedTown(l)) as SearchLeadLike[]);
     /* Each result carries its run, so an add from it is recorded against what this run found. */
     if (runId && !controller.signal.aborted) setLeads((prev) => prev.map((l) => ({ ...l, searchRunId: runId })));
 
@@ -700,7 +705,8 @@ export function LeadSearchProvider({ children }: { children: React.ReactNode }) 
      is shown once, under the first. A refusal (pause, limit, spend guard) stops new towns starting — what was found
      stays; one town failing never stops the others. Answers the towns that were searched (the page unticks them). */
   const searchMany = useCallback(async (base: Omit<SearchFilters, 'location'>, towns: readonly string[]): Promise<string[]> => {
-    const plan = townsForPress(towns);
+    /* Thorough's press ceiling (THOROUGH_MAX_CALLS_PER_PRESS ÷ the per-town ceiling): fewer towns per press. */
+    const plan = townsForPress(towns, base.depth === 'thorough' ? THOROUGH_MAX_TOWNS_PER_PRESS : undefined);
     if (!plan.run.length || !base.keyword?.trim()) return [];
     if (abortRef.current) abortRef.current.abort();
     const controller = new AbortController();
@@ -746,15 +752,17 @@ export function LeadSearchProvider({ children }: { children: React.ReactNode }) 
       const ex = await exclusionsP;
       if (controller.signal.aborted) { setLine(town, { state: 'not_searched' }); return; }
       const shown = shownResults(r.data, ex);
-      const noWebsiteCount = shown.filter((l) => isWithoutWebsite(l.websiteStatus)).length;
+      /* Found = the in-town rows the screen shows (2026-10-23): the outside ones stay behind the grey line. */
+      const inTownShown = shown.filter((l) => !outsideSearchedTown(l));
+      const noWebsiteCount = inTownShown.filter((l) => isWithoutWebsite(l.websiteStatus)).length;
       /* Its own run, written before the results show, so every result can carry it (Found vs Added per town). */
-      const runId = await saveSearch(filters, shown.length, noWebsiteCount, r.data.leads as SearchLeadLike[]);
+      const runId = await saveSearch(filters, inTownShown.length, noWebsiteCount, r.data.leads.filter((l) => !outsideSearchedTown(l)) as SearchLeadLike[]);
       const townCountry = typeof r.data.resolvedCountry === 'string' && r.data.resolvedCountry ? r.data.resolvedCountry : country;
       answers.push({ town, leads: shown.map((l) => ({ ...l, searchTown: town, searchCountry: townCountry, ...(runId ? { searchRunId: runId } : {}) })) });
       const merged = mergeTownLeads(plan.run, answers);
       if (!controller.signal.aborted) setLeads(merged.leads);
       setLine(town, {
-        state: 'done', found: shown.length, noWebsite: noWebsiteCount,
+        state: 'done', found: inTownShown.length, noWebsite: noWebsiteCount,
         ...(r.data.townFilter && r.data.townFilter.applied === false ? { message: 'Town boundary not found — searched the radius instead' } : {}),
       });
     });
