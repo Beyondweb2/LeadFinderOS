@@ -22,6 +22,14 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-23-reply-audit-sweep', date: '2026-10-23', title: 'Missed reply audits are now caught every hour', audience: 'admin',
+    body: 'A background check finds leads who replied on WhatsApp but never got their audit (mostly auto-replies) and queues one each. It never sends anything.',
+    report: {
+      added: ['An hourly sweep: a lead who replied on WhatsApp in the last 30 days and has no reply audit gets one queued, audit only.', 'A daily limit on how many it may queue (50 to start), kept with the other usage limits.'],
+      changed: ['The first run catches up the leads already missed.'],
+      removed: [],
+      effect: 'Leads whose first answer was a bot now get their audit, even though the WhatsApp webhook is still on its old version. It stops when the reply setting is on "Do nothing", when paid prospecting is paused, and under the emergency stop. Anyone who ever said no is skipped.',
+    } },
   { id: '2026-10-23-audit-on-automated-reply', date: '2026-10-23', title: 'An automated reply now starts the audit too', audience: 'all',
     body: 'When a business answers with an auto-reply (out of office, booking bot, "thanks for reaching out"), its audit now runs. Before, it was skipped and the lead never got one.',
     report: {
