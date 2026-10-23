@@ -4,6 +4,7 @@ import { fetchAllRows } from '@/lib/fetchAllRows';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import type { CrawlRow, CrawlStoredResult } from '@/lib/crawlResult';
+import type { StoredSiteScore } from '@/lib/siteScore';
 
 // lead_crawl_checks isn't in the generated types (same as useInbox) → an untyped `from`.
 // deno-lint-ignore no-explicit-any
@@ -20,9 +21,10 @@ const sb = supabase as unknown as { from: (t: string) => any };
    (resolveSiteFault, hasSiteFindings) read — proved identical on all 1,339 live rows. ⛔ Anything that SHOWS the
    check (the popup, the lead popup) reads the full row through useLeadCrawl below. Aliased to `result` so every
    reader keeps its shape. */
-export const LEAD_CRAWL_LIST_SELECT = 'lead_id, result:result_slim, created_at';
+/* The site score (2026-10-23, src/lib/siteScore.ts): its small stored columns ride the same read — never the result. */
+export const LEAD_CRAWL_LIST_SELECT = 'lead_id, result:result_slim, created_at, site_score, site_score_state, site_score_version, site_score_reasons, site_score_detail';
 
-export interface LeadCrawlListRow { lead_id: string | null; result: CrawlStoredResult | null; created_at: string }
+export interface LeadCrawlListRow extends StoredSiteScore { lead_id: string | null; result: CrawlStoredResult | null; created_at: string }
 
 async function fetchLeadCrawls(label: string): Promise<LeadCrawlListRow[]> {
   const res = await fetchAllRows<LeadCrawlListRow>(label, (from, to) =>
@@ -72,7 +74,10 @@ export function useLeadCrawls(label = 'Outreach (crawl checks)') {
       if (!c.lead_id) continue;
       const prev = m.get(c.lead_id);
       if (!prev || new Date(c.created_at).getTime() > new Date(prev.created_at).getTime()) {
-        m.set(c.lead_id, { result: c.result, created_at: c.created_at });
+        m.set(c.lead_id, {
+          result: c.result, created_at: c.created_at,
+          siteScore: { site_score: c.site_score, site_score_state: c.site_score_state, site_score_version: c.site_score_version, site_score_reasons: c.site_score_reasons, site_score_detail: c.site_score_detail },
+        });
       }
     }
     return m;

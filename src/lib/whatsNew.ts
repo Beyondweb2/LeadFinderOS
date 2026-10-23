@@ -22,6 +22,14 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-23-site-score', date: '2026-10-23', title: 'A website score on every lead row', audience: 'all',
+    body: 'Outreach rows show a small ring and Inbox rows a number pill: the lead’s website out of 100. Hover (or tap on a phone) to see the top reasons.',
+    report: {
+      added: ['A score out of 100 from the deep website check: green 75 and up, amber 50 to 74, red under 50.', 'Hover or tap shows the three things that cost the most points and one thing the site does well.', '"Can’t read site" (grey, with the reason) when the site did not answer or builds its text in the browser. That is not a low score.', '"Quick check" (grey) when only the short check has run. The score comes with the deep check.'],
+      changed: ['Nothing else on the rows. The score reads the same website check the Inbox popup and call script use.'],
+      removed: [],
+      effect: 'For you and your team only, never shown to a prospect or sent. Same site, same score. No new crawls and no extra cost: existing leads were scored from checks already stored.',
+    } },
   { id: '2026-10-23-hook-report-link', date: '2026-10-23', title: 'First-reply pitch drafts now include the report link', audience: 'admin',
     body: 'When the audit is finished, the drafted first reply gets one extra line, "Here is the full report:" and their report link, just before the question.',
     report: {

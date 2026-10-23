@@ -45,6 +45,7 @@ import { questionTownForLead } from "../_shared/question-town.ts";
 import { listingForCheck } from "../_shared/listing-website.ts";
 import { crawlPageCapFor, prospectCrawlReuse, PROSPECT_CRAWL_PAGE_CAP } from "../../../src/lib/prospectCrawl.ts";
 import { AUTO_DEEP_MAX_RUNNING, summariseWebsiteCheck } from "../../../src/lib/websiteCheck.ts";
+import { siteScoreColumns, siteScoreForRow } from "../../../src/lib/siteScore.ts";
 import { insightsFromFetchedPages } from "../../../src/lib/salesInsightsInline.ts";
 import type { SalesInsights } from "../../../src/lib/salesInsights.ts";
 import { buildContentTrust, pageObservations, type ContentTrust } from "../../../src/lib/contentTrust.ts";
@@ -786,6 +787,12 @@ Deno.serve(async (req) => {
       const wc = summariseWebsiteCheck({ result: storedResult as never, mode: "standard", created_at: checkedAt });
       if (wc) (storedResult as Record<string, unknown>).websiteCheck = wc;
     } catch (e) { console.error("[crawl-check] website check summary failed:", (e as Error).message); }
+    /* THE SITE SCORE (2026-10-23, src/lib/siteScore.ts): team-only, read off the summary just built, stored beside it so
+       the row never carries a score for an older check. A quick check stores state 'partial' (no number). Never fails the crawl. */
+    let scoreCols: Record<string, unknown> = siteScoreColumns(null, checkedAt);
+    try {
+      scoreCols = siteScoreColumns(siteScoreForRow({ result: storedResult as never, mode: "standard", created_at: checkedAt }), checkedAt);
+    } catch (e) { console.error("[crawl-check] site score failed:", (e as Error).message); }
 
     /* ⛔ ONE CANONICAL ROW PER LEAD, WHICHEVER SCREEN STARTED THE CRAWL. Every entry point — Outreach,
        Inbox, lead detail, Paid Clients, Website Build — lands here with the lead id, so a crawl run
@@ -826,6 +833,7 @@ Deno.serve(async (req) => {
             full_evidence: full,
             requested_from: requestedFrom,
             last_failed_attempt: null,
+            ...scoreCols,
           }, { onConflict: "lead_id" });
           if (upErr) throw new Error(upErr.message);
           stored = true;

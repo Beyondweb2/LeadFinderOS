@@ -33,6 +33,7 @@ const PROSPECT_CRAWL_CONCURRENCY = 1;
 import { cleanCounts, decideFetchOutcome, frontierExhausted, type JobCounts } from "../../../src/lib/crawlJob.ts";
 import { buildContentTrust, pageObservations, type ContentTrust, type PageObs } from "../../../src/lib/contentTrust.ts";
 import { summariseWebsiteCheck } from "../../../src/lib/websiteCheck.ts";
+import { siteScoreColumns, siteScoreForRow } from "../../../src/lib/siteScore.ts";
 import { questionTownForLead } from "./question-town.ts";
 import { listingForCheck } from "./listing-website.ts";
 
@@ -622,7 +623,13 @@ export async function finalizeCrawlJob(service: Client, jobId: string): Promise<
     const wc = summariseWebsiteCheck({ result, full_evidence: full as never, mode: "full", created_at: checkedAt });
     if (wc) (result as Record<string, unknown>).websiteCheck = wc;
   } catch (e) { console.error("[crawl-job] website check summary failed:", (e as Error).message); }
-  const status = full.completeness === "complete" ? "complete" : full.completeness === "failed" ? "failed" : "complete_with_failures";
+  /* THE SITE SCORE (2026-10-23, src/lib/siteScore.ts): team-only, read off the summary just built and stored beside it on
+     the lead row below. Never fails the crawl. */
+  let scoreCols: Record<string, unknown> = siteScoreColumns(null, checkedAt);
+  try {
+    scoreCols = siteScoreColumns(siteScoreForRow({ result, full_evidence: full as never, mode: "full", created_at: checkedAt }), checkedAt);
+  } catch (e) { console.error("[crawl-job] site score failed:", (e as Error).message); }
+  const status =full.completeness === "complete" ? "complete" : full.completeness === "failed" ? "failed" : "complete_with_failures";
   await service.from("crawl_jobs").update({ status, result, summary: { ...summaryState, full }, completed_at: checkedAt, lease_until: null, updated_at: checkedAt }).eq("id", jobId);
   /* ⛔ A FAILED CRAWL NEVER OVERWRITES THE LAST GOOD ONE (2026-10-11, leadCrawlWriteDecision): a full crawl that could
      not read the site keeps the stored row and notes the attempt beside it. */
@@ -645,6 +652,7 @@ export async function finalizeCrawlJob(service: Client, jobId: string): Promise<
     const { error } = await service.from("lead_crawl_checks").upsert({
       lead_id: job.lead_id, url: job.start_url, user_id: job.user_id, result, created_at: checkedAt,
       mode: "full", full_evidence: full, requested_from: job.requested_from, job_id: jobId, last_failed_attempt: null,
+      ...scoreCols,
     }, { onConflict: "lead_id" });
     if (error) {
       console.error(`[crawl-job] lead row write failed: ${error.message}`);

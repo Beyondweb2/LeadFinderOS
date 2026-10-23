@@ -35,7 +35,9 @@ ok(['complete', 'capped', 'failed', 'cancelled'].every(runSettled) && !runSettle
 
 /* ── the summary read ── */
 const crawls = read('src/hooks/useLeadCrawls.ts');
-ok(/LEAD_CRAWL_LIST_SELECT = 'lead_id, result:result_slim, created_at'/.test(crawls), 'the lists read result_slim, aliased to result');
+const listSelect = /LEAD_CRAWL_LIST_SELECT = '([^']*)'/.exec(crawls)?.[1] ?? '';
+ok(listSelect === 'lead_id, result:result_slim, created_at, site_score, site_score_state, site_score_version, site_score_reasons, site_score_detail',
+  'the lists read result_slim, aliased to result, plus the small site-score columns (never the whole result)');
 ok(/select\('result, created_at'\)\.eq\('lead_id'/.test(crawls), 'the one-lead popup read still reads the FULL result');
 const inbox = read('src/hooks/useInbox.ts');
 ok(!/from\('lead_crawl_checks'\)/.test(inbox), "the Inbox no longer reads lead_crawl_checks itself (it shares useLeadCrawls)");
