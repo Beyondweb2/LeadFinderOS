@@ -70,13 +70,42 @@ export const FIX_LINES: Record<FixKind, FixLine | null> = {
   unsourced_claims: { title: 'Show where your claims come from', detail: 'Name the source of any pass rate or star rating you quote.' },
 };
 
+/** THE WEBSITE CHECK'S OWN NAMES (2026-10-23). The report's issues come, on a live report, from the lead's ONE
+ *  website check (websiteCheck.ts), whose findings carry siteAudit ids (and `ct_<kind>` for a content check) — not
+ *  the kinds above. Each alias points a site-audit id at a line Paul already approved; it never adds wording, and
+ *  an id with no honest equivalent is simply absent (so it prints no fix). Training-bot blocks
+ *  (`robots_blocks_<token>`) are deliberately NOT aliased: only a block of everything or of the search crawlers
+ *  is a reason AI cannot read the site. */
+export const FIX_ALIASES: Readonly<Record<string, FixKind>> = {
+  robots_blocks_all: 'search_blocked',
+  search_crawler_refused: 'search_blocked',
+  sitemap_off_site: 'sitemap_wrong_domain',
+  noindex_home: 'noindex_important_page',
+  noindex_pages: 'noindex_important_page',
+  canonical_off_site: 'canonical_off_domain',
+  broken_pages: 'broken_links',
+  thin_key_pages: 'thin_pages',
+  near_duplicate_pages: 'duplicates',
+  no_reviews: 'no_proof',
+  town_missing: 'areas_not_stated',
+  schema_phone_mismatch: 'schema_mismatch',
+};
+
+/** A finding's key → the FixKind it maps to: a content check's `ct_` prefix dropped, then the alias, else itself. */
+function fixKindOf(raw: string): string {
+  const k = raw.startsWith('ct_') ? raw.slice(3) : raw;
+  return Object.prototype.hasOwnProperty.call(FIX_ALIASES, k) ? FIX_ALIASES[k] : k;
+}
+
 /** The fix lines for these finding kinds: in the order given (the issues' own ranking), one per distinct
  *  line, none for a null or unknown kind, at most FIX_LINES_MAX. */
 export function fixLinesFor(kinds: ReadonlyArray<string | null | undefined>, max: number = FIX_LINES_MAX): FixLine[] {
   const out: FixLine[] = [];
   const seen = new Set<string>();
-  for (const k of kinds) {
-    if (!k || !Object.prototype.hasOwnProperty.call(FIX_LINES, k)) continue;
+  for (const raw of kinds) {
+    if (!raw) continue;
+    const k = fixKindOf(raw);
+    if (!Object.prototype.hasOwnProperty.call(FIX_LINES, k)) continue;
     const line = FIX_LINES[k as FixKind];
     if (!line || seen.has(line.title)) continue;
     seen.add(line.title);

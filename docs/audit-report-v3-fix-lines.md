@@ -50,3 +50,12 @@ Status: **PENDING APPROVAL. Do not deploy until Paul has approved or edited thes
 - Fix lines are keyed by finding KIND, never by wording, in one file; the record is exhaustive (a new kind will not
   compile until someone decides what the report says about fixing it).
 - A fix line is not a promise: no figure, price, guarantee or claim about how AI decides.
+
+## The website check's own names (added at deploy, 2026-10-23)
+A live report's issues come from the lead's ONE website check, whose findings use the site-audit ids (and `ct_<kind>`
+for a content check). `FIX_ALIASES` in `siteFixLines.ts` points those ids at the lines above; it adds no wording:
+`robots_blocks_all`, `search_crawler_refused` → let AI tools read your site · `sitemap_off_site` → sitemap · `noindex_home`,
+`noindex_pages` → main pages listed · `canonical_off_site` → main version · `broken_pages` → pages that don’t load ·
+`thin_key_pages` → more to quote · `near_duplicate_pages` → own content · `no_reviews` → proof · `town_missing` → areas ·
+`schema_phone_mismatch` → business details. Training-bot blocks (`robots_blocks_<token>`), generic schema, `no_service_pages`,
+`one_page_site` and the rest print no fix.

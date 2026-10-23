@@ -3,7 +3,7 @@
    homepage picture will go, and the "what to fix first" lines (siteFixLines.ts): only for findings the crawl made, at most
    three, deduplicated, never a number we do not measure, never a promise. */
 import { renderQuickCheckReport, type QuickWebsite } from '../src/lib/aiAuditReportHtml.ts';
-import { FIX_LINES, FIX_LINES_MAX, fixLinesFor } from '../src/lib/siteFixLines.ts';
+import { FIX_ALIASES, FIX_LINES, FIX_LINES_MAX, fixLinesFor } from '../src/lib/siteFixLines.ts';
 import type { HookReportSummary } from '../src/lib/hookAudit.ts';
 
 let failures = 0;
@@ -62,6 +62,16 @@ const html = (w: QuickWebsite, host: string | null = 'example-school.co.uk') => 
   ok(all.every(([, v]) => !/guarantee|refund|£|\bwill (get|make|rank|name)\b|\bensure\b|\bAI (will|decides)\b/i.test(v.title + v.detail)), 'D: no promise, price, guarantee or claim about how AI decides');
   ok(fixLinesFor(['search_blocked', 'robots_blocks_ai', 'thin_pages']).length === 2, 'D: two kinds with the same line print it once');
   ok(fixLinesFor(['nonsense', null, undefined, 'toString']).length === 0, 'D: an unknown key (even an Object.prototype name) prints nothing');
+}
+
+/* ── E. the website check's own names (the live path: websiteCheck.ts hands its siteAudit ids through as the kind) ── */
+{
+  ok(Object.entries(FIX_ALIASES).every(([from, to]) => !(from in FIX_LINES) && FIX_LINES[to]), 'E: every alias points at an existing approved line, and is not itself a kind (no second rule for one thing)');
+  const t = (ids: string[]) => fixLinesFor(ids).map((l) => l.title);
+  ok(t(['ct_unsourced_claims'])[0] === FIX_LINES.unsourced_claims!.title && t(['ct_areas_not_stated'])[0] === FIX_LINES.areas_not_stated!.title, 'E: a content check arrives as ct_<kind> and finds its line');
+  ok(t(['missing_h1', 'town_missing', 'ct_unsourced_claims', 'thin_pages']).length === FIX_LINES_MAX, 'E: the live shape (siteAudit ids) fills the three slots');
+  ok(t(['robots_blocks_gptbot', 'robots_blocks_pages_gptbot', 'no_business_schema', 'schema_malformed', 'no_service_pages', 'one_page_site', 'vs_key_page_basics']).length === 0, 'E: a training-bot block, generic schema and ids with no honest equivalent print nothing');
+  ok(t(['robots_blocks_all', 'search_crawler_refused']).length === 1, 'E: two ids with the same fix print it once');
 }
 
 if (failures) throw new Error(`${failures} v3 layout checks failed`);
