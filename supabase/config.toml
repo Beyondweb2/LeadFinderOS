@@ -377,3 +377,8 @@ verify_jwt = false
 # with x-cron-secret; the handler refuses anything else. verify_jwt must stay false.
 [functions.inbox-scheduled-send]
 verify_jwt = false
+
+# site-shot (2026-10-25): ONE homepage picture per lead for the prospect report. Internal only (CRON_SECRET + x-internal-job); the handler
+# refuses anything else. verify_jwt must stay false. Sends nothing; shoots nothing while site_shot_settings.enabled is false (measure excepted).
+[functions.site-shot]
+verify_jwt = false
