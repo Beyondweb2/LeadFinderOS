@@ -62,6 +62,8 @@ const RENDERERS: Array<[string, string]> = [
   ["audit report (prospect + client)", "src/lib/aiAuditReportHtml.ts"],
   /* 2026-10-11: the content & trust issues' words print on the report's "Website issues we found" card. */
   ["website content & trust issues (prospect)", "src/lib/contentTrust.ts"],
+  /* 2026-10-23: the "What to fix first" lines on the same report. */
+  ["what-to-fix-first lines (prospect)", "src/lib/siteFixLines.ts"],
   ["four-week results document (client)", "src/lib/remeasureResultsHtml.ts"],
   /* 2026-10-02: the monthly update Paul copies to a paying client (prepared by hand, sent by him). */
   ["monthly client update words (client)", "src/lib/monthlyUpdate.ts"],

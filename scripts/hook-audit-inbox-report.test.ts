@@ -261,7 +261,7 @@ function report(grid: Array<[G, G]>, extra: Record<string, unknown> = {}) {
   ok(!/Your website/i.test(report([[true, true], [true, true], [true, true]]).t), 'website: no completed crawl → nothing invented');
   const many = Array.from({ length: 8 }, (_, i) => ({ title: `Issue ${i + 1}`, detail: 'Detail.', minor: false }));
   const w = report([[true, false], [true, true], [false, false]], { crawlFaults: many });
-  ok(/Website issues we found/i.test(w.t) && /Issue 5/.test(w.t) && !/Issue 6/.test(w.t), 'website: capped at 5 findings');
+  ok(/What we found on your website/i.test(w.t) && /Issue 5/.test(w.t) && !/Issue 6/.test(w.t), 'website: capped at 5 findings');
 }
 
 /* ── O. INCOMPLETE: 5 valid + 1 failure → no score, no public report, no hook ──────────────── */
