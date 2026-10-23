@@ -10,7 +10,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { foundRecord, isWithoutWebsite } from '@/lib/websiteStatusClass';
 import { outsideSearchedTown } from '@/lib/inTown';
 import { nicheProfile, notNicheMatch } from '@/lib/nicheMatch';
-import { THOROUGH_MAX_TOWNS_PER_PRESS } from '@/lib/townSearchArea';
+import { THOROUGH_MAX_TOWNS_PER_PRESS, usableSearchDepth } from '@/lib/townSearchArea';
 import { myReadinessSnapshot, notReadyMessage, onboardingWordsForPausedRefusal } from '@/lib/readinessWords';
 
 type SearchLeadLike = Parameters<typeof foundRecord>[0][number];
@@ -407,7 +407,7 @@ export function LeadSearchProvider({ children }: { children: React.ReactNode }) 
              that direct callers cannot leave a pool unindexed — but both writing would double-count
              results_count/no_website_count in useDashboardMetrics. One row, from whichever side has
              the better numbers. */
-          body: { ...filters, skipTrialCount, skipHistory: true, ...(isDemo ? { demo: true } : {}) },
+          body: { ...filters, ...(filters.depth ? { depth: usableSearchDepth(filters.depth) } : {}), skipTrialCount, skipHistory: true, ...(isDemo ? { demo: true } : {}) },
         });
 
         const timeoutPromise = new Promise<never>((_, reject) => {
@@ -710,7 +710,7 @@ export function LeadSearchProvider({ children }: { children: React.ReactNode }) 
      stays; one town failing never stops the others. Answers the towns that were searched (the page unticks them). */
   const searchMany = useCallback(async (base: Omit<SearchFilters, 'location'>, towns: readonly string[]): Promise<string[]> => {
     /* Thorough's press ceiling (THOROUGH_MAX_CALLS_PER_PRESS ÷ the per-town ceiling): fewer towns per press. */
-    const plan = townsForPress(towns, base.depth === 'thorough' ? THOROUGH_MAX_TOWNS_PER_PRESS : undefined);
+    const plan = townsForPress(towns, usableSearchDepth(base.depth) === 'thorough' ? THOROUGH_MAX_TOWNS_PER_PRESS : undefined);
     if (!plan.run.length || !base.keyword?.trim()) return [];
     if (abortRef.current) abortRef.current.abort();
     const controller = new AbortController();

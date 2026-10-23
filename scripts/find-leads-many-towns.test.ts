@@ -74,7 +74,7 @@ function ok(cond: boolean, msg: string) { console.log(`${cond ? 'PASS' : 'FAIL'}
     ok(/searchTown: town, searchCountry: townCountry, \.\.\.\(runId \? \{ searchRunId: runId \} : \{\}\)/.test(manyFn), 'each result carries its town, country and run');
     ok(/if \(r\.kind === 'code'\) \{ stopped = true;/.test(manyFn) && /if \(r\.refusal\) stopped = true;/.test(manyFn) && /if \(stopped \|\| controller\.signal\.aborted\) \{ setLine\(town, \{ state: 'not_searched' \}\)/.test(manyFn), 'a refusal stops new towns starting; a plain failure does not');
     /* 2026-10-23: Thorough presses fewer towns (THOROUGH_MAX_TOWNS_PER_PRESS); Standard is still ten. */
-    ok(/townsForPress\(towns, base\.depth === 'thorough' \? THOROUGH_MAX_TOWNS_PER_PRESS : undefined\)/.test(manyFn) && /runPool\(plan\.run, MANY_TOWNS_CONCURRENCY/.test(manyFn), 'up to ten (Standard), two at a time');
+    ok(/townsForPress\(towns, usableSearchDepth\(base\.depth\) === 'thorough' \? THOROUGH_MAX_TOWNS_PER_PRESS : undefined\)/.test(manyFn) && /runPool\(plan\.run, MANY_TOWNS_CONCURRENCY/.test(manyFn), 'up to ten (Standard), two at a time');
     ok(/return lines\.filter\(\(l\) => l\.state === 'done' \|\| l\.state === 'not_found'\)/.test(manyFn), 'searched towns leave the selection; failed and not-searched stay');
   }
 

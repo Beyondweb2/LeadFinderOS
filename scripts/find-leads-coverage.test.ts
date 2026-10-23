@@ -16,7 +16,7 @@ import { readFileSync } from 'node:fs';
 import { inTownVerdict, townRadiusKm, outsideSearchedTown } from '../src/lib/inTown.ts';
 import {
   AU_SMALL_BOX_KM2, THOROUGH_MAX_CALLS_PER_PRESS, THOROUGH_MAX_CALLS_PER_TOWN, THOROUGH_MAX_TILES, THOROUGH_MAX_TOWNS_PER_PRESS,
-  THOROUGH_MAX_USD_PER_TOWN, TEXT_SEARCH_USD_PER_PAGE, GEOCODE_USD, boxAreaKm2, defaultSearchDepth, parseSearchDepth,
+  THOROUGH_MAX_USD_PER_TOWN, TEXT_SEARCH_USD_PER_PAGE, GEOCODE_USD, boxAreaKm2, defaultSearchDepth, parseSearchDepth, usableSearchDepth, THOROUGH_SEARCH_ENABLED,
   squareBox, thoroughTiles, townSearchBox,
 } from '../src/lib/townSearchArea.ts';
 import { depthButtonSuffix, depthNote, gbpWords } from '../src/lib/searchDepthWords.ts';
@@ -77,9 +77,13 @@ ok(/const take = \(\) => \(reserved < THOROUGH_MAX_CALLS_PER_TOWN/.test(searchSr
 ok(/townOnly && depthAsked === 'thorough' \? 'thorough' : 'standard'/.test(searchSrc), 'Thorough only on a town-only search; anything else runs Standard');
 ok(/##thorough/.test(searchSrc) && /##aubox2/.test(searchSrc), 'Thorough has its own cache pool; an Australian centre-only pool is not replayed');
 const ctx = readFileSync('src/contexts/LeadSearchContext.tsx', 'utf8');
-ok(/townsForPress\(towns, base\.depth === 'thorough' \? THOROUGH_MAX_TOWNS_PER_PRESS/.test(ctx), 'many towns on Thorough searches at most the press ceiling of towns');
-ok(defaultSearchDepth('Australia') === 'thorough' && defaultSearchDepth('UK') === 'standard' && defaultSearchDepth('Malaysia') === 'standard', 'Thorough is pre-selected for Australia only');
-ok(parseSearchDepth('thorough') === 'thorough' && parseSearchDepth('deep') === null && parseSearchDepth(null) === null, 'an unknown depth is never read as one');
+ok(/townsForPress\(towns, usableSearchDepth\(base\.depth\) === 'thorough' \? THOROUGH_MAX_TOWNS_PER_PRESS/.test(ctx), 'many towns on Thorough searches at most the press ceiling of towns');
+ok(THOROUGH_SEARCH_ENABLED === false, 'Thorough is switched off (docs/thorough-search-off.md)');
+ok(defaultSearchDepth('Australia') === 'standard' && defaultSearchDepth('UK') === 'standard' && defaultSearchDepth('Malaysia') === 'standard', 'Standard is the default everywhere while Thorough is off');
+ok(parseSearchDepth('thorough') === 'standard' && usableSearchDepth('thorough') === 'standard' && usableSearchDepth(undefined) === 'standard', 'a saved / linked thorough falls back to Standard');
+ok(parseSearchDepth('deep') === null && parseSearchDepth(null) === null, 'an unknown depth is never read as one');
+const covSrc = readFileSync('src/pages/Coverage.tsx', 'utf8');
+ok(/THOROUGH_SEARCH_ENABLED && <div[^>]*data-testid="coverage-search-depth"/.test(covSrc) && /THOROUGH_SEARCH_ENABLED && <div className="pt-1">/.test(readFileSync('src/components/SearchForm.tsx', 'utf8')), 'both Thorough buttons sit behind the one switch');
 ok(findLeadsHref('locksmiths', 'Albury NSW, Australia', 'Australia', 'thorough').includes('depth=thorough') && !findLeadsHref('locksmiths', 'Hastings').includes('depth='), 'the Coverage link carries the depth; an old call is byte-identical');
 ok((manyTownsHref('locksmiths', ['A', 'B'], 'Australia', 'standard') ?? '').includes('depth=standard'), 'many towns carries it too');
 const sf = readFileSync('src/components/SearchForm.tsx', 'utf8');

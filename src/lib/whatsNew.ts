@@ -57,6 +57,18 @@ export const WHATS_NEW: readonly WhatsNewEntry[] = [
       removed: ['The voice-note offer from the first reply.'],
       effect: 'First replies are quicker to read and only ever list real issues. Press Regenerate on any open draft to get the new wording.',
     } },
+  { id: '2026-10-23-thorough-search-off', date: '2026-10-23', title: 'Find Leads: Thorough search switched off', audience: 'all',
+    body: 'The Thorough option is gone from Find Leads and Coverage. Every search is Standard, in every country. Australian towns still search their whole area.',
+    report: {
+      added: [],
+      changed: [
+        'Australia no longer starts on Thorough: it searches Standard like every other country.',
+      ],
+      removed: [
+        'The Standard / Thorough buttons on Find Leads and Coverage, and the "up to" cost on the Find leads buttons. Small towns have few businesses, so most of the nine squares came back empty at about four times the cost.',
+      ],
+      effect: 'Searches cost the Standard price. The Thorough code is kept behind one switch and can come back.',
+    } },
   { id: '2026-10-23-find-leads-coverage', date: '2026-10-23', title: 'Find Leads finds more of each town: Thorough search, more towns', audience: 'all',
     body: 'Coverage and Find Leads have a Standard / Thorough setting. Thorough searches the town in small squares and finds businesses one search misses. Australian towns now search their whole area, and Coverage lists Scotland, Northern Ireland, the London boroughs and 66 more Malaysian towns.',
     report: {
