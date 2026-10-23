@@ -22,6 +22,14 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-23-report-v3-layout', date: '2026-10-23', title: 'The prospect report has a new look: their site and issues first, then who AI named', audience: 'all',
+    body: 'The six-answer quick report prospects open is redesigned. A black "How visible is…" band with the overall figure in a ring, a tile per AI tool, then "What we found on your website", one dark-titled box per question, and "What to fix first".',
+    report: {
+      added: ['A hero band that asks "How visible is [business] in AI search?" with the overall percentage in a ring.', 'A card beside the website issues showing their web address and how many things we found. The homepage picture comes later.', 'A "What to fix first" row: up to three plain fixes, each tied to something the website check actually found.', 'Each question is a box with a dark title bar and a grey body, so it stands out; ChatGPT, Gemini and Google AI sit side by side inside it.'],
+      changed: ['The report is now light only (it used to follow the viewer’s dark mode).', 'Website issues moved to the top, above the questions.', 'The quoted snippets of each AI answer are kept in the page but hidden, to keep it short.'],
+      removed: ['The old dark header and the old stacked layout of this report.'],
+      effect: 'Every quick report link already sent now shows the new layout, because reports render live. Names, scoring, the Visible rule, the buttons and the guarantee sentence are unchanged, and nothing is sent by this change.',
+    } },
   { id: '2026-10-23-hook-report-link', date: '2026-10-23', title: 'First-reply pitch drafts now include the report link', audience: 'admin',
     body: 'When the audit is finished, the drafted first reply gets one extra line, "Here is the full report:" and their report link, just before the question.',
     report: {

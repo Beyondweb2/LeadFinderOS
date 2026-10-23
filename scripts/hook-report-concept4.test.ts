@@ -159,9 +159,9 @@ const hit = (rivals: string[]): Cell => ({ named: true, rivals });
   ok(/#e7f6ec/.test(rule('.q4-who--me')) && /#b3121e/.test(rule('.q4-who--rival')), 'D2: the business row is green, a competitor row is red');
   ok(!/#c81e2b|#b3121e|red/i.test(rule('.q4-none')), 'D2: "You weren\'t mentioned" is neutral, never red');
   const yellowRules = [...css.matchAll(/([^{}]+)\{[^}]*#fcc933[^}]*\}/gi)].map((m) => m[1].trim());
-  ok(yellowRules.length > 0 && yellowRules.every((sel) => /^\.q4-(wm|method|k|verdict|foot)\b/.test(sel)), `D2: yellow only on the header, the score band and the buttons (${yellowRules.join(', ')})`);
+  ok(yellowRules.length > 0 && yellowRules.every((sel) => /^\.q4-(wm|method|k|verdict|foot|hero2-h|ring|qn)\b/.test(sel)), `D2: yellow only on the header, the hero band, the number badges and the buttons (${yellowRules.join(', ')})`);
   ok(!/violet|orange|#7c4dcc|#d9622b|#c8436b|#b7791f/i.test(css.slice(css.indexOf('.q4-body'))), 'D2: no purple, orange, gold or rose chips below the score');
-  ok(/@media \(prefers-color-scheme: dark\)\{[\s\S]*q4-who--me[\s\S]*q4-who--rival/.test(css), 'D2: a dark-mode palette exists for the chat windows');
+  ok(/:root\{color-scheme:light\}/.test(css) && !/prefers-color-scheme: dark/.test(css), 'D2: the redesigned report is light-only (Paul approved the light design; no dark palette to drift)');
   /* +N more after five competitors. */
   const eight = ['Alpha Roofs', 'Bravo Roofing', 'Charlie Slate', 'Delta Tiles', 'Echo Gutters', 'Foxtrot Roofs', 'Golf Leadwork', 'Hotel Chimneys'];
   const big = report([[miss(eight), miss(['A Co'])], [miss(['A Co']), miss(['B Co'])], [miss(['A Co']), miss(['B Co'])]]);
@@ -229,7 +229,7 @@ const hit = (rivals: string[]): Cell => ({ named: true, rivals });
 {
   const grid: Array<[Cell, Cell]> = [[miss(['A Co']), miss(['B Co'])], [miss(['A Co']), miss(['B Co'])], [hit(['A Co']), miss(['B Co'])]];
   const issues = report(grid, { crawlFaults: [{ title: 'AI can’t reach your site', detail: 'GPTBot is blocked.', minor: false, kind: 'search_blocked' }, { title: 'Pages load slowly for crawlers', detail: 'A minor fault.', minor: true, kind: 'thin_pages' }] });
-  ok(/Website issues we found/i.test(issues.t) && /q4-sev--high">High/.test(issues.html) && /q4-sev--med">Medium/.test(issues.html), 'I: issues → High (serious) and Medium (minor)');
+  ok(/What we found on your website/i.test(issues.t) && /q4-sev--high">High/.test(issues.html) && /q4-sev--med">Medium/.test(issues.html), 'I: issues → High (serious) and Medium (minor)');
   ok(!/\bLow\b/.test(issues.t) && !/of \d+ pages/.test(issues.t), 'I: no invented "Low" and no invented pages-affected figure');
 
   /* ── I2. STRUCTURED DATA (Paul, 2026-10-06): the GENERIC "no schema" line never qualifies for the
