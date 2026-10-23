@@ -129,6 +129,7 @@ import { OutreachMobileCard } from './OutreachMobileCard';
 import { LeadEnrichButtons } from './LeadEnrichButtons';
 import { SocialLinks, findSocialsForLeads, SOCIAL_BULK_MAX } from './SocialLinks';
 import { CrawlCheckButton } from './CrawlCheckButton';
+import { SiteScoreRing } from './SiteScoreBadge';
 import { useLeadCrawls } from '@/hooks/useLeadCrawls';
 import { LeadDetailDialog, type LeadStepper, type WorkspaceTabInput } from './LeadDetailDialog';
 import { isWhatsAppWorthTrying, whatsAppCapabilityOf } from '@/lib/whatsAppCapability';
@@ -3273,6 +3274,8 @@ export function OutreachTable({
                           {perms.crawlSite && !isDemoLead(lead.id) && (
                             <CrawlCheckButton lead={{ id: lead.id, website: lead.website }} crawl={crawlByLeadId.get(lead.id) ?? null} iconOnly from="outreach" />
                           )}
+                          {/* The site score ring (2026-10-23, siteScore.ts) — team only, both roles; hover / tap for the reasons. */}
+                          {!isDemoLead(lead.id) && <SiteScoreRing score={crawlByLeadId.get(lead.id)?.siteScore} website={lead.website} />}
                           {lead.phone ? (
                             <>
                               {/* ONE tap to call (UI cleanup 2026-09-29). This was a two-item menu: Normal Call, and

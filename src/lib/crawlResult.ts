@@ -7,6 +7,7 @@
 import type { CrawlSignals, CrawlVerdict } from './crawlCheck';
 import type { SiteInfo } from './siteInfo';
 import type { SiteEvidence } from './siteEvidence';
+import type { StoredSiteScore } from './siteScore';
 
 export interface CrawlStoredResult {
   version?: number;
@@ -26,4 +27,6 @@ export interface CrawlStoredResult {
 export interface CrawlRow {
   result: CrawlStoredResult | null;
   created_at: string;
+  /** The team-only site score columns (siteScore.ts) — the lists' read only; absent elsewhere. */
+  siteScore?: StoredSiteScore | null;
 }

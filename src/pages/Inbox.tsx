@@ -29,6 +29,8 @@ import { shortReportUrl } from '@/lib/reportSlug';
 import { assessOnboardingLink } from '@/components/OnboardingLinkCard';
 import { LeadDetailFromInbox } from '@/components/LeadDetailFromInbox';
 import { CrawlCheckButton } from '@/components/CrawlCheckButton';
+import { SiteScorePill } from '@/components/SiteScoreBadge';
+import type { StoredSiteScore } from '@/lib/siteScore';
 import { onboardingUrl, onboardingUrlLabel } from '@/config/findableSite';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { fillTemplate } from '@/lib/leadUtils';
@@ -308,6 +310,9 @@ interface ConversationRowProps {
   /* "Only confirmed" / "Auto-reply", now the preview's hover (the separate chip is gone, 2026-10-22). */
   inboundTitle: string | null;
   auditScore: LeadAuditScore | null;
+  /* The team-only site score pill (siteScore.ts) — the stored columns, same object identity until the crawl list re-reads. */
+  siteScore: StoredSiteScore | null;
+  siteWebsite: string | null;
   hookDueMode: boolean;
   hookChecked: boolean;
   bulkMode: boolean;
@@ -326,7 +331,7 @@ interface ConversationRowProps {
    The AI chip, the state chip, "Only confirmed" / "Auto-reply", the Needs you reason line, the engagement pills
    and the next-action pill are off the row (the pill's hover carries what still matters; the header keeps the rest). */
 const ConversationRow = memo(function ConversationRow({
-  c, isActive, outsideFilters, st, attentionKind, attentionLabel, attentionTitle, inboundTitle, auditScore,
+  c, isActive, outsideFilters, st, attentionKind, attentionLabel, attentionTitle, inboundTitle, auditScore, siteScore, siteWebsite,
   hookDueMode, hookChecked, bulkMode, bulkChecked, saving, listStageOf, onOpen, toggleHookSelect, toggleBulkSelect, handleSetStatus,
 }: ConversationRowProps) {
   return (
@@ -379,6 +384,7 @@ const ConversationRow = memo(function ConversationRow({
           {c.leadId && (saving
             ? <Loader2 className="h-3 w-3 shrink-0 animate-spin text-muted-foreground" />
             : <PipelineStatusSelect value={c.leadStatus} stage={listStageOf(c.leadId)} onValueChange={(status) => handleSetStatus(c, status)} askReasonFor={{ leadId: c.leadId, businessName: c.label }} />)}
+          {c.leadId && <span className="ml-auto"><SiteScorePill score={siteScore} website={siteWebsite} /></span>}
         </div>
       )}
       {c.leadId && <ScoreLine score={auditScore} visible={c.visible} />}
@@ -2346,6 +2352,8 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
               st={stateByKey.get(c.key)}
               {...rowAttention(c)}
               auditScore={c.auditScore}
+              siteScore={c.leadId ? crawlByLeadId.get(c.leadId)?.siteScore ?? null : null}
+              siteWebsite={c.leadId ? leadByIdForState.get(c.leadId)?.website ?? null : null}
               hookDueMode={hookDueMode}
               hookChecked={!!c.leadId && hookSelected.has(c.leadId)}
               bulkMode={bulkMode}
