@@ -79,7 +79,7 @@ console.log('── 2. ONE COPY OF THE RULES ──');
 {
   /* The voice-note script is brand-free (Paul, 2026-10-21): the same shared rules, example search said as "AI". */
   ok(VOICE_NOTE_SYSTEM_PROMPT.includes(SALES_STYLE_RULES_NO_BRAND) && SALES_STYLE_RULES_NO_BRAND === SALES_STYLE_RULES.replace(/\bGemini\b/g, 'AI') && !/Gemini/.test(SALES_STYLE_RULES_NO_BRAND), 'the voice-note prompt carries the shared rules (brand-free copy)');
-  ok(REPLY_SYSTEM_PROMPT.includes(SALES_STYLE_RULES), 'the warm-reply prompt carries the shared rules');
+  ok(REPLY_SYSTEM_PROMPT.includes(SALES_STYLE_RULES_NO_BRAND) && !/Gemini/.test(REPLY_SYSTEM_PROMPT), 'the warm-reply prompt carries the shared rules (brand-free copy, 2026-10-23)');
   ok(/plain English a tradesperson uses/.test(RESEARCH_SYSTEM_PROMPT) && /useful_questions:[^\n]*Short and spoken/.test(RESEARCH_SYSTEM_PROMPT),
     'the site research asks for plain-English findings and spoken questions');
   ok(SALES_STYLE_RULES.length < 2600, 'the shared block stays short (' + SALES_STYLE_RULES.length + ' chars)');

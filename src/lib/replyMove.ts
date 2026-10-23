@@ -21,6 +21,7 @@ import { triageByRules } from './replyTriage.ts';
 import { factFor, CONFIDENCE_LINE, GUARANTEE_REFUND, ENGINE_WORDING, type FactTopic } from './offerFactSheet.ts';
 import { mayClaimNamedInstead } from './namedShareRule.ts';
 import { carryOn } from './draftEvidence.ts';
+import { PITCH_MAX_LIST, PITCH_MIN_LIST, PITCH_MAX_WORDS, UNREADABLE_PITCH_LINE as UNREADABLE_LINE, wordCount } from './pitchIssueWords.ts';
 import {
   PLAYBOOK, RE, splitQuestion, readEndDate, nameFromReply, nearSameName, rivalsExcludingSelf, DONT_NEED_SOFT, DOES_AI_MATTER_SOFT,
   DONT_NEED_NO_AUDIT, DOES_AI_MATTER_NO_AUDIT, PRIVACY_NOT_GOOGLE, GO_ON_KNOWN, NOT_NOW_WITH_TIME, WEBSITE_GIVEN_KNOWN,
@@ -35,13 +36,13 @@ import { REMEASURE_WEEKS_STANDARD } from './findableOffer.ts';
 export type MoveId =
   | 'stop' | 'intro_hook' | 'first_reply_pitch' | 'pitch_next' | 'site_followup' | 'offer_voice_note' | 'set_call' | 'answer_fact' | 'objection_provider' | 'objection_rank'
   | 'close_politely' | 'is_bot' | 'media' | 'ack' | 'auto_reply' | 'privacy' | 'other_language' | 'link'
-  | 'escalate' | 'unknown_question' | 'unsure' | 'playbook';
+  | 'escalate' | 'unknown_question' | 'unsure' | 'playbook' | 'site_shared';
 
 export type NeedsYouReason =
   | 'opt_out' | 'angry' | 'do_not_contact' | 'not_interested' | 'wrong_person' | 'legal' | 'complaint' | 'payment'
   | 'media' | 'privacy' | 'other_language' | 'link' | 'question_not_on_sheet' | 'paul_looks' | 'unsure'
   | 'already_replied' | 'ai_limit' | 'repeat_auto_reply' | 'draft_failed' | 'paused' | 'email_given' | 'off_topic'
-  | 'commercial_ask' | 'call_now' | 'wrong_trade' | 'cant_send' | 'third_party' | 'chased';
+  | 'commercial_ask' | 'call_now' | 'wrong_trade' | 'cant_send' | 'third_party' | 'chased' | 'prospect_only' | 'site_not_checked';
 
 export const NEEDS_YOU_LABELS: Record<NeedsYouReason, string> = {
   opt_out: 'Asked to stop',
@@ -72,6 +73,8 @@ export const NEEDS_YOU_LABELS: Record<NeedsYouReason, string> = {
   cant_send: "Asks for something we can't send (a reference, testimonial or case study)",
   third_party: 'Gave another business or person: run the check on that one',
   chased: 'They chased us: answer their earlier message',
+  prospect_only: 'Australian prospect asked about price: prospect-only, no price here',
+  site_not_checked: 'Sent their website: add it to the lead, press Crawl site, then Regenerate',
 };
 
 export interface MoveThreadMsg {
@@ -156,11 +159,16 @@ export interface MoveEvidence {
   /** The lead was found on Google (a place id) — the honest answer to "how did you get my number". */
   foundOnGoogle: boolean;
   /** THE ONE WEBSITE CHECK (websiteCheck.ts websiteCheckFor): its state and the SERIOUS issues' plain titles
-   *  (plainIssueTitle), worst first. Absent = read from hasWebsite / findings (older callers, fixtures). */
-  site?: { state: SiteState; issues: string[]; evidence?: Array<{ title: string; pages: string[] }> } | null;
+   *  (plainIssueTitle), worst first; `pitch` = the same issues in the pitch's plain words (pitchIssueWords.ts), any
+   *  with no plain words left out. Absent = read from hasWebsite / findings (older callers, fixtures). */
+  site?: { state: SiteState; issues: string[]; pitch?: string[]; evidence?: Array<{ title: string; pages: string[] }> } | null;
   /** The "AI handles replies" switch (whatsapp_outreach_state.ai_handles_replies). ON: never say "I read and send every
    *  one myself" — replies may be automated. Absent = off. */
   aiAutoReplies?: boolean;
+  /** The website the check above was run on (the lead's website), for the site-shared reply. */
+  websiteUrl?: string | null;
+  /** A prospect-only country (prospectOnly.ts, Australia): never a price, the guarantee or a sign-up in a draft. */
+  prospectOnly?: boolean;
 }
 export type SiteState = 'issues' | 'clean' | 'not_checked' | 'unreadable' | 'no_website' | 'profile';
 
@@ -194,6 +202,10 @@ export interface MovePlan {
   fixedText?: string | null;
   /** How the message ends, recorded on the draft (Paul, 2026-10-20): the pitch's 'emotional' closer, or the next step. */
   closer?: 'emotional' | 'agency' | 'site' | null;
+  /** How a code-built pitch / site-shared reply was built (why.structure), so reply rates can be compared by structure. */
+  structure?: PitchStructure | null;
+  /** Their first reply to our opener (the pitch is still owed): written in the first-message style, "AI" in capitals. */
+  firstReply?: boolean;
   /** The confidence line (offerFactSheet CONFIDENCE_LINE) is one of the points, recorded on the draft. */
   confidence?: boolean;
   /** No draft at all, not even on "Draft reply": a person answers (Paul, 2026-10-20: stop, not interested, off-topic, unmatched). */
@@ -237,6 +249,34 @@ const WHO_ONLY = /^\W*(\?+|who\??|who'?s\s+this\??|who\s+is\s+this\??|who\s+are\
 const LAUGH_ONLY = /^[\s\u{1F923}\u{1F602}\u{1F606}\u{1F604}\u{1F601}\u{1F639}]+$|^\W*(lol|lmao|haha+|hehe+)\W*$/iu;
 const PRIVACY = /\b(who\s+gave\s+(you|u)\s+(my|this)\s+(number|details)|where\s+did\s+(you|u)\s+get\s+(my|this)\s+(number|details)|how\s+did\s+(you|u)\s+get\s+(my|this)\s+(number|details))\b/i;
 const LINK = /https?:\/\/|www\.|\b[a-z0-9-]+\.(?:co\.uk|com|uk|net|org|io)\b/i;
+/** Our message said we found no website: the no-website pitch, its question, or the playbook's no-website lines. */
+const SAID_NO_SITE = /\bcouldn'?t\s+find\s+(a\s+website|one\s+for\s+you)|\bwebsite\s+i'?ve\s+missed\b|\bnothing\s+of\s+yours\s+to\s+read\b/i;
+/** "How can I get up on the AI search?", "what do I need to do?", "how can you help?", "how do I fix it?" (never "how can I help"). */
+const HOW_TO_GET_NAMED = /\bhow\s+(?:can|do|would|could|should)\s+(?:i|we)\s+(?:get|be|show|come|appear|rank|improve|fix|sort|change)\b|\bhow\s+(?:can|could|would)\s+(?:you|u)\s+help\b|\bwhat\s+(?:do|would|should)\s+(?:i|we)\s+(?:need\s+to\s+)?do\b|\bhow\s+do\s+(?:i|we|you|u)\s+fix\b/i;
+/** The "how" answer (Paul, 2026-10-23): three short lines, no price, the one either/or question last. */
+export function howToGetNamedLine(theyRunIt: boolean): string {
+  return `${theyRunIt ? 'Good, that makes it easier.' : 'Good question.'} The main thing I work on is a website AI can read properly, with clear pages for what you do and where you do it.\n`
+    + 'I build that for you, and check how often AI names you before and after.\n'
+    + 'Easiest to explain properly. Voice note, or a quick call?';
+}
+const hostOf = (u: string | null | undefined): string | null => {
+  const s = String(u ?? '').trim().toLowerCase();
+  if (!s) return null;
+  const m = /^(?:https?:\/\/)?(?:www\.)?([a-z0-9.-]+\.[a-z]{2,})(?:[/:?#]|$)/.exec(s);
+  return m ? m[1].replace(/\.$/, '') : null;
+};
+/** The first link in their message that is a business website (not a map pin, social profile or directory). */
+function siteLinkHost(text: string): string | null {
+  for (const m of text.matchAll(/(?:https?:\/\/)?(?:www\.)?[a-z0-9-]+(?:\.[a-z0-9-]+)*\.(?:co\.uk|com\.au|org\.uk|com|uk|net|org|io|au)\b[^\s,]*/gi)) {
+    const link = m[0];
+    if (NOT_THEIR_SITE.test(link) || /\b(facebook|fb)\.(com|me)\b/i.test(link) || /@/.test(text.slice(Math.max(0, (m.index ?? 0) - 1), m.index ?? 0))) continue;
+    const h = hostOf(link);
+    if (h) return h;
+  }
+  return null;
+}
+/** The shared link and the lead's website are the same site (host, www ignored). */
+const sameSite = (host: string, url: string | null | undefined): boolean => !!url && hostOf(url) === host;
 const VOICE_REQUEST = /\bvoice\s*(note|message|memo)\b|\bsend\s+(me\s+)?a\s+(voice|vn)\b/i;
 /** A time they named: "after 5", "tomorrow", "10am", "monday" … */
 const NAMED_TIME = /\b(\d{1,2}(:\d{2})?\s*(am|pm)?|after\s+\d|before\s+\d|tomorrow|today|tonight|this\s+(morning|afternoon|evening)|morning|afternoon|evening|lunch(time)?|mon(day)?|tue(s(day)?)?|wed(nesday)?|thu(rs(day)?)?|fri(day)?|sat(urday)?|sun(day)?|now|later|in\s+\d+\s*(mins?|minutes|hours?))\b/i;
@@ -401,10 +441,6 @@ export function whichToolLine(e: MoveEvidence): string {
 }
 const withA = (s: string) => (/^[aeiou]/i.test(s) ? `an ${s}` : `a ${s}`);
 const listNames = (n: string[]) => (n.length <= 1 ? n.join('') : `${n.slice(0, -1).join(', ')} and ${n[n.length - 1]}`);
-/** Issue titles as one list: semicolons when a title has its own comma, so the list still reads. */
-const listIssues = (n: string[]) => (n.some((x) => x.includes(',')) && n.length > 1 ? `${n.slice(0, -1).join('; ')}; and ${n[n.length - 1]}`
-  /* Each title is a whole sentence (websiteCheck PLAIN_LINE); three or more take ", and" so a title holding "and" stays apart. */
-  : n.length >= 3 ? `${n.slice(0, -1).join(', ')}, and ${n[n.length - 1]}` : listNames(n));
 /** "Driving instructors" → "driving instructor" (an audit stores the trade capitalised; an acronym such as MOT stays). */
 const tradeWord = (t: string) => t.trim().replace(/s$/i, '').replace(/^([A-Z])(?=[a-z])/, (c) => c.toLowerCase());
 
@@ -453,25 +489,33 @@ export function auditLine(e: MoveEvidence): string | null {
 export const PITCH_SELF_MANAGED_REPLY = PLAYBOOK.self_managed.line;
 /** "Is this a bot?" — Paul's one answer (2026-10-20, the playbook): true whatever the AI auto-reply switch says. */
 export const BOT_ANSWER = PLAYBOOK.is_bot.line;
-/** THE ONE QUESTION the pitch ends on (a website on record): the agency question and the voice note offer. */
-export const PITCH_AGENCY_VOICE = 'Are you with an agency, or do you manage the website yourself? Either way I can send a quick voice note on what I found.';
+/** THE ONE QUESTION the pitch ends on (a website on record). ⛔ No voice-note line in the first pitch (Paul, 2026-10-23):
+ *  the voice note and the call are offered in the NEXT message. */
+export const PITCH_AGENCY_Q = 'Are you with an agency, or do you manage the website yourself?';
 /** The pitch's question when no website is on record (never the agency question). */
-export const PITCH_SITE_Q = "Do you have a website I've missed?";
+export const PITCH_SITE_Q = "Do you have a website I've missed, or is that something you'd want sorted?";
 /** After "no, I haven't got one": the voice note offer. */
 export const PITCH_VOICE_Q = 'Ok if I send a quick voice note on what I found?';
 export const PITCH_INSTEAD_LINE = 'AI is recommending your competitors instead.';
-export const PITCH_WHY_LEAD = 'I looked into why this might be happening and';
+/** The list lead-in (Paul, 2026-10-23), then one "• " line per real issue. */
+export const PITCH_LIST_LEAD = 'I looked into why and a few things could be holding you back:';
+/** One real issue: one sentence, no list. */
+export const PITCH_ONE_LEAD = 'I looked into why and found';
 /** What we do, said once, with no promise of a result (Paul, 2026-10-21). */
 export const PITCH_SPECIALISE_LINE = 'I specialise in getting local businesses to show up in those results, so the customers go to you instead.';
-/** Paul's no-website words for the pitch (2026-10-21): no AI brand. */
-export const PITCH_NO_SITE_LINE = "I couldn't find a website for you, so AI has nothing of yours to read.";
+/** Paul's no-website words (2026-10-23, Option 2): "tends to", never how AI decides. */
+export const PITCH_NO_SITE_LINE = "AI tends to lean on websites when it names businesses, and I couldn't find one for you. Without a well-built one, it tends to name businesses that have one instead.";
 export const PITCH_INTRO_LINE = "It's Paul from Findable. I help local businesses show up when people ask AI tools for their trade in their area.";
-/** Site issues named in the pitch, most serious first. */
-export const PITCH_MAX_ISSUES = 3;
+/** How the pitch was built, stored on the draft (why.structure) so reply rates can be compared by structure. */
+export type PitchStructure = 'pitch_list' | 'pitch_sentence' | 'pitch_plain' | 'pitch_no_site' | 'pitch_intro'
+  | 'site_shared_list' | 'site_shared_sentence' | 'site_shared_plain';
+/** Issue lines as a bullet list, one per line. */
+export const bulletList = (lines: string[]): string => lines.map((l) => `• ${l}`).join('\n');
 
-/** The website check's state for a move: the stored one, else read from what older callers hand over. */
+/** The website check's state for a move: the stored one, else read from what older callers hand over. `issues` are the
+ *  pitch's plain lines (pitchIssueWords.ts) when the caller sent them, else the plain titles. */
 export function siteOf(e: MoveEvidence): { state: SiteState; issues: string[] } {
-  if (e.site) return { state: e.site.state, issues: [...new Set(e.site.issues.map((t) => t.trim()).filter(Boolean))] };
+  if (e.site) return { state: e.site.state, issues: [...new Set((e.site.pitch ?? e.site.issues).map((t) => t.trim()).filter(Boolean))] };
   if (!e.hasWebsite) return { state: 'no_website', issues: [] };
   return e.findings.length ? { state: 'issues', issues: e.findings.map((f) => f.title) } : { state: 'not_checked', issues: [] };
 }
@@ -486,37 +530,76 @@ export function pitchGreeting(e: MoveEvidence, theirName: string | null = null):
   return /^[A-Z][a-z]+(?:['’-][A-Za-z]+)?$/.test(first) ? `Hi ${first},` : PITCH_NO_NAME_GREETING;
 }
 
-/** THE FIRST-REPLY PITCH (Paul, 2026-10-20, wording A):
+/** The "why" paragraph for a list of real issue lines: none → null; one → one sentence; two or more → the bullet list. */
+function issuesParagraph(issues: string[], lead: string | null): { text: string | null; kind: 'list' | 'sentence' | 'plain' } {
+  if (!issues.length) return { text: null, kind: 'plain' };
+  if (issues.length === 1) return { text: `${[lead, PITCH_ONE_LEAD].filter(Boolean).join(' ')} ${carryOn(issues[0])}.`, kind: 'sentence' };
+  return { text: `${[lead, PITCH_LIST_LEAD].filter(Boolean).join(' ')}\n${bulletList(issues)}`, kind: 'list' };
+}
+
+/** THE FIRST-REPLY PITCH (Paul, 2026-10-20 wording A; lean, 2026-10-23):
  *    Hi <first name>, / Hi mate,
  *    I asked AI "<the worst engine's missed question>" and it mentioned <that answer's names>.
- *    AI is recommending your competitors instead. I looked into why this might be happening and found <issues>.
+ *    AI is recommending your competitors instead. I looked into why and a few things could be holding you back:
+ *    • <up to four real issues, plain words, worst first>     (one issue: "…I looked into why and found <it>.")
  *    I specialise in getting local businesses to show up in those results, so the customers go to you instead.
- *    <the agency question> (no website: "Do you have a website I've missed?") — the ONLY question.
+ *    <the agency question> (no website: PITCH_NO_SITE_LINE, then "Do you have a website I've missed, or …?") — the ONLY question.
  *  ⛔ "AI is recommending your competitors instead" only under the one-third rule; above it (the soft version) the same shape
- *     without that sentence. ⛔ No closer question, no "pointed to them", no guarantee, no price, no past results here; the
- *     confidence line stays on price / does-it-work / catch / who-are-you / guarantee replies. Nothing absent is invented. */
-export function firstReplyPitch(e: MoveEvidence, theirName: string | null = null): { lines: string[]; question: string; closer: 'agency' | 'site' } {
+ *     without that sentence. ⛔ No voice-note line, no guarantee, no price, no past results here. Nothing absent is invented.
+ *  ⛔ The length rule: past PITCH_MAX_WORDS the lowest issue goes, never below PITCH_MIN_LIST. */
+export function firstReplyPitch(e: MoveEvidence, theirName: string | null = null): { lines: string[]; question: string; closer: 'agency' | 'site'; structure: PitchStructure } {
   const noSite = noSiteOf(e);
-  const next = noSite ? { question: PITCH_SITE_Q, closer: 'site' as const } : { question: PITCH_AGENCY_VOICE, closer: 'agency' as const };
+  const next = noSite ? { question: PITCH_SITE_Q, closer: 'site' as const } : { question: PITCH_AGENCY_Q, closer: 'agency' as const };
   const hi = pitchGreeting(e, theirName);
   const withHi = (lines: string[]) => [hi, ...lines];
   const counts = e.named && e.named.valid > 0 ? e.named : null;
-  if (!e.trade || !e.town || !counts) return { lines: withHi([PITCH_INTRO_LINE, ...(noSite ? [PITCH_NO_SITE_LINE] : [])]), ...next };
+  if (!e.trade || !e.town || !counts) return { lines: withHi([PITCH_INTRO_LINE, ...(noSite ? [PITCH_NO_SITE_LINE] : [])]), ...next, structure: 'pitch_intro' };
   const full = mayClaimNamedInstead(counts.named, counts.valid);
   const site = siteOf(e);
   const asked = askedPhrase(e) as string;
   /* ⛔ Never a rival with (nearly) their own name (Paul, 2026-10-20). */
   const rivals = rivalsExcludingSelf(e.competitors, e.businessName).slice(0, 3);
-  const issues = site.state === 'issues' ? site.issues.slice(0, PITCH_MAX_ISSUES) : [];
   const first = rivals.length ? `${asked} and it mentioned ${listNames(rivals)}.` : full ? `${asked} and it mentioned other businesses, not you.` : `${asked} and it didn't mention you.`;
-  const why = noSite
-    ? `${PITCH_WHY_LEAD} ${PITCH_NO_SITE_LINE}`
-    : issues.length ? `${PITCH_WHY_LEAD} found ${issues.length > 1 ? 'a few things' : 'one thing'} on your website: ${listIssues(issues.map(carryOn))}.` : null;
-  const second = [full ? PITCH_INSTEAD_LINE : null, why].filter(Boolean).join(' ');
-  return { lines: withHi([first, ...(second ? [second] : []), PITCH_SPECIALISE_LINE]), ...next };
+  const instead = full ? PITCH_INSTEAD_LINE : null;
+  if (noSite) {
+    return { lines: withHi([first, ...(instead ? [instead] : []), PITCH_NO_SITE_LINE, PITCH_SPECIALISE_LINE]), ...next, structure: 'pitch_no_site' };
+  }
+  let issues = site.state === 'issues' ? site.issues.slice(0, PITCH_MAX_LIST) : [];
+  const build = (list: string[]) => {
+    const why = issuesParagraph(list, instead);
+    const middle = why.text ?? instead;
+    return { lines: withHi([first, ...(middle ? [middle] : []), PITCH_SPECIALISE_LINE]), kind: why.kind };
+  };
+  let b = build(issues);
+  while (issues.length > PITCH_MIN_LIST && wordCount(pitchText({ lines: b.lines, question: next.question })) > PITCH_MAX_WORDS) {
+    issues = issues.slice(0, -1);
+    b = build(issues);
+  }
+  return { lines: b.lines, ...next, structure: b.kind === 'list' ? 'pitch_list' : b.kind === 'sentence' ? 'pitch_sentence' : 'pitch_plain' };
 }
 /** The pitch as one message: each line its own paragraph, the question last. */
-export const pitchText = (p: { lines: string[]; question: string; closer: string }): string => [...p.lines, p.question].join('\n\n');
+export const pitchText = (p: { lines: string[]; question: string }): string => [...p.lines, p.question].join('\n\n');
+
+/* ── "site shared" (Paul, 2026-10-23, from the Quick Drive reply that worked) ───────────────────────── */
+
+export const SITE_SHARED_OPEN = 'Ah thanks, I missed that one.';
+export const SITE_SHARED_LIST_LEAD = 'Had a proper look and a few things could be holding you back with AI:';
+export const SITE_SHARED_NONE = "Had a proper look and nothing obvious is wrong with it.";
+/** Said without a crawl: our pitch said we couldn't find a website (their Google listing had none), then they sent one. */
+export const GOOGLE_LISTING_NO_LINK = "Your Google listing doesn't link to your website";
+/** The next step once we already know who runs the site. */
+export const SITE_SHARED_KNOWN_Q = 'Quick call, or shall I send a voice note on what I found?';
+
+/** THE SITE-SHARED REPLY: only issues the website check really found (plus the Google-listing line when it is true), worst
+ *  first, up to four; one issue is one sentence; none is said plainly. Never invented. */
+export function siteSharedReply(issues: string[], o: { googleNoLink: boolean; whoKnown: boolean }): { text: string; question: string; structure: PitchStructure } {
+  const lines = [...new Set([...(o.googleNoLink ? [GOOGLE_LISTING_NO_LINK] : []), ...issues])].slice(0, PITCH_MAX_LIST);
+  const question = o.whoKnown ? SITE_SHARED_KNOWN_Q : PITCH_AGENCY_Q;
+  const body = lines.length >= 2 ? `${SITE_SHARED_OPEN} ${SITE_SHARED_LIST_LEAD}\n${bulletList(lines)}`
+    : lines.length === 1 ? `${SITE_SHARED_OPEN} Had a proper look and one thing could be holding you back: ${carryOn(lines[0])}.`
+    : `${SITE_SHARED_OPEN} ${SITE_SHARED_NONE}`;
+  return { text: `${body}\n\n${question}`, question, structure: lines.length >= 2 ? 'site_shared_list' : lines.length === 1 ? 'site_shared_sentence' : 'site_shared_plain' };
+}
 
 /* ── the reply recon's code-built lines (Paul, 2026-10-21) ─────────────────────────────────────── */
 
@@ -526,23 +609,23 @@ export function thinksCustomerLine(e: MoveEvidence): string {
   const tr = String(e.trade ?? '').trim();
   const driving = /\b(driving|instructor|lesson)/i.test(tr) || (!tr && /\bdriving\b/i.test(e.businessName));
   const base = PLAYBOOK.thinks_customer.line.replace('{thing}', driving ? 'lessons' : tr ? withA(tradeWord(tr)) : 'anything');
-  if (!tr || !e.town) return base.replace('how ai tools recommend {trades} in {town}', 'how ai tools recommend businesses like yours');
+  if (!tr || !e.town) return base.replace('how AI recommends {trades} in {town}', 'how AI recommends businesses like yours');
   return base.replace('{trades}', pluralTrade(tr)).replace('{town}', e.town);
 }
 /** "What are you selling?" / "Why?" before the pitch went: a straight answer, then the pitch's own lines and its one question.
  *  Same greeting rule as the pitch (their name, the site's owner, else "Hi mate,"). Nothing on record: who we are, no claim. */
-export function straightAnswerPitch(e: MoveEvidence, theirName: string | null = null): { lines: string[]; question: string; closer: 'agency' | 'site' } {
+export function straightAnswerPitch(e: MoveEvidence, theirName: string | null = null): { lines: string[]; question: string; closer: 'agency' | 'site'; structure: PitchStructure } {
   const p = firstReplyPitch(e, theirName);
   const [hi, ...rest] = p.lines;
   const answer = PLAYBOOK.straight_answer_then_pitch.line;
   if (rest[0] === PITCH_INTRO_LINE) {
-    const short = answer.replace(/\s*I only got in touch because of what I found:$/, '');
+    const short = answer.replace(/\s*Here's why I got in touch:$/, '');
     return { ...p, lines: [hi, short, 'I help local businesses show up when people ask AI tools for their trade in their area.', ...rest.slice(1)] };
   }
   return { ...p, lines: [hi, answer, ...rest] };
 }
 /** They chased us before the pitch went: say sorry once, then the pitch (Paul: "Sorry for the slow reply." + the pitch). */
-export function chasedPitch(e: MoveEvidence, theirName: string | null = null): { lines: string[]; question: string; closer: 'agency' | 'site' } {
+export function chasedPitch(e: MoveEvidence, theirName: string | null = null): { lines: string[]; question: string; closer: 'agency' | 'site'; structure: PitchStructure } {
   const p = firstReplyPitch(e, theirName);
   const [hi, ...rest] = p.lines;
   return { ...p, lines: [hi, PLAYBOOK.they_chased.line, ...rest] };
@@ -630,13 +713,30 @@ function fromPlaybook(intent: PlaybookIntent, extra: Partial<MovePlan> = {}, lin
 const noDraft = (reason: NeedsYouReason, read: string, move: MoveId = 'unsure'): MovePlan =>
   plan({ move, read, autoDraft: false, noDraft: true, needsYou: flag(reason) });
 
+/** The topics whose answer carries a price, a term or the guarantee. */
+const PRICE_FAMILY: ReadonlySet<FactTopic> = new Set<FactTopic>(['price', 'term', 'cancel', 'monthly_start', 'after_term', 'guarantee']);
+/** Words that make a reply a price / guarantee / sign-up answer, wherever the plan carries them. */
+const OFFER_WORDS = /£|\bmoney\s+back\b|\bguarantee|\bsign[\s-]?up\b|\bpayments?\b|\ba\s+month\b/i;
+/** ⛔ PROSPECT-ONLY (Australia, prospectOnly.ts; Paul 2026-10-23): a plan that would say a price, the guarantee or a sign-up
+ *  is Needs you with NO draft; any other plan may not state a price. Judged on what the plan would SAY (its guide, its
+ *  fixed text, its points) and its topic, never on a list of intents, so a new price line is caught too. */
+export function prospectOnlyPlan(p: MovePlan, e: Pick<MoveEvidence, 'prospectOnly'>): MovePlan {
+  if (!e.prospectOnly) return p;
+  const says = [p.guide ?? '', p.fixedText ?? '', ...p.points].join(' ');
+  if (OFFER_WORDS.test(says) || (p.topic && PRICE_FAMILY.has(p.topic)) || p.confidence) {
+    return { ...p, autoDraft: false, noDraft: true, fixedText: null, needsYou: flag('prospect_only'),
+      note: 'Australian prospect asked about price or the guarantee. Prospect-only: no price, guarantee or sign-up here.' };
+  }
+  return { ...p, allowPrice: false };
+}
+
 /** Did we already learn who runs their site (agency / themselves / a friend), so the agency question is done? */
 function whoRunsKnown(thread: MoveThreadMsg[]): boolean {
   let prev: MoveThreadMsg | null = null;
   for (const m of thread) {
     if (m.from === 'us') {
       const a = ourAsk(m);
-      if (a === 'contract' || a === 'end_date' || a === 'pay_monthly' || a === 'happy_change' || /\bmakes\s+changes\s+easy\b/i.test(m.text)) return true;
+      if (a === 'contract' || a === 'end_date' || a === 'pay_monthly' || a === 'happy_change' || /\bmakes\s+(changes\s+easy|it\s+easier)\b/i.test(m.text)) return true;
       prev = m; continue;
     }
     if (ourAsk(prev) === 'agency' && (RE.agency.test(m.text) || RE.self.test(m.text) || RE.friend.test(m.text) || BARE_NO.test(m.text))) return true;
@@ -681,14 +781,18 @@ export function pickMove(i: MoveInput): MovePlan {
     if (!repeat && !guard && !realBefore && prevUs && wasOpener(prevUs)) {
       const pitch = firstReplyPitch(e);
       return plan({ move: 'auto_reply', read: 'automated', label: 'Auto-reply',
-        points: pitch.lines.map((l) => `Use this line, word for word: "${l}"`), question: pitch.question, fixedText: pitchText(pitch), closer: pitch.closer });
+        points: pitch.lines.map((l) => `Use this line, word for word: "${l}"`), question: pitch.question, fixedText: pitchText(pitch), closer: pitch.closer, structure: pitch.structure });
     }
     return plan({ move: 'auto_reply', read: 'automated', autoDraft: false, label: 'Auto-reply', needsYou: repeat ? flag('repeat_auto_reply') : null,
       points: ['Say: "No rush, speak soon." Do not mention their automatic reply. No pitch.'] });
   }
 
-  /* A loop guard wins the reason: it is why nothing should be drafted on its own. */
-  const g = (p: MovePlan): MovePlan => (guard ? { ...p, autoDraft: false, needsYou: flag(guard) } : p);
+  /* A loop guard wins the reason: it is why nothing should be drafted on its own. Every plan below passes through here:
+     the first reply is marked (its "AI" keeps its capitals, Paul 2026-10-23), and a prospect-only lead never gets a price. */
+  const g = (p0: MovePlan): MovePlan => {
+    const p = prospectOnlyPlan({ ...p0, firstReply: first }, e);
+    return guard ? { ...p, autoDraft: false, needsYou: flag(guard) } : p;
+  };
 
   /* The FIRST reply to our opener (Paul, 2026-10-20): the pitch, unless it is a no / stop / angry, a wrong person or a
      direct question. A name they give in it ("Dom here") may open the pitch.
@@ -701,7 +805,7 @@ export function pickMove(i: MoveInput): MovePlan {
   const pitchPlan = (): MovePlan => {
     const pitch = firstReplyPitch(e, theirName);
     return plan({ move: 'first_reply_pitch', read: 'first_reply', label: t.category === 'confirmed_contact' ? 'Only confirmed' : null, greetName: theirName,
-      points: pitch.lines.map((l) => `Use this line, word for word: "${l}"`), question: pitch.question, fixedText: pitchText(pitch), closer: pitch.closer });
+      points: pitch.lines.map((l) => `Use this line, word for word: "${l}"`), question: pitch.question, fixedText: pitchText(pitch), closer: pitch.closer, structure: pitch.structure });
   };
 
   /* 4. Hand to Paul, no draft: legal, a complaint, a payment problem. "Is this a scam?" alone is the privacy answer. */
@@ -737,9 +841,9 @@ export function pickMove(i: MoveInput): MovePlan {
   const auditedHere = !!e.named && e.named.valid > 0;
   const owed = pitchOwed(thread, idx);
   const earliestName = () => { for (const m of thread.slice(0, idx)) if (m.from === 'them') { const n = nameFromReply(m.text, e.businessName); if (n) return n; } return null; };
-  const codePitch = (intent: PlaybookIntent, p: { lines: string[]; question: string; closer: 'agency' | 'site' }, name: string | null) =>
+  const codePitch = (intent: PlaybookIntent, p: { lines: string[]; question: string; closer: 'agency' | 'site'; structure: PitchStructure }, name: string | null) =>
     plan({ move: 'first_reply_pitch', read: intent, intent, greetName: name, points: p.lines.map((l) => `Use this line, word for word: "${l}"`), question: p.question,
-      fixedText: pitchText(p), closer: p.closer, guide: PLAYBOOK[intent].line });
+      fixedText: pitchText(p), closer: p.closer, structure: p.structure, guide: PLAYBOOK[intent].line });
   if (RE.payOnResults.test(text)) {
     return g(fromPlaybook('pay_on_results', { needsYou: flag('commercial_ask'), autoDraft: false, topic: 'price', note: 'A commercial ask (pay on results / free first). The suggested reply restates the offer word for word.' }));
   }
@@ -796,6 +900,36 @@ export function pickMove(i: MoveInput): MovePlan {
     if (owed) { const n = earliestName(); return g(codePitch('they_chased', chasedPitch(e, n), n)); }
     return g(noDraft('chased', 'chased'));
   }
+  /* "How can I get up on the AI search?" after the pitch / the issues list (Paul, 2026-10-23, Quick Drive): answer the HOW in
+     three short lines, no price, then the voice note or the call. It answers the agency question too when they said
+     they run the site themselves ("I manage it myself… how can I get up on the ai search?"). */
+  if (!owed && HOW_TO_GET_NAMED.test(text)) {
+    const self = ask === 'agency' && RE.self.test(text) && !RE.agency.test(text);
+    return g(fromPlaybook('how_to_get_named', {}, howToGetNamedLine(self)));
+  }
+  /* SITE SHARED (Paul, 2026-10-23): we said we couldn't find a website and they sent one (a map pin or a social link beside
+     it is fine). Read across EVERYTHING they sent since our last message: Quick Drive sent the site, then a map pin, then
+     a Facebook link six minutes later (two turns), and the last turn alone read as "facebook only". The reply lists only
+     what the website check really found on THAT site; not checked yet → Needs you, no draft (never an auto-crawl, Paul).
+     Before the answer-to-our-question rules below. */
+  if (!first) {
+    let since = idx; while (since > 0 && thread[since - 1].from === 'them') since--;
+    const theirsSince = thread.slice(since, idx + 1).map((m) => m.text).join('\n');
+    const sharedSite = LINK.test(theirsSince) ? siteLinkHost(theirsSince) : null;
+    /* A question in their latest turn ("how much?") is answered by the rules below, never skipped for the site. */
+    if (sharedSite && (LINK.test(text) || !/\?/.test(text)) && thread.slice(0, since).some((m) => m.from === 'us' && SAID_NO_SITE.test(m.text))) {
+      const st = e.site?.state ?? null;
+      const checked = sameSite(sharedSite, e.websiteUrl) && (st === 'issues' || st === 'clean' || st === 'unreadable');
+      if (!checked) {
+        return g(plan({ move: 'site_shared', read: 'site_shared', intent: 'site_shared', autoDraft: false, noDraft: true, needsYou: flag('site_not_checked'),
+          note: 'They sent their website. Add it to the lead, press Crawl site, then Regenerate.' }));
+      }
+      const issues = st === 'issues' ? siteOf(e).issues : st === 'unreadable' ? [UNREADABLE_LINE] : [];
+      const r = siteSharedReply(issues, { googleNoLink: e.foundOnGoogle, whoKnown: whoRunsKnown(thread) });
+      return g(plan({ move: 'site_shared', read: 'site_shared', intent: 'site_shared', points: [`Use this reply, word for word: "${r.text}"`], question: r.question,
+        fixedText: r.text, structure: r.structure, closer: r.question === PITCH_AGENCY_Q ? 'agency' : null }));
+    }
+  }
 
   /* 5. An answer to the question our last message asked. */
   const ownTopic = questionTopic(text);
@@ -811,7 +945,7 @@ export function pickMove(i: MoveInput): MovePlan {
     if (ask === 'emotional' || ask === 'emotional_no_site') {
       if (!BARE_NO.test(text) && t.category !== 'not_interested' && t.category !== 'already_sorted') {
         const site = ask === 'emotional_no_site' || noSiteOf(e);
-        const q = site ? PITCH_SITE_Q : PITCH_AGENCY_VOICE;
+        const q = site ? PITCH_SITE_Q : PITCH_AGENCY_Q;
         p = plan({ move: 'pitch_next', read: 'answered_closer', points: [`Use this line, word for word: "${q}"`], question: q, fixedText: q, closer: site ? 'site' : 'agency' });
       }
     } else if (ask === 'agency') {

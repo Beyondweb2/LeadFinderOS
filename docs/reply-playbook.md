@@ -20,11 +20,23 @@ I help", a name only, "hello?", "what's this about?", even "interested" all get 
 ```
 Hi Dom, / Hi mate,
 I asked AI "<the worst engine's missed question>" and it mentioned A, B and C.
-AI is recommending your competitors instead. I looked into why this might be happening and <the site issues, or: I couldn't find a website for you, so AI has nothing of yours to read.>
+AI is recommending your competitors instead. I looked into why and a few things could be holding you back:
+• <up to four real issues from the website check, plain words, worst first>
 I specialise in getting local businesses to show up in those results, so the customers go to you instead.
-<website: Are you with an agency, or do you manage the website yourself? Either way I can send a quick voice note on what I found.>
-<no website: Do you have a website I've missed?>
+Are you with an agency, or do you manage the website yourself?
 ```
+
+No website (Paul, 2026-10-23, Option 2):
+```
+Hi mate,
+I asked AI "<the worst engine's missed question>" and it mentioned A, B and C.
+AI is recommending your competitors instead.
+AI tends to lean on websites when it names businesses, and I couldn't find one for you. Without a well-built one, it tends to name businesses that have one instead.
+I specialise in getting local businesses to show up in those results, so the customers go to you instead.
+Do you have a website I've missed, or is that something you'd want sorted?
+```
+
+The lean rules and the reasons are in section 5e.
 
 * The greeting uses a name **they gave in this reply** ("this is Dom", "Dom here", a name only), else a person the site's
   own crawl states as owner / founder, else **"Hi mate,"** (Paul, 2026-10-21; `PITCH_NO_NAME_GREETING`).
@@ -66,7 +78,7 @@ guard, like a voice note sent or a booked call.
 |---|---|---|
 | website_given | they send their website | Thanks, I'll take a proper look at that one. Do you manage it yourself, or is it with an agency? |
 | no_website | "no, not got one" | That could be why ai has nothing to recommend. I can build you one that's set up for ai and google, and you'd own the domain. Quick call, or shall I send a voice note explaining it? |
-| facebook_only | "just facebook" | I only found a facebook page, so there's very little of your own for ai to read. A proper website would fix that. Quick call, or shall I send a voice note? |
+| facebook_only | "just facebook" | I only found a Facebook page, so there's very little of your own for AI to read. A proper website tends to help with that. Quick call, or shall I send a voice note? |
 | agency | "an agency does it", "I pay someone" | Good to know. Are you tied into a contract with them, or free to leave if it's not working? |
 | in_contract | "tied in until March" | Thanks for being straight. I'll check back near then. Want me to send a voice note in the meantime so you can see what I found? |
 | tied_no_date | "yes, in a contract" (no date) | Thanks for being straight. When does the contract end? I'll check back near then. |
@@ -78,11 +90,11 @@ guard, like a voice note sent or a booked call.
 | call_yes | "call me" | Great, what day and time suits you? Give me a UK time and I'll ring then. |
 | interested | "interested", "tell me more" | Happy to. Easiest is a quick call so I can show you what I found, or I can send a voice note if that's easier? |
 | go_on | "go on then", "ok" | Are you with an agency, or do you manage the website yourself? (the call / voice note once that is known) |
-| what_we_do | "what do you do?" | I build you a new site that's set up for ai and google, sort your google business profile, and keep checking how you show up. Easiest to show you what I found. Quick call, or a voice note? |
+| what_we_do | "what do you do?" | I build you a new site set up for AI and Google, sort your Google Business Profile, and keep checking how you show up. Quick call, or a voice note? |
 | how_much | price (word for word) | It's £99 to start, and I'm confident enough in it that it's backed by a guarantee: we improve ai visibility or you get your money back. After your results it's £99 a month, 12 payments in total including the first, and that covers the new site, hosting, changes and regular checks. Quick call, or a voice note to go through it? |
 | catch | "what's the catch?" (word for word) | No catch. You pay £99 to start and if we don't improve ai visibility you get that £99 back. We re-run the same questions after 4 weeks to check. The one thing to know is it's a 12 payment minimum, counting the first. |
 | how_long | "how long?" (word for word) | The site build usually takes a few days. Then we re-check after 4 weeks to see the difference. |
-| who_are_you | "who are you?" | I'm Paul, I run Findable. We help local businesses show up when people ask ai tools for a recommendation. Happy to jump on a quick call if you'd rather talk. |
+| who_are_you | "who are you?" | I'm Paul, I run Findable. I help local businesses show up when people ask AI for a recommendation. Would a quick call be easier? |
 | which_tool | "which ai?", "what tool?", "was it chatgpt?" (word for word) | I check the same questions on ChatGPT and Gemini. Want a voice note showing what it said? (with "That one was <the missed search's engine>." in front when it is known; the only draft that names a tool) |
 | examples | "examples?", "results?" (word for word, code-built) | I've had good reviews and great feedback from the businesses I've worked with, and I built this site for a locksmith recently: https://mclocksmiths-new.pages.dev/ Happy to talk you through it on a call. Want me to send over the report I did for you too? (no search on record: "…Want me to run the same check on your business?") |
 | definitely | "will I definitely be recommended?" (word for word) | I can't promise ai will recommend you, nobody honestly can. What I do promise is we improve ai visibility or you get your £99 back. |
@@ -90,17 +102,20 @@ guard, like a voice note sent or a booked call.
 | not_now | "not now", "later" | No problem. When would be a better time? I'll check back then. (a time named: "No problem, I'll check back then." + noted) |
 | too_expensive | "too expensive" (word for word) | Fair. It's £99 to start and you get it back if we don't improve things, so the risk is small. Want a quick call so I can show you what I found first? |
 | think_about_it | "I'll think about it" | Of course. Want me to send a voice note so you've got the details in front of you? |
-| dont_need | "don't need more customers" | Good problem to have. I only got in touch because ai named your competitors and not you. Want a voice note so you can see for yourself? |
+| dont_need | "don't need more customers" | Good problem to have. I only got in touch because AI named your competitors and not you. Want a voice note so you can see for yourself? |
 | does_ai_matter | "nobody uses ai" | Fair question. I only reached out because it named your competitors instead of you, and that's easy to check yourself. Want a voice note to show you? |
-| is_bot | "is this a bot?" | I use ai to help write and check my messages, but I'm Paul from Findable and the results I found are real. Happy to jump on a call if you'd rather talk. |
-| privacy | "how did you get my number?", "is this a scam?" | Fair question. I found your business on google and checked how ai recommends you. I won't message again if you'd rather not. Want me to send what I found so you can judge? |
-| send_email | "send me an email" | Sure, what's the best email? Or I can send a voice note here in a minute if that's quicker. |
-| not_owner | "I'm not the owner" | No worries. Who's the best person to speak to, and is there a good time? |
+| is_bot | "is this a bot?" | I use AI to help write and check my messages, but I'm Paul from Findable and the results I found are real. Would a quick call be easier? |
+| privacy | "how did you get my number?", "is this a scam?" | Fair question. I found your business on Google and checked how AI recommends you. I won't message again if you'd rather not. Want me to send what I found? |
+| send_email | "send me an email" | Sure, what's the best email to send it to? |
+| not_owner | "I'm not the owner" | No worries. Who's the best person to speak to? |
 | busy | "busy, call later" | No problem. What day and time suits you? I'll call then. (their time → confirm; the call time agreed is a win) |
 | number_sent | they send a number | Thanks, I'll give you a ring. Is there a good time today? |
 
 * dont_need / does_ai_matter say "not you" / "instead" only under the one-third rule; otherwise a soft line with no claim.
 * privacy says "online" instead of "on google" when the lead has no Google place id.
+
+| site_shared | they send their website after we said we couldn't find one (*code*) | Ah thanks, I missed that one. Had a proper look and a few things could be holding you back with AI: <the check's issues, one per line>. Are you with an agency, or do you manage the website yourself? |
+| how_to_get_named | "how can I get up on the AI search?", "what do I do?" after the issues list (*code*) | Good question. The main thing I work on is a website AI can read properly, with clear pages for what you do and where you do it. I build that for you, and check how often AI names you before and after. Easiest to explain properly. Voice note, or a quick call? |
 
 ## 5. No draft (Needs you, with a reason)
 
@@ -138,19 +153,19 @@ hard gate: a stop / angry / complaint / not-interested / client thread never pro
 
 | Intent | When | Line |
 |---|---|---|
-| thinks_customer | "are you looking for lessons?", "automatic or manual?", "do you need a plumber?" (code) | Ha, sorry for the confusion, I'm not looking for {thing} myself. I'm Paul from Findable. I checked how ai tools recommend {trades} in {town} and wanted to show you what came back. Ok if I send it over? ({thing} = "lessons" for a driving school, else "a plumber"; {trades} in {town} from the lead) |
-| straight_answer_then_pitch | "what are you selling?", "is this a sales call?", "what do you want?", a bare "Why" / "What?" before the pitch went (code) | Fair question, I'm Paul from Findable and yes, I'm offering a service. I only got in touch because of what I found: (then the pitch's lines and its one question, after "Hi <name>," / "Hi mate,") |
+| thinks_customer | "are you looking for lessons?", "automatic or manual?", "do you need a plumber?" (code) | Ha, sorry for the confusion, I'm not after {thing} myself. I'm Paul from Findable. I checked how AI recommends {trades} in {town}. Ok if I send you what came back? ({thing} = "lessons" for a driving school, else "a plumber"; {trades} in {town} from the lead) |
+| straight_answer_then_pitch | "what are you selling?", "is this a sales call?", "what do you want?", a bare "Why" / "What?" before the pitch went (code) | Fair question. I'm Paul from Findable, and yes, I offer a service. Here's why I got in touch: (then the pitch's lines and its one question, after "Hi <name>," / "Hi mate,") |
 | wrong_trade | "we don't do locksmithing", "I'm an auto locksmith, those are all domestic" (**Needs you**) | Sorry about that, my mistake. What is it you mainly do? I'll check it properly. (note: fix the trade on the lead first) |
 | moved_area | "I'm not in Sowerby Bridge anymore" | No worries, thanks for letting me know. Where are you working now? I can check how you show up there. |
 | closed_retired | "no longer trading", "I've retired" | No worries, sorry to bother you. Best of luck with it. (note: mark the lead closed) |
 | fully_booked | "fully booked", "waiting list", "too busy for advertising" | Good problem to have. I'll leave you to it, and if it ever goes quiet you know where I am. |
-| word_of_mouth | "all word of mouth", "busy with recommendations" | Fair enough, that's the best kind of work. I'll leave you to it. If you ever want to see how ai tools recommend you, just say. |
-| already_show_up | "I already show up on ai", "a caller said chatgpt recommended me", "you found me" | Fair enough, that's good to hear. It can come out differently depending on who asks and where, so I'd still like to show you what came back when I checked. Want a quick voice note? (named every time: "Fair enough, you're right, you came up every time I checked too. I'll leave you to it.") |
+| word_of_mouth | "all word of mouth", "busy with recommendations" | Fair enough, that's the best kind of work. I'll leave you to it. If you ever want to see how AI recommends you, just say. |
+| already_show_up | "I already show up on ai", "a caller said chatgpt recommended me", "you found me" | Fair enough, good to hear. It tends to come out differently depending on who asks and where. Want a quick voice note on what came back when I checked? (named every time: "Fair enough, you're right, you came up every time I checked too. I'll leave you to it.") |
 | new_site_being_built | "getting a new website built", "just been rebuilt" | Good timing. Is it with an agency, or are you building it yourself? Then: "No problem. I'll check back in about 4 weeks once it's settled and re-run the same searches so you can compare." (the check back is NOTED on the draft, never written) |
 | proof_request | "send the evidence / screenshots", "a demo" (code; references / testimonials / case studies we cannot send: **Needs you**) | Fair ask. I can send you the report with the exact searches I ran and what came back. I've had good reviews and great feedback from the businesses I've worked with, and I built this site for a locksmith recently: https://mclocksmiths-new.pages.dev/ Want me to send the report here? |
-| explain_here | "please explain here", "send me some details" | Sure. Short version: I build you a new site that's set up for ai and google, sort your google business profile, and keep checking how you show up. Want me to send what I found here? |
+| explain_here | "please explain here", "send me some details" | Sure. Short version: I build you a new site set up for AI and Google, sort your Google Business Profile, and keep checking how you show up. Want me to send what I found here? |
 | pay_on_results | "only pay after results", "show us FOC first" (**Needs you**, word for word) | I don't work pay-after-results, but you're covered: it's £99 to start, and we improve ai visibility or you get your money back. After your results it's £99 a month, 12 payments in total including the first. Quick call to go through it? |
-| ads_question | "do you do google ads?", "tried SEO, didn't work" | No, I don't do ads. I only work on getting businesses recommended when people ask ai tools. Want a quick voice note on what I found for you? |
+| ads_question | "do you do google ads?", "tried SEO, didn't work" | No, I don't do ads. I only work on getting businesses recommended when people ask AI. Want a quick voice note on what I found? |
 | do_it_myself | "I'll learn it and do it myself", "I'll get claude to fix it" | Fair enough, and good luck with it. If you want a second pair of eyes on what I found, just say. |
 | where_based | "are you UK based?", "what's your company called / your website?" (code) | Findable is a UK company, but we work with businesses worldwide. The site's findable.live if you want a look. Quick call, or shall I send a voice note? |
 | call_now | "you free now?", "can I call you?" (**Needs you**: only Paul knows) | Yes, I'm free now. Ring me on this number, or give me a time and I'll ring you. |
@@ -180,6 +195,44 @@ speak soon."), never the busy line.
 **Voice-note script, brand-free:** the spoken script says "AI" ("i asked AI for a plumber in Leicester"), never ChatGPT,
 Gemini or Google AI; the checker flags a brand. The engine stays in the stored evidence for the operator.
 `VOICE_NOTE_GENERATOR_VERSION` 6.
+
+## 5e. Lean first replies (Paul, 2026-10-23)
+
+Approved before / after sheet: `C:\Users\paulj\Documents\Findable\lean-first-replies-2026-10-23.md` (version 2).
+
+* **The pitch** (`firstReplyPitch`): no "Either way I can send a quick voice note" line (the voice note and call come next
+  message); "I looked into why and a few things could be holding you back:" then up to **four** real issues as "• "
+  lines; one issue is one sentence; none, the "why" part is dropped. **Length rule:** past 100 words the lowest issue goes,
+  never below two (`PITCH_MAX_WORDS`, `PITCH_MIN_LIST`, `pitchIssueWords.ts`).
+* **Plain issue words** (`src/lib/pitchIssueWords.ts`): keyed by the website check's issue ID, never its title. A town
+  keeps its capital. An issue with no plain words (page code / schema, sitemaps, canonicals, FAQ mark-up, a second
+  homepage copy) is **left out**, never said in jargon. "No named owner" (a minor finding) joins the address line. The
+  operator screens and client report keep `plainIssueTitle`.
+* **No website:** Paul's Option 2 words (`PITCH_NO_SITE_LINE`): "tends to", never how AI decides. The question is
+  "Do you have a website I've missed, or is that something you'd want sorted?" (a bare "yes" still gets "What's the web
+  address…").
+* **Site shared** (`siteSharedReply`, intent `site_shared`): after we said we found no website, they send one. If the
+  website check has run on THAT site: "Ah thanks, I missed that one. Had a proper look…" + up to four real issues +
+  "Your Google listing doesn't link to your website" (true: our no-website pitch went because their Google listing had
+  none). Not checked yet → **Needs you, no draft**: "Add it to the lead, press Crawl site, then Regenerate" (Paul: never an
+  auto-crawl). A map pin or Facebook link beside it is fine.
+* **How to get named** (`how_to_get_named`): "how can I get up on the AI search?" after the issues list: three lines, no
+  price, "Voice note, or a quick call?". With "I manage it myself" in the same message it opens "Good, that makes it
+  easier." (Quick Drive, 2026-10-22, got a reply that ignored the question.)
+* **"AI" in capitals in every first reply** (`MovePlan.firstReply`, `isFollowUp`); later follow-ups keep "ai".
+* **Australia** (`prospectOnlyPlan`, `prospectOnly.ts`): a plan that would say a price, the guarantee or a sign-up is
+  **Needs you, no draft** ("prospect_only"); every other plan may not state a price. Judged on what the plan SAYS, not a
+  list of intents.
+* **Logged structure:** `why.structure` = pitch_list / pitch_sentence / pitch_plain / pitch_no_site / pitch_intro /
+  site_shared_list / site_shared_sentence / site_shared_plain. The outcome log links to the draft (`draft_id`), so reply
+  rates can be compared by structure with no database change.
+* **The checker** counts a "• " line as part of the list, not a line of its own; the site-shared reply has the pitch's
+  limits; a name the site calls itself ("it says Quick Drive Academy") is not flagged as a stranger.
+* **Not done here (listed for Paul):** an "unsourced claims" check (ratings / pass rates with no source) does not exist and
+  is a separate job. "Welcome, !" (an empty greeting) is not caught by the website check yet: the check lives in
+  `contentTrust.ts`, which reaches 31 functions including send-whatsapp-message and process-whatsapp-queue, so it was
+  not built in this change; the pitch already has words for it if the check ever quotes one.
+* Tests: `scripts/reply-move.test.ts` §6 / §9b, `scripts/reply-new-intents.test.ts`, `scripts/lean-first-replies.test.ts`.
 
 ## 6. Where Paul's brief and v5 differ (v5 wins)
 

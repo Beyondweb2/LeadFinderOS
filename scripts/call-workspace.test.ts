@@ -178,7 +178,7 @@ console.log('── 4. WHO IS CALLING COMES FIRST ──');
   }
   const short = shortVoiceNote({ engineLabel: 'Google AI', competitors: ['Brian Slattery Plumbers', 'Sunnybank Plumbing'], trade: 'Plumbers', area: 'Halifax', site: { mode: 'no_website', source: 'none', sourceLabel: null }, caller: 'Sam Rep' })!;
   ok(/^hi mate, it's Sam from Findable\./.test(short) && !/quick one/.test(short) && /have you got a website i missed/.test(short), 'the 20-second voice note says who is speaking, drops "quick one", and confirms rather than interrogates about the website');
-  ok(/^0\. WHO IS SPEAKING/m.test(VOICE_NOTE_SYSTEM_PROMPT), 'the generated voice note is told to open with who is speaking');
+  ok(/who is speaking \("hi mate, it's Paul from Findable"/.test(VOICE_NOTE_SYSTEM_PROMPT), 'the generated voice note is told to open with who is speaking');
   const prompt = buildVoiceNotePrompt({ business: 'X', trade: 'Plumbers', area: 'Halifax', website: null, evidence: { questionIndex: 0, question: 'q', engine: 'gemini', engineLabel: 'Google AI', competitors: ['A'], answerExcerpt: '', thin: false }, site: { mode: 'no_website', source: 'none', sourceLabel: null, findings: [], services: [], serviceEvidence: '' } as never, caller: 'Sam Rep' });
   ok(/WHO IS SPEAKING .*Sam from Findable/.test(prompt), '…with the signed-in rep\'s first name');
   const check = (s: string) => checkVoiceNoteScript(s, { evidence: { questionIndex: 0, question: 'q', engine: 'gemini', engineLabel: 'Google AI', competitors: ['A'], answerExcerpt: '', thin: false }, site: { mode: 'no_website', source: 'none', sourceLabel: null, findings: [], services: [], serviceEvidence: '' } as never, caller: 'Sam' });

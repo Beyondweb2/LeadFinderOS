@@ -206,6 +206,8 @@ export interface AiReplyWhy {
   styleSource: string;
   /** How the message ends ('emotional' closer, 'agency' / 'site' next step, 'question', or null) and the confidence line used. */
   closer?: string | null;
+  /** How a code-built pitch / site-shared reply was built (Paul, 2026-10-23): compare reply rates by structure. */
+  structure?: string | null;
   confidence?: string | null;
   /** The website issues the draft could name, each with its stored pages (evidence). */
   siteIssues?: Array<{ title: string; pages: string[] }> | null;
@@ -294,7 +296,7 @@ export function buildAiReplyPrompt(c: AiReplyContext): string {
   const greet = c.plan.greetName || c.evidence.ownerName;
   if (greet) lines.push(`NAME: you may greet them as ${greet}.`);
   else lines.push('NAME: do not use a first name.');
-  lines.push(isPitch(c.plan) ? 'STYLE: first message.' : 'STYLE: follow-up (ai in lower case; never start a sentence with it).');
+  lines.push(!isFollowUp(c.plan) ? 'STYLE: first message (write AI in capitals).' : 'STYLE: follow-up (ai in lower case; never start a sentence with it).');
   if (!c.plan.brandsAllowed) lines.push('AI TOOLS: never name one by its brand. Say ai.');
   const thread = c.thread.slice(-8).map((m) => `${m.from === 'us' ? 'PAUL' : 'THEM'}: ${m.text.replace(/\s+/g, ' ').slice(0, 400)}`).join('\n');
   lines.push(`CONVERSATION SO FAR (oldest first, for context only; never repeat what Paul already said):\n${thread}`);
@@ -314,8 +316,9 @@ export function finishDraft(text: string, names: readonly (string | null | undef
   /* A follow-up writes the tools in lower case (Paul, 2026-10-20); the first pitch keeps its capitals. */
   return opts.followUp ? lowerBrands(s) : s;
 }
-/** Every draft but the first-reply pitch is a follow-up (the lower-case style). */
-export const isFollowUp = (p: MovePlan) => !isPitch(p);
+/** Every draft but the first-reply pitch, the site-shared reply and any first reply to our opener is a follow-up (the
+ *  lower-case style). A first reply keeps "AI" in capitals (Paul, 2026-10-23). */
+export const isFollowUp = (p: MovePlan) => !isPitch(p) && !p.firstReply;
 /** The names finishDraft spells the evidence's way. */
 export const evidenceNames = (e: MoveEvidence): string[] => [e.town, e.businessName, ...e.competitors].filter((x): x is string => !!x);
 
@@ -337,10 +340,12 @@ const COMMON_CAPS = new Set(['I', "I'm", "I'll", "I've", "I'd", 'AI', 'ChatGPT',
 
 /** A promise of WHEN something comes ("I'll send it now", "recording it shortly"). Paul, 2026-10-20: never. */
 const TIMING_PROMISE = /\b(send|sending|sent|record|recording|do|doing|get)\b[^.?!\n]{0,40}\b(now|right\s+away|straight\s+away|shortly|in\s+a\s+(minute|min|sec|second|moment|bit)|later\s+today|today|tonight|this\s+(morning|afternoon|evening)|in\s+\d+\s*(mins?|minutes|hours?))\b/i;
-/** The first-reply pitch is code-built and may run to five lines (Paul, 2026-10-20). */
-const isPitch = (p: MovePlan) => p.move === 'first_reply_pitch' || (p.move === 'auto_reply' && !!p.fixedText);
+/** The first-reply pitch is code-built and may run to five lines (Paul, 2026-10-20), plus its "• " issue lines; the
+ *  site-shared reply is built the same way (Paul, 2026-10-23). */
+const isPitch = (p: MovePlan) => p.move === 'first_reply_pitch' || p.move === 'site_shared' || (p.move === 'auto_reply' && !!p.fixedText);
 /* The straight-answer and chased pitches carry one more line (the answer / the apology) in front of the pitch. */
-const lineCap = (p: MovePlan) => (isPitch(p) ? (p.intent === 'straight_answer_then_pitch' || p.intent === 'they_chased' ? 6 : 5) : 3);
+/* The no-website pitch has six paragraphs (Paul, 2026-10-23: "instead", then the two no-site sentences on their own line). */
+const lineCap = (p: MovePlan) => (isPitch(p) ? (p.intent === 'straight_answer_then_pitch' || p.intent === 'they_chased' ? 7 : 6) : 3);
 /** Our own two links (Paul, 2026-10-21): findable.live itself (never a path on it) and the site we built for a locksmith. */
 const OWN_LINKS = [new RegExp(BUILT_SITE_EXAMPLE_URL.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/\/$/, '\\/?'), 'gi'), /\bfindable\.live\b(?![/\w])/gi];
 const withoutOwnLinks = (r: string, p: MovePlan) => (p.linkOk ? OWN_LINKS.reduce((s, re) => s.replace(re, ' '), r) : r);
@@ -364,7 +369,8 @@ export function checkAiReply(reply: string, c: AiReplyContext): string[] {
   const r = reply.trim();
   if (!r) return ['Empty draft.'];
   const e = c.evidence; const p = c.plan;
-  const lines = r.split('\n').filter((l) => l.trim());
+  /* A "• " issue line is part of the list, not a line of its own (the pitch's up-to-four issues, Paul 2026-10-23). */
+  const lines = r.split('\n').filter((l) => l.trim() && !/^\s*•/.test(l));
   if (lines.length > lineCap(p)) out.push(`More than ${lineCap(p)} lines.`);
   if (r.length > charCap(p)) out.push(`Long for a reply (over ${charCap(p)} characters).`);
   if (TIMING_PROMISE.test(r) && p.move !== 'set_call' && !p.timingOk) out.push('Promises when something will come ("now", "shortly"). Never promise timing.');
@@ -396,7 +402,8 @@ export function checkAiReply(reply: string, c: AiReplyContext): string[] {
   if (INSTEAD_CLAIM.test(r.split(PITCH_SPECIALISE_LINE).join(' ')) && !(e.named && mayClaimNamedInstead(e.named.named, e.named.valid))) {
     out.push('Says AI named others instead, but they were named in more than a third of answers (or no counts are on record).');
   }
-  const allowedNames = [e.businessName, ...e.competitors, e.town ?? '', e.ownerName ?? ''].map(lower).filter(Boolean);
+  /* The pitch's own issue lines may quote what the site calls itself ("it says Quick Drive Academy"). */
+  const allowedNames = [e.businessName, ...e.competitors, e.town ?? '', e.ownerName ?? '', ...(e.site?.pitch ?? [])].map(lower).filter(Boolean);
   for (const m of r.matchAll(NAME_SEQ)) {
     const words = m[1].split(/\s+/).filter((w) => w !== '&' && !COMMON_CAPS.has(w));
     if (words.length < 2) continue;
@@ -443,7 +450,8 @@ export function checkAiReply(reply: string, c: AiReplyContext): string[] {
   const ours = c.thread.filter((m) => m.from === 'us').slice(-2).map((m) => opener(m.text)).filter(Boolean);
   const mine = opener(r);
   if (mine && !['i', 'hi', "i'm", "i'll", "i've"].includes(mine) && ours.includes(mine)) out.push(`Opens with "${mine}" again, like your last message. Vary it.`);
-  out.push(...salesStyleProblems(r, [...e.competitors, e.businessName]));
+  /* Text quoted from their own site ("Welcome, !") is theirs, not our style (Paul, 2026-10-23, site shared). */
+  out.push(...salesStyleProblems(r.replace(/"[^"\n]*"/g, ' '), [...e.competitors, e.businessName]));
   return [...new Set(out)];
 }
 

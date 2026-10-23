@@ -54,6 +54,8 @@ import { CONFIDENCE_LINE, FACT_SHEET_VERSION } from "../../../src/lib/offerFactS
 import { WAITING_PITCH_STATUSES } from "../../../src/lib/auditPitchRule.ts";
 import { selectFindings } from "../../../src/lib/coldCallPlaybook.ts";
 import { plainIssueTitle, websiteCheckFor } from "../../../src/lib/websiteCheck.ts";
+import { pitchIssueLines } from "../../../src/lib/pitchIssueWords.ts";
+import { prospectOnlyLead, prospectOnlyNumber } from "../../../src/lib/prospectOnly.ts";
 import { conversationEngine, draftNames } from "../../../src/lib/draftEvidence.ts";
 import { warmStage } from "../../../src/lib/warmStage.ts";
 import { serviceWindowState } from "../../../src/lib/serviceWindow.ts";
@@ -79,7 +81,7 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-internal-job, x-cron-secret",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
   /* The deploy marker: only this build answers with it. */
-  "x-ai-reply-drafts": "2026-10-22c-one-audit-score",
+  "x-ai-reply-drafts": "2026-10-23a-lean-first-replies",
 };
 const json = (b: unknown, s = 200) => new Response(JSON.stringify(b), { status: s, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 const str = (v: unknown) => (typeof v === "string" ? v.trim() : "");
@@ -239,7 +241,12 @@ async function buildContext(service: Service, lead: LeadRow, thread: MsgRow[], i
     foundOnGoogle: !!lead.place_id,
     /* The ONE website check: its state and the serious issues' plain titles, worst first (the first-reply pitch). */
     site: { state: found.check.state, issues: found.check.serious.map(plainIssueTitle),
+      /* The same issues in the pitch's plain words (Paul, 2026-10-23); one with no plain words is left out. */
+      pitch: pitchIssueLines(found.check.serious, found.check.minor),
       evidence: found.check.serious.map((i) => ({ title: plainIssueTitle(i), pages: i.pages })) },
+    websiteUrl: lead.website ?? null,
+    /* ⛔ Australia is prospect-only (prospectOnly.ts): a price / guarantee answer is Needs you, never a draft. */
+    prospectOnly: prospectOnlyLead({ country: lead.country }) || prospectOnlyNumber(lead.phone),
     /* The bot answer follows the AI auto-reply switch; an unreadable switch reads as ON (never claim a person sent it). */
     aiAutoReplies: await aiSwitchOn(service),
   };
@@ -306,6 +313,8 @@ function whyOf(ctx: AiReplyContext, findingsNote: string | null, w: { problems: 
     problems: w?.problems ?? [], usedFallback: w?.usedFallback ?? false, model: w?.model,
     costUsd, calls, styleSource: BEST_TEMPLATE_STYLE_NOTE,
     closer: p.closer ?? (p.question ? "question" : null), confidence: p.confidence ? CONFIDENCE_LINE : null,
+    /* Which structure was sent (Paul, 2026-10-23): the outcome log links to this draft, so reply rates compare by structure. */
+    structure: p.structure ?? null,
     /* The playbook (replyPlaybook.ts): the intent read, "no draft", a note and a tied-in end date for the person's Next Action. */
     intent: p.intent ?? null, noDraft: p.noDraft === true, note: p.note ?? null, followUp: p.followUp ?? null, win: p.win ?? null,
     ...extra,

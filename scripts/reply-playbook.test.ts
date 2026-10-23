@@ -16,6 +16,8 @@ const ev: MoveEvidence = { businessName: 'ZZ Fixture Plumbing 90', trade: 'plumb
   hookAlreadySent: false, findings: [], hasWebsite: true, ownerName: null, foundOnGoogle: true,
   site: { state: 'issues', issues: ['Some pages have no main heading', 'There is no phone number on the site'] } };
 const noSiteEv: MoveEvidence = { ...ev, hasWebsite: false, site: { state: 'no_website', issues: [] } };
+/* The lead after they sent the site we missed and it was checked (Paul, 2026-10-23). */
+const sharedEv: MoveEvidence = { ...ev, websiteUrl: 'https://www.zzfixtureplumbing.co.uk/', site: { state: 'issues', issues: ['x', 'y'], pitch: ['Your homepage doesn\'t mention Rugby', "There's no phone number on your site"] } };
 const opener: MoveThreadMsg = { from: 'us', text: 'Hi, is this ZZ Fixture Plumbing 90?', templateName: 'initial_contact' };
 const pitchMsg: MoveThreadMsg = { from: 'us', text: [...firstReplyPitch(ev).lines, firstReplyPitch(ev).question].join('\n\n') };
 const NOW = Date.parse('2026-10-20T10:00:00Z');
@@ -34,7 +36,11 @@ const qCount = (s: string) => (s.replace(/"[^"\n]*"/g, '').match(/\?/g) ?? []).l
 
 /* One scripted conversation per intent. */
 const CASES: Array<{ intent: PlaybookIntent; thread: MoveThreadMsg[]; evidence?: MoveEvidence; label: string }> = [
-  { intent: 'website_given', label: 'they send their website', thread: [opener, ...said('Yes'), us(firstReplyPitch(noSiteEv).lines.concat(firstReplyPitch(noSiteEv).question).join('\n\n')), ...said('yes its www.zzfixtureplumbing.co.uk')], evidence: noSiteEv },
+  /* We never said we found no website: a link they send is the plain "thanks, I'll take a look". */
+  { intent: 'website_given', label: 'they send their website', thread: after('our new one is www.zzfixtureplumbing2.co.uk') },
+  /* We said we found no website, they sent one and the check has run on it: the site-shared reply (Paul, 2026-10-23). */
+  { intent: 'site_shared', label: 'they send the website we missed (checked)', thread: [opener, ...said('Yes'), us(pitchText(firstReplyPitch(noSiteEv))), ...said('yes its www.zzfixtureplumbing.co.uk')], evidence: sharedEv },
+  { intent: 'how_to_get_named', label: '"how can I get up on the AI search?"', thread: after('I manage it myself, how can I get up on the ai search?') },
   { intent: 'no_website', label: '"no, haven\'t got one"', thread: [opener, ...said('Yes'), us(firstReplyPitch(noSiteEv).lines.concat(firstReplyPitch(noSiteEv).question).join('\n\n')), ...said('No not got one')], evidence: noSiteEv },
   { intent: 'facebook_only', label: '"just facebook"', thread: after('we just have facebook') },
   { intent: 'agency', label: '"an agency does it"', thread: after('An agency does it for us') },
@@ -77,7 +83,9 @@ for (const c of CASES) {
   ok(d.plan.intent === c.intent, `${c.intent}: ${c.label} → ${d.plan.intent ?? d.plan.move}`);
   ok(!!d.text && d.warnings.length === 0, `${c.intent}: the draft passes the checker${d.warnings.length ? ' — ' + d.warnings.join(' | ') : ''}`);
   ok(!!d.text && qCount(d.text) <= 1, `${c.intent}: at most one question`);
-  ok(!!d.text && !/\b(ChatGPT|Gemini|Google AI|AI)\b/.test(d.text) && !startsWithBrand(d.text), `${c.intent}: chatgpt / gemini / ai in lower case, never starting a sentence`);
+  /* site_shared and how_to_get_named are Paul's code-built words with "AI" in capitals (approved sheet, 2026-10-23). */
+  if (!['site_shared', 'how_to_get_named'].includes(c.intent)) ok(!!d.text && !/\b(ChatGPT|Gemini|Google AI|AI)\b/.test(d.text) && !startsWithBrand(d.text), `${c.intent}: chatgpt / gemini / ai in lower case, never starting a sentence`);
+  else ok(!!d.text && !AI_BRAND.test(d.text), `${c.intent}: names no AI tool`);
   if (!['how_much', 'catch'].includes(c.intent)) ok(!(d.text ?? '').includes('backed by a guarantee'), `${c.intent}: no money-back confidence line`);
   previews.push(`PREVIEW ${c.intent} | them: "${[...c.thread].reverse().find((m) => m.from === 'them')?.text}" | draft: "${(d.text ?? '').replace(/\n+/g, ' / ')}"`);
 }
@@ -156,7 +164,7 @@ for (const [label, e] of [['issues', ev], ['no website', noSiteEv], ['no audit',
   ok(!AI_BRAND.test(t), `the pitch (${label}) names no AI tool`);
 }
 ok(PITCH_SPECIALISE_LINE === 'I specialise in getting local businesses to show up in those results, so the customers go to you instead.', 'the confidence line is Paul\'s 2026-10-21 wording');
-ok(PITCH_NO_SITE_LINE === "I couldn't find a website for you, so AI has nothing of yours to read.", 'the no-website line names no tool');
+ok(!AI_BRAND.test(PITCH_NO_SITE_LINE) && /tends to lean on websites/.test(PITCH_NO_SITE_LINE) && /couldn't find one for you/.test(PITCH_NO_SITE_LINE), 'the no-website line names no tool and says "tends to" (Option 2, 2026-10-23)');
 {
   const t = pitchText(firstReplyPitch(ev));
   ok(t.includes('I asked AI "Who is the best plumber in Rugby?" and it mentioned Rival A Plumbing, Rival B Plumbing and Rival C Plumbing.'), 'first message: I asked AI "<question>" and it mentioned A, B and C');

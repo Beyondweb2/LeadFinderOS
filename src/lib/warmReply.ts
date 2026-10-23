@@ -26,14 +26,14 @@
 /* ⛔ The offer constants (findableOffer.ts) are deliberately NOT imported: this stage carries no price
    (Paul, 2026-09-25). A later sales stage will use them; the canonical data is untouched. */
 import { REPORT_PUBLIC_ORIGIN } from './findableOffer.ts';
-import { SALES_STYLE_RULES, salesStyleProblems } from './salesStyle.ts';
+import { SALES_STYLE_RULES_NO_BRAND, salesStyleProblems } from './salesStyle.ts';
 import {
   normaliseForMatch, MIN_QUOTE_CHARS, MIN_SALES_STRENGTH, rankFindings, findingScore,
   type AuditContext, type ResearchFinding, type WarmLeadResearch,
 } from './warmLeadResearch.ts';
 import {
   GENERIC_SITE_LINE, NO_SITE_LINE, ROUTE_NEW_RE as ROUTE_NEW,
-  carryOn, conversationEngine, draftNames, issueMentioned, namesAny, namesLine, offerLine, saysGoogleAiForGemini, vagueSiteClaim, wrongEngineWords,
+  carryOn, draftNames, issueMentioned, namesAny, namesLine, offerLine, saysGoogleAiForGemini, vagueSiteClaim, wrongEngineWords,
 } from './draftEvidence.ts';
 
 export const REPLY_MODEL = 'gpt-4o-mini';
@@ -450,13 +450,15 @@ export function buildReplyContext(i: Omit<ReplyContext, 'question' | 'askOwnersh
     allowReportUrl: !!i.reportUrl && reportUrlAllowed(i.latest.text, question.all),
     route: routeLean(i.research),
     searchContext: aiSearchContext(i),
-    engineWords: conversationEngine(i.thread.filter((m) => m.direction === 'outbound').map((m) => ({ text: m.text, templateName: m.templateName ?? null })), i.audit?.engine ?? null).words,
+    /* ⛔ NO AI BRAND in anything a prospect reads (Paul, 2026-10-21; warm replies 2026-10-23): always "ai", whatever an older
+       message of ours said. The engine stays in the audit for the operator. */
+    engineWords: 'ai',
   };
 }
 
 /* ─────────────────────────────── the prompt ─────────────────────────────── */
 
-export const REPLY_SYSTEM_PROMPT = `You draft WhatsApp replies for Paul, who helps UK local businesses show up when people ask AI tools (chatgpt, gemini, perplexity) for their trade in their area. Paul reads and edits every draft before sending; you never send anything. Return ONLY structured data via the return_reply tool.
+export const REPLY_SYSTEM_PROMPT = `You draft WhatsApp replies for Paul, who helps UK local businesses show up when people ask AI tools for their trade in their area. Paul reads and edits every draft before sending; you never send anything. Return ONLY structured data via the return_reply tool.
 
 WHERE THIS CONVERSATION IS: Paul messaged them cold and they replied. FOR THIS REPLY says whether Paul has ALREADY sent them the AI check (the search and the businesses it named). This reply has exactly three jobs:
 1. PROVE THERE IS A REAL ISSUE: AI was asked for their service in their area, it recommended their competitors, not them, and (only where a finding is given) here is a specific thing on their website.
@@ -464,7 +466,7 @@ WHERE THIS CONVERSATION IS: Paul messaged them cold and they replied. FOR THIS R
 3. FIND OUT WHO CONTROLS THE WEBSITE: end by asking whether they are with an agency or own/manage the site themselves (unless FOR THIS REPLY says they already told us).
 
 THE SHAPE (normally 3 or 4 short paragraphs):
-- respond naturally to what they just said (if they misread the hook, e.g. "do you need an electrician?", put them right in a friendly way: "nah mate, i was checking what gemini recommends when someone's looking for an electrician in addlestone")
+- respond naturally to what they just said (if they misread the hook, e.g. "do you need an electrician?", put them right in a friendly way: "nah mate, i was checking what ai recommends when someone's looking for an electrician in addlestone")
 - the AI search: what was asked, using the AI TOOL words given, and who it recommended instead of them. If the AI check has NOT been sent yet, name the businesses listed under AI VISIBILITY (at most three, spelt as given), casually: "it recommended A, B and C". If it says no names could be read, say "it named a few other businesses" and never make a name up. If the AI check HAS already been sent, do not list them again; they have just seen them.
 - the specific issue from the PRIMARY FINDING (or the CRAWL FINDINGS), with its real details, and what it means in plain english ("so a lot of the ai tools can't properly access and understand the site"). With no finding given, use the GENERAL LINE given instead and claim no fault.
 - what we'd do: "that's the sort of thing we sort out, we can build you a new site that's properly set up for ai visibility and seo, and you can keep your web address"
@@ -474,13 +476,13 @@ NO PRICE AT THIS STAGE. Do not mention any price, figure, monthly fee, number of
 
 HOW PAUL WRITES ON WHATSAPP:
 - conversational, short, simple sentences. lowercase is fine and natural. "mate" where it fits.
-- product names in normal lowercase is fine: gemini, chatgpt, claude, perplexity.
+- write ai in lower case. Never name an AI tool by its brand (no chatgpt, gemini, claude, perplexity): say ai.
 - no headings, no bullet points, no bold, no emojis, no dashes of any kind (no "—" or "–"): use a comma or a new sentence.
 - never: "i'd love to", "great question", "thanks for getting back to me", "ai-powered", "solutions", "leverage", "boost", "online presence", "seamless", "unlock", "don't hesitate", fake urgency, exaggerated claims.
 - it should read like Paul checked THEIR business himself and found something worth fixing, not like a sales script.
-- say the search plainly ("i asked gemini for an electrician in addlestone"), never with an adjective on it and never read back word for word.
+- say the search plainly ("i asked ai for an electrician in addlestone"), never with an adjective on it and never read back word for word.
 
-${SALES_STYLE_RULES}
+${SALES_STYLE_RULES_NO_BRAND}
 
 NEVER:
 - invent a website problem. Use ONLY the findings you are given, and state them no more strongly than their detail does;
@@ -721,7 +723,10 @@ export function checkReply(reply: string, ctx: ReplyContext): ReplyCheck {
     if (!ctx.hookTemplate && names.length && !namesAny(text, names)) problems.push(`It does not name who AI recommended instead (${names.join(', ')}).`);
     if (wrongEngineWords(text, ctx.engineWords)) problems.push(`It names a different AI tool from the one this conversation uses ("${ctx.engineWords}").`);
   }
-  if (!refusal && saysGoogleAiForGemini(text)) problems.push('It says "google ai"; say "gemini".');
+  /* ⛔ No AI brand in a warm reply (Paul, 2026-10-23): "ai", whatever an older message of ours said. A blocked CRAWLER's
+     name from the site's own finding ("chatgpt-user", "perplexitybot") is not an engine claim (the voice note's rule). */
+  const withoutCrawlers = text.replace(/\b(chat\s?gpt[-\s]user|oai[-\s]searchbot|gptbot|claude[-\s]user|perplexity[-\s]?bot|google[-\s]extended|googlebot)\b/gi, ' ');
+  if (!refusal && (saysGoogleAiForGemini(text) || /\b(chat\s?gpt|gemini|perplexity|copilot)\b/i.test(withoutCrawlers))) problems.push('It names an AI tool by its brand; say "ai".');
 
   if (!refusal) {
     if (!AI_SEARCH_STRICT.test(text)) problems.push('It does not mention the AI search that started this conversation.');

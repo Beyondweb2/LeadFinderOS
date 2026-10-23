@@ -1,0 +1,124 @@
+/* ════════════════════════════════════════════════════════════════════════════════════════════════
+   THE PITCH'S ISSUE WORDS (Paul, 2026-10-23, lean first replies) — one short plain line per website issue, for the
+   first-reply pitch's bullet list, the "site shared" reply and the voice-note script. Record: docs/reply-playbook.md §5e.
+
+   ⛔ KEYED BY THE ISSUE ID, never by its title: the operator screens and the client report keep their own wording
+      (websiteCheck.ts plainIssueTitle). An id with no line here is LEFT OUT of the pitch, never said in jargon
+      (page code / schema, sitemaps, canonicals, FAQ mark-up, a second homepage copy).
+   ⛔ A town keeps its capital ("Your site doesn't mention Sunbury", never "sunbury is not mentioned").
+   ⛔ Never how an AI decides; "may" for what our check saw.
+   Pure and edge-reachable: relative imports with .ts, no Deno, no DOM.
+   ════════════════════════════════════════════════════════════════════════════════════════════════ */
+
+/** The issue fields the words read (websiteCheck.ts WebsiteIssue). */
+export interface PitchIssueInput { id: string; title: string; saw?: string; examples?: string[] }
+
+/** Most issues a list carries (Paul, 2026-10-23: "up to four short, specific, real issues"). */
+export const PITCH_MAX_LIST = 4;
+/** A list is never cut below this by the length rule. */
+export const PITCH_MIN_LIST = 2;
+/** The length rule (Paul, 2026-10-23: "about 70 to 100 words is fine"): the lowest issue goes until the message fits. */
+export const PITCH_MAX_WORDS = 100;
+
+/** Our check could not read the site (the site-shared reply says it when that is all the check found). */
+export const UNREADABLE_PITCH_LINE = "My check couldn't read your website, and AI tools may struggle with it too";
+const MAIN_PAGES_UNCLEAR = "Your main pages don't say clearly what you do";
+const NOT_LINKED = "Some important pages aren't linked from anywhere on your site";
+const HIDDEN_PAGES = 'Some of your pages are hidden from Google';
+
+const FIXED: Record<string, string> = {
+  robots_blocks_all: 'Your site tells AI tools not to read it',
+  search_crawler_refused: UNREADABLE_PITCH_LINE,
+  one_page_site: 'Your website is just one page',
+  no_service_pages: "Your services don't have their own pages",
+  service_page_gaps: "Your services don't have their own pages",
+  services_on_one_page: 'Several of your services are squeezed onto one page',
+  thin_key_pages: 'Your main pages say very little about what you do',
+  ct_areas_not_stated: "Your site doesn't say which areas you cover",
+  ct_area_coverage: "Your site doesn't say much about the areas you cover",
+  vs_key_page_basics: MAIN_PAGES_UNCLEAR,
+  missing_h1: MAIN_PAGES_UNCLEAR,
+  missing_title: MAIN_PAGES_UNCLEAR,
+  missing_description: MAIN_PAGES_UNCLEAR,
+  duplicate_titles: MAIN_PAGES_UNCLEAR,
+  ct_vague_headings: MAIN_PAGES_UNCLEAR,
+  vs_name_inconsistent: 'Your business name is written different ways across your site',
+  no_https: "Your site isn't secure (no padlock)",
+  noindex_home: 'Your homepage is hidden from Google',
+  noindex_pages: HIDDEN_PAGES,
+  noindex_important_page: HIDDEN_PAGES,
+  broken_pages: 'Some links on your site are broken',
+  ct_link_mismatch: 'Some links on your site go to the wrong place',
+  vs_town_swapped_pages: 'Lots of your pages are the same text with only the town swapped',
+  near_duplicate_pages: 'Lots of your pages are near enough the same',
+  ct_accreditations_unnamed: "Your site mentions being accredited but doesn't say who by",
+  vs_address_not_on_key_pages: "Your address isn't on your homepage",
+  no_phone: "There's no phone number on your site",
+  no_contact_details: "There's no phone number on your site",
+  no_contact_route: "There's no clear way to contact you on your site",
+  no_viewport: "Your site isn't set up for phones",
+  slow_pages: 'Your pages are slow to load',
+  internal_linking: "Your service pages aren't linked from your homepage or menu",
+  sitemap_only_pages: NOT_LINKED,
+  deep_pages: NOT_LINKED,
+  ct_no_proof: 'There are no reviews or testimonials on your site',
+  ct_conflicting_facts: "Your site gives different figures for how long you've been trading",
+  ct_placeholder_content: 'Some pages still have sample text on them',
+};
+
+/** The town an issue's own title names ("Arundel QLD is not mentioned on the site", "Homepage does not mention Banbury"). */
+function townIn(title: string): string | null {
+  const m = /^(.+?) is not mentioned on the site$/i.exec(title) ?? /does not mention (.+)$/i.exec(title);
+  const t = m?.[1]?.trim() ?? '';
+  return t && /^[A-Z]/.test(t) ? t : null;
+}
+/** The name the homepage uses, from the check's own "saw" (title: "…"), only when it is short and says something. */
+function siteNameIn(saw: string | undefined): string | null {
+  const m = /\(title:\s*[“"]([^”"]+)[”"]\)/.exec(saw ?? '');
+  const t = (m?.[1] ?? '').split(/\s+[|–—-]\s+/)[0].trim();
+  return t && t.toLowerCase() !== 'none' && t.length <= 40 ? t : null;
+}
+/** An empty greeting the check quoted ("Welcome, !"). */
+const EMPTY_GREETING = /[“"]((?:Welcome|Hi|Hello|Hey|Dear|Thanks|Thank you),\s*[!.?])[”"]/i;
+
+/** One issue's pitch line, or null (left out of the pitch). */
+export function pitchIssueLine(i: PitchIssueInput): string | null {
+  const id = String(i.id ?? '');
+  if (id === 'location_unclear' || id === 'town_missing') {
+    const town = townIn(String(i.title ?? ''));
+    if (!town) return null;
+    return id === 'town_missing' ? `Your homepage doesn't mention ${town}` : `Your site doesn't mention ${town}`;
+  }
+  if (id === 'name_unclear') {
+    /* Only "not found on the homepage" (the medium one): the Google listing's name is missing from it. */
+    if (!/not found/i.test(i.title)) return null;
+    const said = siteNameIn(i.saw);
+    return `Your site doesn't use the name on your Google listing${said ? ` (it says ${said})` : ''}`;
+  }
+  if (id === 'ct_placeholder_content') {
+    const g = (i.examples ?? []).map((x) => EMPTY_GREETING.exec(x)?.[1]).find(Boolean) ?? EMPTY_GREETING.exec(i.saw ?? '')?.[1];
+    if (g) return `A line on your site reads "${g}" where a name should be`;
+  }
+  if (id.startsWith('robots_blocks_pages_')) return 'Parts of your site are closed off to AI tools';
+  if (id.startsWith('robots_blocks_')) return 'Your site tells AI tools not to read it';
+  return FIXED[id] ?? null;
+}
+
+/**
+ * The pitch lines for a checked site, worst first: the serious issues' lines, the same line once, at most PITCH_MAX_LIST.
+ * "No named owner" (a minor finding) is said only beside the address line, as one line.
+ */
+export function pitchIssueLines(serious: readonly PitchIssueInput[], minor: readonly PitchIssueInput[] = []): string[] {
+  const noOwner = minor.some((i) => i.id === 'ct_no_people') || serious.some((i) => i.id === 'ct_no_people');
+  const out: string[] = [];
+  for (const i of serious) {
+    let line = pitchIssueLine(i);
+    if (!line) continue;
+    if (i.id === 'vs_address_not_on_key_pages' && noOwner) line = "There's no address on your homepage, and no named owner";
+    if (!out.includes(line)) out.push(line);
+    if (out.length >= PITCH_MAX_LIST) break;
+  }
+  return out;
+}
+
+export const wordCount = (s: string): number => s.replace(/•/g, ' ').split(/\s+/).filter(Boolean).length;

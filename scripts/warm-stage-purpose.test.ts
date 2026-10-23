@@ -57,11 +57,11 @@ ok(ctx.primaryRequired, 'the crawler issue must be in the reply');
 ok(ctx.askOwnership && ctx.route === 'fix_existing', 'nothing known about the site → the website question; a healthy-looking site → fix-first route');
 ok(/AI SEARCH CONTEXT: AI was asked for "electrician in Addlestone"/.test(prompt), 'the prompt carries the AI search context');
 ok(/"OAI-SearchBot" \/ "ChatGPT-User" \/ "Claude-User" \/ "PerplexityBot"/.test(prompt), 'the prompt carries the crawler names as details to keep');
-ok(/put them right in a friendly way: "nah mate, i was checking what gemini recommends/.test(REPLY_SYSTEM_PROMPT), 'a misread hook ("do you need an electrician?") is put right, friendly');
+ok(/put them right in a friendly way: "nah mate, i was checking what ai recommends/.test(REPLY_SYSTEM_PROMPT), 'a misread hook ("do you need an electrician?") is put right, friendly');
 ok(/LAST LINE: end with the website question/.test(prompt), 'the website question ends it');
 ok(!/£\s?\d|refund|guarantee|findable\.live|payments/i.test(prompt.replace(/findable\.live\/r\/ADD123/, '')), 'no price, guarantee or pricing link anywhere in the prompt');
 
-const EXPECTED = `nah mate, i was checking what gemini recommends when someone is looking for an electrician in addlestone and it brought up your competitors instead.
+const EXPECTED = `nah mate, i was checking what ai recommends when someone is looking for an electrician in addlestone and it brought up your competitors instead.
 
 i checked your site to see why and one of the main issues is oai-searchbot, chatgpt-user, claude-user and perplexitybot are blocked from fetching your pages, so a lot of the ai tools can't properly access and understand the site.
 
@@ -149,7 +149,7 @@ const c = buildReplyContext({ ...mk(), research: cleanResearch });
 ok(c.selection.primary === null && c.primaryRequired === false, 'a healthy site with nothing strong → no primary, none invented');
 /* 2026-10-12 (Paul): no finding → the general line, never a fault (draftEvidence.GENERIC_SITE_LINE). */
 ok(/The site itself is not badly built: you may say so honestly\. GENERAL LINE/.test(buildReplyPrompt(c)), 'the no-finding reply claims no fault and uses the general line');
-const NOFIND = `nah mate, i was checking what gemini recommends for an electrician in addlestone and it brought up your competitors instead.\n\nyour site itself isn't badly built, but ai still isn't linking you strongly enough with electrician searches in addlestone, while it is with those other businesses.\n\nthat's the sort of thing we'd work on, we can build you a new one that's properly set up for ai visibility and seo.\n\nare you currently with an agency or do you own/manage the website yourself?`;
+const NOFIND = `nah mate, i was checking what ai recommends for an electrician in addlestone and it brought up your competitors instead.\n\nyour site itself isn't badly built, but ai still isn't linking you strongly enough with electrician searches in addlestone, while it is with those other businesses.\n\nthat's the sort of thing we'd work on, we can build you a new one that's properly set up for ai visibility and seo.\n\nare you currently with an agency or do you own/manage the website yourself?`;
 const nf = checkReply(NOFIND, c);
 ok(nf.problems.length === 0, `the honest no-finding reply passes (${nf.problems.join(' | ') || 'ok'})`);
 ok(nf.warnings.some((w) => /No website finding was strong enough/.test(w)), 'Paul is told internally that no site finding was used');
