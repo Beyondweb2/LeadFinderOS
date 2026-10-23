@@ -39,10 +39,10 @@ console.log('4. wiring');
 const table = src('src/components/LeadsTable.tsx');
 const index = src('src/pages/Index.tsx');
 check(!/!outsideSearchedTown\(l\)\)\s*\)/.test(table.split('onShownChange?.(')[1]?.split('\n')[0] ?? ''), 'the table reports every shown row (outside ones included once shown)');
-check(/!heldOutOfTown\(l, showOutside\)/.test(table), 'selection pool uses heldOutOfTown');
+check(/const held = useCallback\(\(l: Lead\) => heldOutOfTown\(l, showOutside\) \|\|/.test(table) && /!held\(l\)/.test(table), 'selection pool uses heldOutOfTown (through the one held test)');
 check(!/disabled=\{[^}]*outsideSearchedTown\(lead\)/.test(table), 'no row button is disabled by the raw outside test');
 check(/shownIdsRef\.current\.has\(l\.id\)/.test(index), 'the add door lets a shown out-of-town row through');
-check(/outsideSearchedTown\(l\) \|\|/.test(index), 'the add door still refuses a hidden out-of-town row');
+check(/!outsideSearchedTown\(l\) && !notNicheMatch\(l, niche\)\) \|\| shownIdsRef/.test(index), 'the add door still refuses a hidden out-of-town row');
 
 if (failures) { console.log(`\n${failures} FAILED`); process.exit(1); }
 console.log('\nall passed');

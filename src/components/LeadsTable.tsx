@@ -1,6 +1,7 @@
 import { useState, useMemo, useCallback, memo, useEffect, useRef } from 'react';
 import { addProgressText, type AddProgress } from '@/lib/findLeadsBulkAdd';
 import { outsideSearchedTown, heldOutOfTown } from '@/lib/inTown';
+import { heldNotMatch, nicheProfile, notNicheMatch } from '@/lib/nicheMatch';
 import { salesOwnershipCell, adminOwnerMarker, isAlreadyAdded, AlreadyAddedMarker, type OwnershipInfo } from '@/components/FindLeadsOwnership';
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
@@ -106,6 +107,9 @@ interface LeadsTableProps {
   /** The town the results were searched in ("This town only" / Coverage). Results outside it are hidden behind one
    *  grey line and can never be added (src/lib/inTown.ts). Many towns: each result's own searchTown. */
   searchedTown?: string | null;
+  /** The niche searched (the keyword): a result whose name and Google category both miss it is hidden behind one grey
+   *  "Not a match" line (src/lib/nicheMatch.ts). Absent = nothing is judged. */
+  searchedNiche?: string | null;
   /** Per-result CRM state (from Index's matcher): whether the business is in the
    *  ACTIVE CRM, and if so whether it's still fresh/removable + the row id. When
    *  provided, the action cell shows a three-state Add / Remove / In-CRM toggle;
@@ -127,7 +131,7 @@ interface LeadsTableProps {
   addProgress?: AddProgress | null;
 }
 
-export function LeadsTable({ leads, onShownChange, onExport, onAddToOutreach, isInOutreach, onMapLinkClick, isChecked, blurred = false, gated = false, onGatedAction, savedLeadCount = 0, maxFreeSaves = 3, onViewDetailsGated, viewDetailsExhausted = false, searchEnrichment, onEnrichPatch, onSetWebsiteStatus, onBulkAdd, onBulkEnrich, isLeadEnriched, onFindEmails, onCancelFindEmails, findingEmails = false, emailProgress, emailResult, withWebsiteCount = 0, onAddAllWithEmails, addingEmails = false, addAllWithEmailsCount = 0, onExportWithEmails, addCampaignTooltip = 'Add to CRM', getCrmState, onRemoveFromCrm, ownership, onClaim, claiming, viewerRole, activeCampaign, onMoveToCampaign, addProgress, searchedTown }: LeadsTableProps) {
+export function LeadsTable({ leads, onShownChange, onExport, onAddToOutreach, isInOutreach, onMapLinkClick, isChecked, blurred = false, gated = false, onGatedAction, savedLeadCount = 0, maxFreeSaves = 3, onViewDetailsGated, viewDetailsExhausted = false, searchEnrichment, onEnrichPatch, onSetWebsiteStatus, onBulkAdd, onBulkEnrich, isLeadEnriched, onFindEmails, onCancelFindEmails, findingEmails = false, emailProgress, emailResult, withWebsiteCount = 0, onAddAllWithEmails, addingEmails = false, addAllWithEmailsCount = 0, onExportWithEmails, addCampaignTooltip = 'Add to CRM', getCrmState, onRemoveFromCrm, ownership, onClaim, claiming, viewerRole, activeCampaign, onMoveToCampaign, addProgress, searchedTown, searchedNiche }: LeadsTableProps) {
   const isLocked = blurred || gated;
   const handleExport = isLocked ? undefined : onExport;
   const { user } = useAuth();
@@ -137,10 +141,14 @@ export function LeadsTable({ leads, onShownChange, onExport, onAddToOutreach, is
      answers (useOutreach.addLead also joins a repeat press to the same add — this is the visible half). */
   /* Show/Hide on the grey "outside" line. Shown = those rows are ordinary rows for every count and action (heldOutOfTown). */
   const [showOutside, setShowOutside] = useState(false);
+  /* Show/Hide on the grey "Not a match" line (src/lib/nicheMatch.ts) — the same rule as the outside line. */
+  const [showNotMatch, setShowNotMatch] = useState(false);
+  const niche = useMemo(() => nicheProfile(searchedNiche), [searchedNiche]);
   const [addingIds, setAddingIds] = useState<ReadonlySet<string>>(() => new Set());
   const handleAddToOutreach = useCallback((lead: Lead) => {
     if (gated && !canSave) { onGatedAction?.(); return; }
     if (heldOutOfTown(lead, showOutside)) return; // hidden out-of-town rows are never added
+    if (heldNotMatch(lead, niche, showNotMatch)) return; // nor hidden "not a match" rows
     if (addingIds.has(lead.id)) return;
     const run = onAddToOutreach?.(lead);
     if (!run || typeof (run as Promise<unknown>).finally !== 'function') return run;
@@ -148,7 +156,7 @@ export function LeadsTable({ leads, onShownChange, onExport, onAddToOutreach, is
     return (run as Promise<unknown>).finally(() => {
       setAddingIds((prev) => { const next = new Set(prev); next.delete(lead.id); return next; });
     });
-  }, [onAddToOutreach, gated, canSave, onGatedAction, addingIds, showOutside]);
+  }, [onAddToOutreach, gated, canSave, onGatedAction, addingIds, showOutside, niche, showNotMatch]);
 
   const checkIsInOutreach = useCallback((name: string, url?: string) => {
     return isInOutreach?.(name, url) ?? false;
@@ -198,11 +206,20 @@ export function LeadsTable({ leads, onShownChange, onExport, onAddToOutreach, is
   /* ⛔ OUTSIDE THE SEARCHED TOWN (2026-10-20, src/lib/inTown.ts): hidden by default behind ONE grey line, never a badge,
      never added (Add, Select all and Add all leave them out). Show lists them at the bottom, still not addable. */
   const outsideCount = useMemo(() => leads.filter(outsideSearchedTown).length, [leads]);
-  const baseLeads = useMemo(() => (showOutside ? leads : leads.filter((l) => !outsideSearchedTown(l))), [leads, showOutside]);
+  /* ⛔ NOT A MATCH (2026-10-23, src/lib/nicheMatch.ts): a result whose name AND Google category both miss the niche searched
+     ("Mackay Hyundai" for driving instructors) is hidden behind ONE grey line, like the outside line, and never added or
+     counted while hidden. Show makes them ordinary rows. A row outside the town is counted on the outside line only. */
+  const nicheWords = (searchedNiche ?? '').trim().toLowerCase();
+  const isNotMatch = useCallback((l: Lead) => notNicheMatch(l, niche), [niche]);
+  const notMatchCount = useMemo(() => leads.filter((l) => isNotMatch(l) && (showOutside || !outsideSearchedTown(l))).length, [leads, isNotMatch, showOutside]);
+  const baseLeads = useMemo(() => leads.filter((l) => (showOutside || !outsideSearchedTown(l)) && (showNotMatch || !isNotMatch(l))), [leads, showOutside, showNotMatch, isNotMatch]);
   const outsideTownName = useMemo(() => {
     const towns = new Set(leads.filter(outsideSearchedTown).map((l) => (l.searchTown ?? searchedTown ?? '').split(',')[0].trim()).filter(Boolean));
     return towns.size === 1 ? [...towns][0] : 'the searched towns';
   }, [leads, searchedTown]);
+  /* One "held" test for every Add, Select and tooltip below: hidden outside OR hidden not-a-match. */
+  const held = useCallback((l: Lead) => heldOutOfTown(l, showOutside) || heldNotMatch(l, niche, showNotMatch), [showOutside, niche, showNotMatch]);
+  const heldWhy = useCallback((l: Lead) => (heldOutOfTown(l, showOutside) ? `Outside ${outsideTownName}: not added` : `Not a match for ${nicheWords}: not added`), [showOutside, outsideTownName, nicheWords]);
 
   const filteredLeads = useMemo(() => {
     const kept = baseLeads.filter((lead) => {
@@ -215,15 +232,16 @@ export function LeadsTable({ leads, onShownChange, onExport, onAddToOutreach, is
       if (!passesSiteFilter(siteFilters, siteStateOf(hasOwnSite(lead), agency.rowFor(lead.websiteUrl)))) return false;
       return true;
     });
-    /* Shown out-of-town rows come after the town's own. */
-    const shown = [...kept.filter((l) => !outsideSearchedTown(l)), ...kept.filter((l) => outsideSearchedTown(l))];
+    /* Shown out-of-town and not-a-match rows come after the rest. */
+    const aside = (l: Lead) => outsideSearchedTown(l) || isNotMatch(l);
+    const shown = [...kept.filter((l) => !aside(l)), ...kept.filter((l) => aside(l))];
     /* High-confidence agency sites go to the bottom (kept, never hidden) once every check has finished —
        rows never jump under the cursor while results are still arriving. The rest keep their order. */
     if (agency.pending > 0) return shown;
     const last = shown.filter((l) => highAgency(l));
     const rest = shown.filter((l) => !highAgency(l));
     return [...rest, ...last];
-  }, [baseLeads, statusFilters, socialFilters, siteFilters, agency, hasOwnSite, highAgency]);
+  }, [baseLeads, statusFilters, socialFilters, siteFilters, agency, hasOwnSite, highAgency, isNotMatch]);
 
   useEffect(() => { onShownChange?.(filteredLeads); }, [filteredLeads, onShownChange]);
   const visible = visibleResults(baseLeads.length, filteredLeads.length);
@@ -261,6 +279,7 @@ export function LeadsTable({ leads, onShownChange, onExport, onAddToOutreach, is
     setCurrentPage(1);
     clearFilters();
     setShowOutside(false);
+    setShowNotMatch(false);
     setSelectedIds(new Set()); // new search → stale selection would act on gone rows
   }, [signature, clearFilters]);
 
@@ -280,8 +299,8 @@ export function LeadsTable({ leads, onShownChange, onExport, onAddToOutreach, is
   // Rows already in Outreach are unselectable (can't be re-added).
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const selectableLeads = useMemo(
-    () => filteredLeads.filter((l) => !checkIsInOutreach(l.name, l.googleMapsUrl) && !heldOutOfTown(l, showOutside)),
-    [filteredLeads, checkIsInOutreach, showOutside],
+    () => filteredLeads.filter((l) => !checkIsInOutreach(l.name, l.googleMapsUrl) && !held(l)),
+    [filteredLeads, checkIsInOutreach, held],
   );
   // Resolve the selection against the CURRENT filtered set, so a filter change
   // after selecting can never bulk-act on rows that are no longer shown.
@@ -690,6 +709,15 @@ export function LeadsTable({ leads, onShownChange, onExport, onAddToOutreach, is
             </button>
           </p>
         )}
+        {notMatchCount > 0 && (
+          <p className="mb-2 text-xs text-muted-foreground" data-testid="not-a-match-line"
+            title="Their name and Google’s category don’t fit what you searched. Nothing is deleted, and they are not counted in found.">
+            {notMatchCount} not a match for {nicheWords} {showNotMatch ? 'shown' : 'hidden'}{' · '}
+            <button type="button" className="underline underline-offset-2 hover:text-foreground" onClick={() => setShowNotMatch((v) => !v)}>
+              {showNotMatch ? 'Hide' : 'Show'}
+            </button>
+          </p>
+        )}
         {bulkAllowed && (
           <SelectionModeBar className="mb-2" pageIds={pagePoolIds} allIds={selectAllIds} selected={new Set(selectedLeads.map((l) => l.id))} onChange={setSelectedIds} />
         )}
@@ -709,7 +737,7 @@ export function LeadsTable({ leads, onShownChange, onExport, onAddToOutreach, is
                   <Checkbox
                     checked={selectedIds.has(lead.id)}
                     onCheckedChange={(checked) => handleSelectOne(lead.id, checked as boolean)}
-                    disabled={inOutreach || heldOutOfTown(lead, showOutside)}
+                    disabled={inOutreach || held(lead)}
                     aria-label={`Select ${lead.name}`}
                     className="mr-2.5 shrink-0"
                   />
@@ -814,7 +842,7 @@ export function LeadsTable({ leads, onShownChange, onExport, onAddToOutreach, is
                             size="icon"
                             className={`h-8 w-8 bg-primary hover:bg-primary/90`}
                             onClick={() => handleAddToOutreach(lead)}
-                            disabled={addingIds.has(lead.id) || heldOutOfTown(lead, showOutside)}
+                            disabled={addingIds.has(lead.id) || held(lead)}
                             aria-busy={addingIds.has(lead.id)}
                             data-walkthrough-step="add-to-crm"
                             data-walkthrough="add-crm"
@@ -822,7 +850,7 @@ export function LeadsTable({ leads, onShownChange, onExport, onAddToOutreach, is
                             {addingIds.has(lead.id) ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ClipboardList className="h-3.5 w-3.5" />}
                           </Button>
                         </TooltipTrigger>
-                         <TooltipContent>{heldOutOfTown(lead, showOutside) ? `Outside ${outsideTownName}: not added` : 'Save this lead'}</TooltipContent>
+                         <TooltipContent>{held(lead) ? heldWhy(lead) : 'Save this lead'}</TooltipContent>
                       </Tooltip>
                     )
                   )}
@@ -874,7 +902,7 @@ export function LeadsTable({ leads, onShownChange, onExport, onAddToOutreach, is
                       <Checkbox
                         checked={selectedIds.has(lead.id)}
                         onCheckedChange={(checked) => handleSelectOne(lead.id, checked as boolean)}
-                        disabled={inOutreach || heldOutOfTown(lead, showOutside)}
+                        disabled={inOutreach || held(lead)}
                         aria-label={`Select ${lead.name}`}
                       />
                     </TableCell>
@@ -1047,7 +1075,7 @@ export function LeadsTable({ leads, onShownChange, onExport, onAddToOutreach, is
                                 size="sm"
                                 className={`h-8 px-3 text-xs gap-1.5 text-green-600 dark:text-green-500 border-green-600/30 hover:bg-green-500/10 hover:text-green-500`}
                                 onClick={() => handleAddToOutreach(lead)}
-                                disabled={addingIds.has(lead.id) || heldOutOfTown(lead, showOutside)}
+                                disabled={addingIds.has(lead.id) || held(lead)}
                                 aria-busy={addingIds.has(lead.id)}
                                 data-testid="find-leads-add-to-crm"
                                 data-walkthrough-step="add-to-crm"
@@ -1057,7 +1085,7 @@ export function LeadsTable({ leads, onShownChange, onExport, onAddToOutreach, is
                                 {addingIds.has(lead.id) ? 'Adding…' : 'Add to CRM'}
                               </Button>
                             </TooltipTrigger>
-                            <TooltipContent>{heldOutOfTown(lead, showOutside) ? `Outside ${outsideTownName}: not added` : addCampaignTooltip}</TooltipContent>
+                            <TooltipContent>{held(lead) ? heldWhy(lead) : addCampaignTooltip}</TooltipContent>
                           </Tooltip>
                         );
                       })()}

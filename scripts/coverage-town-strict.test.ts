@@ -71,11 +71,11 @@ ok(coverageTownFor({ ...base, townCheck: { inTown: null } }, 'Cheshunt') === nul
 ok((addRowFor({ ...base, townCheck: { inTown: true } }, { trade: 'plumber', town: 'Cheshunt', country: 'UK' }, null, null, null) as { coverage_town?: string }).coverage_town === 'Cheshunt', 'the add row carries coverage_town');
 const lt = read('../src/components/LeadsTable.tsx');
 ok(/outside \{outsideTownName\} \{showOutside \? 'shown' : 'hidden'\}/.test(lt) && /data-testid="outside-town-line"/.test(lt), 'one grey line "N outside {town} hidden · Show"');
-ok(/!checkIsInOutreach\(l\.name, l\.googleMapsUrl\) && !heldOutOfTown\(l, showOutside\)/.test(lt), 'Select all / Add all leave them out while hidden (counted once Show is pressed)');
-ok((lt.match(/disabled=\{addingIds\.has\(lead\.id\) \|\| heldOutOfTown\(lead, showOutside\)\}/g) ?? []).length === 2, 'the row Add is disabled for them (phone and desktop)');
+ok(/const held = useCallback\(\(l: Lead\) => heldOutOfTown\(l, showOutside\) \|\|/.test(lt) && /!checkIsInOutreach\(l\.name, l\.googleMapsUrl\) && !held\(l\)/.test(lt), 'Select all / Add all leave them out while hidden (counted once Show is pressed)');
+ok(/const held = useCallback\(\(l: Lead\) => heldOutOfTown\(l, showOutside\) \|\|/.test(lt) && (lt.match(/disabled=\{addingIds\.has\(lead\.id\) \|\| held\(lead\)\}/g) ?? []).length === 2, 'the row Add is disabled for them (phone and desktop)');
 ok(!/Outside town<\/span>/.test(lt), 'no badge');
 const ix = read('../src/pages/Index.tsx');
-ok(/const sel = selAll\.filter\(\(l\) => !outsideSearchedTown\(l\) \|\| shownIdsRef\.current\.has\(l\.id\)\)/.test(ix), 'every add path refuses them (one door + Add all with emails)');
+ok(/const sel = selAll\.filter\(\(l\) => \(\(!outsideSearchedTown\(l\) && !notNicheMatch\(l, niche\)\) \|\| shownIdsRef\.current\.has\(l\.id\)\)\)/.test(ix), 'every add path refuses them (one door + Add all with emails)');
 const sl = read('../supabase/functions/search-leads/index.ts');
 ok((sl.match(/places\.formattedAddress,places\.location,nextPageToken/g) ?? []).length === 4, 'places.location asked on every text search, Thorough included (free at the billed tier)');
 ok(/outsideTown: true/.test(sl) && /townOnly && !region \? await attachTownChecks/.test(sl) && /if \(townOnly && !regionMeta\) leads = await attachTownChecks/.test(sl), 'town-only answers marked, cached or fresh; outsideTown kept');

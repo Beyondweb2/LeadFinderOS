@@ -29,6 +29,7 @@ import { useCheckedBusinesses } from '@/hooks/useCheckedBusinesses';
 import { useFindLeadsBulkAdd } from '@/hooks/useFindLeadsBulkAdd';
 import { addSummaryReasons, addSummaryTitle, addVisibilityLine, isAccessProblem, SKIP_GROUP_WORDS, skipGroupOf, type AddProgress, type AddRowAnswer, type BulkAddLead } from '@/lib/findLeadsBulkAdd';
 import { outsideSearchedTown } from '@/lib/inTown';
+import { nicheProfile, notNicheMatch } from '@/lib/nicheMatch';
 import { Flame, Zap, Search, MapPin, Info, Globe2, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { PageHeader } from '@/components/salesDash/primitives';
@@ -306,8 +307,10 @@ const Index = () => {
     /* ⛔ ONE DOOR FOR EVERY ADD (2026-10-20): a result judged outside the town it was searched in is never added. */
     /* …unless the person pressed Show on the "outside" line: the table then reports those rows as shown, and they are
        ordinary rows (saved with their own town: coverageTownFor only gives a Coverage town to one judged IN). */
-    const sel = selAll.filter((l) => !outsideSearchedTown(l) || shownIdsRef.current.has(l.id));
-    if (sel.length === 0) return { added: 0, skipped: selAll.length, title: 'Nothing added', description: 'Outside the town that was searched.', rows: [] as AddRowAnswer[] };
+    /* The same for a "Not a match" row (src/lib/nicheMatch.ts): added only once the person pressed Show on that line. */
+    const niche = nicheProfile(lastSearchKeyword);
+    const sel = selAll.filter((l) => ((!outsideSearchedTown(l) && !notNicheMatch(l, niche)) || shownIdsRef.current.has(l.id)));
+    if (sel.length === 0) return { added: 0, skipped: selAll.length, title: 'Nothing added', description: 'Outside the town that was searched, or not a match for the search.', rows: [] as AddRowAnswer[] };
     let res: Awaited<ReturnType<typeof bulkAdd>>;
     try {
       res = await bulkAdd(
@@ -772,6 +775,7 @@ const Index = () => {
                 onAddToOutreach={handleRowAdd}
                 addCampaignTooltip={addCampaignTooltip}
                 searchedTown={lastSearchLocation}
+                searchedNiche={lastSearchKeyword}
                 getCrmState={getCrmState}
                 onRemoveFromCrm={handleRequestRemove}
                 activeCampaign={activeCampaign && activeCampaignName ? { id: activeCampaign, name: activeCampaignName } : null}
