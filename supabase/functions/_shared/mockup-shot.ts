@@ -18,7 +18,12 @@ export type ShotResult =
 
 /** The picture's format. DEFAULT = what the mockup has always taken (PNG at 2x), so no existing caller changes.
  *  fn site-shot asks for a 1x JPEG (src/lib/siteShot.ts): the same viewport and settle policy, a fraction of the bytes. */
-export interface ShotFormat { type: "png" | "jpeg"; quality?: number; scale?: number }
+export interface ShotFormat {
+  type: "png" | "jpeg"; quality?: number; scale?: number;
+  /** Skip the banner-hiding SCRIPT (the CSS layer still runs). A site whose Content-Security-Policy refuses an injected script
+   *  fails the whole shot (Cloudflare error 6004, measured 2026-10-23), so fn site-shot retries once with this set. */
+  noScript?: boolean;
+}
 
 /**
  * Screenshot a prospect's homepage.
@@ -53,7 +58,7 @@ export async function shootSite(website: string | null | undefined, format: Shot
     addStyleTag: [{ content: hideCss() }],
     /* The second layer — catches a banner the selector list does not know about. Wix's was missed
        first time round because it carries no "cookie" anywhere in its markup. */
-    addScriptTag: [{ content: hideByBehaviourJs() }],
+    addScriptTag: format.noScript ? undefined : [{ content: hideByBehaviourJs() }],
     screenshotOptions: format.type === "jpeg"
       ? { type: "jpeg", quality: format.quality ?? 80, fullPage: false, captureBeyondViewport: false }
       : { type: "png", fullPage: false, captureBeyondViewport: false },
@@ -80,5 +85,42 @@ export async function shootSite(website: string | null | undefined, format: Shot
     return { ok: true, bytes: new Uint8Array(await res.arrayBuffer()), ms, url, contentType: ct.split(";")[0].trim().toLowerCase() };
   } catch (e) {
     return { ok: false, refusal: "cf_error", detail: String((e as Error).message).slice(0, 200), ms: Date.now() - t0 };
+  }
+}
+
+/** The rendered page's HTML, read by the same Cloudflare browser (the /content endpoint). fn site-shot uses it ONLY to check
+ *  that a small-looking picture is a real page and not a bot-challenge or error page (src/lib/siteShot.ts). Images, fonts and
+ *  media are not loaded, so it is the cheaper of the two calls. */
+export type ContentResult =
+  | { ok: true; html: string; ms: number }
+  | { ok: false; detail: string; ms: number };
+
+export async function readPageContent(website: string | null | undefined): Promise<ContentResult> {
+  const t0 = Date.now();
+  if (shotRefusal(website)) return { ok: false, detail: "refused", ms: 0 };
+  const account = Deno.env.get("CLOUDFLARE_ACCOUNT_ID") ?? "";
+  const token = Deno.env.get("CLOUDFLARE_BROWSER_TOKEN") ?? "";
+  if (!account || !token) return { ok: false, detail: "not_configured", ms: 0 };
+  try {
+    const res = await fetch(`${CF_API}/${account}/browser-rendering/content`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        url: shotUrl(website!),
+        gotoOptions: { waitUntil: "load", timeout: NAV_TIMEOUT_MS },
+        waitForTimeout: SETTLE_MS,
+        rejectResourceTypes: ["image", "font", "media"],
+      }),
+    });
+    const ms = Date.now() - t0;
+    if (!res.ok) {
+      const wait = res.status === 429 ? ` retry-after=${res.headers.get("retry-after") ?? "none"}` : "";
+      return { ok: false, detail: `HTTP ${res.status}${wait} ${(await res.text()).slice(0, 200)}`, ms };
+    }
+    const j = await res.json() as { success?: boolean; result?: unknown };
+    if (j.success !== true || typeof j.result !== "string") return { ok: false, detail: "no_html", ms };
+    return { ok: true, html: j.result.slice(0, 400_000), ms };
+  } catch (e) {
+    return { ok: false, detail: String((e as Error).message).slice(0, 200), ms: Date.now() - t0 };
   }
 }

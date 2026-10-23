@@ -11,14 +11,14 @@
 // Spend is never started by opening a report: render-audit-report only READS a finished shot.
 // The rules: src/lib/siteShot.ts. The driver: _shared/mockup-shot.ts. Record: docs/site-shot.md.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { shootSite } from "../_shared/mockup-shot.ts";
+import { readPageContent, shootSite } from "../_shared/mockup-shot.ts";
 import { isAggregatorUrl } from "../_shared/aggregators.ts";
 import { shotRefusal } from "../_shared/screenshot-policy.ts";
 import { paidMode } from "../_shared/protection.ts";
 import { usableCrawlSignals } from "../../../src/lib/crawlCheck.ts";
 import {
   SITE_SHOT_BUCKET, SITE_SHOT_FRESH_MS, SITE_SHOT_JPEG_QUALITY, SITE_SHOT_MAX_ATTEMPTS, SITE_SHOT_MEASURE_MAX,
-  SITE_SHOT_SCALE, londonMonthStartIso, siteShotGate, siteShotImageProblem, siteShotPath, siteShotRateLimited, siteShotRetryAfterMs,
+  SITE_SHOT_SCALE, londonMonthStartIso, siteShotGate, siteShotImageProblem, siteShotPath, siteShotRateLimited, siteShotRetryAfterMs, siteShotCspBlocked, siteShotNeedsVerify, siteShotPageProblem,
 } from "../../../src/lib/siteShot.ts";
 
 /** Bumped with every change, so a deploy is proved by the live answer (CLAUDE.md §4). */
@@ -49,6 +49,33 @@ async function readLead(service: Service, leadId: string) {
     websiteRefusal: refusal ?? (isAggregatorUrl(website) ? "website_is_aggregator" as const : null),
     crawl: sig ? { fetchFailed: sig.fetchFailed === true, readableAs: sig.readableAs ?? null } : null,
   };
+}
+
+/** One picture, with the two known recoveries: a site whose Content-Security-Policy refuses our injected script is shot again
+ *  without it, and one Cloudflare rate-limit answer is waited out (its own Retry-After, at most 20 s) and tried again. */
+async function takePicture(website: string, budgetUntil?: number) {
+  let shot = await shootSite(website, FORMAT);
+  if (!shot.ok && siteShotCspBlocked(shot.detail)) shot = await shootSite(website, { ...FORMAT, noScript: true });
+  let retries = 0;
+  while (!shot.ok && siteShotRateLimited(shot.detail) && retries < (budgetUntil ? 3 : 1) && (!budgetUntil || Date.now() < budgetUntil)) {
+    retries++;
+    await new Promise((r) => setTimeout(r, Math.min(20_000, siteShotRetryAfterMs(shot.ok ? null : shot.detail, 15_000))));
+    shot = await shootSite(website, FORMAT);
+  }
+  return { shot, retries };
+}
+
+/** Is the page behind a small picture a real page? Reads its text with the same browser. A read that fails is "no": a small
+ *  picture whose page we could not check is never shown. */
+async function verifyPage(website: string): Promise<{ ok: true } | { ok: false; reason: string }> {
+  let c = await readPageContent(website);
+  if (!c.ok && siteShotRateLimited(c.detail)) {
+    await new Promise((r) => setTimeout(r, Math.min(20_000, siteShotRetryAfterMs(c.ok ? null : c.detail, 12_000))));
+    c = await readPageContent(website);
+  }
+  if (!c.ok) return { ok: false, reason: "verify_failed" };
+  const problem = siteShotPageProblem(c.html);
+  return problem ? { ok: false, reason: problem } : { ok: true };
 }
 
 async function claimedThisMonth(service: Service, now: Date): Promise<number> {
@@ -101,7 +128,7 @@ Deno.serve(async (req) => {
       if (claimErr) throw new Error(`claim: ${String(claimErr.message ?? claimErr)}`);
       if (claim !== "claimed") return json({ ok: true, mode, shot: false, reason: "held" });
 
-      const shot = await shootSite(lead.website, FORMAT);
+      const { shot } = await takePicture(lead.website);
       const stamp = new Date().toISOString();
       if (!shot.ok && siteShotRateLimited(shot.detail)) {
         /* Cloudflare's own rate limit: nothing was shot or billed, and the lead's try is given back (attempts 0), so the next audit may claim it. */
@@ -118,6 +145,13 @@ Deno.serve(async (req) => {
       if (problem) {
         await service.from("lead_site_shots").update({ status: "refused", reason: `image_${problem}`, bytes: shot.bytes.length, request_ms: shot.ms, updated_at: stamp }).eq("lead_id", leadId);
         return json({ ok: true, mode, shot: false, reason: `image_${problem}` });
+      }
+      if (siteShotNeedsVerify(shot.bytes.length)) {
+        const page = await verifyPage(lead.website);
+        if (!page.ok) {
+          await service.from("lead_site_shots").update({ status: "refused", reason: `page_${page.reason}`, bytes: shot.bytes.length, request_ms: shot.ms, updated_at: new Date().toISOString() }).eq("lead_id", leadId);
+          return json({ ok: true, mode, shot: false, reason: `page_${page.reason}` });
+        }
       }
       const path = siteShotPath(leadId)!;
       const up = await service.storage.from(SITE_SHOT_BUCKET).upload(path, shot.bytes, { contentType: "image/jpeg", upsert: true });
@@ -138,7 +172,7 @@ Deno.serve(async (req) => {
       const protection = await paidMode(service);
       if (protection === "all_stop") return json({ ok: true, mode, shot: false, reason: "all_stop" });
       const gapMs = Math.min(30_000, Math.max(0, Number(body.gap_ms ?? 0) || 0));
-      const deadline = Date.now() + 110_000;   // the edge limit is ~150s: leave what does not fit for the caller to resubmit
+      const deadline = Date.now() + 125_000;   // the edge limit is ~150s: leave what does not fit for the caller to resubmit
       const deferred: string[] = [];
       const out = [];
       let first = true;
@@ -150,19 +184,14 @@ Deno.serve(async (req) => {
         if (!lead) { out.push({ lead_id: leadId, error: "no_such_lead" }); continue; }
         const gate = siteShotGate({ enabled: true, mode: "running", websiteRefusal: lead.websiteRefusal, crawl: lead.crawl, claimedThisMonth: 0, monthlyCap: 1 });
         if (lead.websiteRefusal) { out.push({ lead_id: leadId, website: lead.website, gate: gate.ok ? "ok" : gate.reason, shot: false, reason: lead.websiteRefusal }); continue; }
-        let shot = await shootSite(lead.website, FORMAT);
-        let retries = 0;
-        while (!shot.ok && siteShotRateLimited(shot.detail) && retries < 3 && Date.now() < deadline - 25_000) {
-          retries++;
-          await new Promise((r) => setTimeout(r, siteShotRetryAfterMs(shot.ok ? null : shot.detail, 15_000)));
-          shot = await shootSite(lead.website, FORMAT);
-        }
+        const { shot, retries } = await takePicture(lead.website, deadline - 25_000);
         if (!shot.ok) { out.push({ lead_id: leadId, website: lead.website, gate: gate.ok ? "ok" : gate.reason, shot: false, reason: shot.refusal, detail: shot.detail ?? null, request_ms: shot.ms }); continue; }
+        const page = await verifyPage(lead.website);
         const path = siteShotPath(leadId, true)!;
         const up = await service.storage.from(SITE_SHOT_BUCKET).upload(path, shot.bytes, { contentType: "image/jpeg", upsert: true });
         const signed = up.error ? null : (await service.storage.from(SITE_SHOT_BUCKET).createSignedUrl(path, 3600)).data?.signedUrl ?? null;
         out.push({
-          lead_id: leadId, website: lead.website, gate: gate.ok ? "ok" : gate.reason, shot: !up.error, request_ms: shot.ms, retries, bytes: shot.bytes.length,
+          lead_id: leadId, website: lead.website, gate: gate.ok ? "ok" : gate.reason, shot: !up.error, request_ms: shot.ms, retries, bytes: shot.bytes.length, needs_verify: siteShotNeedsVerify(shot.bytes.length), page_check: page.ok ? "ok" : page.reason,
           image_problem: siteShotImageProblem(shot.bytes), crawl: lead.crawl, path, signed_url: signed, store_error: up.error ? String(up.error.message ?? up.error).slice(0, 160) : null,
         });
       }
