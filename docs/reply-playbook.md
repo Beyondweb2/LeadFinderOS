@@ -241,6 +241,15 @@ Approved before / after sheet: `C:\Users\paulj\Documents\Findable\lean-first-rep
   Full gate: 450/451; the one red suite (warm-lead-research "a fresh crawl-check row is reused") fails the same on
   untouched origin/main 50460132 (a date-dependent fixture), not this change. Open drafts keep old wording until Regenerate.
 
+## 5f. The first-reply pitch carries the report link (Paul, 2026-10-23)
+* The pitch (Option A) keeps every word, line and its one question. When the lead's audit has a FINISHED run
+  (`loadAuditContext`, `reportUrl` = `findable.live/r/<code>`), one line "Here's the full report: <link>" goes just before the
+  question (`reportLinkLine` in `replyMove.ts`). No new finding is added.
+* Audit not finished (or the link is not a well-formed report link): no link, the draft's `why.auditPending` is true and its
+  note says "Audit pending: no report link in this draft". Never a sign-up link; the checker allows only the report-link shape.
+* Australia (prospect-only): the link is allowed, the pitch has no price, guarantee or sign-up. Drafts only; Level 2 stays off.
+* Test: `scripts/hook-report-link.test.ts`. Live marker: `x-ai-reply-drafts` 2026-10-23b-hook-report-link.
+
 ## 6. Where Paul's brief and v5 differ (v5 wins)
 
 * **how much**: the brief said "covers the new site, hosting, changes and monthly audits". v5 2.6 / 2.7 only promise a
