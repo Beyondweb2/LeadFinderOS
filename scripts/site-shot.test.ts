@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 import {
   SITE_SHOT_BUCKET, SITE_SHOT_DEFAULT_MONTHLY_CAP, SITE_SHOT_FRESH_DAYS, SITE_SHOT_MAX_ATTEMPTS, SITE_SHOT_MEASURE_MAX, SITE_SHOT_MIN_BYTES,
   londonMonthStartIso, siteShotCaption, siteShotGate, siteShotImageProblem, siteShotPath, siteShotRateLimited, siteShotRetryAfterMs, type SiteShotGateInput,
-  SITE_SHOT_VERIFY_BELOW_BYTES, siteShotCspBlocked, siteShotNeedsVerify, siteShotPageProblem, siteShotVisibleText,
+  SITE_SHOT_VERIFY_BELOW_BYTES, siteShotCspBlocked, siteShotNeedsVerify, siteShotPageProblem, siteShotVisibleText, siteShotTransient,
 } from '../src/lib/siteShot.ts';
 
 let failures = 0;
@@ -100,7 +100,9 @@ const FN = read('supabase/functions/site-shot/index.ts');
   ok(/siteShotNeedsVerify\(shot\.bytes\.length\)[\s\S]{0,200}verifyPage/.test(FN) && /readPageContent/.test(FN), 'G: the function checks a small picture\'s page text before storing it');
   ok(/if \(!c\.ok\) return \{ ok: false, reason: "verify_failed" \}/.test(FN), 'G: a page we could not read means the small picture is not shown (absent = do not)');
   ok(siteShotPageProblem('<title>northernpowerelectrical.co.uk</title><body>Site Currently Unavailable. If you are the owner, contact your hosting provider for more information.</body>') === 'error_page', 'G: a hosting provider "Site Currently Unavailable" page (measured on a real prospect, 39 KB, it passed the first page check) is refused');
-  ok(/noScript: true, noStyle: true/.test(FN), 'G: a site whose CSP refuses even our style gets a bare shot as the last try');
+  ok(siteShotTransient('HTTP 422 {"errors":[{"code":6003,"detail":"Protocol error (Page.captureScreenshot): Not attached to an active page"}]}') && siteShotTransient('net::ERR_BLOCKED_BY_CLIENT at http://x/') && !siteShotTransient('net::ERR_INVALID_AUTH_CREDENTIALS') && !siteShotTransient('Network connection closed.'), 'G: two one-off browser errors get one retry; a site that really refuses the browser does not');
+  ok(/siteShotTransient\(shot\.detail\)/.test(FN), 'G: the function retries a transient browser error once');
+  ok(/noScript: true, noStyle: true/.test(FN),'G: a site whose CSP refuses even our style gets a bare shot as the last try');
 }
 
 if (failures) throw new Error(`${failures} site-shot checks failed`);

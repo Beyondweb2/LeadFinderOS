@@ -18,11 +18,11 @@ import { paidMode } from "../_shared/protection.ts";
 import { usableCrawlSignals } from "../../../src/lib/crawlCheck.ts";
 import {
   SITE_SHOT_BUCKET, SITE_SHOT_FRESH_MS, SITE_SHOT_JPEG_QUALITY, SITE_SHOT_MAX_ATTEMPTS, SITE_SHOT_MEASURE_MAX,
-  SITE_SHOT_SCALE, londonMonthStartIso, siteShotGate, siteShotImageProblem, siteShotPath, siteShotRateLimited, siteShotRetryAfterMs, siteShotCspBlocked, siteShotNeedsVerify, siteShotPageProblem,
+  SITE_SHOT_SCALE, londonMonthStartIso, siteShotGate, siteShotImageProblem, siteShotPath, siteShotRateLimited, siteShotRetryAfterMs, siteShotCspBlocked, siteShotTransient, siteShotNeedsVerify, siteShotPageProblem,
 } from "../../../src/lib/siteShot.ts";
 
 /** Bumped with every change, so a deploy is proved by the live answer (CLAUDE.md §4). */
-const BUILD_ID = "site-shot-2026-10-23c";
+const BUILD_ID = "site-shot-2026-10-23d";
 const json = (body: unknown, status = 200) => new Response(JSON.stringify({ build: BUILD_ID, ...(body as object) }), { status, headers: { "Content-Type": "application/json" } });
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const FORMAT = { type: "jpeg" as const, quality: SITE_SHOT_JPEG_QUALITY, scale: SITE_SHOT_SCALE };
@@ -57,6 +57,7 @@ async function takePicture(website: string, budgetUntil?: number) {
   let shot = await shootSite(website, FORMAT);
   if (!shot.ok && siteShotCspBlocked(shot.detail)) shot = await shootSite(website, { ...FORMAT, noScript: true });
   if (!shot.ok && siteShotCspBlocked(shot.detail)) shot = await shootSite(website, { ...FORMAT, noScript: true, noStyle: true });
+  if (!shot.ok && siteShotTransient(shot.detail)) { await new Promise((r) => setTimeout(r, 2_000)); shot = await shootSite(website, FORMAT); }
   let retries = 0;
   while (!shot.ok && siteShotRateLimited(shot.detail) && retries < (budgetUntil ? 3 : 1) && (!budgetUntil || Date.now() < budgetUntil)) {
     retries++;
