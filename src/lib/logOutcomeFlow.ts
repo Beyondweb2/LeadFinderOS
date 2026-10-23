@@ -9,7 +9,7 @@
    carried out by src/lib/leadOutcome.ts — the same writes as before, for both roles:
      Interested        → outcome `interested` → the ⭐ (lead_mark_interested). Never the old pre-star status.
      Not interested    → outcome `not_interested` → status Not interested, queue stopped, Next Action cleared,
-                         then "why did they say no?" (askLostReason). No next step asked.
+                         No reason asked (2026-10-23). No next step asked.
      Didn't answer     → outcome `no_answer` → recorded; optionally "try again when?" (pre-filled, never saved
                          unless the person presses Save).
      Call back         → outcome `call_back` → SAVES the Next Action "Call · No date set" (the rule), then

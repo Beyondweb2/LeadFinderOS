@@ -3225,7 +3225,6 @@ export function OutreachTable({
                               <PipelineStatusSelect
                                 value={lead.status}
                                 stage={rowSalesState(lead)}
-                                askReasonFor={{ leadId: lead.id, businessName: lead.business_name }}
                                 triggerProps={lastContactedLeadId === lead.id ? { 'data-walkthrough-step': 'pipeline-status', 'data-walkthrough': 'pipeline-status' } : undefined}
                                 onValueChange={(status) => {
                                   // Clear optimistic override so manual change isn't blocked

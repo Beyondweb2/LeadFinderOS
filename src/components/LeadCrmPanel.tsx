@@ -38,7 +38,6 @@ import { cn } from '@/lib/utils';
 import { DOMAIN_CONTROL_OPTIONS, SALES_DOMAIN_LINE } from '@/lib/domainAuthority';
 import { reachedInConversation, meetingWhen, lastLoggedContactOf, outcomeLabel, salesStateOf, stateChangeText, stateChangedWords, suggestNextAction, LOGGED_CONTACT_KINDS, type OutcomePlan, type SalesStateView } from '@/lib/leadState';
 import { applyOutcome } from '@/lib/leadOutcome';
-import { askLostReason } from '@/lib/lostReasonAsk';
 import { DetectedAgency } from '@/components/DetectedAgency';
 import { londonDayPlus, type NextActionPreset } from '@/components/NextActionForm';
 import { bookMeeting, saveNextAction, type NextActionInput, type WriteResult } from '@/lib/nextActionWrite';
@@ -295,10 +294,6 @@ export function useLeadWork(leadId: string) {
       const before = salesStateOf(sl);
       const res = await applyOutcome(sl, outcome, before, logged);
       if (res.plan.suppressNumber) void qc.invalidateQueries({ queryKey: wrongNumberKey(leadId) });
-      /* Why did they say no? The one prompt, once the lead really reads Not interested. */
-      if (outcome === 'not_interested' && res.after.state === 'not_interested' && !res.failed.length) {
-        askLostReason({ leadId, businessName: lead.business_name, reason: lead.lost_reason, note: lead.lost_reason_note });
-      }
       const saved = !!res.plan.setNextAction && !res.failed.some((x) => x.includes('Next Action set'));
       /* The saved task shows at once (the re-read that follows confirms it). */
       if (saved) qc.setQueryData<CrmRow | null>(leadCrmKey(leadId), (row) => (row ? { ...row, next_action: res.plan.setNextAction, next_action_date: null, next_action_time: null, call_booked_at: null } as CrmRow : row));

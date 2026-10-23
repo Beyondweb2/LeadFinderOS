@@ -62,7 +62,7 @@ console.log('2. every element of the WhatsApp inbox is in the shared component')
     ['header: status', /<PipelineStatusSelect value=\{active\.leadStatus\}/],
     ['header: next action', /<NextActionEditor lead=\{activeLead\} variant="pill" \/>/],
     ['header: the same attention pill', /const at = rowAttention\(active\); return <AttentionPill/],
-    ['header: site chips + the one score line', /<ScoreLine score=\{active\.auditScore\} visible=\{active\.visible\} \/>/],
+    ['header: Interested / Not interested buttons', /data-testid="interest-buttons"/],
     ['header: socials', /<SocialLinks lead=\{activeLead\} size="xs" \/>/],
     ['header: Prospect', /aria-label="Open prospect workspace"/],
     ['header: Run AI audit', /aria-label="Run AI audit"/],

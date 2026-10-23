@@ -112,21 +112,17 @@ ok(none.saidNo === 0 && none.rows.length === 0, 'nobody said no: an empty block,
 /* ── 5. Where the prompt opens — the one trigger, every single-lead path ─────────────────────── */
 console.log('── where it is asked ──');
 const pill = read('src/components/PipelineStatusSelect.tsx');
-ok(/if \(res === false \|\| res === null\) return;\s*if \(v === 'not_interested' && value !== 'not_interested' && askReasonFor\) askLostReason\(askReasonFor\);/.test(pill), 'the status pill asks after its caller\'s write, unless the caller says it was refused');
-for (const [file, n] of [['src/components/OutreachTable.tsx', 1], ['src/components/LeadDetailDialog.tsx', 1], ['src/pages/Inbox.tsx', 2]] as const) {
-  const s = read(file);
-  const pills = (s.match(/<PipelineStatusSelect\b[\s\S]*?\/>/g) ?? []);
-  ok(pills.length === n && pills.every((p) => /askReasonFor=/.test(p)), `${file}: every editable status pill (${n}) asks why`);
-}
+ok(!/askLostReason|askReasonFor/.test(pill), 'the status pill no longer asks why (Paul, 2026-10-23)');
 const inbox = read('src/pages/Inbox.tsx');
-ok(/const handleSetStatus = async \(c: WaConversation, status: PipelineStatus\): Promise<boolean>/.test(inbox) && /description: r\.error, variant: 'destructive' \}\); return false; \}/.test(inbox), 'the Inbox says when its write was refused (no prompt then)');
+ok(!/askReasonFor/.test(inbox) && !/askReasonFor/.test(read('src/components/OutreachTable.tsx')) && !/askReasonFor/.test(read('src/components/LeadDetailDialog.tsx')), 'no status pill passes askReasonFor');
+ok(/const handleSetStatus = async \(c: WaConversation, status: PipelineStatus\): Promise<boolean>/.test(inbox), 'the Inbox status handler is unchanged');
 const panel = read('src/components/LeadCrmPanel.tsx');
-ok(/if \(outcome === 'not_interested' && res\.after\.state === 'not_interested' && !res\.failed\.length\) \{\s*askLostReason\(/.test(panel), 'the Work panel\'s Not interested outcome asks (popup and Focus Mode share it)');
+ok(!/askLostReason/.test(panel), "the Work panel's Not interested outcome does not ask either");
 const flowFile = read('src/components/LeadCallFlow.tsx');
 ok(/if \(!lead \|\| lead\.status !== 'not_interested'\) return null;/.test(flowFile) && /data-testid="lost-reason"/.test(flowFile) && /LOST_REASON_UNRECORDED/.test(flowFile) && /\{lead\.lost_reason \? 'Change' : 'Add'\}/.test(flowFile), 'a Not interested lead shows its reason (or Reason not recorded) beside the status, with Change / Add');
 ok(/whatsapp_sent_at, lost_reason, lost_reason_note/.test(panel), 'the Work panel reads the reason');
 const askers = srcFiles.filter((p) => /askLostReason\(/.test(readFileSync(p, 'utf8')) && !/lostReasonAsk\.ts$/.test(p)).map((p) => p.replace(/\\/g, '/').replace(/^.*\/src\//, 'src/')).sort();
-ok(JSON.stringify(askers) === JSON.stringify(['src/components/LeadCallFlow.tsx', 'src/components/LeadCrmPanel.tsx', 'src/components/PipelineStatusSelect.tsx']), `only the pill, the logged outcome and the reason line's Change ask (bulk changes do not): ${askers.join(', ')}`);
+ok(JSON.stringify(askers) === JSON.stringify(['src/components/LeadCallFlow.tsx']), `only the reason line's Add / Change asks (bulk changes do not): ${askers.join(', ')}`);
 const writers = srcFiles.filter((p) => /['"]lead_set_lost_reason['"]/.test(readFileSync(p, 'utf8'))).map((p) => p.replace(/\\/g, '/').replace(/^.*\/src\//, 'src/'));
 ok(JSON.stringify(writers) === JSON.stringify(['src/lib/lostReasonAsk.ts']), `one write: saveLostReason (${writers.join(', ')})`);
 const shell = read('src/components/AppLayout.tsx');

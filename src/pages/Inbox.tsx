@@ -89,7 +89,7 @@ import { useMarkWhatsAppRead, useWhatsAppReads } from '@/hooks/useWhatsAppUnread
 import { conversationState, messageErrorParts, INBOX_QUICK_FILTERS, londonToday, passesQuickFilter, formatWaiting, type ConversationState, type InboxQuickFilter } from '@/lib/conversationState';
 import { SendErrorNote } from '@/components/SendErrorNote';
 import { AiDraftBubble, AiDraftButton, AiDraftPanel } from '@/components/AiDraftPanel';
-import { AttentionPill, ScoreLine } from '@/components/InboxAttention';
+import { AttentionPill, ScoreLine, VisibleTag } from '@/components/InboxAttention';
 import { attentionFor, INBOUND_LABEL_TITLES, type AttentionKind } from '@/lib/inboxAttention';
 import type { LeadAuditScore } from '@/lib/auditScore';
 import type { ScheduledSendRow } from '@/lib/inboxSendWindow';
@@ -383,7 +383,7 @@ const ConversationRow = memo(function ConversationRow({
           <AttentionPill kind={attentionKind} label={attentionLabel} title={attentionTitle} compact />
           {c.leadId && (saving
             ? <Loader2 className="h-3 w-3 shrink-0 animate-spin text-muted-foreground" />
-            : <PipelineStatusSelect value={c.leadStatus} stage={listStageOf(c.leadId)} onValueChange={(status) => handleSetStatus(c, status)} askReasonFor={{ leadId: c.leadId, businessName: c.label }} />)}
+            : <PipelineStatusSelect value={c.leadStatus} stage={listStageOf(c.leadId)} onValueChange={(status) => handleSetStatus(c, status)} />)}
           {c.leadId && <span className="ml-auto"><SiteScorePill score={siteScore} website={siteWebsite} /></span>}
         </div>
       )}
@@ -2447,7 +2447,7 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
                     {active.leadId && (
                       savingStatusKey === active.key
                         ? <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
-                        : <PipelineStatusSelect value={active.leadStatus} stage={activeSales.view} onValueChange={(status) => handleSetStatus(active, status)} askReasonFor={active.leadId ? { leadId: active.leadId, businessName: active.label } : null} />
+                        : <PipelineStatusSelect value={active.leadStatus} stage={activeSales.view} onValueChange={(status) => handleSetStatus(active, status)} />
                     )}
                     {/* ⛔ ONE STATUS PILL (2026-10-01, Paul: "its still showing 2 of the same status pills"): the status
                         control above is the one solid pipeline pill; interested is the star — the separate
@@ -2459,7 +2459,22 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
                     {/* ⛔ THE ONE ATTENTION PILL (2026-10-22): the same pill, same rule, as the list row (src/lib/inboxAttention.ts). */}
                     {(() => { const at = rowAttention(active); return <AttentionPill kind={at.attentionKind} label={at.attentionLabel} title={at.attentionTitle} />; })()}
                     <EngagementPills reportOpenedAt={active.reportOpenedAt} siteVisitedAt={active.siteVisitedAt} />
-                    {active.leadId && <ScoreLine score={active.auditScore} visible={active.visible} />}
+                    {/* Interested / Not interested in one tap (Paul, 2026-10-23), in place of the engine score chips: the score is
+                        already in the AI VISIBILITY strip below and the list row. Same two writes as the status pill and the star. */}
+                    {active.leadId && active.visible && <VisibleTag />}
+                    {active.leadId && (
+                      <span className="inline-flex items-center gap-1" data-testid="interest-buttons">
+                        <Button type="button" size="sm" variant="outline" disabled={starSaving} aria-pressed={!!active.isPotentialWork} onClick={() => void toggleStar(active)}
+                          className={cn('h-7 gap-1 px-2 text-xs', active.isPotentialWork && 'border-amber-500/60 bg-amber-500/10 text-amber-700 dark:text-amber-300')} data-testid="interested-button">
+                          <Star className={cn('h-3.5 w-3.5', active.isPotentialWork && 'fill-amber-400 text-amber-500')} />Interested
+                        </Button>
+                        <Button type="button" size="sm" variant="outline" disabled={savingStatusKey === active.key || active.leadStatus === 'not_interested'} aria-pressed={active.leadStatus === 'not_interested'}
+                          onClick={() => void handleSetStatus(active, 'not_interested')}
+                          className={cn('h-7 gap-1 px-2 text-xs', active.leadStatus === 'not_interested' && 'border-red-500/50 bg-red-500/10 text-red-700 dark:text-red-300')} data-testid="not-interested-button">
+                          <XCircle className="h-3.5 w-3.5" />Not interested
+                        </Button>
+                      </span>
+                    )}
                     {/* The status pill already says Queued; this adds only what it cannot — the queue is paused. */}
                     {active.leadStatus === 'queued' && queueState?.paused && (
                       <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/15 px-2 py-0.5 text-[11px] font-medium text-amber-700 dark:text-amber-300">

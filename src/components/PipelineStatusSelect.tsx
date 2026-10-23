@@ -4,7 +4,6 @@ import { PIPELINE_STATUS_OPTIONS, type PipelineStatus } from '@/types/outreach';
 import { useLeadPermissions } from '@/hooks/useLeadPermissions';
 import { maySetStatus } from '@/lib/access';
 import { pillStatusOf, type SalesStateView } from '@/lib/leadState';
-import { askLostReason } from '@/lib/lostReasonAsk';
 
 /**
  * Editable pipeline-status control — the coloured PipelineStatusBadge as a Select
@@ -29,7 +28,6 @@ export function PipelineStatusSelect({
   triggerProps,
   triggerClassName,
   stage,
-  askReasonFor,
 }: {
   value: PipelineStatus | string | null | undefined;
   onValueChange: (status: PipelineStatus) => void | Promise<unknown>;
@@ -42,9 +40,6 @@ export function PipelineStatusSelect({
   triggerClassName?: string;
   /** The lead's sales stage (leadState.salesStateOf) — tooltip only. */
   stage?: SalesStateView | null;
-  /** The lead this pill belongs to: choosing Not interested then asks why (the one prompt, after the
-   *  caller's own write). Omit it and nothing is asked. */
-  askReasonFor?: { leadId: string; businessName?: string | null } | null;
 }) {
   /* The same list for both roles; a salesperson's options outside lead_set_stage's allowlist are
      shown disabled (the server refuses them anyway) — see src/lib/access.ts. */
@@ -52,12 +47,7 @@ export function PipelineStatusSelect({
   if (disabled) return <OneStatusPill status={value} stage={stage} />;
   return (
     <Select value={value ?? undefined} onValueChange={async (v) => {
-      const res = await onValueChange(v as PipelineStatus);
-      /* Why did they say no? Asked once the write has been made. A caller whose write was refused says so
-         (false / null) and nothing is asked; the server also refuses a reason on a lead that is not Not
-         interested, so a refused status change can never record one. */
-      if (res === false || res === null) return;
-      if (v === 'not_interested' && value !== 'not_interested' && askReasonFor) askLostReason(askReasonFor);
+      await onValueChange(v as PipelineStatus);
     }}>
       <SelectTrigger
         className={triggerClassName ?? "w-auto h-auto p-0 border-0 bg-transparent focus:ring-0"}

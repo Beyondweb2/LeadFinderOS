@@ -568,7 +568,6 @@ function LeadDetailBody({
           const shown = pipelineStatusLabel(pillStatusOf(lead.status, salesState.view));
           const statusPill = (
             <PipelineStatusSelect value={lead.status} stage={salesState.view} onValueChange={(v) => onStatusChange(lead.id, v as LeadStatus)}
-              askReasonFor={{ leadId: lead.id, businessName: lead.business_name }}
               triggerProps={{ 'aria-label': 'Status', 'data-testid': 'workspace-status' }} />
           );
           const extraState = salesState.view && headerStateShown(salesState.view, shown, salesState.row)
