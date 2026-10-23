@@ -209,3 +209,4 @@
 - `docs/lead-status-and-visible.md` — 2026-10-21: the lead status follows the messages (one SQL rule + triggers on both message tables, a guard against late sender writes, the repair, the log); the Visible flag (Gemini / Google AI already names them → no pitch, no Needs you, follow-ups cancelled)
 - `docs/whatsapp-number-health.md` — 2026-10-21: fn whatsapp-number-health reads Meta's quality rating + tier every 15 min; yellow halves the cap, red pauses once, unreadable only blocks cap rises; the 21 Oct failed-sends finding
 - Inbox owner view and country filter: docs/inbox-owner-and-country.md
+- `docs/audit-report-v3.md` — the prospect (quick) report v3 layout, fix lines, the website-check id trap, Phase 2 plan (2026-10-23)
