@@ -23,6 +23,9 @@ export interface ShotFormat {
   /** Skip the banner-hiding SCRIPT (the CSS layer still runs). A site whose Content-Security-Policy refuses an injected script
    *  fails the whole shot (Cloudflare error 6004, measured 2026-10-23), so fn site-shot retries once with this set. */
   noScript?: boolean;
+  /** Skip the banner-hiding CSS too (a bare shot). Some CSPs refuse an injected style as well (measured: the script-less retry failed
+   *  on the same site), so the second retry is bare: a cookie banner may show, which is what a visitor sees. */
+  noStyle?: boolean;
 }
 
 /**
@@ -55,7 +58,7 @@ export async function shootSite(website: string | null | undefined, format: Shot
     gotoOptions: { waitUntil: "load", timeout: NAV_TIMEOUT_MS },
     /* Hidden with CSS, never clicked: answering a consent prompt on someone else's site from an
        automated browser is not ours to do. */
-    addStyleTag: [{ content: hideCss() }],
+    addStyleTag: format.noStyle ? undefined : [{ content: hideCss() }],
     /* The second layer — catches a banner the selector list does not know about. Wix's was missed
        first time round because it carries no "cookie" anywhere in its markup. */
     addScriptTag: format.noScript ? undefined : [{ content: hideByBehaviourJs() }],

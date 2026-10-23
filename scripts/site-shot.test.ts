@@ -99,6 +99,8 @@ const FN = read('supabase/functions/site-shot/index.ts');
   ok(siteShotCspBlocked('HTTP 422 {"success":false,"errors":[{"code":6004,"message":"Content Security Policy blocked script execution"}]}') && !siteShotCspBlocked('HTTP 422 {"code":5009}'), 'G: the CSP refusal (error 6004) is recognised');
   ok(/siteShotNeedsVerify\(shot\.bytes\.length\)[\s\S]{0,200}verifyPage/.test(FN) && /readPageContent/.test(FN), 'G: the function checks a small picture\'s page text before storing it');
   ok(/if \(!c\.ok\) return \{ ok: false, reason: "verify_failed" \}/.test(FN), 'G: a page we could not read means the small picture is not shown (absent = do not)');
+  ok(siteShotPageProblem('<title>northernpowerelectrical.co.uk</title><body>Site Currently Unavailable. If you are the owner, contact your hosting provider for more information.</body>') === 'error_page', 'G: a hosting provider "Site Currently Unavailable" page (measured on a real prospect, 39 KB, it passed the first page check) is refused');
+  ok(/noScript: true, noStyle: true/.test(FN), 'G: a site whose CSP refuses even our style gets a bare shot as the last try');
 }
 
 if (failures) throw new Error(`${failures} site-shot checks failed`);
