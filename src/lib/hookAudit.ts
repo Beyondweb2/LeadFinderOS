@@ -40,7 +40,7 @@
 import { cellNamed, type NamedCell, type NamedContext } from './namedSignal.ts';
 import { OUTREACH_HOOK_QUESTIONS } from './auditQuestionCounts.ts';
 import { searchFillerCount } from './salesStyle.ts';
-import { HOOK_SCORE_QUESTIONS, askedHookQuestions, hasAnswer, hookBreadthScore, isHookStateV2, rowsFromRunResults, scoreHookRun, type HookScoreContext, type HookStateV2 } from './hookScore.ts';
+import { HOOK_SCORE_QUESTIONS, askedHookQuestions, bestFirstHookQuestion, isBestFirstQuestion, hasAnswer, hookBreadthScore, isHookStateV2, rowsFromRunResults, scoreHookRun, type HookScoreContext, type HookStateV2 } from './hookScore.ts';
 
 /* One copy of each: the v2 score (hookScore.ts) owns them, this v1 module re-exports them. */
 export { hasAnswer, hookBreadthScore };
@@ -156,6 +156,22 @@ export function planHookQuestions(generated: readonly string[], ctx: { town: str
     .sort((a, b) => Number(a.filler) - Number(b.filler) || b.s - a.s || a.i - b.i)
     .slice(0, HOOK_MAX_QUESTIONS)
     .map((x) => x.q);
+}
+
+/** A driving instructor's "nervous drivers" question is dropped from a new hook (Paul, 2026-10-23). */
+const NERVOUS_DRIVERS = /\bnervous\b/i;
+const DRIVING_TRADE = /\bdriving\s+(?:instructor|school)s?\b/i;
+
+/** The plan for a NEW hook: "Who is the best [trade] in [town]?" first, then the rest of the planned set in its
+ *  order, three in all. `place` is the town as the questions write it (hookPlaceFor). A trade it cannot read gives
+ *  no best question and the plan is planHookQuestions exactly. Idempotent: planning a confirmed plan again keeps the
+ *  best question first and the others as they were. Builds a new plan only, never rewrites a stored one. */
+export function planHookQuestionsBestFirst(generated: readonly string[], ctx: { town: string; trade: string; place: string }): string[] {
+  const kept = DRIVING_TRADE.test(ctx.trade) ? generated.filter((q) => !NERVOUS_DRIVERS.test(q)) : generated;
+  const best = bestFirstHookQuestion(ctx.trade, ctx.place);
+  if (!best) return planHookQuestions(kept, { town: ctx.town });
+  const rest = kept.filter((q) => q.trim().toLowerCase() !== best.toLowerCase() && !isBestFirstQuestion(q));
+  return [best, ...planHookQuestions(rest, { town: ctx.town }).slice(0, HOOK_MAX_QUESTIONS - 1)];
 }
 
 export function initialHookState(planned: readonly string[]): HookState {
