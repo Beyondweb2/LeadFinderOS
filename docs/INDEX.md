@@ -212,3 +212,4 @@
 - `docs/whatsapp-number-health.md` — 2026-10-21: fn whatsapp-number-health reads Meta's quality rating + tier every 15 min; yellow halves the cap, red pauses once, unreadable only blocks cap rises; the 21 Oct failed-sends finding
 - Inbox owner view and country filter: docs/inbox-owner-and-country.md
 - `docs/audit-report-v3.md` — the prospect (quick) report v3 layout, fix lines, the website-check id trap, Phase 2 plan (2026-10-23)
+- `docs/site-shot.md` — homepage picture per lead for the prospect report: shape, the 20-site measurements, rules it taught, deploy record (2026-10-24)
