@@ -106,5 +106,18 @@ const FN = read('supabase/functions/site-shot/index.ts');
   ok(/noScript: true, noStyle: true/.test(FN),'G: a site whose CSP refuses even our style gets a bare shot as the last try');
 }
 
+/* ── H. the wiring (2026-10-23): the audit queue asks, the report only reads ── */
+{
+  const QUEUE = read('supabase/functions/process-ai-audit-queue/index.ts');
+  const TRIG = read('supabase/functions/_shared/site-shot-trigger.ts');
+  const RENDER = read('supabase/functions/render-audit-report/index.ts');
+  ok((QUEUE.match(/await triggerSiteShot\(cLeadId\)/g) ?? []).length === 2, 'H: the queue asks for a picture in BOTH places a lead\'s website check is settled (a fresh one reused, one just written)');
+  ok(/x-internal-job/.test(TRIG) && /CRON_SECRET/.test(TRIG) && /\.catch\(/.test(TRIG) && /waitUntil/.test(TRIG), 'H: the trigger is internal-auth, fire-and-forget and swallows every failure');
+  ok(!/throw/.test(TRIG), 'H: the trigger never throws into an audit');
+  ok(!/triggerSiteShot|site-shot-trigger/.test(RENDER), 'H: the public report never asks for a picture — it only reads a finished one');
+  ok(/lead_site_shots/.test(RENDER) && /createSignedUrl\(String\(shotRow\.path\), 7200\)/.test(RENDER) && /srcHost\.toLowerCase\(\) === data\.siteHost\.toLowerCase\(\)/.test(RENDER), 'H: the report shows a picture only when it is of the very website the report is about, with a fresh short-lived link');
+  ok(/shotRow\?\.status === "ok"/.test(RENDER), 'H: only a finished (ok) picture is ever shown');
+}
+
 if (failures) throw new Error(`${failures} site-shot checks failed`);
 console.log('all passed');

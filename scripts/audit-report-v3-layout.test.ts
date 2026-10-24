@@ -37,7 +37,12 @@ const html = (w: QuickWebsite, host: string | null = 'example-school.co.uk') => 
 {
   const h = html(issues(['search_blocked', 'thin_pages']));
   ok(/class="q4-site-host">example-school\.co\.uk</.test(h) && /2 things found/.test(h), 'B: the card names their address and counts what was found');
-  ok(!/<img\b/i.test(h), 'B: no picture of any kind until a real capture exists');
+  ok(!/<img\b/i.test(h), 'B: no picture of any kind unless a real capture was handed in');
+  const withShot = renderQuickCheckReport(hook, 'Example School', issues(['search_blocked', 'thin_pages']), false, 'example-school.co.uk', { url: 'https://x.example/sign/a.jpg?token=t&x=1', at: '2026-10-23T10:00:00Z' });
+  ok(/<img src="https:\/\/x\.example\/sign\/a\.jpg\?token=t&amp;x=1" alt=""/.test(withShot) && /class="q4-site q4-site--shot"/.test(withShot), 'B: a handed-in capture is shown (link escaped), as the card\'s picture');
+  ok(/Your homepage, as we saw it on 23 Oct 2026/.test(withShot) && /2 things found/.test(withShot), 'B: the picture is captioned with its DATE and still counts what was found');
+  ok(/class="q4-site-bar"/.test(withShot) && !/q4-site-body/.test(withShot.slice(withShot.indexOf('q4-site--shot'), withShot.indexOf('q4-panel--site'))), 'B: the picture card carries the address bar and caption, and never the neutral body beside the picture');
+  ok(!/<img\b/i.test(renderQuickCheckReport(hook, 'Example School', { state: 'clean' }, false, 'example-school.co.uk', { url: 'https://x.example/a.jpg', at: null })), 'B: a clean site (no issues, no split) never shows the card or the picture');
   const none = html(issues(['search_blocked']), null);
   ok(/class="q4-site-host">Your website</.test(none) && /1 thing found/.test(none), 'B: no address known → the card says only "Your website"; one finding is singular');
 }
