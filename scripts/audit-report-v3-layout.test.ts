@@ -28,7 +28,8 @@ const html = (w: QuickWebsite, host: string | null = 'example-school.co.uk') => 
   const h = html(issues(['search_blocked', 'thin_pages', 'missing_h1', 'unsourced_claims']));
   const at = (s: string) => h.indexOf(s);
   ok(at('class="q4-hero2"') >= 0 && at('class="q4-hero2"') < at('class="q4-engs"'), 'A: the hero band comes first, then the engine tiles');
-  ok(at('class="q4-engs"') < at('class="q4-found"') && at('class="q4-found"') < at('class="q4-chats"') && at('class="q4-chats"') < at('class="q4-fix"'), 'A: found → questions → fix first');
+  ok(at('class="q4-engs"') < at('class="q4-found"') && at('class="q4-found"') < at('class="q4-chats"'), 'A: tiles → what we found → the questions');
+  ok(!/q4-fix|What to fix first/.test(h), 'A: there is no "What to fix first" section (removed at Paul\'s request, 2026-10-23)');
   ok(/How visible is <em>Example School<\/em> in AI search\?/.test(h) && /class="q4-ring" style="--pct:33"/.test(h), 'A: the hero asks the question and the ring carries the real percentage');
 }
 
@@ -36,20 +37,20 @@ const html = (w: QuickWebsite, host: string | null = 'example-school.co.uk') => 
 {
   const h = html(issues(['search_blocked', 'thin_pages']));
   ok(/class="q4-site-host">example-school\.co\.uk</.test(h) && /2 things found/.test(h), 'B: the card names their address and counts what was found');
-  ok(!/<img\b/i.test(h), 'B: no picture of any kind until a real capture exists');
+  ok(!/<img\b/i.test(h), 'B: no picture of any kind unless a real capture was handed in');
+  const withShot = renderQuickCheckReport(hook, 'Example School', issues(['search_blocked', 'thin_pages']), false, 'example-school.co.uk', { url: 'https://x.example/sign/a.jpg?token=t&x=1', at: '2026-10-23T10:00:00Z' });
+  ok(/<img src="https:\/\/x\.example\/sign\/a\.jpg\?token=t&amp;x=1" alt=""/.test(withShot) && /class="q4-site q4-site--shot"/.test(withShot), 'B: a handed-in capture is shown (link escaped), as the card\'s picture');
+  ok(/Your homepage, as we saw it on 23 Oct 2026/.test(withShot) && /2 things found/.test(withShot), 'B: the picture is captioned with its DATE and still counts what was found');
+  ok(/class="q4-site-bar"/.test(withShot) && !/q4-site-body/.test(withShot.slice(withShot.indexOf('q4-site--shot'), withShot.indexOf('q4-panel--site'))), 'B: the picture card carries the address bar and caption, and never the neutral body beside the picture');
+  ok(!/<img\b/i.test(renderQuickCheckReport(hook, 'Example School', { state: 'clean' }, false, 'example-school.co.uk', { url: 'https://x.example/a.jpg', at: null })), 'B: a clean site (no issues, no split) never shows the card or the picture');
   const none = html(issues(['search_blocked']), null);
   ok(/class="q4-site-host">Your website</.test(none) && /1 thing found/.test(none), 'B: no address known → the card says only "Your website"; one finding is singular');
 }
 
-/* ── C. what to fix first ── */
+/* ── C. what to fix first is not rendered in ANY state ── */
 {
-  const h = html(issues(['search_blocked', 'thin_pages', 'missing_h1', 'unsourced_claims']));
-  const fix = h.slice(h.indexOf('class="q4-fix"'));
-  const titles = [...fix.matchAll(/<div class="q4-fixi">[\s\S]*?<b>([^<]+)<\/b>/g)].map((m) => m[1]);
-  ok(titles.length === FIX_LINES_MAX && titles[0] === FIX_LINES.search_blocked!.title && titles[1] === FIX_LINES.thin_pages!.title, `C: at most ${FIX_LINES_MAX}, in the issues' own order (${titles.join(' | ')})`);
-  ok(!/Finding \d/.test(fix) && !/Show where your claims come from/.test(fix), 'C: the fourth finding gets no line (cap), and the issue wording is never reused as a fix');
-  ok(!/class="q4-fix"/.test(html(issues(['no_structured_data', undefined, 'orphan_pages']))), 'C: null and unknown kinds print no fix section at all — nothing invented');
-  ok(!/class="q4-fix"/.test(html({ state: 'clean' })) && !/class="q4-fix"/.test(html({ state: 'none' })) && !/class="q4-fix"/.test(html({ state: 'unknown' })), 'C: no fixes without findings (clean / no website / unknown)');
+  const states: QuickWebsite[] = [issues(['search_blocked', 'thin_pages', 'missing_h1']), { state: 'clean' }, { state: 'none' }, { state: 'unknown' }];
+  ok(states.every((w) => !/q4-fix|What to fix first/.test(html(w))), 'C: no state of the website section prints a fix row');
   ok(/class="q4-panel q4-panel--site"/.test(html({ state: 'clean' })) && !/class="q4-split"/.test(html({ state: 'clean' })), 'C: a clean site keeps its own panel, no split with the card');
 }
 

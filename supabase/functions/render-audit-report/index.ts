@@ -18,6 +18,7 @@ import { measuringState } from "../../../src/lib/measuringState.ts";
 import { showOffer } from "../../../src/lib/buyOffer.ts";
 import { prospectOnlyLead } from "../../../src/lib/prospectOnly.ts";
 import { onboardingUrl, resolveSiteOrigin, ORIGIN_ENV } from "../_shared/onboarding-followup.ts";
+import { SITE_SHOT_BUCKET } from "../../../src/lib/siteShot.ts";
 
 import { auditCodeFromSlug, isShortCode, shortReportUrl } from "../../../src/lib/reportSlug.ts";
 import { paidReportKind } from "../../../src/lib/reportKind.ts";
@@ -361,6 +362,19 @@ Deno.serve(async (req) => {
         const u = new URL(/^https?:\/\//i.test(ownWebsite) ? ownWebsite : `https://${ownWebsite}`);
         data.siteHost = u.hostname.replace(/^www\./i, "") || null;
       } catch { /* an unparseable address names nothing */ }
+    }
+    /* THE HOMEPAGE PICTURE (2026-10-23). READ-ONLY: opening a report never takes a picture (site-shot does that, from the audit queue). A
+       finished picture is shown only when it is of the very website this report is about (its source host equals the report's host), and
+       its link is minted fresh here — short-lived, from the private bucket. Anything else, or any failure, leaves the neutral site card. */
+    if (leadId && data.siteHost) {
+      try {
+        const { data: shotRow } = await service.from("lead_site_shots").select("status, path, shot_at, source_url").eq("lead_id", leadId).maybeSingle();
+        const srcHost = shotRow?.source_url ? new URL(String(shotRow.source_url)).hostname.replace(/^www\./i, "") : "";
+        if (shotRow?.status === "ok" && shotRow.path && shotRow.shot_at && srcHost && srcHost.toLowerCase() === data.siteHost.toLowerCase()) {
+          const { data: signed } = await service.storage.from(SITE_SHOT_BUCKET).createSignedUrl(String(shotRow.path), 7200);
+          if (signed?.signedUrl) { data.siteShotUrl = signed.signedUrl; data.siteShotAt = String(shotRow.shot_at); }
+        }
+      } catch { /* a picture is never worth a failed report */ }
     }
 
     /* ── WHAT'S STOPPING AI READING YOUR SITE + the Request-a-call button (2026-09-16) ────────────

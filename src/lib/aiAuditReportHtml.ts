@@ -21,7 +21,7 @@ import { AI_OVERVIEW_CONTEXT_LABEL, AI_OVERVIEW_LABEL, AI_OVERVIEW_NOT_SCORED, A
 import { FINDABLE_CONTACT_EMAIL, FINDABLE_CONTACT_WHATSAPP, FINDABLE_GUARANTEE, REMEASURE_CLAIM_SENTENCE, offerSummaryFor } from './findableOffer.ts';
 import { BASELINE_QUESTIONS } from './auditQuestionCounts.ts';
 import { isGenericSchemaGap, type CrawlFault } from './crawlCheck.ts';
-import { fixLinesFor } from './siteFixLines.ts';
+import { siteShotCaption } from './siteShot.ts';
 import type { EvidenceKind, SiteEvidenceFinding } from './siteEvidence.ts';
 import type { ReportContentIssue } from './contentTrust.ts';
 import { answerExcerpt, cleanAnswerText, isJunkAnswer, isMapCardAnswer, type AnswerBlock } from './answerText.ts';
@@ -159,6 +159,9 @@ export interface AiAuditReportData {
   siteChecked?: boolean;
   /** The prospect's website address as a bare host (no scheme, no "www."), for the neutral site card in the quick report. Absent = the card says only "Your website". */
   siteHost?: string | null;
+  /** A signed link to the picture of THEIR homepage that fn site-shot took, and when it was taken (src/lib/siteShot.ts). Set by render-audit-report only when the picture is of the very website the report is about. Absent = the neutral site card. */
+  siteShotUrl?: string | null;
+  siteShotAt?: string | null;
   /* ⛔ HOW THE WEBSITE SLOT IS PRESENTED. 'graded' (the DEFAULT) is the original: grade circles,
      /100 scores and a lead sentence naming the grade. 'issues' drops all of that and prints the
      findings alone under a plain heading.
@@ -1275,24 +1278,36 @@ function aioDataState(t: OverviewTally | null): string {
 
 /** The neutral card that stands where the homepage picture will go (2026-10-23). Their address and the
  *  count of what we found — nothing drawn, nothing invented. When a real capture exists it replaces this. */
-function quickSiteCard(siteHost: string | null | undefined, found: number): string {
+function quickSiteCard(siteHost: string | null | undefined, found: number, shot: { url: string; at: string | null } | null = null): string {
   const host = String(siteHost ?? '').trim();
+  const count = `<span class="q4-site-n">${found} ${found === 1 ? 'thing' : 'things'} found</span>`;
+  /* THE PICTURE (2026-10-23): a real capture of their homepage, taken by fn site-shot and judged by its own page text before it was kept.
+     It sits ABOVE the neutral card, so a link that fails to load leaves the plain card showing, never a broken image. The caption carries
+     the DATE, because a site changes after we look. */
+  if (shot && shot.url) {
+    return `<div class="q4-site q4-site--shot" aria-label="Your website">
+          <div class="q4-site-bar"><b></b><b></b><b></b>${host ? `<span>${esc(host)}</span>` : ''}</div>
+          <div class="q4-site-pic"><img src="${esc(shot.url)}" alt="" width="1280" height="800" loading="eager" decoding="async"></div>
+          <div class="q4-site-cap"><span>${esc(siteShotCaption(shot.at))}</span>${count}</div>
+        </div>`;
+  }
   return `<div class="q4-site" aria-label="Your website">
           <div class="q4-site-bar"><b></b><b></b><b></b>${host ? `<span>${esc(host)}</span>` : ''}</div>
           <div class="q4-site-body">
             <span class="q4-site-k">Your website</span>
             <div class="q4-site-host">${host ? esc(host) : 'Your website'}</div>
             <p class="q4-site-p">We read your site and checked how AI tools can use it.</p>
-            <span class="q4-site-n">${found} ${found === 1 ? 'thing' : 'things'} found</span>
+            ${count}
           </div>
         </div>`;
 }
 
 /** The six-answer report's body (2026-10-23 redesign, Paul's v3): the dark hero band with the overall figure
  *  in a ring, one white tile per engine, then WHAT WE FOUND (their site beside the issues), then one box per
- *  question — the question as a dark bar, each engine's reply listing who it named — then WHAT TO FIX FIRST.
+ *  question — the question as a dark bar, each engine's reply listing who it named.
+ *  (A "What to fix first" row was built, then REMOVED at Paul's request on 2026-10-23; src/lib/siteFixLines.ts stays, unrendered, until he says otherwise.)
  *  The caller appends the CTA and footer (renderQuickCheckFooter). */
-export function renderQuickCheckReport(h: HookReportSummary, businessName: string, website: QuickWebsite, prospectOnly = false, siteHost: string | null = null): string {
+export function renderQuickCheckReport(h: HookReportSummary, businessName: string, website: QuickWebsite, prospectOnly = false, siteHost: string | null = null, siteShot: { url: string; at: string | null } | null = null): string {
   const s = h.score;
   if (h.shape !== 'six' || !s) return renderHookSection(h, businessName);
   q4MarkSeq = 0;
@@ -1375,7 +1390,7 @@ export function renderQuickCheckReport(h: HookReportSummary, businessName: strin
       <section class="q4-found">
         <h2 class="q4-h2">What we found on your website <small>Most important first</small></h2>
         <div class="q4-split">
-          ${quickSiteCard(siteHost, website.issues.length)}
+          ${quickSiteCard(siteHost, website.issues.length, siteShot)}
           <div class="q4-panel q4-panel--site"><div class="q4-rows">${issueRows}
           </div></div>
         </div>
@@ -1392,17 +1407,6 @@ export function renderQuickCheckReport(h: HookReportSummary, businessName: strin
       </section>`
     : '';
 
-  /* ── WHAT TO FIX FIRST ── one plain line per finding kind the crawl made (siteFixLines.ts), at most three,
-     never for a finding the report did not show. */
-  const fixes = website.state === 'issues' ? fixLinesFor(website.issues.map((i) => i.kind)) : [];
-  const fix = fixes.length ? `
-      <section class="q4-fix">
-        <h2 class="q4-h2">What to fix first <small>From what we found on your site</small></h2>
-        <div class="q4-fixes">${fixes.map((f, k) => `
-          <div class="q4-fixi"><span class="q4-qn" aria-hidden="true">${k + 1}</span><div><b>${esc(f.title)}</b><p>${esc(f.detail)}</p></div></div>`).join('')}
-        </div>
-      </section>` : '';
-
   return `
     <style>${QUICK_REPORT_CSS}</style>${score}
     <div class="q4-body">${found}
@@ -1410,7 +1414,7 @@ export function renderQuickCheckReport(h: HookReportSummary, businessName: strin
       <p class="q4-sum">${summary}</p>
       <section class="q4-chats" aria-label="What each AI said">${chats}
       </section>
-      <p class="q4-caveat">${esc(c.caveat)}</p>${fix}
+      <p class="q4-caveat">${esc(c.caveat)}</p>
     </div>`;
 }
 
@@ -1495,7 +1499,7 @@ const QUICK_REPORT_CSS = `
   .q4-sr{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
   .q4-h2{margin:0 0 10px;font-size:21px;font-weight:800;letter-spacing:-.02em;color:#101114;display:flex;justify-content:space-between;align-items:baseline;gap:6px 12px;flex-wrap:wrap}
   .q4-h2 small{font-size:12.5px;font-weight:400;color:#5d5e63;letter-spacing:0}
-  .q4-found,.q4-fix{margin:0 0 22px}
+  .q4-found{margin:0 0 22px}
   .q4-split{display:grid;grid-template-columns:1fr 1.15fr;gap:16px;align-items:stretch}
   .q4-site{background:#fff;border:1px solid #e0ddd4;border-radius:18px;overflow:hidden;display:flex;flex-direction:column;box-shadow:0 8px 24px -14px rgba(16,17,20,.35)}
   .q4-site-bar{display:flex;align-items:center;gap:5px;padding:9px 12px;background:#efeeea}
@@ -1505,6 +1509,11 @@ const QUICK_REPORT_CSS = `
   .q4-site-k{font-size:10.5px;font-weight:800;letter-spacing:.16em;text-transform:uppercase;color:#5d5e63}
   .q4-site-host{font-size:24px;font-weight:800;letter-spacing:-.02em;line-height:1.15;color:#101114;overflow-wrap:anywhere}
   .q4-site-p{margin:0;font-size:13.5px;color:#4f5056;max-width:34ch}
+  .q4-site--shot{background:#fff}
+  .q4-site-pic{aspect-ratio:16/10;background:linear-gradient(135deg,#f6f4ef,#e7e4dc);overflow:hidden}
+  .q4-site-pic img{display:block;width:100%;height:100%;object-fit:cover;object-position:top left}
+  .q4-site-cap{display:flex;justify-content:space-between;align-items:center;gap:8px 12px;flex-wrap:wrap;padding:9px 12px;border-top:1px solid #e0ddd4;font-size:12px;color:#5d5e63}
+  .q4-site--shot .q4-site-n{align-self:auto}
   .q4-site-n{align-self:flex-start;font-size:12px;font-weight:800;background:#fde4e6;color:#b3121e;border-radius:999px;padding:3px 10px}
   .q4-sum{margin:0 0 12px;font-size:15px;font-weight:700;line-height:1.4;color:#101114}
   .q4-chats{display:grid;gap:12px}
@@ -1542,10 +1551,6 @@ const QUICK_REPORT_CSS = `
   .q4-sev--high{background:#fde4e6;color:#b3121e} .q4-sev--med{background:#fff0cf;color:#8a5a00}
   .q4-issue-p{margin:3px 0 0;font-size:13px;color:#4f5056;line-height:1.45}
   .q4-issue-ev{margin:4px 0 0;font-size:12px;color:#6b6c72;line-height:1.4;overflow-wrap:anywhere} .q4-issue-ev b{color:#101114;font-weight:700}
-  .q4-fixes{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
-  .q4-fixi{background:#fff;border:1px solid #e0ddd4;border-radius:16px;padding:12px 14px;display:flex;gap:10px;align-items:flex-start;break-inside:avoid;page-break-inside:avoid}
-  .q4-fixi b{display:block;font-size:14.5px;color:#101114;line-height:1.3}
-  .q4-fixi p{margin:3px 0 0;font-size:12.5px;line-height:1.45;color:#4f5056}
   .q4-foot{background:#101114;color:#d4d5d9;padding:26px 28px 22px}
   .q4-foot-cta h3{margin:0 0 16px;font-size:26px;font-weight:800;letter-spacing:-.02em;color:#fff}
   .q4-foot .cta-actions{display:flex;flex-wrap:wrap;gap:10px;margin:0 0 14px}
@@ -1567,7 +1572,6 @@ const QUICK_REPORT_CSS = `
   .q4-foot .foot-note{margin-top:10px;font-size:12px;line-height:1.5;color:#9c9da3;max-width:62ch;padding:0;border:0}
   @media (max-width:760px){
     .q4-split{grid-template-columns:1fr}
-    .q4-fixes{grid-template-columns:1fr}
     .q4-engs{grid-template-columns:1fr 1fr}
     .q4-aio{grid-column:1/-1}
   }
@@ -2881,7 +2885,7 @@ ${d.measuring ? `
       <p class="measuring-progress"><b>${d.measuring.runsDone} of ${d.measuring.runsTarget}</b> ${plural(d.measuring.runsTarget, "round")} of questions ${d.measuring.runsDone === 1 ? "is" : "are"} complete. Each round takes a few minutes. This page updates itself &mdash; check back shortly.</p>
     </section>` : d.nameNotJudgeable ? `${nameCheckSection}
 ${seoSlot}
-` : concept4 && d.hook ? `${renderQuickCheckReport(d.hook, d.businessName, quickWebsite, d.prospectOnly === true, d.siteHost ?? null)}
+` : concept4 && d.hook ? `${renderQuickCheckReport(d.hook, d.businessName, quickWebsite, d.prospectOnly === true, d.siteHost ?? null, d.siteShotUrl ? { url: d.siteShotUrl, at: d.siteShotAt ?? null } : null)}
 ` : quickIncomplete ? `${renderQuickCheckIncomplete()}
 ` : d.hook ? `${renderHookSection(d.hook, d.businessName, d.generatedAtLabel)}
 ${hookCrawlSection}

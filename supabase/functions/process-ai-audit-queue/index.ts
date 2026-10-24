@@ -29,6 +29,7 @@ import { AUDIT_RUN_CAP_USD } from "../../../src/lib/auditLimits.ts";
 import { POOL_DAILY_CAP_USD, budgetDecision, budgetPoolForPurpose, refusalRowError, type ApifyUsage, type BudgetPool } from "../../../src/lib/auditBudget.ts";
 import { latestApifyUsage } from "../_shared/audit-budget.ts";
 import { isAggregatorUrl } from "../_shared/aggregators.ts";
+import { triggerSiteShot } from "../_shared/site-shot-trigger.ts";
 
 // process-ai-audit-queue — cron-driven drain of ai_audit_queue, modelled on
 // process-whatsapp-queue. ASYNC start-and-poll: each tick (a) POLLs in-flight Apify runs and
@@ -1349,6 +1350,9 @@ async function finaliseSettledRuns(service: any, runIds: string[], estCost: numb
               results: { ...currentResults, crawl_check: { status: "complete", ...(cc as { result: Row }).result } },
             }).eq("id", runId);
           }
+          /* The website check is settled: ask for the lead's homepage picture in the background. site-shot owns every gate
+             (switch, protection mode, cap, freshness, one claim per lead); the audit never waits and never fails on it. */
+          await triggerSiteShot(cLeadId);
           return;
         }
         const res = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/crawl-check`, {
@@ -1364,6 +1368,8 @@ async function finaliseSettledRuns(service: any, runIds: string[], estCost: numb
           const txt = await res.text().catch(() => "");
           console.error(`[process-ai-audit-queue] auto crawl-check failed for lead ${cLeadId}: HTTP ${res.status} ${txt.slice(0, 200)}`);
           await markUnavailable(`crawl-check HTTP ${res.status}: ${txt}`);
+        } else {
+          await triggerSiteShot(cLeadId);
         }
       } catch (e) {
         const why = e instanceof Error ? e.message : String(e);

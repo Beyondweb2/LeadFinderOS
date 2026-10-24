@@ -22,6 +22,14 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-24-report-homepage-picture', date: '2026-10-24', title: 'The prospect report now shows a picture of their own homepage', audience: 'all',
+    body: 'Beside the website issues, the report shows what their homepage looks like, captioned with the date we looked. The "What to fix first" row is gone.',
+    report: {
+      added: ['A real picture of the business\'s own homepage on the left of "What we found on your website", captioned "Your homepage, as we saw it on [date]".', 'A background step: when an audit finishes and the website check is settled, one picture is taken per business, at most once every 30 days, up to a monthly cap. It has an off switch (site_shot_settings).'],
+      changed: ['Where we cannot get a clean picture (no website, a site that refuses our browser, or a bot-check, "site unavailable" or error page) the report keeps the plain site card, so a prospect never sees a wrong page captioned as theirs.'],
+      removed: ['The "What to fix first" row at the bottom of the report.'],
+      effect: 'In a 20-site test 16 of 20 got a picture and the other 4 fell back to the plain card. Every quick-report link already sent shows the picture once one exists; nothing is sent by this change.',
+    } },
   { id: '2026-10-23-reply-audit-sweep', date: '2026-10-23', title: 'Missed reply audits are now caught every hour', audience: 'admin',
     body: 'A background check finds leads who replied on WhatsApp but never got their audit (mostly auto-replies) and queues one each. It never sends anything.',
     report: {
