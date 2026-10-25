@@ -33,7 +33,7 @@ export function insightsFromFetchedPages(input: {
     if (!p.html) return;
     const ev = processPage({ url: p.url, finalUrl: p.finalUrl || p.url, status: p.status, xRobotsTag: p.xRobotsTag, html: leanHtml(p.html), isHome }, input.servedUrl);
     if (isHome) nav = ev.nav ?? [];
-    rows.push({ url: p.url, finalUrl: p.finalUrl || p.url, status: 'done', httpStatus: p.status, d: ev.d, b: ev.b, l: ev.l ?? [] });
+    rows.push({ url: p.url, finalUrl: p.finalUrl || p.url, status: 'done', httpStatus: p.status, d: ev.d, b: ev.b, l: ev.l ?? [], t: ev.t });
   };
   take(input.home, true);
   const seen = new Set(rows.map((r) => r.url));

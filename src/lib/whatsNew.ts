@@ -22,6 +22,14 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-25-finding-accuracy', date: '2026-10-25', title: 'First replies no longer say a site is missing something it has', audience: 'all',
+    body: 'A line like "your site doesn’t mention your town" or "doesn’t say which areas you cover" is now said only when the whole text of every page was checked. Otherwise it is left out.',
+    report: {
+      added: ['A full-text check before an absence is quoted: the town is searched in the whole page, without the state label ("Lavington NSW" is written "Lavington").', 'Sentences like "available to anyone in Albury and surrounds" and "all areas of Riverina" now count as saying where the business works.'],
+      changed: ['If the site says where it covers, we no longer claim it misses the town (it may be a suburb of the city named).', 'Question 1 of a new hook audit for a driving category reads the homepage: a truck-licence trainer is asked about as a truck driver trainer, not a driving instructor.', 'Findings stored before today are left out of a first reply until the site is checked again.'],
+      removed: ['"Your main pages don’t say clearly what you do" when the only fact behind it was a missing H1 / title / description, and "doesn’t say much about the areas you cover".'],
+      effect: 'In the last 30 checks of each kind, 7 of 30 "areas not stated" and 7 of 30 "town not mentioned" were contradicted by the pages’ own text, and 19 more could not be proved. Fewer lines go out, and the ones that do are checked against the full text. Nothing is sent by this change.',
+    } },
   { id: '2026-10-24-report-homepage-picture', date: '2026-10-24', title: 'The prospect report now shows a picture of their own homepage', audience: 'all',
     body: 'Beside the website issues, the report shows what their homepage looks like, captioned with the date we looked. The "What to fix first" row is gone.',
     report: {

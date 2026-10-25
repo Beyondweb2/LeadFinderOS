@@ -10,8 +10,14 @@
    Pure and edge-reachable: relative imports with .ts, no Deno, no DOM.
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 
+import { FULL_TEXT_MARK } from './siteClaims.ts';
+
 /** The issue fields the words read (websiteCheck.ts WebsiteIssue). */
 export interface PitchIssueInput { id: string; title: string; saw?: string; examples?: string[] }
+
+/** Pitch-time ids whose absence claim is quoted only when the check read every page to the end (siteClaims.ts). */
+const NEEDS_FULL_TEXT: ReadonlySet<string> = new Set(['location_unclear', 'town_missing', 'ct_areas_not_stated']);
+const readInFull = (i: Pick<PitchIssueInput, 'saw'>): boolean => String(i.saw ?? '').includes(FULL_TEXT_MARK);
 
 /** Most issues a list carries (Paul, 2026-10-23: "up to four short, specific, real issues"). */
 export const PITCH_MAX_LIST = 4;
@@ -40,12 +46,10 @@ const FIXED: Record<string, string> = {
   services_on_one_page: 'Several of your services are squeezed onto one page',
   thin_key_pages: 'Your main pages say very little about what you do',
   ct_areas_not_stated: "Your site doesn't say which areas you cover",
-  ct_area_coverage: "Your site doesn't say much about the areas you cover",
-  vs_key_page_basics: MAIN_PAGES_UNCLEAR,
-  missing_h1: MAIN_PAGES_UNCLEAR,
-  missing_title: MAIN_PAGES_UNCLEAR,
-  missing_description: MAIN_PAGES_UNCLEAR,
-  duplicate_titles: MAIN_PAGES_UNCLEAR,
+  /* ⛔ LEFT OUT ON PURPOSE (2026-10-25, fix/finding-accuracy): ct_area_coverage (the site DOES say where it works), and the
+     technical ids vs_key_page_basics / missing_h1 / missing_title / missing_description / duplicate_titles. "No H1 tag" is a
+     true fact about the page code, not that the pages "don't say clearly what you do" (a Weebly truck-training site with no
+     H1 says so in its first line). Only the heading check, which reads what the headings SAY, may use the line. */
   ct_vague_headings: MAIN_PAGES_UNCLEAR,
   vs_name_inconsistent: 'Your business name is written different ways across your site',
   no_https: "Your site isn't secure (no padlock)",
@@ -94,6 +98,7 @@ export function emptyGreetingIn(i: Pick<PitchIssueInput, 'saw' | 'examples'>): s
 /** One issue's pitch line, or null (left out of the pitch). */
 export function pitchIssueLine(i: PitchIssueInput): string | null {
   const id = String(i.id ?? '');
+  if (NEEDS_FULL_TEXT.has(id) && !readInFull(i)) return null;
   if (id === 'location_unclear' || id === 'town_missing') {
     const town = townIn(String(i.title ?? ''));
     if (!town) return null;

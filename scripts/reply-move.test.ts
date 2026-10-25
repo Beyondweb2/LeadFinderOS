@@ -254,8 +254,8 @@ console.log('9b. the site line: hedged, and a list that reads in parallel (Paul,
   const iss = (id: string, title = '', saw = '') => ({ id, title, saw, severity: 'medium', count: 1, pages: [], meaning: '' });
   const ven = pitchIssueLines([iss('missing_description', 'Missing meta description'), iss('vs_town_swapped_pages', 'Area pages are the same text'),
     iss('name_unclear', 'Business name not found on the homepage', 'We could not find “Ven Language Services” on the homepage (title: “Ven Languages | Muswell Hill”).'),
-    iss('ct_schema_mismatch', 'The business details in your page code don’t match the page'), iss('location_unclear', 'Sunbury VIC is not mentioned on the site')]);
-  ok(ven.join(' | ') === "Your main pages don't say clearly what you do | Lots of your pages are the same text with only the town swapped | Your site doesn't use the name on your Google listing (it says Ven Languages) | Your site doesn't mention Sunbury VIC",
+    iss('ct_schema_mismatch', 'The business details in your page code don’t match the page'), iss('location_unclear', 'Sunbury VIC is not mentioned on the site', 'Sunbury VIC does not appear anywhere in the text of any of the 6 pages read (read in full).')]);
+  ok(ven.join(' | ') === "Lots of your pages are the same text with only the town swapped | Your site doesn't use the name on your Google listing (it says Ven Languages) | Your site doesn't mention Sunbury VIC",
     `the pitch's issue lines: plain, the site's own name quoted, the page-code one left out, the town capitalised (got ${ven.join(' | ')})`);
   ok(pitchIssueLines([iss('vs_address_not_on_key_pages')], [iss('ct_no_people')])[0] === "There's no address on your homepage, and no named owner", 'no address + no named owner (a minor finding) → one line');
   ok(pitchIssueLines([iss('ct_placeholder_content', 'Unfinished placeholder blocks', 'A page reads “Welcome, !”')])[0] === 'A line on your site reads "Welcome, !" where a name should be', 'an empty greeting the check quoted is said as it is');

@@ -29,6 +29,7 @@
 import { crawlPageKind, visibleText, THIN_WORDS, MAX_CRAWL_PAGES } from './crawlCheck.ts';
 import { sameSite, classifyCrawlUrl } from './crawlUrl.ts';
 import type { SiteAudit } from './siteAudit.ts';
+import { KEPT_TEXT_CHARS } from './siteClaims.ts';
 
 export type CrawlMode = 'standard' | 'full';
 
@@ -381,7 +382,7 @@ const PHONE_RE = /(?:\+44\s?\(?0?\)?\s?|\b0)(?:\d[\s-]?){9,10}\b/g;
 const EMAIL_RE = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi;
 const UK_POSTCODE = /\b[A-Z]{1,2}\d[A-Z\d]?\s*\d[A-Z]{2}\b/i;
 const PER_PAGE = 6;
-const TEXT_CHARS = 5_000;
+const TEXT_CHARS = KEPT_TEXT_CHARS;
 const JSONLD_CHARS = 8_000;
 
 function sentences(text: string): string[] {

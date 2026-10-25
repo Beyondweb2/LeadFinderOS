@@ -27,6 +27,7 @@
 import type { CrawlCoverage, PageBusiness, PageDigest, FullCrawlEvidence } from './fullCrawl.ts';
 import { robotsAllows, robotsRulesFor, sameSite } from './crawlUrl.ts';
 import type { SalesInsights } from './salesInsights.ts';
+import { coverageStatementsIn, FULL_TEXT_MARK, pageTextWasCut, textStatesTown } from './siteClaims.ts';
 import { usableVisibilityChecks, VISIBILITY_SUPERSEDES, type VisibilityChecks } from './visibilityChecks.ts';
 import { compareIssues, isBrokenPageStatus, isCrawlerRefusedStatus, usableContentTrust, CONTENT_TRUST_KINDS, type ContentIssue, type ContentTrust, type EvidenceClass } from './contentTrust.ts';
 
@@ -119,6 +120,8 @@ export interface SiteAuditPage {
   d?: PageDigest | null;
   b?: Partial<PageBusiness> | null;
   l?: string[] | null;
+  /** The page's readable text as the crawl kept it (capped at KEPT_TEXT_CHARS). ABSENT = unknown, never "empty". */
+  t?: string | null;
 }
 
 export interface SiteAuditInput {
@@ -415,12 +418,19 @@ export function buildSiteAudit(input: SiteAuditInput): SiteAudit {
   } else if (!leadName) notChecked.push('Business name on the homepage — no business name on the lead to compare with.');
   const town = input.lead?.town?.trim() || '';
   if (home && town && significantWords(town).length) {
-    const townPages = ok.filter((p) => statesAll([p.d!.title, ...(p.d!.h1 ?? []), p.d!.excerpt ?? ''].join(' '), town));
-    if (statesAll(homeHay, town)) out.push(finding({ id: 'town_stated', category: 'entity', severity: 'good', title: `Mentions ${town} on the homepage`, saw: `${town} appears on the homepage${townPages.length > 1 ? ` and on ${plural(townPages.length - 1, 'other page')}` : ''}.`, meaning: 'The site says where the business works.', urls: townPages.map(urlOf) }));
-    else out.push(finding({ id: 'town_missing', category: 'entity', severity: 'medium', absence: true,
+    /* ⛔ FULL TEXT, NOT THE OPENING (2026-10-25, siteClaims.ts): a town is "stated" when it is anywhere in the page's kept text,
+       with the state label dropped ("Lavington NSW" is written "Lavington"). An absence is judged only when every page was read
+       to the end and none of them says where it covers. */
+    const fullHay = (p: SiteAuditPage) => [p.d!.title, ...(p.d!.h1 ?? []), ...(p.d!.h2 ?? []), p.d!.description ?? '', p.d!.excerpt ?? '', p.t ?? ''].join(' ');
+    const townPages = ok.filter((p) => textStatesTown(fullHay(p), town));
+    const homeStates = textStatesTown([homeHay, fullHay(home)].join(' '), town);
+    const absenceProvable = !readScope && ok.every((p) => !pageTextWasCut(p.t)) && !ok.some((p) => coverageStatementsIn(p.t ?? '').length > 0);
+    if (homeStates) out.push(finding({ id: 'town_stated', category: 'entity', severity: 'good', title: `Mentions ${town} on the homepage`, saw: `${town} appears on the homepage${townPages.length > 1 ? ` and on ${plural(townPages.length - 1, 'other page')}` : ''}.`, meaning: 'The site says where the business works.', urls: townPages.map(urlOf) }));
+    else if (townPages.length ? !pageTextWasCut(home.t) : absenceProvable) out.push(finding({ id: 'town_missing', category: 'entity', severity: 'medium', absence: true,
       title: `Homepage does not mention ${town}`,
-      saw: `${town} is not in the homepage’s title, headings or opening text${townPages.length ? `; it appears on ${plural(townPages.length, 'other page')}` : readScope ? `, nor anywhere${readScope}` : ', nor on any page read'}.`,
+      saw: `${town} is not in the homepage’s text (${FULL_TEXT_MARK})${townPages.length ? `; it appears on ${plural(townPages.length, 'other page')}` : readScope ? `, nor anywhere${readScope}` : ', nor on any page read'}.`,
       meaning: 'Saying clearly where the business works helps it be matched to local searches.', urls: townPages.length ? townPages.map(urlOf) : [urlOf(home)] }));
+    else notChecked.push(`${town} on the site — not judged: the site names the places it covers, or a page was longer than the text we keep, so we cannot prove the town is missing.`);
   } else if (!town) notChecked.push('Town on the homepage — no town on the lead to compare with.');
   const phones = biz('phones');
   if (phones.length) out.push(finding({ id: 'phone_shown', category: 'entity', severity: 'good', title: 'Phone number shown', saw: `${String(phones[0].v)} (on ${plural(new Set(phones.map((p) => p.url)).size, 'page')}).`, meaning: 'Customers and AI tools can find how to contact the business.', urls: [...new Set(phones.map((p) => p.url))] }));
