@@ -152,7 +152,7 @@ console.log('\n── 4. a prospect\'s quick check queues the deep check ──'
   ok(!/kickCrawlWorker/.test(block), 'no kick: the minute cron takes them one after another (a bulk audit never floods the worker)');
   /* 2026-10-19: also behind the call screen's one-time start of a MISSING check (callScreenCrawl.ts) — never a person's other presses. */
   ok(/leadId && \(internal \|\| callScreen\) && stored === true/.test(cc), 'only behind an automated (or call-screen) quick check that was stored (a fresh deep check is never replaced)');
-  ok(read('src/lib/fullCrawl.ts').includes("'client_intake', 'automatic'] as const"), "'automatic' is a recorded crawl source");
+  ok(read('src/lib/fullCrawl.ts').includes("'client_intake', 'automatic', 'catch_up'] as const"), "'automatic' is a recorded crawl source");
 }
 
 console.log('\n── 5. the call script lists the issues (Job 3) ──');

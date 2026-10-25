@@ -31,7 +31,7 @@ import {
 } from "../../../src/lib/siteEvidence.ts";
 import {
   resolveCrawlMode, STANDARD_CRAWL, cleanRequestSource, toServedUrl, isPageUrl, internalPageLinks,
-  orderSitemapChildren, isIntakeCrawlRequest, processPage,
+  orderSitemapChildren, isIntakeCrawlRequest, isCatchUpCrawlRequest, processPage,
 } from "../../../src/lib/fullCrawl.ts";
 import { buildVisibilityChecks, type VisibilityChecks } from "../../../src/lib/visibilityChecks.ts";
 import { crawlStartUrl, parseRobots, robotsAllows } from "../../../src/lib/crawlUrl.ts";
@@ -42,6 +42,7 @@ import { CALL_SCREEN_CRAWL_SOURCE, CALL_SCREEN_CRAWL_WINDOW_MS, callScreenCrawlR
 import { leadCrawlWriteDecision, storedCrawlFailed, STORED_CRAWL_STATE_COLUMNS } from "../../../src/lib/crawlWriteRule.ts";
 import { activeJobFor, createCrawlJob, jobCounts, kickCrawlWorker } from "../_shared/crawl-job.ts";
 import { questionTownForLead } from "../_shared/question-town.ts";
+import { paidMode } from "../_shared/protection.ts";
 import { listingForCheck } from "../_shared/listing-website.ts";
 import { crawlPageCapFor, prospectCrawlReuse, PROSPECT_CRAWL_PAGE_CAP } from "../../../src/lib/prospectCrawl.ts";
 import { AUTO_DEEP_MAX_RUNNING, summariseWebsiteCheck } from "../../../src/lib/websiteCheck.ts";
@@ -359,7 +360,8 @@ Deno.serve(async (req) => {
        lead, requested_from client_intake, gets the exhaustive job — and is refused below unless that lead is a
        paid client. It is the one internal door to a full crawl; nothing else internal changes. */
     const intakeCrawl = isIntakeCrawlRequest(internal, body);
-    let mode = intakeCrawl ? "full" as const : resolveCrawlMode(body?.mode, !internal);
+    const catchUpCrawl = isCatchUpCrawlRequest(internal, body);
+    let mode = intakeCrawl || catchUpCrawl ? "full" as const : resolveCrawlMode(body?.mode, !internal);
     /* The INLINE crawl below is always the standard profile. A FULL request never runs inline: it
        becomes a background job (see the branch after the homepage probes). */
     const profile = STANDARD_CRAWL;
@@ -412,6 +414,9 @@ Deno.serve(async (req) => {
         intakeOwnerId = (lr?.user_id as string | undefined) ?? null;
       }
       if (intakeCrawl && !isClient) return json({ ok: false, error: "not_a_client", detail: "The intake crawl is for paid clients only." }, 403);
+      /* The catch-up crawl: prospects only, and only while nothing is paused. */
+      if (catchUpCrawl && isClient) return json({ ok: false, error: "client_lead", detail: "The catch-up crawl is for prospects only." }, 403);
+      if (catchUpCrawl && (await paidMode(service)) !== "running") return json({ ok: false, error: "paused", detail: "Prospecting is paused or all-stop is on." }, 423);
       pageCap = crawlPageCapFor({ isClient, requestedFrom });
       if (leadId && pageCap !== null) {
         const running = await activeJobFor(service, leadId, homeUrl);
@@ -424,7 +429,7 @@ Deno.serve(async (req) => {
             full_evidence: saved.full_evidence != null ? { version: Number(saved.full_evidence), completeness: saved.completeness ?? null } : null,
             result: { signals: { fetchFailed: saved.fetch_failed === true } },
           } : null;
-          const reuse = prospectCrawlReuse(savedRow, { nowMs: Date.now(), websiteUrl: homeUrl, force: body?.force === true, role });
+          const reuse = prospectCrawlReuse(savedRow, { nowMs: Date.now(), websiteUrl: homeUrl, force: body?.force === true || catchUpCrawl, role: catchUpCrawl ? "admin" : role });
           if (reuse.reuse) {
             return json({ ok: true, mode: "full", cached: true, job_id: reuse.jobId, crawled_at: reuse.crawledAt, age_ms: reuse.ageMs, status: "complete", url: homeUrl });
           }
@@ -472,7 +477,7 @@ Deno.serve(async (req) => {
        inline check below records that honestly (as a standard row). */
     if (mode === "full" && home && home.html) {
       const job = await createCrawlJob(service, {
-        leadId, userId: intakeCrawl ? intakeOwnerId : rowOwnerId, requestedFrom, pageCap,
+        leadId, userId: intakeCrawl || catchUpCrawl ? intakeOwnerId : rowOwnerId, requestedFrom, pageCap,
         probe: {
           homeUrl, servedUrl: home.finalUrl || homeUrl, town: town || null, readableUa,
           readableAs: readableProbe?.c.label ?? null, searchBlocked, respondedAny,
@@ -483,10 +488,10 @@ Deno.serve(async (req) => {
       await kickCrawlWorker("start");
       /* Who started it goes on the lead's history (best-effort; never fails the crawl). A second press
          while a job runs returns the running job and logs nothing. */
-      if (leadId && (userId || intakeCrawl) && !job.reused) {
+      if (leadId && (userId || intakeCrawl || catchUpCrawl) && !job.reused) {
         const { error: actErr } = await service.from("lead_activity").insert({
           lead_id: leadId, actor_user_id: userId, kind: "crawl_run",
-          data: { job_id: job.jobId, url: homeUrl, ...(intakeCrawl ? { source: "system", started_by: "client_intake" } : {}) },
+          data: { job_id: job.jobId, url: homeUrl, ...(intakeCrawl ? { source: "system", started_by: "client_intake" } : catchUpCrawl ? { source: "system", started_by: "catch_up" } : {}) },
         });
         if (actErr) console.warn(`[crawl-check] crawl_run activity not recorded: ${actErr.message}`);
       }

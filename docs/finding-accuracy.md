@@ -28,3 +28,9 @@ Page text is not kept beyond the first 5,000 characters, so "false" here means c
 
 ## Not changed
 Scoring, the Visible rule, existing audit data. No migration.
+
+## The catch-up door (2026-10-25)
+Re-checking leads after a rule change used to need Paul's login (a full crawl and a draft rewrite are operator actions). Two INTERNAL doors now exist, both behind `CRON_SECRET` + `x-internal-job` (no login, no new function, no migration):
+- `crawl-check` with exactly `{ mode: "full", requested_from: "catch_up", lead_id }` (`isCatchUpCrawlRequest`): a fresh prospect crawl at the prospect page cap, replacing the saved crawl. Refused for a paid client (403 `client_lead`) and while the protection mode is not `running` (423 `paused`).
+- `ai-reply-drafts` action `catch_up_regenerate` `{ draft_id }`: rewrites ONE open (pending) draft through the same function as the Regenerate button, so every Regenerate rule holds (open, not a stop, 24-hour window, regeneration cap, evidence not running, Visible gets no pitch). Refused while paused and while the Inbox mode is Auto or unreadable. It sends nothing and creates nothing; the draft stays "Needs approval". Cost is booked to the first admin.
+Test: `scripts/catch-up-door.test.ts`. Run it from SQL with the vault secret (`net.http_post`), so the secret never leaves the database.
