@@ -33,6 +33,7 @@
 
 import type { SiteAuditPage } from './siteAudit.ts';
 import { significantWords, statesAll } from './siteAudit.ts';
+import { coverageStatementsIn, FULL_TEXT_MARK, pageTextWasCut, textStatesTown } from './siteClaims.ts';
 
 export const SALES_INSIGHTS_VERSION = 1;
 /** The strongest findings kept on a crawl. More than this is an audit, not a sales insight. */
@@ -402,21 +403,26 @@ export function buildSalesInsights(input: InsightInput): SalesInsights {
 
   /* ── 3. where the business works ──────────────────────────────────────────────────────────────── */
   if (town && townStems.size) {
-    const mentions = (p: SiteAuditPage) => statesAll(`${p.d!.title} ${(p.d!.h1 ?? []).join(' ')} ${(p.d!.h2 ?? []).join(' ')} ${p.d!.excerpt ?? ''}`, town);
+    /* ⛔ FULL TEXT (2026-10-25, siteClaims.ts): the town is anywhere in the page's kept text, state label dropped. An absence is
+       said only when every page was read to the end and no page says where the business covers (the town may sit inside the
+       area named: a suburb, a parent city). The line carries FULL_TEXT_MARK, the only thing that lets a pitch quote it. */
+    const mentions = (p: SiteAuditPage) => statesAll(`${p.d!.title} ${(p.d!.h1 ?? []).join(' ')} ${(p.d!.h2 ?? []).join(' ')} ${p.d!.excerpt ?? ''}`, town)
+      || textStatesTown(`${p.d!.title} ${(p.d!.h1 ?? []).join(' ')} ${(p.d!.h2 ?? []).join(' ')} ${p.d!.description ?? ''} ${p.d!.excerpt ?? ''} ${p.t ?? ''}`, town);
     const homeSays = mentions(home);
     const mentioning = ok.filter(mentions);
     const servicePagesRead = ok.filter((p) => fam(p) === 'service' || dedicated.some((d) => d.url === urlOf(p)));
-    if (!homeSays && mentioning.length === 0 && ok.length >= 2) {
+    const absenceProvable = !capped && ok.every((p) => !pageTextWasCut(p.t)) && !ok.some((p) => coverageStatementsIn(p.t ?? '').length > 0);
+    if (!homeSays && mentioning.length === 0 && ok.length >= 2 && absenceProvable) {
       findings.push({
         id: 'location_unclear', kind: 'location_unclear', theme: 'location', confidence: 'high', priority: 64,
         title: `${town} is not mentioned on the site`,
-        observed: `${town} does not appear in the title, headings or opening text of any of the ${ok.length} pages read.`,
+        observed: `${town} does not appear anywhere in the text of any of the ${ok.length} pages read (${FULL_TEXT_MARK}).`,
         why: 'People search for local businesses by place. If the site never says where you work, Google and AI tools have little to match you to a local search.',
         improvement: `Say clearly where you are based and which areas you cover, on the homepage and the main service pages.`,
         spoken: `Your site doesn't actually say you're in ${town} anywhere I could see. That makes it harder for Google and AI tools to connect you with local searches.`,
         evidence: { urls: [urlOf(home)], quotes: [], signal: `“${town}” absent from ${ok.length} pages read` },
       });
-    } else if (homeSays && servicePagesRead.length >= 2 && !servicePagesRead.some(mentions)) {
+    } else if (homeSays && servicePagesRead.length >= 2 && !servicePagesRead.some(mentions) && servicePagesRead.every((p) => !pageTextWasCut(p.t))) {
       findings.push({
         id: 'location_unclear', kind: 'location_unclear', theme: 'location', confidence: 'medium', priority: 44,
         title: `Service pages don't say where they are offered`,

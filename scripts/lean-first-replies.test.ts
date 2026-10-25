@@ -98,7 +98,7 @@ console.log('4. Australia is prospect-only (Paul, 2026-10-23)');
 
 console.log('5. the pitch words and the length rule');
 {
-  ok(pitchIssueLine({ id: 'location_unclear', title: 'Arundel QLD is not mentioned on the site' }) === "Your site doesn't mention Arundel QLD", 'the town keeps its capital');
+  ok(pitchIssueLine({ id: 'location_unclear', title: 'Arundel QLD is not mentioned on the site', saw: 'Arundel QLD does not appear anywhere in the text of any of the 6 pages read (read in full).' }) === "Your site doesn't mention Arundel QLD", 'the town keeps its capital');
   ok(pitchIssueLine({ id: 'ct_schema_mismatch', title: 'The business details in your page code don’t match the page' }) === null && pitchIssueLine({ id: 'no_sitemap', title: 'No XML sitemap found' }) === null, 'page code and sitemaps are left out, never said in jargon');
   ok(pitchIssueLine({ id: 'search_crawler_refused', title: 'The site refused AI search crawlers' }) === "My check couldn't read your website, and AI tools may struggle with it too", 'our check failing is hedged');
   ok(PITCH_MAX_WORDS === 100, 'the length rule is 100 words');

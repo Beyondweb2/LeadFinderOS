@@ -40,7 +40,7 @@ function page(spec: PageSpec, isHome = false): { p: SiteAuditPage; nav: Array<{ 
     + `<p>${spec.body ?? words(260)}</p>${(spec.links ?? []).map((l) => `<a href="${l}">x</a>`).join('')}</body></html>`;
   const url = O + spec.path;
   const ev = processPage({ url, finalUrl: url, status: 200, xRobotsTag: null, html, isHome }, O + '/');
-  return { p: { url, finalUrl: url, status: 'done', httpStatus: 200, d: ev.d, b: ev.b, l: ev.l ?? [] }, nav: (ev.nav ?? []).map((n) => ({ label: n.label, url: n.url })) };
+  return { p: { url, finalUrl: url, status: 'done', httpStatus: 200, d: ev.d, b: ev.b, l: ev.l ?? [], t: ev.t }, nav: (ev.nav ?? []).map((n) => ({ label: n.label, url: n.url })) };
 }
 function run(specs: Array<PageSpec & { home?: boolean }>, over: Partial<InsightInput> = {}): SalesInsights {
   const built = specs.map((s) => page(s, !!s.home));
@@ -128,7 +128,7 @@ console.log('\n── entity, location, linking, proof ──');
 {
   const i = run([{ ...GOOD_HOME, title: 'RG Locksmiths | Lock experts', h1: 'RG Locksmiths', body: `Call 01225 123456. ${words(300)}` }, ...SERVICE_PAGES.map((s) => ({ ...s, title: s.title.replace(' in Bath', '') }))]);
   const f = i.findings.find((x) => x.id === 'location_unclear');
-  ok(!!f && /Bath does not appear/.test(f.observed), `11. the home town stated nowhere → location_unclear (got ${ids(i)})`);
+  ok(!!f && /Bath does not appear anywhere in the text.*read in full/.test(f.observed), `11. the home town stated nowhere → location_unclear (got ${ids(i)})`);
 }
 {
   const i = run([GOOD_HOME, ...SERVICE_PAGES.map((s) => ({ ...s, title: s.title.replace(' in Bath', ' for homes') }))]);

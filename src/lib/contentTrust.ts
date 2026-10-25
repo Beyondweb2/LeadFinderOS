@@ -35,6 +35,7 @@
 import { visibleText } from './crawlCheck.ts';
 import { CREDENTIALS, fullPageFamily, jsonLdNodes, type FullPageFamily } from './fullCrawl.ts';
 import { robotsAllows, robotsRulesFor } from './crawlUrl.ts';
+import { coverageStatementsIn, FULL_TEXT_MARK } from './siteClaims.ts';
 
 /** Bump when the MEANING of a stored issue changes. Rows with an older (or no) version show nothing new. */
 export const CONTENT_TRUST_VERSION = 1;
@@ -555,6 +556,8 @@ export function pageObservations(html: string, pageUrl: string, homeUrl: string,
      statement of coverage; only an areas list, areaServed markup, or "we cover / serving / covering <Place>" is. */
   const coverage: string[] = [];
   for (const m of text.matchAll(COVERAGE_RE)) { if (coverage.length < 4) coverage.push(`“${quote(text, m.index ?? 0, m[0].length, 20)}”`); }
+  /* "available to anyone in Albury/Wodonga and surrounds", "all areas of Riverina": coverage said in a sentence (2026-10-25). */
+  for (const q of coverageStatementsIn(text)) { if (coverage.length < 4) coverage.push(`“${q}”`); }
   if (areasHead && places.size) coverage.push(`An areas list: “${clip(tagText(areasHead[0]), 120)}”`);
   if (nodes.some((n) => n?.areaServed)) coverage.push('areaServed in the business markup');
   obs.coverage = coverage.slice(0, 5);
@@ -839,7 +842,7 @@ export function buildContentTrust(input: ContentTrustInput): ContentTrust {
     add({ kind: 'areas_not_stated', severity: townInHeadings ? 'low' : 'medium', absence: true,
       title: 'We couldn’t find which areas you cover',
       why: 'When someone asks for a business in a particular town, a clear list of the areas you serve gives search engines and AI tools something specific to match.',
-      evidence: [`No “areas we cover” list or statement${scope || ' on any page read'}`, `No area pages among the ${plural(uniq(input.knownUrls.map(pathOf)).length, 'address', 'addresses')} we know of`],
+      evidence: [`No “areas we cover” list or statement${scope || ' on any page read'}${scope ? '' : ` (${FULL_TEXT_MARK})`}`, `No area pages among the ${plural(uniq(input.knownUrls.map(pathOf)).length, 'address', 'addresses')} we know of`],
       urls: home ? [home.url] : [],
       needs: 'Which towns and areas you genuinely serve.',
       spoken: 'Your site doesn’t really say which areas you cover.' });

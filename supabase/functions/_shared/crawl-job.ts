@@ -439,14 +439,14 @@ export async function finalizeCrawlJob(service: Client, jobId: string): Promise<
   // links (the audit's link graph) only while the site is small enough to hold them in memory.
   const preCounts = await jobCounts(service, jobId);
   const withLinks = preCounts.done <= LINK_GRAPH_MAX_PAGES;
-  const rows: Array<StoredCrawlRow & { id: number; depth: number; links?: string[] | null; ct?: PageObs | null }> = [];
+  const rows: Array<StoredCrawlRow & { id: number; depth: number; links?: string[] | null; ct?: PageObs | null; t?: string | null }> = [];
   for (let from = 0; ; from += 1000) {
     const { data, error } = await service.from("crawl_urls")
-      .select("id,url,status,skip_reason,http_status,final_url,source,depth,d:evidence->d,b:evidence->b,nav:evidence->nav,footer:evidence->footer,ct:evidence->ct" + (withLinks ? ",l:evidence->l" : ""))
+      .select("id,url,status,skip_reason,http_status,final_url,source,depth,d:evidence->d,b:evidence->b,nav:evidence->nav,footer:evidence->footer,ct:evidence->ct" + (withLinks ? ",l:evidence->l,t:evidence->t" : ""))
       .eq("job_id", jobId).eq("kind", "page").order("id").range(from, from + 999);
     if (error) throw new Error(`finalize read: ${error.message}`);
     const list = (data ?? []) as Array<Record<string, any>>;
-    for (const r of list) rows.push({ id: r.id, depth: r.depth, url: r.url, status: r.status, skip_reason: r.skip_reason, http_status: r.http_status, final_url: r.final_url, source: r.source, evidence: r.d ? { d: r.d, b: r.b, nav: r.nav ?? undefined, footer: r.footer ?? undefined } : null, links: Array.isArray(r.l) ? r.l : null, ct: r.ct ?? null });
+    for (const r of list) rows.push({ id: r.id, depth: r.depth, url: r.url, status: r.status, skip_reason: r.skip_reason, http_status: r.http_status, final_url: r.final_url, source: r.source, evidence: r.d ? { d: r.d, b: r.b, nav: r.nav ?? undefined, footer: r.footer ?? undefined } : null, t: typeof r.t === "string" ? r.t : null, links: Array.isArray(r.l) ? r.l : null, ct: r.ct ?? null });
     if (list.length < 1000) break;
   }
   const { count: sitemapsRead } = await service.from("crawl_urls").select("id", { count: "exact", head: true }).eq("job_id", jobId).eq("kind", "sitemap").eq("status", "done");
@@ -534,7 +534,7 @@ export async function finalizeCrawlJob(service: Client, jobId: string): Promise<
     }
     const auditPages: SiteAuditPage[] = rows.map((r) => ({
       url: r.url, finalUrl: r.final_url ?? null, status: r.status, httpStatus: r.http_status ?? null, skipReason: r.skip_reason ?? null,
-      source: r.source ?? null, depth: r.depth, d: r.evidence?.d ?? null, b: r.evidence?.b ?? null, l: withLinks ? (r.links ?? null) : null,
+      source: r.source ?? null, depth: r.depth, d: r.evidence?.d ?? null, b: r.evidence?.b ?? null, l: withLinks ? (r.links ?? null) : null, t: r.t ?? null,
     }));
     full.audit = buildSiteAudit({
       servedUrl, requestedUrl: job.start_url, robotsTxt: job.robots_txt ?? null, pages: auditPages,

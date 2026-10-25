@@ -47,6 +47,7 @@ import {
   expectedResponses, planGenerationBatches,
 } from "../../../src/lib/auditPlan.ts";
 import { planHookQuestionsBestFirst } from "../../../src/lib/hookAudit.ts";
+import { categoryMayBeNarrower, homepageWords, siteTradeFor } from "../../../src/lib/siteClaims.ts";
 import { canWorkLead, isClientLead, refusalBody, resolveActor, salesAuditRefusal, type Actor } from "../_shared/access.ts";
 import { guardAction, paidMode } from "../_shared/protection.ts";
 import { OUTREACH_AUDIT_EST_USD } from "../_shared/outreach-audit.ts";
@@ -253,6 +254,25 @@ function finalHookPlan(questions: string[], ctx: { town: string; country: string
     }
   }
   return qs;
+}
+
+/* ⛔ QUESTION 1 NAMES WHAT THE BUSINESS DOES (Paul, 2026-10-25): a truck-licence trainer filed under "Driving instructors" was
+   asked about as a driving instructor. For a category that can hide a narrower trade, read the homepage's own words
+   (title, headings, description, opening text); only when they name ONE specialism with no car-lesson wording beside it
+   does that replace the category (siteClaims.ts siteTradeFor). Any fetch trouble, or anything unclear: the category. */
+async function hookTradeFor(website: string | null, category: string): Promise<string> {
+  if (!website || !categoryMayBeNarrower(category)) return category;
+  try {
+    const u = new URL(/^https?:\/\//i.test(website) ? website : `https://${website}`);
+    if (!/^https?:$/.test(u.protocol) || /^(?:localhost|\d+\.\d+\.\d+\.\d+|\[.*\])$/i.test(u.hostname) || !u.hostname.includes(".") || /\.(?:local|internal|lan)$/i.test(u.hostname)) return category;
+    const res = await fetch(u.toString(), { redirect: "follow", signal: AbortSignal.timeout(4000), headers: { "User-Agent": "Mozilla/5.0 (compatible; FindableBot/1.0)" } });
+    if (!res.ok) return category;
+    const trade = siteTradeFor(category, homepageWords(await res.text()));
+    if (trade) console.log(`[create-ai-audit] hook: question 1 trade "${trade}" read from the site (category was "${category}")`);
+    return trade ?? category;
+  } catch {
+    return category;
+  }
 }
 
 function hasUsableTown(loc: string): boolean {
@@ -1135,7 +1155,7 @@ Deno.serve(async (req) => {
       /* A HOOK PREVIEW (the prospect workspace's "Propose questions") is planned exactly as the run
          will plan it, so the three the salesperson reviews are the three that are asked. */
       if (hookAuditRequested && !isBaseline && !isMeasurement && !isDiscovery) {
-        qs = finalHookPlan(qs, { town: locationText, country, trade: businessType, businessName });
+        qs = finalHookPlan(qs, { town: locationText, country, trade: await hookTradeFor(website, businessType), businessName });
       }
       return json({
         ok: true,
@@ -1621,7 +1641,7 @@ Deno.serve(async (req) => {
        hook, so the score, the report, the Inbox card and the 6/6 rule know how to read it. */
     let hookState: HookStateV2 | null = null;
     if (isHookAudit) {
-      questions = finalHookPlan(questions, { town: locationText, country, trade: businessType, businessName });
+      questions = finalHookPlan(questions, { town: locationText, country, trade: await hookTradeFor(website, businessType), businessName });
       /* ⛔ SEQUENTIAL (2026-10-15, Paul): ONLY the first planned question is queued. The queue processor asks the
          next one only while every engine that answered named the business, and stops at the first answer that
          did not (that answer is the proof). The plan's length is the ceiling. See advanceSequentialHook. */
