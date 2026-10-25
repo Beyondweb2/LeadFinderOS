@@ -65,7 +65,7 @@ import {
   AUTO_SEND_CHOICES, AUTO_SEND_DEFAULT_DAILY_CAP, AUTO_SEND_MAX_DAILY_CAP,
 } from "../../../src/lib/aiAutoSend.ts";
 import { nextWindowOpenAt, replyWindowFor, replyWindowOpen } from "../../../src/lib/inboxSendWindow.ts";
-import { botMaySaySendsEveryOne, parseInboxReplyMode, INBOX_REPLY_MODES } from "../../../src/lib/inboxReplyMode.ts";
+import { botMaySaySendsEveryOne, modeMayAutoSend, parseInboxReplyMode, INBOX_REPLY_MODES } from "../../../src/lib/inboxReplyMode.ts";
 import { loadReplyHours } from "../_shared/inbox-schedule.ts";
 import { loadLeadScore, rescoreDirtyRuns, SCORED_AUDIT_SELECT } from "../_shared/audit-scores.ts";
 import { AUDIT_SCORE_VERSION, leadAuditScore, pickHookAudit, visibleCountsOf, type ScoredAudit } from "../../../src/lib/auditScore.ts";
@@ -774,7 +774,11 @@ async function personDraft(service: Service, actor: Actor, leadId: string, ctx: 
 async function handleRegenerate(service: Service, actor: Actor, body: Record<string, unknown>) {
   const r = await loadDraftFor(service, actor, str(body.draft_id));
   if (!r.ok) return r.res;
-  const d = r.d;
+  return await regenerateOpenDraft(service, actor, r.d, str(body.avoid));
+}
+
+// deno-lint-ignore no-explicit-any
+async function regenerateOpenDraft(service: Service, actor: Actor, d: any, avoidIn: string) {
   if ((d.kind !== "draft" && d.kind !== "needs_you") || d.status !== "pending") return json({ ok: false, error: "not_open", detail: "This draft is no longer open." });
   if (STOP_REASONS.has(d.reason ?? "")) return json({ ok: false, error: "stopped", detail: "They asked to stop. No draft is written." });
   if ((d.regenerations ?? 0) >= AI_REPLY_MAX_REGENERATIONS) return json({ ok: false, error: "regenerate_limit", detail: `This draft has been rewritten ${AI_REPLY_MAX_REGENERATIONS} times. Edit it by hand.` });
@@ -793,7 +797,7 @@ async function handleRegenerate(service: Service, actor: Actor, body: Record<str
   if (d.auto_send_id && !(await stopAutoSend(service, d.auto_send_id, "ai_person_regenerated"))) {
     return json({ ok: false, error: "not_open", detail: "The AI is sending this reply right now." });
   }
-  const pd = await personDraft(service, actor, d.lead_id, ctx, str(body.avoid) || d.draft_text);
+  const pd = await personDraft(service, actor, d.lead_id, ctx, avoidIn || d.draft_text);
   if (!pd.ok) return pd.res;
   const w = pd.w;
   const totalUsd = Number((Number(d.cost_usd ?? 0) + w.spentUsd).toFixed(6));
@@ -805,6 +809,26 @@ async function handleRegenerate(service: Service, actor: Actor, body: Record<str
   }).eq("id", d.id).eq("status", "pending").select("id, draft_text, why, regenerations").maybeSingle();
   if (!saved) return json({ ok: false, error: "not_open", detail: "This draft closed while it was being rewritten." });
   return json({ ok: true, draft: saved });
+}
+
+/* ⛔ THE CATCH-UP DOOR (Paul, 2026-10-25): an INTERNAL caller (CRON_SECRET + x-internal-job, no login) may rewrite one
+   OPEN draft with the same rules as the Regenerate button (open, not a stop, inside the 24-hour window, regeneration cap,
+   evidence not still running, Visible leads get no pitch). It only ever rewrites the text of a draft that is already
+   waiting for approval: it sends nothing, creates no draft, never touches a sent message, and is refused while the protection
+   mode is not "running" or the Inbox mode is Auto (an auto-send could pick a rewritten draft up). The cost is booked to
+   the first admin, as a Regenerate press is. */
+async function handleCatchUpRegenerate(service: Service, body: Record<string, unknown>) {
+  const draftId = str(body.draft_id);
+  if (!draftId) return json({ ok: false, error: "draft_id_required" }, 400);
+  if ((await paidMode(service)) !== "running") return json({ ok: false, error: "paused", detail: "Prospecting is paused or all-stop is on." }, 423);
+  const { data: st, error: stErr } = await service.from("whatsapp_outreach_state").select("ai_reply_mode").eq("id", 1).maybeSingle();
+  if (stErr || !st || modeMayAutoSend(parseInboxReplyMode(st.ai_reply_mode))) return json({ ok: false, error: "auto_mode", detail: "Catch-up rewrites are refused while the Inbox mode is Auto (or unreadable)." }, 409);
+  const { data: d, error: dErr } = await service.from("ai_reply_drafts").select("*").eq("id", draftId).maybeSingle();
+  if (dErr) throw dErr;
+  if (!d) return json({ ok: false, error: "draft_not_found" }, 404);
+  const { data: roles, error: rErr } = await service.from("user_roles").select("user_id").eq("role", "admin").limit(1);
+  if (rErr || !roles?.length) return json({ ok: false, error: "no_admin" }, 503);
+  return await regenerateOpenDraft(service, { id: roles[0].user_id as string, role: "admin" }, d, "");
 }
 
 /** "Draft reply": a draft for the newest inbound on this conversation, always, except a stop (then Mark opted out). */
@@ -1023,6 +1047,7 @@ Deno.serve(async (req) => {
       && (req.headers.get("x-cron-secret") || "") === (Deno.env.get("CRON_SECRET") || "\u0000__unset__");
     if (action === "tick") return internal ? await handleTick(service) : json({ ok: false, error: "not_authorised" }, 401);
     if (action === "dry_run" && internal) return await handleDryRun(service, null, body);
+    if (action === "catch_up_regenerate") return internal ? await handleCatchUpRegenerate(service, body) : json({ ok: false, error: "not_authorised" }, 401);
     if (action === "rescore" && internal) return json({ ok: true, ...await rescoreDirtyRuns(service, { maxRuns: 200, budgetMs: 100_000 }) });
     const who = await resolveActor(req, service);
     if (!who.ok) return json(refusalBody(who), who.status);

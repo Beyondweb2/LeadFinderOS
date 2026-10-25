@@ -88,7 +88,7 @@ export function resolveCrawlMode(requested: unknown, isOperator: boolean): Crawl
 /** Where the manual crawl was started — recorded, never used to decide anything (except the intake door below).
  *  'client_intake' = the paid client auto-intake (2026-10-06, src/lib/clientIntake.ts).
  *  'automatic' = the deep check a prospect's quick check queues behind itself (2026-10-15, src/lib/websiteCheck.ts). */
-export const CRAWL_REQUEST_SOURCES = ['outreach', 'inbox', 'lead_detail', 'paid_client', 'website_build', 'client_intake', 'automatic'] as const;
+export const CRAWL_REQUEST_SOURCES = ['outreach', 'inbox', 'lead_detail', 'paid_client', 'website_build', 'client_intake', 'automatic', 'catch_up'] as const;
 
 /** ⛔ THE ONE INTERNAL FULL CRAWL (2026-10-06): the paid client auto-intake may ask crawl-check for an
  *  exhaustive crawl of a lead's OWN website — an internal caller, exactly `mode: "full"`,
@@ -97,6 +97,14 @@ export const CRAWL_REQUEST_SOURCES = ['outreach', 'inbox', 'lead_detail', 'paid_
 export function isIntakeCrawlRequest(internal: boolean, body: unknown): boolean {
   const b = (body && typeof body === 'object' ? body : {}) as Record<string, unknown>;
   return internal && b.mode === 'full' && b.requested_from === 'client_intake'
+    && typeof b.lead_id === 'string' && b.lead_id.length > 0 && !b.url && !b.audit_id && !b.run_id;
+}
+/** ⛔ THE CATCH-UP CRAWL (2026-10-25): an internal caller (no login) may ask for a fresh PROSPECT crawl of a lead's own website:
+ *  exactly `mode: "full"`, `requested_from: "catch_up"` and a lead id. crawl-check refuses a paid client, any pause, and
+ *  bypasses the saved-crawl reuse (the whole point is to replace a crawl the checks have since changed). */
+export function isCatchUpCrawlRequest(internal: boolean, body: unknown): boolean {
+  const b = (body && typeof body === 'object' ? body : {}) as Record<string, unknown>;
+  return internal && b.mode === 'full' && b.requested_from === 'catch_up'
     && typeof b.lead_id === 'string' && b.lead_id.length > 0 && !b.url && !b.audit_id && !b.run_id;
 }
 export type CrawlRequestSource = (typeof CRAWL_REQUEST_SOURCES)[number];

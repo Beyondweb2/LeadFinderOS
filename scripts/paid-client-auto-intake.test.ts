@@ -227,7 +227,7 @@ ok(isIntakeCrawlRequest(true, { mode: "full", requested_from: "client_intake", l
 {
   const cc = read("supabase/functions/crawl-check/index.ts");
   ok(/if \(intakeCrawl && !isClient\) return json\(\{ ok: false, error: "not_a_client"/.test(cc), "crawl-check refuses the intake door for anyone who is not a paid client");
-  ok(/userId: intakeCrawl \? intakeOwnerId : rowOwnerId/.test(cc), "…and files the job under the book (the lead's owner)");
+  ok(/userId: intakeCrawl( \|\| catchUpCrawl)? \? intakeOwnerId : rowOwnerId/.test(cc), "…and files the job under the book (the lead's owner)");
 }
 
 /* ═══ 9. AUTO-FILL — client and sales answers only ═════════════════════════════════════════════════ */
