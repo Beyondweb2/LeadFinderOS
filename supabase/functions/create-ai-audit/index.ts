@@ -465,6 +465,10 @@ Deno.serve(async (req) => {
        what makes an audit ADAPTIVE (see isHookAudit below); it is never inferred from the question
        count, the purpose, or who is calling. A separate concept from fresh_audit. */
     const hookAuditRequested: boolean = body.hook_audit === true;
+    /* ⛔ ONE MARKET PER AUDIT (Paul, 2026-10-25): a new hook asks every question about the trade the homepage names (a truck-licence
+       trainer filed under "Driving instructors" is asked about as a truck driver trainer), not just question 1. The stored
+       business_type stays the lead's own category. Any other purpose, and a reuse of a stored audit, is untouched. */
+    const questionType: string = hookAuditRequested ? await hookTradeFor(website, businessType) : businessType;
     /* bulk_score — THE BULK AUDIT'S SCORE MARKER (2026-10-14, docs/bulk-audit-score.md). Set only by bulk-jobs (internal).
        It changes NOTHING about what is asked: same questions, same count, same engines, same reuse, same cost. It only
        stamps results.hook (version 2) with the questions AS QUEUED, so the run is scored by scoreHookRun — the quick
@@ -1103,7 +1107,7 @@ Deno.serve(async (req) => {
        therefore generates byte-for-byte what it generated before. For scope 'local' it is built
        but reads as inert: nothing on the local path consults it. */
     const marketContext: MarketContext | null = businessScope
-      ? buildMarketContext(businessType, locationText, specialisms, country, targetAudience, specialistSectors)
+      ? buildMarketContext(questionType, locationText, specialisms, country, targetAudience, specialistSectors)
       : null;
 
     const estCost = SOURCES.ai_search.estCostUsd;
@@ -1150,12 +1154,12 @@ Deno.serve(async (req) => {
         qs = fillGenerated("discovery preview", generated, questionCount, [],
           { type: businessType, loc: locationText, hasWebsite, specialisms, scope: businessScope, country, market: marketContext });
       } else {
-        qs = await generateQuestions(businessName, businessType, locationText, hasWebsite, specialisms, questionCount, businessScope, country, serviceAreaCoverage, moneyQuestionCount, null, false, marketContext);
+        qs = await generateQuestions(businessName, questionType, locationText, hasWebsite, specialisms, questionCount, businessScope, country, serviceAreaCoverage, moneyQuestionCount, null, false, marketContext);
       }
       /* A HOOK PREVIEW (the prospect workspace's "Propose questions") is planned exactly as the run
          will plan it, so the three the salesperson reviews are the three that are asked. */
       if (hookAuditRequested && !isBaseline && !isMeasurement && !isDiscovery) {
-        qs = finalHookPlan(qs, { town: locationText, country, trade: await hookTradeFor(website, businessType), businessName });
+        qs = finalHookPlan(qs, { town: locationText, country, trade: questionType, businessName });
       }
       return json({
         ok: true,
@@ -1497,7 +1501,7 @@ Deno.serve(async (req) => {
             { type: businessType, loc: locationText, hasWebsite, specialisms, scope: businessScope, country, market: marketContext });
         } else {
           questions = await generateQuestions(
-            businessName, businessType, locationText, hasWebsite, specialisms, questionCount,
+            businessName, questionType, locationText, hasWebsite, specialisms, questionCount,
             businessScope, country, coverage, moneyQuestionCount, null, false, marketContext,
           );
         }
@@ -1641,7 +1645,7 @@ Deno.serve(async (req) => {
        hook, so the score, the report, the Inbox card and the 6/6 rule know how to read it. */
     let hookState: HookStateV2 | null = null;
     if (isHookAudit) {
-      questions = finalHookPlan(questions, { town: locationText, country, trade: await hookTradeFor(website, businessType), businessName });
+      questions = finalHookPlan(questions, { town: locationText, country, trade: questionType, businessName });
       /* ⛔ SEQUENTIAL (2026-10-15, Paul): ONLY the first planned question is queued. The queue processor asks the
          next one only while every engine that answered named the business, and stops at the first answer that
          did not (that answer is the proof). The plan's length is the ceiling. See advanceSequentialHook. */
