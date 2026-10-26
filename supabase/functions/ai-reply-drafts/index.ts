@@ -247,7 +247,9 @@ async function buildContext(service: Service, lead: LeadRow, thread: MsgRow[], i
     site: { state: found.check.state, issues: found.check.serious.map(plainIssueTitle),
       /* The same issues in the pitch's plain words (Paul, 2026-10-23); one with no plain words is left out. */
       pitch: pitchIssueLines(found.check.serious, found.check.minor),
-      evidence: found.check.serious.map((i) => ({ title: plainIssueTitle(i), pages: i.pages })) },
+      evidence: found.check.serious.map((i) => ({ title: plainIssueTitle(i), pages: i.pages })),
+      /* Everything the check found (serious + minor): the pitch says "that's just a few of them" only when it lists fewer. */
+      found: found.check.serious.length + found.check.minor.length },
     websiteUrl: lead.website ?? null,
     /* ⛔ Australia is prospect-only (prospectOnly.ts): a price / guarantee answer is Needs you, never a draft. */
     prospectOnly: prospectOnlyLead({ country: lead.country }) || prospectOnlyNumber(lead.phone),

@@ -97,12 +97,12 @@ for (const x of ['Yes', "that's correct", 'Yes, how can I help?', 'Dom', 'hello?
   const p = pm([opener, ...said(x)]);
   ok(p.move === 'first_reply_pitch' && !!p.fixedText && !p.allowPrice && !(p.fixedText ?? '').includes(CONFIDENCE_LINE), `first reply "${x}" → the pitch (no price, no money-back line)`);
 }
-ok((pm([opener, ...said('Yes this is Dom')]).fixedText ?? '').startsWith('Hi Dom,\n\nI asked AI "Who is the best plumber in Rugby?" and it mentioned Rival A Plumbing'), 'a name they give → "Hi Dom," then the worst search');
+ok((pm([opener, ...said('Yes this is Dom')]).fixedText ?? '').startsWith('Hi Dom,\n\nI asked google ai "Who is the best plumber in Rugby?" and it mentioned Rival A Plumbing'), 'a name they give → "Hi Dom," then the worst search');
 {
   const d = draftOf([opener, ...said('Dom here')]);
   ok(d.text?.startsWith('Hi Dom,') && d.warnings.length === 0, `the "Hi Dom," pitch passes the checker${d.warnings.length ? ' — ' + d.warnings.join(' | ') : ''}`);
 }
-ok((pm([opener, ...said('Yes it is')]).fixedText ?? '').startsWith('Hi mate,\n\nI asked AI'), 'no name given, none on the site → "Hi mate," (Paul, 2026-10-21)');
+ok((pm([opener, ...said('Yes it is')]).fixedText ?? '').startsWith('Hi mate,\n\nI asked google ai'), 'no name given, none on the site → "Hi mate," (Paul, 2026-10-21)');
 ok((pm([opener, ...said('Yes it is')], { ...ev, ownerName: 'Sarah Jones' }).fixedText ?? '').startsWith('Hi Sarah,\n\n'), 'an owner the site states → "Hi Sarah," (a name still wins)');
 ok(nameFromReply('Yes this is Dom') === 'Dom' && nameFromReply('dom here') === 'Dom' && nameFromReply('Speaking') === null && nameFromReply('Yes it is') === null && nameFromReply('its me') === null && nameFromReply('Plumbing', 'ZZ Plumbing') === null, 'names are read only in clear forms; never "speaking", "me" or a business word');
 ok(pm([opener, ...said('No thanks')]).noDraft === true && pm([opener, ...said('stop')]).stop, 'a no → Needs you, no draft; a stop → the stop');
@@ -161,13 +161,13 @@ for (const c of CASES) {
 }
 for (const [label, e] of [['issues', ev], ['no website', noSiteEv], ['no audit', { ...ev, named: null }], ['soft', { ...ev, named: { named: 3, valid: 6 } }]] as const) {
   const t = pitchText(firstReplyPitch(e as MoveEvidence));
-  ok(!AI_BRAND.test(t), `the pitch (${label}) names no AI tool`);
+  ok(!AI_BRAND.test(t.replace('I asked google ai ', 'I asked AI ')), `the pitch (${label}) names no AI tool but its own engine (Paul, 2026-10-26)`);
 }
 ok(PITCH_SPECIALISE_LINE === 'I specialise in getting local businesses to show up in those results, so the customers go to you instead.', 'the confidence line is Paul\'s 2026-10-21 wording');
 ok(!AI_BRAND.test(PITCH_NO_SITE_LINE) && /^Most local work comes from recommendations/.test(PITCH_NO_SITE_LINE) && /couldn't find one for you/.test(PITCH_NO_SITE_LINE), 'the no-website line names no tool (Paul\'s words, 2026-10-26)');
 {
   const t = pitchText(firstReplyPitch(ev));
-  ok(t.includes('I asked AI "Who is the best plumber in Rugby?" and it mentioned Rival A Plumbing, Rival B Plumbing and Rival C Plumbing.'), 'first message: I asked AI "<question>" and it mentioned A, B and C');
+  ok(t.includes('I asked google ai "Who is the best plumber in Rugby?" and it mentioned Rival A Plumbing, Rival B Plumbing and Rival C Plumbing.'), 'first message: I asked AI "<question>" and it mentioned A, B and C');
   ok(!/recommended by AI|get recommended|guarantee|money back/i.test(t), 'the pitch promises no result and carries no guarantee');
 }
 {
@@ -182,7 +182,7 @@ ok(!AI_BRAND.test(PITCH_NO_SITE_LINE) && /^Most local work comes from recommenda
   const plan = pm(after('I do it myself'));
   const ctx: AiReplyContext = { businessName: ev.businessName, latestInbound: 'I do it myself', thread: [], plan, evidence: ev };
   ok(checkAiReply('Good, I asked gemini again and it still named others. Quick call?', ctx).some((x) => /Names an AI tool/.test(x)), 'the checker warns on a brand name in a draft');
-  ok(checkAiReply(pitchText(firstReplyPitch(ev)).replace('I asked AI', 'I asked Gemini'), { ...ctx, plan: pm([opener, ...said('Yes')]) }).some((x) => /Names an AI tool/.test(x)), '…in the pitch too');
+  ok(checkAiReply(pitchText(firstReplyPitch(ev)).replace('I asked google ai', 'I asked Gemini'), { ...ctx, plan: pm([opener, ...said('Yes')]) }).some((x) => /Names an AI tool/.test(x)), '…in the pitch too');
   ok(/never name one/i.test(buildAiReplyPrompt(ctx)) && /Never name an AI tool/.test(AI_REPLY_SYSTEM_PROMPT), 'the model is told never to name a tool');
   const wctx: AiReplyContext = { ...ctx, plan: pm(after('which ai did you use?')) };
   ok(!/never name one/i.test(buildAiReplyPrompt(wctx)) && !checkAiReply('That one was gemini. I check the same questions on chatgpt and gemini. Want a voice note showing what it said?', wctx).some((x) => /Names an AI tool/.test(x)), 'they asked which tool → no brand warning');

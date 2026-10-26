@@ -22,6 +22,22 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-26-hook-names-engine', date: '2026-10-26', title: 'The first message says which AI it asked', audience: 'all',
+    body: 'The AI\'s first reply to a business now says "I asked chatgpt …" when ChatGPT is where they were not named, and "I asked google ai …" when it was Gemini or Google\'s AI answers. Lower case, as it would be typed. Every other message still just says "AI".',
+    report: {
+      added: ['"I asked chatgpt" / "I asked google ai" at the start of the first message, from the search where the business was not named.'],
+      changed: [],
+      removed: [],
+      effect: 'The business can check it themselves on the same tool. If an earlier message already named the other tool, or the tool is not known, it still says "AI" so the conversation never names two.',
+    } },
+  { id: '2026-10-26-hook-more-issues', date: '2026-10-26', title: 'The first message makes clear there are more issues', audience: 'all',
+    body: 'The AI\'s first reply to a business now lists up to four website issues more often, and when our check found more than it lists it says "That\'s just a couple of them. The full report below has the rest." It only says so when it is true.',
+    report: {
+      added: ['"That\'s just a couple / a few of them." after the issue list when the website check found more ("The full report below has the rest." when the report link is in the message).'],
+      changed: ['The first message may run a little longer, so more issues fit (up to four).', 'A competitor with "&" in its name no longer gets a false "not in the audit" warning on the draft.'],
+      removed: [],
+      effect: 'Businesses can see the issues listed are not the only ones. Nothing is claimed that the check did not find.',
+    } },
   { id: '2026-10-26-hook-signed-with-your-name', date: '2026-10-26', title: 'The first message to a business ends with your name', audience: 'all',
     body: 'Everyone now sets the name for their messages when they first log in (it can no longer be skipped). The AI\'s first reply to a business, the one with what AI said when we searched, now ends with the name of the person who sends it, on its own last line. Only that message.',
     report: {

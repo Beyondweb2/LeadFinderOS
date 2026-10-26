@@ -317,3 +317,22 @@ the sending person's own chosen name on its own last line, under the question (`
   by itself. inbox-scheduled-send's last check accepts exactly `signHook(draft_text, queued_by's name)`, nothing looser.
 - The stored draft text stays unsigned. The first-login name box is REQUIRED (MessageNameDialog: no skip, no close).
 - `scripts/hook-signature.test.ts`.
+
+## The hook says when there are more issues (Paul, 2026-10-26)
+
+"It needs to be more clear that the issues mentioned aren't the only issues." The length rule is now `PITCH_MAX_WORDS` 115 (was
+100) so up to four issues fit more often, and `replyMove.pitchMoreLine` adds, right after the issues, "That's just a couple /
+a few / one of them." plus "The full report below has the rest." when the report link is in the message. ⛔ Only when
+`site.found` (serious + minor issues of the ONE website check, set by ai-reply-drafts) is more than the pitch lists; no count,
+no claim. The line is not counted by the length rule. Also: the checker no longer flags a rival with "&" in its name as
+"not in the audit". `scripts/hook-more-issues.test.ts`.
+
+## The hook names the engine, in lower case (Paul, 2026-10-26)
+
+An exception to "no AI brand in a draft" (2026-10-21) and "never 'Google AI' for Gemini" (2026-10-13), for the HOOK only:
+`askedPhrase(e, true)` writes "I asked chatgpt …" when the missed search was ChatGPT's and "I asked google ai …" when it was
+Gemini's or the AI Overview's (`hookEngineWords`). Lower case on purpose (Paul): `tidyCaps` keeps exactly "I asked chatgpt" /
+"I asked google ai" (case-sensitive, so a model's "i asked chatgpt" is still tidied). "AI" when the engine is unknown or the
+conversation already named the other tool (`e.engineWords`: never two tools). The plan carries `hookEngine`; the checker allows
+exactly that phrase and still warns on any other tool name. Every other draft (and `auditLine`) keeps "AI".
+`scripts/hook-engine-name.test.ts`; six older tests that pinned "I asked AI" in the hook were updated.

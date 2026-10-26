@@ -163,7 +163,9 @@ export interface MoveEvidence {
   /** THE ONE WEBSITE CHECK (websiteCheck.ts websiteCheckFor): its state and the SERIOUS issues' plain titles
    *  (plainIssueTitle), worst first; `pitch` = the same issues in the pitch's plain words (pitchIssueWords.ts), any
    *  with no plain words left out. Absent = read from hasWebsite / findings (older callers, fixtures). */
-  site?: { state: SiteState; issues: string[]; pitch?: string[]; evidence?: Array<{ title: string; pages: string[] }> } | null;
+  site?: { state: SiteState; issues: string[]; pitch?: string[]; evidence?: Array<{ title: string; pages: string[] }>;
+    /** How many issues the check found in all (serious + minor). More than the pitch lists → it says so (pitchMoreLine). */
+    found?: number } | null;
   /** The "AI handles replies" switch (whatsapp_outreach_state.ai_handles_replies). ON: never say "I read and send every
    *  one myself" — replies may be automated. Absent = off. */
   aiAutoReplies?: boolean;
@@ -225,6 +227,8 @@ export interface MovePlan {
   greetName?: string | null;
   /** They asked WHICH AI tool (RE.whichTool): the only draft that may name one (Paul, 2026-10-21). Absent = no brand names. */
   brandsAllowed?: boolean;
+  /** The hook named its engine ("I asked chatgpt" / "I asked google ai", Paul 2026-10-26): that phrase only is allowed. */
+  hookEngine?: HookEngineWords | null;
   /** Tied into a contract until a day we could read: noted on the draft. ⛔ Never written to the lead (Next Action is
    *  human-set): the person sets it when they send. */
   followUp?: FollowUpNote | null;
@@ -465,13 +469,27 @@ export function spokenSearch(question: string, trade: string | null): string {
   if (/^(who|what|which|where|can|could|is|are|how|any|do|does|should|would|recommend)\b/i.test(q)) return `"${q.charAt(0).toUpperCase()}${q.slice(1)}?"`;
   return `for ${q}`;
 }
+/** THE HOOK NAMES THE ENGINE (Paul, 2026-10-26): "I asked chatgpt …" when the missed search was ChatGPT's, "I asked google ai …"
+ *  when it was Gemini's or Google's AI answers (overview). Always lower case (Paul: "make sure chatgpt is lowercase, same as
+ *  google ai"). Unknown engine → null (the hook says "AI"). Only the hook uses it; every other draft keeps "AI". */
+export type HookEngineWords = 'chatgpt' | 'google ai';
+export function hookEngineWords(engine: string | null | undefined): HookEngineWords | null {
+  const k = String(engine ?? '').toLowerCase().replace(/[\s-]+/g, '_');
+  if (k === 'chatgpt' || k === 'openai') return 'chatgpt';
+  if (k === 'gemini' || k === 'overview' || k === 'google_ai' || k === 'ai_overview' || k === 'google_ai_overview') return 'google ai';
+  return null;
+}
 /** "I asked AI <the missed search>": the question where they were NOT named (the worst-engine pick, Paul 2026-10-20).
- *  ⛔ NEVER AN AI BRAND (Paul, 2026-10-21): always "AI"; the engine stays in the evidence ("why" panel) and is named only
- *  when they ask which tool (whichToolLine). No missed search on record: trade + town. */
-export function askedPhrase(e: MoveEvidence): string | null {
+ *  ⛔ "AI", never a brand (Paul, 2026-10-21) — EXCEPT the hook (`named`: hookEngineWords, Paul 2026-10-26). The engine stays in
+ *  the evidence ("why" panel) and is otherwise named only when they ask which tool (whichToolLine). No missed search: trade + town. */
+export function askedPhrase(e: MoveEvidence, named = false): string | null {
   if (!e.trade || !e.town) return null;
   const m = e.missed;
-  if (m && m.question.trim()) return `I asked AI ${spokenSearch(m.question, e.trade)}`;
+  /* ⛔ Never two tools: when the conversation already named the other one (e.engineWords), the hook says "AI". */
+  const hw = named ? hookEngineWords(m?.engine) : null;
+  const conv = hookEngineWords(e.engineWords);
+  const who = hw && (!conv || conv === hw) ? hw : 'AI';
+  if (m && m.question.trim()) return `I asked ${who} ${spokenSearch(m.question, e.trade)}`;
   return `I asked AI for ${withA(tradeWord(e.trade))} in ${e.town}`;
 }
 const lowerFirst = (s: string) => s.charAt(0).toLowerCase() + s.slice(1);
@@ -513,6 +531,13 @@ export const PITCH_INSTEAD_LINE = 'AI is recommending your competitors instead.'
 export const PITCH_LIST_LEAD = 'I looked into why and a few things could be holding you back:';
 /** One real issue: one sentence, no list. */
 export const PITCH_ONE_LEAD = 'I looked into why and found';
+/** ⛔ "THESE AREN'T THE ONLY ONES" (Paul, 2026-10-26): said ONLY when the check really found more issues than the pitch lists
+ *  (site.found > shown), never as a guess. "The full report below has the rest." only when the report link goes with it. */
+export function pitchMoreLine(shown: number, found: number | null | undefined, hasReportLink: boolean): string | null {
+  if (!shown || typeof found !== 'number' || found <= shown) return null;
+  const first = shown === 1 ? "That's just one of them." : shown === 2 ? "That's just a couple of them." : "That's just a few of them.";
+  return hasReportLink ? `${first} The full report below has the rest.` : first;
+}
 /** What we do, said once, with no promise of a result (Paul, 2026-10-21). */
 export const PITCH_SPECIALISE_LINE = 'I specialise in getting local businesses to show up in those results, so the customers go to you instead.';
 /** Paul's no-website words, word for word (2026-10-26). ⛔ Never "well-built" or "more important than ever", no stats. */
@@ -572,8 +597,12 @@ const REPORT_URL_RE = /^https:\/\/findable\.live\/r\/[A-Za-z0-9]{4,12}$/;
 export const reportLinkLine = (e: Pick<MoveEvidence, 'reportUrl'> & Partial<Pick<MoveEvidence, 'prospectOnly'>>): string | null =>
   !e.prospectOnly && e.reportUrl && REPORT_URL_RE.test(e.reportUrl) ? `${PITCH_REPORT_LEAD} ${e.reportUrl}` : null;
 /** Marks a code-built pitch: its report link is allowed through the link check; no link means the audit is pending. */
-function markReportLink(p: MovePlan, e: Pick<MoveEvidence, 'reportUrl'> & Partial<Pick<MoveEvidence, 'prospectOnly'>>): MovePlan {
-  if (!p.fixedText || (p.move !== 'first_reply_pitch' && p.move !== 'auto_reply') || e.prospectOnly) return p;
+function markReportLink(p0: MovePlan, e: Pick<MoveEvidence, 'reportUrl'> & Partial<Pick<MoveEvidence, 'prospectOnly' | 'missed'>>): MovePlan {
+  if (!p0.fixedText || (p0.move !== 'first_reply_pitch' && p0.move !== 'auto_reply')) return p0;
+  /* The hook names its engine (hookEngineWords): the checker allows exactly that phrase, nothing else. */
+  const hw = hookEngineWords(e.missed?.engine);
+  const p = hw && p0.fixedText.includes(`I asked ${hw} `) ? { ...p0, hookEngine: hw } : p0;
+  if (e.prospectOnly) return p;
   const link = reportLinkLine(e);
   if (link && p.fixedText.includes(link)) return { ...p, linkOk: true };
   return { ...p, auditPending: true, note: p.note ?? 'Audit pending: no report link in this draft.' };
@@ -587,7 +616,7 @@ function firstReplyPitchBase(e: MoveEvidence, theirName: string | null = null): 
   if (!e.trade || !e.town || !counts) return { lines: withHi([PITCH_INTRO_LINE, ...(noSite ? [PITCH_NO_SITE_LINE] : [])]), ...next, structure: 'pitch_intro' };
   const full = mayClaimNamedInstead(counts.named, counts.valid);
   const site = siteOf(e);
-  const asked = askedPhrase(e) as string;
+  const asked = askedPhrase(e, true) as string;
   /* ⛔ Never a rival with (nearly) their own name (Paul, 2026-10-20). */
   const rivals = rivalsExcludingSelf(e.competitors, e.businessName).slice(0, 3);
   const first = rivals.length ? `${asked} and it mentioned ${listNames(rivals)}.` : full ? `${asked} and it mentioned other businesses, not you.` : `${asked} and it didn't mention you.`;
@@ -606,7 +635,10 @@ function firstReplyPitchBase(e: MoveEvidence, theirName: string | null = null): 
     issues = issues.slice(0, -1);
     b = build(issues);
   }
-  return { lines: b.lines, ...next, structure: b.kind === 'list' ? 'pitch_list' : b.kind === 'sentence' ? 'pitch_sentence' : 'pitch_plain' };
+  /* The check found more than the list shows: say so, right after the issues (not counted by the length rule). */
+  const more = pitchMoreLine(issues.length, e.site?.found, !!reportLinkLine(e));
+  const lines = more && b.kind !== 'plain' ? [...b.lines.slice(0, -1), more, b.lines[b.lines.length - 1]] : b.lines;
+  return { lines, ...next, structure: b.kind === 'list' ? 'pitch_list' : b.kind === 'sentence' ? 'pitch_sentence' : 'pitch_plain' };
 }
 /** The pitch as one message: each line its own paragraph, the question last. */
 export const pitchText = (p: { lines: string[]; question: string }): string => [...p.lines, p.question].join('\n\n');
@@ -1198,6 +1230,9 @@ export function pickMove(i: MoveInput): MovePlan {
 
 /* A link, an email or a bare domain — never the full stop after it (that ends the sentence). */
 const PROTECTED = /(https?:\/\/[^\s]*[^\s.,!?;:]|www\.[^\s]*[^\s.,!?;:]|[\w.+-]+@[\w-]+(?:\.[\w-]+)+|\b[a-z0-9-]+\.(?:co\.uk|com|uk|live|net|org|io)\b(?:\/[^\s]*[^\s.,!?;:])?)/gi;
+/* The hook's engine exactly as code writes it ("I asked chatgpt", "I asked google ai"): kept lower case (Paul, 2026-10-26).
+   Case-sensitive on purpose, so a model's "i asked chatgpt" is still tidied. */
+const HOOK_ENGINE_PROTECTED = /(?<=\bI asked )(?:chatgpt|google ai)\b/g;
 const ILL_VERBS = 'call|send|give|get|be|do|have|let|ring|drop|check|look|pop|text|message|sort|speak|try|explain|show|chat|come|see|leave|pass|put|run|take|keep|make|go';
 /** A private-use character marks a protected link / email while the capitals are fixed (never typed by anyone). */
 const MARK = String.fromCharCode(0xe000);
@@ -1205,7 +1240,8 @@ const MARK = String.fromCharCode(0xe000);
 /** Capital at the start of every sentence and line; I, I'm, I'll, I've, I'd; ChatGPT / Gemini. Links, emails and numbers untouched. */
 export function tidyCaps(text: string): string {
   const stash: string[] = [];
-  let s = String(text ?? '').replace(PROTECTED, (m) => { stash.push(m); return MARK + String(stash.length - 1) + MARK; });
+  const keep = (m: string) => { stash.push(m); return MARK + String(stash.length - 1) + MARK; };
+  let s = String(text ?? '').replace(HOOK_ENGINE_PROTECTED, keep).replace(PROTECTED, keep);
   s = s.replace(/\bi'(m|ll|ve|d)\b/gi, (_m, x: string) => `I'${x.toLowerCase()}`)
     .replace(/\bim\b/gi, (m) => (m === 'IM' ? m : "I'm"))
     .replace(new RegExp(`\\bill\\b(?=\\s+(?:${ILL_VERBS})\\b)`, 'gi'), "I'll")
