@@ -70,6 +70,8 @@ import { loadReplyHours } from "../_shared/inbox-schedule.ts";
 import { loadLeadScore, rescoreDirtyRuns, SCORED_AUDIT_SELECT } from "../_shared/audit-scores.ts";
 import { AUDIT_SCORE_VERSION, leadAuditScore, pickHookAudit, visibleCountsOf, type ScoredAudit } from "../../../src/lib/auditScore.ts";
 import { loadCountrySettings } from "../_shared/country-settings.ts";
+import { senderChosenName } from "../_shared/sender-name.ts";
+import { isHookDraft, signHook } from "../../../src/lib/hookSignature.ts";
 import { autoSendCounts, loadAutoSendState, personActiveAt, sendAsIsAdmin, stopAutoSend, type AutoSendState } from "../_shared/ai-auto-send.ts";
 import {
   auditPhaseOf, crawlPhaseOf, draftLackedEvidence, evidenceVerdict, pitchNeedsEvidence, AUDIT_NOT_FINISHED_LABEL, AUDIT_NOT_FINISHED_REASON,
@@ -464,8 +466,16 @@ async function maybeQueueAutoSend(service: Service, st: AutoSendState, a: {
   const at = autoSendAt({ nowMs, inboundAtMs: Date.parse(a.cand.inbound_at), windowOpenNow: replyWindowOpen(window, now),
     nextOpenMs: nextWindowOpenAt(window, now).getTime(), delayMs: autoSendDelayMs() });
   if (at === null) { await record({ send: false, reason: "window_closing", intent: key }); return; }
+  /* ⛔ THE HOOK IS SIGNED (src/lib/hookSignature.ts): the "send as" person's own chosen name on the last line. None chosen → not
+     sent by itself; it waits for a person, who signs it with theirs. */
+  let body = a.w.reply;
+  if (isHookDraft(a.plan)) {
+    const name = await senderChosenName(service, st.sendAs);
+    if (!name) { await record({ send: false, reason: "no_sender_name", intent: key }); return; }
+    body = signHook(body, name);
+  }
   const { data: row, error } = await service.from("inbox_scheduled_sends").insert({
-    user_id: a.cand.user_id, lead_id: a.cand.lead_id, phone: a.cand.phone, channel: "whatsapp", kind: "text", body: a.w.reply,
+    user_id: a.cand.user_id, lead_id: a.cand.lead_id, phone: a.cand.phone, channel: "whatsapp", kind: "text", body,
     send_at: new Date(at).toISOString(), tz: window.tz, status: "scheduled", queued_by: st.sendAs, checked_at: now.toISOString(),
     ai_draft_id: a.draftId, ai_intent: key,
   }).select("id").single();

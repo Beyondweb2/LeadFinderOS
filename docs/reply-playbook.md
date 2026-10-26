@@ -305,3 +305,15 @@ and any reply to "is this legit / genuine / a scam?") carries `FINDABLE_SITE_LIN
   makes it one; Paul's 2026-10-26 rule: a draft with a link is never sent by itself). So who_are_you / what_we_do / explain_here
   drafts now wait for approval even when their switch is on.
 - `scripts/service-question-link.test.ts` fences it with real phrasings.
+
+## The hook is signed with the sender's name (Paul, 2026-10-26)
+
+Only the hook (a first-reply pitch, or an auto-reply answered with the code-built pitch; `hookSignature.isHookDraft`) ends with
+the sending person's own chosen name on its own last line, under the question (`signHook`: "…yourself?\n\nSam").
+- The name is `profiles.message_name` ONLY (`hookSignatureName`, `_shared/sender-name.ts` `senderChosenName`), never the email
+  fallback, the lead's owner, the assignee or "Paul".
+- Inbox: the draft shows and sends with the VIEWER's name (the approver is the sender); no name → Approve opens the name box.
+- Auto-send (ai-reply-drafts `maybeQueueAutoSend`): signed with the "send as" person's name; none → `no_sender_name`, not sent
+  by itself. inbox-scheduled-send's last check accepts exactly `signHook(draft_text, queued_by's name)`, nothing looser.
+- The stored draft text stays unsigned. The first-login name box is REQUIRED (MessageNameDialog: no skip, no close).
+- `scripts/hook-signature.test.ts`.

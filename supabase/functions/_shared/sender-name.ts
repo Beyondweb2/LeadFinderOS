@@ -3,6 +3,7 @@
 //    email. No user id → no name → the caller refuses. Never the lead's owner, assignee, the book owner or "Paul".
 // Service role only (reads auth.users for the email fallback). Never throws.
 import { messageNameFor } from "../../../src/lib/messageName.ts";
+import { hookSignatureName } from "../../../src/lib/hookSignature.ts";
 
 // deno-lint-ignore no-explicit-any
 type Service = any;
@@ -23,4 +24,16 @@ export async function senderMessageName(service: Service, userId: string | null 
     } catch { /* no email → '' → the caller refuses */ }
   }
   return messageNameFor({ message_name: saved, email });
+}
+
+/** The name the HOOK is signed with (src/lib/hookSignature.ts): the person's CHOSEN name only, never the email fallback.
+ *  null = none chosen, or unreadable (the caller does not send the hook as that person). Never throws. */
+export async function senderChosenName(service: Service, userId: string | null | undefined): Promise<string | null> {
+  const id = String(userId ?? "").trim();
+  if (!id) return null;
+  try {
+    const { data, error } = await service.from("profiles").select("message_name").eq("user_id", id).maybeSingle();
+    if (error) return null;
+    return hookSignatureName((data?.message_name as string | null) ?? null);
+  } catch { return null; }
 }
