@@ -24,7 +24,7 @@ import { buildsFromAudit } from "../../../src/lib/templateRouting.ts";
 import { rivalHookDecision, templateNeedsRivals } from "../../../src/lib/rivalHook.ts";
 import { pitchEverSent } from "../_shared/auto-reply-rules.ts";
 import { isColdOutreachTemplate } from "../../../src/lib/coldOutreach.ts";
-import { DASHBOARD_TEMPLATES, cleanNeededItem, dashboardGreeting, dashboardTemplateTranscript, isDashboardTemplate, neededItemFromTranscript } from "../../../src/lib/dashboardTemplates.ts";
+import { DASHBOARD_PENDING_QUEUE_STATUSES, DASHBOARD_RESEND_WINDOW_MS, DASHBOARD_TEMPLATES, RECENTLY_SENT_REASON, cleanNeededItem, noDoubleSendTemplate, dashboardGreeting, dashboardTemplateTranscript, isDashboardTemplate, neededItemFromTranscript } from "../../../src/lib/dashboardTemplates.ts";
 import { displayBusinessName } from "../../../src/lib/displayName.ts";
 import { isUkColdDestination, NOT_A_UK_MOBILE } from "../../../src/lib/ukColdDestination.ts";
 import { COUNTRY_OFF, MARKET_NAME, channelOn, mobileMarketOf } from "../../../src/lib/outreachMarkets.ts";
@@ -109,8 +109,9 @@ const CAPABILITIES = ["dry_run", "build_phase_hold", "routing_leaf", "any_approv
    2026-10-21a: the Inbox send window — via:"inbox" outside the lead's hours is QUEUED, not sent (src/lib/inboxSendWindow.ts).
    2026-10-21c: both of the above (the send window + Australia prospect-only).
    2026-10-22a: Australia is a WhatsApp market (its own switch); its Inbox hours are read in the lead's zone (src/lib/auLeadZone.ts). */
-/* 2026-10-26a: the admin dashboard's six templates (src/lib/dashboardTemplates.ts), admin only, template_vars.needed_item. */
-const BUILD_ID = "2026-10-26a-dashboard-templates";
+/* 2026-10-26a: the admin dashboard's six templates (src/lib/dashboardTemplates.ts), admin only, template_vars.needed_item.
+   2026-10-26b: a dashboard template to the same lead again within DASHBOARD_RESEND_WINDOW_MS, or while one is queued, is refused. */
+const BUILD_ID = "2026-10-26b-dashboard-no-double-send";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -121,6 +122,24 @@ const corsHeaders = {
   "x-swm-build": BUILD_ID,
   "x-swm-caps": CAPABILITIES.join(","),
 };
+
+/** A dashboard template's double-send guard: "recently_sent" when the same template went to this lead (any status but failed,
+ *  NULL included) inside DASHBOARD_RESEND_WINDOW_MS or is still queued (other than the drain's own row); "recent_check_failed"
+ *  when either read errors (a sending path fails closed); null = clear to send. */
+async function recentDashboardSend(service: ReturnType<typeof createClient>, leadId: string, templateName: string, ownScheduledId: string | null): Promise<"recently_sent" | "recent_check_failed" | null> {
+  const since = new Date(Date.now() - DASHBOARD_RESEND_WINDOW_MS).toISOString();
+  const { data: sent, error: sErr } = await service.from("whatsapp_messages").select("id")
+    .eq("lead_id", leadId).eq("direction", "outbound").eq("template_name", templateName)
+    .or("status.is.null,status.neq.failed").gte("created_at", since).limit(1);
+  if (sErr) return "recent_check_failed";
+  if (Array.isArray(sent) && sent.length) return "recently_sent";
+  let q = service.from("inbox_scheduled_sends").select("id")
+    .eq("lead_id", leadId).eq("template_name", templateName).in("status", [...DASHBOARD_PENDING_QUEUE_STATUSES]);
+  if (ownScheduledId) q = q.neq("id", ownScheduledId);
+  const { data: queued, error: qErr } = await q.limit(1);
+  if (qErr) return "recent_check_failed";
+  return Array.isArray(queued) && queued.length ? "recently_sent" : null;
+}
 
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
@@ -582,6 +601,13 @@ Deno.serve(async (req) => {
          A salesperson can reach only the sign-up template on a lead they work (the role guard above); the
          onboarding template is for a PAID client, which a salesperson's request is refused for (isClientLead). */
       const linkKind = tvars.includes("signup_url") ? "signup" : tvars.includes("onboarding_form_url") ? "onboarding" : null;
+      /* ⛔ NO DOUBLE SEND (2026-10-26b, src/lib/dashboardTemplates.ts): a dashboard row's template (the dashboard's own and
+         re_engage_49) to the same lead inside DASHBOARD_RESEND_WINDOW_MS, or while one is queued, is refused — from any screen.
+         Fails closed: an unreadable log refuses. The drain's own row is not "another queued one". */
+      if (resolvedLeadId && noDoubleSendTemplate(templateName)) {
+        const recent = await recentDashboardSend(service, resolvedLeadId, templateName, sched ? sched.row.id : null);
+        if (recent) return json({ ok: false, error: recent, reason: recent === "recently_sent" ? RECENTLY_SENT_REASON : "Could not check whether this already went to them, so nothing was sent. Try again." }, 200);
+      }
       if (linkKind) {
         if (!resolvedLeadId) return json({ ok: false, error: "template_needs_lead" }, 400);
         if (!allowResend && await pitchEverSent(service, resolvedLeadId, templateName)) {

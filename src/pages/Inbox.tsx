@@ -37,6 +37,8 @@ import { fillTemplate } from '@/lib/leadUtils';
 import { firstNameFrom, hookFollowupBody, contactFollowupBody } from '@/lib/questionnaireFollowup';
 import { readableTemplateBody } from '@/lib/templateBodies';
 import { parseTemplateSnapshot, type WhatsAppTemplateSnapshot } from '@/lib/whatsappTemplateSnapshot';
+import { dashboardTranscriptView } from '@/lib/dashboardTemplates';
+import { DashboardTemplateBubble } from '@/components/DashboardTemplateBubble';
 import { WhatsAppTemplateMessage } from '@/components/WhatsAppTemplateMessage';
 import { Button } from '@/components/ui/button';
 import { InboxComposer } from '@/components/InboxComposer';
@@ -2721,11 +2723,14 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
                   <p className="py-8 text-center text-xs text-muted-foreground/60">No messages yet — send the first below.</p>
                 ) : thread.map((m) => {
                   const templateSnapshot = m.message_type === 'template' ? parseTemplateSnapshot(m.template_snapshot) : null;
+                  /* A dashboard template: Meta's words when known, else a "template sent" card (dashboardTranscriptView). */
+                  const dashView = m.direction === 'outbound' ? dashboardTranscriptView(m.template_name, templateSnapshot?.body ?? m.body) : null;
                   return (
                   <div key={m.id} className={cn('flex', m.direction === 'outbound' ? 'justify-end' : 'justify-start')}>
                     <div className={cn('max-w-[78%] rounded-2xl px-3 py-2 text-sm',
                       m.direction === 'outbound' ? 'bg-primary/90 text-primary-foreground' : 'bg-muted')}>
-                      {m.direction === 'outbound' && templateSnapshot
+                      {dashView ? <DashboardTemplateBubble view={dashView} />
+                        : m.direction === 'outbound' && templateSnapshot
                         ? <WhatsAppTemplateMessage snapshot={templateSnapshot} />
                         : isPlayableVoice(m) ? null
                         : <p className="whitespace-pre-wrap break-words"><PreviewLinkedText text={bubbleReadable(m) || templateLabel(m.template_name)} /></p>}
