@@ -22,6 +22,14 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-26-dashboard-buttons-pressable', date: '2026-10-26', title: 'Every dashboard send button is pressable', audience: 'admin',
+    body: 'No more "Not set up at Meta". Interested and follow-up rows send the 24-hour nudge. If Meta refuses a send, you see why straight away and on the message in their Inbox thread; the button stays usable.',
+    report: {
+      added: ['Interested (waiting on you), follow-up due and quote-gone-quiet rows send the 24-hour nudge.', 'Questionnaire rows that are waiting on them, need a call, or are unfinished also offer the 24-hour nudge.'],
+      changed: ['A mapped button is always pressable. Meta decides on the send; a refusal shows Meta\'s reason after the press and on the failed message in the Inbox thread.', 'An Australian lead gets the 24-hour nudge instead of a sign-up or payment template (Australia is prospect-only).'],
+      removed: ['The "Not set up at Meta" label, and switching buttons off from Meta\'s last answer.'],
+      effect: 'Every row that has a fitting template can be messaged in one tap, still through the normal sender with send hours, opt-outs and the 24-hour rule. Failed payments, client delivery steps and list-level tasks have no template, so they show no send button.',
+    } },
   { id: '2026-10-26-dashboard-templates', date: '2026-10-26', title: 'Dashboard send buttons now send your Meta templates', audience: 'admin',
     body: 'Domain help, payment help, what we need, agency access, agreement & next steps and the 24-hour nudge now send from the dashboard row, through the normal sender. Clicking a lead opens their Inbox conversation.',
     report: {

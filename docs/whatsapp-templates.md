@@ -731,3 +731,8 @@ SERVER_ONLY_TEMPLATE_LABELS (never in a picker). New variable `needed_item` (cle
   off with Meta's reason for 6 h, then it is live again; agency_access and nudge_24h (In review per Paul, 26 Oct) start off
   for 24 h. The account and the agreement_next_steps wording could not be checked from here.
 - The language is assumed "en" (all of Paul's templates are); a mismatch comes back as 132001 and turns the button off.
+- **2026-10-26 (later, Paul): every mapped button is pressable.** The "last real send" on/off rule and the In-review start are
+  removed (`dashboardTemplateState` gone). Meta decides on the send; a refusal is the failed message in the Inbox thread (Meta's
+  reason) plus the after-press message (`failCode` → `sendErrorMeaning`). Interested, follow-up due and quote-quiet rows →
+  nudge_24h; questionnaire waiting / call / unfinished → nudge_24h. An Australian lead gets nudge_24h instead of a sign-up or
+  payment template (`effectiveTemplate`). No template, no button: failed payment, client delivery step, list-level items, tied in.

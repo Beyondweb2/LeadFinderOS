@@ -13,10 +13,8 @@
    (WHATSAPP_BUSINESS_ACCOUNT_ID unset, debug_token gives no ids; whatsapp_template_status holds only `no_waba`), and
    Paul cannot supply it (2026-10-26). Meta renders its own approved text to the prospect; the Inbox transcript says
    which template went and with what, never invented wording.
-   ⛔ ON / OFF FOLLOWS META'S OWN ANSWER, never a manual flip: the last real send of each template. Meta refusing it as
-   a template problem (not approved, paused, disabled, wrong language…) turns the button off with Meta's reason for
-   RETRY_AFTER_MS, then it is live again so the next press asks Meta again; a template Meta accepted stays on. The two
-   Paul reported "In review" on 26 Oct start off for IN_REVIEW_GRACE_MS, then try.
+   ⛔ A MAPPED BUTTON IS ALWAYS PRESSABLE (Paul, 2026-10-26): Meta decides on the send; a refusal is the failed message in
+   the lead's Inbox thread (with Meta's reason) and the message after the press. Nothing turns a button off.
    ═════════════════════════════════════════════════════════════════ */
 
 export type DashboardTemplateVar = 'name' | 'greeting_name' | 'needed_item';
@@ -71,41 +69,4 @@ export function neededItemFromTranscript(text: string | null | undefined): strin
   if (at < 0 || !s.endsWith('.')) return null;
   const v = s.slice(at + '. Needed: '.length, -1).trim();
   return v || null;
-}
-
-/* ── On / off from Meta's own answer ─────────────────────────────────────────────────────────────── */
-
-/** Meta's error codes that mean "this TEMPLATE cannot go" (sendErrorMeaning.ts has the words). A failure for any other
- *  reason (the number, the 24-hour window, an opt-out) says nothing about the template and never turns the button off. */
-export const TEMPLATE_REFUSAL_CODES: ReadonlySet<string> = new Set(['132000', '132001', '132005', '132007', '132012', '132015', '132016']);
-export const RETRY_AFTER_MS = 6 * 3_600_000;
-export const IN_REVIEW_GRACE_MS = 24 * 3_600_000;
-/** Paul, 26 Oct 2026: these two were In review at Meta; the other four Active. */
-export const IN_REVIEW_SINCE: Partial<Record<DashboardTemplateName, string>> = {
-  agency_access: '2026-10-26T12:00:00Z',
-  nudge_24h: '2026-10-26T12:00:00Z',
-};
-
-export interface TemplateSend { status: string | null; error_code: string | number | null; error_title?: string | null; created_at: string }
-
-export interface DashboardTemplateState { ok: boolean; reason?: string }
-
-/** The button's state from the template's LAST real send (newest first). */
-export function dashboardTemplateState(name: DashboardTemplateName, lastSend: TemplateSend | null | undefined, nowMs: number, meaning?: (code: string) => string | null): DashboardTemplateState {
-  if (lastSend) {
-    const code = lastSend.error_code == null ? '' : String(lastSend.error_code);
-    const refused = String(lastSend.status ?? '').startsWith('failed') && TEMPLATE_REFUSAL_CODES.has(code);
-    if (refused) {
-      const age = nowMs - Date.parse(lastSend.created_at);
-      if (age >= 0 && age < RETRY_AFTER_MS) {
-        const words = meaning?.(code) ?? lastSend.error_title ?? `Meta error ${code}`;
-        return { ok: false, reason: `Meta refused it: ${words} Tries again ${Math.max(1, Math.ceil((RETRY_AFTER_MS - age) / 3_600_000))}h after.` };
-      }
-      return { ok: true };
-    }
-    return { ok: true };
-  }
-  const since = IN_REVIEW_SINCE[name];
-  if (since && nowMs - Date.parse(since) < IN_REVIEW_GRACE_MS) return { ok: false, reason: 'In review at Meta' };
-  return { ok: true };
 }

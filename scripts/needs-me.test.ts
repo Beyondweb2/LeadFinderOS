@@ -3,7 +3,7 @@
 import { readFileSync } from 'node:fs';
 import { buildNeedsRows, splitByMarks, hiddenByMark, sinceLabel, type NeedsFacts, type QuestionnaireRowFact } from '../src/lib/needsMe.ts';
 import { questionnaireStop, questionnaireStep, questionnaireRowKey } from '../src/lib/questionnaireStop.ts';
-import { templateGate, NEEDS_TEMPLATES } from '../src/lib/needsMeTemplates.ts';
+import { effectiveTemplate, NEEDS_TEMPLATES } from '../src/lib/needsMeTemplates.ts';
 import type { AttentionItem } from '../src/lib/adminMetrics.ts';
 
 let f = 0;
@@ -36,14 +36,14 @@ console.log('2. every submission has a next action and a due time; 24 h and 48 h
   const n24 = questionnaireStep(q({ ...ready, created_at: ago(60), last_out_at: ago(30), last_out_template: 'questionnaire_followup' }), NOW)!;
   ok(n24.template === 'nudge_24h' && n24.escalation === 1, 'our nudge 30 h ago, no answer → the 24-hour nudge');
   const call = questionnaireStep(q({ ...ready, created_at: ago(90), last_out_at: ago(30), last_out_template: 'nudge_24h' }), NOW)!;
-  ok(call.action === 'Call them' && call.template === null && call.escalation === 2, 'no answer 30 h after the 24-hour nudge → call them (there is no final-nudge template)');
+  ok(call.action === 'Call them' && call.template === 'nudge_24h' && call.escalation === 2, 'no answer 30 h after the 24-hour nudge → call them (the nudge is still offered; no final-nudge template)');
   const done = questionnaireStep(q({ ...ready, created_at: ago(150), last_out_at: ago(50), last_out_template: 'nudge_24h' }), NOW)!;
   ok(done.action === 'Record the outcome' && done.template === null && done.escalation === 3, 'no answer 50 h after the nudge → record the outcome');
   const domain = questionnaireStep(q({ plan_tier: 'new_site', domain_status: null, created_at: ago(1) }), NOW)!;
   ok(domain.template === 'questionnaire_domain_help', 'domain blank → domain help');
   ok(questionnaireStep(q({ ...ready, agreement_signed_at: ago(2), created_at: ago(3) }), NOW)!.template === 'questionnaire_payment_help', 'signed, not paid → payment help');
   const wait = questionnaireStep(q({ ...ready, created_at: ago(10), last_out_at: ago(2), last_out_template: 'questionnaire_followup' }), NOW)!;
-  ok(wait.template === null && wait.action === 'Wait for their answer' && !!wait.dueIso, 'we wrote 2 h ago → waiting, still with a due time');
+  ok(wait.template === 'nudge_24h' && wait.action === 'Wait for their answer' && !!wait.dueIso, 'we wrote 2 h ago → waiting, still with a due time (the nudge is offered)');
   const replied = questionnaireStep(q({ ...ready, created_at: ago(10), last_out_at: ago(5), last_in_at: ago(1) }), NOW)!;
   ok(replied.template === 'agreement_next_steps' && replied.escalation === 0, 'they replied after us → back to the stop\'s own action');
   ok(questionnaireStep(q({ ...ready, lead_amount_paid: 99 }), NOW) === null, 'paid → closed (no row)');
@@ -88,21 +88,39 @@ console.log('4. snooze, dismiss, archive');
   ok(split.visible.length === 1 && split.hidden.length === 1, 'archived rows are kept for undo, not dropped');
 }
 
-console.log('5. send buttons go through the normal sender, new templates stay disabled');
+console.log('5. a mapped send button is always pressable (Paul, 2026-10-26); sends go through the normal sender');
 {
-  /* 2026-10-26: the six Meta templates are wired; on / off is Meta's own answer (dashboard-templates.test.ts has the rule). */
-  const live = { prospectOnly: false, hasPhone: true, nowMs: Date.parse('2026-11-05T12:00:00Z') };
-  ok(templateGate('questionnaire_domain_help', live).ok, 'a wired template with no refusal from Meta can send');
-  const refused = templateGate('questionnaire_domain_help', { ...live, lastSend: { status: 'failed', error_code: '132001', created_at: '2026-11-05T11:00:00Z' } });
-  ok(!refused.ok && /Meta refused it/.test(refused.reason ?? ''), 'Meta refused it an hour ago as a template problem → disabled with Meta\'s reason');
-  ok(!templateGate('final_nudge', live).ok && !templateGate('interested_follow_up', live).ok, 'the two Paul did not wire stay disabled');
-  ok(!templateGate('needs_from_you', { ...live, neededItem: '' }).ok && templateGate('needs_from_you', { ...live, neededItem: 'logo, photos' }).ok, 'needs_from_you needs an item to ask for');
-  ok(!templateGate('questionnaire_payment_help', { ...live, prospectOnly: true }).ok, 'Australia (prospect-only) → no payment messages');
-  ok(!templateGate('questionnaire_domain_help', { ...live, hasPhone: false }).ok, 'no phone → disabled');
-  ok(Object.values(NEEDS_TEMPLATES).filter((t) => t.wired).map((t) => t.key).sort().join() === 'agency_access,agreement_next_steps,needs_from_you,nudge_24h,questionnaire_domain_help,questionnaire_payment_help', 'exactly the six are wired');
+  ok(Object.keys(NEEDS_TEMPLATES).sort().join() === 'agency_access,agreement_next_steps,needs_from_you,nudge_24h,questionnaire_domain_help,questionnaire_payment_help', 'exactly the six Meta templates');
+  ok(effectiveTemplate('questionnaire_domain_help', { prospectOnly: false }) === 'questionnaire_domain_help', 'a mapped template is the button');
+  ok(effectiveTemplate('questionnaire_payment_help', { prospectOnly: true }) === 'nudge_24h' && effectiveTemplate('nudge_24h', { prospectOnly: true }) === 'nudge_24h', 'Australia (prospect-only): a sign-up / payment template becomes the 24h nudge — never dead, never a payment message');
+  ok(effectiveTemplate(null, { prospectOnly: false }) === null, 'no template → no button (never a dead one)');
   const card = readFileSync('src/components/admin/NeedsMeList.tsx', 'utf8');
+  const btn = card.slice(card.indexOf('function SendButton'), card.indexOf('function OutcomeDialog'));
+  ok(!/disabled=\{!gate/.test(btn) && !/Not set up at Meta/.test(card) && !/templateGate|lastSend|TemplateSend/.test(card), 'no "Not set up at Meta", nothing disables the button from Meta\'s last answer');
+  ok(/sendErrorMeaning\('whatsapp', r\.failCode\)/.test(btn) && /Inbox thread/.test(btn), 'a refusal shows Meta\'s reason after the press and points to the Inbox thread');
   ok(card.includes('sendWhatsAppRequest(') && !/functions\.invoke\(\s*['"]send-whatsapp-message/.test(card), 'the row sends through sendWhatsAppRequest (the one browser send), never its own call');
-  ok(/templateGate\(/.test(card), 'the row asks templateGate before enabling the button');
+}
+
+console.log('5a. every row type has a send option where a template fits');
+{
+  const rows = buildNeedsRows({
+    facts: facts({
+      interested: [{ lead_id: 'L3', business_name: 'ZZ Demo Electrical E', phone: '447700900003', country: 'UK', contact_name: null, last_in_at: ago(5), last_out_at: ago(20) }],
+      followups: [{ lead_id: 'L4', business_name: 'ZZ Demo Driving G', phone: '447700900004', country: 'UK', contact_name: null, next_action: 'call', next_action_date: '2026-10-25', next_action_time: null, next_action_note: null, starred: false }],
+    }),
+    attention: [{ key: 'qq', group: 'today', kind: 'quote_quiet', leadId: 'L5', business: 'ZZ Quote Quiet', why: 'Quote sent, no answer', owner: null, sinceIso: ago(40), state: '', action: 'Chase', open: 'lead' },
+                { key: 'pf', group: 'urgent', kind: 'payment_failed', leadId: 'L6', business: 'ZZ Card Declined', why: 'Payment failed', owner: null, sinceIso: ago(30), state: '', action: 'Chase', open: 'client' }],
+    clients: [], nowMs: NOW,
+  });
+  const t = (lead: string) => rows.find((r) => r.leadId === lead)?.template;
+  ok(t('L3') === 'nudge_24h', 'Interested, waiting on you → nudge_24h (it was interested_follow_up, never set up at Meta)');
+  ok(t('L4') === 'nudge_24h', 'Follow-up due → nudge_24h');
+  ok(t('L5') === 'nudge_24h', 'A quote gone quiet → nudge_24h');
+  ok(t('L6') === null, 'A failed payment has no template (payment_failed is not wired) → no button');
+  const waiting = questionnaireStep(q({ ...ready, created_at: ago(10), last_out_at: ago(2), last_out_template: 'agreement_next_steps' }), NOW)!;
+  ok(waiting.template === 'nudge_24h', 'questionnaire, waiting on them → the nudge is still offered');
+  ok(questionnaireStep(q({ plan_tier: 'keep', domain_status: 'existing', incomplete: true }), NOW)!.template === 'nudge_24h', 'questionnaire not finished → nudge');
+  ok(questionnaireStep(q({ ...ready, website_manager: 'web_company', agency_contract: 'in_contract' }), NOW)!.template === null, 'tied into their provider → no template (decline in your own words)');
 }
 
 console.log('5b. clicking a lead row opens their Inbox conversation (Paul, 2026-10-26)');

@@ -10,7 +10,7 @@ import { useSubscription } from '@/hooks/useSubscription';
 import { useTeamDirectory } from '@/hooks/useSalesCrm';
 import { usePersistedState } from '@/hooks/usePersistedState';
 import { useAdminOverview, type PeriodChoice } from '@/hooks/useAdminOverview';
-import { useAdminHomeActions, useAdminHomeNeeds, useAdminHomeNumbers, useClientContacts, useDashboardTemplateSends, type HomeNumbers } from '@/hooks/useAdminHome';
+import { useAdminHomeActions, useAdminHomeNeeds, useAdminHomeNumbers, useLeadContacts, type HomeNumbers } from '@/hooks/useAdminHome';
 import { prospectOnlyLead } from '@/lib/prospectOnly';
 import { edgeErrorMessage } from '@/lib/edgeInvoke';
 import { attentionPath, clientHubLink, whatsAppLinkForLead } from '@/lib/salesLinks';
@@ -112,13 +112,12 @@ const Dashboard = () => {
   const baseRows = useMemo(() => (o && needsQ.data
     ? buildNeedsRows({ facts: needsQ.data, attention: needsYouItems(o.attention, clients, Date.now()), clients, nowMs: Date.now() })
     : []), [o, needsQ.data, clients]);
-  /* A new-client row needs the client's number for its send button (the handoff list carries none). */
-  const contactsQ = useClientContacts(baseRows.filter((r) => r.kind === 'new_client' && r.leadId).map((r) => r.leadId!));
+  /* A row that arrives without the lead's number (new clients, server items) gets it here: a send needs it. */
+  const contactsQ = useLeadContacts(baseRows.filter((r) => r.leadId && !r.phone).map((r) => r.leadId!));
   const rows = useMemo(() => baseRows.map((r) => {
-    const c = r.kind === 'new_client' && r.leadId ? contactsQ.data?.[r.leadId] : undefined;
-    return c ? { ...r, phone: c.phone, country: c.country, firstName: (c.contact_name ?? '').trim().split(/\s+/)[0] || null, prospectOnly: prospectOnlyLead({ country: c.country }) } : r;
+    const c = r.leadId && !r.phone ? contactsQ.data?.[r.leadId] : undefined;
+    return c ? { ...r, phone: c.phone, country: c.country, firstName: r.firstName ?? ((c.contact_name ?? '').trim().split(/\s+/)[0] || null), prospectOnly: prospectOnlyLead({ country: c.country }) } : r;
   }), [baseRows, contactsQ.data]);
-  const templateSendsQ = useDashboardTemplateSends();
   const { visible, hidden } = useMemo(() => splitByMarks(rows, marks, nowMs), [rows, marks, nowMs]);
   const cardHidden = (key: string) => !!hiddenByMark({ key, sinceIso: null }, marks, nowMs);
   const hiddenCards = Object.keys(CARD_LABEL).flatMap((key) => { const m = hiddenByMark({ key, sinceIso: null }, marks, nowMs); return m ? [{ label: CARD_LABEL[key], mark: m }] : []; });
@@ -206,7 +205,7 @@ const Dashboard = () => {
 
       {!cardHidden('card:needs') && (
         <div id="needs-you">
-          <NeedsMeList rows={visible} templateSends={templateSendsQ.data ?? {}} highlightKey={highlight}
+          <NeedsMeList rows={visible} highlightKey={highlight}
             onOpen={openRow} onMark={onMark} lastArchived={lastMark} onUndo={onUndo}
             onAssign={(i) => setCompose({ kind: 'lead_assignment', lead: { id: i.leadId!, name: i.business }, reason: i.why })}
             onOutcome={async (onboardingId, reason, note) => { await actions.outcome.mutateAsync({ onboardingId, lostReason: reason, note }); }}

@@ -2,7 +2,7 @@
    most urgent first, no replies). Same look as the old Your actions list (dot, business, time since, why, action).
    ⛔ The send button sends ONLY through sendWhatsAppRequest (the one browser send → send-whatsapp-message), via 'lead_panel'
    so the lead's send hours apply (queued outside them). Opt-outs, the 24-hour window, one-per-lead and Meta's rules are the
-   server's. templateGate decides if the button is live; a proposed template stays disabled.
+   server's. A mapped button is always pressable; a refusal shows after the press and in the lead's Inbox thread.
    ⛔ Snooze / dismiss / archive write a mark (admin_home_marks); nothing is deleted, every archive has an undo. */
 import { useState } from 'react';
 import { AlertTriangle, Archive, ArrowRight, Clock, Loader2, MoreHorizontal, RotateCcw, Send, X } from 'lucide-react';
@@ -18,10 +18,11 @@ import { supabase } from '@/integrations/supabase/client';
 import { cn } from '@/lib/utils';
 import { Panel, TONE, type Tone } from '@/components/salesDash/ui';
 import { sendWhatsAppRequest } from '@/lib/whatsAppSendRequest';
-import { DASHBOARD_TEMPLATES, dashboardGreeting, isDashboardTemplate, type TemplateSend } from '@/lib/dashboardTemplates';
-import { NEEDS_TEMPLATES, templateGate } from '@/lib/needsMeTemplates';
+import { DASHBOARD_TEMPLATES, dashboardGreeting } from '@/lib/dashboardTemplates';
+import { sendErrorMeaning } from '@/lib/sendErrorMeaning';
+import { NEEDS_TEMPLATES, effectiveTemplate } from '@/lib/needsMeTemplates';
 import { LOST_REASONS, sinceLabel, type MarkAction, type NeedsGroup, type NeedsMark, type NeedsRow } from '@/lib/needsMe';
-import { ADMIN_HOME_NEEDS_KEY, DASHBOARD_TEMPLATE_SENDS_KEY, snoozeUntil } from '@/hooks/useAdminHome';
+import { ADMIN_HOME_NEEDS_KEY, snoozeUntil } from '@/hooks/useAdminHome';
 import { attentionAssignable } from '@/lib/teamBoard';
 import type { AttentionItem } from '@/lib/adminMetrics';
 
@@ -70,37 +71,39 @@ export function CardMarkMenu({ itemKey, onMark }: { itemKey: string; onMark: Mar
   );
 }
 
-function SendButton({ row, sends }: { row: NeedsRow; sends: Readonly<Record<string, TemplateSend>> }) {
+/* ⛔ ALWAYS PRESSABLE when a template is mapped (Paul, 2026-10-26). Meta decides on the send: a refusal is the failed
+   message in the lead's Inbox thread (with Meta's reason) and the message after the press; the button stays usable. */
+function SendButton({ row }: { row: NeedsRow }) {
   const { toast } = useToast();
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
-  if (!row.template) return null;
-  const t = NEEDS_TEMPLATES[row.template];
-  const gate = templateGate(row.template, { prospectOnly: !!row.prospectOnly, hasPhone: !!row.phone, lastSend: sends[row.template] ?? null, neededItem: row.neededItem });
+  const key = effectiveTemplate(row.template, { prospectOnly: !!row.prospectOnly });
+  if (!key) return null;
+  const t = NEEDS_TEMPLATES[key];
   /* What goes: Meta's approved wording for this template, filled with these values (the app cannot read Meta's text). */
-  const dash = isDashboardTemplate(row.template) ? row.template : null;
   const greeting = dashboardGreeting(row.firstName, row.business);
-  const values = dash ? DASHBOARD_TEMPLATES[dash].vars.map((v) => v === 'name' ? `Business name: ${row.business}` : v === 'greeting_name' ? `Name: ${greeting}` : `Item needed: ${row.neededItem ?? ''}`) : [];
+  const vars = DASHBOARD_TEMPLATES[key].vars;
+  const values = vars.map((v) => v === 'name' ? `Business name: ${row.business}` : v === 'greeting_name' ? `Name: ${greeting}` : `Item needed: ${row.neededItem ?? ''}`);
   const send = async () => {
     setBusy(true);
-    const r = await sendWhatsAppRequest(supabase, { phone: row.phone ?? '', leadId: row.leadId, country: row.country ?? null, templateName: row.template!, via: 'lead_panel',
-      ...(dash && DASHBOARD_TEMPLATES[dash].vars.includes('needed_item') ? { templateVars: { needed_item: row.neededItem ?? '' } } : {}) });
+    const r = await sendWhatsAppRequest(supabase, { phone: row.phone ?? '', leadId: row.leadId, country: row.country ?? null, templateName: key, via: 'lead_panel',
+      ...(vars.includes('needed_item') ? { templateVars: { needed_item: row.neededItem ?? '' } } : {}) });
     setBusy(false); setOpen(false);
-    void qc.invalidateQueries({ queryKey: DASHBOARD_TEMPLATE_SENDS_KEY });
-    if (!r.ok) { toast({ title: 'Not sent', description: r.reason ?? r.error ?? 'The sender refused it.', variant: 'destructive' }); return; }
+    if (!r.ok) {
+      const meta = r.failCode != null ? sendErrorMeaning('whatsapp', r.failCode) : null;
+      toast({ title: 'Not sent', description: `${meta ?? r.reason ?? r.error ?? 'The sender refused it.'}${r.failCode != null ? ' The reason is also on the message in their Inbox thread.' : ''}`, variant: 'destructive' });
+      return;
+    }
     toast({ title: r.scheduled ? 'Queued' : 'Sent', description: r.scheduled ? `Outside their send hours: it goes at ${new Date(r.scheduled.send_at).toLocaleString('en-GB', { timeZone: r.scheduled.tz, hour: '2-digit', minute: '2-digit', weekday: 'short' })} (${r.scheduled.tz}).` : `${t.label} to ${row.business}.` });
     void qc.invalidateQueries({ queryKey: ADMIN_HOME_NEEDS_KEY });
   };
-  const preview = `Meta's approved "${row.template}" template, with:\n${values.join('\n')}`;
+  const preview = `Meta's approved "${key}" template, with:\n${values.join('\n')}`;
   return (
     <>
-      <span title={gate.ok ? undefined : gate.reason}>
-        <Button size="sm" className="h-8 gap-1.5 rounded-full" disabled={!gate.ok} onClick={() => setOpen(true)} data-testid="needs-send">
-          <Send className="h-3.5 w-3.5" />{t.label}
-        </Button>
-      </span>
-      {!gate.ok && <span className="hidden text-[10px] text-muted-foreground xl:inline">{gate.reason}</span>}
+      <Button size="sm" className="h-8 gap-1.5 rounded-full" onClick={() => setOpen(true)} data-testid="needs-send">
+        <Send className="h-3.5 w-3.5" />{t.label}
+      </Button>
       <AlertDialog open={open} onOpenChange={setOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -145,10 +148,8 @@ function OutcomeDialog({ row, onClose, onSave }: { row: NeedsRow | null; onClose
   );
 }
 
-export function NeedsMeList({ rows, templateSends, highlightKey, onOpen, onMark, onOutcome, lastArchived, onUndo, loading, error, onRetry, cardMenu, onAssign }: {
-  rows: NeedsRow[];
-  /** Each dashboard template's last real send (Meta's last answer) — turns its button on or off. */
-  templateSends: Readonly<Record<string, TemplateSend>>; highlightKey?: string | null;
+export function NeedsMeList({ rows, highlightKey, onOpen, onMark, onOutcome, lastArchived, onUndo, loading, error, onRetry, cardMenu, onAssign }: {
+  rows: NeedsRow[]; highlightKey?: string | null;
   /** Delegate a lead-based follow-up to a salesperson (the Sales Team Board, unchanged): only where attentionAssignable says so. */
   onAssign?: (i: AttentionItem) => void;
   onOpen: (r: NeedsRow) => void; onMark: MarkFn; onOutcome: (onboardingId: string, reason: string, note: string) => Promise<void>;
@@ -193,7 +194,7 @@ export function NeedsMeList({ rows, templateSends, highlightKey, onOpen, onMark,
                         <ArrowRight className="mt-1 hidden h-4 w-4 shrink-0 text-muted-foreground sm:block" />
                       </button>
                       <div className="flex flex-wrap items-center gap-1.5 border-t border-border/60 px-3 py-2 sm:border-t-0 sm:py-0">
-                        <SendButton row={r} sends={templateSends} />
+                        <SendButton row={r} />
                         {r.onboardingId && r.action === 'Record the outcome' && <Button size="sm" variant="outline" className="h-8 rounded-full" onClick={() => setOutcomeRow(r)}>Record outcome</Button>}
                         {onAssign && r.open.attention && attentionAssignable(r.open.attention) && <Button size="sm" variant="outline" className="h-8 rounded-full" onClick={() => onAssign(r.open.attention!)}>Assign</Button>}
                         <MarkButtons itemKey={r.key} onMark={onMark} />

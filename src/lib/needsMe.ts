@@ -101,7 +101,7 @@ export function questionnaireRows(qs: readonly QuestionnaireRowFact[], nowMs: nu
   for (const q of qs) {
     const s = questionnaireStep(q, nowMs);
     if (!s) continue;
-    const group: NeedsGroup = s.escalation === 3 ? 'waiting' : s.escalation >= 1 || s.stop === 'payment' ? 'urgent' : s.template === null && s.escalation === 0 && !!q.last_out_at ? 'waiting' : 'today';
+    const group: NeedsGroup = s.escalation === 3 ? 'waiting' : s.escalation >= 1 || s.stop === 'payment' ? 'urgent' : s.action === 'Wait for their answer' ? 'waiting' : 'today';
     out.push({
       key: questionnaireRowKey(q.id), kind: 'questionnaire', kindLabel: KIND_LABEL.questionnaire, group,
       leadId: q.lead_id, business: q.business_name || 'Unnamed sign-up', why: s.why, action: s.action, template: s.template,
@@ -128,7 +128,9 @@ export function buildNeedsRows(input: { facts: NeedsFacts; attention: readonly A
       key: `attention:${a.key}`, kind, kindLabel: payment ? (a.kind === 'payment_dispute' ? 'Payment dispute' : 'Payment failed') : KIND_LABEL[kind],
       group: a.group === 'urgent' || payment ? 'urgent' : a.group === 'blocked' ? 'waiting' : 'today',
       leadId: a.leadId, business: a.business, why: a.why, action: a.action,
-      template: null, sinceIso: a.sinceIso,
+      /* Only a per-lead chase has a template: a quote gone quiet → the 24-hour nudge. A failed payment (payment_failed is
+         not wired), a client delivery step (yours, not a message) and the aggregate list items have none: no button. */
+      template: a.kind === 'quote_quiet' && a.leadId ? 'nudge_24h' : null, sinceIso: a.sinceIso,
       open: { kind: 'attention', attention: a },
     });
   }
@@ -138,7 +140,7 @@ export function buildNeedsRows(input: { facts: NeedsFacts; attention: readonly A
       key: `interested:${i.lead_id}`, kind: 'interested', kindLabel: KIND_LABEL.interested,
       group: nowMs - Date.parse(i.last_in_at) >= 24 * 3_600_000 ? 'urgent' : 'today',
       leadId: i.lead_id, business: i.business_name || 'Unnamed lead', why: 'Starred, and their message is the latest: waiting on you',
-      action: 'Reply or send a follow-up', template: 'interested_follow_up', sinceIso: i.last_in_at, star: true,
+      action: 'Reply or send a follow-up', template: 'nudge_24h', sinceIso: i.last_in_at, star: true,
       phone: i.phone, country: i.country, firstName: first(i.contact_name), prospectOnly: prospectOnlyLead({ country: i.country }), open: { kind: 'lead' },
     });
   }
@@ -150,7 +152,7 @@ export function buildNeedsRows(input: { facts: NeedsFacts; attention: readonly A
       key: `followup:${f.lead_id}`, kind: 'follow_up', kindLabel: KIND_LABEL.follow_up, group: v.bucket === 'overdue' ? 'urgent' : 'today',
       leadId: f.lead_id, business: f.business_name || 'Unnamed lead',
       why: `Next Action you set: ${v.label}${v.time ? ` at ${v.time}` : ''}${v.note ? ` · ${v.note}` : ''}`,
-      action: v.label, template: null, sinceIso: f.next_action_date ? `${f.next_action_date}T${v.time ?? '09:00'}:00` : null,
+      action: v.label, template: 'nudge_24h', sinceIso: f.next_action_date ? `${f.next_action_date}T${v.time ?? '09:00'}:00` : null,
       flag: v.bucket === 'overdue' ? 'Overdue' : null, star: !!f.starred,
       phone: f.phone, country: f.country, firstName: first(f.contact_name), open: { kind: 'lead' },
     });

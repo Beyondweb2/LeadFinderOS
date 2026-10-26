@@ -2,8 +2,8 @@
    sender. Pure + source checks; nothing is sent. Run: npx tsx scripts/dashboard-templates.test.ts */
 import { readFileSync } from 'node:fs';
 import {
-  DASHBOARD_TEMPLATES, DASHBOARD_TEMPLATE_NAMES, cleanNeededItem, dashboardGreeting, dashboardTemplateState, dashboardTemplateTranscript,
-  isDashboardTemplate, neededItemFromTranscript, RETRY_AFTER_MS,
+  DASHBOARD_TEMPLATES, DASHBOARD_TEMPLATE_NAMES, cleanNeededItem, dashboardGreeting, dashboardTemplateTranscript,
+  isDashboardTemplate, neededItemFromTranscript,
 } from '../src/lib/dashboardTemplates.ts';
 import { CONTINUATION_TEMPLATES } from '../src/lib/coldOutreach.ts';
 import { READABLE_TEMPLATE_BODIES } from '../src/lib/templateBodies.ts';
@@ -12,7 +12,7 @@ import { isServiceTemplate } from '../src/lib/marketingConsent.ts';
 let f = 0;
 const ok = (c: unknown, m: string) => { if (c) console.log('  PASS ' + m); else { f++; console.log('  FAIL ' + m); } };
 const read = (p: string) => readFileSync(p, 'utf8');
-const H = 3_600_000;
+
 
 console.log('1. the six, their variables, and nothing else');
 {
@@ -46,18 +46,10 @@ console.log('4. the Inbox transcript says which template went, never invented wo
   for (const n of DASHBOARD_TEMPLATE_NAMES) ok(typeof READABLE_TEMPLATE_BODIES[n] === 'function', `${n}: the Inbox can render its row`);
 }
 
-console.log('5. on / off is Meta\'s own answer (the last real send)');
+console.log('5. nothing turns a button off from Meta\'s last answer (Paul, 2026-10-26: always pressable; Meta decides on the send)');
 {
-  const now = Date.parse('2026-11-05T12:00:00Z');
-  ok(dashboardTemplateState('questionnaire_domain_help', null, now).ok, 'never sent, not in review → live');
-  ok(dashboardTemplateState('needs_from_you', { status: 'read', error_code: null, created_at: '2026-11-05T10:00:00Z' }, now).ok, 'Meta took the last one → live');
-  const refused = dashboardTemplateState('agency_access', { status: 'failed', error_code: 132001, error_title: 'Template name does not exist', created_at: '2026-11-05T11:00:00Z' }, now, () => 'The template does not exist in that language, or is not approved.');
-  ok(!refused.ok && /not approved/.test(refused.reason ?? ''), 'Meta refused it as a template problem an hour ago → off, with Meta\'s reason');
-  ok(dashboardTemplateState('agency_access', { status: 'failed', error_code: '132001', created_at: new Date(now - RETRY_AFTER_MS - 1).toISOString() }, now).ok, 'after the cool-off it is live again, so the next press asks Meta again (switches on by itself once approved)');
-  ok(dashboardTemplateState('nudge_24h', { status: 'failed', error_code: 131047, created_at: '2026-11-05T11:30:00Z' }, now).ok, 'a failure that is not about the template (the 24-hour window, the number) never turns it off');
-  ok(!dashboardTemplateState('agency_access', null, Date.parse('2026-10-26T20:00:00Z')).ok && !dashboardTemplateState('nudge_24h', null, Date.parse('2026-10-26T20:00:00Z')).ok, 'the two Paul reported In review start off…');
-  ok(dashboardTemplateState('agency_access', null, Date.parse('2026-10-28T12:00:00Z')).ok, '…and try again by themselves after the grace period');
-  ok(dashboardTemplateState('questionnaire_payment_help', null, Date.parse('2026-10-26T20:00:00Z')).ok, 'the four Paul reported Active are live now');
+  const lib = read('src/lib/dashboardTemplates.ts');
+  ok(!/dashboardTemplateState|IN_REVIEW_SINCE|RETRY_AFTER_MS/.test(lib), 'the old on / off rule is gone');
 }
 
 console.log('6. wired into the normal sender, nothing bypassed');
