@@ -11,10 +11,9 @@
    - pick_up_conversation       {{1}} business name — for a lead whose message is the latest (they replied last).
      Wording given by Paul (2026-10-26), so its transcript IS the message: PICK_UP_CONVERSATION_BODY.
    NOT wired (Paul): final_nudge, payment_failed.
-   ⛔ META'S WORDING IS NOT COPIED HERE (except pick_up_conversation, which Paul gave word for word). The app cannot read it: the sending account's id is not known to the token
-   (WHATSAPP_BUSINESS_ACCOUNT_ID unset, debug_token gives no ids; whatsapp_template_status holds only `no_waba`), and
-   Paul cannot supply it (2026-10-26). Meta renders its own approved text to the prospect; the Inbox transcript says
-   which template went and with what, never invented wording.
+   ⛔ META'S WORDING is DASHBOARD_TEMPLATE_WORDING, exactly as Paul pasted it from WhatsApp Manager (2026-10-26; the app
+   cannot read it from Meta: WHATSAPP_BUSINESS_ACCOUNT_ID unset, whatsapp_template_status holds only `no_waba`). If a template
+   is edited at Meta, paste the new text here too — the Inbox shows these words for every send of that template.
    ⛔ A MAPPED BUTTON IS ALWAYS PRESSABLE (Paul, 2026-10-26): Meta decides on the send; a refusal is the failed message in
    the lead's Inbox thread (with Meta's reason) and the message after the press. Nothing turns a button off.
    ═════════════════════════════════════════════════════════════════ */
@@ -38,12 +37,30 @@ export type DashboardTemplateName = keyof typeof DASHBOARD_TEMPLATES;
  *  old sends too; one not listed shows a tidy "template sent" card instead. The sender's stored line is unchanged either way
  *  (the queued-send drain reads needs_from_you's item back from it). */
 export const DASHBOARD_TEMPLATE_WORDING: Partial<Record<DashboardTemplateName, string>> = {
-  pick_up_conversation: 'Hi {{1}}, thanks for getting back to me, and sorry for the slow reply. Are you still interested in showing up when people ask AI for a recommendation?',
+  /* Pasted by Paul from WhatsApp Manager, 2026-10-26. */
+  questionnaire_domain_help: 'Hi {{1}}, thanks for filling in the questions. Before we start I need to check one thing: who looks after your website domain, you or someone else?',
+  questionnaire_payment_help: 'Hi {{1}}, I saw you got to the last step of signing up. Is there anything I can help with before you finish?',
+  needs_from_you: 'Hi {{1}}, to get started I just need {{2}}. Could you send that over here?',
+  agency_access: 'Hi {{1}}, you mentioned an agency looks after your website. Are they happy to give us access, or would you like me to speak to them?',
+  agreement_next_steps: 'Hi {{1}}, your agreement is ready. Have you had a chance to read it?',
+  nudge_24h: 'Hi {{1}}, just checking you saw my last message. Is now still a good time to get this started?',
+  pick_up_conversation:'Hi {{1}}, thanks for getting back to me, and sorry for the slow reply. Are you still interested in showing up when people ask AI for a recommendation?',
 };
 
 /** {{1}} / {{2}} filled. */
 export function fillDashboardWording(wording: string, v1: string, v2 = ''): string {
   return wording.split('{{1}}').join(v1).split('{{2}}').join(v2);
+}
+
+/** The words this lead will get, before sending (the dashboard's confirm and the Inbox picker): Meta's wording with {{1}} =
+ *  the first name (else business) for greeting templates, the business name for the others, {{2}} = the item; null when the
+ *  wording is not known. */
+export function dashboardTemplatePreview(name: DashboardTemplateName, v: { business: string; greeting?: string; neededItem?: string }): string | null {
+  const wording = DASHBOARD_TEMPLATE_WORDING[name];
+  if (!wording) return null;
+  const vars = DASHBOARD_TEMPLATES[name].vars as readonly DashboardTemplateVar[];
+  const v1 = (vars.includes('greeting_name') ? v.greeting || v.business : v.business) || 'there';
+  return fillDashboardWording(wording, v1, v.neededItem ?? '');
 }
 
 /** pick_up_conversation's registered words (Paul, 2026-10-26). {{1}} = business name. */

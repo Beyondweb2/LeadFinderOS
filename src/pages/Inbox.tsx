@@ -37,7 +37,7 @@ import { fillTemplate } from '@/lib/leadUtils';
 import { firstNameFrom, hookFollowupBody, contactFollowupBody } from '@/lib/questionnaireFollowup';
 import { readableTemplateBody } from '@/lib/templateBodies';
 import { parseTemplateSnapshot, type WhatsAppTemplateSnapshot } from '@/lib/whatsappTemplateSnapshot';
-import { dashboardTranscriptView } from '@/lib/dashboardTemplates';
+import { dashboardTemplatePreview, dashboardTranscriptView } from '@/lib/dashboardTemplates';
 import { DashboardTemplateBubble } from '@/components/DashboardTemplateBubble';
 import { WhatsAppTemplateMessage } from '@/components/WhatsAppTemplateMessage';
 import { Button } from '@/components/ui/button';
@@ -1625,14 +1625,19 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
           {sendVerb(replyOpen)} template
         </Button>
       </div>
-      {/* A dashboard template: what goes is Meta's approved wording filled with these values (the app cannot read Meta's
-          text), so the values are shown here; Preview runs the real dry run. needs_from_you asks for its item first. */}
+      {/* A dashboard template: Meta's approved wording (as Paul pasted it, DASHBOARD_TEMPLATE_WORDING) filled with this lead's
+          values; Preview runs the real dry run. needs_from_you asks for its item first. */}
       {isDashboardTemplate(template) && (
         <div className="mt-1.5 space-y-1.5 rounded-md border border-border/60 bg-muted/30 p-2 text-[11px]" data-testid="picker-dashboard-values">
           {needsTypedItem(template) && (
             <Input value={neededItem} maxLength={NEEDED_ITEM_MAX} onChange={(e) => { setNeededItem(e.target.value); setPreviewResult(null); }}
               placeholder="What do you need from them? e.g. your logo and two photos of your work" className="h-8 text-xs" data-testid="picker-needed-item" />
           )}
+          {(() => {
+            const words = dashboardTemplatePreview(template, { business: activeLead?.business_name ?? '', greeting: dashboardGreeting(activeLead?.contact_name, activeLead?.business_name ?? ''),
+              neededItem: neededItem.trim() || '(type it above)' });
+            return words ? <p className="whitespace-pre-wrap text-foreground" data-testid="picker-dashboard-words">{words}</p> : null;
+          })()}
           <p className="text-muted-foreground">
             Meta's approved “{template}” template, with:{' '}
             {(DASHBOARD_TEMPLATES[template].vars as readonly string[]).includes('greeting_name')

@@ -7,7 +7,7 @@ import {
 } from '../src/lib/dashboardSendState.ts';
 import {
   DASHBOARD_RESEND_WINDOW_MS, DASHBOARD_TEMPLATE_NAMES, DASHBOARD_TEMPLATE_WORDING, NO_DOUBLE_SEND_TEMPLATES, PICK_UP_CONVERSATION_BODY,
-  dashboardTemplateTranscript, dashboardTranscriptView, fillDashboardWording, noDoubleSendTemplate,
+  dashboardTemplatePreview, dashboardTemplateTranscript, dashboardTranscriptView, fillDashboardWording, noDoubleSendTemplate,
 } from '../src/lib/dashboardTemplates.ts';
 import { NEEDS_TEMPLATES } from '../src/lib/needsMeTemplates.ts';
 import type { NeedsRow } from '../src/lib/needsMe.ts';
@@ -128,7 +128,18 @@ console.log('8. the Inbox shows a dashboard template as Meta\'s words or a templ
   ok(dashboardTranscriptView('re_engage_49', 'x') === null && dashboardTranscriptView(null, line) === null, 'not a dashboard template → untouched');
   ok(fillDashboardWording('Hi {{1}}, send {{2}}. {{1}}', 'Jo', 'a logo') === 'Hi Jo, send a logo. Jo', 'every {{1}} / {{2}} filled');
   ok(PICK_UP_CONVERSATION_BODY('B').startsWith('Hi B, thanks for getting back to me'), "pick_up_conversation's words unchanged");
+  ok(v?.words === 'Hi Ian, your agreement is ready. Have you had a chance to read it?', "agreement_next_steps shows Meta's words with the first name");
+  ok(n?.words === 'Hi Jo, to get started I just need your logo. And photos. Could you send that over here?', 'needs_from_you fills {{1}} and {{2}}');
+  const nudge = dashboardTranscriptView('nudge_24h', dashboardTemplateTranscript('nudge_24h', { business: 'ZZ QA Roofing' }));
+  ok(nudge?.words === 'Hi ZZ QA Roofing, just checking you saw my last message. Is now still a good time to get this started?', 'a business-name template fills the business name');
+  for (const k of DASHBOARD_TEMPLATE_NAMES) {
+    const w = DASHBOARD_TEMPLATE_WORDING[k];
+    ok(!!w && w.includes('{{1}}') && (w.includes('{{2}}') === (k === 'needs_from_you')), `${k}: wording pasted, with exactly the variables it declares`);
+  }
+  ok(dashboardTemplatePreview('agency_access', { business: 'B', greeting: 'Ann' })?.startsWith('Hi Ann, you mentioned an agency') === true, 'the confirm / picker preview fills the first name');
+  ok(dashboardTemplatePreview('questionnaire_domain_help', { business: 'ZZ QA Joinery', greeting: 'Ian' })?.startsWith('Hi ZZ QA Joinery, thanks for filling in') === true, 'a business-name template previews the business, not the first name');
   const ib = read('src/pages/Inbox.tsx');
+  ok(ib.includes('data-testid="picker-dashboard-words"'), 'the Inbox picker shows the words before sending');
   ok(/dashboardTranscriptView\(m\.template_name, templateSnapshot\?\.body \?\? m\.body\)/.test(ib) && ib.includes('<DashboardTemplateBubble view={dashView} />'), 'the Inbox bubble uses it');
 }
 

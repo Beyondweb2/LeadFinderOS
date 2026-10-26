@@ -763,3 +763,7 @@ SERVER_ONLY_TEMPLATE_LABELS (never in a picker). New variable `needed_item` (cle
   (label, to whom, item needed) in the Inbox bubble and Last 3; `DASHBOARD_TEMPLATE_WORDING` holds Meta's approved words ONLY
   as Paul pastes them (today only pick_up_conversation) and then shows the real words, old sends included. The stored line is
   unchanged (the drain reads needs_from_you's item back from it). `scripts/dashboard-after-send.test.ts` fences all of this.
+- **Wording pasted (2026-10-26, Paul)**: all seven dashboard templates are now in `DASHBOARD_TEMPLATE_WORDING`, word for word from
+  WhatsApp Manager. The Inbox bubble, Last 3, the dashboard confirm and the Inbox picker show them filled in
+  (`dashboardTranscriptView`, `dashboardTemplatePreview`); the stored line and the sender are unchanged, so no edge redeploy.
+  ⛔ A template edited at Meta must be pasted here too, or the Inbox shows the old words.
