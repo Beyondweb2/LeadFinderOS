@@ -34,7 +34,7 @@ const LINE_BY_ID: Array<[RegExp, string]> = [
   [/^rule:site_down_not_found/, 'Your website is showing a “Not found” error'],
   [/^rule:site_down_error/, 'Your website is showing a server error'],
   [/^full:robots_all/, 'The whole site tells crawlers to stay out'],
-  [/^crawl:crawler_blocked/, 'AI search crawlers are blocked'],
+  [/^crawl:crawler_blocked/, 'robots.txt tells AI search crawlers not to read the site'],
   [/^crawl:unreadable_homepage/, 'The homepage is almost empty without JavaScript'],
 ];
 const LINE_BY_KIND: Record<string, string> = {

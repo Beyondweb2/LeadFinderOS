@@ -11,6 +11,7 @@
    as "unknown" with the reason. Bodies are capped (readCapped); private / loopback addresses refused.
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 import { isPublicHttpUrl, readCapped } from "./safe-fetch.ts";
+import { SITE_CHECK_UA } from "../../../src/lib/siteReadIdentity.ts";
 import { registrableDomain } from "../../../src/lib/siteEvidence.ts";
 import { classifyAgency, pageLinks, pageProblem, selectSamplePages, sitemapLocs, type AgencyPage, type AgencyVerdict } from "../../../src/lib/agencyDetect.ts";
 
@@ -30,7 +31,7 @@ export const AGENCY_TOTAL_BUDGET_MS = 35_000;
 /* v2 (2026-10-02): the "Mozilla/5.0 (compatible; …)" wrapper is gone. Measured on 60 lead-book sites: 9 UK
    hosts answered 403 to it (a bad-bot rule that matches bots borrowing "Mozilla"), and 8 of those 9 accept
    the bare honest name. Still plainly a named crawler with a contact link — never a browser identity. */
-export const AGENCY_CRAWLER_UA = "LeadFinderOS-SiteCheck/1.0 (+https://findable.live)";
+export const AGENCY_CRAWLER_UA = SITE_CHECK_UA;   // the one name every site read carries (src/lib/siteReadIdentity.ts, 2026-10-26)
 const UA = AGENCY_CRAWLER_UA;
 
 export interface AgencyCrawlStats { requests: number; durationMs: number; pagesFetched: number; sitemap: boolean }

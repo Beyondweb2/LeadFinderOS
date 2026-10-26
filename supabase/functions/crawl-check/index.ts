@@ -2,7 +2,7 @@
 // outreach can name their actual problem (Paul, 2026-09-16). NOT the Apify SEO scanner (5.6p, off
 // for outreach): this costs nothing but a handful of fetches.
 //
-// It fetches the homepage as each of the four AI SEARCH crawlers (no JS), then robots.txt and the
+// It reads the homepage ONCE under our own honest crawler name (no JS; src/lib/siteReadIdentity.ts), then robots.txt and the
 // sitemap(s), clusters the sitemap URLs to find a templated location-page set, samples a BOUNDED
 // number of pages, and hands the raw strings to the pure analysers — src/lib/crawlCheck.ts for the
 // paste-ready verdict and src/lib/siteEvidence.ts for the Phase 1 sales findings. The fetch count is
@@ -10,17 +10,23 @@
 //
 // ⚠️ THE HEADER USED TO SAY "fetches the homepage AS GPTBot, robots.txt and the sitemap" AND BOTH
 // HALVES WERE FALSE (corrected 2026-09-22). GPTBot is a TRAINING crawler and is deliberately never
-// tested (see SEARCH_CRAWLERS below — testing it was producing false findings, and that is the whole
+// tested (testing it was producing false findings — and since 2026-10-26 no crawler is impersonated at all; that is the whole
 // reason the search/training split exists); robots.txt was genuinely removed on 2026-09-16 and only
 // came back with this phase, for SITEMAP DISCOVERY, never as evidence of a crawler block. A stale
 // comment is a load-bearing bug (CLAUDE.md §4) and this one had already been quoted back as fact.
+//
+// ⛔ 2026-10-26 (fix/crawl-one-standard): THE FOUR "AS EACH AI SEARCH CRAWLER" PROBES ARE GONE. A firewall refuses a
+// request that borrows a known bot's name from an address that is not that bot's (Cloudflare answered our
+// "OAI-SearchBot" on drivewelluk.co.uk with a 403 challenge and our own name with the page), so the probes turned our
+// refused impostor into "AI can't reach your site". A crawler is now BLOCKED only when robots.txt shuts it out
+// (robotsSearchBlocked, stored with blockEvidence 'robots'); a homepage we could not read is fetchFailed = couldn't check.
 //
 // Auth: operator-only (verify_jwt=false + in-handler admin check), the search-leads pattern. Input:
 // { url?, lead_id?, town?, deep? } — lead_id resolves the website + town from the lead; `deep`
 // governs the EVIDENCE half only (see DEEP CRAWL below) and defaults to true.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import {
-  detectClientRendered, hasH1, hasJsonLd, wordCount, looksChallenged,
+  detectClientRendered, hasH1, hasJsonLd, wordCount, looksChallenged, pageReadable, robotsSearchBlocked, BLOCK_EVIDENCE_ROBOTS,
   extractSitemapLocs, clusterUrls, pageSimilarity, buildVerdict, selectCrawlUrls, crawlPageKind,
   DUP_MIN_CLUSTER, DUP_SIMILARITY, THIN_WORDS, CRAWL_CHECK_VERSION, type CrawlSignals,
 } from "../../../src/lib/crawlCheck.ts";
@@ -35,9 +41,12 @@ import {
 } from "../../../src/lib/fullCrawl.ts";
 import { buildVisibilityChecks, type VisibilityChecks } from "../../../src/lib/visibilityChecks.ts";
 import { crawlStartUrl, parseRobots, robotsAllows } from "../../../src/lib/crawlUrl.ts";
+import { SITE_CHECK_HEADERS, SITE_CHECK_READ_AS, SITE_CHECK_UA } from "../../../src/lib/siteReadIdentity.ts";
 /** ⛔ ONE REQUEST AT A TIME PER SITE (Paul, 2026-10-20): the quick check reads its pages one after another, never in
  *  parallel at one host, and skips any page robots.txt's "User-agent: *" rules disallow (the deep job already does). */
 const QUICK_CHECK_CONCURRENCY = 1;
+/** The pause before the homepage's one second read (2026-10-26). */
+const HOME_RETRY_PAUSE_MS = 2_000;
 import { CALL_SCREEN_CRAWL_SOURCE, CALL_SCREEN_CRAWL_WINDOW_MS, callScreenCrawlRefusal, isCallScreenRetry } from "../../../src/lib/callScreenCrawl.ts";
 import { leadCrawlWriteDecision, storedCrawlFailed, STORED_CRAWL_STATE_COLUMNS } from "../../../src/lib/crawlWriteRule.ts";
 import { activeJobFor, createCrawlJob, jobCounts, kickCrawlWorker } from "../_shared/crawl-job.ts";
@@ -66,16 +75,9 @@ function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 }
 
-/* ⛔ THE SEARCH CRAWLERS — the ones that fetch a page when a person ASKS an AI a question, and so
-   decide whether a business gets named (Paul, 2026-09-16). We fetch as each and record which are
-   BLOCKED. We deliberately do NOT test GPTBot / ClaudeBot / CCBot — those are TRAINING crawlers,
-   blocking them is legitimate and common, and testing GPTBot was producing false findings. */
-const SEARCH_CRAWLERS: ReadonlyArray<{ label: string; ua: string }> = [
-  { label: "OAI-SearchBot", ua: "Mozilla/5.0 (compatible; OAI-SearchBot/1.0; +https://openai.com/searchbot)" },
-  { label: "ChatGPT-User", ua: "Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko); compatible; ChatGPT-User/1.0; +https://openai.com/bot" },
-  { label: "Claude-User", ua: "Mozilla/5.0 (compatible; Claude-User/1.0; +https://www.anthropic.com/claude-user)" },
-  { label: "PerplexityBot", ua: "Mozilla/5.0 (compatible; PerplexityBot/1.0; +https://perplexity.ai/perplexitybot)" },
-];
+/* ⛔ NO AI CRAWLER IS IMPERSONATED (2026-10-26, see the header). The search crawlers that matter (OAI-SearchBot,
+   ChatGPT-User, Claude-User, PerplexityBot — never the training crawlers GPTBot / ClaudeBot / CCBot) are judged from
+   robots.txt only: src/lib/crawlCheck.ts SEARCH_CRAWLER_LABELS + robotsSearchBlocked. */
 /* ⛔ THE CRAWL IS BOUNDED THREE WAYS AND ALL THREE ARE LOAD-BEARING — pages, fetches, milliseconds.
    The numbers live in src/lib/fullCrawl.ts as TWO PROFILES (2026-09-23):
      · STANDARD_CRAWL — the budget this function has always had (12 pages, 22 fetches, 35 s, 4
@@ -131,25 +133,25 @@ async function readCapped(res: Response): Promise<string> {
   try { return new TextDecoder("utf-8", { fatal: false }).decode(joined); } catch { return ""; }
 }
 
-/** One GET with a given crawler UA and a hard timeout. Never throws. `blocked` = the site refused
- *  this crawler: a 4xx/5xx, a `cf-mitigated: challenge` header, or a Cloudflare/challenge body even
- *  on a 200. `responded` = we got ANY HTTP status (distinguishes a block from the site being down). */
-async function get(url: string, ua: string, timeoutMs: number): Promise<Fetched> {
+/** One GET under our own crawler name (SITE_CHECK_HEADERS) with a hard timeout. Never throws. `ok` = we got the page
+ *  (pageReadable). `blocked` = the site refused OUR check — a challenge header or body, or 401 / 403 / 429 — which says
+ *  nothing about any AI crawler (2026-10-26). `responded` = we got ANY HTTP status. */
+async function get(url: string, timeoutMs: number): Promise<Fetched> {
   const controller = new AbortController();
   const t = setTimeout(() => controller.abort(), timeoutMs);
   try {
     const res = await fetch(url, {
-      headers: { "User-Agent": ua, "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8" },
+      headers: { ...SITE_CHECK_HEADERS },
       redirect: "follow",
       signal: controller.signal,
     });
     const html = await readCapped(res).catch(() => "");
     const cfMitigated = (res.headers.get("cf-mitigated") || "").toLowerCase() === "challenge";
-    const blocked = res.status >= 400 || cfMitigated || looksChallenged(html);
+    const blocked = cfMitigated || looksChallenged(html) || res.status === 401 || res.status === 403 || res.status === 429;
     return {
       url,
       finalUrl: res.url && /^https?:\/\//i.test(res.url) ? res.url : url,
-      ok: res.ok && !blocked,
+      ok: pageReadable({ status: res.status, cfMitigated, body: html }),
       status: res.status,
       xRobotsTag: res.headers.get("x-robots-tag"),
       html,
@@ -447,10 +449,10 @@ Deno.serve(async (req) => {
       if ((Date.now() - started) >= profile.deadlineMs) { hitDeadline = true; return true; }
       return false;
     };
-    const budgeted = async (url: string, ua: string, samplePage = false): Promise<Fetched> => {
+    const budgeted = async (url: string, samplePage = false): Promise<Fetched> => {
       if (outOfBudget()) return { url, finalUrl: url, ok: false, status: 0, xRobotsTag: null, html: "", blocked: false, responded: false };
       fetchesUsed++;
-      const r = await get(url, ua, profile.fetchTimeoutMs);
+      const r = await get(url, profile.fetchTimeoutMs);
       /* FULL mode keeps only the lean SAMPLE page (scripts/styles/SVG stripped, JSON-LD kept): 60 raw
          Wix pages would be ~40 MB held at once. The homepage probes stay raw in both modes, because
          the client-rendered check reads the scripts. STANDARD keeps every byte exactly as before. */
@@ -458,15 +460,21 @@ Deno.serve(async (req) => {
       return r;
     };
 
-    // Probe the homepage AS EACH SEARCH CRAWLER (parallel): which are blocked, and which lets us read
-    // the content. robots.txt is NOT consulted for this — a site can "Allow" a crawler there and
-    // still block it at the edge; only the actual fetch is evidence (Paul, 2026-09-16).
-    const probes = await mapPool([...SEARCH_CRAWLERS], QUICK_CHECK_CONCURRENCY, (c) => budgeted(homeUrl, c.ua).then((r) => ({ c, r })));
-    const searchBlocked = probes.filter((p) => p.r.blocked).map((p) => p.c.label);
-    const respondedAny = probes.some((p) => p.r.responded);
-    const readableProbe = probes.find((p) => p.r.ok && p.r.html.trim().length > 0) ?? null;
-    const readableUa = readableProbe?.c.ua ?? SEARCH_CRAWLERS[0].ua;
-    const home = readableProbe?.r ?? null;
+    /* THE HOMEPAGE, READ ONCE under our own name — and once more after a pause when the first read did not give us the
+       page (a slow host, a one-off 5xx or 429). ⛔ What it says about AI crawlers: nothing. Whether one is shut out is
+       robots.txt's answer (searchBlocked, below); a homepage we could not read is "couldn't check" (fetchFailed). */
+    let homeRead = await budgeted(homeUrl);
+    if (!homeRead.ok) {
+      await new Promise((r) => setTimeout(r, HOME_RETRY_PAUSE_MS));
+      const again = await budgeted(homeUrl);
+      if (again.ok || again.responded || !homeRead.responded) homeRead = again;
+    }
+    const home = homeRead.ok && homeRead.html.trim().length > 0 ? homeRead : null;
+    const respondedAny = homeRead.responded;
+    const readableUa = SITE_CHECK_UA;
+    const readableAs = home ? SITE_CHECK_READ_AS : null;
+    /* Filled from robots.txt once it is read (the inline check below; a deep job reads its own in createCrawlJob). */
+    let searchBlocked: string[] = [];
 
     /* ══ THE EXHAUSTIVE MANUAL CRAWL (2026-09-23) ════════════════════════════════════════════════
        A user-triggered crawl is not run in this request any more: it becomes a crawl_jobs row whose
@@ -480,7 +488,7 @@ Deno.serve(async (req) => {
         leadId, userId: intakeCrawl || catchUpCrawl ? intakeOwnerId : rowOwnerId, requestedFrom, pageCap,
         probe: {
           homeUrl, servedUrl: home.finalUrl || homeUrl, town: town || null, readableUa,
-          readableAs: readableProbe?.c.label ?? null, searchBlocked, respondedAny,
+          readableAs, searchBlocked, respondedAny,
           clientRendered: detectClientRendered(home.html), missingH1: !hasH1(home.html), noJsonLd: !hasJsonLd(home.html),
           homeWords: wordCount(home.html), homeStatus: home.status, homeXRobots: home.xRobotsTag, homeHtml: home.html,
         },
@@ -558,9 +566,10 @@ Deno.serve(async (req) => {
          what it says) — NEVER as evidence of a crawler block. Bounded by the profile's
          sitemapFetches so an index of forty children cannot turn into forty requests; a site's own
          PAGES sitemap is read before its generated collections (orderSitemapChildren). */
-      const robots = await budgeted(`${servedOrigin}/robots.txt`, readableUa);
+      const robots = await budgeted(`${servedOrigin}/robots.txt`);
       discoveryFetches++;
       robotsBody = robots.ok && robots.html && !/<html/i.test(robots.html.slice(0, 400)) ? robots.html : null;
+      searchBlocked = robotsSearchBlocked(robotsBody);
       const declared = robotsBody ? sitemapsFromRobots(robotsBody) : [];
       const queue: string[] = [...declared.slice(0, profile.sitemapFetches), `${servedOrigin}/sitemap.xml`];
       const tried = new Set<string>();
@@ -571,7 +580,7 @@ Deno.serve(async (req) => {
         const nextKey = toServedUrl(next, servedUrl) ?? next;
         if (tried.has(nextKey)) continue;
         tried.add(nextKey);
-        const doc = await budgeted(next, readableUa);
+        const doc = await budgeted(next);
         discoveryFetches++;
         sitemapFetches++;
         if (!doc.ok || !doc.html) continue;
@@ -604,7 +613,7 @@ Deno.serve(async (req) => {
         const rules = robotsBody ? parseRobots(robotsBody) : null;
         const allowed = (u: string) => { try { const x = new URL(u); return robotsAllows(rules, x.pathname + x.search); } catch { return false; } };
         const sampleUrls = selectCrawlUrls([...(biggest?.urls ?? []), ...pool].filter(allowed), servedUrl, profile.maxPages);
-        sampleFetched = await mapPool(sampleUrls, QUICK_CHECK_CONCURRENCY, (u) => budgeted(u, readableUa));
+        sampleFetched = await mapPool(sampleUrls, QUICK_CHECK_CONCURRENCY, (u) => budgeted(u));
         discoveredAll = pool;
         pagesQueuedCount = sampleUrls.length;
       }
@@ -701,9 +710,10 @@ Deno.serve(async (req) => {
 
     const signals: CrawlSignals = {
       homeUrl,
-      fetchFailed: !respondedAny,                        // nothing answered at all → site down → section hidden
+      fetchFailed: !home,                                // the homepage was not read → couldn't check, nothing said about the site
       searchBlocked,
-      readableAs: readableProbe?.c.label ?? null,
+      blockEvidence: BLOCK_EVIDENCE_ROBOTS,
+      readableAs,
       clientRendered: cr,
       missingH1: home?.html ? !hasH1(home.html) : false,
       noJsonLd: home?.html ? !hasJsonLd(home.html) : false,
@@ -768,14 +778,11 @@ Deno.serve(async (req) => {
        written as null. A row with no key is the same shape every pre-Phase-1 row already has. */
     /* WHY THE HOMEPAGE COULD NOT BE READ (2026-10-05): a failed crawl says what happened — timeout,
        certificate, DNS, redirect loop, refused, blocked, an error status — instead of a bare failure.
-       Present only when no search crawler got a readable page; absent otherwise. */
+       Present only when the homepage was not read; absent otherwise. Internal: it explains "couldn't check". */
     let homeFetch: HomeFetchIssue | null = null;
     if (!home || !home.html) {
-      const blocked = probes.some((p) => p.r.blocked);
-      const answered = probes.find((p) => p.r.responded) ?? null;
-      const first = probes[0]?.r;
-      const kind = classifyFetchError({ message: first?.error ?? null, status: answered?.r.status ?? null, responded: !!answered, blocked });
-      homeFetch = { kind, status: answered?.r.status ?? null, detail: answered ? null : (first?.error ?? null) };
+      const kind = classifyFetchError({ message: homeRead.error ?? null, status: homeRead.responded ? homeRead.status : null, responded: homeRead.responded, blocked: homeRead.blocked });
+      homeFetch = { kind, status: homeRead.responded ? homeRead.status : null, detail: homeRead.responded ? null : (homeRead.error ?? null) };
     }
     const storedResult = {
       version: CRAWL_CHECK_VERSION, siteInfoVersion: SITE_INFO_VERSION,
@@ -868,7 +875,7 @@ Deno.serve(async (req) => {
               leadId, userId: (lr.user_id as string | null) ?? rowOwnerId, requestedFrom: "automatic", pageCap: PROSPECT_CRAWL_PAGE_CAP,
               probe: {
                 homeUrl, servedUrl: home.finalUrl || homeUrl, town: town || null, readableUa,
-                readableAs: readableProbe?.c.label ?? null, searchBlocked, respondedAny,
+                readableAs, searchBlocked, respondedAny,
                 clientRendered: detectClientRendered(home.html), missingH1: !hasH1(home.html), noJsonLd: !hasJsonLd(home.html),
                 homeWords: wordCount(home.html), homeStatus: home.status, homeXRobots: home.xRobotsTag, homeHtml: home.html,
               },

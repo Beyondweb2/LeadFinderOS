@@ -30,6 +30,7 @@ import type { SalesInsights } from './salesInsights.ts';
 import { coverageStatementsIn, FULL_TEXT_MARK, pageTextWasCut, textStatesTown } from './siteClaims.ts';
 import { usableVisibilityChecks, VISIBILITY_SUPERSEDES, type VisibilityChecks } from './visibilityChecks.ts';
 import { compareIssues, isBrokenPageStatus, isCrawlerRefusedStatus, usableContentTrust, CONTENT_TRUST_KINDS, type ContentIssue, type ContentTrust, type EvidenceClass } from './contentTrust.ts';
+import { crawlUnreadable, verifiedSearchBlocked } from './crawlCheck.ts';
 
 export const SITE_AUDIT_VERSION = 1;
 /** Affected addresses kept per finding. Above it the list is cut and `urlsComplete` is false. */
@@ -133,8 +134,9 @@ export interface SiteAuditInput {
   sitemapUrlCount: number;
   offSiteSitemap: { count: number; samples: string[] };
   coverage: CrawlCoverage;
-  /** The homepage probes crawl-check made as each AI search crawler (real fetches). */
-  probe: { searchBlocked: string[]; readableAs: string | null; clientRendered: { flagged?: boolean } | null };
+  /** The homepage read crawl-check made. `searchBlocked` is robots.txt's verdict when `blockEvidence` is 'robots'
+   *  (2026-10-26); without the marker it came from our own refused fetches and is never used (verifiedSearchBlocked). */
+  probe: { searchBlocked: string[]; blockEvidence?: string | null; readableAs: string | null; clientRendered: { flagged?: boolean } | null };
   /** The engine's near-duplicate check on the biggest templated cluster. */
   duplicates: { clusterSize: number; sampleSize: number; similarityPct: number } | null;
   /** The lead's own name and town (from the CRM), to check the site states them. Optional. */
@@ -233,19 +235,27 @@ export function buildSiteAudit(input: SiteAuditInput): SiteAudit {
         evidence: r.rules.disallow.slice(0, 5).map((d) => `Disallow: ${d}`) }));
     }
   }
-  const blockedByFetch = input.probe.searchBlocked ?? [];
-  if (blockedByFetch.length) {
-    out.push(finding({ id: 'search_crawler_refused', category: 'ai_access', severity: 'high',
-      title: 'The site refused AI search crawlers',
-      saw: `When we requested the homepage as ${blockedByFetch.join(', ')}, the site answered with an error or a bot-check page.`,
-      meaning: 'An AI assistant that fetches the page to answer a question may get nothing to read.', evidence: blockedByFetch, count: 0 }));
+  /* ⛔ ONLY ROBOTS.TXT SAYS A CRAWLER IS SHUT OUT (2026-10-26). The old `search_crawler_refused` ("the site refused AI
+     search crawlers") came from fetching AS those crawlers — an impostor a firewall refuses where the real crawler gets in
+     — and is never built again (stored copies are dropped on read, dropUnverifiedBlockFindings). The two search
+     crawlers AUDIT_CRAWLERS does not cover (ChatGPT-User, Claude-User) are said here, from robots.txt, once. */
+  if (!starBlocksAll) {
+    const covered = new Set(AUDIT_CRAWLERS.map((c) => c.token));
+    const others = verifiedSearchBlocked(input.probe).filter((t) => !covered.has(t));
+    if (others.length) {
+      out.push(finding({ id: 'robots_blocks_ai_search', category: 'ai_access', severity: 'high',
+        title: `robots.txt blocks ${others.join(' and ')}`,
+        saw: `robots.txt disallows the homepage for ${others.join(', ')}.`,
+        meaning: 'These crawlers fetch a page when someone asks an AI assistant about a business; asked not to, they may not read the site.',
+        evidence: others.map((t) => `User-agent: ${t}`), count: 0 }));
+    }
   }
   const oai = robotsRulesFor(robots, 'OAI-SearchBot');
-  if (!blockedByFetch.includes('OAI-SearchBot') && robotsAllows(oai.rules, '/') && input.probe.readableAs) {
+  if (robotsAllows(oai.rules, '/') && input.probe.readableAs) {
     out.push(finding({ id: 'oai_searchbot_ok', category: 'ai_access', severity: 'good',
-      title: 'ChatGPT’s search crawler can read the homepage',
-      saw: `robots.txt ${robots ? 'allows' : 'does not restrict'} OAI-SearchBot, and the homepage loaded when requested as ${input.probe.readableAs}.`,
-      meaning: 'Nothing on the site stops ChatGPT search reading it.', count: 0 }));
+      title: 'ChatGPT’s search crawler is allowed to read the homepage',
+      saw: `robots.txt ${robots ? 'allows' : 'does not restrict'} OAI-SearchBot, and our check read the homepage.`,
+      meaning: 'Nothing in the site’s own rules stops ChatGPT search reading it.', count: 0 }));
   }
   if (input.probe.clientRendered?.flagged === true) {
     out.push(finding({ id: 'client_rendered', category: 'ai_access', severity: 'medium',
@@ -577,7 +587,7 @@ export interface StoredCrawlForAudit {
     url?: string | null;
     checked_at?: string | null;
     signals?: {
-      fetchFailed?: boolean; searchBlocked?: string[]; readableAs?: string | null; clientRendered?: { flagged?: boolean } | null;
+      fetchFailed?: boolean; searchBlocked?: string[]; blockEvidence?: string | null; readableAs?: string | null; clientRendered?: { flagged?: boolean } | null;
       missingH1?: boolean; noJsonLd?: boolean; duplicates?: { clusterSize: number; sampleSize: number; similarityPct: number } | null;
       pagesChecked?: number; thinPageUrls?: string[]; checkedPages?: Array<{ url: string; readable?: boolean }>;
     } | null;
@@ -602,7 +612,8 @@ export const HOME_FETCH_LABELS: Record<HomeFetchIssue['kind'], string> = {
   dns: 'The web address does not resolve — the domain may have lapsed or be misspelt.',
   redirect_loop: 'The website redirects in a loop and never reaches a page.',
   refused: 'The website refused the connection.',
-  blocked: 'The website answered every crawler we tried with an error or a bot-check page.',
+  /* ⛔ Our check refused — never "AI is blocked" (2026-10-26): a firewall can refuse us and let the real crawlers in. */
+  blocked: 'The website refused our check (an error or a bot-check page). That says nothing about whether AI tools can read it.',
   http_error: 'The website answered with an error instead of a page.',
   empty: 'The website answered, but with no readable page.',
   unknown: 'The website could not be reached.',
@@ -627,7 +638,26 @@ export function classifyFetchError(input: { message?: string | null; status?: nu
  *  the caller shows the failure instead). Pure. */
 export function auditFromStoredCrawl(row: StoredCrawlForAudit | null | undefined): SiteAudit | null {
   const a = withContentTrust(auditFromStoredCrawlBase(row), row);
-  return a ? mergeVisibilityChecks(a, usableVisibilityChecks((row?.result as { visibility?: unknown } | null | undefined)?.visibility)) : a;
+  return a ? dropUnverifiedBlockFindings(mergeVisibilityChecks(a, usableVisibilityChecks((row?.result as { visibility?: unknown } | null | undefined)?.visibility))) : a;
+}
+
+/** Finding ids that came from fetching AS an AI crawler (before 2026-10-26) — never evidence, dropped from every stored audit. */
+export const UNVERIFIED_BLOCK_FINDING_IDS: ReadonlySet<string> = new Set(['search_crawler_refused']);
+
+/** A stored audit without the unverified "the site refused AI crawlers" finding. Pure; an audit without it is returned as is. */
+export function dropUnverifiedBlockFindings(audit: SiteAudit): SiteAudit {
+  if (!audit.findings.some((f) => UNVERIFIED_BLOCK_FINDING_IDS.has(f.id))) return audit;
+  return { ...audit, findings: audit.findings.filter((f) => !UNVERIFIED_BLOCK_FINDING_IDS.has(f.id)) };
+}
+
+/** Couldn't check: a stored row whose homepage was never read (fetchFailed, or — on a row from before 2026-10-26 — every
+ *  impostor fetch refused, readableAs null), with no deep audit of its own. Pure. */
+export function storedCrawlUnread(row: StoredCrawlForAudit | null | undefined): boolean {
+  const s = row?.result?.signals ?? null;
+  if (!s) return false;
+  const full = row?.mode === 'full' ? row.full_evidence ?? null : null;
+  if (full?.audit && Number(full.audit.version) >= 1 && s.fetchFailed !== true) return false;
+  return crawlUnreadable(s);
 }
 
 /** An audit with the AI-visibility page checks added (visibilityChecks.ts): one copy each, and the older, vaguer finding
@@ -672,7 +702,7 @@ function auditFromStoredCrawlBase(row: StoredCrawlForAudit | null | undefined): 
   const full = row.mode === 'full' ? row.full_evidence ?? null : null;
   if (full?.audit && Number(full.audit.version) >= 1) return full.audit;
   const s = row.result?.signals ?? null;
-  if (s?.fetchFailed) return null;
+  if (storedCrawlUnread(row)) return null;
   const servedUrl = String(full?.servedUrl || row.result?.url || row.url || '');
   const findings: AuditFinding[] = [];
   const notChecked: string[] = [];
@@ -708,7 +738,9 @@ function auditFromStoredCrawlBase(row: StoredCrawlForAudit | null | undefined): 
     if (b?.phones?.length) findings.push(finding({ id: 'phone_shown', category: 'entity', severity: 'good', title: 'Phone number shown', saw: b.phones[0].value, meaning: 'Customers can find how to contact the business.', urls: [b.phones[0].url] }));
     notChecked.push('This crawl ran before the detailed audit existed: AI crawler rules, business clarity, mobile and link-depth checks need a re-crawl. Lists show up to 40 examples per issue.');
   } else if (s) {
-    if (s.searchBlocked?.length) findings.push(finding({ id: 'search_crawler_refused', category: 'ai_access', severity: 'high', title: 'The site refused AI search crawlers', saw: `Requested as ${s.searchBlocked.join(', ')}, the homepage answered with an error or a bot-check page.`, meaning: 'An AI assistant that fetches the page may get nothing to read.', evidence: s.searchBlocked, count: 0 }));
+    /* Only robots.txt's verdict (verifiedSearchBlocked): an older row's list came from refused impostor fetches. */
+    const blocked = verifiedSearchBlocked(s);
+    if (blocked.length) findings.push(finding({ id: 'robots_blocks_ai_search', category: 'ai_access', severity: 'high', title: `robots.txt blocks ${blocked.join(' and ')}`, saw: `robots.txt disallows the homepage for ${blocked.join(', ')}.`, meaning: 'These crawlers fetch a page when someone asks an AI assistant about a business; asked not to, they may not read the site.', evidence: blocked.map((t) => `User-agent: ${t}`), count: 0 }));
     if (s.clientRendered?.flagged) findings.push(finding({ id: 'client_rendered', category: 'ai_access', severity: 'medium', title: 'Homepage text only appears after JavaScript runs', saw: 'The homepage HTML carries very little readable text.', meaning: 'Crawlers that do not run JavaScript may see an almost empty page.', count: 0 }));
     if (s.duplicates) findings.push(finding({ id: 'near_duplicate_pages', category: 'content', severity: 'medium', title: 'Near-identical location or service pages', saw: `${plural(s.duplicates.clusterSize, 'page')} follow one template; those compared are about ${s.duplicates.similarityPct}% the same.`, meaning: 'Pages that differ only by a town name may be treated as copies.', count: s.duplicates.clusterSize }));
     /* The quick check samples the homepage and the service / location pages, so a thin one is a key page (MEDIUM, as the

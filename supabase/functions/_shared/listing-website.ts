@@ -3,6 +3,7 @@
    call here. Which rows may be judged is listingRecordUsable (src/lib/listingLink.ts). When the listing links to a different domain, its link is followed once (a plain fetch, no provider)
    so an old domain that forwards to this site is not called a wrong link. Never throws: null = not judged. */
 import { listingLinkVerdict, listingNeedsFollow, listingRecordUsable } from "../../../src/lib/listingLink.ts";
+import { SITE_CHECK_HEADERS } from "../../../src/lib/siteReadIdentity.ts";
 
 const FOLLOW_TIMEOUT_MS = 8_000;
 
@@ -10,7 +11,7 @@ async function landedUrl(url: string): Promise<string | null> {
   try {
     const res = await fetch(/^https?:\/\//i.test(url) ? url : `https://${url}`, {
       redirect: "follow", signal: AbortSignal.timeout(FOLLOW_TIMEOUT_MS),
-      headers: { "User-Agent": "Mozilla/5.0 (compatible; FindableSiteCheck/1.0; +https://findable.live)" },
+      headers: { ...SITE_CHECK_HEADERS },
     });
     try { await res.body?.cancel(); } catch { /* nothing to cancel */ }
     return res.url || null;

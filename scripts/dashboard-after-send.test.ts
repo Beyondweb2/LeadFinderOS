@@ -102,7 +102,7 @@ console.log('6. one list of guarded templates, shared by the browser and the sen
   ok(fn.includes('DASHBOARD_RESEND_WINDOW_MS') && fn.includes('DASHBOARD_PENDING_QUEUE_STATUSES'), 'the window and the queued states come from the shared constants');
   ok((fn.match(/return "recent_check_failed"/g) ?? []).length === 2, 'both reads fail closed');
   ok(s.indexOf('noDoubleSendTemplate(templateName)') < s.indexOf('if (linkKind) {'), 'the guard runs before any template branch');
-  ok(/const BUILD_ID = "2026-10-26b-dashboard-no-double-send"/.test(s), 'BUILD_ID bumped (x-swm-build proves the deploy)');
+  ok(/const BUILD_ID = "2026-10-26[b-z]-/.test(s), 'BUILD_ID bumped (x-swm-build proves the deploy; a later bump keeps this true)');
 }
 
 console.log('7. the row sends only through the one sender, and is locked against a double press');

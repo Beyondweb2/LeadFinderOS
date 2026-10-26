@@ -40,7 +40,9 @@
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 import {
   CRAWL_FRESH_MS,
+  crawlUnreadable,
   usableCrawlSignals,
+  verifiedSearchBlocked,
   type CrawlSignals,
 } from './crawlCheck.ts';
 import {
@@ -233,7 +235,7 @@ const EVIDENCE_COPY: Record<EvidenceKind, { clause: string; rest: string }> = {
  *    interpolated at all, which also settles CLAUDE.md §4's "never write a cap in prose".)
  */
 export function candidateFindings(s: CrawlSignals, evidence: SiteEvidenceFinding[] = []): SiteFinding[] {
-  if (s.fetchFailed) return [];   // could not read the site at all — we have nothing to say about it
+  if (crawlUnreadable(s)) return [];   // could not read the site at all — we have nothing to say about it
   const out: SiteFinding[] = [];
 
   /* ── THE DEEP-CRAWL EVIDENCE, FIRST (2026-09-22) ──────────────────────────────────────────────
@@ -250,8 +252,9 @@ export function candidateFindings(s: CrawlSignals, evidence: SiteEvidenceFinding
     if (copy) out.push({ kind: e.kind, clause: copy.clause, rest: copy.rest });
   }
 
-  /* ⛔ ONLY THE SEARCH CRAWLERS, AND ONLY THE ONES THE STORED SIGNAL ACTUALLY NAMES. searchBlocked
-     is derived from real fetches by the crawlers that fetch a page for an AI search tool. Training
+  /* ⛔ ONLY THE SEARCH CRAWLERS, AND ONLY THE ONES ROBOTS.TXT ACTUALLY SHUTS OUT (verifiedSearchBlocked,
+     2026-10-26: the list once came from fetching AS those crawlers, which a firewall refuses where the
+     real crawler gets in — never evidence). Training
      crawlers (GPTBot, ClaudeBot, CCBot) are never in it and must never be described as controlling
      search visibility — blocking those is a common, legitimate choice that does not stop a business
      being cited, and saying otherwise would be telling a prospect to undo a decision for no gain.
@@ -261,13 +264,14 @@ export function candidateFindings(s: CrawlSignals, evidence: SiteEvidenceFinding
      ⛔ AND NOTHING IS COMPARED TO GOOGLE. The previous wording said these crawlers may not read the
      site "as reliably as Google can" — we never fetched the site as Googlebot, so that was a
      comparison against a measurement we do not hold. */
-  if (s.searchBlocked.length) {
-    const one = s.searchBlocked.length === 1;
+  const blocked = verifiedSearchBlocked(s);
+  if (blocked.length) {
+    const one = blocked.length === 1;
     out.push({
       kind: 'crawler_blocked',
       clause: one
-        ? 'one of the crawlers used by AI search tools is being blocked from the site'
-        : 'some of the crawlers used by AI search tools are being blocked from the site',
+        ? 'one of the crawlers used by AI search tools is told to keep out of the site'
+        : 'some of the crawlers used by AI search tools are told to keep out of the site',
       rest: "That can give those systems less information from your own website to work with when they're deciding which businesses are relevant.",
     });
   }
@@ -531,7 +535,7 @@ function hasCleanCurrentCrawl(
   return [...auditRunCrawls, ...(leadCrawl ? [leadCrawl] : [])].some((source) => {
     if (source.complete === false || source.result?.status === 'unavailable') return false;
     const signals = usableCrawlSignals(source.result, source.createdAtMs);
-    return !!signals && signals.fetchFailed !== true;
+    return !!signals && !crawlUnreadable(signals);
   });
 }
 

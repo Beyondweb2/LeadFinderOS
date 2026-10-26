@@ -75,7 +75,7 @@ console.log('6. wired into the normal sender, nothing bypassed');
   ok(/claimTemplatePayload\(templateName, lang, businessName, "", \{ greetingName: greeting, neededItem \}\)/.test(branch), 'the payload is built by the one builder (claimTemplatePayload), never by hand');
   ok(/cleanNeededItem\(templateVars\.needed_item\)/.test(branch) && /dashboardGreeting\(/.test(branch), 'first-name fallback and the cleaned item');
   ok(/neededItemFromTranscript\(r\.body\)/.test(fn), 'a send queued for the lead\'s hours keeps its item');
-  ok(/const BUILD_ID = "2026-10-26b-dashboard-no-double-send"/.test(fn), 'BUILD_ID bumped (x-swm-build proves the deploy)');
+  ok(/const BUILD_ID = "2026-10-26[b-z]-/.test(fn), 'BUILD_ID bumped (x-swm-build proves the deploy; a later bump keeps this true)');
   const card = read('src/components/admin/NeedsMeList.tsx');
   ok(/sendWhatsAppRequest\(supabase, \{[^}]*via: 'lead_panel'/.test(card), 'the dashboard sends through the one browser send with via lead_panel (send hours → queued)');
   ok(!/functions\.invoke\(/.test(card), 'never its own call');

@@ -23,7 +23,7 @@ import { triageByRules } from './replyTriage.ts';
 import { factFor, CONFIDENCE_LINE, GUARANTEE_REFUND, ENGINE_WORDING, type FactTopic } from './offerFactSheet.ts';
 import { mayClaimNamedInstead } from './namedShareRule.ts';
 import { carryOn } from './draftEvidence.ts';
-import { GOOGLE_LISTING_NO_LINK, PITCH_MAX_LIST, PITCH_MIN_LIST, PITCH_MAX_WORDS, UNREADABLE_PITCH_LINE as UNREADABLE_LINE, wordCount } from './pitchIssueWords.ts';
+import { GOOGLE_LISTING_NO_LINK, PITCH_MAX_LIST, PITCH_MIN_LIST, PITCH_MAX_WORDS, wordCount } from './pitchIssueWords.ts';
 import {
   PLAYBOOK, RE, splitQuestion, readEndDate, nameFromReply, nearSameName, rivalsExcludingSelf, DONT_NEED_SOFT, DOES_AI_MATTER_SOFT,
   DONT_NEED_NO_AUDIT, DOES_AI_MATTER_NO_AUDIT, PRIVACY_NOT_GOOGLE, GO_ON_KNOWN, NOT_NOW_WITH_TIME, WEBSITE_GIVEN_KNOWN,
@@ -1012,12 +1012,15 @@ export function pickMove(i: MoveInput): MovePlan {
     /* A question in their latest turn ("how much?") is answered by the rules below, never skipped for the site. */
     if (sharedSite && (LINK.test(text) || !/\?/.test(text)) && thread.slice(0, since).some((m) => m.from === 'us' && SAID_NO_SITE.test(m.text))) {
       const st = e.site?.state ?? null;
-      const checked = sameSite(sharedSite, e.websiteUrl) && (st === 'issues' || st === 'clean' || st === 'unreadable');
+      const checked = sameSite(sharedSite, e.websiteUrl) && (st === 'issues' || st === 'clean');
+      /* ⛔ COULDN'T CHECK IS NOT A LINE IN A MESSAGE (Paul, 2026-10-26): a check that could not read the site holds for a
+         person, like one not run yet — the reply never says "my check couldn't read your website". */
       if (!checked) {
+        const unread = sameSite(sharedSite, e.websiteUrl) && st === 'unreadable';
         return g(plan({ move: 'site_shared', read: 'site_shared', intent: 'site_shared', autoDraft: false, noDraft: true, needsYou: flag('site_not_checked'),
-          note: 'They sent their website. Add it to the lead, press Crawl site, then Regenerate.' }));
+          note: unread ? "They sent their website, and our check couldn't read it. Look at the site yourself, or press Crawl site again later, then Regenerate." : 'They sent their website. Add it to the lead, press Crawl site, then Regenerate.' }));
       }
-      const issues = st === 'issues' ? siteOf(e).issues : st === 'unreadable' ? [UNREADABLE_LINE] : [];
+      const issues = st === 'issues' ? siteOf(e).issues : [];
       const r = siteSharedReply(issues, { googleNoLink: e.foundOnGoogle, whoKnown: whoRunsKnown(thread) });
       return g(plan({ move: 'site_shared', read: 'site_shared', intent: 'site_shared', points: [`Use this reply, word for word: "${r.text}"`], question: r.question,
         fixedText: r.text, structure: r.structure, closer: r.question === PITCH_AGENCY_Q ? 'agency' : null }));

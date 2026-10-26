@@ -101,7 +101,7 @@ const CLEAN: CrawlSignals = {
 };
 const crawl = (s: CrawlSignals) => ({ result: { version: CRAWL_CHECK_VERSION, signals: s }, createdAtMs: NOW - DAY });
 const TRADES = [
-  { name: 'Acme Locksmiths', trade: 'Locksmiths', spoken: 'a locksmith', town: 'Canterbury', website: 'https://acme.co.uk', engine: 'Gemini', rivals: ['Canterbury Lock & Key', 'KeyPoint Locksmiths', 'Lockout Kent', 'Fourth Name Ltd'], signals: { ...CLEAN, searchBlocked: ['OAI-SearchBot'] } as CrawlSignals },
+  { name: 'Acme Locksmiths', trade: 'Locksmiths', spoken: 'a locksmith', town: 'Canterbury', website: 'https://acme.co.uk', engine: 'Gemini', rivals: ['Canterbury Lock & Key', 'KeyPoint Locksmiths', 'Lockout Kent', 'Fourth Name Ltd'], signals: { ...CLEAN, searchBlocked: ['OAI-SearchBot'], blockEvidence: 'robots' } as CrawlSignals },
   { name: 'Rugby Plumbing Co', trade: 'Plumbers', spoken: 'a plumber', town: 'Rugby', website: 'https://rugbyplumb.co.uk', engine: 'Google AI', rivals: ['Dunchurch Plumbing', 'Premier Heating Rugby', 'R&K Plumbers'], signals: { ...CLEAN, thinPages: 2, thinPageUrls: ['https://rugbyplumb.co.uk/a', 'https://rugbyplumb.co.uk/b'] } as CrawlSignals },
   { name: 'Spark Electrical', trade: 'Electrician', spoken: 'an electrician', town: 'Leeds', website: 'https://www.facebook.com/sparkleeds', engine: 'ChatGPT', rivals: ['Leeds Electrical Services', 'Headingley Electrics'], signals: null },
   { name: 'Pass First Driving School', trade: 'Driving instructors', spoken: 'a driving instructor', town: 'Dover', website: null, engine: 'Google AI', rivals: ['Dover Driving School', 'White Cliffs Driving', 'Easy Pass Kent'], signals: null },
@@ -156,7 +156,7 @@ ok(shortVoiceNote({ engineLabel: 'Google AI', competitors: ['A Ltd'], trade: '',
 
 // The WhatsApp {{6}} site findings (Meta-registered template variable) and the prospect-preview message.
 for (const [label, s] of [
-  ['blocked crawlers', { ...CLEAN, searchBlocked: ['OAI-SearchBot', 'PerplexityBot'] }],
+  ['blocked crawlers', { ...CLEAN, searchBlocked: ['OAI-SearchBot', 'PerplexityBot'], blockEvidence: 'robots' }],
   ['thin pages', { ...CLEAN, thinPages: 3 }],
   ['duplicate pages', { ...CLEAN, duplicates: { clusterSize: 5, similarityPct: 91 } as CrawlSignals['duplicates'] }],
   ['empty homepage', { ...CLEAN, clientRendered: { flagged: true, visibleChars: 80, htmlBytes: 30000, appShell: true } }],

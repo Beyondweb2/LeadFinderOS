@@ -15,7 +15,7 @@
 
 import { overviewEvidenceLine, overviewTally } from './aiOverview';
 import type { HookScore } from './hookScore';
-import { auditFromStoredCrawl, HOME_FETCH_LABELS, type AuditFinding, type SiteAudit, type StoredCrawlForAudit } from './siteAudit';
+import { auditFromStoredCrawl, HOME_FETCH_LABELS, storedCrawlUnread, type AuditFinding, type SiteAudit, type StoredCrawlForAudit } from './siteAudit';
 import { isAggregatorUrl } from './aggregators';
 import { websiteCheckFor } from './websiteCheck';
 import type { OpportunityKind } from './salesInsights';
@@ -50,10 +50,10 @@ export function websiteState(input: {
   const row = input.row;
   if (!row) return { kind: 'not_crawled', url: site };
   const checkedAt = row.result?.checked_at ?? row.created_at ?? null;
-  const fetchFailed = row.result?.signals?.fetchFailed === true || (row.mode === 'full' && row.full_evidence?.completeness === 'failed');
+  const fetchFailed = storedCrawlUnread(row) || (row.mode === 'full' && row.full_evidence?.completeness === 'failed');
   if (fetchFailed) {
     const hf = row.result?.homeFetch ?? null;
-    const reason = hf ? HOME_FETCH_LABELS[hf.kind] + (hf.status ? ` (HTTP ${hf.status})` : '') : 'The website could not be reached when it was crawled — it may have been down or blocking automated requests.';
+    const reason = hf ? HOME_FETCH_LABELS[hf.kind] + (hf.status ? ` (HTTP ${hf.status})` : '') : 'Couldn’t check: the homepage was not read when it was crawled. That is not a finding about the site.';
     return { kind: 'failed', url: site, reason, checkedAt };
   }
   const audit = auditFromStoredCrawl(row);

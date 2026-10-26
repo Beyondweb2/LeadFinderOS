@@ -3,6 +3,8 @@
 The free crawlability check (`crawl-check` edge fn, fetches only, £0 — never the Apify SEO scanner)
 run before messaging a prospect. One fetch pass, two separate outputs, one stored row.
 
+> ⚠️ 2026-10-26: the homepage is no longer fetched as the AI search crawlers; "blocked" comes only from robots.txt and a homepage we cannot read is "couldn't check" — docs/website-check.md (one crawl standard).
+
 ## When it runs
 - **Automatically at audit finalisation** (`process-ai-audit-queue`, 2026-09-17) — every audit that
   finalises crawls its lead's site (complete/capped/failed), so every audited lead is covered without

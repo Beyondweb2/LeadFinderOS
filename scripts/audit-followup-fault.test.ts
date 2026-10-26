@@ -101,9 +101,14 @@ ok(CONTINUATION_TEMPLATES.has(NAME), "a CONTINUATION (Inbox only; holds rather t
 ok(REPORT_LINK_TEMPLATES.has(NAME), "in REPORT_LINK_TEMPLATES (it carries the report link in {{7}})");
 
 console.log("\n── {{6}} HAS A LINE FOR A NO-WEBSITE LEAD, NOT JUST A CRAWL FAULT ──");
-const FAULTY: CrawlSignals = { homeUrl: "https://x", fetchFailed: false, searchBlocked: ["OAI-SearchBot"], readableAs: null, clientRendered: null, missingH1: false, noJsonLd: false, duplicates: null, thinPages: 0 };
+const FAULTY: CrawlSignals = { homeUrl: "https://x", fetchFailed: false, searchBlocked: ["OAI-SearchBot"], blockEvidence: "robots", readableAs: "site check", clientRendered: null, missingH1: false, noJsonLd: false, duplicates: null, thinPages: 0 };
 const CLEAN: CrawlSignals = { ...FAULTY, searchBlocked: [] };
 const now = Date.now();
+/* ⛔ 2026-10-26 (drivewelluk.co.uk): the stored shape of a false finding — nothing read, "blocked" from our own refused
+   impostor fetch — must never become {{6}} or make the template sendable. */
+const IMPOSTOR_REFUSED: CrawlSignals = { homeUrl: "https://x", fetchFailed: false, searchBlocked: ["OAI-SearchBot", "ChatGPT-User", "Claude-User", "PerplexityBot"], readableAs: null, clientRendered: null, missingH1: false, noJsonLd: false, duplicates: null, thinPages: 0 };
+ok(siteFaultLine(true, { version: CRAWL_CHECK_VERSION, signals: IMPOSTOR_REFUSED }, now) === null, "a refused impostor fetch (old row) → no {{6}}, the template is not offered");
+ok(resolveSiteFault(true, [{ result: { status: "complete", version: CRAWL_CHECK_VERSION, signals: IMPOSTOR_REFUSED }, createdAtMs: now, complete: true }], null, true) === null, "…and it is not a clean crawl either (no clean-site fallback)");
 // No website → the no-website line, whether or not a crawl row exists.
 ok(siteFaultLine(false, null, 0) === NO_WEBSITE_FAULT_LINE, "no website → the no-website line (no crawl needed)");
 ok(NO_WEBSITE_FAULT_LINE === "You don't currently have a website, which means Google and other AI tools have very little first-party information to use when deciding whether to recommend your business.", "the no-website line is truthful about limited first-party information");

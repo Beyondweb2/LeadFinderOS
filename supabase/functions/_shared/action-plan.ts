@@ -3,7 +3,7 @@
  * produce a useful, retry-safe plan without another provider call. */
 import { classifyWinnability, type EngineMap } from "../../../src/lib/auditReport.ts";
 import { isAggregatorUrl } from "./aggregators.ts";
-import { type CrawlSignals } from "../../../src/lib/crawlCheck.ts";
+import { believableSignals, crawlUnreadable, type CrawlSignals } from "../../../src/lib/crawlCheck.ts";
 import { cellNamed, type NamedContext } from "../../../src/lib/namedSignal.ts";
 
 type Client = any;
@@ -61,10 +61,11 @@ function mergedEngine(rows: Array<Record<string, unknown>>, ctx?: NamedContext):
 
 export function technicalTasks(crawl: unknown): Array<Record<string, unknown>> {
   const c = crawl as { status?: string; signals?: CrawlSignals } | null;
-  if (!c?.signals || c.status === "unavailable" || c.signals.fetchFailed) return [];
-  const s = c.signals;
+  if (!c?.signals || c.status === "unavailable" || crawlUnreadable(c.signals)) return [];
+  /* Only robots.txt's verdict says a crawler is blocked (verifiedSearchBlocked, 2026-10-26). */
+  const s = believableSignals(c.signals);
   const tasks: Array<Record<string, unknown>> = [];
-  if (s.searchBlocked?.length) tasks.push({ id: "crawl-search-blocked", title: "Allow search crawlers to reach the site", priority: "critical", status: "todo", detail: `${s.searchBlocked.join(", ")} blocked the homepage.` });
+  if (s.searchBlocked?.length) tasks.push({ id: "crawl-search-blocked", title: "Allow AI search crawlers in robots.txt", priority: "critical", status: "todo", detail: `robots.txt disallows the site for ${s.searchBlocked.join(", ")}.` });
   if (s.clientRendered?.flagged) tasks.push({ id: "crawl-client-rendered", title: "Make the main page readable without client-side rendering", priority: "high", status: "todo", detail: `Only about ${s.clientRendered.visibleChars} characters were visible to crawlers.` });
   if (s.noJsonLd) tasks.push({ id: "crawl-structured-data", title: "Add appropriate LocalBusiness/service structured data", priority: "high", status: "todo", detail: "No structured data was found on the crawled homepage." });
   if (s.missingH1) tasks.push({ id: "crawl-h1", title: "Add a clear H1 describing the business and service", priority: "medium", status: "todo", detail: "No H1 was found on the crawled homepage." });

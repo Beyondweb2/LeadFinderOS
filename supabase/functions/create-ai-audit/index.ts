@@ -1,6 +1,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { townGated, TOWN_GATE_REASON } from "../../../src/lib/townVerdict.ts";
 import { cleanTypedTown } from "../../../src/lib/typedTown.ts";
+import { SITE_CHECK_HEADERS } from "../../../src/lib/siteReadIdentity.ts";
 import { townWasTyped, townConfirmedByPerson } from "../_shared/typed-town.ts";
 import { SOURCES } from "../_shared/enrichment/sources.ts";
 import { resolveDerivedTown, pickAuditTown } from "../_shared/place-town.ts";
@@ -265,7 +266,7 @@ async function hookTradeFor(website: string | null, category: string): Promise<s
   try {
     const u = new URL(/^https?:\/\//i.test(website) ? website : `https://${website}`);
     if (!/^https?:$/.test(u.protocol) || /^(?:localhost|\d+\.\d+\.\d+\.\d+|\[.*\])$/i.test(u.hostname) || !u.hostname.includes(".") || /\.(?:local|internal|lan)$/i.test(u.hostname)) return category;
-    const res = await fetch(u.toString(), { redirect: "follow", signal: AbortSignal.timeout(4000), headers: { "User-Agent": "Mozilla/5.0 (compatible; FindableBot/1.0)" } });
+    const res = await fetch(u.toString(), { redirect: "follow", signal: AbortSignal.timeout(4000), headers: { ...SITE_CHECK_HEADERS } });
     if (!res.ok) return category;
     const trade = siteTradeFor(category, homepageWords(await res.text()));
     if (trade) console.log(`[create-ai-audit] hook: question 1 trade "${trade}" read from the site (category was "${category}")`);

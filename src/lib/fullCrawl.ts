@@ -30,6 +30,7 @@ import { crawlPageKind, visibleText, THIN_WORDS, MAX_CRAWL_PAGES } from './crawl
 import { sameSite, classifyCrawlUrl } from './crawlUrl.ts';
 import type { SiteAudit } from './siteAudit.ts';
 import { KEPT_TEXT_CHARS } from './siteClaims.ts';
+import { SITE_FETCH_TIMEOUT_MS } from './siteReadIdentity.ts';
 
 export type CrawlMode = 'standard' | 'full';
 
@@ -48,7 +49,8 @@ export interface CrawlProfile {
    book and inside the audit-finalise wall clock; nothing in the exhaustive work raises it. */
 export const STANDARD_CRAWL: CrawlProfile = {
   mode: 'standard', maxPages: MAX_CRAWL_PAGES, fetchBudget: 22, deadlineMs: 35_000,
-  sitemapFetches: 4, concurrency: 6, fetchTimeoutMs: 6_000,
+  /* One page read waits as long in the quick check as in the deep crawl (2026-10-26: 6 s → SITE_FETCH_TIMEOUT_MS). */
+  sitemapFetches: 4, concurrency: 6, fetchTimeoutMs: SITE_FETCH_TIMEOUT_MS,
 };
 
 /* THE EXHAUSTIVE JOB'S WORKER SETTINGS. None of these limits how much of the site is crawled — they
@@ -59,7 +61,7 @@ export const FULL_CRAWL = {
   concurrency: 6,
   /** URLs claimed per batch inside a tick. */
   batchSize: 24,
-  fetchTimeoutMs: 10_000,
+  fetchTimeoutMs: SITE_FETCH_TIMEOUT_MS,
   maxBodyBytes: 1_000_000,
   /** A tick stops claiming new batches after this and hands over to the next tick (platform: an
    *  edge request dies at ~150 s, so a tick leaves room to write its last batch). */

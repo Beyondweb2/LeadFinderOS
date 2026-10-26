@@ -613,7 +613,7 @@ export interface CrawlRowInput {
    JavaScript") and are report copy. `candidateFindings` is the hedged, WhatsApp-safe rewrite of the
    SAME signals, under the same freshness gate — so a reply can never quote an absolute claim. */
 const CRAWL_KIND: Record<string, { kind: FindingKind; strength: ResearchFinding['strength']; title: string }> = {
-  crawler_blocked: { kind: 'crawl_indexing', strength: 5, title: 'AI search crawlers are blocked' },
+  crawler_blocked: { kind: 'crawl_indexing', strength: 5, title: 'robots.txt tells AI search crawlers not to read the site' },
   unreadable_homepage: { kind: 'crawl_indexing', strength: 4, title: 'Homepage is nearly empty without JavaScript' },
   duplicate_pages: { kind: 'thin_or_duplicate', strength: 3, title: 'Many near-identical pages' },
   thin_pages: { kind: 'thin_or_duplicate', strength: 3, title: 'Pages with very little on them' },

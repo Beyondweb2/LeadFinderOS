@@ -252,7 +252,8 @@ console.log('9. Nola: counted over every engine in the score, led by the missed 
 console.log('9b. the site line: hedged, and a list that reads in parallel (Paul, 2026-10-20)');
 {
   const t = (id: string, title = '') => plainIssueTitle({ id, title, severity: 'medium', count: 1 } as unknown as Parameters<typeof plainIssueTitle>[0]);
-  ok(t('search_crawler_refused') === 'Our check could not read your site, which AI tools may also struggle with' && !/turned away/i.test(t('search_crawler_refused')), 'a refused crawler is OUR check failing, hedged: never "turned away the AI search tools"');
+  /* 2026-10-26: OUR check being refused is couldn't check, never an issue line; robots.txt's own block is said plainly. */
+  ok(t('robots_blocks_ai_search') === 'Your site tells an AI or search tool not to read it' && !/turned away|our check/i.test(t('robots_blocks_ai_search')), 'a robots.txt block is said plainly: never "turned away", never about our check');
   ok(t('name_unclear', 'Business name not found on the homepage') === 'Your business name is not on your homepage' && t('town_missing', 'Homepage does not mention Halstead') === 'Your homepage does not mention Halstead', 'noun-phrase titles become whole sentences');
   /* The pitch's own words (pitchIssueWords.ts, Paul 2026-10-23): keyed by id, plain, a town keeps its capital, jargon left out. */
   const iss = (id: string, title = '', saw = '') => ({ id, title, saw, severity: 'medium', count: 1, pages: [], meaning: '' });

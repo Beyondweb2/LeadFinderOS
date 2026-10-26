@@ -24,6 +24,8 @@ it runs until the eligible frontier is empty.**
 | query strings | dropped entirely (`?page=2` never crawled) | arbitrary — replaced by real normalisation |
 | robots.txt | read for Sitemap: only | now `User-agent: *` Allow/Disallow is respected |
 
+> ⚠️ 2026-10-26: the job no longer reads pages as an AI crawler ("the four AI search crawlers" below is history) — one honest crawler name for every read, robots.txt-only blocks; docs/website-check.md (one crawl standard).
+
 ## Architecture
 
 - `crawl-check` (operator press, `mode: "full"`): probes the homepage as the four AI search crawlers

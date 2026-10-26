@@ -145,3 +145,78 @@ script, report, pitch) gets them through the one summary. They apply to checks r
   `x-swm-build: 2026-10-23a-site-check-rules`; market-view, niche-sample, page-generator, run-seo-scan and weekly-visibility
   reach these files by a type-only import, so their bundles hold none of it (redeployed anyway, a no-op). The What's New entry
   `2026-10-23-site-check-rules` is in the live `whatsNew` chunk on app.leadfinderos.com.
+
+
+## 2026-10-26 — one crawl standard; "blocked" only from robots.txt (fix/crawl-one-standard)
+
+**Trigger:** drivewelluk.co.uk was reported as "AI can't reach your site". False: the site is plain WordPress with full
+readable text, robots.txt blocks only /wp-admin/, and it has a sitemap. Also ambition2drive and X Border (Lavington NSW).
+
+**Why (proven from Supabase's own network with pg_net, same second):** the crawl read the homepage AS OAI-SearchBot,
+ChatGPT-User, Claude-User and PerplexityBot (made-up copies of their user-agents). Cloudflare answered our "OAI-SearchBot"
+with a 403 "Just a moment…" challenge and an ordinary request with the 126 KB page. A firewall refuses a request that
+claims a known bot's name from an address that is not that bot's; the real crawler, from its real address, gets in. The
+old code then called any refusal — and any 4xx/5xx, a 404 included — "blocked", and with no probe readable it never read
+the site at all (no deep job, no screenshot).
+
+| Re-fetch of the 76 stored checks that said "all four AI crawlers blocked" (honest name, from Supabase) | Sites |
+|---|---|
+| read fine (the bot name was refused) | 29 |
+| read fine under both now | 8 |
+| 404 to every name (dead sites: "Website not found") | 23 |
+| 403 to every name (refuses any automated read from a datacenter) | 7 |
+| 5xx / 401 / 409 / 429 / no answer | 9 |
+
+No case where the bot name read a page the honest name could not, so **none of the 76 was a verified AI block**. In the
+deep crawls (last 30 days) 4,489 of ~26,000 page reads failed, 2,429 of them 403/429/503; 16 of a 20-page sample of
+those read fine without the bot name (1 a real 404, 3 refuse everything).
+
+**What every crawl path did before:**
+
+| Path | Fetch | Identity | Pages | Timeout | "Failure" |
+|---|---|---|---|---|---|
+| crawl-check quick (audit finalise, report populate, sales check, call screen) | homepage ×4 probes, robots, ≤4 sitemaps, ≤12 pages, one at a time, 35 s | the 4 AI bot names | 12 | 6 s | any 4xx/5xx or challenge = "blocked" |
+| crawl-check full → crawl-worker (Crawl site, intake, catch-up, auto deep) | job frontier, sitemaps in full | the first bot name that got through | 60 prospect / all client | 10 s | page 4xx = failed |
+| agency check | ≤ a few pages | LeadFinderOS-SiteCheck (honest) | few | 10 s | Unknown |
+| warm-reply research, prospect preview | homepage + menu pages / CSS | Chrome browser string | few | — | — |
+| Page Generator scan, email finder | homepage + pages | "LeadFinder/1.0" | few | — | — |
+| audit homepage trade read (create-ai-audit) | homepage | "FindableBot/1.0" | 1 | 4 s | ignored |
+| Google-listing link follow | the listing's link | "FindableSiteCheck/1.0" | 1 | 8 s | not judged |
+| site-shot (Browser Rendering) | screenshot | Cloudflare BR | 1 | — | gated on the crawl having read the homepage |
+| run-seo-scan | Apify, baselines only | Apify | — | — | — |
+
+**What it is now:**
+- **One identity** (`src/lib/siteReadIdentity.ts`): every read of a business's own site sends `SITE_CHECK_HEADERS`
+  (`LeadFinderOS-SiteCheck/1.0 (+https://findable.live)`, Paul's honest-name rule of 2026-10-01) — crawl-check, crawl-job,
+  agency check, listing follow, site research, prospect preview, scan-site-details, extract-email, create-ai-audit. No AI
+  crawler is impersonated; no browser identity. One per-page timeout, `SITE_FETCH_TIMEOUT_MS` (10 s), quick and deep.
+- **The homepage is read once** (and once more after `HOME_RETRY_PAUSE_MS` if the first read gave no page).
+  `pageReadable` decides a page in both crawls.
+- **"Blocked" = robots.txt only** (`robotsSearchBlocked`): an AI search crawler (OAI-SearchBot, ChatGPT-User, Claude-User,
+  PerplexityBot; never GPTBot / ClaudeBot) whose group or `*` disallows `/`. Stored with `signals.blockEvidence = 'robots'`;
+  every reader goes through `verifiedSearchBlocked` / `believableSignals` (via `usableCrawlSignals`), so an older row's
+  list — from refused impostor fetches — is never believed. Wording: "Your site tells AI search tools not to read it".
+  The deep audit says ChatGPT-User / Claude-User as `robots_blocks_ai_search` (OAI-SearchBot / PerplexityBot already have
+  `robots_blocks_<token>`); `search_crawler_refused` is never built again and stored copies are dropped on read
+  (`UNVERIFIED_BLOCK_FINDING_IDS`, in `auditFromStoredCrawl` and `usableWebsiteCheck`).
+- **Couldn't check:** no readable homepage = `fetchFailed` (a refusal included). An older row with `readableAs: null`
+  reads the same (`crawlUnreadable`, `storedCrawlUnread`): no fault lines, no audit, no {{6}}, no clean-site line, website
+  check state `unreadable`. Labels blame nothing (`HOME_FETCH_LABELS.blocked`, `COULD_NOT_CHECK_HEADLINE`). The site-shared
+  reply's "My check couldn't read your website…" line is gone: it holds for a person (`replyMove.ts`).
+- **Depth:** unchanged caps — every automated quick check queues the deep crawl behind it (`PROSPECT_CRAWL_PAGE_CAP`,
+  `AUTO_DEEP_MAX_RUNNING`); a person's Crawl site is the same deep crawl; a paying client's stays exhaustive. What changes
+  the depth in practice is that sites refused under the bot name (no deep job at all) and pages refused mid-crawl now read.
+- **Browser Rendering:** the crawl uses none (before or after). site-shot keeps its switch and monthly cap; leads re-crawled
+  as readable can now pass its "homepage read" gate.
+
+**Before / after (the three sites):**
+
+| Site | Before (stored) | After |
+|---|---|---|
+| drivewelluk.co.uk | "OAI-SearchBot, ChatGPT-User, Claude-User, PerplexityBot are blocked … AI can't see you" (homeFetch blocked 403), nothing read | homepage read (Kettering, Corby, prices, 1,208 words), robots.txt blocks no AI crawler, no block finding; deep crawl queued |
+| ambition2drive | lead website typed `ambiton2drive.com` (no Google listing website): DNS fail, "may be down or blocking automated requests" | "Couldn't check: the web address does not resolve — misspelt?"; the real `ambition2drive.com` reads, nothing blocked. Fix the lead's website, then Crawl site |
+| X Border TT (Lavington NSW) | full catch-up crawl 2026-10-25 (after fix/finding-accuracy), headline "no H1" | reads under the honest name; robots.txt blocks NerdyBot only; no block finding |
+
+Not changed: no migration, no stored row rewritten, no draft regenerated, nothing sent. Tests:
+`scripts/crawl-one-standard.test.ts` (real fixtures in `scripts/fixtures/crawl-*`) plus the updated crawl, site-findings,
+audit-followup-fault, reply, prospect-preview and warm-reply suites.

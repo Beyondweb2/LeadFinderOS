@@ -22,6 +22,14 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-26-crawl-one-standard', date: '2026-10-26', title: 'The website check reads sites properly, and never says "AI is blocked" unless robots.txt says so', audience: 'all',
+    body: 'Every website check now reads the site once under our own name, the same way everywhere. It used to pretend to be ChatGPT\'s and other AI crawlers, and firewalls such as Cloudflare refused that, so sites like drivewelluk.co.uk were wrongly reported as "AI can\'t reach your site". A site is now said to block AI only when its robots.txt tells an AI search crawler to stay out. If our check can\'t read a site, it says "couldn\'t check" and nothing goes into a message.',
+    report: {
+      added: ['"Couldn\'t check" when our check gets no readable homepage (with the reason: no answer, error page, refused, or an address that doesn\'t exist). It is never a finding or a line in a draft.'],
+      changed: ['"AI can\'t reach your site" / "AI search crawlers are blocked" now come only from a robots.txt rule naming an AI search crawler, worded as "Your site tells AI search tools not to read it".', 'Older checks that said a site blocked AI crawlers no longer show that (it came from our own refused requests). Press Crawl site to check those leads again.', 'Deep crawls read pages that used to be refused, so the Crawl site results cover more of the site.'],
+      removed: ['The reply line "My check couldn\'t read your website, and AI tools may struggle with it too". When a prospect sends their site and we can\'t read it, the draft now waits for you.'],
+      effect: 'Fewer false website findings, fuller crawls. Nothing is re-crawled or re-drafted automatically: press Crawl site, then Regenerate, on the leads you want refreshed.',
+    } },
   { id: '2026-10-26-service-question-link', date: '2026-10-26', title: 'AI drafts point to findable.live when they ask about the service', audience: 'admin',
     body: 'When a prospect asks what we do, how it works, who we are, how much it is, whether it is legit, or for examples, the AI draft now says "You can see more about what we do at findable.live." once, just before its question.',
     report: {

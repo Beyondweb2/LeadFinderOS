@@ -83,7 +83,7 @@ export const SITE_SCORE_ISSUE_AREA: Record<string, SiteScoreArea> = {
   no_breadcrumbs: 'markup', schema_phone_mismatch: 'markup',
   // can be found and read
   no_https: 'reachable', ct_no_https: 'reachable', robots_blocks_all: 'reachable', ct_robots_blocks_ai: 'reachable',
-  search_crawler_refused: 'reachable', noindex_home: 'reachable', noindex_pages: 'reachable', noindex_important_page: 'reachable',
+  robots_blocks_ai_search: 'reachable', noindex_home: 'reachable', noindex_pages: 'reachable', noindex_important_page: 'reachable',
   no_sitemap: 'reachable', ct_no_sitemap: 'reachable', sitemap_off_site: 'reachable', sitemap_wrong_domain: 'reachable',
   sitemap_only_pages: 'reachable', ct_orphan_pages: 'reachable', canonical_mismatch: 'reachable', canonical_off_site: 'reachable',
   canonical_off_domain: 'reachable', broken_pages: 'reachable', ct_broken_links: 'reachable', ct_dead_links: 'reachable',
