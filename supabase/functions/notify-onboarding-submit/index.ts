@@ -23,6 +23,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { respellTrade } from "../../../src/lib/freeCheckTrade.ts";
 import { serveDecision, serveInputFromRow, platformLabel, type ServeGateRow } from "../../../src/lib/serveGate.ts";
 import { DOMAIN_REASON_TEXT, DOMAIN_ROW_COLUMNS, domainAuthority, domainInputFromRow, type DomainRow } from "../../../src/lib/domainAuthority.ts";
+import { domainEmailLine } from "../../../src/lib/domainEmailLine.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -392,9 +393,7 @@ Deno.serve(async (req) => {
       if ((row as { domain_escalated_at?: string | null }).domain_escalated_at) needsYou.push("They stopped at the domain question and asked us to check their setup with them. Find out who owns and controls the domain before any new site goes ahead.");
       /* One summary line for the domain answers (they are asked BEFORE payment). Omitted for a row that
          never reached the website questions, so nothing is claimed about answers that do not exist. */
-      const domainLine = domain.applies
-        ? (domain.ready ? "Answered — DOMAIN READY" : "Answered — DOMAIN / AGENCY ISSUE (see NEEDS YOU)")
-        : (row as { domain_status?: string | null }).domain_status ? "Not needed — we would work on their own site" : null;
+      const domainLine = domainEmailLine(domain, row as unknown as DomainRow);
       if (domain.applies && !domain.ready) needsYou.push(`DOMAIN / AGENCY ISSUE: ${domain.reasons.map((r) => DOMAIN_REASON_TEXT[r]).join(", ")}. Do not promise a new site or a switch-over until they own or control the domain.`);
 
       /* ⛔ THE FREE-CHECK TAIL IS A DIFFERENT SENTENCE BECAUSE IT IS A DIFFERENT EVENT. They asked

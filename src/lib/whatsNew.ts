@@ -22,6 +22,14 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-26-reply-detectors', date: '2026-10-26', title: 'Reply drafts read four kinds of reply correctly', audience: 'admin',
+    body: 'Instructors who think you want lessons now get the "not after lessons myself" reply, chatbots get nothing, "no competition" is not read as interest, and a sticker is just a thumbs-up. The new-client email says "NOT ANSWERED" when the domain question was left blank.',
+    report: {
+      added: ['"Are you looking for manual driving lessons?", "manual or automatic you need?", "you need driving lessons?" and "looking to start lessons?" now get the existing customer-mistake reply.'],
+      changed: ['A chatbot reply ("I didn\'t quite catch that, please rephrase") is an Auto-reply: no draft, no price line, no pitch.', '"I\'m in no competition" and "they ain\'t competition" read as a no (Needs you, no draft), not as interest.', 'A sticker or a reaction gets no draft instead of "can\'t play voice notes".', 'The onboarding alert email\'s Domain line now says "NOT ANSWERED — still blank: …" when they skipped the domain questions; "Answered" only when they answered.'],
+      removed: [],
+      effect: 'Fewer wrong drafts on these replies, and the alert email no longer says "Answered" for a skipped domain question. Nothing is sent by this change.',
+    } },
   { id: '2026-10-25-finding-accuracy', date: '2026-10-25', title: 'First replies no longer say a site is missing something it has', audience: 'all',
     body: 'A line like "your site doesn’t mention your town" or "doesn’t say which areas you cover" is now said only when the whole text of every page was checked. Otherwise it is left out.',
     report: {
