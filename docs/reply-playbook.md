@@ -266,3 +266,16 @@ Approved before / after sheet: `C:\Users\paulj\Documents\Findable\lean-first-rep
   website fact stated as the cause of an AI result (CLAUDE.md: never assert how an AI decides), so the line says "That could be why".
 * **is this a bot**: one answer now, whatever the AI auto-reply switch says (Paul's line makes no "I send every one
   myself" claim, which stays a warning when the switch is on).
+
+## 2026-10-26 — four detector fixes (Paul; source `docs/convo-review-2026-10-26.md`)
+
+Branch `fix/reply-detectors`. Wording and moves unchanged; only what reads the reply. Tests: `scripts/reply-detectors.test.ts` (real phrasings).
+- **Thinks we are the customer** (`RE.thinksCustomer`): up to two words before "lessons" ("manual driving lessons"), "looking to start lessons",
+  "you need / do you want … lessons", and "manual or automatic" in either order. Before, 4 of 6 live phrasings went to Needs you "No playbook reply fits".
+- **Chatbot** (`replyMove.ts` `CHATBOT`, read by `isAutoReply`): "didn't quite catch that", "please rephrase", "reply with a number" = automated.
+  In the auto-reply branch a chatbot gets nothing (no pitch, no draft), even as the first reply. `RE.catch` no longer fires on "didn't catch that".
+- **"No competition"** joins `RE.decline` (no draft, Needs you "Said no"). `CLEAR_YES` reads "I'm in" only at the end of a phrase
+  ("I'm in no competition" had read as a yes).
+- **Sticker / reaction** (as `[sticker]` / `[reaction]` or by message type) = ack, no draft (was the "can't play voice notes" line).
+- **Alert email** (fn `notify-onboarding-submit`): the Domain line comes from `src/lib/domainEmailLine.ts` — "NOT ANSWERED — still blank: …" when a
+  domain question is blank, else "Answered — DOMAIN READY / ISSUE". Kept out of `domainAuthority.ts` (byte-identical in findable-site).
