@@ -214,3 +214,4 @@
 - `docs/audit-report-v3.md` — the prospect (quick) report v3 layout, fix lines, the website-check id trap, Phase 2 plan (2026-10-23)
 - `docs/site-shot.md` — homepage picture per lead for the prospect report: shape, the 20-site measurements, rules it taught, deploy record (2026-10-24)
 - `docs/finding-accuracy.md` — what we may tell a prospect their site does not say: full-text stamp, coverage sentences, state label, question 1 from the site; measured false rates (2026-10-25)
+- `docs/convo-review-2026-10-26.md` — 12–25 Oct conversation review: funnel by country / trade, why drafts stopped (mode Manual), drafter misreads, questionnaire stops, proposed reply wording (proposal only, 2026-10-26)
