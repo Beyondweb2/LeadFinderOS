@@ -5,7 +5,7 @@ section headings, cards and row style) in `src/design-mock/AdminHomeMock.tsx`, w
 numbers are the real 14-day figures from `docs/convo-review-2026-10-26.md`; the cap, failures and team figures are made up.
 The sidebar is not drawn (unchanged).
 
-Screenshots: `dark-a-desktop.png`, `dark-a-phone.png`, `dark-b-desktop.png`, `dark-b-phone.png`.
+Screenshots of the BUILT page (real components, fake data, 2026-10-26): `built-desktop.png`, `built-phone.png`. The earlier concept mockups: `dark-a-*.png`, `dark-b-*.png`.
 
 Paul, 2026-10-26: keep today's style; **replies do not belong on the dashboard** (too many a day, they live in the Inbox).
 The first white mockups were dropped.

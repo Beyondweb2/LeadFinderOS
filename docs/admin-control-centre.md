@@ -423,3 +423,22 @@ totals. Cached 5 minutes in the browser; Refresh refetches.
 - **Opt-outs**: see *Late opt-outs* above. One historic STOP (BdH Chartered Certified Accountants) sits on
   a `not_interested` suppression and was filed "already suppressed" — upgrading it is a row rewrite, left
   for Paul.
+
+## 2026-10-26 — Concept A: "What needs you" first (Paul; branch `design/admin-dashboard`, NOT merged)
+
+Record and audit: `docs/design/admin-dashboard/README.md`. Paul: "my dashboard looks good, it's just full of junk"; no replies on it.
+- **Home** (`Dashboard.tsx`): Business at a glance → What needs you (`NeedsMeList`) → Key numbers → Questionnaires this week
+  (`QuestionnaireLog`) → link to Team, insights and costs → the sign-up desk. "My activity" included by default (key v2, `adminPeriod.ts`).
+- **Moved, not deleted**, to `/admin/insights` (`AdminInsights.tsx`): Sales team, Money, Sales intelligence, Clients in delivery,
+  findable.live funnel, feature usage, API costs. `ClientSearchPanel` is rendered nowhere (Search Console never connected).
+- **The list** (`src/lib/needsMe.ts`): questionnaires (`questionnaireStop.ts`: stop reason, due time = +2 h, escalation at 24/48 h,
+  "Record the outcome" 48 h after the final nudge), payments (server attention), starred-and-waiting, Next Actions due (read only),
+  new clients (handoffs), other admin attention kinds. Replies / triage dropped. One row per business, most urgent wins.
+- **Send buttons**: `needsMeTemplates.ts` + `templateGate`; only `questionnaire_followup` is live (registered); the proposed eight stay
+  disabled until marked approved (table `dashboard_template_approvals`) AND added to the sender with Meta's registered words.
+  Sends via `sendWhatsAppRequest(..., via: 'lead_panel')` (send hours apply). Assign kept where `attentionAssignable`.
+- **Marks** (`admin_home_marks`): snooze / dismiss (until the row changes) / archive, per admin, undo = `undone_at`. No delete policy.
+- **Outcomes** (`onboarding_outcomes`): lost + reason; paid is derived from the lead.
+- **Data**: rpc `admin_home_needs()` and `admin_home_numbers(days)`, admin only — migration `20261127090000_admin_home_needs.sql`
+  (NOT applied; tested on the live schema inside a rolled-back transaction 2026-10-26).
+- **Alert email** (fn `notify-onboarding-submit`): "NEXT STEP: … (due …)" + a link to `/?row=questionnaire:<id>#needs-you` (not deployed).

@@ -131,7 +131,8 @@ const prompt = read('src/components/LostReasonPrompt.tsx');
 ok(/LOST_REASONS\.map/.test(prompt) && /Why did they say no\?/.test(prompt) && /'Skip'/.test(prompt), 'the prompt offers the one list, asks the question, and can be skipped');
 const load = read('supabase/functions/_shared/admin-overview-load.ts');
 ok(/lost_reason, lost_reason_note, lost_reason_recorded_at, lost_reason_recorded_by";/.test(load), 'the dashboard\'s load reads the four columns');
-const dash = read('src/pages/Dashboard.tsx');
+/* 2026-10-26 Concept A: Sales intelligence moved to Team, insights and costs (AdminInsights.tsx). */
+const dash = read('src/pages/AdminInsights.tsx');
 /* 2026-10-02 (the control-centre restructure): "Why prospects say no" now LEADS Sales intelligence. */
 // The one-line "your own outreach is left out" note (My activity: hidden, 2026-10-02) may sit above it.
 ok(/<Section title="Sales intelligence"[^>]*>\s*(\{o\.activityScope\?\.hidden && <p [^\n]*data-testid="intel-scope"[^\n]*<\/p>\}\s*)?<LostReasonsPanel o=\{o\} \/>/.test(dash), 'the Admin dashboard shows "Why prospects say no" in Sales intelligence, on the dashboard\'s period');

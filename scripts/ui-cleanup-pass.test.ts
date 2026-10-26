@@ -156,8 +156,12 @@ console.log("\n── the Admin dashboard ──");
   ok(/useAdminOverview/.test(dash) && !/useDashboardMetrics/.test(dash), "numbers come server-folded (fn admin-overview), never the whole book in the browser");
   for (const gone of ["TipBar", "AdminZone", "CampaignStatsSection", "ChannelPerformanceCard", "PipelineCard", "Quick Actions", "<NextActions ", "<FollowUpQueue", "<WaitingPanel", "<ActivityFeed", "<ClientDeliveryCard", "<NextActionsCard", "<AuditFunnelCard"]) ok(!dash.includes(gone), `removed: ${gone}`);
   /* 2026-10-02 (control-centre restructure): TeamComparison → TeamPerformanceTable, RevenuePanel → MoneyPanel. */
-  for (const kept of ["FreeCheckProgressCard", "SubmissionsCard", "AttentionQueue", "TeamPerformanceTable", "MoneyPanel"]) ok(dash.includes(`<${kept}`), `kept/added: ${kept}`);
-  ok(/\/admin\/api-usage/.test(dash), "API usage stays reachable (the cost panel's detail link)");
+  /* 2026-10-26 Concept A: the team, money and cost panels moved to Team, insights and costs (AdminInsights.tsx); the
+     list is NeedsMeList (AttentionQueue's rows, minus replies, plus questionnaires, interested and follow-ups). */
+  const insights = read("src/pages/AdminInsights.tsx");
+  for (const kept of ["FreeCheckProgressCard", "SubmissionsCard", "NeedsMeList"]) ok(dash.includes(`<${kept}`), `kept/added: ${kept}`);
+  for (const moved of ["TeamPerformanceTable", "MoneyPanel", "CostPanel"]) ok(insights.includes(`<${moved}`) && !dash.includes(`<${moved}`), `moved to insights: ${moved}`);
+  ok(/\/admin\/api-usage/.test(insights) && /\/admin\/insights/.test(dash), "API usage stays reachable (the cost panel's detail link, one click from the home page)");
   ok(!/next_action:/.test(dash) && !/supabase\.from\(/.test(dash), "the dashboard writes nothing from the browser");
 }
 
