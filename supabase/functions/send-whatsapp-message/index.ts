@@ -24,6 +24,8 @@ import { buildsFromAudit } from "../../../src/lib/templateRouting.ts";
 import { rivalHookDecision, templateNeedsRivals } from "../../../src/lib/rivalHook.ts";
 import { pitchEverSent } from "../_shared/auto-reply-rules.ts";
 import { isColdOutreachTemplate } from "../../../src/lib/coldOutreach.ts";
+import { DASHBOARD_TEMPLATES, cleanNeededItem, dashboardGreeting, dashboardTemplateTranscript, isDashboardTemplate, neededItemFromTranscript } from "../../../src/lib/dashboardTemplates.ts";
+import { displayBusinessName } from "../../../src/lib/displayName.ts";
 import { isUkColdDestination, NOT_A_UK_MOBILE } from "../../../src/lib/ukColdDestination.ts";
 import { COUNTRY_OFF, MARKET_NAME, channelOn, mobileMarketOf } from "../../../src/lib/outreachMarkets.ts";
 import { phoneProblemWords } from "../../../src/lib/phoneCountry.ts";
@@ -107,7 +109,8 @@ const CAPABILITIES = ["dry_run", "build_phase_hold", "routing_leaf", "any_approv
    2026-10-21a: the Inbox send window — via:"inbox" outside the lead's hours is QUEUED, not sent (src/lib/inboxSendWindow.ts).
    2026-10-21c: both of the above (the send window + Australia prospect-only).
    2026-10-22a: Australia is a WhatsApp market (its own switch); its Inbox hours are read in the lead's zone (src/lib/auLeadZone.ts). */
-const BUILD_ID = "2026-10-23a-site-check-rules";
+/* 2026-10-26a: the admin dashboard's six templates (src/lib/dashboardTemplates.ts), admin only, template_vars.needed_item. */
+const BUILD_ID = "2026-10-26a-dashboard-templates";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -161,6 +164,8 @@ Deno.serve(async (req) => {
       body.body = r.kind === "text" ? (r.body ?? "") : "";
       body.template_name = r.kind === "template" ? r.template_name : null;
       body.allow_resend = r.allow_resend === true; body.link_variant = r.link_variant; body.mode = undefined; body.via = undefined;
+      /* needs_from_you's {{2}} is read back from the row's stored line (the exact inverse of how it was written). */
+      body.template_vars = r.kind === "template" && r.template_name === "needs_from_you" ? { needed_item: neededItemFromTranscript(r.body) } : undefined;
     }
 
     // --- Auth the operator: a signed-in team member with a role (admin or sales) ---
@@ -192,6 +197,8 @@ Deno.serve(async (req) => {
        anything else = the Agreement & Payment link. Positive match — an unknown value is the default, never a third link. */
     const signupLinkVariant: "agreement" | "setup" = body.link_variant === "setup" ? "setup" : "agreement";
     const country: string | null = typeof body.country === "string" ? body.country : null;
+    /* Caller-supplied template values — read ONLY by the admin dashboard's templates (needs_from_you {{2}}), cleaned there. */
+    const templateVars: Record<string, unknown> = body.template_vars && typeof body.template_vars === "object" ? body.template_vars as Record<string, unknown> : {};
     /* ══ mode 'dry_run' — PROVE A SEND WILL WORK WITHOUT SENDING ═════════════════════════════════
        Built 2026-09-15, after two live prospects were burned on `audit_followup` 500s (CLAUDE.md
        §30b). The reason a failure was only ever discovered in front of a prospect is that there was
@@ -600,6 +607,41 @@ Deno.serve(async (req) => {
         auditBusinessName = v.business;
         auditClaimUrl = v.url;
         sentLang = lang;
+      } else if (isDashboardTemplate(templateName)) {
+        /* ══ THE ADMIN DASHBOARD'S SIX (2026-10-26, src/lib/dashboardTemplates.ts) ══════════════════════════════════
+           ⛔ Admin only: they are sent from the admin home's row. ⛔ Every check above and below still runs (opt-out,
+           24-hour rule, send hours → queued, QA hold, destination). ⛔ Meta decides if the template can go: a refusal is
+           stored with Meta's code on the failed row, and the dashboard turns the button off from it.
+           {{1}} = the business name, or (first-name templates) the owner's first name, else the business name.
+           needs_from_you {{2}} = the item needed, from the caller, cleaned (cleanNeededItem); blank refuses. */
+        if (actor.role !== "admin") return json({ ok: false, error: "admin_only", reason: "Only an admin can send this template." }, 403);
+        if (!resolvedLeadId) return json({ ok: false, error: "template_needs_lead" }, 400);
+        const dvars = DASHBOARD_TEMPLATES[templateName].vars;
+        const shownName = displayBusinessName(businessName, { style: "greet" }) || businessName.trim();
+        if (!shownName) return json({ ok: false, error: "no_business_name", reason: "This lead has no business name to use." }, 200);
+        let greeting = "";
+        if (dvars.includes("greeting_name")) {
+          const { data: cn } = await service.from("outreach_leads").select("contact_name").eq("id", resolvedLeadId).maybeSingle();
+          greeting = dashboardGreeting((cn as { contact_name: string | null } | null)?.contact_name, shownName);
+        }
+        let neededItem = "";
+        if (dvars.includes("needed_item")) {
+          const c = cleanNeededItem(templateVars.needed_item);
+          if (!c.ok) return json({ ok: false, error: "unsafe_template_var", reason: c.reason, detail: "Say what you need from them." }, 200);
+          neededItem = c.value;
+        }
+        try {
+          payload = claimTemplatePayload(templateName, lang, businessName, "", { greetingName: greeting, neededItem });
+        } catch (e) {
+          const msg = (e as Error).message ?? "";
+          if (msg.startsWith("unsafe_template_var:")) {
+            const [, reason, detail] = msg.split(":");
+            return json({ ok: false, error: "unsafe_template_var", reason, detail: detail ?? "" }, 200);
+          }
+          throw e;
+        }
+        storedBody = dashboardTemplateTranscript(templateName, { business: shownName, greeting, neededItem });
+        auditClaimUrl = "";
       } else if (needsContactName) {
         /* questionnaire_followup: {{1}} = the OWNER'S first name (first word of the lead's
            contact_name), {{2}} = business name. The one template that greets a person, so a blank

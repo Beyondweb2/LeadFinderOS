@@ -14,6 +14,7 @@ import { isOnboardingFormUrl, isSignupTemplateLinkUrl, onboardingTemplateBody, s
 import { toWhatsAppDigits } from "../../../src/lib/waNumber.ts";
 import { REPORT_OFFER_NO_NAME, REPORT_OFFER_TEMPLATE, reportOfferBody } from "../../../src/lib/reportOfferTemplate.ts";
 import { maskSecrets, metaErrorPartsFromResponse, type SendErrorParts } from "../../../src/lib/sendErrorMeaning.ts";
+import { cleanNeededItem, dashboardTemplateTranscript } from "../../../src/lib/dashboardTemplates.ts";
 
 export const GRAPH_VERSION = "v21.0";
 
@@ -54,7 +55,9 @@ export type TemplateVar = "name" | "url" | "trade" | "trade_plural" | "trade_art
   | "greeting_name" | "signup_url" | "onboarding_form_url"
   /* 2026-10-14 — ai_visibility_report_offer (src/lib/reportOfferTemplate.ts): {{1}} the business name or "there",
      {{4}} the check's visibility score ("66%"), {{6}} the SENDING person's own message name (_shared/sender-name.ts). */
-  | "name_or_there" | "visibility_score" | "sender_name";
+  | "name_or_there" | "visibility_score" | "sender_name"
+  /* 2026-10-26 — needs_from_you {{2}}: the item the client still has to send (src/lib/dashboardTemplates.ts cleanNeededItem). */
+  | "needed_item";
 
 /* ⛔ THE VIDEO HEADER'S URL, IN ONE PLACE (Paul, 2026-09-12).
    `video_template` is registered at Meta with a VIDEO header, which means the send MUST carry a
@@ -319,6 +322,15 @@ export const WA_TEMPLATES: Record<string, { lang: string; vars: TemplateVar[]; h
      CONTINUATION_TEMPLATES): the phone-history seatbelt applies. Queue-sent; the drip reads Meta's live status first.
      MIRRORS process-whatsapp-queue; change both together. */
   ai_visibility_report_offer: { lang: "en", vars: ["name_or_there", "town", "competitors", "visibility_score", "audit_url", "sender_name"] },
+  /* ⛔ THE ADMIN DASHBOARD'S SIX (Paul, 2026-10-26) — src/lib/dashboardTemplates.ts has the variables, the transcript and
+     the on/off rule (Meta's own answer). Sent ONLY from the dashboard row, by an admin, through send-whatsapp-message's
+     dashboard branch; continuations (CONTINUATION_TEMPLATES), never queued. MIRRORS process-whatsapp-queue. */
+  questionnaire_domain_help: { lang: "en", vars: ["name"] },
+  questionnaire_payment_help: { lang: "en", vars: ["name"] },
+  needs_from_you: { lang: "en", vars: ["greeting_name", "needed_item"] },
+  agency_access: { lang: "en", vars: ["greeting_name"] },
+  agreement_next_steps: { lang: "en", vars: ["greeting_name"] },
+  nudge_24h: { lang: "en", vars: ["name"] },
 };
 export const WA_DEFAULT_TEMPLATE = "booking_page_intro";
 
@@ -775,6 +787,14 @@ export const WA_TEMPLATE_BODIES: Record<string, (businessName: string, claimUrl:
   questionnaire_followup: (b, _u, _t, _c, first) => questionnaireFollowupBody(first ?? "", b),
   /* Same adapter shape: {{1}} first name, {{2}} business name, from the shared Deno-free module. */
   hook_followup: (b, _u, _t, _c, first) => hookFollowupBody(first ?? "", b),
+  /* The admin dashboard's six (src/lib/dashboardTemplates.ts): which template went, never invented wording — the app
+     cannot read Meta's text. send-whatsapp-message stores the fuller line (greeting + item); this is the fallback. */
+  questionnaire_domain_help: (b) => dashboardTemplateTranscript("questionnaire_domain_help", { business: b }),
+  questionnaire_payment_help: (b) => dashboardTemplateTranscript("questionnaire_payment_help", { business: b }),
+  needs_from_you: (b, _u, _t, _c, first) => dashboardTemplateTranscript("needs_from_you", { business: b, greeting: first }),
+  agency_access: (b, _u, _t, _c, first) => dashboardTemplateTranscript("agency_access", { business: b, greeting: first }),
+  agreement_next_steps: (b, _u, _t, _c, first) => dashboardTemplateTranscript("agreement_next_steps", { business: b, greeting: first }),
+  nudge_24h: (b) => dashboardTemplateTranscript("nudge_24h", { business: b }),
   /* ONE variable: {{1}} = business name. */
   contact_followup: (b) => contactFollowupBody(b),
   onboarding_followup: onboardingFollowupBody,
@@ -853,7 +873,7 @@ export function templateBodyParams(
   vars: TemplateVar[],
   businessName: string,
   claimUrl: string,
-  extra?: { trade?: string; competitors?: string; rivals?: string[]; onboardingUrl?: string; templateName?: string; contactName?: string; town?: string; auditUrl?: string; siteFault?: string; siteFindings?: string; greetingName?: string; signupUrl?: string; onboardingFormUrl?: string; visibilityScore?: string; senderName?: string },
+  extra?: { trade?: string; competitors?: string; rivals?: string[]; onboardingUrl?: string; templateName?: string; contactName?: string; town?: string; auditUrl?: string; siteFault?: string; siteFindings?: string; greetingName?: string; signupUrl?: string; onboardingFormUrl?: string; visibilityScore?: string; senderName?: string; neededItem?: string },
 ) {
   /* Last line of defence for a template whose copy needs a real name. Callers check first and
      return a readable refusal; this throws so a new caller that forgets cannot quietly send
@@ -1013,6 +1033,13 @@ export function templateBodyParams(
         if (!isOnboardingFormUrl(u)) throw new Error("unsafe_template_var:not_an_onboarding_link:the link is not the client's findable.live onboarding form");
         return u;
       }
+      /* needs_from_you {{2}}: what the client still has to send. Blank or over-long refuses (Meta rejects an empty
+         parameter, and a vague "something" is not a request); the unsafe_template_var: prefix makes it a visible hold. */
+      case "needed_item": {
+        const c = cleanNeededItem(extra?.neededItem);
+        if (!c.ok) throw new Error(`unsafe_template_var:${c.reason}:say what you need from them`);
+        return c.value;
+      }
       case "site_findings": {
         const f = (extra?.siteFindings ?? "").trim();
         if (!f) throw new Error("unsafe_template_var:no_site_findings:the crawl check found nothing strong enough to name — use audit_followup_call");
@@ -1088,7 +1115,7 @@ export function claimTemplatePayload(
   lang: string,
   businessName: string,
   claimUrl: string,
-  extra?: { trade?: string; competitors?: string; rivals?: string[]; onboardingUrl?: string; contactName?: string; town?: string; auditUrl?: string; siteFault?: string; siteFindings?: string; greetingName?: string; signupUrl?: string; onboardingFormUrl?: string; visibilityScore?: string; senderName?: string },
+  extra?: { trade?: string; competitors?: string; rivals?: string[]; onboardingUrl?: string; contactName?: string; town?: string; auditUrl?: string; siteFault?: string; siteFindings?: string; greetingName?: string; signupUrl?: string; onboardingFormUrl?: string; visibilityScore?: string; senderName?: string; neededItem?: string },
 ) {
   /* THROWS on an unrecognised template rather than assuming ["name","url"].
      That assumption was a quieter version of the queue's template fallback: an unregistered name got

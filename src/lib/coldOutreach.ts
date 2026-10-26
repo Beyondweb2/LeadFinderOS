@@ -117,6 +117,14 @@ export const CONTINUATION_TEMPLATES: ReadonlySet<string> = new Set([
      link to a PAYING client. Neither is a first approach; both are one per lead unless deliberately resent. */
   "findable_signup_link",
   "findable_onboarding",
+  /* The admin dashboard's six (2026-10-26, dashboardTemplates.ts): each goes to someone who filled in the questionnaire,
+     is a paying client, or is already in the conversation — never a first approach. */
+  "questionnaire_domain_help",
+  "questionnaire_payment_help",
+  "needs_from_you",
+  "agency_access",
+  "agreement_next_steps",
+  "nudge_24h",
 ]);
 
 /** True when this template is a COLD approach — a first contact that must never land on a number

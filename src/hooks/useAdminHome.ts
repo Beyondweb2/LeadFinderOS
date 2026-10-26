@@ -4,6 +4,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import type { MarkAction, NeedsFacts } from '@/lib/needsMe';
+import { DASHBOARD_TEMPLATE_NAMES, type TemplateSend } from '@/lib/dashboardTemplates';
 
 /* The generated types do not know the new RPCs / tables yet (migration 20261127090000). */
 const sb = supabase as unknown as {
@@ -32,6 +33,43 @@ export function useAdminHomeNeeds() {
 
 export function useAdminHomeNumbers(days: number) {
   return useQuery({ queryKey: ['admin-home-numbers', days], queryFn: () => rpc<HomeNumbers>('admin_home_numbers', { p_days: days }), staleTime: 5 * 60_000 });
+}
+
+export const DASHBOARD_TEMPLATE_SENDS_KEY = ['dashboard-template-sends'] as const;
+
+/** Each dashboard template's LAST real send (Meta's last answer about it) — what turns its button on or off
+ *  (dashboardTemplates.ts dashboardTemplateState). Named columns only; newest first. */
+export function useDashboardTemplateSends() {
+  return useQuery({
+    queryKey: DASHBOARD_TEMPLATE_SENDS_KEY,
+    queryFn: async (): Promise<Record<string, TemplateSend>> => {
+      const { data, error } = await sb.from('whatsapp_messages')
+        .select('template_name, status, error_code, error_title, created_at')
+        .eq('direction', 'outbound').in('template_name', DASHBOARD_TEMPLATE_NAMES)
+        .order('created_at', { ascending: false }).limit(200);
+      if (error) throw new Error(error.message);
+      const last: Record<string, TemplateSend> = {};
+      for (const r of (data ?? []) as (TemplateSend & { template_name: string })[]) if (!last[r.template_name]) last[r.template_name] = r;
+      return last;
+    },
+    staleTime: 60_000,
+  });
+}
+
+/** Phone / country / contact name for the few paid clients on the list (the handoff list carries none; a send needs the
+ *  number). Three columns for a handful of ids — never the lead list. */
+export function useClientContacts(ids: readonly string[]) {
+  const key = [...ids].sort();
+  return useQuery({
+    queryKey: ['admin-home-client-contacts', key],
+    enabled: key.length > 0,
+    queryFn: async (): Promise<Record<string, { phone: string | null; country: string | null; contact_name: string | null }>> => {
+      const { data, error } = await sb.from('outreach_leads').select('id, phone, country, contact_name').in('id', key);
+      if (error) throw new Error(error.message);
+      return Object.fromEntries(((data ?? []) as { id: string; phone: string | null; country: string | null; contact_name: string | null }[]).map((r) => [r.id, r]));
+    },
+    staleTime: 5 * 60_000,
+  });
 }
 
 /** Snooze / dismiss / archive, undo, outcomes and template approvals. Each refreshes the list in place. */

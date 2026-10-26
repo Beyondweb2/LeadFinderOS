@@ -22,6 +22,14 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-26-dashboard-templates', date: '2026-10-26', title: 'Dashboard send buttons now send your Meta templates', audience: 'admin',
+    body: 'Domain help, payment help, what we need, agency access, agreement & next steps and the 24-hour nudge now send from the dashboard row, through the normal sender. Clicking a lead opens their Inbox conversation.',
+    report: {
+      added: ['Six templates wired: questionnaire_domain_help, questionnaire_payment_help, needs_from_you, agency_access, agreement_next_steps, nudge_24h.', 'Each button follows Meta\'s own answer: if Meta refuses the template (for example still in review), the button turns off with Meta\'s reason and tries again 6 hours later. agency_access and nudge_24h start as "In review".'],
+      changed: ['Clicking a business on the dashboard (or in Questionnaires this week) opens their conversation in the Inbox, not Outreach.', 'After the 24-hour nudge the next step is "Call them", then "Record the outcome" (there is no final-nudge template).', 'Questionnaire rows use the new templates: domain question → domain help, signed but not paid → payment help, answers done → agreement & next steps; new clients → what we need (with the missing items).'],
+      removed: ['The final nudge and the interested follow-up buttons stay disabled (not set up at Meta).'],
+      effect: 'The dashboard buttons send for real, still with send hours, opt-outs, the 24-hour rule and Meta\'s rules applied. Nothing sends by itself.',
+    } },
   { id: '2026-10-26-hook-first', date: '2026-10-26', title: 'First reply drafts lead with the hook and report', audience: 'admin',
     body: 'Any first reply that is not a no now gets the normal hook with the report link, even when they think you are a customer ("are you looking for manual lessons?"). No apology, no explaining. No-website hooks use your new paragraph.',
     report: {

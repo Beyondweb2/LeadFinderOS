@@ -713,3 +713,21 @@ Inbox), a preview from `readableTemplateBody`, Send template, and free text insi
   and the dialog both use it. The dialog writes nothing itself. Pinned by `scripts/whatsapp-lead-dialog.test.ts`.
 - The click keeps the No-WhatsApp toast, the contact gate and the Contact Method pill. The old wa.me `SingleWhatsAppDialog`
   still serves only the launch-pad (`launchIntent.channel === 'whatsapp'`).
+
+## The admin dashboard's six templates (2026-10-26, Paul)
+
+`src/lib/dashboardTemplates.ts` (Deno-free; read by the sender and the SPA). questionnaire_domain_help {{1}} business,
+questionnaire_payment_help {{1}} business, needs_from_you {{1}} first name else business {{2}} item needed, agency_access {{1}}
+first name else business, agreement_next_steps {{1}} first name else business, nudge_24h {{1}} business. NOT wired: final_nudge,
+payment_failed. Registered in WA_TEMPLATES (lang "en") + the queue mirror + CONTINUATION_TEMPLATES + both body maps +
+SERVER_ONLY_TEMPLATE_LABELS (never in a picker). New variable `needed_item` (cleanNeededItem; blank refuses).
+- **Sent only** by send-whatsapp-message's dashboard branch: admin only, `template_vars.needed_item` from the caller; every
+  other guard unchanged (opt-out refuses — they are marketing, not service; 24-hour rule; send hours → queued, the drain reads
+  the item back from the stored line, `neededItemFromTranscript`). BUILD_ID `2026-10-26a-dashboard-templates`.
+- ⛔ **Meta's wording and live status are NOT readable** (2026-10-26): `WHATSAPP_BUSINESS_ACCOUNT_ID` is unset, the token's
+  debug_token lists no account ids and me/businesses is empty, so `_shared/template-status.ts` answers `no_waba` for every name.
+  Paul cannot supply the id. So: the transcript names the template and its values, never invented words; and the button's
+  on/off is the template's LAST REAL SEND (`dashboardTemplateState`): a Meta template refusal (132000/1/5/7/12/15/16) turns it
+  off with Meta's reason for 6 h, then it is live again; agency_access and nudge_24h (In review per Paul, 26 Oct) start off
+  for 24 h. The account and the agreement_next_steps wording could not be checked from here.
+- The language is assumed "en" (all of Paul's templates are); a mismatch comes back as 132001 and turns the button off.

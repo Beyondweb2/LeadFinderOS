@@ -65,6 +65,8 @@ export interface NeedsRow {
   firstName?: string | null;
   prospectOnly?: boolean;
   alreadySent?: boolean;
+  /** needs_from_you {{2}}: what the client still has to send. */
+  neededItem?: string | null;
   /** Where the secondary button opens. */
   open: { kind: 'lead' | 'client' | 'attention'; attention?: AttentionItem };
   /** A questionnaire row's id, for "Record the outcome". */
@@ -104,7 +106,7 @@ export function questionnaireRows(qs: readonly QuestionnaireRowFact[], nowMs: nu
       key: questionnaireRowKey(q.id), kind: 'questionnaire', kindLabel: KIND_LABEL.questionnaire, group,
       leadId: q.lead_id, business: q.business_name || 'Unnamed sign-up', why: s.why, action: s.action, template: s.template,
       sinceIso: q.created_at, dueIso: s.dueIso,
-      flag: s.escalation === 1 ? 'Escalated · 24h' : s.escalation === 2 ? 'Escalated · 48h' : s.escalation === 3 ? 'Final nudge sent' : null,
+      flag: s.escalation === 1 ? 'Escalated · 24h' : s.escalation === 2 ? 'Escalated · 48h' : s.escalation === 3 ? 'Nudged, no answer' : null,
       phone: q.lead_phone ?? null, country: q.lead_country ?? null, firstName: first(q.lead_contact_name),
       prospectOnly: prospectOnlyLead({ country: q.lead_country ?? null }), alreadySent: !!q.followup_sent,
       open: { kind: 'lead' }, onboardingId: q.id,
@@ -126,7 +128,7 @@ export function buildNeedsRows(input: { facts: NeedsFacts; attention: readonly A
       key: `attention:${a.key}`, kind, kindLabel: payment ? (a.kind === 'payment_dispute' ? 'Payment dispute' : 'Payment failed') : KIND_LABEL[kind],
       group: a.group === 'urgent' || payment ? 'urgent' : a.group === 'blocked' ? 'waiting' : 'today',
       leadId: a.leadId, business: a.business, why: a.why, action: a.action,
-      template: payment && a.kind === 'payment_failed' ? 'payment_help' : null, sinceIso: a.sinceIso,
+      template: null, sinceIso: a.sinceIso,
       open: { kind: 'attention', attention: a },
     });
   }
@@ -161,7 +163,7 @@ export function buildNeedsRows(input: { facts: NeedsFacts; attention: readonly A
     rows.push({
       key: `client:${c.id}`, kind: 'new_client', kindLabel: KIND_LABEL.new_client, group: next.action ? 'today' : 'waiting',
       leadId: c.id, business: c.business_name, why: `${c.handoff?.stage_label ?? 'Setup'}: ${next.label}${missing.length ? ` · missing ${missing.slice(0, 3).join(', ')}` : ''}`,
-      action: next.label, template: missing.length ? 'what_we_need' : null, sinceIso: c.payment_date ?? null, open: { kind: 'client' },
+      action: next.label, template: missing.length ? 'needs_from_you' : null, neededItem: missing.length ? missing.join(', ') : null, sinceIso: c.payment_date ?? null, open: { kind: 'client' },
     });
   }
 
