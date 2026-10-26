@@ -22,6 +22,14 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-26-hook-first', date: '2026-10-26', title: 'First reply drafts lead with the hook and report', audience: 'admin',
+    body: 'Any first reply that is not a no now gets the normal hook with the report link, even when they think you are a customer ("are you looking for manual lessons?"). No apology, no explaining. No-website hooks use your new paragraph.',
+    report: {
+      added: ['"Manual or automatic?", "yes who\'s this?", "what are you selling?", a price question or anything else on the first reply now gets the hook: Hi mate, what AI said and who it named, the findings, the specialise line, the report link, one question.', 'A draft that carries a link (the report link) is never sent automatically, even in Auto mode with every type switched on.'],
+      changed: ['No website: "Most local work comes from recommendations, and now AI is the one recommending. It leans on websites when it picks who to name, and I couldn\'t find one for you. Without one built for AI, you\'re hard to recommend." The checker warns on "well-built" and "more important than ever".', 'Australian leads get the hook without the report link.', 'A clean-site hook no longer shows the false warning "talks about a website issue" (the report link\'s https was read as a site fault).'],
+      removed: ['On the first reply: "Ha, sorry for the confusion, I\'m not after lessons myself…", "Fair question… I offer a service", "Sorry for the slow reply" and the "I\'m Paul, I run Findable" answer. They still apply after the hook has gone.'],
+      effect: 'First replies get the message that works, with the report. A no, a soft no, a stop, a wrong number, "is this a bot?" and a chatbot keep their old handling. Existing drafts are not rewritten: press Regenerate on the ones you want. Nothing is sent by this change.',
+    } },
   { id: '2026-10-26-reply-detectors', date: '2026-10-26', title: 'Reply drafts read four kinds of reply correctly', audience: 'admin',
     body: 'Instructors who think you want lessons now get the "not after lessons myself" reply, chatbots get nothing, "no competition" is not read as interest, and a sticker is just a thumbs-up. The new-client email says "NOT ANSWERED" when the domain question was left blank.',
     report: {

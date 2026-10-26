@@ -210,7 +210,7 @@ export interface AutoSendFacts {
 export type AutoSendRefusal =
   | 'master_off' | 'intent_off' | 'not_auto_type' | 'not_a_draft' | 'no_text' | 'needs_you' | 'stop' | 'auto_reply_label'
   | 'price_or_proof' | 'checker_warned' | 'fallback' | 'non_uk' | 'client' | 'archived' | 'thread_flagged' | 'suppressed'
-  | 'person_active' | 'daily_cap' | 'no_sender' | 'evidence_incomplete' | 'not_simple_first_reply';
+  | 'person_active' | 'daily_cap' | 'no_sender' | 'evidence_incomplete' | 'not_simple_first_reply' | 'has_link';
 
 export type AutoSendVerdict = { send: true; key: string } | { send: false; reason: AutoSendRefusal };
 
@@ -218,6 +218,7 @@ export const AUTO_SEND_REFUSAL_LABELS: Record<AutoSendRefusal, string> = {
   master_off: 'The Inbox mode is not Auto',
   evidence_incomplete: 'The audit or website check was not complete',
   not_simple_first_reply: 'Their first reply was not a plain "yes" or "how can I help"',
+  has_link: 'The draft carries a link (the report link is approve-to-send only)',
   intent_off: 'This reply type is not switched on',
   not_auto_type: 'This reply type is never sent automatically',
   not_a_draft: 'Not a plain draft',
@@ -240,6 +241,9 @@ export const AUTO_SEND_REFUSAL_LABELS: Record<AutoSendRefusal, string> = {
 
 const ms = (v: string | number | null): number => (typeof v === 'number' ? v : v ? Date.parse(v) : NaN);
 
+/** Any web address in a draft: https://, www., or a findable.live/r/ style bare link. */
+const DRAFT_LINK = /https?:\/\/|\bwww\.|\b[a-z0-9-]+\.(?:live|co\.uk|com|uk|net|org|io)\/\S/i;
+
 /** THE RULE. The order only decides which reason is reported; every check must pass for `send: true`. */
 export function autoSendVerdict(f: AutoSendFacts): AutoSendVerdict {
   const d = f.draft;
@@ -253,6 +257,8 @@ export function autoSendVerdict(f: AutoSendFacts): AutoSendVerdict {
   if (d.needsYou) return no('needs_you');
   if (d.label === 'Auto-reply') return no('auto_reply_label');
   if (!String(d.text ?? '').trim()) return no('no_text');
+  /* ⛔ A draft with a link (the report link) is approve-to-send only, never sent by itself (Paul, 2026-10-26). */
+  if (DRAFT_LINK.test(String(d.text ?? ''))) return no('has_link');
   if (d.confidence || d.allowPrice || PRICE_OR_PROOF.test(String(f.latestInbound ?? ''))) return no('price_or_proof');
   if (HOSTILE_WORDS.test(String(f.latestInbound ?? ''))) return no('thread_flagged');
   if (d.problems.length > 0) return no('checker_warned');

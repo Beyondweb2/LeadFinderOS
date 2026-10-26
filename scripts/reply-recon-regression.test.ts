@@ -28,6 +28,18 @@ const OVERRIDES: Record<string, { expected: string; why: string }> = {
   R075: { expected: 'DRAFT:how_much', why: 'A price question beside a proof ask is answered as the price first (zz-real-15).' },
   R081: { expected: 'DRAFT:set_call', why: 'We asked the time; confirming it is the existing set_call draft (the win event), not a hand-over.' },
   R095: { expected: 'NEW:where_based', why: '"Company name and website": where_based gives both (findable.live); who_are_you gives neither.' },
+  R025: { expected: 'PITCH', why: 'Hook first (Paul, 2026-10-26): a first reply that is not a no gets the hook as it stands, no explaining or apology.' },
+  R026: { expected: 'PITCH', why: 'Hook first (Paul, 2026-10-26): a first reply that is not a no gets the hook as it stands, no explaining or apology.' },
+  R027: { expected: 'PITCH', why: 'Hook first (Paul, 2026-10-26): a first reply that is not a no gets the hook as it stands, no explaining or apology.' },
+  R028: { expected: 'PITCH', why: 'Hook first (Paul, 2026-10-26): a first reply that is not a no gets the hook as it stands, no explaining or apology.' },
+  R030: { expected: 'PITCH', why: 'Hook first (Paul, 2026-10-26): a first reply that is not a no gets the hook as it stands, no explaining or apology.' },
+  R031: { expected: 'PITCH', why: 'Hook first (Paul, 2026-10-26): a first reply that is not a no gets the hook as it stands, no explaining or apology.' },
+  R032: { expected: 'PITCH', why: 'Hook first (Paul, 2026-10-26): a first reply that is not a no gets the hook as it stands, no explaining or apology.' },
+  R033: { expected: 'PITCH', why: 'Hook first (Paul, 2026-10-26): a first reply that is not a no gets the hook as it stands, no explaining or apology.' },
+  R034: { expected: 'PITCH', why: 'Hook first (Paul, 2026-10-26): a first reply that is not a no gets the hook as it stands, no explaining or apology.' },
+  R035: { expected: 'PITCH', why: 'Hook first (Paul, 2026-10-26): a first reply that is not a no gets the hook as it stands, no explaining or apology.' },
+  R036: { expected: 'PITCH', why: 'Hook first (Paul, 2026-10-26): a first reply that is not a no gets the hook as it stands, no explaining or apology.' },
+  R100: { expected: 'PITCH', why: 'Hook first (Paul, 2026-10-26): a first reply that is not a no gets the hook as it stands, no explaining or apology.' },
   R077: { expected: 'NEEDS:proof_request', why: 'References are something we cannot send (Paul: proof we cannot send is Needs you). Suggested text is the proof line.' },
 };
 /* Not scored: an intent not built yet. (R085 acknowledge_wait was built 2026-10-21, Paul: "No problem, speak soon.") */

@@ -63,12 +63,12 @@ for (const [body, reason] of [['STOP', 'opt_out'], ['please stop messaging me', 
   ok(d.kind === 'needs_you' && d.stop === true && d.reason === reason, `stop: "${body}" → Needs you, no draft (${reason})`);
 }
 ok((() => { const d = decide('hi', { suppressed: true }); return d.kind === 'needs_you' && d.stop && d.reason === 'do_not_contact'; })(), 'Do Not Contact → a stop');
-for (const [body, reason] of [['No thanks mate', 'not_interested'], ['wrong number mate', 'wrong_person'], ['my solicitor will be in touch', 'legal'],['Tak berminat', 'other_language'], ['https://maps.app.goo.gl/xxx', 'link'], ['can I cancel if it does not work?', 'paul_looks']] as const) {
+for (const [body, reason] of [['No thanks mate', 'not_interested'], ['wrong number mate', 'wrong_person'], ['my solicitor will be in touch', 'legal'],['Tak berminat', 'other_language'], ['can I cancel if it does not work?', 'paul_looks']] as const) {
   const d = decide(body);
   ok(d.kind === 'needs_you' && !d.stop && d.reason === reason, `Needs you: "${body}" → ${reason}${d.kind === 'needs_you' ? '' : ' — got ' + d.kind}`);
 }
 ok((() => { const d = decide('[audio]', { messageType: 'audio' }); return d.kind === 'needs_you' && d.reason === 'media'; })(), 'a voice note → Needs you (listen first)');
-for (const body of ['How much is it?', 'Can you give me a call tomorrow', 'Yes please, sounds good', 'Yes it is', 'I pay him to do the website']) ok(decide(body).kind === 'draft', `drafted (no hand-over): "${body}"`);
+for (const body of ['How much is it?', 'Can you give me a call tomorrow', 'Yes please, sounds good', 'Yes it is', 'I pay him to do the website', 'https://maps.app.goo.gl/xxx']) ok(decide(body).kind === 'draft', `drafted (no hand-over): "${body}"`);
 /* The first auto-reply to the opener: they have not confirmed who they are, so its draft is the first-reply pitch (Paul,
    2026-10-20, Ven). A repeated auto-reply still gets nothing (reply-move.test.ts, loop guards). */
 {

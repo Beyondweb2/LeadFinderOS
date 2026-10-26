@@ -32,7 +32,7 @@ console.log('1. the no-website pitch Quick Drive would get today');
 {
   const p = firstReplyPitch(QD);
   const t = pitchText(p);
-  ok(/AI tends to lean on websites when it names businesses, and I couldn't find one for you\./.test(t) && !/Gemini|Google AI/.test(t), 'Option 2 words, no brand (the 20 Oct pitch said "I asked Gemini")');
+  ok(t.includes("Most local work comes from recommendations, and now AI is the one recommending. It leans on websites when it picks who to name, and I couldn't find one for you. Without one built for AI, you're hard to recommend.") && !/Gemini|Google AI/.test(t), 'Paul\'s no-website words (2026-10-26), no brand');
   ok(p.question === "Do you have a website I've missed, or is that something you'd want sorted?" && p.structure === 'pitch_no_site', 'the one question, structure pitch_no_site');
 }
 

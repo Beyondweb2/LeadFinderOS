@@ -86,8 +86,9 @@ for (const t of ['Yes, is there anything I can help you with?', 'Hi what can I a
 }
 const noSite = pick([them('Yes how can I assist you?', 30)], { ...EV, hasWebsite: false, site: { state: 'no_website', issues: [] } });
 ok(isPitch(noSite) && /website/i.test(noSite.fixedText ?? ''), 'no website on record: the pitch asks the website question');
-/* "Is this a sales call" gets the straight answer, then the pitch (straight_answer_then_pitch, 2026-10-21): never the plain pitch. */
-for (const t of ['Is this a sales call', 'No thanks', "Who's this?"]) { const p = pick([them(t, 30)]); ok(!isPitch(p) || t === "Who's this?" || p.intent === 'straight_answer_then_pitch', `not widened too far: "${t}"`); }
+/* Hook first (Paul, 2026-10-26): "Is this a sales call" and "Who's this?" as the first reply get the hook as it stands; a no never does. */
+for (const t of ['Is this a sales call', "Who's this?"]) ok(isPitch(pick([them(t, 30)])), `hook first: "${t}"`);
+ok(!isPitch(pick([them('No thanks', 30)])), 'not widened too far: "No thanks" never gets the hook');
 
 console.log(f ? `\n${f} FAILED` : '\nall passed');
 process.exit(f ? 1 : 0);

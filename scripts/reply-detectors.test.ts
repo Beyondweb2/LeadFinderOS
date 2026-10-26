@@ -30,7 +30,8 @@ console.log('1. they think we are the customer');
     ok(p.intent === 'thinks_customer' && !p.allowPrice, `after the pitch → thinks_customer, no price: "${t}"`);
   }
   const first = pm([opener, them('Hiya, yes. Are you looking for manual driving lessons?')]);
-  ok(first.intent === 'thinks_customer', 'as the first reply too → thinks_customer');
+  /* Hook first (Paul, 2026-10-26): on the FIRST reply the mistake is not explained, the hook goes as it stands. */
+  ok(first.move === 'first_reply_pitch' && /^Hi mate,\n\nI asked AI/.test(first.fixedText ?? '') && !/sorry|confusion|not after/i.test(first.fixedText ?? ''), 'as the first reply → the hook, no apology, no "not after lessons"');
   for (const t of ['Yes it is, how can I help?', 'Hi yes this is Pass Me Driving', 'I do it myself', 'Thank you for your interest, I\'m currently building a website with a friend.']) {
     ok(!RE.thinksCustomer.test(t), `not read as a customer mistake: "${t}"`);
   }
