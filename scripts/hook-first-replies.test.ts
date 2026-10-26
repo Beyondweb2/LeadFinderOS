@@ -42,7 +42,7 @@ console.log('1. Green Driver: "are you looking for manual lessons?" → the hook
   const p = pm(greenDriver, them(said));
   const t = p.fixedText ?? '';
   ok(p.move === 'first_reply_pitch', `the hook (got ${p.move} / ${p.intent ?? ''})`);
-  ok(t.startsWith('Hi mate,\n\nI asked AI "Who is the best driving instructor in Gosport?" and it mentioned Rival A Driving, Rival B Driving and Rival C Driving.'), 'opens "Hi mate," then the question and the real names');
+  ok(t.startsWith('Hi mate,\n\nI asked google ai "Who is the best driving instructor in Gosport?" and it mentioned Rival A Driving, Rival B Driving and Rival C Driving.'), 'opens "Hi mate," then the question and the real names');
   ok(t.includes(PITCH_INSTEAD_LINE) && t.includes(PITCH_SPECIALISE_LINE), 'the instead line and the specialise line');
   ok(t.includes(`Here's the full report: ${REPORT}\n\n${PITCH_AGENCY_Q}`) && t.endsWith(PITCH_AGENCY_Q), 'the report link, then ONE question: the agency question');
   ok(!NO_EXPLAINING.test(t), 'no apology, no "not after lessons", no explaining');

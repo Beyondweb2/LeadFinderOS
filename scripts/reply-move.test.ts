@@ -234,7 +234,7 @@ console.log('9. Nola: counted over every engine in the score, led by the missed 
     hookAlreadySent: false, findings: [], hasWebsite: true, ownerName: null, foundOnGoogle: true,
     site: { state: 'issues', issues: ['Some pages are unfinished, with sample text on them'] },
   };
-  const LEAD = 'I asked AI "Who is the best driving instructor for beginners in Halstead?" and it mentioned Driving 4CE Driving School, Reliant Driver Training and One Direction Driving School.';
+  const LEAD = 'I asked google ai "Who is the best driving instructor for beginners in Halstead?" and it mentioned Driving 4CE Driving School, Reliant Driver Training and One Direction Driving School.';
   const p = pm([{ from: 'us', text: '[initial_contact_short]', templateName: 'initial_contact_short' }, { from: 'them', text: 'Yes' }], { evidence: nola });
   ok(p.move === 'first_reply_pitch' && p.closer === 'agency' && (p.fixedText ?? '').includes(PITCH_INSTEAD_LINE), '1 of 3 (Google AI counted) → the FULL pitch (with "AI is recommending your competitors instead"), ending on the agency question');
   ok((p.fixedText ?? '').startsWith(`Hi mate,\n\n${LEAD}`), 'line 1 (after "Hi mate,") is the missed search: the engine, the question and that answer\'s three names');
@@ -243,10 +243,10 @@ console.log('9. Nola: counted over every engine in the score, led by the missed 
   const w = checkAiReply(fallbackAiReply(ctx), ctx);
   ok(w.length === 0, `Nola's pitch draft passes the checker${w.length ? ' — ' + w.join(' | ') : ''}`);
   const half = pm([{ from: 'us', text: '[initial_contact_short]', templateName: 'initial_contact_short' }, { from: 'them', text: 'Yes' }], { evidence: { ...nola, named: { named: 1, valid: 2 } } });
-  ok(!(half.fixedText ?? '').includes(PITCH_INSTEAD_LINE) && /^Hi mate,\n\nI asked AI "Who is the best driving instructor for beginners in Halstead\?" and it mentioned Driving 4CE/.test(half.fixedText ?? '') && !/not you/.test(half.fixedText ?? '') && !/named you in|gap in the rest/.test(half.fixedText ?? ''), 'more than a third (1 of 2) → the soft version, still without "X of Y" or "gap"');
+  ok(!(half.fixedText ?? '').includes(PITCH_INSTEAD_LINE) && /^Hi mate,\n\nI asked google ai "Who is the best driving instructor for beginners in Halstead\?" and it mentioned Driving 4CE/.test(half.fixedText ?? '') && !/not you/.test(half.fixedText ?? '') && !/named you in|gap in the rest/.test(half.fixedText ?? ''), 'more than a third (1 of 2) → the soft version, still without "X of Y" or "gap"');
   ok(checkAiReply("When I asked Gemini for a driving instructor in Halstead it named you in 1 of 2 answers, so there's a gap in the rest.", ctx).some((x) => /X of Y/.test(x)), 'a draft saying "named you in 1 of 2 answers … gap in the rest" → warning');
   ok(firstReplyPitch({ ...nola, engineWords: 'chatgpt' }).lines[1].startsWith('I asked AI "Who is the best driving instructor for beginners in Halstead?" and it mentioned Driving 4CE'), 'the worst answer was Gemini but the conversation already named ChatGPT → "AI": never two tools, never an engine that named them');
-  ok(/^I asked AI for driving instructors in Halstead and/.test(firstReplyPitch({ ...nola, missed: { engine: 'gemini', question: 'Driving instructors in Halstead UK' } }).lines[1]), 'a search phrase (not a question) follows "for", the trade lower case, no "UK"');
+  ok(/^I asked google ai for driving instructors in Halstead and/.test(firstReplyPitch({ ...nola, missed: { engine: 'gemini', question: 'Driving instructors in Halstead UK' } }).lines[1]), 'a search phrase (not a question) follows "for", the trade lower case, no "UK"');
 }
 
 console.log('9b. the site line: hedged, and a list that reads in parallel (Paul, 2026-10-20)');
@@ -277,7 +277,7 @@ console.log('10. Ven: multi-message and non-English auto-responders (Paul, 2026-
   ok(autoReplyFlags(ven).slice(1).every(Boolean), 'all three burst messages read as one auto-reply');
   const p = pm(ven, { evidence: venEv });
   ok(p.move === 'auto_reply' && p.label === 'Auto-reply' && !!p.fixedText && !/cheers for your reply/i.test(p.fixedText ?? ''), 'Ven → Auto-reply (not a real reply), drafted as the first-reply pitch, never "Cheers for your reply"');
-  ok((p.fixedText ?? '').startsWith('Hi mate,\n\nI asked AI for best language schools in London and it mentioned Rival A School and Rival B School'), 'the pitch leads with the missed search');
+  ok((p.fixedText ?? '').startsWith('Hi mate,\n\nI asked google ai for best language schools in London and it mentioned Rival A School and Rival B School'), 'the pitch leads with the missed search');
   ok(!p.allowPrice && !/interested/.test(p.read), 'their "Are you interested in Spanish lessons?" is never read as interest');
   const later = pm([...ven, { from: 'them', text: 'Yes it is', at: '2026-10-20T09:00:00Z' }], { evidence: venEv });
   ok(later.move === 'first_reply_pitch' && !later.allowPrice, 'a real "Yes it is" after the burst → the first-reply pitch, never a price (the burst was not a clear yes)');

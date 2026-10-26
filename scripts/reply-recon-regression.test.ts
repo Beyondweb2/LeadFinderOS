@@ -126,7 +126,7 @@ function contentProblems(text: string, p: MovePlan, ctx: AiReplyContext): string
   if (words(text) > cap) out.push(`${words(text)} words (cap ${cap})`);
   const hi = /^(Hi|Hey) [A-Za-z]+,/.exec(text);
   if (hi && !FIRST_NAMES_OK.test(text)) out.push(`greets "${hi[0]}"`);
-  if (!p.brandsAllowed && AI_BRAND.test(text)) out.push('names an AI brand');
+  if (!p.brandsAllowed && AI_BRAND.test(p.hookEngine ? text.split(`I asked ${p.hookEngine}`).join('I asked AI') : text)) out.push('names an AI brand');
   for (const [re, label] of BANNED) if (re.test(text)) out.push(`uses ${label}`);
   for (const m of text.match(/£\s?\d[\d,]*(?:\.\d+)?/g) ?? []) if (!SHEET_MONEY.includes(m.replace(/\s/g, '').replace(/\.00$/, ''))) out.push(`${m} is not on the fact sheet`);
   for (const m of text.matchAll(/\b(\d+)\s+weeks?\b/gi)) if (Number(m[1]) !== REMEASURE_WEEKS_STANDARD) out.push(`"${m[0]}" is not on the fact sheet`);

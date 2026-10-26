@@ -456,7 +456,9 @@ export function checkAiReply(reply: string, c: AiReplyContext): string[] {
   /* ⛔ No AI brand in any draft unless they asked which tool (Paul, 2026-10-21). When they did, the old engine checks apply:
      the sheet's engine wording names the tools on purpose, so read around it. */
   if (!p.brandsAllowed) {
-    if (AI_BRAND.test(r)) out.push('Names an AI tool (ChatGPT, Gemini, Google AI). Say "AI" unless they asked which tool.');
+    /* The hook's own "I asked chatgpt / google ai" (Paul, 2026-10-26) is allowed, exactly that; any other tool name still warns. */
+    const rb = p.hookEngine ? r.split(`I asked ${p.hookEngine}`).join('I asked AI') : r;
+    if (AI_BRAND.test(rb)) out.push('Names an AI tool (ChatGPT, Gemini, Google AI). Say "AI" unless they asked which tool.');
   } else {
     const forEngine = r.replace(/\bchat\s?gpt\s+and\s+gemini\b/gi, ' ').split(ENGINE_WORDING).join(' ');
     if (e.engineWords && wrongEngineWords(forEngine, e.engineWords) && !/\bthat\s+one\s+was\b/i.test(r)) out.push(`Names a different AI tool from the one this conversation uses (${engineName(e.engineWords)}).`);
