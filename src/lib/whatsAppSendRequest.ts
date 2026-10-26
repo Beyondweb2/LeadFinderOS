@@ -15,6 +15,8 @@ export interface WhatsAppSendArgs {
   /** Where the person pressed Send. 'inbox' (the Inbox) and 'lead_panel' (the Outreach WhatsApp popup): outside the lead's send hours
    *  the server QUEUES it (src/lib/inboxSendWindow.ts, SEND_WINDOW_SURFACES) instead of sending (Paul, 2026-10-21). */
   via?: 'inbox' | 'lead_panel';
+  /** Values a template needs from the person sending it (today only needs_from_you's "item needed"); the server cleans them. */
+  templateVars?: Record<string, string>;
 }
 
 export interface WhatsAppSendResult {
@@ -38,6 +40,7 @@ export async function sendWhatsAppRequest(sb: { functions: typeof Supabase.funct
       template_name: args.templateName,
       allow_resend: args.allowResend === true,
       ...(args.via ? { via: args.via } : {}),
+      ...(args.templateVars ? { template_vars: args.templateVars } : {}),
     },
   });
   if (error) return { ok: false, error: error.message };

@@ -682,6 +682,13 @@ const SERVER_ONLY_TEMPLATE_LABELS: Record<string, string> = {
   /* 2026-10-07: sent from Quick Close / Paid Clients only (one click, Meta's live approval), never from a picker. */
   findable_signup_link: 'Sign-up link (after a close)',
   findable_onboarding: 'Onboarding form link (paid client)',
+  /* 2026-10-26: the admin dashboard's six (src/lib/dashboardTemplates.ts) — sent from the dashboard row only, never a picker. */
+  questionnaire_domain_help: 'Domain help (dashboard)',
+  questionnaire_payment_help: 'Payment help (dashboard)',
+  needs_from_you: 'What we need from you (dashboard)',
+  agency_access: 'Agency access (dashboard)',
+  agreement_next_steps: 'Agreement and next steps (dashboard)',
+  nudge_24h: '24-hour nudge (dashboard)',
 };
 
 /** Every template that can appear anywhere, for pickers that legitimately span both products. */

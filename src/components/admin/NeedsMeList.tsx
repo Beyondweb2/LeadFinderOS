@@ -18,10 +18,10 @@ import { supabase } from '@/integrations/supabase/client';
 import { cn } from '@/lib/utils';
 import { Panel, TONE, type Tone } from '@/components/salesDash/ui';
 import { sendWhatsAppRequest } from '@/lib/whatsAppSendRequest';
-import { questionnaireFollowupBody } from '@/lib/questionnaireFollowup';
+import { DASHBOARD_TEMPLATES, dashboardGreeting, isDashboardTemplate, type TemplateSend } from '@/lib/dashboardTemplates';
 import { NEEDS_TEMPLATES, templateGate } from '@/lib/needsMeTemplates';
 import { LOST_REASONS, sinceLabel, type MarkAction, type NeedsGroup, type NeedsMark, type NeedsRow } from '@/lib/needsMe';
-import { ADMIN_HOME_NEEDS_KEY, snoozeUntil } from '@/hooks/useAdminHome';
+import { ADMIN_HOME_NEEDS_KEY, DASHBOARD_TEMPLATE_SENDS_KEY, snoozeUntil } from '@/hooks/useAdminHome';
 import { attentionAssignable } from '@/lib/teamBoard';
 import type { AttentionItem } from '@/lib/adminMetrics';
 
@@ -70,25 +70,29 @@ export function CardMarkMenu({ itemKey, onMark }: { itemKey: string; onMark: Mar
   );
 }
 
-function SendButton({ row, approvals }: { row: NeedsRow; approvals: readonly string[] }) {
+function SendButton({ row, sends }: { row: NeedsRow; sends: Readonly<Record<string, TemplateSend>> }) {
   const { toast } = useToast();
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   if (!row.template) return null;
   const t = NEEDS_TEMPLATES[row.template];
-  const needsName = row.template === 'questionnaire_followup' && !row.firstName;
-  const gate = needsName ? { ok: false as const, reason: "Add the owner's first name on the lead first" }
-    : templateGate(row.template, { approvals, prospectOnly: !!row.prospectOnly, hasPhone: !!row.phone, alreadySent: row.alreadySent });
-  const preview = row.template === 'questionnaire_followup' ? questionnaireFollowupBody(row.firstName ?? '', row.business) : t.body.replace('{{1}}', row.firstName ?? 'there');
+  const gate = templateGate(row.template, { prospectOnly: !!row.prospectOnly, hasPhone: !!row.phone, lastSend: sends[row.template] ?? null, neededItem: row.neededItem });
+  /* What goes: Meta's approved wording for this template, filled with these values (the app cannot read Meta's text). */
+  const dash = isDashboardTemplate(row.template) ? row.template : null;
+  const greeting = dashboardGreeting(row.firstName, row.business);
+  const values = dash ? DASHBOARD_TEMPLATES[dash].vars.map((v) => v === 'name' ? `Business name: ${row.business}` : v === 'greeting_name' ? `Name: ${greeting}` : `Item needed: ${row.neededItem ?? ''}`) : [];
   const send = async () => {
     setBusy(true);
-    const r = await sendWhatsAppRequest(supabase, { phone: row.phone ?? '', leadId: row.leadId, country: row.country ?? null, templateName: row.template!, via: 'lead_panel' });
+    const r = await sendWhatsAppRequest(supabase, { phone: row.phone ?? '', leadId: row.leadId, country: row.country ?? null, templateName: row.template!, via: 'lead_panel',
+      ...(dash && DASHBOARD_TEMPLATES[dash].vars.includes('needed_item') ? { templateVars: { needed_item: row.neededItem ?? '' } } : {}) });
     setBusy(false); setOpen(false);
+    void qc.invalidateQueries({ queryKey: DASHBOARD_TEMPLATE_SENDS_KEY });
     if (!r.ok) { toast({ title: 'Not sent', description: r.reason ?? r.error ?? 'The sender refused it.', variant: 'destructive' }); return; }
     toast({ title: r.scheduled ? 'Queued' : 'Sent', description: r.scheduled ? `Outside their send hours: it goes at ${new Date(r.scheduled.send_at).toLocaleString('en-GB', { timeZone: r.scheduled.tz, hour: '2-digit', minute: '2-digit', weekday: 'short' })} (${r.scheduled.tz}).` : `${t.label} to ${row.business}.` });
     void qc.invalidateQueries({ queryKey: ADMIN_HOME_NEEDS_KEY });
   };
+  const preview = `Meta's approved "${row.template}" template, with:\n${values.join('\n')}`;
   return (
     <>
       <span title={gate.ok ? undefined : gate.reason}>
@@ -141,8 +145,10 @@ function OutcomeDialog({ row, onClose, onSave }: { row: NeedsRow | null; onClose
   );
 }
 
-export function NeedsMeList({ rows, approvals, highlightKey, onOpen, onMark, onOutcome, lastArchived, onUndo, loading, error, onRetry, cardMenu, onAssign }: {
-  rows: NeedsRow[]; approvals: readonly string[]; highlightKey?: string | null;
+export function NeedsMeList({ rows, templateSends, highlightKey, onOpen, onMark, onOutcome, lastArchived, onUndo, loading, error, onRetry, cardMenu, onAssign }: {
+  rows: NeedsRow[];
+  /** Each dashboard template's last real send (Meta's last answer) — turns its button on or off. */
+  templateSends: Readonly<Record<string, TemplateSend>>; highlightKey?: string | null;
   /** Delegate a lead-based follow-up to a salesperson (the Sales Team Board, unchanged): only where attentionAssignable says so. */
   onAssign?: (i: AttentionItem) => void;
   onOpen: (r: NeedsRow) => void; onMark: MarkFn; onOutcome: (onboardingId: string, reason: string, note: string) => Promise<void>;
@@ -187,7 +193,7 @@ export function NeedsMeList({ rows, approvals, highlightKey, onOpen, onMark, onO
                         <ArrowRight className="mt-1 hidden h-4 w-4 shrink-0 text-muted-foreground sm:block" />
                       </button>
                       <div className="flex flex-wrap items-center gap-1.5 border-t border-border/60 px-3 py-2 sm:border-t-0 sm:py-0">
-                        <SendButton row={r} approvals={approvals} />
+                        <SendButton row={r} sends={templateSends} />
                         {r.onboardingId && r.action === 'Record the outcome' && <Button size="sm" variant="outline" className="h-8 rounded-full" onClick={() => setOutcomeRow(r)}>Record outcome</Button>}
                         {onAssign && r.open.attention && attentionAssignable(r.open.attention) && <Button size="sm" variant="outline" className="h-8 rounded-full" onClick={() => onAssign(r.open.attention!)}>Assign</Button>}
                         <MarkButtons itemKey={r.key} onMark={onMark} />

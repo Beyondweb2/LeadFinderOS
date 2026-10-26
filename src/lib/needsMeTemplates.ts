@@ -1,64 +1,53 @@
 /* ═════════════════════════════════════════════════════════════════
-   THE ADMIN HOME'S ONE-TAP TEMPLATES (Concept A, Paul 2026-10-26). Pure and edge-safe.
-   docs/design/admin-dashboard/README.md §3.
-   ⛔ A button sends ONLY through the normal sender (sendWhatsAppRequest → send-whatsapp-message): send hours,
-   opt-outs, the 24-hour window, one-per-lead and Meta's template rules all apply there; nothing here bypasses them.
-   ⛔ A PROPOSED template (not yet registered with Meta and the sender) is never sendable: its button stays disabled.
-   Paul marks it "approved by Meta" (table dashboard_template_approvals); even then it stays disabled until it is
-   added to the sender's own template list with the exact registered words — `inSender` below — never "try it".
-   The words here are PLACEHOLDERS from the README for Paul to edit; Meta renders its own registered text.
+   THE ADMIN HOME'S ONE-TAP TEMPLATES (Concept A, Paul 2026-10-26). Pure.
+   The six Meta templates (src/lib/dashboardTemplates.ts) plus the two Paul chose NOT to wire (the final nudge and the
+   interested follow-up), which stay disabled.
+   ⛔ A button sends ONLY through sendWhatsAppRequest → send-whatsapp-message (its dashboard branch): send hours, opt-outs,
+   the 24-hour rule, the QA hold and Meta's template rules all apply there; nothing here bypasses them.
+   ⛔ ON / OFF IS META'S ANSWER, never a manual flip: dashboardTemplateState reads each template's last real send.
    ═════════════════════════════════════════════════════════════════ */
+import { DASHBOARD_TEMPLATES, dashboardTemplateState, isDashboardTemplate, type TemplateSend } from './dashboardTemplates.ts';
+import { sendErrorMeaning } from './sendErrorMeaning.ts';
 
 export type NeedsTemplateKey =
-  | 'questionnaire_followup' | 'domain_help' | 'agency_access' | 'agreement_next_steps' | 'payment_help'
-  | 'what_we_need' | 'interested_follow_up' | 'nudge_24h' | 'final_nudge';
+  | 'questionnaire_domain_help' | 'questionnaire_payment_help' | 'needs_from_you' | 'agency_access' | 'agreement_next_steps' | 'nudge_24h'
+  | 'final_nudge' | 'interested_follow_up';
 
 export interface NeedsTemplate {
   key: NeedsTemplateKey;
   /** The button text. */
   label: string;
-  /** Placeholder wording ({{1}} first name, {{2}} the detail). */
-  body: string;
-  /** Registered with Meta AND in the sender's template list today. */
-  inSender: boolean;
+  /** Wired into the sender (one of the six). */
+  wired: boolean;
   /** Never to a prospect-only market (Australia): it talks about the questions, the agreement or payment. */
   ukOnly: boolean;
 }
 
 export const NEEDS_TEMPLATES: Readonly<Record<NeedsTemplateKey, NeedsTemplate>> = {
-  /* The one that exists today (registered 2026-08-17; body in questionnaireFollowup.ts). One per lead (the sender refuses a repeat). */
-  questionnaire_followup: { key: 'questionnaire_followup', label: 'Send payment-step nudge', inSender: true, ukOnly: true,
-    body: "Hi {{1}}, saw your form come through for {{2}}, thanks for that. Everything is ready this end, it's just the payment step left…" },
-  domain_help: { key: 'domain_help', label: 'Send domain help', inSender: false, ukOnly: true,
-    body: "Hi {{1}}, it's Paul from Findable. I saw the website address part of the questions was left blank. Easier if I go through it with you on a quick call?" },
-  agency_access: { key: 'agency_access', label: 'Send agency access', inSender: false, ukOnly: true,
-    body: "Hi {{1}}, it's Paul from Findable. To get your new site live we need the domain, which {{2}} looks after. Would you like me to ask them for you?" },
-  agreement_next_steps: { key: 'agreement_next_steps', label: 'Send agreement & next steps', inSender: false, ukOnly: true,
-    body: "Hi {{1}}, it's Paul from Findable. Your answers are saved. The next step is to read and sign the agreement, then the first payment. Shall I send you the link?" },
-  payment_help: { key: 'payment_help', label: 'Send payment help', inSender: false, ukOnly: true,
-    body: "Hi {{1}}, it's Paul from Findable. It looks like the payment didn't go through. Would it help if I sent the link again?" },
-  what_we_need: { key: 'what_we_need', label: 'Send what we need', inSender: false, ukOnly: true,
-    body: "Hi {{1}}, it's Paul from Findable. To start your new site I just need {{2}}. Could you send that over here?" },
-  interested_follow_up: { key: 'interested_follow_up', label: 'Send follow-up', inSender: false, ukOnly: false,
-    body: "Hi {{1}}, it's Paul from Findable. Still keen to see what I found for your business?" },
-  nudge_24h: { key: 'nudge_24h', label: 'Send 24h nudge', inSender: false, ukOnly: false,
-    body: 'Hi {{1}}, just checking you saw my last message. Anything I can help with?' },
-  final_nudge: { key: 'final_nudge', label: 'Send final nudge', inSender: false, ukOnly: false,
-    body: "Hi {{1}}, I'll leave this with you for now. If you want to pick it up, just reply here and I'll help you finish." },
+  questionnaire_domain_help: { key: 'questionnaire_domain_help', label: 'Send domain help', wired: true, ukOnly: true },
+  questionnaire_payment_help: { key: 'questionnaire_payment_help', label: 'Send payment help', wired: true, ukOnly: true },
+  needs_from_you: { key: 'needs_from_you', label: 'Send what we need', wired: true, ukOnly: true },
+  agency_access: { key: 'agency_access', label: 'Send agency access', wired: true, ukOnly: true },
+  agreement_next_steps: { key: 'agreement_next_steps', label: 'Send agreement & next steps', wired: true, ukOnly: true },
+  nudge_24h: { key: 'nudge_24h', label: 'Send 24h nudge', wired: true, ukOnly: false },
+  final_nudge: { key: 'final_nudge', label: 'Send final nudge', wired: false, ukOnly: false },
+  interested_follow_up: { key: 'interested_follow_up', label: 'Send follow-up', wired: false, ukOnly: false },
 };
 
 /** ok = the button may send; reason says why not (shown on the disabled button). */
 export interface TemplateGate { ok: boolean; reason?: string }
 
+const meaning = (code: string): string | null => sendErrorMeaning('whatsapp', Number(code));
+
 /** Can this button send? Positive match only: anything unknown is a no. */
-export function templateGate(key: NeedsTemplateKey | null | undefined, ctx: { approvals: readonly string[]; prospectOnly: boolean; hasPhone: boolean; alreadySent?: boolean }): TemplateGate {
+export function templateGate(key: NeedsTemplateKey | null | undefined, ctx: { prospectOnly: boolean; hasPhone: boolean; lastSend?: TemplateSend | null; nowMs?: number; neededItem?: string | null }): TemplateGate {
   if (!key) return { ok: false, reason: 'No template for this step' };
   const t = NEEDS_TEMPLATES[key];
   if (!t) return { ok: false, reason: 'Unknown template' };
+  if (!t.wired || !isDashboardTemplate(key)) return { ok: false, reason: 'Not set up at Meta' };
   if (!ctx.hasPhone) return { ok: false, reason: 'No phone number on the lead' };
   if (t.ukOnly && ctx.prospectOnly) return { ok: false, reason: 'Prospect-only market: no sign-up or payment messages' };
-  if (ctx.alreadySent && key === 'questionnaire_followup') return { ok: false, reason: 'Already sent to this lead (one per lead)' };
-  if (t.inSender) return { ok: true };
-  if (!ctx.approvals.includes(key)) return { ok: false, reason: 'Waiting for Meta approval' };
-  return { ok: false, reason: 'Approved: waiting to be added to the sender' };
+  if (DASHBOARD_TEMPLATES[key].vars.includes('needed_item') && !(ctx.neededItem ?? '').trim()) return { ok: false, reason: 'Nothing listed as missing to ask for' };
+  const s = dashboardTemplateState(key, ctx.lastSend ?? null, ctx.nowMs ?? Date.now(), meaning);
+  return s.ok ? { ok: true } : { ok: false, reason: s.reason };
 }

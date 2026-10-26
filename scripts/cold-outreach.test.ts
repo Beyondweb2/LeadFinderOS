@@ -118,6 +118,14 @@ const EXPECTED_CONTINUATIONS = [
      one per lead unless deliberately resent. */
   "findable_signup_link",
   "findable_onboarding",
+  /* The admin dashboard's six — added 2026-10-26 (Paul). YES, DELIBERATELY: each goes to someone who filled in the
+     questionnaire, a paying client, or someone already in the conversation; never a first approach. Admin only. */
+  "questionnaire_domain_help",
+  "questionnaire_payment_help",
+  "needs_from_you",
+  "agency_access",
+  "agreement_next_steps",
+  "nudge_24h",
 ].sort();
 const actual = [...CONTINUATION_TEMPLATES].sort();
 const added = actual.filter((t) => !EXPECTED_CONTINUATIONS.includes(t));

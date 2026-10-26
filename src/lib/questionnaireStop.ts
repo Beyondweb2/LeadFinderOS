@@ -4,8 +4,8 @@
    (fn notify-onboarding-submit), so the email's "Next step" and the row can never disagree.
    Pure and edge-safe: relative imports with .ts only. Derived every time, never stored.
    - Every submission gets a next action and a due time (QUESTIONNAIRE_FIRST_DUE_MS after it landed).
-   - No movement for 24 h → escalated (amber, the 24-hour nudge); 48 h → escalated (red, the final nudge);
-     48 h after the final nudge → "Record the outcome" (paid is automatic; lost needs a reason).
+   - No movement for 24 h → escalated (the 24-hour nudge; escalated again at 48 h). After the nudge: "Call them" at 24 h,
+     then "Record the outcome" at 48 h (paid is automatic; lost needs a reason). No final-nudge template (Paul, 2026-10-26).
    ═════════════════════════════════════════════════════════════════ */
 import { domainAuthority, domainInputFromRow, type DomainRow } from './domainAuthority.ts';
 import { unansweredDomainQuestions } from './domainEmailLine.ts';
@@ -57,7 +57,7 @@ export interface QuestionnaireStep {
   template: NeedsTemplateKey | null;
   /** When the next action is due (ISO). */
   dueIso: string;
-  /** 0 = on time, 1 = no movement 24 h, 2 = no movement 48 h, 3 = final nudge sent 48 h ago: record the outcome. */
+  /** 0 = on time, 1 = no movement 24 h, 2 = no movement 48 h, 3 = the 24-hour nudge went 48 h ago with no answer: record the outcome. */
   escalation: 0 | 1 | 2 | 3;
   /** The last thing that happened (submission, our message, their message, an edit). */
   movedIso: string;
@@ -73,13 +73,13 @@ export function questionnaireStep(q: QuestionnaireFacts, nowMs: number): Questio
   const quiet = nowMs - Date.parse(movedIso);
   const weWroteLast = !!q.last_out_at && (!q.last_in_at || q.last_out_at > q.last_in_at);
   const base: Record<QuestionnaireStop, { action: string; template: NeedsTemplateKey | null }> = {
-    payment: { action: 'Nudge the payment step', template: 'questionnaire_followup' },
-    agreement: { action: 'Nudge the payment step', template: 'questionnaire_followup' },
-    domain: { action: 'Help with the domain question', template: 'domain_help' },
-    rights: { action: 'Help with the website permissions', template: 'domain_help' },
+    payment: { action: 'Help with the payment', template: 'questionnaire_payment_help' },
+    agreement: { action: 'Send the agreement and next steps', template: 'agreement_next_steps' },
+    domain: { action: 'Help with the domain question', template: 'questionnaire_domain_help' },
+    rights: { action: 'Help with the website permissions', template: 'questionnaire_domain_help' },
     agency: { action: 'Sort agency access', template: 'agency_access' },
     tied_in: { action: 'Decline politely and note the end date', template: null },
-    questions: { action: 'Help them finish the questions', template: 'agreement_next_steps' },
+    questions: { action: 'Help them finish the questions', template: null },
   };
   const first = base[stop];
   /* The stop's own message has not gone yet: that is the next action, due 2 h after they submitted. */
@@ -89,12 +89,16 @@ export function questionnaireStep(q: QuestionnaireFacts, nowMs: number): Questio
   }
   /* They answered after us: back to the stop's own action, due now. */
   if (!weWroteLast) return { stop, why: `${STOP_WORDS[stop]}. They replied`, ...first, dueIso: q.last_in_at!, escalation: 0, movedIso };
-  const finalSent = q.last_out_template === 'final_nudge';
-  if (finalSent && quiet >= ESCALATE_2_MS) {
-    return { stop, why: `${STOP_WORDS[stop]}. Final nudge sent, no answer`, action: 'Record the outcome', template: null, dueIso: new Date(Date.parse(movedIso) + ESCALATE_2_MS).toISOString(), escalation: 3, movedIso };
+  /* 2026-10-26: there is no final-nudge template (Paul did not wire it). After the 24-hour nudge: a call at 24 h, then the
+     outcome at 48 h. Before it: the 24-hour nudge (escalated once more at 48 h). */
+  const due = (ms: number) => new Date(Date.parse(movedIso) + ms).toISOString();
+  if (q.last_out_template === 'nudge_24h') {
+    if (quiet >= ESCALATE_2_MS) return { stop, why: `${STOP_WORDS[stop]}. Nudged, no answer for 2 days`, action: 'Record the outcome', template: null, dueIso: due(ESCALATE_2_MS), escalation: 3, movedIso };
+    if (quiet >= ESCALATE_1_MS) return { stop, why: `${STOP_WORDS[stop]}. Nudged, no answer for a day`, action: 'Call them', template: null, dueIso: due(ESCALATE_1_MS), escalation: 2, movedIso };
+  } else {
+    if (quiet >= ESCALATE_2_MS) return { stop, why: `${STOP_WORDS[stop]}. No answer for 2 days`, action: 'Send the 24-hour nudge', template: 'nudge_24h', dueIso: due(ESCALATE_1_MS), escalation: 2, movedIso };
+    if (quiet >= ESCALATE_1_MS) return { stop, why: `${STOP_WORDS[stop]}. No answer for a day`, action: 'Send the 24-hour nudge', template: 'nudge_24h', dueIso: due(ESCALATE_1_MS), escalation: 1, movedIso };
   }
-  if (quiet >= ESCALATE_2_MS) return { stop, why: `${STOP_WORDS[stop]}. No answer for 2 days`, action: 'Send the final nudge', template: 'final_nudge', dueIso: new Date(Date.parse(movedIso) + ESCALATE_2_MS).toISOString(), escalation: 2, movedIso };
-  if (quiet >= ESCALATE_1_MS) return { stop, why: `${STOP_WORDS[stop]}. No answer for a day`, action: 'Send the 24-hour nudge', template: 'nudge_24h', dueIso: new Date(Date.parse(movedIso) + ESCALATE_1_MS).toISOString(), escalation: 1, movedIso };
   return { stop, why: `${STOP_WORDS[stop]}. Waiting on them`, action: 'Wait for their answer', template: null, dueIso: new Date(Date.parse(movedIso) + ESCALATE_1_MS).toISOString(), escalation: 0, movedIso };
 }
 

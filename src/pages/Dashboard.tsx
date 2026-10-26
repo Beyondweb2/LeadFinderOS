@@ -10,9 +10,10 @@ import { useSubscription } from '@/hooks/useSubscription';
 import { useTeamDirectory } from '@/hooks/useSalesCrm';
 import { usePersistedState } from '@/hooks/usePersistedState';
 import { useAdminOverview, type PeriodChoice } from '@/hooks/useAdminOverview';
-import { useAdminHomeActions, useAdminHomeNeeds, useAdminHomeNumbers, type HomeNumbers } from '@/hooks/useAdminHome';
+import { useAdminHomeActions, useAdminHomeNeeds, useAdminHomeNumbers, useClientContacts, useDashboardTemplateSends, type HomeNumbers } from '@/hooks/useAdminHome';
+import { prospectOnlyLead } from '@/lib/prospectOnly';
 import { edgeErrorMessage } from '@/lib/edgeInvoke';
-import { attentionPath, clientHubLink, outreachLeadLink } from '@/lib/salesLinks';
+import { attentionPath, clientHubLink, whatsAppLinkForLead } from '@/lib/salesLinks';
 import { londonDay } from '@/lib/reportingPeriod';
 import { HIDE_MY_ACTIVITY_KEY, PICKER, periodDays, validChoice } from '@/lib/adminPeriod';
 import { cn } from '@/lib/utils';
@@ -108,9 +109,16 @@ const Dashboard = () => {
   const clients = useMemo(() => clientsQ.data ?? [], [clientsQ.data]);
   const nowMs = Date.now();
   const marks = useMemo(() => needsQ.data?.marks ?? [], [needsQ.data]);
-  const rows = useMemo(() => (o && needsQ.data
+  const baseRows = useMemo(() => (o && needsQ.data
     ? buildNeedsRows({ facts: needsQ.data, attention: needsYouItems(o.attention, clients, Date.now()), clients, nowMs: Date.now() })
     : []), [o, needsQ.data, clients]);
+  /* A new-client row needs the client's number for its send button (the handoff list carries none). */
+  const contactsQ = useClientContacts(baseRows.filter((r) => r.kind === 'new_client' && r.leadId).map((r) => r.leadId!));
+  const rows = useMemo(() => baseRows.map((r) => {
+    const c = r.kind === 'new_client' && r.leadId ? contactsQ.data?.[r.leadId] : undefined;
+    return c ? { ...r, phone: c.phone, country: c.country, firstName: (c.contact_name ?? '').trim().split(/\s+/)[0] || null, prospectOnly: prospectOnlyLead({ country: c.country }) } : r;
+  }), [baseRows, contactsQ.data]);
+  const templateSendsQ = useDashboardTemplateSends();
   const { visible, hidden } = useMemo(() => splitByMarks(rows, marks, nowMs), [rows, marks, nowMs]);
   const cardHidden = (key: string) => !!hiddenByMark({ key, sinceIso: null }, marks, nowMs);
   const hiddenCards = Object.keys(CARD_LABEL).flatMap((key) => { const m = hiddenByMark({ key, sinceIso: null }, marks, nowMs); return m ? [{ label: CARD_LABEL[key], mark: m }] : []; });
@@ -131,13 +139,15 @@ const Dashboard = () => {
   };
   const onUndo = (markId: string) => { void actions.undo.mutateAsync(markId); setLastMark(null); };
 
-  /* ⛔ Every row opens WHERE ITS ACTION IS DONE: a lead → its workspace; a client → the hub; a server item → its own path. */
+  /* ⛔ Every row opens WHERE ITS ACTION IS DONE: a client → the hub; a server item → its own path; a lead → their
+     conversation in the Inbox (Paul, 2026-10-26: "clicking to message someone must open their conversation in the inbox,
+     not the outreach page"). */
   const openRow = (r: NeedsRow) => {
     const a = r.open.attention;
     if (a?.kind === 'no_trade') { setFixTrades(true); return; }
     if (a) { navigate(attentionPath(a)); return; }
     if (r.open.kind === 'client' && r.leadId) { navigate(clientHubLink(r.leadId)); return; }
-    if (r.leadId) navigate(outreachLeadLink(r.leadId));
+    if (r.leadId) navigate(whatsAppLinkForLead(r.leadId));
   };
 
   if (roleLoading) return <div className="flex h-full items-center justify-center py-16"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
@@ -196,7 +206,7 @@ const Dashboard = () => {
 
       {!cardHidden('card:needs') && (
         <div id="needs-you">
-          <NeedsMeList rows={visible} approvals={needsQ.data?.approvals ?? []} highlightKey={highlight}
+          <NeedsMeList rows={visible} templateSends={templateSendsQ.data ?? {}} highlightKey={highlight}
             onOpen={openRow} onMark={onMark} lastArchived={lastMark} onUndo={onUndo}
             onAssign={(i) => setCompose({ kind: 'lead_assignment', lead: { id: i.leadId!, name: i.business }, reason: i.why })}
             onOutcome={async (onboardingId, reason, note) => { await actions.outcome.mutateAsync({ onboardingId, lostReason: reason, note }); }}
@@ -210,7 +220,7 @@ const Dashboard = () => {
 
       {!cardHidden('card:questionnaires') && needsQ.data && (
         <QuestionnaireLog facts={needsQ.data.questionnaires} nowMs={nowMs} menu={<CardMarkMenu itemKey="card:questionnaires" onMark={onMark} />}
-          onOpen={(leadId) => navigate(outreachLeadLink(leadId))} />
+          onOpen={(leadId) => navigate(whatsAppLinkForLead(leadId))} />
       )}
 
       <Link to="/admin/insights" className={cn('flex items-center justify-between gap-3 rounded-[1.25rem] border border-border/60 bg-muted/10 px-4 py-3 text-sm transition hover:bg-muted/30')} data-testid="insights-link">

@@ -391,6 +391,14 @@ const TEMPLATES: Record<string, { lang: string; vars: TemplateVar[] }> = {
   findable_onboarding: { lang: "en", vars: ["greeting_name", "onboarding_form_url"] },
   /* ai_visibility_report_offer (2026-10-14, src/lib/reportOfferTemplate.ts) — queue-sent, cold. Mirrors WA_TEMPLATES. */
   ai_visibility_report_offer: { lang: "en", vars: ["name_or_there", "town", "competitors", "visibility_score", "audit_url", "sender_name"] },
+  /* The admin dashboard's six (2026-10-26, src/lib/dashboardTemplates.ts) — mirror only: sent from the dashboard row by
+     send-whatsapp-message, never by the queue. "en" = DASHBOARD_TEMPLATE_LANG. */
+  questionnaire_domain_help: { lang: "en", vars: ["name"] },
+  questionnaire_payment_help: { lang: "en", vars: ["name"] },
+  needs_from_you: { lang: "en", vars: ["greeting_name", "needed_item"] },
+  agency_access: { lang: "en", vars: ["greeting_name"] },
+  agreement_next_steps: { lang: "en", vars: ["greeting_name"] },
+  nudge_24h: { lang: "en", vars: ["name"] },
 };
 
 /* ── ai_visibility_report_offer: a resolver refusal, in the template's own reasons ── */

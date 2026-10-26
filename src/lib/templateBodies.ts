@@ -27,6 +27,7 @@ import { articleTrade, pluraliseTrade, tradeInSentence } from './templateVars.ts
 import { transcriptBusinessName, nameStyleFor } from './displayName.ts';
 import { onboardingTemplateBody, signupLinkTemplateBody } from './whatsappLinkTemplates.ts';
 import { reportOfferBody } from './reportOfferTemplate.ts';
+import { dashboardTemplateTranscript } from './dashboardTemplates.ts';
 
 // ── Findable, link-bearing ────────────────────────────────────────────────
 const onboardingFollowupBody = (b: string, u: string) =>
@@ -417,6 +418,13 @@ export const READABLE_TEMPLATE_BODIES: Record<string, TemplateBodyFn> = {
   payment_recieved: paymentRecievedBody,
   questionnaire_followup: (b, _u, _t, _c, first) => questionnaireFollowupBody(first ?? '', b),
   hook_followup: (b, _u, _t, _c, first) => hookFollowupBody(first ?? '', b),
+  /* The admin dashboard's six (dashboardTemplates.ts): which template went, never invented wording. */
+  questionnaire_domain_help: (b) => dashboardTemplateTranscript('questionnaire_domain_help', { business: b }),
+  questionnaire_payment_help: (b) => dashboardTemplateTranscript('questionnaire_payment_help', { business: b }),
+  needs_from_you: (b, _u, _t, _c, first) => dashboardTemplateTranscript('needs_from_you', { business: b, greeting: first }),
+  agency_access: (b, _u, _t, _c, first) => dashboardTemplateTranscript('agency_access', { business: b, greeting: first }),
+  agreement_next_steps: (b, _u, _t, _c, first) => dashboardTemplateTranscript('agreement_next_steps', { business: b, greeting: first }),
+  nudge_24h: (b) => dashboardTemplateTranscript('nudge_24h', { business: b }),
   contact_followup: (b) => contactFollowupBody(b),
   onboarding_followup: onboardingFollowupBody,
   booking_page_intro: bookingPageIntroBody,
