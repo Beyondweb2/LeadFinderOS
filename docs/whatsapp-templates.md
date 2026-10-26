@@ -741,3 +741,12 @@ SERVER_ONLY_TEMPLATE_LABELS (never in a picker). New variable `needed_item` (cle
   quiet, questionnaire unfinished, "Call them") send the existing **re_engage_49** ("Where did we get to with this? Happy to pick
   it back up…", approved 2026-09-12, no price despite its name). nudge_24h stays for the questionnaire's own 24-hour chase.
   Registered in every place nudge_24h is; `scripts/needs-me.test.ts` §5a pins "they replied last" vs "I sent last".
+- **In the Inbox picker too** (Paul, 2026-10-26, `src/lib/inboxDashboardTemplates.ts`): the dashboard's seven templates are a
+  "Questionnaire / follow-up" group in the Inbox "Send a template" picker. Admin only (the server's dashboard branch refuses
+  sales); greyed on the SMS tab ("WhatsApp only", declared in `inbox-channel-parity.test.ts`); the ukOnly ones (NEEDS_TEMPLATES)
+  greyed for an Australian lead. needs_from_you asks for the item, which Preview (dry run) and Send carry as `template_vars`.
+  Deliberately NOT in WHATSAPP_TEMPLATES (that list feeds bulk queues). No edge redeploy was needed.
+- **Dashboard "Last 3" and "Your next actions"** (same day): `useLeadPeek` is a read-only SELECT of 3 rows (lead id OR number)
+  under the Inbox's RLS, loaded only when a row is opened; `myNextActions.ts` = "set by me" is the newest History follow_up_set
+  actor (no History row: assigned to me); edit / done go through NextActionEditor → lead_set_follow_up.
+  `scripts/dashboard-peek.test.ts` fences both.
