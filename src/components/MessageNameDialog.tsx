@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { PenLine } from 'lucide-react';
+import { MY_MESSAGE_NAME_KEY } from '@/hooks/useMyMessageName';
 import { Dialog, DialogContent, DialogFooter } from '@/components/ui/dialog';
 import { DialogHero } from '@/components/operator/ui';
 import { Button } from '@/components/ui/button';
@@ -9,8 +11,8 @@ import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { mustChangePassword } from '@/lib/teamAccounts';
 import {
-  cleanMessageName, emailLocalPart, hasChosenMessageName, MESSAGE_NAME_MAX, MESSAGE_NAME_PROBLEM_WORDS,
-  messageNameProblem, messageNameSkipKey,
+  cleanMessageName, hasChosenMessageName, MESSAGE_NAME_MAX, MESSAGE_NAME_PROBLEM_WORDS,
+  messageNameProblem,
 } from '@/lib/messageName';
 
 /** Open the box from anywhere (the account menu): `window.dispatchEvent(new Event(OPEN_MESSAGE_NAME_EVENT))`. */
@@ -22,11 +24,14 @@ const sb = supabase as any;
 
 /* THE NAME ON YOUR MESSAGES (2026-10-14, src/lib/messageName.ts). ONE small box, the first time a person signs in
    (after any temporary-password change — ProtectedRoute sends them there first), then editable from the account menu.
-   ⛔ Not onboarding: one field, nothing else asked. Skipped → the first part of their own email is used and the box
-   asks again at the next login (a sessionStorage mark, so it does not nag inside one sign-in). */
+   ⛔ Not onboarding: one field, nothing else asked.
+   ⛔ REQUIRED (Paul, 2026-10-26): the first-time box cannot be skipped or closed until a name is saved — the hook message is
+   signed with it (hookSignature.ts). Editing later from the account menu can be cancelled. An unreadable profile never
+   blocks the app (no box); the sender then refuses to sign a hook with no name. */
 export function MessageNameDialog() {
   const { user } = useAuth();
   const { toast } = useToast();
+  const qc = useQueryClient();
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState(false);
   const [value, setValue] = useState('');
@@ -34,7 +39,6 @@ export function MessageNameDialog() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const uid = user?.id ?? null;
-  const fallback = emailLocalPart(user?.email);
   const mustChange = mustChangePassword(user);
 
   useEffect(() => {
@@ -45,9 +49,7 @@ export function MessageNameDialog() {
       if (!alive || e) return; // unreadable → never block the app with a box
       const name = (data?.message_name as string | null) ?? null;
       setSaved(name);
-      let skipped = false;
-      try { skipped = sessionStorage.getItem(messageNameSkipKey(uid)) === '1'; } catch { /* ignore */ }
-      if (!hasChosenMessageName(name) && !skipped) { setEditing(false); setValue(''); setOpen(true); }
+      if (!hasChosenMessageName(name)) { setEditing(false); setValue(''); setOpen(true); }
     })();
     return () => { alive = false; };
   }, [uid, mustChange]);
@@ -60,10 +62,9 @@ export function MessageNameDialog() {
 
   if (!uid) return null;
 
-  const skip = () => {
-    if (!editing) { try { sessionStorage.setItem(messageNameSkipKey(uid), '1'); } catch { /* ignore */ } }
-    setOpen(false);
-  };
+  /* Only an edit from the account menu can be cancelled; the first-time box stays until a name is saved. */
+  const cancel = () => { if (editing) setOpen(false); };
+  const required = !editing;
 
   const save = async () => {
     const p = messageNameProblem(value);
@@ -80,25 +81,28 @@ export function MessageNameDialog() {
     setSaving(false);
     if (failed) { setError('Could not save just now. Try again.'); return; }
     setSaved(name);
+    void qc.invalidateQueries({ queryKey: MY_MESSAGE_NAME_KEY });
     setOpen(false);
     toast({ title: 'Saved', description: `Your messages will be signed “${name}”.` });
   };
 
   return (
-    <Dialog open={open} onOpenChange={(o) => { if (!o) skip(); }}>
-      <DialogContent className="sm:max-w-sm" data-testid="message-name-dialog">
+    <Dialog open={open} onOpenChange={(o) => { if (!o) cancel(); }}>
+      <DialogContent className="sm:max-w-sm" data-testid="message-name-dialog" hideClose={required}
+        onEscapeKeyDown={(e) => { if (required) e.preventDefault(); }} onPointerDownOutside={(e) => { if (required) e.preventDefault(); }}
+        onInteractOutside={(e) => { if (required) e.preventDefault(); }}>
         <DialogHero icon={PenLine} tone="blue" title="What name should we use on your messages?"
           subtitle="It goes at the end of WhatsApp messages you send, so the business knows who to reply to. You can change it later in your account menu." />
         <div className="space-y-1.5">
-          <Input autoFocus value={value} maxLength={MESSAGE_NAME_MAX} placeholder={fallback ? `e.g. ${fallback}` : 'Your first name'}
+          <Input autoFocus value={value} maxLength={MESSAGE_NAME_MAX} placeholder="Your first name, e.g. Sam"
             aria-label="Name on your messages" data-testid="message-name-input"
             onChange={(e) => { setValue(e.target.value); setError(null); }}
             onKeyDown={(e) => { if (e.key === 'Enter') void save(); }} />
           {error ? <p className="text-xs text-destructive">{error}</p>
-            : !editing && fallback ? <p className="text-xs text-muted-foreground">If you skip, we use “{fallback}” for now and ask again next time you log in.</p> : null}
+            : required ? <p className="text-xs text-muted-foreground">Needed before you start: the first message to a business ends with this name.</p> : null}
         </div>
         <DialogFooter>
-          <Button variant="ghost" size="sm" onClick={skip}>{editing ? 'Cancel' : 'Skip for now'}</Button>
+          {editing && <Button variant="ghost" size="sm" onClick={cancel}>Cancel</Button>}
           <Button size="sm" disabled={saving} onClick={() => void save()} data-testid="message-name-save">Save</Button>
         </DialogFooter>
       </DialogContent>
