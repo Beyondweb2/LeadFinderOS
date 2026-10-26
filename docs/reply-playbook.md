@@ -23,6 +23,9 @@ apology, no "I'm not after lessons", no straight answer, no "sorry for the slow 
 (`replyMove.ts` `keepsOwnFirstReply`). Those lines still apply after the hook has gone. The report link line
 ("Here's the full report: <link>") comes before the one question; never for Australia; a draft with any link is never
 auto-sent (`aiAutoSend.ts` `has_link`). Tests: `scripts/hook-first-replies.test.ts`.
+⛔ **The FIRST automatic reply to the opener (out-of-office, a business greeting) still gets the hook** (Paul, 2026-10-26,
+confirmed: do not re-ask). It stays labelled Auto-reply, so it is never sent by itself. A repeat auto-reply, an auto-reply
+after a real reply, and a chatbot ("didn't quite catch that") get nothing.
 
 ```
 Hi Dom, / Hi mate,
