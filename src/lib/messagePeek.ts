@@ -9,6 +9,7 @@
    ═════════════════════════════════════════════════════════════════ */
 import { parseTemplateSnapshot } from './whatsappTemplateSnapshot.ts';
 import { readableTemplateBody } from './templateBodies.ts';
+import { dashboardTranscriptView } from './dashboardTemplates.ts';
 import { templateLabel } from '../types/outreach.ts';
 
 /** The columns the peek reads — a short explicit list, never `*`. */
@@ -51,7 +52,10 @@ export function peekLine(m: PeekRow, ctx: { businessName?: string | null; firstN
   const base = { id: m.id, who, at: m.created_at, failed: m.status === 'failed' };
   if (type === 'template' || (m.template_name && who === 'us')) {
     const snap = parseTemplateSnapshot(m.template_snapshot);
-    const text = snap?.body?.trim()
+    /* A dashboard template: Meta's words when known, else "template, to whom, what is needed" — never the stored line. */
+    const dash = dashboardTranscriptView(m.template_name, snap?.body ?? m.body);
+    const dashText = dash ? dash.words ?? [`Sent the ${dash.label} template`, dash.who && `to ${dash.who}`, dash.neededItem && `· needed: ${dash.neededItem}`].filter(Boolean).join(' ') : null;
+    const text = dashText || snap?.body?.trim()
       || readableTemplateBody(m.body, m.template_name, { businessName: ctx.businessName ?? '', firstName: ctx.firstName ?? undefined, sentAt: m.created_at })
       || (m.template_name ? templateLabel(m.template_name) : '');
     return { ...base, tag: `Template · ${m.template_name ? templateLabel(m.template_name) : 'unknown'}`, text: text || '[template]' };

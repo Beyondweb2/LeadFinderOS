@@ -4,8 +4,10 @@
    so the lead's send hours apply (queued outside them). Opt-outs, the 24-hour window, one-per-lead and Meta's rules are the
    server's. A mapped button is always pressable; a refusal shows after the press and in the lead's Inbox thread.
    ⛔ Snooze / dismiss / archive write a mark (admin_home_marks); nothing is deleted, every archive has an undo. */
-import { useState } from 'react';
-import { AlertTriangle, Archive, ArrowRight, ChevronDown, ChevronUp, Clock, Loader2, MessageSquare, MoreHorizontal, RotateCcw, Send, X } from 'lucide-react';
+import { useCallback, useMemo, useRef, useState } from 'react';
+import { AlertTriangle, Archive, ArrowRight, Check, CheckCheck, ChevronDown, ChevronUp, Clock, Loader2, MessageSquare, MoreHorizontal, RotateCcw, Send, X } from 'lucide-react';
+import { DASHBOARD_SENDS_KEY, useDashboardSends } from '@/hooks/useDashboardSends';
+import { mergeSendState, sendLockedReason, sendStateLine, storedSendState, withSendStates, type RowSendState } from '@/lib/dashboardSendState';
 import { useNavigate } from 'react-router-dom';
 import { useLeadPeek } from '@/hooks/useLeadPeek';
 import { peekLines } from '@/lib/messagePeek';
@@ -76,41 +78,69 @@ export function CardMarkMenu({ itemKey, onMark }: { itemKey: string; onMark: Mar
   );
 }
 
-/* ⛔ ALWAYS PRESSABLE when a template is mapped (Paul, 2026-10-26). Meta decides on the send: a refusal is the failed
-   message in the lead's Inbox thread (with Meta's reason) and the message after the press; the button stays usable. */
-function SendButton({ row }: { row: NeedsRow }) {
+/* ⛔ PRESSABLE when a template is mapped (Paul, 2026-10-26) — EXCEPT while this send is going, queued, or the same template went
+   to this lead in the last few minutes (Paul, 2026-10-26: no double sends; the server refuses it too). Meta decides on the send:
+   a refusal shows on the row (and on the failed message in the Inbox thread) and the button is usable again.
+   After the press the row shows the real state (dashboardSendState.ts): Sending… → Queued / Sent → Delivered / Read, or Failed. */
+function SendButton({ row, state, onState }: { row: NeedsRow; state: RowSendState | null; onState: (leadKey: string, s: RowSendState | null) => void }) {
   const { toast } = useToast();
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
-  const [busy, setBusy] = useState(false);
+  /* A second press before React re-renders must not send again: the ref is set synchronously. */
+  const inFlight = useRef(false);
   const key = effectiveTemplate(row.template, { prospectOnly: !!row.prospectOnly });
   if (!key) return null;
   const t = NEEDS_TEMPLATES[key];
+  const leadKey = row.leadId ?? row.key;
+  const locked = sendLockedReason(state, key, Date.now());
   /* What goes: Meta's approved wording for this template, filled with these values (the app cannot read Meta's text). */
   const greeting = dashboardGreeting(row.firstName, row.business);
   const vars = NEEDS_TEMPLATES[key].vars;
   const values = vars.map((v) => v === 'name' ? `Business name: ${row.business}` : v === 'greeting_name' ? `Name: ${greeting}` : `Item needed: ${row.neededItem ?? ''}`);
   const send = async () => {
-    setBusy(true);
-    const r = await sendWhatsAppRequest(supabase, { phone: row.phone ?? '', leadId: row.leadId, country: row.country ?? null, templateName: key, via: 'lead_panel',
-      ...(vars.includes('needed_item') ? { templateVars: { needed_item: row.neededItem ?? '' } } : {}) });
-    setBusy(false); setOpen(false);
-    if (!r.ok) {
-      const meta = r.failCode != null ? sendErrorMeaning('whatsapp', r.failCode) : null;
-      toast({ title: 'Not sent', description: `${meta ?? r.reason ?? r.error ?? 'The sender refused it.'}${r.failCode != null ? ' The reason is also on the message in their Inbox thread.' : ''}`, variant: 'destructive' });
-      return;
+    if (inFlight.current || locked) return;
+    inFlight.current = true;
+    setOpen(false);
+    const pressedAt = new Date().toISOString();
+    onState(leadKey, { phase: 'sending', template: key, at: pressedAt });
+    try {
+      const r = await sendWhatsAppRequest(supabase, { phone: row.phone ?? '', leadId: row.leadId, country: row.country ?? null, templateName: key, via: 'lead_panel',
+        ...(vars.includes('needed_item') ? { templateVars: { needed_item: row.neededItem ?? '' } } : {}) });
+      if (!r.ok) {
+        const meta = r.failCode != null ? sendErrorMeaning('whatsapp', r.failCode) : null;
+        const reason = meta ?? r.reason ?? r.error ?? 'The sender refused it.';
+        /* Already sent / queued: the stored state (re-read below) is the truth, not a failure. */
+        onState(leadKey, r.error === 'recently_sent' ? null : { phase: 'failed', template: key, at: pressedAt, reason });
+        toast({ title: 'Not sent', description: `${reason}${r.failCode != null ? ' The reason is also on the message in their Inbox thread.' : ''}`, variant: 'destructive' });
+      } else if (r.scheduled) {
+        onState(leadKey, { phase: 'queued', template: key, at: pressedAt, sendAt: r.scheduled.send_at, tz: r.scheduled.tz });
+      } else {
+        onState(leadKey, { phase: 'sent', template: key, at: pressedAt });
+      }
+    } catch (e) {
+      onState(leadKey, { phase: 'failed', template: key, at: pressedAt, reason: (e as Error)?.message || 'The send did not answer.' });
+    } finally {
+      inFlight.current = false;
+      void qc.invalidateQueries({ queryKey: DASHBOARD_SENDS_KEY });
+      void qc.invalidateQueries({ queryKey: ADMIN_HOME_NEEDS_KEY });
     }
-    toast({ title: r.scheduled ? 'Queued' : 'Sent', description: r.scheduled ? `Outside their send hours: it goes at ${new Date(r.scheduled.send_at).toLocaleString('en-GB', { timeZone: r.scheduled.tz, hour: '2-digit', minute: '2-digit', weekday: 'short' })} (${r.scheduled.tz}).` : `${t.label} to ${row.business}.` });
-    void qc.invalidateQueries({ queryKey: ADMIN_HOME_NEEDS_KEY });
   };
   /* The words where we know them (re_engage_49, pick_up_conversation); else which template and with what values. */
   const preview = key === 're_engage_49' || key === 'pick_up_conversation'
     ? (READABLE_TEMPLATE_BODIES[key]?.(row.business, '') ?? '')
     : `Meta's approved "${key}" template, with:\n${values.join('\n')}`;
+  if (locked) {
+    return (
+      <Button size="sm" variant="outline" disabled className="h-8 gap-1.5 rounded-full disabled:opacity-80" title={`${t.label}: ${locked}`} data-testid="needs-send" data-send-locked="true">
+        {state?.phase === 'sending' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : state?.phase === 'queued' ? <Clock className="h-3.5 w-3.5" /> : <Check className="h-3.5 w-3.5" />}
+        {state?.phase === 'queued' ? 'Queued' : locked}
+      </Button>
+    );
+  }
   return (
     <>
       <Button size="sm" className="h-8 gap-1.5 rounded-full" onClick={() => setOpen(true)} data-testid="needs-send">
-        <Send className="h-3.5 w-3.5" />{t.label}
+        <Send className="h-3.5 w-3.5" />{state?.phase === 'failed' ? 'Try again' : t.label}
       </Button>
       <AlertDialog open={open} onOpenChange={setOpen}>
         <AlertDialogContent>
@@ -124,12 +154,32 @@ function SendButton({ row }: { row: NeedsRow }) {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={busy}>Cancel</AlertDialogCancel>
-            <AlertDialogAction disabled={busy} onClick={(e) => { e.preventDefault(); void send(); }}>{busy ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Send'}</AlertDialogAction>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={(e) => { e.preventDefault(); void send(); }}>Send</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
     </>
+  );
+}
+
+/** "Re-engage", "Agreement & next steps": the button's words without "Send". */
+function templateName(key: string): string {
+  const s = (NEEDS_TEMPLATES[key as keyof typeof NEEDS_TEMPLATES]?.label ?? 'Template').replace(/^Send /, '');
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
+const STATE_TONE: Record<RowSendState['phase'], Tone> ={ sending: 'blue', queued: 'amber', sent: 'green', delivered: 'green', read: 'green', failed: 'red' };
+
+/** The row's send line: what happened to the last dashboard send, from the same facts the Inbox shows. */
+function SendStateLine({ state }: { state: RowSendState }) {
+  const Icon = state.phase === 'sending' ? Loader2 : state.phase === 'queued' ? Clock : state.phase === 'failed' ? AlertTriangle : state.phase === 'sent' ? Check : CheckCheck;
+  const tone = TONE[STATE_TONE[state.phase]];
+  return (
+    <span className={cn('mt-1 inline-flex max-w-full items-start gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium', tone.soft, tone.text)} data-testid="needs-send-state" data-send-phase={state.phase}>
+      <Icon className={cn('mt-px h-3 w-3 shrink-0', state.phase === 'sending' && 'animate-spin')} />
+      <span className="min-w-0 break-words">{templateName(state.template)} · {sendStateLine(state)}</span>
+    </span>
   );
 }
 
@@ -209,8 +259,18 @@ export function NeedsMeList({ rows, highlightKey, onOpen, onMark, onOutcome, las
   /* Which rows show their last 3 messages. Not remembered: an open peek is a glance, never saved state. */
   const [peekOpen, setPeekOpen] = useState<Set<string>>(new Set());
   const togglePeek = (key: string) => setPeekOpen((prev) => { const next = new Set(prev); if (next.has(key)) next.delete(key); else next.add(key); return next; });
+  /* The press's own state per lead ("Sending…", or the sender's answer before the database is re-read). Not remembered:
+     once re-read, the stored state (the same facts as the Inbox) takes over. */
+  const [pressed, setPressed] = useState<Map<string, RowSendState | null>>(new Map());
+  const onState = useCallback((leadKey: string, s: RowSendState | null) => setPressed((prev) => new Map(prev).set(leadKey, s)), []);
+  const leadIds = useMemo(() => rows.map((r) => r.leadId).filter((x): x is string => !!x), [rows]);
+  const sends = useDashboardSends(leadIds);
   const now = Date.now();
-  const urgent = rows.filter((r) => r.group === 'urgent').length;
+  const shownRows = useMemo(() => withSendStates(rows, (r) => mergeSendState(pressed.get(r.leadId ?? r.key),
+    storedSendState(r.leadId, sends.data?.sent ?? [], sends.data?.queued ?? [])), now),
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- `now` is this render's clock; rows/pressed/sends drive it
+  [rows, pressed, sends.data]);
+  const urgent = shownRows.filter((r) => r.group === 'urgent').length;
   return (
     <Panel title="What needs you" icon={AlertTriangle} tone={urgent ? 'red' : 'amber'} action={cardMenu}
       hint="Questionnaires, money, interested leads, follow-ups due and new clients, most urgent first. Replies stay in the Inbox. The send button uses your template through the normal sender: send hours, opt-outs, the 24-hour window and Meta rules all apply.">
@@ -223,7 +283,7 @@ export function NeedsMeList({ rows, highlightKey, onOpen, onMark, onOutcome, las
         : !rows.length ? <p className="rounded-2xl bg-muted/30 px-4 py-6 text-center text-sm text-muted-foreground">Nothing needs you right now.</p> : (
         <div className="space-y-4" data-testid="needs-me">
           {GROUPS.map(({ g, label, tone }) => {
-            const list = rows.filter((r) => r.group === g);
+            const list = shownRows.filter((r) => r.group === g);
             if (!list.length) return null;
             return (
               <div key={g}>
@@ -242,7 +302,10 @@ export function NeedsMeList({ rows, highlightKey, onOpen, onMark, onOutcome, las
                             {r.flag && <span className={cn('rounded-full px-2 py-0.5 text-[10px] font-semibold', TONE.red.soft, TONE.red.text)}>{r.flag}</span>}
                           </span>
                           <span className="block text-xs text-muted-foreground">{r.why}</span>
-                          <span className="mt-0.5 block text-xs font-medium text-primary">{r.action}</span>
+                          {r.sendState && r.group === 'waiting' && r.sendState.phase !== 'failed'
+                            ? <span className="mt-0.5 block text-xs font-medium text-muted-foreground">Handled · waiting on them</span>
+                            : <span className="mt-0.5 block text-xs font-medium text-primary">{r.action}</span>}
+                          {r.sendState && <SendStateLine state={r.sendState} />}
                         </span>
                         <ArrowRight className="mt-1 hidden h-4 w-4 shrink-0 text-muted-foreground sm:block" />
                       </button>
@@ -253,7 +316,7 @@ export function NeedsMeList({ rows, highlightKey, onOpen, onMark, onOutcome, las
                             <MessageSquare className="h-3.5 w-3.5" />Last 3{peekOpen.has(r.key) ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
                           </Button>
                         )}
-                        <SendButton row={r} />
+                        <SendButton row={r} state={r.sendState} onState={onState} />
                         {r.onboardingId && r.action === 'Record the outcome' && <Button size="sm" variant="outline" className="h-8 rounded-full" onClick={() => setOutcomeRow(r)}>Record outcome</Button>}
                         {onAssign && r.open.attention && attentionAssignable(r.open.attention) && <Button size="sm" variant="outline" className="h-8 rounded-full" onClick={() => onAssign(r.open.attention!)}>Assign</Button>}
                         <MarkButtons itemKey={r.key} onMark={onMark} />

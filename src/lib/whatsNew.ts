@@ -22,6 +22,14 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-26-dashboard-after-send', date: '2026-10-26', title: 'Dashboard rows show what happened after you press send', audience: 'admin',
+    body: 'After you press a send button on a "What needs you" row, the row shows Sending…, then Queued (with the time), Sent, Delivered, Read or Failed with Meta\'s reason. A sent or queued row moves to "Waiting on them" and its button is off for a few minutes, so nothing goes twice. The new templates show as a clear template card in the Inbox.',
+    report: {
+      added: ['A send line on each row: Sending…, Queued (sends at their time), Sent [time], Delivered, Read, or Failed: Meta\'s reason.', 'The same template cannot go to the same lead twice within 10 minutes, or while one is queued — the button is off and says why, and the sender refuses it too.'],
+      changed: ['A sent or queued row moves to "Waiting on them" until they write again, the next action comes due, or 48 hours pass.', 'A failed send keeps the row where it was, shows why, and the button says "Try again".', 'In the Inbox and Last 3, the dashboard templates show as a template card (name, who to, what is needed) instead of a sentence that read as if we wrote it.'],
+      removed: [],
+      effect: 'You can see at a glance whether a send went, is queued or failed, and a double press never sends twice. Every send still goes through the normal sender with all its rules.',
+    } },
   { id: '2026-10-26-dashboard-peek-next-actions', date: '2026-10-26', title: 'Peek at a conversation, see your next actions, and the new templates in the Inbox', audience: 'admin',
     body: 'Each "What needs you" row has a "Last 3" button that shows their last three messages without leaving the dashboard. A new "Your next actions" card lists the next actions you set, how many days until each is due, and what to do, with ✓ to close it. The dashboard templates can now be picked in the Inbox too.',
     report: {

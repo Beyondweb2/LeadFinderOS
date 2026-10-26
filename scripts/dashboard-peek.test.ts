@@ -24,7 +24,7 @@ console.log('1. peek lines: who, text, media labels, templates');
   ok(peekLine(row({ body: '[image]' })).text === '[image]', 'a placeholder body on a text row reads as the label');
   const t = peekLine(row({ direction: 'outbound', message_type: 'template', template_name: 'needs_from_you',
     body: dashboardTemplateTranscript('needs_from_you', { business: 'Acme', greeting: 'Jo', neededItem: 'your logo' }) }));
-  ok(t.tag?.startsWith('Template · ') && t.text.includes('needs_from_you') && t.text.includes('Needed: your logo') && t.text.includes('Jo'), 'a dashboard template shows its name and values');
+  ok(t.tag?.startsWith('Template · ') && t.text.includes('What we need') && t.text.includes('needed: your logo') && t.text.includes('Jo') && !t.text.includes('approved wording'), 'a dashboard template shows its label and values, never the stored line');
   const snap = peekLine(row({ direction: 'outbound', message_type: 'template', template_name: 're_engage_49', template_snapshot: { version: 1, template_name: 're_engage_49', language: 'en', body: 'Where did we get to?' } }));
   ok(snap.text === 'Where did we get to?', 'a stored snapshot is the words the Inbox shows');
   ok(peekLine(row({ direction: 'outbound', status: 'failed', body: 'x' })).failed, 'a failed send says so');

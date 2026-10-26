@@ -750,3 +750,16 @@ SERVER_ONLY_TEMPLATE_LABELS (never in a picker). New variable `needed_item` (cle
   under the Inbox's RLS, loaded only when a row is opened; `myNextActions.ts` = "set by me" is the newest History follow_up_set
   actor (no History row: assigned to me); edit / done go through NextActionEditor → lead_set_follow_up.
   `scripts/dashboard-peek.test.ts` fences both.
+- **After the send button (2026-10-26, Paul; branch fix/dashboard-after-send)**: `dashboardSendState.ts` (pure) gives each row
+  its state from the Inbox's own facts (outbound whatsapp_messages + `my_inbox_scheduled_sends`, read by `useDashboardSends`,
+  re-read every 10 s only while a send is still moving) plus the press's own "Sending…". Sending / queued / sent → the row moves
+  to "Waiting on them" until its time-since moves past the send or `HANDLED_FOR_MS` (48 h); failed → stays, shows Meta's reason,
+  button "Try again". No double send: `DASHBOARD_RESEND_WINDOW_MS` (10 min) and pending queued rows, for
+  `NO_DOUBLE_SEND_TEMPLATES` (the dashboard's six + re_engage_49), in the browser (synchronous in-flight ref + lock) AND in
+  send-whatsapp-message (`recentDashboardSend`, before every template branch, fails closed, excludes the drain's own row;
+  BUILD_ID `2026-10-26b-dashboard-no-double-send`). Read-then-send: two presses in the same instant from two tabs can still
+  both pass; closing that needs a conditional write (a migration) — not done, Paul to decide.
+- **How the dashboard templates show** (same day): `dashboardTranscriptView` turns the stored line into a template card
+  (label, to whom, item needed) in the Inbox bubble and Last 3; `DASHBOARD_TEMPLATE_WORDING` holds Meta's approved words ONLY
+  as Paul pastes them (today only pick_up_conversation) and then shows the real words, old sends included. The stored line is
+  unchanged (the drain reads needs_from_you's item back from it). `scripts/dashboard-after-send.test.ts` fences all of this.
