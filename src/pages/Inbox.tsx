@@ -56,6 +56,9 @@ import { PipelineStatusSelect } from '@/components/PipelineStatusSelect';
 import { updateLeadStatus } from '@/lib/leadStatus';
 import { PIPELINE_STATUS_OPTIONS, WHATSAPP_TEMPLATES, type PipelineStatus } from '@/types/outreach';
 import { TemplateSnippet } from '@/components/TemplateWordingPreview';
+import { INBOX_DASHBOARD_GROUP_LABEL, INBOX_DASHBOARD_TEMPLATES, inboxDashboardSendability, isDashboardTemplate, needsTypedItem } from '@/lib/inboxDashboardTemplates';
+import { cleanNeededItem, DASHBOARD_TEMPLATES, dashboardGreeting, NEEDED_ITEM_MAX } from '@/lib/dashboardTemplates';
+import { prospectOnlyLead } from '@/lib/prospectOnly';
 import { useLeadSalesState } from '@/hooks/useLeadSalesState';
 import { salesStateOf } from '@/lib/leadState';
 import { useAllLoggedContacts } from '@/hooks/useLastLoggedContacts';
@@ -63,7 +66,7 @@ import { shownStatusMatches } from '@/lib/statusFilter';
 import { NextActionEditor } from '@/components/NextActionEditor';
 import { SocialLinks } from '@/components/SocialLinks';
 import { RequestTemplateButton } from '@/components/RequestTemplateButton';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
@@ -592,6 +595,8 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
      AdminSiteManage earlier; this was the last one. '' means "not set" and the send button stays
      disabled until the operator picks. */
   const [template, setTemplate] = useState('');
+  /* needs_from_you {{2}}: the one thing the client still has to send, typed before Preview / Send (never guessed). */
+  const [neededItem, setNeededItem] = useState('');
   const [sendingKeys, setSendingKeys] = useState<Set<string>>(new Set());
   const sendingKeysRef = useRef(new Set<string>());
   const sending = !!activeKey && sendingKeys.has(activeKey);
@@ -1526,7 +1531,18 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
 
   /* hasSiteFault gates audit_followup_fault: it names a specific site fault in {{6}} and Meta rejects
      an empty parameter, so it is only offered when this lead's crawl check found one. */
+  /* The dashboard templates' own gate (admin; WhatsApp only — greyed on texts with the reason; Australia prospect-only). */
+  const dashboardPickable = (name: Parameters<typeof inboxDashboardSendability>[0]) =>
+    inboxDashboardSendability(name, { isAdmin: isAdmin === true, sms, prospectOnly: prospectOnlyLead(activeLead) });
   const templateSendability = (name: string): { ok: boolean; reason?: string } => {
+    /* The dashboard's templates (Questionnaire / follow-up group): admin, WhatsApp, not prospect-only where it matters;
+       needs_from_you also needs its item typed. Every other rule is the sender's. */
+    if (isDashboardTemplate(name)) {
+      const d = dashboardPickable(name);
+      if (!d.ok || !needsTypedItem(name)) return d;
+      const c = cleanNeededItem(neededItem);
+      return c.ok ? d : { ok: false, reason: 'reason' in c && c.reason === 'needed_item_too_long' ? `Keep what you need under ${NEEDED_ITEM_MAX} characters.` : 'Type what you need from them first.' };
+    }
     const base = getTemplateSendability(name, { shareToken: null }, { reportSlug: activeReport?.auditId ?? null, hasSiteFault: active?.leadId ? hasSiteFaultLeadIds.has(active.leadId) : false, hasSiteFindings: active?.leadId ? hasSiteFindingsLeadIds.has(active.leadId) : false });
     if (!base.ok || !sms) return base;
     return smsTemplateAvailability(name); // template-availability difference: video / retired barber / Quick Close link templates are greyed with a reason
@@ -1559,6 +1575,23 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
                 </SelectItem>
               );
             })}
+            {/* The dashboard's Meta templates, their own group (admin only; greyed on texts — src/lib/inboxDashboardTemplates.ts). */}
+            {isAdmin && (
+              <SelectGroup data-testid="picker-dashboard-group">
+                <SelectLabel className="mt-1 border-t border-border pt-2 text-[11px] uppercase tracking-wide text-muted-foreground">{INBOX_DASHBOARD_GROUP_LABEL}</SelectLabel>
+                {INBOX_DASHBOARD_TEMPLATES.map((t) => {
+                  const s = dashboardPickable(t.value);
+                  return (
+                    <SelectItem key={t.value} value={t.value} disabled={!s.ok}>
+                      <span className="flex flex-col">
+                        <span>{t.label}</span>
+                        {!s.ok && <span className="text-[10px] text-amber-600">{s.reason}</span>}
+                      </span>
+                    </SelectItem>
+                  );
+                })}
+              </SelectGroup>
+            )}
           </SelectContent>
         </Select>
         {/* ⛔ PREVIEW BEFORE SEND — the dry run (useInbox.preview → send-whatsapp-message
@@ -1575,7 +1608,7 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
             if (!active || !template) return;
             setPreviewing(true);
             setPreviewOf({ template, key: active.key });
-            const r = await preview({ phone: active.phone, leadId: active.leadId, country: activeLead?.country ?? null, templateName: template, allowResend: thread.some((m) => m.direction === 'outbound' && m.template_name === template) });
+            const r = await preview({ phone: active.phone, leadId: active.leadId, country: activeLead?.country ?? null, templateName: template, allowResend: thread.some((m) => m.direction === 'outbound' && m.template_name === template), ...(needsTypedItem(template) ? { templateVars: { needed_item: neededItem } } : {}) });
             setPreviewResult(r.ok
               ? { ok: true, body: r.body ?? '', snapshot: r.snapshot, template: r.template ?? template, fellBack: r.fellBack }
               : { ok: false, error: r.error ?? 'preview_failed', reason: r.reason });
@@ -1590,10 +1623,27 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
           {sendVerb(replyOpen)} template
         </Button>
       </div>
+      {/* A dashboard template: what goes is Meta's approved wording filled with these values (the app cannot read Meta's
+          text), so the values are shown here; Preview runs the real dry run. needs_from_you asks for its item first. */}
+      {isDashboardTemplate(template) && (
+        <div className="mt-1.5 space-y-1.5 rounded-md border border-border/60 bg-muted/30 p-2 text-[11px]" data-testid="picker-dashboard-values">
+          {needsTypedItem(template) && (
+            <Input value={neededItem} maxLength={NEEDED_ITEM_MAX} onChange={(e) => { setNeededItem(e.target.value); setPreviewResult(null); }}
+              placeholder="What do you need from them? e.g. your logo and two photos of your work" className="h-8 text-xs" data-testid="picker-needed-item" />
+          )}
+          <p className="text-muted-foreground">
+            Meta's approved “{template}” template, with:{' '}
+            {(DASHBOARD_TEMPLATES[template].vars as readonly string[]).includes('greeting_name')
+              ? <span className="text-foreground">Name: {dashboardGreeting(activeLead?.contact_name, activeLead?.business_name ?? '') || '—'}</span>
+              : <span className="text-foreground">Business name: {activeLead?.business_name || '—'}</span>}
+            {needsTypedItem(template) && <span className="text-foreground"> · Item needed: {neededItem.trim() || '(type it above)'}</span>}
+          </p>
+        </div>
+      )}
       {/* One line of the chosen template, with this lead's details. No hover preview (Paul, 2026-09-29):
           the full message is the Preview button's dry run above — the exact payload. */}
-      <TemplateSnippet className="mt-1.5" selected={template}
-        values={{ businessName: activeLead?.business_name, firstName: (activeLead as { contact_name?: string | null } | undefined)?.contact_name, town: (activeLead as { derived_town?: string | null; search_location?: string | null } | undefined)?.derived_town ?? (activeLead as { search_location?: string | null } | undefined)?.search_location, trade: (activeLead as { search_keyword?: string | null } | undefined)?.search_keyword }} />
+      {!isDashboardTemplate(template) && <TemplateSnippet className="mt-1.5" selected={template}
+        values={{ businessName: activeLead?.business_name, firstName: (activeLead as { contact_name?: string | null } | undefined)?.contact_name, town: (activeLead as { derived_town?: string | null; search_location?: string | null } | undefined)?.derived_town ?? (activeLead as { search_location?: string | null } | undefined)?.search_location, trade: (activeLead as { search_keyword?: string | null } | undefined)?.search_keyword }} />}
       <RequestTemplateButton source="inbox" />
       {/* ⛔ SHOWN ONLY FOR THE TEMPLATE AND THREAD IT WAS RUN FOR. A stale preview under a different
           template reads as a guarantee about a message nobody previewed. */}
@@ -1998,6 +2048,7 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
       body: useTemplate ? undefined : body,
       templateName: useTemplate ? template : undefined,
       allowResend: alreadySent,
+      ...(useTemplate && needsTypedItem(template) ? { templateVars: { needed_item: neededItem } } : {}),
     });
     sendingKeysRef.current.delete(sendKey);
     setSendingKeys((prev) => { const next = new Set(prev); next.delete(sendKey); return next; });

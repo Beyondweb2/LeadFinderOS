@@ -22,6 +22,14 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-26-dashboard-peek-next-actions', date: '2026-10-26', title: 'Peek at a conversation, see your next actions, and the new templates in the Inbox', audience: 'admin',
+    body: 'Each "What needs you" row has a "Last 3" button that shows their last three messages without leaving the dashboard. A new "Your next actions" card lists the next actions you set, how many days until each is due, and what to do, with ✓ to close it. The dashboard templates can now be picked in the Inbox too.',
+    report: {
+      added: ['"Last 3" on every What needs you row: the last three WhatsApp messages (them or us, how long ago, the words; templates show their name and values; voice notes, stickers, images and files show as a label), with "Open in Inbox".', '"Your next actions": every next action set by you (or everyone\'s), soonest first, with "3 days overdue", "Due today", "In 5 days", the action, the time and your note. Edit it or ✓ close it there; Open goes to where it is done.', 'Inbox "Send a template" has a "Questionnaire / follow-up" group: domain help, payment help, what we need from you (you type the item), agency access, agreement & next steps, 24-hour nudge and pick up the conversation.'],
+      changed: ['The Inbox template preview shows the values those templates will be filled with.'],
+      removed: [],
+      effect: 'Peeking only reads: nothing is marked read, no read receipt goes, no status changes. Templates from the Inbox use the normal sender (send hours, opt-outs, the 24-hour rule, Meta\'s rules) and are admin only; Australian leads cannot be sent the questionnaire, agreement or payment ones. Nothing sends by itself.',
+    } },
   { id: '2026-10-26-dashboard-buttons-pressable', date: '2026-10-26', title: 'Every dashboard send button is pressable', audience: 'admin',
     body: 'No more "Not set up at Meta". When they replied last (Interested, waiting on you) the button sends pick_up_conversation; when you wrote last and they went quiet it sends your re-engage message. If Meta refuses a send, you see why straight away and on the message in their Inbox thread; the button stays usable.',
     report: {

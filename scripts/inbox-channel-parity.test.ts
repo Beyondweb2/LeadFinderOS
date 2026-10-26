@@ -103,6 +103,8 @@ console.log('3. every channel conditional is a DECLARED difference');
     [/if \(!sms\) return supabase\.functions\.invoke\('send-whatsapp-message'/, 'send-path'],
     [/if \(sms && isColdSmsTemplate\(bulkTemplate\)\)|sms && isColdSmsTemplate/, 'bulk-queue'],
     [/if \(!base\.ok \|\| !sms\) return base|return smsTemplateAvailability\(name\)/, 'template-availability'],
+    /* 2026-10-26: the dashboard templates' group is in the one picker on both tabs, greyed on texts with "WhatsApp only." */
+    [/inboxDashboardSendability\(name, \{ isAdmin: isAdmin === true, sms,/, 'template-availability'],
     [/const newPickerLeads = |isPlausibleUkMobile/, 'statuses'],
     [/IconTile icon=\{sms \?|sms \? 'Every text conversation|sms && \(smsQueueRows|title=\{sms \?|\(sms \? smsQueueInfo|sms \? 'The text queue|sms \? 'Start a text|sms \? 'No leads with a UK mobile/, 'send-path'],
     [/!sms && <SelectItem value=\{HOOK_DUE_FILTER\}>|perms\.queueControls && !sms/, 'no-hook-queue'],

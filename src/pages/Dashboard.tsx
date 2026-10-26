@@ -23,6 +23,7 @@ import { SubmissionsCard } from '@/components/dashboard/SubmissionsCard';
 import { FreeCheckProgressCard } from '@/components/dashboard/FreeCheckProgressCard';
 import { BusinessGlance } from '@/components/admin/teamControl';
 import { NeedsMeList, ArchivedList, CardMarkMenu, type MarkFn } from '@/components/admin/NeedsMeList';
+import { NextActionsList } from '@/components/admin/NextActionsList';
 import { QuestionnaireLog } from '@/components/admin/QuestionnaireLog';
 import { usePaidClientList } from '@/hooks/useAdminTeamControl';
 import { needsYouItems } from '@/lib/adminControl';
@@ -48,7 +49,7 @@ function greeting(now = new Date()) {
   return h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening';
 }
 
-const CARD_LABEL: Record<string, string> = { 'card:glance': 'Card: Business at a glance', 'card:needs': 'Card: What needs you', 'card:numbers': 'Card: Key numbers', 'card:questionnaires': 'Card: Questionnaires', 'card:desk': 'Card: Sign-ups & free checks' };
+const CARD_LABEL: Record<string, string> = { 'card:glance': 'Card: Business at a glance', 'card:needs': 'Card: What needs you', 'card:nextactions': 'Card: Your next actions','card:numbers': 'Card: Key numbers', 'card:questionnaires': 'Card: Questionnaires', 'card:desk': 'Card: Sign-ups & free checks' };
 
 function KeyNumbers({ n, hideMine, meId, menu }: { n: HomeNumbers | undefined; hideMine: boolean; meId: string | null; menu: React.ReactNode }) {
   if (!n) return null;
@@ -211,6 +212,13 @@ const Dashboard = () => {
             onOutcome={async (onboardingId, reason, note) => { await actions.outcome.mutateAsync({ onboardingId, lostReason: reason, note }); }}
             loading={needsQ.isLoading || q.isLoading} error={needsQ.isError ? edgeErrorMessage(needsQ.error) : null} onRetry={() => void needsQ.refetch()}
             cardMenu={<CardMarkMenu itemKey="card:needs" onMark={onMark} />} />
+        </div>
+      )}
+
+      {!cardHidden('card:nextactions') && (
+        <div id="next-actions">
+          <NextActionsList meId={user?.id ?? null} nameOf={(id) => (id ? team.byId.get(id)?.display_name ?? null : null)}
+            cardMenu={<CardMarkMenu itemKey="card:nextactions" onMark={onMark} />} />
         </div>
       )}
 
