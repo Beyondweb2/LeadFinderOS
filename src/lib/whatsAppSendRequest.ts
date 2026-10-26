@@ -28,6 +28,8 @@ export interface WhatsAppSendResult {
   message?: { id?: string } & Record<string, unknown>;
   /** Present when it was QUEUED for the lead's send hours instead of sent (nothing has gone yet). */
   scheduled?: { id: string; send_at: string; tz: string };
+  /** Meta's own error code when Meta refused the send (sendErrorMeaning.ts turns it into words). */
+  failCode?: number;
 }
 
 export async function sendWhatsAppRequest(sb: { functions: typeof Supabase.functions }, args: WhatsAppSendArgs): Promise<WhatsAppSendResult> {
@@ -44,7 +46,7 @@ export async function sendWhatsAppRequest(sb: { functions: typeof Supabase.funct
     },
   });
   if (error) return { ok: false, error: error.message };
-  if (!data?.ok) return { ok: false, error: data?.error ?? 'send_failed', reason: data?.reason };
+  if (!data?.ok) return { ok: false, error: data?.error ?? 'send_failed', reason: data?.reason, ...(typeof data?.failCode === 'number' ? { failCode: data.failCode } : {}) };
   if (data.scheduled) return { ok: true, scheduled: data.scheduled };
   return { ok: true, simulated: data.simulated, message: data.message ?? undefined };
 }
