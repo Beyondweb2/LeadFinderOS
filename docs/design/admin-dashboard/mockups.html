@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Admin home mockups</title>
+<!-- Design mockup only (2026-10-26). FAKE data: every business is a made-up "Demo" name. Nothing here talks to the app. -->
+<style>
+:root{--bg:#f6f7f9;--card:#fff;--ink:#16181d;--muted:#6b7280;--line:#e5e7eb;--red:#c62828;--redbg:#fdecec;--amber:#b45309;--amberbg:#fff4e0;--green:#15803d;--greenbg:#e8f6ec;--blue:#1d4ed8;--bluebg:#e8efff;--gold:#d4a017;--accent:#111827}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.4 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+.wrap{max-width:1360px;margin:0 auto;padding:20px 24px}
+h1{font-size:20px;margin:0}h2{font-size:15px;margin:0 0 10px}.muted{color:var(--muted)}.small{font-size:12px}
+.top{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:16px}
+.tag{display:inline-block;font-size:11px;font-weight:600;padding:2px 8px;border-radius:999px;white-space:nowrap}
+.t-red{background:var(--redbg);color:var(--red)}.t-amber{background:var(--amberbg);color:var(--amber)}.t-green{background:var(--greenbg);color:var(--green)}.t-blue{background:var(--bluebg);color:var(--blue)}.t-grey{background:#eef0f3;color:#374151}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px}
+.btn{border:1px solid var(--accent);background:var(--accent);color:#fff;border-radius:8px;padding:6px 10px;font-size:12.5px;font-weight:600;cursor:pointer;white-space:nowrap}
+.btn.ghost{background:#fff;color:var(--ink);border-color:var(--line)}
+.icon{border:1px solid var(--line);background:#fff;border-radius:8px;width:30px;height:30px;font-size:14px;color:var(--muted)}
+.row{display:grid;grid-template-columns:8px 1fr auto;gap:12px;align-items:center;padding:11px 12px;border-bottom:1px solid var(--line)}
+.row:last-child{border-bottom:0}.bar{width:4px;height:36px;border-radius:2px}.b-red{background:var(--red)}.b-amber{background:#f59e0b}.b-blue{background:#3b82f6}.b-grey{background:#cbd5e1}
+.biz{font-weight:600}.star{color:var(--gold)}.why{margin-top:2px}.acts{display:flex;gap:6px;align-items:center}
+.nums{display:grid;grid-template-columns:repeat(7,1fr);gap:8px}.num{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px}
+.num b{display:block;font-size:20px}.num .drop{font-size:11px;color:var(--muted)}
+.health{display:flex;gap:10px;flex-wrap:wrap}.pill{border:1px solid var(--line);border-radius:10px;padding:8px 10px;background:#fff}
+.chips{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}.chip{border:1px solid var(--line);border-radius:999px;padding:4px 10px;font-size:12px;background:#fff}.chip.on{background:var(--accent);color:#fff;border-color:var(--accent)}
+.grid2{display:grid;grid-template-columns:1fr 340px;gap:16px}.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+.col h2 .count{color:var(--muted);font-weight:500}
+.mini{border:1px solid var(--line);border-radius:10px;padding:10px;background:#fff;margin-bottom:8px}
+.mini .acts{margin-top:8px}
+.toast{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);background:#111827;color:#fff;border-radius:10px;padding:10px 14px;font-size:13px;display:flex;gap:14px;align-items:center;box-shadow:0 6px 20px rgba(0,0,0,.2)}
+.toast a{color:#93c5fd;font-weight:600}
+.sec{margin-top:16px}.sec-h{display:flex;justify-content:space-between;align-items:center;cursor:pointer}
+.banner{background:#fffbea;border:1px solid #f5d77a;border-radius:10px;padding:8px 12px;font-size:12.5px;margin-bottom:12px}
+.funnel{display:flex;flex-direction:column;gap:6px}.fbar{display:flex;align-items:center;gap:8px;font-size:12.5px}.fbar i{display:block;height:14px;background:#c7d2fe;border-radius:3px}
+table{width:100%;border-collapse:collapse;font-size:12.5px}td,th{padding:5px 4px;border-bottom:1px solid var(--line);text-align:left}th{color:var(--muted);font-weight:500}
+@media (max-width:760px){
+ .wrap{padding:14px 12px}.grid2,.grid3{grid-template-columns:1fr}.nums{grid-template-columns:repeat(3,1fr)}.num b{font-size:16px}
+ .top{flex-wrap:wrap}.chips{flex-wrap:nowrap;overflow-x:auto}.chip{white-space:nowrap}.banner{font-size:12px}
+ .row>div,.card,.grid2>div{min-width:0}.why,.biz{overflow-wrap:anywhere}body{overflow-x:hidden}
+ .row{grid-template-columns:6px 1fr;}.row .acts{grid-column:2;flex-wrap:wrap}.hide-m{display:none}
+}
+</style>
+</head>
+<body>
+<div class="wrap" id="app"></div>
+<script>
+/* FAKE DATA ONLY. */
+const ROWS=[
+ {biz:'Demo Driving School A',kind:'Questionnaire',sev:'red',why:'Finished the questions 26 h ago, no agreement. Blank: who owns the domain',since:'26 h',esc:'Escalated (24 h)',next:'Send: Domain help',tpl:'domain_help'},
+ {biz:'Demo Plumbing B',kind:'Payment',sev:'red',why:'Monthly payment failed 2 days ago',since:'2 d',next:'Send: Payment help',tpl:'payment_help'},
+ {biz:'Demo Locksmiths C',kind:'Reply',sev:'red',why:'Asked "how much would it cost?" 41 min ago, draft ready',since:'41 min',next:'Approve draft',tpl:null},
+ {biz:'Demo Driving D',kind:'Questionnaire',sev:'amber',why:'Answered everything, agency contract "not sure"',since:'5 h',next:'Send: Agency access',tpl:'agency_access'},
+ {biz:'Demo Electrical E',kind:'Interested',sev:'amber',star:true,why:'Starred, waiting on us since Friday',since:'3 d',next:'Send: Agreement & next steps',tpl:'agreement_next'},
+ {biz:'Demo Roofing F',kind:'Reply',sev:'amber',why:'Needs you: "Are you looking for lessons?"',since:'2 h',next:'Open reply',tpl:null},
+ {biz:'Demo Driving G',kind:'Follow-up',sev:'blue',why:'Next Action: call back today 14:00 (you set it)',since:'due 14:00',next:'Log call',tpl:null},
+ {biz:'Demo Accountants H',kind:'New client',sev:'blue',why:'Paid yesterday. Next onboarding step: logo and photos',since:'1 d',next:'Send: What we need',tpl:'what_we_need'},
+ {biz:'Demo Driving J',kind:'Questionnaire',sev:'grey',why:'Final nudge sent 2 d ago, no answer',since:'4 d',esc:'48 h passed',next:'Mark outcome',tpl:null},
+];
+const FUNNEL=[['Sent',817],['Delivered',708],['Real replies',254],['Interested',14],['Questionnaire',4],['Reached payment',2],['Paid',0]];
+const sevTag={red:'t-red',amber:'t-amber',blue:'t-blue',grey:'t-grey'};
+const kindTag=k=>({Questionnaire:'t-red',Payment:'t-red',Reply:'t-blue',Interested:'t-amber','Follow-up':'t-grey','New client':'t-green'}[k]||'t-grey');
+const acts=(r,compact)=>`<div class="acts">${r.tpl?`<button class="btn">${r.next} ▸</button>`:`<button class="btn ghost">${r.next}</button>`}<button class="icon" title="Snooze">⏰</button><button class="icon" title="Dismiss">✕</button><button class="icon" title="Archive">🗄</button></div>`;
+const row=r=>`<div class="row"><div class="bar b-${r.sev}"></div><div><div><span class="biz">${r.star?'<span class="star">★</span> ':''}${r.biz}</span> <span class="tag ${kindTag(r.kind)}">${r.kind}</span> ${r.esc?`<span class="tag t-red">${r.esc}</span>`:''}</div><div class="why muted">${r.why} · <b>${r.since}</b></div></div>${acts(r)}</div>`;
+const nums=()=>`<div class="nums">${FUNNEL.map(([k,v],i)=>`<div class="num"><span class="muted small">${k}</span><b>${v}</b><span class="drop">${i?Math.round(100*v/(FUNNEL[i-1][1]||1))+'% of previous':'last 14 days'}</span></div>`).join('')}</div>`;
+const health=()=>`<div class="health"><div class="pill"><span class="muted small">Number rating</span><br><span class="tag t-red">RED</span> tier 2K</div><div class="pill"><span class="muted small">Daily cap used</span><br><b>112 / 250</b></div><div class="pill"><span class="muted small">Failed today</span><br><b>6</b> <span class="muted small">(4%)</span></div><div class="pill"><span class="muted small">Team this week</span><br><b>Paul 690</b> · Ethan 1 · Stephan 2</div></div>`;
+const toast=`<div class="toast">Archived Demo Driving J <a href="#">Undo</a></div>`;
+const header=(sub)=>`<div class="top"><div><h1>Good morning, Paul</h1><div class="muted small">${sub}</div></div><div class="acts"><button class="btn ghost">Archived (3)</button><button class="btn ghost">Refresh</button></div></div>`;
+
+function A(){return header('Concept A · one list: what needs you today, most urgent first')+
+`<div class="banner">One-tap buttons ▸ send your pre-written template through the normal sender: send hours, caps, opt-outs, the 24-hour window and Meta rules all apply. Outside their hours it is queued and says when.</div>
+<div class="grid2"><div class="card" style="padding:0"><div style="padding:12px 12px 0"><h2>Needs you · 9</h2><div class="chips"><span class="chip on">All 9</span><span class="chip">Questionnaires 3</span><span class="chip">Replies 2</span><span class="chip">Money 1</span><span class="chip">Interested 1</span><span class="chip">Follow-ups 1</span><span class="chip">New clients 1</span></div></div>${ROWS.map(row).join('')}</div>
+<div><div class="card"><h2>Funnel · 14 days</h2><div class="funnel">${FUNNEL.map(([k,v])=>`<div class="fbar"><span style="width:110px">${k}</span><i style="width:${Math.max(3,v/817*170)}px"></i><b>${v}</b></div>`).join('')}</div></div>
+<div class="card sec"><h2>Sending health</h2>${health()}</div></div></div>`+toast}
+
+function B(){const cols=[['Do now','red'],['Today','amber'],['Waiting on them','grey']];const pick={red:['red'],amber:['amber','blue'],grey:['grey']};
+return header('Concept B · numbers on top, three columns by urgency')+nums()+`<div class="sec">${health()}</div>
+<div class="grid3 sec">${cols.map(([t,s])=>{const rs=ROWS.filter(r=>pick[s].includes(r.sev));return `<div class="col"><h2>${t} <span class="count">${rs.length}</span></h2>${rs.map(r=>`<div class="mini"><div><span class="biz">${r.star?'<span class="star">★</span> ':''}${r.biz}</span></div><div style="margin:4px 0"><span class="tag ${kindTag(r.kind)}">${r.kind}</span> <span class="muted small">${r.since}</span> ${r.esc?`<span class="tag t-red">${r.esc}</span>`:''}</div><div class="muted small">${r.why}</div>${acts(r)}</div>`).join('')}</div>`}).join('')}</div>`+toast}
+
+function C(){const groups=[['Questionnaires',['Questionnaire']],['Money',['Payment']],['Replies and interest',['Reply','Interested']],['Clients and follow-ups',['New client','Follow-up']]];
+return header('Concept C · a short briefing, grouped by what kind of work it is')+
+`<div class="card"><div class="muted small" style="margin-bottom:6px">Today: <b>9 things need you</b> · 3 are over a day old · oldest 4 d</div>${nums()}</div>
+${groups.map(([g,ks])=>{const rs=ROWS.filter(r=>ks.includes(r.kind));return `<div class="card sec" style="padding:0"><div class="sec-h" style="padding:12px"><h2 style="margin:0">${g} <span class="muted">· ${rs.length}</span></h2><span class="muted small">▾</span></div>${rs.map(row).join('')}</div>`}).join('')}
+<div class="card sec"><div class="sec-h"><h2 style="margin:0">Sending health and team</h2><span class="muted small">▾</span></div><div class="sec">${health()}</div></div>
+<div class="card sec"><div class="sec-h"><h2 style="margin:0">Questionnaire log · this week</h2><span class="muted small">outcomes and lost reasons</span></div>
+<table><tr><th>Business</th><th>Submitted</th><th>Stopped at</th><th>Outcome</th></tr><tr><td>Demo Driving School A</td><td>Fri 14:19</td><td>Domain</td><td><span class="tag t-amber">Open · escalated</span></td></tr><tr><td>Demo Driving J</td><td>Wed 09:02</td><td>Payment</td><td><span class="tag t-grey">Lost · went quiet</span></td></tr><tr><td>Demo Plumbing K</td><td>Tue 11:40</td><td>—</td><td><span class="tag t-green">Paid</span></td></tr></table></div>`+toast}
+
+const c=(location.hash||'#a').slice(1);document.getElementById('app').innerHTML=({a:A,b:B,c:C}[c]||A)();
+</script>
+</body>
+</html>
