@@ -75,18 +75,23 @@ console.log("\n── phone polish and the dark colour direction (2026-10-02) �
 console.log("\n── the Admin dashboard ──");
 {
   ok(/title="Admin dashboard"/.test(admin), 'it is called "Admin dashboard"');
-  ok(/<Section title="Website & system"/.test(admin) && !/<Section title="Traffic"/.test(admin) && !/<Section title="System"/.test(admin), 'Traffic, usage and running costs are one section, "Website & system"');
-  const sections = [...admin.matchAll(/<Section title="([^"]+)" tone="(\w+)" hint="[^"]+"/g)].map((m) => m[1]);
-  ok(sections.length === [...admin.matchAll(/<Section title=/g)].length && sections.length >= 7, `every admin section has a colour and a one-line purpose (${sections.join(", ")})`);
-  /* 2026-10-02 control centre (Paul: "my business / sales control centre", one metric one home). */
-  const at = (s: string) => admin.indexOf(s);
-  const order = ["<BusinessGlance ", "<AttentionQueue items={needs}", "<HandoffsPanel ", "<TeamPerformanceTable ", "<MoneyPanel ", "<LostReasonsPanel ", "<FindableFunnelPanel "];
-  ok(order.every((s) => at(s) > -1) && order.every((s, i) => i === 0 || at(order[i - 1]) < at(s)), "order: glance → what needs you → new sales & handoffs → sales team → money → intelligence → website & system");
-  for (const gone of ["<SinceYesterday ", "<TeamComparison ", "<FunnelPanel ", "<CallsPanel ", "<RevenuePanel ", "<ContributionPanel ", "<CommissionPanel "]) ok(!admin.includes(gone), `removed from the page: ${gone.trim()}`);
-  /* 2026-10-02: the toggle now reaches the server (scripts/admin-my-activity.test.ts has the figures). */
-  ok(/usePersistedState<boolean>\('admin\.hideMyActivity', true/.test(admin) && /useAdminOverview\(choice, isAdmin, hideMine\)/.test(admin), "Hide my activity: default hidden, remembered, and sent to the server for every activity figure");
-  ok(/usePaidClientList\(isAdmin\)/.test(admin) && /invokeEdge<\{ clients: PaidClientListRow\[\] \}>\('paid-client-hub', \{ action: 'list' \}\)/.test(read("src/hooks/useAdminTeamControl.ts")), "New sales & handoffs reads the Paid Clients page's own list (no second status system)");
-  ok(/exclude=\{handoffIds\}/.test(admin), "a client under New sales & handoffs is not repeated in Clients in delivery");
+  /* 2026-10-26 Concept A (Paul: "my dashboard looks good, it's just full of junk"): the home keeps glance → what needs
+     you → key numbers → questionnaires → the sign-up desk; the team, money, insight, client-health, traffic and cost
+     panels MOVED (not deleted) to /admin/insights (AdminInsights.tsx). docs/design/admin-dashboard/README.md. */
+  const insights = code("src/pages/AdminInsights.tsx");
+  ok(/<Section title="Website & system"/.test(insights) && !/<Section title="Traffic"/.test(insights) && !/<Section title="System"/.test(insights), 'Traffic, usage and running costs are one section, "Website & system" (on Team, insights and costs)');
+  const sections = [...insights.matchAll(/<Section title="([^"]+)" tone="(\w+)" hint="[^"]+"/g)].map((m) => m[1]);
+  ok(sections.length === [...insights.matchAll(/<Section title=/g)].length && sections.length >= 5, `every insights section has a colour and a one-line purpose (${sections.join(", ")})`);
+  const order = (src: string, list: string[]) => list.every((s) => src.indexOf(s) > -1) && list.every((s, i) => i === 0 || src.indexOf(list[i - 1]) < src.indexOf(s));
+  ok(order(admin, ["<BusinessGlance ", "<NeedsMeList ", "<KeyNumbers ", "<QuestionnaireLog ", 'to="/admin/insights"', 'id="signup-desk"']), "home order: glance → what needs you → key numbers → questionnaires → link to insights → sign-up desk");
+  ok(order(insights, ["<TeamPerformanceTable ", "<MoneyPanel ", "<LostReasonsPanel ", "<ClientHealthPanel ", "<FindableFunnelPanel ", "<CostPanel "]), "insights order: team → money → intelligence → clients in delivery → website & system");
+  for (const moved of ["<TeamPerformanceTable ", "<MoneyPanel ", "<LostReasonsPanel ", "<FindableFunnelPanel ", "<CostPanel ", "<AttentionQueue "]) ok(!admin.includes(moved), `moved off the home page: ${moved.trim()}`);
+  ok(!/<ClientSearchPanel/.test(admin + insights), 'the never-connected "Client websites · Google search" panel is not shown');
+  for (const gone of ["<SinceYesterday ", "<TeamComparison ", "<FunnelPanel ", "<CallsPanel ", "<RevenuePanel ", "<ContributionPanel ", "<CommissionPanel "]) ok(!admin.includes(gone) && !insights.includes(gone), `removed from the page: ${gone.trim()}`);
+  /* My activity: INCLUDED by default (2026-10-26), one key for both pages, still sent to the server. */
+  ok([admin, insights].every((s) => /usePersistedState<boolean>\(HIDE_MY_ACTIVITY_KEY, false/.test(s) && /useAdminOverview\(choice, isAdmin, hideMine\)/.test(s)), "My activity: default included, remembered, and sent to the server for every activity figure");
+  ok(/usePaidClientList\(isAdmin\)/.test(admin) && /invokeEdge<\{ clients: PaidClientListRow\[\] \}>\('paid-client-hub', \{ action: 'list' \}\)/.test(read("src/hooks/useAdminTeamControl.ts")), "new clients read the Paid Clients page's own list (no second status system)");
+  ok(/exclude=\{handoffIds\}/.test(insights), "a client under New sales is not repeated in Clients in delivery");
 }
 
 console.log("\n── the nav ──");

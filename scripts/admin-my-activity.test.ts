@@ -182,7 +182,9 @@ const niche = (o: typeof inc, k: string) => o.niches.find((x) => x.key === k);
   const src = (f: string) => readFileSync(new URL(`../${f}`, import.meta.url), 'utf8');
   const dash = src('src/pages/Dashboard.tsx');
   ok(/useAdminOverview\(choice, isAdmin, hideMine\)/.test(dash), 'the Dashboard sends the one My activity setting to the server');
-  ok((dash.match(/admin\.hideMyActivity/g) ?? []).length === 1, 'there is exactly one My activity preference');
+  /* 2026-10-26: the key lives once in adminPeriod.ts (v2, default included); both admin pages use the constant. */
+  const keyFiles = ['src/pages/Dashboard.tsx', 'src/pages/AdminInsights.tsx', 'src/lib/adminPeriod.ts'].map(src);
+  ok(keyFiles.reduce((n, s) => n + (s.match(/admin\.hideMyActivity/g) ?? []).length, 0) === 1 && /HIDE_MY_ACTIVITY_KEY, false/.test(dash), 'there is exactly one My activity preference');
   const hook = src('src/hooks/useAdminOverview.ts');
   ok(/queryKey: \[[^\]]*hideMine\]/.test(hook) && /hideMine \}\)/.test(hook), 'the setting is in the cache key and the request body');
   const fn = src('supabase/functions/admin-overview/index.ts');

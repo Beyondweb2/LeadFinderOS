@@ -24,6 +24,8 @@ import { respellTrade } from "../../../src/lib/freeCheckTrade.ts";
 import { serveDecision, serveInputFromRow, platformLabel, type ServeGateRow } from "../../../src/lib/serveGate.ts";
 import { DOMAIN_REASON_TEXT, DOMAIN_ROW_COLUMNS, domainAuthority, domainInputFromRow, type DomainRow } from "../../../src/lib/domainAuthority.ts";
 import { domainEmailLine } from "../../../src/lib/domainEmailLine.ts";
+import { questionnaireStep, questionnaireRowKey, type QuestionnaireFacts } from "../../../src/lib/questionnaireStop.ts";
+import { operatorAppUrl } from "../../../src/config/operatorApp.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -185,7 +187,7 @@ Deno.serve(async (req) => {
       .from("onboarding_responses")
       // ONE STRING LITERAL, not a concatenation. supabase-js types the select on the literal, so
       // splitting it across two lines makes `data` GenericStringError[] and the cast below a TS2352.
-      .select("id, lead_id, business_name, status, contact_email, confirmed_location, created_at, website_platform, website_platform_other, website_manager, willing_to_migrate, gbp_exists, gbp_status, gbp_verified, must_not_say, photos_status, incomplete, notify_attempts, source, services, confirmed_phone, domain_escalated_at, " + DOMAIN_ROW_COLUMNS)
+      .select("id, lead_id, business_name, status, contact_email, confirmed_location, created_at, website_platform, website_platform_other, website_manager, willing_to_migrate, gbp_exists, gbp_status, gbp_verified, must_not_say, photos_status, incomplete, notify_attempts, source, services, confirmed_phone, domain_escalated_at, agency_contract, " + DOMAIN_ROW_COLUMNS)
       /* ⛔ THE GATE IS notify_sent_at, NOT notified_at. notified_at is the CLAIM stamp, written
          before the attempt — gating on it is what made a failed send permanent and invisible.
          Gating on delivery, bounded by attempts, is what lets a failure come back. */
@@ -532,9 +534,15 @@ Deno.serve(async (req) => {
       const opening = isFreeCheck
         ? `${name} just asked for a free AI check.\n\n`
         : `${name} filled in the questionnaire ${mins} minutes ago and has not paid.\n\n`;
+      /* The exact next step and a link to its row on the admin home (Concept A, 2026-10-26): the SAME rule as the row
+         (questionnaireStop.ts). Not for a free check (no questionnaire to chase). */
+      const step = isFreeCheck ? null : questionnaireStep(row as unknown as QuestionnaireFacts, Date.now());
+      const rowLink = operatorAppUrl(`/?row=${encodeURIComponent(questionnaireRowKey(row.id))}#needs-you`);
+      const dueWords = step ? new Date(step.dueIso).toLocaleString("en-GB", { weekday: "short", hour: "2-digit", minute: "2-digit", timeZone: "Europe/London" }) : "";
       const text =
         opening +
-        (verdictLabel ? `  ${verdictLabel}\n  ${gate!.reason}\n\n` : "") +
+        (step ? `  NEXT STEP: ${step.action} (due ${dueWords}). ${step.why}.\n  Open it: ${rowLink}\n\n` : "") +
+        (verdictLabel ?`  ${verdictLabel}\n  ${gate!.reason}\n\n` : "") +
         line("Trade:", trade) + line("Town:", town) + line("Phone:", submittedPhone) + line("Email:", row.contact_email) +
         (storedPhone && storedPhone !== submittedPhone ? line("On file:", `${storedPhone} (from prospecting, not typed)`) : "") +
         (gate ? line("Website platform:", siteLine) : "") +
@@ -555,6 +563,9 @@ Deno.serve(async (req) => {
         (isFreeCheck
           ? `<p style="margin:0 0 10px"><strong>${escapeHtml(name)}</strong> just asked for a free AI check.</p>`
           : `<p style="margin:0 0 10px"><strong>${escapeHtml(name)}</strong> filled in the questionnaire ${mins} minutes ago and has not paid.</p>`) +
+        (step
+          ? `<p style="margin:0 0 12px;padding:10px 12px;border-radius:8px;background:#eff6ff;color:#1e3a8a"><strong>Next step:</strong> ${escapeHtml(step.action)} (due ${escapeHtml(dueWords)})<br>${escapeHtml(step.why)}.<br><a href="${rowLink}" style="color:#1d4ed8;font-weight:600">Open it on your dashboard</a></p>`
+          : "") +
         (verdictLabel
           ? `<p style="margin:0 0 12px;padding:10px 12px;border-radius:8px;background:${
             gate!.verdict === "block" ? "#fef2f2" : "#fffbeb"

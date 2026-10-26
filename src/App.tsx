@@ -38,6 +38,7 @@ const ClientHub = lazy(() => import("./pages/ClientHub"));
 const WebsiteBuild = lazy(() => import("./pages/WebsiteBuild"));
 const ComparePage = lazy(() => import("./pages/CompareMeasurements"));
 const AdminApiUsage = lazy(() => import("./pages/AdminApiUsage"));
+const AdminInsights = lazy(() => import("./pages/AdminInsights"));
 const Inbox = lazy(() => import("./pages/Inbox"));
 const WhatsAppQueue = lazy(() => import("./pages/WhatsAppQueue"));
 const SalesDashboard = lazy(() => import("./pages/SalesDashboard"));
@@ -263,6 +264,7 @@ const App = () => {
               <Route path="/page-plan" element={<LegacyToolRedirect />} />
               <Route path="/ai-audit" element={<AiAudit />} />
               <Route path="/admin/api-usage" element={<AdminApiUsage />} />
+              <Route path="/admin/insights" element={<AdminInsights />} />
               {/* Multi-user. The retired My Leads pages redirect into the ONE workflow (2026-09-27):
                   /sales → Outreach; /sales/lead/:id → that lead, opened in Outreach. */}
               <Route path="/sales" element={<Navigate to="/outreach" replace />} />
