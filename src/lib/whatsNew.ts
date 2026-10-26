@@ -22,6 +22,14 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-26-dashboard-template-words', date: '2026-10-26', title: 'The dashboard templates show their real words', audience: 'admin',
+    body: 'The seven dashboard templates now show Meta\'s approved wording, filled in for that lead: in the Inbox thread, in Last 3, in the dashboard\'s send confirm and in the Inbox template picker. Messages already sent show their words too.',
+    report: {
+      added: ['Before sending: the dashboard confirm and the Inbox "Send a template" picker show the exact words the lead will get.'],
+      changed: ['In the Inbox thread and Last 3, a sent dashboard template shows the words they received (e.g. "Hi Ian, your agreement is ready…") instead of a template card. Older sends included.'],
+      removed: [],
+      effect: 'You see exactly what they read. If you edit a template at Meta, the new wording has to be pasted into the app too, or the Inbox shows the old words.',
+    } },
   { id: '2026-10-26-dashboard-after-send', date: '2026-10-26', title: 'Dashboard rows show what happened after you press send', audience: 'admin',
     body: 'After you press a send button on a "What needs you" row, the row shows Sending…, then Queued (with the time), Sent, Delivered, Read or Failed with Meta\'s reason. A sent or queued row moves to "Waiting on them" and its button is off for a few minutes, so nothing goes twice. The new templates show as a clear template card in the Inbox.',
     report: {

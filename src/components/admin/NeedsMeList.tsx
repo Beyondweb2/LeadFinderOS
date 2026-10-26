@@ -24,7 +24,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { cn } from '@/lib/utils';
 import { Panel, TONE, type Tone } from '@/components/salesDash/ui';
 import { sendWhatsAppRequest } from '@/lib/whatsAppSendRequest';
-import { dashboardGreeting } from '@/lib/dashboardTemplates';
+import { dashboardGreeting, dashboardTemplatePreview } from '@/lib/dashboardTemplates';
 import { READABLE_TEMPLATE_BODIES } from '@/lib/templateBodies';
 import { sendErrorMeaning } from '@/lib/sendErrorMeaning';
 import { NEEDS_TEMPLATES, effectiveTemplate } from '@/lib/needsMeTemplates';
@@ -125,10 +125,11 @@ function SendButton({ row, state, onState }: { row: NeedsRow; state: RowSendStat
       void qc.invalidateQueries({ queryKey: ADMIN_HOME_NEEDS_KEY });
     }
   };
-  /* The words where we know them (re_engage_49, pick_up_conversation); else which template and with what values. */
-  const preview = key === 're_engage_49' || key === 'pick_up_conversation'
+  /* The words they will get (Meta's approved wording, filled in); a template with no known wording shows its values. */
+  const preview = key === 're_engage_49'
     ? (READABLE_TEMPLATE_BODIES[key]?.(row.business, '') ?? '')
-    : `Meta's approved "${key}" template, with:\n${values.join('\n')}`;
+    : dashboardTemplatePreview(key, { business: row.business, greeting, neededItem: row.neededItem ?? '' })
+      ?? `Meta's approved "${key}" template, with:\n${values.join('\n')}`;
   if (locked) {
     return (
       <Button size="sm" variant="outline" disabled className="h-8 gap-1.5 rounded-full disabled:opacity-80" title={`${t.label}: ${locked}`} data-testid="needs-send" data-send-locked="true">
