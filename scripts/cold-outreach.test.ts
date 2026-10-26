@@ -126,6 +126,7 @@ const EXPECTED_CONTINUATIONS = [
   "agency_access",
   "agreement_next_steps",
   "nudge_24h",
+  "pick_up_conversation",
 ].sort();
 const actual = [...CONTINUATION_TEMPLATES].sort();
 const added = actual.filter((t) => !EXPECTED_CONTINUATIONS.includes(t));

@@ -36,7 +36,7 @@ console.log('2. every submission has a next action and a due time; 24 h and 48 h
   const n24 = questionnaireStep(q({ ...ready, created_at: ago(60), last_out_at: ago(30), last_out_template: 'questionnaire_followup' }), NOW)!;
   ok(n24.template === 'nudge_24h' && n24.escalation === 1, 'our nudge 30 h ago, no answer → the 24-hour nudge');
   const call = questionnaireStep(q({ ...ready, created_at: ago(90), last_out_at: ago(30), last_out_template: 'nudge_24h' }), NOW)!;
-  ok(call.action === 'Call them' && call.template === 'nudge_24h' && call.escalation === 2, 'no answer 30 h after the 24-hour nudge → call them (the nudge is still offered; no final-nudge template)');
+  ok(call.action === 'Call them' && call.template === 're_engage_49' && call.escalation === 2, 'no answer 30 h after the 24-hour nudge → call them (re-engage offered; no final-nudge template)');
   const done = questionnaireStep(q({ ...ready, created_at: ago(150), last_out_at: ago(50), last_out_template: 'nudge_24h' }), NOW)!;
   ok(done.action === 'Record the outcome' && done.template === null && done.escalation === 3, 'no answer 50 h after the nudge → record the outcome');
   const domain = questionnaireStep(q({ plan_tier: 'new_site', domain_status: null, created_at: ago(1) }), NOW)!;
@@ -90,7 +90,7 @@ console.log('4. snooze, dismiss, archive');
 
 console.log('5. a mapped send button is always pressable (Paul, 2026-10-26); sends go through the normal sender');
 {
-  ok(Object.keys(NEEDS_TEMPLATES).sort().join() === 'agency_access,agreement_next_steps,needs_from_you,nudge_24h,questionnaire_domain_help,questionnaire_payment_help', 'exactly the six Meta templates');
+  ok(Object.keys(NEEDS_TEMPLATES).sort().join() === 'agency_access,agreement_next_steps,needs_from_you,nudge_24h,pick_up_conversation,questionnaire_domain_help,questionnaire_payment_help,re_engage_49', 'the dashboard templates plus re_engage_49');
   ok(effectiveTemplate('questionnaire_domain_help', { prospectOnly: false }) === 'questionnaire_domain_help', 'a mapped template is the button');
   ok(effectiveTemplate('questionnaire_payment_help', { prospectOnly: true }) === 'nudge_24h' && effectiveTemplate('nudge_24h', { prospectOnly: true }) === 'nudge_24h', 'Australia (prospect-only): a sign-up / payment template becomes the 24h nudge — never dead, never a payment message');
   ok(effectiveTemplate(null, { prospectOnly: false }) === null, 'no template → no button (never a dead one)');
@@ -113,13 +113,15 @@ console.log('5a. every row type has a send option where a template fits');
     clients: [], nowMs: NOW,
   });
   const t = (lead: string) => rows.find((r) => r.leadId === lead)?.template;
-  ok(t('L3') === 'nudge_24h', 'Interested, waiting on you → nudge_24h (it was interested_follow_up, never set up at Meta)');
-  ok(t('L4') === 'nudge_24h', 'Follow-up due → nudge_24h');
-  ok(t('L5') === 'nudge_24h', 'A quote gone quiet → nudge_24h');
+  /* ⛔ THEY REPLIED LAST vs I SENT LAST (Paul, 2026-10-26): nudge_24h says "my last message", wrong when they wrote last. */
+  ok(t('L3') === 'pick_up_conversation', 'THEY REPLIED LAST — Interested, waiting on you → pick_up_conversation (it was interested_follow_up, never set up at Meta)');
+  ok(t('L4') === 're_engage_49', 'I SENT LAST — follow-up due → re_engage_49');
+  ok(t('L5') === 're_engage_49', 'I SENT LAST — a quote gone quiet → re_engage_49');
   ok(t('L6') === null, 'A failed payment has no template (payment_failed is not wired) → no button');
+  ok(![t('L4'), t('L5')].includes('pick_up_conversation') && t('L3') !== 'nudge_24h' && t('L3') !== 're_engage_49', 'the two never cross: they-replied rows never get a chase, I-sent rows never get the pick-up');
   const waiting = questionnaireStep(q({ ...ready, created_at: ago(10), last_out_at: ago(2), last_out_template: 'agreement_next_steps' }), NOW)!;
-  ok(waiting.template === 'nudge_24h', 'questionnaire, waiting on them → the nudge is still offered');
-  ok(questionnaireStep(q({ plan_tier: 'keep', domain_status: 'existing', incomplete: true }), NOW)!.template === 'nudge_24h', 'questionnaire not finished → nudge');
+  ok(waiting.template === 'nudge_24h', 'questionnaire, I wrote 2 h ago → the nudge is still offered');
+  ok(questionnaireStep(q({ plan_tier: 'keep', domain_status: 'existing', incomplete: true }), NOW)!.template === 're_engage_49', 'I SENT LAST — questionnaire not finished → re_engage_49');
   ok(questionnaireStep(q({ ...ready, website_manager: 'web_company', agency_contract: 'in_contract' }), NOW)!.template === null, 'tied into their provider → no template (decline in your own words)');
 }
 

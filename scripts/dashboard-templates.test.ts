@@ -16,7 +16,9 @@ const read = (p: string) => readFileSync(p, 'utf8');
 
 console.log('1. the six, their variables, and nothing else');
 {
-  ok(DASHBOARD_TEMPLATE_NAMES.sort().join() === 'agency_access,agreement_next_steps,needs_from_you,nudge_24h,questionnaire_domain_help,questionnaire_payment_help', 'exactly the six templates Paul named');
+  ok(DASHBOARD_TEMPLATE_NAMES.sort().join() === 'agency_access,agreement_next_steps,needs_from_you,nudge_24h,pick_up_conversation,questionnaire_domain_help,questionnaire_payment_help', 'exactly the templates Paul named (the six + pick_up_conversation)');
+  ok(DASHBOARD_TEMPLATES.pick_up_conversation.vars.join() === 'name', 'pick_up_conversation: {{1}} business name');
+  ok(dashboardTemplateTranscript('pick_up_conversation', { business: 'Demo Driving' }) === 'Hi Demo Driving, thanks for getting back to me, and sorry for the slow reply. Are you still interested in showing up when people ask AI for a recommendation?', 'pick_up_conversation: the Inbox shows Paul\'s exact wording');
   ok(!isDashboardTemplate('final_nudge') && !isDashboardTemplate('payment_failed'), 'final_nudge and payment_failed are NOT wired');
   const v = (n: keyof typeof DASHBOARD_TEMPLATES) => DASHBOARD_TEMPLATES[n].vars.join();
   ok(v('questionnaire_domain_help') === 'name' && v('questionnaire_payment_help') === 'name' && v('nudge_24h') === 'name', 'domain help, payment help, 24h nudge: {{1}} business name');

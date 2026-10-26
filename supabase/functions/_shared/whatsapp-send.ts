@@ -331,6 +331,7 @@ export const WA_TEMPLATES: Record<string, { lang: string; vars: TemplateVar[]; h
   agency_access: { lang: "en", vars: ["greeting_name"] },
   agreement_next_steps: { lang: "en", vars: ["greeting_name"] },
   nudge_24h: { lang: "en", vars: ["name"] },
+  pick_up_conversation: { lang: "en", vars: ["name"] },
 };
 export const WA_DEFAULT_TEMPLATE = "booking_page_intro";
 
@@ -795,6 +796,7 @@ export const WA_TEMPLATE_BODIES: Record<string, (businessName: string, claimUrl:
   agency_access: (b, _u, _t, _c, first) => dashboardTemplateTranscript("agency_access", { business: b, greeting: first }),
   agreement_next_steps: (b, _u, _t, _c, first) => dashboardTemplateTranscript("agreement_next_steps", { business: b, greeting: first }),
   nudge_24h: (b) => dashboardTemplateTranscript("nudge_24h", { business: b }),
+  pick_up_conversation: (b) => dashboardTemplateTranscript("pick_up_conversation", { business: b }),
   /* ONE variable: {{1}} = business name. */
   contact_followup: (b) => contactFollowupBody(b),
   onboarding_followup: onboardingFollowupBody,
