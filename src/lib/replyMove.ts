@@ -289,7 +289,7 @@ const MALAY = /\b(boleh|saya|tak|tidak|berminat|terima\s+kasih|siapa|apa|ini|kam
 const ENGLISH_HINT = /\b(the|you|is|it|and|yes|no|what|who|how|thanks|please|mate|me|my|i|we)\b/i;
 const PROVIDER = /\b(i\s+pay\s+(him|her|them|someone|a\s+guy)|(my|our)\s+(web\s*)?(guy|guys|designer|developer|nephew|son|daughter|brother|mate|friend|agency|web\s*(person|man|company))|someone('?s)?\s+(on\s+it|does\s+(it|that|my|our))|(got|have)\s+(someone|somebody|a\s+(guy|company|designer|developer|agency))|leave\s+(the\s+)?(website|site|web)\s+(stuff\s+)?to\s+them|they\s+(do|look\s+after|manage)\s+(it|the\s+site|my\s+site|the\s+website))\b/i;
 const RANKS = /\b(i\s+(already\s+)?(come\s+up|show\s+up|rank|appear)|already\s+(rank|show|come\s+up|appear|on\s+(the\s+)?first)|first\s+(page|on\s+google)|top\s+of\s+google|number\s+one|(my|our)\s+reviews|five\s+star|5\s*star|\d+\s+reviews)\b/i;
-const CLEAR_YES = /\b(yes\s+please|yes\s+send|go\s+on\s+then|go\s+ahead|i'?m\s+interested|we'?re\s+interested|i\s+am\s+interested|interested|sounds\s+(good|great|interesting)|keen|let'?s\s+do\s+it|sign\s+me\s+up|i'?m\s+in|count\s+me\s+in|tell\s+me\s+more|send\s+(me\s+)?(over\s+)?(the\s+|some\s+)?(details|detials|deets|info|more))\b/i;
+const CLEAR_YES = /\b(yes\s+please|yes\s+send|go\s+on\s+then|go\s+ahead|i'?m\s+interested|we'?re\s+interested|i\s+am\s+interested|interested|sounds\s+(good|great|interesting)|keen|let'?s\s+do\s+it|sign\s+me\s+up|i'?m\s+in(?=\s*(?:[.!,)]|$))|count\s+me\s+in|tell\s+me\s+more|send\s+(me\s+)?(over\s+)?(the\s+|some\s+)?(details|detials|deets|info|more))\b/i;
 const NEGATED = /\b(not|n'?t|never|no)\s+([\w']+\s+){0,2}interested\b/i;
 
 /** Which fact-sheet topic a question asks about, or null. Order matters: the specific before the general. */
@@ -378,7 +378,10 @@ const FOREIGN_AUTO = new RegExp([
 const AUTO_FORM = /\bthank(?:s|\s+you)\s+for\s+(?:your\s+)?(?:message|enquiry|inquiry|contacting\b[^.!?]*)[^?]*\b(?:fill\s+(?:in|out)|complete)\s+(?:our|the)\s+(?:\w+\s+)?form\b|\bconsultation\s+fee\b[^?]*\b(?:we'?ll|we\s+will)\s+(?:reply|respond|get\s+back|be\s+in\s+touch)\b|\b(?:we'?ll|we\s+will)\s+(?:reply|respond|get\s+back)\b[^?]*\bconsultation\s+fee\b/i;
 /** A person, never an auto-responder: a commercial ask in the first person ("I would only agree if payment is made after…").
  *  The shared list reads "thanks for reaching out" as automated (R090). */
-const HUMAN_ONLY = /\bi\s+would\s+only\s+(?:agree|pay|work)\b|\b(?:i'?m|i\s+am)\s+interested\s+in\s+your\b|\bhappy\s+to\s+work\s+with\s+you\b/i;
+/** A chatbot answering our message (2026-10-26 review): "I'm sorry, I didn't quite catch that. Could you please rephrase
+ *  your message…". Automated: never a price line, never the pitch, never counted as a reply. */
+export const CHATBOT = /\b(?:sorry,?\s+)?i\s+(?:didn'?t|did\s+not|couldn'?t|could\s+not|don'?t|do\s+not)\s+(?:quite\s+)?(?:catch|understand|recogni[sz]e)\s+(?:that|your\s+(?:message|request|question))\b|\b(?:could|can)\s+you\s+(?:please\s+)?rephrase\b|\bplease\s+rephrase\b|\bplease\s+(?:reply|choose|select|type)\s+(?:with\s+)?(?:a\s+|one\s+of\s+the\s+)?(?:number|option)s?\b/i;
+const HUMAN_ONLY =/\bi\s+would\s+only\s+(?:agree|pay|work)\b|\b(?:i'?m|i\s+am)\s+interested\s+in\s+your\b|\bhappy\s+to\s+work\s+with\s+you\b/i;
 /** A person's own confirmation after an auto-reply in the same burst ("Yeah", "Yes, it is located in Liverpool"). */
 const HUMAN_CONFIRM = /^\W*(?:(?:hi|hello|hey)\W+)?(?:yes|yeah|yea|yep|yup|yh|ya|ye|it\s+is|it'?s\s+me|that'?s\s+(?:right|correct|us|me)|correct|speaking)\b/i;
 export function isAutoReply(text: string | null | undefined, messageType?: string | null): boolean {
@@ -386,7 +389,7 @@ export function isAutoReply(text: string | null | undefined, messageType?: strin
   if (HUMAN_ONLY.test(t)) return false;
   const notAQuestion = !/\?\s*$/.test(t.trim());
   return triageByRules(t, { isClient: false, messageType: messageType ?? 'text' }).category === 'automated'
-    || (notAQuestion && (AUTO_EXTRA.test(t) || AUTO_GREETING.test(t))) || FOREIGN_AUTO.test(t) || AUTO_FORM.test(t);
+    || (notAQuestion && (AUTO_EXTRA.test(t) || AUTO_GREETING.test(t))) || FOREIGN_AUTO.test(t) || AUTO_FORM.test(t) || CHATBOT.test(t);
 }
 
 /** Messages an auto-responder sends together arrive within this long of each other (Ven: three in 72 seconds). */
@@ -804,6 +807,9 @@ export function pickMove(i: MoveInput): MovePlan {
     let prevUs: MoveThreadMsg | null = null;
     for (let j = start - 1; j >= 0; j--) if (thread[j].from === 'us') { prevUs = thread[j]; break; }
     const realBefore = thread.slice(0, start).some((m, k) => m.from === 'them' && !autoFlags[k]);
+    /* ⛔ A chatbot ("didn't quite catch that, please rephrase") gets nothing: no pitch, no price, no line (2026-10-26). */
+    const chatbot = thread.slice(start, idx + 1).some((m) => m.from === 'them' && CHATBOT.test(m.text ?? ''));
+    if (chatbot) return plan({ move: 'auto_reply', read: 'chatbot', autoDraft: false, noDraft: true, label: 'Auto-reply' });
     if (!repeat && !guard && !realBefore && prevUs && wasOpener(prevUs)) {
       const pitch = firstReplyPitch(e);
       return markReportLink(plan({ move: 'auto_reply', read: 'automated', label: 'Auto-reply',
@@ -849,7 +855,9 @@ export function pickMove(i: MoveInput): MovePlan {
      read as a yes to the voice note). A voice note from them gets Paul's line as the suggested text (Paul, 2026-10-21). */
   const bareMedia = /^\[([a-z_]+)\]$/i.exec(text)?.[1]?.toLowerCase() ?? null;
   const typedMedia = !!latest.messageType && !['text', 'button', 'interactive'].includes(latest.messageType) && (!text || !!bareMedia);
-  if (bareMedia === 'reaction') return g(plan({ move: 'ack', read: 'reaction', autoDraft: false, noDraft: true }));
+  /* A sticker or a reaction is an acknowledgement (2026-10-26 review): never the "can't play voice notes" line. */
+  const mediaKind = bareMedia ?? String(latest.messageType ?? '').toLowerCase();
+  if (/^(reaction|sticker)$/.test(mediaKind)) return g(plan({ move: 'ack', read: mediaKind, autoDraft: false, noDraft: true }));
   if (bareMedia || typedMedia) {
     const kind = bareMedia ?? String(latest.messageType ?? '').toLowerCase();
     if (/^(audio|voice|ptt)$/.test(kind)) {
