@@ -30,6 +30,14 @@ export const WHATS_NEW: readonly WhatsNewEntry[] = [
       removed: ['On the first reply: "Ha, sorry for the confusion, I\'m not after lessons myself…", "Fair question… I offer a service", "Sorry for the slow reply" and the "I\'m Paul, I run Findable" answer. They still apply after the hook has gone.'],
       effect: 'First replies get the message that works, with the report. A no, a soft no, a stop, a wrong number, "is this a bot?" and a chatbot keep their old handling. Existing drafts are not rewritten: press Regenerate on the ones you want. Nothing is sent by this change.',
     } },
+  { id: '2026-10-26-admin-home-concept-a', date: '2026-10-26', title: 'Your dashboard now shows what needs you today', audience: 'admin',
+    body: 'Same look, junk moved out. One list, most urgent first: questionnaires (and why they stopped), failed payments, starred leads waiting on you, follow-ups due and new clients. Replies stay in the Inbox.',
+    report: {
+      added: ['"What needs you": one row per business with one next action and a time since. Questionnaires escalate at 24 and 48 hours and ask for an outcome after the final nudge.', 'A send button per row that sends the matching WhatsApp template through the normal sender. New templates stay disabled until you mark them approved by Meta.', 'Snooze, dismiss and archive on every row and card, with Undo and an "Archived" list. Nothing is deleted.', 'Key numbers: the 14-day funnel, WhatsApp number rating, sends and failures today, and team messages this week.', 'Questionnaires this week: where each one stopped and how it ended (paid, or lost with a reason).', 'The new-client email says the exact next step and links to the row.'],
+      changed: ['The team, money, sales intelligence, clients in delivery, traffic and cost panels moved to "Team, insights and costs" (link at the bottom of the dashboard).', '"My activity" is included by default.'],
+      removed: ['"Client websites · Google search" (Google was never connected, so it only ever said Not connected).', 'Reply lines from the dashboard (they are in the Inbox).'],
+      effect: 'The dashboard is a to-do list for today with a few numbers. Nothing sends by itself: every message is a button you press, through the normal sender.',
+    } },
   { id: '2026-10-26-reply-detectors', date: '2026-10-26', title: 'Reply drafts read four kinds of reply correctly', audience: 'admin',
     body: 'Instructors who think you want lessons now get the "not after lessons myself" reply, chatbots get nothing, "no competition" is not read as interest, and a sticker is just a thumbs-up. The new-client email says "NOT ANSWERED" when the domain question was left blank.',
     report: {

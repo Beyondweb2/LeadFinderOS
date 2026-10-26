@@ -49,6 +49,8 @@ function renderedText(src: string): string {
 
 const RENDERERS: Array<[string, string]> = [
   ["welcome pack (paying client)", "src/lib/welcomePackHtml.ts"],
+  /* 2026-10-26: the admin home's proposed WhatsApp template wording (placeholders until Meta approves; questionnaire / paying client). */
+  ["admin home template wording (prospect / client)", "src/lib/needsMeTemplates.ts"],
   /* 2026-10-17: the v5 9A.5 payment-12 reminder email (paying client). */
   ["payment-12 reminder email (paying client)", "src/lib/month12Reminder.ts"],
   /* 2026-10-02: the Client Service Agreement page, its words and the signed PDF (paying client). */
@@ -174,6 +176,12 @@ const OPERATOR_SCREENS: Array<[string, string]> = [
   ["admin control centre: paid client health (operator)", "src/components/admin/clientHealth.tsx"],
   ["admin control centre: site traffic (operator)", "src/components/admin/traffic.tsx"],
   ["admin control centre: AI business summary (operator)", "src/components/admin/businessSummary.tsx"],
+  /* 2026-10-26 Concept A: the admin home's list, questionnaire log and the moved-panels page. */
+  ["admin home: what needs you (operator)", "src/components/admin/NeedsMeList.tsx"],
+  ["admin home: questionnaires this week (operator)", "src/components/admin/QuestionnaireLog.tsx"],
+  ["admin home: list rules (operator)", "src/lib/needsMe.ts"],
+  ["admin home: questionnaire stop rule (operator)", "src/lib/questionnaireStop.ts"],
+  ["team, insights and costs page (operator)", "src/pages/AdminInsights.tsx"],
   ["shared delivery checklist (operator)", "src/components/delivery/DeliveryChecklist.tsx"],
   ["client pages hook (operator)", "src/hooks/useClientPages.ts"],
   ["monthly update panel (operator)", "src/components/MonthlyUpdatePanel.tsx"],
