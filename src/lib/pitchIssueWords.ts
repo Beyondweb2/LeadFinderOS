@@ -23,8 +23,9 @@ const readInFull = (i: Pick<PitchIssueInput, 'saw'>): boolean => String(i.saw ??
 export const PITCH_MAX_LIST = 4;
 /** A list is never cut below this by the length rule. */
 export const PITCH_MIN_LIST = 2;
-/** The length rule (Paul, 2026-10-23: "about 70 to 100 words is fine"): the lowest issue goes until the message fits. */
-export const PITCH_MAX_WORDS = 100;
+/** The length rule (Paul, 2026-10-23: "about 70 to 100 words is fine"; 2026-10-26: "it should list more" → 115): the lowest
+ *  issue goes until the message fits. The "that's just a few of them" line (replyMove.pitchMoreLine) is not counted. */
+export const PITCH_MAX_WORDS = 115;
 
 /** Our check could not read the site (the site-shared reply says it when that is all the check found). */
 export const UNREADABLE_PITCH_LINE = "My check couldn't read your website, and AI tools may struggle with it too";

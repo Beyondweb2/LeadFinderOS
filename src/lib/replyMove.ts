@@ -163,7 +163,9 @@ export interface MoveEvidence {
   /** THE ONE WEBSITE CHECK (websiteCheck.ts websiteCheckFor): its state and the SERIOUS issues' plain titles
    *  (plainIssueTitle), worst first; `pitch` = the same issues in the pitch's plain words (pitchIssueWords.ts), any
    *  with no plain words left out. Absent = read from hasWebsite / findings (older callers, fixtures). */
-  site?: { state: SiteState; issues: string[]; pitch?: string[]; evidence?: Array<{ title: string; pages: string[] }> } | null;
+  site?: { state: SiteState; issues: string[]; pitch?: string[]; evidence?: Array<{ title: string; pages: string[] }>;
+    /** How many issues the check found in all (serious + minor). More than the pitch lists → it says so (pitchMoreLine). */
+    found?: number } | null;
   /** The "AI handles replies" switch (whatsapp_outreach_state.ai_handles_replies). ON: never say "I read and send every
    *  one myself" — replies may be automated. Absent = off. */
   aiAutoReplies?: boolean;
@@ -513,6 +515,13 @@ export const PITCH_INSTEAD_LINE = 'AI is recommending your competitors instead.'
 export const PITCH_LIST_LEAD = 'I looked into why and a few things could be holding you back:';
 /** One real issue: one sentence, no list. */
 export const PITCH_ONE_LEAD = 'I looked into why and found';
+/** ⛔ "THESE AREN'T THE ONLY ONES" (Paul, 2026-10-26): said ONLY when the check really found more issues than the pitch lists
+ *  (site.found > shown), never as a guess. "The full report below has the rest." only when the report link goes with it. */
+export function pitchMoreLine(shown: number, found: number | null | undefined, hasReportLink: boolean): string | null {
+  if (!shown || typeof found !== 'number' || found <= shown) return null;
+  const first = shown === 1 ? "That's just one of them." : shown === 2 ? "That's just a couple of them." : "That's just a few of them.";
+  return hasReportLink ? `${first} The full report below has the rest.` : first;
+}
 /** What we do, said once, with no promise of a result (Paul, 2026-10-21). */
 export const PITCH_SPECIALISE_LINE = 'I specialise in getting local businesses to show up in those results, so the customers go to you instead.';
 /** Paul's no-website words, word for word (2026-10-26). ⛔ Never "well-built" or "more important than ever", no stats. */
@@ -606,7 +615,10 @@ function firstReplyPitchBase(e: MoveEvidence, theirName: string | null = null): 
     issues = issues.slice(0, -1);
     b = build(issues);
   }
-  return { lines: b.lines, ...next, structure: b.kind === 'list' ? 'pitch_list' : b.kind === 'sentence' ? 'pitch_sentence' : 'pitch_plain' };
+  /* The check found more than the list shows: say so, right after the issues (not counted by the length rule). */
+  const more = pitchMoreLine(issues.length, e.site?.found, !!reportLinkLine(e));
+  const lines = more && b.kind !== 'plain' ? [...b.lines.slice(0, -1), more, b.lines[b.lines.length - 1]] : b.lines;
+  return { lines, ...next, structure: b.kind === 'list' ? 'pitch_list' : b.kind === 'sentence' ? 'pitch_sentence' : 'pitch_plain' };
 }
 /** The pitch as one message: each line its own paragraph, the question last. */
 export const pitchText = (p: { lines: string[]; question: string }): string => [...p.lines, p.question].join('\n\n');

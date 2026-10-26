@@ -317,3 +317,12 @@ the sending person's own chosen name on its own last line, under the question (`
   by itself. inbox-scheduled-send's last check accepts exactly `signHook(draft_text, queued_by's name)`, nothing looser.
 - The stored draft text stays unsigned. The first-login name box is REQUIRED (MessageNameDialog: no skip, no close).
 - `scripts/hook-signature.test.ts`.
+
+## The hook says when there are more issues (Paul, 2026-10-26)
+
+"It needs to be more clear that the issues mentioned aren't the only issues." The length rule is now `PITCH_MAX_WORDS` 115 (was
+100) so up to four issues fit more often, and `replyMove.pitchMoreLine` adds, right after the issues, "That's just a couple /
+a few / one of them." plus "The full report below has the rest." when the report link is in the message. ⛔ Only when
+`site.found` (serious + minor issues of the ONE website check, set by ai-reply-drafts) is more than the pitch lists; no count,
+no claim. The line is not counted by the length rule. Also: the checker no longer flags a rival with "&" in its name as
+"not in the audit". `scripts/hook-more-issues.test.ts`.

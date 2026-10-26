@@ -22,6 +22,14 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-26-hook-more-issues', date: '2026-10-26', title: 'The first message makes clear there are more issues', audience: 'all',
+    body: 'The AI\'s first reply to a business now lists up to four website issues more often, and when our check found more than it lists it says "That\'s just a couple of them. The full report below has the rest." It only says so when it is true.',
+    report: {
+      added: ['"That\'s just a couple / a few of them." after the issue list when the website check found more ("The full report below has the rest." when the report link is in the message).'],
+      changed: ['The first message may run a little longer, so more issues fit (up to four).', 'A competitor with "&" in its name no longer gets a false "not in the audit" warning on the draft.'],
+      removed: [],
+      effect: 'Businesses can see the issues listed are not the only ones. Nothing is claimed that the check did not find.',
+    } },
   { id: '2026-10-26-hook-signed-with-your-name', date: '2026-10-26', title: 'The first message to a business ends with your name', audience: 'all',
     body: 'Everyone now sets the name for their messages when they first log in (it can no longer be skipped). The AI\'s first reply to a business, the one with what AI said when we searched, now ends with the name of the person who sends it, on its own last line. Only that message.',
     report: {

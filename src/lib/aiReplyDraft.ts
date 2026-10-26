@@ -419,7 +419,9 @@ export function checkAiReply(reply: string, c: AiReplyContext): string[] {
     out.push('Says AI named others instead, but they were named in more than a third of answers (or no counts are on record).');
   }
   /* The pitch's own issue lines may quote what the site calls itself ("it says Quick Drive Academy"). */
-  const allowedNames = [e.businessName, ...e.competitors, e.town ?? '', e.ownerName ?? '', ...(e.site?.pitch ?? [])].map(lower).filter(Boolean);
+  /* "&" is dropped from the words read below, so it is dropped here too ("Priority Electrical & Renewables Ltd", 2026-10-26). */
+  const allowedNames = [e.businessName, ...e.competitors, e.town ?? '', e.ownerName ?? '', ...(e.site?.pitch ?? [])]
+    .map((n) => lower(n).replace(/\s*&\s*/g, ' ').replace(/\s+/g, ' ').trim()).filter(Boolean);
   for (const m of r.matchAll(NAME_SEQ)) {
     const words = m[1].split(/\s+/).filter((w) => w !== '&' && !COMMON_CAPS.has(w));
     if (words.length < 2) continue;
