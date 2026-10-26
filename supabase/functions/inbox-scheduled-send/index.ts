@@ -21,6 +21,8 @@ import { qaSendHold } from "../_shared/qa-guard.ts";
 import { guardAction } from "../_shared/protection.ts";
 import { answeredAfter, autoSendCounts, loadAutoSendState, personActiveAt, sendAsIsAdmin } from "../_shared/ai-auto-send.ts";
 import { autoSendVerdict, draftFactsFromRow, theirMessagesSinceUs } from "../../../src/lib/aiAutoSend.ts";
+import { senderChosenName } from "../_shared/sender-name.ts";
+import { isHookDraft, signHook } from "../../../src/lib/hookSignature.ts";
 
 const BUILD_ID = "2026-10-21d-named-share-no-chatgpt";
 const corsHeaders = {
@@ -170,7 +172,12 @@ Deno.serve(async (req) => {
           .select("id, kind, status, draft_text, why, inbound_at, inbound_message_id, auto_send_id").eq("id", r.ai_draft_id).maybeSingle();
         if (dErr || !d) return "ai_draft_unreadable";
         if (d.status !== "pending" || d.auto_send_id !== r.id) return "ai_draft_closed";
-        if ((d.draft_text ?? "") !== (r.body ?? "")) return "ai_text_changed";
+        /* The words must be the draft's — or, for the hook, exactly the draft signed with the queuing person's own chosen name
+           (src/lib/hookSignature.ts, what ai-reply-drafts queued). Nothing looser. */
+        if ((d.draft_text ?? "") !== (r.body ?? "")) {
+          const signedBy = isHookDraft(d.why as Record<string, string | null> | null) ? await senderChosenName(service, r.queued_by) : null;
+          if (!signedBy || signHook(d.draft_text ?? "", signedBy) !== (r.body ?? "")) return "ai_text_changed";
+        }
         const facts = draftFactsFromRow(d);
         if (facts.key !== (r.ai_intent ?? "")) return "ai_type_changed";
         const auto = (d.why as { autoSend?: Record<string, unknown> } | null)?.autoSend ?? null;

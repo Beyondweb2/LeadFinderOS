@@ -22,6 +22,14 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-26-hook-signed-with-your-name', date: '2026-10-26', title: 'The first message to a business ends with your name', audience: 'all',
+    body: 'Everyone now sets the name for their messages when they first log in (it can no longer be skipped). The AI\'s first reply to a business, the one with what AI said when we searched, now ends with the name of the person who sends it, on its own last line. Only that message.',
+    report: {
+      added: ['Your name on the last line of the hook (the first reply with the AI search result), when you approve it in the Inbox.', 'An automatic hook is signed with the name of the person it sends as.'],
+      changed: ['The "What name should we use on your messages?" box must be filled in before you start; you can still change the name later from your account menu.'],
+      removed: ['"Skip for now" on the name box.'],
+      effect: 'Businesses see who they are talking to. If you have no name set, Approve asks for it first and nothing is sent; an automatic hook with no name waits for a person.',
+    } },
   { id: '2026-10-26-service-question-link', date: '2026-10-26', title: 'AI drafts point to findable.live when they ask about the service', audience: 'admin',
     body: 'When a prospect asks what we do, how it works, who we are, how much it is, whether it is legit, or for examples, the AI draft now says "You can see more about what we do at findable.live." once, just before its question.',
     report: {

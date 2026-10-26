@@ -100,6 +100,9 @@ import type { LeadAuditScore } from '@/lib/auditScore';
 import type { ScheduledSendRow } from '@/lib/inboxSendWindow';
 import { useAiReplyDrafts } from '@/hooks/useAiReplyDrafts';
 import { needsApproving, needsYou, rowSendable, type AiReplyRow } from '@/lib/aiReplyDraft';
+import { isHookDraft, signHook } from '@/lib/hookSignature';
+import { useMyMessageName } from '@/hooks/useMyMessageName';
+import { OPEN_MESSAGE_NAME_EVENT } from '@/components/MessageNameDialog';
 import { useInboxScheduled, INBOX_SCHEDULED_KEY } from '@/hooks/useInboxScheduled';
 import { ReplyHoursDialog, ReplyWindowChip, ScheduledSendBubble } from '@/components/InboxSendWindow';
 import { hhmm, queuedLabel, replyWindowFor, sendVerb, windowStatusLine } from '@/lib/inboxSendWindow';
@@ -1048,7 +1051,13 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
      over text a person typed; from then on Approve & send sends the box's words. "Approve & send" = claim (one winner,
      server-side) → the Inbox's own send (useInbox.send → send-whatsapp-message, unchanged) → complete (records who,
      when and the text actually sent). Reject (= discard) and Dismiss send nothing. */
-  const activeAi = active ? ai.forPhone(active.phone) : null;
+  const rawActiveAi = active ? ai.forPhone(active.phone) : null;
+  /* THE HOOK IS SIGNED (src/lib/hookSignature.ts): a hook draft shows, and sends, with the viewer's own chosen name on its last
+     line — the person approving is the sender. No name chosen: Approve opens the name box instead of sending. */
+  const myMessageName = useMyMessageName().data ?? null;
+  const activeAiIsHook = isHookDraft(rawActiveAi?.why ?? null);
+  const activeAi = useMemo(() => (rawActiveAi && activeAiIsHook && myMessageName && rawActiveAi.draft_text
+    ? { ...rawActiveAi, draft_text: signHook(rawActiveAi.draft_text, myMessageName) } : rawActiveAi), [rawActiveAi, activeAiIsHook, myMessageName]);
   const [aiBusy, setAiBusy] = useState<'approve' | 'regenerate' | 'discard' | 'optout' | 'stopauto' | null>(null);
   const [aiDrafting, setAiDrafting] = useState(false);
   const aiInsertedRef = useRef<Map<string, string>>(new Map());
@@ -1074,6 +1083,11 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
     if (!active || !activeAi || aiBusy) return;
     const sendKey = active.key;
     if (sendingKeysRef.current.has(sendKey)) return;
+    if (activeAiIsHook && !myMessageName) {
+      toast({ title: 'Add your name first', description: 'The first message to a business ends with your name.' });
+      window.dispatchEvent(new Event(OPEN_MESSAGE_NAME_EVENT));
+      return;
+    }
     /* The bubble's words — or, after "Edit in reply box", the box's (the person's edit). */
     const boxText = getDraft(draftsRef.current, sendKey).trim();
     const fromBox = aiInsertedRef.current.get(sendKey) === activeAiVersion && !!boxText;

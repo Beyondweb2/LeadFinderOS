@@ -35,7 +35,7 @@ ok(!hasChosenMessageName(null) && hasChosenMessageName('Ethan'), 'N9. the box sh
 const dlg = read('src/components/MessageNameDialog.tsx');
 ok(/What name should we use on your messages\?/.test(dlg), 'N10. the box asks exactly "What name should we use on your messages?"');
 ok(/mustChange/.test(dlg) && /if \(!uid \|\| mustChange\) return;/.test(dlg), 'N11. it waits until any temporary-password change is done');
-ok(/sessionStorage/.test(dlg) && /messageNameSkipKey/.test(dlg), 'N12. skipped → asked again at the next login, not again in this one');
+ok(!/Skip for now/.test(dlg) && !/messageNameSkipKey/.test(dlg) && dlg.includes('hideClose={required}') && dlg.includes('onEscapeKeyDown={(e) => { if (required) e.preventDefault(); }}'), 'N12. REQUIRED (Paul, 2026-10-26): no skip, no close, no Escape until a name is saved (an edit from the menu can be cancelled)');
 ok((dlg.match(/<Input /g) ?? []).length === 1, 'N13. ONE field — not onboarding');
 ok(/<MessageNameDialog \/>/.test(read('src/components/AppLayout.tsx')), 'N14. mounted once in the signed-in app shell');
 ok(/OPEN_MESSAGE_NAME_EVENT/.test(read('src/components/UserMenu.tsx')) && /OPEN_MESSAGE_NAME_EVENT/.test(read('src/components/MobileBottomNav.tsx')), 'N15. editable later from the account menu (desktop and phone)');
