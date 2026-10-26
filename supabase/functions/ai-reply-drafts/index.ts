@@ -39,7 +39,7 @@ import { isSuppressed, recordOptOut } from "../_shared/suppression.ts";
 import { logOpenAiUsage } from "../_shared/openai-usage.ts";
 import { loadAuditContext, leadTrade, leadTown, RESEARCH_LEAD_COLUMNS, type ResearchLead } from "../_shared/site-research.ts";
 import {
-  aiReplyDecision, buildAiReplyPrompt, checkAiReply, evidenceNames, fallbackAiReply, finishDraft, isFollowUp, mayCallWithin, callUsd,
+  aiReplyDecision, buildAiReplyPrompt, checkAiReply, ensureSiteLine, evidenceNames, fallbackAiReply, finishDraft, isFollowUp, mayCallWithin, callUsd,
   AI_REPLY_MODEL, AI_REPLY_SYSTEM_PROMPT, AI_REPLY_TOOL, AI_REPLY_MAX_OUTPUT_TOKENS, AI_REPLY_MAX_REGENERATIONS,
   AI_REPLY_DRAFT_MAX_USD, BEST_TEMPLATE_STYLE_NOTE, DRY_RUN_MODELS, DRY_RUN_DRAFT_MAX_USD, HANDOVER_LABELS, STOP_REASONS,
   type AiReplyContext, type AiReplyWhy,
@@ -290,7 +290,8 @@ async function writeDraft(service: Service | null, ctx: AiReplyContext, opts: { 
     calls++; promptTokens += r.promptTokens; completionTokens += r.completionTokens; spent += callUsd(r.promptTokens, r.completionTokens, model);
     if (service && opts.log !== false) await logOpenAiUsage(service, { functionName: "ai-reply-drafts", apiType: "openai_ai_reply_draft", model, promptTokens: r.promptTokens, completionTokens: r.completionTokens, userId: opts.userId, triggerSource: opts.triggerSource });
     if (!r.reply) { modelError = "model_empty_reply"; continue; }
-    const candidate = finishDraft(r.reply, evidenceNames(ctx.evidence), { followUp: isFollowUp(ctx.plan) });
+    /* A service question always carries the findable.live line (ensureSiteLine puts it in when the model left it out). */
+    const candidate = ensureSiteLine(finishDraft(r.reply, evidenceNames(ctx.evidence), { followUp: isFollowUp(ctx.plan) }), ctx.plan);
     const cp = checkAiReply(candidate, ctx);
     if (reply === null || cp.length < problems.length) { reply = candidate; problems = cp; }
     if (!cp.length) break;

@@ -289,3 +289,19 @@ Branch `fix/reply-detectors`. Wording and moves unchanged; only what reads the r
 - **Sticker / reaction** (as `[sticker]` / `[reaction]` or by message type) = ack, no draft (was the "can't play voice notes" line).
 - **Alert email** (fn `notify-onboarding-submit`): the Domain line comes from `src/lib/domainEmailLine.ts` — "NOT ANSWERED — still blank: …" when a
   domain question is blank, else "Answered — DOMAIN READY / ISSUE". Kept out of `domainAuthority.ts` (byte-identical in findable-site).
+
+## The service-question line (Paul, 2026-10-26)
+
+A drafted reply to a question about the service (intents `what_we_do`, `who_are_you`, `how_much`, `examples`, `explain_here`,
+and any reply to "is this legit / genuine / a scam?") carries `FINDABLE_SITE_LINE` once, just before its one question:
+"You can see more about what we do at findable.live." (`replyMove.withSiteLine`, `siteLineDue`; the model's text gets it from
+`aiReplyDraft.ensureSiteLine`, and the checker warns if it is missing or doubled).
+- Checked 2026-10-26: findable.live shows a sample REPORT (before/after), not examples of sites we built, and has no
+  /examples page, so the line never says "examples". If a real examples page ever exists, change the line and the record.
+- Link: the bare homepage (the checker allows findable.live itself, never a path on it).
+- Not for: the hook (first reply, its straight-answer / chased variants), a no, Australia (prospect-only), auto-replies,
+  chatbots, stickers, reactions, media. linkOk is set on the PLAN only, so `autoSendable` (the Level-2 switch list) is unchanged,
+  but a draft carrying the line is approve-to-send: `aiAutoSend` DRAFT_LINK counts a bare "findable.live" as a link (WhatsApp
+  makes it one; Paul's 2026-10-26 rule: a draft with a link is never sent by itself). So who_are_you / what_we_do / explain_here
+  drafts now wait for approval even when their switch is on.
+- `scripts/service-question-link.test.ts` fences it with real phrasings.

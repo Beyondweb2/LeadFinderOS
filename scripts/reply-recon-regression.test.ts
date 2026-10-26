@@ -9,7 +9,7 @@
    Pure: no model, no DB. `--preview` prints the draft for every case. */
 import { readFileSync } from 'node:fs';
 import { pickMove, PITCH_SITE_Q, type MoveEvidence, type MoveThreadMsg, type MovePlan } from '../src/lib/replyMove.ts';
-import { NEEDS_YOU_INTENTS, NEW_INTENTS, type PlaybookIntent } from '../src/lib/replyPlaybook.ts';
+import { FINDABLE_SITE_LINE, NEEDS_YOU_INTENTS, NEW_INTENTS, type PlaybookIntent } from '../src/lib/replyPlaybook.ts';
 import { aiReplyDecision, checkAiReply, fallbackAiReply, AI_BRAND, type AiReplyContext } from '../src/lib/aiReplyDraft.ts';
 import { SHEET_MONEY } from '../src/lib/offerFactSheet.ts';
 import { REMEASURE_WEEKS_STANDARD } from '../src/lib/findableOffer.ts';
@@ -120,7 +120,9 @@ function contentProblems(text: string, p: MovePlan, ctx: AiReplyContext): string
   const pitchStyle = p.move === 'first_reply_pitch' || p.move === 'auto_reply';
   /* Word caps: the first pitch 110 (the straight-answer / chased pitch carries one more sentence: 135); a follow-up 45, except a line
      Paul dictated word for word (factual / fixed: the price, the proof words), which is his length. */
-  const cap = pitchStyle ? (p.intent === 'straight_answer_then_pitch' || p.intent === 'they_chased' ? 135 : 110) : p.fixedText || /word for word/.test(p.points[0] ?? '') ? 70 : 45;
+  /* + the service-question line (Paul's own words, 2026-10-26) where the draft carries it. */
+  const cap = (pitchStyle ? (p.intent === 'straight_answer_then_pitch' || p.intent === 'they_chased' ? 135 : 110) : p.fixedText || /word for word/.test(p.points[0] ?? '') ? 70 : 45)
+    + (p.siteLine ? words(FINDABLE_SITE_LINE) : 0);
   if (words(text) > cap) out.push(`${words(text)} words (cap ${cap})`);
   const hi = /^(Hi|Hey) [A-Za-z]+,/.exec(text);
   if (hi && !FIRST_NAMES_OK.test(text)) out.push(`greets "${hi[0]}"`);

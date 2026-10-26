@@ -22,6 +22,14 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-26-service-question-link', date: '2026-10-26', title: 'AI drafts point to findable.live when they ask about the service', audience: 'admin',
+    body: 'When a prospect asks what we do, how it works, who we are, how much it is, whether it is legit, or for examples, the AI draft now says "You can see more about what we do at findable.live." once, just before its question.',
+    report: {
+      added: ['"You can see more about what we do at findable.live." in drafts that answer a question about the service.'],
+      changed: [],
+      removed: [],
+      effect: 'Prospects who ask about the service get a way to check us out. Not added to the first reply (the hook), a no, an automatic reply, a sticker, or an Australian lead. Existing drafts are not changed.',
+    } },
   { id: '2026-10-26-dashboard-template-words', date: '2026-10-26', title: 'The dashboard templates show their real words', audience: 'admin',
     body: 'The seven dashboard templates now show Meta\'s approved wording, filled in for that lead: in the Inbox thread, in Last 3, in the dashboard\'s send confirm and in the Inbox template picker. Messages already sent show their words too.',
     report: {

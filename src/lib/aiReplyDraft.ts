@@ -29,7 +29,7 @@ import { ENGINE_WORDING, FACT_SHEET_VERSION, GUARANTEE_LINE, SHEET_MONEY, factFo
 import { mayClaimNamedInstead } from './namedShareRule.ts';
 import type { WhyEvidence } from './draftEvidenceWait.ts';
 import { engineName, siteOf, tidyCaps, NEEDS_YOU_LABELS, PITCH_SPECIALISE_LINE, type MoveEvidence, type MovePlan, type NeedsYouReason } from './replyMove.ts';
-import { PLAYBOOK, BUILT_SITE_EXAMPLE_URL, PROOF_WORDS, lowerBrands, startsWithBrand } from './replyPlaybook.ts';
+import { PLAYBOOK, BUILT_SITE_EXAMPLE_URL, FINDABLE_SITE_LINE, PROOF_WORDS, lowerBrands, startsWithBrand } from './replyPlaybook.ts';
 
 /* ── cost ─────────────────────────────────────────────────────────────────────────────────────── */
 
@@ -352,7 +352,19 @@ const lineCap = (p: MovePlan) => (isPitch(p) ? (p.intent === 'straight_answer_th
 const OWN_LINKS = [/https:\/\/findable\.live\/r\/[A-Za-z0-9]{4,12}\b/gi, new RegExp(BUILT_SITE_EXAMPLE_URL.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/\/$/, '\\/?'), 'gi'), /\bfindable\.live\b(?![/\w])/gi];
 const withoutOwnLinks = (r: string, p: MovePlan) => (p.linkOk ? OWN_LINKS.reduce((s, re) => s.replace(re, ' '), r) : r);
 /* The pitch (wording A, 2026-10-20): greeting, the search, why, what we do, the agency question. */
-const charCap = (p: MovePlan) => (isPitch(p) ? 800 : p.confidence ? 480 : 320);
+const charCap = (p: MovePlan) => (isPitch(p) ? 800 : p.confidence ? 480 : 320) + (p.siteLine ? FINDABLE_SITE_LINE.length + 1 : 0);
+
+/** A service-question draft (plan.siteLine) always carries FINDABLE_SITE_LINE once, just before its last question, whatever
+ *  the model wrote: put in by code when the model left it out (Paul, 2026-10-26). Line breaks are kept. */
+export function ensureSiteLine(reply: string, p: Pick<MovePlan, 'siteLine'>): string {
+  if (!p.siteLine || reply.includes(FINDABLE_SITE_LINE)) return reply;
+  const q = reply.lastIndexOf('?');
+  if (q < 0) return `${reply.trimEnd()} ${FINDABLE_SITE_LINE}`;
+  let start = 0;
+  for (let i = q - 1; i >= 0; i--) if ('.!?\n'.includes(reply[i])) { start = i + 1; break; }
+  while (start < q && reply[start] === ' ') start++;
+  return `${reply.slice(0, start)}${start > 0 && reply[start - 1] !== '\n' && reply[start - 1] !== ' ' ? ' ' : ''}${FINDABLE_SITE_LINE} ${reply.slice(start)}`;
+}
 /** "named you in 1 of 2 answers", "there's a gap in the rest": never in any draft (Paul, 2026-10-20, Nola). Lead with the
  *  missed search instead. */
 const SHARE_WORDING = /\bnamed\s+you\s+in\s+\d+\s+(?:of|out\s+of)\s+\d+|\bgap\s+in\s+the\s+rest\b|\bin\s+\d+\s+(?:of|out\s+of)\s+\d+\s+answers\b/i;
@@ -383,6 +395,7 @@ export function checkAiReply(reply: string, c: AiReplyContext): string[] {
   if (qs > 1) out.push('Asks more than one question.');
   if (usesDash(r)) out.push('Uses a dash.');
   if (LINK.test(withoutOwnLinks(r, p))) out.push('Has a link. Never send the sign-up link from a draft.');
+  if (p.siteLine && r.split(FINDABLE_SITE_LINE).length !== 2) out.push(`Should say "${FINDABLE_SITE_LINE}" once, before the question.`);
   if (/\bsign[\s-]?up\b|\bonboarding\s+link\b|\bagreement\s+link\b/i.test(r)) out.push('Talks about the sign-up link.');
   /* Money and terms must match the sheet, and only after a price question or a clear yes. */
   if (PRICE_WORDS.test(r) && !p.allowPrice) out.push('Mentions a price before they asked or said a clear yes.');
