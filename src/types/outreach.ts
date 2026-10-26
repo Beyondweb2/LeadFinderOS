@@ -689,6 +689,7 @@ const SERVER_ONLY_TEMPLATE_LABELS: Record<string, string> = {
   agency_access: 'Agency access (dashboard)',
   agreement_next_steps: 'Agreement and next steps (dashboard)',
   nudge_24h: '24-hour nudge (dashboard)',
+  pick_up_conversation: 'Pick up the conversation (dashboard)',
 };
 
 /** Every template that can appear anywhere, for pickers that legitimately span both products. */

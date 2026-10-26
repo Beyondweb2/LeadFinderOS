@@ -23,9 +23,9 @@ export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
   { id: '2026-10-26-dashboard-buttons-pressable', date: '2026-10-26', title: 'Every dashboard send button is pressable', audience: 'admin',
-    body: 'No more "Not set up at Meta". Interested and follow-up rows send the 24-hour nudge. If Meta refuses a send, you see why straight away and on the message in their Inbox thread; the button stays usable.',
+    body: 'No more "Not set up at Meta". When they replied last (Interested, waiting on you) the button sends pick_up_conversation; when you wrote last and they went quiet it sends your re-engage message. If Meta refuses a send, you see why straight away and on the message in their Inbox thread; the button stays usable.',
     report: {
-      added: ['Interested (waiting on you), follow-up due and quote-gone-quiet rows send the 24-hour nudge.', 'Questionnaire rows that are waiting on them, need a call, or are unfinished also offer the 24-hour nudge.'],
+      added: ['New template pick_up_conversation for rows where their message is the latest (Interested, waiting on you).', 'Follow-up due, quote gone quiet, an unfinished questionnaire and "Call them" send re_engage_49 ("Where did we get to with this?").', 'A questionnaire you messaged in the last day still offers the 24-hour nudge.'],
       changed: ['A mapped button is always pressable. Meta decides on the send; a refusal shows Meta\'s reason after the press and on the failed message in the Inbox thread.', 'An Australian lead gets the 24-hour nudge instead of a sign-up or payment template (Australia is prospect-only).'],
       removed: ['The "Not set up at Meta" label, and switching buttons off from Meta\'s last answer.'],
       effect: 'Every row that has a fitting template can be messaged in one tap, still through the normal sender with send hours, opt-outs and the 24-hour rule. Failed payments, client delivery steps and list-level tasks have no template, so they show no send button.',

@@ -1,15 +1,17 @@
 /* ═════════════════════════════════════════════════════════════════
-   THE ADMIN DASHBOARD'S SIX META TEMPLATES (Paul, 2026-10-26). Deno-free and import-free: the edge sender
+   THE ADMIN DASHBOARD'S META TEMPLATES (Paul, 2026-10-26). Deno-free and import-free: the edge sender
    (send-whatsapp-message, _shared/whatsapp-send.ts) and the SPA (NeedsMeList) both read this, so the variables,
-   the transcript and the on/off rule cannot drift.
+   and the transcript cannot drift.
    - questionnaire_domain_help  {{1}} business name
    - questionnaire_payment_help {{1}} business name
    - needs_from_you             {{1}} first name (else business name), {{2}} the item needed
    - agency_access              {{1}} first name (else business name)
    - agreement_next_steps       {{1}} first name (else business name)
    - nudge_24h                  {{1}} business name
+   - pick_up_conversation       {{1}} business name — for a lead whose message is the latest (they replied last).
+     Wording given by Paul (2026-10-26), so its transcript IS the message: PICK_UP_CONVERSATION_BODY.
    NOT wired (Paul): final_nudge, payment_failed.
-   ⛔ META'S WORDING IS NOT COPIED HERE. The app cannot read it: the sending account's id is not known to the token
+   ⛔ META'S WORDING IS NOT COPIED HERE (except pick_up_conversation, which Paul gave word for word). The app cannot read it: the sending account's id is not known to the token
    (WHATSAPP_BUSINESS_ACCOUNT_ID unset, debug_token gives no ids; whatsapp_template_status holds only `no_waba`), and
    Paul cannot supply it (2026-10-26). Meta renders its own approved text to the prospect; the Inbox transcript says
    which template went and with what, never invented wording.
@@ -26,7 +28,12 @@ export const DASHBOARD_TEMPLATES = {
   agency_access: { label: 'Agency access', vars: ['greeting_name'] as DashboardTemplateVar[] },
   agreement_next_steps: { label: 'Agreement & next steps', vars: ['greeting_name'] as DashboardTemplateVar[] },
   nudge_24h: { label: '24-hour nudge', vars: ['name'] as DashboardTemplateVar[] },
+  pick_up_conversation: { label: 'Pick up the conversation', vars: ['name'] as DashboardTemplateVar[] },
 } as const;
+
+/** pick_up_conversation's registered words (Paul, 2026-10-26). {{1}} = business name. */
+export const PICK_UP_CONVERSATION_BODY = (business: string): string =>
+  `Hi ${business || 'there'}, thanks for getting back to me, and sorry for the slow reply. Are you still interested in showing up when people ask AI for a recommendation?`;
 
 export type DashboardTemplateName = keyof typeof DASHBOARD_TEMPLATES;
 export const DASHBOARD_TEMPLATE_NAMES = Object.keys(DASHBOARD_TEMPLATES) as DashboardTemplateName[];
@@ -56,6 +63,7 @@ export function cleanNeededItem(raw: unknown): { ok: true; value: string } | { o
 
 /** What the Inbox thread shows for a sent dashboard template (Meta renders the real words to the prospect). */
 export function dashboardTemplateTranscript(name: DashboardTemplateName, v: { business: string; greeting?: string; neededItem?: string }): string {
+  if (name === 'pick_up_conversation') return PICK_UP_CONVERSATION_BODY(v.business);
   const t = DASHBOARD_TEMPLATES[name];
   const who = (v.greeting || v.business || 'them').trim();
   return `${t.label} (WhatsApp template "${name}", Meta's approved wording) sent to ${who}${v.neededItem ? `. Needed: ${v.neededItem}` : ''}.`;

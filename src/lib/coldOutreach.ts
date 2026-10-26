@@ -125,6 +125,8 @@ export const CONTINUATION_TEMPLATES: ReadonlySet<string> = new Set([
   "agency_access",
   "agreement_next_steps",
   "nudge_24h",
+  /* pick_up_conversation (2026-10-26): to a lead whose message is the latest — always an existing conversation. */
+  "pick_up_conversation",
 ]);
 
 /** True when this template is a COLD approach — a first contact that must never land on a number

@@ -79,7 +79,7 @@ export function questionnaireStep(q: QuestionnaireFacts, nowMs: number): Questio
     rights: { action: 'Help with the website permissions', template: 'questionnaire_domain_help' },
     agency: { action: 'Sort agency access', template: 'agency_access' },
     tied_in: { action: 'Decline politely and note the end date', template: null },
-    questions: { action: 'Help them finish the questions', template: 'nudge_24h' },
+    questions: { action: 'Help them finish the questions', template: 're_engage_49' },
   };
   const first = base[stop];
   /* The stop's own message has not gone yet: that is the next action, due 2 h after they submitted. */
@@ -94,7 +94,7 @@ export function questionnaireStep(q: QuestionnaireFacts, nowMs: number): Questio
   const due = (ms: number) => new Date(Date.parse(movedIso) + ms).toISOString();
   if (q.last_out_template === 'nudge_24h') {
     if (quiet >= ESCALATE_2_MS) return { stop, why: `${STOP_WORDS[stop]}. Nudged, no answer for 2 days`, action: 'Record the outcome', template: null, dueIso: due(ESCALATE_2_MS), escalation: 3, movedIso };
-    if (quiet >= ESCALATE_1_MS) return { stop, why: `${STOP_WORDS[stop]}. Nudged, no answer for a day`, action: 'Call them', template: 'nudge_24h', dueIso: due(ESCALATE_1_MS), escalation: 2, movedIso };
+    if (quiet >= ESCALATE_1_MS) return { stop, why: `${STOP_WORDS[stop]}. Nudged, no answer for a day`, action: 'Call them', template: 're_engage_49', dueIso: due(ESCALATE_1_MS), escalation: 2, movedIso };
   } else {
     if (quiet >= ESCALATE_2_MS) return { stop, why: `${STOP_WORDS[stop]}. No answer for 2 days`, action: 'Send the 24-hour nudge', template: 'nudge_24h', dueIso: due(ESCALATE_1_MS), escalation: 2, movedIso };
     if (quiet >= ESCALATE_1_MS) return { stop, why: `${STOP_WORDS[stop]}. No answer for a day`, action: 'Send the 24-hour nudge', template: 'nudge_24h', dueIso: due(ESCALATE_1_MS), escalation: 1, movedIso };

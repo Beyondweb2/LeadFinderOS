@@ -736,3 +736,8 @@ SERVER_ONLY_TEMPLATE_LABELS (never in a picker). New variable `needed_item` (cle
   reason) plus the after-press message (`failCode` → `sendErrorMeaning`). Interested, follow-up due and quote-quiet rows →
   nudge_24h; questionnaire waiting / call / unfinished → nudge_24h. An Australian lead gets nudge_24h instead of a sign-up or
   payment template (`effectiveTemplate`). No template, no button: failed payment, client delivery step, list-level items, tied in.
+- **pick_up_conversation** (Paul, 2026-10-26; {{1}} business name; wording given by Paul, so it is the transcript): for rows where
+  THEIR message is the latest (Interested, waiting on you). Rows where WE wrote last and they went quiet (follow-up due, quote
+  quiet, questionnaire unfinished, "Call them") send the existing **re_engage_49** ("Where did we get to with this? Happy to pick
+  it back up…", approved 2026-09-12, no price despite its name). nudge_24h stays for the questionnaire's own 24-hour chase.
+  Registered in every place nudge_24h is; `scripts/needs-me.test.ts` §5a pins "they replied last" vs "I sent last".

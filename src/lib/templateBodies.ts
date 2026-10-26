@@ -425,6 +425,7 @@ export const READABLE_TEMPLATE_BODIES: Record<string, TemplateBodyFn> = {
   agency_access: (b, _u, _t, _c, first) => dashboardTemplateTranscript('agency_access', { business: b, greeting: first }),
   agreement_next_steps: (b, _u, _t, _c, first) => dashboardTemplateTranscript('agreement_next_steps', { business: b, greeting: first }),
   nudge_24h: (b) => dashboardTemplateTranscript('nudge_24h', { business: b }),
+  pick_up_conversation: (b) => dashboardTemplateTranscript('pick_up_conversation', { business: b }),
   contact_followup: (b) => contactFollowupBody(b),
   onboarding_followup: onboardingFollowupBody,
   booking_page_intro: bookingPageIntroBody,

@@ -399,6 +399,7 @@ const TEMPLATES: Record<string, { lang: string; vars: TemplateVar[] }> = {
   agency_access: { lang: "en", vars: ["greeting_name"] },
   agreement_next_steps: { lang: "en", vars: ["greeting_name"] },
   nudge_24h: { lang: "en", vars: ["name"] },
+  pick_up_conversation: { lang: "en", vars: ["name"] },
 };
 
 /* ── ai_visibility_report_offer: a resolver refusal, in the template's own reasons ── */

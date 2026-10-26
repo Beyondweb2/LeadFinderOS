@@ -18,7 +18,8 @@ import { supabase } from '@/integrations/supabase/client';
 import { cn } from '@/lib/utils';
 import { Panel, TONE, type Tone } from '@/components/salesDash/ui';
 import { sendWhatsAppRequest } from '@/lib/whatsAppSendRequest';
-import { DASHBOARD_TEMPLATES, dashboardGreeting } from '@/lib/dashboardTemplates';
+import { dashboardGreeting } from '@/lib/dashboardTemplates';
+import { READABLE_TEMPLATE_BODIES } from '@/lib/templateBodies';
 import { sendErrorMeaning } from '@/lib/sendErrorMeaning';
 import { NEEDS_TEMPLATES, effectiveTemplate } from '@/lib/needsMeTemplates';
 import { LOST_REASONS, sinceLabel, type MarkAction, type NeedsGroup, type NeedsMark, type NeedsRow } from '@/lib/needsMe';
@@ -83,7 +84,7 @@ function SendButton({ row }: { row: NeedsRow }) {
   const t = NEEDS_TEMPLATES[key];
   /* What goes: Meta's approved wording for this template, filled with these values (the app cannot read Meta's text). */
   const greeting = dashboardGreeting(row.firstName, row.business);
-  const vars = DASHBOARD_TEMPLATES[key].vars;
+  const vars = NEEDS_TEMPLATES[key].vars;
   const values = vars.map((v) => v === 'name' ? `Business name: ${row.business}` : v === 'greeting_name' ? `Name: ${greeting}` : `Item needed: ${row.neededItem ?? ''}`);
   const send = async () => {
     setBusy(true);
@@ -98,7 +99,10 @@ function SendButton({ row }: { row: NeedsRow }) {
     toast({ title: r.scheduled ? 'Queued' : 'Sent', description: r.scheduled ? `Outside their send hours: it goes at ${new Date(r.scheduled.send_at).toLocaleString('en-GB', { timeZone: r.scheduled.tz, hour: '2-digit', minute: '2-digit', weekday: 'short' })} (${r.scheduled.tz}).` : `${t.label} to ${row.business}.` });
     void qc.invalidateQueries({ queryKey: ADMIN_HOME_NEEDS_KEY });
   };
-  const preview = `Meta's approved "${key}" template, with:\n${values.join('\n')}`;
+  /* The words where we know them (re_engage_49, pick_up_conversation); else which template and with what values. */
+  const preview = key === 're_engage_49' || key === 'pick_up_conversation'
+    ? (READABLE_TEMPLATE_BODIES[key]?.(row.business, '') ?? '')
+    : `Meta's approved "${key}" template, with:\n${values.join('\n')}`;
   return (
     <>
       <Button size="sm" className="h-8 gap-1.5 rounded-full" onClick={() => setOpen(true)} data-testid="needs-send">
