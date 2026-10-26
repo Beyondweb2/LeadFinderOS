@@ -241,8 +241,9 @@ export const AUTO_SEND_REFUSAL_LABELS: Record<AutoSendRefusal, string> = {
 
 const ms = (v: string | number | null): number => (typeof v === 'number' ? v : v ? Date.parse(v) : NaN);
 
-/** Any web address in a draft: https://, www., or a findable.live/r/ style bare link. */
-const DRAFT_LINK = /https?:\/\/|\bwww\.|\b[a-z0-9-]+\.(?:live|co\.uk|com|uk|net|org|io)\/\S/i;
+/** Any web address in a draft: https://, www., a findable.live/r/ style bare link, or our bare site name (the service-question
+ *  line, 2026-10-26: WhatsApp makes "findable.live" a link, so that draft is approve-to-send too). */
+const DRAFT_LINK = /https?:\/\/|\bwww\.|\b[a-z0-9-]+\.(?:live|co\.uk|com|uk|net|org|io)\/\S|\bfindable\.live\b/i;
 
 /** THE RULE. The order only decides which reason is reported; every check must pass for `send: true`. */
 export function autoSendVerdict(f: AutoSendFacts): AutoSendVerdict {

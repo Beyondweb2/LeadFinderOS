@@ -28,7 +28,7 @@ import {
   PLAYBOOK, RE, splitQuestion, readEndDate, nameFromReply, nearSameName, rivalsExcludingSelf, DONT_NEED_SOFT, DOES_AI_MATTER_SOFT,
   DONT_NEED_NO_AUDIT, DOES_AI_MATTER_NO_AUDIT, PRIVACY_NOT_GOOGLE, GO_ON_KNOWN, NOT_NOW_WITH_TIME, WEBSITE_GIVEN_KNOWN,
   EXAMPLES_NO_AUDIT, PROOF_NO_AUDIT, ALREADY_SHOW_UP_TRUE, ALREADY_SHOW_UP_NO_AUDIT, NEW_SITE_CHECK_BACK, VOICE_NOTE_FROM_THEM,
-  type PlaybookIntent, type FollowUpNote,
+  FINDABLE_SITE_LINE, type PlaybookIntent, type FollowUpNote,
 } from './replyPlaybook.ts';
 import { REMEASURE_WEEKS_STANDARD } from './findableOffer.ts';
 /* ⛔ THE PLAYBOOK (Paul, 2026-10-20, replyPlaybook.ts, docs/reply-playbook.md): the FIRST reply to our opener gets the pitch
@@ -234,6 +234,8 @@ export interface MovePlan {
   note?: string | null;
   /** The line carries our own links only (replyPlaybook FINDABLE_SITE_WORDS / BUILT_SITE_EXAMPLE_URL): the checker allows those. */
   linkOk?: boolean;
+  /** A service question (withSiteLine): the draft carries FINDABLE_SITE_LINE once, before the question. */
+  siteLine?: boolean;
   /** A first-reply pitch written with no report link because the lead's audit is not finished (Paul, 2026-10-23). */
   auditPending?: boolean;
 }
@@ -762,6 +764,35 @@ export function prospectOnlyPlan(p: MovePlan, e: Pick<MoveEvidence, 'prospectOnl
   return { ...p, allowPrice: false };
 }
 
+/** THE SERVICE QUESTIONS that end with FINDABLE_SITE_LINE (Paul, 2026-10-26): what we do / how it works, who we are, how much,
+ *  examples, "explain it here" — plus any reply to "is this legit / genuine / a scam?" (the privacy or guarantee answer). */
+export const SITE_LINE_INTENTS: ReadonlySet<PlaybookIntent> = new Set<PlaybookIntent>(['what_we_do', 'who_are_you', 'how_much', 'examples', 'explain_here']);
+const LEGIT_Q = /\b(legit(?:imate)?|genuine|scam(?:mer|mers|ming)?|real\s+(?:company|business))\b/i;
+/** Pitch-shaped moves keep their own words: the hook, its straight-answer / chased variants, the site-shared reply. */
+const PITCH_MOVES: ReadonlySet<MoveId> = new Set<MoveId>(['first_reply_pitch', 'auto_reply', 'site_shared']);
+
+/** Does this plan get the site line? Positive: a drafted service answer, never Australia, a pitch, a no draft or a stop. */
+export function siteLineDue(p: MovePlan, theirText: string, e: Pick<MoveEvidence, 'prospectOnly'>): boolean {
+  if (e.prospectOnly === true || p.noDraft === true || p.stop || PITCH_MOVES.has(p.move)) return false;
+  return (!!p.intent && SITE_LINE_INTENTS.has(p.intent)) || LEGIT_Q.test(theirText);
+}
+
+/** "Body. Question?" → "Body. <line> Question?" (no question: the line goes last). Never twice. */
+export function insertSiteLine(text: string): string {
+  if (text.includes(FINDABLE_SITE_LINE)) return text;
+  const { body, question } = splitQuestion(text);
+  return [body, FINDABLE_SITE_LINE, question ?? ''].filter(Boolean).join(' ');
+}
+
+/** The plan with the site line: in the fixed text and the guide (the fallback), and as a word-for-word point for the model.
+ *  linkOk on THIS plan only (the playbook entry is untouched, so the auto-send switches stay as they are). */
+export function withSiteLine(p: MovePlan): MovePlan {
+  return { ...p, siteLine: true, linkOk: true,
+    fixedText: p.fixedText ? insertSiteLine(p.fixedText) : p.fixedText,
+    guide: p.guide ? insertSiteLine(p.guide) : p.guide,
+    points: [...p.points, `Then this line, word for word, just before the question: "${FINDABLE_SITE_LINE}"`] };
+}
+
 /** Did we already learn who runs their site (agency / themselves / a friend), so the agency question is done? */
 function whoRunsKnown(thread: MoveThreadMsg[]): boolean {
   let prev: MoveThreadMsg | null = null;
@@ -844,7 +875,8 @@ export function pickMove(i: MoveInput): MovePlan {
   /* A loop guard wins the reason: it is why nothing should be drafted on its own. Every plan below passes through here:
      the first reply is marked (its "AI" keeps its capitals, Paul 2026-10-23), and a prospect-only lead never gets a price. */
   const g = (p0: MovePlan): MovePlan => {
-    const p = markReportLink(prospectOnlyPlan({ ...p0, firstReply: first }, e), e);
+    const p1 = markReportLink(prospectOnlyPlan({ ...p0, firstReply: first }, e), e);
+    const p = siteLineDue(p1, text, e) ? withSiteLine(p1) : p1;
     return guard ? { ...p, autoDraft: false, needsYou: flag(guard) } : p;
   };
 

@@ -2,7 +2,7 @@
    intent: code picks the intent, the rule-built draft (the playbook line) passes the checker, one question at most, the
    follow-up style, no money-back line unasked. Prints one preview draft per intent (PREVIEW lines). Pure: no model, no DB. */
 import { readFileSync } from 'node:fs';
-import { pickMove, firstReplyPitch, pitchText, PITCH_SPECIALISE_LINE, PITCH_NO_SITE_LINE, type MoveEvidence, type MoveThreadMsg } from '../src/lib/replyMove.ts';
+import { pickMove, firstReplyPitch, insertSiteLine, pitchText, PITCH_SPECIALISE_LINE, PITCH_NO_SITE_LINE, type MoveEvidence, type MoveThreadMsg } from '../src/lib/replyMove.ts';
 import { PLAYBOOK, NEW_INTENTS, readEndDate, nameFromReply, nearSameName, lowerBrands, startsWithBrand, type PlaybookIntent } from '../src/lib/replyPlaybook.ts';
 import { checkAiReply, fallbackAiReply, buildAiReplyPrompt, AI_REPLY_SYSTEM_PROMPT, AI_BRAND, type AiReplyContext } from '../src/lib/aiReplyDraft.ts';
 import { CONFIDENCE_LINE } from '../src/lib/offerFactSheet.ts';
@@ -149,7 +149,7 @@ ok(startsWithBrand('Fine. chatgpt named them') && !startsWithBrand('I asked chat
   const ctx: AiReplyContext = { businessName: ev.businessName, latestInbound: 'x', thread: thread.map((m) => ({ from: m.from, text: m.text })), plan: { ...p, noDraft: false }, evidence: ev };
   ok(checkAiReply('Good, I can send a voice note instead?', ctx).some((w) => /Opens with "good" again/.test(w)), 'the same opener as our last message → warning');
   ok(checkAiReply('Gemini named three others.', { ...ctx, plan: pm(after('how long does it take?')) }).some((w) => /Starts a sentence/.test(w)), 'a follow-up starting a sentence with a tool → warning');
-  ok(checkAiReply(PLAYBOOK.examples.line, { ...ctx, plan: pm(after('any examples?')) }).length === 0
+  ok(checkAiReply(insertSiteLine(PLAYBOOK.examples.line), { ...ctx, plan: pm(after('any examples?')) }).length === 0
     && checkAiReply('Our clients saw 40% more calls.', ctx).some((w) => /past results/.test(w)), 'the one results line is allowed; any other results claim still warns');
 }
 

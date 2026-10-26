@@ -36,6 +36,12 @@ export const NEEDS_YOU_INTENTS: readonly PlaybookIntent[] = ['pay_on_results', '
 /** The only links a draft may carry (Paul, 2026-10-21): our own site and the site we built for a locksmith. Never a sign-up link. */
 export const FINDABLE_SITE_WORDS = 'findable.live';
 export const BUILT_SITE_EXAMPLE_URL = 'https://mclocksmiths-new.pages.dev/';
+/** ⛔ THE SERVICE-QUESTION LINE (Paul, 2026-10-26): near the end of a reply to "what do you do / how does it work / who are you /
+ *  is this legit / can I see examples / how much", once, before the one question (replyMove.withSiteLine). Checked on
+ *  2026-10-26: findable.live shows a sample REPORT, not examples of sites we built, so the line never says "examples", only
+ *  "more about what we do". The bare homepage is the link (the checker allows findable.live itself, never a path on it).
+ *  Never for Australia (prospect-only), the hook, a no, an auto-reply or media. */
+export const FINDABLE_SITE_LINE = `You can see more about what we do at ${FINDABLE_SITE_WORDS}.`;
 /** Paul's proof words (2026-10-21): no client name, no number, no percentage, no result claim. */
 export const PROOF_WORDS = `I've had good reviews and great feedback from the businesses I've worked with, and I built this site for a locksmith recently: ${BUILT_SITE_EXAMPLE_URL}`;
 
