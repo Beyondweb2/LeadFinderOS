@@ -1,10 +1,14 @@
-# Admin home redesign — audit and three concepts (2026-10-26, mockups only)
+# Admin home redesign — audit and two concepts (2026-10-26, mockups only)
 
-Nothing here is built, merged or deployed. The mockups (`mockups.html`, open with `#a`, `#b` or `#c`; `phone.html#a` shows
-the phone width) use FAKE "Demo" businesses. The funnel numbers in them are the real 14-day figures from
-`docs/convo-review-2026-10-26.md`; the cap, failures and team figures are made up.
+Nothing here is built, merged or deployed. The mockups are built from the dashboard's own parts (dark theme, the same
+section headings, cards and row style) in `src/design-mock/AdminHomeMock.tsx`, with FAKE "Demo" businesses. The funnel
+numbers are the real 14-day figures from `docs/convo-review-2026-10-26.md`; the cap, failures and team figures are made up.
+The sidebar is not drawn (unchanged).
 
-Screenshots: `concept-a-desktop.png`, `concept-a-phone.png`, `concept-b-…`, `concept-c-…`.
+Screenshots: `dark-a-desktop.png`, `dark-a-phone.png`, `dark-b-desktop.png`, `dark-b-phone.png`.
+
+Paul, 2026-10-26: keep today's style; **replies do not belong on the dashboard** (too many a day, they live in the Inbox).
+The first white mockups were dropped.
 
 ## 1. Audit of today's admin home (`/`, `src/pages/Dashboard.tsx`)
 
@@ -20,7 +24,7 @@ WhatsApps (1,237 of 1,349) were sent by an admin, so the team and insight panels
 | 0 | Header + "Send to sales team" (Dashboard.tsx:112) | team composer | last team post 9 Oct | Keep header; **move** the composer to Team |
 | 1 | Period + "My activity" toggle (:126) | persisted settings | hides 92% of sends | Keep the period; **remove** the toggle, or default it to included |
 | 2 | Business at a glance, 4 tiles (teamControl.tsx:25) | revenue, new clients, needs-you count, commission | no ledger row since 7 Oct | **Keep** (becomes part of key numbers) |
-| 3 | What needs you / Your actions (controlCentre.tsx:54) | server `attention` + `needsYouItems` (adminControl.ts:60) | reply sorter ran today; 3 urgent, 11 review in 14 d | **Keep: the seed of "Needs me"** |
+| 3 | What needs you / Your actions (controlCentre.tsx:54) | server `attention` + `needsYouItems` (adminControl.ts:60) | reply sorter ran today; 3 urgent, 11 review in 14 d | **Keep** as the base of the new list, **minus its reply lines** |
 | 4 | New sales & handoffs (teamControl.tsx:47) | fn `paid-client-hub` | 23 paid leads | **Merge** into Needs me (new client rows) |
 | 5 | Clients in delivery (clientHealth.tsx:70) | clients + weekly checks | weekly column: 1 run ever (28 Sep) | **Move** to Paid Clients; weekly column stale |
 | 6 | Sales team performance (teamControl.tsx:123) | team fold, earnings | Ethan 1, Stephan 2, Liz 0 sends in 14 d | **Move** to Sales dashboard; one line in key numbers |
@@ -45,16 +49,16 @@ TeamComparison, FunnelPanel, CallsPanel, RevenuePanel, CommissionPanel, Contribu
 `supabase.functions.invoke` directly, not `invokeEdge` (a rulebook break; low risk, admin only). `/feedback` is still
 mounted (`App.tsx:229`) although the Feedback page is dead.
 
-## 2. The three concepts
+## 2. The two concepts
 
-| | A · one list | B · three columns | C · briefing |
-|---|---|---|---|
-| Shape | One "Needs you" list, most urgent first, filter chips; numbers on the right | Numbers on top, then Do now / Today / Waiting on them | Numbers, then the list grouped (Questionnaires, Money, Replies, Clients), questionnaire log at the bottom |
-| Best for | Working down a queue fast | Seeing the day at a glance | A morning read; sees the questionnaire log |
-| Phone | Good: one list | Columns stack, long scroll | Good: sections fold |
-| My pick | **A** (fewest clicks; same list on phone) | | C's questionnaire log added under A |
+| | A · today's page, cleaned | B · Needs you first |
+|---|---|---|
+| Shape | Same order as now: Business at a glance tiles → What needs you → Key numbers (funnel, sending health, team) → Questionnaires this week | What needs you and the questionnaire log on the left; funnel, sending health and money in a narrow column on the right |
+| Feels like | Your current dashboard with the junk taken out | A to-do page with numbers on the side |
+| Phone | One column, same order | The side column drops under the list |
+| My pick | **A** (closest to what you like now) | |
 
-Every row in all three: business, kind, why, time since, one next action, and **Snooze / Dismiss / Archive**. Archive is
+Every row in both: business, kind, why, time since, one next action, and **Snooze / Dismiss / Archive**. Archive is
 never a hard delete; an "Undo" toast and an "Archived (n)" view bring it back.
 
 ### What lands in "Needs me" (one row per business, most urgent wins)
@@ -65,12 +69,11 @@ Source for each is existing data; nothing new is stored for "who needs what" exc
 |---|---|---|
 | Questionnaire submitted, not paid, with the reason (domain blank, agency / contract, rights unticked, payment not started) | `onboarding_responses` + `domainAuthority` + `client_agreement_acceptances` | red after 24 h, escalated at 48 h |
 | Failed or overdue payment | `attention` (past due, disputes) | red |
-| Reply needing me / draft needing approval | `ai_reply_drafts` needs_you / pending, `inboxAttention.ts` | red for price, "who is this", call asks; else amber |
 | Interested (star) and waiting on us | `is_potential_work` + last message ours/theirs (`leadState.ts`) | amber after 24 h |
 | Follow-up due | Next Action due today/overdue (`nextActionView.ts`; human-set only) | blue, red when overdue |
 | New client and their next onboarding step | `paid-client-hub` list, `deliveryStage`, `clientMissingInfo.ts` | blue |
 
-Interested stays a star on the row, never a stage.
+Interested stays a star on the row, never a stage. **No reply or draft rows** (Inbox only); the existing reply-sorter line and its 436 rep replies leave the home page too.
 
 ## 3. One-tap template buttons
 
@@ -127,12 +130,12 @@ one sign-up link as today. Never to Australia: `domain_help`, `agency_access`, `
 
 ## What matters
 - Only #2, #3 and #4 answer "what needs me"; most of the rest is stale, empty by default, or belongs on another page.
-- Concept A is the recommendation; every send goes through the normal sender.
+- Concept A keeps today's look and order; every send goes through the normal sender.
 
 ## What to ignore
 - The unrendered panels and unused files (cleanup, not user-facing).
 
 ## Decision needed from you
-- Pick A, B or C (or mix).
+- Pick A or B.
 - Approve or edit the eight template wordings.
 - "My activity": default to included, or remove the toggle?
