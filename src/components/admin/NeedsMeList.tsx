@@ -5,7 +5,11 @@
    server's. A mapped button is always pressable; a refusal shows after the press and in the lead's Inbox thread.
    ⛔ Snooze / dismiss / archive write a mark (admin_home_marks); nothing is deleted, every archive has an undo. */
 import { useState } from 'react';
-import { AlertTriangle, Archive, ArrowRight, Clock, Loader2, MoreHorizontal, RotateCcw, Send, X } from 'lucide-react';
+import { AlertTriangle, Archive, ArrowRight, ChevronDown, ChevronUp, Clock, Loader2, MessageSquare, MoreHorizontal, RotateCcw, Send, X } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { useLeadPeek } from '@/hooks/useLeadPeek';
+import { peekLines } from '@/lib/messagePeek';
+import { whatsAppLinkForLead } from '@/lib/conversationState';
 import { useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -129,6 +133,47 @@ function SendButton({ row }: { row: NeedsRow }) {
   );
 }
 
+/* "LAST 3" (Paul, 2026-10-26): the lead's last three WhatsApp messages, newest at the bottom, loaded only when opened.
+   ⛔ Read-only (useLeadPeek: a SELECT under the Inbox's own access) — nothing is marked read, sent, or changed. */
+function LeadPeek({ row }: { row: NeedsRow }) {
+  const navigate = useNavigate();
+  const q = useLeadPeek({ leadId: row.leadId, phone: row.phone, country: row.country }, true);
+  const lines = q.data ? peekLines(q.data, { businessName: row.business, firstName: row.firstName }) : [];
+  const now = Date.now();
+  return (
+    <div className="border-t border-border/60 bg-background/40 px-3 py-2.5" data-testid="needs-peek">
+      {q.isLoading ? <p className="flex items-center gap-2 text-xs text-muted-foreground"><Loader2 className="h-3.5 w-3.5 animate-spin" />Loading the last messages…</p>
+        : q.isError ? (
+          <p className="flex flex-wrap items-center gap-2 text-xs text-destructive"><AlertTriangle className="h-3.5 w-3.5" />Could not load the messages: {(q.error as Error)?.message ?? 'error'}
+            <Button size="sm" variant="outline" className="h-7 rounded-full text-xs" onClick={() => void q.refetch()}>Try again</Button></p>
+        ) : !lines.length ? <p className="text-xs text-muted-foreground">No WhatsApp messages with them yet.</p> : (
+          <ul className="space-y-1.5">
+            {lines.map((l) => (
+              <li key={l.id} className={cn('flex', l.who === 'us' ? 'justify-end' : 'justify-start')}>
+                <div className={cn('min-w-0 max-w-[88%] rounded-2xl px-3 py-1.5 text-xs sm:max-w-[75%]', l.who === 'us' ? 'bg-primary/20 text-foreground' : 'bg-muted/60 text-foreground')}>
+                  <p className="mb-0.5 flex flex-wrap items-center gap-x-1.5 text-[10px] text-muted-foreground">
+                    <span className="font-semibold">{l.who === 'us' ? 'Us' : 'Them'}</span>
+                    <span>· {sinceLabel(l.at, now)} ago</span>
+                    {l.tag && <span>· {l.tag}</span>}
+                    {l.failed && <span className="font-semibold text-destructive">· failed</span>}
+                  </p>
+                  <p className="line-clamp-4 whitespace-pre-wrap break-words">{l.text}</p>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      {row.leadId && (
+        <div className="mt-2 flex justify-end">
+          <Button size="sm" variant="outline" className="h-7 gap-1 rounded-full text-xs" onClick={() => navigate(whatsAppLinkForLead(row.leadId!))} data-testid="peek-open-inbox">
+            Open in Inbox<ArrowRight className="h-3 w-3" />
+          </Button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function OutcomeDialog({ row, onClose, onSave }: { row: NeedsRow | null; onClose: () => void; onSave: (reason: string, note: string) => Promise<void> }) {
   const [reason, setReason] = useState('');
   const [note, setNote] = useState('');
@@ -161,6 +206,9 @@ export function NeedsMeList({ rows, highlightKey, onOpen, onMark, onOutcome, las
   loading?: boolean; error?: string | null; onRetry?: () => void; cardMenu?: React.ReactNode;
 }) {
   const [outcomeRow, setOutcomeRow] = useState<NeedsRow | null>(null);
+  /* Which rows show their last 3 messages. Not remembered: an open peek is a glance, never saved state. */
+  const [peekOpen, setPeekOpen] = useState<Set<string>>(new Set());
+  const togglePeek = (key: string) => setPeekOpen((prev) => { const next = new Set(prev); if (next.has(key)) next.delete(key); else next.add(key); return next; });
   const now = Date.now();
   const urgent = rows.filter((r) => r.group === 'urgent').length;
   return (
@@ -182,7 +230,8 @@ export function NeedsMeList({ rows, highlightKey, onOpen, onMark, onOutcome, las
                 <p className={cn('mb-1.5 text-[11px] font-semibold uppercase tracking-wide', TONE[tone].text)}>{label} · {list.length}</p>
                 <ul className="divide-y divide-border/60 overflow-hidden rounded-2xl border border-border/60 bg-muted/10">
                   {list.map((r) => (
-                    <li key={r.key} id={`row-${r.key}`} className={cn('flex min-w-0 flex-col sm:flex-row sm:items-stretch', highlightKey === r.key && 'ring-2 ring-inset ring-primary')}>
+                    <li key={r.key} id={`row-${r.key}`} className={cn('flex min-w-0 flex-col', highlightKey === r.key && 'ring-2 ring-inset ring-primary')}>
+                      <div className="flex min-w-0 flex-col sm:flex-row sm:items-stretch">
                       <button type="button" onClick={() => onOpen(r)} className="flex min-w-0 flex-1 items-start gap-3 px-3 py-2.5 text-left transition hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary">
                         <span className={cn('mt-1.5 h-2 w-2 shrink-0 rounded-full', TONE[tone].dot)} />
                         <span className="min-w-0 flex-1">
@@ -198,11 +247,19 @@ export function NeedsMeList({ rows, highlightKey, onOpen, onMark, onOutcome, las
                         <ArrowRight className="mt-1 hidden h-4 w-4 shrink-0 text-muted-foreground sm:block" />
                       </button>
                       <div className="flex flex-wrap items-center gap-1.5 border-t border-border/60 px-3 py-2 sm:border-t-0 sm:py-0">
+                        {(r.leadId || r.phone) && (
+                          <Button size="sm" variant="ghost" className="h-8 gap-1 rounded-full px-2.5 text-xs" aria-expanded={peekOpen.has(r.key)}
+                            onClick={() => togglePeek(r.key)} title={peekOpen.has(r.key) ? 'Hide the last messages' : 'Show the last 3 messages'} data-testid="needs-peek-toggle">
+                            <MessageSquare className="h-3.5 w-3.5" />Last 3{peekOpen.has(r.key) ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+                          </Button>
+                        )}
                         <SendButton row={r} />
                         {r.onboardingId && r.action === 'Record the outcome' && <Button size="sm" variant="outline" className="h-8 rounded-full" onClick={() => setOutcomeRow(r)}>Record outcome</Button>}
                         {onAssign && r.open.attention && attentionAssignable(r.open.attention) && <Button size="sm" variant="outline" className="h-8 rounded-full" onClick={() => onAssign(r.open.attention!)}>Assign</Button>}
                         <MarkButtons itemKey={r.key} onMark={onMark} />
                       </div>
+                      </div>
+                      {peekOpen.has(r.key) && <LeadPeek row={r} />}
                     </li>
                   ))}
                 </ul>

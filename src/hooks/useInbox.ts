@@ -873,6 +873,8 @@ export function useInbox(channel: InboxChannel = 'whatsapp') {
     /** Only true when the operator confirmed a repeat of a pitch this lead already had. The edge
      *  refuses a duplicate pitch by default; this is the deliberate override, never a default. */
     allowResend?: boolean;
+    /** Values the person typed for the template (today only needs_from_you's item); the server cleans them. */
+    templateVars?: Record<string, string>;
   }): Promise<{ ok: boolean; simulated?: boolean; error?: string; reason?: string; messageId?: string; scheduled?: InboxScheduledInfo }> => {
     if (sms) {
       /* A TEXT: through the SMS sender (every guard lives there — mobile check, opt-outs, the conversation gate, QA safety, the abuse guard).
@@ -956,7 +958,7 @@ export function useInbox(channel: InboxChannel = 'whatsapp') {
      ⚠️ Deliberately does NOT refetch: it changes nothing, so a refetch would only make a read look
      like a write. */
   const preview = useCallback(async (args: {
-    phone: string; leadId: string | null; country?: string | null; templateName: string; allowResend?: boolean;
+    phone: string; leadId: string | null; country?: string | null; templateName: string; allowResend?: boolean; templateVars?: Record<string, string>;
   }): Promise<{ ok: boolean; body?: string; snapshot?: WhatsAppTemplateSnapshot; template?: string; fellBack?: string; error?: string; reason?: string }> => {
     if (sms) {
       /* The text this template would send: the six native templates are built here from the same function the sender uses; every other
@@ -979,6 +981,7 @@ export function useInbox(channel: InboxChannel = 'whatsapp') {
         country: args.country ?? null,
         template_name: args.templateName,
         allow_resend: args.allowResend === true,
+        ...(args.templateVars ? { template_vars: args.templateVars } : {}),
       },
     });
     /* ⚠️ A NON-2XX IS THE ANSWER TOO, and saying so is the whole point of this control: before
