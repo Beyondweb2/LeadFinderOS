@@ -13,6 +13,8 @@
    ⛔ THE FIRST REPLY THAT ONLY CONFIRMS WHO THEY ARE gets the FULL PITCH (Paul, 2026-10-20, firstReplyPitch): the AI result,
       what the crawl found on their site, then "agency or yourself?". Every word is code-built (fixedText), never the model's.
       The voice note is offered on the NEXT reply, the call after that. No draft says it is sending anything "now".
+   ⛔ HOOK FIRST (Paul, 2026-10-26): while the pitch is owed, ANY first reply that is not a no / soft no / stop / wrong person
+      gets that hook as it stands ("are you looking for lessons?", "who's this?", a price ask): no apology, no explaining.
    ⛔ NOTHING HERE SENDS. ⛔ Voice note first, call after. ⛔ No sign-up link, ever; prices only after a price question or a
       clear yes. ⛔ "AI named others instead" only when named in at most a third (namedShareRule.ts).
    Pure and edge-reachable: relative imports with .ts, no Deno, no DOM.
@@ -511,8 +513,8 @@ export const PITCH_LIST_LEAD = 'I looked into why and a few things could be hold
 export const PITCH_ONE_LEAD = 'I looked into why and found';
 /** What we do, said once, with no promise of a result (Paul, 2026-10-21). */
 export const PITCH_SPECIALISE_LINE = 'I specialise in getting local businesses to show up in those results, so the customers go to you instead.';
-/** Paul's no-website words (2026-10-23, Option 2): "tends to", never how AI decides. */
-export const PITCH_NO_SITE_LINE = "AI tends to lean on websites when it names businesses, and I couldn't find one for you. Without a well-built one, it tends to name businesses that have one instead.";
+/** Paul's no-website words, word for word (2026-10-26). ⛔ Never "well-built" or "more important than ever", no stats. */
+export const PITCH_NO_SITE_LINE = "Most local work comes from recommendations, and now AI is the one recommending. It leans on websites when it picks who to name, and I couldn't find one for you. Without one built for AI, you're hard to recommend.";
 export const PITCH_INTRO_LINE = "It's Paul from Findable. I help local businesses show up when people ask AI tools for their trade in their area.";
 /** How the pitch was built, stored on the draft (why.structure) so reply rates can be compared by structure. */
 export type PitchStructure = 'pitch_list' | 'pitch_sentence' | 'pitch_plain' | 'pitch_no_site' | 'pitch_intro'
@@ -563,12 +565,13 @@ export function firstReplyPitch(e: MoveEvidence, theirName: string | null = null
 /** The lead-in is a few words; the link is the lead's own report, only once its audit is finished (never a sign-up link). */
 export const PITCH_REPORT_LEAD = "Here's the full report:";
 const REPORT_URL_RE = /^https:\/\/findable\.live\/r\/[A-Za-z0-9]{4,12}$/;
-/** The one short report line before the question, or null when there is no ready, well-formed report link. */
-export const reportLinkLine = (e: Pick<MoveEvidence, 'reportUrl'>): string | null =>
-  e.reportUrl && REPORT_URL_RE.test(e.reportUrl) ? `${PITCH_REPORT_LEAD} ${e.reportUrl}` : null;
+/** The one short report line before the question, or null when there is no ready, well-formed report link.
+ *  ⛔ Australia (prospect-only) never gets the report link in a draft (Paul, 2026-10-26). */
+export const reportLinkLine = (e: Pick<MoveEvidence, 'reportUrl'> & Partial<Pick<MoveEvidence, 'prospectOnly'>>): string | null =>
+  !e.prospectOnly && e.reportUrl && REPORT_URL_RE.test(e.reportUrl) ? `${PITCH_REPORT_LEAD} ${e.reportUrl}` : null;
 /** Marks a code-built pitch: its report link is allowed through the link check; no link means the audit is pending. */
-function markReportLink(p: MovePlan, e: Pick<MoveEvidence, 'reportUrl'>): MovePlan {
-  if (!p.fixedText || (p.move !== 'first_reply_pitch' && p.move !== 'auto_reply')) return p;
+function markReportLink(p: MovePlan, e: Pick<MoveEvidence, 'reportUrl'> & Partial<Pick<MoveEvidence, 'prospectOnly'>>): MovePlan {
+  if (!p.fixedText || (p.move !== 'first_reply_pitch' && p.move !== 'auto_reply') || e.prospectOnly) return p;
   const link = reportLinkLine(e);
   if (link && p.fixedText.includes(link)) return { ...p, linkOk: true };
   return { ...p, auditPending: true, note: p.note ?? 'Audit pending: no report link in this draft.' };
@@ -773,6 +776,25 @@ function whoRunsKnown(thread: MoveThreadMsg[]): boolean {
   return false;
 }
 
+/** A first reply that keeps its own handling instead of the hook (Paul, 2026-10-26): the soft and plain noes, a wrong
+ *  person / trade / area, another language, a new site on the way, and a website they sent when we have none on record. */
+function keepsOwnFirstReply(text: string, category: string, noSite: boolean): boolean {
+  return RE.wrongTrade.test(text) || RE.movedArea.test(text) || RE.sorryWrongDay.test(text) || RE.doItMyself.test(text)
+    || RE.newSite.test(text) || RE.notOwner.test(text) || category === 'wrong_person' || RE.tooExpensive.test(text)
+    || RE.away.test(text) || RE.notNow.test(text) || RE.startLater.test(text) || RE.dontNeed.test(text)
+    || category === 'not_interested' || CLEAR_NO.test(text) || NEGATED.test(text)
+    || (category === 'already_sorted' && !PROVIDER.test(text) && !RANKS.test(text))
+    || (MALAY.test(text) && !ENGLISH_HINT.test(text)) || RE.facebookOnly.test(text)
+    || (LINK.test(text) && noSite)
+    /* Kept as they were (my call, 2026-10-26): "is this a bot?" is always answered honestly, and a question the fact sheet
+       marks for Paul stays a Needs you. */
+    || BOT.test(text) || paulLooksQuestion(text);
+}
+function paulLooksQuestion(text: string): boolean {
+  const topic = questionTopic(text);
+  return !!topic && !!factFor(topic)?.paulLooks;
+}
+
 export function pickMove(i: MoveInput): MovePlan {
   const thread = mergeBursts(i.thread);
   const { latest, prevOurs, idx } = latestPair(thread);
@@ -896,6 +918,11 @@ export function pickMove(i: MoveInput): MovePlan {
   if (RE.callNow.test(text)) return g(fromPlaybook('call_now', { needsYou: flag('call_now'), autoDraft: false, note: 'They want to talk now. Only you know if you are free.' }));
   /* "Will ring later" (Paul, 2026-10-21): they will call us, so never the busy "I'll call then" line. */
   if (RE.willRing.test(text) && !/\?/.test(text)) return g(fromPlaybook('acknowledge_wait', { note: 'They said they will call you.' }));
+  /* ⛔ HOOK FIRST (Paul, 2026-10-26): while the pitch is owed, every first reply that is not a no, a soft no, a wrong
+     person / wrong trade or a site they just sent us gets THE HOOK as it stands: no apology, no "I'm not after lessons", no
+     straight answer, no "sorry for the slow reply". "Are you looking for manual lessons?", "who's this?", a question, a
+     price ask all get it. The soft and plain noes below keep their own handling exactly. */
+  if (first && !keepsOwnFirstReply(text, t.category, noSiteOf(e))) return g(pitchPlan());
   const checkBack = (): MovePlan => {
     const today = new Date(nowMs);
     const end = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate() + REMEASURE_WEEKS_STANDARD * 7));

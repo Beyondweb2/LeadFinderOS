@@ -55,9 +55,12 @@ const pm = (thread: MoveThreadMsg[], o: Partial<{ aiSentSinceWin: number; eviden
   const keen2 = pm([opener, { from: 'them', text: 'Yes' }, hook, { from: 'them', text: "I'm interested, tell me more" }]);
   ok(keen2.intent === 'interested' && /quick call/.test(keen2.guide ?? '') && /voice note/.test(keen2.question ?? ''), 'interested later → the call, or a voice note if easier');
   const price = pm([opener, { from: 'them', text: 'how much is it?' }]);
-  ok(price.intent === 'how_much' && price.topic === 'price' && price.allowPrice && /word for word: "It's £99 to start/.test(price.points[0]), 'a price question → the playbook price line, word for word');
+  ok(price.move === 'first_reply_pitch' && !price.allowPrice && !/£/.test(price.fixedText ?? ''), 'a price question as the FIRST reply → the hook, no price (Paul, 2026-10-26)');
+  const price2 = pm([opener, { from: 'them', text: 'Yes' }, hook, { from: 'them', text: 'how much is it?' }]);
+  ok(price2.intent === 'how_much' && price2.topic === 'price' && price2.allowPrice && /word for word: "It's £99 to start/.test(price2.points[0]), 'a price question after the hook → the playbook price line, word for word');
   /* Ads are ads_question since 2026-10-21 (reply recon); a logo is still not on the sheet. */
-  const unknown = pm([opener, { from: 'them', text: 'Can you do my logo as well?' }]);
+  ok(pm([opener, { from: 'them', text: 'Can you do my logo as well?' }]).move === 'first_reply_pitch', 'an off-sheet question as the FIRST reply → the hook');
+  const unknown = pm([opener, { from: 'them', text: 'Yes' }, hook, { from: 'them', text: 'Can you do my logo as well?' }]);
   ok(unknown.needsYou?.reason === 'question_not_on_sheet' && unknown.noDraft === true, 'a question the sheet does not answer → Needs you, no draft');
   const bot = pm([opener, { from: 'them', text: 'is this a bot?' }]);
   ok(bot.move === 'is_bot' && bot.guide === BOT_ANSWER, '"is this a bot" → honest, never denied');
@@ -118,7 +121,7 @@ console.log('6. the first-reply pitch (Paul, 2026-10-20 wording A; lean, 2026-10
   ok(caps.lines[1].startsWith('I asked AI for a driving instructor in Rugby'), 'a capitalised stored trade is said lower case ("a driving instructor")');
   const none = firstReplyPitch(noSiteEv);
   ok(none.lines[2] === PITCH_INSTEAD_LINE && none.lines[3] === PITCH_NO_SITE_LINE && none.lines[4] === PITCH_SPECIALISE_LINE && none.question === PITCH_SITE_Q && none.closer === 'site' && none.structure === 'pitch_no_site' && !/agency/i.test(none.lines.join(' ') + none.question), 'no website: "instead", then Paul\'s two no-site sentences, then "a website I\'ve missed, or …sorted?", never the agency question');
-  ok(/tends to lean on websites/.test(PITCH_NO_SITE_LINE) && !/reads websites to decide/i.test(PITCH_NO_SITE_LINE), 'the no-site words say "tends to", never how AI decides (Option 2)');
+  ok(PITCH_NO_SITE_LINE === "Most local work comes from recommendations, and now AI is the one recommending. It leans on websites when it picks who to name, and I couldn't find one for you. Without one built for AI, you're hard to recommend." && !/well[\s-]built|more important than ever/i.test(PITCH_NO_SITE_LINE), 'the no-site words are Paul\'s, word for word (2026-10-26); never "well-built" or "more important than ever"');
   for (const state of ['clean', 'not_checked', 'unreadable'] as const) {
     const c = firstReplyPitch({ ...ev, site: { state, issues: [] } });
     ok(c.lines[2] === PITCH_INSTEAD_LINE && !/looked into why/.test(c.lines.join(' ')) && c.lines[3] === PITCH_SPECIALISE_LINE && c.structure === 'pitch_plain', `${state}: "instead" alone, no "looked into why"`);
@@ -196,7 +199,8 @@ console.log('7. the confidence line: only where Paul said');
   ok(has(pm([opener, { from: 'them', text: 'Yes' }, hook, { from: 'them', text: 'does it actually work?' }])), '"does it work" → the confidence line');
   ok(pm([opener, { from: 'them', text: 'Yes' }, hook, { from: 'them', text: "what's the catch" }]).intent === 'catch', '"what\'s the catch" → the catch line (the £99 back)');
   ok(has(pm([opener, { from: 'them', text: 'Yes' }, hook, { from: 'them', text: 'is there a guarantee' }])), 'the guarantee → the confidence line (said once)');
-  ok(pm([opener, { from: 'them', text: 'who is this?' }]).intent === 'who_are_you', '"who is this?" → "I\'m Paul, I run Findable…"');
+  ok(pm([opener, { from: 'them', text: 'who is this?' }]).move === 'first_reply_pitch', '"who is this?" as the FIRST reply → the hook (Paul, 2026-10-26)');
+  ok(pm([opener, { from: 'them', text: 'Yes' }, hook, { from: 'them', text: 'who is this?' }]).intent === 'who_are_you', '"who is this?" after the hook → "I\'m Paul, I run Findable…"');
   for (const x of ['Yes', 'yeah go on', 'ok', 'hmm', 'Dom here']) ok(!pm([opener, { from: 'them', text: 'Yes' }, hook, { from: 'them', text: x }]).points.join(' ').includes(CONFIDENCE_LINE), `never the money-back line unasked ("${x}")`);
   ok(!pm([opener, { from: 'them', text: 'Yes it is' }]).confidence, 'never in the first pitch');
   const g = pm([opener, { from: 'them', text: 'Yes' }, hook, { from: 'them', text: 'is there a guarantee' }]).points.join(' ');

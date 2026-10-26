@@ -396,6 +396,16 @@ Tests: `scripts/inbox-reply-mode.test.ts`, `scripts/ai-auto-send.test.ts`. Marke
 - **"Not sent: The send was refused."** That row was not the pitch: it was an `audit_followup_call` template Paul queued at 03:38 for 06:00. Every queued WhatsApp send (2 so far, both 22 Oct 06:00) failed the same way: the drain called send-whatsapp-message with `Authorization: Bearer <service key>`, which the platform gateway refuses before the function runs (`{"message":"Invalid API key"}`), and `senderOutcome` read only reason / detail / error. Fixed: the drain calls by its cron door only (x-cron-secret + x-internal-job), and `senderOutcome` falls back to the code, the platform's message and the HTTP status — never a bare "refused".
 - **Not fixed here (held):** the opener still reads `failed` on screen; the ratchet lives in whatsapp-status, which must not be deployed until the Meta App cutover.
 
+## Hook first (2026-10-26, Paul)
+
+Branch `fix/hook-first-replies`. Every first reply that is not a no gets the code-built hook with the report link (rules and
+exceptions: `docs/reply-playbook.md` §1, `replyMove.ts` `keepsOwnFirstReply`). New no-website paragraph (Paul's words). Australia:
+no report link (`reportLinkLine` reads `prospectOnly`). Level 2 refuses any draft with a link (`has_link`). The checker no longer
+reads the report link's "https" as a site fault (it warned on every clean-site hook since 2026-10-23). Existing drafts were NOT
+regenerated. `inbox-scheduled-send` reaches `replyMove.ts` / `aiAutoSend.ts` but was not redeployed (Paul: ai-reply-drafts only); its
+send-time re-check lacks `has_link` until it is, which is safe because rows are only queued by ai-reply-drafts at draft time.
+Marker `x-ai-reply-drafts: 2026-10-26a-hook-first`.
+
 ## Two controls, the draft bubble, one pill (2026-10-22, Paul)
 
 Branch `feat/inbox-approval-cleanup`, migration `20261124120000_reply_audit_switch.sql`. Tests: `scripts/inbox-attention.test.ts`.

@@ -377,6 +377,7 @@ export function checkAiReply(reply: string, c: AiReplyContext): string[] {
   if (r.length > charCap(p)) out.push(`Long for a reply (over ${charCap(p)} characters).`);
   if (TIMING_PROMISE.test(r) && p.move !== 'set_call' && !p.timingOk) out.push('Promises when something will come ("now", "shortly"). Never promise timing.');
   if (/\bi\s+was\s+looking\s+for\b/i.test(r)) out.push('Says "I was looking for"; say "I asked".');
+  if (/\bwell[\s-]built\b|\bmore\s+important\s+than\s+ever\b/i.test(r)) out.push('Says "well-built" or "more important than ever" (Paul: never).');
   /* A quoted search ("Who is the best … in Halstead?") is what we asked AI, not a question to them. */
   const qs = (r.replace(/"[^"\n]*"/g, '').match(/\?/g) ?? []).length;
   if (qs > 1) out.push('Asks more than one question.');
@@ -418,7 +419,8 @@ export function checkAiReply(reply: string, c: AiReplyContext): string[] {
     if (!e.town || !lower(e.town).includes(lower(place)) && !lower(place).includes(lower(e.town))) out.push(`Mentions ${place}, which is not the audit's town${e.town ? ` (${e.town})` : ''}.`);
   }
   /* "I built this site for a locksmith" (Paul's proof words) is about our work, not their site: read around it. */
-  const siteText = r.split(PROOF_WORDS).join(' ');
+  /* A link is not a site fault: the hook's report link ("https://findable.live/r/…") read as "https" on a clean site. */
+  const siteText = r.split(PROOF_WORDS).join(' ').replace(/https?:\/\/\S+/gi, ' ');
   if (SITE_FAULT.test(siteText) || vagueSiteClaim(siteText)) {
     /* The crawl's findings, or the website check's own serious-issue titles quoted as they are (the pitch). */
     const backed = (e.findings.length > 0 && e.findings.some((f) => issueMentioned(r, f)))

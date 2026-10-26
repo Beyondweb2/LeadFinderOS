@@ -26,6 +26,10 @@ const us = (text: string, min = -100): MoveThreadMsg => ({ from: 'us', text, at:
 const first = (t: string): MoveThreadMsg[] => [opener, them(t)];
 /** After the pitch went. */
 const later = (...rest: MoveThreadMsg[]): MoveThreadMsg[] => [opener, them('Yes it is', -400), pitchMsg, ...rest];
+/** Hook first (Paul, 2026-10-26): a FIRST reply that is not a no gets the hook as it stands. straight_answer_then_pitch and
+ *  they_chased only fire while the pitch is owed, so a plain first reply no longer reaches them (the hook wins); they are
+ *  checked as the hook below, not as cases. */
+const HOOK_FIRST_RETIRED: readonly PlaybookIntent[] = ['straight_answer_then_pitch', 'they_chased'];
 const pm = (thread: MoveThreadMsg[], e: MoveEvidence = ev) => pickMove({ thread, suppressed: false, aiSentSinceWin: 0, evidence: e, nowMs: T0 + 60_000 });
 const draftOf = (thread: MoveThreadMsg[], e: MoveEvidence = ev) => {
   const plan = pm(thread, e);
@@ -37,8 +41,7 @@ const draftOf = (thread: MoveThreadMsg[], e: MoveEvidence = ev) => {
 const qCount = (s: string) => (s.replace(/"[^"\n]*"/g, '').match(/\?/g) ?? []).length;
 
 const CASES: Array<{ intent: PlaybookIntent; thread: MoveThreadMsg[]; evidence?: MoveEvidence; label: string }> = [
-  { intent: 'thinks_customer', label: '"Are you looking for driving lessons?"', thread: first('Yes it is. Are you looking for driving lessons? Andy.') },
-  { intent: 'straight_answer_then_pitch', label: '"What are you selling?"', thread: first('What are you selling?') },
+  { intent: 'thinks_customer', label: '"Are you looking for driving lessons?" (after the hook)', thread: later(them('Are you looking for driving lessons? Andy.')) },
   { intent: 'wrong_trade', label: '"we don\'t do locksmithing"', thread: later(them("Thank you , but we don't do locksmithing cheers")) },
   { intent: 'moved_area', label: '"I\'m not in Sowerby bridge anymore"', thread: later(them("Hi, I'm not in Sowerby bridge anymore. Sorry")) },
   { intent: 'closed_retired', label: '"No longer trading pal"', thread: first('No longer trading pal 👍') },
@@ -55,11 +58,11 @@ const CASES: Array<{ intent: PlaybookIntent; thread: MoveThreadMsg[]; evidence?:
   { intent: 'call_now', label: '"you free now?"', thread: later(them('You free now?')) },
   { intent: 'sorry_wrong_day', label: '"it\'s a Sunday mate"', thread: later(them("It's a Sunday mate have a day off")) },
   { intent: 'acknowledge_wait', label: '"Will ring later"', thread: later(them('Will ring later')) },
-  { intent: 'they_chased', label: '"just wanted to follow up" three days on', thread: [opener, them('Hello! Yes it is', -4320), them('Hellooo, just wanted to follow up', 0)] },
 ];
 
 console.log('1. every new intent: picked by code, a draft that passes the checker, Paul\'s rules');
-ok(new Set(CASES.map((c) => c.intent)).size === NEW_INTENTS.length && NEW_INTENTS.every((i) => !!PLAYBOOK[i]), `a case and a playbook line for each of the ${NEW_INTENTS.length} new intents`);
+const LIVE_INTENTS = NEW_INTENTS.filter((i) => !HOOK_FIRST_RETIRED.includes(i));
+ok(new Set(CASES.map((c) => c.intent)).size === LIVE_INTENTS.length && NEW_INTENTS.every((i) => !!PLAYBOOK[i]), `a case and a playbook line for each of the ${LIVE_INTENTS.length} reachable new intents`);
 const previews: string[] = [];
 for (const c of CASES) {
   const d = draftOf(c.thread, c.evidence);
@@ -78,9 +81,9 @@ for (const c of CASES) {
 
 console.log("2. Paul's wording (2026-10-21)");
 {
-  ok(draftOf(first('Are you looking for driving lessons?')).text === "Ha, sorry for the confusion, I'm not after lessons myself. I'm Paul from Findable. I checked how AI recommends driving instructors in Rugby. Ok if I send you what came back?",
-    'thinks_customer: Paul\'s line word for word ("lessons", trade + town from the lead)');
-  ok(/I'm not after a plumber myself\. .*recommends plumbers in Rugby/.test(draftOf(first('Do you need a plumber?'), plumber).text ?? ''), 'thinks_customer for another trade: "a plumber", "plumbers in Rugby"');
+  ok(draftOf(later(them('Are you looking for driving lessons?'))).text === "Ha, sorry for the confusion, I'm not after lessons myself. I'm Paul from Findable. I checked how ai recommends driving instructors in Rugby. Ok if I send you what came back?",
+    'thinks_customer (after the hook, so a follow-up: "ai"): Paul\'s line word for word ("lessons", trade + town from the lead)');
+  ok(/I'm not after a plumber myself\. .*recommends plumbers in Rugby/.test(draftOf(later(them('Do you need a plumber?')), plumber).text ?? ''), 'thinks_customer for another trade: "a plumber", "plumbers in Rugby"');
   ok(!Object.values(PLAYBOOK).some((x) => /not after anything from you/i.test(x.line)), 'never "I\'m not after anything from you"');
   ok(PLAYBOOK.ads_question.line.includes('ask AI') && !AI_BRAND.test(PLAYBOOK.ads_question.line), 'ads_question: "AI", no brands');
   ok(PLAYBOOK.sorry_wrong_day.line === "Fair enough, sorry for the message. I'll leave you in peace." && !/day\b/i.test(PLAYBOOK.sorry_wrong_day.line.replace('Fair', '')), 'sorry_wrong_day: Paul\'s line, no weekday');
@@ -95,13 +98,13 @@ console.log("2. Paul's wording (2026-10-21)");
   ok(!draftOf(later(them('have you got any examples?')), { ...ev, named: null }).text?.includes('report I did'), 'no search on record: never "the report I did for you"');
   ok(/regular checks/.test(PLAYBOOK.how_much.line) && !Object.values(PLAYBOOK).some((x) => /\bcheck/i.test(x.line) && /\bmonthly\b/i.test(x.line)), '"regular checks", never "monthly", in every line about checks');
   ok(!/\bfree\b/i.test(PLAYBOOK.new_site_being_built.line + NEW_SITE_CHECK_BACK), 'new_site_being_built never says "free"');
-  const sa = draftOf(first('What are you selling?')).text ?? '';
-  ok(sa.startsWith("Hi mate,\n\nFair question. I'm Paul from Findable, and yes, I offer a service. Here's why I got in touch:\n\nI asked AI \"Who is the best driving instructor in Rugby?\"") && sa.endsWith(PITCH_AGENCY_Q),
-    'straight_answer_then_pitch: "Hi mate," + the straight answer + the pitch + its one question');
-  ok((draftOf(first('Yes this is Dom, what are you selling?')).text ?? '').startsWith('Hi Dom,'), '…a name they gave opens it ("Hi Dom,")');
+  ok((draftOf(first('Yes this is Dom, what are you selling?')).text ?? '').startsWith('Hi Dom,\n\nI asked AI'), 'hook first: a name they gave opens the hook ("Hi Dom,")');
+  for (const t of ['What are you selling?', 'Are you looking for driving lessons?', 'Hellooo, just wanted to follow up']) {
+    const d = draftOf(first(t)).text ?? '';
+    ok(d.startsWith('Hi mate,\n\nI asked AI') && !/sorry|Fair question|not after/i.test(d), `hook first: "${t}" as the first reply → the hook as it stands`);
+  }
   const ch = draftOf([opener, them('Hello! Yes this is Dom', -4320), them('Hellooo, just wanted to follow up', 0)]).text ?? '';
-  ok(ch.startsWith('Hi Dom,\n\nSorry for the slow reply.\n\nI asked AI'), 'they_chased: the same greeting rule, then sorry, then the pitch');
-  ok((draftOf([opener, them('Hello! Yes it is', -4320), them('any update?', 0)]).text ?? '').startsWith('Hi mate,\n\nSorry for the slow reply.'), '…no name: "Hi mate,"');
+  ok(ch.startsWith('Hi Dom,\n\nI asked AI') && !/sorry/i.test(ch), 'hook first: they chased before the hook → the hook, no "sorry for the slow reply"');
   ok(pm(later(them('Yes', -50), them('??', 0))).needsYou?.reason === 'chased', 'chased after the pitch went: Needs you (answer their earlier message), no re-pitch');
   const site = pm(later(them('Thankyou we are In process of getting a new website built', -60), us(PLAYBOOK.new_site_being_built.line, -50), them('an agency is doing it', 0)));
   ok(site.intent === 'new_site_being_built' && site.guide === NEW_SITE_CHECK_BACK && site.followUp?.checkBackOn === '2026-11-18' && /Next Action/.test(site.note ?? ''), 'new site: after their answer, the 4-week check back, NOTED, never written');
@@ -128,9 +131,9 @@ for (const [label, t] of [['pay_on_results', 'show us what you can do FOC first'
 
 console.log('4. detection fixes (§5a)');
 for (const t of ['Why', 'Why??', 'What?', 'Is this an electrical call or a cold call for business?', 'Yep. Are you going to try and sell me a website?']) {
-  ok(pm(first(t)).intent === 'straight_answer_then_pitch', `B4: "${t}" → straight_answer_then_pitch`);
+  ok(pm(first(t)).move === 'first_reply_pitch' && !/Fair question/.test(pm(first(t)).fixedText ?? ''), `B4: "${t}" as the first reply → the hook as it stands`);
 }
-ok(pm(first("Yes, who's this please?")).intent === 'who_are_you', 'B4: "Yes, who\'s this please?" → who_are_you');
+ok(pm(later(them("Yes, who's this please?"))).intent === 'who_are_you' && pm(first("Yes, who's this please?")).move === 'first_reply_pitch', 'B4: "Yes, who\'s this please?" → who_are_you after the hook; the hook as the first reply');
 {
   const askTime = (q: string, a: string) => pm([opener, them('Yes it is', -400), pitchMsg, them('call me', -200), us(q, -100), them(a, 0)]);
   ok(askTime('Can we schedule a call tomorrow? what time works for you?', 'Yes 6').move === 'set_call', 'B6: "what time works for you?" → "Yes 6" is the time');

@@ -107,10 +107,10 @@ ok((pm([opener, ...said('Yes it is')], { ...ev, ownerName: 'Sarah Jones' }).fixe
 ok(nameFromReply('Yes this is Dom') === 'Dom' && nameFromReply('dom here') === 'Dom' && nameFromReply('Speaking') === null && nameFromReply('Yes it is') === null && nameFromReply('its me') === null && nameFromReply('Plumbing', 'ZZ Plumbing') === null, 'names are read only in clear forms; never "speaking", "me" or a business word');
 ok(pm([opener, ...said('No thanks')]).noDraft === true && pm([opener, ...said('stop')]).stop, 'a no → Needs you, no draft; a stop → the stop');
 ok(pm([opener, ...said('wrong number mate')]).move === 'close_politely' && !pm([opener, ...said('wrong number mate')]).noDraft, 'a wrong person → a short polite reply');
-ok(pm([opener, ...said('how much do you charge?')]).intent === 'how_much' && pm([opener, ...said('who is this?')]).intent === 'who_are_you', 'a direct question on the first reply → answered');
+ok(pm([opener, ...said('how much do you charge?')]).move === 'first_reply_pitch' && pm([opener, ...said('who is this?')]).move === 'first_reply_pitch', 'a direct question on the first reply → the hook (Paul, 2026-10-26)');
 ok(pm([opener, ...said("Yes, what's this about?")]).move === 'first_reply_pitch', '"what\'s this about?" → the pitch answers it');
 /* "Do you do Instagram ads?" is ads_question since 2026-10-21; a logo is still not on the sheet. */
-ok(pm([opener, ...said('Can you do my logo as well?')]).noDraft === true, 'a question the playbook cannot answer → Needs you, no draft');
+ok(pm([opener, ...said('Yes'), { from: 'us', text: 'Hi mate, I asked AI "x" and it mentioned A.' }, ...said('Can you do my logo as well?')]).noDraft === true, 'a question the playbook cannot answer (after the hook) → Needs you, no draft');
 {
   const self = pitchText(firstReplyPitch({ ...ev, competitors: ['ZZ Fixture Plumbing 90 Ltd', 'Rival A Plumbing'] }));
   ok(!/ZZ Fixture Plumbing 90 Ltd/.test(self) && /Rival A Plumbing/.test(self), 'a rival with (nearly) their own name is never listed');
@@ -164,7 +164,7 @@ for (const [label, e] of [['issues', ev], ['no website', noSiteEv], ['no audit',
   ok(!AI_BRAND.test(t), `the pitch (${label}) names no AI tool`);
 }
 ok(PITCH_SPECIALISE_LINE === 'I specialise in getting local businesses to show up in those results, so the customers go to you instead.', 'the confidence line is Paul\'s 2026-10-21 wording');
-ok(!AI_BRAND.test(PITCH_NO_SITE_LINE) && /tends to lean on websites/.test(PITCH_NO_SITE_LINE) && /couldn't find one for you/.test(PITCH_NO_SITE_LINE), 'the no-website line names no tool and says "tends to" (Option 2, 2026-10-23)');
+ok(!AI_BRAND.test(PITCH_NO_SITE_LINE) && /^Most local work comes from recommendations/.test(PITCH_NO_SITE_LINE) && /couldn't find one for you/.test(PITCH_NO_SITE_LINE), 'the no-website line names no tool (Paul\'s words, 2026-10-26)');
 {
   const t = pitchText(firstReplyPitch(ev));
   ok(t.includes('I asked AI "Who is the best plumber in Rugby?" and it mentioned Rival A Plumbing, Rival B Plumbing and Rival C Plumbing.'), 'first message: I asked AI "<question>" and it mentioned A, B and C');

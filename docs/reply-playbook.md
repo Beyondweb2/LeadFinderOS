@@ -13,9 +13,16 @@ sends** (Level 1): a person reads, edits and presses Approve & send.
 
 ## 1. The first reply to our opener
 
-Always the main pitch, unless they say no / stop / angry (the existing stop and opt-out), a wrong person (a short polite
-reply, Needs you), or ask a direct question (answered with the matching line below). "Yes", "that's correct", "how can
-I help", a name only, "hello?", "what's this about?", even "interested" all get the pitch.
+**Hook first (Paul, 2026-10-26).** While the pitch is owed, every first reply gets the hook below AS IT STANDS, unless it is
+a no / soft no (the existing handling, unchanged), a stop / angry, a wrong person / wrong trade / moved area, another
+language, a new site on the way, a website they sent when we have none on record, "is this a bot?" (always answered
+honestly), a fact question the sheet marks for Paul, legal / complaint / payment, media, a sticker / reaction, a chatbot
+or an auto-reply (their own rules). "Yes", "how can I help", "are you looking for manual lessons?", "manual or
+automatic?", "yes who's this?", "what are you selling?", a price question, even "interested" all get the hook. No
+apology, no "I'm not after lessons", no straight answer, no "sorry for the slow reply" on the first reply
+(`replyMove.ts` `keepsOwnFirstReply`). Those lines still apply after the hook has gone. The report link line
+("Here's the full report: <link>") comes before the one question; never for Australia; a draft with any link is never
+auto-sent (`aiAutoSend.ts` `has_link`). Tests: `scripts/hook-first-replies.test.ts`.
 
 ```
 Hi Dom, / Hi mate,
@@ -26,12 +33,12 @@ I specialise in getting local businesses to show up in those results, so the cus
 Are you with an agency, or do you manage the website yourself?
 ```
 
-No website (Paul, 2026-10-23, Option 2):
+No website (Paul, 2026-10-26, word for word; never "well-built" or "more important than ever", no stats):
 ```
 Hi mate,
 I asked AI "<the worst engine's missed question>" and it mentioned A, B and C.
 AI is recommending your competitors instead.
-AI tends to lean on websites when it names businesses, and I couldn't find one for you. Without a well-built one, it tends to name businesses that have one instead.
+Most local work comes from recommendations, and now AI is the one recommending. It leans on websites when it picks who to name, and I couldn't find one for you. Without one built for AI, you're hard to recommend.
 I specialise in getting local businesses to show up in those results, so the customers go to you instead.
 Do you have a website I've missed, or is that something you'd want sorted?
 ```
