@@ -101,7 +101,7 @@ import type { ScheduledSendRow } from '@/lib/inboxSendWindow';
 import { useAiReplyDrafts } from '@/hooks/useAiReplyDrafts';
 import { needsApproving, needsYou, rowSendable, type AiReplyRow } from '@/lib/aiReplyDraft';
 import { isHookDraft, signHook } from '@/lib/hookSignature';
-import { useMyMessageName } from '@/hooks/useMyMessageName';
+import { useMyMessageName, useMyMessageNameStatus } from '@/hooks/useMyMessageName';
 import { OPEN_MESSAGE_NAME_EVENT } from '@/components/MessageNameDialog';
 import { useInboxScheduled, INBOX_SCHEDULED_KEY } from '@/hooks/useInboxScheduled';
 import { ReplyHoursDialog, ReplyWindowChip, ScheduledSendBubble } from '@/components/InboxSendWindow';
@@ -1057,6 +1057,7 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
   /* THE HOOK IS SIGNED (src/lib/hookSignature.ts): a hook draft shows, and sends, with the viewer's own chosen name on its last
      line — the person approving is the sender. No name chosen: Approve opens the name box instead of sending. */
   const myMessageName = useMyMessageName().data ?? null;
+  const myNameWaiting = useMyMessageNameStatus().data?.waiting ?? null;
   const activeAiIsHook = isHookDraft(rawActiveAi?.why ?? null);
   const activeAi = useMemo(() => (rawActiveAi && activeAiIsHook && myMessageName && rawActiveAi.draft_text
     ? { ...rawActiveAi, draft_text: signHook(rawActiveAi.draft_text, myMessageName) } : rawActiveAi), [rawActiveAi, activeAiIsHook, myMessageName]);
@@ -1085,6 +1086,10 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
     if (!active || !activeAi || aiBusy) return;
     const sendKey = active.key;
     if (sendingKeysRef.current.has(sendKey)) return;
+    if (activeAiIsHook && !myMessageName && myNameWaiting) {
+      toast({ title: 'Your name is waiting for approval', description: `Paul approves "${myNameWaiting}" before it goes on your messages. Until then, send this one yourself or ask Paul.` });
+      return;
+    }
     if (activeAiIsHook && !myMessageName) {
       toast({ title: 'Add your name first', description: 'The first message to a business ends with your name.' });
       window.dispatchEvent(new Event(OPEN_MESSAGE_NAME_EVENT));

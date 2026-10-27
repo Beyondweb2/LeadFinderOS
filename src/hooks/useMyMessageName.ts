@@ -10,6 +10,22 @@ const sb = supabase as any;
 
 export const MY_MESSAGE_NAME_KEY = ['my-message-name'] as const;
 
+/** The approved name and any name still waiting for Paul's approval (migration 20261128100000). */
+export function useMyMessageNameStatus() {
+  const { user } = useAuth();
+  const uid = user?.id ?? null;
+  return useQuery({
+    queryKey: [...MY_MESSAGE_NAME_KEY, 'status', uid],
+    enabled: !!uid,
+    staleTime: 60_000,
+    queryFn: async (): Promise<{ name: string | null; waiting: string | null }> => {
+      const { data, error } = await sb.from('profiles').select('message_name, message_name_pending').eq('user_id', uid).maybeSingle();
+      if (error) throw new Error(error.message);
+      return { name: hookSignatureName((data?.message_name as string | null) ?? null), waiting: hookSignatureName((data?.message_name_pending as string | null) ?? null) };
+    },
+  });
+}
+
 export function useMyMessageName() {
   const { user } = useAuth();
   const uid = user?.id ?? null;

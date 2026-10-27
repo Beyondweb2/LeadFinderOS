@@ -68,6 +68,20 @@ Branch `feat/team-access-tidy`. Rules live in `src/lib/teamAccounts.ts`; the cre
 - "Onboarding must not show for team members": a salesperson sees only `NotReadyToSellBanner` for a genuine account restriction
   (no role, login, suspended, ended) — never the checklist (Paul's Team-page record; a Trial member's is hidden there too).
 
+### 4a. Paul approves a salesperson's name (2026-10-27, migration 20261128100000)
+
+- `profiles.message_name` stays THE name every sender signs with; it changes only when an admin approves. A salesperson's
+  typed name waits in `message_name_pending` (+ `_pending_at`, same CHECK). ⛔ Enforced by trigger
+  `trg_profiles_message_name_approval`: a signed-in non-admin's write to `message_name` (an old cached app, a hand-made request)
+  is moved into the waiting slot and the approved name kept. The service role and admins write as before.
+- Team page → *Message names waiting for your approval* (`MessageNameApprovals`, only while something waits): Approve / Reject
+  → `review_message_name(_user_id, _approve)` (admin only, anon revoked).
+- A person whose ONLY name is still waiting has no name: `senderMessageName` returns '' (not the email fallback), so a send that
+  needs `{{sender_name}}` refuses; the hook signature (`senderChosenName`, `useMyMessageName`) reads the approved name only;
+  the Inbox says "Your name is waiting for approval".
+- Names already set on 2026-10-27 stayed approved (in use). Tests: `scripts/message-name-approval.test.ts`,
+  `supabase/tests/message-name-approval.sql` (11 checks, rolled back; 11/11 on the live schema).
+
 ## 5. ai_visibility_report_offer (2026-10-14)
 
 Marketing, English, submitted to Meta 2026-10-14 and wired in as approved. Rules: `src/lib/reportOfferTemplate.ts`.
