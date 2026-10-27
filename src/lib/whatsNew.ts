@@ -30,6 +30,14 @@ export const WHATS_NEW: readonly WhatsNewEntry[] = [
       removed: [],
       effect: 'Nobody can sign messages with someone else\'s name. Paul\'s own name changes straight away, as before.',
     } },
+  { id: '2026-10-27-google-ai-score-labels', date: '2026-10-27', title: 'Google AI labels say plainly when it is in the score and when it is left out', audience: 'admin',
+    body: 'When Google showed no AI answer for a search, the call card and the prospect audit now say it is left out of the score, never "in score" and never a miss.',
+    report: {
+      added: [],
+      changed: ['The Google AI line on the call card says "in score" only for a search where Google showed an AI answer, "left out of the score" where it showed none, and "not in score" on older audits.', 'The Google AI tile on the prospect audit says the same, instead of "In the score" when every search showed none.'],
+      removed: [],
+      effect: 'About one search in four has no Google AI answer. The labels now match how the score already worked: those searches are left out, not counted against the business.',
+    } },
   { id: '2026-10-27-multi-user-safety', date: '2026-10-27', title: 'Find Leads says who added a business, and never lets two people add it', audience: 'all',
     body: 'In Find Leads, a business already in the CRM now shows "Added by <name>" instead of Add to CRM — also when it matches by name or website, not only by Google listing or phone. It cannot be ticked for a bulk add. Outreach rows show "Added by <name>" under the business name.',
     report: {
