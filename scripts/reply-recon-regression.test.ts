@@ -8,7 +8,7 @@
    The expected values are Claude's (the recon). Where this session disagrees, OVERRIDES says why; the code is not bent to them.
    Pure: no model, no DB. `--preview` prints the draft for every case. */
 import { readFileSync } from 'node:fs';
-import { pickMove, PITCH_SITE_Q, type MoveEvidence, type MoveThreadMsg, type MovePlan } from '../src/lib/replyMove.ts';
+import { pickMove, HOOK_VOICE_NOTE_Q, type MoveEvidence, type MoveThreadMsg, type MovePlan } from '../src/lib/replyMove.ts';
 import { FINDABLE_SITE_LINE, NEEDS_YOU_INTENTS, NEW_INTENTS, type PlaybookIntent } from '../src/lib/replyPlaybook.ts';
 import { aiReplyDecision, checkAiReply, fallbackAiReply, AI_BRAND, type AiReplyContext } from '../src/lib/aiReplyDraft.ts';
 import { SHEET_MONEY } from '../src/lib/offerFactSheet.ts';
@@ -162,7 +162,7 @@ for (const c of CASES) {
     const im = intentMatches(exp, plan);
     if (im) intentRight++;
     ok(im, `${c.id} intent: expected ${exp}, got ${plan.intent ?? plan.read}`);
-    if (exp === 'PITCH-SITE') ok(plan.question === PITCH_SITE_Q, `${c.id}: no website on record → the website question`);
+    if (exp === 'PITCH-SITE') ok(plan.question === HOOK_VOICE_NOTE_Q && !/website/i.test(plan.fixedText ?? ''), `${c.id}: no website on record → the voice-note hook, never "website" (2026-10-27)`);
   }
   if (!plan.stop && !plan.noDraft && route !== 'client' && route !== 'auto') {
     const ctx: AiReplyContext = { businessName: evidence.businessName, latestInbound: latest.text, thread: thread.map((m) => ({ from: m.from, text: m.text })), plan, evidence };

@@ -2,7 +2,7 @@
    Real cases (prospect words as they came in; rivals anonymised): Green Driver (Gosport, site found) "Hiya, yes. Are you
    looking for manual driving lessons?"; A Wild Driving School (Corby, no website); a plumber with a site and real findings;
    an Australian lead; a plain "no thanks". Run: npx tsx scripts/hook-first-replies.test.ts */
-import { pickMove, PITCH_NO_SITE_LINE, PITCH_SITE_Q, PITCH_AGENCY_Q, PITCH_SPECIALISE_LINE, PITCH_INSTEAD_LINE, type MoveEvidence, type MoveThreadMsg, type MovePlan } from '../src/lib/replyMove.ts';
+import { pickMove, HOOK_VOICE_NOTE_Q, type MoveEvidence, type MoveThreadMsg, type MovePlan } from '../src/lib/replyMove.ts';
 import { checkAiReply, aiReplyDecision, type AiReplyContext } from '../src/lib/aiReplyDraft.ts';
 import { autoSendVerdict, draftFactsFromPlan, theirMessagesSinceUs, threadHardReason, AUTO_SEND_CHOICES, type AutoSendFacts } from '../src/lib/aiAutoSend.ts';
 
@@ -42,9 +42,9 @@ console.log('1. Green Driver: "are you looking for manual lessons?" → the hook
   const p = pm(greenDriver, them(said));
   const t = p.fixedText ?? '';
   ok(p.move === 'first_reply_pitch', `the hook (got ${p.move} / ${p.intent ?? ''})`);
-  ok(t.startsWith('Hi mate,\n\nI asked google ai "Who is the best driving instructor in Gosport?" and it mentioned Rival A Driving, Rival B Driving and Rival C Driving.'), 'opens "Hi mate," then the question and the real names');
-  ok(t.includes(PITCH_INSTEAD_LINE) && t.includes(PITCH_SPECIALISE_LINE), 'the instead line and the specialise line');
-  ok(t.includes(`Here's the full report: ${REPORT}\n\n${PITCH_AGENCY_Q}`) && t.endsWith(PITCH_AGENCY_Q), 'the report link, then ONE question: the agency question');
+  ok(t.startsWith('Hi mate,\n\nI asked googleAI "Who is the best driving instructor in Gosport?" and it named Rival A Driving, Rival B Driving and Rival C Driving, not you.'), 'opens "Hi mate," then the question and the real names');
+  ok(!/recommending your competitors|specialise|agency|website/i.test(t), 'none of the old long lines (2026-10-27)');
+  ok(t.endsWith(`Here's the full result: ${REPORT}\n\n${HOOK_VOICE_NOTE_Q}`), 'the report link, then ONE question: the voice note');
   ok(!NO_EXPLAINING.test(t), 'no apology, no "not after lessons", no explaining');
   ok(!/•/.test(t), 'a clean site: no bullets, nothing invented');
   ok(checkAiReply(t, ctx(p, greenDriver, said)).length === 0, `the checker has nothing to say (${checkAiReply(t, ctx(p, greenDriver, said)).join(' | ')})`);
@@ -56,14 +56,14 @@ console.log('1. Green Driver: "are you looking for manual lessons?" → the hook
   ok(chased.move === 'first_reply_pitch' && !/sorry/i.test(chased.fixedText ?? ''), 'they chased before the hook → the hook, no "sorry for the slow reply"');
 }
 
-console.log('2. Corby, no website → Paul\'s paragraph, word for word');
+console.log('2. Corby, no website → the short shape, never the word "website"');
 {
   const p = pm(corby, them('Yes it is'));
   const t = p.fixedText ?? '';
-  ok(t.includes("Most local work comes from recommendations, and now AI is the one recommending. It leans on websites when it picks who to name, and I couldn't find one for you. Without one built for AI, you're hard to recommend."), 'the no-website paragraph, word for word');
-  ok(t.endsWith(`Here's the full report: ${REPORT}\n\n${PITCH_SITE_Q}`) && PITCH_SITE_Q === "Do you have a website I've missed, or is that something you'd want sorted?", 'the report, then "Do you have a website I\'ve missed, or is that something you\'d want sorted?"');
+  ok(t === `Hi mate,\n\nI asked googleAI "Who is the best driving instructor in Corby?" and it named Rival A Driving, Rival B Driving and Rival C Driving, not you.\n\nHere's the full result: ${REPORT}\n\n${HOOK_VOICE_NOTE_Q}`, 'Paul\'s no-website shape, exactly');
+  ok(!/website|Without one built/i.test(t), 'no mention of "website"');
   ok(!/well[\s-]built|more important than ever|\d+\s*%/i.test(t) && !/•/.test(t), 'never "well-built", "more important than ever" or a stat; no bullets');
-  ok(PITCH_NO_SITE_LINE.length > 0 && checkAiReply('Without a well-built one you lose out.', ctx(p, corby, 'Yes it is')).some((w) => /well-built/.test(w)), 'the checker warns on "well-built"');
+  ok(checkAiReply('Without a well-built one you lose out.', ctx(p, corby, 'Yes it is')).some((w) => /well-built/.test(w)), 'the checker warns on "well-built"');
 }
 
 console.log('3. a plumber with a site and real findings → only those findings');
@@ -71,7 +71,7 @@ console.log('3. a plumber with a site and real findings → only those findings'
   const p = pm(plumber, them('Yes, how can I help?'));
   const t = p.fixedText ?? '';
   ok(/• There is no phone number on the site\n• There is no page for Rugby/.test(t), 'the two real findings as bullets');
-  ok(t.endsWith(`Here's the full report: ${REPORT}\n\n${PITCH_AGENCY_Q}`), 'the report, then the agency question');
+  ok(t.includes('I had a look at your site and a couple of things could be holding you back:\n•') && t.endsWith(`Here's the full result: ${REPORT}\n\n${HOOK_VOICE_NOTE_Q}`), 'the site lead-in, the report, then the voice note');
   ok(checkAiReply(t, ctx(p, plumber, 'Yes, how can I help?')).length === 0, 'the checker has nothing to say');
 }
 
@@ -119,7 +119,7 @@ console.log('7. the report link is approve-to-send only');
   };
   const v = autoSendVerdict(facts);
   ok(!v.send && v.reason === 'has_link', `a hook with the report link never sends itself, every switch on (${v.send ? 'SENT' : v.reason})`);
-  const noLink = autoSendVerdict({ ...facts, draft: { ...facts.draft, text: (plan.fixedText ?? '').replace(/\n\nHere's the full report: \S+/, '') } });
+  const noLink = autoSendVerdict({ ...facts, draft: { ...facts.draft, text: (plan.fixedText ?? '').replace(/\n\nHere's the full result: \S+/, '') } });
   ok(noLink.send === true, `positive control: the same hook without a link may send (${noLink.send ? 'send' : noLink.reason})`);
 }
 

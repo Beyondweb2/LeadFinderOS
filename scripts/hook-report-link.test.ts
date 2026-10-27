@@ -1,7 +1,7 @@
 /* THE HOOK CARRIES THE LEAD'S REPORT LINK (Paul, 2026-10-23; docs/reply-playbook.md §5f). The first-reply pitch keeps every word;
-   when the lead's audit is finished one short line "Here's the full report: <link>" goes before the final question. Not finished:
+   when the lead's audit is finished one short line "Here's the full result: <link>" goes before the final question. Not finished:
    no link, the draft is flagged audit pending. Pure: no model, no DB. */
-import { pickMove, firstReplyPitch, pitchText, PITCH_REPORT_LEAD, type MoveEvidence, type MoveThreadMsg } from '../src/lib/replyMove.ts';
+import { pickMove, firstReplyPitch, pitchText, HOOK_RESULT_LEAD, type MoveEvidence, type MoveThreadMsg } from '../src/lib/replyMove.ts';
 import { checkAiReply, type AiReplyContext } from '../src/lib/aiReplyDraft.ts';
 
 let f = 0;
@@ -22,7 +22,7 @@ console.log('1. finished audit: the hook is unchanged plus one link line before 
   const withLink = firstReplyPitch({ ...E, reportUrl: URL });
   ok(withLink.question === base.question && withLink.structure === base.structure, 'same question and structure');
   ok(JSON.stringify(withLink.lines.slice(0, -1)) === JSON.stringify(base.lines), 'every existing line identical, in order');
-  ok(withLink.lines[withLink.lines.length - 1] === `${PITCH_REPORT_LEAD} ${URL}`, 'one link line, last before the question');
+  ok(withLink.lines[withLink.lines.length - 1] === `${HOOK_RESULT_LEAD} ${URL}`, 'one link line, last before the question');
   const t = pitchText(withLink);
   ok(t.endsWith(base.question) && (t.match(/https?:\/\//g) ?? []).length === 1, 'the question stays last; exactly one link');
   const p = pm({ ...E, reportUrl: URL });

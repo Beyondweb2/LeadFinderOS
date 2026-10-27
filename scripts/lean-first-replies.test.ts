@@ -18,7 +18,9 @@ const QD: MoveEvidence = { businessName: 'QuickDrive School of Motoring', trade:
   competitors: ['MA Driving School', 'Strive2Drive Driving Academy', 'Madinah Driving School'], hookAlreadySent: false, findings: [], hasWebsite: false,
   ownerName: null, foundOnGoogle: true, site: { state: 'no_website', issues: [] } };
 const opener: MoveThreadMsg = { from: 'us', text: '[initial_contact_short]', templateName: 'initial_contact_short' };
-const pitch: MoveThreadMsg = { from: 'us', text: pitchText(firstReplyPitch(QD)) };
+/* The no-website pitch as it was SENT before 2026-10-27 (it said we couldn't find a website): the site-shared reply still follows it. */
+const pitch: MoveThreadMsg = { from: 'us', text: "Hi mate,\n\nI asked AI \"Who are the best driving instructors in Rotherham?\" and it mentioned MA Driving School, Strive2Drive Driving Academy and Madinah Driving School.\n\nMost local work comes from recommendations, and now AI is the one recommending. It leans on websites when it picks who to name, and I couldn't find one for you. Without one built for AI, you're hard to recommend.\n\nDo you have a website I've missed, or is that something you'd want sorted?" };
+const newHook: MoveThreadMsg = { from: 'us', text: pitchText(firstReplyPitch(QD)) };
 const shared: MoveThreadMsg[] = [
   { from: 'them', text: 'https://quickdriveacademy.co.uk/' },
   { from: 'them', text: 'Quick Drive School of Motoring\nhttps://g.page/r/CVfIJVCWlYOPEBM/review' },
@@ -32,8 +34,10 @@ console.log('1. the no-website pitch Quick Drive would get today');
 {
   const p = firstReplyPitch(QD);
   const t = pitchText(p);
-  ok(t.includes("Most local work comes from recommendations, and now AI is the one recommending. It leans on websites when it picks who to name, and I couldn't find one for you. Without one built for AI, you're hard to recommend.") && !/Gemini|Google AI/.test(t), 'Paul\'s no-website words (2026-10-26), no brand');
-  ok(p.question === "Do you have a website I've missed, or is that something you'd want sorted?" && p.structure === 'pitch_no_site', 'the one question, structure pitch_no_site');
+  ok(!/website|Most local work|Without one built/i.test(t) && !/Gemini|Google AI/.test(t), 'the no-website hook never says "website" (2026-10-27), no other brand');
+  ok(p.question === 'Can I send you a quick voice note explaining how you could get AI recommending you?' && p.structure === 'pitch_no_site', 'the voice-note question, structure pitch_no_site');
+  /* The new hook never says we could not find a site, so a site they send after it is the ordinary website-given answer. */
+  ok(pm([opener, { from: 'them', text: 'Yes' }, newHook, ...shared.slice(0, 1)], QD).intent === 'website_given', 'a site sent after the NEW hook → website_given (run Crawl site)');
 }
 
 console.log('2. site shared (Paul, 2026-10-23)');

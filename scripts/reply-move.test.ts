@@ -3,7 +3,7 @@
    pickMove and checks the hand-over decision; pins the loop guards, the capitals and the safeguards. Pure: no model, no DB. */
 import { readFileSync } from 'node:fs';
 import { pitchIssueLines } from '../src/lib/pitchIssueWords.ts';
-import { pickMove, tidyCaps, auditLine, inboundLabel, firstReplyPitch, autoReplyFlags, isAutoReply, PITCH_AGENCY_Q, PITCH_SPECIALISE_LINE, PITCH_INSTEAD_LINE, PITCH_LIST_LEAD, pitchText, PITCH_SITE_Q, PITCH_VOICE_Q, PITCH_NO_SITE_LINE, PITCH_SELF_MANAGED_REPLY, BOT_ANSWER, type MoveEvidence, type MoveThreadMsg } from '../src/lib/replyMove.ts';
+import { pickMove, tidyCaps, auditLine, inboundLabel, firstReplyPitch, autoReplyFlags, isAutoReply, PITCH_AGENCY_Q, HOOK_VOICE_NOTE_Q, hookSiteLead, pitchText, PITCH_SITE_Q, PITCH_VOICE_Q, PITCH_SELF_MANAGED_REPLY, BOT_ANSWER, type MoveEvidence, type MoveThreadMsg } from '../src/lib/replyMove.ts';
 import { CONFIDENCE_LINE, GUARANTEE_LINE } from '../src/lib/offerFactSheet.ts';
 import { checkAiReply, fallbackAiReply, type AiReplyContext } from '../src/lib/aiReplyDraft.ts';
 import { conversationEngine, draftNames } from '../src/lib/draftEvidence.ts';
@@ -91,7 +91,7 @@ ok(tidyCaps('see findable.live or email paul@findable.live. call 07700 900123') 
 ok(tidyCaps('https://findable.live/r/abc is yours') === 'https://findable.live/r/abc is yours', 'a link at the start stays as it is');
 ok(tidyCaps("i've got it, i'd say so") === "I've got it, I'd say so", "I've / I'd");
 
-console.log('6. the first-reply pitch (Paul, 2026-10-20 wording A; lean, 2026-10-23)');
+console.log('6. the first-reply hook (Paul, 2026-10-27: the voice-note hook)');
 {
   const PITCH_LINES = ["Your main pages don't say clearly what you do", "Your site isn't secure (no padlock)", "There's no phone number on your site", 'Some links on your site are broken', 'A fifth issue'];
   const issuesEv: MoveEvidence = { ...ev, site: { state: 'issues', issues: ['Some pages have no main heading', 'Your site is not secure (no padlock)', 'There is no phone number on the site', 'Linked pages that return an error', 'A fifth issue'], pitch: PITCH_LINES } };
@@ -99,70 +99,65 @@ console.log('6. the first-reply pitch (Paul, 2026-10-20 wording A; lean, 2026-10
   const p1 = firstReplyPitch(issuesEv);
   const txt = p1.lines.join(' ');
   const qOutsideQuotes = (s: string) => (s.replace(/"[^"\n]*"/g, '').match(/\?/g) ?? []).length;
-  ok(p1.lines[1] === 'I asked AI for a plumber in Rugby and it mentioned Rival A Plumbing and Rival B Plumbing.', 'line 1: I asked AI <search> and it mentioned <rivals>');
-  ok(p1.lines[2] === `${PITCH_INSTEAD_LINE} ${PITCH_LIST_LEAD}\n${PITCH_LINES.slice(0, 4).map((l) => '• ' + l).join('\n')}` && !/fifth/.test(txt), 'line 2: "instead", then up to FOUR real issues, one "• " line each (Paul, 2026-10-23)');
-  ok(p1.lines[3] === PITCH_SPECIALISE_LINE && p1.lines.length === 4 && p1.question === PITCH_AGENCY_Q && p1.closer === 'agency' && p1.structure === 'pitch_list', 'then "I specialise…", then the agency question; structure pitch_list');
-  ok(!/voice note|either way/i.test(txt + p1.question), 'no voice-note line in the first pitch (Paul, 2026-10-23): it comes in the next message');
-  ok(!/anyone asking ai|pointed to|would you rather/i.test(txt + p1.question), 'no "Anyone asking AI…" line, no "Would you rather…" question');
-  ok(!/guarantee|money back|£|confident|refund|promise/i.test(txt + p1.question), 'no guarantee, money back, price or promise in the pitch');
-  ok(!/main heading|meta description|description for google|robots|schema|sitemap|canonical/i.test(pitchText(p1)), 'no jargon in the pitch');
+  ok(p1.lines[1] === 'I asked AI for a plumber in Rugby and it named Rival A Plumbing and Rival B Plumbing.', 'line 1: I asked AI <search> and it named <rivals> (no missed search on record: no "not you")');
+  ok(p1.lines[2] === `${hookSiteLead(4)}\n${PITCH_LINES.slice(0, 4).map((l) => '• ' + l).join('\n')}` && !/fifth/.test(txt), 'line 2: the site lead-in, then up to FOUR real issues, one "• " line each');
+  ok(p1.lines.length === 3 && p1.question === HOOK_VOICE_NOTE_Q && p1.closer === 'voice_note' && p1.structure === 'pitch_list', 'then the voice-note question; structure pitch_list');
+  ok(!/specialise|recommending your competitors|agency|Without one built/i.test(txt + p1.question), 'none of the old long lines');
+  ok(!/guarantee|money back|£|confident|refund|promise/i.test(txt + p1.question), 'no guarantee, money back, price or promise in the hook');
+  ok(!/main heading|meta description|description for google|robots|schema|sitemap|canonical/i.test(pitchText(p1)), 'no jargon in the hook');
   const text = pitchText(p1);
-  ok(qOutsideQuotes(text) === 1 && text.endsWith(PITCH_AGENCY_Q) && text.split('\n\n').length === 5 && text.startsWith('Hi mate,\n\n'), 'one message: "Hi mate," then four paragraphs, the agency question the ONLY question, last');
+  ok(qOutsideQuotes(text) === 1 && text.endsWith(HOOK_VOICE_NOTE_Q) && text.startsWith('Hi mate,\n\n'), 'one message: "Hi mate," first, the voice-note question the ONLY question, last');
   const one = firstReplyPitch({ ...issuesEv, site: { state: 'issues', issues: ['x'], pitch: ['Your business name is written different ways across your site'] } });
-  ok(one.lines[2] === `${PITCH_INSTEAD_LINE} I looked into why and found your business name is written different ways across your site.` && one.structure === 'pitch_sentence', 'one real issue: one sentence, no list');
+  ok(one.lines[2] === 'I had a look at your site and one thing could be holding you back:\n• Your business name is written different ways across your site' && one.structure === 'pitch_list', 'one real issue: one bullet');
   const town = firstReplyPitch({ ...issuesEv, site: { state: 'issues', issues: ['x', 'y'], pitch: ["Your site doesn't mention Sunbury", "Your site doesn't say which areas you cover"] } });
-  ok(town.lines[2].includes("• Your site doesn't mention Sunbury"), 'a town keeps its capital ("Sunbury", never "sunbury")');
+  ok(town.lines[2].includes("• Your site doesn't mention Sunbury") && town.lines[2].startsWith('I had a look at your site and a couple of things'), 'a town keeps its capital; two issues → "a couple of things"');
   /* The length rule: past PITCH_MAX_WORDS the lowest issue goes, never below two. */
-  const long = 'Your site mentions being accredited but doesn\'t say who by, and several other quite long words go here too';
+  const long = 'Your site mentions being accredited but doesn\'t say who by, and several other quite long words go here too and then a few more';
   const longP = firstReplyPitch({ ...issuesEv, site: { state: 'issues', issues: ['a', 'b', 'c', 'd'], pitch: [long, long + ' 2', long + ' 3', long + ' 4'] } });
   const bullets = (longP.lines[2].match(/^• /gm) ?? []).length;
-  ok(bullets === 2, `the length rule: four long issues past 100 words → cut to the floor of two (got ${bullets})`);
+  ok(bullets >= 2 && bullets < 4, `the length rule: four very long issues → cut, never below two (got ${bullets})`);
   const caps = firstReplyPitch({ ...issuesEv, trade: 'Driving instructors' });
   ok(caps.lines[1].startsWith('I asked AI for a driving instructor in Rugby'), 'a capitalised stored trade is said lower case ("a driving instructor")');
   const none = firstReplyPitch(noSiteEv);
-  ok(none.lines[2] === PITCH_INSTEAD_LINE && none.lines[3] === PITCH_NO_SITE_LINE && none.lines[4] === PITCH_SPECIALISE_LINE && none.question === PITCH_SITE_Q && none.closer === 'site' && none.structure === 'pitch_no_site' && !/agency/i.test(none.lines.join(' ') + none.question), 'no website: "instead", then Paul\'s two no-site sentences, then "a website I\'ve missed, or …sorted?", never the agency question');
-  ok(PITCH_NO_SITE_LINE === "Most local work comes from recommendations, and now AI is the one recommending. It leans on websites when it picks who to name, and I couldn't find one for you. Without one built for AI, you're hard to recommend." && !/well[\s-]built|more important than ever/i.test(PITCH_NO_SITE_LINE), 'the no-site words are Paul\'s, word for word (2026-10-26); never "well-built" or "more important than ever"');
+  ok(none.lines.length === 2 && none.question === HOOK_VOICE_NOTE_Q && none.closer === 'voice_note' && none.structure === 'pitch_no_site' && !/website|agency/i.test(none.lines.join(' ') + none.question), 'no website: the short shape, never "website", never the agency question');
   for (const state of ['clean', 'not_checked', 'unreadable'] as const) {
     const c = firstReplyPitch({ ...ev, site: { state, issues: [] } });
-    ok(c.lines[2] === PITCH_INSTEAD_LINE && !/looked into why/.test(c.lines.join(' ')) && c.lines[3] === PITCH_SPECIALISE_LINE && c.structure === 'pitch_plain', `${state}: "instead" alone, no "looked into why"`);
+    ok(c.lines.length === 2 && !/•|had a look|website|couldn'?t find/i.test(c.lines.join(' ')) && c.structure === 'pitch_plain', `${state}: the no-website shape, no bullets, never a claim the site is missing`);
   }
   const above = firstReplyPitch({ ...issuesEv, named: { named: 3, valid: 6 } });
-  ok(!/instead|not you|3 of 6|gap in the rest/.test(above.lines.slice(1, 3).join(' ')) && above.lines[2].startsWith(PITCH_LIST_LEAD) && above.lines[3] === PITCH_SPECIALISE_LINE && above.question === PITCH_AGENCY_Q, 'the soft version (more than a third): the same shape without "AI is recommending your competitors instead"');
+  ok(!/instead|not you|3 of 6|gap in the rest/.test(above.lines.slice(1, 3).join(' ')) && above.lines[2].startsWith(hookSiteLead(4)) && above.question === HOOK_VOICE_NOTE_Q, 'more than a third, no missed search: the same shape, no "not you"');
   {
     const softEv: MoveEvidence = { ...issuesEv, named: { named: 3, valid: 6 } };
     const softCtx: AiReplyContext = { businessName: ev.businessName, latestInbound: 'Yes it is', thread: [], plan: pm([opener, { from: 'them', text: 'Yes it is' }], { evidence: softEv }), evidence: softEv };
     const sw = checkAiReply(fallbackAiReply(softCtx), softCtx);
-    ok(sw.length === 0, `the soft version passes the checker: "…come to you instead" is what we do, not an audit claim${sw.length ? ' — ' + sw.join(' | ') : ''}`);
+    ok(sw.length === 0, `the soft version passes the checker${sw.length ? ' — ' + sw.join(' | ') : ''}`);
     ok(checkAiReply('AI is recommending your competitors instead.', softCtx).some((x) => /more than a third/.test(x)), 'the soft version saying "AI is recommending your competitors instead" → still a warning');
   }
-  /* The greeting: a name the site's own crawl states as owner / founder, first name only. Never the business name. */
-  const named = firstReplyPitch({ ...issuesEv, ownerName: 'Kylie' });
-  ok(named.lines[0] === 'Hi Kylie,' && named.lines[1].startsWith('I asked AI'), 'a stated owner → "Hi Kylie," on its own line first');
-  ok(p1.lines[0] === 'Hi mate,' && firstReplyPitch({ ...issuesEv, ownerName: '' }).lines[0] === 'Hi mate,', 'no name found → "Hi mate," (Paul, 2026-10-21; never from the business name)');
-  ok(firstReplyPitch({ ...issuesEv, ownerName: 'the' }).lines[0] === 'Hi mate,' && firstReplyPitch({ ...issuesEv, ownerName: 'kylie' }).lines[0] === 'Hi mate,', 'not a capitalised first name → "Hi mate,"');
+  /* ⛔ The hook always opens "Hi mate," (Paul, 2026-10-27), even when the site states an owner. */
+  ok(firstReplyPitch({ ...issuesEv, ownerName: 'Kylie' }).lines[0] === 'Hi mate,' && p1.lines[0] === 'Hi mate,', 'always "Hi mate,", a stated owner included');
   const ctx: AiReplyContext = { businessName: ev.businessName, latestInbound: 'Yes it is', thread: [], plan: pm([opener, { from: 'them', text: 'Yes it is' }], { evidence: { ...issuesEv, ownerName: 'Kylie' } }), evidence: { ...issuesEv, ownerName: 'Kylie' } };
   const d = fallbackAiReply(ctx);
   const warn = checkAiReply(d, ctx);
-  ok(d.startsWith('Hi Kylie,\n\nI asked AI') && qOutsideQuotes(d) === 1 && warn.length === 0, `the pitch draft: greeting, one question, the bullet list, no checker warning${warn.length ? ' — ' + warn.join(' | ') : ''}`);
+  ok(d.startsWith('Hi mate,\n\nI asked AI') && qOutsideQuotes(d) === 1 && warn.length === 0, `the hook draft: greeting, one question, the bullet list, no checker warning${warn.length ? ' — ' + warn.join(' | ') : ''}`);
   ok(ctx.plan.structure === 'pitch_list', 'the plan records which structure was sent (why.structure)');
   ok(checkAiReply(d + '\n\nWould you rather those customers came to you?', ctx).some((x) => /more than one question/.test(x)), 'a second question → the checker still warns');
   const short = pm([{ from: 'us', text: '[initial_contact_short]', templateName: 'initial_contact_short' }, { from: 'them', text: 'Yes it is. How can we help' }], { evidence: issuesEv });
   ok(short.move === 'first_reply_pitch', 'initial_contact_short with no stored text is still the opener (the KSM miss)');
-  /* The pitch now ends on the agency question, so their answer is the agency answer. */
+  /* The hook now ends on the voice-note offer, so a yes is a yes to the voice note. */
   const pitchMsg: MoveThreadMsg = { from: 'us', text: d, templateName: null };
-  const ans = pm([opener, { from: 'them', text: 'Yes it is' }, pitchMsg, { from: 'them', text: 'I do it myself' }], { evidence: issuesEv });
-  ok(ans.intent === 'self_managed' && ans.guide === PITCH_SELF_MANAGED_REPLY, 'answer to the pitch "I do it myself" → "Good, that makes changes easy. Quick call, or…"');
-  const agencyAns = pm([opener, { from: 'them', text: 'Yes it is' }, pitchMsg, { from: 'them', text: 'An agency does it' }], { evidence: issuesEv });
-  ok(agencyAns.intent === 'agency' && /tied into a contract with them, or free to leave/.test(agencyAns.question ?? ''), 'an agency answer → are you tied into a contract, or free to leave?');
+  const yes = pm([opener, { from: 'them', text: 'Yes it is' }, pitchMsg, { from: 'them', text: 'Yes go on' }], { evidence: issuesEv });
+  ok(yes.intent === 'voice_yes', `"yes go on" to the hook → the voice-note yes (got ${yes.intent ?? yes.move})`);
   const no = pm([opener, { from: 'them', text: 'Yes it is' }, pitchMsg, { from: 'them', text: 'no thanks' }], { evidence: issuesEv });
-  ok(no.needsYou?.reason === 'not_interested', 'a clear no to the pitch → Needs you (not interested), no follow-up');
+  ok(no.needsYou?.reason === 'not_interested', 'a clear no to the hook → Needs you (not interested), no follow-up');
   const noSitePitch: MoveThreadMsg = { from: 'us', text: fallbackAiReply({ ...ctx, evidence: noSiteEv, plan: pm([opener, { from: 'them', text: 'Yes' }], { evidence: noSiteEv }) }), templateName: null };
-  const nextNoSite = pm([opener, { from: 'them', text: 'Yes' }, noSitePitch, { from: 'them', text: 'No not got one' }], { evidence: noSiteEv });
-  ok(nextNoSite.intent === 'no_website' && /voice note explaining it\?$/.test(nextNoSite.question ?? ''), 'no website → "That\'s probably why ai has nothing to recommend…"');
+  const yesNoSite = pm([opener, { from: 'them', text: 'Yes' }, noSitePitch, { from: 'them', text: 'yeah sure' }], { evidence: noSiteEv });
+  ok(yesNoSite.intent === 'voice_yes', `no website, "yeah sure" → the voice-note yes (got ${yesNoSite.intent ?? yesNoSite.move})`);
   /* A pitch already SENT in the old wording still gets its old next step. */
   const oldPitch: MoveThreadMsg = { from: 'us', text: 'I asked Gemini for a plumber in Rugby and it mentioned Rival A Plumbing.\n\nAnyone asking AI that question gets pointed to them instead of you.\nWould you rather those customers came to you?', templateName: null };
   const next = pm([opener, { from: 'them', text: 'Yes it is' }, oldPitch, { from: 'them', text: 'Yes of course' }], { evidence: issuesEv });
   ok(next.move === 'pitch_next' && next.fixedText === PITCH_AGENCY_Q, 'a reply to an OLD (already sent) pitch → the agency question, as before');
+  const oldAgency: MoveThreadMsg = { from: 'us', text: 'Hi mate,\n\nI asked AI for a plumber in Rugby.\n\nAre you with an agency, or do you manage the website yourself?', templateName: null };
+  ok(pm([opener, { from: 'them', text: 'Yes it is' }, oldAgency, { from: 'them', text: 'I do it myself' }], { evidence: issuesEv }).intent === 'self_managed', 'an old hook that asked the agency question still gets its answer');
 }
 
 console.log('6b. the worst result leads (Paul, 2026-10-20)');
@@ -234,19 +229,20 @@ console.log('9. Nola: counted over every engine in the score, led by the missed 
     hookAlreadySent: false, findings: [], hasWebsite: true, ownerName: null, foundOnGoogle: true,
     site: { state: 'issues', issues: ['Some pages are unfinished, with sample text on them'] },
   };
-  const LEAD = 'I asked google ai "Who is the best driving instructor for beginners in Halstead?" and it mentioned Driving 4CE Driving School, Reliant Driver Training and One Direction Driving School.';
+  const LEAD = 'I asked googleAI "Who is the best driving instructor for beginners in Halstead?" and it named Driving 4CE Driving School, Reliant Driver Training and One Direction Driving School, not you.';
   const p = pm([{ from: 'us', text: '[initial_contact_short]', templateName: 'initial_contact_short' }, { from: 'them', text: 'Yes' }], { evidence: nola });
-  ok(p.move === 'first_reply_pitch' && p.closer === 'agency' && (p.fixedText ?? '').includes(PITCH_INSTEAD_LINE), '1 of 3 (Google AI counted) → the FULL pitch (with "AI is recommending your competitors instead"), ending on the agency question');
+  ok(p.move === 'first_reply_pitch' && p.closer === 'voice_note' && (p.fixedText ?? '').endsWith(HOOK_VOICE_NOTE_Q), '1 of 3 (Google AI counted) → the hook, ending on the voice-note question');
   ok((p.fixedText ?? '').startsWith(`Hi mate,\n\n${LEAD}`), 'line 1 (after "Hi mate,") is the missed search: the engine, the question and that answer\'s three names');
   ok(!/named you in|gap in the rest|\d+ of \d+/.test(p.fixedText ?? ''), 'never "named you in X of Y" or "a gap in the rest"');
   const ctx: AiReplyContext = { businessName: nola.businessName, latestInbound: 'Yes', thread: [], plan: p, evidence: nola };
   const w = checkAiReply(fallbackAiReply(ctx), ctx);
   ok(w.length === 0, `Nola's pitch draft passes the checker${w.length ? ' — ' + w.join(' | ') : ''}`);
   const half = pm([{ from: 'us', text: '[initial_contact_short]', templateName: 'initial_contact_short' }, { from: 'them', text: 'Yes' }], { evidence: { ...nola, named: { named: 1, valid: 2 } } });
-  ok(!(half.fixedText ?? '').includes(PITCH_INSTEAD_LINE) && /^Hi mate,\n\nI asked google ai "Who is the best driving instructor for beginners in Halstead\?" and it mentioned Driving 4CE/.test(half.fixedText ?? '') && !/not you/.test(half.fixedText ?? '') && !/named you in|gap in the rest/.test(half.fixedText ?? ''), 'more than a third (1 of 2) → the soft version, still without "X of Y" or "gap"');
+  const hw = checkAiReply(half.fixedText ?? '', { ...ctx, plan: half, evidence: { ...nola, named: { named: 1, valid: 2 } } });
+  ok(/^Hi mate,\n\nI asked googleAI "Who is the best driving instructor for beginners in Halstead\?" and it named Driving 4CE.*, not you\./.test(half.fixedText ?? '') && !/named you in|gap in the rest|instead/.test(half.fixedText ?? '') && hw.length === 0, `more than a third (1 of 2) → "not you" is still true of the missed answer; no "X of Y", "gap" or "instead"; no warning${hw.length ? ' — ' + hw.join(' | ') : ''}`);
   ok(checkAiReply("When I asked Gemini for a driving instructor in Halstead it named you in 1 of 2 answers, so there's a gap in the rest.", ctx).some((x) => /X of Y/.test(x)), 'a draft saying "named you in 1 of 2 answers … gap in the rest" → warning');
-  ok(firstReplyPitch({ ...nola, engineWords: 'chatgpt' }).lines[1].startsWith('I asked AI "Who is the best driving instructor for beginners in Halstead?" and it mentioned Driving 4CE'), 'the worst answer was Gemini but the conversation already named ChatGPT → "AI": never two tools, never an engine that named them');
-  ok(/^I asked google ai for driving instructors in Halstead and/.test(firstReplyPitch({ ...nola, missed: { engine: 'gemini', question: 'Driving instructors in Halstead UK' } }).lines[1]), 'a search phrase (not a question) follows "for", the trade lower case, no "UK"');
+  ok(firstReplyPitch({ ...nola, engineWords: 'chatgpt' }).lines[1].startsWith('I asked AI "Who is the best driving instructor for beginners in Halstead?" and it named Driving 4CE'), 'the worst answer was Gemini but the conversation already named ChatGPT → "AI": never two tools, never an engine that named them');
+  ok(/^I asked googleAI for driving instructors in Halstead and/.test(firstReplyPitch({ ...nola, missed: { engine: 'gemini', question: 'Driving instructors in Halstead UK' } }).lines[1]), 'a search phrase (not a question) follows "for", the trade lower case, no "UK"');
 }
 
 console.log('9b. the site line: hedged, and a list that reads in parallel (Paul, 2026-10-20)');
@@ -277,7 +273,7 @@ console.log('10. Ven: multi-message and non-English auto-responders (Paul, 2026-
   ok(autoReplyFlags(ven).slice(1).every(Boolean), 'all three burst messages read as one auto-reply');
   const p = pm(ven, { evidence: venEv });
   ok(p.move === 'auto_reply' && p.label === 'Auto-reply' && !!p.fixedText && !/cheers for your reply/i.test(p.fixedText ?? ''), 'Ven → Auto-reply (not a real reply), drafted as the first-reply pitch, never "Cheers for your reply"');
-  ok((p.fixedText ?? '').startsWith('Hi mate,\n\nI asked google ai for best language schools in London and it mentioned Rival A School and Rival B School'), 'the pitch leads with the missed search');
+  ok((p.fixedText ?? '').startsWith('Hi mate,\n\nI asked googleAI for best language schools in London and it named Rival A School and Rival B School, not you.'), 'the pitch leads with the missed search');
   ok(!p.allowPrice && !/interested/.test(p.read), 'their "Are you interested in Spanish lessons?" is never read as interest');
   const later = pm([...ven, { from: 'them', text: 'Yes it is', at: '2026-10-20T09:00:00Z' }], { evidence: venEv });
   ok(later.move === 'first_reply_pitch' && !later.allowPrice, 'a real "Yes it is" after the burst → the first-reply pitch, never a price (the burst was not a clear yes)');

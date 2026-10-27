@@ -46,7 +46,8 @@ export function draftEngineWords(engine: string | null | undefined): string {
 /** "Google AI Overview(s)" is Google Search's own summary, not Gemini: blanked before reading engine words. */
 const stripOverview = (t: string) => String(t ?? '').replace(/\b(?:google(?:['’]?s)?\s+)?ai\s+overviews?\b/gi, ' ');
 const SAYS_CHATGPT = /\bchat\s?gpt\b/i;
-const SAYS_GEMINI = /\bgemini\b|\bgoogle(?:['’]?s)?\s+ai\b/i;
+/* "googleAI" (the hook's spelling, 2026-10-27) as well as "google ai". */
+const SAYS_GEMINI = /\bgemini\b|\bgoogle(?:['’]?s)?\s*ai\b/i;
 
 /** The one AI tool a message we SENT named: 'chatgpt' / 'gemini', else null (named none, or both — a
  *  "tools like chatgpt and gemini" line claims neither). A template whose text is not on hand falls back
@@ -168,12 +169,12 @@ export function wrongEngineWords(text: string, engineWords: string): boolean {
   const t = stripOverview(String(text ?? '').toLowerCase());
   if (engineWords === 'gemini' || engineWords === 'google ai') return SAYS_CHATGPT.test(t);
   if (engineWords === 'chatgpt') return SAYS_GEMINI.test(t);
-  return /\b(?:asked|checked|tried|searched)\s+(?:on\s+)?(?:chat\s?gpt|gemini|google(?:['’]?s)?\s+ai)\b/.test(t);
+  return /\b(?:asked|checked|tried|searched)\s+(?:on\s+)?(?:chat\s?gpt|gemini|google(?:['’]?s)?\s*ai)\b/.test(t);
 }
 
 /** "google ai" for Gemini (not the AI Overview): the old wording — say "gemini" (Paul, 2026-10-13). */
 export function saysGoogleAiForGemini(text: string): boolean {
-  return /\bgoogle(?:['’]?s)?\s+ai\b/i.test(stripOverview(String(text ?? '')));
+  return /\bgoogle(?:['’]?s)?\s*ai\b/i.test(stripOverview(String(text ?? '')));
 }
 
 /** Does the draft name at least one of the businesses it was given? */
