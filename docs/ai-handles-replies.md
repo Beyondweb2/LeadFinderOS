@@ -396,6 +396,20 @@ Tests: `scripts/inbox-reply-mode.test.ts`, `scripts/ai-auto-send.test.ts`. Marke
 - **"Not sent: The send was refused."** That row was not the pitch: it was an `audit_followup_call` template Paul queued at 03:38 for 06:00. Every queued WhatsApp send (2 so far, both 22 Oct 06:00) failed the same way: the drain called send-whatsapp-message with `Authorization: Bearer <service key>`, which the platform gateway refuses before the function runs (`{"message":"Invalid API key"}`), and `senderOutcome` read only reason / detail / error. Fixed: the drain calls by its cron door only (x-cron-secret + x-internal-job), and `senderOutcome` falls back to the code, the platform's message and the HTTP status — never a bare "refused".
 - **Not fixed here (held):** the opener still reads `failed` on screen; the ratchet lives in whatsapp-status, which must not be deployed until the Meta App cutover.
 
+## Send drafts — approve several at once (2026-10-27, Paul)
+
+Branch `feat/bulk-approve-drafts`. Rules + run: `src/lib/bulkDraftSend.ts`; UI `src/components/InboxDraftBatch.tsx`; tests
+`scripts/bulk-draft-send.test.ts`. In "Select several…" mode (WhatsApp only), "Send drafts (N)" appears when a ticked
+conversation has a draft that Needs approving. Each lead is sent ITS OWN draft (the hook signed with the approver's name; no name →
+the name box opens and nothing is sent). Only `kind = draft` rows in the window are sent; Needs you, no draft, past 24 h, they
+replied again (list's newest inbound after the draft's), no WhatsApp, unfilled blanks and anything past `BULK_DRAFT_MAX` (20) are
+listed as skipped in the confirm. The run is SEQUENTIAL and per lead is exactly the single Approve & send: claim → `useInbox.send`
+→ complete (queued: complete + discard). The claim takes `bulk: true`, which adds three server refusals checked at send time
+before the once-only write: a Needs-you row, a newer inbound on the number (`newerInboundSince`), a lead marked no WhatsApp
+(`leadMarkedNoWhatsApp`); both reads fail closed. The single approve does not send `bulk` and is unchanged. Results per row:
+sent / queued (time + Cancel via `inbox_scheduled_cancel`) / failed (Meta's reason) / skipped (reason). Deploy = SPA + fn
+`ai-reply-drafts` (edge first).
+
 ## Hook first (2026-10-26, Paul)
 
 Branch `fix/hook-first-replies`. Every first reply that is not a no gets the code-built hook with the report link (rules and

@@ -714,6 +714,23 @@ async function answeredSince(service: Service, phone: string, sinceIso: string):
   return (data ?? []).length > 0;
 }
 
+/** An inbound message on this number newer than the one the draft answers. A failed read counts as one (fail closed). */
+async function newerInboundSince(service: Service, phone: string, sinceIso: string, inboundId: string | null): Promise<boolean> {
+  let q = service.from("whatsapp_messages").select("id").eq("phone", phone).eq("direction", "inbound").gt("created_at", sinceIso);
+  if (inboundId) q = q.neq("id", inboundId);
+  const { data, error } = await q.limit(1);
+  if (error) return true;
+  return (data ?? []).length > 0;
+}
+
+const NO_WHATSAPP_LEAD_STATUSES = ["no_whatsapp", "no_whatsapp_needs_sms", "whatsapp_failed"];
+/** The lead is marked as not on WhatsApp (status or delivery). A failed read counts as marked (fail closed). */
+async function leadMarkedNoWhatsApp(service: Service, leadId: string): Promise<boolean> {
+  const { data, error } = await service.from("outreach_leads").select("status, whatsapp_delivery_status").eq("id", leadId).maybeSingle();
+  if (error) return true;
+  return NO_WHATSAPP_LEAD_STATUSES.includes(data?.status ?? "") || data?.whatsapp_delivery_status === "no_whatsapp";
+}
+
 async function handleClaim(service: Service, actor: Actor, body: Record<string, unknown>) {
   const r = await loadDraftFor(service, actor, str(body.draft_id));
   if (!r.ok) return r.res;
@@ -726,6 +743,13 @@ async function handleClaim(service: Service, actor: Actor, body: Record<string, 
   if (await answeredSince(service, d.phone, d.inbound_at)) {
     await service.from("ai_reply_drafts").update({ status: "resolved", updated_at: new Date().toISOString() }).eq("id", d.id).eq("status", "pending");
     return json({ ok: false, error: "already_answered", detail: "Someone has already replied to this message, so the draft was closed." });
+  }
+  /* SEND DRAFTS (bulk, 2026-10-27, src/lib/bulkDraftSend.ts): the person did not open each thread just now, so three more
+     refusals, checked HERE at send time: a Needs-you draft, they wrote again after the draft, the lead is marked no WhatsApp. */
+  if (body.bulk === true) {
+    if (d.kind !== "draft") return json({ ok: false, error: "needs_you", detail: "This one needs you: answer it in the thread." });
+    if (await newerInboundSince(service, d.phone, d.inbound_at, d.inbound_message_id)) return json({ ok: false, error: "newer_inbound", detail: "They replied again after this draft was written. Read it in the thread first." });
+    if (d.lead_id && await leadMarkedNoWhatsApp(service, d.lead_id)) return json({ ok: false, error: "no_whatsapp", detail: "This lead is marked no WhatsApp." });
   }
   const finalText = str(body.final_text);
   if (!finalText) return json({ ok: false, error: "empty_message" }, 400);

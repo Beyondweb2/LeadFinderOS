@@ -110,7 +110,9 @@ import { auLeadTz } from '@/lib/auLeadZone';
 import { inboundLabel } from '@/lib/replyMove';
 import { SENT_BY_AI_LABEL, TYPING_MARK_EVERY_MS } from '@/lib/aiAutoSend';
 import { sameRowProps } from '@/lib/inboxRowMemo';
-import { invokeEdge, edgeErrorMessage } from '@/lib/edgeInvoke';
+import { invokeEdge, edgeErrorMessage, EdgeFunctionError } from '@/lib/edgeInvoke';
+import { anyDraftWaiting, draftOutcomeSummary, planDraftSend, runDraftBatch, type DraftCandidate, type DraftOutcome } from '@/lib/bulkDraftSend';
+import { DraftBatchConfirm, DraftBatchReport } from '@/components/InboxDraftBatch';
 import { DEFAULT_INBOX_SORT, compareLastProspectMessage, type InboxSort } from '@/lib/inboxSort';
 import { NEXT_ACTION_KIND_OPTIONS, NEXT_ACTION_WHEN_OPTIONS, nextActionSortKey, passesNextActionFilter, type NextActionKind, type NextActionWhen } from '@/lib/nextActionView';
 import { Eye, Loader2, Send, MessageSquareText, MessageSquare, MessageSquarePlus, Clock, AlertTriangle, Plus, ShieldAlert, MapPin, Globe, Mail, MessageCircle, Trash2, ListChecks, Sparkles, FileText, Copy, Check, Link2, Star, MoreHorizontal, ArrowLeft, PauseCircle, XCircle, Timer } from 'lucide-react';
@@ -1504,6 +1506,76 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
     await refetch();
   };
 
+  /* ══ SEND DRAFTS — approve and send each selected lead's OWN AI draft (src/lib/bulkDraftSend.ts, 2026-10-27) ══════════
+     WhatsApp only (AI drafts are). Same selection as the template send; the plan is recomputed from the current list and
+     the current drafts every render. Each lead runs the single Approve & send: claim (bulk) → send → complete. */
+  const [draftConfirm, setDraftConfirm] = useState(false);
+  const [draftBusy, setDraftBusy] = useState(false);
+  const draftRunningRef = useRef(false);
+  const [draftProgress, setDraftProgress] = useState({ done: 0, total: 0 });
+  const [draftOutcomes, setDraftOutcomes] = useState<DraftOutcome[] | null>(null);
+  const [draftCancelled, setDraftCancelled] = useState<Set<string>>(new Set());
+  const draftCandidates: DraftCandidate[] = useMemo(() => (aiOn ? filteredList.filter((c) => bulkSelected.has(c.key)).map((c) => {
+    const lastIn = [...messagesForKey(c.key)].reverse().find((m) => m.direction === 'inbound');
+    return { key: c.key, leadId: c.leadId, label: c.label, phone: c.phone, leadStatus: c.leadStatus, lastInboundAt: c.lastInboundAt, lastInboundText: lastIn?.body ?? null, row: ai.forPhone(c.phone) };
+  }) : []), [aiOn, filteredList, bulkSelected, messagesForKey, ai]);
+  const draftPlan = useMemo(() => planDraftSend(draftCandidates, { senderName: myMessageName }), [draftCandidates, myMessageName]);
+  const showSendDrafts = aiOn && anyDraftWaiting(draftCandidates);
+  const openDraftConfirm = () => {
+    if (draftPlan.needsName) {
+      toast({ title: 'Add your name first', description: 'The first message to a business ends with your name. Nothing was sent.' });
+      window.dispatchEvent(new Event(OPEN_MESSAGE_NAME_EVENT));
+      return;
+    }
+    setDraftConfirm(true);
+  };
+  const runDraftSend = async () => {
+    // ⛔ One run at a time: a ref, not state, so a double click inside one render cannot start two.
+    if (draftRunningRef.current || draftPlan.needsName || !draftPlan.send.length) return;
+    draftRunningRef.current = true;
+    const items = draftPlan.send;
+    const skippedBefore: DraftOutcome[] = draftPlan.skipped.map((s) => ({ key: s.key, label: s.label, kind: 'skipped', reason: s.skip ?? undefined }));
+    setDraftBusy(true);
+    setDraftOutcomes(null);
+    setDraftCancelled(new Set());
+    setDraftProgress({ done: 0, total: items.length });
+    try {
+      const outcomes = await runDraftBatch(items, {
+        claim: async (draftId, body) => {
+          try { await invokeEdge('ai-reply-drafts', { action: 'claim', draft_id: draftId, final_text: body, bulk: true }); return { ok: true }; }
+          catch (e) { return { ok: false, refused: e instanceof EdgeFunctionError && !!e.code && (e.status == null || e.status < 500), reason: edgeErrorMessage(e, 'This draft could not be approved.') }; }
+        },
+        send: async (it) => {
+          sendingKeysRef.current.add(it.key);
+          setSendingKeys((prev) => new Set(prev).add(it.key));
+          try { return await send({ phone: it.phone, leadId: it.leadId, body: it.body }); }
+          finally {
+            sendingKeysRef.current.delete(it.key);
+            setSendingKeys((prev) => { const next = new Set(prev); next.delete(it.key); return next; });
+          }
+        },
+        complete: async (draftId, messageId, error) => { await invokeEdge('ai-reply-drafts', { action: 'complete', draft_id: draftId, message_id: messageId, error }); },
+        discard: async (draftId) => { await invokeEdge('ai-reply-drafts', { action: 'discard', draft_id: draftId }); },
+        onProgress: (done) => setDraftProgress((p) => ({ ...p, done })),
+      });
+      const all = [...outcomes, ...skippedBefore];
+      setDraftOutcomes(all);
+      setBulkSelected(new Set());
+      toast({ title: draftOutcomeSummary(all), description: 'Each one is listed above the conversation list.', variant: outcomes.some((o) => o.kind === 'failed') ? 'destructive' : undefined });
+    } finally {
+      draftRunningRef.current = false;
+      setDraftBusy(false);
+      setDraftConfirm(false);
+      void ai.refetch();
+      void refetch();
+    }
+  };
+  const cancelDraftQueued = async (scheduledId: string) => {
+    const r = await sched.cancel(scheduledId);
+    if (r.ok) setDraftCancelled((s) => new Set(s).add(scheduledId));
+    else toast({ title: "Couldn't cancel", description: r.error ?? 'Try again from the thread.', variant: 'destructive' });
+  };
+
   const queueHookFollowups = async () => {
     const ids = [...hookSelected];
     if (!ids.length) return;
@@ -2328,6 +2400,19 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
                       : `Send to ${bulkPlan.send.length}`}
                   </Button>
                 </div>
+                {/* SEND DRAFTS (2026-10-27): each selected lead's OWN waiting AI draft. Shown once at least one selected
+                    conversation has a draft that Needs approving; the rest are listed as skipped in the confirm. */}
+                {showSendDrafts && (
+                  <div className="flex flex-wrap items-center gap-2 border-t border-border/50 pt-1.5" data-testid="send-drafts-bar">
+                    <span className="min-w-0 flex-1 text-muted-foreground">
+                      <Sparkles className="mr-1 inline h-3 w-3 text-violet-600" />
+                      {draftPlan.send.length} with a waiting draft{draftPlan.skipped.length ? ` · ${draftPlan.skipped.length} skipped` : ''}
+                    </span>
+                    <Button size="sm" className="h-7 px-2 text-[11px]" disabled={draftBusy || draftPlan.send.length === 0} onClick={openDraftConfirm} data-testid="send-drafts">
+                      {draftBusy ? <><Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />Sending {draftProgress.done}/{draftProgress.total}</> : `Send drafts (${draftPlan.send.length})`}
+                    </Button>
+                  </div>
+                )}
                 {/* The refusal and the skips are stated BEFORE the confirm, not inside it — a
                     disabled button with no explanation is the thing that makes an operator press
                     it repeatedly. */}
@@ -2349,6 +2434,10 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
                 </button>
               </div>
             )
+          )}
+          {draftOutcomes && (
+            <DraftBatchReport outcomes={draftOutcomes} cancelled={draftCancelled} onCancelQueued={(id) => void cancelDraftQueued(id)}
+              onOpen={openConversation} onDismiss={() => setDraftOutcomes(null)} />
           )}
           {/* What the last batch did. Sticks around until dismissed: a toast disappears, and the
               list of who did NOT get the message is the part worth acting on. */}
@@ -3099,6 +3188,9 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <DraftBatchConfirm open={draftConfirm} plan={draftPlan} busy={draftBusy} progress={draftProgress}
+        onCancel={() => setDraftConfirm(false)} onConfirm={() => void runDraftSend()} />
 
       <Dialog open={hookQueueConfirm} onOpenChange={(o) => { if (!hookQueuing) setHookQueueConfirm(o); }}>
         <DialogContent className="sm:max-w-md">
