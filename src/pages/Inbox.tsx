@@ -1452,6 +1452,12 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
    * ⚠️ Failures are COLLECTED, never thrown — one refusal must not abandon the rest of the batch,
    * and the operator needs the list at the end more than they need a toast per lead.
    */
+  /* A conversation we have just answered (sent, or queued for their send hours) is no longer untouched: clear its
+     blue Unread dot the way opening the thread does. Bulk sends never open the thread, so they call this. */
+  const clearUnreadAfterSend = (phone: string) => {
+    if (sms) void markSmsRead(phone).then(() => queryClient.invalidateQueries({ queryKey: smsKeys.unread }));
+    else void markRead(phone);
+  };
   const runBulkSend = async () => {
     // ⛔ ONLY LEADS THAT PASSED THE SERVER'S DRY RUN, and never while a check is still running.
     if (bulkBusy || bulkChecking || bulkChecked.pending.length || !bulkChecked.ready.length) return;
@@ -1491,6 +1497,7 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
           templateName: bulkTemplate,
         });
         /* Queued for their send hours is NOT sent (src/lib/inboxSendWindow.ts) — counted on its own. */
+        if (res.ok) clearUnreadAfterSend(target.phone);
         if (res.ok && res.scheduled) queued++;
         else if (res.ok) sent++;
         else failed.push({ key: target.key, label: target.label, reason: res.reason ?? res.error ?? 'send failed' });
@@ -1586,8 +1593,11 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
         send: async (it) => {
           sendingKeysRef.current.add(it.key);
           setSendingKeys((prev) => new Set(prev).add(it.key));
-          try { return await send({ phone: it.phone, leadId: it.leadId, body: it.body }); }
-          finally {
+          try {
+            const res = await send({ phone: it.phone, leadId: it.leadId, body: it.body });
+            if (res.ok) clearUnreadAfterSend(it.phone);
+            return res;
+          } finally {
             sendingKeysRef.current.delete(it.key);
             setSendingKeys((prev) => { const next = new Set(prev); next.delete(it.key); return next; });
           }

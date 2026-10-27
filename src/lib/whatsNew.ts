@@ -22,6 +22,14 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-27-bulk-send-clears-unread', date: '2026-10-27', title: 'Send drafts clears the blue dot on every conversation it answers', audience: 'all',
+    body: 'After "Send drafts" (or a bulk template send) in the Inbox, each conversation that was sent a message, or queued for their send hours, loses its blue Unread dot, as if you had opened it.',
+    report: {
+      added: [],
+      changed: ['Send drafts and the bulk template send mark each answered conversation as read (WhatsApp and text), only when the send went through. A failed one keeps its dot.'],
+      removed: [],
+      effect: 'The Unread filter and the blue dots now show only conversations nobody has answered yet, so a batch of replies no longer leaves them looking untouched.',
+    } },
   { id: '2026-10-27-message-name-approval', date: '2026-10-27', title: 'Paul approves the name on a salesperson\'s messages', audience: 'all',
     body: 'When a salesperson sets or changes the name on their messages, Paul approves it first. Until then their old name is used, or, if they have none yet, messages that need a name wait. Names already in use are unchanged.',
     report: {
