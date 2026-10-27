@@ -1,95 +1,81 @@
-/* SEND DRAFTS — the confirm step and the per-row results (Paul, 2026-10-27). The rules and the run are in
-   src/lib/bulkDraftSend.ts; this file only draws them. ⛔ Nothing here sends: the confirm button calls `onConfirm`. */
-import { Ban, Check, Clock, Loader2, Sparkles, X, XCircle } from 'lucide-react';
+/* SEND DRAFTS — the live panel: the Undo bar, progress and the per-row results (Paul, 2026-10-27). The rules and the run
+   are in src/lib/bulkDraftSend.ts; this file only draws them. ⛔ Nothing here sends: Undo / Stop / Cancel call back. */
+import { Ban, Check, Clock, Loader2, PenLine, Send, Sparkles, Undo2, X, XCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogFooter } from '@/components/ui/dialog';
-import { DialogHero, SubSection } from '@/components/operator/ui';
 import { queuedLabel } from '@/lib/inboxSendWindow';
-import { BULK_DRAFT_MAX, draftOutcomeSummary, oneLine, type DraftOutcome, type DraftPlan } from '@/lib/bulkDraftSend';
+import { FINAL_STATES, draftOutcomeSummary, type BatchRow, type RowState } from '@/lib/bulkDraftSend';
 
-export function DraftBatchConfirm({ open, plan, busy, progress, onCancel, onConfirm }: {
-  open: boolean;
-  plan: DraftPlan;
-  busy: boolean;
-  progress: { done: number; total: number };
-  onCancel: () => void;
-  onConfirm: () => void;
-}) {
-  const n = plan.send.length;
-  return (
-    <Dialog open={open} onOpenChange={(o) => { if (!o && !busy) onCancel(); }}>
-      <DialogContent className="sm:max-w-lg" data-testid="draft-batch-confirm">
-        <DialogHero
-          icon={Sparkles}
-          tone="purple"
-          title={<>Approve and send {n} draft{n === 1 ? '' : 's'}?</>}
-          subtitle={<>Each business gets <strong>its own draft</strong>, exactly as shown below. Each one goes through the normal send:
-            outside their send hours it is queued to their morning; opt-outs, daily caps and the 24-hour rule still apply.
-            Each is checked again just before it goes. At most {BULK_DRAFT_MAX} per batch.</>}
-        />
-        <div className="max-h-[50vh] space-y-3 overflow-y-auto text-xs">
-          <ul className="space-y-2" data-testid="draft-batch-list">
-            {plan.send.map((it) => (
-              <li key={it.key} className="rounded-md border border-border/60 px-2 py-1.5">
-                <p className="truncate font-semibold text-foreground">{it.label}</p>
-                {it.theirLast && <p className="truncate text-muted-foreground"><span className="font-medium">They said:</span> {it.theirLast}</p>}
-                <p className="truncate text-violet-700 dark:text-violet-300"><span className="font-medium">Draft:</span> {oneLine(it.body, 140)}</p>
-              </li>
-            ))}
-          </ul>
-          {plan.skipped.length > 0 && (
-            <SubSection testId="draft-batch-skipped" tone="amber" title={<span className="text-amber-700 dark:text-amber-300">Skipped, not sent ({plan.skipped.length})</span>}>
-              <ul className="space-y-0.5 text-muted-foreground">
-                {plan.skipped.map((it) => <li key={it.key} className="truncate">· {it.label} — {it.skip}</li>)}
-              </ul>
-            </SubSection>
-          )}
-        </div>
-        <DialogFooter>
-          <Button variant="ghost" size="sm" disabled={busy} onClick={onCancel}>Cancel</Button>
-          <Button size="sm" disabled={busy || n === 0} onClick={onConfirm} data-testid="draft-batch-send">
-            {busy ? <><Loader2 className="mr-1.5 h-4 w-4 animate-spin" />Sending {progress.done}/{progress.total}</> : <><Check className="mr-1.5 h-4 w-4" />Approve and send {n}</>}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
+const ICON: Record<RowState, typeof Check> = { sent: Check, queued: Clock, failed: XCircle, skipped: Ban, drafting: PenLine, waiting: Clock, sending: Send };
+const TONE: Record<RowState, string> = {
+  sent: 'text-emerald-700 dark:text-emerald-400', queued: 'text-sky-700 dark:text-sky-300', failed: 'text-red-700 dark:text-red-300',
+  skipped: 'text-amber-700 dark:text-amber-300', drafting: 'text-violet-700 dark:text-violet-300', waiting: 'text-muted-foreground', sending: 'text-violet-700 dark:text-violet-300',
+};
+
+function rowWords(o: BatchRow, cancelled: boolean): string {
+  switch (o.state) {
+    case 'sent': return (o.drafted ? 'drafted and ' : '') + (o.simulated ? 'sent (simulated, test mode)' : 'sent');
+    case 'queued': return cancelled ? 'queued send cancelled' : (o.drafted ? 'drafted · ' : '') + (o.sendAt && o.tz ? queuedLabel(o.sendAt, o.tz) : 'queued, goes when their send hours open');
+    case 'failed': return `failed: ${o.reason ?? 'no reason given'}`;
+    case 'skipped': return `skipped: ${o.reason ?? 'no reason given'}`;
+    case 'drafting': return 'writing a draft…';
+    case 'sending': return 'sending…';
+    default: return o.reason ?? 'waiting to send';
+  }
 }
 
-const ICON = { sent: Check, queued: Clock, failed: XCircle, skipped: Ban } as const;
-const TONE = { sent: 'text-emerald-700 dark:text-emerald-400', queued: 'text-sky-700 dark:text-sky-300', failed: 'text-red-700 dark:text-red-300', skipped: 'text-amber-700 dark:text-amber-300' } as const;
-
-/** What the batch did, one row per business. Stays until dismissed. Queued rows can be cancelled one by one. */
-export function DraftBatchReport({ outcomes, cancelled, onCancelQueued, onOpen, onDismiss }: {
-  outcomes: DraftOutcome[];
+export function DraftBatchPanel({ rows, running, undoLeftMs, cancelled, onUndo, onStop, onCancelQueued, onCancelAllQueued, onOpen, onDismiss }: {
+  rows: BatchRow[];
+  running: boolean;
+  /** > 0 while the Undo window is open (nothing has been sent yet). */
+  undoLeftMs: number;
   cancelled: ReadonlySet<string>;
+  onUndo: () => void;
+  onStop: () => void;
   onCancelQueued: (scheduledId: string) => void;
+  onCancelAllQueued: () => void;
   onOpen: (key: string) => void;
   onDismiss: () => void;
 }) {
+  const done = rows.filter((r) => FINAL_STATES.has(r.state)).length;
+  const drafting = rows.filter((r) => r.state === 'drafting').length;
+  const openQueued = rows.filter((r) => r.state === 'queued' && r.scheduledId && !cancelled.has(r.scheduledId));
+  const undoOpen = running && undoLeftMs > 0;
   return (
     <div className="mb-1.5 rounded-md border border-border/60 bg-background px-2 py-1.5 text-[11px]" data-testid="draft-batch-report">
-      <div className="flex items-center gap-2">
-        <span className="font-medium">{draftOutcomeSummary(outcomes)}</span>
+      {undoOpen && (
+        <div className="mb-1.5 flex items-center gap-2 rounded bg-violet-600 px-2 py-1.5 text-white" data-testid="draft-batch-undo">
+          <Sparkles className="h-3.5 w-3.5 shrink-0" />
+          <span className="min-w-0 flex-1 font-medium">Sending starts in {Math.ceil(undoLeftMs / 1000)}s. Nothing has been sent yet.</span>
+          <Button size="sm" variant="secondary" className="h-6 px-2 text-[11px]" onClick={onUndo} data-testid="draft-batch-undo-btn">
+            <Undo2 className="mr-1 h-3 w-3" />Undo
+          </Button>
+        </div>
+      )}
+      <div className="flex flex-wrap items-center gap-2">
+        {running
+          ? <span className="inline-flex items-center gap-1 font-medium"><Loader2 className="h-3 w-3 animate-spin" />Send drafts: {done}/{rows.length} done{drafting ? ` · writing ${drafting}` : ''}</span>
+          : <span className="font-medium">{draftOutcomeSummary(rows)}</span>}
         <span className="flex-1" />
-        <button type="button" className="text-muted-foreground hover:underline" onClick={onDismiss}>Dismiss</button>
+        {running && !undoOpen && <button type="button" className="text-destructive hover:underline" onClick={onStop} data-testid="draft-batch-stop">Stop</button>}
+        {openQueued.length > 0 && (
+          <button type="button" className="text-muted-foreground hover:text-destructive hover:underline" onClick={onCancelAllQueued} data-testid="draft-batch-cancel-all">
+            Cancel all queued ({openQueued.length})
+          </button>
+        )}
+        {!running && <button type="button" className="text-muted-foreground hover:underline" onClick={onDismiss}>Dismiss</button>}
       </div>
-      <ul className="mt-1 space-y-0.5">
-        {outcomes.map((o) => {
-          const Icon = ICON[o.kind];
+      <ul className="mt-1 max-h-[40vh] space-y-0.5 overflow-y-auto">
+        {rows.map((o) => {
+          const Icon = ICON[o.state];
           const isCancelled = !!o.scheduledId && cancelled.has(o.scheduledId);
           return (
-            <li key={o.key} className="flex items-start gap-1.5" data-testid="draft-batch-row">
-              <Icon className={`mt-0.5 h-3 w-3 shrink-0 ${TONE[o.kind]}`} />
-              <span className="min-w-0 flex-1">
+            <li key={o.key} className="flex items-start gap-1.5" data-testid="draft-batch-row" data-state={o.state}>
+              <Icon className={`mt-0.5 h-3 w-3 shrink-0 ${TONE[o.state]} ${o.state === 'drafting' || o.state === 'sending' ? 'animate-pulse' : ''}`} />
+              <span className="min-w-0 flex-1 break-words">
                 <button type="button" className="font-medium text-foreground hover:underline" onClick={() => onOpen(o.key)}>{o.label}</button>
-                <span className="text-muted-foreground"> — {
-                  o.kind === 'sent' ? (o.simulated ? 'sent (simulated, test mode)' : 'sent')
-                  : o.kind === 'queued' ? (isCancelled ? 'queued send cancelled' : (o.sendAt && o.tz ? queuedLabel(o.sendAt, o.tz) : 'queued, goes when their send hours open'))
-                  : `${o.kind === 'failed' ? 'failed' : 'skipped'}: ${o.reason ?? 'no reason given'}`
-                }</span>
+                <span className="text-muted-foreground"> — {rowWords(o, isCancelled)}</span>
               </span>
-              {o.kind === 'queued' && o.scheduledId && !isCancelled && (
+              {o.state === 'queued' && o.scheduledId && !isCancelled && (
                 <button type="button" className="inline-flex shrink-0 items-center gap-0.5 text-muted-foreground hover:text-destructive" onClick={() => onCancelQueued(o.scheduledId as string)}>
                   <X className="h-3 w-3" /> Cancel
                 </button>

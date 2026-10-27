@@ -64,6 +64,7 @@ import {
   autoSendVerdict, autoSendAt, autoSendDelayMs, autoSendKey, cleanAutoSendKeys, cleanDailyCap, draftFactsFromPlan, evidenceComplete, theirMessagesSinceUs, threadHardReason,
   AUTO_SEND_CHOICES, AUTO_SEND_DEFAULT_DAILY_CAP, AUTO_SEND_MAX_DAILY_CAP,
 } from "../../../src/lib/aiAutoSend.ts";
+import { bulkDraftRefusal } from "../../../src/lib/bulkDraftRule.ts";
 import { nextWindowOpenAt, replyWindowFor, replyWindowOpen } from "../../../src/lib/inboxSendWindow.ts";
 import { botMaySaySendsEveryOne, modeMayAutoSend, parseInboxReplyMode, INBOX_REPLY_MODES } from "../../../src/lib/inboxReplyMode.ts";
 import { loadReplyHours } from "../_shared/inbox-schedule.ts";
@@ -724,11 +725,15 @@ async function newerInboundSince(service: Service, phone: string, sinceIso: stri
 }
 
 const NO_WHATSAPP_LEAD_STATUSES = ["no_whatsapp", "no_whatsapp_needs_sms", "whatsapp_failed"];
-/** The lead is marked as not on WhatsApp (status or delivery). A failed read counts as marked (fail closed). */
-async function leadMarkedNoWhatsApp(service: Service, leadId: string): Promise<boolean> {
-  const { data, error } = await service.from("outreach_leads").select("status, whatsapp_delivery_status").eq("id", leadId).maybeSingle();
-  if (error) return true;
-  return NO_WHATSAPP_LEAD_STATUSES.includes(data?.status ?? "") || data?.whatsapp_delivery_status === "no_whatsapp";
+/** The lead as Send drafts needs it: marked not on WhatsApp (status or delivery), and prospect-only (Australia). A failed
+ *  read counts as marked (fail closed). */
+async function bulkLeadFacts(service: Service, leadId: string): Promise<{ noWhatsApp: boolean; prospectOnly: boolean }> {
+  const { data, error } = await service.from("outreach_leads").select("status, whatsapp_delivery_status, country, address").eq("id", leadId).maybeSingle();
+  if (error || !data) return { noWhatsApp: true, prospectOnly: true };
+  return {
+    noWhatsApp: NO_WHATSAPP_LEAD_STATUSES.includes(data.status ?? "") || data.whatsapp_delivery_status === "no_whatsapp",
+    prospectOnly: prospectOnlyLead({ country: data.country, address: data.address }),
+  };
 }
 
 async function handleClaim(service: Service, actor: Actor, body: Record<string, unknown>) {
@@ -744,12 +749,25 @@ async function handleClaim(service: Service, actor: Actor, body: Record<string, 
     await service.from("ai_reply_drafts").update({ status: "resolved", updated_at: new Date().toISOString() }).eq("id", d.id).eq("status", "pending");
     return json({ ok: false, error: "already_answered", detail: "Someone has already replied to this message, so the draft was closed." });
   }
-  /* SEND DRAFTS (bulk, 2026-10-27, src/lib/bulkDraftSend.ts): the person did not open each thread just now, so three more
-     refusals, checked HERE at send time: a Needs-you draft, they wrote again after the draft, the lead is marked no WhatsApp. */
+  /* SEND DRAFTS (bulk, 2026-10-27, src/lib/bulkDraftSend.ts): nobody read this draft before it goes, so more refusals,
+     checked HERE at send time on the STORED row: a Needs-you draft, they wrote again after the draft, the lead is marked no
+     WhatsApp, and the never-sent-unread rule (src/lib/bulkDraftRule.ts: low confidence, price, objection, a no, opt-out,
+     bot / auto-reply, sticker / reaction, a promised action, a fact answer, Australia's words). Every read fails closed. */
   if (body.bulk === true) {
     if (d.kind !== "draft") return json({ ok: false, error: "needs_you", detail: "This one needs you: answer it in the thread." });
     if (await newerInboundSince(service, d.phone, d.inbound_at, d.inbound_message_id)) return json({ ok: false, error: "newer_inbound", detail: "They replied again after this draft was written. Read it in the thread first." });
-    if (d.lead_id && await leadMarkedNoWhatsApp(service, d.lead_id)) return json({ ok: false, error: "no_whatsapp", detail: "This lead is marked no WhatsApp." });
+    if (!d.lead_id) return json({ ok: false, error: "no_lead", detail: "No lead is linked to this conversation." });
+    const lf = await bulkLeadFacts(service, d.lead_id);
+    if (lf.noWhatsApp) return json({ ok: false, error: "no_whatsapp", detail: "This lead is marked no WhatsApp." });
+    const { data: inb, error: inbErr } = d.inbound_message_id
+      ? await service.from("whatsapp_messages").select("body, message_type").eq("id", d.inbound_message_id).maybeSingle()
+      : { data: null, error: null };
+    if (inbErr || !inb) return json({ ok: false, error: "inbound_unreadable", detail: "Their message could not be read, so nothing was sent. Open the thread." });
+    const refusal = bulkDraftRefusal({
+      kind: d.kind, draft_text: str(body.final_text), why: d.why ?? null, inboundText: inb.body ?? "", inboundType: inb.message_type ?? null,
+      prospectOnly: lf.prospectOnly || prospectOnlyNumber(d.phone),
+    });
+    if (refusal) return json({ ok: false, error: "bulk_skip", detail: refusal.charAt(0).toUpperCase() + refusal.slice(1) + "." });
   }
   const finalText = str(body.final_text);
   if (!finalText) return json({ ok: false, error: "empty_message" }, 400);
