@@ -23,7 +23,7 @@ export interface OwnershipInfo {
 }
 
 /** Sales: the cell for a non-new business, or null to let the normal Add button render. */
-export function salesOwnershipCell(own: OwnershipInfo | null | undefined, onClaim?: (leadId: string) => void, claiming?: boolean): ReactNode | null {
+export function salesOwnershipCell(own: OwnershipInfo | null | undefined, onClaim?: (leadId: string) => void, claiming?: boolean, compact = false): ReactNode | null {
   if (!own || own.state === 'new') return null;
   if (own.state === 'paused') {
     return (
@@ -46,7 +46,7 @@ export function salesOwnershipCell(own: OwnershipInfo | null | undefined, onClai
       </Button>
     );
   }
-  return <AlreadyAddedBadge ownerName={own.ownerName} addedByName={own.addedByName} avatarUrl={own.avatarUrl} addedAt={own.addedAt} />;
+  return <AlreadyAddedBadge ownerName={own.ownerName} addedByName={own.addedByName} avatarUrl={own.avatarUrl} addedAt={own.addedAt} compact={compact} />;
 }
 
 /** The server says this business is already in LeadFinderOS (any owner). 'paused' is a refusal, not an answer. */

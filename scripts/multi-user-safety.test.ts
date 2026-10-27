@@ -97,6 +97,8 @@ console.log('6. Outreach rows say who added the lead');
   ok((OUTREACH_LIST_COLUMNS as readonly string[]).includes('added_by_user_id'), 'the admin list reads added_by_user_id');
   ok((SALES_LIST_COLUMNS as readonly string[]).includes('added_by_user_id'), 'the salesperson list reads it too (the view has it)');
   ok(read('src/components/OutreachTable.tsx').includes('data-testid="outreach-added-by"'), 'the row draws "Added by <name>"');
+  ok(read('src/components/OutreachMobileCard.tsx').includes('data-testid="outreach-added-by"'), '…and so does the phone card');
+  ok(read('src/components/LeadsTable.tsx').includes('salesOwnershipCell(ownership?.(lead), onClaim, claiming, true)'), 'Find Leads phone cards use the compact badge (the name keeps its room)');
 }
 
 console.log('7. a salesperson never sees a model cost');

@@ -807,7 +807,7 @@ export function LeadsTable({ leads, onShownChange, onExport, onAddToOutreach, is
                      </TooltipTrigger>
                      <TooltipContent>{viewDetailsExhausted ? 'Start trial to view more' : checked ? 'Already viewed' : 'View business info'}</TooltipContent>
                    </Tooltip>
-                  {onAddToOutreach && viewerRole === 'sales' && salesOwnershipCell(ownership?.(lead), onClaim, claiming)}
+                  {onAddToOutreach && viewerRole === 'sales' && salesOwnershipCell(ownership?.(lead), onClaim, claiming, true)}
                   {onAddToOutreach && !(viewerRole === 'sales' && salesOwnershipCell(ownership?.(lead), onClaim, claiming)) && (
                     inOutreach ? (
                       <span className="inline-flex items-center gap-1 h-8 px-2 rounded-md bg-green-500/10 text-green-600 dark:text-green-400 text-[11px] font-medium whitespace-nowrap">
