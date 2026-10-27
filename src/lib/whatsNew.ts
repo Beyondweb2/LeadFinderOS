@@ -22,6 +22,14 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-27-message-name-approval', date: '2026-10-27', title: 'Paul approves the name on a salesperson\'s messages', audience: 'all',
+    body: 'When a salesperson sets or changes the name on their messages, Paul approves it first. Until then their old name is used, or, if they have none yet, messages that need a name wait. Names already in use are unchanged.',
+    report: {
+      added: ['"Message names waiting for your approval" on the Team page (Paul): Approve or Reject.', 'A note in the name box saying the name is waiting for approval.'],
+      changed: ['A salesperson\'s new or changed message name is used only after Paul approves it.', 'In the Inbox, the first message to a business says "Your name is waiting for approval" until it is approved.'],
+      removed: [],
+      effect: 'Nobody can sign messages with someone else\'s name. Paul\'s own name changes straight away, as before.',
+    } },
   { id: '2026-10-27-multi-user-safety', date: '2026-10-27', title: 'Find Leads says who added a business, and never lets two people add it', audience: 'all',
     body: 'In Find Leads, a business already in the CRM now shows "Added by <name>" instead of Add to CRM — also when it matches by name or website, not only by Google listing or phone. It cannot be ticked for a bulk add. Outreach rows show "Added by <name>" under the business name.',
     report: {
