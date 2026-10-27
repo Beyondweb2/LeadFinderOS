@@ -186,7 +186,7 @@ Deno.serve(async (req) => {
         const [st, counts, active, inb, lead, recent] = await Promise.all([
           loadAutoSendState(service), autoSendCounts(service), personActiveAt(service, r.phone),
           service.from("whatsapp_messages").select("body").eq("id", d.inbound_message_id).maybeSingle(),
-          r.lead_id ? service.from("outreach_leads").select("amount_paid, status, is_archived").eq("id", r.lead_id).maybeSingle() : Promise.resolve({ data: null, error: null }),
+          r.lead_id ? service.from("outreach_leads").select("amount_paid, status, is_archived, assigned_to_user_id").eq("id", r.lead_id).maybeSingle() : Promise.resolve({ data: null, error: null }),
           /* Their messages since our last one (the first-reply pitch goes only on a plain "yes" / "how can I help"). */
           service.from("whatsapp_messages").select("direction, body").eq("phone", r.phone).order("created_at", { ascending: false }).limit(20),
         ]);
@@ -197,10 +197,10 @@ Deno.serve(async (req) => {
           masterOn: st.masterOn, intentsOn: st.intents, dailyCap: st.dailyCap, usedToday: counts.sentToday, draft: facts,
           theirMessages: theirMessagesSinceUs(thread),
           latestInbound: (inb.data as { body?: string | null } | null)?.body ?? "", threadHard: (auto.threadHard as string | null) ?? null,
-          digits: r.phone, lead: lead.data as { amount_paid?: unknown; status?: unknown; is_archived?: unknown } | null,
+          digits: r.phone, lead: lead.data as { amount_paid?: unknown; status?: unknown; is_archived?: unknown; assigned_to_user_id: string | null } | null,
           /* The drain has just read the suppression list for this row (drainDecision cancels a suppressed one). */
           suppressed: false,
-          personActiveAt: active, senderIsAdmin: st.sendAs === r.queued_by && await sendAsIsAdmin(service, r.queued_by), nowMs: Date.now(),
+          personActiveAt: active, senderIsAdmin: st.sendAs === r.queued_by && await sendAsIsAdmin(service, r.queued_by), sendAsUserId: r.queued_by ?? null, nowMs: Date.now(),
         });
         return verdict.send ? null : `ai_${verdict.reason}`;
       },

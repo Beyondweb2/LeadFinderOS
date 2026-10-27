@@ -74,8 +74,8 @@ console.log('3b. a draft carrying the line is approve-to-send, never sent by its
   const facts: AutoSendFacts = {
     masterOn: true, intentsOn: AUTO_SEND_CHOICES.map((c) => c.key), dailyCap: 30, usedToday: 0, theirMessages: 1,
     draft: draftFactsFromPlan(d.plan, { kind: 'draft', text: d.text, problems: [], usedFallback: false, evidenceComplete: true }),
-    latestInbound: 'what do you do?', threadHard: null, digits: '447700900123', lead: { amount_paid: null, status: 'replied', is_archived: false },
-    suppressed: false, personActiveAt: null, senderIsAdmin: true, nowMs: T0 + 60_000,
+    latestInbound: 'what do you do?', threadHard: null, digits: '447700900123', lead: { amount_paid: null, status: 'replied', is_archived: false, assigned_to_user_id: null },
+    suppressed: false, personActiveAt: null, senderIsAdmin: true, sendAsUserId: 'admin-1', nowMs: T0 + 60_000,
   } as AutoSendFacts;
   const v = autoSendVerdict(facts);
   ok(v.send === false && v.reason === 'has_link', `"what do you do?" with the line: held for approval (${v.send ? 'send' : v.reason})`);

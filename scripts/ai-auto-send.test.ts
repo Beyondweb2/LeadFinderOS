@@ -30,7 +30,7 @@ const opener: MoveThreadMsg = { from: 'us', text: '[initial_contact]', templateN
 const them = (text: string): MoveThreadMsg => ({ from: 'them', text });
 const us = (text: string): MoveThreadMsg => ({ from: 'us', text, templateName: null });
 const ALL_ON = AUTO_SEND_CHOICES.map((c) => c.key);
-const PROSPECT = { amount_paid: null, status: 'replied', is_archived: false };
+const PROSPECT = { amount_paid: null, status: 'replied', is_archived: false, assigned_to_user_id: null };
 
 /** The whole chain the worker runs, with everything favourable except what the thread / lead says. */
 function verdictFor(thread: MoveThreadMsg[], o: Partial<AutoSendFacts> & { lead?: AutoSendFacts['lead'] } = {}) {
@@ -42,7 +42,7 @@ function verdictFor(thread: MoveThreadMsg[], o: Partial<AutoSendFacts> & { lead?
   const facts: AutoSendFacts = {
     masterOn: true, intentsOn: ALL_ON, dailyCap: 30, usedToday: 0, theirMessages: theirMessagesSinceUs(thread),
     draft: draftFactsFromPlan(plan, { kind: decision.kind === 'draft' ? 'draft' : decision.kind, text: plan.fixedText ?? 'A clean draft.', problems: [], usedFallback: false, evidenceComplete: true }),
-    latestInbound: latest, threadHard: threadHardReason(input), digits: UK, lead, suppressed: false, personActiveAt: null, senderIsAdmin: true, nowMs: NOW,
+    latestInbound: latest, threadHard: threadHardReason(input), digits: UK, lead, suppressed: false, personActiveAt: null, senderIsAdmin: true, sendAsUserId: 'admin-1', nowMs: NOW,
     ...o,
   };
   return { plan, decision, verdict: autoSendVerdict(facts), facts };
@@ -80,9 +80,9 @@ console.log('2. the hard gate: these threads never auto-send, even with every sw
     ['proof', [opener, them('Yes it is'), us('I asked AI ...'), them('Can you show me examples of your work?')], {}],
     ['a stop earlier in the thread', [opener, them('Stop messaging me'), us('Sorry, will do.'), them('Yes ok')], {}],
     ['angry earlier in the thread', [opener, them('F off'), us('Sorry.'), them('Yes it is')], {}],
-    ['client (paid)', [opener, them('Yes it is')], { lead: { amount_paid: 99, status: 'paid', is_archived: false } }],
-    ['client (status)', [opener, them('Yes it is')], { lead: { amount_paid: null, status: 'in_delivery', is_archived: false } }],
-    ['client (refunded)', [opener, them('Yes it is')], { lead: { amount_paid: null, status: 'refunded', is_archived: false } }],
+    ['client (paid)', [opener, them('Yes it is')], { lead: { amount_paid: 99, status: 'paid', is_archived: false, assigned_to_user_id: null } }],
+    ['client (status)', [opener, them('Yes it is')], { lead: { amount_paid: null, status: 'in_delivery', is_archived: false, assigned_to_user_id: null } }],
+    ['client (refunded)', [opener, them('Yes it is')], { lead: { amount_paid: null, status: 'refunded', is_archived: false, assigned_to_user_id: null } }],
     ['suppressed number', [opener, them('Yes it is')], { suppressed: true }],
   ];
   for (const [name, thread, o] of cases) {
@@ -129,9 +129,9 @@ console.log('3. every other condition');
   ok(reason({ usedToday: 30 }) === 'daily_cap' && reason({ usedToday: 29 }) === 'send', 'the daily cap: 30 used → no, 29 → yes');
   ok(reason({ dailyCap: 0 }) === 'daily_cap', 'a cap of 0 stops all automatic sends');
   ok(reason({ senderIsAdmin: false }) === 'no_sender', 'no admin to send as → no');
-  ok(reason({ lead: { amount_paid: null, status: 'replied', is_archived: true } }) !== 'send', 'an archived lead → no');
+  ok(reason({ lead: { amount_paid: null, status: 'replied', is_archived: true, assigned_to_user_id: null } }) !== 'send', 'an archived lead → no');
   ok(reason({ lead: null }) !== 'send', 'no lead → no');
-  ok(autoSendVerdict({ ...verdictFor(base).facts, lead: { amount_paid: null, status: 'replied', is_archived: true } }).send === false, 'an archived lead → no, even on a clean draft');
+  ok(autoSendVerdict({ ...verdictFor(base).facts, lead: { amount_paid: null, status: 'replied', is_archived: true, assigned_to_user_id: null } }).send === false, 'an archived lead → no, even on a clean draft');
   const twice = verdictFor([opener, them('Yes it is'), us('pitch')]);
   ok(twice.verdict.send === false, `never twice without a prospect message (${twice.verdict.send ? 'SENT' : twice.verdict.reason})`);
   const loop = (() => { const input: MoveInput = { thread: base, suppressed: false, aiSentSinceWin: 3, evidence: ev, nowMs: NOW }; const p = pickMove(input); return autoSendVerdict({ ...verdictFor(base).facts, draft: draftFactsFromPlan(p, { kind: 'draft', text: 'x', problems: [], usedFallback: false, evidenceComplete: true }) }); })();

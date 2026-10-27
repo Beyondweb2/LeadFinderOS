@@ -140,7 +140,7 @@ async function callReplyModel(model: string, system: string, user: string, tempe
 /* ───────────────────────── what we already hold (DB only) ───────────────────────── */
 
 type MsgRow = DraftThreadRow;
-type LeadRow = ResearchLead & { amount_paid: unknown; status: unknown; call_booked_at: string | null; previous_status?: string | null; ai_visible_at?: string | null };
+type LeadRow = ResearchLead & { amount_paid: unknown; status: unknown; call_booked_at: string | null; previous_status?: string | null; ai_visible_at?: string | null; assigned_to_user_id?: string | null };
 
 /** The thread, oldest first. A 'failed' row of ours is read against its receipt (src/lib/draftThread.ts): delivered / read =
  *  it reached them. An unreadable receipt leaves it out (the old reading). */
@@ -158,7 +158,7 @@ async function loadThread(service: Service, bookUserId: string, phone: string): 
 }
 
 async function loadLead(service: Service, leadId: string): Promise<LeadRow | null> {
-  const { data, error } = await service.from("outreach_leads").select(`${RESEARCH_LEAD_COLUMNS}, amount_paid, status, call_booked_at, ai_visible_at`).eq("id", leadId).maybeSingle();
+  const { data, error } = await service.from("outreach_leads").select(`${RESEARCH_LEAD_COLUMNS}, amount_paid, status, call_booked_at, ai_visible_at, assigned_to_user_id`).eq("id", leadId).maybeSingle();
   if (error) throw error;
   return data ?? null;
 }
@@ -455,8 +455,8 @@ async function maybeQueueAutoSend(service: Service, st: AutoSendState, a: {
     masterOn: st.masterOn, intentsOn: st.intents, dailyCap: st.dailyCap, usedToday: counts.queuedToday,
     draft: draftFactsFromPlan(a.plan, { kind: "draft", text: a.w.reply, problems: a.w.problems, usedFallback: a.w.usedFallback, evidenceComplete: a.why.evidence?.complete === true }),
     theirMessages: theirMessagesSinceUs(a.input.thread),
-    latestInbound: a.cand.body ?? "", threadHard, digits: a.cand.phone, lead: a.lead, suppressed: a.input.suppressed,
-    personActiveAt: active, senderIsAdmin: admin, nowMs,
+    latestInbound: a.cand.body ?? "", threadHard, digits: a.cand.phone, lead: { ...a.lead, assigned_to_user_id: a.lead.assigned_to_user_id }, suppressed: a.input.suppressed,
+    personActiveAt: active, senderIsAdmin: admin, sendAsUserId: st.sendAs ?? null, nowMs,
   });
   const record = async (autoSend: Record<string, unknown>, extra: Record<string, unknown> = {}) =>
     service.from("ai_reply_drafts").update({ why: { ...a.why, autoSend }, ...extra, updated_at: new Date().toISOString() })
@@ -799,6 +799,15 @@ async function handleComplete(service: Service, actor: Actor, body: Record<strin
       }).eq("id", d.id).eq("status", "sending");
       return json({ ok: true, status: "sent" });
     }
+  }
+  /* ⛔ QUEUED FOR SEND HOURS (multi-user, 2026-10-27): the reply is already in inbox_scheduled_sends, so the draft closes in ONE
+     write from 'sending' — never back to 'pending' first, where a second person could claim and send it live while the
+     queued copy also goes. The outcome trigger records it as sent ('queued_for_send_hours' + final_text), as before. */
+  if (str(body.error) === "queued_for_send_hours") {
+    await service.from("ai_reply_drafts").update({
+      status: "discarded", discarded_by: actor.id, discarded_at: new Date().toISOString(), error: "queued_for_send_hours", updated_at: new Date().toISOString(),
+    }).eq("id", d.id).eq("status", "sending");
+    return json({ ok: true, status: "queued" });
   }
   await service.from("ai_reply_drafts").update({
     status: "pending", claimed_by: null, claimed_at: null, error: str(body.error).slice(0, 300) || "send_failed", updated_at: new Date().toISOString(),

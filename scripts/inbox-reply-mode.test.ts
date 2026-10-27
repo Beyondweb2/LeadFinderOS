@@ -71,8 +71,8 @@ console.log('5. the verdict: the new checks');
     return {
       masterOn: true, intentsOn: AUTO_SEND_CHOICES.map((c) => c.key), dailyCap: 30, usedToday: 0, theirMessages: theirMessagesSinceUs(thread),
       draft: draftFactsFromPlan(plan, { kind: 'draft', text: plan.fixedText ?? 'A clean draft.', problems: [], usedFallback: false, evidenceComplete: complete }),
-      latestInbound: said[said.length - 1], threadHard: threadHardReason(input), digits: '447700900123', lead: { amount_paid: null, status: 'replied', is_archived: false },
-      suppressed: false, personActiveAt: null, senderIsAdmin: true, nowMs: NOW, ...o,
+      latestInbound: said[said.length - 1], threadHard: threadHardReason(input), digits: '447700900123', lead: { amount_paid: null, status: 'replied', is_archived: false, assigned_to_user_id: null },
+      suppressed: false, personActiveAt: null, senderIsAdmin: true, sendAsUserId: 'admin-1', nowMs: NOW, ...o,
     };
   };
   const why = (v: ReturnType<typeof autoSendVerdict>) => (v.send ? 'send' : v.reason);

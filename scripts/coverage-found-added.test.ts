@@ -52,7 +52,10 @@ console.log('── 3. WHERE THE NUMBERS COME FROM ──');
 const ctx = code('src/contexts/LeadSearchContext.tsx');
 /* 2026-10-23 (Paul): Found = what the screen shows: the raw result (data.leads, before exclusions) without the
    out-of-town rows held behind the grey line. */
-ok(/saveSearch\(filters, inTownShown\.length, noWebsiteCount, \(data\.leads as Lead\[\]\)\.filter\(\(l\) => !outsideSearchedTown\(l\)\) as SearchLeadLike\[\]\)/.test(ctx), 'Find Leads: Found is the search\'s raw result (data.leads) in town, not the post-exclusion list');
+/* Since 77af77a8 (find-leads-not-a-match) the "Not a match" rows behind their own line are not counted either. */
+ok(/saveSearch\(filters, inTownShown\.length, noWebsiteCount, \(data\.leads as Lead\[\]\)\.filter\(counted\) as SearchLeadLike\[\]\)/.test(ctx)
+  && /const counted = \(l: Lead\) => !outsideSearchedTown\(l\) && !notNicheMatch\(l, niche\);/.test(ctx),
+  'Find Leads: Found is the search\'s raw result (data.leads) in town and a niche match, not the post-exclusion list');
 ok(/\.\.\.foundRecord\(found\)/.test(ctx) && /\.select\('id'\)\.single\(\)/.test(ctx), '…written on the run\'s own history row, whose id each result then carries');
 const sl = code('supabase/functions/search-leads/index.ts');
 ok(/\.\.\.foundRecord\(leads\),\s*\}\)\.select\('id'\)\.maybeSingle\(\)/.test(sl) && /searchRunId,\s*leads:/.test(sl), 'search-leads\' own history row (Niche panel) records Found too and returns the run id');

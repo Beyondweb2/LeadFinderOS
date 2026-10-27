@@ -3137,6 +3137,12 @@ export function OutreachTable({
                             {campaignNameByLead[lead.id]}
                           </div>
                         )}
+                        {/* Multi-user (2026-10-27): who ADDED the lead, on every row where it was recorded. */}
+                        {lead.added_by_user_id && team.byId.get(lead.added_by_user_id)?.display_name && (
+                          <div className="text-[11px] text-muted-foreground truncate max-w-[200px]" data-testid="outreach-added-by">
+                            Added by {team.byId.get(lead.added_by_user_id)!.display_name}
+                          </div>
+                        )}
                         {/* The AI check, compact: a state word, or ChatGPT x · Gemini y and Call screen. Scores only. */}
                         {!isDemoLead(lead.id) && aiCheckFor(lead, 'mt-1 max-w-[260px] font-normal')}
                       </TableCell>

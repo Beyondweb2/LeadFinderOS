@@ -132,6 +132,8 @@ export interface OutreachLead {
   product?: string | null;
   /** Multi-user: who works this lead (team member's user id). NULL = unassigned. */
   assigned_to_user_id?: string | null;
+  /** Multi-user: who ADDED this lead (stamped once at the add). NULL = before 2026-09-27, not recorded. */
+  added_by_user_id?: string | null;
   id: string;
   user_id: string;
   business_name: string;

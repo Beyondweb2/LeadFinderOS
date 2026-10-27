@@ -19,7 +19,7 @@ const sb = supabase as any;
 
 export interface TeamMember { user_id: string; display_name: string; role: 'admin' | 'sales' | null; status: string; avatar_url: string | null }
 export interface LeadActivity { id: string; lead_id: string; actor_user_id: string | null; kind: string; body: string | null; data: Record<string, unknown>; created_at: string }
-export interface IdentityHit { k: string; lead_id: string | null; state: IdentityState; owner_id: string | null; owner_name: string | null; added_at: string | null }
+export interface IdentityHit { k: string; lead_id: string | null; state: IdentityState; owner_id: string | null; owner_name: string | null; added_at: string | null; added_by_name?: string | null }
 
 export const salesKeys = {
   team: ['sales', 'team'] as const,

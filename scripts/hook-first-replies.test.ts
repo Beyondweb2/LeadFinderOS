@@ -114,8 +114,8 @@ console.log('7. the report link is approve-to-send only');
   const facts: AutoSendFacts = {
     masterOn: true, intentsOn: AUTO_SEND_CHOICES.map((c) => c.key), dailyCap: 30, usedToday: 0, theirMessages: theirMessagesSinceUs(thread),
     draft: draftFactsFromPlan(plan, { kind: 'draft', text: plan.fixedText ?? '', problems: [], usedFallback: false, evidenceComplete: true }),
-    latestInbound: 'Yes it is', threadHard: threadHardReason(input), digits: '447700900123', lead: { amount_paid: null, status: 'replied', is_archived: false },
-    suppressed: false, personActiveAt: null, senderIsAdmin: true, nowMs: Date.now(),
+    latestInbound: 'Yes it is', threadHard: threadHardReason(input), digits: '447700900123', lead: { amount_paid: null, status: 'replied', is_archived: false, assigned_to_user_id: null },
+    suppressed: false, personActiveAt: null, senderIsAdmin: true, sendAsUserId: 'admin-1', nowMs: Date.now(),
   };
   const v = autoSendVerdict(facts);
   ok(!v.send && v.reason === 'has_link', `a hook with the report link never sends itself, every switch on (${v.send ? 'SENT' : v.reason})`);

@@ -296,11 +296,12 @@ export function LeadsTable({ leads, onShownChange, onExport, onAddToOutreach, is
 
   // ── Multi-select (mirrors OutreachTable's pattern: Set-based ids, header
   // select-all across ALL filtered rows, per-row checkboxes, cleared after acting).
-  // Rows already in Outreach are unselectable (can't be re-added).
+  // Rows already in Outreach are unselectable (can't be re-added) — this browser's own match AND, for both roles, the
+  // SERVER's answer across every user's leads (multi-user, 2026-10-27): another person's lead is never bulk-selectable.
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const selectableLeads = useMemo(
-    () => filteredLeads.filter((l) => !checkIsInOutreach(l.name, l.googleMapsUrl) && !held(l)),
-    [filteredLeads, checkIsInOutreach, held],
+    () => filteredLeads.filter((l) => !checkIsInOutreach(l.name, l.googleMapsUrl) && !held(l) && !isAlreadyAdded(ownership?.(l))),
+    [filteredLeads, checkIsInOutreach, held, ownership],
   );
   // Resolve the selection against the CURRENT filtered set, so a filter change
   // after selecting can never bulk-act on rows that are no longer shown.
@@ -737,7 +738,7 @@ export function LeadsTable({ leads, onShownChange, onExport, onAddToOutreach, is
                   <Checkbox
                     checked={selectedIds.has(lead.id)}
                     onCheckedChange={(checked) => handleSelectOne(lead.id, checked as boolean)}
-                    disabled={inOutreach || held(lead)}
+                    disabled={inOutreach || held(lead) || isAlreadyAdded(ownership?.(lead))}
                     aria-label={`Select ${lead.name}`}
                     className="mr-2.5 shrink-0"
                   />
@@ -806,7 +807,7 @@ export function LeadsTable({ leads, onShownChange, onExport, onAddToOutreach, is
                      </TooltipTrigger>
                      <TooltipContent>{viewDetailsExhausted ? 'Start trial to view more' : checked ? 'Already viewed' : 'View business info'}</TooltipContent>
                    </Tooltip>
-                  {onAddToOutreach && viewerRole === 'sales' && salesOwnershipCell(ownership?.(lead), onClaim, claiming)}
+                  {onAddToOutreach && viewerRole === 'sales' && salesOwnershipCell(ownership?.(lead), onClaim, claiming, true)}
                   {onAddToOutreach && !(viewerRole === 'sales' && salesOwnershipCell(ownership?.(lead), onClaim, claiming)) && (
                     inOutreach ? (
                       <span className="inline-flex items-center gap-1 h-8 px-2 rounded-md bg-green-500/10 text-green-600 dark:text-green-400 text-[11px] font-medium whitespace-nowrap">
@@ -902,7 +903,7 @@ export function LeadsTable({ leads, onShownChange, onExport, onAddToOutreach, is
                       <Checkbox
                         checked={selectedIds.has(lead.id)}
                         onCheckedChange={(checked) => handleSelectOne(lead.id, checked as boolean)}
-                        disabled={inOutreach || held(lead)}
+                        disabled={inOutreach || held(lead) || isAlreadyAdded(ownership?.(lead))}
                         aria-label={`Select ${lead.name}`}
                       />
                     </TableCell>
