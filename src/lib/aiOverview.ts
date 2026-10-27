@@ -60,6 +60,15 @@ export function scoringMethodFor(auditCreatedAt: string | null | undefined): Sco
 }
 export const IN_SCORE_TEXT = 'in score';
 export const NOT_IN_SCORE_TEXT = 'not in score';
+export const LEFT_OUT_OF_SCORE_TEXT = 'left out of the score';
+
+/** What a screen says about ONE search's Google AI beside the score. "In score" only for a search where Google
+ *  actually showed an AI answer (method 2); a search with none shown (or pending / failed / not recorded) is
+ *  "left out of the score", never in it and never a miss; a method-1 audit never scored Google AI at all. */
+export function overviewScoreNote(state: AiOverviewState, inScore: boolean): string {
+  if (!inScore) return NOT_IN_SCORE_TEXT;
+  return state === 'shown' ? IN_SCORE_TEXT : LEFT_OUT_OF_SCORE_TEXT;
+}
 
 /* ══ THE OVERVIEW'S TEXT, READABLE (2026-10-11) ══════════════════════════════════════════════════════
    The actor returns an overview as the page's text run together with NO separators: a sentence glued to
