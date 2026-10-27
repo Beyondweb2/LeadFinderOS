@@ -2,7 +2,7 @@ import { useState, type ReactNode } from 'react';
 import { Check, ChevronDown, ChevronRight, Copy, ExternalLink, Loader2, RefreshCw } from 'lucide-react';
 import { HOOK_ALL_NAMED_REASON, HOOK_SCORE_QUESTIONS, HOOK_ENGINES, isHookStateV2, type HookResult, type HookScore } from '@/lib/hookScore';
 import type { HookCardScore, HookReportLink, HookReportState } from '@/lib/hookVisibility';
-import { AI_OVERVIEW_LABEL, NO_OVERVIEW_DETAIL, OVERVIEW_NO_NAMES_TEXT, overviewStatusWord, overviewTally } from '@/lib/aiOverview';
+import { AI_OVERVIEW_LABEL, NO_OVERVIEW_DETAIL, OVERVIEW_NO_NAMES_TEXT, overviewScoreNote, overviewStatusWord, overviewTally } from '@/lib/aiOverview';
 import { AiOverviewChip } from '@/components/AiOverviewChip';
 import { useToast } from '@/hooks/use-toast';
 import { staffPreviewUrl } from '@/lib/reportShare';
@@ -242,7 +242,7 @@ function Details({ score, rivalsWithheld, legacy, issues }: { score: HookScore; 
                     ))}
                     {overviewOf(qi) && (
                       <div data-testid="hook-overview-detail">
-                        <p className="font-semibold">{AI_OVERVIEW_LABEL} <span className="font-bold text-muted-foreground">{overviewStatusWord(overviewOf(qi)!).toUpperCase()}</span> <span className="font-normal text-muted-foreground">(not scored)</span></p>
+                        <p className="font-semibold">{AI_OVERVIEW_LABEL} <span className="font-bold text-muted-foreground">{overviewStatusWord(overviewOf(qi)!).toUpperCase()}</span> <span className="font-normal text-muted-foreground">({overviewScoreNote(overviewOf(qi)!.state, score.scored.googleAi.inScore)})</span></p>
                         {overviewOf(qi)!.state === 'not_shown' && <p className="text-muted-foreground">{NO_OVERVIEW_DETAIL}</p>}
                         {overviewOf(qi)!.state === 'shown' && !overviewOf(qi)!.named && (rivalsWithheld || overviewOf(qi)!.competitors.length
                           ? <p className="break-words"><span className="text-muted-foreground">Named instead: </span><NamedInstead names={overviewOf(qi)!.competitors} rivalsWithheld={rivalsWithheld} /></p>
