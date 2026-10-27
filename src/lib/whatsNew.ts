@@ -22,6 +22,14 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-27-send-drafts', date: '2026-10-27', title: 'Send several AI drafts at once', audience: 'all',
+    body: 'In the Inbox, press "Select several…" and tick the conversations whose AI draft you have read. "Send drafts" then sends each business its OWN draft, exactly as shown (the first message still ends with your name). A confirm step lists every business, its draft and their last message first. At most 20 at a time.',
+    report: {
+      added: ['"Send drafts (N)" in Select several… mode, shown when a ticked conversation has a draft waiting for approval.', 'A confirm step: each business, the first line of their last message and of its draft, and who is skipped and why.', 'A result per business: sent, queued (with the time, and Cancel), failed (with Meta\'s reason) or skipped (with why).'],
+      changed: [],
+      removed: [],
+      effect: 'Approving many drafts takes one confirm instead of one click per thread. Every message still goes through the normal send: send hours (queued to their morning), daily caps, opt-outs and the 24-hour rule. A conversation where they replied again after the draft, a "Needs you" draft or a lead marked no WhatsApp is skipped, never sent.',
+    } },
   { id: '2026-10-27-hook-voice-note', date: '2026-10-27', title: 'The first message is shorter and offers a voice note', audience: 'all',
     body: 'The AI\'s first reply to a business is now short: "Hi mate,", what chatgpt or googleAI named instead of them, up to four real issues from their site (if we found any), the report link, then "Can I send you a quick voice note explaining how you could get AI recommending you?" and your name. Drafts already in the Inbox keep their old wording until you press Regenerate.',
     report: {
