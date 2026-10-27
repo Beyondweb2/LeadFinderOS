@@ -54,7 +54,7 @@ for (const t of ["Hi there yes it is but I'm off on annual leave this week.", 'Y
   ok(!isPitch(p) && p.intent === 'not_now' && !p.greetName, `parked, not pitched, no name: "${t.slice(0, 50)}"`);
 }
 const named = pick([them('Yes can I help My name is Mark', 30)]);
-ok(isPitch(named) && named.greetName === 'Mark' && /^Hi Mark,/.test(named.fixedText ?? ''), 'a clear name still opens the pitch: "Hi Mark,"');
+ok(isPitch(named) && named.greetName === 'Mark' && /^Hi mate,/.test(named.fixedText ?? ''), 'a clear name is still read (greetName), but the hook always opens "Hi mate," (Paul, 2026-10-27)');
 const about = pick([them("Yes,apologies I'm about to start a lesson.", 30)]);
 ok(isPitch(about) && !/^Hi About/.test(about.fixedText ?? ''), 'no "Hi About,"');
 
@@ -85,7 +85,7 @@ for (const t of ['Yes, is there anything I can help you with?', 'Hi what can I a
   ok(isPitch(p), `pitch: "${t}" (got ${p.move}${p.needsYou ? ' ' + p.needsYou.reason : ''})`);
 }
 const noSite = pick([them('Yes how can I assist you?', 30)], { ...EV, hasWebsite: false, site: { state: 'no_website', issues: [] } });
-ok(isPitch(noSite) && /website/i.test(noSite.fixedText ?? ''), 'no website on record: the pitch asks the website question');
+ok(isPitch(noSite) && !/website/i.test(noSite.fixedText ?? '') && /quick voice note/.test(noSite.fixedText ?? ''), 'no website on record: the hook never says "website", it offers the voice note (2026-10-27)');
 /* Hook first (Paul, 2026-10-26): "Is this a sales call" and "Who's this?" as the first reply get the hook as it stands; a no never does. */
 for (const t of ['Is this a sales call', "Who's this?"]) ok(isPitch(pick([them(t, 30)])), `hook first: "${t}"`);
 ok(!isPitch(pick([them('No thanks', 30)])), 'not widened too far: "No thanks" never gets the hook');

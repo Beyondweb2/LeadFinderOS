@@ -22,6 +22,14 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-27-hook-voice-note', date: '2026-10-27', title: 'The first message is shorter and offers a voice note', audience: 'all',
+    body: 'The AI\'s first reply to a business is now short: "Hi mate,", what chatgpt or googleAI named instead of them, up to four real issues from their site (if we found any), the report link, then "Can I send you a quick voice note explaining how you could get AI recommending you?" and your name. Drafts already in the Inbox keep their old wording until you press Regenerate.',
+    report: {
+      added: ['"Can I send you a quick voice note explaining how you could get AI recommending you?" as the one question.', '"There\'s more in the full report:" when the check found more issues than the message lists.'],
+      changed: ['Always opens "Hi mate,".', 'Says "I asked chatgpt" or "I asked googleAI".', 'With no website, the message never mentions a website.', 'A yes to it ("yes", "go on", "yeah sure") is read as a yes to the voice note.'],
+      removed: ['"AI is recommending your competitors instead."', '"I specialise in getting local businesses…"', 'The long no-website paragraph.', 'The agency / website question at the end.'],
+      effect: 'A shorter, more human first message that asks for one easy yes. Australian leads still get no link, price or sign-up.',
+    } },
   { id: '2026-10-26-hook-names-engine', date: '2026-10-26', title: 'The first message says which AI it asked', audience: 'all',
     body: 'The AI\'s first reply to a business now says "I asked chatgpt …" when ChatGPT is where they were not named, and "I asked google ai …" when it was Gemini or Google\'s AI answers. Lower case, as it would be typed. Every other message still just says "AI".',
     report: {

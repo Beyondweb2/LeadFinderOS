@@ -1,5 +1,5 @@
-/* THE HOOK NAMES THE ENGINE, IN LOWER CASE (Paul, 2026-10-26): "I asked chatgpt …" when the missed search was ChatGPT's,
-   "I asked google ai …" when it was Gemini's or Google's AI answers. Only the hook; every other draft keeps "AI".
+/* THE HOOK NAMES THE ENGINE, AS WRITTEN (Paul, 2026-10-26; googleAI 2026-10-27): "I asked chatgpt …" when the missed search was ChatGPT's,
+   "I asked googleAI …" when it was Gemini's or Google's AI answers. Only the hook; every other draft keeps "AI".
    Pure: no model, no DB. Run: npx tsx scripts/hook-engine-name.test.ts */
 import { firstReplyPitch, auditLine, hookEngineWords, pickMove, tidyCaps, type MoveEvidence, type MoveThreadMsg } from '../src/lib/replyMove.ts';
 import { checkAiReply, fallbackAiReply, type AiReplyContext } from '../src/lib/aiReplyDraft.ts';
@@ -24,16 +24,16 @@ const hookDraft = (e: MoveEvidence) => {
 console.log('1. which words for which engine');
 {
   ok(hookEngineWords('chatgpt') === 'chatgpt', 'chatgpt → "chatgpt"');
-  ok(hookEngineWords('gemini') === 'google ai' && hookEngineWords('overview') === 'google ai' && hookEngineWords('google_ai') === 'google ai', 'gemini / overview / google_ai → "google ai"');
+  ok(hookEngineWords('gemini') === 'googleAI' && hookEngineWords('overview') === 'googleAI' && hookEngineWords('google_ai') === 'googleAI', 'gemini / overview / google_ai → "googleAI"');
   ok(hookEngineWords('perplexity') === null && hookEngineWords(null) === null, 'anything else → none ("AI")');
 }
 
 console.log('2. the hook, lower case, no warning');
-for (const [engine, words] of [['chatgpt', 'chatgpt'], ['gemini', 'google ai'], ['overview', 'google ai']] as const) {
+for (const [engine, words] of [['chatgpt', 'chatgpt'], ['gemini', 'googleAI'], ['overview', 'googleAI']] as const) {
   const d = hookDraft(ev(engine));
-  ok(d.text.includes(`\n\nI asked ${words} "Who is the best electrician in Gravesend?" and it mentioned Hale Electrics Ltd`), `${engine} → "I asked ${words} …" (lower case, after the capitals tidy)`);
+  ok(d.text.includes(`\n\nI asked ${words} "Who is the best electrician in Gravesend?" and it named Hale Electrics Ltd`), `${engine} → "I asked ${words} …" (as written, after the capitals tidy)`);
   ok(d.plan.hookEngine === words && d.warnings.length === 0, `${engine}: the checker allows it${d.warnings.length ? ` (${d.warnings.join(' | ')})` : ''}`);
-  ok(d.text.includes('AI is recommending your competitors instead.'), `${engine}: the rest still says "AI"`);
+  ok(d.text.includes('get AI recommending you?'), `${engine}: the rest still says "AI"`);
 }
 
 console.log('3. "AI" when the engine is unknown, or the conversation already named the other tool');
@@ -54,8 +54,8 @@ console.log('4. only the hook');
 
 console.log('5. the capitals tidy');
 {
-  ok(tidyCaps('Hi mate,\n\nI asked chatgpt "Who?"') === 'Hi mate,\n\nI asked chatgpt "Who?"', 'the hook\'s "I asked chatgpt" stays lower case');
-  ok(tidyCaps('I asked google ai "Who?"') === 'I asked google ai "Who?"', '"I asked google ai" stays lower case');
+  ok(tidyCaps('Hi mate,\n\nI asked chatgpt "Who?"') === 'Hi mate,\n\nI asked chatgpt "Who?"', 'the hook\'s "I asked chatgpt" stays as written');
+  ok(tidyCaps('I asked googleAI "Who?"') === 'I asked googleAI "Who?"', '"I asked googleAI" stays as written');
   ok(tidyCaps('i asked chatgpt and gemini') === 'I asked ChatGPT and Gemini', 'a model\'s sloppy "i asked chatgpt" is still tidied');
 }
 

@@ -27,32 +27,43 @@ auto-sent (`aiAutoSend.ts` `has_link`). Tests: `scripts/hook-first-replies.test.
 confirmed: do not re-ask). It stays labelled Auto-reply, so it is never sent by itself. A repeat auto-reply, an auto-reply
 after a real reply, and a chatbot ("didn't quite catch that") get nothing.
 
-```
-Hi Dom, / Hi mate,
-I asked AI "<the worst engine's missed question>" and it mentioned A, B and C.
-AI is recommending your competitors instead. I looked into why and a few things could be holding you back:
-• <up to four real issues from the website check, plain words, worst first>
-I specialise in getting local businesses to show up in those results, so the customers go to you instead.
-Are you with an agency, or do you manage the website yourself?
-```
-
-No website (Paul, 2026-10-26, word for word; never "well-built" or "more important than ever", no stats):
+**The voice-note hook (Paul, 2026-10-27).** Two shapes, every word code-built (`replyMove.ts` `firstReplyPitch`). Site found,
+with real findings from the one website check:
 ```
 Hi mate,
-I asked AI "<the worst engine's missed question>" and it mentioned A, B and C.
-AI is recommending your competitors instead.
-Most local work comes from recommendations, and now AI is the one recommending. It leans on websites when it picks who to name, and I couldn't find one for you. Without one built for AI, you're hard to recommend.
-I specialise in getting local businesses to show up in those results, so the customers go to you instead.
-Do you have a website I've missed, or is that something you'd want sorted?
+I asked chatgpt "<the missed question>" and it named A, B and C, not you.
+I had a look at your site and a couple of things could be holding you back:
+• <up to four real issues, plain words, worst first>
+There's more in the full report: <link>
+Can I send you a quick voice note explaining how you could get AI recommending you?
+<sender name, added when it is sent>
 ```
 
-The lean rules and the reasons are in section 5e.
+No website on record, or a site with no solid finding (never says "website", never claims the site is missing):
+```
+Hi mate,
+I asked googleAI "<the missed question>" and it named A, B and C, not you.
+Here's the full result: <link>
+Can I send you a quick voice note explaining how you could get AI recommending you?
+<sender name>
+```
 
-* The greeting uses a name **they gave in this reply** ("this is Dom", "Dom here", a name only), else a person the site's
-  own crawl states as owner / founder, else **"Hi mate,"** (Paul, 2026-10-21; `PITCH_NO_NAME_GREETING`).
+* **Always "Hi mate,"** — never a name, even one they gave or the site states.
+* The engine is written exactly `chatgpt` or `googleAI` (Gemini and Google's AI answers); "AI" when the engine is unknown
+  or an earlier message named the other tool. `tidyCaps` keeps both spellings. Only the hook names an engine.
+* "not you" only for the missed search (an answer that did not name them, `worstMiss.ts`). With no missed search on record
+  the line says what AI named, and "not you" only under the one-third rule (`namedShareRule.ts`).
+* Lead-in by count: one thing / a couple of things / a few things. Up to four bullets (`PITCH_MAX_LIST`), trimmed to two
+  past `PITCH_MAX_WORDS`.
+* "There's more in the full report: <link>" only when the check found more than are listed AND the report link exists;
+  else "Here's the full result: <link>"; no ready link → no line. Australia: never a link, price, sign-up or guarantee.
+* Gone (2026-10-27): "AI is recommending your competitors instead", "I specialise in…", the no-website paragraph, and the
+  agency / website closing question. Old hooks already SENT keep their own next steps (the agency answers, and the
+  site-shared reply after "I couldn't find one for you"). After the new hook a site they send is `website_given`
+  (run Crawl site), because the new hook never says we couldn't find one.
+* The one question is the voice-note offer, so a yes ("yes", "go on", "yeah sure") is `voice_yes`.
 * A rival with (nearly) the lead's own name is never listed (`nearSameName`).
-* "AI is recommending your competitors instead" stays under the one-third rule (`namedShareRule.ts`); above a third the
-  same shape without that sentence.
+* Tests: `scripts/hook-voice-note.test.ts`, `hook-first-replies`, `hook-more-issues`, `hook-engine-name`.
 * Never the money-back line in the pitch, and no wording that promises a result. The guarantee is said only on a price,
   catch or guarantee question (and "will I definitely be recommended?").
 

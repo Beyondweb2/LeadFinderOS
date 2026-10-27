@@ -98,13 +98,13 @@ console.log("2. Paul's wording (2026-10-21)");
   ok(!draftOf(later(them('have you got any examples?')), { ...ev, named: null }).text?.includes('report I did'), 'no search on record: never "the report I did for you"');
   ok(/regular checks/.test(PLAYBOOK.how_much.line) && !Object.values(PLAYBOOK).some((x) => /\bcheck/i.test(x.line) && /\bmonthly\b/i.test(x.line)), '"regular checks", never "monthly", in every line about checks');
   ok(!/\bfree\b/i.test(PLAYBOOK.new_site_being_built.line + NEW_SITE_CHECK_BACK), 'new_site_being_built never says "free"');
-  ok((draftOf(first('Yes this is Dom, what are you selling?')).text ?? '').startsWith('Hi Dom,\n\nI asked google ai'), 'hook first: a name they gave opens the hook ("Hi Dom,")');
+  ok((draftOf(first('Yes this is Dom, what are you selling?')).text ?? '').startsWith('Hi mate,\n\nI asked googleAI'), 'hook first: the hook always opens "Hi mate," (Paul, 2026-10-27), even with a name');
   for (const t of ['What are you selling?', 'Are you looking for driving lessons?', 'Hellooo, just wanted to follow up']) {
     const d = draftOf(first(t)).text ?? '';
-    ok(d.startsWith('Hi mate,\n\nI asked google ai') && !/sorry|Fair question|not after/i.test(d), `hook first: "${t}" as the first reply → the hook as it stands`);
+    ok(d.startsWith('Hi mate,\n\nI asked googleAI') && !/sorry|Fair question|not after/i.test(d), `hook first: "${t}" as the first reply → the hook as it stands`);
   }
   const ch = draftOf([opener, them('Hello! Yes this is Dom', -4320), them('Hellooo, just wanted to follow up', 0)]).text ?? '';
-  ok(ch.startsWith('Hi Dom,\n\nI asked google ai') && !/sorry/i.test(ch), 'hook first: they chased before the hook → the hook, no "sorry for the slow reply"');
+  ok(ch.startsWith('Hi mate,\n\nI asked googleAI') && !/sorry/i.test(ch), 'hook first: they chased before the hook → the hook, no "sorry for the slow reply"');
   ok(pm(later(them('Yes', -50), them('??', 0))).needsYou?.reason === 'chased', 'chased after the pitch went: Needs you (answer their earlier message), no re-pitch');
   const site = pm(later(them('Thankyou we are In process of getting a new website built', -60), us(PLAYBOOK.new_site_being_built.line, -50), them('an agency is doing it', 0)));
   ok(site.intent === 'new_site_being_built' && site.guide === NEW_SITE_CHECK_BACK && site.followUp?.checkBackOn === '2026-11-18' && /Next Action/.test(site.note ?? ''), 'new site: after their answer, the 4-week check back, NOTED, never written');

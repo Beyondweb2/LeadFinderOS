@@ -79,7 +79,7 @@ export interface WhyEvidence { ready: boolean; audit: AuditPhase; crawl: CrawlPh
 const UNCHECKED_NOTE = /^(Nobody has checked this website yet|Checking the website)/;
 /** A recorded draft that was the pitch: the move, or the first auto-reply's pitch (it ends on the pitch's own next step). */
 export const whyIsPitch = (why: { move?: string | null; closer?: string | null }): boolean =>
-  why.move === 'first_reply_pitch' || (why.move === 'auto_reply' && (why.closer === 'agency' || why.closer === 'site'));
+  why.move === 'first_reply_pitch' || (why.move === 'auto_reply' && (why.closer === 'agency' || why.closer === 'site' || why.closer === 'voice_note'));
 
 /** Was this pitch draft written WITHOUT its evidence? Since this release: its recorded `evidence.ready`. Older rows: no audit
  *  result on it (no search or no counts) or a website that had not been checked. Only pitch drafts with text ever count. */

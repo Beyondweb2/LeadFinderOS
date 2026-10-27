@@ -45,14 +45,12 @@ console.log("2. Robina's Motoring School: the live rows");
   const text = p.fixedText ?? '';
   ok(p.move === 'first_reply_pitch' && !p.needsYou && !p.noDraft, `"Yes, how can I help?" gets the first-reply pitch (got ${p.move}/${p.read})`);
   ok(/^Hi mate,/.test(text), 'the approved greeting (no name given: "Hi mate,")');
-  ok(/I asked google ai "Who is the best driving instructor in Woking\?" and it mentioned Billie Smith Driving Solutions, FADI Driving School and Wow Drive Woking\./.test(text), 'the competitor names from the missed search');
-  ok(/AI is recommending your competitors instead\./.test(text), '"AI is recommending your competitors instead." (0 of 3)');
-  ok(/I looked into why and found some pages have no title\./.test(text), 'the issues line: one real issue is one sentence (lean pitch, 2026-10-23)');
-  ok(!/voice note|either way/i.test(text), 'no voice-note line in the first pitch (2026-10-23)');
-  ok(/I specialise in getting local businesses to show up in those results/.test(text), 'the "I specialise..." line');
-  ok(/Are you with an agency, or do you manage the website yourself\?/.test(text), 'the agency question');
-  ok(!/\bai\b/.test(text.replace('I asked google ai ', '')), 'never a lower-case "ai" (apart from the hook\'s own "google ai", Paul 2026-10-26)');
-  ok(!/ChatGPT|Gemini|Google AI|Perplexity|Copilot|Claude/i.test(text.replace('I asked google ai ', 'I asked AI ')), 'no other AI brand names (the hook names its own engine, Paul 2026-10-26)');
+  ok(/I asked googleAI "Who is the best driving instructor in Woking\?" and it named Billie Smith Driving Solutions, FADI Driving School and Wow Drive Woking, not you\./.test(text), 'the competitor names from the missed search, "not you"');
+  ok(/I had a look at your site and one thing could be holding you back:\n• some pages have no title/.test(text), 'the one real issue as a bullet (2026-10-27)');
+  ok(text.endsWith('Can I send you a quick voice note explaining how you could get AI recommending you?'), 'the voice-note question (2026-10-27)');
+  ok(!/specialise|recommending your competitors|agency/i.test(text), 'none of the old long lines');
+  ok(!/\bai\b/.test(text), 'never a lower-case "ai"');
+  ok(!/ChatGPT|Gemini|Google AI|Perplexity|Copilot|Claude/i.test(text.replace('I asked googleAI ', 'I asked AI ')), 'no other AI brand names (the hook names its own engine)');
   ok(!/I had a look and saw/.test(text), 'not the go-on line');
 }
 

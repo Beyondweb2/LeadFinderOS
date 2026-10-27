@@ -124,7 +124,7 @@ console.log('6. GSI Driving School: "Yes", then "How can I help" an hour later, 
   const run = (t: MoveThreadMsg[]) => pickMove({ thread: t, suppressed: false, aiSentSinceWin: 0, evidence: e });
   const p = run(thread);
   ok(p.move === 'first_reply_pitch' && !p.needsYou && !p.noDraft, `"How can I help" an hour after "Yes": the pitch (got ${p.move}${p.needsYou ? ` / ${p.needsYou.label}` : ''})`);
-  ok(/recommending your competitors instead/i.test(p.fixedText ?? ''), '…the full pitch: 1 of 3 without ChatGPT allows "AI is recommending your competitors instead"');
+  ok(/and it named PassMeFast, LPOD Academy and driveJohnson's\./.test(p.fixedText ?? '') && /get AI recommending you\?$/.test(p.fixedText ?? ''), '…the full hook: the real names, then the voice-note question (2026-10-27)');
   ok(run(thread.slice(0, 2)).move === 'first_reply_pitch', '"Yes" alone: the pitch (unchanged)');
   /* Once the pitch has gone, a later "how can I help" is not pitched again (and is never "No playbook reply fits"). */
   const after = run([...thread.slice(0, 2), { from: 'us', text: p.fixedText ?? 'pitch', messageType: 'text', at: '2026-10-21T08:40:00Z' }, thread[2]]);
