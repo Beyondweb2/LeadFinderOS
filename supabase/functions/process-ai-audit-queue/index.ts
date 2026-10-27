@@ -5,6 +5,10 @@ import { runEnrichSource, recordCostCorrection } from "../_shared/enrichment/run
 import { startAiSearch, pollAiSearchRun, fetchAiSearchItems, normalizeAiSearch, captureGoogleSerp, toCountryCode, aiOverviewStamp, AI_OVERVIEW_META_KEY, type AiSearchResult } from "../_shared/enrichment/ai-search.ts";
 import { abortApifyRun } from "../_shared/enrichment/apify.ts";
 import {
+  AIO_FIRST_META_KEY, AIO_RETRY_META_KEY, GOOGLE_AI_RETRY_SECRET, SCRAPE_META_KEY,
+  keepFirstAfterRetry, mergeAioRetry, parseAioRetryMode, scrapeEvidence, shouldRetryAio,
+} from "../_shared/enrichment/google-ai-retry.ts";
+import {
   mayFinishWithoutStragglers,
   TARGETING_STRAGGLER_ERROR,
 } from "../_shared/targeting-straggler.ts";
@@ -323,11 +327,65 @@ Deno.serve(async (req) => {
     // SHORT HTTP call — it never blocks on the scrape, so many can run inside one tick.
     const { data: inflight } = await service
       .from("ai_audit_queue")
-      .select("id, run_id, audit_id, attempts, result")
+      .select("id, run_id, audit_id, user_id, question, attempts, result")
       .eq("status", "running")
       .limit(POLL_BATCH);
     const waiting = ((inflight ?? []) as Row[]).filter((r) => r.result?._apify?.runId);
     for (const r of waiting) touchedRuns.add(r.run_id);
+
+    /* ══ GOOGLE AI ONE-TIME RETRY — OFF UNLESS THE SECRET SAYS OTHERWISE (2026-10-27) ═════════════
+       See _shared/enrichment/google-ai-retry.ts. A question whose first run came back "not shown" may be
+       asked ONCE more; only the Google AI answer is taken from the second run, so no score moves except by
+       gaining a Google AI answer. The row stays 'running' while the retry is in flight (its first result
+       carried in result._aio_first), so the run cannot settle without it, and a retry that fails, ages out
+       or cannot start leaves the first result standing. Sample mode counts the retries already started
+       since its start time and fails CLOSED if that count cannot be read. */
+    const retryMode = parseAioRetryMode(Deno.env.get(GOOGLE_AI_RETRY_SECRET));
+    let sampleBase = 0;
+    if (retryMode.kind === "sample") {
+      const { count: usedSoFar, error: usedErr } = await service
+        .from("ai_audit_queue")
+        .select("id", { count: "exact", head: true })
+        .gte("updated_at", retryMode.since)
+        .not("result->>_aio_retry", "is", null);
+      sampleBase = usedErr || usedSoFar == null ? retryMode.limit : usedSoFar;
+    }
+    let retriesThisTick = 0;
+    async function startAioRetry(row: Row, audit: { userId: string; pool: BudgetPool; countryCode: string }, first: Record<string, unknown>): Promise<boolean> {
+      try {
+        const spent = await accumulatedCost(row.run_id);
+        if (spent + estCost > CAP_USD) return false; // this run's own budget has no room for another run
+        const outcome = await runEnrichSource<{ runId: string; datasetId: string | null }>({
+          service,
+          userId: audit.userId || row.user_id,
+          type: "ai_search",
+          cacheKey: `aiaudit:${row.id}:aioretry`,
+          estCostUsd: estCost,
+          capUsd: POOL_DAILY_CAP_USD[audit.pool],
+          budgetPool: audit.pool,
+          noCacheWrite: () => true,
+          run: async () => {
+            const { runId, datasetId } = await startAiSearch(String(row.question), audit.countryCode, apifyToken);
+            return { result: { runId, datasetId }, costUsd: estCost };
+          },
+        });
+        if (outcome.capReached || !outcome.result?.runId) return false;
+        runCost.set(row.run_id, spent + estCost);
+        await service.from("ai_audit_queue").update({
+          attempts: (Number(row.attempts) || 0) + 1,
+          result: {
+            _apify: { runId: outcome.result.runId, datasetId: outcome.result.datasetId ?? null, startedAtTick: new Date().toISOString() },
+            [AIO_FIRST_META_KEY]: first,
+            [AIO_RETRY_META_KEY]: "running",
+          },
+        }).eq("id", row.id);
+        console.log(`[ai-audit] Google AI retry started q="${String(row.question).slice(0, 60)}" run=${outcome.result.runId}`);
+        return true;
+      } catch (e) {
+        console.error("[process-ai-audit-queue] Google AI retry not started:", e instanceof Error ? e.message : e);
+        return false;
+      }
+    }
 
     async function pollRow(row: Row): Promise<void> {
       const runId: string = row.result._apify.runId;
@@ -336,6 +394,13 @@ Deno.serve(async (req) => {
       // A failed actor run → retry (back to 'pending', clear _apify so the next tick starts a FRESH
       // run) or give up ('failed') once we've started MAX_ATTEMPTS runs.
       const failAttempt = async (reason: string) => {
+        /* A Google AI RETRY run that failed or hung: the first run's result is good, so it stands (never
+           re-queued, never failed). */
+        const firstRun = row.result?.[AIO_FIRST_META_KEY];
+        if (firstRun && typeof firstRun === "object") {
+          await service.from("ai_audit_queue").update({ status: "done", result: keepFirstAfterRetry(firstRun as Record<string, unknown>, "failed") }).eq("id", row.id);
+          return;
+        }
         const giveUp = attempts >= MAX_ATTEMPTS;
         await service.from("ai_audit_queue").update({
           status: giveUp ? "failed" : "pending",
@@ -363,6 +428,9 @@ Deno.serve(async (req) => {
              questions carry the stamp, so an old audit is never re-read as "no overview shown". */
           const aio = aiOverviewStamp(items, result as AiSearchResult);
           if (aio) result[AI_OVERVIEW_META_KEY] = aio;
+          /* What the scraper RETURNED for this question (results page? AI Overview block? text?) so "Google
+             showed none" can be told from "the scraper missed it". Recording only — nothing reads it for a score. */
+          result[SCRAPE_META_KEY] = scrapeEvidence(items, result as AiSearchResult);
           // What Apify says this question actually cost. Stored under a leading-underscore meta
           // key (same convention as _apify) so nothing that walks the engine keys trips on it.
           if (usageTotalUsd != null || computeUnits != null) {
@@ -381,6 +449,17 @@ Deno.serve(async (req) => {
               });
             }
             result._compute_units = computeUnits;
+          }
+          /* The Google AI retry's own run just finished: fold it into the first run's result. */
+          const firstRun = row.result?.[AIO_FIRST_META_KEY];
+          if (firstRun && typeof firstRun === "object") {
+            await service.from("ai_audit_queue").update({ status: "done", result: mergeAioRetry(firstRun as Record<string, unknown>, result) }).eq("id", row.id);
+            return;
+          }
+          if (shouldRetryAio({ mode: retryMode, stamp: aio, hasFirst: false, sampleUsed: sampleBase + retriesThisTick, tickRunning: tickMode === "running" })) {
+            retriesThisTick++;
+            if (await startAioRetry(row, audit, result)) return; // row stays 'running' until the retry finishes
+            result[AIO_RETRY_META_KEY] = "not_started";
           }
           await service.from("ai_audit_queue").update({ status: "done", result }).eq("id", row.id);
           return;
