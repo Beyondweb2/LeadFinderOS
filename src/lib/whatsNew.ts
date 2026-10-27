@@ -22,6 +22,14 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-27-send-drafts-generate', date: '2026-10-27', title: 'Send drafts now writes the missing drafts and sends straight away', audience: 'all',
+    body: 'In the Inbox, press "Select several…", tick conversations and press "Send drafts". It starts straight away, no confirm: a conversation with a waiting draft is sent that draft; one with no draft gets one written by the normal AI drafter first, then sent. Undo stays on screen for 10 seconds before anything goes. Anything risky is skipped and the reason shown. At most 20 at a time.',
+    report: {
+      added: ['Conversations with no waiting draft get one written by the normal drafter (3 at a time), then sent.', 'A 10 second Undo bar before anything is sent, then Stop, a Cancel on each queued row, and "Cancel all queued".', 'Skipped, never sent, with the reason: Needs you, low confidence, price / guarantee / proof questions, objections, a no, opt-out, a bot or auto-reply, a sticker or reaction, a promised call / voice note, fact questions, they replied again, no WhatsApp, already answered, outside the 24-hour window (needs a template), and Australia price / sign-up wording.'],
+      changed: ['No confirm step: pressing "Send drafts" starts at once.', 'The server checks the same skip rules again just before each send.'],
+      removed: ['The Send drafts confirm dialog.'],
+      effect: 'A batch of replies goes out in one press instead of drafting each thread first. Every message still goes through the normal send: send hours (queued to their morning), daily caps, opt-outs, Meta rules. The AI\'s automatic replies (Auto mode) are unchanged.',
+    } },
   { id: '2026-10-27-send-drafts', date: '2026-10-27', title: 'Send several AI drafts at once', audience: 'all',
     body: 'In the Inbox, press "Select several…" and tick the conversations whose AI draft you have read. "Send drafts" then sends each business its OWN draft, exactly as shown (the first message still ends with your name). A confirm step lists every business, its draft and their last message first. At most 20 at a time.',
     report: {

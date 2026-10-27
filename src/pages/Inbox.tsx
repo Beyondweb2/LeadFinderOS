@@ -60,7 +60,7 @@ import { PIPELINE_STATUS_OPTIONS, WHATSAPP_TEMPLATES, type PipelineStatus } from
 import { TemplateSnippet } from '@/components/TemplateWordingPreview';
 import { INBOX_DASHBOARD_GROUP_LABEL, INBOX_DASHBOARD_TEMPLATES, inboxDashboardSendability, isDashboardTemplate, needsTypedItem } from '@/lib/inboxDashboardTemplates';
 import { cleanNeededItem, DASHBOARD_TEMPLATES, dashboardGreeting, NEEDED_ITEM_MAX } from '@/lib/dashboardTemplates';
-import { prospectOnlyLead } from '@/lib/prospectOnly';
+import { prospectOnlyLead, prospectOnlyNumber } from '@/lib/prospectOnly';
 import { useLeadSalesState } from '@/hooks/useLeadSalesState';
 import { salesStateOf } from '@/lib/leadState';
 import { useAllLoggedContacts } from '@/hooks/useLastLoggedContacts';
@@ -111,8 +111,8 @@ import { inboundLabel } from '@/lib/replyMove';
 import { SENT_BY_AI_LABEL, TYPING_MARK_EVERY_MS } from '@/lib/aiAutoSend';
 import { sameRowProps } from '@/lib/inboxRowMemo';
 import { invokeEdge, edgeErrorMessage, EdgeFunctionError } from '@/lib/edgeInvoke';
-import { anyDraftWaiting, draftOutcomeSummary, planDraftSend, runDraftBatch, type DraftCandidate, type DraftOutcome } from '@/lib/bulkDraftSend';
-import { DraftBatchConfirm, DraftBatchReport } from '@/components/InboxDraftBatch';
+import { BULK_UNDO_MS, batchWorkCount, draftOutcomeSummary, planBatch, runBatch, type BatchRow, type DraftCandidate } from '@/lib/bulkDraftSend';
+import { DraftBatchPanel } from '@/components/InboxDraftBatch';
 import { DEFAULT_INBOX_SORT, compareLastProspectMessage, type InboxSort } from '@/lib/inboxSort';
 import { NEXT_ACTION_KIND_OPTIONS, NEXT_ACTION_WHEN_OPTIONS, nextActionSortKey, passesNextActionFilter, type NextActionKind, type NextActionWhen } from '@/lib/nextActionView';
 import { Eye, Loader2, Send, MessageSquareText, MessageSquare, MessageSquarePlus, Clock, AlertTriangle, Plus, ShieldAlert, MapPin, Globe, Mail, MessageCircle, Trash2, ListChecks, Sparkles, FileText, Copy, Check, Link2, Star, MoreHorizontal, ArrowLeft, PauseCircle, XCircle, Timer } from 'lucide-react';
@@ -1506,41 +1506,74 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
     await refetch();
   };
 
-  /* ══ SEND DRAFTS — approve and send each selected lead's OWN AI draft (src/lib/bulkDraftSend.ts, 2026-10-27) ══════════
+  /* ══ SEND DRAFTS — draft (if needed) and send each selected lead its OWN reply (src/lib/bulkDraftSend.ts, 2026-10-27) ══
      WhatsApp only (AI drafts are). Same selection as the template send; the plan is recomputed from the current list and
-     the current drafts every render. Each lead runs the single Approve & send: claim (bulk) → send → complete. */
-  const [draftConfirm, setDraftConfirm] = useState(false);
+     the current drafts every render. NO approval step (Paul, later the same day): pressing starts at once; a conversation
+     with no waiting draft gets one from the normal drafter; src/lib/bulkDraftRule.ts skips what must not go unread. Each
+     send is the single Approve & send: claim (bulk) → send → complete. An Undo bar holds every send for BULK_UNDO_MS;
+     then Stop, per-row Cancel and Cancel all queued. */
   const [draftBusy, setDraftBusy] = useState(false);
   const draftRunningRef = useRef(false);
-  const [draftProgress, setDraftProgress] = useState({ done: 0, total: 0 });
-  const [draftOutcomes, setDraftOutcomes] = useState<DraftOutcome[] | null>(null);
+  const draftStopRef = useRef(false);
+  const draftUndoRef = useRef<((go: boolean) => void) | null>(null);
+  const [draftUndoLeft, setDraftUndoLeft] = useState(0);
+  const [draftRows, setDraftRows] = useState<BatchRow[] | null>(null);
   const [draftCancelled, setDraftCancelled] = useState<Set<string>>(new Set());
   const draftCandidates: DraftCandidate[] = useMemo(() => (aiOn ? filteredList.filter((c) => bulkSelected.has(c.key)).map((c) => {
-    const lastIn = [...messagesForKey(c.key)].reverse().find((m) => m.direction === 'inbound');
-    return { key: c.key, leadId: c.leadId, label: c.label, phone: c.phone, leadStatus: c.leadStatus, lastInboundAt: c.lastInboundAt, lastInboundText: lastIn?.body ?? null, row: ai.forPhone(c.phone) };
+    const msgs = messagesForKey(c.key);
+    const lastIn = [...msgs].reverse().find((m) => m.direction === 'inbound');
+    const newest = msgs[msgs.length - 1];
+    return {
+      key: c.key, leadId: c.leadId, label: c.label, phone: c.phone, leadStatus: c.leadStatus, lastInboundAt: c.lastInboundAt,
+      lastInboundText: lastIn?.body ?? null, lastInboundType: lastIn?.message_type ?? null,
+      answered: !!newest && newest.direction === 'outbound' && !!lastIn && Date.parse(newest.created_at) > Date.parse(lastIn.created_at),
+      prospectOnly: prospectOnlyNumber(c.phone), row: ai.forPhone(c.phone),
+    };
   }) : []), [aiOn, filteredList, bulkSelected, messagesForKey, ai]);
-  const draftPlan = useMemo(() => planDraftSend(draftCandidates, { senderName: myMessageName }), [draftCandidates, myMessageName]);
-  const showSendDrafts = aiOn && anyDraftWaiting(draftCandidates);
-  const openDraftConfirm = () => {
+  const draftPlan = useMemo(() => planBatch(draftCandidates, { senderName: myMessageName }), [draftCandidates, myMessageName]);
+  const draftWork = batchWorkCount(draftPlan);
+  const showSendDrafts = aiOn && draftCandidates.length > 0;
+  const runDraftSend = async () => {
+    // ⛔ One run at a time: a ref, not state, so a double click inside one render cannot start two.
+    if (draftRunningRef.current) return;
     if (draftPlan.needsName) {
-      toast({ title: 'Add your name first', description: 'The first message to a business ends with your name. Nothing was sent.' });
+      toast({ title: 'Add your name first', description: 'The first message to a business ends with your name. Nothing was drafted or sent.' });
       window.dispatchEvent(new Event(OPEN_MESSAGE_NAME_EVENT));
       return;
     }
-    setDraftConfirm(true);
-  };
-  const runDraftSend = async () => {
-    // ⛔ One run at a time: a ref, not state, so a double click inside one render cannot start two.
-    if (draftRunningRef.current || draftPlan.needsName || !draftPlan.send.length) return;
+    if (!draftWork) { setDraftRows(draftPlan.items.map((i) => i.row)); return; }
     draftRunningRef.current = true;
-    const items = draftPlan.send;
-    const skippedBefore: DraftOutcome[] = draftPlan.skipped.map((s) => ({ key: s.key, label: s.label, kind: 'skipped', reason: s.skip ?? undefined }));
+    draftStopRef.current = false;
+    const plan = draftPlan;
     setDraftBusy(true);
-    setDraftOutcomes(null);
     setDraftCancelled(new Set());
-    setDraftProgress({ done: 0, total: items.length });
+    setDraftRows(plan.items.map((i) => i.row));
+    /* The Undo window: true after BULK_UNDO_MS, false on Undo. No claim or send starts before it resolves. */
+    const startedAt = Date.now();
+    setDraftUndoLeft(BULK_UNDO_MS);
+    const tick = window.setInterval(() => setDraftUndoLeft(Math.max(0, BULK_UNDO_MS - (Date.now() - startedAt))), 250);
+    const goAhead = new Promise<boolean>((resolve) => {
+      const t = window.setTimeout(() => resolve(true), BULK_UNDO_MS);
+      draftUndoRef.current = (go) => { window.clearTimeout(t); resolve(go); };
+    }).finally(() => { window.clearInterval(tick); setDraftUndoLeft(0); draftUndoRef.current = null; });
     try {
-      const outcomes = await runDraftBatch(items, {
+      const outcomes = await runBatch(plan, {
+        goAhead,
+        stopped: () => draftStopRef.current,
+        senderName: myMessageName,
+        onRow: (r) => setDraftRows((prev) => (prev ?? []).map((x) => (x.key === r.key ? r : x))),
+        /* The normal drafter ("Draft reply", fn ai-reply-drafts `draft`): same rules, same hook shapes. It never sends. */
+        generate: async (c) => {
+          try {
+            const res = await invokeEdge<{ ok: boolean; draft?: AiReplyRow; stop?: boolean; no_draft?: boolean; detail?: string; error?: string }>('ai-reply-drafts', { action: 'draft', lead_id: c.leadId, phone: c.phone });
+            if (!res || res.ok === false || !res.draft) return { ok: false, refused: true, reason: res?.detail ?? res?.error ?? 'no draft was written' };
+            if (res.stop) return { ok: false, refused: true, reason: 'they asked to stop (opt-out)' };
+            if (res.no_draft) return { ok: false, refused: true, reason: 'nothing to answer: read it in the thread' };
+            return { ok: true, row: res.draft };
+          } catch (e) {
+            return { ok: false, refused: e instanceof EdgeFunctionError && !!e.code && (e.status == null || e.status < 500), reason: edgeErrorMessage(e, 'The draft could not be written.') };
+          }
+        },
         claim: async (draftId, body) => {
           try { await invokeEdge('ai-reply-drafts', { action: 'claim', draft_id: draftId, final_text: body, bulk: true }); return { ok: true }; }
           catch (e) { return { ok: false, refused: e instanceof EdgeFunctionError && !!e.code && (e.status == null || e.status < 500), reason: edgeErrorMessage(e, 'This draft could not be approved.') }; }
@@ -1556,24 +1589,28 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
         },
         complete: async (draftId, messageId, error) => { await invokeEdge('ai-reply-drafts', { action: 'complete', draft_id: draftId, message_id: messageId, error }); },
         discard: async (draftId) => { await invokeEdge('ai-reply-drafts', { action: 'discard', draft_id: draftId }); },
-        onProgress: (done) => setDraftProgress((p) => ({ ...p, done })),
       });
-      const all = [...outcomes, ...skippedBefore];
-      setDraftOutcomes(all);
+      setDraftRows(outcomes);
       setBulkSelected(new Set());
-      toast({ title: draftOutcomeSummary(all), description: 'Each one is listed above the conversation list.', variant: outcomes.some((o) => o.kind === 'failed') ? 'destructive' : undefined });
+      toast({ title: draftOutcomeSummary(outcomes), description: 'Each one is listed above the conversation list.', variant: outcomes.some((o) => o.state === 'failed') ? 'destructive' : undefined });
     } finally {
+      draftUndoRef.current?.(false);
       draftRunningRef.current = false;
       setDraftBusy(false);
-      setDraftConfirm(false);
       void ai.refetch();
       void refetch();
     }
   };
+  const undoDraftSend = () => { draftStopRef.current = true; draftUndoRef.current?.(false); };
+  const stopDraftSend = () => { draftStopRef.current = true; };
   const cancelDraftQueued = async (scheduledId: string) => {
     const r = await sched.cancel(scheduledId);
     if (r.ok) setDraftCancelled((s) => new Set(s).add(scheduledId));
     else toast({ title: "Couldn't cancel", description: r.error ?? 'Try again from the thread.', variant: 'destructive' });
+  };
+  const cancelAllDraftQueued = async () => {
+    const ids = (draftRows ?? []).filter((r) => r.state === 'queued' && r.scheduledId && !draftCancelled.has(r.scheduledId)).map((r) => r.scheduledId as string);
+    for (const id of ids) await cancelDraftQueued(id);
   };
 
   const queueHookFollowups = async () => {
@@ -2400,16 +2437,16 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
                       : `Send to ${bulkPlan.send.length}`}
                   </Button>
                 </div>
-                {/* SEND DRAFTS (2026-10-27): each selected lead's OWN waiting AI draft. Shown once at least one selected
-                    conversation has a draft that Needs approving; the rest are listed as skipped in the confirm. */}
+                {/* SEND DRAFTS (2026-10-27): drafts what has no draft, then sends each lead its OWN reply. No confirm: it starts
+                    at once behind the BULK_UNDO_MS Undo bar. Skips (with the reason) show in the panel below. */}
                 {showSendDrafts && (
                   <div className="flex flex-wrap items-center gap-2 border-t border-border/50 pt-1.5" data-testid="send-drafts-bar">
                     <span className="min-w-0 flex-1 text-muted-foreground">
                       <Sparkles className="mr-1 inline h-3 w-3 text-violet-600" />
-                      {draftPlan.send.length} with a waiting draft{draftPlan.skipped.length ? ` · ${draftPlan.skipped.length} skipped` : ''}
+                      Draft if needed, then send each its own reply{draftPlan.items.length - draftWork ? ` · ${draftPlan.items.length - draftWork} will be skipped` : ''}
                     </span>
-                    <Button size="sm" className="h-7 px-2 text-[11px]" disabled={draftBusy || draftPlan.send.length === 0} onClick={openDraftConfirm} data-testid="send-drafts">
-                      {draftBusy ? <><Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />Sending {draftProgress.done}/{draftProgress.total}</> : `Send drafts (${draftPlan.send.length})`}
+                    <Button size="sm" className="h-7 px-2 text-[11px]" disabled={draftBusy} onClick={() => void runDraftSend()} data-testid="send-drafts">
+                      {draftBusy ? <><Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />Working…</> : `Send drafts (${draftWork})`}
                     </Button>
                   </div>
                 )}
@@ -2435,9 +2472,10 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
               </div>
             )
           )}
-          {draftOutcomes && (
-            <DraftBatchReport outcomes={draftOutcomes} cancelled={draftCancelled} onCancelQueued={(id) => void cancelDraftQueued(id)}
-              onOpen={openConversation} onDismiss={() => setDraftOutcomes(null)} />
+          {draftRows && (
+            <DraftBatchPanel rows={draftRows} running={draftBusy} undoLeftMs={draftUndoLeft} cancelled={draftCancelled}
+              onUndo={undoDraftSend} onStop={stopDraftSend} onCancelQueued={(id) => void cancelDraftQueued(id)}
+              onCancelAllQueued={() => void cancelAllDraftQueued()} onOpen={openConversation} onDismiss={() => setDraftRows(null)} />
           )}
           {/* What the last batch did. Sticks around until dismissed: a toast disappears, and the
               list of who did NOT get the message is the part worth acting on. */}
@@ -3188,9 +3226,6 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
-      <DraftBatchConfirm open={draftConfirm} plan={draftPlan} busy={draftBusy} progress={draftProgress}
-        onCancel={() => setDraftConfirm(false)} onConfirm={() => void runDraftSend()} />
 
       <Dialog open={hookQueueConfirm} onOpenChange={(o) => { if (!hookQueuing) setHookQueueConfirm(o); }}>
         <DialogContent className="sm:max-w-md">
