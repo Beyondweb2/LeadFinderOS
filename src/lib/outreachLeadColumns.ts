@@ -23,6 +23,7 @@ export const OUTREACH_LIST_COLUMNS = [
   // identity + dedupe
   'id', 'business_name', 'phone', 'email', 'google_maps_url', 'place_id', 'address', 'country',
   'created_at', 'is_archived', 'campaign_id', 'assigned_to_user_id',
+  'added_by_user_id', // the row's "Added by <name>" line (multi-user, 2026-10-27)
   // trade / town (audit eligibility, town badge, "Set trade")
   'category', 'search_keyword', 'search_location', 'derived_town', 'town_fetch_note',
   // pipeline

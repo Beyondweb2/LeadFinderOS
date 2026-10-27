@@ -106,7 +106,7 @@ const Index = () => {
     const hit = identity.data?.get(lead.id);
     if (!hit) return null;
     const m = hit.owner_id ? teamDir.byId.get(hit.owner_id) : undefined;
-    return { state: hit.state, leadId: hit.lead_id, ownerName: hit.owner_name, avatarUrl: m?.avatar_url ?? null, addedAt: hit.added_at };
+    return { state: hit.state, leadId: hit.lead_id, ownerName: hit.owner_name, avatarUrl: m?.avatar_url ?? null, addedAt: hit.added_at, addedByName: hit.added_by_name ?? null };
   }, [identity.data, teamDir.byId]);
   const handleClaim = useCallback(async (leadId: string) => {
     const r = await salesActions.claim.mutateAsync({ leadId });

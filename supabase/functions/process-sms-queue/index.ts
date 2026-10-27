@@ -65,7 +65,8 @@ Deno.serve(async (req) => {
       .select("id, business_name, phone, country, assigned_to_user_id, sms_queued_at, sms_queued_by_user_id, sms_attempts, sms_queued_template")
       .not("sms_queued_at", "is", null).eq("is_archived", false).not("sms_queued_by_user_id", "is", null)
       .order("sms_queued_at", { ascending: true }).limit(25);
-    const { data: susp, error: suspErr } = await service.from("team_members").select("user_id").not("suspended_at", "is", null);
+    // Disabled (left) is held like suspended (multi-user, 2026-10-27): never sent in a leaver's name.
+    const { data: susp, error: suspErr } = await service.from("team_members").select("user_id").or("suspended_at.not.is.null,status.eq.disabled");
     if (suspErr) return json({ ok: true, skipped: "team_read_failed" });
     const suspended = new Set(((susp ?? []) as Array<{ user_id: string }>).map((r) => r.user_id));
     let qa;
@@ -76,7 +77,7 @@ Deno.serve(async (req) => {
       return m === "MY" || m === "SG" ? marketOpen(m) && !atCap.has(m) : ukOpen;
     };
     const lead = ((rows ?? []) as Array<Record<string, unknown>>).find((l) =>
-      inItsHours(l) && !suspended.has(String(l.sms_queued_by_user_id))
+      inItsHours(l) && !suspended.has(String(l.sms_queued_by_user_id)) && !suspended.has(String(l.assigned_to_user_id))
       && qaSendVerdict(qa, { leadId: String(l.id), phones: [l.phone as string | null], holderUserId: (l.assigned_to_user_id as string | null) ?? null }).kind !== "refuse");
     if (!lead) return json({ ok: true, skipped: (rows ?? []).length ? "all_held" : "empty_queue" });
 

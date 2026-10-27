@@ -265,3 +265,38 @@ normal Outreach and Inbox — the same pages, the same components — with fewer
   Both QA sessions ended with `logout?scope=local` (refresh refused after). ⚠️ Cardiff Bay Dental keeps
   the QA values (star, follow-up 2 Oct, call booked 1 Oct, website control "agency", QA note) — clear
   them by hand if wanted.
+
+## 10. Multi-user safety audit (2026-10-27, branch `fix/multi-user-safety`, migration 20261128090000)
+
+Paul is adding more salespeople. Audit = code review of every sales-reachable route and edge function, live `pg_policy` read
+(read-only), and the send paths. **No real hole found:** routes are a positive list; every new admin control (Inbox mode, auto-send
+switches, Send now, pace/country settings) is admin-only in the UI AND the server; every sender checks `canWorkLead`; drafts are
+claimed by one conditional write; `outreach_leads` writes are admin-only (restrictive); sales reads only `sales_leads`
+(`security_invoker=false`, checked); unread / notifications are per person.
+
+**Fixed:**
+- **Find Leads "already added" = what the add refuses.** `lead_identity_lookup` now also matches same name + country, same
+  website identity, and a previously-added name / Maps link (`outreach_history`) — the three extra refusals `coverage_add_leads`
+  makes. Before, a UK result showed Add to CRM and the add then said "not added". It also returns `added_by_name`; the badge reads
+  "Added by <name>" (tooltip adds "worked by <owner>" when different). `_lead_identity_rows` and `sales_add_lead` unchanged (the
+  website stays a warning there). 200 unmatched items: 150 ms (core alone 28 ms).
+- Bulk select in Find Leads leaves out anything the server says is already added (both roles); the row checkbox is disabled.
+- Outreach rows show "Added by <name>" (`added_by_user_id` added to `OUTREACH_LIST_COLUMNS`; NULL before 2026-09-27 = shows nothing).
+- **Auto-send never answers a lead someone else works** (`autoSendVerdict` → `assigned_to_other`): the send-as admin's name
+  would otherwise sign a salesperson's conversation. Owner not read = refused. Both the queuer and the drain check it.
+- **A leaver (team_members.status = 'disabled')** is held like a suspended rep in the WhatsApp and SMS queues (by owner AND by
+  queuer, since the queuer's name signs it); `lead_recipient` sends their leads' reply notifications to the book owner.
+- **Queued draft race:** `complete` with `queued_for_send_hours` now closes the draft `sending → discarded` in one write; it used
+  to go back to `pending` first, where a second person could claim and send it live as well.
+- The AI model cost line in "Why this reply?" is admin-only (Sales never sees a cost).
+
+**Left as design / Paul's decision (not changed):** two people can still each reply by hand to the same lead at the same moment
+(no lock on manual sends — the admin can see every conversation); `profiles.message_name` is free text (a rep could type "Paul");
+114 leads sat on 3 disabled members on 2026-10-27 (move them with Team → move all); five functions authorise only by
+`row.user_id === caller` (apply-seo-paste, run-seo-scan, extract-competitors, backfill-lead-towns, clear-enrichment-cache) —
+unreachable by Sales today because Sales never owns `user_id`, but they have no role check; caps, send hours and the auto-send
+cap are book-wide (one WhatsApp number), `team_members.daily_send_limit` is per person; opt-outs are global by phone.
+
+**Tests:** `scripts/multi-user-safety.test.ts` (34 checks); `supabase/tests/multi-user-safety.sql` (13 checks, two fake reps,
+same lead / name / website, cross-user read, claim, direct write, anon, a leaver's notifications; always rolled back) — 13/13
+against the live schema with the migration applied inside the rolled-back transaction, 2026-10-27.

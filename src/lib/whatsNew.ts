@@ -22,6 +22,14 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-27-multi-user-safety', date: '2026-10-27', title: 'Find Leads says who added a business, and never lets two people add it', audience: 'all',
+    body: 'In Find Leads, a business already in the CRM now shows "Added by <name>" instead of Add to CRM — also when it matches by name or website, not only by Google listing or phone. It cannot be ticked for a bulk add. Outreach rows show "Added by <name>" under the business name.',
+    report: {
+      added: ['"Added by <name>" on Find Leads results already in the CRM, and under the business name on Outreach rows.'],
+      changed: ['A result with the same name or website as a lead already in the CRM is shown as already added (before, it showed Add to CRM and then said "not added").', 'Already-added results can no longer be ticked for a bulk add.', 'With the Inbox on Auto, a lead a salesperson works is never answered automatically; its draft waits for that salesperson.', 'Replies on a lead whose salesperson has left notify Paul.', 'Queued messages for a salesperson who has left are held, never sent in their name.'],
+      removed: ['The AI cost line in "Why this reply?" for salespeople.'],
+      effect: 'Each business has one owner and one person who added it, and everyone can see who. Nobody can add, bulk-add or auto-answer someone else\'s lead.',
+    } },
   { id: '2026-10-27-send-drafts', date: '2026-10-27', title: 'Send several AI drafts at once', audience: 'all',
     body: 'In the Inbox, press "Select several…" and tick the conversations whose AI draft you have read. "Send drafts" then sends each business its OWN draft, exactly as shown (the first message still ends with your name). A confirm step lists every business, its draft and their last message first. At most 20 at a time.',
     report: {
