@@ -1779,7 +1779,10 @@ Deno.serve(async (req) => {
        salesperson is not sent — Paul decides (reassign, remove, or reactivate). Nothing is written:
        it stays 'queued' and is listed on the API Usage page's Security section. ⛔ FAIL CLOSED: if who
        is suspended cannot be read, this tick sends nothing and the next tick asks again. */
-    const { data: suspendedRows, error: suspendedErr } = await service.from("team_members").select("user_id").not("suspended_at", "is", null);
+    /* ⛔ DISABLED IS HELD TOO (multi-user, 2026-10-27): a lead assigned to — or queued by — a salesperson who has left (status
+       'disabled') is held exactly like a suspended one, so it never goes out signed with a leaver's name. Paul moves their leads
+       (Team → move all), then they send under the new owner. */
+    const { data: suspendedRows, error: suspendedErr } = await service.from("team_members").select("user_id").or("suspended_at.not.is.null,status.eq.disabled");
     if (suspendedErr) return json({ ok: true, skipped: "team_read_failed", ...statusPayload });
     const suspendedIds = new Set(((suspendedRows ?? []) as Array<{ user_id: string }>).map((r) => r.user_id));
     /* ⛔ QA SAFETY (2026-10-04, src/lib/qaSafety.ts). A REAL business held by a test account is held
@@ -1787,8 +1790,9 @@ Deno.serve(async (req) => {
        A QA fixture IS chosen and is simulated at the send below. FAIL CLOSED like the suspended read. */
     let qaEx: Awaited<ReturnType<typeof loadQaExclusions>>;
     try { qaEx = await loadQaExclusions(service); } catch { return json({ ok: true, skipped: "qa_guard_read_failed", ...statusPayload }); }
-    const leadRows = (queuedRows ?? []).filter((l: { id: string; phone?: string | null; assigned_to_user_id?: string | null }) =>
+    const leadRows = (queuedRows ?? []).filter((l: { id: string; phone?: string | null; assigned_to_user_id?: string | null; queued_by_user_id?: string | null }) =>
       (!l.assigned_to_user_id || !suspendedIds.has(l.assigned_to_user_id))
+      && (!l.queued_by_user_id || !suspendedIds.has(l.queued_by_user_id))
       && qaSendVerdict(qaEx, { leadId: l.id, phones: [l.phone], holderUserId: l.assigned_to_user_id ?? null }).kind !== "refuse");
 
     /* ══ WHICH OF THEM SENDS THIS TICK ═══════════════════════════════════════════════════════════

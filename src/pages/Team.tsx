@@ -21,6 +21,7 @@ import { activationPending, RESEND_ERRORS } from '@/lib/teamActivation';
 import { trialOnboardingView } from '@/lib/teamAccounts';
 import { Switch } from '@/components/ui/switch';
 import { AddTeamMember } from '@/components/team/AddTeamMember';
+import { MessageNameApprovals } from '@/components/team/MessageNameApprovals';
 import { ONBOARDING_SAVE_ERRORS, onboardingSummary, type DocumentVersion, type OnboardingRecord } from '@/lib/salespersonOnboarding';
 
 /* TEAM — admin only (multi-user, 2026-09-27). The route is admin-only in src/lib/access.ts, and every
@@ -149,6 +150,8 @@ export default function Team() {
         <p className="text-xs leading-snug text-muted-foreground">Click a salesperson's onboarding badge to see their checklist. The checklist is your record only — it does not block selling. Only a suspended, ended or disabled salesperson is stopped. Only you can see these records.</p>
         {onboarding.error && <Callout tone="red">Onboarding records could not be loaded: {String((onboarding.error as Error).message)}</Callout>}
       </div>
+
+      <MessageNameApprovals nameOf={(id) => team.data?.find((m) => m.user_id === id)?.display_name ?? 'A team member'} />
 
       <Panel title="Add a team member" icon={UserPlus} tone="blue">
         <AddTeamMember call={call} onDone={() => void refresh()} inviteLinkBox={(l, close) => <LinkBox link={l} onClose={close} />} />

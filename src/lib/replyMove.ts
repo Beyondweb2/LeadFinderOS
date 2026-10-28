@@ -10,9 +10,9 @@
      · autoDraft   — may the worker draft without a person asking (the loop guards say no)
      · label       — "Auto-reply" / "Only confirmed": not a real reply, never counted as Replied
 
-   ⛔ THE FIRST REPLY THAT ONLY CONFIRMS WHO THEY ARE gets the FULL PITCH (Paul, 2026-10-20, firstReplyPitch): the AI result,
-      what the crawl found on their site, then "agency or yourself?". Every word is code-built (fixedText), never the model's.
-      The voice note is offered on the NEXT reply, the call after that. No draft says it is sending anything "now".
+   ⛔ THE FIRST REPLY THAT ONLY CONFIRMS WHO THEY ARE gets THE HOOK (firstReplyPitch; Paul, 2026-10-27): the AI result, what
+      the crawl really found on their site, the report link, then the voice-note offer. Every word is code-built (fixedText),
+      never the model's. The call comes after the voice note. No draft says it is sending anything "now".
    ⛔ HOOK FIRST (Paul, 2026-10-26): while the pitch is owed, ANY first reply that is not a no / soft no / stop / wrong person
       gets that hook as it stands ("are you looking for lessons?", "who's this?", a price ask): no apology, no explaining.
    ⛔ NOTHING HERE SENDS. ⛔ Voice note first, call after. ⛔ No sign-up link, ever; prices only after a price question or a
@@ -163,7 +163,9 @@ export interface MoveEvidence {
   /** THE ONE WEBSITE CHECK (websiteCheck.ts websiteCheckFor): its state and the SERIOUS issues' plain titles
    *  (plainIssueTitle), worst first; `pitch` = the same issues in the pitch's plain words (pitchIssueWords.ts), any
    *  with no plain words left out. Absent = read from hasWebsite / findings (older callers, fixtures). */
-  site?: { state: SiteState; issues: string[]; pitch?: string[]; evidence?: Array<{ title: string; pages: string[] }> } | null;
+  site?: { state: SiteState; issues: string[]; pitch?: string[]; evidence?: Array<{ title: string; pages: string[] }>;
+    /** How many issues the check found in all (serious + minor). More than the pitch lists → it says so (pitchMoreLine). */
+    found?: number } | null;
   /** The "AI handles replies" switch (whatsapp_outreach_state.ai_handles_replies). ON: never say "I read and send every
    *  one myself" — replies may be automated. Absent = off. */
   aiAutoReplies?: boolean;
@@ -206,7 +208,7 @@ export interface MovePlan {
   /** Set only when CODE wrote every word (the first-reply pitch): the draft is this text, the model is not asked. */
   fixedText?: string | null;
   /** How the message ends, recorded on the draft (Paul, 2026-10-20): the pitch's 'emotional' closer, or the next step. */
-  closer?: 'emotional' | 'agency' | 'site' | null;
+  closer?: 'emotional' | 'agency' | 'site' | 'voice_note' | null;
   /** How a code-built pitch / site-shared reply was built (why.structure), so reply rates can be compared by structure. */
   structure?: PitchStructure | null;
   /** Their first reply to our opener (the pitch is still owed): written in the first-message style, "AI" in capitals. */
@@ -225,6 +227,8 @@ export interface MovePlan {
   greetName?: string | null;
   /** They asked WHICH AI tool (RE.whichTool): the only draft that may name one (Paul, 2026-10-21). Absent = no brand names. */
   brandsAllowed?: boolean;
+  /** The hook named its engine ("I asked chatgpt" / "I asked google ai", Paul 2026-10-26): that phrase only is allowed. */
+  hookEngine?: HookEngineWords | null;
   /** Tied into a contract until a day we could read: noted on the draft. ⛔ Never written to the lead (Next Action is
    *  human-set): the person sets it when they send. */
   followUp?: FollowUpNote | null;
@@ -465,13 +469,27 @@ export function spokenSearch(question: string, trade: string | null): string {
   if (/^(who|what|which|where|can|could|is|are|how|any|do|does|should|would|recommend)\b/i.test(q)) return `"${q.charAt(0).toUpperCase()}${q.slice(1)}?"`;
   return `for ${q}`;
 }
+/** THE HOOK NAMES THE ENGINE (Paul, 2026-10-26; spelling 2026-10-27): "I asked chatgpt …" when the missed search was ChatGPT's,
+ *  "I asked googleAI …" when it was Gemini's or Google's AI answers (overview). Exactly that casing, kept by tidyCaps.
+ *  Unknown engine → null (the hook says "AI"). Only the hook uses it; every other draft keeps "AI". */
+export type HookEngineWords = 'chatgpt' | 'googleAI';
+export function hookEngineWords(engine: string | null | undefined): HookEngineWords | null {
+  const k = String(engine ?? '').toLowerCase().replace(/[\s-]+/g, '_');
+  if (k === 'chatgpt' || k === 'openai') return 'chatgpt';
+  if (k === 'gemini' || k === 'overview' || k === 'google_ai' || k === 'googleai' || k === 'ai_overview' || k === 'google_ai_overview') return 'googleAI';
+  return null;
+}
 /** "I asked AI <the missed search>": the question where they were NOT named (the worst-engine pick, Paul 2026-10-20).
- *  ⛔ NEVER AN AI BRAND (Paul, 2026-10-21): always "AI"; the engine stays in the evidence ("why" panel) and is named only
- *  when they ask which tool (whichToolLine). No missed search on record: trade + town. */
-export function askedPhrase(e: MoveEvidence): string | null {
+ *  ⛔ "AI", never a brand (Paul, 2026-10-21) — EXCEPT the hook (`named`: hookEngineWords, Paul 2026-10-26). The engine stays in
+ *  the evidence ("why" panel) and is otherwise named only when they ask which tool (whichToolLine). No missed search: trade + town. */
+export function askedPhrase(e: MoveEvidence, named = false): string | null {
   if (!e.trade || !e.town) return null;
   const m = e.missed;
-  if (m && m.question.trim()) return `I asked AI ${spokenSearch(m.question, e.trade)}`;
+  /* ⛔ Never two tools: when the conversation already named the other one (e.engineWords), the hook says "AI". */
+  const hw = named ? hookEngineWords(m?.engine) : null;
+  const conv = hookEngineWords(e.engineWords);
+  const who = hw && (!conv || conv === hw) ? hw : 'AI';
+  if (m && m.question.trim()) return `I asked ${who} ${spokenSearch(m.question, e.trade)}`;
   return `I asked AI for ${withA(tradeWord(e.trade))} in ${e.town}`;
 }
 const lowerFirst = (s: string) => s.charAt(0).toLowerCase() + s.slice(1);
@@ -501,22 +519,26 @@ export function auditLine(e: MoveEvidence): string | null {
 export const PITCH_SELF_MANAGED_REPLY = PLAYBOOK.self_managed.line;
 /** "Is this a bot?" — Paul's one answer (2026-10-20, the playbook): true whatever the AI auto-reply switch says. */
 export const BOT_ANSWER = PLAYBOOK.is_bot.line;
-/** THE ONE QUESTION the pitch ends on (a website on record). ⛔ No voice-note line in the first pitch (Paul, 2026-10-23):
- *  the voice note and the call are offered in the NEXT message. */
+/** The agency question: no longer the hook's question (Paul, 2026-10-27: the hook offers the voice note), still asked later in
+ *  the conversation (site shared, the "go on" answers). */
 export const PITCH_AGENCY_Q = 'Are you with an agency, or do you manage the website yourself?';
-/** The pitch's question when no website is on record (never the agency question). */
+/** The website question (no website on record), asked later in the conversation, never by the hook. */
 export const PITCH_SITE_Q = "Do you have a website I've missed, or is that something you'd want sorted?";
 /** After "no, I haven't got one": the voice note offer. */
 export const PITCH_VOICE_Q = 'Ok if I send a quick voice note on what I found?';
-export const PITCH_INSTEAD_LINE = 'AI is recommending your competitors instead.';
-/** The list lead-in (Paul, 2026-10-23), then one "• " line per real issue. */
-export const PITCH_LIST_LEAD = 'I looked into why and a few things could be holding you back:';
-/** One real issue: one sentence, no list. */
-export const PITCH_ONE_LEAD = 'I looked into why and found';
-/** What we do, said once, with no promise of a result (Paul, 2026-10-21). */
-export const PITCH_SPECIALISE_LINE = 'I specialise in getting local businesses to show up in those results, so the customers go to you instead.';
-/** Paul's no-website words, word for word (2026-10-26). ⛔ Never "well-built" or "more important than ever", no stats. */
-export const PITCH_NO_SITE_LINE = "Most local work comes from recommendations, and now AI is the one recommending. It leans on websites when it picks who to name, and I couldn't find one for you. Without one built for AI, you're hard to recommend.";
+/** ⛔ THE HOOK'S ONE QUESTION (Paul, 2026-10-27), both shapes, word for word. */
+export const HOOK_VOICE_NOTE_Q = 'Can I send you a quick voice note explaining how you could get AI recommending you?';
+/** The site lead-in, then one "• " line per real issue (up to PITCH_MAX_LIST). */
+export const hookSiteLead = (n: number): string =>
+  `I had a look at your site and ${n === 1 ? 'one thing' : n === 2 ? 'a couple of things' : 'a few things'} could be holding you back:`;
+/** The report line: "There's more in the full report:" ONLY when the check really found more issues than the hook lists
+ *  (site.found > shown, never a guess), else "Here's the full result:". No ready report link → no line at all. */
+export const HOOK_RESULT_LEAD = "Here's the full result:";
+export const HOOK_MORE_LEAD = "There's more in the full report:";
+export function hookReportLine(url: string | null, shown: number, found: number | null | undefined): string | null {
+  if (!url) return null;
+  return `${shown > 0 && typeof found === 'number' && found > shown ? HOOK_MORE_LEAD : HOOK_RESULT_LEAD} ${url}`;
+}
 export const PITCH_INTRO_LINE = "It's Paul from Findable. I help local businesses show up when people ask AI tools for their trade in their area.";
 /** How the pitch was built, stored on the draft (why.structure) so reply rates can be compared by structure. */
 export type PitchStructure = 'pitch_list' | 'pitch_sentence' | 'pitch_plain' | 'pitch_no_site' | 'pitch_intro'
@@ -533,80 +555,70 @@ export function siteOf(e: MoveEvidence): { state: SiteState; issues: string[] } 
 }
 const noSiteOf = (e: MoveEvidence) => { const s = siteOf(e).state; return s === 'no_website' || s === 'profile'; };
 
-/** No name found (Paul, 2026-10-21): the pitch opens "Hi mate,". */
+/** ⛔ THE HOOK ALWAYS OPENS "Hi mate," (Paul, 2026-10-27), whatever name they gave or the site states. */
 export const PITCH_NO_NAME_GREETING = 'Hi mate,';
 /** "Hi Kylie," when they gave a name in their reply or the site's own crawl states a person as owner / founder
- *  (MoveEvidence.ownerName). First name only; never guessed from the business name. No name → "Hi mate,". */
+ *  (MoveEvidence.ownerName). First name only; never guessed from the business name. No name → "Hi mate,".
+ *  Not used by the hook (it always says "Hi mate,"). */
 export function pitchGreeting(e: MoveEvidence, theirName: string | null = null): string {
   const first = String(theirName || e.ownerName || '').trim().split(/\s+/)[0] ?? '';
   return /^[A-Z][a-z]+(?:['’-][A-Za-z]+)?$/.test(first) ? `Hi ${first},` : PITCH_NO_NAME_GREETING;
 }
 
-/** The "why" paragraph for a list of real issue lines: none → null; one → one sentence; two or more → the bullet list. */
-function issuesParagraph(issues: string[], lead: string | null): { text: string | null; kind: 'list' | 'sentence' | 'plain' } {
-  if (!issues.length) return { text: null, kind: 'plain' };
-  if (issues.length === 1) return { text: `${[lead, PITCH_ONE_LEAD].filter(Boolean).join(' ')} ${carryOn(issues[0])}.`, kind: 'sentence' };
-  return { text: `${[lead, PITCH_LIST_LEAD].filter(Boolean).join(' ')}\n${bulletList(issues)}`, kind: 'list' };
-}
-
-/** THE FIRST-REPLY PITCH (Paul, 2026-10-20 wording A; lean, 2026-10-23):
- *    Hi <first name>, / Hi mate,
- *    I asked AI "<the worst engine's missed question>" and it mentioned <that answer's names>.
- *    AI is recommending your competitors instead. I looked into why and a few things could be holding you back:
- *    • <up to four real issues, plain words, worst first>     (one issue: "…I looked into why and found <it>.")
- *    I specialise in getting local businesses to show up in those results, so the customers go to you instead.
- *    <the agency question> (no website: PITCH_NO_SITE_LINE, then "Do you have a website I've missed, or …?") — the ONLY question.
- *  ⛔ "AI is recommending your competitors instead" only under the one-third rule; above it (the soft version) the same shape
- *     without that sentence. ⛔ No voice-note line, no guarantee, no price, no past results here. Nothing absent is invented.
- *  ⛔ The length rule: past PITCH_MAX_WORDS the lowest issue goes, never below PITCH_MIN_LIST. */
-export function firstReplyPitch(e: MoveEvidence, theirName: string | null = null): { lines: string[]; question: string; closer: 'agency' | 'site'; structure: PitchStructure } {
-  const p = firstReplyPitchBase(e, theirName);
-  const link = reportLinkLine(e);
-  return link ? { ...p, lines: [...p.lines, link] } : p;
-}
-/** The lead-in is a few words; the link is the lead's own report, only once its audit is finished (never a sign-up link). */
-export const PITCH_REPORT_LEAD = "Here's the full report:";
-const REPORT_URL_RE = /^https:\/\/findable\.live\/r\/[A-Za-z0-9]{4,12}$/;
-/** The one short report line before the question, or null when there is no ready, well-formed report link.
- *  ⛔ Australia (prospect-only) never gets the report link in a draft (Paul, 2026-10-26). */
-export const reportLinkLine = (e: Pick<MoveEvidence, 'reportUrl'> & Partial<Pick<MoveEvidence, 'prospectOnly'>>): string | null =>
-  !e.prospectOnly && e.reportUrl && REPORT_URL_RE.test(e.reportUrl) ? `${PITCH_REPORT_LEAD} ${e.reportUrl}` : null;
-/** Marks a code-built pitch: its report link is allowed through the link check; no link means the audit is pending. */
-function markReportLink(p: MovePlan, e: Pick<MoveEvidence, 'reportUrl'> & Partial<Pick<MoveEvidence, 'prospectOnly'>>): MovePlan {
-  if (!p.fixedText || (p.move !== 'first_reply_pitch' && p.move !== 'auto_reply') || e.prospectOnly) return p;
-  const link = reportLinkLine(e);
-  if (link && p.fixedText.includes(link)) return { ...p, linkOk: true };
-  return { ...p, auditPending: true, note: p.note ?? 'Audit pending: no report link in this draft.' };
-}
-function firstReplyPitchBase(e: MoveEvidence, theirName: string | null = null): { lines: string[]; question: string; closer: 'agency' | 'site'; structure: PitchStructure } {
-  const noSite = noSiteOf(e);
-  const next = noSite ? { question: PITCH_SITE_Q, closer: 'site' as const } : { question: PITCH_AGENCY_Q, closer: 'agency' as const };
-  const hi = pitchGreeting(e, theirName);
-  const withHi = (lines: string[]) => [hi, ...lines];
+/** THE HOOK (the first-reply pitch; Paul, 2026-10-27, the voice-note hook). Two shapes, every word built here:
+ *    Hi mate,
+ *    I asked <chatgpt | googleAI | AI> "<the missed question>" and it named <that answer's names>, not you.
+ *    [site found, real issues only:] I had a look at your site and a couple of things could be holding you back:
+ *    • <up to four real issues, plain words, worst first>
+ *    [report ready, not Australia:] Here's the full result: <link>   (more issues found than listed: "There's more in the full report: <link>")
+ *    Can I send you a quick voice note explaining how you could get AI recommending you?
+ *  The no-website shape is the same with no site paragraph; it never says "website". A site with no solid issue gets that
+ *  shape too (never a claim that the site is missing). "not you" only for the missed search, an answer that did not name
+ *  them; with no missed search on record the line says what it named, nothing more (the old handling).
+ *  ⛔ One question; no price, guarantee or sign-up; nothing absent is invented. The sender's name is added when it is sent
+ *  (hookSignature.ts). ⛔ The length rule: past PITCH_MAX_WORDS the lowest issue goes, never below PITCH_MIN_LIST. */
+export function firstReplyPitch(e: MoveEvidence, _theirName: string | null = null): { lines: string[]; question: string; closer: 'voice_note'; structure: PitchStructure } {
+  const hi = PITCH_NO_NAME_GREETING;
+  const url = reportUrlOf(e);
+  const done = (body: string[], shown: number, structure: PitchStructure) => {
+    const link = hookReportLine(url, shown, e.site?.found);
+    return { lines: [hi, ...body, ...(link ? [link] : [])], question: HOOK_VOICE_NOTE_Q, closer: 'voice_note' as const, structure };
+  };
   const counts = e.named && e.named.valid > 0 ? e.named : null;
-  if (!e.trade || !e.town || !counts) return { lines: withHi([PITCH_INTRO_LINE, ...(noSite ? [PITCH_NO_SITE_LINE] : [])]), ...next, structure: 'pitch_intro' };
+  if (!e.trade || !e.town || !counts) return done([PITCH_INTRO_LINE], 0, 'pitch_intro');
   const full = mayClaimNamedInstead(counts.named, counts.valid);
-  const site = siteOf(e);
-  const asked = askedPhrase(e) as string;
+  const asked = askedPhrase(e, true) as string;
   /* ⛔ Never a rival with (nearly) their own name (Paul, 2026-10-20). */
   const rivals = rivalsExcludingSelf(e.competitors, e.businessName).slice(0, 3);
-  const first = rivals.length ? `${asked} and it mentioned ${listNames(rivals)}.` : full ? `${asked} and it mentioned other businesses, not you.` : `${asked} and it didn't mention you.`;
-  const instead = full ? PITCH_INSTEAD_LINE : null;
-  if (noSite) {
-    return { lines: withHi([first, ...(instead ? [instead] : []), PITCH_NO_SITE_LINE, PITCH_SPECIALISE_LINE]), ...next, structure: 'pitch_no_site' };
-  }
+  /* The missed search is an answer that did NOT name them (worstMiss.ts): "not you" is true of it. */
+  const missed = !!e.missed?.question.trim();
+  const first = rivals.length
+    ? `${asked} and it named ${listNames(rivals)}${missed ? ', not you' : ''}.`
+    : full ? `${asked} and it named other businesses, not you.` : `${asked} and it didn't name you.`;
+  if (noSiteOf(e)) return done([first], 0, 'pitch_no_site');
+  const site = siteOf(e);
   let issues = site.state === 'issues' ? site.issues.slice(0, PITCH_MAX_LIST) : [];
-  const build = (list: string[]) => {
-    const why = issuesParagraph(list, instead);
-    const middle = why.text ?? instead;
-    return { lines: withHi([first, ...(middle ? [middle] : []), PITCH_SPECIALISE_LINE]), kind: why.kind };
-  };
-  let b = build(issues);
-  while (issues.length > PITCH_MIN_LIST && wordCount(pitchText({ lines: b.lines, question: next.question })) > PITCH_MAX_WORDS) {
+  const body = (list: string[]) => (list.length ? [first, `${hookSiteLead(list.length)}\n${bulletList(list)}`] : [first]);
+  while (issues.length > PITCH_MIN_LIST && wordCount(pitchText({ lines: [hi, ...body(issues)], question: HOOK_VOICE_NOTE_Q })) > PITCH_MAX_WORDS) {
     issues = issues.slice(0, -1);
-    b = build(issues);
   }
-  return { lines: b.lines, ...next, structure: b.kind === 'list' ? 'pitch_list' : b.kind === 'sentence' ? 'pitch_sentence' : 'pitch_plain' };
+  return done(body(issues), issues.length, issues.length ? 'pitch_list' : 'pitch_plain');
+}
+const REPORT_URL_RE = /^https:\/\/findable\.live\/r\/[A-Za-z0-9]{4,12}$/;
+/** The lead's own report link, only once its audit is finished and well-formed (never a sign-up link), else null.
+ *  ⛔ Australia (prospect-only) never gets the report link in a draft (Paul, 2026-10-26). */
+export const reportUrlOf = (e: Pick<MoveEvidence, 'reportUrl'> & Partial<Pick<MoveEvidence, 'prospectOnly'>>): string | null =>
+  !e.prospectOnly && e.reportUrl && REPORT_URL_RE.test(e.reportUrl) ? e.reportUrl : null;
+/** Marks a code-built pitch: its report link is allowed through the link check; no link means the audit is pending. */
+function markReportLink(p0: MovePlan, e: Pick<MoveEvidence, 'reportUrl'> & Partial<Pick<MoveEvidence, 'prospectOnly' | 'missed'>>): MovePlan {
+  if (!p0.fixedText || (p0.move !== 'first_reply_pitch' && p0.move !== 'auto_reply')) return p0;
+  /* The hook names its engine (hookEngineWords): the checker allows exactly that phrase, nothing else. */
+  const hw = hookEngineWords(e.missed?.engine);
+  const p = hw && p0.fixedText.includes(`I asked ${hw} `) ? { ...p0, hookEngine: hw } : p0;
+  if (e.prospectOnly) return p;
+  const url = reportUrlOf(e);
+  if (url && p.fixedText.includes(url)) return { ...p, linkOk: true };
+  return { ...p, auditPending: true, note: p.note ?? 'Audit pending: no report link in this draft.' };
 }
 /** The pitch as one message: each line its own paragraph, the question last. */
 export const pitchText = (p: { lines: string[]; question: string }): string => [...p.lines, p.question].join('\n\n');
@@ -648,7 +660,7 @@ export function thinksCustomerLine(e: MoveEvidence): string {
 }
 /** "What are you selling?" / "Why?" before the pitch went: a straight answer, then the pitch's own lines and its one question.
  *  Same greeting rule as the pitch (their name, the site's owner, else "Hi mate,"). Nothing on record: who we are, no claim. */
-export function straightAnswerPitch(e: MoveEvidence, theirName: string | null = null): { lines: string[]; question: string; closer: 'agency' | 'site'; structure: PitchStructure } {
+export function straightAnswerPitch(e: MoveEvidence, theirName: string | null = null): { lines: string[]; question: string; closer: 'voice_note'; structure: PitchStructure } {
   const p = firstReplyPitch(e, theirName);
   const [hi, ...rest] = p.lines;
   const answer = PLAYBOOK.straight_answer_then_pitch.line;
@@ -659,7 +671,7 @@ export function straightAnswerPitch(e: MoveEvidence, theirName: string | null = 
   return { ...p, lines: [hi, answer, ...rest] };
 }
 /** They chased us before the pitch went: say sorry once, then the pitch (Paul: "Sorry for the slow reply." + the pitch). */
-export function chasedPitch(e: MoveEvidence, theirName: string | null = null): { lines: string[]; question: string; closer: 'agency' | 'site'; structure: PitchStructure } {
+export function chasedPitch(e: MoveEvidence, theirName: string | null = null): { lines: string[]; question: string; closer: 'voice_note'; structure: PitchStructure } {
   const p = firstReplyPitch(e, theirName);
   const [hi, ...rest] = p.lines;
   return { ...p, lines: [hi, PLAYBOOK.they_chased.line, ...rest] };
@@ -711,6 +723,10 @@ function ourAsk(m: MoveThreadMsg | null): OurAsk | null {
 }
 const BARE_YES = /^\W*(yes|yeah|yep|yup|yh|ya|ye)\W*$/i;
 const BARE_NO = /^\W*(no|nope|nah|na)\b/i;
+/** A yes to our voice-note offer that yesish misses ("yeah sure", "ok go for it mate"): starts with a yes word, no "but",
+ *  "not", "busy" or "later", and no question ("Yes, who's this please?" is a question, not a yes). The hook ends on that
+ *  offer since 2026-10-27, so a loose yes must not fall to the go-on line. */
+const OFFER_YES = { test: (t: string) => /^\W*(yes|yeah|yea|yep|yup|yh|ok(ay)?|sure|go\s+on|go\s+ahead)\b/i.test(t) && !t.includes('?') && !/\b(but|not|no|busy|later|don'?t|can'?t)\b/i.test(t) };
 const NO_SITE_ANSWER = /^\W*(no|nope|nah|na)\b|\b(don'?t|do\s+not|haven'?t|have\s+not)\s+(have|got)\s+(one|a\s+(web)?site)|\bno\s+(web)?site\b/i;
 const CLEAR_NO = /\b(not\s+interested|no\s+thanks?|no\s+thank\s+you|not\s+for\s+(me|us)|(we'?re|i'?m)\s+(ok|fine|good|alright|sorted))\b/i;
 /** "Does it actually work?", "is it legit?", "how do I know it'll work?" — the guarantee answer, with the confidence line. */
@@ -929,7 +945,7 @@ export function pickMove(i: MoveInput): MovePlan {
   const auditedHere = !!e.named && e.named.valid > 0;
   const owed = pitchOwed(thread, idx);
   const earliestName = () => { for (const m of thread.slice(0, idx)) if (m.from === 'them') { const n = nameFromReply(m.text, e.businessName); if (n) return n; } return null; };
-  const codePitch = (intent: PlaybookIntent, p: { lines: string[]; question: string; closer: 'agency' | 'site'; structure: PitchStructure }, name: string | null) =>
+  const codePitch = (intent: PlaybookIntent, p: { lines: string[]; question: string; closer: 'voice_note'; structure: PitchStructure }, name: string | null) =>
     plan({ move: 'first_reply_pitch', read: intent, intent, greetName: name, points: p.lines.map((l) => `Use this line, word for word: "${l}"`), question: p.question,
       fixedText: pitchText(p), closer: p.closer, structure: p.structure, guide: PLAYBOOK[intent].line });
   if (RE.payOnResults.test(text)) {
@@ -1071,7 +1087,7 @@ export function pickMove(i: MoveInput): MovePlan {
     } else if (ask === 'offer') {
       if (RE.voiceWord.test(text) && !/\b(can'?t|cannot|no)\b/i.test(text)) p = fromPlaybook('voice_yes', { note: 'They said yes to the voice note: record it with the voice-note script.' });
       else if (RE.callWord.test(text) || RE.namedTime.test(text)) p = null; // the call rules below
-      else if (RE.yesish.test(text) || BARE_YES.test(text)) p = fromPlaybook('voice_yes', { note: 'They said yes to the voice note: record it with the voice-note script.' });
+      else if (RE.yesish.test(text) || BARE_YES.test(text) || OFFER_YES.test(text)) p = fromPlaybook('voice_yes', { note: 'They said yes to the voice note: record it with the voice-note script.' });
     } else if (ask === 'call_time' || ask === 'better_time') {
       const note = readEndDate(text, nowMs);
       /* B6: a bare hour after we asked a time ("Yes 6", "5ish") is the time. */
@@ -1201,6 +1217,9 @@ export function pickMove(i: MoveInput): MovePlan {
 
 /* A link, an email or a bare domain — never the full stop after it (that ends the sentence). */
 const PROTECTED = /(https?:\/\/[^\s]*[^\s.,!?;:]|www\.[^\s]*[^\s.,!?;:]|[\w.+-]+@[\w-]+(?:\.[\w-]+)+|\b[a-z0-9-]+\.(?:co\.uk|com|uk|live|net|org|io)\b(?:\/[^\s]*[^\s.,!?;:])?)/gi;
+/* The hook's engine exactly as code writes it ("I asked chatgpt", "I asked googleAI"): kept as written (Paul, 2026-10-27).
+   Case-sensitive on purpose, so a model's "i asked chatgpt" is still tidied. */
+const HOOK_ENGINE_PROTECTED = /(?<=\bI asked )(?:chatgpt|googleAI)\b/g;
 const ILL_VERBS = 'call|send|give|get|be|do|have|let|ring|drop|check|look|pop|text|message|sort|speak|try|explain|show|chat|come|see|leave|pass|put|run|take|keep|make|go';
 /** A private-use character marks a protected link / email while the capitals are fixed (never typed by anyone). */
 const MARK = String.fromCharCode(0xe000);
@@ -1208,7 +1227,8 @@ const MARK = String.fromCharCode(0xe000);
 /** Capital at the start of every sentence and line; I, I'm, I'll, I've, I'd; ChatGPT / Gemini. Links, emails and numbers untouched. */
 export function tidyCaps(text: string): string {
   const stash: string[] = [];
-  let s = String(text ?? '').replace(PROTECTED, (m) => { stash.push(m); return MARK + String(stash.length - 1) + MARK; });
+  const keep = (m: string) => { stash.push(m); return MARK + String(stash.length - 1) + MARK; };
+  let s = String(text ?? '').replace(HOOK_ENGINE_PROTECTED, keep).replace(PROTECTED, keep);
   s = s.replace(/\bi'(m|ll|ve|d)\b/gi, (_m, x: string) => `I'${x.toLowerCase()}`)
     .replace(/\bim\b/gi, (m) => (m === 'IM' ? m : "I'm"))
     .replace(new RegExp(`\\bill\\b(?=\\s+(?:${ILL_VERBS})\\b)`, 'gi'), "I'll")

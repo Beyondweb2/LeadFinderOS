@@ -13,15 +13,21 @@ export function OwnerAvatar({ name, avatarUrl, className }: { name: string | nul
 }
 
 /** "[PS] Already added · Paul" (or "· 25 Sep"). Shown instead of an Add/Claim button. */
-export function AlreadyAddedBadge({ ownerName, avatarUrl, addedAt, className }: {
-  ownerName: string | null | undefined; avatarUrl?: string | null; addedAt?: string | null; className?: string;
+/** Find Leads, a salesperson: the business is already in the CRM. Not a button. Names who ADDED it (2026-10-27); the tooltip
+ *  adds who works it now when that is someone else, and the date. */
+export function AlreadyAddedBadge({ ownerName, addedByName, avatarUrl, addedAt, className, compact = false }: {
+  ownerName: string | null | undefined; addedByName?: string | null; avatarUrl?: string | null; addedAt?: string | null; className?: string;
+  /** Phone card: the avatar and the first name only (the full line is the tooltip), so the business name keeps its room. */
+  compact?: boolean;
 }) {
   const date = addedAt ? new Date(addedAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'Europe/London' }) : null;
+  const who = addedByName ?? null;
+  const tip = [who ? `Added by ${who}` : 'Already in the CRM', ownerName && ownerName !== who ? `worked by ${ownerName}` : null, date ? `added ${date}` : null];
   return (
-    <span className={cn('inline-flex items-center gap-1.5 rounded-md border border-border/60 bg-muted/40 px-2 py-0.5 text-xs text-muted-foreground whitespace-nowrap', className)}
-      title={[ownerName ? `Added by ${ownerName}` : null, date ? `added ${date}` : null].filter(Boolean).join(' · ') || undefined}>
-      {ownerName ? <OwnerAvatar name={ownerName} avatarUrl={avatarUrl} /> : null}
-      <span>Already added{ownerName ? ` · ${ownerName}` : ''}</span>
+    <span className={cn('inline-flex items-center gap-1.5 rounded-md border border-border/60 bg-muted/40 px-2 py-0.5 text-xs text-muted-foreground whitespace-nowrap cursor-default', className)}
+      title={tip.filter(Boolean).join(' · ')} aria-disabled="true" data-testid="find-leads-added-by-badge">
+      {who ? <OwnerAvatar name={who} avatarUrl={who === ownerName ? avatarUrl : null} /> : null}
+      <span>{compact ? (who ? `By ${who.split(' ')[0]}` : 'Added') : who ? `Added by ${who}` : `Already added${ownerName ? ` · ${ownerName}` : ''}`}</span>
     </span>
   );
 }

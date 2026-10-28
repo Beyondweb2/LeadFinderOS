@@ -64,6 +64,7 @@ import {
   autoSendVerdict, autoSendAt, autoSendDelayMs, autoSendKey, cleanAutoSendKeys, cleanDailyCap, draftFactsFromPlan, evidenceComplete, theirMessagesSinceUs, threadHardReason,
   AUTO_SEND_CHOICES, AUTO_SEND_DEFAULT_DAILY_CAP, AUTO_SEND_MAX_DAILY_CAP,
 } from "../../../src/lib/aiAutoSend.ts";
+import { bulkDraftRefusal } from "../../../src/lib/bulkDraftRule.ts";
 import { nextWindowOpenAt, replyWindowFor, replyWindowOpen } from "../../../src/lib/inboxSendWindow.ts";
 import { botMaySaySendsEveryOne, modeMayAutoSend, parseInboxReplyMode, INBOX_REPLY_MODES } from "../../../src/lib/inboxReplyMode.ts";
 import { loadReplyHours } from "../_shared/inbox-schedule.ts";
@@ -139,7 +140,7 @@ async function callReplyModel(model: string, system: string, user: string, tempe
 /* ───────────────────────── what we already hold (DB only) ───────────────────────── */
 
 type MsgRow = DraftThreadRow;
-type LeadRow = ResearchLead & { amount_paid: unknown; status: unknown; call_booked_at: string | null; previous_status?: string | null; ai_visible_at?: string | null };
+type LeadRow = ResearchLead & { amount_paid: unknown; status: unknown; call_booked_at: string | null; previous_status?: string | null; ai_visible_at?: string | null; assigned_to_user_id?: string | null };
 
 /** The thread, oldest first. A 'failed' row of ours is read against its receipt (src/lib/draftThread.ts): delivered / read =
  *  it reached them. An unreadable receipt leaves it out (the old reading). */
@@ -157,7 +158,7 @@ async function loadThread(service: Service, bookUserId: string, phone: string): 
 }
 
 async function loadLead(service: Service, leadId: string): Promise<LeadRow | null> {
-  const { data, error } = await service.from("outreach_leads").select(`${RESEARCH_LEAD_COLUMNS}, amount_paid, status, call_booked_at, ai_visible_at`).eq("id", leadId).maybeSingle();
+  const { data, error } = await service.from("outreach_leads").select(`${RESEARCH_LEAD_COLUMNS}, amount_paid, status, call_booked_at, ai_visible_at, assigned_to_user_id`).eq("id", leadId).maybeSingle();
   if (error) throw error;
   return data ?? null;
 }
@@ -247,7 +248,9 @@ async function buildContext(service: Service, lead: LeadRow, thread: MsgRow[], i
     site: { state: found.check.state, issues: found.check.serious.map(plainIssueTitle),
       /* The same issues in the pitch's plain words (Paul, 2026-10-23); one with no plain words is left out. */
       pitch: pitchIssueLines(found.check.serious, found.check.minor),
-      evidence: found.check.serious.map((i) => ({ title: plainIssueTitle(i), pages: i.pages })) },
+      evidence: found.check.serious.map((i) => ({ title: plainIssueTitle(i), pages: i.pages })),
+      /* Everything the check found (serious + minor): the pitch says "that's just a few of them" only when it lists fewer. */
+      found: found.check.serious.length + found.check.minor.length },
     websiteUrl: lead.website ?? null,
     /* ⛔ Australia is prospect-only (prospectOnly.ts): a price / guarantee answer is Needs you, never a draft. */
     prospectOnly: prospectOnlyLead({ country: lead.country }) || prospectOnlyNumber(lead.phone),
@@ -452,8 +455,8 @@ async function maybeQueueAutoSend(service: Service, st: AutoSendState, a: {
     masterOn: st.masterOn, intentsOn: st.intents, dailyCap: st.dailyCap, usedToday: counts.queuedToday,
     draft: draftFactsFromPlan(a.plan, { kind: "draft", text: a.w.reply, problems: a.w.problems, usedFallback: a.w.usedFallback, evidenceComplete: a.why.evidence?.complete === true }),
     theirMessages: theirMessagesSinceUs(a.input.thread),
-    latestInbound: a.cand.body ?? "", threadHard, digits: a.cand.phone, lead: a.lead, suppressed: a.input.suppressed,
-    personActiveAt: active, senderIsAdmin: admin, nowMs,
+    latestInbound: a.cand.body ?? "", threadHard, digits: a.cand.phone, lead: { ...a.lead, assigned_to_user_id: a.lead.assigned_to_user_id }, suppressed: a.input.suppressed,
+    personActiveAt: active, senderIsAdmin: admin, sendAsUserId: st.sendAs ?? null, nowMs,
   });
   const record = async (autoSend: Record<string, unknown>, extra: Record<string, unknown> = {}) =>
     service.from("ai_reply_drafts").update({ why: { ...a.why, autoSend }, ...extra, updated_at: new Date().toISOString() })
@@ -712,6 +715,27 @@ async function answeredSince(service: Service, phone: string, sinceIso: string):
   return (data ?? []).length > 0;
 }
 
+/** An inbound message on this number newer than the one the draft answers. A failed read counts as one (fail closed). */
+async function newerInboundSince(service: Service, phone: string, sinceIso: string, inboundId: string | null): Promise<boolean> {
+  let q = service.from("whatsapp_messages").select("id").eq("phone", phone).eq("direction", "inbound").gt("created_at", sinceIso);
+  if (inboundId) q = q.neq("id", inboundId);
+  const { data, error } = await q.limit(1);
+  if (error) return true;
+  return (data ?? []).length > 0;
+}
+
+const NO_WHATSAPP_LEAD_STATUSES = ["no_whatsapp", "no_whatsapp_needs_sms", "whatsapp_failed"];
+/** The lead as Send drafts needs it: marked not on WhatsApp (status or delivery), and prospect-only (Australia). A failed
+ *  read counts as marked (fail closed). */
+async function bulkLeadFacts(service: Service, leadId: string): Promise<{ noWhatsApp: boolean; prospectOnly: boolean }> {
+  const { data, error } = await service.from("outreach_leads").select("status, whatsapp_delivery_status, country, address").eq("id", leadId).maybeSingle();
+  if (error || !data) return { noWhatsApp: true, prospectOnly: true };
+  return {
+    noWhatsApp: NO_WHATSAPP_LEAD_STATUSES.includes(data.status ?? "") || data.whatsapp_delivery_status === "no_whatsapp",
+    prospectOnly: prospectOnlyLead({ country: data.country, address: data.address }),
+  };
+}
+
 async function handleClaim(service: Service, actor: Actor, body: Record<string, unknown>) {
   const r = await loadDraftFor(service, actor, str(body.draft_id));
   if (!r.ok) return r.res;
@@ -724,6 +748,26 @@ async function handleClaim(service: Service, actor: Actor, body: Record<string, 
   if (await answeredSince(service, d.phone, d.inbound_at)) {
     await service.from("ai_reply_drafts").update({ status: "resolved", updated_at: new Date().toISOString() }).eq("id", d.id).eq("status", "pending");
     return json({ ok: false, error: "already_answered", detail: "Someone has already replied to this message, so the draft was closed." });
+  }
+  /* SEND DRAFTS (bulk, 2026-10-27, src/lib/bulkDraftSend.ts): nobody read this draft before it goes, so more refusals,
+     checked HERE at send time on the STORED row: a Needs-you draft, they wrote again after the draft, the lead is marked no
+     WhatsApp, and the never-sent-unread rule (src/lib/bulkDraftRule.ts: low confidence, price, objection, a no, opt-out,
+     bot / auto-reply, sticker / reaction, a promised action, a fact answer, Australia's words). Every read fails closed. */
+  if (body.bulk === true) {
+    if (d.kind !== "draft") return json({ ok: false, error: "needs_you", detail: "This one needs you: answer it in the thread." });
+    if (await newerInboundSince(service, d.phone, d.inbound_at, d.inbound_message_id)) return json({ ok: false, error: "newer_inbound", detail: "They replied again after this draft was written. Read it in the thread first." });
+    if (!d.lead_id) return json({ ok: false, error: "no_lead", detail: "No lead is linked to this conversation." });
+    const lf = await bulkLeadFacts(service, d.lead_id);
+    if (lf.noWhatsApp) return json({ ok: false, error: "no_whatsapp", detail: "This lead is marked no WhatsApp." });
+    const { data: inb, error: inbErr } = d.inbound_message_id
+      ? await service.from("whatsapp_messages").select("body, message_type").eq("id", d.inbound_message_id).maybeSingle()
+      : { data: null, error: null };
+    if (inbErr || !inb) return json({ ok: false, error: "inbound_unreadable", detail: "Their message could not be read, so nothing was sent. Open the thread." });
+    const refusal = bulkDraftRefusal({
+      kind: d.kind, draft_text: str(body.final_text), why: d.why ?? null, inboundText: inb.body ?? "", inboundType: inb.message_type ?? null,
+      prospectOnly: lf.prospectOnly || prospectOnlyNumber(d.phone),
+    });
+    if (refusal) return json({ ok: false, error: "bulk_skip", detail: refusal.charAt(0).toUpperCase() + refusal.slice(1) + "." });
   }
   const finalText = str(body.final_text);
   if (!finalText) return json({ ok: false, error: "empty_message" }, 400);
@@ -755,6 +799,15 @@ async function handleComplete(service: Service, actor: Actor, body: Record<strin
       }).eq("id", d.id).eq("status", "sending");
       return json({ ok: true, status: "sent" });
     }
+  }
+  /* ⛔ QUEUED FOR SEND HOURS (multi-user, 2026-10-27): the reply is already in inbox_scheduled_sends, so the draft closes in ONE
+     write from 'sending' — never back to 'pending' first, where a second person could claim and send it live while the
+     queued copy also goes. The outcome trigger records it as sent ('queued_for_send_hours' + final_text), as before. */
+  if (str(body.error) === "queued_for_send_hours") {
+    await service.from("ai_reply_drafts").update({
+      status: "discarded", discarded_by: actor.id, discarded_at: new Date().toISOString(), error: "queued_for_send_hours", updated_at: new Date().toISOString(),
+    }).eq("id", d.id).eq("status", "sending");
+    return json({ ok: true, status: "queued" });
   }
   await service.from("ai_reply_drafts").update({
     status: "pending", claimed_by: null, claimed_at: null, error: str(body.error).slice(0, 300) || "send_failed", updated_at: new Date().toISOString(),

@@ -2,7 +2,7 @@
    intent: code picks the intent, the rule-built draft (the playbook line) passes the checker, one question at most, the
    follow-up style, no money-back line unasked. Prints one preview draft per intent (PREVIEW lines). Pure: no model, no DB. */
 import { readFileSync } from 'node:fs';
-import { pickMove, firstReplyPitch, insertSiteLine, pitchText, PITCH_SPECIALISE_LINE, PITCH_NO_SITE_LINE, type MoveEvidence, type MoveThreadMsg } from '../src/lib/replyMove.ts';
+import { pickMove, firstReplyPitch, insertSiteLine, pitchText, type MoveEvidence, type MoveThreadMsg } from '../src/lib/replyMove.ts';
 import { PLAYBOOK, NEW_INTENTS, readEndDate, nameFromReply, nearSameName, lowerBrands, startsWithBrand, type PlaybookIntent } from '../src/lib/replyPlaybook.ts';
 import { checkAiReply, fallbackAiReply, buildAiReplyPrompt, AI_REPLY_SYSTEM_PROMPT, AI_BRAND, type AiReplyContext } from '../src/lib/aiReplyDraft.ts';
 import { CONFIDENCE_LINE } from '../src/lib/offerFactSheet.ts';
@@ -19,7 +19,10 @@ const noSiteEv: MoveEvidence = { ...ev, hasWebsite: false, site: { state: 'no_we
 /* The lead after they sent the site we missed and it was checked (Paul, 2026-10-23). */
 const sharedEv: MoveEvidence = { ...ev, websiteUrl: 'https://www.zzfixtureplumbing.co.uk/', site: { state: 'issues', issues: ['x', 'y'], pitch: ['Your homepage doesn\'t mention Rugby', "There's no phone number on your site"] } };
 const opener: MoveThreadMsg = { from: 'us', text: 'Hi, is this ZZ Fixture Plumbing 90?', templateName: 'initial_contact' };
-const pitchMsg: MoveThreadMsg = { from: 'us', text: [...firstReplyPitch(ev).lines, firstReplyPitch(ev).question].join('\n\n') };
+/* The agency-question pitch as SENT before 2026-10-27: the answers to it (agency, self-managed, not sure…) keep their rules. */
+const pitchMsg: MoveThreadMsg = { from: 'us', text: "Hi mate,\n\nI asked AI \"Who is the best plumber in Rugby?\" and it mentioned Rival A Plumbing.\n\nI specialise in getting local businesses to show up in those results, so the customers go to you instead.\n\nAre you with an agency, or do you manage the website yourself?" };
+/* The hook as it is sent from 2026-10-27: it ends on the voice-note offer. */
+const newHookMsg: MoveThreadMsg = { from: 'us', text: pitchText(firstReplyPitch(ev)) };
 const NOW = Date.parse('2026-10-20T10:00:00Z');
 const said = (...msgs: Array<string | MoveThreadMsg>): MoveThreadMsg[] => msgs.map((m) => (typeof m === 'string' ? { from: 'them' as const, text: m } : m));
 const us = (text: string): MoveThreadMsg => ({ from: 'us', text });
@@ -34,14 +37,16 @@ const draftOf = (thread: MoveThreadMsg[], evidence: MoveEvidence = ev) => {
 };
 const qCount = (s: string) => (s.replace(/"[^"\n]*"/g, '').match(/\?/g) ?? []).length;
 
+/* The no-website pitch as SENT before 2026-10-27 ("I couldn't find one for you", then the website question): its replies keep their rules. */
+const OLD_NO_SITE_PITCH = "Hi mate,\n\nI asked AI \"Who is the best plumber in Rugby?\" and it mentioned Rival A Plumbing.\n\nMost local work comes from recommendations, and now AI is the one recommending. It leans on websites when it picks who to name, and I couldn't find one for you. Without one built for AI, you're hard to recommend.\n\nDo you have a website I've missed, or is that something you'd want sorted?";
 /* One scripted conversation per intent. */
 const CASES: Array<{ intent: PlaybookIntent; thread: MoveThreadMsg[]; evidence?: MoveEvidence; label: string }> = [
   /* We never said we found no website: a link they send is the plain "thanks, I'll take a look". */
   { intent: 'website_given', label: 'they send their website', thread: after('our new one is www.zzfixtureplumbing2.co.uk') },
   /* We said we found no website, they sent one and the check has run on it: the site-shared reply (Paul, 2026-10-23). */
-  { intent: 'site_shared', label: 'they send the website we missed (checked)', thread: [opener, ...said('Yes'), us(pitchText(firstReplyPitch(noSiteEv))), ...said('yes its www.zzfixtureplumbing.co.uk')], evidence: sharedEv },
+  { intent: 'site_shared', label: 'they send the website we missed (checked)', thread: [opener, ...said('Yes'), us(OLD_NO_SITE_PITCH), ...said('yes its www.zzfixtureplumbing.co.uk')], evidence: sharedEv },
   { intent: 'how_to_get_named', label: '"how can I get up on the AI search?"', thread: after('I manage it myself, how can I get up on the ai search?') },
-  { intent: 'no_website', label: '"no, haven\'t got one"', thread: [opener, ...said('Yes'), us(firstReplyPitch(noSiteEv).lines.concat(firstReplyPitch(noSiteEv).question).join('\n\n')), ...said('No not got one')], evidence: noSiteEv },
+  { intent: 'no_website', label: '"no, haven\'t got one"', thread: [opener, ...said('Yes'), us(OLD_NO_SITE_PITCH), ...said('No not got one')], evidence: noSiteEv },
   { intent: 'facebook_only', label: '"just facebook"', thread: after('we just have facebook') },
   { intent: 'agency', label: '"an agency does it"', thread: after('An agency does it for us') },
   { intent: 'in_contract', label: '"tied in until March"', thread: after('agency', us(PLAYBOOK.agency.line), 'Yeah tied in until March') },
@@ -97,13 +102,13 @@ for (const x of ['Yes', "that's correct", 'Yes, how can I help?', 'Dom', 'hello?
   const p = pm([opener, ...said(x)]);
   ok(p.move === 'first_reply_pitch' && !!p.fixedText && !p.allowPrice && !(p.fixedText ?? '').includes(CONFIDENCE_LINE), `first reply "${x}" → the pitch (no price, no money-back line)`);
 }
-ok((pm([opener, ...said('Yes this is Dom')]).fixedText ?? '').startsWith('Hi Dom,\n\nI asked AI "Who is the best plumber in Rugby?" and it mentioned Rival A Plumbing'), 'a name they give → "Hi Dom," then the worst search');
+ok((pm([opener, ...said('Yes this is Dom')]).fixedText ?? '').startsWith('Hi mate,\n\nI asked googleAI "Who is the best plumber in Rugby?" and it named Rival A Plumbing'), 'a name they give → still "Hi mate," (Paul, 2026-10-27), then the worst search');
 {
   const d = draftOf([opener, ...said('Dom here')]);
-  ok(d.text?.startsWith('Hi Dom,') && d.warnings.length === 0, `the "Hi Dom," pitch passes the checker${d.warnings.length ? ' — ' + d.warnings.join(' | ') : ''}`);
+  ok(d.text?.startsWith('Hi mate,') && d.warnings.length === 0, `the hook to "Dom here" passes the checker${d.warnings.length ? ' — ' + d.warnings.join(' | ') : ''}`);
 }
-ok((pm([opener, ...said('Yes it is')]).fixedText ?? '').startsWith('Hi mate,\n\nI asked AI'), 'no name given, none on the site → "Hi mate," (Paul, 2026-10-21)');
-ok((pm([opener, ...said('Yes it is')], { ...ev, ownerName: 'Sarah Jones' }).fixedText ?? '').startsWith('Hi Sarah,\n\n'), 'an owner the site states → "Hi Sarah," (a name still wins)');
+ok((pm([opener, ...said('Yes it is')]).fixedText ?? '').startsWith('Hi mate,\n\nI asked googleAI'), 'no name given, none on the site → "Hi mate," (Paul, 2026-10-21)');
+ok((pm([opener, ...said('Yes it is')], { ...ev, ownerName: 'Sarah Jones' }).fixedText ?? '').startsWith('Hi mate,\n\n'), 'an owner the site states → still "Hi mate," (Paul, 2026-10-27)');
 ok(nameFromReply('Yes this is Dom') === 'Dom' && nameFromReply('dom here') === 'Dom' && nameFromReply('Speaking') === null && nameFromReply('Yes it is') === null && nameFromReply('its me') === null && nameFromReply('Plumbing', 'ZZ Plumbing') === null, 'names are read only in clear forms; never "speaking", "me" or a business word');
 ok(pm([opener, ...said('No thanks')]).noDraft === true && pm([opener, ...said('stop')]).stop, 'a no → Needs you, no draft; a stop → the stop');
 ok(pm([opener, ...said('wrong number mate')]).move === 'close_politely' && !pm([opener, ...said('wrong number mate')]).noDraft, 'a wrong person → a short polite reply');
@@ -125,7 +130,9 @@ console.log('3. the agency path: agency → contract → call / voice note; tied
   const ask = pm(after('agency', us(PLAYBOOK.agency.line), 'yes in a contract'));
   const date = pm([...after('agency', us(PLAYBOOK.agency.line), 'yes in a contract'), us(PLAYBOOK.tied_no_date.line), ...said('another 6 months')]);
   ok(ask.intent === 'tied_no_date' && date.intent === 'in_contract' && date.followUp?.endsOn === '2027-04-20', 'no date → we ask it; "another 6 months" → noted');
-  ok(pm(after('go on then')).intent === 'go_on' && /agency/.test(pm(after('go on then')).guide ?? ''), '"go on then" → the agency question');
+  ok(pm(after('go on then')).intent === 'go_on' && /agency/.test(pm(after('go on then')).guide ?? ''), '"go on then" after an old agency pitch → the agency question');
+for (const x of ['go on then', 'Yes', 'yeah sure', 'ok go for it mate']) ok(pm([opener, ...said('Yes it is'), newHookMsg, ...said(x)]).intent === 'voice_yes', `"${x}" after the new hook → the voice-note yes`);
+ok(pm([opener, ...said('Yes it is'), newHookMsg, ...said('yeah but not right now')]).intent !== 'voice_yes', '"yeah but not right now" is not a yes');
   ok(/quick call/.test(pm(after('I do it myself', us(PLAYBOOK.self_managed.line), 'Hmm', us('Fair enough.'), 'ok go on')).guide ?? ''), '"go on" once we know who runs it → the call / voice note');
   ok(pm(after('my nephew built it', us(PLAYBOOK.friend_built.line), 'yeah happy to change')).intent === 'free_to_leave', 'happy to change → the call / voice note');
   ok(pm(after('my nephew built it', us(PLAYBOOK.friend_built.line), "I'll keep it with them")).noDraft === true, 'keep it with them → Needs you, no draft');
@@ -161,13 +168,12 @@ for (const c of CASES) {
 }
 for (const [label, e] of [['issues', ev], ['no website', noSiteEv], ['no audit', { ...ev, named: null }], ['soft', { ...ev, named: { named: 3, valid: 6 } }]] as const) {
   const t = pitchText(firstReplyPitch(e as MoveEvidence));
-  ok(!AI_BRAND.test(t), `the pitch (${label}) names no AI tool`);
+  ok(!AI_BRAND.test(t.replace('I asked googleAI ', 'I asked AI ')), `the pitch (${label}) names no AI tool but its own engine (Paul, 2026-10-26)`);
 }
-ok(PITCH_SPECIALISE_LINE === 'I specialise in getting local businesses to show up in those results, so the customers go to you instead.', 'the confidence line is Paul\'s 2026-10-21 wording');
-ok(!AI_BRAND.test(PITCH_NO_SITE_LINE) && /^Most local work comes from recommendations/.test(PITCH_NO_SITE_LINE) && /couldn't find one for you/.test(PITCH_NO_SITE_LINE), 'the no-website line names no tool (Paul\'s words, 2026-10-26)');
+ok(![ev, noSiteEv].some((e) => /specialise|Most local work|Without one built|recommending your competitors/i.test(pitchText(firstReplyPitch(e)))), 'the old long lines are gone (Paul, 2026-10-27)');
 {
   const t = pitchText(firstReplyPitch(ev));
-  ok(t.includes('I asked AI "Who is the best plumber in Rugby?" and it mentioned Rival A Plumbing, Rival B Plumbing and Rival C Plumbing.'), 'first message: I asked AI "<question>" and it mentioned A, B and C');
+  ok(t.includes('I asked googleAI "Who is the best plumber in Rugby?" and it named Rival A Plumbing, Rival B Plumbing and Rival C Plumbing, not you.'), 'first message: I asked googleAI "<question>" and it named A, B and C, not you');
   ok(!/recommended by AI|get recommended|guarantee|money back/i.test(t), 'the pitch promises no result and carries no guarantee');
 }
 {
@@ -182,7 +188,7 @@ ok(!AI_BRAND.test(PITCH_NO_SITE_LINE) && /^Most local work comes from recommenda
   const plan = pm(after('I do it myself'));
   const ctx: AiReplyContext = { businessName: ev.businessName, latestInbound: 'I do it myself', thread: [], plan, evidence: ev };
   ok(checkAiReply('Good, I asked gemini again and it still named others. Quick call?', ctx).some((x) => /Names an AI tool/.test(x)), 'the checker warns on a brand name in a draft');
-  ok(checkAiReply(pitchText(firstReplyPitch(ev)).replace('I asked AI', 'I asked Gemini'), { ...ctx, plan: pm([opener, ...said('Yes')]) }).some((x) => /Names an AI tool/.test(x)), '…in the pitch too');
+  ok(checkAiReply(pitchText(firstReplyPitch(ev)).replace('I asked googleAI', 'I asked Gemini'), { ...ctx, plan: pm([opener, ...said('Yes')]) }).some((x) => /Names an AI tool/.test(x)), '…in the pitch too');
   ok(/never name one/i.test(buildAiReplyPrompt(ctx)) && /Never name an AI tool/.test(AI_REPLY_SYSTEM_PROMPT), 'the model is told never to name a tool');
   const wctx: AiReplyContext = { ...ctx, plan: pm(after('which ai did you use?')) };
   ok(!/never name one/i.test(buildAiReplyPrompt(wctx)) && !checkAiReply('That one was gemini. I check the same questions on chatgpt and gemini. Want a voice note showing what it said?', wctx).some((x) => /Names an AI tool/.test(x)), 'they asked which tool → no brand warning');

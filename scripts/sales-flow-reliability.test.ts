@@ -227,8 +227,9 @@ console.log("\n── no Available to claim tab, ownership labels ──");
   const own = read("src/components/FindLeadsOwnership.tsx");
   ok(/<Check className="h-3\.5 w-3\.5" \/> Yours/.test(own) && /Already in your pipeline/.test(own), "Yours = already in your pipeline");
   ok(/if \(own\.state === 'claimable' && own\.leadId && onClaim\)/.test(own) && /Claim lead/.test(own), "Claim only for an unassigned, never-contacted business");
-  ok(/return <AlreadyAddedBadge ownerName=\{own\.ownerName\}/.test(own), "everything else: Already added · <name>, nothing more about it");
-  ok(/Already added\{ownerName \? ` · \$\{ownerName\}` : ''\}/.test(read("src/components/OwnerBadge.tsx")), "the badge reads 'Already added · <name>'");
+  ok(/return <AlreadyAddedBadge ownerName=\{own\.ownerName\} addedByName=\{own\.addedByName\}/.test(own), "everything else: Added by <name>, nothing more about it");
+  // 2026-10-27 (docs/multi-user.md §10): the badge names who ADDED it; with no adder on record, "Already added · <owner>".
+  ok(/Added by \$\{who\}/.test(read("src/components/OwnerBadge.tsx")) && /Already added\$\{ownerName \? ` · \$\{ownerName\}` : ''\}/.test(read("src/components/OwnerBadge.tsx")), "the badge reads 'Added by <name>' (else 'Already added · <owner>')");
 }
 
 console.log(f ? `\n${f} FAILURES` : "\nALL PASS");

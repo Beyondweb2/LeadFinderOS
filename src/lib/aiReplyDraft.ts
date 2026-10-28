@@ -28,7 +28,7 @@ import { issueMentioned, saysGoogleAiForGemini, vagueSiteClaim, wrongEngineWords
 import { ENGINE_WORDING, FACT_SHEET_VERSION, GUARANTEE_LINE, SHEET_MONEY, factFor, usableCaseStudies } from './offerFactSheet.ts';
 import { mayClaimNamedInstead } from './namedShareRule.ts';
 import type { WhyEvidence } from './draftEvidenceWait.ts';
-import { engineName, siteOf, tidyCaps, NEEDS_YOU_LABELS, PITCH_SPECIALISE_LINE, type MoveEvidence, type MovePlan, type NeedsYouReason } from './replyMove.ts';
+import { engineName, siteOf, tidyCaps, NEEDS_YOU_LABELS, type MoveEvidence, type MovePlan, type NeedsYouReason } from './replyMove.ts';
 import { PLAYBOOK, BUILT_SITE_EXAMPLE_URL, FINDABLE_SITE_LINE, PROOF_WORDS, lowerBrands, startsWithBrand } from './replyPlaybook.ts';
 
 /* ── cost ─────────────────────────────────────────────────────────────────────────────────────── */
@@ -371,7 +371,7 @@ const SHARE_WORDING = /\bnamed\s+you\s+in\s+\d+\s+(?:of|out\s+of)\s+\d+|\bgap\s+
 /** A claim about past results or other clients (Paul, 2026-10-20): only through an APPROVED case study (none today). */
 const PAST_RESULTS = /\b(success(?:es|ful)?|(?<!\b(?:your|the)\s)results?|clients?\s+(?:loved|love|are\s+(?:happy|delighted))|case\s+stud(?:y|ies)|(?:other|our|happy|past)\s+(?:clients|customers)|we'?ve\s+helped|helped\s+(?:loads|lots|many|plenty|other))\b/i;
 /** An AI brand in a prospect-facing draft (Paul, 2026-10-21): a warning unless they asked which tool (plan.brandsAllowed). */
-export const AI_BRAND = /\b(?:chat\s?gpt|gemini|google(?:['’]?s)?\s+ai|ai\s+overviews?|copilot|perplexity|open\s?ai|bard)\b/i;
+export const AI_BRAND = /\b(?:chat\s?gpt|gemini|google(?:['’]?s)?\s*ai|ai\s+overviews?|copilot|perplexity|open\s?ai|bard)\b/i;
 /** Never an absolute promise around the guarantee (Paul, 2026-10-20). */
 const ABSOLUTE = /\b100\s?%|\bif\s+i\s+fail\b|\bhundred\s+per\s*cent\b/i;
 
@@ -405,8 +405,9 @@ export function checkAiReply(reply: string, c: AiReplyContext): string[] {
   /* Paul's one results line (the playbook) is allowed word for word; any other results claim still warns. */
   /* "…show up in those results" (the confidence line) is what we do, not a past-results claim: read around it too. */
   /* "I don't work pay-after-results" (pay_on_results) names the deal they asked for, not our results. */
-  const withoutResultsLine = r.split(new RegExp(PLAYBOOK.examples.line.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i')).join(' ').split(PITCH_SPECIALISE_LINE).join(' ')
-    .replace(/\bpay[- ]after[- ]results\b/gi, ' ');
+  /* The hook's "Here's the full result: <link>" is their own report, not a results claim. */
+  const withoutResultsLine = r.split(new RegExp(PLAYBOOK.examples.line.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i')).join(' ')
+    .replace(/\bpay[- ]after[- ]results\b/gi, ' ').replace(/\bthe\s+full\s+result\b/gi, ' ');
   if (PAST_RESULTS.test(withoutResultsLine) && !usableCaseStudies().length) out.push('Claims past results or other clients, but no case study is approved on the fact sheet.');
   if (ABSOLUTE.test(r)) out.push('Says "100%" or "if I fail". Use the guarantee line only.');
   if (GUARANTEE_WORD.test(r) && !lower(r).includes(lower(GUARANTEE_LINE)) && !r.includes(factFor('cancel')?.say ?? '\u0000')) {
@@ -414,12 +415,16 @@ export function checkAiReply(reply: string, c: AiReplyContext): string[] {
   }
   /* Evidence. */
   if (SHARE_WORDING.test(r)) out.push('Says "named you in X of Y answers" or "a gap in the rest". Say the search where they were not named, and who came up.');
-  /* "…so those customers come to you instead" is what we do, Paul's own words, not a claim about the audit: read around it. */
-  if (INSTEAD_CLAIM.test(r.split(PITCH_SPECIALISE_LINE).join(' ')) && !(e.named && mayClaimNamedInstead(e.named.named, e.named.valid))) {
+  /* The hook's "…and it named X, not you." is about ONE answer, the missed search, which did not name them (worstMiss.ts,
+     Paul 2026-10-27): true whatever the share. Read around it in a code-built pitch only. */
+  const forClaim = isPitch(p) && e.missed?.question?.trim() ? r.replace(/, not you\./g, '.') : r;
+  if (INSTEAD_CLAIM.test(forClaim) && !(e.named && mayClaimNamedInstead(e.named.named, e.named.valid))) {
     out.push('Says AI named others instead, but they were named in more than a third of answers (or no counts are on record).');
   }
   /* The pitch's own issue lines may quote what the site calls itself ("it says Quick Drive Academy"). */
-  const allowedNames = [e.businessName, ...e.competitors, e.town ?? '', e.ownerName ?? '', ...(e.site?.pitch ?? [])].map(lower).filter(Boolean);
+  /* "&" is dropped from the words read below, so it is dropped here too ("Priority Electrical & Renewables Ltd", 2026-10-26). */
+  const allowedNames = [e.businessName, ...e.competitors, e.town ?? '', e.ownerName ?? '', ...(e.site?.pitch ?? [])]
+    .map((n) => lower(n).replace(/\s*&\s*/g, ' ').replace(/\s+/g, ' ').trim()).filter(Boolean);
   for (const m of r.matchAll(NAME_SEQ)) {
     const words = m[1].split(/\s+/).filter((w) => w !== '&' && !COMMON_CAPS.has(w));
     if (words.length < 2) continue;
@@ -454,7 +459,9 @@ export function checkAiReply(reply: string, c: AiReplyContext): string[] {
   /* ⛔ No AI brand in any draft unless they asked which tool (Paul, 2026-10-21). When they did, the old engine checks apply:
      the sheet's engine wording names the tools on purpose, so read around it. */
   if (!p.brandsAllowed) {
-    if (AI_BRAND.test(r)) out.push('Names an AI tool (ChatGPT, Gemini, Google AI). Say "AI" unless they asked which tool.');
+    /* The hook's own "I asked chatgpt / googleAI" (Paul, 2026-10-27) is allowed, exactly that; any other tool name still warns. */
+    const rb = p.hookEngine ? r.split(`I asked ${p.hookEngine}`).join('I asked AI') : r;
+    if (AI_BRAND.test(rb)) out.push('Names an AI tool (ChatGPT, Gemini, Google AI). Say "AI" unless they asked which tool.');
   } else {
     const forEngine = r.replace(/\bchat\s?gpt\s+and\s+gemini\b/gi, ' ').split(ENGINE_WORDING).join(' ');
     if (e.engineWords && wrongEngineWords(forEngine, e.engineWords) && !/\bthat\s+one\s+was\b/i.test(r)) out.push(`Names a different AI tool from the one this conversation uses (${engineName(e.engineWords)}).`);

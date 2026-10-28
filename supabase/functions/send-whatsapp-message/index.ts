@@ -111,7 +111,7 @@ const CAPABILITIES = ["dry_run", "build_phase_hold", "routing_leaf", "any_approv
    2026-10-22a: Australia is a WhatsApp market (its own switch); its Inbox hours are read in the lead's zone (src/lib/auLeadZone.ts). */
 /* 2026-10-26a: the admin dashboard's six templates (src/lib/dashboardTemplates.ts), admin only, template_vars.needed_item.
    2026-10-26b: a dashboard template to the same lead again within DASHBOARD_RESEND_WINDOW_MS, or while one is queued, is refused. */
-const BUILD_ID = "2026-10-26c-crawl-one-standard";
+const BUILD_ID = "2026-10-28a-crawl-one-standard";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",

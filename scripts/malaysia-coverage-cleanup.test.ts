@@ -117,7 +117,7 @@ console.log("── THE MARKER ──");
 const own = read("src/components/FindLeadsOwnership.tsx");
 const table = read("src/components/LeadsTable.tsx");
 const index = read("src/pages/Index.tsx");
-ok(/`Added by \$\{ownerName\}`/.test(own) && /AlreadyAddedMarker/.test(own) && /aria-disabled="true"/.test(own), "the marker says 'Added by <name>' and is not a control");
+ok(/`Added by \$\{addedByName\}`/.test(own) && /AlreadyAddedMarker/.test(own) && /aria-disabled="true"/.test(own), "the marker says 'Added by <name>' and is not a control");
 ok(!/<Button|onClick/.test(own.slice(own.indexOf("export function AlreadyAddedMarker"))), "…it has no button and no click");
 ok(/<Check className="h-3\.5 w-3\.5" \/>/.test(own.slice(own.indexOf("export function AlreadyAddedMarker"))), "no owner on record → a neutral In CRM tick");
 ok(/viewerRole === 'admin' && !crm\?\.inCrm && isAlreadyAdded\(ownership\?\.\(lead\)\)/.test(table) && /viewerRole === 'admin' && isAlreadyAdded\(ownership\?\.\(lead\)\) \?/.test(table), "desktop AND phone rows show it instead of Add to CRM");

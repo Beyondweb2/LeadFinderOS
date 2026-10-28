@@ -3,6 +3,7 @@ import { LeadAiResultChips } from '@/components/LeadAiResultChips';
 import { AlertTriangle, Ban, Check, ChevronDown, FileText, Loader2, Pencil, RefreshCw, Sparkles, UserRound, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import { useSubscription } from '@/hooks/useSubscription';
 import { aiChipFor, autoSendWaiting, rowSendable, STOP_REASONS, type AiChip, type AiReplyRow } from '@/lib/aiReplyDraft';
 
 /* The AI row's badge. Since 2026-10-22 the list row and the thread header show the ONE attention pill instead
@@ -105,6 +106,8 @@ export interface AiDraftBubbleProps {
 
 export function AiDraftBubble({ row, busy, editedInBox, onApprove, onReject, onRegenerate, onEditInBox, onStopAutoSend }: AiDraftBubbleProps) {
   const [whyOpen, setWhyOpen] = useState(false);
+  /* ⛔ Sales never sees a cost (CLAUDE.md §5, abuse/cost protection): the model cost line is the admin's only (2026-10-27). */
+  const { role } = useSubscription();
   if (!rowSendable(row)) return null;
   const why = row.why ?? null;
   const needsYou = aiChipFor(row)?.label === 'Needs you';
@@ -178,7 +181,7 @@ export function AiDraftBubble({ row, busy, editedInBox, onApprove, onReject, onR
             <p><span className="font-medium text-foreground">Website issues on record: </span>{why.findings.length ? why.findings.join(' · ') : (why.findingsNote ?? 'None, so none mentioned.')}</p>
             <p><span className="font-medium text-foreground">Offer facts from: </span>fact sheet {why.factSheetVersion}</p>
             {why.problems.length > 0 && <p className="text-amber-700 dark:text-amber-300"><span className="font-medium">Checks: </span>{why.problems.join(' ')}</p>}
-            <p><span className="font-medium text-foreground">Cost: </span>${(why.costUsd ?? 0).toFixed(4)} · {why.calls} model call{why.calls === 1 ? '' : 's'}{why.usedFallback ? ' · model unavailable, rule-built draft' : ''}</p>
+            {role === 'admin' && <p><span className="font-medium text-foreground">Cost: </span>${(why.costUsd ?? 0).toFixed(4)} · {why.calls} model call{why.calls === 1 ? '' : 's'}{why.usedFallback ? ' · model unavailable, rule-built draft' : ''}</p>}
           </div>
         )}
       </div>

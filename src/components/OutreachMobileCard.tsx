@@ -27,6 +27,7 @@ import { LeadEnrichButtons } from './LeadEnrichButtons';
 import { SocialLinks } from './SocialLinks';
 import type { OutreachLead, LeadStatus, NextActionType, ContactMethod, PipelineStatus } from '@/types/outreach';
 import { useLeadPermissions } from '@/hooks/useLeadPermissions';
+import { useTeamDirectory } from '@/hooks/useSalesCrm';
 import { maySetStatus } from '@/lib/access';
 import type { AuditRowState } from '@/lib/outreachAuditMap';
 import { CONTACT_METHOD_OPTIONS, REP_CONTACT_METHOD_OPTIONS, PIPELINE_STATUS_OPTIONS, OUTREACH_STATUS_OPTIONS, awaitingReplyTooltip } from '@/types/outreach';
@@ -102,6 +103,8 @@ export const OutreachMobileCard = memo(function OutreachMobileCard({
   aiCheck,
   onUpdateLead,
 }: OutreachMobileCardProps) {
+  const team = useTeamDirectory();
+  const addedByName = lead.added_by_user_id ? team.byId.get(lead.added_by_user_id)?.display_name ?? null : null;
   const perms = useLeadPermissions();
   const isPhoneFetching = phoneFetchStatus === 'pending';
   const isPhoneFailed = phoneFetchStatus === 'failed';
@@ -157,6 +160,10 @@ export const OutreachMobileCard = memo(function OutreachMobileCard({
           </div>
           {campaignName && (
             <div className="text-[11px] text-muted-foreground leading-none truncate">{campaignName}</div>
+          )}
+          {/* Multi-user (2026-10-27): who ADDED the lead — the same line as the desktop row. */}
+          {addedByName && (
+            <div className="text-[11px] text-muted-foreground leading-none truncate" data-testid="outreach-added-by">Added by {addedByName}</div>
           )}
           {hasPhone && (
             <button type="button" onClick={() => onCallClick?.()} className="text-left text-[11px] text-muted-foreground leading-none truncate">

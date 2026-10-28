@@ -8,7 +8,7 @@
    The expected values are Claude's (the recon). Where this session disagrees, OVERRIDES says why; the code is not bent to them.
    Pure: no model, no DB. `--preview` prints the draft for every case. */
 import { readFileSync } from 'node:fs';
-import { pickMove, PITCH_SITE_Q, type MoveEvidence, type MoveThreadMsg, type MovePlan } from '../src/lib/replyMove.ts';
+import { pickMove, HOOK_VOICE_NOTE_Q, type MoveEvidence, type MoveThreadMsg, type MovePlan } from '../src/lib/replyMove.ts';
 import { FINDABLE_SITE_LINE, NEEDS_YOU_INTENTS, NEW_INTENTS, type PlaybookIntent } from '../src/lib/replyPlaybook.ts';
 import { aiReplyDecision, checkAiReply, fallbackAiReply, AI_BRAND, type AiReplyContext } from '../src/lib/aiReplyDraft.ts';
 import { SHEET_MONEY } from '../src/lib/offerFactSheet.ts';
@@ -126,7 +126,7 @@ function contentProblems(text: string, p: MovePlan, ctx: AiReplyContext): string
   if (words(text) > cap) out.push(`${words(text)} words (cap ${cap})`);
   const hi = /^(Hi|Hey) [A-Za-z]+,/.exec(text);
   if (hi && !FIRST_NAMES_OK.test(text)) out.push(`greets "${hi[0]}"`);
-  if (!p.brandsAllowed && AI_BRAND.test(text)) out.push('names an AI brand');
+  if (!p.brandsAllowed && AI_BRAND.test(p.hookEngine ? text.split(`I asked ${p.hookEngine}`).join('I asked AI') : text)) out.push('names an AI brand');
   for (const [re, label] of BANNED) if (re.test(text)) out.push(`uses ${label}`);
   for (const m of text.match(/£\s?\d[\d,]*(?:\.\d+)?/g) ?? []) if (!SHEET_MONEY.includes(m.replace(/\s/g, '').replace(/\.00$/, ''))) out.push(`${m} is not on the fact sheet`);
   for (const m of text.matchAll(/\b(\d+)\s+weeks?\b/gi)) if (Number(m[1]) !== REMEASURE_WEEKS_STANDARD) out.push(`"${m[0]}" is not on the fact sheet`);
@@ -162,7 +162,7 @@ for (const c of CASES) {
     const im = intentMatches(exp, plan);
     if (im) intentRight++;
     ok(im, `${c.id} intent: expected ${exp}, got ${plan.intent ?? plan.read}`);
-    if (exp === 'PITCH-SITE') ok(plan.question === PITCH_SITE_Q, `${c.id}: no website on record → the website question`);
+    if (exp === 'PITCH-SITE') ok(plan.question === HOOK_VOICE_NOTE_Q && !/website/i.test(plan.fixedText ?? ''), `${c.id}: no website on record → the voice-note hook, never "website" (2026-10-27)`);
   }
   if (!plan.stop && !plan.noDraft && route !== 'client' && route !== 'auto') {
     const ctx: AiReplyContext = { businessName: evidence.businessName, latestInbound: latest.text, thread: thread.map((m) => ({ from: m.from, text: m.text })), plan, evidence };

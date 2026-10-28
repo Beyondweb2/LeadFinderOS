@@ -198,19 +198,22 @@ export interface AutoSendFacts {
   threadHard: string | null;
   /** WhatsApp digits we would send to. */
   digits: string;
-  lead: { amount_paid?: unknown; status?: unknown; is_archived?: unknown } | null;
+  /** `assigned_to_user_id` is REQUIRED: who works the lead (multi-user, 2026-10-27). Not read = undefined = never sent. */
+  lead: { amount_paid?: unknown; status?: unknown; is_archived?: unknown; assigned_to_user_id: string | null | undefined } | null;
   suppressed: boolean;
   /** The newest moment a person typed in or sent into this conversation, or null. Unreadable = pass `nowMs` (active). */
   personActiveAt: string | number | null;
   /** The account the message is sent as is an admin today. */
   senderIsAdmin: boolean;
+  /** The account the message is sent as (whatsapp_outreach_state.ai_auto_send_by). */
+  sendAsUserId: string | null;
   nowMs: number;
 }
 
 export type AutoSendRefusal =
   | 'master_off' | 'intent_off' | 'not_auto_type' | 'not_a_draft' | 'no_text' | 'needs_you' | 'stop' | 'auto_reply_label'
   | 'price_or_proof' | 'checker_warned' | 'fallback' | 'non_uk' | 'client' | 'archived' | 'thread_flagged' | 'suppressed'
-  | 'person_active' | 'daily_cap' | 'no_sender' | 'evidence_incomplete' | 'not_simple_first_reply' | 'has_link';
+  | 'person_active' | 'daily_cap' | 'no_sender' | 'evidence_incomplete' | 'not_simple_first_reply' | 'has_link' | 'assigned_to_other';
 
 export type AutoSendVerdict = { send: true; key: string } | { send: false; reason: AutoSendRefusal };
 
@@ -237,6 +240,7 @@ export const AUTO_SEND_REFUSAL_LABELS: Record<AutoSendRefusal, string> = {
   person_active: 'Someone typed or sent here in the last 10 minutes',
   daily_cap: 'Daily limit reached',
   no_sender: 'No admin to send as',
+  assigned_to_other: 'Another team member works this lead',
 };
 
 const ms = (v: string | number | null): number => (typeof v === 'number' ? v : v ? Date.parse(v) : NaN);
@@ -270,6 +274,11 @@ export function autoSendVerdict(f: AutoSendFacts): AutoSendVerdict {
   if (!f.lead) return no('client');
   if (isClientLead(f.lead)) return no('client');
   if (f.lead.is_archived === true) return no('archived');
+  /* ⛔ ONE PERSON PER LEAD (multi-user, 2026-10-27): a lead a salesperson works is never answered automatically in the
+     send-as admin's name — the draft waits for the person who works it. Unassigned (the book) or the send-as person's own
+     lead may go. The owner not read (undefined) = never sent. */
+  const owner = f.lead.assigned_to_user_id;
+  if (owner === undefined || (owner !== null && owner !== f.sendAsUserId)) return no('assigned_to_other');
   if (f.threadHard !== null) return no('thread_flagged');
   const active = ms(f.personActiveAt);
   if (f.personActiveAt !== null && (!Number.isFinite(active) || f.nowMs - active < PERSON_ACTIVE_MS)) return no('person_active');
