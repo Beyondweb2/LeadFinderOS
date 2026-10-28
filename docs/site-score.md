@@ -36,6 +36,11 @@ result they scored. The failed-attempt note never touches the score (the last go
 
 Backfill: `scripts/site-score-backfill.ts --token-file <path> [--write]` scores rows with no score from the stored
 summary only (no crawl, no fetch); writes only where `site_score_version is null`, so a newer crawl is never overwritten.
+`--rescore-unverified` (2026-10-28, fix/crawl-one-standard) re-scores rows that already HAVE a score but whose stored check
+came from the old impostor crawl (readableAs null, a "blocked" list without `blockEvidence: 'robots'`, or the old
+`search_crawler_refused` issue), read the way the app reads them now; writes only where `site_score_at` is unchanged since
+the read. Dry run 2026-10-28: 234 rows matched, 38 would change (32 scored → re-scored, 6 partial → unreadable). Not run
+with `--write` until Paul says.
 
 ## Tests
 

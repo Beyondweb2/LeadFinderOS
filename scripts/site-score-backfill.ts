@@ -7,9 +7,17 @@
 
    ⛔ The token is the Supabase Management API token, read from a file OUTSIDE the repo; never printed.
    ⛔ A row is only written while its site_score_version is still null: a crawl that stores a newer check (and its own
-      score) between this read and this write is never overwritten with the older one. */
+      score) between this read and this write is never overwritten with the older one.
+
+   --rescore-unverified (2026-10-28, fix/crawl-one-standard): re-scores rows that ALREADY have a score but whose stored check
+     came from the old impostor crawl — no readable homepage recorded (readableAs null), a "blocked" list without robots.txt
+     evidence, or the old search_crawler_refused issue. Scored the way the app reads them now (unread → couldn't check, the
+     refused-crawler issue dropped). Still no crawl, no fetch. A row is written only while its site_score_at is unchanged
+     since the read, so a fresh crawl's score is never replaced. Dry run without --write, as above. */
 import { readFileSync } from 'node:fs';
-import { SITE_SCORE_VERSION, siteScoreColumns, siteScoreForRow, siteScoreBand, type SiteScore } from '../src/lib/siteScore.ts';
+import { SITE_SCORE_VERSION, siteScoreColumns, siteScoreForRow, siteScoreFromSummary, siteScoreBand, type SiteScore } from '../src/lib/siteScore.ts';
+import { storedCrawlUnread } from '../src/lib/siteAudit.ts';
+import { summariseWebsiteCheck } from '../src/lib/websiteCheck.ts';
 
 const PROJECT = 'ruusxpkkmwtljxxulhbq';
 const PAGE = 200;
@@ -30,6 +38,55 @@ async function sql<T>(query: string): Promise<T[]> {
 
 const lit = (s: string) => `'${s.replace(/'/g, "''")}'`;
 type Row = { id: string; wc: unknown; checked_at: string | null; created_at: string };
+
+if (args.includes('--rescore-unverified')) {
+  type RRow = Row & { mode: string | null; signals: unknown; home_fetch: unknown; audit_version: string | null; prev_at: string | null; prev_state: string | null; prev_score: number | null };
+  let after2 = '00000000-0000-0000-0000-000000000000';
+  let seen = 0, changed = 0, wrote = 0;
+  const moves: Record<string, number> = {};
+  for (;;) {
+    const rows = await sql<RRow>(`select id, result->'websiteCheck' as wc, result->>'checked_at' as checked_at, created_at, mode,
+        result->'signals' as signals, result->'homeFetch' as home_fetch, full_evidence->'audit'->>'version' as audit_version,
+        site_score_at as prev_at, site_score_state as prev_state, site_score as prev_score
+      from public.lead_crawl_checks
+      where site_score_version is not null and id > ${lit(after2)}::uuid
+        and ((result->'signals') is not null and (result->'signals'->>'readableAs') is null
+          or (jsonb_typeof(result->'signals'->'searchBlocked') = 'array' and jsonb_array_length(result->'signals'->'searchBlocked') > 0
+              and (result->'signals'->>'blockEvidence') is distinct from 'robots')
+          or (result->'websiteCheck'->'issues') @> '[{"id":"search_crawler_refused"}]'::jsonb)
+      order by id limit ${PAGE}`);
+    if (!rows.length) break;
+    after2 = rows[rows.length - 1].id;
+    seen += rows.length;
+    const updates: Array<Record<string, unknown>> = [];
+    for (const r of rows) {
+      const row = { mode: r.mode, created_at: r.created_at, full_evidence: r.audit_version ? { audit: { version: Number(r.audit_version) } } : null,
+        result: { websiteCheck: r.wc, checked_at: r.checked_at ?? undefined, signals: r.signals, homeFetch: r.home_fetch } } as never;
+      /* Read as the app reads it now: an unread homepage is summarised afresh (couldn't check), never from its stored summary. */
+      let score: SiteScore | null;
+      if (storedCrawlUnread(row)) { const s = summariseWebsiteCheck(row); score = s ? siteScoreFromSummary(s) : null; }
+      else score = siteScoreForRow(row);
+      if (score?.state === r.prev_state && (score?.score ?? null) === (r.prev_score ?? null)) continue;
+      changed++;
+      const k = `${r.prev_state} -> ${score?.state ?? 'none'}`;
+      moves[k] = (moves[k] ?? 0) + 1;
+      updates.push({ id: r.id, prev_at: r.prev_at, ...siteScoreColumns(score, new Date().toISOString()) });
+    }
+    if (write && updates.length) {
+      const done = await sql<{ n: number }>(`with v as (
+          select * from jsonb_to_recordset(${lit(JSON.stringify(updates))}::jsonb) as x(id uuid, prev_at timestamptz, site_score smallint, site_score_state text,
+            site_score_version smallint, site_score_reasons jsonb, site_score_detail jsonb, site_score_at timestamptz)
+        ), u as (
+          update public.lead_crawl_checks l set site_score = v.site_score, site_score_state = v.site_score_state, site_score_version = v.site_score_version,
+            site_score_reasons = v.site_score_reasons, site_score_detail = v.site_score_detail, site_score_at = v.site_score_at
+          from v where l.id = v.id and l.site_score_at is not distinct from v.prev_at returning 1
+        ) select count(*)::int as n from u`);
+      wrote += done[0]?.n ?? 0;
+    }
+  }
+  console.log(JSON.stringify({ version: SITE_SCORE_VERSION, mode: write ? 'write' : 'dry-run', rescore: 'unverified', rowsMatched: seen, wouldChange: changed, written: wrote, moves }, null, 1));
+  process.exit(0);
+}
 
 let after = '00000000-0000-0000-0000-000000000000';
 let read = 0, written = 0, skippedNoSummary = 0, partial = 0;

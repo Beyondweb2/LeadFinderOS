@@ -220,3 +220,20 @@ those read fine without the bot name (1 a real 404, 3 refuse everything).
 Not changed: no migration, no stored row rewritten, no draft regenerated, nothing sent. Tests:
 `scripts/crawl-one-standard.test.ts` (real fixtures in `scripts/fixtures/crawl-*`) plus the updated crawl, site-findings,
 audit-followup-fault, reply, prospect-preview and warm-reply suites.
+
+**Deployed 2026-10-28** (takeover session; the branch had sat unpushed since 2026-10-26):
+- Merged origin/main (conflicts: whatsNew — entry re-dated `2026-10-28-crawl-one-standard`; lean-first-replies — the crawl
+  rule kept with main's 115-word length; the two BUILD_ID tests — main's). Full gate: typecheck = baseline 9, edge checks
+  clean, build, 479/479 suites. Merge `adfc9264` into main.
+- Edge, by hand from main: the 43 functions that reach the changed files (`check-import-graph --reached-by`), all but
+  `whatsapp-status` (held). `send-whatsapp-message` BUILD_ID `2026-10-28a-crawl-one-standard`.
+- Live: drivewelluk.co.uk re-crawled by the internal crawl-check call from the database (pg_net, vault secret) —
+  `readableAs: 'site check'`, `searchBlocked: []` with `blockEvidence: 'robots'`, headline "No obvious crawlability problems
+  found", 9 content findings from 7 pages, deep job queued. Before: four AI crawler names "blocked", nothing read.
+- flowpointplumbingandheating.co.uk: readable but JavaScript-only. Every address (a made-up one included) answers 200 with
+  the same 5.6 KB shell, ~65 visible characters, the same title and canonical. The check reports the true finding "AI can't
+  read your homepage" (client_rendered) plus "no H1" — not "couldn't check", not "blocked".
+- ambition2drive: the lead's stored website is the misspelt `ambiton2drive.com` (DNS fails → couldn't check: address does
+  not resolve). The real `ambition2drive.com` reads (338 words), robots.txt blocks nothing. The lead's website needs fixing.
+- 129 leads still carry an old unverified "blocked" check (none paid; 6 were sent a message using it) — listed in the
+  untracked `RECON_false-cant-crawl-leads-2026-10-28.md`. No row rewritten, no draft regenerated, nothing sent.
