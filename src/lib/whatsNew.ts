@@ -29,6 +29,7 @@ export const WHATS_NEW: readonly WhatsNewEntry[] = [
       changed: ['"AI can\'t reach your site" / "AI search crawlers are blocked" now come only from a robots.txt rule naming an AI search crawler, worded as "Your site tells AI search tools not to read it".', 'Older checks that said a site blocked AI crawlers no longer show that (it came from our own refused requests). Press Crawl site to check those leads again.', 'Deep crawls read pages that used to be refused, so the Crawl site results cover more of the site.'],
       removed: ['The reply line "My check couldn\'t read your website, and AI tools may struggle with it too". When a prospect sends their site and we can\'t read it, the draft now waits for you.'],
       effect: 'Fewer false website findings, fuller crawls. Nothing is re-crawled or re-drafted automatically: press Crawl site, then Regenerate, on the leads you want refreshed.',
+    } },
   { id: '2026-10-26-hook-signed-with-your-name', date: '2026-10-26', title: 'The first message to a business ends with your name', audience: 'all',
     body: 'Everyone now sets the name for their messages when they first log in (it can no longer be skipped). The AI\'s first reply to a business, the one with what AI said when we searched, now ends with the name of the person who sends it, on its own last line. Only that message.',
     report: {
