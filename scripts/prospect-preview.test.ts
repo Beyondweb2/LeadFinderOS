@@ -41,7 +41,7 @@ const gen = (over: Partial<Parameters<typeof generatePreview>[0]> = {}) => {
   ok(g.ok, 'A: EES fixture generates');
   if (g.ok) {
     const p = g.preview;
-    ok(p.selection.primary?.line === 'AI search crawlers are blocked', 'A: primary finding = crawler block');
+    ok(p.selection.primary?.line === 'robots.txt tells AI search crawlers not to read the site', 'A: primary finding = crawler block');
     ok(p.selection.secondary.length === 2, 'A: two secondary findings');
     ok(!p.selection.secondary.some((s) => /meta description/i.test(s.line)), 'A: a missing meta description never makes the card');
     ok(p.card.competitors.join('|') === 'Addlestone Electricians|Pennington’s Electrical|Helsdown Electrical Contractors Ltd', 'A: card names the three audit competitors, in order');
@@ -391,7 +391,7 @@ ok(areasFromText('Areas we cover: Addlestone, Weybridge, New Haw and Walton-on-T
 ok(cleanServices(['Home', 'Rewiring', 'Electrician in Woking', 'Rewiring', 'Contact Us', 'EICR Testing | E.E.S'], 'electrician', ['Woking']).join('|') === 'Rewiring|EICR Testing', 'facts: nav noise, doorway titles and duplicates removed');
 ok(yearsTradingClaims('Established in 2009. Over 15 years’ experience.', 2026).length === 2, 'facts: two years claims detected (→ conflict)');
 ok(tradePackFor('Electricians').key === 'electrician' && tradePackFor('roofing contractors').key === 'roofer' && tradePackFor('dog groomers').key === 'generic', 'trades: pack by stored trade, generic fallback');
-ok(cardLine(FINDING_CRAWLER_BLOCKED) === 'AI search crawlers are blocked', 'findings: card line for a crawler block');
+ok(cardLine(FINDING_CRAWLER_BLOCKED) === 'robots.txt tells AI search crawlers not to read the site', 'findings: card line for a crawler block');
 
 /* ── brand reading ── */
 {

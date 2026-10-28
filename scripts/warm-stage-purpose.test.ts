@@ -30,7 +30,7 @@ const HOME = `<html><head><title>Electrician Addlestone | Example Electrics</tit
 <nav><a href="/rewiring">Rewiring</a><a href="/fuse-boards">Fuse boards</a><a href="/eicr-testing">EICR</a><a href="/contact">Contact</a></nav>
 <h1>Electrician in Addlestone</h1><p>Example Electrics is based in Addlestone. Call 01932 123456.</p></body></html>`;
 const blocked: CrawlRowInput = { created_at: at(60 * 24), result: { version: 99, signals: {
-  homeUrl: W, fetchFailed: false, searchBlocked: ['OAI-SearchBot', 'ChatGPT-User', 'Claude-User', 'PerplexityBot'], readableAs: null,
+  homeUrl: W, fetchFailed: false, searchBlocked: ['OAI-SearchBot', 'ChatGPT-User', 'Claude-User', 'PerplexityBot'], blockEvidence: 'robots', readableAs: 'site check',
   clientRendered: null, missingH1: false, noJsonLd: false, duplicates: null, thinPages: 0,
 } } } as never;
 const research = assembleResearch({ nowIso: new Date(NOW).toISOString(), website: W, businessName: 'Example Electrics', trade: 'Electricians', town: 'Addlestone',

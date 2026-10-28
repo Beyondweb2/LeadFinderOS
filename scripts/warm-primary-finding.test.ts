@@ -138,7 +138,7 @@ ok(![...a.technicalFindings, ...a.contentFindings].some((x) => /description/i.te
 ok(sa.primary?.keyDetails?.includes('old-agency-site.co.uk') === true, 'A: the other domain is the concrete detail');
 
 // B. Crawlers blocked → primary.
-const b = research(CLEAN, W, { crawl: { created_at: at(60), result: { version: 99, signals: { homeUrl: W, fetchFailed: false, searchBlocked: ['OAI-SearchBot', 'PerplexityBot'], readableAs: 'ChatGPT-User', clientRendered: null, missingH1: false, noJsonLd: true, duplicates: null, thinPages: 0 } } } as never });
+const b = research(CLEAN, W, { crawl: { created_at: at(60), result: { version: 99, signals: { homeUrl: W, fetchFailed: false, searchBlocked: ['OAI-SearchBot', 'PerplexityBot'], blockEvidence: 'robots', readableAs: 'ChatGPT-User', clientRendered: null, missingH1: false, noJsonLd: true, duplicates: null, thinPages: 0 } } } as never });
 const sb = selectReplyFindings(b, [], 'Scunthorpe');
 ok(sb.primary?.kind === 'crawl_indexing' && sb.primary.strength === 5, `B: blocked crawlers are primary (got ${sb.primary?.id})`);
 ok(JSON.stringify(sb.primary?.keyDetails) === JSON.stringify(['OAI-SearchBot', 'PerplexityBot']), 'B: the blocked crawlers are named as the detail');

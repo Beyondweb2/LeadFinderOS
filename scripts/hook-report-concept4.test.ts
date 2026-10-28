@@ -234,13 +234,13 @@ const hit = (rivals: string[]): Cell => ({ named: true, rivals });
 
   /* ── I2. STRUCTURED DATA (Paul, 2026-10-06): the GENERIC "no schema" line never qualifies for the
      six-answer hook report; a misleading schema finding still does; every other surface keeps it. ── */
-  const signals = { homeUrl: 'https://example.co.uk', fetchFailed: false, searchBlocked: ['OAI-SearchBot'], clientRendered: null, duplicates: null, thinPages: 2, missingH1: true, noJsonLd: true } as never;
+  const signals = { homeUrl: 'https://example.co.uk', fetchFailed: false, searchBlocked: ['OAI-SearchBot'], blockEvidence: 'robots', clientRendered: null, duplicates: null, thinPages: 2, missingH1: true, noJsonLd: true } as never;
   const faults = buildFaultLines(signals);
   ok(faults.some((f) => f.kind === 'no_structured_data' && /label the basics/.test(f.title)), 'I2: the crawl check still detects and reports the schema gap (buildFaultLines unchanged for other surfaces)');
   ok(faults.length === 4 && faults.map((f) => f.kind).join(',') === 'search_blocked,thin_pages,missing_h1,no_structured_data', 'I2: buildFaultLines order and cap are unchanged');
   const hook = report(grid, { crawlFaults: faults, siteChecked: true });
   ok(!/label the basics|structured data/i.test(hook.t), 'I2: "no structured data" alone does NOT appear on the six-answer hook report');
-  ok(/AI can’t reach your site/.test(hook.t) && /There isn’t enough on your pages/.test(hook.t) && /Your pages have no clear heading/.test(hook.t) && (hook.html.match(/class="q4-issue"/g) ?? []).length === 3, 'I2: the other genuine issues stay, in order, and nothing is added to fill the slot');
+  ok(/Your site tells AI search tools not to read it/.test(hook.t) && /There isn’t enough on your pages/.test(hook.t) && /Your pages have no clear heading/.test(hook.t) && (hook.html.match(/class="q4-issue"/g) ?? []).length === 3, 'I2: the other genuine issues stay, in order, and nothing is added to fill the slot');
   const onlySchema = report(grid, { crawlFaults: faults.filter(isGenericSchemaGap), siteChecked: true });
   ok(!/structured data|label the basics/i.test(onlySchema.t) && /No technical faults found/.test(onlySchema.t), 'I2: a site whose only finding is "no schema" reads as no technical fault — nothing invented');
   const badSchema: SiteEvidenceFinding = { kind: 'schema_wrong_domain', severity: 5, certainty: 'certain', tier: 'A', pageUrl: 'https://example.co.uk/', evidence: { observed: ['"url": "https://other-site.co.uk"'], source: 'https://example.co.uk/', subject: 'example.co.uk' } } as never;

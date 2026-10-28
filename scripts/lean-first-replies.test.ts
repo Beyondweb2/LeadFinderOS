@@ -104,7 +104,9 @@ console.log('5. the pitch words and the length rule');
 {
   ok(pitchIssueLine({ id: 'location_unclear', title: 'Arundel QLD is not mentioned on the site', saw: 'Arundel QLD does not appear anywhere in the text of any of the 6 pages read (read in full).' }) === "Your site doesn't mention Arundel QLD", 'the town keeps its capital');
   ok(pitchIssueLine({ id: 'ct_schema_mismatch', title: 'The business details in your page code don’t match the page' }) === null && pitchIssueLine({ id: 'no_sitemap', title: 'No XML sitemap found' }) === null, 'page code and sitemaps are left out, never said in jargon');
-  ok(pitchIssueLine({ id: 'search_crawler_refused', title: 'The site refused AI search crawlers' }) === "My check couldn't read your website, and AI tools may struggle with it too", 'our check failing is hedged');
+  /* 2026-10-26: our check failing is never a pitch line; a crawler is said to be shut out only from robots.txt. */
+  ok(pitchIssueLine({ id: 'search_crawler_refused', title: 'The site refused AI search crawlers' }) === null, 'our check being refused is never a pitch line');
+  ok(pitchIssueLine({ id: 'robots_blocks_ai_search', title: 'robots.txt blocks ChatGPT-User' }) === 'Your site tells AI tools not to read it', 'a robots.txt block of an AI search crawler is said plainly');
   ok(PITCH_MAX_WORDS === 115, 'the length rule is 115 words (Paul, 2026-10-26: list more)');
 }
 

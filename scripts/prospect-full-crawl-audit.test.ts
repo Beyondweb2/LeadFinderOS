@@ -425,8 +425,12 @@ console.log('\n── 4/12. robots blocks · OAI-SearchBot block · GPTBot never
   ok(!gpt.findings.some((x) => /gptbot/i.test(x.id + x.title + x.saw)) && ids(gpt).has('oai_searchbot_ok'), '4. a GPTBot (training) block is never a finding; OAI-SearchBot still verified');
   const partial = buildSiteAudit(baseInput(pages, { robotsTxt: 'User-agent: Googlebot\nDisallow: /a' }));
   ok(byId(partial, 'robots_blocks_pages_googlebot')?.count === 1, '4. a block on an important page (service) for one crawler is MEDIUM, with the page');
+  /* 2026-10-26: the two search crawlers AUDIT_CRAWLERS does not cover are said from robots.txt's verdict; a refused fetch of
+     ours (an old probe list with no robots marker) is never a finding, and search_crawler_refused is never built again. */
+  const robotsBlock = buildSiteAudit(baseInput(pages, { probe: { searchBlocked: ['ChatGPT-User', 'Claude-User', 'OAI-SearchBot'], blockEvidence: 'robots', readableAs: 'site check', clientRendered: null } }));
+  ok(byId(robotsBlock, 'robots_blocks_ai_search')?.severity === 'high' && /ChatGPT-User and Claude-User/.test(byId(robotsBlock, 'robots_blocks_ai_search')!.title), '12. ChatGPT-User / Claude-User shut out by robots.txt is HIGH, naming only those two');
   const fetchBlock = buildSiteAudit(baseInput(pages, { probe: { searchBlocked: ['OAI-SearchBot', 'PerplexityBot'], readableAs: 'ChatGPT-User', clientRendered: null } }));
-  ok(byId(fetchBlock, 'search_crawler_refused')?.severity === 'high', '12. a real fetch refused as OAI-SearchBot (403 / challenge) is HIGH');
+  ok(!ids(fetchBlock).has('search_crawler_refused') && !ids(fetchBlock).has('robots_blocks_ai_search'), '12. our fetch refused (no robots evidence) is never a finding');
   ok(robotsRulesFor('User-agent: Bingbot\nUser-agent: Googlebot\nDisallow: /x', 'Googlebot').rules.disallow[0] === '/x' && robotsAllows(robotsRulesFor('User-agent: *\nDisallow: /', 'Googlebot').rules, '/') === false, '4. robots groups: shared groups and * fallback read the standard way');
 }
 
@@ -539,7 +543,7 @@ console.log('\n── 14. cache reuse ──');
   ok(prospectCrawlReuse(row(60_000), { nowMs: now, websiteUrl: 'small.example', force: true, role: 'admin' }).reuse === false, '14. an admin may force any time');
   ok(mayForceRecrawl('sales', 3600_000) === false && mayForceRecrawl('admin', 0) === true, '14. the Re-crawl button follows the same rule');
   const src = read('supabase/functions/crawl-check/index.ts');
-  const reuseAt = src.indexOf('prospectCrawlReuse(savedRow'), probeAt = src.indexOf('const probes = await mapPool');
+  const reuseAt = src.indexOf('prospectCrawlReuse(savedRow'), probeAt = src.indexOf('let homeRead = await budgeted(homeUrl)');
   ok(reuseAt > 0 && reuseAt < probeAt, '14. crawl-check decides reuse BEFORE fetching anything');
   ok(/cached: true, job_id: reuse\.jobId/.test(src) && /activeJobFor\(service, leadId, homeUrl\)/.test(src), '14. a reuse answers cached with the saved job; a running job always wins');
   ok(!/sales_check|guardAction|guard_action|auditBudget|create-ai-audit/.test((read('src/lib/prospectCrawl.ts') + read('src/lib/siteAudit.ts')).replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '')), '14. crawling touches no AI-check allowance, audit budget or guard');

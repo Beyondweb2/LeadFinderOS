@@ -8,7 +8,7 @@ assert(unavailable.length === 0, 'unavailable crawl must not invent technical ta
 const tasks = technicalTasks({
   status: 'complete',
   signals: {
-    fetchFailed: false, searchBlocked: ['GPTBot'], readableAs: 'google',
+    fetchFailed: false, searchBlocked: ['GPTBot'], blockEvidence: 'robots', readableAs: 'google',
     clientRendered: { flagged: false, visibleChars: 1000 }, missingH1: true, noJsonLd: true,
     duplicates: null, thinPages: 0, homeUrl: 'https://example.test',
   },

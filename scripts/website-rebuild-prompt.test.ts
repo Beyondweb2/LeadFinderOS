@@ -232,7 +232,7 @@ console.log('\n── STORED CRAWL IS READ, NEVER RE-RUN ──');
   const p = item('master', {
     crawl: {
       url: 'https://mc-locksmiths.com/', created_at: '2026-09-20T10:00:00Z',
-      result: { signals: { homeUrl: 'https://mc-locksmiths.com/', fetchFailed: false, searchBlocked: ['OAI-SearchBot'], readableAs: null, clientRendered: null, missingH1: false, noJsonLd: true, duplicates: null, thinPages: 0 } as never },
+      result: { signals: { homeUrl: 'https://mc-locksmiths.com/', fetchFailed: false, searchBlocked: ['OAI-SearchBot'], blockEvidence: 'robots', readableAs: 'site check', clientRendered: null, missingH1: false, noJsonLd: true, duplicates: null, thinPages: 0 } as never },
     },
   });
   ok(/STORED TECHNICAL FINDINGS/.test(p), 'the stored crawl section appears when there is one');

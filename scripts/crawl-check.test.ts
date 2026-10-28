@@ -6,7 +6,7 @@
 import {
   visibleText, detectClientRendered, hasH1, hasJsonLd, wordCount,
   looksChallenged, extractSitemapLocs, patternKey, clusterUrls, pageSimilarity, buildVerdict,
-  buildFaultLines, selectCrawlUrls, crawlPageKind, MAX_CRAWL_PAGES, type CrawlSignals,
+  buildFaultLines, selectCrawlUrls, crawlPageKind, MAX_CRAWL_PAGES, BLOCK_EVIDENCE_ROBOTS, type CrawlSignals,
 } from '../src/lib/crawlCheck.ts';
 
 let f = 0;
@@ -42,16 +42,18 @@ console.log('\n── H1 / JSON-LD / thin ──');
   ok(wordCount('<p>one two three</p>') === 3, 'word count');
 }
 
-console.log('\n── search-crawler block + Cloudflare challenge (the actual-fetch fault; robots is not evidence) ──');
+console.log('\n── search-crawler block (robots.txt only, 2026-10-26) + Cloudflare challenge (our check refused, never a fault) ──');
 {
   ok(looksChallenged('<html><body>Just a moment...<script>window.__cf_chl_opt={};</script></body></html>'), 'a Cloudflare challenge body is a block, even on a 200');
   ok(looksChallenged('Please enable JavaScript and cookies to continue'), 'the JS/cookies interstitial is a block');
   ok(!looksChallenged('<html><body><h1>Ace Electrical</h1><p>We rewire homes.</p></body></html>'), 'a real page is not a challenge');
-  // A blocked SEARCH crawler is the red headline fault; GPTBot (training) is never tested, and
-  // robots.txt is never consulted.
-  const blocked = buildFaultLines(mkSig({ searchBlocked: ['OAI-SearchBot', 'ChatGPT-User'], readableAs: null }));
-  ok(blocked[0].title.includes('can’t reach') && blocked[0].detail.includes('OAI-SearchBot') && !blocked[0].minor,
-    'blocked search crawlers are the red headline fault, naming which');
+  // A SEARCH crawler robots.txt shuts out is the red headline fault, naming which; GPTBot (training) is never one.
+  const blocked = buildFaultLines(mkSig({ searchBlocked: ['OAI-SearchBot', 'ChatGPT-User'], blockEvidence: BLOCK_EVIDENCE_ROBOTS }));
+  ok(blocked[0].title.includes('tells AI search tools not to read it') && blocked[0].detail.includes('robots.txt') && blocked[0].detail.includes('OAI-SearchBot') && !blocked[0].minor,
+    'search crawlers robots.txt shuts out are the red headline fault, naming which');
+  // ⛔ A row from before 2026-10-26: the list came from our own refused impostor fetches → never a fault.
+  ok(buildFaultLines(mkSig({ searchBlocked: ['OAI-SearchBot', 'ChatGPT-User'] })).length === 0, 'an unverified (pre-robots) blocked list is no fault');
+  ok(buildFaultLines(mkSig({ searchBlocked: ['OAI-SearchBot'], readableAs: null })).length === 0, 'a homepage nobody read is couldn’t check — no fault at all');
   ok(buildFaultLines(mkSig()).length === 0, 'no search block + clean site → no fault');
 }
 
@@ -92,15 +94,16 @@ console.log('\n── verdict priority + wording ──');
   ok(dup.headline.includes('20 near-identical'), 'duplicate verdict names the count');
   ok(buildVerdict(base).problems.length === 0, 'clean site → no problems');
   // Priority: a blocked SEARCH crawler leads over client-render.
-  const both = buildVerdict({ ...base, searchBlocked: ['OAI-SearchBot'], clientRendered: { flagged: true, visibleChars: 50, htmlBytes: 9000, appShell: true } });
-  ok(/blocked from fetching/.test(both.headline), 'a blocked search crawler leads over client-render');
+  const both = buildVerdict({ ...base, searchBlocked: ['OAI-SearchBot'], blockEvidence: BLOCK_EVIDENCE_ROBOTS, clientRendered: { flagged: true, visibleChars: 50, htmlBytes: 9000, appShell: true } });
+  ok(/robots\.txt tells OAI-SearchBot not to read/.test(both.headline), 'a search crawler robots.txt shuts out leads over client-render');
+  ok(!/blocking automated requests|blocked/i.test(buildVerdict({ ...base, fetchFailed: true }).headline), 'couldn’t check never says the site is blocking anything');
 }
 
 console.log('\n── report fault lines (each carries its number; amber only for structured data) ──');
 {
   const base = mkSig();
   ok(buildFaultLines({ ...base, fetchFailed: true }).length === 0, 'couldn’t fetch → no fault lines (section hidden)');
-  ok(buildFaultLines({ ...base, searchBlocked: ['OAI-SearchBot'] })[0].title.includes('can’t reach'), 'a blocked search crawler IS a fault (headline)');
+  ok(buildFaultLines({ ...base, searchBlocked: ['OAI-SearchBot'], blockEvidence: BLOCK_EVIDENCE_ROBOTS })[0].title.includes('not to read it'), 'a search crawler robots.txt shuts out IS a fault (headline)');
   ok(buildFaultLines(base).length === 0, 'a clean site → no fault lines');
   const dup = buildFaultLines({ ...base, duplicates: { clusterSize: 20, sampleSize: 5, similarityPct: 98 } })[0];
   ok(dup.detail.includes('20') && dup.detail.includes('98%') && !dup.minor, 'duplicate line carries the numbers, red dot');

@@ -39,7 +39,7 @@
    🔴 v5 (Paul, 2026-10-16): ONE PLAN — Findable Build, 12 payments in total (said in payments, never months).
       Findable Optimise is WITHDRAWN: nothing here quotes or recommends it.
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
-import { CRAWL_FRESH_MS, usableCrawlSignals, type CrawlSignals } from './crawlCheck.ts';
+import { CRAWL_FRESH_MS, usableCrawlSignals, verifiedSearchBlocked, type CrawlSignals } from './crawlCheck.ts';
 import { compareIssues, usableContentTrust, type ContentIssue, type ContentTrustKind } from './contentTrust.ts';
 import { resolveFindingsSource, MAX_SITE_FINDINGS, type FindingKind, type FindingsSource, type SiteFinding } from './siteFindings.ts';
 import type { SiteEvidenceFinding } from './siteEvidence.ts';
@@ -400,7 +400,7 @@ const FINDING_TITLES: Record<FindingKind, string> = {
   canonical_off_domain: 'A main page names a different site as the real one',
   schema_wrong_domain: 'Business details in the code point at another address',
   noindex_important_page: 'A main page is marked "leave out of search"',
-  crawler_blocked: 'AI search crawlers are being blocked',
+  crawler_blocked: 'robots.txt tells AI search crawlers not to read the site',
   unreadable_homepage: 'Homepage is nearly empty when fetched directly',
   duplicate_pages: 'Several near-identical town/service pages',
   thin_pages: 'Service pages light on detail',
@@ -419,7 +419,7 @@ function proofFor(f: SiteFinding, signals: CrawlSignals, evidence: SiteEvidenceF
   }
   switch (f.kind) {
     case 'crawler_blocked':
-      return ['Blocked on a real fetch: ' + signals.searchBlocked.join(', ')];
+      return ['robots.txt disallows the site for: ' + verifiedSearchBlocked(signals).join(', ')];
     case 'unreadable_homepage':
       return signals.clientRendered
         ? ['About ' + signals.clientRendered.visibleChars + ' characters of visible text on a direct fetch of ' + signals.homeUrl]

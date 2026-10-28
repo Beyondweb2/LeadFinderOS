@@ -23,6 +23,7 @@ import { isUpstreamOutage } from "../_shared/operator-auth.ts";
 import { leadAccess, refusalBody, resolveActor } from "../_shared/access.ts";
 import { guardAction } from "../_shared/protection.ts";
 import { isAggregatorUrl } from "../_shared/aggregators.ts";
+import { SITE_CHECK_HEADERS } from "../../../src/lib/siteReadIdentity.ts";
 import { shootHtml, shotConfigured } from "../_shared/prospect-preview-shot.ts";
 import type { QueueRow, RunRow } from "../../../src/lib/auditReport.ts";
 import {
@@ -53,7 +54,7 @@ const SIGNED_URL_SECONDS = 3600;
 const IN_PROGRESS_STALE_MS = 5 * 60_000;
 const MAX_HTML_BYTES = 1_500_000;
 const MAX_CSS_BYTES = 600_000;
-const BROWSER_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36";
+/* The site, its stylesheets and images are read under our own crawler name, never a browser's (src/lib/siteReadIdentity.ts). */
 const IN_PROGRESS: readonly string[] = ["gathering", "selecting_template", "building", "rendering"];
 
 // deno-lint-ignore no-explicit-any
@@ -87,7 +88,7 @@ async function fetchCapped(url: string, maxBytes: number, accept: string): Promi
   const controller = new AbortController();
   const t = setTimeout(() => controller.abort(), WARM_RESEARCH_FETCH_TIMEOUT_MS);
   try {
-    const res = await fetch(url, { headers: { "User-Agent": BROWSER_UA, "Accept": accept }, redirect: "follow", signal: controller.signal });
+    const res = await fetch(url, { headers: { ...SITE_CHECK_HEADERS, "Accept": accept }, redirect: "follow", signal: controller.signal });
     const finalUrl = res.url && /^https?:\/\//i.test(res.url) ? res.url : url;
     if (!isPublicHttpUrl(finalUrl)) return null;
     const chunks: Uint8Array[] = [];

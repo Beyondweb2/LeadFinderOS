@@ -15,8 +15,9 @@
 // ⛔ NO MODEL CALLS — deterministic extraction; the crawl costs fetches, nothing else.
 import {
   extractSitemapLocs, clusterUrls, pageSimilarity, buildVerdict, crawlPageKind, THIN_WORDS,
-  CRAWL_CHECK_VERSION, visibleText, type CrawlSignals,
+  CRAWL_CHECK_VERSION, visibleText, robotsSearchBlocked, BLOCK_EVIDENCE_ROBOTS, type CrawlSignals,
 } from "../../../src/lib/crawlCheck.ts";
+import { SITE_CHECK_HEADERS, SITE_CHECK_UA } from "../../../src/lib/siteReadIdentity.ts";
 import { buildSiteAudit, mergeContentTrust, mergeVisibilityChecks, type SiteAuditPage } from "../../../src/lib/siteAudit.ts";
 import { buildVisibilityChecks, VISIBILITY_MAX_PAGES, type VisibilityChecks } from "../../../src/lib/visibilityChecks.ts";
 import { buildSalesInsights, type SalesInsights } from "../../../src/lib/salesInsights.ts";
@@ -48,7 +49,10 @@ function contentObs(html: string, url: string, servedUrl: string, status: number
 // deno-lint-ignore no-explicit-any
 type Client = any;
 
-export const CRAWL_UA_FALLBACK = "Mozilla/5.0 (compatible; OAI-SearchBot/1.0; +https://openai.com/searchbot)";
+/** ⛔ Our own name for every page of every job (2026-10-26, src/lib/siteReadIdentity.ts). Until then a job read the site
+ *  as the AI crawler whose probe got through — an impostor firewalls refuse mid-crawl (2,429 pages refused in 30 days;
+ *  16 of a 20-page sample read fine under a non-bot name). Kept under its old name for the callers that import it. */
+export const CRAWL_UA_FALLBACK = SITE_CHECK_UA;
 
 export interface Fetched {
   url: string; finalUrl: string; ok: boolean; status: number; responded: boolean;
@@ -77,14 +81,14 @@ async function readCapped(res: Response, cap: number): Promise<Uint8Array> {
 }
 
 /** GET with a hard timeout and body cap; gzip sitemap files are decompressed. Never throws. */
-export async function crawlGet(url: string, ua: string): Promise<Fetched> {
+export async function crawlGet(url: string): Promise<Fetched> {
   const controller = new AbortController();
   const t = setTimeout(() => controller.abort(), FULL_CRAWL.fetchTimeoutMs);
   const t0 = Date.now();
   try {
     const res = await fetch(url, {
       method: "GET",
-      headers: { "User-Agent": ua, "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8" },
+      headers: { ...SITE_CHECK_HEADERS },
       redirect: "follow", signal: controller.signal,
     });
     let bytes = await readCapped(res, FULL_CRAWL.maxBodyBytes);
@@ -177,14 +181,15 @@ export async function createCrawlJob(service: Client, input: {
   const existing = await activeJobFor(service, input.leadId, input.probe.homeUrl);
   if (existing) return { jobId: existing.id, reused: true };
   const p = input.probe;
-  const robotsRes = await crawlGet(new URL("/robots.txt", p.servedUrl).href, p.readableUa);
+  const robotsRes = await crawlGet(new URL("/robots.txt", p.servedUrl).href);
   const robotsTxt = robotsRes.ok && robotsRes.body && !/<html/i.test(robotsRes.body.slice(0, 400)) ? robotsRes.body.slice(0, 100_000) : null;
   const robots = parseRobots(robotsTxt);
   const { data: job, error } = await service.from("crawl_jobs").insert({
     lead_id: input.leadId, user_id: input.userId, mode: "full", requested_from: input.requestedFrom,
     start_url: p.homeUrl, served_url: p.servedUrl, status: "running", robots_txt: robotsTxt,
     home: {
-      town: p.town, readableUa: p.readableUa, readableAs: p.readableAs, searchBlocked: p.searchBlocked,
+      /* searchBlocked is robots.txt's verdict, read here (blockEvidence 'robots'), never the caller's fetch result. */
+      town: p.town, readableUa: SITE_CHECK_UA, readableAs: p.readableAs, searchBlocked: robotsSearchBlocked(robotsTxt), blockEvidence: BLOCK_EVIDENCE_ROBOTS,
       respondedAny: p.respondedAny, clientRendered: p.clientRendered, missingH1: p.missingH1, noJsonLd: p.noJsonLd,
       homeWords: p.homeWords, lean: leanHtml(p.homeHtml).slice(0, 600_000), robots,
       page_cap: typeof input.pageCap === "number" && input.pageCap > 0 ? input.pageCap : null,
@@ -283,13 +288,12 @@ export async function runCrawlTick(service: Client): Promise<{ jobId: string | n
   await service.from("crawl_urls").update({ status: "queued" }).eq("job_id", jobId).eq("status", "processing");
 
   const servedUrl = String(job.served_url || job.start_url);
-  const home = (job.home ?? {}) as { readableUa?: string; robots?: RobotsRules; town?: string | null; page_cap?: number | null };
+  const home = (job.home ?? {}) as { robots?: RobotsRules; town?: string | null; page_cap?: number | null };
   /* ⛔ THE PROSPECT PAGE LIMIT (2026-10-05, src/lib/prospectCrawl.ts). A job with a page_cap reads at
      most that many pages (read or failed). Sitemaps are still read in full — they are how the crawl
      knows the site's size. Once the cap is reached every still-queued page is recorded as skipped
      with reason coverage_cap, so the result can say exactly how much was NOT read. */
   const pageCap = typeof home.page_cap === "number" && home.page_cap > 0 ? home.page_cap : null;
-  const ua = home.readableUa || CRAWL_UA_FALLBACK;
   const robots = home.robots ?? parseRobots(job.robots_txt);
   const total = await jobCounts(service, jobId);
   const counts = { total: total.discovered + total.sitemaps };
@@ -334,7 +338,7 @@ export async function runCrawlTick(service: Client): Promise<{ jobId: string | n
 
     /* ⛔ A PROSPECT'S CRAWL ASKS ONE PAGE AT A TIME (Paul, 2026-10-20: polite to sites we have not been asked to crawl);
        a client's exhaustive crawl keeps FULL_CRAWL.concurrency. */
-    const results = await mapPool(rows, pageCap ? PROSPECT_CRAWL_CONCURRENCY : FULL_CRAWL.concurrency, (r) => crawlGet(r.url, ua));
+    const results = await mapPool(rows, pageCap ? PROSPECT_CRAWL_CONCURRENCY : FULL_CRAWL.concurrency, (r) => crawlGet(r.url));
     const updates: Array<Record<string, unknown>> = [];
     const discovered: NewRow[] = [];
     const now = new Date().toISOString();
@@ -491,6 +495,8 @@ export async function finalizeCrawlJob(service: Client, jobId: string): Promise<
   const cr = home.clientRendered ?? null;
   const signals: CrawlSignals = {
     homeUrl: job.start_url, fetchFailed: !home.respondedAny, searchBlocked: home.searchBlocked ?? [],
+    /* Absent on a job created before 2026-10-26: its searchBlocked came from refused impostor fetches (never believed). */
+    ...(home.blockEvidence === BLOCK_EVIDENCE_ROBOTS ? { blockEvidence: BLOCK_EVIDENCE_ROBOTS } : {}),
     readableAs: home.readableAs ?? null, clientRendered: cr, missingH1: !!home.missingH1, noJsonLd: !!home.noJsonLd,
     duplicates, thinPages: thin.length, pagesChecked: fetched.length,
     // A display list for the popup; the complete inventory is the job's crawl_urls rows.
@@ -540,7 +546,7 @@ export async function finalizeCrawlJob(service: Client, jobId: string): Promise<
       servedUrl, requestedUrl: job.start_url, robotsTxt: job.robots_txt ?? null, pages: auditPages,
       sitemapsRead: full.sitemaps.read, sitemapUrlCount: full.sitemaps.urlCount,
       offSiteSitemap: { count: full.sitemaps.offSiteCount, samples: full.sitemaps.offSiteSamples },
-      coverage: full.coverage!, probe: { searchBlocked: home.searchBlocked ?? [], readableAs: home.readableAs ?? null, clientRendered: cr },
+      coverage: full.coverage!, probe: { searchBlocked: home.searchBlocked ?? [], blockEvidence: home.blockEvidence ?? null, readableAs: home.readableAs ?? null, clientRendered: cr },
       duplicates, lead, homeText: home.lean ? visibleText(String(home.lean)).slice(0, 6000) : null,
     });
     /* THE SALES INSIGHTS (2026-10-07, src/lib/salesInsights.ts): what the pages read say about services, name,

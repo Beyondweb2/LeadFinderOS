@@ -27,8 +27,9 @@ export const PITCH_MIN_LIST = 2;
  *  issue goes until the message fits. The "that's just a few of them" line (replyMove.pitchMoreLine) is not counted. */
 export const PITCH_MAX_WORDS = 115;
 
-/** Our check could not read the site (the site-shared reply says it when that is all the check found). */
-export const UNREADABLE_PITCH_LINE = "My check couldn't read your website, and AI tools may struggle with it too";
+/* ⛔ NO LINE FOR "OUR CHECK COULDN'T READ YOUR SITE" (Paul, 2026-10-26, fix/crawl-one-standard). A check that failed is
+   "couldn't check" — it is never a point in a message (the old UNREADABLE_PITCH_LINE is gone; replyMove's site-shared
+   reply holds for a person instead). A crawler is said to be shut out only from robots.txt (robots_blocks_*, incl. robots_blocks_ai_search). */
 const MAIN_PAGES_UNCLEAR = "Your main pages don't say clearly what you do";
 const NOT_LINKED = "Some important pages aren't linked from anywhere on your site";
 const HIDDEN_PAGES = 'Some of your pages are hidden from Google';
@@ -40,7 +41,6 @@ const RATING_NO_SOURCE = "Your site shows a star rating but doesn't say where it
 
 const FIXED: Record<string, string> = {
   robots_blocks_all: 'Your site tells AI tools not to read it',
-  search_crawler_refused: UNREADABLE_PITCH_LINE,
   one_page_site: 'Your website is just one page',
   no_service_pages: "Your services don't have their own pages",
   service_page_gaps: "Your services don't have their own pages",

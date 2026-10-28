@@ -48,8 +48,8 @@ const NAME = 'ai_site_findings_v2';
 const ALL: CrawlSignals = {
   homeUrl: 'https://example.co.uk',
   fetchFailed: false,
-  searchBlocked: ['OAI-SearchBot', 'PerplexityBot'],
-  readableAs: null,
+  searchBlocked: ['OAI-SearchBot', 'PerplexityBot'], blockEvidence: 'robots',
+  readableAs: 'site check',
   clientRendered: { flagged: true, visibleChars: 69, htmlBytes: 74000, appShell: true },
   missingH1: true,
   noJsonLd: true,
@@ -268,7 +268,7 @@ for (const c of candidateFindings(ALL)) {
   const hit = UNSUPPORTED.find(([re]) => re.test(sentenceOf(c)));
   ok(!hit, `${c.kind}: no unsupported AI-decision claim${hit ? ` — ${hit[1]} (${hit[0]})` : ''}`);
 }
-for (const c of candidateFindings(only({ thinPages: 1, searchBlocked: ['OAI-SearchBot'] }))) {
+for (const c of candidateFindings(only({ thinPages: 1, searchBlocked: ['OAI-SearchBot'], blockEvidence: 'robots' }))) {
   const hit = UNSUPPORTED.find(([re]) => re.test(sentenceOf(c)));
   ok(!hit, `${c.kind} (singular): no unsupported AI-decision claim${hit ? ` — ${hit[1]}` : ''}`);
 }
@@ -338,9 +338,9 @@ for (const c of candidateFindings(ALL)) {
   ok(!/SearchBot|PerplexityBot|ChatGPT-User|Claude-User|GPTBot/i.test(sentenceOf(c)),
     `${c.kind}: names no individual bot`);
 }
-ok(/^one of the crawlers/.test(candidateFindings(only({ searchBlocked: ['OAI-SearchBot'] }))[0].clause),
+ok(/^one of the crawlers/.test(candidateFindings(only({ searchBlocked: ['OAI-SearchBot'], blockEvidence: 'robots' }))[0].clause),
   'a single blocked crawler reads "one of the crawlers"');
-ok(/^some of the crawlers/.test(candidateFindings(only({ searchBlocked: ['OAI-SearchBot', 'PerplexityBot'] }))[0].clause),
+ok(/^some of the crawlers/.test(candidateFindings(only({ searchBlocked: ['OAI-SearchBot', 'PerplexityBot'], blockEvidence: 'robots' }))[0].clause),
   '…and several read "some of the crawlers"');
 
 console.log('── 5. WHICH FINDINGS, AND HOW MANY ──');
@@ -374,7 +374,7 @@ for (const seed of ['a', 'b', 'c', 'd', 'e', 'f']) {
    Dropping the measurements took each finding down to roughly 200-255 characters, so the THREE
    SHORTEST now do clear the comfortable bar where they did not before this rewrite. */
 const shortest = buildSiteFindings(only({
-  searchBlocked: ['OAI-SearchBot'],
+  searchBlocked: ['OAI-SearchBot'], blockEvidence: 'robots',
   duplicates: { clusterSize: 3, sampleSize: 8, similarityPct: 90 },
   thinPages: 2,
 }), { seed: 'a' }) ?? '';
@@ -416,7 +416,7 @@ for (const seed of ['a', 'b', 'c']) {
 console.log('── …and never past the length Meta accepts ──');
 /* A text parameter over 1024 characters is refused outright (#131009) — the same invisible class of
    failure as a blank one. The worst realistic case is three findings with every search crawler named. */
-const WORST = { ...ALL, searchBlocked: ['OAI-SearchBot', 'ChatGPT-User', 'Claude-User', 'PerplexityBot'] };
+const WORST = { ...ALL, searchBlocked: ['OAI-SearchBot', 'ChatGPT-User', 'Claude-User', 'PerplexityBot'], blockEvidence: 'robots' };
 for (const seed of ['a', 'b', 'c', 'd', 'e', 'f']) {
   const v = buildSiteFindings(WORST, { seed }) ?? '';
   ok(v.length <= MAX_FINDINGS_CHARS, `seed "${seed}": ${v.length} chars, within the ${MAX_FINDINGS_CHARS} cap`);
@@ -440,14 +440,14 @@ console.log('── 7. NO FABRICATED ANYTHING ──');
    must not contain a business name, and must not be able to invent one. */
 ok(!/rival|competitor/i.test(read('src/lib/siteFindings.ts').replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '')),
   'the findings module names no competitor and cannot manufacture one');
-ok(candidateFindings(only({ fetchFailed: true, searchBlocked: ['OAI-SearchBot'] })).length === 0,
+ok(candidateFindings(only({ fetchFailed: true, searchBlocked: ['OAI-SearchBot'], blockEvidence: 'robots' })).length === 0,
   'a site we could not fetch produces NO findings — we do not describe a site we could not read');
 ok(buildSiteFindings(null) === null && buildSiteFindings(undefined) === null, 'absent signals produce null, never a generic line');
 
 console.log('── 8. WHEN IT MAY BE SENT AT ALL ──');
 /* A. A GENUINE TECHNICAL ISSUE → {{6}} names it (and never the clean-site line). */
-const tech = resolveSiteFindingsDetailed(true, [fresh(only({ searchBlocked: ['OAI-SearchBot'] }))], null, { seed: 'x', auditVisibilityGap: true });
-ok(!!tech && /crawlers used by AI search tools is being blocked/.test(tech.text) && tech.kinds[0] === 'crawler_blocked',
+const tech = resolveSiteFindingsDetailed(true, [fresh(only({ searchBlocked: ['OAI-SearchBot'], blockEvidence: 'robots' }))], null, { seed: 'x', auditVisibilityGap: true });
+ok(!!tech && /crawlers used by AI search tools is told to keep out/.test(tech.text) && tech.kinds[0] === 'crawler_blocked',
   `A. a technical issue → {{6}} names it: "${tech?.text.slice(0, 90)}…"`);
 ok(tech?.text !== NO_TECHNICAL_FAULT_FINDING && !(tech?.text ?? '').includes(NO_TECHNICAL_FAULT_FINDING), 'A. …and a real finding is never swapped for the clean-site line');
 ok(resolveSiteFindings(true, [fresh(ALL)]) !== null, 'a website with strong faults → findings (no gap needed to name a real fault)');

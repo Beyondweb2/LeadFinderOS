@@ -25,7 +25,7 @@
    Pure; no I/O. IMPORTED BY EDGE FUNCTIONS: relative imports with an explicit .ts only.
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 
-import { auditFromStoredCrawl, HOME_FETCH_LABELS, type AuditFinding, type StoredCrawlForAudit, type SiteAudit } from './siteAudit.ts';
+import { auditFromStoredCrawl, HOME_FETCH_LABELS, storedCrawlUnread, UNVERIFIED_BLOCK_FINDING_IDS, type AuditFinding, type StoredCrawlForAudit, type SiteAudit } from './siteAudit.ts';
 import { isBrokenPageStatus, usableContentTrust, type SiteOwner } from './contentTrust.ts';
 import { classifyLeadWebsite } from './leadWebsiteKind.ts';
 import { emptyGreetingIn } from './pitchIssueWords.ts';
@@ -215,7 +215,8 @@ function trueBrokenOnly(f: AuditFinding): AuditFinding | null {
 export function summariseWebsiteCheck(row: StoredCrawlForAudit | null | undefined): WebsiteCheckSummary | null {
   if (!row || (!row.result && !row.full_evidence)) return null;
   const checkedAt = row.result?.checked_at ?? row.created_at ?? null;
-  const failed = row.result?.signals?.fetchFailed === true || (row.full_evidence as { completeness?: string } | null | undefined)?.completeness === 'failed';
+  /* Couldn't check includes an older row whose every impostor fetch was refused (storedCrawlUnread, 2026-10-26). */
+  const failed = storedCrawlUnread(row) || (row.full_evidence as { completeness?: string } | null | undefined)?.completeness === 'failed';
   if (failed) {
     const kind = row.result?.homeFetch?.kind;
     return {
@@ -328,7 +329,9 @@ export function placeholderPagesOnce(s: WebsiteCheckSummary): WebsiteCheckSummar
 export function usableWebsiteCheck(v: unknown): WebsiteCheckSummary | null {
   if (!v || typeof v !== 'object') return null;
   const s = v as WebsiteCheckSummary;
-  return s.version === WEBSITE_CHECK_VERSION && Array.isArray(s.issues) ? s : null;
+  if (s.version !== WEBSITE_CHECK_VERSION || !Array.isArray(s.issues)) return null;
+  /* ⛔ A summary stored before 2026-10-26 can carry "the site refused AI crawlers" from our impostor fetch: never shown. */
+  return s.issues.some((i) => UNVERIFIED_BLOCK_FINDING_IDS.has(i.id)) ? { ...s, issues: s.issues.filter((i) => !UNVERIFIED_BLOCK_FINDING_IDS.has(i.id)) } : s;
 }
 
 const plural = (n: number, one: string, many = `${one}s`) => `${n.toLocaleString('en-GB')} ${n === 1 ? one : many}`;
@@ -366,7 +369,8 @@ export function websiteCheckFor(
   if (kind.source === 'directory_profile' || kind.source === 'social_profile') {
     return empty('profile', `No standalone business website found, only a ${kind.label} profile — nothing of their own to check.`);
   }
-  const stored = usableWebsiteCheck(row?.result?.websiteCheck);
+  /* An unread homepage is summarised afresh (→ couldn't check): its stored summary may say "clean" or "blocked". */
+  const stored = storedCrawlUnread(row) ? null : usableWebsiteCheck(row?.result?.websiteCheck);
   const summary = stored ? placeholderPagesOnce(stored) : summariseWebsiteCheck(row);
   if (!summary) return empty('not_checked', NOT_CHECKED_LINE);
   const now = opts.nowMs ?? Date.now();
@@ -395,8 +399,7 @@ export function websiteCheckFor(
    canonical / schema words. An id without a line here keeps its title (those are plain already). */
 const PLAIN_LINE: Record<string, string> = {
   robots_blocks_all: 'Your site tells every search and AI tool to stay away',
-  /* ⛔ Hedged (Paul, 2026-10-20): we saw OUR check refused, never what an AI tool does. */
-  search_crawler_refused: 'Our check could not read your site, which AI tools may also struggle with',
+  /* ⛔ OUR check being refused is "couldn't check", never an issue line (2026-10-26); robots.txt blocks are robots_blocks_*. */
   /* Every line is a whole sentence ("X is / has …"), so a joined list reads in parallel (Paul, 2026-10-20). */
   no_service_pages: 'There are no separate pages for your services',
   one_page_site: 'Your website is a single page',

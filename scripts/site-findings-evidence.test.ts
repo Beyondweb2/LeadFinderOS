@@ -48,7 +48,7 @@ const CLEAN: CrawlSignals = {
   clientRendered: { flagged: false, visibleChars: 4200, htmlBytes: 51000, appShell: false },
   missingH1: false, noJsonLd: false, duplicates: null, thinPages: 0,
 };
-const BLOCKED: CrawlSignals = { ...CLEAN, searchBlocked: ['OAI-SearchBot'] };
+const BLOCKED: CrawlSignals = { ...CLEAN, searchBlocked: ['OAI-SearchBot'], blockEvidence: 'robots' };
 const sentenceOf = (x: { clause: string; rest: string }) => x.clause + '. ' + x.rest;
 
 /** One finding of each kind, built by the real detectors rather than hand-written, so a copy test can

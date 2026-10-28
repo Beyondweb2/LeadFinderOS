@@ -78,7 +78,7 @@ export const FIX_LINES: Record<FixKind, FixLine | null> = {
  *  is a reason AI cannot read the site. */
 export const FIX_ALIASES: Readonly<Record<string, FixKind>> = {
   robots_blocks_all: 'search_blocked',
-  search_crawler_refused: 'search_blocked',
+  robots_blocks_ai_search: 'search_blocked',
   sitemap_off_site: 'sitemap_wrong_domain',
   noindex_home: 'noindex_important_page',
   noindex_pages: 'noindex_important_page',

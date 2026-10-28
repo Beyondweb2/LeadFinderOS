@@ -14,6 +14,7 @@
 //
 // ⛔ IT NEVER SENDS A MESSAGE. No Graph call, no import of the sender, no whatsapp_* writes.
 import { logOpenAiUsage } from "./openai-usage.ts";
+import { SITE_CHECK_HEADERS } from "../../../src/lib/siteReadIdentity.ts";
 import { resolveAuditReplyVars, HOOK_NO_GAP_REASON } from "./audit-reply.ts";
 import { shortReportUrl } from "../../../src/lib/reportSlug.ts";
 import { draftNames } from "../../../src/lib/draftEvidence.ts";
@@ -27,7 +28,8 @@ import {
 export const WARM_RESEARCH_TABLE = "warm_lead_research";
 const MAX_BODY_BYTES = 1_000_000;
 const OPENAI_TIMEOUT_MS = 45_000;
-const BROWSER_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36";
+/* Our own crawler name, never a browser's (Paul's rule, src/lib/siteReadIdentity.ts — 2026-10-26: this path was the last
+   to borrow a Chrome identity). */
 
 // deno-lint-ignore no-explicit-any
 type Service = any;
@@ -88,7 +90,7 @@ export async function fetchSitePage(url: string): Promise<PageFacts> {
   const controller = new AbortController();
   const t = setTimeout(() => controller.abort(), WARM_RESEARCH_FETCH_TIMEOUT_MS);
   try {
-    const res = await fetch(url, { headers: { "User-Agent": BROWSER_UA, "Accept": "text/html,application/xhtml+xml;q=0.9,*/*;q=0.8" }, redirect: "follow", signal: controller.signal });
+    const res = await fetch(url, { headers: { ...SITE_CHECK_HEADERS }, redirect: "follow", signal: controller.signal });
     const type = res.headers.get("content-type") ?? "";
     const html = /html|xml|text/i.test(type) || !type ? await readCapped(res) : "";
     const finalUrl = res.url && /^https?:\/\//i.test(res.url) ? res.url : url;

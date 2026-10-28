@@ -158,7 +158,7 @@ ok(faulty.strongestFindings[0]?.kind === 'crawl_indexing' && faulty.strongestFin
 ok(faulty.technicallyClean === false, '…and the site is not called clean');
 
 /* ─────────── 7. crawl + audit reuse, trivia line ─────────── */
-const crawlRow = { created_at: new Date(NOW - 3 * DAY).toISOString(), result: { version: 99, signals: { homeUrl: W, fetchFailed: false, searchBlocked: ['OAI-SearchBot'], readableAs: 'ChatGPT-User', clientRendered: null, missingH1: false, noJsonLd: false, duplicates: null, thinPages: 0 } } };
+const crawlRow = { created_at: new Date(NOW - 3 * DAY).toISOString(), result: { version: 99, signals: { homeUrl: W, fetchFailed: false, searchBlocked: ['OAI-SearchBot'], blockEvidence: 'robots', readableAs: 'ChatGPT-User', clientRendered: null, missingH1: false, noJsonLd: false, duplicates: null, thinPages: 0 } } };
 const withCrawl = assemble(ryliPages, { crawl: crawlRow as never });
 ok(withCrawl.technicalFindings.some((x) => x.source === 'crawl' && x.strength === 5), 'a fresh crawl-check row is reused as a finding (no re-crawl)');
 ok(withCrawl.sources.some((s) => s.kind === 'crawl_check'), '…and listed as a source');

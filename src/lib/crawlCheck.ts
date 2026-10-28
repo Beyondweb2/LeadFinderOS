@@ -13,10 +13,18 @@
    during the months it was not. Both corrected — a stale comment is a load-bearing bug (CLAUDE.md
    §4) and these two had already been read back as a description of what runs.
 
+   ⚠️ AND UNTIL 2026-10-26 IT SAID THE HOMEPAGE WAS FETCHED "AS EACH AI SEARCH CRAWLER" — and that was
+   the bug behind every false "AI can't reach your site": a firewall refuses an impostor using a known
+   bot's name, so our fake OAI-SearchBot was refused where the real one gets in (drivewelluk.co.uk).
+   Every page is now read once, under our own honest name (siteReadIdentity.ts). A crawler is called
+   BLOCKED only when robots.txt names it and disallows the site (robotsSearchBlocked); a homepage we
+   could not read is "couldn't check", never a finding (fix/crawl-one-standard).
+
    ⛔ PURE. No fetch, no DOM, no platform globals — it runs in the edge function (Deno) AND in the
    test (Node/tsx), and is imported by the edge with a relative `.ts` path (CLAUDE.md §3). Every
    threshold is a named const so a tuning change is one line, not a scattered magic number.
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
+import { robotsAllows, robotsRulesFor } from './crawlUrl.ts';
 
 /** Below this many characters of crawler-visible text, a page says almost nothing to AI. The real
  *  case that motivated this: 69 characters served to GPTBot against 7,153 rendered in a browser. */
@@ -45,15 +53,42 @@ export const CRAWL_CHECK_VERSION = 2;
    decide whether a business gets NAMED, and a block on them is the real problem. TRAINING crawlers
    (GPTBot, ClaudeBot, CCBot) scrape for model training; blocking them is a common, legitimate choice
    that does NOT stop a business being cited, so it is never a headline.
-   ⛔ THE UA STRINGS LIVE IN THE EDGE FUNCTION (it does the fetching). These labels are what the
-   report names. Testing GPTBot was the bug. */
+   These are the robots.txt tokens checked, and the names the report uses. We never fetch AS them
+   (2026-10-26, see the header): only robots.txt can say one of them is shut out. */
 export const SEARCH_CRAWLER_LABELS = ['OAI-SearchBot', 'ChatGPT-User', 'Claude-User', 'PerplexityBot'] as const;
 
-/** A Cloudflare / bot-challenge interstitial — a BLOCK even when it comes back 200. The edge also
- *  checks the status and the cf-mitigated header; this is the body-marker half. Only the actual
- *  fetch is evidence — robots.txt is not (a site can "Allow" a crawler and still block it here). */
+/** A Cloudflare / bot-challenge interstitial — the site refused OUR check even when it comes back
+ *  200. The edge also checks the status and the cf-mitigated header; this is the body-marker half.
+ *  ⛔ It says nothing about any AI crawler: it is the reason the check could not read the page. */
 export function looksChallenged(body: string): boolean {
   return /__cf_chl_|cf_chl_opt|cf-browser-verification|just a moment|attention required|enable javascript and cookies/i.test((body || '').slice(0, 4000));
+}
+
+/** Did one read of a page give us the page? Not when the status is an error (4xx/5xx), the firewall
+ *  flagged a challenge, the body is a challenge, or nothing came back. Pure, so the quick check and the
+ *  deep crawl's homepage decide it the same way. */
+export function pageReadable(r: { status: number; cfMitigated?: boolean; body: string }): boolean {
+  return r.status >= 200 && r.status < 400 && !r.cfMitigated && !looksChallenged(r.body) && (r.body || '').trim().length > 0;
+}
+
+/** Where a stored `searchBlocked` came from. Only `'robots'` may be believed: rows written before
+ *  2026-10-26 (no marker) filled it from our own refused impostor fetches. */
+export const BLOCK_EVIDENCE_ROBOTS = 'robots' as const;
+
+/** The AI search crawlers robots.txt shuts out of the WHOLE site (the homepage disallowed for that
+ *  crawler, by its own group or by `User-agent: *`). ⛔ The only evidence a crawler is blocked: a
+ *  refused fetch of ours is not (the header). Pages-only rules are the deep audit's own finding. */
+export function robotsSearchBlocked(robotsTxt: string | null | undefined): string[] {
+  if (!robotsTxt) return [];
+  return SEARCH_CRAWLER_LABELS.filter((token) => !robotsAllows(robotsRulesFor(robotsTxt, token).rules, '/'));
+}
+
+/** The crawlers a stored signal may SAY are blocked: its list when it was read from robots.txt, else
+ *  nothing (an older row's list came from our own refused fetches and is not evidence). Every reader
+ *  goes through this. */
+export function verifiedSearchBlocked(s: { searchBlocked?: string[] | null; blockEvidence?: string | null } | null | undefined): string[] {
+  if (!s || s.blockEvidence !== BLOCK_EVIDENCE_ROBOTS) return [];
+  return Array.isArray(s.searchBlocked) ? s.searchBlocked.filter((x): x is string => typeof x === 'string') : [];
 }
 
 /* ── visible text ─────────────────────────────────────────────────────────────────────────────── */
@@ -258,12 +293,18 @@ export function pageSimilarity(htmlA: string, htmlB: string, town?: string | nul
 
 export interface CrawlSignals {
   homeUrl: string;
-  fetchFailed: boolean;              // no crawler could even connect (site down) → section hidden
-  /* SEARCH crawlers BLOCKED on the actual fetch (403 / challenge) — the crawlers that fetch a page
-     when someone asks an AI. A block on these is THE fault. Derived from real fetches, never robots. */
+  /* We could not read the homepage (no answer, an error status, a challenge page) → "couldn't check",
+     the section hidden, nothing said about the site. Since 2026-10-26 a refusal counts too; an older
+     row marked a refusal by readableAs null instead (crawlUnreadable reads both). */
+  fetchFailed: boolean;
+  /* SEARCH crawlers robots.txt shuts out of the whole site (robotsSearchBlocked) — the crawlers that
+     fetch a page when someone asks an AI. Read it through verifiedSearchBlocked: before 2026-10-26 it
+     was filled from our own refused fetches, which prove nothing (no blockEvidence marker). */
   searchBlocked: string[];
-  /* Which search crawler we successfully read the content with (null = all blocked, so the content
-     signals below are withheld — we never diagnose "client-rendered" off a block page). */
+  /** 'robots' on every row written since 2026-10-26; absent = an older, unverified searchBlocked. */
+  blockEvidence?: typeof BLOCK_EVIDENCE_ROBOTS;
+  /* Who read the homepage (SITE_CHECK_READ_AS; older rows: a search crawler's name). Null = nobody
+     could, so the content signals below are withheld — never "client-rendered" off a block page. */
   readableAs: string | null;
   clientRendered: ClientRenderResult | null;
   missingH1: boolean;
@@ -308,14 +349,15 @@ export function isGenericSchemaGap(f: Pick<CrawlFault, 'kind'>): boolean {
  *  [] when the site couldn't be read — the caller then renders NO section (Paul's rule). Each detail
  *  is that lead's real number, never a generic phrase. */
 export function buildFaultLines(s: CrawlSignals): CrawlFault[] {
-  if (s.fetchFailed) return [];   // site down — can't read it, so the section does not render (Paul's rule)
+  if (crawlUnreadable(s)) return [];   // couldn't check — nothing is said about the site (Paul's rule)
   const out: CrawlFault[] = [];
-  /* ⛔ THE REAL FAULT, AND THE HEADLINE: a SEARCH crawler is blocked. These fetch a page when someone
-     asks ChatGPT / Claude / Perplexity, so blocking them is what stops a business being named. A
-     GPTBot-only (training) block is never here — the edge doesn't even test it. */
-  if (s.searchBlocked.length) out.push({
-    title: "AI can’t reach your site",
-    detail: `${s.searchBlocked.join(", ")} ${s.searchBlocked.length === 1 ? "is" : "are"} blocked from fetching your pages — and ${s.searchBlocked.length === 1 ? "that is a crawler" : "those are the crawlers"} AI uses to read a site when someone asks about you.`, minor: false, kind: 'search_blocked' });
+  /* ⛔ THE HEADLINE WHEN IT IS TRUE: robots.txt shuts an AI SEARCH crawler out of the site. These
+     fetch a page when someone asks ChatGPT / Claude / Perplexity. A GPTBot-only (training) rule is
+     never here. Only a robots.txt rule says this (verifiedSearchBlocked), never a refused fetch. */
+  const blocked = verifiedSearchBlocked(s);
+  if (blocked.length) out.push({
+    title: "Your site tells AI search tools not to read it",
+    detail: `Your robots.txt tells ${blocked.join(", ")} not to read your site — and ${blocked.length === 1 ? "that is a crawler" : "those are the crawlers"} AI search tools use to read a site when someone asks about you.`, minor: false, kind: 'search_blocked' });
   if (s.clientRendered?.flagged) out.push({
     title: "AI can’t read your homepage",
     detail: `Only about ${s.clientRendered.visibleChars} characters reach a crawler — the rest loads with JavaScript, which AI doesn’t run.`, minor: false, kind: 'client_rendered' });
@@ -367,7 +409,20 @@ export function usableCrawlSignals(
   // judges freshness against it, so the answer never depends on the day the code happens to run.
   const fresh = (nowMs - createdAtMs) < CRAWL_FRESH_MS;
   const currentVer = (result.version ?? 1) >= CRAWL_CHECK_VERSION;
-  return fresh && currentVer ? result.signals : null;
+  return fresh && currentVer ? believableSignals(result.signals) : null;
+}
+
+/** Couldn't check: the homepage was not read. A row from before 2026-10-26 whose every impostor fetch
+ *  was refused stored fetchFailed false with readableAs NULL (written explicitly) — that is unread too.
+ *  A signal with no readableAs key at all predates the field and is judged on fetchFailed alone. */
+export function crawlUnreadable(s: { fetchFailed?: boolean | null; readableAs?: string | null } | null | undefined): boolean {
+  return !s || s.fetchFailed === true || s.readableAs === null;
+}
+
+/** A stored signal as it may be believed (2026-10-26): an unverified "blocked" list emptied, and an
+ *  unread homepage marked fetchFailed, so every reader downstream of usableCrawlSignals agrees. */
+export function believableSignals(s: CrawlSignals): CrawlSignals {
+  return { ...s, searchBlocked: verifiedSearchBlocked(s), fetchFailed: crawlUnreadable(s) };
 }
 
 /** The ONE sentence naming the site's main fault — the first (highest-priority) fault line's detail,
@@ -429,7 +484,7 @@ function isSuccessfulCurrentCrawl(
   result: { version?: number; status?: string; signals?: CrawlSignals } | null | undefined,
   createdAtMs: number,
 ): boolean {
-  if (!result?.signals || result.signals.fetchFailed || result.status === "unavailable") return false;
+  if (!result?.signals || crawlUnreadable(result.signals) || result.status === "unavailable") return false;
   return (Date.now() - createdAtMs) < CRAWL_FRESH_MS && (result.version ?? 1) >= CRAWL_CHECK_VERSION;
 }
 
@@ -459,17 +514,23 @@ export function resolveSiteFault(
   return auditVisibilityGap && successfulCleanCrawl ? CLEAN_SITE_FAULT_LINE : null;
 }
 
+/** The verdict when the homepage was not read. Internal only: it says the CHECK failed, nothing about
+ *  the site or AI (the reason, when known, is `result.homeFetch`). */
+export const COULD_NOT_CHECK_HEADLINE = "Couldn't check this site: our check got no readable homepage. That is not a finding about the site.";
+
 /** Build the paste-ready verdict from the signals — the single worst problem as the headline, in a
  *  fixed priority (a site AI can't read at all beats a cosmetic gap), plus the full list. Names the
  *  specific problem, never a grade. */
 export function buildVerdict(s: CrawlSignals): CrawlVerdict {
-  if (s.fetchFailed) {
-    return { ok: false, headline: `Couldn't fetch ${s.homeUrl} to check it — the site may be down or blocking automated requests.`, problems: [] };
+  if (crawlUnreadable(s)) {
+    /* ⛔ Couldn't check is not a finding (2026-10-26): never "blocking", never anything about AI. */
+    return { ok: false, headline: COULD_NOT_CHECK_HEADLINE, problems: [] };
   }
   const problems: string[] = [];
 
-  if (s.searchBlocked.length) {
-    problems.push(`${s.searchBlocked.join(', ')} ${s.searchBlocked.length === 1 ? 'is' : 'are'} blocked from fetching your site — and ${s.searchBlocked.length === 1 ? 'that crawler is' : 'those crawlers are'} what AI uses to read a page when someone asks ChatGPT, Claude or Perplexity about you. Blocking them means AI can't see you.`);
+  const blocked = verifiedSearchBlocked(s);
+  if (blocked.length) {
+    problems.push(`Your robots.txt tells ${blocked.join(', ')} not to read your site — and ${blocked.length === 1 ? 'that crawler is' : 'those crawlers are'} what AI search tools use to read a page when someone asks ChatGPT, Claude or Perplexity about you.`);
   }
   if (s.clientRendered?.flagged) {
     problems.push(`AI crawlers see only about ${s.clientRendered.visibleChars} characters of your homepage — the rest loads with JavaScript, which ChatGPT and Gemini don't run, so they can't read what you do or where you work.`);

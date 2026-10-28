@@ -1,5 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { userTeamRole } from "../_shared/access.ts";
+import { SITE_CHECK_HEADERS } from "../../../src/lib/siteReadIdentity.ts";
 import { guardAction } from "../_shared/protection.ts";
 
 // extract-email — Phase 1 email enrichment (website scrape).
@@ -142,7 +143,7 @@ async function fetchHtml(rawUrl: string): Promise<string | null> {
   try {
     const res = await fetch(url, {
       signal: controller.signal,
-      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; LeadFinder/1.0)', 'Accept': 'text/html' },
+      headers: { ...SITE_CHECK_HEADERS, 'Accept': 'text/html' },
     });
     if (!res.ok) return null;
     const reader = res.body?.getReader();

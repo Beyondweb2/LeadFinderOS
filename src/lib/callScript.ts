@@ -122,7 +122,7 @@ const SPOKEN_FINDING: Partial<Record<FindingKind, string>> = {
   canonical_off_domain: 'Some of the signals about one of your main pages are conflicting — it tells Google a different website is the real one.',
   schema_wrong_domain: "The business details built into your site point at a different web address to the one you use, so what AI reads about you doesn't match up.",
   noindex_important_page: 'One of your main pages is set to tell Google to leave it out of search.',
-  crawler_blocked: "Your site is turning away some of the AI search crawlers, so they can't read it properly.",
+  crawler_blocked: "Your site's own settings tell some of the AI search crawlers not to read it.",
   unreadable_homepage: "When an AI crawler opens your homepage it sees hardly any text, so there's very little for it to work with.",
   duplicate_pages: "A lot of your town and service pages are near enough the same, so nothing clearly tells AI which jobs and areas you really cover.",
   thin_pages: "Your service pages are pretty light on detail — there isn't much explaining what you actually do and where.",
