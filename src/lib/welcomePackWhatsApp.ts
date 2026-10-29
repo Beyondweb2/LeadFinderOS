@@ -7,12 +7,11 @@
      1. no phone / no WhatsApp / landline / opted out (or the opt-out check failed) / wrong number → NOTHING
         (Copy WhatsApp message, or Email instead);
      2. they messaged us inside the last 24 hours → FREE TEXT, but only inside their send hours;
-     3. otherwise the approved template — and until it is approved at Meta AND wired into the sender, NOTHING:
-        a clear sentence and Copy WhatsApp message.
-   ⛔ THE TEMPLATE IS NOT WIRED YET (WELCOME_PACK_TEMPLATE_WIRED = false). Registering a template touches
-      _shared/whatsapp-send.ts, reached by 17 functions (stripe-webhook and the held whatsapp-status among them),
-      so it is done in its own change once Meta has approved the wording in docs/welcome-pack-whatsapp-template.md.
-      The gate goes FIRST: an approved-but-unwired template still refuses — never "try it".
+     3. otherwise the welcome_pack_ready TEMPLATE (wired 2026-10-29, registered in _shared/whatsapp-send.ts as a
+        CONTINUATION). Meta's LIVE status decides: approved (or unreadable — Meta decides on the send) goes; in review,
+        rejected, paused or not found refuses with the reason, nothing is recorded, and Copy WhatsApp message stays.
+   ⛔ The template's three variables are resolved by fn send-whatsapp-message from the lead's own records
+      (_shared/welcome-pack-vars.ts), never taken from the caller.
    ⛔ NOT COLD, NOT MARKETING: a message to a paying client about what they bought. Free text carries no template, so
       the sender's cold-template rules (isColdOutreachTemplate) never see it; the number-health RED pause lives only in
       the outreach queue, which this never enters.
@@ -20,18 +19,26 @@
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 import { GBP_MANAGER_EMAIL } from './findableOffer.ts';
 import { windowOpenAt } from './paymentLinkRoute.ts';
+import { displayBusinessName, nameStyleFor } from './displayName.ts';
 
-/** ⛔ THE SETTING: the Meta template's name, in ONE place. Change it here if Meta needs a different name. */
+/** ⛔ THE SETTINGS: the Meta template's name and language. The sender's registry entry in _shared/whatsapp-send.ts
+ *  (WA_TEMPLATES) must carry the same two literals — scripts/welcome-pack-send.test.ts fails if they differ.
+ *  The language is the FALLBACK: when Meta's status can be read, the send uses the language Meta registered. */
 export const WELCOME_PACK_TEMPLATE_NAME = 'welcome_pack_ready';
-/** The sender cannot send this template until it is registered there (see the header). */
-export const WELCOME_PACK_TEMPLATE_WIRED = false;
+export const WELCOME_PACK_TEMPLATE_LANG = 'en_GB';
+/** Registered in the sender (2026-10-29). */
+export const WELCOME_PACK_TEMPLATE_WIRED = true;
 
-const firstName = (name: string | null | undefined): string => (name ?? '').trim().split(/\s+/)[0] || '';
+/** The pack link {{3}} may carry: findable.live/w/<short code>, nothing else. */
+export const isWelcomePackUrl = (u: string | null | undefined): boolean => /^https:\/\/findable\.live\/w\/[23456789abcdefghjkmnpqrstuvwxyz]{6}$/i.test(String(u ?? ''));
+/** {{1}}: the first name, else "there" (the same rule as the free-text message). */
+export const welcomePackGreeting = (contactName: string | null | undefined): string => (contactName ?? '').trim().split(/\s+/)[0] || 'there';
 
 /** Paul's wording, exactly. No first name → "Hi there". */
 export function welcomePackWhatsAppText(a: { contactName?: string | null; businessName: string; url: string }): string {
-  const first = firstName(a.contactName) || 'there';
-  const business = (a.businessName || '').trim() || 'your business';
+  const first = welcomePackGreeting(a.contactName);
+  /* The SAME name style the template's {{2}} renders with (displayName.ts nameStyleFor → "identify"), so both routes read alike. */
+  const business = displayBusinessName(a.businessName || '', { style: nameStyleFor(WELCOME_PACK_TEMPLATE_NAME) }) || (a.businessName || '').trim() || 'your business';
   return `Hi ${first}, welcome to Findable! Your welcome pack for ${business} is ready: ${a.url}. One thing I need from you: please add ${GBP_MANAGER_EMAIL} as a Manager of your Google Business Profile (the steps are on the first page of the pack). Any questions, just reply here. Paul`;
 }
 
@@ -86,7 +93,8 @@ export function decideWelcomePackWhatsApp(f: WelcomePackWaFacts, nowMs: number =
   if (f.wrongNumber) return none('wrong_number', true);
   if (!f.sendHoursOpen) return none('outside_hours', false);
   if (windowOpenAt(f.lastInboundAt, nowMs)) return { route: 'text', reason: 'ok_text', say: SAY.ok_text, emailFallback: false };
-  if (f.templateStatus !== 'APPROVED') return none('template_not_approved', false);
+  /* APPROVED goes; UNKNOWN (Meta could not be asked) is attempted and Meta decides — a refusal is reported, never hidden. */
+  if (f.templateStatus !== 'APPROVED' && f.templateStatus !== 'UNKNOWN') return none('template_not_approved', false);
   if (f.templateWired !== true) return none('template_not_wired', false);
   return { route: 'template', reason: 'ok_template', say: SAY.ok_template, emailFallback: false };
 }

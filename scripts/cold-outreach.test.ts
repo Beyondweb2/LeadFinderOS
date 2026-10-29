@@ -66,6 +66,9 @@ const EXPECTED_CONTINUATIONS = [
   "questionnaire_followup",
   "payment_recieved", // Meta's registered spelling — do not "correct" it
   "re_engage_49",
+  /* welcome_pack_ready — added 2026-10-29, Paul's call: a PAYING client's welcome pack, sent only from Paul's button
+     on the client hub. Never a first approach. */
+  "welcome_pack_ready",
   /* audit_followup — added 2026-09-15, Paul's call, and the tripwire did its job: it went red on
      the classification change and named the template rather than a number.
      THE DECISION IT IS RECORDING: this is the second step of the two-step flow, sent to a lead who

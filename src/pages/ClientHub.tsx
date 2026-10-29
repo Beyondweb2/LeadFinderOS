@@ -515,7 +515,7 @@ function WelcomePackStage({ lead, audit, toEmail }: { lead: AnyRecord; audit: An
       });
       if (res.simulated) { setNote(String(res.detail ?? 'Simulated: nothing was delivered.')); return; }
       if (mode !== 'test') { setLastSent((res.last_sent as typeof lastSent) ?? null); setWaFailed(false); setNote(''); }
-      toast({ title: mode === 'test' ? 'Test sent to your WhatsApp' : `Welcome pack sent ${res.channel === 'email' ? 'by email' : 'on WhatsApp'} to ${String(res.sent_to)}` });
+      toast({ title: mode === 'test' ? `Test sent to your WhatsApp (${res.via === 'template' ? 'as the welcome_pack_ready template' : 'as a normal message'})` : `Welcome pack sent ${res.channel === 'email' ? 'by email' : 'on WhatsApp'} to ${String(res.sent_to)}` });
     } catch (e) {
       const code = e instanceof EdgeFunctionError ? e.code : '';
       if (mode === 'send' && code && !WA_FAILED_CODES_NOT.has(code)) setWaFailed(true);

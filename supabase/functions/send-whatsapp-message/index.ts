@@ -47,6 +47,8 @@ import { formatVisibilityScore, REPORT_OFFER_REFUSAL_WORDS, REPORT_OFFER_TEMPLAT
 import { prospectOnlyTemplateRefusal } from "../../../src/lib/prospectOnly.ts";
 import { senderMessageName } from "../_shared/sender-name.ts";
 import { resolveOnboardingFormVars, resolveSignupLinkVars } from "../_shared/link-template-vars.ts";
+import { resolveWelcomePackVars } from "../_shared/welcome-pack-vars.ts";
+import { WELCOME_PACK_TEMPLATE_NAME } from "../../../src/lib/welcomePackWhatsApp.ts";
 import { LINK_TEMPLATE_NAMES, SIGNUP_LINK_TEMPLATE_NAME, TEMPLATE_UNAVAILABLE_CODES, templateSendFailureText, templateSendState } from "../../../src/lib/whatsappLinkTemplates.ts";
 
 // send-whatsapp-message — the Inbox reply sender (Phase A).
@@ -113,7 +115,9 @@ const CAPABILITIES = ["dry_run", "build_phase_hold", "routing_leaf", "any_approv
    2026-10-26b: a dashboard template to the same lead again within DASHBOARD_RESEND_WINDOW_MS, or while one is queued, is refused. */
 /* 2026-10-29b: test_send also takes FREE TEXT (body.body, no template) — still only to WHATSAPP_TEST_NUMBER, still lead-free
    (the welcome pack's "Send a test to me", paid-client-hub). */
-const BUILD_ID = "2026-10-29b-test-send-text";
+/* 2026-10-29c: welcome_pack_ready (a paying client's welcome pack, admin only, variables resolved here, Meta's live status
+   first); test_send auto_window: free text inside the test number's 24 hours, else the template. */
+const BUILD_ID = "2026-10-29c-welcome-pack-template";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -295,7 +299,15 @@ Deno.serve(async (req) => {
 
       /* FREE TEXT (2026-10-29b): the same destination, the same lead-free rules, the real textPayload. Meta delivers it
          only while the test number's own 24-hour window is open, and its refusal comes back verbatim. */
-      if (!templateName && text) {
+      /* AUTO (2026-10-29c, the welcome pack's "Send a test to me"): free text while the TEST NUMBER's own 24-hour window is
+         open (any inbound from it inside WINDOW_MS), else the named template. The number never leaves this function. */
+      let useText = !templateName && !!text;
+      if (body.auto_window === true && templateName && text) {
+        const { data: tIn } = await service.from("whatsapp_messages").select("created_at").eq("phone", dest).eq("direction", "inbound")
+          .gte("created_at", new Date(Date.now() - WINDOW_MS).toISOString()).limit(1);
+        useText = !!(tIn && tIn.length);
+      }
+      if (useText) {
         const envT = resolveWhatsAppEnv();
         if (!envT.live) return json({ ok: false, error: "not_live", detail: "WHATSAPP_TEST_MODE is on, or the WhatsApp secrets are missing — nothing was sent." }, 400);
         const rt = await sendViaGraph(envT.accessToken, envT.phoneNumberId, dest, textPayload(text));
@@ -310,11 +322,22 @@ Deno.serve(async (req) => {
          database — supplying the variables by hand is what keeps it lead-free, and it also lets a
          specific trade/town be driven through the normaliser on purpose. */
       const v = (body.vars ?? {}) as Record<string, string>;
+      /* welcome_pack_ready: Meta's live status first (a test of an unapproved template is refused with Meta's word), and the
+         language Meta registered (the registry's is the fallback) — the same as the live send. */
+      let testLang = entry.lang;
+      if (templateName === WELCOME_PACK_TEMPLATE_NAME) {
+        const av = await templateAvailability(service, templateName);
+        if (["PENDING", "IN_APPEAL", "REJECTED", "PAUSED", "DISABLED", "LIMIT_EXCEEDED", "NOT_FOUND"].includes(av.status)) {
+          return json({ ok: false, mode: "test_send", error: "template_not_approved", status: av.status, detail: `Meta says the ${templateName} template is ${av.status.toLowerCase().replace("_", " ")} — nothing was sent.` }, 200);
+        }
+        if (av.language) testLang = av.language;
+      }
       let payload: Record<string, unknown>;
       try {
-        payload = claimTemplatePayload(templateName, entry.lang, v.name ?? "", v.url ?? "", {
+        payload = claimTemplatePayload(templateName, testLang, v.name ?? "", v.url ?? "", {
           trade: v.trade, town: v.town, auditUrl: v.audit_url,
           competitors: v.competitors, onboardingUrl: v.onboarding_url, contactName: v.contact_first_name,
+          greetingName: v.greeting_name, welcomePackUrl: v.welcome_pack_url,
         }) as Record<string, unknown>;
       } catch (e) {
         /* The trade/town guards throw here exactly as they do on the live path, so a test send is
@@ -619,7 +642,39 @@ Deno.serve(async (req) => {
         const recent = await recentDashboardSend(service, resolvedLeadId, templateName, sched ? sched.row.id : null);
         if (recent) return json({ ok: false, error: recent, reason: recent === "recently_sent" ? RECENTLY_SENT_REASON : "Could not check whether this already went to them, so nothing was sent. Try again." }, 200);
       }
-      if (linkKind) {
+      if (templateName === WELCOME_PACK_TEMPLATE_NAME) {
+        /* ══ welcome_pack_ready (2026-10-29, src/lib/welcomePackWhatsApp.ts) — a PAYING client's welcome pack ══════════
+           ⛔ Admin only (Paul's button in paid-client-hub). ⛔ Meta's LIVE status decides, exactly as for the link templates:
+              approved sends; in review / rejected / paused / not found refuses with the reason; unreadable → Meta decides.
+           ⛔ All three variables are resolved HERE from the client's own records (_shared/welcome-pack-vars.ts).
+           ⛔ One per client unless the operator explicitly resends. Every other check above and below still runs. */
+        if (actor.role !== "admin") return json({ ok: false, error: "admin_only", reason: "Only an admin can send the welcome pack." }, 403);
+        if (!resolvedLeadId) return json({ ok: false, error: "template_needs_lead" }, 400);
+        if (!allowResend && await pitchEverSent(service, resolvedLeadId, templateName)) {
+          return json({ ok: false, error: "pitch_already_sent", reason: "The welcome pack template already went to them — confirm to send it again." }, 200);
+        }
+        const avail = await templateAvailability(service, templateName);
+        if (["PENDING", "IN_APPEAL", "REJECTED", "PAUSED", "DISABLED", "LIMIT_EXCEEDED", "NOT_FOUND"].includes(avail.status)) {
+          return json({ ok: false, error: "template_not_approved", status: avail.status, reason: `Meta says the ${templateName} template is ${avail.status.toLowerCase().replace("_", " ")} — nothing was sent.` }, 200);
+        }
+        if (avail.language) lang = avail.language;
+        const wv = await resolveWelcomePackVars(service, resolvedLeadId);
+        if (!wv.ok) return json({ ok: false, error: "welcome_pack_unavailable", reason: wv.reason }, 200);
+        try {
+          payload = claimTemplatePayload(templateName, lang, wv.business, "", { greetingName: wv.greeting, welcomePackUrl: wv.url });
+        } catch (e) {
+          const msg = (e as Error).message ?? "";
+          if (msg.startsWith("unsafe_template_var:")) {
+            const [, reason, detail] = msg.split(":");
+            return json({ ok: false, error: "unsafe_template_var", reason, detail: detail ?? "" }, 200);
+          }
+          throw e;
+        }
+        storedBody = renderTemplateBody(templateName, wv.business, wv.url, undefined, undefined, wv.greeting);
+        auditBusinessName = wv.business;
+        auditClaimUrl = wv.url;
+        sentLang = lang;
+      } else if (linkKind) {
         if (!resolvedLeadId) return json({ ok: false, error: "template_needs_lead" }, 400);
         if (!allowResend && await pitchEverSent(service, resolvedLeadId, templateName)) {
           return json({ ok: false, error: "pitch_already_sent", reason: "Already sent to them on WhatsApp — confirm to send it again." }, 200);

@@ -26,6 +26,7 @@ import { hookFollowupBody, contactFollowupBody, questionnaireFollowupBody } from
 import { articleTrade, pluraliseTrade, tradeInSentence } from './templateVars.ts';
 import { transcriptBusinessName, nameStyleFor } from './displayName.ts';
 import { onboardingTemplateBody, signupLinkTemplateBody } from './whatsappLinkTemplates.ts';
+import { WELCOME_PACK_TEMPLATE_BODY } from './welcomePackWhatsApp.ts';
 import { reportOfferBody } from './reportOfferTemplate.ts';
 import { dashboardTemplateTranscript } from './dashboardTemplates.ts';
 
@@ -451,6 +452,8 @@ export const READABLE_TEMPLATE_BODIES: Record<string, TemplateBodyFn> = {
   /* 2026-10-07 — the registered wording (whatsappLinkTemplates.ts): b = {{1}} greeting name, u = {{2}} the link. */
   findable_signup_link: (b, u) => signupLinkTemplateBody(b, u),
   findable_onboarding: (b, u) => onboardingTemplateBody(b, u),
+  /* 2026-10-29 — welcome_pack_ready (welcomePackWhatsApp.ts): b = {{2}} business, u = {{3}} the pack link, 5th = {{1}} greeting. */
+  welcome_pack_ready: (b, u, _t, _c, first) => WELCOME_PACK_TEMPLATE_BODY.replace('{{1}}', first || 'there').replace('{{2}}', b).replace('{{3}}', u),
   /* 2026-10-14 — the registered wording (reportOfferTemplate.ts); the score and the sender ride the last two slots. */
   ai_visibility_report_offer: (b, u, _t, competitors, _first, town, _sf, _sfi, score, sender) =>
     reportOfferBody({ name: b, town: town ?? '', competitors: competitors ?? '', score: score ?? '', link: u, sender: sender ?? '' }),

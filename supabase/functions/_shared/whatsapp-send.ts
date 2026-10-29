@@ -10,6 +10,7 @@ import { displayBusinessName, nameStyleFor } from "../../../src/lib/displayName.
 import { AI_SITE_FINDINGS_V2, AI_SITE_FINDINGS_V2_APPROVED } from "../../../src/lib/siteFindings.ts";
 import { STALE_OFFER_TEMPLATES } from "../../../src/lib/findableOffer.ts";
 import { isOnboardingFormUrl, isSignupTemplateLinkUrl, onboardingTemplateBody, signupLinkTemplateBody } from "../../../src/lib/whatsappLinkTemplates.ts";
+import { isWelcomePackUrl, WELCOME_PACK_TEMPLATE_BODY } from "../../../src/lib/welcomePackWhatsApp.ts";
 
 import { toWhatsAppDigits } from "../../../src/lib/waNumber.ts";
 import { REPORT_OFFER_NO_NAME, REPORT_OFFER_TEMPLATE, reportOfferBody } from "../../../src/lib/reportOfferTemplate.ts";
@@ -53,6 +54,9 @@ export type TemplateVar = "name" | "url" | "trade" | "trade_plural" | "trade_art
      prospect's SIGN-UP link or the paid client's ONBOARDING-FORM link, both resolved server-side by
      _shared/link-template-vars.ts and shape-checked here (never a Stripe URL). */
   | "greeting_name" | "signup_url" | "onboarding_form_url"
+  /* 2026-10-29 — welcome_pack_ready (src/lib/welcomePackWhatsApp.ts): {{2}} the business name (never blank), {{3}} the
+     paid client's findable.live/w/<code> pack link, both resolved server-side by _shared/welcome-pack-vars.ts. */
+  | "business_name" | "welcome_pack_url"
   /* 2026-10-14 — ai_visibility_report_offer (src/lib/reportOfferTemplate.ts): {{1}} the business name or "there",
      {{4}} the check's visibility score ("66%"), {{6}} the SENDING person's own message name (_shared/sender-name.ts). */
   | "name_or_there" | "visibility_score" | "sender_name"
@@ -317,6 +321,12 @@ export const WA_TEMPLATES: Record<string, { lang: string; vars: TemplateVar[]; h
      findable_onboarding:  {{1}} greeting name, {{2}} the paid client's findable.live/details/<token> link. */
   findable_signup_link: { lang: "en", vars: ["greeting_name", "signup_url"] },
   findable_onboarding: { lang: "en", vars: ["greeting_name", "onboarding_form_url"] },
+  /* ⛔ welcome_pack_ready (Paul, 2026-10-29; submitted to Meta as Utility, docs/welcome-pack-whatsapp-template.md). A paying
+     client's welcome pack: {{1}} first name or "there", {{2}} business name, {{3}} their findable.live/w/<code> link.
+     CONTINUATION (src/lib/coldOutreach.ts), never cold. Meta's LIVE status decides, as for the link templates. NOT in the
+     queue mirror: only Paul's button (paid-client-hub) sends it. The name and language literals must equal
+     WELCOME_PACK_TEMPLATE_NAME / WELCOME_PACK_TEMPLATE_LANG (scripts/welcome-pack-send.test.ts). */
+  welcome_pack_ready: { lang: "en_GB", vars: ["greeting_name", "business_name", "welcome_pack_url"] },
   /* ⛔ ai_visibility_report_offer — SUBMITTED TO META 2026-10-14 (Marketing, English), wired in as approved (Paul). The
      rules, the six variables and what refuses it live in src/lib/reportOfferTemplate.ts. COLD (not in
      CONTINUATION_TEMPLATES): the phone-history seatbelt applies. Queue-sent; the drip reads Meta's live status first.
@@ -827,6 +837,8 @@ export const WA_TEMPLATE_BODIES: Record<string, (businessName: string, claimUrl:
   /* The registered wording (whatsappLinkTemplates.ts); b = {{1}} the greeting name, u = {{2}} the link. */
   findable_signup_link: (b, u) => signupLinkTemplateBody(b, u),
   findable_onboarding: (b, u) => onboardingTemplateBody(b, u),
+  /* b = {{2}} the business name, u = {{3}} the pack link, the 5th slot = {{1}} the greeting (first name or "there"). */
+  welcome_pack_ready: (b, u, _t, _c, first) => WELCOME_PACK_TEMPLATE_BODY.replace("{{1}}", first || "there").replace("{{2}}", b).replace("{{3}}", u),
   /* b = the business name (greeting form), u = {{5}} the report link; the score and the sender ride the last two slots. */
   ai_visibility_report_offer: (b, u, _t, competitors, _first, town, _sf, _sfi, score, sender) =>
     reportOfferBody({ name: b, town: town ?? "", competitors: competitors ?? "", score: score ?? "", link: u, sender: sender ?? "" }),
@@ -875,7 +887,7 @@ export function templateBodyParams(
   vars: TemplateVar[],
   businessName: string,
   claimUrl: string,
-  extra?: { trade?: string; competitors?: string; rivals?: string[]; onboardingUrl?: string; templateName?: string; contactName?: string; town?: string; auditUrl?: string; siteFault?: string; siteFindings?: string; greetingName?: string; signupUrl?: string; onboardingFormUrl?: string; visibilityScore?: string; senderName?: string; neededItem?: string },
+  extra?: { trade?: string; competitors?: string; rivals?: string[]; onboardingUrl?: string; templateName?: string; contactName?: string; town?: string; auditUrl?: string; siteFault?: string; siteFindings?: string; greetingName?: string; signupUrl?: string; onboardingFormUrl?: string; visibilityScore?: string; senderName?: string; neededItem?: string; welcomePackUrl?: string },
 ) {
   /* Last line of defence for a template whose copy needs a real name. Callers check first and
      return a readable refusal; this throws so a new caller that forgets cannot quietly send
@@ -1035,6 +1047,18 @@ export function templateBodyParams(
         if (!isOnboardingFormUrl(u)) throw new Error("unsafe_template_var:not_an_onboarding_link:the link is not the client's findable.live onboarding form");
         return u;
       }
+      /* welcome_pack_ready (2026-10-29): the business name in greeting form — blank refuses (never "your business");
+         the link must be EXACTLY findable.live/w/<short code>. */
+      case "business_name": {
+        const n = displayBusinessName(businessName, { style: nameStyleFor(extra?.templateName) }) || businessName.trim();
+        if (!n) throw new Error("unsafe_template_var:no_business_name:this client has no business name");
+        return n;
+      }
+      case "welcome_pack_url": {
+        const u = (extra?.welcomePackUrl ?? "").trim();
+        if (!isWelcomePackUrl(u)) throw new Error("unsafe_template_var:not_a_welcome_pack_link:the link is not the client's findable.live welcome pack");
+        return u;
+      }
       /* needs_from_you {{2}}: what the client still has to send. Blank or over-long refuses (Meta rejects an empty
          parameter, and a vague "something" is not a request); the unsafe_template_var: prefix makes it a visible hold. */
       case "needed_item": {
@@ -1117,7 +1141,7 @@ export function claimTemplatePayload(
   lang: string,
   businessName: string,
   claimUrl: string,
-  extra?: { trade?: string; competitors?: string; rivals?: string[]; onboardingUrl?: string; contactName?: string; town?: string; auditUrl?: string; siteFault?: string; siteFindings?: string; greetingName?: string; signupUrl?: string; onboardingFormUrl?: string; visibilityScore?: string; senderName?: string; neededItem?: string },
+  extra?: { trade?: string; competitors?: string; rivals?: string[]; onboardingUrl?: string; contactName?: string; town?: string; auditUrl?: string; siteFault?: string; siteFindings?: string; greetingName?: string; signupUrl?: string; onboardingFormUrl?: string; visibilityScore?: string; senderName?: string; neededItem?: string; welcomePackUrl?: string },
 ) {
   /* THROWS on an unrecognised template rather than assuming ["name","url"].
      That assumption was a quieter version of the queue's template fallback: an unregistered name got
