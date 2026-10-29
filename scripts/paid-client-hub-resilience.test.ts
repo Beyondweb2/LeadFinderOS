@@ -119,6 +119,10 @@ const live: Record<string, string[]> = {
   outreach_leads_payment_plan: ['payment_plan', 'paid_in_full_at'],
   /* Welcome pack email (migration 20261130110000_welcome_pack_sends.sql, applied and read back from information_schema 2026-10-29). */
   welcome_pack_sends: ['id', 'lead_id', 'user_id', 'sent_by', 'sent_to', 'pack_url', 'resend_id', 'sent_at'],
+  /* Welcome pack on WhatsApp (2026-10-29): channel (migration 20261130120000, applied and read back), and the lead's WhatsApp
+     capability columns (whatsAppCapabilityOf), read back from information_schema the same day. */
+  welcome_pack_sends_channel: ['channel'],
+  outreach_leads_whatsapp_capability: ['line_type', 'whatsapp_delivery_status', 'whatsapp_ever_delivered'],
 };
 const known = new Set(Object.values(live).flat());
 /* An aliased JSON path (family:evidence->d->>family) is checked on its base column. */

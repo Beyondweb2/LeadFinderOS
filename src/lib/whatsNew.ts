@@ -22,6 +22,14 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-29-welcome-pack-whatsapp', date: '2026-10-29', title: 'Send welcome pack now goes on WhatsApp', audience: 'admin',
+    body: 'Send welcome pack sends a short WhatsApp from you with the pack link and the Google Business Profile ask. It goes as a normal message only if the client messaged you in the last 24 hours and it is inside their send hours. Otherwise it needs the welcome_pack_ready template, which is not approved yet: the button says so, and Copy WhatsApp message gives you the full text to paste. Send a test to me goes to your own WhatsApp test number. Email is now only a small "Email instead" for clients without WhatsApp, or after a WhatsApp send fails.',
+    report: {
+      added: ['Copy WhatsApp message on the Welcome Pack stage.', 'Send a test to me sends to your own WhatsApp test number (not recorded).', 'The welcome_pack_ready template wording to submit at Meta (docs/welcome-pack-whatsapp-template.md).'],
+      changed: ['Send welcome pack goes on WhatsApp through the normal sender, with its rules: the 24-hour window, send hours, opt-outs, wrong numbers and no-WhatsApp numbers.', 'Email is only offered for clients who cannot get WhatsApp, or after a WhatsApp send failed.'],
+      removed: ['Email as the default way to send the pack.'],
+      effect: 'Nothing sends on its own. A client who has not messaged in the last 24 hours cannot be sent the pack from the app until the template is approved and wired in; copy the message instead. Sent by either route, the row leaves What needs you.',
+    } },
   { id: '2026-10-29-welcome-pack-send', date: '2026-10-29', title: '"Send welcome pack" on What needs you, and a Send button on the client', audience: 'admin',
     body: 'When a client has paid and finished onboarding, "What needs you" shows "Send welcome pack". It opens the client at the Welcome Pack stage, where Send emails them the link to their pack. Nothing sends on its own. "Send a test to me" sends it to paul@findable.live only. The pack now has a Google Business Profile page with Google\'s own steps for adding paul@findable.live as a Manager, and clients on the new plans see their own plan, the agreement\'s exact guarantee and key points.',
     report: {
