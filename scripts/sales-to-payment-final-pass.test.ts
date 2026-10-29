@@ -249,7 +249,7 @@ console.log('\n── THE PAGE (findable.live) ──');
 console.log('\n── QUICK CLOSE SCREEN ──');
 {
   const dlg = read('src/components/QuickCloseDialog.tsx');
-  ok(/qc-offer-warning/.test(dlg) && /qc-offer-notes/.test(dlg) && /\.filter\(\(o\) => !o\.legacy \|\| answers\[current!\] === o\.value\)/.test(dlg), 'the plan step shows the recommendation, the contract warning and the notes; legacy answers are not offered');
+  ok(/qc-offer-warning/.test(dlg) && /qc-offer-notes/.test(dlg) && /\.filter\(\(o\) => !o\.legacy \|\| answers\[current!\] === o\.value \|\| \(current === 'payment_plan' && showOldPlan\)\)/.test(dlg), 'the plan step shows the recommendation, the contract warning and the notes; legacy answers are not offered (the old payment plan only on request)');
   ok(/Question \{Math\.min\(answeredCount \+ 1, totalSteps\)\} of \{totalSteps\}/.test(dlg) && /data-testid="qc-progress"/.test(dlg), 'progress is shown (N of M, a bar)');
   const lib = read('src/lib/quickClose.ts');
   const banned = ['registrar', 'dns login', 'cms login', 'hosting password', 'google business login', 'expiry', 'logo', 'photos', 'plugin'];

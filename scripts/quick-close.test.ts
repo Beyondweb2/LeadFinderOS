@@ -31,7 +31,8 @@ const NEW_SITE = { decision_maker: "yes", approach: "new_template", build_consen
 
 console.log("\n── the bare minimum, in the v2 order ──");
 /* 2026-10-07 (Paul: "Quick Close should be QUICK"): the OFFER first, then authority; legacy keys last (never asked). */
-ok(QUICK_CLOSE_QUESTIONS[0].key === "route" && QUICK_CLOSE_QUESTIONS[1].key === "decision_maker" && QUICK_CLOSE_QUESTIONS[QUICK_CLOSE_QUESTIONS.length - 1].key === "build_consents", "the offer first, then authority; the retired Build consents last (read on old rows only)");
+/* 2026-10-29: how they pay (payment_plan) sits right after the plan. */
+ok(QUICK_CLOSE_QUESTIONS[0].key === "route" && QUICK_CLOSE_QUESTIONS[1].key === "payment_plan" && QUICK_CLOSE_QUESTIONS[2].key === "decision_maker" && QUICK_CLOSE_QUESTIONS[QUICK_CLOSE_QUESTIONS.length - 1].key === "build_consents", "the offer first, then authority; the retired Build consents last (read on old rows only)");
 /* The Build consents' own wording (their `detail`) is a confirmation, not a collection, so it is not scanned. The rights
    question names photos on purpose (the right to REUSE them), so it is scanned without that word. */
 ok(!/service|opening hours|credential|description|google business/i.test(JSON.stringify(QUICK_CLOSE_QUESTIONS.map((q) => ({ key: q.key, text: q.text, options: q.options })))), "no services, hours, credentials, copy or GBP questions before payment");

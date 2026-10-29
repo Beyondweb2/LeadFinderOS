@@ -14,12 +14,13 @@ import { invokeEdge, edgeErrorMessage, EdgeFunctionError } from '@/lib/edgeInvok
 import { notifyLeadChanged } from '@/lib/leadSync';
 import {
   APPROACH_LABEL, APPROACH_ROUTE, QC_REVIEW_HEADING, ROUTE_WITHDRAWN_TEXT, TIED_IN_DECLINE_HEADING, TIED_IN_DECLINE_REASON, QUICK_CLOSE_AFTER_PAYMENT, QUICK_CLOSE_AGREEMENT_LINE, QUICK_CLOSE_GUARANTEE_LINES, QUICK_CLOSE_QUESTIONS, QUICK_CLOSE_STATE_LABEL,
-  closeFlow, linkTimeLeftWords, missingQuestions, phoneCloseNotesComplete, quickCloseMessage, quickCloseScript, routeAfterAnswer, routeAvailable, routeSwitchText, routeOwnershipLine, routePaymentsShort, routeTermsLines,
+  closeFlow, linkTimeLeftWords, missingQuestions, phoneCloseNotesComplete, quickCloseMessage, quickCloseScript, routeAfterAnswer, routeAvailable, routeSwitchText, routeOwnershipLine, routePaymentsShort, closeTermsLines, closeChipText, firstPaymentGbp,
   type QcApproach, type QcCallNotes, type CloseRoute, type QcKey, type QcLinkShare, type OfferFit, type QuickCloseAnswers, type QuickCloseGate, type QuickCloseState,
 } from '@/lib/quickClose';
 import { LINK_READY_FALLBACK, type LinkRoute } from '@/lib/paymentLinkRoute';
 import { FINDABLE_SETUP_PRICE_GBP, SERVICE_ROUTE_NAME, isSaleableRoute, totalPaymentsFor, type ServiceRoute } from '@/lib/findableOffer';
 import { cn } from '@/lib/utils';
+import { gbpWords } from '@/lib/paymentPlans';
 import { usePriceModel } from '@/hooks/usePriceModel';
 import { PriceModelSwitch } from '@/components/PriceModelSwitch';
 import { PRICE_MODEL_GUARANTEE, priceModelLinkRefusal, upfrontSpoken } from '@/lib/priceModel';
@@ -170,6 +171,8 @@ export function QuickClosePanel({ leadId, active = true, framed = false }: { lea
   const [trade, setTrade] = useState('');
   const [script, setScript] = useState(quickCloseScript(null));
   const [copied, setCopied] = useState<string | null>(null);
+  /* The old £99 × 12 plan is staff-only and hidden until asked for (paymentPlans.ts). */
+  const [showOldPlan, setShowOldPlan] = useState(false);
 
   const answers = v?.answers ?? {};
   const route = answers.route ?? null;
@@ -177,7 +180,7 @@ export function QuickClosePanel({ leadId, active = true, framed = false }: { lea
   const sellRoute: ServiceRoute | null = route && isSaleableRoute(route) ? route : null;
   const declined = v?.state === 'declined';
   // The words follow the route: a new route resets them (the rep can still edit freely after).
-  useEffect(() => { setScript(quickCloseScript(sellRoute)); }, [sellRoute]);
+  useEffect(() => { setScript(quickCloseScript(sellRoute, answers.payment_plan)); }, [sellRoute, answers.payment_plan]);
   const missing = useMemo(() => missingQuestions(answers), [answers]);
   // A decision-maker "No" ends the questions (nothing after it can lead to payment).
   const current: QcKey | null = step && step !== 'review' ? step : answers.decision_maker === 'no' ? null : (missing[0] ?? null);
@@ -305,7 +308,7 @@ export function QuickClosePanel({ leadId, active = true, framed = false }: { lea
               <p className="flex min-w-0 items-baseline gap-1.5 text-base font-bold tracking-tight"><span className="shrink-0 whitespace-nowrap">Close</span><span className="min-w-0 truncate font-normal text-muted-foreground">· {v?.lead.business_name ?? '…'}</span></p>
               <div className="mt-1.5 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
                 {v && <ToneChip tone={STATE_TONE[v.state]} dot className={v.state === 'paid' ? SUCCESS_CHIP : undefined}>{QUICK_CLOSE_STATE_LABEL[v.state]}</ToneChip>}
-                {v && route && <ToneChip tone="grey" icon={PoundSterling} testId="qc-route-chip">{SERVICE_ROUTE_NAME[route]} · {totalPaymentsFor(route)} payments</ToneChip>}
+                {v && route && <ToneChip tone="grey" icon={PoundSterling} testId="qc-route-chip">{closeChipText(route, answers.payment_plan)}</ToneChip>}
                 {v && v.state !== 'paid' && <span className="min-w-0">{answeredCount} of {totalSteps} answered · saved as you go</span>}
               </div>
             </div>
@@ -381,12 +384,12 @@ export function QuickClosePanel({ leadId, active = true, framed = false }: { lea
                   {(v.offer.notes?.length ?? 0) > 0 && <ul className="space-y-0.5 px-1 text-xs text-muted-foreground" data-testid="qc-offer-notes">{v.offer.notes.map((n) => <li key={n}>• {n}</li>)}</ul>}
                 </div>
               )}
-              <div className={cn('mt-3 grid gap-2', current === 'route' || current === 'build_consents' || current === 'approach' || current === 'domain' || current === 'design_owner' || current === 'agency_contract' || current === 'manager' ? 'grid-cols-1' : 'grid-cols-2')}>
+              <div className={cn('mt-3 grid gap-2', current === 'route' || current === 'build_consents' || current === 'approach' || current === 'domain' || current === 'design_owner' || current === 'agency_contract' || current === 'manager' || current === 'payment_plan' ? 'grid-cols-1' : 'grid-cols-2')}>
                 {/* v5: the plan question offers Findable Build only. */}
                 {[...currentQ.options]
                   .sort((x, y) => (current === 'route' && v.offer?.recommended ? Number(y.value === v.offer.recommended) - Number(x.value === v.offer.recommended) : 0))
                   /* A LEGACY answer stays readable but is never offered as a new choice (QcOption.legacy). */
-                  .filter((o) => !o.legacy || answers[current!] === o.value)
+                  .filter((o) => !o.legacy || answers[current!] === o.value || (current === 'payment_plan' && showOldPlan))
                   /* ⛔ v5: a withdrawn plan is never a button, even when a pre-v5 close still carries it. */
                   .filter((o) => current !== 'route' || isSaleableRoute(o.value))
                   .filter((o) => !(current === 'authority' && o.value === 'not_applicable' && (answers.manager === 'agency' || answers.manager === 'freelancer' || answers.manager === 'third_party')))
@@ -409,6 +412,9 @@ export function QuickClosePanel({ leadId, active = true, framed = false }: { lea
                     );
                   })}
               </div>
+              {current === 'payment_plan' && !showOldPlan && answers.payment_plan !== 'legacy_twelve' && (
+                <button type="button" onClick={() => setShowOldPlan(true)} className="mt-2 text-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline" data-testid="qc-show-old-plan">Show the old plan (£99 × 12, staff only)</button>
+              )}
               {step && <button type="button" onClick={() => setStep(null)} className="mt-2 inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"><ArrowLeft className="h-3 w-3" />Back</button>}
             </section>
           )}
@@ -454,7 +460,7 @@ export function QuickClosePanel({ leadId, active = true, framed = false }: { lea
             <section aria-live="polite" className={cn('min-w-0', PANEL, EDGE.blue)} data-testid="qc-route-terms">
               <p className="flex items-center gap-2 text-sm font-bold tracking-tight"><IconTile icon={PoundSterling} tone="blue" size="sm" />{SERVICE_ROUTE_NAME[sellRoute]}</p>
               <div className="mt-2"><PriceModelSwitch compact /></div>
-              <ul className="mt-2 space-y-0.5 text-sm" data-testid="qc-terms" data-model={priceModel}>{(upfront ? upfront.terms : routeTermsLines(sellRoute)).map((l, i) => <li key={l} className={cn(i === 2 && 'font-semibold')}>{l}</li>)}</ul>
+              <ul className="mt-2 space-y-0.5 text-sm" data-testid="qc-terms" data-model={priceModel}>{(upfront ? upfront.terms : closeTermsLines(sellRoute, answers.payment_plan)).map((l, i) => <li key={l} className={cn(i === 2 && 'font-semibold')}>{l}</li>)}</ul>
               <p className="mt-1.5 text-sm">{routeOwnershipLine(sellRoute)}</p>
               <div className="mt-2.5 rounded-xl bg-muted/30 p-2.5 text-sm ring-1 ring-inset ring-border/60" data-testid="qc-guarantee">
                 <p className="flex items-center gap-1.5 font-semibold"><ShieldCheck className={cn('h-4 w-4 shrink-0', EMPHASIS_TEXT)} />{upfront ? PRICE_MODEL_GUARANTEE : QUICK_CLOSE_GUARANTEE_LINES[0]}</p>
@@ -482,7 +488,7 @@ export function QuickClosePanel({ leadId, active = true, framed = false }: { lea
                         {busy === 'link' ? <Loader2 className="h-5 w-5 animate-spin" /> : v.state === 'link_expired' ? <RefreshCw className="h-5 w-5" /> : <PoundSterling className="h-5 w-5" />}
                         {v.state === 'link_expired' ? 'Make a fresh agreement & payment link' : 'Create agreement & payment link'}
                       </Button>
-                      <p className="text-center text-xs text-muted-foreground">One secure Findable link: they check a short summary, read and sign the Client Service Agreement, then pay £{FINDABLE_SETUP_PRICE_GBP}. Payment cannot open before they sign.</p>
+                      <p className="text-center text-xs text-muted-foreground">One secure Findable link: they check a short summary, read and sign the Client Service Agreement, then pay {gbpWords(firstPaymentGbp(answers.payment_plan))}. Payment cannot open before they sign.</p>
                     </>
                   ) : (
                     <>

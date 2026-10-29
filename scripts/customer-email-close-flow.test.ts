@@ -61,7 +61,7 @@ ok(!/body\.to\b/.test(fn), 'a `to` sent by the browser is not honoured anywhere'
 ok(/reply_to: FINDABLE_CONTACT_EMAIL/.test(send), "Findable's address is the reply-to only, never the recipient");
 ok(/checkSuppressed/.test(send) && /qaEmailHold\(service, leadId, to\)/.test(send), 'do-not-contact and the QA sink still run before the send');
 const shareLink = fn.slice(fn.indexOf('if (mode === "share_link")'), fn.indexOf('if (mode === "share_link")') + 4500);
-ok(/emailCustomerLink\(row\.id, async \(senderName\) => quickCloseEmail\(\{ greetName, businessName: lead\.business_name, url, route, senderName \}\)\)/.test(shareLink), 'Agreement & Payment: emailed through the one send, carrying the SAME agreement & payment link');
+ok(/emailCustomerLink\(row\.id, async \(senderName\) => quickCloseEmail\(\{ greetName, businessName: lead\.business_name, url, route, senderName, plan \}\)\)/.test(shareLink), 'Agreement & Payment: emailed through the one send, carrying the SAME agreement & payment link');
 ok(/share\.to = sent\.to; share\.status = "sent"/.test(shareLink), 'the share record keeps who it went to, and only after Resend accepted it');
 const setup = fn.slice(fn.indexOf('if (mode === "share_setup")'));
 ok(/channel !== "copy" && channel !== "whatsapp" && channel !== "email"/.test(setup), 'Full Setup accepts an email channel');

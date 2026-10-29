@@ -85,6 +85,9 @@ const CHECKOUT_REFUSAL_TEXT: Record<string, string> = {
   cannot_serve: "The website answers mean Findable cannot deliver on this site as it stands — Paul needs to look at it.",
   domain_unresolved: "The domain answers need Paul's review before payment.",
   route_undecided: "Confirm the plan (Findable Build) first.",
+  /* 2026-10-29 (paymentPlans.ts): the payment plan is read off the row by findable-checkout. */
+  plan_undecided: "Ask how they want to pay first (pay in full, 6 months or 12 months).",
+  plan_not_on_sale: "That payment plan is not on sale yet (its client agreement still needs Paul's approval).",
   /* v5 (2026-10-16): Findable Optimise is withdrawn; a close still carrying it must be moved to Build first. */
   route_withdrawn: ROUTE_WITHDRAWN_TEXT,
   /* v5 clause 1.6: still tied into a contract with their current provider — not taken on. */
@@ -892,6 +895,7 @@ Deno.serve(async (req) => {
       const qc = (row.quick_close ?? null) as (QuickCloseRecord & Obj) | null;
       if (!linkUsable(qc)) return json({ ok: false, error: "link_expired", detail: "Make the sign-up link first." }, 409);
       const route = cleanAnswers(qc!.answers).route;
+      const plan = cleanAnswers(qc!.answers).payment_plan ?? null;
       if (!route) return json({ ok: false, error: "route_undecided", detail: CHECKOUT_REFUSAL_TEXT.route_undecided }, 409);
       /* ⛔ v5 (2026-10-16): a link made for the withdrawn plan, or for a sale now declined (the client corrected the contract
          answer to "still tied in" after the link was made), is never handed over. */
@@ -909,7 +913,7 @@ Deno.serve(async (req) => {
       }
       if (channel === "email") {
         /* ⛔ The recipient is ALWAYS the saved customer email — a `to` sent by the browser is ignored. */
-        const sent = await emailCustomerLink(row.id, async (senderName) => quickCloseEmail({ greetName, businessName: lead.business_name, url, route, senderName }));
+        const sent = await emailCustomerLink(row.id, async (senderName) => quickCloseEmail({ greetName, businessName: lead.business_name, url, route, senderName, plan }));
         if (!sent.ok) return sent.response;
         share.to = sent.to; share.status = "sent";
       }
@@ -949,7 +953,7 @@ Deno.serve(async (req) => {
           method: "POST", headers: { apikey: anon, Authorization: req.headers.get("authorization") ?? "", "Content-Type": "application/json" },
           body: JSON.stringify(lr.route === "whatsapp_template"
             ? { phone: lead.phone, country: lead.country ?? null, lead_id: leadId, template_name: SIGNUP_LINK_TEMPLATE_NAME, ...(body.resend === true ? { allow_resend: true } : {}) }
-            : { phone: lead.phone, country: lead.country ?? null, lead_id: leadId, body: quickCloseMessage(greetName, url, route) }),
+            : { phone: lead.phone, country: lead.country ?? null, lead_id: leadId, body: quickCloseMessage(greetName, url, route, plan) }),
         });
         const out = await res.json().catch(() => ({})) as Obj;
         if (!res.ok || !out.ok) {

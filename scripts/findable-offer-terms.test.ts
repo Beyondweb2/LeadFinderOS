@@ -56,8 +56,9 @@ for (const r of SERVICE_ROUTES) {
   ok(checkoutLineNameFor(r).includes(`/month from the day after your refund window, ${n} payments in total (the minimum term)`), `Stripe line item (${r}) names the monthly, ${n} payments and the minimum`);
 }
 const checkout = code('supabase/functions/findable-checkout/index.ts');
-ok(/custom_text\[submit\]\[message\]", cardSavedNoticeFor\(route\)\)/.test(checkout), 'checkout shows the route\'s notice beside the card field');
-ok(/product_data\]\[name\]", checkoutLineNameFor\(route\)\)/.test(checkout), 'checkout names the route on the line item');
+/* 2026-10-29: the v5 plan keeps the route's words; the new payment plans use their own (paymentPlans.ts). */
+ok(/custom_text\[submit\]\[message\]", legacyPlan \? cardSavedNoticeFor\(route\) : cardSavedNoticeForPlan\(plan\)\)/.test(checkout), 'checkout shows the route\'s (or plan\'s) notice beside the card field');
+ok(/product_data\]\[name\]", legacyPlan \? checkoutLineNameFor\(route\) : checkoutLineNameForPlan\(plan\)\)/.test(checkout), 'checkout names the route (or plan) on the line item');
 ok(!/29\.99|NEW_SITE/.test(checkout), 'no £29.99 and no new-site tier in checkout code');
 
 console.log('── 3. BILLING: THE ROUTE\'S COUNT, THE SIGN-UP ONE INCLUDED ──');

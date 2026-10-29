@@ -87,9 +87,9 @@ ok(threw, 'a zero / bad recurring count throws — never an open-ended or instan
 
 console.log('── 1b/2b. WHAT THE SUBSCRIPTION BUILDER SENDS STRIPE ──');
 const sub = code('supabase/functions/_shared/delayed-subscription.ts');
-ok(/cancel_at: String\(minimumTermCancelAt\(trialEnd, recurring\)\)/.test(sub) && /const recurring = recurringPaymentsFor\(route\)/.test(sub), 'cancel_at is computed from the ROUTE\'s recurring count');
+ok(/cancel_at: String\(minimumTermCancelAt\(trialEnd, recurring\)\)/.test(sub) && /const recurring = plan === "legacy_twelve" \? recurringPaymentsFor\(route\) : recurringPaymentsForPlan\(plan\)/.test(sub), 'cancel_at is computed from the ROUTE\'s recurring count (the payment plan\'s, once one is recorded)');
 ok(/if \(!isServiceRoute\(route\)\) return \{ kind: "failed"/.test(sub), 'no route → no subscription (a reported failure, never a default 12 or 6)');
-ok(/"metadata\[service_route\]": route/.test(sub) && /"metadata\[total_payments\]": String\(totalPaymentsFor\(route\)\)/.test(sub), 'the subscription carries its route and payment count in metadata');
+ok(/"metadata\[service_route\]": route/.test(sub) && /"metadata\[total_payments\]": String\(plan === "legacy_twelve" \? totalPaymentsFor\(route\) : spec\.totalPayments\)/.test(sub) && /"metadata\[payment_plan\]": plan/.test(sub), 'the subscription carries its route, payment plan and payment count in metadata');
 ok(/proration_behavior: "none"/.test(sub) && /trial_end: String\(trialEnd\)/.test(sub), 'the six-week trial and no proration are unchanged');
 ok(!/cancel_at_period_end|iterations|subscription_schedules/.test(sub), 'one mechanism (cancel_at), no schedule API, no second system');
 
@@ -151,7 +151,7 @@ ok(serviceRouteFromRow({ plan_tier: 'keep', website_addon: null }) === 'optimise
 const checkout = code('supabase/functions/findable-checkout/index.ts');
 ok(/const route = serviceRouteFromRow\(ob/.test(checkout) && /if \(!route\) \{[\s\S]{0,300}error: "route_undecided"/.test(checkout), 'checkout: route from the ROW; none → 409 route_undecided before any Stripe session');
 ok(checkout.indexOf('route_undecided') < checkout.indexOf('checkout/sessions'), 'the route refusal comes before the Stripe call');
-ok(/"metadata\[service_route\]", route/.test(checkout) && /"metadata\[total_payments\]", String\(totalPaymentsFor\(route\)\)/.test(checkout), 'checkout: the session carries the route and count to the webhook');
+ok(/"metadata\[service_route\]", route/.test(checkout) && /"metadata\[payment_plan\]", plan/.test(checkout) && /"metadata\[total_payments\]", String\(PAYMENT_PLAN_SPEC\[plan\]\.totalPayments\)/.test(checkout), 'checkout: the session carries the route, the payment plan and its count to the webhook');
 ok(/cardSavedNoticeFor\(route\)/.test(checkout) && /checkoutLineNameFor\(route\)/.test(checkout), 'checkout: the Stripe page names THIS route\'s count (card notice + line name)');
 ok(!/body\.(plan_tier|route|service_route|total_payments)/.test(checkout), 'the browser never decides the route (nothing read from the request)');
 ok(/line_items\[0\]\[price_data\]\[unit_amount\]", String\(Math\.round\(offer\.gbp \* 100\)\)/.test(checkout), 'the £99 line is unchanged (inline price_data, the guarantee\'s carrier)');
@@ -192,10 +192,10 @@ ok(resolvePaidRoute({}, 'build').route === null && /created before routes existe
 const wh = code('supabase/functions/stripe-webhook/index.ts');
 ok(/const paid = resolvePaidRoute\(s\.metadata \?\? null, rowReadOk \? rowRoute : undefined\)/.test(wh), 'the webhook resolves the route from the session + row');
 /* 2026-10-05: + the timing (v3 hold vs legacy six weeks) after the claim key. */
-ok(/createDelayedSubscription\([\s\S]{0,500}paid\.route,\s*s\.id,\s*v3Checkout && s\.metadata\?\.payment_timing === OPTION_B_TIMING \? OPTION_B_TIMING : "legacy",\s*v3Checkout \? \(s\.metadata\?\.commercial_terms \?\? null\) : null,\s*\)/.test(wh), 'and creates the subscription for THAT route (claimed by this checkout, pre-sales fix 03)');
-ok(/\.update\(\{ contract_total_payments: totalPaymentsFor\(paid\.route\) \}\)[\s\S]{0,80}\.is\("contract_total_payments", null\)/.test(wh), 'the contract is stamped once, only when resolved, never over an existing one');
+ok(/createDelayedSubscription\([\s\S]{0,500}paid\.route,\s*s\.id,\s*v3Checkout && s\.metadata\?\.payment_timing === OPTION_B_TIMING \? OPTION_B_TIMING : "legacy",\s*v3Checkout \? \(s\.metadata\?\.commercial_terms \?\? null\) : null,\s*paidPlan,\s*\)/.test(wh), 'and creates the subscription for THAT route and payment plan (claimed by this checkout, pre-sales fix 03)');
+ok(/const planTotal = paidPlan === "legacy_twelve" \? totalPaymentsFor\(paid\.route\) : PAYMENT_PLAN_SPEC\[paidPlan\]\.totalPayments;/.test(wh) && /\.update\(\{ contract_total_payments: planTotal \}\)[\s\S]{0,80}\.is\("contract_total_payments", null\)/.test(wh), 'the contract is stamped once, only when resolved, never over an existing one');
 ok(/NO MONTHLY SCHEDULE WAS CREATED/.test(wh), 'a payment with no schedule says so in Paul\'s PAID email');
-ok(/await recordLedger\(service, \{\s*lead_id: findableLeadId, kind: "initial"/.test(wh) && wh.indexOf('kind: "initial"') < wh.indexOf('contract_total_payments: totalPaymentsFor'), 'the initial payment is still written to the ledger first (attribution from sold_by at payment)');
+ok(/await recordLedger\(service, \{\s*lead_id: findableLeadId, kind: "initial"/.test(wh) && wh.indexOf('kind: "initial"') < wh.indexOf('contract_total_payments: planTotal'), 'the initial payment is still written to the ledger first (attribution from sold_by at payment)');
 ok(/establishLeadPayment\(service, findableLeadId/.test(wh) && /throw e;/.test(wh), 'the payment itself is still a must-write (conditional since pre-sales fix 03; a missing row still throws)');
 ok(/charge\.refunded|refund/.test(wh) && /charge\.dispute/.test(wh), 'refund and dispute handling is still in the webhook');
 
