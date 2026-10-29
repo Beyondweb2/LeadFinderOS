@@ -85,7 +85,7 @@ export async function loadAdminOverview(service: Service, period: ReportingPerio
     allRows<AdminActivity & { id: string }>((a, b, c) => service.from("lead_activity").select("id, lead_id, actor_user_id, kind, data, created_at", c ? { count: "exact" } : undefined).order("id").range(a, b)),
     allRows<AdminSuppression & { id: string }>((a, b, c) => service.from("contact_suppressions").select("id, lead_id, reason, source, created_at, wrong_number_at, wrong_number_by", c ? { count: "exact" } : undefined).order("id").range(a, b)),
     service.from("payment_ledger").select("id, lead_id, kind, status, amount_gbp, occurred_at, sold_by_user_id, stripe_object_id, stripe_payment_intent_id").order("occurred_at").limit(10000),
-    service.from("onboarding_responses").select("id, lead_id, status, created_at, plan_tier, website_addon, contact_email, source, qc_link_at:quick_close->>link_generated_at").order("created_at").limit(5000),
+    service.from("onboarding_responses").select("id, lead_id, status, created_at, plan_tier, website_addon, contact_email, source, qc_link_at:quick_close->>link_generated_at, confirmed_location, services, services_list").order("created_at").limit(5000),
   ]);
   for (const r of [teamRes, rolesRes, exRes, ledgerRes, onboardingRes]) if (r.error) throw new Error(r.error.message ?? String(r.error));
 
@@ -325,6 +325,24 @@ export async function loadAdminOverview(service: Service, period: ReportingPerio
     delegatedTasks = ((data ?? []) as any[]).filter((r) => r.team_posts?.lead_id).map((r) => ({ post_id: r.post_id, user_id: r.user_id, task_status: r.task_status, lead_id: r.team_posts.lead_id, published_at: r.team_posts.published_at }));
   } catch (err) { console.error("[admin-overview] delegated", err instanceof Error ? err.message : err); delegatedTasks = null; }
 
+  /* WELCOME PACK (2026-10-29): which paid clients were emailed their pack, and whose paid baseline finished — the
+     "Send welcome pack" row on What needs you. A failed read is null → no welcome-pack rows (never "not sent"). */
+  let welcomePack: { sentLeadIds: Set<string>; baselineDoneLeadIds: Set<string> } | null = null;
+  try {
+    const paid = leads.filter((l) => Number(l.amount_paid ?? 0) > 0);
+    const baselineIds = paid.map((l) => l.baseline_audit_id).filter((x): x is string => !!x);
+    const [sends, audits] = await Promise.all([
+      paid.length ? service.from("welcome_pack_sends").select("lead_id").in("lead_id", paid.map((l) => l.id)) : Promise.resolve({ data: [], error: null }),
+      baselineIds.length ? service.from("ai_audits").select("id").in("id", baselineIds).not("baseline_completed_at", "is", null) : Promise.resolve({ data: [], error: null }),
+    ]);
+    for (const x of [sends, audits]) if (x.error) throw new Error(x.error.message);
+    const done = new Set(((audits.data ?? []) as { id: string }[]).map((a) => a.id));
+    welcomePack = {
+      sentLeadIds: new Set(((sends.data ?? []) as { lead_id: string }[]).map((s) => s.lead_id)),
+      baselineDoneLeadIds: new Set(paid.filter((l) => l.baseline_audit_id && done.has(l.baseline_audit_id)).map((l) => l.id)),
+    };
+  } catch (err) { console.error("[admin-overview] welcome pack", err instanceof Error ? err.message : err); welcomePack = null; }
+
   const overview = foldAdminOverview({
     period, today, yesterday, week, month, nowMs,
     bookOwnerId: owner, people, exclusions,
@@ -335,7 +353,7 @@ export async function loadAdminOverview(service: Service, period: ReportingPerio
     onboarding: (onboardingRes.data ?? []) as AdminOnboarding[],
     commissionLines, commissionTotals, commissionDueBySeller, payoutsBySeller,
     cost: { period: cPeriod, today: cToday, yesterday: cYesterday, week: cWeek, month: cMonth },
-    triage, contractAlerts, clientExtras, usage, delegatedTasks, attributionOf, hideActivityOf,
+    triage, contractAlerts, clientExtras, usage, delegatedTasks, attributionOf, welcomePack, hideActivityOf,
   });
 
   return {

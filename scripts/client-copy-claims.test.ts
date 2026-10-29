@@ -231,7 +231,7 @@ ok(/week-four comparison/.test(read("src/lib/baselineView.ts")), "the HELD band 
 
 console.log("\n── THE GUARANTEE APPEARS ONLY AS THE CONSTANT ──");
 const welcome = read("src/lib/welcomePackHtml.ts");
-ok(/esc\(v6 \? V6_GUARANTEE : FINDABLE_GUARANTEE\)/.test(welcome), "the welcome pack renders the guarantee of the client's plan (v5 FINDABLE_GUARANTEE, v6 V6_GUARANTEE), escaped");
+ok(/esc\(v6 \? v6GuaranteeWords\(\) : FINDABLE_GUARANTEE\)/.test(welcome), "the welcome pack renders the guarantee of the client's plan (v5 FINDABLE_GUARANTEE, v6 the signed agreement's own key point), escaped");
 ok(!/you get your money back/i.test(renderedText(welcome)), "…and no hand-written refund sentence beside it");
 ok(FINDABLE_GUARANTEE.includes(`£${FINDABLE_SETUP_PRICE_GBP}`), `the constant itself names £${FINDABLE_SETUP_PRICE_GBP}`);
 ok(/four weeks|week four/.test(FINDABLE_GUARANTEE), "…and four weeks");

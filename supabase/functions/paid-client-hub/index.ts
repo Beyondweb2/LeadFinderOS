@@ -5,6 +5,8 @@ import { attachPersistedQueueProgress } from "../../../src/lib/baselineProgress.
 import { isUpstreamOutage } from "../_shared/operator-auth.ts";
 import { refusalBody, requireAdmin } from "../_shared/access.ts";
 import { renderWelcomePack } from "../_shared/welcome-pack-render.ts";
+import { welcomePackReadiness, welcomePackUrl } from "../../../src/lib/welcomePackData.ts";
+import { sendableEmail, welcomePackEmail, WELCOME_PACK_FROM, WELCOME_PACK_REPLY_TO, WELCOME_PACK_TEST_TO } from "../../../src/lib/welcomePackEmail.ts";
 import { buildReportData, seoStyleForAudit, type QueueRow, type RunRow } from "../../../src/lib/auditReport.ts";
 import { isAggregatorUrl } from "../_shared/aggregators.ts";
 import { normaliseWebsiteBuild } from "../../../src/lib/websiteBuildState.ts";
@@ -1232,6 +1234,86 @@ Deno.serve(async (req) => {
         return json({ ok: false, error: packed.error ?? "not_ready", detail: packed.detail ?? "The welcome pack is not ready yet." }, 409);
       }
       return json({ ok: true, html: packed.html });
+    }
+
+    /* ══ WELCOME PACK EMAIL (Paul, 2026-10-29) — sent ONLY when Paul presses Send ═══════════════════
+       welcome_pack_status: the last real send (read only).
+       welcome_pack_send: emails the client the link to their pack (findable.live/w/<code>) through the SAME
+         Resend call shape the agreement link uses, then records it in welcome_pack_sends — which is what takes
+         the "Send welcome pack" row off What needs you.
+       ⛔ `test: true` goes to WELCOME_PACK_TEST_TO (Paul) only, whatever the body says, and is NOT recorded.
+       ⛔ Refused: not this owner's client, not paid, ended/refunded, pack not ready or no public link, no address,
+          a QA lead's address outside the sink (qaEmailHold), or already sent without `resend: true`. */
+    if (action === "welcome_pack_status" || action === "welcome_pack_send") {
+      const leadId = text(body.lead_id);
+      const { data: lead, error: leadErr } = await service.from("outreach_leads")
+        .select("id,business_name,email,contact_name,amount_paid,status,service_terminated_at,baseline_audit_id").eq("id", leadId).eq("user_id", user.id).maybeSingle();
+      if (leadErr) throw leadErr;
+      if (!lead) return json({ ok: false, error: "client_not_found", detail: "This client is not in your paid-client list." }, 404);
+      const L = lead as { id: string; business_name: string | null; email: string | null; contact_name: string | null; amount_paid: number | null; status: string | null; service_terminated_at: string | null; baseline_audit_id: string | null };
+      const loadSends = async () => {
+        const { data, error } = await service.from("welcome_pack_sends").select("sent_at,sent_to")
+          .eq("lead_id", L.id).order("sent_at", { ascending: false }).limit(1);
+        if (error) throw error;
+        return ((data ?? []) as Array<{ sent_at: string; sent_to: string }>)[0] ?? null;
+      };
+      if (action === "welcome_pack_status") return json({ ok: true, last_sent: await loadSends() });
+
+      const isTest = body.test === true;
+      if (!carriesMoney(L)) return json({ ok: false, error: "not_paid", detail: "This client has not paid yet, so there is no welcome pack to send." }, 409);
+      /* A TEST (to Paul only) is allowed on an ended or refunded client, so the email can be checked on a real pack;
+         a REAL send to an ended or refunded client is refused. */
+      const closed = clientClosed(L);
+      if (closed && !isTest) return json({ ok: false, error: "client_closed", detail: closed === "ended" ? "This engagement has ended, so no welcome pack is sent." : "This client was refunded, so no welcome pack is sent." }, 409);
+      const prior = await loadSends();
+      if (!isTest && prior && body.resend !== true) {
+        return json({ ok: false, error: "already_sent", detail: `Already sent to ${prior.sent_to}. Press Resend if you really mean to send it again.`, last_sent: prior }, 409);
+      }
+      /* The pack must exist and have its public link: the same readiness the Stage 2 pill and the /w/ page use. */
+      const { data: audit, error: auditErr } = L.baseline_audit_id
+        ? await service.from("ai_audits").select("id,audit_purpose,baseline_completed_at,short_code").eq("id", L.baseline_audit_id).maybeSingle()
+        : { data: null, error: null };
+      if (auditErr) throw auditErr;
+      const ready = welcomePackReadiness({ baseline_audit_id: L.baseline_audit_id }, audit as never);
+      if (ready.state !== "ready") return json({ ok: false, error: "not_ready", detail: ready.reason }, 409);
+      if (!ready.canShare || !ready.shortCode || !ready.auditId) return json({ ok: false, error: "no_public_link", detail: "This pack has no public link, so it cannot be emailed. Download it instead." }, 409);
+      /* Rendered once here so a pack that would refuse at the link is never emailed. */
+      const packed = await renderWelcomePack(service, ready.auditId);
+      if (!packed.ok) return json({ ok: false, error: packed.error ?? "not_ready", detail: packed.detail ?? "The welcome pack is not ready yet." }, 409);
+      const url = welcomePackUrl(ready.shortCode);
+
+      const { data: ob } = await service.from("onboarding_responses").select("contact_email,contact_name")
+        .eq("lead_id", L.id).eq("status", "paid").order("updated_at", { ascending: false }).limit(1).maybeSingle();
+      const obRow = ob as { contact_email?: string | null; contact_name?: string | null } | null;
+      const to = isTest ? WELCOME_PACK_TEST_TO : sendableEmail(text(body.to) || text(obRow?.contact_email) || text(L.email));
+      if (!to) return json({ ok: false, error: "no_email", detail: "There is no email address on file for this client. Add one first." }, 409);
+      if (!isTest) {
+        /* ⛔ QA (src/lib/qaSafety.ts): a test lead's pack goes ONLY to the QA sink. */
+        const qaRefusal = await qaEmailHold(service, String(L.id), to);
+        if (qaRefusal) return json({ ok: false, error: "qa_email_sink_only", detail: qaRefusal }, 409);
+      }
+      const key = Deno.env.get("RESEND_API_KEY");
+      if (!key) return json({ ok: false, error: "email_unconfigured", detail: "Email is not configured." }, 500);
+      const mail = welcomePackEmail({ businessName: text(L.business_name), contactName: text(obRow?.contact_name) || text(L.contact_name), url, test: isTest });
+      const res = await fetch("https://api.resend.com/emails", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ from: WELCOME_PACK_FROM, to: [to], reply_to: WELCOME_PACK_REPLY_TO, subject: mail.subject, text: mail.text }),
+      });
+      if (!res.ok) {
+        const detail = (await res.text()).slice(0, 300);
+        await service.from("client_error_reports").insert({ error_id: "welcome_pack_email_failed", message: `${res.status} ${detail}`, context: { lead_id: L.id, test: isTest } });
+        return json({ ok: false, error: "email_failed", detail: "The email did not send. Try again in a moment." }, 502);
+      }
+      const resendId = text(((await res.json().catch(() => ({}))) as { id?: unknown }).id) || null;
+      if (isTest) return json({ ok: true, test: true, sent_to: to, last_sent: prior });
+      const { error: logErr } = await service.from("welcome_pack_sends").insert({ lead_id: L.id, user_id: user.id, sent_by: user.id, sent_to: to, pack_url: url, resend_id: resendId });
+      if (logErr) {
+        /* The client HAS the email; only our record failed. Say so plainly rather than inviting a second send. */
+        await service.from("client_error_reports").insert({ error_id: "welcome_pack_send_not_recorded", message: logErr.message ?? String(logErr), context: { lead_id: L.id } });
+        return json({ ok: false, error: "sent_not_recorded", detail: `Sent to ${to}, but the send could not be recorded. Do not send it again.` }, 500);
+      }
+      return json({ ok: true, sent_to: to, last_sent: await loadSends() });
     }
 
     /* ══ SECTION 5 — EVERYTHING THE REBUILD PROMPT IS GENERATED FROM ══════════════════════════════

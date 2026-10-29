@@ -1,14 +1,15 @@
 /* ⛔ EXPLICIT .ts ON EVERY RELATIVE IMPORT. This module is now reached from an EDGE FUNCTION
    (render-welcome-pack, via _shared/welcome-pack-render.ts), and Deno cannot resolve an
    extensionless specifier — CLAUDE.md §3. scripts/check-import-graph.mjs fences it. */
-import { PAYMENT_PLAN_SPEC, V6_GUARANTEE, gbpWords, isPaymentPlan, planAfterWords, type PaymentPlan } from './paymentPlans.ts';
+import { FULL_PAY_HOSTING_INCLUDED_MONTHS, PAYMENT_PLAN_SPEC, V6_GUARANTEE_HEADLINE, gbpWords, isPaymentPlan, planAfterWords,
+  planAgreementWords, planTotalGbp, type PaymentPlan } from './paymentPlans.ts';
 import { renderReportHtml, esc, type AiAuditReportData } from './aiAuditReportHtml.ts';
 import { FINDABLE_CONTACT_EMAIL, FINDABLE_CONTACT_WHATSAPP, FINDABLE_GUARANTEE, FINDABLE_MONTHLY_GBP,
   FINDABLE_SETUP_PRICE_GBP, MONTHLY_START_V3_WORDS, endOfTermKeyPoint, findableContactPhoneDisplay, serviceRouteForTotal, termMonthsFor, totalPaymentsFor,
-  GBP_ACCESS_ASK, GBP_ADD_STEPS, GBP_ACCESS_REASSURANCE, GBP_ACCESS_CONSEQUENCE } from './findableOffer.ts';
+  GBP_ACCESS_ASK, GBP_ACCESS_REASSURANCE, GBP_ACCESS_CONSEQUENCE, GBP_MANAGER_EMAIL } from './findableOffer.ts';
 import type { BaselineSummary } from './baselineSummary.ts';
 import { qrSvg } from './qrSvg.ts';
-import { ukDate } from './clientAgreement.ts';
+import { agreementVersion, ukDate } from './clientAgreement.ts';
 import { storedRemeasureWeeks } from './remeasureFill.ts';
 
 /* ════════════════════════════════════════════════════════════════════════════════════════════
@@ -259,6 +260,7 @@ function coverPage(name: string, hasDetails: boolean, hasBaseline: boolean, hasA
   /* ⚠️ SAME ORDER AS packPages IN buildWelcomePackHtml (Paul, 2026-10-02): what we're doing → why it
      works → where you are now → what happens next → your part → the report. */
   const contents = [
+    { title: 'Give us Google access', line: 'Two minutes: add us as a Manager on your Google Business Profile.' },
     { title: 'Your plan', line: 'What we do, what you get, the timeline and your guarantee.' },
     { title: 'How it works', line: 'Why many local businesses are hard for AI to read, and what we change.' },
     ...(hasBaseline ? [
@@ -287,7 +289,7 @@ function coverPage(name: string, hasDetails: boolean, hasBaseline: boolean, hasA
       <div class="wp-ask">
         <div class="wp-asklabel">${esc('One thing we need from you')}</div>
         <p class="wp-askline">${esc(GBP_ACCESS_ASK)}</p>
-        <p class="wp-asksteps">${esc(GBP_ADD_STEPS)}</p>
+        <p class="wp-asksteps">${esc('The step-by-step is on the next page.')}</p>
         <p class="wp-asksteps">${esc(GBP_ACCESS_REASSURANCE)} ${esc(GBP_ACCESS_CONSEQUENCE)}</p>
       </div>
       <h2 class="wp-h2">What&rsquo;s inside</h2>
@@ -302,6 +304,48 @@ function coverPage(name: string, hasDetails: boolean, hasBaseline: boolean, hasA
       </div>
       <p style="margin-top:14px">Any questions at all, just reply to the email this came with.
       <b>Glad to have you with us.</b></p>`;
+}
+
+/* ════════════════════════════════════════════════════════════════════════════════════════════════
+   GIVE US GOOGLE ACCESS (Paul, 2026-10-29). The one thing the client must do, step by step.
+   ⛔ THE MENU NAMES ARE GOOGLE'S OWN, checked 2026-10-29 against "Manage your Business Profile owners and
+   managers" (support.google.com/business/answer/3403100): business.google.com → More → Business Profile
+   settings → People and access → Add → email → Access: Manager → Invite; removal is the same screen →
+   Remove person. Re-check that page before changing a word here. Manager is Google's role that cannot
+   add or remove people or remove the profile — the client stays the owner. No password is ever asked for.
+   ════════════════════════════════════════════════════════════════════════════════════════════════ */
+export const GBP_PACK_STEPS: readonly string[] = [
+  'On a computer, go to business.google.com and sign in with the Google account that owns your Business Profile.',
+  'Select More, then Business Profile settings, then People and access.',
+  'At the top left, select Add.',
+  `Enter ${GBP_MANAGER_EMAIL}.`,
+  'Under Access, choose Manager.',
+  'Select Invite. We accept the invitation on our side.',
+];
+function gbpAccessPage(): string {
+  return `
+      <div class="wp-eyebrow">One thing we need from you</div>
+      <h1 class="wp-h1">Give us access to your Google Business Profile</h1>
+      <p class="wp-oneline">Please add ${esc(GBP_MANAGER_EMAIL)} as a Manager of your Google Business Profile.</p>
+      <p>Your Business Profile is what Google shows when people search for you: your hours, phone number,
+      services and reviews. We need Manager access to correct it so it matches your website. ${esc(GBP_ACCESS_CONSEQUENCE)}</p>
+      <div class="wp-box">
+        <p class="wp-boxtitle">How to add us (about two minutes)</p>
+        <div class="wp-rows wp-rows-tight">
+          ${GBP_PACK_STEPS.map((s, i) => `<div class="wp-row"><div class="wp-num">${i + 1}</div><div class="wp-rowbody"><p class="wp-rowline">${esc(s)}</p></div></div>`).join('\n          ')}
+        </div>
+      </div>
+      <div class="wp-box-navy">
+        <p class="wp-boxtitle">What this means for you</p>
+        <ul class="wp-ticks">
+          <li><b>You stay the owner.</b> A Manager can edit your profile, but cannot add or remove people or delete the profile.</li>
+          <li><b>You never share a password.</b> Google sends us an invitation. We will never ask for your login.</li>
+          <li><b>You can remove us at any time.</b> Go back to People and access, select us, then select Remove person.</li>
+        </ul>
+      </div>
+      <p class="wp-note">Can&rsquo;t see People and access, or can&rsquo;t add people? Your account may be a manager rather
+      than the owner. Ask whoever owns the profile to add us, or reply to our email and we will help.
+      Google&rsquo;s own guide: support.google.com/business/answer/3403100</p>`;
 }
 
 /* 🔴 PER ROUTE (2026-09-29): the client's own count; an unknown one names none. */
@@ -335,8 +379,10 @@ function weeksWord(n: number): string { return WEEK_WORDS[n] ?? String(n); }
    never claims we host it.
    ⛔ "a monthly check", NEVER "a monthly audit": /terms says the monthly update is not a full
    re-audit, and the pack must not promise more than the terms do. */
-function upkeepPhrase(totalPayments: number | null | undefined): string {
-  return serviceRouteForTotal(totalPayments) === 'build'
+/* ⚠️ THE PLAN IS PASSED (2026-10-29): a v6 six-month plan has 6 payments, the withdrawn Optimise count, so the
+   count alone printed "if your site is with us" to a Build client whose site we host. */
+function upkeepPhrase(totalPayments: number | null | undefined, paymentPlan: string | null = null): string {
+  return serviceRouteForTotal(totalPayments, paymentPlan) === 'build'
     ? 'hosting and maintenance of your website'
     : 'hosting and maintenance if your site is with us';
 }
@@ -513,24 +559,33 @@ const AGREEMENT_ALWAYS_YOURS = 'Your domain, logo and photos are always yours.';
 
 /* ── v6 (2026-10-29): the three payment plans (paymentPlans.ts) ── */
 const isV6Plan = (p: unknown): p is PaymentPlan => isPaymentPlan(p) && p !== 'legacy_twelve';
+/* \u26d4 v6 KEY POINTS ARE THE SIGNED AGREEMENT'S OWN, VERBATIM (Paul, 2026-10-29: "the guarantee wording exactly as in
+   docs/agreement-v6.md"). Read from clientAgreement.ts V6 \u2014 the text the client signs and docs/agreement-v6.md is
+   generated from \u2014 never retyped here, so the pack cannot drift from the agreement. Fails loudly if they vanish. */
+export function v6AgreementKeyPoints(): readonly string[] {
+  const points = agreementVersion('v6').keyPoints?.points ?? [];
+  if (!points.length) throw new Error('welcomePack: agreement v6 has no key points');
+  return points;
+}
+/** The v6 guarantee exactly as the agreement's key point says it (it starts with Paul's headline). */
+export function v6GuaranteeWords(): string {
+  const g = v6AgreementKeyPoints().find((p) => p.startsWith(V6_GUARANTEE_HEADLINE));
+  if (!g) throw new Error('welcomePack: agreement v6 has no guarantee key point');
+  return g;
+}
 function v6KeyPoints(p: PaymentPlan): readonly string[] {
-  const s = PAYMENT_PLAN_SPEC[p];
-  return [
-    p === 'full'
-      ? `You paid in full: ${gbpWords(s.firstGbp)}, one payment. Nothing more is owed for your plan.`
-      : `Your plan is ${s.totalPayments} payments, counting your first. The remaining payments are owed even if you stop early.`,
-    ...(p === 'full' ? [] : [MONTHLY_KEY_POINT]),
-    'We build, host and manage your new website.',
-    p === 'full' ? 'The website and our work are yours once your payment has cleared.' : 'We own the website and our work until your final payment clears. Then it\u2019s yours.',
-    ...(p === 'full' ? [] : ['If a payment is 14 days late, we can take down the website we built until it\u2019s paid. We will tell you first.']),
-    'If AI names you no more often at your four-week re-check, you can claim back everything you have paid within 14 days, and the agreement ends.',
-    planAfterWords(p),
-  ];
+  return [`Your payment plan: ${planAgreementWords(p)}.`, ...v6AgreementKeyPoints()];
+}
+/** Hosting while on the plan (v6 9.2): while paying; on Pay in full for the included months from go-live. */
+function v6HostingWords(p: PaymentPlan): string {
+  return p === 'full'
+    ? `hosting of your website for ${FULL_PAY_HOSTING_INCLUDED_MONTHS} months from when it goes live`
+    : 'hosting of your website while you are paying';
 }
 function v6PaymentsLine(p: PaymentPlan): string {
   const s = PAYMENT_PLAN_SPEC[p];
-  if (p === 'full') return `You paid ${gbpWords(s.firstGbp)} in full. That covers the measurement, the website, the work and the re-measure. ${planAfterWords(p)}`;
-  return `Your ${gbpWords(s.firstGbp)} covers the measurement, the first round of work and the re-measure. ${gbpWords(s.monthlyGbp)} a month begins ${MONTHLY_START_V3_WORDS}, ${s.totalPayments} payments in total counting your first. We will email you before it starts. ${planAfterWords(p)}`;
+  if (p === 'full') return `You paid ${gbpWords(s.firstGbp)} in full, one payment. Nothing more is owed for your plan. ${planAfterWords(p)}`;
+  return `Your ${gbpWords(s.firstGbp)} covers the measurement, the first round of work and the re-measure. ${gbpWords(s.monthlyGbp)} a month begins ${MONTHLY_START_V3_WORDS}, ${s.totalPayments} payments in total counting your first (${gbpWords(planTotalGbp(p))} in all). We will email you before it starts. ${planAfterWords(p)}`;
 }
 
 /** Exported for its test (scripts/client-signup-agreement-flow.test.ts). */
@@ -657,7 +712,11 @@ function planPage1(name: string, totalPayments: number | null | undefined, amoun
           <li><b>Your Google Business Profile corrected,</b> so it matches your website.</li>
           <li><b>The right directories for your trade.</b> Added where you are missing, fixed where you are wrong.</li>
           <li><b>A before and after.</b> The same questions asked again, shown side by side.</li>
-          <li><b>Every month after that.</b> A new page, a check of your AI visibility, adjustments, and a short update.</li>
+          ${v6
+            /* v6 2.6 / Schedule 1: regular review and updates guided by the data — the amount and type of work vary,
+               so no "new page every month" promise; hosting per 9.2. */
+            ? `<li><b>During your plan.</b> Regular checks of your AI visibility and the updates the data says are most useful, plus ${v6HostingWords(v6)}.</li>`
+            : '<li><b>Every month after that.</b> A new page, a check of your AI visibility, adjustments, and a short update.</li>'}
         </ul>
       </div>
 
@@ -670,7 +729,7 @@ function planPage1(name: string, totalPayments: number | null | undefined, amoun
         ${/* ⛔ ESCAPED ONCE, HERE. It used to go through lead(), which escapes its second argument
               again, so the apostrophe in "we'll" reached the PDF as the six characters &#39; . */''}
         ${current
-          ? `<p><b>Your guarantee.</b> ${esc(v6 ? V6_GUARANTEE : FINDABLE_GUARANTEE)}</p>`
+          ? `<p><b>Your guarantee.</b> ${esc(v6 ? v6GuaranteeWords() : FINDABLE_GUARANTEE)}</p>`
           : lead('Your guarantee.', 'Your money-back guarantee applies on the terms you signed up to.')}
         ${/* ⚠️ lead() ESCAPES ITS SECOND ARGUMENT, so this string uses real characters and never
               HTML entities — "&pound;" here would print those six letters to a paying client. */''}
@@ -678,7 +737,7 @@ function planPage1(name: string, totalPayments: number | null | undefined, amoun
           ? lead('Payments.', v6PaymentsLine(v6))
           : !current
           ? lead('Payments.', 'Your agreed payment schedule continues under the terms you signed up to.')
-          : lead('Payments.', `Your £${FINDABLE_SETUP_PRICE_GBP} covers the measurement, the first round of work and the re-measure. £${FINDABLE_MONTHLY_GBP} a month begins ${MONTHLY_START_V3_WORDS}${termPhrase(totalPayments)}. It pays for the monthly work above, plus ${upkeepPhrase(totalPayments)}. We will email you before it starts.`)}
+          : lead('Payments.', `Your £${FINDABLE_SETUP_PRICE_GBP} covers the measurement, the first round of work and the re-measure. £${FINDABLE_MONTHLY_GBP} a month begins ${MONTHLY_START_V3_WORDS}${termPhrase(totalPayments)}. It pays for the monthly work above, plus ${upkeepPhrase(totalPayments, paymentPlan)}. We will email you before it starts.`)}
       </div>`;
 }
 
@@ -822,7 +881,8 @@ function baselinePage(name: string, b: BaselineSummary): string {
 /* ⛔ THE STEPS NAME THE REAL ORDER: frozen baseline → work → the same questions again → before and
    after. "same frozen questions, the same AI tools, the same method" is pinned by
    welcome-pack-content.test.ts. The guarantee itself is printed once, on the plan page. */
-function nextPage(totalPayments: number | null | undefined, remeasure: { weeks: number; label: string } | null): string {
+function nextPage(totalPayments: number | null | undefined, remeasure: { weeks: number; label: string } | null, paymentPlan: string | null = null): string {
+  const v6 = isV6Plan(paymentPlan) ? paymentPlan : null;
   const W = remeasure ? weeksWord(remeasure.weeks) : 'four';
   const step = (i: number, when: string, title: string, line: string) => `
         <div class="wp-row"><div class="wp-num">${i}</div><div class="wp-rowbody">
@@ -839,7 +899,9 @@ function nextPage(totalPayments: number | null | undefined, remeasure: { weeks: 
           ? `The same frozen questions, the same AI tools, the same method, the same towns. Due ${remeasure.label}.`
           : 'The same frozen questions, the same AI tools, the same method, the same towns.')}
         ${step(4, 'Then', 'You get your before and after', 'Side by side, with every answer shown. If the number has not gone up, your guarantee applies.')}
-        ${step(5, 'Every month after', 'We keep building', `A new page each month, giving customers and AI another clear answer about what you do. We check your AI visibility monthly and adjust as we learn, plus ${upkeepPhrase(totalPayments)}. A short update tells you what changed.`)}
+        ${v6
+          ? step(5, 'During your plan', 'We keep improving', `We check your AI visibility regularly and make the updates the data says are most useful, plus ${v6HostingWords(v6)}. A short update tells you what changed.`)
+          : step(5, 'Every month after', 'We keep building', `A new page each month, giving customers and AI another clear answer about what you do. We check your AI visibility monthly and adjust as we learn, plus ${upkeepPhrase(totalPayments, paymentPlan)}. A short update tells you what changed.`)}
       </div>
       <div class="wp-box">
         <p class="wp-boxtitle">Why the answers vary</p>
@@ -903,9 +965,10 @@ export function buildWelcomePackHtml(input: WelcomePackInput): string {
   const remeasure = recordedRemeasure(input.remeasureDueDate, input.baseline?.completedAt ?? null);
   const packPages = [
     coverPage(name, !!input.facts, !!input.baseline, !!input.agreement, !!(input.agreement?.termsKnown || input.agreement?.acceptedAtIso)),
+    gbpAccessPage(),
     planPage1(name, input.totalPayments, input.amountPaid, remeasure, input.report.googleAiInScore === true, input.paymentPlan ?? null),
     planPage2(name),
-    ...(input.baseline ? [baselinePage(name, input.baseline), nextPage(input.totalPayments, remeasure)] : []),
+    ...(input.baseline ? [baselinePage(name, input.baseline), nextPage(input.totalPayments, remeasure, input.paymentPlan ?? null)] : []),
     ...(input.agreement ? [agreementPage({ ...input.agreement, paymentPlan: input.agreement.paymentPlan ?? input.paymentPlan ?? null })] : []),
     ...(input.facts ? [detailsPage(name, input.facts)] : []),
     reviewsPage1(reviewLink),

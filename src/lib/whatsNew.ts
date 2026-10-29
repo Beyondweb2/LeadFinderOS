@@ -22,6 +22,14 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-29-welcome-pack-send', date: '2026-10-29', title: '"Send welcome pack" on What needs you, and a Send button on the client', audience: 'admin',
+    body: 'When a client has paid and finished onboarding, "What needs you" shows "Send welcome pack". It opens the client at the Welcome Pack stage, where Send emails them the link to their pack. Nothing sends on its own. "Send a test to me" sends it to paul@findable.live only. The pack now has a Google Business Profile page with Google\'s own steps for adding paul@findable.live as a Manager, and clients on the new plans see their own plan, the agreement\'s exact guarantee and key points.',
+    report: {
+      added: ['A "Send welcome pack" row on What needs you once a client has paid and finished onboarding. It waits, saying why, until their baseline finishes. It goes away once the pack is sent.', 'Send welcome pack, Resend and Send a test to me on the client\'s Welcome Pack stage, with when and to whom it was last sent.', 'A "Give us access to your Google Business Profile" page in the pack: add paul@findable.live as a Manager, step by step. They stay the owner, never share a password, and can remove access at any time.'],
+      changed: ['For Pay in full, 6 months and 12 months: the pack prints the plan, the guarantee and the key points word for word from the signed version 6 agreement, the hosting included while paying (6 months from go-live on pay in full), and optional £29.99 a month after. It no longer promises a new page every month on those plans.', 'A 6-month client no longer sees the old Optimise hosting wording.'],
+      removed: [],
+      effect: 'Nothing is sent until you press Send. Clients on the old plans keep their existing pack wording. The stored Next Action is unchanged: this row is worked out, never set for you.',
+    } },
   { id: '2026-10-29-ugc-brand-finder', date: '2026-10-29', title: 'UGC brands: a separate page for Jess to find and pitch brands', audience: 'admin',
     body: 'A new UGC brands page, kept apart from Findable: its own login for Jess, its own tables, its own search budget. It finds brands running video ads, brands that paid other UGC creators, "UGC creator wanted" posts and Chiang Mai venues, finds contacts (named marketing people with verified emails for the top brands), and drafts pitches with her own pitch system. Nothing is sent from it: Jess copies the email into Gmail, or opens Instagram or WhatsApp on her own phone, and the page logs the contact.',
     report: {

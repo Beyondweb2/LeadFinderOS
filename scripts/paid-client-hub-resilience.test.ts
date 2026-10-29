@@ -117,6 +117,8 @@ const live: Record<string, string[]> = {
   outreach_leads_country: ['country'],
   /* Payment plans (migration 20261129090000_payment_plans.sql, read back from information_schema 2026-10-29). */
   outreach_leads_payment_plan: ['payment_plan', 'paid_in_full_at'],
+  /* Welcome pack email (migration 20261130100000_welcome_pack_sends.sql, applied and read back from information_schema 2026-10-29). */
+  welcome_pack_sends: ['id', 'lead_id', 'user_id', 'sent_by', 'sent_to', 'pack_url', 'resend_id', 'sent_at'],
 };
 const known = new Set(Object.values(live).flat());
 /* An aliased JSON path (family:evidence->d->>family) is checked on its base column. */

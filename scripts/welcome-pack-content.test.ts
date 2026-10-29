@@ -4,8 +4,11 @@
 
    Run: npx tsx scripts/welcome-pack-content.test.ts
    ============================================================ */
-import { buildWelcomePackHtml } from '../src/lib/welcomePackHtml.ts';
+import { buildWelcomePackHtml, GBP_PACK_STEPS, v6GuaranteeWords } from '../src/lib/welcomePackHtml.ts';
 import { buildBaselineSummary, visibilitySignals } from '../src/lib/baselineSummary.ts';
+import { agreementVersion } from '../src/lib/clientAgreement.ts';
+import { PAYMENT_PLAN_SPEC, V6_GUARANTEE_HEADLINE, planAgreementWords } from '../src/lib/paymentPlans.ts';
+import { readFileSync } from 'node:fs';
 import type { AiAuditReportData } from '../src/lib/aiAuditReportHtml.ts';
 
 let failures = 0;
@@ -212,6 +215,35 @@ console.log('\n── YOUR AGREEMENT: THE KEY POINTS (Paul, 2026-10-02) ──')
   ok(older.includes('Your agreed payment schedule continues under the terms you signed up to.') && !older.includes('Review and agree'), 'older client → the neutral line and no button to the v1 agreement');
   ok(!older.includes('12 payments (Build)') && !older.includes('claim your £99 back') && !/£s?99 a month/.test(older), 'older client → today’s £99 / 12-or-6 terms are never shown as theirs');
   ok(older.includes('Your agreement How your agreement works from here.'), 'and the contents line matches');
+}
+
+console.log('\n── v6 PLANS AND THE GOOGLE ACCESS PAGE (Paul, 2026-10-29) ──');
+{
+  const text = (h: string) => h.replace(/<style>[\s\S]*?<\/style>/g, '').replace(/<[^>]+>/g, ' ').replace(/&#39;/g, "'").replace(/&rsquo;/g, '’').replace(/\s+/g, ' ');
+  const base = { businessName: 'MCLocksmiths centre', reviewLink: '', report: { ...report }, baseline: summary };
+  const url = 'https://findable.live/agree/' + 'cd'.repeat(32);
+  const v6 = agreementVersion('v6').keyPoints!.points;
+  const guarantee = v6.find((p) => p.startsWith(V6_GUARANTEE_HEADLINE))!;
+  ok(v6GuaranteeWords() === guarantee && readFileSync(new URL('../docs/agreement-v6.md', import.meta.url), 'utf8').includes(guarantee), 'the v6 guarantee is the signed key point, word for word as in docs/agreement-v6.md');
+  for (const [plan, paid] of [['full', 499], ['six', 99], ['twelve', 99]] as const) {
+    const t = text(buildWelcomePackHtml({ ...base, paymentPlan: plan, amountPaid: paid, totalPayments: PAYMENT_PLAN_SPEC[plan].totalPayments, agreement: { url, termsKnown: true, route: 'build' } }));
+    ok(t.includes(`Your guarantee. ${guarantee}`), `${plan}: the plan page prints the agreement's guarantee exactly`);
+    ok(v6.every((p) => t.includes(p)), `${plan}: the agreement page prints every v6 key point verbatim`);
+    ok(t.includes(`Your payment plan: ${planAgreementWords(plan)}.`), `${plan}: the plan line is the agreement's own plan words`);
+    ok(!/a new page each month|A new page, a check/i.test(t), `${plan}: no "new page every month" promise (v6 2.6: the work varies)`);
+    ok(!t.includes('if your site is with us'), `${plan}: a Build client is never given the Optimise hosting wording`);
+    ok(t.includes('£29.99 a month, only if you choose it'), `${plan}: hosting after the plan is optional at £29.99`);
+    ok(t.includes(plan === 'full' ? 'transfers to you once your payment has cleared' : 'transfers to you once your final payment clears'), `${plan}: the site transfers once the (final) payment clears`);
+    ok(plan !== 'full' || (t.includes('hosting of your website for 6 months from when it goes live') && t.includes('You paid £499 in full, one payment')), `${plan}: pay in full names £499 and 6 months' hosting from go-live`);
+    ok(plan !== 'six' || t.includes('6 payments in total counting your first (£594 in all)'), `${plan}: £99 × 6, £594`);
+    ok(plan !== 'twelve' || (t.includes('£49.99 a month begins') && t.includes('12 payments in total counting your first (£648.89 in all)')), `${plan}: £99 then £49.99 × 11, £648.89`);
+  }
+  const t = text(buildWelcomePackHtml({ ...base }));
+  ok(t.includes('Give us access to your Google Business Profile') && t.includes('Give us Google access'), 'the Google access page is in every pack and on the contents');
+  ok(GBP_PACK_STEPS.every((s) => t.includes(s)), 'every step is printed');
+  ok(t.includes('More, then Business Profile settings, then People and access') && t.includes('Under Access, choose Manager') && t.includes('Remove person'), "Google's own menu names (support.google.com/business/answer/3403100)");
+  ok(t.includes('You stay the owner.') && t.includes('You never share a password.') && t.includes('You can remove us at any time.'), 'owner, no password, removable');
+  ok(t.includes('paul@findable.live') && !/move37|outlook\.com|alerts@/i.test(t), 'the only contact address is paul@findable.live');
 }
 
 console.log(failures ? `\n${failures} FAILURE(S)` : '\nAll passed.');

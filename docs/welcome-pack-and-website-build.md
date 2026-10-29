@@ -196,3 +196,28 @@ list in CLAUDE.md §0 is out of date — it names four; there are eight.
   See CLAUDE.md §0 and §7.
 - `audit_purpose = 'discovery'` is a live value that is not in `auditKind.ts`'s constant list.
 - The Welcome Pack still cannot be SENT from the hub — it is download and link only.
+
+## 2026-10-29 — Send welcome pack (manual), v6 wording, Google access page
+
+Branch `feat/welcome-pack-next-action`. Closes the last open item above: the pack can now be SENT.
+
+- **What needs you** (`adminMetrics.ts` attention kind `welcome_pack_due`, via `admin-overview-load.ts`): paid
+  (`isPaidLead`; on Pay in full the first payment is the full payment) + onboarding finished (`questionnaireComplete`,
+  the one rule) + no row in `welcome_pack_sends`. Baseline not finished → group `blocked`, "Wait for the baseline";
+  finished → `today`, "Send welcome pack". Opens the hub at `?section=welcome`. Send log unreadable → no row at all.
+  COMPUTED, never the stored Next Action (that stays human-set; nothing writes `next_action*`).
+- **Send** (`paid-client-hub` `welcome_pack_send` / `welcome_pack_status`): only when Paul presses it. Emails the
+  `/w/<code>` link (`src/lib/welcomePackEmail.ts`) through the same Resend call as the agreement link (from
+  `alerts@findable.live`, reply-to `paul@findable.live`). Refuses: not paid, ended/refunded (real sends), pack not ready
+  or no short code, no address, QA address outside the sink, second send without `resend`. `test: true` → always
+  `paul@findable.live`, `[TEST]` subject, never recorded, allowed on an ended client so a real pack can be checked.
+- **`welcome_pack_sends`** (migration `20261130100000`, applied 2026-10-29, read back): server-only (RLS, no policies).
+  The lead-history table's `kind` CHECK does not include a welcome-pack kind, so no history line is written.
+- **Pack text (v6 plans):** key points and guarantee are read VERBATIM from `clientAgreement.ts` V6
+  (`v6AgreementKeyPoints`, `v6GuaranteeWords`), plan line = `planAgreementWords`; hosting per 9.2; no "a new page every
+  month" on v6 (2.6: the work varies). Fixed: a 6-payment v6 client got the Optimise "if your site is with us" hosting
+  wording (`upkeepPhrase` now gets the plan). v5 and older wording unchanged.
+- **Google access page** (`GBP_PACK_STEPS`): steps checked against Google's "Manage your Business Profile owners and
+  managers" (support.google.com/business/answer/3403100) on 2026-10-29. The cover's ask now points to it instead of the
+  shared `GBP_ADD_STEPS` (which omits Google's "More" step; it is byte-locked with findable-site, so it was not edited
+  here — fix both repos together). No Bing Places in the pack (it never covered it).
