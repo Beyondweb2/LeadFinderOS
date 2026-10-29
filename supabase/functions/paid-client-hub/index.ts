@@ -7,7 +7,7 @@ import { refusalBody, requireAdmin } from "../_shared/access.ts";
 import { renderWelcomePack } from "../_shared/welcome-pack-render.ts";
 import { welcomePackReadiness, welcomePackUrl } from "../../../src/lib/welcomePackData.ts";
 import { sendableEmail, welcomePackEmail, WELCOME_PACK_FROM, WELCOME_PACK_REPLY_TO } from "../../../src/lib/welcomePackEmail.ts";
-import { decideWelcomePackWhatsApp, welcomePackWhatsAppText, WELCOME_PACK_TEMPLATE_NAME, WELCOME_PACK_TEMPLATE_WIRED } from "../../../src/lib/welcomePackWhatsApp.ts";
+import { decideWelcomePackWhatsApp, welcomePackGreeting, welcomePackWhatsAppText, WELCOME_PACK_TEMPLATE_NAME, WELCOME_PACK_TEMPLATE_WIRED } from "../../../src/lib/welcomePackWhatsApp.ts";
 import { checkOptedOut, checkWrongNumber } from "../_shared/suppression.ts";
 import { replyWindowOpenNow } from "../_shared/inbox-schedule.ts";
 import { buildReportData, seoStyleForAudit, type QueueRow, type RunRow } from "../../../src/lib/auditReport.ts";
@@ -1244,7 +1244,7 @@ Deno.serve(async (req) => {
          and the full message for "Copy WhatsApp message". Read only.
        welcome_pack_send (channel 'whatsapp', the default): free text through fn send-whatsapp-message — ITS rules
          decide last (24-hour window, QA, suppression, archived, the emergency stop). Outside the 24 hours it needs the
-         welcome_pack_ready template, which is not wired yet, so it refuses with the copy text.
+         welcome_pack_ready template (sender-resolved variables, Meta's live status first); any refusal records nothing and keeps the copy text.
        welcome_pack_send (channel 'email'): ONLY as the fallback — no phone / no WhatsApp / opted out / wrong number,
          or a WhatsApp send that just failed (`whatsapp_failed`). Same Resend call as the agreement link.
        Either route records ONE welcome_pack_sends row (with its channel), which takes the row off What needs you.
@@ -1345,19 +1345,35 @@ Deno.serve(async (req) => {
 
       /* ── TEST: Paul's own WhatsApp (the sender's test number), never recorded ── */
       if (isTest) {
-        const { res, out } = await callSender({ mode: "test_send", body: `[TEST] ${message}` });
+        /* auto_window: the SENDER picks — free text while Paul's test number messaged in the last 24 hours, else the
+           welcome_pack_ready template with this client's three values (Meta's live status checked there first). */
+        const { res, out } = await callSender({
+          mode: "test_send", auto_window: true, body: `[TEST] ${message}`, template_name: WELCOME_PACK_TEMPLATE_NAME,
+          vars: { greeting_name: welcomePackGreeting(contactName), name: text(L.business_name), welcome_pack_url: url },
+        });
         if (out.error === "test_number_not_configured") return json({ ok: false, error: "test_number_not_configured", detail: "Needs you: no test WhatsApp number is stored (WHATSAPP_TEST_NUMBER), so no test was sent.", copy_text: message }, 409);
-        if (!res.ok || !out.ok) return json({ ok: false, error: String(out.error ?? "test_failed"), detail: `The test did not send: ${String(out.error ?? out.detail ?? "unknown")}. WhatsApp only delivers a normal message to your number if you messaged the business number in the last 24 hours.`, copy_text: message }, 409);
-        return json({ ok: true, test: true, channel: "whatsapp", sent_to: "your WhatsApp test number", last_sent: prior });
+        if (!res.ok || !out.ok) return json({ ok: false, error: String(out.error ?? "test_failed"), detail: `The test did not send: ${String(out.detail ?? out.error ?? "unknown")}.`, copy_text: message }, 409);
+        return json({ ok: true, test: true, channel: "whatsapp", via: out.template ? "template" : "text", sent_to: "your WhatsApp test number", last_sent: prior });
       }
 
       /* ── REAL, ON WHATSAPP ── */
       if (channel === "whatsapp") {
         const d = await waDecision();
-        if (d.route !== "text") return json({ ok: false, error: d.reason, detail: d.say, copy_text: message, email_fallback: d.emailFallback }, 409);
-        const { res, out } = await callSender({ phone: L.phone, country: L.country ?? null, lead_id: L.id, body: message });
+        if (d.route === "none") return json({ ok: false, error: d.reason, detail: d.say, copy_text: message, email_fallback: d.emailFallback }, 409);
+        /* Inside the 24 hours: free text. Outside: welcome_pack_ready, whose variables the SENDER resolves from this
+           client's own records — nothing about the message is passed from here but the name. */
+        const { res, out } = await callSender(d.route === "text"
+          ? { phone: L.phone, country: L.country ?? null, lead_id: L.id, body: message }
+          : { phone: L.phone, country: L.country ?? null, lead_id: L.id, template_name: WELCOME_PACK_TEMPLATE_NAME, ...(body.resend === true ? { allow_resend: true } : {}) });
         if (!res.ok || !out.ok) {
-          return json({ ok: false, error: String(out.error ?? "send_failed"), detail: `WhatsApp did not send it: ${String(out.reason ?? out.detail ?? out.error ?? "unknown")}. Copy the message, or email it instead.`, copy_text: message, email_fallback: true, whatsapp_failed: true }, 409);
+          /* ⛔ FAILS SAFE: nothing recorded, the row stays on What needs you, the copy text stays. A template Meta has not
+             approved is not a WhatsApp failure (email is not offered for it); any other refusal is. */
+          const notApproved = out.error === "template_not_approved" || String(out.error ?? "").startsWith("template_");
+          return json({ ok: false, error: notApproved ? "template_not_approved" : String(out.error ?? "send_failed"),
+            detail: notApproved
+              ? `${String(out.reason ?? "Meta has not approved the welcome_pack_ready template yet.")} Copy the WhatsApp message and send it by hand.`
+              : `WhatsApp did not send it: ${String(out.reason ?? out.detail ?? out.error ?? "unknown")}. Copy the message, or email it instead.`,
+            copy_text: message, email_fallback: !notApproved, whatsapp_failed: !notApproved }, 409);
         }
         /* Test mode / a QA fixture: the sender simulated it — nothing reached the client, so nothing is recorded as sent. */
         if (out.simulated) return json({ ok: true, simulated: true, channel: "whatsapp", detail: "Simulated (test mode): nothing was delivered and nothing is recorded as sent." });

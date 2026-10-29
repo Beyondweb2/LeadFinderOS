@@ -684,6 +684,7 @@ const SERVER_ONLY_TEMPLATE_LABELS: Record<string, string> = {
   /* 2026-10-07: sent from Quick Close / Paid Clients only (one click, Meta's live approval), never from a picker. */
   findable_signup_link: 'Sign-up link (after a close)',
   findable_onboarding: 'Onboarding form link (paid client)',
+  welcome_pack_ready: 'Welcome pack link (paid client)',
   /* 2026-10-26: the admin dashboard's six (src/lib/dashboardTemplates.ts) — sent from the dashboard row only, never a picker. */
   questionnaire_domain_help: 'Domain help (dashboard)',
   questionnaire_payment_help: 'Payment help (dashboard)',

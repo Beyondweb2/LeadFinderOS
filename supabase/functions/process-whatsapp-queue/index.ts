@@ -389,6 +389,9 @@ const TEMPLATES: Record<string, { lang: string; vars: TemplateVar[] }> = {
      (scripts/re-engage-vars.test.ts asserts both directions). */
   findable_signup_link: { lang: "en", vars: ["greeting_name", "signup_url"] },
   findable_onboarding: { lang: "en", vars: ["greeting_name", "onboarding_form_url"] },
+  /* welcome_pack_ready (2026-10-29): mirrored so the two allowlists agree (re-engage-vars.test.ts); NEVER queued — it is
+     server-only (not in WHATSAPP_TEMPLATES, so no campaign can pick it) and only Paul's hub button sends it. */
+  welcome_pack_ready: { lang: "en_GB", vars: ["greeting_name", "business_name", "welcome_pack_url"] },
   /* ai_visibility_report_offer (2026-10-14, src/lib/reportOfferTemplate.ts) — queue-sent, cold. Mirrors WA_TEMPLATES. */
   ai_visibility_report_offer: { lang: "en", vars: ["name_or_there", "town", "competitors", "visibility_score", "audit_url", "sender_name"] },
   /* The admin dashboard's six (2026-10-26, src/lib/dashboardTemplates.ts) — mirror only: sent from the dashboard row by

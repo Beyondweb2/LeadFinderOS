@@ -1,9 +1,9 @@
-# WhatsApp template: welcome_pack_ready (for Paul to submit at Meta)
+# WhatsApp template: welcome_pack_ready
 
-Written 2026-10-29. Not submitted yet. The app reads Meta's live status of this template. Until it is
-**approved at Meta and wired into the sender** (`WELCOME_PACK_TEMPLATE_WIRED` in `src/lib/welcomePackWhatsApp.ts`),
-"Send welcome pack" to a client who has not messaged in the last 24 hours refuses with a clear sentence and
-offers **Copy WhatsApp message**. A client who messaged within 24 hours gets the same words as a normal message.
+Written 2026-10-29; submitted at Meta by Paul the same day; wired into the sender (see "Wired in" below). The app reads
+Meta's live status of this template. Until Meta approves it, "Send welcome pack" to a client who has not messaged in the
+last 24 hours refuses with a clear sentence and offers **Copy WhatsApp message**. A client who messaged within 24 hours
+gets the same words as a normal message.
 
 ## What to enter in WhatsApp Manager
 
@@ -40,11 +40,17 @@ they bought (their pack) and asks for the access the service needs. It carries n
 Meta decides the category in the end. If it re-classes it as Marketing, tell Claude: the app treats it as a
 continuation to a paying client either way, but an explicit opt-out still blocks it.
 
-## After Meta approves it
+## Wired in (2026-10-29)
 
-The app does **not** start sending the template on its own. One change is still needed: register
-`welcome_pack_ready` in the sender (`_shared/whatsapp-send.ts` WA_TEMPLATES + the queue mirror, the transcript body,
-the picker label, `CONTINUATION_TEMPLATES`) with its three variables resolved server-side from the lead
-(first name, business name, the `/w/` link), then set `WELCOME_PACK_TEMPLATE_WIRED = true`. That shared file is
-reached by 17 edge functions, among them `stripe-webhook` and the held `whatsapp-status`, which is why it was
-not done before approval.
+Registered in the sender (`_shared/whatsapp-send.ts` WA_TEMPLATES) as a CONTINUATION template, not in the outreach queue.
+The sender checks Meta's live status first: approved sends; in review, rejected, paused or not found refuses, nothing is
+recorded, the row stays on What needs you, and Copy WhatsApp message keeps working.
+
+**The two settings**
+- Name: `WELCOME_PACK_TEMPLATE_NAME` in `src/lib/welcomePackWhatsApp.ts`.
+- Language: `WELCOME_PACK_TEMPLATE_LANG` in the same file (default `en_GB`).
+- The sender's registry line `welcome_pack_ready: { lang: "en_GB", ... }` in `supabase/functions/_shared/whatsapp-send.ts`
+  must carry the same two values; `scripts/welcome-pack-send.test.ts` fails if they differ.
+- **If you submitted it as "en":** usually nothing to do. When Meta's status can be read, the send uses the language Meta
+  registered. The `en_GB` is only the fallback for when Meta cannot be asked. To change the fallback, edit
+  `WELCOME_PACK_TEMPLATE_LANG` and the `lang` on the registry line together, then redeploy `send-whatsapp-message`.

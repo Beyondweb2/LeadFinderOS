@@ -117,6 +117,8 @@ export const CONTINUATION_TEMPLATES: ReadonlySet<string> = new Set([
      link to a PAYING client. Neither is a first approach; both are one per lead unless deliberately resent. */
   "findable_signup_link",
   "findable_onboarding",
+  /* welcome_pack_ready (2026-10-29, welcomePackWhatsApp.ts): a PAYING client's welcome pack, sent only by Paul's button. */
+  "welcome_pack_ready",
   /* The admin dashboard's six (2026-10-26, dashboardTemplates.ts): each goes to someone who filled in the questionnaire,
      is a paying client, or is already in the conversation — never a first approach. */
   "questionnaire_domain_help",

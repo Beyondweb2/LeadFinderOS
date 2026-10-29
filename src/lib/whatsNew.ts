@@ -22,6 +22,14 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-29-welcome-pack-template', date: '2026-10-29', title: 'Welcome pack: the WhatsApp template is wired in', audience: 'admin',
+    body: 'Send welcome pack now also works for clients who have not messaged you in the last 24 hours: it sends the welcome_pack_ready template with their first name, business name and pack link. Until Meta approves the template, the button says so, nothing is recorded, the row stays on What needs you, and Copy WhatsApp message still works. Send a test to me sends the template to your own WhatsApp when you are outside your own 24 hours, and a normal message inside them.',
+    report: {
+      added: ['The welcome_pack_ready template, sent for clients outside the 24-hour window.'],
+      changed: ['Send a test to me picks the template or a normal message by your own number\'s 24-hour window.'],
+      removed: [],
+      effect: 'Nothing sends on its own. If Meta has not approved the template yet, the send is refused and nothing is recorded as sent.',
+    } },
   { id: '2026-10-29-welcome-pack-whatsapp', date: '2026-10-29', title: 'Send welcome pack now goes on WhatsApp', audience: 'admin',
     body: 'Send welcome pack sends a short WhatsApp from you with the pack link and the Google Business Profile ask. It goes as a normal message only if the client messaged you in the last 24 hours and it is inside their send hours. Otherwise it needs the welcome_pack_ready template, which is not approved yet: the button says so, and Copy WhatsApp message gives you the full text to paste. Send a test to me goes to your own WhatsApp test number. Email is now only a small "Email instead" for clients without WhatsApp, or after a WhatsApp send fails.',
     report: {
