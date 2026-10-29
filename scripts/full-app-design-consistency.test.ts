@@ -114,10 +114,10 @@ console.log('── 4. nothing was taken away ──');
     '/baseline/:auditId', '/baseline-setup/:leadId', '/campaigns', '/campaigns/:campaignId', '/paid-clients', '/paid-clients/:leadId',
     '/paid-clients/:leadId/website-build', '/compare/:auditId', '/mockups', '/mockups/:id', '/templates', '/inbox', '/coverage',
     '/review-replies', '/page-generator', '/page-plan', '/ai-audit', '/admin/api-usage', '/sales', '/sales/lead/:leadId', '/team',
-    '/admin', '/market', '/landing', '/login', '*'];
+    '/admin', '/market', '/landing', '/login', '/ugc', '*'];
   for (const r of ROUTES) ok(app.includes(`path="${r}"`), `route ${r} still exists`);
   const urls = (p: string) => [...new Set([...read(p).matchAll(/url: '([^']+)'/g)].map((m) => m[1]))].sort().join(' ');
-  ok(urls('src/components/AppSidebar.tsx') === '/ /ai-audit /coverage /feedback /find-leads /inbox /outreach /paid-clients /sales-dashboard /team /templates', 'the sidebar has every entry it had');
+  ok(urls('src/components/AppSidebar.tsx') === '/ /ai-audit /coverage /feedback /find-leads /inbox /outreach /paid-clients /sales-dashboard /team /templates /ugc', 'the sidebar has every entry it had (+ /ugc, 2026-10-29)');
   ok(urls('src/components/MobileBottomNav.tsx') === '/ /admin /ai-audit /coverage /feedback /find-leads /inbox /outreach /paid-clients /sales-dashboard /team /templates', 'the phone menu has every entry it had');
   for (const r of ['/sales-dashboard', '/outreach', '/find-leads', '/inbox', '/coverage']) ok(canOpenRoute('sales', r), `a salesperson can still open ${r}`);
   for (const r of ['/paid-clients', '/paid-clients/x', '/team', '/admin/api-usage', '/ai-audit', '/templates', '/feedback']) ok(!canOpenRoute('sales', r), `a salesperson still cannot open ${r}`);

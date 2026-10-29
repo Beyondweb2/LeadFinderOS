@@ -5,6 +5,7 @@ import { useSubscription } from '@/hooks/useSubscription';
 import { useAuth } from '@/hooks/useAuth';
 import { canOpenRoute, homeFor } from '@/lib/access';
 import { Button } from '@/components/ui/button';
+import { useUgcAccess } from '@/hooks/useUgc';
 
 /**
  * The shell gate (multi-user, 2026-09-27) — replaces RequireAdmin around the operator shell.
@@ -21,6 +22,9 @@ import { Button } from '@/components/ui/button';
  */
 export function RequireAccess({ children }: { children: ReactNode }) {
   const { isLoading, role } = useSubscription();
+  /* A UGC login (Jess) has no LeadFinder role: she belongs on /ugc, never on an operator screen. Asked only when
+     there is no role, so admins and salespeople pay nothing for it. */
+  const ugc = useUgcAccess(!isLoading && !role);
   const { signOut } = useAuth();
   const location = useLocation();
 
@@ -31,6 +35,16 @@ export function RequireAccess({ children }: { children: ReactNode }) {
       </div>
     );
   }
+
+  if (!role && ugc.isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background" style={{ backgroundColor: 'hsl(220, 50%, 6%)' }}>
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  if (!role && ugc.data?.member) return <Navigate to="/ugc" replace />;
 
   if (!role) {
     return (
