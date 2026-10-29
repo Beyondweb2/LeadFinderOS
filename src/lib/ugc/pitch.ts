@@ -114,6 +114,14 @@ export function writePrompt(sys: PitchSystem, plan: PitchPlan, research: Researc
     plan.track === 'local'
       ? 'This is the Chiang Mai local collab track: use CM collab DM v4 exactly as written, including "living in Chiang Mai".'
       : 'Never mention Thailand, Chiang Mai, any Thai place, or where Jess lives.',
+    ...(['ad_idea_v2', 'video_idea_v3', 'generic_inbox_v2'].includes(plan.template) ? [
+      'These are checked word for word and the draft is rejected without them:',
+      `- the Hume proof, both sentences: "${HUME_PROOF}"`,
+      '- the intro has "(and former lawyer)" in brackets, and the concept sentence ends "I can film it with a few opening hooks, so you can see which one works best."',
+      `- the ONE call to action: "${plan.template === 'generic_inbox_v2' ? CTA.generic : plan.template === 'ad_idea_v2' ? CTA.ad : CTA.video}"`,
+      plan.template === 'generic_inbox_v2' ? '- the routing line comes first after the greeting' : '- NO routing line (that is only for a generic inbox)',
+    ] : []),
+    plan.track === 'brand' ? 'Draft at least five hooks in both voices; the chosen hook is a first-person or "you" statement, not a question. The payoff is an action, never a state or a result.' : '',
     `Return JSON only, this shape: ${WRITE_OUTPUT_SHAPE}`,
   ].join('\n');
   const user = [
@@ -172,7 +180,57 @@ export function pitchProblems(d: { subject?: string; body?: string } | null | un
     if (n > lim.max) p.push(`too_long:${n}>${lim.max}`);
     if (lim.min && n < lim.min) p.push(`too_short:${n}<${lim.min}`);
   }
+  p.push(...emailStructureProblems(d.body, ctx.plan));
   return p;
+}
+
+/* ── her fixed wording, checked word for word (pitch system 4b, 5b) ─────────────────────────── */
+export const HUME_PROOF = 'I recently created paid content for Hume Health, whose feedback highlighted my fast turnaround and attention to the brief. You can see my work and their review on my portfolio.';
+export const CTA = {
+  ad: 'Would this be worth testing in your paid ads?',
+  video: 'Would this fit any paid UGC briefs you have coming up?',
+  generic: "Who's the best person to speak to about paid UGC?",
+} as const;
+const ROUTING_LINE = /Could you (point me towards whoever manages paid creator content at|pass this to)/i;
+const norm = (s: string) => s.replace(/[‘’]/g, "'").replace(/\s+/g, ' ');
+
+/** The brand-email structure her template fixes: the Hume proof (both sentences), "(and former lawyer)", the hooks
+ *  line, the ONE call to action for this tier / inbox, and the routing line only on a generic inbox. */
+export function emailStructureProblems(body: string, plan: PitchPlan): string[] {
+  if (!['ad_idea_v2', 'video_idea_v3', 'generic_inbox_v2'].includes(plan.template)) return [];
+  const b = norm(body);
+  const p: string[] = [];
+  if (!b.includes(norm(HUME_PROOF))) p.push('hume_proof_not_word_for_word');
+  if (!/\(and former lawyer\)/.test(b)) p.push('intro_missing_former_lawyer_in_brackets');
+  if (!/I can film it with a few opening hooks/i.test(b)) p.push('hooks_line_missing');
+  const generic = plan.template === 'generic_inbox_v2';
+  const want = generic ? CTA.generic : plan.template === 'ad_idea_v2' ? CTA.ad : CTA.video;
+  if (!b.includes(norm(want))) p.push(`cta_should_be:${want}`);
+  for (const other of Object.values(CTA)) if (other !== want && b.includes(norm(other))) p.push('wrong_cta_for_tier_or_inbox');
+  if (generic && !ROUTING_LINE.test(b)) p.push('routing_line_missing');
+  if (!generic && ROUTING_LINE.test(b)) p.push('routing_line_only_for_a_generic_inbox');
+  return p;
+}
+
+/** Her hook test, the parts code can hold: at least five hooks drafted, and the chosen one is not a plain question
+ *  (she allows a question at most one hook in five, never as the safe default). */
+export function hookProblems(w: WriteOut): string[] {
+  const p: string[] = [];
+  const hooks = (w.hooks ?? []).filter((h) => h?.trim());
+  if (hooks.length < 5) p.push(`fewer_than_five_hooks:${hooks.length}`);
+  if (/\?\s*$/.test(w.hook_test?.chosen ?? '')) p.push('chosen_hook_is_a_question');
+  return p;
+}
+
+/** Her readiness rule (pitch system 2): a brand is "Ready" only when its research is filled — ONE named product, a
+ *  verified product detail, and a contact route. Anything missing → Needs Jess, and the model is never called. */
+export function researchMissing(research: ResearchFields, route: { kind: string } | null | undefined, track: PitchTrack): string[] {
+  if (track === 'local') return route && route.kind !== 'none' ? [] : ['contact (Instagram)'];
+  const m: string[] = [];
+  if (!research.product?.trim()) m.push('product');
+  if (!research.product_detail?.trim()) m.push('verified product detail');
+  if (!route || route.kind === 'none') m.push('contact');
+  return m;
 }
 
 /** Words in a body, the way a reader counts them (hyphenated words and contractions are one word). */
@@ -210,11 +268,13 @@ export type PipelineResult =
 
 /** Run write → independent review → code checks, at most MAX_PITCH_ATTEMPTS times. Positive match: only an
  *  explicit pass from BOTH the writer's gate/hook test and the reviewer counts; an absent verdict is a fail. */
-export async function runPitchPipeline(deps: PipelineDeps, sys: PitchSystem, plan: PitchPlan, research: ResearchFields): Promise<PipelineResult> {
+export async function runPitchPipeline(deps: PipelineDeps, sys: PitchSystem, plan: PitchPlan, research: ResearchFields, missing: string[] = []): Promise<PipelineResult> {
   const attempts: PipelineAttempt[] = [];
   if (!sys.content.trim() || !(sys.templates[plan.template] ?? '').trim()) {
     return { outcome: 'needs_jess', why: 'Her pitch system or this template is not loaded yet.', attempts };
   }
+  /* Not "Ready" (her rule): no model call, nothing drafted. */
+  if (missing.length) return { outcome: 'needs_jess', why: `Research missing: ${missing.join(', ')}.`, attempts };
   let carry: string[] = [];
   for (let n = 1; n <= MAX_PITCH_ATTEMPTS; n++) {
     const w = await deps.write(writePrompt(sys, plan, research, carry));
@@ -225,6 +285,7 @@ export async function runPitchPipeline(deps: PipelineDeps, sys: PitchSystem, pla
       if (plan.track === 'brand') {
         if (w.concept_gate?.pass !== true) problems.push('concept_gate_failed');
         if (w.hook_test?.pass !== true) problems.push('hook_test_failed');
+        problems.push(...hookProblems(w));
       }
       problems.push(...pitchProblems(w, { plan, aboutJess: sys.about_jess, research, signoffHtml: sys.signoff_html, templateText: sys.templates[plan.template] }));
       if (!problems.length) {

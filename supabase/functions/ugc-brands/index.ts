@@ -11,7 +11,7 @@ import {
   candidatesFrom, contactsInput, creatorCollabsInput, creatorProfileUrl, fbAdsInput, fromContactItem, googleQueries,
   googleSearchInput, mergeWa, placesInput, waDigits, type BrandCandidate, type WaNumber,
 } from "../../../src/lib/ugc/normalize.ts";
-import { chooseTemplate, researchFields, runPitchPipeline, type PitchPlan, type PitchSystem, type ReviewOut, type WriteOut } from "../../../src/lib/ugc/pitch.ts";
+import { chooseTemplate, researchFields, researchMissing, runPitchPipeline, type PitchPlan, type PitchSystem, type ReviewOut, type WriteOut } from "../../../src/lib/ugc/pitch.ts";
 import { TIER_RANK, tierFor, templateFamilyFor } from "../../../src/lib/ugc/tiers.ts";
 import { bestContact } from "../../../src/lib/ugc/contactOrder.ts";
 import { pitchedKeySet } from "../../../src/lib/ugc/pitchLog.ts";
@@ -419,7 +419,7 @@ Deno.serve(async (req) => {
           const r = await modelJson<WriteOut>(p.system, p.user, 0.7); spent += r.usd; return r.out;
         },
         review: async (p) => { const r = await modelJson<ReviewOut>(p.system, p.user, 0); spent += r.usd; return r.out; },
-      }, sys, plan, research);
+      }, sys, plan, research, researchMissing(research, route, track));
       const working = { tier, route: { kind: route.kind, label: route.label }, template, attempts: result.attempts };
       if (result.outcome === "drafted") {
         const statusPatch = ["new", "researching", "needs_jess"].includes(String(brand.status)) ? { status: "pitch_ready" } : {};
