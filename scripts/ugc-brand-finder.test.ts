@@ -11,7 +11,7 @@ import { execSync } from 'node:child_process';
 import { adsLibraryTierB, tierFor, templateFamilyFor } from '../src/lib/ugc/tiers.ts';
 import { addBusinessDays, bestContact, contactOptions, emailKind, followUps } from '../src/lib/ugc/contactOrder.ts';
 import {
-  CTA, HUME_PROOF, MAX_PITCH_ATTEMPTS, WHATSAPP_ASK_DRAFT, chooseTemplate, researchFields, emailStructureProblems, hookProblems, researchMissing, copyEmailPayload, fillWhatsAppAsk, gmailComposeUrl, pitchProblems,
+  CTA, HUME_PROOF, MAX_PITCH_ATTEMPTS, STATE_PAYOFF, WHATSAPP_ASK_DRAFT, chooseTemplate, researchFields, emailStructureProblems, hookProblems, researchMissing, copyEmailPayload, fillWhatsAppAsk, gmailComposeUrl, pitchProblems,
   runPitchPipeline, safeSignoffHtml, unverifiedFigures, whatsappChatUrl, type PitchPlan, type PitchSystem, type ResearchFields, type WriteOut,
 } from '../src/lib/ugc/pitch.ts';
 import { brandVerdict } from '../src/lib/ugc/brandRules.ts';
@@ -132,6 +132,11 @@ console.log('\n── pitch pipeline ──');
     hooks: ["You'd never guess my post-training secret.", 'After a long day, this is my go-to.', "Too sore to move? Here's what helps.", 'This is how I unwind after workouts.', 'My secret weapon against muscle fatigue.'],
     hook_test: { chosen: 'After a long day, this is my go-to.', pass: true } };
   ok(hookProblems(pulsio).includes('hook_implies_she_already_uses_it') && hookProblems(pulsio).includes('concept_needs_3_to_4_visuals:2'), 'the live Pulsio draft is refused: "my go-to" implies prior use; 2 visuals');
+  /* THE THIRD LIVE DRAFT (Pulsio, after the first fixes): "my new recovery ritual" and a payoff "feeling refreshed". */
+  const pulsio2: WriteOut = { ...good, concept: { name: 'Recovery Ritual', visuals: ['Unpacking and sliding into the suit', 'Activating the compression', 'Showing the fit and feel', 'Removing the suit feeling refreshed'] },
+    hook_test: { chosen: 'This suit is my new recovery ritual.', pass: true } };
+  ok(hookProblems(pulsio2).includes('hook_implies_she_already_uses_it') && hookProblems(pulsio2).includes('payoff_is_a_state'), 'the third live draft is refused: "my new ... ritual"; payoff "feeling refreshed" is a state');
+  ok(!hookProblems(good).includes('payoff_is_a_state') && !STATE_PAYOFF.test('Helmet on') && STATE_PAYOFF.test('calmer at last'), 'an action payoff passes ("Helmet on"); a state fails ("calmer")');
   ok(hookProblems({ ...good, hook_test: { chosen: 'My secret to no soreness post-workout.', pass: true } }).includes('hook_implies_a_result'), 'a hook promising a result is refused (live attempt 1: "no soreness")');
   ok(hookProblems({ ...good, research_used: { product: 'TRIP Mindful Blend' }, hook_test: { chosen: 'TRIP Mindful Blend is my go-to on a Friday night.', pass: true } }, 'TRIP in the evenings (favourite Mindful Blend Wild Strawberry) TRIP Mindful Blend').length === 0, '…but a product About Jess lists may be talked about as hers');
   ok(pitchProblems({ subject: 's', body: `${goodBody} I'm passionate about your brand — truly.` }, { plan, aboutJess: '', research }).includes('banned_phrase_or_em_dash'), 'her banned phrases and the em dash are refused');

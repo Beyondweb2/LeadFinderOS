@@ -157,6 +157,14 @@ export function reviewPrompt(sys: PitchSystem, plan: PitchPlan, research: Resear
       "You independently check a pitch against Jess's pitch system. Apply her concept gate and her hook test strictly. Her system:",
       '"""', sys.content.trim() || '(not loaded)', '"""',
       'Also fail it if it uses any fact not in the research or in About Jess, states a rate, or breaks the template.',
+      'Judge it cold as the brand\'s head of marketing AND compliance lead. Answer each line; ANY "no" means concept_gate_pass or hook_test_pass is false and the reason goes in problems:',
+      '- Sells: built on the brand\'s main selling point or main buyer hesitation (not a side feature)?',
+      '- Brand-safe: never spotlights a limitation, condition, complaint or competitor?',
+      '- Interesting: a reason to watch with tension or a twist, NOT a description of ordinary use (unboxing / putting it on / using it is footage the brand already has)?',
+      '- True: nothing implies Jess has already used the product (e.g. "my go-to", "my ritual", "my routine") unless About Jess lists it; no results she has not had?',
+      '- Payoff: the last moment is an ACTION, never a state or feeling ("feeling refreshed", "calmer", "relaxed" fail)?',
+      '- Hook: understood cold with the sound off, has pull, first person or "you", 10 to 15 words, no claim, timing, number or result the brand page does not state?',
+      'Be strict: when unsure, it fails.',
       `About Jess: """${sys.about_jess.trim()}"""`,
       `Template (${TEMPLATE_LABEL[plan.template]}): """${(sys.templates[plan.template] ?? '').trim()}"""`,
       `Return JSON only: ${REVIEW_OUTPUT_SHAPE}`,
@@ -247,11 +255,17 @@ export function hookProblems(w: WriteOut, aboutJess = ''): string[] {
   if (IMPLIED_USE.test(chosen) && !productInAboutJess(w, aboutJess)) p.push('hook_implies_she_already_uses_it');
   const visuals = (w.concept?.visuals ?? []).filter((v) => v?.trim());
   if (visuals.length < 3 || visuals.length > 4) p.push(`concept_needs_3_to_4_visuals:${visuals.length}`);
+  /* Her lesson: "The payoff is an action, never a state" ("calmer", "first quiet minute" fail). Seen live: "removing the
+     suit feeling refreshed". The payoff is the last visual. */
+  if (visuals.length && STATE_PAYOFF.test(visuals[visuals.length - 1])) p.push('payoff_is_a_state');
   return p;
 }
 
-/** Phrases that claim she already uses the product ("my go-to", "the one I reach for": her lesson on implied prior use). */
-export const IMPLIED_USE = /\b(my go-?to|my secret|my holy grail|my favou?rite|my daily|my must-?have|my staple|i always|i swear by|i can'?t live without|i('ve| have) been using|the one i reach for|i reach for|i use (it|this) (every|daily)|i love (using )?this|my secret weapon)\b/i;
+/** Phrases that claim she already uses the product ("my go-to", "the one I reach for": her lesson on implied prior use;
+ *  live: "my new recovery ritual"). */
+export const IMPLIED_USE = /\b(my go-?to|my secret|my holy grail|my favou?rite|my daily|my must-?have|my staple|my new|my (\w+ )?ritual|my (\w+ )?routine|i always|i swear by|i can'?t live without|i('ve| have) been using|the one i reach for|i reach for|i use (it|this) (every|daily)|i love (using )?this|my secret weapon)\b/i;
+/** A payoff that is a feeling or a state, not an action (her lesson 3c.6). */
+export const STATE_PAYOFF = /\b(feel(s|ing)?|refreshed|relaxed|calm(er)?|happy|happier|smil(e|es|ing)|glow(s|ing)?|confident|energi[sz]ed|rested|soothed|better|ready|recovered|lighter|at peace|unwound|satisfied|content)\b/i;
 /** Results a hook may not promise (her hook test: "no claims, timings, numbers or results the brand's page doesn't state"). */
 export const IMPLIED_RESULT = /\b(no more|say goodbye|goodbye to|no soreness|transform(s|ed)?|results?|cures?|heals?|fix(es|ed)? my|glow(ing)? skin|clear skin|better sleep|pain[- ]free|instantly)\b/i;
 /** Her banned phrases (4e) and the em dash (1b: "no em-dashes"). */
