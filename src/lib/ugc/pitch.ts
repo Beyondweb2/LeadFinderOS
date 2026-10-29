@@ -14,6 +14,7 @@
  * ⛔ NOTHING IS SENT. Jess copies, opens Gmail / Instagram / WhatsApp herself, and logs it. */
 
 import { JESS_PORTFOLIO_URL } from './config.ts';
+import { reviewsLine, type ResearchResult } from './research.ts';
 
 export const MAX_PITCH_ATTEMPTS = 3;
 
@@ -51,6 +52,10 @@ export interface ResearchFields {
   product: string | null;
   product_detail: string | null;
   detail_url: string | null;
+  /** What the brand is pushing now, and her reviews line ("buy reason: …; hesitation: …" or "Reviews: none found"). */
+  pushing_now: string | null;
+  reviews: string | null;
+  ships_to_thailand: string | null;
   pays_for_ugc_evidence: string | null;
   niche: string | null;
   website: string | null;
@@ -66,14 +71,22 @@ export interface PitchBrand {
   live_ads_count?: number | null;
   creators_seen?: readonly string[] | null;
   ad_samples?: ReadonlyArray<{ text?: string; link?: string }> | null;
-  research?: { snippets?: readonly string[]; product?: string; product_detail?: string; detail_url?: string; pays_for_ugc_evidence?: string } | null;
+  research?: { snippets?: readonly string[]; product?: string; product_detail?: string; detail_url?: string; pays_for_ugc_evidence?: string; verified?: ResearchResult | null } | null;
 }
 
 export function researchFields(b: PitchBrand): ResearchFields {
   const r = b.research ?? {};
+  /* Verified research (auto-research, every field quoted from its page) wins; the older free fields are the fallback. */
+  const v = r.verified ?? null;
   const ads = (b.live_ads_count ?? 0) > 0 ? `${b.live_ads_count} active video ads in the Meta Ads Library` : null;
   return {
-    brand: b.name, product: r.product ?? null, product_detail: r.product_detail ?? null, detail_url: r.detail_url ?? null,
+    brand: b.name,
+    product: v?.product?.value ?? r.product ?? null,
+    product_detail: v?.product_detail?.value ?? r.product_detail ?? null,
+    detail_url: v?.product_detail?.url ?? r.detail_url ?? null,
+    pushing_now: v?.pushing_now?.value ?? null,
+    reviews: reviewsLine(v?.reviews ?? null),
+    ships_to_thailand: v?.ships_to_thailand ? (v.ships_to_thailand.ships ? 'yes' : 'no') : null,
     pays_for_ugc_evidence: r.pays_for_ugc_evidence ?? (b.creators_seen?.length ? `Branded content with ${b.creators_seen.slice(0, 3).join(', ')}` : null),
     niche: b.niche ?? null, website: b.website ?? null, ads_summary: ads,
     creators_seen: [...(b.creators_seen ?? [])].slice(0, 5),
@@ -228,7 +241,9 @@ export function researchMissing(research: ResearchFields, route: { kind: string 
   if (track === 'local') return route && route.kind !== 'none' ? [] : ['contact (Instagram)'];
   const m: string[] = [];
   if (!research.product?.trim()) m.push('product');
-  if (!research.product_detail?.trim()) m.push('verified product detail');
+  if (!research.product_detail?.trim() || !research.detail_url?.trim()) m.push('verified product detail');
+  if (!research.pushing_now?.trim()) m.push('what the brand is pushing now');
+  if (!research.reviews?.trim()) m.push('reviews (or a review source read with none found)');
   if (!route || route.kind === 'none') m.push('contact');
   return m;
 }

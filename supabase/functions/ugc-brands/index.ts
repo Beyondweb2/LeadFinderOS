@@ -16,6 +16,12 @@ import { TIER_RANK, tierFor, templateFamilyFor } from "../../../src/lib/ugc/tier
 import { bestContact } from "../../../src/lib/ugc/contactOrder.ts";
 import { pitchedKeySet } from "../../../src/lib/ugc/pitchLog.ts";
 import { inviteUgcMember } from "../_shared/ugc-member-invite.ts";
+import { isPublicHttpUrl, readCapped } from "../_shared/safe-fetch.ts";
+import { SITE_CHECK_HEADERS, SITE_FETCH_TIMEOUT_MS } from "../../../src/lib/siteReadIdentity.ts";
+import {
+  AUTO_RESEARCH_TOP, RESEARCH_USD_CEILING, htmlLinks, htmlToText, pickProductUrl, pickShippingUrl, researchGaps, researchPrompt,
+  reviewSourceUrl, verifyResearch, type FetchedPage, type PageKind, type ResearchResult,
+} from "../../../src/lib/ugc/research.ts";
 import { OPERATOR_APP_URL } from "../../../src/config/operatorApp.ts";
 
 /* Where the invite email lands: the app's own set-password page (the same page the Team invite uses). */
@@ -227,6 +233,89 @@ async function webhookWrite(url: string, payload: unknown): Promise<WriteOut | n
   } catch { return null; } finally { clearTimeout(t); }
 }
 
+/** Read one page under the app's ONE honest crawler name (siteReadIdentity), public addresses only, body capped. */
+async function fetchPage(kind: PageKind, url: string | null): Promise<FetchedPage | null> {
+  if (!url || !isPublicHttpUrl(url)) return null;
+  const controller = new AbortController();
+  const t = setTimeout(() => controller.abort(), SITE_FETCH_TIMEOUT_MS);
+  try {
+    const res = await fetch(url, { headers: { ...SITE_CHECK_HEADERS }, redirect: "follow", signal: controller.signal });
+    const type = res.headers.get("content-type") ?? "";
+    if (!res.ok || !/html|text/i.test(type)) return { kind, url, ok: false, text: "", links: [] };
+    const html = await readCapped(res);
+    const text = htmlToText(html);
+    /* An unread page is "couldn't read", never a finding: too little text counts as not read. */
+    return { kind, url, ok: text.length > 200, text, links: htmlLinks(html, res.url || url) };
+  } catch { return { kind, url, ok: false, text: "", links: [] }; } finally { clearTimeout(t); }
+}
+
+/** Research ONE brand (her required fields, each quoted from its page and checked), as its own costed UGC run. */
+async function researchBrand(service: Service, owner: string, actor: string, brand: Row): Promise<Row> {
+  const now = () => new Date().toISOString();
+  const { data: run } = await service.from("ugc_runs").insert({ owner_user_id: owner, source: "research", input: { _ctx: { brand_id: brand.id } }, item_cap: 1, est_cost_usd: RESEARCH_USD_CEILING, status: "running" }).select("id").single();
+  const finish = async (status: "succeeded" | "failed", usd: number, extra: Row) => {
+    if (run?.id) await service.from("ugc_runs").update({ status, finished_at: now(), actual_cost_usd: Math.round(usd * 10000) / 10000, ...extra }).eq("id", run.id);
+  };
+  try {
+    const domain = String(brand.domain ?? "");
+    if (!domain || !brand.website) {
+      await service.from("ugc_brands").update({ research_status: "failed", researched_at: now() }).eq("id", brand.id);
+      await finish("failed", 0, { error: "no_website" });
+      return { outcome: "failed", why: "No website to read." };
+    }
+    const home = await fetchPage("home", String(brand.website));
+    const pages: FetchedPage[] = home ? [home] : [];
+    if (home?.ok) {
+      const [product, shipping, reviews] = await Promise.all([
+        fetchPage("product", pickProductUrl(home.links, domain)),
+        fetchPage("shipping", pickShippingUrl(home.links, domain)),
+        fetchPage("reviews", reviewSourceUrl(domain)),
+      ]);
+      for (const p of [product, shipping, reviews]) if (p) pages.push(p);
+    }
+    let usd = 0;
+    let result: ResearchResult;
+    if (!pages.some((p) => p.ok)) {
+      result = verifyResearch(null, pages);
+    } else {
+      const p = researchPrompt(String(brand.name), pages);
+      const m = await modelJson<Record<string, unknown>>(p.system, p.user, 0);
+      usd = m.usd;
+      result = verifyResearch(m.out, pages);
+    }
+    const gaps = researchGaps(result);
+    const old = (brand.research as Row | null) ?? {};
+    const patch: Row = { research: { ...old, verified: result }, research_status: "done", researched_at: now() };
+    if (!brand.instagram_url && result.instagram) patch.instagram_url = result.instagram.url;
+    if (result.ships_to_thailand) patch.ships_thailand = result.ships_to_thailand.ships;
+    await service.from("ugc_brands").update(patch).eq("id", brand.id);
+    await service.from("ugc_brand_events").insert({ brand_id: brand.id, owner_user_id: owner, kind: "research", created_by: actor,
+      detail: { pages: result.pages.map((x) => `${x.kind}:${x.ok ? "read" : "not read"}`), gaps, rejected: result.rejected.slice(0, 6), usd: Math.round(usd * 10000) / 10000 } });
+    await finish("succeeded", usd, { items_found: 6 - gaps.length - (result.instagram ? 0 : 1) - (result.ships_to_thailand ? 0 : 1) });
+    return { outcome: gaps.length ? "partial" : "complete", gaps, pagesRead: result.pages.filter((x) => x.ok).length };
+  } catch (e) {
+    await service.from("ugc_brands").update({ research_status: "failed" }).eq("id", brand.id);
+    await finish("failed", 0, { error: String((e as Error)?.message ?? e).slice(0, 300) });
+    return { outcome: "failed", why: "Research failed; try again." };
+  }
+}
+
+/** Key paths (no values) across items, with how many items carry each — the shape of an actor's output. */
+function keyPaths(items: unknown[], maxDepth = 6): Record<string, number> {
+  const counts: Record<string, number> = {};
+  const walk = (v: unknown, path: string, depth: number, seen: Set<string>) => {
+    if (depth > maxDepth || v === null || typeof v !== "object") return;
+    const entries = Array.isArray(v) ? (v.length ? [["[]", v[0]] as const] : []) : Object.entries(v as Row);
+    for (const [k, child] of entries) {
+      const p = path ? `${path}.${k}` : String(k);
+      if (!seen.has(p)) { seen.add(p); counts[p] = (counts[p] ?? 0) + 1; }
+      walk(child, p, depth + 1, seen);
+    }
+  };
+  for (const it of items) walk(it, "", 0, new Set());
+  return Object.fromEntries(Object.entries(counts).sort(([a], [b]) => a.localeCompare(b)).slice(0, 400));
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
   try {
@@ -298,7 +387,9 @@ Deno.serve(async (req) => {
       const estUsd = estimateRunUsd("contacts", 1, { sites: urls.length });
       const st = await spendState(service, owner);
       const refusal = ugcSpendRefusal({ estUsd, spentThisMonthUsd: st.spentThisMonthUsd, budgetUsd: st.budgetUsd, apifyPct: st.apifyPct });
-      if (body.estimateOnly === true) return json({ ok: true, estUsd, sites: urls.length, refusal });
+      /* Research runs automatically after the contacts land, for at most AUTO_RESEARCH_TOP brands: shown here first. */
+      const researchBrands = Math.min(ids.length, AUTO_RESEARCH_TOP);
+      if (body.estimateOnly === true) return json({ ok: true, estUsd, sites: urls.length, refusal, researchBrands, researchEstUsd: Math.round(researchBrands * RESEARCH_USD_CEILING * 100) / 100 });
       const stop = await allStopRefusal(service, corsHeaders);
       if (stop) return json({ ok: false, error: "all_stop" }, 423);
       if (refusal) return json({ ok: false, error: refusal, estUsd }, 409);
@@ -325,6 +416,9 @@ Deno.serve(async (req) => {
           patch.items_found = items.length;
           if (run.source === "contacts" || run.source === "named_contacts") {
             patch.brands_updated = await applyContacts(service, owner, caller.id, ((ctx.brand_ids as string[]) ?? []), items, run.source === "named_contacts");
+            /* Then queue research for the top-ranked of those brands (ctx.brand_ids is already in rank order), capped. */
+            const toQueue = ((ctx.brand_ids as string[]) ?? []).slice(0, AUTO_RESEARCH_TOP);
+            if (toQueue.length) await service.from("ugc_brands").update({ research_status: "queued" }).eq("owner_user_id", owner).in("id", toQueue).is("researched_at", null);
           } else {
             const cands = candidatesFrom(run.source as Exclude<UgcSource, "contacts">, items, { niche: (ctx.niche as string) ?? null, country: (ctx.country as string) ?? null });
             const r = await upsertCandidates(service, owner, caller.id, cands);
@@ -343,6 +437,43 @@ Deno.serve(async (req) => {
         return json({ ok: true, run: { ...run, ...patch } });
       }
       return json({ ok: true, run: { ...run, apify_status: info.status } });
+    }
+
+    if (action === "research" || action === "research_next") {
+      /* One brand per call: the named brand ("Research" on its sheet), or the next queued one (the auto-research queue
+         a contacts run fills; the open page works through it one at a time). */
+      let q = service.from("ugc_brands").select("id, name, website, domain, research, instagram_url, ships_thailand, research_status").eq("owner_user_id", owner);
+      q = action === "research" ? q.eq("id", String(body.brandId ?? "")) : q.eq("research_status", "queued").order("updated_at", { ascending: true }).limit(1);
+      const { data: brand, error } = await q.maybeSingle();
+      if (error) return json({ ok: false, error: "read_failed" }, 503);
+      if (!brand) return json({ ok: true, done: true });
+      if (body.estimateOnly === true) return json({ ok: true, estUsd: RESEARCH_USD_CEILING });
+      const st = await spendState(service, owner);
+      const refusal = ugcSpendRefusal({ estUsd: RESEARCH_USD_CEILING, spentThisMonthUsd: st.spentThisMonthUsd, budgetUsd: st.budgetUsd, apifyPct: st.apifyPct });
+      const stop = await allStopRefusal(service, corsHeaders);
+      if (stop || refusal) {
+        /* Out of budget / paused: the queue is emptied (nothing runs behind her back later), the brand says why. */
+        await service.from("ugc_brands").update({ research_status: null }).eq("owner_user_id", owner).eq("research_status", "queued");
+        return json({ ok: false, error: stop ? "all_stop" : refusal }, stop ? 423 : 409);
+      }
+      /* One researcher per brand: the conditional claim (still queued, or not running) is the guard. */
+      const { data: claimed } = await service.from("ugc_brands").update({ research_status: "running" }).eq("id", brand.id)
+        /* A "running" left by a killed worker is claimable again after five minutes, so a brand never sticks. */
+        .or(`research_status.is.null,research_status.eq.queued,research_status.eq.done,research_status.eq.failed,and(research_status.eq.running,updated_at.lt.${new Date(Date.now() - 5 * 60_000).toISOString()})`)
+        .select("id").maybeSingle();
+      if (!claimed) return json({ ok: true, busy: true });
+      const r = await researchBrand(service, owner, caller.id, brand as Row);
+      return json({ ok: true, brandId: brand.id, ...r });
+    }
+
+    /* Admin: the SHAPE of a finished run's results (key paths and how many items have each) — no values. Used to
+       see what the Ads Library actor really returns (page age / admin countries). Reading a dataset costs nothing. */
+    if (action === "inspect_run") {
+      if (!caller.admin) return json({ ok: false, error: "admin_only" }, 403);
+      const { data: run } = await service.from("ugc_runs").select("apify_run_id, source").eq("id", String(body.runId ?? "")).maybeSingle();
+      if (!run?.apify_run_id) return json({ ok: false, error: "run_not_found" }, 404);
+      const items = await getApifyRunItems(String(run.apify_run_id), Deno.env.get("APIFY_TOKEN") ?? "");
+      return json({ ok: true, source: run.source, items: items.length, paths: keyPaths(items.slice(0, 25)) });
     }
 
     if (action === "named_contacts") {
@@ -368,7 +499,9 @@ Deno.serve(async (req) => {
       const st = await spendState(service, owner);
       const refusal = ugcSpendRefusal({ estUsd, spentThisMonthUsd: st.spentThisMonthUsd, budgetUsd: st.budgetUsd, apifyPct: st.apifyPct });
       if (body.estimateOnly === true) {
-        return json({ ok: true, estUsd, brands: urls.length, extraUsd: Math.round((estUsd - estimateRunUsd("contacts", 1, { sites: urls.length })) * 100) / 100, refusal });
+        const researchBrands = Math.min(urls.length, AUTO_RESEARCH_TOP);
+        return json({ ok: true, estUsd, brands: urls.length, extraUsd: Math.round((estUsd - estimateRunUsd("contacts", 1, { sites: urls.length })) * 100) / 100, refusal,
+          researchBrands, researchEstUsd: Math.round(researchBrands * RESEARCH_USD_CEILING * 100) / 100 });
       }
       const stop = await allStopRefusal(service, corsHeaders);
       if (stop) return json({ ok: false, error: "all_stop" }, 423);
