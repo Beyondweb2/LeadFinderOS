@@ -1,7 +1,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { resolveUgcCaller } from "../_shared/ugc-access.ts";
 import { allStopRefusal } from "../_shared/protection.ts";
-import { getApifyRun, getApifyRunItems } from "../_shared/enrichment/apify.ts";
+import { abortApifyRun, getApifyRun, getApifyRunItems } from "../_shared/enrichment/apify.ts";
 import { openAiUsd } from "../_shared/openai-usage.ts";
 import {
   APIFY_MIN_CHARGE_USD, ENRICH_DEFAULT_TOP, ENRICH_MAX_TOP, PAGE_DETAILS_DEFAULT, PAGE_DETAILS_MAX, THAILAND_AREAS, THAILAND_PLACE_TYPES, UGC_ACTORS, UGC_MAX_CONTACT_BRANDS, UGC_MAX_PITCHES_PER_DAY, UGC_PITCH_MODEL,
@@ -20,7 +20,7 @@ import { isPublicHttpUrl, readCapped } from "../_shared/safe-fetch.ts";
 import { SITE_CHECK_HEADERS, SITE_FETCH_TIMEOUT_MS } from "../../../src/lib/siteReadIdentity.ts";
 import {
   AUTO_RESEARCH_TOP, RESEARCH_USD_CEILING, htmlLinks, htmlToText, pickProductUrl, pickShippingUrl, researchGaps, researchPrompt,
-  jsonLdReviews, reviewSourceUrl, verifyResearch, type FetchedPage, type PageKind, type ResearchResult,
+  jsonLdReviews, trustpilotInput, reviewsPageFromItems, REVIEWS_ACTOR, REVIEWS_MAX, REVIEWS_USD_CEILING, verifyResearch, type FetchedPage, type PageKind, type ResearchResult,
 } from "../../../src/lib/ugc/research.ts";
 import { OPERATOR_APP_URL } from "../../../src/config/operatorApp.ts";
 
@@ -253,6 +253,28 @@ async function fetchPage(kind: PageKind, url: string | null): Promise<FetchedPag
   } catch { return { kind, url, ok: false, text: "", links: [] }; } finally { clearTimeout(t); }
 }
 
+/** Latest Trustpilot reviews for a domain through the Apify review actor (shown cost first, capped by REVIEWS_MAX items and
+ *  Apify's own maxTotalChargeUsd). Waits up to ~75 s; a run that does not finish is aborted and counts as "could not read". */
+async function fetchReviewsPage(domain: string): Promise<{ page: FetchedPage; usd: number }> {
+  const token = Deno.env.get("APIFY_TOKEN") ?? "";
+  if (!token) return { page: reviewsPageFromItems(domain, null), usd: 0 };
+  let runId: string;
+  try { runId = (await startCappedRun(REVIEWS_ACTOR, trustpilotInput(domain), token, REVIEWS_MAX, REVIEWS_USD_CEILING)).runId; }
+  catch (e) { console.warn("[ugc-brands] reviews start:", String((e as Error)?.message ?? e).slice(0, 200)); return { page: reviewsPageFromItems(domain, null), usd: 0 }; }
+  const until = Date.now() + 75_000;
+  while (Date.now() < until) {
+    await new Promise((r) => setTimeout(r, 3_000));
+    const info = await getApifyRun(runId, token);
+    if (info.status === "SUCCEEDED") {
+      const items = await getApifyRunItems(runId, token).catch(() => null);
+      return { page: reviewsPageFromItems(domain, items), usd: Number(info.usageTotalUsd ?? 0) };
+    }
+    if (TERMINAL_BAD.has(String(info.status))) return { page: reviewsPageFromItems(domain, null), usd: Number(info.usageTotalUsd ?? 0) };
+  }
+  await abortApifyRun(runId, token).catch(() => undefined);
+  return { page: reviewsPageFromItems(domain, null), usd: REVIEWS_USD_CEILING };
+}
+
 /** Research ONE brand (her required fields, each quoted from its page and checked), as its own costed UGC run. */
 async function researchBrand(service: Service, owner: string, actor: string, brand: Row): Promise<Row> {
   const now = () => new Date().toISOString();
@@ -269,25 +291,27 @@ async function researchBrand(service: Service, owner: string, actor: string, bra
     }
     const home = await fetchPage("home", String(brand.website));
     const pages: FetchedPage[] = home ? [home] : [];
+    let reviewsUsd = 0;
     if (home?.ok) {
       const [product, shipping, reviews] = await Promise.all([
         fetchPage("product", pickProductUrl(home.links, domain)),
         fetchPage("shipping", pickShippingUrl(home.links, domain)),
-        fetchPage("reviews", reviewSourceUrl(domain)),
+        fetchReviewsPage(domain),
       ]);
-      for (const p of [product, shipping, reviews]) if (p) pages.push(p);
-      /* The brand's OWN reviews, when its product page embeds them, are a review source of their own (Trustpilot refuses
-         readers like ours). */
+      reviewsUsd = reviews.usd;
+      for (const p of [product, shipping, reviews.page]) if (p) pages.push(p);
+      /* The brand's OWN reviews, when its product page embeds them, are a review source of their own (used when the
+         Trustpilot fetch could not be read). */
       if (product?.ok && product.reviewsText) pages.push({ kind: "reviews", url: `${product.url}#reviews`, ok: true, text: product.reviewsText, links: [] });
     }
-    let usd = 0;
+    let usd = reviewsUsd;
     let result: ResearchResult;
     if (!pages.some((p) => p.ok)) {
       result = verifyResearch(null, pages);
     } else {
       const p = researchPrompt(String(brand.name), pages);
       const m = await modelJson<Record<string, unknown>>(p.system, p.user, 0);
-      usd = m.usd;
+      usd += m.usd;
       result = verifyResearch(m.out, pages);
     }
     const gaps = researchGaps(result);

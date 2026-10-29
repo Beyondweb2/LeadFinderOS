@@ -7,6 +7,7 @@ import { EmptyState, ErrorState, LoadState, PageHeader, Segmented, ToneChip } fr
 import { UgcBrandTable } from '@/components/ugc/UgcBrandTable';
 import { UgcBrandSheet } from '@/components/ugc/UgcBrandSheet';
 import { UgcFindPanel } from '@/components/ugc/UgcFindPanel';
+import { UgcExportPanel } from '@/components/ugc/UgcExportPanel';
 import { UgcPitchLogPanel, UgcPitchSystemPanel } from '@/components/ugc/UgcPitchSystemPanel';
 import { UgcSettingsPanel } from '@/components/ugc/UgcSettingsPanel';
 import { useUgcAccess, useUgcActions, useUgcBrands, useUgcPitchLog, useUgcPitchSystem, useUgcState } from '@/hooks/useUgc';
@@ -31,6 +32,7 @@ export default function Ugc() {
   const system = useUgcPitchSystem(member);
   const log = useUgcPitchLog(member);
   const [view, setView] = useState<View>('todo');
+  const [tab, setTab] = useState('brands');
   const [showHidden, setShowHidden] = useState(false);
   const [q, setQ] = useState('');
   const [openId, setOpenId] = useState<string | null>(null);
@@ -87,19 +89,28 @@ export default function Ugc() {
   return (
     <div className="space-y-5" data-testid="ugc-page">
       <PageHeader icon={Clapperboard} tone="purple" title="UGC brands"
-        subtitle="Find brands that pay for UGC, get the right contact, and pitch them yourself. Nothing is sent from here."
+        subtitle="A lead source: find brands that pay for UGC, check their contacts, research them, export them to your workbook. Nothing is sent from here."
         actions={state.data && <div className="flex flex-wrap gap-1.5">
           <ToneChip tone="green">{formatUsd(state.data.spentThisMonthUsd)} of {formatUsd(state.data.budgetUsd)} this month</ToneChip>
           {queued > 0 && <ToneChip tone="blue" testId="ugc-research-queue">Researching: {queued} queued</ToneChip>}
           {state.data.apifyPct != null && state.data.apifyPct >= 0.8 && <ToneChip tone="amber">Searches paused: shared limit</ToneChip>}
         </div>} />
 
-      <Tabs defaultValue="brands">
+      <ol className="flex flex-wrap gap-2 text-xs" data-testid="ugc-steps" aria-label="The four steps">
+        {([['find', '1', 'Find', 'Search for brands'], ['find', '2', 'Check', 'Contacts, named people, dropshipping signs'], ['brands', '3', 'Research', 'Open a brand: research, reviews'], ['export', '4', 'Export', 'Researched brands to your workbook']] as const).map(([t, n, label, hint]) => (
+          <li key={n}><button type="button" onClick={() => setTab(t)} className="flex items-center gap-2 rounded-xl border bg-card px-3 py-1.5 text-left hover:bg-muted/50">
+            <span className="flex h-5 w-5 items-center justify-center rounded-full bg-purple-500/15 font-bold text-purple-700 dark:text-purple-300">{n}</span>
+            <span><b>{label}</b> <span className="text-muted-foreground">{hint}</span></span></button></li>
+        ))}
+      </ol>
+
+      <Tabs value={tab} onValueChange={setTab}>
         <TabsList className="max-w-full justify-start overflow-x-auto">
           <TabsTrigger value="brands">Brands ({paid.filter((r) => !r.view.hidden).length})</TabsTrigger>
           <TabsTrigger value="local">Local · Chiang Mai ({local.length})</TabsTrigger>
-          <TabsTrigger value="find">Find</TabsTrigger>
-          <TabsTrigger value="system">Pitch system</TabsTrigger>
+          <TabsTrigger value="find">Find &amp; check</TabsTrigger>
+          <TabsTrigger value="export">Export</TabsTrigger>
+          <TabsTrigger value="system">Pitch system (advanced)</TabsTrigger>
           <TabsTrigger value="log">Pitch log</TabsTrigger>
           <TabsTrigger value="settings">Settings</TabsTrigger>
         </TabsList>
@@ -109,6 +120,7 @@ export default function Ugc() {
           {filters(local)}{listFor(local, 'No local businesses yet — run a Chiang Mai search on Find.')}
         </TabsContent>
         <TabsContent value="find" className="mt-4"><UgcFindPanel selectedIds={[...selected]} budget={state.data ?? null} /></TabsContent>
+        <TabsContent value="export" className="mt-4"><UgcExportPanel rows={rows} /></TabsContent>
         <TabsContent value="system" className="mt-4"><UgcPitchSystemPanel ownerId={state.data?.owner ?? ''} isMember={member} /></TabsContent>
         <TabsContent value="log" className="mt-4"><UgcPitchLogPanel ownerId={state.data?.owner ?? ''} isMember={member} /></TabsContent>
         <TabsContent value="settings" className="mt-4"><UgcSettingsPanel admin={access.data?.admin === true} /></TabsContent>

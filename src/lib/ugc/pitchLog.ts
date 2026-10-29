@@ -137,3 +137,11 @@ export function pitchedKeySet(log: ReadonlyArray<Pick<PitchLogRow, 'brand_key' |
   for (const [k, blocked] of byName) if (blocked) keys.add(k);
   return keys;
 }
+
+/** What replacing her whole log with a freshly uploaded workbook changes (same dedupe key as the import). */
+export function logReplaceCounts(before: ReadonlyArray<Pick<PitchLogRow, 'brand_key' | 'pitched_on'>>, after: ReadonlyArray<Pick<PitchLogRow, 'brand_key' | 'pitched_on'>>): { before: number; after: number; added: number; removed: number; kept: number } {
+  const key = (r: Pick<PitchLogRow, 'brand_key' | 'pitched_on'>) => `${r.brand_key}|${r.pitched_on ?? ''}`;
+  const b = new Set(before.map(key)); const a = new Set(after.map(key));
+  let kept = 0; for (const k of a) if (b.has(k)) kept++;
+  return { before: b.size, after: a.size, added: a.size - kept, removed: b.size - kept, kept };
+}

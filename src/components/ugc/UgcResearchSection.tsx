@@ -1,9 +1,11 @@
-import { ExternalLink, FileSearch, Loader2 } from 'lucide-react';
+import { ClipboardCopy, ExternalLink, FileSearch, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { SubSection, ToneChip } from '@/components/operator/ui';
 import type { UgcBrand } from '@/hooks/useUgc';
 import { RESEARCH_USD_CEILING, researchGaps, reviewsLine, type Sourced } from '@/lib/ugc/research';
 import { formatUsd } from '@/lib/ugc/config';
+import { NO_EXPERIENCE_FIT } from '@/lib/ugc/researchPack';
 
 /* Her required fields for one brand, each with the page it came from (auto-research, checked against that page).
    Unknown is shown as unknown — never guessed. */
@@ -18,7 +20,7 @@ function Field({ label, s }: { label: string; s: Sourced | null | undefined }) {
   );
 }
 
-export function UgcResearchSection({ brand: b, busy, onResearch }: { brand: UgcBrand; busy: boolean; onResearch: () => void }) {
+export function UgcResearchSection({ brand: b, busy, onResearch, onCopyPack, onSaveFit }: { brand: UgcBrand; busy: boolean; onResearch: () => void; onCopyPack: () => void; onSaveFit: (v: string | null) => void }) {
   const v = b.research?.verified ?? null;
   const gaps = researchGaps(v);
   const queued = b.research_status === 'queued' || b.research_status === 'running';
@@ -43,6 +45,13 @@ export function UgcResearchSection({ brand: b, busy, onResearch }: { brand: UgcB
           <div className="text-xs"><span className="font-semibold">Instagram:</span>{' '}
             {v.instagram ? <a className="text-primary underline" href={v.instagram.url} target="_blank" rel="noreferrer">@{v.instagram.handle}</a> : <span className="text-muted-foreground">unverified</span>}</div>
           <p className="pt-1 text-[11px] text-muted-foreground">Pages read: {v.pages.map((p) => `${p.kind} ${p.ok ? '✓' : '✗'}`).join(' · ')}{b.researched_at ? ` · ${new Date(b.researched_at).toLocaleDateString('en-GB')}` : ''}</p>
+          <div className="mt-2 flex flex-wrap items-center gap-2 border-t pt-2">
+            <Button size="sm" onClick={onCopyPack} data-testid="ugc-copy-pack"><ClipboardCopy className="mr-1 h-3.5 w-3.5" />Copy for Claude</Button>
+            <label className="flex min-w-[220px] flex-1 items-center gap-1.5 text-xs">Experience fit
+              <Input className="h-7 flex-1" placeholder={NO_EXPERIENCE_FIT} defaultValue={b.experience_fit ?? ''} key={b.id + (b.experience_fit ?? '')}
+                onBlur={(e) => { const x = e.target.value.trim() || null; if (x !== (b.experience_fit ?? null)) onSaveFit(x); }} /></label>
+          </div>
+          <p className="text-[11px] text-muted-foreground">Paste it into your Claude Project. Nothing is sent from here.</p>
           {gaps.length > 0
             ? <ToneChip tone="amber" className="mt-1">Not ready to pitch — missing: {gaps.join(', ')}</ToneChip>
             : <ToneChip tone="green" className="mt-1">Research complete</ToneChip>}

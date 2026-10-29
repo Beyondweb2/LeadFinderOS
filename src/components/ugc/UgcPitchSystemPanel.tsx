@@ -9,7 +9,7 @@ import { useToast } from '@/hooks/use-toast';
 import { edgeErrorMessage } from '@/lib/edgeInvoke';
 import { useUgcActions, useUgcPitchLog, useUgcPitchSystem, type UgcPitchSystem } from '@/hooks/useUgc';
 import { TEMPLATE_KEYS, TEMPLATE_LABEL, WHATSAPP_ASK_DRAFT } from '@/lib/ugc/pitch';
-import { rowsFromCsv } from '@/lib/ugc/pitchLog';
+import { logReplaceCounts, rowsFromCsv, rowsFromWorkbook, type PitchLogRow } from '@/lib/ugc/pitchLog';
 import { parsePitchSystem, type PitchSystemImport } from '@/lib/ugc/pitchSystemImport';
 
 /* HER PITCH SYSTEM — private to Jess (RLS: owner only, not the admin). Personal data: it lives here, never in git. */
@@ -113,6 +113,8 @@ export function UgcPitchLogPanel({ ownerId, isMember }: { ownerId: string; isMem
   const { toast } = useToast();
   const [csv, setCsv] = useState('');
   const [busy, setBusy] = useState(false);
+  const [upload, setUpload] = useState<{ name: string; rows: PitchLogRow[] } | null>(null);
+  const [result, setResult] = useState<{ before: number; after: number; added: number; removed: number; kept: number; bySource: Record<string, number> } | null>(null);
   if (!isMember) return <Callout tone="blue" icon={Lock} title="Private to Jess">Her pitch log is visible to her account only.</Callout>;
   const parsed = csv.trim() ? rowsFromCsv(csv) : [];
   const counts = (log.data ?? []).reduce<Record<string, number>>((m, r) => { const k = r.channel ?? 'other'; m[k] = (m[k] ?? 0) + 1; return m; }, {});
@@ -120,6 +122,40 @@ export function UgcPitchLogPanel({ ownerId, isMember }: { ownerId: string; isMem
     <Card><CardContent className="space-y-4 p-4 text-sm">
       <SubSection title="Your pitch log" hint="Every brand here is skipped when found again, until its re-pitch date." tone="blue">
         <p data-testid="ugc-log-count"><b>{log.data?.length ?? 0}</b> brands already pitched{Object.keys(counts).length ? ` · ${Object.entries(counts).slice(0, 4).map(([k, n]) => `${n} ${k}`).join(' · ')}` : ''}</p>
+      </SubSection>
+      <SubSection title="Upload updated pitch log" icon={FileUp} tone="purple"
+        hint="Upload your workbook (.xlsx) any time. It REPLACES this log (same rules as the first import: Pitch Log, Previously Pitched, Brands & Contacts, Chiang Mai Collabs, Agencies & Talent). Brands in it are skipped when found again.">
+        <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs font-medium hover:bg-muted">
+          <FileUp className="h-3.5 w-3.5" />Choose workbook (.xlsx) or CSV
+          <input type="file" accept=".xlsx,.csv,text/csv" className="hidden" data-testid="ugc-log-upload" onChange={(e) => {
+            const file = e.target.files?.[0];
+            e.target.value = '';
+            if (!file) return;
+            setResult(null);
+            void (async () => {
+              try {
+                const rows = /\.csv$/i.test(file.name) ? rowsFromCsv(await file.text()) : rowsFromWorkbook((await (await import('@/lib/ugc/xlsxIO')).readWorkbookSheets(await file.arrayBuffer())));
+                if (!rows.length) { setUpload(null); toast({ title: 'No pitched brands found in that file', variant: 'destructive' }); return; }
+                setUpload({ name: file.name, rows });
+              } catch (err) { setUpload(null); toast({ title: 'Could not read that file', description: edgeErrorMessage(err), variant: 'destructive' }); }
+            })();
+          }} />
+        </label>
+        {upload && (
+          <div className="mt-2 space-y-1.5 text-xs" data-testid="ugc-log-upload-preview">
+            <p><b>{upload.name}</b>: {upload.rows.length} pitched brands found. Now {log.data?.length ?? 0} in your log; replacing changes {(() => { const c = logReplaceCounts(log.data ?? [], upload.rows); return `+${c.added} new, -${c.removed} gone, ${c.kept} kept`; })()}.</p>
+            <Button size="sm" disabled={busy} onClick={() => void (async () => {
+              setBusy(true);
+              try { setResult(await actions.replacePitchLog(ownerId, upload.rows)); setUpload(null); toast({ title: 'Pitch log replaced' }); }
+              catch (err) { toast({ title: 'Not replaced — your old log was put back', description: edgeErrorMessage(err), variant: 'destructive' }); } finally { setBusy(false); }
+            })()}>{busy ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : null}Replace my pitch log with these {upload.rows.length}</Button>
+          </div>
+        )}
+        {result && (
+          <Callout tone="green" className="mt-2" title="Pitch log replaced">
+            <span data-testid="ugc-log-result" className="text-xs">Was {result.before}, now {result.after} · {result.added} new, {result.removed} gone, {result.kept} kept · {Object.entries(result.bySource).map(([k, n]) => `${n} ${k.replace(/_/g, ' ')}`).join(' · ')}</span>
+          </Callout>
+        )}
       </SubSection>
       <SubSection title="Import" icon={FileUp} tone="green" hint="Paste a CSV export with a Brand column (optional: Website, Instagram, Date, Channel, Outcome, Re-pitch from).">
         <Textarea className="min-h-[110px] font-mono text-xs" value={csv} onChange={(e) => setCsv(e.target.value)} placeholder={'Brand,Website,Instagram,Date,Channel,Outcome'} />

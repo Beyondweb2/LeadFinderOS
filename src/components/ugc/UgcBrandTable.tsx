@@ -68,6 +68,7 @@ export function UgcBrandTable({ rows, onOpen, selected, onToggle }: {
                 <TableCell className="min-w-[130px]">
                   <div className="flex items-center gap-1.5">
                     <StatusChip status={b.status} />
+                    {b.exported_at && <ToneChip tone="grey" title="Exported to her workbook">Exported {new Date(b.exported_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })}</ToneChip>}
                     {Ch && <span title={`Active channel: ${b.active_channel}`} className="inline-flex items-center gap-0.5 text-[11px] text-muted-foreground"><Lock className="h-3 w-3" /><Ch className="h-3 w-3" /></span>}
                   </div>
                 </TableCell>
