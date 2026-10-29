@@ -1,4 +1,4 @@
--- 20261130100000_welcome_pack_sends.sql
+-- 20261130110000_welcome_pack_sends.sql
 -- The welcome pack email, recorded as Resend accepted it (Paul, 2026-10-29). Branch feat/welcome-pack-next-action.
 --
 -- Additive only: one new table. No existing row or table is changed.

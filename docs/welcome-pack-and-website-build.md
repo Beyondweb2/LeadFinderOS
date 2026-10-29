@@ -211,7 +211,7 @@ Branch `feat/welcome-pack-next-action`. Closes the last open item above: the pac
   `alerts@findable.live`, reply-to `paul@findable.live`). Refuses: not paid, ended/refunded (real sends), pack not ready
   or no short code, no address, QA address outside the sink, second send without `resend`. `test: true` → always
   `paul@findable.live`, `[TEST]` subject, never recorded, allowed on an ended client so a real pack can be checked.
-- **`welcome_pack_sends`** (migration `20261130100000`, applied 2026-10-29, read back): server-only (RLS, no policies).
+- **`welcome_pack_sends`** (migration `20261130110000`, applied 2026-10-29, read back): server-only (RLS, no policies).
   The lead-history table's `kind` CHECK does not include a welcome-pack kind, so no history line is written.
 - **Pack text (v6 plans):** key points and guarantee are read VERBATIM from `clientAgreement.ts` V6
   (`v6AgreementKeyPoints`, `v6GuaranteeWords`), plan line = `planAgreementWords`; hosting per 9.2; no "a new page every

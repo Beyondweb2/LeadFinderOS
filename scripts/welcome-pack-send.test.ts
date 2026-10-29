@@ -32,7 +32,7 @@ ok(/prior && body\.resend !== true/.test(block), 'a second real send needs Resen
 ok(/qaEmailHold\(/.test(block) && /carriesMoney\(L\)/.test(block) && /if \(closed && !isTest\)/.test(block), 'QA sink, paid, and ended/refunded guards (a test to Paul is allowed on a closed client; a real send is not)');
 ok(/\.eq\("user_id", user\.id\)/.test(block), 'owner-scoped like every hub action');
 ok(!/setInterval|cron|setTimeout/.test(block), 'nothing in the send path runs on its own');
-const mig = read('supabase/migrations/20261130100000_welcome_pack_sends.sql');
+const mig = read('supabase/migrations/20261130110000_welcome_pack_sends.sql');
 ok(/enable row level security/.test(mig) && !/create policy/i.test(mig), 'the send log is server-only (RLS on, no policies)');
 
 console.log(fails ? `\n${fails} FAILED` : '\nall passed');
