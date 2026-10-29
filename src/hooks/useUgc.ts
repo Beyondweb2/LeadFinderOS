@@ -4,9 +4,10 @@ import { supabase } from '@/integrations/supabase/client';
 import { invokeEdge } from '@/lib/edgeInvoke';
 import { fetchAllRows } from '@/lib/fetchAllRows';
 import type { NamedContact, WaNumber } from '@/lib/ugc/normalize';
-import type { PitchLogRow } from '@/lib/ugc/pitchLog';
+import { logReplaceCounts, type PitchLogRow } from '@/lib/ugc/pitchLog';
 import type { ResearchResult } from '@/lib/ugc/research';
 import type { TemplateKey } from '@/lib/ugc/pitch';
+import { PASTED_WRITER } from '@/lib/ugc/pastedPitch';
 
 /* ════════════════════════════════════════════════════════════════════════════════════════════════
    The UGC Brand Finder's reads and writes (docs/ugc-brand-finder.md). Everything is ugc_* only — never a
@@ -30,6 +31,7 @@ export interface UgcBrand {
   ad_samples: { text?: string; link?: string; started?: string }[]; ad_start_dates: string[]; creators_seen: string[];
   page_created_at: string | null; admin_countries: string[]; shop_links: string[]; has_about_page: boolean | null; has_address: boolean | null;
   research: { snippets?: string[]; product?: string; product_detail?: string; detail_url?: string; pays_for_ugc_evidence?: string; verified?: ResearchResult | null };
+  experience_fit: string | null; exported_at: string | null;
   research_status: 'queued' | 'running' | 'done' | 'failed' | null; researched_at: string | null;
   track: 'brand' | 'local'; tier_override: string | null;
   company_country: string | null; ships_to: 'worldwide' | 'one_country' | 'uk_ie' | null; ships_thailand: boolean | null; creator_programme_country: string | null; status: string; active_channel: string | null;
@@ -189,12 +191,30 @@ export function useUgcActions() {
       refresh(UGC_KEYS.brands, UGC_KEYS.events(brandId));
       return data as { ok: boolean; error?: string };
     },
-    updateBrand: async (b: Pick<UgcBrand, 'id' | 'owner_user_id'>, patch: Partial<Pick<UgcBrand, 'status' | 'notes' | 'todo' | 'todo_on' | 'tier_override' | 'checked_sent_mail_at' | 'checked_linkedin_at' | 'company_country' | 'ships_to' | 'ships_thailand' | 'creator_programme_country'>>, kind: 'status' | 'note' | 'todo' | 'check') => {
+    updateBrand: async (b: Pick<UgcBrand, 'id' | 'owner_user_id'>, patch: Partial<Pick<UgcBrand, 'status' | 'notes' | 'todo' | 'todo_on' | 'tier_override' | 'checked_sent_mail_at' | 'checked_linkedin_at' | 'company_country' | 'ships_to' | 'ships_thailand' | 'creator_programme_country' | 'experience_fit'>>, kind: 'status' | 'note' | 'todo' | 'check') => {
       const { error } = await db.from('ugc_brands').update(patch).eq('id', b.id);
       if (error) throw error;
       const { data: u } = await supabase.auth.getUser();
       await db.from('ugc_brand_events').insert({ brand_id: b.id, owner_user_id: b.owner_user_id, kind, detail: patch, created_by: u.user?.id });
       refresh(UGC_KEYS.brands, UGC_KEYS.events(b.id));
+    },
+    /** Jess's own final pitch (from her Claude Project): saved as the draft the send buttons use, logged as her draft.
+     *  Warnings were already shown; she may save anyway. The status moves to Pitch ready (never over a contacted brand). */
+    savePastedPitch: async (b: Pick<UgcBrand, 'id' | 'owner_user_id' | 'status'>, d: { subject: string; body: string }, warnings: string[]) => {
+      const now = new Date().toISOString();
+      const patch: Record<string, unknown> = { pitch_subject: d.subject.trim() || null, pitch_body: d.body.trim(), pitch_writer: PASTED_WRITER, pitch_written_at: now };
+      if (['new', 'researching', 'needs_jess', 'pitch_ready'].includes(b.status)) patch.status = 'pitch_ready';
+      const { error } = await db.from('ugc_brands').update(patch).eq('id', b.id);
+      if (error) throw error;
+      const { data: u } = await supabase.auth.getUser();
+      await db.from('ugc_brand_events').insert({ brand_id: b.id, owner_user_id: b.owner_user_id, kind: 'pitch_pasted', detail: { writer: PASTED_WRITER, warnings, overridden: warnings.length > 0 }, created_by: u.user?.id });
+      refresh(UGC_KEYS.brands, UGC_KEYS.events(b.id));
+    },
+    /** A research pack was copied (logged on the brand's history). */
+    logResearchPack: async (b: Pick<UgcBrand, 'id' | 'owner_user_id'>, channel: string | null) => {
+      const { data: u } = await supabase.auth.getUser();
+      await db.from('ugc_brand_events').insert({ brand_id: b.id, owner_user_id: b.owner_user_id, kind: 'research_pack', detail: { channel }, created_by: u.user?.id });
+      refresh(UGC_KEYS.events(b.id));
     },
     savePitchSystem: async (ownerId: string, patch: Partial<UgcPitchSystem>) => {
       const { error } = await db.from('ugc_pitch_system').upsert({ owner_user_id: ownerId, ...patch }, { onConflict: 'owner_user_id' });
@@ -207,6 +227,38 @@ export function useUgcActions() {
         if (error) throw error;
       }
       refresh(UGC_KEYS.log);
+    },
+    /** "Upload updated pitch log": her whole private log is REPLACED by the uploaded rows (same dedupe rules). The old rows are
+     *  kept in memory first and put back if the new ones cannot be written, so the log is never left empty or half-loaded. */
+    replacePitchLog: async (ownerId: string, rows: PitchLogRow[]) => {
+      const cols = 'brand_name, brand_key, domain, instagram, pitched_on, channel, outcome, repitch_ok_from, source';
+      const old = (await fetchAllRows<PitchLogRow>('ugc_pitch_log', (from, to) => db.from('ugc_pitch_log').select(cols).order('id').range(from, to))).rows;
+      const put = async (list: PitchLogRow[]) => {
+        for (let i = 0; i < list.length; i += 500) {
+          const { error } = await db.from('ugc_pitch_log').insert(list.slice(i, i + 500).map((r) => ({ owner_user_id: ownerId, ...r })));
+          if (error) throw error;
+        }
+      };
+      const del = await db.from('ugc_pitch_log').delete().eq('owner_user_id', ownerId);
+      if (del.error) throw del.error;
+      try { await put(rows); } catch (e) { await put(old).catch(() => undefined); refresh(UGC_KEYS.log); throw e; }
+      refresh(UGC_KEYS.log, UGC_KEYS.brands);
+      const bySource: Record<string, number> = {};
+      for (const r of rows) bySource[r.source] = (bySource[r.source] ?? 0) + 1;
+      return { ...logReplaceCounts(old, rows), bySource };
+    },
+    /** Mark brands as exported (the date), so they are not exported twice; one history entry each. */
+    markExported: async (brands: Pick<UgcBrand, 'id' | 'owner_user_id'>[]) => {
+      const at = new Date().toISOString();
+      const { data: u } = await supabase.auth.getUser();
+      for (let i = 0; i < brands.length; i += 100) {
+        const chunk = brands.slice(i, i + 100);
+        const { error } = await db.from('ugc_brands').update({ exported_at: at }).in('id', chunk.map((b) => b.id));
+        if (error) throw error;
+        await db.from('ugc_brand_events').insert(chunk.map((b) => ({ brand_id: b.id, owner_user_id: b.owner_user_id, kind: 'exported', detail: { at }, created_by: u.user?.id })));
+      }
+      refresh(UGC_KEYS.brands);
+      return brands.length;
     },
     /** Admin: the auth service emails Jess its standard invite (the link never comes back to the browser). */
     inviteMember: (a: { name: string; email: string; sender_email: string }) => invokeEdge<{ ok: boolean; user_id: string }>('ugc-brands', { action: 'invite_member', ...a }),

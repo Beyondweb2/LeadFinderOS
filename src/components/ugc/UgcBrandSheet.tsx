@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import {
-  AlertTriangle, BadgeCheck, CheckCircle2, Clipboard, ExternalLink, History, Instagram, Lightbulb, Loader2, Lock, Mail,
+  AlertTriangle, ChevronDown, ChevronRight, BadgeCheck, CheckCircle2, Clipboard, ExternalLink, History, Instagram, Lightbulb, Loader2, Lock, Mail,
   MessageCircle, PenLine, Sparkles, Unlock, XCircle,
 } from 'lucide-react';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
@@ -14,6 +14,8 @@ import { useUgcActions, useUgcEvents, type UgcBrand, type UgcPitchSystem } from 
 import { CONTACT_KIND_LABEL, type BrandView } from '@/lib/ugc/brandView';
 import { UGC_STATUSES, UGC_STATUS_LABEL } from '@/lib/ugc/config';
 import { TEMPLATE_LABEL, WHATSAPP_ASK_DRAFT, copyEmailPayload, fillWhatsAppAsk, gmailComposeUrl, safeSignoffHtml, whatsappChatUrl, type PipelineAttempt, type TemplateKey } from '@/lib/ugc/pitch';
+import { pastedPitchProblems, problemText } from '@/lib/ugc/pastedPitch';
+import { packChannel, researchPack } from '@/lib/ugc/researchPack';
 import { StatusChip } from './UgcBrandTable';
 import { TIER_TONE, tierLabel } from './tierTone';
 import { UgcResearchSection } from './UgcResearchSection';
@@ -46,6 +48,10 @@ export function UgcBrandSheet({ brand: b, view: v, system, senderEmail, canPitch
   const [notes, setNotes] = useState('');
   const [nextAction, setNextAction] = useState('');
   const [nextAt, setNextAt] = useState('');
+  const [advanced, setAdvanced] = useState(false);
+  const [pasteSubject, setPasteSubject] = useState('');
+  const [pasteBody, setPasteBody] = useState('');
+  useEffect(() => { setPasteSubject(''); setPasteBody(''); setAdvanced(false); }, [b?.id]);
   useEffect(() => { setNotes(b?.notes ?? ''); setNextAction(b?.todo ?? ''); setNextAt(b?.todo_on ?? ''); }, [b?.id, b?.notes, b?.todo, b?.todo_on]);
   if (!b || !v) return null;
 
@@ -102,6 +108,18 @@ export function UgcBrandSheet({ brand: b, view: v, system, senderEmail, canPitch
     const reason = window.prompt(`Why release ${CHANNEL_WORD[b.active_channel ?? '']} for ${b.name}? (e.g. "no reply after FU2", "DM unseen")`);
     if (reason?.trim()) void run('release', async () => { const r = await actions.releaseChannel(b.id, reason); if (!r.ok) throw new Error(String(r.error)); });
   };
+  const waWorth = v.wa.filter((n) => n.worthTrying);
+  const copyPack = () => {
+    const text = researchPack(b, { tier: v.tier, contact: v.contact, wa: waWorth });
+    void copyText(text).then((ok) => toast({ title: ok ? 'Research pack copied' : 'Could not copy', description: ok ? 'Paste it into your Claude Project.' : undefined, variant: ok ? undefined : 'destructive' }));
+    void actions.logResearchPack(b, packChannel(v.contact, waWorth)).catch(() => undefined);
+  };
+  const pasteProblems = pasteBody.trim() ? pastedPitchProblems({ subject: pasteSubject, body: pasteBody }, b, v.tier, v.contact, system).problems : [];
+  const savePaste = () => void run('paste', async () => {
+    await actions.savePastedPitch(b, { subject: pasteSubject, body: pasteBody }, pasteProblems);
+    setPasteSubject(''); setPasteBody('');
+    toast({ title: 'Your pitch is saved as the draft', description: pasteProblems.length ? 'Saved with warnings.' : undefined });
+  });
   const followUpTemplate = fu.next ? system?.templates?.[fu.next] ?? '' : '';
 
   return (
@@ -156,7 +174,7 @@ export function UgcBrandSheet({ brand: b, view: v, system, senderEmail, canPitch
           <UgcResearchSection brand={b} busy={busy === 'research'} onResearch={() => void run('research', async () => {
             const r = await actions.research(b.id);
             toast({ title: r.outcome === 'complete' ? 'Research complete' : r.outcome === 'partial' ? 'Research done: some fields unknown' : r.busy ? 'Already researching' : 'Research failed', description: r.gaps?.length ? `Missing: ${r.gaps.join(', ')}` : r.why });
-          })} />
+          })} onCopyPack={copyPack} onSaveFit={(x) => void run('fit', () => actions.updateBrand(b, { experience_fit: x }, 'note'))} />
 
           {/* 2 CONTACT */}
           <SubSection title="2 · Contact (her order)" icon={Mail} tone="blue">
@@ -190,6 +208,12 @@ export function UgcBrandSheet({ brand: b, view: v, system, senderEmail, canPitch
             )}
           </SubSection>
 
+          {/* ADVANCED — the pitching tools, off by default (the page is a lead source: Find, Check, Research, Export). Nothing here is removed. */}
+          <button type="button" className="flex w-full items-center gap-1.5 rounded-xl border bg-muted/30 px-3 py-2 text-left text-xs font-semibold hover:bg-muted/50" aria-expanded={advanced} data-testid="ugc-advanced-toggle" onClick={() => setAdvanced((x) => !x)}>
+            {advanced ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}Advanced: pitching tools
+            <span className="font-normal text-muted-foreground">AI draft (beta), paste final pitch, send buttons, follow-ups</span>
+          </button>
+          {advanced && (<div className="space-y-5" data-testid="ugc-advanced">
           {/* 3–4 CONCEPT, HOOK — the pipeline's working */}
           <SubSection title="3 · Concept & hook" icon={Lightbulb} tone="purple">
             {!w && !working.why && <p className="text-xs text-muted-foreground">No pitch written yet.</p>}
@@ -217,14 +241,28 @@ export function UgcBrandSheet({ brand: b, view: v, system, senderEmail, canPitch
             action={canPitch && <Button size="sm" variant="outline" disabled={!!busy || v.tier.tier === 'skip'} onClick={() => void run('pitch', async () => {
               const r = await actions.pitch(b.id);
               toast({ title: r.outcome === 'drafted' ? 'Pitch drafted' : 'Needs Jess', description: r.outcome === 'drafted' ? undefined : r.why });
-            })}>{busy === 'pitch' ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : <Sparkles className="mr-1 h-3.5 w-3.5" />}{b.pitch_body ? 'Rewrite' : 'Write pitch'}</Button>}>
+            })}>{busy === 'pitch' ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : <Sparkles className="mr-1 h-3.5 w-3.5" />}AI draft (beta)</Button>}>
+            <div className="mb-3 space-y-1.5 rounded-xl bg-muted/40 p-2.5 text-xs" data-testid="ugc-paste-pitch">
+              <p className="font-semibold">Paste final pitch (from your Claude Project)</p>
+              <Input className="h-8" placeholder="Subject (emails)" value={pasteSubject} onChange={(e) => setPasteSubject(e.target.value)} />
+              <Textarea className="min-h-[110px]" placeholder="Paste the pitch body here" value={pasteBody} onChange={(e) => setPasteBody(e.target.value)} />
+              {pasteProblems.length > 0 && (
+                <Callout tone="amber" icon={AlertTriangle} title="Check before you use this">
+                  <ul className="list-disc pl-4">{pasteProblems.map((p) => <li key={p}>{problemText(p)}</li>)}</ul>
+                </Callout>
+              )}
+              <Button size="sm" variant={pasteProblems.length ? 'outline' : 'default'} disabled={!!busy || !pasteBody.trim()} onClick={savePaste}>
+                {busy === 'paste' ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : <PenLine className="mr-1 h-3.5 w-3.5" />}{pasteProblems.length ? 'Save anyway' : 'Save as my draft'}
+              </Button>
+            </div>
             {b.pitch_body ? (
               <div className="space-y-2" data-testid="ugc-draft">
+                {b.pitch_writer === 'jess' && <p className="text-[11px] text-muted-foreground">Written by you (pasted).</p>}
                 {b.pitch_subject && <p className="text-xs"><span className="font-semibold">Subject:</span> {b.pitch_subject}</p>}
                 <pre className="whitespace-pre-wrap rounded-xl bg-muted/50 p-3 font-sans text-[13px] leading-relaxed">{b.pitch_body}</pre>
                 {system?.signoff_html && <div className="rounded-xl bg-muted/30 p-3 text-xs [&_a]:text-primary [&_a]:underline" dangerouslySetInnerHTML={{ __html: safeSignoffHtml(system.signoff_html) }} />}
               </div>
-            ) : <p className="text-xs text-muted-foreground">{canPitch ? 'Write pitch runs her system: research → concept → gate → hook test → second pass (max 3 tries).' : 'Her pitch system is private: only Jess writes pitches.'}</p>}
+            ) : <p className="text-xs text-muted-foreground">{canPitch ? 'No draft yet. Copy the research pack, write the pitch in your Claude Project, paste it above. (AI draft (beta) is a secondary option.)' : 'Her pitch system is private: only Jess writes pitches.'}</p>}
 
             {b.active_channel && (
               <Callout tone="blue" icon={Lock} className="mt-3" action={<Button size="sm" variant="ghost" onClick={release} disabled={!!busy}><Unlock className="mr-1 h-3.5 w-3.5" />Release</Button>}>
@@ -275,6 +313,8 @@ export function UgcBrandSheet({ brand: b, view: v, system, senderEmail, canPitch
               )}
             </SubSection>
           )}
+
+          </div>)}
 
           {/* CRM */}
           <SubSection title="Status, notes, next action" icon={CheckCircle2} tone="grey">

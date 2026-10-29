@@ -22,6 +22,12 @@ import { parseSheetDate, pitchedKeySet, rowsFromCsv, rowsFromWorkbook } from '..
 import { parsePitchSystem } from '../src/lib/ugc/pitchSystemImport.ts';
 import { ENRICH_LEADS_PER_BRAND, UGC_APIFY_STOP_PCT, UGC_MAX_ITEM_CAP, clampCap, estimateRunUsd, ugcSpendRefusal } from '../src/lib/ugc/config.ts';
 import { AUTO_RESEARCH_TOP, RESEARCH_USD_CEILING, htmlLinks, jsonLdReviews, htmlToText, instagramFromLinks, pickProductUrl, pickShippingUrl, researchGaps, reviewsLine, verifyResearch, type FetchedPage } from '../src/lib/ugc/research.ts';
+import { REVIEWS_MAX, REVIEWS_USD_CEILING, REVIEWS_ACTOR, reviewsPageFromItems, trustpilotInput } from '../src/lib/ugc/research.ts';
+import { NO_EXPERIENCE_FIT, packChannel, researchPack } from '../src/lib/ugc/researchPack.ts';
+import { pastedPitchProblems, problemText } from '../src/lib/ugc/pastedPitch.ts';
+import { EXPORT_HEADERS, EXPORT_SHEET_NAME, exportRows, isExportable, sheetDate, splitExport, toCsv } from '../src/lib/ugc/leadExport.ts';
+import { buildXlsx, readWorkbookSheets } from '../src/lib/ugc/xlsxIO.ts';
+import { logReplaceCounts } from '../src/lib/ugc/pitchLog.ts';
 import { inviteUgcMember } from '../supabase/functions/_shared/ugc-member-invite.ts';
 
 let f = 0;
@@ -356,6 +362,104 @@ console.log('\n── separation and access ──');
   ok(!r2.ok && store.includes('deleted'), 'invite: all-or-nothing (account removed if the member row fails)');
   ok(/inviteUserByEmail\(email, \{ redirectTo: SET_PASSWORD_URL/.test(FN) && !/action_link|hashed_token|generateLink/.test(FN), 'ugc-brands uses the standard emailed invite and never handles the link');
   ok(!/create_member|createUser\(/.test(FN), 'no temporary-password path for UGC logins');
+}
+
+/* ── research pack, pasted pitch, review source (2026-10-29, feat/ugc-research-pack) ── */
+{
+  console.log('research pack');
+  const brand = { name: 'Pulsio', website: 'https://pulsio.com', instagram_url: 'https://www.instagram.com/pulsio/', country: 'GB', facebook_page_id: '123', ad_start_dates: ['2026-10-20'], researched_at: '2026-10-29T10:00:00Z',
+    research: { verified: { product: { value: 'Recovery drink', url: 'https://pulsio.com/p/rd', quote: 'q' }, product_detail: null, pushing_now: { value: 'Summer sale', url: 'https://pulsio.com', quote: 'q' },
+      reviews: { buy_reason: { value: 'tastes good', url: 'https://uk.trustpilot.com/review/pulsio.com', quote: 'q' }, hesitation: null, none_found: false, url: 'https://uk.trustpilot.com/review/pulsio.com' },
+      ships_to_thailand: null, instagram: { handle: 'pulsio', url: 'https://www.instagram.com/pulsio/' }, pages: [], rejected: [] } } };
+  const contact = { kind: 'partnerships' as const, rank: 1, channel: 'email' as const, email: 'partnerships@pulsio.com', person: null, variant: 'standard' as const, label: 'partnerships@pulsio.com' };
+  const tier = { tier: 'B' as const, why: '6 active video ads', source: 'ads_library' as const };
+  const pack = researchPack(brand, { tier, contact });
+  const order = ['Brand:', 'Website:', 'Contact:', 'Contact quality:', 'Named person:', 'Instagram:', 'Pays-for-UGC tier:', 'Product:', 'Verified product detail:', 'What the brand is pushing now:', 'Reviews:', 'Your experience fit:', 'Ships to Thailand:', 'Market:', 'Research date:'];
+  const at = order.map((k) => pack.split('\n').findIndex((l) => l.startsWith(k)));
+  ok(at.every((x, i) => x >= 0 && (i === 0 || x > at[i - 1])), 'pack: every field present in her section-2 order');
+  ok(/Product: Recovery drink \(source: https:\/\/pulsio.com\/p\/rd\)/.test(pack) && /Verified product detail: unknown/.test(pack) && /Ships to Thailand: unknown/.test(pack) && /Named person: unknown/.test(pack), 'pack: sourced fields carry their URL, unknowns say "unknown"');
+  ok(/Your experience fit: none, lead with the problem/.test(pack) && NO_EXPERIENCE_FIT === 'none, lead with the problem', 'pack: experience fit defaults to her wording');
+  ok(/Your experience fit: A former lawyer/.test(researchPack({ ...brand, experience_fit: 'A former lawyer' }, { tier, contact })), 'pack: a fit Jess sets is used');
+  ok(pack.endsWith('Write the pitch for email using my pitch system.') && /Market: UK/.test(pack), 'pack: ends with her one instruction, market UK for GB');
+  ok(/Reviews: buy reason: tastes good \(source: https:\/\/uk.trustpilot.com/.test(pack) && /facebook.com\/ads\/library\/\?view_all_page_id=123/.test(pack), 'pack: reviews line and tier evidence URL');
+  ok(researchPack(brand, { tier, contact: { ...contact, kind: 'instagram', channel: 'instagram', email: null, variant: 'ig_dm', label: 'Instagram DM' } }).endsWith('Write the pitch for Instagram DM using my pitch system.'), 'pack: Instagram route says Instagram DM');
+  const none = { kind: 'none' as const, rank: 9, channel: null, email: null, person: null, variant: null, label: 'No contact yet' };
+  ok(packChannel(none, [{ number: '447700900123', source: 'website_button' }]) === 'WhatsApp' && packChannel(none) === null, 'pack: WhatsApp only when there is no email or Instagram route');
+  const bare = researchPack({ name: 'X', website: null, instagram_url: null, country: null }, { tier: { tier: 'unrated', why: 'x' }, contact: none });
+  ok(/Website: unknown/.test(bare) && /Market: unknown/.test(bare) && /Research date: unknown/.test(bare) && /Instagram: unknown/.test(bare), 'pack: an unresearched brand is all "unknown", nothing invented');
+
+  console.log('pasted pitch');
+  const sys = { about_jess: 'x', signoff_html: '<a href="https://www.jesscousin.com/">Jess</a>', templates: {} };
+  const okBody = Array.from({ length: 100 }, (_, i) => 'word' + i).join(' ');
+  ok(pastedPitchProblems({ subject: 'Idea', body: okBody }, brand as never, tier, contact, sys).problems.length === 0, 'paste: a clean pitch has no warnings');
+  const bad = pastedPitchProblems({ subject: 'Idea', body: 'I live in Chiang Mai, Thailand. My rate is £300.' }, brand as never, tier, contact, sys).problems;
+  ok(bad.includes('mentions_thailand') && bad.includes('mentions_a_rate') && bad.some((p) => p.startsWith('too_short')), 'paste: Thailand, a rate and her word limit warn');
+  ok(pastedPitchProblems({ subject: '', body: okBody }, brand as never, tier, contact, null).problems.includes('no_subject'), 'paste: an email without a subject warns (system not needed)');
+  ok(problemText('too_long:150>140').includes('Too long') && problemText('mentions_thailand').includes('Thailand'), 'paste: warnings are in plain words');
+  const SHEET = read('src/components/ugc/UgcBrandSheet.tsx'), HOOK = read('src/hooks/useUgc.ts');
+  ok(/pitch_writer: PASTED_WRITER/.test(HOOK) && /kind: 'pitch_pasted'/.test(HOOK) && /status = 'pitch_ready'/.test(HOOK), 'paste: saved as pitch_subject/body, writer jess, logged as her draft, status Pitch ready');
+  ok(/Save anyway/.test(SHEET) && /AI draft \(beta\)/.test(SHEET) && /Copy for Claude/.test(read('src/components/ugc/UgcResearchSection.tsx')), 'sheet: Save anyway override, AI draft (beta) button, Copy for Claude button');
+  const MIG = read('supabase/migrations/20261130130000_ugc_research_pack.sql');
+  ok(/experience_fit/.test(MIG) && /pitch_pasted/.test(MIG), 'migration adds experience_fit and the pasted-pitch event kinds');
+
+  console.log('review source');
+  ok(REVIEWS_ACTOR === 'automation-lab~trustpilot' && REVIEWS_MAX === 30 && REVIEWS_USD_CEILING <= 0.03, 'reviews: one named actor, 30 reviews, a few cents ceiling');
+  ok(RESEARCH_USD_CEILING === Math.round((0.05 + REVIEWS_USD_CEILING) * 100) / 100, 'research estimate includes the review fetch');
+  const inp = trustpilotInput('pulsio.com') as { companyUrls: string[]; maxReviewsPerCompany: number };
+  ok(inp.companyUrls[0] === 'pulsio.com' && inp.maxReviewsPerCompany === REVIEWS_MAX, 'reviews: input is capped at REVIEWS_MAX');
+  const items = [{ rating: 5, title: 'Lovely taste', text: 'Really easy to drink after a long run and no gritty texture at all', companyStars: 4.5, companyTotalReviews: 120 }, { rating: 2, title: 'Pricey', text: 'Delivery took nearly two weeks to arrive which was disappointing' }];
+  const pg = reviewsPageFromItems('pulsio.com', items);
+  ok(pg.ok && pg.kind === 'reviews' && /easy to drink after a long run/.test(pg.text), 'reviews: items become a reviews page');
+  const rv = verifyResearch({ reviews: { buy_reason: { value: 'easy to drink', url: pg.url, quote: 'Really easy to drink after a long run' }, hesitation: { value: 'slow delivery', url: pg.url, quote: 'a quote the reviewer never wrote at all' }, none_found: false } }, [pg]);
+  ok(rv.reviews?.buy_reason?.value === 'easy to drink' && rv.reviews?.hesitation === null, 'reviews: kept only with a quote found in the review text');
+  const noneP = reviewsPageFromItems('pulsio.com', []);
+  ok(noneP.ok && verifyResearch({ reviews: { none_found: true } }, [noneP]).reviews?.none_found === true, 'reviews: a fetch with no reviews = "none found"');
+  ok(!reviewsPageFromItems('pulsio.com', null).ok, 'reviews: a fetch that failed is "could not read", never "none found"');
+  const FNX = read('supabase/functions/ugc-brands/index.ts');
+  ok(/fetchReviewsPage\(domain\)/.test(FNX) && /startCappedRun\(REVIEWS_ACTOR/.test(FNX) && /abortApifyRun/.test(FNX), 'research step runs the capped review fetch and aborts a stuck one');
+}
+
+/* ── lead source: export, exported mark, pitch-log upload, advanced fold (Paul, 2026-10-29) ── */
+{
+  console.log('export ready leads');
+  ok(EXPORT_HEADERS.length === 23 && EXPORT_HEADERS[0] === '#' && EXPORT_HEADERS[1] === 'Brand' && EXPORT_HEADERS[6] === 'Best contact / route' && EXPORT_HEADERS[15] === 'Detail source URL' && EXPORT_HEADERS[19] === 'Contact source URL' && EXPORT_HEADERS[22] === 'Concept version' && EXPORT_SHEET_NAME === 'Brands & Contacts', 'export: her 23 Brands & Contacts headers, in her order');
+  const verified = { product: { value: 'Drink', url: 'https://p.com/p/d', quote: 'q' }, product_detail: { value: 'goes into a coffee you already drink', url: 'https://p.com/p/d', quote: 'q' }, pushing_now: { value: 'Sale', url: 'https://p.com', quote: 'q' },
+    reviews: { buy_reason: null, hesitation: null, none_found: true, url: null }, ships_to_thailand: { ships: false, value: 'no', url: 'https://p.com/shipping', quote: 'q' }, instagram: { handle: 'pulsio', url: 'https://www.instagram.com/pulsio/' }, pages: [], rejected: [] };
+  const b = { id: '1', name: 'Pulsio, Ltd', website: 'https://p.com', instagram_url: null, niche: 'wellness', country: 'GB', facebook_page_id: '9', ad_start_dates: ['2026-10-20'], researched_at: '2026-10-29T10:00:00Z', track: 'brand', research: { verified } };
+  const ctx = { tier: { tier: 'B' as const, why: '6 active video ads', source: 'ads_library' as const }, contact: { kind: 'partnerships' as const, rank: 1, channel: 'email' as const, email: 'partnerships@p.com', person: null, variant: 'standard' as const, label: 'partnerships@p.com' } };
+  const rows = exportRows([{ brand: b, ctx }]);
+  ok(rows.length === 2 && rows[1].length === 23 && rows[0].length === 23, 'export: one row per brand, same width as her header');
+  const r1 = rows[1];
+  ok(r1[1] === 'Pulsio, Ltd' && r1[6] === 'partnerships@p.com' && r1[7] === 'Partnerships inbox' && r1[8] === 'Email' && r1[9] === '@pulsio' && r1[4] === 'B' && r1[12] === 'Ready' && r1[13] === '29.10.26', 'export: brand, route, quality, channel, Instagram, tier, status, her date format');
+  ok(r1[14].startsWith('goes into') && r1[15] === 'https://p.com/p/d' && r1[16].includes('facebook.com/ads/library') && r1[19] === 'https://p.com' && r1[20] === 'No', 'export: product detail + source URL, tier evidence URL, contact source, ships to TH');
+  ok(r1[5] === '' && r1[10] === '' && r1[17] === '' && r1[18] === '' && r1[22] === '', 'export: her judgement columns and unknowns are blank');
+  const bare = exportRows([{ brand: { ...b, research: { verified: { ...verified, product: null, product_detail: null, pushing_now: null, reviews: null, ships_to_thailand: null, instagram: null } }, facebook_page_id: null }, ctx: { ...ctx, tier: { tier: 'unrated' as const, why: 'x' }, contact: { kind: 'none' as const, rank: 9, channel: null, email: null, person: null, variant: null, label: '' } } }])[1];
+  ok(bare[14] === '' && bare[15] === '' && bare[9] === '' && bare[20] === '' && bare[4] === '' && /^Needs:/.test(bare[12]) && /Tier not set/.test(bare[11]), 'export: unknown is blank, a gap is shown in Status, no tier means blank priority');
+  const csv = toCsv(rows);
+  ok(csv.startsWith('\uFEFF#,Brand,') && csv.includes('"Pulsio, Ltd"') && csv.split('\r\n').filter(Boolean).length === 2, 'export CSV: BOM, quoted commas, one line per row');
+  const xl = await readWorkbookSheets(await buildXlsx(EXPORT_SHEET_NAME, rows));
+  ok(Object.keys(xl).join() === 'Brands & Contacts' && xl['Brands & Contacts'][0][1] === 'Brand' && xl['Brands & Contacts'][1][1] === 'Pulsio, Ltd' && xl['Brands & Contacts'][1][14].startsWith('goes into'), 'export xlsx: a Brands & Contacts sheet that reads back');
+  ok(isExportable(b, ctx.tier) && !isExportable({ ...b, researched_at: null }, ctx.tier) && !isExportable({ ...b, track: 'local' }, ctx.tier) && !isExportable(b, { tier: 'skip', why: 'x', reasons: [] }), 'export: only researched, non-skipped, paid-track brands');
+  const sp = splitExport([{ brand: b }, { brand: { ...b, id: '2', exported_at: '2026-10-29T11:00:00Z' } }]);
+  ok(sp.fresh.length === 1 && sp.already.length === 1 && sp.export.length === 1 && splitExport([{ brand: b }, { brand: { ...b, exported_at: 'x' } }], true).export.length === 2 && sheetDate('2026-10-29T11:00:00Z') === '29.10.26', 'exported brands are not exported twice unless asked');
+  const PANEL = read('src/components/ugc/UgcExportPanel.tsx'), HK = read('src/hooks/useUgc.ts');
+  ok(/markExported\(fresh\)/.test(PANEL) && /update\(\{ exported_at: at \}\)/.test(HK) && /kind: 'exported'/.test(HK) && /exported_at/.test(read('supabase/migrations/20261130130000_ugc_research_pack.sql')), 'exported brands are marked with the date and logged');
+
+  console.log('upload updated pitch log');
+  const c = logReplaceCounts([{ brand_key: 'a', pitched_on: null }, { brand_key: 'b', pitched_on: '2026-01-01' }], [{ brand_key: 'b', pitched_on: '2026-01-01' }, { brand_key: 'c', pitched_on: null }]);
+  ok(c.before === 2 && c.after === 2 && c.added === 1 && c.removed === 1 && c.kept === 1, 'log upload: counts show new, gone and kept');
+  ok(/Replace my pitch log/.test(read('src/components/ugc/UgcPitchSystemPanel.tsx')) && /put\(old\)/.test(HK) && /delete\(\)\.eq\('owner_user_id', ownerId\)/.test(HK), 'log upload: replaces her log, puts the old one back if the new cannot be written');
+  const wbSheets = await readWorkbookSheets(await buildXlsx('Pitch Log', [['#', 'Brand', 'Channel used', 'Template version', 'Date sent', 'Status', 'Outcome'], ['1', 'Acme', 'Email', 'v2', '2026-09-01', 'Sent', 'No reply']]));
+  const { rowsFromWorkbook: rfw } = await import('../src/lib/ugc/pitchLog.ts');
+  ok(rfw(wbSheets).length === 1 && rfw(wbSheets)[0].brand_name === 'Acme' && rfw(wbSheets)[0].pitched_on === '2026-09-01', 'log upload: a real .xlsx goes through the same tab rules');
+
+  console.log('layout');
+  const PAGE = read('src/pages/Ugc.tsx'), SH = read('src/components/ugc/UgcBrandSheet.tsx');
+  ok(/Find/.test(PAGE) && /'Check'/.test(PAGE) && /'Research'/.test(PAGE) && /'Export'/.test(PAGE) && /ugc-steps/.test(PAGE), 'page shows Find, Check, Research, Export');
+  const adv = SH.indexOf('const [advanced, setAdvanced] = useState(false)');
+  ok(adv > 0 && /\{advanced && \(<div/.test(SH), 'Advanced is closed by default');
+  const inside = SH.slice(SH.indexOf('{advanced && (<div'), SH.indexOf('{/* CRM */}'));
+  ok(/AI draft \(beta\)/.test(inside) && /ugc-paste-pitch/.test(inside) && /ugc-send-actions/.test(inside) && /Follow-ups/.test(inside), 'AI writer, Paste final pitch, send buttons and follow-ups all sit under Advanced (kept, not deleted)');
 }
 
 console.log(f ? `\n${f} FAILED` : '\nall passed');

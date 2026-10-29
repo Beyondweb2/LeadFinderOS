@@ -76,7 +76,7 @@ export function UgcFindPanel({ selectedIds, budget }: { selectedIds: string[]; b
   return (
     <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
       <Card><CardContent className="space-y-4 p-4 text-sm">
-        <SubSection title="Find brands" icon={Search} tone="blue">
+        <SubSection title="1 · Find brands" icon={Search} tone="blue">
           <div className="flex flex-wrap gap-1.5" role="radiogroup" aria-label="Source">
             {SOURCES.map((s) => <Button key={s} size="sm" variant={source === s ? 'default' : 'outline'} onClick={() => setSource(s)} role="radio" aria-checked={source === s}>{UGC_SOURCE_LABEL[s]}</Button>)}
           </div>
@@ -129,7 +129,7 @@ export function UgcFindPanel({ selectedIds, budget }: { selectedIds: string[]; b
 
       <div className="space-y-4">
         <Card><CardContent className="space-y-4 p-4 text-sm">
-          <SubSection title="Contacts" icon={Users} tone="green">
+          <SubSection title="2 · Check: contacts" icon={Users} tone="green">
             <p className="text-xs text-muted-foreground">Reads up to 3 pages per website (and its Linktree) for emails, Instagram and WhatsApp chat buttons.</p>
             <div className="mt-2 flex flex-wrap items-center gap-2">
               <Button variant="outline" size="sm" disabled={!selectedIds.length || !!busy} onClick={() => void go('cest', async () => { const r = await actions.contacts(selectedIds.slice(0, UGC_MAX_CONTACT_BRANDS), true); setContactEst(r); })}>
@@ -139,7 +139,7 @@ export function UgcFindPanel({ selectedIds, budget }: { selectedIds: string[]; b
             </div>
             {contactEst?.refusal && <Callout tone="amber" className="mt-2">{refusalText(contactEst.refusal)}</Callout>}
           </SubSection>
-          <SubSection title="Named marketing contacts" icon={BadgeCheck} tone="green">
+          <SubSection title="2 · Check: named marketing contacts" icon={BadgeCheck} tone="green">
             <p className="text-xs text-muted-foreground">Named people in marketing, partnerships, social or brand roles, emails verified — for your top-ranked brands only (by tier).</p>
             <div className="mt-2 flex flex-wrap items-center gap-2">
               <label className="text-xs font-medium">Top <Input className="ml-1 inline-block h-8 w-20" type="number" min={1} max={ENRICH_MAX_TOP} value={top} onChange={(e) => setTop(Math.max(1, Math.min(ENRICH_MAX_TOP, Number(e.target.value) || 1)))} /> brands</label>
@@ -149,7 +149,7 @@ export function UgcFindPanel({ selectedIds, budget }: { selectedIds: string[]; b
             </div>
             {enrichEst?.refusal && <Callout tone="amber" className="mt-2">{refusalText(enrichEst.refusal)}</Callout>}
           </SubSection>
-          <SubSection title="Dropshipping signs" icon={ShieldAlert} tone="amber">
+          <SubSection title="2 · Check: dropshipping signs" icon={ShieldAlert} tone="amber">
             <p className="text-xs text-muted-foreground">Reads each brand’s own Ad Library page for its age and where it is run from, so new pages and pages run from abroad are flagged (hidden, never deleted). One result per brand.</p>
             <div className="mt-2 flex flex-wrap items-center gap-2">
               <Button variant="outline" size="sm" disabled={!!busy} onClick={() => void go('pest', async () => setPageEst(await actions.pageDetails(PAGE_DETAILS_DEFAULT, true)))}>Show cost</Button>

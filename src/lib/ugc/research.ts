@@ -28,8 +28,22 @@ export interface ResearchResult {
   rejected: string[];
 }
 
-/** Ceiling for one brand's research (one gpt-4o call over up to four capped pages). Shown before a run. */
-export const RESEARCH_USD_CEILING = 0.05;
+/** Ceiling for the model call of one brand's research (one gpt-4o call over up to four capped pages). */
+export const RESEARCH_MODEL_USD_CEILING = 0.05;
+
+/* ── Reviews: the Apify Trustpilot actor (chosen 2026-10-29, docs/ugc-brand-finder.md) ───────────────────────
+   automation-lab/trustpilot: the most used of the maintained Trustpilot actors (about 1,000 users in 30 days, 38k runs,
+   ~98% succeeded), updated 2026-10-26, pay-per-event with the cheapest start fee: $0.005 per run + $0.000575 per
+   review at the free-plan rate. Trustpilot refuses our own reader; this actor opens a real browser. */
+export const REVIEWS_ACTOR = 'automation-lab~trustpilot';
+/** Reviews fetched per brand (the actor's own maxReviewsPerCompany AND Apify's maxItems). */
+export const REVIEWS_MAX = 30;
+export const REVIEWS_START_USD = 0.005;
+export const REVIEWS_USD_PER_REVIEW = 0.000575;
+/** The most one brand's review fetch can cost, rounded up to the cent. */
+export const REVIEWS_USD_CEILING = Math.ceil((REVIEWS_START_USD + REVIEWS_MAX * REVIEWS_USD_PER_REVIEW) * 100) / 100;
+/** One brand's research: the model call plus the review fetch. Shown before every run and checked against her budget. */
+export const RESEARCH_USD_CEILING = Math.round((RESEARCH_MODEL_USD_CEILING + REVIEWS_USD_CEILING) * 100) / 100;
 /** Brands researched automatically after a contacts run (top-ranked first). */
 export const AUTO_RESEARCH_TOP = 10;
 /** Characters of each page's text given to the model. */
@@ -101,6 +115,24 @@ export function reviewSourceUrl(domain: string): string {
   return `https://uk.trustpilot.com/review/${domain}`;
 }
 
+export function trustpilotInput(domain: string): Record<string, unknown> {
+  return { companyUrls: [domain], maxReviewsPerCompany: REVIEWS_MAX, sort: 'recency', includeCompanyInfo: true };
+}
+
+/** The review actor's items → the "reviews" page the model reads and the quote check verifies against. A run that
+ *  finished with no reviews is a page that was READ and has none ("none found"); a run that did not finish is not a page. */
+export function reviewsPageFromItems(domain: string, items: readonly unknown[] | null): FetchedPage {
+  const url = reviewSourceUrl(domain);
+  if (!items) return { kind: 'reviews', url, ok: false, text: '', links: [] };
+  const rows = items.filter((i): i is Record<string, unknown> => !!i && typeof i === 'object')
+    .map((r) => ({ rating: Number(r.rating), title: String(r.title ?? '').trim(), text: String(r.text ?? '').trim() }))
+    .filter((r) => r.title || r.text).slice(0, REVIEWS_MAX);
+  if (!rows.length) return { kind: 'reviews', url, ok: true, text: `Trustpilot page for ${domain}: no reviews found.`, links: [] };
+  const first = (items[0] ?? {}) as Record<string, unknown>;
+  const head = `Trustpilot reviews of ${domain}${first.companyStars ? `, ${String(first.companyStars)} stars` : ''}${first.companyTotalReviews ? ` from ${String(first.companyTotalReviews)} reviews` : ''} (latest ${rows.length}):`;
+  return { kind: 'reviews', url, ok: true, text: [head, ...rows.map((r) => `${Number.isFinite(r.rating) ? `${r.rating} stars. ` : ''}${r.title}. ${r.text}`.slice(0, 500))].join('\n'), links: [] };
+}
+
 /** The brand's Instagram handle from its own site's links (no model). */
 export function instagramFromLinks(links: readonly { href: string }[]): { handle: string; url: string } | null {
   for (const l of links) {
@@ -121,7 +153,7 @@ export function researchPrompt(brand: string, pages: readonly FetchedPage[]): { 
     'product: ONE named product the brand sells (from the product page if there is one).',
     'product_detail: one true, specific line about THAT product written as a moment of use or a benefit, not a spec list (e.g. "the scoop goes straight into a coffee you are already drinking", not "30 ingredients in one 10g serving"). A number may support it, never be the whole line.',
     'pushing_now: what the brand pushes hardest right now (homepage hero, best-seller, headline message).',
-    'reviews: from the REVIEW page only. buy_reason = the most common praise; hesitation = the most common doubt or complaint. If the review page was read and shows no reviews, set none_found true and both to null. If there is no review page, reviews is null.',
+    'reviews: from the REVIEW page only (the latest Trustpilot reviews, each with its star rating). buy_reason = the most common praise; hesitation = the most common doubt or complaint. If the review page was read and shows no reviews, set none_found true and both to null. If there is no review page, reviews is null.',
     'ships_to_thailand: from the shipping page or FAQ: ships true/false only when the page says so (Thailand by name, or a stated list/region that clearly includes or excludes it). Otherwise null.',
     `Return JSON only, this shape: ${RESEARCH_OUTPUT_SHAPE}`,
   ].join('\n');
