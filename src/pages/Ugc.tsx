@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Clapperboard, EyeOff, Search } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Input } from '@/components/ui/input';
@@ -9,7 +9,9 @@ import { UgcBrandSheet } from '@/components/ugc/UgcBrandSheet';
 import { UgcFindPanel } from '@/components/ugc/UgcFindPanel';
 import { UgcPitchLogPanel, UgcPitchSystemPanel } from '@/components/ugc/UgcPitchSystemPanel';
 import { UgcSettingsPanel } from '@/components/ugc/UgcSettingsPanel';
-import { useUgcAccess, useUgcBrands, useUgcPitchLog, useUgcPitchSystem, useUgcState } from '@/hooks/useUgc';
+import { useUgcAccess, useUgcActions, useUgcBrands, useUgcPitchLog, useUgcPitchSystem, useUgcState } from '@/hooks/useUgc';
+import { useToast } from '@/hooks/use-toast';
+import { edgeErrorMessage } from '@/lib/edgeInvoke';
 import { brandView, sortByTier } from '@/lib/ugc/brandView';
 import { pitchedKeySet } from '@/lib/ugc/pitchLog';
 import { formatUsd } from '@/lib/ugc/config';
@@ -33,6 +35,21 @@ export default function Ugc() {
   const [q, setQ] = useState('');
   const [openId, setOpenId] = useState<string | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const actions = useUgcActions();
+  const { toast } = useToast();
+
+  /* THE RESEARCH QUEUE (filled by a contacts run, capped server-side): while this page is open it researches the
+     queued brands one at a time. Each one is its own costed run that the server checks against her budget; a
+     refusal (budget, emergency stop) empties the queue server-side and stops here. */
+  const queued = (brands.data ?? []).filter((b) => b.research_status === 'queued').length;
+  const working = useRef(false);
+  useEffect(() => {
+    if (!queued || working.current) return;
+    working.current = true;
+    void actions.researchNext()
+      .catch((e) => toast({ title: 'Research paused', description: edgeErrorMessage(e), variant: 'destructive' }))
+      .finally(() => { working.current = false; });
+  }, [queued, brands.dataUpdatedAt, actions, toast]);
 
   const ctx = useMemo(() => ({ blocked: system.data?.blocked_list ?? [], pitchedKeys: pitchedKeySet(log.data ?? []) }), [system.data, log.data]);
   const rows = useMemo(() => sortByTier((brands.data ?? []).map((b) => ({ brand: b, view: brandView(b, ctx) }))), [brands.data, ctx]);
@@ -73,6 +90,7 @@ export default function Ugc() {
         subtitle="Find brands that pay for UGC, get the right contact, and pitch them yourself. Nothing is sent from here."
         actions={state.data && <div className="flex flex-wrap gap-1.5">
           <ToneChip tone="green">{formatUsd(state.data.spentThisMonthUsd)} of {formatUsd(state.data.budgetUsd)} this month</ToneChip>
+          {queued > 0 && <ToneChip tone="blue" testId="ugc-research-queue">Researching: {queued} queued</ToneChip>}
           {state.data.apifyPct != null && state.data.apifyPct >= 0.8 && <ToneChip tone="amber">Searches paused: shared limit</ToneChip>}
         </div>} />
 

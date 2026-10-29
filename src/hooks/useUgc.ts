@@ -5,6 +5,7 @@ import { invokeEdge } from '@/lib/edgeInvoke';
 import { fetchAllRows } from '@/lib/fetchAllRows';
 import type { NamedContact, WaNumber } from '@/lib/ugc/normalize';
 import type { PitchLogRow } from '@/lib/ugc/pitchLog';
+import type { ResearchResult } from '@/lib/ugc/research';
 import type { TemplateKey } from '@/lib/ugc/pitch';
 
 /* ════════════════════════════════════════════════════════════════════════════════════════════════
@@ -28,7 +29,8 @@ export interface UgcBrand {
   niche: string | null; country: string | null; sources: string[]; live_ads_count: number;
   ad_samples: { text?: string; link?: string; started?: string }[]; ad_start_dates: string[]; creators_seen: string[];
   page_created_at: string | null; admin_countries: string[]; shop_links: string[]; has_about_page: boolean | null; has_address: boolean | null;
-  research: { snippets?: string[]; product?: string; product_detail?: string; detail_url?: string; pays_for_ugc_evidence?: string };
+  research: { snippets?: string[]; product?: string; product_detail?: string; detail_url?: string; pays_for_ugc_evidence?: string; verified?: ResearchResult | null };
+  research_status: 'queued' | 'running' | 'done' | 'failed' | null; researched_at: string | null;
   track: 'brand' | 'local'; tier_override: string | null;
   company_country: string | null; ships_to: 'worldwide' | 'one_country' | 'uk_ie' | null; ships_thailand: boolean | null; creator_programme_country: string | null; status: string; active_channel: string | null;
   first_contacted_at: string | null; checked_sent_mail_at: string | null; checked_linkedin_at: string | null; follow_ups_sent: number; notes: string | null; todo: string | null; todo_on: string | null;
@@ -138,18 +140,29 @@ export function useUgcActions() {
     estimate: (r: SearchRequest) => invokeEdge<{ ok: boolean; estUsd: number; itemCap: number; refusal: string | null; budgetUsd: number; spentThisMonthUsd: number }>('ugc-brands', { action: 'estimate', ...r }),
     start: async (r: SearchRequest) => { const x = await invokeEdge<{ ok: boolean; run: UgcRun }>('ugc-brands', { action: 'start', ...r }); refresh(UGC_KEYS.runs, UGC_KEYS.state); return x; },
     contacts: async (brandIds: string[], estimateOnly = false) => {
-      const x = await invokeEdge<{ ok: boolean; estUsd: number; sites?: number; refusal?: string | null; run?: UgcRun }>('ugc-brands', { action: 'contacts', brandIds, estimateOnly });
+      const x = await invokeEdge<{ ok: boolean; estUsd: number; sites?: number; refusal?: string | null; run?: UgcRun; researchBrands?: number; researchEstUsd?: number }>('ugc-brands', { action: 'contacts', brandIds, estimateOnly });
       if (!estimateOnly) refresh(UGC_KEYS.runs, UGC_KEYS.state);
       return x;
     },
     namedContacts: async (top: number, estimateOnly = false) => {
-      const x = await invokeEdge<{ ok: boolean; estUsd: number; extraUsd?: number; brands?: number; refusal?: string | null; run?: UgcRun }>('ugc-brands', { action: 'named_contacts', top, estimateOnly });
+      const x = await invokeEdge<{ ok: boolean; estUsd: number; extraUsd?: number; brands?: number; refusal?: string | null; run?: UgcRun; researchBrands?: number; researchEstUsd?: number }>('ugc-brands', { action: 'named_contacts', top, estimateOnly });
       if (!estimateOnly) refresh(UGC_KEYS.runs, UGC_KEYS.state);
       return x;
     },
     poll: async (runId: string) => {
       const x = await invokeEdge<{ ok: boolean; run: UgcRun }>('ugc-brands', { action: 'poll', runId });
       if (x.run?.status !== 'running') refresh(UGC_KEYS.runs, UGC_KEYS.brands, UGC_KEYS.state);
+      return x;
+    },
+    /** Research one brand (her fields, each quoted from its page). research_next takes the next queued brand. */
+    research: async (brandId: string) => {
+      const x = await invokeEdge<{ ok: boolean; outcome?: string; gaps?: string[]; why?: string; busy?: boolean }>('ugc-brands', { action: 'research', brandId });
+      refresh(UGC_KEYS.brands, UGC_KEYS.events(brandId), UGC_KEYS.state, UGC_KEYS.runs);
+      return x;
+    },
+    researchNext: async () => {
+      const x = await invokeEdge<{ ok: boolean; done?: boolean; busy?: boolean; brandId?: string; outcome?: string; error?: string }>('ugc-brands', { action: 'research_next' });
+      refresh(UGC_KEYS.brands, UGC_KEYS.state, UGC_KEYS.runs);
       return x;
     },
     pitch: async (brandId: string) => {

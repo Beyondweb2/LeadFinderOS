@@ -97,7 +97,9 @@ export const UGC_MAX_CONTACT_BRANDS = 25;
 
 /** AI pitch drafts per member per day (each is one small model call). */
 export const UGC_MAX_PITCHES_PER_DAY = 100;
-export const UGC_PITCH_MODEL = 'gpt-4o-mini';
+/** Writer, reviewer and research model (Paul, 2026-10-29: Claude Sonnet 5.5 if an Anthropic key is set server-side,
+ *  else gpt-4o — no Anthropic key is set, so gpt-4o; gpt-4o-mini approved a draft that broke her rules). */
+export const UGC_PITCH_MODEL = 'gpt-4o';
 
 /** UGC never runs when the shared Apify account is at or past this share of its monthly cap — stricter than
  *  Findable's own prospecting stop, so Jess's searches can never be what pushes Findable's client work to the cap. */

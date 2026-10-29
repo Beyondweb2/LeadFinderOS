@@ -11,7 +11,7 @@ import { execSync } from 'node:child_process';
 import { adsLibraryTierB, tierFor, templateFamilyFor } from '../src/lib/ugc/tiers.ts';
 import { addBusinessDays, bestContact, contactOptions, emailKind, followUps } from '../src/lib/ugc/contactOrder.ts';
 import {
-  MAX_PITCH_ATTEMPTS, WHATSAPP_ASK_DRAFT, chooseTemplate, copyEmailPayload, fillWhatsAppAsk, gmailComposeUrl, pitchProblems,
+  CTA, HUME_PROOF, MAX_PITCH_ATTEMPTS, WHATSAPP_ASK_DRAFT, chooseTemplate, researchFields, emailStructureProblems, hookProblems, researchMissing, copyEmailPayload, fillWhatsAppAsk, gmailComposeUrl, pitchProblems,
   runPitchPipeline, safeSignoffHtml, unverifiedFigures, whatsappChatUrl, type PitchPlan, type PitchSystem, type ResearchFields, type WriteOut,
 } from '../src/lib/ugc/pitch.ts';
 import { brandVerdict } from '../src/lib/ugc/brandRules.ts';
@@ -21,6 +21,7 @@ import {
 import { parseSheetDate, pitchedKeySet, rowsFromCsv, rowsFromWorkbook } from '../src/lib/ugc/pitchLog.ts';
 import { parsePitchSystem } from '../src/lib/ugc/pitchSystemImport.ts';
 import { ENRICH_LEADS_PER_BRAND, UGC_APIFY_STOP_PCT, UGC_MAX_ITEM_CAP, clampCap, estimateRunUsd, ugcSpendRefusal } from '../src/lib/ugc/config.ts';
+import { AUTO_RESEARCH_TOP, RESEARCH_USD_CEILING, htmlLinks, htmlToText, instagramFromLinks, pickProductUrl, pickShippingUrl, researchGaps, reviewsLine, verifyResearch, type FetchedPage } from '../src/lib/ugc/research.ts';
 import { inviteUgcMember } from '../supabase/functions/_shared/ugc-member-invite.ts';
 
 let f = 0;
@@ -90,7 +91,9 @@ console.log('\n── pitch pipeline ──');
   const sys: PitchSystem = { content: 'Her system: concept recipe, concept gate, hook test.', about_jess: 'British UGC creator and former lawyer. Paid Hume Health campaign. 200k views in 30 days.', templates: { ad_idea_v2: 'Template text', generic_inbox_v2: 'Generic text', ig_dm_ad_idea_v2: 'DM', cm_collab_dm_v4: 'CM' } };
   const plan: PitchPlan = { track: 'brand', template: 'ad_idea_v2', variant: 'standard' };
   const research: ResearchFields = { brand: 'Glow Lab', product: 'Barrier Serum', product_detail: 'ceramide serum', detail_url: null, pays_for_ugc_evidence: null, niche: 'beauty', website: 'https://glowlab.com', ads_summary: null, creators_seen: [], snippets: [] };
-  const good: WriteOut = { concept: { name: 'Glass skin test' }, concept_gate: { pass: true }, hook_test: { chosen: 'x', pass: true }, subject: 'Glow Lab: Barrier Serum ad idea', body: `Hi team, an idea for Barrier Serum. ${'The serum goes on before the moisturiser and the video shows that moment clearly. '.repeat(6)}Portfolio: https://www.jesscousin.com/` };
+  /* A draft in her structure: (and former lawyer), the hooks line, the Hume proof word for word, the Tier A/B CTA, five hooks. */
+  const goodBody = `Hi Glow Lab team,\n\nI'm Jess, a British UGC creator (and former lawyer) filming hook-led beauty and skincare videos. This one would open on: "You're probably putting your serum on in the wrong order."\n\nI have an ad idea for the Barrier Serum called "Glass skin test", built around the ceramide serum going on before the moisturiser: the dropper, the serum pressed in, then the moisturiser on top. I can film it with a few opening hooks, so you can see which one works best.\n\n${HUME_PROOF}\n\n${CTA.ad} https://www.jesscousin.com/`;
+  const good: WriteOut = { concept: { name: 'Glass skin test' }, concept_gate: { pass: true }, hooks: ['a one', 'b two', 'c three', 'd four', 'e five'], hook_test: { chosen: "You're probably putting your serum on in the wrong order.", pass: true }, subject: 'Glow Lab: Barrier Serum ad idea', body: goodBody };
   ok(pitchProblems({ subject: 's', body: 'Too short. https://www.jesscousin.com/' }, { plan, aboutJess: '', research }).some((p) => p.startsWith('too_short')), 'an email under 80 words is refused (her 80 to 140 rule)');
   ok(pitchProblems({ subject: 's', body: `${'word '.repeat(141)}https://www.jesscousin.com/` }, { plan, aboutJess: '', research }).some((p) => p.startsWith('too_long')), 'an email over 140 words is refused');
   ok(pitchProblems({ body: `${'word '.repeat(66)}` }, { plan: { track: 'brand', template: 'ig_dm_ad_idea_v2', variant: 'ig_dm' }, aboutJess: '', research }).some((p) => p.startsWith('too_long')), 'an IG DM over 65 words is refused');
@@ -107,6 +110,25 @@ console.log('\n── pitch pipeline ──');
   ok(r4.outcome === 'needs_jess', 'an absent hook-test verdict is a fail, never a pass');
   const r5 = await runPitchPipeline({ write: async () => good, review: passReview }, { ...sys, content: '' }, plan, research);
   ok(r5.outcome === 'needs_jess' && r5.attempts.length === 0, 'no pitch system loaded → Needs Jess, no model call');
+
+  /* THE REAL LIVE DRAFT (Feel Reformed, 2026-10-29, gpt-4o-mini): both model passes let it through; code must not. */
+  const live: WriteOut = {
+    concept: { name: 'Morning boost', visuals: ['Pouring Reformed Coffee into a mug', 'Taking a sip and smiling', 'Showing the product packaging on the counter'] },
+    concept_gate: { pass: true }, hooks: ['Is your coffee doing enough for you?', 'What if your morning coffee could do more?', 'This coffee is more than just caffeine.'],
+    hook_test: { chosen: 'What if your morning coffee could do more?', pass: true }, subject: 'Feel Reformed: Reformed Coffee ad idea',
+    body: `Hi Feel Reformed team,\n\nCould you point me towards whoever manages paid creator content at Feel Reformed? \n\nI'm Jess, a British UGC creator (and former lawyer) filming wellness content. This one would open on: "What if your morning coffee could do more?".\n\nI have an ad idea for Reformed Coffee called "Morning boost", built around the morning coffee routine: pouring Reformed Coffee into a mug, taking a sip and smiling, then showing the product packaging on the counter. I can film it with a few opening hooks, so you can see which one works best.\n\n${HUME_PROOF}\n\nWould this be worth testing in your paid ads?`,
+  };
+  const liveResearch: ResearchFields = { ...research, brand: 'Feel Reformed', product: null, product_detail: null };
+  const livePlan: PitchPlan = { track: 'brand', template: 'ad_idea_v2', variant: 'standard' };
+  ok(researchMissing(liveResearch, { kind: 'none' }, 'brand').join() === 'product,verified product detail,what the brand is pushing now,reviews (or a review source read with none found),contact', 'the live brand was not Ready: no product, verified detail, pushing-now, reviews or contact');
+  let calls = 0;
+  const rl = await runPitchPipeline({ write: async () => { calls++; return live; }, review: passReview }, sys, livePlan, liveResearch, researchMissing(liveResearch, { kind: 'none' }, 'brand'));
+  ok(rl.outcome === 'needs_jess' && calls === 0 && /Research missing/.test(rl.why), '…so it is Needs Jess with NO model call (her readiness rule)');
+  ok(emailStructureProblems(live.body!, livePlan).includes('routing_line_only_for_a_generic_inbox'), 'the live draft: a routing line on a non-generic route is refused');
+  ok(hookProblems(live).includes('fewer_than_five_hooks:3') && hookProblems(live).includes('chosen_hook_is_a_question'), 'the live draft: 3 hooks and a question as the chosen hook are refused');
+  ok(emailStructureProblems(goodBody, plan).length === 0 && hookProblems(good).length === 0, 'a draft in her structure passes the structure and hook checks');
+  ok(emailStructureProblems(goodBody.replace(CTA.ad, CTA.video), plan).some((p) => p.startsWith('cta_should_be')), 'the call to action must match the tier');
+  ok(emailStructureProblems(goodBody.replace('You can see my work and their review on my portfolio.', ''), plan).includes('hume_proof_not_word_for_word'), 'the Hume proof must have both sentences');
   const chk = (body: string) => pitchProblems({ subject: 's', body }, { plan, aboutJess: sys.about_jess, research });
   ok(chk('I live in Chiang Mai. https://www.jesscousin.com/').includes('mentions_thailand'), 'Thailand is refused in a brand pitch');
   ok(pitchProblems({ subject: 'x', body: "I'm based in Thailand. https://www.jesscousin.com/" }, { plan: { track: 'brand', template: 'agency_roster_v1', variant: 'standard' }, aboutJess: '', research }).includes('mentions_thailand'), '…and in an agency pitch (her line removed 27.10.26)');
@@ -136,6 +158,7 @@ console.log('\n── actor inputs / outputs ──');
   ok(ad?.domain === 'glowlab.com' && ad?.ad_start_dates[0] === daysAgo(3), "an ad's link is unwrapped to the brand's domain; its start date is kept");
   const merged = candidatesFrom('fb_ads', [{ pageName: 'Glow Lab', pageID: '1', snapshot: { linkUrl: 'https://glowlab.com' } }, { pageName: 'Glow Lab', pageID: '1', snapshot: { linkUrl: 'https://glowlab.com/x' } }], { niche: 'beauty', country: 'GB' });
   ok(merged.length === 1 && merged[0].live_ads_count === 2, 'two ads from one brand merge into one row');
+  ok(['https://tinyurl.com/abc', 'https://x1.lambda-url.eu-west-1.on.aws/r', 'https://ad.doubleclick.net/x', 'https://itunes.apple.com/app/1'].every((u) => brandWebsite(u) === null), 'redirects, trackers, app stores and serverless links are never a brand website (seen live)');
   ok(brandWebsite('https://www.instagram.com/x') === null && brandWebsite('https://linktr.ee/x') === null, 'a platform / link page is never a brand website');
   ok(waDigits('https://wa.me/447700900123') === '447700900123' && waDigits('+66 81 234 5678') === '66812345678' && waDigits('081 234 5678') === null, 'WhatsApp digits only with a country code');
   const ci = fromContactItem({ originalStartUrl: 'https://glowlab.com', domain: 'glowlab.com', emails: ['hello@glowlab.com', 'x@sentry.io'], whatsapps: ['https://wa.me/447700900123'], scrapedUrls: ['https://glowlab.com/about'],
@@ -200,6 +223,47 @@ console.log('\n── importing her pitch-system.md ──');
   ok(r.signoff_html === '<a href="https://example.com/portfolio">View my portfolio</a><br><br>Many thanks,<br>Sam<br><a href="https://example.com/links">@SampleHandle</a>', 'her sign-off rebuilt with live links');
   ok(r.missing.length === 0, 'every template found');
   ok(parsePitchSystem('# Title\n## About Jess\nFacts.\n## Rates\n£1').about_jess === 'Facts.', 'markdown headings still read');
+}
+
+console.log('\n── auto-research (never guessed) ──');
+{
+  const homeHtml = `<html><body><h1>Calm skin starts here</h1><p>Our best-seller, the Barrier Balm, is back in stock.</p>
+    <a href="/products/barrier-balm">Barrier Balm</a><a href="/pages/shipping">Shipping</a><a href="https://www.instagram.com/glowlab/">Instagram</a>
+    <script>var x = "Barrier Balm cures everything";</script></body></html>`;
+  const links = htmlLinks(homeHtml, 'https://glowlab.example/');
+  ok(!htmlToText(homeHtml).includes('cures everything'), 'scripts are never read as page text');
+  ok(pickProductUrl(links, 'glowlab.example') === 'https://glowlab.example/products/barrier-balm', 'ONE product page from the homepage’s own links');
+  ok(pickShippingUrl(links, 'glowlab.example') === 'https://glowlab.example/pages/shipping', 'the shipping page from its own links');
+  ok(instagramFromLinks(links)?.handle === 'glowlab', 'the Instagram handle from the site’s own link (no model)');
+  const pages: FetchedPage[] = [
+    { kind: 'home', url: 'https://glowlab.example/', ok: true, text: htmlToText(homeHtml), links },
+    { kind: 'product', url: 'https://glowlab.example/products/barrier-balm', ok: true, text: 'Barrier Balm. Melts into skin in seconds, so it goes on straight after cleansing. 50ml.', links: [] },
+    { kind: 'reviews', url: 'https://uk.trustpilot.com/review/glowlab.example', ok: true, text: 'Reviews. So easy to use every morning. Wish the tub was bigger.', links: [] },
+  ];
+  const r = verifyResearch({
+    product: { value: 'Barrier Balm', url: pages[1].url, quote: 'Barrier Balm. Melts into skin in seconds' },
+    product_detail: { value: 'melts into skin straight after cleansing', url: pages[1].url, quote: 'Melts into skin in seconds, so it goes on straight after cleansing' },
+    pushing_now: { value: 'Barrier Balm back in stock', url: pages[0].url, quote: 'Our best-seller, the Barrier Balm, is back in stock' },
+    reviews: { buy_reason: { value: 'easy daily use', url: pages[2].url, quote: 'So easy to use every morning' }, hesitation: { value: 'tub size', url: pages[2].url, quote: 'Wish the tub was bigger' } },
+    ships_to_thailand: { ships: true, value: 'ships worldwide', url: pages[0].url, quote: 'We ship worldwide including Thailand' },
+  }, pages);
+  ok(r.product?.value === 'Barrier Balm' && r.product_detail?.url === pages[1].url && r.pushing_now !== null, 'fields whose quote is on the cited page are kept, with their source URL');
+  ok(r.ships_to_thailand === null && r.rejected.some((x) => x.startsWith('ships_to_thailand')), 'a quote that is NOT on the page is rejected: unknown stays unknown');
+  ok(reviewsLine(r.reviews) === 'buy reason: easy daily use; hesitation: tub size', 'her reviews line');
+  ok(researchGaps(r).length === 0, 'research complete when product, detail, pushing-now and reviews are verified');
+  const wrongPage = verifyResearch({ pushing_now: { value: 'x', url: 'https://elsewhere.example/', quote: 'Our best-seller, the Barrier Balm, is back in stock' } }, pages);
+  ok(wrongPage.pushing_now === null, 'a source that is not one of the pages read is rejected');
+  const noReviews = verifyResearch({ reviews: { none_found: true } }, pages.filter((p) => p.kind !== 'reviews'));
+  ok(noReviews.reviews === null, '"none found" is never recorded when no review source was read');
+  const readNone = verifyResearch({ reviews: { none_found: true } }, pages);
+  ok(reviewsLine(readNone.reviews) === 'Reviews: none found', '…and is recorded when the review page was read and had none');
+  const rf = researchFields({ name: 'Glow Lab', research: { verified: r } });
+  ok(rf.product === 'Barrier Balm' && rf.pushing_now === 'Barrier Balm back in stock' && !!rf.reviews && researchMissing(rf, { kind: 'named' }, 'brand').length === 0, 'verified research makes the brand Ready (with a contact)');
+  ok(RESEARCH_USD_CEILING > 0 && AUTO_RESEARCH_TOP === 10, 'research has a per-brand ceiling and an automatic cap of 10 brands per contacts run');
+  const FN2 = read('supabase/functions/ugc-brands/index.ts');
+  ok(/SITE_CHECK_HEADERS/.test(FN2) && /isPublicHttpUrl\(url\)/.test(FN2), 'research reads pages under the one honest crawler name, public addresses only');
+  ok(/research_status: "queued"/.test(FN2) && /\.slice\(0, AUTO_RESEARCH_TOP\)/.test(FN2), 'a finished contacts run queues research for its top brands only (capped)');
+  ok(/UGC_PITCH_MODEL = 'gpt-4o'/.test(read('src/lib/ugc/config.ts')), 'writer, reviewer and research use gpt-4o');
 }
 
 console.log('\n── money ──');

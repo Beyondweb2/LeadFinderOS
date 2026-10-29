@@ -16,6 +16,7 @@ import { UGC_STATUSES, UGC_STATUS_LABEL } from '@/lib/ugc/config';
 import { TEMPLATE_LABEL, WHATSAPP_ASK_DRAFT, copyEmailPayload, fillWhatsAppAsk, gmailComposeUrl, safeSignoffHtml, whatsappChatUrl, type PipelineAttempt, type TemplateKey } from '@/lib/ugc/pitch';
 import { StatusChip } from './UgcBrandTable';
 import { TIER_TONE, tierLabel } from './tierTone';
+import { UgcResearchSection } from './UgcResearchSection';
 
 async function copyRich(html: string, text: string): Promise<boolean> {
   try {
@@ -150,6 +151,12 @@ export function UgcBrandSheet({ brand: b, view: v, system, senderEmail, canPitch
               </div>
             )}
           </SubSection>
+
+          {/* RESEARCH — her required fields with sources; a pitch drafts only when this is complete */}
+          <UgcResearchSection brand={b} busy={busy === 'research'} onResearch={() => void run('research', async () => {
+            const r = await actions.research(b.id);
+            toast({ title: r.outcome === 'complete' ? 'Research complete' : r.outcome === 'partial' ? 'Research done: some fields unknown' : r.busy ? 'Already researching' : 'Research failed', description: r.gaps?.length ? `Missing: ${r.gaps.join(', ')}` : r.why });
+          })} />
 
           {/* 2 CONTACT */}
           <SubSection title="2 · Contact (her order)" icon={Mail} tone="blue">
