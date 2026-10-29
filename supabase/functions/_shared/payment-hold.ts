@@ -7,7 +7,8 @@
 //    payment_ledger row (so no commission), no baseline, no client emails. Paul is told loudly and
 //    resolves it by hand (refund in Stripe, or have them sign and migrate).
 // ⛔ HISTORICAL PAYMENTS ARE NEVER HELD: a replay of a payment the ledger already recorded is not re-judged.
-import { CLIENT_AGREEMENT_VERSION, sha256Hex } from "../../../src/lib/clientAgreement.ts";
+import { sha256Hex } from "../../../src/lib/clientAgreement.ts";
+import { agreementVersionForPlan, paymentPlanFromMeta } from "../../../src/lib/paymentPlans.ts";
 import { commercialTermsFor } from "../../../src/lib/clientTimeline.ts";
 import { webhookV3Verdict, type GateAcceptance, type WebhookVerdict } from "../../../src/lib/signupGate.ts";
 import { sendOperatorAlert } from "./operator-alert.ts";
@@ -40,14 +41,17 @@ export async function verifyV3Checkout(service: Service, s: HoldSession, leadId:
   let acceptance: (GateAcceptance & { agreed_text: string }) | null = null;
   if (accId) {
     const { data, error } = await service.from("client_agreement_acceptances")
-      .select("id, lead_id, onboarding_id, agreement_version, service_route, method, authority_confirmed, agreed_text, agreed_text_sha256, free_to_leave_provider")
+      .select("id, lead_id, onboarding_id, agreement_version, service_route, method, authority_confirmed, agreed_text, agreed_text_sha256, free_to_leave_provider, payment_plan")
       .eq("id", accId).maybeSingle();
     if (error) throw new Error(`could not read the acceptance: ${error.message}`);
     acceptance = data ?? null;
   }
+  /* v6 (2026-10-29): the version a session must rest on follows its payment plan (old plan v5, new plans v6). */
+  const plan = paymentPlanFromMeta(s.metadata ?? null);
+  const version = plan ? agreementVersionForPlan(plan) : "v5";
   return webhookV3Verdict({
-    metadata: s.metadata, acceptance, leadId, onboardingId, currentVersion: CLIENT_AGREEMENT_VERSION,
-    recomputedSha: acceptance ? await sha256Hex(acceptance.agreed_text) : null, expectedTerms: commercialTermsFor(CLIENT_AGREEMENT_VERSION),
+    metadata: s.metadata, acceptance, leadId, onboardingId, currentVersion: version,
+    recomputedSha: acceptance ? await sha256Hex(acceptance.agreed_text) : null, expectedTerms: commercialTermsFor(version),
   });
 }
 

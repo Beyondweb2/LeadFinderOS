@@ -139,7 +139,8 @@ const pb = buildColdCallPlaybook({ lead: { id: 'l', business_name: 'Acme Plumbin
 texts.push(['cold call playbook offer', JSON.stringify(pb.offer)]);
 for (const [label, t] of texts) {
   /* 2026-10-05 (v3 clause 9A): £29.99 only as the Continuing Service after the minimum term. */
-  ok(!/29\.99(?! a month (for|until|hosting and maintenance is optional))/i.test(t), `${label}: no £29.99 except the v3 Continuing Service or v4's optional Build hosting and maintenance`);
+  /* 2026-10-29 (v6): "£29.99 a month only if they want it" is the same optional hosting, said aloud. */
+  ok(!/29\.99(?! a month (for|until|hosting and maintenance is optional|only if))/i.test(t), `${label}: no £29.99 except the v3 Continuing Service or v4/v6's optional Build hosting and maintenance`);
   ok(!/(cancel|stop)( it)?( at)? any ?time|not binding|cancel before (it|week)/i.test(t), `${label}: no "cancel/stop any time", "not binding" or "cancel before it starts"`);
   ok(!/13 payments|7 payments|(12|6) (more|further) payments|plus (12|6)\b/i.test(t), `${label}: nothing that implies an extra payment`);
 }
@@ -166,7 +167,7 @@ for (const k of KINDS) {
 }
 const report = read('src/lib/aiAuditReportHtml.ts');
 ok(!/Building it is included in\s+your &pound;99/.test(report) && /no separate build fee\. \$\{esc\(offerSummaryFor\('build'\)\)\}/.test(report), 'report no-website panel: no "included in your £99", names the Build offer (the only route with no website)');
-ok(/^Findable Build: we build, host and manage a new website for them/.test(pb.offer.monthly) && /website is theirs/.test(pb.offer.monthly) && !/optimise/i.test(pb.offer.monthly), 'v5: the playbook\'s ownership line is Findable Build\'s (the site is theirs after the payments); Optimise is not mentioned');
+ok(/^Findable Build: we build, host and manage a new website for them/.test(pb.offer.monthly) && /site is theirs once the final payment clears/.test(pb.offer.monthly) && !/optimise/i.test(pb.offer.monthly), 'v6: the playbook\'s ownership line is Findable Build\'s (the site is theirs once the final payment clears); Optimise is not mentioned');
 
 console.log('── 12. THE END OF THE TERM IS RECOGNISED, AND ONLY THE END ──');
 {

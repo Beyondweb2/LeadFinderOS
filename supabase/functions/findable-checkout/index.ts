@@ -3,8 +3,8 @@ import { slugifyBusinessName } from "../../../src/lib/reportSlug.ts";
 import { FINDABLE_GUARANTEE, cardSavedNoticeFor, checkoutLineNameFor, isSaleableRoute, serviceRouteFromRow, totalPaymentsFor } from "../../../src/lib/findableOffer.ts";
 import { mayGenerateLink, quickCloseClosedRefusal, type QuickCloseRecord } from "../../../src/lib/quickClose.ts";
 import { offerPrice } from "../_shared/offer-price.ts";
-import { PAYMENT_PLAN_SPEC, cardSavedNoticeForPlan, checkoutLineNameForPlan, isSellablePaymentPlan, paymentPlanFromRow, planHasInstalments } from "../../../src/lib/paymentPlans.ts";
-import { agreementUrl, CLIENT_AGREEMENT_VERSION, sha256Hex } from "../../../src/lib/clientAgreement.ts";
+import { PAYMENT_PLAN_SPEC, agreementVersionForPlan, guaranteeForPlan, cardSavedNoticeForPlan, checkoutLineNameForPlan, paymentPlanFromRow, planAvailable, planHasInstalments } from "../../../src/lib/paymentPlans.ts";
+import { agreementUrl, sha256Hex } from "../../../src/lib/clientAgreement.ts";
 import { checkoutAgreementGate, type GateAcceptance } from "../../../src/lib/signupGate.ts";
 import { SIGNUP_LINK_LIFETIME_MS } from "../../../src/lib/quickClose.ts";
 import { prospectOnlyLead } from "../../../src/lib/prospectOnly.ts";
@@ -245,10 +245,14 @@ Deno.serve(async (req) => {
       await recordRefusal("checkout_refused_plan_undecided", { lead_id: effectiveLeadId, payment_plan: (ob as { payment_plan?: unknown }).payment_plan ?? null });
       return json({ ok: false, error: "plan_undecided" }, 409);
     }
-    if (!isSellablePaymentPlan(plan)) {
-      await recordRefusal("checkout_refused_plan_not_on_sale", { lead_id: effectiveLeadId, payment_plan: plan });
-      return json({ ok: false, error: "plan_not_on_sale" }, 409);
+    /* ⛔ A PLAN WHOSE STRIPE PRICE IS NOT SET UP IS REFUSED HERE, BEFORE ANY SESSION: the client must never pay a £99
+       sign-up into a monthly schedule the webhook then cannot create (the 12-month plan's £49.99 Price). */
+    if (!planAvailable(plan, (n) => Deno.env.get(n))) {
+      await recordRefusal("checkout_refused_plan_unavailable", { lead_id: effectiveLeadId, payment_plan: plan });
+      return json({ ok: false, error: "plan_unavailable" }, 409);
     }
+    /* The agreement this plan is signed on: v5 for the old plan, v6 for the three new ones (paymentPlans.ts). */
+    const agreementVersionNeeded = agreementVersionForPlan(plan);
     const legacyPlan = plan === "legacy_twelve";
 
     /* ⚠️ QUICK CLOSE KEEPS ITS OWN DOMAIN GATE (2026-09-29). A Quick Close answers the domain questions
@@ -494,8 +498,8 @@ Deno.serve(async (req) => {
     let acceptance: (GateAcceptance & { agreed_text: string }) | null = null;
     {
       const { data: acc, error: accErr } = await service.from("client_agreement_acceptances")
-        .select("id, lead_id, onboarding_id, agreement_version, service_route, method, authority_confirmed, agreed_text, agreed_text_sha256, free_to_leave_provider")
-        .eq("lead_id", effectiveLeadId).eq("onboarding_id", onboardingId).eq("agreement_version", CLIENT_AGREEMENT_VERSION)
+        .select("id, lead_id, onboarding_id, agreement_version, service_route, method, authority_confirmed, agreed_text, agreed_text_sha256, free_to_leave_provider, payment_plan")
+        .eq("lead_id", effectiveLeadId).eq("onboarding_id", onboardingId).eq("agreement_version", agreementVersionNeeded)
         .order("accepted_at", { ascending: false }).limit(1).maybeSingle();
       if (accErr) {
         await recordRefusal("checkout_agreement_unreadable", { lead_id: effectiveLeadId, error: accErr.message });
@@ -504,7 +508,7 @@ Deno.serve(async (req) => {
       acceptance = acc ?? null;
     }
     const gateResult = checkoutAgreementGate({
-      acceptance, leadId: effectiveLeadId, onboardingId, route, currentVersion: CLIENT_AGREEMENT_VERSION,
+      acceptance, leadId: effectiveLeadId, onboardingId, route, currentVersion: agreementVersionNeeded, paymentPlan: plan,
       recomputedSha: acceptance ? await sha256Hex(acceptance.agreed_text) : null,
     });
     if (!gateResult.ok) {
@@ -515,9 +519,9 @@ Deno.serve(async (req) => {
     /* ⛔ The binding facts, carried to the webhook: which signature this payment rests on, the terms it
        put the sale on, and the timing the monthly must follow (the webhook creates the subscription on a
        hold and LeadFinder sets the real Payment Start Date later — _shared/client-terms.ts). */
-    form.set("metadata[agreement_version]", CLIENT_AGREEMENT_VERSION);
+    form.set("metadata[agreement_version]", agreementVersionNeeded);
     form.set("metadata[agreement_acceptance_id]", gateResult.acceptanceId);
-    form.set("metadata[commercial_terms]", commercialTermsFor(CLIENT_AGREEMENT_VERSION) ?? "");
+    form.set("metadata[commercial_terms]", commercialTermsFor(agreementVersionNeeded) ?? "");
     form.set("metadata[payment_timing]", OPTION_B_TIMING);
     /* ⛔ THE SALE CREATOR, FOR TRACING ONLY (F + H integration, 2026-10-05). Stripe session → onboarding_id (THE
        sign-up) → agreement_acceptance_id → the person who CREATED that sign-up (sale_creations, append-only).
@@ -583,7 +587,7 @@ Deno.serve(async (req) => {
          a customer and a price move must not be able to leave a stale number on a receipt. */
       /* 🔴 PER ROUTE (2026-09-29): "Findable Build … 12 payments" or "Findable Optimise … 6 payments". */
       form.set("line_items[0][price_data][product_data][name]", legacyPlan ? checkoutLineNameFor(route) : checkoutLineNameForPlan(plan));
-      form.set("line_items[0][price_data][product_data][description]", FINDABLE_GUARANTEE);
+      form.set("line_items[0][price_data][product_data][description]", guaranteeForPlan(plan, FINDABLE_GUARANTEE));
       form.set("line_items[0][quantity]", "1");
     }
 

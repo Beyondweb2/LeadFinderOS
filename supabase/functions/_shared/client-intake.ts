@@ -41,7 +41,7 @@ const text = (v: unknown) => (typeof v === "string" ? v.trim() : "");
 export const INTAKE_LEAD_COLUMNS =
   "id,user_id,business_name,phone,email,website,address,derived_town,search_location,search_keyword,category,contact_name,place_id,google_maps_url," +
   "rating,review_count,services_included,service_areas,website_control,website_control_note,amount_paid,status,payment_date,service_terminated_at," +
-  "sales_handoff,sold_by_user_id,assigned_to_user_id,contract_total_payments,domain_control,delivery_checklist";
+  "sales_handoff,sold_by_user_id,assigned_to_user_id,contract_total_payments,payment_plan,domain_control,delivery_checklist";
 const ONBOARDING_COLUMNS =
   "id,lead_id,status,source,updated_at,created_at,business_name,business_website,confirmed_location,business_address,services,services_list,areas_list,areas_wanted," +
   "contact_name,contact_email,confirmed_phone,standout,accreditations,must_not_say,website_platform,website_manager,website_route,domain_status,gbp_status,gbp_exists," +
@@ -386,7 +386,7 @@ function crawlStepFor(plan: CrawlPlan): IntakeStep {
 }
 
 function routeOf(l: Loaded): "build" | "optimise" | null {
-  return serviceRouteForTotal((l.lead.contract_total_payments as number | null) ?? null) ?? serviceRouteFromRow(l.rows.onboarding as never) ?? null;
+  return serviceRouteForTotal((l.lead.contract_total_payments as number | null) ?? null, l.lead.payment_plan) ?? serviceRouteFromRow(l.rows.onboarding as never) ?? null;
 }
 
 async function autoFill(service: Service, leadId: string, loaded: Loaded): Promise<void> {

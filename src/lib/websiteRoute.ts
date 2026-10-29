@@ -28,7 +28,7 @@ export interface WebsiteRouteVerdict {
 
 export function websiteServiceRoute(
   onboarding: { plan_tier?: unknown; website_addon?: unknown; website_route?: unknown } | null | undefined,
-  lead: { contract_total_payments?: unknown } | null | undefined,
+  lead: { contract_total_payments?: unknown; payment_plan?: unknown } | null | undefined,
 ): WebsiteRouteVerdict {
   const signals: Array<{ route: ServiceRoute; source: string }> = [];
   const plan = serviceRouteFromRow(onboarding as never);
@@ -36,7 +36,7 @@ export function websiteServiceRoute(
   const wr = String(onboarding?.website_route ?? '').trim();
   if (wr === 'new_site' || wr === 'rebuild_existing') signals.push({ route: 'build', source: 'the onboarding website route (' + wr.replace('_', ' ') + ')' });
   else if (wr === 'optimise_existing') signals.push({ route: 'optimise', source: 'the onboarding website route (optimise existing)' });
-  const total = serviceRouteForTotal(lead?.contract_total_payments);
+  const total = serviceRouteForTotal(lead?.contract_total_payments, lead?.payment_plan);
   if (total) signals.push({ route: total, source: 'the contract (' + String(lead?.contract_total_payments) + ' payments)' });
   if (!signals.length) return { route: null, source: 'not recorded — no plan, website route or contract on file' };
   const routes = new Set(signals.map((s) => s.route));

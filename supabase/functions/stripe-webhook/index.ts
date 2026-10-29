@@ -3,7 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { startPaidBaseline } from "../_shared/audit-baseline.ts";
 import { createDelayedSubscription, resolvePaidRoute, subscriptionEndedByTerm, subscriptionRoute, subscriptionTotalPayments, type DelayedSubscriptionLead } from "../_shared/delayed-subscription.ts";
 import { establishLeadPayment, markOnboardingPaid, stampFirstContactOwed } from "../_shared/payment-state.ts";
-import { PAYMENT_PLAN_NAME, PAYMENT_PLAN_SPEC, paymentPlanFromMeta, type PaymentPlan } from "../../../src/lib/paymentPlans.ts";
+import { PAYMENT_PLAN_NAME, PAYMENT_PLAN_SPEC, paymentPlanFromMeta, planAfterWords, type PaymentPlan } from "../../../src/lib/paymentPlans.ts";
 import { clientClosed, maySetSubscriptionStatus, paymentDayOf, type ClosedReason, type PaymentStateLead } from "../../../src/lib/paymentState.ts";
 import { firstContactDueDay, firstContactDueLabel } from "../../../src/lib/firstContact.ts";
 import { effectiveQuestionnaireServices, questionnaireComplete } from "../../../src/lib/questionnaireComplete.ts";
@@ -1710,7 +1710,7 @@ Deno.serve(async (req) => {
            pay and replace the card in one page. A portal session would need the portal activated
            first and would fail here if it were not. */
         const payUrl = String((inv as { hosted_invoice_url?: unknown }).hosted_invoice_url ?? "").trim() || null;
-        await emailClientForLead(leadId, "monthly_payment_failed", paymentFailedEmail({ payUrl }), { subscription: subId, invoice: String(inv.id ?? "") });
+        await emailClientForLead(leadId, "monthly_payment_failed", paymentFailedEmail({ payUrl, amountGbp: Number((inv as { amount_due?: number }).amount_due ?? 0) / 100 || null }), { subscription: subId, invoice: String(inv.id ?? "") });
         break;
       }
       /* ⛔ THE THREE-DAY REMINDER, BUILT AND NOT ASSUMED (2026-09-13). Stripe can send a
@@ -1749,7 +1749,10 @@ Deno.serve(async (req) => {
           }
           const cancelUrl = await portalCancelUrl(idFrom((sub as { customer?: unknown }).customer));
           /* The count this client is told is the one this subscription was created for (its metadata). */
-          const mail = monthlyStartingSoonEmail({ businessName: (lead?.business_name ?? "").trim(), startsOn, cancelUrl, route: subscriptionRoute(sub as { metadata?: unknown }), afterTerm: (() => { const tm = termsOfSubscriptionMeta((sub as { metadata?: Record<string, unknown> }).metadata); return tm ? continuingModeFor(tm, subscriptionRoute(sub as { metadata?: unknown })) : undefined; })() });
+          /* 2026-10-29: a v6 payment plan names its own monthly, count and end (paymentPlans.ts). */
+          const subPlan = paymentPlanFromMeta((sub as { metadata?: Record<string, unknown> }).metadata ?? null);
+          const planFigures = subPlan && subPlan !== "legacy_twelve" ? { monthlyGbp: PAYMENT_PLAN_SPEC[subPlan].monthlyGbp, totalPayments: PAYMENT_PLAN_SPEC[subPlan].totalPayments, firstGbp: PAYMENT_PLAN_SPEC[subPlan].firstGbp, afterWords: planAfterWords(subPlan) } : null;
+          const mail = monthlyStartingSoonEmail({ plan: planFigures, businessName: (lead?.business_name ?? "").trim(), startsOn, cancelUrl, route: subscriptionRoute(sub as { metadata?: unknown }), afterTerm: (() => { const tm = termsOfSubscriptionMeta((sub as { metadata?: Record<string, unknown> }).metadata); return tm ? continuingModeFor(tm, subscriptionRoute(sub as { metadata?: unknown })) : undefined; })() });
           const sent = await postResend({
             from: "Findable <reports@findable.live>", to: [to], reply_to: ADMIN_EMAIL,
             subject: mail.subject,

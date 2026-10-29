@@ -21,12 +21,13 @@
 //    are stored on the row, so the record proves itself.
 // ⛔ ONE REFUSAL FOR A BAD TOKEN. An unknown token gets the same page whatever is wrong with it.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { acceptanceRowFrom, agreePageMissing, asksCurrentProvider, CLIENT_AGREEMENT_VERSION, renderAgreementText, versionOffersRoute, sha256Hex, type AgreementFill, type AgreementRoute, type AgreementAcceptanceRow } from "../../../src/lib/clientAgreement.ts";
+import { acceptanceRowFrom, agreePageMissing, asksCurrentProvider, renderAgreementText, versionOffersRoute, sha256Hex, type AgreementFill, type AgreementRoute, type AgreementAcceptanceRow } from "../../../src/lib/clientAgreement.ts";
 import { agreementPageHtml, agreementUnavailableHtml, TIED_IN_MESSAGE, type AgreementFormValues } from "../../../src/lib/agreementPageHtml.ts";
 import { resolveAgreementRoute } from "../../../src/lib/agreementRoute.ts";
 import { clientClosed } from "../../../src/lib/paymentState.ts";
 import { serviceRouteFromRow } from "../../../src/lib/findableOffer.ts";
 import { commercialTermsFor } from "../../../src/lib/clientTimeline.ts";
+import { agreementVersionForPlan, paymentPlanFromRow, type PaymentPlan } from "../../../src/lib/paymentPlans.ts";
 import { ACCEPTANCE_COLUMNS, agreementPdfForRow, reportAgreementError, storeAndSendAcceptance } from "../_shared/client-agreement.ts";
 import { qaEmailHold } from "../_shared/qa-guard.ts";
 import { alertContractAnswer } from "../_shared/contract-alert.ts";
@@ -37,7 +38,7 @@ type Service = any;
 const TOKEN_RE = /^[0-9a-f]{64}$/;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 const MAX_FIELD = 300;
-const LEAD_COLUMNS = "id,business_name,email,phone,website,address,contact_name,contract_total_payments,service_terminated_at,status,amount_paid";
+const LEAD_COLUMNS = "id,business_name,email,phone,website,address,contact_name,contract_total_payments,payment_plan,service_terminated_at,status,amount_paid";
 
 function html(body: string, status = 200): Response {
   return new Response(body, {
@@ -61,18 +62,19 @@ async function resolve(service: Service, token: string) {
   if (leadErr) throw leadErr;
   if (!lead) return null;
   /* ⛔ WHAT THE CLIENT PAID ON OUTRANKS THE LINK (pre-sales fix 03, src/lib/agreementRoute.ts). */
-  const route: AgreementRoute | null = resolveAgreementRoute(link.service_route, lead.contract_total_payments);
+  const route: AgreementRoute | null = resolveAgreementRoute(link.service_route, lead.contract_total_payments, lead.payment_plan);
   return { lead, route, businessName: clip(lead.business_name) || "your business" };
 }
 
 /** THE OPEN SIGN-UP: the lead's newest onboarding row that has not been paid. Its route (plan_tier) is
  *  what will be charged, so it is what is signed. null = nothing to sign up for. */
-async function openSignup(service: Service, leadId: string): Promise<{ id: string; route: AgreementRoute | null; contactName: string | null; contactEmail: string | null } | null> {
-  const { data, error } = await service.from("onboarding_responses").select("id,status,plan_tier,website_addon,contact_name,contact_email,created_at")
+async function openSignup(service: Service, leadId: string): Promise<{ id: string; route: AgreementRoute | null; plan: PaymentPlan | null; contactName: string | null; contactEmail: string | null } | null> {
+  const { data, error } = await service.from("onboarding_responses").select("id,status,plan_tier,website_addon,payment_plan,contact_name,contact_email,created_at")
     .eq("lead_id", leadId).neq("status", "paid").order("created_at", { ascending: false }).limit(1).maybeSingle();
   if (error) throw error;
   if (!data) return null;
-  return { id: String(data.id), route: serviceRouteFromRow(data), contactName: data.contact_name ?? null, contactEmail: data.contact_email ?? null };
+  /* 2026-10-29: the payment plan decides the agreement version (old plan v5, new plans v6; paymentPlans.ts). */
+  return { id: String(data.id), route: serviceRouteFromRow(data), plan: paymentPlanFromRow(data), contactName: data.contact_name ?? null, contactEmail: data.contact_email ?? null };
 }
 
 async function latestPageAcceptance(service: Service, leadId: string): Promise<(AgreementAcceptanceRow & { accepted_at: string }) | null> {
@@ -83,9 +85,9 @@ async function latestPageAcceptance(service: Service, leadId: string): Promise<(
 }
 
 /** The v3 signature for ONE sign-up (one per sign-up by unique index). */
-async function signupAcceptance(service: Service, leadId: string, signupId: string): Promise<(AgreementAcceptanceRow & { accepted_at: string }) | null> {
+async function signupAcceptance(service: Service, leadId: string, signupId: string, version: string): Promise<(AgreementAcceptanceRow & { accepted_at: string }) | null> {
   const { data, error } = await service.from("client_agreement_acceptances").select(ACCEPTANCE_COLUMNS)
-    .eq("lead_id", leadId).eq("onboarding_id", signupId).eq("agreement_version", CLIENT_AGREEMENT_VERSION)
+    .eq("lead_id", leadId).eq("onboarding_id", signupId).eq("agreement_version", version)
     .order("accepted_at", { ascending: false }).limit(1).maybeSingle();
   if (error) throw error;
   return data ?? null;
@@ -143,12 +145,15 @@ Deno.serve(async (req) => {
 
     /* ══ THE v3 SIGN-UP ══════════════════════════════════════════════════════════════════════════════ */
     if (signup) {
-      if (!signup.route) return html(agreementPageHtml({ mode: "not_ready", businessName: ctx.businessName }));
-      const signed = await signupAcceptance(service, ctx.lead.id, signup.id);
+      if (!signup.route || !signup.plan) return html(agreementPageHtml({ mode: "not_ready", businessName: ctx.businessName }));
+      const plan = signup.plan;
+      /* ⛔ THE VERSION FOLLOWS THE PLAN: the old £99 × 12 plan is signed on v5, the three new plans on v6. */
+      const VERSION = agreementVersionForPlan(plan);
+      const signed = await signupAcceptance(service, ctx.lead.id, signup.id, VERSION);
       /* ⛔ v5 (2026-10-16): Findable Optimise is withdrawn. A sign-up still recorded on it (plan_tier "keep", made
          before the change) is never signed or charged on the current agreement; Paul re-sends it as a Build. */
-      if (!signed && !versionOffersRoute(CLIENT_AGREEMENT_VERSION, signup.route)) {
-        if (form) await reportAgreementError(service, "agreement_route_withdrawn", `sign-up route ${signup.route} is not offered on ${CLIENT_AGREEMENT_VERSION}`, { lead_id: ctx.lead.id, onboarding_id: signup.id });
+      if (!signed && !versionOffersRoute(VERSION, signup.route)) {
+        if (form) await reportAgreementError(service, "agreement_route_withdrawn", `sign-up route ${signup.route} is not offered on ${VERSION}`, { lead_id: ctx.lead.id, onboarding_id: signup.id });
         return html(agreementPageHtml({ mode: "not_ready", businessName: ctx.businessName, message: "The plan on this sign-up is no longer offered, so it cannot be signed. Paul will be in touch with an updated link." }), form ? 409 : 200);
       }
       /* A POST must be for THIS sign-up: a stale tab from an older sign-up never signs or pays for this one. */
@@ -157,7 +162,7 @@ Deno.serve(async (req) => {
       }
 
       if (signed) {
-        if (signed.service_route !== signup.route) {
+        if (signed.service_route !== signup.route || (VERSION === "v6" && signed.payment_plan !== plan)) {
           /* The sign-up's service changed after it was signed: never pay on a signature for the other one. */
           return html(agreementPageHtml({ mode: "not_ready", businessName: ctx.businessName, message: "Your chosen service changed after you signed, so payment cannot open on this signature. Paul will send you a fresh link." }));
         }
@@ -179,7 +184,7 @@ Deno.serve(async (req) => {
         }
         return html(agreementPageHtml({
           mode: "accepted", businessName: ctx.businessName, acceptedAtIso: signed.accepted_at, acceptedBy: signed.typed_name ?? "", pdfHref,
-          payFor: { signupId: signup.id, route: signup.route }, payError, version: signed.agreement_version,
+          payFor: { signupId: signup.id, route: signup.route, plan }, payError, version: signed.agreement_version,
         }));
       }
 
@@ -191,18 +196,18 @@ Deno.serve(async (req) => {
           websiteDomain: clip(ctx.lead.website).replace(/^https?:\/\//, "").replace(/\/$/, ""),
         };
         /* nowIso: the signing date the page previews is TODAY (UK). The stored date is the database's accepted_at. */
-        return html(agreementPageHtml({ mode: "sign", businessName: ctx.businessName, route: signup.route, values, errors: [], signupId: signup.id, nowIso: new Date().toISOString() }));
+        return html(agreementPageHtml({ mode: "sign", businessName: ctx.businessName, route: signup.route, values, errors: [], signupId: signup.id, nowIso: new Date().toISOString(), version: VERSION, paymentPlan: plan }));
       }
       if (form.get("action") === "pay") {
         return html(agreementPageHtml({ mode: "not_ready", businessName: ctx.businessName, message: "Please sign the agreement first — payment opens straight after." }), 409);
       }
       const values = readForm(form);
-      const fill: AgreementFill = { businessName: ctx.businessName, route: signup.route, ...values };
+      const fill: AgreementFill = { businessName: ctx.businessName, route: signup.route, ...values, paymentPlan: plan };
       const errors = await signatureErrors(service, ctx.lead.id, fill, values);
       if (!values.authority) errors.push("Please confirm you have authority to sign for the business.");
       /* ⛔ v5 clause 1.6: the client's own answer. No answer is an error; "No" is a refusal, not an error to
          fix: nothing is signed or charged, Paul is told, and the page says so plainly. */
-      if (asksCurrentProvider(CLIENT_AGREEMENT_VERSION)) {
+      if (asksCurrentProvider(VERSION)) {
         /* CONTRACT CALL ALERT (2026-10-16): "No, tied in" emails Paul once; "Yes, free to leave" closes an earlier alert. */
         if (values.freeToLeave === false || values.freeToLeave === true) {
           await alertContractAnswer(service, { leadId: ctx.lead.id, answer: values.freeToLeave ? "free" : "in_contract", provider: values.currentProvider || null, source: "agreement" });
@@ -213,21 +218,21 @@ Deno.serve(async (req) => {
         }
         if (values.freeToLeave !== true) errors.push("Please say whether you are free to leave your current provider (choose Yes if you have none).");
       }
-      if (errors.length) return html(agreementPageHtml({ mode: "sign", businessName: ctx.businessName, route: signup.route, values, errors, signupId: signup.id, nowIso: new Date().toISOString() }), 422);
-      const agreedText = renderAgreementText(fill, CLIENT_AGREEMENT_VERSION);
+      if (errors.length) return html(agreementPageHtml({ mode: "sign", businessName: ctx.businessName, route: signup.route, values, errors, signupId: signup.id, nowIso: new Date().toISOString(), version: VERSION, paymentPlan: plan }), 422);
+      const agreedText = renderAgreementText(fill, VERSION);
       const row = acceptanceRowFrom({
-        leadId: ctx.lead.id, fill, method: "agree_page", agreedText, sha256: await sha256Hex(agreedText), version: CLIENT_AGREEMENT_VERSION,
+        leadId: ctx.lead.id, fill, method: "agree_page", agreedText, sha256: await sha256Hex(agreedText), version: VERSION,
         ip: clientIp(req), userAgent: req.headers.get("user-agent")?.slice(0, 500) ?? null,
-        v3: { onboardingId: signup.id, authorityConfirmed: true, marketingOptOut: values.marketingOptOut === true, commercialTerms: commercialTermsFor(CLIENT_AGREEMENT_VERSION) ?? "" },
+        v3: { onboardingId: signup.id, authorityConfirmed: true, marketingOptOut: values.marketingOptOut === true, commercialTerms: commercialTermsFor(VERSION) ?? "" },
       });
       const stored = await storeAndSendAcceptance(service, row);
       /* A double submit: the first signature stands (unique per sign-up); show it. */
-      const winner = stored.duplicate ? await signupAcceptance(service, ctx.lead.id, signup.id) : null;
+      const winner = stored.duplicate ? await signupAcceptance(service, ctx.lead.id, signup.id, VERSION) : null;
       return html(agreementPageHtml({
         mode: "accepted", businessName: ctx.businessName,
         acceptedAtIso: winner?.accepted_at ?? stored.acceptedAt, acceptedBy: winner?.typed_name ?? values.contactName!, pdfHref,
         justSigned: !winner, emailedTo: stored.emailedTo ? values.email! : null,
-        payFor: { signupId: signup.id, route: signup.route }, version: CLIENT_AGREEMENT_VERSION,
+        payFor: { signupId: signup.id, route: signup.route, plan }, version: VERSION,
       }));
     }
 

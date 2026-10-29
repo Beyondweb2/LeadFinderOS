@@ -44,7 +44,7 @@ interface ClientLead {
   id: string; business_name: string | null; derived_town: string | null; search_location: string | null; search_keyword: string | null; category: string | null;
   website: string | null; country: string | null; baseline_audit_id: string | null; delivery_checklist: Record<string, unknown> | null;
   website_build: { production_url?: string | null; production_status?: string | null; qa?: { production_checked?: boolean | null } | null } | null;
-  contract_total_payments: number | null; status: string | null; amount_paid: number | null; is_archived: boolean | null; service_terminated_at: string | null;
+  contract_total_payments: number | null; payment_plan?: string | null; status: string | null; amount_paid: number | null; is_archived: boolean | null; service_terminated_at: string | null;
 }
 
 /** The Apify account's share of its monthly cap, from the 15-minute snapshot — recomputed from
@@ -68,7 +68,7 @@ async function run(service: Service, url: string, secret: string, serviceKey: st
   const week = weekOf(now);
   const owner = await bookOwnerId(service);
   const { data: leadsData, error: lErr } = await service.from("outreach_leads")
-    .select("id, business_name, derived_town, search_location, search_keyword, category, website, country, baseline_audit_id, delivery_checklist, website_build, contract_total_payments, status, amount_paid, is_archived, service_terminated_at")
+    .select("id, business_name, derived_town, search_location, search_keyword, category, website, country, baseline_audit_id, delivery_checklist, website_build, contract_total_payments, payment_plan, status, amount_paid, is_archived, service_terminated_at")
     .gt("amount_paid", 0).limit(500);
   if (lErr) throw new Error(`leads: ${lErr.message}`);
   const { data: exData } = await service.from("metric_exclusions").select("kind, value").eq("kind", "lead");
@@ -117,7 +117,7 @@ async function run(service: Service, url: string, secret: string, serviceKey: st
   // 1–3. Start this week's checks.
   for (const c of clients) {
     if (outcome[c.id]) continue;
-    const route = routeOf.get(c.id) ?? serviceRouteForTotal(c.contract_total_payments) ?? null;
+    const route = routeOf.get(c.id) ?? serviceRouteForTotal(c.contract_total_payments, c.payment_plan) ?? null;
     const start = weeklyStart({ route, websiteBuild: c.website_build, checklist: c.delivery_checklist, implementedOpportunities: implemented.get(c.id) ?? 0 });
     if (!start.ok) { outcome[c.id] = `not started: ${start.reason}`; continue; }
     let questions = sets.get(c.id);

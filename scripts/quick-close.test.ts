@@ -26,8 +26,8 @@ const read = (p: string) => fs.readFileSync(path.join(root, p), "utf8").replace(
    withdrawn plan before v5 — still READ (labels, handoff lines, the gate's old reasons), never sold. */
 const SITUATION = { manager: "owner", domain: "yes", rights: "yes" } as const;
 const OPTIMISE_V4 = { decision_maker: "yes", approach: "improve", access: "yes", ...SITUATION } as const;
-const SAFE = { decision_maker: "yes", route: "build", ...SITUATION } as const;
-const NEW_SITE = { decision_maker: "yes", approach: "new_template", build_consents: "yes", ...SITUATION } as const;
+const SAFE = { decision_maker: "yes", route: "build", payment_plan: "six", ...SITUATION } as const;
+const NEW_SITE = { decision_maker: "yes", approach: "new_template", build_consents: "yes", payment_plan: "six", ...SITUATION } as const;
 
 console.log("\n── the bare minimum, in the v2 order ──");
 /* 2026-10-07 (Paul: "Quick Close should be QUICK"): the OFFER first, then authority; legacy keys last (never asked). */
@@ -40,11 +40,11 @@ ok(JSON.stringify(cleanAnswers({ decision_maker: "yes", domain: "maybe", evil: "
 ok(missingQuestions({}).join() === "decision_maker,manager,domain,route", "nothing answered: authority, who looks after the site, the domain — and the PLAN LAST");
 ok(missingQuestions({ decision_maker: "yes", ...SITUATION, approach: "improve" }).join() === "route", "v5: a pre-v5 Optimise close (improve their site) is asked the PLAN again — the withdrawn plan is not an answer, and the site-access question is gone");
 ok(!closeFlow(OPTIMISE_V4).includes("access") && !closeFlow({ route: "optimise" }).includes("access"), "v5: the Optimise-only site-access question is never part of a close");
-ok(missingQuestions({ decision_maker: "yes", ...SITUATION, approach: "new_template" }).length === 0 && missingQuestions({ decision_maker: "yes", ...SITUATION, route: "build" }).length === 0, "Build, self-managed: nothing more — no consents, no registrar, no logins on the call");
-ok(missingQuestions({ decision_maker: "yes", manager: "no_website", domain: "no_domain", route: "build" }).length === 0, "NO WEBSITE: the reuse question is never asked (no irrelevant ownership questions)");
+ok(missingQuestions({ decision_maker: "yes", ...SITUATION, approach: "new_template", payment_plan: "six" }).length === 0 && missingQuestions({ decision_maker: "yes", ...SITUATION, route: "build", payment_plan: "six" }).length === 0, "Build, self-managed: nothing more — no consents, no registrar, no logins on the call");
+ok(missingQuestions({ decision_maker: "yes", manager: "no_website", domain: "no_domain", route: "build", payment_plan: "six" }).length === 0, "NO WEBSITE: the reuse question is never asked (no irrelevant ownership questions)");
 ok(closeFlow({ manager: "no_website" }).join() === "decision_maker,manager,domain,route" && !closeFlow({ manager: "owner" }).includes("agency_contract"), "the flow: no website skips the reuse question; the contract only appears for an agency / freelancer");
-ok(missingQuestions({ decision_maker: "yes", route: "build", manager: "agency" }).join() === "agency_contract,domain", "Build on an agency-run site: the contract, the domain");
-ok(missingQuestions({ decision_maker: "yes", route: "build", manager: "freelancer" }).join() === "agency_contract,domain", "a FREELANCER is asked the contract question exactly like an agency");
+ok(missingQuestions({ decision_maker: "yes", route: "build", manager: "agency" }).join() === "agency_contract,domain,payment_plan", "Build on an agency-run site: the contract, the domain");
+ok(missingQuestions({ decision_maker: "yes", route: "build", manager: "freelancer" }).join() === "agency_contract,domain,payment_plan", "a FREELANCER is asked the contract question exactly like an agency");
 ok(missingQuestions({ decision_maker: "yes", ...SITUATION, approach: "unsure" }).join() === "route", "unsure: the plan is picked explicitly");
 ok(missingQuestions({ decision_maker: "yes", manager: "owner", domain: "yes", rights: "yes" }).join() === "route" && missingQuestions({ decision_maker: "yes", manager: "owner" }).join() === "domain,route", "what the Call screen already saved (who looks after the site, the decision maker) is never asked again");
 ok(closeFlow({}).length <= 5 && closeFlow({ manager: "agency" }).length <= 6, "4–5 questions, one more only when an agency / freelancer is involved");
@@ -112,7 +112,7 @@ console.log("\n── the gate ──");
   ok(quickCloseState("answers_saved", { answers: SAFE, link_url: "https://x", link_generated_at: "2026-09-29T10:00:00Z" }) === "link_expired", "2026-10-04 (M-014): an old stored link is EXPIRED, never 'ready'");
   ok(LINK_REUSE_MS < 24 * 3_600_000, "a link is reused only while its Stripe session is still valid (under 24h)");
   /* Recreation: rights unclear never blocks Build, never promises an exact copy. */
-  const rec = { decision_maker: "yes", approach: "recreation", rights: "not_sure", design_owner: "agency", domain: "yes", manager: "owner", build_consents: "yes" } as const;
+  const rec = { decision_maker: "yes", approach: "recreation", rights: "not_sure", design_owner: "agency", domain: "yes", manager: "owner", build_consents: "yes", payment_plan: "six" } as const;
   ok(quickCloseGate(rec).review.length === 0 && quickCloseGate(rec).flags.includes("exact_copy_rights") && quickCloseState("answers_saved", { answers: rec }) === "ready", "recreation with unclear rights → still sellable as Build, flagged for Paul");
 }
 
@@ -135,7 +135,7 @@ console.log("\n── v5: one plan for sale, tied in = declined, not sure = wait
   }
   const moved = planQuickCloseSave({ answers: OPTIMISE_V4 } as never, { route: "build" }, { expectRoute: "optimise", routeChangeConfirmed: true, actorId: "u1", nowIso: NOW });
   ok(moved.ok && moved.answers.route === "build" && moved.cols.plan_tier === "new_site", "a pre-v5 Optimise close can be moved to Build (a confirmed route change)");
-  ok(routeTermsLines("build").join(" ").includes("12 payments in total") && !/month minimum|-month/.test(routeTermsLines("build").join(" ") + routePaymentsShort("build") + quickCloseScript("build")), "the term is said in PAYMENTS, never as a number of months");
+  ok(routeTermsLines("build").join(" ").includes("12 payments in total") && !/month minimum|-month/.test(routeTermsLines("build").join(" ") + routePaymentsShort("build") + quickCloseScript("build", "six")), "the term is said in PAYMENTS, never as a number of months");
 }
 
 console.log("\n── one onboarding record: the canonical columns ──");
@@ -145,8 +145,8 @@ ok(onboardingColumnsFor({ manager: "agency", authority: "yes" }).website_manager
 ok(onboardingColumnsFor({ authority: "not_sure" }).authority_confirmed === undefined, "'not sure' never writes a yes");
 
 console.log("\n── the words ──");
-const QUICK_CLOSE_SCRIPT = quickCloseScript("build") + " " + quickCloseScript("optimise");
-ok([quickCloseScript("build"), quickCloseScript("optimise")].every((s) => s.includes(`£${FINDABLE_SETUP_PRICE_GBP} today`) && s.includes(`£${FINDABLE_MONTHLY_GBP} a month`)), "the script names both figures on every route (house rule: never one without the other)");
+const QUICK_CLOSE_SCRIPT = quickCloseScript("build", "six") + " " + quickCloseScript("optimise");
+ok([quickCloseScript("build", "six"), quickCloseScript("optimise")].every((s) => s.includes(`£${FINDABLE_SETUP_PRICE_GBP} today`) && s.includes(`£${FINDABLE_MONTHLY_GBP} a month`)), "the script names both figures on every route (house rule: never one without the other)");
 ok(quickCloseScript(null) === "", "2026-10-04 (A-07): no script before a route is chosen — it would name no terms");
 const msg = quickCloseMessage("ABC Plumbing", "https://checkout.stripe.com/c/pay/x", "build");
 ok(msg.includes("https://checkout.stripe.com/c/pay/x") && msg.includes(`£${FINDABLE_MONTHLY_GBP} a month`), "the WhatsApp / copy message carries the link and both figures");
@@ -154,7 +154,7 @@ ok(msg.includes("https://checkout.stripe.com/c/pay/x") && msg.includes(`£${FIND
    sentences (the headline + the byte-locked FINDABLE_GUARANTEE), and nothing that promises an outcome
    the engines decide: no ranking, no recommendation, no citation, no "guaranteed". */
 ok(!/guaranteed|rank|top of|recommend|cited|citation|will name you|be named/i.test(QUICK_CLOSE_SCRIPT + msg + QUICK_CLOSE_AFTER_PAYMENT.join(" ")), "no promised ranking, recommendation or citation; no 'guaranteed'");
-ok([quickCloseScript("build"), quickCloseScript("optimise"), msg].every((s) => s.includes(QUICK_CLOSE_PROMISE) && s.includes(FINDABLE_GUARANTEE)), "the guarantee is said, exactly as written, in the script and the message");
+ok([quickCloseScript("build", "six"), quickCloseScript("optimise"), msg].every((s) => s.includes(QUICK_CLOSE_PROMISE) && s.includes(FINDABLE_GUARANTEE)), "the guarantee is said, exactly as written, in the script and the message");
 
 console.log("\n── the handoff ──");
 {

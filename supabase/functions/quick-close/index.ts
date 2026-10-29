@@ -31,7 +31,7 @@ import { sendSmsToLead } from "../_shared/twilio-sms.ts";
 import { qaEmailHold } from "../_shared/qa-guard.ts";
 import { answerClientInfoRequest, openRequestFor, CLIENT_INFO_REQUEST_COLUMNS } from "../_shared/client-info-request.ts";
 import { cleanSellerClientInfo, MISSING_INFO_LABEL } from "../../../src/lib/clientMissingInfo.ts";
-import { parsePriceModel, priceModelLinkRefusal } from "../../../src/lib/priceModel.ts";
+import { unavailablePlans } from "../../../src/lib/paymentPlans.ts";
 
 // quick-close — QUICK CLOSE (Sales Experience, 2026-09-29; docs/sales-experience.md §9;
 // fixes 2026-10-04: docs/pre-sales-certification/fixes-02-quick-close.md).
@@ -200,23 +200,6 @@ Deno.serve(async (req) => {
         return json(NOT_READY_BODY, 403);
       }
     }
-    /* ⛔ THE PRICE MODEL (2026-10-14, src/lib/priceModel.ts). A sign-up link (made, re-shared, or the Full Setup link) goes
-       only under a model whose payment is live — today only the £99 start. The £499 model's agreement is not approved yet,
-       and the checkout would take £99 on a £99 agreement while the rep pitched £499. Both roles. Fails closed. */
-    let offerModel: "standard" | "upfront_499" = "standard";
-    if (mode === "generate_link" || mode === "share_link" || mode === "share_setup") {
-      const { data: pm, error: pmErr } = await service.rpc("price_model_for", { _user: actor.id });
-      if (pmErr) return json({ ok: false, error: "price_model_unreadable", detail: "Could not read your price model - nothing was sent. Try again." }, 503);
-      offerModel = parsePriceModel(pm);
-      const refusal = priceModelLinkRefusal(offerModel);
-      if (refusal) return json({ ok: false, error: "price_model_not_live", detail: refusal }, 409);
-    }
-    /* Record the model a sign-up link was made or sent under, on the lead (compare conversion by model). Never fatal. */
-    const stampOfferModel = async (id: string) => {
-      try {
-        await service.from("outreach_leads").update({ price_model_offered: offerModel, price_model_offered_at: new Date().toISOString() }).eq("id", id);
-      } catch { /* the record is a report, never a gate */ }
-    };
     /* MY SALES THAT STILL OWE A HANDOFF (2026-10-02): the caller's OWN paid sales since handoffs existed —
        names and states only, never an amount or anything else of the client's.
        ⛔ An ARCHIVED sale is not listed (M-008, 2026-10-04): a rep is never told to finish a lead they binned. */
@@ -471,6 +454,8 @@ Deno.serve(async (req) => {
         call: callNotes,
         call_lines: callNotesLines(answers, callNotes),
         offer: offerFit(answers, hasWebsite),
+        /* 2026-10-29: a plan whose Stripe price is not set up is shown off, with the reason (paymentPlans.ts). */
+        plans_unavailable: unavailablePlans((n) => Deno.env.get(n)),
         has_website: hasWebsite,
         events: ((events as { data?: Obj[] }).data ?? []).map((e) => ({ kind: e.kind, at: e.created_at, by_me: e.actor_user_id === actor.id })),
       };
@@ -872,8 +857,7 @@ Deno.serve(async (req) => {
           const result = await expireSession(adopt.replaced);
           await event(service, leadId, rowId, actor.id, "link_superseded", { reason: "fresh_link", session: adopt.replaced, result });
         }
-        await event(service, leadId, rowId, actor.id, "link_generated", { assigned_to: lead.assigned_to_user_id ?? null, session: ours.session, replaced: adopt.replaced, offer_model: offerModel });
-        await stampOfferModel(leadId);
+        await event(service, leadId, rowId, actor.id, "link_generated", { assigned_to: lead.assigned_to_user_id ?? null, session: ours.session, replaced: adopt.replaced, payment_plan: cleanAnswers((stored as { answers?: unknown } | null)?.answers).payment_plan ?? null });
         row = { ...fresh, quick_close: stored };
         return json(await view());
       }
@@ -1079,7 +1063,6 @@ Deno.serve(async (req) => {
         template = lr.route === "whatsapp_template" ? SIGNUP_LINK_TEMPLATE_NAME : null;
       }
       await event(service, leadId, row?.id ?? null, actor.id, "link_shared", { channel, variant: "setup", status, to: emailedTo });
-      await stampOfferModel(leadId);
       const { error: hErr } = await service.from("lead_activity").insert({
         lead_id: leadId, actor_user_id: actor.id, kind: "payment_link_shared",
         body: channel === "copy" ? "Full setup link copied (to send by hand — not confirmed as sent)" : channel === "email" ? `Full setup link emailed to ${emailedTo}` : channel === "sms" ? (status === "simulated" ? "Full setup link texted (test mode — not sent)" : "Full setup link texted (queued — delivery not yet confirmed)") : status === "simulated" ? "Full setup link sent on WhatsApp (test mode — not delivered)" : "Full setup link sent on WhatsApp",

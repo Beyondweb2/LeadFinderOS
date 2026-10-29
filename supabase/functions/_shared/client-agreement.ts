@@ -10,6 +10,7 @@ import {
   type AgreementAcceptanceRow, type AgreementRoute,
 } from "../../../src/lib/clientAgreement.ts";
 import { buildAgreementPdf } from "../../../src/lib/agreementPdf.ts";
+import { isPaymentPlan } from "../../../src/lib/paymentPlans.ts";
 import { qaEmailHold } from "./qa-guard.ts";
 
 // deno-lint-ignore no-explicit-any
@@ -17,7 +18,7 @@ type Service = any;
 
 export const AGREEMENT_FROM = "Findable <alerts@findable.live>";
 export const ACCEPTANCE_COLUMNS =
-  "id,lead_id,business_name,service_route,agreement_version,agreed_text,agreed_text_sha256,method,legal_business_name,company_number,typed_name,typed_role,business_address,email,phone,website_domain,accepted_at,ip_address,user_agent,stripe_session_id,onboarding_id,authority_confirmed,marketing_opt_out,commercial_terms,current_provider,free_to_leave_provider";
+  "id,lead_id,business_name,service_route,agreement_version,agreed_text,agreed_text_sha256,method,legal_business_name,company_number,typed_name,typed_role,business_address,email,phone,website_domain,accepted_at,ip_address,user_agent,stripe_session_id,onboarding_id,authority_confirmed,marketing_opt_out,commercial_terms,current_provider,free_to_leave_provider,payment_plan";
 
 export async function reportAgreementError(service: Service, errorId: string, message: string, context: Record<string, unknown>) {
   try { await service.from("client_error_reports").insert({ error_id: errorId, message: String(message).slice(0, 1000), context }); } catch { /* never throws */ }
@@ -52,6 +53,8 @@ export async function agreementPdfForRow(row: AgreementAcceptanceRow & { accepte
     address: row.business_address, email: row.email, phone: row.phone, websiteDomain: row.website_domain,
     /* v5 clause 1.6, re-rendered from what was recorded (older rows carry neither). */
     currentProvider: row.current_provider ?? null, freeToLeave: row.free_to_leave_provider ?? null,
+    /* v6: the payment plan printed in the client details (older rows carry none). */
+    paymentPlan: isPaymentPlan(row.payment_plan) ? row.payment_plan : null,
   }, { method: row.method, acceptedAtIso: row.accepted_at, version: row.agreement_version, sha256: row.agreed_text_sha256 });
 }
 

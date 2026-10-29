@@ -80,7 +80,7 @@ export async function loadTimelineFacts(service: Service, leadId: string): Promi
   if (error) throw error;
   if (!terms) return null;
   const { data: lead, error: leadErr } = await service.from("outreach_leads")
-    .select("id,business_name,email,status,service_terminated_at,contract_total_payments,remeasure_results_sent_at,stripe_subscription_id,payment_date")
+    .select("id,business_name,email,status,service_terminated_at,contract_total_payments,payment_plan,remeasure_results_sent_at,stripe_subscription_id,payment_date")
     .eq("id", leadId).maybeSingle();
   if (leadErr) throw leadErr;
   if (!lead) return null;
@@ -88,7 +88,7 @@ export async function loadTimelineFacts(service: Service, leadId: string): Promi
     .eq("lead_id", leadId).eq("kind", "recurring").eq("status", "succeeded").order("occurred_at", { ascending: true });
   if (recErr) throw recErr;
   const t = terms as TermsRow;
-  const route: ServiceRoute | null = isServiceRoute(t.service_route) ? t.service_route : serviceRouteForTotal(lead.contract_total_payments);
+  const route: ServiceRoute | null = isServiceRoute(t.service_route) ? t.service_route : serviceRouteForTotal(lead.contract_total_payments, lead.payment_plan);
   const facts: TimelineFacts = {
     terms: t.commercial_terms,
     route,

@@ -79,6 +79,7 @@ export interface AdminLead {
   service_terminated_at: string | null;
   subscription_status: string | null;
   contract_total_payments: number | null;
+  payment_plan?: string | null;
   baseline_audit_id: string | null;
   remeasure_due_date: string | null;
   remeasure_audit_id: string | null;
@@ -732,7 +733,7 @@ export function foldAdminOverview(input: AdminInput): AdminOverview {
     if (!o.lead_id) continue;
     const r = serviceRouteFromRow(o); if (r) routeOf.set(o.lead_id, r);
   }
-  const route = (leadId: string) => routeOf.get(leadId) ?? serviceRouteForTotal(leadById.get(leadId)?.contract_total_payments) ?? null;
+  const route = (leadId: string) => routeOf.get(leadId) ?? serviceRouteForTotal(leadById.get(leadId)?.contract_total_payments, leadById.get(leadId)?.payment_plan) ?? null;
   const periodMoney = moneyBlock(ledger, p);
   const byRoute = { build: 0, optimise: 0, unknown: 0 };
   const sellerAgg = new Map<string, { gross: number; clients: number }>();

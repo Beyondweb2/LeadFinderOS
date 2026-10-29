@@ -104,7 +104,7 @@ console.log("── BUILD: one answer per call, exactly as the dialog sends them
   ok(mergeAnswers({ decision_maker: "yes", approach: "new_template", domain: "no_domain" }, { build_consents: "yes" }).build_consents === "yes", "mergeAnswers keeps the consent: it is merged OVER the saved set before the cross-answer rules run");
 
   const row = newRow();
-  const steps: [string, string][] = [["decision_maker", "yes"], ["manager", "owner"], ["domain", "no_domain"], ["rights", "yes"], ["approach", "new_template"]];
+  const steps: [string, string][] = [["decision_maker", "yes"], ["manager", "owner"], ["domain", "no_domain"], ["rights", "yes"], ["approach", "new_template"], ["payment_plan", "six"]];
   let route: unknown = null;
   for (const [k, v] of steps) {
     const r = save(row, { [k]: v }, { expectRoute: route });
@@ -113,17 +113,17 @@ console.log("── BUILD: one answer per call, exactly as the dialog sends them
   }
   const a4 = cleanAnswers(row.quick_close!.answers);
   /* 2026-10-07: Quick Close is QUICK — on Build (self-run / no site) the offer and authority are all it asks. */
-ok(counter(a4) === "4/4" && state(row) === "ready" && missingQuestions(a4).length === 0, "Build: the situation answers and the plan → READY (no consent questions, no logins; the agreement and the onboarding form cover them)");
+ok(counter(a4) === "5/5" && state(row) === "ready" && missingQuestions(a4).length === 0, "Build: the situation answers and the plan → READY (no consent questions, no logins; the agreement and the onboarding form cover them)");
   ok(buildConsentsFor(a4)[0] === BUILD_CONSENT_NO_DOMAIN && !/own or control the domain/.test(buildConsentsFor(a4)[0]), "M-012: with No domain the first consent says they WILL register one — not that they own one");
   const r5 = save(row, { build_consents: "yes" }, { expectRoute: "build" });
   ok(r5.ok, "the final answer \"Yes — they confirm all three\" is accepted");
   const a5 = cleanAnswers(row.quick_close!.answers);
-  ok(a5.build_consents === "yes" && counter(a5) === "4/4" && state(row) === "ready", "a legacy consent answer is still accepted and kept; still ready");
+  ok(a5.build_consents === "yes" && counter(a5) === "5/5" && state(row) === "ready", "a legacy consent answer is still accepted and kept; still ready");
   ok((row.quick_close!.build_consents_confirmed as { wording: string; lines: string[] }).wording === "no_domain" && (row.quick_close!.build_consents_confirmed as { lines: string[] }).lines[0] === BUILD_CONSENT_NO_DOMAIN, "the stored consent records WHICH wording was read out");
   ok(row.cols.dns_permission === true && row.cols.materials_confirmed === true && row.cols.plan_tier === "new_site" && row.cols.website_addon === true, "the canonical columns the checkout reads: Build, DNS permission, materials");
   // Refresh = a new load of the stored row.
   const reloaded = clone(row.quick_close);
-  ok(quickCloseState(row.status, reloaded, clock) === "ready" && counter(cleanAnswers(reloaded!.answers)) === "4/4", "refresh: still 4 of 4, still ready");
+  ok(quickCloseState(row.status, reloaded, clock) === "ready" && counter(cleanAnswers(reloaded!.answers)) === "5/5", "refresh: still 5 of 5, still ready");
   // Double submit of the final answer.
   const rev = row.quick_close!.rev;
   const again = save(row, { build_consents: "yes" }, { expectRoute: "build" });
@@ -141,7 +141,7 @@ ok(counter(a4) === "4/4" && state(row) === "ready" && missingQuestions(a4).lengt
 /* ═══ v5: OPTIMISE IS WITHDRAWN (2026-10-16) ═══════════════════════════════════════════════════════ */
 console.log("\n── v5: OPTIMISE can no longer be sold; an old close still reads and moves to Build ──");
 /** A ready Build close, one answer per call (the dialog's order). */
-const BUILD_STEPS = [["decision_maker", "yes"], ["manager", "owner"], ["domain", "yes"], ["rights", "yes"], ["route", "build"]] as const;
+const BUILD_STEPS = [["decision_maker", "yes"], ["manager", "owner"], ["domain", "yes"], ["rights", "yes"], ["route", "build"], ["payment_plan", "six"]] as const;
 /** A close saved on Optimise BEFORE v5 — written straight onto the row (no save can produce one now). */
 const optimiseV4Row = (): Row => ({ status: "answers_saved", cols: { plan_tier: "keep", website_addon: false }, quick_close: { answers: { decision_maker: "yes", manager: "owner", domain: "yes", rights: "yes", approach: "improve", route: "optimise", access: "yes" }, rev: 1 } as QcRecord });
 {
@@ -159,6 +159,7 @@ const optimiseV4Row = (): Row => ({ status: "answers_saved", cols: { plan_tier: 
   const silent = save(old, { route: "build" }, { expectRoute: "optimise" });
   ok(!silent.ok && silent.error === "route_change_unconfirmed", "moving it to Build is a route change — asked, never a stray tap");
   const moved = save(old, { route: "build" }, { expectRoute: "optimise", routeChange: true });
+  save(old, { payment_plan: "six" }, { expectRoute: "build" });
   ok(moved.ok && cleanAnswers(old.quick_close!.answers).route === "build" && old.cols.plan_tier === "new_site" && old.cols.website_addon === true && state(old) === "ready", "confirmed → Build: the row's columns follow and it is ready for the sign-up link");
 }
 
@@ -225,7 +226,7 @@ console.log("\n── PAYMENT LINK: one current link, stale links never 'ready' 
 console.log("\n── ROUTE: only Build can be chosen; changes are deliberate ──");
 {
   const row = newRow();
-  for (const [k, v] of [["decision_maker", "yes"], ["manager", "owner"], ["domain", "yes"], ["rights", "yes"], ["approach", "unsure"], ["route", "build"], ["build_consents", "yes"]] as const) save(row, { [k]: v });
+  for (const [k, v] of [["decision_maker", "yes"], ["manager", "owner"], ["domain", "yes"], ["rights", "yes"], ["approach", "unsure"], ["route", "build"], ["payment_plan", "six"], ["build_consents", "yes"]] as const) save(row, { [k]: v });
   generate(row);
   const buildSession = row.quick_close!.link_session_id as string;
   const sw = save(row, { route: "optimise" }, { expectRoute: "build", routeChange: true });
@@ -235,7 +236,7 @@ console.log("\n── ROUTE: only Build can be chosen; changes are deliberate �
   /* A pre-v5 Optimise close with Build consents never had them; moving it to Build asks nothing more on the call. */
   const back = optimiseV4Row();
   const b2 = save(back, { route: "build" }, { expectRoute: "optimise", routeChange: true });
-  ok(b2.ok && cleanAnswers(back.quick_close!.answers).build_consents === undefined && missingQuestions(cleanAnswers(back.quick_close!.answers)).length === 0, "an old Optimise close moved to Build: no consents carried over, nothing more is asked on the call");
+  ok(b2.ok && cleanAnswers(back.quick_close!.answers).build_consents === undefined && missingQuestions(cleanAnswers(back.quick_close!.answers)).join() === "payment_plan", "an old Optimise close moved to Build: no consents carried over, nothing more is asked on the call but how they pay");
   const nosite = newRow();
   for (const [k, v] of [["decision_maker", "yes"], ["manager", "no_website"], ["domain", "no_domain"], ["approach", "unsure"]] as const) save(nosite, { [k]: v });
   const opt = save(nosite, { route: "optimise" }, { expectRoute: null });
@@ -250,7 +251,7 @@ console.log("\n── ROUTE: only Build can be chosen; changes are deliberate �
   const apSilent = save(ap, { approach: "new_template" }, { expectRoute: "optimise" });
   ok(!apSilent.ok && apSilent.error === "route_change_unconfirmed" && cleanAnswers(ap.quick_close!.answers).route === "optimise", "an old Optimise close: improve → a new site WITHOUT confirming is refused; still Optimise");
   const apSw = save(ap, { approach: "new_template" }, { expectRoute: "optimise", routeChange: true });
-  ok(apSw.ok && cleanAnswers(ap.quick_close!.answers).route === "build" && missingQuestions(cleanAnswers(ap.quick_close!.answers)).length === 0, "confirmed → Build; no domain / consent / site-access questions follow (2026-10-07)");
+  ok(apSw.ok && cleanAnswers(ap.quick_close!.answers).route === "build" && missingQuestions(cleanAnswers(ap.quick_close!.answers)).join() === "payment_plan", "confirmed → Build; no domain / consent / site-access questions follow (2026-10-07) — only how they pay");
   const apRoute = save(ap, { route: "optimise" }, { expectRoute: "build", routeChange: true });
   ok(!apRoute.ok && apRoute.error === "route_withdrawn" && cleanAnswers(ap.quick_close!.answers).route === "build", "v5: once on Build it can never be moved back to Optimise");
   const fn = read("supabase/functions/quick-close/index.ts");
@@ -268,7 +269,7 @@ for (const route of ["build"] as const) {
   const own = routeOwnershipLine(route);
   ok(route === "build" ? /builds, hosts and manages a new website/.test(own) && /website is theirs/.test(terms) : /keep their existing website/.test(own) && /stays theirs/.test(own) && /plan ends/.test(terms) && !/29\.99/.test(terms), `${route}: who owns the website is said; Build: theirs after the payments; Optimise: the plan ends, no £29.99`);
   const url = "https://findable.live/agree/" + "b".repeat(64);
-  for (const [label, text] of [["script", quickCloseScript(route)], ["message", quickCloseMessage("Bob Smith", url, route)], ["email", quickCloseEmail({ greetName: "Bob", businessName: "ABC Ltd", url, route, senderName: "Sumi" }).text]] as const) {
+  for (const [label, text] of [["script", quickCloseScript(route, "legacy_twelve")], ["message", quickCloseMessage("Bob Smith", url, route)], ["email", quickCloseEmail({ greetName: "Bob", businessName: "ABC Ltd", url, route, senderName: "Sumi" }).text]] as const) {
     ok(text.includes(`${n} payments in total`) && text.includes("(the minimum term)") && !/-month minimum/.test(text) && text.includes(QUICK_CLOSE_PROMISE) && text.includes(FINDABLE_GUARANTEE) && /read and sign the Client Service Agreement/.test(text) && !/tick to accept/.test(text), `${route} ${label}: payments, minimum term, the guarantee (exact) and signing the agreement before paying (v3)`);
     ok(!/guaranteed|rank|top of|recommend|cited|citation|week six/i.test(text), `${route} ${label}: no ranking / recommendation / citation promise, no "week six"`);
     ok(!/\([^)]*\(/.test(text), `${route} ${label}: no nested brackets (A-29)`);

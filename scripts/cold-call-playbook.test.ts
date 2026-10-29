@@ -23,6 +23,8 @@ import { resolveSiteFindingsDetailed } from '../src/lib/siteFindings.ts';
 import { CRAWL_CHECK_VERSION, type CrawlSignals } from '../src/lib/crawlCheck.ts';
 import { SITE_EVIDENCE_VERSION, type SiteEvidence } from '../src/lib/siteEvidence.ts';
 import { planSpoken } from '../src/lib/planTerms.ts';
+import { PAYMENT_PLAN_SPEC, REDUCED_MONTHLY_GBP, V6_GUARANTEE, gbpWords, threeWaysSpoken } from '../src/lib/paymentPlans.ts';
+import { FINDABLE_CONTINUING_GBP } from '../src/lib/findableOffer.ts';
 import { salesStyleProblems } from '../src/lib/salesStyle.ts';
 import { BRIDGE_LINE, DISCOVERY_QUESTIONS, FIRST_QUESTION, MAX_SPOKEN_FINDINGS, NO_STRONG_ISSUE_LINE } from '../src/lib/callScript.ts';
 
@@ -246,10 +248,20 @@ console.log('── 10. OFFER AND CLAIMS ──');
   const p = buildColdCallPlaybook(base({ leadCrawl: crawl(THIN, 1, SITEMAP_EVIDENCE) }));
   const text = allText(p);
   ok(p.offer.lines[0] === planSpoken(), 'the offer comes from planTerms.ts (v5: Findable Build, the one plan): ' + planSpoken());
-  ok(/12 payments/.test(p.offer.monthly) && /Findable Build/.test(p.offer.monthly) && !/optimise|6 payments|months/i.test(p.offer.monthly) && !/check current offer/i.test(text), 'v5: Build\'s terms are stated in payments (12); no Optimise, no months; no "check current offer"');
+  ok(p.offer.lines[1] === V6_GUARANTEE, 'the offer\'s second line is the v6 guarantee (paymentPlans.ts V6_GUARANTEE)');
+  /* 2026-10-29 (v6): three ways to pay, from threeWaysSpoken (constants). The 12-month plan is said in PAYMENTS;
+     "6 months" is the name of a plan, never a minimum term in months. */
+  ok(p.offer.monthly.includes(threeWaysSpoken()) && p.offer.monthly.includes(`${PAYMENT_PLAN_SPEC.twelve.totalPayments} payments in total`) && /Findable Build/.test(p.offer.monthly)
+    && !/optimise|minimum term of \d+ months|-month minimum|cancel (at )?any ?time/i.test(p.offer.monthly) && !/check current offer/i.test(text),
+    'v6: Build\'s three ways to pay from the constants (12-month plan in payments); no Optimise, no months-as-minimum-term, no cancel any time; no "check current offer"');
   ok(!/optimise/i.test(JSON.stringify(p.offer) + JSON.stringify(p.objections) + JSON.stringify(p.close.routes)), 'v5: nothing in the offer, the objections or the close sells, quotes or recommends Optimise');
-  /* 2026-10-07: £29.99 appears ONLY as Build's optional hosting / maintenance after its 12 payments. */
-  ok(!/£9\.99|£49\.99/.test(text) && !/£29\.99(?! a month for hosting and maintenance)/.test(text), 'no stale or invented price anywhere (£29.99 only as Build\'s optional hosting and maintenance)');
+  /* 2026-10-29: £29.99 appears ONLY as Build's optional hosting after the payments; £49.99 ONLY as the 12-month plan's monthly. */
+  const cont = gbpWords(FINDABLE_CONTINUING_GBP).replace(/[.£]/g, (c) => '\\' + c);
+  const contOk = new RegExp(cont + ' a month (for hosting and maintenance )?only if|optional at ' + cont + ' a month', 'g');
+  const reduced = new RegExp('then ' + gbpWords(REDUCED_MONTHLY_GBP).replace(/[.£]/g, (c) => '\\' + c) + ' (a month|× ' + (PAYMENT_PLAN_SPEC.twelve.totalPayments - 1) + ')', 'g');
+  const stripped = text.replace(contOk, '').replace(reduced, '');
+  ok(FINDABLE_CONTINUING_GBP === 29.99 && REDUCED_MONTHLY_GBP === 49.99 && !/£9\.99/.test(text) && !/£29\.99|£49\.99/.test(stripped) && contOk.test(text),
+    'no stale or invented price anywhere (£29.99 only as Build\'s optional hosting after; £49.99 only as the 12-month plan\'s monthly)');
   ok(!/Optimise[^.]*£29\.99|carries on at £29\.99 a month for monitoring/.test(text), 'Optimise is never followed by £29.99');
   ok(!/guarantee (you|that you)|will (rank|be named|show up)|you'll definitely/i.test(text), 'no guaranteed outcome anywhere');
   ok(!/is why you (don't|do not|aren't)|caused|because of your (site|website)/i.test(text), 'no website finding is stated as the cause');
@@ -257,20 +269,22 @@ console.log('── 10. OFFER AND CLAIMS ──');
   /* 2026-10-06 (sales-team-today, Paul): the short list a rep can use DURING a call, exactly, in this order.
      The long 2026-09-30 list (website guy, rank on Google, SEO company, …) was removed deliberately. */
   const EXPECTED = ['Why £99?', 'How much is it?', 'I already have an agency', 'My agency controls the website / domain', 'I need to think about it',
-    'Is this a scam?', 'Can I cancel?', "Can you guarantee I'll show up?", 'Why 12 payments?', 'Can you just improve my current website?', 'Just send me something', "I'm busy right now"];
+    'Is this a scam?', 'Can I cancel?', "Can you guarantee I'll show up?", 'Why pay monthly?', 'Can you just improve my current website?', 'Just send me something', "I'm busy right now"];
   for (const o of EXPECTED) ok(objections.includes(o), 'objection covered: ' + o);
   ok(JSON.stringify(objections) === JSON.stringify(EXPECTED), 'the objection list is exactly the call-time list, in order');
-  ok(!objections.some((o) => /Why six payments\?|What happens after\?/.test(o)), 'the objection list keeps its call-time shape');
+  ok(!objections.some((o) => /Why six payments\?|What happens after\?|Why 12 payments\?/.test(o)), 'the objection list keeps its call-time shape (the old "Why 12 payments?" is gone)');
   const ans = (t: string) => p.objections.find((o) => o.objection === t)?.answer ?? '';
-  /* v5 (2026-10-16): Build only; its £29.99 only if they want hosting to continue. */
-  ok(/minimum term of 12 payments/.test(ans('Can I cancel?')) && !/6 if we work on yours|6th payment/.test(ans('Can I cancel?')) && /only if you want it: you can cancel that with 30 days' notice/.test(ans('Can I cancel?')),
-    '"Can I cancel?": a minimum term of 12 payments; the hosting only if they want it, cancellable with notice; no Optimise');
+  /* v6 (2026-10-29): the minimum term is all the payments in the plan; hosting after only if they want it. */
+  ok(/minimum term is all the payments in your plan, today's included/.test(ans('Can I cancel?')) && /Pay in full is one payment/.test(ans('Can I cancel?'))
+    && /final payment clears the website is yours/.test(ans('Can I cancel?')) && !/6 if we work on yours|6th payment|optimise|cancel (at )?any ?time/i.test(ans('Can I cancel?'))
+    && /only if you want it: you can cancel that with 30 days' notice/.test(ans('Can I cancel?')) && /everything you've paid/.test(ans('Can I cancel?')),
+    '"Can I cancel?": the minimum term is every payment in the plan; the site theirs at the final payment; hosting only if they want it, cancellable with notice; no Optimise');
   ok(/not something we offer/.test(ans('Can you just improve my current website?')) && /keep your web address/.test(ans('Can you just improve my current website?')),
     '"Can you just improve my current website?": not offered — a new website, and they keep their web address');
-  ok(/keep hosting and maintaining it after that, it's £29\.99 a month for hosting and maintenance/.test(ans('Why 12 payments?')),
-    '"Why 12 payments?": £29.99 a month only if they want hosting / maintenance to continue');
-  ok(/^No one can promise AI will name you/.test(ans("Can you guarantee I'll show up?")) && /claim your £99 back/.test(ans("Can you guarantee I'll show up?")),
-    '"Can you guarantee …?": nobody can promise a placement; the measurement or the £99 back');
+  ok(/^You don't have to\./.test(ans('Why pay monthly?')) && ans('Why pay monthly?').includes(threeWaysSpoken()) && /Same service either way/.test(ans('Why pay monthly?')),
+    '"Why pay monthly?": they don\'t have to — all three ways to pay (from the constants), the same service either way');
+  ok(/^No one can promise AI will name you/.test(ans("Can you guarantee I'll show up?")) && /the measurement/.test(ans("Can you guarantee I'll show up?")) && /you get your money back\.$/.test(ans("Can you guarantee I'll show up?")),
+    '"Can you guarantee …?": nobody can promise a placement; the measurement or their money back');
 }
 
 console.log('── 11. OPENING THE PLAYBOOK TRIGGERS NOTHING ──');
@@ -363,11 +377,12 @@ console.log('── 12. SIMPLIFIED PLAYBOOK (Paul, 2026-09-27) ──');
   ok(prof.script.found.lines.some((l) => /belongs to TradeHQ/.test(l)) && /Never call the profile their website/.test(prof.script.found.note ?? ''), 'what we found says truthfully that the profile page is TradeHQ\'s');
   ok(ps.includes('Able Group (Shrewsbury Service)') && /asked Gemini/.test(ps), 'the profile lead keeps its exact engine and competitors');
 
-  // "How much" is the canonical offer sentence itself (2026-10-06); the ownership line is on "Why 12 payments?".
+  // "How much" is the canonical offer sentence itself (2026-10-06); 2026-10-29 it names all three ways to pay.
   const howMuch = p.objections.find((o) => o.objection === 'How much is it?')?.answer ?? '';
-  ok(howMuch === planSpoken() && /12 payments in total, today's included/.test(howMuch) && !/6 payments|optimise/i.test(howMuch) && /£29\.99 a month for hosting and maintenance only if you want us to keep looking after it/.test(howMuch),
-    '"How much is it?" names Findable Build: 12 payments, £29.99 after only if they want hosting (v5)');
-  ok(/the website is theirs/.test(p.objections.find((o) => o.objection === 'Why 12 payments?')?.answer ?? ''), 'the ownership line: on Build the site is theirs once the payments are made');
+  ok(howMuch === planSpoken() && howMuch.includes(threeWaysSpoken()) && /12 payments in total/.test(howMuch) && !/optimise/i.test(howMuch) && /£29\.99 a month for hosting and maintenance only if you want us to keep looking after it/.test(howMuch),
+    '"How much is it?" names Findable Build three ways to pay, £29.99 after only if they want hosting (v6)');
+  ok(/Once your final payment clears the site's yours/.test(howMuch) && /site is theirs once the final payment clears/.test(p.offer.monthly) && /final payment clears the website is yours/.test(p.objections.find((o) => o.objection === 'Can I cancel?')?.answer ?? ''),
+    'the ownership line: on Build the site is theirs once the final payment clears');
 
   // The panel: the new hierarchy, the old A–H headings gone.
   const ui = readFileSync(new URL('../src/components/ColdCallPlaybook.tsx', import.meta.url), 'utf8');

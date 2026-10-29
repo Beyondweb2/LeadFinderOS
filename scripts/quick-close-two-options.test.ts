@@ -27,7 +27,7 @@ ok(closeFlow({ manager: 'agency', agency_contract: 'in_contract' }).join() === '
 ok(!/dns|registrar|password|login|hosting|logo|photo|opening hours/i.test(closeFlow({ manager: 'agency', route: 'optimise' }).join()), 'no DNS / registrar / hosting / CMS login, photo, logo or hours on the call');
 ok(!phoneCloseNotesComplete(undefined) && !phoneCloseNotesComplete({ jobs: 'Lock changes' }) && !phoneCloseNotesComplete({ areas: 'Canterbury' }) && !phoneCloseNotesComplete({ jobs: ' ', areas: ' ' }), 'services AND areas are both needed — one, blank or nothing is not complete');
 ok(phoneCloseNotesComplete({ jobs: 'Emergency lockouts, lock changes', areas: 'Canterbury, Whitstable' }), 'what they offer + where they want to be found → complete');
-ok(missingQuestions({ decision_maker: 'yes', manager: 'owner', domain: 'yes', route: 'build' }).length === 0, 'Build with the short answers is ready on the answers alone (the notes are checked when the link is made)');
+ok(missingQuestions({ decision_maker: 'yes', manager: 'owner', domain: 'yes', route: 'build', payment_plan: 'six' }).length === 0, 'Build with the short answers is ready on the answers alone (the notes are checked when the link is made)');
 
 console.log('\n── v5: BUILD ONLY; STILL TIED IN = DECLINED ──');
 ok(offerFit({}, true).recommended === 'build' && offerFit({ manager: 'owner' }, true).recommended === 'build', 'a site they run → Build');
@@ -51,7 +51,7 @@ ok(!isSignupLinkUrl(setupLinkUrl(LEAD)), 'the agreement-link check still accepts
 
 console.log('\n── THE CLIENT CONFIRMATION ──');
 {
-  const qc: QuickCloseRecord = { answers: { decision_maker: 'yes', manager: 'agency', agency_contract: 'free', domain: 'yes', route: 'build' }, call: { jobs: 'Emergency lockouts, lock changes', areas: 'Canterbury, Whitstable' } };
+  const qc: QuickCloseRecord = { answers: { decision_maker: 'yes', manager: 'agency', agency_contract: 'free', domain: 'yes', route: 'build', payment_plan: 'six' }, call: { jobs: 'Emergency lockouts, lock changes', areas: 'Canterbury, Whitstable' } };
   const keys = confirmItemsFor(qc).map((i) => i.key).join();
   ok(keys === 'manager,agency_contract,domain', 'three facts to confirm (the reuse question is gone)');
   const lines = confirmSummaryFor(qc, { plan_tier: 'new_site', website_addon: true }, {});

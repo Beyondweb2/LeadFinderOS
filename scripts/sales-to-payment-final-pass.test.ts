@@ -60,7 +60,7 @@ console.log('── A. BUILD · SELF-MANAGED ──');
   const fit = offerFit(s.qc.answers as QuickCloseAnswers, true);
   ok(fit.recommended === 'build' && fit.offered.build && !fit.offered.optimise && fit.warning === null, 'v5: Build is the plan; Optimise is not offered; no warning');
   ok(fit.notes.includes(REUSE_YES_LINE) && fit.notes.includes(DOMAIN_NOT_WEBSITE_LINE), '…with the reuse line ("very close to the look they already like") and the domain-is-not-the-website line');
-  s.answer({ route: 'build' });
+  s.answer({ route: 'build' }); s.answer({ payment_plan: 'legacy_twelve' });
   ok(s.state() === 'ready' && s.cols.plan_tier === 'new_site' && s.cols.website_addon === true && serviceRouteFromRow(s.cols) === 'build' && totalPaymentsFor('build') === 12, 'ready; sold as Build (12 payments) from the row');
   s.linkMade();
   ok(s.state() === 'link_generated', 'the sign-up link is made');
@@ -77,7 +77,7 @@ console.log('\n── B. BUILD · AGENCY BUT FREE TO LEAVE ──');
   const fit = offerFit(s.qc.answers as QuickCloseAnswers, true);
   ok(fit.recommended === 'build' && fit.offered.build && fit.warning === null, 'contract = No → Build recommended, no warning');
   ok(fit.notes.includes(REUSE_NO_LINE) && !/identical|clone|exact copy/i.test(fit.notes.join(' ')), 'no reuse right → an original site, never a promised copy');
-  s.answer({ route: 'build' });
+  s.answer({ route: 'build' }); s.answer({ payment_plan: 'six' });
   const g = quickCloseGate(s.qc.answers as QuickCloseAnswers);
   ok(s.state() === 'ready' && g.review.length === 0 && g.flags.includes('domain_handoff'), 'ready; the agency-held domain is a note for Paul, never a stop (keeping the domain ≠ keeping the website)');
 }
@@ -102,7 +102,7 @@ console.log('\n── D. UNKNOWN CONTRACT ──');
   s.answer({ decision_maker: 'yes', manager: 'agency', agency_contract: 'not_sure', domain: 'yes', rights: 'yes' });
   const fit = offerFit(s.qc.answers as QuickCloseAnswers, true);
   ok(fit.recommended === 'build' && fit.offered.build && !fit.declined && fit.warning === CONFIRM_CONTRACT_WARNING, 'contract "Not sure": Build stays the plan, with the confirm-the-contract warning (not a decline)');
-  s.answer({ route: 'build' });
+  s.answer({ route: 'build' }); s.answer({ payment_plan: 'six' });
   ok(s.state() === 'needs_review' && !mayGenerateLink('answers_saved', s.qc, NOW), 'the Build still stops for Paul\'s release until the contract is confirmed free (the existing payment stop is unchanged)');
   ok(quickCloseState('answers_saved', { ...s.qc, review_approved_at: iso(NOW) }, NOW) === 'ready', '…and he can release it');
   ok(fit.recommended !== 'optimise', 'never silently recommends Optimise');
@@ -116,14 +116,14 @@ console.log('\n── E. NO WEBSITE ──');
   s.answer({ domain: 'no_domain' });
   const fit = offerFit(s.qc.answers as QuickCloseAnswers, false);
   ok(fit.recommended === 'build' && !fit.offered.optimise && fit.notes.length === 0, 'Build only, and no ownership notes');
-  s.answer({ route: 'build' });
+  s.answer({ route: 'build' }); s.answer({ payment_plan: 'six' });
   ok(s.state() === 'ready' && missingQuestions(s.qc.answers as QuickCloseAnswers).length === 0, 'ready — nothing irrelevant asked');
 }
 
 console.log('\n── F. REOPEN · RESUME · RESEND · NO DUPLICATE · SELLER AND PLAN KEPT ──');
 {
   const s = closeSession();
-  s.answer({ decision_maker: 'yes', manager: 'owner', domain: 'yes', rights: 'yes', route: 'build' }); s.linkMade();
+  s.answer({ decision_maker: 'yes', manager: 'owner', domain: 'yes', rights: 'yes', route: 'build', payment_plan: 'six' }); s.linkMade();
   const held = row('OB-SALES', s.qc, s.cols);
   const first = resumeDecision([held], NOW);
   const again = resumeDecision([held], NOW + 3 * 24 * 3_600_000);
@@ -150,7 +150,7 @@ console.log('\n── POST-PAYMENT ONBOARDING asks only what is still missing �
 {
   /* The columns Quick Close writes for a Build sale on a site an agency runs, the domain theirs, the design reusable. */
   const s = closeSession();
-  s.answer({ decision_maker: 'yes', manager: 'agency', agency_contract: 'free', domain: 'yes', rights: 'yes', route: 'build' });
+  s.answer({ decision_maker: 'yes', manager: 'agency', agency_contract: 'free', domain: 'yes', rights: 'yes', route: 'build', payment_plan: 'six' });
   const keys = onboardingQuestionsFor({ route: 'build', row: { ...s.cols, contact_name: 'Sam', contact_email: 's@x.co' }, profile: {}, hasWebsite: true }).map((q) => q.key);
   ok(!keys.includes('domain_status') && !keys.includes('domain_owned') && !keys.includes('site_rights'), 'the domain, who controls it and the reuse right Quick Close already recorded are NOT asked again');
   ok(keys.includes('dns_permission') && keys.includes('materials_confirmed') && keys.includes('photos_status') && keys.includes('domain_access'), 'what only the paid client can give is still asked: DNS permission, materials, photos, who handles the domain');
@@ -162,7 +162,7 @@ console.log('\n── POST-PAYMENT ONBOARDING asks only what is still missing �
 console.log('\n── CLIENT CONFIRMATION: "here\'s what we have so far" ──');
 {
   const s = closeSession();
-  s.answer({ decision_maker: 'yes', manager: 'agency', agency_contract: 'free', domain: 'yes', rights: 'yes', route: 'build' }); s.linkMade();
+  s.answer({ decision_maker: 'yes', manager: 'agency', agency_contract: 'free', domain: 'yes', rights: 'yes', route: 'build', payment_plan: 'six' }); s.linkMade();
   const items = confirmItemsFor(s.qc);
   const by = Object.fromEntries(items.map((i) => [i.key, i]));
   ok(items.map((i) => i.key).join() === 'manager,agency_contract,domain', 'three facts, in order');

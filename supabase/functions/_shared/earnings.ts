@@ -112,10 +112,10 @@ export async function loadEarnings(service: Service, personId: string | null, to
   const sales = new Set([...roles.filter((r) => r.role === "sales").map((r) => r.user_id), ...disabledNow]);
   for (const a of admins) sales.delete(a);
   const leadIds = [...new Set(ledger.map((r) => r.lead_id).filter((x): x is string => !!x))];
-  type LeadBits = { business_name: string | null; sold_by_user_id: string | null; subscription_status: string | null; contract_total_payments: number | null; subscription_renews_at: string | null; service_terminated_at: string | null; status: string | null; remeasure_results_sent_at: string | null };
+  type LeadBits = { business_name: string | null; sold_by_user_id: string | null; subscription_status: string | null; contract_total_payments: number | null; payment_plan?: string | null; subscription_renews_at: string | null; service_terminated_at: string | null; status: string | null; remeasure_results_sent_at: string | null };
   const leads = new Map<string, LeadBits>();
   for (let i = 0; i < leadIds.length; i += 150) {
-    const { data, error } = await service.from("outreach_leads").select("id, business_name, sold_by_user_id, subscription_status, contract_total_payments, subscription_renews_at, service_terminated_at, status, remeasure_results_sent_at").in("id", leadIds.slice(i, i + 150));
+    const { data, error } = await service.from("outreach_leads").select("id, business_name, sold_by_user_id, subscription_status, contract_total_payments, payment_plan, subscription_renews_at, service_terminated_at, status, remeasure_results_sent_at").in("id", leadIds.slice(i, i + 150));
     if (error) throw new Error(error.message);
     for (const l of (data ?? []) as (LeadBits & { id: string })[]) leads.set(l.id, l);
   }
@@ -145,7 +145,7 @@ export async function loadEarnings(service: Service, personId: string | null, to
       termsOf.set(r.lead_id, {
         terms: r.commercial_terms,
         approvalDay: approvalDay({
-          terms: r.commercial_terms, route: isServiceRoute(r.service_route) ? r.service_route : serviceRouteForTotal(l?.contract_total_payments ?? null),
+          terms: r.commercial_terms, route: isServiceRoute(r.service_route) ? r.service_route : serviceRouteForTotal(l?.contract_total_payments ?? null, l?.payment_plan),
           initialPaidAt: r.initial_paid_at, accessDate: r.access_date, resultsSentAt: l?.remeasure_results_sent_at ?? null, guaranteeCeasedAt: r.guarantee_ceased_at,
         }),
       });
@@ -196,7 +196,7 @@ export async function loadEarnings(service: Service, personId: string | null, to
     const status = leads.get(c.leadId)?.subscription_status ?? null;
     const monthly = lastRecurring.get(c.leadId) ?? FINDABLE_MONTHLY_GBP;
     const active = !!status && LIVE_SUBSCRIPTION.has(status);
-    const route = serviceRouteForTotal(leads.get(c.leadId)?.contract_total_payments ?? null);
+    const route = serviceRouteForTotal(leads.get(c.leadId)?.contract_total_payments ?? null, leads.get(c.leadId)?.payment_plan);
     return { ...c, subscriptionStatus: status, package: route ? SERVICE_ROUTE_NAME[route] : null, remainingPotential: active ? round2(c.commissionablePaymentsLeft * commissionOn(monthly, COMMISSION_RECURRING_RATE)) : 0, _proj: { leadId: c.leadId, paymentsLeft: c.commissionablePaymentsLeft, monthlyGbp: monthly, active } as ProjectionInput };
   });
   const totals = earningsTotals(lines, payouts, clients.map((c) => c._proj), todayIso);

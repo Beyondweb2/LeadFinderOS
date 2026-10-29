@@ -57,7 +57,7 @@ const pm = (thread: MoveThreadMsg[], o: Partial<{ aiSentSinceWin: number; eviden
   const price = pm([opener, { from: 'them', text: 'how much is it?' }]);
   ok(price.move === 'first_reply_pitch' && !price.allowPrice && !/£/.test(price.fixedText ?? ''), 'a price question as the FIRST reply → the hook, no price (Paul, 2026-10-26)');
   const price2 = pm([opener, { from: 'them', text: 'Yes' }, hook, { from: 'them', text: 'how much is it?' }]);
-  ok(price2.intent === 'how_much' && price2.topic === 'price' && price2.allowPrice && /word for word: "It's £99 to start/.test(price2.points[0]), 'a price question after the hook → the playbook price line, word for word');
+  ok(price2.intent === 'how_much' && price2.topic === 'price' && price2.allowPrice && /word for word: "It's £499 once, or £99 a month for 6 months/.test(price2.points[0]), 'a price question after the hook → the playbook price line, word for word');
   /* Ads are ads_question since 2026-10-21 (reply recon); a logo is still not on the sheet. */
   ok(pm([opener, { from: 'them', text: 'Can you do my logo as well?' }]).move === 'first_reply_pitch', 'an off-sheet question as the FIRST reply → the hook');
   const unknown = pm([opener, { from: 'them', text: 'Yes' }, hook, { from: 'them', text: 'Can you do my logo as well?' }]);
@@ -199,7 +199,7 @@ console.log('7. the confidence line: only where Paul said');
   for (const x of ['Yes', 'yeah go on', 'ok', 'hmm', 'Dom here']) ok(!pm([opener, { from: 'them', text: 'Yes' }, hook, { from: 'them', text: x }]).points.join(' ').includes(CONFIDENCE_LINE), `never the money-back line unasked ("${x}")`);
   ok(!pm([opener, { from: 'them', text: 'Yes it is' }]).confidence, 'never in the first pitch');
   const g = pm([opener, { from: 'them', text: 'Yes' }, hook, { from: 'them', text: 'is there a guarantee' }]).points.join(' ');
-  ok(g.includes("If we haven't improved your AI visibility at the 4-week re-check, you get your £99 back.") && !/hasn't gone up/.test(g), 'the guarantee reply: "If we haven\'t improved your AI visibility at the 4-week re-check, you get your £99 back."');
+  ok(g.includes("If we haven't improved your AI visibility at the 4-week re-check, you get back everything you've paid us.") && !/hasn't gone up/.test(g), 'the guarantee reply (v6 5.4): "If we haven\'t improved your AI visibility at the 4-week re-check, you get back everything you\'ve paid us."');
 }
 console.log('8. the bot answer: Paul\'s one line, never a denial (the playbook, 2026-10-20)');
 {

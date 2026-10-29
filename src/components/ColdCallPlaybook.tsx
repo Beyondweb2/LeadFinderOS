@@ -1,8 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { usePriceModel } from '@/hooks/usePriceModel';
-import { PriceModelSwitch } from '@/components/PriceModelSwitch';
-import { guaranteeForModel, routeOfferForModel } from '@/lib/callClose';
-import type { PriceModel } from '@/lib/priceModel';
+import { routeOffer } from '@/lib/callClose';
 import { useQueryClient } from '@tanstack/react-query';
 import { logFeatureUse } from '@/lib/featureUsage';
 import { invokeEdge, edgeErrorMessage } from '@/lib/edgeInvoke';
@@ -83,11 +80,10 @@ function Step({ title, tone = 'grey', hint, children, testId, action }: { title:
 }
 
 /** The script as plain text for the Copy button — the same sections, in the same order, as the screen. */
-export function callFlowText(p: ColdCallPlaybook, model: PriceModel = 'standard'): string {
+export function callFlowText(p: ColdCallPlaybook): string {
   const s = p.script;
   const base = s.plans.routes.find((r) => r.route === s.plans.preselected) ?? s.plans.routes[0];
-  /* The copied script says the price of the person's model (2026-10-14), exactly as the Offer step does. */
-  const plan = base ? routeOfferForModel(base.route, model) : base;
+  const plan = base ? routeOffer(base.route) : base;
   return [
     'SAY\n' + s.opener.join('\n'),
     ...(s.found.lines.length ? [(s.found.coverage ? CALL_SCRIPT_ISSUES_HEADING.toUpperCase() + ' (' + s.found.coverage + ')' : 'WEBSITE') + '\n' + s.found.lines.map((l) => '- ' + l).join('\n')] : []),
@@ -97,16 +93,15 @@ export function callFlowText(p: ColdCallPlaybook, model: PriceModel = 'standard'
     'THEN ASK\n' + s.discovery.map((q) => '- ' + q).join('\n'),
     'WHAT WE DO\n' + CALL_WHAT_WE_DO_STEPS.map((st) => st.n + '. ' + st.title + '\n' + st.lines.map((l) => '- ' + l.text.replace(/\*\*/g, '')).join('\n')).join('\n'),
     ...(plan ? ['PLAN: ' + plan.name + ' (' + plan.summary + ')\n' + plan.spoken.join(' ')] : []),
-    'GUARANTEE\n' + guaranteeForModel(s.guarantee, model).spoken,
+    'GUARANTEE\n' + s.guarantee.spoken,
   ].join('\n\n');
 }
 
 /* ── SAY ──────────────────────────────────────────────────────────────────────────────────────── */
 function Say({ p }: { p: ColdCallPlaybook }) {
   const s = p.script;
-  const { model } = usePriceModel();
   return (
-    <Step title="Say" tone="blue" testId="call-step-open" action={<CopyButton text={callFlowText(p, model)} label="Copy" />}>
+    <Step title="Say" tone="blue" testId="call-step-open" action={<CopyButton text={callFlowText(p)} label="Copy" />}>
       <div className="space-y-2 text-[15px] leading-relaxed" data-testid="playbook-call-script">{s.opener.map((line) => <p key={line}>{line}</p>)}</div>
       {s.found.coverage && s.found.lines.length > 0 && (
         <p className="flex flex-wrap items-baseline gap-x-2 text-[11px] text-muted-foreground" data-testid="call-found-coverage">
@@ -329,9 +324,8 @@ function Offer({ p, ans }: { p: ColdCallPlaybook; ans: ReturnType<typeof useCall
   /* THE AGENCY-CONTRACT RULE (offerFit, v5 2026-10-16): Build is the one plan; still tied into a contract with their current
      provider DECLINES the sale — nothing is offered, to anyone (there is no release for a decline). */
   const fit = ans.v ? offerFit(ans.answers, ans.v.has_website ?? (p.context.website ? true : false)) : null;
-  const { model } = usePriceModel();
-  const routes = s.plans.routes.filter((r) => isSaleableRoute(r.route) && (!fit || fit.offered[r.route])).map((r) => routeOfferForModel(r.route, model));
-  const guarantee = guaranteeForModel(s.guarantee, model);
+  const routes = s.plans.routes.filter((r) => isSaleableRoute(r.route) && (!fit || fit.offered[r.route])).map((r) => routeOffer(r.route));
+  const guarantee = s.guarantee;
   const preferred = fit?.recommended ?? s.plans.preselected;
   const [picked, setPicked] = useState<ServiceRoute | null>(null);
   const route = picked && routes.some((r) => r.route === picked) ? picked : routes.some((r) => r.route === preferred) ? preferred : routes[0]?.route;
@@ -346,7 +340,6 @@ function Offer({ p, ans }: { p: ColdCallPlaybook; ans: ReturnType<typeof useCall
   if (!plan) return null;
   return (
     <Step title="Offer" tone="green" testId="call-step-close">
-      <PriceModelSwitch compact />
       {/* The one-line "Findable Build is the plan…" is gone (Paul, 2026-10-20): the price card says it. A reason that asks
           the rep to do something (the agency contract) stays. */}
       {fit?.reason && fit.reason !== BUILD_DEFAULT_REASON && <p className={cn('rounded-xl px-3 py-2 text-xs leading-snug ring-1 ring-inset', fit.offered.build ? 'bg-muted/40 text-muted-foreground ring-border' : 'bg-amber-500/[0.08] text-amber-800 ring-amber-500/30 dark:text-amber-200')} data-testid="call-offer-fit">{fit.reason}</p>}

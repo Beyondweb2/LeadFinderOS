@@ -102,7 +102,7 @@ console.log('\n── NOTHING CAN SELL THE WITHDRAWN PLAN; THE SAFEGUARDS HOLD �
   }
   const optimiseOnOwnSite = { ...base, route: 'optimise' as const, manager: 'owner' as const, access: 'yes' as const };
   ok(quickCloseState('answers_saved', { answers: optimiseOnOwnSite }) === 'in_progress' && !mayGenerateLink('answers_saved', { answers: optimiseOnOwnSite }), 'a close stored on Optimise before v5 is not ready and makes no link');
-  const buildTied = { ...base, route: 'build' as const, manager: 'agency' as const, agency_contract: 'in_contract' as const };
+  const buildTied = { ...base, route: 'build' as const, payment_plan: 'six' as const, manager: 'agency' as const, agency_contract: 'in_contract' as const };
   ok(agencyContractBlocksBuild(buildTied) && quickCloseGate(buildTied).declined && quickCloseState('answers_saved', { answers: buildTied }) === 'declined' && !mayGenerateLink('answers_saved', { answers: buildTied }), 'Build while still tied in: DECLINED, no link');
   ok(quickCloseState('answers_saved', { answers: buildTied, review_approved_at: NOW }) === 'declined', '…and Paul cannot release it');
   const buildNotSure = { ...buildTied, agency_contract: 'not_sure' as const };

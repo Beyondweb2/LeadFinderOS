@@ -43,6 +43,8 @@ export interface HandoffLead {
   service_termination_reason?: string | null;
   /** The route the client PAID on (12 = Build, 6 = Optimise), stamped once by the checkout. */
   contract_total_payments?: number | null;
+  /** 2026-10-29: the payment plan (every plan is Build; a count of 6 alone is not Optimise once a plan is recorded). */
+  payment_plan?: string | null;
 }
 
 export interface HandoffOnboarding extends DomainRow {
@@ -221,7 +223,7 @@ export function handoffReadiness(
      client actually on Optimise — paid on that route, or an onboarding row that chose it (plan_tier keep / website_route
      optimise_existing). Everyone else, an unknown route included, is a Build client: Findable builds and hosts the site,
      so neither is ever asked for. Existing Optimise clients keep their two items exactly as before. */
-  const route: ServiceRoute | null = serviceRouteForTotal(L.contract_total_payments) ?? serviceRouteFromRow(O as never);
+  const route: ServiceRoute | null = serviceRouteForTotal(L.contract_total_payments, L.payment_plan) ?? serviceRouteFromRow(O as never);
   const optimise = route === 'optimise' || (!route && O?.website_route === 'optimise_existing');
   const build = !optimise;
   // Website: a site on file, or a positive "no website / build a new one".

@@ -383,7 +383,7 @@ console.log('\n── 5. AGREEMENT ROUTE INTEGRITY ──');
   ok(/const allowed = maySetAgreementRoute\(lock, route\);\s*\n\s*if \(!allowed\.ok\) return json\(\{ ok: false, error: "route_locked"/.test(hub), 'agreement_set_route goes through the lock (checkout acceptance included)');
   ok(!/from\("client_agreement_acceptances"\)\s*\.(insert|update|delete|upsert)/.test(hub), 'the hub never writes an acceptance (write-once; the DB trigger refuses update/delete)');
   ok(/const pdf = await agreementPdfForRow\(row\);/.test(hub), 'the signed PDF is rebuilt from the stored record');
-  ok(/resolveAgreementRoute\(link\.service_route, lead\.contract_total_payments\)/.test(read('supabase/functions/client-agreement/index.ts')), 'the agreement page uses the same resolver');
+  ok(/resolveAgreementRoute\(link\.service_route, lead\.contract_total_payments, lead\.payment_plan\)/.test(read('supabase/functions/client-agreement/index.ts')), 'the agreement page uses the same resolver');
   ok(/route_locked/.test(read('src/pages/ClientHub.tsx')), 'the client page disables the other route button when it is locked');
 }
 

@@ -18,6 +18,7 @@
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 
 import { REPORT_PUBLIC_ORIGIN } from './findableOffer.ts';
+import { isPaymentPlan, planAgreementWords, type PaymentPlan } from './paymentPlans.ts';
 
 /* v5 (2026-10-16): what NEW sign-ups sign. A client who signed v4 or v3 stays on it. */
 export const CLIENT_AGREEMENT_VERSION = 'v5';
@@ -56,6 +57,8 @@ export interface AgreementVersion {
     /** v5 clause 1.6: the current provider (if any) and whether the client is free to leave it. Absent = an
      *  older version that never asked, so its bytes never move. */
     currentProvider?: string; freeToLeave?: string;
+    /** v6: the payment plan the client chose (paymentPlans.ts), printed in words. Absent = an older version. */
+    paymentPlan?: string;
   };
   /** The plans the version offers. v1 to v4: Build and Optimise; v5: Build only (versionRoutes). */
   services: { build: { name: string; description: string }; optimise?: { name: string; description: string } };
@@ -712,7 +715,86 @@ const V5: AgreementVersion = {
 };
 /* ⛔ GENERATED V5 END */
 
-const VERSIONS: Record<string, AgreementVersion> = { v1: V1, v3: V3, v4: V4, v5: V5 };
+/* ⛔ V6 (Paul, 2026-10-29): v5 with ONLY what the three payment options need — the plan the client chose (Client Details
+   "Payment plan", 3.1), the Plan Period (2.6, 9.2, 15.1), ownership on the final cleared payment (4.3, 8.2, 8.4), hosting
+   (9.2, 9A: included while paying; Pay in full includes 6 months), and the guarantee refund = what the client has paid
+   (5.4, 5.5). Everything else is v5's wording. Written by Claude on Paul's instruction, to be reviewed by his solicitor
+   (docs/v6-review-for-solicitor.md; the annotated copy with every [CHECK] is docs/agreement-v6.md, rendered from THIS
+   block by scripts/render-agreement-v6-doc.ts). Do not edit a word once a client has signed it: a change is v7.
+   Sold for the new plans only (paymentPlans.agreementVersionForPlan); the old £99 × 12 plan stays on v5. */
+/** v6's changed clauses, by v5 number: each entry REPLACES that v5 clause (one or more clauses in its place).
+ *  ⚠️ DECLARED BEFORE V6, WHICH READS IT AT MODULE LOAD (a const read before its declaration throws). */
+type V6Clause = { num: string; lead?: string; text: string };
+const V6_CLAUSES: Record<string, V6Clause[]> = {
+  "1.3": [{ num: "1.3", text: "The agreement starts on the date and time you accept it (the \"Start Date\"). We keep a record of the agreement version, selected plan, payment plan, details shown to you and your acceptance timestamp. We will make a copy of the accepted agreement available to you." }],
+  "2.6": [
+    { num: "2.6", text: "The \"Plan Period\" is: on the 6-month and 12-month plans, from the Start Date until your final payment has cleared; on Pay in full, from the Start Date until 6 months after the website we build first goes live. During the Plan Period we will review your AI visibility and the website regularly and make the updates we judge most useful. The amount and type of work will vary depending on what the data shows. We may create or improve pages around genuine services, service areas and customer questions where that is useful and truthful." },
+  ],
+  "2.7": [{ num: "2.7", text: "We may provide monthly tracking or updates during the Plan Period. Only the baseline and the guarantee re-measurement described in clause 5 determine the money back guarantee." }],
+  "3.1": [{ num: "3.1", text: "You pay by the payment plan shown in your Client Details: (a) Pay in full: £499, one payment; (b) 6 months: a £99 initial payment, then 5 further monthly payments of £99 (6 payments in total, £594 in all); or (c) 12 months: a £99 initial payment, then 11 further monthly payments of £49.99 (12 payments in total, £648.89 in all)." }],
+  "3.2": [{ num: "3.2", text: "On the 6-month and 12-month plans, your first recurring payment is taken on the Payment Start Date in clause 5.6. Later payments are taken monthly on the same calendar date, or on the last day of the month if that date does not exist. On Pay in full there are no recurring payments." }],
+  "3.3": [{ num: "3.3", text: "You authorise our payment provider (currently Stripe) to take the initial payment and each payment due under your payment plan. The service only continues into the optional hosting and maintenance service in clause 9A if you separately opt in." }],
+  "3.7": [{ num: "3.7", text: "The price of your payment plan is fixed for the plan, subject only to VAT. Findable is not currently VAT registered. If we become VAT registered, we may add VAT at the applicable rate to future payments after giving at least 30 days notice." }],
+  "4.1": [{ num: "4.1", text: "On the 6-month and 12-month plans, the minimum term is all the payments in your plan (6 or 12). The initial £99 counts as payment 1. This is not a cancel-any-time plan during the minimum term. On Pay in full, your one payment is the whole price and nothing further is owed for the plan." }],
+  "4.3": [{ num: "4.3", text: "Ownership of the custom website and client-specific work transfers only once your final payment has cleared (on Pay in full, your one payment)." }],
+  "5.4": [{ num: "5.4", lead: "The guarantee.", text: "We improve AI visibility or you get your money back. If the number of measured answers naming your business is not higher at the guarantee re-measurement than at baseline, you may claim a refund of all payments you have made under this agreement by emailing us no later than 14 days after the Results Date (the \"Refund Window\"). Any increase, however small, means the guarantee improvement condition has been met." }],
+  "5.5": [{ num: "5.5", text: "If you make a valid claim, we refund all payments you have made under this agreement, the agreement ends, and no further payments are owed. Because the agreement ends, ownership of Our Work does not transfer under clause 8, and any transfer that has already happened on Pay in full is reversed: your licence to use Our Work ends and we may take down the website we built." }],
+  "5.6": [{ num: "5.6", lead: "Payment Start Date.", text: "On the 6-month and 12-month plans, your first recurring payment is taken on the day after the Refund Window ends. No recurring payment is taken while the Refund Window is still open. If the guarantee does not apply under clause 5.8 because required access or information was not provided, we may set the Payment Start Date to the day after six weeks from the initial payment and will tell you before charging." }],
+  "8.2": [{ num: "8.2", text: "Client-specific work we create remains ours until your final payment has cleared. This includes website design, code, page layouts, written content and structured data created specifically for you (\"Our Work\")." }],
+  "8.4": [{ num: "8.4", text: "Once your final payment has cleared we assign to you, to the extent we own it, copyright in Our Work created specifically for you, including Our Work we create for you later in the Plan Period (assigned as it is created). On request we will provide a reasonable export or copy of website files and content where technically practicable." }],
+  "8.6": [{ num: "8.6", text: "If the agreement ends before your final payment has cleared and the remaining payments are not paid, your licence to use Our Work ends and we may take down the website we built." }],
+  "9.2": [{ num: "9.2", text: "Hosting is included during the Plan Period: while you are paying your plan, and on Pay in full for 6 months from the date the website we build first goes live. We use reputable providers and take reasonable care with security and backups, but cannot promise uninterrupted availability." }],
+  "9A.1": [{ num: "9A.1", text: "This clause applies after the Plan Period." }],
+  "9A.2": [{ num: "9A.2", text: "The service does not automatically continue after the Plan Period. If you want us to keep hosting and reasonably maintaining the website after it, you may separately opt in to our rolling Hosting and Maintenance service at £29.99 a month." }],
+  "9A.5": [{ num: "9A.5", text: "If you do not opt in, or later cancel, we will make the website reasonably available for you to move to your own hosting. We may keep it live on our hosting for up to 30 days after the Plan Period or cancellation to allow a reasonable transfer, after which we may take it down if you have not moved it. We will remind you before the Plan Period ends that you can opt in." }],
+  "15.1": [{ num: "15.1", text: "The agreement ends at the end of the Plan Period unless you separately opt in to the optional service in clause 9A." }],
+};
+const V6: AgreementVersion = {
+  version: 'v6',
+  intro: V5.intro,
+  findableDetails: V5.findableDetails,
+  clientDetailLabels: { ...V5.clientDetailLabels, paymentPlan: "Payment plan" },
+  sectionTitles: V5.sectionTitles,
+  services: {
+    build: { name: "Findable Build", description: "We build, host and manage a new website optimised for AI visibility. You pay by the payment plan shown in your Client Details: Pay in full (£499, one payment), 6 months (£99 a month, 6 payments, £594 in total) or 12 months (£99 initial payment, then £49.99 a month, 12 payments, £648.89 in total). Once your final payment has cleared, the website transfers to you. Hosting is included while you are paying (Pay in full: for 6 months), then our £29.99/month hosting and maintenance service is optional." },
+  },
+  keyPoints: {
+    title: V5.keyPoints!.title,
+    points: [
+      "Your payment plan is the one shown in your Client Details. On the 6-month and 12-month plans, all of its payments are your minimum term: if you end early outside the guarantee or our serious breach, the remaining payments stay due.",
+      "We improve AI visibility or you get your money back. If the number of measured AI answers naming your business is not higher at the guarantee re-measurement, you can claim a refund of everything you have paid us under this agreement within 14 days of the Results Date. We do not otherwise guarantee rankings, recommendations, citations, enquiries or income.",
+      "On the 6-month and 12-month plans, monthly payments start only after the guarantee Refund Window closes, except where the guarantee does not apply under clause 5.8.",
+      "Hosting is included while you are paying your plan; on Pay in full it is included for 6 months. After that, optional hosting and maintenance at £29.99/month only starts if you separately opt in.",
+      "The custom website and our client-specific work transfer to you once your final payment has cleared. Your domain, logo, photos, branding and other materials remain yours throughout.",
+      V5.keyPoints!.points[5],
+    ],
+  },
+  body: V5.body.flatMap((b): AgreementBlock[] => {
+    if (b.kind === 'heading' && b.text === "9A. OPTIONAL HOSTING AND MAINTENANCE AFTER PAYMENT 12") return [{ kind: 'heading', text: "9A. OPTIONAL HOSTING AND MAINTENANCE AFTER YOUR PLAN PERIOD" }];
+    if (b.kind !== 'clause') return [b];
+    const r = V6_CLAUSES[b.num];
+    if (r === undefined) return [b];
+    return r.map((c) => ({ kind: 'clause', ...c }) as AgreementBlock);
+  }),
+  schedule: {
+    title: V5.schedule.title,
+    columns: V5.schedule.columns,
+    rows: V5.schedule.rows.map((row) =>
+      row[0] === "Monthly work during term" ? ["Work during the Plan Period", "Regular visibility review and updates guided by what the data shows."]
+        : row[0] === "Hosting during term" ? ["Hosting during the Plan Period", "Included while you are paying your plan; on Pay in full, for 6 months from the date the website we build first goes live."]
+          : row[0] === "After minimum term" ? ["After the Plan Period", "The website is yours. Service ends unless you separately opt in to £29.99/month Hosting and Maintenance."]
+            : row),
+  },
+  signatures: V5.signatures,
+};
+
+const VERSIONS: Record<string, AgreementVersion> = { v1: V1, v3: V3, v4: V4, v5: V5, v6: V6 };
+
+/** The versions a NEW sign-up may be made on: v5 for the old £99 × 12 plan (staff only), v6 for the three payment plans. */
+export const SIGNABLE_VERSIONS: readonly string[] = ['v5', 'v6'];
+/** The v6 clause numbers that differ from v5 (for the solicitor review and its test). */
+export const V6_CHANGED_CLAUSES: readonly string[] = Object.keys(V6_CLAUSES);
+
 
 export function agreementVersion(version: string = CLIENT_AGREEMENT_VERSION): AgreementVersion {
   const v = VERSIONS[version];
@@ -738,7 +820,7 @@ export function asksCurrentProvider(version: string = CLIENT_AGREEMENT_VERSION):
 /** Shown verbatim beside the agree button (Paul, 2026-10-02). */
 export function agreeConsentSentence(businessName: string, version: string = CLIENT_AGREEMENT_VERSION): string {
   /* v4 clause 1.2: the acceptance IS ticking this exact sentence (with the separate authority confirmation, 1.4). */
-  if (version === 'v4' || version === 'v5') return 'I have read and agree to the Client Service Agreement';
+  if (version === 'v4' || version === 'v5' || version === 'v6') return 'I have read and agree to the Client Service Agreement';
   return `By ticking this box and clicking 'I agree and sign', I confirm that I have read the Findable Client Service Agreement, that I agree to it on behalf of ${businessName}, that I am authorised to do so, and that I intend this to be my electronic signature.`;
 }
 
@@ -764,6 +846,8 @@ export interface AgreementFill {
   currentProvider?: string | null;
   /** v5 clause 1.6 (b): free to leave that provider without breaching a contract. Only true may sign. */
   freeToLeave?: boolean | null;
+  /** v6: the payment plan (the onboarding row's payment_plan). Printed only by a version that has the label. */
+  paymentPlan?: PaymentPlan | null;
 }
 
 export const NOT_PROVIDED = 'Not provided';
@@ -793,6 +877,7 @@ export function clientDetailRows(fill: AgreementFill, v: AgreementVersion = agre
     [L.website, orNot(fill.websiteDomain)],
     ...(L.currentProvider ? [[L.currentProvider, clean(fill.currentProvider) || NO_CURRENT_PROVIDER] as [string, string]] : []),
     ...(L.freeToLeave ? [[L.freeToLeave, fill.freeToLeave === true ? 'Yes' : fill.freeToLeave === false ? 'No' : NOT_PROVIDED] as [string, string]] : []),
+    ...(L.paymentPlan ? [[L.paymentPlan, isPaymentPlan(fill.paymentPlan) ? planAgreementWords(fill.paymentPlan) : NOT_PROVIDED] as [string, string]] : []),
   ];
 }
 
@@ -855,7 +940,7 @@ export function versionTemplateText(version: string = CLIENT_AGREEMENT_VERSION):
     legalName: '{{legal_name}}', companyNumber: '{{company_number}}', contactName: '{{contact_name}}', role: '{{role}}',
     address: '{{business_address}}', email: '{{email}}', phone: '{{phone}}', websiteDomain: '{{website_domain}}',
     currentProvider: '{{current_provider}}',
-  }, version).replace(/(Free to leave that provider[^:]*: )Not provided/, '$1{{free_to_leave}}').replace('[X] Findable Build', '[{{build}}] Findable Build').replace('[ ] Findable Optimise', '[{{optimise}}] Findable Optimise');
+  }, version).replace(/(Free to leave that provider[^:]*: )Not provided/, '$1{{free_to_leave}}').replace(/^(Payment plan: )Not provided$/m, '$1{{payment_plan}}').replace('[X] Findable Build', '[{{build}}] Findable Build').replace('[ ] Findable Optimise', '[{{optimise}}] Findable Optimise');
 }
 
 /* ════════════════════════════════════════════════════════════════════════════════════════════════
@@ -898,6 +983,8 @@ export interface AgreementAcceptanceRow {
   /* ── v5 clause 1.6 (migration 20261104090000; free_to_leave_provider must be true on a v5 row) ── */
   current_provider?: string | null;
   free_to_leave_provider?: boolean | null;
+  /* ── v6 (migration 20261129100000): the payment plan signed for; the checkout gate requires it to match the sign-up's ── */
+  payment_plan?: string | null;
 }
 
 /** The fields the agreement page REQUIRES before it will sign (mirrors agree_page_is_complete). */
@@ -923,6 +1010,8 @@ export function acceptanceRowFrom(args: {
   return {
     /* v5 clause 1.6: "We record your answers with your acceptance." Only a version that asks writes them. */
     ...(asksCurrentProvider(version) ? { current_provider: orNull(f.currentProvider), free_to_leave_provider: f.freeToLeave === true } : {}),
+    /* v6: the payment plan is part of the agreed text AND its own column (the gate matches it to the sign-up). */
+    ...(agreementVersion(version).clientDetailLabels.paymentPlan ? { payment_plan: isPaymentPlan(f.paymentPlan) ? f.paymentPlan : null } : {}),
     ...(args.v3 ? {
       onboarding_id: args.v3.onboardingId,
       authority_confirmed: args.v3.authorityConfirmed === true,
@@ -958,6 +1047,7 @@ export function fillFromAcceptanceRow(r: AgreementAcceptanceRow): AgreementFill 
     contactName: r.typed_name, role: r.typed_role,
     address: r.business_address, email: r.email, phone: r.phone, websiteDomain: r.website_domain,
     ...(r.free_to_leave_provider !== undefined && r.free_to_leave_provider !== null ? { currentProvider: r.current_provider ?? null, freeToLeave: r.free_to_leave_provider } : {}),
+    ...(isPaymentPlan(r.payment_plan) ? { paymentPlan: r.payment_plan } : {}),
   };
 }
 

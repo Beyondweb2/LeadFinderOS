@@ -102,7 +102,7 @@ ok(missingQuestions(base).includes('route') && !quickCloseGate(base).complete, '
 ok(!mayGenerateLink('answers_saved', { answers: base }), 'no route → no payment link');
 for (const route of ['build', 'optimise'] as const) {
   /* 2026-09-29: Build also needs its three consents confirmed (coverage-found-added.test.ts pins them). */
-  const a = cleanAnswers({ ...base, route, ...(route === 'build' ? { build_consents: 'yes' } : {}) });
+  const a = cleanAnswers({ ...base, route, ...(route === 'build' ? { build_consents: 'yes', payment_plan: 'six' } : {}) });
   /* v5 (2026-10-16): a close still on the withdrawn Optimise is not complete and makes no link; its columns still read. */
   ok(route === 'build' ? quickCloseGate(a).complete && mayGenerateLink('answers_saved', { answers: a }) : !quickCloseGate(a).complete && !mayGenerateLink('answers_saved', { answers: a }), route === 'build' ? 'build: complete and ready for the link' : 'optimise (pre-v5, withdrawn): NOT complete, no link');
   const cols = onboardingColumnsFor(a);

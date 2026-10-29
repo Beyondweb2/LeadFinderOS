@@ -29,7 +29,8 @@ import {
 } from './clientAgreement.ts';
 import { afterTermSummaryWords } from './planTerms.ts';
 import { FINDABLE_CONTINUING_GBP, FINDABLE_MONTHLY_GBP, FINDABLE_SETUP_PRICE_GBP, MONTHLY_START_V3_WORDS, SERVICE_ROUTE_NAME, totalPaymentsFor } from './findableOffer.ts';
-import { planSummaryRows, signingDayWords } from './signupSummary.ts';
+import { planSummaryRows, planSummaryRowsForPlan, signingDayWords } from './signupSummary.ts';
+import { PAYMENT_PLAN_NAME, planHasInstalments, type PaymentPlan } from './paymentPlans.ts';
 
 const esc = (s: unknown) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c] as string));
 /** Escaped text with any email address kept out of Cloudflare's obfuscation (see the note below). */
@@ -48,10 +49,12 @@ export type AgreementPageModel =
   /** `signupId` set = the v3 sign-up (signed BEFORE payment); absent = a legacy post-payment v1 signature.
    *  `nowIso` = the moment the page is served — the signing date it shows (the stored acceptance time is
    *  the DATABASE's, taken when they sign; this is only the preview of that day). */
-  | { mode: 'sign'; businessName: string; route: AgreementRoute; values: AgreementFormValues; errors: string[]; version?: string; signupId?: string | null; nowIso?: string }
+  | { mode: 'sign'; businessName: string; route: AgreementRoute; values: AgreementFormValues; errors: string[]; version?: string; signupId?: string | null; nowIso?: string;
+      /** v6: the sign-up's payment plan, printed in the client details and the summary. */
+      paymentPlan?: PaymentPlan | null }
   | { mode: 'accepted'; businessName: string; acceptedAtIso: string; acceptedBy: string; pdfHref: string; justSigned?: boolean; emailedTo?: string | null;
       /** v3: the sign-up still to pay for (shows "Continue to secure payment"), and an error from the last try. */
-      payFor?: { signupId: string; route: AgreementRoute } | null; payError?: string | null; paid?: boolean;
+      payFor?: { signupId: string; route: AgreementRoute; plan?: PaymentPlan | null } | null; payError?: string | null; paid?: boolean;
       /** The version they signed (shown beside the date). */
       version?: string }
   | { mode: 'redirect'; url: string }
@@ -195,8 +198,9 @@ function agreementHtml(fill: AgreementFill | null, version: string = CLIENT_AGRE
 /** The chosen plan as a summary — Today / Then / Minimum term / After the term (src/lib/signupSummary.ts),
  *  shown above the agreement on the sign-up. A version without a checked summary falls back to the plain
  *  offer line built from the same constants. */
-function offerHtml(route: AgreementRoute, version: string = CLIENT_AGREEMENT_VERSION, signingIso?: string): string {
-  const rows = planSummaryRows(route, version);
+function offerHtml(route: AgreementRoute, version: string = CLIENT_AGREEMENT_VERSION, signingIso?: string, plan?: PaymentPlan | null): string {
+  /* v6: the summary follows the PAYMENT PLAN (a v6 sign-up always has one). */
+  const rows = version === 'v6' ? (plan && plan !== 'legacy_twelve' ? planSummaryRowsForPlan(plan) : null) : planSummaryRows(route, version);
   const n = totalPaymentsFor(route);
   const dated = signingIso
     ? `<div><dt>Agreement date</dt><dd>${esc(signingDayWords(signingIso))}, the day you sign. Version ${esc(version)} of our ${esc(CLIENT_AGREEMENT_TITLE)}.</dd></div>`
@@ -206,7 +210,7 @@ function offerHtml(route: AgreementRoute, version: string = CLIENT_AGREEMENT_VER
       <p>£${FINDABLE_SETUP_PRICE_GBP} today, then £${FINDABLE_MONTHLY_GBP} a month starting ${esc(MONTHLY_START_V3_WORDS)}.
       ${n} payments in total (the minimum term). ${esc(version === 'v3' ? `Then £${FINDABLE_CONTINUING_GBP} a month until you cancel with 30 days' notice.` : afterTermSummaryWords(route))}</p></div>`;
   }
-  return `<div class="offer"><p class="eyebrow gold">Your offer: ${esc(SERVICE_ROUTE_NAME[route])}</p>
+  return `<div class="offer"><p class="eyebrow gold">Your offer: ${esc(SERVICE_ROUTE_NAME[route])}${version === 'v6' && plan ? ` · ${esc(PAYMENT_PLAN_NAME[plan])}` : ''}</p>
     <dl class="sum">${rows.map((r) => `<div><dt>${esc(r.label)}</dt><dd${r.key === 'today' ? ' class="big"' : ''}>${esc(r.value)}</dd></div>`).join('')}${dated}</dl></div>`;
 }
 
@@ -281,9 +285,11 @@ export function agreementPageHtml(m: AgreementPageModel): string {
         <p class="eyebrow gold">Step 3 · Secure payment</p>
         <h2 style="margin-top:0;color:var(--ink);font-size:20px;text-transform:none;letter-spacing:0">Next: your initial payment</h2>
         ${m.payError ? `<div class="errors">${esc(m.payError)}</div>` : ''}
-        ${offerHtml(m.payFor.route, m.version)}
+        ${offerHtml(m.payFor.route, m.version, undefined, m.payFor.plan)}
         <button type="submit">Continue to secure payment</button>
-        <p class="muted small" style="margin-top:10px">Payment is taken by Stripe and your card is saved for the monthly payments in your agreement. No monthly payment is taken until the day after your refund window closes.</p>
+        <p class="muted small" style="margin-top:10px">${m.payFor.plan === 'full'
+          ? 'Payment is taken by Stripe. This is your one payment for the plan.'
+          : 'Payment is taken by Stripe and your card is saved for the monthly payments in your agreement. No monthly payment is taken until the day after your refund window closes.'}</p>
       </form>` : '';
     return shell('Agreement signed', `${m.payFor && !m.paid ? stepsHtml('pay') : m.paid ? stepsHtml('paid') : ''}<div class="card">
       ${m.justSigned ? '<div class="ok">Thank you. Your agreement is signed.</div>' : ''}
@@ -297,9 +303,9 @@ export function agreementPageHtml(m: AgreementPageModel): string {
   }
   const v = m.values;
   const version = m.version ?? CLIENT_AGREEMENT_VERSION;
-  const fill: AgreementFill = { businessName: m.businessName, route: m.route };
+  const fill: AgreementFill = { businessName: m.businessName, route: m.route, paymentPlan: m.paymentPlan ?? null };
   const v3 = !!m.signupId;
-  const accepted = version === 'v4' || version === 'v5';
+  const accepted = version === 'v4' || version === 'v5' || version === 'v6';
   return shell(`${CLIENT_AGREEMENT_TITLE} for ${m.businessName}`, `
     ${v3 ? stepsHtml('sign') : ''}
     <div class="card">
@@ -308,7 +314,7 @@ export function agreementPageHtml(m: AgreementPageModel): string {
       <p class="muted">${v3
         ? 'Before we take payment, please read and accept the Client Service Agreement. We have filled in what we already know: check your plan, read the agreement, confirm your details and sign. You pay only after you have signed.'
         : 'Please read your agreement, check your details at the bottom, and sign.'}</p>
-      ${v3 ? offerHtml(m.route, version, m.nowIso ?? new Date().toISOString()) : ''}
+      ${v3 ? offerHtml(m.route, version, m.nowIso ?? new Date().toISOString(), m.paymentPlan) : ''}
     </div>
     <div class="card">
       <p class="eyebrow">Read the agreement</p>

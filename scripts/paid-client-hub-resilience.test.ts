@@ -115,6 +115,8 @@ const live: Record<string, string[]> = {
   /* The onboarding-form send (2026-10-07): outreach_leads.country (the WhatsApp number's country — UK / AU),
      read back from information_schema 2026-10-07. */
   outreach_leads_country: ['country'],
+  /* Payment plans (migration 20261129090000_payment_plans.sql, read back from information_schema 2026-10-29). */
+  outreach_leads_payment_plan: ['payment_plan', 'paid_in_full_at'],
 };
 const known = new Set(Object.values(live).flat());
 /* An aliased JSON path (family:evidence->d->>family) is checked on its base column. */

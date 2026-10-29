@@ -20,10 +20,7 @@ import {
 import { LINK_READY_FALLBACK, type LinkRoute } from '@/lib/paymentLinkRoute';
 import { FINDABLE_SETUP_PRICE_GBP, SERVICE_ROUTE_NAME, isSaleableRoute, totalPaymentsFor, type ServiceRoute } from '@/lib/findableOffer';
 import { cn } from '@/lib/utils';
-import { gbpWords } from '@/lib/paymentPlans';
-import { usePriceModel } from '@/hooks/usePriceModel';
-import { PriceModelSwitch } from '@/components/PriceModelSwitch';
-import { PRICE_MODEL_GUARANTEE, priceModelLinkRefusal, upfrontSpoken } from '@/lib/priceModel';
+import { gbpWords, guaranteeForPlan } from '@/lib/paymentPlans';
 import { ClosePanel } from '@/components/ClosePanel';
 import { CustomerEmailControl } from '@/components/CustomerEmailControl';
 import { SmsLinkSend } from '@/components/SmsLinkSend';
@@ -71,6 +68,8 @@ interface View {
   call?: QcCallNotes;
   call_lines?: { key: string; label: string; answer: string }[];
   offer?: OfferFit;
+  /** 2026-10-29: payment plans that cannot be sold yet (their Stripe price is not set up), with the reason. */
+  plans_unavailable?: Partial<Record<string, string>>;
   has_website?: boolean;
   events: { kind: string; at: string; by_me: boolean }[];
   /** THE TWO WAYS TO CLOSE: the route this sign-up is on, and the Full Setup link with how it has gone out. */
@@ -175,6 +174,8 @@ export function QuickClosePanel({ leadId, active = true, framed = false }: { lea
   const [showOldPlan, setShowOldPlan] = useState(false);
 
   const answers = v?.answers ?? {};
+  /* The chosen plan cannot be sold yet (its Stripe price is missing): no link, and the reason (the checkout refuses it too). */
+  const planRefusal = answers.payment_plan ? v?.plans_unavailable?.[answers.payment_plan] ?? null : null;
   const route = answers.route ?? null;
   /* v5: a plan no longer for sale (Optimise, stored before 2026-10-16) names no terms and makes no link here. */
   const sellRoute: ServiceRoute | null = route && isSaleableRoute(route) ? route : null;
@@ -290,11 +291,6 @@ export function QuickClosePanel({ leadId, active = true, framed = false }: { lea
   /* A link that already stands is never hidden by the new step; a NEW link needs what they offer and where (server: call_notes_missing). */
   const showNotes = !!v && v.canEdit && !notesDone && !step && answers.decision_maker !== 'no' && v.state !== 'link_generated' && v.state !== 'paid' && (current === 'route' || (current === null && !!route));
   const closing = !!v && v.canEdit && !!sellRoute && (notesDone || v.state === 'link_generated') && (v.state === 'ready' || v.state === 'link_generated' || v.state === 'link_expired');
-  /* THE PRICE MODEL (2026-10-14, src/lib/priceModel.ts): the terms said here follow the person's model. A model whose payment
-     is not live gets no new link — the button is off and says why (the server refuses it too: quick-close price_model_not_live). */
-  const { model: priceModel } = usePriceModel();
-  const modelRefusal = priceModelLinkRefusal(priceModel);
-  const upfront = priceModel === 'upfront_499' ? upfrontSpoken() : null;
   const usableUrl = v?.link?.usable ? v.link.url : null;
   const greetName = v?.onboarding?.contact_name || v?.lead.contact_name || null;
   const currentQ = current ? QUICK_CLOSE_QUESTIONS.find((x) => x.key === current)! : null;
@@ -397,7 +393,9 @@ export function QuickClosePanel({ leadId, active = true, framed = false }: { lea
                     const noSite = current === 'route' && !routeAvailable(answers, o.value as ServiceRoute);
                     /* ⛔ v5 clause 1.6: still tied into their contract → nothing is offered, to anyone (Paul cannot release a decline). */
                     const notOffered = current === 'route' && !noSite && v.offer ? !v.offer.offered[o.value as ServiceRoute] : false;
-                    const off = noSite || notOffered
+                    /* A payment plan whose Stripe price is not set up is shown, switched off, with the reason (never charged). */
+                    const planOff = current === 'payment_plan' ? v.plans_unavailable?.[o.value] ?? null : null;
+                    const off = noSite || notOffered || !!planOff
                       || (current === 'approach' && !hasSite && NEEDS_CURRENT_SITE.has(o.value));
                     const recommended = current === 'route' && v.offer?.recommended === o.value && !noSite;
                     const planOf = current === 'approach' && o.value !== 'unsure' ? APPROACH_ROUTE[o.value as Exclude<QcApproach, 'unsure'>] : null;
@@ -407,6 +405,7 @@ export function QuickClosePanel({ leadId, active = true, framed = false }: { lea
                           answers[current!] === o.value ? PICKED : recommended ? 'border-blue-500/50 bg-card hover:bg-muted/60' : 'border-border/70 bg-card hover:border-blue-500/40 hover:bg-muted/60')}>
                         <span className="flex flex-wrap items-center justify-center gap-1.5">{o.label}{recommended && <span className="rounded-full bg-yellow-400/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-yellow-600 ring-1 ring-inset ring-yellow-500/40 dark:text-yellow-300">Recommended</span>}</span>
                         {current === 'route' && <span className="mt-0.5 text-xs font-normal text-muted-foreground">{noSite ? 'Not possible — they have no website' : notOffered ? 'Not offered — still tied into their contract' : `${SERVICE_ROUTE_NAME[o.value as ServiceRoute]} · ${routePaymentsShort(o.value as ServiceRoute)}`}</span>}
+                        {planOff && <span className="mt-0.5 text-xs font-normal text-muted-foreground" data-testid={'qc-plan-unavailable-' + o.value}>{planOff}</span>}
                         {current === 'approach' && <span className="mt-0.5 text-xs font-normal text-muted-foreground">{off ? 'Not possible — no website on file' : planOf ? `${SERVICE_ROUTE_NAME[planOf]} · ${routePaymentsShort(planOf)}` : 'Pick the plan next'}</span>}
                       </button>
                     );
@@ -459,12 +458,11 @@ export function QuickClosePanel({ leadId, active = true, framed = false }: { lea
           {v && sellRoute && v.state !== 'paid' && v.state !== 'blocked' && !declined && (
             <section aria-live="polite" className={cn('min-w-0', PANEL, EDGE.blue)} data-testid="qc-route-terms">
               <p className="flex items-center gap-2 text-sm font-bold tracking-tight"><IconTile icon={PoundSterling} tone="blue" size="sm" />{SERVICE_ROUTE_NAME[sellRoute]}</p>
-              <div className="mt-2"><PriceModelSwitch compact /></div>
-              <ul className="mt-2 space-y-0.5 text-sm" data-testid="qc-terms" data-model={priceModel}>{(upfront ? upfront.terms : closeTermsLines(sellRoute, answers.payment_plan)).map((l, i) => <li key={l} className={cn(i === 2 && 'font-semibold')}>{l}</li>)}</ul>
+              <ul className="mt-2 space-y-0.5 text-sm" data-testid="qc-terms" >{closeTermsLines(sellRoute, answers.payment_plan).map((l, i) => <li key={l} className={cn(i === 2 && 'font-semibold')}>{l}</li>)}</ul>
               <p className="mt-1.5 text-sm">{routeOwnershipLine(sellRoute)}</p>
               <div className="mt-2.5 rounded-xl bg-muted/30 p-2.5 text-sm ring-1 ring-inset ring-border/60" data-testid="qc-guarantee">
-                <p className="flex items-center gap-1.5 font-semibold"><ShieldCheck className={cn('h-4 w-4 shrink-0', EMPHASIS_TEXT)} />{upfront ? PRICE_MODEL_GUARANTEE : QUICK_CLOSE_GUARANTEE_LINES[0]}</p>
-                {!upfront && <p className="mt-0.5 text-xs text-muted-foreground">{QUICK_CLOSE_GUARANTEE_LINES[1]}</p>}
+                <p className="flex items-center gap-1.5 font-semibold"><ShieldCheck className={cn('h-4 w-4 shrink-0', EMPHASIS_TEXT)} />{QUICK_CLOSE_GUARANTEE_LINES[0]}</p>
+                <p className="mt-0.5 text-xs text-muted-foreground">{guaranteeForPlan(answers.payment_plan ?? 'six', QUICK_CLOSE_GUARANTEE_LINES[1])}</p>
               </div>
               <p className="mt-2 text-xs text-muted-foreground">{QUICK_CLOSE_AGREEMENT_LINE} After payment: {QUICK_CLOSE_AFTER_PAYMENT[0]} {QUICK_CLOSE_AFTER_PAYMENT[1]}</p>
               <p className="mt-1 text-[11px] text-muted-foreground">Say the minimum term out loud before you send the link. Set by the offer — the price, the number of payments and the timing cannot be changed here.</p>
@@ -483,8 +481,8 @@ export function QuickClosePanel({ leadId, active = true, framed = false }: { lea
                           The link made {hhmm(v.link?.generated_at)} is no longer usable and must not be sent. Make a fresh agreement & payment link — any old payment page is closed.
                         </p>
                       )}
-                      {modelRefusal && <p className={cn('flex items-start gap-1.5 rounded-xl px-2.5 py-2 text-xs', TONE.amber.tint, TONE.amber.text)} data-testid="qc-model-not-live"><AlertTriangle className="mt-px h-3.5 w-3.5 shrink-0" />{modelRefusal}</p>}
-                      <Button className={MONEY_CTA} onClick={() => void generate()} disabled={!!busy || !!modelRefusal}>
+                      {planRefusal && <p className={cn('flex items-start gap-1.5 rounded-xl px-2.5 py-2 text-xs', TONE.amber.tint, TONE.amber.text)} data-testid="qc-plan-unavailable"><AlertTriangle className="mt-px h-3.5 w-3.5 shrink-0" />{planRefusal}</p>}
+                      <Button className={MONEY_CTA} onClick={() => void generate()} disabled={!!busy || !!planRefusal}>
                         {busy === 'link' ? <Loader2 className="h-5 w-5 animate-spin" /> : v.state === 'link_expired' ? <RefreshCw className="h-5 w-5" /> : <PoundSterling className="h-5 w-5" />}
                         {v.state === 'link_expired' ? 'Make a fresh agreement & payment link' : 'Create agreement & payment link'}
                       </Button>

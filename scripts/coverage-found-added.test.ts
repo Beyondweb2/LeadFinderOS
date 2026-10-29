@@ -79,7 +79,7 @@ console.log('── 4. QUICK CLOSE: BUILD CONSENTS BEFORE THE LINK ──');
 const base = { decision_maker: 'yes', approach: 'new_template', domain: 'yes', manager: 'owner', rights: 'yes' } as const;
 ok(QUICK_CLOSE_QUESTIONS.some((q) => q.key === 'build_consents' && q.detail?.length === 3) && BUILD_CONSENTS.length === 3, 'one Build-only question listing the three consents');
 ok(/own or control the domain, or have the authority/.test(BUILD_CONSENTS[0]) && /domain \/ DNS changes/.test(BUILD_CONSENTS[1]) && /right to provide and use the business content/.test(BUILD_CONSENTS[2]), 'domain authority · DNS permission · rights to content');
-const build = cleanAnswers({ ...base });
+const build = cleanAnswers({ ...base, payment_plan: 'six' });
 /* 2026-10-07 (Paul): the three consents are no longer asked on the call — the client signs the agreement (domain /
    DNS access 7.1(a), materials 8.1) before paying, and the paid client's onboarding form collects the practical
    answers (dns_permission, materials_confirmed). An old row's stored answer is still read, never required. */

@@ -5,6 +5,7 @@
    the two Meta templates (findable_signup_link / findable_onboarding); the lightweight handoff; the dynamic
    onboarding form; facts read from a client's WhatsApp replies; the migration.
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
+import { threeWaysSpoken } from '../src/lib/paymentPlans.ts';
 import fs from 'node:fs';
 import path from 'node:path';
 import { renderToStaticMarkup } from 'react-dom/server';
@@ -74,7 +75,7 @@ console.log('── QUICK CLOSE (v5): BUILD is the one plan; a contract they are
   }
   ok(offerFit({ ...SIT, domain: 'agency' }, true).recommended === 'build' && offerFit({ ...SIT, domain: 'agency' }, true).notes.includes(DOMAIN_NOT_WEBSITE_LINE), 'a domain held elsewhere never stops Build; the rep is told the domain is not the website');
   /* v5 clause 1.6: a Build saved while tied in is DECLINED — not a review, and no release lifts it. */
-  const tied = { route: 'build', approach: 'unsure', decision_maker: 'yes', manager: 'agency', agency_contract: 'in_contract', domain: 'yes', rights: 'yes' } as const;
+  const tied = { route: 'build', payment_plan: 'six', approach: 'unsure', decision_maker: 'yes', manager: 'agency', agency_contract: 'in_contract', domain: 'yes', rights: 'yes' } as const;
   ok(quickCloseState('answers_saved', { answers: tied }) === 'declined' && !mayGenerateLink('answers_saved', { answers: tied }), 'Build while tied in → DECLINED, no link');
   ok(quickCloseState('answers_saved', { answers: tied, review_approved_at: iso(NOW) }) === 'declined', '…and Paul cannot release a decline');
   const unsure = { ...tied, agency_contract: 'not_sure' } as const;
@@ -91,9 +92,9 @@ console.log('\n── QUICK CLOSE: the shortest close, nothing asked twice ─�
   const sit = { ...fromCall, domain: 'yes', rights: 'yes' } as const;
   ok(missingQuestions(sit).join() === 'route', 'with the situation answered, only the plan is left');
   ok(missingQuestions({ ...sit, ...routeChoiceAnswers(sit, 'optimise') }).join() === 'route', 'v5: a stored Optimise plan is not an answer — the plan is asked again (Build only)');
-  ok(missingQuestions({ ...sit, ...routeChoiceAnswers(sit, 'build') }).length === 0, 'Build after that (self-run): nothing more — ready');
-  ok(quickCloseState('answers_saved', { answers: { ...sit, ...routeChoiceAnswers(sit, 'build') } }) === 'ready', '…READY for the sign-up link');
-  ok(missingQuestions(cleanAnswers({ decision_maker: 'yes', manager: 'agency', route: 'build', approach: 'unsure' })).join() === 'agency_contract,domain', 'an agency-run site: the contract is asked (once), then the domain');
+  ok(missingQuestions({ ...sit, ...routeChoiceAnswers(sit, 'build') }).join() === 'payment_plan' && missingQuestions({ ...sit, ...routeChoiceAnswers(sit, 'build'), payment_plan: 'six' }).length === 0, 'Build after that (self-run): only how they pay, then nothing more — ready');
+  ok(quickCloseState('answers_saved', { answers: { ...sit, ...routeChoiceAnswers(sit, 'build'), payment_plan: 'six' } }) === 'ready', '…READY for the sign-up link');
+  ok(missingQuestions(cleanAnswers({ decision_maker: 'yes', manager: 'agency', route: 'build', approach: 'unsure' })).join() === 'agency_contract,domain,payment_plan', 'an agency-run site: the contract is asked (once), then the domain');
   ok(!closeFlow({ route: 'build', approach: 'unsure' }).some((k) => ['design_owner', 'build_consents', 'approach', 'authority'].includes(k)), 'never the design owner, the consents, the approach sub-type or the legacy authority question');
   const merged = mergeAnswers({ approach: 'new_template' }, { route: 'optimise' });
   ok(merged.route === 'optimise' && merged.approach === 'improve', 'choosing the plan brings the agreeing approach (a stored Build approach never flips it back)');
@@ -115,7 +116,8 @@ console.log('\n── THE WORDS: per plan, no close line, plain "what we do" ─
   ok(continuingOptionAfter('build') && !continuingOptionAfter('optimise'), 'the £29.99 option exists after Build only');
   ok(routeTermsLines('optimise').some((l) => /plan ends/.test(l)) && !routeTermsLines('optimise').join(' ').includes('29.99'), 'the Quick Close card for Optimise names no £29.99');
   ok(!/29\.99/.test(quickCloseMessage('Sam', SIGNUP, 'optimise')) && /29\.99 a month for hosting and maintenance/.test(quickCloseMessage('Sam', SIGNUP, 'build')), 'the message to the client says the same, per plan');
-  ok(/12 payments in total, today's included/.test(planSpoken()) && /29\.99 a month for hosting and maintenance only if you want/.test(planSpoken()) && !/optimise|6 payments|your current website|month minimum/i.test(planSpoken()), 'v5: "How much is it?" names Findable Build only: 12 payments, then the optional £29.99 — never Optimise, never months');
+  /* 2026-10-29: Build is sold three ways (paymentPlans.ts, agreement v6). */
+  ok(planSpoken().includes(threeWaysSpoken()) && /29\.99 a month for hosting and maintenance only if you want/.test(planSpoken()) && !/optimise|your current website|month minimum/i.test(planSpoken()), '"How much is it?" names Findable Build\'s three ways to pay, then the optional £29.99 — never Optimise, never a months minimum');
   ok(!/public evidence/i.test(WHAT_WE_DO_LINE) && /AI visibility check/.test(WHAT_WE_DO_LINE) && /four weeks/.test(WHAT_WE_DO_LINE) && /every month/.test(WHAT_WE_DO_LINE)
     && !/guarantee|recommend|cite|citation|rank/i.test(WHAT_WE_DO_LINE), '"What we do": plain words — check, real questions, a new website, pages, same check at four weeks, monthly; no promised outcome');
   ok(WHAT_WE_DO_LINE.split(/\s+/).length < 90, '…short enough to say on a call');

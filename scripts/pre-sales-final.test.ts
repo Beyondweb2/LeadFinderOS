@@ -223,7 +223,7 @@ console.log('── 5. commercial terms: Build 12 / Optimise 6, £99 + £99/mont
   ok(totalPaymentsFor('optimise') === 6 && termMonthsFor('optimise') === 6, 'Optimise: 6 payments in total, 6-month minimum');
   const own = buildCallClose('own_site'), none = buildCallClose(null);
   const b = own.routes.find((r) => r.route === 'build')!;
-  ok(/build you a new website, host it and look after it/.test(b.spoken.join(' ')) && /Once the 12 payments are made the website is theirs/.test(b.spoken.join(' ')), 'Build: Findable builds, hosts and manages; the site is theirs after the final payment');
+  ok(/build you a new website, host it and look after it/.test(b.spoken.join(' ')) && /The website is theirs once the final payment clears/.test(b.spoken.join(' ')), 'Build: Findable builds, hosts and manages; the site is theirs after the final payment');
   ok(/12 payments in total/.test(b.spoken.join(' ')) && !/-month minimum/.test(b.spoken.join(' ')), 'v5: the term is said in payments, never "a 12-month minimum"');
   ok(own.routes.length === 1 && own.routes[0].route === 'build' && none.routes.length === 1 && none.routes[0].route === 'build', 'v5: every lead is offered Build only (Optimise is withdrawn)');
   const words = [...own.routes.flatMap((r) => r.spoken), own.guarantee.spoken, own.guarantee.headline].join(' ');

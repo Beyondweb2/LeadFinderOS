@@ -98,14 +98,14 @@ const CLIENT_PAGES_COLUMNS = "id,status,primary_question,service,town";
 /* ⚠️ READ BACK AGAINST THE LIVE SCHEMA 2026-09-22 (information_schema.columns), including
    `website_build`, which its own migration adds. */
 const HUB_LEAD_COLUMNS =
-  "id,business_name,address,search_location,derived_town,website,email,phone,contact_name,amount_paid,payment_date,status,next_action,next_action_date,next_action_time,baseline_audit_id,remeasure_audit_id,remeasure_due_date,delivery_checklist,category,search_keyword,services_included,delivery_ref,notes,delivery_notes,project_overview,project_status,paid_for,place_id,website_build,service_areas,website_control,website_control_note,lead_source,assigned_to_user_id,added_by_user_id,sold_by_user_id,sold_at,domain_control,service_terminated_at,service_termination_reason,service_termination_note,stripe_subscription_id,subscription_status,subscription_renews_at,contract_total_payments,client_contacted_at,client_contacted_via," +
+  "id,business_name,address,search_location,derived_town,website,email,phone,contact_name,amount_paid,payment_date,status,next_action,next_action_date,next_action_time,baseline_audit_id,remeasure_audit_id,remeasure_due_date,delivery_checklist,category,search_keyword,services_included,delivery_ref,notes,delivery_notes,project_overview,project_status,paid_for,place_id,website_build,service_areas,website_control,website_control_note,lead_source,assigned_to_user_id,added_by_user_id,sold_by_user_id,sold_at,domain_control,service_terminated_at,service_termination_reason,service_termination_note,stripe_subscription_id,subscription_status,subscription_renews_at,contract_total_payments,payment_plan,client_contacted_at,client_contacted_via," +
   /* Client missing-info actions (2026-10-05): WhatsApp reachability for Contact client (whatsAppCapability.ts). Read back live. */
   "line_type,whatsapp_delivery_status,whatsapp_ever_delivered,country";
 
 /* The handoff (2026-09-28, src/lib/handoffReadiness.ts): what Sales collected, who sold it, and whether
    Paul can start. The list reads the same readiness, so these columns ride on the list too. */
 const HUB_LIST_COLUMNS =
-  "id,business_name,address,search_location,derived_town,website,email,phone,contact_name,amount_paid,payment_date,status,next_action,next_action_date,next_action_time,baseline_audit_id,remeasure_audit_id,remeasure_due_date,delivery_checklist,services_included,service_areas,website_control,assigned_to_user_id,sold_by_user_id,service_terminated_at,stripe_subscription_id,subscription_status,subscription_renews_at,contract_total_payments";
+  "id,business_name,address,search_location,derived_town,website,email,phone,contact_name,amount_paid,payment_date,status,next_action,next_action_date,next_action_time,baseline_audit_id,remeasure_audit_id,remeasure_due_date,delivery_checklist,services_included,service_areas,website_control,assigned_to_user_id,sold_by_user_id,service_terminated_at,stripe_subscription_id,subscription_status,subscription_renews_at,contract_total_payments,payment_plan";
 /* The prospect audits a paid client arrives with: the hook / quick check / free check. Never a baseline,
    a measurement, Discovery or a replay (those are delivery, shown elsewhere on the hub). */
 const PROSPECT_AUDIT_PURPOSES = ["audit", "free_check"];
@@ -890,7 +890,7 @@ Deno.serve(async (req) => {
     if (action === "save_website_build") {
       const leadId = text(body.lead_id);
       const patch = normaliseWebsiteBuild(body.website_build);
-      const { data: before } = await service.from("outreach_leads").select("website_build,contract_total_payments,service_terminated_at").eq("id", leadId).eq("user_id", user.id).maybeSingle();
+      const { data: before } = await service.from("outreach_leads").select("website_build,contract_total_payments,payment_plan,service_terminated_at").eq("id", leadId).eq("user_id", user.id).maybeSingle();
       /* ⛔ LAUNCH GATE (fix workstream 6, src/lib/websiteLaunch.ts): a save that NEWLY records production,
          ticks "Production checked" or switches the enquiry form on is refused unless the one launch rule
          allows it — Build client only, preview ready, QA ticked, live gate passed. Never for Optimise. */
@@ -971,10 +971,10 @@ Deno.serve(async (req) => {
     if (action === "agreement_status" || action === "agreement_set_route" || action === "agreement_send_link") {
       const leadId = text(body.lead_id);
       const { data: lead, error: leadErr } = await service.from("outreach_leads")
-        .select("id,business_name,email,contract_total_payments,service_terminated_at,status").eq("id", leadId).eq("user_id", user.id).maybeSingle();
+        .select("id,business_name,email,contract_total_payments,payment_plan,service_terminated_at,status").eq("id", leadId).eq("user_id", user.id).maybeSingle();
       if (leadErr) throw leadErr;
       if (!lead) return json({ ok: false, error: "client_not_found", detail: "This client is not in your paid-client list." }, 404);
-      const L = lead as { id: string; business_name: string | null; email: string | null; contract_total_payments: number | null; service_terminated_at: string | null; status: string | null };
+      const L = lead as { id: string; business_name: string | null; email: string | null; contract_total_payments: number | null; payment_plan?: string | null; service_terminated_at: string | null; status: string | null };
       /* ⛔ AN ENDED OR REFUNDED CLIENT IS ASKED FOR NO AGREEMENT (pre-sales fix 03): the route cannot be set
          and no link is sent. The status view stays readable (history is kept). */
       const closed = clientClosed(L);
@@ -999,10 +999,10 @@ Deno.serve(async (req) => {
         const route = text(body.route);
         if (route !== "build" && route !== "optimise") return json({ ok: false, error: "bad_route", detail: "Choose Build or Optimise." }, 400);
         /* v5 (2026-10-16): Optimise is withdrawn. It may be recorded only for a client who already paid on it (6 payments). */
-        if (route === "optimise" && Number(L.contract_total_payments) !== FINDABLE_OPTIMISE_TOTAL_PAYMENTS) return json({ ok: false, error: "route_withdrawn", detail: "Findable Optimise is no longer offered. Choose Build." }, 409);
+        if (route === "optimise" && (Number(L.contract_total_payments) !== FINDABLE_OPTIMISE_TOTAL_PAYMENTS || !!L.payment_plan)) return json({ ok: false, error: "route_withdrawn", detail: "Findable Optimise is no longer offered. Choose Build." }, 409);
         /* ⛔ THE ROUTE LOCKS AT THE FIRST BINDING FACT (M-021, src/lib/agreementRoute.ts): the checkout's
            stamped contract OR any acceptance — checkout included, not only an agree-page signature. */
-        const lock = agreementRouteLock({ contractTotalPayments: L.contract_total_payments, acceptances: await loadAcceptances() });
+        const lock = agreementRouteLock({ contractTotalPayments: L.contract_total_payments, paymentPlan: L.payment_plan, acceptances: await loadAcceptances() });
         const allowed = maySetAgreementRoute(lock, route);
         if (!allowed.ok) return json({ ok: false, error: "route_locked", detail: allowed.reason }, 409);
         const { error: upErr } = await service.from("client_agreement_links")
@@ -1012,7 +1012,7 @@ Deno.serve(async (req) => {
 
       if (action === "agreement_send_link") {
         const link = await loadLink();
-        const route = resolveAgreementRoute(link?.service_route, L.contract_total_payments);
+        const route = resolveAgreementRoute(link?.service_route, L.contract_total_payments, L.payment_plan);
         if (!link || !route) return json({ ok: false, error: "route_not_set", detail: "Set Build or Optimise first, then send the link." }, 409);
         const { data: ob } = await service.from("onboarding_responses").select("contact_email")
           .eq("lead_id", L.id).order("updated_at", { ascending: false }).limit(1).maybeSingle();
@@ -1059,9 +1059,9 @@ Deno.serve(async (req) => {
 
       const link = await loadLink();
       const linkRoute = (link?.service_route === "build" || link?.service_route === "optimise") ? link.service_route : null;
-      const stampedRoute = serviceRouteForTotal(L.contract_total_payments);
+      const stampedRoute = serviceRouteForTotal(L.contract_total_payments, L.payment_plan);
       const acceptances = await loadAcceptances();
-      const lock = agreementRouteLock({ contractTotalPayments: L.contract_total_payments, acceptances });
+      const lock = agreementRouteLock({ contractTotalPayments: L.contract_total_payments, paymentPlan: L.payment_plan, acceptances });
       /* THE SIGNED AGREEMENT AS ONE RECORD (src/lib/signedAgreement.ts — the welcome pack folds the same way):
          status, date, version, plan, and whether the authoritative payment rests on this signature. */
       const { data: termsRow, error: termsErr } = await service.from("client_service_terms")
@@ -1073,7 +1073,7 @@ Deno.serve(async (req) => {
         agreement: {
           url: link ? agreementUrl(link.token) : null,
           /* What the client PAID on outranks the link (the same resolver the agreement page uses). */
-          route: resolveAgreementRoute(linkRoute, L.contract_total_payments),
+          route: resolveAgreementRoute(linkRoute, L.contract_total_payments, L.payment_plan),
           route_source: stampedRoute ? "checkout" : linkRoute ? "set" : null,
           route_locked: lock.locked,
           route_lock_reason: lock.reason,

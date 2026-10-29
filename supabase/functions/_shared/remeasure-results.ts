@@ -71,7 +71,7 @@ export async function loadRemeasureBundle(service: Client, remeasureAuditId: str
   if (String(audit.audit_purpose ?? "").toLowerCase() !== "remeasure") return { bundle: null, reason: `audit_purpose is '${audit.audit_purpose ?? "null"}', not remeasure` };
   if (!audit.lead_id) return { bundle: null, reason: "replay has no lead" };
   const { data: l } = await service.from("outreach_leads")
-    .select("id, business_name, email, website, baseline_audit_id, remeasure_audit_id, remeasure_results_sent_at, search_location, derived_town, amount_paid, remeasure_due_date, stripe_customer_id, stripe_subscription_id, subscription_status, subscription_renews_at, service_terminated_at, contract_total_payments")
+    .select("id, business_name, email, website, baseline_audit_id, remeasure_audit_id, remeasure_results_sent_at, search_location, derived_town, amount_paid, remeasure_due_date, stripe_customer_id, stripe_subscription_id, subscription_status, subscription_renews_at, service_terminated_at, contract_total_payments, payment_plan")
     .eq("id", audit.lead_id).maybeSingle();
   const lead = l as RemeasureBundle["lead"] | null;
   if (!lead) return { bundle: null, reason: "lead not found" };
@@ -242,6 +242,7 @@ export async function maybeSendRemeasureResults(service: Client, auditId: string
     weeks: bundle.weeks,
     monthlyStartsOn: prettyDate(billingStartIso),
     totalPayments: lead.contract_total_payments ?? null,
+    paymentPlan: (lead as { payment_plan?: string | null }).payment_plan ?? null,
     v3Terms,
     continuingMode: v3 ? continuingModeFor(v3.facts.terms, v3.facts.route) : undefined,
   };

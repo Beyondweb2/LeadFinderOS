@@ -36,7 +36,7 @@ import { signedAgreementRecord, type AcceptanceLite, type TermsLite } from "../.
 
 /** ⛔ CLIENT-SAFE LEAD COLUMNS. Operator columns are absent by construction, not by discipline. */
 export const LEAD_CLIENT_COLUMNS =
-  "id,business_name,website,contact_name,email,phone,address,derived_town,search_location,category,search_keyword,services_included,payment_date,place_id,amount_paid,baseline_audit_id,contract_total_payments,remeasure_due_date";
+  "id,business_name,website,contact_name,email,phone,address,derived_town,search_location,category,search_keyword,services_included,payment_date,place_id,amount_paid,baseline_audit_id,contract_total_payments,payment_plan,remeasure_due_date";
 
 /** ⛔ CLIENT-SAFE ONBOARDING COLUMNS. `must_not_say` is read because it is a CONSTRAINT on what we
  *  may write, never rendered; it is dropped before the pack input is built. */
@@ -200,12 +200,12 @@ export async function renderWelcomePack(service: any, slug: string): Promise<Wel
        route stamped by today's checkout. The same test the agreement page itself uses to open. */
     const linkRoute = (agreeLink as { service_route?: string | null }).service_route;
     const termsKnown = linkRoute === "build" || linkRoute === "optimise"
-      || serviceRouteForTotal((lead as { contract_total_payments?: unknown }).contract_total_payments) !== null;
+      || serviceRouteForTotal((lead as { contract_total_payments?: unknown }).contract_total_payments, (lead as { payment_plan?: unknown }).payment_plan) !== null;
     agreement = {
       url: agreementUrl(String((agreeLink as { token: string }).token)),
       /* The route the ownership key points are written for: what they PAID on, else the link (the same
          resolver the agreement page uses — src/lib/agreementRoute.ts). */
-      route: resolveAgreementRoute(linkRoute, (lead as { contract_total_payments?: unknown }).contract_total_payments),
+      route: resolveAgreementRoute(linkRoute, (lead as { contract_total_payments?: unknown }).contract_total_payments, (lead as { payment_plan?: unknown }).payment_plan),
       termsKnown,
       acceptedAtIso: (signed as { accepted_at?: string } | null)?.accepted_at ?? null,
       acceptedBy: (signed as { typed_name?: string | null } | null)?.typed_name ?? null,
@@ -236,6 +236,8 @@ export async function renderWelcomePack(service: any, slug: string): Promise<Wel
     baseline: buildBaselineSummary(report, (audit as { baseline_completed_at?: string | null }).baseline_completed_at ?? null),
     /* The client's own contracted payment count (stamped at payment; null for a client who paid before routes). */
     totalPayments: (lead as { contract_total_payments?: number | null } | null)?.contract_total_payments ?? null,
+    /* 2026-10-29: the plan the client paid on decides the payment wording (paymentPlans.ts). */
+    paymentPlan: (lead as { payment_plan?: string | null } | null)?.payment_plan ?? null,
     /* The client's own recorded first payment and re-measure date — the pack prints today's offer only
        when these prove it, and the re-measure timing from the stored date (RG is pinned at 56 days). */
     amountPaid: (lead as { amount_paid?: number | null } | null)?.amount_paid ?? null,

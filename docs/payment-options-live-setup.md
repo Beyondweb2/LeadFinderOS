@@ -1,8 +1,6 @@
 # Payment options: what to create in LIVE Stripe (for Paul to approve and do)
 
-Branch `feat/build-payment-options`, 2026-10-29. Nothing here has been created in live mode. Do this only after the
-new agreement version is approved (see `docs/payment-options-term-changes-draft.md`) and just before the switch
-`PAYMENT_OPTIONS_SELLABLE` is turned on in `src/lib/paymentPlans.ts`.
+Branch `feat/build-payment-options`, 2026-10-29. Nothing here has been created in live mode. The three plans are live; until step 1 and 3 are done, the 12-month plan shows as unavailable and cannot be charged.
 
 ## Why so little
 
@@ -52,10 +50,10 @@ When the last payment clears, Stripe ends the subscription at `cancel_at`; the w
 full** (`outreach_leads.paid_in_full_at`), sends the existing "payments complete" email (website transfers; optional
 £29.99/month hosting only if they ask) and alerts you. £29.99 hosting stays a manual opt-in, as today.
 
-## 5. Order on go-live day
+## 5. To switch the 12-month plan on
 
-1. Agreement v6 approved and generated (both repos), findable.live `/agreement` matches.
-2. Create the £49.99 Price (step 1). Give me the id; I set `FINDABLE_REDUCED_MONTHLY_PRICE_ID`.
-3. Deploy edge functions `findable-checkout`, `stripe-webhook`, `quick-close` (and anything else the import graph names).
-4. Turn `PAYMENT_OPTIONS_SELLABLE` on, deploy the app, add the What's New entry.
-5. One QA run per plan with a `ZZ QA` lead and `scripts/qa-simulate-payment.ts` (no real card).
+1. Create the £49.99 Price (step 1) and send me its `price_…` id.
+2. I set `FINDABLE_REDUCED_MONTHLY_PRICE_ID`. No redeploy is needed: Quick Close and the checkout read it on the next request.
+3. One QA run with a `ZZ QA` lead and `scripts/qa-simulate-payment.ts` (no real card).
+
+Pay in full and 6 months need nothing new in Stripe and are live now.

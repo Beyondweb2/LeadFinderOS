@@ -22,6 +22,14 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-29-payment-options', date: '2026-10-29', title: 'Findable Build now has three ways to pay: £499 once, 6 months, or 12 months', audience: 'all',
+    body: 'The Close tab asks "How do they want to pay?" after the plan: Pay in full (£499 once), 6 months (£99 a month, 6 payments) or 12 months (£99, then £49.99 a month, 12 payments). Same service either way. The client signs the new agreement (version 6) for the plan they chose, then pays. The call script, reply drafts and voice notes now quote all three.',
+    report: {
+      added: ['"How do they want to pay?" on the Close tab, with the three plans.', 'Agreement version 6, signed for the chosen plan: the website is the client\'s once the final payment clears; hosting is included while they pay (6 months on pay in full); the guarantee refunds everything they have paid.', '"Show the old plan (£99 × 12, staff only)" under the plan buttons, for the rare case it is still needed.'],
+      changed: ['The terms you read out, the link message and the link email follow the chosen plan. No figures show until a plan is picked.', 'The call script, objections, reply drafts and voice-note price line now name all three ways to pay.', 'If the 12-month plan\'s Stripe price is not set up yet, it shows switched off with the reason and no link can be made on it.'],
+      removed: ['The "£99 start / £499 upfront" price model switch on the Sales dashboard, call script and Close tab. Its £499-then-£99-a-month offer is gone.'],
+      effect: 'Ask how they want to pay before you make the link. Existing clients and anything already signed are unchanged.',
+    } },
   { id: '2026-10-28-crawl-one-standard', date: '2026-10-28', title: 'The website check reads sites properly, and never says "AI is blocked" unless robots.txt says so', audience: 'all',
     body: 'Every website check now reads the site once under our own name, the same way everywhere. It used to pretend to be ChatGPT\'s and other AI crawlers, and firewalls such as Cloudflare refused that, so sites like drivewelluk.co.uk were wrongly reported as "AI can\'t reach your site". A site is now said to block AI only when its robots.txt tells an AI search crawler to stay out. If our check can\'t read a site, it says "couldn\'t check" and nothing goes into a message.',
     report: {

@@ -73,7 +73,7 @@ import {
 } from './findableOffer.ts';
 import { afterTermClientWords, afterTermRepLine } from './planTerms.ts';
 import { agencyContractOutcome } from './agencyContractRule.ts';
-import { CLIENT_PAYMENT_PLANS, PAYMENT_OPTIONS_SELLABLE, PAYMENT_PLAN_NAME, PAYMENT_PLAN_SPEC, isSellablePaymentPlan, planShortLine, planTermsLines, type PaymentPlan } from './paymentPlans.ts';
+import { CLIENT_PAYMENT_PLANS, PAYMENT_PLAN_NAME, PAYMENT_PLAN_SPEC, isPaymentPlan, planShortLine, planTermsLines, type PaymentPlan } from './paymentPlans.ts';
 
 export type QcDecisionMaker = 'yes' | 'no';
 /** 'agency' (v2): an agency / provider controls it — a handoff, not a refusal. */
@@ -122,7 +122,7 @@ export interface QuickCloseAnswers {
   /** The agency contract (2026-10-07) — asked on the call, read by offerFit. */
   agency_contract?: QcAgencyContract | null;
   /** 🔴 HOW THEY PAY FOR BUILD (Paul, 2026-10-29; paymentPlans.ts). Asked after the plan, only while the new options are on
-   *  sale (PAYMENT_OPTIONS_SELLABLE). 'legacy_twelve' is staff-only and hidden unless asked for. */
+   *  Build (2026-10-29: live). 'legacy_twelve' is staff-only and hidden unless asked for ("Show the old plan"). */
   payment_plan?: PaymentPlan | null;
 }
 export type QcKey = keyof QuickCloseAnswers;
@@ -361,22 +361,21 @@ export function callNotesLines(a: QuickCloseAnswers, n: QcCallNotes | null | und
 /** The short count line used on the route buttons. */
 export const routePaymentsShort = (route: ServiceRoute) => `${totalPaymentsFor(route)} payments in total (the minimum term)`;
 /** Build is sold with a payment plan (once the options are on sale) and none has been picked yet. */
-const planStillToPick = (route: ServiceRoute, plan: PaymentPlan | null | undefined, sellable: boolean): boolean =>
-  sellable && route === 'build' && !plan;
+const planStillToPick = (route: ServiceRoute, plan: PaymentPlan | null | undefined): boolean => route === 'build' && !plan;
 /** What is paid on the link today: the plan's first payment, or the sign-up £99. */
 export const firstPaymentGbp = (plan: PaymentPlan | null | undefined): number => plan ? PAYMENT_PLAN_SPEC[plan].firstGbp : FINDABLE_SETUP_PRICE_GBP;
 export const PICK_PLAN_FIRST_LINE = 'Ask how they want to pay first: the price and the number of payments follow the plan they choose.';
 /** The terms read out before the link: the chosen payment plan's when it is not the v5 plan, else the route's. ⛔ While a
  *  plan is still to be picked, no figures at all — never the old plan's terms by default. */
-export function closeTermsLines(route: ServiceRoute, plan: PaymentPlan | null | undefined, sellable: boolean = PAYMENT_OPTIONS_SELLABLE): string[] {
-  if (planStillToPick(route, plan, sellable)) return [PICK_PLAN_FIRST_LINE];
+export function closeTermsLines(route: ServiceRoute, plan: PaymentPlan | null | undefined): string[] {
+  if (planStillToPick(route, plan)) return [PICK_PLAN_FIRST_LINE];
   return plan && plan !== 'legacy_twelve' ? planTermsLines(plan) : routeTermsLines(route);
 }
 /** The header chip: "Findable Build · 6 months" once a plan is chosen, else the route's payment count (none while a plan is
  *  still to be picked). */
-export function closeChipText(route: ServiceRoute, plan: PaymentPlan | null | undefined, sellable: boolean = PAYMENT_OPTIONS_SELLABLE): string {
+export function closeChipText(route: ServiceRoute, plan: PaymentPlan | null | undefined): string {
   if (plan) return `${SERVICE_ROUTE_NAME[route]} · ${PAYMENT_PLAN_NAME[plan]}`;
-  return planStillToPick(route, plan, sellable) ? SERVICE_ROUTE_NAME[route] : `${SERVICE_ROUTE_NAME[route]} · ${totalPaymentsFor(route)} payments`;
+  return planStillToPick(route, plan) ? SERVICE_ROUTE_NAME[route] : `${SERVICE_ROUTE_NAME[route]} · ${totalPaymentsFor(route)} payments`;
 }
 
 /** Who owns the website, per route, in the REP's words (findableOffer.ts's TWO ROUTES note is the source:
@@ -450,7 +449,7 @@ export function cleanAnswers(raw: unknown): QuickCloseAnswers {
   // The Build consents belong to Build: on any other route (or none) they are not an answer.
   if (out.route !== 'build') delete out.build_consents;
   // A payment plan belongs to Build, and only a plan that can be sold today is an answer.
-  if (out.payment_plan && (out.route !== 'build' || !isSellablePaymentPlan(out.payment_plan))) delete out.payment_plan;
+  if (out.payment_plan && (out.route !== 'build' || !isPaymentPlan(out.payment_plan))) delete out.payment_plan;
   return out;
 }
 
@@ -492,7 +491,7 @@ export function closeFlow(raw: QuickCloseAnswers): QcKey[] {
   flow.push('domain');
   flow.push('route');
   /* 2026-10-29: how they pay, once the options are on sale (until then every sale is the v5 plan and nothing is asked). */
-  if (PAYMENT_OPTIONS_SELLABLE && a.route === 'build') flow.push('payment_plan');
+  if (a.route === 'build') flow.push('payment_plan');
   flow.push(...routeQuestions(a));
   return flow;
 }
@@ -967,7 +966,7 @@ const AFTER_PAYMENT_SENTENCE = "Once it's paid, Paul will be in touch within two
 /** What the rep says once the route is chosen. ⛔ Not shown before a route exists (it would name no terms). */
 export function quickCloseScript(route: ServiceRoute | null | undefined, plan?: PaymentPlan | null): string {
   if (!route) return '';
-  if (PAYMENT_OPTIONS_SELLABLE && route === 'build' && !plan) return '';
+  if (route === 'build' && !plan) return '';
   return `I'll send you your sign-up link now. It's ${SERVICE_ROUTE_NAME[route]}: ${ownershipToClient(route)} ` +
     `It's ${priceSentence(route, plan)} ${QUICK_CLOSE_PROMISE} ${FINDABLE_GUARANTEE} ` +
     `${SIGNUP_LINK_SENTENCE} ${AFTER_PAYMENT_SENTENCE} You don't need to sort any of that out today.`;

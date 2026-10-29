@@ -98,7 +98,9 @@ const STALE: Array<[RegExp, string]> = [
   [/\b(8|eight)[- ]weeks?\b/i, "eight weeks — the cycle has been four since 2026-09-03"],
   [/week[- ]eight\b/i, "week eight — four since 2026-09-03"],
   [/\b56 days\b/, "56 days — 28 since 2026-09-03 (RG's +56 is a stored date, never copy)"],
-  [/£\s?49\.99|\b49\.99\b|£\s?19\.99|\b19\.99\b/, "a retired price — £99 flat since 2026-09-12"],
+  /* 2026-10-29: £49.99 is live again as the 12-month plan's MONTHLY (paymentPlans.ts); the retired £49.99 was a one-off
+     setup price ("£49.99 instead of £99"). */
+  [/£\s?49\.99 (instead|one[- ]off|to start|setup)|£\s?19\.99|\b19\.99\b/, "a retired price — £99 flat since 2026-09-12 (£49.99 only as the 12-month monthly)"],
   [/\bfounder\b/i, "founder offer — retired 2026-09-03"],
   [/first (10|ten) (businesses|at)\b/i, "the 'first ten' pitch — retired"],
   [/\b(two|2) months\b/i, "'two months' — the one-off never bought two months"],
@@ -226,7 +228,7 @@ ok(/week-four comparison/.test(read("src/lib/baselineView.ts")), "the HELD band 
 
 console.log("\n── THE GUARANTEE APPEARS ONLY AS THE CONSTANT ──");
 const welcome = read("src/lib/welcomePackHtml.ts");
-ok(/esc\(FINDABLE_GUARANTEE\)/.test(welcome), "the welcome pack renders FINDABLE_GUARANTEE, escaped");
+ok(/esc\(v6 \? V6_GUARANTEE : FINDABLE_GUARANTEE\)/.test(welcome), "the welcome pack renders the guarantee of the client's plan (v5 FINDABLE_GUARANTEE, v6 V6_GUARANTEE), escaped");
 ok(!/you get your money back/i.test(renderedText(welcome)), "…and no hand-written refund sentence beside it");
 ok(FINDABLE_GUARANTEE.includes(`£${FINDABLE_SETUP_PRICE_GBP}`), `the constant itself names £${FINDABLE_SETUP_PRICE_GBP}`);
 ok(/four weeks|week four/.test(FINDABLE_GUARANTEE), "…and four weeks");
