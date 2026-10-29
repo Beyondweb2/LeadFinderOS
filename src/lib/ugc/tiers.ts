@@ -47,6 +47,11 @@ export interface TierInput extends BrandFacts {
   ad_start_dates?: readonly string[] | null;
   tier_override?: string | null;
   track?: string | null;
+  /** Her tier-adjustment facts (null = not known; nothing is adjusted on an unknown). */
+  company_country?: string | null;
+  ships_to?: ShipsTo | string | null;
+  ships_thailand?: boolean | null;
+  creator_programme_country?: string | null;
 }
 export interface TierContext {
   now?: Date;
@@ -81,7 +86,30 @@ export function hardNoReasons(b: TierInput, ctx: TierContext = {}): string[] {
   const blocked = (ctx.blocked ?? []).map((x) => x.trim().toLowerCase()).filter(Boolean);
   if (blocked.length && (blocked.includes(host) || blocked.some((x) => normaliseName(x) === normaliseName(name)))) out.unshift('On her blocked list');
   if (ctx.pitchedKeys && ((b.brand_key && ctx.pitchedKeys.has(b.brand_key)) || ctx.pitchedKeys.has(`n:${normaliseName(name)}`))) out.unshift('Already in her pitch log');
+  /* Her rule: a brand whose creator programme is limited to residents of one country is skipped (hidden, not deleted). */
+  if (b.creator_programme_country) out.unshift(`Creator programme limited to residents of ${b.creator_programme_country}`);
   return [...new Set(out)];
+}
+
+/* ── Her tier adjustments (pitch system 3a step 3) ─────────────────────────────────────────────────────────────
+   Facts on the brand, set from her research or by her on the sheet. An absent fact adjusts nothing. */
+export type ShipsTo = 'worldwide' | 'one_country' | 'uk_ie';
+
+/** A Thai company: her recorded company country, or a Thai domain (.th). */
+export function isThaiCompany(b: Pick<TierInput, 'company_country' | 'domain'>): boolean {
+  if (String(b.company_country ?? '').toUpperCase() === 'TH') return true;
+  return /\.(co\.|in\.|or\.|ac\.)?th$/i.test(String(b.domain ?? ''));
+}
+
+const LOWER: Record<Tier, Tier> = { A: 'B', B: 'C', C: 'D', D: 'D' };
+
+/** Apply her adjustments to a base tier. Returns the tier and the reasons that changed it. */
+export function adjustTier(base: Tier, b: TierInput): { tier: Tier; notes: string[] } {
+  if (isThaiCompany(b)) return { tier: 'D', notes: base === 'D' ? [] : ['Thai company: always Tier D'] };
+  if (b.ships_to === 'uk_ie') return { tier: LOWER[base], notes: base === 'D' ? [] : ['Ships to the UK and Ireland only: one tier lower'] };
+  /* Positive match: only an explicit "does not ship to Thailand" lowers it; unknown leaves the tier alone. */
+  if (b.ships_to === 'one_country' && b.ships_thailand === false) return { tier: LOWER[base], notes: base === 'D' ? [] : ['Ships to one country only, not Thailand: one tier lower'] };
+  return { tier: base, notes: [] };
 }
 
 export function tierFor(b: TierInput, ctx: TierContext = {}): TierResult {
@@ -91,9 +119,15 @@ export function tierFor(b: TierInput, ctx: TierContext = {}): TierResult {
   /* The Chiang Mai local track is not tiered: one business per category, CM collab DM v4 (her Agencies & Talent rules). */
   if (b.track === 'local') return { tier: 'local', why: 'Local collab (CM collab DM v4)' };
   const o = String(b.tier_override ?? '').toUpperCase();
-  if (o === 'A' || o === 'B' || o === 'C' || o === 'D') return { tier: o, why: 'Set by Jess', source: 'jess' };
+  const withAdjust = (base: Tier, why: string, source: 'jess' | 'ads_library'): TierResult => {
+    const a = adjustTier(base, b);
+    return { tier: a.tier, why: a.notes.length ? `${why}; ${a.notes.join('; ')}` : why, source };
+  };
+  if (o === 'A' || o === 'B' || o === 'C' || o === 'D') return withAdjust(o, `Set by Jess (${o})`, 'jess');
   const ads = adsLibraryTierB(b.ad_start_dates, now);
-  if (ads.ok) return { tier: 'B', why: ads.why, source: 'ads_library' };
+  if (ads.ok) return withAdjust('B', ads.why, 'ads_library');
+  /* A Thai company is Tier D even before Jess rates it. */
+  if (isThaiCompany(b)) return { tier: 'D', why: 'Thai company: always Tier D', source: 'jess' };
   return { tier: 'unrated', why: `${ads.why}. Jess to set A, C or D.` };
 }
 

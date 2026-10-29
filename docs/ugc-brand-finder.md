@@ -6,7 +6,7 @@ Branch `feat/ugc-brand-finder`, built 2026-10-29. Stage 1 (build, migration writ
 A separate page (`/ugc`) for Jess (UGC creator, jesscousin.com) to find brands that pay for UGC, get the right contact, and pitch them herself. Nothing is sent from the app.
 
 ## Separation rules (enforced, not just hidden)
-- **Own tables**: `ugc_members`, `ugc_settings`, `ugc_brands`, `ugc_brand_events`, `ugc_runs`, `ugc_pitch_system`, `ugc_pitch_log` (migration `20261129090000_ugc_brand_finder.sql`). RLS on every one. No Findable table is read or written (except the Apify usage snapshot, read-only, to stop at the shared cap).
+- **Own tables**: `ugc_members`, `ugc_settings`, `ugc_brands`, `ugc_brand_events`, `ugc_runs`, `ugc_pitch_system`, `ugc_pitch_log` (migration `20261130090000_ugc_brand_finder.sql`). RLS on every one. No Findable table is read or written (except the Apify usage snapshot, read-only, to stop at the shared cap).
 - **Jess's login has no Findable role** — a `ugc_members` row, never `user_roles`. `my_role()` stays NULL for her, so every Findable policy and edge function keeps refusing her (`no_role`). Checked live on 2026-10-29: the only rows a role-less account can read are `profiles` (team display names), `uk_towns`, `directory_businesses` and published `generated_sites` — pre-existing, not caused by this.
 - **Her pitch system, rates and pitch log are owner-only**: not even the admin can read them (policies use `auth.uid()` + `is_ugc_member()`, never `my_role()`). The pitch action refuses anyone but the member herself.
 - **Her files never go in git**: `docs/ugc/jess-pitch-system/` is gitignored. Her workbook `UGC_brand_pitch_list_50.xlsx` is copied there locally only. Content goes into `ugc_pitch_system` / `ugc_pitch_log`.
@@ -34,3 +34,9 @@ A separate page (`/ugc`) for Jess (UGC creator, jesscousin.com) to find brands t
 - Her export is saved (gitignored) in the worktree; stage 2 loads it into her private record (Import pitch-system.md on her Pitch system tab, or the same parser server-side).
 - Tier A/C/D evidence (job posts, Backstage castings, affiliate-only schemes) is not scraped: Jess sets those tiers. Tier B is automated from the Ads Library only; her tier adjustments (a Thai company is always D; ships to one country only → one tier lower) are not automated yet.
 - Stage 2: apply the migration (one statement file, by hand), create Jess's login from Settings, load her pitch system + workbook pitch log into her private records, deploy `ugc-brands`, then the SPA.
+
+## Stage 2 changes (2026-10-29)
+- Migration renamed `20261130090000_ugc_brand_finder.sql` (main took the 20261129090000 slot for payment plans).
+- Her tier adjustments (`tiers.ts`, derived from facts on the brand; an unknown fact adjusts nothing): a Thai company (`company_country = TH` or a `.th` domain) is always Tier D; ships to one country only and explicitly not to Thailand, or UK-and-Ireland only, is one tier lower (D stays D); a creator programme limited to residents of one country is skipped (hidden, never deleted). Jess sets the facts on the brand sheet.
+- Jess's login: `invite_member` (admin) asks the auth service to EMAIL her its standard invite to the set-password page; the link never comes back to the function, a log or the screen. She gets a `ugc_members` row only. The temporary-password path was removed.
+- The admin works the first UGC member's workspace by default (her list, her budget). The admin may run a pitch on it (the stage-2 live test); her pitch system, rates and pitch log are still read server-side only and never returned.

@@ -97,7 +97,7 @@ export default function Ugc() {
       </Tabs>
 
       <UgcBrandSheet brand={open?.brand ?? null} view={open?.view ?? null} system={system.data ?? null} senderEmail={access.data?.sender_email ?? null}
-        canPitch={member} open={!!open} onOpenChange={(v) => { if (!v) setOpenId(null); }} />
+        canPitch={member || access.data?.admin === true} open={!!open} onOpenChange={(v) => { if (!v) setOpenId(null); }} />
     </div>
   );
 }

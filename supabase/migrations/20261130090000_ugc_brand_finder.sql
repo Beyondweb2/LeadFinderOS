@@ -118,6 +118,13 @@ create table if not exists public.ugc_brands (
   track             text not null default 'brand' check (track in ('brand','local')),
   -- A tier Jess set by hand (A–D) when her rules need her judgement; the computed tier is derived on read.
   tier_override     text check (tier_override is null or tier_override in ('A','B','C','D')),
+  -- Her tier-adjustment FACTS (src/lib/ugc/tiers.ts adjusts on read; null = not known, nothing adjusted):
+  -- a Thai company is always Tier D; ships to one country only and not Thailand, or UK-and-Ireland only = one tier
+  -- lower; a creator programme limited to residents of one country = skipped (hidden, never deleted).
+  company_country   text,
+  ships_to          text check (ships_to is null or ships_to in ('worldwide','one_country','uk_ie')),
+  ships_thailand    boolean,
+  creator_programme_country text,
   -- CRM
   status            text not null default 'new'
                     check (status in ('new','researching','pitch_ready','needs_jess','contacted','replied','negotiating','won','not_interested','not_a_fit')),

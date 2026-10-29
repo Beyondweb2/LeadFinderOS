@@ -21,7 +21,7 @@ import {
 import { parseSheetDate, pitchedKeySet, rowsFromCsv, rowsFromWorkbook } from '../src/lib/ugc/pitchLog.ts';
 import { parsePitchSystem } from '../src/lib/ugc/pitchSystemImport.ts';
 import { ENRICH_LEADS_PER_BRAND, UGC_APIFY_STOP_PCT, UGC_MAX_ITEM_CAP, clampCap, estimateRunUsd, ugcSpendRefusal } from '../src/lib/ugc/config.ts';
-import { createUgcMember } from '../supabase/functions/_shared/ugc-member-create.ts';
+import { inviteUgcMember } from '../supabase/functions/_shared/ugc-member-invite.ts';
 
 let f = 0;
 const ok = (c: unknown, m: string) => { if (c) console.log(`  PASS ${m}`); else { f++; console.log(`  FAIL ${m}`); } };
@@ -50,6 +50,18 @@ console.log('── tiers ──');
   ok(tierFor(base, { now: NOW, pitchedKeys: new Set(['n:glow lab']) }).tier === 'skip', 'already in her pitch log (by name) → skip');
   ok(tierFor({ ...base, track: 'local' }, { now: NOW }).tier === 'local' && tierFor({ ...base, track: 'local', text: 'casino' }, { now: NOW }).tier === 'skip', 'the local track is not tiered, but the hard no list still applies');
   ok(templateFamilyFor('A') === 'ad_idea_v2' && templateFamilyFor('B') === 'ad_idea_v2' && templateFamilyFor('C') === 'video_idea_v3' && templateFamilyFor('D') === 'video_idea_v3' && templateFamilyFor('unrated') === null, 'A/B → Ad idea v2, C/D → Video idea v3, unrated → none');
+  /* Her tier adjustments (pitch system 3a step 3). */
+  const tierB = { ...base, ad_start_dates: [daysAgo(1), daysAgo(5), daysAgo(9)] };
+  ok(tierFor({ ...base, tier_override: 'A', company_country: 'TH' }, { now: NOW }).tier === 'D', 'a Thai company is always Tier D, even over her A');
+  ok(tierFor({ ...base, domain: 'brand.co.th' }, { now: NOW }).tier === 'D', 'a Thai domain counts as a Thai company (Tier D before she rates it)');
+  ok(tierFor({ ...tierB, ships_to: 'one_country', ships_thailand: false }, { now: NOW }).tier === 'C', 'ships to one country only, not Thailand: B → C');
+  ok(tierFor({ ...tierB, ships_to: 'one_country', ships_thailand: null }, { now: NOW }).tier === 'B', '…an unchecked Thailand answer lowers nothing');
+  ok(tierFor({ ...tierB, ships_to: 'one_country', ships_thailand: true }, { now: NOW }).tier === 'B', '…and shipping to Thailand keeps the tier');
+  ok(tierFor({ ...base, tier_override: 'A', ships_to: 'uk_ie' }, { now: NOW }).tier === 'B', 'UK-and-Ireland only: A → B');
+  ok(tierFor({ ...base, tier_override: 'D', ships_to: 'uk_ie' }, { now: NOW }).tier === 'D', 'Tier D stays D (nothing lower)');
+  const prog = tierFor({ ...tierB, creator_programme_country: 'US' }, { now: NOW });
+  ok(prog.tier === 'skip' && /residents of US/.test(prog.why), 'a creator programme limited to one country is skipped (hidden, not deleted)');
+  ok(/one tier lower/.test(tierFor({ ...tierB, ships_to: 'uk_ie' }, { now: NOW }).why), 'the reason for a lowered tier is shown');
   const v = brandVerdict({ name: 'X', country: 'GB', admin_countries: ['Viet Nam'], page_created_at: daysAgo(30) }, NOW);
   ok(v.dropship.includes('foreign_admins') && v.dropship.includes('new_page') && v.hidden, 'dropshipping signs: new page + admins abroad → hidden');
   ok(!brandVerdict({ name: 'X', country: 'GB' }, NOW).hidden, 'unknown facts flag nothing');
@@ -138,12 +150,19 @@ console.log('\n── actor inputs / outputs ──');
 console.log('\n── pitch log ──');
 {
   ok(parseSheetDate('23.09.26') === '2026-09-23' && parseSheetDate('2026-10-16') === '2026-10-16' && parseSheetDate('45900') === '2025-08-31', 'her date formats');
+  /* Her real tab layout (checked 2026-10-29). */
   const rows = rowsFromWorkbook({
-    'Previously Pitched': [['#', 'Brand', 'Channel used', 'Date sent', 'Status', 'Outcome'], ['1', 'Glow Lab', 'Email', '2026-10-01', 'Sent', '']],
+    'Pitch Log': [['#', 'Brand', 'Channel used', 'Template version', 'Date sent', 'Status', 'Outcome'], ['1', 'Glow Lab', 'Email', 'Ad idea v2', '2026-10-01', 'Sent', '']],
+    'Previously Pitched': [['Brand', 'First pitched', 'Contact used', 'Outcome / status', 'Re-pitch OK from (est.)'], ['Old Co', '2026-01-01', 'Email', 'No reply', '2026-06-01']],
     'Brands & Contacts': [['Brand', 'Status', 'Instagram'], ['Ready Co', 'Ready', ''], ['Sent Co', 'Pitched', '@sentco']],
-    'Creator Watchlist': [['Brand', 'First pitched', 'Re-pitch OK from (est.)'], ['Old Co', '2026-01-01', '2026-06-01']],
+    'Chiang Mai Collabs': [['Business', 'Instagram', 'Status', 'Date pitched'], ['Slow Bar', '@slowbar', 'Pitched', '15.10.26'], ['Queued Cafe', '', 'Queued', '']],
+    'Agencies & Talent': [['Name', 'Website', 'Status', 'Date pitched'], ['Agency X', 'https://agencyx.example', 'Sent', '2026-10-20'], ['Agency Y', '', 'Research', '']],
+    'Creator Watchlist': [['Handle', 'Group', 'Status'], ['@somecreator', 'Beauty', 'Active']],
   });
   ok(rows.some((r) => r.brand_name === 'Glow Lab') && rows.some((r) => r.brand_name === 'Sent Co') && !rows.some((r) => r.brand_name === 'Ready Co'), 'only brands she actually contacted are logged');
+  ok(rows.some((r) => r.brand_name === 'Slow Bar') && !rows.some((r) => r.brand_name === 'Queued Cafe'), 'local pitches from Chiang Mai Collabs (queued ones are not pitched)');
+  ok(rows.some((r) => r.brand_name === 'Agency X' && r.domain === 'agencyx.example') && !rows.some((r) => r.brand_name === 'Agency Y'), 'pitched agencies are logged');
+  ok(!rows.some((r) => /somecreator/.test(r.brand_name)), 'the Creator Watchlist (creators, not brands) is never read as pitched');
   const keys = pitchedKeySet(rows, NOW);
   ok(keys.has('n:glow lab') && !keys.has('n:old co'), 'a re-pitch date in the past frees the brand');
   ok(rowsFromCsv('Brand,Website\n"Acme, Inc",acme.com\n').some((r) => r.domain === 'acme.com'), 'CSV import (quoted commas)');
@@ -195,7 +214,7 @@ console.log('\n── money ──');
 
 console.log('\n── separation and access ──');
 {
-  const MIG = read('supabase/migrations/20261129090000_ugc_brand_finder.sql');
+  const MIG = read('supabase/migrations/20261130090000_ugc_brand_finder.sql');
   for (const t of ['ugc_members', 'ugc_settings', 'ugc_brands', 'ugc_brand_events', 'ugc_runs', 'ugc_pitch_system', 'ugc_pitch_log']) {
     ok(new RegExp(`alter table public\\.${t} enable row level security`).test(MIG), `${t}: RLS on`);
   }
@@ -228,15 +247,17 @@ console.log('\n── separation and access ──');
   ok(!/'\/ugc'/.test(read('src/lib/access.ts')), 'sales can never open /ugc (not in SALES_ROUTE_PATTERNS)');
 
   const store: string[] = [];
-  const r = await createUgcMember({
-    createAuthUser: async () => ({ id: 'u1', error: null }),
+  const r = await inviteUgcMember({
+    inviteByEmail: async ({ email }) => { store.push(`invite:${email}`); return { id: 'u1', error: null }; },
     deleteAuthUser: async () => { store.push('deleted'); },
     writeMember: async (id) => { store.push(`member:${id}`); return null; },
-  }, 'admin1', { name: 'Jess', email: 'jess@example.com', password: 'Abcdefgh1234xyz' });
-  ok(r.ok && store.join() === 'member:u1', 'create login: a ugc_members row only');
-  const r2 = await createUgcMember({ createAuthUser: async () => ({ id: 'u2', error: null }), deleteAuthUser: async () => { store.push('deleted'); }, writeMember: async () => 'boom' }, 'a', { name: 'J', email: 'j@example.com', password: 'Abcdefgh1234xyz' });
-  ok(!r2.ok && store.includes('deleted'), 'create login: all-or-nothing (account removed if the member row fails)');
-  ok(!JSON.stringify(r2).includes('Abcdefgh1234xyz'), 'the password never appears in a result');
+  }, 'admin1', { name: 'Jess', email: 'Jess@Example.com' });
+  ok(r.ok && store.join() === 'invite:jess@example.com,member:u1', 'invite: the auth service emails the invite, then a ugc_members row only');
+  ok(!('link' in r) && !/http/.test(JSON.stringify(r)), 'the invite link never comes back (no credential passes through)');
+  const r2 = await inviteUgcMember({ inviteByEmail: async () => ({ id: 'u2', error: null }), deleteAuthUser: async () => { store.push('deleted'); }, writeMember: async () => 'boom' }, 'a', { name: 'J', email: 'j@example.com' });
+  ok(!r2.ok && store.includes('deleted'), 'invite: all-or-nothing (account removed if the member row fails)');
+  ok(/inviteUserByEmail\(email, \{ redirectTo: SET_PASSWORD_URL/.test(FN) && !/action_link|hashed_token|generateLink/.test(FN), 'ugc-brands uses the standard emailed invite and never handles the link');
+  ok(!/create_member|createUser\(/.test(FN), 'no temporary-password path for UGC logins');
 }
 
 console.log(f ? `\n${f} FAILED` : '\nall passed');

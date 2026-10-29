@@ -29,7 +29,8 @@ export interface UgcBrand {
   ad_samples: { text?: string; link?: string; started?: string }[]; ad_start_dates: string[]; creators_seen: string[];
   page_created_at: string | null; admin_countries: string[]; shop_links: string[]; has_about_page: boolean | null; has_address: boolean | null;
   research: { snippets?: string[]; product?: string; product_detail?: string; detail_url?: string; pays_for_ugc_evidence?: string };
-  track: 'brand' | 'local'; tier_override: string | null; status: string; active_channel: string | null;
+  track: 'brand' | 'local'; tier_override: string | null;
+  company_country: string | null; ships_to: 'worldwide' | 'one_country' | 'uk_ie' | null; ships_thailand: boolean | null; creator_programme_country: string | null; status: string; active_channel: string | null;
   first_contacted_at: string | null; checked_sent_mail_at: string | null; checked_linkedin_at: string | null; follow_ups_sent: number; notes: string | null; todo: string | null; todo_on: string | null;
   pitch_subject: string | null; pitch_body: string | null; pitch_writer: string | null; pitch_written_at: string | null;
   pitch_working: Record<string, unknown>; pitch_attempts: number; last_contacted_at: string | null; last_contacted_via: string | null;
@@ -169,7 +170,7 @@ export function useUgcActions() {
       refresh(UGC_KEYS.brands, UGC_KEYS.events(brandId));
       return data as { ok: boolean; error?: string };
     },
-    updateBrand: async (b: Pick<UgcBrand, 'id' | 'owner_user_id'>, patch: Partial<Pick<UgcBrand, 'status' | 'notes' | 'todo' | 'todo_on' | 'tier_override' | 'checked_sent_mail_at' | 'checked_linkedin_at'>>, kind: 'status' | 'note' | 'todo' | 'check') => {
+    updateBrand: async (b: Pick<UgcBrand, 'id' | 'owner_user_id'>, patch: Partial<Pick<UgcBrand, 'status' | 'notes' | 'todo' | 'todo_on' | 'tier_override' | 'checked_sent_mail_at' | 'checked_linkedin_at' | 'company_country' | 'ships_to' | 'ships_thailand' | 'creator_programme_country'>>, kind: 'status' | 'note' | 'todo' | 'check') => {
       const { error } = await db.from('ugc_brands').update(patch).eq('id', b.id);
       if (error) throw error;
       const { data: u } = await supabase.auth.getUser();
@@ -188,6 +189,7 @@ export function useUgcActions() {
       }
       refresh(UGC_KEYS.log);
     },
-    createMember: (a: { name: string; email: string; sender_email: string; password: string }) => invokeEdge<{ ok: boolean; user_id: string }>('ugc-brands', { action: 'create_member', ...a }),
+    /** Admin: the auth service emails Jess its standard invite (the link never comes back to the browser). */
+    inviteMember: (a: { name: string; email: string; sender_email: string }) => invokeEdge<{ ok: boolean; user_id: string }>('ugc-brands', { action: 'invite_member', ...a }),
   }), [refresh]);
 }

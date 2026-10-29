@@ -129,6 +129,26 @@ export function UgcBrandSheet({ brand: b, view: v, system, senderEmail, canPitch
               ))}
               {b.ad_start_dates.length > 0 && <span className="ml-1 text-muted-foreground">Ads Library: {b.ad_start_dates.length} active video ads</span>}
             </div>}
+            {b.track !== 'local' && (
+              <div className="mt-2 grid gap-2 text-xs sm:grid-cols-2" data-testid="ugc-tier-facts">
+                <label className="flex items-center justify-between gap-2">Company based in
+                  <Input className="h-7 w-24" placeholder="e.g. GB" defaultValue={b.company_country ?? ''} maxLength={2}
+                    onBlur={(e) => { const v = e.target.value.trim().toUpperCase() || null; if (v !== (b.company_country ?? null)) void run('fact', () => actions.updateBrand(b, { company_country: v }, 'status')); }} /></label>
+                <label className="flex items-center justify-between gap-2">Ships to
+                  <select className="h-7 rounded-md border bg-background px-1" value={b.ships_to ?? ''}
+                    onChange={(e) => void run('fact', () => actions.updateBrand(b, { ships_to: (e.target.value || null) as UgcBrand['ships_to'] }, 'status'))}>
+                    <option value="">Not checked</option><option value="worldwide">Worldwide / many countries</option><option value="one_country">One country only</option><option value="uk_ie">UK and Ireland only</option>
+                  </select></label>
+                <label className="flex items-center justify-between gap-2">Ships to Thailand
+                  <select className="h-7 rounded-md border bg-background px-1" value={b.ships_thailand == null ? '' : b.ships_thailand ? 'yes' : 'no'}
+                    onChange={(e) => void run('fact', () => actions.updateBrand(b, { ships_thailand: e.target.value === '' ? null : e.target.value === 'yes' }, 'status'))}>
+                    <option value="">Not checked</option><option value="yes">Yes</option><option value="no">No</option>
+                  </select></label>
+                <label className="flex items-center justify-between gap-2">Creator programme only for residents of
+                  <Input className="h-7 w-24" placeholder="none" defaultValue={b.creator_programme_country ?? ''} maxLength={2}
+                    onBlur={(e) => { const v = e.target.value.trim().toUpperCase() || null; if (v !== (b.creator_programme_country ?? null)) void run('fact', () => actions.updateBrand(b, { creator_programme_country: v }, 'status')); }} /></label>
+              </div>
+            )}
           </SubSection>
 
           {/* 2 CONTACT */}

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { KeyRound, Loader2, MessageCircle, PowerOff, UserPlus } from 'lucide-react';
+import { Loader2, MailPlus, MessageCircle, PowerOff } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -7,9 +7,8 @@ import { Callout, SubSection, ToneChip } from '@/components/operator/ui';
 import { useToast } from '@/hooks/use-toast';
 import { edgeErrorMessage } from '@/lib/edgeInvoke';
 import { useUgcActions } from '@/hooks/useUgc';
-import { generateTempPassword } from '@/lib/teamAccounts';
 
-/* UGC settings: the WhatsApp API slot (OFF) and, for the admin, Jess's login. */
+/* UGC settings: the WhatsApp API slot (OFF) and, for the admin, Jess's invite. */
 
 export function UgcSettingsPanel({ admin }: { admin: boolean }) {
   const actions = useUgcActions();
@@ -17,9 +16,8 @@ export function UgcSettingsPanel({ admin }: { admin: boolean }) {
   const [name, setName] = useState('Jess Cousin');
   const [email, setEmail] = useState('');
   const [sender, setSender] = useState('');
-  const [pw, setPw] = useState(() => generateTempPassword());
   const [busy, setBusy] = useState(false);
-  const [made, setMade] = useState(false);
+  const [sent, setSent] = useState(false);
 
   return (
     <div className="grid gap-4 lg:grid-cols-2">
@@ -33,20 +31,17 @@ export function UgcSettingsPanel({ admin }: { admin: boolean }) {
 
       {admin && (
         <Card><CardContent className="space-y-3 p-4 text-sm">
-          <SubSection title="Give Jess her login" icon={UserPlus} tone="purple" hint="A UGC login: it opens this page only and has no LeadFinder role.">
-            {made ? <Callout tone="green" title="Login created">Give Jess the email and the temporary password; she sets her own at first sign-in.</Callout> : (
+          <SubSection title="Invite Jess" icon={MailPlus} tone="purple" hint="A UGC login: it opens this page only and has no LeadFinder role.">
+            {sent ? <Callout tone="green" title="Invite sent">She gets an email to set her own password, then lands on this page.</Callout> : (
               <div className="grid gap-2">
                 <label className="text-xs font-medium">Name<Input className="mt-1" value={name} onChange={(e) => setName(e.target.value)} /></label>
-                <label className="text-xs font-medium">Login email<Input className="mt-1" type="email" value={email} onChange={(e) => setEmail(e.target.value)} /></label>
-                <label className="text-xs font-medium">Gmail she sends from (if different)<Input className="mt-1" type="email" value={sender} onChange={(e) => setSender(e.target.value)} /></label>
-                <label className="text-xs font-medium">Temporary password
-                  <div className="mt-1 flex gap-1.5"><Input value={pw} onChange={(e) => setPw(e.target.value)} className="font-mono" />
-                    <Button type="button" variant="outline" size="icon" onClick={() => setPw(generateTempPassword())} aria-label="New password"><KeyRound className="h-4 w-4" /></Button></div></label>
+                <label className="text-xs font-medium">Her email (the invite goes here)<Input className="mt-1" type="email" value={email} onChange={(e) => setEmail(e.target.value)} /></label>
+                <label className="text-xs font-medium">Gmail she sends pitches from (if different)<Input className="mt-1" type="email" value={sender} onChange={(e) => setSender(e.target.value)} /></label>
                 <Button disabled={busy || !email.trim()} onClick={() => void (async () => {
                   setBusy(true);
-                  try { await actions.createMember({ name, email, sender_email: sender.trim() || email, password: pw }); setMade(true); }
-                  catch (e) { toast({ title: 'Not created', description: edgeErrorMessage(e), variant: 'destructive' }); } finally { setBusy(false); }
-                })()}>{busy ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <UserPlus className="mr-1 h-4 w-4" />}Create login</Button>
+                  try { await actions.inviteMember({ name, email, sender_email: sender.trim() || email }); setSent(true); }
+                  catch (e) { toast({ title: 'Not sent', description: edgeErrorMessage(e), variant: 'destructive' }); } finally { setBusy(false); }
+                })()}>{busy ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <MailPlus className="mr-1 h-4 w-4" />}Send invite email</Button>
               </div>
             )}
           </SubSection>

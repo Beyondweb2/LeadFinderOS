@@ -71,13 +71,21 @@ export function rowsFromWorkbook(sheets: Record<string, string[][]>): PitchLogRo
       if (row) out.push(row);
     }
   };
-  tab('Previously Pitched', (g) => logRow({ brand: g('Brand'), date: g('Date sent'), channel: g('Channel used'), outcome: g('Outcome') || g('Status'), source: 'previously_pitched' }));
+  /* Her live record (checked against her real workbook 2026-10-29). "Creator Watchlist" lists CREATORS, not pitched
+     brands, and is never read as a pitch log. */
+  /* Pitch Log: every brand on it is never pitched again (her rule 1d), whatever its status. */
+  tab('Pitch Log', (g) => logRow({ brand: g('Brand'), date: g('Date sent'), channel: g('Channel used'), outcome: g('Outcome') || g('Status'), source: 'pitch_log' }));
+  /* Previously Pitched: blocked until its "Re-pitch OK from" date. */
+  tab('Previously Pitched', (g) => logRow({ brand: g('Brand'), date: g('First pitched'), channel: g('Contact used'), outcome: g('Outcome / status'), repitch: g('Re-pitch OK from (est.)'), source: 'previously_pitched' }));
   /* Brands & Contacts: only rows she has actually contacted (Pitched / Drafted / Bounced / Declined / Form / Replied). */
   tab('Brands & Contacts', (g) => /^(pitched|drafted|bounced|declined|form submitted|replied)/i.test(g('Status').trim())
     ? logRow({ brand: g('Brand'), instagram: g('Instagram'), channel: g('Best first channel'), outcome: g('Status'), source: 'brands_and_contacts' }) : null);
-  tab('Pitch Log', (g) => /^(pitched|no)$/i.test(g('Status').trim())
-    ? logRow({ brand: g('Business'), instagram: g('Instagram'), date: g('Date pitched'), channel: 'Instagram DM', outcome: g('Status'), source: 'pitch_log_local' }) : null);
-  tab('Creator Watchlist', (g) => logRow({ brand: g('Brand'), date: g('First pitched'), channel: g('Contact used'), outcome: g('Outcome / status'), repitch: g('Re-pitch OK from (est.)'), source: 'creator_watchlist' }));
+  /* Chiang Mai Collabs (local track): businesses she has DM'd (Pitched) or that said no. */
+  tab('Chiang Mai Collabs', (g) => /^(pitched|no)\b/i.test(g('Status').trim())
+    ? logRow({ brand: g('Business'), instagram: g('Instagram'), date: g('Date pitched'), channel: 'Instagram DM', outcome: g('Status'), source: 'chiang_mai_collabs' }) : null);
+  /* Agencies & Talent: agencies she has pitched. */
+  tab('Agencies & Talent', (g) => (g('Date pitched').trim() || /pitched|sent/i.test(g('Status')))
+    ? logRow({ brand: g('Name'), website: g('Website'), date: g('Date pitched'), channel: g('Best route'), outcome: g('Reply / outcome') || g('Status'), source: 'agencies' }) : null);
   return dedupeLog(out);
 }
 

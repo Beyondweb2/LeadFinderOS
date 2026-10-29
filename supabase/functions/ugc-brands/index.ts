@@ -15,7 +15,11 @@ import { chooseTemplate, researchFields, runPitchPipeline, type PitchPlan, type 
 import { TIER_RANK, tierFor, templateFamilyFor } from "../../../src/lib/ugc/tiers.ts";
 import { bestContact } from "../../../src/lib/ugc/contactOrder.ts";
 import { pitchedKeySet } from "../../../src/lib/ugc/pitchLog.ts";
-import { createUgcMember } from "../_shared/ugc-member-create.ts";
+import { inviteUgcMember } from "../_shared/ugc-member-invite.ts";
+import { OPERATOR_APP_URL } from "../../../src/config/operatorApp.ts";
+
+/* Where the invite email lands: the app's own set-password page (the same page the Team invite uses). */
+const SET_PASSWORD_URL = `${(Deno.env.get("TEAM_APP_URL")?.trim() || OPERATOR_APP_URL).replace(/\/+$/, "")}/set-password`;
 
 /* ugc-brands — the UGC Brand Finder's ONE server door (docs/ugc-brand-finder.md).
  *
@@ -28,7 +32,7 @@ import { createUgcMember } from "../_shared/ugc-member-create.ts";
  *    maxItems, so Apify itself stops the run at the ceiling.
  * ⛔ NOTHING IS SENT. Pitches are drafts; the send buttons are links Jess opens herself.
  *
- * Actions: state · estimate · start · contacts · poll · pitch · create_member (admin). */
+ * Actions: state · estimate · start · contacts · named_contacts · poll · pitch · invite_member (admin). */
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -233,13 +237,14 @@ Deno.serve(async (req) => {
     const body = (await req.json().catch(() => ({}))) as Row;
     const action = String(body.action ?? "");
 
-    /* ── admin: give Jess her login (a UGC member, never a team role) ── */
-    if (action === "create_member") {
+    /* ── admin: invite Jess (a UGC member, never a team role). The auth service EMAILS her its standard invite;
+          the link never comes back here, so no credential passes through this function, a log or the screen. ── */
+    if (action === "invite_member") {
       if (!caller.admin) return json({ ok: false, error: "admin_only" }, 403);
-      const r = await createUgcMember({
-        createAuthUser: async ({ email, password, displayName, appMetadata }) => {
-          const { data, error } = await service.auth.admin.createUser({ email, password, email_confirm: true, user_metadata: { display_name: displayName }, app_metadata: appMetadata });
-          return { id: data?.user?.id ?? null, error: error ? String(error.message ?? "create failed") : null };
+      const r = await inviteUgcMember({
+        inviteByEmail: async ({ email, displayName }) => {
+          const { data, error } = await service.auth.admin.inviteUserByEmail(email, { redirectTo: SET_PASSWORD_URL, data: { display_name: displayName } });
+          return { id: data?.user?.id ?? null, error: error ? String(error.message ?? "invite failed") : null };
         },
         deleteAuthUser: async (id) => { await service.from("ugc_members").delete().eq("user_id", id); await service.auth.admin.deleteUser(id); },
         writeMember: async (id, displayName, senderEmail, by) => {
@@ -250,14 +255,19 @@ Deno.serve(async (req) => {
         },
       }, caller.id, body);
       if (!r.ok) return json({ ok: false, error: r.error, detail: r.detail }, r.status);
-      console.log(JSON.stringify({ level: "info", fn: "ugc-brands", action, admin: caller.id, created: r.user_id }));
+      console.log(JSON.stringify({ level: "info", fn: "ugc-brands", action, admin: caller.id, invited: r.user_id }));
       return json({ ok: true, user_id: r.user_id });
     }
 
-    /* Whose workspace: a member works their own; the admin works the named member's (or their own, for setup). */
+    /* Whose workspace: a member works their own. The admin works a member's (the named one, else the first member
+       invited — today there is one, Jess), so an admin test lands in her list and her budget; with no member yet,
+       the admin's own (setup). */
     let owner = caller.id;
-    if (!caller.member && caller.admin && typeof body.ownerUserId === "string") {
-      const { data: m } = await service.from("ugc_members").select("user_id").eq("user_id", body.ownerUserId).maybeSingle();
+    if (!caller.member && caller.admin) {
+      const q = service.from("ugc_members").select("user_id").order("created_at", { ascending: true }).limit(1);
+      const { data: m } = typeof body.ownerUserId === "string"
+        ? await service.from("ugc_members").select("user_id").eq("user_id", body.ownerUserId).maybeSingle()
+        : await q.maybeSingle();
       if (m?.user_id) owner = m.user_id;
     }
 
@@ -339,7 +349,7 @@ Deno.serve(async (req) => {
       /* Named marketing people for the TOP-RANKED brands only (her tiers, not raw ad count): default 50 a run. */
       const top = Math.min(Math.max(1, Math.floor(Number(body.top ?? ENRICH_DEFAULT_TOP)) || ENRICH_DEFAULT_TOP), ENRICH_MAX_TOP);
       const [{ data: rows, error }, ps, log] = await Promise.all([
-        service.from("ugc_brands").select("id, name, website, domain, brand_key, country, page_created_at, admin_countries, shop_links, has_about_page, has_address, ad_start_dates, tier_override, research, live_ads_count, creators_seen, track, enriched_at, status")
+        service.from("ugc_brands").select("id, name, website, domain, brand_key, country, page_created_at, admin_countries, shop_links, has_about_page, has_address, ad_start_dates, tier_override, company_country, ships_to, ships_thailand, creator_programme_country, research, live_ads_count, creators_seen, track, enriched_at, status")
           .eq("owner_user_id", owner).eq("track", "brand").not("website", "is", null).is("enriched_at", null)
           .in("status", ["new", "researching", "pitch_ready", "needs_jess"]).order("live_ads_count", { ascending: false }).limit(1000),
         service.from("ugc_pitch_system").select("blocked_list").eq("owner_user_id", owner).maybeSingle(),
@@ -368,8 +378,11 @@ Deno.serve(async (req) => {
     }
 
     if (action === "pitch") {
-      /* Her pitch system is PRIVATE to her: only the member writes her own pitches (the admin cannot read it). */
-      if (!caller.member || owner !== caller.id) return json({ ok: false, error: "pitch_system_private" }, 403);
+      /* Her pitch system is PRIVATE to her: it is read here with the service role and NEVER returned — only the draft
+         (which lives on the brand, as every draft does) comes back. The member pitches her own brands; the admin may
+         run a pitch on a member's workspace (Paul, 2026-10-29: the stage-2 live test) but still never sees her system,
+         rates or pitch log. A pitch on the admin's own setup workspace has no system to read and is refused. */
+      if (!(caller.member && owner === caller.id) && !(caller.admin && owner !== caller.id)) return json({ ok: false, error: "pitch_system_private" }, 403);
       const { data: brand, error } = await service.from("ugc_brands").select("*").eq("id", String(body.brandId ?? "")).eq("owner_user_id", owner).maybeSingle();
       if (error || !brand) return json({ ok: false, error: "brand_not_found" }, 404);
       const dayAgo = new Date(Date.now() - 86_400_000).toISOString();
