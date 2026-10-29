@@ -52,6 +52,8 @@ export interface TierInput extends BrandFacts {
   ships_to?: ShipsTo | string | null;
   ships_thailand?: boolean | null;
   creator_programme_country?: string | null;
+  /** Set once auto-research has run: no Tier B evidence by then means Tier D (her rule: "no evidence found"). */
+  researched_at?: string | null;
 }
 export interface TierContext {
   now?: Date;
@@ -78,7 +80,8 @@ export function adsLibraryTierB(starts: readonly string[] | null | undefined, no
 
 export function hardNoReasons(b: TierInput, ctx: TierContext = {}): string[] {
   const now = ctx.now ?? new Date();
-  const out = verdictReasons(brandVerdict(b, now));
+  /* "Run from another country" is judged against where the brand is based when Jess has recorded it, else the country searched. */
+  const out = verdictReasons(brandVerdict({ ...b, country: b.company_country || b.country }, now));
   const name = b.name ?? '';
   const host = (b.domain ?? '').toLowerCase();
   if (name && nameHit(name, MEGA_BRANDS)) out.unshift('Mega-brand');
@@ -128,6 +131,9 @@ export function tierFor(b: TierInput, ctx: TierContext = {}): TierResult {
   if (ads.ok) return withAdjust('B', ads.why, 'ads_library');
   /* A Thai company is Tier D even before Jess rates it. */
   if (isThaiCompany(b)) return { tier: 'D', why: 'Thai company: always Tier D', source: 'jess' };
+  /* Her Tier D is "no evidence found, still pitchable": once the brand is researched and the Ads Library shows no Tier B
+     evidence, it is Tier D (Jess raises it if she finds A or C evidence). Before research it stays unrated. */
+  if (b.researched_at) return withAdjust('D', `No Tier A/B evidence found (${ads.why}); Jess can raise it`, 'ads_library');
   return { tier: 'unrated', why: `${ads.why}. Jess to set A, C or D.` };
 }
 

@@ -14,14 +14,14 @@
  *    could not be read (her rule: never guess a hesitation). */
 
 export type PageKind = 'home' | 'product' | 'shipping' | 'reviews';
-export interface FetchedPage { kind: PageKind; url: string; ok: boolean; text: string; links: { href: string; text: string }[] }
+export interface FetchedPage { kind: PageKind; url: string; ok: boolean; text: string; links: { href: string; text: string }[]; /** Reviews the page embeds as structured data (product pages). */ reviewsText?: string }
 
 export interface Sourced { value: string; url: string; quote: string }
 export interface ResearchResult {
   product: Sourced | null;
   product_detail: Sourced | null;
   pushing_now: Sourced | null;
-  reviews: { buy_reason: Sourced | null; hesitation: Sourced | null; none_found: boolean; url: string | null } | null;
+  reviews: { buy_reason: Sourced | null; hesitation: Sourced | null; none_found: boolean; url: string | null; checked?: string } | null;
   ships_to_thailand: (Sourced & { ships: boolean }) | null;
   instagram: { handle: string; url: string } | null;
   pages: { kind: PageKind; url: string; ok: boolean }[];
@@ -78,6 +78,25 @@ export function pickShippingUrl(links: readonly { href: string; text: string }[]
     ?? own.find((l) => /\/(faq|help|returns)\b/i.test(new URL(l.href).pathname))?.href ?? null;
 }
 
+/** The brand's OWN reviews embedded in a page as structured data (schema.org Review / AggregateRating in JSON-LD,
+ *  which many shop themes and review apps print into the HTML). Review texts joined, or '' when there are none. */
+export function jsonLdReviews(html: string): string {
+  const out: string[] = [];
+  const re = /<script[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi;
+  let m: RegExpExecArray | null;
+  const walk = (v: unknown) => {
+    if (!v || typeof v !== 'object') return;
+    if (Array.isArray(v)) { v.forEach(walk); return; }
+    const o = v as Record<string, unknown>;
+    const type = String(o['@type'] ?? '');
+    if (/^Review$/i.test(type)) { const body = String(o.reviewBody ?? o.description ?? '').trim(); if (body) out.push(body.slice(0, 600)); }
+    if (/^AggregateRating$/i.test(type) && o.ratingValue) out.push(`Average rating ${String(o.ratingValue)} from ${String(o.reviewCount ?? o.ratingCount ?? '')} reviews`.trim());
+    Object.values(o).forEach(walk);
+  };
+  while ((m = re.exec(html)) && out.length < 40) { try { walk(JSON.parse(m[1].trim())); } catch { /* not JSON */ } }
+  return [...new Set(out)].join('\n');
+}
+
 export function reviewSourceUrl(domain: string): string {
   return `https://uk.trustpilot.com/review/${domain}`;
 }
@@ -125,6 +144,14 @@ export function verifySourced(raw: unknown, pages: readonly FetchedPage[], allow
   return { value: String(o.value).trim().slice(0, 300), url, quote: quote.slice(0, 300) };
 }
 
+/** Her rule: "a number can sit inside it as support, never as the whole line" — a short line carried by a figure is not a product detail. */
+export function notJustANumber(s: Sourced | null, rejected: string[]): Sourced | null {
+  if (!s) return null;
+  const words = s.value.split(/\s+/).filter(Boolean);
+  if (/\d/.test(s.value) && words.length <= 5) { rejected.push('product_detail: a number is the whole line (her rule)'); return null; }
+  return s;
+}
+
 export function verifyResearch(raw: Record<string, unknown> | null, pages: readonly FetchedPage[]): ResearchResult {
   const rejected: string[] = [];
   const r = raw ?? {};
@@ -133,15 +160,19 @@ export function verifyResearch(raw: Record<string, unknown> | null, pages: reado
   const rv = (r.reviews && typeof r.reviews === 'object' ? r.reviews : null) as { buy_reason?: unknown; hesitation?: unknown; none_found?: unknown } | null;
   const buy = rv ? verifySourced(rv.buy_reason, pages, ['reviews'], rejected, 'reviews.buy_reason') : null;
   const hes = rv ? verifySourced(rv.hesitation, pages, ['reviews'], rejected, 'reviews.hesitation') : null;
-  /* "none found" only when the review page was really read and the model says it has none. */
-  const noneFound = !!reviewsPage && !buy && !hes && rv?.none_found === true;
+  /* "none found" when a review source was read and has none, OR (her fallback, "use what the brand's page leads with")
+     when no review source could be read at all but the brand's own product page was read and showed no reviews. The
+     reviews line then names what was checked. A hesitation is never guessed either way. */
+  const productRead = pages.some((p) => p.kind === 'product' && p.ok);
+  const noneFound = !buy && !hes && ((!!reviewsPage && rv?.none_found === true) || (!reviewsPage && productRead));
+  const checked = reviewsPage ? undefined : `checked the brand\u2019s product page; ${pages.some((p) => p.kind === 'reviews') ? 'Trustpilot could not be read' : 'no review site'}`;
   const sh = (r.ships_to_thailand && typeof r.ships_to_thailand === 'object' ? r.ships_to_thailand : null) as { ships?: unknown } | null;
   const ships = sh && typeof sh.ships === 'boolean' ? verifySourced(sh, pages, ['shipping', 'home', 'product'], rejected, 'ships_to_thailand') : null;
   return {
     product: verifySourced(r.product, pages, ['product', 'home'], rejected, 'product'),
-    product_detail: verifySourced(r.product_detail, pages, ['product', 'home'], rejected, 'product_detail'),
+    product_detail: notJustANumber(verifySourced(r.product_detail, pages, ['product', 'home'], rejected, 'product_detail'), rejected),
     pushing_now: verifySourced(r.pushing_now, pages, ['home'], rejected, 'pushing_now'),
-    reviews: buy || hes || noneFound ? { buy_reason: buy, hesitation: hes, none_found: noneFound, url: reviewsPage?.url ?? null } : null,
+    reviews: buy || hes || noneFound ? { buy_reason: buy, hesitation: hes, none_found: noneFound, url: reviewsPage?.url ?? null, checked } : null,
     ships_to_thailand: ships && sh ? { ...ships, ships: sh.ships as boolean } : null,
     instagram: home ? instagramFromLinks(home.links) : null,
     pages: pages.map((p) => ({ kind: p.kind, url: p.url, ok: p.ok })),
@@ -162,6 +193,6 @@ export function researchGaps(r: Partial<ResearchResult> | null | undefined): str
 /** The reviews line in her format: "buy reason: …; hesitation: …" or "none found". */
 export function reviewsLine(r: ResearchResult['reviews']): string | null {
   if (!r) return null;
-  if (r.none_found) return 'Reviews: none found';
+  if (r.none_found) return r.checked ? `Reviews: none found (${r.checked})` : 'Reviews: none found';
   return [r.buy_reason ? `buy reason: ${r.buy_reason.value}` : null, r.hesitation ? `hesitation: ${r.hesitation.value}` : null].filter(Boolean).join('; ') || null;
 }

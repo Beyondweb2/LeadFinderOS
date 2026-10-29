@@ -21,7 +21,7 @@ import {
 import { parseSheetDate, pitchedKeySet, rowsFromCsv, rowsFromWorkbook } from '../src/lib/ugc/pitchLog.ts';
 import { parsePitchSystem } from '../src/lib/ugc/pitchSystemImport.ts';
 import { ENRICH_LEADS_PER_BRAND, UGC_APIFY_STOP_PCT, UGC_MAX_ITEM_CAP, clampCap, estimateRunUsd, ugcSpendRefusal } from '../src/lib/ugc/config.ts';
-import { AUTO_RESEARCH_TOP, RESEARCH_USD_CEILING, htmlLinks, htmlToText, instagramFromLinks, pickProductUrl, pickShippingUrl, researchGaps, reviewsLine, verifyResearch, type FetchedPage } from '../src/lib/ugc/research.ts';
+import { AUTO_RESEARCH_TOP, RESEARCH_USD_CEILING, htmlLinks, jsonLdReviews, htmlToText, instagramFromLinks, pickProductUrl, pickShippingUrl, researchGaps, reviewsLine, verifyResearch, type FetchedPage } from '../src/lib/ugc/research.ts';
 import { inviteUgcMember } from '../supabase/functions/_shared/ugc-member-invite.ts';
 
 let f = 0;
@@ -264,8 +264,18 @@ console.log('\n── auto-research (never guessed) ──');
   ok(researchGaps(r).length === 0, 'research complete when product, detail, pushing-now and reviews are verified');
   const wrongPage = verifyResearch({ pushing_now: { value: 'x', url: 'https://elsewhere.example/', quote: 'Our best-seller, the Barrier Balm, is back in stock' } }, pages);
   ok(wrongPage.pushing_now === null, 'a source that is not one of the pages read is rejected');
-  const noReviews = verifyResearch({ reviews: { none_found: true } }, pages.filter((p) => p.kind !== 'reviews'));
-  ok(noReviews.reviews === null, '"none found" is never recorded when no review source was read');
+  /* Her fallback (live 2026-10-29: Trustpilot refuses readers like ours): no review source readable, but the brand's own
+     product page was read with no reviews on it → "none found", naming what was checked. Without the product page: unknown. */
+  const tpRefused: FetchedPage = { kind: 'reviews', url: 'https://uk.trustpilot.com/review/glowlab.example', ok: false, text: '', links: [] };
+  const noReviews = verifyResearch({}, [...pages.filter((p) => p.kind !== 'reviews'), tpRefused]);
+  ok(reviewsLine(noReviews.reviews) === 'Reviews: none found (checked the brand’s product page; Trustpilot could not be read)', '"none found" names what was checked when no review site could be read');
+  ok(verifyResearch({}, [pages[0], tpRefused]).reviews === null, '…and with no product page read either, reviews stay unknown');
+  ok(jsonLdReviews('<script type="application/ld+json">{"@type":"Product","review":[{"@type":"Review","reviewBody":"Melts in fast"}],"aggregateRating":{"@type":"AggregateRating","ratingValue":"4.8","reviewCount":"120"}}</script>').includes('Melts in fast'), 'the brand’s own reviews embedded in its product page are read');
+  const numOnly = verifyResearch({ product_detail: { value: 'Replaces 16 supplements', url: pages[1].url, quote: 'Melts into skin in seconds, so it goes on' } }, pages);
+  ok(numOnly.product_detail === null && numOnly.rejected.includes('product_detail: a number is the whole line (her rule)'), 'a detail line that is just a number claim is rejected (seen live: "Replaces 16 supplements")');
+  ok(tierFor({ name: 'Plain Co', domain: 'plain.example', ad_start_dates: [], researched_at: '2026-10-29' }, { now: NOW }).tier === 'D', 'after research with no Tier B evidence: Tier D ("no evidence found, still pitchable")');
+  ok(tierFor({ name: 'US Co', domain: 'us.example', country: 'GB', company_country: 'US', admin_countries: ['United States'], researched_at: '2026-10-29' }, { now: NOW }).tier === 'D', 'a US brand run from the US is not "run from abroad" once its country is recorded');
+  ok(tierFor({ name: 'US Co', domain: 'us.example', country: 'GB', admin_countries: ['United States'] }, { now: NOW }).tier === 'skip', '…without a recorded country it is judged against the country searched');
   const readNone = verifyResearch({ reviews: { none_found: true } }, pages);
   ok(reviewsLine(readNone.reviews) === 'Reviews: none found', '…and is recorded when the review page was read and had none');
   const rf = researchFields({ name: 'Glow Lab', research: { verified: r } });
