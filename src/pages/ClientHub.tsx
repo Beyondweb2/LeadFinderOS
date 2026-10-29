@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
-import { AlertCircle, AlertTriangle, BookOpen, CalendarDays, CheckCircle2, Clipboard, ClipboardEdit, ExternalLink, FileCode2, FileSignature, FileText, Gauge, Gift, Globe, Layers, Lightbulb, Loader2, Lock, Play, RefreshCw, Save, Trophy, UsersRound } from 'lucide-react';
+import { AlertCircle, AlertTriangle, BookOpen, CalendarDays, CheckCircle2, Clipboard, ClipboardEdit, ExternalLink, FileCode2, FileSignature, FileText, Gauge, Gift, Globe, Layers, Lightbulb, Loader2, Lock, Mail, Play, RefreshCw, Save, Trophy, UsersRound } from 'lucide-react';
 import { invokePaidBaseline, type PaidBaseline } from '@/lib/paidBaseline';
 import { EdgeAuthError, edgeErrorMessage, invokeEdge } from '@/lib/edgeInvoke';
 import { Button } from '@/components/ui/button';
@@ -474,11 +474,36 @@ function AgreementRecordBlock({ record }: { record: SignedAgreementRecord }) {
   </div>;
 }
 
-function WelcomePackStage({ lead, audit }: { lead: AnyRecord; audit: AnyRecord | null }) {
+/* SEND (Paul, 2026-10-29): the pack's link by email, ONLY when Paul presses Send (paid-client-hub welcome_pack_send).
+   "Send a test to me" goes to Paul's own address only and is not recorded. A real send is recorded, which takes the
+   "Send welcome pack" row off What needs you; a second real send needs Resend. */
+function WelcomePackStage({ lead, audit, toEmail }: { lead: AnyRecord; audit: AnyRecord | null; toEmail: string | null }) {
   const { toast } = useToast();
   const [busy, setBusy] = useState(false);
+  const [sending, setSending] = useState<'' | 'send' | 'test'>('');
+  const [lastSent, setLastSent] = useState<{ sent_at: string; sent_to: string } | null>(null);
   const ready = welcomePackReadiness(lead as { baseline_audit_id?: string | null }, audit);
   const url = ready.canShare && ready.shortCode ? welcomePackUrl(ready.shortCode) : '';
+  const closed = !!lead.service_terminated_at || lead.status === 'refunded';
+  useEffect(() => {
+    let live = true;
+    call({ action: 'welcome_pack_status', lead_id: lead.id }).then((r) => { if (live) setLastSent((r.last_sent as typeof lastSent) ?? null); }).catch(() => { /* status only; Send still refuses a duplicate on the server */ });
+    return () => { live = false; };
+  }, [lead.id]);
+
+  const send = async (test: boolean) => {
+    if (!test && !window.confirm(lastSent
+      ? `Already sent to ${lastSent.sent_to}. Send the welcome pack again to ${toEmail || 'the client'}?`
+      : `Email the welcome pack to ${toEmail || 'the client'} now?`)) return;
+    setSending(test ? 'test' : 'send');
+    try {
+      const res = await call({ action: 'welcome_pack_send', lead_id: lead.id, ...(test ? { test: true } : {}), ...(!test && lastSent ? { resend: true } : {}) });
+      if (!test) setLastSent((res.last_sent as typeof lastSent) ?? null);
+      toast({ title: test ? `Test sent to ${String(res.sent_to)}` : `Welcome pack sent to ${String(res.sent_to)}` });
+    } catch (e) {
+      toast({ title: test ? 'Test did not send' : 'Welcome pack did not send', description: edgeErrorMessage(e, 'Try again'), variant: 'destructive' });
+    } finally { setSending(''); }
+  };
 
   const download = async () => {
     setBusy(true);
@@ -510,6 +535,18 @@ function WelcomePackStage({ lead, audit }: { lead: AnyRecord; audit: AnyRecord |
         {busy ? <Loader2 className="mr-1 h-4 w-4 animate-spin"/> : <FileText className="mr-1 h-4 w-4"/>}Download Welcome Pack
       </Button>
     </div>}
+    {ready.state === 'ready' && url && <div className="flex flex-wrap gap-2 pt-1">
+      {/* An ended or refunded client is sent nothing; the test (to Paul only) still works on their pack. */}
+      {!closed && <Button size="sm" disabled={!!sending} onClick={() => void send(false)}>
+        {sending === 'send' ? <Loader2 className="mr-1 h-4 w-4 animate-spin"/> : <Mail className="mr-1 h-4 w-4"/>}{lastSent ? 'Resend welcome pack' : 'Send welcome pack'}
+      </Button>}
+      <Button size="sm" variant="outline" disabled={!!sending} onClick={() => void send(true)}>
+        {sending === 'test' ? <Loader2 className="mr-1 h-4 w-4 animate-spin"/> : <Mail className="mr-1 h-4 w-4"/>}Send a test to me
+      </Button>
+    </div>}
+    {ready.state === 'ready' && url && <p className="text-xs text-muted-foreground">
+      {lastSent ? `Sent ${ukWhen(lastSent.sent_at)} to ${lastSent.sent_to}.` : closed ? 'This client has ended or was refunded, so the pack is not sent. A test still goes to you.' : `Not sent yet. Send emails the link to ${toEmail || 'the client'}. Nothing sends on its own.`}
+    </p>}
     {ready.state === 'ready' && url && <p className="break-all text-xs text-muted-foreground">{url}</p>}
   </Stage>;
 }
@@ -744,7 +781,7 @@ export default function ClientHub() {
       {bs === 'starting' && <p className="text-muted-foreground">The server is creating the persisted queue for the approved set × {BASELINE_RUNS} runs. This page refreshes itself.</p>}
       {(bs === 'running' || bs === 'complete') && <><p>{onboarding?.baseline_questions?.length || 'Saved'} frozen questions × {BASELINE_RUNS} runs · ChatGPT + Gemini</p><p className="text-muted-foreground">{progress}</p>{audit && <Button asChild variant="outline"><Link to={`/baseline/${audit.id}`}>Open internal baseline</Link></Button>}</>}
     </Stage>
-    <WelcomePackStage lead={lead} audit={audit}/>
+    <WelcomePackStage lead={lead} audit={audit} toEmail={onboarding?.contact_email || lead.email || null}/>
     <AgreementStage lead={lead} ended={!!ended}/>
     {/* ⛔ REMOVED 2026-09-29 (Paul): "3. Action Plan" — a link into the deprecated Playbook, the last one. Stages renumbered. */}
     <Stage k="directories" title="3. Directories"><p>Directory opportunities are intentionally unverified until checked.</p>{/* REMOVED 2026-09-29 (UI cleanup): a permanently disabled "Directory catalogue integration" button — it could never be pressed. */}</Stage>

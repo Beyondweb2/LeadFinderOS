@@ -243,5 +243,27 @@ const row = (o: ReturnType<typeof foldAdminOverview>, u: string) => o.team.find(
   ok(costFeatureOf('enrichment', 'apify_ai_search_correction') === 'AI visibility audits', 'a correction row belongs to the audits it corrects');
 }
 
+/* ── Welcome pack (Paul, 2026-10-29): a computed row, never a stored Next Action; manual send ──────── */
+{
+  const paid = { status: 'payment_received', amount_paid: 99, payment_date: addDays('2026-09-30', -2), sold_at: at(2), baseline_audit_id: 'A1' };
+  const ready = lead({ ...paid }); const waiting = lead({ ...paid, baseline_audit_id: null }); const sent = lead({ ...paid });
+  const unfinished = lead({ ...paid }); const unpaid = lead({});
+  const ob = (l: AdminLead, o: Record<string, unknown> = {}) => ({ lead_id: l.id, status: 'paid', created_at: at(3), plan_tier: 'new_site', website_addon: null, confirmed_location: 'Leeds', services: 'boiler repair', ...o });
+  const input = base({
+    leads: [ready, waiting, sent, unfinished, unpaid],
+    onboarding: [ob(ready), ob(waiting), ob(sent), ob(unfinished, { services: null, services_list: [] }), ob(unpaid, { status: 'submitted' })],
+    welcomePack: { sentLeadIds: new Set([sent.id]), baselineDoneLeadIds: new Set([ready.id, sent.id]) },
+  });
+  const o = foldAdminOverview(input);
+  const wp = (l: AdminLead) => o.attention.find((x) => x.leadId === l.id && x.kind === 'welcome_pack_due');
+  ok(wp(ready)?.action === 'Send welcome pack' && wp(ready)?.group === 'today' && wp(ready)?.open === 'client' && wp(ready)?.section === 'welcome', 'paid + onboarding finished + baseline done → "Send welcome pack", opening the client at the Welcome Pack stage');
+  ok(wp(waiting)?.group === 'blocked' && /Wait for the baseline/.test(wp(waiting)?.action ?? ''), 'before the baseline finishes the row waits and says why');
+  ok(!wp(sent), 'once sent, the row is gone');
+  ok(!wp(unfinished) && !wp(unpaid), 'onboarding not finished, or not paid → no row');
+  ok(!foldAdminOverview({ ...input, welcomePack: null }).attention.some((x) => x.kind === 'welcome_pack_due'), 'send log unreadable → no row at all (never "not sent")');
+  ok(!foldAdminOverview({ ...input, leads: [{ ...ready, status: 'refunded' }] }).attention.some((x) => x.kind === 'welcome_pack_due'), 'a refunded client gets no row');
+  ok(ready.next_action === null, 'nothing writes the stored Next Action (it stays human-set)');
+}
+
 console.log(fails ? `\n${fails} FAILED` : '\nall passed');
 process.exit(fails ? 1 : 0);

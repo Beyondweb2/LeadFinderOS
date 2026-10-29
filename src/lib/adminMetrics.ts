@@ -34,6 +34,7 @@ import { contractEndWords } from './onboardingSimpleAnswers.ts';
 import { followUpBucket } from './salesCrm.ts';
 import { looksAutomated } from './inboundClassify.ts';
 import { isPaidLead } from './leadPayment.ts';
+import { questionnaireComplete } from './questionnaireComplete.ts';
 import { salesStateOf, openerReallySent, CONVERSATION_OUTCOMES, REACHED_OUTCOMES, NOT_INTERESTED_STATUSES, INTERESTED_STATUSES } from './leadState.ts';
 import { serviceRouteForTotal, serviceRouteFromRow, type ServiceRoute } from './findableOffer.ts';
 import { DISPUTE_LOST, DISPUTE_RELEASED, type CommissionLine, type EarningsTotals } from './commission.ts';
@@ -129,7 +130,9 @@ export function stripeDashboardUrl(...ids: (string | null | undefined)[]): strin
 }
 /** `source` + `qc_link_at` (2026-10-04, M-022): a Quick Close row exists from the rep's FIRST tap, so it is
  *  "filled the sign-up" only once a payment link was made (`quick_close->>link_generated_at`). */
-export interface AdminOnboarding { lead_id: string | null; status: string | null; created_at: string; plan_tier: string | null; website_addon: boolean | null; contact_email?: string | null; source?: string | null; qc_link_at?: string | null }
+export interface AdminOnboarding { lead_id: string | null; status: string | null; created_at: string; plan_tier: string | null; website_addon: boolean | null; contact_email?: string | null; source?: string | null; qc_link_at?: string | null;
+  /** The two answers questionnaireComplete reads (welcome pack row, 2026-10-29). */
+  confirmed_location?: string | null; services?: string | null; services_list?: unknown }
 /** conversation_triage (fn conversation-triage): one row per inbound message. */
 export interface TriageRow {
   id: string; message_id: string; lead_id: string | null; message_at: string;
@@ -302,6 +305,10 @@ export interface AdminInput {
    *  its actor's. ⛔ Never money, clients, delivery, attention, inventory, costs or feature usage — and a
    *  lead is never dropped because of who added, owns or delivers it. Absent / empty = everyone counts. */
   hideActivityOf?: ReadonlySet<string> | null;
+  /** WELCOME PACK (Paul, 2026-10-29): leads whose pack was emailed (welcome_pack_sends) and leads whose paid baseline has
+   *  finished. Absent/null = not read → NO welcome-pack rows at all: an unreadable send log must never ask for a send
+   *  that may already have happened. */
+  welcomePack?: { sentLeadIds: ReadonlySet<string>; baselineDoneLeadIds: ReadonlySet<string> } | null;
   /** Sale-attribution reviews by lead (view sale_attribution_holds: review_status). A held sale's revenue is
    *  on nobody's row (saleCreditOf). Absent/null = not read: a lead whose attribution was decided with no
    *  seller (sold_at set) still reads as awaiting — never handed to the book owner. */
@@ -943,6 +950,9 @@ function attentionItems(
   const factsById = new Map(facts.map((f) => [f.lead.id, f]));
   const biz = (id: string | null) => (id ? leadById.get(id)?.business_name ?? 'Unknown business' : '');
   const stateOf = (l: AdminLead) => stateLabelOf(l, factsById.get(l.id), nowMs).label;
+  const wp = input.welcomePack ?? null;
+  /* A PAID sign-up row with the answers the baseline needs: "finished onboarding". */
+  const onboardingDone = new Set(input.onboarding.filter((o) => o.lead_id && o.status === 'paid' && questionnaireComplete(o)).map((o) => o.lead_id as string));
 
   // URGENT — an open dispute on a payment.
   for (const r of ledger) {
@@ -971,6 +981,17 @@ function attentionItems(
       out.push({ key: `setup:${l.id}`, group: days !== null && days >= SETUP_PROMISE_DAYS ? 'urgent' : 'today', kind: 'setup_not_started', leadId: l.id, business: l.business_name ?? 'Client',
         why: days !== null && days >= SETUP_PROMISE_DAYS ? `Paid ${days} days ago and setup hasn't started — the promise is two working days` : 'Paid and setup has not started yet',
         owner: nameOf(l.sold_by_user_id), sinceIso: since, state: stateOf(l), action: 'Start the baseline', open: 'client', section: 'baseline' });
+    }
+    /* TODAY — WELCOME PACK (Paul, 2026-10-29): paid (first payment cleared; on Pay in full that IS the full payment),
+       onboarding finished (questionnaireComplete, the one rule) and no pack emailed yet. COMPUTED, never a stored Next
+       Action (that stays human-set). Sending stays manual: the row only opens the client's Welcome Pack stage. Before
+       the baseline finishes there is no pack to send, so the row waits and says so. */
+    if (wp && paid && live && !wp.sentLeadIds.has(l.id) && onboardingDone.has(l.id)) {
+      const ready = wp.baselineDoneLeadIds.has(l.id);
+      out.push({ key: `welcome_pack:${l.id}`, group: ready ? 'today' : 'blocked', kind: 'welcome_pack_due', leadId: l.id, business: l.business_name ?? 'Client',
+        why: ready ? 'Paid, onboarding finished, and the welcome pack has not been sent' : 'Paid and onboarding finished; the welcome pack is ready once the baseline finishes',
+        owner: nameOf(l.sold_by_user_id), sinceIso: l.sold_at ?? l.payment_date, state: stateOf(l),
+        action: ready ? 'Send welcome pack' : 'Wait for the baseline, then send the welcome pack', open: 'client', section: 'welcome' });
     }
     // TODAY — the four-week re-measure is past its date and has not run.
     if (paid && live && l.baseline_audit_id && l.remeasure_due_date && !l.remeasure_audit_id && l.remeasure_due_date.slice(0, 10) < todayDay) {
