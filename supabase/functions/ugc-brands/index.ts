@@ -4,7 +4,7 @@ import { allStopRefusal } from "../_shared/protection.ts";
 import { getApifyRun, getApifyRunItems } from "../_shared/enrichment/apify.ts";
 import { openAiUsd } from "../_shared/openai-usage.ts";
 import {
-  ENRICH_DEFAULT_TOP, ENRICH_MAX_TOP, PAGE_DETAILS_DEFAULT, PAGE_DETAILS_MAX, THAILAND_AREAS, THAILAND_PLACE_TYPES, UGC_ACTORS, UGC_MAX_CONTACT_BRANDS, UGC_MAX_PITCHES_PER_DAY, UGC_PITCH_MODEL,
+  APIFY_MIN_CHARGE_USD, ENRICH_DEFAULT_TOP, ENRICH_MAX_TOP, PAGE_DETAILS_DEFAULT, PAGE_DETAILS_MAX, THAILAND_AREAS, THAILAND_PLACE_TYPES, UGC_ACTORS, UGC_MAX_CONTACT_BRANDS, UGC_MAX_PITCHES_PER_DAY, UGC_PITCH_MODEL,
   clampCap, estimateRunUsd, isUgcCountry, isUgcNiche, ugcSpendRefusal, type UgcSource,
 } from "../../../src/lib/ugc/config.ts";
 import {
@@ -87,9 +87,12 @@ async function spendState(service: Service, owner: string) {
   };
 }
 
-/** Start an actor run with Apify's own hard stops: maxItems and maxTotalChargeUsd. */
+/** Start an actor run with Apify's own hard stops: maxItems and maxTotalChargeUsd. Some actors refuse a charge cap
+ *  below APIFY_MIN_CHARGE_USD (seen live 2026-10-29, the contact scraper: "$0.50 minimum"), so Apify's cap is never
+ *  below that; the run's real size is still bounded by maxItems and the input's own page caps, and the estimate shown
+ *  and checked against her budget is ours. */
 async function startCappedRun(actor: string, input: Row, token: string, maxItems: number, maxUsd: number): Promise<{ runId: string }> {
-  const qs = new URLSearchParams({ maxItems: String(maxItems), maxTotalChargeUsd: maxUsd.toFixed(2) });
+  const qs = new URLSearchParams({ maxItems: String(maxItems), maxTotalChargeUsd: Math.max(maxUsd, APIFY_MIN_CHARGE_USD).toFixed(2) });
   const controller = new AbortController();
   const t = setTimeout(() => controller.abort(), 20_000);
   try {
