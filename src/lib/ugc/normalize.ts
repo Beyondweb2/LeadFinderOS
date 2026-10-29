@@ -79,6 +79,10 @@ const PLATFORM_HOSTS = [
   'lazada.com.my', 'lazada.com.ph', 'aliexpress.com', 'temu.com', 'google.com', 'goo.gl', 'bit.ly', 'wa.me', 'whatsapp.com',
   'apps.apple.com', 'play.google.com', 'indeed.com', 'glassdoor.com', 'upwork.com', 'fiverr.com', 'collabstr.com',
   'backstage.com', 'tripadvisor.com', 'booking.com', 'agoda.com', 'medium.com', 'quora.com', 'wikipedia.org',
+  /* Redirects, shorteners, ad trackers, app stores and serverless endpoints seen in real ads (2026-10-29): never a brand's site. */
+  'tinyurl.com', 'ow.ly', 't.co', 'buff.ly', 'rebrand.ly', 'cutt.ly', 'lnk.to', 'app.link', 'onelink.me', 'adj.st', 'amzn.to',
+  'doubleclick.net', 'googleadservices.com', 'googlesyndication.com', 'apple.com', 'on.aws', 'amazonaws.com', 'cloudfront.net',
+  'linkin.bio', 'shopmy.us', 'l.instagram.com', 'typeform.com', 'calendly.com', 'forms.gle',
 ];
 export const LINK_PAGE_HOSTS = ['linktr.ee', 'beacons.ai', 'bio.link', 'campsite.bio'];
 
