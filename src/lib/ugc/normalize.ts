@@ -214,7 +214,6 @@ export function pageDetailsInput(pageIds: readonly string[]) {
   return {
     startUrls: ids.map((id) => ({ url: `https://www.facebook.com/ads/library/?active_status=all&ad_type=all&country=ALL&view_all_page_id=${id}` })),
     resultsLimit: 1,
-    activeStatus: 'all',
     includeAboutPage: true,
     isDetailsPerAd: false,
   };
