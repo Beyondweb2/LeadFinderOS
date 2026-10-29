@@ -35,7 +35,7 @@ export const THAILAND_PLACE_TYPES = ['hotel', 'resort', 'wellness spa', 'cafe'] 
 /** The local track starts in Chiang Mai (Jess). */
 export const THAILAND_AREAS = ['Chiang Mai', 'Bangkok', 'Phuket', 'Koh Samui', 'Krabi'] as const;
 
-export type UgcSource = 'fb_ads' | 'creator_collabs' | 'places' | 'google_search' | 'contacts' | 'named_contacts';
+export type UgcSource = 'fb_ads' | 'creator_collabs' | 'places' | 'google_search' | 'contacts' | 'named_contacts' | 'page_details';
 
 export const UGC_ACTORS: Record<UgcSource, string> = {
   fb_ads: 'apify~facebook-ads-scraper',
@@ -45,6 +45,8 @@ export const UGC_ACTORS: Record<UgcSource, string> = {
   contacts: 'vdrmota~contact-info-scraper',
   /* The same actor with its Business Leads Enrichment switched on (named people + verified emails). */
   named_contacts: 'vdrmota~contact-info-scraper',
+  /* The ads actor again, on each brand's OWN Ad Library page with its About tab: page age + admin countries. */
+  page_details: 'apify~facebook-ads-scraper',
 };
 
 export const UGC_SOURCE_LABEL: Record<UgcSource, string> = {
@@ -54,6 +56,7 @@ export const UGC_SOURCE_LABEL: Record<UgcSource, string> = {
   google_search: '"UGC creator wanted" searches',
   contacts: 'Find contacts',
   named_contacts: 'Find named marketing contacts',
+  page_details: 'Check pages for dropshipping signs',
 };
 
 /** USD per billed unit at Apify's free-plan rate (ceiling). Unit: one ad / post / place / result page / scraped page. */
@@ -64,6 +67,7 @@ export const UGC_RATE_USD_PER_UNIT: Record<UgcSource, number> = {
   google_search: 3.50 / 1000,
   contacts: 2.00 / 1000,
   named_contacts: 2.00 / 1000,
+  page_details: 5.80 / 1000,
 };
 
 /* ── Named marketing contacts (the contact scraper's Business Leads Enrichment) ───────────────────────────────
@@ -100,6 +104,10 @@ export const UGC_MAX_PITCHES_PER_DAY = 100;
 /** Writer, reviewer and research model (Paul, 2026-10-29: Claude Sonnet 5.5 if an Anthropic key is set server-side,
  *  else gpt-4o — no Anthropic key is set, so gpt-4o; gpt-4o-mini approved a draft that broke her rules). */
 export const UGC_PITCH_MODEL = 'gpt-4o';
+
+/** Page details (dropshipping signs) per run: default and ceiling, one result per brand. */
+export const PAGE_DETAILS_DEFAULT = 25;
+export const PAGE_DETAILS_MAX = 50;
 
 /** UGC never runs when the shared Apify account is at or past this share of its monthly cap — stricter than
  *  Findable's own prospecting stop, so Jess's searches can never be what pushes Findable's client work to the cap. */

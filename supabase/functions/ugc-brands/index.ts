@@ -4,12 +4,12 @@ import { allStopRefusal } from "../_shared/protection.ts";
 import { getApifyRun, getApifyRunItems } from "../_shared/enrichment/apify.ts";
 import { openAiUsd } from "../_shared/openai-usage.ts";
 import {
-  ENRICH_DEFAULT_TOP, ENRICH_MAX_TOP, THAILAND_AREAS, THAILAND_PLACE_TYPES, UGC_ACTORS, UGC_MAX_CONTACT_BRANDS, UGC_MAX_PITCHES_PER_DAY, UGC_PITCH_MODEL,
+  ENRICH_DEFAULT_TOP, ENRICH_MAX_TOP, PAGE_DETAILS_DEFAULT, PAGE_DETAILS_MAX, THAILAND_AREAS, THAILAND_PLACE_TYPES, UGC_ACTORS, UGC_MAX_CONTACT_BRANDS, UGC_MAX_PITCHES_PER_DAY, UGC_PITCH_MODEL,
   clampCap, estimateRunUsd, isUgcCountry, isUgcNiche, ugcSpendRefusal, type UgcSource,
 } from "../../../src/lib/ugc/config.ts";
 import {
   candidatesFrom, contactsInput, creatorCollabsInput, creatorProfileUrl, fbAdsInput, fromContactItem, googleQueries,
-  googleSearchInput, mergeWa, placesInput, waDigits, type BrandCandidate, type WaNumber,
+  googleSearchInput, mergeWa, pageDetailsInput, pageFactsFrom, placesInput, waDigits, type BrandCandidate, type WaNumber,
 } from "../../../src/lib/ugc/normalize.ts";
 import { chooseTemplate, researchFields, researchMissing, runPitchPipeline, type PitchPlan, type PitchSystem, type ReviewOut, type WriteOut } from "../../../src/lib/ugc/pitch.ts";
 import { TIER_RANK, tierFor, templateFamilyFor } from "../../../src/lib/ugc/tiers.ts";
@@ -414,7 +414,19 @@ Deno.serve(async (req) => {
         try {
           const items = await getApifyRunItems(String(run.apify_run_id), token);
           patch.items_found = items.length;
-          if (run.source === "contacts" || run.source === "named_contacts") {
+          if (run.source === "page_details") {
+            /* Page age + admin countries onto the brands with that Facebook page; only facts actually returned are written. */
+            let n = 0;
+            for (const f of items.map(pageFactsFrom)) {
+              if (!f || (!f.page_created_at && !f.admin_countries.length)) continue;
+              const patch2: Row = {};
+              if (f.page_created_at) patch2.page_created_at = f.page_created_at;
+              if (f.admin_countries.length) patch2.admin_countries = f.admin_countries;
+              const { data: upd } = await service.from("ugc_brands").update(patch2).eq("owner_user_id", owner).eq("facebook_page_id", f.pageId).select("id");
+              n += (upd ?? []).length;
+            }
+            patch.brands_updated = n;
+          } else if (run.source === "contacts" || run.source === "named_contacts") {
             patch.brands_updated = await applyContacts(service, owner, caller.id, ((ctx.brand_ids as string[]) ?? []), items, run.source === "named_contacts");
             /* Then queue research for the top-ranked of those brands (ctx.brand_ids is already in rank order), capped. */
             const toQueue = ((ctx.brand_ids as string[]) ?? []).slice(0, AUTO_RESEARCH_TOP);
@@ -464,6 +476,27 @@ Deno.serve(async (req) => {
       if (!claimed) return json({ ok: true, busy: true });
       const r = await researchBrand(service, owner, caller.id, brand as Row);
       return json({ ok: true, brandId: brand.id, ...r });
+    }
+
+    if (action === "page_details") {
+      /* Dropshipping signs: page age + admin countries for brands found in the Ads Library that do not have them yet. */
+      const top = Math.min(Math.max(1, Math.floor(Number(body.top ?? PAGE_DETAILS_DEFAULT)) || PAGE_DETAILS_DEFAULT), PAGE_DETAILS_MAX);
+      const { data: rows, error } = await service.from("ugc_brands").select("id, facebook_page_id")
+        .eq("owner_user_id", owner).eq("track", "brand").not("facebook_page_id", "is", null).is("page_created_at", null)
+        .order("live_ads_count", { ascending: false }).limit(top);
+      if (error) return json({ ok: false, error: "read_failed" }, 503);
+      const ids = ((rows ?? []) as Row[]).map((b) => String(b.facebook_page_id));
+      const input = pageDetailsInput(ids);
+      const pages = (input.startUrls as unknown[]).length;
+      if (!pages) return json({ ok: false, error: "no_pages" }, 400);
+      const estUsd = estimateRunUsd("page_details", pages);
+      const st = await spendState(service, owner);
+      const refusal = ugcSpendRefusal({ estUsd, spentThisMonthUsd: st.spentThisMonthUsd, budgetUsd: st.budgetUsd, apifyPct: st.apifyPct });
+      if (body.estimateOnly === true) return json({ ok: true, estUsd, pages, refusal });
+      const stop = await allStopRefusal(service, corsHeaders);
+      if (stop) return json({ ok: false, error: "all_stop" }, 423);
+      if (refusal) return json({ ok: false, error: refusal, estUsd }, 409);
+      return await startRun(service, owner, "page_details", input, pages, estUsd, {});
     }
 
     /* Admin: the SHAPE of a finished run's results (key paths and how many items have each) — no values. Used to
