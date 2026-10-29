@@ -97,8 +97,9 @@ async function startCappedRun(actor: string, input: Row, token: string, maxItems
       method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
       body: JSON.stringify(input), signal: controller.signal,
     });
-    const body = await res.json().catch(() => null) as { data?: { id?: string } } | null;
-    if (!res.ok || !body?.data?.id) throw new Error(`Apify start ${actor} HTTP ${res.status}`);
+    const body = await res.json().catch(() => null) as { data?: { id?: string }; error?: { type?: string; message?: string } } | null;
+    /* Keep Apify's own reason (an input-validation message, never a secret) so a refused start says why. */
+    if (!res.ok || !body?.data?.id) throw new Error(`Apify start ${actor} HTTP ${res.status}${body?.error ? `: ${String(body.error.type ?? "")} ${String(body.error.message ?? "").slice(0, 200)}` : ""}`);
     return { runId: body.data.id };
   } finally { clearTimeout(t); }
 }
