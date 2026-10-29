@@ -158,7 +158,12 @@ console.log('\n── THE SET-UP PAGE (findable-site OnboardingFlow) ──');
     ok(!/Would you like (us )?to build/i.test(code) && !/Are we using an existing domain\?/.test(code), 'A: never "would you like a new website", and the old domain question is gone');
     const planAt = code.indexOf('What you pay');
     const pre = code.slice(0, planAt);
-    ok(planAt > code.indexOf('function WorkPlan') && /<WorkPlan route=\{route\} \/>/.test(code), 'F: the plan and what is included render before the price summary');
+    /* Test the PROPERTY, not today's text (2026-10-29: WorkPlan gained a plan prop on agreement v6 and the old exact
+       match failed while the page was right): WorkPlan is rendered, and rendered before PlanBlock — the block that
+       holds "What you pay". */
+    const workAt = code.search(/<WorkPlan route=\{route\}[^>]*\/>/);
+    const priceAt = code.search(/<PlanBlock\b/);
+    ok(planAt > code.indexOf('function WorkPlan') && workAt > 0 && priceAt > 0 && workAt < priceAt, 'F: the plan and what is included render before the price summary');
     ok(/"Opening your agreement\." : "Taking you to secure payment\."/.test(code) && /r\.kind === "agreement_required"/.test(code), 'G: Get started opens the AGREEMENT, and says so');
     ok(/setPhase\(salesSignup\?\.ready \? "plan" : "questions"\)/.test(code) && /case "signup_in_progress":/.test(code), 'a sales-held sign-up goes straight to its plan and never re-asks the website question');
     ok(!/"Run my check"/.test(code) && /"See my plan"/.test(code), 'no "Run my check" — no check runs at that step');

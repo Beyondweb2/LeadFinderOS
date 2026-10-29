@@ -82,7 +82,7 @@ export const SIMPLE_COPY = {
   buildOk: { headline: 'Happy for us to build you an AI-optimised website?', sub: 'Built so customers, search engines and AI understand exactly what you do and where you work. Hosting is included during your plan.' },
   design: { headline: 'Keep your current design, or improve it?', sub: 'Either way your new site is built properly for AI and search.' },
   domain: { headline: 'Do you own your domain, and can you log in to it?', sub: 'Your domain is your web address, like yourbusiness.co.uk.' },
-  legal: { headline: 'Last thing: a few quick confirmations', sub: 'So we can build your new website and connect it cleanly.' },
+  legal: { headline: 'A few quick confirmations', sub: 'So we can build your new website and connect it cleanly.' },
 } as const;
 export type HasAgency = 'yes' | 'no';
 export const AGENCY_OPTIONS: ReadonlyArray<{ value: HasAgency; label: string }> = [{ value: 'no', label: 'No' }, { value: 'yes', label: 'Yes' }];
@@ -182,12 +182,12 @@ export function accessConsequenceText(answer: SiteAccessAnswer | null): string {
     ? `No problem, we'll build and manage a new website for you as part of the service: ${FINDABLE_BUILD_TOTAL_PAYMENTS} payments in total. It transfers to you once all ${FINDABLE_BUILD_TOTAL_PAYMENTS} payments are complete.`
     : `We'll work on your existing website as part of the service: ${FINDABLE_OPTIMISE_TOTAL_PAYMENTS} payments in total. Your website stays yours.`;
 }
-/** findable-site siteAccess.ts permissionAckText — three states, the unanswered one names no site. */
+/** findable-site siteAccess.ts permissionAckText, word for word (findable-site 7d8892f, 2026-10-29: plain English, no
+ *  leading "Yes,"; every answered sign-up is Build, so the answered text names the new site we build). The unanswered
+ *  one names no site. It still records gbp_consent "yes_all", exactly as before. */
 export function permissionAckText(answer: SiteAccessAnswer | null): string {
-  if (!answer) return 'Yes, complete my Google Business Profile and publish the pages you write for me.';
-  return answer !== 'yes_access'
-    ? 'Yes, complete my Google Business Profile and publish the pages you write onto the new site you build me.'
-    : 'Yes, complete my Google Business Profile and publish the pages you write onto my site.';
+  if (!answer) return 'Please finish setting up my Google Business Profile and publish the pages you write for me.';
+  return 'Please finish setting up my Google Business Profile and publish the new pages on the new site you build for me.';
 }
 
 /** The build route the website answer implies — the operator-path column (website_route) that
