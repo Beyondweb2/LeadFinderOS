@@ -134,7 +134,12 @@ export function writePrompt(sys: PitchSystem, plan: PitchPlan, research: Researc
       `- the ONE call to action: "${plan.template === 'generic_inbox_v2' ? CTA.generic : plan.template === 'ad_idea_v2' ? CTA.ad : CTA.video}"`,
       plan.template === 'generic_inbox_v2' ? '- the routing line comes first after the greeting' : '- NO routing line (that is only for a generic inbox)',
     ] : []),
-    plan.track === 'brand' ? 'Draft at least five hooks in both voices; the chosen hook is a first-person or "you" statement, not a question. The payoff is an action, never a state or a result.' : '',
+    plan.track === 'brand' ? [
+      'Draft at least five hooks in both voices; the chosen hook is a first-person or "you" statement, not a question.',
+      'Assume Jess has NOT used this product unless About Jess lists it: never "my go-to", "my secret", "I always", "the one I reach for", "my favourite". Frame it as a first time or a first impression.',
+      'The hook promises no result (no "no soreness", "say goodbye to", "transform"). The concept is a reason to watch with tension or a twist, not a description of ordinary use (unboxing and putting it on is footage the brand already has).',
+      'The concept has 3 or 4 visuals; the payoff is an action, never a state or a result.',
+    ].join('\n') : '',
     `Return JSON only, this shape: ${WRITE_OUTPUT_SHAPE}`,
   ].join('\n');
   const user = [
@@ -194,6 +199,9 @@ export function pitchProblems(d: { subject?: string; body?: string } | null | un
     if (lim.min && n < lim.min) p.push(`too_short:${n}<${lim.min}`);
   }
   p.push(...emailStructureProblems(d.body, ctx.plan));
+  if (BANNED.test(all)) p.push('banned_phrase_or_em_dash');
+  const owned = (ctx.research.product ?? '').length > 3 && ctx.aboutJess.toLowerCase().includes(String(ctx.research.product).toLowerCase());
+  if (IMPLIED_USE.test(all) && !owned) p.push('implies_she_already_uses_it');
   return p;
 }
 
@@ -227,12 +235,32 @@ export function emailStructureProblems(body: string, plan: PitchPlan): string[] 
 
 /** Her hook test, the parts code can hold: at least five hooks drafted, and the chosen one is not a plain question
  *  (she allows a question at most one hook in five, never as the safe default). */
-export function hookProblems(w: WriteOut): string[] {
+export function hookProblems(w: WriteOut, aboutJess = ''): string[] {
   const p: string[] = [];
   const hooks = (w.hooks ?? []).filter((h) => h?.trim());
   if (hooks.length < 5) p.push(`fewer_than_five_hooks:${hooks.length}`);
-  if (/\?\s*$/.test(w.hook_test?.chosen ?? '')) p.push('chosen_hook_is_a_question');
+  const chosen = w.hook_test?.chosen ?? '';
+  if (/\?\s*$/.test(chosen)) p.push('chosen_hook_is_a_question');
+  /* Her hook test (3d.4) and lessons (3c.6), the parts code can hold. Seen live 2026-10-29: "After a long day, this is my
+     go-to." passed both model checks for a product she has never used. */
+  if (IMPLIED_RESULT.test(chosen)) p.push('hook_implies_a_result');
+  if (IMPLIED_USE.test(chosen) && !productInAboutJess(w, aboutJess)) p.push('hook_implies_she_already_uses_it');
+  const visuals = (w.concept?.visuals ?? []).filter((v) => v?.trim());
+  if (visuals.length < 3 || visuals.length > 4) p.push(`concept_needs_3_to_4_visuals:${visuals.length}`);
   return p;
+}
+
+/** Phrases that claim she already uses the product ("my go-to", "the one I reach for": her lesson on implied prior use). */
+export const IMPLIED_USE = /\b(my go-?to|my secret|my holy grail|my favou?rite|my daily|my must-?have|my staple|i always|i swear by|i can'?t live without|i('ve| have) been using|the one i reach for|i reach for|i use (it|this) (every|daily)|i love (using )?this|my secret weapon)\b/i;
+/** Results a hook may not promise (her hook test: "no claims, timings, numbers or results the brand's page doesn't state"). */
+export const IMPLIED_RESULT = /\b(no more|say goodbye|goodbye to|no soreness|transform(s|ed)?|results?|cures?|heals?|fix(es|ed)? my|glow(ing)? skin|clear skin|better sleep|pain[- ]free|instantly)\b/i;
+/** Her banned phrases (4e) and the em dash (1b: "no em-dashes"). */
+export const BANNED = /(passionate about your brand|i'?d love the opportunity to|i am reaching out|synergy|authentic engagement|scroll-?stopping|genuinely amazing|healing era|\bvibes\b|—|ads that convert|won'?t flop|uk-based|back in the uk)/i;
+
+/** A product she really uses (her About Jess list) may be talked about as hers. */
+function productInAboutJess(w: WriteOut, aboutJess: string): boolean {
+  const product = String((w.research_used as { product?: unknown } | undefined)?.product ?? '').trim().toLowerCase();
+  return product.length > 3 && aboutJess.toLowerCase().includes(product);
 }
 
 /** Her readiness rule (pitch system 2): a brand is "Ready" only when its research is filled — ONE named product, a
@@ -300,7 +328,7 @@ export async function runPitchPipeline(deps: PipelineDeps, sys: PitchSystem, pla
       if (plan.track === 'brand') {
         if (w.concept_gate?.pass !== true) problems.push('concept_gate_failed');
         if (w.hook_test?.pass !== true) problems.push('hook_test_failed');
-        problems.push(...hookProblems(w));
+        problems.push(...hookProblems(w, sys.about_jess));
       }
       problems.push(...pitchProblems(w, { plan, aboutJess: sys.about_jess, research, signoffHtml: sys.signoff_html, templateText: sys.templates[plan.template] }));
       if (!problems.length) {
