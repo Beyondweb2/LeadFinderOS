@@ -10,6 +10,7 @@ import { edgeErrorMessage } from '@/lib/edgeInvoke';
 import { useUgcActions, useUgcPitchLog, useUgcPitchSystem, type UgcPitchSystem } from '@/hooks/useUgc';
 import { TEMPLATE_KEYS, TEMPLATE_LABEL, WHATSAPP_ASK_DRAFT } from '@/lib/ugc/pitch';
 import { rowsFromCsv } from '@/lib/ugc/pitchLog';
+import { parsePitchSystem, type PitchSystemImport } from '@/lib/ugc/pitchSystemImport';
 
 /* HER PITCH SYSTEM — private to Jess (RLS: owner only, not the admin). Personal data: it lives here, never in git. */
 
@@ -24,6 +25,7 @@ export function UgcPitchSystemPanel({ ownerId, isMember }: { ownerId: string; is
   const [s, setS] = useState(EMPTY);
   const [blocked, setBlocked] = useState('');
   const [busy, setBusy] = useState(false);
+  const [imported, setImported] = useState<PitchSystemImport | null>(null);
   useEffect(() => {
     if (q.data) { setS({ ...EMPTY, ...q.data }); setBlocked((q.data.blocked_list ?? []).join('\n')); }
   }, [q.data]);
@@ -44,7 +46,28 @@ export function UgcPitchSystemPanel({ ownerId, isMember }: { ownerId: string; is
     <div className="space-y-4">
       <Callout tone="blue" icon={Lock} title="Private to you">Only your account can read or change this. The pitch writer follows it; rates are kept here and never put in a pitch.</Callout>
       <Card><CardContent className="space-y-4 p-4 text-sm">
-        <SubSection title="Pitch system" hint="Your full system as written: research fields, concept recipe, concept gate, hook test." tone="purple">
+        <SubSection title="Pitch system" hint="Your full system as written: research fields, concept recipe, concept gate, hook test." tone="purple"
+          action={<label className="inline-flex cursor-pointer items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs font-medium hover:bg-muted">
+            <FileUp className="h-3.5 w-3.5" />Import pitch-system.md
+            <input type="file" accept=".md,.txt,text/markdown,text/plain" className="hidden" data-testid="ugc-system-import" onChange={(e) => {
+              const file = e.target.files?.[0];
+              e.target.value = '';
+              if (!file) return;
+              void file.text().then((md) => {
+                const r = parsePitchSystem(md);
+                /* Her export wins over what is here; anything it does not cover is left as it was. Nothing is saved until Save. */
+                setS((x) => ({ ...x, content: r.content, about_jess: r.about_jess || x.about_jess, rates: r.rates || x.rates, signoff_html: r.signoff_html || x.signoff_html, templates: { ...x.templates, ...r.templates } }));
+                if (r.blocked_list.length) setBlocked(r.blocked_list.join('\n'));
+                setImported(r);
+              });
+            }} />
+          </label>}>
+          {imported && (
+            <Callout tone={imported.missing.length ? 'amber' : 'green'} className="mb-2" title={`Imported — check it, then Save. ${imported.placed.length} sections placed.`}>
+              <span className="text-xs">{imported.placed.map((p) => `${p.heading} → ${p.to}`).join(' · ') || 'No sections recognised; the whole text is kept as your system.'}
+                {imported.missing.length > 0 && ` · Not found: ${imported.missing.map((k) => TEMPLATE_LABEL[k]).join(', ')} (paste those below).`}</span>
+            </Callout>
+          )}
           <Textarea className="min-h-[220px] font-mono text-xs" value={s.content} onChange={(e) => set('content', e.target.value)} placeholder="Paste pitch-system.md here" data-testid="ugc-system-content" />
         </SubSection>
         <div className="grid gap-4 lg:grid-cols-2">

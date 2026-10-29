@@ -54,7 +54,7 @@ create policy ugc_members_self_read on public.ugc_members for select to authenti
 create table if not exists public.ugc_settings (
   owner_user_id       uuid primary key references auth.users(id) on delete cascade,
   -- UGC's OWN monthly Apify budget, in USD, separate from Findable's spend caps.
-  monthly_budget_usd  numeric(8,2) not null default 15 check (monthly_budget_usd >= 0 and monthly_budget_usd <= 200),
+  monthly_budget_usd  numeric(8,2) not null default 30 check (monthly_budget_usd >= 0 and monthly_budget_usd <= 200),
   -- The swappable pitch step: null = the built-in writer. A webhook is a SLOT for Jess's own system;
   -- it is only called once Paul has switched it on (webhook_enabled) — never set from code.
   pitch_webhook_url   text,
@@ -125,6 +125,10 @@ create table if not exists public.ugc_brands (
   -- released only by ugc_release_channel; a trigger refuses any other change.
   active_channel    text check (active_channel is null or active_channel in ('email','instagram','whatsapp')),
   first_contacted_at timestamptz,
+  -- Her two MANUAL checks (the app cannot do them): no email to this domain in her sent mail in the last 180 days,
+  -- and the LinkedIn named-person search. Ticked by Jess; a brand-track first contact is refused until both are set.
+  checked_sent_mail_at timestamptz,
+  checked_linkedin_at  timestamptz,
   -- Follow-ups sent so far (0, 1, 2); the due dates (+5 / +12 business days) are derived from first_contacted_at.
   follow_ups_sent   integer not null default 0 check (follow_ups_sent between 0 and 2),
   -- The pitch pipeline's working (research fields, concept, gate, hook test, review) for Jess to read.
@@ -163,7 +167,7 @@ create table if not exists public.ugc_brand_events (
   id            bigint generated always as identity primary key,
   brand_id      uuid not null references public.ugc_brands(id) on delete cascade,
   owner_user_id uuid not null references auth.users(id) on delete cascade,
-  kind          text not null check (kind in ('found','contacts','status','note','todo','pitch','contacted')),
+  kind          text not null check (kind in ('found','contacts','status','note','todo','pitch','contacted','check')),
   detail        jsonb not null default '{}'::jsonb,
   created_by    uuid references auth.users(id),
   created_at    timestamptz not null default now()
@@ -326,6 +330,11 @@ begin
   end if;
   if b.active_channel is not null and b.active_channel <> _via then
     return jsonb_build_object('ok', false, 'error', 'other_channel_active', 'active_channel', b.active_channel);
+  end if;
+  -- A paid brand's FIRST contact needs both of Jess's manual checks ticked (sent mail 180 days, LinkedIn search).
+  if b.track = 'brand' and b.first_contacted_at is null
+     and (b.checked_sent_mail_at is null or b.checked_linkedin_at is null) then
+    return jsonb_build_object('ok', false, 'error', 'jess_checks_missing');
   end if;
   update public.ugc_brands set
     active_channel = _via,

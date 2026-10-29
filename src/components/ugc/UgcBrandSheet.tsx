@@ -32,6 +32,7 @@ async function copyText(text: string): Promise<boolean> {
 }
 
 const CHANNEL_WORD: Record<string, string> = { email: 'Email', instagram: 'Instagram', whatsapp: 'WhatsApp' };
+const CHECKS_MISSING = 'Tick both checks first: your sent mail (last 180 days) and the LinkedIn named-person search.';
 
 export function UgcBrandSheet({ brand: b, view: v, system, senderEmail, canPitch, open, onOpenChange }: {
   brand: UgcBrand | null; view: BrandView | null; system: UgcPitchSystem | null; senderEmail: string | null; canPitch: boolean;
@@ -52,7 +53,7 @@ export function UgcBrandSheet({ brand: b, view: v, system, senderEmail, canPitch
   const lockedMsg = (via: string) => `${CHANNEL_WORD[b.active_channel ?? ''] ?? 'Another channel'} is already active for ${b.name}. Release it first (with a reason) to use ${CHANNEL_WORD[via]}.`;
   const logged = async (via: 'email' | 'instagram' | 'whatsapp', kind: 'pitch' | 'follow_up_1' | 'follow_up_2' | 'ask_who') => {
     const r = await actions.logContact(b.id, via, kind);
-    if (!r.ok) toast({ title: 'Not logged', description: r.error === 'other_channel_active' ? lockedMsg(via) : String(r.error), variant: 'destructive' });
+    if (!r.ok) toast({ title: 'Not logged', description: r.error === 'other_channel_active' ? lockedMsg(via) : r.error === 'jess_checks_missing' ? CHECKS_MISSING : String(r.error), variant: 'destructive' });
     else toast({ title: `Logged: contacted by ${CHANNEL_WORD[via]}` });
   };
 
@@ -61,6 +62,12 @@ export function UgcBrandSheet({ brand: b, view: v, system, senderEmail, canPitch
   const w = last?.write ?? null;
   const emailTo = v.contact.channel === 'email' ? v.contact.email : (v.contacts.find((c) => c.channel === 'email')?.email ?? null);
   const fu = v.followUp;
+  /* Her two manual checks gate a paid brand's FIRST contact (the database refuses it too: ugc_log_contact). */
+  const checksNeeded = b.track === 'brand' && !b.first_contacted_at;
+  const checksDone = !!b.checked_sent_mail_at && !!b.checked_linkedin_at;
+  const blockedByChecks = checksNeeded && !checksDone;
+  const tick = (field: 'checked_sent_mail_at' | 'checked_linkedin_at', on: boolean) =>
+    void run(field, () => actions.updateBrand(b, { [field]: on ? new Date().toISOString() : null }, 'check'));
   const waTemplate = system?.whatsapp_template?.trim() || WHATSAPP_ASK_DRAFT;
   const waApproved = system?.whatsapp_template_approved === true;
   const product = b.research?.product ?? null;
@@ -198,11 +205,20 @@ export function UgcBrandSheet({ brand: b, view: v, system, senderEmail, canPitch
               </Callout>
             )}
 
+            {checksNeeded && (
+              <div className="mt-3 space-y-1.5 rounded-xl bg-muted/40 p-2.5 text-xs" data-testid="ugc-jess-checks">
+                <p className="font-semibold">Jess checked (before this can be marked sent)</p>
+                <label className="flex items-center gap-2"><input type="checkbox" className="h-4 w-4 accent-primary" checked={!!b.checked_sent_mail_at} disabled={!!busy} onChange={(e) => tick('checked_sent_mail_at', e.target.checked)} />
+                  Nothing sent to {b.domain ?? 'this brand'} from my sent mail in the last 180 days</label>
+                <label className="flex items-center gap-2"><input type="checkbox" className="h-4 w-4 accent-primary" checked={!!b.checked_linkedin_at} disabled={!!busy} onChange={(e) => tick('checked_linkedin_at', e.target.checked)} />
+                  LinkedIn named-person search done</label>
+              </div>
+            )}
             <div className="mt-3 flex flex-wrap gap-1.5" data-testid="ugc-send-actions">
-              <Button size="sm" disabled={!emailTo || !b.pitch_body || locked('email')} onClick={doEmail}><Mail className="mr-1 h-3.5 w-3.5" />Copy email + open Gmail</Button>
-              <Button size="sm" variant="outline" disabled={!b.instagram_url || !b.pitch_body || locked('instagram')} onClick={doInstagram}><Instagram className="mr-1 h-3.5 w-3.5" />Copy + open Instagram</Button>
+              <Button size="sm" disabled={!emailTo || !b.pitch_body || locked('email') || blockedByChecks} onClick={doEmail}><Mail className="mr-1 h-3.5 w-3.5" />Copy email + open Gmail</Button>
+              <Button size="sm" variant="outline" disabled={!b.instagram_url || !b.pitch_body || locked('instagram') || blockedByChecks} onClick={doInstagram}><Instagram className="mr-1 h-3.5 w-3.5" />Copy + open Instagram</Button>
               {v.wa.filter((n) => n.worthTrying).slice(0, 2).map((n) => (
-                <Button key={n.number} size="sm" variant="outline" disabled={locked('whatsapp')} onClick={() => doWhatsApp(n)} title={n.sourceLabel}>
+                <Button key={n.number} size="sm" variant="outline" disabled={locked('whatsapp') || blockedByChecks} onClick={() => doWhatsApp(n)} title={n.sourceLabel}>
                   <MessageCircle className="mr-1 h-3.5 w-3.5" />Open WhatsApp chat{n.source === 'named_person' ? ` (${n.label})` : ''}
                 </Button>
               ))}

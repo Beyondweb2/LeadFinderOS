@@ -19,6 +19,7 @@ import {
   candidatesFrom, contactsInput, fromContactItem, fromFbAd, namedContactsFrom, primaryNamedContact, waDigits, brandWebsite,
 } from '../src/lib/ugc/normalize.ts';
 import { parseSheetDate, pitchedKeySet, rowsFromCsv, rowsFromWorkbook } from '../src/lib/ugc/pitchLog.ts';
+import { parsePitchSystem } from '../src/lib/ugc/pitchSystemImport.ts';
 import { ENRICH_LEADS_PER_BRAND, UGC_APIFY_STOP_PCT, UGC_MAX_ITEM_CAP, clampCap, estimateRunUsd, ugcSpendRefusal } from '../src/lib/ugc/config.ts';
 import { createUgcMember } from '../supabase/functions/_shared/ugc-member-create.ts';
 
@@ -77,7 +78,10 @@ console.log('\n── pitch pipeline ──');
   const sys: PitchSystem = { content: 'Her system: concept recipe, concept gate, hook test.', about_jess: 'British UGC creator and former lawyer. Paid Hume Health campaign. 200k views in 30 days.', templates: { ad_idea_v2: 'Template text', generic_inbox_v2: 'Generic text', ig_dm_ad_idea_v2: 'DM', cm_collab_dm_v4: 'CM' } };
   const plan: PitchPlan = { track: 'brand', template: 'ad_idea_v2', variant: 'standard' };
   const research: ResearchFields = { brand: 'Glow Lab', product: 'Barrier Serum', product_detail: 'ceramide serum', detail_url: null, pays_for_ugc_evidence: null, niche: 'beauty', website: 'https://glowlab.com', ads_summary: null, creators_seen: [], snippets: [] };
-  const good: WriteOut = { concept: { name: 'Glass skin test' }, concept_gate: { pass: true }, hook_test: { chosen: 'x', pass: true }, subject: 'Glow Lab: Barrier Serum ad idea', body: 'Hi team, an idea for Barrier Serum. Portfolio: https://www.jesscousin.com/' };
+  const good: WriteOut = { concept: { name: 'Glass skin test' }, concept_gate: { pass: true }, hook_test: { chosen: 'x', pass: true }, subject: 'Glow Lab: Barrier Serum ad idea', body: `Hi team, an idea for Barrier Serum. ${'The serum goes on before the moisturiser and the video shows that moment clearly. '.repeat(6)}Portfolio: https://www.jesscousin.com/` };
+  ok(pitchProblems({ subject: 's', body: 'Too short. https://www.jesscousin.com/' }, { plan, aboutJess: '', research }).some((p) => p.startsWith('too_short')), 'an email under 80 words is refused (her 80 to 140 rule)');
+  ok(pitchProblems({ subject: 's', body: `${'word '.repeat(141)}https://www.jesscousin.com/` }, { plan, aboutJess: '', research }).some((p) => p.startsWith('too_long')), 'an email over 140 words is refused');
+  ok(pitchProblems({ body: `${'word '.repeat(66)}` }, { plan: { track: 'brand', template: 'ig_dm_ad_idea_v2', variant: 'ig_dm' }, aboutJess: '', research }).some((p) => p.startsWith('too_long')), 'an IG DM over 65 words is refused');
   const passReview = async () => ({ concept_gate_pass: true, hook_test_pass: true, follows_template: true, problems: [] });
   const r1 = await runPitchPipeline({ write: async () => good, review: passReview }, sys, plan, research);
   ok(r1.outcome === 'drafted' && r1.attempts.length === 1, 'a clean draft that passes both passes is drafted on attempt 1');
@@ -93,7 +97,9 @@ console.log('\n── pitch pipeline ──');
   ok(r5.outcome === 'needs_jess' && r5.attempts.length === 0, 'no pitch system loaded → Needs Jess, no model call');
   const chk = (body: string) => pitchProblems({ subject: 's', body }, { plan, aboutJess: sys.about_jess, research });
   ok(chk('I live in Chiang Mai. https://www.jesscousin.com/').includes('mentions_thailand'), 'Thailand is refused in a brand pitch');
-  ok(!pitchProblems({ body: 'Chiang Mai cafe' }, { plan: { track: 'local', template: 'cm_collab_dm_v4', variant: 'ig_dm' }, aboutJess: '', research }).includes('mentions_thailand'), '…but allowed on the local Chiang Mai track');
+  ok(pitchProblems({ subject: 'x', body: "I'm based in Thailand. https://www.jesscousin.com/" }, { plan: { track: 'brand', template: 'agency_roster_v1', variant: 'standard' }, aboutJess: '', research }).includes('mentions_thailand'), '…and in an agency pitch (her line removed 27.10.26)');
+  const cm = "Hi [Business]! I'm Jess, a British creator living in Chiang Mai. My Instagram content has reached over 200k views in the last 30 days.";
+  ok(pitchProblems({ body: "Hi Nimman Slow Bar! I'm Jess, a British creator living in Chiang Mai. My Instagram content has reached over 200k views in the last 30 days." }, { plan: { track: 'local', template: 'cm_collab_dm_v4', variant: 'ig_dm' }, aboutJess: '', research, templateText: cm }).length === 0, 'the local track uses CM v4 as written: "living in Chiang Mai" and its reach figures pass (Paul, 2026-10-29)');
   ok(chk('My rate is £150 per video. https://www.jesscousin.com/').includes('mentions_a_rate'), 'a rate is refused');
   ok(chk('This got 3x sales. https://www.jesscousin.com/').some((p) => p.startsWith('unverified_figures')), 'a figure not in About Jess / research is refused');
   ok(!chk('My videos reached 200k views in 30 days. https://www.jesscousin.com/').some((p) => p.startsWith('unverified_figures')), 'a figure from About Jess is fine');
@@ -143,6 +149,40 @@ console.log('\n── pitch log ──');
   ok(rowsFromCsv('Brand,Website\n"Acme, Inc",acme.com\n').some((r) => r.domain === 'acme.com'), 'CSV import (quoted commas)');
 }
 
+console.log('\n── importing her pitch-system.md ──');
+{
+  /* A made-up export in HER format: numbered plain-text headings, numbered rule lists inside sections. */
+  const md = [
+    'Sample Pitch System Export', '1. Instructions', '1d. Hard rules', '• Blocked: Acme (commission-only), Beta Co (already pitched). Hard no: gambling.',
+    '2. Inputs per brand', 'Fields.', '3. Research', '3a. Research steps', '1. Previously pitched check. Not in the log.', '2. Legitimacy. Drop dropship stores.',
+    '3c. The concept gate (every concept, before drafting)', '3. Five questions, all must be yes:', 'Sells: yes.',
+    '4. Pitch rules', '4b. Structure of the email, in order', '1. Greeting. "Hi [Brand] team,"', '4c. Ad wording vs video wording', 'Tier A/B get ad framing.',
+    '5. Channels', '5a. Email subject lines', '• Tier A/B: [Brand]: [Product] ad idea',
+    '5b. Generic inbox vs named person vs partnerships inbox', '• Generic = hello@.',
+    '5c. Instagram DM (word for word template)', '"Hi [Brand] team! DM text."',
+    '5d. Email follow-ups', '• Follow-up 1 (+5 business days): FU1 shape.', '• Follow-up 2 (+12 business days): FU2 words.', '• Same channel as the original.',
+    '5f. Agency pitch ("Agency roster v1")', '• Subject: [Agency]: UGC creator for your client briefs',
+    '5h. Chiang Mai local collabs (separate track, Instagram DM)', '"Hi [Business]! I\'m Sam, living in Chiang Mai."',
+    '6. About me', '6a. Identity', '• Sample creator. Former lawyer.', '6c. Rates', '£999 per video', '6d. Personal facts', '• Rides a bike.',
+    '7. Examples', 'Example text.', '8. Output', '8a. Email: a Gmail draft', 'View my portfolio   ← linked to https://example.com/portfolio', '', 'Many thanks,', 'Sam',
+    '@SampleHandle   ← linked to https://example.com/links', '• No attachments.', '8b. Instagram DM, X or LinkedIn: written in the chat', 'Headed with the platform.',
+  ].join('\n');
+  const r = parsePitchSystem(md);
+  ok(r.content.startsWith('Sample Pitch System Export') && r.content.includes('Previously pitched check'), 'the whole export becomes her system text');
+  ok(r.placed.every((p) => !/^\d\. (Previously|Legitimacy|Greeting)|Five questions/.test(p.heading)), 'her numbered rule lists are never read as headings');
+  ok(r.about_jess.includes('Former lawyer') && r.about_jess.includes('Rides a bike') && !r.about_jess.includes('£999'), 'About me → About Jess, its Rates sub-section kept out');
+  ok(r.rates.includes('£999') && !Object.values(r.templates).some((t) => t?.includes('£999')), 'rates kept apart, never in a template');
+  ok(!!r.templates.ad_idea_v2?.includes('Greeting') && r.templates.ad_idea_v2.includes('ad idea') && !!r.templates.video_idea_v3?.includes('video wording'), 'email templates carry her structure, subjects and tier wording');
+  ok(!!r.templates.generic_inbox_v2?.includes('Generic = hello@'), 'Generic inbox rules');
+  ok(r.templates.ig_dm_ad_idea_v2?.includes('DM text') === true && !r.templates.ig_dm_ad_idea_v2.includes('Headed with the platform'), 'IG DM template, not the output rule for DMs');
+  ok(r.templates.follow_up_1?.includes('FU1 shape') === true && !r.templates.follow_up_1.includes('FU2') && r.templates.follow_up_2?.includes('FU2 words') === true, 'follow-ups split into 1 and 2');
+  ok(r.templates.cm_collab_dm_v4?.includes('living in Chiang Mai') === true, 'CM collab DM v4 taken as written');
+  ok(r.blocked_list.join() === 'Acme,Beta Co', 'blocked brands from her "Blocked:" rule');
+  ok(r.signoff_html === '<a href="https://example.com/portfolio">View my portfolio</a><br><br>Many thanks,<br>Sam<br><a href="https://example.com/links">@SampleHandle</a>', 'her sign-off rebuilt with live links');
+  ok(r.missing.length === 0, 'every template found');
+  ok(parsePitchSystem('# Title\n## About Jess\nFacts.\n## Rates\n£1').about_jess === 'Facts.', 'markdown headings still read');
+}
+
 console.log('\n── money ──');
 {
   ok(clampCap(10_000) === UGC_MAX_ITEM_CAP && clampCap('x') > 0, 'the item cap is clamped server-side');
@@ -165,6 +205,10 @@ console.log('\n── separation and access ──');
   ok(!/my_role|ugc_can_access/.test(pl), 'her pitch log: owner-only, NOT the admin');
   ok(!/create policy[^;]*on public\.ugc_runs for (insert|update|all)/.test(MIG) && !/create policy[^;]*on public\.ugc_members for (insert|update|all)/.test(MIG), 'runs and membership: no browser write policy');
   ok(/raise exception 'ugc_other_channel_active'/.test(MIG) && /b\.active_channel is not null and b\.active_channel <> _via/.test(MIG), 'one active channel per brand: refused in SQL (trigger + log function)');
+  ok(/if b\.track = 'brand' and b\.first_contacted_at is null\s+and \(b\.checked_sent_mail_at is null or b\.checked_linkedin_at is null\) then\s+return jsonb_build_object\('ok', false, 'error', 'jess_checks_missing'\)/.test(MIG),
+    "a paid brand's first contact is refused in SQL until Jess ticks both manual checks (sent mail 180 days, LinkedIn)");
+  const SHEET = read('src/components/ugc/UgcBrandSheet.tsx');
+  ok(/blockedByChecks/.test(SHEET) && (SHEET.match(/\|\| blockedByChecks\}/g) ?? []).length === 3, 'the sheet disables all three send buttons until both boxes are ticked');
   ok(/ugc_webhook_admin_only/.test(MIG) && /whatsapp_api_enabled/.test(MIG.slice(MIG.indexOf('ugc_settings_guard'))), 'the webhook slot, WhatsApp API switch and budget are the admin\'s only');
   ok(/whatsapp_api_enabled\s+boolean not null default false/.test(MIG) && /whatsapp_daily_cap\s+integer not null default 25 check \(whatsapp_daily_cap between 25 and 100\)/.test(MIG), 'WhatsApp API sending: off by default, cap 25–100');
   ok(!/user_roles/.test(MIG.replace(/--.*$/gm, '')) || !/insert into public\.user_roles|update public\.user_roles/.test(MIG), 'the migration never writes user_roles');

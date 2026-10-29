@@ -6,7 +6,7 @@
  *             (her concept recipe), its own concept-gate verdict, hooks and the hook test, and the draft.
  *   2 REVIEW  a SECOND, independent call that never saw the writer's reasoning re-runs the concept gate and the
  *             hook test against her system and the research only.
- *   3 CODE    pitchProblems(): no rate, no Thailand in a brand pitch, no figure that is not in "About Jess" or the
+ *   3 CODE    pitchProblems(): no rate, no Thailand in a brand or agency pitch, no figure that is not in "About Jess" or the
  *             research, no placeholder, the portfolio link where her template has one.
  *   Fail any → try again, at most MAX_PITCH_ATTEMPTS. Still failing → "Needs Jess": NOTHING is drafted.
  *
@@ -109,7 +109,11 @@ export function writePrompt(sys: PitchSystem, plan: PitchPlan, research: Researc
     '"""', template.trim() || '(template text not loaded)', '"""',
     'Hard rules: use ONLY the research fields for facts about the brand; never state a rate or price; never invent timings, results or figures.',
     sys.signoff_html?.trim() ? 'Stop after the call to action: do NOT write a sign-off or portfolio line. Her formatted sign-off is added after the body.' : '',
-    plan.track === 'brand' ? 'Never mention Thailand, Chiang Mai or where Jess lives in a brand pitch.' : 'This is the Chiang Mai local collab track.',
+    /* Paul, 2026-10-29: no Thailand in brand or agency pitches (her export dropped "I'm based in Thailand" on 27.10.26).
+       The Chiang Mai local track uses CM collab DM v4 exactly as written, "living in Chiang Mai" included. */
+    plan.track === 'local'
+      ? 'This is the Chiang Mai local collab track: use CM collab DM v4 exactly as written, including "living in Chiang Mai".'
+      : 'Never mention Thailand, Chiang Mai, any Thai place, or where Jess lives.',
     `Return JSON only, this shape: ${WRITE_OUTPUT_SHAPE}`,
   ].join('\n');
   const user = [
@@ -145,22 +149,42 @@ export function unverifiedFigures(text: string, sources: string): string[] {
   return [...new Set(figs.map((f) => f.trim()))].filter((f) => !src.includes(f.toLowerCase()) && !src.includes(f.replace(/,/g, '').toLowerCase()));
 }
 
-export function pitchProblems(d: { subject?: string; body?: string } | null | undefined, ctx: { plan: PitchPlan; aboutJess: string; research: ResearchFields; signoffHtml?: string }): string[] {
+export function pitchProblems(d: { subject?: string; body?: string } | null | undefined, ctx: { plan: PitchPlan; aboutJess: string; research: ResearchFields; signoffHtml?: string; templateText?: string }): string[] {
   if (!d?.body?.trim()) return ['no_body'];
   const p: string[] = [];
   const isEmail = ctx.plan.template !== 'ig_dm_ad_idea_v2' && ctx.plan.template !== 'cm_collab_dm_v4';
   if (isEmail && !d.subject?.trim()) p.push('no_subject');
   const all = `${d.subject ?? ''}\n${d.body}`;
-  if (ctx.plan.track === 'brand' && THAILAND.test(all)) p.push('mentions_thailand');
+  /* No Thailand in a brand or agency pitch (Paul, 2026-10-29). The local track's own template says "living in Chiang Mai". */
+  if (ctx.plan.track !== 'local' && THAILAND.test(all)) p.push('mentions_thailand');
   if (RATE.test(all)) p.push('mentions_a_rate');
   if (/\[[^\]]*\]|\{\{|<\w+>|\bTODO\b/.test(all)) p.push('placeholder_left');
   /* Her formatted sign-off carries the portfolio link; a body without it is fine only when the sign-off has it. */
   if (LINKED.has(ctx.plan.template) && !/jesscousin\.com/i.test(`${d.body}\n${ctx.signoffHtml ?? ''}`)) p.push('no_portfolio_link');
-  const sources = `${ctx.aboutJess}\n${JSON.stringify(ctx.research)}\n${JESS_PORTFOLIO_URL}`;
+  /* A figure is verified when it is in About Jess, the research, or her own template (her CM v4 reach figures). */
+  const sources = `${ctx.aboutJess}\n${JSON.stringify(ctx.research)}\n${ctx.templateText ?? ''}\n${JESS_PORTFOLIO_URL}`;
   const figs = unverifiedFigures(all, sources);
   if (figs.length) p.push(`unverified_figures:${figs.join(',')}`);
+  /* Her length rules (pitch-system sections 4 and 5), counted on the body before the sign-off. */
+  const lim = WORD_LIMITS[ctx.plan.template];
+  if (lim) {
+    const n = wordCount(d.body);
+    if (n > lim.max) p.push(`too_long:${n}>${lim.max}`);
+    if (lim.min && n < lim.min) p.push(`too_short:${n}<${lim.min}`);
+  }
   return p;
 }
+
+/** Words in a body, the way a reader counts them (hyphenated words and contractions are one word). */
+export function wordCount(text: string): number {
+  return text.split(/\s+/).filter((w) => /[A-Za-z0-9]/.test(w)).length;
+}
+
+/** Her word limits per template (email 80 to 140 before the sign-off; IG DM 40 to 65; agency 70 to 120; FU1 under 60). */
+export const WORD_LIMITS: Partial<Record<TemplateKey, { min?: number; max: number }>> = {
+  ad_idea_v2: { min: 80, max: 140 }, video_idea_v3: { min: 80, max: 140 }, generic_inbox_v2: { min: 80, max: 140 },
+  ig_dm_ad_idea_v2: { min: 40, max: 65 }, agency_roster_v1: { min: 70, max: 120 }, follow_up_1: { max: 59 },
+};
 
 /* ── the pipeline ──────────────────────────────────────────────────────────────────────────── */
 
@@ -202,7 +226,7 @@ export async function runPitchPipeline(deps: PipelineDeps, sys: PitchSystem, pla
         if (w.concept_gate?.pass !== true) problems.push('concept_gate_failed');
         if (w.hook_test?.pass !== true) problems.push('hook_test_failed');
       }
-      problems.push(...pitchProblems(w, { plan, aboutJess: sys.about_jess, research, signoffHtml: sys.signoff_html }));
+      problems.push(...pitchProblems(w, { plan, aboutJess: sys.about_jess, research, signoffHtml: sys.signoff_html, templateText: sys.templates[plan.template] }));
       if (!problems.length) {
         r = await deps.review(reviewPrompt(sys, plan, research, { concept: w.concept ?? null, hook: w.hook_test?.chosen ?? '', subject: w.subject ?? '', body: w.body ?? '' }));
         if (!r) problems.push('review_failed');
