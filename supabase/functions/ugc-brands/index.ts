@@ -20,7 +20,7 @@ import { isPublicHttpUrl, readCapped } from "../_shared/safe-fetch.ts";
 import { SITE_CHECK_HEADERS, SITE_FETCH_TIMEOUT_MS } from "../../../src/lib/siteReadIdentity.ts";
 import {
   AUTO_RESEARCH_TOP, RESEARCH_USD_CEILING, htmlLinks, htmlToText, pickProductUrl, pickShippingUrl, researchGaps, researchPrompt,
-  reviewSourceUrl, verifyResearch, type FetchedPage, type PageKind, type ResearchResult,
+  jsonLdReviews, reviewSourceUrl, verifyResearch, type FetchedPage, type PageKind, type ResearchResult,
 } from "../../../src/lib/ugc/research.ts";
 import { OPERATOR_APP_URL } from "../../../src/config/operatorApp.ts";
 
@@ -249,7 +249,7 @@ async function fetchPage(kind: PageKind, url: string | null): Promise<FetchedPag
     const html = await readCapped(res);
     const text = htmlToText(html);
     /* An unread page is "couldn't read", never a finding: too little text counts as not read. */
-    return { kind, url, ok: text.length > 200, text, links: htmlLinks(html, res.url || url) };
+    return { kind, url, ok: text.length > 200, text, links: htmlLinks(html, res.url || url), reviewsText: kind === "product" ? jsonLdReviews(html) : undefined };
   } catch { return { kind, url, ok: false, text: "", links: [] }; } finally { clearTimeout(t); }
 }
 
@@ -276,6 +276,9 @@ async function researchBrand(service: Service, owner: string, actor: string, bra
         fetchPage("reviews", reviewSourceUrl(domain)),
       ]);
       for (const p of [product, shipping, reviews]) if (p) pages.push(p);
+      /* The brand's OWN reviews, when its product page embeds them, are a review source of their own (Trustpilot refuses
+         readers like ours). */
+      if (product?.ok && product.reviewsText) pages.push({ kind: "reviews", url: `${product.url}#reviews`, ok: true, text: product.reviewsText, links: [] });
     }
     let usd = 0;
     let result: ResearchResult;
@@ -517,7 +520,7 @@ Deno.serve(async (req) => {
       /* Named marketing people for the TOP-RANKED brands only (her tiers, not raw ad count): default 50 a run. */
       const top = Math.min(Math.max(1, Math.floor(Number(body.top ?? ENRICH_DEFAULT_TOP)) || ENRICH_DEFAULT_TOP), ENRICH_MAX_TOP);
       const [{ data: rows, error }, ps, log] = await Promise.all([
-        service.from("ugc_brands").select("id, name, website, domain, brand_key, country, page_created_at, admin_countries, shop_links, has_about_page, has_address, ad_start_dates, tier_override, company_country, ships_to, ships_thailand, creator_programme_country, research, live_ads_count, creators_seen, track, enriched_at, status")
+        service.from("ugc_brands").select("id, name, website, domain, brand_key, country, page_created_at, admin_countries, shop_links, has_about_page, has_address, ad_start_dates, tier_override, researched_at, company_country, ships_to, ships_thailand, creator_programme_country, research, live_ads_count, creators_seen, track, enriched_at, status")
           .eq("owner_user_id", owner).eq("track", "brand").not("website", "is", null).is("enriched_at", null)
           .in("status", ["new", "researching", "pitch_ready", "needs_jess"]).order("live_ads_count", { ascending: false }).limit(1000),
         service.from("ugc_pitch_system").select("blocked_list").eq("owner_user_id", owner).maybeSingle(),
