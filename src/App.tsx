@@ -11,6 +11,7 @@ import { AuthProvider } from "@/hooks/useAuth";
 import { SubscriptionProvider } from "@/hooks/useSubscription";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { RequireAccess } from "@/components/RequireAccess";
+import { RequireUgcAccess, UgcLayout } from "@/components/ugc/UgcShell";
 import { AppLayout } from "@/components/AppLayout";
 import { AccentInitializer } from "@/components/AccentInitializer";
 
@@ -51,6 +52,9 @@ const SetPassword = lazy(() => import("./pages/SetPassword"));
    own photos and the row is a DRAFT that must never be public (Step 1 proved anon reads only
    published rows). Nothing on this screen sends or publishes anything. */
 const Mockups = lazy(() => import("./pages/Mockups"));
+/* UGC Brand Finder (2026-10-29, docs/ugc-brand-finder.md): Jess's own page, OUTSIDE the operator shell — her login has
+   no LeadFinder role. RequireUgcAccess admits a UGC member or the admin; RLS and fn ugc-brands are the real boundary. */
+const Ugc = lazy(() => import("./pages/Ugc"));
 
 function FullPageLoader() {
   return (
@@ -189,6 +193,7 @@ const App = () => {
             {/* Where an invite link lands (multi-user). Outside the shell: the session is being set up
                 from the link, and there is no role check to pass until it exists. */}
             <Route path="/set-password" element={<SetPassword />} />
+            <Route path="/ugc" element={<ProtectedRoute><RequireUgcAccess><UgcLayout><Ugc /></UgcLayout></RequireUgcAccess></ProtectedRoute>} />
             {/* ══ THE OPERATOR SHELL — ONE layout route, not fifteen wrappers ═══════════════════
                 Every operator page used to carry its own <ProtectedRoute><SubscriptionGate>
                 <AppLayout> stack, so EVERY navigation unmounted and remounted the whole shell —

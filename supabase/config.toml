@@ -382,6 +382,11 @@ verify_jwt = false
 [functions.process-sms-queue]
 verify_jwt = false
 
+# ugc-brands (2026-10-29, docs/ugc-brand-finder.md): the UGC Brand Finder's one door. SPA-only, signed-in callers;
+# the handler admits a UGC member (ugc_members) or the admin and refuses everyone else. It sends nothing.
+[functions.ugc-brands]
+verify_jwt = true
+
 # inbox-scheduled-send (2026-10-21): the Inbox send window drain. Called every minute by pg_cron (invoke_inbox_scheduled_send)
 # with x-cron-secret; the handler refuses anything else. verify_jwt must stay false.
 [functions.inbox-scheduled-send]

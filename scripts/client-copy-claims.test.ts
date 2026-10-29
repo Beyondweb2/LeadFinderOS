@@ -166,6 +166,7 @@ console.log("\n── NO OPERATOR SCREEN CARRIES A STALE CLAIM EITHER (2026-09-1
    his contract (CLAUDE.md §1). Add to this list only a sentence that is true, never to silence one. */
 const OPERATOR_SCREENS: Array<[string, string]> = [
   ["baseline bands (operator)", "src/lib/baselineView.ts"],
+  ["UGC brands page (separate product, Jess)", "src/pages/Ugc.tsx"],
   ["Website Build simple screen (operator)", "src/components/SimpleWebsiteBuild.tsx"],
   ["Website Build simple flow + master prompt (operator)", "src/lib/simpleBuild.ts"],
   ["Baseline screen (operator)", "src/pages/Baseline.tsx"],

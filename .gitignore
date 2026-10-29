@@ -41,3 +41,6 @@ email-preview.txt
 
 # TypeScript incremental build artefacts (written at the repo root by `tsc -b`)
 *.tsbuildinfo
+
+# Jess (UGC) private pitch system + pitch log: personal data, never committed. Loaded into the DB (ugc_pitch_system) instead.
+docs/ugc/jess-pitch-system/

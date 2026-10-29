@@ -218,3 +218,4 @@
 - `docs/audit-report-v3.md` — the prospect (quick) report v3 layout, fix lines, the website-check id trap, Phase 2 plan (2026-10-23)
 - `docs/site-shot.md` — homepage picture per lead for the prospect report: shape, the 20-site measurements, rules it taught, deploy record (2026-10-24)
 - `docs/finding-accuracy.md` — what we may tell a prospect their site does not say: full-text stamp, coverage sentences, state label, question 1 from the site; measured false rates (2026-10-25)
+- `docs/ugc-brand-finder.md` — UGC Brand Finder for Jess (separate login, tables, spend; her tiers, contact order, pitch pipeline; nothing sent from the app) (2026-10-29)

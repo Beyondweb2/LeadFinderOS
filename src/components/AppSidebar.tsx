@@ -16,7 +16,7 @@ import { useAllInboxUnread } from '@/hooks/useSms';
 import {
   LayoutDashboard, Search, ClipboardList, FileText, UsersRound,
   Inbox, Sparkles, Map, Users,
-  BarChart3, MessageCircle, MessageSquarePlus,
+  BarChart3, MessageCircle, MessageSquarePlus, Clapperboard,
 } from 'lucide-react';
 import { FeedbackNewsButtons } from '@/components/FeedbackNewsButtons';
 import { PaletteButton } from '@/components/CommandPaletteHost';
@@ -50,6 +50,8 @@ export function AppSidebar() {
        inside Paid clients (its Tools tab, and each client's Pages & reviews). Their old URLs redirect there. */
     { title: t('nav.templates'), url: '/templates', icon: FileText, description: t('nav.templatesDesc') },
     { title: 'Team', url: '/team', icon: Users, description: 'Salespeople, invites and lead ownership' },
+    /* UGC Brand Finder (2026-10-29): Jess's separate page. Admin-only in this menu (sales never: not in SALES_ROUTE_PATTERNS). */
+    { title: 'UGC brands', url: '/ugc', icon: Clapperboard, description: "Jess's brand finder (separate)" },
     { title: 'Feedback inbox', url: '/feedback', icon: MessageSquarePlus, description: 'Team feedback and template requests' },
   ];
   /* ⛔ The matrix decides WHAT is shown (src/lib/access.ts); this decides the ORDER. The admin keeps

@@ -22,6 +22,14 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-29-ugc-brand-finder', date: '2026-10-29', title: 'UGC brands: a separate page for Jess to find and pitch brands', audience: 'admin',
+    body: 'A new UGC brands page, kept apart from Findable: its own login for Jess, its own tables, its own search budget. It finds brands running video ads, brands that paid other UGC creators, "UGC creator wanted" posts and Chiang Mai venues, finds contacts (named marketing people with verified emails for the top brands), and drafts pitches with her own pitch system. Nothing is sent from it: Jess copies the email into Gmail, or opens Instagram or WhatsApp on her own phone, and the page logs the contact.',
+    report: {
+      added: ['UGC brands in the admin menu (Jess sees only this page).', 'Searches show their cost first, with an item cap; Apify is told the same ceiling.', 'Her tiers, hard no\'s, contact order, one channel per brand, follow-ups at +5 and +12 business days.', 'Her pitch system, rates and pitch log are private to her account and not visible to the admin.'],
+      changed: ['A signed-in account with no LeadFinder role but UGC access is sent to /ugc instead of "No access".'],
+      removed: [],
+      effect: 'Nothing changes for Findable leads, campaigns, queues or the WhatsApp number. UGC searches use the shared Apify account but stop at 80% of its monthly cap and at her own monthly budget.',
+    } },
   { id: '2026-10-29-plan-period-reminder', date: '2026-10-29', title: 'Clients on the new plans get their hosting reminder by email, automatically', audience: 'admin',
     body: 'Agreement version 6 promises a reminder before the Plan Period ends that the client can opt in to £29.99 a month hosting. The app now sends it: one email, once per client, 30 days before. Pay in full: 6 months after the site first goes live. 6 and 12 months: before the final payment.',
     report: {
