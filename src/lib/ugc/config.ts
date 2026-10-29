@@ -113,6 +113,9 @@ export const PAGE_DETAILS_MAX = 50;
  *  Findable's own prospecting stop, so Jess's searches can never be what pushes Findable's client work to the cap. */
 export const UGC_APIFY_STOP_PCT = 0.80;
 
+/** The lowest maxTotalChargeUsd some Apify actors accept (contact scraper, live 400 on 2026-10-29). */
+export const APIFY_MIN_CHARGE_USD = 0.5;
+
 /** How many billed units a run can produce at most, for the estimate. */
 export function billedUnits(source: UgcSource, itemCap: number, opts: { queries?: number; sites?: number } = {}): number {
   const cap = clampCap(itemCap);
