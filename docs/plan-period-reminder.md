@@ -42,4 +42,16 @@ When the Plan Period ends (v6 2.6, 9.2):
 
 ## Verified on 2026-10-29
 
-Dry run on live (no real client in any window) and one QA drill email to the QA sink only — results below.
+- Migration applied and read back (switch on, cron `15 10 * * *` active, RLS on, trigger present, 0 existing sites stamped).
+- fn deployed (build `plan-period-reminder-2026-10-29a`); unauthorised POST → 401.
+- Live dry run (horizon 400 days): 18 clients with terms rows, all QA, **0 would be sent** ("not v6").
+- QA fixture `ZZ QA PP1 pay in full` (`12290000-0000-4000-8000-0000000000a1`, v6, plan full, no phone/email, excluded,
+  ARCHIVED after): the insert stamped `site_first_live_at` by trigger; drill day 2027-03-29 → too_early; 2027-04-10 →
+  sent to paul@move37.fun (Resend accepted; row `sent`; terms `continuing_reminder_sent_at` stamped); 2027-04-11 →
+  already_sent. Dry run after: still 0 real clients.
+- The v6 row in `client_agreement_versions` did not exist yet (the agreement function writes it on the first v6
+  signature). It was written for the fixture with the identical text/hash the function writes (`versionTemplateText('v6')`,
+  sha `7d1157c8…`; the same method reproduced the live v5 hash exactly), so the first real v6 signature finds it and
+  matches.
+- Invoking an internal function for a test: `net.http_post` from SQL with the vault `CRON_SECRET` (as the cron invoker
+  does), then read `net._http_response`.
