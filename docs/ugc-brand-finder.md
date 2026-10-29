@@ -55,3 +55,5 @@ A separate page (`/ugc`) for Jess (UGC creator, jesscousin.com) to find brands t
 - Readiness (no model call until Ready): product, verified product detail with its URL, pushing now, reviews (or none found), and a contact.
 - Writer, reviewer and research use gpt-4o (no Anthropic key is configured; Paul: "I use gpt api").
 - Migration `20261130100000_ugc_research.sql`: `research_status`, `researched_at`, run sources `research` / `page_details`, event kind `research`.
+- Dropshipping data (2026-10-29): a live inspect of the Ads Library run (`inspect_run`, admin, key paths only) showed `pageInfo.page` EMPTY on all 25 keyword-search ads — `includeAboutPage` does not reach search URLs. New "Check pages" pass (`page_details`): the same actor on each brand's own Ad Library page (`view_all_page_id`), About tab on, one result per brand (~$0.006 each, cost shown first, default 25 / max 50), writes page age + admin countries so the new-page / run-from-abroad flags can fire.
+- Retailer domains (costco, boots, holland & barrett, sephora, …) are never a brand's website (seen live: Nordic Naturals → costco.com).

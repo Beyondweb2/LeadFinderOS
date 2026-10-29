@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { BadgeCheck, Loader2, Play, RefreshCw, Search, Users } from 'lucide-react';
+import { BadgeCheck, Loader2, Play, RefreshCw, Search, ShieldAlert, Users } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -8,7 +8,7 @@ import { useToast } from '@/hooks/use-toast';
 import { edgeErrorMessage, EdgeFunctionError } from '@/lib/edgeInvoke';
 import { useUgcActions, useUgcRuns, type SearchRequest, type UgcRun } from '@/hooks/useUgc';
 import {
-  ENRICH_DEFAULT_TOP, ENRICH_MAX_TOP, THAILAND_AREAS, THAILAND_PLACE_TYPES, UGC_COUNTRIES, UGC_DEFAULT_ITEM_CAP, UGC_MAX_CONTACT_BRANDS,
+  ENRICH_DEFAULT_TOP, ENRICH_MAX_TOP, PAGE_DETAILS_DEFAULT, THAILAND_AREAS, THAILAND_PLACE_TYPES, UGC_COUNTRIES, UGC_DEFAULT_ITEM_CAP, UGC_MAX_CONTACT_BRANDS,
   UGC_MAX_ITEM_CAP, UGC_NICHES, UGC_REFUSAL_TEXT, UGC_SOURCE_LABEL, formatUsd, type UgcSource,
 } from '@/lib/ugc/config';
 
@@ -48,6 +48,7 @@ export function UgcFindPanel({ selectedIds, budget }: { selectedIds: string[]; b
   const [busy, setBusy] = useState<string | null>(null);
   const [top, setTop] = useState(ENRICH_DEFAULT_TOP);
   const [enrichEst, setEnrichEst] = useState<{ estUsd: number; extraUsd?: number; brands?: number; refusal?: string | null; researchBrands?: number; researchEstUsd?: number } | null>(null);
+  const [pageEst, setPageEst] = useState<{ estUsd: number; pages?: number; refusal?: string | null } | null>(null);
   const [contactEst, setContactEst] = useState<{ estUsd: number; sites?: number; refusal?: string | null; researchBrands?: number; researchEstUsd?: number } | null>(null);
 
   const req = (): SearchRequest => ({ source, niche, country, itemCap: cap, keyword: keyword || undefined, creators: creators.split(/[\n,]/).map((s) => s.trim()).filter(Boolean), placeTypes: types, area });
@@ -147,6 +148,15 @@ export function UgcFindPanel({ selectedIds, budget }: { selectedIds: string[]; b
               <Button size="sm" disabled={!enrichEst || !!enrichEst.refusal || !!busy} onClick={() => void go('erun', async () => { await actions.namedContacts(top); setEnrichEst(null); toast({ title: 'Finding named contacts…' }); })}>Find named contacts</Button>
             </div>
             {enrichEst?.refusal && <Callout tone="amber" className="mt-2">{refusalText(enrichEst.refusal)}</Callout>}
+          </SubSection>
+          <SubSection title="Dropshipping signs" icon={ShieldAlert} tone="amber">
+            <p className="text-xs text-muted-foreground">Reads each brand’s own Ad Library page for its age and where it is run from, so new pages and pages run from abroad are flagged (hidden, never deleted). One result per brand.</p>
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              <Button variant="outline" size="sm" disabled={!!busy} onClick={() => void go('pest', async () => setPageEst(await actions.pageDetails(PAGE_DETAILS_DEFAULT, true)))}>Show cost</Button>
+              {pageEst && <span data-testid="ugc-page-estimate">Up to <b>{formatUsd(pageEst.estUsd)}</b> for {pageEst.pages} pages</span>}
+              <Button size="sm" disabled={!pageEst || !!pageEst.refusal || !!busy} onClick={() => void go('prun', async () => { await actions.pageDetails(PAGE_DETAILS_DEFAULT); setPageEst(null); toast({ title: 'Checking pages…' }); })}>Check pages</Button>
+            </div>
+            {pageEst?.refusal && <Callout tone="amber" className="mt-2">{refusalText(pageEst.refusal)}</Callout>}
           </SubSection>
           {budget && <p className="text-xs text-muted-foreground">This month: {formatUsd(budget.spentThisMonthUsd)} of your {formatUsd(budget.budgetUsd)} search budget.</p>}
         </CardContent></Card>

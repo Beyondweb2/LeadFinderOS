@@ -154,6 +154,12 @@ export function useUgcActions() {
       if (x.run?.status !== 'running') refresh(UGC_KEYS.runs, UGC_KEYS.brands, UGC_KEYS.state);
       return x;
     },
+    /** Dropshipping signs: page age + admin countries from each brand's own Ad Library page (cost shown first). */
+    pageDetails: async (top: number, estimateOnly = false) => {
+      const x = await invokeEdge<{ ok: boolean; estUsd: number; pages?: number; refusal?: string | null; run?: UgcRun }>('ugc-brands', { action: 'page_details', top, estimateOnly });
+      if (!estimateOnly) refresh(UGC_KEYS.runs, UGC_KEYS.state);
+      return x;
+    },
     /** Research one brand (her fields, each quoted from its page). research_next takes the next queued brand. */
     research: async (brandId: string) => {
       const x = await invokeEdge<{ ok: boolean; outcome?: string; gaps?: string[]; why?: string; busy?: boolean }>('ugc-brands', { action: 'research', brandId });

@@ -83,6 +83,9 @@ const PLATFORM_HOSTS = [
   'tinyurl.com', 'ow.ly', 't.co', 'buff.ly', 'rebrand.ly', 'cutt.ly', 'lnk.to', 'app.link', 'onelink.me', 'adj.st', 'amzn.to',
   'doubleclick.net', 'googleadservices.com', 'googlesyndication.com', 'apple.com', 'on.aws', 'amazonaws.com', 'cloudfront.net',
   'linkin.bio', 'shopmy.us', 'l.instagram.com', 'typeform.com', 'calendly.com', 'forms.gle',
+  /* Retailers stockists link to (seen live: Nordic Naturals -> costco.com): the retailer is never the brand's site. */
+  'costco.com', 'costco.co.uk', 'walmart.com', 'target.com', 'boots.com', 'superdrug.com', 'hollandandbarrett.com', 'sephora.com',
+  'sephora.co.uk', 'ulta.com', 'lookfantastic.com', 'cultbeauty.co.uk', 'iherb.com', 'tesco.com', 'sainsburys.co.uk', 'asda.com',
 ];
 export const LINK_PAGE_HOSTS = ['linktr.ee', 'beacons.ai', 'bio.link', 'campsite.bio'];
 
@@ -204,6 +207,26 @@ export function googleSearchInput(niche: UgcNiche, country: UgcCountry, itemCap:
 }
 
 /** With enrich: the actor's Business Leads Enrichment — named marketing people, emails verified. */
+/** Page details: each brand's OWN Ad Library page with its About tab (keyword searches return pageInfo.page empty —
+ *  checked on a live run 2026-10-29), one result per page, so page age and admin countries come back. */
+export function pageDetailsInput(pageIds: readonly string[]) {
+  const ids = uniq(pageIds.filter((id) => /^\d{5,25}$/.test(id)));
+  return {
+    startUrls: ids.map((id) => ({ url: `https://www.facebook.com/ads/library/?active_status=all&ad_type=all&country=ALL&view_all_page_id=${id}` })),
+    resultsLimit: 1,
+    activeStatus: 'all',
+    includeAboutPage: true,
+    isDetailsPerAd: false,
+  };
+}
+
+/** The page facts one page-details item carries (page id, creation date, admin countries); null when it has none. */
+export function pageFactsFrom(raw: unknown): { pageId: string; page_created_at: string | null; admin_countries: string[] } | null {
+  const c = fromFbAd(raw, null, null);
+  if (!c?.facebook_page_id) return null;
+  return { pageId: c.facebook_page_id, page_created_at: c.page_created_at, admin_countries: c.admin_countries };
+}
+
 export function contactsInput(urls: readonly string[], enrich = false) {
   const start = uniq(urls.filter(Boolean));
   const leads = enrich ? {

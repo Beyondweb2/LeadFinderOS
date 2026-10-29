@@ -16,7 +16,7 @@ import {
 } from '../src/lib/ugc/pitch.ts';
 import { brandVerdict } from '../src/lib/ugc/brandRules.ts';
 import {
-  candidatesFrom, contactsInput, fromContactItem, fromFbAd, namedContactsFrom, primaryNamedContact, waDigits, brandWebsite,
+  candidatesFrom, contactsInput, fromContactItem, fromFbAd, pageDetailsInput, pageFactsFrom, namedContactsFrom, primaryNamedContact, waDigits, brandWebsite,
 } from '../src/lib/ugc/normalize.ts';
 import { parseSheetDate, pitchedKeySet, rowsFromCsv, rowsFromWorkbook } from '../src/lib/ugc/pitchLog.ts';
 import { parsePitchSystem } from '../src/lib/ugc/pitchSystemImport.ts';
@@ -168,6 +168,17 @@ console.log('\n── actor inputs / outputs ──');
   ok(primaryNamedContact(namedContactsFrom([{ fullName: 'A', jobTitle: 'Brand Manager', email: 'a@x.com', emailVerification: { result: 'unknown' } }])) === null, 'Open in Gmail uses a named person only with a verified email');
   const ci2 = contactsInput(['https://a.com'], true) as Record<string, unknown>;
   ok(ci2.maximumLeadsEnrichmentRecords === ENRICH_LEADS_PER_BRAND && ci2.verifyLeadsEnrichmentEmails === true && ci2.maxRequestsPerStartUrl === 3, 'named contacts: enrichment on, emails verified, max 3 pages per site');
+  /* Dropshipping signs (2026-10-29): keyword searches returned pageInfo.page EMPTY on a live run, so page age and admin
+     countries come from each brand's own Ad Library page with its About tab. */
+  const pd = pageDetailsInput(['123456789', 'bad id', '123456789']) as { startUrls: { url: string }[]; resultsLimit: number; includeAboutPage: boolean };
+  ok(pd.startUrls.length === 1 && /view_all_page_id=123456789/.test(pd.startUrls[0].url) && pd.resultsLimit === 1 && pd.includeAboutPage === true, 'page details: one result from each brand’s own Ad Library page, About tab on, bad ids dropped');
+  const facts = pageFactsFrom({ pageName: 'X', pageID: '123456789', pageInfo: { page: { pagesTransparencyInfo: {
+    historyItems: [{ itemType: 'CREATION', eventTimeFormatted: '2026-08-01' }], adminLocations: { adminCountryCounts: [{ country: { isoName: 'Viet Nam' }, count: 2 }] } } } } });
+  ok(facts?.pageId === '123456789' && facts.page_created_at === '2026-08-01' && facts.admin_countries[0] === 'Viet Nam', 'page details: creation date and admin countries are read');
+  ok(brandVerdict({ name: 'X', country: 'GB', page_created_at: facts!.page_created_at, admin_countries: facts!.admin_countries }, NOW).dropship.join() === 'new_page,foreign_admins', '…so the new-page and run-from-abroad flags fire');
+  ok(pageFactsFrom({ pageName: 'X', pageID: '1', pageInfo: { page: {} } })?.page_created_at === null, 'an empty page block writes nothing (unknown stays unknown)');
+  ok(estimateRunUsd('page_details', 25) <= 0.2, 'page details for 25 brands costs cents, shown first');
+  ok(brandWebsite('https://www.costco.com/nordic-naturals.html') === null && brandWebsite('https://www.boots.com/x') === null, 'a retailer link is never the brand’s website (seen live: costco.com)');
 }
 
 console.log('\n── pitch log ──');
