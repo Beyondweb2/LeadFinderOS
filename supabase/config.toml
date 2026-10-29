@@ -81,6 +81,10 @@ verify_jwt = false
 [functions.month12-reminder]
 verify_jwt = false
 
+# The v6 clause 9A.5 Plan Period reminder: internal only (CRON_SECRET + x-internal-job, checked in the handler).
+[functions.plan-period-reminder]
+verify_jwt = false
+
 # Reply-audit sweeper: internal only (CRON_SECRET + x-internal-job, checked in the handler). Queues the
 # audit-only reply audits the held WhatsApp webhook missed; sends nothing. docs/reply-audit-sweep.md
 [functions.reply-audit-sweep]

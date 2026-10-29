@@ -22,6 +22,14 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-29-plan-period-reminder', date: '2026-10-29', title: 'Clients on the new plans get their hosting reminder by email, automatically', audience: 'admin',
+    body: 'Agreement version 6 promises a reminder before the Plan Period ends that the client can opt in to £29.99 a month hosting. The app now sends it: one email, once per client, 30 days before. Pay in full: 6 months after the site first goes live. 6 and 12 months: before the final payment.',
+    report: {
+      added: ['A daily scheduled email to version 6 clients (Pay in full, 6 months, 12 months) 30 days before their Plan Period ends, offering the optional £29.99 a month hosting. Paul gets a notice each time.', 'The app now records the day a client\'s website first goes live (needed for Pay in full).'],
+      changed: [],
+      removed: [],
+      effect: 'Nothing to do. Clients on the old £99 x 12 plan keep their existing payment-12 reminder; nobody gets both. Sites already live before today have no recorded go-live day.',
+    } },
   { id: '2026-10-29-payment-options', date: '2026-10-29', title: 'Findable Build now has three ways to pay: £499 once, 6 months, or 12 months', audience: 'all',
     body: 'The Close tab asks "How do they want to pay?" after the plan: Pay in full (£499 once), 6 months (£99 a month, 6 payments) or 12 months (£99, then £49.99 a month, 12 payments). Same service either way. The client signs the new agreement (version 6) for the plan they chose, then pays. The call script, reply drafts and voice notes now quote all three.',
     report: {

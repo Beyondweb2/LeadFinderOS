@@ -208,6 +208,9 @@ export interface TimelineFacts {
   /** Continuing Service bookkeeping (all manual for now). */
   continuingReminderSentAt?: string | null;
   continuingDecision?: 'continue' | 'cancel' | null;
+  /** The recurring payments the SIGNED payment plan needs (paymentPlans.ts: totalPayments - 1). Absent = the route's
+      count (recurringPaymentsFor). Set only by a caller that read the plan (fn plan-period-reminder), 2026-10-29. */
+  recurringPaymentsNeeded?: number | null;
 }
 
 export type PaymentStartBasis = 'results' | 'fallback';
@@ -281,9 +284,10 @@ export interface MinimumTerm {
  */
 export function minimumTerm(f: TimelineFacts): MinimumTerm {
   const route = f.route;
-  const empty: MinimumTerm = { recurringNeeded: route ? recurringPaymentsFor(route) : 0, recurringPaid: f.recurringPaidAt?.length ?? 0, finalPaymentDay: null, finalPaymentActual: false, continuingStartDay: null, clientReminderDueDay: null, paulActionDay: null };
+  const planNeeds = typeof f.recurringPaymentsNeeded === 'number' && f.recurringPaymentsNeeded >= 1 ?f.recurringPaymentsNeeded : null;
+  const empty: MinimumTerm = { recurringNeeded: route ? (planNeeds ?? recurringPaymentsFor(route)) : 0, recurringPaid: f.recurringPaidAt?.length ?? 0, finalPaymentDay: null, finalPaymentActual: false, continuingStartDay: null, clientReminderDueDay: null, paulActionDay: null };
   if (!route) return empty;
-  const needed = recurringPaymentsFor(route);
+  const needed = planNeeds ?? recurringPaymentsFor(route);
   const paid = [...(f.recurringPaidAt ?? [])].map((x) => ukDay(x)).filter((x): x is string => !!x).sort();
   const start = paymentStart(f).day;
   // The billing anchor: the first real payment's day when there is one (Stripe bills from it), else the Payment Start Date.

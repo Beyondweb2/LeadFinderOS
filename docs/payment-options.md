@@ -56,8 +56,8 @@ price model (`priceModel.ts`, its switch and hook); its DB columns/functions rem
 
 ## Known gaps
 
-- No reminder is sent before the Plan Period ends for the 6-month plan or pay in full (v6 9A.5 promises one; fn
-  `month12-reminder` covers v5 Build only).
+- (Closed 2026-10-29) The v6 9A.5 reminder before the Plan Period ends is built: fn `plan-period-reminder`,
+  `docs/plan-period-reminder.md` (Pay in full, 6 months and 12 months).
 - Commission: initial commission is on the real first payment (£499 on pay in full); recurring on £49.99 for the 12-month plan.
   Not changed; Paul to confirm.
 - Saved replies "Price" and "Pricing" (personal templates) quote retired prices and direct Stripe links.
