@@ -16,13 +16,17 @@ import { contractAlertAnswerFromQuickClose, contractAlertAnswerFromRow } from ".
 import { effectiveAnswers } from "../../../src/lib/quickClose.ts";
 import { readContractEnd, readDesignChoice, contractEndWords, simpleAnswerFills, maskEmail } from "../../../src/lib/onboardingSimpleAnswers.ts";
 import { recordSetupSignupCreator } from "../_shared/setup-link-creator.ts";
+import { publicPlanCatalogue, readSignupPaymentPlan } from "../../../src/lib/paymentPlans.ts";
 
 // findable-onboarding — the PUBLIC backend for findable-site's /onboarding flow
 // (verify_jwt = false; the static site calls it with the anon apikey only). Actions:
 //
 //   prefill     { lead_id }                    → safe prefill fields for a known lead
 //                                                (NEVER phone/email — anyone with a report link can call this)
-//   submit      { lead_id?, answers{...} }     → save answers; for a KNOWN lead also fire the audit
+//   plans       {}                             → [{ plan, name, available }] — the three plans and which are on sale.
+//                                                No DB read, no client data, no secrets (docs/findable-site-plan-contract.md)
+//   submit      { lead_id?, answers{...} }     → save answers; for a KNOWN lead also fire the audit.
+//                                                answers.payment_plan: "full" | "six" | "twelve" or absent (= as before)
 //   revise      { onboarding_id, ... }         → pre-payment answer changes (refuses paid rows)
 //   sales_confirm { lead_id, onboarding_id, answers } → the client confirms / corrects the four situation facts
 //                                                on THEIR salesperson's sign-up (never the plan, price or seller)
@@ -226,6 +230,16 @@ Deno.serve(async (req) => {
     const action: string = typeof body.action === "string" ? body.action : "";
     const leadId: string | null =
       typeof body.lead_id === "string" && UUID_RE.test(body.lead_id.trim()) ? body.lead_id.trim() : null;
+
+    // ── plans ───────────────────────────────────────────────────────────────────
+    /* PUBLIC, READ-ONLY (2026-10-29, docs/findable-site-plan-contract.md): which of the three plans findable.live may
+       sell right now. Names and availability only (paymentPlans.publicPlanCatalogue) — no DB read, no client data, no
+       price ids, no secrets, so it costs nothing and needs no rate limit. Cached for 5 minutes. */
+    if (action === "plans") {
+      return new Response(JSON.stringify({ ok: true, plans: publicPlanCatalogue((n) => Deno.env.get(n)) }), {
+        status: 200, headers: { ...corsHeaders, "Content-Type": "application/json", "Cache-Control": "public, max-age=300" },
+      });
+    }
 
     // ── prefill ─────────────────────────────────────────────────────────────────
     if (action === "prefill") {
@@ -795,6 +809,18 @@ Deno.serve(async (req) => {
     // ── submit ──────────────────────────────────────────────────────────────────
     if (action === "submit") {
       const a = (body.answers ?? {}) as Record<string, unknown>;
+      /* 🔴 THE PAYMENT PLAN (2026-10-29, docs/findable-site-plan-contract.md, paymentPlans.readSignupPaymentPlan).
+         "full" | "six" | "twelve", written to the row findable-checkout and client-agreement read (they pick the first
+         payment and agreement v6 from it). ABSENT = exactly as before: no payment_plan on the row = the v5 offer, so
+         links already sent keep working. Anything else, or a plan not on sale yet, is REFUSED before a row exists.
+         In ALL THREE lists (answers / NEWER_COLS / optional). A salesperson's sign-up that resumes below keeps ITS
+         plan — never one from the browser. */
+      const planRead = readSignupPaymentPlan(a.payment_plan, (n) => Deno.env.get(n));
+      if (!planRead.ok) {
+        return json({ ok: false, error: planRead.error, detail: planRead.error === "plan_unavailable"
+          ? "That payment option is not available yet. Please choose another way to pay."
+          : "Unknown payment option. Reload the page and choose again." }, planRead.error === "plan_unavailable" ? 409 : 400);
+      }
       const confirmedLocation = clip(a.confirmed_location, 200);
       const gbpConsent = typeof a.gbp_consent === "string" && GBP_CONSENT.has(a.gbp_consent) ? a.gbp_consent : null;
       // The flow's single escape hatch ("I'll fill this in later") posts whatever exists so
@@ -976,6 +1002,7 @@ Deno.serve(async (req) => {
            Anything not a known value / a real yyyy-mm-dd day stores null. */
         design_choice: readDesignChoice(a.design_choice),
         agency_contract_ends: readContractEnd(a.agency_contract_ends),
+        payment_plan: planRead.plan,
         incomplete,
       };
 
@@ -989,7 +1016,7 @@ Deno.serve(async (req) => {
          sent it, the row saved with HTTP 200, and the value was null, because this function builds
          its insert from an explicit key list and an unlisted key simply disappears. A Squarespace
          customer who had said no to moving reached Stripe as a result. */
-      const NEWER_COLS = ["services_list", "areas_list", "website_manager", "website_manager_email", "competitor_name", "website_platform", "website_platform_other", "willing_to_migrate", "gbp_exists", "gbp_status", "gbp_verified", "must_not_say", "photos_status", "contact_name", "confirmed_phone", "business_website", "source", "website_addon", "plan_tier", "domain_status", "domain_owned", "domain_access", "domain_third_party", "site_rights", "authority_confirmed", "dns_permission", "materials_confirmed", "domain_escalated_at", "agency_contract", "services_not_offered", "top_requests", "design_choice", "agency_contract_ends"];
+      const NEWER_COLS = ["services_list", "areas_list", "website_manager", "website_manager_email", "competitor_name", "website_platform", "website_platform_other", "willing_to_migrate", "gbp_exists", "gbp_status", "gbp_verified", "must_not_say", "photos_status", "contact_name", "confirmed_phone", "business_website", "source", "website_addon", "plan_tier", "domain_status", "domain_owned", "domain_access", "domain_third_party", "site_rights", "authority_confirmed", "dns_permission", "materials_confirmed", "domain_escalated_at", "agency_contract", "services_not_offered", "top_requests", "design_choice", "agency_contract_ends", "payment_plan"];
       for (const col of NEWER_COLS) {
         if ((answers as Record<string, unknown>)[col] == null) delete (answers as Record<string, unknown>)[col];
       }
@@ -1006,7 +1033,7 @@ Deno.serve(async (req) => {
         // comes before website_manager: the shorter name is a substring of the longer one, so
         // testing it first would shed both columns on a single miss. Same for agency_contract_ends before
         // agency_contract.
-        const optional = ["business_website", "design_choice", "agency_contract_ends", "services_list", "areas_list", "website_manager_email", "website_manager", "website_platform_other", "website_platform", "willing_to_migrate", "gbp_verified", "gbp_exists", "gbp_status", "must_not_say", "photos_status", "competitor_name", "areas_wanted", "incomplete", "contact_email", "contact_name", "confirmed_phone", "business_address", "source", "website_addon", "plan_tier", "domain_status", "domain_owned", "domain_access", "domain_third_party", "site_rights", "authority_confirmed", "dns_permission", "materials_confirmed", "domain_escalated_at", "agency_contract", "services_not_offered", "top_requests"];
+        const optional = ["business_website", "design_choice", "agency_contract_ends", "services_list", "areas_list", "website_manager_email", "website_manager", "website_platform_other", "website_platform", "willing_to_migrate", "gbp_verified", "gbp_exists", "gbp_status", "must_not_say", "photos_status", "competitor_name", "areas_wanted", "incomplete", "contact_email", "contact_name", "confirmed_phone", "business_address", "source", "website_addon", "plan_tier", "domain_status", "domain_owned", "domain_access", "domain_third_party", "site_rights", "authority_confirmed", "dns_permission", "materials_confirmed", "domain_escalated_at", "agency_contract", "services_not_offered", "top_requests", "payment_plan"];
         const reduced = { ...answers } as Record<string, unknown>;
         let res = await attempt({ ...reduced, ...extra });
         let guard = 0;

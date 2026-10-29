@@ -97,6 +97,26 @@ export function unavailablePlans(env: (name: string) => string | undefined): Par
   return out;
 }
 
+/* ── findable.live's SELF-SERVICE SIGN-UP (2026-10-29, docs/findable-site-plan-contract.md) ── */
+export type SignupPlanRead =
+  | { ok: true; plan: PaymentPlan | null }
+  | { ok: false; error: 'invalid_payment_plan' | 'plan_unavailable' };
+/** The plan a findable.live sign-up sends (fn findable-onboarding `submit`, answers.payment_plan).
+ *  Absent / null / '' → plan null: the row is written exactly as before plans (blank = the v5 offer), so links
+ *  already sent keep working. Only the three CLIENT plans are accepted — never legacy_twelve (staff only) or anything
+ *  else. A plan whose Stripe price is not set up is refused here, before a row exists (checkout refuses it too). */
+export function readSignupPaymentPlan(raw: unknown, env: (name: string) => string | undefined): SignupPlanRead {
+  if (raw === undefined || raw === null || raw === '') return { ok: true, plan: null };
+  if (!isClientPaymentPlan(raw)) return { ok: false, error: 'invalid_payment_plan' };
+  if (!planAvailable(raw, env)) return { ok: false, error: 'plan_unavailable' };
+  return { ok: true, plan: raw };
+}
+/** The PUBLIC list of plans (fn findable-onboarding `plans`): id, name, on sale. Nothing else — no client data, no
+ *  price ids, no secrets. The staff-only plan is never listed. */
+export function publicPlanCatalogue(env: (name: string) => string | undefined): { plan: PaymentPlan; name: string; available: boolean }[] {
+  return CLIENT_PAYMENT_PLANS.map((p) => ({ plan: p, name: PAYMENT_PLAN_NAME[p], available: planAvailable(p, env) }));
+}
+
 /** Recurring payments Stripe takes after the sign-up payment. Derived — never write the number. */
 export const recurringPaymentsForPlan = (p: PaymentPlan): number => PAYMENT_PLAN_SPEC[p].totalPayments - 1;
 /** Does this plan need a Stripe subscription after checkout? */
