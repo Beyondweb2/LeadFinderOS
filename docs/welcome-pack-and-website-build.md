@@ -221,3 +221,23 @@ Branch `feat/welcome-pack-next-action`. Closes the last open item above: the pac
   managers" (support.google.com/business/answer/3403100) on 2026-10-29. The cover's ask now points to it instead of the
   shared `GBP_ADD_STEPS` (which omits Google's "More" step; it is byte-locked with findable-site, so it was not edited
   here — fix both repos together). No Bing Places in the pack (it never covered it).
+
+## 2026-10-29 (later) — the welcome pack goes on WhatsApp
+
+Branch `feat/welcome-pack-whatsapp`. `welcome_pack_send` defaults to WhatsApp (`src/lib/welcomePackWhatsApp.ts`
+`decideWelcomePackWhatsApp`): no phone / no WhatsApp / landline / opted out / wrong number → nothing (email offered);
+opt-out check failed → nothing; outside send hours (`replyWindowOpenNow`, the Inbox rule) → nothing now; inbound within
+24 hours → FREE TEXT through fn send-whatsapp-message (its own window, QA, archived and emergency-stop rules decide last);
+otherwise the `welcome_pack_ready` template — **not wired** (`WELCOME_PACK_TEMPLATE_WIRED = false`), so it refuses with
+the copy text even once Meta approves it. Wording for Meta: `docs/welcome-pack-whatsapp-template.md`.
+- **RED quality / cold volume (checked 2026-10-29):** the number-health RED pause and the daily cap live only in
+  `process-whatsapp-queue`; fn send-whatsapp-message has no health check. A free-text send carries no template, so
+  `isColdOutreachTemplate` and the cold-opener rules never apply. When the template is wired it must go in
+  `CONTINUATION_TEMPLATES`, or the sender will treat it as cold.
+- **Test:** `mode: test_send` in fn send-whatsapp-message now also takes free text; destination is still the
+  `WHATSAPP_TEST_NUMBER` secret only, lead-free, nothing recorded. Meta delivers free text only while that number's own
+  24-hour window is open. BUILD_ID `2026-10-29b-test-send-text`.
+- **Email:** fallback only (the WhatsApp decision offers it, or `whatsapp_failed` after a failed send).
+  `welcome_pack_sends.channel` (migration `20261130120000`, applied, read back) records the route.
+- Why the template was not registered now: `_shared/whatsapp-send.ts` reaches 17 functions incl. `stripe-webhook` and
+  the held `whatsapp-status`. Do it in its own change after Meta approves.

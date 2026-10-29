@@ -111,7 +111,9 @@ const CAPABILITIES = ["dry_run", "build_phase_hold", "routing_leaf", "any_approv
    2026-10-22a: Australia is a WhatsApp market (its own switch); its Inbox hours are read in the lead's zone (src/lib/auLeadZone.ts). */
 /* 2026-10-26a: the admin dashboard's six templates (src/lib/dashboardTemplates.ts), admin only, template_vars.needed_item.
    2026-10-26b: a dashboard template to the same lead again within DASHBOARD_RESEND_WINDOW_MS, or while one is queued, is refused. */
-const BUILD_ID = "2026-10-29a-payment-options";
+/* 2026-10-29b: test_send also takes FREE TEXT (body.body, no template) — still only to WHATSAPP_TEST_NUMBER, still lead-free
+   (the welcome pack's "Send a test to me", paid-client-hub). */
+const BUILD_ID = "2026-10-29b-test-send-text";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -291,6 +293,15 @@ Deno.serve(async (req) => {
       if (!dest) return json({ ok: false, error: "test_number_not_configured" }, 400);
       if (to && to !== dest) return json({ ok: false, error: "phone_not_the_test_number" }, 403);
 
+      /* FREE TEXT (2026-10-29b): the same destination, the same lead-free rules, the real textPayload. Meta delivers it
+         only while the test number's own 24-hour window is open, and its refusal comes back verbatim. */
+      if (!templateName && text) {
+        const envT = resolveWhatsAppEnv();
+        if (!envT.live) return json({ ok: false, error: "not_live", detail: "WHATSAPP_TEST_MODE is on, or the WhatsApp secrets are missing — nothing was sent." }, 400);
+        const rt = await sendViaGraph(envT.accessToken, envT.phoneNumberId, dest, textPayload(text));
+        console.log(`[send-whatsapp-message] test_send text -> ${dest}: ${rt.ok ? "ok " + rt.messageId : "FAILED " + rt.error}`);
+        return json({ ok: rt.ok, mode: "test_send", template: null, to: dest, messageId: rt.messageId, failCode: rt.failCode ?? null, error: rt.error, errorParts: rt.errorParts ?? null });
+      }
       if (!templateName) return json({ ok: false, error: "empty_message" }, 400);
       const entry = WA_TEMPLATES[templateName];
       if (!entry) return json({ ok: false, error: "unknown_template", detail: templateName }, 400);

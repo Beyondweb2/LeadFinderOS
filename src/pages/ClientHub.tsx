@@ -1,8 +1,8 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
-import { AlertCircle, AlertTriangle, BookOpen, CalendarDays, CheckCircle2, Clipboard, ClipboardEdit, ExternalLink, FileCode2, FileSignature, FileText, Gauge, Gift, Globe, Layers, Lightbulb, Loader2, Lock, Mail, Play, RefreshCw, Save, Trophy, UsersRound } from 'lucide-react';
+import { AlertCircle, AlertTriangle, BookOpen, CalendarDays, CheckCircle2, Clipboard, ClipboardEdit, ExternalLink, FileCode2, FileSignature, FileText, Gauge, Gift, Globe, Layers, Lightbulb, Loader2, Lock, Mail, MessageCircle, Play, RefreshCw, Save, Trophy, UsersRound } from 'lucide-react';
 import { invokePaidBaseline, type PaidBaseline } from '@/lib/paidBaseline';
-import { EdgeAuthError, edgeErrorMessage, invokeEdge } from '@/lib/edgeInvoke';
+import { EdgeAuthError, EdgeFunctionError, edgeErrorMessage, invokeEdge } from '@/lib/edgeInvoke';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogTrigger } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
@@ -474,36 +474,56 @@ function AgreementRecordBlock({ record }: { record: SignedAgreementRecord }) {
   </div>;
 }
 
-/* SEND (Paul, 2026-10-29): the pack's link by email, ONLY when Paul presses Send (paid-client-hub welcome_pack_send).
-   "Send a test to me" goes to Paul's own address only and is not recorded. A real send is recorded, which takes the
-   "Send welcome pack" row off What needs you; a second real send needs Resend. */
+/* SEND (Paul, 2026-10-29): the pack's link ON WHATSAPP, ONLY when Paul presses Send (paid-client-hub welcome_pack_send,
+   through fn send-whatsapp-message and all its rules). Outside the 24-hour window it needs the welcome_pack_ready template;
+   until that works, the send refuses and "Copy WhatsApp message" has the full text. "Email instead" shows only for a client
+   who cannot get WhatsApp, or after a WhatsApp send failed. "Send a test to me" goes to Paul's own WhatsApp test number
+   only and is not recorded. A real send (either route) is recorded, which takes the row off What needs you. */
+type WaView = { route: 'text' | 'template' | 'none'; reason: string; say: string; emailFallback: boolean };
+/* Refusals that are about WhatsApp itself (so email is offered), against ones that only need waiting or the template. */
+const WA_FAILED_CODES_NOT = new Set(['template_not_approved', 'template_not_wired', 'outside_hours', 'optout_unknown', 'already_sent', 'not_ready', 'no_public_link', 'not_paid', 'client_closed']);
 function WelcomePackStage({ lead, audit, toEmail }: { lead: AnyRecord; audit: AnyRecord | null; toEmail: string | null }) {
   const { toast } = useToast();
   const [busy, setBusy] = useState(false);
-  const [sending, setSending] = useState<'' | 'send' | 'test'>('');
-  const [lastSent, setLastSent] = useState<{ sent_at: string; sent_to: string } | null>(null);
+  const [sending, setSending] = useState<'' | 'send' | 'test' | 'email'>('');
+  const [lastSent, setLastSent] = useState<{ sent_at: string; sent_to: string; channel?: string } | null>(null);
+  const [wa, setWa] = useState<WaView | null>(null);
+  const [copyText, setCopyText] = useState('');
+  const [waFailed, setWaFailed] = useState(false);
+  const [note, setNote] = useState('');
   const ready = welcomePackReadiness(lead as { baseline_audit_id?: string | null }, audit);
   const url = ready.canShare && ready.shortCode ? welcomePackUrl(ready.shortCode) : '';
   const closed = !!lead.service_terminated_at || lead.status === 'refunded';
-  useEffect(() => {
-    let live = true;
-    call({ action: 'welcome_pack_status', lead_id: lead.id }).then((r) => { if (live) setLastSent((r.last_sent as typeof lastSent) ?? null); }).catch(() => { /* status only; Send still refuses a duplicate on the server */ });
-    return () => { live = false; };
+  const loadStatus = useCallback(async () => {
+    const r = await call({ action: 'welcome_pack_status', lead_id: lead.id });
+    setLastSent((r.last_sent as typeof lastSent) ?? null);
+    setWa((r.whatsapp as WaView | null) ?? null);
+    setCopyText(String(r.copy_text ?? ''));
   }, [lead.id]);
+  useEffect(() => { void loadStatus().catch(() => { /* status only; Send still decides on the server */ }); }, [loadStatus]);
 
-  const send = async (test: boolean) => {
-    if (!test && !window.confirm(lastSent
-      ? `Already sent to ${lastSent.sent_to}. Send the welcome pack again to ${toEmail || 'the client'}?`
-      : `Email the welcome pack to ${toEmail || 'the client'} now?`)) return;
-    setSending(test ? 'test' : 'send');
+  const send = async (mode: 'send' | 'test' | 'email') => {
+    if (mode !== 'test' && !window.confirm(lastSent
+      ? `Already sent to ${lastSent.sent_to}. Send the welcome pack again${mode === 'email' ? ` by email to ${toEmail || 'the client'}` : ' on WhatsApp'}?`
+      : mode === 'email' ? `Email the welcome pack to ${toEmail || 'the client'} now?` : 'Send the welcome pack to the client on WhatsApp now?')) return;
+    setSending(mode);
     try {
-      const res = await call({ action: 'welcome_pack_send', lead_id: lead.id, ...(test ? { test: true } : {}), ...(!test && lastSent ? { resend: true } : {}) });
-      if (!test) setLastSent((res.last_sent as typeof lastSent) ?? null);
-      toast({ title: test ? `Test sent to ${String(res.sent_to)}` : `Welcome pack sent to ${String(res.sent_to)}` });
+      const res = await call({
+        action: 'welcome_pack_send', lead_id: lead.id,
+        ...(mode === 'test' ? { test: true } : {}), ...(mode === 'email' ? { channel: 'email', ...(waFailed ? { whatsapp_failed: true } : {}) } : {}),
+        ...(mode !== 'test' && lastSent ? { resend: true } : {}),
+      });
+      if (res.simulated) { setNote(String(res.detail ?? 'Simulated: nothing was delivered.')); return; }
+      if (mode !== 'test') { setLastSent((res.last_sent as typeof lastSent) ?? null); setWaFailed(false); setNote(''); }
+      toast({ title: mode === 'test' ? 'Test sent to your WhatsApp' : `Welcome pack sent ${res.channel === 'email' ? 'by email' : 'on WhatsApp'} to ${String(res.sent_to)}` });
     } catch (e) {
-      toast({ title: test ? 'Test did not send' : 'Welcome pack did not send', description: edgeErrorMessage(e, 'Try again'), variant: 'destructive' });
+      const code = e instanceof EdgeFunctionError ? e.code : '';
+      if (mode === 'send' && code && !WA_FAILED_CODES_NOT.has(code)) setWaFailed(true);
+      setNote(edgeErrorMessage(e, 'Try again'));
+      toast({ title: mode === 'test' ? 'Test did not send' : 'Welcome pack did not send', description: edgeErrorMessage(e, 'Try again'), variant: 'destructive' });
     } finally { setSending(''); }
   };
+  const emailOffered = !closed && (wa?.emailFallback === true || waFailed);
 
   const download = async () => {
     setBusy(true);
@@ -537,16 +557,24 @@ function WelcomePackStage({ lead, audit, toEmail }: { lead: AnyRecord; audit: An
     </div>}
     {ready.state === 'ready' && url && <div className="flex flex-wrap gap-2 pt-1">
       {/* An ended or refunded client is sent nothing; the test (to Paul only) still works on their pack. */}
-      {!closed && <Button size="sm" disabled={!!sending} onClick={() => void send(false)}>
-        {sending === 'send' ? <Loader2 className="mr-1 h-4 w-4 animate-spin"/> : <Mail className="mr-1 h-4 w-4"/>}{lastSent ? 'Resend welcome pack' : 'Send welcome pack'}
+      {!closed && <Button size="sm" disabled={!!sending} onClick={() => void send('send')}>
+        {sending === 'send' ? <Loader2 className="mr-1 h-4 w-4 animate-spin"/> : <MessageCircle className="mr-1 h-4 w-4"/>}{lastSent ? 'Resend welcome pack' : 'Send welcome pack'}
       </Button>}
-      <Button size="sm" variant="outline" disabled={!!sending} onClick={() => void send(true)}>
-        {sending === 'test' ? <Loader2 className="mr-1 h-4 w-4 animate-spin"/> : <Mail className="mr-1 h-4 w-4"/>}Send a test to me
+      <Button size="sm" variant="outline" disabled={!copyText} onClick={() => { void copy(copyText); toast({ title: 'WhatsApp message copied' }); }}>
+        <Clipboard className="mr-1 h-4 w-4"/>Copy WhatsApp message
       </Button>
+      <Button size="sm" variant="outline" disabled={!!sending} onClick={() => void send('test')}>
+        {sending === 'test' ? <Loader2 className="mr-1 h-4 w-4 animate-spin"/> : <MessageCircle className="mr-1 h-4 w-4"/>}Send a test to me
+      </Button>
+      {emailOffered && <Button size="sm" variant="ghost" className="text-xs" disabled={!!sending} onClick={() => void send('email')}>
+        {sending === 'email' ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin"/> : <Mail className="mr-1 h-3.5 w-3.5"/>}Email instead
+      </Button>}
     </div>}
     {ready.state === 'ready' && url && <p className="text-xs text-muted-foreground">
-      {lastSent ? `Sent ${ukWhen(lastSent.sent_at)} to ${lastSent.sent_to}.` : closed ? 'This client has ended or was refunded, so the pack is not sent. A test still goes to you.' : `Not sent yet. Send emails the link to ${toEmail || 'the client'}. Nothing sends on its own.`}
+      {lastSent ? `Sent ${ukWhen(lastSent.sent_at)} ${lastSent.channel === 'whatsapp' ? 'on WhatsApp' : 'by email'} to ${lastSent.sent_to}.` : closed ? 'This client has ended or was refunded, so the pack is not sent. A test still goes to your WhatsApp.' : 'Not sent yet. Send goes on WhatsApp. Nothing sends on its own.'}
+      {!lastSent && !closed && wa && ` ${wa.say}`}
     </p>}
+    {note && <p className="text-xs text-amber-700 dark:text-amber-300">{note}</p>}
     {ready.state === 'ready' && url && <p className="break-all text-xs text-muted-foreground">{url}</p>}
   </Stage>;
 }

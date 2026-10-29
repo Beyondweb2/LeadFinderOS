@@ -6,7 +6,10 @@ import { isUpstreamOutage } from "../_shared/operator-auth.ts";
 import { refusalBody, requireAdmin } from "../_shared/access.ts";
 import { renderWelcomePack } from "../_shared/welcome-pack-render.ts";
 import { welcomePackReadiness, welcomePackUrl } from "../../../src/lib/welcomePackData.ts";
-import { sendableEmail, welcomePackEmail, WELCOME_PACK_FROM, WELCOME_PACK_REPLY_TO, WELCOME_PACK_TEST_TO } from "../../../src/lib/welcomePackEmail.ts";
+import { sendableEmail, welcomePackEmail, WELCOME_PACK_FROM, WELCOME_PACK_REPLY_TO } from "../../../src/lib/welcomePackEmail.ts";
+import { decideWelcomePackWhatsApp, welcomePackWhatsAppText, WELCOME_PACK_TEMPLATE_NAME, WELCOME_PACK_TEMPLATE_WIRED } from "../../../src/lib/welcomePackWhatsApp.ts";
+import { checkOptedOut, checkWrongNumber } from "../_shared/suppression.ts";
+import { replyWindowOpenNow } from "../_shared/inbox-schedule.ts";
 import { buildReportData, seoStyleForAudit, type QueueRow, type RunRow } from "../../../src/lib/auditReport.ts";
 import { isAggregatorUrl } from "../_shared/aggregators.ts";
 import { normaliseWebsiteBuild } from "../../../src/lib/websiteBuildState.ts";
@@ -1236,65 +1239,144 @@ Deno.serve(async (req) => {
       return json({ ok: true, html: packed.html });
     }
 
-    /* ══ WELCOME PACK EMAIL (Paul, 2026-10-29) — sent ONLY when Paul presses Send ═══════════════════
-       welcome_pack_status: the last real send (read only).
-       welcome_pack_send: emails the client the link to their pack (findable.live/w/<code>) through the SAME
-         Resend call shape the agreement link uses, then records it in welcome_pack_sends — which is what takes
-         the "Send welcome pack" row off What needs you.
-       ⛔ `test: true` goes to WELCOME_PACK_TEST_TO (Paul) only, whatever the body says, and is NOT recorded.
-       ⛔ Refused: not this owner's client, not paid, ended/refunded, pack not ready or no public link, no address,
-          a QA lead's address outside the sink (qaEmailHold), or already sent without `resend: true`. */
+/* ══ WELCOME PACK — SENT ON WHATSAPP, ONLY WHEN PAUL PRESSES SEND (Paul, 2026-10-29) ═════════════════
+       welcome_pack_status: the last real send, plus how a WhatsApp send would go right now (decideWelcomePackWhatsApp)
+         and the full message for "Copy WhatsApp message". Read only.
+       welcome_pack_send (channel 'whatsapp', the default): free text through fn send-whatsapp-message — ITS rules
+         decide last (24-hour window, QA, suppression, archived, the emergency stop). Outside the 24 hours it needs the
+         welcome_pack_ready template, which is not wired yet, so it refuses with the copy text.
+       welcome_pack_send (channel 'email'): ONLY as the fallback — no phone / no WhatsApp / opted out / wrong number,
+         or a WhatsApp send that just failed (`whatsapp_failed`). Same Resend call as the agreement link.
+       Either route records ONE welcome_pack_sends row (with its channel), which takes the row off What needs you.
+       ⛔ `test: true` goes to WHATSAPP_TEST_NUMBER only (fn send-whatsapp-message mode test_send — the destination
+          is the secret, never this request) and is NEVER recorded.
+       ⛔ Refused: not this owner's client, not paid, ended/refunded (real sends), pack not ready or no public link,
+          already sent without `resend: true`. */
     if (action === "welcome_pack_status" || action === "welcome_pack_send") {
       const leadId = text(body.lead_id);
       const { data: lead, error: leadErr } = await service.from("outreach_leads")
-        .select("id,business_name,email,contact_name,amount_paid,status,service_terminated_at,baseline_audit_id").eq("id", leadId).eq("user_id", user.id).maybeSingle();
+        .select("id,business_name,email,contact_name,amount_paid,status,service_terminated_at,baseline_audit_id,phone,country,line_type,whatsapp_delivery_status,whatsapp_ever_delivered")
+        .eq("id", leadId).eq("user_id", user.id).maybeSingle();
       if (leadErr) throw leadErr;
       if (!lead) return json({ ok: false, error: "client_not_found", detail: "This client is not in your paid-client list." }, 404);
-      const L = lead as { id: string; business_name: string | null; email: string | null; contact_name: string | null; amount_paid: number | null; status: string | null; service_terminated_at: string | null; baseline_audit_id: string | null };
+      const L = lead as { id: string; business_name: string | null; email: string | null; contact_name: string | null; amount_paid: number | null; status: string | null; service_terminated_at: string | null; baseline_audit_id: string | null; phone: string | null; country: string | null; line_type: string | null; whatsapp_delivery_status: string | null; whatsapp_ever_delivered: boolean | null };
       const loadSends = async () => {
-        const { data, error } = await service.from("welcome_pack_sends").select("sent_at,sent_to")
+        const { data, error } = await service.from("welcome_pack_sends").select("sent_at,sent_to,channel")
           .eq("lead_id", L.id).order("sent_at", { ascending: false }).limit(1);
         if (error) throw error;
-        return ((data ?? []) as Array<{ sent_at: string; sent_to: string }>)[0] ?? null;
+        return ((data ?? []) as Array<{ sent_at: string; sent_to: string; channel: string }>)[0] ?? null;
       };
-      if (action === "welcome_pack_status") return json({ ok: true, last_sent: await loadSends() });
+      const { data: ob } = await service.from("onboarding_responses").select("contact_email,contact_name")
+        .eq("lead_id", L.id).eq("status", "paid").order("updated_at", { ascending: false }).limit(1).maybeSingle();
+      const obRow = ob as { contact_email?: string | null; contact_name?: string | null } | null;
+      const contactName = text(obRow?.contact_name) || text(L.contact_name);
+      /* The pack must exist and have its public link: the same readiness the Stage 2 pill and the /w/ page use. */
+      const packUrl = async (): Promise<{ ok: true; url: string } | { ok: false; error: string; detail: string }> => {
+        const { data: audit, error: auditErr } = L.baseline_audit_id
+          ? await service.from("ai_audits").select("id,audit_purpose,baseline_completed_at,short_code").eq("id", L.baseline_audit_id).maybeSingle()
+          : { data: null, error: null };
+        if (auditErr) throw auditErr;
+        const ready = welcomePackReadiness({ baseline_audit_id: L.baseline_audit_id }, audit as never);
+        if (ready.state !== "ready") return { ok: false, error: "not_ready", detail: ready.reason };
+        if (!ready.canShare || !ready.shortCode || !ready.auditId) return { ok: false, error: "no_public_link", detail: "This pack has no public link, so it cannot be sent. Download it instead." };
+        /* Rendered once here so a pack that would refuse at the link is never sent. */
+        const packed = await renderWelcomePack(service, ready.auditId);
+        if (!packed.ok) return { ok: false, error: packed.error ?? "not_ready", detail: packed.detail ?? "The welcome pack is not ready yet." };
+        return { ok: true, url: welcomePackUrl(ready.shortCode) };
+      };
+      const digits = toWhatsAppDigits(L.phone, L.country);
+      /* How a WhatsApp send would go right now — every fact read positively; a failed opt-out read is null (refuses). */
+      const waDecision = async () => {
+        const [inb, optedOut, wrong, hoursOpen, tpl] = await Promise.all([
+          service.from("whatsapp_messages").select("created_at").eq("lead_id", L.id).eq("direction", "inbound").order("created_at", { ascending: false }).limit(1),
+          digits ? checkOptedOut(service, { phone: "+" + digits, leadId: L.id }) : Promise.resolve(false),
+          digits ? checkWrongNumber(service, "+" + digits) : Promise.resolve(false),
+          digits ? replyWindowOpenNow(service, "whatsapp", digits, new Date(), { leadId: L.id }).catch(() => false) : Promise.resolve(false),
+          templateAvailability(service, WELCOME_PACK_TEMPLATE_NAME),
+        ]);
+        return decideWelcomePackWhatsApp({
+          hasPhone: !!digits, capability: whatsAppCapabilityOf(L as never), optedOut, wrongNumber: wrong === true,
+          lastInboundAt: (((inb.data ?? []) as Row[])[0]?.created_at as string | undefined) ?? null, sendHoursOpen: hoursOpen === true,
+          templateStatus: tpl.status, templateWired: WELCOME_PACK_TEMPLATE_WIRED,
+        });
+      };
+
+      if (action === "welcome_pack_status") {
+        const p = await packUrl();
+        return json({
+          ok: true, last_sent: await loadSends(),
+          whatsapp: p.ok ? await waDecision() : null,
+          copy_text: p.ok ? welcomePackWhatsAppText({ contactName, businessName: text(L.business_name), url: p.url }) : null,
+        });
+      }
 
       const isTest = body.test === true;
+      const channel = body.channel === "email" ? "email" : "whatsapp";
       if (!carriesMoney(L)) return json({ ok: false, error: "not_paid", detail: "This client has not paid yet, so there is no welcome pack to send." }, 409);
-      /* A TEST (to Paul only) is allowed on an ended or refunded client, so the email can be checked on a real pack;
-         a REAL send to an ended or refunded client is refused. */
+      /* A TEST (to Paul's own WhatsApp only) is allowed on an ended or refunded client, so it can be checked on a real
+         pack; a REAL send to an ended or refunded client is refused. */
       const closed = clientClosed(L);
       if (closed && !isTest) return json({ ok: false, error: "client_closed", detail: closed === "ended" ? "This engagement has ended, so no welcome pack is sent." : "This client was refunded, so no welcome pack is sent." }, 409);
       const prior = await loadSends();
       if (!isTest && prior && body.resend !== true) {
         return json({ ok: false, error: "already_sent", detail: `Already sent to ${prior.sent_to}. Press Resend if you really mean to send it again.`, last_sent: prior }, 409);
       }
-      /* The pack must exist and have its public link: the same readiness the Stage 2 pill and the /w/ page use. */
-      const { data: audit, error: auditErr } = L.baseline_audit_id
-        ? await service.from("ai_audits").select("id,audit_purpose,baseline_completed_at,short_code").eq("id", L.baseline_audit_id).maybeSingle()
-        : { data: null, error: null };
-      if (auditErr) throw auditErr;
-      const ready = welcomePackReadiness({ baseline_audit_id: L.baseline_audit_id }, audit as never);
-      if (ready.state !== "ready") return json({ ok: false, error: "not_ready", detail: ready.reason }, 409);
-      if (!ready.canShare || !ready.shortCode || !ready.auditId) return json({ ok: false, error: "no_public_link", detail: "This pack has no public link, so it cannot be emailed. Download it instead." }, 409);
-      /* Rendered once here so a pack that would refuse at the link is never emailed. */
-      const packed = await renderWelcomePack(service, ready.auditId);
-      if (!packed.ok) return json({ ok: false, error: packed.error ?? "not_ready", detail: packed.detail ?? "The welcome pack is not ready yet." }, 409);
-      const url = welcomePackUrl(ready.shortCode);
+      const p = await packUrl();
+      if (!p.ok) return json({ ok: false, error: p.error, detail: p.detail }, 409);
+      const url = p.url;
+      const message = welcomePackWhatsAppText({ contactName, businessName: text(L.business_name), url });
+      const record = async (sentTo: string, via: "whatsapp" | "email", providerId: string | null) => {
+        const { error: logErr } = await service.from("welcome_pack_sends").insert({ lead_id: L.id, user_id: user.id, sent_by: user.id, sent_to: sentTo, pack_url: url, resend_id: providerId, channel: via });
+        if (logErr) {
+          /* The client HAS the message; only our record failed. Say so plainly rather than inviting a second send. */
+          await service.from("client_error_reports").insert({ error_id: "welcome_pack_send_not_recorded", message: logErr.message ?? String(logErr), context: { lead_id: L.id, channel: via } });
+          return json({ ok: false, error: "sent_not_recorded", detail: `Sent to ${sentTo}, but the send could not be recorded. Do not send it again.` }, 500);
+        }
+        return json({ ok: true, channel: via, sent_to: sentTo, last_sent: await loadSends() });
+      };
+      const callSender = async (payload: Row) => {
+        const anon = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
+        const res = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/send-whatsapp-message`, {
+          method: "POST", headers: { apikey: anon, Authorization: req.headers.get("authorization") ?? "", "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        return { res, out: await res.json().catch(() => ({})) as Row };
+      };
 
-      const { data: ob } = await service.from("onboarding_responses").select("contact_email,contact_name")
-        .eq("lead_id", L.id).eq("status", "paid").order("updated_at", { ascending: false }).limit(1).maybeSingle();
-      const obRow = ob as { contact_email?: string | null; contact_name?: string | null } | null;
-      const to = isTest ? WELCOME_PACK_TEST_TO : sendableEmail(text(body.to) || text(obRow?.contact_email) || text(L.email));
-      if (!to) return json({ ok: false, error: "no_email", detail: "There is no email address on file for this client. Add one first." }, 409);
-      if (!isTest) {
-        /* ⛔ QA (src/lib/qaSafety.ts): a test lead's pack goes ONLY to the QA sink. */
-        const qaRefusal = await qaEmailHold(service, String(L.id), to);
-        if (qaRefusal) return json({ ok: false, error: "qa_email_sink_only", detail: qaRefusal }, 409);
+      /* ── TEST: Paul's own WhatsApp (the sender's test number), never recorded ── */
+      if (isTest) {
+        const { res, out } = await callSender({ mode: "test_send", body: `[TEST] ${message}` });
+        if (out.error === "test_number_not_configured") return json({ ok: false, error: "test_number_not_configured", detail: "Needs you: no test WhatsApp number is stored (WHATSAPP_TEST_NUMBER), so no test was sent.", copy_text: message }, 409);
+        if (!res.ok || !out.ok) return json({ ok: false, error: String(out.error ?? "test_failed"), detail: `The test did not send: ${String(out.error ?? out.detail ?? "unknown")}. WhatsApp only delivers a normal message to your number if you messaged the business number in the last 24 hours.`, copy_text: message }, 409);
+        return json({ ok: true, test: true, channel: "whatsapp", sent_to: "your WhatsApp test number", last_sent: prior });
       }
+
+      /* ── REAL, ON WHATSAPP ── */
+      if (channel === "whatsapp") {
+        const d = await waDecision();
+        if (d.route !== "text") return json({ ok: false, error: d.reason, detail: d.say, copy_text: message, email_fallback: d.emailFallback }, 409);
+        const { res, out } = await callSender({ phone: L.phone, country: L.country ?? null, lead_id: L.id, body: message });
+        if (!res.ok || !out.ok) {
+          return json({ ok: false, error: String(out.error ?? "send_failed"), detail: `WhatsApp did not send it: ${String(out.reason ?? out.detail ?? out.error ?? "unknown")}. Copy the message, or email it instead.`, copy_text: message, email_fallback: true, whatsapp_failed: true }, 409);
+        }
+        /* Test mode / a QA fixture: the sender simulated it — nothing reached the client, so nothing is recorded as sent. */
+        if (out.simulated) return json({ ok: true, simulated: true, channel: "whatsapp", detail: "Simulated (test mode): nothing was delivered and nothing is recorded as sent." });
+        return await record("+" + String(digits ?? ""), "whatsapp", text(out.messageId) || null);
+      }
+
+      /* ── REAL, BY EMAIL — the fallback only ── */
+      const d = await waDecision();
+      if (!d.emailFallback && body.whatsapp_failed !== true) {
+        return json({ ok: false, error: "use_whatsapp", detail: "Email is only for clients who cannot get it on WhatsApp. Send it on WhatsApp, or copy the message." }, 409);
+      }
+      const to = sendableEmail(text(body.to) || text(obRow?.contact_email) || text(L.email));
+      if (!to) return json({ ok: false, error: "no_email", detail: "There is no email address on file for this client. Add one first, or copy the WhatsApp message." }, 409);
+      /* ⛔ QA (src/lib/qaSafety.ts): a test lead's pack goes ONLY to the QA sink. */
+      const qaRefusal = await qaEmailHold(service, String(L.id), to);
+      if (qaRefusal) return json({ ok: false, error: "qa_email_sink_only", detail: qaRefusal }, 409);
       const key = Deno.env.get("RESEND_API_KEY");
       if (!key) return json({ ok: false, error: "email_unconfigured", detail: "Email is not configured." }, 500);
-      const mail = welcomePackEmail({ businessName: text(L.business_name), contactName: text(obRow?.contact_name) || text(L.contact_name), url, test: isTest });
+      const mail = welcomePackEmail({ businessName: text(L.business_name), contactName, url });
       const res = await fetch("https://api.resend.com/emails", {
         method: "POST",
         headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
@@ -1302,18 +1384,10 @@ Deno.serve(async (req) => {
       });
       if (!res.ok) {
         const detail = (await res.text()).slice(0, 300);
-        await service.from("client_error_reports").insert({ error_id: "welcome_pack_email_failed", message: `${res.status} ${detail}`, context: { lead_id: L.id, test: isTest } });
-        return json({ ok: false, error: "email_failed", detail: "The email did not send. Try again in a moment." }, 502);
+        await service.from("client_error_reports").insert({ error_id: "welcome_pack_email_failed", message: `${res.status} ${detail}`, context: { lead_id: L.id } });
+        return json({ ok: false, error: "email_failed", detail: "The email did not send. Try again in a moment.", copy_text: message }, 502);
       }
-      const resendId = text(((await res.json().catch(() => ({}))) as { id?: unknown }).id) || null;
-      if (isTest) return json({ ok: true, test: true, sent_to: to, last_sent: prior });
-      const { error: logErr } = await service.from("welcome_pack_sends").insert({ lead_id: L.id, user_id: user.id, sent_by: user.id, sent_to: to, pack_url: url, resend_id: resendId });
-      if (logErr) {
-        /* The client HAS the email; only our record failed. Say so plainly rather than inviting a second send. */
-        await service.from("client_error_reports").insert({ error_id: "welcome_pack_send_not_recorded", message: logErr.message ?? String(logErr), context: { lead_id: L.id } });
-        return json({ ok: false, error: "sent_not_recorded", detail: `Sent to ${to}, but the send could not be recorded. Do not send it again.` }, 500);
-      }
-      return json({ ok: true, sent_to: to, last_sent: await loadSends() });
+      return await record(to, "email", text(((await res.json().catch(() => ({}))) as { id?: unknown }).id) || null);
     }
 
     /* ══ SECTION 5 — EVERYTHING THE REBUILD PROMPT IS GENERATED FROM ══════════════════════════════
