@@ -47,8 +47,8 @@ export function UgcFindPanel({ selectedIds, budget }: { selectedIds: string[]; b
   const [est, setEst] = useState<{ estUsd: number; refusal: string | null } | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [top, setTop] = useState(ENRICH_DEFAULT_TOP);
-  const [enrichEst, setEnrichEst] = useState<{ estUsd: number; extraUsd?: number; brands?: number; refusal?: string | null } | null>(null);
-  const [contactEst, setContactEst] = useState<{ estUsd: number; sites?: number; refusal?: string | null } | null>(null);
+  const [enrichEst, setEnrichEst] = useState<{ estUsd: number; extraUsd?: number; brands?: number; refusal?: string | null; researchBrands?: number; researchEstUsd?: number } | null>(null);
+  const [contactEst, setContactEst] = useState<{ estUsd: number; sites?: number; refusal?: string | null; researchBrands?: number; researchEstUsd?: number } | null>(null);
 
   const req = (): SearchRequest => ({ source, niche, country, itemCap: cap, keyword: keyword || undefined, creators: creators.split(/[\n,]/).map((s) => s.trim()).filter(Boolean), placeTypes: types, area });
   /* Any change to the search clears the shown estimate: a run always starts from the estimate it shows. */
@@ -133,7 +133,7 @@ export function UgcFindPanel({ selectedIds, budget }: { selectedIds: string[]; b
             <div className="mt-2 flex flex-wrap items-center gap-2">
               <Button variant="outline" size="sm" disabled={!selectedIds.length || !!busy} onClick={() => void go('cest', async () => { const r = await actions.contacts(selectedIds.slice(0, UGC_MAX_CONTACT_BRANDS), true); setContactEst(r); })}>
                 Show cost for {Math.min(selectedIds.length, UGC_MAX_CONTACT_BRANDS)} selected</Button>
-              {contactEst && <span>Up to <b>{formatUsd(contactEst.estUsd)}</b> ({contactEst.sites} sites)</span>}
+              {contactEst && <span data-testid="ugc-contacts-estimate">Up to <b>{formatUsd(contactEst.estUsd)}</b> ({contactEst.sites} sites){contactEst.researchBrands ? <>, then research for the top {contactEst.researchBrands}: up to <b>{formatUsd(contactEst.researchEstUsd)}</b></> : null}</span>}
               <Button size="sm" disabled={!contactEst || !!contactEst.refusal || !!busy} onClick={() => void go('crun', async () => { await actions.contacts(selectedIds.slice(0, UGC_MAX_CONTACT_BRANDS)); setContactEst(null); toast({ title: 'Finding contacts…' }); })}>Find contacts</Button>
             </div>
             {contactEst?.refusal && <Callout tone="amber" className="mt-2">{refusalText(contactEst.refusal)}</Callout>}
@@ -143,7 +143,7 @@ export function UgcFindPanel({ selectedIds, budget }: { selectedIds: string[]; b
             <div className="mt-2 flex flex-wrap items-center gap-2">
               <label className="text-xs font-medium">Top <Input className="ml-1 inline-block h-8 w-20" type="number" min={1} max={ENRICH_MAX_TOP} value={top} onChange={(e) => setTop(Math.max(1, Math.min(ENRICH_MAX_TOP, Number(e.target.value) || 1)))} /> brands</label>
               <Button variant="outline" size="sm" disabled={!!busy} onClick={() => void go('eest', async () => setEnrichEst(await actions.namedContacts(top, true)))}>Show cost</Button>
-              {enrichEst && <span data-testid="ugc-enrich-estimate">Up to <b>{formatUsd(enrichEst.estUsd)}</b> for {enrichEst.brands} brands — of which <b>{formatUsd(enrichEst.extraUsd)}</b> is the named-contact extra</span>}
+              {enrichEst && <span data-testid="ugc-enrich-estimate">Up to <b>{formatUsd(enrichEst.estUsd)}</b> for {enrichEst.brands} brands — of which <b>{formatUsd(enrichEst.extraUsd)}</b> is the named-contact extra{enrichEst.researchBrands ? <>; then research for the top {enrichEst.researchBrands}: up to <b>{formatUsd(enrichEst.researchEstUsd)}</b></> : null}</span>}
               <Button size="sm" disabled={!enrichEst || !!enrichEst.refusal || !!busy} onClick={() => void go('erun', async () => { await actions.namedContacts(top); setEnrichEst(null); toast({ title: 'Finding named contacts…' }); })}>Find named contacts</Button>
             </div>
             {enrichEst?.refusal && <Callout tone="amber" className="mt-2">{refusalText(enrichEst.refusal)}</Callout>}

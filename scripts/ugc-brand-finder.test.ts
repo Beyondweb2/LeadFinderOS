@@ -11,7 +11,7 @@ import { execSync } from 'node:child_process';
 import { adsLibraryTierB, tierFor, templateFamilyFor } from '../src/lib/ugc/tiers.ts';
 import { addBusinessDays, bestContact, contactOptions, emailKind, followUps } from '../src/lib/ugc/contactOrder.ts';
 import {
-  CTA, HUME_PROOF, MAX_PITCH_ATTEMPTS, WHATSAPP_ASK_DRAFT, chooseTemplate, emailStructureProblems, hookProblems, researchMissing, copyEmailPayload, fillWhatsAppAsk, gmailComposeUrl, pitchProblems,
+  CTA, HUME_PROOF, MAX_PITCH_ATTEMPTS, WHATSAPP_ASK_DRAFT, chooseTemplate, researchFields, emailStructureProblems, hookProblems, researchMissing, copyEmailPayload, fillWhatsAppAsk, gmailComposeUrl, pitchProblems,
   runPitchPipeline, safeSignoffHtml, unverifiedFigures, whatsappChatUrl, type PitchPlan, type PitchSystem, type ResearchFields, type WriteOut,
 } from '../src/lib/ugc/pitch.ts';
 import { brandVerdict } from '../src/lib/ugc/brandRules.ts';
@@ -21,6 +21,7 @@ import {
 import { parseSheetDate, pitchedKeySet, rowsFromCsv, rowsFromWorkbook } from '../src/lib/ugc/pitchLog.ts';
 import { parsePitchSystem } from '../src/lib/ugc/pitchSystemImport.ts';
 import { ENRICH_LEADS_PER_BRAND, UGC_APIFY_STOP_PCT, UGC_MAX_ITEM_CAP, clampCap, estimateRunUsd, ugcSpendRefusal } from '../src/lib/ugc/config.ts';
+import { AUTO_RESEARCH_TOP, RESEARCH_USD_CEILING, htmlLinks, htmlToText, instagramFromLinks, pickProductUrl, pickShippingUrl, researchGaps, reviewsLine, verifyResearch, type FetchedPage } from '../src/lib/ugc/research.ts';
 import { inviteUgcMember } from '../supabase/functions/_shared/ugc-member-invite.ts';
 
 let f = 0;
@@ -119,7 +120,7 @@ console.log('\n── pitch pipeline ──');
   };
   const liveResearch: ResearchFields = { ...research, brand: 'Feel Reformed', product: null, product_detail: null };
   const livePlan: PitchPlan = { track: 'brand', template: 'ad_idea_v2', variant: 'standard' };
-  ok(researchMissing(liveResearch, { kind: 'none' }, 'brand').join() === 'product,verified product detail,contact', 'the live brand was not Ready: no product, no verified detail, no contact');
+  ok(researchMissing(liveResearch, { kind: 'none' }, 'brand').join() === 'product,verified product detail,what the brand is pushing now,reviews (or a review source read with none found),contact', 'the live brand was not Ready: no product, verified detail, pushing-now, reviews or contact');
   let calls = 0;
   const rl = await runPitchPipeline({ write: async () => { calls++; return live; }, review: passReview }, sys, livePlan, liveResearch, researchMissing(liveResearch, { kind: 'none' }, 'brand'));
   ok(rl.outcome === 'needs_jess' && calls === 0 && /Research missing/.test(rl.why), '…so it is Needs Jess with NO model call (her readiness rule)');
@@ -222,6 +223,47 @@ console.log('\n── importing her pitch-system.md ──');
   ok(r.signoff_html === '<a href="https://example.com/portfolio">View my portfolio</a><br><br>Many thanks,<br>Sam<br><a href="https://example.com/links">@SampleHandle</a>', 'her sign-off rebuilt with live links');
   ok(r.missing.length === 0, 'every template found');
   ok(parsePitchSystem('# Title\n## About Jess\nFacts.\n## Rates\n£1').about_jess === 'Facts.', 'markdown headings still read');
+}
+
+console.log('\n── auto-research (never guessed) ──');
+{
+  const homeHtml = `<html><body><h1>Calm skin starts here</h1><p>Our best-seller, the Barrier Balm, is back in stock.</p>
+    <a href="/products/barrier-balm">Barrier Balm</a><a href="/pages/shipping">Shipping</a><a href="https://www.instagram.com/glowlab/">Instagram</a>
+    <script>var x = "Barrier Balm cures everything";</script></body></html>`;
+  const links = htmlLinks(homeHtml, 'https://glowlab.example/');
+  ok(!htmlToText(homeHtml).includes('cures everything'), 'scripts are never read as page text');
+  ok(pickProductUrl(links, 'glowlab.example') === 'https://glowlab.example/products/barrier-balm', 'ONE product page from the homepage’s own links');
+  ok(pickShippingUrl(links, 'glowlab.example') === 'https://glowlab.example/pages/shipping', 'the shipping page from its own links');
+  ok(instagramFromLinks(links)?.handle === 'glowlab', 'the Instagram handle from the site’s own link (no model)');
+  const pages: FetchedPage[] = [
+    { kind: 'home', url: 'https://glowlab.example/', ok: true, text: htmlToText(homeHtml), links },
+    { kind: 'product', url: 'https://glowlab.example/products/barrier-balm', ok: true, text: 'Barrier Balm. Melts into skin in seconds, so it goes on straight after cleansing. 50ml.', links: [] },
+    { kind: 'reviews', url: 'https://uk.trustpilot.com/review/glowlab.example', ok: true, text: 'Reviews. So easy to use every morning. Wish the tub was bigger.', links: [] },
+  ];
+  const r = verifyResearch({
+    product: { value: 'Barrier Balm', url: pages[1].url, quote: 'Barrier Balm. Melts into skin in seconds' },
+    product_detail: { value: 'melts into skin straight after cleansing', url: pages[1].url, quote: 'Melts into skin in seconds, so it goes on straight after cleansing' },
+    pushing_now: { value: 'Barrier Balm back in stock', url: pages[0].url, quote: 'Our best-seller, the Barrier Balm, is back in stock' },
+    reviews: { buy_reason: { value: 'easy daily use', url: pages[2].url, quote: 'So easy to use every morning' }, hesitation: { value: 'tub size', url: pages[2].url, quote: 'Wish the tub was bigger' } },
+    ships_to_thailand: { ships: true, value: 'ships worldwide', url: pages[0].url, quote: 'We ship worldwide including Thailand' },
+  }, pages);
+  ok(r.product?.value === 'Barrier Balm' && r.product_detail?.url === pages[1].url && r.pushing_now !== null, 'fields whose quote is on the cited page are kept, with their source URL');
+  ok(r.ships_to_thailand === null && r.rejected.some((x) => x.startsWith('ships_to_thailand')), 'a quote that is NOT on the page is rejected: unknown stays unknown');
+  ok(reviewsLine(r.reviews) === 'buy reason: easy daily use; hesitation: tub size', 'her reviews line');
+  ok(researchGaps(r).length === 0, 'research complete when product, detail, pushing-now and reviews are verified');
+  const wrongPage = verifyResearch({ pushing_now: { value: 'x', url: 'https://elsewhere.example/', quote: 'Our best-seller, the Barrier Balm, is back in stock' } }, pages);
+  ok(wrongPage.pushing_now === null, 'a source that is not one of the pages read is rejected');
+  const noReviews = verifyResearch({ reviews: { none_found: true } }, pages.filter((p) => p.kind !== 'reviews'));
+  ok(noReviews.reviews === null, '"none found" is never recorded when no review source was read');
+  const readNone = verifyResearch({ reviews: { none_found: true } }, pages);
+  ok(reviewsLine(readNone.reviews) === 'Reviews: none found', '…and is recorded when the review page was read and had none');
+  const rf = researchFields({ name: 'Glow Lab', research: { verified: r } });
+  ok(rf.product === 'Barrier Balm' && rf.pushing_now === 'Barrier Balm back in stock' && !!rf.reviews && researchMissing(rf, { kind: 'named' }, 'brand').length === 0, 'verified research makes the brand Ready (with a contact)');
+  ok(RESEARCH_USD_CEILING > 0 && AUTO_RESEARCH_TOP === 10, 'research has a per-brand ceiling and an automatic cap of 10 brands per contacts run');
+  const FN2 = read('supabase/functions/ugc-brands/index.ts');
+  ok(/SITE_CHECK_HEADERS/.test(FN2) && /isPublicHttpUrl\(url\)/.test(FN2), 'research reads pages under the one honest crawler name, public addresses only');
+  ok(/research_status: "queued"/.test(FN2) && /\.slice\(0, AUTO_RESEARCH_TOP\)/.test(FN2), 'a finished contacts run queues research for its top brands only (capped)');
+  ok(/UGC_PITCH_MODEL = 'gpt-4o'/.test(read('src/lib/ugc/config.ts')), 'writer, reviewer and research use gpt-4o');
 }
 
 console.log('\n── money ──');
