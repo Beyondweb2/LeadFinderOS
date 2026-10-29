@@ -56,7 +56,8 @@ import type { ResearchFinding, WarmLeadResearch } from './warmLeadResearch.ts';
 import { classifyLeadWebsite, type SiteSource } from './leadWebsiteKind.ts';
 import { SALES_STYLE_RULES_NO_BRAND, salesStyleProblems } from './salesStyle.ts';
 import { callerFirstName } from './callerName.ts';
-import { FINDABLE_SETUP_PRICE_GBP, FINDABLE_MONTHLY_GBP, FINDABLE_BUILD_TOTAL_PAYMENTS, REMEASURE_WEEKS_STANDARD } from './findableOffer.ts';
+import { REMEASURE_WEEKS_STANDARD } from './findableOffer.ts';
+import { threeWaysSpoken } from './paymentPlans.ts';
 import { GUARANTEE_LINE } from './offerFactSheet.ts';
 
 /** Bump when the prompt, the pick or the checks change in a way worth telling apart in stored rows.
@@ -81,7 +82,8 @@ export const VOICE_NOTE_HARD_WORDS = { min: 60, max: 290 } as const;
 /* The words and seconds shown under a script: one rule, spokenLength.ts. */
 export { SPOKEN_WORDS_PER_MINUTE, spokenLength } from './spokenLength.ts';
 /** The offer said in a voice note, word for word (Paul, 2026-10-23; findableOffer.ts). */
-export const SPOKEN_PRICE_LINE = `£${FINDABLE_SETUP_PRICE_GBP} to start, then £${FINDABLE_MONTHLY_GBP} a month, ${FINDABLE_BUILD_TOTAL_PAYMENTS} payments in total including the first`;
+/* 2026-10-29: the three ways to pay (paymentPlans.ts), said as one line. */
+export const SPOKEN_PRICE_LINE = threeWaysSpoken();
 /** What the price includes (Paul, 2026-10-23): "before we start", never "on day 1". "Regular checks", never "monthly". */
 export const SPOKEN_INCLUDES = `a new high-quality website and a 20-question audit before we start, then the same audit again at week ${REMEASURE_WEEKS_STANDARD === 4 ? 'four' : REMEASURE_WEEKS_STANDARD} and regular checks after that, so you can see how often you're being named`;
 /** The guarantee, word for word (offerFactSheet GUARANTEE_LINE). */

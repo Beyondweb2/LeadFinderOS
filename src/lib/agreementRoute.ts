@@ -23,8 +23,8 @@ const asRoute = (v: unknown): ServiceRoute | null => (v === 'build' || v === 'op
 const NAME: Record<ServiceRoute, string> = { build: 'Build', optimise: 'Optimise' };
 
 /** The route the agreement page shows: the contract's when stamped, else the link's, else none. */
-export function resolveAgreementRoute(linkRoute: unknown, contractTotalPayments: unknown): ServiceRoute | null {
-  return serviceRouteForTotal(contractTotalPayments) ?? asRoute(linkRoute);
+export function resolveAgreementRoute(linkRoute: unknown, contractTotalPayments: unknown, paymentPlan?: unknown): ServiceRoute | null {
+  return serviceRouteForTotal(contractTotalPayments, paymentPlan) ?? asRoute(linkRoute);
 }
 
 export interface RouteLock {
@@ -38,9 +38,11 @@ export interface RouteLock {
 /** Is the agreement route locked, and to what? */
 export function agreementRouteLock(input: {
   contractTotalPayments: unknown;
+  /** 2026-10-29: the lead's payment plan (every plan is Build). */
+  paymentPlan?: unknown;
   acceptances: ReadonlyArray<{ method?: string | null; service_route?: string | null }>;
 }): RouteLock {
-  const contract = serviceRouteForTotal(input.contractTotalPayments);
+  const contract = serviceRouteForTotal(input.contractTotalPayments, input.paymentPlan);
   const accepted = input.acceptances.map((a) => asRoute(a.service_route)).filter((r): r is ServiceRoute => !!r);
   if (!contract && accepted.length === 0) return { locked: false, route: null, reason: null };
   const all = new Set<ServiceRoute>([...(contract ? [contract] : []), ...accepted]);

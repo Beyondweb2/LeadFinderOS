@@ -25,7 +25,7 @@ export const SETUP_LEAD_COLUMNS =
   "remeasure_results_sent_at,website_build,sales_handoff,delivery_submitted_at,delivery_submitted_by," +
   /* pre-sales fix 03: the route they PAID on (readiness is route-aware) and Paul's recorded first contact;
      wave 1 integration: the activation stamp that decides whether first contact is owed at all. */
-  "contract_total_payments,client_contacted_at,client_contacted_via,first_contact_owed_since";
+  "contract_total_payments,payment_plan,client_contacted_at,client_contacted_via,first_contact_owed_since";
 
 /** Onboarding columns the checklist + stage read. */
 export const SETUP_ONBOARDING_COLUMNS =
@@ -115,7 +115,7 @@ export async function loadClientSetups(service: Service, leads: Row[], nowMs = D
       discovery: discoverySummary(o?.baseline_discovery, dAudit ? runStatus.get(dAudit) ?? [] : []),
       /* The route they PAID on first (the checkout's stamp), else the onboarding row's — the same order
          the readiness rule uses, so the stage label and the checklist cannot disagree. */
-      route: serviceRouteForTotal(l.contract_total_payments) ?? serviceRouteFromRow(o as never),
+      route: serviceRouteForTotal(l.contract_total_payments, l.payment_plan) ?? serviceRouteFromRow(o as never),
       today,
     });
     out.set(id, { readiness, stage, onboarding: o, handoffApplies: applies, sellerId, crawlAgeDays });

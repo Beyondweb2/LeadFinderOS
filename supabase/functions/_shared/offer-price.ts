@@ -26,6 +26,7 @@
    caller-supplied money and no discount flag.
    ============================================================ */
 import { FINDABLE_SETUP_PRICE_GBP } from "../../../src/lib/findableOffer.ts";
+import { PAYMENT_PLAN_SPEC, type PaymentPlan } from "../../../src/lib/paymentPlans.ts";
 
 export interface OfferPrice {
   /** What Stripe will be told to charge, in pounds. */
@@ -44,10 +45,14 @@ export interface OfferPrice {
  * client; keeping the async signature "just in case" would leave three dead queries' worth of
  * plumbing in two functions and invite someone to put a lookup back without asking why it went.
  */
-export function offerPrice(): OfferPrice {
+/* 🔴 PER PAYMENT PLAN (2026-10-29): what is taken TODAY depends on the plan stored on the onboarding row (paymentPlans.ts)
+   — £499 on pay in full, the £99 sign-up otherwise. Still nothing the browser can set: the caller reads the plan off
+   the row. No plan → the sign-up price, exactly as before. */
+export function offerPrice(plan: PaymentPlan = "legacy_twelve"): OfferPrice {
+  const gbp = PAYMENT_PLAN_SPEC[plan]?.firstGbp ?? FINDABLE_SETUP_PRICE_GBP;
   return {
-    gbp: FINDABLE_SETUP_PRICE_GBP,
-    label: `£${FINDABLE_SETUP_PRICE_GBP}`,
+    gbp,
+    label: `£${gbp}`,
     reason: "flat_price",
   };
 }

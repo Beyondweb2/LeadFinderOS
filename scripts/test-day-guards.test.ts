@@ -141,52 +141,6 @@ console.log("── Job 3: WhatsApp cap, pace and auto-pause ──");
   ok(/\{teamControls && <WhatsAppPaceSettings/.test(panel), "the limits, per-person counts and auto-pause note show only with team controls (admin)");
 }
 
-console.log("── Job 4: the price model ──");
-{
-  const PM = await import("../src/lib/priceModel.ts");
-  const O = await import("../src/lib/findableOffer.ts");
-  const QC = await import("../src/lib/quickClose.ts");
-  const CC = await import("../src/lib/callClose.ts");
-  ok(O.FINDABLE_SETUP_PRICE_GBP === 99 && O.FINDABLE_MONTHLY_GBP === 99 && O.FINDABLE_BUILD_TOTAL_PAYMENTS === 12 && O.FINDABLE_OPTIMISE_TOTAL_PAYMENTS === 6,
-    "today's offers are untouched: £99 + £99/month, Build 12 payments, Optimise 6");
-  ok(PM.UPFRONT_SETUP_GBP === 499 && PM.UPFRONT_MONTHLY_GBP === 99 && PM.UPFRONT_MONTHLY_PAYMENTS === 12, "the new model: £499 upfront, then £99 a month for 12 months");
-  ok(PM.UPFRONT_MONTHLY_START_WORDS === O.MONTHLY_START_V3_WORDS, "its monthly starts when Build's does (the agreement's timing)");
-  ok(PM.PRICE_MODEL_GUARANTEE === QC.QUICK_CLOSE_PROMISE, "its guarantee is the existing line, word for word — nothing invented");
-  ok(PM.PRICE_MODEL_PAYMENT_LIVE.standard === true && PM.PRICE_MODEL_PAYMENT_LIVE.upfront_499 === false, "only the £99 model can be paid for until Paul approves the £499 agreement");
-  ok(PM.priceModelLinkRefusal("standard") === null && /not switched on for payment/.test(PM.priceModelLinkRefusal("upfront_499") ?? ""), "a £499 sign-up link is refused, with the reason");
-  ok(PM.parsePriceModel(undefined) === "standard" && PM.parsePriceModel("bogus") === "standard", "unknown → the standard model, never the one that cannot be paid");
-  ok(PM.effectivePriceModel(null, "upfront_499") === "upfront_499" && PM.effectivePriceModel("standard", "upfront_499") === "standard", "own choice first, then the team default");
-  const u = PM.upfrontSpoken();
-  ok(u.terms.some((t) => t.includes("£1,687")), "the £499 terms state the whole: £499 + 12 × £99 = £1,687");
-  ok(!/refund your £|£99 back|£499 back|14 days/.test(u.spoken.join(" ") + u.terms.join(" ")), "the £499 words name no refund amount or condition");
-
-  const std = CC.routeOfferForModel("build", "standard");
-  ok(JSON.stringify(std) === JSON.stringify(CC.routeOffer("build")), "standard model: the call script is byte-for-byte today's");
-  const up = CC.routeOfferForModel("optimise", "upfront_499");
-  ok(/£499 up front/.test(up.spoken[0]) && /You keep your own website/.test(up.spoken[0]) && !/£99 today/.test(up.spoken.join(" ")), "£499 model: the route's words stay, the price changes");
-  const g = CC.guaranteeForModel({ headline: "h", spoken: "s", caution: "c" }, "upfront_499");
-  ok(g.spoken === PM.PRICE_MODEL_GUARANTEE && g.headline === PM.PRICE_MODEL_GUARANTEE && /Do not quote a refund amount/.test(g.caution), "£499 model: the guarantee is the headline and the rep is told not to quote an amount");
-  ok(CC.guaranteeForModel({ spoken: "s", caution: "c" }, "standard").spoken === "s", "standard model: the guarantee words are unchanged");
-
-  const qcFn = read("supabase/functions/quick-close/index.ts");
-  const gate = qcFn.slice(qcFn.indexOf("THE PRICE MODEL (2026-10-14"), qcFn.indexOf("MY SALES THAT STILL OWE A HANDOFF"));
-  ok(/mode === "generate_link" \|\| mode === "share_link" \|\| mode === "share_setup"/.test(gate) && /price_model_not_live/.test(gate) && /pmErr\) return json/.test(gate),
-    "server: every sign-up link path refuses a model that cannot be paid, and fails closed");
-  ok(qcFn.indexOf("THE PRICE MODEL (2026-10-14") < qcFn.indexOf('if (mode === "generate_link") {'), "server: the refusal comes before any checkout call");
-  ok((qcFn.match(/await stampOfferModel\(leadId\);/g) ?? []).length === 2, "server: the model is recorded on the lead when a link is made or the Full Setup link is sent");
-  ok(!/price_model/.test(read("supabase/functions/findable-checkout/index.ts")) && !/price_model/.test(read("supabase/functions/stripe-webhook/index.ts")),
-    "the checkout and the webhook are untouched (no payment change, no live charge)");
-
-  const mig = read("supabase/migrations/20261024120000_price_model.sql");
-  ok(!/drop |delete from|truncate|alter column/i.test(mig.replace(/--.*$/gm, "")), "the migration is additive");
-  ok(/if public\.my_role\(\) is distinct from 'admin' then raise exception 'admin_only'/.test(mig), "only the admin sets the team default");
-  ok(/update public\.team_members set price_model = _model where user_id = v_uid;/.test(mig), "a person can only switch their OWN model");
-  ok(/revoke all on function public\.price_model_for\(uuid\) from public, anon, authenticated;/.test(mig), "nobody in a browser can read another person's model");
-  ok(/alter table public\.sales_price_settings enable row level security;/.test(mig) && /revoke all on public\.sales_price_settings from anon, authenticated;/.test(mig), "the settings table is closed to browsers");
-
-  const dlg = read("src/components/QuickCloseDialog.tsx");
-  ok(/disabled=\{!!busy \|\| !!modelRefusal\}/.test(dlg) && /data-testid="qc-model-not-live"/.test(dlg), "the Close tab disables the link button and says why under the £499 model");
-}
-
+/* Job 4 (the £99 / £499-upfront price model switch) was removed 2026-10-29: the three payment plans replaced it (paymentPlans.ts). */
 console.log(f ? `\n${f} FAILURE(S)` : "\nALL PASS");
 process.exit(f ? 1 : 0);

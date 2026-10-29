@@ -19,7 +19,8 @@
       Anything else — including no row at all — is a refusal, and the visitor is sent to the agreement page.
    Pure. ⚠️ Edge-reachable — explicit .ts on every relative import.
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
-import { asksCurrentProvider, versionOffersRoute, type AgreementRoute } from './clientAgreement.ts';
+import { agreementVersion, asksCurrentProvider, versionOffersRoute, type AgreementRoute } from './clientAgreement.ts';
+import { agreementVersionForPlan, isPaymentPlan } from './paymentPlans.ts';
 
 export interface GateAcceptance {
   id: string;
@@ -32,11 +33,13 @@ export interface GateAcceptance {
   agreed_text_sha256: string;
   /** v5 clause 1.6 (absent on older versions, which never asked). Callers must select it. */
   free_to_leave_provider?: boolean | null;
+  /** v6: the payment plan signed for (absent on older versions). Callers must select it. */
+  payment_plan?: string | null;
 }
 
 export type GateRefusal =
   | 'not_signed' | 'wrong_method' | 'old_version' | 'other_client' | 'other_signup' | 'other_route'
-  | 'no_authority' | 'tampered' | 'route_withdrawn' | 'not_free_to_leave';
+  | 'no_authority' | 'tampered' | 'route_withdrawn' | 'not_free_to_leave' | 'other_plan';
 
 export type GateResult = { ok: true; acceptanceId: string } | { ok: false; refusal: GateRefusal; reason: string };
 
@@ -51,6 +54,7 @@ const REASONS: Record<GateRefusal, string> = {
   tampered: 'The stored agreement text no longer matches its fingerprint.',
   route_withdrawn: 'This service is not offered under the current agreement (v5 offers Findable Build only).',
   not_free_to_leave: 'The client did not confirm they are free to leave their current provider (clause 1.6).',
+  other_plan: 'The signature is for a different payment plan from the one this sign-up is on.',
 };
 
 /**
@@ -64,6 +68,9 @@ export function checkoutAgreementGate(args: {
   route: AgreementRoute;
   currentVersion: string;
   recomputedSha: string | null;
+  /** v6 (2026-10-29): the sign-up's payment plan. A version that prints the plan must have been signed for THIS plan,
+   *  and the plan must be one that version is for (paymentPlans.agreementVersionForPlan). Omitted = a pre-plan caller. */
+  paymentPlan?: string | null;
 }): GateResult {
   const a = args.acceptance;
   const no = (refusal: GateRefusal): GateResult => ({ ok: false, refusal, reason: REASONS[refusal] });
@@ -77,6 +84,12 @@ export function checkoutAgreementGate(args: {
   /* v5: Optimise is withdrawn, and a signature without "free to leave" is not one we can take payment on. */
   if (!versionOffersRoute(a.agreement_version, a.service_route)) return no('route_withdrawn');
   if (asksCurrentProvider(a.agreement_version) && a.free_to_leave_provider !== true) return no('not_free_to_leave');
+  if (args.paymentPlan !== undefined) {
+    if (!isPaymentPlan(args.paymentPlan)) return no('other_plan');
+    const printsPlan = !!agreementVersion(a.agreement_version).clientDetailLabels.paymentPlan;
+    /* A new plan rests only on a version that names it (v6) signed for THAT plan; the old plan only on an earlier version. */
+    if (agreementVersionForPlan(args.paymentPlan) === 'v6' ? !printsPlan || a.payment_plan !== args.paymentPlan : printsPlan) return no('other_plan');
+  } else if (agreementVersion(a.agreement_version).clientDetailLabels.paymentPlan) return no('other_plan');
   if (!args.recomputedSha || args.recomputedSha !== a.agreed_text_sha256) return no('tampered');
   return { ok: true, acceptanceId: a.id };
 }
@@ -105,7 +118,9 @@ export function webhookV3Verdict(args: {
   if (!args.acceptance || args.acceptance.id !== m.agreement_acceptance_id) return { ok: false, reason: 'acceptance_not_found: the named signature does not exist' };
   const route = m.service_route === 'build' || m.service_route === 'optimise' ? m.service_route : null;
   if (!route) return { ok: false, reason: 'no_route: the session names no service' };
-  const g = checkoutAgreementGate({ acceptance: args.acceptance, leadId: args.leadId, onboardingId: args.onboardingId, route, currentVersion: args.currentVersion, recomputedSha: args.recomputedSha });
+  /* v6: the plan the session was made on (absent on a pre-plan session = the v5 plan). */
+  const plan = m.payment_plan === undefined || m.payment_plan === '' ? 'legacy_twelve' : m.payment_plan;
+  const g = checkoutAgreementGate({ acceptance: args.acceptance, leadId: args.leadId, onboardingId: args.onboardingId, route, currentVersion: args.currentVersion, recomputedSha: args.recomputedSha, paymentPlan: plan });
   if ('refusal' in g) return { ok: false, reason: `${g.refusal}: ${g.reason}` };
   return { ok: true, acceptanceId: g.acceptanceId };
 }

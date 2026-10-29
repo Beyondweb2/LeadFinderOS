@@ -32,6 +32,7 @@
       the rep notes when it ends and calls back then. The minimum term is said in PAYMENTS, never months.
    Pure. No React, no fetch, no clock.
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
+import { threeWaysSpoken } from './paymentPlans.ts';
 import {
   FINDABLE_MONTHLY_GBP, FINDABLE_SETUP_PRICE_GBP,
   REMEASURE_WEEKS_STANDARD, totalPaymentsFor, type ServiceRoute,
@@ -317,17 +318,16 @@ export function buildCallScript(i: CallScriptInput): CallScript {
 
   /* OBJECTIONS — spoken answers, short enough to say mid-call. Every figure is a constant. v5 (2026-10-16): Build only;
      after its payments the site is theirs and £29.99 applies only if they want hosting / maintenance to carry on. */
-  const build = totalPaymentsFor('build');
   const objections = [
-    { objection: `Why £${FINDABLE_SETUP_PRICE_GBP}?`, answer: `The £${FINDABLE_SETUP_PRICE_GBP} covers measuring where you are now, the first round of work and the re-check at four weeks. If the number hasn't gone up by then, you can claim it back.` },
+    { objection: `Why £${FINDABLE_SETUP_PRICE_GBP}?`, answer: `The £${FINDABLE_SETUP_PRICE_GBP} covers measuring where you are now, the first round of work and the re-check at four weeks. If the number hasn't gone up by then, you can claim back everything you've paid.` },
     { objection: 'How much is it?', answer: planSpoken() },
     { objection: 'I already have an agency', answer: "Fair enough — what do they look after for you at the moment? This is one specific thing: what AI says when someone asks for a business like yours. I can send them what I found too." },
     { objection: 'My agency controls the website / domain', answer: SALES_DOMAIN_LINE + " Your agreement with them is yours to check — I can't advise on that, and we would never ask you to break it." },
     { objection: 'I need to think about it', answer: "Of course — is it mainly the price, the timing, or you're not sure what we'd actually be doing? When's good for a quick ring back?" },
     { objection: 'Is this a scam?', answer: 'Fair question. You read and sign a written agreement before you pay anything, all the terms are at findable.live, and ' + (i.hasReport ? 'I can send you the report showing exactly what AI said.' : "you'll see exactly what AI said before anything else happens.") },
-    { objection: 'Can I cancel?', answer: `There's a minimum term of ${build} payments, today's £${FINDABLE_SETUP_PRICE_GBP} included. Once they're made the website is yours, and the hosting carries on afterwards only if you want it: you can cancel that with 30 days' notice. And if the number hasn't gone up at four weeks, a valid claim gets your £${FINDABLE_SETUP_PRICE_GBP} back and stops the monthly too.` },
-    { objection: "Can you guarantee I'll show up?", answer: `No one can promise AI will name you, and I won't. What we do promise is the measurement: if the number hasn't gone up on the same questions, you can claim your £${FINDABLE_SETUP_PRICE_GBP} back.` },
-    { objection: `Why ${build} payments?`, answer: `That's Findable Build. We build the new website, host it and look after it: ${build} payments including today. ${afterTermRepLine('build')}` },
+    { objection: 'Can I cancel?', answer: `On the monthly plans the minimum term is all the payments in your plan, today's included. Pay in full is one payment. Once your final payment clears the website is yours, and the hosting carries on afterwards only if you want it: you can cancel that with 30 days' notice. And if the number hasn't gone up at four weeks, a valid claim gets back everything you've paid and stops the monthly too.` },
+    { objection: "Can you guarantee I'll show up?", answer: `No one can promise AI will name you, and I won't. What we do promise is the measurement: if the number hasn't gone up on the same questions, you get your money back.` },
+    { objection: 'Why pay monthly?', answer: `You don't have to. It's ${threeWaysSpoken()}. Same service either way, only the way you pay changes.` },
     { objection: 'Can you just improve my current website?', answer: "That's not something we offer. What we do is build you a new website, set up properly for AI and search from day one, and you can keep your web address." },
     { objection: 'Just send me something', answer: i.hasReport ? "Sure, I'll send you the report — it shows the exact search, what AI said and who it named. Can I give you a ring once you've had a look?" : "Sure, I'll run the check and send it over. Can I give you a ring once you've had a look?" },
     { objection: "I'm busy right now", answer: "No problem. When's a better time for a quick ring back?" },

@@ -11,6 +11,7 @@
    Pure and edge-reachable: relative imports with .ts, no Deno, no DOM.
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 import { FINDABLE_SETUP_PRICE_GBP, FINDABLE_MONTHLY_GBP, FINDABLE_BUILD_TOTAL_PAYMENTS, FINDABLE_CONTINUING_GBP, REMEASURE_WEEKS_STANDARD } from './findableOffer.ts';
+import { PAY_IN_FULL_GBP, threeWaysSpoken } from './paymentPlans.ts';
 import { GUARANTEE_LINE, ENGINE_WORDING } from './offerFactSheet.ts';
 
 export type PlaybookIntent =
@@ -87,9 +88,9 @@ export const PLAYBOOK: Record<PlaybookIntent, PlaybookEntry> = {
   go_on: { line: 'Are you with an agency, or do you manage the website yourself?' },
   what_we_do: { line: "I build you a new site set up for AI and Google, sort your Google Business Profile, and keep checking how you show up. Quick call, or a voice note?" },
   how_much: { factual: true, allowPrice: true, confidence: true,
-    line: `It's ${P1} to start, and I'm confident enough in it that it's backed by a guarantee: ${GUARANTEE_LOWER} After your results it's ${PM} a month, ${FINDABLE_BUILD_TOTAL_PAYMENTS} payments in total including the first, and that covers the new site, hosting, changes and regular checks. Quick call, or a voice note to go through it?` },
+    line: `It's ${threeWaysSpoken()}, and I'm confident enough in it that it's backed by a guarantee: ${GUARANTEE_LOWER} That covers the new site, hosting, changes and regular checks. Quick call, or a voice note to go through it?` },
   catch: { factual: true, allowPrice: true, confidence: true,
-    line: `No catch. You pay ${P1} to start and if we don't improve ai visibility you get that ${P1} back. We re-run the same questions after ${REMEASURE_WEEKS_STANDARD} weeks to check. The one thing to know is it's a ${FINDABLE_BUILD_TOTAL_PAYMENTS} payment minimum, counting the first.` },
+    line: `No catch. If we don't improve ai visibility you get back everything you've paid. We re-run the same questions after ${REMEASURE_WEEKS_STANDARD} weeks to check. The one thing to know: if you pay by the month, all the payments in your plan are the minimum. Or you can pay ${gbp(PAY_IN_FULL_GBP)} once.` },
   how_long: { factual: true, line: `The site build usually takes a few days. Then we re-check after ${REMEASURE_WEEKS_STANDARD} weeks to see the difference.` },
   who_are_you: { line: "I'm Paul, I run Findable. I help local businesses show up when people ask AI for a recommendation. Would a quick call be easier?" },
   /* ⛔ THE ONLY PAST-WORK WORDS (Paul, 2026-10-21): reviews, feedback and the one site we built. No numbers, no client names,
@@ -131,7 +132,7 @@ export const PLAYBOOK: Record<PlaybookIntent, PlaybookEntry> = {
   explain_here: { line: "Sure. Short version: I build you a new site set up for AI and Google, sort your Google Business Profile, and keep checking how you show up. Want me to send what I found here?" },
   /* Needs you (a commercial ask): the figures and the guarantee are how_much's, word for word. */
   pay_on_results: { factual: true, allowPrice: true,
-    line: `I don't work pay-after-results, but you're covered: it's ${P1} to start, and ${GUARANTEE_LOWER} After your results it's ${PM} a month, ${FINDABLE_BUILD_TOTAL_PAYMENTS} payments in total including the first. Quick call to go through it?` },
+    line: `I don't work pay-after-results, but you're covered: it's ${threeWaysSpoken()}, and ${GUARANTEE_LOWER} Quick call to go through it?` },
   ads_question: { line: "No, I don't do ads. I only work on getting businesses recommended when people ask AI. Want a quick voice note on what I found?" },
   do_it_myself: { line: 'Fair enough, and good luck with it. If you want a second pair of eyes on what I found, just say.' },
   where_based: { fixed: true, linkOk: true, line: `Findable is a UK company, but we work with businesses worldwide. The site's ${FINDABLE_SITE_WORDS} if you want a look. Quick call, or shall I send a voice note?` },

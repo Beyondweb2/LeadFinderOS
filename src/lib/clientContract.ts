@@ -8,12 +8,15 @@
    website looks like. What the WORK is (build vs optimise) is a separate fact, from the onboarding row.
    Pure, relative imports with .ts: read by fn paid-client-hub and the SPA.
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
+import { PAYMENT_PLAN_NAME, isPaymentPlan } from './paymentPlans.ts';
 import { SERVICE_ROUTE_NAME, findableSiteKind, serviceRouteForTotal, type ServiceRoute } from './findableOffer.ts';
 
 export interface ContractLedgerRow { kind: string; status: string; amount_gbp: number | string }
 export interface ClientContractInput {
   lead: {
     contract_total_payments?: number | null;
+    /** 2026-10-29: the payment plan the client paid on (paymentPlans.ts). Every plan is Build. */
+    payment_plan?: string | null;
     amount_paid?: number | string | null;
     stripe_subscription_id?: string | null;
     subscription_status?: string | null;
@@ -41,7 +44,7 @@ export interface ClientContract {
 const LIVE = new Set(['trialing', 'active', 'past_due']);
 
 export function clientContract(i: ClientContractInput): ClientContract {
-  const route = serviceRouteForTotal(i.lead.contract_total_payments);
+  const route = serviceRouteForTotal(i.lead.contract_total_payments, i.lead.payment_plan);
   const totalPayments = route ? Number(i.lead.contract_total_payments) : null;
   const ledgerPayments = (i.ledger ?? []).filter((r) => (r.kind === 'initial' || r.kind === 'recurring') && r.status === 'succeeded' && Number(r.amount_gbp) > 0).length;
   // A client who paid before the ledger existed still paid their sign-up (the lead records the amount).
@@ -54,7 +57,9 @@ export function clientContract(i: ClientContractInput): ClientContract {
   let note: string | null = null;
   if (!route) note = 'Payment term not recorded (paid before Build / Optimise existed) — Paul to confirm what was agreed.';
   else if (!live && paymentsRemaining !== null && paymentsRemaining > 0) note = 'No live monthly schedule in Stripe — check it was created.';
-  return { route, name: route ? SERVICE_ROUTE_NAME[route] : null, totalPayments, paymentsMade, paymentsRemaining, nextPaymentAt, work, note };
+  /* 2026-10-29: the payment plan is named beside the service ("Findable Build · 6 months"). */
+  const planName = isPaymentPlan(i.lead.payment_plan) ? PAYMENT_PLAN_NAME[i.lead.payment_plan] : null;
+  return { route, name: route ? SERVICE_ROUTE_NAME[route] + (planName ? ` · ${planName}` : '') : null, totalPayments, paymentsMade, paymentsRemaining, nextPaymentAt, work, note };
 }
 
 export const WORK_LABEL: Record<ClientContract['work'], string> = {

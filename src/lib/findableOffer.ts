@@ -128,8 +128,14 @@ export function termMonthsFor(route: ServiceRoute): number {
 export function contractTotalGbpFor(route: ServiceRoute): number {
   return FINDABLE_SETUP_PRICE_GBP + recurringPaymentsFor(route) * FINDABLE_MONTHLY_GBP;
 }
-/** A payment count Stripe metadata / the lead carries → the route it belongs to (positive match only). */
-export function serviceRouteForTotal(total: unknown): ServiceRoute | null {
+/** The payment plans (src/lib/paymentPlans.ts owns their meaning; the ids live here so this leaf can recognise one). */
+export const PAYMENT_PLAN_IDS = ['full', 'six', 'twelve', 'legacy_twelve'] as const;
+
+/** A payment count Stripe metadata / the lead carries → the route it belongs to (positive match only).
+ *  🔴 2026-10-29: pass the lead's recorded payment_plan too. Every payment plan is Build — and the six plan's count (6) is
+ *  also the withdrawn Optimise route's, so a count alone must never decide once a plan is recorded. */
+export function serviceRouteForTotal(total: unknown, paymentPlan?: unknown): ServiceRoute | null {
+  if (typeof paymentPlan === 'string' && (PAYMENT_PLAN_IDS as readonly string[]).includes(paymentPlan)) return 'build';
   const n = Number(total);
   if (n === FINDABLE_BUILD_TOTAL_PAYMENTS) return 'build';
   if (n === FINDABLE_OPTIMISE_TOTAL_PAYMENTS) return 'optimise';
@@ -396,12 +402,14 @@ export function findableContactPhoneDisplay(): string {
    so the one thing this must not do is read like a cancellation. "Nothing changes in the meantime"
    is the load-bearing sentence: without it, somebody whose card bounced assumes they have left and
    is then charged four days later when a retry succeeds. */
-export function paymentFailedEmail(i: { payUrl: string | null }): { subject: string; paragraphs: string[] } {
+/* 2026-10-29: `amountGbp` = the failed invoice's own amount (a 12-month plan's monthly is £49.99). Absent = the £99 monthly. */
+export function paymentFailedEmail(i: { payUrl: string | null; amountGbp?: number | null }): { subject: string; paragraphs: string[] } {
+  const amount = typeof i.amountGbp === 'number' && i.amountGbp > 0 ? i.amountGbp : FINDABLE_MONTHLY_GBP;
   return {
     subject: "Your Findable payment didn't go through",
     paragraphs: [
       `Hi,`,
-      `Your monthly payment of £${FINDABLE_MONTHLY_GBP} didn't go through — usually the card has expired or the bank wanted a check.`,
+      `Your monthly payment of £${Number.isInteger(amount) ? amount : amount.toFixed(2)} didn't go through — usually the card has expired or the bank wanted a check.`,
       `We'll try again over the next few days. Nothing changes in the meantime and you're still a client.`,
       i.payUrl
         ? `If it keeps failing you can update your card here: ${i.payUrl}`
@@ -492,7 +500,22 @@ export function termCompleteEmail(i: { siteKind: FindableSiteKind; totalPayments
    minimum term now, so offering a free exit here would contradict what was sold. `cancelUrl` stays in
    the signature for the caller and is deliberately not printed.
    🔴 ROUTE-AWARE (2026-09-29): `route` is the subscription's own (its metadata); null names no count. */
-export function monthlyStartingSoonEmail(i: { businessName: string; startsOn: string; cancelUrl: string | null; route: ServiceRoute | null; continuingService?: boolean; afterTerm?: 'automatic' | 'optional' | 'none' }): { subject: string; paragraphs: string[] } {
+/* 2026-10-29: `plan` = a v6 payment plan's own figures (paymentPlans.ts, passed in as numbers: this leaf cannot import it). */
+export function monthlyStartingSoonEmail(i: { businessName: string; startsOn: string; cancelUrl: string | null; route: ServiceRoute | null; continuingService?: boolean; afterTerm?: 'automatic' | 'optional' | 'none'; plan?: { monthlyGbp: number; totalPayments: number; firstGbp: number; afterWords: string } | null }): { subject: string; paragraphs: string[] } {
+  if (i.plan) {
+    const m = (n: number) => `£${Number.isInteger(n) ? n : n.toFixed(2)}`;
+    return {
+      subject: `Your Findable monthly starts on ${i.startsOn}`,
+      paragraphs: [
+        `Hi,`,
+        `Your monthly payment of ${m(i.plan.monthlyGbp)} starts on ${i.startsOn}.`,
+        `It covers the work we keep doing to add another way for people to find you: pages improved on what the newer data shows, new pages where there is something worth going after, and an eye on who else is being named.`,
+        `It runs for your plan: ${i.plan.totalPayments} payments in total, counting the ${m(i.plan.firstGbp)} you paid at sign-up. ${i.plan.afterWords}`,
+        `Any questions, just reply to this email.`,
+        `Paul, findable`,
+      ],
+    };
+  }
   /* 🔴 v3 (clause 9A): the minimum term is followed by the Continuing Service (FINDABLE_CONTINUING_GBP), so "then it stops"
      is only true for a legacy subscription. The caller says which (the subscription's own marker). */
   /* 🔴 v4 (2026-10-07): what follows depends on what the client SIGNED — v3 continues, v4 Optimise ends, v4 Build's £29.99 is

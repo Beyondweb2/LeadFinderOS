@@ -73,6 +73,7 @@ import {
 } from './findableOffer.ts';
 import { afterTermClientWords, afterTermRepLine } from './planTerms.ts';
 import { agencyContractOutcome } from './agencyContractRule.ts';
+import { CLIENT_PAYMENT_PLANS, PAYMENT_PLAN_NAME, PAYMENT_PLAN_SPEC, isPaymentPlan, planShortLine, planTermsLines, type PaymentPlan } from './paymentPlans.ts';
 
 export type QcDecisionMaker = 'yes' | 'no';
 /** 'agency' (v2): an agency / provider controls it — a handoff, not a refusal. */
@@ -120,6 +121,9 @@ export interface QuickCloseAnswers {
   build_consents?: QcConsents | null;
   /** The agency contract (2026-10-07) — asked on the call, read by offerFit. */
   agency_contract?: QcAgencyContract | null;
+  /** 🔴 HOW THEY PAY FOR BUILD (Paul, 2026-10-29; paymentPlans.ts). Asked after the plan, only while the new options are on
+   *  Build (2026-10-29: live). 'legacy_twelve' is staff-only and hidden unless asked for ("Show the old plan"). */
+  payment_plan?: PaymentPlan | null;
 }
 export type QcKey = keyof QuickCloseAnswers;
 
@@ -166,6 +170,12 @@ export const QUICK_CLOSE_QUESTIONS: readonly { key: QcKey; text: string; detail?
   /* v5 (2026-10-16): Build is the one plan for sale. 'optimise' stays a LEGACY value so a close stored before v5 still
      reads and labels; it is never offered as a choice and a save that sends it is refused (planQuickCloseSave). */
   { key: 'route', text: 'Confirm the plan', options: [{ value: 'build', label: 'Findable Build — we build, host and manage a new website, optimised for AI visibility' }, { value: 'optimise', label: 'Findable Optimise (withdrawn) — improve their current website', legacy: true }] },
+  /* 2026-10-29: how they pay (paymentPlans.ts). The old £99 × 12 plan is LEGACY here: never a default button, shown only
+     when the rep asks for it ("Show the old plan") or when a close already carries it. */
+  { key: 'payment_plan', text: 'How do they want to pay?', options: [
+    ...CLIENT_PAYMENT_PLANS.map((p) => ({ value: p, label: `${PAYMENT_PLAN_NAME[p]}: ${planShortLine(p)}` })),
+    { value: 'legacy_twelve', label: `${PAYMENT_PLAN_NAME.legacy_twelve}: ${planShortLine('legacy_twelve')}`, legacy: true },
+  ] },
   { key: 'decision_maker', text: 'Are they authorised to make this decision for the business?', options: [{ value: 'yes', label: 'Yes' }, { value: 'no', label: 'No' }] },
   { key: 'access', text: 'Can Findable get access to their current website (its CMS / admin)?', options: [{ value: 'yes', label: 'Yes' }, { value: 'no', label: 'No' }, { value: 'not_sure', label: 'Not sure' }, { value: 'not_applicable', label: 'Not applicable' }] },
   { key: 'manager', text: 'Who currently looks after their website?', options: [{ value: 'owner', label: 'They manage it themselves' }, { value: 'freelancer', label: 'Freelancer / individual developer' }, { value: 'agency', label: 'Agency' }, { value: 'no_website', label: 'No website' }, { value: 'not_sure', label: 'Not sure' }, { value: 'employee', label: 'Employee', legacy: true }, { value: 'third_party', label: 'Other third party', legacy: true }] },
@@ -350,6 +360,23 @@ export function callNotesLines(a: QuickCloseAnswers, n: QcCallNotes | null | und
 
 /** The short count line used on the route buttons. */
 export const routePaymentsShort = (route: ServiceRoute) => `${totalPaymentsFor(route)} payments in total (the minimum term)`;
+/** Build is sold with a payment plan (once the options are on sale) and none has been picked yet. */
+const planStillToPick = (route: ServiceRoute, plan: PaymentPlan | null | undefined): boolean => route === 'build' && !plan;
+/** What is paid on the link today: the plan's first payment, or the sign-up £99. */
+export const firstPaymentGbp = (plan: PaymentPlan | null | undefined): number => plan ? PAYMENT_PLAN_SPEC[plan].firstGbp : FINDABLE_SETUP_PRICE_GBP;
+export const PICK_PLAN_FIRST_LINE = 'Ask how they want to pay first: the price and the number of payments follow the plan they choose.';
+/** The terms read out before the link: the chosen payment plan's when it is not the v5 plan, else the route's. ⛔ While a
+ *  plan is still to be picked, no figures at all — never the old plan's terms by default. */
+export function closeTermsLines(route: ServiceRoute, plan: PaymentPlan | null | undefined): string[] {
+  if (planStillToPick(route, plan)) return [PICK_PLAN_FIRST_LINE];
+  return plan && plan !== 'legacy_twelve' ? planTermsLines(plan) : routeTermsLines(route);
+}
+/** The header chip: "Findable Build · 6 months" once a plan is chosen, else the route's payment count (none while a plan is
+ *  still to be picked). */
+export function closeChipText(route: ServiceRoute, plan: PaymentPlan | null | undefined): string {
+  if (plan) return `${SERVICE_ROUTE_NAME[route]} · ${PAYMENT_PLAN_NAME[plan]}`;
+  return planStillToPick(route, plan) ? SERVICE_ROUTE_NAME[route] : `${SERVICE_ROUTE_NAME[route]} · ${totalPaymentsFor(route)} payments`;
+}
 
 /** Who owns the website, per route, in the REP's words (findableOffer.ts's TWO ROUTES note is the source:
  *  a site Findable builds transfers once the term is complete and paid; Optimise never takes a site over). */
@@ -421,6 +448,8 @@ export function cleanAnswers(raw: unknown): QuickCloseAnswers {
   }
   // The Build consents belong to Build: on any other route (or none) they are not an answer.
   if (out.route !== 'build') delete out.build_consents;
+  // A payment plan belongs to Build, and only a plan that can be sold today is an answer.
+  if (out.payment_plan && (out.route !== 'build' || !isPaymentPlan(out.payment_plan))) delete out.payment_plan;
   return out;
 }
 
@@ -461,6 +490,8 @@ export function closeFlow(raw: QuickCloseAnswers): QcKey[] {
   if (agencyContractTiedIn(a)) return flow;
   flow.push('domain');
   flow.push('route');
+  /* 2026-10-29: how they pay, once the options are on sale (until then every sale is the v5 plan and nothing is asked). */
+  if (a.route === 'build') flow.push('payment_plan');
   flow.push(...routeQuestions(a));
   return flow;
 }
@@ -581,6 +612,8 @@ export function onboardingColumnsFor(raw: QuickCloseAnswers): Record<string, unk
      one decision), so the checkout reads one interpretation whichever path made the sale. An unset
      route writes NOTHING — never a default. */
   if (a.route) { out.plan_tier = planTierForRoute(a.route); out.website_addon = a.route === 'build'; }
+  /* The payment plan, in the column findable-checkout reads. Unset writes nothing — never a default. */
+  if (a.payment_plan) out.payment_plan = a.payment_plan;
   /* The Build consents land in the SAME columns the self-service domain pages write. Authority is never
      turned into a yes over an explicit 'no' / 'not sure' to the authority question, nor while the domain is
      still to be handed over (v2: the pending consent does not say they control it). */
@@ -746,7 +779,7 @@ const SHORT_Q: Record<QcKey, string> = {
   decision_maker: 'Decision maker', approach: 'Website approach', domain: 'Domain controlled by', manager: 'Website managed by',
   access: 'Can give site access', authority: 'Authority to replace / move site', rights: 'Rights to reuse content / branding / photos',
   design_owner: 'Current design / code owned by', route: 'Website route', build_consents: 'Build consents (domain, DNS, content)',
-  agency_contract: 'Agency contract',
+  agency_contract: 'Agency contract', payment_plan: 'Payment plan',
 };
 
 /** The answered Quick Close questions as label / answer pairs (the Paid Client intake shows them). Pure. */
@@ -854,6 +887,7 @@ export function planQuickCloseSave(
   const cols: Record<string, unknown> = { ...onboardingColumnsFor(answers) };
   /* A route dropped by the re-clean clears the row's route too — never left behind as a stale sale. */
   if (prev.route && !answers.route) { cols.plan_tier = null; cols.website_addon = null; }
+  if (prev.payment_plan && !answers.payment_plan) cols.payment_plan = null;
   /* Build consents withdrawn (Not yet, or the route moved off Build): the consent columns they set go too. */
   if (prev.build_consents === 'yes' && answers.build_consents !== 'yes') {
     cols.dns_permission = null; cols.materials_confirmed = null;
@@ -918,7 +952,8 @@ export function adoptLink(
    on it BEFORE paying (clause 1.2); the timing is the day after the refund window (5.6).
    🔴 2026-10-07 (Paul): what follows the payments is PER PLAN (planTerms.ts) — Optimise ends after its sixth
    payment; Build's £29.99 applies only if they want hosting / maintenance to continue. */
-const priceSentence = (route: ServiceRoute) =>
+/* 2026-10-29: a chosen payment plan (not the v5 plan) speaks its own terms (paymentPlans.ts), in the client's words. */
+const priceSentence = (route: ServiceRoute, plan?: PaymentPlan | null) => plan && plan !== 'legacy_twelve' ? planTermsLines(plan).map((l) => (l.endsWith('.') ? l : `${l}.`)).join(' ') :
   `£${FINDABLE_SETUP_PRICE_GBP} today, then £${FINDABLE_MONTHLY_GBP} a month starting ${MONTHLY_START_V3_WORDS} — ${totalPaymentsFor(route)} payments in total, today's included (the minimum term). ${afterTermClientWords(route)}`;
 /** What happens on the link, in the client's words. */
 export const SIGNUP_LINK_SENTENCE = "On the link you'll check your details, read and sign the Client Service Agreement, and then pay securely.";
@@ -929,10 +964,11 @@ const ownershipToClient = (route: ServiceRoute) => route === 'build'
 const AFTER_PAYMENT_SENTENCE = "Once it's paid, Paul will be in touch within two working days to take over the setup — website, domain and access — and we take your baseline AI visibility measurement once we have the access we need.";
 
 /** What the rep says once the route is chosen. ⛔ Not shown before a route exists (it would name no terms). */
-export function quickCloseScript(route: ServiceRoute | null | undefined): string {
+export function quickCloseScript(route: ServiceRoute | null | undefined, plan?: PaymentPlan | null): string {
   if (!route) return '';
+  if (route === 'build' && !plan) return '';
   return `I'll send you your sign-up link now. It's ${SERVICE_ROUTE_NAME[route]}: ${ownershipToClient(route)} ` +
-    `It's ${priceSentence(route)} ${QUICK_CLOSE_PROMISE} ${FINDABLE_GUARANTEE} ` +
+    `It's ${priceSentence(route, plan)} ${QUICK_CLOSE_PROMISE} ${FINDABLE_GUARANTEE} ` +
     `${SIGNUP_LINK_SENTENCE} ${AFTER_PAYMENT_SENTENCE} You don't need to sort any of that out today.`;
 }
 
@@ -943,12 +979,12 @@ export function quickCloseGreeting(contactName: string | null | undefined): stri
 }
 
 /** The message that carries the link (WhatsApp, copy, email body). `greetName` is the contact's name. */
-export function quickCloseMessage(greetName: string | null | undefined, url: string, route: ServiceRoute): string {
+export function quickCloseMessage(greetName: string | null | undefined, url: string, route: ServiceRoute, plan?: PaymentPlan | null): string {
   return [
     `${quickCloseGreeting(greetName)}, here's your ${SERVICE_ROUTE_NAME[route]} sign-up link:`,
     url,
     '',
-    `What you're signing up to: ${priceSentence(route)} ${ownershipToClient(route)}`,
+    `What you're signing up to: ${priceSentence(route, plan)} ${ownershipToClient(route)}`,
     '',
     `${QUICK_CLOSE_PROMISE} ${FINDABLE_GUARANTEE}`,
     '',
@@ -959,12 +995,12 @@ export function quickCloseMessage(greetName: string | null | undefined, url: str
 }
 
 /** The email that carries the link (fn quick-close mode share_link, channel email). Plain text. */
-export function quickCloseEmail(i: { greetName: string | null | undefined; businessName: string | null | undefined; url: string; route: ServiceRoute; senderName: string | null | undefined }): { subject: string; text: string } {
+export function quickCloseEmail(i: { greetName: string | null | undefined; businessName: string | null | undefined; url: string; route: ServiceRoute; senderName: string | null | undefined; plan?: PaymentPlan | null }): { subject: string; text: string } {
   const biz = String(i.businessName ?? '').trim();
   const sender = String(i.senderName ?? '').trim();
   return {
     subject: `Your ${SERVICE_ROUTE_NAME[i.route]} sign-up link${biz ? ` - ${biz}` : ''}`,
-    text: `${quickCloseMessage(i.greetName, i.url, i.route)}\n\nAny questions, just reply to this email.\n\n${sender ? `${sender}\n` : ''}Findable`,
+    text: `${quickCloseMessage(i.greetName, i.url, i.route, i.plan)}\n\nAny questions, just reply to this email.\n\n${sender ? `${sender}\n` : ''}Findable`,
   };
 }
 

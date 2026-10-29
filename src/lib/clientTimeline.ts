@@ -39,18 +39,22 @@ export const COMMERCIAL_TERMS_V4 = 'csa_v4_option_b';
 /** v5 (2026-10-16, Findable_Client_Service_Agreement_v5_clean.docx): the SAME Option B timing again. One plan, Build:
  *  12 payments, the website transfers after payment 12, the £29.99 Hosting and Maintenance is an opt-in (9A). */
 export const COMMERCIAL_TERMS_V5 = 'csa_v5_option_b';
-export type CommercialTerms = typeof COMMERCIAL_TERMS_V3 | typeof COMMERCIAL_TERMS_V4 | typeof COMMERCIAL_TERMS_V5;
+/** v6 (2026-10-29, docs/agreement-v6.md): the SAME Option B timing. Build paid by a payment plan (paymentPlans.ts): Pay in
+ *  full, 6 months or 12 months; the website transfers on the final cleared payment; £29.99 Hosting and Maintenance is an opt-in. */
+export const COMMERCIAL_TERMS_V6 = 'csa_v6_option_b';
+export type CommercialTerms = typeof COMMERCIAL_TERMS_V3 | typeof COMMERCIAL_TERMS_V4 | typeof COMMERCIAL_TERMS_V5 | typeof COMMERCIAL_TERMS_V6;
 /** STRICTLY v3. Almost nothing wants this — see isOptionBTerms. */
 export function isV3Terms(v: unknown): v is typeof COMMERCIAL_TERMS_V3 { return v === COMMERCIAL_TERMS_V3; }
 export function isV4Terms(v: unknown): v is typeof COMMERCIAL_TERMS_V4 { return v === COMMERCIAL_TERMS_V4; }
 export function isV5Terms(v: unknown): v is typeof COMMERCIAL_TERMS_V5 { return v === COMMERCIAL_TERMS_V5; }
+export function isV6Terms(v: unknown): v is typeof COMMERCIAL_TERMS_V6 { return v === COMMERCIAL_TERMS_V6; }
 /** ⛔ THE ONE QUESTION "is this client on the agreement-first (Option B) terms?" — v3, v4 OR v5. Every timeline,
  *  payment-start, baseline-gate, commission and cutover rule asks THIS, never === a version. A client with no
  *  stamp (Ronnie, MCL, RG, the QA clients) is on neither and is never re-ruled. */
-export function isOptionBTerms(v: unknown): v is CommercialTerms { return v === COMMERCIAL_TERMS_V3 || v === COMMERCIAL_TERMS_V4 || v === COMMERCIAL_TERMS_V5; }
+export function isOptionBTerms(v: unknown): v is CommercialTerms { return v === COMMERCIAL_TERMS_V3 || v === COMMERCIAL_TERMS_V4 || v === COMMERCIAL_TERMS_V5 || v === COMMERCIAL_TERMS_V6; }
 /** The terms a signed agreement VERSION puts a sale on; null for a version that is not agreement-first (v1). */
 export function commercialTermsFor(agreementVersion: string | null | undefined): CommercialTerms | null {
-  return agreementVersion === 'v3' ? COMMERCIAL_TERMS_V3 : agreementVersion === 'v4' ? COMMERCIAL_TERMS_V4 : agreementVersion === 'v5' ? COMMERCIAL_TERMS_V5 : null;
+  return agreementVersion === 'v3' ? COMMERCIAL_TERMS_V3 : agreementVersion === 'v4' ? COMMERCIAL_TERMS_V4 : agreementVersion === 'v5' ? COMMERCIAL_TERMS_V5 : agreementVersion === 'v6' ? COMMERCIAL_TERMS_V6 : null;
 }
 /** The terms a Stripe subscription was created under (its metadata). A subscription with the Option B timing marker
  *  and no `commercial_terms` was created under v3, before the v4 stamp existed. Anything else: null. */
@@ -72,7 +76,7 @@ export function termsOfSubscriptionMeta(m: Record<string, unknown> | null | unde
 export type ContinuingMode = 'automatic' | 'optional' | 'none';
 export function continuingModeFor(terms: unknown, route: ServiceRoute | null | undefined): ContinuingMode {
   if (isV3Terms(terms)) return route === 'build' || route === 'optimise' ? 'automatic' : 'none';
-  if (isV4Terms(terms) || isV5Terms(terms)) return route === 'build' ? 'optional' : 'none';
+  if (isV4Terms(terms) || isV5Terms(terms) || isV6Terms(terms)) return route === 'build' ? 'optional' : 'none';
   return 'none';
 }
 /** The marker a v3 checkout and its Stripe subscription carry (metadata payment_timing): the monthly is

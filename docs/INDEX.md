@@ -27,6 +27,7 @@
 | §9 | 9. Where the AI-visibility code lives | `docs/code-map.md` |
 | §10 | 10. The other docs, and how much to trust them | `docs/other-docs.md` |
 | §11 | 11. 🔴 THE PRICE — ONE FLAT £99 SINCE 2026-09-12, PLUS THE HOSTING SUBSCRIPTION | `docs/business-and-offer.md` |
+| — | Payment options (2026-10-29, branch, off sale until agreement v6) | `docs/payment-options.md` |
 | §12 | 12. ✅ THE SITE ORIGIN — an allowlist is not an address book (2026-09-03) | `docs/business-and-offer.md` |
 | §13 | 13. ✅ THE REPORT'S "GET STARTED" BUTTON — the only CTA in the document (2026-09-03) | `docs/business-and-offer.md` |
 | §13b | 13b. ✅ THE REPORT'S QUESTION PAGES ARE OPERATOR-ONLY, AND THE CTA (2026-09-12) | `docs/business-and-offer.md` |

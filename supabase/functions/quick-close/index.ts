@@ -31,7 +31,7 @@ import { sendSmsToLead } from "../_shared/twilio-sms.ts";
 import { qaEmailHold } from "../_shared/qa-guard.ts";
 import { answerClientInfoRequest, openRequestFor, CLIENT_INFO_REQUEST_COLUMNS } from "../_shared/client-info-request.ts";
 import { cleanSellerClientInfo, MISSING_INFO_LABEL } from "../../../src/lib/clientMissingInfo.ts";
-import { parsePriceModel, priceModelLinkRefusal } from "../../../src/lib/priceModel.ts";
+import { unavailablePlans } from "../../../src/lib/paymentPlans.ts";
 
 // quick-close — QUICK CLOSE (Sales Experience, 2026-09-29; docs/sales-experience.md §9;
 // fixes 2026-10-04: docs/pre-sales-certification/fixes-02-quick-close.md).
@@ -85,6 +85,9 @@ const CHECKOUT_REFUSAL_TEXT: Record<string, string> = {
   cannot_serve: "The website answers mean Findable cannot deliver on this site as it stands — Paul needs to look at it.",
   domain_unresolved: "The domain answers need Paul's review before payment.",
   route_undecided: "Confirm the plan (Findable Build) first.",
+  /* 2026-10-29 (paymentPlans.ts): the payment plan is read off the row by findable-checkout. */
+  plan_undecided: "Ask how they want to pay first (pay in full, 6 months or 12 months).",
+  plan_not_on_sale: "That payment plan is not on sale yet (its client agreement still needs Paul's approval).",
   /* v5 (2026-10-16): Findable Optimise is withdrawn; a close still carrying it must be moved to Build first. */
   route_withdrawn: ROUTE_WITHDRAWN_TEXT,
   /* v5 clause 1.6: still tied into a contract with their current provider — not taken on. */
@@ -197,23 +200,6 @@ Deno.serve(async (req) => {
         return json(NOT_READY_BODY, 403);
       }
     }
-    /* ⛔ THE PRICE MODEL (2026-10-14, src/lib/priceModel.ts). A sign-up link (made, re-shared, or the Full Setup link) goes
-       only under a model whose payment is live — today only the £99 start. The £499 model's agreement is not approved yet,
-       and the checkout would take £99 on a £99 agreement while the rep pitched £499. Both roles. Fails closed. */
-    let offerModel: "standard" | "upfront_499" = "standard";
-    if (mode === "generate_link" || mode === "share_link" || mode === "share_setup") {
-      const { data: pm, error: pmErr } = await service.rpc("price_model_for", { _user: actor.id });
-      if (pmErr) return json({ ok: false, error: "price_model_unreadable", detail: "Could not read your price model - nothing was sent. Try again." }, 503);
-      offerModel = parsePriceModel(pm);
-      const refusal = priceModelLinkRefusal(offerModel);
-      if (refusal) return json({ ok: false, error: "price_model_not_live", detail: refusal }, 409);
-    }
-    /* Record the model a sign-up link was made or sent under, on the lead (compare conversion by model). Never fatal. */
-    const stampOfferModel = async (id: string) => {
-      try {
-        await service.from("outreach_leads").update({ price_model_offered: offerModel, price_model_offered_at: new Date().toISOString() }).eq("id", id);
-      } catch { /* the record is a report, never a gate */ }
-    };
     /* MY SALES THAT STILL OWE A HANDOFF (2026-10-02): the caller's OWN paid sales since handoffs existed —
        names and states only, never an amount or anything else of the client's.
        ⛔ An ARCHIVED sale is not listed (M-008, 2026-10-04): a rep is never told to finish a lead they binned. */
@@ -468,6 +454,8 @@ Deno.serve(async (req) => {
         call: callNotes,
         call_lines: callNotesLines(answers, callNotes),
         offer: offerFit(answers, hasWebsite),
+        /* 2026-10-29: a plan whose Stripe price is not set up is shown off, with the reason (paymentPlans.ts). */
+        plans_unavailable: unavailablePlans((n) => Deno.env.get(n)),
         has_website: hasWebsite,
         events: ((events as { data?: Obj[] }).data ?? []).map((e) => ({ kind: e.kind, at: e.created_at, by_me: e.actor_user_id === actor.id })),
       };
@@ -869,8 +857,7 @@ Deno.serve(async (req) => {
           const result = await expireSession(adopt.replaced);
           await event(service, leadId, rowId, actor.id, "link_superseded", { reason: "fresh_link", session: adopt.replaced, result });
         }
-        await event(service, leadId, rowId, actor.id, "link_generated", { assigned_to: lead.assigned_to_user_id ?? null, session: ours.session, replaced: adopt.replaced, offer_model: offerModel });
-        await stampOfferModel(leadId);
+        await event(service, leadId, rowId, actor.id, "link_generated", { assigned_to: lead.assigned_to_user_id ?? null, session: ours.session, replaced: adopt.replaced, payment_plan: cleanAnswers((stored as { answers?: unknown } | null)?.answers).payment_plan ?? null });
         row = { ...fresh, quick_close: stored };
         return json(await view());
       }
@@ -892,6 +879,7 @@ Deno.serve(async (req) => {
       const qc = (row.quick_close ?? null) as (QuickCloseRecord & Obj) | null;
       if (!linkUsable(qc)) return json({ ok: false, error: "link_expired", detail: "Make the sign-up link first." }, 409);
       const route = cleanAnswers(qc!.answers).route;
+      const plan = cleanAnswers(qc!.answers).payment_plan ?? null;
       if (!route) return json({ ok: false, error: "route_undecided", detail: CHECKOUT_REFUSAL_TEXT.route_undecided }, 409);
       /* ⛔ v5 (2026-10-16): a link made for the withdrawn plan, or for a sale now declined (the client corrected the contract
          answer to "still tied in" after the link was made), is never handed over. */
@@ -909,7 +897,7 @@ Deno.serve(async (req) => {
       }
       if (channel === "email") {
         /* ⛔ The recipient is ALWAYS the saved customer email — a `to` sent by the browser is ignored. */
-        const sent = await emailCustomerLink(row.id, async (senderName) => quickCloseEmail({ greetName, businessName: lead.business_name, url, route, senderName }));
+        const sent = await emailCustomerLink(row.id, async (senderName) => quickCloseEmail({ greetName, businessName: lead.business_name, url, route, senderName, plan }));
         if (!sent.ok) return sent.response;
         share.to = sent.to; share.status = "sent";
       }
@@ -949,7 +937,7 @@ Deno.serve(async (req) => {
           method: "POST", headers: { apikey: anon, Authorization: req.headers.get("authorization") ?? "", "Content-Type": "application/json" },
           body: JSON.stringify(lr.route === "whatsapp_template"
             ? { phone: lead.phone, country: lead.country ?? null, lead_id: leadId, template_name: SIGNUP_LINK_TEMPLATE_NAME, ...(body.resend === true ? { allow_resend: true } : {}) }
-            : { phone: lead.phone, country: lead.country ?? null, lead_id: leadId, body: quickCloseMessage(greetName, url, route) }),
+            : { phone: lead.phone, country: lead.country ?? null, lead_id: leadId, body: quickCloseMessage(greetName, url, route, plan) }),
         });
         const out = await res.json().catch(() => ({})) as Obj;
         if (!res.ok || !out.ok) {
@@ -1075,7 +1063,6 @@ Deno.serve(async (req) => {
         template = lr.route === "whatsapp_template" ? SIGNUP_LINK_TEMPLATE_NAME : null;
       }
       await event(service, leadId, row?.id ?? null, actor.id, "link_shared", { channel, variant: "setup", status, to: emailedTo });
-      await stampOfferModel(leadId);
       const { error: hErr } = await service.from("lead_activity").insert({
         lead_id: leadId, actor_user_id: actor.id, kind: "payment_link_shared",
         body: channel === "copy" ? "Full setup link copied (to send by hand — not confirmed as sent)" : channel === "email" ? `Full setup link emailed to ${emailedTo}` : channel === "sms" ? (status === "simulated" ? "Full setup link texted (test mode — not sent)" : "Full setup link texted (queued — delivery not yet confirmed)") : status === "simulated" ? "Full setup link sent on WhatsApp (test mode — not delivered)" : "Full setup link sent on WhatsApp",

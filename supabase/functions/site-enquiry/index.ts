@@ -29,7 +29,7 @@ const BUILD_ID = "site-enquiry-registry-1";
 async function recordsForKey(service: SupabaseClient, key: string) {
   if (!isSiteKey(key)) return [];
   const { data, error } = await service.from("outreach_leads")
-    .select("id,business_name,service_terminated_at,website_build,contract_total_payments")
+    .select("id,business_name,service_terminated_at,website_build,contract_total_payments,payment_plan")
     .eq("website_build->form->>site_key", key).limit(2);
   if (error) throw new Error("registry: " + error.message);
   const out = [];

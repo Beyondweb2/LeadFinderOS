@@ -69,7 +69,7 @@ export async function loadOnboardingContext(service: Service, leadId: string): P
   if (error) throw error;
   const row = pickOnboarding((rows ?? []) as Row[]);
   const profile = mergeClientProfile(intakeCandidates(loaded.rows), cleanOverrides(rec?.overrides));
-  const route = serviceRouteForTotal((lead.contract_total_payments as number | null) ?? null) ?? serviceRouteFromRow(row as never) ?? null;
+  const route = serviceRouteForTotal((lead.contract_total_payments as number | null) ?? null, lead.payment_plan) ?? serviceRouteFromRow(row as never) ?? null;
   const qc = (row?.quick_close ?? null) as { answers?: { manager?: string }; call?: unknown } | null;
   const control = text(lead.website_control);
   const known: OnboardingKnown = {

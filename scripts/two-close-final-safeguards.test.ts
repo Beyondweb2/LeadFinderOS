@@ -38,7 +38,7 @@ ok(/agencyContractBlocksBuild\(\{ manager: 'agency'/.test(read('src/lib/selfServ
 
 console.log('\n── WHERE IT IS ENFORCED ──');
 const co = read('supabase/functions/findable-checkout/index.ts');
-ok(/agency_contract, quick_close, " \+ DOMAIN_ROW_COLUMNS/.test(co) && /if \(selfServeBuildHold\(ob as never\)\)/.test(co) && /held_for_review/.test(co.slice(co.indexOf('selfServeBuildHold(ob'), co.indexOf('selfServeBuildHold(ob') + 400)), 'findable-checkout reads the answer from the row and refuses with held_for_review');
+ok(/agency_contract, quick_close, (payment_plan, )?" \+ DOMAIN_ROW_COLUMNS/.test(co) && /if \(selfServeBuildHold\(ob as never\)\)/.test(co) && /held_for_review/.test(co.slice(co.indexOf('selfServeBuildHold(ob'), co.indexOf('selfServeBuildHold(ob') + 400)), 'findable-checkout reads the answer from the row and refuses with held_for_review');
 ok(co.indexOf('selfServeBuildHold(ob') < co.indexOf('const domain = domainAuthority'), '…before any domain / Stripe work');
 const on = read('supabase/functions/findable-onboarding/index.ts');
 ok(/selfServeBuildHold\(contractRow\)/.test(on) && /self_serve_review:\$\{row\.id\}/.test(on), 'a held self-serve Build tells Paul once (deduped per sign-up)');

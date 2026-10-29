@@ -11,6 +11,7 @@
    ⚠️ EXPLICIT .ts ON EVERY RELATIVE IMPORT — reached from an edge function (client-agreement).
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 import { afterTermSummaryWords } from './planTerms.ts';
+import { PAYMENT_PLAN_NAME, PAYMENT_PLAN_SPEC, gbpWords, planAfterWords, planTotalGbp, type PaymentPlan } from './paymentPlans.ts';
 import {
   FINDABLE_CONTINUING_GBP, FINDABLE_MONTHLY_GBP, FINDABLE_SETUP_PRICE_GBP, MONTHLY_START_V3_WORDS,
   SERVICE_ROUTE_NAME, totalPaymentsFor, type ServiceRoute,
@@ -53,4 +54,23 @@ export function planSummaryRows(route: ServiceRoute, version: string): PlanSumma
 /** The signing date as the page shows it: the UK calendar day of `iso` (never a stored or report date). */
 export function signingDayWords(iso: string): string {
   return new Date(iso).toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Europe/London' });
+}
+
+/** v6 (2026-10-29): the summary for a PAYMENT PLAN (paymentPlans.ts), worded as v6 says it (3.1, 4.3, 9.2, 9A). */
+export function planSummaryRowsForPlan(plan: PaymentPlan): PlanSummaryRow[] {
+  const s = PAYMENT_PLAN_SPEC[plan];
+  const rows: PlanSummaryRow[] = [
+    { key: 'plan', label: 'Your plan', value: `${SERVICE_ROUTE_NAME.build}, ${PAYMENT_PLAN_NAME[plan].toLowerCase()}. ${PLAN_ONE_LINE.build}` },
+  ];
+  if (plan === 'full') {
+    rows.push({ key: 'today', label: 'Today', value: `${gbpWords(s.firstGbp)}, paid once. Nothing more to pay for the plan` });
+  } else {
+    rows.push(
+      { key: 'today', label: 'Today', value: `${gbpWords(s.firstGbp)} initial payment (payment 1 of ${s.totalPayments})` },
+      { key: 'then', label: 'Then', value: `${gbpWords(s.monthlyGbp)} a month, starting ${MONTHLY_START_V3_WORDS}` },
+      { key: 'term', label: 'Minimum term', value: `${s.totalPayments} payments in total, including today's (${gbpWords(planTotalGbp(plan))})` },
+    );
+  }
+  rows.push({ key: 'after', label: 'After that', value: planAfterWords(plan) });
+  return rows;
 }

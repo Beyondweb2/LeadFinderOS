@@ -1,6 +1,7 @@
 /* ⛔ EXPLICIT .ts ON EVERY RELATIVE IMPORT. This module is now reached from an EDGE FUNCTION
    (render-welcome-pack, via _shared/welcome-pack-render.ts), and Deno cannot resolve an
    extensionless specifier — CLAUDE.md §3. scripts/check-import-graph.mjs fences it. */
+import { PAYMENT_PLAN_SPEC, V6_GUARANTEE, gbpWords, isPaymentPlan, planAfterWords, type PaymentPlan } from './paymentPlans.ts';
 import { renderReportHtml, esc, type AiAuditReportData } from './aiAuditReportHtml.ts';
 import { FINDABLE_CONTACT_EMAIL, FINDABLE_CONTACT_WHATSAPP, FINDABLE_GUARANTEE, FINDABLE_MONTHLY_GBP,
   FINDABLE_SETUP_PRICE_GBP, MONTHLY_START_V3_WORDS, endOfTermKeyPoint, findableContactPhoneDisplay, serviceRouteForTotal, termMonthsFor, totalPaymentsFor,
@@ -51,6 +52,9 @@ export interface WelcomePackInput {
   /** The client's contracted payment count (outreach_leads.contract_total_payments: Build 12,
    *  Optimise 6). Absent/unknown → the pack names no count, never a guessed one. */
   totalPayments?: number | null;
+  /** 2026-10-29: outreach_leads.payment_plan (paymentPlans.ts). A v6 plan (pay in full / 6 / 12 months) prints its own
+   *  payments, guarantee and key points; absent or the old plan = exactly the v5 wording. */
+  paymentPlan?: string | null;
   /** outreach_leads.amount_paid — what the client actually paid at sign-up. Absent/unknown → the pack
    *  names no price at all (see agreedCurrentOffer). */
   amountPaid?: number | null;
@@ -83,6 +87,8 @@ export interface WelcomePackAgreement {
   version?: string | null;
   planName?: string | null;
   initialPaidAtIso?: string | null;
+  /** 2026-10-29: the payment plan (set from WelcomePackInput.paymentPlan). A v6 plan gets the v6 key points. */
+  paymentPlan?: string | null;
 }
 
 /** Client-safe business facts. ⛔ NOTHING OPERATOR-ONLY BELONGS IN THIS SHAPE — no notes, no
@@ -497,11 +503,35 @@ export const AGREEMENT_KEY_POINTS: Record<'build' | 'optimise' | 'unknown', read
 /** The key points for ONE client's agreement: the route's list, plus (v4 only) what happens after the last minimum-term
  *  payment — the shared wording (findableOffer.endOfTermKeyPoint). ⛔ A v3 signer's pack is unchanged: only a record that says
  *  v4 gets it, and an unknown route names nothing. */
-export function agreementKeyPointsFor(a: { route?: 'build' | 'optimise' | null; version?: string | null }): readonly string[] {
+export function agreementKeyPointsFor(a: { route?: 'build' | 'optimise' | null; version?: string | null; paymentPlan?: string | null }): readonly string[] {
+  /* v6 (2026-10-29): the key points of the client's own payment plan (agreement v6 3.1, 4.3, 5.4, 8.6, 9.2). */
+  if (isV6Plan(a.paymentPlan)) return v6KeyPoints(a.paymentPlan);
   const base = AGREEMENT_KEY_POINTS[a.route ?? 'unknown'];
   return (a.version === 'v4' || a.version === 'v5') && a.route ? [...base, endOfTermKeyPoint(a.route)] : base;
 }
 const AGREEMENT_ALWAYS_YOURS = 'Your domain, logo and photos are always yours.';
+
+/* ── v6 (2026-10-29): the three payment plans (paymentPlans.ts) ── */
+const isV6Plan = (p: unknown): p is PaymentPlan => isPaymentPlan(p) && p !== 'legacy_twelve';
+function v6KeyPoints(p: PaymentPlan): readonly string[] {
+  const s = PAYMENT_PLAN_SPEC[p];
+  return [
+    p === 'full'
+      ? `You paid in full: ${gbpWords(s.firstGbp)}, one payment. Nothing more is owed for your plan.`
+      : `Your plan is ${s.totalPayments} payments, counting your first. The remaining payments are owed even if you stop early.`,
+    ...(p === 'full' ? [] : [MONTHLY_KEY_POINT]),
+    'We build, host and manage your new website.',
+    p === 'full' ? 'The website and our work are yours once your payment has cleared.' : 'We own the website and our work until your final payment clears. Then it\u2019s yours.',
+    ...(p === 'full' ? [] : ['If a payment is 14 days late, we can take down the website we built until it\u2019s paid. We will tell you first.']),
+    'If AI names you no more often at your four-week re-check, you can claim back everything you have paid within 14 days, and the agreement ends.',
+    planAfterWords(p),
+  ];
+}
+function v6PaymentsLine(p: PaymentPlan): string {
+  const s = PAYMENT_PLAN_SPEC[p];
+  if (p === 'full') return `You paid ${gbpWords(s.firstGbp)} in full. That covers the measurement, the website, the work and the re-measure. ${planAfterWords(p)}`;
+  return `Your ${gbpWords(s.firstGbp)} covers the measurement, the first round of work and the re-measure. ${gbpWords(s.monthlyGbp)} a month begins ${MONTHLY_START_V3_WORDS}, ${s.totalPayments} payments in total counting your first. We will email you before it starts. ${planAfterWords(p)}`;
+}
 
 /** Exported for its test (scripts/client-signup-agreement-flow.test.ts). */
 export function welcomePackAgreementPage(a: WelcomePackAgreement): string { return agreementPage(a); }
@@ -592,13 +622,15 @@ function detailsPage(name: string, facts: WelcomePackFacts): string {
    whether it is named more often. The engine observations are stated as what OUR MEASUREMENTS have
    often shown, never as a rule about how a model works. */
 function planPage1(name: string, totalPayments: number | null | undefined, amountPaid: number | null | undefined,
-  remeasure: { weeks: number; label: string } | null, googleAiInScore = false): string {
+  remeasure: { weeks: number; label: string } | null, googleAiInScore = false, paymentPlan: string | null = null): string {
   const n = esc(name);
-  const current = agreedCurrentOffer(totalPayments, amountPaid);
+  /* v6: the plan is the proof (stamped at payment) when the first payment matches it. */
+  const v6 = isV6Plan(paymentPlan) && amountPaid !== null && amountPaid !== undefined && Number(amountPaid) === PAYMENT_PLAN_SPEC[paymentPlan].firstGbp ? paymentPlan : null;
+  const current = v6 ? true : agreedCurrentOffer(totalPayments, amountPaid);
   const W = remeasure ? weeksWord(remeasure.weeks) : '';
   /* ⛔ WHAT YOU GET, PER ROUTE (M-024): a Build client's main purchase is the new website, so it is named;
      an Optimise client's pages go on THEIR site. Unknown route: the neutral line. */
-  const route = serviceRouteForTotal(totalPayments);
+  const route = serviceRouteForTotal(totalPayments, paymentPlan);
   const pagesLine = route === 'build'
     ? '<li><b>A new website, built and hosted by us.</b> One dedicated page for each key service, answering what customers really ask.</li>'
     : route === 'optimise'
@@ -638,11 +670,13 @@ function planPage1(name: string, totalPayments: number | null | undefined, amoun
         ${/* ⛔ ESCAPED ONCE, HERE. It used to go through lead(), which escapes its second argument
               again, so the apostrophe in "we'll" reached the PDF as the six characters &#39; . */''}
         ${current
-          ? `<p><b>Your guarantee.</b> ${esc(FINDABLE_GUARANTEE)}</p>`
+          ? `<p><b>Your guarantee.</b> ${esc(v6 ? V6_GUARANTEE : FINDABLE_GUARANTEE)}</p>`
           : lead('Your guarantee.', 'Your money-back guarantee applies on the terms you signed up to.')}
         ${/* ⚠️ lead() ESCAPES ITS SECOND ARGUMENT, so this string uses real characters and never
               HTML entities — "&pound;" here would print those six letters to a paying client. */''}
-        ${!current
+        ${v6
+          ? lead('Payments.', v6PaymentsLine(v6))
+          : !current
           ? lead('Payments.', 'Your agreed payment schedule continues under the terms you signed up to.')
           : lead('Payments.', `Your £${FINDABLE_SETUP_PRICE_GBP} covers the measurement, the first round of work and the re-measure. £${FINDABLE_MONTHLY_GBP} a month begins ${MONTHLY_START_V3_WORDS}${termPhrase(totalPayments)}. It pays for the monthly work above, plus ${upkeepPhrase(totalPayments)}. We will email you before it starts.`)}
       </div>`;
@@ -869,10 +903,10 @@ export function buildWelcomePackHtml(input: WelcomePackInput): string {
   const remeasure = recordedRemeasure(input.remeasureDueDate, input.baseline?.completedAt ?? null);
   const packPages = [
     coverPage(name, !!input.facts, !!input.baseline, !!input.agreement, !!(input.agreement?.termsKnown || input.agreement?.acceptedAtIso)),
-    planPage1(name, input.totalPayments, input.amountPaid, remeasure, input.report.googleAiInScore === true),
+    planPage1(name, input.totalPayments, input.amountPaid, remeasure, input.report.googleAiInScore === true, input.paymentPlan ?? null),
     planPage2(name),
     ...(input.baseline ? [baselinePage(name, input.baseline), nextPage(input.totalPayments, remeasure)] : []),
-    ...(input.agreement ? [agreementPage(input.agreement)] : []),
+    ...(input.agreement ? [agreementPage({ ...input.agreement, paymentPlan: input.agreement.paymentPlan ?? input.paymentPlan ?? null })] : []),
     ...(input.facts ? [detailsPage(name, input.facts)] : []),
     reviewsPage1(reviewLink),
     reviewsPage2(),

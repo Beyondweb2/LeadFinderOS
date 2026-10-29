@@ -160,7 +160,8 @@ async function main() {
     const v3page = agreementPageHtml({ mode: 'sign', businessName: 'Acme', route: 'build', values: {}, errors: [], signupId: 's1', nowIso: '2026-12-07T10:00:00Z', version: 'v3' });
     ok(v3page.includes('I agree and sign') && /clause 12\.4/.test(v3page), 'a v3 page still reads as v3 (button and clause references)');
     const agent = read('supabase/functions/client-agreement/index.ts');
-    ok(/commercialTermsFor\(CLIENT_AGREEMENT_VERSION\)/.test(agent) && !/COMMERCIAL_TERMS_V3/.test(agent), 'the agreement function stamps the terms its version decides');
+    /* 2026-10-29: the version follows the sign-up's payment plan (VERSION = agreementVersionForPlan). */
+    ok(/commercialTermsFor\(VERSION\)/.test(agent) && /const VERSION = agreementVersionForPlan\(plan\)/.test(agent) && !/COMMERCIAL_TERMS_V3/.test(agent), 'the agreement function stamps the terms its version decides');
   }
 
   console.log('\n── THE RECORD: COMPLETE, BOUND TO ONE SIGN-UP, TAMPER-PROOF ──');
@@ -181,6 +182,7 @@ async function main() {
     ok(!gate({ ...acc, authority_confirmed: false }).ok && !gate({ ...acc, authority_confirmed: null }).ok, 'no authority confirmation, no checkout');
     ok(!gate(acc, { sha: 'f'.repeat(64) }).ok && !gate(acc, { sha: null }).ok, 'altered stored text no longer matches its fingerprint: refused');
     ok(!gate({ ...acc, method: 'checkout' }).ok, 'only an agreement-page acceptance counts');
+    /* A v4 sale was the £99 × 12 plan (legacy_twelve); a session made before plans carries none and is read as it. */
     const meta = { commercial_terms: COMMERCIAL_TERMS_V4, agreement_version: 'v4', agreement_acceptance_id: 'A1', service_route: 'build' };
     const wv = (m: Record<string, string | undefined>) => webhookV3Verdict({ metadata: m, acceptance: acc, leadId: 'L1', onboardingId: 'S1', currentVersion: 'v4', recomputedSha: sha, expectedTerms: COMMERCIAL_TERMS_V4 });
     ok(wv(meta).ok, 'the webhook accepts a paid session that names the v4 signature');
@@ -190,9 +192,9 @@ async function main() {
     /* Price: the browser never decides money — the checkout reads route and price from the row and the constants. */
     const co = read('supabase/functions/findable-checkout/index.ts');
     ok(/serviceRouteFromRow\(/.test(co) && /unit_amount/.test(co) && !/req\.json\(\)[^;]*price|body\.(price|amount|unit_amount)/.test(co), 'a tampered price or plan in the request is not read: the route comes from the row, the price from the constants');
-    ok(/form\.set\("metadata\[commercial_terms\]", commercialTermsFor\(CLIENT_AGREEMENT_VERSION\) \?\? ""\)/.test(co), 'the checkout session carries the terms the CURRENT version decides');
+    ok(/form\.set\("metadata\[commercial_terms\]", commercialTermsFor\(agreementVersionNeeded\) \?\? ""\)/.test(co) && /const agreementVersionNeeded = agreementVersionForPlan\(plan\)/.test(co), 'the checkout session carries the terms the version of ITS PLAN decides');
     const hold = read('supabase/functions/_shared/payment-hold.ts');
-    ok(/expectedTerms: commercialTermsFor\(CLIENT_AGREEMENT_VERSION\)/.test(hold), 'the webhook backstop checks the same terms');
+    ok(/expectedTerms: commercialTermsFor\(version\)/.test(hold) && /const version = plan \? agreementVersionForPlan\(plan\) : "v5"/.test(hold), 'the webhook backstop checks the same terms');
   }
 
   console.log('\n── PAID CLIENTS AND THE WELCOME PACK SEE THE SIGNED AGREEMENT ──');

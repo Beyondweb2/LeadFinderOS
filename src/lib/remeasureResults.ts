@@ -27,6 +27,7 @@
 import { MIN_CELLS_FOR_QUESTION_CLAIM, type MeasurementComparison } from './measurementCompare.ts';
 import { guaranteeNumberWentUp, type ContinuingMode } from './clientTimeline.ts';
 import { afterTermSummaryWords } from './planTerms.ts';
+import { PAYMENT_PLAN_SPEC, gbpWords, isPaymentPlan, planAfterWords, type PaymentPlan } from './paymentPlans.ts';
 import { FINDABLE_CONTINUING_GBP, FINDABLE_MONTHLY_GBP, FINDABLE_SETUP_PRICE_GBP, GUARANTEE_PAYMENT_TWO_SENTENCE, REMEASURE_CLAIM_SENTENCE, REMEASURE_WEEKS_STANDARD, serviceRouteForTotal, termMonthsFor, totalPaymentsFor } from './findableOffer.ts';
 import { defaultRemeasureDue, remeasureOffsetDays } from './deliveryCockpit.ts';
 
@@ -247,6 +248,9 @@ export interface ResultsCopyInput {
   v3Terms?: boolean;
   /** What follows the minimum term for THIS client (clientTimeline.continuingModeFor). Absent with v3Terms = v3's automatic continuation. */
   continuingMode?: ContinuingMode;
+  /** 2026-10-29: the payment plan the client paid on (outreach_leads.payment_plan). A v6 plan (not legacy_twelve) gets the
+   *  v6 guarantee (everything they paid back) and its own monthly figure; absent / legacy = exactly the v5 wording. */
+  paymentPlan?: string | null;
 }
 
 /* ⛔ THE CLAIM PARAGRAPH — ONE SENTENCE OF OURS IN FRONT OF ONE SENTENCE THAT IS LOCKED.
@@ -262,9 +266,12 @@ export interface ResultsCopyInput {
 /* 🔴 PAYMENT 2 (Paul, 2026-09-23): the claim paragraph also says what a valid claim does to the
    monthly — refunded if already taken, never taken otherwise (GUARANTEE_PAYMENT_TWO_SENTENCE, locked
    to findable-site). */
-export function resultsClaimParagraph(): string {
+export function resultsClaimParagraph(paymentPlan?: string | null): string {
+  /* v6 (5.4, 5.5): the refund is everything the client has paid, and a valid claim ends the plan. */
+  if (isV6Plan(paymentPlan)) return `That means the guarantee applies. If that number has not gone up, email us within 14 days of your results and we'll refund everything you have paid us. A valid claim also ends your plan: no further payments are taken.`;
   return `That means the guarantee applies. ${REMEASURE_CLAIM_SENTENCE} ${GUARANTEE_PAYMENT_TWO_SENTENCE}`;
 }
+const isV6Plan = (p: unknown): p is PaymentPlan => isPaymentPlan(p) && p !== 'legacy_twelve';
 
 const pct = (n: number, d: number) => (d > 0 ? Math.round((100 * n) / d) : 0);
 
@@ -291,7 +298,7 @@ export function resultsEmailParagraphs(i: ResultsCopyInput): string[] {
     /* ⛔ THE ORDER IS PAUL'S, 2026-09-13: the verdict, then the entitlement, then the mechanism.
        It used to read as an apology followed by an offer. "That means the guarantee applies" is
        ours to write; the sentence after it is NOT — see the note above resultsClaimParagraph. */
-    out.push(`Your number has not gone up.`, resultsClaimParagraph());
+    out.push(`Your number has not gone up.`, resultsClaimParagraph(i.paymentPlan));
   }
   /* ⛔ THIS EMAIL IS THE EARLY BILLING NOTICE. Stripe's own trial-ending event fires three days out
      and nothing can move it, so the date and the amount are named here too.
@@ -303,7 +310,11 @@ export function resultsEmailParagraphs(i: ResultsCopyInput): string[] {
   /* ⛔ ONLY WHEN THE NUMBER WENT UP (Paul, 2026-10-05). The not-gone-up email has just said a valid
      claim stops the monthly; a "your first monthly payment is on…" paragraph straight after it reads
      as taking that back. That version names no upcoming payment. */
-  if (i.wentUp && i.monthlyStartsOn && i.v3Terms) {
+  if (i.wentUp && i.monthlyStartsOn && isV6Plan(i.paymentPlan)) {
+    /* v6 (2026-10-29): the plan's own monthly and count; pay in full has no monthly (no subscription, so no date). */
+    const s = PAYMENT_PLAN_SPEC[i.paymentPlan];
+    if (s.monthlyGbp > 0) out.push(`Your first monthly payment of ${gbpWords(s.monthlyGbp)} is on ${i.monthlyStartsOn}, the day after your 14-day refund window closes. It is payment 2 of ${s.totalPayments}, counting the ${gbpWords(s.firstGbp)} you paid at sign-up. ${planAfterWords(i.paymentPlan)}`);
+  } else if (i.wentUp && i.monthlyStartsOn && i.v3Terms) {
     /* v3: the date is the Payment Start Date (the day after the 14-day Refund Window); after the minimum
        term the Continuing Service follows (9A) — never "nothing is charged after". */
     const route = serviceRouteForTotal(i.totalPayments);
@@ -343,7 +354,7 @@ export function resultsDocumentMeaning(i: ResultsCopyInput): string[] {
       `We keep the work live and keep measuring.`,
     ];
   }
-  return [`The number has not gone up.`, resultsClaimParagraph()];
+  return [`The number has not gone up.`, resultsClaimParagraph(i.paymentPlan)];
 }
 
 /** What the results email says about the end of the plan, by what THIS client signed (clientTimeline.continuingModeFor).

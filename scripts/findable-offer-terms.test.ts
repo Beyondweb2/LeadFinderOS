@@ -24,6 +24,7 @@ import { getTemplateSendability } from '../src/lib/whatsappTemplates.ts';
 import { templateAwaitingApproval } from '../supabase/functions/_shared/whatsapp-send.ts';
 import { buildColdCallPlaybook } from '../src/lib/coldCallPlaybook.ts';
 import { planSpoken } from '../src/lib/planTerms.ts';
+import { PAYMENT_PLAN_SPEC, gbpWords, threeWaysSpoken } from '../src/lib/paymentPlans.ts';
 
 let f = 0;
 const ok = (c: unknown, l: string) => { if (!c) f++; console.log((c ? 'PASS ' : 'FAIL ') + l); };
@@ -56,8 +57,9 @@ for (const r of SERVICE_ROUTES) {
   ok(checkoutLineNameFor(r).includes(`/month from the day after your refund window, ${n} payments in total (the minimum term)`), `Stripe line item (${r}) names the monthly, ${n} payments and the minimum`);
 }
 const checkout = code('supabase/functions/findable-checkout/index.ts');
-ok(/custom_text\[submit\]\[message\]", cardSavedNoticeFor\(route\)\)/.test(checkout), 'checkout shows the route\'s notice beside the card field');
-ok(/product_data\]\[name\]", checkoutLineNameFor\(route\)\)/.test(checkout), 'checkout names the route on the line item');
+/* 2026-10-29: the v5 plan keeps the route's words; the new payment plans use their own (paymentPlans.ts). */
+ok(/custom_text\[submit\]\[message\]", legacyPlan \? cardSavedNoticeFor\(route\) : cardSavedNoticeForPlan\(plan\)\)/.test(checkout), 'checkout shows the route\'s (or plan\'s) notice beside the card field');
+ok(/product_data\]\[name\]", legacyPlan \? checkoutLineNameFor\(route\) : checkoutLineNameForPlan\(plan\)\)/.test(checkout), 'checkout names the route (or plan) on the line item');
 ok(!/29\.99|NEW_SITE/.test(checkout), 'no £29.99 and no new-site tier in checkout code');
 
 console.log('── 3. BILLING: THE ROUTE\'S COUNT, THE SIGN-UP ONE INCLUDED ──');
@@ -124,8 +126,11 @@ const pb = buildColdCallPlaybook({
 });
 /* v5 (2026-10-16): the sales offer is planTerms.ts — ONE plan, Findable Build (Optimise is withdrawn). */
 ok(pb.offer.lines[0] === planSpoken(), 'Cold Call Playbook quotes the offer from the one sales source (planTerms.ts)');
-ok(/12 payments/.test(pb.offer.monthly) && /first of the 12 payments/.test(pb.offer.monthly) && !/6 payments|optimise|months/i.test(pb.offer.monthly) && !/check current offer/i.test(JSON.stringify(pb)),
-  'and names Build\'s count in payments, the sign-up counted — no Optimise, no months, no "check current offer"');
+/* 2026-10-29 (v6): three ways to pay (threeWaysSpoken). The 12-month plan's count is in payments, the £99 start counted
+   ("… to start then … a month, 12 payments in total"); "6 months" is a plan's name, never a minimum term in months. */
+ok(pb.offer.monthly.includes(threeWaysSpoken()) && pb.offer.monthly.includes(`${gbpWords(PAYMENT_PLAN_SPEC.twelve.firstGbp)} to start then ${gbpWords(PAYMENT_PLAN_SPEC.twelve.monthlyGbp)} a month, ${PAYMENT_PLAN_SPEC.twelve.totalPayments} payments in total`)
+  && !/optimise|minimum term of \d+ months|-month minimum/i.test(pb.offer.monthly) && !/check current offer/i.test(JSON.stringify(pb)),
+  'and names Build\'s three ways to pay, the 12-month count in payments with the sign-up counted — no Optimise, no months-as-term, no "check current offer"');
 /* Nothing customer-facing may describe the count ON TOP of the sign-up. */
 for (const [label, text] of [['card notice (build)', cardSavedNoticeFor('build')], ['card notice (optimise)', cardSavedNoticeFor('optimise')], ['offer summary', FINDABLE_OFFER_SUMMARY], ['playbook offer', JSON.stringify(pb.offer)]] as const) {
   ok(!/(12|6) (more|further|monthly) payments|then (12|6) payments|plus (12|6)\b|13 payments|7 payments/i.test(text), label + ': no wording that implies an extra payment');

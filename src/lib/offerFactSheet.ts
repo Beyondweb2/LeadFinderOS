@@ -1,8 +1,8 @@
 /* ════════════════════════════════════════════════════════════════════════════════════════════════
    THE OFFER FACT SHEET — the ONLY things a reply draft may say about the offer (Paul, 2026-10-20).
 
-   Versioned (FACT_SHEET_VERSION). Built from the LIVE Client Service Agreement v5 (src/lib/clientAgreement.ts,
-   CLIENT_AGREEMENT_VERSION). Where Paul's brief and v5 differ, v5 wins and the difference is listed in
+   Versioned (FACT_SHEET_VERSION). 🔴 2026-10-29: built from Client Service Agreement v6 (src/lib/clientAgreement.ts), the
+   agreement every new sale on the three payment plans signs (paymentPlans.ts). Where Paul's brief and the agreement differ, the agreement wins and the difference is listed in
    FACT_SHEET_CONFLICTS for Paul to decide. scripts/offer-fact-sheet.test.ts pins every figure to the agreement text.
 
    ⛔ A draft may state an offer fact ONLY from an entry here with status 'live'. Anything else (a question the
@@ -16,22 +16,25 @@
    Pure and edge-reachable: relative imports with .ts, no Deno, no DOM.
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 import {
-  FINDABLE_SETUP_PRICE_GBP, FINDABLE_MONTHLY_GBP, FINDABLE_BUILD_TOTAL_PAYMENTS, FINDABLE_CONTINUING_GBP,
+  FINDABLE_SETUP_PRICE_GBP, FINDABLE_MONTHLY_GBP, FINDABLE_CONTINUING_GBP,
   FINDABLE_CONTACT_EMAIL, REMEASURE_WEEKS_STANDARD,
 } from './findableOffer.ts';
+import { FULL_PAY_HOSTING_INCLUDED_MONTHS, PAYMENT_PLAN_SPEC, PAY_IN_FULL_GBP, REDUCED_MONTHLY_GBP, planTotalGbp } from './paymentPlans.ts';
 
-export const FACT_SHEET_VERSION = '2026-10-20.1';
+const FULL = PAYMENT_PLAN_SPEC.full, SIX = PAYMENT_PLAN_SPEC.six, TWELVE = PAYMENT_PLAN_SPEC.twelve;
+
+export const FACT_SHEET_VERSION = '2026-10-29.1';
 /** The agreement this sheet follows. A new agreement version needs a new sheet version (the test checks). */
-export const FACT_SHEET_AGREEMENT = 'v5';
+export const FACT_SHEET_AGREEMENT = 'v6';
 
-/** Paul's guarantee line, word for word. v5 5.4: the £99 initial payment back if the count is not higher. */
+/** Paul's guarantee line, word for word. v6 5.4: everything they have paid back if the count is not higher. */
 export const GUARANTEE_LINE = 'We improve AI visibility or you get your money back.';
 /** THE CONFIDENCE LINE (Paul, 2026-10-20): said only when they ask about price, whether it works, "the catch", who we are,
  *  the guarantee, or sound unsure, and in the voice note. NEVER in the first pitch. The guarantee words are GUARANTEE_LINE
- *  verbatim; never "100%" or "if I fail". The refund is the £99 first payment (v5 5.4, GUARANTEE_REFUND). */
+ *  verbatim; never "100%" or "if I fail". The refund is everything they have paid (v6 5.4, GUARANTEE_REFUND). */
 export const CONFIDENCE_LINE = `I'm confident enough in it that it's backed by a guarantee: ${GUARANTEE_LINE.charAt(0).toLowerCase()}${GUARANTEE_LINE.slice(1)} We re-run the same questions after ${REMEASURE_WEEKS_STANDARD} weeks to check.`;
-/** What the guarantee pays back (v5 5.4). */
-export const GUARANTEE_REFUND = `If we haven't improved your AI visibility at the ${REMEASURE_WEEKS_STANDARD}-week re-check, you get your £${FINDABLE_SETUP_PRICE_GBP} back.`;
+/** What the guarantee pays back (v6 5.4, 5.5). */
+export const GUARANTEE_REFUND = `If we haven't improved your AI visibility at the ${REMEASURE_WEEKS_STANDARD}-week re-check, you get back everything you've paid us.`;
 
 /** The ONE way a reply names the measured engines. v5 2.2 says "ChatGPT and Google AI / Gemini"; the drafter says
  *  "Gemini" (never "google ai"). See FACT_SHEET_CONFLICTS: engine-wording. */
@@ -55,33 +58,33 @@ export interface Fact {
 const gbp = (n: number) => (Number.isInteger(n) ? `£${n}` : `£${n.toFixed(2)}`);
 
 export const FACT_SHEET: readonly Fact[] = [
-  { topic: 'price', status: 'live', source: 'v5 3.1, 4.1',
-    say: `It's ${gbp(FINDABLE_SETUP_PRICE_GBP)} to start, then ${gbp(FINDABLE_MONTHLY_GBP)} a month, ${FINDABLE_BUILD_TOTAL_PAYMENTS} payments in total including the first one.` },
-  { topic: 'monthly_start', status: 'live', source: 'v5 5.6',
-    say: `The monthly ${gbp(FINDABLE_MONTHLY_GBP)} only starts after your results and the 14 day refund window, so nothing more is taken until you've seen whether it worked.` },
-  { topic: 'term', status: 'live', source: 'v5 4.1',
-    say: `The minimum is ${FINDABLE_BUILD_TOTAL_PAYMENTS} payments, counting the first ${gbp(FINDABLE_SETUP_PRICE_GBP)}. It's not a cancel any time plan.` },
-  { topic: 'cancel', status: 'live', source: 'v5 4.2, 5.5', paulLooks: true,
-    say: `It's a ${FINDABLE_BUILD_TOTAL_PAYMENTS} payment minimum, so ending early leaves those payments due. The exception is the guarantee: if the number hasn't gone up at the re-check you can claim your ${gbp(FINDABLE_SETUP_PRICE_GBP)} back and it ends there.` },
-  { topic: 'guarantee', status: 'live', source: 'v5 5.2 to 5.5',
+  { topic: 'price', status: 'live', source: 'v6 3.1',
+    say: `There are three ways to pay: ${gbp(FULL.firstGbp)} once, or ${gbp(SIX.monthlyGbp)} a month for ${SIX.totalPayments} months, or ${gbp(TWELVE.firstGbp)} to start then ${gbp(TWELVE.monthlyGbp)} a month, ${TWELVE.totalPayments} payments in total.` },
+  { topic: 'monthly_start', status: 'live', source: 'v6 5.6',
+    say: `On the monthly plans the monthly payment only starts after your results and the 14 day refund window, so nothing more is taken until you've seen whether it worked.` },
+  { topic: 'term', status: 'live', source: 'v6 4.1',
+    say: `On the monthly plans the minimum is all the payments in your plan (${SIX.totalPayments} or ${TWELVE.totalPayments}), counting the first one. It's not a cancel any time plan. Pay in full is one payment and that's it.` },
+  { topic: 'cancel', status: 'live', source: 'v6 4.2, 5.5', paulLooks: true,
+    say: `On the monthly plans ending early leaves the rest of the plan's payments due. The exception is the guarantee: if the number hasn't gone up at the re-check you get back everything you've paid and it ends there.` },
+  { topic: 'guarantee', status: 'live', source: 'v6 5.2 to 5.5',
     say: `${GUARANTEE_LINE} We count how many AI answers name you before we start and again after ${REMEASURE_WEEKS_STANDARD} weeks on the same questions. ${GUARANTEE_REFUND}` },
-  { topic: 'measurement', status: 'live', source: 'v5 2.2, 5.2, 5.3',
+  { topic: 'measurement', status: 'live', source: 'v6 2.2, 5.2, 5.3',
     say: `We ask 20 real customer style questions, 3 times each, on ${ENGINE_WORDING}, then ask the same ones again about ${REMEASURE_WEEKS_STANDARD} weeks later.` },
-  { topic: 'domain', status: 'live', source: 'v5 9.1',
+  { topic: 'domain', status: 'live', source: 'v6 9.1',
     say: `Your domain is always yours. We'd just need you to be able to point it at the new site or move it over.` },
-  { topic: 'ownership', status: 'live', source: 'v5 4.3, 8.1, 8.4',
-    say: `The site becomes yours once all ${FINDABLE_BUILD_TOTAL_PAYMENTS} payments are made. Your domain, logo and photos stay yours the whole time.` },
-  { topic: 'after_term', status: 'live', source: 'v5 9A.2, 9A.5',
-    say: `After payment ${FINDABLE_BUILD_TOTAL_PAYMENTS} it stops, nothing carries on by itself. If you want us to keep hosting it there's an optional ${gbp(FINDABLE_CONTINUING_GBP)} a month, and I'll remind you before payment ${FINDABLE_BUILD_TOTAL_PAYMENTS}.` },
+  { topic: 'ownership', status: 'live', source: 'v6 4.3, 8.1, 8.4',
+    say: `The site becomes yours once your final payment clears (straight away on pay in full). Your domain, logo and photos stay yours the whole time.` },
+  { topic: 'after_term', status: 'live', source: 'v6 9.2, 9A.2, 9A.5',
+    say: `Hosting is included while you're paying (${FULL_PAY_HOSTING_INCLUDED_MONTHS} months on pay in full). After that nothing carries on by itself. If you want us to keep hosting it there's an optional ${gbp(FINDABLE_CONTINUING_GBP)} a month, and I'll remind you before it ends.` },
   { topic: 'build_time', status: 'live', source: 'paul',
     say: `The build usually takes a few days once we have what we need from you.` },
-  { topic: 'client_needs', status: 'live', source: 'v5 7.1, 1.6',
+  { topic: 'client_needs', status: 'live', source: 'v6 7.1, 1.6',
     say: `Just the services and areas you want to be found for, access to point or move your domain, and manager access on your Google Business Profile.` },
-  { topic: 'changes', status: 'live', source: 'v5 16.3, 16.6',
+  { topic: 'changes', status: 'live', source: 'v6 16.3, 16.6',
     say: `If you ever want something changed you just email me at ${FINDABLE_CONTACT_EMAIL}.` },
-  { topic: 'what_we_do', status: 'live', source: 'v5 2.1, Schedule 1',
+  { topic: 'what_we_do', status: 'live', source: 'v6 2.1, Schedule 1',
     say: `We build you a new site set up so AI tools and Google can clearly see what you do and where, then measure before and after.` },
-  { topic: 'provider', status: 'live', source: 'v5 1.6, 7.2', paulLooks: true,
+  { topic: 'provider', status: 'live', source: 'v6 1.6, 7.2', paulLooks: true,
     say: `If someone else looks after your site that's fine, as long as you're free to leave them. If you're tied into a contract we can't take you on.` },
 ];
 
@@ -128,16 +131,16 @@ export function factSheetForPrompt(topics?: readonly FactTopic[]): string {
 }
 
 /** Money figures the sheet allows a draft to state (the checker warns on any other £ figure). */
-export const SHEET_MONEY = [FINDABLE_SETUP_PRICE_GBP, FINDABLE_MONTHLY_GBP, FINDABLE_CONTINUING_GBP].map(gbp);
+export const SHEET_MONEY = [FINDABLE_SETUP_PRICE_GBP, FINDABLE_MONTHLY_GBP, FINDABLE_CONTINUING_GBP, PAY_IN_FULL_GBP, REDUCED_MONTHLY_GBP, planTotalGbp('six'), planTotalGbp('twelve')].map(gbp);
 
 /* ── gaps and conflicts, for Paul (shown in the report and docs) ──────────────────────────────── */
 
 export const FACT_SHEET_CONFLICTS: readonly { id: string; brief: string; agreement: string; sheetSays: string }[] = [
-  { id: 'monthly-start', brief: '£99/month from 42 days later', agreement: 'v5 5.6: the day after the 14-day Refund Window that follows the Results Date (6 weeks after the payment only when the guarantee does not apply)', sheetSays: 'after your results and the 14 day refund window' },
-  { id: 'term-words', brief: '12-month minimum', agreement: 'v5 4.1: 12 payments (the release note says count payments, not months)', sheetSays: '12 payments in total including the first one' },
-  { id: 'guarantee-line', brief: '"We improve AI visibility or you get your money back."', agreement: 'v5 5.4: refund of the £99 initial payment if the count is not higher; 6.2 no other result is promised', sheetSays: 'the line, then the £99 detail' },
+  { id: 'monthly-start', brief: '£99/month from 42 days later', agreement: 'v6 5.6 (as v5): the day after the 14-day Refund Window that follows the Results Date (6 weeks after the payment only when the guarantee does not apply)', sheetSays: 'after your results and the 14 day refund window' },
+  { id: 'term-words', brief: 'three ways to pay', agreement: 'v6 4.1: the payments in the plan (6 or 12); pay in full is one payment', sheetSays: 'all the payments in your plan, counting the first one' },
+  { id: 'guarantee-line', brief: '"We improve AI visibility or you get your money back."', agreement: 'v6 5.4: refund of all payments made if the count is not higher; 6.2 no other result is promised', sheetSays: 'the line, then "everything you\'ve paid"' },
   { id: 'engine-wording', brief: 'one engine wording', agreement: 'v5 2.2 / 5.2: "ChatGPT and Google AI / Gemini"; code since 2026-10-19 also counts Google AI (AI Overview) for new clients; the drafter says "Gemini" and flags "google ai"', sheetSays: ENGINE_WORDING },
   { id: 'build-time', brief: 'build usually takes a few days', agreement: 'not in v5', sheetSays: 'usually a few days (marked as Paul\'s word)' },
-  { id: 'reminder-12', brief: 'reminder before payment 12', agreement: 'v5 9A.5 promises it; fn month12-reminder sends it, behind the month12_reminder_settings.enabled switch', sheetSays: 'I\'ll remind you before payment 12' },
+  { id: 'reminder-12', brief: 'reminder before hosting ends', agreement: 'v6 9A.5 promises a reminder before the Plan Period ends; fn month12-reminder covers v5 Build only today (not the six plan or pay in full)', sheetSays: 'I\'ll remind you before it ends' },
   { id: 'case-studies', brief: 'ABLM, MCL, BS4, one review', agreement: 'v5 8.9 allows naming a client unless they object', sheetSays: 'none used until Paul approves each with permission, evidence and quote' },
 ];

@@ -30,6 +30,7 @@ import { buildColdCallPlaybook, type PlaybookInput } from '../src/lib/coldCallPl
 import { CRAWL_CHECK_VERSION, type CrawlSignals } from '../src/lib/crawlCheck.ts';
 import { SITE_EVIDENCE_VERSION, type SiteEvidence } from '../src/lib/siteEvidence.ts';
 import { FINDABLE_CONTINUING_GBP, FINDABLE_MONTHLY_GBP } from '../src/lib/findableOffer.ts';
+import { PAYMENT_PLAN_SPEC, gbpWords, threeWaysSpoken } from '../src/lib/paymentPlans.ts';
 import { percentTone, salesEngineLabel, scoreTone, SCORE_TONE_CLASS } from '../src/lib/scoreTone.ts';
 import { HOOK_ENGINES, initialHookStateV2, type HookScoreRow } from '../src/lib/hookScore.ts';
 import { hookReportState, pickHookAudit, scoreHookAuditForCard, type HookCardAudit } from '../src/lib/hookVisibility.ts';
@@ -177,11 +178,15 @@ console.log('── 9. Build / Optimise preselection, live v3 terms only ──'
   ok(o.plans.preselected === 'build' && o.plans.routes.map((r) => r.route).join() === 'build', 'v5: existing usable website → Findable Build, the one plan (Optimise is withdrawn)');
   const all = spokenScriptText(o);
   ok(!/payments stop|one final month|nothing more to pay|then they stop/i.test(all), 'none of the unapproved v4 AGREEMENT phrases (the sales words say Optimise ends; the contract wording is a separate, unapproved change)');
-  /* Build's £29.99 only if they want hosting to continue. */
-  ok(o.plans.routes.find((r) => r.route === 'build')!.spoken.join(' ').includes('£' + FINDABLE_CONTINUING_GBP + ' a month for hosting and maintenance'), 'Build: £29.99 only for continued hosting');
+  /* Build's £29.99 only as optional hosting after the final payment (v6, 2026-10-29). */
+  const buildSpoken = o.plans.routes.find((r) => r.route === 'build')!.spoken.join(' ');
+  ok(buildSpoken.includes('then optional at ' + gbpWords(FINDABLE_CONTINUING_GBP) + ' a month') && /theirs once the final payment clears/.test(buildSpoken) && (buildSpoken.match(/£29\.99/g) ?? []).length === 1,
+    'Build: £29.99 only as optional hosting, after the site is theirs');
   ok(!o.objections.some((x) => /six months|Optimise/i.test(x.objection + ' ' + x.answer)) && !/optimise|6 payments|six months|month minimum/i.test(all + ' ' + o.objections.map((x) => x.answer).join(' ')), 'v5: no objection or spoken line sells, quotes or recommends Optimise, and no term is said in months');
-  const twelve = o.objections.find((x) => x.objection === 'Why 12 payments?')?.answer ?? '';
-  ok(/Findable Build/.test(twelve) && /12 payments including today/.test(twelve), '"Why 12 payments?": Findable Build, said in payments');
+  /* 2026-10-29: "Why 12 payments?" was replaced by "Why pay monthly?" — three ways to pay, the 12-month plan in payments. */
+  ok(!o.objections.some((x) => x.objection === 'Why 12 payments?'), 'the old "Why 12 payments?" objection is gone');
+  const monthly = o.objections.find((x) => x.objection === 'Why pay monthly?')?.answer ?? '';
+  ok(monthly.includes(threeWaysSpoken()) && monthly.includes(PAYMENT_PLAN_SPEC.twelve.totalPayments + ' payments in total'), '"Why pay monthly?": all three ways to pay from the constants, the 12-month plan said in payments');
   ok(/That's not something we offer/.test(o.objections.find((x) => x.objection === 'Can you just improve my current website?')?.answer ?? ''), '"Can you just improve my current website?": not something we offer — a new website, same web address');
   ok(o.ifAgency.coaching.some((c) => /can't take them on yet/.test(c)) && o.ifAgency.coaching.some((c) => /not sure/.test(c)), 'the agency branch: still tied in → we cannot take them on yet; not sure → check before signing up');
 }

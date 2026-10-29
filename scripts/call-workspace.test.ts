@@ -26,7 +26,8 @@ import path from 'node:path';
 import { findableSiteDir } from './findable-site-dir.mjs';
 import { buildColdCallPlaybook, spokenDay, WHO_ASKED_RE, type PlaybookInput, type PlaybookMessage } from '../src/lib/coldCallPlaybook.ts';
 import { buildCallClose, GUARANTEE_HEADLINE, routeOffer, routesFor } from '../src/lib/callClose.ts';
-import { FINDABLE_MONTHLY_GBP, FINDABLE_SETUP_PRICE_GBP, FINDABLE_BUILD_TOTAL_PAYMENTS, FINDABLE_OPTIMISE_TOTAL_PAYMENTS } from '../src/lib/findableOffer.ts';
+import { FINDABLE_CONTINUING_GBP, FINDABLE_MONTHLY_GBP, FINDABLE_SETUP_PRICE_GBP, FINDABLE_BUILD_TOTAL_PAYMENTS, FINDABLE_OPTIMISE_TOTAL_PAYMENTS, MONTHLY_START_V3_WORDS } from '../src/lib/findableOffer.ts';
+import { CLIENT_PAYMENT_PLANS, FULL_PAY_HOSTING_INCLUDED_MONTHS, PAYMENT_PLAN_NAME, PAYMENT_PLAN_SPEC, PAY_IN_FULL_GBP, REDUCED_MONTHLY_GBP, gbpWords, planShortLine, planTotalGbp } from '../src/lib/paymentPlans.ts';
 import { QUICK_CLOSE_AFTER_PAYMENT } from '../src/lib/quickClose.ts';
 import { foldSalesWorkspace, isActiveWork } from '../src/lib/salesWorkspace.ts';
 import { isStaleSave, snapshotOf, toSnapshotArg } from '../src/lib/nextActionStale.ts';
@@ -95,15 +96,29 @@ console.log('── 2. THE OFFER, BOTH ROUTES, FROM THE CONSTANTS ──');
 {
   const b = routeOffer('build');
   const o = routeOffer('optimise');
-  ok(b.summary === `£${FINDABLE_SETUP_PRICE_GBP} now · £${FINDABLE_MONTHLY_GBP}/month · ${FINDABLE_BUILD_TOTAL_PAYMENTS} payments in total` && FINDABLE_BUILD_TOTAL_PAYMENTS === 12, 'Build: £99 now · £99/month · 12 payments in total');
+  /* 2026-10-29 (paymentPlans.ts, agreement v6): Build is sold three ways; the summary names each, from the plan constants. */
+  const P = PAYMENT_PLAN_SPEC;
+  ok(CLIENT_PAYMENT_PLANS.join(',') === 'full,six,twelve'
+    && b.summary === CLIENT_PAYMENT_PLANS.map((p) => `${PAYMENT_PLAN_NAME[p]} ${planShortLine(p)}`).join(' · ')
+    && b.summary.includes(gbpWords(PAY_IN_FULL_GBP)) && b.summary.includes(gbpWords(REDUCED_MONTHLY_GBP))
+    && P.full.firstGbp === PAY_IN_FULL_GBP && P.full.totalPayments === 1
+    && P.six.firstGbp === FINDABLE_SETUP_PRICE_GBP && P.six.monthlyGbp === FINDABLE_MONTHLY_GBP && P.six.totalPayments === 6
+    && P.twelve.firstGbp === FINDABLE_SETUP_PRICE_GBP && P.twelve.monthlyGbp === REDUCED_MONTHLY_GBP && P.twelve.totalPayments === FINDABLE_BUILD_TOTAL_PAYMENTS,
+    'Build: the summary names all three ways to pay (pay in full · 6 months · 12 months), every figure from the plan constants');
   ok(o.summary === `£${FINDABLE_SETUP_PRICE_GBP} now · £${FINDABLE_MONTHLY_GBP}/month · ${FINDABLE_OPTIMISE_TOTAL_PAYMENTS} payments in total` && FINDABLE_OPTIMISE_TOTAL_PAYMENTS === 6, 'Optimise: £99 now · £99/month · 6 payments in total');
   ok(/new website, host it and look after it/.test(b.spoken.join(' ')) && /built, hosted and managed by Findable/.test(b.site), 'Build: a new Findable-built, hosted and managed website');
   ok(/keep your own website and it stays yours/.test(o.spoken.join(' ')) && /never take it offline/.test(o.spoken.join(' ')) && /keep their existing website and its ownership/.test(o.site), 'Optimise: they keep their existing site and its ownership; we never take it offline');
-  ok(/12 payments in total, the £99 today included: that's the minimum term/.test(b.spoken.join(' ')) && /6 payments in total, the £99 today included: that's the minimum term/.test(o.spoken.join(' ')) && !/-month minimum/.test(b.spoken.join(' ') + o.spoken.join(' ')), 'both say the total counts the £99 today and name the minimum term — in PAYMENTS, never months (v5)');
+  const bs = b.spoken.join(' ');
+  ok(bs.includes(`${gbpWords(P.full.firstGbp)} once`) && bs.includes(`${gbpWords(P.six.monthlyGbp)} a month for ${P.six.totalPayments} months`)
+    && bs.includes(`${gbpWords(P.twelve.firstGbp)} today, then ${gbpWords(P.twelve.monthlyGbp)} a month, ${P.twelve.totalPayments} payments in total (${gbpWords(planTotalGbp('twelve'))})`),
+    'Build spoken: names all three ways to pay — the 12-month count said in PAYMENTS, today\'s included, with its total');
+  ok(/6 payments in total, the £99 today included: that's the minimum term/.test(o.spoken.join(' ')) && !/-month minimum|cancel (at )?any ?time|no commitment/i.test(bs + o.spoken.join(' ')), 'Optimise (history) still names its minimum term in payments; neither says "-month minimum" or cancel any time');
   /* 2026-10-05 (v3 clause 5.6): never "six weeks after today" — the day after the refund window. */
-  ok(/starting the day after your 14-day refund window closes/.test(b.spoken.join(' ')) && !/six weeks after today/.test(b.spoken.join(' ')), 'the first monthly payment is the day after the refund window (v3), never "six weeks after today"');
-  /* 2026-10-07 (Paul): per plan — Build's £29.99 only if they want hosting / maintenance to carry on; Optimise ENDS. */
-  ok(/If they want us to keep hosting and maintaining it after that, it's £29\.99 a month for hosting and maintenance/.test(b.spoken.join(' ')), 'Build: £29.99 a month only if they want hosting / maintenance to continue after the 12 payments');
+  ok(bs.includes(`start ${MONTHLY_START_V3_WORDS}`) && /the day after your 14-day refund window closes/.test(bs) && !/six weeks after today/.test(bs), 'the first monthly payment is the day after the refund window (v3), never "six weeks after today"');
+  /* 2026-10-29: the site is theirs once the final payment clears; hosting included while paying, then £29.99 optional. */
+  ok(/website is theirs once the final payment clears/.test(bs) && bs.includes(`${FULL_PAY_HOSTING_INCLUDED_MONTHS} months on pay in full`)
+    && bs.includes(`then optional at ${gbpWords(FINDABLE_CONTINUING_GBP)} a month`) && (bs.match(/£29\.99/g) ?? []).length === 1,
+    'Build: the site is theirs once the final payment clears; £29.99 a month only as optional hosting after');
   ok(/6th payment is the last one/.test(o.spoken.join(' ')) && /plan ends/.test(o.spoken.join(' ')) && !/£29\.99/.test(o.spoken.join(' ')), 'Optimise: the 6th payment is the last, then the plan ends — no £29.99 continuation');
   ok(!/\b(12|6) (more|further) payments|then (12|6) payments|13 payments|7 payments/i.test(b.spoken.join(' ') + o.spoken.join(' ')), 'no wording that implies an extra payment on top of the 12 / 6');
   const src = read('src/lib/callClose.ts').replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
@@ -140,11 +155,11 @@ console.log('── 3. NO FALSE GUARANTEE ──');
     ok(!/has not named a business without a website/.test(JSON.stringify(p)), 'the absolute "no website is never named" claim is gone (A-05)');
   }
   const g = buildCallClose('own_site').guarantee;
-  ok(/before we start/.test(g.spoken) && /four weeks/.test(g.spoken) && /14 days of your results/.test(g.spoken) && g.spoken.includes('£' + FINDABLE_SETUP_PRICE_GBP + ' back'), 'the guarantee said plainly: measured before, re-checked at four weeks, 14 days to claim, the £99 back');
+  ok(/before we start/.test(g.spoken) && /four weeks/.test(g.spoken) && /14 days of your results/.test(g.spoken) && /get back everything you've paid\.$/.test(g.spoken) && !/£\d+ back/.test(g.spoken), 'the guarantee said plainly: measured before, re-checked at four weeks, 14 days to claim, everything they\'ve paid back (v6, no "£99 back")');
   ok(/Never promise a ranking, a recommendation or that AI will name them/.test(g.caution), 'and the rep is told what never to promise');
   // 2026-10-06 (sales-team-today, Paul): the objection is now "Can you guarantee I'll show up?".
   const appear = buildColdCallPlaybook(base()).objections.find((o) => o.objection === "Can you guarantee I'll show up?")?.answer ?? '';
-  ok(/^No one can promise AI will name you/.test(appear) && /claim your £99 back\.$/.test(appear), '"Can you guarantee I\'ll show up?" — nobody can promise a placement; the number or the £99 back, with no hedge after it');
+  ok(/^No one can promise AI will name you/.test(appear) && /the measurement/.test(appear) && /you get your money back\.$/.test(appear), '"Can you guarantee I\'ll show up?" — nobody can promise a placement; the measurement or the money back, with no hedge after it');
 }
 
 console.log('── 4. WHO IS CALLING COMES FIRST ──');

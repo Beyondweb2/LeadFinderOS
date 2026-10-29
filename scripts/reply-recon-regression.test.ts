@@ -108,7 +108,7 @@ const intentMatches = (exp: string, p: MovePlan) => {
 /* ── §7b content checks on a draft ── */
 const FIRST_NAMES_OK = /^(Hi|Hey) (mate|Mark|Sarah|Michael|Kylie|Dom|Lewis|Rachel),/;
 const BANNED: Array<[RegExp, string]> = [
-  [/£\s?19\.99|£\s?49\.99|£\s?59\b|special\s+deal|six\s+months\s+minimum/i, 'a retired price or deal'], [/\binvisible\b/i, '"invisible"'], [/\btop\b/i, '"top"'],
+  [/£\s?19\.99|£\s?49\.99\s+instead|£\s?59\b|special\s+deal|six\s+months\s+minimum/i, 'a retired price or deal'], [/\binvisible\b/i, '"invisible"'], [/\btop\b/i, '"top"'],
   [/\bnumber\s+one\b/i, '"number one"'], [/\bdefinitely\b/i, '"definitely"'], [/\bwe'?ll\s+get\s+you\b/i, '"we\'ll get you"'], [/\bwill\s+rank\b/i, '"will rank"'],
   [/100\s?%/, '"100%"'], [/\brubbish\b|\buseless\b/i, 'a put-down'], [/\bfree\b(?!\s+(?:now|to\s+(?:leave|talk|chat|call)))/i, '"free"'], [/\bmonthly\b/i, '"monthly" (say "regular checks")'],
   [/\/agree\b|\bsign[\s-]?up\b|\bonboarding\b/i, 'a sign-up link'],

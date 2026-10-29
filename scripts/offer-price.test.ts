@@ -64,7 +64,8 @@ const CALLERS = [
 ];
 for (const rel of CALLERS) {
   const src = code(rel);
-  ok(/offerPrice\s*\(\s*\)/.test(src), `${rel}: calls offerPrice()`);
+  /* 2026-10-29: the checkout passes the PLAN read off the onboarding row (paymentPlans.ts) — a key, never an amount. */
+  ok(/offerPrice\s*\(\s*(plan)?\s*\)/.test(src), `${rel}: calls offerPrice() (or offerPrice(plan), the row's plan)`);
   /* A decimal money literal in live code is the drift this file exists to prevent. The constant
      itself lives in findableOffer.ts and reaches these files by import, never by retyping. */
   const literals = src.match(/\b\d+\.\d{2}\b/g) ?? [];

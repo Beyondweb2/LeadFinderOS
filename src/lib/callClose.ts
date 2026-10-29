@@ -23,7 +23,8 @@ import {
 import { QUICK_CLOSE_AFTER_PAYMENT, QUICK_CLOSE_PROMISE } from './quickClose.ts';
 import { afterTermRepLine } from './planTerms.ts';
 import type { SiteSource } from './leadWebsiteKind.ts';
-import { PRICE_MODEL_GUARANTEE, UPFRONT_SETUP_GBP, upfrontSpoken, type PriceModel } from './priceModel.ts';
+import { CLIENT_PAYMENT_PLANS, FULL_PAY_HOSTING_INCLUDED_MONTHS, PAYMENT_PLAN_NAME, PAYMENT_PLAN_SPEC, gbpWords, planShortLine, planTotalGbp } from './paymentPlans.ts';
+import { FINDABLE_CONTINUING_GBP } from './findableOffer.ts';
 
 /** findable.live's guarantee line, word for word (findable-site Guarantee.astro / Pricing.astro).
  *  ⛔ ONE COPY (wave 1 integration): it IS Quick Close's promise, so the call screen and the payment
@@ -71,13 +72,15 @@ export function routeOffer(route: ServiceRoute): CallRouteOffer {
   const total = totalPaymentsFor(route);
   const spokenPrice = `It's £${FINDABLE_SETUP_PRICE_GBP} today, then £${FINDABLE_MONTHLY_GBP} a month starting ${MONTHLY_STARTS_SPOKEN}.`;
   const spokenTerm = `That's ${total} payments in total, the £${FINDABLE_SETUP_PRICE_GBP} today included: that's the minimum term.`;
+  /* 🔴 2026-10-29 (paymentPlans.ts, agreement v6): Build is sold three ways. Every figure comes from the plan constants. */
+  const full = PAYMENT_PLAN_SPEC.full, six = PAYMENT_PLAN_SPEC.six, twelve = PAYMENT_PLAN_SPEC.twelve;
   return route === 'build'
     ? {
       route, name: SERVICE_ROUTE_NAME.build,
-      summary: `£${FINDABLE_SETUP_PRICE_GBP} now · £${FINDABLE_MONTHLY_GBP}/month · ${total} payments in total`,
+      summary: CLIENT_PAYMENT_PLANS.map((p) => `${PAYMENT_PLAN_NAME[p]} ${planShortLine(p)}`).join(' · '),
       spoken: [
-        `${ROUTE_WHAT.build} ${spokenPrice}`,
-        `${spokenTerm} ${afterTermRepLine(route)}`,
+        `${ROUTE_WHAT.build} There are three ways to pay: ${gbpWords(full.firstGbp)} once; or ${gbpWords(six.monthlyGbp)} a month for ${six.totalPayments} months; or ${gbpWords(twelve.firstGbp)} today, then ${gbpWords(twelve.monthlyGbp)} a month, ${twelve.totalPayments} payments in total (${gbpWords(planTotalGbp('twelve'))}). Monthly payments start ${MONTHLY_STARTS_SPOKEN}.`,
+        `The website is theirs once the final payment clears. Hosting is included while they pay (${FULL_PAY_HOSTING_INCLUDED_MONTHS} months on pay in full), then optional at ${gbpWords(FINDABLE_CONTINUING_GBP)} a month.`,
       ],
       site: 'A new website built, hosted and managed by Findable — theirs once the term is paid',
     }
@@ -104,26 +107,6 @@ export function routesFor(source: SiteSource | null | undefined): { routes: Serv
   };
 }
 
-/* ══ THE PRICE MODEL (2026-10-14, src/lib/priceModel.ts) ═══════════════════════════════════════════════════════
-   'standard' returns the offer above unchanged. The £499 model keeps what the route IS and says its own price; its
-   guarantee is the headline only — no refund amount or condition is invented (that is Paul's, in its agreement). */
-export function routeOfferForModel(route: ServiceRoute, model: PriceModel): CallRouteOffer {
-  const base = routeOffer(route);
-  if (model !== 'upfront_499') return base;
-  const u = upfrontSpoken();
-  return { ...base, summary: u.summary, spoken: [`${ROUTE_WHAT[route]} ${u.spoken[0]}`] };
-}
-
-export function guaranteeForModel<G extends { spoken: string; caution: string }>(base: G, model: PriceModel): G {
-  if (model !== 'upfront_499') return base;
-  return {
-    ...base,
-    ...('headline' in base ? { headline: PRICE_MODEL_GUARANTEE } : {}),
-    spoken: PRICE_MODEL_GUARANTEE,
-    caution: `Say only this line. Do not quote a refund amount or conditions for the £${UPFRONT_SETUP_GBP} model — Paul confirms them in its agreement. Never promise a ranking or that AI will name them.`,
-  };
-}
-
 export function buildCallClose(source: SiteSource | null | undefined): CallClose {
   const { routes, note } = routesFor(source);
   return {
@@ -131,8 +114,8 @@ export function buildCallClose(source: SiteSource | null | undefined): CallClose
     routeNote: note,
     guarantee: {
       headline: GUARANTEE_HEADLINE,
-      spoken: `We measure how often AI names you before we start, then ask the same questions again after ${REMEASURE_SPOKEN}. If that number hasn't gone up, you email us within 14 days of your results and get your £${FINDABLE_SETUP_PRICE_GBP} back.`,
-      caution: 'Never promise a ranking, a recommendation or that AI will name them. The promise is the measured number, or the £' + FINDABLE_SETUP_PRICE_GBP + ' back.',
+      spoken: `We measure how often AI names you before we start, then ask the same questions again after ${REMEASURE_SPOKEN}. If that number hasn't gone up, you email us within 14 days of your results and get back everything you've paid.`,
+      caution: 'Never promise a ranking, a recommendation or that AI will name them. The promise is the measured number, or their money back.',
     },
     monthly: `The monthly is a new page every month, a monthly check of what AI says about you, adjustments as we go, and ${routes[0] === 'build' ? 'hosting and looking after the website' : 'keeping your site right'}.`,
     afterPayment: QUICK_CLOSE_AFTER_PAYMENT,

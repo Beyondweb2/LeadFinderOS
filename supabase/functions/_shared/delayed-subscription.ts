@@ -4,6 +4,7 @@ import {
 } from "../../../src/lib/findableOffer.ts";
 import { FIRST_PAYMENT_FILTERS, subscriptionRefusal } from "../../../src/lib/paymentState.ts";
 import { OPTION_B_TIMING, PAYMENT_START_HOLD_DAYS } from "../../../src/lib/clientTimeline.ts";
+import { PAYMENT_PLAN_SPEC, REDUCED_MONTHLY_GBP, paymentPlanFromMeta, recurringPaymentsForPlan, type PaymentPlan } from "../../../src/lib/paymentPlans.ts";
 
 /** The provisional first-charge instant for a v3 subscription: PAYMENT_START_HOLD_DAYS after sign-up. */
 export function paymentStartHoldIso(signupIso: string | null | undefined): string | null {
@@ -138,6 +139,12 @@ export function subscriptionEndedByTerm(
  *  the two routes and was created for the one 12-payment plan. Anything else unrecognised → null. */
 export function subscriptionTotalPayments(s: { metadata?: unknown }): number | null {
   const m = (s.metadata && typeof s.metadata === "object" ? s.metadata : {}) as Record<string, unknown>;
+  /* 🔴 A RECORDED PAYMENT PLAN WINS (2026-10-29): the six plan's count is also the withdrawn Optimise's, so the plan,
+     not the count, says how many payments a subscription is for. */
+  if (m.payment_plan !== undefined && m.payment_plan !== null && m.payment_plan !== "") {
+    const plan = paymentPlanFromMeta(m);
+    return plan ? PAYMENT_PLAN_SPEC[plan].totalPayments : null;
+  }
   if (m.total_payments === undefined || m.total_payments === null || m.total_payments === "") {
     return m.product === "findable_standard_monthly" ? FINDABLE_BUILD_TOTAL_PAYMENTS : null;
   }
@@ -166,7 +173,11 @@ export function resolvePaidRoute(
   if (!isServiceRoute(raw)) {
     return { ...base, route: null, problem: raw ? `the checkout carried an unknown route "${raw}".` : "the checkout session carries no Build / Optimise route (it was created before routes existed)." };
   }
-  if (Number(m.total_payments) !== totalPaymentsFor(raw)) {
+  const recordedPlan = m.payment_plan !== undefined && m.payment_plan !== null && m.payment_plan !== "" ? paymentPlanFromMeta(m) : null;
+  if (recordedPlan && raw !== "build") {
+    return { ...base, route: null, problem: `the checkout carried payment plan "${recordedPlan}" on ${raw}; plans are Build only.` };
+  }
+  if (recordedPlan ? Number(m.total_payments) !== PAYMENT_PLAN_SPEC[recordedPlan].totalPayments : Number(m.total_payments) !== totalPaymentsFor(raw)) {
     return { ...base, route: null, problem: `the checkout's payment count (${String(m.total_payments ?? "none")}) does not match ${raw}.` };
   }
   if (rowRoute !== undefined && rowRoute !== raw) {
@@ -205,12 +216,20 @@ export async function createDelayedSubscription(
   /** The commercial terms the sale is on (clientTimeline CommercialTerms), stamped on the subscription so every later
    *  email and alert says what the client SIGNED (v3 continues, v4 Optimise ends, v4 Build is optional). */
   terms: string | null = null,
+  /* 🔴 THE PAYMENT PLAN (2026-10-29; paymentPlans.ts). Default = the v5 plan, so every existing caller is unchanged.
+     It decides the monthly price and how many recurring payments Stripe takes before it stops (cancel_at). */
+  plan: PaymentPlan = "legacy_twelve",
 ): Promise<DelayedSubscriptionOutcome> {
   if (lead.stripe_subscription_id) return { kind: "skipped", reason: `already subscribed (${lead.stripe_subscription_id})` };
   const refusal = subscriptionRefusal(lead);
   if (refusal) return { kind: "skipped", reason: refusal };
   if (!isServiceRoute(route)) return { kind: "failed", reason: "the service route (Build / Optimise) is not decided, so no payment schedule was created" };
-  const recurring = recurringPaymentsFor(route);
+  const spec = PAYMENT_PLAN_SPEC[plan];
+  if (!spec) return { kind: "failed", reason: `unknown payment plan ${JSON.stringify(plan)}, so no payment schedule was created` };
+  /* Pay in full: the one payment WAS the plan. Nothing to schedule. */
+  if (recurringPaymentsForPlan(plan) < 1) return { kind: "skipped", reason: "paid in full at checkout, no instalments to schedule" };
+  if (plan !== "legacy_twelve" && route !== "build") return { kind: "failed", reason: `payment plan ${plan} is Build only` };
+  const recurring = plan === "legacy_twelve" ? recurringPaymentsFor(route) : recurringPaymentsForPlan(plan);
 
   const secret = Deno.env.get("STRIPE_SECRET_KEY") ?? "";
   if (!secret) return { kind: "failed", reason: "STRIPE_SECRET_KEY is not set" };
@@ -234,13 +253,18 @@ export async function createDelayedSubscription(
 
   // The old new-site Price is already the verified £99/month recurring Price. Prefer an explicitly
   // named standard-price secret when configured, without requiring an unrelated secret migration.
-  const priceId = (Deno.env.get("FINDABLE_STANDARD_MONTHLY_PRICE_ID") ?? Deno.env.get("FINDABLE_NEW_SITE_PRICE_ID") ?? "").trim();
-  if (!PRICE_ID_RE.test(priceId)) return { kind: "failed", reason: "no usable £99 monthly Stripe Price id is configured" };
+  /* 🔴 TWO MONTHLY PRICES (2026-10-29): £99 (the v5 plan and the six plan) and £49.99 (the twelve plan). Each is a
+     dashboard Price whose amount is CHECKED below against the plan before anything is created. */
+  const reduced = spec.monthlyGbp === REDUCED_MONTHLY_GBP;
+  const priceId = (reduced
+    ? (Deno.env.get("FINDABLE_REDUCED_MONTHLY_PRICE_ID") ?? "")
+    : (Deno.env.get("FINDABLE_STANDARD_MONTHLY_PRICE_ID") ?? Deno.env.get("FINDABLE_NEW_SITE_PRICE_ID") ?? "")).trim();
+  if (!PRICE_ID_RE.test(priceId)) return { kind: "failed", reason: `no usable £${spec.monthlyGbp} monthly Stripe Price id is configured` };
   const price = await stripe(secret, `prices/${encodeURIComponent(priceId)}`);
   const amount = Number(price.json.unit_amount);
   const interval = ((price.json.recurring ?? {}) as { interval?: string }).interval ?? "";
-  if (!price.ok || amount !== Math.round(FINDABLE_MONTHLY_GBP * 100) || interval !== "month") {
-    return { kind: "failed", reason: `the configured monthly Stripe price is not £${FINDABLE_MONTHLY_GBP}/month` };
+  if (!price.ok || amount !== Math.round(spec.monthlyGbp * 100) || interval !== "month") {
+    return { kind: "failed", reason: `the configured monthly Stripe price is not £${spec.monthlyGbp}/month` };
   }
 
   const created = await stripe(secret, "subscriptions", form({
@@ -260,7 +284,8 @@ export async function createDelayedSubscription(
     /* The contract this subscription was created for — read back by the term-complete and
        starting-soon emails, so the count a client is told is the count Stripe bills. */
     "metadata[service_route]": route,
-    "metadata[total_payments]": String(totalPaymentsFor(route)),
+    "metadata[total_payments]": String(plan === "legacy_twelve" ? totalPaymentsFor(route) : spec.totalPayments),
+    "metadata[payment_plan]": plan,
     "metadata[checkout_session]": claimKey,
     ...(terms ? { "metadata[commercial_terms]": terms } : {}),
     /* v3: the marker the Payment Start scheduler requires before it will move this subscription. */

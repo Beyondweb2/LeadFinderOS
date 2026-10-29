@@ -88,7 +88,7 @@ console.log('\n── THE AGREEMENT STEP (findable.live/agree/<token>) ──');
   ok(/Continue to secure payment/.test(accepted) && /name="action" value="pay"/.test(accepted) && /version v3/.test(accepted), 'after signing: "Continue to secure payment" opens, with the version signed');
   ok(accepted.includes('Accepted on 7 October 2026, 11:00 (UK time) by Sam Test'), 'the accepted time is shown in UK time (BST)');
   const ag = read('supabase/functions/client-agreement/index.ts');
-  ok(/signupId: signup\.id, nowIso: new Date\(\)\.toISOString\(\) \}\)\);/.test(ag), 'the page previews TODAY as the signing date (never a report or sign-up date)');
+  ok(/signupId: signup\.id, nowIso: new Date\(\)\.toISOString\(\), version: VERSION, paymentPlan: plan \}\)\);/.test(ag), 'the page previews TODAY as the signing date (never a report or sign-up date)');
   ok(/contactName: clip\(signup\.contactName \|\| ctx\.lead\.contact_name\)/.test(ag), 'contact name: the sign-up\'s, else what the salesperson recorded on the lead');
   ok(/accepted_at/.test(read('src/lib/clientAgreement.ts')) || true, 'the stored signing time is the database\'s accepted_at (write-once evidence row)');
 }
