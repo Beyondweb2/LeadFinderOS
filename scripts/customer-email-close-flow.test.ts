@@ -85,9 +85,9 @@ ok(/Email goes to/.test(ctl) && /\{email\}/.test(ctl), 'with a customer email it
 ok(/disabled=\{!email \|\| changing \|\| !!busy\}/.test(ctl), '"Email the link" is off until a customer email exists — and nothing else is blocked');
 ok(/cleanCloseEmail\(draft\)/.test(ctl) && /setErr\(CLOSE_EMAIL_INVALID_TEXT\)/.test(ctl), 'an invalid address is rejected on the spot with a message');
 ok(/await onSave\(c\.email\)/.test(ctl) && /setChanging\(false\)/.test(ctl), 'after a save the control flips to "Email goes to …" with no refresh');
-ok(/mode: 'save_email', email/.test(dlg) && /mode: 'save_email', email/.test(cp), 'both close routes save through the same server mode');
+ok(/mode: 'save_email', email/.test(cp), 'Full Setup saves the customer email through the server mode (2026-10-30: the Quick Close dialog no longer collects an email)');
 ok(/qc\.setQueryData\(quickCloseKey\(leadId\), r\)/.test(dlg) && /qc\.setQueryData\(quickCloseKey\(leadId\), r\)/.test(cp), 'both routes put the server\'s fresh view straight into the cache (instant update; a reopen reads the saved value)');
-ok(/<CustomerEmailControl testId="qc-customer-email"/.test(dlg) && /<CustomerEmailControl testId="setup-customer-email"/.test(cp), 'Agreement & Payment AND Full Setup both use the one control');
+ok(!/CustomerEmailControl/.test(dlg) && /<CustomerEmailControl testId="setup-customer-email"/.test(cp) && /v\.share\?\.email && <Button/.test(dlg) && /data-testid="qc-send-email"/.test(dlg), 'Full Setup uses the one email control; the Quick Close dialog only offers "Email the link" when an address already exists');
 ok(!/No email address on file/.test(dlg) && !/No email address for them — add one under/.test(dlg), 'the old "add one under Correct a detail" dead end is gone');
 ok(/data-testid="qc-send-whatsapp"/.test(dlg) && /doCopy\('message'/.test(dlg) && /doCopy\('link'/.test(dlg), 'WhatsApp, Copy link and Copy message do not depend on an email');
 ok(/data-testid="setup-send-whatsapp"/.test(cp) && /data-testid="setup-copy-link"/.test(cp), 'Full Setup: WhatsApp and Copy link do not depend on an email');

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { routeOffer } from '@/lib/callClose';
+import { paymentOptionsSummary, COMPLETE_EXTRAS, ESSENTIAL_PAYMENT_PLANS, FULL_PAY_HOSTING_INCLUDED_MONTHS, PAYMENT_PLAN_NAME, PAYMENT_PLAN_SPEC, PLAN_PRODUCTS, PLAN_PRODUCT_NAME, gbpWords, planAfterWords, planShortLine, planTotalGbp, type PlanProduct } from '@/lib/paymentPlans';
 import { useQueryClient } from '@tanstack/react-query';
 import { logFeatureUse } from '@/lib/featureUsage';
 import { invokeEdge, edgeErrorMessage } from '@/lib/edgeInvoke';
@@ -20,7 +20,6 @@ import { useColdCallPlaybook } from '@/hooks/useColdCallPlaybook';
 import { type ColdCallPlaybook } from '@/lib/coldCallPlaybook';
 import { afterFirstQuestion, CALL_SCRIPT_ISSUES_HEADING, type WebsiteManager } from '@/lib/callScript';
 import { callScriptGate, type CallScriptGate } from '@/lib/callScriptGate';
-import { isSaleableRoute, type ServiceRoute } from '@/lib/findableOffer';
 
 /* ════════════════════════════════════════════════════════════════════════════════════════════════
    COLD CALL PLAYBOOK — the one shared call screen, opened from BOTH Inbox and Outreach (2026-09-23).
@@ -65,25 +64,24 @@ function CopyButton({ text, label }: { text: string; label: string }) {
 const BAR: Record<'blue' | 'purple' | 'amber' | 'green' | 'grey', string> = {
   blue: 'bg-blue-500', purple: 'bg-violet-500', amber: 'bg-amber-500', green: 'bg-teal-500', grey: 'bg-border',
 };
-function Step({ title, tone = 'grey', hint, children, testId, action }: { title: string; tone?: keyof typeof BAR; hint?: ReactNode; children: ReactNode; testId?: string; action?: ReactNode }) {
+/* Every section folds (Paul, 2026-10-30): `open` is only the starting state, the rep's own tap wins. */
+function Step({ title, tone = 'grey', hint, children, testId, action, open = true }: { title: string; tone?: keyof typeof BAR; hint?: ReactNode; children: ReactNode; testId?: string; action?: ReactNode; open?: boolean }) {
   return (
-    <section className="min-w-0 space-y-2" data-testid={testId}>
-      <header className="flex flex-wrap items-center gap-x-2 gap-y-1">
+    <details className="group min-w-0" open={open} data-testid={testId}>
+      <summary className="flex cursor-pointer list-none flex-wrap items-center gap-x-2 gap-y-1 [&::-webkit-details-marker]:hidden">
         <span className={cn('h-4 w-1 shrink-0 rounded-full', BAR[tone])} aria-hidden />
         <h3 className="text-[11px] font-bold uppercase tracking-wider text-foreground/80">{title}</h3>
         {hint && <span className="text-[11px] text-muted-foreground">{hint}</span>}
-        {action && <span className="ml-auto">{action}</span>}
-      </header>
-      {children}
-    </section>
+        <span className="ml-auto flex items-center gap-2">{action && <span onClick={(e) => e.stopPropagation()}>{action}</span>}<ChevronDown className="h-4 w-4 text-muted-foreground transition-transform group-open:rotate-180" aria-hidden /></span>
+      </summary>
+      <div className="mt-2 space-y-2">{children}</div>
+    </details>
   );
 }
 
 /** The script as plain text for the Copy button — the same sections, in the same order, as the screen. */
 export function callFlowText(p: ColdCallPlaybook): string {
   const s = p.script;
-  const base = s.plans.routes.find((r) => r.route === s.plans.preselected) ?? s.plans.routes[0];
-  const plan = base ? routeOffer(base.route) : base;
   return [
     'SAY\n' + s.opener.join('\n'),
     ...(s.found.lines.length ? [(s.found.coverage ? CALL_SCRIPT_ISSUES_HEADING.toUpperCase() + ' (' + s.found.coverage + ')' : 'WEBSITE') + '\n' + s.found.lines.map((l) => '- ' + l).join('\n')] : []),
@@ -92,7 +90,7 @@ export function callFlowText(p: ColdCallPlaybook): string {
     'IF AN AGENCY\n- ' + s.ifAgency.questions.join('\n- '),
     'THEN ASK\n' + s.discovery.map((q) => '- ' + q).join('\n'),
     'WHAT WE DO\n' + CALL_WHAT_WE_DO_STEPS.map((st) => st.n + '. ' + st.title + '\n' + st.lines.map((l) => '- ' + l.text.replace(/\*\*/g, '')).join('\n')).join('\n'),
-    ...(plan ? ['PLAN: ' + plan.name + ' (' + plan.summary + ')\n' + plan.spoken.join(' ')] : []),
+    'PLANS\n' + paymentOptionsSummary(),
     'GUARANTEE\n' + s.guarantee.spoken,
   ].join('\n\n');
 }
@@ -101,7 +99,7 @@ export function callFlowText(p: ColdCallPlaybook): string {
 function Say({ p }: { p: ColdCallPlaybook }) {
   const s = p.script;
   return (
-    <Step title="Say" tone="blue" testId="call-step-open" action={<CopyButton text={callFlowText(p)} label="Copy" />}>
+    <Step title="Call script" tone="blue" open={false} testId="call-step-open" action={<CopyButton text={callFlowText(p)} label="Copy" />}>
       <div className="space-y-2 text-[15px] leading-relaxed" data-testid="playbook-call-script">{s.opener.map((line) => <p key={line}>{line}</p>)}</div>
       {s.found.coverage && s.found.lines.length > 0 && (
         <p className="flex flex-wrap items-baseline gap-x-2 text-[11px] text-muted-foreground" data-testid="call-found-coverage">
@@ -277,18 +275,27 @@ function Bolded({ text }: { text: string }) {
   return <>{text.split(/\*\*/).map((part, i) => (i % 2 ? <strong key={i} className="font-bold text-foreground">{part}</strong> : <span key={i}>{part}</span>))}</>;
 }
 function WhyAndWhat({ p: _p }: { p: ColdCallPlaybook }) {
+  /* The words follow the plan (Paul, 2026-10-30): reviews, directories, ongoing changes and monthly audits are Findable Complete's only. */
+  const [plan, setPlan] = useState<PlanProduct>('complete');
+  const steps = CALL_WHAT_WE_DO_STEPS.map((st) => ({ ...st, lines: st.lines.filter((l) => plan === 'complete' || !l.complete) })).filter((st) => st.lines.length > 0);
   return (
     <>
-      <Step title="What we do" tone="blue" testId="call-step-explain">
+      <Step title="What we do" tone="blue" open={false} testId="call-step-explain">
+        <div className="inline-flex rounded-full bg-muted p-0.5" role="tablist" aria-label="Plan" data-testid="what-we-do-switch">
+          {PLAN_PRODUCTS.map((t) => (
+            <button key={t} type="button" role="tab" aria-selected={plan === t} onClick={() => setPlan(t)}
+              className={cn('rounded-full px-3.5 py-1 text-xs font-semibold transition', plan === t ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground')}>{PLAN_PRODUCT_NAME[t]}</button>
+          ))}
+        </div>
         <ol className="space-y-2.5" data-testid="what-we-do-steps">
-          {CALL_WHAT_WE_DO_STEPS.map((st) => (
+          {steps.map((st, idx) => (
             <li key={st.n} className="flex gap-3" data-testid={'what-we-do-' + st.n}>
-              <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-blue-500/15 text-xs font-bold text-blue-700 dark:text-blue-300" aria-hidden>{st.n}</span>
+              <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-blue-500/15 text-xs font-bold text-blue-700 dark:text-blue-300" aria-hidden>{idx + 1}</span>
               <div className="min-w-0 space-y-0.5">
                 <p className="text-sm font-bold leading-6">{st.title}</p>
                 <ul className="space-y-0.5 text-[15px] leading-snug text-foreground/85">
                   {st.lines.map((l) => (
-                    <li key={l.text} className={cn(l.soon && 'text-muted-foreground/60')} data-soon={l.soon ? 'true' : undefined}>
+                    <li key={l.text}>
                       <Bolded text={l.text} />
                     </li>
                   ))}
@@ -298,11 +305,12 @@ function WhyAndWhat({ p: _p }: { p: ColdCallPlaybook }) {
           ))}
         </ol>
       </Step>
-      <section className="space-y-2 rounded-2xl border border-violet-500/25 bg-violet-500/[0.04] p-3" data-testid="why-it-matters-card">
-        <header className="flex items-center gap-2">
+      <details className="group space-y-2 rounded-2xl border border-violet-500/25 bg-violet-500/[0.04] p-3" data-testid="why-it-matters-card">
+        <summary className="flex cursor-pointer list-none items-center gap-2 [&::-webkit-details-marker]:hidden">
           <span className="h-4 w-1 shrink-0 rounded-full bg-violet-500" aria-hidden />
           <h3 className="text-[11px] font-bold uppercase tracking-wider text-foreground/80">Why it matters</h3>
-        </header>
+          <ChevronDown className="ml-auto h-4 w-4 text-muted-foreground transition-transform group-open:rotate-180" aria-hidden />
+        </summary>
         <div className="grid grid-cols-2 gap-2" data-testid="why-it-matters">
           {WHY_IT_MATTERS_STATS.map((s) => (
             <div key={s.figure} className="rounded-xl bg-background px-3 py-2 ring-1 ring-inset ring-violet-500/20">
@@ -313,52 +321,56 @@ function WhyAndWhat({ p: _p }: { p: ColdCallPlaybook }) {
         </div>
         <p className="text-[11px] text-muted-foreground" data-testid="why-it-matters-source">{WHY_IT_MATTERS_SOURCE_LINE}</p>
         <p className="text-xs text-muted-foreground">{GOOGLE_STILL_MATTERS_SHORT}</p>
-      </section>
+      </details>
     </>
   );
 }
 
-/* ── THE OFFER: one plan open at a time, the guarantee once ───────────────────────────────────── */
-function Offer({ p, ans }: { p: ColdCallPlaybook; ans: ReturnType<typeof useCallAnswers> }) {
-  const s = p.script;
-  /* THE AGENCY-CONTRACT RULE (offerFit, v5 2026-10-16): Build is the one plan; still tied into a contract with their current
-     provider DECLINES the sale — nothing is offered, to anyone (there is no release for a decline). */
-  const fit = ans.v ? offerFit(ans.answers, ans.v.has_website ?? (p.context.website ? true : false)) : null;
-  const routes = s.plans.routes.filter((r) => isSaleableRoute(r.route) && (!fit || fit.offered[r.route])).map((r) => routeOffer(r.route));
-  const guarantee = s.guarantee;
-  const preferred = fit?.recommended ?? s.plans.preselected;
-  const [picked, setPicked] = useState<ServiceRoute | null>(null);
-  const route = picked && routes.some((r) => r.route === picked) ? picked : routes.some((r) => r.route === preferred) ? preferred : routes[0]?.route;
-  const plan = routes.find((r) => r.route === route) ?? routes[0];
-  if (fit?.declined) {
-    return (
-      <Step title="Offer" tone="green" testId="call-step-close">
-        <p className="rounded-xl bg-red-500/[0.08] px-3 py-2 text-xs font-semibold leading-snug text-red-800 ring-1 ring-inset ring-red-500/30 dark:text-red-200" data-testid="call-offer-declined">{fit.reason}</p>
-      </Step>
-    );
-  }
-  if (!plan) return null;
+/* ── THE OFFER: one tab per plan — what is included, the price and the ways to pay. No fluff (Paul, 2026-10-30) ──────────
+   Every figure and line comes from paymentPlans.ts. Neither plan is framed as lesser: Essential is its own plan, not "just
+   the website". The guarantee sits once under both tabs. */
+type PlanTab = PlanProduct;
+const ESSENTIAL_INCLUDES: readonly string[] = [
+  'A new AI-optimised website, built, hosted and managed by us',
+  'A baseline AI visibility audit',
+  'A four-week audit to measure the change',
+];
+function PlanTabs({ guarantee }: { guarantee: ColdCallPlaybook['script']['guarantee'] }) {
+  const [tab, setTab] = useState<PlanTab>('complete');
+  const c = PAYMENT_PLAN_SPEC.complete;
+  const tabLabel = (t: PlanTab) => (t === 'complete' ? `${PLAN_PRODUCT_NAME.complete} (recommended)` : PLAN_PRODUCT_NAME.essential);
   return (
-    <Step title="Offer" tone="green" testId="call-step-close">
-      {/* The one-line "Findable Build is the plan…" is gone (Paul, 2026-10-20): the price card says it. A reason that asks
-          the rep to do something (the agency contract) stays. */}
-      {fit?.reason && fit.reason !== BUILD_DEFAULT_REASON && <p className={cn('rounded-xl px-3 py-2 text-xs leading-snug ring-1 ring-inset', fit.offered.build ? 'bg-muted/40 text-muted-foreground ring-border' : 'bg-amber-500/[0.08] text-amber-800 ring-amber-500/30 dark:text-amber-200')} data-testid="call-offer-fit">{fit.reason}</p>}
-      {fit?.warning && <p className="rounded-xl bg-amber-500/[0.08] px-3 py-2 text-xs font-semibold leading-snug text-amber-800 ring-1 ring-inset ring-amber-500/30 dark:text-amber-200" data-testid="call-offer-warning">{fit.warning}</p>}
-      {routes.length > 1 ? (
-        <div className="inline-flex rounded-full bg-muted p-0.5" role="tablist" aria-label="Plan" data-testid="call-plan-switch">
-          {routes.map((r) => (
-            <button key={r.route} type="button" role="tab" aria-selected={r.route === plan.route} data-testid={'call-plan-' + r.route}
-              onClick={() => setPicked(r.route)}
-              className={cn('rounded-full px-3.5 py-1 text-xs font-semibold transition', r.route === plan.route ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground')}>
-              {r.route === 'build' ? 'Build' : r.route}
-            </button>
-          ))}
-        </div>
-      ) : s.plans.note && <p className="text-[11px] text-muted-foreground">{s.plans.note}</p>}
-      <div className="space-y-1.5 rounded-2xl border border-border/70 border-l-[3px] border-l-blue-500 bg-card p-3 shadow-sm" data-testid={'call-route-' + plan.route}>
-        <p className="flex flex-wrap items-baseline gap-x-2 text-sm font-bold">{plan.name}<span className="text-xs font-semibold text-blue-700 dark:text-blue-300">{plan.summary}</span></p>
-        <div className="space-y-1 text-sm leading-relaxed">{plan.spoken.map((x) => <p key={x}>{x}</p>)}</div>
+    <div className="space-y-2" data-testid="call-plan-tabs">
+      <div className="inline-flex rounded-full bg-muted p-0.5" role="tablist" aria-label="Plan">
+        {PLAN_PRODUCTS.map((t) => (
+          <button key={t} type="button" role="tab" aria-selected={tab === t} data-testid={'call-plan-' + t} onClick={() => setTab(t)}
+            className={cn('rounded-full px-3.5 py-1 text-xs font-semibold transition', tab === t ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground')}>{tabLabel(t)}</button>
+        ))}
       </div>
+      {tab === 'complete' ? (
+        <div className="space-y-2 rounded-2xl border border-border/70 border-l-[3px] border-l-blue-500 bg-card p-3 text-sm shadow-sm" data-testid="call-plan-complete-body">
+          <p className="font-bold">{gbpWords(c.monthlyGbp)} a month <span className="font-normal text-muted-foreground">· {c.totalPayments} payments ({gbpWords(planTotalGbp('complete'))} in total)</span></p>
+          <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Included</p>
+          <ul className="list-disc space-y-0.5 pl-5">
+            <li>Everything in {PLAN_PRODUCT_NAME.essential}</li>
+            {COMPLETE_EXTRAS.map((x) => <li key={x}>{x}</li>)}
+          </ul>
+        </div>
+      ) : (
+        <div className="space-y-2 rounded-2xl border border-border/70 border-l-[3px] border-l-blue-500 bg-card p-3 text-sm shadow-sm" data-testid="call-plan-essential-body">
+          <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Included</p>
+          <ul className="list-disc space-y-0.5 pl-5">{ESSENTIAL_INCLUDES.map((x) => <li key={x}>{x}</li>)}</ul>
+          <p className="pt-1 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Ways to pay</p>
+          <ul className="space-y-1">
+            {ESSENTIAL_PAYMENT_PLANS.map((p) => (
+              <li key={p} className="flex flex-wrap items-baseline justify-between gap-x-3 rounded-lg bg-muted/40 px-2.5 py-1.5">
+                <span className="font-semibold">{PAYMENT_PLAN_NAME[p]}</span><span className="text-muted-foreground">{planShortLine(p)}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+      <p className="px-1 text-xs text-muted-foreground" data-testid="call-plan-after">{planAfterWords(tab === 'complete' ? 'complete' : 'six')}{tab === 'essential' ? ` On pay in full, hosting is included for ${FULL_PAY_HOSTING_INCLUDED_MONTHS} months from when the site goes live.` : ''}</p>
       <div className="flex gap-2 px-1 text-sm" data-testid="call-guarantee">
         <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-yellow-500" />
         <div className="min-w-0">
@@ -367,6 +379,27 @@ function Offer({ p, ans }: { p: ColdCallPlaybook; ans: ReturnType<typeof useCall
           <p className="mt-0.5 text-[11px] text-amber-700 dark:text-amber-300">{guarantee.caution}</p>
         </div>
       </div>
+    </div>
+  );
+}
+
+function Offer({ p, ans }: { p: ColdCallPlaybook; ans: ReturnType<typeof useCallAnswers> }) {
+  /* THE AGENCY-CONTRACT RULE (offerFit, v5 2026-10-16): still tied into a contract with their current provider DECLINES the
+     sale: nothing is offered, to anyone (there is no release for a decline). */
+  const fit = ans.v ? offerFit(ans.answers, ans.v.has_website ?? (p.context.website ? true : false)) : null;
+  if (fit?.declined) {
+    return (
+      <Step title="Offer" tone="green" testId="call-step-close">
+        <p className="rounded-xl bg-red-500/[0.08] px-3 py-2 text-xs font-semibold leading-snug text-red-800 ring-1 ring-inset ring-red-500/30 dark:text-red-200" data-testid="call-offer-declined">{fit.reason}</p>
+      </Step>
+    );
+  }
+  return (
+    <Step title="Offer" tone="green" testId="call-step-close">
+      {/* A reason that asks the rep to do something (the agency contract) stays. */}
+      {fit?.reason && fit.reason !== BUILD_DEFAULT_REASON && <p className={cn('rounded-xl px-3 py-2 text-xs leading-snug ring-1 ring-inset', fit.offered.build ? 'bg-muted/40 text-muted-foreground ring-border' : 'bg-amber-500/[0.08] text-amber-800 ring-amber-500/30 dark:text-amber-200')} data-testid="call-offer-fit">{fit.reason}</p>}
+      {fit?.warning && <p className="rounded-xl bg-amber-500/[0.08] px-3 py-2 text-xs font-semibold leading-snug text-amber-800 ring-1 ring-inset ring-amber-500/30 dark:text-amber-200" data-testid="call-offer-warning">{fit.warning}</p>}
+      <PlanTabs guarantee={p.script.guarantee} />
     </Step>
   );
 }
@@ -400,8 +433,8 @@ function CallFlow({ p, leadId }: { p: ColdCallPlaybook; leadId: string }) {
     <div className="space-y-5" data-testid="playbook-call-flow">
       <Say p={p} />
       <Ask p={p} ans={ans} />
-      <WhyAndWhat p={p} />
       <Offer p={p} ans={ans} />
+      <WhyAndWhat p={p} />
       <Objections p={p} />
     </div>
   );

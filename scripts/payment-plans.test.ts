@@ -126,7 +126,7 @@ console.log('Quick Close');
   ok(q.closeTermsLines('build', 'legacy_twelve').join(' ') === q.routeTermsLines('build').join(' '), 'the old plan → exactly the v5 terms');
   ok(q.onboardingColumnsFor({ route: 'build', payment_plan: 'six' }).payment_plan === 'six', 'the plan is written to the sign-up row');
   const qo = q.QUICK_CLOSE_QUESTIONS.find((x) => x.key === 'payment_plan')!;
-  ok(qo.options.filter((o) => !o.legacy).map((o) => o.value).join() === 'complete,full,six,twelve' && /recommended/.test(qo.options[0].label) && qo.options.find((o) => o.value === 'legacy_twelve')?.legacy === true, 'Complete first and recommended, then Essential; the old plan is hidden (legacy)');
+  ok(qo.options.filter((o) => !o.legacy).map((o) => o.value).join() === 'complete,full,six,twelve' && /^Findable Complete/.test(qo.options[0].label) && /^Findable Essential/.test(qo.options[1].label) && qo.options.find((o) => o.value === 'legacy_twelve')?.legacy === true, 'Complete first and recommended, then Essential; the old plan is hidden (legacy)');
   ok(read('src/components/QuickCloseDialog.tsx').includes('Show the old plan (£99 × 12, staff only)'), '"Show the old plan" reveals it');
 }
 ok(!existsSync(new URL('../src/lib/priceModel.ts', import.meta.url)) && !/PriceModelSwitch|upfront_499/.test(read('src/components/QuickCloseDialog.tsx') + read('src/pages/SalesDashboard.tsx') + read('src/components/ColdCallPlaybook.tsx')), 'the old "£499 upfront then £99 × 12" model is gone');

@@ -73,7 +73,7 @@ import {
 } from './findableOffer.ts';
 import { afterTermClientWords, afterTermRepLine } from './planTerms.ts';
 import { agencyContractOutcome } from './agencyContractRule.ts';
-import { CLIENT_PAYMENT_PLANS, DEFAULT_PAYMENT_PLAN, PAYMENT_PLAN_NAME, PAYMENT_PLAN_SPEC, guaranteeForPlan, isPaymentPlan, planFullName, planShortLine, planTermsLines, type PaymentPlan } from './paymentPlans.ts';
+import { CLIENT_PAYMENT_PLANS, PAYMENT_PLAN_NAME, PAYMENT_PLAN_SPEC, guaranteeForPlan, isPaymentPlan, planFullName, planShortLine, planTermsLines, type PaymentPlan } from './paymentPlans.ts';
 
 export type QcDecisionMaker = 'yes' | 'no';
 /** 'agency' (v2): an agency / provider controls it — a handoff, not a refusal. */
@@ -175,9 +175,7 @@ export const QUICK_CLOSE_QUESTIONS: readonly { key: QcKey; text: string; detail?
   /* 2026-10-30: TWO PLANS. Findable Complete first and marked recommended (DEFAULT_PAYMENT_PLAN), then Essential's three ways
      to pay. Never pre-answered: the rep still asks, so the client chooses. */
   { key: 'payment_plan', text: 'Which plan, and how do they want to pay?', options: [
-    ...CLIENT_PAYMENT_PLANS.map((p) => ({ value: p, label: p === DEFAULT_PAYMENT_PLAN
-      ? `${PAYMENT_PLAN_NAME[p]} (recommended): ${planShortLine(p)}. Everything in Essential, plus review replies, Google profile, directories, changes and monthly audits`
-      : `${planFullName(p)}: ${planShortLine(p)}` })),
+    ...CLIENT_PAYMENT_PLANS.map((p) => ({ value: p, label: `${planFullName(p)}: ${planShortLine(p)}` })),
     { value: 'legacy_twelve', label: `${PAYMENT_PLAN_NAME.legacy_twelve}: ${planShortLine('legacy_twelve')}`, legacy: true },
   ] },
   { key: 'decision_maker', text: 'Are they authorised to make this decision for the business?', options: [{ value: 'yes', label: 'Yes' }, { value: 'no', label: 'No' }] },
@@ -492,10 +490,10 @@ export function closeFlow(raw: QuickCloseAnswers): QcKey[] {
   if (thirdPartyManaged(a)) flow.push('agency_contract');
   /* v5 clause 1.6: still tied in → the close ends here (declined). Nothing after it can lead to a sale. */
   if (agencyContractTiedIn(a)) return flow;
-  flow.push('domain');
-  flow.push('route');
-  /* 2026-10-29: how they pay, once the options are on sale (until then every sale is the v5 plan and nothing is asked). */
-  if (a.route === 'build') flow.push('payment_plan');
+  /* 2026-10-30 (Paul: remove friction): the domain and the plan-confirmation questions are no longer asked. The agreement and the
+     client's own onboarding cover the domain (a Paul flag, never a stop); picking the plan IS the route (Build, saved with it).
+     The one decision left is the plan and how they pay, so the link the client gets is already the right one. */
+  flow.push('payment_plan');
   flow.push(...routeQuestions(a));
   return flow;
 }

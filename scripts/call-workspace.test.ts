@@ -135,10 +135,10 @@ console.log('── 2. THE OFFER, BOTH ROUTES, FROM THE CONSTANTS ──');
   const ui = read('src/components/ColdCallPlaybook.tsx');
   /* 2026-10-06 (sales-team-today, Paul): ONE plan open at a time (Optimise | Build switch), the guarantee once, and
      Quick Close moved to the sticky bar beside Log this call — the only Quick Close on the call screen. */
-  ok(/testId="call-step-close"/.test(ui) && /data-testid="call-plan-switch"/.test(ui) && /data-testid=\{'call-plan-' \+ r\.route\}/.test(ui)
-    && /data-testid=\{'call-route-' \+ plan\.route\}/.test(ui) && /const preferred = fit\?\.recommended \?\? s\.plans\.preselected/.test(ui) && (ui.match(/data-testid="call-guarantee"/g) ?? []).length === 1,
-    'the call screen renders the close block: a plan switch, ONE route open (the call answers\' recommendation, else the website\'s), the guarantee once');
-  ok(/offerFit\(ans\.answers/.test(ui) && /isSaleableRoute\(r\.route\) && \(!fit \|\| fit\.offered\[r\.route\]\)/.test(ui) && /if \(fit\?\.declined\)/.test(ui) && !/role === 'admin'/.test(ui), 'v5: the plans offered follow the agency-contract rule — still tied in shows a decline and no plan, to anyone');
+  ok(/testId="call-step-close"/.test(ui) && /data-testid=\{'call-plan-' \+ t\}/.test(ui)
+    && /data-testid="call-plan-tabs"/.test(ui) && /useState<PlanTab>\('complete'\)/.test(ui) && (ui.match(/data-testid="call-guarantee"/g) ?? []).length === 1,
+    'the call screen renders the close block (2026-10-30): TWO plan tabs (Findable Complete recommended, Findable Essential), one open, the guarantee once');
+  ok(/offerFit\(ans\.answers/.test(ui) && /<PlanTabs guarantee=/.test(ui) && /if \(fit\?\.declined\)/.test(ui) && !/role === 'admin'/.test(ui), 'v5: the offer follows the agency-contract rule — still tied in shows a decline and no plan tabs, to anyone');
   ok((ui.match(/<QuickCloseButton /g) ?? []).length === 1 && /data-testid="log-this-call"[\s\S]{0,200}<QuickCloseButton leadId=\{leadId\}/.test(ui), '…and Quick Close once, in the sticky bar beside Log this call');
 }
 
@@ -228,7 +228,7 @@ console.log('── 5. THE CALL FLOW WORKS WITH NO AUDIT AND NO WHATSAPP ──'
     const at = order.map((id) => ui.indexOf(`testId="${id}"`));
     ok(at.every((i) => i > 0), 'the screen has every section: ' + order.join(' → '));
     const flow = ui.slice(ui.indexOf('function CallFlow('), ui.indexOf('type ScriptTab'));
-    ok(/<Say p=\{p\} \/>\s*<Ask p=\{p\} ans=\{ans\} \/>\s*<WhyAndWhat p=\{p\} \/>\s*<Offer p=\{p\} ans=\{ans\} \/>\s*<Objections p=\{p\} \/>/.test(flow), '…rendered in that order');
+    ok(/<Say p=\{p\} \/>\s*<Ask p=\{p\} ans=\{ans\} \/>\s*<Offer p=\{p\} ans=\{ans\} \/>\s*<WhyAndWhat p=\{p\} \/>\s*<Objections p=\{p\} \/>/.test(flow), '…rendered in that order');
     ok(!['call-step-after', 'call-not-the-owner', 'call-card'].some((id) => ui.includes(`data-testid="${id}"`)), 'removed: call card, after-they-pay step, gatekeeper/voicemail fold');
     ok(/data-testid="answer-self"/.test(ui) && /data-testid="answer-agency"/.test(ui) && /\{manager === 'agency' && after && \([\s\S]{0,120}data-testid="call-step-agency"/.test(ui), 'the first question has two answer buttons; the agency branch shows only after "Agency"');
   }

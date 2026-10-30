@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
-  AlertTriangle, ArrowLeft, BadgePoundSterling, Check, CheckCircle2, ClipboardCopy, ClipboardList, Copy, Flag, Loader2, Lock, MessageCircle, Pencil, PoundSterling, RefreshCw, ShieldAlert, ShieldCheck, Zap,
+  AlertTriangle, ArrowLeft, BadgePoundSterling, Check, CheckCircle2, ClipboardCopy, ClipboardList, Copy, Flag, Loader2, Lock, Mail, MessageCircle, Pencil, PoundSterling, RefreshCw, ShieldAlert, ShieldCheck, Zap,
 } from 'lucide-react';
 import { Callout, EDGE, IconTile, SubSection, TONE, ToneChip, type Tone } from '@/components/operator/ui';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
@@ -20,9 +20,8 @@ import {
 import { LINK_READY_FALLBACK, type LinkRoute } from '@/lib/paymentLinkRoute';
 import { FINDABLE_SETUP_PRICE_GBP, SERVICE_ROUTE_NAME, isSaleableRoute, totalPaymentsFor, type ServiceRoute } from '@/lib/findableOffer';
 import { cn } from '@/lib/utils';
-import { gbpWords, guaranteeForPlan } from '@/lib/paymentPlans';
+import { COMPLETE_EXTRAS, ESSENTIAL_PAYMENT_PLANS, PAYMENT_PLAN_NAME, PAYMENT_PLAN_SPEC, PLAN_PRODUCT_NAME, V7_WINDOW_START_LINE, gbpWords, guaranteeForPlan, planShortLine, type PaymentPlan } from '@/lib/paymentPlans';
 import { ClosePanel } from '@/components/ClosePanel';
-import { CustomerEmailControl } from '@/components/CustomerEmailControl';
 import { SmsLinkSend } from '@/components/SmsLinkSend';
 import { SalesHandoffForm } from '@/components/SalesHandoffForm';
 import type { HandoffFieldKey, SalesHandoffFields } from '@/lib/salesHandoff';
@@ -137,6 +136,59 @@ function timeLeft(iso: string | null | undefined): string {
 }
 const SHARE_WORDS: Record<QcLinkShare['channel'], string> = { copy: 'Copied', email: 'Emailed', whatsapp: 'Sent on WhatsApp', sms: 'Texted' };
 
+/** THE PLAN, AND HOW THEY PAY — the one decision Quick Close still asks (Paul, 2026-10-30). Both plans side by side, Complete first and
+ *  recommended, neither framed as lesser; Essential carries its three ways to pay. One tap saves the plan, so the sign-up link the
+ *  client receives is already the right one and they are never asked to choose a plan themselves. Every line is from paymentPlans.ts. */
+function PlanPicker({ chosen, busy, unavailable, onPick }: { chosen: PaymentPlan | null | undefined; busy: boolean; unavailable: Partial<Record<string, string>> | undefined; onPick: (p: PaymentPlan) => void }) {
+  const c = PAYMENT_PLAN_SPEC.complete;
+  const completeOff = unavailable?.complete ?? null;
+  return (
+    <div className="mt-3 space-y-2.5" data-testid="qc-plan-picker">
+      <div className="rounded-xl bg-muted/30 p-2.5 text-sm ring-1 ring-inset ring-border/60" data-testid="qc-picker-guarantee">
+        <p className="flex items-center gap-1.5 font-semibold"><ShieldCheck className={cn('h-4 w-4 shrink-0', EMPHASIS_TEXT)} />{QUICK_CLOSE_GUARANTEE_LINES[0]}</p>
+        <p className="mt-0.5 text-xs text-muted-foreground">{V7_WINDOW_START_LINE}</p>
+      </div>
+      <div className="grid gap-2.5 sm:grid-cols-2">
+        <button type="button" disabled={busy || !!completeOff} onClick={() => onPick('complete')} data-testid="qc-plan-complete"
+          className={cn('flex flex-col items-start rounded-2xl border p-3 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-50',
+            chosen === 'complete' ? PICKED : 'border-blue-500/50 bg-card hover:bg-muted/60')}>
+          <span className="flex flex-wrap items-center gap-1.5 text-base font-bold">{PLAN_PRODUCT_NAME.complete}<span className="rounded-full bg-yellow-400/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-yellow-600 ring-1 ring-inset ring-yellow-500/40 dark:text-yellow-300">Recommended</span></span>
+          <span className="mt-1 text-sm font-semibold">{gbpWords(c.monthlyGbp)} a month · {c.totalPayments} payments</span>
+          <span className="mt-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Included</span>
+          <ul className="mt-0.5 list-disc space-y-0.5 pl-4 text-xs font-normal text-foreground/85">
+            <li>Everything in {PLAN_PRODUCT_NAME.essential}</li>
+            {COMPLETE_EXTRAS.map((x) => <li key={x}>{x}</li>)}
+          </ul>
+          {completeOff && <span className="mt-1 text-xs font-normal text-muted-foreground">{completeOff}</span>}
+        </button>
+        <div className={cn('flex flex-col rounded-2xl border p-3', chosen && ESSENTIAL_PAYMENT_PLANS.includes(chosen) ? 'border-blue-500/70' : 'border-border/70 bg-card')} data-testid="qc-plan-essential">
+          <span className="text-base font-bold">{PLAN_PRODUCT_NAME.essential}</span>
+          <span className="mt-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Included</span>
+          <ul className="mt-0.5 list-disc space-y-0.5 pl-4 text-xs text-foreground/85">
+            <li>A new AI-optimised website, built, hosted and managed by us</li>
+            <li>A baseline AI visibility audit</li>
+            <li>A four-week audit to measure the change</li>
+          </ul>
+          <span className="mt-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">How do they want to pay?</span>
+          <div className="mt-1 space-y-1.5">
+            {ESSENTIAL_PAYMENT_PLANS.map((p) => {
+              const off = unavailable?.[p] ?? null;
+              return (
+                <button key={p} type="button" disabled={busy || !!off} onClick={() => onPick(p)} data-testid={'qc-plan-' + p}
+                  className={cn('flex w-full flex-col rounded-xl border px-3 py-2 text-left text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-50',
+                    chosen === p ? PICKED : 'border-border/70 bg-card hover:border-blue-500/40 hover:bg-muted/60')}>
+                  {PAYMENT_PLAN_NAME[p]}
+                  <span className="text-xs font-normal text-muted-foreground">{off ?? planShortLine(p)}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /** Inside the lead workspace, a Quick Close button goes to the CLOSE tab instead of opening a second window. */
 export const QuickCloseNav = createContext<{ openClose: (leadId: string) => void } | null>(null);
 
@@ -221,6 +273,16 @@ export function QuickClosePanel({ leadId, active = true, framed = false }: { lea
     const r = await run(`a:${key}`, { mode: 'save', answers: { [key]: value }, expect_route: route, ...(routeChange ? { route_change: true } : {}) });
     if (!r && before) qc.setQueryData(quickCloseKey(leadId), before);
   };
+  /* The plan IS the route (Build): saved together, so no separate plan-confirmation question. A pre-v5 Optimise close asks first. */
+  const pickPlan = async (p: PaymentPlan) => {
+    const switching = !!route && route !== 'build';
+    if (switching && !window.confirm(routeSwitchText(route!, 'build', !!v?.link))) return;
+    const before = qc.getQueryData<View>(quickCloseKey(leadId));
+    if (before) qc.setQueryData<View>(quickCloseKey(leadId), { ...before, answers: { ...before.answers, route: 'build', payment_plan: p } });
+    setStep(null);
+    const r = await run('a:payment_plan', { mode: 'save', answers: { route: 'build', payment_plan: p }, expect_route: route, ...(switching ? { route_change: true } : {}) });
+    if (!r && before) qc.setQueryData(quickCloseKey(leadId), before);
+  };
   const saveFixes = async () => { const r = await run('fix', { mode: 'save', answers: {}, expect_route: route, corrections: fix, ...(trade.trim() ? { trade: trade.trim() } : {}) }); if (r) setEditing(false); };
   const generate = async () => {
     if (!v?.lead.trade && !trade.trim()) { toast({ title: 'Add the trade first', description: 'It decides what the baseline measures.', variant: 'destructive' }); return; }
@@ -238,12 +300,6 @@ export function QuickClosePanel({ leadId, active = true, framed = false }: { lea
   const sendEmail = async () => {
     const r = await run('email', { mode: 'share_link', channel: 'email' });
     if (r) toast({ title: 'Agreement & payment link emailed', description: v?.share?.email ? `To ${v.share.email}` : undefined });
-  };
-  /** Save the customer's email to the lead (quick-close save_email). True when stored; the view comes back with it. */
-  const saveEmail = async (email: string) => {
-    const r = await run('email-save', { mode: 'save_email', email });
-    if (r) toast({ title: 'Email saved', description: email });
-    return !!r;
   };
   /* ONE click (2026-10-07): the server picks the route — the approved findable_signup_link template, or a normal
      message in a conversation they replied to inside 24 hours — and refuses a second send of the same link unless
@@ -380,12 +436,14 @@ export function QuickClosePanel({ leadId, active = true, framed = false }: { lea
                   {(v.offer.notes?.length ?? 0) > 0 && <ul className="space-y-0.5 px-1 text-xs text-muted-foreground" data-testid="qc-offer-notes">{v.offer.notes.map((n) => <li key={n}>• {n}</li>)}</ul>}
                 </div>
               )}
-              <div className={cn('mt-3 grid gap-2', current === 'route' || current === 'build_consents' || current === 'approach' || current === 'domain' || current === 'design_owner' || current === 'agency_contract' || current === 'manager' || current === 'payment_plan' ? 'grid-cols-1' : 'grid-cols-2')}>
+              {current === 'payment_plan' && <PlanPicker chosen={answers.payment_plan} busy={!!busy} unavailable={v.plans_unavailable} onPick={(p) => void pickPlan(p)} />}
+              {current === 'payment_plan' && showOldPlan && <button type="button" disabled={!!busy} onClick={() => void pickPlan('legacy_twelve')} className="mt-2 w-full rounded-xl border border-border/70 px-3 py-2 text-left text-sm" data-testid="qc-plan-legacy_twelve">{PAYMENT_PLAN_NAME.legacy_twelve}: {planShortLine('legacy_twelve')} (staff only)</button>}
+              {current !== 'payment_plan' && <div className={cn('mt-3 grid gap-2', current === 'route' || current === 'build_consents' || current === 'approach' || current === 'domain' || current === 'design_owner' || current === 'agency_contract' || current === 'manager' ? 'grid-cols-1' : 'grid-cols-2')}>
                 {/* v5: the plan question offers Findable Build only. */}
                 {[...currentQ.options]
                   .sort((x, y) => (current === 'route' && v.offer?.recommended ? Number(y.value === v.offer.recommended) - Number(x.value === v.offer.recommended) : 0))
                   /* A LEGACY answer stays readable but is never offered as a new choice (QcOption.legacy). */
-                  .filter((o) => !o.legacy || answers[current!] === o.value || (current === 'payment_plan' && showOldPlan))
+                  .filter((o) => !o.legacy || answers[current!] === o.value)
                   /* ⛔ v5: a withdrawn plan is never a button, even when a pre-v5 close still carries it. */
                   .filter((o) => current !== 'route' || isSaleableRoute(o.value))
                   .filter((o) => !(current === 'authority' && o.value === 'not_applicable' && (answers.manager === 'agency' || answers.manager === 'freelancer' || answers.manager === 'third_party')))
@@ -394,7 +452,7 @@ export function QuickClosePanel({ leadId, active = true, framed = false }: { lea
                     /* ⛔ v5 clause 1.6: still tied into their contract → nothing is offered, to anyone (Paul cannot release a decline). */
                     const notOffered = current === 'route' && !noSite && v.offer ? !v.offer.offered[o.value as ServiceRoute] : false;
                     /* A payment plan whose Stripe price is not set up is shown, switched off, with the reason (never charged). */
-                    const planOff = current === 'payment_plan' ? v.plans_unavailable?.[o.value] ?? null : null;
+                    const planOff: string | null = null;
                     const off = noSite || notOffered || !!planOff
                       || (current === 'approach' && !hasSite && NEEDS_CURRENT_SITE.has(o.value));
                     const recommended = current === 'route' && v.offer?.recommended === o.value && !noSite;
@@ -410,7 +468,7 @@ export function QuickClosePanel({ leadId, active = true, framed = false }: { lea
                       </button>
                     );
                   })}
-              </div>
+              </div>}
               {current === 'payment_plan' && !showOldPlan && answers.payment_plan !== 'legacy_twelve' && (
                 <button type="button" onClick={() => setShowOldPlan(true)} className="mt-2 text-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline" data-testid="qc-show-old-plan">Show the old plan (£99 × 12, staff only)</button>
               )}
@@ -464,8 +522,7 @@ export function QuickClosePanel({ leadId, active = true, framed = false }: { lea
                 <p className="flex items-center gap-1.5 font-semibold"><ShieldCheck className={cn('h-4 w-4 shrink-0', EMPHASIS_TEXT)} />{QUICK_CLOSE_GUARANTEE_LINES[0]}</p>
                 <p className="mt-0.5 text-xs text-muted-foreground">{guaranteeForPlan(answers.payment_plan ?? 'complete', QUICK_CLOSE_GUARANTEE_LINES[1])}</p>
               </div>
-              <p className="mt-2 text-xs text-muted-foreground">{QUICK_CLOSE_AGREEMENT_LINE} After payment: {QUICK_CLOSE_AFTER_PAYMENT[0]} {QUICK_CLOSE_AFTER_PAYMENT[1]}</p>
-              <p className="mt-1 text-[11px] text-muted-foreground">Say the minimum term out loud before you send the link. Set by the offer — the price, the number of payments and the timing cannot be changed here.</p>
+              <p className="mt-2 text-xs text-muted-foreground">{QUICK_CLOSE_AGREEMENT_LINE} They do not choose a plan again: the link is already this one.</p>
 
               {closing && (
                 <div className="mt-3 space-y-2 border-t border-border/60 pt-3" data-testid="qc-link">
@@ -520,7 +577,8 @@ export function QuickClosePanel({ leadId, active = true, framed = false }: { lea
                             )}
                             {lr?.route === 'whatsapp_template' && lr.reason === 'ok_unverified' && !sentWa && <p className="text-[11px] text-muted-foreground">{lr.template.say}</p>}
                             <SmsLinkSend leadId={leadId} kind="agreement" otherSent={sentWa ? ['whatsapp'] : []} onSend={sendSmsLink} />
-                            <CustomerEmailControl testId="qc-customer-email" email={v.share?.email ?? null} busy={busy} onSave={saveEmail} onSend={() => void sendEmail()} />
+                            {/* Email only when we already hold their address (from the website check); never asked for here. */}
+                            {v.share?.email && <Button variant="outline" className="h-12 w-full gap-1.5" onClick={() => void sendEmail()} disabled={!!busy} data-testid="qc-send-email">{busy === 'email' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Mail className="h-4 w-4" />}Email the link to {v.share.email}</Button>}
                             <Button variant="outline" className="h-12 w-full gap-1.5" onClick={() => void doCopy('message', quickCloseMessage(greetName, usableUrl, sellRoute))}><ClipboardCopy className="h-4 w-4" />{copied === 'message' ? 'Copied' : 'Copy message'}</Button>
                             <p className="text-xs text-muted-foreground" data-testid="qc-share-availability">
                               {lr?.route === 'whatsapp_reply' ? 'WhatsApp: they replied to us in the last 24 hours.' : lr?.route === 'whatsapp_template' && lr.template.sendable ? 'WhatsApp: sends as the approved findable_signup_link template.' : ''}
@@ -543,7 +601,7 @@ export function QuickClosePanel({ leadId, active = true, framed = false }: { lea
           )}
 
           {v && sellRoute && v.state !== 'paid' && v.state !== 'blocked' && !declined && (
-            <details className={FOLD} open={v.state === 'ready'}>
+            <details className={FOLD}>
               <summary className="flex min-h-[36px] cursor-pointer select-none items-center justify-between gap-2 text-sm font-semibold"><span className="flex items-center gap-2"><span className={cn('h-4 w-1 shrink-0 rounded-full', TONE.blue.bar)} aria-hidden />What to tell them</span><button type="button" onClick={(e) => { e.preventDefault(); void doCopy('script', script); }} className="inline-flex min-h-[36px] items-center rounded-lg px-2 text-xs font-medium text-primary hover:bg-muted hover:underline">{copied === 'script' ? 'Copied' : 'Copy'}</button></summary>
               <Textarea value={script} onChange={(e) => setScript(e.target.value)} rows={6} className="mt-2 text-sm" aria-label="What to tell them (edit freely)" />
               <p className="mt-1 text-[11px] text-muted-foreground">Your words — change them however you like, but keep the price, the minimum term and the guarantee as written. Never promise a ranking, a recommendation or that AI will name them.</p>

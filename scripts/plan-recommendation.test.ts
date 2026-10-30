@@ -78,7 +78,7 @@ console.log('\n── THE BADGE FOLLOWS THE ANSWER IMMEDIATELY ──');
   const fn = read('supabase/functions/quick-close/index.ts');
   ok(/offer: offerFit\(answers, hasWebsite\)/.test(fn), 'the server recomputes the offer from the stored answers on every view (every save returns it)');
   const cc = read('src/components/ColdCallPlaybook.tsx');
-  ok(/const fit = ans\.v \? offerFit\(ans\.answers,/.test(cc) && /const preferred = fit\?\.recommended \?\? s\.plans\.preselected/.test(cc) && /if \(fit\?\.declined\)/.test(cc), 'the Call screen recomputes from the call answers on every render, and shows a decline');
+  ok(/const fit = ans\.v \? offerFit\(ans\.answers,/.test(cc) && /if \(fit\?\.declined\)/.test(cc), 'the Call screen recomputes from the call answers on every render, and shows a decline');
   ok(!/role === 'admin'/.test(cc), 'the Call screen gives nobody (not even the admin) another plan to pick');
 }
 

@@ -241,7 +241,7 @@ console.log('── 12. The Call screen UI: removed noise stays removed ──')
   ok(WHY_IT_MATTERS_STATS.length === 2 && WHY_IT_MATTERS_STATS.every((s) => /^\d+%$/.test(s.figure) && !/https?:/.test(s.label)), 'two stat cards: a figure and a line, no link in the words');
   ok(/data-testid="answer-self"[^>]*>I manage it</.test(ui) && /data-testid="answer-agency"[^>]*>Agency \/ someone else</.test(ui), 'the first-question buttons: I manage it / Agency / someone else');
   ok(/manager === 'agency' && after &&/.test(ui), 'the agency questions appear only after Agency is chosen');
-  ok(/const preferred = fit\?\.recommended \?\? s\.plans\.preselected/.test(ui) && /data-testid=\{'call-route-' \+ plan\.route\}/.test(ui) && !/routes\.map\(\(r[^)]*\) => \(\s*<div key=\{r\.route\}[^]*?r\.spoken/.test(ui), 'one plan open at a time, starting from the preselected one');
+  ok(/useState<PlanTab>\('complete'\)/.test(ui) && /data-testid=\{'call-plan-' \+ t\}/.test(ui) && !/routes\.map\(\(r[^)]*\) => \(\s*<div key=\{r\.route\}[^]*?r\.spoken/.test(ui), 'one plan open at a time (two tabs), starting on Findable Complete');
   ok(/useState<number \| null>\(null\)/.test(ui) && /open !== null && p\.script\.objections\[open\]/.test(ui), 'objections: closed by default, one answer open at a time');
   ok((code.match(/<QuickCloseButton/g) ?? []).length === 1, 'exactly ONE Quick Close on the call screen (the sticky bar)');
   ok(/data-testid="log-this-call"/.test(ui) && /Log this call/.test(ui), 'the sticky bar: Log this call');

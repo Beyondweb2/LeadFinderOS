@@ -85,16 +85,16 @@ console.log('── QUICK CLOSE (v5): BUILD is the one plan; a contract they are
 console.log('\n── QUICK CLOSE: the shortest close, nothing asked twice ──');
 {
   ok(QUICK_CLOSE_QUESTIONS[0].key === 'route', 'the plan question is first in the table, but LAST in the flow (closeFlow)');
-  ok(closeFlow({}).slice(-1)[0] === 'route' && closeFlow({ manager: 'agency' }).slice(-1)[0] === 'route', 'the plan is the LAST question (v5: nothing after it)');
-  ok(missingQuestions({}).join() === 'decision_maker,manager,domain,route', 'a fresh close asks authority, who runs the site, the domain, then the plan');
+  ok(closeFlow({}).slice(-1)[0] === 'payment_plan' && closeFlow({ manager: 'agency' }).slice(-1)[0] === 'payment_plan', 'the plan is the LAST question (v5: nothing after it)');
+  ok(missingQuestions({}).join() === 'decision_maker,manager,payment_plan', 'a fresh close asks authority, who runs the site, then the plan and how they pay (2026-10-30: no domain or route question)');
   const fromCall = cleanAnswers({ decision_maker: 'yes', manager: 'owner' });
-  ok(missingQuestions(fromCall).join() === 'domain,route', 'the call already answered authority and who runs the site → those are not asked again');
+  ok(missingQuestions(fromCall).join() === 'payment_plan', 'the call already answered authority and who runs the site → those are not asked again');
   const sit = { ...fromCall, domain: 'yes', rights: 'yes' } as const;
-  ok(missingQuestions(sit).join() === 'route', 'with the situation answered, only the plan is left');
-  ok(missingQuestions({ ...sit, ...routeChoiceAnswers(sit, 'optimise') }).join() === 'route', 'v5: a stored Optimise plan is not an answer — the plan is asked again (Build only)');
+  ok(missingQuestions(sit).join() === 'payment_plan', 'with the situation answered, only the plan is left');
+  ok(missingQuestions({ ...sit, ...routeChoiceAnswers(sit, 'optimise') }).join() === 'payment_plan', 'v5: a stored Optimise plan is not an answer — the plan is asked again (Build only)');
   ok(missingQuestions({ ...sit, ...routeChoiceAnswers(sit, 'build') }).join() === 'payment_plan' && missingQuestions({ ...sit, ...routeChoiceAnswers(sit, 'build'), payment_plan: 'six' }).length === 0, 'Build after that (self-run): only how they pay, then nothing more — ready');
   ok(quickCloseState('answers_saved', { answers: { ...sit, ...routeChoiceAnswers(sit, 'build'), payment_plan: 'six' } }) === 'ready', '…READY for the sign-up link');
-  ok(missingQuestions(cleanAnswers({ decision_maker: 'yes', manager: 'agency', route: 'build', approach: 'unsure' })).join() === 'agency_contract,domain,payment_plan', 'an agency-run site: the contract is asked (once), then the domain');
+  ok(missingQuestions(cleanAnswers({ decision_maker: 'yes', manager: 'agency', route: 'build', approach: 'unsure' })).join() === 'agency_contract,payment_plan', 'an agency-run site: the contract is asked (once), then the plan');
   ok(!closeFlow({ route: 'build', approach: 'unsure' }).some((k) => ['design_owner', 'build_consents', 'approach', 'authority'].includes(k)), 'never the design owner, the consents, the approach sub-type or the legacy authority question');
   const merged = mergeAnswers({ approach: 'new_template' }, { route: 'optimise' });
   ok(merged.route === 'optimise' && merged.approach === 'improve', 'choosing the plan brings the agreeing approach (a stored Build approach never flips it back)');
