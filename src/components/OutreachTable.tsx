@@ -129,7 +129,8 @@ import { OutreachMobileCard } from './OutreachMobileCard';
 import { LeadEnrichButtons } from './LeadEnrichButtons';
 import { SocialLinks, findSocialsForLeads, SOCIAL_BULK_MAX } from './SocialLinks';
 import { CrawlCheckButton } from './CrawlCheckButton';
-import { SiteScoreRing } from './SiteScoreBadge';
+import { SiteScorePill } from './SiteScoreBadge';
+import { SITE_SCORE_GROUP_LABELS, siteScoreGroupOf, siteScoreSortKey, siteScoreViewFor, type SiteScoreGroup } from '@/lib/siteScore';
 import { useLeadCrawls } from '@/hooks/useLeadCrawls';
 import { LeadDetailDialog, type LeadStepper, type WorkspaceTabInput } from './LeadDetailDialog';
 import { isWhatsAppWorthTrying, whatsAppCapabilityOf } from '@/lib/whatsAppCapability';
@@ -307,7 +308,7 @@ const ITEMS_PER_PAGE_MOBILE = 10;
    window, so a mismatch would let the UI queue leads the drainer then silently de-queues. */
 const CONTACT_FOLLOWUP_MIN_DAYS = 3;
 
-type SortField = 'business_name' | 'status' | 'next_action_date' | 'created_at' | 'tracked' | 'last_contact';
+type SortField = 'business_name' | 'status' | 'next_action_date' | 'created_at' | 'tracked' | 'last_contact' | 'site_score';
 type SortDirection = 'asc' | 'desc';
 
 // Cheap LISTING-level channel signals — derived for free from the stored `website`
@@ -517,6 +518,9 @@ export function OutreachTable({
   const [sigNoWebsite, setSigNoWebsite] = useState(false);
   const [sigFacebook, setSigFacebook] = useState(false);
   const [sigInstagram, setSigInstagram] = useState(false);
+  /* Room to improve the website (2026-10-30, siteScore.ts): show only one band or state. A view filter only: it skips nothing
+     automatically and changes no send. */
+  const [siteGroup, setSiteGroup] = useState<SiteScoreGroup | 'all'>('all');
   // Lead-detail modal (Track Leads fold-in) — opened on row click.
   const [detailLead, setDetailLead] = useState<OutreachLead | null>(null);
   /** Which workspace tab the popup opens on (the call icon opens Work, where the call is logged). */
@@ -771,6 +775,7 @@ export function OutreachTable({
     if (typeof parsed.sigNoWebsite === 'boolean') setSigNoWebsite(parsed.sigNoWebsite);
     if (typeof parsed.sigFacebook === 'boolean') setSigFacebook(parsed.sigFacebook);
     if (typeof parsed.sigInstagram === 'boolean') setSigInstagram(parsed.sigInstagram);
+    if (typeof parsed.siteGroup === 'string' && (parsed.siteGroup === 'all' || parsed.siteGroup in SITE_SCORE_GROUP_LABELS)) setSiteGroup(parsed.siteGroup as SiteScoreGroup | 'all');
     if (parsed.sortField) setSortField(parsed.sortField);
     if (parsed.sortDirection) setSortDirection(parsed.sortDirection);
     if (shouldForcePage1) {
@@ -811,11 +816,12 @@ export function OutreachTable({
       sigNoWebsite,
       sigFacebook,
       sigInstagram,
+      siteGroup,
       sortField,
       sortDirection,
       currentPage,
     });
-  }, [tableStateKey, searchQuery, locationFilter, statusFilter, naWhen, naKind, trackedOnly, hideNoWhatsApp, hideNotInterested, hasEmail, hasInstagram, hasFacebook, hasWhatsApp, sigWebsite, sigNoWebsite, sigFacebook, sigInstagram, sortField, sortDirection, currentPage]);
+  }, [tableStateKey, searchQuery, locationFilter, statusFilter, naWhen, naKind, trackedOnly, hideNoWhatsApp, hideNotInterested, hasEmail, hasInstagram, hasFacebook, hasWhatsApp, sigWebsite, sigNoWebsite, sigFacebook, sigInstagram, siteGroup, sortField, sortDirection, currentPage]);
 
   // Apply optimistic updates to leads for rendering
   const leadsWithOptimistic = useMemo(() => {
@@ -2031,6 +2037,11 @@ export function OutreachTable({
     if (sigFacebook) result = result.filter((lead) => isFacebookListing(lead.website));
     if (sigInstagram) result = result.filter((lead) => isInstagramListing(lead.website));
 
+    /* Room to improve the website: the SAME view the row's pill draws (siteScoreViewFor), so the filter, the sort and the
+       pill can never disagree. */
+    const siteView = (lead: OutreachLead) => siteScoreViewFor(lead.website, crawlByLeadId.get(lead.id)?.siteScore);
+    if (siteGroup !== 'all') result = result.filter((lead) => siteScoreGroupOf(siteView(lead)) === siteGroup);
+
     // Sort
     result.sort((a, b) => {
       let comparison = 0;
@@ -2056,6 +2067,10 @@ export function OutreachTable({
         case 'created_at':
           comparison = new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
           break;
+        case 'site_score':
+          /* Most room to improve first (lowest number), the states after (siteScoreSortKey). */
+          comparison = siteScoreSortKey(siteView(a)) - siteScoreSortKey(siteView(b));
+          break;
         case 'tracked':
           // Tracked (is_potential_work) leads first.
           comparison = (b.is_potential_work ? 1 : 0) - (a.is_potential_work ? 1 : 0);
@@ -2066,7 +2081,7 @@ export function OutreachTable({
     });
 
     return result;
-  }, [leadsWithOptimistic, listComplete, isArchiveView, archiveView, preset, searchQuery, locationFilter, statusFilter, naWhen, naKind, sharedPhoneOnly, sharedPhoneIds, trackedOnly, hasEmail, hasInstagram, hasFacebook, hasWhatsApp, hideNoWhatsApp, hideNotInterested, sigWebsite, sigNoWebsite, sigFacebook, sigInstagram, sortField, sortDirection, rowSalesState]);
+  }, [leadsWithOptimistic, listComplete, isArchiveView, archiveView, preset, searchQuery, locationFilter, statusFilter, naWhen, naKind, sharedPhoneOnly, sharedPhoneIds, trackedOnly, hasEmail, hasInstagram, hasFacebook, hasWhatsApp, hideNoWhatsApp, hideNotInterested, sigWebsite, sigNoWebsite, sigFacebook, sigInstagram, siteGroup, crawlByLeadId, sortField, sortDirection, rowSalesState]);
 
   // Bulk "Find emails" — free website crawl (extract-email) over the filtered leads
   // with a website and no email yet, persisting to outreach_leads.email via updateLead.
@@ -2859,7 +2874,7 @@ export function OutreachTable({
                 (unchanged); the trigger shows the active count. */}
             {(() => {
               const activeFilterCount =
-                [hasEmail, hasInstagram, hasFacebook, hasWhatsApp, hideNoWhatsApp, hideNotInterested, sigWebsite, sigNoWebsite, sigFacebook, sigInstagram, archiveView === 'archived'].filter(Boolean).length;
+                [hasEmail, hasInstagram, hasFacebook, hasWhatsApp, hideNoWhatsApp, hideNotInterested, sigWebsite, sigNoWebsite, sigFacebook, sigInstagram, archiveView === 'archived', siteGroup !== 'all'].filter(Boolean).length;
               const toggle = (setter: (updater: (prev: boolean) => boolean) => void) => () => {
                 setter((v) => !v);
                 setCurrentPage(1);
@@ -2868,7 +2883,7 @@ export function OutreachTable({
                 setHasEmail(false); setHasInstagram(false); setHasFacebook(false); setHasWhatsApp(false);
                 setHideNoWhatsApp(false); setHideNotInterested(false);
                 setSigWebsite(false); setSigNoWebsite(false); setSigFacebook(false); setSigInstagram(false);
-                setShowArchived(false);
+                setShowArchived(false); setSiteGroup('all');
                 setCurrentPage(1);
               };
               return (
@@ -2938,6 +2953,15 @@ export function OutreachTable({
                     <DropdownMenuCheckboxItem checked={sigInstagram} onCheckedChange={toggle(setSigInstagram)} onSelect={(e) => e.preventDefault()}>
                       <Instagram className="h-3.5 w-3.5 mr-2" /> IG (listing)
                     </DropdownMenuCheckboxItem>
+                    <DropdownMenuSeparator />
+                    {/* Room to improve the website (siteScore.ts) — one band or state at a time; team only, sends nothing. */}
+                    <DropdownMenuLabel>Room to improve the website</DropdownMenuLabel>
+                    {(['big', 'some', 'little', 'no_website', 'profile_only', 'js_only', 'robots_blocked', 'unreachable', 'partial', 'not_checked'] as SiteScoreGroup[]).map((g) => (
+                      <DropdownMenuCheckboxItem key={g} checked={siteGroup === g} data-testid={`filter-site-${g}`}
+                        onCheckedChange={() => { setSiteGroup((cur) => (cur === g ? 'all' : g)); setCurrentPage(1); }} onSelect={(e) => e.preventDefault()}>
+                        <Globe className="h-3.5 w-3.5 mr-2 text-muted-foreground" /> {SITE_SCORE_GROUP_LABELS[g]}
+                      </DropdownMenuCheckboxItem>
+                    ))}
                     {activeFilterCount > 0 && (
                       <>
                         <DropdownMenuSeparator />
@@ -2950,7 +2974,7 @@ export function OutreachTable({
                 </DropdownMenu>
               );
             })()}
-            {(hasEmail || hasInstagram || hasFacebook || hasWhatsApp || hideNoWhatsApp || hideNotInterested || sigWebsite || sigNoWebsite || sigFacebook || sigInstagram) && (
+            {(hasEmail || hasInstagram || hasFacebook || hasWhatsApp || hideNoWhatsApp || hideNotInterested || sigWebsite || sigNoWebsite || sigFacebook || sigInstagram || siteGroup !== 'all') && (
               <span className="self-center text-xs text-muted-foreground whitespace-nowrap" title="Leads matching all active filters">
                 {filteredAndSortedLeads.length} match
               </span>
@@ -2977,6 +3001,7 @@ export function OutreachTable({
                 <SelectItem value="last_contact:desc">Most recent contact</SelectItem>
                 <SelectItem value="status:asc">Status</SelectItem>
                 <SelectItem value="business_name:asc">A → Z</SelectItem>
+                <SelectItem value="site_score:asc">Website: most room to improve</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -3279,8 +3304,8 @@ export function OutreachTable({
                           {perms.crawlSite && !isDemoLead(lead.id) && (
                             <CrawlCheckButton lead={{ id: lead.id, website: lead.website }} crawl={crawlByLeadId.get(lead.id) ?? null} iconOnly from="outreach" />
                           )}
-                          {/* The site score ring (2026-10-23, siteScore.ts) — team only, both roles; hover / tap for the reasons. */}
-                          {!isDemoLead(lead.id) && <SiteScoreRing score={crawlByLeadId.get(lead.id)?.siteScore} website={lead.website} />}
+                          {/* Room to improve the website (2026-10-30, siteScore.ts) — the same pill as the Inbox; team only, both roles. */}
+                          {!isDemoLead(lead.id) && <SiteScorePill score={crawlByLeadId.get(lead.id)?.siteScore} website={lead.website} leadId={lead.id} />}
                           {lead.phone ? (
                             <>
                               {/* ONE tap to call (UI cleanup 2026-09-29). This was a two-item menu: Normal Call, and

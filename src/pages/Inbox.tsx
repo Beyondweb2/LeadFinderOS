@@ -395,10 +395,16 @@ const ConversationRow = memo(function ConversationRow({
           {c.leadId && (saving
             ? <Loader2 className="h-3 w-3 shrink-0 animate-spin text-muted-foreground" />
             : <PipelineStatusSelect value={c.leadStatus} stage={listStageOf(c.leadId)} onValueChange={(status) => handleSetStatus(c, status)} />)}
-          {c.leadId && <span className="ml-auto"><SiteScorePill score={siteScore} website={siteWebsite} /></span>}
         </div>
       )}
-      {c.leadId && <ScoreLine score={auditScore} visible={c.visible} />}
+      {/* The AI Visibility line, then "room to improve the website" right after Google AI (2026-10-30, Paul: off the crowded
+          status line, where it could be pushed out of sight). Wraps on a narrow list rather than clipping. */}
+      {c.leadId && (
+        <div className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5" data-testid="ai-visibility-line">
+          <ScoreLine score={auditScore} visible={c.visible} />
+          <SiteScorePill score={siteScore} website={siteWebsite} leadId={c.leadId} />
+        </div>
+      )}
     </div>
   );
 }, sameRowProps);

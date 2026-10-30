@@ -8,6 +8,7 @@ import { ClosePanel } from '@/components/ClosePanel';
 import { LeadQuestionnaireSection } from '@/components/LeadQuestionnaireSection';
 import { LeadSiteCheckButton } from '@/components/LeadSiteCheckButton';
 import { CrawlCheckButton } from '@/components/CrawlCheckButton';
+import { LeadSiteScore } from '@/components/SiteScoreBadge';
 import { useLeadCrawl } from '@/hooks/useLeadCrawls';
 import { WelcomePackButton } from '@/components/WelcomePackButton';
 import { ColdCallPlaybookInline } from '@/components/ColdCallPlaybook';
@@ -650,6 +651,8 @@ function LeadDetailBody({
                     {!lead.email && perms.enrichLeads && <FindEmailButton leadId={lead.id} website={lead.website} />}
                     <SocialLinks lead={lead} withFind />
                     {perms.crawlOwnLead && <LeadDetailCrawlButton lead={lead} />}
+                    {/* Room to improve the website (siteScore.ts): number, band and, on Full breakdown, every point lost with its page and quote. Team only. */}
+                    <LeadSiteScore leadId={lead.id} website={lead.website} />
                     {perms.clientDelivery && <WelcomePackButton leadId={lead.id} businessName={lead.business_name} />}
                     {perms.clientDelivery && <LeadSiteCheckButton lead={lead} />}
                     {/* PREFERRED CHANNEL BY HAND (2026-10-07, Paul): admin picks any; a selling salesperson picks Call or WhatsApp (lead_set_contact_method). */}
