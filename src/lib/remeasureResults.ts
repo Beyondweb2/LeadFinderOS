@@ -270,7 +270,8 @@ export interface ResultsCopyInput {
    to findable-site). */
 export function resultsClaimParagraph(paymentPlan?: string | null, refundWindowDays: number | null = null): string {
   /* v6 / v7 (5.4, 5.5): the refund is everything the client has paid, and a valid claim ends the plan. v7's window is 7 days. */
-  if (isV6Plan(paymentPlan)) return `That means the guarantee applies. If that number has not gone up, email us within ${windowDays(refundWindowDays)} days of your results and we'll refund everything you have paid us. A valid claim also ends your plan: no further payments are taken.`;
+  /* v7 (2026-10-30): the 7 days run from the date we send these results (this email), said as findable.live says it. */
+  if (isV6Plan(paymentPlan)) return `That means the guarantee applies. If that number has not gone up, email us within ${windowDays(refundWindowDays)} days of ${windowDays(refundWindowDays) === V7_REFUND_WINDOW_DAYS ? 'the date we send your four-week audit results (the date of this email)' : 'your results'} and we'll refund everything you have paid us. A valid claim also ends your plan: no further payments are taken.`;
   return `That means the guarantee applies. ${REMEASURE_CLAIM_SENTENCE} ${GUARANTEE_PAYMENT_TWO_SENTENCE}`;
 }
 const isV6Plan = (p: unknown): p is PaymentPlan => isPaymentPlan(p) && p !== 'legacy_twelve';

@@ -245,7 +245,7 @@ export function accessDateEmail(i: { businessName: string; accessDay: string; re
         : `We now take your baseline measurement, before we change anything, and send you the list of questions with your baseline result. We aim to send your formal before-and-after results about four weeks from your Access Date (around ${ukDayWords(i.resultsTargetDay)}). The date we send them is your Results Date.`,
       "",
       i.v7
-        ? `Your refund window is the ${REFUND_WINDOW_DAYS_V7} days after your Results Date. If your plan has monthly payments, the first is not taken until the day after that window closes.`
+        ? `Your refund window is the ${REFUND_WINDOW_DAYS_V7} days after the date we send your four-week audit results, not from the day you signed up. If your plan has monthly payments, the first is not taken until the day after that window closes.`
         : "Your first monthly payment is not taken until the day after your 14-day refund window closes.",
       "",
       "If anything about this date looks wrong, just reply to this email.",

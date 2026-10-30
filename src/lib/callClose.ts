@@ -116,7 +116,7 @@ export function buildCallClose(source: SiteSource | null | undefined): CallClose
     routeNote: note,
     guarantee: {
       headline: GUARANTEE_HEADLINE,
-      spoken: `We measure how often AI names you before we start, then ask the same questions again after ${REMEASURE_SPOKEN}. If that number hasn't gone up, you email us within ${V7_REFUND_WINDOW_DAYS} days of your results and get back everything you've paid.`,
+      spoken: `We measure how often AI names you before we start, then ask the same questions again after ${REMEASURE_SPOKEN}. If that number hasn't gone up, you email us within ${V7_REFUND_WINDOW_DAYS} days of the date we send your four-week audit results and get back everything you've paid.`,
       caution: 'Never promise a ranking, a recommendation or that AI will name them. The promise is the measured number, or their money back.',
     },
     monthly: `The monthly is a new page every month, a monthly check of what AI says about you, adjustments as we go, and ${routes[0] === 'build' ? 'hosting and looking after the website' : 'keeping your site right'}.`,

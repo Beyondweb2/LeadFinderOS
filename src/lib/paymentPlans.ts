@@ -249,13 +249,16 @@ export const V6_GUARANTEE =
 export const GUARANTEE_HEADLINE = V6_GUARANTEE_HEADLINE;
 export const V7_REFUND_WINDOW_DAYS = 7;
 /** v7's claim sentence on its own (5.4, 5.5), the second sentence of V7_GUARANTEE. The quick-check report says it after
- *  "judged on a full measurement, not on this quick check" (2026-10-30). */
-export const V7_CLAIM_SENTENCE = `If that number has not gone up, email us within ${V7_REFUND_WINDOW_DAYS} days of your results and we'll refund everything you have paid us.`;
+ *  "judged on a full measurement, not on this quick check" (2026-10-30). The 7 days run from the date we SEND the
+ *  four-week audit results, never from sign-up: worded as findable.live's Guarantee says it (Paul, 2026-10-30). */
+export const V7_CLAIM_SENTENCE = `If that number has not gone up, email us within ${V7_REFUND_WINDOW_DAYS} days of the date we send your four-week audit results and we'll refund everything you have paid us.`;
+/** findable.live /refunds' own line: when the 7 days start. Said beside the signed guarantee words where those say "Results Date". */
+export const V7_WINDOW_START_LINE = `The ${V7_REFUND_WINDOW_DAYS} days start on the date we send you your four-week audit results, not on the day you sign up.`;
 export const V7_GUARANTEE =
   'We measure how often AI names you before we start, then re-measure four weeks later on the same questions and the same engines. ' +
   V7_CLAIM_SENTENCE;
 /** When the first MONTHLY payment is taken on v7 (clause 5.6): the day after the 7-day window after the day-28 results. */
-export const MONTHLY_START_V7_WORDS = `the day after your ${V7_REFUND_WINDOW_DAYS}-day refund window closes (normally 36 days after your baseline audit)`;
+export const MONTHLY_START_V7_WORDS = `the day after your refund window closes, ${V7_REFUND_WINDOW_DAYS} days after we send your four-week audit results (normally 36 days after your baseline audit)`;
 /** The guarantee sentence for a NEW sale on a plan: v7's for Complete and Essential, v5's FINDABLE_GUARANTEE (passed in)
  *  for the old staff-only plan. */
 export function guaranteeForPlan(p: PaymentPlan, v5Guarantee: string): string {
