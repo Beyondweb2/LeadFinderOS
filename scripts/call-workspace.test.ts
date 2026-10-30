@@ -98,13 +98,13 @@ console.log('── 2. THE OFFER, BOTH ROUTES, FROM THE CONSTANTS ──');
   const o = routeOffer('optimise');
   /* 2026-10-29 (paymentPlans.ts, agreement v6): Build is sold three ways; the summary names each, from the plan constants. */
   const P = PAYMENT_PLAN_SPEC;
-  ok(CLIENT_PAYMENT_PLANS.join(',') === 'full,six,twelve'
+  ok(CLIENT_PAYMENT_PLANS.join(',') === 'complete,full,six,twelve'
     && b.summary === CLIENT_PAYMENT_PLANS.map((p) => `${PAYMENT_PLAN_NAME[p]} ${planShortLine(p)}`).join(' · ')
     && b.summary.includes(gbpWords(PAY_IN_FULL_GBP)) && b.summary.includes(gbpWords(REDUCED_MONTHLY_GBP))
     && P.full.firstGbp === PAY_IN_FULL_GBP && P.full.totalPayments === 1
     && P.six.firstGbp === FINDABLE_SETUP_PRICE_GBP && P.six.monthlyGbp === FINDABLE_MONTHLY_GBP && P.six.totalPayments === 6
     && P.twelve.firstGbp === FINDABLE_SETUP_PRICE_GBP && P.twelve.monthlyGbp === REDUCED_MONTHLY_GBP && P.twelve.totalPayments === FINDABLE_BUILD_TOTAL_PAYMENTS,
-    'Build: the summary names all three ways to pay (pay in full · 6 months · 12 months), every figure from the plan constants');
+    'Build: the summary names both plans (Complete · pay in full · 6 months · 12 months), every figure from the plan constants');
   ok(o.summary === `£${FINDABLE_SETUP_PRICE_GBP} now · £${FINDABLE_MONTHLY_GBP}/month · ${FINDABLE_OPTIMISE_TOTAL_PAYMENTS} payments in total` && FINDABLE_OPTIMISE_TOTAL_PAYMENTS === 6, 'Optimise: £99 now · £99/month · 6 payments in total');
   ok(/new website, host it and look after it/.test(b.spoken.join(' ')) && /built, hosted and managed by Findable/.test(b.site), 'Build: a new Findable-built, hosted and managed website');
   ok(/keep your own website and it stays yours/.test(o.spoken.join(' ')) && /never take it offline/.test(o.spoken.join(' ')) && /keep their existing website and its ownership/.test(o.site), 'Optimise: they keep their existing site and its ownership; we never take it offline');

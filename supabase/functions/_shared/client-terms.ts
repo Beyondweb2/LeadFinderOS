@@ -16,10 +16,11 @@
 // ⛔ THE CONTINUING SERVICE PRICE IS NEVER CHARGED FROM HERE. The minimum term's cancel_at is kept at its end; the Continuing
 //    Service is Paul's manual step until CONTINUING_SERVICE_AUTOMATION.stripeSwitch is turned on.
 import {
-  CONTINUING_SERVICE_AUTOMATION, OPTION_B_TIMING, chargeAllowedOn, isOptionBTerms, paymentStart, timelineActions, ukDay, ukDayAtHourIso, ukDayWords,
+  COMMERCIAL_TERMS_V7, CONTINUING_SERVICE_AUTOMATION, OPTION_B_TIMING, chargeAllowedOn, isOptionBTerms, isV7Terms, paymentStart, timelineActions, ukDay, ukDayAtHourIso, ukDayWords,
   type TimelineFacts,
 } from "../../../src/lib/clientTimeline.ts";
 import { recurringPaymentsFor, serviceRouteForTotal, isServiceRoute, type ServiceRoute } from "../../../src/lib/findableOffer.ts";
+import { isPaymentPlan, recurringPaymentsForPlan } from "../../../src/lib/paymentPlans.ts";
 import { minimumTermCancelAt } from "./delayed-subscription.ts";
 
 // deno-lint-ignore no-explicit-any
@@ -80,7 +81,7 @@ export async function loadTimelineFacts(service: Service, leadId: string): Promi
   if (error) throw error;
   if (!terms) return null;
   const { data: lead, error: leadErr } = await service.from("outreach_leads")
-    .select("id,business_name,email,status,service_terminated_at,contract_total_payments,payment_plan,remeasure_results_sent_at,stripe_subscription_id,payment_date")
+    .select("id,business_name,email,status,service_terminated_at,contract_total_payments,payment_plan,remeasure_results_sent_at,stripe_subscription_id,payment_date,baseline_audit_id")
     .eq("id", leadId).maybeSingle();
   if (leadErr) throw leadErr;
   if (!lead) return null;
@@ -88,6 +89,13 @@ export async function loadTimelineFacts(service: Service, leadId: string): Promi
     .eq("lead_id", leadId).eq("kind", "recurring").eq("status", "succeeded").order("occurred_at", { ascending: true });
   if (recErr) throw recErr;
   const t = terms as TermsRow;
+  /* v7 day 0: the lead's baseline audit, completed. Read only on v7 terms (earlier versions run from the Results Date). */
+  let baselineAt: string | null = null;
+  if (isV7Terms(t.commercial_terms) && lead.baseline_audit_id) {
+    const { data: au, error: auErr } = await service.from("ai_audits").select("baseline_completed_at").eq("id", lead.baseline_audit_id).maybeSingle();
+    if (auErr) throw auErr;
+    baselineAt = (au as { baseline_completed_at?: string | null } | null)?.baseline_completed_at ?? null;
+  }
   const route: ServiceRoute | null = isServiceRoute(t.service_route) ? t.service_route : serviceRouteForTotal(lead.contract_total_payments, lead.payment_plan);
   const facts: TimelineFacts = {
     terms: t.commercial_terms,
@@ -104,6 +112,10 @@ export async function loadTimelineFacts(service: Service, leadId: string): Promi
     recurringPaidAt: ((rec ?? []) as Array<{ occurred_at: string; amount_gbp: number }>).filter((r) => Number(r.amount_gbp) > 0).map((r) => r.occurred_at),
     continuingReminderSentAt: t.continuing_reminder_sent_at,
     continuingDecision: t.continuing_decision,
+    /* 🔴 THE PLAN'S COUNT, NOT THE ROUTE'S (2026-10-30). Without this a 6-month plan read the Build route's 11 recurring
+       payments, and the Payment Start write below re-set Stripe's cancel_at to 11 payments instead of 5. */
+    recurringPaymentsNeeded: isPaymentPlan(lead.payment_plan) ? recurringPaymentsForPlan(lead.payment_plan) : null,
+    baselineAt,
   };
   return { terms: t, facts, lead: lead as Record<string, unknown> };
 }
@@ -140,7 +152,7 @@ export function planPaymentStart(facts: TimelineFacts, leadId: string, sub: Stri
   const trialEndSec = Math.floor(Date.parse(trialEndIso) / 1000);
   return {
     ok: true, day: ps.day, basis: ps.basis ?? "results", trialEndSec,
-    cancelAtSec: minimumTermCancelAt(trialEndSec, recurringPaymentsFor(facts.route)),
+    cancelAtSec: minimumTermCancelAt(trialEndSec, typeof facts.recurringPaymentsNeeded === "number" && facts.recurringPaymentsNeeded >= 1 ? facts.recurringPaymentsNeeded : recurringPaymentsFor(facts.route)),
     idempotencyKey: `findable-payment-start-${sub.id}-${trialEndSec}`,
   };
 }
@@ -176,6 +188,7 @@ export async function schedulePaymentStart(service: Service, leadId: string, act
   const nowIso = opts.nowIso ?? new Date().toISOString();
   const loaded = await loadTimelineFacts(service, leadId);
   if (!loaded) return { kind: "refused", reason: "This client has no v3 terms record." };
+  loaded.facts.today = nowIso;
   const subId = String(loaded.lead.stripe_subscription_id ?? "").trim();
   if (!secret) return { kind: "failed", reason: "STRIPE_SECRET_KEY is not set" };
   let sub: StripeSubscriptionView | null = null;
@@ -268,6 +281,7 @@ export async function notifyTimelineActions(service: Service, nowIso: string = n
     const loaded = await loadTimelineFacts(service, r.lead_id);
     if (!loaded) continue;
     const biz = String(loaded.lead.business_name ?? "A client").trim() || "A client";
+    loaded.facts.today = nowIso;
     const out = timelineActions(loaded.facts, nowIso).map((a) => ({
       user_id: ownerId, kind: "team_task", title: `${biz}: ${TIMELINE_ACTION_TITLE[a.kind]}`, body: a.text,
       link: `/paid-clients/${r.lead_id}`, lead_id: r.lead_id, priority: 2, dedupe_key: `terms:${r.lead_id}:${a.kind}:${a.dueDay}`,
@@ -284,10 +298,32 @@ const TIMELINE_ACTION_TITLE: Record<string, string> = {
   access_deadline: "no access after 30 days",
   results_due: "formal results due",
   payment_start_unscheduled: "Payment Start Date not set in Stripe",
+  baseline_not_taken: "baseline not taken, first monthly not scheduled",
   continuing_prepare: "Continuing Service reminder due",
   continuing_reminder_overdue: "Continuing Service reminder OVERDUE",
   continuing_decision: "Continuing Service starts soon",
 };
+
+/* ══ v7: SET THE FIRST MONTHLY FROM THE BASELINE DATE, once a day (fn cron-run) ══════════════════════════
+   Every v7 client whose derived Payment Start Date (clientTimeline.paymentStartV7) is not the one confirmed in Stripe gets
+   schedulePaymentStart: once the baseline is taken (day 36), again when the results go out (later if they were late), and
+   daily while late results slide the provisional date (V7_SLIDE_LEAD_DAYS). Before the baseline nothing is scheduled; the
+   client shows on What needs you instead. ⛔ Only v7: v3 to v6 keep their rule (set when the results are sent). */
+export async function scheduleV7PaymentStarts(service: Service, nowIso: string = new Date().toISOString()): Promise<{ checked: number; scheduled: number; refused: number; failed: number }> {
+  const { data: rows, error } = await service.from("client_service_terms").select("lead_id").eq("commercial_terms", COMMERCIAL_TERMS_V7).order("lead_id").limit(1000);
+  if (error) throw error;
+  let scheduled = 0, refused = 0, failed = 0;
+  for (const r of (rows ?? []) as { lead_id: string }[]) {
+    const loaded = await loadTimelineFacts(service, r.lead_id);
+    if (!loaded || loaded.facts.refundedAt || loaded.facts.endedAt) continue;
+    loaded.facts.today = nowIso;
+    const ps = paymentStart(loaded.facts);
+    if (!ps.day || (loaded.facts.paymentStartScheduledDay === ps.day && loaded.facts.paymentStartConfirmedAt)) continue;
+    const out = await schedulePaymentStart(service, r.lead_id, null, { nowIso });
+    if (out.kind === "scheduled") scheduled++; else if (out.kind === "refused") refused++; else { failed++; console.error(`[client-terms] v7 payment start for ${r.lead_id}: ${out.reason}`); }
+  }
+  return { checked: (rows ?? []).length, scheduled, refused, failed };
+}
 
 /** Today's UK day (for the actions list). */
 export const todayUk = (nowIso: string = new Date().toISOString()) => ukDay(nowIso)!;

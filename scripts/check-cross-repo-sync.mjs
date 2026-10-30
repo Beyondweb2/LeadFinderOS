@@ -372,8 +372,34 @@ function checkSameFiles() {
   return bad;
 }
 
+/* ⛔ THE PLANS THE SITE MAY SELL (2026-10-30, TWO PLANS: Findable Complete + Findable Essential; docs/two-plans.md).
+   findable.live reads the live list from fn findable-onboarding `plans` (id, name, product, recommended, available) and
+   sends the chosen id as answers.payment_plan. If the site keeps its own copy of the ids (`SITE_PLAN_IDS` in site.ts),
+   every id in it must be one this repo SELLS (CLIENT_PAYMENT_PLANS) — a site offering an id the server refuses would show
+   a plan nobody can sign or pay for. No copy yet = the site sells no plan (a blank plan is the v5 offer): a PASS that says so.
+   Our ids are read from paymentPlans.ts as a plain array literal, so the list stays parseable here. */
+function readIdArray(file, name) {
+  const src = fs.readFileSync(file, 'utf8');
+  const m = src.match(new RegExp('export const ' + name + '(?::[^=]+)?=\\s*\\[([^\\]]*)\\]'));
+  if (!m) return null;
+  return [...m[1].matchAll(/'([^']+)'|"([^"]+)"/g)].map((x) => x[1] ?? x[2]);
+}
+function checkPlanIds() {
+  const ours = readIdArray(path.join(LFOS, 'paymentPlans.ts'), 'CLIENT_PAYMENT_PLANS');
+  if (!ours || !ours.length) { console.error('\nFAIL  could not read CLIENT_PAYMENT_PLANS from paymentPlans.ts (keep it a plain array literal).'); return false; }
+  const siteFile = path.join(SITE, 'site.ts');
+  const theirs = fs.existsSync(siteFile) ? readIdArray(siteFile, 'SITE_PLAN_IDS') : null;
+  if (!theirs) { console.log(`PASS  the plans: the site declares no SITE_PLAN_IDS yet, so it sells no plan (blank = the v5 offer). It can sell: ${ours.join(', ')}`); return true; }
+  const unknown = theirs.filter((id) => !ours.includes(id));
+  if (!unknown.length) { console.log(`PASS  the plans: every id the site offers (${theirs.join(', ')}) is one we sell`); return true; }
+  console.error(`\nFAIL  the site offers plan ids we do not sell: ${unknown.join(', ')}. We sell: ${ours.join(', ')}.`);
+  console.error('  The checkout would refuse them (invalid_payment_plan). Fix the site, or add the plan here first.');
+  return false;
+}
+
 let failed = 0;
 if (!checkRefundAmount()) failed++;
+if (!checkPlanIds()) failed++;
 failed += checkSameFiles();
 for (const pair of PAIRS) {
   let mine, theirs;
@@ -411,9 +437,9 @@ failed += checkGroups();
 
 // pairs + the guarantee prefix + the refund-amount check + the same-repo groups
 /* +1 is the refund-amount check. (It was +2 while the guarantee prefix assertion existed.) */
-const TOTAL = PAIRS.length + 1 + SAME_REPO_GROUPS.length + SAME_FILES.length;
+const TOTAL = PAIRS.length + 2 + SAME_REPO_GROUPS.length + SAME_FILES.length;
 if (failed) {
   console.error(`\n${failed} of ${TOTAL} checks failed.`);
   process.exit(1);
 }
-console.log(`\nAll ${TOTAL} checks pass: ${PAIRS.length} cross-repo, ${SAME_REPO_GROUPS.length} same-repo, plus the refund amount.`);
+console.log(`\nAll ${TOTAL} checks pass: ${PAIRS.length} cross-repo, ${SAME_REPO_GROUPS.length} same-repo, plus the refund amount and the plan ids.`);

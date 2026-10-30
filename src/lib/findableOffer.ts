@@ -129,7 +129,7 @@ export function contractTotalGbpFor(route: ServiceRoute): number {
   return FINDABLE_SETUP_PRICE_GBP + recurringPaymentsFor(route) * FINDABLE_MONTHLY_GBP;
 }
 /** The payment plans (src/lib/paymentPlans.ts owns their meaning; the ids live here so this leaf can recognise one). */
-export const PAYMENT_PLAN_IDS = ['full', 'six', 'twelve', 'legacy_twelve'] as const;
+export const PAYMENT_PLAN_IDS = ['complete', 'full', 'six', 'twelve', 'legacy_twelve'] as const;
 
 /** A payment count Stripe metadata / the lead carries → the route it belongs to (positive match only).
  *  🔴 2026-10-29: pass the lead's recorded payment_plan too. Every payment plan is Build — and the six plan's count (6) is

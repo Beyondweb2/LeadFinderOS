@@ -194,7 +194,7 @@ async function main() {
     ok(/serviceRouteFromRow\(/.test(co) && /unit_amount/.test(co) && !/req\.json\(\)[^;]*price|body\.(price|amount|unit_amount)/.test(co), 'a tampered price or plan in the request is not read: the route comes from the row, the price from the constants');
     ok(/form\.set\("metadata\[commercial_terms\]", commercialTermsFor\(agreementVersionNeeded\) \?\? ""\)/.test(co) && /const agreementVersionNeeded = agreementVersionForPlan\(plan\)/.test(co), 'the checkout session carries the terms the version of ITS PLAN decides');
     const hold = read('supabase/functions/_shared/payment-hold.ts');
-    ok(/expectedTerms: commercialTermsFor\(version\)/.test(hold) && /const version = plan \? agreementVersionForPlan\(plan\) : "v5"/.test(hold), 'the webhook backstop checks the same terms');
+    ok(/expectedTerms: commercialTermsFor\(version\)/.test(hold) && /const version = v6Session \? "v6" : plan \? agreementVersionForPlan\(plan\) : "v5"/.test(hold), 'the webhook backstop checks the same terms');
   }
 
   console.log('\n── PAID CLIENTS AND THE WELCOME PACK SEE THE SIGNED AGREEMENT ──');

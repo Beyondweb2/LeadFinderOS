@@ -31,7 +31,7 @@ console.log('── every place that queues or sends ──');
 const swm = read('supabase/functions/send-whatsapp-message/index.ts');
 ok(/if \(templateDestinationRefusal\(to\) === NOT_A_MOBILE\)/.test(swm), 'send-whatsapp-message: EVERY template refuses a non-mobile (Inbox, Quick Close link, client-hub link, follow-ups)');
 ok(swm.indexOf('templateDestinationRefusal(to)') > swm.indexOf('if (templateName) {'), '…inside the template branch (a free-form reply in an open thread is not touched)');
-ok(/const BUILD_ID = "2026-10-(19a-template-non-mobile|19[b-z]-[a-z-]+|2[0-9][a-z]-[a-z-]+)"/.test(swm), 'send-whatsapp-message BUILD_ID bumped (the deploy marker)');
+ok(/const BUILD_ID = "2026-(10-(19a-template-non-mobile|19[b-z]-[a-z-]+|2[0-9][a-z]-[a-z-]+|3[01][a-z]-[a-z-]+)|1[12]-[0-3][0-9][a-z]-[a-z-]+)"/.test(swm), 'send-whatsapp-message BUILD_ID bumped (the deploy marker)');
 const pwq = read('supabase/functions/process-whatsapp-queue/index.ts');
 ok(/trigger !== "first_reply" && templateDestinationRefusal\(/.test(pwq) && /finish\("skipped_not_mobile"/.test(pwq), 'auto-reply drain: the audit-complete pitch to a stored landline is skipped');
 ok(/!lineType\.whatsappEligible \|\| knownNonMobile/.test(pwq), 'the drip backstop: the digit rule as well as the phone library');

@@ -76,7 +76,7 @@ ok(/const dest = toWhatsAppNumber\(Deno\.env\.get\("WHATSAPP_TEST_NUMBER"\)/.tes
 ok(/body\.auto_window === true/.test(ts) && /\.eq\("phone", dest\)/.test(ts), 'auto mode reads the TEST number\'s own 24-hour window');
 ok(!/\.insert\(/.test(ts) && /textPayload\(text\)/.test(ts), 'test mode writes nothing (no message row, no send row)');
 ok(/welcomePackUrl: v\.welcome_pack_url/.test(ts) && /templateName === WELCOME_PACK_TEMPLATE_NAME/.test(ts), 'a template test checks Meta\'s status and carries the three values');
-ok(/BUILD_ID = "2026-10-29c-welcome-pack-template"/.test(swm), 'BUILD_ID bumped');
+ok(/BUILD_ID = "2026-(10-29[c-z]|10-3[01]|1[12]-[0-3][0-9])[a-z]?-?[a-z-]+"/.test(swm), 'BUILD_ID bumped (2026-10-29c or later)');
 const vars = read('supabase/functions/_shared/welcome-pack-vars.ts');
 ok(/carriesMoney\(lead\) \|\| clientClosed\(lead\)/.test(vars) && /welcomePackReadiness/.test(vars) && /isWelcomePackUrl/.test(vars), 'variables only for a current paying client with a ready pack and a valid link');
 

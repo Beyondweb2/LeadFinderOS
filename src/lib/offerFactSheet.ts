@@ -19,15 +19,15 @@ import {
   FINDABLE_SETUP_PRICE_GBP, FINDABLE_MONTHLY_GBP, FINDABLE_CONTINUING_GBP,
   FINDABLE_CONTACT_EMAIL, REMEASURE_WEEKS_STANDARD,
 } from './findableOffer.ts';
-import { FULL_PAY_HOSTING_INCLUDED_MONTHS, PAYMENT_PLAN_SPEC, PAY_IN_FULL_GBP, REDUCED_MONTHLY_GBP, planTotalGbp } from './paymentPlans.ts';
+import { FULL_PAY_HOSTING_INCLUDED_MONTHS, PAYMENT_PLAN_SPEC, PAY_IN_FULL_GBP, REDUCED_MONTHLY_GBP, V7_REFUND_WINDOW_DAYS, planTotalGbp } from './paymentPlans.ts';
 
-const FULL = PAYMENT_PLAN_SPEC.full, SIX = PAYMENT_PLAN_SPEC.six, TWELVE = PAYMENT_PLAN_SPEC.twelve;
+const COMPLETE = PAYMENT_PLAN_SPEC.complete, FULL = PAYMENT_PLAN_SPEC.full, SIX = PAYMENT_PLAN_SPEC.six, TWELVE = PAYMENT_PLAN_SPEC.twelve;
 
-export const FACT_SHEET_VERSION = '2026-10-29.1';
+export const FACT_SHEET_VERSION = '2026-10-30.1';
 /** The agreement this sheet follows. A new agreement version needs a new sheet version (the test checks). */
-export const FACT_SHEET_AGREEMENT = 'v6';
+export const FACT_SHEET_AGREEMENT = 'v7';
 
-/** Paul's guarantee line, word for word. v6 5.4: everything they have paid back if the count is not higher. */
+/** Paul's guarantee line, word for word (both plans). v7 5.4: everything they have paid back if the count is not higher. */
 export const GUARANTEE_LINE = 'We improve AI visibility or you get your money back.';
 /** THE CONFIDENCE LINE (Paul, 2026-10-20): said only when they ask about price, whether it works, "the catch", who we are,
  *  the guarantee, or sound unsure, and in the voice note. NEVER in the first pitch. The guarantee words are GUARANTEE_LINE
@@ -58,15 +58,15 @@ export interface Fact {
 const gbp = (n: number) => (Number.isInteger(n) ? `£${n}` : `£${n.toFixed(2)}`);
 
 export const FACT_SHEET: readonly Fact[] = [
-  { topic: 'price', status: 'live', source: 'v6 3.1',
-    say: `There are three ways to pay: ${gbp(FULL.firstGbp)} once, or ${gbp(SIX.monthlyGbp)} a month for ${SIX.totalPayments} months, or ${gbp(TWELVE.firstGbp)} to start then ${gbp(TWELVE.monthlyGbp)} a month, ${TWELVE.totalPayments} payments in total.` },
-  { topic: 'monthly_start', status: 'live', source: 'v6 5.6',
-    say: `On the monthly plans the monthly payment only starts after your results and the 14 day refund window, so nothing more is taken until you've seen whether it worked.` },
-  { topic: 'term', status: 'live', source: 'v6 4.1',
-    say: `On the monthly plans the minimum is all the payments in your plan (${SIX.totalPayments} or ${TWELVE.totalPayments}), counting the first one. It's not a cancel any time plan. Pay in full is one payment and that's it.` },
+  { topic: 'price', status: 'live', source: 'v7 3.1',
+    say: `There are two plans. Findable Complete is ${gbp(COMPLETE.monthlyGbp)} a month, ${COMPLETE.totalPayments} payments in total, and on top of the website and the before and after it covers your Google reviews, your Google profile, directories, changes within reason and regular checks. Findable Essential is the AI optimised website with the before and after check: ${gbp(FULL.firstGbp)} once, or ${gbp(SIX.monthlyGbp)} a month for ${SIX.totalPayments} months, or ${gbp(TWELVE.firstGbp)} to start then ${gbp(TWELVE.monthlyGbp)} a month, ${TWELVE.totalPayments} payments in total.` },
+  { topic: 'monthly_start', status: 'live', source: 'v7 5.3, 5.4, 5.6',
+    say: `The monthly payment only starts after your results and the ${V7_REFUND_WINDOW_DAYS} day refund window, so nothing more is taken until you've seen whether it worked. That's normally about 5 weeks after your baseline check.` },
+  { topic: 'term', status: 'live', source: 'v7 4.1',
+    say: `Complete is ${COMPLETE.totalPayments} monthly payments. On Essential's monthly options the minimum is all the payments in your plan (${SIX.totalPayments} or ${TWELVE.totalPayments}). The first payment counts and it's not a cancel any time plan. Essential paid in full is one payment and that's it.` },
   { topic: 'cancel', status: 'live', source: 'v6 4.2, 5.5', paulLooks: true,
     say: `On the monthly plans ending early leaves the rest of the plan's payments due. The exception is the guarantee: if the number hasn't gone up at the re-check you get back everything you've paid and it ends there.` },
-  { topic: 'guarantee', status: 'live', source: 'v6 5.2 to 5.5',
+  { topic: 'guarantee', status: 'live', source: 'v7 5.2 to 5.5',
     say: `${GUARANTEE_LINE} We count how many AI answers name you before we start and again after ${REMEASURE_WEEKS_STANDARD} weeks on the same questions. ${GUARANTEE_REFUND}` },
   { topic: 'measurement', status: 'live', source: 'v6 2.2, 5.2, 5.3',
     say: `We ask 20 real customer style questions, 3 times each, on ${ENGINE_WORDING}, then ask the same ones again about ${REMEASURE_WEEKS_STANDARD} weeks later.` },
@@ -80,8 +80,8 @@ export const FACT_SHEET: readonly Fact[] = [
     say: `The build usually takes a few days once we have what we need from you.` },
   { topic: 'client_needs', status: 'live', source: 'v6 7.1, 1.6',
     say: `Just the services and areas you want to be found for, access to point or move your domain, and manager access on your Google Business Profile.` },
-  { topic: 'changes', status: 'live', source: 'v6 16.3, 16.6',
-    say: `If you ever want something changed you just email me at ${FINDABLE_CONTACT_EMAIL}.` },
+  { topic: 'changes', status: 'live', source: 'v7 2.10, 16.6',
+    say: `On Complete, small changes to the site are included within reason, things like text, prices, hours or photos, not a rebuild. Just email me at ${FINDABLE_CONTACT_EMAIL}.` },
   { topic: 'what_we_do', status: 'live', source: 'v6 2.1, Schedule 1',
     say: `We build you a new site set up so AI tools and Google can clearly see what you do and where, then measure before and after.` },
   { topic: 'provider', status: 'live', source: 'v6 1.6, 7.2', paulLooks: true,
@@ -131,13 +131,13 @@ export function factSheetForPrompt(topics?: readonly FactTopic[]): string {
 }
 
 /** Money figures the sheet allows a draft to state (the checker warns on any other £ figure). */
-export const SHEET_MONEY = [FINDABLE_SETUP_PRICE_GBP, FINDABLE_MONTHLY_GBP, FINDABLE_CONTINUING_GBP, PAY_IN_FULL_GBP, REDUCED_MONTHLY_GBP, planTotalGbp('six'), planTotalGbp('twelve')].map(gbp);
+export const SHEET_MONEY = [FINDABLE_SETUP_PRICE_GBP, FINDABLE_MONTHLY_GBP, FINDABLE_CONTINUING_GBP, PAY_IN_FULL_GBP, REDUCED_MONTHLY_GBP, planTotalGbp('six'), planTotalGbp('twelve'), planTotalGbp('complete')].map(gbp);
 
 /* ── gaps and conflicts, for Paul (shown in the report and docs) ──────────────────────────────── */
 
 export const FACT_SHEET_CONFLICTS: readonly { id: string; brief: string; agreement: string; sheetSays: string }[] = [
-  { id: 'monthly-start', brief: '£99/month from 42 days later', agreement: 'v6 5.6 (as v5): the day after the 14-day Refund Window that follows the Results Date (6 weeks after the payment only when the guarantee does not apply)', sheetSays: 'after your results and the 14 day refund window' },
-  { id: 'term-words', brief: 'three ways to pay', agreement: 'v6 4.1: the payments in the plan (6 or 12); pay in full is one payment', sheetSays: 'all the payments in your plan, counting the first one' },
+  { id: 'monthly-start', brief: 'first payment after the window (about day 35)', agreement: 'v7 5.6: the day after the 7-day Refund Window after the day-28 results, normally day 36 from the Baseline Date; later if the results are late', sheetSays: 'after your results and the 7 day refund window' },
+  { id: 'term-words', brief: 'two plans', agreement: 'v7 4.1: Complete 12 payments; Essential monthly options the payments in the plan (6 or 12); pay in full is one payment', sheetSays: 'Complete is 12 monthly payments; Essential all the payments in your plan' },
   { id: 'guarantee-line', brief: '"We improve AI visibility or you get your money back."', agreement: 'v6 5.4: refund of all payments made if the count is not higher; 6.2 no other result is promised', sheetSays: 'the line, then "everything you\'ve paid"' },
   { id: 'engine-wording', brief: 'one engine wording', agreement: 'v5 2.2 / 5.2: "ChatGPT and Google AI / Gemini"; code since 2026-10-19 also counts Google AI (AI Overview) for new clients; the drafter says "Gemini" and flags "google ai"', sheetSays: ENGINE_WORDING },
   { id: 'build-time', brief: 'build usually takes a few days', agreement: 'not in v5', sheetSays: 'usually a few days (marked as Paul\'s word)' },

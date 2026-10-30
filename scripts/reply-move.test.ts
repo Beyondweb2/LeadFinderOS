@@ -57,7 +57,7 @@ const pm = (thread: MoveThreadMsg[], o: Partial<{ aiSentSinceWin: number; eviden
   const price = pm([opener, { from: 'them', text: 'how much is it?' }]);
   ok(price.move === 'first_reply_pitch' && !price.allowPrice && !/£/.test(price.fixedText ?? ''), 'a price question as the FIRST reply → the hook, no price (Paul, 2026-10-26)');
   const price2 = pm([opener, { from: 'them', text: 'Yes' }, hook, { from: 'them', text: 'how much is it?' }]);
-  ok(price2.intent === 'how_much' && price2.topic === 'price' && price2.allowPrice && /word for word: "It's £499 once, or £99 a month for 6 months/.test(price2.points[0]), 'a price question after the hook → the playbook price line, word for word');
+  ok(price2.intent === 'how_much' && price2.topic === 'price' && price2.allowPrice && /word for word: "There are two plans: Findable Complete at £99 a month/.test(price2.points[0]), 'a price question after the hook → the playbook price line, word for word');
   /* Ads are ads_question since 2026-10-21 (reply recon); a logo is still not on the sheet. */
   ok(pm([opener, { from: 'them', text: 'Can you do my logo as well?' }]).move === 'first_reply_pitch', 'an off-sheet question as the FIRST reply → the hook');
   const unknown = pm([opener, { from: 'them', text: 'Yes' }, hook, { from: 'them', text: 'Can you do my logo as well?' }]);

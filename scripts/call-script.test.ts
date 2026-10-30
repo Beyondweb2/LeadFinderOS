@@ -186,7 +186,7 @@ console.log('── 9. Build / Optimise preselection, live v3 terms only ──'
   /* 2026-10-29: "Why 12 payments?" was replaced by "Why pay monthly?" — three ways to pay, the 12-month plan in payments. */
   ok(!o.objections.some((x) => x.objection === 'Why 12 payments?'), 'the old "Why 12 payments?" objection is gone');
   const monthly = o.objections.find((x) => x.objection === 'Why pay monthly?')?.answer ?? '';
-  ok(monthly.includes(threeWaysSpoken()) && monthly.includes(PAYMENT_PLAN_SPEC.twelve.totalPayments + ' payments in total'), '"Why pay monthly?": all three ways to pay from the constants, the 12-month plan said in payments');
+  ok(monthly.includes(threeWaysSpoken()) && monthly.includes('Findable Complete') && monthly.includes(PAYMENT_PLAN_SPEC.twelve.totalPayments + ' payments in total'), '"Why pay monthly?": all three ways to pay from the constants, the 12-month plan said in payments');
   ok(/That's not something we offer/.test(o.objections.find((x) => x.objection === 'Can you just improve my current website?')?.answer ?? ''), '"Can you just improve my current website?": not something we offer — a new website, same web address');
   ok(o.ifAgency.coaching.some((c) => /can't take them on yet/.test(c)) && o.ifAgency.coaching.some((c) => /not sure/.test(c)), 'the agency branch: still tied in → we cannot take them on yet; not sure → check before signing up');
 }

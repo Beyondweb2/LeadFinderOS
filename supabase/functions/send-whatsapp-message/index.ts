@@ -117,7 +117,7 @@ const CAPABILITIES = ["dry_run", "build_phase_hold", "routing_leaf", "any_approv
    (the welcome pack's "Send a test to me", paid-client-hub). */
 /* 2026-10-29c: welcome_pack_ready (a paying client's welcome pack, admin only, variables resolved here, Meta's live status
    first); test_send auto_window: free text inside the test number's 24 hours, else the template. */
-const BUILD_ID = "2026-10-29c-welcome-pack-template";
+const BUILD_ID = "2026-10-30a-two-plans";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",

@@ -30,7 +30,7 @@ import {
 } from "../../../src/lib/remeasureResults.ts";
 import { REPORT_PUBLIC_ORIGIN, remeasureWeeksFor } from "../../../src/lib/findableOffer.ts";
 import { reportOnceAnHour } from "./audit-baseline.ts";
-import { continuingModeFor, isOptionBTerms, paymentStart } from "../../../src/lib/clientTimeline.ts";
+import { REFUND_WINDOW_DAYS_V7, continuingModeFor, isOptionBTerms, isV7Terms, paymentStart } from "../../../src/lib/clientTimeline.ts";
 import { loadTimelineFacts, schedulePaymentStart } from "./client-terms.ts";
 import { storedRemeasureWeeks } from "../../../src/lib/remeasureFill.ts";
 
@@ -245,6 +245,7 @@ export async function maybeSendRemeasureResults(service: Client, auditId: string
     paymentPlan: (lead as { payment_plan?: string | null }).payment_plan ?? null,
     v3Terms,
     continuingMode: v3 ? continuingModeFor(v3.facts.terms, v3.facts.route) : undefined,
+    refundWindowDays: v3 && isV7Terms(v3.facts.terms) ? REFUND_WINDOW_DAYS_V7 : null,
   };
   const paragraphs = resultsEmailParagraphs(copy);
   const subject = resultsEmailSubject(copy);

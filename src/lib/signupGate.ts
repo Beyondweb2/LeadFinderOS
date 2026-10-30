@@ -87,8 +87,8 @@ export function checkoutAgreementGate(args: {
   if (args.paymentPlan !== undefined) {
     if (!isPaymentPlan(args.paymentPlan)) return no('other_plan');
     const printsPlan = !!agreementVersion(a.agreement_version).clientDetailLabels.paymentPlan;
-    /* A new plan rests only on a version that names it (v6) signed for THAT plan; the old plan only on an earlier version. */
-    if (agreementVersionForPlan(args.paymentPlan) === 'v6' ? !printsPlan || a.payment_plan !== args.paymentPlan : printsPlan) return no('other_plan');
+    /* A new plan rests only on a version that names it (v7) signed for THAT plan; the old plan only on an earlier version. */
+    if (agreementVersionForPlan(args.paymentPlan) === 'v7' ? !printsPlan || a.payment_plan !== args.paymentPlan : printsPlan) return no('other_plan');
   } else if (agreementVersion(a.agreement_version).clientDetailLabels.paymentPlan) return no('other_plan');
   if (!args.recomputedSha || args.recomputedSha !== a.agreed_text_sha256) return no('tampered');
   return { ok: true, acceptanceId: a.id };

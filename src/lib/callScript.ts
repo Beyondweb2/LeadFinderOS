@@ -32,7 +32,7 @@
       the rep notes when it ends and calls back then. The minimum term is said in PAYMENTS, never months.
    Pure. No React, no fetch, no clock.
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
-import { threeWaysSpoken } from './paymentPlans.ts';
+import { plansSpoken } from './paymentPlans.ts';
 import {
   FINDABLE_MONTHLY_GBP, FINDABLE_SETUP_PRICE_GBP,
   REMEASURE_WEEKS_STANDARD, totalPaymentsFor, type ServiceRoute,
@@ -327,7 +327,7 @@ export function buildCallScript(i: CallScriptInput): CallScript {
     { objection: 'Is this a scam?', answer: 'Fair question. You read and sign a written agreement before you pay anything, all the terms are at findable.live, and ' + (i.hasReport ? 'I can send you the report showing exactly what AI said.' : "you'll see exactly what AI said before anything else happens.") },
     { objection: 'Can I cancel?', answer: `On the monthly plans the minimum term is all the payments in your plan, today's included. Pay in full is one payment. Once your final payment clears the website is yours, and the hosting carries on afterwards only if you want it: you can cancel that with 30 days' notice. And if the number hasn't gone up at four weeks, a valid claim gets back everything you've paid and stops the monthly too.` },
     { objection: "Can you guarantee I'll show up?", answer: `No one can promise AI will name you, and I won't. What we do promise is the measurement: if the number hasn't gone up on the same questions, you get your money back.` },
-    { objection: 'Why pay monthly?', answer: `You don't have to. It's ${threeWaysSpoken()}. Same service either way, only the way you pay changes.` },
+    { objection: 'Why pay monthly?', answer: `There are two plans. It's ${plansSpoken()}. On Essential only the way you pay changes, the service is the same.` },
     { objection: 'Can you just improve my current website?', answer: "That's not something we offer. What we do is build you a new website, set up properly for AI and search from day one, and you can keep your web address." },
     { objection: 'Just send me something', answer: i.hasReport ? "Sure, I'll send you the report — it shows the exact search, what AI said and who it named. Can I give you a ring once you've had a look?" : "Sure, I'll run the check and send it over. Can I give you a ring once you've had a look?" },
     { objection: "I'm busy right now", answer: "No problem. When's a better time for a quick ring back?" },
