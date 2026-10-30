@@ -230,6 +230,37 @@ export function SiteScorePill({ score, website, leadId = null }: { score: Stored
   );
 }
 
+const BAND_BAR: Record<SiteScoreBand, string> = { big: 'bg-red-500', some: 'bg-amber-500', little: 'bg-emerald-500' };
+
+/** Outreach's own "Website" column (2026-10-30, Paul chose "B"): the number, the band word, and a thin bar the length of the
+ *  number — easy to scan down a long list. The same reasons and breakdown as the pill; a state is its own grey words. */
+export function SiteScoreBar({ score, website, leadId = null }: { score: StoredSiteScore | null | undefined; website: string | null | undefined; leadId?: string | null }) {
+  const view = siteScoreViewFor(website, score);
+  if (view.kind === 'state') {
+    const faint = view.state === 'not_checked';
+    return (
+      <WithReasons view={view} label={`${ROOM_TO_IMPROVE}: ${SITE_SCORE_STATE_LABELS[view.state]}`} leadId={leadId} website={website}>
+        <span className={cn('whitespace-nowrap text-[11px]', faint ? 'text-muted-foreground/60' : 'text-muted-foreground')} data-state={view.state}>
+          {SITE_SCORE_STATE_LABELS[view.state]}
+        </span>
+      </WithReasons>
+    );
+  }
+  return (
+    <WithReasons view={view} label={`${ROOM_TO_IMPROVE}: ${view.score} out of 100, ${SITE_SCORE_BAND_LABELS[view.band]}`} leadId={leadId} website={website}>
+      <span className="flex w-[104px] flex-col items-stretch gap-1 text-left" data-state="scored" data-band={view.band} data-testid="site-score-bar">
+        <span className="flex items-baseline gap-1.5 whitespace-nowrap">
+          <span className={cn('text-sm font-semibold tabular-nums', BAND_TEXT[view.band])}>{view.score}</span>
+          <span className="text-[11px] text-muted-foreground">{SITE_SCORE_BAND_LABELS[view.band]}</span>
+        </span>
+        <span className="h-1 w-full overflow-hidden rounded-full bg-muted">
+          <span className={cn('block h-full rounded-full', BAND_BAR[view.band])} style={{ width: `${Math.max(0, Math.min(100, view.score))}%` }} />
+        </span>
+      </span>
+    </WithReasons>
+  );
+}
+
 /** The lead detail's line: the same pill, read for this one lead (the lists' read is not loaded there). */
 export function LeadSiteScore({ leadId, website }: { leadId: string; website: string | null | undefined }) {
   const { score } = useLeadSiteScore(leadId);

@@ -2,6 +2,8 @@
 
 ## v2 (2026-10-30, feat/site-score-v2) — current
 
+**Placement (2026-10-30, Paul chose B + Inbox 1):** Outreach has its own **Website** column before Actions (`SiteScoreBar`: number, band word, a bar the length of the number); the Inbox pill sits at the right of the status line (`ml-auto shrink-0`, never shrinks), the AI line holds the AI scores only. Supersedes the placement below.
+
 Label: **"Room to improve the website"**, never a prediction of AI visibility. Team only. One pill (`SiteScorePill`) on the
 Inbox's AI line right after Google AI, on the Outreach row, and in the lead detail (`LeadSiteScore`); hover = top reasons,
 "Full breakdown" = every point lost with its page URL and quote (`SiteScoreBreakdown`, reads `site_score_evidence` for one lead).

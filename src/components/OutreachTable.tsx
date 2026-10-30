@@ -129,7 +129,7 @@ import { OutreachMobileCard } from './OutreachMobileCard';
 import { LeadEnrichButtons } from './LeadEnrichButtons';
 import { SocialLinks, findSocialsForLeads, SOCIAL_BULK_MAX } from './SocialLinks';
 import { CrawlCheckButton } from './CrawlCheckButton';
-import { SiteScorePill } from './SiteScoreBadge';
+import { SiteScoreBar } from './SiteScoreBadge';
 import { SITE_SCORE_GROUP_LABELS, siteScoreGroupOf, siteScoreSortKey, siteScoreViewFor, type SiteScoreGroup } from '@/lib/siteScore';
 import { useLeadCrawls } from '@/hooks/useLeadCrawls';
 import { LeadDetailDialog, type LeadStepper, type WorkspaceTabInput } from './LeadDetailDialog';
@@ -3084,13 +3084,14 @@ export function OutreachTable({
                       <TableHead className="min-w-[140px] sm:w-[180px]">Next Action</TableHead>
                     </>
                   )}
+                  <TableHead className="w-[120px]" title="Room to improve the website (team only)">Website</TableHead>
                   <TableHead className="w-[160px] text-center">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {paginatedLeads.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={readOnly ? 4 : 7} className="text-center py-6 sm:py-8 text-muted-foreground text-sm">
+                    <TableCell colSpan={readOnly ? 5 : 8} className="text-center py-6 sm:py-8 text-muted-foreground text-sm">
                       {leads.length === 0
                         ? isArchiveView 
                           ? 'No archived leads yet.'
@@ -3281,6 +3282,11 @@ export function OutreachTable({
                         </>
                       )}
                       <TableCell onClick={(e) => e.stopPropagation()}>
+                        {/* Room to improve the website — its own column (2026-10-30, Paul chose "B": number, band word, bar);
+                            team only, both roles (siteScore.ts). */}
+                        {!isDemoLead(lead.id) && <SiteScoreBar score={crawlByLeadId.get(lead.id)?.siteScore} website={lead.website} leadId={lead.id} />}
+                      </TableCell>
+                      <TableCell onClick={(e) => e.stopPropagation()}>
                         {/* Action icons in a fixed 5-per-row grid: every icon is an
                             individual grid item (the enrich group and the SMS/WhatsApp
                             pair are flattened), so 9 icons wrap as 5 + 4, not uneven rows. */}
@@ -3304,8 +3310,6 @@ export function OutreachTable({
                           {perms.crawlSite && !isDemoLead(lead.id) && (
                             <CrawlCheckButton lead={{ id: lead.id, website: lead.website }} crawl={crawlByLeadId.get(lead.id) ?? null} iconOnly from="outreach" />
                           )}
-                          {/* Room to improve the website (2026-10-30, siteScore.ts) — the same pill as the Inbox; team only, both roles. */}
-                          {!isDemoLead(lead.id) && <SiteScorePill score={crawlByLeadId.get(lead.id)?.siteScore} website={lead.website} leadId={lead.id} />}
                           {lead.phone ? (
                             <>
                               {/* ONE tap to call (UI cleanup 2026-09-29). This was a two-item menu: Normal Call, and
