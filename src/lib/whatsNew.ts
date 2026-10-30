@@ -22,6 +22,14 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-30-website-column', date: '2026-10-30', title: 'Website score: its own column on Outreach, tidier Inbox rows', audience: 'all',
+    body: 'Outreach has a Website column: the room-to-improve number, its band, and a coloured bar you can scan down the list. In the Inbox the score sits at the right of the status line, so the AI line stays on one row.',
+    report: {
+      added: ['Outreach: a Website column just before Actions, with the number, the band word and a bar.'],
+      changed: ['Outreach: the score is no longer squeezed in among the action icons.', 'Inbox: the score moved to the right of the status line; the AI line shows the AI scores only.'],
+      removed: [],
+      effect: 'Looks only. The scores, the filter, the sort and every send are unchanged.',
+    } },
   { id: '2026-10-30-room-to-improve-website', date: '2026-10-30', title: 'Room to improve the website: a pill on every lead', audience: 'all',
     body: 'Every lead now shows how much its website has to gain, in the Inbox on the AI line right after Google AI, on the Outreach row and in the lead\'s details: a number with Big gains (under 60), Some gains (60 to 79) or Little to gain (80 and over). A site we could not judge says why instead of a number. Hover for the top reasons; Full breakdown shows every point lost with the page and the words our crawl read. Team only, never sent to anyone, and not a prediction of AI visibility.',
     report: {

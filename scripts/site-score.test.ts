@@ -143,10 +143,16 @@ ok(!/\.update\(\{[^}]*site_score/.test(cc + cj), 'the failed-attempt note never 
 const lists = read('src/hooks/useLeadCrawls.ts');
 ok(/LEAD_CRAWL_LIST_SELECT = '[^']*site_score_detail'/.test(lists) && !/LEAD_CRAWL_LIST_SELECT = '[^']*site_score_evidence/.test(lists), 'the list select leaves the evidence out (one lead’s detail reads it)');
 
-/* ── the Inbox: the pill is on the AI Visibility line, right after Google AI ── */
+/* ── the Inbox: the pill at the right of the status line, never shrinking (Paul chose "Inbox 1", 2026-10-30) ── */
 const inbox = read('src/pages/Inbox.tsx');
-ok(/data-testid="ai-visibility-line">\n\s+<ScoreLine score=\{auditScore\} visible=\{c\.visible\} \/>\n\s+<SiteScorePill /.test(inbox), 'Inbox: the pill sits on the AI line, after the score line');
-ok(!/ml-auto"><SiteScorePill/.test(inbox), 'Inbox: no longer on the crowded status line');
+ok(/<span className="ml-auto shrink-0" data-testid="site-score-status-line">\n\s+<SiteScorePill /.test(inbox), 'Inbox: the pill sits at the right of the status line and never shrinks');
+ok(!/data-testid="ai-visibility-line">[\s\S]{0,200}<SiteScorePill/.test(inbox), 'Inbox: the AI line holds the AI scores only');
+
+/* ── Outreach: its own Website column, number + band + bar (Paul chose "B", 2026-10-30) ── */
+const outreach = read('src/components/OutreachTable.tsx');
+ok(/>Website<\/TableHead>\n\s+<TableHead className="w-\[160px\] text-center">Actions<\/TableHead>/.test(outreach), 'Outreach: a Website column just before Actions');
+ok(/colSpan=\{readOnly \? 5 : 8\}/.test(outreach), 'Outreach: the empty row spans the extra column');
+ok(/<SiteScoreBar score=/.test(outreach) && !/<SiteScorePill /.test(outreach), 'Outreach: the bar in its column, no pill among the action icons');
 
 /* ── words: room to improve, never a prediction ── */
 const badge = read('src/components/SiteScoreBadge.tsx');

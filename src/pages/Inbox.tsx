@@ -395,14 +395,19 @@ const ConversationRow = memo(function ConversationRow({
           {c.leadId && (saving
             ? <Loader2 className="h-3 w-3 shrink-0 animate-spin text-muted-foreground" />
             : <PipelineStatusSelect value={c.leadStatus} stage={listStageOf(c.leadId)} onValueChange={(status) => handleSetStatus(c, status)} />)}
+          {/* "Room to improve the website" at the right of the status line (2026-10-30, Paul chose "Inbox 1"): it never
+              shrinks, so the status side gives way first and the pill is never pushed out of sight. */}
+          {c.leadId && (
+            <span className="ml-auto shrink-0" data-testid="site-score-status-line">
+              <SiteScorePill score={siteScore} website={siteWebsite} leadId={c.leadId} />
+            </span>
+          )}
         </div>
       )}
-      {/* The AI Visibility line, then "room to improve the website" right after Google AI (2026-10-30, Paul: off the crowded
-          status line, where it could be pushed out of sight). Wraps on a narrow list rather than clipping. */}
+      {/* The AI Visibility line, on its own row. */}
       {c.leadId && (
         <div className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5" data-testid="ai-visibility-line">
           <ScoreLine score={auditScore} visible={c.visible} />
-          <SiteScorePill score={siteScore} website={siteWebsite} leadId={c.leadId} />
         </div>
       )}
     </div>
