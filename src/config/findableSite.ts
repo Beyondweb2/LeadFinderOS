@@ -46,12 +46,14 @@ export const FINDABLE_SITE_ORIGIN = "https://findable.live";
  * slugifyBusinessName is the SAME helper the report URLs use, so apostrophes, ampersands and emoji
  * are handled once rather than twice.
  */
-export const onboardingUrl = (leadId: string, businessName?: string | null) => {
+/** `plan` (2026-10-30): the payment plan the rep chose, appended as &plan=<id> so the page can open on it. findable.live has to READ it
+ *  (it does not yet); a link without one is exactly as before. */
+export const onboardingUrl = (leadId: string, businessName?: string | null, plan?: string | null) => {
   const slug = slugifyBusinessName(businessName ?? '');
   // 'business' is slugifyBusinessName's fallback for an empty/emoji-only name — no point putting
   // that in a URL, so drop the segment entirely and fall back to the previous shape.
   const segment = businessName && slug !== 'business' ? `${slug}/` : '';
-  return `${FINDABLE_SITE_ORIGIN}/onboarding/${segment}?lead=${leadId}`;
+  return `${FINDABLE_SITE_ORIGIN}/onboarding/${segment}?lead=${leadId}${plan ? `&plan=${plan}` : ''}`;
 };
 
 /**
