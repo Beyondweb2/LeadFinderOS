@@ -37,7 +37,7 @@ import { weeklyStart } from "../../../src/lib/weeklyCheck.ts";
 import { loadQaExclusions, qaEmailHold } from "../_shared/qa-guard.ts";
 import { saleCreditOf } from "../../../src/lib/saleAttribution.ts";
 import { accessDateEmail, appendTermsEvent, loadTimelineFacts, schedulePaymentStart, sendAccessDateEmail, todayUk } from "../_shared/client-terms.ts";
-import { CONTINUING_SERVICE_AUTOMATION, GUARANTEE_CEASED_REASONS, RESULTS_TARGET_DAYS, accessReadiness, addDays, timelineView, ukDay, type AccessItem, type GuaranteeCeasedReason } from "../../../src/lib/clientTimeline.ts";
+import { CONTINUING_SERVICE_AUTOMATION, GUARANTEE_CEASED_REASONS, RESULTS_TARGET_DAYS, accessReadiness, addDays, isV7Terms, timelineView, ukDay, type AccessItem, type GuaranteeCeasedReason } from "../../../src/lib/clientTimeline.ts";
 import { clientContactRoutes, clientInfoRequestView, clientItems, missingInformation, sellerAskState, sellerItems, cleanInfoKeys, gatherKnown, patchForCandidate, type MissingInfoItem } from "../../../src/lib/clientMissingInfo.ts";
 import { whatsAppCapabilityOf } from "../../../src/lib/whatsAppCapability.ts";
 import { toWhatsAppDigits } from "../../../src/lib/waNumber.ts";
@@ -1149,7 +1149,7 @@ Deno.serve(async (req) => {
           const qa = await qaEmailHold(service, leadId, to);
           if (qa) emailDetail = qa;
           else {
-            const mail = accessDateEmail({ businessName: String(loaded.lead.business_name ?? "your business"), accessDay: day, resultsTargetDay: addDays(day, RESULTS_TARGET_DAYS) });
+            const mail = accessDateEmail({ businessName: String(loaded.lead.business_name ?? "your business"), accessDay: day, resultsTargetDay: addDays(day, RESULTS_TARGET_DAYS), v7: isV7Terms(loaded.terms.commercial_terms) });
             const sent = await sendAccessDateEmail(to, mail);
             emailed = sent.ok; emailDetail = sent.detail;
           }

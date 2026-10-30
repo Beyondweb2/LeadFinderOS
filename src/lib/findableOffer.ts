@@ -25,7 +25,7 @@
  *
  *  ⛔ £99 NOW INCLUDES THE WEBSITE BUILD (Paul, 2026-09-12). Until today a customer who ticked
  *  "build my site" was charged a SEPARATE £49.99 build line from a Stripe Price object. That line
- *  is gone from findable-checkout entirely — the tick now adds only the £9.99/month hosting
+ *  is gone from findable-checkout entirely — the tick now adds only the hosting price (£9.99 then; £29.99 since 2026-10-30)
  *  subscription. So this number is the whole one-off charge in both shapes of the sale, which is
  *  exactly why it may not be quietly raised without pricing the build work into it.
  *

@@ -73,7 +73,7 @@ import {
 } from './findableOffer.ts';
 import { afterTermClientWords, afterTermRepLine } from './planTerms.ts';
 import { agencyContractOutcome } from './agencyContractRule.ts';
-import { CLIENT_PAYMENT_PLANS, DEFAULT_PAYMENT_PLAN, PAYMENT_PLAN_NAME, PAYMENT_PLAN_SPEC, isPaymentPlan, planFullName, planShortLine, planTermsLines, type PaymentPlan } from './paymentPlans.ts';
+import { CLIENT_PAYMENT_PLANS, DEFAULT_PAYMENT_PLAN, PAYMENT_PLAN_NAME, PAYMENT_PLAN_SPEC, guaranteeForPlan, isPaymentPlan, planFullName, planShortLine, planTermsLines, type PaymentPlan } from './paymentPlans.ts';
 
 export type QcDecisionMaker = 'yes' | 'no';
 /** 'agency' (v2): an agency / provider controls it — a handoff, not a refusal. */
@@ -959,6 +959,9 @@ export function adoptLink(
 /* 2026-10-29: a chosen payment plan (not the v5 plan) speaks its own terms (paymentPlans.ts), in the client's words. */
 const priceSentence = (route: ServiceRoute, plan?: PaymentPlan | null) => plan && plan !== 'legacy_twelve' ? planTermsLines(plan).map((l) => (l.endsWith('.') ? l : `${l}.`)).join(' ') :
   `£${FINDABLE_SETUP_PRICE_GBP} today, then £${FINDABLE_MONTHLY_GBP} a month starting ${MONTHLY_START_V3_WORDS} — ${totalPaymentsFor(route)} payments in total, today's included (the minimum term). ${afterTermClientWords(route)}`;
+/** The guarantee terms the client will sign (2026-10-30): v7's for Complete and Essential (7 days, everything paid back),
+ *  the v5 FINDABLE_GUARANTEE only for the old plan or no plan. The dialog already showed this; the message did not. */
+const closeGuarantee = (plan?: PaymentPlan | null) => (plan ? guaranteeForPlan(plan, FINDABLE_GUARANTEE) : FINDABLE_GUARANTEE);
 /** What happens on the link, in the client's words. */
 export const SIGNUP_LINK_SENTENCE = "On the link you'll check your details, read and sign the Client Service Agreement, and then pay securely.";
 /** The ownership sentence in the CLIENT's words ("you"). Same facts as routeOwnershipLine. */
@@ -972,7 +975,7 @@ export function quickCloseScript(route: ServiceRoute | null | undefined, plan?: 
   if (!route) return '';
   if (route === 'build' && !plan) return '';
   return `I'll send you your sign-up link now. It's ${SERVICE_ROUTE_NAME[route]}: ${ownershipToClient(route)} ` +
-    `It's ${priceSentence(route, plan)} ${QUICK_CLOSE_PROMISE} ${FINDABLE_GUARANTEE} ` +
+    `It's ${priceSentence(route, plan)} ${QUICK_CLOSE_PROMISE} ${closeGuarantee(plan)} ` +
     `${SIGNUP_LINK_SENTENCE} ${AFTER_PAYMENT_SENTENCE} You don't need to sort any of that out today.`;
 }
 
@@ -990,7 +993,7 @@ export function quickCloseMessage(greetName: string | null | undefined, url: str
     '',
     `What you're signing up to: ${priceSentence(route, plan)} ${ownershipToClient(route)}`,
     '',
-    `${QUICK_CLOSE_PROMISE} ${FINDABLE_GUARANTEE}`,
+    `${QUICK_CLOSE_PROMISE} ${closeGuarantee(plan)}`,
     '',
     `${SIGNUP_LINK_SENTENCE} ${AFTER_PAYMENT_SENTENCE}`,
     '',

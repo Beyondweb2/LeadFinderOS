@@ -14,7 +14,7 @@ import { buildReportData } from '../src/lib/auditReport.ts';
 import { renderReportHtml, quickEngineTone, quickReplyOrder, ownNameVariants, QUICK_ANSWER_CHARS, QUICK_MAX_RIVALS } from '../src/lib/aiAuditReportHtml.ts';
 import { initialHookStateV2 } from '../src/lib/hookScore.ts';
 import { buildHookReportSummary, countDistinctBusinesses, normaliseRivalName } from '../src/lib/hookAudit.ts';
-import { REMEASURE_CLAIM_SENTENCE } from '../src/lib/findableOffer.ts';
+import { V7_CLAIM_SENTENCE } from '../src/lib/paymentPlans.ts';
 import { buildFaultLines, isGenericSchemaGap } from '../src/lib/crawlCheck.ts';
 import type { SiteEvidenceFinding } from '../src/lib/siteEvidence.ts';
 
@@ -312,7 +312,7 @@ const hit = (rivals: string[]): Cell => ({ named: true, rivals });
   ok(/Want to be the one AI names\?/.test(c4.t) && foot.includes('class="cta-btn start" href="#" target="_blank" rel="noopener noreferrer">Improve AI visibility</a>') && !/Get started/.test(c4.t), 'K: new heading, and the primary button says "Improve AI visibility" with no price');
   ok(/<form method="POST" action="[^"]+request-call"[^>]*><input type="hidden" name="audit" value="[^"]+"><button type="submit" class="cta-btn call">Request a call<\/button><\/form>/.test(foot) && /class="cta-btn wa" href="https:\/\/wa\.me\/447943262742\?text=[^"]+"[^>]*>Ask me anything</.test(foot), 'K: Request a call is the same POST form; Ask me anything goes to Paul’s WhatsApp (wa.me)');
   ok(foot.includes('See how it works at findable.live') && /Prepared for[\s\S]*Report date[\s\S]*Measured on/.test(foot) && /q4-foot-card/.test(foot), 'K: the site link and the three cards are there');
-  ok(c4.t.includes(REMEASURE_CLAIM_SENTENCE.replace(/'/g, '’')), 'K: the locked guarantee sentence is unchanged');
+  ok(c4.t.includes(V7_CLAIM_SENTENCE.replace(/'/g, '’')) && !/within 14 days/.test(c4.t), 'K: the guarantee sentence is v7\'s (7 days, everything paid back; 2026-10-30)');
   ok(/Want to be one of the names\?/.test(old.t) && old.html.includes('Get started &mdash; &pound;99') && old.html.includes('<footer class="site-foot">'), 'K: other reports keep "Want to be one of the names?", "Get started — £99" and their footer');
   ok(c4.html.indexOf('class="q4-chats"') < c4.html.indexOf('<footer class="q4-foot">') && c4.html.indexOf('class="q4-caveat"') > c4.html.indexOf('class="q4-chats"') && /This is a quick check of 3 questions, not your full AI visibility measurement\./.test(c4.t), 'K: the chat windows and the honest quick-check note come before the closing band');
   ok(!/#(?:4285F4|1a73e8|0c1322|121726|eef1f8)\b/i.test(c4.html), 'K: no blue anywhere on the six-answer report (the old navy / Google-blue values are gone)');

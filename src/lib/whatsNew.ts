@@ -22,6 +22,14 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-30-guarantee-v7-wording', date: '2026-10-30', title: 'The guarantee says 7 days everywhere a new sale reads it, and hosting is £29.99 in Stripe', audience: 'all',
+    body: 'The quick-check report, the call script, the Quick Close message and the Access Date email now say what agreement v7 says: email us within 7 days of your four-week results and we refund everything you have paid. The report says the guarantee is judged on the full measurement after they join, not on the quick check. The optional hosting price in Stripe is now £29.99 a month, as the agreement says.',
+    report: {
+      added: [],
+      changed: ['Quick-check report: the claim line is v7 (7 days, everything paid back), and the no-website panel names the two plans instead of the old single plan.', 'Call script: the guarantee says 7 days and monthly payments start the day after the 7-day window (normally day 36 from the baseline).', 'Quick Close: the message the client gets with the sign-up link carries the v7 guarantee for Complete and Essential (the dialog already did).', 'Access Date email: a v7 client is told results come 28 days after the baseline, then a 7-day refund window.', 'Stripe: a new £29.99/month price on Findable Hosting; the old £9.99 price is archived.'],
+      removed: [],
+      effect: 'Clients keep what they signed: v5 and v6 clients still have 14 days, and their emails still say so. The one client already paying £9.99 a month for hosting is unchanged.',
+    } },
   { id: '2026-10-30-hook-pick-three-rivals', date: '2026-10-30', title: 'The hook now uses the answer that names three competitors', audience: 'all',
     body: 'When Gemini missed the business but named fewer than three competitors, and ChatGPT missed them and named three, the hook used to stay on Gemini and the competitor follow-up was refused. Now the ChatGPT answer is used, with its own three names. Gemini still comes first when it names three too.',
     report: {

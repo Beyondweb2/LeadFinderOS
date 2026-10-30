@@ -380,7 +380,8 @@ function checkSameFiles() {
    Our ids are read from paymentPlans.ts as a plain array literal, so the list stays parseable here. */
 function readIdArray(file, name) {
   const src = fs.readFileSync(file, 'utf8');
-  const m = src.match(new RegExp('export const ' + name + '(?::[^=]+)?=\\s*\\[([^\\]]*)\\]'));
+  /* Whitespace before the ':' or '=' is allowed: "SITE_PLAN_IDS = [" used to read as "no list" (2026-10-30). */
+  const m = src.match(new RegExp('export const ' + name + '\\s*(?::[^=]+)?=\\s*\\[([^\\]]*)\\]'));
   if (!m) return null;
   return [...m[1].matchAll(/'([^']+)'|"([^"]+)"/g)].map((x) => x[1] ?? x[2]);
 }

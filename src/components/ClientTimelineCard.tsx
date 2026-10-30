@@ -95,7 +95,7 @@ export function ClientTimelineCard({ leadId, ended = false }: { leadId: string; 
         <Row label="Access Date" value={v.accessDate ? ukDayWords(v.accessDate) : 'Not confirmed'} note={v.accessDate ? (s.terms?.access_email_sent_at ? 'Client emailed' : 'Client email NOT sent') : v.accessDeadlineDay ? `Guarantee needs access by ${ukDayWords(v.accessDeadlineDay)}` : undefined}/>
         <Row label="Results due" value={v.resultsTargetDay ? `about ${ukDayWords(v.resultsTargetDay)}` : 'after the Access Date'} note={v.resultsNormalLatestDay ? `normally by ${ukDayWords(v.resultsNormalLatestDay)}` : undefined}/>
         <Row label="Results Date" value={v.resultsDay ? ukDayWords(v.resultsDay) : 'Not sent yet'} note="the day the formal results are actually sent"/>
-        <Row label="Refund window ends" value={v.refundWindowEndDay ? ukDayWords(v.refundWindowEndDay) : v.guaranteeApplies ? '14 days after the Results Date' : 'Guarantee does not apply'}/>
+        <Row label="Refund window ends" value={v.refundWindowEndDay ? ukDayWords(v.refundWindowEndDay) : v.guaranteeApplies ? '7 days after the Results Date (v7; 14 on v3 to v6)' : 'Guarantee does not apply'}/>
         <Row label="Approval / Payment Start" value={v.paymentStart.day ? ukDayWords(v.paymentStart.day) : 'Not known yet'} note={v.paymentStart.day ? (v.paymentStartConfirmed ? 'Stripe confirmed' : 'NOT yet set in Stripe') : v.paymentStart.why}/>
         <Row label="Monthly payments" value={`${mt.recurringPaid} of ${mt.recurringNeeded} collected`} note={mt.finalPaymentDay ? `minimum term ${mt.finalPaymentActual ? 'completed' : 'expected to complete'} ${ukDayWords(mt.finalPaymentDay)}` : undefined}/>
       </dl>

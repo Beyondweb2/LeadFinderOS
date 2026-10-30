@@ -72,7 +72,7 @@ export const DELIVERY_CHECKLIST_ITEMS: DeliveryChecklistItem[] = [
   { key: 'pages', label: 'Pages built', hint: 'One line per planned page (the page-plan queue). Tick a page when it is live on their site', kind: 'pages' },
   { key: 'website', label: 'Website', hint: 'Site built or fixed where there was none / it was blocking', kind: 'tick' },
   { key: 'remeasure', label: 'Week-four re-measure', hint: 'Fires itself on the stored due date (RG Locksmiths: eight weeks, by his contract). Tick once you have checked the replay', kind: 'remeasure' },
-  { key: 'results_sent', label: 'Results sent', hint: 'Stamped by the system when the four-week results email goes out (outreach_leads.remeasure_results_sent_at). Starts the client\'s 14-day claim window. Not a tick.', kind: 'stamp' },
+  { key: 'results_sent', label: 'Results sent', hint: 'Stamped by the system when the four-week results email goes out (outreach_leads.remeasure_results_sent_at). Starts the client\'s refund window (7 days on v7, 14 on earlier versions). Not a tick.', kind: 'stamp' },
 ];
 
 /** The delivery-checklist key Findable ticks when the client's Manager invite has been accepted. */

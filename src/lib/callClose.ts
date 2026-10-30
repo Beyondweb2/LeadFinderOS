@@ -12,8 +12,8 @@
       The minimum term is said in PAYMENTS ("12 payments in total"), never as months.
    ⛔ THE GUARANTEE IS THE MEASURED NUMBER OR THE £99 BACK — never a ranking, a citation, a recommendation
       or "AI will name you". GUARANTEE_HEADLINE is findable.live's own line (Guarantee.astro, Pricing.astro);
-      the spoken explanation is FINDABLE_GUARANTEE's facts said aloud (four weeks, same questions, 14 days,
-      the £99). The rep-facing caution says what must never be promised.
+      the spoken explanation is V7_GUARANTEE's facts said aloud (four weeks, same questions, 7 days,
+      everything paid back; agreement v7, 2026-10-30). The rep-facing caution says what must never be promised.
    ⛔ AFTER PAYMENT reads QUICK_CLOSE_AFTER_PAYMENT (quickClose.ts) — the dialog's own list, not a copy.
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 import {
@@ -23,7 +23,7 @@ import {
 import { QUICK_CLOSE_AFTER_PAYMENT, QUICK_CLOSE_PROMISE } from './quickClose.ts';
 import { afterTermRepLine } from './planTerms.ts';
 import type { SiteSource } from './leadWebsiteKind.ts';
-import { CLIENT_PAYMENT_PLANS, FULL_PAY_HOSTING_INCLUDED_MONTHS, PAYMENT_PLAN_NAME, PAYMENT_PLAN_SPEC, gbpWords, planShortLine, planTotalGbp } from './paymentPlans.ts';
+import { CLIENT_PAYMENT_PLANS, FULL_PAY_HOSTING_INCLUDED_MONTHS, MONTHLY_START_V7_WORDS, PAYMENT_PLAN_NAME, PAYMENT_PLAN_SPEC, V7_REFUND_WINDOW_DAYS, gbpWords, planShortLine, planTotalGbp } from './paymentPlans.ts';
 import { FINDABLE_CONTINUING_GBP } from './findableOffer.ts';
 
 /** findable.live's guarantee line, word for word (findable-site Guarantee.astro / Pricing.astro).
@@ -34,7 +34,8 @@ export const GUARANTEE_HEADLINE = QUICK_CLOSE_PROMISE;
 /** The first monthly payment, said aloud. 🔴 v3 (2026-10-05, clause 5.6): the day after the refund window
  *  closes — never "six weeks after today" any more (FINDABLE_MONTHLY_DELAY_DAYS is legacy timing). */
 const WEEKS_WORDS = ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten'];
-export const MONTHLY_STARTS_SPOKEN = MONTHLY_START_V3_WORDS;
+/* 2026-10-30: every plan offered on a call signs v7, so the start is v7's (the day after the 7-day window). */
+export const MONTHLY_STARTS_SPOKEN = MONTHLY_START_V7_WORDS;
 const REMEASURE_SPOKEN = `${WEEKS_WORDS[REMEASURE_WEEKS_STANDARD] ?? REMEASURE_WEEKS_STANDARD} weeks`;
 
 export interface CallRouteOffer {
@@ -70,7 +71,8 @@ const ROUTE_WHAT: Record<ServiceRoute, string> = {
 
 export function routeOffer(route: ServiceRoute): CallRouteOffer {
   const total = totalPaymentsFor(route);
-  const spokenPrice = `It's £${FINDABLE_SETUP_PRICE_GBP} today, then £${FINDABLE_MONTHLY_GBP} a month starting ${MONTHLY_STARTS_SPOKEN}.`;
+  /* Optimise is a pre-v5 record only, so its words stay on the v3 timing it was sold with. */
+  const spokenPrice = `It's £${FINDABLE_SETUP_PRICE_GBP} today, then £${FINDABLE_MONTHLY_GBP} a month starting ${MONTHLY_START_V3_WORDS}.`;
   const spokenTerm = `That's ${total} payments in total, the £${FINDABLE_SETUP_PRICE_GBP} today included: that's the minimum term.`;
   /* 🔴 2026-10-29 (paymentPlans.ts, agreement v6): Build is sold three ways. Every figure comes from the plan constants. */
   const full = PAYMENT_PLAN_SPEC.full, six = PAYMENT_PLAN_SPEC.six, twelve = PAYMENT_PLAN_SPEC.twelve;
@@ -114,7 +116,7 @@ export function buildCallClose(source: SiteSource | null | undefined): CallClose
     routeNote: note,
     guarantee: {
       headline: GUARANTEE_HEADLINE,
-      spoken: `We measure how often AI names you before we start, then ask the same questions again after ${REMEASURE_SPOKEN}. If that number hasn't gone up, you email us within 14 days of your results and get back everything you've paid.`,
+      spoken: `We measure how often AI names you before we start, then ask the same questions again after ${REMEASURE_SPOKEN}. If that number hasn't gone up, you email us within ${V7_REFUND_WINDOW_DAYS} days of your results and get back everything you've paid.`,
       caution: 'Never promise a ranking, a recommendation or that AI will name them. The promise is the measured number, or their money back.',
     },
     monthly: `The monthly is a new page every month, a monthly check of what AI says about you, adjustments as we go, and ${routes[0] === 'build' ? 'hosting and looking after the website' : 'keeping your site right'}.`,

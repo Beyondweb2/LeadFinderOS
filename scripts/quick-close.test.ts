@@ -11,6 +11,7 @@ import {
   offerFit, planQuickCloseSave, routeTermsLines, routePaymentsShort,
 } from "../src/lib/quickClose.ts";
 import { FINDABLE_GUARANTEE, FINDABLE_MONTHLY_GBP, FINDABLE_SETUP_PRICE_GBP } from "../src/lib/findableOffer.ts";
+import { V7_GUARANTEE } from "../src/lib/paymentPlans.ts";
 
 let f = 0;
 const ok = (c: boolean, l: string) => { if (!c) f++; console.log(`${c ? "PASS" : "FAIL"} ${l}`); };
@@ -154,7 +155,11 @@ ok(msg.includes("https://checkout.stripe.com/c/pay/x") && msg.includes(`£${FIND
    sentences (the headline + the byte-locked FINDABLE_GUARANTEE), and nothing that promises an outcome
    the engines decide: no ranking, no recommendation, no citation, no "guaranteed". */
 ok(!/guaranteed|rank|top of|recommend|cited|citation|will name you|be named/i.test(QUICK_CLOSE_SCRIPT + msg + QUICK_CLOSE_AFTER_PAYMENT.join(" ")), "no promised ranking, recommendation or citation; no 'guaranteed'");
-ok([quickCloseScript("build", "six"), quickCloseScript("optimise"), msg].every((s) => s.includes(QUICK_CLOSE_PROMISE) && s.includes(FINDABLE_GUARANTEE)), "the guarantee is said, exactly as written, in the script and the message");
+ok([quickCloseScript("build", "six"), quickCloseScript("optimise"), msg].every((s) => s.includes(QUICK_CLOSE_PROMISE)), "the guarantee headline is said in the script and the message");
+/* 2026-10-30: the terms are the ones the client will SIGN: v7 for Complete and Essential, v5 only for no plan / the old plan. */
+const v7Msg = quickCloseMessage("ABC Plumbing", "https://x", "build", "complete");
+ok(quickCloseScript("build", "six").includes(V7_GUARANTEE) && v7Msg.includes(V7_GUARANTEE) && !/within 14 days/.test(quickCloseScript("build", "six") + v7Msg), "a v7 plan's script and message carry the v7 guarantee (7 days), never the v5 14 days");
+ok(quickCloseScript("optimise").includes(FINDABLE_GUARANTEE) && msg.includes(FINDABLE_GUARANTEE) && quickCloseMessage("A", "u", "build", "legacy_twelve").includes(FINDABLE_GUARANTEE), "no plan or the old plan keeps the v5 FINDABLE_GUARANTEE, exactly as written");
 
 console.log("\n── the handoff ──");
 {

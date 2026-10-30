@@ -18,7 +18,9 @@ import { AI_OVERVIEW_CONTEXT_LABEL, AI_OVERVIEW_LABEL, AI_OVERVIEW_NOT_SCORED, A
 /* RELATIVE paths with explicit .ts extensions, NOT the "@/" alias: this file is bundled into
    render-audit-report and apply-seo-paste, and Deno cannot resolve the Vite alias. Both are
    dependency-free constant files, so nothing heavy joins those bundles. */
-import { FINDABLE_CONTACT_EMAIL, FINDABLE_CONTACT_WHATSAPP, FINDABLE_GUARANTEE, REMEASURE_CLAIM_SENTENCE, offerSummaryFor } from './findableOffer.ts';
+import { FINDABLE_CONTACT_EMAIL, FINDABLE_CONTACT_WHATSAPP, FINDABLE_GUARANTEE } from './findableOffer.ts';
+/* 2026-10-30: a new sale signs agreement v7, so the report speaks v7 (7-day claim window, everything paid back, two plans). */
+import { MONTHLY_START_V7_WORDS, V7_CLAIM_SENTENCE, plansReplyLine } from './paymentPlans.ts';
 import { BASELINE_QUESTIONS } from './auditQuestionCounts.ts';
 import { isGenericSchemaGap, type CrawlFault } from './crawlCheck.ts';
 import { siteShotCaption } from './siteShot.ts';
@@ -534,12 +536,16 @@ function siteCheckPendingSection(): string {
 /* The approved no-website words, ONE copy: the ordinary report's section below and the six-answer
    quick report's panel (renderQuickCheckReport) both print exactly these. */
 const NO_WEBSITE_TITLE_HTML = "You don&rsquo;t have a website yet, so we&rsquo;ll build you one.";
+/** The offer in one line for a prospect's report: both v7 plans and when the monthly starts (2026-10-30). */
+function reportPlansLine(): string {
+  return 'There are two plans: ' + plansReplyLine() + '. Monthly payments start ' + MONTHLY_START_V7_WORDS + '.';
+}
 function noWebsiteBodyHtml(prospectOnly = false): string {
   /* A prospect-only country (Australia) gets the same words WITHOUT the offer sentence — no price, no payment count. */
   return `AI can&rsquo;t recommend a business it can&rsquo;t read, and right now there&rsquo;s nothing for it to read.
         We&rsquo;ll build you a simple site that&rsquo;s set up properly for AI from the start: your services,
         your area, your credentials, all written the way AI quotes them.${prospectOnly ? '' : ` Building and hosting it are
-        part of the service, with no separate build fee. ${esc(offerSummaryFor('build'))}`}`;
+        part of the service, with no separate build fee. ${esc(reportPlansLine())}`}`;
 }
 function noWebsiteSection(prospectOnly = false): string {
   return `
@@ -2129,7 +2135,7 @@ export function renderReportHtml(d: AiAuditReportData): string {
   const quickFooter = concept4 ? renderQuickCheckFooter({
     pitch: !(d.hidePitch || d.paidSummary), startBtn, requestCallBtn, waHref,
     /* No guarantee card for a prospect-only country: the locked sentence names the £99 (renderQuickCheckFooter drops an empty one). */
-    promiseHtml: d.prospectOnly === true ? '' : `Your guarantee is judged on a full ${BASELINE_QUESTIONS}-question measurement we run after you join, not on this quick check. ${esc(REMEASURE_CLAIM_SENTENCE)}`,
+    promiseHtml: d.prospectOnly === true ? '' : `Your guarantee is judged on a full ${BASELINE_QUESTIONS}-question measurement we run after you join, not on this quick check. ${esc(V7_CLAIM_SENTENCE)}`,
     businessName: d.businessName, dateLabel: d.generatedAtLabel, measuredOnHtml, noteHtml: footNoteHtml,
   }) : "";
 
@@ -3063,7 +3069,7 @@ ${concept4 || d.hidePitch || d.paidSummary || quickIncomplete ? "" : `
            check the sentence sat directly under a 3-question score, so "that number" read as THIS
            figure. The line in front says which number the guarantee is judged on; the locked sentence
            follows it unchanged. -->
-      ${d.prospectOnly === true ? '' : `<p class="cta-promise">Your guarantee is judged on a full ${BASELINE_QUESTIONS}-question measurement we run after you join, not on this quick check. ${esc(REMEASURE_CLAIM_SENTENCE)}</p>`}
+      ${d.prospectOnly === true ? '' : `<p class="cta-promise">Your guarantee is judged on a full ${BASELINE_QUESTIONS}-question measurement we run after you join, not on this quick check. ${esc(V7_CLAIM_SENTENCE)}</p>`}
     </section>`}
 
 ${concept4 ? quickFooter : `
