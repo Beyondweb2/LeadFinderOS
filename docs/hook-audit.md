@@ -23,9 +23,14 @@ Branch `feat/hook-audit-visibility-score`. Replaced the adaptive (early-stop) ho
 - **Complete = every expected result is a valid answer.** A failed row, or an engine with no answer,
   is `failed`, never "not named". Incomplete means no percentage and no hook. A failure is not retried
   beyond the queue's existing row retries.
-- **Hook pick:** strongest Google AI miss, else strongest ChatGPT miss, else none. The rank is
-  `hookBreadthScore` (commercial and local wording), plus the core trade, plus up to 3 competitor names.
-  The competitors are **that cell's own list**, never merged across questions or engines.
+- **Hook pick (2026-10-30, Paul):** first pass = the best miss naming at least `RIVALS_REQUIRED` (3)
+  rivals, engines in `HOOK_PICK_ENGINE_ORDER` (Gemini, then ChatGPT). So Gemini with three wins, but a
+  ChatGPT miss with three beats a Gemini miss with one (WSH Electrical: Gemini 1 name, ChatGPT 3, the
+  follow-up had been refused). Only when no miss on either engine has three: the old rule, strongest
+  Gemini miss, else strongest ChatGPT miss, else none. The rank is `hookBreadthScore` (commercial and
+  local wording), plus the core trade, plus up to 3 competitor names. The competitors are **that cell's
+  own list**, never merged across questions or engines, never padded, and the business itself is never
+  counted as its own rival (`excludeSelfRivals` with the audit's business name).
 - ⛔ **RETIRED 2026-10-04 (Paul, fix/07): no audit result changes a lead's status.** The rule below (and
   the v1 Gemini-3/3 one) and `_shared/hook-not-interested.ts` are deleted. A 6/6 result now shows as
   "Strong AI visibility — named in all 6 answers" (`callCardAudit`) and the lead keeps its status;

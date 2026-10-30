@@ -163,7 +163,31 @@ ok(JSON.stringify(state.engines) === JSON.stringify(['chatgpt', 'gemini']), 'bot
     { questionIndex: 2, question: 'emergency roofer who can come out today in Manchester UK', engine: 'gemini', label: 'Google AI', status: 'not_named', competitors: ['E1', 'E2'], answerExcerpt: '' },
     { questionIndex: 0, question: 'roof repair services in Manchester UK', engine: 'chatgpt', label: 'ChatGPT', status: 'not_named', competitors: ['C1', 'C2', 'C3'], answerExcerpt: '' },
   ], { town: 'Manchester', trade: 'roofer' });
-  ok(thin?.engine === 'gemini' && thin.competitors.length < 3, 'J: Google AI still comes first — no switch of engine and no padding when no Google AI miss has three (the send is then refused)');
+  /* 2026-10-30, Paul: three rivals beat the engine order. Reversed from "Gemini always first". */
+  ok(thin?.engine === 'chatgpt' && thin.questionIndex === 0 && thin.competitors.join() === 'C1,C2,C3', 'J: no Gemini miss has three, a ChatGPT miss does → the ChatGPT miss, its own three names');
+  const bothFull = pickHookResult([
+    { questionIndex: 1, question: 'Can you recommend a roofer in Manchester?', engine: 'chatgpt', label: 'ChatGPT', status: 'not_named', competitors: ['C1', 'C2', 'C3', 'C4'], answerExcerpt: '' },
+    { questionIndex: 2, question: 'roofer in Manchester', engine: 'gemini', label: 'Gemini', status: 'not_named', competitors: ['G1', 'G2', 'G3'], answerExcerpt: '' },
+  ], { town: 'Manchester', trade: 'roofer' });
+  ok(bothFull?.engine === 'gemini' && bothFull.competitors.join() === 'G1,G2,G3', 'J: Gemini with three beats ChatGPT with three, even a higher-scored one');
+  const neitherFull = pickHookResult([
+    { questionIndex: 0, question: 'roof repair services in Manchester UK', engine: 'gemini', label: 'Gemini', status: 'not_named', competitors: ['R1'], answerExcerpt: '' },
+    { questionIndex: 2, question: 'emergency roofer who can come out today in Manchester UK', engine: 'gemini', label: 'Gemini', status: 'not_named', competitors: ['E1', 'E2'], answerExcerpt: '' },
+    { questionIndex: 1, question: 'Can you recommend a roofer in Manchester?', engine: 'chatgpt', label: 'ChatGPT', status: 'not_named', competitors: ['C1', 'C2'], answerExcerpt: '' },
+  ], { town: 'Manchester', trade: 'roofer' });
+  ok(neitherFull?.engine === 'gemini' && neitherFull.competitors.length < 3, 'J: no miss anywhere has three → the old rule, Gemini first, no padding (the send is then refused)');
+  /* WSH Electrical, 2026-10-30: Gemini named 1 rival, ChatGPT named 3 → ChatGPT. The business on its own
+     list is not a rival: with it listed, ChatGPT still has three real names and nothing else is added. */
+  const wsh = pickHookResult([
+    { questionIndex: 0, question: 'Who is the best electrician in Hythe?', engine: 'gemini', label: 'Gemini', status: 'not_named', competitors: ['Solo Sparks'], answerExcerpt: '' },
+    { questionIndex: 0, question: 'Who is the best electrician in Hythe?', engine: 'chatgpt', label: 'ChatGPT', status: 'not_named', competitors: ['SCV Electrical', 'WSH Electrical', 'D&B', 'Orsidaen'], answerExcerpt: '' },
+  ], { town: 'Hythe', trade: 'electrician', businessName: 'WSH Electrical' });
+  ok(wsh?.engine === 'chatgpt' && wsh.competitors.join() === 'SCV Electrical,D&B,Orsidaen', 'J: WSH-shaped (Gemini 1, ChatGPT 3) → chatgpt, its own names, never the business itself');
+  const selfOnly = pickHookResult([
+    { questionIndex: 0, question: 'Who is the best electrician in Hythe?', engine: 'chatgpt', label: 'ChatGPT', status: 'not_named', competitors: ['SCV Electrical', 'WSH Electrical', 'D&B'], answerExcerpt: '' },
+    { questionIndex: 0, question: 'Who is the best electrician in Hythe?', engine: 'gemini', label: 'Gemini', status: 'not_named', competitors: ['Solo Sparks'], answerExcerpt: '' },
+  ], { town: 'Hythe', trade: 'electrician', businessName: 'WSH Electrical' });
+  ok(selfOnly?.engine === 'gemini', 'J: the business is never counted toward three — ChatGPT has two real rivals, so the old rule (Gemini first) runs');
 }
 /* K. One matcher */
 {
