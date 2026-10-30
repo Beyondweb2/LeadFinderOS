@@ -91,8 +91,11 @@ solid colour pills", "interested was supposed to just add a gold star". Do not b
 
 **Hook pick (DM Roofing):** `pickHookResult` now ranks, within an engine, a miss naming ≥
 `RIVALS_REQUIRED` rivals above one that cannot (then the score). The emergency search (2 names) had
-out-scored roof repair (5 names) on the trade-word bonus. Google AI still first; names never borrowed
-or padded; fewer than three in every Google AI miss still refuses. Same order as voiceNoteScript.
+out-scored roof repair (5 names) on the trade-word bonus. Names never borrowed or padded.
+**Superseded 2026-10-30 (Paul, WSH Electrical):** three rivals now beat the engine order across engines
+too: when no Gemini miss has three and a ChatGPT miss does, the ChatGPT miss is the hook. Only when no
+miss on either engine has three does Gemini-first apply (and the send still refuses). See
+`docs/hook-audit.md` "Hook pick".
 
 ## 5. Tests
 

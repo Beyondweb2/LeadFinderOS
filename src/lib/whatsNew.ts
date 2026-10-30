@@ -22,6 +22,14 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-30-hook-pick-three-rivals', date: '2026-10-30', title: 'The hook now uses the answer that names three competitors', audience: 'all',
+    body: 'When Gemini missed the business but named fewer than three competitors, and ChatGPT missed them and named three, the hook used to stay on Gemini and the competitor follow-up was refused. Now the ChatGPT answer is used, with its own three names. Gemini still comes first when it names three too.',
+    report: {
+      added: [],
+      changed: ['The hook picks a missed answer that names at least three competitors first: Gemini if it has one, then ChatGPT. Only if neither does is the old order used.', 'The business itself is never counted as one of its own competitors.'],
+      removed: [],
+      effect: 'More leads can get the three-competitor follow-up. The names always come from that one answer: nothing is borrowed from another answer or padded. The report, Inbox card, call script and voice note all show the same pick.',
+    } },
   { id: '2026-10-30-two-plans', date: '2026-10-30', title: 'Two plans: Findable Complete and Findable Essential', audience: 'all',
     body: 'Quick Close now offers two plans. Findable Complete (recommended, shown first) is £99 a month for 12 months: everything in Essential plus replies to Google reviews, Google Business Profile, directories, changes within reason and a monthly audit. Findable Essential is the AI-optimised website with a baseline and four-week audit, at the same prices as before (£499 once, £99 × 6, or £99 then £49.99 × 11). New sign-ups sign agreement v7. The guarantee is "We improve AI visibility or you get your money back": results 28 days after the baseline, then 7 days to claim, and the first monthly payment the day after.',
     report: {

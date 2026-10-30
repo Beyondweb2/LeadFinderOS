@@ -33,7 +33,8 @@
 
 import { cellNamed, type NamedCell, type NamedContext } from './namedSignal.ts';
 import { articleTrade } from './templateVars.ts';
-import { RIVALS_REQUIRED } from './rivalHook.ts';
+import { RIVALS_REQUIRED, excludeSelfRivals } from './rivalHook.ts';
+import { nameMatches } from './nameMatch.ts';
 import { auditRecordsOverviews, overviewFor, type AiOverviewView, type ScoringMethod } from './aiOverview.ts';
 
 /** The engines a hook asks, in DISPLAY order. Each queue row lists these, so every question
@@ -497,7 +498,7 @@ export function scoreHookRun(state: unknown, rows: readonly HookScoreRow[], ctx:
     : null;
   const pick: HookPick | null = storedGap
     ? { questionIndex: storedGap.questionIndex, question: storedGap.question, engine: storedGap.engine, label: storedGap.label, competitors: [...storedGap.competitors], answerExcerpt: storedGap.answerExcerpt }
-    : pickHookResult(misses, { town: ctx.town ?? '', trade: ctx.trade ?? '' });
+    : pickHookResult(misses, { town: ctx.town ?? '', trade: ctx.trade ?? '', businessName: ctx.named?.businessName });
   const gaShown = overviews.filter((o) => o.state === 'shown').length;
   const gaNamed = overviews.filter((o) => o.state === 'shown' && o.named === true).length;
   const method: ScoringMethod = ctx.scoringMethod === 2 ? 2 : 1;
@@ -548,9 +549,8 @@ export function hookMissScore(r: Pick<HookResult, 'question' | 'competitors'>, c
 }
 
 /**
- * The strongest genuine missed search. Google AI misses first. Only when Google AI named them in
- * every search is a ChatGPT miss used. No miss on either engine means no hook, and nothing is
- * fabricated. Ties keep question order.
+ * The strongest genuine missed search. Gemini misses first, then ChatGPT — inside each pass below.
+ * No miss on either engine means no hook, and nothing is fabricated. Ties keep question order.
  * ⛔ THE COMPETITORS TRAVEL WITH THE RESULT. They are the picked cell's own list, never another
  * question's and never another engine's.
  * ⛔ A MISS THAT CAN FILL THE COMPETITOR TEMPLATE WINS (2026-10-01, Paul: "it should find 3 competitors
@@ -559,20 +559,35 @@ export function hookMissScore(r: Pick<HookResult, 'question' | 'competitors'>, c
  * roof-repair search (5 names) on the trade-word bonus, so the follow-up was refused with 5-name
  * evidence in hand. The voice-note script already ranked this way (voiceNoteScript.ts). Nothing is
  * padded or borrowed: fewer than three in every miss still refuses.
+ * ⛔ THREE RIVALS BEAT THE ENGINE ORDER (2026-10-30, Paul). FIRST PASS: the best miss naming at least
+ * RIVALS_REQUIRED rivals, engines in HOOK_PICK_ENGINE_ORDER — so a Gemini miss with three still wins, but a
+ * ChatGPT miss with three now beats a Gemini miss with one (WSH Electrical: Gemini 1 name, ChatGPT 3, the
+ * follow-up was refused). Only when no miss on any engine has three does the old rule run unchanged.
+ * The business itself never counts as its own rival (excludeSelfRivals, when the caller gives the name).
  */
-export function pickHookResult(misses: readonly HookResult[], ctx: { town: string; trade: string }): HookPick | null {
+export function pickHookResult(
+  misses: readonly HookResult[],
+  ctx: { town: string; trade: string; businessName?: string | null },
+): HookPick | null {
+  const pool = misses
+    .filter((m) => m.status === 'not_named')
+    .map((m) => ({ ...m, competitors: excludeSelfRivals(m.competitors, ctx.businessName, nameMatches) }));
+  const best = (list: typeof pool) => list
+    .map((m) => ({ m, s: hookMissScore(m, ctx), full: m.competitors.length >= RIVALS_REQUIRED, first: m.questionIndex === 0 && isBestFirstQuestion(m.question) }))
+    /* ⛔ The hook quotes question 1 ("Who is the best … in …?") when it is a miss that can name three rivals
+       (Paul, 2026-10-23). Old audits have no such Q1, so nothing about them changes. */
+    .sort((a, b) => Number(b.full && b.first) - Number(a.full && a.first) || Number(b.full) - Number(a.full) || b.s - a.s || a.m.questionIndex - b.m.questionIndex)[0].m;
+  const asPick = (m: (typeof pool)[number]): HookPick => ({
+    questionIndex: m.questionIndex, question: m.question, engine: m.engine, label: m.label,
+    competitors: [...m.competitors], answerExcerpt: m.answerExcerpt,
+  });
   for (const engine of HOOK_PICK_ENGINE_ORDER) {
-    const pool = misses.filter((m) => m.engine === engine && m.status === 'not_named');
-    if (!pool.length) continue;
-    const best = pool
-      .map((m) => ({ m, s: hookMissScore(m, ctx), full: m.competitors.length >= RIVALS_REQUIRED, first: m.questionIndex === 0 && isBestFirstQuestion(m.question) }))
-      /* ⛔ The hook quotes question 1 ("Who is the best … in …?") when it is a miss that can name three rivals
-         (Paul, 2026-10-23). Old audits have no such Q1, so nothing about them changes. */
-      .sort((a, b) => Number(b.full && b.first) - Number(a.full && a.first) || Number(b.full) - Number(a.full) || b.s - a.s || a.m.questionIndex - b.m.questionIndex)[0].m;
-    return {
-      questionIndex: best.questionIndex, question: best.question, engine: best.engine, label: best.label,
-      competitors: [...best.competitors], answerExcerpt: best.answerExcerpt,
-    };
+    const full = pool.filter((m) => m.engine === engine && m.competitors.length >= RIVALS_REQUIRED);
+    if (full.length) return asPick(best(full));
+  }
+  for (const engine of HOOK_PICK_ENGINE_ORDER) {
+    const mine = pool.filter((m) => m.engine === engine);
+    if (mine.length) return asPick(best(mine));
   }
   return null;
 }
