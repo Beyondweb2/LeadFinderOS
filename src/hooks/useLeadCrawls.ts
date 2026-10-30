@@ -4,7 +4,7 @@ import { fetchAllRows } from '@/lib/fetchAllRows';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import type { CrawlRow, CrawlStoredResult } from '@/lib/crawlResult';
-import type { StoredSiteScore } from '@/lib/siteScore';
+import type { SiteScoreEvidence, StoredSiteScore } from '@/lib/siteScore';
 
 // lead_crawl_checks isn't in the generated types (same as useInbox) → an untyped `from`.
 // deno-lint-ignore no-explicit-any
@@ -58,6 +58,22 @@ export function useLeadCrawl(leadId: string | null | undefined) {
     },
   });
   return { crawl: query.data ?? null, refetch: query.refetch, isLoading: query.isLoading };
+}
+
+/** ONE lead's site score WITH its evidence (every point lost, the page and the quote) — the detail view only; the lists
+ *  never read site_score_evidence. Same ['lead-crawls', …] prefix, so a crawl finishing refreshes it. */
+export const LEAD_SITE_SCORE_SELECT = 'site_score, site_score_state, site_score_version, site_score_reasons, site_score_detail, site_score_evidence';
+export function useLeadSiteScore(leadId: string | null | undefined, enabled = true) {
+  const query = useQuery({
+    queryKey: ['lead-crawls', 'score', leadId ?? null],
+    enabled: !!leadId && enabled,
+    queryFn: async (): Promise<(StoredSiteScore & { site_score_evidence: SiteScoreEvidence | null }) | null> => {
+      const { data, error } = await sb.from('lead_crawl_checks').select(LEAD_SITE_SCORE_SELECT).eq('lead_id', leadId).maybeSingle();
+      if (error) throw error;
+      return data ?? null;
+    },
+  });
+  return { score: query.data ?? null, isLoading: query.isLoading, isError: query.isError, refetch: query.refetch };
 }
 
 export function useLeadCrawls(label = 'Outreach (crawl checks)') {

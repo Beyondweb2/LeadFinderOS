@@ -22,6 +22,14 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-30-room-to-improve-website', date: '2026-10-30', title: 'Room to improve the website: a pill on every lead', audience: 'all',
+    body: 'Every lead now shows how much its website has to gain, in the Inbox on the AI line right after Google AI, on the Outreach row and in the lead\'s details: a number with Big gains (under 60), Some gains (60 to 79) or Little to gain (80 and over). A site we could not judge says why instead of a number. Hover for the top reasons; Full breakdown shows every point lost with the page and the words our crawl read. Team only, never sent to anyone, and not a prediction of AI visibility.',
+    report: {
+      added: ['A new way of scoring (version 2): 100 points over Reachable, Identity, Services, Content, Structured data, Consistency and Basics, from the stored crawl only.', 'A one-page site, or one with no real service pages, always sits in Big gains.', 'Own labels instead of a number: No website, Social / directory only, JavaScript-only site, Blocked by robots.txt, Couldn\'t reach, Quick check only, and a faint Not checked.', 'Outreach: a "Room to improve the website" filter and a "Website: most room to improve" sort.', 'Full breakdown: every point lost, with the page link and the quote.'],
+      changed: ['The pill in the Inbox moved off the status line onto the AI line.', 'The Outreach ring is now the same pill as the Inbox.', 'The Inbox now updates the pill when a crawl finishes, without a reload.'],
+      removed: ['The old Strong / Fair / Weak words (the old numbers are kept on file).'],
+      effect: 'Admins could not see the score at all before this: the crawl results were not readable from the admin account. They are now. Nothing is skipped or sent differently: the pill, the filter and the sort only help you choose.',
+    } },
   { id: '2026-10-30-quick-close-two-plans', date: '2026-10-30', title: 'Quick Close and the Call tab now work from the two plans', audience: 'all',
     body: 'Quick Close shows Findable Complete and Findable Essential side by side, you pick the plan and how they pay, and the sign-up link is already that plan. The Call tab is shorter and every section folds.',
     report: {

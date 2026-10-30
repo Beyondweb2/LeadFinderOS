@@ -1,4 +1,39 @@
-# Site score (2026-10-23, feat/site-score)
+# Room to improve the website — the site score
+
+## v2 (2026-10-30, feat/site-score-v2) — current
+
+Label: **"Room to improve the website"**, never a prediction of AI visibility. Team only. One pill (`SiteScorePill`) on the
+Inbox's AI line right after Google AI, on the Outreach row, and in the lead detail (`LeadSiteScore`); hover = top reasons,
+"Full breakdown" = every point lost with its page URL and quote (`SiteScoreBreakdown`, reads `site_score_evidence` for one lead).
+
+- **Rubric** (`src/lib/siteScore.ts`, `SITE_SCORE_VERSION = 2`): 100 points — Reachable 20, Identity 15, Services 20, Content
+  15, Structured data 10, Consistency 10, Basics 10 — split into 27 checks (`SITE_SCORE_CHECKS`), each mapping the one website
+  check's issue ids. Each verified issue takes a share of its check (`SITE_SCORE_SEVERITY_SHARE`: high 1, medium 1, low 0.4);
+  a check stops at zero. `one_page_site` / `no_service_pages` take the whole Services category.
+- **Cap:** a one-page site, no service pages, or services crammed on one page (`SITE_SCORE_CAP_ISSUES`) is capped at 59 (big
+  gains); the uncapped number is kept in the evidence.
+- **Only verified:** a site-wide "not found" on a crawl that stopped at its page cap takes nothing (listed as not judged); a
+  "not found" on a named page, or a missing sitemap / robots.txt, counts. Real OAI-SearchBot / Googlebot / PerplexityBot
+  visits are not recorded (the crawl reads as one honest crawler) — only their robots.txt rules are judged.
+- **Bands** (`SITE_SCORE_BAND_MIN`): under 60 Big gains, 60–79 Some gains, 80+ Little to gain.
+- **States, never a number:** `profile_only` (social / directory URL), `js_only`, `robots_blocked` (robots_blocks_all),
+  `unreachable`, `partial` (quick check only). From the lead, no row needed: No website, and a faint Not checked.
+  `siteScoreViewFor(website, stored)` decides; the pill, the Outreach filter and the sort all read it (`siteScoreGroupOf`,
+  `siteScoreSortKey`). v1's `unreadable` reads as Couldn't reach until re-scored.
+- **Outreach:** Filters → "Room to improve the website" (one band or state); Sort → "Website: most room to improve". View only:
+  nothing is skipped, sending is unchanged.
+- **Storage** (migration `20261130150000_site_score_v2.sql`): `site_score_evidence` (losses with url + quote, cap, not judged —
+  never in the list select), `site_score_v1` (the v1 score kept as it was), the state check widened.
+- ⛔ **Found 2026-10-30: the admin could not read `lead_crawl_checks` at all** (RLS on, only `sales_select_crawl_checks`; tested
+  as the admin: 0 of 1,615 rows) — so no score, ring or crawl icon from that table ever reached the admin. Added
+  `admin_select_crawl_checks` (select, `my_role() = 'admin'`). Also the table was not in `supabase_realtime`, so the Inbox's
+  crawl listener never fired; now published. L J Rainford (stored 69, no pill) was both.
+- **NS Elec:** `nselec.co.uk` answers 302 → `home.nselec.co.uk`; the crawl follows it and reads that page, which is a genuine
+  one-page site (every menu link is a `#` anchor). The crawl already treats the redirect target as the site; correct.
+- **Calibration** (stored crawls, 2026-10-30): NS Elec 59 big (capped from 71), Tribeca 40 big, WSH 66 **some** (no weighting
+  tried put it under 60 without pushing most sites there), Great Ouse 99 little, Locksmith Rotherham 85 little, L J Rainford 80.
+
+## v1 (2026-10-23, feat/site-score) — superseded, numbers kept in `site_score_v1`
 
 A number out of 100 for each lead's website on the Outreach row (ring) and the Inbox row (number pill), so the team does not
 have to open each site. Paul chose the look on `design/site-score-concepts` (B ring on Outreach, A pill on Inbox) and
