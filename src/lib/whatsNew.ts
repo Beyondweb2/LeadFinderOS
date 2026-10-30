@@ -22,6 +22,14 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-30-quick-close-two-plans', date: '2026-10-30', title: 'Quick Close and the Call tab now work from the two plans', audience: 'all',
+    body: 'Quick Close shows Findable Complete and Findable Essential side by side, you pick the plan and how they pay, and the sign-up link is already that plan. The Call tab is shorter and every section folds.',
+    report: {
+      added: ['Quick Close: both plans side by side, Complete first and recommended, with Essential\'s three ways to pay inside it and the guarantee above both.', 'Call tab: the Offer is two tabs (Complete, Essential) listing what is included and the price or pay options.', 'Call tab: "What we do" has a Complete / Essential switch.', 'Inbox: the sign-up link button opens a plan menu and copies the link for the plan you pick.'],
+      changed: ['Quick Close now asks only: decision maker, who looks after the site, the agency contract if there is one, then the plan. The domain and "confirm the plan" questions are gone.', 'Every section on the Call tab folds, and the call script starts closed.', 'Quick Close shows Email only when we already hold their address.', 'The "Why £99?" answer no longer claims £99 covers the baseline: it is the first payment on the monthly options.', 'Manual onboarding matches findable.live\'s shorter sign-up (two questions fewer, the Google box reworded).'],
+      removed: ['The "coming soon" review replies line (review replies are part of Complete, done by hand).', 'The long "After payment" and "say the minimum term" notes in Quick Close.'],
+      effect: 'A rep picks the plan once on the call and sends the right link in a few taps, and the client no longer chooses a plan again. In the Inbox, the plan in the link is only used once findable.live reads it, so until then the client still picks.',
+    } },
   { id: '2026-10-30-guarantee-window-start', date: '2026-10-30', title: 'The 7 days to claim start when we send the four-week results', audience: 'all',
     body: 'Everywhere a new client reads the guarantee now says the 7 days start on the date we send the four-week audit results, not on sign-up, as findable.live says it: the Stripe checkout description and card notice, the welcome pack, Quick Close, the quick-check report, the call script, the four-week results email and the Access Date email.',
     report: {
