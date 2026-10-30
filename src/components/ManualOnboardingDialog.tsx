@@ -11,9 +11,9 @@ import { tradeWord } from '@/lib/trade';
 import { chipsForTrade, serviceExamplesFor } from '@/lib/onboardingChips';
 import { AGENCY_CONTRACT_NOTE, DOMAIN_QUESTIONS, DOMAIN_REASON_TEXT, NEW_DOMAIN_REGISTRATION_NOTE, SITE_RIGHTS_OPTIONS, domainAuthority } from '@/lib/domainAuthority';
 import {
-  AGENCY_OPTIONS, BUILD_OK_OPTIONS, CONTRACT_OPTIONS, DESIGN_OPTIONS, KEEP_ACCESS_OPTIONS, LEGACY_KEEP_COPY as L, MANAGER_OPTIONS, ONBOARDING_COPY as C, SIMPLE_COPY as S, WEBSITE_CHOICE_OPTIONS,
+  AGENCY_OPTIONS, CONTRACT_OPTIONS, KEEP_ACCESS_OPTIONS, LEGACY_KEEP_COPY as L, MANAGER_OPTIONS, ONBOARDING_COPY as C, SIMPLE_COPY as S, WEBSITE_CHOICE_OPTIONS,
   accessConsequenceText, answerProblems, answersFromRecords, branchFromChoice, choiceFromBranch, domainAnswerOf, domainColumnsFor, domainOptionsFor, onboardingStatus, permissionAckText, siteAccessFromBranch,
-  type BuildOk, type HasAgency, type OnboardingAnswers, type SiteManager, type WebsiteChoice,
+  type HasAgency, type OnboardingAnswers, type SiteManager, type WebsiteChoice,
 } from '@/lib/manualOnboarding';
 import { agencyContractOutcome } from '@/lib/agencyContractRule';
 import { QC_REVIEW_TEXT, TIED_IN_DECLINE_REASON } from '@/lib/quickClose';
@@ -80,9 +80,6 @@ export function ManualOnboardingDialog({ leadId, open, onOpenChange, onSaved }: 
   const [choiceState, setChoiceState] = useState<WebsiteChoice | null>(null);
   const [managerState, setManagerState] = useState<SiteManager | null>(null);
   const [keepAccess, setKeepAccess] = useState<'yes' | 'no' | null>(null);
-  /* 2026-10-16: "Happy for us to build you an AI-optimised website?" — the form's own answer (no column; the client's
-     page does not store it either). A Build sign-up already said yes by choosing it. */
-  const [buildOk, setBuildOk] = useState<BuildOk | null>(null);
   /* What the record already held when the form opened: shown, not asked (Fix opens it). */
   const [loaded, setLoaded] = useState<OnboardingAnswers | null>(null);
   const [fixing, setFixing] = useState(false);
@@ -101,7 +98,6 @@ export function ManualOnboardingDialog({ leadId, open, onOpenChange, onSaved }: 
         setRow(f.onboarding); setA(first); setLoaded(first); setFixing(false); setDetected(f.detected ?? { services: [], towns: [] });
         /* A fresh load reads the website choice back from the stored answers, never from the last client's form. */
         setChoiceState(null); setManagerState(null); setKeepAccess(null);
-        setBuildOk(String(f.onboarding?.plan_tier ?? '') === 'new_site' ? 'yes' : null);
       })
       .catch((e) => { if (!cancelled) setError(edgeErrorMessage(e, 'Could not load the onboarding answers')); })
       .finally(() => { if (!cancelled) setLoading(false); });
@@ -215,14 +211,7 @@ export function ManualOnboardingDialog({ leadId, open, onOpenChange, onSaved }: 
             </Callout>}
             {contract === 'hold' && <Callout tone="amber" icon={Info} testId="manual-contract-hold" className="text-xs">{QC_REVIEW_TEXT.agency_contract_build}.</Callout>}
           </Panel>
-          {contract !== 'stop' && <Panel headline={S.buildOk.headline} sub={S.buildOk.sub}>
-            <Radio name="build-ok" value={buildOk} options={BUILD_OK_OPTIONS} onChange={(v) => setBuildOk(v as BuildOk)} />
-            {buildOk === 'no' && <Callout tone="red" icon={AlertCircle} testId="manual-build-declined" className="text-xs">Do not sell: building them a website set up properly for AI is how Findable works, so there is nothing else to offer. Note why, and leave the door open.</Callout>}
-          </Panel>}
-          {contract !== 'stop' && buildOk !== 'no' && !noWebsite && <Panel headline={S.design.headline} sub={S.design.sub}>
-            <Radio name="design-choice" value={a.design_choice} options={DESIGN_OPTIONS} onChange={(v) => set('design_choice', v)} />
-          </Panel>}
-          {contract !== 'stop' && buildOk !== 'no' && choice && <Panel headline={S.domain.headline} sub={S.domain.sub}>
+          {contract !== 'stop' && choice && <Panel headline={S.domain.headline} sub={S.domain.sub}>
             <Radio name="domain-answer" value={domainAnswer} options={domainOptionsFor(!noWebsite)} onChange={(v) => setA((p) => (p ? { ...p, ...domainColumnsFor(v, !noWebsite) } : p))} />
             {domainAnswer === 'none' && <p className="text-xs text-muted-foreground">{NEW_DOMAIN_REGISTRATION_NOTE}</p>}
             {domainAnswer && domainAnswer !== 'yes' && domainAnswer !== 'none' && <p className="text-xs text-amber-700 dark:text-amber-300">The domain is not ready to connect — sort this out with the client before launch (the site can still be built and previewed).</p>}
@@ -246,7 +235,7 @@ export function ManualOnboardingDialog({ leadId, open, onOpenChange, onSaved }: 
         <Panel headline={S.legal.headline} sub={S.legal.sub}>
             {/* ⛔ THE DOMAIN RULE (2026-09-28): the confirmations the customer gives on the new-site path (the simple
                 onboarding's one confirmations screen). Record only what the CLIENT confirmed — never tick one on their behalf. */}
-            {!legacyKeep && contract !== 'stop' && buildOk !== 'no' && siteAccess && siteAccess !== 'yes_access' && (() => {
+            {!legacyKeep && contract !== 'stop' && siteAccess && siteAccess !== 'yes_access' && (() => {
               const hasSite = siteAccess !== 'no_website';
               const v = domainAuthority({ newSite: true, hasCurrentSite: hasSite, domain_status: a.domain_status, domain_owned: a.domain_owned, domain_access: a.domain_access, domain_third_party: a.domain_third_party, authority_confirmed: a.authority_confirmed, dns_permission: a.dns_permission, materials_confirmed: a.materials_confirmed, site_rights: a.site_rights });
               return <div className="space-y-3" data-testid="manual-domain-section">

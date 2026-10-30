@@ -14,7 +14,7 @@ import { execFileSync } from 'node:child_process';
 import { findableSiteDir } from './findable-site-dir.mjs';
 import {
   ONBOARDING_COPY,
-  SIMPLE_COPY, AGENCY_OPTIONS, CONTRACT_OPTIONS, BUILD_OK_OPTIONS, DESIGN_OPTIONS, DOMAIN_ANSWER_OPTIONS, NO_DOMAIN_OPTION, domainColumnsFor, domainAnswerOf,
+  SIMPLE_COPY, AGENCY_OPTIONS, CONTRACT_OPTIONS, DOMAIN_ANSWER_OPTIONS, NO_DOMAIN_OPTION, domainColumnsFor, domainAnswerOf,
   branchFromChoice, choiceFromBranch, siteAccessFromBranch, websiteManagerFromBranch, permissionAckText, accessConsequenceText, websiteRouteFor,
   answersFromRecords, buildOnboardingPatch, cleanAnswers, answerProblems, leadPatchFromAnswers, onboardingStatus,
   type OnboardingAnswers,
@@ -93,9 +93,9 @@ console.log('\n── SAME QUESTIONS: every string is the customer flow\'s own (
     && siteAccessFromBranch('no', null, 'none') === 'no_website' && siteAccessFromBranch('yes', null, null) === null && siteAccessFromBranch(null, 'yes', 'access') === null,
     'the website branch folds exactly as the customer flow\'s siteAccessFromBranch');
   ok(websiteManagerFromBranch('yes') === 'web_company' && websiteManagerFromBranch('no') === 'direct_access' && websiteManagerFromBranch(null) === null, 'website_manager folds the same way');
-  /* 2026-10-16 (Build only): the simple questions' show conditions — the contract only with an agency, the design only
-     with a website, nothing after a tied-in contract or a "no" to the build; the Optimise branch only for a row on it. */
-  ok(/hasAgency === 'yes' && <div data-testid="manual-agency-contract">/.test(dialog) && /contract !== 'stop' && buildOk !== 'no' && !noWebsite && <Panel headline=\{S\.design\.headline\}/.test(dialog)
+  /* 2026-10-16 (Build only): the simple questions' show conditions — the contract only with an agency, nothing after a tied-in
+     contract (2026-10-30: the build and design questions are gone, as on findable.live); the Optimise branch only for a row on it. */
+  ok(/hasAgency === 'yes' && <div data-testid="manual-agency-contract">/.test(dialog) && /contract !== 'stop' && choice && <Panel headline=\{S\.domain\.headline\}/.test(dialog)
     && /contract === 'stop' && <Callout/.test(dialog) && /\{legacyKeep && <Panel/.test(dialog) && /manager === 'agency' && keep === 'yes' && <div/.test(dialog) && /keep === 'no' && <div/.test(dialog),
     'the conditional questions keep the customer\'s show conditions');
   const bf = (c: Parameters<typeof branchFromChoice>[0], m: Parameters<typeof branchFromChoice>[1], k: Parameters<typeof branchFromChoice>[2]) => {
@@ -136,7 +136,7 @@ console.log('\n── 7b. THE SIMPLE ONBOARDING\'S QUESTIONS (2026-10-16), word 
     const strings: string[] = [];
     const walk = (v: unknown) => { if (typeof v === 'string') strings.push(v); else if (v && typeof v === 'object') Object.values(v).forEach(walk); };
     walk(SIMPLE_COPY);
-    for (const opts of [AGENCY_OPTIONS, BUILD_OK_OPTIONS, DESIGN_OPTIONS, DOMAIN_ANSWER_OPTIONS, [NO_DOMAIN_OPTION]]) for (const o of opts) strings.push(o.label);
+    for (const opts of [AGENCY_OPTIONS, DOMAIN_ANSWER_OPTIONS, [NO_DOMAIN_OPTION]]) for (const o of opts) strings.push(o.label);
     const missing = strings.filter((s) => !customer.includes(norm(s)));
     ok(missing.length === 0, `all ${strings.length} simple-onboarding texts appear verbatim in the customer flow${missing.length ? ' — MISSING: ' + missing.join(' | ') + ' — compared against ' + from : ''}`);
     ok(CONTRACT_OPTIONS.map((o) => o.label).join('|') === 'Free to leave|Tied in|Not sure' && /"Free to leave"/.test(src) && /"Tied in"/.test(src), 'the contract answers are the customer page\'s three, in its order');

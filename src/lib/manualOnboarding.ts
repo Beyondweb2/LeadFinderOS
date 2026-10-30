@@ -79,17 +79,12 @@ export const SIMPLE_COPY = {
   agency: { headline: 'Are you with a web agency or provider?', sub: 'Someone you pay to run or host your website.' },
   contract: { question: 'Are you tied into a contract with them?' },
   tiedIn: { stop: "Thanks for telling us. While you're tied in, it isn't the right time to build you a new website.", ends: 'When does your contract end?' },
-  buildOk: { headline: 'Happy for us to build you an AI-optimised website?', sub: 'Built so customers, search engines and AI understand exactly what you do and where you work. Hosting is included during your plan.' },
-  design: { headline: 'Keep your current design, or improve it?', sub: 'Either way your new site is built properly for AI and search.' },
   domain: { headline: 'Do you own your domain, and can you log in to it?', sub: 'Your domain is your web address, like yourbusiness.co.uk.' },
   legal: { headline: 'A few quick confirmations', sub: 'So we can build your new website and connect it cleanly.' },
 } as const;
 export type HasAgency = 'yes' | 'no';
 export const AGENCY_OPTIONS: ReadonlyArray<{ value: HasAgency; label: string }> = [{ value: 'no', label: 'No' }, { value: 'yes', label: 'Yes' }];
 export const CONTRACT_OPTIONS: ReadonlyArray<{ value: AgencyContractAnswer; label: string }> = AGENCY_CONTRACT_ANSWERS.map((v) => ({ value: v, label: AGENCY_CONTRACT_LABEL[v] }));
-export type BuildOk = 'yes' | 'no';
-export const BUILD_OK_OPTIONS: ReadonlyArray<{ value: BuildOk; label: string }> = [{ value: 'yes', label: 'Yes' }, { value: 'no', label: 'No' }];
-export const DESIGN_OPTIONS: ReadonlyArray<{ value: DesignChoice; label: string }> = [{ value: 'keep', label: 'Keep my current design' }, { value: 'improve', label: 'Improve it' }];
 export type DomainAnswer = 'yes' | 'cant_login' | 'not_sure' | 'agency_owns' | 'none';
 export const DOMAIN_ANSWER_OPTIONS: ReadonlyArray<{ value: DomainAnswer; label: string }> = [
   { value: 'yes', label: "Yes, it's ours and I can log in" },
@@ -187,7 +182,7 @@ export function accessConsequenceText(answer: SiteAccessAnswer | null): string {
  *  one names no site. It still records gbp_consent "yes_all", exactly as before. */
 export function permissionAckText(answer: SiteAccessAnswer | null): string {
   if (!answer) return 'Please finish setting up my Google Business Profile and publish the pages you write for me.';
-  return 'Please finish setting up my Google Business Profile and publish the new pages on the new site you build for me.';
+  return 'Please finish setting up my Google Business Profile and publish the new pages on my site for me.';
 }
 
 /** The build route the website answer implies — the operator-path column (website_route) that
