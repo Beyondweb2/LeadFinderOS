@@ -43,6 +43,23 @@ findable.live (not touched, separate repo): `src/lib/site.ts` `GUARANTEE` (line 
 (line 328) say 14 days / £99, rendered on the home page, `/refunds`, Guarantee, ProofSection, WhatWeDo, GetStartedFab and
 OnboardingFlow. Correct only while the site sells v5. Changing them means changing V1's locked copies in the same pass.
 
+### Second pass (same day): when the 7 days start
+
+Paul: say the 7 days start when we SEND the four-week audit results, not from sign-up, as findable.live now does
+(site commit `92dec7f`, Guarantee.astro / refunds.astro / `PAYMENT_START_SHORT`).
+- `V7_CLAIM_SENTENCE` → "...email us within 7 days of the date we send your four-week audit results and we'll refund
+  everything you have paid us." Feeds `V7_GUARANTEE`, so the Stripe line-item description (`guaranteeForPlan`), Quick
+  Close, the report and the cold-call playbook all change with it. ⚠️ The Stripe description is now ~280 characters;
+  the longest proven untruncated was 236, so read the first real hosted Checkout page.
+- `MONTHLY_START_V7_WORDS` → "the day after your refund window closes, 7 days after we send your four-week audit
+  results (normally 36 days after your baseline audit)". Feeds the Stripe card-saved custom text, welcome pack, sign-up
+  summary, plan terms and call script.
+- Welcome pack (v7): the signed key point is printed unchanged, then `V7_WINDOW_START_LINE` (findable.live /refunds'
+  sentence: "The 7 days start on the date we send you your four-week audit results, not on the day you sign up.").
+- Four-week results email (v7 only): "...of the date we send your four-week audit results (the date of this email)".
+- Access Date email (v7): "the 7 days after the date we send your four-week audit results, not from the day you signed up".
+- Headline "We improve AI visibility or you get your money back" unchanged. Agreement texts untouched.
+
 ## 3. Housekeeping
 
 - Onboarding rows `5f7107cf`, `eb0a6242`, `eb612f23`, `54ed5a20`, `fc293e4e` (lead `e33f9c57…`, "ZZ TEST two plans"):

@@ -1,7 +1,7 @@
 /* ⛔ EXPLICIT .ts ON EVERY RELATIVE IMPORT. This module is now reached from an EDGE FUNCTION
    (render-welcome-pack, via _shared/welcome-pack-render.ts), and Deno cannot resolve an
    extensionless specifier — CLAUDE.md §3. scripts/check-import-graph.mjs fences it. */
-import { FULL_PAY_HOSTING_INCLUDED_MONTHS, GUARANTEE_HEADLINE, MONTHLY_START_V7_WORDS, PAYMENT_PLAN_SPEC, V6_GUARANTEE_HEADLINE, gbpWords, isPaymentPlan, planAfterWords,
+import { FULL_PAY_HOSTING_INCLUDED_MONTHS, GUARANTEE_HEADLINE, MONTHLY_START_V7_WORDS, PAYMENT_PLAN_SPEC, V6_GUARANTEE_HEADLINE, V7_WINDOW_START_LINE, gbpWords, isPaymentPlan, planAfterWords,
   planAgreementWords, planAgreementWordsV7, planTotalGbp, type PaymentPlan } from './paymentPlans.ts';
 import { renderReportHtml, esc, type AiAuditReportData } from './aiAuditReportHtml.ts';
 import { FINDABLE_CONTACT_EMAIL, FINDABLE_CONTACT_WHATSAPP, FINDABLE_GUARANTEE, FINDABLE_MONTHLY_GBP,
@@ -760,7 +760,7 @@ function planPage1(name: string, totalPayments: number | null | undefined, amoun
         ${/* ⛔ ESCAPED ONCE, HERE. It used to go through lead(), which escapes its second argument
               again, so the apostrophe in "we'll" reached the PDF as the six characters &#39; . */''}
         ${current
-          ? `<p><b>Your guarantee.</b> ${esc(v6 ? (signedV7(agreementVer, v6) ? v7GuaranteeWords() : v6GuaranteeWords()) : FINDABLE_GUARANTEE)}</p>`
+          ? `<p><b>Your guarantee.</b> ${esc(v6 ? (signedV7(agreementVer, v6) ? v7GuaranteeWords() + ' ' + V7_WINDOW_START_LINE : v6GuaranteeWords()) : FINDABLE_GUARANTEE)}</p>`
           : lead('Your guarantee.', 'Your money-back guarantee applies on the terms you signed up to.')}
         ${/* ⚠️ lead() ESCAPES ITS SECOND ARGUMENT, so this string uses real characters and never
               HTML entities — "&pound;" here would print those six letters to a paying client. */''}

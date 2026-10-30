@@ -22,6 +22,14 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-30-guarantee-window-start', date: '2026-10-30', title: 'The 7 days to claim start when we send the four-week results', audience: 'all',
+    body: 'Everywhere a new client reads the guarantee now says the 7 days start on the date we send the four-week audit results, not on sign-up, as findable.live says it: the Stripe checkout description and card notice, the welcome pack, Quick Close, the quick-check report, the call script, the four-week results email and the Access Date email.',
+    report: {
+      added: ['Welcome pack (v7 clients): after the agreement\'s guarantee words, "The 7 days start on the date we send you your four-week audit results, not on the day you sign up."'],
+      changed: ['The v7 claim sentence: "email us within 7 days of the date we send your four-week audit results".', 'When the monthly starts: "the day after your refund window closes, 7 days after we send your four-week audit results (normally 36 days after your baseline audit)".'],
+      removed: [],
+      effect: 'Same terms as agreement v7, said more clearly. The headline "We improve AI visibility or you get your money back" is unchanged. v5 and v6 clients keep their own wording.',
+    } },
   { id: '2026-10-30-guarantee-v7-wording', date: '2026-10-30', title: 'The guarantee says 7 days everywhere a new sale reads it, and hosting is £29.99 in Stripe', audience: 'all',
     body: 'The quick-check report, the call script, the Quick Close message and the Access Date email now say what agreement v7 says: email us within 7 days of your four-week results and we refund everything you have paid. The report says the guarantee is judged on the full measurement after they join, not on the quick check. The optional hosting price in Stripe is now £29.99 a month, as the agreement says.',
     report: {
