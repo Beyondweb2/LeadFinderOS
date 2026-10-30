@@ -117,7 +117,7 @@ const row: QcRow = { status: 'answers_saved', quick_close: null, cols: {} };
   const close = buildCallClose('none');
   ok(close.routes.length === 1 && close.routes[0].route === 'build', 'a lead with no website: the call screen offers Build only');
   ok(close.guarantee.headline === QUICK_CLOSE_PROMISE && GUARANTEE_HEADLINE === QUICK_CLOSE_PROMISE, 'the call screen and Quick Close say the SAME guarantee line (one copy)');
-  ok(close.routes[0].spoken.join(' ').includes(`${totalPaymentsFor('build')} payments in total`) && /the day after your 14-day refund window closes/.test(close.routes[0].spoken.join(' ')), 'the spoken Build offer: 12 payments in total, monthly from the day after the refund window (v3, 2026-10-05)');
+  ok(close.routes[0].spoken.join(' ').includes(`${totalPaymentsFor('build')} payments in total`) && /the day after your 7-day refund window closes/.test(close.routes[0].spoken.join(' ')), 'the spoken Build offer: 12 payments in total, monthly from the day after the 7-day refund window (v7, 2026-10-30)');
   let route: unknown = null;
   for (const [k, v] of [['decision_maker', 'yes'], ['manager', 'owner'], ['domain', 'no_domain'], ['rights', 'yes'], ['approach', 'new_template'], ['payment_plan', 'six']] as const) {
     ok(qcSave(row, { [k]: v }, route).ok, `Quick Close saves ${k}=${v} (one answer per call, as the dialog sends it)`);

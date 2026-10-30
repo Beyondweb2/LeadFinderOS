@@ -82,7 +82,7 @@ export function CommissionExplainer() {
   const rules: { icon: typeof Info; text: ReactNode }[] = [
     { icon: Layers3, text: <>Each sale keeps the rate it earned — reaching sale 13 never changes sales 1–12. The count starts again on the 1st of each month (UK time).</> },
     { icon: Repeat, text: <>Monthly payments: {pct(COMMISSION_RECURRING_RATE)} of each of the first {COMMISSION_RECURRING_COUNT_V3} successful £99 monthly payments, on Build and Optimise alike. Nothing on payment {COMMISSION_RECURRING_COUNT_V3 + 1} onwards or on the £{FINDABLE_CONTINUING_GBP} Continuing Service. A failed, refunded or charged-back payment earns nothing. (Sales made before the current client agreement keep the next {COMMISSION_RECURRING_COUNT}.)</> },
-    { icon: ShieldCheck, text: <>First-payment commission is Pending until the client's Approval Date — the day after their 14-day refund window closes — and your rate for it is provisional until then. A refund inside the window cancels it; a refund after it does not.</> },
+    { icon: ShieldCheck, text: <>First-payment commission is Pending until the client's Approval Date — the day after their refund window closes (7 days on the current agreement) — and your rate for it is provisional until then. A refund inside the window cancels it; a refund after it does not.</> },
     { icon: CalendarCheck2, text: <>Paid on the first working day of the next month. A refund or chargeback takes back the commission on that money, and a refunded sale stops counting towards your rate.</> },
     { icon: ShieldCheck, text: <>Only money the client actually paid counts. Monthly commission is earned while you work with Findable; if that ends, everything you earned before stays yours.</> },
   ];

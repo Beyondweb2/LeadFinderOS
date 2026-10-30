@@ -16,7 +16,7 @@
 // ⛔ THE CONTINUING SERVICE PRICE IS NEVER CHARGED FROM HERE. The minimum term's cancel_at is kept at its end; the Continuing
 //    Service is Paul's manual step until CONTINUING_SERVICE_AUTOMATION.stripeSwitch is turned on.
 import {
-  COMMERCIAL_TERMS_V7, CONTINUING_SERVICE_AUTOMATION, OPTION_B_TIMING, chargeAllowedOn, isOptionBTerms, isV7Terms, paymentStart, timelineActions, ukDay, ukDayAtHourIso, ukDayWords,
+  COMMERCIAL_TERMS_V7, CONTINUING_SERVICE_AUTOMATION, OPTION_B_TIMING, REFUND_WINDOW_DAYS_V7, RESULTS_DAY_V7, chargeAllowedOn, isOptionBTerms, isV7Terms, paymentStart, timelineActions, ukDay, ukDayAtHourIso, ukDayWords,
   type TimelineFacts,
 } from "../../../src/lib/clientTimeline.ts";
 import { recurringPaymentsFor, serviceRouteForTotal, isServiceRoute, type ServiceRoute } from "../../../src/lib/findableOffer.ts";
@@ -230,7 +230,9 @@ export async function schedulePaymentStart(service: Service, leadId: string, act
 }
 
 /* ══ THE ACCESS DATE EMAIL (clause 5.1: "We will confirm the date to you by email") ═══════════════════ */
-export function accessDateEmail(i: { businessName: string; accessDay: string; resultsTargetDay: string }): { subject: string; text: string } {
+/* v7 (2026-10-30): day 0 is the completed baseline, results day 28, then the 7-day Refund Window (5.4, 5.6), so a v7
+   client is told that instead of the v3 to v6 Access Date clock and its 14 days. */
+export function accessDateEmail(i: { businessName: string; accessDay: string; resultsTargetDay: string; v7?: boolean }): { subject: string; text: string } {
   return {
     subject: `Your Findable Access Date - ${i.businessName}`,
     text: [
@@ -238,9 +240,13 @@ export function accessDateEmail(i: { businessName: string; accessDay: string; re
       "",
       `Thank you for giving us the access and information we need. This email confirms your Access Date under clause 5.1 of your Client Service Agreement: ${ukDayWords(i.accessDay)}.`,
       "",
-      `We now take your baseline measurement, before we change anything, and send you the list of questions with your baseline result. We aim to send your formal before-and-after results about four weeks from your Access Date (around ${ukDayWords(i.resultsTargetDay)}). The date we send them is your Results Date.`,
+      i.v7
+        ? `We now take your baseline measurement, before we change anything, and send you the list of questions with your baseline result. We send your formal before-and-after results ${RESULTS_DAY_V7} days after your baseline measurement is completed. The date we send them is your Results Date.`
+        : `We now take your baseline measurement, before we change anything, and send you the list of questions with your baseline result. We aim to send your formal before-and-after results about four weeks from your Access Date (around ${ukDayWords(i.resultsTargetDay)}). The date we send them is your Results Date.`,
       "",
-      "Your first monthly payment is not taken until the day after your 14-day refund window closes.",
+      i.v7
+        ? `Your refund window is the ${REFUND_WINDOW_DAYS_V7} days after your Results Date. If your plan has monthly payments, the first is not taken until the day after that window closes.`
+        : "Your first monthly payment is not taken until the day after your 14-day refund window closes.",
       "",
       "If anything about this date looks wrong, just reply to this email.",
       "",

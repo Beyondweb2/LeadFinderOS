@@ -166,7 +166,7 @@ for (const k of KINDS) {
   }
 }
 const report = read('src/lib/aiAuditReportHtml.ts');
-ok(!/Building it is included in\s+your &pound;99/.test(report) && /no separate build fee\. \$\{esc\(offerSummaryFor\('build'\)\)\}/.test(report), 'report no-website panel: no "included in your £99", names the Build offer (the only route with no website)');
+ok(!/Building it is included in\s+your &pound;99/.test(report) && /no separate build fee\. \$\{esc\(reportPlansLine\(\)\)\}/.test(report) && /function reportPlansLine\(\)[\s\S]{0,200}plansReplyLine\(\)[\s\S]{0,80}MONTHLY_START_V7_WORDS/.test(report), 'report no-website panel: no "included in your £99", names the two v7 plans and the v7 monthly start (2026-10-30)');
 ok(/^Findable Build: we build, host and manage a new website for them/.test(pb.offer.monthly) && /site is theirs once the final payment clears/.test(pb.offer.monthly) && !/optimise/i.test(pb.offer.monthly), 'v6: the playbook\'s ownership line is Findable Build\'s (the site is theirs once the final payment clears); Optimise is not mentioned');
 
 console.log('── 12. THE END OF THE TERM IS RECOGNISED, AND ONLY THE END ──');

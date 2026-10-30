@@ -236,7 +236,7 @@ const words = [...resultsEmailParagraphs(copyIn), ...resultsDocumentMeaning(copy
 ok(!/we built|are what the engines|because of|thanks to/i.test(words), 'the results copy no longer claims Findable CAUSED the rise (C-28)');
 ok(!/guarantee(d)? (that )?(AI|ChatGPT|Gemini) will|rank(ing)?s? (you )?(first|top)/i.test(words), 'no guaranteed recommendation / ranking language');
 const html = read('src/lib/aiAuditReportHtml.ts');
-ok(/Your guarantee is judged on a full \$\{BASELINE_QUESTIONS\}-question measurement we run after you join, not on this quick check\. \$\{esc\(REMEASURE_CLAIM_SENTENCE\)\}/.test(html), 'the hook report says the guarantee is judged on the full measurement, then the byte-locked sentence (C-06)');
+ok(/Your guarantee is judged on a full \$\{BASELINE_QUESTIONS\}-question measurement we run after you join, not on this quick check\. \$\{esc\(V7_CLAIM_SENTENCE\)\}/.test(html), 'the hook report says the guarantee is judged on the full measurement, then the v7 claim sentence (C-06; v7 2026-10-30)');
 ok(/d\.hidePitch \|\| d\.paidSummary \|\| quickIncomplete/.test(html), 'a paying client\'s own report carries no "Request a call" pitch (C-34)');
 
 if (failures) { console.log(`\n${failures} FAILURE(S)`); process.exit(1); }

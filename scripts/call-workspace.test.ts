@@ -114,7 +114,7 @@ console.log('── 2. THE OFFER, BOTH ROUTES, FROM THE CONSTANTS ──');
     'Build spoken: names all three ways to pay — the 12-month count said in PAYMENTS, today\'s included, with its total');
   ok(/6 payments in total, the £99 today included: that's the minimum term/.test(o.spoken.join(' ')) && !/-month minimum|cancel (at )?any ?time|no commitment/i.test(bs + o.spoken.join(' ')), 'Optimise (history) still names its minimum term in payments; neither says "-month minimum" or cancel any time');
   /* 2026-10-05 (v3 clause 5.6): never "six weeks after today" — the day after the refund window. */
-  ok(bs.includes(`start ${MONTHLY_START_V3_WORDS}`) && /the day after your 14-day refund window closes/.test(bs) && !/six weeks after today/.test(bs), 'the first monthly payment is the day after the refund window (v3), never "six weeks after today"');
+  ok(/start the day after your 7-day refund window closes \(normally 36 days after your baseline audit\)/.test(bs) && !/six weeks after today/.test(bs), 'the first monthly payment is the day after the 7-day refund window (v7, 2026-10-30), never "six weeks after today"');
   /* 2026-10-29: the site is theirs once the final payment clears; hosting included while paying, then £29.99 optional. */
   ok(/website is theirs once the final payment clears/.test(bs) && bs.includes(`${FULL_PAY_HOSTING_INCLUDED_MONTHS} months on pay in full`)
     && bs.includes(`then optional at ${gbpWords(FINDABLE_CONTINUING_GBP)} a month`) && (bs.match(/£29\.99/g) ?? []).length === 1,
@@ -155,7 +155,7 @@ console.log('── 3. NO FALSE GUARANTEE ──');
     ok(!/has not named a business without a website/.test(JSON.stringify(p)), 'the absolute "no website is never named" claim is gone (A-05)');
   }
   const g = buildCallClose('own_site').guarantee;
-  ok(/before we start/.test(g.spoken) && /four weeks/.test(g.spoken) && /14 days of your results/.test(g.spoken) && /get back everything you've paid\.$/.test(g.spoken) && !/£\d+ back/.test(g.spoken), 'the guarantee said plainly: measured before, re-checked at four weeks, 14 days to claim, everything they\'ve paid back (v6, no "£99 back")');
+  ok(/before we start/.test(g.spoken) && /four weeks/.test(g.spoken) && /7 days of your results/.test(g.spoken) && /get back everything you've paid\.$/.test(g.spoken) && !/£\d+ back/.test(g.spoken), 'the guarantee said plainly: measured before, re-checked at four weeks, 7 days to claim, everything they\'ve paid back (v7, no "£99 back")');
   ok(/Never promise a ranking, a recommendation or that AI will name them/.test(g.caution), 'and the rep is told what never to promise');
   // 2026-10-06 (sales-team-today, Paul): the objection is now "Can you guarantee I'll show up?".
   const appear = buildColdCallPlaybook(base()).objections.find((o) => o.objection === "Can you guarantee I'll show up?")?.answer ?? '';
