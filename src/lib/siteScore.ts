@@ -26,6 +26,10 @@
    one with no real service pages, is capped in the "big gains" band. Bands: under 60 big gains, 60–79 some gains,
    80+ little to gain.
 
+   v3 (Paul, 2026-10-30): the SEVERITY CAP — any verified HIGH-severity finding (the website check's own grade: live
+   placeholder text, a homepage asking not to be listed, no HTTPS, robots.txt shutting out AI crawlers, pages naming
+   another site as the main one …) also caps the score in "big gains", whatever the number. The point weights are v2's.
+
    Pure; no I/O. IMPORTED BY EDGE FUNCTIONS (crawl-check, crawl-job): relative imports with .ts only.
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 
@@ -33,7 +37,7 @@ import { placeholderPagesOnce, summariseWebsiteCheck, usableWebsiteCheck, type W
 import { storedCrawlUnread, type StoredCrawlForAudit } from './siteAudit.ts';
 import { classifyLeadWebsite } from './leadWebsiteKind.ts';
 
-export const SITE_SCORE_VERSION = 2;
+export const SITE_SCORE_VERSION = 3;
 /** Reasons kept on the list row: the biggest losses first. The full evidence is in site_score_evidence. */
 export const SITE_SCORE_MAX_DOWN_REASONS = 3;
 
@@ -111,6 +115,9 @@ export const SITE_SCORE_SEVERITY_SHARE: Record<WebsiteIssueSeverity, number> = {
 export const SITE_SCORE_CAP_ISSUES: ReadonlySet<string> = new Set(['one_page_site', 'no_service_pages', 'services_on_one_page']);
 /** Issues that, on their own, mean the site has no Services at all: the whole category is lost (said as such by the check). */
 const WHOLE_CATEGORY_ISSUES: ReadonlySet<string> = new Set(['one_page_site', 'no_service_pages']);
+/** The severity cap (v3): a verified finding the website check graded this caps the score too. Graded by the check, never
+ *  by a list of ids here — a new HIGH finding caps without touching this file. */
+export const SITE_SCORE_SEVERE: WebsiteIssueSeverity = 'high';
 /** The cap: the top of the "big gains" band. */
 export const SITE_SCORE_CAP = 59;
 
@@ -160,7 +167,7 @@ export interface SiteScoreEvidence {
   version: number;
   losses: SiteScoreLoss[];
   /** Why the score was capped, with its evidence (null = not capped). */
-  cap: { reason: string; url: string | null; quote: string; uncapped: number } | null;
+  cap: { reason: string; url: string | null; quote: string; uncapped: number; kind?: 'structure' | 'severity' } | null;
   /** What was not judged and why (absences on a capped crawl, things the crawl does not record). */
   notJudged: string[];
 }
@@ -282,14 +289,20 @@ export function siteScoreFromSummary(s: WebsiteCheckSummary, src: QuoteSources |
   /* ⛔ THE CALIBRATION CAP: a one-page site, or one with no real service pages, has big gains to make whatever else it does well. */
   const capIssue = [...s.issues].sort(byId).find((i) => SITE_SCORE_CAP_ISSUES.has(i.id));
   const capEv = capIssue ? evidenceFor(capIssue, src) : null;
-  const cap = capIssue && capEv && uncapped > SITE_SCORE_CAP
-    ? { reason: `${capIssue.title} — capped at ${SITE_SCORE_CAP} (a one-page site, or one without real service pages, has big gains to make).`, url: capEv.url, quote: capEv.quote, uncapped }
-    : null;
+  /* ⛔ THE SEVERITY CAP (v3): a verified HIGH finding — one that took points here, so the crawl saw it — caps it too. */
+  const severe = [...losses].sort((a, b) => (a.issueId < b.issueId ? -1 : a.issueId > b.issueId ? 1 : 0)).find((l) => l.severity === SITE_SCORE_SEVERE);
+  const cap = uncapped <= SITE_SCORE_CAP ? null
+    : capIssue && capEv
+      ? { reason: `${capIssue.title} — capped at ${SITE_SCORE_CAP} (a one-page site, or one without real service pages, has big gains to make).`, url: capEv.url, quote: capEv.quote, uncapped, kind: 'structure' as const }
+      : severe
+        ? { reason: `${severe.title} — a serious problem, capped at ${SITE_SCORE_CAP} (big gains to make whatever else the site does well).`, url: severe.url, quote: severe.quote, uncapped, kind: 'severity' as const }
+        : null;
+  const capTitle = cap ? (cap.kind === 'structure' ? capIssue!.title : severe!.title) : null;
   const score = cap ? SITE_SCORE_CAP : uncapped;
 
   const downs = [...losses].sort((a, b) => b.points - a.points || (a.check < b.check ? -1 : 1)).slice(0, SITE_SCORE_MAX_DOWN_REASONS)
     .map((l) => ({ kind: 'down' as const, text: l.title, points: Math.round(l.points) }));
-  const reasons: SiteScoreReason[] = cap ? [{ kind: 'down', text: capIssue!.title }, ...downs.filter((d) => d.text !== capIssue!.title).slice(0, SITE_SCORE_MAX_DOWN_REASONS - 1)] : downs;
+  const reasons: SiteScoreReason[] = capTitle ? [{ kind: 'down', text: capTitle }, ...downs.filter((d) => d.text !== capTitle).slice(0, SITE_SCORE_MAX_DOWN_REASONS - 1)] : downs;
   if (s.notChecked?.length) for (const n of s.notChecked) notJudged.add(n);
   return {
     version: SITE_SCORE_VERSION, state: 'scored', score, reasons,

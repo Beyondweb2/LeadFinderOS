@@ -71,7 +71,7 @@ function Reasons({ view, onBreakdown }: { view: SiteScoreView; onBreakdown?: () 
           ))}
         </ul>
       ) : <p className="text-muted-foreground">Nothing took points off.</p>}
-      {view.capped && <p className="text-muted-foreground">Capped in Big gains: one page, or no real service pages.</p>}
+      {view.capped && <p className="text-muted-foreground">Capped in Big gains by the first reason above (one page, no real service pages, or a serious problem).</p>}
       {onBreakdown && view.version >= 2 && (
         <button type="button" className="text-[11px] font-medium text-primary hover:underline" data-testid="site-score-breakdown"
           onClick={(e) => { e.stopPropagation(); onBreakdown(); }}>

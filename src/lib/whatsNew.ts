@@ -22,6 +22,14 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-30-website-severity-cap', date: '2026-10-30', title: 'Website score: a serious problem now means Big gains', audience: 'all',
+    body: 'A website with a serious problem our crawl actually saw (live placeholder text, a homepage asking not to be listed, no HTTPS, pages naming another site as the main one, robots.txt shutting out AI crawlers, no way to contact the business) now sits in Big gains, whatever its number. The hover and Full breakdown say which problem and show the evidence.',
+    report: {
+      added: ['A severity cap: any finding the website check grades HIGH, and that the crawl verified, caps the score at 59 (Big gains).'],
+      changed: ['Every stored website check was re-scored from the crawl already on file (no new crawls). About 80 leads moved into Big gains.', 'The hover says why a score was capped: the first reason listed.'],
+      removed: [],
+      effect: 'The bands stay where they were (Big gains under 60). Nothing is skipped or sent differently: the score only helps you choose.',
+    } },
   { id: '2026-10-30-website-column', date: '2026-10-30', title: 'Website score: its own column on Outreach, tidier Inbox rows', audience: 'all',
     body: 'Outreach has a Website column: the room-to-improve number, its band, and a coloured bar you can scan down the list. In the Inbox the score sits at the right of the status line, so the AI line stays on one row.',
     report: {

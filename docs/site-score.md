@@ -1,6 +1,28 @@
 # Room to improve the website — the site score
 
-## v2 (2026-10-30, feat/site-score-v2) — current
+## v3 (2026-10-30, feat/site-score-column) — current: v2's weights + the severity cap
+
+- **Severity cap** (`SITE_SCORE_SEVERE = 'high'`, `siteScore.ts`): a finding the website check GRADED high, that took points
+  here (so the crawl verified it), caps the score at 59 — Big gains whatever the number. Keyed to the check's grade, not to
+  a list of ids: the same id graded medium does not cap; a new HIGH id caps without touching the file. The structural cap
+  (one page / no service pages) wins when both apply. `evidence.cap.kind` = `structure` | `severity`.
+- HIGH findings on the live rows (2026-10-30, 1,054 scored live leads, 183 with one): `ct_placeholder_content` 83,
+  `no_https` 52, `no_contact_route` 18, `canonical_off_site` 17, `schema_wrong_domain` 14, `noindex_home` 14,
+  `ct_robots_blocks_ai` 7, `noindex_important_page` 6, `robots_blocks_oai-searchbot` 2. Placeholder quotes sampled: real
+  ("Lorem ipsum", "Sample Page", "Double click to edit"). Weakest: `schema_wrong_domain` is sometimes the business's own
+  second domain.
+- **Line kept at 60 (Paul: "don't move it yet").** Counts over 1,054 scored live leads:
+
+  | Big-gains line | v2 (no severity cap) big / some / little | v3 (severity cap) big / some / little |
+  |---|---|---|
+  | under 60 | 506 / 350 / 198 | **587 / 282 / 185** (live) |
+  | under 65 | 527 / 329 / 198 | 598 / 271 / 185 |
+  | under 70 | 579 / 277 / 198 | 632 / 237 / 185 |
+
+- Calibration (v3, line 60): NS Elec 59 big (structure cap, 71), Tribeca 40 big, WSH 59 big (severity cap: placeholder
+  text, 66), Great Ouse 99 little, Locksmith Rotherham 85 little, L J Rainford 80 little — all as Paul asked.
+
+## v2 (2026-10-30, feat/site-score-v2) — superseded by v3 (same weights)
 
 **Placement (2026-10-30, Paul chose B + Inbox 1):** Outreach has its own **Website** column before Actions (`SiteScoreBar`: number, band word, a bar the length of the number); the Inbox pill sits at the right of the status line (`ml-auto shrink-0`, never shrinks), the AI line holds the AI scores only. Supersedes the placement below.
 

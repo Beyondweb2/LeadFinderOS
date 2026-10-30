@@ -22,7 +22,7 @@ const summary = (over: Partial<WebsiteCheckSummary> = {}): WebsiteCheckSummary =
 const SITE = { url: 'https://example.co.uk/' };
 
 /* ── the rubric: Paul's seven categories ── */
-ok(SITE_SCORE_VERSION === 2, 'rubric version 2');
+ok(SITE_SCORE_VERSION === 3, 'rubric version 3 (v2 weights + the severity cap)');
 ok(JSON.stringify(SITE_SCORE_CATEGORY_POINTS) === JSON.stringify({ reachable: 20, identity: 15, services: 20, content: 15, structured: 10, consistency: 10, basics: 10 }),
   'Reachable 20, Identity 15, Services 20, Content 15, Structured data 10, Consistency 10, Basics 10');
 ok(Object.values(SITE_SCORE_CATEGORY_POINTS).reduce((a, b) => a + b, 0) === 100, 'the categories make 100');
@@ -65,8 +65,8 @@ ok(st(siteScoreFromSummary(summary(), { url: 'https://www.facebook.com/somebiz' 
 /* ── the number, with its evidence ── */
 const clean = siteScoreFromSummary(summary(), SITE);
 ok(clean.state === 'scored' && clean.score === 100 && clean.evidence?.losses.length === 0, 'a deep check with nothing found → 100');
-const one = siteScoreFromSummary(summary({ issues: [issue('no_https', 'high')] }), SITE);
-ok(one.score === 96 && one.evidence?.losses[0].points === 4 && one.evidence.losses[0].url === 'https://example.co.uk/no_https', 'no HTTPS (high) → its 4 points, with the page');
+const one = siteScoreFromSummary(summary({ issues: [issue('no_https', 'medium')] }), SITE);
+ok(one.score === 96 && one.evidence?.losses[0].points === 4 && one.evidence.losses[0].url === 'https://example.co.uk/no_https', 'no HTTPS (graded medium, so no cap) → its 4 points, with the page');
 const low = siteScoreFromSummary(summary({ issues: [issue('no_viewport', 'low')] }), SITE);
 ok(low.score === 99 && low.evidence?.losses[0].points === 0.8, 'a low finding takes 40% of its check');
 const stack = siteScoreFromSummary(summary({ issues: [issue('no_phone', 'medium'), issue('no_contact_page', 'medium'), issue('no_contact_details', 'medium')] }), SITE);
@@ -94,6 +94,23 @@ ok(crammed.score === SITE_SCORE_CAP && siteScoreBand(crammed.score!) === 'big', 
 const lowAnyway = siteScoreFromSummary(summary({ issues: ['one_page_site', 'no_https', 'no_contact_route', 'name_unclear', 'town_missing', 'ct_placeholder_content', 'no_business_schema'].map((id) => issue(id, 'high')) }), SITE);
 ok(lowAnyway.score! < SITE_SCORE_CAP && lowAnyway.evidence?.cap === null, 'a site already below the cap keeps its own number');
 
+/* ── the severity cap (v3, Paul 2026-10-30): any verified HIGH finding caps in Big gains ── */
+const placeholder = siteScoreFromSummary(summary({ issues: [issue('ct_placeholder_content', 'high')] }), SITE);
+ok(placeholder.score === SITE_SCORE_CAP && placeholder.evidence?.cap?.kind === 'severity' && placeholder.evidence.cap.uncapped === 97
+  && placeholder.evidence.cap.quote === 'saw ct_placeholder_content' && placeholder.reasons[0].text === 'ct_placeholder_content',
+  'live placeholder text (HIGH) on an otherwise strong site → capped in Big gains, with its evidence and first reason');
+for (const id of ['noindex_home', 'no_https', 'canonical_off_site', 'ct_robots_blocks_ai']) {
+  ok(siteScoreFromSummary(summary({ issues: [issue(id, 'high')] }), SITE).score === SITE_SCORE_CAP, `HIGH ${id} → capped in Big gains`);
+}
+const medium = siteScoreFromSummary(summary({ issues: [issue('ct_placeholder_content', 'medium')] }), SITE);
+ok(medium.score! > SITE_SCORE_CAP && medium.evidence?.cap === null, 'the same finding graded MEDIUM by the check does not cap (the grade decides, not the id)');
+const unverified = siteScoreFromSummary(summary({ capped: true, issues: [issue('no_contact_route', 'high', { absence: true, pages: [] })] }), SITE);
+ok(unverified.score! > SITE_SCORE_CAP && unverified.evidence?.cap === null, 'a HIGH "not found" the crawl could not verify (capped crawl, no page) does not cap');
+const highUnmapped = siteScoreFromSummary(summary({ issues: [issue('something_new_and_unmapped', 'high')] }), SITE);
+ok(highUnmapped.score === 100 && highUnmapped.evidence?.cap === null, 'a HIGH finding that takes no points here is not seen by the score, so does not cap');
+const both = siteScoreFromSummary(summary({ issues: [issue('one_page_site', 'medium'), issue('no_https', 'high')] }), SITE);
+ok(both.score === SITE_SCORE_CAP && both.evidence?.cap?.kind === 'structure', 'a one-page site with a HIGH finding is capped once, for the structure');
+
 /* ── same site, same number ── */
 const many = ['no_reviews', 'missing_h1', 'no_sitemap', 'ct_areas_not_stated', 'slow_pages', 'service_page_gaps', 'vs_business_schema', 'no_phone'].map((id, n) => issue(id, (['high', 'medium', 'low'] as const)[n % 3]));
 const a = siteScoreFromSummary(summary({ issues: many }), SITE);
@@ -103,7 +120,7 @@ ok(JSON.stringify(a) === JSON.stringify(siteScoreFromSummary(summary({ issues: m
 ok(a.reasons.length === 3 && a.reasons.every((r) => r.kind === 'down'), 'three biggest losses are kept for the row');
 
 /* ── the row path ── */
-const row = siteScoreForRow({ result: { url: SITE.url, websiteCheck: summary({ issues: [issue('no_https', 'high')] }) } as never, created_at: '2026-10-20T10:00:00Z' } as never);
+const row = siteScoreForRow({ result: { url: SITE.url, websiteCheck: summary({ issues: [issue('no_https', 'medium')] }) } as never, created_at: '2026-10-20T10:00:00Z' } as never);
 ok(row?.score === 96, 'a row with a stored summary is scored from it');
 ok(siteScoreForRow(null) === null, 'no row → no score');
 
@@ -112,7 +129,7 @@ const cols = siteScoreColumns(null, '2026-10-30T00:00:00Z');
 ok(Object.values(cols).every((v) => v === null) && Object.keys(cols).length === 7, 'no score → every column null (never an old score beside a new check)');
 ok(!('site_score_v1' in cols), 'the crawls never write site_score_v1 (the v1 number is kept)');
 const c2 = siteScoreColumns(one, '2026-10-30T00:00:00Z');
-ok(c2.site_score === 96 && c2.site_score_state === 'scored' && c2.site_score_version === 2 && Array.isArray((c2.site_score_evidence as { losses: unknown[] }).losses), 'a score → number, state, version, reasons, evidence');
+ok(c2.site_score === 96 && c2.site_score_state === 'scored' && c2.site_score_version === SITE_SCORE_VERSION && Array.isArray((c2.site_score_evidence as { losses: unknown[] }).losses), 'a score → number, state, version, reasons, evidence');
 
 /* ── the view: website first, then the stored score ── */
 const stored = (o: Partial<{ site_score: number | null; site_score_state: string | null; site_score_version: number | null }>) =>
