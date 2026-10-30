@@ -119,13 +119,14 @@ const row: QcRow = { status: 'answers_saved', quick_close: null, cols: {} };
   ok(close.guarantee.headline === QUICK_CLOSE_PROMISE && GUARANTEE_HEADLINE === QUICK_CLOSE_PROMISE, 'the call screen and Quick Close say the SAME guarantee line (one copy)');
   ok(close.routes[0].spoken.join(' ').includes(`${totalPaymentsFor('build')} payments in total`) && /the day after your refund window closes, 7 days after we send your four-week audit results/.test(close.routes[0].spoken.join(' ')), 'the spoken Build offer: 12 payments in total, monthly from the day after the 7-day refund window (v7, 2026-10-30)');
   let route: unknown = null;
-  for (const [k, v] of [['decision_maker', 'yes'], ['manager', 'owner'], ['domain', 'no_domain'], ['rights', 'yes'], ['approach', 'new_template'], ['payment_plan', 'six']] as const) {
-    ok(qcSave(row, { [k]: v }, route).ok, `Quick Close saves ${k}=${v} (one answer per call, as the dialog sends it)`);
+  for (const [k, v] of [['decision_maker', 'yes'], ['manager', 'owner'], ['payment_plan', 'six']] as const) {
+    /* 2026-10-30: picking a plan sends route 'build' WITH it (QuickCloseDialog pickPlan). */
+    ok(qcSave(row, k === 'payment_plan' ? { route: 'build', payment_plan: v } : { [k]: v }, route).ok, `Quick Close saves ${k}=${v} (one answer per call, as the dialog sends it)`);
     route = cleanAnswers(row.quick_close?.answers).route ?? null;
   }
-  ok(counter(cleanAnswers(row.quick_close!.answers)) === '5/5', 'two options: a new site asks authority, who looks after the site, the domain, the plan and how they pay (no site access, no consents on the call)');
+  ok(counter(cleanAnswers(row.quick_close!.answers)) === '3/3', 'two options: a new site asks authority, who looks after the site, the plan and how they pay (no site access, no consents on the call)');
   ok(qcSave(row, { build_consents: 'yes' }, 'build').ok, 'the Build consents are kept (the M-001 bug cannot recur)');
-  ok(counter(cleanAnswers(row.quick_close!.answers)) === '5/5' && quickCloseState(row.status, row.quick_close, NOW) === 'ready', 'Build is READY FOR PAYMENT');
+  ok(counter(cleanAnswers(row.quick_close!.answers)) === '3/3' && quickCloseState(row.status, row.quick_close, NOW) === 'ready', 'Build is READY FOR PAYMENT');
   ok(row.cols.plan_tier === 'new_site', 'the checkout reads Build from the row (plan_tier new_site)');
   // generate the link (claim → Stripe → adopt), as fn quick-close does
   const step = linkStep(row.status, clone(row.quick_close), NOW);

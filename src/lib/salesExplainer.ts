@@ -124,7 +124,8 @@ export const spokenSeconds = (text: string) => Math.round((text.trim().split(/\s
          the fact sheet's GUARANTEE_LINE word for word.
      5 · v5 2.6 / Schedule 1: regular review and updates guided by the data; v5 16.3 changes on request. ⛔ Never a fixed
          amount of monthly work. */
-export interface CallWhatWeDoStep { n: number; title: string; lines: Array<{ text: string; soon?: boolean }> }
+/** `complete` = a line only Findable Complete includes (2026-10-30, Paul: review replies are done by hand and are Complete's, so no "coming soon" line). */
+export interface CallWhatWeDoStep { n: number; title: string; lines: Array<{ text: string; soon?: boolean; complete?: boolean }> }
 export const CALL_WHAT_WE_DO_STEPS: readonly CallWhatWeDoStep[] = [
   { n: 1, title: 'Find the winnable questions', lines: [
     { text: `A discovery audit of around **${DISCOVERY_ABOUT} questions**, each asked **${BASELINE_RUNS} times**.` },
@@ -136,17 +137,16 @@ export const CALL_WHAT_WE_DO_STEPS: readonly CallWhatWeDoStep[] = [
   ] },
   { n: 3, title: 'Do the work', lines: [
     { text: 'A **new website**, built for **AI and search**.' },
-    { text: 'Your **Google Business Profile** and **listings** checked and tidied (with your access).' },
-    { text: '**Replying to reviews**: coming soon, not included yet.', soon: true },
+    { text: '**Replies to your Google reviews**.', complete: true },
+    { text: 'Your **Google Business Profile** kept up to date, and your **directory listings** kept accurate.', complete: true },
   ] },
   { n: 4, title: `Re-check at ${REMEASURE_WEEKS} weeks`, lines: [
     { text: `The **same ${BASELINE_QUESTIONS} questions**, asked the same way.` },
     { text: `**${GUARANTEE_LINE}**` },
   ] },
   { n: 5, title: 'Every month', lines: [
-    { text: '**Review** your AI visibility.' },
-    { text: '**Changes** whenever you ask.' },
-    { text: 'Keep **improving** how AI finds you, **based on the data**.' },
+    { text: 'A **monthly AI visibility audit**.', complete: true },
+    { text: '**Changes** to your website within reason (small edits, not rebuilds).', complete: true },
   ] },
 ];
 /** The source line under the two stat cards (Paul, 2026-10-20: shown, as text — never a link). */

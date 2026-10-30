@@ -387,7 +387,7 @@ console.log('── 12. SIMPLIFIED PLAYBOOK (Paul, 2026-09-27) ──');
   // The panel: the new hierarchy, the old A–H headings gone.
   const ui = readFileSync(new URL('../src/components/ColdCallPlaybook.tsx', import.meta.url), 'utf8');
   /* 2026-10-06 (sales-team-today, Paul): SCAN → SAY → ASK → LOG → CLOSE. The sections a rep glances at mid-call. */
-  for (const t of ['title="Say"', 'title="Ask first"', 'title="Then ask"', 'title="What we do"', 'title="Offer"', 'title="Objections"', "'Call script'", "'Voice note'"]) ok(ui.includes(t), 'panel shows: ' + t);
+  for (const t of ['title="Call script"', 'title="Ask first"', 'title="Then ask"', 'title="What we do"', 'title="Offer"', 'title="Objections"', "'Call script'", "'Voice note'"]) ok(ui.includes(t), 'panel shows: ' + t);
   /* removed 2026-10-06 (sales-team-today, Paul): the second copy of the AI result (AI opportunity / Audit evidence /
      report links), "What I'd talk about", "Questions they may ask", the source links and the coaching blocks. */
   for (const t of ['AI opportunity', "What I'd talk about", 'Questions they may ask', 'Audit evidence', 'Open report', 'Copy report link',

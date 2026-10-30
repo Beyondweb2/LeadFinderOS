@@ -71,6 +71,7 @@ import { RequestTemplateButton } from '@/components/RequestTemplateButton';
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { CLIENT_PAYMENT_PLANS, planFullName, planShortLine, type PaymentPlan } from '@/lib/paymentPlans';
 import { cn } from '@/lib/utils';
 import { WarmReplyAssistant } from '@/components/WarmReplyAssistant';
 import { ClientInfoNeededHelper } from '@/components/ClientInfoNeededHelper';
@@ -1832,17 +1833,17 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
      the card, so the no-trade warning cannot differ between them. */
   const signupLink = activeLead ? assessOnboardingLink(activeLead) : null;
   const [signupCopied, setSignupCopied] = useState(false);
-  const copySignupLink = async () => {
+  const copySignupLink = async (plan?: PaymentPlan) => {
     if (!activeLead) return;
     try {
-      await navigator.clipboard.writeText(onboardingUrl(activeLead.id, activeLead.business_name));
+      await navigator.clipboard.writeText(onboardingUrl(activeLead.id, activeLead.business_name, plan));
       setSignupCopied(true);
       setTimeout(() => setSignupCopied(false), 1500);
       void recordOnboardingLinkEvent(activeLead.id, 'generated', null);
     } catch {
       /* Clipboard refused (insecure context / denied). Show the link so there is still a way to get
          it, rather than the click appearing to do nothing. */
-      window.prompt('Copy the sign-up link:', onboardingUrl(activeLead.id, activeLead.business_name));
+      window.prompt('Copy the sign-up link:', onboardingUrl(activeLead.id, activeLead.business_name, plan));
     }
   };
 
@@ -2748,9 +2749,10 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
                       no trade stored, which means no baseline can run after they pay and the four-week
                       guarantee cannot be measured. Orange for that; amber for the cosmetic warnings. */}
                   {activeLead && signupLink && !signupLink.paid && (
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
                     <button
                       type="button"
-                      onClick={copySignupLink}
                       aria-label={signupLink.blocking
                         ? `Copy sign-up link. Warning: ${signupLink.warnings.join('; ')}`
                         : 'Copy sign-up link'}
@@ -2772,6 +2774,16 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
                         />
                       )}
                     </button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-72">
+                      {CLIENT_PAYMENT_PLANS.map((p) => (
+                        <DropdownMenuItem key={p} onSelect={() => void copySignupLink(p)} data-testid={'signup-plan-' + p} className="flex flex-col items-start gap-0">
+                          <span className="font-semibold">{p === 'complete' ? `${planFullName(p)} (recommended)` : planFullName(p)}</span>
+                          <span className="text-xs text-muted-foreground">{planShortLine(p)}</span>
+                        </DropdownMenuItem>
+                      ))}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                   )}
                   {/* CLIENT WELCOME PACK — the SAME component the Outreach lead modal renders, so
                       there is exactly one pack code path: it resolves this lead's own audit and calls

@@ -113,17 +113,17 @@ console.log("── BUILD: one answer per call, exactly as the dialog sends them
   }
   const a4 = cleanAnswers(row.quick_close!.answers);
   /* 2026-10-07: Quick Close is QUICK — on Build (self-run / no site) the offer and authority are all it asks. */
-ok(counter(a4) === "5/5" && state(row) === "ready" && missingQuestions(a4).length === 0, "Build: the situation answers and the plan → READY (no consent questions, no logins; the agreement and the onboarding form cover them)");
+ok(counter(a4) === "3/3" && state(row) === "ready" && missingQuestions(a4).length === 0, "Build: the situation answers and the plan → READY (no consent questions, no logins; the agreement and the onboarding form cover them)");
   ok(buildConsentsFor(a4)[0] === BUILD_CONSENT_NO_DOMAIN && !/own or control the domain/.test(buildConsentsFor(a4)[0]), "M-012: with No domain the first consent says they WILL register one — not that they own one");
   const r5 = save(row, { build_consents: "yes" }, { expectRoute: "build" });
   ok(r5.ok, "the final answer \"Yes — they confirm all three\" is accepted");
   const a5 = cleanAnswers(row.quick_close!.answers);
-  ok(a5.build_consents === "yes" && counter(a5) === "5/5" && state(row) === "ready", "a legacy consent answer is still accepted and kept; still ready");
+  ok(a5.build_consents === "yes" && counter(a5) === "3/3" && state(row) === "ready", "a legacy consent answer is still accepted and kept; still ready");
   ok((row.quick_close!.build_consents_confirmed as { wording: string; lines: string[] }).wording === "no_domain" && (row.quick_close!.build_consents_confirmed as { lines: string[] }).lines[0] === BUILD_CONSENT_NO_DOMAIN, "the stored consent records WHICH wording was read out");
   ok(row.cols.dns_permission === true && row.cols.materials_confirmed === true && row.cols.plan_tier === "new_site" && row.cols.website_addon === true, "the canonical columns the checkout reads: Build, DNS permission, materials");
   // Refresh = a new load of the stored row.
   const reloaded = clone(row.quick_close);
-  ok(quickCloseState(row.status, reloaded, clock) === "ready" && counter(cleanAnswers(reloaded!.answers)) === "5/5", "refresh: still 5 of 5, still ready");
+  ok(quickCloseState(row.status, reloaded, clock) === "ready" && counter(cleanAnswers(reloaded!.answers)) === "3/3", "refresh: still 3 of 3, still ready");
   // Double submit of the final answer.
   const rev = row.quick_close!.rev;
   const again = save(row, { build_consents: "yes" }, { expectRoute: "build" });
@@ -152,7 +152,7 @@ const optimiseV4Row = (): Row => ({ status: "answers_saved", cols: { plan_tier: 
   const viaRoute = save(row, { route: "optimise" }, { expectRoute: null, routeChange: true });
   ok(!viaRoute.ok && viaRoute.error === "route_withdrawn" && !cleanAnswers(row.quick_close!.answers).route, "save route=optimise → REFUSED, even confirmed; nothing stored");
   const old = optimiseV4Row();
-  ok(cleanAnswers(old.quick_close!.answers).route === "optimise" && state(old) === "in_progress" && missingQuestions(cleanAnswers(old.quick_close!.answers)).join() === "route", "a pre-v5 Optimise close still READS (no crash), is in progress, and is asked the plan again");
+  ok(cleanAnswers(old.quick_close!.answers).route === "optimise" && state(old) === "in_progress" && missingQuestions(cleanAnswers(old.quick_close!.answers)).join() === "payment_plan", "a pre-v5 Optimise close still READS (no crash), is in progress, and is asked the plan again");
   ok(linkStep(old.status, old.quick_close, clock).kind === "refuse", "…and can never make a link");
   const keepAnswer = save(old, { domain: "yes" }, { expectRoute: "optimise" });
   ok(keepAnswer.ok, "an unrelated answer on that old close still saves (it is not refused for carrying the old plan)");
@@ -299,7 +299,7 @@ console.log("\n── SHARING: copy, email, WhatsApp — each recorded, none ove
   ok(/if \(!res\.ok \|\| !out\.ok\) \{[\s\S]{0,200}"link_share_failed"/.test(share) && /share\.status = out\.simulated \? "simulated"/.test(share), "a failed WhatsApp is not recorded as sent; a test-mode one says so");
   ok(/kind: "payment_link_shared"/.test(share) && /"link_shared", \{ channel/.test(share), "every share writes History and the audit trail");
   ok(ACTIVITY_LABEL.payment_link_shared === "Sign-up link" && activityDetail({ kind: "payment_link_shared", body: "Sign-up link emailed to a@b.co" }, () => "x") === "Sign-up link emailed to a@b.co", "History shows how the link was shared");
-  ok(/<CustomerEmailControl testId="qc-customer-email" email=\{v\.share\?\.email/.test(dlg) && /data-testid="qc-send-whatsapp"/.test(dlg) && /data-testid="qc-link-fallback"/.test(dlg) && /data-testid="qc-share-availability"/.test(dlg) && /data-testid="qc-share-history"/.test(dlg), "the screen says which ways are available (one-click WhatsApp, or the honest fallback) and shows what was shared, when");
+  ok(/v\.share\?\.email && <Button[^\n]*data-testid="qc-send-email"/.test(dlg) && /data-testid="qc-send-whatsapp"/.test(dlg) && /data-testid="qc-link-fallback"/.test(dlg) && /data-testid="qc-share-availability"/.test(dlg) && /data-testid="qc-share-history"/.test(dlg), "the screen says which ways are available (one-click WhatsApp, or the honest fallback) and shows what was shared, when");
   ok(/Make a fresh agreement &amp; payment link|Make a fresh agreement & payment link/.test(dlg) && /Copy link/.test(dlg) && /url: usable \? cur\.link_url : null/.test(fn), "COPY SIGN-UP LINK is the primary action; an expired link offers a fresh one and its URL is never sent to the screen");
   const mig = read("supabase/migrations/20261006020000_quick_close_link_sharing.sql");
   ok(/'link_shared', 'link_share_failed', 'link_superseded'/.test(mig) && /'payment_link_shared'/.test(mig) && /if not \(v = any\(v_vals\)\)/.test(mig), "migration widens both checks from their LIVE definition (never clobbers another workstream's kinds)");

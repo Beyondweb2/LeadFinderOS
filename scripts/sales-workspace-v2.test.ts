@@ -107,8 +107,8 @@ console.log('\n── 3. THE CALL TAB ──');
     ok(/\{t\.named\}\/\{t\.expected\}/.test(hv) && /scoreTone\(t\.named, t\.expected\)/.test(hv) && /variant\?: 'inline' \| 'call'/.test(hv), 'the "X / N named" count comes from the scored stored results, coloured by scoreTone (the AI result, call variant)');
   }
   const flow = ui.slice(ui.indexOf('function CallFlow('), ui.indexOf('type ScriptTab'));
-  const order = ['<Say ', '<Ask ', '<WhyAndWhat ', '<Offer ', '<Objections '].map((s) => flow.indexOf(s));
-  ok(order.every((x, i) => x > 0 && (i === 0 || x > order[i - 1])) && /title="What we do"/.test(ui), 'order: say (opener → reasons → bridge) → ask → what we do (why it matters) → offer → objections');
+  const order = ['<Say ', '<Ask ', '<Offer ', '<WhyAndWhat ', '<Objections '].map((s) => flow.indexOf(s));
+  ok(order.every((x, i) => x > 0 && (i === 0 || x > order[i - 1])) && /title="What we do"/.test(ui), 'order (2026-10-30): say (opener → reasons → bridge) → ask → offer → what we do (why it matters) → objections');
   ok(!/HowWeBuild|Questions they may ask/.test(ui), 'removed 2026-10-06 (sales-team-today, Paul): "how we build" and "Questions they may ask" blocks');
   ok(/36\.7% of UK consumers had used AI for local search in the previous month/.test(WHY_IT_MATTERS[0].text) && /2026 Yext study/.test(WHY_IT_MATTERS[0].text) && /24% had tried a new local business because of an AI recommendation/.test(WHY_IT_MATTERS[1].text), 'the UK talking point, exactly as sourced');
   /* removed 2026-10-06 (sales-team-today, Paul): the source link on the call screen. The source stays on the DATA
@@ -148,9 +148,9 @@ console.log('\n── 5. CLOSE ──');
 {
   ok(APPROACH_ROUTE.improve === 'optimise' && APPROACH_ROUTE.new_template === 'build' && APPROACH_ROUTE.refresh === 'build' && APPROACH_ROUTE.recreation === 'build', 'the approach maps onto the two existing plans');
   /* 2026-10-07 (Paul: "Quick Close should be QUICK"): the offer, authority, then only the plan's own questions. */
-  ok(closeFlow({ decision_maker: 'yes', approach: 'new_template' }).join() === 'decision_maker,manager,domain,route,payment_plan', 'new site: authority, who looks after the site, the domain, then the plan and how they pay — never current-site access');
-  ok(closeFlow({ decision_maker: 'yes', approach: 'improve' }).join() === 'decision_maker,manager,domain,route', 'v5: a pre-v5 Optimise close gets the same situation questions and the plan — no site-access question (Optimise is withdrawn)');
-  ok(closeFlow({ decision_maker: 'yes', approach: 'refresh' }).join() === 'decision_maker,manager,domain,route,payment_plan' && closeFlow({ decision_maker: 'yes', approach: 'recreation', manager: 'agency' }).join() === 'decision_maker,manager,agency_contract,domain,route,payment_plan', 'refresh / recreation ask nothing extra; an agency-run site adds only whether they are still in contract');
+  ok(closeFlow({ decision_maker: 'yes', approach: 'new_template' }).join() === 'decision_maker,manager,payment_plan', 'new site: authority, who looks after the site, then the plan and how they pay — never current-site access, no domain question');
+  ok(closeFlow({ decision_maker: 'yes', approach: 'improve' }).join() === 'decision_maker,manager,payment_plan', 'v5: a pre-v5 Optimise close gets the same situation questions and the plan — no site-access question (Optimise is withdrawn)');
+  ok(closeFlow({ decision_maker: 'yes', approach: 'refresh' }).join() === 'decision_maker,manager,payment_plan' && closeFlow({ decision_maker: 'yes', approach: 'recreation', manager: 'agency' }).join() === 'decision_maker,manager,agency_contract,payment_plan', 'refresh / recreation ask nothing extra; an agency-run site adds only whether they are still in contract');
   const newNoAccess = { decision_maker: 'yes', approach: 'new_template', domain: 'yes', rights: 'yes', access: 'no', manager: 'agency', agency_contract: 'free', build_consents: 'yes', payment_plan: 'six' } as const;
   ok(quickCloseGate(newNoAccess).review.length === 0 && quickCloseState('answers_saved', { answers: newNoAccess }) === 'ready', 'the screenshot: Build + "could not give access to the current website" → NO blocker');
   for (const d of ['agency', 'not_sure', 'no'] as const) {

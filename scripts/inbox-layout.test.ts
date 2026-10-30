@@ -59,7 +59,11 @@ ok(/<span className="truncate">\{active\.unassigned/.test(header)
   && /<span className="ml-auto flex shrink-0 items-center gap-1">[\s\S]{0,300}<ReplyWindowChip className="hidden sm:flex"[\s\S]{0,500}flex shrink-0 items-center gap-1 rounded-full bg-green-500\/15/.test(header),
   'the name truncates only against the window pill group, which never shrinks (their time joins it on desktop only)');
 ok(/ml-auto flex min-w-0 flex-wrap items-center justify-end gap-1/.test(header), 'the tools wrap on a narrow screen instead of being clipped');
-const more = header.slice(header.indexOf('<DropdownMenu>'), header.indexOf('</DropdownMenu>'));
+/* The first menu is the sign-up link's plan menu (2026-10-30); the More menu is the one after it. */
+const planMenuEnd = header.indexOf('</DropdownMenu>');
+const moreStart = header.indexOf('<DropdownMenu>', planMenuEnd);
+const more = header.slice(moreStart, header.indexOf('</DropdownMenu>', moreStart));
+ok(header.slice(0, planMenuEnd).includes('signup-plan-'), 'the sign-up link opens a plan menu');
 for (const label of ['Open in Google Maps', 'Open website', 'Email the business', 'Open in WhatsApp app', 'Remove from inbox']) {
   ok(more.includes(`aria-label="${label}"`), `"${label}" lives in the More menu`);
   ok((header.match(new RegExp(`aria-label="${label}"`, 'g')) ?? []).length === 1, `   …and only there`);

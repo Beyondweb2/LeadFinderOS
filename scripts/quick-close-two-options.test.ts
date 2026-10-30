@@ -19,10 +19,10 @@ const root = path.resolve(import.meta.dirname, '..');
 const read = (p: string) => fs.readFileSync(path.join(root, p), 'utf8').replace(/\r\n/g, '\n');
 
 console.log('\n── PHONE CLOSE: the questions ──');
-ok(closeFlow({}).join() === 'decision_maker,manager,domain,route', 'owner-run site: authority, who looks after the site, the domain, then the plan LAST');
-ok(closeFlow({ manager: 'agency' }).join() === 'decision_maker,manager,agency_contract,domain,route', 'an agency / developer adds exactly one question: are they still tied into a contract');
+ok(closeFlow({}).join() === 'decision_maker,manager,payment_plan', 'owner-run site: authority, who looks after the site, then the plan and how they pay LAST (2026-10-30: no domain or route question)');
+ok(closeFlow({ manager: 'agency' }).join() === 'decision_maker,manager,agency_contract,payment_plan', 'an agency / developer adds exactly one question: are they still tied into a contract');
 ok(!closeFlow({ manager: 'owner' }).includes('rights') && !closeFlow({ manager: 'agency', route: 'optimise' }).includes('rights'), 'the reuse-of-design question is not asked any more');
-ok(closeFlow({ route: 'optimise' }).join() === 'decision_maker,manager,domain,route', 'v5: the Optimise-only site-access question is gone (Optimise is withdrawn)');
+ok(closeFlow({ route: 'optimise' }).join() === 'decision_maker,manager,payment_plan', 'v5: the Optimise-only site-access question is gone (Optimise is withdrawn)');
 ok(closeFlow({ manager: 'agency', agency_contract: 'in_contract' }).join() === 'decision_maker,manager,agency_contract', 'v5: still tied in ENDS the close (declined) — no domain or plan question after it');
 ok(!/dns|registrar|password|login|hosting|logo|photo|opening hours/i.test(closeFlow({ manager: 'agency', route: 'optimise' }).join()), 'no DNS / registrar / hosting / CMS login, photo, logo or hours on the call');
 ok(!phoneCloseNotesComplete(undefined) && !phoneCloseNotesComplete({ jobs: 'Lock changes' }) && !phoneCloseNotesComplete({ areas: 'Canterbury' }) && !phoneCloseNotesComplete({ jobs: ' ', areas: ' ' }), 'services AND areas are both needed — one, blank or nothing is not complete');

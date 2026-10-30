@@ -98,7 +98,7 @@ console.log('── 3, 4. QUICK CLOSE: THE ROUTE IS REQUIRED AND WRITES THE SCHE
 const base: QuickCloseAnswers = { decision_maker: 'yes', approach: 'unsure', domain: 'yes', manager: 'owner', rights: 'yes', access: 'yes' };
 ok(QUICK_CLOSE_QUESTIONS.some((q) => q.key === 'route' && q.options.map((o) => o.value).join() === 'build,optimise'), 'Quick Close asks the website route: build / optimise (final pass: the plan LAST, Build first)');
 ok(QUICK_CLOSE_QUESTIONS.find((q) => q.key === 'route')!.options.filter((o) => !o.legacy).map((o) => o.label).join(' | ') === 'Findable Build — we build, host and manage a new website, optimised for AI visibility', 'v5: the one plan offered, named as the agreement names it (Optimise stays a legacy, read-only value)');
-ok(missingQuestions(base).includes('route') && !quickCloseGate(base).complete, 'no route → the close is not complete');
+ok(missingQuestions(base).includes('payment_plan') && !quickCloseGate(base).complete, 'no plan chosen (the plan IS the route since 2026-10-30) → the close is not complete');
 ok(!mayGenerateLink('answers_saved', { answers: base }), 'no route → no payment link');
 for (const route of ['build', 'optimise'] as const) {
   /* 2026-09-29: Build also needs its three consents confirmed (coverage-found-added.test.ts pins them). */

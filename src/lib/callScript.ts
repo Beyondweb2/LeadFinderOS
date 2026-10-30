@@ -319,7 +319,7 @@ export function buildCallScript(i: CallScriptInput): CallScript {
   /* OBJECTIONS — spoken answers, short enough to say mid-call. Every figure is a constant. v5 (2026-10-16): Build only;
      after its payments the site is theirs and £29.99 applies only if they want hosting / maintenance to carry on. */
   const objections = [
-    { objection: `Why £${FINDABLE_SETUP_PRICE_GBP}?`, answer: `The £${FINDABLE_SETUP_PRICE_GBP} covers measuring where you are now, the first round of work and the re-check at four weeks. If the number hasn't gone up by then, you can claim back everything you've paid.` },
+    { objection: `Why £${FINDABLE_SETUP_PRICE_GBP}?`, answer: `On the monthly options £${FINDABLE_SETUP_PRICE_GBP} is simply your first payment. It starts your baseline audit and the work on your website. And the four-week re-check is covered by the guarantee: if the number hasn't gone up, you can claim back everything you've paid.` },
     { objection: 'How much is it?', answer: planSpoken() },
     { objection: 'I already have an agency', answer: "Fair enough — what do they look after for you at the moment? This is one specific thing: what AI says when someone asks for a business like yours. I can send them what I found too." },
     { objection: 'My agency controls the website / domain', answer: SALES_DOMAIN_LINE + " Your agreement with them is yours to check — I can't advise on that, and we would never ask you to break it." },
