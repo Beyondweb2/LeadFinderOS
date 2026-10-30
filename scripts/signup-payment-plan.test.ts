@@ -33,10 +33,11 @@ for (const bad of ['legacy_twelve', 'FULL', 'monthly', 6, true, {}]) {
 }
 
 console.log('── 2. dry run: the row → agreement version + first payment (what client-agreement / findable-checkout do) ──');
-const expect: Array<[PaymentPlan | null, 'v5' | 'v6', number, PaymentPlan]> = [
-  ['full', 'v6', 499, 'full'],
-  ['six', 'v6', 99, 'six'],
-  ['twelve', 'v6', 99, 'twelve'],
+const expect: Array<[PaymentPlan | null, 'v5' | 'v7', number, PaymentPlan]> = [
+  ['complete', 'v7', 99, 'complete'],
+  ['full', 'v7', 499, 'full'],
+  ['six', 'v7', 99, 'six'],
+  ['twelve', 'v7', 99, 'twelve'],
   [null, 'v5', 99, 'legacy_twelve'],   // the no-plan path: unchanged
 ];
 for (const [sent, version, gbp, planOnRow] of expect) {
@@ -49,9 +50,9 @@ for (const [sent, version, gbp, planOnRow] of expect) {
 
 console.log('── 3. the public plans list ──');
 const cat = publicPlanCatalogue(today);
-ok(cat.map((c) => c.plan).join() === 'full,six,twelve', 'lists the three client plans, never the staff-only one');
-ok(cat.every((c) => Object.keys(c).sort().join() === 'available,name,plan'), 'each entry is plan, name, available — nothing else');
-ok(cat.find((c) => c.plan === 'twelve')?.available === false && cat.filter((c) => c.available).length === 2, 'today: 12 months not on sale, the other two are');
+ok(cat.map((c) => c.plan).join() === 'complete,full,six,twelve', 'lists Complete then Essential\'s three, never the staff-only one');
+ok(cat.every((c) => Object.keys(c).sort().join() === 'available,name,plan,product,recommended'), 'each entry is plan, name, product, recommended, available — nothing else (no prices, no ids)');
+ok(cat.find((c) => c.plan === 'twelve')?.available === false && cat.filter((c) => c.available).length === 3 && cat[0].recommended === true, 'today: 12 months not on sale, the other three are; Complete is recommended');
 ok(publicPlanCatalogue(withTwelve).every((c) => c.available), 'once the price is set: all three on sale');
 ok(!/price_|sk_|secret/i.test(JSON.stringify(publicPlanCatalogue(withTwelve))), 'no price id, key or secret in the answer');
 

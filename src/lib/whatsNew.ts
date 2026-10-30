@@ -22,6 +22,14 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-30-two-plans', date: '2026-10-30', title: 'Two plans: Findable Complete and Findable Essential', audience: 'all',
+    body: 'Quick Close now offers two plans. Findable Complete (recommended, shown first) is £99 a month for 12 months: everything in Essential plus replies to Google reviews, Google Business Profile, directories, changes within reason and a monthly audit. Findable Essential is the AI-optimised website with a baseline and four-week audit, at the same prices as before (£499 once, £99 × 6, or £99 then £49.99 × 11). New sign-ups sign agreement v7. The guarantee is "We improve AI visibility or you get your money back": results 28 days after the baseline, then 7 days to claim, and the first monthly payment the day after.',
+    report: {
+      added: ['Findable Complete in Quick Close, first and marked recommended.', 'Agreement v7 for every new sign-up (both plans).', 'Complete clients see their extra services in the welcome pack.', 'A "What needs you" row when a monthly client\'s baseline is not finished, because their first monthly payment is not scheduled until it is.'],
+      changed: ['The claim window is 7 days after the four-week results (was 14), counted from the baseline date.', 'The first monthly payment is set automatically from the baseline date (normally day 36), and moves back if the results go out late.', 'Call scripts, objections, voice notes and the AI reply facts name both plans, Complete first.'],
+      removed: ['New signatures on agreement v6 (clients who signed v6 stay on it).'],
+      effect: 'Essential prices are unchanged. Existing clients keep the agreement they signed. A v6 signature that has not been paid for yet must be signed again on v7.',
+    } },
   { id: '2026-10-29-welcome-pack-template', date: '2026-10-29', title: 'Welcome pack: the WhatsApp template is wired in', audience: 'admin',
     body: 'Send welcome pack now also works for clients who have not messaged you in the last 24 hours: it sends the welcome_pack_ready template with their first name, business name and pack link. Until Meta approves the template, the button says so, nothing is recorded, the row stays on What needs you, and Copy WhatsApp message still works. Send a test to me sends the template to your own WhatsApp when you are outside your own 24 hours, and a normal message inside them.',
     report: {

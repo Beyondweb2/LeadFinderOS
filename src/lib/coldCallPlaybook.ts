@@ -55,7 +55,7 @@ import { isRealSend } from './realSend.ts';
 import { REPORT_LINK_TEMPLATES } from './templateAttribution.ts';
 import { readableTemplateBody } from './templateBodies.ts';
 import { FINDABLE_CONTINUING_GBP, FINDABLE_GUARANTEE, FINDABLE_SETUP_PRICE_GBP, reportPublicUrl, totalPaymentsFor } from './findableOffer.ts';
-import { V6_GUARANTEE, threeWaysSpoken } from './paymentPlans.ts';
+import { V7_GUARANTEE, plansSpoken } from './paymentPlans.ts';
 import { afterTermRepLine, planSpoken } from './planTerms.ts';
 import { shortReportUrl } from './reportSlug.ts';
 import { classifyLeadWebsite, type SiteSource } from './leadWebsiteKind.ts';
@@ -799,11 +799,11 @@ export function buildColdCallPlaybook(input: PlaybookInput): ColdCallPlaybook {
   const offer = {
     lines: [
       planSpoken(),
-      V6_GUARANTEE,
+      V7_GUARANTEE,
     ],
     /* v5 (2026-10-16): ONE plan, Findable Build. After its payments the site is theirs; £29.99 only if they want it. */
     /* 2026-10-29: three ways to pay (paymentPlans.ts). The site is theirs once the final payment clears. */
-    monthly: 'Findable Build: we build, host and manage a new website for them. Three ways to pay: ' + threeWaysSpoken() + '. The site is theirs once the final payment clears; '
+    monthly: 'Findable Build: we build, host and manage a new website for them. Two plans, Complete first: ' + plansSpoken() + '. The site is theirs once the final payment clears; '
       + 'hosting is included while they pay, then £' + FINDABLE_CONTINUING_GBP + ' a month only if they want it.',
     nextSteps,
   };

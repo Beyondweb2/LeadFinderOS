@@ -30,7 +30,7 @@ import {
 import { afterTermSummaryWords } from './planTerms.ts';
 import { FINDABLE_CONTINUING_GBP, FINDABLE_MONTHLY_GBP, FINDABLE_SETUP_PRICE_GBP, MONTHLY_START_V3_WORDS, SERVICE_ROUTE_NAME, totalPaymentsFor } from './findableOffer.ts';
 import { planSummaryRows, planSummaryRowsForPlan, signingDayWords } from './signupSummary.ts';
-import { PAYMENT_PLAN_NAME, planHasInstalments, type PaymentPlan } from './paymentPlans.ts';
+import { PAYMENT_PLAN_NAME, planFullName, planHasInstalments, type PaymentPlan } from './paymentPlans.ts';
 
 const esc = (s: unknown) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c] as string));
 /** Escaped text with any email address kept out of Cloudflare's obfuscation (see the note below). */
@@ -199,8 +199,8 @@ function agreementHtml(fill: AgreementFill | null, version: string = CLIENT_AGRE
  *  shown above the agreement on the sign-up. A version without a checked summary falls back to the plain
  *  offer line built from the same constants. */
 function offerHtml(route: AgreementRoute, version: string = CLIENT_AGREEMENT_VERSION, signingIso?: string, plan?: PaymentPlan | null): string {
-  /* v6: the summary follows the PAYMENT PLAN (a v6 sign-up always has one). */
-  const rows = version === 'v6' ? (plan && plan !== 'legacy_twelve' ? planSummaryRowsForPlan(plan) : null) : planSummaryRows(route, version);
+  /* v6 / v7: the summary follows the PAYMENT PLAN (a v6 or v7 sign-up always has one). */
+  const rows = version === 'v6' || version === 'v7' ? (plan && plan !== 'legacy_twelve' ? planSummaryRowsForPlan(plan) : null) : planSummaryRows(route, version);
   const n = totalPaymentsFor(route);
   const dated = signingIso
     ? `<div><dt>Agreement date</dt><dd>${esc(signingDayWords(signingIso))}, the day you sign. Version ${esc(version)} of our ${esc(CLIENT_AGREEMENT_TITLE)}.</dd></div>`
@@ -210,7 +210,7 @@ function offerHtml(route: AgreementRoute, version: string = CLIENT_AGREEMENT_VER
       <p>£${FINDABLE_SETUP_PRICE_GBP} today, then £${FINDABLE_MONTHLY_GBP} a month starting ${esc(MONTHLY_START_V3_WORDS)}.
       ${n} payments in total (the minimum term). ${esc(version === 'v3' ? `Then £${FINDABLE_CONTINUING_GBP} a month until you cancel with 30 days' notice.` : afterTermSummaryWords(route))}</p></div>`;
   }
-  return `<div class="offer"><p class="eyebrow gold">Your offer: ${esc(SERVICE_ROUTE_NAME[route])}${version === 'v6' && plan ? ` · ${esc(PAYMENT_PLAN_NAME[plan])}` : ''}</p>
+  return `<div class="offer"><p class="eyebrow gold">Your offer: ${esc(SERVICE_ROUTE_NAME[route])}${(version === 'v6' || version === 'v7') && plan ? ` · ${esc(version === 'v7' ? planFullName(plan) : PAYMENT_PLAN_NAME[plan])}` : ''}</p>
     <dl class="sum">${rows.map((r) => `<div><dt>${esc(r.label)}</dt><dd${r.key === 'today' ? ' class="big"' : ''}>${esc(r.value)}</dd></div>`).join('')}${dated}</dl></div>`;
 }
 
@@ -305,7 +305,7 @@ export function agreementPageHtml(m: AgreementPageModel): string {
   const version = m.version ?? CLIENT_AGREEMENT_VERSION;
   const fill: AgreementFill = { businessName: m.businessName, route: m.route, paymentPlan: m.paymentPlan ?? null };
   const v3 = !!m.signupId;
-  const accepted = version === 'v4' || version === 'v5' || version === 'v6';
+  const accepted = version === 'v4' || version === 'v5' || version === 'v6' || version === 'v7';
   return shell(`${CLIENT_AGREEMENT_TITLE} for ${m.businessName}`, `
     ${v3 ? stepsHtml('sign') : ''}
     <div class="card">

@@ -34,6 +34,7 @@ import { contractEndWords } from './onboardingSimpleAnswers.ts';
 import { followUpBucket } from './salesCrm.ts';
 import { looksAutomated } from './inboundClassify.ts';
 import { isPaidLead } from './leadPayment.ts';
+import { isPaymentPlan, planHasInstalments } from './paymentPlans.ts';
 import { questionnaireComplete } from './questionnaireComplete.ts';
 import { salesStateOf, openerReallySent, CONVERSATION_OUTCOMES, REACHED_OUTCOMES, NOT_INTERESTED_STATUSES, INTERESTED_STATUSES } from './leadState.ts';
 import { serviceRouteForTotal, serviceRouteFromRow, type ServiceRoute } from './findableOffer.ts';
@@ -981,6 +982,15 @@ function attentionItems(
       out.push({ key: `setup:${l.id}`, group: days !== null && days >= SETUP_PROMISE_DAYS ? 'urgent' : 'today', kind: 'setup_not_started', leadId: l.id, business: l.business_name ?? 'Client',
         why: days !== null && days >= SETUP_PROMISE_DAYS ? `Paid ${days} days ago and setup hasn't started — the promise is two working days` : 'Paid and setup has not started yet',
         owner: nameOf(l.sold_by_user_id), sinceIso: since, state: stateOf(l), action: 'Start the baseline', open: 'client', section: 'baseline' });
+    }
+    /* BLOCKED — FIRST MONTHLY NOT SCHEDULED (Paul, 2026-10-30, agreement v7 5.6): a paid client on a monthly plan whose
+       baseline has started but not finished. Their first monthly payment is counted from the Baseline Date, so nothing is
+       scheduled in Stripe until the baseline is taken. (No baseline at all is already the setup row above.) Computed. */
+    if (wp && paid && live && l.baseline_audit_id && !wp.baselineDoneLeadIds.has(l.id) && isPaymentPlan(l.payment_plan) && planHasInstalments(l.payment_plan)) {
+      out.push({ key: `payment_waits_baseline:${l.id}`, group: 'blocked', kind: 'payment_waits_baseline', leadId: l.id, business: l.business_name ?? 'Client',
+        why: 'The baseline audit is not finished, so their first monthly payment is not scheduled yet (it is counted from the Baseline Date)',
+        owner: nameOf(l.sold_by_user_id), sinceIso: l.sold_at ?? l.payment_date, state: stateOf(l),
+        action: 'Finish the baseline: the first monthly is then set automatically for day 36', open: 'client', section: 'baseline' });
     }
     /* TODAY — WELCOME PACK (Paul, 2026-10-29): paid (first payment cleared; on Pay in full that IS the full payment),
        onboarding finished (questionnaireComplete, the one rule) and no pack emailed yet. COMPUTED, never a stored Next

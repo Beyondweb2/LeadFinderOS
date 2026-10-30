@@ -6,7 +6,8 @@ import {
   PAYMENT_PLAN_SPEC, PAY_IN_FULL_GBP, REDUCED_MONTHLY_GBP, CLIENT_PAYMENT_PLANS, STAFF_ONLY_PAYMENT_PLANS, FULL_PAY_HOSTING_INCLUDED_MONTHS,
   planTotalGbp, recurringPaymentsForPlan, planHasInstalments, paymentPlanFromRow, paymentPlanFromMeta, agreementVersionForPlan,
   planShortLine, planTermsLines, cardSavedNoticeForPlan, checkoutLineNameForPlan, paymentOptionsSummary, gbpWords, planAvailable,
-  unavailablePlans, PLAN_UNAVAILABLE_TEXT, V6_GUARANTEE, V6_GUARANTEE_HEADLINE, guaranteeForPlan, planAgreementWords, threeWaysSpoken,
+  unavailablePlans, PLAN_UNAVAILABLE_TEXT, V6_GUARANTEE, V6_GUARANTEE_HEADLINE, V7_GUARANTEE, V7_REFUND_WINDOW_DAYS, guaranteeForPlan, guaranteeForSigned, planAgreementWords, threeWaysSpoken,
+  planProduct, DEFAULT_PAYMENT_PLAN, COMPLETE_EXTRAS, ESSENTIAL_SUMMARY, publicPlanCatalogue, readSignupPaymentPlan, plansReplyLine,
 } from '../src/lib/paymentPlans.ts';
 import { FINDABLE_CONTINUING_GBP, FINDABLE_GUARANTEE, FINDABLE_MONTHLY_GBP, FINDABLE_SETUP_PRICE_GBP, serviceRouteForTotal } from '../src/lib/findableOffer.ts';
 import { agreementVersion, renderAgreementText, versionTemplateText, V6_CHANGED_CLAUSES, SIGNABLE_VERSIONS } from '../src/lib/clientAgreement.ts';
@@ -29,8 +30,8 @@ ok(FINDABLE_SETUP_PRICE_GBP === 99 && FINDABLE_CONTINUING_GBP === 29.99 && FULL_
 ok(!CLIENT_PAYMENT_PLANS.includes('legacy_twelve') && STAFF_ONLY_PAYMENT_PLANS.includes('legacy_twelve'), 'the old plan is staff-only, never a client option');
 
 console.log('Which agreement each plan is signed on');
-ok(agreementVersionForPlan('legacy_twelve') === 'v5' && CLIENT_PAYMENT_PLANS.every((p) => agreementVersionForPlan(p) === 'v6'), 'old plan v5, the three new plans v6');
-ok(SIGNABLE_VERSIONS.includes('v5') && SIGNABLE_VERSIONS.includes('v6'), 'both v5 and v6 can be signed');
+ok(agreementVersionForPlan('legacy_twelve') === 'v5' && CLIENT_PAYMENT_PLANS.every((p) => agreementVersionForPlan(p) === 'v7'), 'old plan v5; Complete and Essential v7 (2026-10-30)');
+ok(SIGNABLE_VERSIONS.includes('v5') && SIGNABLE_VERSIONS.includes('v7') && !SIGNABLE_VERSIONS.includes('v6'), 'v5 and v7 can be signed; v6 is archived (never signed again)');
 ok(commercialTermsFor('v6') === 'csa_v6_option_b' && isOptionBTerms('csa_v6_option_b') && continuingModeFor('csa_v6_option_b', 'build') === 'optional', 'v6 terms: Option B timing, hosting opt-in after the plan');
 ok(paymentPlanFromRow({}) === 'legacy_twelve' && paymentPlanFromRow({ payment_plan: null }) === 'legacy_twelve', 'a blank sign-up row is the v5 offer (rows made before plans; findable.live self-service)');
 ok(paymentPlanFromRow({ payment_plan: 'twelve' }) === 'twelve' && paymentPlanFromRow({ payment_plan: 'nonsense' }) === null, 'a stored plan reads positively; junk is refused');
@@ -59,14 +60,14 @@ for (const p of [...CLIENT_PAYMENT_PLANS, 'legacy_twelve' as const]) {
   const n = cardSavedNoticeForPlan(p);
   ok(!n.includes('—') && n.includes('signed agreement') && n.includes('£29.99'), `${p}: card notice, no em dash, names the agreement and optional hosting`);
   ok(planTermsLines(p).join(' ').includes('transfers to you'), `${p}: the rep's terms say the website transfers`);
-  ok(checkoutLineNameForPlan(p).startsWith('Findable Build'), `${p}: Stripe line is Findable Build`);
+  ok(checkoutLineNameForPlan(p).startsWith(p === 'complete' ? 'Findable Complete' : p === 'legacy_twelve' ? 'Findable Build' : 'Findable Essential'), `${p}: Stripe line names its plan`);
 }
 ok(!/cancel any time|no commitment/i.test(paymentOptionsSummary() + CLIENT_PAYMENT_PLANS.map(planTermsLines).flat().join(' ')), 'never "cancel any time" / "no commitment"');
 
 console.log('The guarantee');
 ok(V6_GUARANTEE_HEADLINE === 'We improve AI visibility or you get your money back.', 'the headline is exactly Paul\'s words');
 ok(/within 14 days of your results/.test(V6_GUARANTEE) && /same questions and the same engines/.test(V6_GUARANTEE) && /refund everything you have paid/.test(V6_GUARANTEE), 'v6: same questions, 14 days, refund everything paid');
-ok(guaranteeForPlan('legacy_twelve', FINDABLE_GUARANTEE) === FINDABLE_GUARANTEE && guaranteeForPlan('full', FINDABLE_GUARANTEE) === V6_GUARANTEE, 'old plan keeps the v5 guarantee; new plans the v6 one');
+ok(guaranteeForPlan('legacy_twelve', FINDABLE_GUARANTEE) === FINDABLE_GUARANTEE && guaranteeForPlan('full', FINDABLE_GUARANTEE) === V7_GUARANTEE && guaranteeForPlan('complete', FINDABLE_GUARANTEE) === V7_GUARANTEE, 'old plan keeps the v5 guarantee; Complete and Essential the v7 one');
 ok(read('src/lib/findableOffer.ts').includes(`"questions and the same engines. If that number has not gone up, email us within 14 days of your " +`), 'FINDABLE_GUARANTEE (byte-locked with findable.live) is unchanged');
 
 console.log('Agreement v6');
@@ -125,10 +126,45 @@ console.log('Quick Close');
   ok(q.closeTermsLines('build', 'legacy_twelve').join(' ') === q.routeTermsLines('build').join(' '), 'the old plan → exactly the v5 terms');
   ok(q.onboardingColumnsFor({ route: 'build', payment_plan: 'six' }).payment_plan === 'six', 'the plan is written to the sign-up row');
   const qo = q.QUICK_CLOSE_QUESTIONS.find((x) => x.key === 'payment_plan')!;
-  ok(qo.options.filter((o) => !o.legacy).map((o) => o.value).join() === 'full,six,twelve' && qo.options.find((o) => o.value === 'legacy_twelve')?.legacy === true, 'three plans by default; the old plan is hidden (legacy)');
+  ok(qo.options.filter((o) => !o.legacy).map((o) => o.value).join() === 'complete,full,six,twelve' && /recommended/.test(qo.options[0].label) && qo.options.find((o) => o.value === 'legacy_twelve')?.legacy === true, 'Complete first and recommended, then Essential; the old plan is hidden (legacy)');
   ok(read('src/components/QuickCloseDialog.tsx').includes('Show the old plan (£99 × 12, staff only)'), '"Show the old plan" reveals it');
 }
 ok(!existsSync(new URL('../src/lib/priceModel.ts', import.meta.url)) && !/PriceModelSwitch|upfront_499/.test(read('src/components/QuickCloseDialog.tsx') + read('src/pages/SalesDashboard.tsx') + read('src/components/ColdCallPlaybook.tsx')), 'the old "£499 upfront then £99 × 12" model is gone');
+
+console.log('TWO PLANS (2026-10-30): Complete beside Essential, agreement v7, the baseline clock');
+{
+  const T = await import('../src/lib/clientTimeline.ts');
+  const C = PAYMENT_PLAN_SPEC.complete;
+  ok(C.totalPayments === 12 && C.firstGbp === 99 && C.monthlyGbp === 99 && planTotalGbp('complete') === 1188 && planHasInstalments('complete'), 'Complete: £99 at sign-up then 11 × £99 (12 payments, £1,188), monthly only');
+  ok(DEFAULT_PAYMENT_PLAN === 'complete' && CLIENT_PAYMENT_PLANS[0] === 'complete' && planProduct('complete') === 'complete' && ['full', 'six', 'twelve', 'legacy_twelve'].every((p) => planProduct(p as 'full') === 'essential'), 'Complete is the default and first; the rest are Essential');
+  ok(COMPLETE_EXTRAS.length === 5 && !/just the website|lesser|basic/i.test(ESSENTIAL_SUMMARY) && /baseline/.test(ESSENTIAL_SUMMARY) && /four-week/.test(ESSENTIAL_SUMMARY), 'Essential is never "just the website"; Complete has its five extras');
+  ok(planAvailable('complete', (n) => (n === 'FINDABLE_STANDARD_MONTHLY_PRICE_ID' ? 'price_abc' : undefined)) && !planAvailable('complete', () => undefined), 'Complete reuses the existing £99 monthly Price (no new Stripe price)');
+  ok(publicPlanCatalogue(() => 'price_x').map((p) => p.plan).join() === 'complete,full,six,twelve' && publicPlanCatalogue(() => 'price_x')[0].recommended && publicPlanCatalogue(() => 'price_x')[1].product === 'essential', 'the public list: both plans, Complete recommended');
+  ok(readSignupPaymentPlan('complete', () => 'price_x').ok && !readSignupPaymentPlan('legacy_twelve', () => 'price_x').ok, 'findable.live may send complete; never the staff-only plan');
+  ok(V7_REFUND_WINDOW_DAYS === T.REFUND_WINDOW_DAYS_V7 && V7_REFUND_WINDOW_DAYS === 7 && T.PAYMENT_START_DAY_V7 === 36, 'the 7-day window is one number in both modules; first monthly day 36');
+  ok(V7_GUARANTEE.includes('within 7 days') && guaranteeForSigned('v6', 'six', FINDABLE_GUARANTEE) === V6_GUARANTEE && guaranteeForSigned('v7', 'six', FINDABLE_GUARANTEE) === V7_GUARANTEE, 'a v6 signer keeps 14 days; v7 is 7');
+  ok(!/\b12 months\b|\bmonthly\b/.test(plansReplyLine()), 'the reply line follows the reply checker (payments, never months or "monthly")');
+  const base = { terms: T.COMMERCIAL_TERMS_V7, route: 'build' as const, initialPaidAt: '2026-11-01T10:00:00Z', accessDate: '2026-11-02', resultsSentAt: null, guaranteeCeasedAt: null };
+  ok(T.paymentStart({ ...base }).day === null && T.v7AwaitingBaseline({ ...base }), 'no baseline → nothing scheduled, and it is flagged');
+  ok(T.paymentStart({ ...base, baselineAt: '2026-11-03T15:00:00Z' }).day === '2026-12-09', 'baseline 3 Nov → first monthly 9 Dec (day 36)');
+  ok(T.paymentStart({ ...base, baselineAt: '2026-11-03T15:00:00Z', resultsSentAt: '2026-12-01T09:00:00Z' }).day === '2026-12-09', 'results on day 28 → still day 36');
+  ok(T.paymentStart({ ...base, baselineAt: '2026-11-03T15:00:00Z', resultsSentAt: '2026-12-05T09:00:00Z' }).day === '2026-12-13', 'results late (day 32) → the day after their 7-day window');
+  ok(T.paymentStart({ ...base, baselineAt: '2026-11-03T15:00:00Z', today: '2026-12-06' }).day === '2026-12-17', 'results still unsent 3 days before day 36 → the date slides');
+  ok(T.paymentStart({ ...base, baselineAt: '2026-11-03T15:00:00Z', today: '2026-11-20' }).day === '2026-12-09', 'well before day 33 → no slide');
+  ok(!T.chargeAllowedOn({ ...base, baselineAt: '2026-11-03T15:00:00Z', resultsSentAt: '2026-12-01T09:00:00Z' }, '2026-12-08T10:00:00Z'), 'no charge inside the window');
+  ok(T.commercialTermsFor('v7') === T.COMMERCIAL_TERMS_V7 && T.isOptionBTerms(T.COMMERCIAL_TERMS_V7) && T.continuingModeFor(T.COMMERCIAL_TERMS_V7, 'build') === 'optional', 'v7 terms are agreement-first, hosting after the plan optional');
+  const v6Facts = { terms: T.COMMERCIAL_TERMS_V6, route: 'build' as const, initialPaidAt: '2026-11-01T10:00:00Z', accessDate: '2026-11-02', resultsSentAt: '2026-12-01T09:00:00Z', guaranteeCeasedAt: null };
+  ok(T.paymentStart(v6Facts).day === '2026-12-16', 'v6 unchanged: Results Date + 15');
+  const terms = read('supabase/functions/_shared/client-terms.ts');
+  ok(/recurringPaymentsNeeded: isPaymentPlan\(lead\.payment_plan\) \? recurringPaymentsForPlan\(lead\.payment_plan\)/.test(terms) && /facts\.recurringPaymentsNeeded >= 1 \? facts\.recurringPaymentsNeeded/.test(terms), 'the Payment Start write keeps the PLAN\'s count (a 6-month plan is never re-set to 11 payments)');
+  ok(/v7PaymentStarts/.test(read('supabase/functions/cron-run/index.ts')), 'the daily cron sets v7 first monthlies');
+  const text = renderAgreementText({ businessName: 'ZZ QA', route: 'build', paymentPlan: 'complete' }, 'v7');
+  ok(/Payment plan: Findable Complete: £99 initial payment, then 11 monthly payments of £99/.test(text) && /2\.10 Changes within reason/.test(text) && /no later than 7 days after the Results Date/.test(text) && text.includes(V6_GUARANTEE_HEADLINE.slice(0, -1)), 'v7 prints the plan, the extras, the 7-day window and Paul\'s headline');
+  ok(/Findable Essential, Pay in full: £499/.test(renderAgreementText({ businessName: 'ZZ QA', route: 'build', paymentPlan: 'full' }, 'v7')), 'an Essential signature names Essential');
+  const gate = checkoutAgreementGate({ acceptance: { id: 'a', lead_id: 'L', onboarding_id: 'S', agreement_version: 'v6', service_route: 'build', method: 'agree_page', authority_confirmed: true, agreed_text_sha256: 'x', free_to_leave_provider: true, payment_plan: 'six' }, leadId: 'L', onboardingId: 'S', route: 'build', currentVersion: agreementVersionForPlan('six'), recomputedSha: 'x', paymentPlan: 'six' });
+  ok(!gate.ok, 'a NEW checkout on an unpaid v6 signature is refused (re-sign on v7)');
+  ok(/const v6Session = s\.metadata\?\.agreement_version === "v6"/.test(read('supabase/functions/_shared/payment-hold.ts')), 'a v6 session already at Stripe is still verified as v6 (not held)');
+}
 
 if (f) { console.log(`\n${f} FAILED`); process.exit(1); }
 console.log('\nall payment-plan checks passed');

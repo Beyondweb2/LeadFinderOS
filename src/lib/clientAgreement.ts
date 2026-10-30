@@ -18,7 +18,7 @@
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 
 import { REPORT_PUBLIC_ORIGIN } from './findableOffer.ts';
-import { isPaymentPlan, planAgreementWords, type PaymentPlan } from './paymentPlans.ts';
+import { isPaymentPlan, planAgreementWords, planAgreementWordsV7, type PaymentPlan } from './paymentPlans.ts';
 
 /* v5 (2026-10-16): what NEW sign-ups sign. A client who signed v4 or v3 stays on it. */
 export const CLIENT_AGREEMENT_VERSION = 'v5';
@@ -788,12 +788,102 @@ const V6: AgreementVersion = {
   signatures: V5.signatures,
 };
 
-const VERSIONS: Record<string, AgreementVersion> = { v1: V1, v3: V3, v4: V4, v5: V5, v6: V6 };
 
-/** The versions a NEW sign-up may be made on: v5 for the old £99 × 12 plan (staff only), v6 for the three payment plans. */
-export const SIGNABLE_VERSIONS: readonly string[] = ['v5', 'v6'];
+/* ⛔ V7 (Paul, 2026-10-30): TWO PLANS. v6 with ONLY what the two plans and the new guarantee clock need:
+     · Findable Complete (12 monthly payments of £99) beside Findable Essential (v6's three ways to pay, unchanged prices),
+       Complete's extra scope (2.8 to 2.11: review replies, Google Business Profile, directories, changes within reason as
+       fair use, monthly audits) and its 12-month term (4.1);
+     · the guarantee clock from the Baseline Date: results on day 28, a 7-day Refund Window (was 14 from the Results Date),
+       the first monthly on the day after it, normally day 36 (5.2 to 5.7).
+   Everything else is v6's wording. Written by Claude on Paul's instruction, to be reviewed by his solicitor
+   (docs/v7-review-for-solicitor.md; the annotated copy is docs/agreement-v7.md, rendered from THIS block by
+   scripts/render-agreement-v7-doc.ts). Do not edit a word once a client has signed it: a change is v8.
+   Sold for Complete and Essential (paymentPlans.agreementVersionForPlan); the old £99 × 12 plan stays on v5; v6 is
+   archived (readable, binding for the clients who signed it, never signed again). */
+/** v7's changed clauses, by v6 number: each entry REPLACES that v6 clause (one or more clauses in its place).
+ *  ⚠️ DECLARED BEFORE V7, WHICH READS IT AT MODULE LOAD (a const read before its declaration throws). */
+const V7_CLAUSES: Record<string, V6Clause[]> = {
+  "1.5": [{ num: "1.5", text: "Schedule 1 explains what is included in each plan. If Schedule 1 conflicts with the main agreement, the main agreement applies." }],
+  "2.4": [{ num: "2.4", text: "Anything not listed in Schedule 1 for your plan is outside the plan, for example online shops, complex booking systems, paid advertising, photography, logo design, email hosting or substantial new software features. We can quote separately for extra work." }],
+  "2.6": [
+    { num: "2.6", text: "The \"Plan Period\" is: on Findable Complete and on the Findable Essential 6-month and 12-month payment options, from the Start Date until your final payment has cleared; on Findable Essential paid in full, from the Start Date until 6 months after the website we build first goes live. During the Plan Period we will review your AI visibility and the website regularly and make the updates we judge most useful. The amount and type of work will vary depending on what the data shows. We may create or improve pages around genuine services, service areas and customer questions where that is useful and truthful." },
+  ],
+  "2.7": [
+    { num: "2.7", text: "We may provide monthly tracking or updates during the Plan Period. Only the baseline and the guarantee re-measurement described in clause 5 determine the money back guarantee." },
+    { num: "2.8", lead: "Findable Complete.", text: "If your plan is Findable Complete, during the Plan Period you also receive the services in clauses 2.9 to 2.11 and the Complete column of Schedule 1, in addition to everything Findable Essential includes. These depend on you giving us the access described in clause 7.1." },
+    { num: "2.9", lead: "Reviews, Google Business Profile and directories (Complete).", text: "Where you give us access, we will: (a) reply on your behalf to reviews left on your Google Business Profile, in a professional tone and based on the facts of your business; (b) keep your Google Business Profile accurate and up to date; and (c) list your business on relevant legitimate directories and keep those listings accurate. Clause 10 applies to all of this work. You may ask us not to reply to a particular review, and you remain responsible for the accuracy of facts you give us." },
+    { num: "2.10", lead: "Changes within reason (Complete).", text: "We will make reasonable changes you ask for to the website we built, for example updating text, prices, opening hours, photos, contact details, services or service areas, or adding a page about a genuine service or area. This is a fair use service for small edits. It does not include a redesign or rebuild of the website, new features or functionality, or anything listed as outside the plan in clause 2.4. If a request goes beyond a small edit, or your requests taken together are well beyond what our clients typically ask for, we will tell you and may decline it or offer to quote for it separately." },
+    { num: "2.11", lead: "Monthly audits (Complete).", text: "We run an AI visibility audit each month during the Plan Period and share the result with you. Monthly audits are for tracking only and do not affect the money back guarantee, which is decided only under clause 5." },
+  ],
+  "3.1": [{ num: "3.1", text: "You pay for the plan shown in your Client Details: (a) Findable Complete: a £99 initial payment, then 11 further monthly payments of £99 (12 payments in total, £1,188 in all); or Findable Essential, by one of: (b) pay in full: £499, one payment; (c) 6 months: a £99 initial payment, then 5 further monthly payments of £99 (6 payments in total, £594 in all); or (d) 12 months: a £99 initial payment, then 11 further monthly payments of £49.99 (12 payments in total, £648.89 in all)." }],
+  "3.2": [{ num: "3.2", text: "On Findable Complete and on the Findable Essential 6-month and 12-month payment options, your first recurring payment is taken on the Payment Start Date in clause 5.6. Later payments are taken monthly on the same calendar date, or on the last day of the month if that date does not exist. On Findable Essential paid in full there are no recurring payments." }],
+  "4.1": [{ num: "4.1", text: "On Findable Complete, the minimum term is 12 payments, so the plan runs for 12 months of payments. On the Findable Essential 6-month and 12-month payment options, the minimum term is all the payments in your plan (6 or 12). In each case the initial payment counts as payment 1, and this is not a cancel-any-time plan during the minimum term. On Findable Essential paid in full, your one payment is the whole price and nothing further is owed for the plan." }],
+  "4.3": [{ num: "4.3", text: "Ownership of the custom website and client-specific work transfers only once your final payment has cleared (on Findable Essential paid in full, your one payment)." }],
+  "5.2": [{ num: "5.2", lead: "Baseline.", text: "On or shortly after the Access Date, before material changes are made, we run the approved baseline: currently 20 realistic customer-style questions, each asked 3 times on ChatGPT and Google AI / Gemini. We count how many answers name your business. Once approved, the questions are frozen for the guarantee comparison. The day the baseline is completed is the \"Baseline Date\" (day 0). We will tell you the Baseline Date." }],
+  "5.3": [{ num: "5.3", lead: "Re-measurement.", text: "We repeat the same measurement using the same frozen questions, the same scored engines and the same method, and send you the guarantee results 28 days after the Baseline Date (day 28). The date we send them is the \"Results Date\". If we send them later than day 28, the Results Date is the day we actually send them." }],
+  "5.4": [{ num: "5.4", lead: "The guarantee.", text: "We improve AI visibility or you get your money back. If the number of measured answers naming your business is not higher at the guarantee re-measurement than at baseline, you may claim a refund of all payments you have made under this agreement by emailing us no later than 7 days after the Results Date (the \"Refund Window\"; when the results are sent on day 28, from day 28 to day 35). Any increase, however small, means the guarantee improvement condition has been met." }],
+  "5.5": [{ num: "5.5", text: "If you make a valid claim, we refund all payments you have made under this agreement, the agreement ends, and no further payments are owed. Because the agreement ends, ownership of Our Work does not transfer under clause 8, and any transfer that has already happened on Findable Essential paid in full is reversed: your licence to use Our Work ends and we may take down the website we built." }],
+  "5.6": [{ num: "5.6", lead: "Payment Start Date.", text: "On Findable Complete and on the Findable Essential 6-month and 12-month payment options, your first recurring payment is taken on the day after the Refund Window ends: when the results are sent on day 28, that is day 36 counted from the Baseline Date. No recurring payment is scheduled before the Baseline Date, and none is taken while the Refund Window is still open, so if the Results Date is later than day 28 the Payment Start Date moves back to the day after the Refund Window. If the guarantee does not apply under clause 5.8 because required access or information was not provided, we may set the Payment Start Date to the day after six weeks from the initial payment and will tell you before charging." }],
+  "5.7": [{ num: "5.7", text: "The guarantee depends on you giving and keeping in place the access, information and approvals we reasonably need. If you cause delay before the baseline, the Baseline Date and every date counted from it move back with it. If you cause delay after the Baseline Date, we may move the re-measurement and Results Date back by a similar period." }],
+  "9.2": [{ num: "9.2", text: "Hosting is included during the Plan Period: on Findable Complete and the Findable Essential 6-month and 12-month payment options while you are paying your plan, and on Findable Essential paid in full for 6 months from the date the website we build first goes live. We use reputable providers and take reasonable care with security and backups, but cannot promise uninterrupted availability." }],
+};
+const V7: AgreementVersion = {
+  version: 'v7',
+  intro: V6.intro,
+  findableDetails: V6.findableDetails,
+  clientDetailLabels: V6.clientDetailLabels,
+  sectionTitles: V6.sectionTitles,
+  services: {
+    build: { name: "Findable", description: "The plan shown in your Client Details. Findable Complete: £99 a month for 12 months (12 payments, £1,188 in total). We build, host and manage a new website optimised for AI visibility, measure your AI visibility before and after, and also reply to your Google reviews, keep your Google Business Profile and directory listings up to date, make changes to the website within reason and run a monthly AI visibility audit. Findable Essential: we build, host and manage a new website optimised for AI visibility, with a baseline AI visibility audit and a four-week audit to measure the change, paid in full (£499, one payment), over 6 months (£99 a month, 6 payments, £594 in total) or over 12 months (£99 initial payment, then £49.99 a month, 12 payments, £648.89 in total). On both plans, once your final payment has cleared the website transfers to you. Hosting is included while you are paying (Essential paid in full: for 6 months), then our £29.99/month hosting and maintenance service is optional." },
+  },
+  keyPoints: {
+    title: V6.keyPoints!.title,
+    points: [
+      "Your plan is the one shown in your Client Details: Findable Complete, or Findable Essential with its payment option. On Complete, and on Essential's 6-month and 12-month options, all of the plan's payments are your minimum term: if you end early outside the guarantee or our serious breach, the remaining payments stay due.",
+      "We improve AI visibility or you get your money back. If the number of measured AI answers naming your business is not higher at the guarantee re-measurement, you can claim a refund of everything you have paid us under this agreement within 7 days of the Results Date. We send the results 28 days after your Baseline Date. We do not otherwise guarantee rankings, recommendations, citations, enquiries or income.",
+      "Monthly payments start only after the Refund Window closes (normally day 36 counted from your Baseline Date), except where the guarantee does not apply under clause 5.8. Nothing is scheduled before the baseline is taken.",
+      "Hosting is included while you are paying your plan; on Essential paid in full it is included for 6 months. After that, optional hosting and maintenance at £29.99/month only starts if you separately opt in.",
+      "Findable Complete also includes review replies, your Google Business Profile, directory listings, changes to the website within reason (fair use: small edits, not rebuilds) and a monthly audit (clauses 2.8 to 2.11).",
+      V6.keyPoints!.points[4],
+      V6.keyPoints!.points[5],
+    ],
+  },
+  body: V6.body.flatMap((b): AgreementBlock[] => {
+    if (b.kind !== 'clause') return [b];
+    const r = V7_CLAUSES[b.num];
+    if (r === undefined) return [b];
+    return r.map((c) => ({ kind: 'clause', ...c }) as AgreementBlock);
+  }),
+  schedule: {
+    title: V6.schedule.title,
+    columns: ["Findable Complete", "Findable Essential"],
+    rows: [
+      ...V6.schedule.rows.map((row): string[] => {
+        if (row[0] === "Guarantee re-measurement") return [row[0], "28 days after the Baseline Date.", "28 days after the Baseline Date."];
+        if (row[0] === "Listings") return [row[0], "Google Business Profile kept accurate and up to date, and your business listed and kept accurate on relevant legitimate directories, where access is provided.", row[1]];
+        if (row[0] === "Hosting during the Plan Period") return [row[0], "Included while you are paying your plan.", "Included while you are paying your plan; paid in full, for 6 months from the date the website we build first goes live."];
+        return [row[0], row[1], row[1]];
+      }),
+      ["Review replies", "Replies to your Google reviews where access is provided.", "Not included."],
+      ["Changes within reason", "Small edits to the website on a fair use basis (clause 2.10). Not redesigns or rebuilds.", "Not included."],
+      ["Monthly audits", "A monthly AI visibility audit, shared with you.", "Not included. Baseline and four-week audits are included."],
+      ["Payments", "£99 a month, 12 payments (£1,188 in total).", "£499 in full; or £99 a month, 6 payments (£594); or £99, then £49.99 a month, 12 payments (£648.89)."],
+    ],
+  },
+  signatures: V6.signatures,
+};
+
+const VERSIONS: Record<string, AgreementVersion> = { v1: V1, v3: V3, v4: V4, v5: V5, v6: V6, v7: V7 };
+
+/** The versions a NEW sign-up may be made on: v5 for the old £99 × 12 plan (staff only), v7 for Complete and Essential.
+ *  v6 is ARCHIVED (2026-10-30): its signed records stay valid, and it renders, but nobody signs it again. */
+export const SIGNABLE_VERSIONS: readonly string[] = ['v5', 'v7'];
+/** The current public agreement (what a client reads before choosing): v7. */
+export const PUBLIC_AGREEMENT_VERSION = 'v7';
 /** The v6 clause numbers that differ from v5 (for the solicitor review and its test). */
 export const V6_CHANGED_CLAUSES: readonly string[] = Object.keys(V6_CLAUSES);
+/** The v6 clause numbers v7 replaces (2.7 also adds 2.8 to 2.11). */
+export const V7_CHANGED_CLAUSES: readonly string[] = Object.keys(V7_CLAUSES);
 
 
 export function agreementVersion(version: string = CLIENT_AGREEMENT_VERSION): AgreementVersion {
@@ -820,7 +910,7 @@ export function asksCurrentProvider(version: string = CLIENT_AGREEMENT_VERSION):
 /** Shown verbatim beside the agree button (Paul, 2026-10-02). */
 export function agreeConsentSentence(businessName: string, version: string = CLIENT_AGREEMENT_VERSION): string {
   /* v4 clause 1.2: the acceptance IS ticking this exact sentence (with the separate authority confirmation, 1.4). */
-  if (version === 'v4' || version === 'v5' || version === 'v6') return 'I have read and agree to the Client Service Agreement';
+  if (version === 'v4' || version === 'v5' || version === 'v6' || version === 'v7') return 'I have read and agree to the Client Service Agreement';
   return `By ticking this box and clicking 'I agree and sign', I confirm that I have read the Findable Client Service Agreement, that I agree to it on behalf of ${businessName}, that I am authorised to do so, and that I intend this to be my electronic signature.`;
 }
 
@@ -877,7 +967,7 @@ export function clientDetailRows(fill: AgreementFill, v: AgreementVersion = agre
     [L.website, orNot(fill.websiteDomain)],
     ...(L.currentProvider ? [[L.currentProvider, clean(fill.currentProvider) || NO_CURRENT_PROVIDER] as [string, string]] : []),
     ...(L.freeToLeave ? [[L.freeToLeave, fill.freeToLeave === true ? 'Yes' : fill.freeToLeave === false ? 'No' : NOT_PROVIDED] as [string, string]] : []),
-    ...(L.paymentPlan ? [[L.paymentPlan, isPaymentPlan(fill.paymentPlan) ? planAgreementWords(fill.paymentPlan) : NOT_PROVIDED] as [string, string]] : []),
+    ...(L.paymentPlan ? [[L.paymentPlan, isPaymentPlan(fill.paymentPlan) ? (v.version === 'v7' ? planAgreementWordsV7(fill.paymentPlan) : planAgreementWords(fill.paymentPlan)) : NOT_PROVIDED] as [string, string]] : []),
   ];
 }
 
@@ -940,7 +1030,7 @@ export function versionTemplateText(version: string = CLIENT_AGREEMENT_VERSION):
     legalName: '{{legal_name}}', companyNumber: '{{company_number}}', contactName: '{{contact_name}}', role: '{{role}}',
     address: '{{business_address}}', email: '{{email}}', phone: '{{phone}}', websiteDomain: '{{website_domain}}',
     currentProvider: '{{current_provider}}',
-  }, version).replace(/(Free to leave that provider[^:]*: )Not provided/, '$1{{free_to_leave}}').replace(/^(Payment plan: )Not provided$/m, '$1{{payment_plan}}').replace('[X] Findable Build', '[{{build}}] Findable Build').replace('[ ] Findable Optimise', '[{{optimise}}] Findable Optimise');
+  }, version).replace(/(Free to leave that provider[^:]*: )Not provided/, '$1{{free_to_leave}}').replace(/^(Payment plan: )Not provided$/m, '$1{{payment_plan}}').replace('[X] Findable Build', '[{{build}}] Findable Build').replace('[X] Findable:', '[{{build}}] Findable:').replace('[ ] Findable Optimise', '[{{optimise}}] Findable Optimise');
 }
 
 /* ════════════════════════════════════════════════════════════════════════════════════════════════

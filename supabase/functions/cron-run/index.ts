@@ -1,6 +1,6 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.57.2";
-import { notifyTimelineActions } from "../_shared/client-terms.ts";
+import { notifyTimelineActions, scheduleV7PaymentStarts } from "../_shared/client-terms.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -131,6 +131,8 @@ serve(async (req) => {
       /* v3 Client Service Agreement (2026-10-05): Paul's daily notices — Access Date, results due, Payment
          Start not in Stripe, and the Continuing Service reminder ahead of the 30-day notice (clause 9A.3). */
       ["clientTimelineNotices", async () => { logStep("Task:clientTimelineNotices", await notifyTimelineActions(supabase)); }],
+      /* v7 (2026-10-30): set each client's first monthly from the Baseline Date, and slide it while late results are unsent. */
+      ["v7PaymentStarts", async () => { logStep("Task:v7PaymentStarts", await scheduleV7PaymentStarts(supabase)); }],
     ] as const) {
       try {
         await (fn as () => Promise<void>)();

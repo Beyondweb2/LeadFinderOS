@@ -23,7 +23,7 @@ import { resolveSiteFindingsDetailed } from '../src/lib/siteFindings.ts';
 import { CRAWL_CHECK_VERSION, type CrawlSignals } from '../src/lib/crawlCheck.ts';
 import { SITE_EVIDENCE_VERSION, type SiteEvidence } from '../src/lib/siteEvidence.ts';
 import { planSpoken } from '../src/lib/planTerms.ts';
-import { PAYMENT_PLAN_SPEC, REDUCED_MONTHLY_GBP, V6_GUARANTEE, gbpWords, threeWaysSpoken } from '../src/lib/paymentPlans.ts';
+import { PAYMENT_PLAN_SPEC, REDUCED_MONTHLY_GBP, V7_GUARANTEE, gbpWords, plansSpoken, threeWaysSpoken } from '../src/lib/paymentPlans.ts';
 import { FINDABLE_CONTINUING_GBP } from '../src/lib/findableOffer.ts';
 import { salesStyleProblems } from '../src/lib/salesStyle.ts';
 import { BRIDGE_LINE, DISCOVERY_QUESTIONS, FIRST_QUESTION, MAX_SPOKEN_FINDINGS, NO_STRONG_ISSUE_LINE } from '../src/lib/callScript.ts';
@@ -248,7 +248,7 @@ console.log('── 10. OFFER AND CLAIMS ──');
   const p = buildColdCallPlaybook(base({ leadCrawl: crawl(THIN, 1, SITEMAP_EVIDENCE) }));
   const text = allText(p);
   ok(p.offer.lines[0] === planSpoken(), 'the offer comes from planTerms.ts (v5: Findable Build, the one plan): ' + planSpoken());
-  ok(p.offer.lines[1] === V6_GUARANTEE, 'the offer\'s second line is the v6 guarantee (paymentPlans.ts V6_GUARANTEE)');
+  ok(p.offer.lines[1] === V7_GUARANTEE, 'the offer\'s second line is the v7 guarantee (paymentPlans.ts V7_GUARANTEE, both plans)');
   /* 2026-10-29 (v6): three ways to pay, from threeWaysSpoken (constants). The 12-month plan is said in PAYMENTS;
      "6 months" is the name of a plan, never a minimum term in months. */
   ok(p.offer.monthly.includes(threeWaysSpoken()) && p.offer.monthly.includes(`${PAYMENT_PLAN_SPEC.twelve.totalPayments} payments in total`) && /Findable Build/.test(p.offer.monthly)
@@ -281,8 +281,8 @@ console.log('── 10. OFFER AND CLAIMS ──');
     '"Can I cancel?": the minimum term is every payment in the plan; the site theirs at the final payment; hosting only if they want it, cancellable with notice; no Optimise');
   ok(/not something we offer/.test(ans('Can you just improve my current website?')) && /keep your web address/.test(ans('Can you just improve my current website?')),
     '"Can you just improve my current website?": not offered — a new website, and they keep their web address');
-  ok(/^You don't have to\./.test(ans('Why pay monthly?')) && ans('Why pay monthly?').includes(threeWaysSpoken()) && /Same service either way/.test(ans('Why pay monthly?')),
-    '"Why pay monthly?": they don\'t have to — all three ways to pay (from the constants), the same service either way');
+  ok(/^There are two plans\./.test(ans('Why pay monthly?')) && ans('Why pay monthly?').includes(plansSpoken()) && ans('Why pay monthly?').includes(threeWaysSpoken()) && /On Essential only the way you pay changes/.test(ans('Why pay monthly?')),
+    '"Why pay monthly?": two plans, Complete first, then Essential\'s three ways to pay (from the constants)');
   ok(/^No one can promise AI will name you/.test(ans("Can you guarantee I'll show up?")) && /the measurement/.test(ans("Can you guarantee I'll show up?")) && /you get your money back\.$/.test(ans("Can you guarantee I'll show up?")),
     '"Can you guarantee …?": nobody can promise a placement; the measurement or their money back');
 }

@@ -462,7 +462,7 @@ export function QuickClosePanel({ leadId, active = true, framed = false }: { lea
               <p className="mt-1.5 text-sm">{routeOwnershipLine(sellRoute)}</p>
               <div className="mt-2.5 rounded-xl bg-muted/30 p-2.5 text-sm ring-1 ring-inset ring-border/60" data-testid="qc-guarantee">
                 <p className="flex items-center gap-1.5 font-semibold"><ShieldCheck className={cn('h-4 w-4 shrink-0', EMPHASIS_TEXT)} />{QUICK_CLOSE_GUARANTEE_LINES[0]}</p>
-                <p className="mt-0.5 text-xs text-muted-foreground">{guaranteeForPlan(answers.payment_plan ?? 'six', QUICK_CLOSE_GUARANTEE_LINES[1])}</p>
+                <p className="mt-0.5 text-xs text-muted-foreground">{guaranteeForPlan(answers.payment_plan ?? 'complete', QUICK_CLOSE_GUARANTEE_LINES[1])}</p>
               </div>
               <p className="mt-2 text-xs text-muted-foreground">{QUICK_CLOSE_AGREEMENT_LINE} After payment: {QUICK_CLOSE_AFTER_PAYMENT[0]} {QUICK_CLOSE_AFTER_PAYMENT[1]}</p>
               <p className="mt-1 text-[11px] text-muted-foreground">Say the minimum term out loud before you send the link. Set by the offer — the price, the number of payments and the timing cannot be changed here.</p>

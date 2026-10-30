@@ -1,5 +1,8 @@
 # Payment options for Findable Build (live 2026-10-29)
 
+> **Superseded 2026-10-30 by two plans** (`docs/two-plans.md`): these three options are now **Findable Essential**, sold
+> beside **Findable Complete**, and every new signature is agreement v7. The money mechanics below still hold for Essential.
+
 Paul, 2026-10-29: "Build everything out and ship it. No off switch." Findable Build is sold three ways, signed on
 agreement v6; the old £99 × 12 is staff-only on v5. Existing clients and signed records are untouched.
 

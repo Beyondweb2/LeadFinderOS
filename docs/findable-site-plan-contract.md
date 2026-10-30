@@ -1,4 +1,10 @@
-# findable.live → LeadFinderOS: selling the three payment plans (contract, 2026-10-29)
+# findable.live → LeadFinderOS: selling the plans (contract, 2026-10-29; two plans from 2026-10-30)
+
+> **2026-10-30, TWO PLANS:** `plans` now returns four ids: `complete` (Findable Complete, £99 × 12, `recommended: true`)
+> first, then Essential's `full`, `six`, `twelve`. Each entry is `{ plan, name, product, recommended, available }`
+> (`product` is `"complete"` or `"essential"`). `submit` accepts `"complete"` too; every plan now signs agreement **v7**.
+> If the site keeps its own list of ids, name it `SITE_PLAN_IDS` in `src/lib/site.ts`: `scripts/check-cross-repo-sync.mjs`
+> fails if it offers an id this repo does not sell. The rest of this page is the 2026-10-29 contract (v6 wording).
 
 For the session working on the `findable-site` repo. Two hooks in fn **`findable-onboarding`** (the function the
 sign-up already calls). Nothing else changes: the site still calls `findable-checkout` and the agreement page exactly as

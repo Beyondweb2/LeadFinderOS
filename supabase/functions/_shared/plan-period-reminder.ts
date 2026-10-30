@@ -141,7 +141,7 @@ async function sendOne(service: Service, c: ClientFacts, v: Extract<PlanPeriodVe
   if (res.ok && !opts.simulate) {
     // Paul's timeline prompt for this reminder clears (clientTimeline.timelineActions reads it).
     await service.from("client_service_terms").update({ continuing_reminder_sent_at: nowIso }).eq("lead_id", c.leadId).is("continuing_reminder_sent_at", null);
-    await appendTermsEvent(service, c.leadId, "continuing_reminder_sent", null, { clause: "9A.5", agreement: "v6", plan: v.end.plan, period_end_day: v.end.endDay, channel: "email", automatic: true });
+    await appendTermsEvent(service, c.leadId, "continuing_reminder_sent", null, { clause: "9A.5", agreement: v.end.plan === "complete" ? "v7" : "v6 or v7", plan: v.end.plan, period_end_day: v.end.endDay, channel: "email", automatic: true });
   }
   await sendOperatorAlert(
     status === "failed" ? `Plan Period reminder FAILED — ${c.businessName}` : `Plan Period reminder ${status} — ${c.businessName}`,

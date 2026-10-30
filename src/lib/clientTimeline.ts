@@ -42,19 +42,24 @@ export const COMMERCIAL_TERMS_V5 = 'csa_v5_option_b';
 /** v6 (2026-10-29, docs/agreement-v6.md): the SAME Option B timing. Build paid by a payment plan (paymentPlans.ts): Pay in
  *  full, 6 months or 12 months; the website transfers on the final cleared payment; £29.99 Hosting and Maintenance is an opt-in. */
 export const COMMERCIAL_TERMS_V6 = 'csa_v6_option_b';
-export type CommercialTerms = typeof COMMERCIAL_TERMS_V3 | typeof COMMERCIAL_TERMS_V4 | typeof COMMERCIAL_TERMS_V5 | typeof COMMERCIAL_TERMS_V6;
+/** v7 (2026-10-30, docs/agreement-v7.md): TWO PLANS (Complete, Essential) and a NEW clock. Day 0 is the Baseline Date (the
+ *  day the baseline audit is completed); the four-week results are due on day 28; the Refund Window is the
+ *  V7_REFUND_WINDOW_DAYS after the Results Date; the first monthly is the day after it (normally day 36). See paymentStart. */
+export const COMMERCIAL_TERMS_V7 = 'csa_v7_two_plans';
+export type CommercialTerms = typeof COMMERCIAL_TERMS_V3 | typeof COMMERCIAL_TERMS_V4 | typeof COMMERCIAL_TERMS_V5 | typeof COMMERCIAL_TERMS_V6 | typeof COMMERCIAL_TERMS_V7;
 /** STRICTLY v3. Almost nothing wants this — see isOptionBTerms. */
 export function isV3Terms(v: unknown): v is typeof COMMERCIAL_TERMS_V3 { return v === COMMERCIAL_TERMS_V3; }
 export function isV4Terms(v: unknown): v is typeof COMMERCIAL_TERMS_V4 { return v === COMMERCIAL_TERMS_V4; }
 export function isV5Terms(v: unknown): v is typeof COMMERCIAL_TERMS_V5 { return v === COMMERCIAL_TERMS_V5; }
 export function isV6Terms(v: unknown): v is typeof COMMERCIAL_TERMS_V6 { return v === COMMERCIAL_TERMS_V6; }
+export function isV7Terms(v: unknown): v is typeof COMMERCIAL_TERMS_V7 { return v === COMMERCIAL_TERMS_V7; }
 /** ⛔ THE ONE QUESTION "is this client on the agreement-first (Option B) terms?" — v3, v4 OR v5. Every timeline,
  *  payment-start, baseline-gate, commission and cutover rule asks THIS, never === a version. A client with no
  *  stamp (Ronnie, MCL, RG, the QA clients) is on neither and is never re-ruled. */
-export function isOptionBTerms(v: unknown): v is CommercialTerms { return v === COMMERCIAL_TERMS_V3 || v === COMMERCIAL_TERMS_V4 || v === COMMERCIAL_TERMS_V5 || v === COMMERCIAL_TERMS_V6; }
+export function isOptionBTerms(v: unknown): v is CommercialTerms { return v === COMMERCIAL_TERMS_V3 || v === COMMERCIAL_TERMS_V4 || v === COMMERCIAL_TERMS_V5 || v === COMMERCIAL_TERMS_V6 || v === COMMERCIAL_TERMS_V7; }
 /** The terms a signed agreement VERSION puts a sale on; null for a version that is not agreement-first (v1). */
 export function commercialTermsFor(agreementVersion: string | null | undefined): CommercialTerms | null {
-  return agreementVersion === 'v3' ? COMMERCIAL_TERMS_V3 : agreementVersion === 'v4' ? COMMERCIAL_TERMS_V4 : agreementVersion === 'v5' ? COMMERCIAL_TERMS_V5 : agreementVersion === 'v6' ? COMMERCIAL_TERMS_V6 : null;
+  return agreementVersion === 'v3' ? COMMERCIAL_TERMS_V3 : agreementVersion === 'v4' ? COMMERCIAL_TERMS_V4 : agreementVersion === 'v5' ? COMMERCIAL_TERMS_V5 : agreementVersion === 'v6' ? COMMERCIAL_TERMS_V6 : agreementVersion === 'v7' ? COMMERCIAL_TERMS_V7 : null;
 }
 /** The terms a Stripe subscription was created under (its metadata). A subscription with the Option B timing marker
  *  and no `commercial_terms` was created under v3, before the v4 stamp existed. Anything else: null. */
@@ -76,15 +81,25 @@ export function termsOfSubscriptionMeta(m: Record<string, unknown> | null | unde
 export type ContinuingMode = 'automatic' | 'optional' | 'none';
 export function continuingModeFor(terms: unknown, route: ServiceRoute | null | undefined): ContinuingMode {
   if (isV3Terms(terms)) return route === 'build' || route === 'optimise' ? 'automatic' : 'none';
-  if (isV4Terms(terms) || isV5Terms(terms) || isV6Terms(terms)) return route === 'build' ? 'optional' : 'none';
+  if (isV4Terms(terms) || isV5Terms(terms) || isV6Terms(terms) || isV7Terms(terms)) return route === 'build' ? 'optional' : 'none';
   return 'none';
 }
 /** The marker a v3 checkout and its Stripe subscription carry (metadata payment_timing): the monthly is
  *  created on a hold and its first charge is set later to the Payment Start Date. */
 export const OPTION_B_TIMING = 'option_b';
 
-/** 5.4 — the Refund Window ends this many days after the Results Date. */
+/** 5.4 — the Refund Window ends this many days after the Results Date (v3 to v6). */
 export const REFUND_WINDOW_DAYS = 14;
+/** v7 5.4 — the Refund Window is this many days after the Results Date (Paul, 2026-10-30: "day 28 to 35"). The same number
+ *  as paymentPlans.V7_REFUND_WINDOW_DAYS (a test pins them; this file may not import that one). */
+export const REFUND_WINDOW_DAYS_V7 = 7;
+/** v7 5.3 — the four-week results are due this many days after the Baseline Date (day 0). */
+export const RESULTS_DAY_V7 = 28;
+/** v7 5.6 — the Payment Start Date from the Baseline Date when the results go out on day 28: day 28 + 7 + 1. */
+export const PAYMENT_START_DAY_V7 = RESULTS_DAY_V7 + REFUND_WINDOW_DAYS_V7 + 1;
+/** v7: if the results have not gone out this many days before the provisional Payment Start Date, the date slides so a
+ *  monthly can never be charged before the Refund Window has even opened (the daily cron re-sets it; clientTerms). */
+export const V7_SLIDE_LEAD_DAYS = 3;
 /** 5.8(a) — access not given within this many days of the initial payment → the guarantee ceases. */
 export const ACCESS_DEADLINE_DAYS = 30;
 /** 5.6 — the fallback Payment Start Date: the day after the date six weeks from the initial payment. */
@@ -211,9 +226,14 @@ export interface TimelineFacts {
   /** The recurring payments the SIGNED payment plan needs (paymentPlans.ts: totalPayments - 1). Absent = the route's
       count (recurringPaymentsFor). Set only by a caller that read the plan (fn plan-period-reminder), 2026-10-29. */
   recurringPaymentsNeeded?: number | null;
+  /** v7 day 0: the instant the baseline audit was completed (ai_audits.baseline_completed_at of the lead's baseline).
+      Read only on v7 terms. Absent = the baseline has not been taken: nothing is scheduled. */
+  baselineAt?: string | null;
+  /** v7 only: today (UK day or instant), so a provisional date can slide while the results are late. Absent = no slide. */
+  today?: string | null;
 }
 
-export type PaymentStartBasis = 'results' | 'fallback';
+export type PaymentStartBasis = 'results' | 'fallback' | 'baseline';
 export interface PaymentStart {
   /** The Payment Start Date (= the Approval Date), or null while it cannot be known yet. */
   day: string | null;
@@ -232,6 +252,7 @@ export interface PaymentStart {
  *  · Otherwise → none yet. ⛔ Never a guess: no date means Stripe stays on its hold and nothing is charged.
  */
 export function paymentStart(f: TimelineFacts): PaymentStart {
+  if (isV7Terms(f.terms)) return paymentStartV7(f);
   const initialDay = ukDay(f.initialPaidAt);
   const resultsDay = ukDay(f.resultsSentAt);
   const fromResults = resultsDay ? approvalDayFromResults(resultsDay) : null;
@@ -248,6 +269,47 @@ export function paymentStart(f: TimelineFacts): PaymentStart {
   return { day: null, basis: null, why: 'Not known yet: it is the day after the Refund Window, which starts when the formal results are sent.' };
 }
 
+/** v7 5.4 — the last day of the Refund Window. */
+export function refundWindowEndDayV7(resultsDay: string): string { return addDays(resultsDay, REFUND_WINDOW_DAYS_V7); }
+/** v7 5.3 — the day the four-week results are due (day 28 from the Baseline Date). */
+export function resultsDueDayV7(baselineDay: string): string { return addDays(baselineDay, RESULTS_DAY_V7); }
+
+/**
+ * v7 5.6 — THE PAYMENT START DATE, counted from the BASELINE DATE (day 0), not from sign-up.
+ *  · No baseline yet → none. ⛔ Nothing is scheduled until the baseline is taken (the clock starts there).
+ *  · The guarantee ceased (5.8) → v6's fallback (the day after six weeks from the initial payment, never retroactive).
+ *  · Results sent → the later of day 36 and the day after the Refund Window (Results Date + 8). On time = day 36.
+ *  · Baseline taken, results not sent → day 36, provisional. If today is within V7_SLIDE_LEAD_DAYS of it and the results
+ *    have still not gone out, it slides to today + V7_SLIDE_LEAD_DAYS + window + 1, so no monthly is ever charged before
+ *    the client has had their full 7 days with the results. Later is acceptable, earlier never (5.6).
+ */
+export function paymentStartV7(f: TimelineFacts): PaymentStart {
+  const baselineDay = ukDay(f.baselineAt);
+  const resultsDay = ukDay(f.resultsSentAt);
+  if (f.guaranteeCeasedAt) {
+    const initialDay = ukDay(f.initialPaidAt);
+    const ceasedDay = ukDay(f.guaranteeCeasedAt);
+    if (!initialDay || !ceasedDay) return { day: null, basis: null, why: 'The guarantee was recorded as not applying, but the initial payment date is unknown: set the Payment Start Date by hand.' };
+    const fallback = fallbackPaymentStartDay(initialDay);
+    const notBefore = addDays(ceasedDay, 1);
+    return { day: fallback < notBefore ? notBefore : fallback, basis: 'fallback', why: 'The guarantee does not apply (clause 5.8), so monthly payments start the day after six weeks from the initial payment.' };
+  }
+  if (!baselineDay) return { day: null, basis: null, why: 'Not scheduled: the baseline audit has not been taken yet. The clock starts on the Baseline Date (clause 5.2), and the first monthly payment is normally 36 days after it.' };
+  const onTime = addDays(baselineDay, PAYMENT_START_DAY_V7);
+  if (resultsDay) {
+    const afterWindow = addDays(refundWindowEndDayV7(resultsDay), 1);
+    const day = afterWindow > onTime ? afterWindow : onTime;
+    return { day, basis: 'results', why: day === onTime ? `Day ${PAYMENT_START_DAY_V7} from the Baseline Date: the day after the ${REFUND_WINDOW_DAYS_V7}-day Refund Window (clauses 5.4 and 5.6).` : `The results went out after day ${RESULTS_DAY_V7}, so the first payment is the day after their ${REFUND_WINDOW_DAYS_V7}-day Refund Window (clause 5.6).` };
+  }
+  const today = ukDay(f.today);
+  if (today && daysBetween(today, onTime) <= V7_SLIDE_LEAD_DAYS) {
+    const slid = addDays(today, V7_SLIDE_LEAD_DAYS + REFUND_WINDOW_DAYS_V7 + 1);
+    const day = slid > onTime ? slid : onTime;
+    return { day, basis: 'baseline', why: `Provisional, moved back: the four-week results have not been sent, so the first payment waits until ${REFUND_WINDOW_DAYS_V7} full days after they could go out (clause 5.6). Send the results.` };
+  }
+  return { day: onTime, basis: 'baseline', why: `Day ${PAYMENT_START_DAY_V7} from the Baseline Date (${baselineDay}): results due day ${RESULTS_DAY_V7}, then the ${REFUND_WINDOW_DAYS_V7}-day Refund Window (clause 5.6). It moves back if the results go out late.` };
+}
+
 /** Initial commission is Pending until this day, Approved from it (contractor 6.1; checklist Part 4). */
 export function approvalDay(f: TimelineFacts): string | null { return paymentStart(f).day; }
 
@@ -257,6 +319,11 @@ export function chargeAllowedOn(f: TimelineFacts, chargeInstantIso: string): boo
   const ps = paymentStart(f);
   const chargeDay = ukDay(chargeInstantIso);
   return !!ps.day && !!chargeDay && chargeDay >= ps.day;
+}
+
+/** v7 "What needs you": the paid client's baseline has not been taken, so no monthly payment is scheduled. */
+export function v7AwaitingBaseline(f: TimelineFacts): boolean {
+  return isV7Terms(f.terms) && !!f.initialPaidAt && !ukDay(f.baselineAt) && !f.guaranteeCeasedAt && !f.refundedAt && !f.endedAt;
 }
 
 /* ── the minimum term and the Continuing Service ───────────────────────────────────────────────── */
@@ -321,6 +388,7 @@ export type TimelineActionKind =
   | 'access_deadline'         // 30 days without access: decide whether the guarantee has ceased (5.8(a))
   | 'results_due'             // the four-week target is close or passed, results not sent
   | 'payment_start_unscheduled' // a Payment Start Date exists but Stripe has not been set / confirmed
+  | 'baseline_not_taken'      // v7: paid, no baseline yet, so nothing is scheduled
   | 'continuing_prepare'      // the minimum term is approaching: prepare the 9A.3 reminder
   | 'continuing_reminder_overdue' // the 30-day client reminder is due or late
   | 'continuing_decision';    // the Continuing Service is about to start: continue or cancel?
@@ -339,7 +407,17 @@ export function timelineActions(f: TimelineFacts, todayIso: string): TimelineAct
     if (today > deadline) out.push({ kind: 'access_deadline', dueDay: deadline, urgent: true, text: `No Access Date ${ACCESS_DEADLINE_DAYS} days after the initial payment (deadline ${deadline}). If access is still missing, record that the guarantee no longer applies (clause 5.8(a)) — monthly payments then start on the six-week fallback.` });
     else out.push({ kind: 'confirm_access', dueDay: deadline, urgent: daysBetween(today, deadline) <= ACCESS_REMINDER_LEAD_DAYS, text: `Confirm the Access Date once the access and information needed to start are in (clause 5.1). Deadline for the guarantee: ${deadline}.` });
   }
-  if (f.accessDate && !f.resultsSentAt && !f.guaranteeCeasedAt) {
+  if (v7AwaitingBaseline(f)) {
+    out.push({ kind: 'baseline_not_taken', dueDay: today, urgent: false, text: 'Paid, but the baseline audit has not been taken. Nothing is scheduled: the guarantee clock and the first monthly payment both start from the Baseline Date (clauses 5.2 and 5.6). Take the baseline.' });
+  }
+  const v7BaselineDay = isV7Terms(f.terms) ? ukDay(f.baselineAt) : null;
+  if (v7BaselineDay && !f.resultsSentAt && !f.guaranteeCeasedAt) {
+    const due = resultsDueDayV7(v7BaselineDay);
+    if (daysBetween(today, due) <= RESULTS_REMINDER_LEAD_DAYS) {
+      out.push({ kind: 'results_due', dueDay: due, urgent: today >= due, text: `Four-week results due ${due} (day ${RESULTS_DAY_V7} from the Baseline Date). The ${REFUND_WINDOW_DAYS_V7}-day Refund Window runs from the day they are sent; if they go out late, the first monthly payment moves back.` });
+    }
+  }
+  if (!isV7Terms(f.terms) && f.accessDate && !f.resultsSentAt && !f.guaranteeCeasedAt) {
     const target = resultsTargetDay(f.accessDate);
     const latest = resultsNormalLatestDay(f.accessDate);
     if (daysBetween(today, target) <= RESULTS_REMINDER_LEAD_DAYS) {
@@ -447,10 +525,10 @@ export function timelineView(f: TimelineFacts, todayIso: string): TimelineView {
     initialPaidDay,
     accessDate: f.accessDate,
     accessDeadlineDay: initialPaidDay ? accessDeadlineDay(initialPaidDay) : null,
-    resultsTargetDay: f.accessDate ? resultsTargetDay(f.accessDate) : null,
+    resultsTargetDay: isV7Terms(f.terms) ? (ukDay(f.baselineAt) ? resultsDueDayV7(ukDay(f.baselineAt)!) : null) : f.accessDate ? resultsTargetDay(f.accessDate) : null,
     resultsNormalLatestDay: f.accessDate ? resultsNormalLatestDay(f.accessDate) : null,
     resultsDay,
-    refundWindowEndDay: resultsDay && !f.guaranteeCeasedAt ? refundWindowEndDay(resultsDay) : null,
+    refundWindowEndDay: resultsDay && !f.guaranteeCeasedAt ? (isV7Terms(f.terms) ? refundWindowEndDayV7(resultsDay) : refundWindowEndDay(resultsDay)) : null,
     guaranteeApplies: !f.guaranteeCeasedAt,
     paymentStart: ps,
     paymentStartConfirmed: !!ps.day && f.paymentStartScheduledDay === ps.day && !!f.paymentStartConfirmedAt,

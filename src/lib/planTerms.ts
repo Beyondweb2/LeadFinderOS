@@ -21,7 +21,7 @@
    ⛔ Every figure is a findableOffer.ts constant; nothing here is a typed price.
    Pure. Edge-reachable (quick-close via quickClose.ts): relative imports, explicit .ts.
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
-import { FULL_PAY_HOSTING_INCLUDED_MONTHS, threeWaysSpoken } from './paymentPlans.ts';
+import { FULL_PAY_HOSTING_INCLUDED_MONTHS, MONTHLY_START_V7_WORDS, plansSpoken } from './paymentPlans.ts';
 import {
   FINDABLE_CONTINUING_GBP, FINDABLE_MONTHLY_GBP, FINDABLE_SETUP_PRICE_GBP, MONTHLY_START_V3_WORDS, totalPaymentsFor, type ServiceRoute,
 } from './findableOffer.ts';
@@ -56,8 +56,9 @@ export { afterTermSummaryWords, endOfTermKeyPoint } from './findableOffer.ts';
 
 /** The spoken answer to "How much is it?" — v5 (2026-10-16): ONE plan, Findable Build. The minimum term is said in
  *  PAYMENTS ("12 payments in total"), never as a number of months. ⛔ Never names Optimise (withdrawn). */
-/* 🔴 2026-10-29 (paymentPlans.ts, agreement v6): Build is sold three ways; the spoken offer names all three. */
+/* 🔴 2026-10-29 (paymentPlans.ts, agreement v6): Build is sold three ways; the spoken offer names all three.
+   🔴 2026-10-30 (agreement v7): TWO PLANS, Complete first. */
 export function planSpoken(): string {
-  return `We build, host and manage a new website for you. There are three ways to pay: ${threeWaysSpoken()}. Monthly payments start ${MONTHLY_START_V3_WORDS}. `
+  return `We build, host and manage a new website for you, and measure your AI visibility before and after. There are two plans: ${plansSpoken()}. Monthly payments start ${MONTHLY_START_V7_WORDS}. `
     + `Once your final payment clears the site's yours. Hosting is included while you're paying (${FULL_PAY_HOSTING_INCLUDED_MONTHS} months on pay in full), then it's £${FINDABLE_CONTINUING_GBP} a month for hosting and maintenance only if you want us to keep looking after it.`;
 }

@@ -147,7 +147,7 @@ Deno.serve(async (req) => {
     if (signup) {
       if (!signup.route || !signup.plan) return html(agreementPageHtml({ mode: "not_ready", businessName: ctx.businessName }));
       const plan = signup.plan;
-      /* ⛔ THE VERSION FOLLOWS THE PLAN: the old £99 × 12 plan is signed on v5, the three new plans on v6. */
+      /* ⛔ THE VERSION FOLLOWS THE PLAN: the old £99 × 12 plan is signed on v5, Complete and Essential on v7 (v6 archived). */
       const VERSION = agreementVersionForPlan(plan);
       const signed = await signupAcceptance(service, ctx.lead.id, signup.id, VERSION);
       /* ⛔ v5 (2026-10-16): Findable Optimise is withdrawn. A sign-up still recorded on it (plan_tier "keep", made
@@ -162,7 +162,7 @@ Deno.serve(async (req) => {
       }
 
       if (signed) {
-        if (signed.service_route !== signup.route || (VERSION === "v6" && signed.payment_plan !== plan)) {
+        if (signed.service_route !== signup.route || (VERSION === "v7" && signed.payment_plan !== plan)) {
           /* The sign-up's service changed after it was signed: never pay on a signature for the other one. */
           return html(agreementPageHtml({ mode: "not_ready", businessName: ctx.businessName, message: "Your chosen service changed after you signed, so payment cannot open on this signature. Paul will send you a fresh link." }));
         }

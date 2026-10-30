@@ -11,7 +11,7 @@
    ⚠️ EXPLICIT .ts ON EVERY RELATIVE IMPORT — reached from an edge function (client-agreement).
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 import { afterTermSummaryWords } from './planTerms.ts';
-import { PAYMENT_PLAN_NAME, PAYMENT_PLAN_SPEC, gbpWords, planAfterWords, planTotalGbp, type PaymentPlan } from './paymentPlans.ts';
+import { COMPLETE_SUMMARY, ESSENTIAL_SUMMARY, MONTHLY_START_V7_WORDS, PAYMENT_PLAN_NAME, PAYMENT_PLAN_SPEC, PLAN_PRODUCT_NAME, gbpWords, planAfterWords, planFullName, planTotalGbp, type PaymentPlan } from './paymentPlans.ts';
 import {
   FINDABLE_CONTINUING_GBP, FINDABLE_MONTHLY_GBP, FINDABLE_SETUP_PRICE_GBP, MONTHLY_START_V3_WORDS,
   SERVICE_ROUTE_NAME, totalPaymentsFor, type ServiceRoute,
@@ -60,14 +60,14 @@ export function signingDayWords(iso: string): string {
 export function planSummaryRowsForPlan(plan: PaymentPlan): PlanSummaryRow[] {
   const s = PAYMENT_PLAN_SPEC[plan];
   const rows: PlanSummaryRow[] = [
-    { key: 'plan', label: 'Your plan', value: `${SERVICE_ROUTE_NAME.build}, ${PAYMENT_PLAN_NAME[plan].toLowerCase()}. ${PLAN_ONE_LINE.build}` },
+    { key: 'plan', label: 'Your plan', value: plan === 'complete' ? `${PLAN_PRODUCT_NAME.complete}. ${COMPLETE_SUMMARY}` : plan === 'legacy_twelve' ? `${SERVICE_ROUTE_NAME.build}, ${PAYMENT_PLAN_NAME[plan].toLowerCase()}. ${PLAN_ONE_LINE.build}` : `${planFullName(plan)}. ${ESSENTIAL_SUMMARY}` },
   ];
   if (plan === 'full') {
     rows.push({ key: 'today', label: 'Today', value: `${gbpWords(s.firstGbp)}, paid once. Nothing more to pay for the plan` });
   } else {
     rows.push(
       { key: 'today', label: 'Today', value: `${gbpWords(s.firstGbp)} initial payment (payment 1 of ${s.totalPayments})` },
-      { key: 'then', label: 'Then', value: `${gbpWords(s.monthlyGbp)} a month, starting ${MONTHLY_START_V3_WORDS}` },
+      { key: 'then', label: 'Then', value: `${gbpWords(s.monthlyGbp)} a month, starting ${plan === 'legacy_twelve' ? MONTHLY_START_V3_WORDS : MONTHLY_START_V7_WORDS}` },
       { key: 'term', label: 'Minimum term', value: `${s.totalPayments} payments in total, including today's (${gbpWords(planTotalGbp(plan))})` },
     );
   }

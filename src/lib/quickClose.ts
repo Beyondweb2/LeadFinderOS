@@ -73,7 +73,7 @@ import {
 } from './findableOffer.ts';
 import { afterTermClientWords, afterTermRepLine } from './planTerms.ts';
 import { agencyContractOutcome } from './agencyContractRule.ts';
-import { CLIENT_PAYMENT_PLANS, PAYMENT_PLAN_NAME, PAYMENT_PLAN_SPEC, isPaymentPlan, planShortLine, planTermsLines, type PaymentPlan } from './paymentPlans.ts';
+import { CLIENT_PAYMENT_PLANS, DEFAULT_PAYMENT_PLAN, PAYMENT_PLAN_NAME, PAYMENT_PLAN_SPEC, isPaymentPlan, planFullName, planShortLine, planTermsLines, type PaymentPlan } from './paymentPlans.ts';
 
 export type QcDecisionMaker = 'yes' | 'no';
 /** 'agency' (v2): an agency / provider controls it — a handoff, not a refusal. */
@@ -172,8 +172,12 @@ export const QUICK_CLOSE_QUESTIONS: readonly { key: QcKey; text: string; detail?
   { key: 'route', text: 'Confirm the plan', options: [{ value: 'build', label: 'Findable Build — we build, host and manage a new website, optimised for AI visibility' }, { value: 'optimise', label: 'Findable Optimise (withdrawn) — improve their current website', legacy: true }] },
   /* 2026-10-29: how they pay (paymentPlans.ts). The old £99 × 12 plan is LEGACY here: never a default button, shown only
      when the rep asks for it ("Show the old plan") or when a close already carries it. */
-  { key: 'payment_plan', text: 'How do they want to pay?', options: [
-    ...CLIENT_PAYMENT_PLANS.map((p) => ({ value: p, label: `${PAYMENT_PLAN_NAME[p]}: ${planShortLine(p)}` })),
+  /* 2026-10-30: TWO PLANS. Findable Complete first and marked recommended (DEFAULT_PAYMENT_PLAN), then Essential's three ways
+     to pay. Never pre-answered: the rep still asks, so the client chooses. */
+  { key: 'payment_plan', text: 'Which plan, and how do they want to pay?', options: [
+    ...CLIENT_PAYMENT_PLANS.map((p) => ({ value: p, label: p === DEFAULT_PAYMENT_PLAN
+      ? `${PAYMENT_PLAN_NAME[p]} (recommended): ${planShortLine(p)}. Everything in Essential, plus review replies, Google profile, directories, changes and monthly audits`
+      : `${planFullName(p)}: ${planShortLine(p)}` })),
     { value: 'legacy_twelve', label: `${PAYMENT_PLAN_NAME.legacy_twelve}: ${planShortLine('legacy_twelve')}`, legacy: true },
   ] },
   { key: 'decision_maker', text: 'Are they authorised to make this decision for the business?', options: [{ value: 'yes', label: 'Yes' }, { value: 'no', label: 'No' }] },
@@ -374,7 +378,7 @@ export function closeTermsLines(route: ServiceRoute, plan: PaymentPlan | null | 
 /** The header chip: "Findable Build · 6 months" once a plan is chosen, else the route's payment count (none while a plan is
  *  still to be picked). */
 export function closeChipText(route: ServiceRoute, plan: PaymentPlan | null | undefined): string {
-  if (plan) return `${SERVICE_ROUTE_NAME[route]} · ${PAYMENT_PLAN_NAME[plan]}`;
+  if (plan) return plan === 'legacy_twelve' ? `${SERVICE_ROUTE_NAME[route]} · ${PAYMENT_PLAN_NAME[plan]}` : planFullName(plan);
   return planStillToPick(route, plan) ? SERVICE_ROUTE_NAME[route] : `${SERVICE_ROUTE_NAME[route]} · ${totalPaymentsFor(route)} payments`;
 }
 

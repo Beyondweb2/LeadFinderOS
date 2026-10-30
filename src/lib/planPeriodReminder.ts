@@ -29,8 +29,8 @@ export const PLAN_PERIOD_PROMISE_SENTENCE = 'We will remind you before the Plan 
 export const PLAN_PERIOD_REMINDER_LEAD_DAYS = 30;
 /** How far ahead the dry run looks by default (pay in full: go-live + 6 months, so look far). */
 export const PLAN_PERIOD_DRY_RUN_HORIZON_DAYS = 240;
-/** The plans whose signed v6 text carries the promise. legacy_twelve is v5 (fn month12-reminder). */
-export const PLAN_PERIOD_REMINDER_PLANS: readonly PaymentPlan[] = ['full', 'six', 'twelve'];
+/** The plans whose signed v6 / v7 text carries the promise (v7 keeps 9A.5 word for word; Complete is v7 only). legacy_twelve is v5 (fn month12-reminder). */
+export const PLAN_PERIOD_REMINDER_PLANS: readonly PaymentPlan[] = ['complete', 'full', 'six', 'twelve'];
 
 const norm = (s: string) => s.replace(/[‘’]/g, "'").replace(/\s+/g, ' ').trim().toLowerCase();
 /** Does this signed agreement text contain the v6 9A.5 promise? Absent text → false. */
