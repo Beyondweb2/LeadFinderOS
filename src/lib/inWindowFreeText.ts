@@ -11,18 +11,24 @@
    ⛔ IT IS STILL THAT TEMPLATE. The sender runs the template's whole build (every guard, every
       resolver) and only swaps the payload, so the row keeps template_name: pitchEverSent, the
       once-per-lead guards, report_sent and the snapshot all see it exactly as before.
-   ⛔ A PROPERTY, NEVER A LIST OF NAMES: a template whose payload carries a HEADER (today the video
-      header) has no faithful plain-text version — the words say "the video above" — so it goes as the
-      template. So does one with no real rendered wording, or wording that still carries a {{marker}}.
+   ⛔ A PROPERTY, NEVER A LIST OF NAMES: a template whose payload carries a VIDEO header (a link) goes as
+      an ordinary VIDEO message with the same wording as its caption (2026-10-31b, Paul) — WhatsApp shows the
+      caption under the video, so "the video above" still reads true. Any other header, a caption over
+      Meta's limit, no real rendered wording, or wording that still carries a {{marker}} → the template.
    Pure; no imports (edge + browser).
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 
 export type FreeTextVersion =
-  | { ok: true; text: string }
-  | { ok: false; why: 'has_header' | 'no_wording' | 'unfilled_marker' };
+  /** videoUrl: the template's own header video, sent as a normal video message with `text` as its caption. */
+  | { ok: true; text: string; videoUrl?: string }
+  | { ok: false; why: 'has_header' | 'no_wording' | 'unfilled_marker' | 'caption_too_long' };
+
+/** Meta's limit on a media message's caption. Longer words cannot ride under the video, so the send stays the template. */
+export const VIDEO_CAPTION_MAX = 1024;
 
 export const NO_FREE_TEXT_WORDS: Record<Extract<FreeTextVersion, { ok: false }>['why'], string> = {
-  has_header: 'it carries a video, which a normal message cannot',
+  has_header: 'it has a header a normal message cannot carry',
+  caption_too_long: `its wording is longer than a video caption can be (${VIDEO_CAPTION_MAX} characters)`,
   no_wording: 'there is no plain wording for it',
   unfilled_marker: 'its wording still has a blank to fill',
 };
@@ -35,12 +41,22 @@ const PLACEHOLDER = /^(?:\[[a-z0-9_]+\]|[a-z0-9]+(?:_[a-z0-9]+)+)$/;
 /** The free-text version of a built template send: its payload (as claimTemplatePayload made it) and the words to send —
  *  the person's own edited text when they typed it, else the stored rendering. */
 export function freeTextVersionOf(payload: unknown, words: string | null | undefined): FreeTextVersion {
-  const components = (payload as { template?: { components?: Array<{ type?: string }> } } | null)?.template?.components ?? [];
-  if (components.some((c) => c?.type === 'header')) return { ok: false, why: 'has_header' };
+  type Param = { type?: string; video?: { link?: unknown } };
+  const components = (payload as { template?: { components?: Array<{ type?: string; parameters?: Param[] }> } } | null)?.template?.components ?? [];
+  const headers = components.filter((c) => c?.type === 'header');
+  let videoUrl: string | undefined;
+  if (headers.length) {
+    /* Exactly one header carrying exactly one video LINK (claimTemplatePayload's shape) — anything else has no faithful version. */
+    const params = headers.length === 1 ? headers[0].parameters ?? [] : [];
+    const link = params.length === 1 && params[0]?.type === 'video' ? params[0].video?.link : null;
+    if (typeof link !== 'string' || !/^https:\/\/\S+$/.test(link)) return { ok: false, why: 'has_header' };
+    videoUrl = link;
+  }
   const text = String(words ?? '').trim();
   if (!text || PLACEHOLDER.test(text)) return { ok: false, why: 'no_wording' };
   if (MARKER.test(text)) return { ok: false, why: 'unfilled_marker' };
-  return { ok: true, text };
+  if (videoUrl && text.length > VIDEO_CAPTION_MAX) return { ok: false, why: 'caption_too_long' };
+  return videoUrl ? { ok: true, text, videoUrl } : { ok: true, text };
 }
 
 /** Where a template send came from decides whether it may be turned into free text. */
@@ -49,7 +65,7 @@ export type SendOrigin = 'inbox' | 'scheduled' | 'other';
 export type InWindowShape =
   | { as: 'template' }
   | { as: 'template'; noFreeText: string }
-  | { as: 'text'; text: string }
+  | { as: 'text'; text: string; videoUrl?: string }
   | { as: 'refuse'; error: 'window_closed' | 'no_free_text_version'; reason: string };
 
 /**
@@ -76,9 +92,18 @@ export function inWindowShape(a: {
     if (!a.allowClosedText) return { as: 'refuse', error: 'window_closed', reason: 'Their 24 hours have run out, so this can only go as the approved template. Pick it again to send the template.' };
   }
   const v = a.version;
-  if (v.ok === true) return { as: 'text', text: v.text };
+  if (v.ok === true) return v.videoUrl ? { as: 'text', text: v.text, videoUrl: v.videoUrl } : { as: 'text', text: v.text };
   const why = NO_FREE_TEXT_WORDS[(v as Extract<FreeTextVersion, { ok: false }>).why];
   return a.typed
     ? { as: 'refuse', error: 'no_free_text_version', reason: `This template can't go as a normal message: ${why}. Send it as the template instead.` }
     : { as: 'template', noFreeText: `Goes as the template: ${why}.` };
 }
+
+/* ⛔ A QUEUED SEND WHOSE WORDS CANNOT BE READ BACK (2026-10-31b). A queued row keeps only the words and the template's name.
+   needs_from_you rebuilds its {{2}} from the stored transcript line — but a send that went into the queue as the person's own
+   (possibly edited) wording has no such line. When it runs: window open → those words go as a normal message (the shape above);
+   closed → it could only go as the template, which cannot be rebuilt from their words, so it is REFUSED with this reason. The
+   drain stores it on the row and the Inbox shows it ("Not sent — …"). Never a silent failure, never the template's own wording
+   swapped in for the person's edit. */
+export const QUEUED_WORDS_UNREADABLE_REASON =
+  'Their 24 hours had run out by the time it was due, and an edited message can only go as a normal message — the approved template can’t be rebuilt from your words. Nothing was sent. Pick the template again to send it.';

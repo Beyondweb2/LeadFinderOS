@@ -33,9 +33,27 @@ messages a month per number before charging the market's service rate (= utility
 - Quick reply: each saved reply has **Send now** (Queue outside send hours; keeps any half-typed draft). Window closed: the
   menu still shows, greyed, "They haven't replied in 24 hours". Saved replies never carry a template marker.
 
-## Templates with no free-text version (go as the template, the picker says why)
+## The video templates (2026-10-31b, `fix/in-window-video-and-leftovers`)
 
-`video_template`, `competitor_hook`, `explain_offer`, `explain_offer_v2` — the video header (`WA_TEMPLATES[*].headerVideoUrl`).
-Any template whose renderer is missing (placeholder body) falls back the same way.
+`video_template`, `competitor_hook`, `explain_offer`, `explain_offer_v2` carry their video as a template HEADER with a LINK
+(`VIDEO_TEMPLATE_HEADER_URL`, `https://findable.live/media/findable-hook.mp4`). In the window they go as an ordinary video
+message by link (`videoPayload(link, caption)` → `{type:"video", video:{link, caption}}`), the filled (or edited) words as its
+caption; the row is `message_type: "video"`, no `media_path`, `template_name` kept (bubble: "▶ Sent with the Findable video").
+`freeTextVersionOf` accepts exactly one header holding exactly one https video link; caption over `VIDEO_CAPTION_MAX` (1024,
+Meta's media-caption limit) → the template with the reason. Any other header, or a template with a placeholder body → the template.
+The Inbox fills the composer exactly as for the others (the dry run answers `message_type: "video"`, mapped to sentAs 'text').
+
+## A queued send whose words cannot be read back
+
+A queued row keeps only the words + template name. `needs_from_you` rebuilds `{{2}}` from the transcript line
+(`neededItemFromTranscript`); a send queued as the composer's own words has none. When it runs: window open → those words go
+as free text (still recorded as the template); closed → refused `queued_words_unreadable` with `QUEUED_WORDS_UNREADABLE_REASON`,
+which the drain stores on the failed row and the Inbox shows as "Not sent — …". Every other template rebuilds from lead data.
+
+## Quick report rival count
+
+`rivalsNamedInstead` (`hookAudit.ts`) counts the same answers the displayed score counts: with Google AI in the score (method 2,
+`scoringMethodFor`) a shown Google AI answer that did not name them adds its names; the client's own name is never counted.
+WSH Electrical 2026-10-31: "3 of 3 answers didn't name you. 4 other businesses were named instead." → "… 8 other businesses …".
 
 Tests: `scripts/in-window-free-text.test.ts`.

@@ -962,7 +962,7 @@ export function useInbox(channel: InboxChannel = 'whatsapp') {
      like a write. */
   const preview = useCallback(async (args: {
     phone: string; leadId: string | null; country?: string | null; templateName: string; allowResend?: boolean; templateVars?: Record<string, string>;
-  }): Promise<{ ok: boolean; body?: string; snapshot?: WhatsAppTemplateSnapshot; template?: string; fellBack?: string; error?: string; reason?: string; sentAs?: 'text' | 'template'; noFreeText?: string }> => {
+  }): Promise<{ ok: boolean; body?: string; snapshot?: WhatsAppTemplateSnapshot; template?: string; fellBack?: string; error?: string; reason?: string; sentAs?: 'text' | 'template'; withVideo?: boolean; noFreeText?: string }> => {
     if (sms) {
       /* The text this template would send: the six native templates are built here from the same function the sender uses; every other
          template is built by the WhatsApp sender's own dry run (twilio-sms-send mode:'preview'). Nothing is sent either way. */
@@ -1000,7 +1000,8 @@ export function useInbox(channel: InboxChannel = 'whatsapp') {
       return { ok: false, error: 'preview_unsupported', reason: 'The live function does not have the preview yet — deploy send-whatsapp-message.' };
     }
     return { ok: true, body: data.body ?? '', snapshot: data.template_snapshot ?? undefined, template: data.template ?? args.templateName, fellBack: data.fell_back,
-      sentAs: data.message_type === 'text' ? 'text' : 'template', ...(typeof data.no_free_text === 'string' ? { noFreeText: data.no_free_text } : {}) };
+      /* 'video' = a video template's in-window version (a normal video message, the words as its caption): free-form too. */
+      sentAs: data.message_type === 'text' || data.message_type === 'video' ? 'text' : 'template', ...(data.message_type === 'video' ? { withVideo: true } : {}), ...(typeof data.no_free_text === 'string' ? { noFreeText: data.no_free_text } : {}) };
   }, [sms, queryClient, queryKey]);
 
   // Optimistic single-lead status patch — updates local `leads` state so the derived

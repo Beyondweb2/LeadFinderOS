@@ -54,7 +54,9 @@ export function MessageMedia({ message }: { message: WhatsAppMediaMessage }) {
     const timer = window.setInterval(() => { void renew(); }, (SIGNED_URL_SECONDS - 60) * 1000);
     return () => { alive = false; window.clearInterval(timer); };
   }, [message.media_path]);
-  if (!message.media_path) return message.error ? <p className="mt-1 text-xs text-muted-foreground">{message.error}</p> : null;
+  /* A video template sent inside the 24-hour window (src/lib/inWindowFreeText.ts) goes by LINK — there is no stored file. */
+  if (!message.media_path && message.direction === 'outbound' && message.message_type === 'video' && !message.error) return <p className="mt-1 text-xs opacity-80" data-testid="sent-with-video">▶ Sent with the Findable video</p>;
+  if (!message.media_path) return message.error ?<p className="mt-1 text-xs text-muted-foreground">{message.error}</p> : null;
   if (refused) return <p className="mt-1 text-xs text-muted-foreground">Attachment unavailable</p>;
   if (!url) return <p className="mt-1 text-xs text-muted-foreground">Loading attachment…</p>;
   if (message.message_type === 'image' || message.message_type === 'sticker') return <img src={url} alt={message.media_filename ?? message.message_type} className="mt-1 max-h-72 rounded object-contain" />;
