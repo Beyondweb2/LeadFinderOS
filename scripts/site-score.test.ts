@@ -162,8 +162,8 @@ ok(/LEAD_CRAWL_LIST_SELECT = '[^']*site_score_detail'/.test(lists) && !/LEAD_CRA
 
 /* ── the Inbox: the pill at the right of the status line, never shrinking (Paul chose "Inbox 1", 2026-10-30) ── */
 const inbox = read('src/pages/Inbox.tsx');
-ok(!/site-score-status-line/.test(inbox) && (inbox.match(/<SiteScorePill /g) ?? []).length === 1, 'Inbox list card: ONE website score pill, in the AI Visibility row, not also on the status line');
-ok(/data-testid="ai-visibility-line">[\s\S]{0,400}<SiteScorePill/.test(inbox), 'Inbox: the pill is in the AI Visibility row');
+ok(/<span className="ml-auto shrink-0" data-testid="site-score-status-line">\n\s+<SiteScorePill /.test(inbox) && (inbox.match(/<SiteScorePill /g) ?? []).length === 1, 'Inbox list card: ONE website score pill, at the right of the status line (Paul, 2026-10-31)');
+ok(!/data-testid="ai-visibility-line">[\s\S]{0,200}<SiteScorePill/.test(inbox), 'Inbox list card: the AI line holds the AI scores only');
 ok(/afterEngines=\{<LeadSiteScore /.test(inbox), 'Inbox detail: the pill is beside the Google AI pill in the AI visibility card');
 
 /* ── Outreach: its own Website column, number + band + bar (Paul chose "B", 2026-10-30) ── */

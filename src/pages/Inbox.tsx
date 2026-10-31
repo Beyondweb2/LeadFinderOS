@@ -400,14 +400,18 @@ const ConversationRow = memo(function ConversationRow({
             : <PipelineStatusSelect value={c.leadStatus} stage={listStageOf(c.leadId)} onValueChange={(status) => handleSetStatus(c, status)}
                 display={<StatusPill pillKey={statusKey} label={statusLabel} tone={statusTone} title={statusTitle} compact />} />)
             : <StatusPill pillKey={statusKey} label={statusLabel} tone={statusTone} title={statusTitle} compact />}
+          {/* "Room to improve the website" at the right of the status line (Paul, 2026-10-31: the list card keeps it HERE, once). */}
+          {c.leadId && (
+            <span className="ml-auto shrink-0" data-testid="site-score-status-line">
+              <SiteScorePill score={siteScore} website={siteWebsite} leadId={c.leadId} />
+            </span>
+          )}
         </div>
       )}
       {/* The AI Visibility line, on its own row. */}
       {c.leadId && (
         <div className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5" data-testid="ai-visibility-line">
           <ScoreLine score={auditScore} visible={c.visible} />
-          {/* The website score again, beside the Google AI pill (2026-10-31, Paul: ONE copy, here, not also on the status line). */}
-          <SiteScorePill score={siteScore} website={siteWebsite} leadId={c.leadId} />
         </div>
       )}
     </div>
