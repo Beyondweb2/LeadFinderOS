@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { useHookVisibility } from '@/hooks/useHookVisibility';
 import { HookVisibilityView, type HookRunNewProps } from '@/components/HookVisibilityView';
 import { HookWebsiteIssues } from '@/components/HookWebsiteIssues';
@@ -10,7 +10,7 @@ export { HookVisibilityView } from '@/components/HookVisibilityView';
    change (useHookVisibility). Everything it shows, and why, is in HookVisibilityView.tsx.
    "View full audit" opens the large detailed window (ProspectAuditDialog, 2026-10-05) instead of the old
    40vh overlay, wherever this card is mounted (Inbox, the lead popup's AI check, the Outreach audit popup). */
-export function HookVisibilityCard({ leadId, onRunNew, runNewBusy, onReportCopied, variant }: { leadId: string | null | undefined; variant?: 'inline' | 'call' } & HookRunNewProps) {
+export function HookVisibilityCard({ leadId, onRunNew, runNewBusy, onReportCopied, variant, afterEngines }: { leadId: string | null | undefined; variant?: 'inline' | 'call'; afterEngines?: ReactNode } & HookRunNewProps) {
   const q = useHookVisibility(leadId);
   const [fullOpen, setFullOpen] = useState(false);
   if (!leadId || q.isLoading || !q.data) {
@@ -32,6 +32,7 @@ export function HookVisibilityCard({ leadId, onRunNew, runNewBusy, onReportCopie
         issues={<HookWebsiteIssues leadId={leadId} />}
         onOpenFull={() => setFullOpen(true)}
         variant={variant}
+        afterEngines={afterEngines}
       />
       <ProspectAuditDialog leadId={leadId} open={fullOpen} onOpenChange={setFullOpen} />
     </>

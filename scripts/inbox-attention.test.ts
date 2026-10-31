@@ -50,8 +50,8 @@ console.log('3. the list row and the header');
   const INBOX = read('src/pages/Inbox.tsx');
   const row = INBOX.slice(INBOX.indexOf('const ConversationRow = memo('), INBOX.indexOf('}, sameRowProps);'));
   ok(!/InboundLabelChip|ConvStateChip|AiDraftChip|needs-you-reason|EngagementPills|NextActionPill/.test(row), 'the row draws none of the old chips');
-  ok(/<AttentionPill kind=\{attentionKind\}/.test(row) && /<PipelineStatusSelect value=\{c\.leadStatus\}/.test(row) && /<ScoreLine /.test(row), 'the row: one attention pill, the solid status pill (Paul: it must remain), one score line');
-  ok((INBOX.match(/<AttentionPill /g) ?? []).length === 2 && /const at = rowAttention\(active\)/.test(INBOX), 'the header shows the SAME pill from the SAME rule');
+  ok(/<StatusPill pillKey=\{statusKey\}/.test(row) && !/<AttentionPill/.test(row) && /<PipelineStatusSelect value=\{c\.leadStatus\}/.test(row) && /<ScoreLine /.test(row), 'the row: ONE status pill (inboxStatusPill.ts) inside the stage menu, one score line');
+  ok(!/<AttentionPill /.test(INBOX) && (INBOX.match(/const sp = rowAttention\(active\)/g) ?? []).length >= 1, 'the header shows the SAME pill from the SAME rule (rowAttention)');
   ok((INBOX.match(/<PipelineStatusSelect /g) ?? []).length === 2, 'the status pill on the row and in the thread header (the same pill, the same handler)');
   ok(/aria-label=\{active\.isPotentialWork \? 'Remove interested star' : 'Mark as interested'\}/.test(INBOX), 'Interested stays the star');
 }

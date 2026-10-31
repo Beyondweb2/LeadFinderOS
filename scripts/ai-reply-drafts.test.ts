@@ -112,7 +112,7 @@ ok(INBOX_QUICK_FILTERS.some((x) => x.value === 'needs_you' && x.label === 'Needs
 ok(/NEEDS YOU SORTS TO THE TOP/.test(INBOX) && /ai: aiOn \? ai\.forPhone\(c\.phone\) : null/.test(INBOX), 'Needs you sorts to the top and its reason is the row pill\'s hover');
 /* The list row is the memoised ConversationRow (2026-10-16, speed): its ONE pill comes from rowAttention(c), st = stateByKey.get(c.key). */
 ok(/\{\.\.\.rowAttention\(c\)\}/.test(INBOX) && /st=\{stateByKey\.get\(c\.key\)\}/.test(INBOX)
-  && /<AttentionPill kind=\{attentionKind\}/.test(INBOX) && !/<ConvStateChip/.test(INBOX) && !/<AiDraftChip/.test(INBOX), 'the list shows ONE pill (Needs approval before Waiting; the old state and AI chips are gone)');
+  && /<StatusPill pillKey=\{statusKey\}/.test(INBOX) && !/<ConvStateChip/.test(INBOX) && !/<AiDraftChip/.test(INBOX), 'the list shows ONE pill (Needs approval before Waiting; the old state and AI chips are gone)');
 
 console.log('6. approve sends ONCE; discard sends nothing; the function itself never sends');
 ok(!/sendViaGraph|graph\.facebook\.com|whatsapp-send\.ts|from\("whatsapp_messages"\)\.insert|from\("whatsapp_sends"\)(?!\.select\()/.test(FN), 'ai-reply-drafts has no send path and writes no message row');
