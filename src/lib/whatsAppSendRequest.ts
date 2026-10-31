@@ -17,6 +17,9 @@ export interface WhatsAppSendArgs {
   via?: 'inbox' | 'lead_panel';
   /** Values a template needs from the person sending it (today only needs_from_you's "item needed"); the server cleans them. */
   templateVars?: Record<string, string>;
+  /** With templateName + body: send THESE words as free text, recorded as that template (a composer filled from a saved template
+   *  inside the 24-hour window — src/lib/inWindowFreeText.ts). The server honours it only for via:'inbox'. */
+  asFreeText?: boolean;
 }
 
 export interface WhatsAppSendResult {
@@ -30,6 +33,10 @@ export interface WhatsAppSendResult {
   scheduled?: { id: string; send_at: string; tz: string };
   /** Meta's own error code when Meta refused the send (sendErrorMeaning.ts turns it into words). */
   failCode?: number;
+  /** For a template send: how it went ('text' = its free-text version inside the 24-hour window). */
+  sentAs?: 'text' | 'template';
+  /** The window was open but this template has no plain-text version, so it went as the template — why, in words. */
+  noFreeText?: string;
 }
 
 export async function sendWhatsAppRequest(sb: { functions: typeof Supabase.functions }, args: WhatsAppSendArgs): Promise<WhatsAppSendResult> {
@@ -43,10 +50,15 @@ export async function sendWhatsAppRequest(sb: { functions: typeof Supabase.funct
       allow_resend: args.allowResend === true,
       ...(args.via ? { via: args.via } : {}),
       ...(args.templateVars ? { template_vars: args.templateVars } : {}),
+      ...(args.asFreeText ? { as_free_text: true } : {}),
     },
   });
   if (error) return { ok: false, error: error.message };
   if (!data?.ok) return { ok: false, error: data?.error ?? 'send_failed', reason: data?.reason, ...(typeof data?.failCode === 'number' ? { failCode: data.failCode } : {}) };
-  if (data.scheduled) return { ok: true, scheduled: data.scheduled };
-  return { ok: true, simulated: data.simulated, message: data.message ?? undefined };
+  const shape = {
+    ...(data.sent_as === 'text' || data.sent_as === 'template' ? { sentAs: data.sent_as as 'text' | 'template' } : {}),
+    ...(typeof data.no_free_text === 'string' ? { noFreeText: data.no_free_text } : {}),
+  };
+  if (data.scheduled) return { ok: true, scheduled: data.scheduled, ...shape };
+  return { ok: true, simulated: data.simulated, message: data.message ?? undefined, ...shape };
 }
