@@ -5,6 +5,7 @@ import {
   sendViaGraph,
   errorColumns,
   textPayload,
+  videoPayload,
   claimTemplatePayload,
   renderTemplateBody,
   WA_TEMPLATES,
@@ -43,7 +44,7 @@ import { qaSendHold } from "../_shared/qa-guard.ts";
 import { templateAvailability } from "../_shared/template-status.ts";
 import { queueGate, replyWindowOpenNow, scheduledSendFor } from "../_shared/inbox-schedule.ts";
 import { keepsSendHours } from "../../../src/lib/inboxSendWindow.ts";
-import { freeTextVersionOf, inWindowShape, type SendOrigin } from "../../../src/lib/inWindowFreeText.ts";
+import { freeTextVersionOf, inWindowShape, QUEUED_WORDS_UNREADABLE_REASON, type SendOrigin } from "../../../src/lib/inWindowFreeText.ts";
 import { formatVisibilityScore, REPORT_OFFER_REFUSAL_WORDS, REPORT_OFFER_TEMPLATE, reportOfferRefusal, UK_WORDED_TEMPLATES, ukWordedTemplateRefusal } from "../../../src/lib/reportOfferTemplate.ts";
 import { prospectOnlyTemplateRefusal } from "../../../src/lib/prospectOnly.ts";
 import { senderMessageName } from "../_shared/sender-name.ts";
@@ -120,7 +121,9 @@ const CAPABILITIES = ["dry_run", "build_phase_hold", "routing_leaf", "any_approv
    first); test_send auto_window: free text inside the test number's 24 hours, else the template. */
 /* 2026-10-31a: inside the 24-hour window an Inbox template send (and a queued one, judged when it runs) goes as FREE TEXT of
    the same wording, still recorded as that template (src/lib/inWindowFreeText.ts); as_free_text sends the composer's edit. */
-const BUILD_ID = "2026-10-31a-in-window-free-text";
+/* 2026-10-31b: the four video templates go in-window as a normal VIDEO message (the header's video, the words as its caption);
+   a queued needs_from_you whose words cannot be read back sends those words if the window is open, else refuses with a reason. */
+const BUILD_ID = "2026-10-31b-in-window-video";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -495,7 +498,7 @@ Deno.serve(async (req) => {
        throw that carries no prefix, like the empty audit_url / onboarding_url guards) degrades to a
        readable hold instead of a 500. Two layers, one rule. */
     let payload: Record<string, unknown>;
-    let messageType: "text" | "template";
+    let messageType: "text" | "template" | "video";
     let usedTemplate: string | null = null;
     // What we STORE as the message body: the text for free-form, or the rendered
     // template copy (real wording + business name + claim URL) so the Inbox shows
@@ -733,22 +736,35 @@ Deno.serve(async (req) => {
           greeting = dashboardGreeting((cn as { contact_name: string | null } | null)?.contact_name, shownName);
         }
         let neededItem = "";
+        /* ⛔ A QUEUED SEND WHOSE WORDS CANNOT BE READ BACK (2026-10-31b, src/lib/inWindowFreeText.ts): the row holds the person's
+           own wording, not the transcript line {{2}} is read from. Open window → those words go as a normal message (below);
+           closed → refused with the reason the Inbox shows on the failed row. Never silent, never the template's wording instead. */
+        let queuedWordsOnly = false;
         if (dvars.includes("needed_item")) {
           const c = cleanNeededItem(templateVars.needed_item);
-          if (!c.ok) return json({ ok: false, error: "unsafe_template_var", reason: c.reason, detail: "Say what you need from them." }, 200);
-          neededItem = c.value;
+          if (!c.ok) {
+            if (!(sched && text)) return json({ ok: false, error: "unsafe_template_var", reason: c.reason, detail: "Say what you need from them." }, 200);
+            if (!windowOpen) return json({ ok: false, error: "queued_words_unreadable", reason: QUEUED_WORDS_UNREADABLE_REASON }, 200);
+            queuedWordsOnly = true;
+          } else neededItem = c.value;
         }
-        try {
-          payload = claimTemplatePayload(templateName, lang, businessName, "", { greetingName: greeting, neededItem });
-        } catch (e) {
-          const msg = (e as Error).message ?? "";
-          if (msg.startsWith("unsafe_template_var:")) {
-            const [, reason, detail] = msg.split(":");
-            return json({ ok: false, error: "unsafe_template_var", reason, detail: detail ?? "" }, 200);
+        if (queuedWordsOnly) {
+          /* No template payload can be built; the in-window shape below sends `text` (a payload with no header) as free text. */
+          payload = textPayload(text);
+          storedBody = text;
+        } else {
+          try {
+            payload = claimTemplatePayload(templateName, lang, businessName, "", { greetingName: greeting, neededItem });
+          } catch (e) {
+            const msg = (e as Error).message ?? "";
+            if (msg.startsWith("unsafe_template_var:")) {
+              const [, reason, detail] = msg.split(":");
+              return json({ ok: false, error: "unsafe_template_var", reason, detail: detail ?? "" }, 200);
+            }
+            throw e;
           }
-          throw e;
+          storedBody = dashboardTemplateTranscript(templateName, { business: shownName, greeting, neededItem });
         }
-        storedBody = dashboardTemplateTranscript(templateName, { business: shownName, greeting, neededItem });
         auditClaimUrl = "";
       } else if (needsContactName) {
         /* questionnaire_followup: {{1}} = the OWNER'S first name (first word of the lead's
@@ -988,8 +1004,9 @@ Deno.serve(async (req) => {
       if (shape.as === "text") {
         templatePayload = payload;
         if (findingsShown?.length && findingsText && !shape.text.includes(findingsText.trim())) findingsShown = null;
-        payload = textPayload(shape.text);
-        messageType = "text";
+        /* A video template: the same video as a normal video message, the words as its caption (recorded as message_type video). */
+        payload = shape.videoUrl ? videoPayload(shape.videoUrl, shape.text) : textPayload(shape.text);
+        messageType = shape.videoUrl ? "video" : "text";
         storedBody = shape.text;
       } else if ("noFreeText" in shape) noFreeTextReason = shape.noFreeText;
     } else {

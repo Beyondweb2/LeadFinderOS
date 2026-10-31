@@ -22,6 +22,14 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-31-in-window-video', date: '2026-10-31', title: 'Inbox: video templates inside their 24 hours go as a normal video message', audience: 'all',
+    body: 'The four video templates now work like the others when someone has replied in the last 24 hours: "Put in message box" fills the box with the wording, you can edit it, and Send sends the same video as a normal WhatsApp video with your words underneath. It still counts as that template. A queued message whose wording was edited never fails quietly any more, and the quick report\'s "other businesses were named" number now includes the Google AI answers when Google AI is in the score.',
+    report: {
+      added: ['A "▶ Sent with the Findable video" line on a video sent this way in the conversation.'],
+      changed: ['Audit result hook with video, Competitor hook, and both Explain the offer versions: inside their 24 hours they go as a normal video message (the video, your words as its caption), not a template. Over 1,024 characters, they go as the template and the picker says why.', 'A queued "What we need from you" message whose words were edited: if their 24 hours are still open when it goes, your words go as a normal message; if not, it shows in the conversation as "Not sent" with the reason.', 'Quick report: "X other businesses were named instead" now counts the businesses Google AI named too, when Google AI is part of the score, so the number matches the names listed.'],
+      removed: [],
+      effect: 'No more Meta template charges for the video templates inside the 24 hours. Cold openers, the WhatsApp queue, the lead popup, the dashboard buttons, the welcome pack and Quick Close are unchanged.',
+    } },
   { id: '2026-10-31-in-window-free-text', date: '2026-10-31', title: 'Inbox: inside their 24 hours a template goes as a normal message', audience: 'all',
     body: 'When someone has replied in the last 24 hours, picking a WhatsApp template no longer sends a template. "Put in message box" fills the message box with its wording, every detail already filled in, so you can edit it and press Send. It still counts as that template (it will not go twice by mistake, and the lead moves on as before). Once their 24 hours are up, templates work exactly as they did. Quick replies now have a one-click Send now.',
     report: {

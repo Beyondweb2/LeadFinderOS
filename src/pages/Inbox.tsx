@@ -183,7 +183,8 @@ function templateLabel(name: string | null): string {
 }
 
 /** The composer was filled from this saved template inside the 24-hour window: its send goes as free text recorded as the template. */
-interface FreeTextMarker { key: string; template: string; templateVars?: Record<string, string> }
+/** withVideo: a video template's in-window version — the words go as the caption under the same video (a normal video message). */
+interface FreeTextMarker { key: string; template: string; templateVars?: Record<string, string>; withVideo?: boolean }
 
 /** The picker's own name for a template (sendable list, then the dashboard group). */
 function pickerLabel(name: string): string {
@@ -1744,10 +1745,10 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
     const left = unresolvedTokens(words);
     if (left.length) { setPreviewResult({ ok: false, error: 'blank_left', reason: `The wording still has ${left.join(', ')} to fill, so it was not put in the box.` }); return; }
     insertWarmDraft(target.key, words);
-    setFreeTextOf({ key: target.key, template: target.template, ...(templateVars ? { templateVars } : {}) });
+    setFreeTextOf({ key: target.key, template: target.template, ...(templateVars ? { templateVars } : {}), ...(r.withVideo ? { withVideo: true } : {}) });
     setPreviewResult(null);
     setTemplatesOpen(false);
-    toast({ title: 'In the message box', description: 'Edit it if you like, then Send. It goes as a normal message, not a template.' });
+    toast({ title: 'In the message box', description: r.withVideo ? 'Edit it if you like, then Send. It goes as a normal message with the video, not a template.' : 'Edit it if you like, then Send. It goes as a normal message, not a template.' });
   };
 
   // Approved WhatsApp-template picker — SEPARATE from the free-text "Quick reply" snippets. Shown in
@@ -3153,7 +3154,7 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
                     {inWindowWa && freeTextOf?.key === active.key && (
                       <div className="flex items-center gap-2 rounded-md border border-emerald-600/30 bg-emerald-50/60 px-2 py-1 text-[11px] dark:bg-emerald-950/20" data-testid="composer-free-text-marker">
                         <MessageSquareText className="h-3.5 w-3.5 shrink-0 text-emerald-700 dark:text-emerald-400" />
-                        <span className="min-w-0 flex-1">From the “{pickerLabel(freeTextOf.template)}” template. It goes as a normal message and counts as that template.</span>
+                        <span className="min-w-0 flex-1">From the “{pickerLabel(freeTextOf.template)}” template. It goes as a normal message{freeTextOf.withVideo ? ' with the video (these words as its caption)' : ''} and counts as that template.</span>
                         <button type="button" className="shrink-0 text-muted-foreground underline-offset-2 hover:underline" onClick={() => setFreeTextOf(null)}>Remove</button>
                       </div>
                     )}

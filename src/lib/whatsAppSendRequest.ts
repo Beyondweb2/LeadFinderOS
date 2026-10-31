@@ -35,6 +35,8 @@ export interface WhatsAppSendResult {
   failCode?: number;
   /** For a template send: how it went ('text' = its free-text version inside the 24-hour window). */
   sentAs?: 'text' | 'template';
+  /** With sentAs 'text': it went as a normal VIDEO message (a video template's in-window version), the words as its caption. */
+  withVideo?: boolean;
   /** The window was open but this template has no plain-text version, so it went as the template — why, in words. */
   noFreeText?: string;
 }
@@ -56,7 +58,8 @@ export async function sendWhatsAppRequest(sb: { functions: typeof Supabase.funct
   if (error) return { ok: false, error: error.message };
   if (!data?.ok) return { ok: false, error: data?.error ?? 'send_failed', reason: data?.reason, ...(typeof data?.failCode === 'number' ? { failCode: data.failCode } : {}) };
   const shape = {
-    ...(data.sent_as === 'text' || data.sent_as === 'template' ? { sentAs: data.sent_as as 'text' | 'template' } : {}),
+    /* 'video' = a video template's in-window version (a normal video message, the words as its caption): free-form, like text. */
+    ...(data.sent_as === 'text' || data.sent_as === 'template' ? { sentAs: data.sent_as as 'text' | 'template' } : data.sent_as === 'video' ? { sentAs: 'text' as const, withVideo: true } : {}),
     ...(typeof data.no_free_text === 'string' ? { noFreeText: data.no_free_text } : {}),
   };
   if (data.scheduled) return { ok: true, scheduled: data.scheduled, ...shape };
