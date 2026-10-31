@@ -2,6 +2,7 @@ import { memo } from 'react';
 import { AlertTriangle, CheckCheck, Clock, Loader2, MessageCircleReply, Timer, UserRound } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { AttentionKind } from '@/lib/inboxAttention';
+import type { StatusPillKey, StatusPillTone } from '@/lib/inboxStatusPill';
 import type { LeadAuditScore } from '@/lib/auditScore';
 import { VISIBLE_LABEL, VISIBLE_TITLE } from '@/lib/visibleFlag';
 
@@ -27,6 +28,24 @@ export const AttentionPill = memo(function AttentionPill({ kind, label, title, c
     <span data-testid="attention-pill" data-kind={kind} title={title ?? undefined}
       className={cn('inline-flex min-w-0 shrink-0 items-center gap-1 rounded-full font-semibold', compact ? 'px-1.5 py-0 text-[10px]' : 'px-2 py-0.5 text-[11px]', PILL_TONE[kind])}>
       <Icon className={cn('h-3 w-3 shrink-0', kind === 'auditing' && 'animate-spin')} />
+      <span className="truncate">{label}</span>
+    </span>
+  );
+});
+
+/* ⛔ THE ONE STATUS PILL (src/lib/inboxStatusPill.ts decides the words). Fixed height, one line, never wraps and never grows:
+   every label is short and the pill truncates rather than balloon. Warm = needs me, cool = waiting, green = positive, muted = closed. */
+const STATUS_TONE: Record<StatusPillTone, string> = {
+  warm: 'bg-amber-500/20 text-amber-800 dark:text-amber-300',
+  cool: 'bg-sky-500/15 text-sky-800 dark:text-sky-300',
+  good: 'bg-emerald-500/20 text-emerald-800 dark:text-emerald-300',
+  muted: 'bg-muted text-muted-foreground',
+  neutral: 'bg-slate-500/15 text-slate-700 dark:text-slate-300',
+};
+export const StatusPill = memo(function StatusPill({ pillKey, label, tone, title, compact = false }: { pillKey: StatusPillKey; label: string; tone: StatusPillTone; title: string; compact?: boolean }) {
+  return (
+    <span data-testid="status-pill" data-kind={pillKey} data-tone={tone} title={title}
+      className={cn('inline-flex max-w-[11rem] shrink-0 items-center whitespace-nowrap rounded-full font-semibold leading-none', compact ? 'h-[18px] px-2 text-[10px]' : 'h-5 px-2.5 text-[11px]', STATUS_TONE[tone])}>
       <span className="truncate">{label}</span>
     </span>
   );

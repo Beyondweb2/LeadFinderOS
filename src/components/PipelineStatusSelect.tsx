@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { Select, SelectContent, SelectItem, SelectLabel, SelectGroup, SelectTrigger } from '@/components/ui/select';
 import { PipelineStatusBadge, pipelineStatusLabel } from './PipelineStatusBadge';
 import { PIPELINE_STATUS_OPTIONS, type PipelineStatus } from '@/types/outreach';
@@ -28,6 +29,7 @@ export function PipelineStatusSelect({
   triggerProps,
   triggerClassName,
   stage,
+  display,
 }: {
   value: PipelineStatus | string | null | undefined;
   onValueChange: (status: PipelineStatus) => void | Promise<unknown>;
@@ -40,11 +42,13 @@ export function PipelineStatusSelect({
   triggerClassName?: string;
   /** The lead's sales stage (leadState.salesStateOf) — tooltip only. */
   stage?: SalesStateView | null;
+  /** What the trigger SHOWS (the Inbox's one derived status pill). The menu and what it writes are unchanged. */
+  display?: ReactNode;
 }) {
   /* The same list for both roles; a salesperson's options outside lead_set_stage's allowlist are
      shown disabled (the server refuses them anyway) — see src/lib/access.ts. */
   const perms = useLeadPermissions();
-  if (disabled) return <OneStatusPill status={value} stage={stage} />;
+  if (disabled) return display ? <span className="inline-flex items-center">{display}</span> : <OneStatusPill status={value} stage={stage} />;
   return (
     <Select value={value ?? undefined} onValueChange={async (v) => {
       await onValueChange(v as PipelineStatus);
@@ -55,7 +59,7 @@ export function PipelineStatusSelect({
         title={titleOf(value, stage)}
         {...(triggerProps ?? {})}
       >
-        <OneStatusPill status={value} stage={stage} />
+        {display ?? <OneStatusPill status={value} stage={stage} />}
       </SelectTrigger>
       <SelectContent>
         <SelectGroup>
