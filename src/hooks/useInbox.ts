@@ -875,7 +875,9 @@ export function useInbox(channel: InboxChannel = 'whatsapp') {
     allowResend?: boolean;
     /** Values the person typed for the template (today only needs_from_you's item); the server cleans them. */
     templateVars?: Record<string, string>;
-  }): Promise<{ ok: boolean; simulated?: boolean; error?: string; reason?: string; messageId?: string; scheduled?: InboxScheduledInfo }> => {
+    /** body + templateName: these words as free text, recorded as that template (WhatsApp, inside the 24-hour window). */
+    asFreeText?: boolean;
+  }): Promise<{ ok: boolean; simulated?: boolean; error?: string; reason?: string; messageId?: string; scheduled?: InboxScheduledInfo; sentAs?: 'text' | 'template'; noFreeText?: string }> => {
     if (sms) {
       /* A TEXT: through the SMS sender (every guard lives there — mobile check, opt-outs, the conversation gate, QA safety, the abuse guard).
          The row it wrote is read back and merged so the thread shows it at once, exactly as a WhatsApp send does. */
@@ -895,13 +897,14 @@ export function useInbox(channel: InboxChannel = 'whatsapp') {
     // The one WhatsApp send request (src/lib/whatsAppSendRequest.ts) — the Outreach WhatsApp dialog sends through it too.
     const r = await sendWhatsAppRequest(sb, { ...args, via: 'inbox' });
     if (!r.ok) return { ok: false, error: r.error, reason: r.reason };
-    if (r.scheduled) { void queryClient.invalidateQueries({ queryKey: INBOX_SCHEDULED_KEY }); return { ok: true, scheduled: r.scheduled }; }
+    const shape = { ...(r.sentAs ? { sentAs: r.sentAs } : {}), ...(r.noFreeText ? { noFreeText: r.noFreeText } : {}) };
+    if (r.scheduled) { void queryClient.invalidateQueries({ queryKey: INBOX_SCHEDULED_KEY }); return { ok: true, scheduled: r.scheduled, ...shape }; }
     if (r.message?.id) {
       queryClient.setQueryData<InboxData>(queryKey, (current) => current
         ? { ...current, messages: mergeInboxMessages(current.messages, [r.message as unknown as WaMessage]) } : current);
     }
     /* messageId: the row the server wrote — AI handles replies records it as the approved send. */
-    return { ok: true, simulated: r.simulated, messageId: r.message?.id };
+    return { ok: true, simulated: r.simulated, messageId: r.message?.id, ...shape };
   }, [queryClient, queryKey, sms, channel]);
 
   /* ⛔ ONE RECORDED VOICE NOTE → send-whatsapp-voice. The server resolves the recipient from the
@@ -959,7 +962,7 @@ export function useInbox(channel: InboxChannel = 'whatsapp') {
      like a write. */
   const preview = useCallback(async (args: {
     phone: string; leadId: string | null; country?: string | null; templateName: string; allowResend?: boolean; templateVars?: Record<string, string>;
-  }): Promise<{ ok: boolean; body?: string; snapshot?: WhatsAppTemplateSnapshot; template?: string; fellBack?: string; error?: string; reason?: string }> => {
+  }): Promise<{ ok: boolean; body?: string; snapshot?: WhatsAppTemplateSnapshot; template?: string; fellBack?: string; error?: string; reason?: string; sentAs?: 'text' | 'template'; withVideo?: boolean; noFreeText?: string }> => {
     if (sms) {
       /* The text this template would send: the six native templates are built here from the same function the sender uses; every other
          template is built by the WhatsApp sender's own dry run (twilio-sms-send mode:'preview'). Nothing is sent either way. */
@@ -976,6 +979,9 @@ export function useInbox(channel: InboxChannel = 'whatsapp') {
     const { data, error } = await sb.functions.invoke('send-whatsapp-message', {
       body: {
         mode: 'dry_run',
+        /* The Inbox's own door, so the dry run answers as an Inbox send would: inside the 24-hour window a saved template comes
+           back as its free-text version (message_type 'text'), or says why it has none (src/lib/inWindowFreeText.ts). */
+        via: 'inbox',
         phone: args.phone,
         lead_id: args.leadId,
         country: args.country ?? null,
@@ -993,7 +999,9 @@ export function useInbox(channel: InboxChannel = 'whatsapp') {
     if (data?.mode !== 'dry_run') {
       return { ok: false, error: 'preview_unsupported', reason: 'The live function does not have the preview yet — deploy send-whatsapp-message.' };
     }
-    return { ok: true, body: data.body ?? '', snapshot: data.template_snapshot ?? undefined, template: data.template ?? args.templateName, fellBack: data.fell_back };
+    return { ok: true, body: data.body ?? '', snapshot: data.template_snapshot ?? undefined, template: data.template ?? args.templateName, fellBack: data.fell_back,
+      /* 'video' = a video template's in-window version (a normal video message, the words as its caption): free-form too. */
+      sentAs: data.message_type === 'text' || data.message_type === 'video' ? 'text' : 'template', ...(data.message_type === 'video' ? { withVideo: true } : {}), ...(typeof data.no_free_text === 'string' ? { noFreeText: data.no_free_text } : {}) };
   }, [sms, queryClient, queryKey]);
 
   // Optimistic single-lead status patch — updates local `leads` state so the derived

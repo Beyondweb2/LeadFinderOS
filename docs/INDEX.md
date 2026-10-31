@@ -221,3 +221,4 @@
 - `docs/ugc-brand-finder.md` — UGC Brand Finder for Jess (separate login, tables, spend; her tiers, contact order, pitch pipeline; nothing sent from the app) (2026-10-29)
 - `docs/two-plans.md` — Findable Complete + Findable Essential, agreement v7, the baseline clock (2026-10-30)
 - `docs/hosting-price-and-guarantee-v7-wording.md` — hosting £29.99 Stripe price, who stayed on £9.99, the v7 guarantee wording sweep (2026-10-30)
+- `docs/in-window-free-text.md` — inside the 24-hour window an Inbox template goes as free text, recorded as that template; queued sends judged when they run; Meta pricing from 1 Oct 2026 (2026-10-31)

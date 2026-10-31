@@ -1115,6 +1115,12 @@ export function textPayload(body: string) {
   return { type: "text", text: { body, preview_url: false } };
 }
 
+/** A free-form VIDEO message by link, the words as its caption (inside the 24h window only) — a video template's in-window
+ *  version (src/lib/inWindowFreeText.ts): the same video its header carries, the same wording under it. */
+export function videoPayload(link: string, caption: string) {
+  return { type: "video", video: { link, caption } };
+}
+
 /**
  * True when a registered template must NOT be sent because Meta has not approved it yet.
  *

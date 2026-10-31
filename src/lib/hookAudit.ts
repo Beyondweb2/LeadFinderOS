@@ -576,13 +576,18 @@ function buildHookReportSummaryV2(
   if (input.rivalFilter) {
     const keys: string[] = [];
     let withheld = false;
-    for (const r of score.results) {
-      if (r.status !== 'not_named') continue;
-      const names = input.rivalFilter(r.competitors);
+    /* ⛔ THE SAME ANSWERS THE SCORE COUNTS (2026-10-31b, Paul — WSH Electrical said "4 other businesses" beside 8 names): when
+       Google AI is in the score (method 2), a Google AI answer that was shown and did not name them is a miss like any other,
+       so its names count too. Method 1 (Google AI display only) leaves them out, as the score does. */
+    const misses: string[][] = score.results.filter((r) => r.status === 'not_named').map((r) => r.competitors);
+    if (score.scored.googleAi.inScore) for (const o of score.overviews) if (o.state === 'shown' && o.named === false) misses.push(o.competitors);
+    for (const competitors of misses) {
+      const names = input.rivalFilter(competitors);
       if (names === null) { withheld = true; break; }
       for (const n of names) { const k = normaliseRivalName(n, input.town); if (k) keys.push(k); }
     }
-    rivalsNamedInstead = withheld ? null : countDistinctBusinesses(keys);
+    /* The client is never counted as their own rival (the same filter the listed names pass). */
+    rivalsNamedInstead = withheld ? null : countDistinctBusinesses(clientKey ? keys.filter((k) => !sameBusiness(k, clientKey)) : keys);
   }
   /* The featured question with every engine's answer (see `featured` above). Status comes from the
      score, never re-derived, so the card and the table cannot disagree. */

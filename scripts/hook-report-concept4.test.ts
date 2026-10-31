@@ -204,6 +204,23 @@ const hit = (rivals: string[]): Cell => ({ named: true, rivals });
   ok(html.length > 0, 'G: render ok');
 }
 
+/* ── G2. Google AI in the score → its answers' names count too (2026-10-31b, WSH Electrical: "4" beside 8 names) ── */
+{
+  const state = initialHookStateV2(Q);
+  const ov = (rivals: string[], named = false) => ({ ...cell({ named, rivals, text: named ? `${BIZ} and ${rivals.join(', ')} are local roofers.` : `Local roofers include ${rivals.join(', ')}. Compare quotes first.` }) });
+  const rows = Q.map((q, i) => ({ question: q, status: 'done', result: {
+    chatgpt: cell(miss(['Top Tiles Ltd'])), gemini: cell(miss(['Slate Masters'])), _ai_overview: 'shown',
+    ai_overview: i === 0 ? ov(['Top Tiles Ltd', 'Chase Farm Roofing', 'Stand To Roofing']) : i === 1 ? ov(['Hidden Named Rival'], true) : ov(['Leeds Roof Co']),
+  } }));
+  const base = { state, rows, engineOrder: ['chatgpt', 'gemini'] as const, engineLabel: (e: string) => (e === 'chatgpt' ? 'ChatGPT' : 'Gemini'), namedInstead: () => [] as string[], namedCtx: { businessName: BIZ, trade: 'roofer', town: TOWN }, town: TOWN, trade: 'roofer', rivalFilter: (c: string[]) => c };
+  const m1 = buildHookReportSummary({ ...base, scoringMethod: 1 });
+  ok(m1!.rivalsNamedInstead === 2, `G2: method 1 (Google AI display only) counts ChatGPT + Gemini misses only (got ${m1!.rivalsNamedInstead})`);
+  const m2 = buildHookReportSummary({ ...base, scoringMethod: 2 });
+  ok(m2!.rivalsNamedInstead === 5, `G2: method 2 adds the names from Google AI answers that missed, once each (got ${m2!.rivalsNamedInstead}: Top Tiles + Slate Masters + Chase Farm + Stand To + Leeds Roof Co)`);
+  const self = buildHookReportSummary({ ...base, scoringMethod: 2, rows: rows.map((r, i) => i === 2 ? { ...r, result: { ...r.result, ai_overview: { ...ov(['Leeds Roof Co']), competitors: [`${BIZ} Ltd`, 'Leeds Roof Co'] } } } : r) });
+  ok(self!.rivalsNamedInstead === 5, 'G2: the client spelled another way is never counted as their own rival');
+}
+
 /* ── H. Fallback when nothing readable survives ──────────────────────────────────────────────── */
 {
   const r = report([[miss(['Top Tiles Ltd']), miss(['Ridge Roofing Ltd', 'Slate Masters', 'Tile Doctors'], MAP_ONLY)], [miss(['Top Tiles Ltd']), miss(['Slate Masters'])], [miss(['Top Tiles Ltd']), miss(['Slate Masters'])]]);

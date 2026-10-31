@@ -5,6 +5,7 @@ import {
   sendViaGraph,
   errorColumns,
   textPayload,
+  videoPayload,
   claimTemplatePayload,
   renderTemplateBody,
   WA_TEMPLATES,
@@ -43,6 +44,7 @@ import { qaSendHold } from "../_shared/qa-guard.ts";
 import { templateAvailability } from "../_shared/template-status.ts";
 import { queueGate, replyWindowOpenNow, scheduledSendFor } from "../_shared/inbox-schedule.ts";
 import { keepsSendHours } from "../../../src/lib/inboxSendWindow.ts";
+import { freeTextVersionOf, inWindowShape, QUEUED_WORDS_UNREADABLE_REASON, type SendOrigin } from "../../../src/lib/inWindowFreeText.ts";
 import { formatVisibilityScore, REPORT_OFFER_REFUSAL_WORDS, REPORT_OFFER_TEMPLATE, reportOfferRefusal, UK_WORDED_TEMPLATES, ukWordedTemplateRefusal } from "../../../src/lib/reportOfferTemplate.ts";
 import { prospectOnlyTemplateRefusal } from "../../../src/lib/prospectOnly.ts";
 import { senderMessageName } from "../_shared/sender-name.ts";
@@ -117,7 +119,11 @@ const CAPABILITIES = ["dry_run", "build_phase_hold", "routing_leaf", "any_approv
    (the welcome pack's "Send a test to me", paid-client-hub). */
 /* 2026-10-29c: welcome_pack_ready (a paying client's welcome pack, admin only, variables resolved here, Meta's live status
    first); test_send auto_window: free text inside the test number's 24 hours, else the template. */
-const BUILD_ID = "2026-10-30d-quick-close-two-plans";
+/* 2026-10-31a: inside the 24-hour window an Inbox template send (and a queued one, judged when it runs) goes as FREE TEXT of
+   the same wording, still recorded as that template (src/lib/inWindowFreeText.ts); as_free_text sends the composer's edit. */
+/* 2026-10-31b: the four video templates go in-window as a normal VIDEO message (the header's video, the words as its caption);
+   a queued needs_from_you whose words cannot be read back sends those words if the window is open, else refuses with a reason. */
+const BUILD_ID = "2026-10-31b-in-window-video";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -186,7 +192,8 @@ Deno.serve(async (req) => {
       const r = sched.row;
       if (r.kind !== "text" && r.kind !== "template") return json({ ok: false, error: "scheduled_wrong_kind" }, 400);
       body.phone = r.phone; body.lead_id = r.lead_id; body.country = null;
-      body.body = r.kind === "text" ? (r.body ?? "") : "";
+      /* A template row's stored words ride along too: if the 24-hour window is open when it runs, they go as free text. */
+      body.body = r.body ?? "";
       body.template_name = r.kind === "template" ? r.template_name : null;
       body.allow_resend = r.allow_resend === true; body.link_variant = r.link_variant; body.mode = undefined; body.via = undefined;
       /* needs_from_you's {{2}} is read back from the row's stored line (the exact inverse of how it was written). */
@@ -205,6 +212,11 @@ Deno.serve(async (req) => {
     /* ⛔ THE SCREEN SAYS WHERE IT IS SENDING FROM. The Inbox (via:"inbox") and the Outreach WhatsApp popup (via:"lead_panel") — the
        SEND_WINDOW_SURFACES list, scripts/inbox-send-window.test.ts sweeps them — are queued below outside the lead's send hours. */
     const viaInbox = !sched && keepsSendHours(body.via);
+    /* ⛔ IN-WINDOW FREE TEXT (2026-10-31, src/lib/inWindowFreeText.ts) applies to the Inbox and to a queued send when it runs.
+       The bulk queue, the lead popup, the dashboard, the welcome pack and Quick Close keep sending templates exactly as before. */
+    const sendOrigin: SendOrigin = sched ? "scheduled" : body.via === "inbox" ? "inbox" : "other";
+    /* The composer's own words for a saved template (the Inbox filled it, the person may have edited it). */
+    const typedFreeText = !sched && sendOrigin === "inbox" && body.as_free_text === true;
     const rawPhone: string = typeof body.phone === "string" ? body.phone : "";
     const leadId: string | null = typeof body.lead_id === "string" && body.lead_id ? body.lead_id : null;
     const text: string = typeof body.body === "string" ? body.body.trim() : "";
@@ -486,7 +498,7 @@ Deno.serve(async (req) => {
        throw that carries no prefix, like the empty audit_url / onboarding_url guards) degrades to a
        readable hold instead of a 500. Two layers, one rule. */
     let payload: Record<string, unknown>;
-    let messageType: "text" | "template";
+    let messageType: "text" | "template" | "video";
     let usedTemplate: string | null = null;
     // What we STORE as the message body: the text for free-form, or the rendered
     // template copy (real wording + business name + claim URL) so the Inbox shows
@@ -497,6 +509,13 @@ Deno.serve(async (req) => {
        which is all of them but one. Hoisted for the same reason storedBody is: the insert happens
        after the branches. */
     let findingsShown: string[] | null = null;
+    /* The findings sentence itself, so an in-window free-text send that the person edited keeps findings_shown only while the
+       words still carry it. */
+    let findingsText: string | null = null;
+    /* The template payload, kept when an in-window send goes as free text: the snapshot still records the template it was. */
+    let templatePayload: Record<string, unknown> | null = null;
+    /* Set when the window was open but the template has no plain-text version, so it went as the template (the Inbox says why). */
+    let noFreeTextReason = "";
     // What the SEND-AUDIT row records: the business name and the link actually placed in the
     // template. Hoisted out of the branches below because whatsapp_sends is written after them.
     // For audit_reply the "claim url" IS the report link — the same column, the send's outbound URL.
@@ -717,22 +736,35 @@ Deno.serve(async (req) => {
           greeting = dashboardGreeting((cn as { contact_name: string | null } | null)?.contact_name, shownName);
         }
         let neededItem = "";
+        /* ⛔ A QUEUED SEND WHOSE WORDS CANNOT BE READ BACK (2026-10-31b, src/lib/inWindowFreeText.ts): the row holds the person's
+           own wording, not the transcript line {{2}} is read from. Open window → those words go as a normal message (below);
+           closed → refused with the reason the Inbox shows on the failed row. Never silent, never the template's wording instead. */
+        let queuedWordsOnly = false;
         if (dvars.includes("needed_item")) {
           const c = cleanNeededItem(templateVars.needed_item);
-          if (!c.ok) return json({ ok: false, error: "unsafe_template_var", reason: c.reason, detail: "Say what you need from them." }, 200);
-          neededItem = c.value;
+          if (!c.ok) {
+            if (!(sched && text)) return json({ ok: false, error: "unsafe_template_var", reason: c.reason, detail: "Say what you need from them." }, 200);
+            if (!windowOpen) return json({ ok: false, error: "queued_words_unreadable", reason: QUEUED_WORDS_UNREADABLE_REASON }, 200);
+            queuedWordsOnly = true;
+          } else neededItem = c.value;
         }
-        try {
-          payload = claimTemplatePayload(templateName, lang, businessName, "", { greetingName: greeting, neededItem });
-        } catch (e) {
-          const msg = (e as Error).message ?? "";
-          if (msg.startsWith("unsafe_template_var:")) {
-            const [, reason, detail] = msg.split(":");
-            return json({ ok: false, error: "unsafe_template_var", reason, detail: detail ?? "" }, 200);
+        if (queuedWordsOnly) {
+          /* No template payload can be built; the in-window shape below sends `text` (a payload with no header) as free text. */
+          payload = textPayload(text);
+          storedBody = text;
+        } else {
+          try {
+            payload = claimTemplatePayload(templateName, lang, businessName, "", { greetingName: greeting, neededItem });
+          } catch (e) {
+            const msg = (e as Error).message ?? "";
+            if (msg.startsWith("unsafe_template_var:")) {
+              const [, reason, detail] = msg.split(":");
+              return json({ ok: false, error: "unsafe_template_var", reason, detail: detail ?? "" }, 200);
+            }
+            throw e;
           }
-          throw e;
+          storedBody = dashboardTemplateTranscript(templateName, { business: shownName, greeting, neededItem });
         }
-        storedBody = dashboardTemplateTranscript(templateName, { business: shownName, greeting, neededItem });
         auditClaimUrl = "";
       } else if (needsContactName) {
         /* questionnaire_followup: {{1}} = the OWNER'S first name (first word of the lead's
@@ -895,7 +927,7 @@ Deno.serve(async (req) => {
            them for any lead with a usable crawl, so writing them on every send would attach a claim
            about what this message said to messages that never said it — and the whole point of the
            column is to be able to trust it later. Same condition as the variable itself. */
-        if (tvars.includes("site_findings")) findingsShown = a.siteFindingsKinds ?? null;
+        if (tvars.includes("site_findings")) { findingsShown = a.siteFindingsKinds ?? null; findingsText = a.siteFindings ?? null; }
         /* ai_visibility_report_offer (2026-10-14): {{4}} the check's score, {{6}} the PERSON PRESSING SEND's own message
            name (never anyone else's). Every missing piece refuses with the template's own words, before Meta. */
         if (tvars.includes("visibility_score")) auditExtra.visibilityScore = formatVisibilityScore(a.visibilityPct);
@@ -963,6 +995,20 @@ Deno.serve(async (req) => {
       }
       messageType = "template";
       usedTemplate = templateName;
+      /* ⛔ INSIDE THE 24-HOUR WINDOW, FREE TEXT OF THE SAME WORDING (2026-10-31, src/lib/inWindowFreeText.ts). Everything above —
+         every guard, every resolver, the real payload — has run for the template, so only the payload changes: the row keeps
+         template_name (pitchEverSent, report_sent, the snapshot all see it), and a queued send is judged again when it runs. */
+      const ownWords = (typedFreeText || sched) && text ? text : storedBody;
+      const shape = inWindowShape({ origin: sendOrigin, windowOpen, allowClosedText: !env.live, typed: typedFreeText, version: freeTextVersionOf(payload, ownWords) });
+      if (shape.as === "refuse") return json({ ok: false, error: shape.error, reason: shape.reason, template: templateName }, 200);
+      if (shape.as === "text") {
+        templatePayload = payload;
+        if (findingsShown?.length && findingsText && !shape.text.includes(findingsText.trim())) findingsShown = null;
+        /* A video template: the same video as a normal video message, the words as its caption (recorded as message_type video). */
+        payload = shape.videoUrl ? videoPayload(shape.videoUrl, shape.text) : textPayload(shape.text);
+        messageType = shape.videoUrl ? "video" : "text";
+        storedBody = shape.text;
+      } else if ("noFreeText" in shape) noFreeTextReason = shape.noFreeText;
     } else {
       // Free-form text — only deliverable inside the 24h window when LIVE. In test
       // mode we allow it (simulated) so the UI can be exercised before the webhook.
@@ -978,10 +1024,12 @@ Deno.serve(async (req) => {
        find the window open NOW, so there is no door around the hours. */
     if (viaInbox && !dryRun) {
       const gate = await queueGate(service, {
-        bookUserId, leadId: resolvedLeadId, phone: to, channel: "whatsapp", kind: messageType === "template" ? "template" : "text",
+        /* A template send that would go as free text is queued AS THE TEMPLATE with these words: when it runs, an open window
+           sends the words, a closed one the approved template (it is never refused for the window closing first). */
+        bookUserId, leadId: resolvedLeadId, phone: to, channel: "whatsapp", kind: usedTemplate ? "template" : "text",
         body: storedBody, templateName: usedTemplate, allowResend, linkVariant: usedTemplate ? signupLinkVariant : null, queuedBy: operatorId,
       }, lastInboundAt);
-      if (gate) return json({ ...gate, ...(gate.ok && fellBackReason ? { template: usedTemplate, fell_back: fellBackReason } : {}) }, 200);
+      if (gate) return json({ ...gate, ...(gate.ok && fellBackReason ? { template: usedTemplate, fell_back: fellBackReason } : {}), ...(gate.ok && usedTemplate ? { sent_as: messageType } : {}) }, 200);
     }
     /* Australia (2026-10-22): the row's stored zone is the lead's, resolved when it was queued. */
     if (sched && !(await replyWindowOpenNow(service, "whatsapp", to, new Date(), { leadId: sched.row.lead_id, leadTz: sched.row.tz }))) return json({ ok: false, error: "outside_reply_window" }, 200);
@@ -1015,6 +1063,7 @@ Deno.serve(async (req) => {
         body: storedBody,
         ...(messageType === "template" && usedTemplate ? { template_snapshot: createTemplateSnapshot({ templateName: usedTemplate, language: sentLang ?? WA_TEMPLATES[usedTemplate].lang, body: storedBody, payload }) } : {}),
         ...(fellBackReason ? { fell_back: fellBackReason } : {}),
+        ...(noFreeTextReason ? { no_free_text: noFreeTextReason } : {}),
       });
     }
 
@@ -1054,7 +1103,8 @@ Deno.serve(async (req) => {
       test_mode: env.testMode,
       error: sendError,
       ...errorColumns(sendParts),
-      ...(messageType === "template" && usedTemplate ? { template_snapshot: createTemplateSnapshot({ templateName: usedTemplate, language: sentLang ?? WA_TEMPLATES[usedTemplate].lang, body: storedBody, payload }) } : {}),
+      /* An in-window free-text send of a template keeps that template's snapshot (built from the template payload, with the words sent). */
+      ...(usedTemplate ? { template_snapshot: createTemplateSnapshot({ templateName: usedTemplate, language: sentLang ?? WA_TEMPLATES[usedTemplate].lang, body: storedBody, payload: templatePayload ?? payload }) } : {}),
       ...(findingsShown?.length ? { findings_shown: findingsShown } : {}),
     }).select("*").maybeSingle();
     if (insErr) console.error("[send-whatsapp-message] log insert failed:", insErr.message);
@@ -1168,6 +1218,8 @@ Deno.serve(async (req) => {
       /* Present ONLY after a substitution. The operator pressed send on one template and a different
          one went out; saying nothing would leave them believing the competitor message had gone. */
       ...(fellBackReason ? { template: usedTemplate, fell_back: fellBackReason } : {}),
+      ...(usedTemplate ? { sent_as: messageType } : {}),
+      ...(noFreeTextReason ? { no_free_text: noFreeTextReason } : {}),
     });
   } catch (e) {
     const msg = (e as Error)?.message ?? String(e);

@@ -22,6 +22,22 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-31-in-window-video', date: '2026-10-31', title: 'Inbox: video templates inside their 24 hours go as a normal video message', audience: 'all',
+    body: 'The four video templates now work like the others when someone has replied in the last 24 hours: "Put in message box" fills the box with the wording, you can edit it, and Send sends the same video as a normal WhatsApp video with your words underneath. It still counts as that template. A queued message whose wording was edited never fails quietly any more, and the quick report\'s "other businesses were named" number now includes the Google AI answers when Google AI is in the score.',
+    report: {
+      added: ['A "▶ Sent with the Findable video" line on a video sent this way in the conversation.'],
+      changed: ['Audit result hook with video, Competitor hook, and both Explain the offer versions: inside their 24 hours they go as a normal video message (the video, your words as its caption), not a template. Over 1,024 characters, they go as the template and the picker says why.', 'A queued "What we need from you" message whose words were edited: if their 24 hours are still open when it goes, your words go as a normal message; if not, it shows in the conversation as "Not sent" with the reason.', 'Quick report: "X other businesses were named instead" now counts the businesses Google AI named too, when Google AI is part of the score, so the number matches the names listed.'],
+      removed: [],
+      effect: 'No more Meta template charges for the video templates inside the 24 hours. Cold openers, the WhatsApp queue, the lead popup, the dashboard buttons, the welcome pack and Quick Close are unchanged.',
+    } },
+  { id: '2026-10-31-in-window-free-text', date: '2026-10-31', title: 'Inbox: inside their 24 hours a template goes as a normal message', audience: 'all',
+    body: 'When someone has replied in the last 24 hours, picking a WhatsApp template no longer sends a template. "Put in message box" fills the message box with its wording, every detail already filled in, so you can edit it and press Send. It still counts as that template (it will not go twice by mistake, and the lead moves on as before). Once their 24 hours are up, templates work exactly as they did. Quick replies now have a one-click Send now.',
+    report: {
+      added: ['Template picker (24 hours open): "Put in message box" with the template\'s wording, ready to edit, and a green note above the box saying which template it came from (Remove takes it off).', 'Quick reply: a Send now button on every saved reply (Queue outside their send hours). When their 24 hours are up the list still shows, greyed, with "They haven\'t replied in 24 hours".'],
+      changed: ['A template sent from the Inbox while their 24 hours are open goes as a normal message with the same wording. A queued one is checked when it goes: still open, a normal message; closed, the approved template.', 'The video templates (Audit result hook with video, Competitor hook, both Explain the offer versions) have no plain-text version, so they still go as templates, and the picker says so.'],
+      removed: ['The "Send template" button while their 24 hours are open (except for the video templates).'],
+      effect: 'Meta now charges for a template sent inside the 24 hours, and a normal message reads better in a conversation. Cold openers, the WhatsApp queue, the lead popup, the dashboard buttons, the welcome pack and Quick Close are unchanged.',
+    } },
   { id: '2026-10-31-inbox-single-status', date: '2026-10-31', title: 'Inbox: one status pill per lead', audience: 'all',
     body: 'Each Inbox lead now shows ONE status pill that says whose turn it is: Reply needed, Waiting on them, Follow-up due, Call booked, Contacted and so on. The separate Needs you and Waiting pills are gone, and the lead pane shows the website score next to Google AI in its AI Visibility row.',
     report: {

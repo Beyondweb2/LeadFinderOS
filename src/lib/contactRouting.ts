@@ -19,6 +19,9 @@
    recommended instead, with the reason — the rep reviews it and presses send; nothing resends by itself.
    ⛔ COST ONLY BREAKS TIES between channels that are both likely to land. Free WhatsApp (verified, in window)
    beats SMS; a verified WhatsApp that needs a PAID template is compared against SMS on delivery confidence first.
+   ⚠️ "Free" in the window (from 1 Oct 2026, channelCosts.ts): a free-text reply is free for the first 1,000 a month per
+   number, then charged at the service rate (= utility); a utility TEMPLATE inside the window is now charged too, which is
+   why the Inbox sends a saved template there as free text (inWindowFreeText.ts). The UK figure is still unconfirmed.
    Pure; relative imports with .ts only (edge-reachable). */
 import { CHANNEL_COST_GBP, costWords } from './channelCosts.ts';
 import { isUkColdDestination } from './ukColdDestination.ts';
