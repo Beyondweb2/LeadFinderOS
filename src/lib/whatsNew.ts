@@ -22,6 +22,14 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-31-in-window-free-text', date: '2026-10-31', title: 'Inbox: inside their 24 hours a template goes as a normal message', audience: 'all',
+    body: 'When someone has replied in the last 24 hours, picking a WhatsApp template no longer sends a template. "Put in message box" fills the message box with its wording, every detail already filled in, so you can edit it and press Send. It still counts as that template (it will not go twice by mistake, and the lead moves on as before). Once their 24 hours are up, templates work exactly as they did. Quick replies now have a one-click Send now.',
+    report: {
+      added: ['Template picker (24 hours open): "Put in message box" with the template\'s wording, ready to edit, and a green note above the box saying which template it came from (Remove takes it off).', 'Quick reply: a Send now button on every saved reply (Queue outside their send hours). When their 24 hours are up the list still shows, greyed, with "They haven\'t replied in 24 hours".'],
+      changed: ['A template sent from the Inbox while their 24 hours are open goes as a normal message with the same wording. A queued one is checked when it goes: still open, a normal message; closed, the approved template.', 'The video templates (Audit result hook with video, Competitor hook, both Explain the offer versions) have no plain-text version, so they still go as templates, and the picker says so.'],
+      removed: ['The "Send template" button while their 24 hours are open (except for the video templates).'],
+      effect: 'Meta now charges for a template sent inside the 24 hours, and a normal message reads better in a conversation. Cold openers, the WhatsApp queue, the lead popup, the dashboard buttons, the welcome pack and Quick Close are unchanged.',
+    } },
   { id: '2026-10-31-inbox-single-status', date: '2026-10-31', title: 'Inbox: one status pill per lead', audience: 'all',
     body: 'Each Inbox lead now shows ONE status pill that says whose turn it is: Reply needed, Waiting on them, Follow-up due, Call booked, Contacted and so on. The separate Needs you and Waiting pills are gone, and the website score moved into the AI Visibility row, next to Google AI.',
     report: {

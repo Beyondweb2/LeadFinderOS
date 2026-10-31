@@ -182,6 +182,14 @@ function templateLabel(name: string | null): string {
   return `📄 ${friendlyTemplate(name)}`;
 }
 
+/** The composer was filled from this saved template inside the 24-hour window: its send goes as free text recorded as the template. */
+interface FreeTextMarker { key: string; template: string; templateVars?: Record<string, string> }
+
+/** The picker's own name for a template (sendable list, then the dashboard group). */
+function pickerLabel(name: string): string {
+  return WHATSAPP_TEMPLATES.find((t) => t.value === name)?.label ?? INBOX_DASHBOARD_TEMPLATES.find((t) => t.value === name)?.label ?? name;
+}
+
 /* ⛔ TWO TEMPLATES PUT A REPORT IN FRONT OF A PROSPECT NOW. `audit_reply` was the only one for
    months, so three places compared against that single string; `free_check_result` (the free-check
    lane) carries the same report link and matched none of them, so the Inbox believed no report had
@@ -1029,12 +1037,19 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
      remounts and re-seeds from the draft we just wrote. Deliberately not an imperative ref handle:
      a remount cannot get out of step with the stored draft, and a handle can. */
   const [composerSeed, setComposerSeed] = useState(0);
+  /* Team templates carry markers beyond the business name (src/lib/teamTemplateSeed.ts): the lead's report link, trade and town resolve
+     from the open lead; the rival names and a site fault are typed by the rep, and doSend refuses a message that still carries one. */
+  const quickReplyVars = () => ({ businessName: activeBusinessName, link: reportUrl, trade: activeLead?.category || activeLead?.search_keyword || null, town: (activeLead as { derived_town?: string | null; search_location?: string | null } | undefined)?.derived_town ?? activeLead?.search_location ?? null });
+  const fillQuickReply = (content: string) => fillTemplate(content, quickReplyVars());
   const insertTemplate = (content: string) => {
-    /* Team templates carry markers beyond the business name (src/lib/teamTemplateSeed.ts): the lead's report link, trade and town resolve
-       from the open lead; the rival names and a site fault are typed by the rep, and doSend refuses a message that still carries one. */
-    setText(fillTemplate(content, { businessName: activeBusinessName, link: reportUrl, trade: activeLead?.category || activeLead?.search_keyword || null, town: (activeLead as { derived_town?: string | null; search_location?: string | null } | undefined)?.derived_town ?? activeLead?.search_location ?? null }));
+    setText(fillTemplate(content, quickReplyVars()));
     setComposerSeed((n) => n + 1);
   };
+  /* ⛔ IN-WINDOW FREE TEXT (2026-10-31, src/lib/inWindowFreeText.ts). A saved WhatsApp template picked while their 24 hours are open
+     goes INTO THE COMPOSER as its free-text wording (the sender's own dry run renders it, every value filled), and the send carries
+     which template it was, so the server records it AS that template (pitch guards, report_sent, the snapshot). Keyed by
+     conversation; cleared on a successful send or by the person (Remove). Quick replies never carry one. */
+  const [freeTextOf, setFreeTextOf] = useState<FreeTextMarker | null>(null);
   /* WARM REPLY DRAFTS go in the same way a quick reply does: write the draft, remount the composer.
      ⛔ NEVER A SEND — Paul reviews, edits and presses the composer's own Send. The key is explicit so
      a draft that lands after Paul has moved thread is filed under the thread it was written for.
@@ -1678,7 +1693,7 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
   const [previewing, setPreviewing] = useState(false);
   const [previewOf, setPreviewOf] = useState<{ template: string; key: string } | null>(null);
   const [previewResult, setPreviewResult] = useState<
-    { ok: boolean; body?: string; snapshot?: WhatsAppTemplateSnapshot; template?: string; fellBack?: string; error?: string; reason?: string } | null
+    { ok: boolean; body?: string; snapshot?: WhatsAppTemplateSnapshot; template?: string; fellBack?: string; error?: string; reason?: string; sentAs?: 'text' | 'template'; noFreeText?: string } | null
   >(null);
 
   /* hasSiteFault gates audit_followup_fault: it names a specific site fault in {{6}} and Meta rejects
@@ -1703,6 +1718,37 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
      block — so "nothing selected" has to be refused here or the button would be live with no
      template chosen. */
   const selectedSendability = template ? templateSendability(template) : { ok: false as const, reason: 'Choose a template first.' };
+
+  /* ⛔ IN-WINDOW FREE TEXT (2026-10-31). WhatsApp with their 24 hours open: the picker FILLS THE COMPOSER instead of sending a template.
+     The words come from the sender's own dry run (the same render, every value filled, every guard asked), so what the box shows is
+     exactly what would go. A template with no plain-text version (a video) comes back as a template: then — and only then — the
+     template button is offered, with the reason. Texts have no 24-hour window and keep their own template sender. */
+  const inWindowWa = !sms && win.open;
+  const [filling, setFilling] = useState(false);
+  const templateGoesAsTemplate = !!(previewResult?.ok && previewResult.sentAs === 'template' && previewOf?.template === template && previewOf.key === active?.key);
+  const fillComposerFromTemplate = async () => {
+    if (!active?.leadId || !template) return;
+    if (!selectedSendability.ok) { toast({ title: 'Template not available for this lead', description: selectedSendability.reason, variant: 'destructive' }); return; }
+    const target = { key: active.key, template };
+    const templateVars = needsTypedItem(template) ? { needed_item: neededItem } : undefined;
+    setFilling(true);
+    setPreviewOf(target);
+    const r = await preview({ phone: active.phone, leadId: active.leadId, country: activeLead?.country ?? null, templateName: template, allowResend: thread.some((m) => m.direction === 'outbound' && m.template_name === template), ...(templateVars ? { templateVars } : {}) });
+    setFilling(false);
+    if (!r.ok) { setPreviewResult({ ok: false, error: r.error ?? 'preview_failed', reason: r.reason }); return; }
+    if (r.sentAs !== 'text') {
+      setPreviewResult({ ok: true, body: r.body ?? '', snapshot: r.snapshot, template: r.template ?? template, fellBack: r.fellBack, sentAs: 'template', noFreeText: r.noFreeText });
+      return;
+    }
+    const words = r.body ?? '';
+    const left = unresolvedTokens(words);
+    if (left.length) { setPreviewResult({ ok: false, error: 'blank_left', reason: `The wording still has ${left.join(', ')} to fill, so it was not put in the box.` }); return; }
+    insertWarmDraft(target.key, words);
+    setFreeTextOf({ key: target.key, template: target.template, ...(templateVars ? { templateVars } : {}) });
+    setPreviewResult(null);
+    setTemplatesOpen(false);
+    toast({ title: 'In the message box', description: 'Edit it if you like, then Send. It goes as a normal message, not a template.' });
+  };
 
   // Approved WhatsApp-template picker — SEPARATE from the free-text "Quick reply" snippets. Shown in
   // both window states (below). Each option is enabled/disabled by the SHARED getTemplateSendability
@@ -1762,7 +1808,7 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
             setPreviewOf({ template, key: active.key });
             const r = await preview({ phone: active.phone, leadId: active.leadId, country: activeLead?.country ?? null, templateName: template, allowResend: thread.some((m) => m.direction === 'outbound' && m.template_name === template), ...(needsTypedItem(template) ? { templateVars: { needed_item: neededItem } } : {}) });
             setPreviewResult(r.ok
-              ? { ok: true, body: r.body ?? '', snapshot: r.snapshot, template: r.template ?? template, fellBack: r.fellBack }
+              ? { ok: true, body: r.body ?? '', snapshot: r.snapshot, template: r.template ?? template, fellBack: r.fellBack, sentAs: r.sentAs, noFreeText: r.noFreeText }
               : { ok: false, error: r.error ?? 'preview_failed', reason: r.reason });
             setPreviewing(false);
           }}
@@ -1770,11 +1816,26 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
           {previewing ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Eye className="mr-1.5 h-4 w-4" />}
           Preview
         </Button>
-        <Button onClick={() => doSend(true)} disabled={sending || !active?.leadId || !template || !selectedSendability.ok} className="shrink-0">
-          {sending ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : replyOpen ? <Send className="mr-1.5 h-4 w-4" /> : <Clock className="mr-1.5 h-4 w-4" />}
-          {sendVerb(replyOpen)} template
-        </Button>
+        {/* Window open (WhatsApp): the wording goes into the message box. The template button appears only for a template the
+            sender says has no plain-text version. Window closed (or a text): exactly as before. */}
+        {inWindowWa && (
+          <Button onClick={() => void fillComposerFromTemplate()} disabled={filling || sending || !active?.leadId || !template || !selectedSendability.ok} className="shrink-0" data-testid="picker-fill-composer">
+            {filling ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <MessageSquarePlus className="mr-1.5 h-4 w-4" />}
+            Put in message box
+          </Button>
+        )}
+        {(!inWindowWa || templateGoesAsTemplate) && (
+          <Button onClick={() => doSend(true)} disabled={sending || !active?.leadId || !template || !selectedSendability.ok} className="shrink-0">
+            {sending ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : replyOpen ? <Send className="mr-1.5 h-4 w-4" /> : <Clock className="mr-1.5 h-4 w-4" />}
+            {sendVerb(replyOpen)} template
+          </Button>
+        )}
       </div>
+      {inWindowWa && (
+        <p className="mt-1 text-[11px] text-muted-foreground" data-testid="picker-free-text-note">
+          Their 24 hours are open, so a template goes as a normal message: it fills the message box with its wording for you to check, edit and send.
+        </p>
+      )}
       {/* A dashboard template: Meta's approved wording (as Paul pasted it, DASHBOARD_TEMPLATE_WORDING) filled with this lead's
           values; Preview runs the real dry run. needs_from_you asks for its item first. */}
       {isDashboardTemplate(template) && (
@@ -1812,6 +1873,8 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
               {previewResult.template !== template && ` It would fall back to "${previewResult.template}".`}
             </p>
             {previewResult.fellBack && <p className="text-[10px] text-muted-foreground">{previewResult.fellBack}</p>}
+            {previewResult.sentAs === 'text' && <p className="text-[10px] text-muted-foreground">It goes as a normal message (their 24 hours are open), recorded as this template.</p>}
+            {previewResult.noFreeText && <p className="text-[10px] text-amber-700 dark:text-amber-400" data-testid="picker-no-free-text">No plain-text version — {previewResult.noFreeText}</p>}
             <div className="mt-2 rounded-xl bg-primary/90 p-3 text-[11px] text-primary-foreground">{previewResult.snapshot ? <WhatsAppTemplateMessage snapshot={previewResult.snapshot} /> : <pre className="whitespace-pre-wrap break-words leading-snug">{previewResult.body}</pre>}</div>
           </div>
         ) : (
@@ -2176,7 +2239,9 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
      DRAFT_DEBOUNCE_MS behind what is on screen, and sending the stale copy would send the message
      minus its last few characters. Template sends ignore it entirely.
      Returns whether the message actually went, so the composer only clears itself on success. */
-  const doSend = async (asTemplate?: boolean, freeText?: string): Promise<boolean> => {
+  /* `opts.marker`: the composer was filled from a saved template (in-window free text) — the words go as text, recorded as it.
+     `opts.keepDraft`: a quick reply's one-click send leaves whatever the person was typing in the composer alone. */
+  const doSend = async (asTemplate?: boolean, freeText?: string, opts: { marker?: FreeTextMarker | null; keepDraft?: boolean } = {}): Promise<boolean> => {
     if (!active) return false;
     // IN-FLIGHT GUARD. The buttons are disabled while `sending`, but that only covers the buttons:
     // the composer's Enter key and the template picker can both reach here, and two taps inside the
@@ -2210,16 +2275,20 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
     // Template sends are deliberate button actions; do not add a second confirmation step.
     // Repeats still pass the explicit server override automatically so removing the browser prompt
     // does not turn a valid repeat into a confusing duplicate refusal.
-    const alreadySent = useTemplate && thread.some((m) => m.direction === 'outbound' && m.template_name === template);
+    /* The marker counts only on WhatsApp, for the conversation it was set in, with a lead to record it against. */
+    const marker = !useTemplate && !sms && active.leadId && opts.marker?.key === sendKey ? opts.marker : null;
+    const recordedAs = useTemplate ? template : marker?.template;
+    const alreadySent = !!recordedAs && thread.some((m) => m.direction === 'outbound' && m.template_name === recordedAs);
     sendingKeysRef.current.add(sendKey);
     setSendingKeys((prev) => new Set(prev).add(sendKey));
     const res = await send({
       phone: active.phone,
       leadId: active.leadId,
       body: useTemplate ? undefined : body,
-      templateName: useTemplate ? template : undefined,
+      templateName: recordedAs,
       allowResend: alreadySent,
       ...(useTemplate && needsTypedItem(template) ? { templateVars: { needed_item: neededItem } } : {}),
+      ...(marker ? { asFreeText: true, ...(marker.templateVars ? { templateVars: marker.templateVars } : {}) } : {}),
     });
     sendingKeysRef.current.delete(sendKey);
     setSendingKeys((prev) => { const next = new Set(prev); next.delete(sendKey); return next; });
@@ -2235,19 +2304,65 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
         // operator's normal path, which now asks and then sends. So it reads as the unexpected
         // state it is, rather than as a policy the operator has already been asked about.
         pitch_already_sent: 'Already sent to this lead, and the repeat was not confirmed. Try again — you will be asked to confirm.',
+        no_free_text_version: 'This template can’t go as a normal message. Send it as the template instead.',
       };
       toast({ title: 'Not sent', description: res.reason ?? map[res.error ?? ''] ?? res.error ?? 'Send failed.', variant: 'destructive' });
       return false;
     }
+    if (marker) setFreeTextOf((cur) => (cur?.key === sendKey ? null : cur));
     /* The composer clears ITSELF on a true return (and clears its own draft). This still runs for
        the template path, which has no composer text to clear but may hold a draft. */
-    setDrafts((prev) => setDraft(prev, sendKey, ''));
-    if (res.scheduled) { queuedToast(res.scheduled, useTemplate ? 'Template' : 'Reply'); return true; }
+    if (!opts.keepDraft) setDrafts((prev) => setDraft(prev, sendKey, ''));
+    /* How it went, said plainly: a template that went as a normal message (their 24 hours were open), or one that had to go as
+       the template even though they were open (no plain-text version — the server's reason). */
+    const how = res.noFreeText ?? (useTemplate && res.sentAs === 'text' ? 'Their 24 hours are open, so it went as a normal message (same wording).' : marker ? `Recorded as “${pickerLabel(marker.template)}”.` : undefined);
+    if (res.scheduled) {
+      if (recordedAs && res.sentAs === 'text') toast({ title: 'Queued', description: `Outside their send hours. ${queuedLabel(res.scheduled.send_at, res.scheduled.tz)}. It goes as a normal message if their 24 hours are still open then, otherwise as the approved template.` });
+      else queuedToast(res.scheduled, useTemplate ? 'Template' : 'Reply');
+      return true;
+    }
     if (activeKey === sendKey) setSynthetic(null); // the real conversation now exists under the same key
-    toast({ title: res.simulated ? 'Sent (simulated — test mode)' : 'Sent ✓' });
+    toast({ title: res.simulated ? 'Sent (simulated — test mode)' : 'Sent ✓', ...(how ? { description: how } : {}) });
     if (activeKey === sendKey) setTimeout(() => threadRef.current?.scrollTo({ top: threadRef.current.scrollHeight }), 50);
     return true;
   };
+
+  /* QUICK REPLY (the saved TEXT scripts, 2026-10-31): click the wording to put it in the message box (editable), or "Send now" to
+     send it as it is — the same doSend, so the blanks check, send hours (Queue) and every server rule apply, and it leaves a
+     half-typed draft alone. A saved reply is free text, so outside the 24 hours it is still listed but greyed, with the reason. */
+  const NO_REPLY_24H = 'They haven’t replied in 24 hours';
+  const quickReplyMenu = (windowOpen: boolean) => textTemplates.length > 0 && (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button variant="outline" size="sm" className="h-7 gap-1 text-xs" disabled={sending}>
+          <MessageSquarePlus className="h-3.5 w-3.5" /> Quick reply
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start" className="max-h-72 w-96 max-w-[calc(100vw-2rem)] overflow-y-auto thin-scrollbar">
+        {!windowOpen && <p className="px-2 py-1.5 text-[11px] text-amber-700 dark:text-amber-400" data-testid="quick-reply-closed">{NO_REPLY_24H}, so a saved reply can’t be sent. Use an approved template below.</p>}
+        {[{ label: TEAM_HEADING, rows: teamTextTemplates, team: true }, { label: MINE_HEADING, rows: myTextTemplates, team: false }].filter((g) => g.rows.length > 0).map((g) => (
+          <div key={g.label} data-testid={g.team ? 'quick-reply-team' : 'quick-reply-mine'}>
+            {(teamTextTemplates.length > 0 && myTextTemplates.length > 0) && <p className="px-2 pb-0.5 pt-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">{g.label}</p>}
+            {g.rows.map((t, i) => (
+              <div key={`${t.id}-${i}`} className="flex items-start gap-1">
+                <DropdownMenuItem disabled={!windowOpen} onClick={() => insertTemplate(t.content)} className="flex min-w-0 flex-1 flex-col items-start gap-0.5">
+                  <span className="flex items-center gap-1.5 text-xs font-medium">{t.title}{g.team && <span className="rounded-full bg-yellow-400/15 px-1.5 text-[9px] font-bold tracking-wide text-yellow-600 ring-1 ring-inset ring-yellow-500/40 dark:text-yellow-300">{TEAM_MARK}</span>}</span>
+                  <span className="line-clamp-2 whitespace-normal text-[11px] text-muted-foreground">
+                    {fillTemplate(t.content, { businessName: activeBusinessName })}
+                  </span>
+                </DropdownMenuItem>
+                <DropdownMenuItem disabled={!windowOpen || sending} onClick={() => void doSend(false, fillQuickReply(t.content), { keepDraft: true })}
+                  className="shrink-0 flex-col items-end gap-0 text-[11px] font-medium" data-testid="quick-reply-send-now">
+                  <span className="flex items-center gap-1"><Send className="h-3 w-3" /> {windowOpen && !replyOpen ? 'Queue' : 'Send now'}</span>
+                  {!windowOpen && <span className="max-w-[7rem] whitespace-normal text-right text-[10px] font-normal text-muted-foreground">{NO_REPLY_24H}</span>}
+                </DropdownMenuItem>
+              </div>
+            ))}
+          </div>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
 
   /* ══ THE INBOX FILLS THE SCREEN (2026-09-27) ═════════════════════════════════════════════════════
      Both panels used to be a fixed 60vh, so on a tall desktop the thread stopped two-thirds of the way
@@ -3008,31 +3123,8 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
                       />
                       </div>
                     )}
-                    {/* Quick-reply: insert a saved TEXT script (editable before send). */}
-                    {textTemplates.length > 0 && (
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="outline" size="sm" className="h-7 gap-1 text-xs" disabled={sending}>
-                            <MessageSquarePlus className="h-3.5 w-3.5" /> Quick reply
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="start" className="max-h-72 w-80 overflow-y-auto thin-scrollbar">
-                          {[{ label: TEAM_HEADING, rows: teamTextTemplates, team: true }, { label: MINE_HEADING, rows: myTextTemplates, team: false }].filter((g) => g.rows.length > 0).map((g) => (
-                            <div key={g.label} data-testid={g.team ? 'quick-reply-team' : 'quick-reply-mine'}>
-                              {(teamTextTemplates.length > 0 && myTextTemplates.length > 0) && <p className="px-2 pb-0.5 pt-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">{g.label}</p>}
-                              {g.rows.map((t, i) => (
-                                <DropdownMenuItem key={`${t.id}-${i}`} onClick={() => insertTemplate(t.content)} className="flex flex-col items-start gap-0.5">
-                                  <span className="flex items-center gap-1.5 text-xs font-medium">{t.title}{g.team && <span className="rounded-full bg-yellow-400/15 px-1.5 text-[9px] font-bold tracking-wide text-yellow-600 ring-1 ring-inset ring-yellow-500/40 dark:text-yellow-300">{TEAM_MARK}</span>}</span>
-                                  <span className="line-clamp-2 whitespace-normal text-[11px] text-muted-foreground">
-                                    {fillTemplate(t.content, { businessName: activeBusinessName })}
-                                  </span>
-                                </DropdownMenuItem>
-                              ))}
-                            </div>
-                          ))}
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    )}
+                    {/* Quick-reply: insert a saved TEXT script (editable before send), or send it as it is. */}
+                    {quickReplyMenu(true)}
                     {/* ⛔ KEYED BY CONVERSATION (+ the insert seed), so switching thread REMOUNTS it:
                         the outgoing instance flushes its draft under its own key on unmount and the
                         incoming one seeds from the new thread's draft. That is what stops a
@@ -3050,7 +3142,7 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
                         window they are optional, so they open on demand; outside it they always show. */}
                     <Button type="button" variant="ghost" size="sm" className="h-7 gap-1 px-2 text-xs text-muted-foreground"
                       onClick={() => setTemplatesOpen((v) => !v)} aria-expanded={templatesOpen}>
-                      <FileText className="h-3.5 w-3.5" /> {templatesOpen ? 'Hide templates' : 'Send a template'}
+                      <FileText className="h-3.5 w-3.5" /> {templatesOpen ? 'Hide templates' : inWindowWa ? 'Use a template' : 'Send a template'}
                     </Button>
                     </div>
                     {/* ⛔ THE ROW BELONGS TO ONE THING AT A TIME: text, a voice note, or a staged file.
@@ -3058,6 +3150,13 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
                         mounted, so a half-typed reply survives). Both are keyed by conversation: a
                         thread switch drops a recording or a staged file, so neither can be sent into
                         the wrong conversation. */}
+                    {inWindowWa && freeTextOf?.key === active.key && (
+                      <div className="flex items-center gap-2 rounded-md border border-emerald-600/30 bg-emerald-50/60 px-2 py-1 text-[11px] dark:bg-emerald-950/20" data-testid="composer-free-text-marker">
+                        <MessageSquareText className="h-3.5 w-3.5 shrink-0 text-emerald-700 dark:text-emerald-400" />
+                        <span className="min-w-0 flex-1">From the “{pickerLabel(freeTextOf.template)}” template. It goes as a normal message and counts as that template.</span>
+                        <button type="button" className="shrink-0 text-muted-foreground underline-offset-2 hover:underline" onClick={() => setFreeTextOf(null)}>Remove</button>
+                      </div>
+                    )}
                     <div className="flex min-w-0 items-end gap-2">
                       <div className={cn('min-w-0 flex-1', (voiceActive || attachActive) && active.leadId && 'hidden')}>
                         <InboxComposer
@@ -3066,7 +3165,7 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
                           initialText={text}
                           sending={sending}
                           onPersist={persistDraft}
-                          onSend={(bodyText) => doSend(false, bodyText)}
+                          onSend={(bodyText) => doSend(false, bodyText, { marker: freeTextOf })}
                           queueHint={queueHint}
                           typingPhone={active.phone}
                           onTyping={markTyping}
@@ -3093,7 +3192,7 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
                     {sms && <p className="text-[11px] text-muted-foreground" data-testid="sms-cost-note">About {costWords(CHANNEL_COST_GBP.sms)} a text segment. No 24-hour window. Links go only through templates.</p>}
                     {templatesOpen && (
                       <div className="border-t border-border/60 pt-2">
-                        <p className="mb-1 text-[11px] text-muted-foreground">{sms ? 'Or send a template (the same wording as WhatsApp):' : 'Or send an approved WhatsApp template:'}</p>
+                        <p className="mb-1 text-[11px] text-muted-foreground">{sms ? 'Or send a template (the same wording as WhatsApp):' : 'Or use an approved WhatsApp template’s wording:'}</p>
                         {templatePicker}
                       </div>
                     )}
@@ -3112,6 +3211,8 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
                         onDraft={() => undefined}
                       />
                     )}
+                    {/* Saved replies stay listed outside the window, greyed with the reason, instead of disappearing. */}
+                    <div className="flex flex-wrap items-center gap-1.5">{quickReplyMenu(false)}</div>
                     <p className="text-[11px] text-muted-foreground">
                       Outside the 24h window — free text, files and voice notes aren’t allowed. Send an approved template{active.leadId ? '' : ' (needs a linked lead)'}:
                     </p>

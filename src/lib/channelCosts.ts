@@ -9,9 +9,15 @@
      Twilio UK SMS      ~USD 0.046-0.056 per outbound segment, ~USD 0.0075 inbound, plus carrier fees that vary.
      Twilio UK voice    ~USD 0.03 per minute to a UK mobile, less to a landline; browser (Voice SDK) client leg
                         ~USD 0.004 per minute extra; UK mobile number ~USD 2.50 a month.
-     WhatsApp (Meta)    UK utility ~GBP 0.016, marketing ~GBP 0.04-0.06 per delivered template message; a reply inside
-                        the customer's 24-hour window is free (Meta moves rates; some sources say service charges
-                        change from 1 Oct 2026 — unconfirmed). Billed by Meta direct, not Twilio.
+     WhatsApp (Meta)    UK utility ~GBP 0.016, marketing ~GBP 0.04-0.06 per delivered template message. Billed by Meta
+                        direct, not Twilio.
+                        FROM 1 OCT 2026 (Paul, 2026-10-31): a free-text (service) reply inside the customer's 24-hour
+                        window is free for the first 1,000 a month PER NUMBER, then charged at the market's service rate
+                        (the same as utility); a UTILITY TEMPLATE sent inside the window is now charged too (it used to
+                        be free there). That is why the Inbox sends a saved template as free text while the window is
+                        open (src/lib/inWindowFreeText.ts). The UK figure itself is still UNCONFIRMED until a billed
+                        row agrees. whatsapp_service stays 0 below: inside the free 1,000 it is free, and nothing here
+                        counts usage (no usage counter, by decision).
      Email              Resend: effectively free at our volume.
    ⛔ THE CHEAPEST NOMINAL PRICE IS NOT THE ANSWER (contactRouting.ts): a delivered message beats a cheap one that
    never arrives, so cost only breaks ties between channels that are both likely to land.
@@ -21,7 +27,7 @@ export type CostChannel = 'whatsapp_service' | 'whatsapp_utility' | 'whatsapp_ma
 
 /** GBP. SMS is per SEGMENT; calls are per MINUTE (client leg included); WhatsApp per delivered template message. */
 export const CHANNEL_COST_GBP: Readonly<Record<CostChannel, number>> = {
-  whatsapp_service: 0,        // a reply inside the 24-hour customer window
+  whatsapp_service: 0,        // a free-text reply inside the 24-hour window: free for the first 1,000 a month per number (from 1 Oct 2026), then the service rate (= utility) — not counted here
   whatsapp_utility: 0.02,
   whatsapp_marketing: 0.06,
   sms: 0.05,                  // per outbound segment, rounded up for carrier fees
