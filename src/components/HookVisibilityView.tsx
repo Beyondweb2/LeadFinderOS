@@ -266,7 +266,7 @@ function Details({ score, rivalsWithheld, legacy, issues }: { score: HookScore; 
 /* ── The card ────────────────────────────────────────────────────────────────────────────────── */
 
 /** The presentational half: no fetching, so it renders from plain data. */
-export function HookVisibilityView({ card, inFlight, state, report, onRunNew, runNewBusy, onRefresh, refreshing, defaultExpanded = false, issues, onReportCopied, onOpenFull, variant = 'inline' }: {
+export function HookVisibilityView({ card, inFlight, state, report, onRunNew, runNewBusy, onRefresh, refreshing, defaultExpanded = false, issues, onReportCopied, onOpenFull, variant = 'inline', afterEngines }: {
   card: HookCardScore | null;
   inFlight: boolean;
   state: unknown;
@@ -284,6 +284,8 @@ export function HookVisibilityView({ card, inFlight, state, report, onRunNew, ru
   /** 'call': the top of the lead's Call tab (2026-10-06) — bigger coloured scores, the competitors named, no
    *  thread-strip border. 'inline' (default): the Inbox strip. Same data, same rules. */
   variant?: 'inline' | 'call';
+  /** Drawn at the end of the engine row, after the Google AI pill (the Inbox puts the website score pill here). */
+  afterEngines?: ReactNode;
 } & HookRunNewProps) {
   const [expanded, setExpanded] = useState(defaultExpanded);
 
@@ -338,6 +340,7 @@ export function HookVisibilityView({ card, inFlight, state, report, onRunNew, ru
       ))}
       {/* Google AI beside them (2026-10-19): in the score on a method-2 audit (solid), else "not in score" (dashed). */}
       <AiOverviewChip tally={overviewTally(score.overviews)} showNotScored inScore={score.scored.googleAi.inScore} className={cn(call && 'px-2.5 py-1 text-sm')} testId="hook-overview-chip" />
+      {afterEngines}
     </div>
   );
 

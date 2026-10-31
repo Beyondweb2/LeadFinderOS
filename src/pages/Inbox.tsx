@@ -29,7 +29,7 @@ import { shortReportUrl } from '@/lib/reportSlug';
 import { assessOnboardingLink } from '@/components/OnboardingLinkCard';
 import { LeadDetailFromInbox } from '@/components/LeadDetailFromInbox';
 import { CrawlCheckButton } from '@/components/CrawlCheckButton';
-import { SiteScorePill } from '@/components/SiteScoreBadge';
+import { SiteScorePill, LeadSiteScore } from '@/components/SiteScoreBadge';
 import type { StoredSiteScore } from '@/lib/siteScore';
 import { onboardingUrl, onboardingUrlLabel } from '@/config/findableSite';
 import type { SupabaseClient } from '@supabase/supabase-js';
@@ -62,7 +62,9 @@ import { INBOX_DASHBOARD_GROUP_LABEL, INBOX_DASHBOARD_TEMPLATES, inboxDashboardS
 import { cleanNeededItem, DASHBOARD_TEMPLATES, dashboardGreeting, NEEDED_ITEM_MAX } from '@/lib/dashboardTemplates';
 import { prospectOnlyLead, prospectOnlyNumber } from '@/lib/prospectOnly';
 import { useLeadSalesState } from '@/hooks/useLeadSalesState';
-import { salesStateOf } from '@/lib/leadState';
+import { salesStateOf, pillStatusOf } from '@/lib/leadState';
+import { statusPillFor, type StatusPillKey, type StatusPillTone } from '@/lib/inboxStatusPill';
+import { pipelineStatusLabel } from '@/components/PipelineStatusBadge';
 import { useAllLoggedContacts } from '@/hooks/useLastLoggedContacts';
 import { shownStatusMatches } from '@/lib/statusFilter';
 import { NextActionEditor } from '@/components/NextActionEditor';
@@ -95,7 +97,7 @@ import { useMarkWhatsAppRead, useWhatsAppReads } from '@/hooks/useWhatsAppUnread
 import { conversationState, messageErrorParts, INBOX_QUICK_FILTERS, londonToday, passesQuickFilter, formatWaiting, type ConversationState, type InboxQuickFilter } from '@/lib/conversationState';
 import { SendErrorNote } from '@/components/SendErrorNote';
 import { AiDraftBubble, AiDraftButton, AiDraftPanel } from '@/components/AiDraftPanel';
-import { AttentionPill, ScoreLine, VisibleTag } from '@/components/InboxAttention';
+import { StatusPill, ScoreLine, VisibleTag } from '@/components/InboxAttention';
 import { attentionFor, INBOUND_LABEL_TITLES, type AttentionKind } from '@/lib/inboxAttention';
 import type { LeadAuditScore } from '@/lib/auditScore';
 import type { ScheduledSendRow } from '@/lib/inboxSendWindow';
@@ -323,9 +325,10 @@ interface ConversationRowProps {
   outsideFilters: boolean;
   st: ConversationState | undefined;
   /* The ONE attention pill (src/lib/inboxAttention.ts), passed as words so the row memo compares by value. */
-  attentionKind: AttentionKind | null;
-  attentionLabel: string | null;
-  attentionTitle: string | null;
+  statusKey: StatusPillKey;
+  statusLabel: string;
+  statusTone: StatusPillTone;
+  statusTitle: string;
   /* "Only confirmed" / "Auto-reply", now the preview's hover (the separate chip is gone, 2026-10-22). */
   inboundTitle: string | null;
   auditScore: LeadAuditScore | null;
@@ -350,7 +353,7 @@ interface ConversationRowProps {
    The AI chip, the state chip, "Only confirmed" / "Auto-reply", the Needs you reason line, the engagement pills
    and the next-action pill are off the row (the pill's hover carries what still matters; the header keeps the rest). */
 const ConversationRow = memo(function ConversationRow({
-  c, isActive, outsideFilters, st, attentionKind, attentionLabel, attentionTitle, inboundTitle, auditScore, siteScore, siteWebsite,
+  c, isActive, outsideFilters, st, statusKey, statusLabel, statusTone, statusTitle, inboundTitle, auditScore, siteScore, siteWebsite,
   hookDueMode, hookChecked, bulkMode, bulkChecked, saving, listStageOf, onOpen, toggleHookSelect, toggleBulkSelect, handleSetStatus,
 }: ConversationRowProps) {
   return (
@@ -397,25 +400,22 @@ const ConversationRow = memo(function ConversationRow({
           {listPreview(c.lastMessage, c.label)}
         </span>
       )}
-      {(attentionKind || c.leadId) && (
+      {(statusKey !== 'stage' || c.leadId) && (
         <div className="mt-0.5 flex min-w-0 items-center gap-1.5">
-          <AttentionPill kind={attentionKind} label={attentionLabel} title={attentionTitle} compact />
-          {c.leadId && (saving
+          {/* ⛔ ONE STATUS PILL (2026-10-31, src/lib/inboxStatusPill.ts): the words are derived, the control is still the stage menu. */}
+          {c.leadId ? (saving
             ? <Loader2 className="h-3 w-3 shrink-0 animate-spin text-muted-foreground" />
-            : <PipelineStatusSelect value={c.leadStatus} stage={listStageOf(c.leadId)} onValueChange={(status) => handleSetStatus(c, status)} />)}
-          {/* "Room to improve the website" at the right of the status line (2026-10-30, Paul chose "Inbox 1"): it never
-              shrinks, so the status side gives way first and the pill is never pushed out of sight. */}
-          {c.leadId && (
-            <span className="ml-auto shrink-0" data-testid="site-score-status-line">
-              <SiteScorePill score={siteScore} website={siteWebsite} leadId={c.leadId} />
-            </span>
-          )}
+            : <PipelineStatusSelect value={c.leadStatus} stage={listStageOf(c.leadId)} onValueChange={(status) => handleSetStatus(c, status)}
+                display={<StatusPill pillKey={statusKey} label={statusLabel} tone={statusTone} title={statusTitle} compact />} />)
+            : <StatusPill pillKey={statusKey} label={statusLabel} tone={statusTone} title={statusTitle} compact />}
         </div>
       )}
       {/* The AI Visibility line, on its own row. */}
       {c.leadId && (
         <div className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5" data-testid="ai-visibility-line">
           <ScoreLine score={auditScore} visible={c.visible} />
+          {/* The website score again, beside the Google AI pill (2026-10-31, Paul: ONE copy, here, not also on the status line). */}
+          <SiteScorePill score={siteScore} website={siteWebsite} leadId={c.leadId} />
         </div>
       )}
     </div>
@@ -1924,7 +1924,7 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
   const auditInFlight = !!active?.leadId && (auditRunningLeadIds.has(active.leadId) || firedAudits.has(active.leadId));
   /* ⛔ THE ONE ATTENTION PILL for a conversation (src/lib/inboxAttention.ts) — the list row and the thread header both call this,
      so the two can never show different states. Returned as words so the row memo compares by value. */
-  const rowAttention = (c: WaConversation): { attentionKind: AttentionKind | null; attentionLabel: string | null; attentionTitle: string | null; inboundTitle: string | null } => {
+  const rowAttention = (c: WaConversation): { statusKey: StatusPillKey; statusLabel: string; statusTone: StatusPillTone; statusTitle: string; inboundTitle: string | null } => {
     const last = c.lastMessage;
     const label = last?.direction === 'inbound' ? inboundLabel(last.body, last.message_type) : null;
     const at = attentionFor({
@@ -1935,7 +1935,21 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
       inboundLabel: label,
       channel,
     });
-    return { attentionKind: at?.kind ?? null, attentionLabel: at?.label ?? null, attentionTitle: at?.title ?? null, inboundTitle: label ? INBOUND_LABEL_TITLES[label] : null };
+    /* ⛔ ONE STATUS PILL: the stored stage (as the pill already reads it) + whose turn it is + the attention state, one set of words. */
+    const stage = listStageOf(c.leadId);
+    const stageStatus = pillStatusOf(c.leadStatus, stage);
+    const sp = statusPillFor({
+      stage: stageStatus,
+      stageLabel: pipelineStatusLabel(stageStatus),
+      attentionKind: at?.kind ?? null,
+      attentionTitle: at?.title ?? null,
+      waitingOnUs: (stateByKey.get(c.key)?.waitingSinceMs ?? null) !== null,
+      waitingOnThem: !!stateByKey.get(c.key)?.waitingOnThem,
+      failed: !!stateByKey.get(c.key)?.failed,
+      followUpDue: !!stateByKey.get(c.key)?.followUpDue,
+      meetingBooked: stage?.state === 'meeting_booked',
+    });
+    return { statusKey: sp.key, statusLabel: sp.label, statusTone: sp.tone, statusTitle: sp.title, inboundTitle: label ? INBOUND_LABEL_TITLES[label] : null };
   };
   // Inline missing-inputs prompt — the inbox is NEVER left to run an audit. Prefilled from
   // whatever partial lead data exists; values are written back to the lead before running.
@@ -2788,7 +2802,8 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
                     {active.leadId && (
                       savingStatusKey === active.key
                         ? <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
-                        : <PipelineStatusSelect value={active.leadStatus} stage={activeSales.view} onValueChange={(status) => handleSetStatus(active, status)} />
+                        : <PipelineStatusSelect value={active.leadStatus} stage={activeSales.view} onValueChange={(status) => handleSetStatus(active, status)}
+                            display={(() => { const sp = rowAttention(active); return <StatusPill pillKey={sp.statusKey} label={sp.statusLabel} tone={sp.statusTone} title={sp.statusTitle} />; })()} />
                     )}
                     {/* ⛔ ONE STATUS PILL (2026-10-01, Paul: "its still showing 2 of the same status pills"): the status
                         control above is the one solid pipeline pill; interested is the star — the separate
@@ -2796,9 +2811,9 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
                     {/* The ONE next action (src/lib/nextActionView.ts), set by a person — shown AND set here (2026-10-02,
                         in place of "Find email": email outreach is not used). "+ Set next action", or the saved
                         action ("Call · Tomorrow"); the shared editor and the one write (lead_set_follow_up). */}
+                    {!active.leadId && (() => { const sp = rowAttention(active); return sp.statusKey !== 'stage' ? <StatusPill pillKey={sp.statusKey} label={sp.statusLabel} tone={sp.statusTone} title={sp.statusTitle} /> : null; })()}
                     {activeLead && <NextActionEditor lead={activeLead} variant="pill" />}
                     {/* ⛔ THE ONE ATTENTION PILL (2026-10-22): the same pill, same rule, as the list row (src/lib/inboxAttention.ts). */}
-                    {(() => { const at = rowAttention(active); return <AttentionPill kind={at.attentionKind} label={at.attentionLabel} title={at.attentionTitle} />; })()}
                     <EngagementPills reportOpenedAt={active.reportOpenedAt} siteVisitedAt={active.siteVisitedAt} />
                     {/* Interested / Not interested in one tap (Paul, 2026-10-23), in place of the engine score chips: the score is
                         already in the AI VISIBILITY strip below and the list row. Same two writes as the status pill and the star. */}
@@ -2811,7 +2826,7 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
                         </Button>
                         <Button type="button" size="sm" variant="outline" disabled={savingStatusKey === active.key || active.leadStatus === 'not_interested'} aria-pressed={active.leadStatus === 'not_interested'}
                           onClick={() => void handleSetStatus(active, 'not_interested')}
-                          className={cn('h-7 gap-1 px-2 text-xs', active.leadStatus === 'not_interested' && 'border-red-500/50 bg-red-500/10 text-red-700 dark:text-red-300')} data-testid="not-interested-button">
+                          className={cn('h-7 gap-1 px-2 text-xs', active.leadStatus === 'not_interested' && 'border-border bg-muted text-muted-foreground')} data-testid="not-interested-button">
                           <XCircle className="h-3.5 w-3.5" />Not interested
                         </Button>
                       </span>
@@ -3008,7 +3023,8 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
 
               {/* AI visibility: the lead's hook audit (3 questions × ChatGPT + Google AI) and its report
                   state. Compact by default; "Run new 3 × 2 audit" never queues a pitch. */}
-              {active.leadId && <HookVisibilityCard leadId={active.leadId} onRunNew={startHookRerun} runNewBusy={hookRerunBusy} />}
+              {active.leadId && <HookVisibilityCard leadId={active.leadId} onRunNew={startHookRerun} runNewBusy={hookRerunBusy}
+                afterEngines={<LeadSiteScore leadId={active.leadId} website={activeLead?.website ?? null} />} />}
 
               {/* NEED FROM THIS CLIENT (from Paid Client → Contact client): internal, never sent. */}
               {active.leadId && needFor && active.leadId === needFor.leadId && (

@@ -30,6 +30,14 @@ export const WHATS_NEW: readonly WhatsNewEntry[] = [
       removed: ['The "Send template" button while their 24 hours are open (except for the video templates).'],
       effect: 'Meta now charges for a template sent inside the 24 hours, and a normal message reads better in a conversation. Cold openers, the WhatsApp queue, the lead popup, the dashboard buttons, the welcome pack and Quick Close are unchanged.',
     } },
+  { id: '2026-10-31-inbox-single-status', date: '2026-10-31', title: 'Inbox: one status pill per lead', audience: 'all',
+    body: 'Each Inbox lead now shows ONE status pill that says whose turn it is: Reply needed, Waiting on them, Follow-up due, Call booked, Contacted and so on. The separate Needs you and Waiting pills are gone, and the website score moved into the AI Visibility row, next to Google AI.',
+    report: {
+      added: ['One pill with fixed words: Reply needed, Approve draft, Send failed, Follow-up due, Call booked, Waiting on them, Auditing, Queued, Won, Paid, Not interested, Opted out (or the stage name when nothing else applies).', 'The website score pill sits next to the Google AI pill in the list cards and in the lead pane (once, no longer also on the status line).'],
+      changed: ['The pill is one fixed height, never wraps, and is coloured by meaning: amber needs you, blue waiting, green good, grey closed.', 'Clicking the pill still changes the stage by hand, exactly as before.', 'Not interested is a small grey pill, not red.'],
+      removed: ['The separate Needs you and Waiting pills beside the status pill.'],
+      effect: 'Looks only. Stored stages, sending, next actions, filters and sorting are unchanged.',
+    } },
   { id: '2026-10-30-website-severity-cap', date: '2026-10-30', title: 'Website score: a serious problem now means Big gains', audience: 'all',
     body: 'A website with a serious problem our crawl actually saw (live placeholder text, a homepage asking not to be listed, no HTTPS, pages naming another site as the main one, robots.txt shutting out AI crawlers, no way to contact the business) now sits in Big gains, whatever its number. The hover and Full breakdown say which problem and show the evidence.',
     report: {

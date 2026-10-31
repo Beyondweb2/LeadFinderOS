@@ -105,7 +105,7 @@ console.log('9. the SMS inbox is the WhatsApp inbox twin');
   // 2026-10-09: the separate SMS page is GONE — one component renders both channels (scripts/inbox-channel-parity.test.ts proves the parity).
   const s = read('src/pages/Inbox.tsx');
   ok(!existsSync(new URL('../src/components/SmsInbox.tsx', import.meta.url)), 'there is no separate SMS inbox page any more');
-  for (const c of ['PipelineStatusSelect', 'NextActionEditor', 'AttentionPill', 'ScoreLine', 'HookVisibilityCard', 'LeadOwnerControl', 'LeadDetailFromInbox', 'CampaignPicker', 'conversationState', 'INBOX_QUICK_FILTERS', 'markLeadInterested', 'setLeadPipelineStatus', 'shownStatusMatches']) {
+  for (const c of ['PipelineStatusSelect', 'NextActionEditor', 'StatusPill', 'ScoreLine', 'HookVisibilityCard', 'LeadOwnerControl', 'LeadDetailFromInbox', 'CampaignPicker', 'conversationState', 'INBOX_QUICK_FILTERS', 'markLeadInterested', 'setLeadPipelineStatus', 'shownStatusMatches']) {
     ok(new RegExp('\\b' + c + '\\b').test(s), `uses the same ${c} as the WhatsApp inbox`);
   }
   ok(/aria-label="Next action type"/.test(s) && /aria-label="Sort conversations"/.test(s) && /aria-label="Lead status"/.test(s), 'same filter bar (status, next action when/type, sort)');
