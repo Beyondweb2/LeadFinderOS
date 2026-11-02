@@ -33,6 +33,10 @@ Six `initial_contact` openers were queued from the Inbox around 14:31 to 14:40 U
 
 The first live tick read Malaysia's failed sends from 23:00 UTC as today's probe and started a cool-down, although Paul had switched it back on at 08:10 UTC. Caught by the live check. The probe now starts at the latest of the window opening, the end of a cool-down and the last switch-on (`probeStart`), and the mistaken rest was cleared the same morning (on the pause log).
 
+## Meta's own reading (2 Nov, 09:45 UTC)
+
+`status` CONNECTED, `health_status.can_send_message` LIMITED, rating RED, tier TIER_2K. LIMITED does NOT trip the stop: only FLAGGED / RESTRICTED / BANNED / BLOCKED do, as asked. Stopping on LIMITED would have stopped all cold WhatsApp on the first read. Which entity LIMITED refers to has not been read; Meta's answer carries it (`health_status.entities`).
+
 ## Other changes
 
 - **Opener:** `coldOpenerFor` turns `initial_contact_short` into `initial_contact` at both senders, every country. `initial_opener_v2` is left alone: it is a person's explicit choice (2026-09-27) and has not been sent in the last 10 days.
