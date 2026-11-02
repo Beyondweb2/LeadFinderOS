@@ -76,11 +76,7 @@ export function ClientSetupCard({ leadId, businessName = null, h, route, onChang
   const recordContact = (via: FirstContactChannel) => run(`contact_${via}`, () => invokeEdge('paid-client-hub', { action: 'record_first_contact', lead_id: leadId, via }), 'First contact recorded');
   const fc = s.first_contact;
   const contactOwed = !!fc && (fc.state === 'owed' || fc.state === 'overdue');
-  const saveHandoff = async (f: SalesHandoffFields) => {
-    const ok = await run('handoff', () => invokeEdge('quick-close', { mode: 'save_handoff', lead_id: leadId, handoff: f }), 'Handoff saved');
-    if (ok) setEditing(false);
-    return ok;
-  };
+  const saveHandoffField = async (field: string, value: string) => { await invokeEdge('quick-close', { mode: 'save_handoff_field', lead_id: leadId, field, value }); };
   const go = (section: string) => document.getElementById(`hub-${section}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   const nextAction = () => {
     const k = s.next.key;
@@ -219,7 +215,7 @@ export function ClientSetupCard({ leadId, businessName = null, h, route, onChang
           ? <ul className="mt-2 space-y-1 text-sm">{handoffLines.map((l) => <li key={l} className="break-words">{l}</li>)}</ul>
           : <p className="mt-1 text-xs text-muted-foreground">Nothing given yet.</p>)}
         {!editing && <Button type="button" size="sm" variant="ghost" onClick={() => setEditing(true)} className="mt-1 -ml-2 h-9 px-2 text-xs text-primary"><Pencil className="mr-1 h-3.5 w-3.5" />{handoffLines.length ? 'Edit' : 'Fill it in'}</Button>}
-        {editing && <div className="mt-3"><SalesHandoffForm fields={sh.fields} prefilled={sh.prefilled} route={route} onSave={saveHandoff} busy={busy === 'handoff'} /></div>}
+        {editing && <div className="mt-3"><SalesHandoffForm fields={sh.fields} prefilled={sh.prefilled} route={route} leadId={leadId} onSaveField={saveHandoffField} onDone={() => { setEditing(false); onChanged(); }} /></div>}
       </SubSection>
 
       {/* History — the meaningful events only. */}

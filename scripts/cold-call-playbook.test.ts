@@ -304,7 +304,7 @@ console.log('── 11. OPENING THE PLAYBOOK TRIGGERS NOTHING ──');
     const ui = read('src/components/ColdCallPlaybook.tsx').replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
     const calls = [...ui.matchAll(/invokeEdge\(\s*'([a-z-]+)'/g)].map((m) => m[1]);
     ok(calls.length > 0 && calls.every((c) => c === 'quick-close'), 'the call screen talks only to fn quick-close');
-    ok(/mode: 'save', answers:/.test(ui) && /mode: 'save_call', call:/.test(ui) && !/mode: '(generate_link|share_link|send_to_paul)'/.test(ui), '…only to save answers (never a link, a share or a send)');
+    ok(/mode: 'save', answers:/.test(ui) && /mode: 'save_call', quiet: true, call:/.test(ui) && !/mode: '(generate_link|share_link|send_to_paul)'/.test(ui), '…only to save answers (never a link, a share or a send)');
     ok(!/useEffect\([^)]*\b(saveAnswer|saveCall)\b/.test(ui), '…and never on open (no save inside an effect)');
   }
   const hook = read('src/hooks/useColdCallPlaybook.ts');

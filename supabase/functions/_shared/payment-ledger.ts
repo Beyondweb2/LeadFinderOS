@@ -12,6 +12,8 @@ import { commissionLines, type LedgerRow } from "../../../src/lib/commission.ts"
 import { approvalDay } from "../../../src/lib/clientTimeline.ts";
 import { isServiceRoute } from "../../../src/lib/findableOffer.ts";
 import { loadAttributionHolds } from "./earnings.ts";
+import { payoutRuleForPaymentAt } from "../../../src/lib/commissionConfig.ts";
+import { salePlanFlagAtPayment } from "../../../src/lib/salePlan.ts";
 
 // deno-lint-ignore no-explicit-any
 type Service = any;
@@ -31,6 +33,8 @@ export interface LedgerWrite {
   stripe_event_id?: string | null;
   source?: "webhook" | "backfill";
   note?: string | null;
+  /** An initial payment: the plan on Stripe's own session. It wins over what the salesperson picked. */
+  stripe_plan?: string | null;
 }
 
 export type LedgerOutcome = "inserted" | "exists" | "updated" | "failed";
@@ -50,7 +54,20 @@ export async function recordLedger(service: Service, w: LedgerWrite): Promise<Le
       const { data } = await service.from("outreach_leads").select("sold_by_user_id").eq("id", w.lead_id).maybeSingle();
       soldBy = (data as { sold_by_user_id?: string | null } | null)?.sold_by_user_id ?? null;
     }
+    /* 🔴 THE SALE'S PLAN (2026-11-02): Stripe's, beside what the salesperson picked, and any mismatch. A failed read never stops
+       the money being recorded; it only means no comparison was made. */
+    let saleBits: Record<string, unknown> = {};
+    if (w.kind === "initial") {
+      let picked: string | null = null;
+      if (w.lead_id) {
+        const { data: ob, error: obErr } = await service.from("onboarding_responses").select("payment_plan").eq("lead_id", w.lead_id).not("payment_plan", "is", null).order("updated_at", { ascending: false }).limit(1);
+        if (obErr) console.error("[payment-ledger] picked plan unreadable:", obErr.message);
+        picked = ((ob ?? [])[0] as { payment_plan?: string | null } | undefined)?.payment_plan ?? null;
+      }
+      saleBits = { sale_plan: w.stripe_plan ?? null, sale_plan_picked: picked, sale_plan_flag: salePlanFlagAtPayment({ stripePlan: w.stripe_plan, pickedPlan: picked, amountGbp: w.amount_gbp }) };
+    }
     const row = {
+      ...saleBits, payout_rule: payoutRuleForPaymentAt(w.occurred_at),
       lead_id: w.lead_id, kind: w.kind, status: w.status ?? "succeeded",
       amount_gbp: Math.round(w.amount_gbp * 100) / 100, currency: (w.currency ?? "gbp").toLowerCase(),
       occurred_at: w.occurred_at, stripe_object_id: w.stripe_object_id,
@@ -101,7 +118,7 @@ async function notifyMoney(service: Service, leadId: string | null, kind: string
   try {
     if (!leadId) return;
     const [{ data: rows }, { data: lead }, { data: owner }] = await Promise.all([
-      service.from("payment_ledger").select("id, lead_id, kind, status, amount_gbp, occurred_at, stripe_object_id, stripe_payment_intent_id, stripe_charge_id, stripe_invoice_id, sold_by_user_id, commission_rule, commission_month_start, commission_month_seq, commission_rate").eq("lead_id", leadId),
+      service.from("payment_ledger").select("id, lead_id, kind, status, amount_gbp, occurred_at, stripe_object_id, stripe_payment_intent_id, stripe_charge_id, stripe_invoice_id, sold_by_user_id, commission_rule, commission_month_start, commission_month_seq, commission_rate, payout_rule, sale_plan, sale_plan_flag, commission_payable_on").eq("lead_id", leadId),
       service.from("outreach_leads").select("business_name, sold_by_user_id, service_terminated_at, status, remeasure_results_sent_at").eq("id", leadId).maybeSingle(),
       service.from("team_members").select("user_id").eq("is_book_owner", true).maybeSingle(),
     ]);
@@ -137,7 +154,7 @@ async function notifyMoney(service: Service, leadId: string | null, kind: string
     const biz = String((lead as { business_name?: string | null } | null)?.business_name ?? "A client").trim() || "A client";
     const out: Record<string, unknown>[] = [];
     if (sellerIsSales && seller && line && line.commission !== 0 && line.status === "pending") {
-      out.push({ user_id: seller, kind: "commission_earned", title: `+£${line.commission.toFixed(2)} commission pending`, body: `${biz} paid £${line.clientAmount.toFixed(2)} (${Math.round(line.rate * 100)}%, provisional). It is approved the day after the client's refund window closes${line.approvalDay ? ` (${line.approvalDay})` : ""}.`, link: "/sales-dashboard", lead_id: leadId, priority: 2, dedupe_key: `commission:${me.id}` });
+      out.push({ user_id: seller, kind: "commission_earned", title: `+£${line.commission.toFixed(2)} commission pending`, body: `${biz} paid £${line.clientAmount.toFixed(2)} (${Math.round(line.rate * 100)}%${line.planRules ? "" : ", provisional"}). ${line.planRules ? "It becomes payable once the client's four-week results have been sent and their refund window has closed." : `It is approved the day after the client's refund window closes${line.approvalDay ? ` (${line.approvalDay})` : ""}.`}`, link: "/sales-dashboard", lead_id: leadId, priority: 2, dedupe_key: `commission:${me.id}` });
     } else if (sellerIsSales && seller && line && line.commission !== 0 && line.status !== "cancelled") {
       out.push(line.commission > 0
         ? { user_id: seller, kind: "commission_earned", title: `+£${line.commission.toFixed(2)} commission earned`, body: `${biz} paid £${line.clientAmount.toFixed(2)} (${lower(line.label)}, ${Math.round(line.rate * 100)}%).`, link: "/sales-dashboard", lead_id: leadId, priority: 2, dedupe_key: `commission:${me.id}` }

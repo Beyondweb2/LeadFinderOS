@@ -165,6 +165,7 @@ console.log("\n── NO OPERATOR SCREEN CARRIES A STALE CLAIM EITHER (2026-09-1
    ALLOWED: exact strings that are TRUE and must stay — RG Locksmiths really is on eight weeks by
    his contract (CLAUDE.md §1). Add to this list only a sentence that is true, never to silence one. */
 const OPERATOR_SCREENS: Array<[string, string]> = [
+  ['Commission owed and New paid clients', 'src/components/admin/CommissionOwed.tsx'],
   ["baseline bands (operator)", "src/lib/baselineView.ts"],
   ["UGC brands page (separate product, Jess)", "src/pages/Ugc.tsx"],
   ["Website Build simple screen (operator)", "src/components/SimpleWebsiteBuild.tsx"],

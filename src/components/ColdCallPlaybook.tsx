@@ -3,6 +3,8 @@ import { paymentOptionsSummary, COMPLETE_EXTRAS, ESSENTIAL_PAYMENT_PLANS, FULL_P
 import { useQueryClient } from '@tanstack/react-query';
 import { logFeatureUse } from '@/lib/featureUsage';
 import { invokeEdge, edgeErrorMessage } from '@/lib/edgeInvoke';
+import { AutosaveIndicator, useAutosaveFields } from '@/hooks/useAutosaveFields';
+import { withSaveRetry } from '@/lib/autosaveQueue';
 import { notifyLeadChanged } from '@/lib/leadSync';
 import { useToast } from '@/hooks/use-toast';
 import { BUILD_DEFAULT_REASON, offerFit, thirdPartyManaged, type QcAgencyContract, type QuickCloseAnswers } from '@/lib/quickClose';
@@ -169,7 +171,7 @@ function useCallAnswers(leadId: string) {
     if (!canSave) return false;
     setBusy(label);
     try {
-      const r = await invokeEdge('quick-close', { lead_id: leadId, ...body });
+      const r = await withSaveRetry(() => invokeEdge('quick-close', { lead_id: leadId, ...body }));
       qc.setQueryData(quickCloseKey(leadId), r);
       notifyLeadChanged(leadId);
       return true;
@@ -179,20 +181,31 @@ function useCallAnswers(leadId: string) {
     } finally { setBusy(null); }
   };
   const saveAnswer = (key: keyof QuickCloseAnswers, value: string) => post(`a:${key}`, { mode: 'save', answers: { [key]: value }, expect_route: answers.route ?? null });
-  const saveCall = (patch: Record<string, string>) => post(`c:${Object.keys(patch).join(',')}`, { mode: 'save_call', call: patch });
-  return { v, answers, canSave, busy, loading: q.isLoading, saveAnswer, saveCall };
+  /* Autosave's save: no busy state (the buttons must not flicker per pause in typing), and a failure is thrown so it retries. */
+  const saveCall = async (patch: Record<string, string>) => {
+    if (!canSave) return;
+    await invokeEdge('quick-close', { lead_id: leadId, mode: 'save_call', quiet: true, call: patch });
+    qc.setQueryData<typeof v>(quickCloseKey(leadId), (old) => (old ? { ...old, call: { ...old.call, ...patch } } : old));
+    notifyLeadChanged(leadId);
+  };
+  return { leadId, v, answers, canSave, busy, loading: q.isLoading, saveAnswer, saveCall };
 }
 
 /** A text answer that saves when the rep moves on (blur / Enter) — only when it changed. */
-function SavedText({ value, onSave, placeholder, testId, label, inputMode }: { value: string; onSave: (v: string) => void; placeholder: string; testId: string; label: string; inputMode?: 'text' | 'decimal' }) {
+function SavedText({ value, onSave, placeholder, testId, label, inputMode, leadId }: { value: string; onSave: (v: string) => Promise<void>; placeholder: string; testId: string; label: string; inputMode?: 'text' | 'decimal'; leadId: string }) {
   const [text, setText] = useState(value);
-  const last = useRef(value);
-  useEffect(() => { setText(value); last.current = value; }, [value]);
-  const commit = () => { const t = text.trim(); if (t !== last.current.trim()) { last.current = t; onSave(t); } };
+  const focused = useRef(false);
+  const auto = useAutosaveFields({ save: (_k, v) => onSave(v.trim()), storageKey: `call:${leadId}:${testId}`, onRestore: (left) => { if (typeof left.v === 'string') setText(left.v); } });
+  /* Autosave (docs/commission-owed.md): what the server says never overwrites text being typed or not yet saved. */
+  useEffect(() => { auto.baseline('v', value); if (!focused.current && !auto.isDirty('v')) setText(value); }, [value]); // eslint-disable-line react-hooks/exhaustive-deps
+  const commit = () => { focused.current = false; auto.flush('v'); };
   return (
-    <input value={text} onChange={(e) => setText(e.target.value)} onBlur={commit} onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
+    <>
+    <input value={text} onFocus={() => { focused.current = true; }} onChange={(e) => { setText(e.target.value); auto.set('v', e.target.value); }} onBlur={commit} onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
       placeholder={placeholder} aria-label={label} inputMode={inputMode} data-testid={testId}
       className="h-10 w-full min-w-0 rounded-lg border border-border bg-background px-3 text-sm text-foreground placeholder:text-muted-foreground/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/60" />
+    {auto.status !== 'idle' && <AutosaveIndicator status={auto.status} className="mt-0.5" />}
+    </>
   );
 }
 
@@ -238,7 +251,7 @@ function Ask({ p, ans }: { p: ColdCallPlaybook; ans: ReturnType<typeof useCallAn
               <p className="text-[15px] leading-relaxed">{after.ask[1]}</p>
               <label className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                 Roughly a month (£)
-                <span className="w-28"><SavedText value={spend !== null && spend !== undefined ? String(spend) : ''} onSave={(t) => void ans.saveCall({ agency_monthly_gbp: t })} placeholder="e.g. 150" label="What they pay their agency a month" testId="agency-monthly" inputMode="decimal" /></span>
+                <span className="w-28"><SavedText value={spend !== null && spend !== undefined ? String(spend) : ''} leadId={ans.leadId} onSave={(t) => ans.saveCall({ agency_monthly_gbp: t })} placeholder="e.g. 150" label="What they pay their agency a month" testId="agency-monthly" inputMode="decimal" /></span>
               </label>
               {after.priceAngle && (
                 <p className="rounded-xl bg-blue-500/[0.08] px-3 py-2 text-sm leading-snug ring-1 ring-inset ring-blue-500/30" data-testid="call-price-angle">“{after.priceAngle}”</p>
@@ -251,9 +264,9 @@ function Ask({ p, ans }: { p: ColdCallPlaybook; ans: ReturnType<typeof useCallAn
       <Step title="Then ask" tone="purple" hint={ans.canSave ? 'saved as you go — Quick Close won’t ask again' : 'pick what fits'} testId="call-step-ask">
         <div className="space-y-3 text-[15px] leading-snug">
           <label className="block space-y-1.5"><span className="flex gap-2"><HelpCircle className="mt-0.5 h-4 w-4 shrink-0 text-violet-500" />{s.discovery[0]}</span>
-            <SavedText value={call.jobs ?? ''} onSave={(t) => void ans.saveCall({ jobs: t })} placeholder="e.g. kitchen fitting, extensions" label={s.discovery[0]} testId="call-jobs" /></label>
+            <SavedText value={call.jobs ?? ''} leadId={ans.leadId} onSave={(t) => ans.saveCall({ jobs: t })} placeholder="e.g. kitchen fitting, extensions" label={s.discovery[0]} testId="call-jobs" /></label>
           <label className="block space-y-1.5"><span className="flex gap-2"><HelpCircle className="mt-0.5 h-4 w-4 shrink-0 text-violet-500" />{s.discovery[1]}</span>
-            <SavedText value={call.areas ?? ''} onSave={(t) => void ans.saveCall({ areas: t })} placeholder="e.g. Maidenhead, Windsor, Slough" label={s.discovery[1]} testId="call-areas" /></label>
+            <SavedText value={call.areas ?? ''} leadId={ans.leadId} onSave={(t) => ans.saveCall({ areas: t })} placeholder="e.g. Maidenhead, Windsor, Slough" label={s.discovery[1]} testId="call-areas" /></label>
           <div className="space-y-1.5"><p className="flex gap-2"><HelpCircle className="mt-0.5 h-4 w-4 shrink-0 text-violet-500" />{s.discovery[2]}</p>
             <div className="flex flex-wrap gap-2" role="group" aria-label="Decision maker" data-testid="call-decision-maker">
               {(['yes', 'no'] as const).map((d) => (

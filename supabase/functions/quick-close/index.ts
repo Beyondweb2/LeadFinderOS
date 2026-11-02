@@ -466,6 +466,31 @@ Deno.serve(async (req) => {
     /* ══ SAVE THE SALES HANDOFF (before or after payment) ═════════════════════════════════════════════
        A key sent blank CLEARS that answer; a key not sent is left alone. Complete is stamped once, on the
        first save with every required answer. History: "completed" once, then each material change. */
+    /* 🔴 AUTOSAVE (Paul, 2026-11-02, docs/commission-owed.md): ONE answer, ONE small atomic write, and a small reply. The same
+       who-may-write check as save_handoff. The merge happens inside the database update, so two tabs editing different answers never
+       overwrite each other. One History line per burst of typing, not one per pause. */
+    if (mode === "save_handoff_field") {
+      if (!mayHandoff) {
+        await recordDenial(service, actor.id, "quick-close:save_handoff_field", leadId);
+        return json({ ok: false, error: "not_your_sale", detail: paidLead ? "Only the salesperson who made this sale can change its handoff." : "That lead is not assigned to you." }, 403);
+      }
+      const key = String(body.field ?? "");
+      if (!HANDOFF_QUESTIONS.some((q) => q.key === key)) return json({ ok: false, error: "bad_request", detail: "Unknown field." }, 400);
+      const cleaned = (cleanHandoff({ [key]: body.value }) as Obj)[key] ?? null;
+      const { data: wrote, error: wErr } = await service.rpc("sales_handoff_set_field", { _lead: leadId, _key: key, _value: cleaned, _actor: actor.id });
+      if (wErr) return json({ ok: false, error: "not_saved", detail: "Not saved. Trying again." }, 500);
+      const prevAt = (Array.isArray(wrote) ? wrote[0] : wrote)?.previous_saved_at as string | null | undefined;
+      const newBurst = !prevAt || Date.now() - Date.parse(prevAt) > 10 * 60_000;
+      if (newBurst) {
+        await recordLeadEvent(service, leadId, "handoff_saved", { actor: actor.id, source: actor.role === "admin" ? "admin" : "sales", body: prevAt ? "Sales handoff updated" : "Sales handoff started", data: { changed: [key], after_submission: !!lead.delivery_submitted_at } });
+        if (actor.role === "sales" && lead.sold_by_user_id === actor.id && paidLead) {
+          const { data: me } = await service.from("team_members").select("display_name").eq("user_id", actor.id).maybeSingle();
+          await answerClientInfoRequest(service, { leadId, actorId: actor.id, actorName: (me?.display_name as string | undefined) ?? null, businessName: lead.business_name ?? null, what: "Sales handoff updated" });
+        }
+      }
+      return json({ ok: true, field: key, value: cleaned, saved_at: new Date().toISOString() });
+    }
+
     if (mode === "save_handoff") {
       if (!mayHandoff) {
         await recordDenial(service, actor.id, "quick-close:save_handoff", leadId);
@@ -643,6 +668,8 @@ Deno.serve(async (req) => {
           }
         }
         await event(service, leadId, rowId, actor.id, "call_answers_saved", { keys: sentKeys });
+        /* Autosave asks for a small reply: it has the text already, and a full view per pause in typing is waste. */
+        if (body.quiet === true) return json({ ok: true, saved_at: now });
         return json(await view());
       }
       return json({ ok: false, error: "busy", detail: "Someone else is saving this at the same moment — try again." }, 409);

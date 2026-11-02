@@ -266,7 +266,8 @@ console.log('── 6. THE SALES PAGE ──');
   ok(/className="mt-3 text-xl font-bold leading-snug text-amber-200" data-testid="ladder-next-line"/.test(ladder), 'the progress line is the headline of the ladder');
   ok(/data-testid="ladder-scheme"/.test(ladder) && /COMMISSION_RECURRING_COUNT/.test(ladder) && /zoneWords\(zones\)/.test(ladder), 'the scheme in one line, from the constants: 1–12 = 30% · 13–24 = 40% · 25+ = 50%, plus 20% of the next 6');
   /* 2026-10-05 (v3): the explainer leads with the FIVE of the current terms and still names the six that older sales keep. */
-  ok(/of each of the first \{COMMISSION_RECURRING_COUNT_V3\} successful £99 monthly payments/.test(parts) && /keep the next \{COMMISSION_RECURRING_COUNT\}/.test(parts) && !/next 3|next three/i.test(parts + ladder + card), 'the explainer says five (v3) and that older sales keep six; nothing still says three');
+  /* Paul, 2026-11-02 (docs/commission-owed.md): new sales are 20% of the next six, and the explainer says so. Old sales keep their numbers. */
+  ok(/of each of the next \{COMMISSION_RECURRING_COUNT\} successful monthly payments/.test(parts) && !/next 3|next three/i.test(parts + ladder + card), 'the explainer says the next six; nothing still says three');
   const wn = read('src/lib/whatsNew.ts');
   ok(/id: '2026-10-02-commission-six-forecast'/.test(wn), "a What's New entry for this release");
 }

@@ -31,6 +31,7 @@ import { buildNeedsRows, hiddenByMark, splitByMarks, type NeedsMark, type NeedsR
 import { healthVerdict } from '@/lib/whatsappNumberHealth';
 import { TeamComposer, type ComposerSeed } from '@/components/team/TeamComposer';
 import { TradeAutofixDialog } from '@/components/admin/TradeAutofixDialog';
+import { CommissionOwedSection, NewPaidClientsSection } from '@/components/admin/CommissionOwed';
 
 /* ════════════════════════════════════════════════════════════════════════════════════════════════
    THE ADMIN HOME (Concept A, Paul 2026-10-26: "my dashboard looks good as it is, it's just full of junk").
@@ -219,6 +220,9 @@ const Dashboard = () => {
             cardMenu={<CardMarkMenu itemKey="card:nextactions" onMark={onMark} />} />
         </div>
       )}
+
+      {isAdmin && <CommissionOwedSection />}
+      {isAdmin && <NewPaidClientsSection />}
 
       {!cardHidden('card:numbers') && <KeyNumbers n={numbersQ.data} hideMine={hideMine} meId={user?.id ?? null} menu={<CardMarkMenu itemKey="card:numbers" onMark={onMark} />} />}
       {numbersQ.isError && <p className="rounded-2xl bg-destructive/10 px-4 py-3 text-sm text-destructive">Could not load the key numbers: {edgeErrorMessage(numbersQ.error)} <button type="button" className="ml-2 underline" onClick={() => void numbersQ.refetch()}>Try again</button></p>}

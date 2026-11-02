@@ -16,6 +16,9 @@ import {
 } from "../../../src/lib/commission.ts";
 import { FINDABLE_MONTHLY_GBP, SERVICE_ROUTE_NAME, isServiceRoute, serviceRouteForTotal } from "../../../src/lib/findableOffer.ts";
 import { approvalDay } from "../../../src/lib/clientTimeline.ts";
+import { PAYMENT_PLAN_SPEC, isPaymentPlan } from "../../../src/lib/paymentPlans.ts";
+import { buildOwed, type LinePaymentRow, type OwedView } from "../../../src/lib/commissionOwed.ts";
+import { monthlyDiffers } from "../../../src/lib/salePlan.ts";
 
 // deno-lint-ignore no-explicit-any
 type Service = any;
@@ -33,6 +36,12 @@ export interface Earnings {
   forecast: CommissionForecast;
   /** The viewed person's engagement (null for "everyone"): ended = no new trailing commission from endedAt. */
   engagement: Engagement | null;
+  /** What Paul has marked as paid, line by line (scoped like lines). */
+  linePayments: LinePaymentRow[];
+  /** The older month-by-month payouts (scoped like lines). */
+  monthlyPayouts: { user_id: string; amount_gbp: number }[];
+  /** Per sale: Stripe's plan and any mismatch (scoped like lines). */
+  sales: { leadId: string; plan: string | null; flag: string | null; business: string }[];
 }
 
 const LIVE_SUBSCRIPTION = new Set(["active", "trialing", "past_due"]);
@@ -92,14 +101,21 @@ export function engagementOf(events: EngagementEvent[] | undefined): Engagement 
 }
 
 export async function loadEarnings(service: Service, personId: string | null, todayIso: string): Promise<Earnings> {
-  const [ledgerRes, rolesRes, payoutsRes, teamRes, logRes] = await Promise.all([
-    service.from("payment_ledger").select("id, lead_id, kind, status, amount_gbp, occurred_at, stripe_object_id, stripe_payment_intent_id, stripe_charge_id, stripe_invoice_id, sold_by_user_id, commission_rule, commission_month_start, commission_month_seq, commission_rate").order("occurred_at").limit(10000),
+  const [ledgerRes, rolesRes, payoutsRes, teamRes, logRes, linePayRes] = await Promise.all([
+    service.from("payment_ledger").select("id, lead_id, kind, status, amount_gbp, occurred_at, stripe_object_id, stripe_payment_intent_id, stripe_charge_id, stripe_invoice_id, sold_by_user_id, commission_rule, commission_month_start, commission_month_seq, commission_rate, payout_rule, sale_plan, sale_plan_flag, commission_payable_on").order("occurred_at").limit(10000),
     service.from("user_roles").select("user_id, role"),
     service.from("commission_payouts").select("user_id, period_month, amount_gbp, paid_at"),
     service.from("team_members").select("user_id, status, disabled_at, is_book_owner"),
     service.from("team_engagement_events").select("user_id, kind, at").order("at").limit(10000),
+    service.from("commission_line_payments").select("id, batch_id, line_key, part, user_id, lead_id, amount_gbp, business_name, plan, label, rate, client_amount_gbp, collected_at, payable_on, paid_at, paid_by").is("undone_at", null).order("paid_at").limit(10000),
   ]);
-  for (const r of [ledgerRes, rolesRes, payoutsRes, teamRes, logRes]) if (r.error) throw new Error(r.error.message);
+  /* ⛔ Fails closed like every read here: an unreadable payment record must never show a paid line as owed. Only a MISSING table
+     (the migration not applied yet, so nothing has been marked) reads as none. */
+  const linePayMissing = !!linePayRes.error && ["42P01", "PGRST205"].includes(String((linePayRes.error as { code?: string }).code));
+  for (const r of [ledgerRes, rolesRes, payoutsRes, teamRes, logRes, ...(linePayMissing ? [] : [linePayRes])]) if (r.error) throw new Error(r.error.message);
+  const linePaymentsAll = ((linePayMissing ? [] : linePayRes.data ?? []) as LinePaymentRow[]).map((p) => ({ ...p, amount_gbp: Number(p.amount_gbp) }));
+  const paidByLine = new Map<string, number>();
+  for (const p of linePaymentsAll) paidByLine.set(p.line_key, Math.round(((paidByLine.get(p.line_key) ?? 0) + p.amount_gbp) * 100) / 100);
   const ledger = ((ledgerRes.data ?? []) as LedgerRow[]).map((r) => ({ ...r, amount_gbp: Number(r.amount_gbp) }));
   const roles = (rolesRes.data ?? []) as { user_id: string; role: string }[];
   const admins = new Set(roles.filter((r) => r.role === "admin").map((r) => r.user_id));
@@ -185,16 +201,22 @@ export async function loadEarnings(service: Service, personId: string | null, to
     engagement: timelines, closings,
     /* pre-sales fix 03: the CLIENT's end — no commission on money taken after it, nothing projected. */
     clientStateOf: new Map([...leads].map(([id, l]) => [id, { endedAt: l.service_terminated_at ?? null, refunded: l.status === "refunded" }])),
-    termsOf, exclusionsOf, attributionOf, nowIso: todayIso.length > 10 ? todayIso : new Date().toISOString(),
+    paidByLine, termsOf, exclusionsOf, attributionOf, nowIso: todayIso.length > 10 ? todayIso : new Date().toISOString(),
   });
   const mine = (seller: string | null) => personId === null || seller === personId;
   const lines = all.lines.filter((l) => mine(l.sellerId));
-  const payouts = ((payoutsRes.data ?? []) as PayoutRow[]).map((p) => ({ ...p, amount_gbp: Number(p.amount_gbp) })).filter((p) => personId === null || p.user_id === personId);
+  const monthlyPayouts = ((payoutsRes.data ?? []) as PayoutRow[]).map((p) => ({ ...p, amount_gbp: Number(p.amount_gbp) })).filter((p) => personId === null || p.user_id === personId);
+  const linePayments = linePaymentsAll.filter((p) => personId === null || p.user_id === personId);
+  /* Paid so far counts both ways of recording it. */
+  const payouts: PayoutRow[] = [...monthlyPayouts, ...linePayments.map((p) => ({ user_id: p.user_id, period_month: p.paid_at.slice(0, 7) + "-01", amount_gbp: p.amount_gbp, paid_at: p.paid_at }))];
   const lastRecurring = new Map<string, number>();
   for (const r of ledger) if (r.lead_id && r.kind === "recurring" && r.status === "succeeded") lastRecurring.set(r.lead_id, r.amount_gbp);
   const clients = all.clients.filter((c) => mine(c.sellerId)).map((c) => {
     const status = leads.get(c.leadId)?.subscription_status ?? null;
-    const monthly = lastRecurring.get(c.leadId) ?? FINDABLE_MONTHLY_GBP;
+    /* What this client's plan actually charges (£49.99 on the 12-month plan), never a flat £99. */
+    const salePlan = ledger.find((r) => r.lead_id === c.leadId && r.kind === "initial")?.sale_plan ?? leads.get(c.leadId)?.payment_plan ?? null;
+    const planMonthly = isPaymentPlan(salePlan) && PAYMENT_PLAN_SPEC[salePlan].monthlyGbp > 0 ? PAYMENT_PLAN_SPEC[salePlan].monthlyGbp : FINDABLE_MONTHLY_GBP;
+    const monthly = lastRecurring.get(c.leadId) ?? planMonthly;
     const active = !!status && LIVE_SUBSCRIPTION.has(status);
     const route = serviceRouteForTotal(leads.get(c.leadId)?.contract_total_payments ?? null, leads.get(c.leadId)?.payment_plan);
     return { ...c, subscriptionStatus: status, package: route ? SERVICE_ROUTE_NAME[route] : null, remainingPotential: active ? round2(c.commissionablePaymentsLeft * commissionOn(monthly, COMMISSION_RECURRING_RATE)) : 0, _proj: { leadId: c.leadId, paymentsLeft: c.commissionablePaymentsLeft, monthlyGbp: monthly, active } as ProjectionInput };
@@ -214,10 +236,26 @@ export async function loadEarnings(service: Service, personId: string | null, to
       paymentsLeft: c.commissionablePaymentsLeft, monthlyGbp: c._proj.monthlyGbp, live: !!l?.subscription_status && FORECAST_LIVE.has(l.subscription_status),
     };
   }), todayIso);
+  const recurringOf = new Map<string, number[]>();
+  for (const r of ledger) if (r.lead_id && r.kind === "recurring" && r.status === "succeeded" && r.amount_gbp > 0) (recurringOf.get(r.lead_id) ?? recurringOf.set(r.lead_id, []).get(r.lead_id)!).push(r.amount_gbp);
+  const saleFacts = ledger.filter((r) => r.lead_id && r.kind === "initial" && mine(r.sold_by_user_id ?? sellerOfLead.get(r.lead_id) ?? null)).map((r) => {
+    const plan = r.sale_plan ?? leads.get(r.lead_id!)?.payment_plan ?? null;
+    return { leadId: r.lead_id!, plan, flag: r.sale_plan_flag ?? (monthlyDiffers(plan, recurringOf.get(r.lead_id!) ?? []) ? "monthly_differs" : null), business: leads.get(r.lead_id!)?.business_name ?? "Client" };
+  });
   return {
-    lines, totals, bySeller, forecast,
+    lines, totals, bySeller, forecast, linePayments, monthlyPayouts, sales: saleFacts,
     clients: clients.map(({ _proj: _p, ...c }) => c),
     commissionable: personId === null ? true : sales.has(personId),
     engagement: personId === null ? null : engagementOf(timelines.get(personId)),
   };
+}
+
+/** THE ONE VIEW OF WHAT IS OWED (src/lib/commissionOwed.ts), from the same load as the earnings page. personId as loadEarnings. */
+export function owedFrom(e: Earnings, today: string): OwedView {
+  const bySale = new Map(e.sales.map((s) => [s.leadId, s]));
+  return buildOwed({
+    lines: e.lines, payments: e.linePayments, monthlyPayouts: e.monthlyPayouts,
+    businessOf: (id) => bySale.get(id)?.business ?? e.clients.find((c) => c.leadId === id)?.business ?? "Client",
+    planOf: (id) => bySale.get(id)?.plan ?? null, flagOf: (id) => bySale.get(id)?.flag ?? null, today,
+  });
 }
