@@ -7,16 +7,16 @@ import { useToast } from '@/hooks/use-toast';
 import { Callout } from '@/components/operator/ui';
 import { useCountrySettings } from '@/hooks/useCountrySettings';
 import { countryAutoOffRuleWords, countryAutoPauseHeadline } from '@/lib/countryAutoPause';
-import { cooldownHeadline, inCooldown, type CooldownSetting } from '@/lib/whatsappColdGuard';
+import { DEFAULT_ABROAD_COLD_CAP, DEFAULT_UK_COLD_CAP, cooldownHeadline, inCooldown, type CooldownSetting, type MarketColdCount } from '@/lib/whatsappColdGuard';
 import type { CountryOffSetting } from '@/lib/countryHold';
 import { SMS_SENDER_WORDS, checkCountryValue, hhmm, MARKET_NAME, MAX_COUNTRY_DAILY_CAP, WHATSAPP_ONLY_MARKETS, PER_LEAD_ZONE_MARKETS, type Market, type CountrySetting } from '@/lib/outreachMarkets';
 
 /* ══ SENDING BY COUNTRY — ADMIN ONLY (2026-10-14, Malaysia / Singapore; src/lib/outreachMarkets.ts) ═════════════════
    One row per country: a switch for WhatsApp, SMS and browser calling, the country's own daily caps and its local send
-   hours. Saved through set_outreach_country (admin-only on the server). The UK row's hours and caps are the existing
-   queue settings above (07:00-21:30 London, the team cap), so only its switches are shown here.
+   hours. Saved through set_outreach_country (admin-only on the server). The UK's hours are the existing queue windows
+   (07:00-21:30 London), so its row has its switches and its WhatsApp cap only.
    Australia (2026-10-22): WhatsApp only (its SMS / call switches are shown off and cannot be turned on); its hours are read
-   in each lead's own zone, Mon–Fri. 2026-11-02: every country's cap sits INSIDE the team cap (src/lib/whatsappColdGuard.ts). */
+   in each lead's own zone, Mon–Fri. 2026-11-02: every country's cold cap is its own, no team cap (src/lib/whatsappColdGuard.ts). */
 
 const ROWS: Market[] = ['UK', 'MY', 'SG', 'AU'];
 const t = (n: number | null | undefined) => (n == null ? '' : String(n));
@@ -29,7 +29,7 @@ const toMin = (s: string): number | null | 'bad' => {
   return Number(m[1]) > 24 || Number(m[2]) > 59 || n > 1440 ? 'bad' : n;
 };
 
-export function CountrySendingSettings() {
+export function CountrySendingSettings({ coldMarkets = null }: { coldMarkets?: Partial<Record<Market, MarketColdCount>> | null }) {
   const { settings, loaded, error, save } = useCountrySettings();
   const { toast } = useToast();
   const [open, setOpen] = useState(false);
@@ -61,8 +61,9 @@ export function CountrySendingSettings() {
     if (start === 'bad' || end === 'bad' || (start != null && end != null && start >= end)) {
       toast({ title: 'Check the hours', description: 'Use 24-hour times like 09:00 and 19:00, with the start before the end.', variant: 'destructive' }); return;
     }
-    const patch: Record<string, unknown> = { whatsapp_daily_cap: wa.value, send_start_min: start, send_end_min: end };
-    if (!WHATSAPP_ONLY_MARKETS.has(m)) patch.sms_daily_cap = sms.value;
+    /* The UK's hours are the queue windows and its texts have no cap of their own: its row saves its WhatsApp cap only. */
+    const patch: Record<string, unknown> = m === 'UK' ? { whatsapp_daily_cap: wa.value } : { whatsapp_daily_cap: wa.value, send_start_min: start, send_end_min: end };
+    if (m !== 'UK' && !WHATSAPP_ONLY_MARKETS.has(m)) patch.sms_daily_cap = sms.value;
     void apply(m, patch, `${MARKET_NAME[m]} limits saved`);
   };
 
@@ -121,13 +122,19 @@ export function CountrySendingSettings() {
                   ))}
                   {waOnly && <span className="text-[11px] text-muted-foreground" data-testid={`country-${m}-whatsapp-only`}>SMS and browser calls: never (WhatsApp only, prospect-only)</span>}
                   {busy === m && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                  {coldMarkets?.[m] && <span className="text-[11px] text-muted-foreground tabular-nums" data-testid={`country-${m}-cold-count`}>{coldMarkets[m]!.used} of {coldMarkets[m]!.cap} cold today</span>}
                 </div>
                 {m === 'UK' ? (
-                  <p className="text-[11px] text-muted-foreground">UK hours and caps are the queue limits above (WhatsApp 07:00–21:30, texts 09:00–20:00 London).</p>
+                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-5 items-end">
+                    <label className="flex flex-col gap-1"><span className="text-muted-foreground">WhatsApp a day</span>
+                      <Input className="h-8" inputMode="numeric" value={draft.UK.wa} onChange={(e) => setDraft((d) => ({ ...d, UK: { ...d.UK, wa: e.target.value } }))} placeholder={`Default ${DEFAULT_UK_COLD_CAP}`} data-testid="country-UK-wa-cap" /></label>
+                    <Button size="sm" className="h-8 text-xs" disabled={busy === m} onClick={() => saveRow(m)} data-testid="country-UK-save">Save</Button>
+                    <p className="col-span-2 sm:col-span-3 text-[11px] text-muted-foreground">UK hours: WhatsApp 07:00–21:30, texts 09:00–20:00 London.</p>
+                  </div>
                 ) : (
                   <div className="grid grid-cols-2 gap-2 sm:grid-cols-5 items-end">
                     <label className="flex flex-col gap-1"><span className="text-muted-foreground">WhatsApp a day</span>
-                      <Input className="h-8" inputMode="numeric" value={draft[m].wa} onChange={(e) => setDraft((d) => ({ ...d, [m]: { ...d[m], wa: e.target.value } }))} placeholder="No country cap" data-testid={`country-${m}-wa-cap`} /></label>
+                      <Input className="h-8" inputMode="numeric" value={draft[m].wa} onChange={(e) => setDraft((d) => ({ ...d, [m]: { ...d[m], wa: e.target.value } }))} placeholder={`Default ${DEFAULT_ABROAD_COLD_CAP}`} data-testid={`country-${m}-wa-cap`} /></label>
                     {waOnly ? (
                       <div className="flex flex-col gap-1"><span className="text-muted-foreground">Texts a day</span>
                         <span className="h-8 flex items-center text-muted-foreground">Never (WhatsApp only)</span></div>
@@ -158,7 +165,7 @@ export function CountrySendingSettings() {
             ⛔ Cold WhatsApp to Malaysia, Singapore and Australia goes only through these switches — test a handful by hand first. A failed
             send there is never retried automatically: that lead is handed back. While a country is off, its queued leads wait in the
             queue and send when it is switched back on.
-            {' '}Malaysia and Singapore send in their own time (UTC+8). Each country’s WhatsApp cap counts cold messages, from the queue and from people, inside the team cap. The UK uses the rest.
+            {' '}Malaysia and Singapore send in their own time (UTC+8). Each country’s WhatsApp cap is its own: it counts cold messages to that country, from the queue and from people, and no country uses another’s. Replies inside 24 hours are not counted. A red rating is a warning only and changes no cap.
             {' '}Australia is prospect-only: no price, sign-up or checkout message is ever sent there.
             {' '}WhatsApp templates are written in English for UK businesses: send only the openers, and not explain_offer / explain_offer_v2 (they quote £ prices and “UK businesses”).
           </p>

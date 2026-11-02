@@ -4,8 +4,6 @@
 // ⛔ FAILS TOWARDS NOT SENDING: an unreadable count or state answers null from loadColdFacts, and every door treats that as "no".
 // ⛔ THE GAP IS ONE CONDITIONAL WRITE (claimColdSlot): whichever door wins the row sends, the others wait. A read here would let
 //    two doors go in the same second. On 2 Nov queued openers went 4 seconds apart.
-import { healthLimitedCap, healthVerdict, type StoredHealth } from "../../../src/lib/whatsappNumberHealth.ts";
-import { effectivePace } from "../../../src/lib/whatsappPace.ts";
 import {
   COLD_READ_HOURS, coldGapMs, coldVerdict, isCountedColdSend, probeFailedReason, probeStart, probeVerdict, coldMarketOfPhone,
   COOLDOWN_HOURS, UK_PROBE_REST_HOURS,
@@ -17,7 +15,7 @@ import { loadCountrySettings } from "./country-settings.ts";
 // deno-lint-ignore no-explicit-any
 type Service = any;
 
-const STATE_COLUMNS = "daily_cap, min_gap_minutes, person_daily_limit_default, meta_quality_rating, meta_messaging_tier, meta_health_ok_at, meta_health_checked_at, meta_health_error, cold_stop_at, cold_stop_reason, cold_gap_until";
+const STATE_COLUMNS = "cold_stop_at, cold_stop_reason, cold_gap_until";
 const FAILED = ["failed", "failed_temporary"];
 
 export interface LoadedColdFacts extends ColdFacts { stopAt: string | null; gapUntil: string | null }
@@ -56,13 +54,11 @@ export async function loadColdFacts(service: Service, settingsIn?: CountrySettin
           && !["no_whatsapp", "whatsapp_failed"].includes(String(l.status ?? "")),
       };
     });
-    const health = healthVerdict(st as StoredHealth, now);
     return {
       stopReason: (st.cold_stop_at ? (st.cold_stop_reason as string | null) ?? "Meta limited the number." : null),
       stopAt: (st.cold_stop_at as string | null) ?? null,
       gapUntil: (st.cold_gap_until as string | null) ?? null,
       settings, sends,
-      teamCap: healthLimitedCap(effectivePace(st as never).dailyCap, health),
     };
   } catch {
     return null;

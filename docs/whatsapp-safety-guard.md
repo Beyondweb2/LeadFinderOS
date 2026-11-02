@@ -1,5 +1,7 @@
 # The cold WhatsApp guard (2026-11-02, `fix/whatsapp-safety-guard`)
 
+> **Later the same day (`fix/uk-cap-separate-from-malaysia`, migration `20261202090000`): the team cap is gone, on Paul's instruction.** Each country has its own cold cap and none draws on another's. See "Separate caps" below; older sections describe the first version where they mention a team cap.
+
 Why: the number has been rated RED since 25 Oct. The queue had a cap, a gap and rating checks; a person's cold send had none. Malaysia kept switching itself off for good. Rule: `src/lib/whatsappColdGuard.ts`. Database half: `supabase/functions/_shared/cold-whatsapp-gate.ts`. Migration: `20261201090000_whatsapp_safety_guard.sql`. Tests: `scripts/whatsapp-cold-guard.test.ts`.
 
 ## What every cold send now asks (queue, person, queued Inbox message)
@@ -10,8 +12,7 @@ First "no" wins:
 |---|---|
 | **Cold stop** | Stored tier dropped, or Meta says flagged / restricted / banned / blocked. ALL cold WhatsApp stops, whole drip included. Latched by `whatsapp-number-health`; a person clears it (Clear and restart, on the pause log). |
 | **Cool-down** | A country rests 24 hours, then restarts by itself. `whatsapp_on` is not touched, leads can still be queued. Restart now is the override (on the pause log). |
-| **Team cap** | `daily_cap`, default 100 (`DEFAULT_DAILY_CAP`), halved on YELLOW / RED. London day. Counts cold sends from the queue and from people. |
-| **Country cap** | `whatsapp_daily_cap`, its own local day, inside the team cap. The UK has none by default: it uses the rest. Malaysia is set to 30. |
+| **Country cap** | `whatsapp_daily_cap`, its own count on its own local day, from the queue and from people. UK 150 (default `DEFAULT_UK_COLD_CAP`), Malaysia 30, any other its stored value or `DEFAULT_ABROAD_COLD_CAP`. No country draws on another's. |
 | **Probe** | The first 3 after a window opens or a cool-down ends, then wait for delivery reports. 2 delivered carries on. 2 failed rests the country (24 hours abroad, 1 hour UK). After 30 minutes, one delivered with no second failure carries on; nothing delivered is a failure. |
 | **Gap** | One conditional write (`claimColdSlot`, `cold_gap_until`): at most one cold send every 1 to 2 minutes, whichever door. The queue's pacing still spreads the cap across the day on top. |
 
@@ -21,7 +22,17 @@ First "no" wins:
 
 Unreadable guard = nothing cold goes.
 
-⚠️ While RED the team cap is 50, so with Malaysia at 30 the UK can get as few as 20 a day. That is the requested rules combined (100, halved, 30 for Malaysia), not a fault.
+## Separate caps (2 Nov, later)
+
+Under the first version, RED made the team cap 50, and Malaysia's 30 came out of it, so the UK could get as few as 20 a day. Paul's instruction: only Malaysia is capped low, the UK goes back to 100+.
+
+- **Where the UK's cap lives:** `outreach_country_settings.whatsapp_daily_cap`, like every other country, set on the Countries screen. `whatsapp_outreach_state.daily_cap` is no longer read; it stays in the table, NULL. `set_pace` no longer takes it.
+- **A rating changes no cap.** RED and YELLOW are a banner only: no halving (Malaysia's included, which was offered as optional and not taken, so the screens read "Malaysia 0 of 30"), and no block on changing a cap. `healthLimitedCap`, `capRiseRefused` and `halveCap` are gone. The tripwire is unchanged.
+- **Pacing:** the shared clock now spreads what the countries that are on have left (`coldAllowanceLeft`) over the minutes left, so a Malaysian send no longer slows the UK. At 150 + 30 from 07:00 that is a send about every 5 minutes.
+- **The tick** stops early only when every country that is on has used its cap. A country at its cap is held by `leadSendable` like a window, and the other carries on.
+- **Pause log:** `cap_changed`, by trigger for a person's change, and by hand in the migration for the UK's 150 (under the admin account).
+
+⚠️ **What this does not fix:** on 2 Nov there were 0 leads queued, and the UK sent 0 to 3 a day from 31 Oct. The cap only matters once leads are queued. And the number is RED with Meta warning that its limit will drop if the rating does not improve: more volume on RED is Paul's call (2 Nov), and the tripwire is what catches a tier drop.
 
 ## Why Malaysia's 07:00 sends failed (2 Nov, 23:00 UTC on 1 Nov)
 

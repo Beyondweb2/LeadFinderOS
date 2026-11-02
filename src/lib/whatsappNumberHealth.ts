@@ -7,14 +7,14 @@
    (relative .ts imports only: edge-reachable).
 
    ⛔ GREEN  → nothing changes.
-   ⛔ YELLOW → the team's daily cap is HALVED and no one may raise the cap.
-   ⛔ RED    → a warning banner, the cap halved and no one may raise it. RED ALONE DOES NOT STOP SENDING (Paul, 2026-11-02): it used
-              to pause the queue, and the rating has flipped three times in a week. What stops everything is the tripwire below.
+   ⛔ YELLOW, RED → A WARNING BANNER AND NOTHING ELSE (Paul, 2026-11-02). No pause, no halved cap, no block on changing a cap, in any
+              country. RED used to pause the queue, then to halve the cap; the UK's caps are its own now and the rating has flipped three
+              times in a week. What stops everything is the tripwire below.
    ⛔ TRIPWIRE → the stored tier DROPS, or Meta says the number is FLAGGED / RESTRICTED / BANNED or cannot send: ALL cold WhatsApp
               stops (whatsapp_outreach_state.cold_stop_at, src/lib/whatsappColdGuard.ts) until a person clears it. Latched on the
               turn into the state, so a person's clear is not fought while it lasts. An absent or unreadable value never trips it.
    ⛔ CANNOT BE READ (no reading yet, the last good reading is older than HEALTH_STALE_AFTER_MIN, or Meta says
-              UNKNOWN) → sending is NEVER paused or slowed; only cap rises are blocked.
+              UNKNOWN) → sending is NEVER paused or slowed.
    The 1–2 minute random gap, the stored caps, the failure-burst auto-pause and the Malaysia / Singapore auto-off are
    separate rules and are untouched by this one.
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
@@ -65,10 +65,6 @@ export interface HealthVerdict {
   state: HealthState;
   rating: QualityRating;
   tier: string | null;
-  /** The daily cap is halved (yellow, red). */
-  halveCap: boolean;
-  /** No one may raise the daily cap (yellow, red, unreadable). */
-  blockCapRise: boolean;
   /** One plain line for the panel; null when green. */
   limitText: string | null;
 }
@@ -80,28 +76,18 @@ export function healthVerdict(h: StoredHealth | null | undefined, now: Date = ne
   const okAt = h?.meta_health_ok_at ? Date.parse(h.meta_health_ok_at) : NaN;
   const fresh = Number.isFinite(okAt) && now.getTime() - okAt <= HEALTH_STALE_AFTER_MIN * 60_000;
   if (!fresh || rating === 'UNKNOWN') {
-    return { state: 'unreadable', rating: fresh ? rating : 'UNKNOWN', tier, halveCap: false, blockCapRise: true,
-      limitText: 'The number’s quality rating could not be read from Meta, so the daily cap cannot be raised until it is. Sending carries on as normal.' };
+    return { state: 'unreadable', rating: fresh ? rating : 'UNKNOWN', tier,
+      limitText: 'The number’s quality rating could not be read from Meta. Sending carries on as normal.' };
   }
   if (rating === 'RED') {
-    return { state: 'red', rating, tier, halveCap: true, blockCapRise: true,
-      limitText: 'Meta rates the number RED. Sending carries on carefully: the daily cap is halved and cannot be raised until it recovers.' };
+    return { state: 'red', rating, tier,
+      limitText: 'Meta rates the number RED. This is a warning: caps and sending do not change. Meta lowering the tier, or flagging or restricting the number, stops all cold WhatsApp.' };
   }
   if (rating === 'YELLOW') {
-    return { state: 'yellow', rating, tier, halveCap: true, blockCapRise: true,
-      limitText: 'Meta rates the number YELLOW. The daily cap is halved and cannot be raised until it is green again.' };
+    return { state: 'yellow', rating, tier,
+      limitText: 'Meta rates the number YELLOW. This is a warning: caps and sending do not change.' };
   }
-  return { state: 'green', rating, tier, halveCap: false, blockCapRise: false, limitText: null };
-}
-
-/** The cap the drip uses after the rating rule. Halving rounds down; a cap of 0 stays 0. */
-export function healthLimitedCap(dailyCap: number, v: HealthVerdict): number {
-  return v.halveCap ? Math.floor(dailyCap / 2) : dailyCap;
-}
-
-/** Is this save a cap RISE the rating forbids? `currentCap` / `nextCap` are EFFECTIVE caps (stored, or the default). */
-export function capRiseRefused(currentCap: number, nextCap: number, v: HealthVerdict): boolean {
-  return v.blockCapRise && nextCap > currentCap;
+  return { state: 'green', rating, tier, limitText: null };
 }
 
 /** A tier as a number to compare. Unlimited is the highest; absent, or a word we do not know, is null (never a drop). */

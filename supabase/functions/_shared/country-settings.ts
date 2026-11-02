@@ -24,8 +24,8 @@ export async function loadCountrySettings(service: Service): Promise<CountrySett
 /** The digits prefix a market's numbers start with, as stored by each sender ("60…" WhatsApp, "+60…" SMS). */
 const CALLING_CODE: Record<Exclude<Market, "UK">, string> = { MY: "60", SG: "65", AU: "61" };
 
-/** Has `market` reached its own daily cap on this channel today (its own local day)? The UK has no country cap (the
- *  team cap is its cap) → false. A NULL cap → false. A failed count → true (send less, never more). */
+/** Has `market` reached its own daily cap on this channel today (its own local day)? Only the text queue asks, for Malaysia and
+ *  Singapore; cold WhatsApp asks src/lib/whatsappColdGuard.ts. The UK → false. A NULL cap → false. A failed count → true (send less, never more). */
 export async function marketAtDailyCap(service: Service, settings: CountrySettings, market: Market,
                                        channel: "whatsapp" | "sms", now: Date = new Date()): Promise<boolean> {
   if (market === "UK") return false;

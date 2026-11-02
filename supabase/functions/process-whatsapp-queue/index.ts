@@ -8,7 +8,7 @@ import { AU_ZONE_COLUMNS, auLeadTz } from "../../../src/lib/auLeadZone.ts";
 import { NOT_A_MOBILE, NOT_A_MOBILE_REASON, templateDestinationRefusal } from "../../../src/lib/whatsAppDestination.ts";
 import { loadCountrySettings } from "../_shared/country-settings.ts";
 import { claimColdSlot, coldGateFor, loadColdFacts } from "../_shared/cold-whatsapp-gate.ts";
-import { coldVerdict, teamColdCount, type ColdVerdict } from "../../../src/lib/whatsappColdGuard.ts";
+import { coldAllowanceLeft, coldVerdict, teamColdCount, type ColdVerdict } from "../../../src/lib/whatsappColdGuard.ts";
 import { coldOpenerFor } from "../../../src/lib/openerVariant.ts";
 import { isUkColdDestination, NOT_A_UK_MOBILE } from "../../../src/lib/ukColdDestination.ts";
 import { statusBeforeQueue, statusWhenWhatsAppUnavailable, statusWithContactEvidence } from "../../../src/lib/coldWhatsAppEligibility.ts";
@@ -37,8 +37,8 @@ import { effectiveFirstReplyMode } from "../../../src/lib/firstReplyAutomation.t
 import { WAITING_PITCH_EXPIRED_REASON, WAITING_PITCH_STATUSES, isWaitingPitchExpired, waitingPitchCutoffIso } from "../../../src/lib/auditPitchRule.ts";
 import { SETTLED_TOWN_NOTES } from "../_shared/place-details.ts";
 import { createTemplateSnapshot } from "../../../src/lib/whatsappTemplateSnapshot.ts";
-import { AUTO_PAUSE_WINDOW_MIN, DEFAULT_DAILY_CAP, FAILED_SEND_STATUSES, MAX_DAILY_CAP, autoPauseVerdict, checkPaceValue, effectivePace, type EffectivePace } from "../../../src/lib/whatsappPace.ts";
-import { capRiseRefused, healthLimitedCap, healthVerdict, tierLimit, type StoredHealth } from "../../../src/lib/whatsappNumberHealth.ts";
+import { AUTO_PAUSE_WINDOW_MIN, FAILED_SEND_STATUSES, autoPauseVerdict, checkPaceValue, effectivePace, type EffectivePace } from "../../../src/lib/whatsappPace.ts";
+import { healthVerdict, tierLimit, type StoredHealth } from "../../../src/lib/whatsappNumberHealth.ts";
 import { STRONG_STATUSES, postgrestList } from "../../../src/lib/strongStatuses.ts";
 import { qaSendVerdict } from "../../../src/lib/qaSafety.ts";
 import { loadQaExclusions, qaSendHold } from "../_shared/qa-guard.ts";
@@ -63,7 +63,7 @@ import { maskSecrets, metaErrorPartsFromResponse, partsFromStoredError, type Sen
 //
 // Guards (server-side, never UI-only):
 //   • 7am–9:30pm Europe/London window (DST-correct via Intl, not the cron schedule)
-//   • DAILY_CAP sends/day GLOBAL cap (one WABA number) — counted from whatsapp_sends.
+//   • Each country's own cold cap (src/lib/whatsappColdGuard.ts, 2026-11-02; there is no team cap any more). The DAILY_CAP notes below are history.
 //     ⛔ THIS SAID "40" WHILE THE CONSTANT WAS 100, and Paul believed his cap was 40 because of it.
 //     Never write the number here twice: name the constant, which cannot go stale.
 //   • randomised spacing via whatsapp_outreach_state.next_send_at
@@ -186,7 +186,9 @@ const GRAPH_VERSION = "v21.0";
    (src/lib/whatsappPace.ts effectivePace — NULL = DEFAULT_DAILY_CAP 800 / DEFAULT_GAP_FLOOR_MIN 1; never above
    MAX_DAILY_CAP, Meta's first established tier). Inside the handler DAILY_CAP is that effective cap. Everything above
    about the grid still holds: one send per one-minute tick, 870 ticks in the window, so 800 is close to the most the
-   drip can reach — the pacing formula is unchanged. */
+   drip can reach — the pacing formula is unchanged.
+   ⛔ 2026-11-02: THAT CAP IS GONE. Each country has its own (src/lib/whatsappColdGuard.ts); the pacing spreads what the countries that
+   are on have left (coldLeft) over the minutes left, and daily_cap is no longer read. */
 /* ══ THE SEND GAP ═══════════════════════════════════════════════════════════════════════
    ⚠️ THESE WERE BARE LITERALS INSIDE THE PACING EXPRESSION. The floor in particular — the single
    number that decided real throughput for months — had no name, so nothing could reference it, no
@@ -492,8 +494,8 @@ function minutesUntilWindowEnd(): number {
  *  baseGap = time-left-in-window / remaining-cap, jittered, floored and ceilinged. Both the opener
  *  lane and the hook_followup lane write this, so the two share one pacing clock and one global rate
  *  (with one send per tick, they interleave at the cap — never a burst). */
-function nextPacingStamp(sentTodayCount: number, pace: EffectivePace): string {
-  const remaining = Math.max(1, pace.dailyCap - (sentTodayCount + 1));
+function nextPacingStamp(coldLeftNow: number, pace: EffectivePace): string {
+  const remaining = Math.max(1, coldLeftNow - 1);
   const minsLeft = minutesUntilWindowEnd();
   const baseGap = minsLeft / remaining;
   const jitter = SEND_GAP_JITTER_LOW + Math.random() * (SEND_GAP_JITTER_HIGH - SEND_GAP_JITTER_LOW);
@@ -514,11 +516,10 @@ function nextPacingStamp(sentTodayCount: number, pace: EffectivePace): string {
  *   - outside the window, OR cap reached → the next 07:00 Europe/London. Cap-hit today rolls to
  *     tomorrow; before 07:00 today rolls to 07:00 today; after 21:30 today rolls to tomorrow.
  *  DST-correct because londonInstant round-trips through the London offset. */
-function nextEligibleSendAt(sentToday: number, storedNextSendAt: string | null, dailyCap: number): string {
+function nextEligibleSendAt(underCap: boolean, storedNextSendAt: string | null): string {
   const n = londonNow();
   const nowMin = n.hour * 60 + n.minute;
   const inWindow = nowMin >= WINDOW_START * 60 && nowMin < WINDOW_END_MIN;
-  const underCap = sentToday < dailyCap;
 
   if (inWindow && underCap) {
     // The pacing wait already in flight, if it is still ahead of now; otherwise it is due now.
@@ -711,7 +712,7 @@ Deno.serve(async (req) => {
     let paceRow: Record<string, unknown> | null = null;
     try {
       const { data: pr, error: prErr } = await service.from("whatsapp_outreach_state")
-        .select("daily_cap, min_gap_minutes, person_daily_limit_default, auto_paused_at, auto_pause_reason").eq("id", 1).maybeSingle();
+        .select("min_gap_minutes, person_daily_limit_default, auto_paused_at, auto_pause_reason").eq("id", 1).maybeSingle();
       if (!prErr) paceRow = (pr ?? null) as Record<string, unknown> | null;
     } catch { paceRow = null; }
     /* WHO LAST PAUSED / RESUMED THE QUEUE, AND WHEN (2026-10-15). Read on its own: a missing column only hides the line. */
@@ -724,10 +725,9 @@ Deno.serve(async (req) => {
           byName: await personName(service, (pc.pause_changed_by as string | null) ?? null), source: (pc.pause_changed_source as string | null) ?? null };
       }
     } catch { pauseChange = null; }
-    const setPace = effectivePace(paceRow as never);
+    const pace: EffectivePace = effectivePace(paceRow as never);
     /* ⛔ THE NUMBER'S QUALITY RATING (2026-10-21, src/lib/whatsappNumberHealth.ts). Read on its own: a missing column or a
-       failed read is "cannot be read", which never slows or pauses sending (it only blocks cap rises in set_pace).
-       Yellow / red halve the cap the drip uses; the admin's stored cap is unchanged (shown as setCap). */
+       failed read is "cannot be read", which never slows or pauses sending. Display only: no rating changes a cap (2026-11-02). */
     let healthRow: StoredHealth | null = null;
     try {
       const { data: hr, error: hrErr } = await service.from("whatsapp_outreach_state")
@@ -735,14 +735,11 @@ Deno.serve(async (req) => {
       if (!hrErr) healthRow = (hr ?? null) as StoredHealth | null;
     } catch { healthRow = null; }
     const health = healthVerdict(healthRow);
-    const pace: EffectivePace = { ...setPace, dailyCap: healthLimitedCap(setPace.dailyCap, health) };
-    const DAILY_CAP = pace.dailyCap;
     /* ⛔ PER-COUNTRY SWITCHES, HOURS AND CAPS (2026-10-14, src/lib/outreachMarkets.ts). An unreadable table answers the
        defaults: the UK exactly as before, Malaysia and Singapore OFF. */
     const countrySettings = await loadCountrySettings(service);
-    /* ⛔ THE COLD GUARD (2026-11-02, src/lib/whatsappColdGuard.ts). One count for the queue and a person's cold sends; replies
-       are not in it, and the tick sends nothing if it cannot be read. Australia no longer has a budget outside the team cap:
-       one number, one allowance. */
+    /* ⛔ THE COLD GUARD (2026-11-02, src/lib/whatsappColdGuard.ts). One count per country for the queue and a person's cold sends;
+       replies are not in it, and the tick sends nothing if it cannot be read. Each country has its own cap: none draws on another's. */
     const coldFacts = await loadColdFacts(service, countrySettings);
     const sentToday = coldFacts ? teamColdCount(coldFacts.sends) : 0;
     const coldNow: Partial<Record<Market, ColdVerdict>> = {};
@@ -752,6 +749,8 @@ Deno.serve(async (req) => {
         coldNow[m] = mode === "tick" && channelOn(countrySettings, m, "whatsapp") ? await coldGateFor(service, coldFacts, m) : coldVerdict(m, coldFacts);
       }
     }
+    /* What the countries that are on have left today. The pacing spreads it over the day; at 0 the tick has nothing to do. */
+    const coldLeft = coldAllowanceLeft((["UK", ...ABROAD_MARKETS] as Market[]).filter((m) => channelOn(countrySettings, m, "whatsapp")).map((m) => coldNow[m]));
     const paused: boolean = stateRow?.paused === true;
     const uk = londonNow();
     // Minute-granular so the 21:30 end is honoured (a whole-hour compare would run to 21:59).
@@ -775,7 +774,7 @@ Deno.serve(async (req) => {
     /* A market the cold guard says no to (cool-down, its own cap, a probe waiting for its reports) holds its leads, like the
        window does: not chosen, nothing written. */
     const marketHeld = (m: Market | null) => !!m && coldNow[m]?.go === false;
-    const teamCapReached = sentToday >= DAILY_CAP;
+    const allCapsUsed = coldLeft <= 0;
     /* ⛔ 2026-10-22 (src/lib/countryHold.ts heldCountryOff): a lead whose country's WhatsApp is OFF is held like the
        window and the cap — not chosen, nothing written — and sends once the country is switched back on. */
     const leadSendable = (r: QRow) => {
@@ -803,25 +802,23 @@ Deno.serve(async (req) => {
     } catch { testHeldQueuedCount = null; }
 
     const statusPayload = {
-      testMode, live, sentToday, cap: DAILY_CAP,
+      testMode, live, sentToday,
       /* 2026-11-02: the cold guard, for the banners. A stop covers everything; each market says what it may do now. */
       coldGuard: {
         readable: !!coldFacts,
         stop: coldFacts?.stopReason ? { at: coldFacts.stopAt, reason: coldFacts.stopReason } : null,
         markets: Object.fromEntries((Object.entries(coldNow) as Array<[Market, ColdVerdict]>).map(([m, v]) => [m, {
-          go: v.go, probing: v.go ? v.probing : false, code: v.go ? null : v.code, reason: v.go ? null : v.reason,
+          on: channelOn(countrySettings, m, "whatsapp"), go: v.go, probing: v.go ? v.probing : false, code: v.go ? null : v.code, reason: v.go ? null : v.reason,
           retryAt: v.go ? null : (v.retryAt ? v.retryAt.toISOString() : null), used: v.used, cap: v.cap,
         }])),
       },
       /* 2026-10-14: the admin-set numbers (stored null = the default) and the auto-pause note, for the queue panel. */
-      pace: { dailyCap: pace.dailyCap, gapFloorMin: pace.gapFloorMin, personDefault: pace.personDefault, maxDailyCap: MAX_DAILY_CAP,
-              stored: { daily_cap: paceRow?.daily_cap ?? null, min_gap_minutes: paceRow?.min_gap_minutes ?? null },
-              /* 2026-10-21: the cap the admin set, before the rating rule (equal to dailyCap unless yellow / red). */
-              setCap: setPace.dailyCap },
-      /* 2026-10-21: Meta's quality rating and messaging tier for the number (display; the rule is already in dailyCap). */
+      pace: { gapFloorMin: pace.gapFloorMin, personDefault: pace.personDefault,
+              stored: { min_gap_minutes: paceRow?.min_gap_minutes ?? null } },
+      /* 2026-10-21: Meta's quality rating and messaging tier for the number (display only). */
       numberHealth: {
         state: health.state, rating: health.rating, tier: health.tier, tierLimit: tierLimit(health.tier),
-        halved: health.halveCap, capRiseBlocked: health.blockCapRise, limitText: health.limitText,
+        limitText: health.limitText,
         okAt: healthRow?.meta_health_ok_at ?? null, checkedAt: healthRow?.meta_health_checked_at ?? null, error: healthRow?.meta_health_error ?? null,
       },
       autoPausedAt: (paceRow?.auto_paused_at as string | null) ?? null,
@@ -842,7 +839,7 @@ Deno.serve(async (req) => {
       /* The real next eligible send, Europe/London, computed live — what the dashboard shows.
          `nextSendAt` (the raw stored pacing stamp) stays in the payload for back-compat, but the
          panel reads THIS. Display only; changes no gate. */
-      nextEligibleSendAt: nextEligibleSendAt(sentToday, nextSendAt, DAILY_CAP),
+      nextEligibleSendAt: nextEligibleSendAt(!allCapsUsed, nextSendAt),
       ukTime: `${String(uk.hour).padStart(2, "0")}:${String(uk.minute).padStart(2, "0")}`,
       // Auto audit_reply rule state: BOTH must be on for the rule to run. Toggle read is
       // defensive (missing column → false), so status works before the SQL has been run.
@@ -994,20 +991,11 @@ Deno.serve(async (req) => {
        default. person_limits writes team_members.daily_send_limit for an ACTIVE salesperson only. */
     if (mode === "set_pace") {
       const patch: Record<string, unknown> = {};
-      for (const k of ["daily_cap", "min_gap_minutes", "person_daily_limit_default"] as const) {
+      for (const k of ["min_gap_minutes", "person_daily_limit_default"] as const) {
         if (!(k in body)) continue;
         const c = checkPaceValue(k, body[k]);
         if (!c.ok) return json({ ok: false, error: c.error }, 400);
         patch[k] = c.value;
-      }
-      /* ⛔ NO CAP RISE WHILE THE RATING IS YELLOW / RED OR CANNOT BE READ (2026-10-21). Compared as EFFECTIVE caps
-         (blank = the default), so clearing a low cap back to the default is a rise too. A cut is always allowed. */
-      if ("daily_cap" in patch) {
-        const nextCap = (patch.daily_cap as number | null) ?? DEFAULT_DAILY_CAP;
-        if (capRiseRefused(setPace.dailyCap, nextCap, health)) {
-          await service.from("whatsapp_number_health_log").insert({ kind: "cap_rise_refused", from_value: String(setPace.dailyCap), to_value: String(nextCap), detail: `rating ${health.rating}, ${health.state}` });
-          return json({ ok: false, error: "cap_rise_blocked", detail: health.limitText });
-        }
       }
       const people = Array.isArray(body.person_limits) ? body.person_limits as Array<{ user_id?: unknown; limit?: unknown }> : [];
       const personWrites: Array<{ user_id: string; limit: number | null }> = [];
@@ -1770,8 +1758,8 @@ Deno.serve(async (req) => {
       console.error("[outreach-audit] audit-ahead pass threw:", e instanceof Error ? e.message : String(e));
     }
 
-    /* The team cap stops every market. */
-    if (teamCapReached && !qaDrill) return json({ ok: true, skipped: "cap_reached", ...statusPayload, auditAhead });
+    /* Every country that is on has used its own cap. One that has not still goes: leadSendable holds only the ones that have. */
+    if (allCapsUsed && !qaDrill) return json({ ok: true, skipped: "cap_reached", ...statusPayload, auditAhead });
     /* ⛔ THE GAP (src/lib/whatsappColdGuard.ts): a person's cold send takes the same slot. send_now skips the pacing below, never this. */
     if (!qaDrill && !force && coldFacts?.gapUntil && new Date(coldFacts.gapUntil) > new Date()) {
       return json({ ok: true, skipped: "cold_gap", ...statusPayload });
@@ -2007,7 +1995,7 @@ Deno.serve(async (req) => {
 
         // Share the pacing clock, exactly like the opener lane.
         await service.from("whatsapp_outreach_state")
-          .update({ next_send_at: nextPacingStamp(sentToday, pace), updated_at: hNowIso }).eq("id", 1);
+          .update({ next_send_at: nextPacingStamp(coldLeft, pace), updated_at: hNowIso }).eq("id", 1);
 
         return json({
           ok: true, sent: hOutcome === "sent", simulated: !hLive, outcome: hOutcome, lane: "hook_followup",
@@ -2118,7 +2106,7 @@ Deno.serve(async (req) => {
 
         // Share the pacing clock, exactly like the opener and hook lanes.
         await service.from("whatsapp_outreach_state")
-          .update({ next_send_at: nextPacingStamp(sentToday, pace), updated_at: cNowIso }).eq("id", 1);
+          .update({ next_send_at: nextPacingStamp(coldLeft, pace), updated_at: cNowIso }).eq("id", 1);
 
         return json({
           ok: true, sent: cOutcome === "sent", simulated: !cLive, outcome: cOutcome, lane: "contact_followup",
@@ -2844,7 +2832,7 @@ Deno.serve(async (req) => {
     // A QA drill never moves the real queue's clock.
     if (!qaDrill) {
       await service.from("whatsapp_outreach_state")
-        .update({ next_send_at: nextPacingStamp(sentToday, pace), updated_at: nowIso }).eq("id", 1);
+        .update({ next_send_at: nextPacingStamp(coldLeft, pace), updated_at: nowIso }).eq("id", 1);
     }
 
     return json({

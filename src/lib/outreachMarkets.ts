@@ -71,7 +71,7 @@ export interface CountrySetting {
   whatsapp_on?: boolean | null;
   sms_on?: boolean | null;
   call_on?: boolean | null;
-  /** The country's own daily cap for the queue (WhatsApp); NULL = no country cap (the UK: the team cap is the cap). */
+  /** The country's own daily cold WhatsApp cap; NULL = the default for that country (src/lib/whatsappColdGuard.ts countryColdCap). */
   whatsapp_daily_cap?: number | null;
   /** The country's own daily cap for texts; NULL = no country cap. */
   sms_daily_cap?: number | null;
@@ -98,7 +98,7 @@ export const DEFAULT_COUNTRY_SETTINGS: Record<Market, CountrySetting> = {
         send_start_min: 9 * 60, send_end_min: 17 * 60, timezone: 'Australia/Sydney' },
 };
 
-/** The largest per-country daily cap that may be typed (a typo guard; the team cap still binds WhatsApp). */
+/** The largest per-country daily cap that may be typed (a typo guard). */
 export const MAX_COUNTRY_DAILY_CAP = 1000;
 
 export type CountrySettings = Record<Market, CountrySetting>;

@@ -45,7 +45,6 @@ interface TeamStatus {
   testMode: boolean;
   live: boolean;
   sentToday: number;
-  cap: number;
   nextSendAt: string | null;
   /** The real next eligible send, computed server-side in Europe/London. Optional so the panel
    *  degrades cleanly against an older function deploy that has not shipped it yet. */
@@ -56,6 +55,7 @@ interface TeamStatus {
   /* 2026-10-14: the admin-set cap / pace, the auto-pause note, sent today per person (WhatsAppPaceSettings). */
   pace?: PaceStatus['pace'];
   numberHealth?: PaceStatus['numberHealth'];
+  coldGuard?: PaceStatus['coldGuard'];
   autoPausedAt?: PaceStatus['autoPausedAt'];
   autoPauseReason?: PaceStatus['autoPauseReason'];
   perPersonToday?: PaceStatus['perPersonToday'];
@@ -298,7 +298,8 @@ export function WhatsAppQueuePanel() {
 
   const line = queuedLeadLine(state);
   const clock = tabClock(tab, countrySettings);
-  const tabCap = tab === 'UK' ? team?.cap ?? null : countrySettings[tab].whatsapp_daily_cap ?? null;
+  /* The guard's own count and cap for this country (src/lib/whatsappColdGuard.ts), the numbers the sender goes by. */
+  const tabCold = team?.coldGuard?.markets?.[tab] ?? null;
   const total = q.isSuccess ? QUEUE_TABS.reduce((n, m) => n + views[m].waiting.length, 0) : null;
   const offNote = countryOffNote(tab, countrySettings[tab], view.waiting.length);
 
@@ -398,7 +399,7 @@ export function WhatsAppQueuePanel() {
             {/* The cap, pace, per-person limits, quality rating and tier, sent today per person; the auto-pause note (2026-10-14). Admin only. */}
             {teamControls && <WhatsAppPaceSettings team={team} onSaved={() => refreshTeam(true)} />}
             {/* 2026-10-14: sending by country — UK / Malaysia / Singapore / Australia switches, caps and local hours (admin only). */}
-            {teamControls && <CountrySendingSettings />}
+            {teamControls && <CountrySendingSettings coldMarkets={team?.coldGuard?.markets ?? null} />}
             {/* 2026-10-15: every failed send of the last 7 days with Meta's real error code and what it means (admin only). */}
             {teamControls && <RecentSendFailures />}
           </DialogContent>
@@ -432,7 +433,7 @@ export function WhatsAppQueuePanel() {
             <div className="text-[10px] font-medium text-sky-600/80 dark:text-sky-400/80">+ {view.followUps.length} no-reply follow-up{view.followUps.length === 1 ? '' : 's'}</div>
           )}
         </div>
-        {teamControls && <Stat label="Sent today" value={sentToday.data == null ? '—' : tabCap != null ? `${sentToday.data} / ${tabCap}` : String(sentToday.data)} />}
+        {teamControls && <Stat label="Sent today" value={tabCold ? `${tabCold.used} / ${tabCold.cap}` : sentToday.data == null ? '—' : String(sentToday.data)} />}
         {/* ⛔ READS nextEligibleSendAt (server), NOT the raw nextSendAt pacing stamp, shown in THIS country's own time
             (nextSendWords). The server has one next-send for the whole queue, so a country shows it only while it could be
             the one sending; otherwise it says Off / Paused / Opens HH:MM. Falls back to nextSendAt on an older deploy. */}

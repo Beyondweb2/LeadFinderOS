@@ -1,9 +1,9 @@
 /* WHATSAPP NUMBER QUALITY RATING / TIER — the one rule (src/lib/whatsappNumberHealth.ts) and its wiring
-   (2026-10-21, docs/whatsapp-number-health.md). Yellow halves the cap and blocks rises; red pauses ONCE and halves;
-   cannot be read never slows or pauses, only blocks rises. The existing pace rules are untouched. */
+   (2026-10-21, docs/whatsapp-number-health.md). Since 2026-11-02 yellow and red are warnings only; cannot be read never slows or
+   pauses. The existing pace rules are untouched. */
 import { readFileSync } from 'node:fs';
 import {
-  HEALTH_STALE_AFTER_MIN, capRiseRefused, healthLimitedCap, healthVerdict, normaliseRating,
+  HEALTH_STALE_AFTER_MIN, healthVerdict, normaliseRating,
   tierLimit, tierWords,
 } from '../src/lib/whatsappNumberHealth.ts';
 
@@ -21,24 +21,20 @@ ok(normaliseRating('green') === 'GREEN' && normaliseRating(' Red ') === 'RED' &&
 
 console.log('green');
 const g = at('GREEN');
-ok(g.state === 'green' && !g.halveCap && !g.blockCapRise && g.limitText === null, 'green changes nothing');
-ok(healthLimitedCap(800, g) === 800 && !capRiseRefused(400, 800, g), 'green: cap as set, rises allowed');
+ok(g.state === 'green' && g.limitText === null, 'green changes nothing');
 
 console.log('yellow');
 const y = at('YELLOW');
-ok(y.state === 'yellow' && y.halveCap && y.blockCapRise, 'yellow halves and blocks rises');
-ok(healthLimitedCap(800, y) === 400 && healthLimitedCap(5, y) === 2 && healthLimitedCap(0, y) === 0, 'halving rounds down; 0 stays 0');
-ok(capRiseRefused(400, 401, y) && !capRiseRefused(400, 400, y) && !capRiseRefused(400, 100, y), 'yellow: a rise is refused, the same or a cut is allowed');
+ok(y.state === 'yellow' && /warning/.test(y.limitText ?? ''), 'yellow is a warning');
 
 console.log('red');
 const r = at('RED');
-ok(r.state === 'red' && r.halveCap && r.blockCapRise, 'red halves and blocks rises');
-/* 2026-11-02: RED warns and halves; it no longer pauses (scripts/whatsapp-cold-guard.test.ts holds the tripwire). */
+ok(r.state === 'red' && /warning/.test(r.limitText ?? ''), 'red is a warning');
+/* 2026-11-02: RED warns, nothing else (scripts/whatsapp-cold-guard.test.ts holds the tripwire and that no rating changes a cap). */
 
 console.log('cannot be read');
 for (const [why, v] of [['never read', healthVerdict(null, now)], ['stale', at('GREEN', stale)], ['UNKNOWN', at('UNKNOWN')], ['bad date', at('GREEN', 'nope')]] as const) {
-  ok(v.state === 'unreadable' && !v.halveCap && v.blockCapRise, `${why}: never slows sending, only blocks rises`);
-  ok(healthLimitedCap(800, v) === 800, `${why}: cap untouched`);
+  ok(v.state === 'unreadable' && /carries on/.test(v.limitText ?? ''), `${why}: never slows sending`);
 }
 
 console.log('tiers');
@@ -47,9 +43,6 @@ ok(tierWords('TIER_1K') === '1,000 new people a day' && tierWords('TIER_UNLIMITE
 
 console.log('wiring');
 const q = read('supabase/functions/process-whatsapp-queue/index.ts');
-ok(/dailyCap: healthLimitedCap\(setPace\.dailyCap, health\)/.test(q), 'the queue drips at the rating-limited cap');
-ok(/capRiseRefused\(setPace\.dailyCap, nextCap, health\)/.test(q) && /cap_rise_blocked/.test(q), 'set_pace refuses a cap rise by the one rule');
-ok(/const nextCap = \(patch\.daily_cap as number \| null\) \?\? DEFAULT_DAILY_CAP/.test(q), 'clearing the cap is compared as the default');
 ok(/autoPauseVerdict\(rows\.length, failed\)/.test(q), 'the failure-burst auto-pause is still there');
 ok(/SEND_GAP_JITTER_LOW \+ Math\.random\(\)/.test(q), 'the random gap is unchanged');
 const w = read('supabase/functions/whatsapp-number-health/index.ts');

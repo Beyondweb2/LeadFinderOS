@@ -1,28 +1,21 @@
 /* ════════════════════════════════════════════════════════════════════════════════════════════════
-   THE WHATSAPP QUEUE'S CAP, PACE AND AUTO-PAUSE — ONE RULE (2026-10-14, test day; docs/test-day-outreach.md).
+   THE WHATSAPP QUEUE'S PACE AND AUTO-PAUSE — ONE RULE (2026-10-14, test day; docs/test-day-outreach.md).
 
-   Until today the daily cap (400) and the send-gap floor (1 min) were code constants in process-whatsapp-queue, so
-   changing either meant a deploy. They now live in whatsapp_outreach_state (id 1), set by the admin on the WhatsApp
-   queue panel; NULL = the default below. This leaf is the ONE place that turns the stored values into the numbers
-   the drip uses — the edge function and the panel both import it (relative .ts imports only: edge-reachable).
+   The send-gap floor (1 min) was a code constant in process-whatsapp-queue, so changing it meant a deploy. It now lives in
+   whatsapp_outreach_state (id 1), set by the admin on the WhatsApp queue panel; NULL = the default below. This leaf turns the
+   stored values into the numbers the drip uses — the edge function and the panel both import it (relative .ts imports only:
+   edge-reachable).
 
-   ⛔ THE CEILING IS META'S, NOT OURS. One WhatsApp number (WHATSAPP_PHONE_NUMBER_ID) sends for the whole team.
-   Meta limits how many NEW people a business number may start conversations with per 24 hours by its messaging
-   tier (1,000 at the first established tier). MAX_DAILY_CAP keeps any setting under that line; a number still on
-   the 250 starter tier must have its cap set to 250 or less by hand (the panel says so).
-   ⛔ THE DRIP SENDS AT MOST ONE MESSAGE PER CRON TICK (every minute), inside 07:00–21:30 London = 870 ticks. The
-   pacing spreads (cap − sent) over the minutes left, never faster than the floor. So ~800 is the practical top of
-   what the drip can reach in a day; a cap above it only matters on a day the queue starts early.
+   ⛔ THERE IS NO TEAM CAP (2026-11-02). Each country has its own (src/lib/whatsappColdGuard.ts); whatsapp_outreach_state.daily_cap
+   is no longer read and stays in the table, NULL. One WhatsApp number (WHATSAPP_PHONE_NUMBER_ID) sends for the whole team and
+   Meta limits how many NEW people it may message per 24 hours by its tier: the panel warns if the caps add up to more than that.
+   ⛔ THE DRIP SENDS AT MOST ONE MESSAGE PER CRON TICK (every minute). The pacing spreads what the countries that are on have left
+   over the minutes left in the London window, never faster than the floor.
    ⛔ AUTO-PAUSE: when the queue's own sends in the last hour mostly FAIL, the queue pauses itself and says why —
    failures in a burst usually mean the number is being limited or blocked, and carrying on makes it worse. A person
    resumes it; nothing resumes it automatically.
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 
-/** The team's cold WhatsApp cap when the admin has set none (2026-11-02, RED since 25 Oct; was 800). It counts cold sends from the
- *  queue AND from people, not in-window replies (src/lib/whatsappColdGuard.ts). The rating rule halves it on YELLOW / RED. */
-export const DEFAULT_DAILY_CAP = 100;
-/** Never above this, whatever is stored: Meta's first established messaging tier (new conversations / 24 h). */
-export const MAX_DAILY_CAP = 1000;
 /** The minimum minutes between two queue sends when the admin has set none (unchanged from the constant). */
 export const DEFAULT_GAP_FLOOR_MIN = 1;
 /** The slowest floor the admin may choose (one send an hour). */
@@ -39,13 +32,11 @@ export const AUTO_PAUSE_MIN_ATTEMPTS = 8;
 export const AUTO_PAUSE_FAIL_SHARE = 0.5;
 
 export interface StoredPace {
-  daily_cap?: number | null;
   min_gap_minutes?: number | null;
   person_daily_limit_default?: number | null;
 }
 
 export interface EffectivePace {
-  dailyCap: number;
   gapFloorMin: number;
   /** The per-person daily queue limit for a salesperson with none of their own. null = no limit. */
   personDefault: number | null;
@@ -56,25 +47,21 @@ const wholeIn = (v: unknown, lo: number, hi: number): number | null => {
   return v < lo || v > hi ? null : v;
 };
 
-/** The stored row → the numbers the drip uses. An absent or out-of-range value is the default (never a guess
- *  above the ceiling); a cap of 0 is a real setting (send nothing). */
+/** The stored row → the numbers the drip uses. An absent or out-of-range value is the default. */
 export function effectivePace(row: StoredPace | null | undefined): EffectivePace {
   return {
-    dailyCap: wholeIn(row?.daily_cap, 0, MAX_DAILY_CAP) ?? DEFAULT_DAILY_CAP,
     gapFloorMin: wholeIn(row?.min_gap_minutes, 1, MAX_GAP_FLOOR_MIN) ?? DEFAULT_GAP_FLOOR_MIN,
     personDefault: wholeIn(row?.person_daily_limit_default, 0, MAX_PERSON_DAILY_LIMIT),
   };
 }
 
-export type PaceField = 'daily_cap' | 'min_gap_minutes' | 'person_daily_limit_default' | 'person_limit';
+export type PaceField = 'min_gap_minutes' | 'person_daily_limit_default' | 'person_limit';
 
 /** Validate ONE value the admin typed. null = clear it (back to the default / no limit). Refused, never clamped. */
 export function checkPaceValue(field: PaceField, v: unknown): { ok: true; value: number | null } | { ok: false; error: string } {
   if (v === null || v === '' || v === undefined) return { ok: true, value: null };
   const n = typeof v === 'string' ? Number(v.trim()) : v;
-  const [lo, hi] = field === 'daily_cap' ? [0, MAX_DAILY_CAP]
-    : field === 'min_gap_minutes' ? [1, MAX_GAP_FLOOR_MIN]
-    : [0, MAX_PERSON_DAILY_LIMIT];
+  const [lo, hi] = field === 'min_gap_minutes' ? [1, MAX_GAP_FLOOR_MIN] : [0, MAX_PERSON_DAILY_LIMIT];
   const w = wholeIn(n, lo, hi);
   return w === null ? { ok: false, error: `${field}_out_of_range` } : { ok: true, value: w };
 }
