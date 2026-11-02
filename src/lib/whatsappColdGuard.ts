@@ -8,11 +8,11 @@
 
    ⛔ IN ORDER, THE FIRST "NO" WINS:
       1. COLD STOP   — the stored tier dropped, or Meta flagged / restricted the number: ALL cold WhatsApp stops until a person
-                       clears it. RED alone is not a stop (src/lib/whatsappNumberHealth.ts: it warns and halves the cap).
+                       clears it. RED alone is not a stop and changes no cap (src/lib/whatsappNumberHealth.ts: a banner only).
       2. COOL-DOWN   — a country whose sends failed in a pattern rests COOLDOWN_HOURS, then starts again by itself with a probe.
-      3. TEAM CAP    — every cold send, every country, one count on the London day. The admin's daily_cap (src/lib/whatsappPace.ts).
-      4. COUNTRY CAP — so one country cannot use the whole team cap. The UK has none by default: it uses the rest.
-      5. PROBE       — the first PROBE_SIZE sends after a window opens or a cool-down ends, then wait for Meta's delivery reports.
+      3. COUNTRY CAP — every country has its OWN daily count and cap, on its own local day. No country draws on another's: there is
+                       no team cap (Paul, 2026-11-02). whatsapp_daily_cap, or DEFAULT_UK_COLD_CAP / DEFAULT_ABROAD_COLD_CAP.
+      4. PROBE       — the first PROBE_SIZE sends after a window opens or a cool-down ends, then wait for Meta's delivery reports.
    ⛔ AND THE GAP — one conditional write (claimColdSlot in the gate): at most one cold send every 1–2 minutes, whichever door.
       Malaysian openers queued overnight went 4 seconds apart at 07:00 on 2 Nov, and the country switched itself off.
    ⛔ COUNTED: cold templates (isColdOutreachTemplate) and the queue's own follow-up lanes. An in-window reply, a continuation
@@ -23,8 +23,10 @@
 import { isColdOutreachTemplate } from './coldOutreach.ts';
 import { localDayStartUtc, MARKET_NAME, windowForMarket, type CountrySetting, type CountrySettings, type Market } from './outreachMarkets.ts';
 
-/** A country with no cap of its own, abroad. On a sending path absent is never "unlimited". The UK's absent cap is "the rest". */
+/** A country with no cap of its own, abroad. On a sending path absent is never "unlimited". */
 export const DEFAULT_ABROAD_COLD_CAP = 30;
+/** The UK's cap when the admin has set none (2026-11-02). Malaysia's sends never come out of it. */
+export const DEFAULT_UK_COLD_CAP = 150;
 /** How long a country rests after a pattern of failures, or a failed probe abroad. */
 export const COOLDOWN_HOURS = 24;
 /** The UK is the main market and its cold lists hold more dead numbers: a failed probe rests it an hour, then a new probe.
@@ -90,11 +92,11 @@ export type CooldownSetting = CountrySetting & {
   whatsapp_cooldown_started_at?: string | null;
 };
 
-/** The country's own cold cap. UK: null (the rest of the team cap). Abroad: its stored cap, or the default. */
-export function countryColdCap(market: Market, s: CountrySetting | null | undefined): number | null {
+/** The country's own cold cap: its stored cap, or the default. Never absent: on a sending path absent is not "unlimited". */
+export function countryColdCap(market: Market, s: CountrySetting | null | undefined): number {
   const stored = s?.whatsapp_daily_cap;
   if (typeof stored === 'number' && Number.isInteger(stored) && stored >= 0) return stored;
-  return market === 'UK' ? null : DEFAULT_ABROAD_COLD_CAP;
+  return market === 'UK' ? DEFAULT_UK_COLD_CAP : DEFAULT_ABROAD_COLD_CAP;
 }
 
 const UK_WINDOW = { tz: LONDON, startMin: 7 * 60, endMin: 21 * 60 + 30 };
@@ -158,21 +160,19 @@ export interface ColdFacts {
   /** The latched stop (whatsapp_outreach_state.cold_stop_*), or null. */
   stopReason: string | null;
   settings: CountrySettings | null | undefined;
-  /** The effective team cap: the admin's cap after the rating rule. */
-  teamCap: number;
   /** Counted cold sends of the last COLD_READ_HOURS, every market. */
   sends: readonly ColdSendRow[];
 }
 
-export type ColdCode = 'cold_stopped' | 'cooldown' | 'team_cap' | 'country_cap' | 'probe_wait' | 'probe_failed';
+export type ColdCode = 'cold_stopped' | 'cooldown' | 'country_cap' | 'probe_wait' | 'probe_failed';
 export type ColdVerdict =
-  | { go: true; probing: boolean; used: number; cap: number | null }
+  | { go: true; probing: boolean; used: number; cap: number }
   /** retryAt: when asking again makes sense. Null for a stop: only a person clears it. */
-  | { go: false; code: ColdCode; reason: string; retryAt: Date | null; used: number; cap: number | null };
+  | { go: false; code: ColdCode; reason: string; retryAt: Date | null; used: number; cap: number };
 
 const atOrAfter = (r: ColdSendRow, d: Date) => Date.parse(r.created_at) >= d.getTime();
 
-/** Counted cold sends on the London day: the number the team cap is compared with. */
+/** Counted cold sends on the London day, every country. A display number: no rule compares it with anything. */
 export function teamColdCount(sends: readonly ColdSendRow[], now: Date = new Date()): number {
   const dayStart = localDayStartUtc(LONDON, now);
   return sends.filter((r) => atOrAfter(r, dayStart)).length;
@@ -194,13 +194,7 @@ export function coldVerdict(market: Market, facts: ColdFacts, now: Date = new Da
     return { go: false, code: 'cooldown', used, cap, retryAt: until,
       reason: `WhatsApp to ${name} is resting after failed sends and starts again by itself. ${s?.whatsapp_cooldown_reason ?? ''}`.trim() };
   }
-  const teamUsed = teamColdCount(facts.sends, now);
-  if (teamUsed >= facts.teamCap) {
-    const next = new Date(localDayStartUtc(LONDON, now).getTime() + 25 * 3_600_000);
-    return { go: false, code: 'team_cap', used, cap, retryAt: localDayStartUtc(LONDON, next),
-      reason: `The team's cold WhatsApp cap for today is used (${teamUsed} of ${facts.teamCap}). It starts again tomorrow.` };
-  }
-  if (cap != null && used >= cap) {
+  if (used >= cap) {
     const tomorrow = new Date(dayStart.getTime() + 25 * 3_600_000);
     return { go: false, code: 'country_cap', used, cap, retryAt: marketDay(market, facts.settings, tomorrow).windowOpen,
       reason: `${name}'s cold WhatsApp cap for today is used (${used} of ${cap}). It starts again tomorrow.` };
@@ -217,6 +211,31 @@ export function coldVerdict(market: Market, facts: ColdFacts, now: Date = new Da
       reason: `The first ${PROBE_SIZE} sends to ${name} went. The rest wait for Meta's delivery reports.` };
   }
   return { go: true, probing: probe.state === 'probing', used, cap };
+}
+
+/** What is left today across the countries given (the ones switched on). The queue's pacing spreads this over the day. An absent
+ *  verdict (nothing could be read) adds nothing. */
+export function coldAllowanceLeft(verdicts: ReadonlyArray<{ used: number; cap: number } | null | undefined>): number {
+  return verdicts.reduce((n, v) => n + (v ? Math.max(0, v.cap - v.used) : 0), 0);
+}
+
+/** One country's count, as the status read gives it to the screens. */
+export interface MarketColdCount { on?: boolean; used: number; cap: number }
+const LIMIT_ORDER: readonly Market[] = ['UK', 'MY', 'SG', 'AU'];
+
+/** The countries switched on, UK first, with their counts. A country that is off is left out. */
+function marketsOn(markets: Partial<Record<Market, MarketColdCount>> | null | undefined): Array<[Market, MarketColdCount]> {
+  return LIMIT_ORDER.flatMap((m): Array<[Market, MarketColdCount]> => { const c = markets?.[m]; return c && c.on === true ? [[m, c]] : []; });
+}
+
+/** "UK 0 of 150 today, Malaysia 0 of 30 today". Empty when the counts could not be read. */
+export function coldLimitsWords(markets: Partial<Record<Market, MarketColdCount>> | null | undefined): string {
+  return marketsOn(markets).map(([m, c]) => `${m === 'UK' ? 'UK' : MARKET_NAME[m]} ${c.used} of ${c.cap} today`).join(', ');
+}
+
+/** Every switched-on country's cap added up: the most the one number can be asked to send, to compare with Meta's tier. */
+export function coldCapsTotal(markets: Partial<Record<Market, MarketColdCount>> | null | undefined): number {
+  return marketsOn(markets).reduce((n, [, c]) => n + c.cap, 0);
 }
 
 /** The stored reason when a probe fails (the pause log and the banner show it word for word). */

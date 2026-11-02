@@ -17,7 +17,7 @@ import {
   windowForMarket, type Market,
 } from '../src/lib/outreachMarkets.ts';
 import { anyWindowOpen, LONDON_SEND_WINDOW, sendWindowForDigits, windowOpenForDigits } from '../src/lib/sendWindow.ts';
-import { DEFAULT_DAILY_CAP } from '../src/lib/whatsappPace.ts';
+import { DEFAULT_UK_COLD_CAP } from '../src/lib/whatsappColdGuard.ts';
 import { decideContactRoute } from '../src/lib/contactRouting.ts';
 import { isTextableMobile } from '../src/lib/smsStatus.ts';
 import { qualifyPlace, placeSuffixForCountry } from '../src/lib/seedGuard.ts';
@@ -168,7 +168,7 @@ ok(!channelOn(off, 'MY', 'whatsapp') && !channelOn(off, 'SG', 'sms') && !channel
 ok(!channelOn(countrySettingsFrom([{ country: 'MY', whatsapp_on: null }]), 'MY', 'whatsapp'), 'a NULL switch is off (only an explicit true is on)');
 for (const m of ['MY', 'SG'] as Market[]) {
   const s = DEFAULT_COUNTRY_SETTINGS[m];
-  ok((s.whatsapp_daily_cap ?? 1e9) < DEFAULT_DAILY_CAP && (s.sms_daily_cap ?? 1e9) < DEFAULT_DAILY_CAP, `${m} starts with lower caps than the UK team cap`);
+  ok((s.whatsapp_daily_cap ?? 1e9) < DEFAULT_UK_COLD_CAP && (s.sms_daily_cap ?? 1e9) < DEFAULT_UK_COLD_CAP, `${m} starts with lower caps than the UK's`);
 }
 ok(checkCountryValue('whatsapp_daily_cap', '40').ok && !checkCountryValue('whatsapp_daily_cap', 5000).ok && !checkCountryValue('send_end_min', -1).ok, 'caps / hours are validated, refused never clamped');
 ok(/insert into public\.outreach_country_settings[\s\S]*\('UK', true, true, true[\s\S]*\('MY', false, false, false, 50, 25, 540, 1140, 'Asia\/Kuala_Lumpur'\)[\s\S]*\('SG', false, false, false, 50, 25, 540, 1140, 'Asia\/Singapore'\)[\s\S]*on conflict \(country\) do nothing/.test(MIG),
@@ -215,7 +215,7 @@ ok(/if \(isStopMessage\(body\) \|\| isOptOut\(body\)\) \{/.test(read('supabase/f
 console.log('\n── 12. the admin panel and the SMS sender warning ──');
 {
   const panel = read('src/components/CountrySendingSettings.tsx');
-  ok(/\{teamControls && <CountrySendingSettings \/>\}/.test(read('src/components/WhatsAppQueuePanel.tsx')), 'the country panel sits in the WhatsApp queue panel, admin (team controls) only');
+  ok(/\{teamControls && <CountrySendingSettings [^\n]*\/>\}/.test(read('src/components/WhatsAppQueuePanel.tsx')), 'the country panel sits in the WhatsApp queue panel, admin (team controls) only');
   ok(/\['whatsapp_on', 'WhatsApp'\], \['sms_on', 'SMS'\], \['call_on', 'Browser calls'\]/.test(panel) && /checkCountryValue\('whatsapp_daily_cap'/.test(panel), 'a switch per channel and the country caps, validated by the one rule');
   ok(/\+44 7400 420187/.test(SMS_SENDER_WORDS) && /delivery depends on sender registration/.test(SMS_SENDER_WORDS), 'the SMS warning names the sender and says delivery depends on registration');
   ok(/explain_offer \/ explain_offer_v2/.test(panel), 'the panel names the templates not to use in Malaysia / Singapore');

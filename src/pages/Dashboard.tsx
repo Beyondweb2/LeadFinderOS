@@ -28,8 +28,7 @@ import { QuestionnaireLog } from '@/components/admin/QuestionnaireLog';
 import { usePaidClientList } from '@/hooks/useAdminTeamControl';
 import { needsYouItems } from '@/lib/adminControl';
 import { buildNeedsRows, hiddenByMark, splitByMarks, type NeedsMark, type NeedsRow } from '@/lib/needsMe';
-import { effectivePace } from '@/lib/whatsappPace';
-import { healthLimitedCap, healthVerdict } from '@/lib/whatsappNumberHealth';
+import { healthVerdict } from '@/lib/whatsappNumberHealth';
 import { TeamComposer, type ComposerSeed } from '@/components/team/TeamComposer';
 import { TradeAutofixDialog } from '@/components/admin/TradeAutofixDialog';
 
@@ -58,7 +57,6 @@ function KeyNumbers({ n, hideMine, meId, menu }: { n: HomeNumbers | undefined; h
   const h = n.health;
   /* THE health rule (whatsappNumberHealth.ts): a rating older than its stale window reads as unknown, never as the old colour. */
   const verdict = healthVerdict({ meta_quality_rating: h?.rating ?? null, meta_messaging_tier: h?.tier ?? null, meta_health_checked_at: h?.checked_at ?? null, meta_health_ok_at: h?.ok_at ?? null });
-  const cap = healthLimitedCap(effectivePace(h ?? null).dailyCap, verdict);
   const team = n.team.filter((t) => !(hideMine && t.user_id === meId));
   const teamTotal = team.reduce((s, t) => s + t.messages, 0);
   const ratingTone = verdict.state === 'green' ? 'green' : verdict.state === 'yellow' ? 'amber' : 'red';
@@ -78,7 +76,7 @@ function KeyNumbers({ n, hideMine, meId, menu }: { n: HomeNumbers | undefined; h
       </Panel>
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <KpiCard tone={ratingTone} icon={Signal} label="WhatsApp number rating" value={verdict.rating === 'UNKNOWN' ? '—' : verdict.rating} sub={`${h?.tier ? h.tier.replace('TIER_', 'Tier ') : 'Tier unknown'}${h?.checked_at ? ` · checked ${ago(h.checked_at)}` : ''}`} />
-        <KpiCard tone="blue" icon={Send} label="Sent today / daily cap" value={`${h?.sent_today ?? 0} / ${cap}`} sub={verdict.halveCap ? 'Cap halved while the rating is not green' : h?.paused ? 'Sending is paused' : 'All WhatsApp sends today'} />
+        <KpiCard tone="blue" icon={Send} label="Sent today" value={h?.sent_today ?? 0} sub={h?.paused ? 'Sending is paused' : 'All WhatsApp sends today'} />
         <KpiCard tone="amber" icon={AlertTriangle} label="Failed today" value={h?.failed_today ?? 0} sub={h?.sent_today ? `${Math.round((100 * (h.failed_today ?? 0)) / h.sent_today)}% of sends` : 'No sends yet today'} />
         <KpiCard tone="purple" icon={Users} label="Team this week" value={teamTotal} sub={team.length ? team.slice(0, 4).map((t) => `${t.name.split(' ')[0]} ${t.messages}`).join(' · ') : 'No messages this week'} />
       </div>

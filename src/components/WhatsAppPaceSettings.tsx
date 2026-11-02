@@ -6,11 +6,10 @@ import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { Callout, ToneChip } from '@/components/operator/ui';
 import { tierWords, type HealthState } from '@/lib/whatsappNumberHealth';
-import {
-  DEFAULT_DAILY_CAP, DEFAULT_GAP_FLOOR_MIN, MAX_DAILY_CAP, MAX_GAP_FLOOR_MIN, MAX_PERSON_DAILY_LIMIT, checkPaceValue,
-} from '@/lib/whatsappPace';
+import { DEFAULT_GAP_FLOOR_MIN, MAX_GAP_FLOOR_MIN, MAX_PERSON_DAILY_LIMIT, checkPaceValue } from '@/lib/whatsappPace';
+import { coldCapsTotal, coldLimitsWords } from '@/lib/whatsappColdGuard';
 
-/* ══ THE WHATSAPP CAP, PACE AND PER-PERSON LIMITS — ADMIN ONLY (2026-10-14, test day) ═══════════════════════════
+/* ══ THE WHATSAPP PACE AND PER-PERSON LIMITS — ADMIN ONLY (2026-10-14, test day). The caps are each country's own: Countries, below. ═══
    Shown inside the WhatsApp queue panel only when the panel has team controls (the server refuses set_pace and the
    status read to anyone else). Every number is checked by the ONE rule (src/lib/whatsappPace.ts) here AND on the
    server; blank = the default. Sent today per person is the status read's own count (a queue send is credited to
@@ -18,19 +17,18 @@ import {
 
 export interface PaceStatus {
   sentToday: number;
-  cap: number;
   paused: boolean;
-  pace?: { dailyCap: number; gapFloorMin: number; personDefault: number | null; maxDailyCap: number; stored?: { daily_cap: number | null; min_gap_minutes: number | null }; setCap?: number };
+  pace?: { gapFloorMin: number; personDefault: number | null; stored?: { min_gap_minutes: number | null } };
   /** 2026-10-21: Meta's quality rating and messaging tier for the number (src/lib/whatsappNumberHealth.ts). Absent on an older deploy. */
   numberHealth?: {
-    state: HealthState; rating: string; tier: string | null; tierLimit: number | null; halved: boolean; capRiseBlocked: boolean;
+    state: HealthState; rating: string; tier: string | null; tierLimit: number | null;
     limitText: string | null; okAt: string | null; checkedAt: string | null; error: string | null;
   } | null;
   /** 2026-11-02: the cold guard (src/lib/whatsappColdGuard.ts). Absent on an older deploy. */
   coldGuard?: {
     readable: boolean;
     stop: { at: string | null; reason: string } | null;
-    markets: Record<string, { go: boolean; probing: boolean; code: string | null; reason: string | null; retryAt: string | null; used: number; cap: number | null }>;
+    markets: Record<string, { on?: boolean; go: boolean; probing: boolean; code: string | null; reason: string | null; retryAt: string | null; used: number; cap: number }>;
   } | null;
   autoPausedAt?: string | null;
   autoPauseReason?: string | null;
@@ -49,7 +47,7 @@ const londonTime = (iso: string | null) => {
 };
 
 /** The number's rating, tier and any active limit — one line, plus the limit in words when there is one. */
-export function NumberHealthLine({ health, cap, setCap }: { health: NonNullable<PaceStatus['numberHealth']>; cap: number; setCap: number | undefined }) {
+export function NumberHealthLine({ health, cap }: { health: NonNullable<PaceStatus['numberHealth']>; cap: number }) {
   const read = londonTime(health.okAt);
   const tier = tierWords(health.tier);
   const overTier = health.tierLimit != null && cap > health.tierLimit;
@@ -65,12 +63,11 @@ export function NumberHealthLine({ health, cap, setCap }: { health: NonNullable<
       {health.limitText && (
         <Callout tone={health.state === 'red' ? 'red' : health.state === 'yellow' ? 'amber' : 'grey'} icon={AlertTriangle} className="px-3 py-2 text-[11px]" testId="queue-number-limit">
           {health.limitText}
-          {health.halved && setCap != null && <> Cap today: <strong>{cap}</strong> (set to {setCap}).</>}
         </Callout>
       )}
       {overTier && (
         <Callout tone="amber" icon={AlertTriangle} className="px-3 py-2 text-[11px]" testId="queue-number-over-tier">
-          The cap ({cap}) is above the number’s Meta tier ({health.tierLimit!.toLocaleString('en-GB')} new people a day). Lower it to stay inside the tier.
+          The countries’ caps add up to {cap}, above the number’s Meta tier ({health.tierLimit!.toLocaleString('en-GB')} new people a day). Lower them to stay inside the tier.
         </Callout>
       )}
     </div>
@@ -81,7 +78,6 @@ export function WhatsAppPaceSettings({ team, onSaved }: { team: PaceStatus | nul
   const { toast } = useToast();
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [cap, setCap] = useState('');
   const [gap, setGap] = useState('');
   const [personDefault, setPersonDefault] = useState('');
   const [people, setPeople] = useState<Record<string, string>>({});
@@ -90,7 +86,6 @@ export function WhatsAppPaceSettings({ team, onSaved }: { team: PaceStatus | nul
   // Fill the form from the server each time it opens (never from a stale edit).
   useEffect(() => {
     if (!open || !team?.pace) return;
-    setCap(asText(team.pace.stored?.daily_cap ?? null));
     setGap(asText(team.pace.stored?.min_gap_minutes ?? null));
     setPersonDefault(asText(team.pace.personDefault));
     setPeople(Object.fromEntries((team.personLimits ?? []).map((p) => [p.user_id, asText(p.limit)])));
@@ -115,7 +110,6 @@ export function WhatsAppPaceSettings({ team, onSaved }: { team: PaceStatus | nul
 
   const save = async () => {
     const checks = [
-      ['Daily cap', checkPaceValue('daily_cap', cap)],
       ['Minutes between sends', checkPaceValue('min_gap_minutes', gap)],
       ['Default per-person limit', checkPaceValue('person_daily_limit_default', personDefault)],
       ...Object.entries(people).map(([, v]) => ['A person’s limit', checkPaceValue('person_limit', v)] as const),
@@ -126,7 +120,6 @@ export function WhatsAppPaceSettings({ team, onSaved }: { team: PaceStatus | nul
     try {
       const body = {
         mode: 'set_pace',
-        daily_cap: cap.trim() === '' ? null : Number(cap),
         min_gap_minutes: gap.trim() === '' ? null : Number(gap),
         person_daily_limit_default: personDefault.trim() === '' ? null : Number(personDefault),
         person_limits: Object.entries(people).map(([user_id, v]) => ({ user_id, limit: v.trim() === '' ? null : Number(v) })),
@@ -161,7 +154,7 @@ export function WhatsAppPaceSettings({ team, onSaved }: { team: PaceStatus | nul
           Today’s cold WhatsApp limits could not be read, so nothing cold is going until they can.
         </Callout>
       )}
-      {team.numberHealth && <NumberHealthLine health={team.numberHealth} cap={team.pace?.dailyCap ?? team.cap} setCap={team.pace?.setCap} />}
+      {team.numberHealth && <NumberHealthLine health={team.numberHealth} cap={coldCapsTotal(team.coldGuard?.markets)} />}
       {perPerson && perPerson.length > 0 && (
         <p className="text-[11px] text-muted-foreground" data-testid="queue-per-person">
           <span className="font-medium text-foreground/80">Sent today: </span>
@@ -170,16 +163,12 @@ export function WhatsAppPaceSettings({ team, onSaved }: { team: PaceStatus | nul
       )}
       <button type="button" onClick={() => setOpen((v) => !v)} className="flex items-center gap-1 text-[11px] font-medium text-muted-foreground hover:text-foreground" data-testid="queue-pace-toggle">
         {open ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
-        Limits: {team.sentToday} of {team.pace?.dailyCap ?? team.cap} cold today for the team · at least {team.pace?.gapFloorMin ?? DEFAULT_GAP_FLOOR_MIN} min apart
+        <span data-testid="queue-limits-counts">Limits: {coldLimitsWords(team.coldGuard?.markets) || 'today’s counts not read'}</span> · at least {team.pace?.gapFloorMin ?? DEFAULT_GAP_FLOOR_MIN} min apart
         {team.pace?.personDefault != null ? ` · ${team.pace.personDefault} a day per salesperson` : ''}
       </button>
       {open && (
         <div className="rounded-xl bg-muted/30 p-3 ring-1 ring-inset ring-border/40 space-y-3 text-xs" data-testid="queue-pace-form">
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-            <label className="flex flex-col gap-1">
-              <span className="text-muted-foreground">Team cold cap a day (0–{MAX_DAILY_CAP})</span>
-              <Input value={cap} onChange={(e) => setCap(e.target.value)} inputMode="numeric" placeholder={`Default ${DEFAULT_DAILY_CAP}`} data-testid="pace-cap" />
-            </label>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <label className="flex flex-col gap-1">
               <span className="text-muted-foreground">Minutes between sends (1–{MAX_GAP_FLOOR_MIN})</span>
               <Input value={gap} onChange={(e) => setGap(e.target.value)} inputMode="numeric" placeholder={`Default ${DEFAULT_GAP_FLOOR_MIN}`} data-testid="pace-gap" />
@@ -203,9 +192,8 @@ export function WhatsAppPaceSettings({ team, onSaved }: { team: PaceStatus | nul
             </div>
           )}
           <p className="text-[11px] text-muted-foreground">
-            One WhatsApp number sends for the whole team. Meta limits how many new people a number may message in 24 hours by its messaging tier;
-            {' '}the cap can never go above {MAX_DAILY_CAP}. If the number is still on the 250 starter tier in Meta, set the cap to 250 or less.
-            {' '}The cap counts every cold message, from the queue and from people. Replies inside 24 hours are not counted. Each country’s own cap sits inside it, and the UK uses the rest.
+            One WhatsApp number sends for the whole team. Meta limits how many new people a number may message in 24 hours by its messaging tier.
+            {' '}Each country has its own daily cap, set under Countries below. It counts every cold message to that country, from the queue and from people. Replies inside 24 hours are not counted. No country uses another’s.
             {' '}Cold messages go one at a time, 1 to 2 minutes apart, and the first 3 after a window opens wait for their delivery reports.
           </p>
           <div className="flex justify-end">

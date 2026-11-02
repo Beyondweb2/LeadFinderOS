@@ -99,16 +99,14 @@ console.log("── Job 2: CSV import — messy real-world files ──");
 console.log("── Job 3: WhatsApp cap, pace and auto-pause ──");
 {
   const P = await import("../src/lib/whatsappPace.ts");
-  ok(P.DEFAULT_DAILY_CAP === 100 && P.MAX_DAILY_CAP === 1000 && P.DEFAULT_GAP_FLOOR_MIN === 1, "defaults: 100 cold a day (2026-11-02), never above 1,000, 1 minute floor (unchanged)");
+  ok(P.DEFAULT_GAP_FLOOR_MIN === 1, "defaults: 1 minute floor (unchanged)");
   const e0 = P.effectivePace(null);
-  ok(e0.dailyCap === 100 && e0.gapFloorMin === 1 && e0.personDefault === null, "nothing stored → the defaults, no per-person limit");
-  ok(P.effectivePace({ daily_cap: 5000 }).dailyCap === 100, "a stored cap above Meta's ceiling is never used (falls back to the default)");
-  ok(P.effectivePace({ daily_cap: 0 }).dailyCap === 0, "a cap of 0 is a real setting (send nothing)");
-  ok(P.effectivePace({ daily_cap: 300, min_gap_minutes: 3, person_daily_limit_default: 40 }).gapFloorMin === 3, "stored values are used when in range");
-  ok(P.effectivePace({ min_gap_minutes: 0 }).gapFloorMin === 1 && P.effectivePace({ daily_cap: 2.5 }).dailyCap === 100, "out-of-range or fractional values fall back");
-  ok(P.checkPaceValue("daily_cap", "1001").ok === false && P.checkPaceValue("daily_cap", "-1").ok === false, "the admin's cap is refused above 1,000 or below 0 (never clamped)");
-  const okCap = P.checkPaceValue("daily_cap", " 650 ");
-  ok(okCap.ok === true && okCap.value === 650, "a typed cap is read as a whole number");
+  ok(e0.gapFloorMin === 1 && e0.personDefault === null, "nothing stored → the defaults, no per-person limit");
+  ok(P.effectivePace({ min_gap_minutes: 3, person_daily_limit_default: 40 }).gapFloorMin === 3, "stored values are used when in range");
+  ok(P.effectivePace({ min_gap_minutes: 0 }).gapFloorMin === 1 && P.effectivePace({ min_gap_minutes: 2.5 }).gapFloorMin === 1, "out-of-range or fractional values fall back");
+  ok(P.checkPaceValue("min_gap_minutes", "61").ok === false && P.checkPaceValue("person_limit", "-1").ok === false, "a typed value out of range is refused (never clamped)");
+  const okCap = P.checkPaceValue("person_limit", " 650 ");
+  ok(okCap.ok === true && okCap.value === 650, "a typed number is read as a whole number");
   const blank = P.checkPaceValue("person_limit", "");
   ok(blank.ok === true && blank.value === null, "blank = back to the default");
   ok(P.checkPaceValue("min_gap_minutes", "abc").ok === false, "not a number → refused");
@@ -120,9 +118,9 @@ console.log("── Job 3: WhatsApp cap, pace and auto-pause ──");
   ok(/press Resume/.test(P.autoPauseVerdict(10, 9).reason ?? ""), "auto-pause says why and what to do");
 
   const q = read("supabase/functions/process-whatsapp-queue/index.ts");
-  ok(!/^const DAILY_CAP = /m.test(q) && /const DAILY_CAP = pace\.dailyCap;/.test(q), "the drip's cap comes from the one rule, not a constant");
+  ok(!/^const DAILY_CAP = /m.test(q) && /const coldLeft = coldAllowanceLeft\(/.test(q), "the drip goes by what each country has left, not a constant");
   ok(/Math\.max\(pace\.gapFloorMin, Math\.round\(baseGap \* jitter\)\)/.test(q), "the pacing floor is the admin-set floor (the formula is unchanged)");
-  ok(/select\("daily_cap, min_gap_minutes, person_daily_limit_default, auto_paused_at, auto_pause_reason"\)/.test(q)
+  ok(/select\("min_gap_minutes, person_daily_limit_default, auto_paused_at, auto_pause_reason"\)/.test(q)
     && /\.select\("next_send_at, paused"\)/.test(q), "the pace is read separately — the pause flag's own read is untouched");
   const tick = q.slice(q.indexOf('skipped: "outside_window"'), q.indexOf('skipped: "cap_reached"'));
   ok(/autoPauseVerdict\(rows\.length, failed\)/.test(tick) && /\.is\("user_id", null\)\.eq\("test_mode", false\)/.test(tick), "auto-pause runs in the tick, on the queue's own non-test sends, before any send");

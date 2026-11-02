@@ -22,6 +22,14 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-11-02-country-caps', date: '2026-11-02', title: 'WhatsApp: the UK and Malaysia now have separate daily limits', audience: 'all',
+    body: 'Each country now has its own daily limit for cold WhatsApp. The UK has 150 and Malaysia has 30, and Malaysia’s sends no longer come out of the UK’s. A red rating from Meta now shows a warning and changes nothing else. Replies inside 24 hours are still not limited.',
+    report: {
+      added: ['A UK limit, set by an admin on the Countries screen (150 by default).', 'Each country’s own count on the queue’s Limits line and the Countries screen, for example UK 0 of 150 today, Malaysia 0 of 30 today.', 'The pause log records who changed a country’s WhatsApp limit, and when.'],
+      changed: ['A red or yellow rating no longer halves any limit or stops anyone changing one. It is a warning banner only.', 'The admin home page shows Sent today without a limit beside it, because there is no longer one team limit.'],
+      removed: ['The team cold limit. Its box has gone from the queue settings.'],
+      effect: 'The UK can send up to 150 cold messages a day again, as long as leads are queued. Malaysia stays at 30 and Singapore stays off. If Meta lowers the number’s tier, or flags or restricts it, all cold WhatsApp still stops until an admin clears it. The 1 to 2 minute gap, the original opener and the cool-downs are unchanged.',
+    } },
   { id: '2026-11-02-whatsapp-safety-guard', date: '2026-11-02', title: 'WhatsApp: one daily limit for all cold messages, and Malaysia no longer switches itself off for good', audience: 'all',
     body: 'To protect the WhatsApp number, every cold message now follows the same rules, whether it comes from the queue or from you. They go one at a time, 1 to 2 minutes apart, inside one team limit a day, and each country has its own share. If you press send and it is not its turn, it queues for the next slot. Replies inside 24 hours are not limited. If a country has too many failed sends it now rests for 24 hours and restarts by itself, instead of switching off until someone notices.',
     report: {

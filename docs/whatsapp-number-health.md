@@ -13,6 +13,8 @@ Branch `feat/whatsapp-rating-watcher`. Rules: `src/lib/whatsappNumberHealth.ts` 
     `meta_health_error` on `whatsapp_outreach_state` (id 1) and logs every change to `whatsapp_number_health_log`
     (service role only; kinds `rating_changed`, `tier_changed`, `read_failed`, `read_recovered`, `paused_red`, `cap_rise_refused`).
 - **Rules** (`healthVerdict`):
+  ⛔ **2026-11-02: yellow and red are a warning banner ONLY (docs/whatsapp-safety-guard.md, "Separate caps"). No halving, no block on changing a cap, no pause. The table below is the older rule, kept as history.**
+
   | Rating | Daily cap | Cap rises | Queue |
   |---|---|---|---|
   | GREEN | as set | allowed | unchanged |

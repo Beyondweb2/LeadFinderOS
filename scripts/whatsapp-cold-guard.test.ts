@@ -1,13 +1,12 @@
 /* THE COLD WHATSAPP GUARD (2026-11-02, docs/whatsapp-safety-guard.md; src/lib/whatsappColdGuard.ts). Every door a cold send can leave by
-   asks one rule: one cap, one gap, the cool-down, the probe, the tripwire. Nothing here can message anyone. */
+   asks one rule: each country's own cap, one gap, the cool-down, the probe, the tripwire. Nothing here can message anyone. */
 import { readFileSync } from 'node:fs';
 import {
-  COOLDOWN_HOURS, PROBE_SIZE, UK_PROBE_REST_HOURS, coldGapMs, coldMarketOfPhone, coldVerdict, countryColdCap, inCooldown, isCountedColdSend,
+  COOLDOWN_HOURS, DEFAULT_UK_COLD_CAP, PROBE_SIZE, UK_PROBE_REST_HOURS, coldAllowanceLeft, coldCapsTotal, coldGapMs, coldLimitsWords, coldMarketOfPhone, coldVerdict, countryColdCap, inCooldown, isCountedColdSend,
   probeStart, probeVerdict, teamColdCount, type ColdFacts, type ColdSendRow,
 } from '../src/lib/whatsappColdGuard.ts';
 import { countrySettingsFrom } from '../src/lib/outreachMarkets.ts';
-import { healthLimitedCap, healthVerdict, numberLimited, tierDropped, tripwireReason } from '../src/lib/whatsappNumberHealth.ts';
-import { DEFAULT_DAILY_CAP } from '../src/lib/whatsappPace.ts';
+import { healthVerdict, numberLimited, tierDropped, tripwireReason } from '../src/lib/whatsappNumberHealth.ts';
 import { coldOpenerFor } from '../src/lib/openerVariant.ts';
 import { drainTick, type DrainDeps, type DueRow } from '../supabase/functions/_shared/inbox-scheduled-drain.ts';
 
@@ -24,7 +23,7 @@ const settings = (my: Record<string, unknown> = {}) => countrySettingsFrom([
   { country: 'UK', whatsapp_on: true },
   { country: 'MY', whatsapp_on: true, whatsapp_daily_cap: 30, send_start_min: 420, send_end_min: 1230, timezone: 'Asia/Kuala_Lumpur', ...my },
 ] as never);
-const facts = (sends: ColdSendRow[], o: Partial<ColdFacts> = {}): ColdFacts => ({ stopReason: null, settings: settings(), teamCap: 100, sends, ...o });
+const facts = (sends: ColdSendRow[], o: Partial<ColdFacts> = {}): ColdFacts => ({ stopReason: null, settings: settings(), sends, ...o });
 const MY = '60123456789'; const UK = '447700900123';
 const delivered = (phone: string) => [row(300, phone, 'delivered'), row(298, phone, 'read'), row(296, phone, 'delivered')];
 
@@ -45,24 +44,48 @@ console.log('what is counted');
 
 console.log('caps');
 {
-  ok(DEFAULT_DAILY_CAP === 100, 'the team default is 100');
-  ok(healthLimitedCap(DEFAULT_DAILY_CAP, healthVerdict({ meta_quality_rating: 'RED', meta_health_ok_at: NOW.toISOString() }, NOW)) === 50, 'RED still halves the cap');
-  ok(countryColdCap('UK', { country: 'UK' } as never) === null, 'the UK has no country cap by default: it uses the rest');
+  ok(DEFAULT_UK_COLD_CAP === 150, 'the UK default is 150');
+  ok(countryColdCap('UK', { country: 'UK' } as never) === 150, 'the UK with no stored cap is the default, never unlimited');
+  ok(countryColdCap('UK', { country: 'UK', whatsapp_daily_cap: 200 } as never) === 200 && countryColdCap('UK', { country: 'UK', whatsapp_daily_cap: 0 } as never) === 0, 'the admin sets the UK cap; 0 is a real setting');
   ok(countryColdCap('MY', { country: 'MY' } as never) === 30, 'abroad with no stored cap is about 30, never unlimited');
   const my30 = Array.from({ length: 30 }, (_, i) => row(200 - i, MY, 'delivered'));
   const v = coldVerdict('MY', facts(my30), NOW);
   ok(!v.go && v.code === 'country_cap', 'Malaysia at 30 is held');
-  ok(coldVerdict('UK', facts(my30), NOW).go, '…and the UK still sends: one country cannot use the whole cap');
+  const ukAfterMy = coldVerdict('UK', facts(my30), NOW);
+  ok(ukAfterMy.go && ukAfterMy.used === 0 && ukAfterMy.cap === 150, '…and the UK still sends, its count and cap untouched by Malaysia');
   const manual = Array.from({ length: 30 }, (_, i) => row(200 - i, MY, 'delivered', { user_id: 'stephan' }));
   const vm = coldVerdict('MY', facts(manual), NOW);
   ok(!vm.go && vm.code === 'country_cap', 'a person’s sends count against the country cap too (they used to skip it)');
-  const uk100 = Array.from({ length: 100 }, (_, i) => row(200 - i, UK, 'delivered'));
-  const t = coldVerdict('MY', facts(uk100), NOW);
-  ok(!t.go && t.code === 'team_cap', 'the team cap stops every country');
-  ok(teamColdCount(facts(uk100).sends, NOW) === 100, 'the team count is the London day');
+  const uk149 = Array.from({ length: 149 }, (_, i) => row(200 - i, UK, 'delivered'));
+  const below = coldVerdict('UK', facts(uk149), NOW);
+  ok(below.go && below.used === 149, 'the UK at 149 of 150 still sends');
+  const uk150 = [...uk149, row(40, UK, 'delivered')];
+  const atCap = coldVerdict('UK', facts(uk150), NOW);
+  ok(!atCap.go && atCap.code === 'country_cap' && atCap.used === 150 && atCap.cap === 150, 'the UK at 150 is held by its own cap');
+  const myAfterUk = coldVerdict('MY', facts(uk150), NOW);
+  ok(myAfterUk.go && myAfterUk.used === 0 && myAfterUk.cap === 30, '…and Malaysia still sends: the UK using its cap takes nothing from Malaysia');
+  const sgOwn = coldVerdict('SG', facts(uk150, { settings: settings({}) }), NOW);
+  ok(sgOwn.used === 0, 'another country has its own count');
+  ok(teamColdCount(facts(uk150).sends, NOW) === 150, 'the display count is the London day');
   ok(teamColdCount([row(60 * 24, UK, 'delivered')], NOW) === 0, 'yesterday is not counted');
-  const au = coldVerdict('AU', facts(uk100), NOW);
-  ok(!au.go && au.code === 'team_cap', 'Australia has no budget outside the team cap any more');
+  ok(coldAllowanceLeft([{ used: 10, cap: 150 }, { used: 40, cap: 30 }, undefined]) === 140, 'what is left: over a cap counts as 0, an unread country adds nothing');
+  ok(coldLimitsWords({ UK: { on: true, used: 0, cap: 150 }, MY: { on: true, used: 0, cap: 30 }, SG: { on: false, used: 0, cap: 150 } }) === 'UK 0 of 150 today, Malaysia 0 of 30 today', 'the Limits line: each country that is on, its own count');
+  ok(coldLimitsWords(null) === '' && coldLimitsWords({}) === '', 'nothing read says nothing, never a made-up count');
+  ok(coldCapsTotal({ UK: { on: true, used: 0, cap: 150 }, MY: { on: true, used: 5, cap: 30 }, AU: { on: false, used: 0, cap: 150 } }) === 180, 'caps add up for the tier warning, countries that are off left out');
+}
+
+console.log('a rating changes no cap');
+{
+  const q = read('supabase/functions/process-whatsapp-queue/index.ts');
+  const g = read('supabase/functions/_shared/cold-whatsapp-gate.ts');
+  for (const rating of ['GREEN', 'YELLOW', 'RED', 'UNKNOWN']) {
+    const v = healthVerdict({ meta_quality_rating: rating, meta_health_ok_at: NOW.toISOString() }, NOW) as unknown as Record<string, unknown>;
+    ok(!('halveCap' in v) && !('blockCapRise' in v), rating + ': the verdict has nothing that could change a cap');
+  }
+  ok(!/healthLimitedCap|capRiseRefused|halveCap|blockCapRise/.test(q + g), 'nothing on the sending path reads a rating to set a cap');
+  ok(!/healthVerdict/.test(g), 'the cold gate does not read the rating at all');
+  ok(!/teamCap|team_cap|daily_cap/.test(g), 'the cold gate has no team cap');
+  ok(!/\bdaily_cap\b/.test(q.slice(q.indexOf('Deno.serve'))), 'the queue handler no longer reads or writes the old team cap');
 }
 
 console.log('the probe');
@@ -129,7 +152,7 @@ console.log('the tripwire');
   const m = coldVerdict('MY', facts([], { stopReason: 'Meta lowered the tier.' }), NOW);
   ok(!m.go && m.code === 'cold_stopped', '…and every other country');
   const red = healthVerdict({ meta_quality_rating: 'RED', meta_health_ok_at: NOW.toISOString() }, NOW);
-  ok(!/paused/.test(red.limitText ?? '') && /carries on/.test(red.limitText ?? ''), 'RED warns and does not stop');
+  ok(!/paused|halved/.test(red.limitText ?? '') && /warning/.test(red.limitText ?? ''), 'RED warns and does not stop');
 }
 
 console.log('the opener');
@@ -197,6 +220,17 @@ console.log('the SQL');
   ok(/whatsapp_cooldown_clear/.test(m) && /'cooldown_cleared', 'person', auth\.uid\(\)/.test(m), 'the manual override is recorded with who');
   ok(/trg_country_switch_logged/.test(m) && /'person', v_who, 'WhatsApp'/.test(m) && /v_who is null then return new/.test(m), 'a person’s on/off is logged, a system write is not logged as a person');
   ok(!/update public\.outreach_country_settings\s+set whatsapp_on/.test(m), 'nothing in this migration changes a switch (Singapore stays as it is)');
+}
+
+console.log('the caps migration');
+{
+  const cm = read('supabase/migrations/20261202090000_uk_cap_separate_from_malaysia.sql');
+  const body = cm.replace(/--.*$/gm, '');
+  ok(/set whatsapp_daily_cap = 150[^;]*where country = 'UK'/.test(body), 'it sets the UK cap');
+  ok((body.match(/update public.outreach_country_settings/g) ?? []).length === 1 && !/'MY'|'SG'|'AU'|whatsapp_ons*=/.test(body), 'it touches no other country and no switch');
+  ok(/whatsapp_daily_cap is null/.test(body), 'it never overwrites a cap an admin has set');
+  ok(/'cap_changed', 'person', v_who/.test(body), 'the change is on the pause log, under a person');
+  ok(!/(drop table|delete from|truncate)/i.test(body), 'nothing destructive');
 }
 
 console.log('the held webhook');
