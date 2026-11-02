@@ -121,7 +121,7 @@ const LIMITED_STATUSES: ReadonlySet<string> = new Set(['FLAGGED', 'RESTRICTED', 
 
 /** Does Meta say this number is limited? Meta's phone number status, or health_status.can_send_message = BLOCKED. Positive:
  *  an absent value, CONNECTED, or Meta's LIMITED is not a stop. Live on 2 Nov the number reads CONNECTED / LIMITED while sending, and
- *  what LIMITED covers has not been read (docs/whatsapp-safety-guard.md). */
+ *  Meta's only messaging note on it is a warning that the tier will fall if RED persists (docs/whatsapp-safety-guard.md). */
 export function numberLimited(status: string | null | undefined, canSend: string | null | undefined): boolean {
   return LIMITED_STATUSES.has(String(status ?? '').trim().toUpperCase()) || String(canSend ?? '').trim().toUpperCase() === 'BLOCKED';
 }

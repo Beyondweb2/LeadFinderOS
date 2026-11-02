@@ -35,7 +35,18 @@ The first live tick read Malaysia's failed sends from 23:00 UTC as today's probe
 
 ## Meta's own reading (2 Nov, 09:45 UTC)
 
-`status` CONNECTED, `health_status.can_send_message` LIMITED, rating RED, tier TIER_2K. LIMITED does NOT trip the stop: only FLAGGED / RESTRICTED / BANNED / BLOCKED do, as asked. Stopping on LIMITED would have stopped all cold WhatsApp on the first read. Which entity LIMITED refers to has not been read; Meta's answer carries it (`health_status.entities`).
+`status` CONNECTED, `health_status.can_send_message` LIMITED, rating RED, tier TIER_2K. LIMITED does NOT trip the stop: only FLAGGED / RESTRICTED / BANNED / BLOCKED do, as asked. Stopping on LIMITED would have stopped all cold WhatsApp on the first read. 
+
+What LIMITED covers, read the same day (`whatsapp-number-health` mode `probe` returns Meta's whole answer; it stores nothing):
+
+| Entity | Can send | What Meta adds |
+|---|---|---|
+| Phone number | LIMITED | "Your messaging limit will decrease if your quality rating doesn't improve". Also SIP calling not enabled (138024). |
+| WhatsApp account (WABA) | AVAILABLE | |
+| Business | AVAILABLE | |
+| App | AVAILABLE | SIP server not configured (138025). |
+
+So the limit is on the number alone, and the only messaging note is a warning that the tier will fall if RED persists. Meta does not state that this note is what causes LIMITED: that is an inference. The SIP errors are about WhatsApp's own calling, which we do not use (browser calling is Twilio). If the tier does fall, the tripwire stops all cold WhatsApp.
 
 ## Other changes
 
