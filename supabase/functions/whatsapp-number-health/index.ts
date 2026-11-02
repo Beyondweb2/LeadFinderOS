@@ -20,7 +20,7 @@ const corsHeaders = {
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
-interface Reading { ok: true; rating: QualityRating; rawRating: string | null; tier: string | null; tierField: boolean; status: string | null; canSend: string | null }
+interface Reading { ok: true; rating: QualityRating; rawRating: string | null; tier: string | null; tierField: boolean; status: string | null; canSend: string | null; healthStatus: unknown }
 interface ReadFailure { ok: false; error: string }
 
 /** Meta's error → a short safe line (code + message, never the request). */
@@ -68,7 +68,7 @@ async function readMeta(): Promise<Reading | ReadFailure> {
   const st = await ask("status,health_status");
   const status = st.ok && typeof st.data.status === "string" ? st.data.status : null;
   const can = st.ok ? (st.data.health_status as { can_send_message?: unknown } | undefined)?.can_send_message : null;
-  return { ok: true, rating: normaliseRating(rawRating), rawRating, tier, tierField, status, canSend: typeof can === "string" ? can : null };
+  return { ok: true, rating: normaliseRating(rawRating), rawRating, tier, tierField, status, canSend: typeof can === "string" ? can : null, healthStatus: st.ok ? st.data.health_status ?? null : null };
 }
 
 Deno.serve(async (req) => {
@@ -87,6 +87,7 @@ Deno.serve(async (req) => {
     const mode = body.mode === "probe" ? "probe" : "check";
 
     const reading = await readMeta();
+    /* Probe only: healthStatus is Meta's whole answer (which entity is limited, and why), for reading by hand. Nothing stores it. */
     if (mode === "probe") return json({ ok: true, mode, reading });
 
     const nowIso = new Date().toISOString();
