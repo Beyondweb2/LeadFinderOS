@@ -18,8 +18,9 @@
    resumes it; nothing resumes it automatically.
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 
-/** The global daily cap when the admin has set none. Was a hard-coded 400 until 2026-10-14 (about 2×). */
-export const DEFAULT_DAILY_CAP = 800;
+/** The team's cold WhatsApp cap when the admin has set none (2026-11-02, RED since 25 Oct; was 800). It counts cold sends from the
+ *  queue AND from people, not in-window replies (src/lib/whatsappColdGuard.ts). The rating rule halves it on YELLOW / RED. */
+export const DEFAULT_DAILY_CAP = 100;
 /** Never above this, whatever is stored: Meta's first established messaging tier (new conversations / 24 h). */
 export const MAX_DAILY_CAP = 1000;
 /** The minimum minutes between two queue sends when the admin has set none (unchanged from the constant). */

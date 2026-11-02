@@ -29,6 +29,9 @@ import { DASHBOARD_PENDING_QUEUE_STATUSES, DASHBOARD_RESEND_WINDOW_MS, DASHBOARD
 import { displayBusinessName } from "../../../src/lib/displayName.ts";
 import { isUkColdDestination, NOT_A_UK_MOBILE } from "../../../src/lib/ukColdDestination.ts";
 import { COUNTRY_OFF, MARKET_NAME, channelOn, mobileMarketOf } from "../../../src/lib/outreachMarkets.ts";
+import { claimColdSlot, coldGateFor, loadColdFacts } from "../_shared/cold-whatsapp-gate.ts";
+import { COLD_SLOT_QUEUED_WORDS, coldGapMs } from "../../../src/lib/whatsappColdGuard.ts";
+import { coldOpenerFor } from "../../../src/lib/openerVariant.ts";
 import { phoneProblemWords } from "../../../src/lib/phoneCountry.ts";
 import { NOT_A_MOBILE, NOT_A_MOBILE_REASON, templateDestinationRefusal } from "../../../src/lib/whatsAppDestination.ts";
 import { loadCountrySettings } from "../_shared/country-settings.ts";
@@ -42,7 +45,7 @@ import { STRONG_STATUSES, postgrestList } from "../../../src/lib/strongStatuses.
 import { QA_REFUSAL_REASON } from "../../../src/lib/qaSafety.ts";
 import { qaSendHold } from "../_shared/qa-guard.ts";
 import { templateAvailability } from "../_shared/template-status.ts";
-import { queueGate, replyWindowOpenNow, scheduledSendFor } from "../_shared/inbox-schedule.ts";
+import { queueGate, replyWindowForDest, replyWindowOpenNow, scheduledSendFor } from "../_shared/inbox-schedule.ts";
 import { keepsSendHours } from "../../../src/lib/inboxSendWindow.ts";
 import { freeTextVersionOf, inWindowShape, QUEUED_WORDS_UNREADABLE_REASON, type SendOrigin } from "../../../src/lib/inWindowFreeText.ts";
 import { formatVisibilityScore, REPORT_OFFER_REFUSAL_WORDS, REPORT_OFFER_TEMPLATE, reportOfferRefusal, UK_WORDED_TEMPLATES, ukWordedTemplateRefusal } from "../../../src/lib/reportOfferTemplate.ts";
@@ -123,7 +126,8 @@ const CAPABILITIES = ["dry_run", "build_phase_hold", "routing_leaf", "any_approv
    the same wording, still recorded as that template (src/lib/inWindowFreeText.ts); as_free_text sends the composer's edit. */
 /* 2026-10-31b: the four video templates go in-window as a normal VIDEO message (the header's video, the words as its caption);
    a queued needs_from_you whose words cannot be read back sends those words if the window is open, else refuses with a reason. */
-const BUILD_ID = "2026-10-31b-in-window-video";
+/* 2026-11-02: a person's cold send asks the cold guard (src/lib/whatsappColdGuard.ts): one cap, one gap, the cool-down, the tripwire. */
+const BUILD_ID = "2026-11-02a-cold-guard";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -224,7 +228,8 @@ Deno.serve(async (req) => {
        lead's audit cannot supply three competitor names (src/lib/rivalHook.ts). It is reassigned in
        exactly one place; everything downstream — the payload, the stored body, the message row —
        then describes what was ACTUALLY sent, which is the point. */
-    let templateName: string | null = typeof body.template_name === "string" && body.template_name ? body.template_name : null;
+    /* ⛔ THE COLD OPENER IS initial_contact (2026-11-02, src/lib/openerVariant.ts). */
+    let templateName: string | null = typeof body.template_name === "string" && body.template_name ? coldOpenerFor(body.template_name) : null;
     /* Non-empty only after a fallback, so the operator who pressed send is told what went instead. */
     let fellBackReason = "";
     // Set by the Inbox ONLY after the operator confirmed a repeat send. Strict === true so a
@@ -1030,6 +1035,31 @@ Deno.serve(async (req) => {
         body: storedBody, templateName: usedTemplate, allowResend, linkVariant: usedTemplate ? signupLinkVariant : null, queuedBy: operatorId,
       }, lastInboundAt);
       if (gate) return json({ ...gate, ...(gate.ok && fellBackReason ? { template: usedTemplate, fell_back: fellBackReason } : {}), ...(gate.ok && usedTemplate ? { sent_as: messageType } : {}) }, 200);
+    }
+    /* ⛔ THE COLD GUARD (2026-11-02, src/lib/whatsappColdGuard.ts). A person's cold template was the one send that skipped the rating,
+       the cap and the gap. Inside the hours it now asks the same rule as the queue. A stop, a cool-down or a cap is refused with the
+       reason. The gap or a probe waiting for its reports only queues it for the next slot. The drain's own row already took its slot.
+       Free text, in-window sends and continuations never reach this; a QA fixture is simulated and spends nothing. */
+    if (!sched && !dryRun && usedTemplate && messageType === "template" && isColdOutreachTemplate(usedTemplate) && qa.kind === "live") {
+      const coldM = mobileMarketOf(to);
+      const facts = await loadColdFacts(service);
+      if (!facts) return json({ ok: false, error: "cold_guard_unreadable", template: usedTemplate, reason: "Could not check today's WhatsApp limits, so nothing was sent. Try again." }, 200);
+      const verdict = coldM ? await coldGateFor(service, facts, coldM) : null;
+      if (verdict && !verdict.go && verdict.code !== "probe_wait") {
+        return json({ ok: false, error: verdict.code, template: usedTemplate, reason: verdict.reason }, 200);
+      }
+      if ((verdict && !verdict.go) || !(await claimColdSlot(service))) {
+        if (!viaInbox) return json({ ok: false, error: "cold_gap", template: usedTemplate, reason: "Cold messages go one at a time, 1 to 2 minutes apart. Try again in a minute." }, 200);
+        const sendAt = new Date(Date.now() + coldGapMs()).toISOString();
+        const w = await replyWindowForDest(service, "whatsapp", to, { leadId: resolvedLeadId });
+        const { data: slotRow, error: slotErr } = await service.from("inbox_scheduled_sends").insert({
+          user_id: bookUserId, lead_id: resolvedLeadId, phone: to, channel: "whatsapp", kind: "template", body: storedBody,
+          template_name: usedTemplate, allow_resend: allowResend, link_variant: signupLinkVariant, send_at: sendAt, tz: w.tz,
+          status: "scheduled", queued_by: operatorId, checked_at: new Date().toISOString(),
+        }).select("id, send_at, tz").single();
+        if (slotErr || !slotRow) return json({ ok: false, error: "queue_failed", template: usedTemplate, reason: "Could not queue it for the next slot, so nothing was sent. Try again." }, 200);
+        return json({ ok: true, scheduled: { id: slotRow.id, send_at: slotRow.send_at, tz: slotRow.tz, status: "scheduled" }, template: usedTemplate, sent_as: messageType, reason: COLD_SLOT_QUEUED_WORDS }, 200);
+      }
     }
     /* Australia (2026-10-22): the row's stored zone is the lead's, resolved when it was queued. */
     if (sched && !(await replyWindowOpenNow(service, "whatsapp", to, new Date(), { leadId: sched.row.lead_id, leadTz: sched.row.tz }))) return json({ ok: false, error: "outside_reply_window" }, 200);

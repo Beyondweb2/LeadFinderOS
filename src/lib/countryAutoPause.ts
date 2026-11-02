@@ -1,4 +1,6 @@
-/* THE PER-COUNTRY WHATSAPP AUTO SWITCH-OFF — the TypeScript mirror of the SQL rule `public.country_whatsapp_auto_pause`
+/* ⛔ SINCE 2026-11-02 THE ACTION IS A 24-HOUR COOL-DOWN, NOT A SWITCH-OFF (migration 20261201090000, src/lib/whatsappColdGuard.ts). The pattern
+   below is unchanged.
+   THE PER-COUNTRY WHATSAPP AUTO SWITCH-OFF — the TypeScript mirror of the SQL rule `public.country_whatsapp_auto_pause`
    (migration 20261122090000, which replaced 20261029090000's trial rule on 2026-10-22, docs/country-auto-off.md). The
    DATABASE decides (a trigger on every failed WhatsApp write, whoever wrote it); this copy exists so the rule is readable,
    tested and worded once for the screens. `scripts/country-auto-off.test.ts` pins the two copies together.
@@ -78,12 +80,12 @@ export function countryAutoPauseVerdict(sends: readonly CountrySendOutcome[], se
 /** The rule in one plain line, for the settings screen. */
 export function countryAutoOffRuleWords(s?: CountryAutoOffSettings | null): string {
   const r = countryAutoOffRule(s);
-  return `Each switches itself off only if at least ${r.minFails} sends fail and they are at least ${r.failPct}% of its last ${r.window}, `
+  return `Each rests for 24 hours, then restarts by itself with 3 sends, only if at least ${r.minFails} sends fail and they are at least ${r.failPct}% of its last ${r.window}, `
     + 'or if Meta refuses a send for a reason about our account or template. Numbers that are not on WhatsApp are not counted, '
     + 'and one failed number only marks that lead.';
 }
 
-/** The banner's headline for a country that switched itself off. The reason itself is the stored one, word for word. */
+/** The banner's headline for a country that switched itself off before 2 Nov 2026 (Singapore's is still stored). The reason is the stored one, word for word. */
 export function countryAutoPauseHeadline(countryName: string): string {
   return `WhatsApp to ${countryName} switched itself off`;
 }

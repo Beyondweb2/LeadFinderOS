@@ -130,9 +130,8 @@ ok(/leadTz: auLeadTz\(lead\)/.test(read('src/components/InboxSendWindow.tsx')) &
 
 console.log('F. Budgets, auto-off, no retry, prospect-only');
 const pwq = read('supabase/functions/process-whatsapp-queue/index.ts');
-ok(/\.gte\("created_at", dayStart\)\.not\("phone", "like", "61%"\)/.test(pwq), 'the team count leaves Australian sends out');
-ok(/if \(teamCapReached && m !== "AU"\) return false;/.test(pwq) && /if \(teamCapReached && !auMaySend\) return json\(\{ ok: true, skipped: "cap_reached"/.test(pwq),
-  'the team cap stops every market but Australia');
+/* 2026-11-02: one number, one allowance. Australia's cap sits inside the team cap (scripts/whatsapp-cold-guard.test.ts). */
+ok(/if \(teamCapReached && !qaDrill\) return json\(\{ ok: true, skipped: "cap_reached"/.test(pwq), 'the team cap stops every market, Australia too');
 ok(/for \(const m of ABROAD_MARKETS\)/.test(pwq), 'Australia\'s own daily cap is read like Malaysia\'s');
 ok(/return m === "MY" \|\| m === "SG" \|\| m === "AU";/.test(pwq), 'a failed Australian send is never retried automatically (drip)');
 ok(/in \('MY', 'SG', 'AU'\) then\s+new\.status := 'whatsapp_failed'/.test(mig) && /if v_market in \('MY', 'SG', 'AU'\) then perform public\.country_whatsapp_auto_pause/.test(mig),

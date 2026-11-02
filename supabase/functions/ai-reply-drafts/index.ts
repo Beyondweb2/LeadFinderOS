@@ -66,7 +66,7 @@ import {
 } from "../../../src/lib/aiAutoSend.ts";
 import { bulkDraftRefusal } from "../../../src/lib/bulkDraftRule.ts";
 import { nextWindowOpenAt, replyWindowFor, replyWindowOpen } from "../../../src/lib/inboxSendWindow.ts";
-import { botMaySaySendsEveryOne, modeMayAutoSend, parseInboxReplyMode, INBOX_REPLY_MODES } from "../../../src/lib/inboxReplyMode.ts";
+import { botMaySaySendsEveryOne, parseInboxReplyMode, INBOX_REPLY_MODES } from "../../../src/lib/inboxReplyMode.ts";
 import { loadReplyHours } from "../_shared/inbox-schedule.ts";
 import { loadLeadScore, rescoreDirtyRuns, SCORED_AUDIT_SELECT } from "../_shared/audit-scores.ts";
 import { AUDIT_SCORE_VERSION, leadAuditScore, pickHookAudit, visibleCountsOf, type ScoredAudit } from "../../../src/lib/auditScore.ts";
@@ -886,7 +886,7 @@ async function handleCatchUpRegenerate(service: Service, body: Record<string, un
   if (!draftId) return json({ ok: false, error: "draft_id_required" }, 400);
   if ((await paidMode(service)) !== "running") return json({ ok: false, error: "paused", detail: "Prospecting is paused or all-stop is on." }, 423);
   const { data: st, error: stErr } = await service.from("whatsapp_outreach_state").select("ai_reply_mode").eq("id", 1).maybeSingle();
-  if (stErr || !st || modeMayAutoSend(parseInboxReplyMode(st.ai_reply_mode))) return json({ ok: false, error: "auto_mode", detail: "Catch-up rewrites are refused while the Inbox mode is Auto (or unreadable)." }, 409);
+  if (stErr || !st || st.ai_reply_mode === "auto") return json({ ok: false, error: "auto_mode", detail: "Catch-up rewrites are refused while the Inbox mode is Auto (or unreadable)." }, 409);
   const { data: d, error: dErr } = await service.from("ai_reply_drafts").select("*").eq("id", draftId).maybeSingle();
   if (dErr) throw dErr;
   if (!d) return json({ ok: false, error: "draft_not_found" }, 404);
@@ -1056,7 +1056,7 @@ async function handleSettings(service: Service, actor: Actor, body: Record<strin
     if (error) throw error;
   } else if (set) {
     const raw = set === "mode" ? str(body.mode) : body.enabled === true ? "draft" : "manual";
-    if (!(INBOX_REPLY_MODES as readonly string[]).includes(raw)) return json({ ok: false, error: "bad_mode", detail: "Choose Manual, Draft for approval or Auto." }, 400);
+    if (!(INBOX_REPLY_MODES as readonly string[]).includes(raw)) return json({ ok: false, error: "bad_mode", detail: "Choose Manual or Draft for approval. AI replies never send themselves." }, 400);
     const { error } = await service.from("whatsapp_outreach_state").update({ ai_reply_mode: raw, updated_at: new Date().toISOString() }).eq("id", 1);
     if (error) throw error;
   }

@@ -80,7 +80,7 @@ console.log('5. two reply settings');
   ok(/new\.reply_audit_enabled := coalesce\(new\.auto_reply_enabled, false\);/.test(MIG), 'an old writer of the audit toggle moves the new switch (the two never disagree)');
   ok(/action === "set_reply_audit"/.test(FN) && /typeof body\.on !== "boolean"/.test(FN) && /reply_audit: data\?\.reply_audit_enabled === true/.test(FN), 'set_reply_audit (admin, boolean only) and the settings read');
   ok(/data-testid="reply-audit-switch"/.test(CTRL) && /role="radiogroup"/.test(CTRL), 'two controls in Settings: the audit switch and the AI replies mode');
-  ok(pitchNeedsAuditHint('draft', false) && pitchNeedsAuditHint('auto', false) && !pitchNeedsAuditHint('draft', true) && !pitchNeedsAuditHint('manual', false) && !pitchNeedsAuditHint('draft', null), 'the hint shows only when AI drafts and the audit is off');
+  ok(pitchNeedsAuditHint('draft', false) && !pitchNeedsAuditHint('draft', true) && !pitchNeedsAuditHint('manual', false) && !pitchNeedsAuditHint('draft', null), 'the hint shows only when AI drafts and the audit is off');
   ok(!/no audit/i.test(INBOX_REPLY_MODE_HINTS.manual), 'Manual\'s words no longer say the audit is off');
   ok(/pitchNeedsEvidence/.test(FN), 'the draft-after-audit rule is untouched (a pitch is never drafted without evidence)');
 }

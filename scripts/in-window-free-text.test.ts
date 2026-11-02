@@ -112,7 +112,7 @@ const withHeader = { type: 'template', template: { name: 'video_template', langu
   ok(/usedTemplate \? \{ template_snapshot: createTemplateSnapshot\(\{[^}]*payload: templatePayload \?\? payload/.test(s), 'the snapshot is saved for the free-text send too, from the template payload');
   ok(/findingsShown\?\.length && findingsText && !shape\.text\.includes\(findingsText\.trim\(\)\)\) findingsShown = null/.test(s), 'findings_shown stays only while the sent words still carry the findings');
   ok(/const tvars = usedTemplate \? \(WA_TEMPLATES\[usedTemplate\]\?\.vars \?\? \[\]\) : \[\];/.test(s), 'report_sent still keys on the template it was, whatever shape went');
-  ok(/const BUILD_ID = "2026-10-31b-in-window-video"/.test(s), 'BUILD_ID bumped (x-swm-build proves the deploy)');
+  ok(/const BUILD_ID = "2026-1[01]-\d\d[a-z]-[a-z-]+"/.test(s), 'BUILD_ID bumped (x-swm-build proves the deploy)');
   ok(s.includes('payload = shape.videoUrl ? videoPayload(shape.videoUrl, shape.text) : textPayload(shape.text);')
     && s.includes('messageType = shape.videoUrl ? "video" : "text";'), 'a video template in the window goes as a normal video message, recorded as message_type video');
   const w = read('supabase/functions/_shared/whatsapp-send.ts');

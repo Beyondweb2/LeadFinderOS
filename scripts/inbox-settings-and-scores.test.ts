@@ -50,7 +50,7 @@ const set = src('src/components/InboxSettings.tsx');
 /* 2026-10-21 (later): the reply rule and AI handles replies are ONE mode control (scripts/inbox-reply-mode.test.ts holds its rules). */
 check(/<InboxReplyModeControl channel=\{channel\} \/>/.test(set) && /ReplyHoursDialog/.test(set) && !/<AutoReplyToggle|<AiRepliesToggle/.test(set), 'it holds the Inbox mode (with Draft outcomes) and reply hours');
 const auto = src('src/components/InboxReplyModeControl.tsx');
-check(/Can send by itself/.test(auto) && /<AutoSendSwitches/.test(auto), 'the mode that can send by itself is marked, with its switches under it');
+check(!/Can send by itself/.test(auto) && !/<AutoSendSwitches/.test(auto), 'no mode can send by itself any more (2026-11-02)');
 
 console.log(failures === 0 ? '\nAll checks passed.' : `\n${failures} check(s) FAILED.`);
 process.exit(failures === 0 ? 0 : 1);

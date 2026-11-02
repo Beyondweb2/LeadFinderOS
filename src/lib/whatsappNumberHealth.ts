@@ -8,8 +8,11 @@
 
    ⛔ GREEN  → nothing changes.
    ⛔ YELLOW → the team's daily cap is HALVED and no one may raise the cap.
-   ⛔ RED    → the watcher PAUSES the queue once, when the rating turns red (a person resumes it; it is never
-              re-paused while it stays red, so a resume is not fought). The cap stays halved and rises stay blocked.
+   ⛔ RED    → a warning banner, the cap halved and no one may raise it. RED ALONE DOES NOT STOP SENDING (Paul, 2026-11-02): it used
+              to pause the queue, and the rating has flipped three times in a week. What stops everything is the tripwire below.
+   ⛔ TRIPWIRE → the stored tier DROPS, or Meta says the number is FLAGGED / RESTRICTED / BANNED or cannot send: ALL cold WhatsApp
+              stops (whatsapp_outreach_state.cold_stop_at, src/lib/whatsappColdGuard.ts) until a person clears it. Latched on the
+              turn into the state, so a person's clear is not fought while it lasts. An absent or unreadable value never trips it.
    ⛔ CANNOT BE READ (no reading yet, the last good reading is older than HEALTH_STALE_AFTER_MIN, or Meta says
               UNKNOWN) → sending is NEVER paused or slowed; only cap rises are blocked.
    The 1–2 minute random gap, the stored caps, the failure-burst auto-pause and the Malaysia / Singapore auto-off are
@@ -82,7 +85,7 @@ export function healthVerdict(h: StoredHealth | null | undefined, now: Date = ne
   }
   if (rating === 'RED') {
     return { state: 'red', rating, tier, halveCap: true, blockCapRise: true,
-      limitText: 'Meta rates the number RED. The queue was paused when it turned red, the daily cap is halved and cannot be raised.' };
+      limitText: 'Meta rates the number RED. Sending carries on carefully: the daily cap is halved and cannot be raised until it recovers.' };
   }
   if (rating === 'YELLOW') {
     return { state: 'yellow', rating, tier, halveCap: true, blockCapRise: true,
@@ -101,11 +104,36 @@ export function capRiseRefused(currentCap: number, nextCap: number, v: HealthVer
   return v.blockCapRise && nextCap > currentCap;
 }
 
-/** Should the watcher pause the queue now? Only on the turn INTO red (previous reading not red). */
-export function shouldPauseForRating(previous: unknown, next: QualityRating): boolean {
-  return next === 'RED' && normaliseRating(previous) !== 'RED';
+/** A tier as a number to compare. Unlimited is the highest; absent, or a word we do not know, is null (never a drop). */
+export function tierRank(tier: string | null | undefined): number | null {
+  const s = String(tier ?? '').trim().toUpperCase();
+  if (s === 'TIER_UNLIMITED' || s === 'UNLIMITED') return Number.POSITIVE_INFINITY;
+  return tierLimit(s);
 }
 
-/** The auto-pause reason written when the rating turns red (shown in the panel's "paused itself" box). */
-export const RED_PAUSE_REASON =
-  'Meta rated the WhatsApp number RED, so the queue paused itself to protect the number. Check the number in Meta, then press Resume.';
+/** Did the tier go DOWN? Both readings must be known. */
+export function tierDropped(previous: string | null | undefined, next: string | null | undefined): boolean {
+  const a = tierRank(previous); const b = tierRank(next);
+  return a != null && b != null && b < a;
+}
+
+const LIMITED_STATUSES: ReadonlySet<string> = new Set(['FLAGGED', 'RESTRICTED', 'BANNED']);
+
+/** Does Meta say this number is limited? Meta's phone number status, or health_status.can_send_message = BLOCKED. Positive:
+ *  an absent value, CONNECTED, or Meta's LIMITED (an advisory on the business, seen on healthy numbers) is not a limit. */
+export function numberLimited(status: string | null | undefined, canSend: string | null | undefined): boolean {
+  return LIMITED_STATUSES.has(String(status ?? '').trim().toUpperCase()) || String(canSend ?? '').trim().toUpperCase() === 'BLOCKED';
+}
+
+export interface TripwireInput { prevTier?: string | null; tier?: string | null; prevStatus?: string | null; status?: string | null; prevCanSend?: string | null; canSend?: string | null }
+
+/** The reason to stop all cold WhatsApp, on the turn into it, or null. */
+export function tripwireReason(i: TripwireInput): string | null {
+  if (numberLimited(i.status, i.canSend) && !numberLimited(i.prevStatus, i.prevCanSend)) {
+    return 'Meta says the WhatsApp number is ' + String(i.status ?? 'blocked from sending').toLowerCase() + '. Check it in WhatsApp Manager, then clear this.';
+  }
+  if (tierDropped(i.prevTier, i.tier)) {
+    return "Meta lowered the number's messaging tier (" + tierWords(i.prevTier) + ' to ' + tierWords(i.tier) + '). Check it in WhatsApp Manager, then clear this.';
+  }
+  return null;
+}

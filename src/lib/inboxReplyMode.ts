@@ -5,19 +5,20 @@
      · manual — no draft. Needs you flags still run (rules only, no model).
      · draft  — every reply gets a draft that waits for Approve & send.
      (Whether the reply AUDIT runs is the separate "Audit after first reply" switch since 2026-10-22.)
-     · auto   — as draft, and a draft whose reply type an admin switched on may send itself (src/lib/aiAutoSend.ts).
+     ⛔ AUTO IS RETIRED (Paul, 2026-11-02): an AI-written reply never sends itself; every one needs a person's approval. It cannot be
+        chosen any more, the server refuses it, and a stored 'auto' reads as Draft for approval. src/lib/aiAutoSend.ts is left as it is,
+        with nothing able to switch it on (modeMayAutoSend below).
    ⛔ "Audit and reply" is RETIRED: nothing sends the old template reply automatically (the database refuses the value).
    ⛔ ABSENT / UNKNOWN = 'manual' for what HAPPENS (nothing drafted, nothing sent) — but the bot answer reads an unreadable
       mode as Auto (botMaySaySendsEveryOne false): it never claims a person sent every message when it cannot know.
    Pure; edge-reachable (no imports, no Deno, no DOM). */
 
-export const INBOX_REPLY_MODES = ['manual', 'draft', 'auto'] as const;
+export const INBOX_REPLY_MODES = ['manual', 'draft'] as const;
 export type InboxReplyMode = typeof INBOX_REPLY_MODES[number];
 
 export const INBOX_REPLY_MODE_LABELS: Record<InboxReplyMode, string> = {
   manual: 'Manual',
   draft: 'Draft for approval',
-  auto: 'Auto',
 };
 
 export const INBOX_REPLY_MODE_QUESTION = 'AI replies';
@@ -27,7 +28,6 @@ export const INBOX_REPLY_MODE_QUESTION = 'AI replies';
 export const INBOX_REPLY_MODE_HINTS: Record<InboxReplyMode, string> = {
   manual: 'Nothing is drafted. You read and answer every reply yourself. Stops and complaints are still flagged.',
   draft: 'Every reply gets an AI draft in the thread, marked Needs approval. Nothing is sent until you press Approve & send.',
-  auto: 'As Draft for approval, and a confident reply of a type you switch on below sends itself 3 to 8 minutes later. Anything unsure waits for your approval.',
 };
 
 export const REPLY_AUDIT_QUESTION = 'Audit after first reply';
@@ -37,17 +37,18 @@ export const REPLY_AUDIT_OFF_PITCH_HINT = 'The audit is off, so a first-reply pi
 /** True when the hint above applies. */
 export const pitchNeedsAuditHint = (mode: InboxReplyMode, auditOn: boolean | null): boolean => modeDrafts(mode) && auditOn === false;
 
-/** Read a stored mode. Anything absent, blank or unrecognised is 'manual' (nothing happens). */
+/** Read a stored mode. Anything absent, blank or unrecognised is 'manual' (nothing happens). A leftover 'auto' only drafts. */
 export function parseInboxReplyMode(raw: unknown): InboxReplyMode {
   const t = typeof raw === 'string' ? raw.trim() : '';
+  if (t === 'auto') return 'draft';
   return (INBOX_REPLY_MODES as readonly string[]).includes(t) ? (t as InboxReplyMode) : 'manual';
 }
 
-/** Does a reply get an AI draft? Draft for approval and Auto. */
-export const modeDrafts = (m: InboxReplyMode): boolean => m === 'draft' || m === 'auto';
+/** Does a reply get an AI draft? Draft for approval. */
+export const modeDrafts = (m: InboxReplyMode): boolean => m === 'draft';
 
-/** May a draft ever send itself? ONLY Auto (positive). */
-export const modeMayAutoSend = (m: InboxReplyMode): boolean => m === 'auto';
+/** May a draft ever send itself? NEVER (Paul, 2026-11-02). */
+export const modeMayAutoSend = (_m: InboxReplyMode): boolean => false;
 
 /** May the "is this a bot?" answer say "I read and send every one myself"? Only when a person sends every message:
  *  Manual or Draft for approval, read from a stored value. Unreadable (null / undefined) = no. */

@@ -4,14 +4,14 @@
 // Callers: pg_cron every 15 minutes (public.invoke_whatsapp_number_health, CRON_SECRET), or an admin.
 // Modes:
 //   probe — ask Meta and answer; WRITES NOTHING. (Used to prove the token can read the rating.)
-//   check — ask Meta, store the reading on whatsapp_outreach_state (id 1), log every change, and pause the queue ONCE
-//           when the rating turns RED. A failed read stores only the failure: it never pauses, never touches the
-//           last good reading (the queue then only blocks cap rises, by the stale rule).
+//   check — ask Meta, store the reading on whatsapp_outreach_state (id 1), log every change, and latch the cold stop when the tier
+//           drops or the number is flagged / restricted. RED alone pauses nothing (2026-11-02). A failed read stores only the
+//           failure: it never stops anything, never touches the last good reading (the queue then only blocks cap rises).
 // ⛔ Reads only. Sends nothing. Never returns or logs the token (errors keep Meta's code and message only).
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { requireAdmin, refusalBody } from "../_shared/access.ts";
 import { GRAPH_VERSION } from "../_shared/whatsapp-send.ts";
-import { RED_PAUSE_REASON, normaliseRating, shouldPauseForRating, type QualityRating } from "../../../src/lib/whatsappNumberHealth.ts";
+import { normaliseRating, tripwireReason, type QualityRating } from "../../../src/lib/whatsappNumberHealth.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -20,7 +20,7 @@ const corsHeaders = {
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
-interface Reading { ok: true; rating: QualityRating; rawRating: string | null; tier: string | null; tierField: boolean }
+interface Reading { ok: true; rating: QualityRating; rawRating: string | null; tier: string | null; tierField: boolean; status: string | null; canSend: string | null }
 interface ReadFailure { ok: false; error: string }
 
 /** Meta's error → a short safe line (code + message, never the request). */
@@ -63,7 +63,12 @@ async function readMeta(): Promise<Reading | ReadFailure> {
     const v = alt.ok ? alt.data.whatsapp_business_manager_messaging_limit : null;
     if (typeof v === "string" && v) { tier = v; tierField = true; }
   }
-  return { ok: true, rating: normaliseRating(rawRating), rawRating, tier, tierField };
+  /* 2026-11-02: is the number flagged or restricted? Asked on its own, so a field this API version does not know costs nothing:
+     no value, no tripwire. */
+  const st = await ask("status,health_status");
+  const status = st.ok && typeof st.data.status === "string" ? st.data.status : null;
+  const can = st.ok ? (st.data.health_status as { can_send_message?: unknown } | undefined)?.can_send_message : null;
+  return { ok: true, rating: normaliseRating(rawRating), rawRating, tier, tierField, status, canSend: typeof can === "string" ? can : null };
 }
 
 Deno.serve(async (req) => {
@@ -86,7 +91,7 @@ Deno.serve(async (req) => {
 
     const nowIso = new Date().toISOString();
     const { data: prev, error: pErr } = await service.from("whatsapp_outreach_state")
-      .select("paused, meta_quality_rating, meta_messaging_tier, meta_health_error").eq("id", 1).maybeSingle();
+      .select("meta_quality_rating, meta_messaging_tier, meta_health_error, meta_number_status, meta_can_send, cold_stop_at").eq("id", 1).maybeSingle();
     if (pErr) return json({ ok: false, error: "state_read_failed", detail: pErr.message }, 500);
     const logs: Array<{ kind: string; from_value: string | null; to_value: string | null; detail?: string | null }> = [];
 
@@ -105,6 +110,9 @@ Deno.serve(async (req) => {
     };
     /* The tier field may be unsupported (asked for the rating alone): keep the last known tier then. */
     if (reading.tierField) patch.meta_messaging_tier = reading.tier;
+    /* A status Meta did not answer keeps the last known one: absent is never "it recovered". */
+    if (reading.status != null) patch.meta_number_status = reading.status;
+    if (reading.canSend != null) patch.meta_can_send = reading.canSend;
     const { error: uErr } = await service.from("whatsapp_outreach_state").update(patch).eq("id", 1);
     if (uErr) return json({ ok: false, error: "state_write_failed", detail: uErr.message }, 500);
 
@@ -112,22 +120,30 @@ Deno.serve(async (req) => {
     if (reading.tierField && prevTier !== reading.tier) logs.push({ kind: "tier_changed", from_value: prevTier, to_value: reading.tier });
     if (prev?.meta_health_error) logs.push({ kind: "read_recovered", from_value: null, to_value: null, detail: String(prev.meta_health_error).slice(0, 300) });
 
-    /* ⛔ RED pauses ONCE, on the turn into red. A person resumes it; it is not re-paused while it stays red. */
-    let pausedNow = false;
-    if (shouldPauseForRating(prevRating, reading.rating) && prev?.paused !== true) {
-      await service.from("whatsapp_outreach_state").update({ auto_paused_at: nowIso, auto_pause_reason: RED_PAUSE_REASON }).eq("id", 1);
-      const { error: apErr } = await service.from("whatsapp_outreach_state")
-        .update({ paused: true, updated_at: nowIso, pause_changed_at: nowIso, pause_changed_by: null, pause_changed_source: "auto" }).eq("id", 1);
-      if (apErr) await service.from("whatsapp_outreach_state").update({ paused: true, updated_at: nowIso }).eq("id", 1);
-      pausedNow = true;
-      logs.push({ kind: "paused_red", from_value: prevRating, to_value: "RED", detail: RED_PAUSE_REASON });
-      console.warn("[whatsapp-number-health] RED: queue paused");
+    const prevStatus = (prev?.meta_number_status as string | null) ?? null;
+    if (reading.status != null && prevStatus !== reading.status) logs.push({ kind: "status_changed", from_value: prevStatus, to_value: reading.status });
+    /* ⛔ THE TRIPWIRE (2026-11-02): the turn into a limit stops all cold WhatsApp, once. A person clears it (mode clear_cold_stop on the
+       queue function), and it is not re-latched while the same reading lasts. RED is not in here. */
+    const stopReason = tripwireReason({
+      prevTier, tier: reading.tierField ? reading.tier : prevTier,
+      prevStatus, status: reading.status ?? prevStatus,
+      prevCanSend: (prev?.meta_can_send as string | null) ?? null, canSend: reading.canSend ?? (prev?.meta_can_send as string | null) ?? null,
+    });
+    let stoppedNow = false;
+    if (stopReason && !prev?.cold_stop_at) {
+      const { error: sErr } = await service.from("whatsapp_outreach_state").update({ cold_stop_at: nowIso, cold_stop_reason: stopReason }).eq("id", 1);
+      if (!sErr) {
+        stoppedNow = true;
+        logs.push({ kind: "cold_stopped", from_value: prevTier, to_value: reading.tier, detail: stopReason });
+        await service.from("whatsapp_queue_pause_log").insert({ scope: "queue", action: "cold_stopped", source: "auto", by_user_id: null, reason: stopReason });
+        console.warn("[whatsapp-number-health] cold WhatsApp stopped");
+      }
     }
     if (logs.length) {
       const { error: lErr } = await service.from("whatsapp_number_health_log").insert(logs);
       if (lErr) console.error("[whatsapp-number-health] log write failed: " + lErr.message);
     }
-    return json({ ok: true, mode, read: true, rating: reading.rating, tier: reading.tierField ? reading.tier : prevTier, pausedNow, changes: logs.map((l) => l.kind) });
+    return json({ ok: true, mode, read: true, rating: reading.rating, tier: reading.tierField ? reading.tier : prevTier, status: reading.status, stoppedNow, changes: logs.map((l) => l.kind) });
   } catch (e) {
     console.error("[whatsapp-number-health] " + ((e as Error)?.message ?? String(e)));
     return json({ ok: false, error: "server_error" }, 500);

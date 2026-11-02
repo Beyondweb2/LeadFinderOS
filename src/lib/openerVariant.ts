@@ -49,6 +49,13 @@ export const INITIAL_OPENERS = [INITIAL_OPENER_A, INITIAL_OPENER_B] as const;
 export const WHATSAPP_OPENERS = [INITIAL_OPENER_A, INITIAL_OPENER_B, INITIAL_OPENER_C] as const;
 export type InitialOpener = (typeof INITIAL_OPENERS)[number];
 
+/** ⛔ THE COLD OPENER IS THE ORIGINAL (Paul, 2026-11-02, RED since 25 Oct): the short opener was ramped to about 200 a day just
+ *  before the rating fell, so a send that names it goes as initial_contact, every country, at both senders. A queued lead keeps
+ *  the name it was stored with; what goes, and what is recorded, is the original. */
+export function coldOpenerFor(name: string): string {
+  return name === INITIAL_OPENER_C ? INITIAL_OPENER_A : name;
+}
+
 const OPENER_SET: ReadonlySet<string> = new Set(WHATSAPP_OPENERS);
 
 /** True when this template is one of the initial cold openers. */

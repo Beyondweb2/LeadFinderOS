@@ -6,7 +6,10 @@ import { heldCountryOff } from "../../../src/lib/countryHold.ts";
 import { phoneProblemWords } from "../../../src/lib/phoneCountry.ts";
 import { AU_ZONE_COLUMNS, auLeadTz } from "../../../src/lib/auLeadZone.ts";
 import { NOT_A_MOBILE, NOT_A_MOBILE_REASON, templateDestinationRefusal } from "../../../src/lib/whatsAppDestination.ts";
-import { loadCountrySettings, marketAtDailyCap } from "../_shared/country-settings.ts";
+import { loadCountrySettings } from "../_shared/country-settings.ts";
+import { claimColdSlot, coldGateFor, loadColdFacts } from "../_shared/cold-whatsapp-gate.ts";
+import { coldVerdict, teamColdCount, type ColdVerdict } from "../../../src/lib/whatsappColdGuard.ts";
+import { coldOpenerFor } from "../../../src/lib/openerVariant.ts";
 import { isUkColdDestination, NOT_A_UK_MOBILE } from "../../../src/lib/ukColdDestination.ts";
 import { statusBeforeQueue, statusWhenWhatsAppUnavailable, statusWithContactEvidence } from "../../../src/lib/coldWhatsAppEligibility.ts";
 import { leadAccess, resolveActor } from "../_shared/access.ts";
@@ -630,13 +633,9 @@ Deno.serve(async (req) => {
        seconds on the Outreach and Inbox loads AND on every one-minute cron tick. None depends on
        another, so they run in parallel; the payload is built from the same values, unchanged. */
     const [
-      { count: sentToday }, { count: queuedCount }, { count: archivedQueuedCount }, { count: unverifiedQueuedCount }, { count: phoneHistorySkippedCount }, { count: hookQueuedCount }, { count: contactQueuedCount }, { data: stateRow },
+      { count: queuedCount }, { count: archivedQueuedCount }, { count: unverifiedQueuedCount }, { count: phoneHistorySkippedCount }, { count: hookQueuedCount }, { count: contactQueuedCount }, { data: stateRow },
       autoReplyEnabledV, auditCompleteTemplateV, firstReplyTemplateV, firstReplyModeV, auditOnlyReadyCountV,
     ] = await Promise.all([
-      /* ⛔ AUSTRALIA HAS ITS OWN BUDGET (2026-10-22): an Australian send (61…) never counts against the team cap, and the team
-         cap never stops Australia (its own country cap does). Every other row is counted exactly as before. */
-      service
-        .from("whatsapp_sends").select("id", { count: "exact", head: true }).gte("created_at", dayStart).not("phone", "like", "61%"),
       /* Queue depth counts what this processor will ACTUALLY send: archived leads are excluded here
          for the same reason they are excluded from the selection below. The archived-but-queued count
          is reported alongside it rather than silently dropped, so "nothing to send" and "skipping N
@@ -741,6 +740,18 @@ Deno.serve(async (req) => {
     /* ⛔ PER-COUNTRY SWITCHES, HOURS AND CAPS (2026-10-14, src/lib/outreachMarkets.ts). An unreadable table answers the
        defaults: the UK exactly as before, Malaysia and Singapore OFF. */
     const countrySettings = await loadCountrySettings(service);
+    /* ⛔ THE COLD GUARD (2026-11-02, src/lib/whatsappColdGuard.ts). One count for the queue and a person's cold sends; replies
+       are not in it, and the tick sends nothing if it cannot be read. Australia no longer has a budget outside the team cap:
+       one number, one allowance. */
+    const coldFacts = await loadColdFacts(service, countrySettings);
+    const sentToday = coldFacts ? teamColdCount(coldFacts.sends) : 0;
+    const coldNow: Partial<Record<Market, ColdVerdict>> = {};
+    if (coldFacts) {
+      for (const m of ["UK", ...ABROAD_MARKETS] as Market[]) {
+        /* Only a tick of a country that is on can start a rest. A status read writes nothing. */
+        coldNow[m] = mode === "tick" && channelOn(countrySettings, m, "whatsapp") ? await coldGateFor(service, coldFacts, m) : coldVerdict(m, coldFacts);
+      }
+    }
     const paused: boolean = stateRow?.paused === true;
     const uk = londonNow();
     // Minute-granular so the 21:30 end is honoured (a whole-hour compare would run to 21:59).
@@ -761,25 +772,17 @@ Deno.serve(async (req) => {
     const leadWindowOpen = (r: QRow) =>
       (force && !(rowMarket(r) === "AU" && !rowTz(r)))
       || windowOpenForDigits(toWhatsAppNumber(String(r.phone ?? ""), (r.country as string | null) ?? null), new Date(), countrySettings, rowTz(r));
-    /* A country at its OWN daily cap (Malaysia / Singapore / Australia; counted in its own local day) holds its leads, like the
-       window does: not chosen, nothing written. Read once per tick, only for a market that is switched on. */
-    const marketsAtCap = new Set<Market>();
-    for (const m of ABROAD_MARKETS) {
-      if (channelOn(countrySettings, m, "whatsapp") && await marketAtDailyCap(service, countrySettings, m, "whatsapp")) marketsAtCap.add(m);
-    }
-    /* The team cap reached: only Australia (its own budget) may still send this tick. */
-    const teamCapReached = (sentToday ?? 0) >= DAILY_CAP;
+    /* A market the cold guard says no to (cool-down, its own cap, a probe waiting for its reports) holds its leads, like the
+       window does: not chosen, nothing written. */
+    const marketHeld = (m: Market | null) => !!m && coldNow[m]?.go === false;
+    const teamCapReached = sentToday >= DAILY_CAP;
     /* ⛔ 2026-10-22 (src/lib/countryHold.ts heldCountryOff): a lead whose country's WhatsApp is OFF is held like the
        window and the cap — not chosen, nothing written — and sends once the country is switched back on. */
     const leadSendable = (r: QRow) => {
       if (heldCountryOff(countrySettings, rowMarket(r))) return false;
       if (!leadWindowOpen(r)) return false;
-      const m = rowMarket(r);
-      if (teamCapReached && m !== "AU") return false;
-      return !(m && marketsAtCap.has(m));
+      return !marketHeld(rowMarket(r));
     };
-    const auMaySend = channelOn(countrySettings, "AU", "whatsapp") && !marketsAtCap.has("AU")
-      && marketWindowOpen(["AU"], "whatsapp", new Date(), countrySettings);
 
     /* ⛔ QUEUED BUT HELD BY A TEST ACCOUNT (2026-10-08). The drip never chooses a real business held by a test
        account (src/lib/qaSafety.ts REFUSE) — correct, but silent: 7 real plumbers queued from "test1" sat
@@ -800,7 +803,16 @@ Deno.serve(async (req) => {
     } catch { testHeldQueuedCount = null; }
 
     const statusPayload = {
-      testMode, live, sentToday: sentToday ?? 0, cap: DAILY_CAP,
+      testMode, live, sentToday, cap: DAILY_CAP,
+      /* 2026-11-02: the cold guard, for the banners. A stop covers everything; each market says what it may do now. */
+      coldGuard: {
+        readable: !!coldFacts,
+        stop: coldFacts?.stopReason ? { at: coldFacts.stopAt, reason: coldFacts.stopReason } : null,
+        markets: Object.fromEntries((Object.entries(coldNow) as Array<[Market, ColdVerdict]>).map(([m, v]) => [m, {
+          go: v.go, probing: v.go ? v.probing : false, code: v.go ? null : v.code, reason: v.go ? null : v.reason,
+          retryAt: v.go ? null : (v.retryAt ? v.retryAt.toISOString() : null), used: v.used, cap: v.cap,
+        }])),
+      },
       /* 2026-10-14: the admin-set numbers (stored null = the default) and the auto-pause note, for the queue panel. */
       pace: { dailyCap: pace.dailyCap, gapFloorMin: pace.gapFloorMin, personDefault: pace.personDefault, maxDailyCap: MAX_DAILY_CAP,
               stored: { daily_cap: paceRow?.daily_cap ?? null, min_gap_minutes: paceRow?.min_gap_minutes ?? null },
@@ -830,7 +842,7 @@ Deno.serve(async (req) => {
       /* The real next eligible send, Europe/London, computed live — what the dashboard shows.
          `nextSendAt` (the raw stored pacing stamp) stays in the payload for back-compat, but the
          panel reads THIS. Display only; changes no gate. */
-      nextEligibleSendAt: nextEligibleSendAt(sentToday ?? 0, nextSendAt, DAILY_CAP),
+      nextEligibleSendAt: nextEligibleSendAt(sentToday, nextSendAt, DAILY_CAP),
       ukTime: `${String(uk.hour).padStart(2, "0")}:${String(uk.minute).padStart(2, "0")}`,
       // Auto audit_reply rule state: BOTH must be on for the rule to run. Toggle read is
       // defensive (missing column → false), so status works before the SQL has been run.
@@ -927,6 +939,15 @@ Deno.serve(async (req) => {
       await service.from("whatsapp_outreach_state").update({ auto_paused_at: null, auto_pause_reason: null }).eq("id", 1);
       return json({ ok: true, ...statusPayload, paused: nextPaused, autoPausedAt: null, autoPauseReason: null,
         pauseChange: { at: changedAt, byUserId: callerId, byName: await personName(service, callerId), source: "person" } });
+    }
+
+    /* ⛔ CLEAR THE COLD STOP (2026-11-02, admin-gated like pause). The manual override: cold WhatsApp starts again and the person
+       is on the pause log. The watcher latches only on the turn into a limit, so it does not fight this. */
+    if (mode === "clear_cold_stop") {
+      const { error: cErr } = await service.from("whatsapp_outreach_state").update({ cold_stop_at: null, cold_stop_reason: null }).eq("id", 1);
+      if (cErr) return json({ ok: false, error: "state_write_failed" }, 500);
+      await service.from("whatsapp_queue_pause_log").insert({ scope: "queue", action: "cold_resumed", source: "person", by_user_id: callerId, reason: coldFacts?.stopReason ?? null });
+      return json({ ok: true, ...statusPayload, coldGuard: { ...statusPayload.coldGuard, stop: null } });
     }
 
     /* RECENT FAILED SENDS (2026-10-15, admin-gated like this whole handler) — the queue panel's list: every failed
@@ -1690,6 +1711,10 @@ Deno.serve(async (req) => {
     // Pause guard FIRST — a paused queue sends nothing, even on a forced manual tick.
     if (paused) return json({ ok: true, skipped: "paused", ...statusPayload });
     if (!anyWindowOpen && !force && !qaDrill) return json({ ok: true, skipped: "outside_window", ...statusPayload });
+    /* ⛔ THE COLD GUARD STOPS THE WHOLE DRIP (2026-11-02): an unreadable guard or a latched stop sends nothing, follow-up lanes
+       included, and starts no paid audit for a message that cannot go. */
+    if (!qaDrill && !coldFacts) return json({ ok: true, skipped: "cold_guard_unreadable", ...statusPayload });
+    if (!qaDrill && coldFacts?.stopReason) return json({ ok: true, skipped: "cold_stopped", reason: coldFacts.stopReason, ...statusPayload });
     /* ⛔ AUTO-PAUSE ON A BURST OF FAILURES (2026-10-14; src/lib/whatsappPace.ts). The queue's OWN sends (user_id NULL)
        in the last AUTO_PAUSE_WINDOW_MIN minutes, test sends left out: when at least AUTO_PAUSE_MIN_ATTEMPTS went and at
        least AUTO_PAUSE_FAIL_SHARE of them failed, the queue pauses itself and records why. A person resumes it.
@@ -1745,8 +1770,12 @@ Deno.serve(async (req) => {
       console.error("[outreach-audit] audit-ahead pass threw:", e instanceof Error ? e.message : String(e));
     }
 
-    /* The team cap stops every market but Australia; Australia then goes on alone (leadSendable) while its own window and cap allow. */
-    if (teamCapReached && !auMaySend) return json({ ok: true, skipped: "cap_reached", ...statusPayload, auditAhead });
+    /* The team cap stops every market. */
+    if (teamCapReached && !qaDrill) return json({ ok: true, skipped: "cap_reached", ...statusPayload, auditAhead });
+    /* ⛔ THE GAP (src/lib/whatsappColdGuard.ts): a person's cold send takes the same slot. send_now skips the pacing below, never this. */
+    if (!qaDrill && !force && coldFacts?.gapUntil && new Date(coldFacts.gapUntil) > new Date()) {
+      return json({ ok: true, skipped: "cold_gap", ...statusPayload });
+    }
     if (nextSendAt && new Date(nextSendAt) > new Date() && !force && !sendNow && !qaDrill) {
       return json({ ok: true, skipped: "not_due", ...statusPayload });
     }
@@ -1769,7 +1798,12 @@ Deno.serve(async (req) => {
        so a long held queue can never fill QUEUE_SCAN and starve the UK behind it. heldCountryOff below stays the rule. */
     let queuedFiltered = (qaDrill ? queuedQuery.eq("id", qaDrillLeadId as string) : queuedQuery);
     for (const m of ABROAD_MARKETS) {
-      if (heldCountryOff(countrySettings, m)) queuedFiltered = queuedFiltered.not("phone", "like", `${HELD_PHONE_PREFIX[m]}%`);
+      if (heldCountryOff(countrySettings, m) || (!qaDrill && marketHeld(m))) queuedFiltered = queuedFiltered.not("phone", "like", `${HELD_PHONE_PREFIX[m]}%`);
+    }
+    /* 2026-11-02: and the other way round: a UK held by the guard must not fill the scan with UK leads and starve Malaysia. UK
+       numbers are stored in several shapes, abroad ones always with their prefix, so this names the abroad ones. */
+    if (!qaDrill && marketHeld("UK")) {
+      queuedFiltered = queuedFiltered.or(ABROAD_MARKETS.map((m) => `phone.like.${HELD_PHONE_PREFIX[m]}%`).join(","));
     }
     const { data: queuedRows } = await queuedFiltered
       .eq("status", "queued")
@@ -1973,13 +2007,13 @@ Deno.serve(async (req) => {
 
         // Share the pacing clock, exactly like the opener lane.
         await service.from("whatsapp_outreach_state")
-          .update({ next_send_at: nextPacingStamp(sentToday ?? 0, pace), updated_at: hNowIso }).eq("id", 1);
+          .update({ next_send_at: nextPacingStamp(sentToday, pace), updated_at: hNowIso }).eq("id", 1);
 
         return json({
           ok: true, sent: hOutcome === "sent", simulated: !hLive, outcome: hOutcome, lane: "hook_followup",
           lead_id: hookLead.id, business: hookLead.business_name, template: "hook_followup", to,
           message_id: hMessageId, delivery_status: hDelivery, error: hError,
-          ...statusPayload, sentToday: (sentToday ?? 0) + 1,
+          ...statusPayload, sentToday: sentToday + 1,
         });
       }
 
@@ -2084,13 +2118,13 @@ Deno.serve(async (req) => {
 
         // Share the pacing clock, exactly like the opener and hook lanes.
         await service.from("whatsapp_outreach_state")
-          .update({ next_send_at: nextPacingStamp(sentToday ?? 0, pace), updated_at: cNowIso }).eq("id", 1);
+          .update({ next_send_at: nextPacingStamp(sentToday, pace), updated_at: cNowIso }).eq("id", 1);
 
         return json({
           ok: true, sent: cOutcome === "sent", simulated: !cLive, outcome: cOutcome, lane: "contact_followup",
           lead_id: contactLead.id, business: contactLead.business_name, template: "contact_followup", to,
           message_id: cMessageId, delivery_status: cDelivery, error: cError,
-          ...statusPayload, sentToday: (sentToday ?? 0) + 1,
+          ...statusPayload, sentToday: sentToday + 1,
         });
       }
 
@@ -2156,7 +2190,8 @@ Deno.serve(async (req) => {
     /* ⚠️ `let`, FOR ONE REASON ONLY: a template that names three competitors and cannot get three
        falls back to video_template (rivalHookDecision, applied after the audit resolves below).
        Nothing else reassigns these, and the fallback is one-way. */
-    let templateName = requestedTemplate;
+    /* ⛔ THE COLD OPENER IS initial_contact (2026-11-02, src/lib/openerVariant.ts): a lead queued with the short opener gets the original. */
+    let templateName = coldOpenerFor(requestedTemplate);
     let lang = TEMPLATES[templateName].lang;
     let tvars = TEMPLATES[templateName].vars;
     /* Only templates whose url IS the claim link need a share_token. audit_reply also declares a
@@ -2637,6 +2672,12 @@ Deno.serve(async (req) => {
     const sendLive = live && qaVerdict.kind === "live";
     const rowTestMode = testMode || qaVerdict.kind === "simulate";
 
+    /* ⛔ THE SLOT, RIGHT BEFORE THE SEND (2026-11-02): one conditional write. Losing it (a person's cold send won) writes nothing
+       about the lead: it is chosen again on a later tick. */
+    if (sendLive && !qaDrill && !(await claimColdSlot(service))) {
+      return json({ ok: true, skipped: "cold_gap", lead_id: lead.id, ...statusPayload });
+    }
+
     if (sendLive) {
       try {
         const res = await fetch(`https://graph.facebook.com/${GRAPH_VERSION}/${phoneNumberId}/messages`, {
@@ -2803,7 +2844,7 @@ Deno.serve(async (req) => {
     // A QA drill never moves the real queue's clock.
     if (!qaDrill) {
       await service.from("whatsapp_outreach_state")
-        .update({ next_send_at: nextPacingStamp(sentToday ?? 0, pace), updated_at: nowIso }).eq("id", 1);
+        .update({ next_send_at: nextPacingStamp(sentToday, pace), updated_at: nowIso }).eq("id", 1);
     }
 
     return json({
@@ -2827,7 +2868,7 @@ Deno.serve(async (req) => {
       fail_code: failCode,
       error: sendError,
       ...statusPayload,
-      sentToday: (sentToday ?? 0) + 1,
+      sentToday: sentToday + 1,
     });
   } catch (e) {
     console.error("process-whatsapp-queue error:", e);
