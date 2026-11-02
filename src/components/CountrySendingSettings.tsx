@@ -7,6 +7,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Callout } from '@/components/operator/ui';
 import { useCountrySettings } from '@/hooks/useCountrySettings';
 import { countryAutoOffRuleWords, countryAutoPauseHeadline } from '@/lib/countryAutoPause';
+import { cooldownHeadline, inCooldown, type CooldownSetting } from '@/lib/whatsappColdGuard';
 import type { CountryOffSetting } from '@/lib/countryHold';
 import { SMS_SENDER_WORDS, checkCountryValue, hhmm, MARKET_NAME, MAX_COUNTRY_DAILY_CAP, WHATSAPP_ONLY_MARKETS, PER_LEAD_ZONE_MARKETS, type Market, type CountrySetting } from '@/lib/outreachMarkets';
 
@@ -15,7 +16,7 @@ import { SMS_SENDER_WORDS, checkCountryValue, hhmm, MARKET_NAME, MAX_COUNTRY_DAI
    hours. Saved through set_outreach_country (admin-only on the server). The UK row's hours and caps are the existing
    queue settings above (07:00-21:30 London, the team cap), so only its switches are shown here.
    Australia (2026-10-22): WhatsApp only (its SMS / call switches are shown off and cannot be turned on); its hours are read
-   in each lead's own zone, Mon–Fri; its cap is its own budget, outside the team cap. */
+   in each lead's own zone, Mon–Fri. 2026-11-02: every country's cap sits INSIDE the team cap (src/lib/whatsappColdGuard.ts). */
 
 const ROWS: Market[] = ['UK', 'MY', 'SG', 'AU'];
 const t = (n: number | null | undefined) => (n == null ? '' : String(n));
@@ -75,6 +76,8 @@ export function CountrySendingSettings() {
   /* A country that switched ITSELF off (country_whatsapp_auto_pause, 2026-10-15): said in a banner that shows even with
      the settings folded, in the stored words, until a person switches it back on. */
   const autoOff = ROWS.filter((m) => m !== 'UK' && settings[m].whatsapp_on !== true && settings[m].whatsapp_auto_pause_reason);
+  /* 2026-11-02: a country resting after failed sends. It restarts by itself; Restart now is the manual override (on the pause log). */
+  const resting = ROWS.filter((m) => inCooldown(settings[m] as CooldownSetting));
 
   return (
     <div className="mt-2 space-y-2" data-testid="country-sending">
@@ -83,6 +86,14 @@ export function CountrySendingSettings() {
           <strong>{countryAutoPauseHeadline(MARKET_NAME[m])}</strong>
           {settings[m].whatsapp_auto_paused_at ? ` on ${new Date(settings[m].whatsapp_auto_paused_at as string).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: 'Europe/London' })}` : ''}.
           {' '}{settings[m].whatsapp_auto_pause_reason}
+        </Callout>
+      ))}
+      {resting.map((m) => (
+        <Callout key={m} tone="amber" icon={AlertTriangle} className="px-3 py-2 text-[11px]" testId={`country-cooldown-${m}`}>
+          <strong>{cooldownHeadline(m, settings[m] as CooldownSetting)}.</strong>
+          {' '}{(settings[m] as CooldownSetting).whatsapp_cooldown_reason}
+          <Button size="sm" variant="outline" className="ml-2 h-6 text-[11px]" disabled={busy === m}
+            onClick={() => void apply(m, { whatsapp_cooldown_clear: true }, `${MARKET_NAME[m]} restarted`)} data-testid={`country-cooldown-clear-${m}`}>Restart now</Button>
         </Callout>
       ))}
       <button type="button" onClick={() => setOpen((v) => !v)} className="flex items-center gap-1 text-[11px] font-medium text-muted-foreground hover:text-foreground" data-testid="country-sending-toggle">
@@ -137,7 +148,7 @@ export function CountrySendingSettings() {
                 {PER_LEAD_ZONE_MARKETS.has(m) && (
                   <p className="text-[11px] text-muted-foreground" data-testid={`country-${m}-zone-note`}>
                     Monday–Friday only, in each lead’s own time zone from its state (Sydney, Melbourne, Hobart, Brisbane, Adelaide, Darwin or Perth).
-                    A lead with no state is held as “Needs state”. Its daily cap is its own budget: it does not count against the team cap, and the team cap does not stop it.
+                    A lead with no state is held as “Needs state”.
                   </p>
                 )}
               </div>
@@ -147,7 +158,7 @@ export function CountrySendingSettings() {
             ⛔ Cold WhatsApp to Malaysia, Singapore and Australia goes only through these switches — test a handful by hand first. A failed
             send there is never retried automatically: that lead is handed back. While a country is off, its queued leads wait in the
             queue and send when it is switched back on.
-            {' '}Malaysia and Singapore send in their own time (UTC+8). Their caps come on top of the team cap — the team cap still counts every message.
+            {' '}Malaysia and Singapore send in their own time (UTC+8). Each country’s WhatsApp cap counts cold messages, from the queue and from people, inside the team cap. The UK uses the rest.
             {' '}Australia is prospect-only: no price, sign-up or checkout message is ever sent there.
             {' '}WhatsApp templates are written in English for UK businesses: send only the openers, and not explain_offer / explain_offer_v2 (they quote £ prices and “UK businesses”).
           </p>

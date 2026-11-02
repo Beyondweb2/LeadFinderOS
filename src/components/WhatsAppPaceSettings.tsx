@@ -26,6 +26,12 @@ export interface PaceStatus {
     state: HealthState; rating: string; tier: string | null; tierLimit: number | null; halved: boolean; capRiseBlocked: boolean;
     limitText: string | null; okAt: string | null; checkedAt: string | null; error: string | null;
   } | null;
+  /** 2026-11-02: the cold guard (src/lib/whatsappColdGuard.ts). Absent on an older deploy. */
+  coldGuard?: {
+    readable: boolean;
+    stop: { at: string | null; reason: string } | null;
+    markets: Record<string, { go: boolean; probing: boolean; code: string | null; reason: string | null; retryAt: string | null; used: number; cap: number | null }>;
+  } | null;
   autoPausedAt?: string | null;
   autoPauseReason?: string | null;
   perPersonToday?: Array<{ user_id: string | null; name: string; sent: number }> | null;
@@ -79,6 +85,7 @@ export function WhatsAppPaceSettings({ team, onSaved }: { team: PaceStatus | nul
   const [gap, setGap] = useState('');
   const [personDefault, setPersonDefault] = useState('');
   const [people, setPeople] = useState<Record<string, string>>({});
+  const [clearing, setClearing] = useState(false);
 
   // Fill the form from the server each time it opens (never from a stale edit).
   useEffect(() => {
@@ -91,6 +98,20 @@ export function WhatsAppPaceSettings({ team, onSaved }: { team: PaceStatus | nul
 
   if (!team) return null;
   const perPerson = team.perPersonToday ?? null;
+
+  /* The manual override of the cold stop. Recorded on the pause log with who pressed it. */
+  const clearStop = async () => {
+    setClearing(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('process-whatsapp-queue', { body: { mode: 'clear_cold_stop' } });
+      if (error) throw error;
+      if (!data?.ok) throw new Error(String(data?.error ?? 'refused'));
+      toast({ title: 'Cold WhatsApp can send again', description: 'It starts from the next queue tick, with a probe of 3.' });
+      await onSaved();
+    } catch (e) {
+      toast({ title: 'Not cleared', description: (e as Error)?.message ?? 'Failed', variant: 'destructive' });
+    } finally { setClearing(false); }
+  };
 
   const save = async () => {
     const checks = [
@@ -127,6 +148,19 @@ export function WhatsAppPaceSettings({ team, onSaved }: { team: PaceStatus | nul
           <strong>The queue paused itself.</strong> {team.autoPauseReason}
         </Callout>
       )}
+      {team.coldGuard?.stop && (
+        <Callout tone="red" icon={AlertTriangle} className="px-3 py-2 text-[11px]" testId="queue-cold-stop">
+          <strong>All cold WhatsApp is stopped.</strong> {team.coldGuard.stop.reason} Replies inside 24 hours still go.
+          <Button size="sm" variant="outline" className="ml-2 h-6 text-[11px]" onClick={() => void clearStop()} disabled={clearing} data-testid="queue-cold-stop-clear">
+            {clearing ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Clear and restart'}
+          </Button>
+        </Callout>
+      )}
+      {team.coldGuard && !team.coldGuard.readable && (
+        <Callout tone="red" icon={AlertTriangle} className="px-3 py-2 text-[11px]" testId="queue-cold-unreadable">
+          Today’s cold WhatsApp limits could not be read, so nothing cold is going until they can.
+        </Callout>
+      )}
       {team.numberHealth && <NumberHealthLine health={team.numberHealth} cap={team.pace?.dailyCap ?? team.cap} setCap={team.pace?.setCap} />}
       {perPerson && perPerson.length > 0 && (
         <p className="text-[11px] text-muted-foreground" data-testid="queue-per-person">
@@ -136,14 +170,14 @@ export function WhatsAppPaceSettings({ team, onSaved }: { team: PaceStatus | nul
       )}
       <button type="button" onClick={() => setOpen((v) => !v)} className="flex items-center gap-1 text-[11px] font-medium text-muted-foreground hover:text-foreground" data-testid="queue-pace-toggle">
         {open ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
-        Limits: {team.pace?.dailyCap ?? team.cap} a day for the team · at least {team.pace?.gapFloorMin ?? DEFAULT_GAP_FLOOR_MIN} min apart
+        Limits: {team.sentToday} of {team.pace?.dailyCap ?? team.cap} cold today for the team · at least {team.pace?.gapFloorMin ?? DEFAULT_GAP_FLOOR_MIN} min apart
         {team.pace?.personDefault != null ? ` · ${team.pace.personDefault} a day per salesperson` : ''}
       </button>
       {open && (
         <div className="rounded-xl bg-muted/30 p-3 ring-1 ring-inset ring-border/40 space-y-3 text-xs" data-testid="queue-pace-form">
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
             <label className="flex flex-col gap-1">
-              <span className="text-muted-foreground">Team daily cap (0–{MAX_DAILY_CAP})</span>
+              <span className="text-muted-foreground">Team cold cap a day (0–{MAX_DAILY_CAP})</span>
               <Input value={cap} onChange={(e) => setCap(e.target.value)} inputMode="numeric" placeholder={`Default ${DEFAULT_DAILY_CAP}`} data-testid="pace-cap" />
             </label>
             <label className="flex flex-col gap-1">
@@ -171,7 +205,8 @@ export function WhatsAppPaceSettings({ team, onSaved }: { team: PaceStatus | nul
           <p className="text-[11px] text-muted-foreground">
             One WhatsApp number sends for the whole team. Meta limits how many new people a number may message in 24 hours by its messaging tier;
             {' '}the cap can never go above {MAX_DAILY_CAP}. If the number is still on the 250 starter tier in Meta, set the cap to 250 or less.
-            {' '}The queue sends at most one message a minute between 7:00 and 21:30, so about 800 is the most it can reach in a day.
+            {' '}The cap counts every cold message, from the queue and from people. Replies inside 24 hours are not counted. Each country’s own cap sits inside it, and the UK uses the rest.
+            {' '}Cold messages go one at a time, 1 to 2 minutes apart, and the first 3 after a window opens wait for their delivery reports.
           </p>
           <div className="flex justify-end">
             <Button size="sm" className="h-8 text-xs" onClick={() => void save()} disabled={saving} data-testid="pace-save">

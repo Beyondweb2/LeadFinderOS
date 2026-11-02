@@ -3,8 +3,8 @@
    cannot be read never slows or pauses, only blocks rises. The existing pace rules are untouched. */
 import { readFileSync } from 'node:fs';
 import {
-  HEALTH_STALE_AFTER_MIN, RED_PAUSE_REASON, capRiseRefused, healthLimitedCap, healthVerdict, normaliseRating,
-  shouldPauseForRating, tierLimit, tierWords,
+  HEALTH_STALE_AFTER_MIN, capRiseRefused, healthLimitedCap, healthVerdict, normaliseRating,
+  tierLimit, tierWords,
 } from '../src/lib/whatsappNumberHealth.ts';
 
 let failures = 0;
@@ -33,17 +33,13 @@ ok(capRiseRefused(400, 401, y) && !capRiseRefused(400, 400, y) && !capRiseRefuse
 console.log('red');
 const r = at('RED');
 ok(r.state === 'red' && r.halveCap && r.blockCapRise, 'red halves and blocks rises');
-ok(shouldPauseForRating('GREEN', 'RED') && shouldPauseForRating(null, 'RED') && shouldPauseForRating('YELLOW', 'RED'), 'turning red pauses');
-ok(!shouldPauseForRating('RED', 'RED'), 'staying red does not re-pause (a person resumed it)');
-ok(!shouldPauseForRating('RED', 'YELLOW') && !shouldPauseForRating('GREEN', 'UNKNOWN'), 'nothing else pauses');
-ok(/Resume/.test(RED_PAUSE_REASON), 'the red reason tells the person to resume');
+/* 2026-11-02: RED warns and halves; it no longer pauses (scripts/whatsapp-cold-guard.test.ts holds the tripwire). */
 
 console.log('cannot be read');
 for (const [why, v] of [['never read', healthVerdict(null, now)], ['stale', at('GREEN', stale)], ['UNKNOWN', at('UNKNOWN')], ['bad date', at('GREEN', 'nope')]] as const) {
   ok(v.state === 'unreadable' && !v.halveCap && v.blockCapRise, `${why}: never slows sending, only blocks rises`);
   ok(healthLimitedCap(800, v) === 800, `${why}: cap untouched`);
 }
-ok(!shouldPauseForRating(null, 'UNKNOWN'), 'unreadable never pauses');
 
 console.log('tiers');
 ok(tierLimit('TIER_250') === 250 && tierLimit('TIER_1K') === 1000 && tierLimit('TIER_10K') === 10000 && tierLimit('TIER_UNLIMITED') === null && tierLimit(null) === null, 'tier words → limits');
@@ -62,8 +58,7 @@ ok(!/\.send|messages`/.test(w) && !/console\.(log|error|warn)\([^)]*token/i.test
 ok(/if \(mode === "probe"\) return json/.test(w), 'probe answers before any write');
 ok(/if \(!reading\.ok\) \{[\s\S]*?meta_health_error: reading\.error[\s\S]*?return json/.test(w), 'a failed read stores only the failure');
 ok(!/if \(!reading\.ok\) \{[^}]*paused/.test(w), 'a failed read never pauses');
-ok(/shouldPauseForRating\(prevRating, reading\.rating\) && prev\?\.paused !== true/.test(w), 'red pauses once, through the one rule');
-ok(/pause_changed_source: "auto"/.test(w), 'the red pause is logged as the queue pausing itself');
+ok(!/paused: true/.test(w) && /tripwireReason\(/.test(w), 'the watcher pauses nothing; it latches the cold stop through the one rule');
 ok(/\[functions\.whatsapp-number-health\]\nverify_jwt = false/.test(read('supabase/config.toml')), 'config.toml lists the watcher');
 const m = read('supabase/migrations/20261119090000_whatsapp_number_health.sql');
 ok(/enable row level security/.test(m) && /revoke all on public\.whatsapp_number_health_log from anon, authenticated/.test(m), 'the log is service role only');

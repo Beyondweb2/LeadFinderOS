@@ -27,6 +27,7 @@ import {
   type AuditRowForStatus, type QueueAuditStatus,
 } from '@/lib/queueAuditStatus';
 import { WA_TEMPLATE_REQS } from '@/lib/whatsappTemplates';
+import { cooldownHeadline, inCooldown, type CooldownSetting } from '@/lib/whatsappColdGuard';
 import {
   announceQueueChanged, batchHeadline, countryOffChip, countryOffNote, deriveQueue, NEEDS_STATE_CHIP, QUEUE_ROW_STATE, rowCountryOff, rowNeedsState,
   type QueueBatch, type QueueRow, type QueueRowState,
@@ -447,6 +448,14 @@ export function WhatsAppQueuePanel() {
         <Callout tone="amber" className="mt-2 px-3 py-2 text-[11px]" testId="queue-country-off">
           <strong>{offNote.title}</strong> {offNote.why}
           {offNote.detail && <span className="block text-muted-foreground" data-testid="queue-country-off-detail">{offNote.detail}</span>}
+        </Callout>
+      )}
+
+      {/* 2026-11-02: this country is resting after failed sends (src/lib/whatsappColdGuard.ts). Both roles see why and until when. */}
+      {inCooldown(countrySettings[tab] as CooldownSetting) && (
+        <Callout tone="amber" className="mt-2 px-3 py-2 text-[11px]" testId="queue-country-cooldown">
+          <strong>{cooldownHeadline(tab, countrySettings[tab] as CooldownSetting)}.</strong> Leads stay queued and can still be added.
+          {(countrySettings[tab] as CooldownSetting).whatsapp_cooldown_reason && <span className="block text-muted-foreground">{(countrySettings[tab] as CooldownSetting).whatsapp_cooldown_reason}</span>}
         </Callout>
       )}
 

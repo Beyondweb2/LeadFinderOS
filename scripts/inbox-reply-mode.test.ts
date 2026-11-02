@@ -18,11 +18,12 @@ const strip = (s: string) => s.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\
 
 console.log('1. the three modes');
 {
-  ok(JSON.stringify(INBOX_REPLY_MODES) === '["manual","draft","auto"]', 'exactly Manual, Draft for approval, Auto');
-  ok(INBOX_REPLY_MODE_LABELS.manual === 'Manual' && INBOX_REPLY_MODE_LABELS.draft === 'Draft for approval' && INBOX_REPLY_MODE_LABELS.auto === 'Auto', 'the labels Paul named');
+  ok(JSON.stringify(INBOX_REPLY_MODES) === '["manual","draft"]', 'exactly Manual and Draft for approval (Auto retired 2026-11-02)');
+  ok(INBOX_REPLY_MODE_LABELS.manual === 'Manual' && INBOX_REPLY_MODE_LABELS.draft === 'Draft for approval', 'the labels Paul named');
   for (const raw of [null, undefined, '', 'send', 'audit_only', 'AUTO', 7]) ok(parseInboxReplyMode(raw) === 'manual', `unknown ${JSON.stringify(raw)} reads as Manual (nothing happens)`);
-  ok(modeMayAutoSend('auto') && !modeMayAutoSend('draft') && !modeMayAutoSend('manual'), 'only Auto may ever send by itself');
-  ok(modeDrafts('draft') && modeDrafts('auto') && !modeDrafts('manual'), 'Manual drafts nothing');
+  ok(!modeMayAutoSend('draft') && !modeMayAutoSend('manual') && !modeMayAutoSend(parseInboxReplyMode('auto')), 'an AI reply never sends itself, a leftover Auto included');
+  ok(parseInboxReplyMode('auto') === 'draft', 'a stored Auto only drafts');
+  ok(modeDrafts('draft') && !modeDrafts('manual'), 'Manual drafts nothing');
 }
 
 console.log('2. the bot answer');
@@ -114,7 +115,7 @@ console.log('7. the wiring');
   ok(/theirMessages: theirMessagesSinceUs\(thread\)/.test(DRAIN) && /recent\.error\) return "ai_facts_unreadable"/.test(DRAIN), 'the send-time check reads their messages again (unreadable = dropped)');
   const UI = read('src/components/InboxReplyModeControl.tsx');
   ok(/INBOX_REPLY_MODES\.map/.test(UI) && !/'send'|set_first_reply_mode|Audit and reply/.test(strip(UI)), 'the control offers the three modes and nothing that sends the old template reply');
-  ok(/\{mode === 'auto' && auto && <AutoSendSwitches/.test(UI), 'the per-type switches show only under Auto');
+  ok(!/AutoSendSwitches/.test(UI), 'the per-type switches are gone from the screen');
   ok(/action: 'set_mode', mode: next/.test(UI) && /invalidateQueries\(\{ queryKey: QUEUE_STATUS_KEY \}\)/.test(UI), 'it saves through set_mode and refreshes the shared status');
   const SET = read('src/components/InboxSettings.tsx');
   ok(/<InboxReplyModeControl channel=\{channel\} \/>/.test(SET) && !/AutoReplyToggle|AiRepliesToggle/.test(strip(SET)), 'Settings holds the one control; the two old controls are gone');

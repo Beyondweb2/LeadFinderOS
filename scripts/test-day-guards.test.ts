@@ -99,13 +99,13 @@ console.log("── Job 2: CSV import — messy real-world files ──");
 console.log("── Job 3: WhatsApp cap, pace and auto-pause ──");
 {
   const P = await import("../src/lib/whatsappPace.ts");
-  ok(P.DEFAULT_DAILY_CAP === 800 && P.MAX_DAILY_CAP === 1000 && P.DEFAULT_GAP_FLOOR_MIN === 1, "defaults: 800 a day (was 400), never above 1,000, 1 minute floor (unchanged)");
+  ok(P.DEFAULT_DAILY_CAP === 100 && P.MAX_DAILY_CAP === 1000 && P.DEFAULT_GAP_FLOOR_MIN === 1, "defaults: 100 cold a day (2026-11-02), never above 1,000, 1 minute floor (unchanged)");
   const e0 = P.effectivePace(null);
-  ok(e0.dailyCap === 800 && e0.gapFloorMin === 1 && e0.personDefault === null, "nothing stored → the defaults, no per-person limit");
-  ok(P.effectivePace({ daily_cap: 5000 }).dailyCap === 800, "a stored cap above Meta's ceiling is never used (falls back to the default)");
+  ok(e0.dailyCap === 100 && e0.gapFloorMin === 1 && e0.personDefault === null, "nothing stored → the defaults, no per-person limit");
+  ok(P.effectivePace({ daily_cap: 5000 }).dailyCap === 100, "a stored cap above Meta's ceiling is never used (falls back to the default)");
   ok(P.effectivePace({ daily_cap: 0 }).dailyCap === 0, "a cap of 0 is a real setting (send nothing)");
   ok(P.effectivePace({ daily_cap: 300, min_gap_minutes: 3, person_daily_limit_default: 40 }).gapFloorMin === 3, "stored values are used when in range");
-  ok(P.effectivePace({ min_gap_minutes: 0 }).gapFloorMin === 1 && P.effectivePace({ daily_cap: 2.5 }).dailyCap === 800, "out-of-range or fractional values fall back");
+  ok(P.effectivePace({ min_gap_minutes: 0 }).gapFloorMin === 1 && P.effectivePace({ daily_cap: 2.5 }).dailyCap === 100, "out-of-range or fractional values fall back");
   ok(P.checkPaceValue("daily_cap", "1001").ok === false && P.checkPaceValue("daily_cap", "-1").ok === false, "the admin's cap is refused above 1,000 or below 0 (never clamped)");
   const okCap = P.checkPaceValue("daily_cap", " 650 ");
   ok(okCap.ok === true && okCap.value === 650, "a typed cap is read as a whole number");

@@ -6,13 +6,12 @@ import { invokeEdge, edgeErrorMessage } from '@/lib/edgeInvoke';
 import { QUEUE_STATUS_KEY } from '@/lib/queueStatus';
 import { Switch } from '@/components/ui/switch';
 import { AiDraftOutcomes } from '@/components/AiDraftOutcomes';
-import { AutoSendSwitches, type AutoSendSettings } from '@/components/AutoSendSwitches';
 import {
   INBOX_REPLY_MODES, INBOX_REPLY_MODE_HINTS, INBOX_REPLY_MODE_LABELS, INBOX_REPLY_MODE_QUESTION, parseInboxReplyMode, pitchNeedsAuditHint,
   REPLY_AUDIT_HINT, REPLY_AUDIT_OFF_PITCH_HINT, REPLY_AUDIT_QUESTION, type InboxReplyMode,
 } from '@/lib/inboxReplyMode';
 
-type SettingsReply = { ok: true; mode?: string; reply_audit?: boolean; auto_send?: AutoSendSettings };
+type SettingsReply = { ok: true; mode?: string; reply_audit?: boolean };
 
 /* THE INBOX REPLY SETTINGS (2026-10-21, Paul; split 2026-10-22). TWO controls in Inbox Settings:
      (a) "Audit after first reply" On / Off — the website check + audit on a first reply (whatsapp_outreach_state.reply_audit_enabled).
@@ -26,13 +25,12 @@ export function InboxReplyModeControl({ channel }: { channel: 'whatsapp' | 'sms'
   const [visible, setVisible] = useState(false);
   const [mode, setMode] = useState<InboxReplyMode>('manual');
   const [auditOn, setAuditOn] = useState<boolean | null>(null);
-  const [auto, setAuto] = useState<AutoSendSettings | null>(null);
   const [saving, setSaving] = useState<null | 'mode' | 'audit'>(null);
 
   useEffect(() => {
     let live = true;
     invokeEdge<SettingsReply>('ai-reply-drafts', { action: 'settings' })
-      .then((r) => { if (live) { setMode(parseInboxReplyMode(r.mode)); setAuditOn(typeof r.reply_audit === 'boolean' ? r.reply_audit : null); setAuto(r.auto_send ?? null); setVisible(true); } })
+      .then((r) => { if (live) { setMode(parseInboxReplyMode(r.mode)); setAuditOn(typeof r.reply_audit === 'boolean' ? r.reply_audit : null); setVisible(true); } })
       .catch(() => { /* not an admin, or not deployed yet: stay hidden */ });
     return () => { live = false; };
   }, []);
@@ -48,15 +46,10 @@ export function InboxReplyModeControl({ channel }: { channel: 'whatsapp' | 'sms'
       const r = await invokeEdge<SettingsReply>('ai-reply-drafts', { action: 'set_mode', mode: next });
       const saved = parseInboxReplyMode(r.mode);
       setMode(saved);
-      if (r.auto_send) setAuto(r.auto_send);
       void qc.invalidateQueries({ queryKey: QUEUE_STATUS_KEY });
-      const on = r.auto_send?.intents.length ?? 0;
       toast({
         title: `AI replies: ${INBOX_REPLY_MODE_LABELS[saved]}`,
-        description: saved === 'auto'
-          ? (on ? `${on} reply ${on === 1 ? 'type is' : 'types are'} switched on to send by themselves. Everything else waits for your approval.` : 'No reply type is switched on yet, so nothing sends by itself until you switch one on below.')
-          : `${INBOX_REPLY_MODE_HINTS[saved]}${prev === 'auto' ? ' Any automatic reply still waiting was cancelled.' : ''}`,
-        variant: saved === 'auto' ? 'destructive' : undefined,
+        description: INBOX_REPLY_MODE_HINTS[saved],
       });
     } catch (e) {
       setMode(prev);
@@ -106,11 +99,10 @@ export function InboxReplyModeControl({ channel }: { channel: 'whatsapp' | 'sms'
               <button key={m} type="button" role="radio" aria-checked={lit} disabled={saving !== null} onClick={() => void pick(m)}
                 data-testid={`inbox-reply-mode-${m}`}
                 className={cn('w-full rounded-md border px-3 py-2 text-left transition disabled:opacity-60',
-                  lit ? (m === 'auto' ? 'border-destructive bg-destructive/10' : 'border-primary bg-primary/5') : 'border-input hover:bg-muted/50')}>
+                  lit ? 'border-primary bg-primary/5' : 'border-input hover:bg-muted/50')}>
                 <span className="flex items-center gap-2 text-sm font-medium">
-                  <span className={cn('h-3 w-3 shrink-0 rounded-full border', lit ? (m === 'auto' ? 'border-destructive bg-destructive' : 'border-primary bg-primary') : 'border-muted-foreground/50')} />
+                  <span className={cn('h-3 w-3 shrink-0 rounded-full border', lit ? 'border-primary bg-primary' : 'border-muted-foreground/50')} />
                   {INBOX_REPLY_MODE_LABELS[m]}
-                  {m === 'auto' && <span className="rounded bg-destructive/15 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-destructive">Can send by itself</span>}
                 </span>
                 <span className="mt-0.5 block pl-5 text-xs text-muted-foreground">{INBOX_REPLY_MODE_HINTS[m]}</span>
               </button>
@@ -124,7 +116,6 @@ export function InboxReplyModeControl({ channel }: { channel: 'whatsapp' | 'sms'
       {channel === 'sms' && (
         <p className="text-xs text-muted-foreground" data-testid="sms-reply-note">Texts are never drafted or sent automatically. On a text reply only the audit runs, when {REPLY_AUDIT_QUESTION} is on.</p>
       )}
-      {mode === 'auto' && auto && <AutoSendSwitches initial={auto} />}
       <div className="flex justify-end"><AiDraftOutcomes /></div>
     </div>
   );

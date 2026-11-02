@@ -12,6 +12,8 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { isInternalCall, leadAccess, pickRole, type Actor } from "../_shared/access.ts";
 import { checkSuppressed } from "../_shared/suppression.ts";
 import { loadCountrySettings } from "../_shared/country-settings.ts";
+import { claimColdSlot, coldGateFor, loadColdFacts } from "../_shared/cold-whatsapp-gate.ts";
+import { coldMarketOfPhone } from "../../../src/lib/whatsappColdGuard.ts";
 import { loadReplyHours, SCHEDULED_COLUMNS, SCHEDULED_JOB_HEADER, type ScheduledRow } from "../_shared/inbox-schedule.ts";
 import { drainTick, senderOutcome, type DueRow, type SendOutcome } from "../_shared/inbox-scheduled-drain.ts";
 import { sendVoiceNote } from "../_shared/voice-note-send.ts";
@@ -123,6 +125,18 @@ Deno.serve(async (req) => {
         if (error) throw new Error(`due read failed: ${error.message}`);
         for (const r of (data ?? []) as ScheduledRow[]) full.set(r.id, r);
         return (data ?? []) as DueRow[];
+      },
+      /* ⛔ A COLD TEMPLATE TAKES THE ONE SLOT (2026-11-02). Facts are read fresh each time: the last send moved them. */
+      async coldTurn(row) {
+        const now = new Date();
+        const soon = new Date(now.getTime() + 2 * 60_000).toISOString();
+        const facts = await loadColdFacts(service, countrySettings, now);
+        if (!facts) return { go: false, retryAtIso: soon };
+        const market = coldMarketOfPhone(row.phone);
+        if (!market) return { go: true };
+        const v = await coldGateFor(service, facts, market, now);
+        if (!v.go) return { go: false, retryAtIso: (v.retryAt ?? new Date(now.getTime() + 15 * 60_000)).toISOString() };
+        return (await claimColdSlot(service, now)) ? { go: true } : { go: false, retryAtIso: soon };
       },
       async suppression(row) {
         const s = await checkSuppressed(service, { phone: `+${row.phone}`, leadId: row.lead_id });

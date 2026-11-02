@@ -7,6 +7,8 @@
 //   1. facts     — suppression (fail closed: unreadable = wait), the lead (archived / stopped), the newest message from them on
 //                  either channel, the WhatsApp 24 hours, an earlier unsent row in the same conversation;
 //   2. decision  — drainDecision (src/lib/inboxSendWindow.ts): cancel / hold (Needs you) / wait / send;
+//   2b. cold     — a cold template asks the cold guard (src/lib/whatsappColdGuard.ts): no slot, a cap or a cool-down moves the row to
+//                  when asking again makes sense. Never a burst at the window's opening: on 2 Nov they went 4 seconds apart.
 //   3. claim     — scheduled → sending, a conditional write only one tick can win;
 //   4. send      — through the channel's own sender, AS the person who queued it (every guard runs again there);
 //   5. record    — sent (with the message id) or failed (with the sender's own reason). A failure is never retried
@@ -17,6 +19,7 @@ import {
   type CancelReason, type HoldReason, type InboxChannel, type ReplyHours, type ScheduledKind,
 } from "../../../src/lib/inboxSendWindow.ts";
 import type { CountrySettings } from "../../../src/lib/outreachMarkets.ts";
+import { isColdOutreachTemplate } from "../../../src/lib/coldOutreach.ts";
 
 export const MAX_SENDS_PER_TICK = 10;
 export const PACE_MS = 2_000;
@@ -30,6 +33,8 @@ export interface DueRow {
   tz?: string | null;
   /** Level 2: an automatic AI reply (its draft). Null / absent = a person queued it. */
   ai_draft_id?: string | null;
+  /** The template a 'template' row sends. */
+  template_name?: string | null;
 }
 
 /** Why an automatic AI reply was dropped (its draft then waits for a person). Stored as cancel_reason. */
@@ -54,6 +59,9 @@ export interface DrainDeps {
   /** Level 2 (src/lib/aiAutoSend.ts): an automatic reply's own re-check just before it goes — null = still allowed, else why
    *  it is dropped. An absent dep drops every automatic row (fails towards not sending). */
   autoRecheck?(row: DueRow): Promise<AutoCancelReason | null>;
+  /** A cold template's turn (src/lib/whatsappColdGuard.ts). go = the slot is taken for it. Otherwise it waits until retryAt. An absent dep
+   *  waits a few minutes: a cold send never passes without being asked. */
+  coldTurn?(row: DueRow): Promise<{ go: true } | { go: false; retryAtIso: string }>;
   claim(id: string): Promise<boolean>;
   send(row: DueRow): Promise<SendOutcome>;
   finish(id: string, outcome: SendOutcome): Promise<void>;
@@ -100,6 +108,11 @@ export async function drainTick(deps: DrainDeps): Promise<TickReport> {
       let why: AutoCancelReason | null = "ai_recheck_unavailable";
       try { why = deps.autoRecheck ? await deps.autoRecheck(row) : "ai_recheck_unavailable"; } catch { why = "ai_recheck_failed"; }
       if (why) { await deps.cancel(row.id, why); report.cancelled++; continue; }
+    }
+    /* The row's real template decides; WhatsApp only: the text queue has its own rules. */
+    if (row.channel === "whatsapp" && row.kind === "template" && isColdOutreachTemplate(row.template_name)) {
+      const turn = deps.coldTurn ? await deps.coldTurn(row) : { go: false as const, retryAtIso: new Date(at.getTime() + 5 * 60_000).toISOString() };
+      if (!turn.go) { await deps.reschedule(row.id, turn.retryAtIso); report.waiting++; continue; }
     }
     if (!(await deps.claim(row.id))) continue;
     if (sends > 0) await deps.sleep(PACE_MS);

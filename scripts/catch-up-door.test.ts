@@ -36,7 +36,7 @@ console.log('3. ai-reply-drafts: internal only, rewrite an open draft, send noth
   ok(s.includes('if (action === "catch_up_regenerate") return internal ? await handleCatchUpRegenerate(service, body) : json({ ok: false, error: "not_authorised" }, 401);'), 'refused 401 unless CRON_SECRET + x-internal-job');
   const a = s.indexOf('async function handleCatchUpRegenerate');
   const fn = s.slice(a, s.indexOf('/** "Draft reply"', a));
-  ok(fn.includes('paidMode(service)) !== "running"') && fn.includes('modeMayAutoSend(parseInboxReplyMode(st.ai_reply_mode))'), 'refused while paused, or while the Inbox mode is Auto or unreadable');
+  ok(fn.includes('paidMode(service)) !== "running"') && fn.includes('st.ai_reply_mode === "auto"'), 'refused while paused, or while the Inbox mode is Auto or unreadable');
   ok(fn.includes('regenerateOpenDraft('), 'it goes through the same function the Regenerate button uses');
   ok(!/send-whatsapp|status: "sent"|\.insert\(|whatsapp_messages|sendMessage|fetch\(/.test(fn), 'the door body sends nothing and creates nothing');
   const reg = s.slice(s.indexOf('async function regenerateOpenDraft'), s.indexOf('/* ⛔ THE CATCH-UP DOOR'));
