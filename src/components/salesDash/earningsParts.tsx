@@ -12,7 +12,7 @@ import { cn } from '@/lib/utils';
 import { Empty, Panel, TONE, gbp, type Tone } from '@/components/salesDash/ui';
 import { FINDABLE_CONTINUING_GBP } from '@/lib/findableOffer';
 import {
-  COMMISSION_RECURRING_COUNT, COMMISSION_RECURRING_COUNT_V3, COMMISSION_RECURRING_RATE, MONTHLY_TIERS, londonDayOf,
+  COMMISSION_RECURRING_COUNT, COMMISSION_RECURRING_RATE, MONTHLY_TIERS, londonDayOf,
   type CommissionLine,
 } from '@/lib/commission';
 import type { EarningsResponse } from '@/hooks/useEarnings';
@@ -22,6 +22,8 @@ import type { EarningsResponse } from '@/hooks/useEarnings';
    admin's payout record, the per-salesperson table; plus the page's recent wins and the
    plain commission rules (the week-by-week chart went 2026-10-02). Every figure is a commission line (src/lib/commission.ts) — nothing
    here is counted a second way. */
+
+import { COMMISSION_PAYABLE_DAYS_V7 } from '@/lib/commissionConfig';
 
 const pct = (r: number) => `${Math.round(r * 100)}%`;
 const day = (iso: string) => new Date(iso.length === 10 ? `${iso}T12:00:00Z` : iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'Europe/London' });
@@ -33,7 +35,7 @@ const STATUS: Record<CommissionLine['status'], { label: string; tone: Tone }> = 
   reversed: { label: 'Reversed', tone: 'red' },
   not_commissionable: { label: 'No commission', tone: 'grey' },
   /* v3 terms (2026-10-05): the initial commission waits for the client's Approval Date. */
-  pending: { label: 'Pending · until approval', tone: 'amber' },
+  pending: { label: 'Pending', tone: 'amber' },
   cancelled: { label: 'Cancelled · refunded', tone: 'red' },
 };
 
@@ -81,13 +83,13 @@ export function RecentWins({ lines, clients, todayIso = new Date().toISOString()
 export function CommissionExplainer() {
   const rules: { icon: typeof Info; text: ReactNode }[] = [
     { icon: Layers3, text: <>Each sale keeps the rate it earned — reaching sale 13 never changes sales 1–12. The count starts again on the 1st of each month (UK time).</> },
-    { icon: Repeat, text: <>Monthly payments: {pct(COMMISSION_RECURRING_RATE)} of each of the first {COMMISSION_RECURRING_COUNT_V3} successful £99 monthly payments, on Build and Optimise alike. Nothing on payment {COMMISSION_RECURRING_COUNT_V3 + 1} onwards or on the £{FINDABLE_CONTINUING_GBP} Continuing Service. A failed, refunded or charged-back payment earns nothing. (Sales made before the current client agreement keep the next {COMMISSION_RECURRING_COUNT}.)</> },
-    { icon: ShieldCheck, text: <>First-payment commission is Pending until the client's Approval Date — the day after their refund window closes (7 days on the current agreement) — and your rate for it is provisional until then. A refund inside the window cancels it; a refund after it does not.</> },
-    { icon: CalendarCheck2, text: <>Paid on the first working day of the next month. A refund or chargeback takes back the commission on that money, and a refunded sale stops counting towards your rate.</> },
+    { icon: Repeat, text: <>Monthly payments: {pct(COMMISSION_RECURRING_RATE)} of each of the next {COMMISSION_RECURRING_COUNT} successful monthly payments, whatever the plan’s monthly amount. Pay in full has none, and nothing on hosting (£{FINDABLE_CONTINUING_GBP}). A failed, refunded or charged-back payment earns nothing. (Sales made before the current client agreement keep the next {COMMISSION_RECURRING_COUNT}.)</> },
+    { icon: ShieldCheck, text: <>First-payment commission becomes payable when the client’s guarantee window closes: {COMMISSION_PAYABLE_DAYS_V7} days after their four-week audit results are sent. Until they are sent it shows as waiting for the four-week audit. If the client claims a refund, it is never payable.</> },
+    { icon: CalendarCheck2, text: <>Monthly commission is payable on the 1st of the month after each payment. Any refund or chargeback earns nothing, and one after you were paid comes off your next commission. A refunded sale stops counting towards your rate.</> },
     { icon: ShieldCheck, text: <>Only money the client actually paid counts. Monthly commission is earned while you work with Findable; if that ends, everything you earned before stays yours.</> },
   ];
   return (
-    <Panel collapseKey="sales.commission-rules" defaultOpen={false} title="How your commission works" icon={Info} tone="blue" hint="The rules behind every number on this page." summary={`${MONTHLY_TIERS.map((z) => pct(z.rate)).join(' · ')} of the first payment, plus ${pct(COMMISSION_RECURRING_RATE)} of the first ${COMMISSION_RECURRING_COUNT_V3} £99 monthly payments — open for the rules.`}>
+    <Panel collapseKey="sales.commission-rules" defaultOpen={false} title="How your commission works" icon={Info} tone="blue" hint="The rules behind every number on this page." summary={`${MONTHLY_TIERS.map((z) => pct(z.rate)).join(' · ')} of the first payment, plus ${pct(COMMISSION_RECURRING_RATE)} of the next ${COMMISSION_RECURRING_COUNT} monthly payments. Open for the rules.`}>
       <ul className="space-y-2.5" data-testid="commission-explainer">
         {rules.map((r, i) => (
           <li key={i} className="flex items-start gap-3 text-[13px] leading-relaxed">
@@ -122,7 +124,7 @@ export function PaymentsTable({ lines, bizOf, sellerOf }: { lines: CommissionLin
                   <td className="px-2 py-2 text-right tabular-nums text-muted-foreground">{pct(l.rate)}</td>
                   <td className={cn('px-2 py-2 text-right font-semibold tabular-nums', l.commission > 0 ? 'text-emerald-600 dark:text-emerald-300' : l.commission < 0 ? 'text-red-600 dark:text-red-300' : 'text-muted-foreground')}>{l.commission < 0 ? `−${gbp(-l.commission)}` : gbp(l.commission)}</td>
                   <td className="px-2 py-2"><span className={cn('rounded-full px-2 py-0.5 text-[11px] font-semibold', TONE[STATUS[l.status].tone].soft, TONE[STATUS[l.status].tone].text)}>{STATUS[l.status].label}</span></td>
-                  <td className="whitespace-nowrap px-2 py-2 text-right text-muted-foreground">{l.status === 'not_commissionable' ? '—' : day(l.payoutDate)}</td>
+                  <td className="whitespace-nowrap px-2 py-2 text-right text-muted-foreground">{l.status === 'not_commissionable' ? '—' : l.payoutDate ? day(l.payoutDate) : 'After four-week audit'}</td>
                 </tr>
               ))}
             </tbody>

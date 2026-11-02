@@ -1,15 +1,24 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { refusalBody, resolveActor } from "../_shared/access.ts";
 import { recordDenial } from "../_shared/protection.ts";
-import { loadEarnings } from "../_shared/earnings.ts";
+import { loadEarnings, owedFrom } from "../_shared/earnings.ts";
 import { recordLedger, stripeIdOf, type LedgerWrite } from "../_shared/payment-ledger.ts";
 import { londonDayOf } from "../../../src/lib/commission.ts";
+import { MARK_PAID_REFUSAL_WORDS, paidHistory, planMarkPaid } from "../../../src/lib/commissionOwed.ts";
+import { MARK_PAID_UNDO_HOURS } from "../../../src/lib/commissionConfig.ts";
+import { closeInfoMissing, cleanHandoff } from "../../../src/lib/salesHandoff.ts";
+import { monthlyDiffers, salePlanParts } from "../../../src/lib/salePlan.ts";
 
 // sales-earnings — commission from the payment ledger (Sales Experience, 2026-09-28; docs/sales-experience.md §4).
 //
 // Modes:
 //   summary (default, both roles) — a salesperson ALWAYS gets their own earnings (`person` ignored);
 //     the admin may ask for one person or everyone.
+//   owed (both roles; docs/commission-owed.md) — what is owed, by person, with countdowns and the paid history. A salesperson
+//     ALWAYS gets only their own, whatever they send. The admin also gets the names and New paid clients.
+//   mark_paid (admin) — record a bank transfer Paul made: { person } (everything due now) or { item_key }, with { expected_total }.
+//     The server works the money out again from the ledger; the browser's figure only has to agree. Nothing moves money here.
+//   undo_paid (admin) — { batch_id }, for a payment this admin just recorded.
 //   record_payout (admin) — record a payout actually made: { user_id, period_month: "YYYY-MM", amount_gbp, paid_at, note }.
 //   backfill (admin) — rebuild ledger rows from Stripe's own history. { apply: false } (the default) only
 //     REPORTS what it would write; { apply: true } writes (idempotent — unique by the Stripe object).
@@ -145,6 +154,48 @@ async function backfill(service: Service, apply: boolean, sinceIso: string) {
   };
 }
 
+async function teamNames(service: Service): Promise<Record<string, string>> {
+  const { data, error } = await service.from("team_members").select("user_id, display_name");
+  if (error) throw new Error(error.message);
+  return Object.fromEntries(((data ?? []) as { user_id: string; display_name: string | null }[]).filter((t) => t.display_name).map((t) => [t.user_id, t.display_name as string]));
+}
+
+/** NEW PAID CLIENTS, newest first, for the admin home. Money from the ledger where it holds the sale, and Stripe's plan over the pick. */
+async function newPaidClients(service: Service) {
+  const { data: leads, error } = await service.from("outreach_leads")
+    .select("id, business_name, amount_paid, payment_date, status, sold_by_user_id, payment_plan, sales_handoff")
+    .gt("amount_paid", 0).order("payment_date", { ascending: false, nullsFirst: false }).limit(50);
+  if (error) throw new Error(error.message);
+  const rows = (leads ?? []) as Obj[];
+  const ids = rows.map((l) => l.id as string);
+  const [ledger, onboarding, exclusions] = await Promise.all([
+    service.from("payment_ledger").select("lead_id, kind, status, amount_gbp, occurred_at, sold_by_user_id, sale_plan, sale_plan_flag").in("lead_id", ids).in("kind", ["initial", "recurring"]).limit(5000),
+    service.from("onboarding_responses").select("lead_id, website_manager, payment_plan, quick_close").in("lead_id", ids).order("updated_at", { ascending: false }).limit(1000),
+    service.from("metric_exclusions").select("value").eq("kind", "lead").in("value", ids).limit(1000),
+  ]);
+  for (const r of [ledger, onboarding, exclusions]) if (r.error) throw new Error(r.error.message);
+  const firstOb = new Map<string, Obj>();
+  for (const o of (onboarding.data ?? []) as Obj[]) if (!firstOb.has(o.lead_id)) firstOb.set(o.lead_id, o);
+  const tests = new Set(((exclusions.data ?? []) as { value: string }[]).map((e) => e.value));
+  return rows.map((l) => {
+    const pays = ((ledger.data ?? []) as Obj[]).filter((r) => r.lead_id === l.id && r.status === "succeeded");
+    const sale = pays.filter((r) => r.kind === "initial").sort((a, b) => String(a.occurred_at).localeCompare(String(b.occurred_at)))[0] ?? null;
+    const plan = (sale?.sale_plan ?? l.payment_plan ?? null) as string | null;
+    const recurring = pays.filter((r) => r.kind === "recurring").sort((a, b) => String(a.occurred_at).localeCompare(String(b.occurred_at))).map((r) => Number(r.amount_gbp));
+    const ob = firstOb.get(l.id) ?? null;
+    const answers = ((ob?.quick_close as Obj | null)?.answers ?? {}) as Obj;
+    const missing = closeInfoMissing({ handoff: cleanHandoff(l.sales_handoff), manager: (answers.manager ?? ob?.website_manager ?? null) as string | null, agencyContract: (answers.agency_contract ?? null) as string | null, plan });
+    return {
+      lead_id: l.id, business: l.business_name ?? "Client", plan, plan_words: salePlanParts(plan).words,
+      amount_paid: sale ? Number(sale.amount_gbp) : Number(l.amount_paid ?? 0),
+      seller_id: (sale?.sold_by_user_id ?? l.sold_by_user_id ?? null) as string | null,
+      paid_at: (sale?.occurred_at ?? l.payment_date ?? null) as string | null,
+      missing, flag: (sale?.sale_plan_flag ?? (monthlyDiffers(plan, recurring) ? "monthly_differs" : null)) as string | null,
+      test: tests.has(l.id), refunded: l.status === "refunded",
+    };
+  });
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
   const started = Date.now();
@@ -168,8 +219,51 @@ Deno.serve(async (req) => {
       if (actor.role === "sales" && earnings.lines.some((l) => l.sellerId !== actor.id)) return json({ ok: false, error: "scope_error" }, 500);
       return json({ ok: true, scope: { person: personId, self: personId === actor.id, role: actor.role }, ...earnings, ms: Date.now() - started });
     }
+    if (mode === "owed") {
+      const personId = actor.role === "sales" ? actor.id : null;
+      const today = londonDayOf(new Date().toISOString());
+      const earnings = await loadEarnings(service, personId, today);
+      const owed = owedFrom(earnings, today);
+      /* The belt: a salesperson's answer holds nobody else's money. */
+      if (actor.role === "sales" && [...owed.next, ...owed.quiet].some((i) => i.sellerId !== actor.id)) return json({ ok: false, error: "scope_error" }, 500);
+      const history = paidHistory(earnings.linePayments);
+      if (actor.role === "sales") return json({ ok: true, ...owed, history, names: {}, new_paid_clients: [], ms: Date.now() - started });
+      return json({ ok: true, ...owed, history, names: await teamNames(service), new_paid_clients: await newPaidClients(service), ms: Date.now() - started });
+    }
     if (actor.role !== "admin") return await adminOnly();
 
+    if (mode === "mark_paid") {
+      const person = typeof body.person === "string" && UUID_RE.test(body.person) ? body.person : null;
+      const itemKey = typeof body.item_key === "string" && /^(pay|rev):[0-9a-f-]{36}$/i.test(body.item_key) ? body.item_key : null;
+      const expected = Number(body.expected_total);
+      if ((!person && !itemKey) || !Number.isFinite(expected)) return json({ ok: false, error: "bad_request" }, 400);
+      const today = londonDayOf(new Date().toISOString());
+      const owed = owedFrom(await loadEarnings(service, null, today), today);
+      const planned = planMarkPaid(owed, { person, itemKey, expectedTotal: expected });
+      if (!planned.ok) return json({ ok: false, error: planned.error, detail: MARK_PAID_REFUSAL_WORDS[planned.error] }, 409);
+      const rows = planned.items.flatMap((i) => i.parts.map((p) => ({
+        line_key: p.lineId, part: p.part, user_id: i.sellerId, lead_id: i.leadId, amount_gbp: p.amount, business_name: i.business, plan: i.plan,
+        label: i.label, rate: i.rate, client_amount_gbp: i.clientAmount, collected_at: i.collectedAt, payable_on: i.payableOn,
+      })));
+      const batchId = crypto.randomUUID();
+      const { error } = await service.rpc("commission_record_line_payments", { _batch: batchId, _by: actor.id, _rows: rows });
+      if (error) {
+        /* One line can only be paid once (a partial unique index): the other tab won. */
+        if (String((error as { code?: string }).code) === "23505") return json({ ok: false, error: "already_paid", detail: "Part of this was already marked as paid. The screen has been refreshed." }, 409);
+        return json({ ok: false, error: "write_failed", detail: "Not recorded. Try again." }, 500);
+      }
+      return json({ ok: true, batch_id: batchId, total: planned.total, count: rows.length });
+    }
+    if (mode === "undo_paid") {
+      const batchId = String(body.batch_id ?? "");
+      if (!UUID_RE.test(batchId)) return json({ ok: false, error: "bad_request" }, 400);
+      const since = new Date(Date.now() - MARK_PAID_UNDO_HOURS * 3_600_000).toISOString();
+      const { data, error } = await service.from("commission_line_payments").update({ undone_at: new Date().toISOString(), undone_by: actor.id })
+        .eq("batch_id", batchId).eq("paid_by", actor.id).is("undone_at", null).gte("paid_at", since).select("id");
+      if (error) return json({ ok: false, error: "write_failed", detail: "Not undone. Try again." }, 500);
+      if (!data?.length) return json({ ok: false, error: "too_late", detail: "This payment can no longer be undone here." }, 409);
+      return json({ ok: true, count: data.length });
+    }
     if (mode === "record_payout") {
       const month = String(body.period_month ?? "");
       const amount = Number(body.amount_gbp);

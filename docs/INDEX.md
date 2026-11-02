@@ -219,6 +219,7 @@
 - `docs/site-shot.md` — homepage picture per lead for the prospect report: shape, the 20-site measurements, rules it taught, deploy record (2026-10-24)
 - `docs/finding-accuracy.md` — what we may tell a prospect their site does not say: full-text stamp, coverage sentences, state label, question 1 from the site; measured false rates (2026-10-25)
 - `docs/ugc-brand-finder.md` — UGC Brand Finder for Jess (separate login, tables, spend; her tiers, contact order, pitch pipeline; nothing sent from the app) (2026-10-29)
+- `docs/commission-owed.md` — Commission owed, plan on every close, New paid clients, autosave on the close (2026-11-02)
 - `docs/two-plans.md` — Findable Complete + Findable Essential, agreement v7, the baseline clock (2026-10-30)
 - `docs/hosting-price-and-guarantee-v7-wording.md` — hosting £29.99 Stripe price, who stayed on £9.99, the v7 guarantee wording sweep (2026-10-30)
 - `docs/in-window-free-text.md` — inside the 24-hour window an Inbox template goes as free text, recorded as that template; queued sends judged when they run; Meta pricing from 1 Oct 2026 (2026-10-31)

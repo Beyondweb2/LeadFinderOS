@@ -22,6 +22,22 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-11-02-commission-owed-admin', date: '2026-11-02', title: 'Commission owed: see what you owe, and mark it paid', audience: 'admin',
+    body: 'Your dashboard now shows the total you owe today, each person’s owed, coming soon and paid so far, and the next payments with a countdown. New paid clients has its own list.',
+    report: {
+      added: ['Commission owed on your dashboard, with a Mark as paid button on each person and each line, an undo, and a paid history for each person.', 'New paid clients on your dashboard: plan, amount, salesperson, date, and whether the handoff is complete.', 'Every sale now records the plan Stripe took, what the salesperson picked, and a flag if they differ.'],
+      changed: ['New sales follow the new commission rules. First-payment commission becomes payable when the guarantee window closes after the four-week results are sent, with no backstop date. Monthly commission is 20% of the next 6 payments, payable on the 1st of the next month.', 'A refund after you have paid comes off that person’s next commission.'],
+      removed: [],
+      effect: 'You can see at a glance what you owe and record each bank transfer. Nothing is paid from the app. Old sales keep their numbers.',
+    } },
+  { id: '2026-11-02-commission-owed-sales', date: '2026-11-02', title: 'See when you get paid, and your close notes save themselves', audience: 'sales',
+    body: 'Your Sales page now shows what you are owed, what is coming and when, and what you have been paid. Handoff answers now save as you type, with no Save button.',
+    report: {
+      added: ['Your payments on the Sales page: owed now, coming soon with a countdown, and everything you have been paid.'],
+      changed: ['First-payment commission on new sales becomes payable when the client’s guarantee window closes after their four-week results are sent. Monthly commission is 20% of the next 6 payments, payable on the 1st of the next month.', 'Handoff answers and call notes save as you type, with a small Saved line. Send to Paul stays, and just tells him you are done.'],
+      removed: ['The Save handoff button.'],
+      effect: 'You always know what you are owed and when. You cannot lose what you typed on the call.',
+    } },
   { id: '2026-11-02-country-caps', date: '2026-11-02', title: 'WhatsApp: the UK and Malaysia now have separate daily limits', audience: 'all',
     body: 'Each country now has its own daily limit for cold WhatsApp. The UK has 150 and Malaysia has 30, and Malaysia’s sends no longer come out of the UK’s. A red rating from Meta now shows a warning and changes nothing else. Replies inside 24 hours are still not limited.',
     report: {

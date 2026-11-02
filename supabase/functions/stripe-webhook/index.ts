@@ -1353,6 +1353,7 @@ Deno.serve(async (req) => {
                 occurred_at: new Date((event.created ?? Math.floor(Date.now() / 1000)) * 1000).toISOString(),
                 stripe_object_id: stripePaymentIntentId ?? s.id, stripe_payment_intent_id: stripePaymentIntentId,
                 stripe_customer_id: stripeCustomerId, stripe_event_id: event.id, note: `checkout ${s.id}`,
+                stripe_plan: paymentPlanFromMeta(s.metadata ?? null),
               });
               /* ⛔ THE STRIPE IDS: customer and payment intent are filled where blank by
                  establishLeadPayment (never over a stored id — a later refund resolves by the FIRST

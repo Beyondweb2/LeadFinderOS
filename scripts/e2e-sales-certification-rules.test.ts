@@ -201,7 +201,7 @@ async function main() {
     ok(initialOf(legLines, 'H2').rate === 0.30 && legLines.find((l) => l.id === 'pay:' + leg29.id)!.commission === 6.0,
       'J8c pre-v3 unstamped sale keeps the flat 30%, and its £29.99 monthly still earns 20% (£6.00) under the old rule');
     const src = read('src/lib/commission.ts');
-    ok(/const v3 = !!termsRow && isOptionBTerms\(termsRow\.terms\);/.test(src), 'J8d source: agreement-first vs historical is decided ONLY by a client_service_terms stamp of v3 or v4 (isOptionBTerms)');
+    ok(/const v3 = !planRules && !!termsRow && isOptionBTerms\(termsRow\.terms\);/.test(src), 'J8d source: among sales not on the plan rules, agreement-first vs historical is decided ONLY by a client_service_terms stamp (isOptionBTerms)');
   }
 
   /* ══════════════════════════════════════════════════════════════════════════════════════════════

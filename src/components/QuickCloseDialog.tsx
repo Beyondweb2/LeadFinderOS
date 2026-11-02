@@ -11,6 +11,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { useSubscription } from '@/hooks/useSubscription';
 import { useToast } from '@/hooks/use-toast';
 import { invokeEdge, edgeErrorMessage, EdgeFunctionError } from '@/lib/edgeInvoke';
+import { AutosaveIndicator, useAutosaveFields } from '@/hooks/useAutosaveFields';
+import { withSaveRetry } from '@/lib/autosaveQueue';
 import { notifyLeadChanged } from '@/lib/leadSync';
 import {
   APPROACH_LABEL, APPROACH_ROUTE, QC_REVIEW_HEADING, ROUTE_WITHDRAWN_TEXT, TIED_IN_DECLINE_HEADING, TIED_IN_DECLINE_REASON, QUICK_CLOSE_AFTER_PAYMENT, QUICK_CLOSE_AGREEMENT_LINE, QUICK_CLOSE_GUARANTEE_LINES, QUICK_CLOSE_QUESTIONS, QUICK_CLOSE_STATE_LABEL,
@@ -224,6 +226,8 @@ export function QuickClosePanel({ leadId, active = true, framed = false }: { lea
   const [copied, setCopied] = useState<string | null>(null);
   /* The old £99 × 12 plan is staff-only and hidden until asked for (paymentPlans.ts). */
   const [showOldPlan, setShowOldPlan] = useState(false);
+  const [retrying, setRetrying] = useState(false);
+  const [lastSaved, setLastSaved] = useState(false);
 
   const answers = v?.answers ?? {};
   /* The chosen plan cannot be sold yet (its Stripe price is missing): no link, and the reason (the checkout refuses it too). */
@@ -245,10 +249,15 @@ export function QuickClosePanel({ leadId, active = true, framed = false }: { lea
 
   const run = async (label: string, body: Record<string, unknown>, quiet = false) => {
     setBusy(label);
+    const answer = label.startsWith('a:');
     try {
-      const r = await invokeEdge<View>('quick-close', { lead_id: leadId, ...body });
+      /* A tapped answer (who runs the site, the agency contract, the plan) rides out a bad connection before it says it failed. */
+      const r = answer
+        ? await withSaveRetry(() => invokeEdge<View>('quick-close', { lead_id: leadId, ...body }), (on) => setRetrying(on))
+        : await invokeEdge<View>('quick-close', { lead_id: leadId, ...body });
       qc.setQueryData(quickCloseKey(leadId), r);
       notifyLeadChanged(leadId);
+      if (answer) setLastSaved(true);
       return r;
     } catch (e) {
       if (!quiet) toast({ title: 'Not done', description: edgeErrorMessage(e), variant: 'destructive' });
@@ -322,7 +331,12 @@ export function QuickClosePanel({ leadId, active = true, framed = false }: { lea
     return true;
   };
 
-  const saveHandoff = async (h: SalesHandoffFields) => !!(await run('handoff', { mode: 'save_handoff', handoff: h }));
+  /* AUTOSAVE: one answer, one small write, and the cached view follows so a reopened dialog shows it (docs/commission-owed.md). */
+  const saveHandoffField = async (field: string, value: string) => {
+    await invokeEdge('quick-close', { lead_id: leadId, mode: 'save_handoff_field', field, value });
+    qc.setQueryData<View>(quickCloseKey(leadId), (old) => (old?.handoff ? { ...old, handoff: { ...old.handoff, fields: { ...old.handoff.fields, [field]: value }, prefilled: old.handoff.prefilled.filter((k) => k !== field) } } : old));
+    notifyLeadChanged(leadId);
+  };
   /* SEND TO PAUL (2026-10-06): saves what the form holds and sends it, once. The server re-checks every answer. */
   const sendToPaul = async (h: SalesHandoffFields) => {
     const r = await run('handoff', { mode: 'send_to_paul', handoff: h });
@@ -361,7 +375,8 @@ export function QuickClosePanel({ leadId, active = true, framed = false }: { lea
               <div className="mt-1.5 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
                 {v && <ToneChip tone={STATE_TONE[v.state]} dot className={v.state === 'paid' ? SUCCESS_CHIP : undefined}>{QUICK_CLOSE_STATE_LABEL[v.state]}</ToneChip>}
                 {v && route && <ToneChip tone="grey" icon={PoundSterling} testId="qc-route-chip">{closeChipText(route, answers.payment_plan)}</ToneChip>}
-                {v && v.state !== 'paid' && <span className="min-w-0">{answeredCount} of {totalSteps} answered · saved as you go</span>}
+                {v && <AutosaveIndicator status={busy?.startsWith('a:') ? (retrying ? 'retrying' : 'saving') : lastSaved ? 'saved' : 'idle'} className="min-w-0" />}
+                {v && v.state !== 'paid' && <span className="min-w-0">{answeredCount} of {totalSteps} answered</span>}
               </div>
             </div>
           </div>
@@ -414,7 +429,7 @@ export function QuickClosePanel({ leadId, active = true, framed = false }: { lea
           )}
 
           {/* ── THE CURRENT QUESTION (while answering) ── */}
-          {v && showNotes && <ServicesAreasStep key={String(v.call?.jobs ?? '') + '|' + String(v.call?.areas ?? '')} call={v.call} busy={busy === 'notes'} total={totalSteps} number={Math.min(answeredCount + 1, totalSteps)}
+          {v && showNotes && <ServicesAreasStep key={leadId} leadId={leadId} call={v.call} busy={busy === 'notes'} total={totalSteps} number={Math.min(answeredCount + 1, totalSteps)}
             onSave={async (jobs, areas) => !!(await run('notes', { mode: 'save_call', call: { jobs, areas } }))} />}
 
           {v && v.canEdit && currentQ && !showNotes && (
@@ -639,7 +654,7 @@ export function QuickClosePanel({ leadId, active = true, framed = false }: { lea
               <details className={cn(FOLD, sent ? 'border-l-[3px] border-l-emerald-500' : h.complete ? EDGE.blue : EDGE.amber)} open={openNow} data-testid="qc-handoff">
                 <summary className="flex min-h-[36px] cursor-pointer select-none flex-wrap items-center justify-between gap-x-2 gap-y-1 text-sm font-semibold">Handoff for Paul<ToneChip tone={chip.tone} dot className={chip.cls}>{chip.text}</ToneChip></summary>
                 <p className="mt-1 text-xs text-muted-foreground">{sent ? 'Paul has your handoff. You can still correct an answer.' : 'Most of this is already filled in from the call. Add only what you learned that Paul should know — nothing here is required — then Send to Paul.'}</p>
-                <div className="mt-3"><SalesHandoffForm fields={h.fields} prefilled={h.prefilled} route={route ?? 'build'} onSave={saveHandoff} onSend={sendToPaul} sent={sent ? { at: sent.at, by: sent.by_me ? null : sent.by, changed_since: sent.changed_since } : null} busy={busy === 'handoff'} compact /></div>
+                <div className="mt-3"><SalesHandoffForm fields={h.fields} prefilled={h.prefilled} route={route ?? 'build'} leadId={leadId} onSaveField={saveHandoffField} onSend={sendToPaul} sent={sent ? { at: sent.at, by: sent.by_me ? null : sent.by, changed_since: sent.changed_since } : null} busy={busy === 'handoff'} compact /></div>
               </details>
             );
           })()}
@@ -686,21 +701,33 @@ export function QuickClosePanel({ leadId, active = true, framed = false }: { lea
 
 /** TWO OPTIONS: the short "what do they offer, and where do they want to be found?" step, just before the plan. It saves
  *  the same two call notes the Call screen does (save_call), so a rep who already heard them there is never asked again. */
-function ServicesAreasStep({ call, busy, total, number, onSave }: { call: QcCallNotes | undefined; busy: boolean; total: number; number: number; onSave: (jobs: string, areas: string) => Promise<boolean> }) {
+function ServicesAreasStep({ leadId, call, busy, total, number, onSave }: { leadId: string; call: QcCallNotes | undefined; busy: boolean; total: number; number: number; onSave: (jobs: string, areas: string) => Promise<boolean> }) {
   const [jobs, setJobs] = useState(call?.jobs ?? '');
   const [areas, setAreas] = useState(call?.areas ?? '');
+  /* Autosave as they type. Continue only moves on. A reply never overwrites what is being typed (the server's value is taken when idle). */
+  const auto = useAutosaveFields({
+    save: async (k, v) => { await invokeEdge('quick-close', { lead_id: leadId, mode: 'save_call', quiet: true, call: { [k]: v.trim() } }); },
+    storageKey: `qc-call:${leadId}`,
+    onRestore: (left) => { if (typeof left.jobs === 'string') setJobs(left.jobs); if (typeof left.areas === 'string') setAreas(left.areas); },
+  });
+  useEffect(() => {
+    auto.baseline('jobs', call?.jobs ?? ''); auto.baseline('areas', call?.areas ?? '');
+    if (!auto.isDirty('jobs') && document.activeElement?.getAttribute('data-testid') !== 'qc-services') setJobs(call?.jobs ?? '');
+    if (!auto.isDirty('areas') && document.activeElement?.getAttribute('data-testid') !== 'qc-areas') setAreas(call?.areas ?? '');
+  }, [call?.jobs, call?.areas]); // eslint-disable-line react-hooks/exhaustive-deps
   const ok = jobs.trim().length > 1 && areas.trim().length > 1;
   return (
     <section aria-live="polite" data-testid="qc-services-areas">
       <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Question {number} of {total}</p>
       <p className="mt-1 text-lg font-semibold leading-snug">What do they offer, and where do they want to be found?</p>
       <label className="mt-3 block text-sm font-medium">What do they offer?
-        <Textarea value={jobs} onChange={(e) => setJobs(e.target.value)} rows={2} maxLength={300} placeholder="e.g. emergency lockouts, lock changes, car keys" className="mt-1 text-base" data-testid="qc-services" />
+        <Textarea value={jobs} onChange={(e) => { setJobs(e.target.value); auto.set('jobs', e.target.value); }} onBlur={() => auto.flush('jobs')} rows={2} maxLength={300} placeholder="e.g. emergency lockouts, lock changes, car keys" className="mt-1 text-base" data-testid="qc-services" />
       </label>
       <label className="mt-3 block text-sm font-medium">Where do they want to be found?
-        <Textarea value={areas} onChange={(e) => setAreas(e.target.value)} rows={2} maxLength={300} placeholder="e.g. Canterbury, Whitstable, Herne Bay" className="mt-1 text-base" data-testid="qc-areas" />
+        <Textarea value={areas} onChange={(e) => { setAreas(e.target.value); auto.set('areas', e.target.value); }} onBlur={() => auto.flush('areas')} rows={2} maxLength={300} placeholder="e.g. Canterbury, Whitstable, Herne Bay" className="mt-1 text-base" data-testid="qc-areas" />
       </label>
-      <Button className="mt-3 h-12 w-full text-base font-bold" disabled={!ok || busy} onClick={() => void onSave(jobs.trim(), areas.trim())} data-testid="qc-services-continue">
+      <p className="mt-1 flex justify-end"><AutosaveIndicator status={auto.status} /></p>
+      <Button className="mt-2 h-12 w-full text-base font-bold" disabled={!ok || busy} onClick={() => { auto.flush(); void onSave(jobs.trim(), areas.trim()); }} data-testid="qc-services-continue">
         {busy && <Loader2 className="mr-1 h-4 w-4 animate-spin" />}Continue
       </Button>
     </section>

@@ -58,16 +58,16 @@ ok(/^From Tom\. Awaiting payment/.test(handoffSentBody({ sellerName: "Tom", paid
 /* ═══ 2. SEND TO PAUL — the form's final state ═════════════════════════════════════════════════════ */
 console.log("\n── SEND TO PAUL: the form ──");
 const noop = async () => true;
-const formHtml = (props: Record<string, unknown>) => renderToStaticMarkup(createElement(SalesHandoffForm, { prefilled: [], onSave: noop, ...props } as never));
+const formHtml = (props: Record<string, unknown>) => renderToStaticMarkup(createElement(SalesHandoffForm, { prefilled: [], leadId: "lead-1", onSaveField: noop, ...props } as never));
 const complete = formHtml({ fields: fullHandoff, onSend: noop });
-ok(/Ready to send/.test(complete) && /Send to Paul/.test(complete) && /Save without sending/.test(complete), "complete → READY TO SEND + Send to Paul (primary), saving without sending is secondary");
+ok(/Ready to send/.test(complete) && /Send to Paul/.test(complete) && !/Save without sending/.test(complete), "complete → READY TO SEND + Send to Paul; there is no Save button, every answer saves itself (2026-11-02)");
 ok(!/>Save handoff</.test(complete), "…and the primary action is no longer 'Save handoff'");
 const partial = formHtml({ fields: { ...fullHandoff, why_bought: "" }, onSend: noop });
 ok(/data-testid="send-to-paul"/.test(partial) && !/required answer/.test(partial), "partial → still Send to Paul (no required answers since 2026-10-07)");
 const sentHtml = formHtml({ fields: fullHandoff, onSend: noop, sent: { at: "2026-10-06T10:00:00Z", by: null, changed_since: false } });
-ok(/Sent to Paul/.test(sentHtml) && /Save changes/.test(sentHtml) && !/data-testid="send-to-paul"/.test(sentHtml), "sent → 'Sent to Paul · <time>', later edits are Save changes (no second send)");
+ok(/Sent to Paul/.test(sentHtml) && !/Save changes/.test(sentHtml) && !/data-testid="send-to-paul"/.test(sentHtml), "sent → 'Sent to Paul · <time>', later edits save themselves (no second send)");
 const paulsPage = formHtml({ fields: fullHandoff });
-ok(!/Send to Paul/.test(paulsPage) && /Save handoff/.test(paulsPage), "Paul's own page (no onSend) never shows Send to Paul");
+ok(!/Send to Paul/.test(paulsPage) && !/Save handoff/.test(paulsPage), "Paul's own page (no onSend) never shows Send to Paul, and has no Save button");
 
 /* ═══ 3. SEND TO PAUL — the server ═════════════════════════════════════════════════════════════════ */
 console.log("\n── SEND TO PAUL: fn quick-close ──");

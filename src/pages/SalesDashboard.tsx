@@ -13,6 +13,7 @@ import { NotReadyToSellBanner } from '@/components/NotReadyToSellBanner';
 import { MonthlyLadder } from '@/components/salesDash/MonthlyLadder';
 import { CommissionForecastCard, EarningsStats } from '@/components/salesDash/CommissionForecastCard';
 import { BySellerTable, CommissionExplainer, PaymentsTable, PayoutDialog, RecentWins } from '@/components/salesDash/earningsParts';
+import { MyCommissionOwed } from '@/components/admin/CommissionOwed';
 import { CampaignCards, ChannelBars, ManageRows, SimpleTable, TemplateTable } from '@/components/salesDash/breakdown';
 import { invokeEdge, edgeErrorMessage } from '@/lib/edgeInvoke';
 import { templateLabel } from '@/types/outreach';
@@ -182,6 +183,9 @@ export default function SalesDashboard() {
           <div className={cn('min-w-0', !e.forecast && 'lg:col-span-3')}><RecentWins lines={e.lines} clients={e.clients} /></div>
         </div>
       )}
+
+      {/* The salesperson's own payments, with countdowns. The server scopes it to them. */}
+      {!isAdmin && e && e.commissionable && <MyCommissionOwed />}
 
       {/* ── 5. The detail, folded: the commission rules, every payment, everyone's commission, the outreach numbers ── */}
       {e && oneSeller && e.commissionable && <CommissionExplainer />}
