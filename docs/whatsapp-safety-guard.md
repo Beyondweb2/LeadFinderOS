@@ -29,6 +29,10 @@ Six `initial_contact` openers were queued from the Inbox around 14:31 to 14:40 U
 
 ⚠️ **The burst explains the spacing, not proven to explain the failures.** On 27 Oct, 5 Malaysian queue sends from 23:00 UTC also all failed while 1 to 2 minutes apart, while that afternoon's run to other Malaysian numbers had mostly delivered. Without Meta's codes (below) the reason is unknown. The probe limits what a repeat can cost: 3 sends, then a rest.
 
+## What went wrong on deploy (2 Nov, 09:38 UTC)
+
+The first live tick read Malaysia's failed sends from 23:00 UTC as today's probe and started a cool-down, although Paul had switched it back on at 08:10 UTC. Caught by the live check. The probe now starts at the latest of the window opening, the end of a cool-down and the last switch-on (`probeStart`), and the mistaken rest was cleared the same morning (on the pause log).
+
 ## Other changes
 
 - **Opener:** `coldOpenerFor` turns `initial_contact_short` into `initial_contact` at both senders, every country. `initial_opener_v2` is left alone: it is a person's explicit choice (2026-09-27) and has not been sent in the last 10 days.

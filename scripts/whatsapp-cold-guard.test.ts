@@ -104,6 +104,11 @@ console.log('the cool-down');
   ok(probeStart('MY', after, NOW).toISOString() === ended, 'the probe starts when it ended');
   const old = [row(60, MY, 'failed'), row(59, MY, 'failed'), row(58, MY, 'failed')];
   ok(coldVerdict('MY', facts(old, { settings: after }), NOW).go, 'the failures that started it do not end the new probe');
+  const on = settings({ whatsapp_on_since: ago(60) });
+  ok(coldVerdict('MY', facts([row(120, MY, 'failed'), row(119, MY, 'failed'), row(118, MY, 'failed')], { settings: on }), NOW).go,
+    'switching a country on starts a new probe: failures from before it say nothing (2 Nov: it rested Malaysia on deploy)');
+  const afterOn = coldVerdict('MY', facts([row(30, MY, 'failed'), row(29, MY, 'failed')], { settings: on }), NOW);
+  ok(!afterOn.go && afterOn.code === 'probe_failed', '…and failures after it still count');
   const three = [row(20, MY, 'sent'), row(19, MY, 'sent'), row(18, MY, 'sent')];
   const held = coldVerdict('MY', facts(three, { settings: after }), NOW);
   ok(!held.go && held.code === 'probe_wait', 'restart: 3 sends, then the reports decide');

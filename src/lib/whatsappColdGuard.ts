@@ -118,11 +118,17 @@ export function inCooldown(s: CooldownSetting | null | undefined, now: Date = ne
   return !!u && u.getTime() > now.getTime();
 }
 
-/** When the running probe started: today's window opening, or the end of the last cool-down if that is later. Derived, never stored. */
+/** When the running probe started: the latest of today's window opening, the end of the last cool-down, and the moment a person
+ *  switched the country on (sends from before that say nothing about now: on 2 Nov this morning's failures rested a country that
+ *  had been switched back on since). Derived, never stored. */
 export function probeStart(market: Market, settings: CountrySettings | null | undefined, now: Date = new Date()): Date {
   const { windowOpen } = marketDay(market, settings, now);
-  const u = cooldownUntil(settings?.[market] as CooldownSetting | undefined);
-  return u && u.getTime() > windowOpen.getTime() && u.getTime() <= now.getTime() ? u : windowOpen;
+  const s = settings?.[market] as CooldownSetting | undefined;
+  let start = windowOpen;
+  for (const d of [cooldownUntil(s), s?.whatsapp_on_since ? new Date(s.whatsapp_on_since) : null]) {
+    if (d && Number.isFinite(d.getTime()) && d.getTime() > start.getTime() && d.getTime() <= now.getTime()) start = d;
+  }
+  return start;
 }
 
 export type ProbeState = 'probing' | 'waiting' | 'passed' | 'failed';
