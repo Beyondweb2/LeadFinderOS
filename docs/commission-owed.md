@@ -77,3 +77,9 @@ send row. `SellerClientInfoForm` keeps its button: saving it tells Paul, so auto
 
 `scripts/commission-owed.test.ts`, `scripts/autosave-queue.test.ts`, `supabase/tests/commission-owed.sql` (migration + proof in a rolled-back
 transaction on the live database, 2026-11-02; read back, nothing stayed).
+
+**Live, 2026-11-02 (migration applied, 12 functions deployed, main 3ed926b8).** Fixture `ZZ QA commission owed` (`20100000-0000-4000-8000-000000000ca1`, archived).
+A simulated v7 Complete checkout through the deployed webhook: plan written, picked plan agreed, no flag, no hold, no outbound WhatsApp. On app.leadfinderos.com, signed in as the admin:
+New paid clients showed it first (plan, test chip, click opens the lead). With the row temporarily stamped as earning: £29.70 due today, £19.80 "in 29 days",
+Mark as paid, one confirm, £0.00, paid history, undo, back to £29.70; the row recorded who, when and how much. Then reset to `test_excluded`.
+**Not checked live:** the salesperson's view (mock data only). Nobody has seen the screens; read from the page by script.

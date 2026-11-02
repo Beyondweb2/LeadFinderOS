@@ -40,6 +40,12 @@ A salesperson whose only leads are archived fixtures (the Test salesperson today
 Outreach list**. That is expected, not a visibility bug — see `docs/workspace-declutter.md` pass 2 and the
 pin in `scripts/workspace-declutter.test.ts`.
 
+## Testing commission with a fixture (2026-11-02)
+
+A QA sale earns nothing, three ways, all correct: it is stamped `test_excluded`; a sale nobody authorised to sell created opens an attribution review (held); and the Test salesperson
+(`sales-test@leadfinder.invalid`) has been DISABLED since 2026-10-07, so it cannot sign in and any line on it reads "after the engagement ended". To see money on screen, stamp the fixture's row
+`monthly_tier_v1`, use a seller who is still active, resolve the review, and reset to `test_excluded` at the end. A future payable date on a first payment is cancelled because the seller is excluded; use a monthly line for a countdown. Record in `docs/commission-owed.md`.
+
 ## State on 2026-10-01
 
 All 18 fixtures (`ZZ QA` … `ZZ QA6`) checked: archived, no phone or email, excluded. Nothing needed
