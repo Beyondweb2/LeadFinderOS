@@ -427,6 +427,8 @@ export async function runCrawlTick(service: Client): Promise<{ jobId: string | n
             if (Date.now() - started >= FULL_CRAWL.tickBudgetMs) { updates.push({ id: r.id, status: "queued", processed_at: null }); continue; }
             const read = await renderForCrawl(service, f.finalUrl);
             if (read.ok) { renderedNow++; await new Promise((done) => setTimeout(done, RENDER_PAUSE_MS)); }
+            /* Cloudflare's rate limit or a hiccup: this page is tried again on a later tick, within the usual attempts. */
+            else if (read.reason === "cf_error" && r.attempts < FULL_CRAWL.maxAttempts) { console.error(`[crawl-job] ${f.finalUrl} render retry: ${read.detail ?? ""}`); updates.push({ id: r.id, status: "queued", processed_at: null }); continue; }
             else console.error(`[crawl-job] ${f.finalUrl} not rendered (${read.reason}): ${read.detail ?? ""}`);
             if (read.ok && renderedNotFound(read.html)) {
               updates.push({ ...base, status: "skipped", skip_reason: "rendered_not_found", error: null, processed_at: now });

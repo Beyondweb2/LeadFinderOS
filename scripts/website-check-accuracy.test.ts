@@ -153,6 +153,19 @@ const ids = (a: { findings: Array<{ id: string }> }) => a.findings.map((f) => f.
   ok(/gpt-4o-mini/.test(src) && /logOpenAiUsage/.test(src), 'the reader is the cheap model and its cost is logged');
 }
 
+/* ── what the live re-crawl of 2026-11-03 showed ──────────────────────────────────────────────────── */
+{
+  const review: ServiceReview = { kind: 'reviewed', real: ['Fire & security', 'Kitchens & outbuildings', 'Rewires', 'Lighting'], pageFor: {} };
+  const nav = [{ label: 'Fire & security', url: '/fire' }, { label: 'Kitchens & outbuildings', url: '/kitchens' }, { label: 'Rewires', url: '/rewires' }, { label: 'Lighting', url: '/lighting' }];
+  const ps = [page('/', full('Shorelec', words(40))), page('/rewires', full('Rewires', words(40)))];
+  const capped = buildSalesInsights({ servedUrl: HOME, pages: ps, nav, capped: true, serviceReview: review, lead: { name: 'Shorelec', town: 'x', trade: 'Electrician' } });
+  ok(!capped.findings.some((f) => /service/.test(f.kind)), 'a crawl stopped at its page limit never says a service has no page');
+  const reviewsOn = page('/', full('AC Roofing', 'We are on Checkatrade with 40 customer reviews from local homeowners who used us. ' + words(40)));
+  ok((reviewsOn.b?.reviews ?? []).length > 0, 'Checkatrade and customer reviews on the page count as reviews');
+  const oneShell = audit([page('/', full('Example Trade', `Call 01295 123456. ${words(40)}`)), page('/contact', SHELL)]);
+  ok(!ids(oneShell).includes('no_contact_page') && !oneShell.findings.some((f) => f.absence), 'one unread page: nothing is said to be missing');
+}
+
 /* ── an older stored check says only what it got right ────────────────────────────────────────────── */
 {
   const f = (id: string, extra: Record<string, unknown> = {}) => ({ id, severity: 'medium', ...extra });

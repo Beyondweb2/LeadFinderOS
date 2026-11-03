@@ -581,8 +581,11 @@ export function buildSiteAudit(input: SiteAuditInput): SiteAudit {
   out.sort((a, b) => SEVERITY_RANK[a.severity] - SEVERITY_RANK[b.severity] || b.count - a.count);
   /* ⛔ PART OF A PAGE WAS NOT DOWNLOADED (MAX_PAGE_BYTES): what was kept is true, but nothing is said to be missing. */
   const anyCut = ok.some((p) => p.d!.cut === true);
-  const findings = anyCut ? out.filter((f) => !f.absence) : out;
+  /* The same when a page stayed an empty shell: the contact page may be the one we could not read. */
+  const anyShell = answered.length > ok.length;
+  const findings = anyCut || anyShell ? out.filter((f) => !f.absence) : out;
   if (anyCut) notChecked.push('Things that may be missing — not judged: a page was longer than we download, so it may be further down.');
+  else if (anyShell) notChecked.push('Things that may be missing — not judged: a page could not be read, so it may be there.');
   return { version: SITE_AUDIT_VERSION, basis: capped ? 'capped' : 'full', servedUrl, coverage, findings, notChecked, ...(ok.some((p) => p.d!.rendered === true) ? { rendered: true } : {}) };
 }
 
