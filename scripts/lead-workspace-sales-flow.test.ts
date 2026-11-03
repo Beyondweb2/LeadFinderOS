@@ -22,7 +22,7 @@ const crm = read("src/components/LeadCrmPanel.tsx");
 const strip = read("src/components/LeadStateStrip.tsx");
 const lib = read("src/lib/logOutcomeFlow.ts");
 const header = dlg.slice(dlg.indexOf("{/* ── Header: name + glanceable pills"), dlg.indexOf("<Tabs value={tab}"));
-const callTab = dlg.slice(dlg.indexOf('<TabsContent value="call"'), dlg.indexOf('<TabsContent value="details"'));
+const callTab = dlg.slice(dlg.indexOf('<TabsContent value="call"'), dlg.indexOf('<TabsContent value="close"'));
 const closeTab = dlg.slice(dlg.indexOf('<TabsContent value="close"'), dlg.indexOf('<TabsContent value="history"'));
 const code = (s: string) => s.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, ""); // comments out
 
@@ -42,8 +42,7 @@ for (const [what, needle] of [
 ok(!/function LogContact\(/.test(crm) && !/part="call"/.test(dlg) && !/statusControl/.test(dlg + crm), "no LogContact component, no Call part of the Work panel, no status card slot");
 ok(!/<LeadWorkPanel/.test(callTab) && !/PipelineStatusSelect/.test(callTab), "the Call tab carries no CRM card and no second status control");
 // 2026-10-06 (sales-team-today, Paul): SCAN → SAY — the AI result moved to the TOP of the Call tab (no longer folded at the bottom).
-ok(callTab.indexOf("<LoggedLine") >= 0 && callTab.indexOf("<LoggedLine") < callTab.indexOf("ai-check-tools") && callTab.indexOf("ai-check-tools") < callTab.indexOf("<ColdCallPlaybookInline")
-  && /<LeadHookPanel leadId=\{lead\.id\} variant="call" \/>/.test(callTab) && !/<details/.test(callTab), "Call order: the last result → the AI result (LeadHookPanel 'call', not folded) → the script (+ Log / Quick Close bar)");
+ok(callTab.indexOf("<LoggedLine") >= 0 && callTab.indexOf("<LoggedLine") < callTab.indexOf("<SimpleCallTab") && !/<details/.test(callTab), "Call order: the last result → the simple call tab (What we found, the script, the offer; the sticky Log / Quick Close bar)");
 
 console.log("── 3. the Log window ──");
 ok(/const \[windows, setWindows\] = useState\(\(\) => arrivalWindows\(callArrivalOf\(openNumberPopup, openLogContact\)/.test(dlg) && /const logOpen = windows\.logOpen;/.test(dlg) && /const logThisCall = \(\) => setWindows\(afterLogCall\(\)\);/.test(dlg), "Log opens the window; Outreach's Call arrives on the number window, never on it (2026-10-07)");

@@ -256,7 +256,7 @@ console.log('12. UI: one inbox, WhatsApp preserved, honest call states');
   ok(/data-testid="call-mute"/.test(panel) && /data-testid="call-hangup"/.test(panel) && /data-testid="call-duration"/.test(panel) && /Log this call/.test(panel), 'mute, hang up, duration and Log this call');
   ok(/call-other-lead/.test(panel), 'a call in progress with another prospect is shown, not hidden');
   const dlg = read('src/components/LeadDetailDialog.tsx');
-  ok(/<CallPanel leadId=\{lead\.id\}/.test(dlg) && /<ColdCallPlaybookInline/.test(dlg) && /<LeadHookPanel leadId=\{lead\.id\} variant="call"/.test(dlg), 'the script, the AI result and the call panel are all on the Call tab');
+  ok(/<CallPanel leadId=\{lead\.id\}/.test(dlg) && /<SimpleCallTab/.test(dlg) && /<LeadHookPanel leadId=\{leadId\} variant="call"/.test(read('src/components/SimpleCallTab.tsx').replace(/\r\n/g, '\n')), 'the script, the AI result and the call panel are all on the Call tab');
   ok(/useTwilioCall\(\)/.test(dlg) && dlg.indexOf('useTwilioCall()') < dlg.indexOf('<Tabs'), 'the call lives above the tabs, so switching tabs does not end it');
   ok(/WhatsApp app call|Call on WhatsApp/.test(read('src/components/CallNumberPopup.tsx')), 'the free WhatsApp app call is still there, labelled');
   const panelCode = code(read('src/components/CallPanel.tsx'));

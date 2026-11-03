@@ -98,7 +98,7 @@ console.log('\n── 3. THE CALL TAB ──');
      HookVisibilityCard → useHookVisibility, the stored scored results). The script reads the stored evidence only. */
   const dlgCall = read('src/components/LeadDetailDialog.tsx');
   ok(!/function (CallEvidence|AiOpportunity|AuditEvidence|TalkAbout)\b|<(CallEvidence|AiOpportunity|AuditEvidence|TalkAbout)\b/.test(ui) && !/'[A-Z][a-z]+ (Plumbing|Locksmiths|Ltd)'/.test(ui)
-    && /data-testid="ai-check-tools"[\s\S]{0,400}<LeadHookPanel leadId=\{lead\.id\} variant="call" \/>/.test(dlgCall)
+    && /data-testid="found-ai-tools"[\s\S]{0,400}<LeadHookPanel leadId=\{leadId\} variant="call" \/>/.test(read('src/components/SimpleCallTab.tsx').replace(/\r\n/g, '\n'))
     && /const q = useHookVisibility\(leadId\)/.test(read('src/components/HookVisibilityCard.tsx'))
     && /const top = i\.competitors\.slice\(0, 3\)/.test(read('src/lib/callScript.ts')) && /competitors: evidence\.competitors/.test(read('src/lib/coldCallPlaybook.ts')),
     'evidence = the stored audit (the AI result above the script, the stored answer\'s own competitors in the opener) and the stored crawl — nothing hard-coded');

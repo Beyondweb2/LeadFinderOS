@@ -11,7 +11,8 @@ import { CrawlCheckButton } from '@/components/CrawlCheckButton';
 import { LeadSiteScore } from '@/components/SiteScoreBadge';
 import { useLeadCrawl } from '@/hooks/useLeadCrawls';
 import { WelcomePackButton } from '@/components/WelcomePackButton';
-import { ColdCallPlaybookInline } from '@/components/ColdCallPlaybook';
+import { SimpleCallTab, TouchedBeforeTag } from '@/components/SimpleCallTab';
+import { useCheckNewWebsite } from '@/hooks/useCheckNewWebsite';
 import { CallNumberPopup } from '@/components/CallNumberPopup';
 import { CallPanel } from '@/components/CallPanel';
 import { LeadSmsSection } from '@/components/LeadSmsPanel';
@@ -66,9 +67,9 @@ import { SalesStatePill } from '@/components/SalesStatePill';
 import { useLeadSalesState } from '@/hooks/useLeadSalesState';
 import { pillStatusOf } from '@/lib/leadState';
 import { leadSourceFor } from '@/lib/outreachLeadColumns';
-import { LeadHistoryPanel, LeadHookPanel, LeadWorkPanel, ProspectProfilePanel } from '@/components/LeadCrmPanel';
+import { LeadHistoryPanel, LeadWorkPanel, ProspectProfilePanel } from '@/components/LeadCrmPanel';
 import { DialogHero, IconTile, TONE, ToneChip } from '@/components/operator/ui';
-import { AlertTriangle, Building2, Sparkles } from 'lucide-react';
+import { AlertTriangle, Building2 } from 'lucide-react';
 import { phoneCountryMismatch } from '@/lib/phoneCountry';
 import { HeaderNextAction, LeadCallFlow, LoggedLine, LostReasonLine, type LoggedResult } from '@/components/LeadCallFlow';
 import { isAggregatorUrl } from '@/lib/aggregators';
@@ -186,15 +187,17 @@ function StepperBar({ s }: { s: LeadStepper }) {
   );
 }
 
-/* ⛔ SALES WORKSPACE V2 (Paul, 2026-10-05): FOUR TABS — CALL (everything needed while talking: the evidence, the
-   script, Log + Quick Close; the status and the ONE Next Action are in the header since 2026-10-06), DETAILS (what was learned: campaign, services, website & domain, note), CLOSE (the
-   one close UI — QuickClosePanel), HISTORY. CLIENT stays the admin's delivery tab. */
-export type WorkspaceTab = 'call' | 'details' | 'close' | 'history' | 'client';
-/** Older callers and links named the tabs Work / Scripts / Prospect (before v2): they open the matching new tab. */
-export type WorkspaceTabInput = WorkspaceTab | 'work' | 'scripts' | 'prospect';
+/* ⛔ SIMPLE PROSPECT POPUP (Paul, 2026-11-03): THREE TABS — CALL (what we found, the script, what we offer, objections, and
+   the sticky Log this call + Quick Close; the status and the ONE Next Action are in the header), CLOSE (the one close UI —
+   QuickClosePanel), HISTORY. CLIENT is the admin's delivery tab and appears only once the lead has paid. DETAILS is gone: who
+   they are (phone, website, area) is in the header, and what the old Details tab held sits folded at the foot of History. */
+export type WorkspaceTab = 'call' | 'close' | 'history' | 'client';
+/** Older callers and links named the tabs Work / Scripts / Prospect (before v2) or Details (before the simple popup):
+ *  they open the matching tab — Details' content now lives at the foot of History. */
+export type WorkspaceTabInput = WorkspaceTab | 'work' | 'scripts' | 'prospect' | 'details';
 export function workspaceTabOf(t: WorkspaceTabInput | string | null | undefined): WorkspaceTab | undefined {
   if (t === 'work' || t === 'scripts' || t === 'call') return 'call';
-  if (t === 'prospect' || t === 'details') return 'details';
+  if (t === 'prospect' || t === 'details') return 'history';
   if (t === 'close' || t === 'history' || t === 'client') return t;
   return undefined;
 }
@@ -318,8 +321,15 @@ function LeadDetailBody({
 }: LeadDetailBodyProps) {
   const permsForTab = useLeadPermissions();
   /* A paying client opens on Client for the admin (delivery is the work then); everyone else on Call. */
-  const [tab, setTab] = useState<WorkspaceTab>(() => workspaceTabOf(initialTab) ?? (permsForTab.clientDelivery && isPaidLead(lead) ? 'client' : 'call'));
+  /* The Client tab exists only once they have paid (Paul, 2026-11-03), and only for the admin. */
+  const showClientTab = permsForTab.clientDelivery && isPaidLead(lead);
+  const [tab, setTab] = useState<WorkspaceTab>(() => {
+    const wanted = workspaceTabOf(initialTab);
+    return wanted === 'client' && !showClientTab ? 'call' : wanted ?? (showClientTab ? 'client' : 'call');
+  });
   const bodyRef = useRef<HTMLDivElement>(null);
+  /* A website added to a lead that had none is checked at once, by the app's existing website check. */
+  useCheckNewWebsite(isDemoLead(lead.id) ? '' : lead.id, lead.website);
   const [moreTools, setMoreTools] = useState(false);
   /* ⛔ THE LOG WINDOW (2026-10-06): Log (the header, the script's sticky bar, Outreach's Call) opens ONE small
      window — what happened, then only the next step that outcome needs (src/components/LeadCallFlow.tsx).
@@ -337,9 +347,6 @@ function LeadDetailBody({
   const logThisCall = () => setWindows(afterLogCall());
   /* The browser call lives HERE, above the tabs, so it survives switching tabs (script, Details, Close) mid-call. */
   const twilioCall = useTwilioCall();
-  const aiCheckRef = useRef<HTMLElement>(null);
-  const showCheck = () => aiCheckRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  /* "Run the AI check" on the evidence card: the AI check tools just below, opened. */
   const goTab = (next: WorkspaceTab) => { setTab(next); if (bodyRef.current) bodyRef.current.scrollTop = 0; };
 
   const [notes, setNotes] = useState(lead.notes || '');
@@ -493,6 +500,7 @@ function LeadDetailBody({
             ) : (
               <>
                 <span className="line-clamp-2 break-words sm:truncate">{lead.business_name}</span>
+                {!isDemoLead(lead.id) && <TouchedBeforeTag leadId={lead.id} />}
                 {!isDemoLead(lead.id) && <StarToggle leadId={lead.id} on={!!lead.is_potential_work} canWriteRow={perms.editLeadRecord} />}
                 {perms.editLeadRecord && <button onClick={() => setEditingName(true)} className="h-5 w-5 flex items-center justify-center text-muted-foreground/40 hover:text-foreground rounded transition-colors shrink-0" title="Edit name">
                   <Pencil className="h-3.5 w-3.5" />
@@ -538,11 +546,12 @@ function LeadDetailBody({
           const trade = (lead.search_keyword || lead.category || '').trim();
           const town = (lead.derived_town || lead.search_location || '').trim();
           const site = lead.website && !isAggregatorUrl(lead.website) ? lead.website : null;
-          if (!lead.phone && !site && !trade && !town) return null;
+          if (!lead.phone && !site && !trade && !town && isDemoLead(lead.id)) return null;
           return (
             <div className="mt-1 flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground" data-testid="workspace-facts">
               {lead.phone && <button type="button" onClick={showNumber} title="Show the number to dial" className="inline-flex items-center gap-1 font-medium text-foreground/85 hover:text-primary"><Phone className="h-3 w-3" />{lead.phone}</button>}
-              {site && <a href={/^https?:\/\//i.test(site) ? site : `https://${site}`} target="_blank" rel="noopener noreferrer" className="inline-flex min-w-0 max-w-[14rem] items-center gap-1 hover:text-primary"><Globe className="h-3 w-3 shrink-0" /><span className="truncate">{site.replace(/^https?:\/\//i, '').replace(/\/$/, '')}</span></a>}
+              {site ? <a href={/^https?:\/\//i.test(site) ? site : `https://${site}`} target="_blank" rel="noopener noreferrer" className="inline-flex min-w-0 max-w-[14rem] items-center gap-1 hover:text-primary"><Globe className="h-3 w-3 shrink-0" /><span className="truncate">{site.replace(/^https?:\/\//i, '').replace(/\/$/, '')}</span></a>
+                : <span className="inline-flex items-center gap-1 text-muted-foreground/70" data-testid="workspace-no-website"><Globe className="h-3 w-3 shrink-0" />No website</span>}
               {(trade || town) && <span className="inline-flex min-w-0 items-center gap-1"><MapPin className="h-3 w-3 shrink-0" /><span className="truncate">{[trade, town].filter(Boolean).join(' · ')}</span></span>}
             </div>
           );
@@ -605,36 +614,56 @@ function LeadDetailBody({
           selling, and a genuinely restricted account is told on the Sales dashboard and Find Leads. */}
       <QuickCloseNav.Provider value={{ openClose: () => goTab('close') }}>
       <Tabs value={tab} onValueChange={(v) => goTab(v as WorkspaceTab)} className="flex min-h-0 flex-1 flex-col">
-        <TabsList className={cn('mx-3 mt-2.5 grid h-9 shrink-0 sm:mx-5', perms.clientDelivery ? 'grid-cols-5' : 'grid-cols-4')}>
+        <TabsList className={cn('mx-3 mt-2.5 grid h-9 shrink-0 sm:mx-5', showClientTab ? 'grid-cols-4' : 'grid-cols-3')}>
           <TabsTrigger value="call" className="text-xs">Call</TabsTrigger>
-          <TabsTrigger value="details" className="text-xs">Details</TabsTrigger>
           <TabsTrigger value="close" className="text-xs">Close</TabsTrigger>
           <TabsTrigger value="history" className="text-xs">History</TabsTrigger>
-          {perms.clientDelivery && <TabsTrigger value="client" className="text-xs">Client</TabsTrigger>}
+          {showClientTab && <TabsTrigger value="client" className="text-xs">Client</TabsTrigger>}
         </TabsList>
         <div ref={bodyRef} className="min-h-0 flex-1 overflow-y-auto thin-scrollbar px-3 py-3 sm:px-5 sm:py-4">
-          {/* ── CALL (sales-team-today, 2026-10-06): SCAN → SAY → ASK → LOG → CLOSE.
-                1 AI RESULT — the ONE AI summary on this screen (LeadHookPanel variant 'call': coloured scores, best
-                  missed search, who was named, full audit / report / copy link, run / re-run, earlier checks folded).
-                  ⛔ Never a second copy of the AI result lower down or inside the script.
-                2 CALL SCRIPT — the playbook (read-only), its sticky bar: Log this call + Quick Close.
+          {/* ── CALL (Paul, 2026-11-03): WHAT WE FOUND → SCRIPT → WHAT WE OFFER → OBJECTIONS, then the sticky Log this call +
+                Quick Close (src/components/SimpleCallTab.tsx). The call button sits above it (CallPanel).
                 ⛔ No CRM cards here: the status and the Next Action are in the header, the outcome is the Log window. ── */}
           <TabsContent value="call" className="mt-0 space-y-4" data-testid="workspace-call">
             {!isDemoLead(lead.id) && <CallPanel leadId={lead.id} phone={lead.phone} country={lead.country} call={twilioCall} onLogCall={logThisCall} />}
             {logged && <LoggedLine leadId={lead.id} logged={logged} onDismiss={() => setLogged(null)} />}
-            {!isDemoLead(lead.id) && (
-              <section ref={aiCheckRef} className="scroll-mt-2 space-y-2 rounded-2xl border border-violet-500/30 bg-violet-500/[0.04] p-3 sm:p-3.5" data-testid="ai-check-tools">
-                <h3 className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-violet-700 dark:text-violet-300"><Sparkles className="h-4 w-4" />AI result</h3>
-                <LeadHookPanel leadId={lead.id} variant="call" />
-              </section>
-            )}
-            {!isDemoLead(lead.id) && <ColdCallPlaybookInline leadId={lead.id} initialScript="call" onLogCall={logThisCall} onShowCheck={showCheck} />}
-            {!isDemoLead(lead.id) && context !== 'inbox' && <RecentWhatsApp leadId={lead.id} />}
-            {!isDemoLead(lead.id) && lead.phone && <LeadSmsSection leadId={lead.id} />}
+            {!isDemoLead(lead.id) && <SimpleCallTab leadId={lead.id} contactName={lead.contact_name} onLogCall={logThisCall} />}
           </TabsContent>
 
-          {/* ── DETAILS: what was learned on the call, recorded — never a script. ── */}
-          <TabsContent value="details" className="mt-0 space-y-4" data-testid="workspace-details">
+          {/* ── CLOSE: the one close UI (QuickClosePanel), then — before payment only — the self-service sign-up link. ── */}
+          <TabsContent value="close" className="mt-0 space-y-4" data-testid="workspace-close">
+            {/* TWO WAYS TO CLOSE (2026-10-07): Close on the phone, or Send full setup — one sign-up either way (ClosePanel). */}
+            {!isDemoLead(lead.id) && <ClosePanel leadId={lead.id} active={tab === 'close'} />}
+            {/* ⛔ MARK PAID BY HAND (moved 2026-10-06 from the footer of EVERY tab, Paul: "should not dominate every
+                Call screen"). Admin only (clientDelivery — a salesperson never had it and still has not), unpaid
+                only, the SAME handler and writes as before: payment_received through onStatusChange (the page's own
+                write path and confirm), then the lead leaves Track. Seller attribution is the server's — the
+                client stamp and the attribution review are untouched by where this button sits. A small
+                secondary action; a little stronger at a payment stage (workspaceHeader.markPaidIsMain). */}
+            {perms.clientDelivery && !isPaidLead(lead) && (
+              <section className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-dashed border-border/70 px-3.5 py-2.5" data-testid="mark-paid-admin">
+                <span className="min-w-0 text-xs text-muted-foreground"><span className="font-semibold text-foreground/80">Admin · </span>Paid another way (bank transfer, cash)? Record it by hand.</span>
+                <Button size="sm" variant="outline" onClick={handleMarkPaid} title="Record that they have paid"
+                  className={cn('h-8 gap-1 text-xs', markPaidIsMain(lead.status, salesState.view) ? 'border-emerald-600/60 text-emerald-700 hover:bg-emerald-500/10 dark:text-emerald-300' : 'text-muted-foreground')}>
+                  <Check className="h-3.5 w-3.5" /> Mark paid
+                </Button>
+              </section>
+            )}
+          </TabsContent>
+
+          {/* ── HISTORY (everything recorded), then — folded — what the old Details tab held: what was learned on the call,
+                never a script; plus the WhatsApp and text panels that used to sit on the Call tab. ── */}
+          <TabsContent value="history" className="mt-0 space-y-4" data-testid="workspace-history">
+            {/* ONE timeline (2026-09-29): the CRM activity, the sign-up link events and the older
+                outreach_activities rows (lead added, status changes) — no second "Activity" card. */}
+            {!isDemoLead(lead.id) && <LeadHistoryPanel leadId={lead.id} older={activities} />}
+            <details className="group rounded-xl border border-border/60 px-3 py-2" data-testid="more-about-lead">
+              <summary className="flex cursor-pointer list-none items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-foreground/70 [&::-webkit-details-marker]:hidden">
+                More about this lead<ChevronDown className="ml-auto h-3.5 w-3.5 transition-transform group-open:rotate-180" aria-hidden />
+              </summary>
+          <div className="mt-3 space-y-4" data-testid="workspace-details">
+            {!isDemoLead(lead.id) && context !== 'inbox' && <RecentWhatsApp leadId={lead.id} />}
+            {!isDemoLead(lead.id) && lead.phone && <LeadSmsSection leadId={lead.id} />}
             <ProspectFacts lead={lead} />
             {!isDemoLead(lead.id) && <ProspectProfilePanel leadId={lead.id} />}
             {!isDemoLead(lead.id) && <LeadWorkPanel leadId={lead.id} onRemoved={onClose} />}
@@ -748,36 +777,11 @@ function LeadDetailBody({
                 </section>
               );
             })()}
+          </div>
+            </details>
           </TabsContent>
 
-          {/* ── CLOSE: the one close UI (QuickClosePanel), then — before payment only — the self-service sign-up link. ── */}
-          <TabsContent value="close" className="mt-0 space-y-4" data-testid="workspace-close">
-            {/* TWO WAYS TO CLOSE (2026-10-07): Close on the phone, or Send full setup — one sign-up either way (ClosePanel). */}
-            {!isDemoLead(lead.id) && <ClosePanel leadId={lead.id} active={tab === 'close'} />}
-            {/* ⛔ MARK PAID BY HAND (moved 2026-10-06 from the footer of EVERY tab, Paul: "should not dominate every
-                Call screen"). Admin only (clientDelivery — a salesperson never had it and still has not), unpaid
-                only, the SAME handler and writes as before: payment_received through onStatusChange (the page's own
-                write path and confirm), then the lead leaves Track. Seller attribution is the server's — the
-                client stamp and the attribution review are untouched by where this button sits. A small
-                secondary action; a little stronger at a payment stage (workspaceHeader.markPaidIsMain). */}
-            {perms.clientDelivery && !isPaidLead(lead) && (
-              <section className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-dashed border-border/70 px-3.5 py-2.5" data-testid="mark-paid-admin">
-                <span className="min-w-0 text-xs text-muted-foreground"><span className="font-semibold text-foreground/80">Admin · </span>Paid another way (bank transfer, cash)? Record it by hand.</span>
-                <Button size="sm" variant="outline" onClick={handleMarkPaid} title="Record that they have paid"
-                  className={cn('h-8 gap-1 text-xs', markPaidIsMain(lead.status, salesState.view) ? 'border-emerald-600/60 text-emerald-700 hover:bg-emerald-500/10 dark:text-emerald-300' : 'text-muted-foreground')}>
-                  <Check className="h-3.5 w-3.5" /> Mark paid
-                </Button>
-              </section>
-            )}
-          </TabsContent>
-
-          <TabsContent value="history" className="mt-0 space-y-4" data-testid="workspace-history">
-            {/* ONE timeline (2026-09-29): the CRM activity, the sign-up link events and the older
-                outreach_activities rows (lead added, status changes) — no second "Activity" card. */}
-            {!isDemoLead(lead.id) && <LeadHistoryPanel leadId={lead.id} older={activities} />}
-          </TabsContent>
-
-          {perms.clientDelivery && (
+          {showClientTab && (
           <TabsContent value="client" className="mt-0 space-y-4" data-testid="workspace-client">
         {perms.clientDelivery && !isDemoLead(lead.id) && (
           <LeadDeliveryCockpit lead={lead} onUpdateLead={onUpdateLead} context={context} onClose={onClose} />

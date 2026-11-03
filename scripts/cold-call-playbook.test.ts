@@ -316,7 +316,7 @@ console.log('── 11. OPENING THE PLAYBOOK TRIGGERS NOTHING ──');
     'Inbox: no second copy of the script on the header (UI cleanup 2026-09-29) — the Prospect button opens the workspace whose Scripts tab is the same panel');
   ok(/Send WhatsApp message[\s\S]{0,1800}setPlaybookLeadId\(lead\.id\)/.test(read('src/components/OutreachTable.tsx')),
     'Outreach: an icon beside the contact buttons');
-  ok(/ColdCallPlaybookSheet/.test(outreach) && /ColdCallPlaybookInline/.test(outreach), 'Outreach opens the same shared panel (the row sheet, and inline in the prospect workspace Scripts tab)');
+  ok(/ColdCallPlaybookSheet/.test(outreach) && /SimpleCallTab/.test(outreach), 'Outreach opens the same shared panel (the row sheet, and inline in the prospect workspace Scripts tab)');
 }
 
 console.log('── 12. SIMPLIFIED PLAYBOOK (Paul, 2026-09-27) ──');
