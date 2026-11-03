@@ -48,11 +48,15 @@ export const PROSPECT_CRAWL_MIN_GAP_MS = 86_400_000;
    isLowValuePage — pages a sales read never needs: privacy / cookie / terms, tag, category, author and date
    archives, pagination, feeds. They are recorded as skipped (skip reason low_value), never read, never
    counted against the limit. */
-const WEIGHT: Record<string, number> = { service: 0, about: 1, contact: 1, other: 2, gallery: 2, reviews: 2, faq: 2, pricing: 2, location: 3, blog: 6 };
+/* ⛔ CONTACT, ABOUT AND REVIEWS COME FIRST (2026-11-03): each is one page, and the check says when it is missing. Service first
+   let a site's town × service pages take all sixty slots (highdesignroofing.com: /about, /contact-us and /reviews never read,
+   then reported as missing). A page further down the address (/barnsley/chimney-repairs) waits behind /chimney-repairs. */
+const WEIGHT: Record<string, number> = { contact: -1, about: -1, reviews: -1, service: 0, faq: 1, pricing: 1, other: 2, gallery: 2, location: 3, blog: 6 };
+const pathSegments = (url: string) => { try { return new URL(url).pathname.split('/').filter(Boolean).length; } catch { return 1; } };
 
 export function crawlPriority(url: string, depth: number, homeUrl: string): number {
   const family = fullPageFamily(url, homeUrl);
-  return (WEIGHT[family] ?? 2) + Math.max(0, depth) * 1.5;
+  return (WEIGHT[family] ?? 2) + Math.max(0, depth) * 1.5 + Math.max(0, pathSegments(url) - 1) * 0.25;
 }
 
 const LOW_VALUE_PATH = /(^|\/)(privacy[-a-z]*|cookies?[-a-z]*|terms[-a-z0-9]*|legal|gdpr|disclaimer|accessibility|modern-slavery|tags?|category|categories|author|authors|feed|attachment|sitemap[-a-z]*|thank-?you|returns?|refunds?)(\/|$)|\/page\/\d+|\/(?:19|20)\d{2}\/\d{1,2}(\/|$)/i;

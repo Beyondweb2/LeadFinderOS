@@ -50,20 +50,20 @@ console.log('2. the town: "Lavington NSW" is judged on the full text, the parent
   ok(textStatesTown('Training in Lavington and Albury', 'Lavington NSW'), 'a site that writes "Lavington" without "NSW" states Lavington NSW');
   ok(!textStatesTown('Training in Lavingtonia', 'Lavington NSW'), 'whole words only');
   ok(textStatesTown('Tiff achieved her HR licence with us in Thurgoona', 'Thurgoona NSW'), 'a town deep in the text counts (not only title / headings / opening)');
-  const i = buildSalesInsights({ servedUrl: O + '/', pages: built.map((b) => b.row), nav: [], knownUrls: PAGES.map((p) => O + p.path), lead: { name: 'X Border Transport Training', town: 'Lavington NSW', trade: 'Driving instructors' } });
+  const i = buildSalesInsights({ serviceReview: { kind: 'rules_only' }, servedUrl: O + '/', pages: built.map((b) => b.row), nav: [], knownUrls: PAGES.map((p) => O + p.path), lead: { name: 'X Border Transport Training', town: 'Lavington NSW', trade: 'Driving instructors' } });
   ok(!i.findings.some((f) => f.id === 'location_unclear'), 'this lead: Lavington is NOT reported missing (the site names Albury/Wodonga and surrounds)');
   // A site that says nothing about where it works at all, every page read to the end: still reported, and stamped.
   const plain = (b: string) => ({ title: 'Acme Locks', body: `<h2>Locks</h2><p>${b}</p>` });
   const nowhere = ['/', '/a', '/b'].map((p, k) => { const u = O + p; const h = html(plain('We fit and repair locks for homes and businesses. Call us today. '.repeat(10))); const ev = processPage({ url: u, finalUrl: u, status: 200, xRobotsTag: null, html: h, isHome: k === 0 }, O + '/'); return { url: u, finalUrl: u, status: 'done', httpStatus: 200, d: ev.d, b: ev.b, l: ev.l ?? [], t: ev.t } as SiteAuditPage; });
-  const j = buildSalesInsights({ servedUrl: O + '/', pages: nowhere, nav: [], knownUrls: [], lead: { name: 'Acme Locks', town: 'Bath', trade: 'locksmith' } });
+  const j = buildSalesInsights({ serviceReview: { kind: 'rules_only' }, servedUrl: O + '/', pages: nowhere, nav: [], knownUrls: [], lead: { name: 'Acme Locks', town: 'Bath', trade: 'locksmith' } });
   const f = j.findings.find((x) => x.id === 'location_unclear');
   ok(!!f && f.observed.includes(FULL_TEXT_MARK), 'a town named nowhere, every page read in full, no coverage said → reported, with the full-text stamp');
   // The same site with a page cut at the cap: cannot be proved, not reported.
   const cut = nowhere.map((p, k) => (k === 1 ? { ...p, t: 'x '.repeat(KEPT_TEXT_CHARS) } : p));
-  ok(!buildSalesInsights({ servedUrl: O + '/', pages: cut, nav: [], knownUrls: [], lead: { name: 'Acme Locks', town: 'Bath', trade: 'locksmith' } }).findings.some((x) => x.id === 'location_unclear'), 'a page longer than the text we keep → not reported');
+  ok(!buildSalesInsights({ serviceReview: { kind: 'rules_only' }, servedUrl: O + '/', pages: cut, nav: [], knownUrls: [], lead: { name: 'Acme Locks', town: 'Bath', trade: 'locksmith' } }).findings.some((x) => x.id === 'location_unclear'), 'a page longer than the text we keep → not reported');
   // Old stored rows have no text at all: unknown is not "empty".
   ok(pageTextWasCut(undefined) && pageTextWasCut(null) && !pageTextWasCut('short'), 'text we never kept is "cut", never "absent"');
-  ok(!buildSalesInsights({ servedUrl: O + '/', pages: nowhere.map((p) => ({ ...p, t: undefined })), nav: [], knownUrls: [], lead: { name: 'Acme Locks', town: 'Bath', trade: 'locksmith' } }).findings.some((x) => x.id === 'location_unclear'), 'pages with no kept text → not reported');
+  ok(!buildSalesInsights({ serviceReview: { kind: 'rules_only' }, servedUrl: O + '/', pages: nowhere.map((p) => ({ ...p, t: undefined })), nav: [], knownUrls: [], lead: { name: 'Acme Locks', town: 'Bath', trade: 'locksmith' } }).findings.some((x) => x.id === 'location_unclear'), 'pages with no kept text → not reported');
 }
 
 console.log('3. what reaches a prospect');

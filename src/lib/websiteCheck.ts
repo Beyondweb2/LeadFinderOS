@@ -25,7 +25,7 @@
    Pure; no I/O. IMPORTED BY EDGE FUNCTIONS: relative imports with an explicit .ts only.
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 
-import { auditFromStoredCrawl, HOME_FETCH_LABELS, storedCrawlUnread, UNVERIFIED_BLOCK_FINDING_IDS, type AuditFinding, type StoredCrawlForAudit, type SiteAudit } from './siteAudit.ts';
+import { auditFromStoredCrawl, checksAreCurrent, heldOnOlderCheck, HOME_FETCH_LABELS, storedCrawlUnread, UNVERIFIED_BLOCK_FINDING_IDS, WEBSITE_CHECKS_VERSION, type AuditFinding, type StoredCrawlForAudit, type SiteAudit } from './siteAudit.ts';
 import { isBrokenPageStatus, usableContentTrust, type SiteOwner } from './contentTrust.ts';
 import { classifyLeadWebsite } from './leadWebsiteKind.ts';
 import { emptyGreetingIn } from './pitchIssueWords.ts';
@@ -82,6 +82,8 @@ export interface WebsiteCheckSummary {
   notChecked: string[];
   /** Why the site could not be read (depth 'failed'). */
   failure: string | null;
+  /** Which checks wrote this (siteAudit.WEBSITE_CHECKS_VERSION). Absent = before 2026-11-03: its issues are held back on read. */
+  checksVersion?: number;
   /** The owner / founder the site names, with the page it was read on (contentTrust.ownerOf). Absent = not read. */
   owner?: SiteOwner | null;
 }
@@ -280,10 +282,13 @@ export function summariseWebsiteCheck(row: StoredCrawlForAudit | null | undefine
   issues.sort((a, b) => SEV_RANK[a.severity] - SEV_RANK[b.severity] || b.count - a.count);
   const signals = row.result?.signals;
   const pagesRead = audit.coverage?.pagesCrawled ?? (typeof signals?.pagesChecked === 'number' ? signals.pagesChecked : null);
+  const current = checksAreCurrent(row);
+  const capped = audit.coverage?.capped === true;
   return {
     version: WEBSITE_CHECK_VERSION, depth: deep ? 'deep' : 'quick', checkedAt,
-    pagesRead, pagesFound: audit.coverage?.urlsDiscovered ?? null, capped: audit.coverage?.capped === true,
-    issues: issues.slice(0, WEBSITE_CHECK_MAX_ISSUES), strengths, notChecked: audit.notChecked.slice(0, 8), failure: null,
+    pagesRead, pagesFound: audit.coverage?.urlsDiscovered ?? null, capped,
+    issues: (current ? issues : heldOnOlderCheck(issues, capped)).slice(0, WEBSITE_CHECK_MAX_ISSUES), strengths, notChecked: audit.notChecked.slice(0, 8), failure: null,
+    ...(current ? { checksVersion: WEBSITE_CHECKS_VERSION } : {}),
     ...ownerField(row),
   };
 }
@@ -331,7 +336,9 @@ export function usableWebsiteCheck(v: unknown): WebsiteCheckSummary | null {
   const s = v as WebsiteCheckSummary;
   if (s.version !== WEBSITE_CHECK_VERSION || !Array.isArray(s.issues)) return null;
   /* ⛔ A summary stored before 2026-10-26 can carry "the site refused AI crawlers" from our impostor fetch: never shown. */
-  return s.issues.some((i) => UNVERIFIED_BLOCK_FINDING_IDS.has(i.id)) ? { ...s, issues: s.issues.filter((i) => !UNVERIFIED_BLOCK_FINDING_IDS.has(i.id)) } : s;
+  const shown = s.issues.some((i) => UNVERIFIED_BLOCK_FINDING_IDS.has(i.id)) ? { ...s, issues: s.issues.filter((i) => !UNVERIFIED_BLOCK_FINDING_IDS.has(i.id)) } : s;
+  /* ⛔ A summary from before the current checks says only what those checks got right (siteAudit.heldOnOlderCheck). */
+  return shown.checksVersion === WEBSITE_CHECKS_VERSION ? shown : { ...shown, issues: heldOnOlderCheck(shown.issues, shown.capped === true) };
 }
 
 const plural = (n: number, one: string, many = `${one}s`) => `${n.toLocaleString('en-GB')} ${n === 1 ? one : many}`;

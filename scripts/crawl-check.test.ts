@@ -89,7 +89,7 @@ console.log('\n── verdict priority + wording ──');
   ok(!buildVerdict({ ...base, fetchFailed: true }).ok, 'fetch failed → not ok');
   const cr = buildVerdict({ ...base, clientRendered: { flagged: true, visibleChars: 69, htmlBytes: 9000, appShell: true }, missingH1: true });
   ok(cr.headline.includes('69 characters'), 'client-render leads the verdict and names the char count');
-  ok(cr.problems.length === 2, 'both problems listed (client-render + missing H1)');
+  ok(cr.problems.length === 1, 'a shell has one problem: it is a shell. Its "missing H1" is not judged (2026-11-03)');
   const dup = buildVerdict({ ...base, duplicates: { clusterSize: 20, sampleSize: 5, similarityPct: 99 } });
   ok(dup.headline.includes('20 near-identical'), 'duplicate verdict names the count');
   ok(buildVerdict(base).problems.length === 0, 'clean site → no problems');

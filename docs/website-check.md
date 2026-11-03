@@ -1,5 +1,7 @@
 # One website check (2026-10-15, feat/send-error-capture)
 
+**Latest:** the accuracy fix of 2026-11-03 is at the bottom of this file. Read it before changing what a check may claim.
+
 ## What was there before (the inspection)
 
 Ten paths fetched or judged a website. Five of them showed "website findings", and each used its own rules over its own copy of the crawl:
@@ -237,3 +239,31 @@ audit-followup-fault, reply, prospect-preview and warm-reply suites.
   not resolve). The real `ambition2drive.com` reads (338 words), robots.txt blocks nothing. The lead's website needs fixing.
 - 129 leads still carry an old unverified "blocked" check (none paid; 6 were sent a message using it) — listed in the
   untracked `RECON_false-cant-crawl-leads-2026-10-28.md`. No row rewritten, no draft regenerated, nothing sent.
+
+
+## 2026-11-03 — accuracy: what we claim must be true (fix/website-check-accuracy)
+
+**Trigger:** Paul spotted false issues. Audit of 25 random deep checks, each site fetched fresh and in a real browser and read with
+separate parsing: at least 37 of 127 serious claims false, on 19 of 25 sites. There is no model in the check; the faults were in the reading and the rules.
+
+| Cause | Fix |
+|---|---|
+| An empty JavaScript shell judged as an empty site ("no way to contact the business") | `d.shell`: nothing is judged from a shell, in any of the four builders. A deep crawl reads a JavaScript site's pages in Cloudflare Browser Rendering (`_shared/site-render.ts`, our honest name). The client_rendered finding stays: it is true. |
+| Pages cut at 1 MB, called "read in full" | `MAX_PAGE_BYTES` 3 MB. A longer page is `d.cut`: absence findings are not made. A cut inside a script no longer counts as page text. |
+| The 60 pages spent on town × service pages | `crawlPriority`: contact, about and reviews first; deeper addresses later. |
+| `<base href>` ignored | `linkBase` in every link reader. |
+| Title and meta tags after `</head>` not read | Head first, then the whole page without its SVGs. |
+| A postcode on the page not read as an address | A line around every postcode is an address; `no_address` also reads `d.postcodes`. |
+| Services guessed from word starts | `ServiceReview`: a claim about service pages needs a model to have read the names (`_shared/service-review.ts`, gpt-4o-mini, one call per deep crawl, `api_usage_log` `openai_service_review`). Failed or not asked = no claim. A quick check makes none. The code still decides the claim. |
+| A service page with an "other services" block not counted as its own page | Only an index page (/services) is excluded. |
+| Name "variants" from anywhere | Review pages' markup is ignored, "Copyright" names nobody, a title's repeated part counts only if it shares a real word with a stated name or is a builder's default ("mysite"). |
+| Listing name vs the name on the site | `nameOnPage` (`businessNameMatch.ts`): brand part, spacing, initials. |
+| The address was any postcode on any page | The postcode most pages show; a page showing any postcode is not "missing" the address. |
+
+Overstated claims turned down: a booking page is not a contact page; a link that goes elsewhere on the site is low unless it is a contact link; stars above one customer's review are not a claimed rating; a Services page in the menu counts as linking the services; shop products are not town-swapped pages.
+
+**Older rows:** nothing stored is rewritten. `result.checksVersion` (`WEBSITE_CHECKS_VERSION`) marks a check made by these rules. A row without it goes through `heldOnOlderCheck` on every read: a shell's row says only what robots.txt and the sitemap show, the unreliable kinds are dropped, a capped crawl's "not found" is dropped. `SALES_INSIGHTS_VERSION` 2 retires the stored guessed services for every direct reader. `website_check_recrawl` + cron `website-check-recrawl` replaces open leads' checks through the catch-up door, 2 a minute, paused at 8 running jobs, and unschedules itself. A paid client's check stays held until their next crawl.
+
+**Spend:** browser reads are capped by `crawl_render_settings` (switch + monthly cap) through `claim_crawl_render()`, one conditional write; any protection mode but running = no read. 12 pages per prospect's JavaScript site, 40 for a client. Refused or failed = the page stays unjudged.
+
+Tests: `scripts/website-check-accuracy.test.ts`. Evidence: untracked `RECON_website-check-accuracy-2026-11-03.md` in the primary checkout.

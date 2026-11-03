@@ -27,6 +27,7 @@
 import type { CrawlCoverage, PageBusiness, PageDigest, FullCrawlEvidence } from './fullCrawl.ts';
 import { robotsAllows, robotsRulesFor, sameSite } from './crawlUrl.ts';
 import type { SalesInsights } from './salesInsights.ts';
+import { nameOnPage, significantWords, statesAll } from './businessNameMatch.ts';
 import { coverageStatementsIn, FULL_TEXT_MARK, pageTextWasCut, textStatesTown } from './siteClaims.ts';
 import { usableVisibilityChecks, VISIBILITY_SUPERSEDES, type VisibilityChecks } from './visibilityChecks.ts';
 import { compareIssues, isBrokenPageStatus, isCrawlerRefusedStatus, usableContentTrust, CONTENT_TRUST_KINDS, type ContentIssue, type ContentTrust, type EvidenceClass } from './contentTrust.ts';
@@ -106,6 +107,8 @@ export interface SiteAudit {
   findings: AuditFinding[];
   /** Checks that could not be made on this evidence, said rather than skipped silently. */
   notChecked: string[];
+  /** The site was read in a real browser because its HTML is an empty shell (2026-11-03). */
+  rendered?: boolean;
   /** The ranked, evidence-backed sales insights (src/lib/salesInsights.ts), added 2026-10-07. Absent on older rows. */
   insights?: SalesInsights;
 }
@@ -160,19 +163,7 @@ function finding(f: Omit<AuditFinding, 'urls' | 'urlsComplete' | 'count'> & { ur
   return { ...f, count, urls, urlsComplete: urls.length >= count };
 }
 
-/** Significant words of a business name or town, for a loose "is it stated" match. */
-const STOP = new Set(['the', 'and', 'ltd', 'limited', 'llp', 'plc', 'co', 'company', 'services', 'service', 'uk', 'of', 'in', 'group', 'solutions', 'mr', 'mrs', 'amp']);
-export function significantWords(s: string | null | undefined): string[] {
-  return String(s ?? '').toLowerCase().replace(/&/g, ' ').replace(/[^a-z0-9\s'-]/g, ' ').split(/\s+/)
-    .map((w) => w.replace(/^'+|'+$/g, '')).filter((w) => w.length >= 3 && !STOP.has(w));
-}
-/** Every significant word of `needle` appears in `hay` (whole words). */
-export function statesAll(hay: string, needle: string | null | undefined): boolean {
-  const words = significantWords(needle);
-  if (!words.length) return false;
-  const h = ` ${String(hay ?? '').toLowerCase().replace(/[^a-z0-9']+/g, ' ')} `;
-  return words.every((w) => h.includes(` ${w} `) || h.includes(` ${w}s `) || h.includes(` ${w.replace(/s$/, '')} `));
-}
+export { nameOnPage, significantWords, statesAll };
 
 const BUSINESS_TYPE = /business|organi[sz]ation|contractor|service|plumber|electrician|locksmith|store|dentist|accounting|roofing|hvac|attorney|legal|restaurant|salon|clinic|agent|repair|mover|garage/i;
 const IMPORTANT_FAMILY = new Set(['homepage', 'service', 'location', 'about', 'contact']);
@@ -196,7 +187,11 @@ export function buildSiteAudit(input: SiteAuditInput): SiteAudit {
   const readScope = capped ? ` in the ${fmt(coverage.pagesCrawled)} pages read` : '';
 
   const done = input.pages.filter((p) => p.status === 'done' && p.d);
-  const ok = done.filter((p) => (p.d!.status ?? 200) > 0 && (p.d!.status ?? 200) < 400);
+  /* ⛔ AN EMPTY JAVASCRIPT SHELL IS NOT A PAGE THAT HAS NOTHING ON IT (2026-11-03). Nothing is judged from one: it was how a full
+     website with a phone, an email and a form read "No way to contact the business" (poesuk.com, shorelec.uk). */
+  const answered = done.filter((p) => (p.d!.status ?? 200) > 0 && (p.d!.status ?? 200) < 400);
+  const ok = answered.filter((p) => p.d!.shell !== true);
+  if (answered.length > ok.length) notChecked.push(`${plural(answered.length - ok.length, 'page')} only show their content after JavaScript runs and could not be read in a browser — nothing is said about ${answered.length - ok.length === 1 ? 'it' : 'them'}.`);
   const failed = input.pages.filter((p) => p.status === 'failed');
   const urlOf = (p: SiteAuditPage) => p.d?.finalUrl || p.finalUrl || p.url;
   const fam = (p: SiteAuditPage) => p.d?.family ?? 'other';
@@ -260,7 +255,9 @@ export function buildSiteAudit(input: SiteAuditInput): SiteAudit {
   if (input.probe.clientRendered?.flagged === true) {
     out.push(finding({ id: 'client_rendered', category: 'ai_access', severity: 'medium',
       title: 'Homepage text only appears after JavaScript runs',
-      saw: 'The homepage HTML we received carries very little readable text; the content is built in the browser.',
+      saw: home?.d?.rendered
+        ? 'The homepage HTML we received carries very little readable text; the content is built in the browser. The rest of this check read the site in a real browser, as a customer sees it.'
+        : 'The homepage HTML we received carries very little readable text; the content is built in the browser.',
       meaning: 'Crawlers that do not run JavaScript may see an almost empty page, which gives them less to work with.', urls: home ? [urlOf(home)] : [] }));
   }
 
@@ -418,8 +415,8 @@ export function buildSiteAudit(input: SiteAuditInput): SiteAudit {
   const siteNames = biz('names').map((x) => String(x.v));
   const leadName = input.lead?.name?.trim() || '';
   if (home && leadName && significantWords(leadName).length) {
-    const inHead = statesAll([home.d!.title, ...(home.d!.h1 ?? []), ...siteNames].join(' '), leadName);
-    const inText = statesAll(homeHay, leadName);
+    const inHead = nameOnPage([home.d!.title, ...(home.d!.h1 ?? []), ...siteNames].join(' '), leadName);
+    const inText = nameOnPage(homeHay, leadName);
     if (inHead) out.push(finding({ id: 'name_clear', category: 'entity', severity: 'good', title: 'Business name stated clearly', saw: `“${leadName}” appears in the homepage title, main heading or business markup.`, meaning: 'The site says plainly who the business is.', urls: [urlOf(home)] }));
     else out.push(finding({ id: 'name_unclear', category: 'entity', severity: inText ? 'low' : 'medium', absence: !inText,
       title: inText ? 'Business name is not in the homepage title or main heading' : 'Business name not found on the homepage',
@@ -461,14 +458,17 @@ export function buildSiteAudit(input: SiteAuditInput): SiteAudit {
   if (aboutPages.length) out.push(finding({ id: 'about_page', category: 'entity', severity: 'good', title: 'About page found', saw: `${plural(aboutPages.length, 'about page')}.`, meaning: 'Tells customers who is behind the business.', urls: aboutPages.map(urlOf) }));
   else if (ok.length > 1) out.push(finding({ id: 'no_about_page', category: 'entity', severity: 'low', absence: true, title: 'No About page found', saw: `No page looks like an About page${readScope}.`, meaning: 'Who runs the business, how long it has traded and what it is qualified to do are what a customer checks before calling.', count: 0 }));
   const addresses = biz('addresses');
-  if (!addresses.length && ok.length) out.push(finding({ id: 'no_address', category: 'entity', severity: 'low', absence: true, title: 'No address or postcode found', saw: `No street address or postcode was found${readScope || ' on any page read'}.`, meaning: 'Fine for a mobile trade that does not publish one; otherwise a stated address helps confirm where the business is.', count: 0 }));
+  if (!addresses.length && !ok.some((p) => (p.d!.postcodes ?? []).length) && ok.length) out.push(finding({ id: 'no_address', category: 'entity', severity: 'low', absence: true, title: 'No address or postcode found', saw: `No street address or postcode was found${readScope || ' on any page read'}.`, meaning: 'Fine for a mobile trade that does not publish one; otherwise a stated address helps confirm where the business is.', count: 0 }));
   const people = biz('people');
   if (people.length) out.push(finding({ id: 'people', category: 'entity', severity: 'good', title: 'Says who runs the business', saw: `“${String(people[0].v).slice(0, 160)}”`, meaning: 'A named owner or team builds trust.', urls: [...new Set(people.map((p) => p.url))] }));
 
   /* ── Services & content ─────────────────────────────────────────────────────────────────────── */
   const servicePages = ok.filter((p) => fam(p) === 'service');
   const locationPages = ok.filter((p) => fam(p) === 'location');
-  if (ok.length === 1) {
+  /* "Only the homepage was found" needs that to be so: no other page known from its links or its sitemap (2026-11-03, shorelec.uk
+     said it with 212 addresses found). */
+  const otherPagesKnown = input.sitemapUrlCount > 1 || input.pages.some((p) => !sameAddress(p.finalUrl || p.url, servedUrl) && (p.status !== 'skipped' || p.skipReason === 'coverage_cap'));
+  if (ok.length === 1 && !otherPagesKnown) {
     out.push(finding({ id: 'one_page_site', category: 'content', severity: 'medium', title: 'A one-page website', saw: 'Only the homepage was found; there are no other pages.', meaning: 'With everything on one page there is no page dedicated to each service or area a customer searches for.', urls: home ? [urlOf(home)] : [] }));
   } else if (servicePages.length) {
     out.push(finding({ id: 'service_pages', category: 'content', severity: 'good', title: 'Service pages found', saw: `${plural(servicePages.length, 'page')} look like service pages.`, meaning: 'Each service has somewhere to be described.', urls: servicePages.map(urlOf) }));
@@ -488,7 +488,9 @@ export function buildSiteAudit(input: SiteAuditInput): SiteAudit {
       urls: locationPages.length ? locationPages.map(urlOf) : [] }));
   }
   const byTitle = new Map<string, string[]>();
-  for (const p of ok) { const t = (p.d!.title || '').trim().toLowerCase(); if (t) (byTitle.get(t) ?? byTitle.set(t, []).get(t)!).push(urlOf(p)); }
+  /* One page under two addresses (/services and /services/, ?page=2) is one page, not two sharing a title (2026-11-03). */
+  const samePage = (u: string) => { try { const x = new URL(u); return x.hostname.replace(/^www\./, '') + (x.pathname.replace(/\/+$/, '') || '/').toLowerCase(); } catch { return u; } };
+  for (const p of ok) { const t = (p.d!.title || '').trim().toLowerCase(); if (t && !(byTitle.get(t) ?? []).some((u) => samePage(u) === samePage(urlOf(p)))) (byTitle.get(t) ?? byTitle.set(t, []).get(t)!).push(urlOf(p)); }
   const dupTitles = [...byTitle.values()].filter((u) => u.length > 1).flat();
   if (dupTitles.length) out.push(finding({ id: 'duplicate_titles', category: 'content', severity: dupTitles.length >= 5 ? 'medium' : 'low', title: 'Pages sharing the same title', saw: `${plural(dupTitles.length, 'page')} share a page title with another page.`, meaning: 'Identical titles make pages hard to tell apart in search results.', urls: dupTitles }));
   const noH1 = ok.filter((p) => (p.d!.h1?.length ?? 0) === 0);
@@ -505,7 +507,10 @@ export function buildSiteAudit(input: SiteAuditInput): SiteAudit {
 
   /* ── Local & trust evidence ─────────────────────────────────────────────────────────────────── */
   const reviews = biz('reviews');
+  /* A page of its own for reviews or testimonials is proof, whatever its wording (2026-11-03, renderplus.co.uk). */
+  const reviewPages = ok.filter((p) => fam(p) === 'reviews').map(urlOf);
   if (reviews.length) out.push(finding({ id: 'reviews_shown', category: 'local_evidence', severity: 'good', title: 'Reviews or testimonials on the site', saw: `Seen on ${plural(new Set(reviews.map((r) => r.url)).size, 'page')}, e.g. ${String(reviews[0].v).slice(0, 140)}`, meaning: 'Visible proof from real customers.', urls: [...new Set(reviews.map((r) => r.url))] }));
+  else if (reviewPages.length) out.push(finding({ id: 'reviews_shown', category: 'local_evidence', severity: 'good', title: 'Reviews or testimonials on the site', saw: `A page of its own: ${reviewPages[0]}`, meaning: 'Visible proof from real customers.', urls: reviewPages }));
   else if (ok.length) out.push(finding({ id: 'no_reviews', category: 'local_evidence', severity: 'low', absence: true, title: 'No reviews or testimonials found on the site', saw: `No customer reviews or testimonials were found${readScope || ' on any page read'} (a reviews widget that loads by JavaScript would not be visible to us).`, meaning: 'Reviews shown on the site are visible proof a customer can check.', count: 0 }));
   const creds = biz('credentials');
   if (creds.length) {
@@ -574,7 +579,11 @@ export function buildSiteAudit(input: SiteAuditInput): SiteAudit {
   if (clash.length) out.push(finding({ id: 'schema_phone_mismatch', category: 'structured_data', severity: 'medium', title: 'Structured data gives a different phone number', saw: `The markup says ${clash[0].tel}; the pages show ${String(phones[0].v)}.`, meaning: 'Conflicting details make it harder to be sure which is right.', urls: [...new Set(clash.map((c) => c.url))], evidence: [`markup: ${clash[0].tel}`, `page: ${String(phones[0].v)}`] }));
 
   out.sort((a, b) => SEVERITY_RANK[a.severity] - SEVERITY_RANK[b.severity] || b.count - a.count);
-  return { version: SITE_AUDIT_VERSION, basis: capped ? 'capped' : 'full', servedUrl, coverage, findings: out, notChecked };
+  /* ⛔ PART OF A PAGE WAS NOT DOWNLOADED (MAX_PAGE_BYTES): what was kept is true, but nothing is said to be missing. */
+  const anyCut = ok.some((p) => p.d!.cut === true);
+  const findings = anyCut ? out.filter((f) => !f.absence) : out;
+  if (anyCut) notChecked.push('Things that may be missing — not judged: a page was longer than we download, so it may be further down.');
+  return { version: SITE_AUDIT_VERSION, basis: capped ? 'capped' : 'full', servedUrl, coverage, findings, notChecked, ...(ok.some((p) => p.d!.rendered === true) ? { rendered: true } : {}) };
 }
 
 /* ── stored rows (any age) → an audit ─────────────────────────────────────────────────────────── */
@@ -638,7 +647,40 @@ export function classifyFetchError(input: { message?: string | null; status?: nu
  *  the caller shows the failure instead). Pure. */
 export function auditFromStoredCrawl(row: StoredCrawlForAudit | null | undefined): SiteAudit | null {
   const a = withContentTrust(auditFromStoredCrawlBase(row), row);
-  return a ? dropUnverifiedBlockFindings(mergeVisibilityChecks(a, usableVisibilityChecks((row?.result as { visibility?: unknown } | null | undefined)?.visibility))) : a;
+  if (!a) return a;
+  const merged = dropUnverifiedBlockFindings(mergeVisibilityChecks(a, usableVisibilityChecks((row?.result as { visibility?: unknown } | null | undefined)?.visibility)));
+  if (checksAreCurrent(row)) return merged;
+  const kept = heldOnOlderCheck(merged.findings, !!merged.coverage?.capped);
+  return kept.length === merged.findings.length ? merged : { ...merged, findings: kept };
+}
+
+/* ⛔ THE CHECKS BEFORE 2026-11-03 (RECON_website-check-accuracy-2026-11-03.md: at least 37 of 127 serious claims false). A row stored
+   before WEBSITE_CHECKS_VERSION keeps only what those checks got right, until a new crawl replaces it. Nothing stored is
+   rewritten: this is what is SAID about an older row. */
+export const WEBSITE_CHECKS_VERSION = 2;
+/** The row's own checks are the current ones. */
+export function checksAreCurrent(row: StoredCrawlForAudit | null | undefined): boolean {
+  return (row?.result as { checksVersion?: unknown } | null | undefined)?.checksVersion === WEBSITE_CHECKS_VERSION;
+}
+/** Said wrongly often enough on an older row that none is believed: the service guess, the name variants, the address picked
+ *  from any page, the listing name, titles read only from <head>, links read without <base>. */
+const UNRELIABLE_ON_OLDER_CHECK: ReadonlySet<string> = new Set([
+  'service_page_gaps', 'no_service_pages', 'services_on_one_page', 'vs_name_inconsistent', 'ct_schema_mismatch',
+  'vs_address_not_on_key_pages', 'name_unclear', 'missing_title', 'broken_pages', 'ct_broken_links', 'one_page_site', 'no_address', 'no_contact_page',
+]);
+/** All that can be said of a site whose pages were an empty shell and never read: what robots.txt, the sitemap and the address show. */
+const TRUE_OF_A_SHELL = /^(?:client_rendered|no_https|https_ok|no_robots|no_sitemap|sitemap_ok|sitemap_off_site|oai_searchbot_ok|robots_|ct_robots_|ct_no_https|ct_no_sitemap)/;
+
+/** What survives on a check stored before the current ones. A capped crawl's "not found" is dropped too: it may never have read
+ *  the page (contact, about and reviews were read last). Pure. */
+export function heldOnOlderCheck<T extends { id: string; severity?: string; absence?: boolean }>(findings: readonly T[], capped: boolean): T[] {
+  const shell = findings.some((f) => f.id === 'client_rendered');
+  return findings.filter((f) => {
+    if (f.severity === 'good') return !shell || TRUE_OF_A_SHELL.test(f.id);
+    if (shell && !TRUE_OF_A_SHELL.test(f.id)) return false;
+    if (UNRELIABLE_ON_OLDER_CHECK.has(f.id)) return false;
+    return !(capped && f.absence === true);
+  });
 }
 
 /** Finding ids that came from fetching AS an AI crawler (before 2026-10-26) — never evidence, dropped from every stored audit. */
@@ -746,7 +788,7 @@ function auditFromStoredCrawlBase(row: StoredCrawlForAudit | null | undefined): 
     /* The quick check samples the homepage and the service / location pages, so a thin one is a key page (MEDIUM, as the
        deep audit's thin_key_pages). ⛔ A thin HOMEPAGE is said as the homepage, never "one of the service pages" (The
        Royal Locksmiths, 2026-09-23). */
-    if (s.thinPageUrls?.length) {
+    if (s.thinPageUrls?.length && !s.clientRendered?.flagged) {
       const homeOnly = s.thinPageUrls.every((u) => { try { return (new URL(u).pathname.replace(/\/+$/, '') || '/') === '/'; } catch { return false; } });
       const n = s.thinPageUrls.length;
       findings.push(finding({ id: 'thin_pages', category: 'content', severity: 'medium',
@@ -754,8 +796,8 @@ function auditFromStoredCrawlBase(row: StoredCrawlForAudit | null | undefined): 
         saw: homeOnly ? `The homepage has under ${AUDIT_THIN_WORDS} words of readable text.` : `${plural(n, 'checked page')} ${n === 1 ? 'has' : 'have'} under ${AUDIT_THIN_WORDS} words of readable text.`,
         meaning: 'Very short pages say little about what the business does.', urls: s.thinPageUrls }));
     }
-    if (s.missingH1) findings.push(finding({ id: 'missing_h1', category: 'content', severity: 'medium', title: 'Homepage has no main heading (H1)', saw: 'The homepage has no H1 heading.', meaning: 'The main heading is the clearest statement of what a page is about.', count: 0 }));
-    if (s.noJsonLd) findings.push(finding({ id: 'no_business_schema', category: 'structured_data', severity: 'low', title: 'Homepage has no structured data', saw: 'No JSON-LD on the homepage.', meaning: 'Good housekeeping; on its own not a ranking fix.', count: 0 }));
+    if (s.missingH1 && !s.clientRendered?.flagged) findings.push(finding({ id: 'missing_h1', category: 'content', severity: 'medium', title: 'Homepage has no main heading (H1)', saw: 'The homepage has no H1 heading.', meaning: 'The main heading is the clearest statement of what a page is about.', count: 0 }));
+    if (s.noJsonLd && !s.clientRendered?.flagged) findings.push(finding({ id: 'no_business_schema', category: 'structured_data', severity: 'low', title: 'Homepage has no structured data', saw: 'No JSON-LD on the homepage.', meaning: 'Good housekeeping; on its own not a ranking fix.', count: 0 }));
     if (row.result?.siteInfo?.phone) findings.push(finding({ id: 'phone_shown', category: 'entity', severity: 'good', title: 'Phone number shown', saw: row.result.siteInfo.phone, meaning: 'Customers can find how to contact the business.', count: 0 }));
     notChecked.push(`This was a quick check of up to ${s.pagesChecked ?? 12} pages, not a full crawl. Run "Crawl site" for the complete audit.`);
   } else {

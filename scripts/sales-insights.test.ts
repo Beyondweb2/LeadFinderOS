@@ -45,7 +45,7 @@ function page(spec: PageSpec, isHome = false): { p: SiteAuditPage; nav: Array<{ 
 function run(specs: Array<PageSpec & { home?: boolean }>, over: Partial<InsightInput> = {}): SalesInsights {
   const built = specs.map((s) => page(s, !!s.home));
   const nav = built.find((_, i) => specs[i].home)?.nav ?? [];
-  return buildSalesInsights({
+  return buildSalesInsights({ serviceReview: { kind: 'rules_only' },
     servedUrl: O + '/', pages: built.map((b) => b.p), nav,
     lead: { name: 'RG Locksmiths', town: 'Bath', trade: 'locksmith' }, ...over,
   });
@@ -141,7 +141,7 @@ console.log('\n── entity, location, linking, proof ──');
   ok(!!f && f.evidence.urls.length === 3 && /3 of 3/.test(f.observed), `13. service pages the homepage and menu never link to → internal_linking, 3 of 3 (got ${ids(i)}: ${f?.observed})`);
   const j = run([GOOD_HOME, ...SERVICE_PAGES]);
   ok(!ids(j).includes('internal_linking'), '13. linked from the menu and homepage → no internal-linking finding');
-  const g = buildSalesInsights({ servedUrl: O + '/', pages: [page({ ...GOOD_HOME, links: [], nav: [['Home', '/']] }, true).p, ...SERVICE_PAGES.map((s) => { const x = page(s).p; x.l = undefined; return x; })], nav: [], lead: { town: 'Bath' } });
+  const g = buildSalesInsights({ serviceReview: { kind: 'rules_only' }, servedUrl: O + '/', pages: [page({ ...GOOD_HOME, links: [], nav: [['Home', '/']] }, true).p, ...SERVICE_PAGES.map((s) => { const x = page(s).p; x.l = undefined; return x; })], nav: [], lead: { town: 'Bath' } });
   ok(!ids(g).includes('internal_linking'), '13. links not recorded → never judged (an absent value is not "no links")');
 }
 {
@@ -179,17 +179,17 @@ console.log('\n── strong site, opportunity, limits ──');
 }
 {
   const built = [GOOD_HOME, ...SERVICE_PAGES.slice(0, 1)].map((s) => page(s, !!(s as { home?: boolean }).home));
-  const i = buildSalesInsights({
+  const i = buildSalesInsights({ serviceReview: { kind: 'rules_only' },
     servedUrl: O + '/', pages: built.map((b) => b.p), nav: built[0].nav, capped: true,
     knownUrls: [O + '/lock-changes', O + '/upvc-door-repairs'], lead: { name: 'RG Locksmiths', town: 'Bath', trade: 'locksmith' },
   });
   ok(!ids(i).includes('no_service_pages') && i.services.every((s) => s.coverage === 'dedicated'), `19. capped crawl: pages found but not read still count as covered, never as missing (got ${i.services.map((s) => s.name + ':' + s.coverage)})`);
-  const j = buildSalesInsights({ servedUrl: O + '/', pages: built.map((b) => b.p), nav: [['Emergency Locksmith', '/x-a'], ['Lock Changes', '/x-b'], ['uPVC Repairs', '/x-c']].map(([label, url]) => ({ label, url })), capped: true, lead: { town: 'Bath', trade: 'locksmith' } });
+  const j = buildSalesInsights({ serviceReview: { kind: 'rules_only' }, servedUrl: O + '/', pages: built.map((b) => b.p), nav: [['Emergency Locksmith', '/x-a'], ['Lock Changes', '/x-b'], ['uPVC Repairs', '/x-c']].map(([label, url]) => ({ label, url })), capped: true, lead: { town: 'Bath', trade: 'locksmith' } });
   ok(j.services.filter((s) => s.name !== 'Emergency Locksmith').length === 2 && j.services.filter((s) => s.name !== 'Emergency Locksmith').every((s) => s.coverage === 'unknown') && !ids(j).includes('no_service_pages'), '19. capped crawl: a menu item pointing at a page nobody read is "unknown", never "no page"');
   ok(j.basis.capped === true && j.basis.pagesRead === 2, '19. the basis says how much was read');
 }
 {
-  const dead = buildSalesInsights({ servedUrl: O + '/', pages: [], nav: [], lead: null });
+  const dead = buildSalesInsights({ serviceReview: { kind: 'rules_only' }, servedUrl: O + '/', pages: [], nav: [], lead: null });
   ok(dead.state === 'unreadable' && dead.findings.length === 0 && dead.opportunity === null, '20. nothing readable → unreadable, nothing said');
 }
 
@@ -235,7 +235,8 @@ console.log('\n── the inline (standard) crawl, the research layer, and what 
   const samples = [page('/services', 'Our Services', '<h2>Emergency Locksmith</h2><p>' + words(50) + '</p><h2>Lock Changes</h2><p>' + words(50) + '</p><h2>uPVC Door Repairs</h2><p>' + words(50) + '</p>' + filler), page('/about', 'About RG Locksmiths', filler), page('/contact', 'Contact', filler)];
   const known = [O + '/services', O + '/about', O + '/contact', O + '/blog/a', O + '/blog/b'];
   const i = insightsFromFetchedPages({ servedUrl: O + '/', home, samples, knownUrls: known, lead: { name: 'RG Locksmiths', town: 'Bath', trade: 'locksmith' } });
-  ok(i.findings.some((f) => f.id === 'services_on_one_page') && i.basis.pagesRead === 4 && i.basis.capped === true, '24. the inline crawl turns the SAME fetched pages into the same finding, and says it read a sample (capped) — got ' + i.findings.map((f) => f.id).join() + '/' + JSON.stringify(i.basis));
+  /* ⛔ 2026-11-03: the quick check has no reader of service names, so it claims nothing about service pages; the deep check behind it does. */
+  ok(!i.findings.some((f) => f.id === 'services_on_one_page') && i.basis.pagesRead === 4 && i.basis.capped === true, '24. the inline crawl reads the SAME pages, says it read a sample (capped), and makes no service-page claim — got ' + i.findings.map((f) => f.id).join() + '/' + JSON.stringify(i.basis));
   const full = insightsFromFetchedPages({ servedUrl: O + '/', home, samples, knownUrls: [O + '/services', O + '/about', O + '/contact'], lead: { name: 'RG Locksmiths', town: 'Bath', trade: 'locksmith' } });
   ok(full.basis.capped === false, '24. every known page sampled → not capped');
   ok(insightsFromFetchedPages({ servedUrl: O + '/', home: { ...home, html: '' }, samples: [], knownUrls: [] }).state === 'unreadable', '24. an empty homepage → unreadable, nothing said');

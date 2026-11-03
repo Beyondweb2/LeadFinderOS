@@ -102,6 +102,8 @@ export function visibleText(html: string): string {
     .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, ' ')
     .replace(/<noscript\b[^>]*>[\s\S]*?<\/noscript>/gi, ' ')
     .replace(/<!--[\s\S]*?-->/g, ' ')
+    /* A page cut short can end inside a script: the rest is code, never page text. */
+    .replace(/<(?:script|style)\b[^>]*>[\s\S]*$/i, ' ')
     .replace(/<[^>]+>/g, ' ')
     .replace(/&nbsp;/gi, ' ')
     .replace(/&amp;/gi, '&')
@@ -364,13 +366,14 @@ export function buildFaultLines(s: CrawlSignals): CrawlFault[] {
   if (s.duplicates) out.push({
     title: "Your pages are too similar",
     detail: `${s.duplicates.clusterSize} near-identical pages, ${s.duplicates.similarityPct}% the same. AI reads them as one.`, minor: false, kind: 'duplicates' });
-  if (s.thinPages > 0) out.push({
+  /* ⛔ An empty JavaScript shell has no text and no heading to judge (2026-11-03): the one true fault is that it is a shell. */
+  if (s.thinPages > 0 && !s.clientRendered?.flagged) out.push({
     title: "There isn’t enough on your pages",
     detail: `${s.thinPages} page${s.thinPages === 1 ? "" : "s"} under ${THIN_WORDS} words. Not enough for AI to quote you from.`, minor: false, kind: 'thin_pages' });
-  if (s.missingH1) out.push({
+  if (s.missingH1 && !s.clientRendered?.flagged) out.push({
     title: "Your pages have no clear heading",
     detail: `No H1 heading, so AI has no plain statement of what the page is about.`, minor: false, kind: 'missing_h1' });
-  if (s.noJsonLd) out.push({
+  if (s.noJsonLd && !s.clientRendered?.flagged) out.push({
     title: "Your site doesn’t label the basics",
     detail: `No structured data — nothing tells AI what you do, where you are, or how to reach you.`, minor: true, kind: 'no_structured_data' });
   return out.slice(0, 4);
@@ -538,13 +541,13 @@ export function buildVerdict(s: CrawlSignals): CrawlVerdict {
   if (s.duplicates) {
     problems.push(`You have about ${s.duplicates.clusterSize} near-identical pages (${s.duplicates.similarityPct}% the same text, with just the town swapped) — AI reads that as one thin page, not ${s.duplicates.clusterSize}.`);
   }
-  if (s.missingH1) {
+  if (s.missingH1 && !s.clientRendered?.flagged) {
     problems.push(`Your homepage has no H1 heading, so AI has no clear statement of what the page is about.`);
   }
-  if (s.noJsonLd) {
+  if (s.noJsonLd && !s.clientRendered?.flagged) {
     problems.push(`Your site has no structured data (JSON-LD), so AI has to guess your business details instead of reading them.`);
   }
-  if (s.thinPages > 0) {
+  if (s.thinPages > 0 && !s.clientRendered?.flagged) {
     problems.push(`${s.thinPages} of your service pages have very little text — too thin for AI to draw on.`);
   }
 

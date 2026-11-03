@@ -33,9 +33,11 @@
 
 import type { SiteAuditPage } from './siteAudit.ts';
 import { significantWords, statesAll } from './siteAudit.ts';
+import { nameInShortForm } from './businessNameMatch.ts';
 import { coverageStatementsIn, FULL_TEXT_MARK, pageTextWasCut, textStatesTown } from './siteClaims.ts';
 
-export const SALES_INSIGHTS_VERSION = 1;
+/* 2 (2026-11-03): an older row's guessed services are never read again (usableInsights); a new crawl replaces them. */
+export const SALES_INSIGHTS_VERSION = 2;
 /** The strongest findings kept on a crawl. More than this is an audit, not a sales insight. */
 export const MAX_INSIGHT_FINDINGS = 5;
 /** What the script may say aloud — one or two hooks, never a list. */
@@ -120,6 +122,8 @@ export interface SalesInsights {
   strengths: string[];
   services: ServiceStatus[];
   basis: { pagesRead: number; capped: boolean };
+  /** Every service name found, for the reader that decides which are real (ServiceReview). */
+  candidates?: string[];
 }
 
 export interface InsightLead {
@@ -142,7 +146,18 @@ export interface InsightInput {
   lead?: InsightLead | null;
   /** The crawl stopped at its page limit: absences are said of the pages read only, and unread pages are not judged. */
   capped?: boolean;
+  /** A reader's verdict on which names are services. Absent or 'not_reviewed' = no claim about service pages (absent = do not). */
+  serviceReview?: ServiceReview;
 }
+
+/* ⛔ WHAT COUNTS AS A SERVICE IS A QUESTION OF MEANING (2026-11-03). Word matching called "Newton Heath" a service ("heat") and
+   "Health & Safety" one ("safe"), and "1 of 54 services" went on a call script. A claim that a service has no page now needs a
+   model to have read the names (_shared/service-review.ts): the code still decides the claim, the model only says which names
+   are services a customer would buy and which page is about each. 'rules_only' is for a test of the rules themselves. */
+export type ServiceReview =
+  | { kind: 'reviewed'; real: readonly string[]; pageFor: Readonly<Record<string, string>> }
+  | { kind: 'not_reviewed' }
+  | { kind: 'rules_only' };
 
 /* ── tiny helpers ─────────────────────────────────────────────────────────────────────────────── */
 
@@ -195,7 +210,9 @@ const SERVICE_NOUN_PREFIXES = ['locksmith', 'lock', 'plumb', 'boiler', 'heat', '
   'dental', 'whiten', 'veneer', 'brace', 'implant', 'hair', 'nail', 'beaut', 'massag', 'physio', 'therap', 'accountan', 'bookkeep', 'payroll', 'conveyanc', 'probate', 'mortgag',
   'photograph', 'wedding', 'cater', 'tutor', 'lesson', 'coach', 'design', 'print', 'cutting', 'engrav', 'shoe', 'watch', 'batter', 'safe', 'boil', 'sweep', 'heating', 'unblock'];
 const SERVICE_NOUN_EXACT = new Set(['gas', 'tap', 'taps', 'tv', 'mot', 'dj', 'tax', 'vat', 'key', 'keys', 'car', 'cars', 'ev', 'pat']);
-const hasServiceNoun = (label: string) => String(label ?? '').toLowerCase().split(/[^a-z0-9]+/).filter(Boolean)
+/** Words that start like a service word and are not one: places and everyday words. */
+const NOT_SERVICE_NOUNS = new Set(['heath', 'heaton', 'heathrow', 'heathfield', 'heatherton', 'safety', 'safely', 'lockdown', 'watchet', 'printed', 'building', 'buildings', 'designed', 'lightly', 'doorstep', 'treeton', 'batters']);
+const hasServiceNoun = (label: string) => String(label ?? '').toLowerCase().split(/[^a-z0-9]+/).filter((w) => w && !NOT_SERVICE_NOUNS.has(w))
   .some((w) => SERVICE_NOUN_EXACT.has(w) || SERVICE_NOUN_PREFIXES.some((p) => stem(w).startsWith(p) || w.startsWith(p)));
 const isServiceLabel = (label: string) => {
   const t = String(label ?? '').replace(/\s+/g, ' ').trim();
@@ -224,6 +241,7 @@ export function nameStated(hay: string, name: string, tradeStems: ReadonlySet<st
     .filter((w) => w.length >= 2 && !NAME_STOP.has(w));
   const distinctive = words.filter((w) => !tradeStems.has(stem(w)));
   const need = distinctive.length ? distinctive : words;
+  if (nameInShortForm(hay, name)) return true;
   if (!need.length) return false;
   const h = new Set(String(hay ?? '').toLowerCase().replace(/['’]/g, '').replace(/&/g, ' ').replace(/[^a-z0-9]+/g, ' ').split(' ').filter(Boolean));
   return need.every((w) => h.has(w) || h.has(w + 's') || h.has(w.replace(/s$/, '')));
@@ -243,7 +261,8 @@ export function buildSalesInsights(input: InsightInput): SalesInsights {
   const capped = input.capped === true;
   const scope = capped ? ' in the pages read' : '';
   const done = input.pages.filter((p) => p.status === 'done' && p.d);
-  const ok = done.filter((p) => (p.d!.status ?? 200) > 0 && (p.d!.status ?? 200) < 400 && !p.d!.noindex);
+  /* ⛔ An empty JavaScript shell is never judged (2026-11-03, siteAudit says why). */
+  const ok = done.filter((p) => (p.d!.status ?? 200) > 0 && (p.d!.status ?? 200) < 400 && !p.d!.noindex && p.d!.shell !== true);
   const urlOf = (p: SiteAuditPage) => p.d?.finalUrl || p.finalUrl || p.url;
   const fam = (p: SiteAuditPage) => p.d?.family ?? 'other';
   const home = ok.find((p) => fam(p) === 'homepage') ?? null;
@@ -298,13 +317,22 @@ export function buildSalesInsights(input: InsightInput): SalesInsights {
   }
   // A candidate whose words are wholly inside another's ("Locks" inside "Lock changes") is the same service.
   const list = [...cands.values()];
-  const services0 = list.filter((c) => !list.some((o) => o !== c && o.tokens.length > c.tokens.length && c.tokens.every((t) => o.tokens.includes(t))));
+  const review: ServiceReview = input.serviceReview ?? { kind: 'not_reviewed' };
+  const realServices = review.kind === 'reviewed' ? new Set(review.real.map((n) => n.trim().toLowerCase())) : null;
+  const services0 = list.filter((c) => !list.some((o) => o !== c && o.tokens.length > c.tokens.length && c.tokens.every((t) => o.tokens.includes(t))))
+    .filter((c) => !realServices || realServices.has(c.name.trim().toLowerCase()));
+  const mayClaimServicePages = review.kind === 'reviewed' || review.kind === 'rules_only';
   /* A heading that only appears on the homepage is the weakest evidence; keep it, but at MEDIUM. */
   const confOf = (c: Candidate): InsightConfidence => (c.sources.has('lead') || c.sources.has('nav') || c.sources.has('index') ? 'high' : 'medium');
 
   /* ── coverage: does each service have its own page? ───────────────────────────────────────────── */
-  const dedicatedPool = ok.filter((p) => !EXCLUDED_DEDICATED_FAMILIES.has(fam(p)) && !sharedPages.some((s) => s.page === p));
+  /* Only a page that is ABOUT several services is not "its own page". A service page with an "our other services" block in its
+     headings still is (2026-11-03, acroofingsouth.co.uk: /chimney-repairs-andover/ read, "Chimney repairs" reported as having no page). */
+  const isIndexPage = (p: SiteAuditPage) => /(?:^|\/)(?:our-)?services?(?:\/index[^/]*)?\/?$|\/what-we-do\/?$/i.test(pathOf(urlOf(p)));
+  const dedicatedPool = ok.filter((p) => !EXCLUDED_DEDICATED_FAMILIES.has(fam(p)) && !(isIndexPage(p) && sharedPages.some((s) => s.page === p)));
   const statuses: ServiceStatus[] = services0.map((c) => {
+    const reviewedPage = review.kind === 'reviewed' ? review.pageFor[c.name] : null;
+    if (reviewedPage) return { name: c.name, coverage: 'dedicated', confidence: confOf(c), url: reviewedPage, seenOn: c.seenOn };
     const navPath = c.navUrl ? safePath(c.navUrl, input.servedUrl) : null;
     const navTarget = navPath ? ok.find((p) => pathOf(urlOf(p)) === navPath) : null;
     const navIsOwn = navTarget && dedicatedPool.includes(navTarget);
@@ -328,7 +356,7 @@ export function buildSalesInsights(input: InsightInput): SalesInsights {
   const shared = judged.filter((s) => s.coverage === 'shared').sort((a, b) => (a.confidence === b.confidence ? 0 : a.confidence === 'high' ? -1 : 1));
   const homeOnlyEvidence = home.d!.excerpt ?? '';
 
-  if (judged.length >= MIN_SERVICES_FOR_PAGE_CLAIMS && dedicated.length === 0) {
+  if (mayClaimServicePages && judged.length >= MIN_SERVICES_FOR_PAGE_CLAIMS && dedicated.length === 0) {
     const list3 = lacking.slice(0, 4).map((s) => s.name);
     const named = lacking.slice(0, 4);
     const sharedTarget = shared.length >= MIN_SERVICES_FOR_PAGE_CLAIMS ? shared[0].url : null;
@@ -353,7 +381,7 @@ export function buildSalesInsights(input: InsightInput): SalesInsights {
         evidence: { urls: [urlOf(home)], quotes: lacking.slice(0, EVIDENCE_QUOTES).map((s) => `“${s.name}” (${s.seenOn[0] ?? urlOf(home)})`), signal: `${lacking.length} services named, 0 dedicated pages found` },
       });
     }
-  } else if (judged.length >= MIN_SERVICES_FOR_PAGE_CLAIMS && dedicated.length >= 1 && lacking.filter((s) => s.confidence === 'high').length >= 2) {
+  } else if (mayClaimServicePages && judged.length >= MIN_SERVICES_FOR_PAGE_CLAIMS && dedicated.length >= 1 && lacking.filter((s) => s.confidence === 'high').length >= 2) {
     const names = lacking.filter((s) => s.confidence === 'high').slice(0, 4).map((s) => s.name);
     findings.push({
       id: 'service_page_gaps', kind: 'service_page_gaps', theme: 'services', confidence: 'high', priority: 68,
@@ -439,8 +467,11 @@ export function buildSalesInsights(input: InsightInput): SalesInsights {
   const homeLinks = Array.isArray(home.l) ? new Set(home.l.map((l) => safePath(l, input.servedUrl) ?? l.toLowerCase())) : null;
   const navPaths = new Set((input.nav ?? []).map((n) => safePath(n.url, input.servedUrl) ?? ''));
   const ownServicePages = dedicated.filter((d) => d.url && ok.some((p) => urlOf(p) === d.url)).map((d) => d.url!);
+  /* One click on from the menu counts: a Services page in the menu listing them all is how a customer finds them (2026-11-03,
+     ljmullanelectrical.com: "12 of 12 not linked", every one linked from /services). */
+  const hubLinks = new Set(ok.filter((p) => navPaths.has(pathOf(urlOf(p))) || isIndexPage(p)).flatMap((p) => (p.l ?? []).map((l) => safePath(l, input.servedUrl) ?? l.toLowerCase())));
   if (homeLinks && ownServicePages.length >= 2) {
-    const unlinked = ownServicePages.filter((u) => !homeLinks.has(pathOf(u)) && !navPaths.has(pathOf(u)));
+    const unlinked = ownServicePages.filter((u) => !homeLinks.has(pathOf(u)) && !navPaths.has(pathOf(u)) && !hubLinks.has(pathOf(u)));
     if (unlinked.length === ownServicePages.length || unlinked.length >= Math.ceil(ownServicePages.length * 0.6)) {
       findings.push({
         id: 'internal_linking', kind: 'internal_linking', theme: 'linking', confidence: 'high', priority: 54,
@@ -479,12 +510,13 @@ export function buildSalesInsights(input: InsightInput): SalesInsights {
 
   /* ── the honest opportunity, for when there is no fault worth raising ─────────────────────────── */
   const speakable = ranked.some((f) => f.priority >= SPEAK_MIN_PRIORITY);
-  const opportunity = speakable ? null : pickOpportunity({ ok, home, urlOf, fam, statuses: judged, dedicated, town, leadServices: lead.services ?? [], proofCount, workPages, knownUrls: known });
+  const opportunity = speakable ? null : pickOpportunity({ ok, home, urlOf, fam, statuses: mayClaimServicePages ? judged : [], dedicated, town, leadServices: lead.services ?? [], proofCount, workPages, knownUrls: known });
   return {
     version: SALES_INSIGHTS_VERSION,
     state: speakable ? 'issues' : 'strong_site',
     findings: ranked, opportunity, strengths: strengths.slice(0, 6),
     services: statuses.slice(0, 12), basis,
+    candidates: statuses.map((s) => s.name).slice(0, 60),
   };
 }
 

@@ -22,6 +22,7 @@
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 
 import type { AuditFinding } from './siteAudit.ts';
+import { nameOnPage } from './businessNameMatch.ts';
 import type { PageBusiness, PageDigest } from './fullCrawl.ts';
 
 export const VISIBILITY_CHECKS_VERSION = 1;
@@ -106,10 +107,22 @@ export function titleBrand(titles: string[]): { brand: string; pages: number } |
   return { brand: best.label, pages: best.n };
 }
 
+/** A website builder's default, left in place: said as a name, because it is what the site calls itself. */
+const DEFAULT_SITE_NAME = /^(?:my ?site|website|site title|home|untitled|my website)$/i;
+/** Words any roofer's or electrician's name can share with a strapline: they do not make it the same name. */
+const NOT_A_NAME_WORD = /^(?:roof\w*|electric\w*|plumb\w*|heat\w*|gas|build\w*|construct\w*|locksmith\w*|driving|school|account\w*|compan\w*|services?|solutions?|contractors?|specialists?|group|local|north|south|east|west|the|and|for|ltd|limited|llp|uk)$/i;
+const nameWords = (s: string) => String(s ?? '').toLowerCase().split(/[^a-z0-9]+/).filter((w) => w.length >= 2 && !NOT_A_NAME_WORD.test(w));
+function sharesNameWord(a: string, b: string): boolean {
+  const A = new Set(nameWords(a));
+  return nameWords(b).some((w) => A.has(w));
+}
+
 /** "© 2025 Name. All rights reserved" → "Name". */
 export function footerName(footer: string | null | undefined): string | null {
   const m = /(?:©|&copy;|\(c\)|copyright)\s*(?:copyright\s*)?(?:\d{4}\s*(?:[-–]\s*\d{4})?\s*)?([^|.©\n]{3,60}?)(?=\s*(?:[|.]|all rights|\d{4}|registered|company|website|designed|powered|privacy|terms|$))/i.exec(String(footer ?? ''));
-  const n = m?.[1]?.replace(/^[\s,:-]+|[\s,:-]+$/g, '').trim() ?? '';
+  const n = m?.[1]?.replace(/^[\s,:-]+|[\s,:-]+$/g, '').replace(/^by\s+/i, '').trim() ?? '';
+  /* "©Copyright. All rights reserved" names nobody; nor does "Copyright". */
+  if (/^(?:copyright|all rights|rights reserved|reserved)\b/i.test(n)) return null;
   return n.length >= 3 && /[a-z]/i.test(n) ? n : null;
 }
 
@@ -169,7 +182,11 @@ const qKey = (q: string, strip: string[]) => normFor(q, strip);
 export function buildVisibilityChecks(input: VisibilityInput): VisibilityChecks {
   const out: AuditFinding[] = [];
   const notChecked: string[] = [];
-  const pages = input.pages.filter((p) => p.d && (p.d.status ?? 200) > 0 && (p.d.status ?? 200) < 400).slice(0, VISIBILITY_MAX_PAGES);
+  /* ⛔ An empty JavaScript shell, or a page we did not download to its end, cannot show that something is missing (2026-11-03). */
+  /* One page under two addresses (/services and /services/) is judged once. */
+  const seenPath = new Set<string>();
+  const pages = input.pages.filter((p) => p.d && (p.d.status ?? 200) > 0 && (p.d.status ?? 200) < 400 && p.d.shell !== true && p.d.cut !== true)
+    .filter((p) => { const k = pathOfUrl(p.d.finalUrl || p.url); if (seenPath.has(k)) return false; seenPath.add(k); return true; }).slice(0, VISIBILITY_MAX_PAGES);
   if (!pages.length) return { version: VISIBILITY_CHECKS_VERSION, findings: [], notChecked: ['The page checks — no page could be read.'] };
   const urlOf = (p: VisibilityPage) => p.d.finalUrl || p.url;
   const home = pages.find((p) => p.d.family === 'homepage') ?? null;
@@ -225,6 +242,12 @@ export function buildVisibilityChecks(input: VisibilityInput): VisibilityChecks 
   const known = pages.flatMap((p) => [...(p.b?.addresses ?? []), ...(p.b?.schema ?? []).map((s) => s.address).filter(Boolean)].map((a) => ({ a: String(a), url: urlOf(p) })))
     .map((x) => ({ ...x, pc: postcodeOf(x.a) }))
     .filter((x) => !!x.pc);
+  /* The business's address is the postcode most pages show, not the first one read: a project page names the customer's
+     street (2026-11-03, hmconstruction.co.uk: "HA98NN" reported missing from a homepage showing NW9 8DE). */
+  const pcKey = (x: { pc: RegExpExecArray | null }) => (x.pc![1] + x.pc![2]).toUpperCase();
+  const pcCount = new Map<string, number>();
+  for (const k of new Set(known.map((x) => `${x.url} ${pcKey(x)}`))) { const c = k.split(' ')[1]; pcCount.set(c, (pcCount.get(c) ?? 0) + 1); }
+  known.sort((a, b) => (pcCount.get(pcKey(b)) ?? 0) - (pcCount.get(pcKey(a)) ?? 0));
   if (known.length) {
     const pc = known[0].pc!;
     const pcRe = new RegExp(`\\b${pc[1]}\\s*${pc[2]}\\b`, 'i');
@@ -233,10 +256,12 @@ export function buildVisibilityChecks(input: VisibilityInput): VisibilityChecks 
     /* ⛔ JUDGED ONLY ON THE WHOLE PAGE: the postcodes read from the full text (d.postcodes). A page stored before that
        existed is judged only when its kept text was not cut short: a footer address past the cut is not "missing". */
     const judged = key.filter((p) => Array.isArray(p.d.postcodes) || (typeof p.t === 'string' && p.t.length > 0 && p.t.length < VISIBILITY_TEXT_CUT));
-    const without = judged.filter((p) => !shows(p));
+    /* A page showing any postcode has an address on it: a different one is not a missing one. */
+    const without = judged.filter((p) => !shows(p) && !(p.d.postcodes ?? []).length);
     /* The address as read: the words just before the postcode, never the menu text the sentence ran into. */
     const at0 = known[0].a.search(pcRe);
-    const addr = known[0].a.slice(Math.max(0, at0 - 60), at0 + known[0].pc![0].length).replace(/^S*s/, '').trim();
+    /* Cut at a word, never through one ("eve Knight Electrical"). */
+    const addr = known[0].a.slice(Math.max(0, at0 - 60), at0 + known[0].pc![0].length).replace(/^\S*\s+/, '').trim();
     const homeMissing = !!home && without.includes(home);
     if (homeMissing || (without.length >= 2 && without.length * 2 >= judged.length)) {
       out.push(finding({
@@ -252,16 +277,22 @@ export function buildVisibilityChecks(input: VisibilityInput): VisibilityChecks 
   /* ── 4. The business name written differently ───────────────────────────────────────────────── */
   const variants: Array<{ name: string; source: string; url: string }> = [];
   const brand = titleBrand(pages.map((p) => p.d.title ?? ''));
-  if (brand) variants.push({ name: brand.brand, source: `page titles (${plural(brand.pages, 'page')})`, url: homeUrl ?? urlOf(pages[0]) });
-  for (const p of pages) for (const s of p.b?.schema ?? []) if (s.name && !NOT_A_BUSINESS.has((s.types[0] ?? '').toLowerCase())) variants.push({ name: s.name, source: `business markup on ${at(p)}`, url: urlOf(p) });
+  /* A title's repeated part is often a strapline ("Castleford, West Yorkshire Roofing Company", "Electricians Cheshire & Greater Manchester").
+     It is a name only when it shares a word that is not a trade or a place word with a name the site states, or is a builder's default. */
+  /* Only the business's own pages: a review page's markup names the customer who wrote it (2026-11-03, 11 "names" on one site). */
+  for (const p of pages) if (p.d.family !== 'reviews') for (const s of p.b?.schema ?? []) if (s.name && !NOT_A_BUSINESS.has((s.types[0] ?? '').toLowerCase())) variants.push({ name: s.name, source: `business markup on ${at(p)}`, url: urlOf(p) });
   if (home?.b?.siteName) variants.push({ name: home.b.siteName, source: 'site name (og:site_name)', url: urlOf(home) });
   const fName = footerName(home?.footer ?? null);
   if (fName) variants.push({ name: fName, source: 'homepage footer', url: urlOf(home!) });
+  if (brand && (DEFAULT_SITE_NAME.test(brand.brand.trim()) || variants.some((v) => sharesNameWord(v.name, brand.brand)))) {
+    variants.unshift({ name: brand.brand, source: `page titles (${plural(brand.pages, 'page')})`, url: homeUrl ?? urlOf(pages[0]) });
+  }
   const distinct: typeof variants = [];
   for (const v of variants) {
     const k = nameKey(v.name);
     if (k.length < 4) continue;
-    const same = distinct.findIndex((d) => { const dk = nameKey(d.name); return dk === k || dk.includes(k) || k.includes(dk); });
+    /* "POES UK" and "Power On Electrical Services UK" are one name (nameOnPage: spacing, brand part, initials). */
+    const same = distinct.findIndex((d) => { const dk = nameKey(d.name); return dk === k || dk.includes(k) || k.includes(dk) || nameOnPage(d.name, v.name) || nameOnPage(v.name, d.name); });
     /* One name said two ways ("Learning Curve" / "Learning Curve Driving Lessons") is one name: the fuller one is quoted. */
     if (same >= 0) { if (k.length > nameKey(distinct[same].name).length) distinct[same] = { ...v, source: `${v.source}; also ${distinct[same].source}` }; continue; }
     distinct.push(v);
@@ -319,7 +350,8 @@ export function buildVisibilityChecks(input: VisibilityInput): VisibilityChecks 
     }
 
     /* 5. Location / service pages that are the same text with only the town swapped. */
-    const candidates = withText.filter((p) => ['location', 'service', 'other'].includes(p.d.family) && words(p) >= 60);
+    /* A shop's products share a template and carry no town: not "area or service pages" (2026-11-03: "Harvest Moon Cup" on an electrician's site). */
+    const candidates = withText.filter((p) => ['location', 'service', 'other'].includes(p.d.family) && words(p) >= 60 && !/\/(?:shop|store(?:-[\w-]+)?|products?)(?:\/|$)/i.test(pathOfUrl(urlOf(p))));
     const groups: VisibilityPage[][] = [];
     const used = new Set<VisibilityPage>();
     for (let i = 0; i < candidates.length; i++) {
