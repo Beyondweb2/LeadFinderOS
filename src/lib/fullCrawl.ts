@@ -521,7 +521,8 @@ export function processPage(p: {
     if (/\bguarantee[ds]?\b|\bwarrant(?:y|ies|ied)\b|\bno fix,? no fee\b|\bmoney[- ]back\b/i.test(s)) guarantees.push(s);
     if (/\b\d{1,2}\+?\s*(?:years?|yrs)\b[^.]{0,40}\b(?:experience|trading|established|in business|serving)\b|\b(?:established|est\.?|since|founded)\s+(?:in\s+)?(?:19|20)\d{2}\b/i.test(s)) experience.push(s);
     if (/£\s?\d/.test(s)) prices.push(s);
-    if (/\b(?:testimonial|would highly recommend|highly recommended|5 stars?|five stars?)\b|★/i.test(s)) reviews.push(s);
+    /* The same words the content check counts as proof (contentTrust REVIEW_RE), so the two never disagree (2026-11-03, acroofingsouth.co.uk). */
+    if (/\b(?:testimonials?|what (?:our|my) (?:customers|clients) say|customer reviews?|google reviews?|reviews? from|would highly recommend|highly recommended|5[- ]stars?|five[- ]stars?|trustpilot|checkatrade|trustatrader|rated people|mybuilder)\b|★/i.test(s)) reviews.push(s);
   }
   /* A page whose text has no sentence breaks makes one long "sentence" over the limit above, so a postcode plainly on the page
      was never read as an address (2026-11-03, sknightelectrical.co.uk: "No address or postcode found" beside TQ2 8LA). */

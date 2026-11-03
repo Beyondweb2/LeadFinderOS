@@ -643,7 +643,7 @@ export function buildContentTrust(input: ContentTrustInput): ContentTrust {
   /* ⛔ An empty JavaScript shell is never judged (2026-11-03, siteAudit says why); a page we did not download to its end cannot
      show that something is missing. */
   const pages = input.pages.filter((p) => p && p.status > 0 && p.status < 400 && p.shell !== true);
-  const anyCut = pages.some((p) => p.cut === true);
+  const anyCut = pages.some((p) => p.cut === true) || input.pages.some((p) => p && p.shell === true);
   const out: ContentIssue[] = [];
   const verified: string[] = [];
   const notChecked: string[] = [];

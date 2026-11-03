@@ -321,7 +321,9 @@ export function buildSalesInsights(input: InsightInput): SalesInsights {
   const realServices = review.kind === 'reviewed' ? new Set(review.real.map((n) => n.trim().toLowerCase())) : null;
   const services0 = list.filter((c) => !list.some((o) => o !== c && o.tokens.length > c.tokens.length && c.tokens.every((t) => o.tokens.includes(t))))
     .filter((c) => !realServices || realServices.has(c.name.trim().toLowerCase()));
-  const mayClaimServicePages = review.kind === 'reviewed' || review.kind === 'rules_only';
+  /* ⛔ A crawl that stopped at its page limit has not seen every page, so it never says a service has none (2026-11-03: poesuk.com, 12 of 883
+     read; highdesignroofing.com's /services/cast-iron-guttering sat unread). */
+  const mayClaimServicePages = (review.kind === 'reviewed' || review.kind === 'rules_only') && !capped;
   /* A heading that only appears on the homepage is the weakest evidence; keep it, but at MEDIUM. */
   const confOf = (c: Candidate): InsightConfidence => (c.sources.has('lead') || c.sources.has('nav') || c.sources.has('index') ? 'high' : 'medium');
 

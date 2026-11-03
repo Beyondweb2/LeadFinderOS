@@ -50,7 +50,8 @@ export async function reviewServices(service: any, input: {
           {
             role: "system",
             content: "You read headings taken from a small UK business's website. Decide which are services a customer could buy from this business. " +
-              "NOT services: towns or areas, slogans, sentences, reasons to choose them, company policies such as health and safety, tools such as calculators, and product names in a shop. " +
+              "NOT services: towns or areas, slogans, sentences, reasons to choose them, company policies such as health and safety, tools such as calculators, product names in a shop, " +
+              "calls to action (Arrange..., Discuss..., Book..., Get...), section headings about the process (Survey Scope, Next Steps, Design and Quotation), and lists of unrelated things (New Builds, Renovations and Finished Properties). When in doubt, leave it out. " +
               "For each real service, give the address of the page that is mainly about that service, from the pages listed, or null if none is. A page about a wider topic or several services is not its page. " +
               'Reply as JSON: {"services":[{"name":"<the heading exactly as given>","page":"<address or null>"}]}. Leave out anything that is not a service.',
           },
