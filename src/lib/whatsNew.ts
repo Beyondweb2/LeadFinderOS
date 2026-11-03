@@ -22,6 +22,14 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-11-03-sales-page-wording', date: '2026-11-03', title: 'Clearer money words on your Sales page', audience: 'sales',
+    body: 'Your payments is now the one place that says when you get paid. The list of every client payment is now called Client payments, and your sales show the plan they were sold on.',
+    report: {
+      added: [],
+      changed: ['The older list of every client payment is now called Client payments, so only one panel is called Your payments.', 'Earned this month now says what is earned and not paid yet, with no date. The dates are in Your payments.', 'The note under Your next 6 months now follows the new commission rules.', 'Recent wins and the monthly ladder show the plan a sale was sold on, such as Complete · monthly.'],
+      removed: ['The old wording about one payout date and an Approval Date.'],
+      effect: 'The page no longer gives two different answers to when you get paid. No commission figure changed.',
+    } },
   { id: '2026-11-02-commission-owed-admin', date: '2026-11-02', title: 'Commission owed: see what you owe, and mark it paid', audience: 'admin',
     body: 'Your dashboard now shows the total you owe today, each person’s owed, coming soon and paid so far, and the next payments with a countdown. New paid clients has its own list.',
     report: {

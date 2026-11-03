@@ -32,6 +32,11 @@ export function monthlyDiffers(plan: string | null | undefined, recurringAmounts
   return recurringAmounts.slice(0, Math.max(0, spec.totalPayments - 1)).some((a) => Math.abs(a - spec.monthlyGbp) >= 0.005);
 }
 
+/** The words for a sale on a screen: its plan, or (an old-plan sale) the caller's own name for what was sold. */
+export function salePlanWordsOr(plan: string | null | undefined, oldPlanWords: string): string {
+  return isPaymentPlan(plan) && plan !== 'legacy_twelve' ? salePlanParts(plan).words : oldPlanWords;
+}
+
 export interface SalePlanParts { product: PlanProduct | null; option: PayOption; words: string; }
 
 /** "Complete · monthly" / "Essential · pay in full" / "Old plan". A blank plan is the v5 offer (paymentPlans.ts). */

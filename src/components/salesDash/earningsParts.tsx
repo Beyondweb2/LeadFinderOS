@@ -15,6 +15,7 @@ import {
   COMMISSION_RECURRING_COUNT, COMMISSION_RECURRING_RATE, MONTHLY_TIERS, londonDayOf,
   type CommissionLine,
 } from '@/lib/commission';
+import { salePlanWordsOr } from '@/lib/salePlan';
 import type { EarningsResponse } from '@/hooks/useEarnings';
 
 /* ══ THE SALES PAGE'S MONEY PARTS (2026-10-01) ═════════════════════════════════════════════════════
@@ -47,8 +48,9 @@ function whenWords(iso: string, todayIso: string): string {
 }
 
 /** The newest sales (first payments), each with what it earned. */
-export function RecentWins({ lines, clients, todayIso = new Date().toISOString(), max = 5 }: { lines: CommissionLine[]; clients: Client[]; todayIso?: string; max?: number }) {
+export function RecentWins({ lines, clients, sales, todayIso = new Date().toISOString(), max = 5 }: { lines: CommissionLine[]; clients: Client[]; sales?: EarningsResponse['sales']; todayIso?: string; max?: number }) {
   const clientOf = new Map(clients.map((c) => [c.leadId, c]));
+  const planOf = new Map((sales ?? []).map((s) => [s.leadId, s.plan]));
   const wins = lines.filter((l) => l.kind === 'payment' && l.paymentNumber === 1 && !l.testSale).slice(0, max);
   return (
     <Panel title="Recent wins" icon={Trophy} tone="amber" hint="Your newest sales and what each one earned you.">
@@ -61,7 +63,7 @@ export function RecentWins({ lines, clients, todayIso = new Date().toISOString()
                 <span className={cn('flex h-8 w-8 shrink-0 items-center justify-center rounded-full', l.commission > 0 ? TONE.amber.solid : TONE.grey.icon)}><Trophy className="h-3.5 w-3.5" /></span>
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-sm font-semibold">{c?.business ?? 'Client'}</span>
-                  <span className="block text-xs text-muted-foreground">{c?.package ?? 'Findable'} · {whenWords(l.occurredAt, todayIso)}</span>
+                  <span className="block text-xs text-muted-foreground">{salePlanWordsOr(planOf.get(l.leadId), c?.package ?? 'Findable')} · {whenWords(l.occurredAt, todayIso)}</span>
                 </span>
                 <span className={cn('shrink-0 rounded-full px-2.5 py-1 text-sm font-bold tabular-nums', l.commission > 0 ? cn(TONE.green.soft, TONE.green.text) : 'text-muted-foreground')}>
                   {l.status === 'not_commissionable' ? 'No commission' : `+${gbp(l.commission)}`}
@@ -106,7 +108,7 @@ export function CommissionExplainer() {
 export function PaymentsTable({ lines, bizOf, sellerOf }: { lines: CommissionLine[]; bizOf: Map<string, string>; sellerOf?: (id: string | null) => string }) {
   const head = ['Client', ...(sellerOf ? ['Sold by'] : []), 'Payment', 'Date', 'Client paid', 'Rate', 'Commission', 'Status', 'Paid on'];
   return (
-    <Panel collapseKey="sales.payments" defaultOpen={false} title="Your payments" icon={PiggyBank} tone="green" hint="Every client payment and refund, newest first, with the commission on it.">
+    <Panel collapseKey="sales.payments" defaultOpen={false} title="Client payments" icon={PiggyBank} tone="green" hint="Every client payment and refund, newest first, with the commission on it.">
       {lines.length === 0 ? <Empty>Nothing yet.</Empty> : (
         <div className="-mx-1 overflow-x-auto">
           <table className="w-full min-w-[720px] border-collapse text-sm">
