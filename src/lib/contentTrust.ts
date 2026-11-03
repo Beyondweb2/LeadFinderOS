@@ -32,8 +32,9 @@
      touches `signals`, so the audit_followup_fault gate and every stored row behave exactly as before.
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 
-import { visibleText } from './crawlCheck.ts';
-import { CREDENTIALS, fullPageFamily, jsonLdNodes, type FullPageFamily } from './fullCrawl.ts';
+import { nameOnPage } from './businessNameMatch.ts';
+import { detectClientRendered, visibleText } from './crawlCheck.ts';
+import { CREDENTIALS, fullPageFamily, jsonLdNodes, linkBase, pageWasCut, type FullPageFamily } from './fullCrawl.ts';
 import { robotsAllows, robotsRulesFor } from './crawlUrl.ts';
 import { coverageStatementsIn, FULL_TEXT_MARK } from './siteClaims.ts';
 
@@ -197,6 +198,10 @@ export interface PageObs {
   /** A star rating or pass rate the page states, and whether the SAME page names where it comes from (2026-10-23).
    *  Absent on observations stored before it existed — then the claims check is not made. */
   claims?: Array<{ k: 'stars' | 'pass_rate'; q: string; sourced: boolean }>;
+  /** The HTML is an empty JavaScript shell (2026-11-03): nothing on it is judged. */
+  shell?: boolean;
+  /** Longer than we download: nothing is said to be missing from it. */
+  cut?: boolean;
   schema: { blocks: number; bad: number; biz: Array<{ name: string; tel: string; pc: string; url: string }> };
   phones: string[];
   postcodes: string[];
@@ -257,7 +262,7 @@ function sentenceAround(text: string, index: number, len: number): string {
 const FOUNDED_RE = /\b(?:established|est\.?|founded|trading since|since|started in)\s+(?:in\s+)?((?:19|20)\d{2})\b/gi;
 const COMPANY_NO_RE = /\b(?:company|registration|reg\.?|registered)\s*(?:no\.?|number|num\.?)?\s*[:.]?\s*((?:SC|NI|OC)?\d{6,8})\b|\bregistered in (?:england|scotland|wales|northern ireland)[^.]{0,60}?\b((?:SC|NI|OC)?\d{8})\b/i;
 const VAGUE_CRED_RE = /\b(?:accredited|fully accredited|approved (?:electrician|contractor|installer|engineer|tradesm[ae]n|plumber|gas engineer)s?|certified (?:electrician|installer|engineer|contractor)s?|registered (?:installer|electrician|contractor|engineer)s?|industry[- ]approved|fully (?:qualified|certified))\b/gi;
-const REVIEW_RE = /\b(?:testimonials?|what (?:our|my) (?:customers|clients) say|customer reviews?|google reviews?|reviews? from|rated \d(?:\.\d)? (?:out of|\/) ?5|\d(?:\.\d)? ?(?:stars?|★)|five[- ]star|5[- ]star|would (?:highly )?recommend|highly recommended|trustpilot|checkatrade|trustatrader|rated people|mybuilder)\b|★{3,}/i;
+const REVIEW_RE = /\b(?:testimonials?|what (?:our|my) (?:customers|clients) say|customer reviews?|google reviews?|reviews? from|rated \d(?:\.\d)? (?:out of|\/) ?5|\d(?:\.\d)? ?(?:stars?|★)|five[- ]star|5[- ]star|would (?:highly )?recommend|highly recommended|trustpilot|checkatrade|trustatrader|rated people|mybuilder)\b|(?:★\s*){3,}/i;
 /** Only an explicit case study counts — "the result" or "recent projects" in a blog post is not proof of work. */
 const CASE_RE = /\bcase stud(?:y|ies)\b/i;
 const PEOPLE_RE = /\b(?:owner|founder|co-founder|director|managing director|proprietor|my name is|i'm [A-Z][a-z]+|run by|family[- ]run|meet the team|our team)\b/i;
@@ -355,10 +360,15 @@ export function pageObservations(html: string, pageUrl: string, homeUrl: string,
   const raw = String(html || '');
   const url = pageUrl;
   const text = decode(visibleText(raw)).replace(/[​-‍﻿]/g, '').replace(/\s+/g, ' ').trim();
-  const head = /<head\b[^>]*>([\s\S]*?)<\/head>/i.exec(raw)?.[1] ?? raw.slice(0, 60_000);
+  const headPart = /<head\b[^>]*>([\s\S]*?)<\/head>/i.exec(raw)?.[1] ?? raw.slice(0, 60_000);
+  /* Some builders write the title and meta tags after </head> (fullCrawl.processPage says why). */
+  const head = /<title\b/i.test(headPart) ? headPart : raw.replace(/<svg\b[^>]*>[\s\S]*?<\/svg>/gi, ' ');
+  const linkRoot = linkBase(raw, url);
   const h1 = [...raw.matchAll(/<h1\b[^>]*>([\s\S]*?)<\/h1>/gi)].map((m) => clip(tagText(m[1]), 160)).filter(Boolean).slice(0, 5);
   const obs: PageObs = {
     url, family: fullPageFamily(url, homeUrl), status,
+    ...(detectClientRendered(raw).flagged ? { shell: true } : {}),
+    ...(pageWasCut(raw) ? { cut: true } : {}),
     title: clip(tagText(/<title\b[^>]*>([\s\S]*?)<\/title>/i.exec(head)?.[1] ?? ''), 200),
     h1, words: text ? text.split(/\s+/).filter(Boolean).length : 0,
     viewport: /<meta\b[^>]*name=["']viewport["']/i.test(head),
@@ -473,7 +483,7 @@ export function pageObservations(html: string, pageUrl: string, homeUrl: string,
       obs.contactMix.push(`The email “${label}” is linked as a phone number (${clip(href, 60)})`);
     }
     let abs: URL | null = null;
-    try { abs = new URL(href, url); } catch { abs = null; }
+    try { abs = new URL(href, linkRoot); } catch { abs = null; }
     if (!abs || !/^https?:$/.test(abs.protocol)) continue;
     let same = false;
     try { same = abs.hostname.replace(/^www\./, '') === new URL(homeUrl).hostname.replace(/^www\./, ''); } catch { same = false; }
@@ -502,6 +512,8 @@ export function pageObservations(html: string, pageUrl: string, homeUrl: string,
   }
   for (const m of text.matchAll(RATING_CLAIM_RE)) {
     if ((obs.claims?.length ?? 0) >= 6) break;
+    /* Five stars printed above one customer's review is that review, not a rating the business claims (2026-11-03). */
+    if (/(?:★\s*){3,}$/.test(text.slice(Math.max(0, (m.index ?? 0) - 16), m.index ?? 0).replace(/&#9733;/g, '★'))) continue;
     obs.claims?.push({ k: 'stars', q: quote(text, m.index ?? 0, m[0].length, 25), sourced: ratingSourced });
   }
 
@@ -510,7 +522,7 @@ export function pageObservations(html: string, pageUrl: string, homeUrl: string,
     const href = attr(`<a ${m[1]}>`, 'href');
     if (!/\/(?:post|posts|blog|news|article|articles)\/|\/20\d\d\//i.test(href)) continue;
     const d = isoDate(tagText(m[2]));
-    if (d && obs.dates.length < 40) obs.dates.push({ p: pathOf(new URL(href, url).href), d });
+    if (d && obs.dates.length < 40) obs.dates.push({ p: pathOf(new URL(href, linkRoot).href), d });
   }
   if (obs.family === 'blog' && pathOf(url).split('/').filter(Boolean).length >= 2) {
     const t = /<time\b[^>]*datetime=["'](\d{4}-\d{2}-\d{2})/i.exec(raw)?.[1]
@@ -628,7 +640,10 @@ function tokenMatch(a: string, b: string): boolean {
 const slugTokens = (p: string) => p.toLowerCase().split(/[/_\-.]+/).filter((t) => t.length >= 2);
 
 export function buildContentTrust(input: ContentTrustInput): ContentTrust {
-  const pages = input.pages.filter((p) => p && p.status > 0 && p.status < 400);
+  /* ⛔ An empty JavaScript shell is never judged (2026-11-03, siteAudit says why); a page we did not download to its end cannot
+     show that something is missing. */
+  const pages = input.pages.filter((p) => p && p.status > 0 && p.status < 400 && p.shell !== true);
+  const anyCut = pages.some((p) => p.cut === true);
   const out: ContentIssue[] = [];
   const verified: string[] = [];
   const notChecked: string[] = [];
@@ -637,7 +652,8 @@ export function buildContentTrust(input: ContentTrustInput): ContentTrust {
   const where = whereOn(home ? pathOf(home.url) : '/');
   const bizWords = new Set(words(input.lead?.name));
   const trade = (input.lead?.trade || '').toLowerCase();
-  const add = (i: Omit<ContentIssue, 'evidenceClass'>) => out.push({ ...i, evidenceClass: CONTENT_TRUST_KINDS[i.kind].evidenceClass, evidence: uniq(i.evidence).slice(0, 8), urls: uniq(i.urls).slice(0, 20) });
+  const add = (i: Omit<ContentIssue, 'evidenceClass'>) => (anyCut && i.absence) ? 0 : out.push({ ...i, evidenceClass: CONTENT_TRUST_KINDS[i.kind].evidenceClass, evidence: uniq(i.evidence).slice(0, 8), urls: uniq(i.urls).slice(0, 20) });
+  if (anyCut) notChecked.push('Things that may be missing — not judged: a page was longer than we download.');
   if (!pages.length) return { version: CONTENT_TRUST_VERSION, issues: [], verified, notChecked: ['No page could be read.'], pagesRead: 0 };
 
   /* ── AI & search access (robots.txt) and the technical basics ─────────────────────────────────── */
@@ -768,7 +784,8 @@ export function buildContentTrust(input: ContentTrustInput): ContentTrust {
   const reviews = pages.filter((p) => p.reviews.length);
   const cases = pages.filter((p) => p.cases.length);
   const logos = pages.reduce((n, p) => Math.max(n, p.img.logos), 0);
-  if (!reviews.length && !cases.length) add({ kind: 'no_proof', severity: 'medium', absence: true,
+  /* A reviews or testimonials page IS proof, whatever its wording (2026-11-03). */
+  if (!reviews.length && !cases.length && !pages.some((p) => p.family === 'reviews')) add({ kind: 'no_proof', severity: 'medium', absence: true,
     title: 'We couldn’t find reviews, testimonials or case studies',
     why: 'Proof of real work for real customers is what people look for before they get in touch, and gives AI tools something concrete to say about you. (A reviews widget that only loads with JavaScript would not be visible to us.)',
     evidence: [`None found${scope || ' on any page read'}`, ...(logos >= 5 ? [`About ${logos} client logos are shown, but with no story about the work behind them`] : [])], urls: [],
@@ -816,7 +833,7 @@ export function buildContentTrust(input: ContentTrustInput): ContentTrust {
     const isVague = p.family === 'homepage' ? (!names && !hasPlace) : (!specific.length && !hasPlace);
     if (isVague) vagueH1.push({ h, url: p.url, home: p.family === 'homepage' });
   }
-  if (vagueH1.length) add({ kind: 'vague_headings', severity: 'medium',
+  if (vagueH1.length) add({ kind: 'vague_headings', severity: vagueH1.some((v) => v.home) ? 'medium' : 'low',
     title: 'Main headings don’t say what you do or where',
     why: 'The main heading is the plainest statement of what a page is about. A heading that names no service or place gives search engines and AI tools less to match the page to a real search.',
     evidence: vagueH1.map((v) => `${v.home ? 'Homepage' : pathOf(v.url)}: “${v.h}”`), urls: vagueH1.map((v) => v.url),
@@ -850,9 +867,10 @@ export function buildContentTrust(input: ContentTrustInput): ContentTrust {
     /* Medium only when the site barely says where it works at all — its home town in no title or main heading
        either. A local business whose pages already say its town gets the gentler (low) note. */
     const townInHeads = townW.length > 0 && pages.some((p) => { const hw = new Set(words(`${p.title} ${p.h1.join(' ')}`)); return townW.every((t) => hw.has(t)); });
-    const thin = allPlaces.length <= 2 && !townInHeads;
+    /* A site that says "Serving Oxfordshire and Northamptonshire" has said where it works; it only lacks pages (2026-11-03, fpelectric.uk). */
+    const thin = allPlaces.length <= 2 && !townInHeads && !coverageSaid;
     add({ kind: 'area_coverage', severity: thin ? 'medium' : 'low', absence: true,
-      title: allPlaces.length <= 2 ? 'We couldn’t find much about the areas you cover' : 'We couldn’t find a page for each area you cover',
+      title: allPlaces.length <= 2 && !coverageSaid ? 'We couldn’t find much about the areas you cover' : 'We couldn’t find a page for each area you cover',
       why: 'When someone asks for a business in a particular town, a page that genuinely covers work there gives search engines and AI tools something specific to match — only where it is genuinely true and useful, never copies of one page with the town name swapped.',
       evidence: [
         allPlaces.length ? `Places named on the site: ${allPlaces.slice(0, 8).join(', ')}${national ? ' (and “across the UK”)' : ''}` : `No town or area named${scope}`,
@@ -860,6 +878,7 @@ export function buildContentTrust(input: ContentTrustInput): ContentTrust {
       ], urls: [],
       needs: 'Which towns you genuinely serve, and real jobs you have done there. Only where it is genuinely true and useful — never a new office location or a town-swap page.',
       spoken: !allPlaces.length ? 'Your site doesn’t really say which areas you cover.'
+        : coverageSaid ? 'Your site says where you work, but there’s no page about your work in those areas.'
         : allPlaces.length <= 2 ? `The only places your site really mentions are ${allPlaces.slice(0, 2).join(' and ')} — there’s nothing about the other areas you work in.`
         : `Your site lists areas like ${allPlaces.slice(1, 3).join(' and ')}, but there’s no page about your work in any of them.` });
   }
@@ -914,7 +933,9 @@ export function buildContentTrust(input: ContentTrustInput): ContentTrust {
     if (!mismatched.includes(line)) { mismatched.push(line); mismatchUrls.push(l.from); }
   }
   const mix = uniq(pages.flatMap((p) => p.contactMix));
-  if (mismatched.length || mix.length) add({ kind: 'link_mismatch', severity: mix.length || mismatched.length >= 2 ? 'medium' : 'low',
+  /* A contact link that opens the wrong app is a fault. A word in a link going somewhere else on the site is often a button to the
+     quote form: never said as serious (2026-11-03). */
+  if (mismatched.length || mix.length) add({ kind: 'link_mismatch', severity: mix.length ? 'medium' : 'low',
     title: 'Some links go to the wrong place',
     why: 'A button or link that says one thing and opens another sends visitors — and crawlers following links to understand the site — to the wrong page or the wrong contact method.',
     evidence: [...mix, ...mismatched].slice(0, 6), urls: [...mismatchUrls, ...pages.filter((p) => p.contactMix.length).map((p) => p.url)],
@@ -965,7 +986,8 @@ export function buildContentTrust(input: ContentTrustInput): ContentTrust {
   /* ── Business markup (JSON-LD) against what the pages show ────────────────────────────────────── */
   const blocks = pages.reduce((n, p) => n + p.schema.blocks, 0);
   const bad = pages.reduce((n, p) => n + p.schema.bad, 0);
-  const biz = pages.flatMap((p) => p.schema.biz.map((b) => ({ ...b, pageUrl: p.url })));
+  /* A review page's markup names the customer who wrote it, not the business (2026-11-03: "The markup names the business Thomas McFall"). */
+  const biz = pages.filter((p) => p.family !== 'reviews').flatMap((p) => p.schema.biz.map((b) => ({ ...b, pageUrl: p.url })));
   if (blocks && bad === blocks) add({ kind: 'schema_unverified', severity: 'low',
     title: 'We could not verify your structured data',
     why: 'The business details written into the page code could not be read (they are not valid JSON), so we cannot say whether they match what the pages show.',
@@ -981,7 +1003,7 @@ export function buildContentTrust(input: ContentTrustInput): ContentTrust {
       if (tel.length >= 10 && shownPhones.size && !shownPhones.has(tel)) mism.push(`The markup gives the phone ${b.tel}; the pages show ${[...shownPhones][0]}`);
       const pc = b.pc.toUpperCase().replace(/\s+/g, ' ').trim();
       if (pc && shownPcs.size && ![...shownPcs].some((s) => s.replace(/\s/g, '') === pc.replace(/\s/g, ''))) mism.push(`The markup gives the postcode ${pc}; the pages show ${[...shownPcs][0]}`);
-      if (b.name && bizWords.size && !words(b.name).some((w) => bizWords.has(w))) mism.push(`The markup names the business “${b.name}”`);
+      if (b.name && bizWords.size && !words(b.name).some((w) => bizWords.has(w)) && !nameOnPage(b.name, input.lead?.name)) mism.push(`The markup names the business “${b.name}”`);
     }
     if (mism.length) add({ kind: 'schema_mismatch', severity: 'medium',
       title: 'The business details in your page code don’t match the page',

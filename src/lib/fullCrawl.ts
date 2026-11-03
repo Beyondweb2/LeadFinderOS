@@ -14,19 +14,19 @@
    edge request: 60 pages / 90 requests / 95 s / 12 sitemaps / 1,000 stored URLs were all consequences
    of having to finish before the request died. The fix is the job, not bigger numbers.
 
-   What remains is crawler SAFETY, not sampling: 1 MB per response (memory), 6 concurrent requests
+   What remains is crawler SAFETY, not sampling: MAX_PAGE_BYTES per response (memory), 6 concurrent requests
    (politeness to a small host), a per-request timeout, three attempts per URL, and a runaway ceiling
    (RUNAWAY_URL_CEILING) that only an infinite URL space can reach — reaching it is reported as such,
    never as "complete".
 
    ⛔ EVIDENCE, NEVER TRUTH. Everything here is "what the public website currently says" — DETECTED,
    never an approved client fact. Every item carries the URL it was read on.
-   ⛔ NO MODEL CALLS. Extraction is deterministic; the crawl costs fetches only.
+   ⛔ NO MODEL CALLS HERE. Extraction is deterministic; the job asks one cheap question about service names (_shared/service-review.ts).
 
    IMPORTED BY EDGE FUNCTIONS: relative imports with an explicit .ts extension only (CLAUDE.md §4).
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 
-import { crawlPageKind, visibleText, THIN_WORDS, MAX_CRAWL_PAGES } from './crawlCheck.ts';
+import { crawlPageKind, detectClientRendered, visibleText, THIN_WORDS, MAX_CRAWL_PAGES } from './crawlCheck.ts';
 import { sameSite, classifyCrawlUrl } from './crawlUrl.ts';
 import type { SiteAudit } from './siteAudit.ts';
 import { KEPT_TEXT_CHARS } from './siteClaims.ts';
@@ -53,6 +53,14 @@ export const STANDARD_CRAWL: CrawlProfile = {
   sitemapFetches: 4, concurrency: 6, fetchTimeoutMs: SITE_FETCH_TIMEOUT_MS,
 };
 
+/** The most of one page either crawl downloads (2026-11-03, 1 MB → 3 MB). Site builders send pages over 1 MB where the text,
+ *  the title and the reviews sit past the first megabyte (fpelectric.uk: 2.8 MB, "Serving Oxfordshire" at 1.13 MB). A page
+ *  still longer is marked `cut`: nothing is said to be missing from it. */
+export const MAX_PAGE_BYTES = 3_000_000;
+
+/** The page as downloaded reached the limit, so its end was not seen. */
+export const pageWasCut = (html: string) => (html || '').length >= MAX_PAGE_BYTES * 0.98;
+
 /* THE EXHAUSTIVE JOB'S WORKER SETTINGS. None of these limits how much of the site is crawled — they
    govern how each worker tick behaves; the job runs as many ticks as the site needs. */
 export const FULL_CRAWL = {
@@ -62,7 +70,7 @@ export const FULL_CRAWL = {
   /** URLs claimed per batch inside a tick. */
   batchSize: 24,
   fetchTimeoutMs: SITE_FETCH_TIMEOUT_MS,
-  maxBodyBytes: 1_000_000,
+  maxBodyBytes: MAX_PAGE_BYTES,
   /** A tick stops claiming new batches after this and hands over to the next tick (platform: an
    *  edge request dies at ~150 s, so a tick leaves room to write its last batch). */
   tickBudgetMs: 100_000,
@@ -138,13 +146,22 @@ export function isPageUrl(url: string): boolean {
 /** Same-site absolute page URLs from <a href>, on the served origin (standard profile). */
 export function internalPageLinks(html: string, pageUrl: string, servedUrl: string): string[] {
   const out = new Set<string>();
+  const base = linkBase(html, pageUrl);
   for (const href of rawLinks(html)) {
     let abs = '';
-    try { abs = new URL(href, pageUrl).href; } catch { continue; }
+    try { abs = new URL(href, base).href; } catch { continue; }
     const s = toServedUrl(abs, servedUrl);
     if (s && isPageUrl(s)) out.add(s);
   }
   return [...out];
+}
+
+/** What a page's relative links are relative to: its <base href> when it has one, as in a browser (2026-11-03,
+ *  st-electric.co.uk: 38 working links reported as broken because the base was ignored). */
+export function linkBase(html: string, pageUrl: string): string {
+  const href = /<base\b[^>]*\shref\s*=\s*["']([^"']+)["']/i.exec(html || '')?.[1];
+  if (!href) return pageUrl;
+  try { return new URL(decode(href), pageUrl).href; } catch { return pageUrl; }
 }
 
 /** Every href on the page, raw (the exhaustive crawl classifies each one itself). */
@@ -170,7 +187,9 @@ export function leanHtml(html: string): string {
     .replace(/<script\b(?![^>]*application\/ld\+json)[^>]*>[\s\S]*?<\/script>/gi, ' ')
     .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, ' ')
     .replace(/<svg\b[^>]*>[\s\S]*?<\/svg>/gi, ' ')
-    .replace(/<!--[\s\S]*?-->/g, ' ');
+    .replace(/<!--[\s\S]*?-->/g, ' ')
+    /* A page cut at MAX_PAGE_BYTES can end inside a script: the rest is code, never page text. */
+    .replace(/<(?:script\b(?![^>]*application\/ld\+json)|style\b)[^>]*>[\s\S]*$/i, ' ');
 }
 
 /* ── text helpers ─────────────────────────────────────────────────────────────────────────────── */
@@ -267,6 +286,8 @@ export function fullPageFamily(url: string, homeUrl: string): FullPageFamily {
   if (/gallery|portfolio|our-work|projects|case-stud/.test(p)) return 'gallery';
   if (/privacy|cookie|terms|legal|gdpr|disclaimer|accessibility|modern-slavery/.test(p)) return 'legal';
   if (/blog|news|article|post|\/20\d\d\//.test(p)) return 'blog';
+  /* A booking widget's pages are not the business's contact page, and asking not to be listed is normal for them (2026-11-03). */
+  if (/\/booking-calendar\/|\/book-online(?:\/|$)/.test(p)) return 'other';
   if (/location|areas?-(we-)?(cover|serve)|near-me/.test(p)) return 'location';
   const k = crawlPageKind(url);
   return k === 'other' ? 'other' : k;
@@ -308,6 +329,13 @@ export interface PageDigest {
   /* ── added 2026-10-19 (the AI-visibility page checks, visibilityChecks.ts). ABSENT on older rows = not checked. ── */
   /** UK postcodes read anywhere in the page's visible text (the WHOLE page, before the kept text is cut), at most 5. */
   postcodes?: string[];
+  /* ── added 2026-11-03 (website check accuracy). ABSENT on older rows. ── */
+  /** The HTML is an empty JavaScript shell and no browser read it: nothing on this page is judged. */
+  shell?: boolean;
+  /** The text was read from a real browser, because the HTML alone was an empty shell. */
+  rendered?: boolean;
+  /** The page was longer than MAX_PAGE_BYTES: what we kept is true, what we did not see is not "missing". */
+  cut?: boolean;
 }
 
 /** An enquiry form in the page HTML: a <form> holding an email / phone input or a message box (a search box alone is
@@ -411,31 +439,42 @@ function addressLine(n: { address?: unknown }): string {
 }
 
 /** Everything the crawl keeps about ONE page it read. Pure; no I/O. */
-export function processPage(p: { url: string; finalUrl: string; status: number; xRobotsTag: string | null; html: string; isHome?: boolean }, homeUrl: string): PageEvidence {
+export function processPage(p: {
+  url: string; finalUrl: string; status: number; xRobotsTag: string | null; html: string; isHome?: boolean;
+  /** Decided on the page as downloaded, by a caller that passes leaned HTML. Absent = judged from `html`. */
+  shell?: boolean; rendered?: boolean; cut?: boolean;
+}, homeUrl: string): PageEvidence {
   const html = p.html || '';
   const url = p.finalUrl || p.url;
   const head = /<head\b[^>]*>([\s\S]*?)<\/head>/i.exec(html)?.[1] ?? html.slice(0, 60_000);
-  const robots = [metaContent(head, 'name', 'robots'), p.xRobotsTag ?? ''].filter(Boolean).join(', ').toLowerCase();
+  /* Some site builders write the title and meta tags after </head>; a browser still uses them (2026-11-03, svgelectricalsolutions.co.uk:
+     "6 pages have no title"). The head first, then the whole page without its SVGs, whose own <title> is not the page's. */
+  const doc = html.replace(/<svg\b[^>]*>[\s\S]*?<\/svg>/gi, ' ');
+  const robots = [metaContent(head, 'name', 'robots') || metaContent(doc, 'name', 'robots'), p.xRobotsTag ?? ''].filter(Boolean).join(', ').toLowerCase();
   const text = decode(visibleText(html));
-  const canonical = linkHref(head, /(^|\s)canonical(\s|$)/i);
+  const canonical = linkHref(head, /(^|\s)canonical(\s|$)/i) || linkHref(doc, /(^|\s)canonical(\s|$)/i);
   const nodes = jsonLdNodes(html);
   const links = rawLinks(html);
-  const internal = links.filter((h) => sameSite(abs(h, url), homeUrl)).length;
+  const base = linkBase(html, url);
+  const internal = links.filter((h) => sameSite(abs(h, base), homeUrl)).length;
   const d: PageDigest = {
     url: p.url, finalUrl: url, status: p.status, family: fullPageFamily(url, homeUrl),
-    title: clip(tagText(/<title\b[^>]*>([\s\S]*?)<\/title>/i.exec(head)?.[1] ?? ''), 200),
-    description: clip(metaContent(head, 'name', 'description'), 320),
+    title: clip(tagText((/<title\b[^>]*>([\s\S]*?)<\/title>/i.exec(head) ?? /<title\b[^>]*>([\s\S]*?)<\/title>/i.exec(doc))?.[1] ?? ''), 200),
+    description: clip(metaContent(head, 'name', 'description') || metaContent(doc, 'name', 'description'), 320),
     canonical: canonical ? abs(canonical, url) : '',
     noindex: /noindex|\bnone\b/.test(robots), robots,
     h1: headings(html, 1, 5), h2: headings(html, 2, 12),
     words: text ? text.split(/\s+/).filter(Boolean).length : 0,
     excerpt: clip(text, 700), internalLinks: internal,
     schemaTypes: [...new Set(nodes.flatMap(typesOf))].slice(0, 12),
-    viewport: /<meta\b[^>]*name=["']viewport["']/i.test(head),
+    viewport: /<meta\b[^>]*name=["']viewport["']/i.test(doc),
     jsonLdInvalid: jsonLdBlocks(html).filter((b) => { try { JSON.parse(b); return false; } catch { return true; } }).length,
     h3: headings(html, 3, 12),
     form: detectEnquiryForm(html),
     postcodes: [...new Set((text.match(new RegExp(UK_POSTCODE.source, 'gi')) ?? []).map((x) => x.toUpperCase().replace(/\s+/g, ' ')))].slice(0, 5),
+    ...((p.shell ?? detectClientRendered(html).flagged) ? { shell: true } : {}),
+    ...(p.rendered ? { rendered: true } : {}),
+    ...((p.cut ?? pageWasCut(html)) ? { cut: true } : {}),
   };
 
   const b: PageBusiness = { names: [], phones: [], emails: [], addresses: [], people: [], credentials: [], guarantees: [], experience: [], prices: [], reviews: [], profiles: [], schema: [], logo: '', favicon: '', ogImage: '', siteName: '' };
@@ -450,7 +489,7 @@ export function processPage(p: { url: string; finalUrl: string; status: number; 
   for (const n of nodes) {
     const types = typesOf(n);
     if (!types.length) continue;
-    const name = typeof n.name === 'string' ? n.name.trim() : '';
+    const name = typeof n.name === 'string' ? decode(n.name).trim() : '';
     const tel = typeof n.telephone === 'string' ? n.telephone.trim() : '';
     const addr = addressLine(n);
     // deno-lint-ignore no-explicit-any
@@ -483,6 +522,13 @@ export function processPage(p: { url: string; finalUrl: string; status: number; 
     if (/\b\d{1,2}\+?\s*(?:years?|yrs)\b[^.]{0,40}\b(?:experience|trading|established|in business|serving)\b|\b(?:established|est\.?|since|founded)\s+(?:in\s+)?(?:19|20)\d{2}\b/i.test(s)) experience.push(s);
     if (/£\s?\d/.test(s)) prices.push(s);
     if (/\b(?:testimonial|would highly recommend|highly recommended|5 stars?|five stars?)\b|★/i.test(s)) reviews.push(s);
+  }
+  /* A page whose text has no sentence breaks makes one long "sentence" over the limit above, so a postcode plainly on the page
+     was never read as an address (2026-11-03, sknightelectrical.co.uk: "No address or postcode found" beside TQ2 8LA). */
+  for (const m of text.matchAll(new RegExp(UK_POSTCODE.source, 'gi'))) {
+    const at = m.index ?? 0;
+    const line = text.slice(Math.max(0, at - 60), at + m[0].length).trim();
+    if (!addresses.some((a) => a.includes(m[0]))) addresses.push(line);
   }
   const creds: string[] = [];
   for (const c of CREDENTIALS) {
@@ -517,7 +563,7 @@ export function processPage(p: { url: string; finalUrl: string; status: number; 
   const linkPaths = new Set<string>();
   for (const h of links) {
     if (linkPaths.size >= PAGE_LINKS_MAX) break;
-    const c = classifyCrawlUrl(h, url, homeUrl, null);
+    const c = classifyCrawlUrl(h, base, homeUrl, null);
     if (c.ok) { const lu = new URL(c.url); linkPaths.add(lu.pathname + lu.search); }
   }
   const ev: PageEvidence = { d, b, t: text.slice(0, TEXT_CHARS), j: [], img, l: [...linkPaths] };

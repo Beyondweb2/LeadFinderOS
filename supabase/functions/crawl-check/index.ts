@@ -37,7 +37,7 @@ import {
 } from "../../../src/lib/siteEvidence.ts";
 import {
   resolveCrawlMode, STANDARD_CRAWL, cleanRequestSource, toServedUrl, isPageUrl, internalPageLinks,
-  orderSitemapChildren, isIntakeCrawlRequest, isCatchUpCrawlRequest, processPage,
+  orderSitemapChildren, isIntakeCrawlRequest, isCatchUpCrawlRequest, processPage, MAX_PAGE_BYTES,
 } from "../../../src/lib/fullCrawl.ts";
 import { buildVisibilityChecks, type VisibilityChecks } from "../../../src/lib/visibilityChecks.ts";
 import { crawlStartUrl, parseRobots, robotsAllows } from "../../../src/lib/crawlUrl.ts";
@@ -59,7 +59,7 @@ import { siteScoreColumns, siteScoreForRow } from "../../../src/lib/siteScore.ts
 import { insightsFromFetchedPages } from "../../../src/lib/salesInsightsInline.ts";
 import type { SalesInsights } from "../../../src/lib/salesInsights.ts";
 import { buildContentTrust, pageObservations, type ContentTrust } from "../../../src/lib/contentTrust.ts";
-import { classifyFetchError, type HomeFetchIssue } from "../../../src/lib/siteAudit.ts";
+import { classifyFetchError, WEBSITE_CHECKS_VERSION, type HomeFetchIssue } from "../../../src/lib/siteAudit.ts";
 import { progressLabel, type JobStatus } from "../../../src/lib/crawlJob.ts";
 import { CRAWL_FRESH_MS } from "../../../src/lib/crawlCheck.ts";
 import { canWorkLead, isClientLead, type AppRole } from "../../../src/lib/roleRules.ts";
@@ -89,9 +89,9 @@ function json(body: unknown, status = 200): Response {
    Every inline fetch past the standard deadline is skipped rather than queued. */
 /** ⛔ BYTES READ PER RESPONSE. crawl-check had NO cap at all — a site serving a 40MB HTML file (or a
  *  misconfigured one streaming forever) could take the whole edge runtime down with it. The body is
- *  read incrementally and the stream cancelled at the cap; a truncated page still answers every
- *  question we ask of it, because everything we read lives in the head or the first screenfuls. */
-const MAX_BODY_BYTES = 1_000_000;
+ *  read incrementally and the stream cancelled at the cap. A truncated page is marked cut (fullCrawl.pageWasCut): what we kept is
+ *  true, and nothing is said to be missing from it. */
+const MAX_BODY_BYTES = MAX_PAGE_BYTES;
 
 interface Fetched {
   /** The URL we asked for. */
@@ -785,7 +785,7 @@ Deno.serve(async (req) => {
       homeFetch = { kind, status: homeRead.responded ? homeRead.status : null, detail: homeRead.responded ? null : (homeRead.error ?? null) };
     }
     const storedResult = {
-      version: CRAWL_CHECK_VERSION, siteInfoVersion: SITE_INFO_VERSION,
+      version: CRAWL_CHECK_VERSION, checksVersion: WEBSITE_CHECKS_VERSION, siteInfoVersion: SITE_INFO_VERSION,
       checked_at: checkedAt, url: homeUrl, town: town || null, signals, verdict, siteInfo,
       ...(insights ? { insights } : {}),
       ...(contentTrust ? { contentTrust } : {}),

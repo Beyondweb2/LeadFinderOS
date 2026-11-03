@@ -22,6 +22,14 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-11-03-website-check-accuracy', date: '2026-11-03', title: 'Website issues you can trust', audience: 'all',
+    body: 'We checked 25 sites by hand against what the website check said, and about 30% of the serious claims were wrong. The check now reads sites properly, and says nothing when it cannot be sure.',
+    report: {
+      added: ['Sites built with JavaScript are now read in a real browser, so we see what a customer sees.', 'A cheap AI check decides which names on a site are real services, before anything is said about service pages.'],
+      changed: ['Contact, about and reviews pages are read first, so they are no longer reported missing because the check ran out of pages.', 'Longer pages are read in full, working links are no longer called broken, and a postcode on the page counts as an address.', 'The business name check understands short names, spacing and initials. Customer names and words like Copyright are no longer treated as your business name.', 'Older checks hide the claims we found unreliable until the site is checked again. Open leads are being re-checked automatically over the next few days.'],
+      removed: ['False claims such as No way to contact the business on full websites, and towns listed as services.'],
+      effect: 'The website issues on the call screen, the Inbox and the report are now far more likely to be true. You may see fewer issues on some leads for a few days until their new check finishes. Nothing has been sent to anyone.',
+    } },
   { id: '2026-11-03-simple-prospect-popup', date: '2026-11-03', title: 'A much simpler prospect popup', audience: 'all',
     body: 'The popup now has three tabs: Call, Close and History. The Call tab is what we found, the script, what we offer and the objections, with Log this call and Quick Close always at the bottom.',
     report: {

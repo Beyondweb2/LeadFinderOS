@@ -12,13 +12,16 @@
 // Nothing restarts from page 1. Ticks chain themselves; a one-minute cron (invoke_crawl_worker) is
 // the backstop when a chain link is lost.
 // ⛔ GET ONLY, PUBLIC PAGES ONLY, robots.txt `User-agent: *` respected (src/lib/crawlUrl.ts).
-// ⛔ NO MODEL CALLS — deterministic extraction; the crawl costs fetches, nothing else.
+// ⛔ Deterministic extraction. The only spends: a browser for a site that is an empty JavaScript shell (_shared/site-render.ts,
+// capped) and one cheap question about service names at finalize (_shared/service-review.ts).
 import {
-  extractSitemapLocs, clusterUrls, pageSimilarity, buildVerdict, crawlPageKind, THIN_WORDS,
+  extractSitemapLocs, clusterUrls, pageSimilarity, buildVerdict, crawlPageKind, THIN_WORDS, detectClientRendered, hasH1, hasJsonLd, wordCount,
   CRAWL_CHECK_VERSION, visibleText, robotsSearchBlocked, BLOCK_EVIDENCE_ROBOTS, type CrawlSignals,
 } from "../../../src/lib/crawlCheck.ts";
 import { SITE_CHECK_HEADERS, SITE_CHECK_UA } from "../../../src/lib/siteReadIdentity.ts";
-import { buildSiteAudit, mergeContentTrust, mergeVisibilityChecks, type SiteAuditPage } from "../../../src/lib/siteAudit.ts";
+import { buildSiteAudit, mergeContentTrust, mergeVisibilityChecks, WEBSITE_CHECKS_VERSION, type SiteAuditPage } from "../../../src/lib/siteAudit.ts";
+import { renderForCrawl } from "./site-render.ts";
+import { reviewServices } from "./service-review.ts";
 import { buildVisibilityChecks, VISIBILITY_MAX_PAGES, type VisibilityChecks } from "../../../src/lib/visibilityChecks.ts";
 import { buildSalesInsights, type SalesInsights } from "../../../src/lib/salesInsights.ts";
 import { planCappedBatch } from "../../../src/lib/prospectCrawl.ts";
@@ -26,11 +29,25 @@ import { extractSiteInfo, SITE_INFO_VERSION } from "../../../src/lib/siteInfo.ts
 import { buildSiteEvidence, SITE_EVIDENCE_VERSION, MAX_SITEMAP_LOCS, type EvidencePage } from "../../../src/lib/siteEvidence.ts";
 import {
   FULL_CRAWL, RUNAWAY_URL_CEILING, leanHtml, orderSitemapChildren, processPage, summariseCrawlRows,
-  syntheticHtml, rawLinks, type PageEvidence, type StoredCrawlRow,
+  syntheticHtml, rawLinks, linkBase, pageWasCut, type PageEvidence, type StoredCrawlRow,
 } from "../../../src/lib/fullCrawl.ts";
 import { leadCrawlWriteDecision, storedCrawlFailed, STORED_CRAWL_STATE_COLUMNS } from "../../../src/lib/crawlWriteRule.ts";
 import { classifyCrawlUrl, classifySitemapUrl, parseRobots, type RobotsRules } from "../../../src/lib/crawlUrl.ts";
 const PROSPECT_CRAWL_CONCURRENCY = 1;
+/* A JavaScript site read in a browser (docs/website-check.md): how many pages one crawl may spend on it, how many per batch (an edge
+   request has ~150 s), and the pause between them (Cloudflare refuses a burst, docs/site-shot.md). The pages read are the
+   prospect crawl's priority order, so twelve is contact, about, reviews and the main services. */
+const RENDER_PAGES_PROSPECT = 12;
+const RENDER_PAGES_CLIENT = 40;
+const RENDER_BATCH = 5;
+const RENDER_PAUSE_MS = 3_000;
+/** A JavaScript site answers every address with 200 and draws its own "not found": that is no page of the site. */
+const RENDERED_NOT_FOUND = /page not found|page (?:no longer exists|isn.t on the site|does not exist|can.t be found)|^404\b/i;
+const renderedNotFound = (html: string) => {
+  const title = /<title\b[^>]*>([\s\S]*?)<\/title>/i.exec(html)?.[1] ?? "";
+  const h1 = /<h1\b[^>]*>([\s\S]*?)<\/h1>/i.exec(html)?.[1]?.replace(/<[^>]+>/g, " ") ?? "";
+  return RENDERED_NOT_FOUND.test(title.trim()) || RENDERED_NOT_FOUND.test(h1.trim());
+};
 import { cleanCounts, decideFetchOutcome, frontierExhausted, type JobCounts } from "../../../src/lib/crawlJob.ts";
 import { buildContentTrust, pageObservations, type ContentTrust, type PageObs } from "../../../src/lib/contentTrust.ts";
 import { summariseWebsiteCheck } from "../../../src/lib/websiteCheck.ts";
@@ -39,8 +56,12 @@ import { questionTownForLead } from "./question-town.ts";
 import { listingForCheck } from "./listing-website.ts";
 
 /** One page's content observations, or undefined if the analyser trips — never a failed page. */
-function contentObs(html: string, url: string, servedUrl: string, status: number): PageObs | undefined {
-  try { return pageObservations(html, url, servedUrl, status); } catch (e) {
+function contentObs(html: string, url: string, servedUrl: string, status: number, read?: { shell: boolean; cut: boolean }): PageObs | undefined {
+  try {
+    const obs = pageObservations(html, url, servedUrl, status);
+    /* Decided on the page as downloaded: the HTML here may be leaned or rendered. */
+    return read ? { ...obs, shell: read.shell || undefined, cut: read.cut || undefined } : obs;
+  } catch (e) {
     console.error(`[crawl-job] content observations failed for ${url}:`, (e as Error).message);
     return undefined;
   }
@@ -180,7 +201,23 @@ export async function createCrawlJob(service: Client, input: {
 }): Promise<{ jobId: string; reused: boolean }> {
   const existing = await activeJobFor(service, input.leadId, input.probe.homeUrl);
   if (existing) return { jobId: existing.id, reused: true };
-  const p = input.probe;
+  /* ⛔ AN EMPTY SHELL IS READ IN A BROWSER (2026-11-03). The clientRendered flag stays: what a crawler without JavaScript gets is
+     still true, and worth saying. Everything else is judged from what the site really shows. A failed read leaves it a shell: unjudged. */
+  let p = input.probe;
+  let homeRendered = false;
+  let homeShell = detectClientRendered(p.homeHtml).flagged;
+  const homeCut = pageWasCut(p.homeHtml);
+  if (homeShell) {
+    const r = await renderForCrawl(service, p.servedUrl);
+    if (r.ok && !detectClientRendered(r.html).flagged) {
+      homeRendered = true; homeShell = false;
+      p = { ...p, homeHtml: r.html, missingH1: !hasH1(r.html), noJsonLd: !hasJsonLd(r.html), homeWords: wordCount(r.html) };
+    } else if (!r.ok) console.error(`[crawl-job] homepage not rendered (${r.reason}): ${r.detail ?? ""}`);
+  }
+  const jsSite = p.clientRendered?.flagged === true;
+  const cap = typeof input.pageCap === "number" && input.pageCap > 0 ? input.pageCap : null;
+  /* A JavaScript site's prospect crawl stops where its browser reads stop: the shells past them would only be unjudged. */
+  const pageCapForJob = cap && jsSite ? Math.min(cap, RENDER_PAGES_PROSPECT) : cap;
   const robotsRes = await crawlGet(new URL("/robots.txt", p.servedUrl).href);
   const robotsTxt = robotsRes.ok && robotsRes.body && !/<html/i.test(robotsRes.body.slice(0, 400)) ? robotsRes.body.slice(0, 100_000) : null;
   const robots = parseRobots(robotsTxt);
@@ -192,17 +229,17 @@ export async function createCrawlJob(service: Client, input: {
       town: p.town, readableUa: SITE_CHECK_UA, readableAs: p.readableAs, searchBlocked: robotsSearchBlocked(robotsTxt), blockEvidence: BLOCK_EVIDENCE_ROBOTS,
       respondedAny: p.respondedAny, clientRendered: p.clientRendered, missingH1: p.missingH1, noJsonLd: p.noJsonLd,
       homeWords: p.homeWords, lean: leanHtml(p.homeHtml).slice(0, 600_000), robots,
-      page_cap: typeof input.pageCap === "number" && input.pageCap > 0 ? input.pageCap : null,
+      page_cap: pageCapForJob,
     },
-    summary: { sitemap_url_count: 0, offsite_sitemap_count: 0, offsite_sitemap_samples: [], sitemap_locs_sample: [], runaway_dropped: 0 },
+    summary: { rendered_pages: homeRendered ? 1 : 0, sitemap_url_count: 0, offsite_sitemap_count: 0, offsite_sitemap_samples: [], sitemap_locs_sample: [], runaway_dropped: 0 },
   }).select("id").single();
   if (error) throw new Error(`crawl job insert: ${error.message}`);
   const jobId = job.id as string;
   const counts = { total: 0 };
 
   // The homepage is already read: it is the first page row, done.
-  const homeEv: PageEvidence & { ct?: PageObs } = processPage({ url: p.homeUrl, finalUrl: p.servedUrl, status: p.homeStatus, xRobotsTag: p.homeXRobots, html: p.homeHtml, isHome: true }, p.servedUrl);
-  homeEv.ct = contentObs(p.homeHtml, p.servedUrl, p.servedUrl, p.homeStatus);
+  const homeEv: PageEvidence & { ct?: PageObs } = processPage({ url: p.homeUrl, finalUrl: p.servedUrl, status: p.homeStatus, xRobotsTag: p.homeXRobots, html: p.homeHtml, isHome: true, shell: homeShell, rendered: homeRendered, cut: homeCut }, p.servedUrl);
+  homeEv.ct = contentObs(p.homeHtml, p.servedUrl, p.servedUrl, p.homeStatus, { shell: homeShell, cut: homeCut });
   const homeKey = classifyCrawlUrl(p.servedUrl, p.servedUrl, p.servedUrl, null);
   const homeUrlKey = homeKey.ok ? homeKey.url : p.servedUrl;
   await enqueue(service, jobId, [{ url: homeUrlKey, kind: "page", source: "seed", depth: 0, status: "done", http_status: p.homeStatus, final_url: p.servedUrl, evidence: homeEv, processed_at: new Date().toISOString() }], counts);
@@ -213,7 +250,7 @@ export async function createCrawlJob(service: Client, input: {
   await enqueue(service, jobId, [...new Set(sitemapSeeds)].map((u, i) => ({ url: u, kind: "sitemap" as const, source: i < robots.sitemaps.length ? "robots" : "seed", depth: 0 })), counts);
 
   // The homepage's links.
-  await enqueue(service, jobId, linkRows(homeEv, rawLinks(p.homeHtml), p.servedUrl, p.servedUrl, robots, 1), counts);
+  await enqueue(service, jobId, linkRows(homeEv, rawLinks(p.homeHtml), linkBase(p.homeHtml, p.servedUrl), p.servedUrl, robots, 1), counts);
 
   // ⛔ RE-CRAWL SEEDS: the previous completed job's pages, re-checked (never assumed). One that is
   // now gone is recorded as removed_since_last_crawl, not as a failure of this crawl.
@@ -288,7 +325,7 @@ export async function runCrawlTick(service: Client): Promise<{ jobId: string | n
   await service.from("crawl_urls").update({ status: "queued" }).eq("job_id", jobId).eq("status", "processing");
 
   const servedUrl = String(job.served_url || job.start_url);
-  const home = (job.home ?? {}) as { robots?: RobotsRules; town?: string | null; page_cap?: number | null };
+  const home = (job.home ?? {}) as { robots?: RobotsRules; town?: string | null; page_cap?: number | null; clientRendered?: { flagged?: boolean } | null };
   /* ⛔ THE PROSPECT PAGE LIMIT (2026-10-05, src/lib/prospectCrawl.ts). A job with a page_cap reads at
      most that many pages (read or failed). Sitemaps are still read in full — they are how the crawl
      knows the site's size. Once the cap is reached every still-queued page is recorded as skipped
@@ -299,6 +336,10 @@ export async function runCrawlTick(service: Client): Promise<{ jobId: string | n
   const counts = { total: total.discovered + total.sitemaps };
   let processed = 0;
   let sitemapUrlCount = 0, offsiteCount = 0, dropped = 0;
+  const jsSite = home.clientRendered?.flagged === true;
+  const renderedBefore = Number((job.summary as Record<string, unknown> | null)?.rendered_pages ?? 0);
+  let renderedNow = 0;
+  const renderBudget = (pageCap ? RENDER_PAGES_PROSPECT : RENDER_PAGES_CLIENT) - renderedBefore;
   const offsiteSamples: string[] = [], locSamples: string[] = [];
 
   // At least one batch per tick (a tick always makes progress), then more until the budget.
@@ -318,7 +359,7 @@ export async function runCrawlTick(service: Client): Promise<{ jobId: string | n
         await service.from("crawl_urls").update({ status: "skipped", skip_reason: "low_value", processed_at: new Date().toISOString() })
           .in("id", plan.lowValue.map((r) => r.id)).eq("status", "queued");
       }
-      rows = plan.read.slice(0, FULL_CRAWL.batchSize);
+      rows = plan.read.slice(0, jsSite ? RENDER_BATCH : FULL_CRAWL.batchSize);
       if (!rows.length) continue;
     }
     if (pageCap) {
@@ -377,14 +418,31 @@ export async function runCrawlTick(service: Client): Promise<{ jobId: string | n
           // A redirect: this address is recorded as redirecting; the destination gets its own row.
           discovered.push({ url: finalKey.url, kind: "page", source: "redirect", depth: r.depth });
         } else {
-          const html = leanHtml(f.body);
-          const ev = processPage({ url: r.url, finalUrl: f.finalUrl, status: f.status, xRobotsTag: f.xRobotsTag, html }, servedUrl);
+          /* A page that is an empty shell on a JavaScript site is read in a browser while the budget lasts; past it, or if the read
+             fails, it stays a shell and nothing is judged from it. */
+          let source = f.body;
+          let shell = detectClientRendered(f.body).flagged;
+          let rendered = false;
+          if (shell && jsSite && renderedNow < renderBudget) {
+            if (Date.now() - started >= FULL_CRAWL.tickBudgetMs) { updates.push({ id: r.id, status: "queued", processed_at: null }); continue; }
+            const read = await renderForCrawl(service, f.finalUrl);
+            if (read.ok) { renderedNow++; await new Promise((done) => setTimeout(done, RENDER_PAUSE_MS)); }
+            else console.error(`[crawl-job] ${f.finalUrl} not rendered (${read.reason}): ${read.detail ?? ""}`);
+            if (read.ok && renderedNotFound(read.html)) {
+              updates.push({ ...base, status: "skipped", skip_reason: "rendered_not_found", error: null, processed_at: now });
+              continue;
+            }
+            if (read.ok && !detectClientRendered(read.html).flagged) { source = read.html; shell = false; rendered = true; }
+          }
+          const cut = pageWasCut(f.body);
+          const html = leanHtml(source);
+          const ev = processPage({ url: r.url, finalUrl: f.finalUrl, status: f.status, xRobotsTag: f.xRobotsTag, html, shell, rendered, cut }, servedUrl);
           /* Page speed (2026-10-15): our own download time and size for this page — one fetch, not a browser test. */
           if (typeof f.ms === "number") ev.d.ms = f.ms;
-          ev.d.bytes = f.body.length;
+          ev.d.bytes = source.length;
           /* The content & trust observations ride on the row (evidence.ct): the raw page is gone by finalize. */
-          base.evidence = { ...ev, ct: contentObs(html, f.finalUrl || r.url, servedUrl, f.status) };
-          discovered.push(...linkRows(ev, rawLinks(html), f.finalUrl, servedUrl, robots, r.depth + 1));
+          base.evidence = { ...ev, ct: contentObs(html, f.finalUrl || r.url, servedUrl, f.status, { shell, cut }) };
+          discovered.push(...linkRows(ev, rawLinks(html), linkBase(html, f.finalUrl), servedUrl, robots, r.depth + 1));
         }
       }
       updates.push(base);
@@ -400,9 +458,10 @@ export async function runCrawlTick(service: Client): Promise<{ jobId: string | n
     await service.from("crawl_jobs").update({ lease_until: new Date(Date.now() + FULL_CRAWL.leaseMs).toISOString(), updated_at: new Date().toISOString() }).eq("id", jobId);
   }
 
-  if (sitemapUrlCount || offsiteCount || dropped || locSamples.length) {
+  if (sitemapUrlCount || offsiteCount || dropped || locSamples.length || renderedNow) {
     await bumpSummary(service, jobId, (s) => ({
       ...s,
+      rendered_pages: Number(s.rendered_pages ?? 0) + renderedNow,
       sitemap_url_count: Number(s.sitemap_url_count ?? 0) + sitemapUrlCount,
       offsite_sitemap_count: Number(s.offsite_sitemap_count ?? 0) + offsiteCount,
       offsite_sitemap_samples: [...(Array.isArray(s.offsite_sitemap_samples) ? s.offsite_sitemap_samples : []), ...offsiteSamples].slice(0, 50),
@@ -491,7 +550,7 @@ export async function finalizeCrawlJob(service: Client, jobId: string): Promise<
   /* ⛔ ONLY A PAGE THAT IS MEANT TO EXPLAIN SOMETHING CAN BE "THIN" (2026-10-07). A short contact page, a legal page or
      a gallery is normal, and "your service pages are light on detail" said about one is false. The signal counts
      service, area and home pages only — the same families siteAudit's thin_key_pages judges. */
-  const thin = done.filter((r) => (r.evidence!.d.words ?? 0) < THIN_WORDS && ["service", "location", "homepage"].includes(r.evidence!.d.family));
+  const thin = done.filter((r) => r.evidence!.d.shell !== true && (r.evidence!.d.words ?? 0) < THIN_WORDS && ["service", "location", "homepage"].includes(r.evidence!.d.family));
   const cr = home.clientRendered ?? null;
   const signals: CrawlSignals = {
     homeUrl: job.start_url, fetchFailed: !home.respondedAny, searchBlocked: home.searchBlocked ?? [],
@@ -552,12 +611,25 @@ export async function finalizeCrawlJob(service: Client, jobId: string): Promise<
     /* THE SALES INSIGHTS (2026-10-07, src/lib/salesInsights.ts): what the pages read say about services, name,
        phone, town, linking and proof — one ranked, evidence-backed list for the call script. Deterministic. */
     const homeNav = rows.find((r) => r.evidence?.nav)?.evidence?.nav ?? [];
-    insights = buildSalesInsights({
+    const insightInput = {
       servedUrl, pages: auditPages, nav: homeNav,
       knownUrls: rows.filter((r) => r.status !== "skipped" || r.skip_reason === "coverage_cap").map((r) => r.final_url || r.url),
       lead: { name: lead?.name ?? null, town: lead?.town ?? null, trade: leadForInsights?.trade ?? null, services: leadForInsights?.services ?? [] },
       capped: !!full.coverage?.capped,
-    });
+    };
+    insights = buildSalesInsights({ ...insightInput, serviceReview: { kind: "not_reviewed" } });
+    /* WHICH NAMES ARE SERVICES (2026-11-03): the read that lets the code claim a service has no page. Only when a claim is possible;
+       a failed read leaves the claim unsaid. */
+    const names = insights.candidates ?? [];
+    if (names.length >= 3) {
+      const review = await reviewServices(service, {
+        business: lead?.name ?? null, trade: leadForInsights?.trade ?? null, names,
+        pages: auditPages.filter((p) => p.status === "done" && p.d && p.d.shell !== true && p.d.family !== "homepage")
+          .map((p) => ({ url: p.d!.finalUrl || p.url, title: String(p.d!.title ?? ""), heading: String(p.d!.h1?.[0] ?? "") })),
+      });
+      if (review.kind === "reviewed") insights = buildSalesInsights({ ...insightInput, serviceReview: review });
+    }
+    delete insights.candidates;
     full.audit.insights = insights;
   } catch (e) { console.error("[crawl-job] site audit failed:", (e as Error).message); }
 
@@ -566,7 +638,7 @@ export async function finalizeCrawlJob(service: Client, jobId: string): Promise<
      simply not judged). Pages nothing links to come from the audit's own link graph, only when it was usable. */
   let contentTrust: ContentTrust | null = null;
   try {
-    const obsPages = [...rows].sort((a, b) => a.depth - b.depth || a.id - b.id).filter((r) => r.status === "done" && r.ct).map((r) => r.ct as PageObs);
+    const obsPages = [...rows].sort((a, b) => a.depth - b.depth || a.id - b.id).filter((r) => r.status === "done" && r.ct && r.evidence?.d?.shell !== true).map((r) => r.ct as PageObs);
     if (obsPages.length) {
       const graph = full.audit?.findings.find((f) => f.id === "sitemap_only_pages");
       const graphJudged = !!full.audit && !full.audit.notChecked.some((n) => /^Click depth/.test(n));
@@ -599,7 +671,7 @@ export async function finalizeCrawlJob(service: Client, jobId: string): Promise<
      stored audit (one copy per finding) and kept beside the result. Best-effort: never fails the crawl. */
   let visibility: VisibilityChecks | null = null;
   try {
-    const vRows = [...done].sort((a, b) => a.depth - b.depth || a.id - b.id).slice(0, VISIBILITY_MAX_PAGES);
+    const vRows = [...done].filter((r) => r.evidence!.d.shell !== true).sort((a, b) => a.depth - b.depth || a.id - b.id).slice(0, VISIBILITY_MAX_PAGES);
     const texts = new Map<number, string>();
     for (let i = 0; i < vRows.length; i += 200) {
       const ids = vRows.slice(i, i + 200).map((r) => r.id);
@@ -616,7 +688,7 @@ export async function finalizeCrawlJob(service: Client, jobId: string): Promise<
 
   const checkedAt = new Date().toISOString();
   const result = {
-    version: CRAWL_CHECK_VERSION, siteInfoVersion: SITE_INFO_VERSION, checked_at: checkedAt, url: job.start_url, town,
+    version: CRAWL_CHECK_VERSION, checksVersion: WEBSITE_CHECKS_VERSION, siteInfoVersion: SITE_INFO_VERSION, checked_at: checkedAt, url: job.start_url, town,
     signals, verdict, siteInfo, job_id: jobId,
     ...(insights ? { insights } : {}),
     ...(contentTrust ? { contentTrust } : {}),

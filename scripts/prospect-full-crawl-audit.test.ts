@@ -127,8 +127,15 @@ const service = {
 /* ── fake websites: a map of host → (path → response) ─────────────────────────────────────────── */
 type Resp = { status: number; body: string; ct?: string; final?: string };
 const sites = new Map<string, (p: string) => Resp | null>();
-(globalThis as any).fetch = async (url: string) => {
+/* The reader of service names (_shared/service-review.ts) needs a key, and here accepts every heading: these cases test the rules. */
+if (!(globalThis as any).Deno) (globalThis as any).Deno = { env: new Map<string, string>() };
+(globalThis as any).Deno.env.set('OPENAI_API_KEY', 'test');
+(globalThis as any).fetch = async (url: string, init?: { body?: string }) => {
   const u = new URL(url);
+  if (u.hostname === 'api.openai.com') {
+    const asked = JSON.parse(JSON.parse(String(init?.body)).messages[1].content);
+    return new Response(JSON.stringify({ usage: {}, choices: [{ message: { content: JSON.stringify({ services: asked.headings.map((name: string) => ({ name, page: null })) }) } }] }), { status: 200 });
+  }
   const handler = sites.get(u.hostname);
   const r = handler ? handler(u.pathname + u.search) : null;
   if (!r) { const resp = new Response('not found', { status: 404, headers: { 'content-type': 'text/html' } }); Object.defineProperty(resp, 'url', { value: url }); return resp; }
@@ -290,7 +297,7 @@ console.log('\n── 21. crawl limits and junk exclusion ──');
   ok(['/privacy-policy', '/cookie-policy', '/terms-and-conditions', '/tag/boilers', '/category/news', '/blog/page/2'].every((p) => skippedLow.includes(p)), '21. privacy, cookies, terms, tag, category and pagination pages are recorded as skipped low_value (' + skippedLow.length + ')');
   ok(!read.some((p) => skippedLow.includes(p)) && read.length === 60, '21. …never read, and never counted against the limit');
   ok(isLowValuePage(O + '/privacy-policy') && isLowValuePage(O + '/2026/09/post') && isLowValuePage(O + '/blog/page/3') && !isLowValuePage(O + '/services/boiler-repair') && !isLowValuePage(O + '/about-us'), '21. the junk test names junk and nothing else');
-  ok(crawlPriority(O + '/services/x', 1, O + '/') < crawlPriority(O + '/about', 1, O + '/') && crawlPriority(O + '/about', 1, O + '/') < crawlPriority(O + '/blog/post-1', 1, O + '/') && crawlPriority(O + '/a', 1, O + '/') < crawlPriority(O + '/a', 3, O + '/'), '21. priority: services, then about, then the blog; shallower first');
+  ok(crawlPriority(O + '/about', 1, O + '/') < crawlPriority(O + '/services/x', 1, O + '/') && crawlPriority(O + '/services/x', 1, O + '/') < crawlPriority(O + '/blog/post-1', 1, O + '/') && crawlPriority(O + '/a', 1, O + '/') < crawlPriority(O + '/a', 3, O + '/'), '21. priority: about and contact, then services, then the blog; shallower first');
   const plan = planCappedBatch([{ url: O + '/blog/x', kind: 'page', depth: 1 }, { url: O + '/sitemap.xml', kind: 'sitemap', depth: 0 }, { url: O + '/privacy', kind: 'page', depth: 1 }, { url: O + '/services', kind: 'page', depth: 1 }], O + '/');
   ok(plan.read.map((r) => r.url.replace(O, '')).join() === '/sitemap.xml,/services,/blog/x' && plan.lowValue.length === 1, '21. a capped batch reads sitemaps, then services, then the blog; low-value split out');
   ok(typeof leadRow.result.insights === 'object' && JSON.stringify(leadRow.result.insights).length < 9000, '21. the insights are stored on the row\'s result and stay small');
