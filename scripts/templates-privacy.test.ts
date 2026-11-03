@@ -64,8 +64,7 @@ console.log('\n── no server path sends a saved text by id ──');
   walk(fnRoot, '');
   ok(offenders.length === 0, `no edge function reads the templates table (${offenders.join(', ') || 'none'}) — sending is message text the rep could read`);
   const inbox = read('src/pages/Inbox.tsx');
-  ok(/const \{ templates, grouped: templateGroups \} = useTemplates\(\);/.test(inbox) && /templates\.filter\(\(t\) => t\.template_type === 'text'\)/.test(inbox),
-    'the Inbox Quick reply is built only from useTemplates (an RLS-scoped read: the caller\'s own rows plus active Team templates)');
+  ok(!/\.from\(\s*['"]templates['"]\s*\)/.test(inbox), 'the Inbox never reads the templates table itself (Quick reply removed 2026-11-03)');
 }
 
 console.log('\n── the browser does not seed defaults into an account ──');

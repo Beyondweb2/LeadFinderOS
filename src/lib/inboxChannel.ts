@@ -18,7 +18,7 @@ export type InboxChannel = 'whatsapp' | 'sms';
 /** The complete list of places the shared Inbox is allowed to behave differently for texts, and why each one is unavoidable. */
 export const SMS_ONLY_DIFFERENCES: ReadonlyArray<{ id: string; why: string }> = [
   { id: 'window', why: 'A text has no 24-hour service window: free text is always allowed and there is no "Window closed" chip.' },
-  { id: 'send-path', why: 'Texts go through the SMS queue and Twilio; WhatsApp goes through Meta. Send now, the queue banner and the queued count read the SMS queue.' },
+  { id: 'send-path', why: 'Texts go through the SMS queue and Twilio; WhatsApp goes through Meta. The queue banner and the queued count read the SMS queue.' },
   { id: 'reads', why: 'The unread mark comes from the per-person SMS read marks (my_sms_unread_counts), not the WhatsApp ones.' },
   { id: 'cost', why: 'Cost wording: a text is about 5p a segment.' },
   { id: 'statuses', why: 'The Queued / SMS Failed / No SMS pills (smsStatus.ts) replace WhatsApp-only states on early leads.' },

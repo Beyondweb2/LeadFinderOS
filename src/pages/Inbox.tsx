@@ -17,8 +17,6 @@ import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { useInbox, windowFor, normalizeWaNumber, type WaConversation, type LeadLite, type WaMessage } from '@/hooks/useInbox';
 import { getTemplateSendability, WA_TEMPLATE_REQS, canonicalTemplate } from '@/lib/whatsappTemplates';
 import { useToast } from '@/hooks/use-toast';
-import { useTemplates } from '@/hooks/useTemplates';
-import { MINE_HEADING, TEAM_HEADING, TEAM_MARK } from '@/lib/teamTemplates';
 import { unresolvedTokens } from '@/lib/leadUtils';
 import { useSubscription } from '@/hooks/useSubscription';
 import { usePersistedState } from '@/hooks/usePersistedState';
@@ -33,7 +31,6 @@ import { SiteScorePill, LeadSiteScore } from '@/components/SiteScoreBadge';
 import type { StoredSiteScore } from '@/lib/siteScore';
 import { onboardingUrl, onboardingUrlLabel } from '@/config/findableSite';
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { fillTemplate } from '@/lib/leadUtils';
 import { firstNameFrom, hookFollowupBody, contactFollowupBody } from '@/lib/questionnaireFollowup';
 import { readableTemplateBody } from '@/lib/templateBodies';
 import { parseTemplateSnapshot, type WhatsAppTemplateSnapshot } from '@/lib/whatsappTemplateSnapshot';
@@ -57,7 +54,9 @@ import { CampaignPicker } from '@/components/CampaignPicker';
 import { PipelineStatusSelect } from '@/components/PipelineStatusSelect';
 import { updateLeadStatus } from '@/lib/leadStatus';
 import { PIPELINE_STATUS_OPTIONS, WHATSAPP_TEMPLATES, type PipelineStatus } from '@/types/outreach';
-import { TemplateSnippet } from '@/components/TemplateWordingPreview';
+import { TemplateEye } from '@/components/TemplateWordingPreview';
+import { templatePreviewText } from '@/lib/templatePreview';
+import { smsPreview } from '@/lib/smsPreview';
 import { INBOX_DASHBOARD_GROUP_LABEL, INBOX_DASHBOARD_TEMPLATES, inboxDashboardSendability, isDashboardTemplate, needsTypedItem } from '@/lib/inboxDashboardTemplates';
 import { cleanNeededItem, DASHBOARD_TEMPLATES, dashboardGreeting, NEEDED_ITEM_MAX } from '@/lib/dashboardTemplates';
 import { prospectOnlyLead, prospectOnlyNumber } from '@/lib/prospectOnly';
@@ -449,8 +448,7 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
   // Only for invalidating the AiAudit page's audit-book cache when startAudit fires one from
   // here — Inbox itself is not on React Query (see useInbox.ts).
   const queryClient = useQueryClient();
-  const { templates, grouped: templateGroups } = useTemplates(); // same source as the Templates page ("Texts" tab)
-  const { isAdmin } = useSubscription(); // gates the admin-only "Send now" button
+  const { isAdmin } = useSubscription();
   /* ⛔ ONE INBOX, BOTH ROLES (2026-09-27). A salesperson's conversations are their own leads'
      (useInbox reads the safe sales_leads view; messages and media are scoped by RLS/storage policy),
      and every send is re-checked by the send functions. `perms` withholds only queue/automation
@@ -458,42 +456,11 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
      ownership-checked lead functions (salesPatchLead) — a direct write would silently change nothing. */
   const perms = useLeadPermissions();
   const navigate = useNavigate();
-  const [sendingNow, setSendingNow] = useState(false);
   // Which lead's full-detail overlay is open (null = none). The rich dialog is the SAME component
   // Outreach uses — see LeadDetailFromInbox. Inbox-only tools (auto-reply toggle, send-window,
   // template state) are untouched and sit alongside it.
   const [detailLeadId, setDetailLeadId] = useState<string | null>(null);
 
-  // Admin "Send now": force the next queued WhatsApp message to send immediately,
-  // SKIPPING ONLY the pacing wait (send_now). It still respects pause, the daily cap
-  // and the sending window (the edge guards those). Admin-gated server-side too (403
-  // for non-admins) — the button is also hidden below unless isAdmin.
-  const handleSendNow = async () => {
-    setSendingNow(true);
-    try {
-      const { data, error } = sms
-        ? await supabase.functions.invoke('process-sms-queue', { body: { send_now: true } })
-        : await supabase.functions.invoke('process-whatsapp-queue', { body: { mode: 'tick', send_now: true } });
-      if (error) throw error;
-      if (data?.sent) {
-        toast({ title: sms ? 'Sent next text' : 'Sent next message', description: `${data.business ?? ''}${data.simulated ? ' — TEST_MODE, nothing real sent' : ''}`.trim() || undefined });
-      } else {
-        const reason: Record<string, string> = {
-          paused: 'Queue is paused',
-          cap_reached: 'Daily cap reached',
-          outside_window: 'Outside sending hours',
-          empty_queue: 'Nothing queued to send',
-          all_held: 'Everything queued is on hold',
-        };
-        toast({ title: reason[data?.skipped as string] ?? `No send (${data?.skipped ?? 'unknown'})` });
-      }
-    } catch (e) {
-      toast({ title: "Couldn't send now", description: (e as Error)?.message ?? 'Failed', variant: 'destructive' });
-    } finally {
-      setSendingNow(false);
-      if (sms) void queryClient.invalidateQueries({ queryKey: ['sms-queue'] });
-    }
-  };
   /* The text queue's own state: how many are waiting, and whether it is paused (the WhatsApp queue has useQueueState below). */
   const smsQueueRows = useQuery({ queryKey: ['sms-queue', 'rows'], enabled: sms, refetchInterval: 30_000,
     queryFn: async () => { const { data, error } = await (supabase as unknown as { rpc: (n: string) => Promise<{ data: unknown; error: unknown }> }).rpc('my_sms_queue'); if (error) throw error; return (data ?? []) as Array<{ id: string }>; } });
@@ -627,7 +594,7 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
      AdminSiteManage earlier; this was the last one. '' means "not set" and the send button stays
      disabled until the operator picks. */
   const [template, setTemplate] = useState('');
-  /* needs_from_you {{2}}: the one thing the client still has to send, typed before Preview / Send (never guessed). */
+  /* needs_from_you {{2}}: the one thing the client still has to send, typed before Send (never guessed). */
   const [neededItem, setNeededItem] = useState('');
   const [sendingKeys, setSendingKeys] = useState<Set<string>>(new Set());
   const sendingKeysRef = useRef(new Set<string>());
@@ -1011,12 +978,6 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [active?.key, active?.lastInboundAt]);
 
-  // Quick-reply scripts = the saved TEXT templates (not voice). Placeholders are filled
-  // from the conversation's lead where possible, then inserted (editable, not auto-sent).
-  const textTemplates = useMemo(() => templates.filter((t) => t.template_type === 'text'), [templates]);
-  /* TEAM TEMPLATES (2026-10-07): the shared Findable library first, then this person's own. Inserting either writes only the draft. */
-  const teamTextTemplates = useMemo(() => templateGroups.team.filter((t) => t.template_type === 'text'), [templateGroups]);
-  const myTextTemplates = useMemo(() => templateGroups.mine.filter((t) => t.template_type === 'text'), [templateGroups]);
   const activeLead = active?.leadId ? leads.find((l) => l.id === active.leadId) : undefined;
   /* "Assign to me" on the open conversation's lead: the admin's assign_lead_with_brief to themself, or a salesperson's atomic claim_lead (an unowned lead only). The server decides; a refusal is shown, not hidden. */
   const assignActiveToMe = async () => {
@@ -1042,18 +1003,10 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
      remounts and re-seeds from the draft we just wrote. Deliberately not an imperative ref handle:
      a remount cannot get out of step with the stored draft, and a handle can. */
   const [composerSeed, setComposerSeed] = useState(0);
-  /* Team templates carry markers beyond the business name (src/lib/teamTemplateSeed.ts): the lead's report link, trade and town resolve
-     from the open lead; the rival names and a site fault are typed by the rep, and doSend refuses a message that still carries one. */
-  const quickReplyVars = () => ({ businessName: activeBusinessName, link: reportUrl, trade: activeLead?.category || activeLead?.search_keyword || null, town: (activeLead as { derived_town?: string | null; search_location?: string | null } | undefined)?.derived_town ?? activeLead?.search_location ?? null });
-  const fillQuickReply = (content: string) => fillTemplate(content, quickReplyVars());
-  const insertTemplate = (content: string) => {
-    setText(fillTemplate(content, quickReplyVars()));
-    setComposerSeed((n) => n + 1);
-  };
   /* ⛔ IN-WINDOW FREE TEXT (2026-10-31, src/lib/inWindowFreeText.ts). A saved WhatsApp template picked while their 24 hours are open
      goes INTO THE COMPOSER as its free-text wording (the sender's own dry run renders it, every value filled), and the send carries
      which template it was, so the server records it AS that template (pitch guards, report_sent, the snapshot). Keyed by
-     conversation; cleared on a successful send or by the person (Remove). Quick replies never carry one. */
+     conversation; cleared on a successful send or by the person (Remove). */
   const [freeTextOf, setFreeTextOf] = useState<FreeTextMarker | null>(null);
   /* WARM REPLY DRAFTS go in the same way a quick reply does: write the draft, remount the composer.
      ⛔ NEVER A SEND — Paul reviews, edits and presses the composer's own Send. The key is explicit so
@@ -1695,7 +1648,6 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
   /* ⛔ THE PREVIEW PANEL'S STATE. Held here rather than in the picker because it must be CLEARED
      when the chosen template or the open thread changes — a preview of a different message left on
      screen is worse than no preview, and it is the shape a person acts on. */
-  const [previewing, setPreviewing] = useState(false);
   const [previewOf, setPreviewOf] = useState<{ template: string; key: string } | null>(null);
   const [previewResult, setPreviewResult] = useState<
     { ok: boolean; body?: string; snapshot?: WhatsAppTemplateSnapshot; template?: string; fellBack?: string; error?: string; reason?: string; sentAs?: 'text' | 'template'; noFreeText?: string } | null
@@ -1755,7 +1707,16 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
     toast({ title: 'In the message box', description: r.withVideo ? 'Edit it if you like, then Send. It goes as a normal message with the video, not a template.' : 'Edit it if you like, then Send. It goes as a normal message, not a template.' });
   };
 
-  // Approved WhatsApp-template picker — SEPARATE from the free-text "Quick reply" snippets. Shown in
+  /* The eye's words (TemplateEye): the app's own copy of the template with this lead's details. A reading aid; the sender builds what
+     actually goes. A text shows its SMS wording; a template with no SMS version shows the app's copy. */
+  const pickerWording = (name: string): string | null => {
+    if (isDashboardTemplate(name)) return dashboardTemplatePreview(name, { business: activeLead?.business_name ?? '', greeting: dashboardGreeting(activeLead?.contact_name, activeLead?.business_name ?? ''), neededItem: neededItem.trim() || '(type it above)' });
+    const lead = activeLead as { contact_name?: string | null; derived_town?: string | null; search_location?: string | null; search_keyword?: string | null } | undefined;
+    if (sms) { try { return smsPreview(name as Parameters<typeof smsPreview>[0], { business_name: activeLead?.business_name, derived_town: lead?.derived_town ?? null }); } catch { /* no SMS version: the app's copy below */ } }
+    return templatePreviewText(name, { businessName: activeLead?.business_name, firstName: lead?.contact_name, town: lead?.derived_town ?? lead?.search_location, trade: lead?.search_keyword });
+  };
+
+  // Approved WhatsApp-template picker. Shown in
   // both window states (below). Each option is enabled/disabled by the SHARED getTemplateSendability
   // guard (audit_reply needs a completed audit; claim templates need a share_token). Send goes via
   // doSend(true) → send-whatsapp-message, which resolves vars per-lead server-side (safe).
@@ -1770,7 +1731,7 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
               const group = WA_TEMPLATE_REQS[t.value]?.group;
               const groupLabel = group === 'site' ? 'Site / claim' : group === 'audit' ? 'Audit' : 'Opener';
               return (
-                <SelectItem key={t.value} value={t.value} disabled={!s.ok}>
+                <SelectItem key={t.value} value={t.value} disabled={!s.ok} trailing={<TemplateEye label={t.label} getText={() => pickerWording(t.value)} />}>
                   <span className="flex flex-col">
                     <span>{t.label} <span className="text-[10px] text-muted-foreground">· {groupLabel}</span></span>
                     {!s.ok && <span className="text-[10px] text-amber-600">{s.reason}</span>}
@@ -1785,7 +1746,7 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
                 {INBOX_DASHBOARD_TEMPLATES.map((t) => {
                   const s = dashboardPickable(t.value);
                   return (
-                    <SelectItem key={t.value} value={t.value} disabled={!s.ok}>
+                    <SelectItem key={t.value} value={t.value} disabled={!s.ok} trailing={<TemplateEye label={t.label} getText={() => pickerWording(t.value)} />}>
                       <span className="flex flex-col">
                         <span>{t.label}</span>
                         {!s.ok && <span className="text-[10px] text-amber-600">{s.reason}</span>}
@@ -1797,30 +1758,9 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
             )}
           </SelectContent>
         </Select>
-        {/* ⛔ PREVIEW BEFORE SEND — the dry run (useInbox.preview → send-whatsapp-message
-            mode:"dry_run"). It runs every server-side guard and builds the real Meta payload, then
-            stops. Two live prospects were spent finding out that `audit_followup` would 500, because
-            the only way to ask was to send. Deliberately NOT disabled by `selectedSendability` — a
-            template the client-side guard already blocks is exactly the one worth asking the SERVER
-            about, and its answer names the real reason. */}
-        <Button
-          variant="outline"
-          className="shrink-0"
-          disabled={previewing || sending || !active?.leadId || !template}
-          onClick={async () => {
-            if (!active || !template) return;
-            setPreviewing(true);
-            setPreviewOf({ template, key: active.key });
-            const r = await preview({ phone: active.phone, leadId: active.leadId, country: activeLead?.country ?? null, templateName: template, allowResend: thread.some((m) => m.direction === 'outbound' && m.template_name === template), ...(needsTypedItem(template) ? { templateVars: { needed_item: neededItem } } : {}) });
-            setPreviewResult(r.ok
-              ? { ok: true, body: r.body ?? '', snapshot: r.snapshot, template: r.template ?? template, fellBack: r.fellBack, sentAs: r.sentAs, noFreeText: r.noFreeText }
-              : { ok: false, error: r.error ?? 'preview_failed', reason: r.reason });
-            setPreviewing(false);
-          }}
-        >
-          {previewing ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Eye className="mr-1.5 h-4 w-4" />}
-          Preview
-        </Button>
+        {/* The chosen template's full wording, on hover, tap or keyboard focus. The big Preview button (the dry run) went on 2026-11-03,
+            Paul: every send still runs the server's guards, and "Put in message box" still runs the dry run. */}
+        {!!template && <TemplateEye selected label={pickerLabel(template)} getText={() => pickerWording(template)} />}
         {/* Window open (WhatsApp): the wording goes into the message box. The template button appears only for a template the
             sender says has no plain-text version. Window closed (or a text): exactly as before. */}
         {inWindowWa && (
@@ -1842,7 +1782,7 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
         </p>
       )}
       {/* A dashboard template: Meta's approved wording (as Paul pasted it, DASHBOARD_TEMPLATE_WORDING) filled with this lead's
-          values; Preview runs the real dry run. needs_from_you asks for its item first. */}
+          values. needs_from_you asks for its item first. */}
       {isDashboardTemplate(template) && (
         <div className="mt-1.5 space-y-1.5 rounded-md border border-border/60 bg-muted/30 p-2 text-[11px]" data-testid="picker-dashboard-values">
           {needsTypedItem(template) && (
@@ -1863,10 +1803,6 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
           </p>
         </div>
       )}
-      {/* One line of the chosen template, with this lead's details. No hover preview (Paul, 2026-09-29):
-          the full message is the Preview button's dry run above — the exact payload. */}
-      {!isDashboardTemplate(template) && <TemplateSnippet className="mt-1.5" selected={template}
-        values={{ businessName: activeLead?.business_name, firstName: (activeLead as { contact_name?: string | null } | undefined)?.contact_name, town: (activeLead as { derived_town?: string | null; search_location?: string | null } | undefined)?.derived_town ?? (activeLead as { search_location?: string | null } | undefined)?.search_location, trade: (activeLead as { search_keyword?: string | null } | undefined)?.search_keyword }} />}
       <RequestTemplateButton source="inbox" />
       {/* ⛔ SHOWN ONLY FOR THE TEMPLATE AND THREAD IT WAS RUN FOR. A stale preview under a different
           template reads as a guarantee about a message nobody previewed. */}
@@ -2332,43 +2268,6 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
     return true;
   };
 
-  /* QUICK REPLY (the saved TEXT scripts, 2026-10-31): click the wording to put it in the message box (editable), or "Send now" to
-     send it as it is — the same doSend, so the blanks check, send hours (Queue) and every server rule apply, and it leaves a
-     half-typed draft alone. A saved reply is free text, so outside the 24 hours it is still listed but greyed, with the reason. */
-  const NO_REPLY_24H = 'They haven’t replied in 24 hours';
-  const quickReplyMenu = (windowOpen: boolean) => textTemplates.length > 0 && (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button variant="outline" size="sm" className="h-7 gap-1 text-xs" disabled={sending}>
-          <MessageSquarePlus className="h-3.5 w-3.5" /> Quick reply
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" className="max-h-72 w-96 max-w-[calc(100vw-2rem)] overflow-y-auto thin-scrollbar">
-        {!windowOpen && <p className="px-2 py-1.5 text-[11px] text-amber-700 dark:text-amber-400" data-testid="quick-reply-closed">{NO_REPLY_24H}, so a saved reply can’t be sent. Use an approved template below.</p>}
-        {[{ label: TEAM_HEADING, rows: teamTextTemplates, team: true }, { label: MINE_HEADING, rows: myTextTemplates, team: false }].filter((g) => g.rows.length > 0).map((g) => (
-          <div key={g.label} data-testid={g.team ? 'quick-reply-team' : 'quick-reply-mine'}>
-            {(teamTextTemplates.length > 0 && myTextTemplates.length > 0) && <p className="px-2 pb-0.5 pt-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">{g.label}</p>}
-            {g.rows.map((t, i) => (
-              <div key={`${t.id}-${i}`} className="flex items-start gap-1">
-                <DropdownMenuItem disabled={!windowOpen} onClick={() => insertTemplate(t.content)} className="flex min-w-0 flex-1 flex-col items-start gap-0.5">
-                  <span className="flex items-center gap-1.5 text-xs font-medium">{t.title}{g.team && <span className="rounded-full bg-yellow-400/15 px-1.5 text-[9px] font-bold tracking-wide text-yellow-600 ring-1 ring-inset ring-yellow-500/40 dark:text-yellow-300">{TEAM_MARK}</span>}</span>
-                  <span className="line-clamp-2 whitespace-normal text-[11px] text-muted-foreground">
-                    {fillTemplate(t.content, { businessName: activeBusinessName })}
-                  </span>
-                </DropdownMenuItem>
-                <DropdownMenuItem disabled={!windowOpen || sending} onClick={() => void doSend(false, fillQuickReply(t.content), { keepDraft: true })}
-                  className="shrink-0 flex-col items-end gap-0 text-[11px] font-medium" data-testid="quick-reply-send-now">
-                  <span className="flex items-center gap-1"><Send className="h-3 w-3" /> {windowOpen && !replyOpen ? 'Queue' : 'Send now'}</span>
-                  {!windowOpen && <span className="max-w-[7rem] whitespace-normal text-right text-[10px] font-normal text-muted-foreground">{NO_REPLY_24H}</span>}
-                </DropdownMenuItem>
-              </div>
-            ))}
-          </div>
-        ))}
-      </DropdownMenuContent>
-    </DropdownMenu>
-  );
-
   /* ══ THE INBOX FILLS THE SCREEN (2026-09-27) ═════════════════════════════════════════════════════
      Both panels used to be a fixed 60vh, so on a tall desktop the thread stopped two-thirds of the way
      down and left the rest of the window empty. From md up the page is exactly the viewport minus the
@@ -2380,8 +2279,8 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
   return (
     <div className="space-y-4 md:flex md:h-[calc(100dvh-6.5rem)] md:min-h-[560px] md:flex-col md:space-y-2 lg:h-[calc(100dvh-7.5rem)]">
       {/* ══ THE TOP BAR (2026-10-01) ═══════════════════════════════════════════════════════════════
-          Two rows, each one job. Row 1: what the page is, and its two actions (Send now, New). They
-          stay on the title's line at every width (Send now drops to its icon on a phone). The admin's
+          Two rows, each one job. Row 1: what the page is, and its action (New). It stays on the
+          title's line at every width. (Send now was removed, Paul, 2026-11-03; the queue keeps its own pace.) The admin's
           first-reply rule joins row 1 on a wide screen and takes its own row under the title below that
           (see AutoReplyToggle). Row 2: the five list filters as one group: two columns on a phone, a
           balanced 3 + 2 grid at tablet and laptop widths, one line from xl. Every control is h-9 and
@@ -2396,18 +2295,6 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
           </div>
           <div className="flex shrink-0 items-center gap-2">
             {sms && (smsQueueRows.data?.length ?? 0) > 0 && <span className="rounded-full bg-sky-500/15 px-2.5 py-1 text-xs font-semibold text-sky-700 dark:text-sky-300" data-testid="sms-queued-count">{smsQueueRows.data?.length} queued</span>}
-            {isAdmin && (
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={handleSendNow}
-                disabled={sendingNow}
-                aria-label="Send now"
-                title={sms ? 'Send the next queued text now — skips only the pacing wait; still respects pause, the daily cap and the sending hours' : 'Send the next queued WhatsApp message now — skips only the pacing wait; still respects pause, the daily cap and the 7am–9:30pm window'}
-              >
-                {sendingNow ? <Loader2 className="h-4 w-4 animate-spin sm:mr-1.5" /> : <Send className="h-4 w-4 sm:mr-1.5" />}<span className="hidden sm:inline">Send now</span>
-              </Button>
-            )}
             {/* Everything else that lived on this row (the reply rule, AI handles replies, Draft outcomes, reply hours) is in Settings. */}
             {perms.queueControls && <InboxSettings channel={channel} aiOn={aiOn} isAdmin={isAdmin} replyHours={sched.replyHours} onSaveReplyHours={sched.saveReplyHours} />}
             <Button size="sm" onClick={() => setNewOpen((v) => !v)}><Plus className="mr-1.5 h-4 w-4" /> New</Button>
@@ -3128,8 +3015,6 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
                       />
                       </div>
                     )}
-                    {/* Quick-reply: insert a saved TEXT script (editable before send), or send it as it is. */}
-                    {quickReplyMenu(true)}
                     {/* ⛔ KEYED BY CONVERSATION (+ the insert seed), so switching thread REMOUNTS it:
                         the outgoing instance flushes its draft under its own key on unmount and the
                         incoming one seeds from the new thread's draft. That is what stops a
@@ -3143,7 +3028,7 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
                         read out when he records. Never sends. Closed-window threads do not get one. */}
                     {!sms && active.leadId && <VoiceNoteScriptButton key={active.key} leadId={active.leadId} prominent />}
                     <span className="flex-1" />
-                    {/* Approved WhatsApp templates — SEPARATE from the free-text "Quick reply". In the
+                    {/* Approved WhatsApp templates. In the
                         window they are optional, so they open on demand; outside it they always show. */}
                     <Button type="button" variant="ghost" size="sm" className="h-7 gap-1 px-2 text-xs text-muted-foreground"
                       onClick={() => setTemplatesOpen((v) => !v)} aria-expanded={templatesOpen}>
@@ -3216,8 +3101,6 @@ const ConversationInbox = ({ channel }: { channel: InboxChannel }) => {
                         onDraft={() => undefined}
                       />
                     )}
-                    {/* Saved replies stay listed outside the window, greyed with the reason, instead of disappearing. */}
-                    <div className="flex flex-wrap items-center gap-1.5">{quickReplyMenu(false)}</div>
                     <p className="text-[11px] text-muted-foreground">
                       Outside the 24h window — free text, files and voice notes aren’t allowed. Send an approved template{active.leadId ? '' : ' (needs a linked lead)'}:
                     </p>

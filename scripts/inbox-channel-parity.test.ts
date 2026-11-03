@@ -41,7 +41,6 @@ console.log('2. every element of the WhatsApp inbox is in the shared component')
   const REQUIRED: Array<[string, RegExp]> = [
     ['top bar: title + channel switch', /<InboxChannelSwitch current=\{channel\} \/>/],
     ['top bar: Settings (holds "When a prospect replies", AI handles replies, reply hours)', /<InboxSettings channel=\{channel\}/],
-    ['top bar: Send now', /aria-label="Send now"/],
     ['top bar: New', /<Plus className="mr-1\.5 h-4 w-4" \/> New/],
     ['filters: campaign', /<CampaignPicker mode="filter"/],
     ['filters: lead status', /aria-label="Lead status"/],
@@ -74,9 +73,8 @@ console.log('2. every element of the WhatsApp inbox is in the shared component')
     ['thread: message bubbles', /rounded-2xl px-3 py-2 text-sm/],
     ['composer', /<InboxComposer/],
     ['composer: draft helper', /<WarmReplyAssistant/],
-    ['composer: quick reply', /<MessageSquarePlus className="h-3\.5 w-3\.5" \/> Quick reply/],
     ['composer: template picker (full list)', /WHATSAPP_TEMPLATES\.map\(\(t\) => \{\s*const s = templateSendability\(t\.value\);/],
-    ['composer: preview', /\bPreview\b\s*<\/Button>/],
+    ['composer: template wording eye', /<TemplateEye selected /],
     ['lead dialog', /<LeadDetailFromInbox/],
   ];
   for (const [name, re] of REQUIRED) {
@@ -103,6 +101,8 @@ console.log('3. every channel conditional is a DECLARED difference');
     [/if \(!sms\) return supabase\.functions\.invoke\('send-whatsapp-message'/, 'send-path'],
     [/if \(sms && isColdSmsTemplate\(bulkTemplate\)\)|sms && isColdSmsTemplate/, 'bulk-queue'],
     [/if \(!base\.ok \|\| !sms\) return base|return smsTemplateAvailability\(name\)/, 'template-availability'],
+    /* 2026-11-03: the eye reads a text's own SMS wording. */
+    [/if \(sms\) \{ try \{ return smsPreview\(name/, 'template-availability'],
     /* 2026-10-26: the dashboard templates' group is in the one picker on both tabs, greyed on texts with "WhatsApp only." */
     [/inboxDashboardSendability\(name, \{ isAdmin: isAdmin === true, sms,/, 'template-availability'],
     [/const newPickerLeads = |isPlausibleUkMobile/, 'statuses'],

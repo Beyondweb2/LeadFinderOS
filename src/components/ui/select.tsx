@@ -100,8 +100,9 @@ SelectLabel.displayName = SelectPrimitive.Label.displayName;
 
 const SelectItem = React.forwardRef<
   React.ElementRef<typeof SelectPrimitive.Item>,
-  React.ComponentPropsWithoutRef<typeof SelectPrimitive.Item>
->(({ className, children, ...props }, ref) => (
+  /** `trailing` sits at the row's end, outside ItemText: Radix copies ItemText into the closed trigger, and this must not follow it. */
+  React.ComponentPropsWithoutRef<typeof SelectPrimitive.Item> & { trailing?: React.ReactNode }
+>(({ className, children, trailing, ...props }, ref) => (
   <SelectPrimitive.Item
     ref={ref}
     className={cn(
@@ -117,6 +118,7 @@ const SelectItem = React.forwardRef<
     </span>
 
     <SelectPrimitive.ItemText>{children}</SelectPrimitive.ItemText>
+    {trailing != null && <span className="ml-auto shrink-0 pl-2">{trailing}</span>}
   </SelectPrimitive.Item>
 ));
 SelectItem.displayName = SelectPrimitive.Item.displayName;

@@ -32,9 +32,11 @@ console.log("── the preview is the approved wording ──");
     /* ⛔ NO HOVER PREVIEW (Paul, 2026-09-29): moving the pointer through the list changes nothing. The
        chosen template shows one line under the picker; the full wording only on an explicit Preview. */
     ok(!/useTemplateHover|TemplateWordingInList|itemProps\(|onPointerEnter/.test(s), `${file}: no hover preview of any kind`);
-    ok(/<TemplateSnippet [^>]*selected=\{\w+\}/.test(s), `${file}: the chosen template shows one line under the picker`);
-    ok(src === "inbox" ? /await preview\(\{ phone: active\.phone/.test(s) : /<TemplatePreviewButton [^>]*selected=\{\w+\}/.test(s),
-      `${file}: …and an explicit Preview shows the full wording (the Inbox's is the dry run)`);
+    /* The Inbox (Paul, 2026-11-03): no snippet and no Preview button, an eye instead (scripts/inbox-simplify.test.ts). */
+    if (src !== "inbox") {
+      ok(/<TemplateSnippet [^>]*selected=\{\w+\}/.test(s), `${file}: the chosen template shows one line under the picker`);
+      ok(/<TemplatePreviewButton [^>]*selected=\{\w+\}/.test(s), `${file}: …and an explicit Preview shows the full wording`);
+    }
     ok(new RegExp(`<RequestTemplateButton source="${src}" />`).test(s), `${file}: has Request a template`);
   }
 }

@@ -59,7 +59,6 @@ ok(gone === 'for an accountant in Leeds {{competitors}}', 'the article marker re
 ok(unresolvedTokens('Hi Ace, nothing left') .length === 0 && unresolvedTokens('x {{ competitors }} y {{competitors}} {{link}}').join() === '{{competitors}},{{link}}', 'unresolved markers are detected (once each, spacing-tolerant)');
 const inbox = read('src/pages/Inbox.tsx');
 ok(/const left = unresolvedTokens\(body\);[\s\S]{0,200}Fill in the blanks first/.test(inbox) && /return false; \}\s*\}/.test(inbox.slice(inbox.indexOf('Fill in the blanks first'))), 'the Inbox refuses to send a free-text message that still carries a marker');
-ok(/link: reportUrl, trade: activeLead\?\.category/.test(inbox), 'inserting a Team template fills the report link, trade and town from the open lead');
 
 console.log('\n── THE MIGRATION IS THE RENDER, IDEMPOTENT, AND TOUCHES NOTHING ELSE ──');
 const mig = read('supabase/migrations/20261016200000_seed_team_templates.sql');
