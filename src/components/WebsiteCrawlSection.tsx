@@ -51,7 +51,9 @@ function IssueRow({ issue }: { issue: WebsiteIssue }) {
   );
 }
 
-export function WebsiteCrawlSection({ p, leadId }: { p: ColdCallPlaybook; leadId: string }) {
+/** What the website section knows and does: the check, which of the four states to draw, and Run again. Shared by this section
+ *  and the simple call screen's "What we found" (one watch, one wait, one rule). */
+export function useWebsiteCrawl(p: ColdCallPlaybook, leadId: string) {
   const qc = useQueryClient();
   const auto = useCallScreenCrawl(leadId, p);
   const [jobId, setJobId] = useState<string | null>(null);
@@ -90,6 +92,11 @@ export function WebsiteCrawlSection({ p, leadId }: { p: ColdCallPlaybook; leadId
     }, WEBSITE_CRAWL_WAIT_POLL_MS);
     return () => clearInterval(t);
   }, [waiting, leadId, qc]);
+  return { check, shown, runAgain, error, savedNote };
+}
+
+export function WebsiteCrawlSection({ p, leadId }: { p: ColdCallPlaybook; leadId: string }) {
+  const { check, shown, runAgain, error, savedNote } = useWebsiteCrawl(p, leadId);
   const owner = check.summary?.owner ?? null;
   if (shown === 'no_website') {
     return (

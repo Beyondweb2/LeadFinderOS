@@ -418,10 +418,10 @@ function Offer({ p, ans }: { p: ColdCallPlaybook; ans: ReturnType<typeof useCall
 }
 
 /* ── OBJECTIONS: closed, one answer open at a time ─────────────────────────────────────────────── */
-function Objections({ p }: { p: ColdCallPlaybook }) {
+export function Objections({ p, startOpen = true }: { p: ColdCallPlaybook; startOpen?: boolean }) {
   const [open, setOpen] = useState<number | null>(null);
   return (
-    <Step title="Objections" tone="amber" testId="call-step-objections">
+    <Step title="Objections" tone="amber" testId="call-step-objections" open={startOpen}>
       <div className="flex flex-wrap gap-1.5" data-testid="playbook-questions">
         {p.script.objections.map((o, i) => (
           <button key={o.objection} type="button" aria-expanded={open === i} onClick={() => setOpen(open === i ? null : i)}
@@ -499,7 +499,7 @@ function Prospect({ p }: { p: ColdCallPlaybook }) {
 
 /** The call's outcome and next action go through the ONE Log window (LeadCallFlow); Quick Close opens its
  *  dialog. These two are the ONLY primary actions on the call screen. */
-function LogCallBar({ onLogCall, leadId }: { onLogCall: () => void; leadId: string }) {
+export function LogCallBar({ onLogCall, leadId }: { onLogCall: () => void; leadId: string }) {
   return (
     <div className="sticky bottom-0 z-10 mt-3 flex items-center gap-2 border-t border-border bg-background/95 py-2 backdrop-blur" data-testid="call-actions">
       <Button type="button" className="h-11 min-w-0 flex-1 rounded-full text-sm font-bold" onClick={onLogCall} data-testid="log-this-call">
@@ -512,7 +512,7 @@ function LogCallBar({ onLogCall, leadId }: { onLogCall: () => void; leadId: stri
 
 /** NO VALID COMPLETED AUDIT → NO SCRIPT (Paul, 2026-10-07; the rule is src/lib/callScriptGate.ts). What the Call tab
  *  and the sheet show instead of the script: the one line, why, and the way to the check's own controls. */
-function ScriptLocked({ gate, onShowCheck }: { gate: CallScriptGate; onShowCheck?: () => void }) {
+export function ScriptLocked({ gate, onShowCheck }: { gate: CallScriptGate; onShowCheck?: () => void }) {
   const waiting = gate.reason === 'queued' || gate.reason === 'running';
   return (
     <section className="space-y-2 rounded-2xl border border-dashed border-border bg-muted/30 p-3.5 sm:p-4" data-testid="call-script-locked" data-reason={gate.reason}>

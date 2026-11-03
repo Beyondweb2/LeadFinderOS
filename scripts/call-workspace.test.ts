@@ -216,8 +216,9 @@ console.log('── 5. THE CALL FLOW WORKS WITH NO AUDIT AND NO WHATSAPP ──'
   ok(!/call-card-run-check|onRunCheck/.test(ui), 'no second "Run the AI check" inside the script');
   {
     const dlg = read('src/components/LeadDetailDialog.tsx').replace(/\r\n/g, '\n');
-    ok(!/openAiTools|onRunCheck/.test(dlg) && /data-testid="ai-check-tools"[\s\S]{0,400}<LeadHookPanel leadId=\{lead\.id\} variant="call" \/>/.test(dlg)
-      && dlg.indexOf('data-testid="ai-check-tools"') < dlg.indexOf('<ColdCallPlaybookInline'), '…the AI check tools sit at the top of the Call tab, above the script, where the one-lead check is run');
+    const tab = read('src/components/SimpleCallTab.tsx').replace(/\r\n/g, '\n');
+    ok(!/openAiTools|onRunCheck/.test(dlg) && /data-testid="found-ai-tools"[\s\S]{0,400}<LeadHookPanel leadId=\{leadId\} variant="call" \/>/.test(tab)
+      && tab.indexOf('data-testid="found-ai-tools"') < tab.indexOf('<Script p='), '…the AI check tools sit at the top of the Call tab (What we found), above the script, where the one-lead check is run');
   }
   const ready = buildColdCallPlaybook(base());
   ok(ready.audit.state === 'ready' && /Gemini did not name them — it named Brian Slattery Plumbers Limited and Sunnybank Plumbing Services/.test(ready.audit.headline), 'with an audit: the key finding in one line, from the stored result');

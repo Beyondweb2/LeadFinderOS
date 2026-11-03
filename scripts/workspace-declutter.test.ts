@@ -125,7 +125,7 @@ console.log("\n── the popup: one display, one editor, nothing removed ──
   ok(!/<QuickCloseButton/.test(dlg) && /<TabsTrigger value="close"/.test(dlg) && /QuickCloseNav\.Provider/.test(dlg), "v2: Quick Close is the Close tab (no second close window from the header); every Quick Close button in the workspace switches to it");
   /* Nothing removed: every tool the header had is still mounted. */
   for (const [what, re] of [
-    ["Find email", /<FindEmailButton leadId=\{lead\.id\}/], ["Find socials", /<SocialLinks lead=\{lead\} withFind \/>/], ["Call script (the Call tab)", /<ColdCallPlaybookInline leadId=\{lead\.id\} initialScript="call"/], ["Call (tel)", /data-testid="workspace-call"/],
+    ["Find email", /<FindEmailButton leadId=\{lead\.id\}/], ["Find socials", /<SocialLinks lead=\{lead\} withFind \/>/], ["Call script (the Call tab)", /<SimpleCallTab leadId=\{lead\.id\}/], ["Call (tel)", /data-testid="workspace-call"/],
     ["Crawl site", /<LeadDetailCrawlButton lead=\{lead\} \/>/], ["Welcome pack", /<WelcomePackButton leadId=\{lead\.id\}/], ["Site check", /<LeadSiteCheckButton lead=\{lead\} \/>/],
     ["the star", /<StarToggle /], ["edit name", /setEditingName\(true\)/], ["WhatsApp link", /whatsAppLinkForLead\(lead\.id\)/], ["tabs", /<TabsTrigger value="client"/],
   ] as const) ok(re.test(dlg), `still there: ${what}`);

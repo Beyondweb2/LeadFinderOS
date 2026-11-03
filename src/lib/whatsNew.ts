@@ -22,6 +22,14 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-11-03-simple-prospect-popup', date: '2026-11-03', title: 'A much simpler prospect popup', audience: 'all',
+    body: 'The popup now has three tabs: Call, Close and History. The Call tab is what we found, the script, what we offer and the objections, with Log this call and Quick Close always at the bottom.',
+    report: {
+      added: ['What we found at the top of Call: who AI named instead, the ChatGPT, Gemini and Google AI scores, and the top 3 website issues with Show all.', 'Two short call scripts. One if they have a website, one if they do not, with grey prompts for you and a box to add their website address.', 'A What we offer list for Findable Complete.', 'A small In touch before tag by the name.', 'Adding a website to a lead that had none now starts the website check straight away.'],
+      changed: ['Phone, website and area stay in the header, and it says No website when there is none.', 'The same website issue no longer shows twice.', 'The Client tab only appears once the client has paid.', 'The old Details tab is folded at the bottom of History under More about this lead, with the WhatsApp and text panels.'],
+      removed: ['The Details tab.', 'The issues, the More people are using AI paragraph and the crawl explanation inside the script.', 'The Ask first and Then ask answer boxes on the Call tab. Quick Close still asks them.'],
+      effect: 'A new salesperson sees the facts, reads the script and has the offer in front of them, with nothing to explain. Quick Close, the sign-up link, call logging, the next action and History work exactly as before.',
+    } },
   { id: '2026-11-03-inbox-simplify', date: '2026-11-03', title: 'A simpler Inbox reply area', audience: 'all',
     body: 'The template picker is smaller. An eye icon on each template shows its full wording when you hover or tap it. Quick reply and the big Preview button are gone.',
     report: {

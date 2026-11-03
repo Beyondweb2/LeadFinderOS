@@ -166,7 +166,7 @@ console.log('── 4. AUDIT GATE — no valid completed audit, no script ──
   ok(/const gate = callScriptGate\(leadId, q\.data\);/.test(sheet) && /gate\.show \? <><Warnings p=\{q\.data\} \/><Scripts/.test(sheet), 'the Outreach / Inbox script sheet is gated the same way');
   ok((play.match(/<Scripts /g) ?? []).length === 2, 'no other place renders the script');
   ok(/data-testid="call-script-locked"/.test(play) && /data-testid="call-script-go-to-check"/.test(play) && /\{gate\.title\}/.test(play), 'the locked state: the one line, why, and Go to the AI check');
-  ok(/<section ref=\{aiCheckRef\}[^>]*data-testid="ai-check-tools"/.test(dlg) && /onShowCheck=\{showCheck\}/.test(dlg), '…which scrolls to the existing check controls (LeadHookPanel) at the top of the Call tab');
+  ok(/data-testid="found-ai-tools"/.test(read('src/components/SimpleCallTab.tsx').replace(/\r\n/g, '\n')) && /<LeadHookPanel/.test(read('src/components/SimpleCallTab.tsx').replace(/\r\n/g, '\n')), '…the existing check controls (LeadHookPanel) sit folded under What we found on the Call tab, open when there is no result');
   ok(/callAuditProgress\(audits, leadId\)/.test(read('src/hooks/useColdCallPlaybook.ts')) && /: callScriptRecheckMs\(leadId, query\.state\.data\)\)/.test(read('src/hooks/useColdCallPlaybook.ts')) && /findingsStatus === 'checking' \? WEBSITE_CHECK_RECHECK_MS/.test(read('src/hooks/useColdCallPlaybook.ts')), 'the loader passes progress and re-reads while the check runs');
 }
 

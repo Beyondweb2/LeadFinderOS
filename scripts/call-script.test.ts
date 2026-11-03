@@ -247,9 +247,9 @@ console.log('── 12. The Call screen UI: removed noise stays removed ──')
   ok(/data-testid="log-this-call"/.test(ui) && /Log this call/.test(ui), 'the sticky bar: Log this call');
   ok(!/AiOpportunity|CallEvidence|AiCheckCount|TalkAbout/.test(code), 'no second AI-result block inside the script');
   const dlg = read('src/components/LeadDetailDialog.tsx');
-  const call = dlg.slice(dlg.indexOf('data-testid="workspace-call"'), dlg.indexOf('data-testid="workspace-details"'));
-  ok(call.indexOf('<LeadHookPanel leadId={lead.id} variant="call" />') > 0 && call.indexOf('<LeadHookPanel') < call.indexOf('<ColdCallPlaybookInline'), 'the ONE AI summary is at the TOP of the Call tab, above the script');
-  ok((call.match(/<LeadHookPanel/g) ?? []).length === 1 && !/<details[^>]*ai-check-tools/.test(call), '…exactly once (no folded second copy below)');
+  const call = dlg.slice(dlg.indexOf('data-testid="workspace-call"'), dlg.indexOf('data-testid="workspace-close"'));
+  { const tab = read('src/components/SimpleCallTab.tsx'); ok(tab.indexOf('<LeadHookPanel leadId={leadId} variant="call" />') > 0 && tab.indexOf('<WhatWeFound p') < tab.indexOf('<Script p'), 'the ONE AI summary is at the TOP of the Call tab (What we found), above the script'); }
+  ok((read('src/components/SimpleCallTab.tsx').match(/<LeadHookPanel/g) ?? []).length === 1 && !/<LeadHookPanel/.test(call), '…exactly once (no second copy in the dialog)');
   ok(!/NotReadyToSellBanner/.test(dlg.replace(/\{\/\*[\s\S]*?\*\/\}/g, '')), 'no onboarding banner in the lead popup');
 }
 

@@ -357,7 +357,7 @@ ok(/\[functions\.voice-note-script\]\nverify_jwt = true/.test(read('supabase/con
   ok(openBranch.includes('prominent />') && openBranch.indexOf('prominent />') < openBranch.indexOf('<VoiceNoteRecorder'), '…in the OPEN window, beside the recorder');
   ok(!closedBranch.includes('VoiceNoteScriptButton'), 'closed-window threads do not get an equal active control');
 }
-ok(/<ColdCallPlaybookInline leadId=\{lead\.id\} initialScript="call"/.test(read('src/components/LeadDetailDialog.tsx')) && /VoiceNoteScriptBody/.test(read('src/components/ColdCallPlaybook.tsx')), 'the lead popup holds the voice-note script (the Call tab\'s Voice note switch, the shared body)');
+ok(/<SimpleCallTab leadId=\{lead\.id\}/.test(read('src/components/LeadDetailDialog.tsx')) && /VoiceNoteScriptBody/.test(read('src/components/SimpleCallTab.tsx')), 'the lead popup holds the voice-note script (the Call tab\'s Voice note switch, the shared body)');
 
 if (f > 0) { console.log(`\n${f} FAILURE${f === 1 ? '' : 'S'}`); process.exit(1); }
 console.log('\nALL PASS');

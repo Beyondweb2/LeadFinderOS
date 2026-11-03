@@ -198,7 +198,7 @@ console.log("── security ──");
   ok(canOpenRoute("sales", "/sales-dashboard") && !canOpenRoute("sales", "/") && !canOpenRoute("sales", "/review-replies") && !canOpenRoute("sales", "/paid-clients"), "routes: Sales opens the dashboard, never the admin Dashboard, Review Replies or Paid clients");
   ok(/\[functions\.sales-performance\]\nverify_jwt = true/.test(read("supabase/config.toml")), "config.toml names the new function");
   const dialog = read("src/components/LeadDetailDialog.tsx");
-  ok(/perms\.clientDelivery && <TabsTrigger value="client"/.test(dialog), "the Client tab (delivery, payment, private note) is admin-only");
+  ok(/const showClientTab = permsForTab\.clientDelivery && isPaidLead\(lead\);[\s\S]*showClientTab && <TabsTrigger value="client"/.test(dialog), "the Client tab (delivery, payment, private note) is admin-only");
 }
 
 console.log("── Next Action stays human-set ──");

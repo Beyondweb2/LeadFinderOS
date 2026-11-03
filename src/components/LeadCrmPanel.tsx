@@ -164,6 +164,25 @@ function useSave(leadId: string): SaveFn {
   };
 }
 
+/** The call script's "what's the address?" box (2026-11-03): the same lead_set_profile write the Profile editor makes, with
+ *  the services, areas and address already on the lead sent back unchanged — only the website is new. */
+export function useAddWebsite(leadId: string) {
+  const crm = useLeadCrmRow(leadId);
+  const save = useSave(leadId);
+  const [busy, setBusy] = useState(false);
+  const add = async (website: string): Promise<boolean> => {
+    const lead = crm.data;
+    const w = website.trim();
+    if (!lead || !w) return false;
+    setBusy(true);
+    try {
+      const r = await save('lead_set_profile', { _services: lead.services_included ?? [], _areas: lead.service_areas ?? [], _address: lead.address ?? '', _website: w }, 'Website added', { website: w });
+      return r.ok === true;
+    } finally { setBusy(false); }
+  };
+  return { add, busy, ready: !!crm.data };
+}
+
 /* ── PROFILE: what the business genuinely does and where (2026-09-28) ──────────────────────────────
    Services and service areas the salesperson has actually learned (the call, their website, the
    referral), plus the address and website. Progressive — any field can be filled later. Saved through

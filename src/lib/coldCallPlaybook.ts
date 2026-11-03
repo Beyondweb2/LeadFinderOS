@@ -209,6 +209,8 @@ export interface ColdCallPlaybook {
     business: string;
     trade: string | null;
     town: string | null;
+    /** The search said plainly ("a plumber in Rugby") — the simple call script says it. */
+    searchFor: string;
     phone: string | null;
     website: string | null;
     auditDate: string | null;
@@ -878,6 +880,7 @@ export function buildColdCallPlaybook(input: PlaybookInput): ColdCallPlaybook {
       business,
       trade,
       town,
+      searchFor,
       phone: clean(lead.phone) || null,
       website: clean(lead.website) || null,
       auditDate,

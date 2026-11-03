@@ -26,10 +26,10 @@ const dlg = read("src/components/LeadDetailDialog.tsx");
 ok(/const logThisCall = \(\) => setWindows\(afterLogCall\(\)\);/.test(dlg), "2026-10-06: Log outcome opens the Log window (no scrolling to a card at the bottom)");
 ok(/<LeadCallFlow leadId=\{lead\.id\}[^>]*logOpen=\{logOpen\} onLogOpenChange=\{setLogOpen\}/.test(dlg) && /const \[windows, setWindows\] = useState\(\(\) => arrivalWindows\(callArrivalOf\(openNumberPopup, openLogContact\)/.test(dlg) && /const logOpen = windows\.logOpen;/.test(dlg), "…the one window, mounted once for the popup; it opens on arrival only for the script sheet's Log this call (2026-10-07: Outreach's Call arrives on the number window)");
 // openAiTools / onRunCheck removed 2026-10-06 (sales-team-today, Paul): the AI check tools are at the TOP of the Call tab.
-ok(/<ColdCallPlaybookInline leadId=\{lead\.id\} initialScript="call" onLogCall=\{logThisCall\} onShowCheck=\{showCheck\} \/>/.test(dlg) && !/openAiTools|onRunCheck/.test(dlg), "the Call tab passes it (no openAiTools — the AI check tools sit above the script)");
+ok(/<SimpleCallTab leadId=\{lead\.id\} contactName=\{lead\.contact_name\} onLogCall=\{logThisCall\} \/>/.test(dlg) && !/openAiTools|onRunCheck/.test(dlg), "the Call tab passes it (no openAiTools — the AI check tools sit above the script)");
 {
-  const ai = dlg.indexOf('data-testid="ai-check-tools"'), inline = dlg.indexOf("<ColdCallPlaybookInline leadId={lead.id}");
-  ok(ai > 0 && inline > ai && /data-testid="ai-check-tools"[\s\S]{0,300}<LeadHookPanel leadId=\{lead\.id\} variant="call" \/>/.test(dlg), "the AI check tools (LeadHookPanel 'call') come BEFORE the script on the Call tab");
+  const tabSrc = read('src/components/SimpleCallTab.tsx').replace(/\r\n/g, '\n'); const ai = tabSrc.indexOf('data-testid="found-ai-tools"'), inline = tabSrc.indexOf("<Script p=");
+  ok(ai > 0 && inline > ai && /data-testid="found-ai-tools"[\s\S]{0,400}<LeadHookPanel leadId=\{leadId\} variant="call" \/>/.test(tabSrc), "the AI check tools (LeadHookPanel 'call') come BEFORE the script on the Call tab");
 }
 ok(/key=\{fullLead\.id\}/.test(dlg), "the body is keyed per lead, so the request never carries to the next lead");
 
