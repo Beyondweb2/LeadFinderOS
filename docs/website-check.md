@@ -267,3 +267,13 @@ Overstated claims turned down: a booking page is not a contact page; a link that
 **Spend:** browser reads are capped by `crawl_render_settings` (switch + monthly cap) through `claim_crawl_render()`, one conditional write; any protection mode but running = no read. 12 pages per prospect's JavaScript site, 40 for a client. Refused or failed = the page stays unjudged.
 
 Tests: `scripts/website-check-accuracy.test.ts`. Evidence: untracked `RECON_website-check-accuracy-2026-11-03.md` in the primary checkout.
+
+**Also from the live re-crawl:** a crawl stopped at its page limit never says a service has no page; the service reader rejects calls to action, process headings and mixed lists; review words count the same in both checks; one page left unread means nothing is called missing; a rate-limited browser read is retried on a later tick.
+
+**Deployed 2026-11-03:** merges bc2bc8e3 and 75dacdc2. `20261204090000_crawl_render_cap` first, read back; then 41 edge functions by hand, twice (`--remote=<ref> --yes`: Supabase CLI 3 refuses a production deploy from an agent without it), everything `check-import-graph --reached-by` names for the changed files, except the held `whatsapp-status`; `20261204090100_website_check_recrawl` last. `x-swm-build: 2026-11-03b-website-check-accuracy`; `2026-11-03-website-check-accuracy` is in the live whatsNew chunk.
+
+**Live proof, seven audited sites re-crawled through the catch-up door:** poesuk.com (12 pages in a browser, of 883 known) and shorelec.uk (5, rest unjudged) now say only client_rendered: no "no way to contact", "no phone", "one page", "no H1". st-electric.co.uk: no broken links. highdesignroofing.com: no "no reviews / contact / about". acroofingsouth.co.uk: no serious issue, its 6 service pages counted. fpelectric.uk: reviews and areas found, title read. svgelectricalsolutions.co.uk: true findings remain (its email really is linked as a phone number). Spend for those runs: 43 browser pages, $0.004 of model time.
+
+**Reached prospects (not fixed by this, for the record):** in the 60 days before the fix, 102 outbound WhatsApp texts carried one of the claim kinds that proved unreliable, last on 2026-10-28, found by wording, so not each one is false. 4 pending AI drafts quote the old checks; they need approval to send and were left for Paul.
+
+**Not seen by a person:** checked by code against real pages and a browser's page text, not by eye.
