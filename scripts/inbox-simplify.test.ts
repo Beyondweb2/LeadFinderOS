@@ -35,7 +35,7 @@ ok(/\{!!template && <TemplateEye selected /.test(inbox), "and one beside the cho
 ok(/\{trailing != null && /.test(read("src/components/ui/select.tsx")) && read("src/components/ui/select.tsx").indexOf("ItemText>{children}") < read("src/components/ui/select.tsx").indexOf("trailing != null"), "it sits outside ItemText, so it is not copied into the closed picker");
 ok(/onPointerUp=\{stop\}/.test(eye) && /stop\(e\);\s*e\.preventDefault\(\);\s*const touch/.test(eye), "pressing it never selects the row");
 ok(/pointerType === 'touch'/.test(eye) && /tabIndex=\{selected \? 0 : -1\}/.test(eye), "a tap opens it, and the chosen template's eye takes keyboard focus");
-ok(/if \(lastInputWasKey\) setOpen\(true\)/.test(eye) && !/onPointerEnter/.test(eye), "passing the pointer over a row opens nothing");
+ok(/if \(lastInputWasKey\) timer = setTimeout\(\(\) => setOpen\(true\)/.test(eye) && !/onPointerEnter/.test(eye), "passing the pointer over a row opens nothing");
 ok(/pointer-events-auto/.test(eye), "it still answers on a greyed-out row");
 
 if (fails) { console.log(`${fails} FAILED`); process.exit(1); }
