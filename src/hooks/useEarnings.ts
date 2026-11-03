@@ -12,6 +12,8 @@ export interface EarningsResponse {
   clients: (ClientEarnings & { remainingPotential: number; subscriptionStatus: string | null; package: string | null })[];
   totals: EarningsTotals;
   commissionable: boolean;
+  /** Each sale's plan (absent from a server deployed before 2026-11-02). */
+  sales?: { leadId: string; plan: string | null }[];
   bySeller: { sellerId: string; earned: number; due: number; offset: number; paidOut: number }[];
   /** The next six London months (absent from a server deployed before 2026-10-02). */
   forecast?: CommissionForecast;

@@ -5,7 +5,7 @@ import { commissionLines, firstOfNextMonth, type LedgerRow } from '../src/lib/co
 import { COMMISSION_PAYABLE_DAYS_OLDER, COMMISSION_PAYABLE_DAYS_V7, COMMISSION_RECURRING_COUNT, commissionPayableDays, payoutRuleForPaymentAt } from '../src/lib/commissionConfig.ts';
 import { REFUND_WINDOW_DAYS, REFUND_WINDOW_DAYS_V7 } from '../src/lib/clientTimeline.ts';
 import { buildOwed, countdownWords, paidHistory, planMarkPaid, type LinePaymentRow } from '../src/lib/commissionOwed.ts';
-import { monthlyDiffers, salePlanFlagAtPayment, salePlanParts } from '../src/lib/salePlan.ts';
+import { monthlyDiffers, salePlanFlagAtPayment, salePlanParts, salePlanWordsOr } from '../src/lib/salePlan.ts';
 import { closeInfoMissing } from '../src/lib/salesHandoff.ts';
 
 let f = 0;
@@ -248,6 +248,18 @@ console.log('── 11. SCOPE AND WIRING ──');
   ok(read('supabase/functions/stripe-webhook/index.ts').includes('stripe_plan: paymentPlanFromMeta(s.metadata ?? null)'), 'the webhook hands the ledger Stripe’s plan');
   const screen = read('src/components/admin/CommissionOwed.tsx');
   ok(!/stripe\.com|\bpayout\(|transfers/i.test(screen), 'no payment integration on the screen');
+}
+
+/* The salesperson's page gives one answer to "when do I get paid?" (Paul, 2026-11-03). */
+{
+  const all = ['src/components/salesDash/earningsParts.tsx', 'src/components/salesDash/CommissionForecastCard.tsx', 'src/components/salesDash/EarnedCelebration.tsx', 'src/components/admin/CommissionOwed.tsx'].map(read).join('\n');
+  ok((all.match(/title="Your payments"/g) ?? []).length === 1, 'only one panel is called Your payments');
+  const card = read('src/components/salesDash/CommissionForecastCard.tsx');
+  ok(!/due to you on/.test(card) && !/nextPayoutDate/.test(card), 'the top card names no payout date');
+  ok(!/COMMISSION_RECURRING_COUNT_V3/.test(card) && !/Approval Date/.test(card), 'the forecast note follows the new rules');
+  ok(!/next payout/.test(read('src/components/salesDash/EarnedCelebration.tsx')), 'the pop-up names no next payout');
+  ok(salePlanWordsOr('complete', 'Findable Build') === 'Complete · monthly', 'a sale on a plan shows its plan');
+  ok(salePlanWordsOr('legacy_twelve', 'Findable Build') === 'Findable Build' && salePlanWordsOr(null, 'Findable Build') === 'Findable Build' && salePlanWordsOr('nonsense', '') === '', 'an old or unknown plan keeps the old name');
 }
 
 console.log(f ? `\n${f} FAILED` : '\nALL PASS');

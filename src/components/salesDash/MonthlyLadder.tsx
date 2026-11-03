@@ -3,6 +3,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { cn } from '@/lib/utils';
 import { SURFACE, gbp } from '@/components/salesDash/ui';
 import { COMMISSION_RECURRING_COUNT, COMMISSION_RECURRING_RATE, MONTHLY_TIERS, monthName, monthlyTracker, monthlyTrackerNextLine, type CommissionLine, type LadderSale } from '@/lib/commission';
+import { salePlanWordsOr } from '@/lib/salePlan';
 import type { EarningsResponse } from '@/hooks/useEarnings';
 
 /* ══ THE MONTH'S LADDER — the Sales dashboard's hero (2026-10-01; redesigned 2026-10-02) ═══════════
@@ -28,7 +29,8 @@ type Client = EarningsResponse['clients'][number];
 type StepState = 'done' | 'here' | 'locked';
 const DOT: Record<StepState, string> = { done: 'bg-teal-300', here: 'bg-amber-300', locked: 'bg-slate-400' };
 
-function SaleDot({ sale, client, state }: { sale: LadderSale; client: Client | undefined; state: StepState }) {
+function SaleDot({ sale, client, plan, state }: { sale: LadderSale; client: Client | undefined; plan: string | null | undefined; state: StepState }) {
+  const sold = salePlanWordsOr(plan, client?.package ?? '');
   return (
     <Popover>
       <PopoverTrigger asChild>
@@ -37,7 +39,7 @@ function SaleDot({ sale, client, state }: { sale: LadderSale; client: Client | u
       </PopoverTrigger>
       <PopoverContent className="w-64 space-y-1.5 p-3 text-xs" align="start">
         <p className="text-sm font-semibold">{client?.business ?? 'Client'}</p>
-        <p className="text-muted-foreground">Sale {sale.seq} · {dayMonth(sale.occurredAt)}{client?.package ? ` · ${client.package}` : ''}</p>
+        <p className="text-muted-foreground">Sale {sale.seq} · {dayMonth(sale.occurredAt)}{sold ? ` · ${sold}` : ''}</p>
         <p><span className="font-semibold text-teal-600 dark:text-teal-300">{gbp(sale.commission)}</span> commission ({pct(sale.rate)} of the first payment)</p>
         <p className="text-muted-foreground">{!client ? null : client.commissionablePaymentsLeft > 0
           ? `Plus 20% of the next ${client.commissionablePaymentsLeft} monthly payment${client.commissionablePaymentsLeft === 1 ? '' : 's'}${client.remainingPotential ? ` (up to ${gbp(client.remainingPotential)})` : ''}.`
@@ -47,11 +49,12 @@ function SaleDot({ sale, client, state }: { sale: LadderSale; client: Client | u
   );
 }
 
-export function MonthlyLadder({ lines, clients, todayIso = new Date().toISOString() }: {
-  lines: CommissionLine[]; clients: Client[]; todayIso?: string;
+export function MonthlyLadder({ lines, clients, sales, todayIso = new Date().toISOString() }: {
+  lines: CommissionLine[]; clients: Client[]; sales?: EarningsResponse['sales']; todayIso?: string;
 }) {
   const t = monthlyTracker(lines, todayIso);
   const clientOf = new Map(clients.map((c) => [c.leadId, c]));
+  const planOf = new Map((sales ?? []).map((s) => [s.leadId, s.plan]));
   const counted = t.sales.filter((s) => s.counted);
   const gone = t.sales.filter((s) => !s.counted);
   const zones = MONTHLY_TIERS.map((z, i) => {
@@ -100,7 +103,7 @@ export function MonthlyLadder({ lines, clients, todayIso = new Date().toISOStrin
                 {Array.from({ length: slots }, (_, k) => {
                   const idx = z.from - 1 + k;
                   const sale = counted[idx];
-                  if (sale) return <SaleDot key={k} sale={sale} client={clientOf.get(sale.leadId)} state={state} />;
+                  if (sale) return <SaleDot key={k} sale={sale} client={clientOf.get(sale.leadId)} plan={planOf.get(sale.leadId)} state={state} />;
                   return <span key={k} aria-hidden className={cn('h-4 w-4 rounded-full border-2 lg:h-3 lg:w-3 lg:border-[1.5px]', idx === nextIndex ? 'animate-pulse border-dashed border-amber-300 motion-reduce:animate-none' : state === 'here' ? 'border-amber-200/30' : 'border-slate-600/70')} />;
                 })}
               </div>

@@ -2,7 +2,7 @@ import { CalendarRange, Info, PiggyBank, TrendingUp, UserX, Wallet } from 'lucid
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
 import { KpiCard, Panel, gbp } from '@/components/salesDash/ui';
-import { COMMISSION_RECURRING_COUNT_V3, COMMISSION_RECURRING_RATE, ENGAGEMENT_END_UNKNOWN, FORECAST_MONTHS, type CommissionForecast, type EarningsTotals, type ForecastMonth } from '@/lib/commission';
+import { COMMISSION_RECURRING_COUNT, COMMISSION_RECURRING_RATE, ENGAGEMENT_END_UNKNOWN, FORECAST_MONTHS, type CommissionForecast, type EarningsTotals, type ForecastMonth } from '@/lib/commission';
 
 /* ══ YOUR MONEY — THREE FIGURES AND THE NEXT SIX MONTHS (Paul, 2026-10-02; redesigned the same day) ══
    EarningsStats: the three money figures, each once, beside the month's ladder — earned this month,
@@ -25,10 +25,9 @@ const BAR_MIN_PX = 6;
 
 /** The three money figures, beside the hero. Stacked from lg; three across on a tablet; stacked on a phone. */
 export function EarningsStats({ totals, forecast }: { totals: EarningsTotals; forecast: CommissionForecast | null }) {
-  const payout = new Date(`${totals.nextPayoutDate}T12:00:00Z`).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' });
   return (
     <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 lg:grid-cols-1" data-testid="earnings-stats">
-      <KpiCard tone="green" icon={PiggyBank} label="Earned this month" value={<span data-testid="ladder-earned">{gbp(totals.earnedThisMonth)}</span>} sub={`${gbp(totals.due)} due to you on ${payout}`} />
+      <KpiCard tone="green" icon={PiggyBank} label="Earned this month" value={<span data-testid="ladder-earned">{gbp(totals.earnedThisMonth)}</span>} sub={`${gbp(totals.due)} earned, not paid yet`} />
       <KpiCard tone="blue" icon={Wallet} label="Total earned to date" value={<span data-testid="forecast-earned-total">{gbp(totals.earned)}</span>} sub="Collected, after any refunds" />
       {forecast && <KpiCard tone="purple" icon={TrendingUp} label={`Expected over ${FORECAST_MONTHS} months`} value={<span data-testid="forecast-expected">{gbp(forecast.expectedTotal)}</span>} sub="From clients you've already sold" />}
     </div>
@@ -105,13 +104,13 @@ export function CommissionForecastCard({ forecast, engagement }: {
         </div>
         {forecast.undated.length > 0 && (
           <p className="mt-2 text-[11px] text-muted-foreground" data-testid="forecast-undated">
-            Not in any month yet: {forecast.undated.map((u) => `${u.business} (${gbp(u.amount)})`).join(', ')} — Stripe has not set a billing date.
+            Not in any month yet: {forecast.undated.map((u) => `${u.business} (${gbp(u.amount)})`).join(', ')} — waiting for the four-week audit or a Stripe billing date.
           </p>
         )}
         <p className="mt-3 flex items-start gap-1.5 border-t border-border/60 pt-3 text-[11px] leading-relaxed text-muted-foreground">
           <Info className="mt-0.5 h-3 w-3 shrink-0" />
           <span>
-            Expected is {pct(COMMISSION_RECURRING_RATE)} of each live client's next monthly payments (up to {COMMISSION_RECURRING_COUNT_V3} per client on the current terms), plus first-payment commission still pending its Approval Date, on the date Stripe will bill them — not earned until they pay. A failed or refunded payment drops out. New sales are never guessed.
+            Expected is {pct(COMMISSION_RECURRING_RATE)} of each live client's next monthly payments (up to {COMMISSION_RECURRING_COUNT} per client; older sales keep their own count), on the date Stripe will bill them — not earned until they pay — plus first-payment commission on the date it becomes payable. A failed or refunded payment drops out. New sales are never guessed.
           </span>
         </p>
       </div>

@@ -64,6 +64,8 @@ A reply never overwrites text being typed.
 **Send to Paul stays.** It saves nothing he would not already see. It is the salesperson's "I'm done", which rings his bell and writes the one
 send row. `SellerClientInfoForm` keeps its button: saving it tells Paul, so autosaving would notify him on every pause.
 
+**One answer to "when do I get paid?" (Paul, 2026-11-03).** Your payments is the only panel that names dates and the only one with that name (the list of every payment is Client payments). Earned this month says "earned, not paid yet" with no date, and the pop-up points to Your payments. Screens show a sale's plan through `salePlanWordsOr`; old-plan sales keep their route name.
+
 ## Open
 
 - ⚠️ `REMEASURE_RESULTS_COPY_APPROVED` is false, and no client has ever been sent four-week results. Until Paul approves that copy, every

@@ -149,7 +149,7 @@ export default function SalesDashboard() {
       {earn.isLoading && <div className="h-72 animate-pulse rounded-[1.25rem] bg-muted/50 motion-reduce:animate-none" aria-busy="true" />}
       {e && oneSeller && e.commissionable && (
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-          <div className="min-w-0 lg:col-span-2"><MonthlyLadder lines={e.lines} clients={e.clients} /></div>
+          <div className="min-w-0 lg:col-span-2"><MonthlyLadder lines={e.lines} clients={e.clients} sales={e.sales} /></div>
           <EarningsStats totals={e.totals} forecast={e.forecast ?? null} />
         </div>
       )}
@@ -180,7 +180,7 @@ export default function SalesDashboard() {
       {e && oneSeller && e.commissionable && (
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
           {e.forecast && <div className="min-w-0 lg:col-span-2"><CommissionForecastCard forecast={e.forecast} engagement={e.engagement ?? null} /></div>}
-          <div className={cn('min-w-0', !e.forecast && 'lg:col-span-3')}><RecentWins lines={e.lines} clients={e.clients} /></div>
+          <div className={cn('min-w-0', !e.forecast && 'lg:col-span-3')}><RecentWins lines={e.lines} clients={e.clients} sales={e.sales} /></div>
         </div>
       )}
 

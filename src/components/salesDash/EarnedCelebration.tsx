@@ -57,7 +57,7 @@ export function EarnedCelebration({ lines, enabled }: { lines: CommissionLine[] 
         <PartyPopper className="h-6 w-6 shrink-0" />
         <div>
           <p className="text-2xl font-bold tabular-nums leading-none">+£{shown.toFixed(2)} earned</p>
-          <p className="mt-1 text-xs text-emerald-50/90">{show.count === 1 ? 'A client payment just landed.' : `${show.count} client payments landed.`} It is in your next payout.</p>
+          <p className="mt-1 text-xs text-emerald-50/90">{show.count === 1 ? 'A client payment just landed.' : `${show.count} client payments landed.`} Your payments shows when you get paid.</p>
         </div>
         <button type="button" onClick={() => setShow(null)} className="ml-1 rounded-md p-1 text-emerald-50/80 hover:bg-white/10 hover:text-white" aria-label="Dismiss"><X className="h-4 w-4" /></button>
       </div>
