@@ -277,3 +277,5 @@ Tests: `scripts/website-check-accuracy.test.ts`. Evidence: untracked `RECON_webs
 **Reached prospects (not fixed by this, for the record):** in the 60 days before the fix, 102 outbound WhatsApp texts carried one of the claim kinds that proved unreliable, last on 2026-10-28, found by wording, so not each one is false. 4 pending AI drafts quote the old checks; they need approval to send and were left for Paul.
 
 **Not seen by a person:** checked by code against real pages and a browser's page text, not by eye.
+
+**Re-crawl stopped (Paul, 2026-11-03):** cron `website-check-recrawl` unscheduled soon after it started; old checks are not re-crawled. An older check stays held on read until that lead next gets a crawl (a new audit, or Crawl site / Run again). Past messages are not being followed up.
