@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
+import { AutosaveIndicator, useAutosaveFields } from '@/hooks/useAutosaveFields';
 import { isDemoLead } from '@/lib/demoLeads';
 import { StickyNote, Save, Check, X, Pencil, Calendar as CalendarIconLucide, PoundSterling, Mail, Copy, Share2, Globe, Phone, MapPin, Loader2, PhoneCall, ChevronDown, MessageCircle, Wrench, ClipboardCheck } from 'lucide-react';
 import { Link } from 'react-router-dom';
@@ -362,6 +363,7 @@ function LeadDetailBody({
   const [editValue, setEditValue] = useState('');
   /* Typed-but-unsaved text on this lead (UnsavedDraftGuard): the private note, the name, a contact field. */
   useUnsavedDraft('private-note', isEditingNotes && notesDirty);
+
   useUnsavedDraft('business-name', editingName && editedName.trim() !== (lead.business_name ?? '').trim());
   useUnsavedDraft('contact-field', editingField !== null && editValue.trim() !== String(lead[editingField as keyof OutreachLead] ?? '').trim());
   /* ⛔ THE SAME DIALOG FOR BOTH ROLES (2026-09-27). A salesperson gets everything that works or closes
@@ -393,22 +395,41 @@ function LeadDetailBody({
     }
   }, [activitiesLoaded, fetchActivities, lead.id]);
 
+  const cancelName = () => { putBack('name'); setEditedName(openedAs.current.name ?? lead.business_name); };
   const handleSaveName = async () => {
-    if (editedName.trim() && editedName.trim() !== lead.business_name) {
-      if (onBusinessNameChange) await onBusinessNameChange(lead.id, editedName.trim());
-      else await onUpdateLead(lead.id, { business_name: editedName.trim() });
-    }
+    if (editedName.trim()) { autoDetails.set('name', editedName.trim()); autoDetails.flush('name'); }
+    else cancelName();
     setEditingName(false);
   };
 
   type ContactField = 'phone' | 'email' | 'website' | 'address';
   const startEditField = (field: ContactField, current: string | null) => {
+    openEdit(field, current ?? '');
     setEditingField(field);
     setEditValue(current ?? '');
   };
-  /* AUTOSAVE (2026-11-03): leaving a field saves it. Escape and the cross are the only ways to throw an edit away, so they must not save on the way out. */
+  /* AUTOSAVE (2026-11-03): every field saves as they type. Escape and the cross throw an edit away, which now means putting back what was there when it opened.
+     ⛔ A number on a queued or already-messaged lead does NOT save while typing: the next send reads it, and changing it must ask first (saveField). */
   const cancellingEdit = useRef(false);
-  const cancelEditField = () => setEditingField(null);
+  const openedAs = useRef<Record<string, string>>({});
+  const autoDetails = useAutosaveFields({
+    save: async (k, v) => {
+      if (isDemoLead(lead.id)) return;
+      const res: unknown = k === 'name'
+        ? (onBusinessNameChange ? await onBusinessNameChange(lead.id, v.trim()) : await onUpdateLead(lead.id, { business_name: v.trim() }))
+        : k === 'notes'
+          ? (onNotesChange ? await onNotesChange(lead.id, v) : await onUpdateLead(lead.id, { notes: v }))
+          : await onUpdateLead(lead.id, { [k]: v.trim() || null } as Partial<OutreachLead>);
+      if (res === null) throw Object.assign(new Error('not_saved'), { status: 400 });
+    },
+    storageKey: `lead-details:${lead.id}`,
+    onRestore: (left) => { if (typeof left.notes === 'string') setNotes(left.notes); },
+  });
+  const openEdit = (k: string, current: string) => { openedAs.current[k] = current; autoDetails.baseline(k, current); };
+  const putBack = (k: string) => { const was = openedAs.current[k]; if (was !== undefined) { autoDetails.set(k, was); autoDetails.flush(k); } };
+  const phoneAsksFirst = lead.status === 'queued' || !!lead.whatsapp_sent_at;
+  const typeField = (field: ContactField, val: string) => { setEditValue(val); if (field !== 'phone' || !phoneAsksFirst) autoDetails.set(field, val.trim()); };
+  const cancelEditField = () => { if (editingField) putBack(editingField); setEditingField(null); };
   const saveField = async (field: ContactField) => {
     // Store raw-trimmed for ALL fields (no normalisation / E.164 / URL reformat) —
     // existing leads store raw-trimmed and the send-time helpers expect that.
@@ -426,14 +447,15 @@ function LeadDetailBody({
       ) {
         return;
       }
-      await onUpdateLead(lead.id, { [field]: trimmed } as Partial<OutreachLead>);
+      autoDetails.set(field, trimmed ?? '');
     }
+    autoDetails.flush(field);
     setEditingField(null);
   };
 
   const handleSaveNotes = async () => {
-    if (onNotesChange) await onNotesChange(lead.id, notes);
-    else await onUpdateLead(lead.id, { notes });
+    autoDetails.set('notes', notes);
+    autoDetails.flush('notes');
     setNotesDirty(false);
     setNotesSaved(true);
     setIsEditingNotes(false);
@@ -442,7 +464,8 @@ function LeadDetailBody({
   };
 
   const handleCancelNotes = () => {
-    setNotes(lead.notes || '');
+    putBack('notes');
+    setNotes(openedAs.current.notes ?? (lead.notes || ''));
     setNotesDirty(false);
     setIsEditingNotes(false);
   };
@@ -483,20 +506,20 @@ function LeadDetailBody({
               <div className="flex items-center gap-1 flex-1 min-w-0">
                 <Input
                   value={editedName}
-                  onChange={(e) => setEditedName(e.target.value)}
+                  onChange={(e) => { setEditedName(e.target.value); if (e.target.value.trim()) autoDetails.set('name', e.target.value.trim()); }}
                   onBlur={() => { if (!cancellingEdit.current) void handleSaveName(); cancellingEdit.current = false; }}
                   className="h-8 text-base font-semibold px-2 flex-1"
                   autoFocus
                   {...{ [ESCAPE_CANCELS_EDIT]: '' }}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter') handleSaveName();
-                    if (e.key === 'Escape') { cancellingEdit.current = true; setEditedName(lead.business_name); setEditingName(false); }
+                    if (e.key === 'Escape') { cancellingEdit.current = true; cancelName(); setEditingName(false); }
                   }}
                 />
                 <button onMouseDown={(e) => e.preventDefault()} onClick={handleSaveName} className="h-7 w-7 flex items-center justify-center text-green-500 hover:bg-green-500/10 rounded">
                   <Check className="h-4 w-4" />
                 </button>
-                <button onMouseDown={(e) => e.preventDefault()} onClick={() => { setEditedName(lead.business_name); setEditingName(false); }} className="h-7 w-7 flex items-center justify-center text-muted-foreground hover:bg-muted/40 rounded">
+                <button onMouseDown={(e) => e.preventDefault()} onClick={() => { cancelName(); setEditingName(false); }} className="h-7 w-7 flex items-center justify-center text-muted-foreground hover:bg-muted/40 rounded">
                   <X className="h-4 w-4" />
                 </button>
               </div>
@@ -505,7 +528,7 @@ function LeadDetailBody({
                 <span className="line-clamp-2 break-words sm:truncate">{lead.business_name}</span>
                 {!isDemoLead(lead.id) && <TouchedBeforeTag leadId={lead.id} />}
                 {!isDemoLead(lead.id) && <StarToggle leadId={lead.id} on={!!lead.is_potential_work} canWriteRow={perms.editLeadRecord} />}
-                {perms.editLeadRecord && <button onClick={() => setEditingName(true)} className="h-5 w-5 flex items-center justify-center text-muted-foreground/40 hover:text-foreground rounded transition-colors shrink-0" title="Edit name">
+                {perms.editLeadRecord && <button onClick={() => { openEdit('name', lead.business_name); setEditedName(lead.business_name); setEditingName(true); }} className="h-5 w-5 flex items-center justify-center text-muted-foreground/40 hover:text-foreground rounded transition-colors shrink-0" title="Edit name">
                   <Pencil className="h-3.5 w-3.5" />
                 </button>}
               </>
@@ -723,14 +746,14 @@ function LeadDetailBody({
                     {(perms.editLeadRecord ? editableFields : []).map(({ field, Icon, label, value, color, external, hrefFor }) => {
                       const isEditing = editingField === field;
                       return (
-                        <li key={field} className="flex items-center gap-2 text-xs">
+                        <li key={field} className={cn('flex items-center gap-2 text-xs', isEditing && 'flex-wrap')}>
                           <Icon className={cn('h-3.5 w-3.5 shrink-0', color)} />
                           <span className="w-16 shrink-0 text-muted-foreground/70">{label}</span>
                           {isEditing ? (
                             <>
                               <Input
                                 value={editValue}
-                                onChange={(e) => setEditValue(e.target.value)}
+                                onChange={(e) => typeField(field, e.target.value)}
                                 onBlur={() => { if (!cancellingEdit.current) void saveField(field); cancellingEdit.current = false; }}
                                 autoFocus
                                 className="h-7 flex-1 min-w-0 px-2 text-xs"
@@ -743,6 +766,7 @@ function LeadDetailBody({
                               <button onMouseDown={(e) => e.preventDefault()} onClick={() => saveField(field)} className="flex h-6 w-6 shrink-0 items-center justify-center rounded text-green-500 hover:bg-green-500/10" title="Save">
                                 <Check className="h-3.5 w-3.5" />
                               </button>
+                              <AutosaveIndicator status={autoDetails.status} className="order-last basis-full pl-[5.5rem]" />
                               <button onMouseDown={(e) => e.preventDefault()} onClick={cancelEditField} className="flex h-6 w-6 shrink-0 items-center justify-center rounded text-muted-foreground hover:bg-muted/40" title="Cancel">
                                 <X className="h-3.5 w-3.5" />
                               </button>
@@ -869,7 +893,7 @@ function LeadDetailBody({
                     <Textarea
                       ref={notesRef}
                       value={notes}
-                      onChange={(e) => { setNotes(e.target.value); setNotesDirty(true); }}
+                      onChange={(e) => { setNotes(e.target.value); setNotesDirty(true); autoDetails.set('notes', e.target.value); }}
                       onBlur={() => { if (notesDirty) void handleSaveNotes(); }}
                       rows={2}
                       className="resize-none text-xs border-border/50 min-h-[52px]"
@@ -877,6 +901,7 @@ function LeadDetailBody({
                       autoFocus
                     />
                     <div className="flex items-center justify-end gap-1.5">
+                      <AutosaveIndicator status={autoDetails.status} className="mr-auto" />
                       <Button size="sm" variant="ghost" className="h-6 text-[11px] text-muted-foreground" onMouseDown={(e) => e.preventDefault()} onClick={handleCancelNotes}>Cancel</Button>
                       <Button size="sm" className="h-6 text-[11px] gap-1" onMouseDown={(e) => e.preventDefault()} onClick={handleSaveNotes}><Save className="h-2.5 w-2.5" /> Save</Button>
                     </div>
@@ -884,7 +909,7 @@ function LeadDetailBody({
                 ) : (
                   <div
                     className="flex items-start gap-2 cursor-pointer rounded-md p-2 border border-border/40 bg-background/40 hover:bg-muted/30 transition-colors min-h-[36px]"
-                    onClick={() => setIsEditingNotes(true)}
+                    onClick={() => { openEdit('notes', notes); setIsEditingNotes(true); }}
                   >
                     <div className="flex-1 min-w-0">
                       {notes ? (

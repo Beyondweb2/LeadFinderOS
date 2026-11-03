@@ -199,8 +199,8 @@ export function ProspectProfilePanel({ leadId }: { leadId: string }) {
   const lead = crm.data;
   const [editing, setEditing] = useState(false);
   const [f, setF] = useState({ services: '', areas: '', address: '', website: '' });
-  /* AUTOSAVE (2026-11-03): one RPC holds all four, so one slot holds all four. Each leave writes one History line, not one per pause in typing;
-     what has not reached the server survives a closed tab. */
+  /* AUTOSAVE (2026-11-03): one RPC holds all four, so one slot holds all four. It saves as they type; lead_set_profile keeps one History line for
+     the edit, not one per pause. What has not reached the server survives a closed tab. */
   const auto = useAutosaveFields({
     save: async (_k, json) => {
       const next = JSON.parse(json) as typeof f;
@@ -208,12 +208,13 @@ export function ProspectProfilePanel({ leadId }: { leadId: string }) {
       const r = await save('lead_set_profile', { _services: v.services, _areas: v.areas, _address: v.address, _website: v.website }, '', {
         services_included: v.services.length ? v.services : null, service_areas: v.areas.length ? v.areas : null, address: v.address || null, website: v.website || null,
       });
-      if (!r.ok) throw new Error(r.error ?? 'not_saved');
+      if (!r.ok) throw Object.assign(new Error(r.error ?? 'not_saved'), { status: 400 });
     },
     storageKey: `profile:${leadId}`,
     onRestore: (left) => { try { setF(JSON.parse(left.all) as typeof f); setEditing(true); } catch { /* unreadable: nothing to bring back */ } },
   });
-  const leaveField = () => { auto.set('all', JSON.stringify(f)); auto.flush('all'); };
+  const edit = (patch: Partial<typeof f>) => { const next = { ...f, ...patch }; setF(next); auto.set('all', JSON.stringify(next)); };
+  const leaveField = () => auto.flush('all');
   if (!lead) return null;
   const services = lead.services_included ?? [];
   const areas = lead.service_areas ?? [];
@@ -238,17 +239,17 @@ export function ProspectProfilePanel({ leadId }: { leadId: string }) {
       ) : (
         <div className="grid gap-2">
           <label className="text-[11px] text-muted-foreground">Main services they genuinely offer (comma separated)
-            <Textarea rows={2} className="mt-1 resize-none text-sm" value={f.services} onBlur={leaveField} onChange={(e) => setF((p) => ({ ...p, services: e.target.value }))} placeholder="e.g. boiler repair, bathroom fitting" />
+            <Textarea rows={2} className="mt-1 resize-none text-sm" value={f.services} onBlur={leaveField} onChange={(e) => edit({ services: e.target.value })} placeholder="e.g. boiler repair, bathroom fitting" />
           </label>
           <label className="text-[11px] text-muted-foreground">Towns / areas they genuinely serve (comma separated)
-            <Input className="mt-1 h-9 text-sm" value={f.areas} onBlur={leaveField} onChange={(e) => setF((p) => ({ ...p, areas: e.target.value }))} placeholder="e.g. Wakefield, Ossett, Horbury" />
+            <Input className="mt-1 h-9 text-sm" value={f.areas} onBlur={leaveField} onChange={(e) => edit({ areas: e.target.value })} placeholder="e.g. Wakefield, Ossett, Horbury" />
           </label>
           <div className="grid gap-2 sm:grid-cols-2">
             <label className="text-[11px] text-muted-foreground">Address
-              <Input className="mt-1 h-9 text-sm" value={f.address} onBlur={leaveField} onChange={(e) => setF((p) => ({ ...p, address: e.target.value }))} />
+              <Input className="mt-1 h-9 text-sm" value={f.address} onBlur={leaveField} onChange={(e) => edit({ address: e.target.value })} />
             </label>
             <label className="text-[11px] text-muted-foreground">Website
-              <Input className="mt-1 h-9 text-sm" value={f.website} onBlur={leaveField} onChange={(e) => setF((p) => ({ ...p, website: e.target.value }))} placeholder="example.co.uk" />
+              <Input className="mt-1 h-9 text-sm" value={f.website} onBlur={leaveField} onChange={(e) => edit({ website: e.target.value })} placeholder="example.co.uk" />
             </label>
           </div>
           <p className="text-[11px] text-muted-foreground">Only what you actually know. The AI check builds its questions from these, and they go to Paul if the client signs up.</p>
@@ -399,7 +400,7 @@ export function LeadWorkPanel({ leadId, onRemoved }: { leadId: string; onRemoved
 
       <LeadCampaign lead={lead} save={save} reached={reachedInConversation(activity.data)} />
 
-      <InternalNote save={save} />
+      <InternalNote leadId={leadId} save={save} />
 
       {/* Folded to its summary (declutter pass 2): who controls the site and domain.
           ⛔ ONE NEXT ACTION (2026-10-02): the "Call booked for" time box that lived here was a SECOND editor of the
@@ -524,32 +525,30 @@ function LeadCampaign({ lead, save, reached }: { lead: CrmRow; save: SaveFn; rea
 /** The Call booked section's folded line — the one rule in src/lib/workspaceHeader.ts (no time when the Next Action bar shows it). */
 const callBookedSummary = (lead: CrmRow) => callBookedSummaryOf(lead, Date.now(), { websiteControl: WEBSITE_CONTROL_OPTIONS, meetingWhen });
 
-function InternalNote({ save }: { save: SaveFn }) {
+function InternalNote({ leadId, save }: { leadId: string; save: SaveFn }) {
   const [note, setNote] = useState('');
-  const latest = useRef('');
-  latest.current = note;
-  useUnsavedDraft(`internal-note-${useId()}`, note.trim() !== '');
-  /* AUTOSAVE (2026-11-03): a note is one History row, so it saves when they leave the box, not on every pause. Refused or failed, the text stays. */
-  const saving = useRef(false);
-  const commit = useCallback(async () => {
-    const text = latest.current.trim();
-    if (!text || saving.current) return;
-    saving.current = true;
-    try {
-      const r = await save('lead_add_note', { _body: text }, 'Note saved');
-      if (r.ok && latest.current.trim() === text) setNote('');
-    } finally { saving.current = false; }
-  }, [save]);
-  /* Leaving the lead with the box still in focus: no blur comes, so the unmount saves it. */
-  const commitRef = useRef(commit);
-  commitRef.current = commit;
-  useEffect(() => () => { void commitRef.current(); }, []);
+  const [inBox, setInBox] = useState(false);
+  /* AUTOSAVE (2026-11-03): saves as they type, and lead_note_draft keeps it as ONE row. Leaving the box finishes the note, and the next one starts a new row. */
+  const noteId = useRef<string | null>(null);
+  const auto = useAutosaveFields({
+    save: async (_k, text) => {
+      const r = await save('lead_note_draft', { _note_id: noteId.current, _body: text }, '');
+      if (!r.ok) throw Object.assign(new Error(r.error ?? 'not_saved'), { status: 400 });
+      noteId.current = (r.id as string | null | undefined) ?? null;
+    },
+    storageKey: `internal-note:${leadId}`,
+    onRestore: (left) => { if (typeof left.note === 'string') setNote(left.note); },
+  });
+  useEffect(() => {
+    if (inBox || !note.trim() || auto.status !== 'saved' || auto.isDirty('note')) return;
+    setNote(''); noteId.current = null; auto.baseline('note', '');
+  }, [inBox, note, auto.status]); // eslint-disable-line react-hooks/exhaustive-deps
   return (
     /* Quiet until used (declutter pass, 2026-10-01): one line to type in; it grows while there is a note. */
     <section className={CARD}>
       <div className="mb-2 flex items-center gap-1.5"><Lock className="h-3 w-3" /><span className={LABEL}>Internal note</span><span className="text-[10px] uppercase tracking-wide text-amber-500">never sent</span></div>
-      <Textarea value={note} onChange={(e) => setNote(e.target.value)} onBlur={() => void commit()} rows={note ? 2 : 1} className="min-h-[36px] resize-none text-xs" placeholder="e.g. agency runs the site, anything you promised, best way to reach them" data-testid="internal-note" />
-      <p className={cn('mt-1 text-[11px] text-muted-foreground', !note.trim() && 'hidden')}>Saves when you click away. Paul sees it when the client pays.</p>
+      <Textarea value={note} onChange={(e) => { setNote(e.target.value); auto.set('note', e.target.value); }} onFocus={() => setInBox(true)} onBlur={() => { setInBox(false); auto.flush('note'); }} rows={note ? 2 : 1} className="min-h-[36px] resize-none text-xs" placeholder="Who decides? Anything you promised? Best way to reach them?" data-testid="internal-note" />
+      <p className="mt-1 flex flex-wrap items-center justify-between gap-2 text-[11px] text-muted-foreground"><AutosaveIndicator status={auto.status} /><span>Paul sees it when the client pays.</span></p>
     </section>
   );
 }

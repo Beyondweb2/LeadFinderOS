@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useMemo, useState } from 'react';
+import { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   AlertTriangle, ArrowLeft, BadgePoundSterling, Check, CheckCircle2, ClipboardCopy, ClipboardList, Copy, Flag, Loader2, Lock, Mail, MessageCircle, Pencil, PoundSterling, RefreshCw, ShieldAlert, ShieldCheck, Zap,
@@ -25,6 +25,7 @@ import { cn } from '@/lib/utils';
 import { COMPLETE_EXTRAS, COMPLETE_PAYMENT_PLANS, COMPLETE_UPFRONT_MONTHS, ESSENTIAL_PAYMENT_PLANS, PAYMENT_PLAN_NAME, PAYMENT_PLAN_SPEC, PLAN_PRODUCT_NAME, V7_WINDOW_START_LINE, completeUpfrontSavingGbp, gbpWords, guaranteeForPlan, planShortLine, planTotalGbp, type PaymentPlan } from '@/lib/paymentPlans';
 import { ClosePanel } from '@/components/ClosePanel';
 import { SmsLinkSend } from '@/components/SmsLinkSend';
+import { cleanCloseEmail } from '@/lib/closeEmail';
 import type { NextStep } from '@/lib/deliveryStage';
 import { firstContactDueLabel, type FirstContactState } from '@/lib/firstContact';
 import { SellerClientInfoForm, type SellerClientInfo } from '@/components/SellerClientInfoForm';
@@ -224,6 +225,7 @@ export function QuickClosePanel({ leadId, active = true, framed = false }: { lea
   const [busy, setBusy] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
   const [trade, setTrade] = useState('');
+  const [tradeTyped, setTradeTyped] = useState(false);
   const [script, setScript] = useState(quickCloseScript(null));
   const [copied, setCopied] = useState<string | null>(null);
   /* The old £99 × 12 plan is staff-only and hidden until asked for (paymentPlans.ts). */
@@ -303,10 +305,28 @@ export function QuickClosePanel({ leadId, active = true, framed = false }: { lea
       throw e;
     }
   };
-  const saveTrade = async () => { if (trade.trim() && !v?.lead.trade) await run('fix', { mode: 'save', answers: {}, expect_route: route, trade: trade.trim() }); };
+  /* The trade saves as it is typed. The box stays open once typing starts (saving it fills lead.trade), and trade_prev lets each save replace only what this box itself saved. */
+  const tradeSaved = useRef('');
+  const tradeAuto = useAutosaveFields({
+    save: async (_k, val) => {
+      const t = val.trim();
+      if (!t) return;
+      const r = await invokeEdge<View>('quick-close', { lead_id: leadId, mode: 'save', answers: {}, expect_route: route, trade: t, ...(tradeSaved.current ? { trade_prev: tradeSaved.current } : {}) });
+      tradeSaved.current = t;
+      qc.setQueryData(quickCloseKey(leadId), r);
+    },
+    storageKey: `qc-trade:${leadId}`,
+    onRestore: (left) => { if (left.trade) { setTrade(left.trade); setTradeTyped(true); } },
+  });
+  const typeTrade = (val: string) => { setTrade(val); setTradeTyped(true); tradeAuto.set('trade', val); };
   const generate = async () => {
     if (!v?.lead.trade && !trade.trim()) { toast({ title: 'Add the trade first', description: 'It decides what the baseline measures.', variant: 'destructive' }); return; }
-    if (!v?.lead.trade && trade.trim()) { const ok = await run('fix', { mode: 'save', answers: {}, expect_route: route, trade: trade.trim() }); if (!ok) return; }
+    /* A link is about to be made from it: what is in the box goes first, even inside the typing pause. */
+    if (trade.trim() && trade.trim() !== v?.lead.trade) {
+      const ok = await run('fix', { mode: 'save', answers: {}, expect_route: route, trade: trade.trim(), ...(tradeSaved.current ? { trade_prev: tradeSaved.current } : {}) });
+      if (!ok) return;
+      tradeSaved.current = trade.trim();
+    }
     await run('link', { mode: 'generate_link' });
   };
   /** Copy, then record it (as COPIED — the app cannot know where it was pasted). The record never blocks the copy. */
@@ -531,9 +551,10 @@ export function QuickClosePanel({ leadId, active = true, framed = false }: { lea
 
               {closing && (
                 <div className="mt-3 space-y-2 border-t border-border/60 pt-3" data-testid="qc-link">
-                  {!v.lead.trade && (
+                  {(!v.lead.trade || tradeTyped) && (
                     <label className={cn('block rounded-xl p-2.5 text-sm font-medium', TONE.amber.tint)}>What is their trade? <span className="font-normal text-muted-foreground">(decides what the baseline measures)</span>
-                      <Input value={trade} onChange={(e) => setTrade(e.target.value)} onBlur={() => void saveTrade()} placeholder="e.g. plumber" className="mt-1.5 h-11 text-base" />
+                      <Input value={trade} onChange={(e) => typeTrade(e.target.value)} onBlur={() => tradeAuto.flush('trade')} placeholder="e.g. plumber" className="mt-1.5 h-11 text-base" />
+                      <AutosaveIndicator status={tradeAuto.status} className="mt-1" />
                     </label>
                   )}
                   {!usableUrl ? (
@@ -655,9 +676,10 @@ export function QuickClosePanel({ leadId, active = true, framed = false }: { lea
             </details>
           )}
 
-          {v && !v.lead.trade && v.canEdit && !closing && (
+          {v && (!v.lead.trade || tradeTyped) && v.canEdit && !closing && (
             <label className={cn('block rounded-2xl p-3.5 text-sm font-medium', TONE.amber.tint)}>What is their trade? <span className="font-normal text-muted-foreground">(decides what the baseline measures)</span>
-              <Input value={trade} onChange={(e) => setTrade(e.target.value)} placeholder="e.g. plumber" className="mt-1.5 h-11 text-base" />
+              <Input value={trade} onChange={(e) => typeTrade(e.target.value)} onBlur={() => tradeAuto.flush('trade')} placeholder="e.g. plumber" className="mt-1.5 h-11 text-base" />
+              <AutosaveIndicator status={tradeAuto.status} className="mt-1" />
             </label>
           )}
 
@@ -668,7 +690,8 @@ export function QuickClosePanel({ leadId, active = true, framed = false }: { lea
 
 /** TWO OPTIONS: the short "what do they offer, and where do they want to be found?" step, just before the plan. It saves
  *  the same two call notes the Call screen does (save_call), so a rep who already heard them there is never asked again. */
-/** "Correct a detail": each one saves as they leave it, and what is not yet saved survives a closed tab (useAutosaveFields). */
+/** "Correct a detail": each one saves as they type, and what is not yet saved survives a closed tab (useAutosaveFields). A half-typed email would
+ *  only be refused, so an email waits until it is valid or they leave the field. */
 function CorrectDetails({ leadId, initial, onSave, onDone }: { leadId: string; initial: Record<string, string>; onSave: (key: string, value: string) => Promise<void>; onDone: () => void }) {
   const [draft, setDraft] = useState(initial);
   const auto = useAutosaveFields({ save: onSave, storageKey: `qc-details:${leadId}`, onRestore: (left) => setDraft((d) => ({ ...d, ...left })) });
@@ -677,7 +700,7 @@ function CorrectDetails({ leadId, initial, onSave, onDone }: { leadId: string; i
     <div className="mt-2 space-y-2" data-testid="qc-correct-details">
       {([['contact_name', 'Contact name'], ['contact_email', 'Email'], ['confirmed_phone', 'Phone'], ['business_website', 'Website']] as const).map(([k, label]) => (
         <label key={k} className="block text-xs text-muted-foreground">{label}
-          <Input value={draft[k] ?? ''} onChange={(e) => setDraft((d) => ({ ...d, [k]: e.target.value }))} onBlur={(e) => { auto.set(k, e.target.value.trim()); auto.flush(k); }} className="mt-0.5 h-10 text-sm" inputMode={k === 'confirmed_phone' ? 'tel' : k === 'contact_email' ? 'email' : undefined} />
+          <Input value={draft[k] ?? ''} onChange={(e) => { const val = e.target.value; setDraft((d) => ({ ...d, [k]: val })); if (k !== 'contact_email' || !val.trim() || cleanCloseEmail(val).ok) auto.set(k, val.trim()); }} onBlur={(e) => { auto.set(k, e.target.value.trim()); auto.flush(k); }} className="mt-0.5 h-10 text-sm" inputMode={k === 'confirmed_phone' ? 'tel' : k === 'contact_email' ? 'email' : undefined} />
         </label>
       ))}
       <div className="flex items-center justify-between gap-2"><AutosaveIndicator status={auto.status} /><Button size="sm" variant="ghost" className="h-10" onClick={onDone}>Done</Button></div>
